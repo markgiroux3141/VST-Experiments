@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Valvechild UI Mockup</title>
+<style>
+  :root {
+    --page: #14110e;
+    --bar: #1c1814;
+    --bar-line: #2e2720;
+    --ink: #eadcc0;
+    --muted: #978a73;
+    --accent: #e3913a;
+    --bar-h: 52px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--page); color: var(--ink);
+    font: 13px/1.4 "Segoe UI", system-ui, sans-serif;
+  }
+  body.dragging, body.dragging * { cursor: grabbing !important; }
+
+  #viewport {
+    position: absolute; left: 0; right: 0; top: 0; bottom: var(--bar-h);
+    display: grid; place-items: center;
+  }
+  #frame { position: relative; }
+  #stage {
+    position: absolute; left: 0; top: 0;
+    width: 1448px; height: 1086px;
+    transform-origin: 0 0;
+    user-select: none; -webkit-user-select: none;
+  }
+  #stage .bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+
+  /* ---------- lighting overlays: baked from the lit panel art, faded in by JS ---------- */
+  .lit { position: absolute; display: block; pointer-events: none; opacity: 0; }
+
+  /* ---------- VU meters ---------- */
+  .meter { position: absolute; width: 390px; height: 190px; pointer-events: none; }
+  .meter .lit { inset: 0; width: 100%; height: 100%; }
+  .meter .needle-layer {
+    position: absolute; inset: 0;
+    -webkit-mask-size: 100% 100%; mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+  }
+  .meter .needle { position: absolute; transform-origin: 50% 50%; will-change: transform; }
+
+  /* ---------- tube window ---------- */
+  .tube-spill {
+    position: absolute; left: 561px; top: 206px; width: 336px; height: 125px;
+    pointer-events: none; mix-blend-mode: screen; opacity: 0;
+    background: radial-gradient(ellipse 50% 45% at 50% 55%, rgba(255, 120, 30, .22), rgba(255, 110, 20, 0) 75%);
+  }
+
+  /* ---------- pilot lamp ---------- */
+  .lamp { position: absolute; width: 37px; height: 37px; pointer-events: none; }
+  .lamp img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .lamp .glow {
+    position: absolute; inset: 6px; border-radius: 50%; opacity: 0;
+    box-shadow: 0 0 10px 4px rgba(255, 140, 30, .55), 0 0 30px 12px rgba(255, 110, 20, .22);
+  }
+
+  /* ---------- knobs ---------- */
+  .knob {
+    position: absolute; border-radius: 50%;
+    cursor: grab; touch-action: none; outline: none;
+    filter: drop-shadow(0 7px 5px rgba(0, 0, 0, .5)) drop-shadow(0 2px 1.5px rgba(0, 0, 0, .55));
+  }
+  /* One frame of the relit knob strip; JS picks the frame and rotates by the remainder. */
+  .knob .face {
+    position: absolute; pointer-events: none; will-change: transform;
+    background: url(img/knob-strip.webp) no-repeat;
+  }
+  .knob:focus-visible::after {
+    content: ""; position: absolute; inset: -5px; border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(255, 196, 120, .85);
+  }
+
+  /* ---------- toggle switches ---------- */
+  .switch {
+    position: absolute; padding: 0; border: 0; background: none;
+    cursor: pointer; outline: none; border-radius: 40%;
+    filter: drop-shadow(0 5px 4px rgba(0, 0, 0, .5)) drop-shadow(0 1px 1px rgba(0, 0, 0, .5));
+  }
+  .switch img {
+    position: absolute; left: 50%; top: 50%; pointer-events: none;
+    transform: translate(-50%, -50%);
+  }
+  .switch .up { visibility: hidden; }
+  .switch[aria-checked="true"] .up { visibility: visible; }
+  .switch[aria-checked="true"] .down { visibility: hidden; }
+  .switch:focus-visible::after {
+    content: ""; position: absolute; inset: -4px; border-radius: 40%;
+    box-shadow: 0 0 0 2px rgba(255, 196, 120, .85);
+  }
+
+  /* ---------- value tooltip (lives outside the scaled stage so it stays readable) ---------- */
+  #tip {
+    position: fixed; z-index: 10; pointer-events: none;
+    transform: translate(-50%, calc(-100% - 10px));
+    padding: 5px 10px 6px; border-radius: 4px;
+    background: rgba(22, 15, 9, .93); color: #f4e7ca;
+    border: 1px solid rgba(227, 160, 90, .35);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, .45);
+    font: 600 13px/1 Consolas, "Cascadia Mono", ui-monospace, monospace;
+    white-space: nowrap; opacity: 0; transition: opacity .12s;
+  }
+  #tip .name { color: var(--muted); font-weight: 400; margin-right: 8px; letter-spacing: .04em; text-transform: uppercase; font-size: 11px; }
+  #tip.show { opacity: 1; }
+
+  /* ---------- dev bar ---------- */
+  #bar {
+    position: fixed; left: 0; right: 0; bottom: 0; height: var(--bar-h);
+    display: flex; align-items: center; gap: 22px; padding: 0 16px;
+    background: var(--bar); border-top: 1px solid var(--bar-line);
+    color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow-x: auto;
+  }
+  #bar .group { display: flex; align-items: center; gap: 8px; }
+  #bar .seg { display: flex; border: 1px solid var(--bar-line); border-radius: 6px; overflow: hidden; }
+  #bar .seg button {
+    font: inherit; color: var(--muted); background: transparent; border: 0;
+    padding: 6px 11px; cursor: pointer;
+  }
+  #bar .seg button + button { border-left: 1px solid var(--bar-line); }
+  #bar .seg button:hover { color: var(--ink); }
+  #bar .seg button[aria-pressed="true"] { background: #3b2b1a; color: var(--ink); }
+  #bar .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  #bar .num {
+    font: 600 12.5px Consolas, "Cascadia Mono", ui-monospace, monospace;
+    color: var(--ink); display: inline-block; min-width: 7ch; text-align: right;
+  }
+  #bar .hint { margin-left: auto; }
+  #bar kbd {
+    font: 11px Consolas, monospace; color: var(--ink);
+    border: 1px solid var(--bar-line); border-bottom-width: 2px; border-radius: 3px; padding: 0 4px;
+  }
+</style>
+</head>
+<body>
+
+<div id="viewport">
+  <div id="frame">
+    <div id="stage">
+      <img class="bg" src="img/background.png" alt="">
+
+      <!-- Tube window: the lit tubes, cut to the unlit grille's slots -->
+      <div class="tube-spill" id="tubeSpill"></div>
+      <img class="lit" id="litTubes" src="img/lit-tubes.png" alt="" style="left:581px; top:229px; width:296px; height:78px">
+
+      <!-- VU meters: lit face under the needle; the needle layer is clipped to the face -->
+      <div class="meter" id="meterIn" style="left:140px; top:196px">
+        <img class="lit" src="img/lit-meter-left.png" alt="">
+        <div class="needle-layer" data-mask="vuLeft"><img class="needle" src="img/needle.png" alt=""></div>
+      </div>
+      <div class="meter" id="meterGr" style="left:930px; top:196px">
+        <img class="lit" src="img/lit-meter-right.png" alt="">
+        <div class="needle-layer" data-mask="vuRight"><img class="needle" src="img/needle.png" alt=""></div>
+      </div>
+
+      <div class="lamp" style="left:1270.1px; top:753.5px">
+        <div class="glow" id="lampGlow"></div>
+        <img src="img/lamp-off.png" alt="">
+        <img class="lit" id="lampOn" src="img/lamp-on.png" alt="">
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tip"><span class="name"></span><span class="val"></span></div>
+
+<div id="bar">
+  <div class="group">
+    <span>Test signal</span>
+    <div class="seg" id="signalSeg">
+      <button type="button" data-signal="music" aria-pressed="true">Music loop</button>
+      <button type="button" data-signal="sweep" aria-pressed="false">Level sweep</button>
+      <button type="button" data-signal="tone" aria-pressed="false">Tone 0 VU</button>
+      <button type="button" data-signal="silence" aria-pressed="false">Silence</button>
+    </div>
+  </div>
+  <div class="group">Input <span class="num" id="readIn">–</span></div>
+  <div class="group">Gain reduction <span class="num" id="readGr">–</span></div>
+  <div class="hint">Drag knobs &middot; <kbd>Shift</kbd> fine &middot; wheel &middot; double-click resets &middot; arrow keys when focused</div>
+</div>
+
+<script src="img/masks.js"></script>
+<script src="img/knob-strip.js"></script>
+<script>
+"use strict";
+
+/* =========================================================================
+   Panel geometry. All coordinates are pixels in the 1448x1086 background.
+   Knob angles are degrees clockwise from 12 o'clock and were measured from
+   the printed tick marks, so the pointer lands on the labels.
+   ========================================================================= */
+const STAGE_W = 1448, STAGE_H = 1086;
+
+const KNOBS = [
+  { id: "inputGain", name: "Input gain", x: 190.3, y: 575.9, d: 128, unit: "dB", def: 0,
+    anchors: [[-118, -20], [0, 0], [118, 20]] },
+  { id: "threshold", name: "Threshold", x: 401.1, y: 576.4, d: 128, unit: "dB", def: -20,
+    anchors: [[-106, -40], [-49, -30], [0, -20], [51, -10], [105, 0]] },
+  { id: "ratio", name: "Ratio", x: 614.5, y: 576.9, d: 128, unit: ":1", def: 2, log: true,
+    anchors: [[-105, 1.5], [-32, 2], [10, 4], [52, 6], [83, 10]] },
+  { id: "attack", name: "Attack", x: 814.9, y: 576.2, d: 128, unit: "ms", def: 1, log: true,
+    anchors: [[-110, 0.1], [-39, 0.3], [0, 1], [40, 3], [73, 10], [107, 30]] },
+  { id: "release", name: "Release", x: 1029.4, y: 576.3, d: 128, unit: "ms", def: 3, log: true,
+    anchors: [[-110, 0.1], [-43, 0.3], [0, 1], [42, 3], [73, 10], [106, 60]] },
+  { id: "timeConstant", name: "Time constant", x: 1253.8, y: 576.3, d: 128, def: "B",
+    steps: [[-52, "A", "Smooth"], [0, "B", "Normal"], [52, "C", "Aggressive"]] },
+  { id: "scHpf", name: "Sidechain HPF", x: 189.5, y: 843.2, d: 113, unit: "Hz", def: 60, log: true,
+    anchors: [[-108, 20], [-47, 60], [0, 100], [44, 200], [88, 400]] },
+  { id: "makeup", name: "Make-up gain", x: 399.2, y: 843.4, d: 118, unit: "dB", def: 0,
+    anchors: [[-116, -20], [-56, -10], [0, 0], [57, 10], [116, 20]] },
+  { id: "output", name: "Output gain", x: 596.1, y: 843.5, d: 118, unit: "dB", def: 0,
+    anchors: [[-117, -20], [-56, -10], [0, 0], [57, 10], [117, 20]] },
+  { id: "mix", name: "Mix", x: 812.7, y: 844.9, d: 112, unit: "%", def: 100,
+    anchors: [[-118, 0], [0, 50], [116, 100]] },
+];
+
+// Disc = diameter of the switch's mounting ring on screen.
+const SWITCHES = [
+  { id: "stereoLink", name: "Stereo link", x: 997.9, y: 853.5, disc: 56, def: false },
+  { id: "bypass", name: "Bypass", x: 1139.4, y: 853.6, disc: 56, def: false },
+  { id: "power", name: "Power", x: 1290.4, y: 886.8, disc: 70, def: true },
+];
+
+// VU meters. Pivot sits at the bottom-center of the face; the hub peeks above the bezel.
+const METERS = {
+  in: { el: "meterIn", box: { x: 140, y: 196 }, pivot: { x: 328.4, y: 373.8 } },
+  gr: { el: "meterGr", box: { x: 930, y: 196 }, pivot: { x: 1118.4, y: 373.8 } },
+};
+const NEEDLE_LENGTH = 150;          // pivot to tip, px
+// Major tick positions on the left meter's scale arc: [dB, x, y].
+const VU_TICKS = [[-20, 198.4, 305.3], [-10, 247.4, 291.2], [-7, 286.4, 284.2], [-3, 344.4, 281.2], [0, 403.5, 286.2], [3, 456.5, 301.3]];
+const PEG_MAX_DEG = 70;
+
+// Relit knob frames (see relight_knob.py). Each frame shows the knob turned by
+// i * stepDeg with its lighting kept fixed; the frame is slightly larger than the body.
+const STRIP = window.KNOB_STRIP;
+const STRIP_ROWS = Math.ceil(STRIP.frames / STRIP.cols);
+const SWITCH_IMG_RATIO = 1400 / 683; // switch png size relative to its mounting ring
+
+/* ========================================================================= */
+
+const $ = (s, r = document) => r.querySelector(s);
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const dbToAmp = db => Math.pow(10, db / 20);
+const powToDb = p => 10 * Math.log10(Math.max(p, 1e-12));
+const ease = (dt, tau) => 1 - Math.exp(-dt / Math.max(tau, 1e-4));
+
+const stage = $("#stage");
+const state = { signal: "music", params: {}, switches: {} };
+const tip = $("#tip");
+let tipOwner = null;   // knob whose value the tooltip shows
+let dragging = null;   // { k, x, y } while a knob is being dragged
+
+/* ---------- scaling to the window ---------- */
+function fit() {
+  const pad = 20;
+  const vp = $("#viewport");
+  const s = Math.min((vp.clientWidth - pad) / STAGE_W, (vp.clientHeight - pad) / STAGE_H);
+  stage.style.transform = `scale(${s})`;
+  $("#frame").style.width = STAGE_W * s + "px";
+  $("#frame").style.height = STAGE_H * s + "px";
+}
+addEventListener("resize", fit);
+fit();
+
+/* ---------- needle clip masks ---------- */
+document.querySelectorAll("[data-mask]").forEach(el => {
+  const uri = window.UI_MASKS && UI_MASKS[el.dataset.mask];
+  if (!uri) return;
+  el.style.webkitMaskImage = el.style.maskImage = `url(${uri})`;
+});
+
+/* =========================================================================
+   Knobs
+   ========================================================================= */
+function valueAtAngle(k, a) {
+  const an = k.anchors;
+  if (a <= an[0][0]) return an[0][1];
+  for (let i = 0; i < an.length - 1; i++) {
+    const [a0, v0] = an[i], [a1, v1] = an[i + 1];
+    if (a <= a1) {
+      const t = (a - a0) / (a1 - a0);
+      return k.log ? v0 * Math.pow(v1 / v0, t) : lerp(v0, v1, t);
+    }
+  }
+  return an[an.length - 1][1];
+}
+
+function angleOfValue(k, v) {
+  if (k.steps) return k.steps.find(s => s[1] === v)[0];
+  const an = k.anchors;
+  for (let i = 0; i < an.length - 1; i++) {
+    const [a0, v0] = an[i], [a1, v1] = an[i + 1];
+    if (v <= v1 || i === an.length - 2) {
+      const t = k.log ? Math.log(v / v0) / Math.log(v1 / v0) : (v - v0) / (v1 - v0);
+      return clamp(lerp(a0, a1, t), an[0][0], an[an.length - 1][0]);
+    }
+  }
+}
+
+function formatValue(k, v) {
+  if (k.steps) return `${v} · ${k.steps.find(s => s[1] === v)[2]}`;
+  switch (k.unit) {
+    case "dB": { const r = Math.round(v * 10) / 10; return `${r > 0 ? "+" : r < 0 ? "−" : ""}${Math.abs(r).toFixed(1)} dB`; }
+    case ":1": return `${v.toFixed(v < 10 ? 1 : 0)}:1`;
+    case "ms": return `${v.toFixed(v < 1 ? 2 : v < 10 ? 1 : 0)} ms`;
+    case "Hz": return `${Math.round(v)} Hz`;
+    case "%":  return `${Math.round(v)}%`;
+  }
+  return String(v);
+}
+
+function stepAt(k, a) {
+  let best = k.steps[0];
+  for (const s of k.steps) if (Math.abs(s[0] - a) < Math.abs(best[0] - a)) best = s;
+  return best;
+}
+
+const knobs = KNOBS.map(spec => {
+  const k = Object.assign({}, spec);
+  if (k.steps) { k.aMin = k.steps[0][0]; k.aMax = k.steps[k.steps.length - 1][0]; }
+  else { k.aMin = k.anchors[0][0]; k.aMax = k.anchors[k.anchors.length - 1][0]; }
+  k.span = k.aMax - k.aMin;
+
+  // The element is the knob body (round hit area); the padded image overflows it.
+  const el = document.createElement("div");
+  el.className = "knob";
+  el.tabIndex = 0;
+  el.setAttribute("role", "slider");
+  el.setAttribute("aria-label", k.name);
+  Object.assign(el.style, { left: k.x - k.d / 2 + "px", top: k.y - k.d / 2 + "px", width: k.d + "px", height: k.d + "px" });
+  const face = document.createElement("div");
+  face.className = "face";
+  const size = k.d / STRIP.bodyFraction, inset = -(size - k.d) / 2 + "px";
+  Object.assign(face.style, {
+    left: inset, top: inset, width: size + "px", height: size + "px",
+    backgroundSize: `${STRIP.cols * 100}% ${STRIP_ROWS * 100}%`,
+  });
+  el.appendChild(face);
+  stage.appendChild(el);
+  k.el = el; k.face = face; k.frame = -1;
+
+  k.target = angleOfValue(k, k.def);  // where the knob is heading (degrees)
+  k.shown = k.target;                 // where it is drawn (eased toward target)
+  k.raw = k.target;                   // unsnapped drag position for stepped knobs
+  setKnobAngle(k, k.target, true);
+  bindKnob(k);
+  return k;
+});
+const knobById = Object.fromEntries(knobs.map(k => [k.id, k]));
+
+function setKnobAngle(k, a, immediate) {
+  a = clamp(a, k.aMin, k.aMax);
+  if (k.steps) { const s = stepAt(k, a); k.target = s[0]; k.value = s[1]; }
+  else { k.target = a; k.value = valueAtAngle(k, a); }
+  if (immediate) k.shown = k.target;
+  state.params[k.id] = k.value;
+  const text = formatValue(k, k.value);
+  k.el.setAttribute("aria-valuetext", text);
+  k.el.setAttribute("aria-valuenow", k.steps ? k.steps.findIndex(s => s[1] === k.value) : +k.value.toFixed(3));
+  if (tipOwner === k) updateTip();
+}
+
+/* ---------- value tooltip ---------- */
+function showTip(k) { tipOwner = k; updateTip(); tip.classList.add("show"); }
+function hideTip(k) { if (tipOwner === k && !dragging) { tip.classList.remove("show"); tipOwner = null; } }
+function updateTip() {
+  if (!tipOwner) return;
+  const r = tipOwner.el.getBoundingClientRect();
+  tip.style.left = r.left + r.width / 2 + "px";
+  tip.style.top = r.top + r.height * 0.06 + "px";
+  $(".name", tip).textContent = tipOwner.name;
+  $(".val", tip).textContent = formatValue(tipOwner, tipOwner.value);
+}
+
+/* ---------- interaction ---------- */
+const DRAG_PX_FULL_SWEEP = 260;   // vertical pixels for a full sweep
+const FINE = 0.15;
+
+function bindKnob(k) {
+  const el = k.el;
+  el.addEventListener("pointerdown", e => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    el.focus({ preventScroll: true });
+    el.setPointerCapture(e.pointerId);
+    dragging = { k, x: e.clientX, y: e.clientY };
+    k.raw = k.target;
+    document.body.classList.add("dragging");
+    showTip(k);
+  });
+  el.addEventListener("pointermove", e => {
+    if (!dragging || dragging.k !== k) return;
+    const dx = e.clientX - dragging.x, dy = e.clientY - dragging.y;
+    dragging.x = e.clientX; dragging.y = e.clientY;
+    const scale = (e.shiftKey ? FINE : 1) * k.span / DRAG_PX_FULL_SWEEP;
+    // Up and right both turn clockwise; vertical is the primary axis.
+    k.raw = clamp(k.raw + (dx * 0.4 - dy) * scale, k.aMin, k.aMax);
+    setKnobAngle(k, k.raw);
+  });
+  const end = () => {
+    if (!dragging || dragging.k !== k) return;
+    dragging = null;
+    document.body.classList.remove("dragging");
+    if (!el.matches(":hover")) hideTip(k);
+  };
+  el.addEventListener("pointerup", end);
+  el.addEventListener("pointercancel", end);
+  el.addEventListener("pointerenter", () => showTip(k));
+  el.addEventListener("pointerleave", () => hideTip(k));
+  el.addEventListener("focus", () => showTip(k));
+  el.addEventListener("blur", () => hideTip(k));
+  el.addEventListener("dblclick", () => setKnobAngle(k, angleOfValue(k, k.def)));
+  el.addEventListener("wheel", e => {
+    e.preventDefault();
+    const dir = e.deltaY < 0 ? 1 : -1;
+    nudge(k, dir, e.shiftKey ? 0.004 : 0.025);
+    showTip(k);
+  }, { passive: false });
+  el.addEventListener("keydown", e => {
+    const fine = e.shiftKey ? 0.002 : 0.01;
+    const keys = { ArrowUp: [1, fine], ArrowRight: [1, fine], ArrowDown: [-1, fine], ArrowLeft: [-1, fine], PageUp: [1, 0.1], PageDown: [-1, 0.1] };
+    if (keys[e.key]) { nudge(k, ...keys[e.key]); e.preventDefault(); }
+    else if (e.key === "Home") { setKnobAngle(k, k.aMin); e.preventDefault(); }
+    else if (e.key === "End") { setKnobAngle(k, k.aMax); e.preventDefault(); }
+  });
+}
+
+function nudge(k, dir, fraction) {
+  if (k.steps) {
+    const i = k.steps.findIndex(s => s[1] === k.value);
+    const j = clamp(i + dir, 0, k.steps.length - 1);
+    setKnobAngle(k, k.steps[j][0]);
+  } else {
+    setKnobAngle(k, k.target + dir * fraction * k.span);
+  }
+}
+
+/* =========================================================================
+   Toggle switches (lever up = on)
+   ========================================================================= */
+SWITCHES.forEach(sw => {
+  const imgSize = sw.disc * SWITCH_IMG_RATIO;
+  const w = sw.disc, h = sw.disc * 1.5;
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = "switch";
+  el.setAttribute("role", "switch");
+  el.setAttribute("aria-label", sw.name);
+  Object.assign(el.style, { left: sw.x - w / 2 + "px", top: sw.y - h / 2 + "px", width: w + "px", height: h + "px" });
+  for (const which of ["down", "up"]) {
+    const img = document.createElement("img");
+    img.src = `img/switch-${which}.png`; img.alt = ""; img.className = which; img.draggable = false;
+    img.style.width = img.style.height = imgSize + "px";
+    el.appendChild(img);
+  }
+  const set = on => { state.switches[sw.id] = on; el.setAttribute("aria-checked", String(on)); };
+  el.addEventListener("click", () => set(!state.switches[sw.id]));
+  set(sw.def);
+  stage.appendChild(el);
+});
+
+/* =========================================================================
+   VU meters
+   Needle deflection on a real VU is proportional to voltage, so the scale is
+   tabulated in linear volts. Ballistics are a 2nd-order spring/damper tuned
+   for ~300 ms rise and ~1.5% overshoot, with hard end pegs.
+   ========================================================================= */
+const vuTable = (() => {
+  const p = METERS.in.pivot;
+  const rows = VU_TICKS.map(([db, x, y]) => [dbToAmp(db), Math.atan2(x - p.x, p.y - y) * 180 / Math.PI]);
+  // Extrapolate the first segment down to 0 V: that is the left rest peg.
+  const [v0, a0] = rows[0], [v1, a1] = rows[1];
+  rows.unshift([0, a0 - (a1 - a0) / (v1 - v0) * v0]);
+  // ...and the last segment up to the right peg.
+  const [vb, ab] = rows[rows.length - 2], [ve, ae] = rows[rows.length - 1];
+  const slope = (ae - ab) / (ve - vb);
+  rows.push([ve + (PEG_MAX_DEG - ae) / slope, PEG_MAX_DEG]);
+  return rows;
+})();
+const VU_MAX_V = vuTable[vuTable.length - 1][0];
+
+function voltsToAngle(v) {
+  for (let i = 0; i < vuTable.length - 1; i++) {
+    const [v0, a0] = vuTable[i], [v1, a1] = vuTable[i + 1];
+    if (v <= v1) return lerp(a0, a1, (v - v0) / (v1 - v0));
+  }
+  return PEG_MAX_DEG;
+}
+
+const meters = Object.values(METERS).map(m => {
+  const root = document.getElementById(m.el);
+  const needle = $(".needle", root);
+  // needle.png is 112x1010 with the pivot at its exact center.
+  const h = NEEDLE_LENGTH * 2 * (1010 / 1006), w = h * 112 / 1010;
+  const px = m.pivot.x - m.box.x, py = m.pivot.y - m.box.y;
+  Object.assign(needle.style, { width: w + "px", height: h + "px", left: px - w / 2 + "px", top: py - h / 2 + "px" });
+  return { root, needle, layer: $(".needle-layer", root), lit: $(".lit", root), x: 0, vel: 0, drive: 0 };
+});
+const [meterIn, meterGr] = meters;
+
+const VU_WN = 2 * Math.PI * 2.1, VU_ZETA = 0.8;
+function stepMeter(m, h) {
+  const acc = VU_WN * VU_WN * (m.drive - m.x) - 2 * VU_ZETA * VU_WN * m.vel;
+  m.vel += acc * h;
+  m.x += m.vel * h;
+  if (m.x < 0) { m.x = 0; if (m.vel < 0) m.vel = 0; }
+  if (m.x > VU_MAX_V) { m.x = VU_MAX_V; if (m.vel > 0) m.vel = 0; }
+}
+
+/* =========================================================================
+   Stand-in signal + compressor model (no audio yet).
+   Each source returns power in a low band and a high band so that the
+   sidechain HPF has something to act on. 0 dB = 0 VU.
+   ========================================================================= */
+function wobble(t) {  // slow, smooth pseudo-random level drift in dB
+  return 0.9 * Math.sin(2 * Math.PI * 0.37 * t) + 0.6 * Math.sin(2 * Math.PI * 1.13 * t + 1.7)
+       + 0.4 * Math.sin(2 * Math.PI * 2.71 * t + 0.4);
+}
+
+const SOURCES = {
+  music(t) {
+    const beat = 60 / 112, bar = beat * 4;
+    const tb = t % beat, n = Math.floor(t / beat);
+    const kick = Math.exp(-tb / 0.11);
+    const snare = n % 2 === 1 ? Math.exp(-tb / 0.17) : 0;
+    const hat = Math.exp(-(t % (beat / 2)) / 0.035);
+    const section = [-3, -3, 1.5, 3][Math.floor(t / (bar * 4)) % 4];   // verse, verse, lift, chorus
+    const swell = 1.5 * Math.sin(2 * Math.PI * t / (bar * 2));
+    const bed = Math.pow(10, (-11 + section + swell + wobble(t)) / 10);
+    return {
+      lo: bed * (0.35 + 5 * kick * kick),
+      hi: bed * (0.65 + 2.5 * snare * snare + 0.4 * hat * hat),
+    };
+  },
+  sweep(t) {   // -30 dB to +6 dB over 7 s, then a second of silence
+    const ph = t % 8;
+    if (ph > 7) return { lo: 0, hi: 0 };
+    const p = Math.pow(10, (-30 + 36 * ph / 7) / 10);
+    return { lo: p / 2, hi: p / 2 };
+  },
+  tone() { return { lo: 0.5, hi: 0.5 }; },
+  silence() { return { lo: 0, hi: 0 }; },
+};
+
+const TIME_CONSTANT = { A: { atk: 2, rel: 3 }, B: { atk: 1, rel: 1 }, C: { atk: 0.5, rel: 0.5 } };
+const sim = { t: 0, gr: 0, heat: 0, warm: 0, lamp: 0, pilot: 0, flick: 0, flickT: 0, inDb: -Infinity };
+
+function simulate(h) {
+  const P = state.params, on = state.switches.power;
+  sim.t += h;
+
+  // The pilot lamp is near-instant, the meter lamps come up fast,
+  // and the tube heaters take a couple of seconds.
+  sim.pilot += ((on ? 1 : 0) - sim.pilot) * ease(h, on ? 0.04 : 0.12);
+  sim.lamp += ((on ? 1 : 0) - sim.lamp) * ease(h, on ? 0.12 : 0.3);
+  sim.heat = on ? Math.min(1, sim.heat + h / 2.6) : sim.heat * Math.exp(-h / 1.4);
+  sim.warm = sim.heat * sim.heat * (3 - 2 * sim.heat);   // smoothstep
+
+  const src = SOURCES[state.signal](sim.t);
+  const g = Math.pow(10, P.inputGain / 10);   // power gain
+  const inP = (src.lo + src.hi) * g * sim.warm * sim.warm;
+  sim.inDb = powToDb(inP);
+
+  // Sidechain: 2nd-order HPF approximated on the low band (content ~55 Hz).
+  const f = 55, fc = P.scHpf;
+  const loW = Math.pow(f, 4) / (Math.pow(f, 4) + Math.pow(fc, 4));
+  const scDb = powToDb((src.lo * loW + src.hi) * g);
+
+  // Static curve with a 6 dB soft knee.
+  const knee = 6, over = scDb - P.threshold;
+  const curve = over <= -knee / 2 ? 0 : over >= knee / 2 ? over : (over + knee / 2) ** 2 / (2 * knee);
+  const grTarget = curve * (1 - 1 / P.ratio) * sim.warm;
+
+  const tc = TIME_CONSTANT[P.timeConstant];
+  const tau = grTarget > sim.gr ? P.attack * tc.atk : P.release * tc.rel;
+  sim.gr += (grTarget - sim.gr) * ease(h, tau / 1000);
+
+  // Meter drives (volts). With no power, the GR meter drops to its rest peg.
+  meterIn.drive = Math.sqrt(inP);
+  const grShown = state.switches.bypass ? 0 : sim.gr;
+  meterGr.drive = dbToAmp(-grShown) * sim.warm;
+
+  stepMeter(meterIn, h);
+  stepMeter(meterGr, h);
+
+  // Lamp flicker: smoothed random walk.
+  sim.flickT -= h;
+  if (sim.flickT <= 0) { sim.flickT = 0.05 + Math.random() * 0.1; sim.flickTarget = Math.random(); }
+  sim.flick += ((sim.flickTarget || 0) - sim.flick) * ease(h, 0.06);
+}
+
+/* =========================================================================
+   Render loop
+   ========================================================================= */
+const litTubes = $("#litTubes"), tubeSpill = $("#tubeSpill"), lampOn = $("#lampOn"), lampGlow = $("#lampGlow");
+const readIn = $("#readIn"), readGr = $("#readGr");
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let last = performance.now(), readoutT = 0;
+
+// ?t=4 fast-forwards the simulation by 4 s on load (handy for screenshots).
+const skip = Math.min(60, +new URLSearchParams(location.search).get("t") || 0);
+for (let t = 0; t < skip; t += 1 / 480) simulate(1 / 480);
+
+// Nearest relit frame, plus a CSS rotation of at most half a step for smooth motion.
+function drawKnob(k) {
+  const a = ((k.shown % 360) + 360) % 360;
+  const nearest = Math.round(a / STRIP.stepDeg);
+  const i = nearest % STRIP.frames;
+  if (i !== k.frame) {
+    k.frame = i;
+    const col = i % STRIP.cols, row = Math.floor(i / STRIP.cols);
+    k.face.style.backgroundPosition = `${col / (STRIP.cols - 1) * 100}% ${row / (STRIP_ROWS - 1) * 100}%`;
+  }
+  k.face.style.transform = `rotate(${(a - nearest * STRIP.stepDeg).toFixed(2)}deg)`;
+}
+
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  const SUB = 1 / 480;
+  for (let t = 0; t < dt; t += SUB) simulate(Math.min(SUB, dt - t));
+
+  for (const k of knobs) {
+    k.shown += (k.target - k.shown) * ease(dt, k.steps ? 0.07 : 0.03);
+    if (Math.abs(k.target - k.shown) < 0.02) k.shown = k.target;
+    drawKnob(k);
+  }
+
+  for (const m of meters) m.needle.style.transform = `rotate(${voltsToAngle(m.x).toFixed(2)}deg)`;
+
+  const flick = reduceMotion ? 0 : sim.flick;
+  const lampLevel = (sim.lamp * (0.96 + 0.04 * flick)).toFixed(3);
+  for (const m of meters) {
+    m.lit.style.opacity = lampLevel;
+    // The lamp catches the needle a little too.
+    m.layer.style.filter = `brightness(${(0.8 + 0.3 * sim.lamp).toFixed(3)}) drop-shadow(2px 3px 1.6px rgba(40, 20, 0, .45))`;
+  }
+  const tube = (sim.warm * (0.92 + 0.08 * flick)).toFixed(3);
+  litTubes.style.opacity = tube;
+  tubeSpill.style.opacity = tube;
+  lampOn.style.opacity = lampGlow.style.opacity = sim.pilot.toFixed(3);
+
+  readoutT -= dt;
+  if (readoutT <= 0) {
+    readoutT = 0.1;
+    readIn.textContent = isFinite(sim.inDb) && sim.inDb > -60 ? `${sim.inDb.toFixed(1)} VU` : "—";
+    readGr.textContent = state.switches.bypass || !state.switches.power ? "—" : `${sim.gr.toFixed(1)} dB`;
+  }
+  if (tipOwner) updateTip();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ---------- dev bar ---------- */
+$("#signalSeg").addEventListener("click", e => {
+  const b = e.target.closest("button[data-signal]");
+  if (!b) return;
+  state.signal = b.dataset.signal;
+  sim.t = 0;
+  for (const x of $("#signalSeg").children) x.setAttribute("aria-pressed", String(x === b));
+});
+</script>
+</body>
+</html>
