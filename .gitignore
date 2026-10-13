@@ -1,0 +1,36 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+
+# Generated data (reproducible from seed + code version; see manifest.json)
+data/test_signals/*
+!data/test_signals/.gitkeep
+
+# Program material: user-owned recordings, never committed
+data/clips/*
+!data/clips/.gitkeep
+
+# Listening results
+data/judgments/*
+!data/judgments/.gitkeep
+
+# Simulation scratch / caches
+runs/
+cache/
+*.raw
+*.prn
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local tool installs (ngspice portable, downloads)
+tools/

@@ -1,0 +1,182 @@
+"""Triode compact models: Koren, the N-section variable-mu extension, grid current.
+
+Every model evaluates in numpy (the Python reference implementation) and emits
+the same equations as a SPICE behavioral-source expression. Tests check that
+the two agree.
+
+Koren, "Improved vacuum tube models for SPICE simulations", Glass Audio 8(5), 1996:
+    E1 = (Vp / Kp) * ln(1 + exp(Kp * (1/mu + Vg / sqrt(Kvb + Vp^2))))
+    Ip = (E1^Ex / Kg1) * (1 + sgn(E1))
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+
+def softplus(x):
+    return np.logaddexp(0.0, x)
+
+
+def spice_softplus(x: str) -> str:
+    """ln(1 + exp(x)) written so it can't overflow."""
+    return f"(max({x},0)+ln(1+exp(-abs({x}))))"
+
+
+def num(x: float) -> str:
+    return f"{x:.15g}"
+
+
+@dataclass(frozen=True)
+class KorenTriode:
+    mu: float
+    ex: float
+    kg1: float
+    kp: float
+    kvb: float
+
+    def ip(self, vg, vp):
+        vg, vp = np.asarray(vg, float), np.asarray(vp, float)
+        e1 = vp / self.kp * softplus(self.kp * (1 / self.mu + vg / np.sqrt(self.kvb + vp**2)))
+        return 2.0 / self.kg1 * np.maximum(e1, 0.0) ** self.ex
+
+    def spice_ip(self, vg: str, vp: str) -> str:
+        arg = f"{num(self.kp)}*({num(1 / self.mu)}+{vg}/sqrt({num(self.kvb)}+{vp}*{vp}))"
+        e1 = f"{vp}/{num(self.kp)}*{spice_softplus(arg)}"
+        return f"{num(2.0 / self.kg1)}*pow(max({e1},0),{num(self.ex)})"
+
+
+@dataclass(frozen=True)
+class VariMuTriode:
+    """Remote-cutoff triode as N parallel Koren sections.
+
+    Section i has amplification factor mus[i] and carries a share weights[i] of
+    the cathode, with sum(weights) = 1. This mirrors the variable-pitch grid:
+    as the bias goes more negative, the high-mu (fine-pitch) sections cut off
+    first and the coarse low-mu sections keep conducting, so gm falls
+    gradually instead of abruptly. Ex, Kg1, Kp and Kvb are shared.
+    """
+
+    mus: tuple[float, ...]
+    weights: tuple[float, ...]
+    ex: float
+    kg1: float
+    kp: float
+    kvb: float
+
+    def __post_init__(self):
+        if len(self.mus) != len(self.weights) or not self.mus:
+            raise ValueError("mus and weights must be non-empty and the same length")
+        if min(self.weights) <= 0 or not np.isclose(sum(self.weights), 1.0):
+            raise ValueError("weights must be positive and sum to 1")
+
+    @property
+    def sections(self) -> list[KorenTriode]:
+        # w * Ip(Kg1) == Ip(Kg1 / w)
+        return [
+            KorenTriode(m, self.ex, self.kg1 / w, self.kp, self.kvb)
+            for m, w in zip(self.mus, self.weights, strict=True)
+        ]
+
+    def ip(self, vg, vp):
+        return sum(s.ip(vg, vp) for s in self.sections)
+
+    def spice_ip(self, vg: str, vp: str) -> str:
+        return "+".join(f"({s.spice_ip(vg, vp)})" for s in self.sections)
+
+
+@dataclass(frozen=True)
+class GridCurrent:
+    """Grid-cathode conduction: a Child-law diode above the contact-potential voltage.
+
+    Ig = perveance * (s * softplus((Vg - contact_v) / s))^1.5, where the
+    softplus with width s = smooth_v rounds the knee. That keeps the SPICE
+    Jacobian continuous and is physically plausible, since electrons leave the
+    cathode with a spread of initial velocities.
+    """
+
+    perveance: float  # A / V^1.5
+    contact_v: float  # grid-cathode voltage at which conduction begins
+    smooth_v: float = 0.05
+
+    def ig(self, vg):
+        x = self.smooth_v * softplus((np.asarray(vg, float) - self.contact_v) / self.smooth_v)
+        return self.perveance * x**1.5
+
+    def spice_ig(self, vg: str) -> str:
+        arg = f"({vg}-({num(self.contact_v)}))/{num(self.smooth_v)}"
+        return f"{num(self.perveance)}*pow({num(self.smooth_v)}*{spice_softplus(arg)},1.5)"
+
+
+PlateModel = KorenTriode | VariMuTriode
+
+
+@dataclass(frozen=True)
+class Triode:
+    """One triode section: plate model, optional grid current, interelectrode capacitances."""
+
+    name: str
+    plate: PlateModel
+    grid: GridCurrent | None = None
+    c_gk: float = 0.0  # F
+    c_gp: float = 0.0
+    c_pk: float = 0.0
+
+    def ip(self, vg, vp):
+        return self.plate.ip(vg, vp)
+
+    def ig(self, vg):
+        return np.zeros_like(np.asarray(vg, float)) if self.grid is None else self.grid.ig(vg)
+
+    def gm(self, vg, vp, dv: float = 1e-4):
+        return (self.ip(np.asarray(vg) + dv, vp) - self.ip(np.asarray(vg) - dv, vp)) / (2 * dv)
+
+    def rp(self, vg, vp, dv: float = 1e-3):
+        return 2 * dv / (self.ip(vg, np.asarray(vp) + dv) - self.ip(vg, np.asarray(vp) - dv))
+
+    @property
+    def subckt_name(self) -> str:
+        return "TRIODE_" + "".join(c if c.isalnum() else "_" for c in self.name).upper()
+
+    def subckt(self) -> str:
+        """SPICE subcircuit with pins (plate, grid, cathode)."""
+        vg, vp = "V(g,k)", "V(p,k)"
+        lines = [
+            f"* {self.name}: generated by varimu.devices.triode",
+            f".subckt {self.subckt_name} p g k",
+            f"Bp p k I={{{self.plate.spice_ip(vg, vp)}}}",
+        ]
+        if self.grid is not None:
+            lines.append(f"Bg g k I={{{self.grid.spice_ig(vg)}}}")
+        for nm, a, b, c in (
+            ("Cgk", "g", "k", self.c_gk),
+            ("Cgp", "g", "p", self.c_gp),
+            ("Cpk", "p", "k", self.c_pk),
+        ):
+            if c > 0:
+                lines.append(f"{nm} {a} {b} {num(c)}")
+        lines.append(f".ends {self.subckt_name}")
+        return "\n".join(lines) + "\n"
+
+
+def koren_from_spec(
+    *, vp: float, vg: float, ip: float, gm: float, rp: float, kp: float = 300.0, kvb: float = 300.0
+) -> KorenTriode:
+    """Solve Koren mu, ex and kg1 so the model reproduces one published operating point.
+
+    kp and kvb are held fixed. In the Koren form, gm/Ip is tied to ex and mu,
+    so ex has to be free for Ip, gm and rp to all be matched exactly.
+    """
+    from scipy.optimize import least_squares
+
+    def resid(x):
+        t = Triode("fit", KorenTriode(np.exp(x[0]), np.exp(x[1]), np.exp(x[2]), kp, kvb))
+        return [np.log(t.ip(vg, vp) / ip), np.log(t.gm(vg, vp) / gm), np.log(t.rp(vg, vp) / rp)]
+
+    sol = least_squares(resid, np.log([gm * rp, 1.4, 1500.0]), xtol=1e-14, ftol=1e-14)
+    if np.max(np.abs(sol.fun)) > 1e-6:
+        raise RuntimeError(f"Koren spec fit did not converge: residuals {sol.fun}")
+    m, ex, k1 = np.exp(sol.x)
+    return KorenTriode(float(m), float(ex), float(k1), kp, kvb)

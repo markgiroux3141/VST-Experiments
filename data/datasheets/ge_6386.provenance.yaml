@@ -1,0 +1,35 @@
+device: "6386"
+document: "GE Electronic Tubes 6386 Twin Triode, ET-T1113 (8-54); curves dated August 21, 1953"
+publisher: General Electric
+date: 1954-08
+local_copy: sources/ge_6386_ET-T1113.pdf
+local_copy_sha256: 12f495c6632a32508377bdd967cfaf6c5cf9ee405e5dc8c161ba07a6144bc3d2
+scan_source: "web: https://frank.pocnet.net/sheets/142/6/6386.pdf (Frank's Electron Tube Data Sheets)"
+digitized_with: "scripts/digitize_ge6386.py (automatic trace, 400 dpi, quadratic grid calibration)"
+digitized_by: Claude Code
+digitized_on: 2026-10-13
+files:
+  ge_6386_plate.csv:
+    figure: "p.5 lower, Average Plate Characteristics, Each Section"
+    columns: "vg_v, vp_v, ip_a"
+    curves: "Ec = 0, -2, -4, -6, -8, -10, -12, -14, -17, -20, -25, -30, -40, -50, -70 V"
+    coverage: "Ip >= 1.5 mA for Ec >= -30 V (curves merge below that); Ip >= 0.5 mA for Ec <= -40 V"
+  ge_6386_transfer.csv:
+    figure: "p.4 lower, Average Transfer Characteristics, Each Section"
+    columns: "vp_v, vg_v, ip_a"
+    curves: "Eb = 100, 150, 200, 250, 300 V"
+    coverage: "Ip >= 0.4 mA"
+  ge_6386_cascode_gm.csv:
+    figure: "p.3 upper, Average Transfer Characteristics, Cascode Connection (transconductance, log scale)"
+    columns: "ecc2_v, vg1_v, gm_s"
+    curves: "Ecc2 = 150, 200, 250, 300 V; Eb = 250 V; upper grid fed from Ecc2 via 470k/470k divider, bypassed"
+    coverage: "10 to ~7000 umho"
+axis_calibration: "frame lines and detected grid lines; see digitize script constants"
+estimated_error: >-
+  Trace centerline within about 2 px at 400 dpi: about 0.4 V and 0.05 mA on the
+  plate plot, 0.06 V and 0.06 mA on the transfer plot, and 1.5% on the log gm
+  plot. Larger systematic error is possible where label text overlays a curve.
+  These are "average" characteristics, not a single specimen.
+notes: >-
+  Overlays used to check the traces can be regenerated with
+  `uv run python scripts/digitize_ge6386.py --overlays DIR`.

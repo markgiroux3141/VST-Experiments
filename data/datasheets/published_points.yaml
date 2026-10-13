@@ -1,0 +1,71 @@
+# Tabulated values transcribed from datasheets (not digitized curves).
+# Units: V, A, S (siemens), ohm, F.
+
+"6386":
+  source: "GE ET-T1113 (8-54) p.1-2; local copy sources/ge_6386_ET-T1113.pdf"
+  class_a1:   # each section
+    vp_v: 100
+    rk_ohm: 200
+    mu: 17
+    rp_ohm: 4250
+    gm_s: 4.0e-3
+    ip_a: 9.6e-3
+  gm_100umho_at:   # "Grid voltage, approximate, Gm = 100 micromhos"
+    vp_v: 100
+    vg_v: -16
+    gm_s: 1.0e-4
+  capacitances_f:  # without external shield, each section
+    gp: 1.2e-12
+    input: 2.0e-12
+    output: 1.1e-12
+  max_ratings:
+    vp_v: 300
+    pd_w: 1.5
+    ik_a: 18.0e-3
+  heater: {v: 6.3, a: 0.35}
+
+"12BH7":
+  source: "Ei-RC 12BH7 data sheet p.3; local copy sources/eirc_12bh7.pdf (web: tubedatabase.co)"
+  class_a1:
+    vp_v: 250
+    vg_v: -10.5
+    ip_a: 11.5e-3
+    gm_s: 3.1e-3
+    mu: 16.5
+    rp_ohm: 5300
+  max_ratings: {vp_v: 300, pd_w: 3.5}
+
+"6973":
+  source: "RCA 6973 DATA 1 (10-60) p.1; local copy sources/rca_6973.pdf (web: tubedatabase.co)"
+  class_a1:
+    vp_v: 250
+    vg2_v: 250
+    vg1_v: -15
+    rp_ohm: 73000
+    gm_s: 4.8e-3
+    ip_a: 46.0e-3
+    ig2_a: 3.5e-3
+  cutoff:   # "Grid-No.1 voltage (approx.) for plate uA = 100"
+    vp_v: 250
+    vg2_v: 250
+    vg1_v: -40
+    ip_a: 100.0e-6
+  capacitances_f:
+    g1p: 0.4e-12
+    input: 9.0e-12
+    output: 6.0e-12
+  max_ratings: {vp_v: 440, vg2_v: 330, pd_w: 12, pg2_w: 2}
+
+"GZ34":
+  source: "Philips GZ34 data, sheet A (6.6.1958), anode characteristic; local copy sources/philips_gz34.pdf (web: tubedatabase.co)"
+  anode_curve_read_by_eye:   # per anode, approx +-5%
+    - {va_v: 10, ia_a: 0.115}
+    - {va_v: 20, ia_a: 0.330}
+    - {va_v: 30, ia_a: 0.650}
+  max_ratings: {io_a: 0.25, iap_a: 0.75, vinv_v: 1500}
+  heater: {v: 5.0, a: 1.9}
+
+"12AX7":
+  source: "web: https://normankoren.com/Audio/Tubemodspice_article.html (Koren, Table 1)"
+  koren: {mu: 100, ex: 1.4, kg1: 1060, kp: 600, kvb: 300}
+  capacitances_f: {gk: 2.3e-12, gp: 2.4e-12, pk: 0.9e-12}

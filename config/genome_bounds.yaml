@@ -1,0 +1,74 @@
+# Genome bounds: every physical parameter the optimizer may vary.
+#
+# Schema: a parameter is any mapping that has a `source` key. It takes one of:
+#   {min, max, source, unit?, notes?}   continuous range
+#   {choices, source, notes?}           discrete choice
+# Groups are plain nested mappings, and a parameter's ID is its dotted path,
+# e.g. `tubes.v6386_a.emission_scale`.
+#
+# Rules (see VARIMU_PROJECT_PLAN.md, "Never fabricate data"):
+#   - Every parameter has a `source`: a datasheet, schematic or cited paper.
+#   - "TBD" is allowed for min/max/choices/source while a phase is in progress.
+#     An invented number with no source is not.
+#   - `uv run varimu genome-status` lists everything still unresolved.
+#
+# This is the Phase 0 skeleton. Values are filled in during Phases 1-3.
+
+tubes:
+  # Push-pull 6386 variable-mu gain stage. Multipliers apply to the parameters
+  # fitted to the RCA 6386 datasheet in Phase 1.
+  v6386_a:
+    emission_scale: {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "aging / cathode emission spread"}
+    mu_spread:      {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "manufacturing tolerance"}
+    grid_contact_v: {min: -1.0, max: -0.5, unit: V, source: "provisional: model knowledge (oxide-cathode contact potential)", notes: "onset of grid current; loads the timing networks"}
+  v6386_b:
+    emission_scale: {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "aging / cathode emission spread"}
+    mu_spread:      {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "manufacturing tolerance"}
+    grid_contact_v: {min: -1.0, max: -0.5, unit: V, source: "provisional: model knowledge (oxide-cathode contact potential)", notes: "onset of grid current; loads the timing networks"}
+  # Sidechain chain is 12AX7 -> 12BH7 -> push-pull 6973 -> diode bridge
+  # (web: gearspace.com/threads/fairchild-tubes.463974; historyofrecording.com).
+  # Per-instance spreads get added in Phase 3.
+
+sidechain_rectifier:
+  diode_type: {choices: [silicon, selenium], source: "web: https://historyofrecording.com/Tube_Equipment_Corporation.html says 'diode bridge rectifier'; type unknown", notes: "only silicon is modeled so far (config/devices/si_rectifier.yaml)"}
+
+transformers:
+  input:
+    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
+    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
+    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
+    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
+    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
+  interstage:
+    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
+    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
+    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
+    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
+    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
+  output:
+    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
+    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
+    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
+    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
+    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
+  sidechain:
+    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
+    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
+    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
+    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
+    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
+
+psu:
+  # Shared by the audio path and sidechain (plan: Coupling Checklist).
+  # Nominal component values come from the schematic. Only uncertain
+  # quantities belong here.
+  source_impedance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD, notes: "mains transformer + rectifier"}
+
+passives:
+  # Per-instance deviation from nominal, drawn independently for every part.
+  resistor_deviation_pct:  {min: TBD, max: TBD, unit: pct, source: TBD}
+  capacitor_deviation_pct: {min: TBD, max: TBD, unit: pct, source: TBD}

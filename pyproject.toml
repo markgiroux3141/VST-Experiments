@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "varimu"
+dynamic = ["version"]
+description = "Physically modeled variable-mu (Fairchild-style) compressor with human-in-the-loop optimization"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "soundfile>=0.12",
+    "pyyaml>=6.0",
+    "matplotlib>=3.8",
+]
+
+[project.optional-dependencies]
+# Later-phase stacks, installed when their phase starts (`uv sync --extra listen`, ...).
+listen = ["fastapi", "uvicorn", "pyloudnorm"]     # Phase 5
+ml = ["torch"]                                    # Phases 6, 7, 10
+optimize = ["botorch", "cma", "ribs"]             # Phase 8
+
+[project.scripts]
+varimu = "varimu.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.hatch.version]
+path = "varimu/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["varimu"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["ui-mockup"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY"]

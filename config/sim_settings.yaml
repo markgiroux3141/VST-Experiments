@@ -1,0 +1,23 @@
+# Simulation and signal settings.
+#
+# These are numerical / engineering choices, not physical data, so they carry no
+# `source` field. Leave a comment saying why whenever you change one.
+
+sample_rate: 96000   # Hz. Test signals, renders and simulation output all use this rate.
+seed: 0              # Default seed for anything stochastic (test signals, genome sampling).
+
+audio:
+  # Circuit volts (peak) at the input transformer primary that correspond to
+  # 0 dBFS. Test signals are defined in dBFS; this calibration is applied by the
+  # simulation layer. Set during Phase 4.
+  full_scale_volts_peak: null
+
+simulator:
+  primary: TBD       # xyce | ngspice. Decided after Phase 2 (see plan: Open Decisions).
+  fallback: ngspice
+
+transient:
+  max_timestep_s: null   # null -> 1 / sample_rate
+  reltol: 1.0e-3         # SPICE default
+  abstol: 1.0e-12        # SPICE default
+  vntol: 1.0e-6          # SPICE default
