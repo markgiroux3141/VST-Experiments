@@ -1,0 +1,22 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "circuitsim"
+description = "Fast nonlinear audio circuit simulator (Rust, PyO3)"
+requires-python = ">=3.11"
+dynamic = ["version"]
+
+[tool.maturin]
+features = ["python"]
+module-name = "circuitsim"
+
+[tool.uv]
+# uv only rebuilds a path dependency when one of these changes (default: pyproject.toml only).
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "../../Cargo.toml" },
+    { file = "src/**/*.rs" },
+]

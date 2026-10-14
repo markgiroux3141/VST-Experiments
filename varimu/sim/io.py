@@ -93,6 +93,21 @@ class TransientSettings:
         return asdict(self)
 
 
+# --- Oversampling (shared by both engines) ----------------------------------------
+
+
+def upsample(x: np.ndarray, k: int) -> np.ndarray:
+    """Band-limited upsampling of the input to the simulation rate."""
+    return resample_poly(x, k, 1) if k > 1 else x
+
+
+def decimate(v: np.ndarray, k: int, n: int) -> np.ndarray:
+    """Anti-aliased decimation of a simulated vector back to n output samples."""
+    if k > 1:
+        v = resample_poly(v, 1, k, padtype="edge")
+    return v[:n]
+
+
 # --- Audio files ------------------------------------------------------------------
 
 
@@ -130,6 +145,9 @@ def input_chunks(x: np.ndarray, rate: float, chunk: int | None = None):
     to the neighbouring sample time, so adjacent chunks' ramps add up to the
     straight segment between x[b-1] and x[b]. A filesource holds its first
     value before its first point, so later chunks also start with (0, 0).
+    It does not hold its last value: past the last entry it reads 0 (ngspice 47),
+    and the final timepoint can land a rounding error past it. So the last
+    chunk ends with an extra point one sample after the end, holding x[-1].
     """
     n, chunk = len(x), chunk or CHUNK_LINES
     out = []
@@ -140,6 +158,8 @@ def input_chunks(x: np.ndarray, rate: float, chunk: int | None = None):
             idx, vals = np.concatenate([[a - 1], idx]), np.concatenate([[0.0], vals])
         if b < n:
             idx, vals = np.concatenate([idx, [b]]), np.concatenate([vals, [0.0]])
+        else:
+            idx, vals = np.concatenate([idx, [n]]), np.concatenate([vals, [x[-1]]])
         t = idx / rate
         if a > 1:
             t, vals = np.concatenate([[0.0], t]), np.concatenate([[0.0], vals])
@@ -249,15 +269,26 @@ def _deck(
     s: TransientSettings,
     t_end: float,
     chunks: Sequence[str],
+    max_step_div: int = 1,
+    grid_breakpoints: bool = False,
 ) -> str:
     dt = 1.0 / s.sim_rate
+    # A pulse with corners every dt / 2 on an isolated node: its breakpoints put
+    # a timepoint on every sample, so the output needs no interpolation.
+    brk = (
+        f"Vgrid_brk grid_brk 0 PULSE(0 1 0 {dt / 2:.17g} {dt / 2:.17g} 0 {dt:.17g})\n"
+        f"Rgrid_brk grid_brk 0 1k\n"
+        if grid_breakpoints
+        else ""
+    )
     return (
         f"{netlist.rstrip()}\n"
         f"* --- audio input (varimu.sim.io) ---\n"
         f"{_input_sources(input_node, chunks)}"
+        f"{brk}"
         f".options reltol={s.reltol:g} abstol={s.abstol:g} vntol={s.vntol:g} method={s.method}\n"
         f".save {' '.join(save)}\n"
-        f".tran {dt:.17g} {t_end:.17g} 0 {dt:.17g}\n"
+        f".tran {dt:.17g} {t_end:.17g} 0 {dt / max_step_div:.17g}\n"
         f".end\n"
     )
 
@@ -291,6 +322,8 @@ def run_transient(
     progress: Callable[[float], None] | None = None,
     timeout_s: float | None = None,
     files: Mapping[str, Path | str] | None = None,
+    max_step_div: int = 1,
+    grid_breakpoints: bool = False,
 ) -> TransientResult:
     """Drive `input_node` (to ground) with `input_v` volts and run a transient.
 
@@ -301,11 +334,18 @@ def run_transient(
     for inspection; by default a temporary directory is used and removed.
     `files` are placed next to the netlist under the given names, e.g. device
     tables: a Path is hard-linked (copied if linking fails), a str is written.
+
+    Reference runs (agreement tests): `max_step_div` caps ngspice's step at
+    1 / (sim_rate * max_step_div), and `grid_breakpoints` forces a timepoint
+    on every sample. Without them ngspice's timepoints straddle the sample
+    grid, where the piecewise-linear input has its kinks, and the output is
+    interpolated: about -55 to -75 dB re signal on small linear circuits at
+    tight reltol (measured 2026-10-14, see tests/test_circuitsim_linear.py).
     """
     s = settings or TransientSettings.from_sim_settings()
     x = np.asarray(input_v, float)
     n, k = len(x), s.oversample
-    x_up = resample_poly(x, k, 1) if k > 1 else x
+    x_up = upsample(x, k)
     n_up = len(x_up)
     t_end = (n_up - 1) / s.sim_rate
 
@@ -319,7 +359,7 @@ def run_transient(
         (wd / ".spiceinit").write_text(
             f"set filetype=binary\nset num_threads={s.threads}\n", encoding="utf-8"
         )
-        deck = _deck(netlist, input_node, save, s, t_end, chunks)
+        deck = _deck(netlist, input_node, save, s, t_end, chunks, max_step_div, grid_breakpoints)
         (wd / NETLIST_FILE).write_text("* varimu transient\n" + deck, encoding="utf-8")
         raw = wd / RAW_FILE
         raw.unlink(missing_ok=True)
@@ -363,10 +403,7 @@ def run_transient(
     grid = np.arange(n_up) / s.sim_rate
     out: dict[str, np.ndarray] = {}
     for name in save:
-        v = np.interp(grid, t, vec[name.lower()])
-        if k > 1:
-            v = resample_poly(v, 1, k, padtype="edge")
-        out[name] = v[:n]
+        out[name] = decimate(np.interp(grid, t, vec[name.lower()]), k, n)
     if progress:
         progress(1.0)
     return TransientResult(out, s.sample_rate, wall, len(t))

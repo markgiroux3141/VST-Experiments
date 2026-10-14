@@ -236,10 +236,92 @@ serde types). Refactor `netlist.py` to build IR, then emit SPICE from it.
 *Done when:* ngspice renders from the IR path are bit-identical to today's (same
 netlist text), and the IR round-trips Python -> JSON -> Rust -> JSON.
 
+*Status (2026-10-13): M0 and M1 done.* Measured: the SPICE text emitted from
+the IR is byte-identical to the pre-refactor netlists for 12 builds (defaults,
+every Time Constant position, both pot extremes incl. the 0 dB T-pad short,
+6386 mismatch, both triode formulations; `tests/test_netlist_golden.py`), and
+all 10 distinct IRs round-trip Python -> JSON -> Rust -> JSON exactly (cargo
+test on the fixtures; pytest through the binding). IR decisions made along the
+way, with M2 in mind:
+
+- **Coupled inductors are pairwise `Coupling` elements** (SPICE `K`: two
+  inductor names and k), not a matrix in the IR. That is what SPICE emission
+  needs. M2 turned out not to need explicit groups either: each inductor has
+  a branch-current unknown, and each coupling stamps
+  M_ij = k_ij sqrt(L_i L_j) into the reactive matrix next to the self
+  inductances, so the inductance matrix is never inverted.
+- **Device models in the IR are the `varimu.devices` dataclasses** (Triode
+  with Koren or variable-mu plate and grid current, Pentode, JunctionDiode,
+  VacuumDiode) with every parameter, so they can't drift from the Python
+  reference. Instances are one generic `Device` element: model name plus
+  nodes in the model's pin order.
+- **The triode formulation (table vs exact) is not in the IR.** It's a SPICE
+  emission choice; table grids are passed to the emitter.
+- **Sections** (titled element groups) exist for readable, exactly
+  reproducible SPICE; engines just concatenate them.
+- **JSON** is versioned (`version: 1`), every number is a float, unknown
+  fields are errors on both sides, and both sides run the same validation
+  (unique names ignoring case, SPICE letter prefixes, positive values, model
+  references and pin counts, couplings name inductors, input and probes
+  connected).
+- **Binding:** PyO3 0.29 with `abi3-py311` (one wheel for Python >= 3.11);
+  for now it exposes `__version__`, `IR_VERSION` and `ir_roundtrip(json)`.
+
 **M2. Linear engine.** MNA stamps for R, C, L, coupled inductors and sources;
 trapezoidal fixed step; input and probes.
 *Done when:* linear test circuits match closed form and ngspice; the 670's
 transformers alone (driven by the input, tubes removed) match ngspice.
+
+*Status (2026-10-14): done.* `mna.rs` (stamps), `linalg.rs` (dense LU),
+`transient.rs` (fixed step; trapezoidal in companion form, as SPICE does it,
+so resistive rows are solved exactly instead of averaged; backward Euler as
+an option); binding `circuitsim.simulate`; Python wrapper
+`varimu.sim.fast.run_transient` with `io.run_transient`'s oversampling and
+decimation. Measured:
+
+- **Closed form** (cargo, `tests/linear.rs`): RC, RL and series RLC driven by
+  a sine from rest, and a k = 0.999 transformer against an independent RK4
+  integration of its ODE. Errors fall 4x per halving of the step (2x for
+  backward Euler); the transformer's start-up shows the known trapezoidal
+  ringing of a mode faster than the step (leakage, tau = 0.65 us), 2e-3 of
+  peak on the first step, decaying 0.6x per step.
+- **ngspice** (`tests/test_circuitsim_linear.py`): small circuits and the 670
+  with tubes and diodes removed, driven at the input (T101), the output
+  (T102, T103) and a 6973 plate (T104), every node probed. The difference
+  falls 12 dB per doubling of the oversampling, so what's left is the
+  trapezoidal error; operating points agree with `.op` to 1.3e-9 of B+.
+  Worst probe at k = 2 / 4 / 8: input -45 / -56 / -68 dB, output
+  -39 / -49 / -60 dB, T104 -16 / -29 / -41 dB.
+- **Speed:** the device-stripped 670 (83 unknowns, dense) runs at 2.0 s per
+  second of audio at k = 2. Sparse vs dense is still M3's decision.
+
+Findings that change later milestones:
+
+- **k = 2 is not enough for the fixed-step engine on this circuit.** The
+  transformers resonate at 20-110 kHz with Q up to 7 (T101 secondary 35 kHz,
+  T103 75 kHz, T104 110 kHz: winding capacitance against leakage
+  inductance), and trapezoidal integration warps those frequencies, by -9%
+  at 35 kHz at k = 2. ngspice escapes this because it adapts its step. The
+  670 target (-55 dB) needs about k = 8 near T104 unless the resonances are
+  damped in reality (Phase 2's transformer models decide that) or the
+  engine changes method. Options for M4: higher oversampling only inside the
+  engine (decimating in Rust), or a higher-order or prewarped scheme for
+  those modes. Measure on the full slice before choosing.
+- **ngspice needs a reference mode to be a reference.** Plain runs straddle
+  the input's sample kinks and interpolate the output (-55 to -75 dB on small
+  circuits at tight reltol); `io.run_transient(max_step_div=8,
+  grid_breakpoints=True)` fixes that. On the device-stripped 670 ngspice also
+  needs gear for the T104 drive (trap ran > 300 s) and crawls at reltol 1e-6.
+- **Bug found in the ngspice path:** a filesource reads 0 past its last
+  entry, and the final timepoint could land a rounding error past it, so the
+  last oversampled sample of every render saw input 0. Fixed in
+  `io.input_chunks` (extra hold point), with a test.
+- **Ill-conditioned nodes:** a node held only by a 1 GOhm leak (T104's
+  secondary once the bridge diodes are gone) showed ~4 mV of roundoff with
+  unscaled pivoting. Row/column equilibration brings it to the double-
+  precision floor (~5e-5 V; ngspice shows ~2e-5 V there). Iterative
+  refinement didn't help further and was dropped. Expect the same with
+  reverse-biased diodes in M3; Newton's residuals behave like ngspice's.
 
 **M3. Devices and Newton (full MNA).** Device trait; triode, variable-mu triode,
 grid current, pentode, diodes; Newton with limiting and substeps; DC

@@ -38,3 +38,6 @@ tools/
 # Generated renders and logs under reports/ (plots and summaries are kept)
 reports/**/renders/
 reports/**/*.log
+
+# Rust build output
+target/

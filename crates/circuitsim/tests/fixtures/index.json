@@ -1,0 +1,14 @@
+{
+  "default_table": "default.json",
+  "default_exact": "default.json",
+  "tc1": "tc1.json",
+  "tc2": "default.json",
+  "tc3": "tc3.json",
+  "tc4": "tc4.json",
+  "tc5": "tc5.json",
+  "tc6": "tc6.json",
+  "pots_min": "pots_min.json",
+  "pots_max": "pots_max.json",
+  "mismatch_table": "mismatch.json",
+  "mismatch_exact": "mismatch_exact.json"
+}

@@ -7,7 +7,14 @@ import pytest
 import soundfile as sf
 
 from varimu.sim import ngspice
-from varimu.sim.io import TransientSettings, load_audio, read_raw, run_transient, write_audio
+from varimu.sim.io import (
+    TransientSettings,
+    load_audio,
+    read_raw,
+    run_transient,
+    upsample,
+    write_audio,
+)
 
 FS = 96000
 
@@ -122,6 +129,21 @@ def test_chunked_input_matches_single_file(monkeypatch):
     many = run_transient(net, x, input_node="in", save=save, settings=s)
     for v in save:
         np.testing.assert_allclose(many.vectors[v], one.vectors[v], atol=2e-4)
+
+
+@spice
+def test_input_holds_through_the_last_timepoint(tmp_path):
+    """ngspice's last timepoint can land a rounding error past the file's last entry
+    (times are written with 15 digits), where a filesource stops holding its value.
+    Measured on ngspice 47 with this length and rate: the input read 0 there."""
+    s = dataclasses.replace(TransientSettings.from_sim_settings(), oversample=4)
+    t = np.arange(2880) / FS
+    x = np.sin(2 * np.pi * 1000 * t) * np.clip(t / 3e-3, 0, 1)
+    run_transient("r1 in 0 1k\n", x, input_node="in", save=["v(in)"], settings=s, workdir=tmp_path)
+    raw = read_raw(tmp_path / "out.raw")
+    x_up = upsample(x, s.oversample)
+    assert raw["time"][-1] == pytest.approx((len(x_up) - 1) / s.sim_rate, rel=1e-12)
+    assert raw["v(in)"][-1] == pytest.approx(x_up[-1], abs=1e-9)
 
 
 @spice

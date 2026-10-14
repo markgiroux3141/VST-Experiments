@@ -1,0 +1,10 @@
+# Rust workspace. crates/circuitsim is the fast circuit simulator
+# (docs/CIRCUIT_SIM_PLAN.md); a plugin crate joins later (main plan, Phase 10).
+[workspace]
+members = ["crates/*"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.92"
+publish = false

@@ -1,0 +1,149 @@
+{
+  "default_table": {
+    "overrides": {},
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "default_exact": {
+    "overrides": {},
+    "triode_formulation": "exact",
+    "files": {}
+  },
+  "tc1": {
+    "overrides": {
+      "time_constant": 1
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "tc2": {
+    "overrides": {
+      "time_constant": 2
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "tc3": {
+    "overrides": {
+      "time_constant": 3
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "tc4": {
+    "overrides": {
+      "time_constant": 4
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "tc5": {
+    "overrides": {
+      "time_constant": 5
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "tc6": {
+    "overrides": {
+      "time_constant": 6
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "pots_min": {
+    "overrides": {
+      "input_atten_db": 0.0,
+      "ac_threshold": 0.0,
+      "dc_threshold": 0.0,
+      "zero": 0.0,
+      "balance": 0.0
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "pots_max": {
+    "overrides": {
+      "input_atten_db": 30.0,
+      "ac_threshold": 1.0,
+      "dc_threshold": 1.0,
+      "zero": 1.0,
+      "balance": 1.0
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
+      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+    }
+  },
+  "mismatch_table": {
+    "overrides": {
+      "v6386_a.emission_scale": 0.8,
+      "v6386_a.mu_spread": 1.05,
+      "v6386_a.grid_contact_v": -0.6,
+      "v6386_b.emission_scale": 1.1,
+      "v6386_b.mu_spread": 0.97
+    },
+    "triode_formulation": "table",
+    "files": {
+      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
+      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
+      "v6386_a.tab": "4cc7263dd50d221570d0acf59f4501fa.tab",
+      "v6386_b.tab": "c7d765d5db7254b4f6dd4927fa6977ad.tab"
+    }
+  },
+  "mismatch_exact": {
+    "overrides": {
+      "v6386_a.emission_scale": 0.8,
+      "v6386_a.mu_spread": 1.05,
+      "v6386_a.grid_contact_v": -0.6,
+      "v6386_b.emission_scale": 1.1,
+      "v6386_b.mu_spread": 0.97,
+      "time_constant": 6
+    },
+    "triode_formulation": "exact",
+    "files": {}
+  }
+}

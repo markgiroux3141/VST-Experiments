@@ -173,6 +173,10 @@ wheels = [
 ]
 
 [[package]]
+name = "circuitsim"
+source = { directory = "crates/circuitsim" }
+
+[[package]]
 name = "click"
 version = "8.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2435,6 +2439,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+fast = [
+    { name = "circuitsim" },
+]
 listen = [
     { name = "fastapi" },
     { name = "pyloudnorm" },
@@ -2458,6 +2465,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "botorch", marker = "extra == 'optimize'" },
+    { name = "circuitsim", marker = "extra == 'fast'", directory = "crates/circuitsim" },
     { name = "cma", marker = "extra == 'optimize'" },
     { name = "fastapi", marker = "extra == 'listen'" },
     { name = "matplotlib", specifier = ">=3.8" },
@@ -2470,7 +2478,7 @@ requires-dist = [
     { name = "torch", marker = "extra == 'ml'" },
     { name = "uvicorn", marker = "extra == 'listen'" },
 ]
-provides-extras = ["listen", "ml", "optimize"]
+provides-extras = ["fast", "listen", "ml", "optimize"]
 
 [package.metadata.requires-dev]
 dev = [

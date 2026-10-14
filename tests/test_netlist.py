@@ -81,8 +81,8 @@ def test_pots_follow_their_controls():
 
 def test_t_pad_gives_its_attenuation_into_its_own_impedance():
     for db in (1.0, 10.0, 20.0):
-        el = _elements("\n".join(nl._t_pad("AT", "a", "b", 600.0, db)))
-        r1, r2, r3 = (float(el[n].split()[-1]) for n in ("RAT1", "RAT2", "RAT3"))
+        el = {r.name: r for r in nl._t_pad("AT", "a", "b", 600.0, db)}
+        r1, r2, r3 = (el[n].r_ohm for n in ("RAT1", "RAT2", "RAT3"))
         load = 600.0
         mid = r3 * (r2 + load) / (r3 + r2 + load)
         v_mid = mid / (r1 + mid)

@@ -1,9 +1,9 @@
-"""Genome -> full coupled compressor netlist (Phase 3).
+"""Genome -> full coupled compressor circuit (Phase 3).
 
-Planned modules:
-    netlist.py      genome -> full netlist
-    psu.py          power supply section, shared by audio path and sidechain
-    subcircuits/    .lib / .sub files, one per stage
+Modules:
+    netlist.py      circuit values + overrides -> circuit IR (+ SPICE text)
+    ir.py           the circuit IR shared with the Rust engine (crates/circuitsim)
+    spice.py        circuit IR -> ngspice netlist text
 
 Every component value traces to the published schematic; anything illegible
 or ambiguous becomes a bounded genome parameter.
