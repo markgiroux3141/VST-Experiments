@@ -7,17 +7,45 @@ sample_rate: 96000   # Hz. Test signals, renders and simulation output all use t
 seed: 0              # Default seed for anything stochastic (test signals, genome sampling).
 
 audio:
-  # Circuit volts (peak) at the input transformer primary that correspond to
+  # Circuit volts (peak) at the unit's input terminals that correspond to
   # 0 dBFS. Test signals are defined in dBFS; this calibration is applied by the
-  # simulation layer. Set during Phase 4.
-  full_scale_volts_peak: null
+  # simulation layer. 13.80 V = +22 dBu peak-sine-equivalent, i.e. the common
+  # studio alignment -18 dBFS = +4 dBu (0.775 V * 10^(22/20) * sqrt(2)). The
+  # same scale converts the output back to dBFS. The front-panel input control
+  # sets how hard that drives the unit, so this is a convention, not physics.
+  full_scale_volts_peak: 13.80
 
 simulator:
   primary: TBD       # xyce | ngspice. Decided after Phase 2 (see plan: Open Decisions).
   fallback: ngspice
 
 transient:
-  max_timestep_s: null   # null -> 1 / sample_rate
+  # Input is band-limited upsampled by this factor before simulation, and the
+  # output is decimated with an anti-alias filter (see varimu/sim/io.py). The
+  # max timestep is 1 / (oversample * sample_rate).
+  #
+  # Chosen from scripts/tolerance_study.py (2026-10-13, reports/slice/
+  # tolerance_study.json): against gear/reltol 1e-4/4x, trap/1e-3/2x is off by
+  # -65 dB (0 dBFS burst attack) and -67 dB (program clip) re signal, CV within
+  # 0.12 V, at ~31-37x real time. gear/1e-3/2x: -63/-59 dB at similar speed.
+  # 1x oversampling: -53/-49 dB and barely faster. reltol 1e-5 fails to start
+  # ("timestep too small" at a bridge diode). If trap ever collapses its step
+  # (it did while the netlist had a parasitic oscillation), use gear.
+  oversample: 2
+  method: trap           # trap | gear
   reltol: 1.0e-3         # SPICE default
   abstol: 1.0e-12        # SPICE default
   vntol: 1.0e-6          # SPICE default
+
+runner:
+  # Keep the machine usable while renders run.
+  threads_per_job: 1          # ngspice OpenMP threads; spinit's default (8) spins every core
+  priority: below_normal      # normal | below_normal | idle (OS scheduling class for ngspice)
+  max_parallel_jobs: null     # null -> cpu_count - 2 (at least 1)
+
+devices:
+  # How triode plate currents reach SPICE. "table": an XSPICE table2D of the
+  # Python model, regenerated per instance (the 6386 runs ~20x faster; bilinear
+  # error 1e-4 of max current or better, see varimu/devices/table.py).
+  # "exact": the analytic behavioral expressions (slow; for verification).
+  triode_formulation: table

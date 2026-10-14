@@ -1,0 +1,140 @@
+# Fairchild 670, one channel (left/right mode), as a parametric netlist.
+# Read by varimu/circuit/netlist.py.
+#
+# Main source [MAN]: Fairchild 670 instruction manual (Dec 1959) incl. drawing
+# A-96039 "670 Dual Limiter Schematic":
+#   http://thehistoryofrecording.com/Manuals/Fairchild/Fairchild_670_stereo_limiting_amplifier_instructions_Schematics.pdf
+#   sha256 0ede9ed8d1294ada7b3e+05a6f8ef89e+7487a7530a2c7a36481c5c297bac7c535 (scanned, 24 MB, not committed)
+# Crops of the drawing are in data/schematics/fairchild_670/ (see README there).
+#
+# Source tags:
+#   "sch: ..."         value printed on A-96039
+#   "sch-interp: ..."  wiring read off the scan; plausible but not certain
+#   "web: <url> ..."   other published source
+#   "provisional: ..." model knowledge; must be a genome parameter or replaced later
+#
+# Every entry is {value, source} (+ unit/notes). Entries with `genome:` are
+# uncertain: their bounds live at that path in config/genome_bounds.yaml, and
+# `value` is the nominal used for renders until the optimizer takes over.
+# Any key can be overridden per render (`varimu render --set key=value`).
+
+controls:
+  # Front panel and screwdriver trims. Not physical uncertainties, so not genome.
+  input_atten_db:
+    {value: 10.0, min: 0.0, max: 30.0, unit: dB, source: "sch: AT101 600 ohm T attenuator; [MAN] p.5 1 dB/step, p.9 ~10 dB for unity gain. Range end (30 dB) is provisional: step count not legible"}
+  ac_threshold:
+    {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: R115A 100k / R115B 180k LIN dual pot (front-panel knob)", notes: "1 = most signal to the sidechain = lowest threshold"}
+  time_constant:
+    {value: 2, min: 1, max: 6, unit: position, source: "sch: S102 positions 1-6"}
+  dc_threshold:
+    {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "sch: R117 100k (screwdriver beneath front panel)", notes: "0 = 12AX7 cathodes at ~3.6 V (lowest threshold), 1 = ~16 V"}
+  balance:
+    {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: R105A/B dual 100 ohm (screwdriver, front panel)"}
+  zero:
+    {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "sch: R142 2500 ohm 'ZERO' between bias rail and ground", notes: "standing 6386 grid bias = zero * bias rail"}
+
+values:
+  # --- Program source and load -------------------------------------------------
+  source_impedance_ohm: {value: 600, source: "[MAN] p.4: 600 ohm input"}
+  load_ohm: {value: 600, source: "[MAN] p.4: 600 ohm output"}
+
+  # --- Transformers (all four) ----------------------------------------------------
+  # Self-capacitance of the high-impedance windings. Without it the plate load
+  # stays inductive at ultrasonic frequencies and the 6386 stage oscillates
+  # (tuned-plate tuned-grid) in simulation.
+  t101_c_half_f: {value: 100.0e-12, genome: transformers.input.winding_capacitance_f, source: "provisional: model knowledge (high-ratio input transformer secondaries, 50-200 pF)"}
+  t102_c_half_f: {value: 200.0e-12, genome: transformers.output.winding_capacitance_f, source: "provisional: model knowledge (push-pull output primaries, 100-500 pF)"}
+  t103_c_half_f: {value: 100.0e-12, source: "provisional: model knowledge (Phase 2 replaces)"}
+  t104_c_half_f: {value: 200.0e-12, source: "provisional: model knowledge (Phase 2 replaces)"}
+  # Lumped core/eddy-current loss across the high-impedance windings. Real
+  # windings are lossy at ultrasonic frequencies; lossless coupled inductors
+  # let the 6386 stage oscillate in common mode (~30 kHz) in simulation.
+  t101_rloss_half_ohm: {value: 200.0e+3, source: "provisional: model knowledge (Phase 2 replaces with a Cauer eddy-current ladder)"}
+  t102_rloss_half_ohm: {value: 50.0e+3, source: "provisional: model knowledge (Phase 2 replaces with a Cauer eddy-current ladder)"}
+  t104_rloss_half_ohm: {value: 50.0e+3, source: "provisional: model knowledge (Phase 2 replaces)"}
+  transformer_k: {value: 0.999, source: "provisional: model knowledge; one coupling coefficient for every winding pair until Phase 2 models leakage per transformer"}
+
+  # --- Input: AT101 -> T101 ----------------------------------------------------
+  attenuator_z_ohm: {value: 600, source: "sch: AT101 600 ohm T"}
+  r101_r102_ohm: {value: 360, source: "sch: R101, R102 180 ohm 1% across each primary winding; primaries taken in series"}
+  t101_turns_half: {value: 4.5, genome: transformers.input.turns_ratio, source: "web: https://www.don-audio.com/Sowter-8346E-Fairchild-Signal-amp-input-transformer-T101-201 (replacement: 600:50k, 1+1:9+9) -> each secondary half = 4.5x the series primary"}
+  t101_lp_h: {value: 10.0, genome: transformers.input.primary_inductance_h, source: "provisional: model knowledge (600 ohm line input transformers, 5-30 H)"}
+  t101_r_pri_ohm: {value: 20.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+  t101_r_half_ohm: {value: 400.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+
+  # --- 6386 push-pull gain stage ------------------------------------------------
+  v6386_per_side: {value: 4, source: "sch: V101A/V102A + V103B/V104B on one side, V101B/V102B + V103A/V104A on the other"}
+  r103_r104_ohm: {value: 680, source: "sch: R103, R104 680 1W, one per bank"}
+  r105_ohm: {value: 100, source: "sch: R105A/B 100 dual; sch-interp: modeled as one pot between the cathode resistors, wiper to the cathode return (ground)"}
+  c101_f: {value: 4.0e-6, source: "sch: C101/C102 4 uF 200 V; sch-interp: between the two bank cathode nodes"}
+  # C114 (trimmer between the grid lines) is omitted: value not printed.
+
+  # --- Output: T102 --------------------------------------------------------------
+  r111_ohm: {value: 33, source: "sch: R111 33 1W, B+ feed to the T102 centre tap"}
+  r107_r108_ohm: {value: 30, source: "sch: R107, R108 30 1% (meter shunts in the primary centre)"}
+  t102_turns_half: {value: 4.5, genome: transformers.output.turns_ratio, source: "web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202 (replacement: 60k CT:600, 9+9:1+1) -> each primary half = 4.5x the series secondary"}
+  t102_l_half_h: {value: 30.0, genome: transformers.output.primary_inductance_h, source: "provisional: model knowledge (sized for ~10 Hz -3 dB against the bank plate resistance)"}
+  t102_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+  t102_r_sec_ohm: {value: 10.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+
+  # --- Sidechain pick-off: T102 secondary -> pads -> T103 -------------------------
+  r145_r148_ohm: {value: 150, source: "sch: R145-R148 150 5% series legs"}
+  r149_r150_ohm: {value: 1360, source: "sch: R149, R150 680 5% shunts; the two pads are combined in series here (one output winding)"}
+  t103_turns_half: {value: 3.0, genome: transformers.sidechain_input.turns_ratio, source: "provisional: ratio not printed and no replacement spec found"}
+  t103_lp_h: {value: 5.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+
+  # --- AC threshold and 12AX7 (V105) ----------------------------------------------
+  r115a_ohm: {value: 100.0e+3, source: "sch: R115A 100K LIN"}
+  r115b_ohm: {value: 180.0e+3, source: "sch: R115B printed 180K LIN"}
+  r113_r114_ohm: {value: 24.0e+3, source: "sch: R113, R114 24K 5%; sch-interp: in series below each pot section"}
+  r116_ohm: {value: 270.0e+3, source: "sch: R116 270K from B+ to the R117 wiper"}
+  r117_ohm: {value: 100.0e+3, source: "sch: R117 100K DC THRESHOLD"}
+  r118_ohm: {value: 1.0e+6, source: "sch: R118 1M"}
+  r119_ohm: {value: 18.0e+3, source: "sch: R119 18K; check: with R117 at the ground end the cathodes sit at 3.6 V, matching web: https://groupdiy.com/threads/sharing-fairchild-data.34060/ '3.6V (cut-off)'"}
+  r120_r121_ohm: {value: 100.0e+3, source: "sch: R120, R121 100K 1W 5% plate loads"}
+  c103_c104_f: {value: 0.05e-6, source: "sch: C103, C104 .05 400V"}
+
+  # --- 12BH7A (V106) -------------------------------------------------------------
+  r122_r123_ohm: {value: 1.0e+6, source: "sch: R122, R123 1M grid leaks; sch-interp: returned to ground"}
+  r124_r125_ohm: {value: 1000, source: "sch: R124, R125 1000 1W 5%; sch-interp: returned to ground"}
+  r126_r127_ohm: {value: 100.0e+3, source: "sch: R126, R127 100K 2W plate loads"}
+  c107_c108_f: {value: 0.1e-6, source: "sch: C107, C108 .1 600V"}
+  r_fb_ohm: {value: 2700, source: "sch: R120/R129 2700 1W 5%, T104 feedback winding to the 12BH7 cathodes"}
+  r134_ohm: {value: 860, source: "sch: R134 860 1W"}
+  r135_ohm: {value: 560, source: "sch: R135 560 1W"}
+
+  # --- 6973 push-pull (V107, V108) -------------------------------------------------
+  r130_r131_ohm: {value: 150.0e+3, source: "sch: R130, R131 150K grid leaks"}
+  r132_r133_ohm: {value: 560, source: "sch: R132, R133 560 screen resistors"}
+  r143_r144_ohm: {value: 47.0e+3, source: "sch: R143, R144 47K plate-to-grid"}
+  c105_c106_f: {value: 20.0e-12, source: "sch: C105 '20 NMF', C107(V108) '20 MMF' 1.6 kV; read as 20 pF"}
+  v6973_grid_bias_v: {value: -27.0, genome: sidechain.v6973_grid_bias_v, source: "provisional: the grid-leak return rail isn't traceable on the scan"}
+
+  # --- T104 and rectifier ------------------------------------------------------------
+  t104_sec_per_half: {value: 0.5, genome: transformers.sidechain_output.turns_ratio, source: "web: https://don-audio.com/9643S-Fairchild-Control-amp-output-T104-204 (replacement: 10k CT:600, 4:1) -> secondary = half a primary half"}
+  t104_fb_per_half: {value: 0.2105, source: "web: same page, feedback winding 9.5:1 of the full primary"}
+  t104_l_half_h: {value: 10.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+  r136_ohm: {value: 3900, source: "sch: R136 ('A136') 3900 1W across the secondary"}
+  bridge_diode: {value: SI_RECTIFIER, source: "sch: CR101-104 1N538 silicon; modeled with config/devices/si_rectifier.yaml (provisional 1N4007-like)"}
+
+  # --- Time constant network (S102) ----------------------------------------------
+  r137_ohm: {value: 220.0e+3, source: "sch: R137 220K (always in)"}
+  c109_f: {value: 2.0e-6, source: "sch: C109 2 200V (always in)"}
+  r141_ohm: {value: 68.0e+3, source: "sch: R141 68K (position 1)"}
+  r138_ohm: {value: 470.0e+3, source: "sch: R138 470K (position 2)"}
+  c113_f: {value: 2.0e-6, source: "sch: C113 2 200V (positions 3-5)"}
+  c111_f: {value: 4.0e-6, source: "sch: C111 4 150V (position 4)"}
+  r139_ohm: {value: 100.0e+3, source: "sch: R139 100K in series with C110 (positions 5, 6)"}
+  c110_f: {value: 8.0e-6, source: "sch: C110 8 150V"}
+  r140_ohm: {value: 100.0e+3, source: "sch: R140 100K in series with C112 (position 6)"}
+  c112_f: {value: 20.0e-6, source: "sch: C112 20 150V"}
+  c115_f: {value: 0.1e-6, source: "sch: C115 .1 200V, ZERO wiper to ground"}
+  r142_ohm: {value: 2500, source: "sch: R142 2500 ZERO"}
+
+  # --- Power supply ------------------------------------------------------------------
+  b_plus_v: {value: 240.0, source: "sch: regulated B+ 'ADJ. TO 240 V.'; [MAN] p.7"}
+  psu_source_impedance_ohm: {value: 10.0, genome: psu.source_impedance_ohm, source: "provisional: stands in for the EL34/6084/5651 regulator's output impedance until it is modeled"}
+  c307a_f: {value: 80.0e-6, source: "sch: C307A 80 450V on the regulated rail"}
+  bias_v: {value: -13.75, source: "sch: bias rail '-13 V to -14.5 V' (midpoint)"}
+  bias_source_impedance_ohm: {value: 100.0, source: "provisional: unregulated selenium-bridge supply, filter chain values on sch not yet modeled"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: DC path for the floating T104 secondary (not physical)"}

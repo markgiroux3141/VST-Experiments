@@ -1,0 +1,102 @@
+{
+ "reference": {
+  "reltol": 0.0001,
+  "oversample": 4
+ },
+ "results": {
+  "burst attack (0 dBFS, TC1)": {
+   "gear 1e-5, 4x": {
+    "failed": "transient stopped at t=8.22504e-07 s of 0.499997 s: | doAnalyses: TRAN:  Timestep too small; time = 8.22504e-07, timestep = 8.49058e-18: trouble with d_si_rectifier-instance dcr101"
+   },
+   "reference": {
+    "realtime_factor": 93.2,
+    "sim_points": 238833,
+    "out_err_db": null,
+    "cv_max_err_v": null
+   },
+   "default (gear 1e-3, 2x)": {
+    "realtime_factor": 40.1,
+    "sim_points": 104625,
+    "out_err_db": -62.9,
+    "cv_max_err_v": 0.107
+   },
+   "gear 1e-4, 2x": {
+    "realtime_factor": 84.3,
+    "sim_points": 192349,
+    "out_err_db": -66.8,
+    "cv_max_err_v": 0.107
+   },
+   "gear 1e-3, 1x": {
+    "realtime_factor": 37.7,
+    "sim_points": 75272,
+    "out_err_db": -52.6,
+    "cv_max_err_v": 0.509
+   },
+   "gear 1e-3, 4x": {
+    "realtime_factor": 58.7,
+    "sim_points": 193897,
+    "out_err_db": -78.3,
+    "cv_max_err_v": 0.01
+   },
+   "trap 1e-3, 2x": {
+    "realtime_factor": 36.6,
+    "sim_points": 97840,
+    "out_err_db": -64.8,
+    "cv_max_err_v": 0.122
+   },
+   "trap 1e-4, 2x": {
+    "realtime_factor": 66.2,
+    "sim_points": 146071,
+    "out_err_db": -65.6,
+    "cv_max_err_v": 0.125
+   }
+  },
+  "clip Arpeggio04b_120_m_D#_16b 1 s (TC2)": {
+   "gear 1e-5, 4x": {
+    "failed": "transient stopped at t=7.17305e-07 s of 0.999997 s: | doAnalyses: TRAN:  Timestep too small; time = 7.17305e-07, timestep = 2.19755e-17: trouble with d_si_rectifier-instance dcr101"
+   },
+   "reference": {
+    "realtime_factor": 65.7,
+    "sim_points": 413906,
+    "out_err_db": null,
+    "cv_max_err_v": null
+   },
+   "default (gear 1e-3, 2x)": {
+    "realtime_factor": 25.2,
+    "sim_points": 193726,
+    "out_err_db": -58.7,
+    "cv_max_err_v": 0.122
+   },
+   "gear 1e-4, 2x": {
+    "realtime_factor": 51.9,
+    "sim_points": 258949,
+    "out_err_db": -66.1,
+    "cv_max_err_v": 0.018
+   },
+   "gear 1e-3, 1x": {
+    "realtime_factor": 21.4,
+    "sim_points": 102210,
+    "out_err_db": -49.0,
+    "cv_max_err_v": 0.141
+   },
+   "gear 1e-3, 4x": {
+    "realtime_factor": 53.4,
+    "sim_points": 384771,
+    "out_err_db": -69.0,
+    "cv_max_err_v": 0.043
+   },
+   "trap 1e-3, 2x": {
+    "realtime_factor": 30.6,
+    "sim_points": 192788,
+    "out_err_db": -67.2,
+    "cv_max_err_v": 0.037
+   },
+   "trap 1e-4, 2x": {
+    "realtime_factor": 33.1,
+    "sim_points": 222059,
+    "out_err_db": -70.0,
+    "cv_max_err_v": 0.025
+   }
+  }
+ }
+}

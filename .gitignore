@@ -34,3 +34,7 @@ Thumbs.db
 
 # Local tool installs (ngspice portable, downloads)
 tools/
+
+# Generated renders and logs under reports/ (plots and summaries are kept)
+reports/**/renders/
+reports/**/*.log

@@ -18,12 +18,12 @@ tubes:
   # Push-pull 6386 variable-mu gain stage. Multipliers apply to the parameters
   # fitted to the RCA 6386 datasheet in Phase 1.
   v6386_a:
-    emission_scale: {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "aging / cathode emission spread"}
-    mu_spread:      {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "manufacturing tolerance"}
+    emission_scale: {min: 0.75, max: 1.05, unit: ratio, source: "provisional: model knowledge (cathode aging lowers emission; new tubes vary roughly +-5%)", notes: "multiplies plate current of the whole bank (4 triodes)"}
+    mu_spread:      {min: 0.95, max: 1.05, unit: ratio, source: "provisional: model knowledge (grid-pitch manufacturing tolerance)", notes: "multiplies every section's mu"}
     grid_contact_v: {min: -1.0, max: -0.5, unit: V, source: "provisional: model knowledge (oxide-cathode contact potential)", notes: "onset of grid current; loads the timing networks"}
   v6386_b:
-    emission_scale: {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "aging / cathode emission spread"}
-    mu_spread:      {min: TBD, max: TBD, unit: ratio, source: TBD, notes: "manufacturing tolerance"}
+    emission_scale: {min: 0.75, max: 1.05, unit: ratio, source: "provisional: model knowledge (cathode aging lowers emission; new tubes vary roughly +-5%)", notes: "multiplies plate current of the whole bank (4 triodes)"}
+    mu_spread:      {min: 0.95, max: 1.05, unit: ratio, source: "provisional: model knowledge (grid-pitch manufacturing tolerance)", notes: "multiplies every section's mu"}
     grid_contact_v: {min: -1.0, max: -0.5, unit: V, source: "provisional: model knowledge (oxide-cathode contact potential)", notes: "onset of grid current; loads the timing networks"}
   # Sidechain chain is 12AX7 -> 12BH7 -> push-pull 6973 -> diode bridge
   # (web: gearspace.com/threads/fairchild-tubes.463974; historyofrecording.com).
@@ -33,40 +33,47 @@ sidechain_rectifier:
   diode_type: {choices: [silicon, selenium], source: "web: https://historyofrecording.com/Tube_Equipment_Corporation.html says 'diode bridge rectifier'; type unknown", notes: "only silicon is modeled so far (config/devices/si_rectifier.yaml)"}
 
 transformers:
+  # The 670 has four per channel: T101 input, T102 output, T103 sidechain input,
+  # T104 sidechain output (drawing A-96039). Original turns ratios aren't printed;
+  # the ranges below bracket Sowter's replacement designs. Fields still TBD are
+  # Phase 2 work. Ratios use the convention of config/circuits/fairchild_670.yaml.
   input:
     core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
     air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
-    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
+    turns_ratio:            {min: 4.0, max: 5.0, unit: ratio, source: "web: https://www.don-audio.com/Sowter-8346E-Fairchild-Signal-amp-input-transformer-T101-201 (replacement 1+1:9+9 -> 4.5); +-11% is provisional", notes: "each secondary half / series primary"}
+    primary_inductance_h:   {min: 5.0, max: 30.0, unit: H, source: "provisional: model knowledge (600 ohm line input transformers)"}
     leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
-    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
-  interstage:
-    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
-    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
-    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
-    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
-    winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
-    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
+    winding_capacitance_f:  {min: 50.0e-12, max: 200.0e-12, unit: F, source: "provisional: model knowledge (high-ratio input transformer secondaries)", notes: "per secondary half"}
   output:
     core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
     air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
-    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
+    turns_ratio:            {min: 4.0, max: 5.0, unit: ratio, source: "web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202 (replacement 9+9:1+1 -> 4.5); +-11% is provisional", notes: "each primary half / series secondary"}
+    primary_inductance_h:   {min: 10.0, max: 60.0, unit: H, source: "provisional: model knowledge", notes: "per primary half"}
     leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
-    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
-  sidechain:
+    winding_capacitance_f:  {min: 100.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull output transformer primaries)", notes: "per primary half"}
+  sidechain_input:
     core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
-    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
-    turns_ratio:            {min: TBD, max: TBD, unit: ratio, source: TBD}
+    turns_ratio:            {min: 1.0, max: 8.0, unit: ratio, source: "provisional: not printed on A-96039, no replacement spec found", notes: "each secondary half / primary; sets the AC threshold range"}
     leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
-    winding_capacitance_pF: {min: TBD, max: TBD, unit: pF, source: TBD}
+    winding_capacitance_f:  {min: TBD, max: TBD, unit: F, source: TBD}
+  sidechain_output:
+    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
+    turns_ratio:            {min: 0.4, max: 0.6, unit: ratio, source: "web: https://don-audio.com/9643S-Fairchild-Control-amp-output-T104-204 (replacement 10k CT:600, 4:1 -> 0.5); +-20% is provisional", notes: "secondary / one primary half"}
+    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
+    winding_capacitance_f:  {min: TBD, max: TBD, unit: F, source: TBD}
+
+sidechain:
+  v6973_grid_bias_v: {min: -35.0, max: -20.0, unit: V, source: "provisional: grid-leak return not traceable on the A-96039 scan; bounded so the 6973 model idles between ~0.3 and ~20 mA at 240 V (under its 12 W rating)"}
 
 psu:
   # Shared by the audio path and sidechain (plan: Coupling Checklist).
   # Nominal component values come from the schematic. Only uncertain
   # quantities belong here.
-  source_impedance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD, notes: "mains transformer + rectifier"}
+  source_impedance_ohm: {min: 1.0, max: 200.0, unit: ohm, source: "provisional: model knowledge (tube series regulator output impedance, a few ohms when working, far higher near dropout)", notes: "the B+ is regulated to 240 V (EL34 pass, 6084 error amp, 5651 reference); this stands in until the regulator is modeled"}
 
 passives:
   # Per-instance deviation from nominal, drawn independently for every part.

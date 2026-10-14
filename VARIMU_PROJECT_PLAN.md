@@ -328,6 +328,10 @@ Every entry carries a `source` field. "TBD" is acceptable during development; an
 - **Mono first, or stereo/lateral-vertical from the start?** Default: mono first.
 - **Noise modeling:** include from Phase 3, or add after the optimization loop works? Default: add after.
 - **Primary simulator:** Xyce vs ngspice, decided after Phase 2 testing of transformer core support and speed.
+  - *Decided 2026-10-13:* build a fast netlist-driven simulator in Rust (`crates/circuitsim`),
+    with ngspice kept as the reference engine and agreement tests between them. This pulls Phase
+    10 option B (nodal DK) forward, because render speed (25-40x slower than real time on the
+    670 slice) is the bottleneck for listening. Plan: [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
 
 ## Notes for Claude Code
 
