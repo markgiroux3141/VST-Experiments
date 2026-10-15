@@ -1,6 +1,8 @@
-"""The coupled 670 slice in ngspice: stable at idle, gain reduction rising with level.
+"""The coupled 670 slice on both engines: stable at idle, gain reduction rising with level.
 
-These run real transients (about 20-40 s in total at ~50x real time).
+These run real transients (ngspice: about 20-40 s in total at ~50x real time;
+circuitsim: a few seconds). Agreement between the engines is in
+test_circuitsim_slice.py.
 """
 
 import numpy as np
@@ -9,38 +11,52 @@ import pytest
 from varimu.circuit import netlist as nl
 from varimu.measure import metrics
 from varimu.measure.signals import stepped_sine
-from varimu.sim import ngspice
+from varimu.sim import fast, ngspice
 from varimu.sim.io import TransientSettings, run_transient
-
-try:
-    ngspice.find_ngspice()
-except ngspice.SimulatorNotFound:
-    pytest.skip("ngspice not available", allow_module_level=True)
 
 # Most sensitive front panel so a short signal shows strong compression.
 HOT = {"input_atten_db": 0.0, "ac_threshold": 1.0, "time_constant": 1}
 
 
-def _run(x_dbfs, overrides, save=("v(out)", "v(cv)", "v(ga)", "v(gb)")):
-    s = TransientSettings.from_sim_settings()
+def _ngspice_available() -> bool:
+    try:
+        ngspice.find_ngspice()
+    except ngspice.SimulatorNotFound:
+        return False
+    return True
+
+
+ENGINES = [
+    pytest.param(
+        "ngspice", marks=pytest.mark.skipif(not _ngspice_available(), reason="no ngspice")
+    ),
+    pytest.param(
+        "circuitsim",
+        marks=pytest.mark.skipif(not fast.available(), reason="needs `uv sync --extra fast`"),
+    ),
+]
+
+
+def _run(engine, x_dbfs, overrides):
+    """Production settings of `engine`; every probe comes back."""
+    s = TransientSettings.from_sim_settings(engine=engine)
     c = nl.build(overrides)
+    x = x_dbfs * s.full_scale_volts_peak
+    if engine == "circuitsim":
+        return fast.run_transient(c.ir, x, settings=s), s
     return run_transient(
-        c.text,
-        x_dbfs * s.full_scale_volts_peak,
-        input_node=c.input_node,
-        save=list(save),
-        settings=s,
-        files=c.files,
+        c.text, x, input_node=c.input_node, save=list(c.save), settings=s, files=c.files
     ), s
 
 
-def test_idle_circuit_is_quiet_and_sits_at_its_operating_point():
+@pytest.mark.parametrize("engine", ENGINES)
+def test_idle_circuit_is_quiet_and_sits_at_its_operating_point(engine):
     """No input: no parasitic oscillation, CV stays at ZERO * bias rail.
 
     A lossless transformer model made the 6386 stage oscillate at ~30 kHz and
     pump the CV through grid current; this guards against that coming back.
     """
-    r, s = _run(np.zeros(int(0.03 * 96000)), HOT)
+    r, s = _run(engine, np.zeros(int(0.03 * 96000)), HOT)
     out = r.vectors["v(out)"] / s.full_scale_volts_peak
     assert np.max(np.abs(out)) < 1e-4  # below -80 dBFS
     cv = r.vectors["v(cv)"]
@@ -50,11 +66,12 @@ def test_idle_circuit_is_quiet_and_sits_at_its_operating_point():
     np.testing.assert_allclose(r.vectors["v(ga)"], cv, atol=1e-3)
 
 
-def test_gain_reduction_increases_with_input_level():
+@pytest.mark.parametrize("engine", ENGINES)
+def test_gain_reduction_increases_with_input_level(engine):
     sig = stepped_sine(
         freq_hz=1000, start_dbfs=-30, stop_dbfs=0, step_db=10, hold_s=0.06, sample_rate=96000
     )
-    r, s = _run(sig.samples, HOT)
+    r, s = _run(engine, sig.samples, HOT)
     y = r.vectors["v(out)"] / s.full_scale_volts_peak
     pts = metrics.segment_gains(sig.samples, y, sig.meta["segments"])
     gains = np.array([g for _, g in pts])

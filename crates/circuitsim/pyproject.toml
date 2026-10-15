@@ -17,6 +17,7 @@ module-name = "circuitsim"
 cache-keys = [
     { file = "pyproject.toml" },
     { file = "Cargo.toml" },
+    { file = "build.rs" },
     { file = "../../Cargo.toml" },
     { file = "src/**/*.rs" },
 ]

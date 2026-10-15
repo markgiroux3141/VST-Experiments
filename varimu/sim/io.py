@@ -34,7 +34,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from math import gcd
 from pathlib import Path
 from typing import Any
@@ -56,6 +56,18 @@ LOG_FILE = "ngspice.log"
 # --- Settings ---------------------------------------------------------------------
 
 
+ENGINES = ("ngspice", "circuitsim")
+
+
+def configured_engine(s: SimSettings | None = None) -> str:
+    """sim_settings.yaml simulator.engine (ngspice when absent)."""
+    s = s or load_sim_settings()
+    engine = str(s.data.get("simulator", {}).get("engine", "ngspice"))
+    if engine not in ENGINES:
+        raise ValueError(f"simulator.engine must be one of {ENGINES}, got {engine!r}")
+    return engine
+
+
 @dataclass(frozen=True)
 class TransientSettings:
     sample_rate: int
@@ -64,16 +76,29 @@ class TransientSettings:
     reltol: float
     abstol: float
     vntol: float
-    method: str  # trap | gear
+    method: str  # ngspice: trap | gear; circuitsim: see circuitsim.simulate
     threads: int = 1  # ngspice OpenMP threads per job
     priority: str = "below_normal"  # normal | below_normal | idle
+    engine: str = "ngspice"  # ngspice | circuitsim
+    input_order: int = 1  # circuitsim only: input interpolation at stage times
+    error_abstol: float = 0.0  # circuitsim only: local error control (0 = off), V
+    error_reltol: float = 0.0  # circuitsim only: ... plus this times |v|
 
     @classmethod
-    def from_sim_settings(cls, s: SimSettings | None = None) -> TransientSettings:
+    def from_sim_settings(
+        cls, s: SimSettings | None = None, engine: str = "ngspice"
+    ) -> TransientSettings:
+        """The settings for `engine` ("configured" = simulator.engine). circuitsim
+        takes its oversampling and method from the `circuitsim` block; reltol,
+        abstol and vntol stay ngspice's and don't apply to it."""
         s = s or load_sim_settings()
+        if engine == "configured":
+            engine = configured_engine(s)
+        if engine not in ENGINES:
+            raise ValueError(f"unknown engine {engine!r} ({' | '.join(ENGINES)})")
         tr, audio = s.data["transient"], s.data["audio"]
         runner = s.data.get("runner", {})
-        return cls(
+        st = cls(
             sample_rate=s.sample_rate,
             oversample=int(tr["oversample"]),
             full_scale_volts_peak=float(audio["full_scale_volts_peak"]),
@@ -84,6 +109,18 @@ class TransientSettings:
             threads=int(runner.get("threads_per_job", 1)),
             priority=str(runner.get("priority", "below_normal")),
         )
+        if engine == "circuitsim":
+            cs = s.data["circuitsim"]
+            st = replace(
+                st,
+                engine=engine,
+                oversample=int(cs["oversample"]),
+                method=str(cs["method"]),
+                input_order=int(cs.get("input_order", 1)),
+                error_abstol=float(cs.get("error_abstol", 0.0)),
+                error_reltol=float(cs.get("error_reltol", 0.0)),
+            )
+        return st
 
     @property
     def sim_rate(self) -> int:

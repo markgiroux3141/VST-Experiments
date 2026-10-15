@@ -1,10 +1,14 @@
 """Measure the vertical slice: static compression curve and Time Constant attack/release.
 
     uv run python scripts/slice_report.py [--tc 1 2 3 4] [--set key=value ...]
+                                          [--engine ngspice|circuitsim]
 
 Renders come from the cache when `varimu render` already produced them with
 the same settings, otherwise they run here. Plots and a JSON summary go to
-reports/slice/.
+reports/slice/ (summary.json for ngspice, summary_circuitsim.json for the fast
+engine). A circuitsim run is also compared with the ngspice summary, when there
+is one for the same overrides, against the circuit-sim plan's 670 behaviour
+tolerances: gain reduction within 0.2 dB per step, CV times within 5%.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ import numpy as np  # noqa: E402
 from varimu.config import REPO_ROOT, load_sim_settings  # noqa: E402
 from varimu.measure import metrics, signals  # noqa: E402
 from varimu.sim import runner  # noqa: E402
+from varimu.sim.io import TransientSettings  # noqa: E402
 
 OUT = REPO_ROOT / "reports" / "slice"
 
@@ -41,9 +46,14 @@ def _signal(name: str):
     return signals.render(spec, sample_rate=st.sample_rate, seed=st.seed)
 
 
-def compression_curve(overrides: dict) -> dict:
+def _suffix(s: TransientSettings) -> str:
+    return "" if s.engine == "ngspice" else f"_{s.engine}"
+
+
+def compression_curve(overrides: dict, s: TransientSettings) -> dict:
     sig = _signal("steps_1000hz")
-    r = runner.render(runner.RenderJob(sig.samples, dict(overrides), "steps_1000hz"))
+    job = runner.RenderJob(sig.samples, dict(overrides), "steps_1000hz")
+    r = runner.render(job, settings=s)
     pts = metrics.segment_gains(sig.samples, r.output, sig.meta["segments"])
     lin, gain = np.array(pts).T
     gr = gain[0] - gain
@@ -65,7 +75,7 @@ def compression_curve(overrides: dict) -> dict:
         a.grid(alpha=0.3)
     fig.suptitle(f"steps_1000hz  overrides={overrides or 'defaults'}  render {r.key[:12]}")
     fig.tight_layout()
-    path = OUT / "compression_curve.png"
+    path = OUT / f"compression_curve{_suffix(s)}.png"
     fig.savefig(path, dpi=110)
     plt.close(fig)
     return {
@@ -79,13 +89,13 @@ def compression_curve(overrides: dict) -> dict:
     }
 
 
-def bursts(tcs, overrides: dict) -> dict:
+def bursts(tcs, overrides: dict, s: TransientSettings) -> dict:
     sig = _signal("burst_1000hz_0dbfs")
     jobs = [
         runner.RenderJob(sig.samples, {**overrides, "time_constant": tc}, f"burst_tc{tc}")
         for tc in tcs
     ]
-    renders = runner.render_many(jobs)
+    renders = runner.render_many(jobs, settings=s)
     fs = renders[0].sample_rate
     a, b = sig.meta["burst_start"], sig.meta["burst_stop"]
     t = (np.arange(len(sig.samples)) - a) / fs
@@ -117,10 +127,36 @@ def bursts(tcs, overrides: dict) -> dict:
         x.grid(alpha=0.3)
         x.legend()
     fig.tight_layout()
-    path = OUT / "bursts.png"
+    path = OUT / f"bursts{_suffix(s)}.png"
     fig.savefig(path, dpi=110)
     plt.close(fig)
     return {"plot": str(path.relative_to(REPO_ROOT)), "by_time_constant": rows}
+
+
+def compare(summary: dict, ref: dict) -> dict:
+    """This summary against the ngspice one: worst gain-reduction difference per step,
+    and each CV time's relative difference (circuit-sim plan: 0.2 dB, 5%)."""
+    out: dict = {}
+    if "compression_curve" in summary and "compression_curve" in ref:
+        a = np.array(summary["compression_curve"]["gain_reduction_db"])
+        b = np.array(ref["compression_curve"]["gain_reduction_db"])
+        out["gr_max_diff_db"] = round(float(np.max(np.abs(a - b))), 3)
+    times = {}
+    for tc, row in summary["bursts"]["by_time_constant"].items():
+        r = ref["bursts"]["by_time_constant"].get(str(tc))
+        if r is None:
+            continue
+        times[tc] = {
+            k: round(row[k] / r[k] - 1, 4)
+            for k in ("attack_cv_63_ms", "release_cv_63_s", "release_cv_90_s")
+        }
+        times[tc]["gain_reduction_db"] = round(row["gain_reduction_db"] - r["gain_reduction_db"], 3)
+    out["burst_relative_time_diff"] = times
+    worst = max(
+        (abs(v[k]) for v in times.values() for k in v if k != "gain_reduction_db"), default=0.0
+    )
+    out["passes"] = bool(out.get("gr_max_diff_db", 0.0) <= 0.2 and worst <= 0.05)
+    return out
 
 
 def main() -> None:
@@ -128,14 +164,22 @@ def main() -> None:
     ap.add_argument("--tc", nargs="+", type=int, default=[1, 2, 3, 4])
     ap.add_argument("--set", nargs="+", default=[], metavar="KEY=VALUE")
     ap.add_argument("--skip-curve", action="store_true")
+    ap.add_argument("--engine", choices=["ngspice", "circuitsim"], help="default: configured")
     args = ap.parse_args()
+    s = TransientSettings.from_sim_settings(engine=args.engine or "configured")
     ov = runner.parse_overrides(args.set)
     OUT.mkdir(parents=True, exist_ok=True)
     summary = {"overrides": ov}
     if not args.skip_curve:
-        summary["compression_curve"] = compression_curve(ov)
-    summary["bursts"] = bursts(args.tc, ov)
-    (OUT / "summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
+        summary["compression_curve"] = compression_curve(ov, s)
+    summary["bursts"] = bursts(args.tc, ov, s)
+    reference = OUT / "summary.json"
+    if s.engine != "ngspice" and reference.exists():
+        ref = json.loads(reference.read_text(encoding="utf-8"))
+        if ref.get("overrides") == ov:
+            summary["vs_ngspice"] = compare(summary, ref)
+    path = OUT / f"summary{_suffix(s)}.json"
+    path.write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary, indent=1)[:4000])
 
 

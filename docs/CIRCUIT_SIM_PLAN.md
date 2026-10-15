@@ -111,6 +111,10 @@ changing a knob means rebuilding from the IR (see "Parameter changes").
 - Known risk: trapezoidal integration rings at Nyquist on stiff modes, as
   ngspice's trap did while the netlist oscillated. Mitigations, in order:
   oversampling, then a per-run switch to TR-BDF2 or backward Euler damping.
+- *Superseded by M4's method study:* production is esdirk4 (L-stable, 4th
+  order) at 2x with 5th-order input interpolation and local error control
+  (see M4's status). Trapezoidal stays available and is the baseline the
+  agreement tests check convergence with.
 
 ### Solver: full MNA Newton first, then nodal DK
 
@@ -401,6 +405,127 @@ solver; engine setting in the runner and cache.
 *Done when:* the 670 verification rows in the table above pass, and the speed
 is measured and recorded.
 
+*Status (2026-10-15): done.* M2-M3 had left the engine at -40 dB from ngspice
+at 2x on small circuits, and the plan's options were more oversampling or
+another integration method. A method study on the full 670 decided it,
+judged two ways: agreement with ngspice, and behaving like an analog circuit
+(frequency response, aliasing, no numerical artifacts).
+
+What the engine has now (`transient.rs`):
+
+- **Methods:** `trap`, `euler`, `trbdf2`, `sdirk3`, `esdirk4` (Kennedy &
+  Carpenter's ESDIRK4(3)6L[2]SA, with its embedded 3rd-order solution),
+  `radau3`, `radau5`. All are stiffly accurate, so the MNA system's algebraic
+  rows hold at every sample. Diagonally implicit methods solve one stage at a
+  time with the same block-eliminated Newton as before; Radau solves its
+  stages coupled (every device placed once per stage). `tests/methods.rs`
+  checks each reaches its order.
+- **Input interpolation** (`input_order` 1 / 3 / 5): Lagrange through the
+  nearest oversampled samples at stage times. Linear (the default) is
+  ngspice's PWL source.
+- **Local error control** (`error_abstol`, `error_reltol`, esdirk4): Hairer &
+  Wanner's filtered estimate, (G + G_dev + C/(gh))^-1 (1/g) sum d_i F_i with
+  the last stage's Newton Jacobian; a step whose estimate exceeds the
+  tolerance on a node voltage is redone as halves, up to 4 levels, starting
+  each sample one level above the deepest the previous one needed. Outputs
+  stay on the sample grid.
+- **Newton predictor** for later stages: the quadratic through the last two
+  samples and the latest solved stage (11-23% fewer iterations).
+- Sparse `C x` and a vectorizable LU loop (about 1.5x per step, results
+  within ~1e-11 relative of before).
+
+How the method was chosen (scripts and data in the session's scratch
+directory; the numbers below are what matters). The reference is the
+engine's own converged solution (radau5 at 8x; trap at 32x agrees to
+-105 dB), itself checked once against ngspice with the exact triode
+formulation: -92 dB rms, CV within 0.003 V (0.5 s burst onset; that ngspice
+run took an hour). ngspice with tabulated triodes, the tolerance study's
+reference, sits -62 dB rms from it on every excerpt, so it can only referee
+to about -60 dB.
+
+1. **The error has three sources, not one.** (a) Integration of smooth
+   dynamics: the slice's transformers resonate near 17 kHz (+10 dB, from the
+   provisional winding capacitances) and trapezoidal's frequency warping
+   moves that resonance; small-signal error at 20 kHz vs ngspice `.ac`:
+   trap 2x 0.8 dB / 8 deg, 4x 0.18 dB / 2 deg, 8x 0.04 dB / 0.5 deg.
+   (b) The input: linear between samples (as ngspice's PWL) droops a 20 kHz
+   tone by 0.3 dB at 2x, which capped every higher-order method at -41 dB
+   at 10 kHz until the input was interpolated to higher order. (c) Non-smooth
+   events: the sidechain bridge switching (the TC1 attack slews the CV 75 V
+   in 0.15 ms; HF content rectified), where no method's order helps and
+   every method converges ~12 dB per doubling of the rate.
+2. **With smooth input, higher order wins (a):** esdirk4 at 2x, input order
+   5, matches `.ac` to -63 dB up to 20 kHz (0.00 dB / 0.04 deg); radau5 -73 dB.
+3. **Only time resolution helps (c):** on a -10 dBFS 19 + 20 kHz twin tone,
+   esdirk4 2x / 3x / 4x is -36 / -44 / -59 dB; trap 8x / 16x / 32x
+   -39 / -50 / -62 dB.
+4. **Error control combines both:** esdirk4 at 2x with error_abstol 0.01 V,
+   error_reltol 1e-3, vs the converged solution (rms re signal / max CV):
+
+   | excerpt | no control | with control | cost | fixed 4x |
+   |---|---|---|---|---|
+   | CCIF 19+20 kHz -10 dBFS | -36 dB / 0.71 V | -64 / 0.049 | 2.6x | -59 / 0.18 |
+   | multitone -10 dBFS | -64 / 0.036 | -70 / 0.011 | 1.4x | -81 / 0.007 |
+   | SMPTE 0 dBFS | -48 / 0.53 | -71 / 0.017 | 1.1x | -71 / 0.13 |
+   | sweep 0 dBFS | -73 / 0.017 | -84 / 0.006 | 1.0x | -93 / 0.002 |
+   | burst onset TC1 | -75 / 0.043 | -86 / 0.005 | 1.1x | -88 / 0.011 |
+   | arpeggio clip | -80 / 0.012 | -83 / 0.006 | 1.05x | -92 / 0.002 |
+
+   ("cost" is wall time relative to no control; fixed 4x costs ~1.7x.)
+   Rejected: trapezoidal (needs 16x for broadband HF at -60 dB), 1x with any
+   method (aliasing: a 7.9 kHz 0 dBFS tone leaves -47 dB of inharmonic
+   products with esdirk4, -35 dB with trap; 2x: -68 / -51 dB; the analog
+   truth -78 dB), trbdf2, sdirk3 and radau3 (each beaten at equal cost),
+   radau5 (twice esdirk4's cost for little gain at 2x). Trapezoidal's
+   theoretical Nyquist ringing on stiff modes did not show at any probe.
+5. The 0 dBFS twin tone (CCIF) drives the provisional ~17 kHz resonance so
+   hard that every setting, the reference included, halves thousands of
+   steps: a limit of the provisional transformer model, left out of the
+   tests. Phase 2's transformer models change the resonance, so rerun this
+   comparison then; trapezoidal may become competitive again.
+
+Verification (production: `sim_settings.yaml` `circuitsim` block):
+
+- **670 slice** (`tests/test_circuitsim_slice.py`, 0.1 s excerpts): vs the
+  converged solution, burst onset -79.7 dB / CV 0.010 V, sweep -79.6 / 0.009,
+  CCIF -10 dBFS -63.7 / 0.044, multitone -70.5 / 0.010; vs the plan's ngspice
+  reference (gear, reltol 1e-4, 4x), on the excerpts it can referee (content
+  well below 20 kHz): burst -61.2 dB / 0.024 V, sweep -57.4 / 0.167 (that
+  reference's own error at 0 dBFS). ngspice's input is linear between
+  samples (-41 dB at 20 kHz at 4x) and gear damps near 20 kHz, so HF-rich
+  excerpts are checked against the converged solution only.
+- **670 behaviour** (`scripts/slice_report.py --engine circuitsim`, compared
+  with the ngspice summary, both regenerated 2026-10-15): the compression
+  curve (51 steps, 1 kHz) agrees within 0.033 dB per step (tolerance 0.2 dB);
+  for TC1-4 the CV attack and the 63% / 90% releases agree within 0.05%
+  (tolerance 5%) and the burst gain reduction within 0.04 dB.
+- **Stability:** `tests/test_slice.py` runs the idle and gain-reduction tests
+  on both engines.
+- **Speed** (one core, production settings, nothing else running): 25-30x
+  slower than real time on program material and tone bursts (~10 Newton
+  iterations per sample: 5 stages, ~2 each, ~13 us per iteration), 70x on
+  the -10 dBFS multitone, 190x on the -10 dBFS twin tone. That is about
+  ngspice's speed (25-40x), with far better accuracy. Trapezoidal at 2x runs
+  6-8x. Where the time goes (`examples/profile.rs`): per iteration, the two
+  32-section 6386 models (~4.6 us) and the 27 x 27 refactor (~4 us); per
+  stage, the block reduction. M5 has to recover the speed: fewer iterations
+  per stage (the update-based convergence test needs 2), cheaper 6386
+  evaluation, the DK reduction.
+
+Engine plumbing: `simulator.engine` in `sim_settings.yaml` (ngspice stays
+the default until M6), `TransientSettings.from_sim_settings(engine=...)`,
+`varimu render --engine`, `slice_report.py --engine` (it writes
+`summary_circuitsim.json` and compares it with the ngspice summary against
+the behaviour tolerances). The render cache key includes the engine and the
+hash of the crate sources the binary was built from; `build.rs` embeds that
+hash (`circuitsim.SOURCE_HASH`) and `varimu.sim.fast` refuses to run a build
+whose hash doesn't match the working tree (`StaleBuild`), so plain `uv run`
+after a Rust edit fails loudly instead of rendering with the old binary.
+
+Found along the way: `metrics.cv_timing` read crossings at whole samples,
+which quantizes the TC1 attack (13 samples) by 8%, more than the 5%
+tolerance; it now interpolates between samples (`tests/test_metrics.py`).
+
 **M5. Nodal DK.** Automatic derivation of the state-space matrices from the
 IR; Newton on the nonlinear ports only; parameter-change recomputation.
 *Done when:* DK and full-MNA agree to solver tolerance on every test circuit,
@@ -443,9 +568,12 @@ The device trait carries state from M3 so that isn't a redesign.
 ## Open decisions
 
 - **Crate name.** `circuitsim` is a placeholder.
-- **Fixed vs adaptive step.** The plan is fixed-step (simple, plugin-ready).
-  If accuracy at 2x oversampling falls short on some circuit, the options are
-  4x or local substepping, not a full adaptive scheme.
+- ~~**Fixed vs adaptive step.**~~ Decided in M4: a fixed output grid at 2x
+  with local, error-controlled substepping (steps halved only where the
+  embedded error estimate asks). Still open for real time (M8): substepping
+  makes the cost per block vary (2.7 substeps per sample on the hardest
+  test signal); a fixed 4x without error control is the fixed-cost
+  fallback.
 - ~~**Sparse vs dense.**~~ Decided in M3: dense, with the linear unknowns
   eliminated once per step size so Newton refactors only the device-node
   block (see M3's status).

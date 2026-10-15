@@ -69,17 +69,23 @@ def cv_timing(cv: np.ndarray, sample_rate: int, burst_start: int, burst_stop: in
     during = float(np.median(cv[burst_stop - dur // 4 : burst_stop - ms]))
     swing = during - before
 
-    def first(mask):
-        hit = np.flatnonzero(mask)
-        return hit[0] / sample_rate if len(hit) else float("nan")
+    def first(progress, level):
+        """Time of the first crossing of `level`, interpolated between samples (a
+        whole-sample answer would quantize a 0.1 ms attack by ~10%)."""
+        hit = np.flatnonzero(progress >= level)
+        if not len(hit):
+            return float("nan")
+        i = hit[0]
+        if i == 0:
+            return 0.0
+        a, b = progress[i - 1], progress[i]
+        return (i - 1 + (level - a) / (b - a)) / sample_rate
 
     # Progress from 0 (start of the move) to 1 (end), whichever way the CV moves.
     attack = (cv[burst_start:burst_stop] - before) / swing
     release = (during - cv[burst_stop:]) / swing
     tc = 1 - np.exp(-1)  # one time constant
-    return CvTiming(
-        before, during, first(attack >= tc), first(release >= tc), first(release >= 0.9)
-    )
+    return CvTiming(before, during, first(attack, tc), first(release, tc), first(release, 0.9))
 
 
 @dataclass(frozen=True)

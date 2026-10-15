@@ -1,8 +1,12 @@
 """Cached, parallel renders: (circuit parameters, input audio) -> output audio + internal signals.
 
-A render is keyed by a hash of everything that determines its result: the
-netlist text and the files it reads, the input samples, the transient
-settings, and the varimu source code. A finished render lives in
+Renders run on the engine named by sim_settings.yaml `simulator.engine`
+(ngspice, the reference, or circuitsim, the fast Rust engine), or the one in
+the settings passed in. A render is keyed by a hash of everything that
+determines its result: the netlist text and the files it reads, the input
+samples, the transient settings (engine included), the varimu source code
+and, for circuitsim, the hash of the crate sources it was built from. A
+finished render lives in
 cache/renders/<key>/:
 
     out.wav        output, mono float32, in dBFS-scaled units (volts / full scale)
@@ -36,6 +40,7 @@ import numpy as np
 import varimu
 from varimu.circuit import netlist as nl
 from varimu.config import REPO_ROOT, load_sim_settings
+from varimu.sim import fast
 from varimu.sim.io import TransientSettings, run_transient, write_audio
 
 CACHE_DIR = REPO_ROOT / "cache"
@@ -100,6 +105,8 @@ def _key(circuit: nl.Circuit, samples: np.ndarray, s: TransientSettings) -> tupl
         "save": list(circuit.save),
         "code": code_version(),
     }
+    if s.engine == "circuitsim":
+        parts["engine_build"] = fast.check_build()
     return _sha(json.dumps(parts, sort_keys=True).encode()), parts
 
 
@@ -114,12 +121,21 @@ def _log_timing(meta: dict[str, Any]) -> None:
         "audio_s": round(meta["duration_s"], 3),
         "wall_s": round(meta["wall_s"], 2),
         "wall_per_audio_s": round(meta["realtime_factor"], 2),
+        "engine": meta["settings"].get("engine", "ngspice"),
         "oversample": meta["settings"]["oversample"],
         "method": meta["settings"]["method"],
         "reltol": meta["settings"]["reltol"],
     }
     with _timing_lock:
         new = not path.exists()
+        if not new:
+            with open(path, newline="", encoding="utf-8") as f:
+                old = list(csv.DictReader(f))
+            if old and set(old[0]) != set(row):  # a column was added: rewrite the log
+                with open(path, "w", newline="", encoding="utf-8") as f:
+                    w = csv.DictWriter(f, fieldnames=list(row), restval="")
+                    w.writeheader()
+                    w.writerows({k: r.get(k, "") for k in row} for r in old)
         with open(path, "a", newline="", encoding="utf-8") as f:
             w = csv.DictWriter(f, fieldnames=list(row))
             if new:
@@ -142,8 +158,9 @@ def render(
     progress: Callable[[float], None] | None = None,
     use_cache: bool = True,
 ) -> Render:
-    """Run (or fetch from cache) one render."""
-    s = settings or TransientSettings.from_sim_settings()
+    """Run (or fetch from cache) one render, on the configured engine unless `settings`
+    names one."""
+    s = settings or TransientSettings.from_sim_settings(engine="configured")
     circuit = nl.build(job.overrides)
     samples = np.asarray(job.samples, float)
     key, parts = _key(circuit, samples, s)
@@ -161,16 +178,21 @@ def render(
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True)
     try:
-        res = run_transient(
-            circuit.text,
-            samples * s.full_scale_volts_peak,
-            input_node=circuit.input_node,
-            save=circuit.save,
-            settings=s,
-            workdir=workdir,
-            progress=progress,
-            files=circuit.files,
-        )
+        if s.engine == "circuitsim":
+            res = fast.run_transient(circuit.ir, samples * s.full_scale_volts_peak, settings=s)
+            if progress:  # no progress from inside the engine yet
+                progress(1.0)
+        else:
+            res = run_transient(
+                circuit.text,
+                samples * s.full_scale_volts_peak,
+                input_node=circuit.input_node,
+                save=circuit.save,
+                settings=s,
+                workdir=workdir,
+                progress=progress,
+                files=circuit.files,
+            )
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
 
@@ -211,7 +233,8 @@ def render_many(
     max_jobs: int | None = None,
     progress: Callable[[int, float], None] | None = None,
 ) -> list[Render]:
-    """Run renders in parallel (threads; each waits on its own ngspice process)."""
+    """Run renders in parallel (threads; each waits on its own ngspice process, or in
+    circuitsim, which releases the GIL while it simulates)."""
     jobs = list(jobs)
     n = min(max_jobs or default_jobs(), max(1, len(jobs)))
 

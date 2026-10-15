@@ -90,7 +90,7 @@ def _cmd_render(args: argparse.Namespace) -> int:
     import itertools
 
     from varimu.sim import runner
-    from varimu.sim.io import write_audio
+    from varimu.sim.io import TransientSettings, write_audio
 
     settings = load_sim_settings()
     inputs = _render_inputs(args, settings.sample_rate, settings.seed)
@@ -110,7 +110,9 @@ def _cmd_render(args: argparse.Namespace) -> int:
 
     n = min(args.jobs or runner.default_jobs(), len(jobs))
     print(f"{len(jobs)} render(s), up to {n} in parallel")
-    renders = runner.render_many(jobs, max_jobs=n)
+    ts = TransientSettings.from_sim_settings(engine=args.engine or "configured")
+    print(f"engine: {ts.engine} ({ts.method}, {ts.oversample}x oversampling)")
+    renders = runner.render_many(jobs, settings=ts, max_jobs=n)
     single = len(renders) == 1 and args.out and args.out.suffix.lower() == ".wav"
     for r, name in zip(renders, names, strict=True):
         dest = args.out if single else (args.out or Path("renders")) / f"{name}.wav"
@@ -162,6 +164,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--seconds", type=float, help="excerpt length (s); default: to the end")
     p.add_argument("--out", type=Path, help="output .wav (single render) or directory")
     p.add_argument("--jobs", type=int, help="parallel renders (default: cpu_count - 2)")
+    p.add_argument(
+        "--engine",
+        choices=["ngspice", "circuitsim"],
+        help="simulation engine (default: sim_settings.yaml simulator.engine)",
+    )
     p.set_defaults(func=_cmd_render)
 
     p = sub.add_parser("listen", help="tweak-and-listen web page (needs the listen extra)")

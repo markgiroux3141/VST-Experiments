@@ -18,6 +18,35 @@ audio:
 simulator:
   primary: TBD       # xyce | ngspice. Decided after Phase 2 (see plan: Open Decisions).
   fallback: ngspice
+  # Which engine renders: ngspice (the reference) or circuitsim (the fast Rust
+  # engine, docs/CIRCUIT_SIM_PLAN.md). circuitsim becomes the default in M6.
+  engine: ngspice
+
+circuitsim:
+  # Fixed-step engine settings; the `transient` block below is ngspice's.
+  #
+  # Chosen from the M4 method study (2026-10-15, CIRCUIT_SIM_PLAN.md, M4):
+  # esdirk4 (4th order, L-stable) at 2x, the input interpolated to 5th order
+  # at its stage times, and local error control: a step whose embedded error
+  # estimate exceeds error_abstol + error_reltol * |v| on any node is redone
+  # as halves (output stays on the sample grid).
+  # - Smooth dynamics: the small-signal response matches ngspice .ac to
+  #   -63 dB up to 20 kHz (0.00 dB / 0.04 deg; trapezoidal at 4x:
+  #   0.18 dB / 2 deg). The slice's provisional ~17 kHz transformer resonance
+  #   is what trapezoidal's frequency warping trips on.
+  # - Switching (bridge diodes on HF, grid conduction): no method's order
+  #   helps there; the error control subdivides just those steps.
+  # vs the converged solution, 6 excerpts: -64 dB rms or better (CCIF 19+20
+  # kHz at -10 dBFS -64, multitone -70, SMPTE 0 dBFS -71, burst -86, clip
+  # -83), costing 1.0-1.1x the uncontrolled run on typical material, 1.4x on
+  # the multitone, 2.6x on CCIF. Fixed 4x (no control) costs ~1.7x everywhere
+  # and reaches -59 dB on CCIF; it's the fallback if real time needs a fixed
+  # cost (M8).
+  oversample: 2
+  method: esdirk4        # trap | euler | trbdf2 | sdirk3 | esdirk4 | radau3 | radau5
+  input_order: 5         # 1 | 3 | 5: input interpolation at stage times (not used by trap)
+  error_abstol: 0.01     # V; 0 turns error control off (esdirk4 only)
+  error_reltol: 0.001
 
 transient:
   # Input is band-limited upsampled by this factor before simulation, and the

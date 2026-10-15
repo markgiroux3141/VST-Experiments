@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use crate::Error;
 use crate::devices::{self, Device};
 use crate::ir::{CircuitIr, DeviceModel, Element, GROUND, Probe};
-use crate::linalg::Matrix;
+use crate::linalg::{Matrix, SparseRows};
 
 /// SPICE's default GMIN (S), across every junction diode.
 pub const SPICE_GMIN: f64 = 1e-12;
@@ -71,6 +71,8 @@ pub struct Mna {
     pub g: Matrix,
     /// Reactive part: capacitances and the (negated) inductance matrix.
     pub c: Matrix,
+    /// `c`'s nonzeros, for the products taken every step.
+    pub c_sparse: SparseRows,
     /// Constant sources.
     pub b: Vec<f64>,
     /// Row of the input equation (`b[input_row] += u(t)`).
@@ -211,6 +213,7 @@ impl Mna {
         Ok(Mna {
             unknowns,
             g,
+            c_sparse: SparseRows::new(&c),
             c,
             b,
             input_row,

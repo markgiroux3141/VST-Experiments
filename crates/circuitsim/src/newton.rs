@@ -170,16 +170,22 @@ pub enum Failure {
 }
 
 /// Newton's scratch space and the devices' linearization points.
+///
+/// The system may hold several copies of the circuit (the stages of a fully
+/// implicit Runge-Kutta step, see `transient.rs`): copy c's unknowns are the
+/// circuit's shifted by c x `stride`, and every device is placed once per
+/// copy, placement `c * n_devices + d`.
 #[derive(Debug, Clone)]
 pub struct Newton {
-    /// N position of each device pin (`None` = ground), per device. Device
+    /// N position of each pin (`None` = ground), per placement. Device
     /// nodes are the first entries of every [`Reduced`]'s N.
     pin_pos: Vec<Vec<Option<usize>>>,
-    /// Offset of each device's ports in `v_lin`.
+    /// Offset of each placement's ports in `v_lin`.
     offsets: Vec<usize>,
+    n_devices: usize,
     n_device_nodes: usize,
-    /// Port voltages at which each device was last linearized. Callers set
-    /// them before a solve (the previous accepted point, for limiting).
+    /// Port voltages at which each placement was last linearized. Callers
+    /// set them before a solve (the previous accepted point, for limiting).
     pub v_lin: Vec<f64>,
     j: Matrix,
     lu: Lu,
@@ -193,6 +199,18 @@ pub struct Newton {
 impl Newton {
     /// `device_nodes`: the full indices of every device-pin node (N's prefix).
     pub fn new(devices: &[DeviceInstance], device_nodes: &[usize]) -> Newton {
+        Newton::with_copies(devices, device_nodes, 1)
+    }
+
+    /// For a system of `copies` copies of the circuit, whose N starts with
+    /// copy 0's `device_nodes`, then copy 1's, and so on (see
+    /// [`Newton::copy_nodes`]).
+    pub fn with_copies(
+        devices: &[DeviceInstance],
+        device_nodes: &[usize],
+        copies: usize,
+    ) -> Newton {
+        let nd = device_nodes.len();
         let pos = |full: Option<usize>| {
             full.map(|f| {
                 device_nodes
@@ -201,22 +219,27 @@ impl Newton {
                     .expect("device node")
             })
         };
-        let pin_pos: Vec<Vec<Option<usize>>> = devices
-            .iter()
-            .map(|d| d.pins.iter().map(|&p| pos(p)).collect())
-            .collect();
-        let mut offsets = Vec::with_capacity(devices.len());
+        let mut pin_pos: Vec<Vec<Option<usize>>> = Vec::with_capacity(copies * devices.len());
+        for c in 0..copies {
+            for d in devices {
+                pin_pos.push(d.pins.iter().map(|&p| pos(p).map(|a| a + c * nd)).collect());
+            }
+        }
+        let mut offsets = Vec::with_capacity(pin_pos.len());
         let mut total = 0;
         let mut widest = 0;
-        for d in devices {
-            offsets.push(total);
-            total += d.device.ports();
-            widest = widest.max(d.device.ports());
+        for _ in 0..copies {
+            for d in devices {
+                offsets.push(total);
+                total += d.device.ports();
+                widest = widest.max(d.device.ports());
+            }
         }
         Newton {
             pin_pos,
             offsets,
-            n_device_nodes: device_nodes.len(),
+            n_devices: devices.len(),
+            n_device_nodes: copies * nd,
             v_lin: vec![0.0; total],
             j: Matrix::zeros(0),
             lu: Lu::with_size(0),
@@ -228,13 +251,38 @@ impl Newton {
         }
     }
 
-    /// Port voltages of every device for the device-node voltages `xn`
-    /// (the first entries of an N vector), into `out` (laid out like `v_lin`).
+    /// The full indices of a `copies`-copy system's device nodes, in the
+    /// order [`Newton::with_copies`] expects (`stride`: unknowns per copy).
+    pub fn copy_nodes(device_nodes: &[usize], copies: usize, stride: usize) -> Vec<usize> {
+        (0..copies)
+            .flat_map(|c| device_nodes.iter().map(move |&d| d + c * stride))
+            .collect()
+    }
+
+    /// Port voltages of every device in copy 0 for the device-node voltages
+    /// `xn` (the first entries of an N vector), into `out` (laid out like
+    /// copy 0's part of `v_lin`).
     pub fn ports(&self, devices: &[DeviceInstance], xn: &[f64], out: &mut [f64]) {
-        for (d, (pins, &off)) in devices.iter().zip(self.pin_pos.iter().zip(&self.offsets)) {
+        self.copy_ports(devices, xn, 0, out);
+    }
+
+    /// Like [`Newton::ports`], for copy `c`.
+    pub fn copy_ports(&self, devices: &[DeviceInstance], xn: &[f64], c: usize, out: &mut [f64]) {
+        let first = c * self.n_devices;
+        let Some(&base) = self.offsets.get(first) else {
+            return; // no devices
+        };
+        for (d, (pins, &off)) in devices.iter().zip(
+            self.pin_pos[first..first + self.n_devices]
+                .iter()
+                .zip(&self.offsets[first..]),
+        ) {
             let at = |p: Option<usize>| p.map_or(0.0, |a| xn[a]);
             let vref = at(*pins.last().expect("devices have pins"));
-            for (j, o) in out[off..off + d.device.ports()].iter_mut().enumerate() {
+            for (j, o) in out[off - base..off - base + d.device.ports()]
+                .iter_mut()
+                .enumerate()
+            {
                 *o = at(pins[j]) - vref;
             }
         }
@@ -267,8 +315,8 @@ impl Newton {
                 }
             }
             let mut limited = false;
-            for (d, dev) in devices.iter().enumerate() {
-                limited |= self.stamp(d, &*dev.device, xn);
+            for p in 0..self.pin_pos.len() {
+                limited |= self.stamp(p, &*devices[p % self.n_devices].device, xn);
             }
             self.lu
                 .refactor(&self.j)
@@ -304,6 +352,12 @@ impl Newton {
             position: worst.0,
             update: worst.1,
         })
+    }
+
+    /// Solve with the Jacobian of the last iteration of the last [`Newton::solve`]
+    /// (`b` is overwritten; `work` has the N length).
+    pub fn solve_jacobian(&self, b: &mut [f64], work: &mut [f64]) {
+        self.lu.solve(b, work);
     }
 
     /// Linearize device `d` at the (limited) port voltages of `xn` and stamp

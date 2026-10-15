@@ -5,8 +5,9 @@
 //! `docs/CIRCUIT_SIM_PLAN.md` in the repository for the plan and milestones.
 //!
 //! So far: the circuit IR shared with the Python side ([`ir`], M1), the
-//! fixed-step engine ([`mna`], [`transient`], M2) and the nonlinear devices
-//! with Newton on the full MNA system ([`devices`], [`newton`], M3).
+//! fixed-step engine ([`mna`], [`transient`], M2), the nonlinear devices
+//! with Newton on the full MNA system ([`devices`], [`newton`], M3), and
+//! the integration methods with local error control chosen for the 670 (M4).
 
 use std::fmt;
 
@@ -20,10 +21,14 @@ pub mod transient;
 #[cfg(feature = "python")]
 mod python;
 
-pub use transient::{Method, Options, Output, Stats, simulate};
+pub use transient::{Method, Options, Output, Stats, StepInput, simulate};
 
 /// Crate version (also `circuitsim.__version__` in Python).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Hash of the sources this build was compiled from (see `build.rs`; also
+/// `circuitsim.SOURCE_HASH` in Python).
+pub const SOURCE_HASH: &str = env!("CIRCUITSIM_SOURCE_HASH");
 
 /// Anything that stops a simulation: an invalid circuit, an unsupported
 /// element, a singular matrix.

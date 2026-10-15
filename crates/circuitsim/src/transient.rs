@@ -2,22 +2,54 @@
 //! the device currents.
 //!
 //! The step h is 1 / (oversample x sample rate), and the input is given at
-//! every step, so outputs land exactly on the sample grid. The run starts from
-//! the DC operating point with the first input sample (capacitors open,
-//! inductors shorted), as ngspice's `.tran` does.
+//! every step, so outputs land exactly on the sample grid. Between samples the
+//! input is linear, like ngspice's PWL file source. The run starts from the DC
+//! operating point with the first input sample (capacitors open, inductors
+//! shorted), as ngspice's `.tran` does.
 //!
-//! Trapezoidal rule in companion form, with `q' = C x'` carried as state:
+//! Every method is a stiffly accurate implicit Runge-Kutta method (the last
+//! stage is the step's end point), so the algebraic rows of the MNA system
+//! (resistive nodes, sources) hold exactly at every sample. Write the system
+//! as `C x' = F(x, t)` with `F = b - G x - d(x)`.
+//!
+//! **Diagonally implicit** methods (`trap`, `euler`, `trbdf2`, `sdirk3`,
+//! `esdirk4`) solve their stages one after another. Stage i solves
 //!
 //! ```text
-//! (G + 2C/h) x[n+1] + d(x[n+1]) = b[n+1] + 2C/h x[n] + q'[n]
-//! q'[n+1] = 2C/h (x[n+1] - x[n]) - q'[n]
+//! (G + C/(gh)) Y_i + d(Y_i) = b(t_i) + C x[n]/(gh) + (1/g) sum_{j<i} a_ij F_j
+//! F_i = C (Y_i - x[n]) / (gh) - (1/g) sum_{j<i} a_ij F_j
 //! ```
 //!
-//! This is SPICE's capacitor/inductor companion model written for the whole
-//! matrix. Rows without a C entry (resistive nodes, sources) are solved exactly
-//! each step instead of being averaged, so they can't ring. Backward Euler,
-//! `(G + C/h) x[n+1] + d(x[n+1]) = b[n+1] + C/h x[n]`, is there for damping
-//! stiff modes. Each step is solved by Newton (see `newton.rs`).
+//! with the method's diagonal g the same for every stage, so every stage uses
+//! the same step matrix. `F_j = C x'` at stage j is carried as state, as in
+//! SPICE's companion models. A first stage with a = 0 is explicit (it is the
+//! previous step's end point, so it reuses its F). The trapezoidal rule is the
+//! two-stage case g = 1/2, a = [[0], [1/2, 1/2]]:
+//!
+//! ```text
+//! (G + 2C/h) x[n+1] + d(x[n+1]) = b[n+1] + 2C/h x[n] + F[n]
+//! F[n+1] = 2C/h (x[n+1] - x[n]) - F[n]
+//! ```
+//!
+//! **Radau IIA** (`radau3`, `radau5`) couples its s stages: with W = A^-1,
+//!
+//! ```text
+//! G Y_i + sum_j (w_ij / h) C Y_j + d(Y_i) = b(t_i) + (sum_j w_ij / h) C x[n]
+//! ```
+//!
+//! one system of s copies of the circuit (block matrix `I (x) G + W/h (x) C`),
+//! solved by the same block elimination and Newton as a single step, with
+//! every device placed once per stage.
+//!
+//! | method  | order | stages solved      | stability |
+//! |---------|-------|--------------------|-----------|
+//! | euler   | 1     | 1                  | L-stable  |
+//! | trap    | 2     | 1                  | A-stable (fast modes ring at Nyquist) |
+//! | trbdf2  | 2     | 2                  | L-stable  |
+//! | sdirk3  | 3     | 3                  | L-stable  |
+//! | esdirk4 | 4     | 5                  | L-stable  |
+//! | radau3  | 3     | 1 (2 coupled)      | L-stable  |
+//! | radau5  | 5     | 1 (3 coupled)      | L-stable  |
 //!
 //! Newton robustness:
 //! - the initial guess is the previous two points extrapolated linearly;
@@ -31,6 +63,7 @@
 
 use crate::Error;
 use crate::ir::CircuitIr;
+use crate::linalg::Matrix;
 use crate::mna::{Mna, SPICE_GMIN};
 use crate::newton::{Failure, Newton, NewtonOptions, Reduced};
 
@@ -38,17 +71,257 @@ use crate::newton::{Failure, Newton, NewtonOptions, Reduced};
 pub enum Method {
     Trapezoidal,
     BackwardEuler,
+    TrBdf2,
+    Sdirk3,
+    Esdirk4,
+    Radau3,
+    Radau5,
 }
 
 impl Method {
+    pub const NAMES: [&'static str; 7] = [
+        "trap", "euler", "trbdf2", "sdirk3", "esdirk4", "radau3", "radau5",
+    ];
+
     pub fn parse(name: &str) -> Result<Method, Error> {
-        match name {
-            "trap" => Ok(Method::Trapezoidal),
-            "euler" => Ok(Method::BackwardEuler),
-            _ => Err(Error::new(format!(
-                "unknown method {name:?} (trap | euler)"
-            ))),
+        Ok(match name {
+            "trap" => Method::Trapezoidal,
+            "euler" => Method::BackwardEuler,
+            "trbdf2" => Method::TrBdf2,
+            "sdirk3" => Method::Sdirk3,
+            "esdirk4" => Method::Esdirk4,
+            "radau3" => Method::Radau3,
+            "radau5" => Method::Radau5,
+            _ => {
+                return Err(Error::new(format!(
+                    "unknown method {name:?} ({})",
+                    Method::NAMES.join(" | ")
+                )));
+            }
+        })
+    }
+
+    fn tableau(self) -> Tableau {
+        match self {
+            Method::Trapezoidal => Tableau::dirk(0.5, &[&[], &[0.5]]),
+            Method::BackwardEuler => Tableau::dirk(1.0, &[&[]]).with_implicit_first(),
+            Method::TrBdf2 => {
+                // Hosea & Shampine (1996): g = 1 - sqrt(2)/2, the trapezoidal
+                // rule to 2g h, then BDF2 to h, as an ESDIRK.
+                let g = 1.0 - std::f64::consts::FRAC_1_SQRT_2;
+                let w = std::f64::consts::SQRT_2 / 4.0;
+                Tableau::dirk(g, &[&[], &[g], &[w, w]])
+            }
+            Method::Sdirk3 => {
+                // Alexander (1977), 3 stages, order 3, L-stable.
+                let g = 0.435_866_521_508_459;
+                let b1 = -1.5 * g * g + 4.0 * g - 0.25;
+                let b2 = 1.5 * g * g - 5.0 * g + 1.25;
+                Tableau::dirk(g, &[&[0.0; 0], &[(1.0 - g) / 2.0], &[b1, b2]]).with_implicit_first()
+            }
+            Method::Esdirk4 => {
+                // Kennedy & Carpenter (2003), ESDIRK4(3)6L[2]SA: 6 stages (the
+                // first explicit), order 4, stage order 2, L-stable.
+                Tableau::dirk(
+                    0.25,
+                    &[
+                        &[],
+                        &[0.25],
+                        &[8611.0 / 62500.0, -1743.0 / 31250.0],
+                        &[
+                            5012029.0 / 34652500.0,
+                            -654441.0 / 2922500.0,
+                            174375.0 / 388108.0,
+                        ],
+                        &[
+                            15267082809.0 / 155376265600.0,
+                            -71443401.0 / 120774400.0,
+                            730878875.0 / 902184768.0,
+                            2285395.0 / 8070912.0,
+                        ],
+                        &[
+                            82889.0 / 524892.0,
+                            0.0,
+                            15625.0 / 83664.0,
+                            69875.0 / 102672.0,
+                            -2260.0 / 8211.0,
+                        ],
+                    ],
+                )
+                // The pair's embedded 3rd-order solution.
+                .with_embedded(&[
+                    4586570599.0 / 29645900160.0,
+                    0.0,
+                    178811875.0 / 945068544.0,
+                    814220225.0 / 1159782912.0,
+                    -3700637.0 / 11593932.0,
+                    61727.0 / 225920.0,
+                ])
+            }
+            Method::Radau3 => Tableau::full(&[&[5.0 / 12.0, -1.0 / 12.0], &[3.0 / 4.0, 1.0 / 4.0]]),
+            Method::Radau5 => {
+                let s6 = 6f64.sqrt();
+                Tableau::full(&[
+                    &[
+                        (88.0 - 7.0 * s6) / 360.0,
+                        (296.0 - 169.0 * s6) / 1800.0,
+                        (-2.0 + 3.0 * s6) / 225.0,
+                    ],
+                    &[
+                        (296.0 + 169.0 * s6) / 1800.0,
+                        (88.0 + 7.0 * s6) / 360.0,
+                        (-2.0 - 3.0 * s6) / 225.0,
+                    ],
+                    &[(16.0 - s6) / 36.0, (16.0 + s6) / 36.0, 1.0 / 9.0],
+                ])
+            }
         }
+    }
+}
+
+/// Butcher tableau of a stiffly accurate implicit Runge-Kutta method.
+#[derive(Debug, Clone, PartialEq)]
+struct Tableau {
+    /// Full A matrix, row-major s x s.
+    a: Vec<f64>,
+    c: Vec<f64>,
+    s: usize,
+    /// Diagonally implicit: every diagonal entry is `gamma` (the first may be
+    /// 0, an explicit stage), and A is lower triangular.
+    diagonal: bool,
+    gamma: f64,
+    /// `b - b_hat` for an embedded lower-order solution (error estimate).
+    d: Option<Vec<f64>>,
+}
+
+impl Tableau {
+    /// A diagonally implicit method from the strictly lower rows of A (row i
+    /// has i entries) and the diagonal `gamma`. The first stage is explicit
+    /// (a_00 = 0) unless [`Tableau::with_implicit_first`].
+    fn dirk(gamma: f64, lower: &[&[f64]]) -> Tableau {
+        let s = lower.len();
+        let mut a = vec![0.0; s * s];
+        for (i, row) in lower.iter().enumerate() {
+            assert_eq!(row.len(), i);
+            a[i * s..i * s + i].copy_from_slice(row);
+            if i > 0 {
+                a[i * s + i] = gamma;
+            }
+        }
+        Tableau::finish(a, s, true, gamma)
+    }
+
+    fn with_implicit_first(mut self) -> Tableau {
+        self.a[0] = self.gamma;
+        self.c[0] = self.gamma;
+        self
+    }
+
+    fn full(rows: &[&[f64]]) -> Tableau {
+        let s = rows.len();
+        let a: Vec<f64> = rows.iter().flat_map(|r| r.iter().copied()).collect();
+        assert_eq!(a.len(), s * s);
+        Tableau::finish(a, s, false, 0.0)
+    }
+
+    fn finish(a: Vec<f64>, s: usize, diagonal: bool, gamma: f64) -> Tableau {
+        let c = (0..s).map(|i| a[i * s..(i + 1) * s].iter().sum()).collect();
+        Tableau {
+            a,
+            c,
+            s,
+            diagonal,
+            gamma,
+            d: None,
+        }
+    }
+
+    /// With an embedded solution of weights `b_hat`.
+    fn with_embedded(mut self, b_hat: &[f64]) -> Tableau {
+        let s = self.s;
+        assert_eq!(b_hat.len(), s);
+        let b = &self.a[(s - 1) * s..];
+        self.d = Some(b.iter().zip(b_hat).map(|(x, y)| x - y).collect());
+        self
+    }
+
+    fn explicit_first(&self) -> bool {
+        self.a[0] == 0.0
+    }
+
+    /// A^-1 (fully implicit methods), row-major.
+    fn inverse(&self) -> Vec<f64> {
+        let s = self.s;
+        let mut m = Matrix::zeros(s);
+        for i in 0..s {
+            for j in 0..s {
+                m.set(i, j, self.a[i * s + j]);
+            }
+        }
+        let lu = crate::linalg::Lu::factor(&m).expect("Radau A is invertible");
+        let mut w = vec![0.0; s * s];
+        let mut work = vec![0.0; s];
+        for j in 0..s {
+            let mut col = vec![0.0; s];
+            col[j] = 1.0;
+            lu.solve(&mut col, &mut work);
+            for i in 0..s {
+                w[i * s + j] = col[i];
+            }
+        }
+        w
+    }
+}
+
+/// The input over one step, as a polynomial in the step fraction theta (0 at
+/// the step's start, 1 at its end): Lagrange interpolation through up to six
+/// samples at integer theta offsets.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StepInput {
+    vals: [f64; 6],
+    /// Offset (in samples, relative to the step's start) of `vals[0]`.
+    first: i32,
+    len: usize,
+}
+
+impl StepInput {
+    /// Straight line from `u0` to `u1`.
+    pub fn linear(u0: f64, u1: f64) -> StepInput {
+        StepInput {
+            vals: [u0, u1, 0.0, 0.0, 0.0, 0.0],
+            first: 0,
+            len: 2,
+        }
+    }
+
+    /// Through `vals`, the samples at offsets `first`, `first + 1`, ... (the
+    /// step runs from offset 0 to 1, which must be among them).
+    pub fn lagrange(vals: &[f64], first: i32) -> StepInput {
+        assert!((2..=6).contains(&vals.len()) && first <= 0 && first + vals.len() as i32 >= 2);
+        let mut v = [0.0; 6];
+        v[..vals.len()].copy_from_slice(vals);
+        StepInput {
+            vals: v,
+            first,
+            len: vals.len(),
+        }
+    }
+
+    /// The input at step fraction `theta`. Exact at the sample offsets.
+    pub fn at(&self, theta: f64) -> f64 {
+        let mut sum = 0.0;
+        for j in 0..self.len {
+            let oj = (self.first + j as i32) as f64;
+            let mut l = 1.0;
+            for m in 0..self.len {
+                if m != j {
+                    let om = (self.first + m as i32) as f64;
+                    l *= (theta - om) / (oj - om);
+                }
+            }
+            sum += l * self.vals[j];
+        }
+        sum
     }
 }
 
@@ -79,6 +352,27 @@ pub struct Options {
     pub gmin: f64,
     /// Extrapolate the previous two points for Newton's initial guess.
     pub extrapolate: bool,
+    /// How [`simulate`] interpolates the input between samples at stage
+    /// times inside a step: 1 = linear (ngspice's PWL source; the default),
+    /// 3 or 5 = Lagrange through the 4 or 6 nearest samples. Only methods
+    /// with stages inside the step (all but trap and euler) see a difference.
+    pub input_order: usize,
+    /// Initial guess for a diagonally implicit method's later stages:
+    /// 1 = the previous two samples extrapolated linearly (as for the first
+    /// stage), 2 = the quadratic through those two and the latest stage
+    /// solved in this step. 2 (the default) takes 11-23% fewer Newton
+    /// iterations with esdirk4 on the 670.
+    pub predictor: usize,
+    /// Local error control (methods with an embedded solution: esdirk4).
+    /// After each step the error estimate on every node voltage is compared
+    /// with `error_abstol + error_reltol * |v|`; a step that fails is redone
+    /// as two half steps, recursively, at most `max_error_halvings` times
+    /// (and at most `max_halvings`; the deepest level is accepted as it
+    /// is). The output stays on the
+    /// sample grid. `error_abstol = 0` turns it off (the default).
+    pub error_abstol: f64,
+    pub error_reltol: f64,
+    pub max_error_halvings: u32,
 }
 
 impl Default for Options {
@@ -92,6 +386,11 @@ impl Default for Options {
             max_halvings: 8,
             gmin: SPICE_GMIN,
             extrapolate: true,
+            input_order: 1,
+            predictor: 2,
+            error_abstol: 0.0,
+            error_reltol: 0.0,
+            max_error_halvings: 4,
         }
     }
 }
@@ -111,7 +410,13 @@ impl Options {
             && self.vntol > 0.0
             && self.max_iter > 0
             && self.max_iter_dc > 0
-            && self.max_halvings <= 30;
+            && self.max_halvings <= 30
+            && matches!(self.input_order, 1 | 3 | 5)
+            && matches!(self.predictor, 1 | 2)
+            && self.error_abstol.is_finite()
+            && self.error_abstol >= 0.0
+            && self.error_reltol.is_finite()
+            && self.error_reltol >= 0.0;
         if ok {
             Ok(())
         } else {
@@ -123,12 +428,17 @@ impl Options {
 /// Solver statistics of a run.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Stats {
-    /// Time steps taken at the full step size, and as substeps.
+    /// Samples stepped, and steps accepted at less than the full step.
     pub steps: u64,
     pub substeps: u64,
-    /// Steps that had to be halved at least once.
+    /// Samples that took more than one step (Newton or error halvings).
     pub halved_steps: u64,
-    /// Newton iterations over all steps (DC excluded).
+    /// Steps (or substeps) redone as halves because of the error estimate.
+    pub error_rejections: u64,
+    /// Newton solves (one per implicit stage of a diagonally implicit
+    /// method, one per step otherwise) and iterations over all steps (DC
+    /// excluded). `max_iterations` is per solve.
+    pub solves: u64,
     pub iterations: u64,
     pub max_iterations: usize,
     /// How the DC operating point was found: "newton", "gmin" or "source".
@@ -139,27 +449,62 @@ pub struct Stats {
     pub linear_unknowns: usize,
 }
 
+/// The step machinery of a fully implicit method: s coupled copies.
+#[derive(Debug)]
+struct Coupled {
+    /// A^-1 of the tableau, and its row sums.
+    w: Vec<f64>,
+    w_sum: Vec<f64>,
+    newton: Newton,
+    nodes: Vec<usize>,
+    // Scratch, s x n.
+    rhs: Vec<f64>,
+    y: Vec<f64>,
+    x: Vec<f64>,
+}
+
+/// Why a step attempt was rejected.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum StepFail {
+    Newton(Failure),
+    /// The error estimate exceeded the tolerance.
+    Inaccurate,
+}
+
+impl From<Failure> for StepFail {
+    fn from(f: Failure) -> Self {
+        StepFail::Newton(f)
+    }
+}
+
 /// A transient run in progress; `step` advances it one sample.
 #[derive(Debug)]
 pub struct Transient {
     mna: Mna,
     opts: Options,
+    tab: Tableau,
     h: f64,
     device_nodes: Vec<usize>,
     newton: Newton,
+    coupled: Option<Coupled>,
     /// Reduced step matrix per halving level (built on first use).
     levels: Vec<Option<Reduced>>,
     x: Vec<f64>,
     x_prev: Vec<f64>,
     /// Step that led to `x` (0 before the first step: nothing to extrapolate).
     h_prev: f64,
+    /// `C x` and `F = C x'` at `x`.
     cx: Vec<f64>,
-    qdot: Vec<f64>,
+    f: Vec<f64>,
     /// Port voltages of every device at `x` (layout of `Newton::v_lin`).
     ports: Vec<f64>,
     u: f64,
     /// Samples stepped so far (the sample index of `x`).
     n: u64,
+    /// Deepest halving level accepted in the current sample, and in the
+    /// previous one (where error control starts the next).
+    deepest: usize,
+    level_hint: usize,
     stats: Stats,
     // Scratch.
     rhs: Vec<f64>,
@@ -169,6 +514,11 @@ pub struct Transient {
     x_new: Vec<f64>,
     cx_new: Vec<f64>,
     work: Vec<f64>,
+    /// Stage F values (s x n) of a diagonally implicit step.
+    stage_f: Vec<f64>,
+    /// Which unknowns are node voltages (the error control looks at those).
+    is_node: Vec<bool>,
+    err: Vec<f64>,
 }
 
 impl Transient {
@@ -188,20 +538,39 @@ impl Transient {
             }
         }
         let newton = Newton::new(&mna.devices, &device_nodes);
+        let tab = opts.method.tableau();
+        let coupled = (!tab.diagonal).then(|| {
+            let s = tab.s;
+            let w = tab.inverse();
+            let w_sum = (0..s).map(|i| w[i * s..(i + 1) * s].iter().sum()).collect();
+            Coupled {
+                w,
+                w_sum,
+                newton: Newton::with_copies(&mna.devices, &device_nodes, s),
+                nodes: Newton::copy_nodes(&device_nodes, s, n),
+                rhs: vec![0.0; s * n],
+                y: vec![0.0; s * n],
+                x: vec![0.0; s * n],
+            }
+        });
         let ports = vec![0.0; newton.v_lin.len()];
+        let s = tab.s;
         let mut tr = Transient {
             opts,
             h,
             newton,
+            coupled,
             levels: vec![None; opts.max_halvings as usize + 1],
             x: vec![0.0; n],
             x_prev: vec![0.0; n],
             h_prev: 0.0,
             cx: vec![0.0; n],
-            qdot: vec![0.0; n],
+            f: vec![0.0; n],
             ports,
             u: u0,
             n: 0,
+            deepest: 0,
+            level_hint: 0,
             stats: Stats::default(),
             rhs: vec![0.0; n],
             y: vec![0.0; n],
@@ -210,6 +579,18 @@ impl Transient {
             x_new: vec![0.0; n],
             cx_new: vec![0.0; n],
             work: vec![0.0; n],
+            stage_f: if tab.diagonal {
+                vec![0.0; s * n]
+            } else {
+                Vec::new()
+            },
+            is_node: mna
+                .unknowns
+                .iter()
+                .map(|u| matches!(u, crate::mna::Unknown::Node(_)))
+                .collect(),
+            err: vec![0.0; n],
+            tab,
             device_nodes,
             mna,
         };
@@ -309,8 +690,8 @@ impl Transient {
         sys.expand(&self.y[..nl], &xn, &mut self.x);
         self.newton.ports(&self.mna.devices, &xn, &mut self.ports);
         self.accept_ports();
-        self.mna.c.mul_vec(&self.x, &mut self.cx);
-        self.qdot.fill(0.0);
+        self.mna.c_sparse.mul_vec(&self.x, &mut self.cx);
+        self.f.fill(0.0);
         self.stats.dc_method = method;
         self.stats.dc_iterations = iterations;
         self.stats.nonlinear_unknowns = nn;
@@ -328,12 +709,37 @@ impl Transient {
         }
     }
 
-    /// Advance one step to the time where the input is `u`.
+    /// Advance one step to the time where the input is `u`, the input
+    /// linear in between.
     pub fn step(&mut self, u: f64) -> Result<(), Error> {
-        let u0 = self.u;
-        let halved_before = self.stats.substeps;
-        let res = self.advance(0, u0, u);
-        if self.stats.substeps > halved_before {
+        self.step_input(&StepInput::linear(self.u, u))
+    }
+
+    /// Advance one step with the input `inp` over it (`inp.at(0)` should be
+    /// the previous step's end input).
+    pub fn step_input(&mut self, inp: &StepInput) -> Result<(), Error> {
+        let substeps_before = self.stats.substeps;
+        // With error control, start one level above the deepest the previous
+        // sample needed (fewer rejected attempts through a hard passage, and
+        // back to full steps one level per sample after it).
+        let start = if self.opts.error_abstol > 0.0 {
+            self.level_hint.saturating_sub(1)
+        } else {
+            0
+        };
+        self.deepest = 0;
+        let m = 1usize << start;
+        let mut res = Ok(());
+        for j in 0..m {
+            let (a, b) = (j as f64 / m as f64, (j + 1) as f64 / m as f64);
+            res = self.advance(start, a, b, inp);
+            if res.is_err() {
+                break;
+            }
+        }
+        self.level_hint = self.deepest;
+        self.stats.steps += 1;
+        if self.stats.substeps > substeps_before {
             self.stats.halved_steps += 1;
         }
         self.n += 1;
@@ -349,96 +755,297 @@ impl Transient {
         })
     }
 
-    /// Advance by `h / 2^level` to input `u1`, halving on failure.
-    fn advance(&mut self, level: usize, u0: f64, u1: f64) -> Result<(), (usize, Failure)> {
-        match self.try_step(level, u1) {
-            Ok(()) => Ok(()),
-            Err(f) if level as u32 >= self.opts.max_halvings => Err((level, f)),
-            Err(_) => {
-                let um = 0.5 * (u0 + u1);
-                self.advance(level + 1, u0, um)?;
-                self.advance(level + 1, um, u1)
+    /// Advance by `h / 2^level`, over step fractions `th0` to `th1` of
+    /// `inp`, halving on failure.
+    fn advance(
+        &mut self,
+        level: usize,
+        th0: f64,
+        th1: f64,
+        inp: &StepInput,
+    ) -> Result<(), (usize, Failure)> {
+        let res = if self.tab.diagonal {
+            self.try_step_dirk(level, th0, th1, inp)
+        } else {
+            self.try_step_coupled(level, th0, th1, inp)
+        };
+        match res {
+            Ok(()) => return Ok(()),
+            Err(StepFail::Inaccurate) => self.stats.error_rejections += 1,
+            Err(StepFail::Newton(f)) if level as u32 >= self.opts.max_halvings => {
+                return Err((level, f));
             }
+            Err(StepFail::Newton(_)) => {}
+        }
+        let tm = 0.5 * (th0 + th1);
+        self.advance(level + 1, th0, tm, inp)?;
+        self.advance(level + 1, tm, th1, inp)
+    }
+
+    fn newton_options(&self) -> NewtonOptions {
+        NewtonOptions {
+            reltol: self.opts.reltol,
+            vntol: self.opts.vntol,
+            max_iter: self.opts.max_iter,
+            gshunt: 0.0,
         }
     }
 
-    fn try_step(&mut self, level: usize, u: f64) -> Result<(), Failure> {
+    /// Slope for the initial guess `x + slope * c * (x - x_prev)` at stage
+    /// time fraction c of a step of `hk`.
+    fn extrapolation(&self, hk: f64) -> f64 {
+        if self.opts.extrapolate && self.h_prev > 0.0 {
+            hk / self.h_prev
+        } else {
+            0.0
+        }
+    }
+
+    fn count(&mut self, iterations: usize) {
+        self.stats.solves += 1;
+        self.stats.iterations += iterations as u64;
+        self.stats.max_iterations = self.stats.max_iterations.max(iterations);
+    }
+
+    /// Accept `x_new` / `cx_new` as the step's end point, reached by `hk`.
+    fn accept(&mut self, level: usize, hk: f64, u: f64) {
+        std::mem::swap(&mut self.x_prev, &mut self.x);
+        std::mem::swap(&mut self.x, &mut self.x_new);
+        std::mem::swap(&mut self.cx, &mut self.cx_new);
+        self.h_prev = hk;
+        self.u = u;
+        self.accept_ports();
+        self.deepest = self.deepest.max(level);
+        if level > 0 {
+            self.stats.substeps += 1;
+        }
+    }
+
+    fn try_step_dirk(
+        &mut self,
+        level: usize,
+        th0: f64,
+        th1: f64,
+        inp: &StepInput,
+    ) -> Result<(), StepFail> {
         let hk = self.h / (1u64 << level) as f64;
-        let coef = match self.opts.method {
-            Method::Trapezoidal => 2.0 / hk,
-            Method::BackwardEuler => 1.0 / hk,
-        };
+        let n = self.x.len();
+        let s = self.tab.s;
+        let g = self.tab.gamma;
+        let inv = 1.0 / (g * hk);
         if self.levels[level].is_none() {
-            let a = self.mna.g.plus_scaled(coef, &self.mna.c);
+            let a = self.mna.g.plus_scaled(inv, &self.mna.c);
             self.levels[level] = Some(Reduced::new(&a, &self.device_nodes));
         }
         let sys = self.levels[level].as_ref().expect("just built");
         let (nn, nl) = (sys.n_len(), sys.l_len());
+        let slope = self.extrapolation(hk);
+        let opts = self.newton_options();
+        self.newton.v_lin.copy_from_slice(&self.ports);
 
-        for (((r, b), cx), q) in self
-            .rhs
-            .iter_mut()
-            .zip(&self.mna.b)
-            .zip(&self.cx)
-            .zip(&self.qdot)
-        {
-            *r = b + coef * cx;
-            if self.opts.method == Method::Trapezoidal {
-                *r += q;
+        // Newton iterations per implicit stage, counted once the step succeeds.
+        let mut iterations = [0usize; 8];
+        let mut solves = 0;
+        // Step fraction of the latest solved stage (its N values stay in xn).
+        let mut c_last: Option<f64> = None;
+        for i in 0..s {
+            let fi = i * n;
+            if i == 0 && self.tab.explicit_first() {
+                // The previous end point, and its F.
+                self.stage_f[..n].copy_from_slice(&self.f);
+                continue;
+            }
+            let ci = self.tab.c[i];
+            for ((r, b), cx) in self.rhs.iter_mut().zip(&self.mna.b).zip(&self.cx) {
+                *r = b + inv * cx;
+            }
+            self.rhs[self.mna.input_row] += inp.at(th0 + ci * (th1 - th0));
+            for j in 0..i {
+                let coef = self.tab.a[i * s + j] / g;
+                if coef != 0.0 {
+                    let fj = &self.stage_f[j * n..(j + 1) * n];
+                    for (r, f) in self.rhs.iter_mut().zip(fj) {
+                        *r += coef * f;
+                    }
+                }
+            }
+            sys.reduce(
+                &self.rhs,
+                &mut self.y[..nl],
+                &mut self.rn[..nn],
+                &mut self.work[..nl],
+            );
+            let xn = &mut self.xn[..nn];
+            match c_last {
+                Some(cm) if self.opts.predictor == 2 && slope > 0.0 => {
+                    // Quadratic through x_prev (at -1/slope), x (at 0) and
+                    // the latest stage (at cm), evaluated at ci.
+                    let tp = -1.0 / slope;
+                    let lp = ci * (ci - cm) / (tp * (tp - cm));
+                    let l0 = (ci - tp) * (ci - cm) / (tp * cm);
+                    let lm = (ci - tp) * ci / ((cm - tp) * cm);
+                    for (v, &k) in xn.iter_mut().zip(&sys.n_idx) {
+                        *v = lp * self.x_prev[k] + l0 * self.x[k] + lm * *v;
+                    }
+                }
+                Some(cm) if self.opts.predictor == 2 => {
+                    for (v, &k) in xn.iter_mut().zip(&sys.n_idx) {
+                        *v = self.x[k] + ci / cm * (*v - self.x[k]);
+                    }
+                }
+                _ => {
+                    for (v, &k) in xn.iter_mut().zip(&sys.n_idx) {
+                        *v = self.x[k] + ci * slope * (self.x[k] - self.x_prev[k]);
+                    }
+                }
+            }
+            let it = self
+                .newton
+                .solve(sys, &self.mna.devices, &self.rn[..nn], xn, &opts)?;
+            iterations[solves] = it;
+            solves += 1;
+            c_last = Some(ci);
+            sys.expand(&self.y[..nl], xn, &mut self.x_new);
+            self.mna.c_sparse.mul_vec(&self.x_new, &mut self.cx_new);
+            // F_i = (C Y_i - C x[n]) / (g h) - (1/g) sum_j a_ij F_j.
+            let (done, rest) = self.stage_f.split_at_mut(fi);
+            let f_i = &mut rest[..n];
+            for ((f, new), old) in f_i.iter_mut().zip(&self.cx_new).zip(&self.cx) {
+                *f = inv * (new - old);
+            }
+            for j in 0..i {
+                let coef = self.tab.a[i * s + j] / g;
+                if coef != 0.0 {
+                    for (f, fj) in f_i.iter_mut().zip(&done[j * n..(j + 1) * n]) {
+                        *f -= coef * fj;
+                    }
+                }
             }
         }
-        self.rhs[self.mna.input_row] += u;
-        sys.reduce(
-            &self.rhs,
-            &mut self.y[..nl],
-            &mut self.rn[..nn],
-            &mut self.work[..nl],
-        );
 
-        let xn = &mut self.xn[..nn];
+        if self.opts.error_abstol > 0.0
+            && (level as u32) < self.opts.max_error_halvings.min(self.opts.max_halvings)
+            && let Some(d) = &self.tab.d
+        {
+            // Hairer & Wanner's filtered estimate for stiff problems:
+            // err = (G + G_dev + C/(g h))^-1 (1/g) sum_i d_i F_i, with the
+            // last stage's Newton Jacobian.
+            self.rhs.fill(0.0);
+            for (i, &di) in d.iter().enumerate() {
+                if di != 0.0 {
+                    let fi = &self.stage_f[i * n..(i + 1) * n];
+                    for (r, f) in self.rhs.iter_mut().zip(fi) {
+                        *r += di / g * f;
+                    }
+                }
+            }
+            sys.reduce(
+                &self.rhs,
+                &mut self.y[..nl],
+                &mut self.rn[..nn],
+                &mut self.work[..nl],
+            );
+            self.newton
+                .solve_jacobian(&mut self.rn[..nn], &mut self.work[..nn]);
+            sys.expand(&self.y[..nl], &self.rn[..nn], &mut self.err);
+            let (at, rt) = (self.opts.error_abstol, self.opts.error_reltol);
+            let too_big = self
+                .err
+                .iter()
+                .zip(&self.x_new)
+                .zip(&self.is_node)
+                .any(|((e, x), &node)| node && e.abs() > at + rt * x.abs());
+            if too_big {
+                return Err(StepFail::Inaccurate);
+            }
+        }
+
+        // Stiffly accurate: the last stage is the end point.
+        self.f.copy_from_slice(&self.stage_f[(s - 1) * n..s * n]);
+        self.newton
+            .ports(&self.mna.devices, &self.xn[..nn], &mut self.ports);
+        self.accept(level, hk, inp.at(th1));
+        for &it in &iterations[..solves] {
+            self.count(it);
+        }
+        Ok(())
+    }
+
+    fn try_step_coupled(
+        &mut self,
+        level: usize,
+        th0: f64,
+        th1: f64,
+        inp: &StepInput,
+    ) -> Result<(), StepFail> {
+        let hk = self.h / (1u64 << level) as f64;
+        let n = self.x.len();
+        let s = self.tab.s;
+        let cp = self.coupled.as_mut().expect("fully implicit method");
+        if self.levels[level].is_none() {
+            // I (x) G + W/h (x) C.
+            let mut a = Matrix::zeros(s * n);
+            for bi in 0..s {
+                for bj in 0..s {
+                    let wij = cp.w[bi * s + bj] / hk;
+                    for r in 0..n {
+                        for c in 0..n {
+                            let mut v = wij * self.mna.c.get(r, c);
+                            if bi == bj {
+                                v += self.mna.g.get(r, c);
+                            }
+                            if v != 0.0 {
+                                a.set(bi * n + r, bj * n + c, v);
+                            }
+                        }
+                    }
+                }
+            }
+            self.levels[level] = Some(Reduced::new(&a, &cp.nodes));
+        }
+        let sys = self.levels[level].as_ref().expect("just built");
+        let (nn, nl) = (sys.n_len(), sys.l_len());
+        for i in 0..s {
+            let ws = cp.w_sum[i] / hk;
+            let rhs = &mut cp.rhs[i * n..(i + 1) * n];
+            for ((r, b), cx) in rhs.iter_mut().zip(&self.mna.b).zip(&self.cx) {
+                *r = b + ws * cx;
+            }
+            rhs[self.mna.input_row] += inp.at(th0 + self.tab.c[i] * (th1 - th0));
+        }
+        let mut work = vec![0.0; nl];
+        let mut rn = vec![0.0; nn];
+        sys.reduce(&cp.rhs, &mut cp.y[..nl], &mut rn, &mut work);
         let slope = if self.opts.extrapolate && self.h_prev > 0.0 {
             hk / self.h_prev
         } else {
             0.0
         };
-        for (v, &i) in xn.iter_mut().zip(&sys.n_idx) {
-            *v = self.x[i] + slope * (self.x[i] - self.x_prev[i]);
+        let mut xn = vec![0.0; nn];
+        for (v, &k) in xn.iter_mut().zip(&sys.n_idx) {
+            let (stage, j) = (k / n, k % n);
+            *v = self.x[j] + self.tab.c[stage] * slope * (self.x[j] - self.x_prev[j]);
         }
-        self.newton.v_lin.copy_from_slice(&self.ports);
+        let np = self.ports.len();
+        for c in 0..s {
+            cp.newton.v_lin[c * np..(c + 1) * np].copy_from_slice(&self.ports);
+        }
         let opts = NewtonOptions {
             reltol: self.opts.reltol,
             vntol: self.opts.vntol,
             max_iter: self.opts.max_iter,
             gshunt: 0.0,
         };
-        let iters = self
+        let it = cp
             .newton
-            .solve(sys, &self.mna.devices, &self.rn[..nn], xn, &opts)?;
-
-        // Accept.
-        sys.expand(&self.y[..nl], xn, &mut self.x_new);
-        self.mna.c.mul_vec(&self.x_new, &mut self.cx_new);
-        for ((q, new), old) in self.qdot.iter_mut().zip(&self.cx_new).zip(&self.cx) {
-            *q = match self.opts.method {
-                Method::Trapezoidal => coef * (new - old) - *q,
-                Method::BackwardEuler => coef * (new - old),
-            };
-        }
-        std::mem::swap(&mut self.x_prev, &mut self.x);
-        std::mem::swap(&mut self.x, &mut self.x_new);
-        std::mem::swap(&mut self.cx, &mut self.cx_new);
-        self.h_prev = hk;
-        self.u = u;
-        self.newton
-            .ports(&self.mna.devices, &self.xn[..nn], &mut self.ports);
-        self.accept_ports();
-        if level == 0 {
-            self.stats.steps += 1;
-        } else {
-            self.stats.substeps += 1;
-        }
-        self.stats.iterations += iters as u64;
-        self.stats.max_iterations = self.stats.max_iterations.max(iters);
+            .solve(sys, &self.mna.devices, &rn, &mut xn, &opts)?;
+        sys.expand(&cp.y[..nl], &xn, &mut cp.x);
+        self.x_new.copy_from_slice(&cp.x[(s - 1) * n..]);
+        cp.newton
+            .copy_ports(&self.mna.devices, &xn, s - 1, &mut self.ports);
+        self.mna.c_sparse.mul_vec(&self.x_new, &mut self.cx_new);
+        self.accept(level, hk, inp.at(th1));
+        self.count(it);
         Ok(())
     }
 
@@ -455,7 +1062,8 @@ impl Transient {
                 format!("Newton did not converge (last update {update:.3e})"),
             ),
         };
-        let full = sys.n_idx[position];
+        // Fully implicit methods solve s copies; name the circuit unknown.
+        let full = sys.n_idx[position] % self.mna.len();
         let unknown = &self.mna.unknowns[full];
         let mut on: Vec<String> = Vec::new();
         for d in &self.mna.devices {
@@ -522,8 +1130,20 @@ pub fn simulate(ir: &CircuitIr, input: &[f64], h: f64, opts: &Options) -> Result
         }
     };
     record(&tr);
-    for &u in rest {
-        tr.step(u)?;
+    // Step n -> n + 1 interpolates through the `order + 1` samples centred
+    // on it (fewer at the ends of the input).
+    let order = opts.input_order as i64;
+    let len = input.len() as i64;
+    for (i, &u) in rest.iter().enumerate() {
+        if order == 1 {
+            tr.step(u)?;
+        } else {
+            let n = i as i64; // the step's start sample
+            let lo = (n - (order - 1) / 2).max(0);
+            let hi = (n + 1 + (order - 1) / 2).min(len - 1);
+            let w = &input[lo as usize..=hi as usize];
+            tr.step_input(&StepInput::lagrange(w, (lo - n) as i32))?;
+        }
         record(&tr);
     }
     Ok(Output {
@@ -531,4 +1151,35 @@ pub fn simulate(ir: &CircuitIr, input: &[f64], h: f64, opts: &Options) -> Result
         values,
         stats: tr.stats().clone(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Row sums are c, b (the last row) sums to 1, and b . c = 1/2: every
+    /// method is at least second-order consistent (except Euler).
+    #[test]
+    fn tableaus_are_consistent() {
+        for name in Method::NAMES {
+            let t = Method::parse(name).unwrap().tableau();
+            let s = t.s;
+            let b = &t.a[(s - 1) * s..];
+            assert!((b.iter().sum::<f64>() - 1.0).abs() < 1e-14, "{name}");
+            assert!(
+                (t.c[s - 1] - 1.0).abs() < 1e-14,
+                "{name} is stiffly accurate"
+            );
+            let bc: f64 = b.iter().zip(&t.c).map(|(p, q)| p * q).sum();
+            if name != "euler" {
+                assert!((bc - 0.5).abs() < 1e-14, "{name}: b.c = {bc}");
+            }
+            if t.diagonal {
+                for i in 0..s {
+                    let d = t.a[i * s + i];
+                    assert!(d == t.gamma || (i == 0 && d == 0.0), "{name}");
+                }
+            }
+        }
+    }
 }

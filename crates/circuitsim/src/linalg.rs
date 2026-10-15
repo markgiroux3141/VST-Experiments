@@ -73,6 +73,48 @@ impl Matrix {
     }
 }
 
+/// A matrix's nonzero entries by row, for products with mostly-zero
+/// matrices (the reactive matrix C). Same sums, in the same order, as
+/// [`Matrix::mul_vec`] without the zero terms.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SparseRows {
+    start: Vec<usize>,
+    col: Vec<usize>,
+    val: Vec<f64>,
+}
+
+impl SparseRows {
+    pub fn new(m: &Matrix) -> SparseRows {
+        let mut s = SparseRows {
+            start: vec![0],
+            col: Vec::new(),
+            val: Vec::new(),
+        };
+        for i in 0..m.n {
+            for (j, &x) in m.row(i).iter().enumerate() {
+                if x != 0.0 {
+                    s.col.push(j);
+                    s.val.push(x);
+                }
+            }
+            s.start.push(s.col.len());
+        }
+        s
+    }
+
+    /// `y = M x`.
+    pub fn mul_vec(&self, x: &[f64], y: &mut [f64]) {
+        for (i, yi) in y.iter_mut().enumerate() {
+            let r = self.start[i]..self.start[i + 1];
+            *yi = self.col[r.clone()]
+                .iter()
+                .zip(&self.val[r])
+                .map(|(&j, a)| a * x[j])
+                .sum();
+        }
+    }
+}
+
 /// The matrix is singular (to working precision) at this column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Singular {
@@ -175,14 +217,17 @@ impl Lu {
                 perm.swap(k, p);
             }
             let pivot = lu.get(k, k);
-            for i in k + 1..n {
-                let f = lu.get(i, k) / pivot;
+            // Row slices, so the update loop has no bounds checks and vectorizes.
+            let (top, below) = lu.a.split_at_mut((k + 1) * n);
+            let pivot_row = &top[k * n + k + 1..(k + 1) * n];
+            for row in below.chunks_exact_mut(n) {
+                let f = row[k] / pivot;
                 if f == 0.0 {
                     continue;
                 }
-                lu.a[i * n + k] = f;
-                for j in k + 1..n {
-                    lu.a[i * n + j] -= f * lu.a[k * n + j];
+                row[k] = f;
+                for (x, p) in row[k + 1..].iter_mut().zip(pivot_row) {
+                    *x -= f * p;
                 }
             }
         }

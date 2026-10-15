@@ -18,8 +18,9 @@ placeholders with provisional parasitics; Phase 2 replaces them. Results are in
 A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
 Work its milestones in order, with the same "done when" discipline.
-**M0 (scaffolding), M1 (circuit IR), M2 (linear engine) and M3 (devices and
-Newton) are done; next is M4 (the 670 slice on the fast engine).**
+**M0 (scaffolding), M1 (circuit IR), M2 (linear engine), M3 (devices and
+Newton) and M4 (the 670 slice on the fast engine) are done; next is M5
+(nodal DK: speed).**
 `netlist.build()` builds a typed circuit IR (`varimu/circuit/ir.py`) and emits
 SPICE from it (`varimu/circuit/spice.py`); the Rust side reads the same IR as
 JSON (`crates/circuitsim/src/ir.rs`) and simulates it at a fixed step
@@ -27,6 +28,10 @@ JSON (`crates/circuitsim/src/ir.rs`) and simulates it at a fixed step
 (`devices/`) and Newton on the device-node block of the MNA system
 (`newton.rs`). `varimu.sim.fast.run_transient(ir, x)` is the Rust counterpart
 of `varimu.sim.io.run_transient` (same oversampling and decimation).
+Production settings are the `circuitsim` block of `config/sim_settings.yaml`:
+esdirk4 at 2x, 5th-order input interpolation, local error control (chosen by
+M4's method study; the plan has the numbers). `simulator.engine` picks the
+engine for renders (ngspice until M6).
 
 ## Commands
 
@@ -40,8 +45,9 @@ uv run varimu fit-devices [--only 6386 ...]   # refit device models -> config/de
 uv run python scripts/digitize_ge6386.py --overlays DIR   # re-digitize the 6386 sheet
 uv run varimu render --clip data/clips/x.wav --set ac_threshold=0.7 time_constant=3 --out r.wav
 uv run varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached
+uv run --extra fast varimu render --signal burst_1000hz_0dbfs --engine circuitsim
 uv run varimu listen             # http://127.0.0.1:8765 (needs: uv sync --extra listen)
-uv run python scripts/slice_report.py       # compression curve + TC attack/release -> reports/slice/
+uv run python scripts/slice_report.py [--engine circuitsim]   # compression curve + TC attack/release -> reports/slice/
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 ```
@@ -50,6 +56,7 @@ Rust (`crates/circuitsim`; workspace `Cargo.toml` at the repo root, output in `t
 
 ```sh
 cargo test                                            # Rust tests (IR round trip, ...)
+cargo run --release --example profile -- circuit.json [method] [oversample]   # where a step's time goes
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check
@@ -58,12 +65,15 @@ uv sync --extra fast             # build circuitsim (maturin, abi3) into .venv: 
 
 - **Rebuilds:** `uv sync --extra fast` and `uv run --extra fast ...` rebuild
   circuitsim whenever a crate source changes (`cache-keys` in
-  `crates/circuitsim/pyproject.toml`: its `pyproject.toml`, `Cargo.toml`, the
-  workspace `Cargo.toml`, `src/**/*.rs`) and are no-ops otherwise. **Plain
-  `uv run` does not rebuild:** it keeps the installed circuitsim, stale after
-  a Rust edit. So after editing Rust, use `uv run --extra fast pytest` (or
-  sync first). Add a cache key if the build starts depending on another file.
-  (All verified 2026-10-14.)
+  `crates/circuitsim/pyproject.toml`: its `pyproject.toml`, `Cargo.toml`,
+  `build.rs`, the workspace `Cargo.toml`, `src/**/*.rs`) and are no-ops
+  otherwise. **Plain `uv run` does not rebuild:** it keeps the installed
+  circuitsim, stale after a Rust edit. So after editing Rust, use
+  `uv run --extra fast pytest` (or sync first). Add a cache key if the build
+  starts depending on another file. (All verified 2026-10-14.) A stale build
+  can't slip through: `build.rs` embeds a hash of the crate sources
+  (`circuitsim.SOURCE_HASH`) and `varimu.sim.fast` raises `StaleBuild` when it
+  doesn't match the working tree (`tests/test_fast.py` too).
 - **`uv sync` is exact:** it uninstalls every extra you don't name (plain
   `uv run` leaves them installed). Name all of them each time, e.g.
   `uv sync --extra listen --extra fast`.
@@ -180,14 +190,24 @@ tests skip when ngspice is missing.
   - for agreement tests, `run_transient(..., max_step_div=8,
     grid_breakpoints=True)` makes ngspice a reference: plain runs straddle
     the input's sample kinks and interpolate, about -55 to -75 dB re signal.
-- **Fixed-step engine accuracy (measured 2026-10-14).** circuitsim runs
-  trapezoidal at exactly 1 / (oversample x 96 kHz), so the transformers'
-  20-110 kHz winding-capacitance resonances get frequency-warped: against an
-  ngspice reference the device-stripped 670 is off by -16 to -45 dB at k = 2
-  and -41 to -68 dB at k = 8, falling 12 dB per doubling. ngspice adapts its
-  step and doesn't have this. Details and options: `docs/CIRCUIT_SIM_PLAN.md`, M2.
-  The small nonlinear circuits show the same (M3): -39 to -45 dB at k = 2,
-  -63 to -68 dB at k = 8, so this is M4's main decision.
+- **Fixed-step engine accuracy (decided 2026-10-15, plan M4).** Trapezoidal
+  frequency-warps the transformers' resonances (the slice peaks +10 dB near
+  17 kHz from provisional winding capacitances): 0.8 dB / 8 deg off at 20 kHz
+  at 2x. Production uses esdirk4 at 2x instead, with 5th-order input
+  interpolation (linear input between samples, ngspice's PWL, droops 20 kHz
+  by 0.3 dB at 2x and caps any higher-order method) and local error control
+  for the non-smooth events (bridge diodes switching on HF, the TC1 attack),
+  where only smaller steps help. Measure against the engine's converged
+  solution (e.g. radau5 at 8x, input_order 5), not ngspice: ngspice with
+  tabulated triodes is ~-62 dB rms from it; with the exact formulation it
+  agrees to -92 dB but runs ~7000x slower than real time. The M2/M3
+  agreement tests (`tests/engine_compare.py`) still run trapezoidal, the
+  engine's 2nd-order baseline.
+- **circuitsim speed (measured 2026-10-15).** Production runs 25-30x slower
+  than real time on program material (one core; ~10 Newton iterations per
+  sample, ~13 us each), up to 70-190x on HF-heavy test tones where the error
+  control subdivides steps: about ngspice's speed, much more accurate. M5's
+  job. Trapezoidal at 2x runs 6-8x.
 - **Floating nodes and Newton tolerance (measured 2026-10-14).** At DC the 670's
   T104 secondary is a 1 mOhm winding held only by bridge-diode leakage and a
   1 GOhm leak; double precision resolves it to ~1e-6..1e-5 V in any engine.

@@ -31,8 +31,8 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
 /// Transient run of a circuit IR (JSON) at a fixed step.
 ///
 /// `input` holds the volts at the IR's input node, one sample per step of
-/// `dt` seconds; sample 0 is the DC operating point. `method` is "trap" or
-/// "euler". The other keywords are solver options (see `Options` in
+/// `dt` seconds; sample 0 is the DC operating point. `method` is one of
+/// `Method::NAMES` ("trap", "radau5", ...). The other keywords are solver options (see `Options` in
 /// transient.rs; None keeps the default). Returns {probe name, e.g.
 /// "v(out)": float64 array like `input`}, and with `stats=True` also a dict
 /// of solver statistics. Raises ValueError for invalid arguments and
@@ -40,7 +40,9 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
 #[pyfunction]
 #[pyo3(signature = (
     ir_json, input, dt, method = "trap", *, reltol = None, vntol = None, max_iter = None,
-    max_halvings = None, gmin = None, extrapolate = None, stats = false
+    max_halvings = None, gmin = None, extrapolate = None, input_order = None,
+    predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
+    stats = false
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -55,6 +57,11 @@ fn simulate<'py>(
     max_halvings: Option<u32>,
     gmin: Option<f64>,
     extrapolate: Option<bool>,
+    input_order: Option<usize>,
+    predictor: Option<usize>,
+    error_abstol: Option<f64>,
+    error_reltol: Option<f64>,
+    max_error_halvings: Option<u32>,
     stats: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
@@ -67,6 +74,11 @@ fn simulate<'py>(
         max_halvings: max_halvings.unwrap_or(d.max_halvings),
         gmin: gmin.unwrap_or(d.gmin),
         extrapolate: extrapolate.unwrap_or(d.extrapolate),
+        input_order: input_order.unwrap_or(d.input_order),
+        predictor: predictor.unwrap_or(d.predictor),
+        error_abstol: error_abstol.unwrap_or(d.error_abstol),
+        error_reltol: error_reltol.unwrap_or(d.error_reltol),
+        max_error_halvings: max_error_halvings.unwrap_or(d.max_error_halvings),
         ..d
     };
     let x = input.as_array().to_vec();
@@ -85,6 +97,8 @@ fn simulate<'py>(
     st.set_item("steps", s.steps)?;
     st.set_item("substeps", s.substeps)?;
     st.set_item("halved_steps", s.halved_steps)?;
+    st.set_item("error_rejections", s.error_rejections)?;
+    st.set_item("solves", s.solves)?;
     st.set_item("iterations", s.iterations)?;
     st.set_item("max_iterations", s.max_iterations)?;
     st.set_item("dc_method", s.dc_method)?;
@@ -97,6 +111,7 @@ fn simulate<'py>(
 #[pymodule]
 fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", crate::VERSION)?;
+    m.add("SOURCE_HASH", crate::SOURCE_HASH)?;
     m.add("IR_VERSION", IR_VERSION)?;
     m.add("SimulationError", m.py().get_type::<SimulationError>())?;
     m.add_function(wrap_pyfunction!(ir_roundtrip, m)?)?;

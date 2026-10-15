@@ -71,7 +71,7 @@ def compare(
     ng = io.run_transient(
         text, x, input_node=ir.input_node, save=save, settings=s, timeout_s=300, **REFERENCE
     )
-    rs = fast.run_transient(ir, x, settings=s)
+    rs = fast.run_transient(ir, x, settings=s, method="trap")  # the engine's 2nd-order baseline
     worst_db, worst_dc = -np.inf, 0.0
     swings = {n: np.max(np.abs(v - v[0])) for n, v in ng.vectors.items()}
     floor = 1e-4 * max(swings.values())
