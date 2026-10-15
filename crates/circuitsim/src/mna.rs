@@ -13,12 +13,20 @@
 //!   coupling, `M_kj = M_jk = k sqrt(L_k L_j)` (dotted ends are the `a` ends,
 //!   like SPICE `K`). Stamping the inductance matrix directly means a
 //!   k = 0.999 transformer never needs its ill-conditioned inverse.
+//! - Device (tube, diode): its interelectrode capacitances go into `C`, and
+//!   each junction diode gets SPICE's GMIN across it in `G` (ngspice puts
+//!   1e-12 S across every `D` junction). The nonlinear currents themselves are
+//!   the [`DeviceInstance`]s, which the Newton solver stamps each iteration.
 
 use std::collections::HashMap;
 
 use crate::Error;
-use crate::ir::{CircuitIr, Element, GROUND, Probe};
+use crate::devices::{self, Device};
+use crate::ir::{CircuitIr, DeviceModel, Element, GROUND, Probe};
 use crate::linalg::Matrix;
+
+/// SPICE's default GMIN (S), across every junction diode.
+pub const SPICE_GMIN: f64 = 1e-12;
 
 /// What an entry of the unknown vector is.
 #[derive(Debug, Clone, PartialEq)]
@@ -42,8 +50,21 @@ impl Unknown {
     }
 }
 
-/// The linear circuit, ready for DC and transient analysis.
-#[derive(Debug, Clone)]
+/// A nonlinear device placed in the circuit.
+#[derive(Debug)]
+pub struct DeviceInstance {
+    /// Element name, e.g. `XVA`.
+    pub name: String,
+    pub device: Box<dyn Device>,
+    /// Unknown index of each pin, in the model's pin order (`None` = ground).
+    /// The last pin is the ports' reference (see [`devices`]).
+    pub pins: Vec<Option<usize>>,
+    /// Pin names, for messages.
+    pub pin_names: &'static [&'static str],
+}
+
+/// The circuit as matrices, ready for DC and transient analysis.
+#[derive(Debug)]
 pub struct Mna {
     pub unknowns: Vec<Unknown>,
     /// Conductance part (including the incidence entries of branch rows).
@@ -56,20 +77,19 @@ pub struct Mna {
     pub input_row: usize,
     /// Index into `x` of each probe, `None` for ground.
     pub probes: Vec<(String, Option<usize>)>,
+    pub devices: Vec<DeviceInstance>,
 }
 
 impl Mna {
-    pub fn from_ir(ir: &CircuitIr) -> Result<Mna, Error> {
+    /// `gmin` (S) goes across every junction diode; [`SPICE_GMIN`] matches ngspice.
+    pub fn from_ir(ir: &CircuitIr, gmin: f64) -> Result<Mna, Error> {
         ir.validate()?;
+        if !(gmin.is_finite() && gmin >= 0.0) {
+            return Err(Error::new(format!("gmin = {gmin} must be >= 0")));
+        }
         let mut unknowns = Vec::new();
         let mut node_index: HashMap<&str, usize> = HashMap::new();
         for el in ir.elements() {
-            if let Element::Device(d) = el {
-                return Err(Error::new(format!(
-                    "{}: nonlinear devices are not supported yet (M3)",
-                    d.name
-                )));
-            }
             for n in el.nodes() {
                 if n != GROUND && !node_index.contains_key(n) {
                     node_index.insert(n, unknowns.len());
@@ -120,6 +140,7 @@ impl Mna {
         }
 
         let mut inductance: HashMap<&str, f64> = HashMap::new();
+        let mut instances = Vec::new();
         for el in ir.elements() {
             match el {
                 Element::Resistor(r) => stamp(&mut g, node(&r.a), node(&r.b), 1.0 / r.r_ohm),
@@ -135,7 +156,38 @@ impl Mna {
                     c.add(k, k, -l.l_h);
                     inductance.insert(&l.name, l.l_h);
                 }
-                Element::Coupling(_) | Element::Device(_) => {}
+                Element::Device(d) => {
+                    let model = ir.model(&d.model).expect("validated");
+                    let pins: Vec<Option<usize>> = d.nodes.iter().map(|n| node(n)).collect();
+                    // Interelectrode capacitances, as the SPICE subcircuits have them.
+                    let caps: Vec<(usize, usize, f64)> = match model {
+                        // pins (p, g, k)
+                        DeviceModel::Triode(t) => {
+                            vec![(1, 2, t.c_gk), (1, 0, t.c_gp), (0, 2, t.c_pk)]
+                        }
+                        // pins (p, g2, g1, k)
+                        DeviceModel::Pentode(p) => {
+                            vec![(2, 3, p.c_g1k), (2, 0, p.c_g1p), (0, 3, p.c_pk)]
+                        }
+                        DeviceModel::JunctionDiode(_) => {
+                            stamp(&mut g, pins[0], pins[1], gmin);
+                            vec![]
+                        }
+                        DeviceModel::VacuumDiode(_) => vec![],
+                    };
+                    for (a, b, cf) in caps {
+                        if cf > 0.0 {
+                            stamp(&mut c, pins[a], pins[b], cf);
+                        }
+                    }
+                    instances.push(DeviceInstance {
+                        name: d.name.clone(),
+                        device: devices::from_model(model),
+                        pins,
+                        pin_names: model.pins(),
+                    });
+                }
+                Element::Coupling(_) => {}
             }
         }
         for el in ir.elements() {
@@ -163,6 +215,7 @@ impl Mna {
             b,
             input_row,
             probes,
+            devices: instances,
         })
     }
 

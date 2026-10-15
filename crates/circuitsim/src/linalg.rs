@@ -1,7 +1,8 @@
 //! Dense linear algebra: a row-major square matrix and LU with partial pivoting.
 //!
-//! Enough for the full-MNA engine on circuits of up to a few hundred unknowns.
-//! Sparse vs dense for the nonlinear engine is decided in M3 from benchmarks.
+//! Enough for the full-MNA engine on circuits of up to a few hundred unknowns:
+//! the nonlinear solver only refactors the small block of unknowns that
+//! devices touch (see `newton.rs`), so no sparse LU is needed.
 
 /// Row-major n x n matrix.
 #[derive(Debug, Clone, PartialEq)]
@@ -55,6 +56,15 @@ impl Matrix {
         }
     }
 
+    pub fn set(&mut self, i: usize, j: usize, x: f64) {
+        self.a[i * self.n + j] = x;
+    }
+
+    /// Copy `other` (same size) into this matrix.
+    pub fn copy_from(&mut self, other: &Matrix) {
+        self.a.copy_from_slice(&other.a);
+    }
+
     /// `y = self * x`.
     pub fn mul_vec(&self, x: &[f64], y: &mut [f64]) {
         for (i, yi) in y.iter_mut().enumerate() {
@@ -94,8 +104,35 @@ impl Lu {
     /// double-precision floor, eps x G_max x V / G_node (~5e-5 V there).
     /// Iterative refinement was tried on top and didn't lower it.
     pub fn factor(a: &Matrix) -> Result<Lu, Singular> {
+        let mut lu = Lu::with_size(a.n);
+        lu.refactor(a)?;
+        Ok(lu)
+    }
+
+    /// Storage for factoring n x n matrices with [`Lu::refactor`].
+    pub fn with_size(n: usize) -> Lu {
+        Lu {
+            lu: Matrix::zeros(n),
+            perm: (0..n).collect(),
+            row_scale: vec![0.0; n],
+            col_scale: vec![0.0; n],
+        }
+    }
+
+    /// Factor `a` (same size) into this storage, without allocating. On
+    /// error the storage holds garbage until the next successful refactor.
+    pub fn refactor(&mut self, a: &Matrix) -> Result<(), Singular> {
         let n = a.n;
-        let mut row_scale = vec![0.0f64; n];
+        assert_eq!(n, self.lu.n, "matrix size");
+        if n == 0 {
+            return Ok(());
+        }
+        let Lu {
+            lu,
+            perm,
+            row_scale,
+            col_scale,
+        } = self;
         for (i, r) in row_scale.iter_mut().enumerate() {
             let m = a.row(i).iter().fold(0.0f64, |m, x| m.max(x.abs()));
             if m == 0.0 {
@@ -103,7 +140,7 @@ impl Lu {
             }
             *r = 1.0 / m;
         }
-        let mut col_scale = vec![0.0f64; n];
+        col_scale.fill(0.0);
         for (i, &r) in row_scale.iter().enumerate() {
             for (c, x) in col_scale.iter_mut().zip(a.row(i)) {
                 *c = c.max((r * x).abs());
@@ -115,13 +152,15 @@ impl Lu {
             }
             *c = 1.0 / *c;
         }
-        let mut lu = a.clone();
-        for (row, r) in lu.a.chunks_mut(n).zip(&row_scale) {
-            for (x, c) in row.iter_mut().zip(&col_scale) {
+        lu.a.copy_from_slice(&a.a);
+        for (row, r) in lu.a.chunks_mut(n).zip(row_scale.iter()) {
+            for (x, c) in row.iter_mut().zip(col_scale.iter()) {
                 *x *= r * c;
             }
         }
-        let mut perm: Vec<usize> = (0..n).collect();
+        for (k, p) in perm.iter_mut().enumerate() {
+            *p = k;
+        }
         for k in 0..n {
             let (p, big) = (k..n)
                 .map(|i| (i, lu.get(i, k).abs()))
@@ -147,12 +186,11 @@ impl Lu {
                 }
             }
         }
-        Ok(Lu {
-            lu,
-            perm,
-            row_scale,
-            col_scale,
-        })
+        Ok(())
+    }
+
+    pub fn n(&self) -> usize {
+        self.lu.n
     }
 
     /// Solve `A x = b`; `b` is overwritten with `x`. `work` must have length n.

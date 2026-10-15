@@ -25,10 +25,9 @@ from varimu.circuit.ir import (
     Coupling,
     Inductor,
     Resistor,
-    Section,
     VoltageProbe,
 )
-from varimu.sim import fast, io, ngspice
+from varimu.sim import ngspice
 
 pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
 try:
@@ -36,40 +35,11 @@ try:
 except ngspice.SimulatorNotFound:
     pytest.skip("ngspice not available", allow_module_level=True)
 
-FS = 96000
-REFERENCE = {"max_step_div": 8, "grid_breakpoints": True}
-
-
-def _settings(k: int, reltol: float = 1e-6) -> io.TransientSettings:
-    return io.TransientSettings(
-        sample_rate=FS,
-        oversample=k,
-        full_scale_volts_peak=1.0,
-        reltol=reltol,
-        abstol=1e-15,
-        vntol=1e-9,
-        method="trap",
-    )
-
-
-def _signal(dur_s: float = 0.03, amp: float = 1.0) -> np.ndarray:
-    """Three tones across the band, faded in so the start is smooth."""
-    t = np.arange(int(dur_s * FS)) / FS
-    fade = np.clip(t / 0.003, 0, 1) ** 2
-    return amp * fade * sum(np.sin(2 * np.pi * f * t) / 3 for f in (100.0, 1000.0, 10000.0))
-
-
-def _circuit(elements, probes) -> CircuitIR:
-    return CircuitIR(
-        "test", "in", tuple(VoltageProbe(p) for p in probes), (), (Section("t", tuple(elements)),)
-    )
-
+from engine_compare import circuit, compare, signal  # noqa: E402
 
 SMALL = {
-    "rc": _circuit(
-        [Resistor("R1", "in", "out", 1e3), Capacitor("C1", "out", "0", 100e-9)], ["out"]
-    ),
-    "rlc": _circuit(
+    "rc": circuit([Resistor("R1", "in", "out", 1e3), Capacitor("C1", "out", "0", 100e-9)], ["out"]),
+    "rlc": circuit(
         [
             Resistor("R1", "in", "a", 100.0),
             Inductor("L1", "a", "b", 10e-3),
@@ -78,7 +48,7 @@ SMALL = {
         ["a", "b"],
     ),
     # 1:2, k = 0.999, winding capacitance: leakage resonance ~180 kHz.
-    "transformer": _circuit(
+    "transformer": circuit(
         [
             Resistor("RS", "in", "p", 600.0),
             Inductor("L1", "p", "0", 1.0),
@@ -92,51 +62,13 @@ SMALL = {
 }
 
 
-def compare(
-    ir: CircuitIR, x: np.ndarray, k: int, reltol: float = 1e-6, method: str = "trap"
-) -> tuple[float, float]:
-    """(worst AC difference in dB re the probe's swing, worst DC difference re the
-    largest DC voltage in the circuit).
-
-    Probes that barely move are skipped for AC: a swing within ~100x of
-    ngspice's tolerance there (reltol x |V|, e.g. uV on a node at B+), or
-    below 1e-4 of the largest swing in the run. Probes that also sit near 0 V
-    (below 1e-3 of the largest DC voltage) are skipped for DC too. Both
-    engines put roundoff noise on nodes held only by high resistances: the
-    device-stripped 670's T104 secondary floats on a 1 GOhm leak and should
-    sit at exactly 0 V, and shows ~1e-5..1e-4 V in both. Errors on such a
-    node measure roundoff, not agreement.
-    """
-    s = dataclasses.replace(_settings(k, reltol), method=method)
-    text, _ = spice.emit(ir, triode_formulation="exact")
-    save = [p.spice for p in ir.probes]
-    ng = io.run_transient(
-        text, x, input_node=ir.input_node, save=save, settings=s, timeout_s=300, **REFERENCE
-    )
-    rs = fast.run_transient(ir, x, settings=s)
-    worst_db, worst_dc = -np.inf, 0.0
-    swings = {n: np.max(np.abs(v - v[0])) for n, v in ng.vectors.items()}
-    floor = 1e-4 * max(swings.values())
-    dc_scale = max(1.0, max(abs(v[0]) for v in ng.vectors.values()))
-    for name in save:
-        a, b = rs.vectors[name], ng.vectors[name]
-        swing = swings[name]
-        carries_signal = swing > max(floor, 100 * (reltol * np.max(np.abs(b)) + s.vntol))
-        if carries_signal or abs(b[0]) > 1e-3 * dc_scale:
-            worst_dc = max(worst_dc, abs(a[0] - b[0]) / dc_scale)
-        if carries_signal:
-            d = np.max(np.abs((a - a[0]) - (b - b[0]))) / swing
-            worst_db = max(worst_db, 20 * np.log10(d + 1e-300))
-    return worst_db, worst_dc
-
-
 # Measured at k = 8: rc -99.5 dB, rlc -98.1 dB, transformer -72.0 dB. The
 # transformer is worse because its 180 kHz leakage resonance is above the
 # k = 2..4 Nyquist and trapezoidal integration warps it into the band
 # (-48 dB at k = 2, the production rate; see docs/CIRCUIT_SIM_PLAN.md).
 @pytest.mark.parametrize(("name", "bound_db"), [("rc", -95), ("rlc", -94), ("transformer", -68)])
 def test_small_circuits_agree_and_converge_at_second_order(name, bound_db):
-    x = _signal()
+    x = signal()
     e4, dc4 = compare(SMALL[name], x, 4)
     e8, dc8 = compare(SMALL[name], x, 8)
     assert e8 < bound_db, f"k=8: {e8:.1f} dB"
@@ -169,7 +101,7 @@ def _linear_670(drive: str) -> CircuitIR:
 )
 def test_670_transformers_alone_agree_and_converge(drive, amp_v, method, bound_db):
     ir = _linear_670(drive)
-    x = _signal(dur_s=0.012, amp=amp_v)
+    x = signal(dur_s=0.012, amp=amp_v)
     # DC is tested against .op below: the first decimated sample mixes in the
     # floating T104 secondary's roundoff (see compare()).
     e4, _ = compare(ir, x, 4, reltol=1e-4, method=method)
@@ -195,11 +127,6 @@ def test_670_operating_point_matches_ngspice_op(drive):
     worst = max(abs(rs[n][0] - ng[n][0]) for n in save)
     assert scale > 200  # B+ is in the circuit
     assert worst < 1e-8 * scale, f"{worst:.2e} V"
-
-
-def test_devices_are_rejected_until_m3():
-    with pytest.raises(ngspice.SimulationFailed, match="nonlinear"):
-        fast.run_transient(nl.build().ir, np.zeros(16), settings=_settings(2))
 
 
 def test_without_devices_keeps_the_linear_network():

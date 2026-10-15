@@ -7,8 +7,9 @@ step of exactly 1 / sim_rate, so outputs land on the grid without
 interpolation. The solver tolerances in TransientSettings are ngspice's and
 don't apply.
 
-Needs the `fast` extra (`uv sync --extra fast`). So far the engine is linear
-only (milestone M2): circuits with tubes or diodes raise SimulationFailed.
+Needs the `fast` extra (`uv sync --extra fast`). Tubes and diodes are solved
+by Newton on the full MNA system (circuit-sim plan, M3); a step that won't
+converge even after halving raises SimulationFailed naming the time and node.
 """
 
 from __future__ import annotations

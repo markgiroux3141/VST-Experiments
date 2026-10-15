@@ -41,11 +41,19 @@ def find_ngspice() -> Path:
 
 
 def run(
-    netlist: str, analysis: str, vectors: list[str], *, options: str = "", timeout: float = 120.0
+    netlist: str,
+    analysis: str,
+    vectors: list[str],
+    *,
+    options: str = "",
+    timeout: float = 120.0,
+    digits: int | None = None,
 ) -> dict[str, np.ndarray]:
     """Run one analysis (e.g. "dc vp 0 400 1") in batch mode and return the requested vectors.
 
     `options` is inserted as a `.options` line, e.g. "reltol=1e-9".
+    `digits` sets ngspice's `numdgt`, the significant digits `wrdata` writes
+    (the default prints about 10; 16 is full double precision).
     The result maps each name in `vectors` to an array, with the sweep or time
     axis under "scale". For AC analyses the values are complex.
     """
@@ -54,10 +62,12 @@ def run(
         td = Path(td)
         out = td / "out.txt"
         cir = td / "in.cir"
+        opts = f".options {options}\n" if options else ""
+        numdgt = f"set numdgt={digits}\n" if digits else ""
         cir.write_text(
-            f"* varimu\n{netlist}\n.control\nset wr_singlescale\nset wr_vecnames\n"
-            f"set filetype=ascii\n{analysis}\nwrdata {out.as_posix()} {' '.join(vectors)}\n"
-            f"quit\n.endc\n.end\n",
+            f"* varimu\n{netlist}\n{opts}.control\n{numdgt}set wr_singlescale\n"
+            f"set wr_vecnames\nset filetype=ascii\n{analysis}\n"
+            f"wrdata {out.as_posix()} {' '.join(vectors)}\nquit\n.endc\n.end\n",
             encoding="utf-8",
         )
         proc = subprocess.run(

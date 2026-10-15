@@ -329,6 +329,73 @@ operating point.
 *Done when:* device fixtures match Python to 1e-12; the small nonlinear
 circuits match ngspice; the 670 operating point matches ngspice's `.op`.
 
+*Status (2026-10-14): done.* `devices/` (a `Device` trait: ports relative
+to the last pin, currents plus analytic Jacobian, optional limiting, and an
+`accept` hook for devices with memory), `newton.rs`, `transient.rs` (DC and
+fixed-step transient with Newton). Measured:
+
+- **Devices** (`tests/devices.rs`, fixtures from `varimu.devices.fixtures`):
+  every 670 model, the mismatched 6386s, a 12AX7 without grid current, a
+  diode without series resistance and the GZ34, ~3000 points. The tubes are
+  bit-identical to Python (same order of operations, numpy's `logaddexp`
+  softplus); the junction diode's Lambert W is within 1.7e-13 of scipy's.
+  Jacobians match finite differences except where those can't straddle
+  (the pentode's 1 mV screen floor, the onsets of `Vp^Ex` and `x^1.5`).
+- **Small nonlinear circuits vs ngspice** (`tests/test_circuitsim_nonlinear.py`):
+  a diode clipper, a 12AX7 stage driven into grid current, and a 12BH7
+  push-pull pair with input and output transformers. Worst probe at
+  k = 2 / 4 / 8: -39 / -51 / -63 dB, -39 / -51 / -63 dB, -45 / -55 / -68 dB,
+  falling 12 dB per doubling, so what remains is the fixed-step trapezoidal
+  error (M2's finding), not Newton's. DC within 1e-8 of the largest voltage.
+- **670 operating point vs ngspice `.op`** (five builds: default, mismatch,
+  both pot extremes, Time Constant 6): plain Newton converges in 14-17
+  iterations (~3 ms). Every node agrees within 1e-10 of B+ or within the
+  engine's own roundoff spread (see below), and ngspice's value lies inside
+  that spread. Where the bridge is reverse biased (pots at minimum), every
+  node is within 5.7e-10 V (2e-12 of B+).
+- **Newton cost on audio:** ~3 iterations per step on the small circuits and
+  2.6 on the full 670 (1 kHz tone, k = 2), no halvings. A first unoptimized
+  run of the full 670: **1 s of audio in 9.2 s** at k = 2, one core, about
+  3-4x faster than ngspice. M4 measures properly.
+
+Decisions made along the way:
+
+- **Sparse vs dense (open decision, now closed): dense, with block
+  elimination.** Newton runs on the full MNA system, but the unknowns no
+  device touches are eliminated once per step size (Schur complement), so
+  each iteration refactors only the device-node block: 27 x 27 for the 670
+  instead of 83 x 83. The iterates are exactly those of full-MNA Newton.
+  Unknowns that would leave the linear block singular (a source or inductor
+  between device nodes) join the device block automatically. No sparse LU,
+  no faer dependency.
+- **Junction diode as a two-terminal Lambert W device**, like the Python
+  reference, not SPICE's internal node for RS. SPICE's GMIN (1e-12 S) is
+  stamped across each junction diode as a linear conductance, to match
+  ngspice. ngspice's `D` replaces Shockley with a cubic below -3 nVt (3e-3
+  relative at -0.2 V); the bridge doesn't sit there in the builds tested.
+- **Convergence tolerances: reltol 1e-6, vntol 1e-6 V** (SPICE's vntol).
+  vntol can't go much lower: at DC, T104's secondary is a 1 mOhm winding
+  whose common mode only the bridge diodes' leakage and a 1 GOhm leak hold,
+  so double precision resolves it to ~1e-6..1e-5 V in any engine (measured
+  by reordering the unknowns), and Newton's updates there never shrink
+  below that. ngspice fails to find the operating point at all at
+  reltol 1e-9. Newton's quadratic convergence leaves the real error on
+  well-conditioned nodes far below the last update.
+- **Robustness:** linear extrapolation of the previous two points as the
+  initial guess (on by default: 2.6 vs 3.3 iterations per step on the 670;
+  it costs iterations after a hard input step, e.g. 15 vs 8 on a 0 -> 100 V
+  step onto a diode), SPICE `pnjlim` for junctions (tubes need no limiting so
+  far), step halving up to 8 times with errors that name the time, sample,
+  node and device pins, and DC by plain Newton, then gmin stepping, then
+  source stepping. Halving only helps a junction so far: a step that turns a
+  diode further on needs ~7 iterations at almost any step size.
+- **Bug found in the ngspice path:** `varimu.sim.ngspice.run` documented an
+  `options` argument but never wrote it into the deck, so every `.op`
+  agreement test asking for tight tolerances ran at ngspice's defaults.
+  Fixed (the existing tests still pass with the options applied), and `run`
+  gained `digits` (`numdgt`; the default output has ~10 significant digits,
+  which had limited the M2 `.op` comparison to ~5e-7 V).
+
 **M4. The 670 slice on the fast engine.** Full transient with the full-MNA
 solver; engine setting in the runner and cache.
 *Done when:* the 670 verification rows in the table above pass, and the speed
@@ -379,8 +446,9 @@ The device trait carries state from M3 so that isn't a redesign.
 - **Fixed vs adaptive step.** The plan is fixed-step (simple, plugin-ready).
   If accuracy at 2x oversampling falls short on some circuit, the options are
   4x or local substepping, not a full adaptive scheme.
-- **Sparse vs dense.** Full MNA in M3-M4 uses a sparse LU (faer). DK in M5 is
-  dense and small. Decide in M3 from benchmarks.
+- ~~**Sparse vs dense.**~~ Decided in M3: dense, with the linear unknowns
+  eliminated once per step size so Newton refactors only the device-node
+  block (see M3's status).
 - **Which EQ for M7.** It must have a published schematic so values are
   sourced.
 

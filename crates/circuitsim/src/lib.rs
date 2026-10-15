@@ -4,20 +4,23 @@
 //! (tubes, diodes, transformers). ngspice stays the reference engine; see
 //! `docs/CIRCUIT_SIM_PLAN.md` in the repository for the plan and milestones.
 //!
-//! So far: the circuit IR shared with the Python side ([`ir`], M1) and a
-//! fixed-step linear engine ([`mna`], [`transient`], M2).
+//! So far: the circuit IR shared with the Python side ([`ir`], M1), the
+//! fixed-step engine ([`mna`], [`transient`], M2) and the nonlinear devices
+//! with Newton on the full MNA system ([`devices`], [`newton`], M3).
 
 use std::fmt;
 
+pub mod devices;
 pub mod ir;
 pub mod linalg;
 pub mod mna;
+pub mod newton;
 pub mod transient;
 
 #[cfg(feature = "python")]
 mod python;
 
-pub use transient::{Method, Output, simulate};
+pub use transient::{Method, Options, Output, Stats, simulate};
 
 /// Crate version (also `circuitsim.__version__` in Python).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -5,10 +5,10 @@
 use std::f64::consts::PI;
 
 use circuitsim::ir::{
-    Capacitor, CircuitIr, Coupling, Device, DeviceModel, Element, IR_VERSION, Inductor,
-    JunctionDiode, Probe, Resistor, Section, VoltageSource,
+    Capacitor, CircuitIr, Coupling, Element, IR_VERSION, Inductor, Probe, Resistor, Section,
+    VoltageSource,
 };
-use circuitsim::{Method, simulate};
+use circuitsim::{Method, Options, simulate};
 
 // --- Building test circuits ----------------------------------------------------------
 
@@ -83,7 +83,7 @@ fn max_err(
     exact: impl Fn(f64) -> f64,
 ) -> f64 {
     let n = (t_end / h).round() as usize + 1;
-    let out = simulate(ir, &sine(n, h, f_hz), h, method).unwrap();
+    let out = simulate(ir, &sine(n, h, f_hz), h, &Options::with_method(method)).unwrap();
     out.values[0]
         .iter()
         .enumerate()
@@ -114,7 +114,7 @@ fn dc_operating_point_opens_capacitors_and_shorts_inductors() {
         &["a", "b", "vb", "in", "0"],
     );
     // Constant input: the DC point must persist through the transient.
-    let out = simulate(&ir, &[10.0; 50], H, Method::Trapezoidal).unwrap();
+    let out = simulate(&ir, &[10.0; 50], H, &Options::default()).unwrap();
     assert_eq!(out.names, ["v(a)", "v(b)", "v(vb)", "v(in)", "v(0)"]);
     for (vals, want) in out.values.iter().zip([5.0, 5.0, 3.0, 10.0, 0.0]) {
         for v in vals {
@@ -263,7 +263,7 @@ fn coupled_inductors_match_the_ode() {
     // Errors vs the ODE on the secondary: (whole run, after the first 2 ms).
     let errors = |h: f64| {
         let n = (10e-3 / h) as usize;
-        let out = simulate(&ir, &sine(n, h, f), h, Method::Trapezoidal).unwrap();
+        let out = simulate(&ir, &sine(n, h, f), h, &Options::default()).unwrap();
         let t: Vec<f64> = (0..n).map(|i| i as f64 * h).collect();
         let (vp, vs) = transformer_reference(l1, l2, kk, rs, rl, f, &t);
         let settle = (2e-3 / h) as usize;
@@ -302,7 +302,7 @@ fn coupled_inductors_match_the_ode() {
     // Reversing the secondary's dot flips its polarity.
     let mut flipped = ir.clone();
     flipped.sections[0].elements[2] = l("L2", "0", "s", l2);
-    let out2 = simulate(&flipped, &sine(n, H, f), H, Method::Trapezoidal).unwrap();
+    let out2 = simulate(&flipped, &sine(n, H, f), H, &Options::default()).unwrap();
     for (a, b) in out.values[1].iter().zip(&out2.values[1]) {
         assert!((a + b).abs() < 1e-9 * peak);
     }
@@ -338,7 +338,7 @@ fn floating_secondary_stays_at_zero() {
         &["a", "b"],
     );
     let n = (10e-3 / H) as usize;
-    let out = simulate(&ir, &sine(n, H, 1e3), H, Method::Trapezoidal).unwrap();
+    let out = simulate(&ir, &sine(n, H, 1e3), H, &Options::default()).unwrap();
     let swing = out.values[0].iter().fold(0.0f64, |m, v| m.max(v.abs()));
     let worst = out.values[1].iter().fold(0.0f64, |m, v| m.max(v.abs()));
     assert!(swing > 0.1, "secondary swing {swing}");
@@ -358,37 +358,15 @@ fn errors_name_the_problem() {
         vec![r("R1", "in", "0", 1e3), c("C1", "in", "x", 1e-6)],
         &["x"],
     );
-    let e = simulate(&floating, &[0.0; 4], H, Method::Trapezoidal).unwrap_err();
+    let e = simulate(&floating, &[0.0; 4], H, &Options::default()).unwrap_err();
     assert!(e.to_string().contains("node x"), "{e}");
 
-    let mut with_device = circuit(
-        vec![
-            r("R1", "in", "a", 1e3),
-            Element::Device(Device {
-                name: "D1".into(),
-                model: "D".into(),
-                nodes: vec!["a".into(), "0".into()],
-            }),
-        ],
-        &["a"],
-    );
-    with_device
-        .models
-        .push(DeviceModel::JunctionDiode(JunctionDiode {
-            name: "D".into(),
-            is_a: 1e-14,
-            n: 1.0,
-            rs_ohm: 0.0,
-        }));
-    let e = simulate(&with_device, &[0.0; 4], H, Method::Trapezoidal).unwrap_err();
-    assert!(e.to_string().contains("nonlinear"), "{e}");
-
     let rc = circuit(vec![r("R1", "in", "0", 1e3)], &["in"]);
-    let e = simulate(&rc, &[0.0, f64::NAN], H, Method::Trapezoidal).unwrap_err();
+    let e = simulate(&rc, &[0.0, f64::NAN], H, &Options::default()).unwrap_err();
     assert!(e.to_string().contains("sample 1"), "{e}");
-    assert!(simulate(&rc, &[0.0], 0.0, Method::Trapezoidal).is_err());
+    assert!(simulate(&rc, &[0.0], 0.0, &Options::default()).is_err());
     assert_eq!(
-        simulate(&rc, &[], H, Method::Trapezoidal).unwrap().values,
+        simulate(&rc, &[], H, &Options::default()).unwrap().values,
         [Vec::<f64>::new()]
     );
 }

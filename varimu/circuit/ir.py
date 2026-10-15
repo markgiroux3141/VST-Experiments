@@ -385,6 +385,11 @@ def _encode(x: Any) -> Any:
     raise IRError(f"can't encode {type(x).__name__} in the IR")
 
 
+def model_to_dict(m: DeviceModel) -> dict[str, Any]:
+    """A device model as it appears in the IR's "models" list."""
+    return _encode(m)
+
+
 def _check_keys(what: str, d: dict, expected: set[str]) -> None:
     if set(d) != expected:
         extra, missing = sorted(set(d) - expected), sorted(expected - set(d))
