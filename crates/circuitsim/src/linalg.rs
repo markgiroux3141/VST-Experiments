@@ -115,6 +115,188 @@ impl SparseRows {
     }
 }
 
+/// `y += A x` for rows `row0..row0 + y.len()` of the column-major matrix `a`
+/// with leading dimension `lda`. Columns are added one after another, so
+/// every `y_i` sums its terms in column order, exactly like a row-wise dot
+/// product, but the inner loop runs down a column with no reduction and
+/// vectorizes.
+pub fn gemv_add(y: &mut [f64], a: &[f64], row0: usize, lda: usize, x: &[f64]) {
+    let m = y.len();
+    let col = |j: usize| &a[row0 + j * lda..row0 + j * lda + m];
+    let mut j = 0;
+    // Four columns per pass: y is loaded and stored a quarter as often, and
+    // the sums keep their order (left to right).
+    while j + 4 <= x.len() {
+        let (x0, x1, x2, x3) = (x[j], x[j + 1], x[j + 2], x[j + 3]);
+        let (c0, c1, c2, c3) = (col(j), col(j + 1), col(j + 2), col(j + 3));
+        for i in 0..m {
+            y[i] = y[i] + c0[i] * x0 + c1[i] * x1 + c2[i] * x2 + c3[i] * x3;
+        }
+        j += 4;
+    }
+    for (k, &xk) in x.iter().enumerate().skip(j) {
+        for (yi, ci) in y.iter_mut().zip(col(k)) {
+            *yi += ci * xk;
+        }
+    }
+}
+
+/// `y -= A x`, see [`gemv_add`] (`y - a x` rounds exactly like `y + a (-x)`).
+pub fn gemv_sub(y: &mut [f64], a: &[f64], row0: usize, lda: usize, x: &[f64], neg: &mut [f64]) {
+    for (n, v) in neg.iter_mut().zip(x) {
+        *n = -v;
+    }
+    gemv_add(y, a, row0, lda, &neg[..x.len()]);
+}
+
+/// LU with partial pivoting of a small column-major matrix, for Newton on
+/// the device ports (see `dk.rs`), where the matrix changes every iteration.
+/// Equilibrated like [`Lu`]: the DK matrix `I + K G_d` has columns of ~1
+/// next to ~1e10 (a conducting diode on a node held only by a 1 GOhm leak).
+#[derive(Debug, Clone)]
+pub struct ColLu {
+    n: usize,
+    lu: Vec<f64>,
+    perm: Vec<usize>,
+    row_scale: Vec<f64>,
+    col_scale: Vec<f64>,
+}
+
+impl ColLu {
+    pub fn with_size(n: usize) -> ColLu {
+        ColLu {
+            n,
+            lu: vec![0.0; n * n],
+            perm: (0..n).collect(),
+            row_scale: vec![0.0; n],
+            col_scale: vec![0.0; n],
+        }
+    }
+
+    pub fn n(&self) -> usize {
+        self.n
+    }
+
+    /// Factor the column-major `a` (n x n). On error the storage holds
+    /// garbage until the next successful factorization.
+    pub fn factor(&mut self, a: &[f64]) -> Result<(), Singular> {
+        let n = self.n;
+        if n == 0 {
+            return Ok(());
+        }
+        let a = &a[..n * n];
+        // Rows, then columns, scaled to a largest entry of 1. (Maxima by
+        // compare-and-select, which vectorizes; `f64::max` handles NaN and
+        // doesn't. A NaN entry is caught by the pivot test.)
+        self.row_scale.fill(0.0);
+        for col in a.chunks_exact(n) {
+            for (r, x) in self.row_scale.iter_mut().zip(col) {
+                let x = x.abs();
+                *r = if x > *r { x } else { *r };
+            }
+        }
+        for (i, r) in self.row_scale.iter_mut().enumerate() {
+            if *r == 0.0 {
+                return Err(Singular { column: i });
+            }
+            *r = 1.0 / *r;
+        }
+        for (j, ((dst, src), c)) in self
+            .lu
+            .chunks_exact_mut(n)
+            .zip(a.chunks_exact(n))
+            .zip(self.col_scale.iter_mut())
+            .enumerate()
+        {
+            let mut m = [0.0f64; 4];
+            for (k, ((d, s), r)) in dst.iter_mut().zip(src).zip(&self.row_scale).enumerate() {
+                *d = s * r;
+                let x = d.abs();
+                m[k % 4] = if x > m[k % 4] { x } else { m[k % 4] };
+            }
+            let m = m.iter().fold(0.0f64, |a, &b| if b > a { b } else { a });
+            if m == 0.0 {
+                return Err(Singular { column: j });
+            }
+            *c = 1.0 / m;
+            for d in dst.iter_mut() {
+                *d *= *c;
+            }
+        }
+        let lu = &mut self.lu;
+        for k in 0..n {
+            let col = &lu[k * n..(k + 1) * n];
+            let (mut p, mut big) = (k, -1.0);
+            for (i, x) in col.iter().enumerate().skip(k) {
+                if x.abs() > big {
+                    (p, big) = (i, x.abs());
+                }
+            }
+            if big <= PIVOT_TOL {
+                return Err(Singular { column: k });
+            }
+            self.perm[k] = p;
+            if p != k {
+                for j in 0..n {
+                    lu.swap(j * n + k, j * n + p);
+                }
+            }
+            let (left, right) = lu.split_at_mut((k + 1) * n);
+            let ck = &mut left[k * n..];
+            let inv = 1.0 / ck[k];
+            for x in &mut ck[k + 1..] {
+                *x *= inv;
+            }
+            let lcol = &ck[k + 1..];
+            for cj in right.chunks_exact_mut(n) {
+                let f = cj[k];
+                if f != 0.0 {
+                    for (x, l) in cj[k + 1..].iter_mut().zip(lcol) {
+                        *x -= l * f;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Solve `A x = b` in place.
+    pub fn solve(&self, b: &mut [f64]) {
+        let n = self.n;
+        for (x, r) in b.iter_mut().zip(&self.row_scale) {
+            *x *= r;
+        }
+        for k in 0..n {
+            let p = self.perm[k];
+            if p != k {
+                b.swap(k, p);
+            }
+        }
+        for k in 0..n {
+            let bk = b[k];
+            if bk != 0.0 {
+                let col = &self.lu[k * n + k + 1..(k + 1) * n];
+                for (x, l) in b[k + 1..n].iter_mut().zip(col) {
+                    *x -= l * bk;
+                }
+            }
+        }
+        for k in (0..n).rev() {
+            b[k] /= self.lu[k * n + k];
+            let bk = b[k];
+            if bk != 0.0 {
+                let col = &self.lu[k * n..k * n + k];
+                for (x, u) in b[..k].iter_mut().zip(col) {
+                    *x -= u * bk;
+                }
+            }
+        }
+        for (x, c) in b.iter_mut().zip(&self.col_scale) {
+            *x *= c;
+        }
+    }
+}
+
 /// The matrix is singular (to working precision) at this column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Singular {

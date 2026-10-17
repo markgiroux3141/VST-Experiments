@@ -201,7 +201,8 @@ crates/circuitsim/
   src/lib.rs               public API: Circuit::from_ir, simulate, Session
   src/ir.rs                IR types (serde), validation
   src/mna.rs               stamps, sparse/dense assembly
-  src/dk.rs                state-space derivation (M5)
+  src/dk.rs                state-space derivation and port Newton (M5)
+  src/fastmath.rs          vectorizable exp/ln for device sections (M5)
   src/newton.rs            nonlinear solve, limiting, substeps
   src/devices/{mod,triode,pentode,diode}.rs
   src/python.rs            PyO3 bindings (feature "python")
@@ -530,6 +531,139 @@ tolerance; it now interpolates between samples (`tests/test_metrics.py`).
 IR; Newton on the nonlinear ports only; parameter-change recomputation.
 *Done when:* DK and full-MNA agree to solver tolerance on every test circuit,
 and the 670 slice is at least 10x faster than ngspice (target: near real time).
+
+*Status (2026-10-17): done except the speed target.* DK, agreement and
+parameter changes are done; the 670 slice runs 5-6x faster than ngspice,
+short of the 10x target. Decided 2026-10-17: the speed target is deferred
+until the main milestone work is done (the "Open" item under Speed below
+lists where to start), and M6 goes ahead. What the engine has now:
+
+- **`dk.rs`**: for each step matrix `A = G + C/(g h)` (one per step size,
+  built on first use, ~0.7 ms for the 670), the responses of `A^-1` to the
+  state, the stage inputs, the device ports, `b` and the input, read out on
+  the ports, the state rows and all unknowns. A diagonally implicit stage is
+  then an M x r product, Newton on the M = 22 device port voltages, and an
+  r x (r + M) product for the state (r = 43: the rows where `C` has
+  entries); the unknowns themselves only at the end of a step. Radau (fully
+  implicit) stays on full MNA. `solver: dk | mna` picks the solver (`dk` is
+  the default; `mna` is M3-M4's, the reference).
+- **Newton with a lagged Jacobian** (Hairer & Wanner IV.8): the factored
+  `I + K G` is kept across iterations, stages and steps (one per step size)
+  and refactored when an iteration contracts by less than 0.5, after the
+  last solve contracted by more than 0.1, and on and after junction
+  limiting (a chord step from a limited linearization cycles at a diode
+  turning on). Devices whose ports moved less than the tolerance keep their
+  last evaluation (SPICE's bypass). On a 1 kHz tone at the production
+  tolerance: 8.7 iterations, 63 device evaluations (of 12 devices) and 1.4
+  factorizations per sample, against 11.5 iterations and as many 27 x 27
+  refactors for M4.
+- **Device evaluation**: the 6386's 32 sections run in passes over arrays
+  with vectorizable `exp`/`ln` (`fastmath.rs`, within 1 ulp of `std`), AVX2
+  when the CPU has it (detected at run time; same results either way):
+  0.4 us per tube instead of 2.0. Fixtures still within 4e-16 of Python.
+- **Parameter changes**: `Transient::update(ir)` takes the same circuit
+  with other values (pots, refits, Time Constant positions 1-4), carries
+  the state over and restarts consistently (`C x'` from the new circuit at
+  the current point). ~0.3 ms, plus ~0.8 ms in the next step (the DK
+  system); positions that add nodes (TC 5-6, the input pad's 0 dB end) are
+  refused, and switching while running is M8's (crossfading).
+- **Settings**: `circuitsim` block: `solver: dk`, Newton `reltol 1e-4`,
+  `vntol 1e-3 V` (10x tighter than the local error tolerance), reuse on.
+  Python: `TransientSettings.solver / newton_*`, `circuitsim.simulate(...,
+  solver=, newton_reuse=)`, stats with device evaluations and
+  factorizations.
+
+Numerical findings (each cost a wrong turn first):
+
+- **State variables.** The first DK version carried `C x` (charges,
+  fluxes) as the state, as DK derivations usually do. In the 670 the
+  push-pull windings carry DC fluxes (~5 Wb) that cancel between halves, so
+  `C x/(g h)` is 1e4-1e6 while the port voltages are 1-300 V: summing
+  precomputed response columns with such coefficients lost 3-5 digits (DK
+  1e-4 V from full MNA on the plates, whose own roundoff spread is 1e-7 V).
+  Carrying `x_S` (node voltages, inductor currents) and precomputing the
+  response to `C x_S/(g h)`, which is `I - A^-1 G` on those rows, fixed it.
+- **The floating bridge.** With the devices removed, `A` leaves T104's
+  secondary and the bridge on a 1 GOhm leak next to 1 mOhm windings: K
+  reaches 1e9 Ohm and the precomputed responses lost 4 digits everywhere
+  (iterative refinement diverged: the matrix is too close to singular for
+  double-precision residuals). Each diode port now lends a fixed 10 uS from
+  the device to `A` (`A + N^T G0 N`, the device becomes `i - g0 v`): exact
+  in exact arithmetic, and the island's conditioning moves to the small
+  Newton matrix, equilibrated and refactored when needed, as full MNA does
+  on its device block. 1e-7..1e-5 S all agree with full MNA within its own
+  roundoff spread; 0 is 50-80x off, 1e-3 S 2.4x.
+- **The island's own floor.** With the bridge off, T104's secondary hangs
+  on ~1e-7 S of diode leakage (or the 1 GOhm leak alone, bridge reversed),
+  and the 1 mOhm winding's ~5e4 A conductance terms leave ~1e-11 A of
+  roundoff in its KCL: 1e-4..1e-2 V of common mode in any solver. In
+  40-digit arithmetic at one sample, full MNA's solution there violated the
+  island's KCL by 4e-12 A, DK's by 1e-12 A. Reordering the unknowns doesn't
+  reveal this floor (both orderings share it). Tests compare the island
+  relative to its common mode, and the common mode against that floor.
+- **Newton tolerance.** Against the converged solution (esdirk4 4x, error
+  tolerance / 10), production with Newton tolerances 1e-6, 1e-5, 1e-4 and
+  1e-3 (with and without reuse) gives the same error to 0.3 dB on all five
+  M4 excerpts: the integration error dominates by orders of magnitude.
+  Newton's update tolerance was what forced a second iteration per stage
+  (the stage predictor misses by ~1e-3 V on the plates); most stages now
+  take one. The remaining extra iterations are the bridge diodes switching.
+- **Large instantaneous parameter jumps** (a pot thrown end to end in one
+  sample) make Newton fail in both solvers, halving or not: an algebraic
+  jump looks the same at any step size. Swept over 32 samples, it runs.
+  Smoothing is M8's.
+
+Verification:
+
+- **DK vs full MNA** (exact Newton, so the iterates are the same):
+  `tests/dk.rs`, every node of the 670 at every sample, four builds
+  (default, TC1, pots at minimum, mismatched 6386s), trapezoidal and
+  esdirk4 with and without error control, 6 ms of 0 dBFS: within 0.2
+  tolerance, with the same error-control decisions; the island's common
+  mode within its floor. With reuse each solve ends within a tolerance and
+  the differences add up over steps (<= 3 tolerances with esdirk4, <= 18
+  with trapezoidal, which doesn't damp them). Python
+  (`test_circuitsim_{linear,nonlinear}.py`): every small test circuit and
+  the device-stripped 670 driven at three points, trapezoidal and esdirk4:
+  within one tolerance (the stripped 670's floating secondary excepted).
+  Through parameter changes (`tests/update.rs`): within 0.13 tolerance.
+- **Closed form**: an RC whose R switches mid-run, within 7e-13 V. The M2-M4
+  closed-form, order-of-accuracy and nonlinear tests all run on DK now.
+- **670 slice** (`tests/test_circuitsim_slice.py`, production = DK): same
+  bounds as M4 vs the converged solution and vs ngspice. `slice_report.py
+  --engine circuitsim` (regenerated): compression curve within 0.033 dB per
+  step of ngspice, TC1-4 attack and releases within 0.05%, burst gain
+  reduction within 0.04 dB, as at M4.
+- **Speed** (`varimu.sim.runner.render`, cache bypassed, one job at a
+  time, same desktop and session, 2026-10-17; x = slower than real time):
+
+  | render | ngspice (trap 1e-3, 2x) | full MNA (M4) | DK (M5) | DK vs ngspice |
+  |---|---|---|---|---|
+  | 7 s burst, TC1, 0 dBFS | 20.6x | 15.8x | 3.3x | 6.2x faster |
+  | 4 s program clip (arpeggio) | 21.2x | 18.5x | 4.2x | 5.0x faster |
+
+  On the HF test excerpts error control still subdivides steps: CCIF
+  -10 dBFS 77x (M4 142x), multitone -10 dBFS 21x (M4 53x). This desktop's
+  timings drift +-35% with background load (an IDE's `cargo check`, a busy
+  explorer.exe), so speed claims here are back-to-back ratios.
+
+  **Open: the 10x target** (2-2.5x real time on this material). A stage
+  costs ~4 us on average: one evaluation of the devices (~1.5 us, half of
+  it the two 6386s), the bridge diodes' extra iterations, the M x M solves,
+  and ~1 us of stage linear algebra. Next candidates, roughly by size:
+  fewer factorizations (tune the reuse thresholds), the bridge diodes'
+  extra iterations (a cheaper partial update when only they moved), the
+  6386's sections (their 1/mu are an arithmetic progression, so
+  `exp(-|a|)` is a running product: one transcendental of four), and loop
+  overhead in the iteration bookkeeping. Each is a few percent to ~15%.
+
+Profile of a step on the 670 (1 kHz tone, production tolerances, cycle
+counts from `cargo run --release --features timing --example profile`):
+devices 37%, the rest of the Newton iterations 20%, stage linear algebra
+16%, factorizations 14%, per-step linear algebra 7%. The 6386 pair is half
+the device time. Global AVX2 (`target-cpu=x86-64-v3`) gained nothing: at
+these sizes (M = 22, r = 43) the linear algebra is bound by loop overhead,
+not arithmetic.
 
 **M6. Default engine.** The listen app and renders use the fast engine. ngspice
 stays for verification (a setting, plus a periodic agreement test).

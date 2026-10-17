@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::ir::{CircuitIr, IR_VERSION};
-use crate::transient::{Method, Options};
+use crate::transient::{Method, Options, Solver};
 
 create_exception!(
     circuitsim,
@@ -32,17 +32,18 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
 ///
 /// `input` holds the volts at the IR's input node, one sample per step of
 /// `dt` seconds; sample 0 is the DC operating point. `method` is one of
-/// `Method::NAMES` ("trap", "radau5", ...). The other keywords are solver options (see `Options` in
+/// `Method::NAMES` ("trap", "radau5", ...), `solver` one of `Solver::NAMES`
+/// ("dk", "mna"). The other keywords are solver options (see `Options` in
 /// transient.rs; None keeps the default). Returns {probe name, e.g.
 /// "v(out)": float64 array like `input`}, and with `stats=True` also a dict
 /// of solver statistics. Raises ValueError for invalid arguments and
 /// SimulationError when the circuit can't be simulated.
 #[pyfunction]
 #[pyo3(signature = (
-    ir_json, input, dt, method = "trap", *, reltol = None, vntol = None, max_iter = None,
-    max_halvings = None, gmin = None, extrapolate = None, input_order = None,
+    ir_json, input, dt, method = "trap", *, solver = None, reltol = None, vntol = None,
+    max_iter = None, max_halvings = None, gmin = None, extrapolate = None, input_order = None,
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
-    stats = false
+    newton_reuse = None, stats = false
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -51,6 +52,7 @@ fn simulate<'py>(
     input: PyReadonlyArray1<'py, f64>,
     dt: f64,
     method: &str,
+    solver: Option<&str>,
     reltol: Option<f64>,
     vntol: Option<f64>,
     max_iter: Option<usize>,
@@ -62,12 +64,16 @@ fn simulate<'py>(
     error_abstol: Option<f64>,
     error_reltol: Option<f64>,
     max_error_halvings: Option<u32>,
+    newton_reuse: Option<bool>,
     stats: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
     let d = Options::default();
     let opts = Options {
         method: Method::parse(method).map_err(invalid)?,
+        solver: solver
+            .map_or(Ok(d.solver), Solver::parse)
+            .map_err(invalid)?,
         reltol: reltol.unwrap_or(d.reltol),
         vntol: vntol.unwrap_or(d.vntol),
         max_iter: max_iter.unwrap_or(d.max_iter),
@@ -79,6 +85,7 @@ fn simulate<'py>(
         error_abstol: error_abstol.unwrap_or(d.error_abstol),
         error_reltol: error_reltol.unwrap_or(d.error_reltol),
         max_error_halvings: max_error_halvings.unwrap_or(d.max_error_halvings),
+        newton_reuse: newton_reuse.unwrap_or(d.newton_reuse),
         ..d
     };
     let x = input.as_array().to_vec();
@@ -103,8 +110,12 @@ fn simulate<'py>(
     st.set_item("max_iterations", s.max_iterations)?;
     st.set_item("dc_method", s.dc_method)?;
     st.set_item("dc_iterations", s.dc_iterations)?;
+    st.set_item("solver", s.solver)?;
     st.set_item("nonlinear_unknowns", s.nonlinear_unknowns)?;
     st.set_item("linear_unknowns", s.linear_unknowns)?;
+    st.set_item("states", s.states)?;
+    st.set_item("device_evaluations", s.device_evaluations)?;
+    st.set_item("factorizations", s.factorizations)?;
     Ok((probes, st).into_pyobject(py)?.into_any())
 }
 

@@ -4,15 +4,16 @@ Same input and output handling as `io.run_transient`: the input is upsampled
 by `settings.oversample`, simulated, and every probe is decimated back to the
 input's length, with the same filters. The difference is the solver: a fixed
 step of exactly 1 / sim_rate, so outputs land on the grid without
-interpolation. The solver tolerances in TransientSettings are ngspice's and
-don't apply; `method`, `input_order` and the error tolerances do (see
-`circuitsim.simulate`).
+interpolation. TransientSettings' reltol, abstol and vntol are ngspice's and
+don't apply; `method`, `solver`, `input_order`, the error tolerances and the
+`newton_*` settings do (see `circuitsim.simulate`).
 `TransientSettings.from_sim_settings(engine="circuitsim")` gives the production
 settings (sim_settings.yaml, `circuitsim` block).
 
 Needs the `fast` extra (`uv sync --extra fast`). Tubes and diodes are solved
-by Newton on the full MNA system (circuit-sim plan, M3); a step that won't
-converge even after halving raises SimulationFailed naming the time and node.
+by Newton on the device ports of a nodal DK system (`solver="dk"`, circuit-sim
+plan M5) or on the full MNA system (`"mna"`, M3); a step that won't converge
+even after halving raises SimulationFailed naming the time and the device.
 
 A build of circuitsim older than the crate's sources (plain `uv run` after a
 Rust edit doesn't rebuild) is refused: `check_build` compares the hash the
@@ -97,6 +98,10 @@ def run_transient(
             np.ascontiguousarray(x_up),
             1.0 / s.sim_rate,
             method or s.method,
+            solver=s.solver,
+            reltol=s.newton_reltol,
+            vntol=s.newton_vntol,
+            newton_reuse=s.newton_reuse,
             input_order=s.input_order,
             error_abstol=s.error_abstol,
             error_reltol=s.error_reltol,

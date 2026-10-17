@@ -31,6 +31,12 @@ def test_engine_settings():
         block["input_order"],
     )
     assert (cs.error_abstol, cs.error_reltol) == (block["error_abstol"], block["error_reltol"])
+    assert (cs.solver, cs.newton_reltol, cs.newton_vntol, cs.newton_reuse) == (
+        block["solver"],
+        block["newton_reltol"],
+        block["newton_vntol"],
+        block["newton_reuse"],
+    )
     # Everything else is shared with ngspice's settings.
     assert cs.sample_rate == ng.sample_rate
     assert cs.full_scale_volts_peak == ng.full_scale_volts_peak

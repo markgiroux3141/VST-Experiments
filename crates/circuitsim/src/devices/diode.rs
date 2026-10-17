@@ -73,7 +73,19 @@ impl Device for JunctionDiode {
         v[0] = new;
         limited
     }
+
+    fn shunt(&self, _port: usize) -> f64 {
+        DIODE_SHUNT
+    }
 }
+
+/// [`Device::shunt`] of the diodes: 10 uS (100 kOhm), between a junction's
+/// leakage and its conductance when conducting (1N4007-like: ~1e-7 S near
+/// 0 V, 0.02 S at 1 mA). Chosen on the 670 (DK vs full MNA, every node but
+/// T104's floating secondary): 1e-7..1e-5 S agree within full MNA's own
+/// roundoff spread; 0 (no shunt) is 50-80x off, 1e-3 S up to 2.4x (its
+/// `g0 v` on a diode reversed by 60 V is 6e4 times the diode's current).
+pub const DIODE_SHUNT: f64 = 1e-5;
 
 /// SPICE3's junction voltage limiting (`DEVpnjlim`, forward branch): above
 /// the critical voltage, a step of more than 2 Vt follows the logarithm of
@@ -161,6 +173,10 @@ impl Device for VacuumDiode {
         let x = self.smooth_v * softplus(t);
         i[0] = self.perveance * x.powf(1.5);
         g[0] = 1.5 * self.perveance * x.sqrt() * sigmoid(t);
+    }
+
+    fn shunt(&self, _port: usize) -> f64 {
+        DIODE_SHUNT
     }
 }
 

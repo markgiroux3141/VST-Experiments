@@ -35,7 +35,7 @@ try:
 except ngspice.SimulatorNotFound:
     pytest.skip("ngspice not available", allow_module_level=True)
 
-from engine_compare import circuit, compare, signal  # noqa: E402
+from engine_compare import circuit, compare, compare_solvers, signal  # noqa: E402
 
 SMALL = {
     "rc": circuit([Resistor("R1", "in", "out", 1e3), Capacitor("C1", "out", "0", 100e-9)], ["out"]),
@@ -76,6 +76,14 @@ def test_small_circuits_agree_and_converge_at_second_order(name, bound_db):
     assert max(dc4, dc8) < 1e-8
 
 
+@pytest.mark.parametrize("method", ["trap", "esdirk4"])
+@pytest.mark.parametrize("name", list(SMALL))
+def test_dk_matches_full_mna(name, method):
+    """The DK solver against full MNA (M5): within one Newton tolerance everywhere."""
+    worst = compare_solvers(SMALL[name], signal(), 2, method)
+    assert worst < 1.0, f"{worst:.2f} x tolerance"
+
+
 def _linear_670(drive: str) -> CircuitIR:
     """The 670 with tubes and diodes removed, driven at `drive`, probed at every node."""
     ir = nl.build().ir.without_devices()
@@ -108,6 +116,19 @@ def test_670_transformers_alone_agree_and_converge(drive, amp_v, method, bound_d
     e8, _ = compare(ir, x, 8, reltol=1e-4, method=method)
     assert e8 < bound_db, f"k=8: {e8:.1f} dB"
     assert -15 < e8 - e4 < -9, f"k=4 {e4:.1f} dB -> k=8 {e8:.1f} dB (expect -12 dB)"
+
+
+# T104's secondary with the bridge diodes gone floats on its 1 GOhm leak, so its
+# common mode carries roundoff far above the tolerance in either solver (measured
+# 0.011 V apart driven at pa3; every other node within 0.07 tolerance).
+FLOATING = ("v(ay)", "v(bk)", "v(T104_s_r)")
+
+
+@pytest.mark.parametrize("drive", ["in", "out", "pa3"])
+def test_670_transformers_alone_dk_matches_full_mna(drive):
+    ir = _linear_670(drive)
+    worst = compare_solvers(ir, signal(dur_s=0.006, amp=1.0), 2, "esdirk4", skip=FLOATING)
+    assert worst < 1.0, f"{worst:.2f} x tolerance"
 
 
 @pytest.mark.parametrize("drive", ["in", "out", "pa3"])

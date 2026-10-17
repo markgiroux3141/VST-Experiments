@@ -12,16 +12,19 @@
 use std::fmt;
 
 pub mod devices;
+pub mod dk;
+pub mod fastmath;
 pub mod ir;
 pub mod linalg;
 pub mod mna;
 pub mod newton;
+pub mod timing;
 pub mod transient;
 
 #[cfg(feature = "python")]
 mod python;
 
-pub use transient::{Method, Options, Output, Stats, StepInput, simulate};
+pub use transient::{Method, Options, Output, Solver, Stats, StepInput, simulate};
 
 /// Crate version (also `circuitsim.__version__` in Python).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

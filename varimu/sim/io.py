@@ -83,6 +83,10 @@ class TransientSettings:
     input_order: int = 1  # circuitsim only: input interpolation at stage times
     error_abstol: float = 0.0  # circuitsim only: local error control (0 = off), V
     error_reltol: float = 0.0  # circuitsim only: ... plus this times |v|
+    solver: str = "dk"  # circuitsim only: dk | mna
+    newton_reltol: float = 1e-6  # circuitsim only: Newton's update tolerance, relative
+    newton_vntol: float = 1e-6  # circuitsim only: ... plus this, V
+    newton_reuse: bool = True  # circuitsim only: lagged Jacobian and device bypass (dk)
 
     @classmethod
     def from_sim_settings(
@@ -119,6 +123,10 @@ class TransientSettings:
                 input_order=int(cs.get("input_order", 1)),
                 error_abstol=float(cs.get("error_abstol", 0.0)),
                 error_reltol=float(cs.get("error_reltol", 0.0)),
+                solver=str(cs.get("solver", "dk")),
+                newton_reltol=float(cs.get("newton_reltol", 1e-6)),
+                newton_vntol=float(cs.get("newton_vntol", 1e-6)),
+                newton_reuse=bool(cs.get("newton_reuse", True)),
             )
         return st
 

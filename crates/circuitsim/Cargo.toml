@@ -13,6 +13,8 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 python = ["dep:pyo3", "dep:numpy"]
+# Cycle counts per part of a DK step (examples/profile.rs); off in builds.
+timing = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }

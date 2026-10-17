@@ -86,3 +86,24 @@ def compare(
             d = np.max(np.abs((a - a[0]) - (b - b[0]))) / swing
             worst_db = max(worst_db, 20 * np.log10(d + 1e-300))
     return worst_db, worst_dc
+
+
+def compare_solvers(ir: CircuitIR, x: np.ndarray, k: int, method: str, skip=()) -> float:
+    """Worst difference between the DK and full-MNA solvers (circuit-sim plan, M5) over
+    every probe and output sample, in units of the Newton tolerance on that value
+    (reltol |v| + vntol). Exact Newton (no Jacobian reuse), so the iterates are the
+    same up to roundoff. `skip`: probes on nodes whose roundoff exceeds the tolerance
+    (a winding floating on a 1 GOhm leak)."""
+    base = dataclasses.replace(settings(k), method=method, newton_reuse=False)
+    runs = {
+        solver: fast.run_transient(ir, x, settings=dataclasses.replace(base, solver=solver))
+        for solver in ("mna", "dk")
+    }
+    worst = 0.0
+    for p in ir.probes:
+        if p.spice in skip:
+            continue
+        a, b = runs["mna"].vectors[p.spice], runs["dk"].vectors[p.spice]
+        tol = base.newton_reltol * np.maximum(np.abs(a), np.abs(b)) + base.newton_vntol
+        worst = max(worst, float(np.max(np.abs(a - b) / tol)))
+    return worst

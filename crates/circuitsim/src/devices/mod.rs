@@ -39,10 +39,25 @@ pub trait Device: fmt::Debug + Send + Sync {
         false
     }
 
+    /// A conductance (S) the DK solver may move from this port into the
+    /// linear part of the circuit (`dk.rs`): numerics only, results are the
+    /// same in exact arithmetic. Nonzero for ports that can be the only
+    /// path to a node (a rectifier into a floating winding); the value
+    /// should lie within the port's range of conductances.
+    fn shunt(&self, _port: usize) -> f64 {
+        0.0
+    }
+
     /// Called once per accepted time step with the final port voltages. The
     /// hook for devices with memory (a hysteretic transformer core, an
     /// optical cell); stateless models ignore it.
     fn accept(&mut self, _v: &[f64]) {}
+
+    /// Whether [`Device::accept`] can change the device's currents (then the
+    /// DK solver doesn't reuse an evaluation across steps).
+    fn has_state(&self) -> bool {
+        false
+    }
 }
 
 /// The device for an IR model.

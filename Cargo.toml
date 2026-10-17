@@ -8,3 +8,8 @@ resolver = "3"
 edition = "2024"
 rust-version = "1.92"
 publish = false
+
+# Tests run the full 670 through Newton (tests/dk.rs); unoptimized that takes
+# minutes. Debug assertions stay on.
+[profile.test]
+opt-level = 3

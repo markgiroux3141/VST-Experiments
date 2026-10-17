@@ -62,10 +62,40 @@
 //!   stepping (all sources scaled up from 0), the SPICE homotopies.
 
 use crate::Error;
+use crate::dk::{self, DkNewton, DkSystem, Ports};
 use crate::ir::CircuitIr;
-use crate::linalg::Matrix;
+use crate::linalg::{Matrix, Singular, SparseRows};
 use crate::mna::{Mna, SPICE_GMIN};
 use crate::newton::{Failure, Newton, NewtonOptions, Reduced};
+use crate::timing::{self, Part};
+
+/// How a step's nonlinear system is solved.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Solver {
+    /// Nodal DK (`dk.rs`): the linear part folded into a state-space system
+    /// once per step size, Newton on the device ports. Diagonally implicit
+    /// methods only; fully implicit ones (Radau) fall back to `Mna`.
+    Dk,
+    /// Newton on the full MNA system with the linear unknowns eliminated
+    /// per step size (`newton.rs`). The reference the DK solver is checked
+    /// against.
+    Mna,
+}
+
+impl Solver {
+    pub const NAMES: [&'static str; 2] = ["dk", "mna"];
+
+    pub fn parse(name: &str) -> Result<Solver, Error> {
+        match name {
+            "dk" => Ok(Solver::Dk),
+            "mna" => Ok(Solver::Mna),
+            _ => Err(Error::new(format!(
+                "unknown solver {name:?} ({})",
+                Solver::NAMES.join(" | ")
+            ))),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
@@ -329,6 +359,7 @@ impl StepInput {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Options {
     pub method: Method,
+    pub solver: Solver,
     /// Newton converges when no device-node voltage moves by more than
     /// `reltol * |v| + vntol`. Newton's error after that is about the square
     /// of the last update, far below these.
@@ -373,12 +404,19 @@ pub struct Options {
     pub error_abstol: f64,
     pub error_reltol: f64,
     pub max_error_halvings: u32,
+    /// DK solver: reuse the factored Newton matrix across iterations,
+    /// stages and steps until convergence slows, and skip re-evaluating
+    /// devices whose ports moved less than the tolerance (see
+    /// `dk::DkNewton`). Off: Newton refactors every iteration and evaluates
+    /// every device, like the full-MNA solver.
+    pub newton_reuse: bool,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Options {
             method: Method::Trapezoidal,
+            solver: Solver::Dk,
             reltol: 1e-6,
             vntol: 1e-6,
             max_iter: 50,
@@ -391,6 +429,7 @@ impl Default for Options {
             error_abstol: 0.0,
             error_reltol: 0.0,
             max_error_halvings: 4,
+            newton_reuse: true,
         }
     }
 }
@@ -444,9 +483,18 @@ pub struct Stats {
     /// How the DC operating point was found: "newton", "gmin" or "source".
     pub dc_method: &'static str,
     pub dc_iterations: usize,
-    /// Size of the Newton system and of the eliminated linear block.
+    /// The solver that ran ("dk" or "mna"; see [`Solver`]).
+    pub solver: &'static str,
+    /// Size of the Newton system (device ports for DK, device nodes for
+    /// MNA) and of the eliminated linear part (all unknowns for DK, the
+    /// rest for MNA).
     pub nonlinear_unknowns: usize,
     pub linear_unknowns: usize,
+    /// DK only: size of the state (rows of C with any entry), device
+    /// evaluations and Newton matrix factorizations.
+    pub states: usize,
+    pub device_evaluations: u64,
+    pub factorizations: u64,
 }
 
 /// The step machinery of a fully implicit method: s coupled copies.
@@ -469,11 +517,77 @@ enum StepFail {
     Newton(Failure),
     /// The error estimate exceeded the tolerance.
     Inaccurate,
+    /// The DK solver's step matrix is singular at this unknown.
+    Matrix(usize),
 }
 
 impl From<Failure> for StepFail {
     fn from(f: Failure) -> Self {
         StepFail::Newton(f)
+    }
+}
+
+/// The DK solver's systems and state (see `dk.rs`).
+#[derive(Debug)]
+struct Dk {
+    ports: Ports,
+    /// Rows of C with any entry: the state.
+    support: Vec<usize>,
+    /// C on those rows and columns.
+    css: SparseRows,
+    /// DK system per halving level (built on first use).
+    levels: Vec<Option<DkSystem>>,
+    newton: DkNewton,
+    /// `x_S` and `F_S` at `x`.
+    xs: Vec<f64>,
+    f: Vec<f64>,
+    /// Stage F values (s x r).
+    stage_f: Vec<f64>,
+    /// Port voltages at `x_prev` (those at `x` are `Transient::ports`).
+    v_prev: Vec<f64>,
+    // Scratch.
+    /// The step's start on every row of the DK responses.
+    base: Vec<f64>,
+    /// Stage inputs `(1/g) sum_j a_ij F_j`.
+    w: Vec<f64>,
+    /// Port voltages and state of a stage (m + r).
+    out: Vec<f64>,
+    v: Vec<f64>,
+    d: Vec<f64>,
+    neg: Vec<f64>,
+    wm: Vec<f64>,
+}
+
+impl Dk {
+    /// The DK solver's state for `mna`, stepped by a method of `stages` stages.
+    fn new(mna: &Mna, opts: &Options, stages: usize) -> Dk {
+        let ports = Ports::new(&mna.devices);
+        let support = dk::support(&mna.c);
+        let (m, r) = (ports.len(), support.len());
+        let mut css = Matrix::zeros(r);
+        for (i, &si) in support.iter().enumerate() {
+            for (j, &sj) in support.iter().enumerate() {
+                css.set(i, j, mna.c.get(si, sj));
+            }
+        }
+        Dk {
+            newton: DkNewton::new(&ports, opts.newton_reuse),
+            ports,
+            css: SparseRows::new(&css),
+            levels: vec![None; opts.max_halvings as usize + 1],
+            xs: vec![0.0; r],
+            f: vec![0.0; r],
+            stage_f: vec![0.0; stages * r],
+            v_prev: vec![0.0; m],
+            base: Vec::new(),
+            w: vec![0.0; r],
+            out: vec![0.0; m + r],
+            v: vec![0.0; m],
+            d: vec![0.0; r],
+            neg: vec![0.0; m.max(r)],
+            wm: vec![0.0; m],
+            support,
+        }
     }
 }
 
@@ -487,6 +601,7 @@ pub struct Transient {
     device_nodes: Vec<usize>,
     newton: Newton,
     coupled: Option<Coupled>,
+    dk: Option<Dk>,
     /// Reduced step matrix per halving level (built on first use).
     levels: Vec<Option<Reduced>>,
     x: Vec<f64>,
@@ -555,11 +670,13 @@ impl Transient {
         });
         let ports = vec![0.0; newton.v_lin.len()];
         let s = tab.s;
+        let dk = (opts.solver == Solver::Dk && tab.diagonal).then(|| Dk::new(&mna, &opts, s));
         let mut tr = Transient {
             opts,
             h,
             newton,
             coupled,
+            dk,
             levels: vec![None; opts.max_halvings as usize + 1],
             x: vec![0.0; n],
             x_prev: vec![0.0; n],
@@ -694,18 +811,35 @@ impl Transient {
         self.f.fill(0.0);
         self.stats.dc_method = method;
         self.stats.dc_iterations = iterations;
+        self.stats.solver = "mna";
         self.stats.nonlinear_unknowns = nn;
         self.stats.linear_unknowns = nl;
+        if let Some(dk) = &mut self.dk {
+            for (v, &s) in dk.xs.iter_mut().zip(&dk.support) {
+                *v = self.x[s];
+            }
+            dk.f.fill(0.0);
+            dk.v_prev.copy_from_slice(&self.ports);
+            self.stats.solver = "dk";
+            self.stats.nonlinear_unknowns = dk.ports.len();
+            self.stats.linear_unknowns = self.x.len();
+            self.stats.states = dk.support.len();
+        }
         Ok(())
     }
 
     /// Tell every device its port voltages at the accepted point `x`.
     fn accept_ports(&mut self) {
         let mut off = 0;
+        let mut state = false;
         for inst in &mut self.mna.devices {
             let np = inst.device.ports();
             inst.device.accept(&self.ports[off..off + np]);
+            state |= inst.device.has_state();
             off += np;
+        }
+        if state && let Some(dk) = &mut self.dk {
+            dk.newton.invalidate();
         }
     }
 
@@ -744,14 +878,24 @@ impl Transient {
         }
         self.n += 1;
         res.map_err(|(level, f)| {
-            let sys = self.levels[level].as_ref().expect("built");
             let what = format!(
                 "transient step to t = {:.9e} s (sample {}, after {} halvings)",
                 self.n as f64 * self.h,
                 self.n,
                 level
             );
-            self.failure_error(sys, f, &what)
+            match (f, &self.dk) {
+                (StepFail::Matrix(unknown), _) => Error::new(format!(
+                    "{what}: step matrix singular at the {} (a loop of sources and inductors?)",
+                    self.mna.unknowns[unknown].describe()
+                )),
+                (StepFail::Newton(f), Some(dk)) => self.port_failure_error(&dk.ports, f, &what),
+                (StepFail::Newton(f), None) => {
+                    let sys = self.levels[level].as_ref().expect("built");
+                    self.failure_error(sys, f, &what)
+                }
+                (StepFail::Inaccurate, _) => unreachable!("inaccurate steps are halved"),
+            }
         })
     }
 
@@ -763,8 +907,10 @@ impl Transient {
         th0: f64,
         th1: f64,
         inp: &StepInput,
-    ) -> Result<(), (usize, Failure)> {
-        let res = if self.tab.diagonal {
+    ) -> Result<(), (usize, StepFail)> {
+        let res = if self.dk.is_some() {
+            self.try_step_dk(level, th0, th1, inp)
+        } else if self.tab.diagonal {
             self.try_step_dirk(level, th0, th1, inp)
         } else {
             self.try_step_coupled(level, th0, th1, inp)
@@ -772,7 +918,8 @@ impl Transient {
         match res {
             Ok(()) => return Ok(()),
             Err(StepFail::Inaccurate) => self.stats.error_rejections += 1,
-            Err(StepFail::Newton(f)) if level as u32 >= self.opts.max_halvings => {
+            Err(f @ StepFail::Matrix(_)) => return Err((level, f)),
+            Err(f @ StepFail::Newton(_)) if level as u32 >= self.opts.max_halvings => {
                 return Err((level, f));
             }
             Err(StepFail::Newton(_)) => {}
@@ -802,6 +949,10 @@ impl Transient {
     }
 
     fn count(&mut self, iterations: usize) {
+        if let Some(dk) = &self.dk {
+            self.stats.device_evaluations = dk.newton.evaluations;
+            self.stats.factorizations = dk.newton.factorizations;
+        }
         self.stats.solves += 1;
         self.stats.iterations += iterations as u64;
         self.stats.max_iterations = self.stats.max_iterations.max(iterations);
@@ -811,7 +962,9 @@ impl Transient {
     fn accept(&mut self, level: usize, hk: f64, u: f64) {
         std::mem::swap(&mut self.x_prev, &mut self.x);
         std::mem::swap(&mut self.x, &mut self.x_new);
-        std::mem::swap(&mut self.cx, &mut self.cx_new);
+        if self.dk.is_none() {
+            std::mem::swap(&mut self.cx, &mut self.cx_new);
+        }
         self.h_prev = hk;
         self.u = u;
         self.accept_ports();
@@ -971,6 +1124,174 @@ impl Transient {
         Ok(())
     }
 
+    /// A diagonally implicit step with the DK solver: the same stages as
+    /// [`Transient::try_step_dirk`], on the state rows and device ports.
+    fn try_step_dk(
+        &mut self,
+        level: usize,
+        th0: f64,
+        th1: f64,
+        inp: &StepInput,
+    ) -> Result<(), StepFail> {
+        let hk = self.h / (1u64 << level) as f64;
+        let s = self.tab.s;
+        let g = self.tab.gamma;
+        let inv = 1.0 / (g * hk);
+        let slope = self.extrapolation(hk);
+        let opts = self.newton_options();
+        let dk = self.dk.as_mut().expect("DK solver");
+        if dk.levels[level].is_none() {
+            let sys = DkSystem::new(
+                &self.mna.g,
+                &self.mna.c,
+                inv,
+                &self.mna.b,
+                self.mna.input_row,
+                &dk.ports,
+                &dk.support,
+            )
+            .map_err(|Singular { column }| StepFail::Matrix(column))?;
+            dk.levels[level] = Some(sys);
+        }
+        let sys = dk.levels[level].as_ref().expect("just built");
+        let (m, r) = (sys.m, sys.r);
+        dk.newton.v_lin.copy_from_slice(&self.ports);
+        let t0 = timing::now();
+        dk.base.resize(sys.rows(), 0.0);
+        sys.step_base(&dk.xs, &mut dk.base);
+        timing::add(Part::Step, t0);
+
+        let mut iterations = [0usize; 8];
+        let mut solves = 0;
+        let mut c_last: Option<f64> = None;
+        let mut u = inp.at(th0);
+        for i in 0..s {
+            if i == 0 && self.tab.explicit_first() {
+                dk.stage_f[..r].copy_from_slice(&dk.f);
+                continue;
+            }
+            let ci = self.tab.c[i];
+            let t0 = timing::now();
+            // w = (1/g) sum_j a_ij F_j.
+            dk.w.fill(0.0);
+            for j in 0..i {
+                let coef = self.tab.a[i * s + j] / g;
+                if coef != 0.0 {
+                    for (w, f) in dk.w.iter_mut().zip(&dk.stage_f[j * r..(j + 1) * r]) {
+                        *w += coef * f;
+                    }
+                }
+            }
+            u = inp.at(th0 + ci * (th1 - th0));
+            sys.stage(&dk.base, u, &dk.w, &mut dk.out);
+            // The initial guess, as try_step_dirk's on the device nodes (the
+            // ports are linear in them, so the guesses correspond).
+            let v = &mut dk.v;
+            match c_last {
+                Some(cm) if self.opts.predictor == 2 && slope > 0.0 => {
+                    let tp = -1.0 / slope;
+                    let lp = ci * (ci - cm) / (tp * (tp - cm));
+                    let l0 = (ci - tp) * (ci - cm) / (tp * cm);
+                    let lm = (ci - tp) * ci / ((cm - tp) * cm);
+                    for ((v, &p), &x) in v.iter_mut().zip(&dk.v_prev).zip(&self.ports) {
+                        *v = lp * p + l0 * x + lm * *v;
+                    }
+                }
+                Some(cm) if self.opts.predictor == 2 => {
+                    for (v, &x) in v.iter_mut().zip(&self.ports) {
+                        *v = x + ci / cm * (*v - x);
+                    }
+                }
+                _ => {
+                    for ((v, &p), &x) in v.iter_mut().zip(&dk.v_prev).zip(&self.ports) {
+                        *v = x + ci * slope * (x - p);
+                    }
+                }
+            }
+            timing::add(Part::Stage, t0);
+            let it = dk.newton.solve(
+                sys,
+                &self.mna.devices,
+                &dk.ports,
+                &dk.out[..m],
+                &mut dk.v,
+                &opts,
+            )?;
+            let t0 = timing::now();
+            iterations[solves] = it;
+            solves += 1;
+            c_last = Some(ci);
+            let ys = &mut dk.out[m..m + r];
+            sys.states(ys, &dk.newton.i, &mut dk.neg);
+            // F_i = C (Y_i - x[n]) / (g h) - w.
+            for ((d, y), x) in dk.d.iter_mut().zip(&*ys).zip(&dk.xs) {
+                *d = y - x;
+            }
+            let f_i = &mut dk.stage_f[i * r..(i + 1) * r];
+            dk.css.mul_vec(&dk.d, f_i);
+            for (f, w) in f_i.iter_mut().zip(&dk.w) {
+                *f = inv * *f - w;
+            }
+            timing::add(Part::Stage, t0);
+        }
+        let t0 = timing::now();
+        // Stiffly accurate: the last stage is the end point.
+        sys.unknowns(
+            &dk.base,
+            u,
+            &dk.w,
+            &dk.newton.i,
+            &mut self.x_new,
+            &mut dk.neg,
+        );
+
+        if self.opts.error_abstol > 0.0
+            && (level as u32) < self.opts.max_error_halvings.min(self.opts.max_halvings)
+            && let Some(d) = &self.tab.d
+        {
+            // As try_step_dirk: (G + G_dev + C/(g h))^-1 (1/g) sum_i d_i F_i.
+            dk.w.fill(0.0);
+            for (i, &di) in d.iter().enumerate() {
+                if di != 0.0 {
+                    let fi = &dk.stage_f[i * r..(i + 1) * r];
+                    for (e, f) in dk.w.iter_mut().zip(fi) {
+                        *e += di / g * f;
+                    }
+                }
+            }
+            sys.solve_linearized(
+                &dk.newton,
+                &dk.ports,
+                &dk.w,
+                &mut self.err,
+                &mut dk.wm,
+                &mut dk.neg,
+            );
+            let (at, rt) = (self.opts.error_abstol, self.opts.error_reltol);
+            let too_big = self
+                .err
+                .iter()
+                .zip(&self.x_new)
+                .zip(&self.is_node)
+                .any(|((e, x), &node)| node && e.abs() > at + rt * x.abs());
+            if too_big {
+                timing::add(Part::Step, t0);
+                return Err(StepFail::Inaccurate);
+            }
+        }
+        timing::add(Part::Step, t0);
+
+        dk.xs.copy_from_slice(&dk.out[m..m + r]);
+        dk.f.copy_from_slice(&dk.stage_f[(s - 1) * r..s * r]);
+        dk.v_prev.copy_from_slice(&self.ports);
+        self.ports.copy_from_slice(&dk.v);
+        self.accept(level, hk, inp.at(th1));
+        for &it in &iterations[..solves] {
+            self.count(it);
+        }
+        Ok(())
+    }
+
     fn try_step_coupled(
         &mut self,
         level: usize,
@@ -1084,9 +1405,138 @@ impl Transient {
         ))
     }
 
+    /// Change component values mid-run (a pot, a switch, a refitted model):
+    /// `ir` must be the same circuit apart from values, with the same
+    /// unknowns (nodes, sources, inductors) and the same devices on the same
+    /// pins. Elements may appear or disappear between existing nodes (a
+    /// switched capacitor).
+    ///
+    /// The state (every node voltage and inductor current) carries over, and
+    /// the integration restarts from it: the derivative `C x'` is taken from
+    /// the new circuit at the current point (`b + u - G x - d(x)` on the
+    /// rows of `C`), and the next step doesn't extrapolate across the change.
+    /// Nodes without capacitance settle to the new circuit within that step
+    /// (every method is stiffly accurate). The step matrices are rebuilt on
+    /// first use, one per step size (for the 670: ~1 ms each; see
+    /// `tests/update.rs`). Devices with memory start over from their model.
+    pub fn update(&mut self, ir: &CircuitIr) -> Result<(), Error> {
+        let mna = Mna::from_ir(ir, self.opts.gmin)?;
+        if mna.unknowns != self.mna.unknowns {
+            return Err(Error::new(
+                "update: the circuit's nodes, sources or inductors changed (only values may)",
+            ));
+        }
+        let same_devices =
+            mna.devices.len() == self.mna.devices.len()
+                && mna.devices.iter().zip(&self.mna.devices).all(|(a, b)| {
+                    a.name == b.name && a.pins == b.pins && a.pin_names == b.pin_names
+                });
+        if !same_devices {
+            return Err(Error::new(
+                "update: the circuit's devices or their connections changed (only values may)",
+            ));
+        }
+        self.mna = mna;
+        self.levels.iter_mut().for_each(|l| *l = None);
+        let n = self.x.len();
+
+        // F = C x' from the new circuit at x: b + u e_in - G x - d(x) on the
+        // rows of C, with d the device currents at the current ports.
+        let mut f = self.mna.b.clone();
+        f[self.mna.input_row] += self.u;
+        let mut gx = vec![0.0; n];
+        self.mna.g.mul_vec(&self.x, &mut gx);
+        for (f, g) in f.iter_mut().zip(&gx) {
+            *f -= g;
+        }
+        let mut off = 0;
+        for inst in &self.mna.devices {
+            let np = inst.device.ports();
+            let mut i = vec![0.0; np];
+            let mut g = vec![0.0; np * np];
+            inst.device.eval(&self.ports[off..off + np], &mut i, &mut g);
+            let reference = *inst.pins.last().expect("devices have pins");
+            for (&pin, &ij) in inst.pins[..np].iter().zip(&i) {
+                if let Some(p) = pin {
+                    f[p] -= ij;
+                }
+                if let Some(r) = reference {
+                    f[r] += ij;
+                }
+            }
+            off += np;
+        }
+        let support = dk::support(&self.mna.c);
+        let mut on_c = vec![false; n];
+        for &k in &support {
+            on_c[k] = true;
+        }
+        for (f, &c) in f.iter_mut().zip(&on_c) {
+            if !c {
+                *f = 0.0;
+            }
+        }
+        self.f.copy_from_slice(&f);
+        self.mna.c_sparse.mul_vec(&self.x, &mut self.cx);
+        if let Some(dk) = &mut self.dk {
+            *dk = Dk::new(&self.mna, &self.opts, self.tab.s);
+            for ((xs, fs), &k) in dk.xs.iter_mut().zip(dk.f.iter_mut()).zip(&dk.support) {
+                *xs = self.x[k];
+                *fs = f[k];
+            }
+            dk.v_prev.copy_from_slice(&self.ports);
+        }
+        // No extrapolation across the change.
+        self.x_prev.copy_from_slice(&self.x);
+        self.h_prev = 0.0;
+        Ok(())
+    }
+
+    /// An error naming the device port the DK Newton failed on, and its nodes.
+    fn port_failure_error(&self, ports: &Ports, f: Failure, what: &str) -> Error {
+        let (position, detail) = match f {
+            Failure::Singular { position } => (
+                position,
+                "Newton matrix singular (a device port with no path through the circuit?)"
+                    .to_string(),
+            ),
+            Failure::NoConvergence { position, update } => (
+                position,
+                format!("Newton did not converge (last update {update:.3e})"),
+            ),
+        };
+        let (d, k) = ports.device_of(position);
+        let dev = &self.mna.devices[d];
+        let node =
+            |p: Option<usize>| p.map_or("ground".to_string(), |i| self.mna.unknowns[i].describe());
+        let (pin, reference) = ports.nodes[position];
+        let names = dev.pin_names;
+        Error::new(format!(
+            "{what}: {detail} at {0}.{1} ({2}) relative to {0}.{3} ({4})",
+            dev.name,
+            names[k],
+            node(pin),
+            names[names.len() - 1],
+            node(reference),
+        ))
+    }
+
     /// The current solution (node voltages, then branch currents; see `Mna`).
     pub fn x(&self) -> &[f64] {
         &self.x
+    }
+
+    /// DK only: evaluations of each device so far (`Mna::devices` order).
+    pub fn device_evaluations(&self) -> Option<&[u64]> {
+        self.dk
+            .as_ref()
+            .map(|dk| dk.newton.device_evaluations.as_slice())
+    }
+
+    /// Port voltages of every device at the current solution (device by
+    /// device, as `dk::Ports` lays them out).
+    pub fn port_voltages(&self) -> &[f64] {
+        &self.ports
     }
 
     pub fn mna(&self) -> &Mna {

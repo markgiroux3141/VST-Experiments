@@ -1,7 +1,7 @@
 {
  "overrides": {},
  "compression_curve": {
-  "render": "50030c1119bc",
+  "render": "e2123b647f54",
   "input_dbfs": [
    -50.0,
    -49.0,
@@ -175,14 +175,14 @@
    -4.841,
    -5.016,
    -5.215,
-   -5.439,
+   -5.44,
    -5.693,
    -5.977,
    -6.295,
    -6.65,
-   -7.043,
+   -7.042,
    -7.477,
-   -7.959,
+   -7.958,
    -8.501,
    -9.121,
    -9.828,
@@ -221,7 +221,7 @@
   "plot": "reports\\slice\\bursts_circuitsim.png",
   "by_time_constant": {
    "1": {
-    "render": "1901b0f6875e",
+    "render": "e9d6e13db559",
     "cv_before_v": -4.75,
     "cv_burst_v": -59.03,
     "gain_reduction_db": 13.15,
@@ -232,7 +232,7 @@
     "published_release_s": 0.3
    },
    "2": {
-    "render": "e6fce0aa6c8a",
+    "render": "16f371ccd348",
     "cv_before_v": -4.84,
     "cv_burst_v": -59.18,
     "gain_reduction_db": 13.21,
@@ -243,7 +243,7 @@
     "published_release_s": 0.8
    },
    "3": {
-    "render": "f6aae0513c27",
+    "render": "2477cfaa9170",
     "cv_before_v": -4.87,
     "cv_burst_v": -59.2,
     "gain_reduction_db": 13.21,
@@ -254,7 +254,7 @@
     "published_release_s": 2.0
    },
    "4": {
-    "render": "54d98bf89043",
+    "render": "ff94ae428f61",
     "cv_before_v": -4.87,
     "cv_burst_v": -59.19,
     "gain_reduction_db": 13.21,

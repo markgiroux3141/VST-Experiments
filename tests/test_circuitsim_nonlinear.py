@@ -39,7 +39,7 @@ try:
 except ngspice.SimulatorNotFound:
     pytest.skip("ngspice not available", allow_module_level=True)
 
-from engine_compare import circuit, compare, signal  # noqa: E402
+from engine_compare import circuit, compare, compare_solvers, signal  # noqa: E402
 
 REPO = Path(__file__).parent.parent
 DEVICE_FIXTURE = REPO / "crates/circuitsim/tests/fixtures/devices/devices.json"
@@ -155,19 +155,38 @@ def test_small_nonlinear_circuits_agree_and_converge_at_second_order(name):
     assert max(dc4, dc8) < 1e-8
 
 
+@pytest.mark.parametrize("method", ["trap", "esdirk4"])
+@pytest.mark.parametrize("name", list(SMALL))
+def test_dk_matches_full_mna(name, method):
+    """The DK solver against full MNA at the production rate (k = 2), exact Newton:
+    every probe at every sample within one Newton tolerance (M5's "done when";
+    the 670 itself is checked node by node in crates/circuitsim/tests/dk.rs)."""
+    build, amp, _ = SMALL[name]
+    worst = compare_solvers(build(), signal(amp=amp), 2, method)
+    assert worst < 1.0, f"{worst:.2f} x tolerance"
+
+
 @pytest.mark.parametrize("name", list(SMALL))
 def test_newton_is_cheap_on_audio(name):
-    """At the production rate (k = 2) no step needs halving, and Newton takes about 3
-    iterations per step (measured 2.9-3.4; the 670 takes 2.6 on a 1 kHz tone)."""
+    """At the production rate (k = 2) no step needs halving. Exact Newton takes about
+    3 iterations per step (measured 2.9-3.4; the 670 takes 2.6 on a 1 kHz tone). With
+    Jacobian reuse (the default) the iterations are cheaper and a few more, and the
+    Newton matrix is refactored on a small fraction of the steps."""
     import circuitsim
 
     from varimu.sim.io import upsample
 
     build, amp, _ = SMALL[name]
     x = upsample(signal(amp=amp), 2)
-    _, st = circuitsim.simulate(build().to_json(), x, 1 / (2 * 96000), stats=True)
+    run = lambda reuse: circuitsim.simulate(  # noqa: E731
+        build().to_json(), x, 1 / (2 * 96000), newton_reuse=reuse, stats=True
+    )[1]
+    st = run(False)
     assert st["halved_steps"] == 0 and st["dc_method"] == "newton", st
     assert st["iterations"] / st["steps"] < 4.0 and st["max_iterations"] <= 10, st
+    st = run(True)
+    assert st["halved_steps"] == 0, st
+    assert st["factorizations"] / st["steps"] < 0.5, st
 
 
 # --- The 670 operating point ----------------------------------------------------------

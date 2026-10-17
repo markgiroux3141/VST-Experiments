@@ -19,18 +19,25 @@ A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
 Work its milestones in order, with the same "done when" discipline.
 **M0 (scaffolding), M1 (circuit IR), M2 (linear engine), M3 (devices and
-Newton) and M4 (the 670 slice on the fast engine) are done; next is M5
-(nodal DK: speed).**
+Newton), M4 (the 670 slice on the fast engine) and M5 (nodal DK) are done,
+except M5's speed target (10x faster than ngspice; 5-6x so far), deferred
+until the main milestone work is done (decided 2026-10-17; the plan's M5
+status lists where to start). Next is M6 (default engine).**
 `netlist.build()` builds a typed circuit IR (`varimu/circuit/ir.py`) and emits
 SPICE from it (`varimu/circuit/spice.py`); the Rust side reads the same IR as
 JSON (`crates/circuitsim/src/ir.rs`) and simulates it at a fixed step
 (`mna.rs`, `transient.rs`), with compiled ports of the Python device models
-(`devices/`) and Newton on the device-node block of the MNA system
-(`newton.rs`). `varimu.sim.fast.run_transient(ir, x)` is the Rust counterpart
+(`devices/`). The default solver is nodal DK (`dk.rs`): the linear part
+folded into responses of the step matrix once per step size, Newton on the
+22 device ports with the factored Jacobian reused and unmoved devices not
+re-evaluated; `solver: mna` is M3-M4's Newton on the device-node block of the
+full MNA system (`newton.rs`), the reference DK is tested against.
+`Transient::update(ir)` changes component values mid-run. `varimu.sim.fast.run_transient(ir, x)` is the Rust counterpart
 of `varimu.sim.io.run_transient` (same oversampling and decimation).
 Production settings are the `circuitsim` block of `config/sim_settings.yaml`:
 esdirk4 at 2x, 5th-order input interpolation, local error control (chosen by
-M4's method study; the plan has the numbers). `simulator.engine` picks the
+M4's method study; the plan has the numbers), DK with Newton tolerances
+1e-4 / 1e-3 V (M5). `simulator.engine` picks the
 engine for renders (ngspice until M6).
 
 ## Commands
@@ -56,7 +63,8 @@ Rust (`crates/circuitsim`; workspace `Cargo.toml` at the repo root, output in `t
 
 ```sh
 cargo test                                            # Rust tests (IR round trip, ...)
-cargo run --release --example profile -- circuit.json [method] [oversample]   # where a step's time goes
+cargo run --release --example profile -- circuit.json [method] [oversample] [dk|mna] [reltol] [vntol]   # speed of a step
+cargo run --release --features timing --example profile -- ...   # plus where the DK step's time goes (cycle counts)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check
@@ -203,17 +211,29 @@ tests skip when ngspice is missing.
   agrees to -92 dB but runs ~7000x slower than real time. The M2/M3
   agreement tests (`tests/engine_compare.py`) still run trapezoidal, the
   engine's 2nd-order baseline.
-- **circuitsim speed (measured 2026-10-15).** Production runs 25-30x slower
-  than real time on program material (one core; ~10 Newton iterations per
-  sample, ~13 us each), up to 70-190x on HF-heavy test tones where the error
-  control subdivides steps: about ngspice's speed, much more accurate. M5's
-  job. Trapezoidal at 2x runs 6-8x.
+- **circuitsim speed (measured 2026-10-17, M5).** Production (DK) runs
+  3.3x slower than real time on the 7 s TC1 burst and 4.2x on the arpeggio
+  clip, against ngspice's 20.6x / 21.2x and M4's full MNA 15.8x / 18.5x in
+  the same session (one job at a time). HF test tones are slower (CCIF
+  -10 dBFS 77x) where error control subdivides steps. Per sample: ~9 Newton
+  iterations over 5 stages, ~1.4 factorizations of the 22 x 22 port matrix.
+- **Benchmarking on this desktop.** Timings drift +-35% between runs:
+  VS Code's rust-analyzer recompiles the crate on all cores for ~2 minutes
+  after each Rust edit, and explorer.exe often holds a core. Wait until no
+  `rustc` runs, report the best of several runs, and compare engines back to
+  back rather than against old numbers.
 - **Floating nodes and Newton tolerance (measured 2026-10-14).** At DC the 670's
   T104 secondary is a 1 mOhm winding held only by bridge-diode leakage and a
   1 GOhm leak; double precision resolves it to ~1e-6..1e-5 V in any engine.
   So circuitsim's vntol is 1e-6 V (SPICE's), and ngspice can't find the
   670's `.op` at reltol 1e-9. Compare such nodes against the engine's own
   roundoff spread (reorder the unknowns), as `test_circuitsim_nonlinear.py` does.
+  In transient the floor is ~1e-4 V with the bridge off and ~1e-2 V with it
+  reversed for good, in either solver, and reordering doesn't reveal it (both
+  orders share it): compare that island relative to its common mode
+  (`crates/circuitsim/tests/dk.rs`). DK also needs a 10 uS shunt per diode
+  port moved into the step matrix (`Device::shunt`), or its precomputed
+  responses lose 4 digits there.
 - **`ngspice.run(options=...)` was silently ignored until 2026-10-14** (fixed):
   `.op` agreement tests written before then ran at ngspice's default
   tolerances. Pass `digits=16` for full-precision output (the default prints
