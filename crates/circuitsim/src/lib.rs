@@ -24,7 +24,9 @@ pub mod transient;
 #[cfg(feature = "python")]
 mod python;
 
-pub use transient::{Method, Options, Output, Solver, Stats, StepInput, simulate};
+pub use transient::{
+    Method, Options, Output, Solver, Stats, StepInput, simulate, simulate_with_progress,
+};
 
 /// Crate version (also `circuitsim.__version__` in Python).
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

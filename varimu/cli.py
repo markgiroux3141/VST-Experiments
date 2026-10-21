@@ -86,12 +86,28 @@ def _render_inputs(args: argparse.Namespace, sample_rate: int, seed: int):
     return [(label, x[a:b]) for label, x in items]
 
 
+def _engine_settings(engine: str | None):
+    """Transient settings for `engine` (None: the configured one), with the engine
+    checked first: a missing or stale circuitsim build stops here with its message."""
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    ts = TransientSettings.from_sim_settings(engine=engine or "configured")
+    if ts.engine == "circuitsim":
+        try:
+            fast.check_build()
+        except (fast.EngineUnavailable, fast.StaleBuild) as e:
+            raise SystemExit(f"error: {e}") from e
+    return ts
+
+
 def _cmd_render(args: argparse.Namespace) -> int:
     import itertools
 
     from varimu.sim import runner
-    from varimu.sim.io import TransientSettings, write_audio
+    from varimu.sim.io import write_audio
 
+    ts = _engine_settings(args.engine)
     settings = load_sim_settings()
     inputs = _render_inputs(args, settings.sample_rate, settings.seed)
     base = runner.parse_overrides(args.set or [])
@@ -110,7 +126,6 @@ def _cmd_render(args: argparse.Namespace) -> int:
 
     n = min(args.jobs or runner.default_jobs(), len(jobs))
     print(f"{len(jobs)} render(s), up to {n} in parallel")
-    ts = TransientSettings.from_sim_settings(engine=args.engine or "configured")
     print(f"engine: {ts.engine} ({ts.method}, {ts.oversample}x oversampling)")
     renders = runner.render_many(jobs, settings=ts, max_jobs=n)
     single = len(renders) == 1 and args.out and args.out.suffix.lower() == ".wav"
@@ -131,7 +146,11 @@ def _cmd_listen(args: argparse.Namespace) -> int:
     try:
         from varimu.listen.app import serve
     except ImportError as e:
-        raise SystemExit(f"{e}. Install the listen extra: uv sync --extra listen") from e
+        raise SystemExit(
+            f"{e}. Install the listen extra: uv sync --extra listen --extra fast"
+        ) from e
+    ts = _engine_settings(None)
+    print(f"engine: {ts.engine} ({ts.method}, {ts.oversample}x oversampling)")
     print(f"varimu listen on http://{args.host}:{args.port}  (Ctrl-C to stop)")
     serve(args.host, args.port, args.jobs)
     return 0
@@ -167,7 +186,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument(
         "--engine",
         choices=["ngspice", "circuitsim"],
-        help="simulation engine (default: sim_settings.yaml simulator.engine)",
+        help="simulation engine (default: sim_settings.yaml simulator.engine, circuitsim; "
+        "ngspice is the reference)",
     )
     p.set_defaults(func=_cmd_render)
 

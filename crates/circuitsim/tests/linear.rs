@@ -8,7 +8,7 @@ use circuitsim::ir::{
     Capacitor, CircuitIr, Coupling, Element, IR_VERSION, Inductor, Probe, Resistor, Section,
     VoltageSource,
 };
-use circuitsim::{Method, Options, simulate};
+use circuitsim::{Error, Method, Options, simulate, simulate_with_progress};
 
 // --- Building test circuits ----------------------------------------------------------
 
@@ -369,4 +369,33 @@ fn errors_name_the_problem() {
         simulate(&rc, &[], H, &Options::default()).unwrap().values,
         [Vec::<f64>::new()]
     );
+}
+
+/// Progress is reported every `every` samples, doesn't change the result, and
+/// an error from the callback stops the run.
+#[test]
+fn progress_is_reported_and_can_stop_a_run() {
+    let ir = circuit(
+        vec![r("R1", "in", "out", 1e3), c("C1", "out", "0", 1e-6)],
+        &["out"],
+    );
+    let x = sine(10, H, 1e3);
+    let opts = Options::default();
+    let mut seen = vec![];
+    let out = simulate_with_progress(&ir, &x, H, &opts, 3, |done| {
+        seen.push(done);
+        Ok(())
+    })
+    .unwrap();
+    assert_eq!(seen, [3, 6, 9]);
+    assert_eq!(out, simulate(&ir, &x, H, &opts).unwrap());
+    let e = simulate_with_progress(&ir, &x, H, &opts, 4, |done| {
+        if done >= 8 {
+            Err(Error::new("stop"))
+        } else {
+            Ok(())
+        }
+    })
+    .unwrap_err();
+    assert_eq!(e.to_string(), "stop");
 }

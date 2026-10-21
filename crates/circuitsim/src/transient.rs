@@ -1560,6 +1560,20 @@ pub struct Output {
 /// Run `ir` with `input` (volts at `input_node`, one sample per step of `h`
 /// seconds). Sample 0 is the DC operating point.
 pub fn simulate(ir: &CircuitIr, input: &[f64], h: f64, opts: &Options) -> Result<Output, Error> {
+    simulate_with_progress(ir, input, h, opts, usize::MAX, |_| Ok(()))
+}
+
+/// [`simulate`], calling `progress(samples done)` every `every` samples. An
+/// error from `progress` stops the run and is returned (e.g. an interrupt).
+pub fn simulate_with_progress(
+    ir: &CircuitIr,
+    input: &[f64],
+    h: f64,
+    opts: &Options,
+    every: usize,
+    mut progress: impl FnMut(usize) -> Result<(), Error>,
+) -> Result<Output, Error> {
+    let every = every.max(1);
     if let Some(i) = input.iter().position(|u| !u.is_finite()) {
         return Err(Error::new(format!("input sample {i} is not finite")));
     }
@@ -1595,6 +1609,9 @@ pub fn simulate(ir: &CircuitIr, input: &[f64], h: f64, opts: &Options) -> Result
             tr.step_input(&StepInput::lagrange(w, (lo - n) as i32))?;
         }
         record(&tr);
+        if (i + 2) % every == 0 {
+            progress(i + 2)?;
+        }
     }
     Ok(Output {
         names,

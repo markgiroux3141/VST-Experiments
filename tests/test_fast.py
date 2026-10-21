@@ -1,4 +1,5 @@
-"""The fast engine's Python side: build freshness and engine settings."""
+"""The fast engine's Python side: build freshness, engine settings, the default engine
+(and what happens without it), progress and thread priority in the runner."""
 
 import dataclasses
 
@@ -60,3 +61,78 @@ def test_engine_is_part_of_the_cache_key():
     assert k_ng != k_cs
     assert "engine_build" in parts_cs and "engine_build" not in parts_ng
     assert runner._key(c, x, dataclasses.replace(cs, error_abstol=0.0))[0] != k_cs
+
+
+def test_renders_default_to_circuitsim():
+    """Circuit-sim plan M6: renders, the CLI and the listen app use the fast engine;
+    ngspice stays available by name for verification."""
+    assert TransientSettings.from_sim_settings(engine="configured").engine == "circuitsim"
+
+
+@pytest.fixture
+def no_circuitsim(monkeypatch):
+    """As if the `fast` extra weren't installed."""
+    import sys
+
+    monkeypatch.setitem(sys.modules, "circuitsim", None)  # import raises ImportError
+    fast.check_build.cache_clear()
+    yield
+    fast.check_build.cache_clear()
+
+
+def test_without_the_extra_renders_stop_with_instructions(no_circuitsim, tmp_path, monkeypatch):
+    """No silent fallback to ngspice: the error says how to install the engine or
+    choose ngspice, and the CLI exits with that message before any work."""
+    from varimu.cli import main
+    from varimu.sim import runner
+
+    assert not fast.available()
+    monkeypatch.setattr(runner, "RENDER_DIR", tmp_path / "renders")
+    monkeypatch.setattr(runner, "JOB_DIR", tmp_path / "jobs")
+    with pytest.raises(fast.EngineUnavailable, match=r"uv sync --extra fast.*--engine ngspice"):
+        runner.render(runner.RenderJob([0.0] * 10))
+    with pytest.raises(SystemExit, match="--engine ngspice"):
+        main(["render", "--signal", "steps_1000hz", "--seconds", "0.01", "--out", str(tmp_path)])
+    assert not (tmp_path / "renders").exists()
+    # ngspice settings don't touch circuitsim.
+    from varimu.circuit import netlist as nl
+
+    runner._key(nl.build({}), [0.0] * 10, TransientSettings.from_sim_settings())
+
+
+def test_render_reports_progress_and_caches(tmp_path, monkeypatch):
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    import numpy as np
+
+    from varimu.sim import runner
+
+    monkeypatch.setattr(runner, "RENDER_DIR", tmp_path / "renders")
+    monkeypatch.setattr(runner, "JOB_DIR", tmp_path / "jobs")
+    x = 0.3 * np.sin(2 * np.pi * 1000 * np.arange(2000) / 96000)
+    seen = []
+    r = runner.render(runner.RenderJob(x), progress=seen.append)
+    assert not r.cached and r.meta["settings"]["engine"] == "circuitsim"
+    assert len(seen) > 100 and seen[-1] == 1.0 and np.all(np.diff(seen) > 0)
+    again = runner.render(runner.RenderJob(x))
+    assert again.cached and again.key == r.key
+    np.testing.assert_allclose(again.output, r.output, rtol=1e-6, atol=1e-7)  # stored as f4
+
+
+def test_thread_priority_is_lowered_and_restored():
+    import sys
+
+    with pytest.raises(ValueError, match="unknown priority"):
+        with fast.thread_priority("realtime"):
+            pass
+    with fast.thread_priority("normal"):
+        pass
+    if sys.platform != "win32":
+        return
+    k32 = fast._kernel32()
+    me = k32.GetCurrentThread()
+    before = k32.GetThreadPriority(me)
+    with fast.thread_priority("below_normal"):
+        assert k32.GetThreadPriority(me) == -2
+    with fast.thread_priority("idle"):
+        assert k32.GetThreadPriority(me) == -15
+    assert k32.GetThreadPriority(me) == before

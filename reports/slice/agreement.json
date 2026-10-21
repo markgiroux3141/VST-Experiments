@@ -1,0 +1,106 @@
+{
+ "when": "2026-10-21T13:39:08",
+ "code": "0.1.0+928fa1a60838",
+ "engine_build": "75198f6e2543991e",
+ "overrides": {},
+ "program_clip": "clip:Arpeggio04b_120_m_D#_16b.WAV",
+ "tolerance": {
+  "gr_db": 0.2,
+  "time_rel": 0.05,
+  "out_rms_db": -55.0,
+  "cv_v": 0.2
+ },
+ "reference": {
+  "method": "gear",
+  "reltol": 0.0001,
+  "oversample": 4
+ },
+ "behaviour_vs_ngspice": {
+  "gr_max_diff_db": 0.033,
+  "clip_gain_max_diff_db": 0.028,
+  "burst_relative_time_diff": {
+   "1": {
+    "attack_cv_63_ms": 0.0,
+    "release_cv_63_s": 0.0,
+    "release_cv_90_s": 0.0,
+    "gain_reduction_db": -0.03
+   },
+   "2": {
+    "attack_cv_63_ms": 0.0,
+    "release_cv_63_s": 0.0,
+    "release_cv_90_s": 0.0,
+    "gain_reduction_db": -0.04
+   },
+   "3": {
+    "attack_cv_63_ms": 0.0,
+    "release_cv_63_s": 0.0,
+    "release_cv_90_s": 0.0005,
+    "gain_reduction_db": -0.04
+   },
+   "4": {
+    "attack_cv_63_ms": 0.0,
+    "release_cv_63_s": 0.0,
+    "release_cv_90_s": 0.0003,
+    "gain_reduction_db": -0.04
+   }
+  },
+  "passes": true
+ },
+ "waveforms": {
+  "burst_tc1": {
+   "circuitsim_vs_reference": {
+    "out_rms_db": -66.7,
+    "cv_max_v": 0.0225
+   },
+   "ngspice_vs_reference": {
+    "out_rms_db": -74.4,
+    "cv_max_v": 0.0497
+   }
+  },
+  "burst_tc2": {
+   "circuitsim_vs_reference": {
+    "out_rms_db": -65.8,
+    "cv_max_v": 0.0228
+   },
+   "ngspice_vs_reference": {
+    "out_rms_db": -76.7,
+    "cv_max_v": 0.045
+   }
+  },
+  "burst_tc3": {
+   "circuitsim_vs_reference": {
+    "out_rms_db": -66.8,
+    "cv_max_v": 0.0092
+   },
+   "ngspice_vs_reference": {
+    "out_rms_db": -76.6,
+    "cv_max_v": 0.0193
+   }
+  },
+  "burst_tc4": {
+   "circuitsim_vs_reference": {
+    "out_rms_db": -67.2,
+    "cv_max_v": 0.0063
+   },
+   "ngspice_vs_reference": {
+    "out_rms_db": -76.6,
+    "cv_max_v": 0.0079
+   }
+  },
+  "program_clip": {
+   "circuitsim_vs_reference": {
+    "out_rms_db": -55.5,
+    "cv_max_v": 0.0404
+   },
+   "ngspice_vs_reference": {
+    "out_rms_db": -54.6,
+    "cv_max_v": 0.0445
+   },
+   "circuitsim_vs_converged": {
+    "out_rms_db": -76.7,
+    "cv_max_v": 0.0069
+   }
+  }
+ },
+ "passes": true
+}

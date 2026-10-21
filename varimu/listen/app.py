@@ -1,11 +1,13 @@
 """Tweak-and-listen page for the 670 slice (offline renders, not live).
 
-    uv sync --extra listen
+    uv sync --extra listen --extra fast
     uv run varimu listen            # http://127.0.0.1:8765
 
 Pick a clip from data/clips/ (or a test signal), move the sliders, press
 Render. Renders run in the background through varimu.sim.runner (cached, at
-reduced CPU priority) and show progress. Playback switches between dry, the
+reduced CPU priority) and show progress, on the configured engine
+(sim_settings.yaml simulator.engine: circuitsim by default, about 3-5x slower
+than real time on program material; ngspice 20-30x). Playback switches between dry, the
 current render and the previous render at the same position; all three are
 loudness-matched (varimu.listen.matching). Each render also shows its gain
 over time and the sidechain control voltage on the 6386 grids.
@@ -13,6 +15,7 @@ over time and the sidechain control voltage on the 6386 grids.
 
 from __future__ import annotations
 
+import csv
 import io
 import itertools
 import threading
@@ -32,7 +35,7 @@ from varimu.config import DATA_DIR, load_genome_bounds, load_sim_settings
 from varimu.listen import matching
 from varimu.measure import signals
 from varimu.sim import runner
-from varimu.sim.io import load_audio
+from varimu.sim.io import configured_engine, load_audio
 
 CLIP_DIR = DATA_DIR / "clips"
 AUDIO_EXT = {".wav", ".flac", ".aif", ".aiff", ".ogg"}
@@ -119,6 +122,25 @@ def to_overrides(values: dict[str, float]) -> dict[str, Any]:
     if "time_constant" in ov:
         ov["time_constant"] = int(round(ov["time_constant"]))
     return ov
+
+
+TYPICAL_SPEED = {"circuitsim": 5.0, "ngspice": 30.0}  # x slower than real time (plan, M5)
+
+
+def last_speed(engine: str) -> float:
+    """Wall seconds per audio second of the engine's last uncached render
+    (cache/renders/timing.csv), or a typical figure: the page's time estimate."""
+    path = runner.RENDER_DIR / "timing.csv"
+    try:
+        with open(path, newline="", encoding="utf-8") as f:
+            rows = [
+                r
+                for r in csv.DictReader(f)
+                if r.get("engine") == engine and r.get("cached") == "False"
+            ]
+        return float(rows[-1]["wall_per_audio_s"])
+    except (OSError, IndexError, KeyError, ValueError):
+        return TYPICAL_SPEED.get(engine, 30.0)
 
 
 # --- Sources -----------------------------------------------------------------------------
@@ -289,7 +311,13 @@ def create_app(workers: int | None = None):
 
     @app.get("/api/controls")
     def controls():
-        return {"controls": control_schema(), "sources": list_sources()}
+        engine = configured_engine()
+        return {
+            "controls": control_schema(),
+            "sources": list_sources(),
+            "engine": engine,
+            "realtime_factor": last_speed(engine),
+        }
 
     @app.post("/api/render")
     def submit(req: RenderRequest):

@@ -117,17 +117,19 @@
 </main>
 <script>
 const $ = s => document.querySelector(s);
-let schema = [], defaults = {}, current = null, previous = null, lastRtf = 50;
+let schema = [], defaults = {}, current = null, previous = null, lastRtf = 50, engine = '';
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } },
                 set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
 
 // Keys like "v6386_a.emission_scale" contain dots: make a plain, safe element id.
 function valueId(key) { return 'v-' + key.replace(/[^A-Za-z0-9_-]/g, '_'); }
+function rtf(x) { return x < 10 ? x.toFixed(1) : x.toFixed(0); }
 function fmt(v, step) { return step >= 1 ? String(Math.round(v)) : (Math.abs(v) >= 100 ? v.toFixed(1) : v.toFixed(3)); }
 
 async function init() {
   const r = await (await fetch('/api/controls')).json();
   schema = r.controls;
+  engine = r.engine; lastRtf = r.realtime_factor;
   const saved = store.get('values', {});
   const box = $('#controls'); let group = null;
   for (const c of schema) {
@@ -161,7 +163,8 @@ async function srcInfo() {
   const d = (await r.json()).duration_s;
   const len = +$('#seconds').value || Math.max(0, d - +$('#start').value);
   $('#srcinfo').textContent = `${d.toFixed(2)} s long; rendering ${len.toFixed(2)} s`;
-  $('#estimate').textContent = `About ${Math.ceil(len * lastRtf / 60)} min per render at the last measured speed (${lastRtf.toFixed(0)}x real time). Identical settings come straight from the cache.`;
+  const wall = len * lastRtf, est = wall < 90 ? `${Math.ceil(wall)} s` : `${Math.ceil(wall / 60)} min`;
+  $('#estimate').textContent = `About ${est} per render on ${engine} at the last measured speed (${rtf(lastRtf)}x slower than real time). Identical settings come straight from the cache.`;
 }
 
 async function render() {
@@ -183,7 +186,7 @@ async function pollJobs() {
     const tr = document.createElement('tr');
     const tags = (j.id === current ? '<span class="tag">current</span>' : '') + (j.id === previous ? '<span class="tag">previous</span>' : '');
     const status = j.status === 'running' ? `running ${(j.progress * 100).toFixed(0)}%<div class="bar"><div style="width:${j.progress * 100}%"></div></div>`
-      : j.status === 'done' ? `<span class="st-done">done</span> <span class="small">${j.wall_s.toFixed(0)} s, ${j.realtime_factor.toFixed(0)}x</span>`
+      : j.status === 'done' ? `<span class="st-done">done</span> <span class="small">${j.wall_s.toFixed(0)} s, ${rtf(j.realtime_factor)}x</span>`
       : j.status === 'failed' ? `<span class="st-failed">failed</span><div class="err">${j.error}</div>` : j.status;
     tr.innerHTML = `<td>${j.id}${tags}</td><td>${j.source.split(':')[1]}<div class="small">${j.start_s}s${j.seconds ? ' +' + j.seconds + 's' : ''}</div></td>
       <td class="diff">${diff}</td><td>${status}</td><td></td>`;

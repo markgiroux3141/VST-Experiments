@@ -1,8 +1,10 @@
 """Cached, parallel renders: (circuit parameters, input audio) -> output audio + internal signals.
 
 Renders run on the engine named by sim_settings.yaml `simulator.engine`
-(ngspice, the reference, or circuitsim, the fast Rust engine), or the one in
-the settings passed in. A render is keyed by a hash of everything that
+(circuitsim, the fast Rust engine and the default, or ngspice, the reference
+it is verified against), or the one in the settings passed in. Either engine
+runs at the `runner:` priority: ngspice as a process, circuitsim on the
+calling thread (varimu.sim.fast.thread_priority). A render is keyed by a hash of everything that
 determines its result: the netlist text and the files it reads, the input
 samples, the transient settings (engine included), the varimu source code
 and, for circuitsim, the hash of the crate sources it was built from. A
@@ -179,9 +181,10 @@ def render(
     workdir.mkdir(parents=True)
     try:
         if s.engine == "circuitsim":
-            res = fast.run_transient(circuit.ir, samples * s.full_scale_volts_peak, settings=s)
-            if progress:  # no progress from inside the engine yet
-                progress(1.0)
+            with fast.thread_priority(s.priority):
+                res = fast.run_transient(
+                    circuit.ir, samples * s.full_scale_volts_peak, settings=s, progress=progress
+                )
         else:
             res = run_transient(
                 circuit.text,
@@ -233,7 +236,7 @@ def render_many(
     max_jobs: int | None = None,
     progress: Callable[[int, float], None] | None = None,
 ) -> list[Render]:
-    """Run renders in parallel (threads; each waits on its own ngspice process, or in
+    """Run renders in parallel (threads; each waits on its own ngspice process, or runs
     circuitsim, which releases the GIL while it simulates)."""
     jobs = list(jobs)
     n = min(max_jobs or default_jobs(), max(1, len(jobs)))

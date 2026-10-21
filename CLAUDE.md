@@ -3,9 +3,12 @@
 The project plan is [VARIMU_PROJECT_PLAN.md](VARIMU_PROJECT_PLAN.md) (the plan's
 layout calls it `PLAN.md`). Read it before starting work.
 
-**Phases 0 and 1 are done; next per the plan is Phase 2 (Transformer Models).**
-Work one phase at a time. Don't start the next phase until the current phase's
-"done when" criterion is met and covered by tests.
+**Phases 0 and 1 are done; next is Phase 2 (Transformer Models).** Read the
+"Starting Phase 2" notes at the end of the plan's Phase 2 section first: the
+phase opens with the circuit-sim plan's "M6 follow-up" (rework `--verify`)
+and a decision for the user (does the transformer core need a SPICE
+implementation?). Work one phase at a time. Don't start the next phase until
+the current phase's "done when" criterion is met and covered by tests.
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
@@ -19,10 +22,21 @@ A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
 Work its milestones in order, with the same "done when" discipline.
 **M0 (scaffolding), M1 (circuit IR), M2 (linear engine), M3 (devices and
-Newton), M4 (the 670 slice on the fast engine) and M5 (nodal DK) are done,
-except M5's speed target (10x faster than ngspice; 5-6x so far), deferred
-until the main milestone work is done (decided 2026-10-17; the plan's M5
-status lists where to start). Next is M6 (default engine).**
+Newton), M4 (the 670 slice on the fast engine), M5 (nodal DK) and M6
+(default engine) are done, except M5's speed target (10x faster than
+ngspice; 5-7x so far), deferred (decided 2026-10-17; the plan's M5 status
+lists where to start). M7 and M8 wait until main plan Phase 2 is done
+(decided 2026-10-21: the simulator is already more accurate than the
+placeholder transformers it runs); Phase 2's core lands in circuitsim as
+part of Phase 2.** The periodic agreement test against ngspice is
+`slice_report.py --verify` (Commands); run it after changes to the engine,
+the circuit or the device models.
+**What the references are for (decided 2026-10-21):** accuracy is judged
+against circuitsim's converged solution and analog behaviour; ngspice is the
+independent cross-check that catches bugs, best with the exact triode
+formulation on short excerpts (its tabulated triodes are only good to about
+-55 dB on hot material); behaviour metrics (GR, attack/release) are compared
+with production ngspice. Details: the circuit-sim plan's Verification section.
 `netlist.build()` builds a typed circuit IR (`varimu/circuit/ir.py`) and emits
 SPICE from it (`varimu/circuit/spice.py`); the Rust side reads the same IR as
 JSON (`crates/circuitsim/src/ir.rs`) and simulates it at a fixed step
@@ -37,24 +51,30 @@ of `varimu.sim.io.run_transient` (same oversampling and decimation).
 Production settings are the `circuitsim` block of `config/sim_settings.yaml`:
 esdirk4 at 2x, 5th-order input interpolation, local error control (chosen by
 M4's method study; the plan has the numbers), DK with Newton tolerances
-1e-4 / 1e-3 V (M5). `simulator.engine` picks the
-engine for renders (ngspice until M6).
+1e-4 / 1e-3 V (M5). `simulator.engine` picks the engine for renders,
+the CLI, the listen app and `slice_report.py`: **circuitsim by default
+(M6)**, ngspice by name (`--engine ngspice`). Without the `fast` extra,
+renders stop with instructions (`fast.EngineUnavailable`); nothing falls back
+to ngspice silently. circuitsim renders run in-process on the runner's
+threads (GIL released), at the `runner:` priority (Windows thread priority),
+with progress and Ctrl-C through `circuitsim.simulate(progress=...)`.
 
 ## Commands
 
 ```sh
-uv sync                          # install (add --extra listen|fast|ml|optimize when a phase needs it)
+uv sync --extra fast             # install; renders need fast (add listen|ml|optimize when a phase needs it)
 uv run pytest                    # tests
 uv run ruff check . && uv run ruff format --check .
 uv run varimu signals [--seed N] [--only NAME ...] [--list]
 uv run varimu genome-status
 uv run varimu fit-devices [--only 6386 ...]   # refit device models -> config/devices/*.yaml
 uv run python scripts/digitize_ge6386.py --overlays DIR   # re-digitize the 6386 sheet
-uv run varimu render --clip data/clips/x.wav --set ac_threshold=0.7 time_constant=3 --out r.wav
-uv run varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached
-uv run --extra fast varimu render --signal burst_1000hz_0dbfs --engine circuitsim
-uv run varimu listen             # http://127.0.0.1:8765 (needs: uv sync --extra listen)
-uv run python scripts/slice_report.py [--engine circuitsim]   # compression curve + TC attack/release -> reports/slice/
+uv run --extra fast varimu render --clip data/clips/x.wav --set ac_threshold=0.7 time_constant=3 --out r.wav
+uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached
+uv run varimu render --signal burst_1000hz_0dbfs --engine ngspice   # the reference engine
+uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765
+uv run --extra fast python scripts/slice_report.py [--engine ngspice] [--clip NAME]   # curve, TC bursts, program clip -> reports/slice/
+uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~15 min cold)
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 ```
@@ -128,7 +148,9 @@ tests skip when ngspice is missing.
 - **One coupled simulation.** The audio path, sidechain and PSU go in one
   netlist, never in separately chained DSP blocks.
 - **Every device model has two implementations**, SPICE and a Python
-  reference, with a test that they agree.
+  reference, with a test that they agree. (Under review for Phase 2's
+  transformer core; the rule stands until the user decides. See the plan's
+  Phase 2 notes.)
 - **Reproducibility.** Every result must be reproducible from (genome, signal,
   settings, code version). All randomness goes through a seeded
   `np.random.Generator`. Derive per-item seeds, e.g.
@@ -165,7 +187,8 @@ tests skip when ngspice is missing.
   at default tolerances: measure it in Phase 4 before trusting renders.
 - The SPICE `D` model uses a cubic approximation in deep reverse bias, so it
   differs from pure Shockley by about 1e-11 A.
-- **Full-slice render speed (measured 2026-10-13).** About **25-40x slower than
+- **ngspice render speed (measured 2026-10-13; circuitsim is the default
+  since M6, see below).** About **25-40x slower than
   real time** per render (one core each): 25.5 s staircase 28x, 7 s bursts
   28x, 1 s program clip 25-31x, plus ~2-5 s fixed start-up. Parallel renders
   scale with cores. What made it feasible:
@@ -217,6 +240,16 @@ tests skip when ngspice is missing.
   the same session (one job at a time). HF test tones are slower (CCIF
   -10 dBFS 77x) where error control subdivides steps. Per sample: ~9 Newton
   iterations over 5 stages, ~1.4 factorizations of the 22 x 22 port matrix.
+  M6 (2026-10-21): 3.7x / 4.5x vs ngspice's 26x on the TC1 burst and the
+  arpeggio clip at the report's hot front panel. Parallel circuitsim renders
+  scale to ~8.5x one job's throughput at 14 jobs (the default) on this
+  8-core desktop.
+- **ngspice's reference can't referee hot program material much below
+  -55 dB (measured 2026-10-21, M6).** Its tabulated triodes are -53 dB from
+  the exact formulation where the CV swings to -84 V (the arpeggio clip at
+  pad 0 dB, threshold 0.8), so `--verify`'s clip row vs ngspice passes by
+  only 0.5 dB on ngspice's error; the converged-solution row (-77 dB) is the
+  sensitive one. The plan's M6 status has the numbers and the options.
 - **Benchmarking on this desktop.** Timings drift +-35% between runs:
   VS Code's rust-analyzer recompiles the crate on all cores for ~2 minutes
   after each Rust edit, and explorer.exe often holds a core. Wait until no

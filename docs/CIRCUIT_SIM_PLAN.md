@@ -226,6 +226,31 @@ crates/circuitsim/
 Fixtures come from Python, so the Python models stay the single source of
 truth. Python tests call the binding on the same circuits ngspice runs.
 
+**What each reference is for (decided 2026-10-21, after M6).** circuitsim
+is now the more accurate engine: on the hot program clip, production ngspice
+is -50.7 dB from circuitsim's converged solution and the tolerance study's
+ngspice reference -55.3 dB, both limited by ngspice's tabulated triodes, not
+its integration (M6 status). So:
+
+- **Accuracy** is judged against circuitsim's own converged solution
+  (esdirk4 at 4x, error tolerance / 10) and against analog behaviour: small-
+  signal response vs `.ac` or closed form, aliasing, idle stability, no
+  numerical artifacts. The converged-solution rows are the regression
+  guards.
+- **ngspice is the independent cross-check that catches bugs** (a wrong
+  stamp, swapped pins, an IR translation error), which no self-convergence
+  test can: a wrong equation converges to the same wrong answer. It does
+  that best with the **exact triode formulation on short excerpts** (0.1-
+  0.5 s at ~560x slower than real time: a few minutes each), where it agrees
+  with circuitsim to -66 dB (hot clip) and -92 dB (burst onset, M4), not
+  with tabulated triodes on long renders.
+- **Behaviour metrics** (gain reduction per step, CV attack and release)
+  stay compared with production ngspice: they are robust to its waveform
+  error.
+
+The 670 slice row of the table above still describes M6's `--verify`; the
+follow-up under M6 moves it to exact-formulation excerpts.
+
 ## Milestones
 
 Each one ends with its "done when" met and tested, like the main plan.
@@ -671,7 +696,135 @@ stays for verification (a setting, plus a periodic agreement test).
 TC bursts, a program clip) reproduce on the fast engine within the
 verification tolerances.
 
-**M7. Beyond the 670.** Device library growth, and a second circuit as proof
+*Status (2026-10-21): done.* circuitsim is the default engine
+(`simulator.engine: circuitsim`); ngspice is the reference, by name
+(`--engine ngspice`) and in the periodic agreement test. What changed:
+
+- **Default and fallback.** Renders, `varimu render`, the listen app and
+  `slice_report.py` use the configured engine. Without the `fast` extra a
+  render raises `fast.EngineUnavailable`, whose message says how to install
+  it or pick ngspice; the CLI (`render`, `listen`) checks the engine (and a
+  stale build) before any work and exits with that message. Decided: no
+  silent fallback to ngspice, for the same reason as `StaleBuild`: a render
+  that quietly comes from another engine (5-7x slower, different numbers,
+  another cache key) is worse than a clear stop.
+- **Progress and Ctrl-C.** `circuitsim.simulate(..., progress=)`: the run
+  takes the GIL back ~200 times to check signals and report the fraction
+  done (`transient::simulate_with_progress` in Rust), so the listen page's
+  progress bar moves (it used to jump to 100%) and Ctrl-C stops a render.
+- **Parallel renders and priority.** circuitsim runs on the runner's
+  threads, in-process with the GIL released; `fast.thread_priority` gives
+  each such thread the `runner.priority` (Windows: below_normal is
+  THREAD_PRIORITY_LOWEST, base priority 6, the same as a thread of ngspice's
+  BELOW_NORMAL process; elsewhere a no-op) and restores it afterwards.
+  Throughput on this 8-core / 16-thread desktop (2 s clip excerpts at once,
+  per-job wall vs one job): 1 / 2 / 4 / 8 / 14 / 16 jobs give 1.0 / 1.9 /
+  3.6 / 6.4 / 8.5 / 7.8x one job's throughput, so the default
+  `max_parallel_jobs` (cpu_count - 2 = 14) stays.
+- **Listen app.** Checked end to end over HTTP on circuitsim (two 2 s
+  renders of the arpeggio clip, progress in 34 visible steps, compare and
+  audio); the page shows the engine and starts its time estimate from that
+  engine's last uncached render in `timing.csv`.
+- **Program clip in `slice_report.py`** (`--clip`, default the arpeggio in
+  `data/clips/`, left out where missing): gain over 50 ms windows and the
+  CV, at the tolerance study's front panel (input pad 0 dB, threshold 0.8,
+  TC2), where the clip compresses by up to ~6 dB and the CV swings to
+  -84 V.
+- **The periodic agreement test** is one command, `slice_report.py
+  --verify`: the report on both engines, the TC bursts and the clip on the
+  ngspice reference (gear, reltol 1e-4, 4x), the clip on the converged
+  solution (esdirk4 4x, error tolerance / 10), checked against the
+  Verification table; `reports/slice/agreement.json` and `agreement.png`,
+  exit status 1 on failure. ~15 min from a cold cache (18 renders in
+  parallel; ngspice's 25.5 s staircase is the longest at 13 min), 15 s
+  warm. The pytest agreement tests (`test_spice_agreement.py`,
+  `test_circuitsim_{linear,nonlinear,slice}.py`, `test_slice.py`) stay in
+  the default test run.
+
+Verification (`slice_report.py --verify`, 2026-10-21, all pass):
+
+| check | tolerance | measured |
+|---|---|---|
+| compression curve, GR per step vs ngspice | 0.2 dB | 0.033 dB |
+| clip gain per 50 ms window vs ngspice | 0.2 dB | 0.028 dB |
+| TC1-4 burst GR vs ngspice | 0.2 dB | 0.03-0.04 dB |
+| TC1-4 CV attack, 63% / 90% release vs ngspice | 5% | <= 0.05% |
+| TC1-4 bursts (7 s) vs ngspice reference | -55 dB, 0.2 V | -65.8 to -67.2 dB, CV <= 0.023 V |
+| clip (4 s) vs ngspice reference | -55 dB, 0.2 V | -55.5 dB, CV 0.040 V |
+| clip vs converged solution | -55 dB, 0.2 V | -76.7 dB, CV 0.007 V |
+
+For scale, production ngspice vs its reference: bursts -74 to -77 dB,
+clip -54.6 dB (it would fail the clip row), and production ngspice vs the
+converged solution on the clip: -50.7 dB.
+
+**The clip row vs ngspice passes by 0.5 dB, and the margin is the
+reference's, not circuitsim's.** The ngspice reference itself is -55.3 dB
+from the converged solution, band for band the same as circuitsim vs the
+reference, mostly below 2 kHz. It is not integration error: ngspice gear
+and trap at 8x agree with each other to -72 dB and still sit -56 dB from
+the converged solution. It is the tabulated triodes: on 0.1 s of the clip
+around its deepest CV (-84.5 V), ngspice with tables vs the exact
+formulation is -53.3 dB; with the exact formulation ngspice agrees with
+circuitsim's converged solution to -66.3 dB, and circuitsim production
+with exact ngspice to -66.4 dB (production vs converged there: -79.5 dB).
+M4 measured the tables at ~-62 dB on lighter material; this front panel
+drives the 6386s further down their curves. So with the tolerance study's
+reference the -55 dB row can't referee this clip much more tightly; a
+regression in circuitsim shows first in the converged-solution row. Options
+if the margin bites (not done): the exact formulation for the clip's
+reference (~560x slower than real time: ~40 min for the 4 s clip), or finer
+6386 table grids.
+
+- **Speed** (`runner.render`, cache bypassed, one job at a time, back to
+  back, 2026-10-21; x = slower than real time; best of the runs, which
+  drifted 3.7-6.5x for circuitsim):
+
+  | render | ngspice (trap 1e-3, 2x) | circuitsim | |
+  |---|---|---|---|
+  | 7 s burst, TC1, 0 dBFS (defaults) | 26.0x | 3.7x | 7.0x faster |
+  | 4 s arpeggio clip (pad 0 dB, threshold 0.8, TC2) | 25.6x | 4.5x | 5.6x faster |
+
+  In the listen app, with the verify run's 14 renders going at once, a 2 s
+  render took ~14x.
+
+**M6 follow-up: rework `--verify` around the reference roles** (decided
+2026-10-21; do it first in the next session, before Phase 2 changes the
+circuit, so the agreement test is trustworthy when it matters). In
+`scripts/slice_report.py --verify`:
+
+- Replace the waveform rows against the tabulated ngspice reference (7 s
+  bursts, 4 s clip at gear 4x) with ngspice at the **exact** triode
+  formulation (`nl.build(..., triode_formulation="exact")`; `runner.render`
+  builds with the configured formulation, so this needs a way to pass it,
+  e.g. a field in the render job or a direct `io.run_transient` as in the
+  M6 scratch measurement) on short excerpts: the TC1-4 burst onsets and
+  releases (~0.1-0.3 s each) and 0.1-0.3 s of the clip at its deepest CV
+  and at a loud HF-rich passage. circuitsim runs the same excerpts.
+- Keep the plan's -55 dB / 0.2 V as the pass criterion, and record the
+  measured values with regression bounds a few dB outside them, as
+  `tests/test_circuitsim_slice.py` does (measured on the clip excerpt: exact
+  ngspice vs circuitsim production -66.4 dB, CV 0.030 V).
+- Keep the behaviour rows vs production ngspice and the clip vs the
+  converged solution. Drop the production-ngspice-vs-reference rows (they
+  were only for scale).
+- Target: cold run well under the current ~15 min, the excerpts in parallel.
+- Update the Verification table's 670 slice row, CLAUDE.md's command line
+  for `--verify`, and this status with the new numbers.
+
+**Milestone order after M6 (decided 2026-10-21).** The simulator is fast
+enough to listen with (5-7x faster than ngspice) and more accurate than the
+model it runs: the slice's transformers are still linear placeholders with
+provisional parasitics, whose error dwarfs a -55 dB numerical one. So the
+main plan's **Phase 2 (transformer models) comes next**, and M7 (a second
+circuit) and M8 (real time) wait until Phase 2 is done; M5's speed target
+stays deferred. Phase 2's nonlinear core is engine work in circuitsim (a
+device with state, which the device trait has carried since M3) and lands
+as part of Phase 2. After Phase 2, rerun the M4 method study (its item 5:
+the ~17 kHz resonance that chose esdirk4 at 2x comes from provisional
+winding capacitances).
+
+**M7. Beyond the 670.** (Deferred until main plan Phase 2 is done; see
+"Milestone order after M6" above.) Device library growth, and a second circuit as proof
 of generality: a passive tube EQ (LC network plus tube make-up stage), with
 its own sourced YAML and ngspice agreement tests. Then BJT, JFET, op-amp and
 opto-cell models as circuits need them.
@@ -684,8 +837,9 @@ measured. This hands over to main plan Phase 10.
 *Done when:* a benchmark processes audio in real time on one core with knob
 changes, and the output matches offline renders.
 
-Phase 2's nonlinear transformer core lands in both engines when Phase 2 does.
-The device trait carries state from M3 so that isn't a redesign.
+Phase 2's nonlinear transformer core lands in circuitsim when Phase 2 does,
+and in ngspice too unless the open decision below says otherwise. The device
+trait carries state from M3 so that isn't a redesign.
 
 ## Risks
 
@@ -713,6 +867,16 @@ The device trait carries state from M3 so that isn't a redesign.
   block (see M3's status).
 - **Which EQ for M7.** It must have a published schematic so values are
   sourced.
+- **SPICE implementations of new devices (raised 2026-10-21, the user's
+  call; decide at the start of Phase 2).** The hard rule asks for a SPICE
+  implementation and a Python reference of every device model. A nonlinear
+  transformer core with hysteresis may be awkward and slow in ngspice (not
+  yet checked: XSPICE's `core` code model, or behavioral sources with
+  integrators, whose symbolic derivatives already made the 6386 B-source
+  impractical). If it is, the option is: Python reference + circuitsim for
+  the core, with tests that they agree, and ngspice keeps cross-checking the
+  existing devices and the circuit around the core (e.g. with the core
+  replaced by its linear limit in both engines).
 
 ## References
 

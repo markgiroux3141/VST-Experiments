@@ -164,6 +164,15 @@ Each phase lists its goal, tasks and a "done when" criterion. Do not start a pha
 
 **Done when:** Each transformer, tested standalone, shows plausible frequency response, low-frequency saturation with rising level, and a visible hysteresis loop.
 
+**Starting Phase 2 (notes from 2026-10-21; the circuit-sim plan's M6 status has the details):**
+
+- The engines are now circuitsim (`crates/circuitsim`, the default for renders) and ngspice (the reference); Xyce isn't used. "Xyce's core model" above becomes: the core as a circuitsim device with state, plus its Python reference.
+- **First, before any modelling:** the circuit-sim plan's "M6 follow-up" (rework `slice_report.py --verify` around exact-formulation ngspice excerpts), so the agreement test is trustworthy once the circuit starts changing.
+- **First decision of the phase (the user's):** whether the core also gets a SPICE implementation, as the hard rule asks. Check what ngspice can express (XSPICE `core` code model, or behavioral sources with integrators) and at what speed and robustness, then bring the user the options: keep the rule, or Python reference + circuitsim for the core with ngspice cross-checking everything else. See the circuit-sim plan's Open decisions.
+- Accuracy is judged against circuitsim's converged solution and analog behaviour (frequency response, saturation, the hysteresis loop itself, aliasing of the core's harmonics); ngspice is the cross-check for bugs (circuit-sim plan, Verification).
+- The slice's current transformers are linear with provisional winding capacitances and core loss (`config/circuits/fairchild_670.yaml`); they cause the ~17 kHz resonance that drove the fixed-step method choice. When Phase 2's models replace them, rerun the circuit-sim plan's M4 method comparison (and `tests/test_slice.py`'s idle stability), and re-run `--verify`.
+- Circuit-sim M7 (second circuit) and M8 (real time) wait until Phase 2 is done; M5's speed target stays deferred.
+
 ### Phase 3: Full Circuit Netlist
 
 **Goal:** A parametric netlist generator that turns a genome into a complete, coupled compressor circuit.
@@ -332,12 +341,17 @@ Every entry carries a `source` field. "TBD" is acceptable during development; an
     with ngspice kept as the reference engine and agreement tests between them. This pulls Phase
     10 option B (nodal DK) forward, because render speed (25-40x slower than real time on the
     670 slice) is the bottleneck for listening. Plan: [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
+  - *2026-10-21:* circuitsim is the default engine (circuit-sim M6), 5-7x faster than ngspice
+    and closer to the converged solution. ngspice's role is now the independent cross-check
+    for bugs (exact triode formulation on short excerpts) and the behaviour metrics; accuracy is
+    judged against circuitsim's converged solution and analog behaviour. Whether new devices
+    (Phase 2's core first) still need a SPICE implementation is open; see Phase 2's notes.
 
 ## Notes for Claude Code
 
 - Work one phase at a time, and do not move on until the phase's "done when" criterion is met and tested.
 - Keep the end-to-end loop working at all times once Phase 5 exists; fidelity improvements must not break it.
 - Never invent component values, tube parameters or transformer specs. If a value can't be traced to a schematic, datasheet or cited literature, make it a bounded genome parameter and flag it.
-- Every device model has both a SPICE implementation and a Python reference implementation, with tests that they agree.
+- Every device model has both a SPICE implementation and a Python reference implementation, with tests that they agree. (Under review for Phase 2's transformer core: see Phase 2's notes. Until the user decides, the rule stands.)
 - Every simulation result is cached and reproducible from (genome, signal, settings, code version).
 - Prefer small, inspectable steps and plots over large untested changes; save measurement plots for every candidate so changes in character can be reviewed visually as well as by ear.

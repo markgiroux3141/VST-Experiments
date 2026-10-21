@@ -60,9 +60,9 @@ ENGINES = ("ngspice", "circuitsim")
 
 
 def configured_engine(s: SimSettings | None = None) -> str:
-    """sim_settings.yaml simulator.engine (ngspice when absent)."""
+    """sim_settings.yaml simulator.engine (circuitsim when absent)."""
     s = s or load_sim_settings()
-    engine = str(s.data.get("simulator", {}).get("engine", "ngspice"))
+    engine = str(s.data.get("simulator", {}).get("engine", "circuitsim"))
     if engine not in ENGINES:
         raise ValueError(f"simulator.engine must be one of {ENGINES}, got {engine!r}")
     return engine
@@ -92,9 +92,11 @@ class TransientSettings:
     def from_sim_settings(
         cls, s: SimSettings | None = None, engine: str = "ngspice"
     ) -> TransientSettings:
-        """The settings for `engine` ("configured" = simulator.engine). circuitsim
-        takes its oversampling and method from the `circuitsim` block; reltol,
-        abstol and vntol stay ngspice's and don't apply to it."""
+        """The settings for `engine` ("configured" = simulator.engine, which renders
+        use). The default is ngspice's, for the ngspice-specific callers
+        (`run_transient` here, agreement tests). circuitsim takes its oversampling
+        and method from the `circuitsim` block; reltol, abstol and vntol stay
+        ngspice's and don't apply to it."""
         s = s or load_sim_settings()
         if engine == "configured":
             engine = configured_engine(s)

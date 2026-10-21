@@ -16,6 +16,9 @@ create_exception!(
     "The circuit can't be simulated (unsupported element, singular matrix, ...)."
 );
 
+/// How often per run `simulate` checks for signals and reports progress.
+const PROGRESS_CALLS: usize = 200;
+
 fn invalid(e: impl ToString) -> PyErr {
     PyValueError::new_err(e.to_string())
 }
@@ -38,12 +41,17 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
 /// "v(out)": float64 array like `input`}, and with `stats=True` also a dict
 /// of solver statistics. Raises ValueError for invalid arguments and
 /// SimulationError when the circuit can't be simulated.
+///
+/// The run releases the GIL. About PROGRESS_CALLS times per run it takes the
+/// GIL back to check for signals (so Ctrl-C stops it with KeyboardInterrupt)
+/// and calls `progress(fraction done)` if given; an exception raised there
+/// stops the run and propagates.
 #[pyfunction]
 #[pyo3(signature = (
     ir_json, input, dt, method = "trap", *, solver = None, reltol = None, vntol = None,
     max_iter = None, max_halvings = None, gmin = None, extrapolate = None, input_order = None,
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
-    newton_reuse = None, stats = false
+    newton_reuse = None, stats = false, progress = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -66,6 +74,7 @@ fn simulate<'py>(
     max_error_halvings: Option<u32>,
     newton_reuse: Option<bool>,
     stats: bool,
+    progress: Option<Py<PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
     let d = Options::default();
@@ -89,9 +98,28 @@ fn simulate<'py>(
         ..d
     };
     let x = input.as_array().to_vec();
-    let out = py
-        .detach(|| crate::simulate(&ir, &x, dt, &opts))
-        .map_err(|e| SimulationError::new_err(e.to_string()))?;
+    let total = x.len();
+    let mut raised: Option<PyErr> = None;
+    let result = py.detach(|| {
+        let every = total.div_ceil(PROGRESS_CALLS);
+        crate::simulate_with_progress(&ir, &x, dt, &opts, every, |done| {
+            Python::attach(|py| {
+                py.check_signals()?;
+                if let Some(f) = &progress {
+                    f.call1(py, (done as f64 / total as f64,))?;
+                }
+                Ok(())
+            })
+            .map_err(|e: PyErr| {
+                raised = Some(e);
+                crate::Error::new("interrupted")
+            })
+        })
+    });
+    if let Some(e) = raised {
+        return Err(e);
+    }
+    let out = result.map_err(|e| SimulationError::new_err(e.to_string()))?;
     let probes = PyDict::new(py);
     for (name, v) in out.names.into_iter().zip(out.values) {
         probes.set_item(name, v.into_pyarray(py))?;

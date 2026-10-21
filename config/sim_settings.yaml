@@ -18,9 +18,13 @@ audio:
 simulator:
   primary: TBD       # xyce | ngspice. Decided after Phase 2 (see plan: Open Decisions).
   fallback: ngspice
-  # Which engine renders: ngspice (the reference) or circuitsim (the fast Rust
-  # engine, docs/CIRCUIT_SIM_PLAN.md). circuitsim becomes the default in M6.
-  engine: ngspice
+  # Which engine renders (varimu render, the listen app, slice_report.py):
+  # circuitsim, the fast Rust engine (docs/CIRCUIT_SIM_PLAN.md; default since
+  # M6, 2026-10-21: 5-6x faster than ngspice, and closer to the converged
+  # solution), or ngspice, the reference it is verified against
+  # (`scripts/slice_report.py --verify`). circuitsim needs the `fast` extra;
+  # without it renders stop with a message instead of falling back.
+  engine: circuitsim
 
 circuitsim:
   # Fixed-step engine settings; the `transient` block below is ngspice's.
@@ -84,7 +88,10 @@ transient:
 runner:
   # Keep the machine usable while renders run.
   threads_per_job: 1          # ngspice OpenMP threads; spinit's default (8) spins every core
-  priority: below_normal      # normal | below_normal | idle (OS scheduling class for ngspice)
+  # normal | below_normal | idle: OS scheduling class of each ngspice process,
+  # and of each thread running circuitsim (in-process, GIL released; Windows
+  # only, where below_normal gives both the same base priority).
+  priority: below_normal
   max_parallel_jobs: null     # null -> cpu_count - 2 (at least 1)
 
 devices:

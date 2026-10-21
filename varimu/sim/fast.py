@@ -15,14 +15,25 @@ by Newton on the device ports of a nodal DK system (`solver="dk"`, circuit-sim
 plan M5) or on the full MNA system (`"mna"`, M3); a step that won't converge
 even after halving raises SimulationFailed naming the time and the device.
 
-A build of circuitsim older than the crate's sources (plain `uv run` after a
-Rust edit doesn't rebuild) is refused: `check_build` compares the hash the
-build embedded with `source_hash()` of the working tree.
+circuitsim is the default engine (circuit-sim plan M6). Without the extra,
+`check_build` raises EngineUnavailable, which says how to install it or to
+render with ngspice instead; nothing falls back to ngspice silently. A build
+of circuitsim older than the crate's sources (plain `uv run` after a Rust
+edit doesn't rebuild) is refused: `check_build` compares the hash the build
+embedded with `source_hash()` of the working tree.
+
+The engine simulates on the calling thread with the GIL released, so
+parallel renders are threads of one process (varimu.sim.runner);
+`thread_priority` gives those threads the priority ngspice's processes get.
 """
 
 from __future__ import annotations
 
+import ctypes
+import sys
 import time
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from functools import cache
 
 import numpy as np
@@ -33,6 +44,17 @@ from varimu.sim.io import TransientResult, TransientSettings, decimate, upsample
 from varimu.sim.ngspice import SimulationFailed
 
 CRATE_DIR = REPO_ROOT / "crates" / "circuitsim"
+
+MISSING = (
+    "the circuitsim engine (simulator.engine's default) isn't installed: run "
+    "`uv sync --extra fast` (name every extra you use, e.g. `--extra listen --extra fast`), "
+    "or render with ngspice (`--engine ngspice`, or simulator.engine: ngspice in "
+    "config/sim_settings.yaml)"
+)
+
+
+class EngineUnavailable(RuntimeError):
+    """circuitsim isn't installed (the `fast` extra)."""
 
 
 class StaleBuild(RuntimeError):
@@ -61,8 +83,12 @@ def source_hash() -> str:
 
 @cache
 def check_build() -> str:
-    """The installed build's source hash; raises StaleBuild if the sources changed since."""
-    import circuitsim
+    """The installed build's source hash; raises EngineUnavailable without the extra and
+    StaleBuild if the sources changed since the build."""
+    try:
+        import circuitsim
+    except ImportError as e:
+        raise EngineUnavailable(MISSING) from e
 
     built = circuitsim.SOURCE_HASH
     if CRATE_DIR.exists() and built != (now := source_hash()):
@@ -74,19 +100,64 @@ def check_build() -> str:
     return built
 
 
+# Windows thread priorities (SetThreadPriority). In a normal-class process,
+# LOWEST runs at base priority 6, as a normal thread of ngspice's
+# BELOW_NORMAL_PRIORITY_CLASS process does.
+_THREAD_PRIORITY = {"below_normal": -2, "idle": -15}  # LOWEST, IDLE
+
+
+@contextmanager
+def thread_priority(priority: str) -> Iterator[None]:
+    """Run the calling thread at `priority` (sim_settings runner.priority: normal |
+    below_normal | idle) inside the block, then restore it. circuitsim simulates on
+    the calling thread, so this is its counterpart of ngspice's process priority.
+    Windows only; elsewhere a no-op (lowering a Linux thread's nice value can't be
+    undone without privileges)."""
+    if priority not in ("normal", *_THREAD_PRIORITY):
+        raise ValueError(f"unknown priority {priority!r}")
+    if priority == "normal" or sys.platform != "win32":
+        yield
+        return
+    k32 = _kernel32()
+    handle = k32.GetCurrentThread()
+    old = k32.GetThreadPriority(handle)
+    k32.SetThreadPriority(handle, _THREAD_PRIORITY[priority])
+    try:
+        yield
+    finally:
+        k32.SetThreadPriority(handle, old)
+
+
+@cache
+def _kernel32():
+    """kernel32 with the thread-priority functions typed (a private instance, so the
+    shared ctypes.windll function objects keep their defaults)."""
+    from ctypes import wintypes
+
+    k32 = ctypes.WinDLL("kernel32")
+    k32.GetCurrentThread.restype = wintypes.HANDLE
+    k32.GetThreadPriority.argtypes = (wintypes.HANDLE,)
+    k32.GetThreadPriority.restype = ctypes.c_int
+    k32.SetThreadPriority.argtypes = (wintypes.HANDLE, ctypes.c_int)
+    k32.SetThreadPriority.restype = wintypes.BOOL
+    return k32
+
+
 def run_transient(
     ir: CircuitIR,
     input_v: np.ndarray,
     *,
     settings: TransientSettings | None = None,
     method: str | None = None,
+    progress: Callable[[float], None] | None = None,
 ) -> TransientResult:
     """Drive `ir.input_node` (to ground) with `input_v` volts; every IR probe comes back
     on the input's sample grid, keyed like ngspice vectors ("v(out)"). `method`
-    overrides `settings.method`."""
+    overrides `settings.method`. `progress(fraction)` is called ~200 times during
+    the run; Ctrl-C stops it (KeyboardInterrupt)."""
+    check_build()
     import circuitsim
 
-    check_build()
     s = settings or TransientSettings.from_sim_settings(engine="circuitsim")
     x = np.asarray(input_v, float)
     n, k = len(x), s.oversample
@@ -105,6 +176,7 @@ def run_transient(
             input_order=s.input_order,
             error_abstol=s.error_abstol,
             error_reltol=s.error_reltol,
+            progress=progress,
         )
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e
