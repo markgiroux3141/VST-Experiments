@@ -1,4 +1,5 @@
-//! Modified nodal analysis: the circuit as `G x + C dx/dt = b + u(t) e_in`.
+//! Modified nodal analysis: the circuit as
+//! `G x + C dx/dt = b + u(t) e_in + sum_k a_k sin(w_k t + phi_k) e_k`.
 //!
 //! Unknowns `x`: every non-ground node voltage (in order of first appearance
 //! in the IR), then one branch current per DC voltage source and inductor (in
@@ -8,6 +9,8 @@
 //! - Capacitor: capacitance stamp in `C`.
 //! - Voltage source and the input (`input_node` to ground): KCL entries plus a
 //!   row `v_pos - v_neg = V`.
+//! - Sine source: the same, its offset in `b` and its sine a [`Wave`] on its
+//!   row. The DC operating point takes it at t = 0 ([`Mna::add_waves`]).
 //! - Inductor k from a to b: KCL entries (current leaves a, enters b) plus a
 //!   row `v_a - v_b - sum_j M_kj di_j/dt = 0`, with `M_kk = L_k` and, for each
 //!   coupling, `M_kj = M_jk = k sqrt(L_k L_j)` (dotted ends are the `a` ends,
@@ -21,6 +24,9 @@
 //!   each junction diode gets SPICE's GMIN across it in `G` (ngspice puts
 //!   1e-12 S across every `D` junction). The nonlinear currents themselves are
 //!   the [`DeviceInstance`]s, which the Newton solver stamps each iteration.
+//!   Stateless devices of one kind on the same pins (a bank of triodes in
+//!   parallel) become one instance, a [`devices::Parallel`], named after all
+//!   of them ("XV101A+XV102A+..."): the same equations, one set of ports.
 
 use std::collections::HashMap;
 
@@ -54,6 +60,22 @@ impl Unknown {
     }
 }
 
+/// The sinusoidal part of a sine source: `amplitude sin(omega t + phase)` on
+/// the right-hand side's row `row`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Wave {
+    pub row: usize,
+    pub amplitude: f64,
+    pub omega: f64,
+    pub phase: f64,
+}
+
+impl Wave {
+    pub fn at(&self, t: f64) -> f64 {
+        self.amplitude * (self.omega * t + self.phase).sin()
+    }
+}
+
 /// A nonlinear device placed in the circuit.
 #[derive(Debug)]
 pub struct DeviceInstance {
@@ -77,13 +99,56 @@ pub struct Mna {
     pub c: Matrix,
     /// `c`'s nonzeros, for the products taken every step.
     pub c_sparse: SparseRows,
-    /// Constant sources.
+    /// Constant sources (a sine source's offset).
     pub b: Vec<f64>,
+    /// The sine sources' sinusoidal parts, added to `b` at each stage's time.
+    pub waves: Vec<Wave>,
     /// Row of the input equation (`b[input_row] += u(t)`).
     pub input_row: usize,
     /// Index into `x` of each probe, `None` for ground.
     pub probes: Vec<(String, Option<usize>)>,
     pub devices: Vec<DeviceInstance>,
+}
+
+/// Merge stateless instances of one kind on the same pins into one
+/// [`devices::Parallel`] each, in order of first appearance.
+fn merge_parallel(instances: Vec<DeviceInstance>) -> Vec<DeviceInstance> {
+    let mut groups: Vec<Vec<DeviceInstance>> = Vec::new();
+    for inst in instances {
+        let same = |g: &Vec<DeviceInstance>| {
+            let first = &g[0];
+            !inst.device.has_state()
+                && !first.device.has_state()
+                && first.pins == inst.pins
+                && first.pin_names == inst.pin_names
+        };
+        match groups.iter_mut().find(|g| same(g)) {
+            Some(g) => g.push(inst),
+            None => groups.push(vec![inst]),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|mut g| {
+            if g.len() == 1 {
+                return g.pop().expect("one");
+            }
+            let name = g
+                .iter()
+                .map(|d| d.name.as_str())
+                .collect::<Vec<_>>()
+                .join("+");
+            let (pins, pin_names) = (g[0].pins.clone(), g[0].pin_names);
+            DeviceInstance {
+                name,
+                device: Box::new(devices::Parallel::new(
+                    g.into_iter().map(|d| d.device).collect(),
+                )),
+                pins,
+                pin_names,
+            }
+        })
+        .collect()
 }
 
 impl Mna {
@@ -105,7 +170,11 @@ impl Mna {
         }
         let mut branch_index: HashMap<&str, usize> = HashMap::new();
         for el in ir.elements() {
-            if let Element::VoltageSource(_) | Element::Inductor(_) | Element::Winding(_) = el {
+            if let Element::VoltageSource(_)
+            | Element::SineSource(_)
+            | Element::Inductor(_)
+            | Element::Winding(_) = el
+            {
                 branch_index.insert(el.name(), unknowns.len());
                 unknowns.push(Unknown::Branch(el.name().to_string()));
             }
@@ -145,6 +214,7 @@ impl Mna {
             }
         }
 
+        let mut waves = Vec::new();
         let mut inductance: HashMap<&str, f64> = HashMap::new();
         let mut instances = Vec::new();
         for el in ir.elements() {
@@ -155,6 +225,18 @@ impl Mna {
                     let k = branch_index[v.name.as_str()];
                     incidence(&mut g, k, node(&v.pos), node(&v.neg));
                     b[k] = v.dc_v;
+                }
+                Element::SineSource(v) => {
+                    let k = branch_index[v.name.as_str()];
+                    incidence(&mut g, k, node(&v.pos), node(&v.neg));
+                    b[k] = v.offset_v;
+                    let (omega, phase) = v.omega_phase();
+                    waves.push(Wave {
+                        row: k,
+                        amplitude: v.amplitude_v,
+                        omega,
+                        phase,
+                    });
                 }
                 Element::Inductor(l) => {
                     let k = branch_index[l.name.as_str()];
@@ -212,6 +294,7 @@ impl Mna {
             }
         }
         incidence(&mut g, input_row, node(&ir.input_node), None);
+        let instances = merge_parallel(instances);
 
         let probes = ir
             .probes
@@ -227,10 +310,18 @@ impl Mna {
             c_sparse: SparseRows::new(&c),
             c,
             b,
+            waves,
             input_row,
             probes,
             devices: instances,
         })
+    }
+
+    /// Add every sine source's sinusoidal part at time `t` to `rhs`.
+    pub fn add_waves(&self, t: f64, rhs: &mut [f64]) {
+        for w in &self.waves {
+            rhs[w.row] += w.at(t);
+        }
     }
 
     pub fn len(&self) -> usize {

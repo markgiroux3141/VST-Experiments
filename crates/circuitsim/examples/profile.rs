@@ -174,7 +174,17 @@ fn main() {
     let sup = dk::support(&mna.c);
     let inv = 4.0 / h;
     let t = Instant::now();
-    let sys = DkSystem::new(&mna.g, &mna.c, inv, &mna.b, mna.input_row, &ports, &sup).unwrap();
+    let sys = DkSystem::new(
+        &mna.g,
+        &mna.c,
+        inv,
+        &mna.b,
+        mna.input_row,
+        &mna.waves,
+        &ports,
+        &sup,
+    )
+    .unwrap();
     println!(
         "DK: M = {}, r = {}; system built in {:.2} ms",
         sys.m,
@@ -192,7 +202,7 @@ fn main() {
     let mut out = vec![0.0; m + r];
     println!(
         "  stage: {:.2} us",
-        time(reps, || sys.stage(&base, 0.1, &w, &mut out))
+        time(reps, || sys.stage(&base, 0.1, &[], &w, &mut out))
     );
     let iv = vec![1e-3; m];
     let mut neg = vec![0.0; m.max(r)];
@@ -204,8 +214,15 @@ fn main() {
     let mut xn = vec![0.0; mna.len()];
     println!(
         "  unknowns: {:.2} us",
-        time(reps, || sys
-            .unknowns(&base, 0.1, &w, &iv, &mut xn, &mut neg))
+        time(reps, || sys.unknowns(
+            &base,
+            0.1,
+            &[],
+            &w,
+            &iv,
+            &mut xn,
+            &mut neg
+        ))
     );
     let mut newton = DkNewton::new(&ports, false);
     let mut v0 = vec![0.0; m];

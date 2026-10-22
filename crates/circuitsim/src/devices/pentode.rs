@@ -6,9 +6,11 @@
 //! Ig2 = max(Vg1 + Vg2 / mu, 0)^1.5 / Kg2
 //! ```
 //!
-//! No control-grid current. Ports: 0 = plate, 1 = screen, 2 = control grid
-//! (all relative to the cathode).
+//! The control grid conducts with the triode's grid-current law
+//! (`GridCurrent`), if the model has one. Ports: 0 = plate, 1 = screen,
+//! 2 = control grid (all relative to the cathode).
 
+use super::triode::grid_current;
 use super::{Device, sigmoid, softplus};
 use crate::ir;
 
@@ -25,6 +27,7 @@ pub struct Pentode {
     kg2: f64,
     kp: f64,
     kvb: f64,
+    grid: Option<ir::GridCurrent>,
 }
 
 impl Pentode {
@@ -38,6 +41,7 @@ impl Pentode {
             kg2: k.kg2,
             kp: k.kp,
             kvb: k.kvb,
+            grid: m.grid.clone(),
         }
     }
 }
@@ -84,6 +88,12 @@ impl Device for Pentode {
             i[1] = 0.0;
         }
 
-        i[2] = 0.0;
+        // Control grid.
+        let (ig, dig) = self
+            .grid
+            .as_ref()
+            .map_or((0.0, 0.0), |gc| grid_current(gc, vg1));
+        i[2] = ig;
+        g[2 * 3 + 2] = dig;
     }
 }

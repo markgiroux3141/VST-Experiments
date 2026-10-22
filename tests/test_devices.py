@@ -149,7 +149,10 @@ def test_cascode_solver_matches_bruteforce(t6386):
 
 
 def test_all_device_files_have_sources():
-    for name in ("6386", "12AX7", "12BH7", "6973", "GZ34", "SI_RECTIFIER"):
+    for name in (
+        "6386", "12AX7", "12BH7", "6973", "GZ34", "SI_RECTIFIER", "EL34T", "6084", "5651",
+        "SELENIUM",
+    ):  # fmt: skip
         dev = load_device(name)
         assert dev is not None
         d = yaml.safe_load(

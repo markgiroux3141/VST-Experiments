@@ -74,7 +74,7 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::linalg::{ColLu, Lu, Matrix, Singular, gemv_add, gemv_sub};
-use crate::mna::DeviceInstance;
+use crate::mna::{DeviceInstance, Wave};
 use crate::newton::{Failure, NewtonOptions};
 use crate::timing::{self, Part};
 
@@ -160,7 +160,8 @@ pub fn support(c: &Matrix) -> Vec<usize> {
 /// three blocks of rows: the M port voltages, the r state unknowns `x_S`,
 /// and all n unknowns. Input columns: the state (`C e_s / (g h)` for each s
 /// in S), the stage inputs (`e_s`: the F history), the M port currents
-/// (`N^T e_j`), the sources `b` and the input `e_in`.
+/// (`N^T e_j`), the sources `b`, the input `e_in` and each sine source's
+/// row (its wave, [`crate::mna::Wave`]).
 #[derive(Debug, Clone)]
 pub struct DkSystem {
     /// Unique per system built, so a factored Newton matrix knows its K.
@@ -180,12 +181,14 @@ pub struct DkSystem {
     /// Responses to `b` and to the input.
     b0: Vec<f64>,
     be: Vec<f64>,
+    /// Response to each wave's row, rows x waves, column-major.
+    bw: Vec<f64>,
 }
 
 impl DkSystem {
     /// For a circuit with conductance and reactive matrices `g` and `c`,
-    /// sources `b` and the input on row `input_row`, stepped with
-    /// `inv = 1 / (g h)`. Fails if the step matrix is singular.
+    /// sources `b`, the input on row `input_row` and sine sources `waves`,
+    /// stepped with `inv = 1 / (g h)`. Fails if the step matrix is singular.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         g: &Matrix,
@@ -193,6 +196,7 @@ impl DkSystem {
         inv: f64,
         b: &[f64],
         input_row: usize,
+        waves: &[Wave],
         ports: &Ports,
         support: &[usize],
     ) -> Result<DkSystem, Singular> {
@@ -255,6 +259,12 @@ impl DkSystem {
         z.fill(0.0);
         z[input_row] = 1.0;
         respond(&mut z, &mut be);
+        let mut bw = vec![0.0; rows * waves.len()];
+        for (col, wave) in bw.chunks_exact_mut(rows).zip(waves) {
+            z.fill(0.0);
+            z[wave.row] = 1.0;
+            respond(&mut z, col);
+        }
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);
         Ok(DkSystem {
             id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
@@ -267,6 +277,7 @@ impl DkSystem {
             ia,
             b0,
             be,
+            bw,
         })
     }
 
@@ -278,12 +289,14 @@ impl DkSystem {
     }
 
     /// Port voltages and state without device currents, for the stage
-    /// inputs `w` and input `u`: `out[..m + r]` (the first m are Newton's `p`).
-    pub fn stage(&self, base: &[f64], u: f64, w: &[f64], out: &mut [f64]) {
+    /// inputs `w`, input `u` and wave values `wv` (one per sine source, at
+    /// the stage's time): `out[..m + r]` (the first m are Newton's `p`).
+    pub fn stage(&self, base: &[f64], u: f64, wv: &[f64], w: &[f64], out: &mut [f64]) {
         let k = self.m + self.r;
         for ((o, b), e) in out[..k].iter_mut().zip(base).zip(&self.be) {
             *o = b + u * e;
         }
+        gemv_add(&mut out[..k], &self.bw, 0, self.rows, wv);
         gemv_add(&mut out[..k], &self.qa, 0, self.rows, w);
     }
 
@@ -293,13 +306,14 @@ impl DkSystem {
         gemv_sub(ys, &self.ia, self.m, self.rows, i, neg);
     }
 
-    /// All unknowns of a stage: `x = A^-1 (b + u e_in + C x_S / (g h) + w)
-    /// - A^-1 N^T i`.
+    /// All unknowns of a stage: `x = A^-1 (b + u e_in + sum wv_k e_k + C x_S
+    /// / (g h) + w) - A^-1 N^T i`.
     #[allow(clippy::too_many_arguments)]
     pub fn unknowns(
         &self,
         base: &[f64],
         u: f64,
+        wv: &[f64],
         w: &[f64],
         i: &[f64],
         x: &mut [f64],
@@ -309,6 +323,7 @@ impl DkSystem {
         for ((o, b), e) in x.iter_mut().zip(&base[k..]).zip(&self.be[k..]) {
             *o = b + u * e;
         }
+        gemv_add(x, &self.bw, k, self.rows, wv);
         gemv_add(x, &self.qa, k, self.rows, w);
         gemv_sub(x, &self.ia, k, self.rows, i, neg);
     }

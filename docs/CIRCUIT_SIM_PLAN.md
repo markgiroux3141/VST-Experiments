@@ -942,6 +942,91 @@ trapezoidal still needs 8-16x on HF-rich and switching material. Speed
 with linear cores 4.2x / 5.8x, ngspice (linear cores) 22.3x / 26.6x. The
 four cores cost ~35% (four more devices evaluated every iteration).
 
+**Phase 3 in circuitsim: the power supply (2026-10-21).** Main plan Phase 3
+puts the 670's power supply in the circuit: the mains, two rectifiers, a
+tube regulator, the bias supply, and idle channel 2's draw on the rails.
+What the engine gained:
+
+- **IR v3: `SineSource`**, SPICE's `SIN(VO VA FREQ 0 0 PHASE)` (the mains).
+  It gets a branch row like a DC source: its offset is in `b`, and its sine
+  is a `Wave` on its row, evaluated exactly at every stage's absolute time
+  `(n + theta) h` in all three step paths (DK, full-MNA DIRK, Radau). DK
+  keeps one more response column per wave (`DkSystem::bw`, applied in
+  `stage` / `unknowns`). The DC operating point takes the source at t = 0,
+  as ngspice's transient operating point does, so phase 90 starts the run
+  at the mains peak with no jump (`spice.py` writes `dc` = the t = 0 value
+  as well). Checks: an RC driven by a sine source against its closed form,
+  DK / MNA / Radau / trapezoidal (`tests/linear.rs`), and a GZ34 full-wave
+  rectifier against ngspice, -108.6 / -120.6 / -132.1 dB at 2x / 4x / 8x,
+  DC 5e-11 (`tests/test_circuitsim_nonlinear.py`).
+- **Pentode grid current.** The Koren pentode now takes the triode's
+  `GridCurrent` law on its control grid (Python reference, SPICE `Bg1`, Rust
+  `devices/pentode.rs`; the grid term is shared, `triode::grid_current`).
+  Without it, the 6973 grids, now driven harder (the 12BH7 plates on the
+  traced 435 V rail, the 6973 grid-leak return at -13.7 V instead of the
+  slice's provisional -27 V), went to +251 V on the mismatch fixture, with
+  plates at 1245 V and the CV at -296 V. With it they clamp near +1.9 V
+  (the CV then peaks at -60 V), and esdirk4 at 2x / 4x / 8x and radau5 at 8x
+  agree. Trapezoidal at 2x rings at 57.7 kHz there, its known weakness.
+- **An exact retry before halving** (`try_step_dk`): when a stage's Newton
+  solve with the lagged Jacobian fails, it is redone from the same guess with
+  exact Newton before the step is halved (`Stats::exact_retries`). The new
+  grid-conduction knee is where reuse stalled: `pots_min` halved 4 steps
+  with reuse where exact Newton halved none.
+- **Settling** (`TransientSettings.settle_s`, sim_settings `start.settle_s`
+  = 1 s): the run starts from the DC point with the mains at its peak, so
+  renders first run 1 s with the input held at its first sample; both
+  engines, outputs trimmed. `--verify`'s exact-ngspice excerpts skip it in
+  both engines (`EXCERPT_SETTLE_S`): an engine-to-engine comparison needs
+  the same start, not a settled one.
+
+- **Parallel devices merged** (`devices::Parallel`, `mna::merge_parallel`):
+  stateless instances of one kind on the same pins (a 6386 bank, now its four
+  triodes, each with its own mismatch) become one instance, named after all
+  of them, their currents and Jacobians summed. The Newton system keeps the
+  bank's two ports (45 in all), and the DK bypass skips evaluating unmoved
+  parts: four triodes per bank cost ~5% over one (1 s of the clip, 27.6x vs
+  26.2x real time). Tested against the sum of the parts (`tests/devices.rs`).
+
+`slice_report.py --verify` on the Phase 3 circuit (2026-10-22): behaviour vs
+production ngspice 0.08 dB GR, clip gain 0.022 dB, attack / release within
+0.15%; excerpts vs exact ngspice -80.9 to -85.2 dB on the bursts, -76.2 /
+-70.8 dB on the clip's loudest / HF windows (better than Phase 2's); the clip
+vs circuitsim's converged solution -56.8 dB / CV 0.19 V (Phase 2: -76.3 /
+0.006), at the plan's tolerance: the error is the clip's first attack from
+rest, the CV falling ~80 V in ~2 ms, the bridge turning on within a step.
+10x tighter error tolerances give 0.07 V for +19% time, 4x oversampling
+0.04 V for +43%; production is unchanged pending the user's call (main plan,
+Phase 3 findings). Cold run 72 minutes (exact ngspice on a circuit twice the
+size).
+
+DK vs full MNA on the 670 (`tests/dk.rs`) still holds at its bounds: exact
+Newton within 0.12 tolerance everywhere, Jacobian reuse within 28
+tolerances (the worst nodes are now the 6973 plate-to-grid feedback nodes
+nfa / nfb), differing error-control decisions within 18.5 error tolerances.
+The test now names the worst node.
+
+**Speed regressed** (one render at a time, x = slower than real time): the
+7 s TC1 burst 14.3x (Phase 2: 5.8x), the 4 s arpeggio clip 36x (7.3x), at
+the slice report's front panel (pad 0 dB, threshold 0.8). Two causes,
+measured on 1 s of the clip:
+
+| variant | x real time | halved samples |
+|---|---|---|
+| as built | 26.2 | 14107 of 192000 |
+| 6973 grid current off | 14.7 | 357 |
+| softer grid knee (0.2 V, every tube) | 25.4 | 13321 |
+| error control off | 17.4 | 0 |
+
+- **The circuit doubled** (45 device ports, 82 states; Phase 2: 22 ports):
+  ~2x on its own.
+- **The 6973 grid conduction** costs another ~1.8x: every time the hard-driven
+  6973 grids clamp, error control halves the step (16,529 rejections in that
+  second). It is physical (it also stops the runaway above) and a softer knee
+  doesn't help; what would is step-size selection that doesn't halve
+  recursively from the full step, or not re-deriving the whole step on a
+  local event. Open, with M5's deferred speed target.
+
 **Milestone order after M6 (decided 2026-10-21; main plan Phase 2 done the
 same day, and M7 / M8 stay deferred after it: nothing in main-plan Phases
 3-5 needs them; next is main-plan Phase 3).** The simulator is fast

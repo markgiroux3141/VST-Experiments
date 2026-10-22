@@ -55,6 +55,7 @@ from varimu.circuit.ir import (
     Inductor,
     IRError,
     Resistor,
+    SineSource,
     VoltageSource,
     Winding,
     element_nodes,
@@ -88,6 +89,13 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
         return f"{el.name} {el.l_a} {el.l_b} {num(el.k)}"
     if isinstance(el, VoltageSource):
         return f"{el.name} {el.pos} {el.neg} dc {num(el.dc_v)}"
+    if isinstance(el, SineSource):
+        # The dc value (for .op) is the t = 0 value, which the transient op
+        # takes from the SIN function too.
+        return (
+            f"{el.name} {el.pos} {el.neg} dc {num(el.at(0.0))} sin({num(el.offset_v)} "
+            f"{num(el.amplitude_v)} {num(el.freq_hz)} 0 0 {num(el.phase_deg)})"
+        )
     if isinstance(el, Device):
         return f"{el.name} {' '.join(el.nodes)} {instance_target(models[el.model])}"
     raise TypeError(type(el))

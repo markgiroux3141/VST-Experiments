@@ -68,11 +68,15 @@ def _excerpt(name: str) -> tuple[np.ndarray, dict]:
 #   multitone_-10dbfs   -72.6 / 0.015
 # (2026-10-15, the slice's linear placeholders: -79.7 / 0.010, -79.6 / 0.009,
 # -63.7 / 0.044, -70.5 / 0.010; vs ngspice -61.2 / 0.024, -57.4 / 0.167.)
+# Phase 3 (the power supply and idle channel 2 in the circuit, 1 s settling first,
+# grid current in the 6973s; 2026-10-21), vs converged: -83.0 / 0.003, -87.5 / 0.001,
+# -73.4 / 0.090, -67.4 / 0.033. CCIF's CV difference is at its attack onset (the CV
+# drops ~75 V in ~2 ms); the rails agree to mV.
 EXCERPTS = {
-    "burst_1000hz_0dbfs": (-76.0, 0.02, True),
-    "ess_0dbfs": (-76.0, 0.02, True),
-    "ccif_-10dbfs": (-60.0, 0.08, False),
-    "multitone_-10dbfs": (-67.0, 0.02, False),
+    "burst_1000hz_0dbfs": (-79.0, 0.01, True),
+    "ess_0dbfs": (-83.0, 0.005, True),
+    "ccif_-10dbfs": (-69.0, 0.13, False),
+    "multitone_-10dbfs": (-64.0, 0.05, False),
 }
 
 

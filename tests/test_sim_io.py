@@ -136,7 +136,7 @@ def test_input_holds_through_the_last_timepoint(tmp_path):
     """ngspice's last timepoint can land a rounding error past the file's last entry
     (times are written with 15 digits), where a filesource stops holding its value.
     Measured on ngspice 47 with this length and rate: the input read 0 there."""
-    s = dataclasses.replace(TransientSettings.from_sim_settings(), oversample=4)
+    s = dataclasses.replace(TransientSettings.from_sim_settings(), oversample=4, settle_s=0.0)
     t = np.arange(2880) / FS
     x = np.sin(2 * np.pi * 1000 * t) * np.clip(t / 3e-3, 0, 1)
     run_transient("r1 in 0 1k\n", x, input_node="in", save=["v(in)"], settings=s, workdir=tmp_path)

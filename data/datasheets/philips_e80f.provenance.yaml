@@ -1,0 +1,34 @@
+device: "6084"
+document: "Philips Data handbook, E80F / 6084 S.Q. tube"
+publisher: Philips
+date: 1968-12
+local_copy: sources/philips_e80f_1968.pdf
+local_copy_sha256: f22bdd0e93d47092537053534f0ef35b17956903a689c09d6545626f5abd8e8f
+scan_source: "web: https://frank.pocnet.net/sheets/009/e/E80F.pdf"
+digitized_with: "rendered at 300-800 dpi (PyMuPDF); grid lines from pixel profiles, axes calibrated on two labelled grid lines, curve crossings located along pixel rows/columns, each curve assignment checked by eye (Claude Code subagent, scratch scripts not kept)"
+digitized_by: Claude Code
+digitized_on: 2026-10-21
+files:
+  philips_e80f_transfer.csv:
+    figure: "PDF p.6, right graph (7Z03965): Ia vs Vg1 at Va = 250 V, Vg3 = 0 V"
+    columns: "va_v, vg2_v, vg1_v, ia_a"
+    curves: "Vg2 = 200, 150, 108, 100, 50 V"
+    coverage: "Ia 0.5-13 mA"
+  philips_e80f_plate.csv:
+    figure: "PDF p.7: Ia vs Va; upper graph Vg2 = 100 V, lower graph Vg2 printed '108V' (legible at 500 dpi)"
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    curves: "Vg2 = 100 V: Vg1 = -1..-4 V; Vg2 = 108 V: Vg1 = 0..-4 V"
+    coverage: "Va 15-495 V; points beyond the Wa = 1.3 W line (dashed) left out"
+  philips_e80f_screen.csv:
+    figure: "PDF p.8: Ig2 vs Vg2 at Va = 250 V"
+    columns: "va_v, vg1_v, vg2_v, ig2_a"
+    curves: "Vg1 = 0, -1, ..., -9 V"
+    coverage: "dashed-region points left out"
+axis_calibration: "labelled grid lines"
+estimated_error: >-
+  About +-0.03 mA on the plate curves, +-0.05 V on the transfer curves. Check: the
+  Wa = 1.3 W line reads 1.28-1.30 W; the Vg2 = 100 V transfer curve gives 3 mA at
+  -1.96 V against the nominal -2.0 V (p.2). Published nominal (p.2): Va 250 V, Vg2 100 V,
+  Rk 550 ohm: Ia 3 mA, Ig2 0.65 mA, S 1.85 mA/V, Ri 1.5 MOhm, mu g2g1 25; cutoff
+  Ia <= 20 uA at Vg1 = -7.5 V.
+notes: "Fit: varimu.devices.library.build_6084 (Koren pentode, least squares)."

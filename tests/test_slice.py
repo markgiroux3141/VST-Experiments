@@ -52,18 +52,21 @@ def _run(engine, x_dbfs, overrides):
 
 @pytest.mark.parametrize("engine", ENGINES)
 def test_idle_circuit_is_quiet_and_sits_at_its_operating_point(engine):
-    """No input: no parasitic oscillation, CV stays at ZERO * bias rail.
+    """No input: no parasitic oscillation, CV stays at ZERO * the bias supply's C108 node.
 
     A lossless transformer model made the 6386 stage oscillate at ~30 kHz and
     pump the CV through grid current; this guards against that coming back.
+    Since the power supply is in the circuit (Phase 3), the CV carries the bias
+    supply's ripple (C108's ~14 mV pp at 120 Hz times ZERO, ~4 mV pp) and the end
+    of its settling.
     """
     r, s = _run(engine, np.zeros(int(0.03 * 96000)), HOT)
     out = r.vectors["v(out)"] / s.full_scale_volts_peak
     assert np.max(np.abs(out)) < 1e-4  # below -80 dBFS
     cv = r.vectors["v(cv)"]
-    assert np.ptp(cv) < 1e-3
-    zero_v = nl.resolve(HOT)["zero"] * nl.resolve(HOT)["bias_v"]
-    assert cv.mean() == pytest.approx(zero_v, abs=0.6)  # bias rail sags a little under load
+    assert np.ptp(cv) < 0.02
+    zero_v = nl.resolve(HOT)["zero"] * r.vectors["v(nb3)"].mean()
+    assert cv.mean() == pytest.approx(zero_v, abs=0.05)
     np.testing.assert_allclose(r.vectors["v(ga)"], cv, atol=1e-3)
 
 

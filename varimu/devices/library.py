@@ -19,7 +19,17 @@ import yaml
 import varimu
 from varimu.config import CONFIG_DIR, REPO_ROOT
 from varimu.devices.diode import JunctionDiode, VacuumDiode
-from varimu.devices.fit import DATASHEETS, PitchDistribution, evaluate_6386, fit_6386, load_6386
+from varimu.devices.fit import (
+    DATASHEETS,
+    PitchDistribution,
+    evaluate_6386,
+    fit_6386,
+    fit_junction_diode,
+    fit_koren_pentode,
+    fit_koren_triode,
+    load_6386,
+    load_csv,
+)
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_spec
 
@@ -75,9 +85,11 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         )
     if kind == "pentode":
         p, c = d["model"], d["capacitances_f"]
+        g = d.get("grid_current")
         return Pentode(
             d["name"],
             KorenPentode(p["mu"], p["ex"], p["kg1"], p["kg2"], p["kp"], p["kvb"]),
+            GridCurrent(g["perveance"], g["contact_v"], g["smooth_v"]) if g else None,
             c_g1k=c["g1k"],
             c_g1p=c["g1p"],
             c_pk=c["pk"],
@@ -197,6 +209,7 @@ def build_6973() -> dict[str, Any]:
         "source": f"fit to class-A1 point + cutoff point ({pub['source']}); ex=1.35 is "
         "provisional: Koren's typical pentode value",
         "model": {"mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kg2": m.kg2, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
         "capacitances_f": {
             "g1k": caps["input"],
             "g1p": caps["g1p"],
@@ -235,6 +248,119 @@ def build_si_rectifier() -> dict[str, Any]:
     }
 
 
+def build_el34t() -> dict[str, Any]:
+    """The EL34 triode-connected (the 670's series pass tube, V302): a Koren triode fit to
+    Mullard's triode-connected plate curves."""
+    pub = _published()["EL34"]
+    vg, va, ia = load_csv("mullard_el34_triode_plate.csv").T
+    m, rep = fit_koren_triode(vg, va, ia, np.hypot(0.03 * ia, 2e-3))
+    caps = pub["capacitances_f"]
+    return {
+        "name": "EL34T",
+        "kind": "triode",
+        "source": "fit: Koren triode, least squares on Mullard EL34 sheet C4 (triode "
+        "connected, g2 to anode), digitized: data/datasheets/mullard_el34.provenance.yaml. "
+        "The 670 also ties g3 to the anode; no data for that",
+        "plate": {"model": "koren", "mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": caps["input"],
+            "gp": caps["ag1"],
+            "pk": caps["output"],
+            "source": f"provisional: the pentode-connection values ({pub['source']}); none "
+            "printed for triode connection",
+        },
+        "fit_report": {"plate": rep.as_dict(), "sigma": "hypot(3% of Ia, 2 mA)"},
+    }
+
+
+def build_6084() -> dict[str, Any]:
+    """The 6084 (E80F), the regulator's error amplifier (V303): a Koren pentode fit to the
+    Philips E80F transfer, plate and screen curves."""
+    pub = _published()["6084"]
+    tr = load_csv("philips_e80f_transfer.csv")  # va, vg2, vg1, ia
+    pl = load_csv("philips_e80f_plate.csv")  # vg2, vg1, va, ia
+    sc = load_csv("philips_e80f_screen.csv")  # va, vg1, vg2, ig2
+    plate = np.r_[
+        np.c_[tr[:, 2], tr[:, 1], tr[:, 0], tr[:, 3]],
+        np.c_[pl[:, 1], pl[:, 0], pl[:, 2], pl[:, 3]],
+    ]
+    screen = np.c_[sc[:, 1], sc[:, 2], sc[:, 3]]
+    m, rp, rs = fit_koren_pentode(
+        plate,
+        screen,
+        np.hypot(0.02 * plate[:, 3], 0.03e-3),
+        np.hypot(0.03 * screen[:, 2], 0.02e-3),
+    )
+    caps = pub["capacitances_f"]
+    return {
+        "name": "6084",
+        "kind": "pentode",
+        "source": "fit: Koren pentode, least squares on the Philips E80F (6084) transfer, "
+        "plate and screen curves, digitized: data/datasheets/philips_e80f.provenance.yaml. "
+        "Koren's screen law fits the screen curves only to ~40% rms",
+        "model": {"mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kg2": m.kg2, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["ag1"],
+            "pk": caps["output"],
+            "source": pub["source"],
+        },
+        "fit_report": {
+            "plate": rp.as_dict(),
+            "screen": rs.as_dict(),
+            "sigma": "plate hypot(2%, 30 uA), screen hypot(3%, 20 uA)",
+        },
+    }
+
+
+# The 5651's current at which its operating voltage (circuit value v5651_operating_v) is
+# taken: the middle of its 1.5-3.5 mA range.
+V5651_REF_A = 2.5e-3
+
+
+def build_5651() -> dict[str, Any]:
+    """The 5651 voltage reference (V304) as a junction diode in series with its burning
+    voltage (a DC source in the netlist): the diode's series resistance is the slope of
+    Tung-Sol's typical drop-vs-current line; its knee only keeps the tube from
+    conducting below the burning voltage (lit from the DC point on: no ignition)."""
+    i, v = load_csv("tungsol_5651_drop.csv").T
+    slope, _ = np.polyfit(i, v, 1)
+    return {
+        "name": "5651",
+        "kind": "junction_diode",
+        "is_a": 1.0e-9,
+        "n": 1.0,
+        "rs_ohm": float(slope),
+        "source": "rs: slope of the Tung-Sol 5651 typical tube drop vs current (1.45-3.6 mA, "
+        "digitized: data/datasheets/tungsol_5651.provenance.yaml); is, n: provisional (the "
+        "knee below 1.5 mA isn't published; it only blocks conduction below the burning "
+        "voltage)",
+    }
+
+
+def build_selenium() -> dict[str, Any]:
+    """A selenium rectifier cell of 1 sq. in. rectifying area (GR301): a junction diode fit
+    to Tarzian's 25 C static forward characteristic. The netlist scales it by area."""
+    se = load_csv("tarzian_selenium_static.csv")
+    s25 = se[se[:, 0] == 25]
+    v, j = s25[:, 1], s25[:, 2]
+    m, rep = fit_junction_diode(v, j, np.hypot(0.05 * j, 5e-3), "SELENIUM")
+    return {
+        "name": "SELENIUM",
+        "kind": "junction_diode",
+        "is_a": m.is_a,
+        "n": m.n,
+        "rs_ohm": m.rs_ohm,
+        "source": "fit: Shockley diode with series resistance on the Sarkes Tarzian (1950) "
+        "Fig. 4 static forward characteristic at 25 C, per sq. in. of rectifying area "
+        "(digitized: data/datasheets/tarzian_selenium.provenance.yaml). Reverse leakage "
+        "(~1 mA/in^2 at an unstated voltage, Fig. 6) is not modeled",
+        "fit_report": {"forward": rep.as_dict(), "sigma": "hypot(5%, 5 mA/in^2)"},
+    }
+
+
 BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
@@ -242,6 +368,10 @@ BUILDERS = {
     "6973": build_6973,
     "GZ34": build_gz34,
     "SI_RECTIFIER": build_si_rectifier,
+    "EL34T": build_el34t,
+    "6084": build_6084,
+    "5651": build_5651,
+    "SELENIUM": build_selenium,
 }
 
 

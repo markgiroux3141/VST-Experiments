@@ -3,9 +3,10 @@
 //!
 //! The step h is 1 / (oversample x sample rate), and the input is given at
 //! every step, so outputs land exactly on the sample grid. Between samples the
-//! input is linear, like ngspice's PWL file source. The run starts from the DC
-//! operating point with the first input sample (capacitors open, inductors
-//! shorted), as ngspice's `.tran` does.
+//! input is linear, like ngspice's PWL file source. Sine sources (the mains)
+//! are exact at every stage's time. The run starts from the DC operating
+//! point with the first input sample and the sine sources at t = 0
+//! (capacitors open, inductors shorted), as ngspice's `.tran` does.
 //!
 //! Every method is a stiffly accurate implicit Runge-Kutta method (the last
 //! stage is the step's end point), so the algebraic rows of the MNA system
@@ -495,6 +496,9 @@ pub struct Stats {
     pub states: usize,
     pub device_evaluations: u64,
     pub factorizations: u64,
+    /// DK with Jacobian reuse: stage solves that failed with the lagged
+    /// Jacobian and were redone with exact Newton (before any halving).
+    pub exact_retries: u64,
 }
 
 /// The step machinery of a fully implicit method: s coupled copies.
@@ -556,6 +560,11 @@ struct Dk {
     d: Vec<f64>,
     neg: Vec<f64>,
     wm: Vec<f64>,
+    /// Wave values (one per sine source) at the latest stage's time.
+    wv: Vec<f64>,
+    /// A stage's initial guess and limiting reference, for an exact retry.
+    v_guess: Vec<f64>,
+    v_lin_guess: Vec<f64>,
 }
 
 impl Dk {
@@ -586,6 +595,9 @@ impl Dk {
             d: vec![0.0; r],
             neg: vec![0.0; m.max(r)],
             wm: vec![0.0; m],
+            wv: vec![0.0; mna.waves.len()],
+            v_guess: vec![0.0; m],
+            v_lin_guess: vec![0.0; m],
             support,
         }
     }
@@ -723,6 +735,7 @@ impl Transient {
         let nl = sys.l_len();
         let mut base = self.mna.b.clone();
         base[self.mna.input_row] += u0;
+        self.mna.add_waves(0.0, &mut base);
         let o = self.opts;
         let opts = |gshunt: f64| NewtonOptions {
             reltol: o.reltol,
@@ -929,6 +942,12 @@ impl Transient {
         self.advance(level + 1, tm, th1, inp)
     }
 
+    /// Time at step fraction `theta` of the current sample (the sine sources'
+    /// argument).
+    fn time(&self, theta: f64) -> f64 {
+        (self.n as f64 + theta) * self.h
+    }
+
     fn newton_options(&self) -> NewtonOptions {
         NewtonOptions {
             reltol: self.opts.reltol,
@@ -1012,7 +1031,9 @@ impl Transient {
             for ((r, b), cx) in self.rhs.iter_mut().zip(&self.mna.b).zip(&self.cx) {
                 *r = b + inv * cx;
             }
-            self.rhs[self.mna.input_row] += inp.at(th0 + ci * (th1 - th0));
+            let th = th0 + ci * (th1 - th0);
+            self.rhs[self.mna.input_row] += inp.at(th);
+            self.mna.add_waves(self.time(th), &mut self.rhs);
             for j in 0..i {
                 let coef = self.tab.a[i * s + j] / g;
                 if coef != 0.0 {
@@ -1147,6 +1168,7 @@ impl Transient {
                 inv,
                 &self.mna.b,
                 self.mna.input_row,
+                &self.mna.waves,
                 &dk.ports,
                 &dk.support,
             )
@@ -1182,8 +1204,13 @@ impl Transient {
                     }
                 }
             }
-            u = inp.at(th0 + ci * (th1 - th0));
-            sys.stage(&dk.base, u, &dk.w, &mut dk.out);
+            let th = th0 + ci * (th1 - th0);
+            u = inp.at(th);
+            let t = (self.n as f64 + th) * self.h;
+            for (v, wave) in dk.wv.iter_mut().zip(&self.mna.waves) {
+                *v = wave.at(t);
+            }
+            sys.stage(&dk.base, u, &dk.wv, &dk.w, &mut dk.out);
             // The initial guess, as try_step_dirk's on the device nodes (the
             // ports are linear in them, so the guesses correspond).
             let v = &mut dk.v;
@@ -1209,14 +1236,35 @@ impl Transient {
                 }
             }
             timing::add(Part::Stage, t0);
-            let it = dk.newton.solve(
+            dk.v_guess.copy_from_slice(&dk.v);
+            dk.v_lin_guess.copy_from_slice(&dk.newton.v_lin);
+            let mut res = dk.newton.solve(
                 sys,
                 &self.mna.devices,
                 &dk.ports,
                 &dk.out[..m],
                 &mut dk.v,
                 &opts,
-            )?;
+            );
+            if res.is_err() && dk.newton.reuse {
+                // A lagged Jacobian can stall where Newton converges (a sharp
+                // knee: grid conduction, a diode turning on). Redo the stage
+                // with exact Newton from the same guess before halving.
+                self.stats.exact_retries += 1;
+                dk.v.copy_from_slice(&dk.v_guess);
+                dk.newton.v_lin.copy_from_slice(&dk.v_lin_guess);
+                dk.newton.reuse = false;
+                res = dk.newton.solve(
+                    sys,
+                    &self.mna.devices,
+                    &dk.ports,
+                    &dk.out[..m],
+                    &mut dk.v,
+                    &opts,
+                );
+                dk.newton.reuse = true;
+            }
+            let it = res?;
             let t0 = timing::now();
             iterations[solves] = it;
             solves += 1;
@@ -1239,6 +1287,7 @@ impl Transient {
         sys.unknowns(
             &dk.base,
             u,
+            &dk.wv,
             &dk.w,
             &dk.newton.i,
             &mut self.x_new,
@@ -1332,7 +1381,9 @@ impl Transient {
             for ((r, b), cx) in rhs.iter_mut().zip(&self.mna.b).zip(&self.cx) {
                 *r = b + ws * cx;
             }
-            rhs[self.mna.input_row] += inp.at(th0 + self.tab.c[i] * (th1 - th0));
+            let th = th0 + self.tab.c[i] * (th1 - th0);
+            rhs[self.mna.input_row] += inp.at(th);
+            self.mna.add_waves((self.n as f64 + th) * self.h, rhs);
         }
         let mut work = vec![0.0; nl];
         let mut rn = vec![0.0; nn];
@@ -1450,6 +1501,7 @@ impl Transient {
         // rows of C, with d the device currents at the current ports.
         let mut f = self.mna.b.clone();
         f[self.mna.input_row] += self.u;
+        self.mna.add_waves(self.time(0.0), &mut f);
         let mut gx = vec![0.0; n];
         self.mna.g.mul_vec(&self.x, &mut gx);
         for (f, g) in f.iter_mut().zip(&gx) {

@@ -25,6 +25,14 @@ tubes:
     emission_scale: {min: 0.75, max: 1.05, unit: ratio, source: "provisional: model knowledge (cathode aging lowers emission; new tubes vary roughly +-5%)", notes: "multiplies plate current of the whole bank (4 triodes)"}
     mu_spread:      {min: 0.95, max: 1.05, unit: ratio, source: "provisional: model knowledge (grid-pitch manufacturing tolerance)", notes: "multiplies every section's mu"}
     grid_contact_v: {min: -1.0, max: -0.5, unit: V, source: "provisional: model knowledge (oxide-cathode contact potential)", notes: "onset of grid current; loads the timing networks"}
+  v5651:
+    operating_v: {min: 82.0, max: 92.0, unit: V, source: "RCA 5651 (1948) and Sylvania (1955): operating voltage min 82 / av. 87 / max 92 V (data/datasheets/published_points.yaml)", notes: "the reference of the 240 V regulator; B+ ADJ trims the rail back"}
+  instance:
+    # Every tube (each 6386 triode, each section of the 12AX7 and 12BH7, the 6973s,
+    # the regulator's EL34 and 6084, the GZ34): its own deviation, u in [-1, 1] times
+    # passives.spread times these (the 6386s around their bank's values above).
+    emission_pct: {min: 5.0, max: 20.0, unit: pct, source: "provisional: model knowledge (plate current spread of new tubes of one type at fixed bias)"}
+    mu_pct:       {min: 1.0, max: 5.0, unit: pct, source: "provisional: model knowledge (grid-pitch tolerance)"}
   # Sidechain chain is 12AX7 -> 12BH7 -> push-pull 6973 -> diode bridge
   # (web: gearspace.com/threads/fairchild-tubes.463974; historyofrecording.com).
   # Per-instance spreads get added in Phase 3.
@@ -84,16 +92,35 @@ transformers:
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
     winding_capacitance_f:  {min: 100.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull primaries)", notes: "per primary half"}
 
-sidechain:
-  v6973_grid_bias_v: {min: -35.0, max: -20.0, unit: V, source: "provisional: grid-leak return not traceable on the A-96039 scan; bounded so the 6973 model idles between ~0.3 and ~20 mA at 240 V (under its 12 W rating)"}
-
 psu:
-  # Shared by the audio path and sidechain (plan: Coupling Checklist).
-  # Nominal component values come from the schematic. Only uncertain
-  # quantities belong here.
-  source_impedance_ohm: {min: 1.0, max: 200.0, unit: ohm, source: "provisional: model knowledge (tube series regulator output impedance, a few ohms when working, far higher near dropout)", notes: "the B+ is regulated to 240 V (EL34 pass, 6084 error amp, 5651 reference); this stands in until the regulator is modeled"}
+  # Shared by the audio path and sidechain (plan: Coupling Checklist). The
+  # topology and the printed values are traced on A-96039
+  # (data/schematics/fairchild_670/README.md, "Supply rails"); these are what
+  # the drawing doesn't print. Replacement-part specs (Sowter) are a reference
+  # point, not the originals.
+  t302_hv_half_rms_v: {min: 360.0, max: 420.0, unit: V, source: "provisional: model knowledge (open-circuit rms per HV half, around the replacement's 375-0-375 V at 200 mA: web: https://www.sowter.co.uk/specs/0526.htm)", notes: "the unregulated rail must stay near the printed 420-450 V"}
+  t302_r_half_ohm:    {min: 20.0, max: 150.0, unit: ohm, source: "provisional: model knowledge (HV winding resistance per half of a ~100 VA mains transformer)"}
+  t302_leakage_h:     {min: 1.0e-3, max: 20.0e-3, unit: H, source: "provisional: model knowledge (leakage per HV half)"}
+  t302_winding_capacitance_f: {min: 100.0e-12, max: 1.0e-9, unit: F, source: "provisional: model knowledge (self-capacitance of a mains transformer's HV half)"}
+  l301_h:             {min: 5.0, max: 15.0, unit: H, source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html (replacement 10 H at 200 mA); +-50% is provisional"}
+  l301_r_ohm:         {min: 40.0, max: 200.0, unit: ohm, source: "web: same page (replacement 71 ohms); the range is provisional (era chokes of that inductance ran to ~200 ohm)"}
+  t301_rms_v:         {min: 24.0, max: 29.0, unit: V, source: "web: https://www.sowter.co.uk/specs/0531.htm (replacement 26.8 V for the selenium bridge, 24 V tap for silicon); range provisional", notes: "the R303 end must stay near the printed -13 to -14.5 V"}
+  t301_r_ohm:         {min: 0.3, max: 3.0, unit: ohm, source: "provisional: model knowledge (small 0.5 A transformer)"}
+  t301_leakage_h:     {min: 0.1e-3, max: 5.0e-3, unit: H, source: "provisional: model knowledge"}
+  l302_h:             {min: 1.5, max: 5.0, unit: H, source: "web: Sowter replacement 5 H (same catalog page); a Drip 670 bias choke is reportedly 1.5 H (GroupDIY search snippet, 2026-10-21)"}
+  l302_r_ohm:         {min: 85.0, max: 350.0, unit: ohm, source: "web: 85 ohm is Sowter's replacement (catalog page above); the measured -6.2 V at C303 (https://groupdiy.com/threads/fairchild-670-questions.32169/) needs ~284 ohm (scripts/calibrate_psu.py); 350 is provisional headroom", notes: "sets the 6386 cathode return: with the grid bias, the stage's standing current"}
+  gr301_cell_area_in2: {min: 0.5, max: 1.6, unit: in2, source: "provisional: Sarkes Tarzian handbook (1950) cell sizes 1-inch (size 2) to 1.25-inch (size 3) square, and an unknown effective area per plate"}
 
 passives:
-  # Per-instance deviation from nominal, drawn independently for every part.
-  resistor_deviation_pct:  {min: TBD, max: TBD, unit: pct, source: TBD}
-  capacitor_deviation_pct: {min: TBD, max: TBD, unit: pct, source: TBD}
+  # Per-instance deviation from nominal, drawn independently for every part and tube
+  # (config/circuits/fairchild_670.yaml, "Per-instance tolerance and mismatch"):
+  # u in [-1, 1] from default_rng([seed, crc32(designator)]), times spread, times the
+  # part's band. Resistor bands are printed (1%, 5%, 10% by note 1); these are the rest.
+  seed:                   {min: 0, max: 2147483647, unit: seed, source: "numerical: which set of parts a unit is built from"}
+  spread:                 {min: 0.0, max: 1.0, unit: ratio, source: "provisional: fraction of each band the draws span (1 = parts anywhere within tolerance)"}
+  pot_pct:                {min: 10.0, max: 20.0, unit: pct, source: "provisional: model knowledge (track resistance tolerance of the era's pots)"}
+  attenuator_pct:         {min: 1.0, max: 5.0, unit: pct, source: "provisional: model knowledge (precision step attenuator resistors)"}
+  paper_capacitor_pct:    {min: 10.0, max: 20.0, unit: pct, source: "provisional: model knowledge (1950s paper and oil capacitors)"}
+  mica_capacitor_pct:     {min: 5.0, max: 20.0, unit: pct, source: "provisional: model knowledge (high-voltage mica or ceramic)"}
+  electrolytic_minus_pct: {min: 10.0, max: 20.0, unit: pct, source: "provisional: model knowledge (1950s electrolytics)"}
+  electrolytic_plus_pct:  {min: 50.0, max: 100.0, unit: pct, source: "provisional: model knowledge (1950s electrolytics)"}

@@ -3,9 +3,9 @@
 The project plan is [VARIMU_PROJECT_PLAN.md](VARIMU_PROJECT_PLAN.md) (the plan's
 layout calls it `PLAN.md`). Read it before starting work.
 
-**Phases 0, 1 and 2 are done (Phase 2, transformer models: 2026-10-21; the
-plan's Phase 2 status has what was built and measured); next is Phase 3
-(Full Circuit Netlist).** Phase 2's decision (the user's): the hysteretic
+**Phases 0-3 are done (Phase 3, full circuit netlist: 2026-10-22; the plan's
+Phase 3 status has what was built, measured, and which genomes oscillate);
+next is Phase 4 (Simulation Runner and Measurement Suite).** Phase 2's decision (the user's): the hysteretic
 core has a Python reference and a circuitsim device, no SPICE
 implementation; ngspice cross-checks the rest with the cores in their linear
 limit (Hard rules). Work one phase at a time. Don't start the next phase until
@@ -23,7 +23,16 @@ materials in `config/magnetics.yaml`, mumetall fitted to its datasheet by
 `scripts/fit_core_material.py`) with leakage, winding R, self-capacitance,
 the cores' joint gap and classical eddy loss; geometry, turns, leakage and
 capacitances are provisional genome parameters (`genome_bounds.yaml`
-`transformers`).
+`transformers`). Since Phase 3 the circuit has the 670's power supply, traced
+on the drawing (`data/schematics/fairchild_670/README.md`, "Supply rails"):
+the mains (an IR `SineSource`) into T302 / GZ34 / L301, the EL34 / 6084 / 5651
+regulator (240 V, B+ ADJ), the selenium bias supply (the 6386 cathode return
+at C303, ZERO, the 6973 grid-leak return), and idle channel 2 lumped onto the
+same rails. Unprinted supply values are genome parameters, three nominals
+calibrated by `scripts/calibrate_psu.py`. Every part and tube instance
+deviates by its own seeded draw (`passive_seed`, `passive_spread`; the
+nominal genome has spread 0), each 6386 bank is its four triodes, and
+`varimu.sim.setup.adjust` sets B+ ADJ / BALANCE / ZERO per the manual.
 
 A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
@@ -95,9 +104,11 @@ uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2
 uv run varimu render --signal burst_1000hz_0dbfs --engine ngspice   # the reference engine
 uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765
 uv run --extra fast python scripts/slice_report.py [--engine ngspice] [--clip NAME]   # curve, TC bursts, program clip -> reports/slice/
-uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~9 min cold, ~40 s warm)
+uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~70 min cold since Phase 3, ~1 min warm)
 uv run --extra fast python scripts/transformer_report.py [--only t101 ...]   # each transformer standalone -> reports/transformers/
 uv run python scripts/fit_core_material.py mumetall   # refit a core material's JA parameters to its datasheet figures
+uv run --extra fast python scripts/calibrate_psu.py    # re-derive T302's voltage, L302's resistance, B+ ADJ from the printed/measured rails
+uv run --extra fast python scripts/corner_sweep.py [--quick]   # genome corners: simulates? GR rises? quiet at idle? -> reports/corners/
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 ```
@@ -302,6 +313,25 @@ tests skip when ngspice is missing.
   in LF response (bass-rich program compresses up to ~2 dB differently).
   The core's map is piecewise smooth (substep and direction changes), so
   Jacobian tests compare it only within 10 uT of its state.
+- **The power supply and the start of a run (Phase 3, 2026-10-21).** A run
+  starts at the DC operating point with the mains sine sources at their t = 0
+  value (phase 90: the peak), so the reservoirs start charged to the peak;
+  renders first run `start.settle_s` = 1 s with the input held at its first
+  sample (both engines, trimmed from the outputs). `--verify`'s exact-ngspice
+  excerpts skip it in both engines (`EXCERPT_SETTLE_S`), and the standalone
+  transformer measurements have no supply to settle. ngspice stopped ~1 ms in,
+  where the GZ34 first cuts off and its leakage inductance kicks into a node
+  with nothing on it, until T302's winding capacitance and the selenium cells'
+  capacitance went in: keep a capacitance on every rectifier node.
+- **Speed since Phase 3 (measured 2026-10-21).** circuitsim 14x slower than
+  real time on the 7 s TC1 burst and 36x on the 4 s clip (Phase 2: 5.8x /
+  7.3x), plus 1 s of settling per render: 45 device ports instead of 22, and
+  error-control halvings at every 6973 grid clamp (pentodes have grid current
+  since Phase 3; without it the 6973 grids ran to +251 V). Cold `--verify`:
+  see the circuit-sim plan's "Phase 3 in circuitsim".
+- **Genomes that oscillate** (`reports/corners/summary.json`, flagged): some
+  random corners oscillate at 19-30 kHz or wander at LF (weak-supply corners:
+  the regulator in dropout). Phase 4's plausibility checks must reject them.
 - **Benchmarking on this desktop.** Timings drift +-35% between runs:
   VS Code's rust-analyzer recompiles the crate on all cores for ~2 minutes
   after each Rust edit, and explorer.exe often holds a core. Wait until no

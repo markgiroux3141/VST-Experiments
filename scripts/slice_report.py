@@ -49,9 +49,9 @@ Waveform rows pass at the plan's tolerance (output < -55 dB rms re signal, CV
 within 0.2 V) and, at the default front panel and clip, within regression
 bounds a few dB outside the measured values. Results go to
 reports/slice/agreement.json and agreement.png; the exit status is 1 if a
-check fails. About 6 minutes from a cold cache (all renders in parallel;
-exact ngspice runs ~800x slower than real time); seconds when nothing
-changed.
+check fails. About 70 minutes from a cold cache since Phase 3's power
+supply (all renders in parallel; it was ~6 minutes before), a minute when
+nothing changed.
 """
 
 from __future__ import annotations
@@ -99,26 +99,33 @@ EXCERPT_BURST = dict(
 CLIP_EXCERPT_S = (0.15, 0.1)  # excerpt from this long before the chosen 0.1 s window to its end
 CLIP_HF_HZ = 5000  # "HF-rich": the most energy above this
 FADE_IN_S = 0.01  # raised cosine, so a clip excerpt starts from the operating point smoothly
+# The excerpts compare two engines from the same DC operating point, so they skip the
+# power supply's settling (start.settle_s, ~800 x 1 s of exact ngspice per excerpt): both
+# run the supply's start from the mains peak, the same transient in both.
+EXCERPT_SETTLE_S = 0.0
 
 # Regression bounds (rms dB re signal, CV V) at the default front panel and
-# clip, a few dB outside the values measured 2026-10-21 on the Phase 2
-# transformers (circuitsim production vs exact ngspice, both on linear cores;
-# ngspice's own error dominates; the converged row is on the Jiles-Atherton
-# cores). Re-measure when the circuit changes.
-#   burst_tc1 -78.6 / 0.023    burst_tc2 -79.9 / 0.024
-#   burst_tc3 -80.7 / 0.015    burst_tc4 -74.8 / 0.007
-#   clip_loudest -67.7 / 0.021    clip_hf -61.8 / 0.035
-#   clip vs converged -76.3 / 0.006
-# (Before Phase 2, the linear placeholders: -78.1 / 0.028, -76.3 / 0.028,
-# -76.8 / 0.015, -81.3 / 0.007; -67.5 / 0.017, -61.6 / 0.034; -76.7 / 0.007.)
+# clip, a few dB outside the values measured 2026-10-22 on the Phase 3 circuit
+# (the power supply and idle channel 2 in it; circuitsim production vs exact
+# ngspice, both on linear cores; the converged row on the Jiles-Atherton cores).
+# Re-measure when the circuit changes.
+#   burst_tc1 -80.9 / 0.0029    burst_tc2 -81.9 / 0.0022
+#   burst_tc3 -84.9 / 0.0015    burst_tc4 -85.2 / 0.0018
+#   clip_loudest -76.2 / 0.0035    clip_hf -70.8 / 0.0052
+#   clip vs converged -56.8 / 0.1945: its error is at the clip's first attack
+#   from rest (the CV falls ~80 V in ~2 ms); the bound is the plan's tolerance.
+#   10x tighter error tolerances give 0.07 V (+19% time), 4x 0.04 V (+43%):
+#   VARIMU_PROJECT_PLAN.md, Phase 3 findings.
+# (Phase 2, 2026-10-21: -78.6 / 0.023, -79.9 / 0.024, -80.7 / 0.015,
+# -74.8 / 0.007; -67.7 / 0.021, -61.8 / 0.035; -76.3 / 0.006.)
 BOUNDS = {
-    "burst_tc1": (-75.0, 0.04),
-    "burst_tc2": (-76.0, 0.04),
-    "burst_tc3": (-77.0, 0.03),
-    "burst_tc4": (-71.0, 0.02),
-    "clip_loudest": (-64.0, 0.04),
-    "clip_hf": (-58.0, 0.06),
-    "clip_vs_converged": (-73.0, 0.02),
+    "burst_tc1": (-77.0, 0.01),
+    "burst_tc2": (-78.0, 0.01),
+    "burst_tc3": (-81.0, 0.01),
+    "burst_tc4": (-81.0, 0.01),
+    "clip_loudest": (-72.0, 0.01),
+    "clip_hf": (-67.0, 0.015),
+    "clip_vs_converged": (-55.0, 0.2),
 }
 
 # [MAN] p.4 (Fairchild 670 manual, 1959): attack, and release from 10 dB of limiting.
@@ -448,6 +455,8 @@ def verify(overrides: dict, tcs, clip_name: str) -> int:
     # ngspice has no core model: circuitsim meets it on linear cores
     cs_lin = dataclasses.replace(cs, cores="linear")
     exact, conv = dataclasses.replace(ng, **EXACT), converged(cs)
+    exact = dataclasses.replace(exact, settle_s=EXCERPT_SETTLE_S)
+    cs_ex = dataclasses.replace(cs_lin, settle_s=EXCERPT_SETTLE_S)
     clip = clip_job(clip_name, overrides)
     if clip is None:
         print(f"program clip {clip_name!r} not in {CLIP_DIR}: left out")
@@ -458,7 +467,7 @@ def verify(overrides: dict, tcs, clip_name: str) -> int:
     report_jobs = [j for j, _ in curve_chunks(overrides)] + burst_jobs(tcs, overrides) + clips
     todo = [(exact, j) for j in excerpts.values()]
     todo += [(s, j) for s in (ng, cs_lin, cs) for j in report_jobs]
-    todo += [(cs_lin, j) for j in excerpts.values()]
+    todo += [(cs_ex, j) for j in excerpts.values()]
     todo += [(conv, j) for j in clips] + [(cs, curve_job(overrides))]
     prefetch(todo)
 
@@ -479,7 +488,7 @@ def verify(overrides: dict, tcs, clip_name: str) -> int:
     waveforms: dict = {}
     traces = {}
     for name, j in excerpts.items():
-        r_cs, r_ex = runner.render(j, settings=cs_lin), runner.render(j, settings=exact)
+        r_cs, r_ex = runner.render(j, settings=cs_ex), runner.render(j, settings=exact)
         waveforms[name] = {
             "excerpt": j.label,
             "reference": "exact ngspice (linear)",

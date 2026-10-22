@@ -205,6 +205,66 @@ Findings that change later work:
 
 **Done when:** The netlist simulates without convergence failure across the corners of the genome bounds, and the compressor visibly reduces gain as input level rises.
 
+*Status (2026-10-22): done* (one channel; the second channel's draw on the supply is in, idle and lumped). What exists:
+
+- **The supply, traced** on A-96039 (`data/schematics/fairchild_670/README.md`, "Supply rails", with `rails*.png`; the rails run between the crops, so the full drawing was rendered and followed):
+  - **Main supply.** Mains (a sine source) into T302 and V301 (printed "6234": the GZ34, per the manual's tube list and chassis photo), then C304 4 uF and L301 into C305 + C306: the unregulated rail. The regulator: EL34 triode-connected pass tube, 6084 error amplifier, 5651 reference, and R313 B+ ADJ, giving 240 V. R315/R316 make the 6973 screens' tap.
+  - **Bias supply.** T301 into the selenium bridge GR301. C303, after L302, is the 6386 cathode return. C108 feeds ZERO. The R303 end, printed -13 to -14.5 V, is the 6973 grid-leak return; it replaces the slice's provisional -27 V.
+  - **What each rail feeds.** The 12BH7 loads and T104's centre tap (6973 plates) are on the unregulated rail, not 240 V. The 12BH7 grid leaks and cathode resistors return to ground. Both settle the slice's open wiring questions.
+  - **Unprinted values.** They are genome parameters. Replacement-part specs (Sowter) are reference points. Three nominals are calibrated (`scripts/calibrate_psu.py`) to what the drawing prints and a unit measured:
+    - T302's voltage puts the unregulated rail at 435 V (printed 420-450 V);
+    - L302's resistance (284 ohm) puts C303 at the measured -6.2 V (web: GroupDIY, Dave P);
+    - B+ ADJ sets 240 V.
+  - **Checks that came out right without fitting** (`tests/test_psu.py`):
+    - C302 -34.4 V (Dave P: ~34 V);
+    - the R303 end -13.8 V (printed -13 to -14.5 V);
+    - 6386 banks 24.9 mA each (measured ~26 mA);
+    - 12AX7 cathodes 3.7 V (web: "3.6 V (cut-off)").
+- **New devices**, each fitted to datasheet data digitized here (`data/datasheets/`, provenance sidecars):
+  - EL34 triode-connected: Koren triode on Mullard's triode curves, 0.8 sigma rms.
+  - 6084 / E80F: Koren pentode on Philips curves, plate current 11% rms; Koren's screen law fits only ~40%.
+  - 5651: a diode in series with its burning voltage, the slope from Tung-Sol's plot, the operating voltage a genome parameter (RCA's 82 / 87 / 92 V).
+  - Selenium cell: on Tarzian's 25 C static curve, 2% rms, scaled by area, with the handbook's junction capacitance.
+  - Pentodes now have grid current (the triodes' law), Python, SPICE and circuitsim.
+- **Ripple and sag reach both paths** (`tests/test_psu.py`):
+  - **Ripple.** The bias supply's 120 Hz sits on both 6386 grids through ZERO (1.8 mV). Matched banks cancel it at the output; a 10% emission mismatch lets it through as hum (-121 dBFS).
+  - **Sag in the audio path.** Under a 0 dBFS burst the 6386 current halves, so the drop across L302 shrinks and the cathode return moves -8.2 to -14.5 V: a slow, program-dependent bias shift, shared with channel 2. The unregulated rail rises 13 V as the stage stops loading it.
+  - **Sag in the sidechain.** The 6973 screen tap sags (153 to 147 V), and their grid current pulls the R303 end down (-13.8 to -15.0 V). The 240 V rail holds within 0.6 V.
+- **Per-instance tolerance and mismatch.**
+  - **Seeded draws.** Every part of channel 1 and the supply, and every tube instance, draws from `default_rng([seed, crc32(designator)])`.
+  - **Bands.** Resistor bands are printed: 1%, 5%, and 10% by note 1. Capacitor, pot and tube bands are provisional genome bounds.
+  - **Banks.** Each 6386 bank is its four triodes (the drawing's designators), around the bank's genome values. circuitsim merges devices on identical pins into one parallel device, so the Newton system keeps its size: 45 ports, ~5% slower.
+  - **The nominal genome has spread 0** (every part at its printed value). Spread 1 is a unit with its parts anywhere in tolerance.
+- **Setup** (`varimu.sim.setup`): the manual's procedures on the DC operating point, a few seconds per unit. B+ ADJ to the nominal rail, BALANCE for equal meter readings across R107/R108, ZERO for the nominal total plate current; the meter's ZERO position reads 15 ohm x that current, which is how ZERO's nominal 0.3 got its source.
+- **Done when** (`tests/test_corners.py`; full sweep `scripts/corner_sweep.py` -> `reports/corners/summary.json`). 143 genomes over the 63 genome-linked parameters:
+  - the genomes: nominal, all-min, all-max, each parameter alone at each bound, and 16 random corners with part spread 1;
+  - the runs: set up, and the extreme and random corners also as built (161 runs);
+  - each run: 0.1 s idle, then a 1 kHz staircase -30 to 0 dBFS at the hottest front panel.
+  - **Every run simulated without convergence failure.** Gain reduction rose at every step in 158 of 161 (to 15-44 dB at 0 dBFS).
+- **Genomes Phase 4's plausibility checks must reject** (recorded in the summary):
+  - **HF oscillators:** random-15 and random-3 at 19.4 kHz (random-15 near full scale, its CV pinned at -212 V by its own oscillation), random-5 at ~23 kHz, random-6 at 30 kHz (Phase 2's tuned-plate tuned-grid mode).
+  - **Low-frequency wander** (-38 to -76 dBFS): random-4, 8, 9, 10, 13, 14. These are weak-supply corners: random-13's unregulated rail sits at 346 V, the regulator is in dropout at 230 V, and ZERO drives the grids into conduction to restore the current.
+  - **Gain reduction folding back** at 0 dBFS with T101's leakage at its 20 mH bound (Phase 2's +15 dB peak near 17.8 kHz).
+
+Findings that change later work:
+
+- **Render speed regressed.** circuitsim is 14x slower than real time on the 7 s TC1 burst (Phase 2: 5.8x) and 36x on the 4 s clip (7.3x), at the slice report's front panel.
+  - **The circuit doubled:** 45 device ports, 86 states.
+  - **The 6973 grid conduction:** error control halves steps at every grid clamp, ~1.8x. It is physical; without grid current the 6973 grids ran to +251 V.
+  - **Settling:** renders now run 1 s first (`start.settle_s`), because the supply starts from its DC point at the mains peak.
+  - What would help is engine work: step-size selection instead of recursive halving, and M5's deferred speed target (circuit-sim plan, "Phase 3 in circuitsim").
+- **Production accuracy on the clip's first attack.** Production circuitsim against its converged solution: -56.8 dB / CV 0.19 V on the whole clip (Phase 2: -76.3 dB / 0.006 V). That is inside the plan's -55 dB / 0.2 V, with the error at the clip's first attack from rest, where the CV falls ~80 V in ~2 ms. 10x tighter error tolerances give 0.07 V (+19% time), 4x oversampling 0.04 V (+43%). Not changed (speed); the user's call.
+- **ngspice needed the rectifier's capacitance.** Production ngspice stopped ~1 ms in, where the GZ34 first cuts off, until T302's winding capacitance and the selenium cells' capacitance went in. Both are physical: an inductive kick into a node with nothing on it.
+- **Sourced values not yet applied** (they change the slice's behaviour; separate steps):
+  - T103's ratio: Sowter's replacement is 17+17:1+1, i.e. 8.5 per secondary half, against the provisional 3.0.
+  - The AC THRESHOLD pots are tapped, with R113/R114 hanging off the taps (GroupDIY); R115B may be 100K on some prints.
+- **Open:**
+  - the 5651's ignition (it is lit from the DC point on);
+  - electrolytic ESR;
+  - selenium reverse leakage (no absolute figure found);
+  - the meter's sensitivity, which would calibrate ZERO without the measured current;
+  - wiring the setup into renders: renders use the trims as given, and the nominal genome needs none; Phase 4's unit pipeline should apply `setup.adjust`.
+
 ### Phase 4: Simulation Runner and Measurement Suite
 
 **Goal:** Reliable, parallel, cached simulation plus objective measurements of every unit.
@@ -304,10 +364,10 @@ Findings that change later work:
 These are the mechanisms most likely responsible for emergent character. Verify each is present and measurable in the simulation:
 
 - [ ] Control voltage on the same grids as the audio, so push-pull imbalance produces thump and signal-dependent asymmetry
-- [ ] Shared power supply rails whose sag affects audio path and sidechain simultaneously
+- [x] Shared power supply rails whose sag affects audio path and sidechain simultaneously (Phase 3: measurable: under a 0 dBFS burst the 6386 cathode return moves 6 V through the bias choke and the 6973 screen tap sags 6 V; ripple reaches the output through tube mismatch)
 - [ ] Grid current that loads the timing networks, producing program-dependent attack/release
 - [x] Transformer hysteresis, so low-frequency history shapes later transients (Phase 2: Jiles-Atherton cores; measurable: bass-rich program compresses up to ~2 dB differently than with linear cores)
-- [ ] Per-instance tube mismatch, affecting even-harmonic balance
+- [ ] Per-instance tube mismatch, affecting even-harmonic balance (Phase 3 built it: every tube and part draws its own deviation, each 6386 triode separately; its effect on harmonics is Phase 4's to measure)
 - [ ] Interelectrode capacitances, including Miller effect in the gain stage
 - [ ] (Later) Noise sources: tube shot and flicker noise, resistor thermal noise
 - [ ] (Later) Slow thermal drift of cathode emission

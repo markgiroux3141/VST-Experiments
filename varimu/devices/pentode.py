@@ -4,6 +4,9 @@ Koren, "Improved vacuum tube models for SPICE simulations", 1996:
     E1  = (Vg2 / Kp) * ln(1 + exp(Kp * (1/mu + Vg1 / Vg2)))
     Ip  = (E1^Ex / Kg1) * (1 + sgn(E1)) * atan(Vp / Kvb)
     Ig2 = (Vg1 + Vg2/mu)^1.5 / Kg2
+
+The control grid conducts with the triode's grid-current law (GridCurrent), if
+the model has one.
 """
 
 from __future__ import annotations
@@ -12,7 +15,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from varimu.devices.triode import num, softplus, spice_softplus
+from varimu.devices.triode import GridCurrent, num, softplus, spice_softplus
 
 _VG2_MIN = 1e-3  # avoids division by zero when the screen is at 0 V
 
@@ -50,6 +53,7 @@ class KorenPentode:
 class Pentode:
     name: str
     model: KorenPentode
+    grid: GridCurrent | None = None  # control-grid current
     c_g1k: float = 0.0  # input capacitance (F)
     c_g1p: float = 0.0
     c_pk: float = 0.0  # output capacitance
@@ -59,6 +63,9 @@ class Pentode:
 
     def ig2(self, vg1, vg2):
         return self.model.ig2(vg1, vg2)
+
+    def ig1(self, vg1):
+        return np.zeros_like(np.asarray(vg1, float)) if self.grid is None else self.grid.ig(vg1)
 
     @property
     def subckt_name(self) -> str:
@@ -73,6 +80,8 @@ class Pentode:
             f"Bp p k I={{{self.model.spice_ip(vg1, vg2, vp)}}}",
             f"Bg2 g2 k I={{{self.model.spice_ig2(vg1, vg2)}}}",
         ]
+        if self.grid is not None:
+            lines.append(f"Bg1 g1 k I={{{self.grid.spice_ig(vg1)}}}")
         for nm, a, b, c in (
             ("Cg1k", "g1", "k", self.c_g1k),
             ("Cg1p", "g1", "p", self.c_g1p),

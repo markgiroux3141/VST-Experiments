@@ -144,6 +144,7 @@ fn simulate<'py>(
     st.set_item("states", s.states)?;
     st.set_item("device_evaluations", s.device_evaluations)?;
     st.set_item("factorizations", s.factorizations)?;
+    st.set_item("exact_retries", s.exact_retries)?;
     Ok((probes, st).into_pyobject(py)?.into_any())
 }
 

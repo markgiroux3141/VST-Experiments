@@ -68,19 +68,21 @@ fn run(ir: &CircuitIr, opts: Options, input: &[f64], h: f64) -> (Vec<Vec<f64>>, 
 }
 
 /// Worst difference between two runs over the nodes, relative to each
-/// node's Newton tolerance, and of the `floating` island's common mode in
-/// volts (its first node; the others are compared relative to it).
+/// node's Newton tolerance (and that node), and of the `floating` island's
+/// common mode in volts (its first node; the others are compared relative
+/// to it).
 fn compare(
     unknowns: &[Unknown],
     a: &[Vec<f64>],
     b: &[Vec<f64>],
     opts: &Options,
     floating: &[&str],
-) -> (f64, f64) {
+) -> (f64, String, f64) {
     let common = unknowns
         .iter()
         .position(|u| floating.first() == Some(&u.describe().as_str()));
     let (mut worst, mut worst_floating) = (0.0f64, 0.0f64);
+    let mut worst_at = 0;
     for (a, b) in a.iter().zip(b) {
         let (ca, cb) = common.map_or((0.0, 0.0), |c| (a[c], b[c]));
         worst_floating = worst_floating.max((ca - cb).abs());
@@ -94,20 +96,17 @@ fn compare(
                 (*p, *q)
             };
             let tol = opts.reltol * p.abs().max(q.abs()) + opts.vntol;
-            worst = worst.max((p - q).abs() / tol);
+            let e = (p - q).abs() / tol;
+            if e > worst {
+                (worst, worst_at) = (e, j);
+            }
         }
     }
-    (worst, worst_floating)
+    (worst, unknowns[worst_at].describe(), worst_floating)
 }
 
 #[test]
 fn dk_agrees_with_full_mna_on_the_670() {
-    let esdirk4 = Options::with_method(Method::Esdirk4);
-    let production = Options {
-        error_abstol: 0.01,
-        error_reltol: 1e-3,
-        ..esdirk4
-    };
     let k = 2;
     let input = tone(0.0, 0.006, k);
     let h = 1.0 / (FS * k as f64);
@@ -116,6 +115,12 @@ fn dk_agrees_with_full_mna_on_the_670() {
     for name in ["default.json", "tc1.json", "pots_min.json", "mismatch.json"] {
         let ir = fixture(name);
         let unknowns = Mna::from_ir(&ir, 1e-12).unwrap().unknowns;
+        let esdirk4 = Options::with_method(Method::Esdirk4);
+        let production = Options {
+            error_abstol: 0.01,
+            error_reltol: 1e-3,
+            ..esdirk4
+        };
         for opts in [
             Options::with_method(Method::Trapezoidal),
             esdirk4,
@@ -139,9 +144,10 @@ fn dk_agrees_with_full_mna_on_the_670() {
                 };
                 let (dk, st_dk) = run(&ir, o, &input, h);
                 assert_eq!(st_dk.solver, "dk");
-                let (worst, floating) = compare(&unknowns, &mna, &dk, &opts, &FLOATING);
+                let (worst, at, floating) = compare(&unknowns, &mna, &dk, &opts, &FLOATING);
                 println!(
-                    "{name:14} {:?} control {} reuse {newton_reuse}: worst {worst:.2e} tol,                      floating {floating:.1e} V; iterations mna {} dk {}, substeps {} / {}",
+                    "{name:14} {:?} control {} reuse {newton_reuse}: worst {worst:.2e} tol ({at}), \
+                     floating {floating:.1e} V; iterations mna {} dk {}, substeps {} / {}",
                     opts.method,
                     opts.error_abstol > 0.0,
                     st_mna.iterations,
@@ -163,7 +169,7 @@ fn dk_agrees_with_full_mna_on_the_670() {
                         vntol: opts.error_abstol,
                         ..opts
                     };
-                    let (w, floating) = compare(&unknowns, &mna, &dk, &err_opts, &FLOATING);
+                    let (w, _, floating) = compare(&unknowns, &mna, &dk, &err_opts, &FLOATING);
                     println!("  decisions differ: {w:.2} x error tolerance");
                     assert!(w < 30.0 && floating < 0.5, "{name}: {w}, {floating} V");
                     continue;

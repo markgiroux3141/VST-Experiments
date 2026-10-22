@@ -71,6 +71,63 @@ pub trait Device: fmt::Debug + Send + Sync {
     fn set_state(&mut self, _state: &[f64]) {}
 }
 
+/// Largest port count [`Parallel`] sums without allocating (a pentode has 3).
+const PARALLEL_MAX_PORTS: usize = 4;
+
+/// Devices on the same pins, in parallel (a bank of triodes): one set of
+/// ports, their currents and Jacobians summed, so the Newton system doesn't
+/// grow with the bank. Stateless devices only (see [`Device::has_state`]).
+#[derive(Debug)]
+pub struct Parallel {
+    parts: Vec<Box<dyn Device>>,
+}
+
+impl Parallel {
+    /// `parts` must share a port count of at most [`PARALLEL_MAX_PORTS`].
+    pub fn new(parts: Vec<Box<dyn Device>>) -> Parallel {
+        let p = parts[0].ports();
+        assert!(p <= PARALLEL_MAX_PORTS && parts.iter().all(|d| d.ports() == p));
+        assert!(parts.iter().all(|d| !d.has_state()));
+        Parallel { parts }
+    }
+}
+
+impl Device for Parallel {
+    fn ports(&self) -> usize {
+        self.parts[0].ports()
+    }
+
+    fn eval(&self, v: &[f64], i: &mut [f64], g: &mut [f64]) {
+        let p = self.ports();
+        let (mut ik, mut gk) = (
+            [0.0; PARALLEL_MAX_PORTS],
+            [0.0; PARALLEL_MAX_PORTS * PARALLEL_MAX_PORTS],
+        );
+        self.parts[0].eval(v, i, g);
+        for d in &self.parts[1..] {
+            d.eval(v, &mut ik[..p], &mut gk[..p * p]);
+            for (a, b) in i.iter_mut().zip(&ik[..p]) {
+                *a += b;
+            }
+            for (a, b) in g.iter_mut().zip(&gk[..p * p]) {
+                *a += b;
+            }
+        }
+    }
+
+    fn limit(&self, v: &mut [f64], v_old: &[f64]) -> bool {
+        let mut limited = false;
+        for d in &self.parts {
+            limited |= d.limit(v, v_old);
+        }
+        limited
+    }
+
+    fn shunt(&self, port: usize) -> f64 {
+        self.parts.iter().map(|d| d.shunt(port)).sum()
+    }
+}
+
 /// The device for an IR model.
 pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
     match model {

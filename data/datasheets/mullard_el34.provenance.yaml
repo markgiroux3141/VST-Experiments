@@ -1,0 +1,25 @@
+device: EL34
+document: "Mullard EL34 Output pentode, data sheets D1-D5 and curves C1-C14"
+publisher: Mullard
+date: "D1-D2 Jan 1964, D3-D4 Apr 1962, D5 and C1-C14 Jan 1960 (1)"
+local_copy: sources/mullard_el34.pdf
+local_copy_sha256: 2e7de7adde4147ce298eea3a2d35103bf433f34fa5a134ab205f495ae6964453
+scan_source: "web: https://frank.pocnet.net/sheets/129/e/EL34.pdf (Frank's Electron Tube Data Sheets)"
+digitized_with: "rendered at 300-800 dpi (PyMuPDF); grid lines from pixel profiles, axes calibrated on two labelled grid lines, curve crossings located along pixel rows/columns, each curve assignment checked by eye (Claude Code subagent, scratch scripts not kept)"
+digitized_by: Claude Code
+digitized_on: 2026-10-21
+files:
+  mullard_el34_triode_plate.csv:
+    figure: "sheet C4 (PDF p.9), drawing 6589: anode current against anode voltage with control-grid voltage as parameter when triode connected"
+    columns: "vg1_v, va_v, ia_a"
+    curves: "Vg1 = 0, -5, -10, -15, -20, -25, -30, -35 V"
+    coverage: "Ia >= ~4 mA; the last 1-2 points per curve lie in the dashed region beyond the pa+g2 = 30 W line"
+axis_calibration: "labelled grid lines (Va 0-400 V, Ia 0-300 mA)"
+estimated_error: >-
+  About +-2 mA or +-3%, up to +-5% above Va ~ 350 V. Check: the 30 W line reads 30-31 W
+  up to Va 335 V. "Triode connected" here is g2 to the anode (D1) and g3 to the cathode
+  (D3's push-pull data); the 670 ties g3 to the anode too, for which no data was found.
+  At the printed point (Va 250 V, Ia 70 mA, Vg1 -15.5 V) the curve gives Vg1 ~ -15.9 V;
+  its slopes give gm ~ 9.5 mA/V, ra ~ 1.0 kOhm, mu ~ 11 against the printed 11.5 mA/V,
+  910 ohm, 10.5.
+notes: "Fit: varimu.devices.library.build_el34t (Koren triode, least squares)."

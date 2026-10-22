@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.special import lambertw
+from scipy.special import lambertw, wrightomega
 
 from varimu.devices.triode import num, softplus, spice_softplus
 
@@ -31,7 +31,15 @@ class JunctionDiode:
         if self.rs_ohm == 0:
             return self.is_a * np.expm1(v / nvt)
         a = self.is_a * self.rs_ohm / nvt
-        w = lambertw(a * np.exp((v + self.is_a * self.rs_ohm) / nvt)).real
+        t = (v + self.is_a * self.rs_ohm) / nvt
+        # W(a e^t); where e^t overflows (far forward), the Wright omega W(e^y) at
+        # y = ln a + t, as the Rust engine does.
+        with np.errstate(over="ignore"):
+            z = a * np.exp(t)
+        far = ~np.isfinite(z)
+        w = lambertw(np.where(far, 1.0, z)).real
+        if np.any(far):
+            w = np.where(far, wrightomega(np.log(a) + t).real, w)
         return nvt / self.rs_ohm * w - self.is_a
 
     @property

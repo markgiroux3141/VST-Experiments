@@ -1,0 +1,22 @@
+device: "5651"
+document: "Tung-Sol 5651 Tentative data"
+publisher: Tung-Sol Electric Inc.
+date: 1958-05-01
+local_copy: sources/tungsol_5651.pdf
+local_copy_sha256: 3bc1dced2d5b6553b85c4c30e916228c82930e4550322554e6c39cdac957b54c
+scan_source: "web: https://frank.pocnet.net/sheets/127/5/5651.pdf"
+digitized_with: "rendered at 300-800 dpi (PyMuPDF); grid lines from pixel profiles, axes calibrated on two labelled grid lines, curve crossings located along pixel rows/columns, each curve assignment checked by eye (Claude Code subagent, scratch scripts not kept)"
+digitized_by: Claude Code
+digitized_on: 2026-10-21
+files:
+  tungsol_5651_drop.csv:
+    figure: "PDF p.3: 5651 typical average tube voltage drop vs. tube current plot"
+    columns: "i_a, v_v"
+    curves: "one straight line, 1.45-3.6 mA"
+axis_calibration: "labelled grid lines"
+estimated_error: "+-0.1 V"
+notes: >-
+  The same plot has an unlabelled zig-zag band on a broken axis, not used. RCA (1948,
+  sources/rca_5651.pdf) and Sylvania (1955) print: operating voltage min 82 / av. 87 /
+  max 92 V, current 1.5-3.5 mA, regulation over that range max 3 V; Tung-Sol: average
+  regulation 1.5 V.

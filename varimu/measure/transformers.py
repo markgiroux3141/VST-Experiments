@@ -93,7 +93,7 @@ def fixture(key: str, overrides: Mapping[str, Any] | None = None, cores: str = "
         around = [
             _r("pa3", "in", "pa3", rp3),
             _r("pb3", "pb3", "0", rp3),
-            _r("bp", "bp", "0", 1.0),
+            _r("ur", "ur", "0", 1.0),
             _r("136", "ay", "bk", p["r136_ohm"]),
             _r("bk", "bk", "0", 1.0),
             _r("134", "fy", "0", p["r134_ohm"]),
@@ -117,7 +117,8 @@ def fixture(key: str, overrides: Mapping[str, Any] | None = None, cores: str = "
 
 def _settings() -> io.TransientSettings:
     s = io.TransientSettings.from_sim_settings(engine="circuitsim")
-    return dataclasses.replace(s, full_scale_volts_peak=1.0)
+    # No power supply to settle: these drive each transformer from its DC point.
+    return dataclasses.replace(s, full_scale_volts_peak=1.0, settle_s=0.0)
 
 
 def run(fx: Fixture, x: np.ndarray, settings: io.TransientSettings | None = None) -> dict:

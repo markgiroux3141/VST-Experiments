@@ -48,7 +48,8 @@ PHYSICAL = [
     ("v6386_a.mu_spread", "6386 bank A mu"),
     ("v6386_b.mu_spread", "6386 bank B mu"),
     ("grid_contact_v", "6386 grid contact potential (both banks)"),
-    ("psu_source_impedance_ohm", "B+ source impedance"),
+    ("l302_r_ohm", "Bias choke L302 resistance (6386 cathode return)"),
+    ("t302_r_half_ohm", "Mains transformer HV winding resistance"),
 ]
 LABELS = {
     "input_atten_db": "Input attenuator (dB)",

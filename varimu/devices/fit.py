@@ -261,3 +261,109 @@ def fit_6386(
         if best is None or sol.cost < best.cost:
             best = sol
     return unpack(best.x)
+
+
+# --- Power supply devices (Phase 3) -------------------------------------------------
+
+
+def load_csv(name: str, root: Path = DATASHEETS) -> np.ndarray:
+    """A digitized curve (see data/datasheets/README.md) as an array, header skipped."""
+    return np.loadtxt(root / name, delimiter=",", skiprows=1, ndmin=2)
+
+
+@dataclass(frozen=True)
+class CurveFit:
+    """Fit residuals on the digitized points, in each point's estimated error (sigma)."""
+
+    rms_sigma: float
+    max_sigma: float
+    rms_pct: float  # RMS of 100 * (model / data - 1)
+
+    def as_dict(self):
+        return {k: float(v) for k, v in self.__dict__.items()}
+
+
+def _report(model_i, data_i, sigma) -> CurveFit:
+    z = (model_i - data_i) / sigma
+    return CurveFit(
+        float(np.sqrt(np.mean(z**2))),
+        float(np.max(np.abs(z))),
+        float(100 * np.sqrt(np.mean((model_i / data_i - 1) ** 2))),
+    )
+
+
+def fit_koren_triode(vg, vp, ip, sigma):
+    """Koren triode (mu, ex, kg1, kp, kvb) by least squares on plate-curve points
+    (each weighted by its sigma). Returns (KorenTriode, CurveFit)."""
+    from varimu.devices.triode import KorenTriode
+
+    vg, vp, ip, sigma = (np.asarray(a, float) for a in (vg, vp, ip, sigma))
+
+    def make(x):
+        return KorenTriode(*np.exp(x))
+
+    def resid(x):
+        return (make(x).ip(vg, vp) - ip) / sigma
+
+    best = None
+    for x0 in ([10.0, 1.35, 1000.0, 50.0, 30.0], [10.0, 1.4, 500.0, 300.0, 300.0]):
+        sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000)
+        if best is None or sol.cost < best.cost:
+            best = sol
+    m = make(best.x)
+    return m, _report(m.ip(vg, vp), ip, sigma)
+
+
+def fit_koren_pentode(plate, screen, plate_sigma, screen_sigma, ex: float | None = None):
+    """Koren pentode (mu, ex, kg1, kg2, kp, kvb) by least squares on plate-current points
+    `plate` (columns vg1, vg2, vp, ip) and screen-current points `screen` (vg1, vg2,
+    ig2), jointly: mu sets both. `ex` fixed if given. Returns (KorenPentode, plate
+    CurveFit, screen CurveFit)."""
+    from varimu.devices.pentode import KorenPentode
+
+    plate, screen = np.asarray(plate, float), np.asarray(screen, float)
+
+    def make(x):
+        e = np.exp(x)
+        if ex is None:
+            return KorenPentode(e[0], e[1], e[2], e[3], e[4], e[5])
+        return KorenPentode(e[0], ex, e[1], e[2], e[3], e[4])
+
+    def resid(x):
+        m = make(x)
+        rp = (m.ip(plate[:, 0], plate[:, 1], plate[:, 2]) - plate[:, 3]) / plate_sigma
+        rs = (m.ig2(screen[:, 0], screen[:, 1]) - screen[:, 2]) / screen_sigma
+        return np.r_[rp, rs]
+
+    x0 = [25.0, 1.35, 3000.0, 20000.0, 100.0, 20.0]
+    if ex is not None:
+        x0.pop(1)
+    sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000)
+    m = make(sol.x)
+    return (
+        m,
+        _report(m.ip(plate[:, 0], plate[:, 1], plate[:, 2]), plate[:, 3], plate_sigma),
+        _report(m.ig2(screen[:, 0], screen[:, 1]), screen[:, 2], screen_sigma),
+    )
+
+
+def fit_junction_diode(v, i, sigma, name: str = "fit"):
+    """Shockley diode with series resistance (is, n, rs) by least squares on forward
+    points. Returns (JunctionDiode, CurveFit)."""
+    from varimu.devices.diode import JunctionDiode
+
+    v, i, sigma = (np.asarray(a, float) for a in (v, i, sigma))
+
+    def make(x):
+        return JunctionDiode(name, *np.exp(x))
+
+    def resid(x):
+        return (make(x).i(v) - i) / sigma
+
+    best = None
+    for x0 in ([1e-6, 5.0, 1.0], [1e-4, 10.0, 0.5], [1e-8, 3.0, 2.0]):
+        sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000)
+        if best is None or sol.cost < best.cost:
+            best = sol
+    m = make(best.x)
+    return m, _report(m.i(v), i, sigma)

@@ -199,21 +199,24 @@ impl Triode {
         (ip, d_vg, d_vp)
     }
 
-    /// Grid current and d/dVg (zero without a grid-current model). Python's
-    /// `x ** 1.5` is `x sqrt(x)` here (within an ulp).
+    /// Grid current and d/dVg (zero without a grid-current model).
     pub fn grid(&self, vg: f64) -> (f64, f64) {
-        match &self.grid {
-            None => (0.0, 0.0),
-            Some(g) => {
-                let t = (vg - g.contact_v) / g.smooth_v;
-                let (sp, sg) = softplus_sigmoid(t, fastmath::exp(-t.abs()));
-                let x = g.smooth_v * sp;
-                let sx = x.sqrt();
-                (g.perveance * (x * sx), 1.5 * g.perveance * sx * sg)
-            }
-        }
+        self.grid
+            .as_ref()
+            .map_or((0.0, 0.0), |g| grid_current(g, vg))
     }
 }
+/// Grid current `GridCurrent` at grid-cathode voltage `vg`, and d/dVg: the
+/// triode's and the pentode's control grid. Python's `x ** 1.5` is
+/// `x sqrt(x)` here (within an ulp).
+pub fn grid_current(g: &ir::GridCurrent, vg: f64) -> (f64, f64) {
+    let t = (vg - g.contact_v) / g.smooth_v;
+    let (sp, sg) = softplus_sigmoid(t, fastmath::exp(-t.abs()));
+    let x = g.smooth_v * sp;
+    let sx = x.sqrt();
+    (g.perveance * (x * sx), 1.5 * g.perveance * sx * sg)
+}
+
 impl Device for Triode {
     fn ports(&self) -> usize {
         2

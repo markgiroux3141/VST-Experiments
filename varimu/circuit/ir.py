@@ -17,6 +17,8 @@ Conventions:
 - mutual inductance is one Coupling (SPICE K) per inductor pair. The linear
   engine groups connected inductors and stamps the inductance matrix
   M_ij = k_ij sqrt(L_i L_j) directly (docs/CIRCUIT_SIM_PLAN.md, M1 notes);
+- a SineSource is SPICE's SIN source (mains, Phase 3): the DC operating
+  point takes it at its t = 0 value, as ngspice's transient op does;
 - a transformer on a nonlinear core (Phase 2) is Windings on a core node,
   whose voltage is the flux density B (1 V = 1 mT, varimu.devices.core),
   plus a MagneticCore device from that node to ground (or a resistor, in
@@ -37,7 +39,7 @@ from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.pentode import KorenPentode, Pentode
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
 
-IR_VERSION = 2  # 2: Winding, MagneticCore (Phase 2)
+IR_VERSION = 3  # 2: Winding, MagneticCore (Phase 2); 3: SineSource (Phase 3, mains)
 GROUND = "0"
 
 
@@ -95,6 +97,29 @@ class VoltageSource:
 
 
 @dataclass(frozen=True)
+class SineSource:
+    """V(pos) - V(neg) = offset_v + amplitude_v sin(2 pi freq_hz t + phase_deg).
+
+    SPICE's SIN(VO VA FREQ 0 0 PHASE). The DC operating point that starts a
+    run takes the value at t = 0 (offset + amplitude sin(phase)), so phase 90
+    starts at the peak with no jump.
+    """
+
+    name: str
+    pos: str
+    neg: str
+    offset_v: float
+    amplitude_v: float
+    freq_hz: float
+    phase_deg: float
+
+    def at(self, t: float) -> float:
+        return self.offset_v + self.amplitude_v * math.sin(
+            2 * math.pi * self.freq_hz * t + math.radians(self.phase_deg)
+        )
+
+
+@dataclass(frozen=True)
 class Winding:
     """`turns` turns on the core whose node is `core`, of cross-section `area_m2`.
 
@@ -124,7 +149,7 @@ class Device:
     nodes: tuple[str, ...]
 
 
-Element = Resistor | Capacitor | Inductor | Coupling | VoltageSource | Winding | Device
+Element = Resistor | Capacitor | Inductor | Coupling | VoltageSource | SineSource | Winding | Device
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
 
 PINS: dict[type, tuple[str, ...]] = {
@@ -141,6 +166,7 @@ _PREFIX = {
     Inductor: "L",
     Coupling: "K",
     VoltageSource: "V",
+    SineSource: "V",
     Winding: "L",
 }
 
@@ -153,7 +179,7 @@ def instance_prefix(model: DeviceModel) -> str:
 def element_nodes(el: Element) -> tuple[str, ...]:
     if isinstance(el, Resistor | Capacitor | Inductor):
         return (el.a, el.b)
-    if isinstance(el, VoltageSource):
+    if isinstance(el, VoltageSource | SineSource):
         return (el.pos, el.neg)
     if isinstance(el, Winding):
         return (el.a, el.b, el.core)
@@ -256,6 +282,11 @@ class CircuitIR:
                     raise IRError(f"{el.name}.k = {el.k} must be in [-1, 0) or (0, 1]")
             elif isinstance(el, VoltageSource):
                 _finite(f"{el.name}.dc_v", el.dc_v)
+            elif isinstance(el, SineSource):
+                _finite(f"{el.name}.offset_v", el.offset_v)
+                _finite(f"{el.name}.amplitude_v", el.amplitude_v)
+                _positive(f"{el.name}.freq_hz", el.freq_hz)
+                _finite(f"{el.name}.phase_deg", el.phase_deg)
             elif isinstance(el, Winding):
                 _positive(f"{el.name}.turns", el.turns)
                 _positive(f"{el.name}.area_m2", el.area_m2)
@@ -371,6 +402,9 @@ def _validate_model(m: DeviceModel) -> None:
             nonneg(what, getattr(m, what))
     elif isinstance(m, Pentode):
         values += [(f.name, getattr(m.model, f.name)) for f in dataclasses.fields(m.model)]
+        if m.grid is not None:
+            values += [("grid.perveance", m.grid.perveance), ("grid.smooth_v", m.grid.smooth_v)]
+            _finite(f"{m.name}.grid.contact_v", m.grid.contact_v)
         for what in ("c_g1k", "c_g1p", "c_pk"):
             nonneg(what, getattr(m, what))
     elif isinstance(m, JunctionDiode):
@@ -399,6 +433,7 @@ _ELEMENT_KINDS = {
     "inductor": Inductor,
     "coupling": Coupling,
     "voltage_source": VoltageSource,
+    "sine_source": SineSource,
     "winding": Winding,
     "device": Device,
 }
@@ -476,6 +511,10 @@ def _decode_model(d: dict) -> DeviceModel:
         )
     if cls is Pentode:
         return _fields(
-            Pentode, d, tagged=True, model=lambda p: _fields(KorenPentode, p, tagged=False)
+            Pentode,
+            d,
+            tagged=True,
+            model=lambda p: _fields(KorenPentode, p, tagged=False),
+            grid=lambda g: None if g is None else _fields(GridCurrent, g, tagged=False),
         )
     return _decode(d, _MODEL_KINDS)

@@ -26,6 +26,7 @@ from varimu.circuit.ir import (
     Inductor,
     Resistor,
     Section,
+    SineSource,
     VoltageProbe,
     VoltageSource,
 )
@@ -129,6 +130,28 @@ def push_pull():
     return circuit(els, ["ga", "gb", "pa", "pb", "k", "s"], [t])
 
 
+def rectifier():
+    """Full-wave rectifier off the mains: two anti-phase 60 Hz sine sources (a
+    centre-tapped winding, 50 Ohm each half) into GZ34 anodes, a 4 uF reservoir and a
+    100 Ohm / 20 uF filter into 2k. Phase 90: the run starts at the peak, from the DC
+    point with the reservoir charged."""
+    d = load_device("GZ34")
+    els = [
+        Resistor("RIN", "in", "0", 1e3),
+        SineSource("VA", "sa", "0", 0.0, 300.0, 60.0, 90.0),
+        SineSource("VB", "sb", "0", 0.0, 300.0, 60.0, 270.0),
+        Resistor("RWA", "sa", "aa", 50.0),
+        Resistor("RWB", "sb", "ab", 50.0),
+        Device("XDA", d.name, ("aa", "k")),
+        Device("XDB", d.name, ("ab", "k")),
+        Capacitor("C1", "k", "0", 4e-6),
+        Resistor("RF", "k", "o", 100.0),
+        Capacitor("C2", "o", "0", 20e-6),
+        Resistor("RL", "o", "0", 2e3),
+    ]
+    return circuit(els, ["k", "o", "aa"], [d])
+
+
 # name -> (circuit, input amplitude in V, bound at k = 8 in dB re signal). Measured
 # 2026-10-14 (worst probe, 30 ms of 100 Hz + 1 kHz + 10 kHz), k = 2 / 4 / 8:
 #   diode_clipper  -39.4 / -51.5 / -63.3 dB
@@ -136,11 +159,13 @@ def push_pull():
 #   push_pull      -44.9 / -55.2 / -67.9 dB
 # falling 12 dB per doubling: what's left is the fixed-step trapezoidal error
 # (at k = 2 the 10 kHz tone's phase error, (wh)^2 / 12 ~ 0.9%), not Newton's.
-# DC agrees to 1e-8 of the largest voltage or better.
+# DC agrees to 1e-8 of the largest voltage or better. The rectifier (no audio, the
+# mains only; 2026-10-21): -108.6 / -120.6 / -132.1 dB, DC 5e-11.
 SMALL = {
     "diode_clipper": (diode_clipper, 3.0, -60),
     "triode_stage": (triode_stage, 3.0, -60),
     "push_pull": (push_pull, 6.0, -64),
+    "rectifier": (rectifier, 0.0, -125),
 }
 
 

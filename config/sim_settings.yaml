@@ -15,6 +15,17 @@ audio:
   # sets how hard that drives the unit, so this is a convention, not physics.
   full_scale_volts_peak: 13.80
 
+start:
+  # Every run starts at the DC operating point with the mains at its peak (phase 90),
+  # so the reservoir capacitors start charged to the peak, not to their ripple's
+  # average. Renders first run this long with the input held at its first sample;
+  # the outputs leave it out (both engines; TransientSettings.settle_s). Measured
+  # 2026-10-21 on the idle unit (circuitsim): from the DC point the unregulated rail
+  # falls ~100 V and settles to 0.1% within ~0.6 s; the bias supply within ~0.5 s;
+  # the 6973 screen tap (C307B, ~1.3 s time constant) is within ~1% at 1 s. The
+  # regulated 240 V rail moves < 1% throughout.
+  settle_s: 1.0
+
 simulator:
   primary: TBD       # xyce | ngspice. Decided after Phase 2 (see plan: Open Decisions).
   fallback: ngspice

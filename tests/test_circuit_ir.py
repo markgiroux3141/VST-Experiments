@@ -60,7 +60,8 @@ def test_rust_round_trip(case):
 def test_rust_rejects_what_python_rejects(default_ir):
     circuitsim = pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
     d = default_ir.to_dict()
-    d["sections"][0]["elements"][1]["name"] = "VBP"
+    els = d["sections"][0]["elements"]
+    els[1]["name"] = els[0]["name"]
     with pytest.raises(ValueError, match="duplicate element"):
         circuitsim.ir_roundtrip(json.dumps(d))
     with pytest.raises(IRError, match="duplicate element"):
@@ -71,11 +72,11 @@ def test_ir_is_the_circuit_the_netlist_describes(default_ir):
     assert default_ir.input_node == nl.INPUT_NODE
     assert tuple(p.spice for p in default_ir.probes) == nl.SAVE
     els = {e.name: e for e in default_ir.elements()}
-    assert els["XVA"] == Device("XVA", "6386_a", ("pa", "ga", "ka"))
+    assert els["XV101A"] == Device("XV101A", "6386_V101A", ("pa", "ga", "ka"))
     assert els["LT101_sa"] == Winding("LT101_sa", "T101_sa_l", "cv", "t101_core", 4.5 * 1320, 1e-4)
     assert els["XT101_CORE"] == Device("XT101_CORE", "CORE_T101", ("t101_core", "0"))
     # Device models carry every parameter (Rust never reads the YAML).
-    bank = default_ir.model("6386_a")
+    bank = default_ir.model("6386_V101A")
     assert len(bank.plate.mus) == len(bank.plate.weights) > 1
 
 
@@ -110,8 +111,8 @@ def _with_extra(ir: CircuitIR, *els) -> CircuitIR:
         (Resistor("Rx", "a", "a", 1.0), "both ends"),
         (Resistor("Rx", "a", "b c", 1.0), "bad node name"),
         (Device("XVZ", "nope", ("a", "b", "c")), "unknown model"),
-        (Device("XVZ", "6386_a", ("a", "b")), "pins"),
-        (Device("DZ", "6386_a", ("a", "b", "c")), "must start with X"),
+        (Device("XVZ", "6386_V101A", ("a", "b")), "pins"),
+        (Device("DZ", "6386_V101A", ("a", "b", "c")), "must start with X"),
         (Coupling("Kx", "LT101_p", "R103", 0.5), "not an inductor"),
         (Coupling("Kx", "LT101_p", "LT101_sa", 1.5), "must be in"),
     ],

@@ -202,3 +202,57 @@ fn junction_diode_limits_and_tubes_do_not() {
         }
     }
 }
+
+/// A [`devices::Parallel`] of the fixtures' tubes on one set of ports is the
+/// sum of its parts (a 6386 bank: four triodes, each its own model), and the
+/// 670's netlist merges exactly its banks' triodes into one instance each.
+#[test]
+fn parallel_devices_sum_their_parts() {
+    let entries = fixtures();
+    let triodes: Vec<&Entry> = entries
+        .iter()
+        .filter(|e| {
+            matches!(&e.model, DeviceModel::Triode(t)
+                if t.name.starts_with("6386_V") && !t.name.ends_with("_mismatch"))
+        })
+        .collect();
+    assert_eq!(triodes.len(), 8, "the fixtures' 6386 triodes");
+    let bank = devices::Parallel::new(
+        triodes[..4]
+            .iter()
+            .map(|e| devices::from_model(&e.model))
+            .collect(),
+    );
+    for v in [[250.0, -5.0], [180.0, -30.0], [100.0, 0.4], [-5.0, -1.0]] {
+        let (i, g) = eval(&bank, &v);
+        let (mut i_sum, mut g_sum) = (vec![0.0; 2], vec![0.0; 4]);
+        for e in &triodes[..4] {
+            let (ik, gk) = eval(devices::from_model(&e.model).as_ref(), &v);
+            i_sum.iter_mut().zip(&ik).for_each(|(a, b)| *a += b);
+            g_sum.iter_mut().zip(&gk).for_each(|(a, b)| *a += b);
+        }
+        for (a, b) in i.iter().chain(&g).zip(i_sum.iter().chain(&g_sum)) {
+            assert!(
+                (a - b).abs() <= 1e-15 * b.abs().max(1e-12),
+                "{a} vs {b} at {v:?}"
+            );
+        }
+    }
+
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let ir = circuitsim::ir::CircuitIr::from_json(
+        &fs::read_to_string(dir.join("default.json")).unwrap(),
+    )
+    .unwrap();
+    let mna = circuitsim::mna::Mna::from_ir(&ir, 1e-12).unwrap();
+    let merged: Vec<&str> = mna
+        .devices
+        .iter()
+        .map(|d| d.name.as_str())
+        .filter(|n| n.contains('+'))
+        .collect();
+    assert_eq!(
+        merged,
+        ["XV101A+XV102A+XV103B+XV104B", "XV101B+XV102B+XV103A+XV104A"]
+    );
+}

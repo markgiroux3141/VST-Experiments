@@ -20,6 +20,10 @@
 //! A transformer on a nonlinear core (main plan Phase 2) is [`Winding`]s on a
 //! core node, whose voltage is the flux density (1 V = 1 mT,
 //! [`TESLA_PER_V`]), and a [`MagneticCore`] device from that node to ground.
+//!
+//! A [`SineSource`] is SPICE's `SIN` source (the mains, main plan Phase 3):
+//! the DC operating point takes it at its t = 0 value, as ngspice's
+//! transient operating point does.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -27,7 +31,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 /// JSON schema version. Bump it (in Python too) on any incompatible change.
-pub const IR_VERSION: u32 = 2;
+pub const IR_VERSION: u32 = 3;
 
 /// Flux density per volt on a core node (`varimu.devices.core.TESLA_PER_V`).
 pub const TESLA_PER_V: f64 = 1e-3;
@@ -71,6 +75,7 @@ pub enum Element {
     Inductor(Inductor),
     Coupling(Coupling),
     VoltageSource(VoltageSource),
+    SineSource(SineSource),
     Winding(Winding),
     Device(Device),
 }
@@ -122,6 +127,37 @@ pub struct VoltageSource {
     pub pos: String,
     pub neg: String,
     pub dc_v: f64,
+}
+
+/// `pos` minus `neg` = `offset_v + amplitude_v sin(2 pi freq_hz t + phase)`,
+/// SPICE's `SIN(VO VA FREQ 0 0 PHASE)` (phase in degrees). The DC operating
+/// point takes the value at t = 0, so phase 90 starts at the peak.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SineSource {
+    pub name: String,
+    pub pos: String,
+    pub neg: String,
+    pub offset_v: f64,
+    pub amplitude_v: f64,
+    pub freq_hz: f64,
+    pub phase_deg: f64,
+}
+
+impl SineSource {
+    /// Angular frequency (rad/s) and phase (rad) of the sine.
+    pub fn omega_phase(&self) -> (f64, f64) {
+        (
+            2.0 * std::f64::consts::PI * self.freq_hz,
+            self.phase_deg.to_radians(),
+        )
+    }
+
+    /// The source voltage at time `t`.
+    pub fn at(&self, t: f64) -> f64 {
+        let (w, ph) = self.omega_phase();
+        self.offset_v + self.amplitude_v * (w * t + ph).sin()
+    }
 }
 
 /// `turns` turns on the core whose node is `core`, of cross-section
@@ -221,6 +257,8 @@ pub struct GridCurrent {
 pub struct Pentode {
     pub name: String,
     pub model: KorenPentode,
+    /// Control-grid current (the triode's [`GridCurrent`] law).
+    pub grid: Option<GridCurrent>,
     pub c_g1k: f64,
     pub c_g1p: f64,
     pub c_pk: f64,
@@ -308,6 +346,7 @@ impl Element {
             Element::Inductor(e) => &e.name,
             Element::Coupling(e) => &e.name,
             Element::VoltageSource(e) => &e.name,
+            Element::SineSource(e) => &e.name,
             Element::Winding(e) => &e.name,
             Element::Device(e) => &e.name,
         }
@@ -321,6 +360,7 @@ impl Element {
             Element::Inductor(e) => vec![&e.a, &e.b],
             Element::Coupling(_) => vec![],
             Element::VoltageSource(e) => vec![&e.pos, &e.neg],
+            Element::SineSource(e) => vec![&e.pos, &e.neg],
             Element::Winding(e) => vec![&e.a, &e.b, &e.core],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
         }
@@ -429,6 +469,13 @@ impl CircuitIr {
                     finite(&format!("{name}.dc_v"), e.dc_v)?;
                     'V'
                 }
+                Element::SineSource(e) => {
+                    finite(&format!("{name}.offset_v"), e.offset_v)?;
+                    finite(&format!("{name}.amplitude_v"), e.amplitude_v)?;
+                    positive(&format!("{name}.freq_hz"), e.freq_hz)?;
+                    finite(&format!("{name}.phase_deg"), e.phase_deg)?;
+                    'V'
+                }
                 Element::Winding(e) => {
                     positive(&format!("{name}.turns"), e.turns)?;
                     positive(&format!("{name}.area_m2"), e.area_m2)?;
@@ -534,6 +581,13 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             let k = &p.model;
             values.extend([("mu", k.mu), ("ex", k.ex), ("kg1", k.kg1), ("kg2", k.kg2)]);
             values.extend([("kp", k.kp), ("kvb", k.kvb)]);
+            if let Some(g) = &p.grid {
+                values.extend([
+                    ("grid.perveance", g.perveance),
+                    ("grid.smooth_v", g.smooth_v),
+                ]);
+                finite(&format!("{name}.grid.contact_v"), g.contact_v)?;
+            }
             for (what, c) in [("c_g1k", p.c_g1k), ("c_g1p", p.c_g1p), ("c_pk", p.c_pk)] {
                 if !(c.is_finite() && c >= 0.0) {
                     return err(format!("{name}.{what} = {c} must be >= 0"));

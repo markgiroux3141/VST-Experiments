@@ -93,6 +93,10 @@ class TransientSettings:
     newton_reltol: float = 1e-6  # circuitsim only: Newton's update tolerance, relative
     newton_vntol: float = 1e-6  # circuitsim only: ... plus this, V
     newton_reuse: bool = True  # circuitsim only: lagged Jacobian and device bypass (dk)
+    # Seconds run before the input starts, with the input held at its first sample
+    # (start.settle_s): the power supply settles from its DC operating point (mains
+    # at its peak) into its ripple. Both engines; the outputs leave it out.
+    settle_s: float = 0.0
 
     @classmethod
     def from_sim_settings(
@@ -121,6 +125,7 @@ class TransientSettings:
             threads=int(runner.get("threads_per_job", 1)),
             priority=str(runner.get("priority", "below_normal")),
             triode_formulation=str(s.data["devices"]["triode_formulation"]),
+            settle_s=float(s.data.get("start", {}).get("settle_s", 0.0)),
         )
         if engine == "circuitsim":
             cs = s.data["circuitsim"]
@@ -148,7 +153,16 @@ class TransientSettings:
         return asdict(self)
 
 
-# --- Oversampling (shared by both engines) ----------------------------------------
+# --- Oversampling and settling (shared by both engines) ---------------------------
+
+
+def with_settle(x: np.ndarray, s: TransientSettings) -> tuple[np.ndarray, int]:
+    """`x` with `s.settle_s` of its first sample in front, and how many samples that is
+    (the outputs drop them)."""
+    n0 = round(s.settle_s * s.sample_rate)
+    if n0 <= 0 or len(x) == 0:
+        return x, 0
+    return np.concatenate([np.full(n0, x[0]), x]), n0
 
 
 def upsample(x: np.ndarray, k: int) -> np.ndarray:
@@ -398,7 +412,7 @@ def run_transient(
     tight reltol (measured 2026-10-14, see tests/test_circuitsim_linear.py).
     """
     s = settings or TransientSettings.from_sim_settings()
-    x = np.asarray(input_v, float)
+    x, n0 = with_settle(np.asarray(input_v, float), s)
     n, k = len(x), s.oversample
     x_up = upsample(x, k)
     n_up = len(x_up)
@@ -458,7 +472,7 @@ def run_transient(
     grid = np.arange(n_up) / s.sim_rate
     out: dict[str, np.ndarray] = {}
     for name in save:
-        out[name] = decimate(np.interp(grid, t, vec[name.lower()]), k, n)
+        out[name] = decimate(np.interp(grid, t, vec[name.lower()]), k, n)[n0:]
     if progress:
         progress(1.0)
     return TransientResult(out, s.sample_rate, wall, len(t))

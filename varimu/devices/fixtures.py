@@ -8,7 +8,7 @@ checks the file is current.
 Port conventions are the Rust engine's: port j is pin j relative to the last
 pin (the cathode), and the currents flow into pins 0..P-1:
 - triode (p, g, k): ports (Vpk, Vgk), currents (Ip, Ig);
-- pentode (p, g2, g1, k): ports (Vpk, Vg2k, Vg1k), currents (Ip, Ig2, 0);
+- pentode (p, g2, g1, k): ports (Vpk, Vg2k, Vg1k), currents (Ip, Ig2, Ig1);
 - diodes (a, k): port Vak, current I;
 - magnetic core (b, ref): port B / TESLA_PER_V, current path * H. A core has
   memory, so each of its points also records the state it is evaluated
@@ -72,7 +72,7 @@ def _models() -> list:
         for m in nl.build(MISMATCH).ir.models
         if m.name.startswith("6386")
     ]
-    ax7 = next(m for m in default if m.name == "12AX7")
+    ax7 = next(m for m in default if m.name.startswith("12AX7_"))
     diode = next(m for m in default if isinstance(m, JunctionDiode))
     extra = [
         dataclasses.replace(ax7, name="12AX7_no_grid", grid=None),
@@ -112,7 +112,7 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
         grid = itertools.product(_PENTODE_VG1, _PENTODE_VG2, _PENTODE_VP)
         ports = [(vp, vg2, vg1) for vg1, vg2, vp in grid]
         vp, vg2, vg1 = np.array(ports, float).T
-        currents = np.stack([m.ip(vg1, vg2, vp), m.ig2(vg1, vg2), np.zeros_like(vp)], axis=1)
+        currents = np.stack([m.ip(vg1, vg2, vp), m.ig2(vg1, vg2), m.ig1(vg1)], axis=1)
     elif isinstance(m, MagneticCore):
         ports, currents, _ = _core_points(m)
     elif isinstance(m, JunctionDiode | VacuumDiode):

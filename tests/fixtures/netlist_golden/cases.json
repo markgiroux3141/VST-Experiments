@@ -3,10 +3,21 @@
     "overrides": {},
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "default_exact": {
@@ -20,10 +31,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "tc2": {
@@ -32,10 +54,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "tc3": {
@@ -44,10 +77,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "tc4": {
@@ -56,10 +100,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "tc5": {
@@ -68,10 +123,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "tc6": {
@@ -80,10 +146,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "pots_min": {
@@ -96,10 +173,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "pots_max": {
@@ -112,10 +200,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "6972819df8ccb529b8ba4209628fc43f.tab",
-      "v6386_b.tab": "e7ec7d8c1af32c7012cf2dafa22315c9.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "89f9060baed6e0fcb7d2246630949e62.tab",
+      "v6386_v101b.tab": "18cba1107fbc99e7cbc80ec69468fba0.tab",
+      "v6386_v102a.tab": "cc7a58573e801643458b53cfbd8701e3.tab",
+      "v6386_v102b.tab": "554cf416bceb10aca22af8cabaf55bf9.tab",
+      "v6386_v103a.tab": "d334c7e3ef188a92b2351762d52d2bef.tab",
+      "v6386_v103b.tab": "9bc76ede1c9210601eab5f6201ae9615.tab",
+      "v6386_v104a.tab": "2773757d9a6e4a43a1d128338184f443.tab",
+      "v6386_v104b.tab": "4bf68a71bdc7748da6e60d4e5680c1a5.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "mismatch_table": {
@@ -128,10 +227,21 @@
     },
     "triode_formulation": "table",
     "files": {
-      "v12ax7.tab": "071b4870e76dbf12bbc692c0fe035b09.tab",
-      "v12bh7.tab": "d6f188cd41caadb3a44900412eeb0366.tab",
-      "v6386_a.tab": "4cc7263dd50d221570d0acf59f4501fa.tab",
-      "v6386_b.tab": "c7d765d5db7254b4f6dd4927fa6977ad.tab"
+      "v12ax7_v105a.tab": "02a392dcf0022b39a0ba59c3813e0af5.tab",
+      "v12ax7_v105b.tab": "5f22bc2cf97fb3e17af68a96ac11e1ad.tab",
+      "v12bh7_ch2.tab": "d96883b0a83124328d684a8c017094ee.tab",
+      "v12bh7_v106a.tab": "8fb2134aaed93f48a46b3bd852e37715.tab",
+      "v12bh7_v106b.tab": "8e9d1efbd6bc0e3db084501128d737c9.tab",
+      "v6386_ch2.tab": "f8165393298b5bdf643a30d7370de76c.tab",
+      "v6386_v101a.tab": "a3a7e43aee342059483d7cc97d13bc02.tab",
+      "v6386_v101b.tab": "9a469376268d5195aacba66a9c92120b.tab",
+      "v6386_v102a.tab": "88a4e0aa8d90e8edaccb24b707297b9c.tab",
+      "v6386_v102b.tab": "1678b34b4f1fcdd0f0b5a58e6c55267b.tab",
+      "v6386_v103a.tab": "3e9a729f53bb981ffbada5b60f163391.tab",
+      "v6386_v103b.tab": "a4e6a3eff5c6c72c4d54483be60c1b23.tab",
+      "v6386_v104a.tab": "c20bf7516ca98ead1966371d8aee26a4.tab",
+      "v6386_v104b.tab": "0c3b3b98acd0e630da53088ab73ac37c.tab",
+      "vel34t_v302.tab": "8fefac3476f2c77918c2aff1e4dc85d1.tab"
     }
   },
   "mismatch_exact": {

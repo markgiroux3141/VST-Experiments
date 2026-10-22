@@ -1,0 +1,25 @@
+device: selenium rectifier cell
+document: "Sarkes Tarzian Selenium Rectifier Handbook"
+publisher: Sarkes Tarzian, Inc.
+date: 1950
+local_copy: sources/tarzian_selenium_1950.pdf
+local_copy_sha256: cd2efec2defe156397334c746e969c1c8154ae2c88ee949820691a98be1e6a69
+scan_source: "web: https://www.americanradiohistory.com/BOOKSHELF-ARH/Technology/Technology-General/Sarkes-Tarzian-Selenium-Rectifier-Handbook-1950.pdf"
+digitized_with: "rendered at 300-800 dpi (PyMuPDF); grid lines from pixel profiles, axes calibrated on two labelled grid lines, curve crossings located along pixel rows/columns, each curve assignment checked by eye (Claude Code subagent, scratch scripts not kept)"
+digitized_by: Claude Code
+digitized_on: 2026-10-21
+files:
+  tarzian_selenium_static.csv:
+    figure: "Figure 4 (printed p.54, PDF p.52): isothermal characteristics for selenium rectifier cells, DC milliamperes per sq. in. of rectifying area vs forward voltage drop (DC)"
+    columns: "temp_c, v_v, j_a_per_in2"
+    curves: "75, 25, -50 C"
+axis_calibration: "labelled grid lines (0-1.0 V, 0-500 mA/in^2)"
+estimated_error: >-
+  About +-5 mA/in^2 and +-0.01 V; the figure's grid is coarse (0.2 V x 100 mA/in^2), so
+  values between grid lines carry ~10%.
+notes: >-
+  Text (printed p.55): threshold 0.25 V at +75 C to 0.55 V at -55 C. Ratings (printed
+  p.61-62): 26 V rms per cell; the full-wave bridge for max 26 V AC input uses one cell
+  per arm (code 1B1); 1-inch-square cells (size 2) 0.225 A continuous in a bridge, 80% of
+  that into a capacitor. Reverse current (Fig. 6) about 1 mA/in^2 at 50-100 Hz, at an
+  unstated voltage; not modeled.

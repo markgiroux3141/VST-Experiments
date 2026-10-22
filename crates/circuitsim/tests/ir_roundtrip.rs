@@ -61,7 +61,7 @@ fn fixtures_round_trip_exactly() {
 fn round_trip_check_catches_ints_in_float_fields() {
     // Python must write every value as a float; an int would come back as a float.
     let text = edit(&default_text(), |v| {
-        v["sections"][0]["elements"][1]["r_ohm"] = 50.into()
+        v["sections"][0]["elements"][2]["r_ohm"] = 50.into()
     });
     let original: Value = serde_json::from_str(&text).unwrap();
     let back: Value =
@@ -78,20 +78,37 @@ fn default_fixture_has_the_670_parts() {
     assert_eq!(
         names,
         [
-            "6386_a",
-            "6386_b",
-            "12AX7",
-            "12BH7",
-            "6973",
+            "6386_V101A",
+            "6386_V102A",
+            "6386_V103B",
+            "6386_V104B",
+            "6386_V101B",
+            "6386_V102B",
+            "6386_V103A",
+            "6386_V104A",
+            "12AX7_V105A",
+            "12AX7_V105B",
+            "12BH7_V106A",
+            "12BH7_V106B",
+            "6973_V107",
+            "6973_V108",
             "SI_RECTIFIER",
+            "GZ34_V301",
+            "EL34T_V302",
+            "6084_V303",
+            "5651",
+            "SELENIUM_GR301",
+            "6386_CH2",
+            "12BH7_CH2",
+            "6973_CH2",
             "CORE_T101",
             "CORE_T102",
             "CORE_T103",
             "CORE_T104"
         ]
     );
-    let DeviceModel::Triode(bank) = ir.model("6386_a").unwrap() else {
-        panic!("6386_a is not a triode")
+    let DeviceModel::Triode(bank) = ir.model("6386_V101A").unwrap() else {
+        panic!("6386_V101A is not a triode")
     };
     let PlateModel::VariMu(plate) = &bank.plate else {
         panic!("6386 plate is not variable-mu")
@@ -118,10 +135,10 @@ fn default_fixture_has_the_670_parts() {
         panic!("XT101_CORE missing")
     };
     assert_eq!(core.nodes, ["t101_core", "0"]);
-    let Some(Element::Device(xva)) = find("XVA") else {
-        panic!("XVA missing")
+    let Some(Element::Device(xva)) = find("XV101A") else {
+        panic!("XV101A missing")
     };
-    assert_eq!(xva.model, "6386_a");
+    assert_eq!(xva.model, "6386_V101A");
     assert_eq!(xva.nodes, ["pa", "ga", "ka"]);
 }
 
@@ -178,34 +195,34 @@ fn rejects_unknown_fields_and_versions() {
 #[test]
 fn rejects_inconsistent_circuits() {
     let text = default_text();
-    // Element 1 of the power supply section is the resistor Rpsu.
+    // Element 2 of the power supply section is the resistor RT302A (hva to hva_r).
     rejects(
         &edit(&text, |v| {
-            v["sections"][0]["elements"][1]["name"] = "VBP".into()
+            v["sections"][0]["elements"][2]["name"] = "VHVA".into()
         }),
         "duplicate element",
     );
     rejects(
         &edit(&text, |v| {
-            v["sections"][0]["elements"][1]["name"] = "Xpsu".into()
+            v["sections"][0]["elements"][2]["name"] = "XT302A".into()
         }),
         "must start with R",
     );
     rejects(
         &edit(&text, |v| {
-            v["sections"][0]["elements"][1]["r_ohm"] = 0.0.into()
+            v["sections"][0]["elements"][2]["r_ohm"] = 0.0.into()
         }),
         "> 0",
     );
     rejects(
         &edit(&text, |v| {
-            v["sections"][0]["elements"][1]["b"] = "bpi".into()
+            v["sections"][0]["elements"][2]["b"] = "hva".into()
         }),
         "both ends",
     );
     rejects(
         &edit(&text, |v| v["models"][0]["name"] = "6386_x".into()),
-        "unknown model 6386_a",
+        "unknown model 6386_V101A",
     );
     rejects(
         &edit(&text, |v| v["input_node"] = "nowhere".into()),
@@ -217,7 +234,7 @@ fn rejects_inconsistent_circuits() {
     );
     let bad_coupling = edit(&text, |v| {
         let k = serde_json::json!({
-            "kind": "coupling", "name": "KBAD", "l_a": "LT101_p_lk", "l_b": "Rpsu", "k": 0.5
+            "kind": "coupling", "name": "KBAD", "l_a": "LT101_p_lk", "l_b": "RT302A", "k": 0.5
         });
         v["sections"][0]["elements"].as_array_mut().unwrap().push(k);
     });

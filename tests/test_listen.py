@@ -51,7 +51,7 @@ def test_app_schema_and_overrides():
     keys = [c["key"] for c in schema]
     for k in ("input_atten_db", "ac_threshold", "time_constant", "balance", "zero",
               "dc_threshold", "v6386_a.emission_scale", "grid_contact_v",
-              "psu_source_impedance_ohm"):  # fmt: skip
+              "l302_r_ohm", "t302_r_half_ohm"):  # fmt: skip
         assert k in keys
     for c in schema:
         assert c["min"] <= c["default"] <= c["max"], c["key"]

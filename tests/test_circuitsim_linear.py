@@ -156,7 +156,11 @@ def test_without_devices_keeps_the_linear_network():
     assert lin.models == () and not any(e.name.startswith(("X", "D")) for e in lin.elements())
     removed = {e.name for e in ir.elements()} - {e.name for e in lin.elements()}
     assert removed == {
-        "XVA", "XVB", "XV105A", "XV105B", "XV106A", "XV106B", "XV107", "XV108",
+        "XV101A", "XV102A", "XV103B", "XV104B", "XV101B", "XV102B", "XV103A", "XV104A",
+        "XV105A", "XV105B", "XV106A", "XV106B", "XV107", "XV108",
         "DCR101", "DCR102", "DCR103", "DCR104",
+        "XV301A", "XV301B", "XV302", "XV303", "DV304",
+        "DGR301A", "DGR301B", "DGR301C", "DGR301D",
+        "XV2_6386", "XV2_12BH7", "XV2_6973",
     }  # fmt: skip
     assert dataclasses.replace(lin, title="x").nodes()  # still a valid IR

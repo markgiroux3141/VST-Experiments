@@ -6,9 +6,9 @@ use std::f64::consts::PI;
 
 use circuitsim::ir::{
     Capacitor, CircuitIr, Coupling, Element, IR_VERSION, Inductor, Probe, Resistor, Section,
-    VoltageSource,
+    SineSource, VoltageSource,
 };
-use circuitsim::{Error, Method, Options, simulate, simulate_with_progress};
+use circuitsim::{Error, Method, Options, Solver, simulate, simulate_with_progress};
 
 // --- Building test circuits ----------------------------------------------------------
 
@@ -124,6 +124,70 @@ fn dc_operating_point_opens_capacitors_and_shorts_inductors() {
 }
 
 // --- First- and second-order circuits vs closed form ------------------------------------
+
+/// RC lowpass driven by a sine source A cos(wt) (phase 90): the DC operating
+/// point takes the source at t = 0, so the capacitor starts charged to A,
+/// and the run is the forced response plus a decay from there. Every
+/// solver path (DK, full MNA, Radau's coupled stages) evaluates the source
+/// at its stage times.
+#[test]
+fn sine_source_starts_at_its_t0_value_and_matches_closed_form() {
+    let (rr, cc, f, a) = (1e3, 1e-6, 60.0, 10.0);
+    let ir = circuit(
+        vec![
+            Element::SineSource(SineSource {
+                name: "VM".into(),
+                pos: "m".into(),
+                neg: "0".into(),
+                offset_v: 0.0,
+                amplitude_v: a,
+                freq_hz: f,
+                phase_deg: 90.0,
+            }),
+            r("R1", "m", "out", rr),
+            c("C1", "out", "0", cc),
+            r("RIN", "in", "0", 1e3),
+        ],
+        &["out", "m"],
+    );
+    let (w, tau) = (2.0 * PI * f, rr * cc);
+    let wt = w * tau;
+    let exact = |t: f64| {
+        let forced = a * ((w * t).cos() + wt * (w * t).sin()) / (1.0 + wt * wt);
+        forced + a * (1.0 - 1.0 / (1.0 + wt * wt)) * (-t / tau).exp()
+    };
+    let n = (0.05 / H).round() as usize;
+    for (method, solver, tol) in [
+        (Method::Esdirk4, Solver::Dk, 1e-9),
+        (Method::Esdirk4, Solver::Mna, 1e-9),
+        (Method::Radau5, Solver::Mna, 1e-9),
+        (Method::Trapezoidal, Solver::Dk, 1e-6),
+    ] {
+        let opts = Options {
+            method,
+            solver,
+            ..Options::default()
+        };
+        let out = simulate(&ir, &vec![0.0; n], H, &opts).unwrap();
+        let src = &out.values[1];
+        assert!((src[0] - a).abs() < 1e-12, "source at t = 0: {}", src[0]);
+        let err = out.values[0]
+            .iter()
+            .enumerate()
+            .map(|(i, y)| (y - exact(i as f64 * H)).abs())
+            .fold(0.0, f64::max);
+        assert!(err < tol * a, "{method:?} {solver:?}: max error {err}");
+        let src_err = src
+            .iter()
+            .enumerate()
+            .map(|(i, y)| (y - a * (w * i as f64 * H).cos()).abs())
+            .fold(0.0, f64::max);
+        assert!(
+            src_err < 1e-12 * a,
+            "{method:?} {solver:?}: source error {src_err}"
+        );
+    }
+}
 
 /// RC lowpass driven by A sin(wt) from rest: the forced response plus the
 /// decaying term that makes v(0) = 0.

@@ -44,9 +44,21 @@ def test_one_coupled_netlist(default):
     assert "cv" in el["DCR103"].split() and "cv" in el["DCR104"].split()
     # The sidechain is fed from the output (feedback topology).
     assert el["R145"].split()[0] == "out"
-    # One B+ node feeds the 6386 plates, every sidechain stage and the 6973 screens.
-    for name in ("R111", "R120", "R126", "R132", "R118", "R116"):
-        assert "bp" in el[name].split()[:2], name
+    # The supply's rails, as traced on A-96039 (data/schematics/fairchild_670/README.md):
+    # regulated 240 V, the unregulated rail, the screen tap and the bias supply's nodes.
+    rails = {
+        "bp": ("R111", "R120", "R121", "R118", "R116", "R315", "R211"),
+        "ur": ("R126", "R127", "LT104_PA", "R309"),
+        "sg": ("R132", "R133", "R232"),
+        "nb2": ("R105A", "R105B", "R203", "C303"),
+        "nb3": ("R142B", "R242B", "R301", "R302"),
+        "nb4": ("R130", "R131", "R230", "R303"),
+    }
+    for node, names in rails.items():
+        for name in names:
+            assert node in el[name].split()[:2], (node, name)
+    # The mains drives the rectifiers: both supplies hang off sine sources.
+    assert "sin(" in el["VHVA"] and "sin(" in el["VBS"]
     assert default.input_node == "in" and "v(cv)" in default.save
 
 
@@ -118,12 +130,67 @@ def test_tube_instance_scales_current_and_mu():
 def test_mismatch_reaches_the_netlist():
     a = nl.build({"v6386_a.emission_scale": 0.8}, triode_formulation="exact", cores="linear").text
     b = nl.build(triode_formulation="exact", cores="linear").text
-    sub_a = re.findall(r"\.subckt (TRIODE_6386_A)[\s\S]*?\.ends", a)
+    sub_a = re.findall(r"\.subckt (TRIODE_6386_V101A)[\s\S]*?\.ends", a)
     assert sub_a and a != b
 
 
 def test_table_formulation_lists_its_files():
     c = nl.build(cores="linear")
-    assert set(c.files) == {"v6386_a.tab", "v6386_b.tab", "v12ax7.tab", "v12bh7.tab"}
+    triodes = [*nl.BANK_TRIODES["a"], *nl.BANK_TRIODES["b"]]
+    assert set(c.files) == {f"v6386_{d.lower()}.tab" for d in triodes} | {
+        "v12ax7_v105a.tab", "v12ax7_v105b.tab", "v12bh7_v106a.tab", "v12bh7_v106b.tab",
+        "vel34t_v302.tab", "v6386_ch2.tab", "v12bh7_ch2.tab",
+    }  # fmt: skip
     for name, path in c.files.items():
         assert path.exists() and f'file="{name}"' in c.text
+
+
+# --- Per-instance tolerance (Phase 3) -------------------------------------------------
+
+
+def _values(overrides):
+    ir = nl.build(overrides, cores="linear").ir
+    vals = {}
+    for e in ir.elements():
+        if hasattr(e, "r_ohm"):
+            vals[e.name] = e.r_ohm
+        elif hasattr(e, "c_f"):
+            vals[e.name] = e.c_f
+    return vals, {m.name: m for m in ir.models}
+
+
+def test_tolerances_are_seeded_per_part_and_stay_in_their_bands():
+    nominal, _ = _values({})
+    a, _ = _values({"passive_spread": 1.0, "passive_seed": 7})
+    assert a == _values({"passive_spread": 1.0, "passive_seed": 7})[0]  # reproducible
+    b, _ = _values({"passive_spread": 1.0, "passive_seed": 8})
+    spec = nl.load_spec()
+    classes = spec.part_classes()
+    p = nl.resolve({"passive_spread": 1.0})
+    band = {
+        "r1": (1, 1), "r5": (5, 5), "r10": (10, 10), "pot": (20, 20), "attenuator": (2, 2),
+        "paper": (20, 20), "mica": (10, 10),
+        "electrolytic": (p["tol_electrolytic_minus_pct"], p["tol_electrolytic_plus_pct"]),
+    }  # fmt: skip
+    moved = 0
+    for name, v0 in nominal.items():
+        d = nl.part_designator(name)
+        if d is None:
+            assert a[name] == v0, name  # not a part: never moves
+            continue
+        lo, hi = band[classes[spec.parts["combined"].get(d, [d])[0]]]
+        assert v0 * (1 - lo / 100) <= a[name] <= v0 * (1 + hi / 100), name
+        moved += a[name] != v0
+        assert a[name] != b[name], name  # another seed, other parts
+    assert moved > 80
+    # The two halves of a pot share its track's draw; the wiper stays where it was.
+    assert a["R105a"] / nominal["R105a"] == pytest.approx(a["R105b"] / nominal["R105b"])
+
+
+def test_the_banks_are_individual_triodes_that_differ_with_spread():
+    _, models = _values({"passive_spread": 1.0})
+    triodes = [models[f"6386_{d}"] for side in "ab" for d in nl.BANK_TRIODES[side]]
+    assert len({t.plate.kg1 for t in triodes}) == 8
+    assert len({t.plate.mus[0] for t in triodes}) == 8
+    _, nominal = _values({})
+    assert len({nominal[f"6386_{d}"].plate.kg1 for d in nl.BANK_TRIODES["a"]}) == 1
