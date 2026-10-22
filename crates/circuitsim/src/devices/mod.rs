@@ -14,10 +14,12 @@ use std::fmt;
 
 use crate::ir::DeviceModel;
 
+pub mod core;
 pub mod diode;
 pub mod pentode;
 pub mod triode;
 
+pub use self::core::MagneticCore;
 pub use diode::{JunctionDiode, VacuumDiode};
 pub use pentode::Pentode;
 pub use triode::Triode;
@@ -58,6 +60,15 @@ pub trait Device: fmt::Debug + Send + Sync {
     fn has_state(&self) -> bool {
         false
     }
+
+    /// The device's memory (empty for stateless models), to carry it across
+    /// a parameter change (`Transient::update` builds new device instances).
+    fn state(&self) -> Vec<f64> {
+        Vec::new()
+    }
+
+    /// Restore memory taken with [`Device::state`].
+    fn set_state(&mut self, _state: &[f64]) {}
 }
 
 /// The device for an IR model.
@@ -67,6 +78,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::Pentode(m) => Box::new(Pentode::new(m)),
         DeviceModel::JunctionDiode(m) => Box::new(JunctionDiode::new(m)),
         DeviceModel::VacuumDiode(m) => Box::new(VacuumDiode::new(m)),
+        DeviceModel::MagneticCore(m) => Box::new(MagneticCore::new(m)),
     }
 }
 

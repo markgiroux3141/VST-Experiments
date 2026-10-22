@@ -4,13 +4,23 @@
                                           [--engine ngspice|circuitsim] [--clip NAME]
     uv run --extra fast python scripts/slice_report.py --verify    # periodic agreement test
 
-Renders come from the cache when `varimu render` already produced them with
-the same settings, otherwise they run here. Plots and a JSON summary go to
-reports/slice/ (summary.json for ngspice, summary_circuitsim.json for the fast
-engine). A circuitsim run is also compared with the ngspice summary, when there
-is one for the same overrides, against the circuit-sim plan's 670 behaviour
-tolerances: gain reduction within 0.2 dB per step (and per 50 ms window of the
-clip), CV times within 5%.
+Renders come from the cache when they already ran with the same settings,
+otherwise they run here. Plots and a JSON summary go to reports/slice/
+(summary.json for ngspice, summary_circuitsim.json for the fast engine with
+its Jiles-Atherton cores, summary_circuitsim_linear.json with the cores in
+their linear limit). A circuitsim run is also compared with the ngspice
+summary, when there is one for the same overrides and core model (ngspice
+always runs linear cores: there is no SPICE core, decided 2026-10-21),
+against the circuit-sim plan's 670 behaviour tolerances: gain reduction
+within 0.2 dB per step (and per 50 ms window of the clip), CV times within
+5%.
+
+The compression curve's staircase (51 steps of 0.5 s) runs as parallel chunks
+of CURVE_CHUNK steps, each from the operating point with CURVE_WARMUP step(s)
+before it, whose gains are dropped. Every step settles well within its 0.5 s
+and levels only rise, so this is the continuous staircase's curve (measured
+2026-10-21: within 3e-6 dB on circuitsim; --verify keeps checking it), and
+ngspice's 13-minute staircase takes ~2.
 
 The program clip is data/clips/<--clip>, the user's own material: it is never
 committed, and the clip is left out where it's missing. It runs at the
@@ -18,20 +28,30 @@ tolerance study's front panel (input pad 0 dB, threshold 0.8, TC2), where the
 default clip compresses by up to ~6 dB.
 
 --verify is the periodic check that the default engine (circuitsim) still
-reproduces the reference engine (circuit-sim plan, M6). It renders the
-report on both engines, plus the TC bursts and the clip on the ngspice
-reference (gear, reltol 1e-4, 4x: the tolerance study's) and the clip on the
-engine's converged solution (esdirk4 at 4x, error tolerance / 10), and checks
-the plan's verification tolerances:
+agrees with the reference engine (circuit-sim plan, Verification and M6's
+follow-up). It renders the report on both engines and checks:
 
-- behaviour, circuitsim vs production ngspice: the above;
-- waveforms: output < -55 dB rms re signal and CV within 0.2 V, circuitsim vs
-  the ngspice reference (bursts, clip) and vs the converged solution (clip).
-  Production ngspice vs its reference is shown alongside, for scale.
+- behaviour, circuitsim vs production ngspice, both with linear cores: the
+  tolerances above;
+- waveforms vs ngspice with the exact triode formulation (gear, reltol 1e-4,
+  4x), the independent cross-check, on short excerpts, both with linear
+  cores: a 0.1 s 0 dBFS burst at each Time Constant (onset and 0.15 s of
+  release) and 0.25 s of the clip at its loudest window (the deepest CV) and
+  its HF-richest one;
+- the whole clip vs circuitsim's converged solution (esdirk4 at 4x, error
+  tolerance / 10), with the Jiles-Atherton cores (production);
+- the chunked staircase vs the continuous one, on circuitsim (Jiles-Atherton).
 
-Results go to reports/slice/agreement.json and agreement.png; the exit status
-is 1 if a check fails. About 15 minutes from a cold cache (the ngspice
-renders, in parallel); seconds when nothing changed since the last run.
+It also renders the report on circuitsim with the Jiles-Atherton cores, the
+production circuit, for its plots and summary.
+
+Waveform rows pass at the plan's tolerance (output < -55 dB rms re signal, CV
+within 0.2 V) and, at the default front panel and clip, within regression
+bounds a few dB outside the measured values. Results go to
+reports/slice/agreement.json and agreement.png; the exit status is 1 if a
+check fails. About 6 minutes from a cold cache (all renders in parallel;
+exact ngspice runs ~800x slower than real time); seconds when nothing
+changed.
 """
 
 from __future__ import annotations
@@ -49,6 +69,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+from scipy.signal import butter, sosfilt  # noqa: E402
 
 from varimu.config import DATA_DIR, REPO_ROOT, load_sim_settings  # noqa: E402
 from varimu.listen.matching import gain_trace  # noqa: E402
@@ -61,12 +82,44 @@ CLIP_DIR = DATA_DIR / "clips"
 CLIP = "Arpeggio04b_120_m_D#_16b.WAV"
 CLIP_FRONT_PANEL = {"input_atten_db": 0.0, "ac_threshold": 0.8, "time_constant": 2}
 GAIN_WINDOW_S = 0.05
+CURVE_CHUNK = 6  # staircase steps per render
+CURVE_WARMUP = 1  # steps rendered before each chunk and not measured
 
-# The ngspice reference of the tolerance study and the circuit-sim plan's
-# Verification table, as changes to production ngspice settings.
-REFERENCE = {"method": "gear", "reltol": 1e-4, "oversample": 4}
 # Circuit-sim plan, Verification: 670 slice and 670 behaviour rows.
 TOLERANCE = {"gr_db": 0.2, "time_rel": 0.05, "out_rms_db": -55.0, "cv_v": 0.2}
+CHUNKING_TOLERANCE_DB = 0.01  # chunked vs continuous staircase, GR per step
+
+# The excerpts' reference: ngspice with the exact triode formulation, at the
+# tolerance study's reference settings, as changes to production ngspice.
+# Production's trap 2x fails the HF clip excerpt on its own error (-50 dB).
+EXACT = {"method": "gear", "reltol": 1e-4, "oversample": 4, "triode_formulation": "exact"}
+EXCERPT_BURST = dict(
+    freq_hz=1000, base_dbfs=-40, burst_dbfs=0, pre_s=0.02, burst_s=0.1, release_s=0.15
+)
+CLIP_EXCERPT_S = (0.15, 0.1)  # excerpt from this long before the chosen 0.1 s window to its end
+CLIP_HF_HZ = 5000  # "HF-rich": the most energy above this
+FADE_IN_S = 0.01  # raised cosine, so a clip excerpt starts from the operating point smoothly
+
+# Regression bounds (rms dB re signal, CV V) at the default front panel and
+# clip, a few dB outside the values measured 2026-10-21 on the Phase 2
+# transformers (circuitsim production vs exact ngspice, both on linear cores;
+# ngspice's own error dominates; the converged row is on the Jiles-Atherton
+# cores). Re-measure when the circuit changes.
+#   burst_tc1 -78.6 / 0.023    burst_tc2 -79.9 / 0.024
+#   burst_tc3 -80.7 / 0.015    burst_tc4 -74.8 / 0.007
+#   clip_loudest -67.7 / 0.021    clip_hf -61.8 / 0.035
+#   clip vs converged -76.3 / 0.006
+# (Before Phase 2, the linear placeholders: -78.1 / 0.028, -76.3 / 0.028,
+# -76.8 / 0.015, -81.3 / 0.007; -67.5 / 0.017, -61.6 / 0.034; -76.7 / 0.007.)
+BOUNDS = {
+    "burst_tc1": (-75.0, 0.04),
+    "burst_tc2": (-76.0, 0.04),
+    "burst_tc3": (-77.0, 0.03),
+    "burst_tc4": (-71.0, 0.02),
+    "clip_loudest": (-64.0, 0.04),
+    "clip_hf": (-58.0, 0.06),
+    "clip_vs_converged": (-73.0, 0.02),
+}
 
 # [MAN] p.4 (Fairchild 670 manual, 1959): attack, and release from 10 dB of limiting.
 PUBLISHED = {
@@ -87,7 +140,9 @@ def _signal(name: str):
 
 
 def _suffix(s: TransientSettings) -> str:
-    return "" if s.engine == "ngspice" else f"_{s.engine}"
+    if s.engine == "ngspice":
+        return ""
+    return f"_{s.engine}" + ("_linear" if s.cores == "linear" else "")
 
 
 def converged(s: TransientSettings) -> TransientSettings:
@@ -101,7 +156,22 @@ def converged(s: TransientSettings) -> TransientSettings:
 
 
 def curve_job(overrides: dict) -> runner.RenderJob:
+    """The continuous staircase (--verify checks the chunks against it)."""
     return runner.RenderJob(_signal("steps_1000hz").samples, dict(overrides), "steps_1000hz")
+
+
+def curve_chunks(overrides: dict) -> list[tuple[runner.RenderJob, list[dict]]]:
+    """The staircase as (job, its measured segments in job samples), CURVE_CHUNK steps each."""
+    sig = _signal("steps_1000hz")
+    segs = sig.meta["segments"]
+    out = []
+    for i0 in range(0, len(segs), CURVE_CHUNK):
+        i1 = min(i0 + CURVE_CHUNK, len(segs))
+        a, b = segs[max(0, i0 - CURVE_WARMUP)]["start"], segs[i1 - 1]["stop"]
+        local = [dict(s, start=s["start"] - a, stop=s["stop"] - a) for s in segs[i0:i1]]
+        job = runner.RenderJob(sig.samples[a:b], dict(overrides), f"steps_1000hz[{i0}:{i1}]")
+        out.append((job, local))
+    return out
 
 
 def burst_jobs(tcs, overrides: dict) -> list[runner.RenderJob]:
@@ -118,8 +188,46 @@ def clip_job(name: str, overrides: dict) -> runner.RenderJob | None:
     return runner.RenderJob(x, {**CLIP_FRONT_PANEL, **overrides}, f"clip:{name}")
 
 
+def excerpt_jobs(tcs, overrides: dict, clip: runner.RenderJob | None) -> dict:
+    """--verify's short excerpts, name -> job: a burst per Time Constant (EXCERPT_BURST),
+    and the clip's loudest and HF-richest 0.1 s windows with CLIP_EXCERPT_S around them."""
+    fs = load_sim_settings().sample_rate
+    burst = signals.tone_burst(**EXCERPT_BURST, sample_rate=fs).samples
+    out = {
+        f"burst_tc{tc}": runner.RenderJob(
+            burst, {**overrides, "time_constant": tc}, f"excerpt:burst_tc{tc}"
+        )
+        for tc in tcs
+    }
+    if clip is None:
+        return out
+    x = clip.samples
+    w, before, after = fs // 10, int(CLIP_EXCERPT_S[0] * fs), int(CLIP_EXCERPT_S[1] * fs)
+    starts = np.arange(before, len(x) - after + 1, fs // 40)
+    hp = sosfilt(butter(4, CLIP_HF_HZ, "hp", fs=fs, output="sos"), x)
+    fade = 0.5 - 0.5 * np.cos(np.pi * np.arange(int(FADE_IN_S * fs)) / int(FADE_IN_S * fs))
+    for name, v in (("clip_loudest", x), ("clip_hf", hp)):
+        c = np.concatenate([[0.0], np.cumsum(v**2)])
+        a = int(starts[np.argmax(c[starts + w] - c[starts])])
+        y = x[a - before : a + after].copy()
+        y[: len(fade)] *= fade
+        label = f"excerpt:{name}:{clip.label}@{(a - before) / fs:.3f}-{(a + after) / fs:.3f}s"
+        out[name] = runner.RenderJob(y, dict(clip.overrides), label)
+    return out
+
+
+def _cost(s: TransientSettings, j: runner.RenderJob) -> float:
+    """Rough wall time (x slower than real time per oversampling), to start the longest first."""
+    if s.engine == "ngspice":
+        x = 200.0 if s.triode_formulation == "exact" else 15.0
+    else:
+        x = 3.0 * s.oversample / 2
+    return len(j.samples) * s.oversample * x
+
+
 def prefetch(todo: list[tuple[TransientSettings, runner.RenderJob]]) -> None:
-    """Run every (settings, job) render in parallel, filling the cache for the report."""
+    """Run every (settings, job) render in parallel, longest first, filling the cache."""
+    todo = sorted(todo, key=lambda sj: -_cost(*sj))
     n = min(runner.default_jobs(), len(todo))
     print(f"{len(todo)} renders, up to {n} in parallel (cached ones return at once)")
     with ThreadPoolExecutor(max_workers=n) as ex:
@@ -128,22 +236,41 @@ def prefetch(todo: list[tuple[TransientSettings, runner.RenderJob]]) -> None:
             s, j = futs[f]
             r = f.result()
             how = "cached" if r.cached else f"{r.meta['wall_s']:.0f} s"
-            print(f"  {j.label} [{s.engine} {s.method} {s.oversample}x]: {how}", flush=True)
+            tag = f"{s.engine} {s.method} {s.oversample}x"
+            tag += " exact" if s.engine == "ngspice" and s.triode_formulation == "exact" else ""
+            print(f"  {j.label} [{tag}]: {how}", flush=True)
 
 
 # --- Report sections -------------------------------------------------------------------------
 
 
-def compression_curve(overrides: dict, s: TransientSettings) -> dict:
-    sig = _signal("steps_1000hz")
-    r = runner.render(curve_job(overrides), settings=s)
-    pts = metrics.segment_gains(sig.samples, r.output, sig.meta["segments"])
+def _curve_points(x: np.ndarray, r: runner.Render, segs: list[dict]):
+    """(input dBFS, gain dB) per segment, and the CV's median over each segment's last quarter."""
+    pts = metrics.segment_gains(x, r.output, segs)
+    v = r.vectors["v(cv)"]
+    cv = [float(np.median(v[s["stop"] - (s["stop"] - s["start"]) // 4 : s["stop"]])) for s in segs]
+    return pts, cv
+
+
+def curve_gains(overrides: dict, s: TransientSettings, chunked: bool = True):
+    """The staircase's input levels, gains and CVs per step, and the render keys."""
+    if chunked:
+        parts = curve_chunks(overrides)
+    else:
+        parts = [(curve_job(overrides), _signal("steps_1000hz").meta["segments"])]
+    renders = runner.render_many([j for j, _ in parts], settings=s)
+    pts, cv = [], []
+    for (j, segs), r in zip(parts, renders, strict=True):
+        p, c = _curve_points(j.samples, r, segs)
+        pts += p
+        cv += c
     lin, gain = np.array(pts).T
+    return lin, gain, np.array(cv), [r.key[:12] for r in renders]
+
+
+def compression_curve(overrides: dict, s: TransientSettings) -> dict:
+    lin, gain, cv, keys = curve_gains(overrides, s)
     gr = gain[0] - gain
-    cv = [
-        float(np.median(r.vectors["v(cv)"][s["stop"] - (s["stop"] - s["start"]) // 4 : s["stop"]]))
-        for s in sig.meta["segments"]
-    ]
 
     fig, ax = plt.subplots(1, 3, figsize=(15, 4.5))
     ax[0].plot(lin, lin + gain, "o-", ms=3, label="670 slice")
@@ -156,13 +283,15 @@ def compression_curve(overrides: dict, s: TransientSettings) -> dict:
     ax[2].set(xlabel="input (dBFS peak)", ylabel="V", title="Control voltage (6386 grid CT)")
     for a in ax:
         a.grid(alpha=0.3)
-    fig.suptitle(f"steps_1000hz  overrides={overrides or 'defaults'}  render {r.key[:12]}")
+    fig.suptitle(f"steps_1000hz  overrides={overrides or 'defaults'}  {s.engine}")
     fig.tight_layout()
     path = OUT / f"compression_curve{_suffix(s)}.png"
     fig.savefig(path, dpi=110)
     plt.close(fig)
     return {
-        "render": r.key[:12],
+        "renders": keys,
+        "chunk_steps": CURVE_CHUNK,
+        "warmup_steps": CURVE_WARMUP,
         "input_dbfs": lin.round(2).tolist(),
         "gain_db": gain.round(3).tolist(),
         "gain_reduction_db": gr.round(3).tolist(),
@@ -284,7 +413,7 @@ def compare(summary: dict, ref: dict) -> dict:
 def report(overrides: dict, tcs, s: TransientSettings, clip, skip_curve=False) -> dict:
     """Every section on `s`'s engine; writes summary{_engine}.json and the plots."""
     OUT.mkdir(parents=True, exist_ok=True)
-    summary: dict = {"overrides": overrides}
+    summary: dict = {"overrides": overrides, "cores": s.cores}
     if not skip_curve:
         summary["compression_curve"] = compression_curve(overrides, s)
     summary["bursts"] = bursts(tcs, overrides, s)
@@ -293,7 +422,7 @@ def report(overrides: dict, tcs, s: TransientSettings, clip, skip_curve=False) -
     reference = OUT / "summary.json"
     if s.engine != "ngspice" and reference.exists():
         ref = json.loads(reference.read_text(encoding="utf-8"))
-        if ref.get("overrides") == overrides:
+        if ref.get("overrides") == overrides and ref.get("cores", "linear") == s.cores:
             summary["vs_ngspice"] = compare(summary, ref)
     path = OUT / f"summary{_suffix(s)}.json"
     path.write_text(json.dumps(summary, indent=1), encoding="utf-8")
@@ -313,46 +442,70 @@ def waveform_diff(a: runner.Render, ref: runner.Render) -> dict:
 def verify(overrides: dict, tcs, clip_name: str) -> int:
     from varimu.sim import fast
 
-    fast.check_build()  # fail before an hour of ngspice if the engine is missing or stale
+    fast.check_build()  # fail before the ngspice renders if the engine is missing or stale
     ng = TransientSettings.from_sim_settings(engine="ngspice")
-    cs = TransientSettings.from_sim_settings(engine="circuitsim")
-    ref, conv = dataclasses.replace(ng, **REFERENCE), converged(cs)
-    curve, bjobs = curve_job(overrides), burst_jobs(tcs, overrides)
+    cs = TransientSettings.from_sim_settings(engine="circuitsim")  # Jiles-Atherton cores
+    # ngspice has no core model: circuitsim meets it on linear cores
+    cs_lin = dataclasses.replace(cs, cores="linear")
+    exact, conv = dataclasses.replace(ng, **EXACT), converged(cs)
     clip = clip_job(clip_name, overrides)
     if clip is None:
         print(f"program clip {clip_name!r} not in {CLIP_DIR}: left out")
     clips = [clip] if clip else []
-    # Longest first: the ngspice reference, then ngspice production, then circuitsim.
-    todo = [(ref, j) for j in bjobs + clips]
-    todo += [(s, j) for s in (ng, cs) for j in [curve, *bjobs, *clips]]
-    todo += [(conv, j) for j in clips]
+    excerpts = excerpt_jobs(tcs, overrides, clip)
+    # Regression bounds were measured at the default front panel and clip.
+    bounded = not overrides and clip_name == CLIP
+    report_jobs = [j for j, _ in curve_chunks(overrides)] + burst_jobs(tcs, overrides) + clips
+    todo = [(exact, j) for j in excerpts.values()]
+    todo += [(s, j) for s in (ng, cs_lin, cs) for j in report_jobs]
+    todo += [(cs_lin, j) for j in excerpts.values()]
+    todo += [(conv, j) for j in clips] + [(cs, curve_job(overrides))]
     prefetch(todo)
 
     ng_summary = report(overrides, tcs, ng, clip)
-    cs_summary = report(overrides, tcs, cs, clip)
-    behaviour = cs_summary.get("vs_ngspice") or compare(cs_summary, ng_summary)
+    lin_summary = report(overrides, tcs, cs_lin, clip)
+    report(overrides, tcs, cs, clip)  # the production circuit's plots and summary
+    behaviour = lin_summary.get("vs_ngspice") or compare(lin_summary, ng_summary)
+
+    _, g_chunk, _, _ = curve_gains(overrides, cs)
+    _, g_cont, _, _ = curve_gains(overrides, cs, chunked=False)
+    chunking_db = float(np.max(np.abs((g_chunk[0] - g_chunk) - (g_cont[0] - g_cont))))
+    chunking = {
+        "gr_max_diff_db": float(f"{chunking_db:.2g}"),
+        "tolerance_db": CHUNKING_TOLERANCE_DB,
+        "passes": chunking_db <= CHUNKING_TOLERANCE_DB,
+    }
 
     waveforms: dict = {}
-    pairs = [(f"burst_tc{tc}", j) for tc, j in zip(tcs, bjobs, strict=True)]
-    pairs += [("program_clip", j) for j in clips]
     traces = {}
-    for name, j in pairs:
-        r_cs, r_ng, r_ref = (runner.render(j, settings=s) for s in (cs, ng, ref))
+    for name, j in excerpts.items():
+        r_cs, r_ex = runner.render(j, settings=cs_lin), runner.render(j, settings=exact)
         waveforms[name] = {
-            "circuitsim_vs_reference": waveform_diff(r_cs, r_ref),
-            "ngspice_vs_reference": waveform_diff(r_ng, r_ref),
+            "excerpt": j.label,
+            "reference": "exact ngspice (linear)",
+            **waveform_diff(r_cs, r_ex),
+            "cv_min_v": round(float(r_cs.vectors["v(cv)"].min()), 2),
         }
-        traces[name] = [("vs ngspice reference", r_cs.vectors["v(cv)"] - r_ref.vectors["v(cv)"])]
-        if name == "program_clip":
-            r_conv = runner.render(j, settings=conv)
-            waveforms[name]["circuitsim_vs_converged"] = waveform_diff(r_cs, r_conv)
-            traces[name].append(("vs converged", r_cs.vectors["v(cv)"] - r_conv.vectors["v(cv)"]))
+        traces[name] = r_cs.vectors["v(cv)"] - r_ex.vectors["v(cv)"]
+    if clip:
+        r_cs, r_conv = runner.render(clip, settings=cs), runner.render(clip, settings=conv)
+        waveforms["clip_vs_converged"] = {
+            "excerpt": clip.label,
+            "reference": "circuitsim converged",
+            **waveform_diff(r_cs, r_conv),
+            "cv_min_v": round(float(r_cs.vectors["v(cv)"].min()), 2),
+        }
+        traces["clip_vs_converged"] = r_cs.vectors["v(cv)"] - r_conv.vectors["v(cv)"]
+    for name, d in waveforms.items():
+        d["passes"] = (
+            d["out_rms_db"] < TOLERANCE["out_rms_db"] and d["cv_max_v"] < TOLERANCE["cv_v"]
+        )
+        if bounded and name in BOUNDS:
+            d["bound"] = BOUNDS[name]
+            d["passes"] &= d["out_rms_db"] < BOUNDS[name][0] and d["cv_max_v"] < BOUNDS[name][1]
 
-    def ok(d: dict) -> bool:
-        return d["out_rms_db"] < TOLERANCE["out_rms_db"] and d["cv_max_v"] < TOLERANCE["cv_v"]
-
-    wf_pass = all(ok(d) for w in waveforms.values() for k, d in w.items() if k.startswith("circ"))
-    passes = bool(behaviour["passes"] and wf_pass)
+    passes = bool(behaviour["passes"] and chunking["passes"])
+    passes &= all(d["passes"] for d in waveforms.values())
     result = {
         "when": dt.datetime.now().isoformat(timespec="seconds"),
         "code": runner.code_version(),
@@ -360,15 +513,16 @@ def verify(overrides: dict, tcs, clip_name: str) -> int:
         "overrides": overrides,
         "program_clip": clip.label if clip else None,
         "tolerance": TOLERANCE,
-        "reference": REFERENCE,
+        "excerpt_reference": EXACT,
         "behaviour_vs_ngspice": behaviour,
+        "curve_chunking": chunking,
         "waveforms": waveforms,
         "passes": passes,
     }
     (OUT / "agreement.json").write_text(json.dumps(result, indent=1), encoding="utf-8")
     _plot_agreement(traces)
 
-    print("\nBehaviour, circuitsim vs ngspice (tolerance: 0.2 dB, 5%):")
+    print("\nBehaviour, circuitsim vs ngspice, linear cores (tolerance: 0.2 dB, 5%):")
     print(f"  compression curve GR: {behaviour.get('gr_max_diff_db')} dB max")
     if "clip_gain_max_diff_db" in behaviour:
         print(f"  clip gain per {GAIN_WINDOW_S * 1e3:.0f} ms: "
@@ -376,24 +530,27 @@ def verify(overrides: dict, tcs, clip_name: str) -> int:
     for tc, v in behaviour["burst_relative_time_diff"].items():
         t = ", ".join(f"{k} {v[k]:+.2%}" for k in v if k != "gain_reduction_db")
         print(f"  TC{tc}: {t}; GR {v['gain_reduction_db']:+.3f} dB")
-    print("Waveforms (tolerance: < -55 dB rms re signal, CV < 0.2 V):")
-    for name, w in waveforms.items():
-        for k, d in w.items():
-            mark = "" if not k.startswith("circ") else ("  ok" if ok(d) else "  FAIL")
-            print(f"  {name:13s} {k:24s} {d['out_rms_db']:6.1f} dB  CV {d['cv_max_v']:.4f} V{mark}")
+    print(f"Chunked vs continuous staircase (circuitsim): {chunking['gr_max_diff_db']} dB max"
+          f"{'' if chunking['passes'] else '  FAIL'}")  # fmt: skip
+    print("Waveforms (tolerance: < -55 dB rms re signal, CV < 0.2 V; [regression bound]):")
+    for name, d in waveforms.items():
+        b = f"[{d['bound'][0]:.0f} dB, {d['bound'][1]} V]" if "bound" in d else ""
+        print(f"  {name:17s} vs {d['reference']:20s} {d['out_rms_db']:6.1f} dB  "
+              f"CV {d['cv_max_v']:.4f} V  {b:16s}{'ok' if d['passes'] else 'FAIL'}")  # fmt: skip
+    if not bounded:
+        print("  (regression bounds apply at the default front panel and clip only)")
     print(f"\n{'PASS' if passes else 'FAIL'} -> {(OUT / 'agreement.json').relative_to(REPO_ROOT)}")
     return 0 if passes else 1
 
 
 def _plot_agreement(traces: dict) -> None:
     fs = load_sim_settings().sample_rate
-    fig, ax = plt.subplots(len(traces), 1, figsize=(11, 2.2 * len(traces)), squeeze=False)
-    for a, (name, rows) in zip(ax[:, 0], traces.items(), strict=True):
-        for label, d in rows:
-            a.plot(np.arange(len(d)) / fs, d, lw=0.8, label=label)
-        a.set(ylabel="CV diff (V)", title=f"{name}: circuitsim's CV minus the other run's")
+    fig, ax = plt.subplots(len(traces), 1, figsize=(11, 1.9 * len(traces)), squeeze=False)
+    for a, (name, d) in zip(ax[:, 0], traces.items(), strict=True):
+        a.plot(np.arange(len(d)) / fs, d, lw=0.8)
+        other = "converged solution" if name.endswith("converged") else "exact ngspice"
+        a.set(ylabel="CV diff (V)", title=f"{name}: circuitsim's CV minus {other}'s")
         a.grid(alpha=0.3)
-        a.legend(loc="upper right")
     ax[-1, 0].set(xlabel="time (s)")
     fig.tight_layout()
     fig.savefig(OUT / "agreement.png", dpi=100)

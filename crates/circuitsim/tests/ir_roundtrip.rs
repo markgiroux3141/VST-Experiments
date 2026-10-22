@@ -77,7 +77,18 @@ fn default_fixture_has_the_670_parts() {
     let names: Vec<&str> = ir.models.iter().map(DeviceModel::name).collect();
     assert_eq!(
         names,
-        ["6386_a", "6386_b", "12AX7", "12BH7", "6973", "SI_RECTIFIER"]
+        [
+            "6386_a",
+            "6386_b",
+            "12AX7",
+            "12BH7",
+            "6973",
+            "SI_RECTIFIER",
+            "CORE_T101",
+            "CORE_T102",
+            "CORE_T103",
+            "CORE_T104"
+        ]
     );
     let DeviceModel::Triode(bank) = ir.model("6386_a").unwrap() else {
         panic!("6386_a is not a triode")
@@ -96,10 +107,17 @@ fn default_fixture_has_the_670_parts() {
         (r103.a.as_str(), r103.b.as_str(), r103.r_ohm),
         ("ka", "ta", 680.0)
     );
-    let Some(Element::Coupling(k)) = find("KT101_p_sa") else {
-        panic!("KT101_p_sa missing")
+    let Some(Element::Winding(w)) = find("LT101_sa") else {
+        panic!("LT101_sa missing")
     };
-    assert_eq!((k.l_a.as_str(), k.l_b.as_str()), ("LT101_p", "LT101_sa"));
+    assert_eq!(
+        (w.a.as_str(), w.b.as_str(), w.core.as_str()),
+        ("T101_sa_l", "cv", "t101_core")
+    );
+    let Some(Element::Device(core)) = find("XT101_CORE") else {
+        panic!("XT101_CORE missing")
+    };
+    assert_eq!(core.nodes, ["t101_core", "0"]);
     let Some(Element::Device(xva)) = find("XVA") else {
         panic!("XVA missing")
     };
@@ -198,13 +216,20 @@ fn rejects_inconsistent_circuits() {
         "probe node",
     );
     let bad_coupling = edit(&text, |v| {
+        let k = serde_json::json!({
+            "kind": "coupling", "name": "KBAD", "l_a": "LT101_p_lk", "l_b": "Rpsu", "k": 0.5
+        });
+        v["sections"][0]["elements"].as_array_mut().unwrap().push(k);
+    });
+    rejects(&bad_coupling, "not an inductor");
+    let grounded_core = edit(&text, |v| {
         for s in v["sections"].as_array_mut().unwrap() {
             for e in s["elements"].as_array_mut().unwrap() {
-                if e["name"] == "KT101_p_sa" {
-                    e["l_b"] = "RT101_sa".into();
+                if e["name"] == "LT101_sa" {
+                    e["core"] = "0".into();
                 }
             }
         }
     });
-    rejects(&bad_coupling, "not an inductor");
+    rejects(&grounded_core, "must be its own node");
 }

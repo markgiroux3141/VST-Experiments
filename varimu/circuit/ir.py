@@ -16,7 +16,11 @@ Conventions:
   parameter, so the Rust side never reads the YAML files;
 - mutual inductance is one Coupling (SPICE K) per inductor pair. The linear
   engine groups connected inductors and stamps the inductance matrix
-  M_ij = k_ij sqrt(L_i L_j) directly (docs/CIRCUIT_SIM_PLAN.md, M1 notes).
+  M_ij = k_ij sqrt(L_i L_j) directly (docs/CIRCUIT_SIM_PLAN.md, M1 notes);
+- a transformer on a nonlinear core (Phase 2) is Windings on a core node,
+  whose voltage is the flux density B (1 V = 1 mT, varimu.devices.core),
+  plus a MagneticCore device from that node to ground (or a resistor, in
+  the core's linear limit). See Winding.
 """
 
 from __future__ import annotations
@@ -28,11 +32,12 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
+from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.pentode import KorenPentode, Pentode
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
 
-IR_VERSION = 1
+IR_VERSION = 2  # 2: Winding, MagneticCore (Phase 2)
 GROUND = "0"
 
 
@@ -90,6 +95,27 @@ class VoltageSource:
 
 
 @dataclass(frozen=True)
+class Winding:
+    """`turns` turns on the core whose node is `core`, of cross-section `area_m2`.
+
+    A branch from a to b: v(a) - v(b) = turns * area_m2 * dB/dt, with B the
+    core node's voltage times varimu.devices.core.TESLA_PER_V, and its
+    current (a to b, through the winding) adds turns * i to the core's
+    magnetomotive force: the core node's KCL is sum(turns * i) = the
+    current drawn from it (by a MagneticCore, a gap, eddy loss). Winding
+    resistance and leakage are separate elements in series. The dotted end
+    is a.
+    """
+
+    name: str
+    a: str
+    b: str
+    core: str
+    turns: float
+    area_m2: float
+
+
+@dataclass(frozen=True)
 class Device:
     """An instance of a device model; nodes follow the model's PINS order."""
 
@@ -98,17 +124,25 @@ class Device:
     nodes: tuple[str, ...]
 
 
-Element = Resistor | Capacitor | Inductor | Coupling | VoltageSource | Device
-DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode
+Element = Resistor | Capacitor | Inductor | Coupling | VoltageSource | Winding | Device
+DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
 
 PINS: dict[type, tuple[str, ...]] = {
     Triode: ("p", "g", "k"),
     Pentode: ("p", "g2", "g1", "k"),
     JunctionDiode: ("a", "k"),
     VacuumDiode: ("a", "k"),
+    MagneticCore: ("b", "ref"),
 }
 
-_PREFIX = {Resistor: "R", Capacitor: "C", Inductor: "L", Coupling: "K", VoltageSource: "V"}
+_PREFIX = {
+    Resistor: "R",
+    Capacitor: "C",
+    Inductor: "L",
+    Coupling: "K",
+    VoltageSource: "V",
+    Winding: "L",
+}
 
 
 def instance_prefix(model: DeviceModel) -> str:
@@ -121,6 +155,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.a, el.b)
     if isinstance(el, VoltageSource):
         return (el.pos, el.neg)
+    if isinstance(el, Winding):
+        return (el.a, el.b, el.core)
     if isinstance(el, Device):
         return el.nodes
     return ()
@@ -220,6 +256,11 @@ class CircuitIR:
                     raise IRError(f"{el.name}.k = {el.k} must be in [-1, 0) or (0, 1]")
             elif isinstance(el, VoltageSource):
                 _finite(f"{el.name}.dc_v", el.dc_v)
+            elif isinstance(el, Winding):
+                _positive(f"{el.name}.turns", el.turns)
+                _positive(f"{el.name}.area_m2", el.area_m2)
+                if el.core == GROUND or el.core in (el.a, el.b):
+                    raise IRError(f"{el.name}: core node {el.core} must be its own node")
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
@@ -337,6 +378,10 @@ def _validate_model(m: DeviceModel) -> None:
         nonneg("rs_ohm", m.rs_ohm)
     elif isinstance(m, VacuumDiode):
         values += [("perveance", m.perveance), ("smooth_v", m.smooth_v)]
+    elif isinstance(m, MagneticCore):
+        problems = m.validate()
+        if problems:
+            raise IRError(f"{m.name}: " + "; ".join(problems))
     else:
         raise IRError(f"unknown device model type {type(m).__name__}")
     for what, x in values:
@@ -354,6 +399,7 @@ _ELEMENT_KINDS = {
     "inductor": Inductor,
     "coupling": Coupling,
     "voltage_source": VoltageSource,
+    "winding": Winding,
     "device": Device,
 }
 _MODEL_KINDS = {
@@ -361,6 +407,7 @@ _MODEL_KINDS = {
     "pentode": Pentode,
     "junction_diode": JunctionDiode,
     "vacuum_diode": VacuumDiode,
+    "magnetic_core": MagneticCore,
 }
 _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 _PROBE_KINDS = {"voltage": VoltageProbe}

@@ -152,7 +152,7 @@ fn sweep(
 /// tolerance on it, skipping T104's floating secondary (see tests/dk.rs).
 fn worst(a: &[Vec<f64>], b: &[Vec<f64>], ir: &CircuitIr, opts: &Options) -> f64 {
     let unknowns = Mna::from_ir(ir, opts.gmin).unwrap().unknowns;
-    let floating = ["node ay", "node bk", "node T104_s_r"];
+    let floating = ["node ay", "node bk", "node T104_s_l"];
     let skip: Vec<bool> = unknowns
         .iter()
         .map(|u| floating.contains(&u.describe().as_str()))

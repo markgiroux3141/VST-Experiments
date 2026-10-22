@@ -38,9 +38,10 @@ ENGINES = [
 
 
 def _run(engine, x_dbfs, overrides):
-    """Production settings of `engine`; every probe comes back."""
+    """Production settings of `engine`; every probe comes back. circuitsim runs the
+    Jiles-Atherton cores, ngspice their linear limit (it has no core model)."""
     s = TransientSettings.from_sim_settings(engine=engine)
-    c = nl.build(overrides)
+    c = nl.build(overrides, cores=s.cores)
     x = x_dbfs * s.full_scale_volts_peak
     if engine == "circuitsim":
         return fast.run_transient(c.ir, x, settings=s), s

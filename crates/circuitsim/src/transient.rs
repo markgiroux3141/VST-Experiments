@@ -831,15 +831,15 @@ impl Transient {
     /// Tell every device its port voltages at the accepted point `x`.
     fn accept_ports(&mut self) {
         let mut off = 0;
-        let mut state = false;
-        for inst in &mut self.mna.devices {
+        for (d, inst) in self.mna.devices.iter_mut().enumerate() {
             let np = inst.device.ports();
             inst.device.accept(&self.ports[off..off + np]);
-            state |= inst.device.has_state();
+            if inst.device.has_state()
+                && let Some(dk) = &mut self.dk
+            {
+                dk.newton.invalidate_device(d);
+            }
             off += np;
-        }
-        if state && let Some(dk) = &mut self.dk {
-            dk.newton.invalidate();
         }
     }
 
@@ -1435,6 +1435,12 @@ impl Transient {
             return Err(Error::new(
                 "update: the circuit's devices or their connections changed (only values may)",
             ));
+        }
+        // Devices with memory (cores) keep it: the new instances start where the
+        // old ones were, whatever values changed.
+        let mut mna = mna;
+        for (new, old) in mna.devices.iter_mut().zip(&self.mna.devices) {
+            new.device.set_state(&old.device.state());
         }
         self.mna = mna;
         self.levels.iter_mut().for_each(|l| *l = None);

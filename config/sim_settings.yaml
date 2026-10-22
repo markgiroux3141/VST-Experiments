@@ -36,10 +36,13 @@ circuitsim:
   # as halves (output stays on the sample grid).
   # - Smooth dynamics: the small-signal response matches ngspice .ac to
   #   -63 dB up to 20 kHz (0.00 dB / 0.04 deg; trapezoidal at 4x:
-  #   0.18 dB / 2 deg). The slice's provisional ~17 kHz transformer resonance
+  #   0.18 dB / 2 deg). The pre-Phase 2 slice's provisional ~17 kHz resonance
   #   is what trapezoidal's frequency warping trips on.
   # - Switching (bridge diodes on HF, grid conduction): no method's order
   #   helps there; the error control subdivides just those steps.
+  # Rerun on the Phase 2 slice (Jiles-Atherton cores, 2026-10-21): -67.5 to
+  # -80 dB on the same six excerpts, trapezoidal still needing 8-16x; the
+  # choice stands (CIRCUIT_SIM_PLAN.md, "Phase 2 in circuitsim").
   # vs the converged solution, 6 excerpts: -64 dB rms or better (CCIF 19+20
   # kHz at -10 dBFS -64, multitone -70, SMPTE 0 dBFS -71, burst -86, clip
   # -83), costing 1.0-1.1x the uncontrolled run on typical material, 1.4x on
@@ -100,3 +103,8 @@ devices:
   # error 1e-4 of max current or better, see varimu/devices/table.py).
   # "exact": the analytic behavioral expressions (slow; for verification).
   triode_formulation: table
+  # Transformer cores (main plan Phase 2): "ja", the Jiles-Atherton core
+  # (varimu.devices.core; circuitsim only, decided 2026-10-21), or "linear",
+  # each core in its linear limit. ngspice always runs "linear" (there is no
+  # SPICE core); agreement tests compare the engines on "linear" builds.
+  cores: ja

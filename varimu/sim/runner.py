@@ -31,6 +31,7 @@ import json
 import os
 import shutil
 import threading
+import time
 from collections.abc import Callable, Iterable, Mapping
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -100,7 +101,10 @@ class RenderJob:
 
 def _key(circuit: nl.Circuit, samples: np.ndarray, s: TransientSettings) -> tuple[str, dict]:
     parts = {
-        "netlist": _sha(circuit.text.encode()),
+        # The IR determines the circuit for both engines (the SPICE text, when there is
+        # one, follows from it plus the formulation and tables, both keyed too).
+        "ir": _sha(circuit.ir.to_json().encode()),
+        "netlist": _sha(circuit.text.encode()) if circuit.text is not None else None,
         "files": {k: Path(v).name for k, v in sorted(circuit.files.items())},
         "input": _sha(np.ascontiguousarray(samples, "<f8").tobytes()),
         "settings": s.as_dict(),
@@ -127,6 +131,10 @@ def _log_timing(meta: dict[str, Any]) -> None:
         "oversample": meta["settings"]["oversample"],
         "method": meta["settings"]["method"],
         "reltol": meta["settings"]["reltol"],
+        # ngspice only (exact runs ~10-30x slower than table); circuitsim's models are analytic.
+        "triode_formulation": meta["settings"].get("triode_formulation", "table")
+        if meta["settings"].get("engine", "ngspice") == "ngspice"
+        else "",
     }
     with _timing_lock:
         new = not path.exists()
@@ -143,6 +151,20 @@ def _log_timing(meta: dict[str, Any]) -> None:
             if new:
                 w.writeheader()
             w.writerow(row)
+
+
+def _replace_dir(src: Path, dst: Path, attempts: int = 8) -> None:
+    """os.replace, retried with backoff (~13 s in all): on Windows, a virus scanner or
+    the indexer briefly holding a file just written into `src` makes renaming the
+    directory fail with access denied (seen 2026-10-21, one of 42 parallel renders)."""
+    for k in range(attempts):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if k == attempts - 1:
+                raise
+            time.sleep(0.05 * 2**k)
 
 
 def load_render(path: Path) -> Render:
@@ -163,7 +185,9 @@ def render(
     """Run (or fetch from cache) one render, on the configured engine unless `settings`
     names one."""
     s = settings or TransientSettings.from_sim_settings(engine="configured")
-    circuit = nl.build(job.overrides)
+    if s.engine == "ngspice" and s.cores != "linear":
+        raise ValueError("ngspice has no Jiles-Atherton core: render with cores='linear'")
+    circuit = nl.build(job.overrides, triode_formulation=s.triode_formulation, cores=s.cores)
     samples = np.asarray(job.samples, float)
     key, parts = _key(circuit, samples, s)
     path = RENDER_DIR / key
@@ -224,7 +248,7 @@ def render(
     (tmp / "meta.json").write_text(json.dumps(meta, indent=1, default=str), encoding="utf-8")
     if path.exists():
         shutil.rmtree(path)
-    os.replace(tmp, path)
+    _replace_dir(tmp, path)
     _log_timing(meta)
     return Render(key, path, out, res.vectors, meta, cached=False)
 

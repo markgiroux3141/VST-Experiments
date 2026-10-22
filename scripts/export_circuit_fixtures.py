@@ -65,16 +65,18 @@ CASES: dict[str, tuple[dict, str]] = {
 }
 
 
-def build_case(name: str):
+def build_case(name: str, cores: str = "ja"):
+    """The case's circuit: Jiles-Atherton cores for the IR fixtures, linear cores for
+    the SPICE goldens (ngspice has no core model)."""
     overrides, form = CASES[name]
-    return nl.build(overrides, triode_formulation=form)
+    return nl.build(overrides, triode_formulation=form, cores=cores)
 
 
 def write_golden(out_dir: Path = GOLDEN_DIR) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     index = {}
     for name, (overrides, form) in CASES.items():
-        c = build_case(name)
+        c = build_case(name, cores="linear")
         (out_dir / f"{name}.cir").write_bytes(c.text.encode("utf-8"))
         index[name] = {
             "overrides": overrides,

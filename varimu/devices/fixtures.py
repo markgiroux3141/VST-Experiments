@@ -9,7 +9,11 @@ Port conventions are the Rust engine's: port j is pin j relative to the last
 pin (the cathode), and the currents flow into pins 0..P-1:
 - triode (p, g, k): ports (Vpk, Vgk), currents (Ip, Ig);
 - pentode (p, g2, g1, k): ports (Vpk, Vg2k, Vg1k), currents (Ip, Ig2, 0);
-- diodes (a, k): port Vak, current I.
+- diodes (a, k): port Vak, current I;
+- magnetic core (b, ref): port B / TESLA_PER_V, current path * H. A core has
+  memory, so each of its points also records the state it is evaluated
+  from ([b, h, delta]: the last accepted point), taken along a magnetization
+  history: demagnetized, up, back down, into saturation.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ import numpy as np
 
 from varimu.circuit import netlist as nl
 from varimu.circuit.ir import model_to_dict
+from varimu.devices.core import DEMAGNETIZED, TESLA_PER_V, MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.library import load_device
 from varimu.devices.pentode import Pentode
@@ -46,6 +51,18 @@ _PENTODE_VP = (-10, 0, 1, 10, 50, 250, 400)
 # Reverse bias through the knee to series-resistance-dominated conduction.
 _JUNCTION_V = (-100, -10, -1, -0.2, *np.round(np.arange(-0.1, 1.5001, 0.02), 10), 2, 3, 5, 10, 20)
 _VACUUM_V = (-50, -5, -1, -0.3, -0.1, 0, 0.05, 0.1, 0.5, 1, 5, 20, 50, 100, 300)
+# Core: B history (T) whose accepted points are the states, and offsets from each state's B.
+_CORE_HISTORY = (0.0, 0.6, 0.3, 1.2, -0.4, 1.9)
+# (not multiples of DB_MAX: there the substep count changes, a ~1e-8 relative jump that
+# finite differences would see)
+_CORE_DB = (
+    *(-x for x in (0.9713, 0.3071, 0.0473, 4.73e-3, 7e-4, 1e-6)),
+    0.0,
+    *(1e-6, 7e-4, 4.73e-3, 0.0473, 0.3071, 0.9713),
+)
+# A literature set with a wide loop (Jiles & Atherton 1986, via Holters & Zoelzer, DAFx-16,
+# Table 1, c converted to the 1992 form), for the fixtures only.
+_JA1986 = MagneticCore("CORE_JA1986", 1.6e6, 1100.0, 400.0, 0.17, 1.6e-3, 0.1)
 
 
 def _models() -> list:
@@ -61,8 +78,29 @@ def _models() -> list:
         dataclasses.replace(ax7, name="12AX7_no_grid", grid=None),
         dataclasses.replace(diode, name=diode.name + "_rs0", rs_ohm=0.0),
         load_device("GZ34"),
+        core_model("CORE_GO", "grain_oriented_si_steel", 0.1),
+        core_model("CORE_NI", "permalloy_fluxgate", 0.08),
+        core_model("CORE_MU", "mumetall", 0.07),
+        _JA1986,
     ]
     return [*default, *mismatch, *extra]
+
+
+def _core_points(m: MagneticCore):
+    states, state = [], DEMAGNETIZED
+    for b in _CORE_HISTORY:
+        # walk there in 10 mT steps, accepting each (as a transient would)
+        for bj in np.linspace(state.b, b, max(2, int(abs(b - state.b) / 0.01) + 1))[1:]:
+            state = m.advance(float(bj), state)
+        states.append(state)
+    ports, currents, st = [], [], []
+    for s in states:
+        for db in _CORE_DB:
+            v = (s.b + db) / TESLA_PER_V
+            ports.append((v,))
+            currents.append((m.port_current(v, s)[0],))
+            st.append((s.b, s.h, s.delta))
+    return ports, currents, st
 
 
 def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
@@ -75,6 +113,8 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
         ports = [(vp, vg2, vg1) for vg1, vg2, vp in grid]
         vp, vg2, vg1 = np.array(ports, float).T
         currents = np.stack([m.ip(vg1, vg2, vp), m.ig2(vg1, vg2), np.zeros_like(vp)], axis=1)
+    elif isinstance(m, MagneticCore):
+        ports, currents, _ = _core_points(m)
     elif isinstance(m, JunctionDiode | VacuumDiode):
         volts = _JUNCTION_V if isinstance(m, JunctionDiode) else _VACUUM_V
         if isinstance(m, JunctionDiode) and m.rs_ohm == 0:
@@ -90,7 +130,10 @@ def device_fixtures() -> dict:
     out = []
     for m in _models():
         ports, currents = _evaluate(m)
-        out.append({"model": model_to_dict(m), "ports": ports, "currents": currents})
+        entry = {"model": model_to_dict(m), "ports": ports, "currents": currents}
+        if isinstance(m, MagneticCore):
+            entry["states"] = [list(s) for s in _core_points(m)[2]]
+        out.append(entry)
     return {"devices": out}
 
 

@@ -214,7 +214,7 @@ def test_670_operating_point_matches_ngspice_op(case):
 
     Each node must agree within 1e-10 of B+ or within 3x the engine's own
     roundoff spread across unknown orderings, whichever is larger. The spread
-    matters on one island: at DC, T104's secondary (ay, bk, T104_s_r) is a
+    matters on one island: at DC, T104's secondary (ay, bk, T104_s_l) is a
     1 mOhm winding whose common mode only the bridge diodes' leakage and a
     1 GOhm leak hold, so double precision resolves it to ~1e-6..1e-5 V in any
     engine (eps x 1000 S x 13 V / 6e-7 S), and the control-voltage nodes
@@ -222,12 +222,20 @@ def test_670_operating_point_matches_ngspice_op(case):
     0.57x of the spread; ngspice's value lies inside Rust's spread; without
     the island (pots_min, where the bridge is reverse biased), every node
     within 5.7e-10 V (2e-12 of B+).
+
+    Phase 2 (2026-10-21): T104's secondary has no winding resistance any more
+    (the 1 mOhm placeholder went with the old transformer model), so Rust's
+    spread there is 1e-11..2e-10 V; ngspice differs by up to 1.5e-7 V, inside its
+    own convergence tolerance on the island (reltol 1e-6 of its 4-13 V), which
+    bounds the island's nodes.
     """
     import circuitsim
 
-    ir = nl.build(GOLDEN[case]["overrides"]).ir
-    ir = dataclasses.replace(ir, probes=tuple(VoltageProbe(n) for n in ir.nodes()))
-    text, _ = spice.emit(ir, triode_formulation="exact")
+    ir = nl.build(GOLDEN[case]["overrides"], cores="linear").ir
+    # (the nodes the SPICE text has: not core nodes or the windings' inner nodes)
+    ok = spice.spice_nodes(ir)
+    ir = dataclasses.replace(ir, probes=tuple(VoltageProbe(n) for n in ir.nodes() if n in ok))
+    text, _ = spice.emit(ir, triode_formulation="exact", rshunt_ohm=None)
     save = [p.spice for p in ir.probes]
     ng = ngspice.run(
         text + f"Vin_dc {ir.input_node} 0 dc 0\n", "op", save, options="reltol=1e-6", digits=16
@@ -240,6 +248,7 @@ def test_670_operating_point_matches_ngspice_op(case):
         spread = max(vals) - min(vals)
         assert spread < 1e-7 * b_plus, f"{n}: roundoff spread {spread:.1e} V"
         diff = abs(vals[0] - ng[n][0])
-        assert diff <= 1e-10 * b_plus + 3 * spread, (
+        island = 1e-6 * abs(ng[n][0]) if n in ("v(ay)", "v(bk)") else 0.0
+        assert diff <= 1e-10 * b_plus + 3 * spread + island, (
             f"{n}: Rust {vals[0]:.12f}, ngspice {ng[n][0]:.12f} (spread {spread:.1e})"
         )

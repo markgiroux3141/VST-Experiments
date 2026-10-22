@@ -80,6 +80,12 @@ class TransientSettings:
     threads: int = 1  # ngspice OpenMP threads per job
     priority: str = "below_normal"  # normal | below_normal | idle
     engine: str = "ngspice"  # ngspice | circuitsim
+    # How triode plate currents reach SPICE (devices.triode_formulation): table | exact.
+    # ngspice only; circuitsim always evaluates the analytic models.
+    triode_formulation: str = "table"
+    # Transformer cores the circuit is built with (devices.cores): ja | linear. ngspice
+    # always runs "linear" (no SPICE core); circuitsim takes the configured model.
+    cores: str = "linear"
     input_order: int = 1  # circuitsim only: input interpolation at stage times
     error_abstol: float = 0.0  # circuitsim only: local error control (0 = off), V
     error_reltol: float = 0.0  # circuitsim only: ... plus this times |v|
@@ -114,6 +120,7 @@ class TransientSettings:
             method=str(tr["method"]),
             threads=int(runner.get("threads_per_job", 1)),
             priority=str(runner.get("priority", "below_normal")),
+            triode_formulation=str(s.data["devices"]["triode_formulation"]),
         )
         if engine == "circuitsim":
             cs = s.data["circuitsim"]
@@ -129,6 +136,7 @@ class TransientSettings:
                 newton_reltol=float(cs.get("newton_reltol", 1e-6)),
                 newton_vntol=float(cs.get("newton_vntol", 1e-6)),
                 newton_reuse=bool(cs.get("newton_reuse", True)),
+                cores=str(s.data["devices"].get("cores", "ja")),
             )
         return st
 

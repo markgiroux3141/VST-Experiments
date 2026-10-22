@@ -10,8 +10,16 @@ Component values and their sources are in config/circuits/fairchild_670.yaml.
 It builds the circuit IR (varimu.circuit.ir; the Rust engine's input) and
 emits ngspice text from it (varimu.circuit.spice).
 
-Simplifications in this first slice (each is a later fidelity step):
-- transformers are linear coupled inductors with winding resistance (Phase 2);
+Transformers (Phase 2): windings on a Jiles-Atherton core (varimu.devices.core)
+with winding resistance, leakage inductance, self- and interwinding
+capacitance, the core's joint gap and classical eddy-current loss (see
+_transformer). `cores="linear"` builds the same circuit with each core in its
+linear limit: ngspice can only run that (there is no SPICE core), so the
+agreement tests compare both engines on it.
+
+Simplifications in this slice (each is a later fidelity step):
+- eddy-current loss is the classical thin-lamination term (frequency
+  independent); a Cauer ladder for skin effect in the laminations is open;
 - B+ is an ideal 240 V source behind a source impedance, standing in for the
   regulated supply (EL34 / 6084 / 5651);
 - each 4-triode 6386 bank is one device instance with 4x the current, so
@@ -33,7 +41,6 @@ from varimu.circuit import spice
 from varimu.circuit.ir import (
     Capacitor,
     CircuitIR,
-    Coupling,
     Device,
     DeviceModel,
     Element,
@@ -42,8 +49,10 @@ from varimu.circuit.ir import (
     Section,
     VoltageProbe,
     VoltageSource,
+    Winding,
 )
 from varimu.config import CONFIG_DIR, ConfigError, load_genome_bounds, load_sim_settings
+from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.library import load_device
 from varimu.devices.pentode import Pentode
 from varimu.devices.table import GRIDS
@@ -68,7 +77,15 @@ TUBE_PARAMS = {
 }
 
 _MIN_R = 1e-3  # ohm; stands in for the zero end of a pot
-_STRING_VALUES = {"bridge_diode"}
+_STRING_VALUES = {
+    "bridge_diode",
+    "t101_core_material",
+    "t102_core_material",
+    "t103_core_material",
+    "t104_core_material",
+}
+CORE_MODES = ("ja", "linear")
+TRANSFORMERS = ("t101", "t102", "t103", "t104")
 
 
 # --- Parameters --------------------------------------------------------------------
@@ -138,6 +155,9 @@ def check_genome_links(spec: CircuitSpec | None = None) -> list[str]:
             problems.append(f"{key}: genome path {path} not in genome_bounds.yaml")
         elif not b.resolved:
             problems.append(f"{key}: genome bounds {path} still TBD")
+        elif b.choices is not None:
+            if v not in b.choices:
+                problems.append(f"{key}: nominal {v!r} not in {list(b.choices)} ({path})")
         elif not b.min <= v <= b.max:
             problems.append(f"{key}: nominal {v} outside [{b.min}, {b.max}] ({path})")
     return problems
@@ -214,34 +234,109 @@ def _t_pad(name: str, a: str, b: str, z: float, atten_db: float) -> list[Resisto
     ]
 
 
-def _transformer(
-    name: str,
-    windings: list[tuple[str, str, str, float, float, float, float]],
-    l_unit_h: float,
-    k: float,
-) -> list[Element]:
-    """Linear transformer as coupled inductors.
+def transformer_core(key: str, p: Mapping[str, Any]) -> MagneticCore:
+    """The JA core of transformer `key` (t101..t104) from its material and path length."""
+    return core_model(f"CORE_{key.upper()}", p[f"{key}_core_material"], p[f"{key}_core_path_m"])
 
-    windings: (label, dot_node, other_node, turns, r_ohm, c_f, rloss_ohm).
-    Inductance is l_unit_h * turns^2, every pair is coupled with k, and a
+
+def _transformer(
+    key: str,
+    windings: list[tuple[str, str, str, float, float, float]],
+    p: Mapping[str, Any],
+    cores: str,
+    interwinding: tuple[tuple[str, str], str] | None = None,
+) -> list[Element]:
+    """A transformer: windings on one core (varimu.devices.core).
+
+    windings: (label, dot_node, other_node, turns relative to the reference
+    winding, r_ohm, c_f). Per winding: its DC resistance, its leakage
+    inductance (half the transformer's leakage `<key>_leakage_h`, which is
+    referred to the reference winding, times turns^2), the Winding on the
+    core node, and its self-capacitance across the terminals (0 = none). A
     positive voltage from dot to other on one winding gives the same on the
-    others. c_f is the winding's self-capacitance and rloss_ohm a lumped
-    core/eddy loss, both across its terminals (0 = none).
+    others. On the core node: the core (a MagneticCore, or its linear limit
+    as a resistor), the joint gap (B g / mu0 of magnetomotive force) and
+    classical eddy-current loss in the laminations (l_e sigma d^2 / 12 dB/dt).
+    `interwinding` ((end_a, end_b), other): `<key>_c_interwinding_f` split in half
+    from both ends of a balanced winding to a terminal of the other side, as
+    the replacements' balanced two-chamber construction has it (common mode
+    only; one capacitor at one end couples in differential mode, and that
+    made the 6386 stage oscillate at ~32 kHz, measured 2026-10-21).
     """
+    name = key.upper()
+    n_ref, area = p[f"{key}_turns"], p[f"{key}_core_area_m2"]
+    path, gap = p[f"{key}_core_path_m"], p[f"{key}_gap_m"]
+    mat = materials()[p[f"{key}_core_material"]]
+    u = f"{key}_core"
     els: list[Element] = []
-    for label, dot, other, turns, r, c, rloss in windings:
-        mid = f"{name}_{label}_r"
-        els.append(_r(f"{name}_{label}", dot, mid, r))
-        els.append(Inductor(f"L{name}_{label}", mid, other, l_unit_h * turns * turns))
+    for label, dot, other, rel, r, c in windings:
+        n = f"{name}_{label}"
+        top = dot
+        if r > 0:
+            els.append(_r(n, top, f"{n}_r", r))
+            top = f"{n}_r"
+        leak = 0.5 * p[f"{key}_leakage_h"] * rel * rel
+        if leak > 0:
+            els.append(Inductor(f"L{n}_lk", top, f"{n}_l", leak))
+            top = f"{n}_l"
+        els.append(Winding(f"L{n}", top, other, u, rel * n_ref, area))
         if c > 0:
-            els.append(Capacitor(f"C{name}_{label}", dot, other, c))
-        if rloss > 0:
-            els.append(_r(f"{name}_{label}_loss", dot, other, rloss))
-    labels = [w[0] for w in windings]
-    for i, a in enumerate(labels):
-        for b in labels[i + 1 :]:
-            els.append(Coupling(f"K{name}_{a}_{b}", f"L{name}_{a}", f"L{name}_{b}", k))
+            els.append(Capacitor(f"C{n}", dot, other, c))
+    if interwinding and p[f"{key}_c_interwinding_f"] > 0:
+        (end_a, end_b), other = interwinding
+        half = 0.5 * p[f"{key}_c_interwinding_f"]
+        els.append(Capacitor(f"C{name}_iwa", end_a, other, half))
+        els.append(Capacitor(f"C{name}_iwb", end_b, other, half))
+    core = transformer_core(key, p)
+    if cores == "linear":
+        els.append(Resistor(f"R{name}_core", u, "0", 1 / core.linear_conductance()))
+    else:
+        els.append(Device(f"X{name}_CORE", core.name, (u, "0")))
+    if gap > 0:
+        els.append(Resistor(f"R{name}_gap", u, "0", MU0 / (gap * TESLA_PER_V)))
+    eddy = path * mat["lamination_m"] ** 2 / (12 * mat["resistivity_ohm_m"]) * TESLA_PER_V
+    els.append(Capacitor(f"C{name}_eddy", u, "0", eddy))
     return els
+
+
+def transformer_windings(key: str, p: Mapping[str, Any]):
+    """The windings of the 670's transformer `key` with their circuit nodes, as
+    _transformer takes them, and its interwinding capacitance placement."""
+    if key == "t101":
+        half = (p["t101_turns_half"], p["t101_r_half_ohm"], p["t101_c_half_f"])
+        return [
+            ("p", "pri", "0", 1.0, p["t101_r_pri_ohm"], 0.0),
+            ("sa", "ga", "cv", *half),
+            ("sb", "cv", "gb", *half),
+        ], (("ga", "gb"), "pri")
+    if key == "t102":
+        half = (p["t102_turns_half"], p["t102_r_half_ohm"], p["t102_c_half_f"])
+        return [
+            ("pa", "pa", "t3", *half),
+            ("pb", "t2", "pb", *half),
+            ("s", "out", "0", 1.0, p["t102_r_sec_ohm"], 0.0),
+        ], (("pa", "pb"), "out")
+    if key == "t103":
+        t3 = p["t103_turns_half"]
+        return [
+            ("p", "s1", "s2", 1.0, 0.0, 0.0),
+            ("sa", "t5", "0", t3, 0.0, p["t103_c_half_f"]),
+            ("sb", "0", "t8", t3, 0.0, p["t103_c_half_f"]),
+        ], None
+    if key == "t104":
+        return [
+            ("pa", "pa3", "bp", 1.0, 0.0, p["t104_c_half_f"]),
+            ("pb", "bp", "pb3", 1.0, 0.0, p["t104_c_half_f"]),
+            ("s", "ay", "bk", p["t104_sec_per_half"], 0.0, 0.0),
+            ("f", "fy", "fg", p["t104_fb_per_half"], 0.0, 0.0),
+        ], None
+    raise KeyError(key)
+
+
+def transformer(key: str, p: Mapping[str, Any], cores: str = "ja") -> list[Element]:
+    """The 670's transformer `key` (t101..t104) on its circuit nodes."""
+    windings, interwinding = transformer_windings(key, p)
+    return _transformer(key, windings, p, cores, interwinding)
 
 
 def _time_constant(position: int, p: Mapping[str, Any], top: str, bot: str) -> list[Element]:
@@ -276,12 +371,13 @@ def _time_constant(position: int, p: Mapping[str, Any], top: str, bot: str) -> l
 
 @dataclass(frozen=True)
 class Circuit:
-    text: str
+    text: str | None  # SPICE; None when the cores are Jiles-Atherton (circuitsim only)
     input_node: str
     save: tuple[str, ...]
     params: dict[str, Any]
     files: dict[str, Path]  # extra files the netlist reads (job-dir name -> source), e.g. tables
     ir: CircuitIR  # what `text` was emitted from; the Rust engine's input
+    cores: str = "ja"  # "ja" (then text is None: no SPICE core) or "linear"
 
 
 def build(
@@ -289,27 +385,36 @@ def build(
     spec: CircuitSpec | None = None,
     *,
     triode_formulation: str | None = None,
+    cores: str | None = None,
 ) -> Circuit:
     """The netlist for one channel. `triode_formulation` is "table" or "exact"
-    (default from sim_settings.yaml, devices.triode_formulation)."""
+    (default from sim_settings.yaml, devices.triode_formulation); `cores` is
+    "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text."""
     p = resolve(overrides, spec)
-    form = triode_formulation or load_sim_settings().data["devices"]["triode_formulation"]
+    devices = load_sim_settings().data["devices"]
+    form = triode_formulation or devices["triode_formulation"]
     if form not in spice.FORMULATIONS:
         raise ValueError(f"unknown triode formulation {form!r}")
-    ir = build_ir(p)
+    cores = cores or devices.get("cores", "ja")
+    if cores not in CORE_MODES:
+        raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
+    ir = build_ir(p, cores)
     grids = {
         "6386_a": GRIDS["6386"],
         "6386_b": GRIDS["6386"],
         "12AX7": GRIDS["12AX7"],
         "12BH7": GRIDS["12BH7"],
     }
-    text, files = spice.emit(ir, triode_formulation=form, table_grids=grids)
+    text, files = None, {}
+    if cores == "linear":
+        text, files = spice.emit(ir, triode_formulation=form, table_grids=grids)
     save = tuple(pr.spice for pr in ir.probes)
-    return Circuit(text, ir.input_node, save, p, files, ir)
+    return Circuit(text, ir.input_node, save, p, files, ir, cores)
 
 
-def build_ir(p: Mapping[str, Any]) -> CircuitIR:
-    """The circuit IR for resolved parameters `p` (see `resolve()`)."""
+def build_ir(p: Mapping[str, Any], cores: str = "ja") -> CircuitIR:
+    """The circuit IR for resolved parameters `p` (see `resolve()`); `cores`: "ja" or
+    "linear" (each core in its linear limit)."""
     base6386 = load_device("6386")
     v12ax7 = load_device("12AX7")
     v12bh7 = load_device("12BH7")
@@ -351,28 +456,15 @@ def build_ir(p: Mapping[str, Any]) -> CircuitIR:
     )
 
     # Input: source impedance, AT101, T101 (secondary centre tap = control voltage).
-    t1 = p["t101_turns_half"]
-    half1 = (t1, p["t101_r_half_ohm"], p["t101_c_half_f"], p["t101_rloss_half_ohm"])
     section(
         "input",
         _r("src", INPUT_NODE, "in_s", p["source_impedance_ohm"]),
         _t_pad("AT101", "in_s", "pri", p["attenuator_z_ohm"], p["input_atten_db"]),
         _r("101", "pri", "0", p["r101_r102_ohm"]),
-        _transformer(
-            "T101",
-            [
-                ("p", "pri", "0", 1.0, p["t101_r_pri_ohm"], 0.0, 0.0),
-                ("sa", "ga", "cv", *half1),
-                ("sb", "cv", "gb", *half1),
-            ],
-            p["t101_lp_h"],
-            p["transformer_k"],
-        ),
+        transformer("t101", p, cores),
     )
 
     # 6386 banks: plates to T102, cathodes through R103/R104 and the balance pot.
-    t2 = p["t102_turns_half"]
-    half2 = (t2, p["t102_r_half_ohm"], p["t102_c_half_f"], p["t102_rloss_half_ohm"])
     section(
         "6386 push-pull",
         dev("XVA", bank["a"], "pa", "ga", "ka"),
@@ -384,37 +476,18 @@ def build_ir(p: Mapping[str, Any]) -> CircuitIR:
         _r("111", "bp", "ctr", p["r111_ohm"]),
         _r("107", "ctr", "t3", p["r107_r108_ohm"]),
         _r("108", "ctr", "t2", p["r107_r108_ohm"]),
-        _transformer(
-            "T102",
-            [
-                ("pa", "pa", "t3", *half2),
-                ("pb", "t2", "pb", *half2),
-                ("s", "out", "0", 1.0, p["t102_r_sec_ohm"], 0.0, 0.0),
-            ],
-            p["t102_l_half_h"] / t2**2,
-            p["transformer_k"],
-        ),
+        transformer("t102", p, cores),
         _r("load", "out", "0", p["load_ohm"]),
     )
 
     # Sidechain pick-off from the output, T103, AC threshold pots.
-    t3 = p["t103_turns_half"]
     th = p["ac_threshold"]
     section(
         "sidechain input",
         _r("145", "out", "s1", p["r145_r148_ohm"]),
         _r("147", "0", "s2", p["r145_r148_ohm"]),
         _r("149", "s1", "s2", p["r149_r150_ohm"]),
-        _transformer(
-            "T103",
-            [
-                ("p", "s1", "s2", 1.0, 0.0, 0.0, 0.0),
-                ("sa", "t5", "0", t3, 0.0, p["t103_c_half_f"], 0.0),
-                ("sb", "0", "t8", t3, 0.0, p["t103_c_half_f"], 0.0),
-            ],
-            p["t103_lp_h"],
-            p["transformer_k"],
-        ),
+        transformer("t103", p, cores),
         _pot("115A", "t5", "w1a", "x1a", p["r115a_ohm"], 1 - th),
         _pot("115B", "t8", "w1b", "x1b", p["r115b_ohm"], 1 - th),
         _r("113", "x1a", "0", p["r113_r114_ohm"]),
@@ -468,17 +541,7 @@ def build_ir(p: Mapping[str, Any]) -> CircuitIR:
         Capacitor("C105", "nfa", "pa3", p["c105_c106_f"]),
         _r("144", "g3b", "nfb", p["r143_r144_ohm"]),
         Capacitor("C106", "nfb", "pb3", p["c105_c106_f"]),
-        _transformer(
-            "T104",
-            [
-                ("pa", "pa3", "bp", 1.0, 0.0, p["t104_c_half_f"], p["t104_rloss_half_ohm"]),
-                ("pb", "bp", "pb3", 1.0, 0.0, p["t104_c_half_f"], p["t104_rloss_half_ohm"]),
-                ("s", "ay", "bk", p["t104_sec_per_half"], 0.0, 0.0, 0.0),
-                ("f", "fy", "fg", p["t104_fb_per_half"], 0.0, 0.0, 0.0),
-            ],
-            p["t104_l_half_h"],
-            p["transformer_k"],
-        ),
+        transformer("t104", p, cores),
     )
 
     # Bridge rectifier, time constant network, ZERO.
@@ -499,6 +562,7 @@ def build_ir(p: Mapping[str, Any]) -> CircuitIR:
         title=TITLE,
         input_node=INPUT_NODE,
         probes=tuple(VoltageProbe(n) for n in PROBE_NODES),
-        models=(bank["a"], bank["b"], v12ax7, v12bh7, v6973, diode),
+        models=(bank["a"], bank["b"], v12ax7, v12bh7, v6973, diode)
+        + (() if cores == "linear" else tuple(transformer_core(k, p) for k in TRANSFORMERS)),
         sections=tuple(sections),
     )

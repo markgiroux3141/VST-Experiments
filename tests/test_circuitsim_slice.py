@@ -19,7 +19,8 @@ method study (CIRCUIT_SIM_PLAN.md, M4).
 The excerpts are 0.1 s of the test library: the 0 dBFS burst onset at TC1
 (the fastest attack), a 0 dBFS sweep section (~600 Hz), a -10 dBFS 19 + 20 kHz
 twin tone and a -10 dBFS multitone. The last two exercise frequency warping
-near the slice's ~17 kHz transformer resonance and the sidechain rectifying
+near the slice's transformer resonances (35.5 kHz since Phase 2; ~17 kHz
+before) and the sidechain rectifying
 HF, which the error control is there for. (At 0 dBFS the twin tone drives
 that resonance so hard that every setting halves thousands of steps: the
 provisional transformer model's limit, not a test.)
@@ -49,15 +50,24 @@ def _excerpt(name: str) -> tuple[np.ndarray, dict]:
         a = sig.meta["burst_start"]
         return sig.samples[a - FS // 50 : a + FS // 12], dict(BASE, time_constant=1)
     mid = len(sig.samples) // 2
-    return sig.samples[mid : mid + FS // 10], dict(BASE, time_constant=2)
+    # Faded in over 10 ms: a run starts at the DC operating point with its first
+    # input sample, and a 0 dBFS sample there is 13.8 V of DC on T101's primary,
+    # which saturates its mumetall core (a start no real input has).
+    x = sig.samples[mid : mid + FS // 10].copy()
+    n = FS // 100
+    x[:n] *= 0.5 - 0.5 * np.cos(np.pi * np.arange(n) / n)
+    return x, dict(BASE, time_constant=2)
 
 
 # name -> (bound vs converged: rms dB, CV V; checked against ngspice too).
-# Measured 2026-10-15, production vs converged / vs ngspice (rms dB, CV V):
-#   burst_1000hz_0dbfs  -79.7 / 0.010    -61.2 / 0.024
-#   ess_0dbfs           -79.6 / 0.009    -57.4 / 0.167  (ngspice's gear at 0 dBFS)
-#   ccif_-10dbfs        -63.7 / 0.044
-#   multitone_-10dbfs   -70.5 / 0.010
+# Measured 2026-10-21 with the Phase 2 transformers, production vs converged
+# (Jiles-Atherton cores) / vs ngspice (both engines on linear cores) (rms dB, CV V):
+#   burst_1000hz_0dbfs  -79.3 / 0.007    -60.1 / 0.026
+#   ess_0dbfs           -89.0 / 0.002    -55.7 / 0.098  (ngspice's gear at 0 dBFS)
+#   ccif_-10dbfs        -70.8 / 0.058
+#   multitone_-10dbfs   -72.6 / 0.015
+# (2026-10-15, the slice's linear placeholders: -79.7 / 0.010, -79.6 / 0.009,
+# -63.7 / 0.044, -70.5 / 0.010; vs ngspice -61.2 / 0.024, -57.4 / 0.167.)
 EXCERPTS = {
     "burst_1000hz_0dbfs": (-76.0, 0.02, True),
     "ess_0dbfs": (-76.0, 0.02, True),
@@ -111,11 +121,15 @@ def test_production_settings_agree_with_the_ngspice_reference(runs, name):
         ngspice.find_ngspice()
     except ngspice.SimulatorNotFound:
         pytest.skip("ngspice not available")
-    x, ov, prod, _ = runs[name]
+    # Both engines on the same circuit: the cores in their linear limit (ngspice has
+    # no Jiles-Atherton core; decided 2026-10-21).
+    x, ov, _, _ = runs[name]
     s = dataclasses.replace(
         io.TransientSettings.from_sim_settings(), method="gear", reltol=1e-4, oversample=4
     )
-    c = nl.build(ov)
+    c = nl.build(ov, cores="linear")
+    cs = io.TransientSettings.from_sim_settings(engine="circuitsim")
+    prod = fast.run_transient(c.ir, x * cs.full_scale_volts_peak, settings=cs).vectors
     ref = io.run_transient(
         c.text,
         x * s.full_scale_volts_peak,

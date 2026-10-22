@@ -13,7 +13,11 @@
 //!   coupling, `M_kj = M_jk = k sqrt(L_k L_j)` (dotted ends are the `a` ends,
 //!   like SPICE `K`). Stamping the inductance matrix directly means a
 //!   k = 0.999 transformer never needs its ill-conditioned inverse.
-//! - Device (tube, diode): its interelectrode capacitances go into `C`, and
+//! - Winding k from a to b on core node u: KCL entries plus a row
+//!   `v_a - v_b - turns area TESLA_PER_V du/dt = 0` (so `C` is not symmetric
+//!   here), and `-turns` in u's KCL row: the winding feeds `turns i` into the
+//!   core node, whose KCL is `sum(turns i)` = what the core device draws.
+//! - Device (tube, diode, core): its interelectrode capacitances go into `C`, and
 //!   each junction diode gets SPICE's GMIN across it in `G` (ngspice puts
 //!   1e-12 S across every `D` junction). The nonlinear currents themselves are
 //!   the [`DeviceInstance`]s, which the Newton solver stamps each iteration.
@@ -22,7 +26,7 @@ use std::collections::HashMap;
 
 use crate::Error;
 use crate::devices::{self, Device};
-use crate::ir::{CircuitIr, DeviceModel, Element, GROUND, Probe};
+use crate::ir::{CircuitIr, DeviceModel, Element, GROUND, Probe, TESLA_PER_V};
 use crate::linalg::{Matrix, SparseRows};
 
 /// SPICE's default GMIN (S), across every junction diode.
@@ -101,7 +105,7 @@ impl Mna {
         }
         let mut branch_index: HashMap<&str, usize> = HashMap::new();
         for el in ir.elements() {
-            if let Element::VoltageSource(_) | Element::Inductor(_) = el {
+            if let Element::VoltageSource(_) | Element::Inductor(_) | Element::Winding(_) = el {
                 branch_index.insert(el.name(), unknowns.len());
                 unknowns.push(Unknown::Branch(el.name().to_string()));
             }
@@ -158,6 +162,13 @@ impl Mna {
                     c.add(k, k, -l.l_h);
                     inductance.insert(&l.name, l.l_h);
                 }
+                Element::Winding(w) => {
+                    let k = branch_index[w.name.as_str()];
+                    incidence(&mut g, k, node(&w.a), node(&w.b));
+                    let u = node(&w.core).expect("validated: the core node isn't ground");
+                    c.add(k, u, -w.turns * w.area_m2 * TESLA_PER_V);
+                    g.add(u, k, -w.turns);
+                }
                 Element::Device(d) => {
                     let model = ir.model(&d.model).expect("validated");
                     let pins: Vec<Option<usize>> = d.nodes.iter().map(|n| node(n)).collect();
@@ -175,7 +186,7 @@ impl Mna {
                             stamp(&mut g, pins[0], pins[1], gmin);
                             vec![]
                         }
-                        DeviceModel::VacuumDiode(_) => vec![],
+                        DeviceModel::VacuumDiode(_) | DeviceModel::MagneticCore(_) => vec![],
                     };
                     for (a, b, cf) in caps {
                         if cf > 0.0 {

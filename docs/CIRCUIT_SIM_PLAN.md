@@ -218,7 +218,7 @@ crates/circuitsim/
 | Device | Rust model vs Python reference on fixture grids exported from Python (incl. 6386 with mismatch spreads) | 1e-12 relative |
 | Linear circuits | RC, RLC, coupled inductors vs closed form and vs ngspice | ~1e-6 (discretization-limited, stated per test) |
 | Small nonlinear | diode clipper, single triode stage, push-pull pair with transformer: vs ngspice at tight tolerance | output error < -60 dB re signal |
-| 670 slice | vs the ngspice reference used in the tolerance study (gear, reltol 1e-4, 4x) on the burst and a program clip | output < -55 dB re signal; CV within 0.2 V |
+| 670 slice | vs ngspice with the exact triode formulation (gear, reltol 1e-4, 4x) on short excerpts: TC1-4 burst onset and release, the program clip's loudest and HF-richest 0.25 s; the whole clip vs circuitsim's converged solution (M6 follow-up) | output < -55 dB re signal; CV within 0.2 V; plus regression bounds a few dB outside the measured values |
 | 670 behaviour | compression curve and Time Constant attack/release from `scripts/slice_report.py` | GR within 0.2 dB per step; times within 5% |
 | Stability | idle circuit quiet (same as `tests/test_slice.py`) | |
 | Speed | criterion benches and the existing `timing.csv` | tracked per milestone |
@@ -241,15 +241,16 @@ its integration (M6 status). So:
   stamp, swapped pins, an IR translation error), which no self-convergence
   test can: a wrong equation converges to the same wrong answer. It does
   that best with the **exact triode formulation on short excerpts** (0.1-
-  0.5 s at ~560x slower than real time: a few minutes each), where it agrees
-  with circuitsim to -66 dB (hot clip) and -92 dB (burst onset, M4), not
-  with tabulated triodes on long renders.
+  0.5 s at ~560x slower than real time alone, ~800x with `--verify`'s 14
+  renders at once: a few minutes each), where it agrees with circuitsim to
+  -62 to -68 dB (hot clip) and -76 to -92 dB (bursts), not with tabulated
+  triodes on long renders.
 - **Behaviour metrics** (gain reduction per step, CV attack and release)
   stay compared with production ngspice: they are robust to its waveform
   error.
 
-The 670 slice row of the table above still describes M6's `--verify`; the
-follow-up under M6 moves it to exact-formulation excerpts.
+`slice_report.py --verify` checks the 670 slice and behaviour rows this way
+since the M6 follow-up (2026-10-21; numbers there).
 
 ## Milestones
 
@@ -771,9 +772,10 @@ M4 measured the tables at ~-62 dB on lighter material; this front panel
 drives the 6386s further down their curves. So with the tolerance study's
 reference the -55 dB row can't referee this clip much more tightly; a
 regression in circuitsim shows first in the converged-solution row. Options
-if the margin bites (not done): the exact formulation for the clip's
-reference (~560x slower than real time: ~40 min for the 4 s clip), or finer
-6386 table grids.
+if the margin bites: the exact formulation for the clip's reference (~560x
+slower than real time: ~40 min for the 4 s clip), or finer 6386 table
+grids. (The follow-up below replaced this row with exact-formulation
+excerpts.)
 
 - **Speed** (`runner.render`, cache bypassed, one job at a time, back to
   back, 2026-10-21; x = slower than real time; best of the runs, which
@@ -811,7 +813,138 @@ circuit, so the agreement test is trustworthy when it matters). In
 - Update the Verification table's 670 slice row, CLAUDE.md's command line
   for `--verify`, and this status with the new numbers.
 
-**Milestone order after M6 (decided 2026-10-21).** The simulator is fast
+*Status (2026-10-21): done.* What `slice_report.py --verify` runs now:
+
+- **Waveforms vs exact ngspice** (gear, reltol 1e-4, 4x, exact triodes:
+  `TransientSettings.triode_formulation`, which `runner.render` builds the
+  netlist with; it is part of the cache key) on six excerpts, each from the
+  operating point: a 0.1 s 0 dBFS 1 kHz burst out of -40 dBFS at TC1-4
+  (20 ms before, 0.15 s of release after: 0.27 s), and 0.25 s of the clip
+  ending with its loudest 0.1 s window (0.60-0.85 s, the deepest CV:
+  -84.4 V) and with its HF-richest one (most energy above 5 kHz; 2.35-
+  2.60 s), faded in over 10 ms. Both windows are picked from the input, so
+  another `--clip` gets its own. The reference settings stay: production
+  ngspice (trap 2x) with exact triodes fails the HF excerpt on its own
+  error (-50 dB from the converged solution; -61 dB at gear 4x).
+- **The whole clip vs the converged solution**, and the behaviour rows vs
+  production ngspice, as before. Dropped: the tabulated ngspice reference
+  and the production-ngspice-vs-reference rows.
+- **The compression curve's staircase runs as 9 parallel chunks** of 6 steps,
+  each with one warm-up step whose gain is dropped (in every report, not
+  only `--verify`). Every step settles well within its 0.5 s and levels only
+  rise, so this is the continuous curve: within 2.9e-6 dB on circuitsim
+  (2.3e-5 dB without a warm-up step). `--verify` keeps checking that (0.01 dB
+  tolerance). It took ngspice's staircase, the old long pole, from 13 min to
+  ~2.
+- **Cold run 344 s** (42 renders, 14 at once; the longest are production
+  ngspice's 7 s bursts at ~255 s and the exact excerpts at 190-245 s), down
+  from ~15 min; 16 s warm.
+- Found on the way: one of the 42 renders failed renaming its finished
+  directory into the cache (Windows access denied: a scanner or the indexer
+  briefly holding a new file). `runner` now retries the rename with backoff.
+
+Verification (`slice_report.py --verify`, 2026-10-21, all pass; regression
+bounds apply at the default front panel and clip):
+
+| check | tolerance | regression bound | measured |
+|---|---|---|---|
+| compression curve, GR per step vs ngspice | 0.2 dB | | 0.033 dB |
+| clip gain per 50 ms window vs ngspice | 0.2 dB | | 0.028 dB |
+| TC1-4 burst GR vs ngspice | 0.2 dB | | 0.03-0.04 dB |
+| TC1-4 CV attack, 63% / 90% release vs ngspice | 5% | | <= 0.05% |
+| chunked vs continuous staircase (circuitsim) | 0.01 dB | | 2.9e-6 dB |
+| burst TC1 excerpt vs exact ngspice | -55 dB, 0.2 V | -75 dB, 0.05 V | -78.1 dB, CV 0.028 V |
+| burst TC2 excerpt | | -73 dB, 0.05 V | -76.3 dB, 0.028 V |
+| burst TC3 excerpt | | -73 dB, 0.03 V | -76.8 dB, 0.015 V |
+| burst TC4 excerpt | | -78 dB, 0.02 V | -81.3 dB, 0.007 V |
+| clip, loudest 0.25 s, vs exact ngspice | -55 dB, 0.2 V | -64 dB, 0.04 V | -67.5 dB, 0.017 V |
+| clip, HF-richest 0.25 s | | -58 dB, 0.06 V | -61.6 dB, 0.034 V |
+| clip (4 s) vs converged solution | -55 dB, 0.2 V | -73 dB, 0.02 V | -76.7 dB, 0.007 V |
+
+On every excerpt the margin to -55 dB is ngspice's: exact ngspice is as far
+from circuitsim's converged solution as circuitsim production is from it
+(bursts -76 to -83 dB, clip -67 / -61 dB), while circuitsim production is
+-73 to -91 dB from its converged solution there. So a regression in
+circuitsim shows first in the converged-solution row; the exact-ngspice
+rows are the independent check for wrong equations. The bounds change when
+the circuit does (Phase 2): re-measure them then.
+
+**Phase 2 in circuitsim: the hysteretic core (2026-10-21).** Main plan
+Phase 2's transformers need a core with memory. What the engine has now:
+
+- **IR v2:** `Winding` (a branch with `v_a - v_b = N A dB/dt` on a core
+  node whose voltage is B, 1 V = 1 mT, `TESLA_PER_V`; its current feeds
+  `N i` into the core node's KCL) and the `MagneticCore` device model (a
+  Jiles-Atherton core from the core node to ground drawing `l_e H(B)`).
+  Gap and eddy loss are linear elements on the core node. A transformer is
+  windings + series R + leakage L + self-capacitance + core node + core.
+- **The core** (`devices/core.rs`, Python reference `varimu/devices/core.py`,
+  same order of operations): the JA model in its effective-field form, as a
+  rate-independent map H(B) from the last accepted point along a monotonic
+  path, integrated by RK4 substeps (at most 1 mT of B, 5% of `a + |H|` of
+  H, halved until the end slope is within 25% of the start's: stiffness and
+  curvature deep in mumetall's saturation and its Rayleigh region need
+  both); `accept` commits (B, H, direction). Jacobian dH/dB at the path's
+  end. Newton limiting: 50 mT per iteration, and an iterate that crosses
+  the state's B keeps 10% of its offset (H ~ sqrt(B) from the demagnetized
+  state cycles plain Newton). `shunt` lends the demagnetized slope to DK.
+  Fixtures from Python on a magnetization history (demagnetized, up, down,
+  saturation; three materials and a literature set) agree to 1e-12.
+- **DK** takes C's columns as well as its rows as the state (a winding's
+  row reads its core node's column: C isn't symmetric there), and a
+  stateful device's `accept` now drops only its own cached evaluation
+  (`DkNewton::invalidate_device`), not every device's and the factored
+  Jacobians. `Transient::update` carries device state across (new trait
+  methods `state` / `set_state`): it used to rebuild cores demagnetized.
+- **SPICE** (`varimu/circuit/spice.py`): no MagneticCore (decided
+  2026-10-21); a core in its linear limit (resistors and capacitors on the
+  core node) goes out as coupled inductors with each winding's leakage
+  folded into the inductance matrix (k < 1), eddy loss as a shorted turn,
+  and `.options rshunt=1e12`. Three other emissions ran small circuits but
+  stopped ngspice on the 670 (the module docstring has which and where).
+
+Verification:
+
+| check | measured |
+|---|---|
+| core map vs a forward (H-driven) JA solve | 2e-9 .. 5e-8 of the peak H (mumetall 4e-6) |
+| per-sample stepping vs the same path 50x finer (30 Hz into saturation) | <= 1.5e-6 of peak-to-peak H |
+| circuits vs an exact Python solution (winding / transformer with gap / load, driven into saturation with minor loops; steel, permalloy, mumetall below and past saturation) | production -79 to -95 dB, converged -85 to -94 dB, B within 5e-5 T |
+| DK vs full MNA on those circuits | 0.00 tolerances (exact Newton) |
+| linear-core windings vs coupled inductors, circuitsim | -250 dB |
+| linear-core windings vs ngspice, small circuit / each 670 transformer standalone | -145 dB / -60 to -71 dB at 8x (trap, converging 12 dB per doubling) |
+| 670: DK vs MNA, `.op` vs ngspice, idle stability | pass (an error-control decision with reuse can now differ: then within 5 error tolerances) |
+
+`slice_report.py --verify` on the Phase 2 circuit: ngspice rows compare
+both engines on linear cores (behaviour 0.043 dB / 0.06%; excerpts -61.8 to
+-80.7 dB), the converged row runs the Jiles-Atherton cores (-76.3 dB, CV
+0.006 V); bounds re-measured (the script lists them). Cold run 541 s (the
+report now also renders on circuitsim with linear cores), 37 s warm.
+
+**M4's method comparison rerun on the Phase 2 slice** (Jiles-Atherton cores,
+0.1 s excerpts faded in, front panel pad 0 dB / threshold 0.8, reference
+radau5 at 8x with error tolerance / 10; rms dB re signal):
+
+| excerpt | production (esdirk4 2x, control) | esdirk4 2x | esdirk4 4x | trap 2x | trap 8x | trap 16x |
+|---|---|---|---|---|---|---|
+| CCIF 19+20 kHz -10 dBFS | -67.5 | -35.4 | -47.5 | -18.3 | -43.0 | -52.8 |
+| multitone -10 dBFS | -70.3 | -69.4 | -79.5 | -40.0 | -64.7 | -76.0 |
+| SMPTE 0 dBFS | -74.3 | -41.4 | -60.6 | -40.7 | -50.9 | -66.9 |
+| sweep 0 dBFS | -80.0 | -79.1 | -81.7 | -61.4 | -82.6 | -88.2 |
+| burst onset TC1 | -71.7 | -59.8 | -73.5 | -51.8 | -70.1 | -77.7 |
+| arpeggio clip, loudest 0.1 s | -76.6 | -75.5 | -81.5 | -61.4 | -85.0 | -86.6 |
+
+The provisional 17 kHz resonance that chose esdirk4 is gone (T101's
+secondary resonance now sits at 35.5 kHz, +1.4 dB), and the choice stands:
+trapezoidal still needs 8-16x on HF-rich and switching material. Speed
+(`runner.render`, cache bypassed, one at a time; x = slower than real time):
+7 s TC1 burst / 4 s arpeggio clip, circuitsim with JA cores 5.8x / 7.3x,
+with linear cores 4.2x / 5.8x, ngspice (linear cores) 22.3x / 26.6x. The
+four cores cost ~35% (four more devices evaluated every iteration).
+
+**Milestone order after M6 (decided 2026-10-21; main plan Phase 2 done the
+same day, and M7 / M8 stay deferred after it: nothing in main-plan Phases
+3-5 needs them; next is main-plan Phase 3).** The simulator is fast
 enough to listen with (5-7x faster than ngspice) and more accurate than the
 model it runs: the slice's transformers are still linear placeholders with
 provisional parasitics, whose error dwarfs a -55 dB numerical one. So the
@@ -838,8 +971,8 @@ measured. This hands over to main plan Phase 10.
 changes, and the output matches offline renders.
 
 Phase 2's nonlinear transformer core lands in circuitsim when Phase 2 does,
-and in ngspice too unless the open decision below says otherwise. The device
-trait carries state from M3 so that isn't a redesign.
+not in ngspice (decided 2026-10-21, Open decisions). The device trait
+carries state from M3 so that isn't a redesign.
 
 ## Risks
 
@@ -867,8 +1000,11 @@ trait carries state from M3 so that isn't a redesign.
   block (see M3's status).
 - **Which EQ for M7.** It must have a published schematic so values are
   sourced.
-- **SPICE implementations of new devices (raised 2026-10-21, the user's
-  call; decide at the start of Phase 2).** The hard rule asks for a SPICE
+- ~~**SPICE implementations of new devices**~~ (raised 2026-10-21, the user's
+  call). *Decided 2026-10-21: the hysteretic core has the Python reference
+  and circuitsim, with tests that they agree, and no SPICE implementation;
+  ngspice cross-checks the rest of the circuit with the core in its linear
+  limit in both engines (the measurements below).* The question was: The hard rule asks for a SPICE
   implementation and a Python reference of every device model. A nonlinear
   transformer core with hysteresis may be awkward and slow in ngspice (not
   yet checked: XSPICE's `core` code model, or behavioral sources with
@@ -877,6 +1013,34 @@ trait carries state from M3 so that isn't a redesign.
   the core, with tests that they agree, and ngspice keeps cross-checking the
   existing devices and the circuit around the core (e.g. with the core
   replaced by its linear limit in both engines).
+
+  *Measured 2026-10-21 (scratch study, the session's scratch directory).* Test: a voltage source and 10 Ohm drive one winding
+  (500 turns, 1 cm^2, 10 cm path) on a Jiles-Atherton core (Jiles, Thoelke,
+  Devine 1992 form), two scratch parameter sets (steel-like: Ms 1.45e6, a 50,
+  k 40 A/m; nickel-like: Ms 6e5, a 4, k 2 A/m; provisional: model
+  knowledge). Reference: the circuit's ODE in Python with every direction
+  and irreversible-gate switch located as an event, DOP853 at rtol 1e-11.
+  Signals: 1 kHz tone, a 30 Hz ramp into saturation, 30 Hz plus a 3 kHz tone
+  that reverses H mid-loop (minor loops), 80 V switch-on inrush, a DC step.
+  Settings: production (trap, reltol 1e-3, 2x) and reference (gear, 1e-4, 4x).
+
+  | ngspice route | loop | vs JA reference | cost per timepoint | robustness |
+  |---|---|---|---|---|
+  | XSPICE `lcouple` + `core`, PWL mode | anhysteretic B(H) only, no memory | -27 dB (another model) | 3.5-7 us | fine |
+  | XSPICE `core`, HYSTERESIS mode | the generic `hyst` block: a parallelogram (linear ramp, hard limits, +-hyst by direction); minor loops collapse onto a line | -0.5 dB on minor loops | 3.5-7 us | fine |
+  | B-sources, `ddt()` for dH/dt | JA | diverges (1 kHz tone) | | |
+  | B-sources, state in 1 F capacitors (M integrated, dH/dt sensed by a capacitor), hard `sgn`/`u` switching | JA | prod / ref: tone -71 / -77 dB, minor loops -62 / -67, saturation -94 / -95, inrush -84 / -90 (steel); nickel -58 to -85 prod, -67 to -93 ref | 57-91 us (nickel inrush 190 us at prod) | DC step into saturation fails at the reference settings: "timestep too small" at the dH/dt sensor (steel), no progress in 300 s (nickel); production settings pass |
+  | same, irreversible gate smoothed (tanh) | JA, smoothed | minor -60, saturation -80 (the smoothing changes the model) | 72-130 us | also hangs on the DC step at ref |
+
+  In the 670 (four such cores appended, driven near the knee plus 1 kHz, 0.5 s
+  of the burst): **production ngspice goes from 29x to 291x slower than real
+  time**, ~5x more than the per-timepoint cost alone (the cores' direction
+  switches cut the shared timestep); with exact triodes at the reference
+  settings, 713x vs 650x (no change: the step is pinned at 4x and the exact
+  triodes dominate). Not tested: a Verilog-A core compiled to OSDI with
+  OpenVAF (ngspice 47 has the adapter; OpenVAF is a separate download). It
+  would evaluate faster than B-sources but share the timestep and the
+  direction-switch problem.
 
 ## References
 

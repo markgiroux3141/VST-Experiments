@@ -25,7 +25,7 @@ def _value(text, name):
 
 @pytest.fixture(scope="module")
 def default():
-    return nl.build(triode_formulation="exact")
+    return nl.build(triode_formulation="exact", cores="linear")
 
 
 def test_every_circuit_value_has_a_source_and_genome_links_resolve():
@@ -61,14 +61,16 @@ def test_time_constant_positions_switch_the_documented_parts():
     }
     switched = {"R141", "R138", "C113", "C111", "R139", "C110", "R140", "C112"}
     for pos, parts in expected.items():
-        el = _elements(nl.build({"time_constant": pos}).text)
+        el = _elements(nl.build({"time_constant": pos}, cores="linear").text)
         assert {"R137", "C109"} <= set(el)
         assert switched & set(el) == parts, pos
 
 
 def test_pots_follow_their_controls():
-    lo = nl.build({"ac_threshold": 0.0, "dc_threshold": 0.0, "zero": 0.0, "balance": 0.25}).text
-    hi = nl.build({"ac_threshold": 1.0, "dc_threshold": 1.0, "zero": 1.0, "balance": 0.25}).text
+    lo_ov = {"ac_threshold": 0.0, "dc_threshold": 0.0, "zero": 0.0, "balance": 0.25}
+    hi_ov = {"ac_threshold": 1.0, "dc_threshold": 1.0, "zero": 1.0, "balance": 0.25}
+    lo = nl.build(lo_ov, cores="linear").text
+    hi = nl.build(hi_ov, cores="linear").text
     # AC threshold fully up: wiper at the transformer end (all of the signal).
     assert _value(hi, "R115Aa") == pytest.approx(1e-3) and _value(lo, "R115Ab") == pytest.approx(
         1e-3
@@ -114,14 +116,14 @@ def test_tube_instance_scales_current_and_mu():
 
 
 def test_mismatch_reaches_the_netlist():
-    a = nl.build({"v6386_a.emission_scale": 0.8}, triode_formulation="exact").text
-    b = nl.build(triode_formulation="exact").text
+    a = nl.build({"v6386_a.emission_scale": 0.8}, triode_formulation="exact", cores="linear").text
+    b = nl.build(triode_formulation="exact", cores="linear").text
     sub_a = re.findall(r"\.subckt (TRIODE_6386_A)[\s\S]*?\.ends", a)
     assert sub_a and a != b
 
 
 def test_table_formulation_lists_its_files():
-    c = nl.build()
+    c = nl.build(cores="linear")
     assert set(c.files) == {"v6386_a.tab", "v6386_b.tab", "v12ax7.tab", "v12bh7.tab"}
     for name, path in c.files.items():
         assert path.exists() and f'file="{name}"' in c.text

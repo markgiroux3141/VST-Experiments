@@ -34,37 +34,55 @@ sidechain_rectifier:
 
 transformers:
   # The 670 has four per channel: T101 input, T102 output, T103 sidechain input,
-  # T104 sidechain output (drawing A-96039). Original turns ratios aren't printed;
-  # the ranges below bracket Sowter's replacement designs. Fields still TBD are
-  # Phase 2 work. Ratios use the convention of config/circuits/fairchild_670.yaml.
+  # T104 sidechain output (drawing A-96039). Each is windings on a
+  # Jiles-Atherton core (Phase 2; varimu.devices.core, materials in
+  # config/magnetics.yaml). Original turns ratios and core data aren't
+  # published; the ratios bracket Sowter's replacement designs, and the
+  # geometry is provisional, bounded around a nominal that gives the slice's
+  # former inductances (config/circuits/fairchild_670.yaml, transformer notes).
+  # Ratios use that file's convention. `turns` is the reference winding's.
   input:
-    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
-    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
+    core_material:          {choices: [mumetall, permalloy_fluxgate, grain_oriented_si_steel], source: "web: https://www.don-audio.com/Sowter-8346E-Fairchild-Signal-amp-input-transformer-T101-201 (replacement: mumetal); materials: config/magnetics.yaml"}
+    core_area_m2:           {min: 0.5e-4, max: 2.0e-4, unit: m2, source: "provisional: model knowledge (line input transformer cores; the replacement's can is 45 x 72 x 63 mm)"}
+    core_path_m:            {min: 0.05, max: 0.10, unit: m, source: "provisional: model knowledge (E-I cores of that size)"}
+    air_gap_m:              {min: 2.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints of a stacked core: a few to tens of micrometres)"}
+    turns:                  {min: 800, max: 2600, unit: turns, source: "provisional: model knowledge (nominal 1320 derived from the former 10 H primary with mumetall; the range spans 5-30 H at nominal geometry)", notes: "series primary"}
     turns_ratio:            {min: 4.0, max: 5.0, unit: ratio, source: "web: https://www.don-audio.com/Sowter-8346E-Fairchild-Signal-amp-input-transformer-T101-201 (replacement 1+1:9+9 -> 4.5); +-11% is provisional", notes: "each secondary half / series primary"}
-    primary_inductance_h:   {min: 5.0, max: 30.0, unit: H, source: "provisional: model knowledge (600 ohm line input transformers)"}
-    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    leakage_h:              {min: 0.5e-3, max: 20.0e-3, unit: H, source: "provisional: model knowledge (0.005-0.2% of the primary inductance; the nominal 2.5 mH meets the published +-1 dB to 15 kHz, see the circuit file)", notes: "referred to the primary. Above ~5 mH the secondary resonance peaks in the audio band"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
     winding_capacitance_f:  {min: 50.0e-12, max: 200.0e-12, unit: F, source: "provisional: model knowledge (high-ratio input transformer secondaries)", notes: "per secondary half"}
+    interwinding_capacitance_f: {min: 0.0, max: 100.0e-12, unit: F, source: "provisional: model knowledge (primary-secondary capacitance without an electrostatic screen, tens of pF; 0 = screened)"}
   output:
-    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
-    air_gap_mm:             {min: TBD, max: TBD, unit: mm, source: TBD}
+    core_material:          {choices: [grain_oriented_si_steel, mumetall, permalloy_fluxgate], source: "web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202 (replacement: M6, grain-oriented steel); materials: config/magnetics.yaml"}
+    core_area_m2:           {min: 1.0e-4, max: 4.0e-4, unit: m2, source: "provisional: model knowledge (the replacement's can is 48.5 mm dia x 57 mm)"}
+    core_path_m:            {min: 0.06, max: 0.12, unit: m, source: "provisional: model knowledge (E-I cores of that size)"}
+    air_gap_m:              {min: 5.0e-6, max: 100.0e-6, unit: m, source: "provisional: model knowledge (butt joints of a stacked core, up to a deliberate 0.1 mm gap)"}
+    turns:                  {min: 200, max: 700, unit: turns, source: "provisional: model knowledge (nominal 360 derived from the former 30 H per primary half)", notes: "series secondary; each primary half has turns_ratio times as many"}
     turns_ratio:            {min: 4.0, max: 5.0, unit: ratio, source: "web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202 (replacement 9+9:1+1 -> 4.5); +-11% is provisional", notes: "each primary half / series secondary"}
-    primary_inductance_h:   {min: 10.0, max: 60.0, unit: H, source: "provisional: model knowledge", notes: "per primary half"}
-    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    leakage_h:              {min: 0.5e-3, max: 10.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999)", notes: "referred to the secondary"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
     winding_capacitance_f:  {min: 100.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull output transformer primaries)", notes: "per primary half"}
+    interwinding_capacitance_f: {min: 0.0, max: 200.0e-12, unit: F, source: "provisional: model knowledge (output transformers without screen, tens to 100+ pF)"}
   sidechain_input:
-    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
+    core_material:          {choices: [mumetall, permalloy_fluxgate, grain_oriented_si_steel], source: "provisional: model knowledge (no replacement spec found); materials: config/magnetics.yaml"}
+    core_area_m2:           {min: 0.2e-4, max: 1.0e-4, unit: m2, source: "provisional: model knowledge (small signal transformer cores)"}
+    core_path_m:            {min: 0.03, max: 0.08, unit: m, source: "provisional: model knowledge"}
+    air_gap_m:              {min: 2.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints)"}
+    turns:                  {min: 700, max: 2400, unit: turns, source: "provisional: model knowledge (nominal 1215 derived from the former 5 H primary with mumetall)", notes: "primary"}
     turns_ratio:            {min: 1.0, max: 8.0, unit: ratio, source: "provisional: not printed on A-96039, no replacement spec found", notes: "each secondary half / primary; sets the AC threshold range"}
-    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    leakage_h:              {min: 2.0e-3, max: 30.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999)", notes: "referred to the primary"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
-    winding_capacitance_f:  {min: TBD, max: TBD, unit: F, source: TBD}
+    winding_capacitance_f:  {min: 50.0e-12, max: 200.0e-12, unit: F, source: "provisional: model knowledge (secondaries of a small step-up transformer)", notes: "per secondary half"}
   sidechain_output:
-    core_material:          {choices: [silicon_steel, nickel_alloy], source: TBD}
+    core_material:          {choices: [grain_oriented_si_steel, mumetall, permalloy_fluxgate], source: "web: https://don-audio.com/9643S-Fairchild-Control-amp-output-T104-204 (replacement: M6 cored); materials: config/magnetics.yaml"}
+    core_area_m2:           {min: 2.0e-4, max: 8.0e-4, unit: m2, source: "provisional: model knowledge (the replacement weighs 1.2 kg)"}
+    core_path_m:            {min: 0.08, max: 0.16, unit: m, source: "provisional: model knowledge (E-I cores of that size)"}
+    air_gap_m:              {min: 5.0e-6, max: 100.0e-6, unit: m, source: "provisional: model knowledge (butt joints, up to a deliberate 0.1 mm gap)"}
+    turns:                  {min: 350, max: 1300, unit: turns, source: "provisional: model knowledge (nominal 670 derived from the former 10 H per primary half)", notes: "each primary half"}
     turns_ratio:            {min: 0.4, max: 0.6, unit: ratio, source: "web: https://don-audio.com/9643S-Fairchild-Control-amp-output-T104-204 (replacement 10k CT:600, 4:1 -> 0.5); +-20% is provisional", notes: "secondary / one primary half"}
-    leakage_mH:             {min: TBD, max: TBD, unit: mH, source: TBD}
+    leakage_h:              {min: 5.0e-3, max: 60.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999)", notes: "referred to a primary half"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
-    winding_capacitance_f:  {min: TBD, max: TBD, unit: F, source: TBD}
+    winding_capacitance_f:  {min: 100.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull primaries)", notes: "per primary half"}
 
 sidechain:
   v6973_grid_bias_v: {min: -35.0, max: -20.0, unit: V, source: "provisional: grid-leak return not traceable on the A-96039 scan; bounded so the 6973 model idles between ~0.3 and ~20 mA at 240 V (under its 12 W rating)"}

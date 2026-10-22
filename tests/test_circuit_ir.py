@@ -15,6 +15,7 @@ from varimu.circuit.ir import (
     IRError,
     Resistor,
     Section,
+    Winding,
 )
 
 REPO = Path(__file__).parent.parent
@@ -71,7 +72,8 @@ def test_ir_is_the_circuit_the_netlist_describes(default_ir):
     assert tuple(p.spice for p in default_ir.probes) == nl.SAVE
     els = {e.name: e for e in default_ir.elements()}
     assert els["XVA"] == Device("XVA", "6386_a", ("pa", "ga", "ka"))
-    assert els["KT101_p_sa"] == Coupling("KT101_p_sa", "LT101_p", "LT101_sa", 0.999)
+    assert els["LT101_sa"] == Winding("LT101_sa", "T101_sa_l", "cv", "t101_core", 4.5 * 1320, 1e-4)
+    assert els["XT101_CORE"] == Device("XT101_CORE", "CORE_T101", ("t101_core", "0"))
     # Device models carry every parameter (Rust never reads the YAML).
     bank = default_ir.model("6386_a")
     assert len(bank.plate.mus) == len(bank.plate.weights) > 1

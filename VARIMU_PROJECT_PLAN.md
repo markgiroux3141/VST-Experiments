@@ -167,11 +167,28 @@ Each phase lists its goal, tasks and a "done when" criterion. Do not start a pha
 **Starting Phase 2 (notes from 2026-10-21; the circuit-sim plan's M6 status has the details):**
 
 - The engines are now circuitsim (`crates/circuitsim`, the default for renders) and ngspice (the reference); Xyce isn't used. "Xyce's core model" above becomes: the core as a circuitsim device with state, plus its Python reference.
-- **First, before any modelling:** the circuit-sim plan's "M6 follow-up" (rework `slice_report.py --verify` around exact-formulation ngspice excerpts), so the agreement test is trustworthy once the circuit starts changing.
+- **First, before any modelling:** the circuit-sim plan's "M6 follow-up" (rework `slice_report.py --verify` around exact-formulation ngspice excerpts), so the agreement test is trustworthy once the circuit starts changing. *Done 2026-10-21* (cold run ~6 min; numbers in the circuit-sim plan's M6 follow-up).
+- *Measured 2026-10-21 for the decision below* (circuit-sim plan, Open decisions): XSPICE's `core` can't express a Jiles-Atherton core (its hysteresis mode is a fixed parallelogram whose minor loops collapse); a behavioral JA core (B-sources with capacitor integrators) agrees with a Python reference to -62 to -95 dB, but four of them make production ngspice on the 670 10x slower (29x -> 291x real time), and a DC step into saturation fails at the reference settings. *Decided by the user 2026-10-21:* the core gets the Python reference and a circuitsim device with tests that they agree, no SPICE implementation; ngspice cross-checks everything else with the core replaced by its linear limit in both engines; the nonlinear core is judged against circuitsim's converged solution and analog behaviour.
 - **First decision of the phase (the user's):** whether the core also gets a SPICE implementation, as the hard rule asks. Check what ngspice can express (XSPICE `core` code model, or behavioral sources with integrators) and at what speed and robustness, then bring the user the options: keep the rule, or Python reference + circuitsim for the core with ngspice cross-checking everything else. See the circuit-sim plan's Open decisions.
 - Accuracy is judged against circuitsim's converged solution and analog behaviour (frequency response, saturation, the hysteresis loop itself, aliasing of the core's harmonics); ngspice is the cross-check for bugs (circuit-sim plan, Verification).
 - The slice's current transformers are linear with provisional winding capacitances and core loss (`config/circuits/fairchild_670.yaml`); they cause the ~17 kHz resonance that drove the fixed-step method choice. When Phase 2's models replace them, rerun the circuit-sim plan's M4 method comparison (and `tests/test_slice.py`'s idle stability), and re-run `--verify`.
 - Circuit-sim M7 (second circuit) and M8 (real time) wait until Phase 2 is done; M5's speed target stays deferred.
+
+*Status (2026-10-21): done.* What exists:
+
+- **The core:** the Jiles-Atherton model (effective-field form) as a rate-independent circuitsim device with state (`crates/circuitsim/src/devices/core.rs`) and its Python reference (`varimu/devices/core.py`), tested to agree (fixtures to 1e-12; circuits against an exact Python solution, -79 to -95 dB). No SPICE implementation (the decision above); ngspice runs the cores' linear limit. The engine side is in the circuit-sim plan, "Phase 2 in circuitsim".
+- **Materials** (`config/magnetics.yaml`): grain-oriented silicon steel (a published JA fit of H75-23 transformer steel, for the replacements' M6), MUMETALL (fitted here to its datasheet by `scripts/fit_core_material.py`: mu4, mu_max, Hc, loss within 2%), and a harder permalloy (a published fluxgate-core fit).
+- **Every transformer** (`config/circuits/fairchild_670.yaml`, `varimu/circuit/netlist.transformer`): windings with DC resistance, leakage inductance and self-capacitance on one core with its joint gap and classical eddy loss; balanced interwinding capacitance (nominal 0, screened). Material choice, core area and path, gap, turns, leakage and capacitances are genome parameters (`genome_bounds.yaml`), provisional where nothing is published, the turns derived so the small-signal inductance is the slice's former value, and checked against the 670's published specs (T102 saturates near +27 dBu at 30 Hz; clipping is specified at +27 dBm, <1% THD to +18 dBm). Winding resistances stay TBD (provisional values in the circuit).
+- **Done when** (`tests/test_transformers.py`, `scripts/transformer_report.py` -> `reports/transformers/`): each transformer standalone (the slice's own source and load impedances, tubes as resistances), re 1 kHz at 40 Hz / 15 kHz: T101 -0.29 / +0.60 dB, T102 -0.33 / -0.32 dB, T103 -0.26 / +1.02 dB, T104 -6.6 dB (pentode drive without the slice's feedback; flat from 300 Hz) / -0.04 dB; 30 Hz THD rising with flux to 12-17% past saturation (1 kHz below 0.05%); B-H loops with coercivity, minor loops.
+
+Findings that change later work:
+
+- **ngspice and the new transformers.** Three SPICE emissions of the linear-limit windings stopped ngspice on the 670; what runs is coupled inductors with the leakage folded in, eddy loss as a shorted turn, and `rshunt=1e12`. The device-stripped 670 no longer runs in ngspice's transient, so "transformers alone" are tested standalone.
+- **The 30 kHz tuned-plate tuned-grid mode** is still there under the old loss resistors: with the classical eddy loss it is damped at the nominal values, but an unscreened interwinding capacitance (20 pF on T101 plus 50 pF on T102) made the idle slice oscillate at ~31 kHz, and T101's leakage at the slice's old k = 0.999 equivalent (20 mH) peaked +15 dB at 17.8 kHz; the nominal leakage (2.5 mH) was chosen to meet the published +-1 dB to 15 kHz. Phase 4's plausibility checks must catch oscillating genomes.
+- **Mumetall's linear limit** (its origin susceptibility) is ~10x below its incremental permeability at audio levels, so the cores' JA and linear builds differ in LF response: bass-rich program compresses up to ~2 dB differently (median 0.6 dB per 50 ms on the arpeggio clip), while the 1 kHz curve and TC timings agree within 0.06 dB / 0.06%. That is the hysteresis reaching the behaviour (Coupling Checklist).
+- **Rerun of the M4 method comparison** (circuit-sim plan): production esdirk4 at 2x with error control stays, -67.5 to -80 dB from the converged solution on the six excerpts; trapezoidal still needs 8-16x. Render speed with the JA cores: 5.8x / 7.3x slower than real time (7 s burst / 4 s clip), ngspice 22-27x.
+- Decided 2026-10-21 (the user delegating): Phase 2's provisional choices stand (T101 leakage 2.5 mH, interwinding capacitance nominal 0, the effective-field JA form, the mumetall fit); they are genome parameters, free to move later. Next is Phase 3; circuit-sim M7 / M8 stay deferred.
+- Open: a Cauer ladder for frequency-dependent eddy loss (skin effect makes the classical term wrong above ~100 Hz in high-permeability laminations); per-winding resistance bounds.
 
 ### Phase 3: Full Circuit Netlist
 
@@ -289,7 +306,7 @@ These are the mechanisms most likely responsible for emergent character. Verify 
 - [ ] Control voltage on the same grids as the audio, so push-pull imbalance produces thump and signal-dependent asymmetry
 - [ ] Shared power supply rails whose sag affects audio path and sidechain simultaneously
 - [ ] Grid current that loads the timing networks, producing program-dependent attack/release
-- [ ] Transformer hysteresis, so low-frequency history shapes later transients
+- [x] Transformer hysteresis, so low-frequency history shapes later transients (Phase 2: Jiles-Atherton cores; measurable: bass-rich program compresses up to ~2 dB differently than with linear cores)
 - [ ] Per-instance tube mismatch, affecting even-harmonic balance
 - [ ] Interelectrode capacitances, including Miller effect in the gain stage
 - [ ] (Later) Noise sources: tube shot and flicker noise, resistor thermal noise
@@ -352,6 +369,6 @@ Every entry carries a `source` field. "TBD" is acceptable during development; an
 - Work one phase at a time, and do not move on until the phase's "done when" criterion is met and tested.
 - Keep the end-to-end loop working at all times once Phase 5 exists; fidelity improvements must not break it.
 - Never invent component values, tube parameters or transformer specs. If a value can't be traced to a schematic, datasheet or cited literature, make it a bounded genome parameter and flag it.
-- Every device model has both a SPICE implementation and a Python reference implementation, with tests that they agree. (Under review for Phase 2's transformer core: see Phase 2's notes. Until the user decides, the rule stands.)
+- Every device model has both a SPICE implementation and a Python reference implementation, with tests that they agree. Exception (decided 2026-10-21): the hysteretic transformer core has the Python reference and circuitsim only; ngspice cross-checks the circuit around it with the core in its linear limit (Phase 2's notes).
 - Every simulation result is cached and reproducible from (genome, signal, settings, code version).
 - Prefer small, inspectable steps and plots over large untested changes; save measurement plots for every candidate so changes in character can be reviewed visually as well as by ear.

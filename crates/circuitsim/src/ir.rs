@@ -16,6 +16,10 @@
 //! element. The linear engine (M2) groups connected inductors and stamps the
 //! inductance matrix `M[i][j] = k_ij * sqrt(L_i * L_j)` directly, so a
 //! k = 0.999 transformer never needs the ill-conditioned inverse.
+//!
+//! A transformer on a nonlinear core (main plan Phase 2) is [`Winding`]s on a
+//! core node, whose voltage is the flux density (1 V = 1 mT,
+//! [`TESLA_PER_V`]), and a [`MagneticCore`] device from that node to ground.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -23,7 +27,10 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 /// JSON schema version. Bump it (in Python too) on any incompatible change.
-pub const IR_VERSION: u32 = 1;
+pub const IR_VERSION: u32 = 2;
+
+/// Flux density per volt on a core node (`varimu.devices.core.TESLA_PER_V`).
+pub const TESLA_PER_V: f64 = 1e-3;
 
 /// The ground node.
 pub const GROUND: &str = "0";
@@ -64,6 +71,7 @@ pub enum Element {
     Inductor(Inductor),
     Coupling(Coupling),
     VoltageSource(VoltageSource),
+    Winding(Winding),
     Device(Device),
 }
 
@@ -116,6 +124,22 @@ pub struct VoltageSource {
     pub dc_v: f64,
 }
 
+/// `turns` turns on the core whose node is `core`, of cross-section
+/// `area_m2`: a branch from `a` to `b` with `v_a - v_b = turns area dB/dt`
+/// (B = the core node's voltage times [`TESLA_PER_V`]); its current adds
+/// `turns i` to the core's magnetomotive force, so the core node's KCL is
+/// `sum(turns i)` = what the core draws. `a` is the dotted end.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Winding {
+    pub name: String,
+    pub a: String,
+    pub b: String,
+    pub core: String,
+    pub turns: f64,
+    pub area_m2: f64,
+}
+
 /// An instance of a device model; `nodes` follow the model's pin order
 /// ([`DeviceModel::pins`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -135,6 +159,7 @@ pub enum DeviceModel {
     Pentode(Pentode),
     JunctionDiode(JunctionDiode),
     VacuumDiode(VacuumDiode),
+    MagneticCore(MagneticCore),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -231,6 +256,20 @@ pub struct VacuumDiode {
     pub smooth_v: f64,
 }
 
+/// `varimu.devices.core.MagneticCore`: a Jiles-Atherton core, pins (core node,
+/// ground). Port current: `path_m * H(B)`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MagneticCore {
+    pub name: String,
+    pub ms_a_per_m: f64,
+    pub a_a_per_m: f64,
+    pub k_a_per_m: f64,
+    pub c: f64,
+    pub alpha: f64,
+    pub path_m: f64,
+}
+
 impl DeviceModel {
     pub fn name(&self) -> &str {
         match self {
@@ -238,6 +277,7 @@ impl DeviceModel {
             DeviceModel::Pentode(m) => &m.name,
             DeviceModel::JunctionDiode(m) => &m.name,
             DeviceModel::VacuumDiode(m) => &m.name,
+            DeviceModel::MagneticCore(m) => &m.name,
         }
     }
 
@@ -247,6 +287,7 @@ impl DeviceModel {
             DeviceModel::Triode(_) => &["p", "g", "k"],
             DeviceModel::Pentode(_) => &["p", "g2", "g1", "k"],
             DeviceModel::JunctionDiode(_) | DeviceModel::VacuumDiode(_) => &["a", "k"],
+            DeviceModel::MagneticCore(_) => &["b", "ref"],
         }
     }
 
@@ -267,6 +308,7 @@ impl Element {
             Element::Inductor(e) => &e.name,
             Element::Coupling(e) => &e.name,
             Element::VoltageSource(e) => &e.name,
+            Element::Winding(e) => &e.name,
             Element::Device(e) => &e.name,
         }
     }
@@ -279,6 +321,7 @@ impl Element {
             Element::Inductor(e) => vec![&e.a, &e.b],
             Element::Coupling(_) => vec![],
             Element::VoltageSource(e) => vec![&e.pos, &e.neg],
+            Element::Winding(e) => vec![&e.a, &e.b, &e.core],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
         }
     }
@@ -385,6 +428,14 @@ impl CircuitIr {
                 Element::VoltageSource(e) => {
                     finite(&format!("{name}.dc_v"), e.dc_v)?;
                     'V'
+                }
+                Element::Winding(e) => {
+                    positive(&format!("{name}.turns"), e.turns)?;
+                    positive(&format!("{name}.area_m2"), e.area_m2)?;
+                    if e.core == GROUND || e.core == e.a || e.core == e.b {
+                        return err(format!("{name}: core node {} must be its own node", e.core));
+                    }
+                    'L'
                 }
                 Element::Device(e) => {
                     let Some(m) = models.get(e.model.as_str()) else {
@@ -497,6 +548,24 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
         }
         DeviceModel::VacuumDiode(d) => {
             values.extend([("perveance", d.perveance), ("smooth_v", d.smooth_v)]);
+        }
+        DeviceModel::MagneticCore(m) => {
+            values.extend([
+                ("ms_a_per_m", m.ms_a_per_m),
+                ("a_a_per_m", m.a_a_per_m),
+                ("k_a_per_m", m.k_a_per_m),
+                ("path_m", m.path_m),
+            ]);
+            if !(0.0..1.0).contains(&m.c) {
+                return err(format!("{name}: c = {} must be in [0, 1)", m.c));
+            }
+            if !(m.alpha.is_finite() && m.alpha >= 0.0) {
+                return err(format!("{name}: alpha = {} must be >= 0", m.alpha));
+            } else if m.alpha * m.c * m.ms_a_per_m / (3.0 * m.a_a_per_m) >= 1.0 {
+                return err(format!(
+                    "{name}: alpha c Ms / (3 a) must be < 1 (else dM/dH diverges at the origin)"
+                ));
+            }
         }
     }
     for (what, x) in values {

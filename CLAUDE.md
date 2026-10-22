@@ -3,20 +3,27 @@
 The project plan is [VARIMU_PROJECT_PLAN.md](VARIMU_PROJECT_PLAN.md) (the plan's
 layout calls it `PLAN.md`). Read it before starting work.
 
-**Phases 0 and 1 are done; next is Phase 2 (Transformer Models).** Read the
-"Starting Phase 2" notes at the end of the plan's Phase 2 section first: the
-phase opens with the circuit-sim plan's "M6 follow-up" (rework `--verify`)
-and a decision for the user (does the transformer core need a SPICE
-implementation?). Work one phase at a time. Don't start the next phase until
+**Phases 0, 1 and 2 are done (Phase 2, transformer models: 2026-10-21; the
+plan's Phase 2 status has what was built and measured); next is Phase 3
+(Full Circuit Netlist).** Phase 2's decision (the user's): the hysteretic
+core has a Python reference and a circuitsim device, no SPICE
+implementation; ngspice cross-checks the rest with the cores in their linear
+limit (Hard rules). Work one phase at a time. Don't start the next phase until
 the current phase's "done when" criterion is met and covered by tests.
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
 (`config/circuits/fairchild_670.yaml` -> `varimu/circuit/netlist.py`), audio
 I/O and a cached parallel runner (`varimu/sim/io.py`, `runner.py`), and a
-tweak-and-listen page (`varimu/listen/`). Its transformers are linear
-placeholders with provisional parasitics; Phase 2 replaces them. Results are in
-`reports/slice/` (compression curve, Time Constant bursts, tolerance study).
+tweak-and-listen page (`varimu/listen/`). Results are in `reports/slice/`
+(compression curve, Time Constant bursts, program clip, `--verify`) and
+`reports/transformers/` (each transformer standalone). Its transformers
+(Phase 2) are windings on Jiles-Atherton cores (`varimu/devices/core.py`;
+materials in `config/magnetics.yaml`, mumetall fitted to its datasheet by
+`scripts/fit_core_material.py`) with leakage, winding R, self-capacitance,
+the cores' joint gap and classical eddy loss; geometry, turns, leakage and
+capacitances are provisional genome parameters (`genome_bounds.yaml`
+`transformers`).
 
 A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
@@ -25,12 +32,21 @@ Work its milestones in order, with the same "done when" discipline.
 Newton), M4 (the 670 slice on the fast engine), M5 (nodal DK) and M6
 (default engine) are done, except M5's speed target (10x faster than
 ngspice; 5-7x so far), deferred (decided 2026-10-17; the plan's M5 status
-lists where to start). M7 and M8 wait until main plan Phase 2 is done
-(decided 2026-10-21: the simulator is already more accurate than the
-placeholder transformers it runs); Phase 2's core lands in circuitsim as
-part of Phase 2.** The periodic agreement test against ngspice is
+lists where to start). M7 and M8 stay deferred after Phase 2 too (decided
+2026-10-21, the user delegating: nothing in main-plan Phases 3-5 needs a
+second circuit or real time, and renders at 6-7x real time are workable);
+next is main-plan Phase 3. Phase 2's core is in circuitsim (the circuit-sim
+plan's "Phase 2 in circuitsim").** The periodic
+agreement test against ngspice is
 `slice_report.py --verify` (Commands); run it after changes to the engine,
-the circuit or the device models.
+the circuit or the device models. It checks behaviour (GR, attack/release)
+vs production ngspice, waveforms vs exact-formulation ngspice on six short
+excerpts (TC1-4 bursts, the clip's loudest and HF-richest 0.25 s), both of
+those with both engines on linear cores, and the clip vs circuitsim's
+converged solution with the Jiles-Atherton cores, with regression bounds a
+few dB outside the measured values (re-measure them when the circuit
+changes); numbers in the circuit-sim plan's M6 follow-up and "Phase 2 in
+circuitsim".
 **What the references are for (decided 2026-10-21):** accuracy is judged
 against circuitsim's converged solution and analog behaviour; ngspice is the
 independent cross-check that catches bugs, best with the exact triode
@@ -46,7 +62,12 @@ folded into responses of the step matrix once per step size, Newton on the
 22 device ports with the factored Jacobian reused and unmoved devices not
 re-evaluated; `solver: mna` is M3-M4's Newton on the device-node block of the
 full MNA system (`newton.rs`), the reference DK is tested against.
-`Transient::update(ir)` changes component values mid-run. `varimu.sim.fast.run_transient(ir, x)` is the Rust counterpart
+`Transient::update(ir)` changes component values mid-run (device state, a
+core's magnetization, carries over). Transformers in the IR (v2): `Winding`s
+on a core node whose voltage is B (1 V = 1 mT) and a `MagneticCore` device
+on it; `netlist.build(cores="ja" | "linear")` (default `devices.cores: ja`);
+a "ja" build has no SPICE text (`Circuit.text` is None), and ngspice renders
+always build "linear" (`TransientSettings.cores`). `varimu.sim.fast.run_transient(ir, x)` is the Rust counterpart
 of `varimu.sim.io.run_transient` (same oversampling and decimation).
 Production settings are the `circuitsim` block of `config/sim_settings.yaml`:
 esdirk4 at 2x, 5th-order input interpolation, local error control (chosen by
@@ -74,7 +95,9 @@ uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2
 uv run varimu render --signal burst_1000hz_0dbfs --engine ngspice   # the reference engine
 uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765
 uv run --extra fast python scripts/slice_report.py [--engine ngspice] [--clip NAME]   # curve, TC bursts, program clip -> reports/slice/
-uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~15 min cold)
+uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~9 min cold, ~40 s warm)
+uv run --extra fast python scripts/transformer_report.py [--only t101 ...]   # each transformer standalone -> reports/transformers/
+uv run python scripts/fit_core_material.py mumetall   # refit a core material's JA parameters to its datasheet figures
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 ```
@@ -148,9 +171,11 @@ tests skip when ngspice is missing.
 - **One coupled simulation.** The audio path, sidechain and PSU go in one
   netlist, never in separately chained DSP blocks.
 - **Every device model has two implementations**, SPICE and a Python
-  reference, with a test that they agree. (Under review for Phase 2's
-  transformer core; the rule stands until the user decides. See the plan's
-  Phase 2 notes.)
+  reference, with a test that they agree. **Exception (decided by the user
+  2026-10-21): the hysteretic transformer core** has the Python reference
+  and circuitsim only, with tests that they agree; ngspice cross-checks the
+  rest of the circuit with the core in its linear limit in both engines
+  (measurements behind it: the circuit-sim plan's Open decisions).
 - **Reproducibility.** Every result must be reproducible from (genome, signal,
   settings, code version). All randomness goes through a seeded
   `np.random.Generator`. Derive per-item seeds, e.g.
@@ -223,7 +248,9 @@ tests skip when ngspice is missing.
     the input's sample kinks and interpolate, about -55 to -75 dB re signal.
 - **Fixed-step engine accuracy (decided 2026-10-15, plan M4).** Trapezoidal
   frequency-warps the transformers' resonances (the slice peaks +10 dB near
-  17 kHz from provisional winding capacitances): 0.8 dB / 8 deg off at 20 kHz
+  17 kHz from the pre-Phase 2 provisional winding capacitances; Phase 2's
+  transformers moved it to 35.5 kHz, +1.4 dB, and the rerun method comparison
+  kept the choice): 0.8 dB / 8 deg off at 20 kHz
   at 2x. Production uses esdirk4 at 2x instead, with 5th-order input
   interpolation (linear input between samples, ngspice's PWL, droops 20 kHz
   by 0.3 dB at 2x and caps any higher-order method) and local error control
@@ -244,12 +271,37 @@ tests skip when ngspice is missing.
   arpeggio clip at the report's hot front panel. Parallel circuitsim renders
   scale to ~8.5x one job's throughput at 14 jobs (the default) on this
   8-core desktop.
-- **ngspice's reference can't referee hot program material much below
-  -55 dB (measured 2026-10-21, M6).** Its tabulated triodes are -53 dB from
-  the exact formulation where the CV swings to -84 V (the arpeggio clip at
-  pad 0 dB, threshold 0.8), so `--verify`'s clip row vs ngspice passes by
-  only 0.5 dB on ngspice's error; the converged-solution row (-77 dB) is the
-  sensitive one. The plan's M6 status has the numbers and the options.
+- **Tabulated-triode ngspice can't referee hot program material much below
+  -55 dB (measured 2026-10-21, M6).** Its tables are -53 dB from the exact
+  formulation where the CV swings to -84 V (the arpeggio clip at pad 0 dB,
+  threshold 0.8). So waveform references use the exact formulation
+  (`TransientSettings.triode_formulation="exact"`, ~800x slower than real
+  time) on short excerpts; even then, on the HF-rich clip excerpt ngspice's
+  own error (-61 dB, gear 4x) sets the margin, and the converged-solution
+  row is the sensitive one for circuitsim regressions.
+- **The compression curve renders in chunks** (`slice_report.py`: 6 steps
+  plus 1 warm-up step each, in parallel), equal to the continuous staircase
+  to 3e-6 dB on the current circuit. `--verify` checks that; if a circuit
+  change (e.g. slow PSU or core dynamics) breaks it, lengthen the warm-up.
+- **Transformer cores and ngspice (2026-10-21).** ngspice has no
+  Jiles-Atherton core: it runs the cores' linear limit, emitted as coupled
+  inductors with the leakage folded into the inductance matrix, eddy loss as
+  a shorted turn, and `.options rshunt=1e12` (without it ngspice at reltol
+  <= 1e-4 stopped within ~60 ns at the bridge on T104's floating secondary).
+  Three other emissions stopped ngspice on the 670 (`varimu/circuit/spice.py`
+  docstring). The SPICE text has no core nodes and no inner nodes of
+  windings (`spice.spice_nodes`); `.op` comparisons pass `rshunt_ohm=None`.
+  The device-stripped 670 no longer runs in ngspice's transient (its T104
+  secondary floats), so "the transformers alone" are tested standalone
+  (`varimu/measure/transformers.py` fixtures).
+- **Core quirks (2026-10-21).** A run starts at the DC operating point with
+  its first input sample: DC on T101's primary saturates its mumetall core,
+  and a DC point past saturation can fail; fade excerpts in. The linear limit
+  is the susceptibility at the demagnetized origin; mumetall's incremental
+  permeability at audio levels is ~10x that, so JA and linear builds differ
+  in LF response (bass-rich program compresses up to ~2 dB differently).
+  The core's map is piecewise smooth (substep and direction changes), so
+  Jacobian tests compare it only within 10 uT of its state.
 - **Benchmarking on this desktop.** Timings drift +-35% between runs:
   VS Code's rust-analyzer recompiles the crate on all cores for ~2 minutes
   after each Rust edit, and explorer.exe often holds a core. Wait until no

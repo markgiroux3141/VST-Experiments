@@ -27,6 +27,7 @@ from varimu.circuit.ir import (
     Resistor,
     VoltageProbe,
 )
+from varimu.measure import transformers as tx
 from varimu.sim import ngspice
 
 pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
@@ -85,35 +86,34 @@ def test_dk_matches_full_mna(name, method):
 
 
 def _linear_670(drive: str) -> CircuitIR:
-    """The 670 with tubes and diodes removed, driven at `drive`, probed at every node."""
-    ir = nl.build().ir.without_devices()
+    """The 670 with tubes and diodes removed and its cores in their linear limit, driven
+    at `drive`, probed at every node the SPICE text has (not the core nodes or the
+    windings' inner nodes: it has the windings as coupled inductors,
+    varimu.circuit.spice)."""
+    ir = nl.build(cores="linear").ir.without_devices()
     ir = dataclasses.replace(ir, input_node=drive)
-    return dataclasses.replace(ir, probes=tuple(VoltageProbe(n) for n in ir.nodes()))
+    nodes = [n for n in ir.nodes() if n in spice.spice_nodes(ir)]
+    return dataclasses.replace(ir, probes=tuple(VoltageProbe(n) for n in nodes))
 
 
-# The 670's transformers, tubes and diodes removed (M2's "done when"), driven
-# at three points so all four transformers carry signal: the input (T101),
-# the output (T102 backwards, T103 and the sidechain pads), and a 6973 plate
-# (T104, all four windings). ngspice needs gear for the last one (trap ran
-# > 300 s). The circuit has transformer resonances at 20-110 kHz with Q up to
-# 7 (T101 secondary 35 kHz, T103 75 kHz, T104 110 kHz). Trapezoidal
-# integration warps them, so the error near them is larger than for the small
-# circuits. Measured on this 12 ms signal, worst probe, at k = 2 / 4 / 8:
-#   in   -44.7 / -56.4 / -68.1 dB      out  -39.4 / -48.7 / -60.3 dB
-#   pa3  -15.9 / -28.9 / -41.1 dB (gear reference; 12BH7 plate, 6973 grid network)
-# and DC within 1e-9 of the circuit's largest voltage. k = 2 is the production
-# oversampling: see docs/CIRCUIT_SIM_PLAN.md (M2) for what that means for M4.
+# The 670's transformers alone, each between the slice's own source and load
+# impedances with the tubes as resistances (varimu.measure.transformers
+# fixtures), cores in their linear limit: ngspice runs the windings as coupled
+# inductors with k = 1 (varimu.circuit.spice). (Until Phase 2 this was the
+# device-stripped 670 driven at three points; with the Phase 2 transformers
+# ngspice stops on its floating T104 secondary within ~30 ns, every emission
+# tried. The DK and .op checks below still use it.) Measured 2026-10-21, worst
+# probe at k = 4 / 8 (trap, 12 ms of 100 Hz + 1 kHz + 10 kHz): T101 -50.6 / -62.0,
+# T102 -58.9 / -70.9, T103 -48.2 / -59.8, T104 -56.4 / -68.5 dB.
 @pytest.mark.parametrize(
-    ("drive", "amp_v", "method", "bound_db"),
-    [("in", 1.0, "trap", -65), ("out", 1.0, "trap", -57), ("pa3", 10.0, "gear", -38)],
+    ("key", "bound_db"), [("t101", -58), ("t102", -67), ("t103", -56), ("t104", -65)]
 )
-def test_670_transformers_alone_agree_and_converge(drive, amp_v, method, bound_db):
-    ir = _linear_670(drive)
-    x = signal(dur_s=0.012, amp=amp_v)
-    # DC is tested against .op below: the first decimated sample mixes in the
-    # floating T104 secondary's roundoff (see compare()).
-    e4, _ = compare(ir, x, 4, reltol=1e-4, method=method)
-    e8, _ = compare(ir, x, 8, reltol=1e-4, method=method)
+def test_670_transformers_alone_agree_and_converge(key, bound_db):
+    ir = tx.fixture(key, cores="linear").ir
+    x = signal(dur_s=0.012, amp=1.0)
+    e4, _ = compare(ir, x, 4, reltol=1e-4)
+    e8, _ = compare(ir, x, 8, reltol=1e-4)
+    print(key, f"k=4 {e4:.1f} dB, k=8 {e8:.1f} dB")
     assert e8 < bound_db, f"k=8: {e8:.1f} dB"
     assert -15 < e8 - e4 < -9, f"k=4 {e4:.1f} dB -> k=8 {e8:.1f} dB (expect -12 dB)"
 
@@ -121,7 +121,7 @@ def test_670_transformers_alone_agree_and_converge(drive, amp_v, method, bound_d
 # T104's secondary with the bridge diodes gone floats on its 1 GOhm leak, so its
 # common mode carries roundoff far above the tolerance in either solver (measured
 # 0.011 V apart driven at pa3; every other node within 0.07 tolerance).
-FLOATING = ("v(ay)", "v(bk)", "v(T104_s_r)")
+FLOATING = ("v(ay)", "v(bk)", "v(T104_s_l)")
 
 
 @pytest.mark.parametrize("drive", ["in", "out", "pa3"])
@@ -138,7 +138,7 @@ def test_670_operating_point_matches_ngspice_op(drive):
     import circuitsim
 
     ir = _linear_670(drive)
-    text, _ = spice.emit(ir, triode_formulation="exact")
+    text, _ = spice.emit(ir, triode_formulation="exact", rshunt_ohm=None)
     save = [p.spice for p in ir.probes]
     ng = ngspice.run(
         text + f"Vin_dc {drive} 0 dc 0\n", "op", save, options="reltol=1e-9 vntol=1e-12"
@@ -151,7 +151,7 @@ def test_670_operating_point_matches_ngspice_op(drive):
 
 
 def test_without_devices_keeps_the_linear_network():
-    ir = nl.build().ir
+    ir = nl.build(cores="linear").ir
     lin = ir.without_devices()
     assert lin.models == () and not any(e.name.startswith(("X", "D")) for e in lin.elements())
     removed = {e.name for e in ir.elements()} - {e.name for e in lin.elements()}

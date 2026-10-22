@@ -20,6 +20,6 @@ CASES = json.loads((GOLDEN_DIR / "cases.json").read_text(encoding="utf-8"))
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_netlist_matches_golden(name):
     case = CASES[name]
-    c = nl.build(case["overrides"], triode_formulation=case["triode_formulation"])
+    c = nl.build(case["overrides"], triode_formulation=case["triode_formulation"], cores="linear")
     assert c.text.encode("utf-8") == (GOLDEN_DIR / f"{name}.cir").read_bytes()
     assert {k: Path(v).name for k, v in c.files.items()} == case["files"]

@@ -10,7 +10,7 @@
 //! differences add up over steps (bounds below).
 //!
 //! Except the common mode of T104's floating secondary (nodes ay, bk,
-//! T104_s_r, compared relative to bk; bk itself gets an absolute bound).
+//! T104_s_l, compared relative to bk; bk itself gets an absolute bound).
 //! With the bridge off the island hangs on diode leakage (~1e-7 S) or, with
 //! the bridge reversed for good, on its 1 GOhm leak alone, and the 1 mOhm
 //! winding's ~5e4 A conductance terms leave ~1e-11 A of roundoff in its KCL:
@@ -39,7 +39,7 @@ const FS: f64 = 96_000.0;
 /// T104's secondary, floating on the bridge diodes and a 1 GOhm leak: its
 /// nodes, compared relative to the first, and the bound on the first (V):
 /// 1e-11 A of KCL roundoff on the 1 GOhm leak. Measured up to 2.1e-3 V.
-const FLOATING: [&str; 3] = ["node bk", "node ay", "node T104_s_r"];
+const FLOATING: [&str; 3] = ["node bk", "node ay", "node T104_s_l"];
 const FLOATING_BOUND_V: f64 = 1e-2;
 
 /// A 1 kHz tone at `dbfs`, faded in over 1 ms, for `dur_s`, at k x 96 kHz.
@@ -149,6 +149,25 @@ fn dk_agrees_with_full_mna_on_the_670() {
                     st_mna.substeps,
                     st_dk.substeps,
                 );
+                if newton_reuse && st_mna.substeps != st_dk.substeps {
+                    // With reuse a solve ends anywhere within a tolerance of
+                    // its solution, which can tip a borderline error-control
+                    // decision (measured once, TC1 with the Jiles-Atherton
+                    // cores: 13 substeps vs 12). The runs then differ by what
+                    // that decision is about: compare them in units of the
+                    // error tolerance (measured: 5.0; the floating island
+                    // 0.19 V).
+                    assert!(opts.error_abstol > 0.0, "{name}: decisions differ");
+                    let err_opts = Options {
+                        reltol: opts.error_reltol,
+                        vntol: opts.error_abstol,
+                        ..opts
+                    };
+                    let (w, floating) = compare(&unknowns, &mna, &dk, &err_opts, &FLOATING);
+                    println!("  decisions differ: {w:.2} x error tolerance");
+                    assert!(w < 30.0 && floating < 0.5, "{name}: {w}, {floating} V");
+                    continue;
+                }
                 assert!(floating < FLOATING_BOUND_V, "{name}: {floating} V");
                 // Exact Newton: the iterates are full MNA's, so every node
                 // agrees within a tolerance (measured <= 0.2). With reuse each
@@ -161,7 +180,7 @@ fn dk_agrees_with_full_mna_on_the_670() {
                     "{name} {:?} reuse {newton_reuse}: {worst} x tol",
                     opts.method
                 );
-                // The same error-control decisions.
+                // The same error-control decisions (exact Newton: always).
                 assert_eq!(
                     st_mna.substeps, st_dk.substeps,
                     "{name} reuse {newton_reuse}"

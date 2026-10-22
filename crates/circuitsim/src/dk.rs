@@ -12,10 +12,11 @@
 //!
 //! where `N` maps the unknowns to the device port voltages (row j: +1 at
 //! port j's pin, -1 at its reference pin) and `i` are the port currents.
-//! `C x` and every `F = C x'` only involve the rows (and, C being
-//! symmetric, the columns) S where `C` has any entry, r of them, so the
-//! state is `x_S`: the voltages of nodes with capacitance and the currents
-//! of inductors. With the responses of `A^-1` to `C x_S/(g h)`, to `w`, to
+//! `C x` and every `F = C x'` only involve the rows and columns S where `C`
+//! has any entry, r of them, so the state is `x_S`: the voltages of nodes
+//! with capacitance, the currents of inductors, and the flux densities of
+//! core nodes (a winding's row reads its core node's column: C is not
+//! symmetric there). With the responses of `A^-1` to `C x_S/(g h)`, to `w`, to
 //! the port currents, to `b` and to the input computed once per step size,
 //! a stage is
 //!
@@ -145,10 +146,11 @@ impl Ports {
     }
 }
 
-/// Rows of `C` with any nonzero entry: the state of the DK system.
+/// Rows and columns of `C` with any nonzero entry: the state of the DK system.
 pub fn support(c: &Matrix) -> Vec<usize> {
-    (0..c.n())
-        .filter(|&i| c.row(i).iter().any(|&x| x != 0.0))
+    let n = c.n();
+    (0..n)
+        .filter(|&i| c.row(i).iter().any(|&x| x != 0.0) || (0..n).any(|j| c.get(j, i) != 0.0))
         .collect()
 }
 
@@ -223,9 +225,9 @@ impl DkSystem {
         let mut z = vec![0.0; n];
         let mut xa = vec![0.0; rows * r];
         for (col, &s) in xa.chunks_exact_mut(rows).zip(support) {
-            for (zi, &ci) in z.iter_mut().zip(c.row(s)) {
-                // C is symmetric: column s is row s.
-                *zi = inv * ci;
+            // Column s of C (not symmetric where windings read core nodes).
+            for (i, zi) in z.iter_mut().enumerate() {
+                *zi = inv * c.get(i, s);
             }
             respond(&mut z, col);
         }
@@ -479,6 +481,13 @@ impl DkNewton {
         for f in &mut self.slots {
             f.id = 0;
         }
+    }
+
+    /// Forget device `d`'s evaluation (it accepted a step and changed state).
+    /// The factored matrices stay: a lagged Jacobian is refactored anyway
+    /// when it stops converging.
+    pub fn invalidate_device(&mut self, d: usize) {
+        self.evaluated[d] = false;
     }
 
     /// Solve `v = p - K i(v)` for the port voltages `v` (the guess on

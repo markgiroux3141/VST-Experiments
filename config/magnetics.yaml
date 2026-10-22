@@ -1,0 +1,55 @@
+# Magnetic core materials for the Jiles-Atherton core (varimu/devices/core.py).
+#
+# JA parameters in the form of Jiles, Thoelke & Devine (1992), as
+# varimu.devices.core uses them (c is the 1992 c: Mrev = c (Man - Mirr)).
+# Every block carries a `source`; "provisional:" values are model knowledge.
+# Which transformer uses which material, and its geometry, is in the circuit
+# file (config/circuits/fairchild_670.yaml).
+
+materials:
+  grain_oriented_si_steel:
+    ms_a_per_m: 1.51913e+6
+    a_a_per_m: 13.0
+    k_a_per_m: 24.0
+    c: 0.8
+    alpha: 1.0e-5
+    source: "web: https://arxiv.org/abs/2405.11011 Table II, material A (H75-23 grain-oriented steel of medium-voltage transformers; brute-force JA fit to its B-H curve, 2.3% error; Ms fixed from its known saturation). Stands in for AISI M6, the grain-oriented grade of the replacement T102/T104 (web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202); not a fit to M6 itself"
+    lamination_m: 0.35e-3
+    lamination_source: "web: https://ocw.uniovi.es/mod/resource/view.php?id=4572 (AK Steel CARLITE bulletin: M-6 nominal 0.35 mm)"
+    resistivity_ohm_m: 4.8e-7
+    resistivity_source: "provisional: model knowledge (3% Si grain-oriented steel ~45-52 uOhm cm; web: https://image-ppubs.uspto.gov/dirsearch-public/print/downloadPdf/5779819 claims >= 50 for a high-resistivity variant)"
+  permalloy_fluxgate:
+    ms_a_per_m: 1.0359e+6
+    a_a_per_m: 148.79
+    k_a_per_m: 39.512
+    c: 0.3876
+    alpha: 30.551e-5
+    source: "web: https://pmc.ncbi.nlm.nih.gov/articles/PMC4970030 Table 3, IBBO column (a permalloy fluxgate core, composition not given; fitted loop error 0.0544 T; identified in the 1986 form, dMirr/dH = (Man - Mirr) / (delta k - alpha (Man - Mirr)), so in varimu.devices.core's effective-field form it is an approximation). A harder nickel-iron than mumetal (coercivity ~40 A/m against ~1.5, saturation 1.30 T against 0.8): an alternative core material for the genome"
+    lamination_m: 0.1e-3
+    lamination_source: "provisional: model knowledge (nickel-alloy audio transformer laminations 0.1-0.35 mm)"
+    resistivity_ohm_m: 5.5e-7
+    resistivity_source: "provisional: model knowledge (77-80% Ni alloys ~55-60 uOhm cm)"
+  mumetall:
+    # JA parameters fitted to the datasheet figures below by
+    # scripts/fit_core_material.py (tests/test_core.py checks they still meet them).
+    ms_a_per_m: 6.366e+5
+    a_a_per_m: 0.661602
+    k_a_per_m: 1.58936
+    c: 0.000765012
+    alpha: 4.93314e-6
+    source: "fit (2026-10-21; mu4 -0.0%, mu_max -0.2%, Hc +1.3%, hysteresis loss at 0.5 T -1.5%): scripts/fit_core_material.py to the MUMETALL datasheet (web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf, Lamineries Matthey / Vacuumschmelze: ~76% Ni, 5% Mo, 5% Cu); Ms from its saturation polarization 0.8 T"
+    datasheet:
+      mu_initial: 60000.0       # mu4, relative permeability at 0.4 A/m (static, 1.00 mm)
+      h_initial_a_per_m: 0.4
+      mu_max: 250000.0          # static, 1.00 mm
+      coercivity_a_per_m: 1.5   # printed "0.015" without unit; read as A/cm (Vacuumschmelze's unit)
+      loss_w_per_kg: 0.025      # P0.5: 50 Hz, 0.5 T, 0.20 mm strip
+      loss_hz: 50.0
+      b_loss_t: 0.5
+      strip_m: 0.20e-3
+      density_kg_per_m3: 8700.0
+      source: "web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf (magnetic and physical properties tables)"
+    lamination_m: 0.1e-3
+    lamination_source: "provisional: model knowledge (nickel-alloy audio transformer laminations 0.1-0.35 mm)"
+    resistivity_ohm_m: 5.5e-7
+    resistivity_source: "web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf (electrical resistivity 55 uOhm cm)"

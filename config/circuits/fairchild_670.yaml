@@ -44,23 +44,51 @@ values:
   # (tuned-plate tuned-grid) in simulation.
   t101_c_half_f: {value: 100.0e-12, genome: transformers.input.winding_capacitance_f, source: "provisional: model knowledge (high-ratio input transformer secondaries, 50-200 pF)"}
   t102_c_half_f: {value: 200.0e-12, genome: transformers.output.winding_capacitance_f, source: "provisional: model knowledge (push-pull output primaries, 100-500 pF)"}
-  t103_c_half_f: {value: 100.0e-12, source: "provisional: model knowledge (Phase 2 replaces)"}
-  t104_c_half_f: {value: 200.0e-12, source: "provisional: model knowledge (Phase 2 replaces)"}
-  # Lumped core/eddy-current loss across the high-impedance windings. Real
-  # windings are lossy at ultrasonic frequencies; lossless coupled inductors
-  # let the 6386 stage oscillate in common mode (~30 kHz) in simulation.
-  t101_rloss_half_ohm: {value: 200.0e+3, source: "provisional: model knowledge (Phase 2 replaces with a Cauer eddy-current ladder)"}
-  t102_rloss_half_ohm: {value: 50.0e+3, source: "provisional: model knowledge (Phase 2 replaces with a Cauer eddy-current ladder)"}
-  t104_rloss_half_ohm: {value: 50.0e+3, source: "provisional: model knowledge (Phase 2 replaces)"}
-  transformer_k: {value: 0.999, source: "provisional: model knowledge; one coupling coefficient for every winding pair until Phase 2 models leakage per transformer"}
+  t103_c_half_f: {value: 100.0e-12, genome: transformers.sidechain_input.winding_capacitance_f, source: "provisional: model knowledge (secondaries of a small step-up transformer, 50-200 pF)"}
+  t104_c_half_f: {value: 200.0e-12, genome: transformers.sidechain_output.winding_capacitance_f, source: "provisional: model knowledge (push-pull primaries, 100-500 pF)"}
+  # Phase 2: every transformer is windings on a Jiles-Atherton core
+  # (varimu.devices.core; materials in config/magnetics.yaml), with the
+  # core's joint gap and classical eddy-current loss on the core node. Per
+  # transformer: material, core cross-section and magnetic path, gap, turns
+  # of its reference winding (the others follow the turns ratios below),
+  # leakage inductance referred to that winding (split half and half between
+  # the two sides), interwinding capacitance. The turns are derived: at the
+  # nominal geometry and gap they give the slice's former small-signal
+  # inductances (T101 10 H primary, T102 30 H per primary half, T103 5 H
+  # primary, T104 10 H per primary half), whose sources were model
+  # knowledge, and the leakage keeps its former k = 0.999 (2 (1 - k) L_ref).
+  # This replaces the slice's lumped loss resistors (t10x_rloss) and the one
+  # coupling coefficient (transformer_k): the eddy loss now damps the
+  # windings' ultrasonic resonances. "Small-signal" is the core's linear
+  # limit (its susceptibility at the demagnetized origin). Mumetall's is far
+  # below its incremental permeability at audio levels (its fit is almost all
+  # irreversible: 5,850 at the origin, 60,000 at 0.4 A/m), so with the gap
+  # T101's and T103's inductance at program levels is up to ~2x the derived
+  # value; the slice compresses bass-rich program material up to ~2 dB
+  # differently with the Jiles-Atherton cores than with their linear limit
+  # (median 0.6 dB per 50 ms window on the arpeggio clip, 2026-10-21), while
+  # the 1 kHz curve agrees within 0.06 dB.
+  #
+  # Saturation check (scratch calculation, 2026-10-21): T102's secondary
+  # reaches 1 T at +21.9 dBu and saturation (~1.9 T) at +27.5 dBu, 30 Hz;
+  # +24.4 / +30.0 dBu at 40 Hz. Published 670 specs (reissue/dealer
+  # listings, web: https://www.telefunken-elektroakustik.com/product/fairchild-670):
+  # <1% THD up to +18 dBm output without limiting, clipping +27 dBm,
+  # 40 Hz - 15 kHz +-1 dB.
 
   # --- Input: AT101 -> T101 ----------------------------------------------------
   attenuator_z_ohm: {value: 600, source: "sch: AT101 600 ohm T"}
   r101_r102_ohm: {value: 360, source: "sch: R101, R102 180 ohm 1% across each primary winding; primaries taken in series"}
   t101_turns_half: {value: 4.5, genome: transformers.input.turns_ratio, source: "web: https://www.don-audio.com/Sowter-8346E-Fairchild-Signal-amp-input-transformer-T101-201 (replacement: 600:50k, 1+1:9+9) -> each secondary half = 4.5x the series primary"}
-  t101_lp_h: {value: 10.0, genome: transformers.input.primary_inductance_h, source: "provisional: model knowledge (600 ohm line input transformers, 5-30 H)"}
-  t101_r_pri_ohm: {value: 20.0, source: "provisional: model knowledge (Phase 2 replaces)"}
-  t101_r_half_ohm: {value: 400.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+  t101_r_pri_ohm: {value: 20.0, source: "provisional: model knowledge (series primary of a 600 ohm line transformer)"}
+  t101_r_half_ohm: {value: 400.0, source: "provisional: model knowledge (each half of a 50k secondary)"}
+  t101_core_material: {value: mumetall, genome: transformers.input.core_material, source: "web: https://www.don-audio.com/Sowter-8346E-Fairchild-Signal-amp-input-transformer-T101-201 (the replacement has a mumetal core); the original's is not documented"}
+  t101_core_area_m2: {value: 1.0e-4, genome: transformers.input.core_area_m2, source: "provisional: model knowledge (line input transformer core, ~1 cm^2; the replacement's can is 45 x 72 x 63 mm, same page)"}
+  t101_core_path_m: {value: 0.07, genome: transformers.input.core_path_m, source: "provisional: model knowledge (E-I core of that size)"}
+  t101_gap_m: {value: 10.0e-6, genome: transformers.input.air_gap_m, source: "provisional: model knowledge (butt joints of a stacked, ungapped core; no DC in T101)"}
+  t101_turns: {value: 1320, genome: transformers.input.turns, source: "provisional: derived (gives the former 10 H primary at nominal geometry and gap, see the transformer notes above)", notes: "series primary (the reference winding)"}
+  t101_leakage_h: {value: 2.5e-3, genome: transformers.input.leakage_h, source: "provisional: chosen so the slice meets the published 40 Hz - 15 kHz +-1 dB (web: https://www.telefunken-elektroakustik.com/product/fairchild-670, reissue/dealer specs): measured 2026-10-21 with ngspice .ac on the linear-core build, -0.4 dB at 40 Hz, +0.2 dB at 15 kHz, the T101 secondary resonance at 35.5 kHz (+1.4 dB). The slice's former k = 0.999 (20 mH) gave +15 dB at 17.8 kHz once the lumped loss resistors were gone", notes: "referred to the primary (0.2 H referred to the 50k secondary)"}
+  t101_c_interwinding_f: {value: 0.0, genome: transformers.input.interwinding_capacitance_f, source: "provisional: nominal 0 = electrostatically screened (unknown for the original; unscreened line transformers have tens of pF)", notes: "half from each grid end of the secondary to the primary hot end (balanced). 20 pF here plus 50 pF on T102 made the 6386 stage oscillate at ~31 kHz at idle (tuned-plate tuned-grid; measured 2026-10-21): the plausibility checks (Phase 4) must catch such units"}
 
   # --- 6386 push-pull gain stage ------------------------------------------------
   v6386_per_side: {value: 4, source: "sch: V101A/V102A + V103B/V104B on one side, V101B/V102B + V103A/V104A on the other"}
@@ -73,15 +101,26 @@ values:
   r111_ohm: {value: 33, source: "sch: R111 33 1W, B+ feed to the T102 centre tap"}
   r107_r108_ohm: {value: 30, source: "sch: R107, R108 30 1% (meter shunts in the primary centre)"}
   t102_turns_half: {value: 4.5, genome: transformers.output.turns_ratio, source: "web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202 (replacement: 60k CT:600, 9+9:1+1) -> each primary half = 4.5x the series secondary"}
-  t102_l_half_h: {value: 30.0, genome: transformers.output.primary_inductance_h, source: "provisional: model knowledge (sized for ~10 Hz -3 dB against the bank plate resistance)"}
-  t102_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (Phase 2 replaces)"}
-  t102_r_sec_ohm: {value: 10.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+  t102_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (each half of a 60k CT primary)"}
+  t102_r_sec_ohm: {value: 10.0, source: "provisional: model knowledge (600 ohm secondary)"}
+  t102_core_material: {value: grain_oriented_si_steel, genome: transformers.output.core_material, source: "web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202 (the replacement has an M6 core, grain-oriented steel); the original's is not documented"}
+  t102_core_area_m2: {value: 2.0e-4, genome: transformers.output.core_area_m2, source: "provisional: model knowledge (the replacement's can is 48.5 mm dia x 57 mm, same page)"}
+  t102_core_path_m: {value: 0.09, genome: transformers.output.core_path_m, source: "provisional: model knowledge (E-I core of that size)"}
+  t102_gap_m: {value: 20.0e-6, genome: transformers.output.air_gap_m, source: "provisional: model knowledge (butt joints of a stacked core; push-pull, so no deliberate gap)"}
+  t102_turns: {value: 360, genome: transformers.output.turns, source: "provisional: derived (gives the former 30 H per primary half at nominal geometry and gap, see the transformer notes above)", notes: "series secondary (the reference winding); each primary half has 4.5x"}
+  t102_leakage_h: {value: 3.0e-3, genome: transformers.output.leakage_h, source: "provisional: model knowledge (keeps the slice's k = 0.999: 2 (1 - k) x 1.48 H)", notes: "referred to the secondary"}
+  t102_c_interwinding_f: {value: 0.0, genome: transformers.output.interwinding_capacitance_f, source: "provisional: nominal 0 = electrostatically screened (unknown for the original; unscreened output transformers have tens to 100+ pF)", notes: "half from each plate end to the output (balanced); see t101_c_interwinding_f"}
 
   # --- Sidechain pick-off: T102 secondary -> pads -> T103 -------------------------
   r145_r148_ohm: {value: 150, source: "sch: R145-R148 150 5% series legs"}
   r149_r150_ohm: {value: 1360, source: "sch: R149, R150 680 5% shunts; the two pads are combined in series here (one output winding)"}
   t103_turns_half: {value: 3.0, genome: transformers.sidechain_input.turns_ratio, source: "provisional: ratio not printed and no replacement spec found"}
-  t103_lp_h: {value: 5.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+  t103_core_material: {value: mumetall, genome: transformers.sidechain_input.core_material, source: "provisional: model knowledge (a small signal transformer; no replacement spec found)"}
+  t103_core_area_m2: {value: 0.5e-4, genome: transformers.sidechain_input.core_area_m2, source: "provisional: model knowledge (small signal transformer core)"}
+  t103_core_path_m: {value: 0.05, genome: transformers.sidechain_input.core_path_m, source: "provisional: model knowledge"}
+  t103_gap_m: {value: 10.0e-6, genome: transformers.sidechain_input.air_gap_m, source: "provisional: model knowledge (butt joints; no DC)"}
+  t103_turns: {value: 1215, genome: transformers.sidechain_input.turns, source: "provisional: derived (gives the former 5 H primary at nominal geometry and gap)", notes: "primary (the reference winding)"}
+  t103_leakage_h: {value: 0.01, genome: transformers.sidechain_input.leakage_h, source: "provisional: model knowledge (keeps the slice's k = 0.999: 2 (1 - k) x 5 H)", notes: "referred to the primary"}
 
   # --- AC threshold and 12AX7 (V105) ----------------------------------------------
   r115a_ohm: {value: 100.0e+3, source: "sch: R115A 100K LIN"}
@@ -113,7 +152,12 @@ values:
   # --- T104 and rectifier ------------------------------------------------------------
   t104_sec_per_half: {value: 0.5, genome: transformers.sidechain_output.turns_ratio, source: "web: https://don-audio.com/9643S-Fairchild-Control-amp-output-T104-204 (replacement: 10k CT:600, 4:1) -> secondary = half a primary half"}
   t104_fb_per_half: {value: 0.2105, source: "web: same page, feedback winding 9.5:1 of the full primary"}
-  t104_l_half_h: {value: 10.0, source: "provisional: model knowledge (Phase 2 replaces)"}
+  t104_core_material: {value: grain_oriented_si_steel, genome: transformers.sidechain_output.core_material, source: "web: https://don-audio.com/9643S-Fairchild-Control-amp-output-T104-204 (the replacement is M6 cored); the original's is not documented"}
+  t104_core_area_m2: {value: 4.0e-4, genome: transformers.sidechain_output.core_area_m2, source: "provisional: model knowledge (the replacement weighs 1.2 kg, same page: a 2 x 2 cm core cross-section is typical at that weight)"}
+  t104_core_path_m: {value: 0.12, genome: transformers.sidechain_output.core_path_m, source: "provisional: model knowledge (E-I core of that size)"}
+  t104_gap_m: {value: 20.0e-6, genome: transformers.sidechain_output.air_gap_m, source: "provisional: model knowledge (butt joints; push-pull, so no deliberate gap)"}
+  t104_turns: {value: 670, genome: transformers.sidechain_output.turns, source: "provisional: derived (gives the former 10 H per primary half at nominal geometry and gap)", notes: "each primary half (the reference winding)"}
+  t104_leakage_h: {value: 0.02, genome: transformers.sidechain_output.leakage_h, source: "provisional: model knowledge (keeps the slice's k = 0.999: 2 (1 - k) x 10 H)", notes: "referred to a primary half"}
   r136_ohm: {value: 3900, source: "sch: R136 ('A136') 3900 1W across the secondary"}
   bridge_diode: {value: SI_RECTIFIER, source: "sch: CR101-104 1N538 silicon; modeled with config/devices/si_rectifier.yaml (provisional 1N4007-like)"}
 
