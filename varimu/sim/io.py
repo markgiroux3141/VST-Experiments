@@ -411,9 +411,13 @@ def run_transient(
     found 2026-10-23 at the default front panel, where every render split into
     four chunks stopped at t = h / 100 at a bridge diode on T104's floating
     secondary (3, 5 and 7 chunks ran), whatever the input, method (trap or gear),
-    rshunt or added capacitance. So a run that stops within its first sample is
+    rshunt or added capacitance. Again 2026-10-24, after mumetall's Rayleigh
+    refit (T101's and T103's linear-limit couplings 0.99993 / 0.9997): two
+    compression-curve chunks in four filesources stopped 9 ms and 59 ms into the
+    settling (timestep too small at a T101 grid) and ran past it in three or
+    five, as they did with the old fit in four. So a run that stops anywhere is
     retried once split into one chunk more: the same input values, another
-    plumbing.
+    plumbing (a second stop raises).
 
     `netlist` is the circuit body without analysis or `.end` lines.
     `input_v` is sampled at settings.sample_rate. Every vector in `save` comes
@@ -484,7 +488,7 @@ def run_transient(
 
     t = vec.pop("time")
     stopped = len(t) == 0 or t[-1] < t_end * (1 - 1e-9)
-    if stopped and chunk_lines is None and (len(t) == 0 or t[-1] < 1.0 / s.sim_rate):
+    if stopped and chunk_lines is None:
         return run_transient(
             netlist,
             input_v,

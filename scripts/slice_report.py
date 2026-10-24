@@ -118,6 +118,9 @@ EXCERPT_SETTLE_S = 0.0
 #   10x tighter error tolerances now give -78.5 / 0.040, 4x -83.9 / 0.007)
 # (Phase 3, 2026-10-22: -80.9 / 0.0029, -81.9 / 0.0022, -84.9 / 0.0015,
 # -85.2 / 0.0018; -76.2 / 0.0035, -70.8 / 0.0052; -56.8 / 0.1945.)
+# 2026-10-24, mumetall's Rayleigh refit (T101 / T103 cores and their linear limits):
+# -82.5 / 0.0036, -82.5 / 0.0033, -84.5 / 0.0020, -85.0 / 0.0019; -76.2 / 0.0046,
+# -71.7 / 0.0076; -77.1 / 0.102. Every row 3-4.5 dB inside its bound: bounds kept.
 BOUNDS = {
     "burst_tc1": (-78.0, 0.01),
     "burst_tc2": (-79.0, 0.01),

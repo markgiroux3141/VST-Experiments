@@ -103,8 +103,8 @@ def prepare(
 
     def one(item):
         # One (candidate, clip)'s targets in turn: they share the reference and the grid,
-        # which the first renders and the rest find cached (the runner can't take one
-        # job twice at once: both would write the same temporary directory).
+        # which the first renders and the rest find cached (at once, both would render
+        # them).
         c, clip = item
         ex, x, _ = excerpts[clip]
         return [

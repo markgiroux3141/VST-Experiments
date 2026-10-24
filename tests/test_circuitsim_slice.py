@@ -75,6 +75,9 @@ def _excerpt(name: str) -> tuple[np.ndarray, dict]:
 # 2026-10-23 (T103 at 8.5, the tapped AC THRESHOLD pots, the factory-adjusted DC
 # threshold): vs converged -81.2 / 0.005, -85.8 / 0.002, -72.2 / 0.012, -74.3 / 0.013;
 # vs ngspice -64.0 / 0.007, -60.4 / 0.014.
+# 2026-10-24 (mumetall's Rayleigh refit: T101 / T103 cores, and their linear limits
+# in the ngspice rows): vs converged -81.6 / 0.005, -86.3 / 0.002, -73.1 / 0.013,
+# -74.5 / 0.008; vs ngspice -64.3 / 0.013, -60.4 / 0.013.
 EXCERPTS = {
     "burst_1000hz_0dbfs": (-78.0, 0.01, True),
     "ess_0dbfs": (-82.0, 0.005, True),

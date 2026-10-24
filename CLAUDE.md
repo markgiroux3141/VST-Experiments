@@ -7,10 +7,10 @@ layout calls it `PLAN.md`). Read it before starting work.
 for noise sources). Phase 5 (Listening App and Preference Data) is in
 progress: blind A/B at `/ab` of `varimu listen`, stimuli matched by
 `varimu ab-prepare` (varimu/listen/: candidates, stimuli, prepare, session,
-store; the plan's Phase 5 status). Next: the Phase 2 follow-up the user
-chose 2026-10-23 (Option 1, a JA refit of mumetall with its Rayleigh region;
-the plan's Phase 2, "Low-level core physics"), then Phase 5's planned
-listening aids (difference listening, ABX with an exaggeration staircase).** Plausibility (`varimu.measure.plausibility`) rejects only what no
+store; the plan's Phase 5 status). Mumetall's Rayleigh refit (the plan's
+Phase 2, "Low-level core physics", Option 1) is applied (2026-10-24). Next:
+Phase 5's planned listening aids (difference listening, ABX with an
+exaggeration staircase).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the
@@ -275,8 +275,11 @@ tests skip when ngspice is missing.
   - ngspice can stop at its first step (t = h / 100, at a bridge diode on
     T104's floating secondary) depending only on how the input is split into
     filesources (found 2026-10-23: 4 and 4.5 s renders at the default panel;
-    no method, rshunt, gmin or capacitance helped); `run_transient` retries a
-    run that stops within its first sample once with another split.
+    no method, rshunt, gmin or capacitance helped). Again 2026-10-24 after
+    mumetall's refit (stiffer T101 / T103 couplings): two compression-curve
+    chunks stopped 9 and 59 ms into the settling in four filesources and ran in
+    three or five. `run_transient` retries any stopped run once with one
+    filesource more (a second stop raises).
 - **Fixed-step engine accuracy (decided 2026-10-15, plan M4).** Trapezoidal
   frequency-warps the transformers' resonances (the slice peaks +10 dB near
   17 kHz from the pre-Phase 2 provisional winding capacitances; Phase 2's
@@ -328,17 +331,21 @@ tests skip when ngspice is missing.
 - **Core quirks (2026-10-21).** A run starts at the DC operating point with
   its first input sample: DC on T101's primary saturates its mumetall core,
   and a DC point past saturation can fail; fade excerpts in. The linear limit
-  is the susceptibility at the demagnetized origin; mumetall's incremental
-  permeability at audio levels is ~10x that, so JA and linear builds differ
-  in LF response (bass-rich program compresses up to ~2 dB differently).
+  is the susceptibility at the demagnetized origin (mumetall since its
+  refit: 29,300, within ~20% of its permeability at program levels, so JA and
+  linear builds compress the slice's clip within 0.022 dB per 50 ms; the old
+  fit's 246 made that ~2 dB).
   The core's map is piecewise smooth (substep and direction changes), so
   Jacobian tests compare it only within 10 uT of its state.
-- **Mumetall at low fields (2026-10-23).** The production fit's permeability at
-  the demagnetized origin is 246, not the 5,850 the circuit file's comment
-  says (T101's and T103's turns were derived at 5,850): its initial curve is
-  H ~ sqrt(B) over the audio range, the source of Phase 4's low-level THD and
-  of a level-dependent bass response. A Rayleigh refit is measured and chosen
-  (Option 1, the plan's Phase 2, "Low-level core physics"), not yet applied.
+- **Mumetall at low fields (refit 2026-10-24).** The fit now has a Rayleigh
+  region (`rayleigh_r_per_a_m`, `h_rayleigh_a_per_m` in its datasheet block;
+  c 0.289): origin permeability 29,300, hysteresis distortion that falls with
+  level (nominal unit, 1 kHz, -10 dBm: 0.012% THD, was 0.16%). The previous
+  fit (c 0.00077, origin 246, H ~ sqrt(B) at program levels) caused Phase 4's
+  low-level THD and a level-dependent bass response. T101's and T103's turns
+  stay as derived (for 10 H / 5 H at an origin of 5,850); their linear limits
+  are 17.7 H / 7.9 H, mostly the joint gap. Keep the Rayleigh targets when
+  refitting: the four datasheet scalars alone gave the old fit.
 - **Attack is current-limited (2026-10-23).** The 6973 pair (its zero-bias
   current at the ~150 V screen tap) sets the CV's slope into C109; the
   bridge diodes and T104's leakage don't matter. A long burst's CV keeps
@@ -352,12 +359,13 @@ tests skip when ngspice is missing.
   committed); stimuli are stored per code and config version
   (`prepare.code_version`: a material refit counts), so a circuit change
   means preparing again.
-- **One render job twice at once collides (found 2026-10-23).** Two threads
-  rendering the identical job (same cache key) both write
-  `cache/renders/<key>.tmp` and one fails with WinError 32. Callers avoid it
-  (`listen.prepare` runs a candidate's targets in turn); the fix (a unique
-  temporary name in `runner.render`) touches the cache key, so it waits for
-  the next cache-invalidating batch.
+- **One render job twice at once (fixed 2026-10-24).** Two threads rendering
+  the identical job (same cache key) used to share `cache/renders/<key>.tmp`
+  and `cache/jobs/<key>` (WinError 32). Each render now has its own (key, pid,
+  thread) names, and the second to finish keeps the first's cache entry
+  (`tests/test_fast.py`). `listen.prepare` still runs a candidate's targets in
+  turn: that shares the grid's renders through the cache instead of rendering
+  them twice.
 - **The power supply and the start of a run (Phase 3, 2026-10-21).** A run
   starts at the DC operating point with the mains sine sources at their t = 0
   value (phase 90: the peak), so the reservoirs start charged to the peak;
@@ -377,7 +385,9 @@ tests skip when ngspice is missing.
   circuit-sim plan's "Speed after Phase 3"): step selection, probe-only steps
   with the ports-and-states error norm, and AVX2 linear algebra, 1.16-1.26x
   faster at the same accuracy; the substeps are needed by accuracy (the 6973
-  feedback nodes nfa / nfb), not wasted by halving.
+  feedback nodes nfa / nfb), not wasted by halving. 2026-10-24, mumetall's
+  refit: no change (11.8x / 24.0x against the old fit's 11.9x / 24.3x, back to
+  back, one job, the 1 s of settling counted in).
 - **Genomes that oscillate** (`reports/corners/summary.json`, flagged): some
   random corners oscillate at 19-30 kHz or wander at LF (weak-supply corners:
   the regulator in dropout). `varimu.measure.plausibility` rejects every one

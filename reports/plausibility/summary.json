@@ -1,5 +1,5 @@
 {
- "code": "0.1.0+22f96f969280",
+ "code": "0.1.0+429a4862465e",
  "all_judged_right": true,
  "genomes": {
   "nominal": {
@@ -17,7 +17,7 @@
      },
      "idle_quiet": {
       "passes": true,
-      "value": -253.96407467923123,
+      "value": -254.48712355932338,
       "limit": -80.0
      },
      "b_plus": {
@@ -52,13 +52,13 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 26.56,
+      "value": 26.58,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
-       7.1,
+       7.11,
        8.89,
        10.58
       ],
@@ -67,14 +67,14 @@
      "no_oscillation_under_signal": {
       "passes": true,
       "value": {
-       "spur_db": -96.4,
+       "spur_db": -96.5,
        "at_hz": 1480
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.0652,
+      "value": 0.0617,
       "limit": 5.0
      }
     },
@@ -84,8 +84,8 @@
      "zero": 0.3
     },
     "idle": {
-     "out_peak_dbfs": -254.0,
-     "out_peak_hz": 5,
+     "out_peak_dbfs": -254.5,
+     "out_peak_hz": 10,
      "rails_v": {
       "ur": 434.96,
       "bp": 240.07,
@@ -107,14 +107,14 @@
      ],
      "gr_db": [
       0.0,
-      7.1,
-      15.99,
-      26.56
+      7.11,
+      16.0,
+      26.58
      ],
      "spur_db": [
       -103.9,
       -101.9,
-      -96.4,
+      -96.5,
       -103.7
      ],
      "spur_hz": [
@@ -124,12 +124,12 @@
       1360
      ],
      "cv_v": [
-      -46.32,
-      -73.08,
-      -89.39,
-      -106.53
+      -46.46,
+      -73.15,
+      -89.43,
+      -106.55
      ],
-     "cv_min_v": -107.23
+     "cv_min_v": -107.25
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -142,8 +142,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 4.4,
-     "thd_pct": 0.0652
+     "out_dbm": 4.42,
+     "thd_pct": 0.0617
     },
     "failed": []
    },
@@ -228,7 +228,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -67.11566227987431,
+      "value": -67.10759221677768,
       "limit": -80.0
      },
      "b_plus": {
@@ -285,7 +285,7 @@
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.0679,
+      "value": 0.067,
       "limit": 5.0
      }
     },
@@ -326,7 +326,7 @@
       -105.6,
       -105.1,
       -103.8,
-      -110.2
+      -110.0
      ],
      "spur_hz": [
       1380,
@@ -335,12 +335,12 @@
       1360
      ],
      "cv_v": [
-      -9.06,
-      -28.46,
-      -56.37,
-      -80.07
+      -9.07,
+      -28.47,
+      -56.38,
+      -80.08
      ],
-     "cv_min_v": -80.82
+     "cv_min_v": -80.83
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -354,7 +354,7 @@
     },
     "nominal": {
      "out_dbm": 4.82,
-     "thd_pct": 0.0679
+     "thd_pct": 0.067
     },
     "failed": [
      "idle_quiet"
@@ -441,7 +441,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -51.390899928569524,
+      "value": -51.381115212678885,
       "limit": -80.0
      },
      "b_plus": {
@@ -476,29 +476,29 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 27.95,
+      "value": 27.92,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
-       7.83,
-       8.81,
-       11.32
+       7.84,
+       8.8,
+       11.29
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": -35.7,
+       "spur_db": -36.6,
        "at_hz": 1500
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.4866,
+      "value": 0.4754,
       "limit": 5.0
      }
     },
@@ -531,15 +531,15 @@
      ],
      "gr_db": [
       0.0,
-      7.83,
+      7.84,
       16.63,
-      27.95
+      27.92
      ],
      "spur_db": [
-      -44.8,
-      -97.2,
-      -35.7,
-      -84.3
+      -46.9,
+      -99.7,
+      -36.6,
+      -85.3
      ],
      "spur_hz": [
       300,
@@ -548,12 +548,12 @@
       1480
      ],
      "cv_v": [
-      -48.45,
-      -70.81,
-      -84.2,
-      -102.64
+      -48.9,
+      -71.04,
+      -84.33,
+      -102.72
      ],
-     "cv_min_v": -103.33
+     "cv_min_v": -103.4
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -566,8 +566,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 6.02,
-     "thd_pct": 0.4866
+     "out_dbm": 6.03,
+     "thd_pct": 0.4754
     },
     "failed": [
      "idle_quiet",
@@ -870,7 +870,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -13.749214731270353,
+      "value": -13.747384533478757,
       "limit": -80.0
      },
      "b_plus": {
@@ -895,7 +895,7 @@
      "grid_bias": {
       "passes": false,
       "value": {
-       "cv_v": -2.243,
+       "cv_v": -2.244,
        "zero_divider_v": -0.0
       },
       "limit": {
@@ -905,29 +905,29 @@
      },
      "gain_reduction": {
       "passes": false,
-      "value": -9.97,
+      "value": -9.34,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": false,
       "value": [
-       -0.37,
-       -0.09,
-       -9.51
+       0.35,
+       -0.16,
+       -9.52
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": 47.8,
+       "spur_db": 47.2,
        "at_hz": 19400
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 2.1544,
+      "value": 2.1516,
       "limit": 5.0
      }
     },
@@ -945,7 +945,7 @@
       "nb2": 1.26,
       "nb3": -16.32
      },
-     "cv_v": -2.243,
+     "cv_v": -2.244,
      "bank_ma": [
       25.61,
       19.94
@@ -960,13 +960,13 @@
      ],
      "gr_db": [
       0.0,
-      -0.37,
-      -0.47,
-      -9.97
+      0.35,
+      0.18,
+      -9.34
      ],
      "spur_db": [
-      47.8,
-      37.5,
+      47.2,
+      37.6,
       27.4,
       5.0
      ],
@@ -977,12 +977,12 @@
       19480
      ],
      "cv_v": [
-      -205.57,
-      -205.55,
-      -205.49,
+      -205.61,
+      -205.59,
+      -205.53,
       -205.55
      ],
-     "cv_min_v": -205.84
+     "cv_min_v": -205.85
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -996,7 +996,7 @@
     },
     "nominal": {
      "out_dbm": 6.41,
-     "thd_pct": 2.1544
+     "thd_pct": 2.1516
     },
     "failed": [
      "idle_quiet",
@@ -1087,7 +1087,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -13.255479006205926,
+      "value": -13.254952999734389,
       "limit": -80.0
      },
      "b_plus": {
@@ -1122,29 +1122,29 @@
      },
      "gain_reduction": {
       "passes": false,
-      "value": -9.59,
+      "value": -8.01,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": false,
       "value": [
-       -0.88,
-       0.04,
-       -8.75
+       0.63,
+       -0.02,
+       -8.62
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": 48.0,
+       "spur_db": 46.4,
        "at_hz": 19400
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 2.6802,
+      "value": 2.662,
       "limit": 5.0
      }
     },
@@ -1177,14 +1177,14 @@
      ],
      "gr_db": [
       0.0,
-      -0.88,
-      -0.84,
-      -9.59
+      0.63,
+      0.61,
+      -8.01
      ],
      "spur_db": [
-      48.0,
-      37.0,
-      27.0,
+      46.4,
+      36.9,
+      26.8,
       6.9
      ],
      "spur_hz": [
@@ -1194,12 +1194,12 @@
       19460
      ],
      "cv_v": [
-      -213.98,
-      -213.99,
-      -213.96,
-      -214.05
+      -214.02,
+      -214.03,
+      -214.0,
+      -214.07
      ],
-     "cv_min_v": -214.71
+     "cv_min_v": -214.73
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -1212,8 +1212,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 5.79,
-     "thd_pct": 2.6802
+     "out_dbm": 5.8,
+     "thd_pct": 2.662
     },
     "failed": [
      "idle_quiet",
@@ -1304,7 +1304,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -24.67048785546662,
+      "value": -24.668698584574223,
       "limit": -80.0
      },
      "b_plus": {
@@ -1318,7 +1318,7 @@
      "bank_current": {
       "passes": true,
       "value": [
-       31.52,
+       31.51,
        27.12
       ],
       "limit": [
@@ -1329,7 +1329,7 @@
      "grid_bias": {
       "passes": false,
       "value": {
-       "cv_v": -21.218,
+       "cv_v": -21.217,
        "zero_divider_v": -17.27
       },
       "limit": {
@@ -1339,14 +1339,14 @@
      },
      "gain_reduction": {
       "passes": false,
-      "value": -2.9,
+      "value": -2.87,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": false,
       "value": [
-       0.09,
-       0.3,
+       0.08,
+       0.34,
        -3.29
       ],
       "limit": 0.5
@@ -1354,14 +1354,14 @@
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": 22.2,
+       "spur_db": 22.1,
        "at_hz": 19300
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 3.5627,
+      "value": 3.5746,
       "limit": 5.0
      }
     },
@@ -1379,9 +1379,9 @@
       "nb2": -20.94,
       "nb3": -17.27
      },
-     "cv_v": -21.218,
+     "cv_v": -21.217,
      "bank_ma": [
-      31.52,
+      31.51,
       27.12
      ]
     },
@@ -1394,12 +1394,12 @@
      ],
      "gr_db": [
       0.0,
-      0.09,
-      0.39,
-      -2.9
+      0.08,
+      0.42,
+      -2.87
      ],
      "spur_db": [
-      22.2,
+      22.1,
       13.5,
       3.7,
       -4.4
@@ -1411,12 +1411,12 @@
       18380
      ],
      "cv_v": [
-      -129.79,
-      -133.68,
-      -145.23,
+      -129.81,
+      -133.69,
+      -145.25,
       -169.08
      ],
-     "cv_min_v": -169.64
+     "cv_min_v": -169.63
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -1429,8 +1429,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 6.22,
-     "thd_pct": 3.5627
+     "out_dbm": 6.24,
+     "thd_pct": 3.5746
     },
     "failed": [
      "idle_quiet",
@@ -1521,7 +1521,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -24.36182768177286,
+      "value": -24.355724021699523,
       "limit": -80.0
      },
      "b_plus": {
@@ -1546,7 +1546,7 @@
      "grid_bias": {
       "passes": false,
       "value": {
-       "cv_v": -9.465,
+       "cv_v": -9.463,
        "zero_divider_v": -5.152
       },
       "limit": {
@@ -1556,14 +1556,14 @@
      },
      "gain_reduction": {
       "passes": false,
-      "value": -1.98,
+      "value": -1.97,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": false,
       "value": [
        0.51,
-       0.58,
+       0.59,
        -3.07
       ],
       "limit": 0.5
@@ -1578,7 +1578,7 @@
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 3.2339,
+      "value": 3.2391,
       "limit": 5.0
      }
     },
@@ -1596,7 +1596,7 @@
       "nb2": -18.87,
       "nb3": -17.17
      },
-     "cv_v": -9.465,
+     "cv_v": -9.463,
      "bank_ma": [
       36.45,
       32.03
@@ -1613,11 +1613,11 @@
       0.0,
       0.51,
       1.1,
-      -1.98
+      -1.97
      ],
      "spur_db": [
       -1.3,
-      -8.4,
+      -8.3,
       -0.8,
       -4.1
      ],
@@ -1628,9 +1628,9 @@
       18380
      ],
      "cv_v": [
-      -107.56,
-      -114.32,
-      -126.99,
+      -107.57,
+      -114.34,
+      -127.0,
       -153.29
      ],
      "cv_min_v": -154.27
@@ -1646,8 +1646,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 7.62,
-     "thd_pct": 3.2339
+     "out_dbm": 7.64,
+     "thd_pct": 3.2391
     },
     "failed": [
      "idle_quiet",
@@ -1738,7 +1738,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -68.98791599864578,
+      "value": -68.98790115046354,
       "limit": -80.0
      },
      "b_plus": {
@@ -1781,7 +1781,7 @@
       "value": [
        2.84,
        5.09,
-       8.07
+       8.08
       ],
       "limit": 0.5
      },
@@ -1795,7 +1795,7 @@
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.2395,
+      "value": 0.2384,
       "limit": 5.0
      }
     },
@@ -1829,12 +1829,12 @@
      "gr_db": [
       0.0,
       2.84,
-      7.92,
+      7.93,
       16.0
      ],
      "spur_db": [
       -102.7,
-      -104.6,
+      -104.7,
       -103.7,
       -104.3
      ],
@@ -1846,11 +1846,11 @@
      ],
      "cv_v": [
       -21.78,
-      -39.79,
+      -39.8,
       -76.11,
-      -105.35
+      -105.36
      ],
-     "cv_min_v": -105.99
+     "cv_min_v": -106.0
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -1864,7 +1864,7 @@
     },
     "nominal": {
      "out_dbm": 5.96,
-     "thd_pct": 0.2395
+     "thd_pct": 0.2384
     },
     "failed": [
      "idle_quiet",
@@ -1952,7 +1952,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -61.035970971583765,
+      "value": -61.035953800139765,
       "limit": -80.0
      },
      "b_plus": {
@@ -1987,7 +1987,7 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 16.84,
+      "value": 16.85,
       "limit": 6.0
      },
      "gr_rises": {
@@ -2003,13 +2003,13 @@
       "passes": true,
       "value": {
        "spur_db": -104.0,
-       "at_hz": 1360
+       "at_hz": 1320
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.0873,
+      "value": 0.087,
       "limit": 5.0
      }
     },
@@ -2044,24 +2044,24 @@
       0.0,
       3.57,
       8.86,
-      16.84
+      16.85
      ],
      "spur_db": [
       -104.7,
       -105.2,
       -104.0,
-      -109.8
+      -110.2
      ],
      "spur_hz": [
       1300,
       1360,
-      1360,
+      1320,
       1360
      ],
      "cv_v": [
       -12.39,
-      -31.49,
-      -68.25,
+      -31.5,
+      -68.26,
       -101.58
      ],
      "cv_min_v": -102.62
@@ -2078,7 +2078,7 @@
     },
     "nominal": {
      "out_dbm": 8.66,
-     "thd_pct": 0.0873
+     "thd_pct": 0.087
     },
     "failed": [
      "idle_quiet",
@@ -2166,7 +2166,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -22.243535431825734,
+      "value": -22.213729971799772,
       "limit": -80.0
      },
      "b_plus": {
@@ -2191,8 +2191,8 @@
      "grid_bias": {
       "passes": false,
       "value": {
-       "cv_v": -28.566,
-       "zero_divider_v": -19.141
+       "cv_v": -28.568,
+       "zero_divider_v": -19.142
       },
       "limit": {
        "below_v": -1.5,
@@ -2201,29 +2201,29 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 20.38,
+      "value": 20.39,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
-       5.08,
-       7.09,
-       8.21
+       5.07,
+       7.1,
+       8.22
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": -9.8,
+       "spur_db": -9.4,
        "at_hz": 47520
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.3812,
+      "value": 0.2873,
       "limit": 5.0
      }
     },
@@ -2241,7 +2241,7 @@
       "nb2": -27.1,
       "nb3": -19.14
      },
-     "cv_v": -28.566,
+     "cv_v": -28.568,
      "bank_ma": [
       28.33,
       23.6
@@ -2256,29 +2256,29 @@
      ],
      "gr_db": [
       0.0,
-      5.08,
+      5.07,
       12.17,
-      20.38
+      20.39
      ],
      "spur_db": [
-      -11.6,
-      -9.8,
-      -98.7,
-      -99.5
+      -11.4,
+      -9.4,
+      -96.4,
+      -99.2
      ],
      "spur_hz": [
       47620,
       47520,
-      500,
+      580,
       1360
      ],
      "cv_v": [
-      -60.08,
-      -85.62,
-      -101.83,
-      -116.12
+      -60.15,
+      -85.77,
+      -101.85,
+      -116.14
      ],
-     "cv_min_v": -117.12
+     "cv_min_v": -117.16
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -2291,8 +2291,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 2.83,
-     "thd_pct": 0.3812
+     "out_dbm": 2.86,
+     "thd_pct": 0.2873
     },
     "failed": [
      "idle_quiet",
@@ -2382,7 +2382,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -24.92485221856496,
+      "value": -24.899028952772646,
       "limit": -80.0
      },
      "b_plus": {
@@ -2396,7 +2396,7 @@
      "bank_current": {
       "passes": true,
       "value": [
-       32.57,
+       32.56,
        29.25
       ],
       "limit": [
@@ -2407,8 +2407,8 @@
      "grid_bias": {
       "passes": false,
       "value": {
-       "cv_v": -15.305,
-       "zero_divider_v": -5.683
+       "cv_v": -15.307,
+       "zero_divider_v": -5.684
       },
       "limit": {
        "below_v": -1.5,
@@ -2417,14 +2417,14 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 20.91,
+      "value": 20.97,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
-       6.39,
-       6.14,
+       6.43,
+       6.16,
        8.38
       ],
       "limit": 0.5
@@ -2432,14 +2432,14 @@
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": -8.9,
+       "spur_db": -9.1,
        "at_hz": 47680
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.265,
+      "value": 0.2,
       "limit": 5.0
      }
     },
@@ -2450,16 +2450,16 @@
     },
     "idle": {
      "out_peak_dbfs": -24.9,
-     "out_peak_hz": 22722,
+     "out_peak_hz": 22725,
      "rails_v": {
       "ur": 340.13,
       "bp": 202.08,
       "nb2": -24.79,
-      "nb3": -18.94
+      "nb3": -18.95
      },
-     "cv_v": -15.305,
+     "cv_v": -15.307,
      "bank_ma": [
-      32.57,
+      32.56,
       29.25
      ]
     },
@@ -2472,29 +2472,29 @@
      ],
      "gr_db": [
       0.0,
-      6.39,
-      12.53,
-      20.91
+      6.43,
+      12.59,
+      20.97
      ],
      "spur_db": [
-      -12.0,
-      -8.9,
-      -63.3,
-      -104.0
+      -11.1,
+      -9.1,
+      -72.1,
+      -110.1
      ],
      "spur_hz": [
-      23680,
+      23700,
       47680,
       23500,
-      1300
+      1360
      ],
      "cv_v": [
-      -51.55,
-      -75.14,
-      -97.48,
-      -113.52
+      -51.7,
+      -75.26,
+      -97.53,
+      -113.53
      ],
-     "cv_min_v": -113.98
+     "cv_min_v": -114.0
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -2507,8 +2507,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 4.86,
-     "thd_pct": 0.265
+     "out_dbm": 4.89,
+     "thd_pct": 0.2
     },
     "failed": [
      "idle_quiet",
@@ -2598,7 +2598,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -13.163914929973224,
+      "value": -13.16349757860763,
       "limit": -80.0
      },
      "b_plus": {
@@ -2633,29 +2633,29 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 17.84,
+      "value": 17.86,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": false,
       "value": [
        0.23,
-       10.49,
-       7.11
+       10.5,
+       7.13
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": -16.1,
+       "spur_db": -16.0,
        "at_hz": 11680
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 2.4676,
+      "value": 2.5752,
       "limit": 5.0
      }
     },
@@ -2690,25 +2690,25 @@
       0.0,
       0.23,
       10.73,
-      17.84
+      17.86
      ],
      "spur_db": [
-      -42.7,
-      -16.1,
+      -42.9,
+      -16.0,
       -34.1,
-      -39.7
+      -38.9
      ],
      "spur_hz": [
-      25320,
+      6680,
       11680,
       1500,
-      1440
+      1460
      ],
      "cv_v": [
-      -29.51,
-      -75.93,
-      -64.83,
-      -81.63
+      -29.52,
+      -75.95,
+      -64.85,
+      -81.66
      ],
      "cv_min_v": -86.14
     },
@@ -2724,7 +2724,7 @@
     },
     "nominal": {
      "out_dbm": -3.36,
-     "thd_pct": 2.4676
+     "thd_pct": 2.5752
     },
     "failed": [
      "idle_quiet",
@@ -2814,7 +2814,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -11.566689967157433,
+      "value": -11.918038078160924,
       "limit": -80.0
      },
      "b_plus": {
@@ -2855,23 +2855,23 @@
      "gr_rises": {
       "passes": false,
       "value": [
-       -0.86,
-       10.5,
-       7.06
+       -0.88,
+       10.51,
+       7.08
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": -10.8,
+       "spur_db": -10.7,
        "at_hz": 47700
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.9241,
+      "value": 0.89,
       "limit": 5.0
      }
     },
@@ -2881,7 +2881,7 @@
      "zero": 0.3
     },
     "idle": {
-     "out_peak_dbfs": -11.6,
+     "out_peak_dbfs": -11.9,
      "out_peak_hz": 30000,
      "rails_v": {
       "ur": 466.24,
@@ -2904,15 +2904,15 @@
      ],
      "gr_db": [
       0.0,
-      -0.86,
-      9.65,
+      -0.88,
+      9.63,
       16.71
      ],
      "spur_db": [
-      -10.8,
+      -10.7,
       -14.1,
-      -34.7,
-      -36.9
+      -34.9,
+      -37.2
      ],
      "spur_hz": [
       47700,
@@ -2921,12 +2921,12 @@
       1400
      ],
      "cv_v": [
-      -36.99,
-      -79.76,
-      -69.05,
-      -86.01
+      -37.0,
+      -79.8,
+      -69.07,
+      -86.03
      ],
-     "cv_min_v": -92.24
+     "cv_min_v": -92.32
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -2940,7 +2940,7 @@
     },
     "nominal": {
      "out_dbm": -4.46,
-     "thd_pct": 0.9241
+     "thd_pct": 0.89
     },
     "failed": [
      "idle_quiet",
@@ -3030,7 +3030,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -63.93794387816357,
+      "value": -63.963853826483486,
       "limit": -80.0
      },
      "b_plus": {
@@ -3065,14 +3065,14 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 26.44,
+      "value": 26.45,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
-       8.26,
-       8.55,
+       8.27,
+       8.56,
        9.63
       ],
       "limit": 0.5
@@ -3080,14 +3080,14 @@
      "no_oscillation_under_signal": {
       "passes": true,
       "value": {
-       "spur_db": -59.0,
+       "spur_db": -59.2,
        "at_hz": 300
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.1096,
+      "value": 0.0513,
       "limit": 5.0
      }
     },
@@ -3097,7 +3097,7 @@
      "zero": 1.0
     },
     "idle": {
-     "out_peak_dbfs": -63.9,
+     "out_peak_dbfs": -64.0,
      "out_peak_hz": 5,
      "rails_v": {
       "ur": 349.74,
@@ -3120,15 +3120,15 @@
      ],
      "gr_db": [
       0.0,
-      8.26,
-      16.81,
-      26.44
+      8.27,
+      16.82,
+      26.45
      ],
      "spur_db": [
-      -59.0,
+      -59.2,
       -98.4,
-      -95.0,
-      -97.9
+      -94.7,
+      -96.8
      ],
      "spur_hz": [
       300,
@@ -3137,12 +3137,12 @@
       1360
      ],
      "cv_v": [
-      -51.12,
-      -83.52,
-      -99.53,
-      -114.56
+      -51.21,
+      -83.55,
+      -99.54,
+      -114.57
      ],
-     "cv_min_v": -115.14
+     "cv_min_v": -115.15
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -3155,8 +3155,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 3.73,
-     "thd_pct": 0.1096
+     "out_dbm": 3.75,
+     "thd_pct": 0.0513
     },
     "failed": [
      "idle_quiet",
@@ -3245,7 +3245,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -63.69540740012926,
+      "value": -63.72631018427133,
       "limit": -80.0
      },
      "b_plus": {
@@ -3280,7 +3280,7 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 26.06,
+      "value": 26.07,
       "limit": 6.0
      },
      "gr_rises": {
@@ -3295,14 +3295,14 @@
      "no_oscillation_under_signal": {
       "passes": true,
       "value": {
-       "spur_db": -79.3,
+       "spur_db": -79.1,
        "at_hz": 300
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.0954,
+      "value": 0.0481,
       "limit": 5.0
      }
     },
@@ -3336,28 +3336,28 @@
      "gr_db": [
       0.0,
       7.51,
-      16.27,
-      26.06
+      16.28,
+      26.07
      ],
      "spur_db": [
-      -79.3,
+      -79.1,
       -102.8,
       -101.2,
-      -104.1
+      -105.2
      ],
      "spur_hz": [
       300,
       1360,
       1360,
-      1360
+      1500
      ],
      "cv_v": [
-      -48.63,
-      -74.21,
-      -89.27,
-      -103.89
+      -48.71,
+      -74.24,
+      -89.28,
+      -103.9
      ],
-     "cv_min_v": -104.47
+     "cv_min_v": -104.48
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -3370,8 +3370,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 6.28,
-     "thd_pct": 0.0954
+     "out_dbm": 6.3,
+     "thd_pct": 0.0481
     },
     "failed": [
      "idle_quiet",
@@ -3460,7 +3460,7 @@
      },
      "idle_quiet": {
       "passes": false,
-      "value": -70.04207337065043,
+      "value": -70.04154438470374,
       "limit": -80.0
      },
      "b_plus": {
@@ -3495,29 +3495,29 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 11.15,
+      "value": 10.17,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": false,
       "value": [
-       -0.18,
+       -1.18,
        2.48,
-       8.85
+       8.87
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": -17.0,
+       "spur_db": -20.1,
        "at_hz": 300
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.2413,
+      "value": 0.2154,
       "limit": 5.0
      }
     },
@@ -3550,15 +3550,15 @@
      ],
      "gr_db": [
       0.0,
-      -0.18,
-      2.3,
-      11.15
+      -1.18,
+      1.3,
+      10.17
      ],
      "spur_db": [
-      -54.4,
-      -17.0,
-      -104.3,
-      -103.2
+      -55.7,
+      -20.1,
+      -104.2,
+      -103.3
      ],
      "spur_hz": [
       300,
@@ -3567,12 +3567,12 @@
       300
      ],
      "cv_v": [
-      -76.04,
-      -77.64,
+      -77.66,
+      -77.33,
       -82.95,
-      -97.64
+      -97.65
      ],
-     "cv_min_v": -128.11
+     "cv_min_v": -129.92
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -3585,8 +3585,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 3.98,
-     "thd_pct": 0.2413
+     "out_dbm": 4.0,
+     "thd_pct": 0.2154
     },
     "failed": [
      "idle_quiet",
@@ -3614,7 +3614,7 @@
      },
      "idle_quiet": {
       "passes": true,
-      "value": -212.20346008458984,
+      "value": -201.47539187952535,
       "limit": -80.0
      },
      "b_plus": {
@@ -3649,29 +3649,29 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 24.46,
+      "value": 24.5,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
-       5.18,
-       10.93,
-       8.34
+       5.21,
+       10.96,
+       8.33
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": false,
       "value": {
-       "spur_db": -1.8,
+       "spur_db": -1.7,
        "at_hz": 34320
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.4872,
+      "value": 0.5803,
       "limit": 5.0
      }
     },
@@ -3681,7 +3681,7 @@
      "zero": 0.3
     },
     "idle": {
-     "out_peak_dbfs": -212.2,
+     "out_peak_dbfs": -201.5,
      "out_peak_hz": 31242,
      "rails_v": {
       "ur": 438.42,
@@ -3704,29 +3704,29 @@
      ],
      "gr_db": [
       0.0,
-      5.18,
-      16.11,
-      24.46
+      5.21,
+      16.17,
+      24.5
      ],
      "spur_db": [
-      -23.3,
-      -1.8,
-      -45.7,
+      -22.3,
+      -1.7,
+      -46.2,
       -103.6
      ],
      "spur_hz": [
-      34600,
+      32300,
       34320,
       1300,
       1360
      ],
      "cv_v": [
-      -35.22,
-      -118.26,
-      -87.86,
-      -105.35
+      -35.42,
+      -118.54,
+      -87.9,
+      -105.38
      ],
-     "cv_min_v": -153.06
+     "cv_min_v": -153.17
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -3739,8 +3739,8 @@
      }
     },
     "nominal": {
-     "out_dbm": -4.83,
-     "thd_pct": 0.4872
+     "out_dbm": -4.8,
+     "thd_pct": 0.5803
     },
     "failed": [
      "grid_bias",
@@ -3768,7 +3768,7 @@
      },
      "idle_quiet": {
       "passes": true,
-      "value": -258.01800611175327,
+      "value": -259.51626211759987,
       "limit": -80.0
      },
      "b_plus": {
@@ -3803,14 +3803,14 @@
      },
      "gain_reduction": {
       "passes": false,
-      "value": 2.13,
+      "value": 2.16,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": false,
       "value": [
-       0.19,
-       0.55,
+       0.2,
+       0.56,
        1.39
       ],
       "limit": 0.5
@@ -3825,7 +3825,7 @@
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.064,
+      "value": 0.055,
       "limit": 5.0
      }
     },
@@ -3835,8 +3835,8 @@
      "zero": 0.3
     },
     "idle": {
-     "out_peak_dbfs": -258.0,
-     "out_peak_hz": 5,
+     "out_peak_dbfs": -259.5,
+     "out_peak_hz": 120,
      "rails_v": {
       "ur": 434.96,
       "bp": 240.07,
@@ -3858,13 +3858,13 @@
      ],
      "gr_db": [
       0.0,
-      0.19,
-      0.74,
-      2.13
+      0.2,
+      0.76,
+      2.16
      ],
      "spur_db": [
+      -103.7,
       -103.6,
-      -103.5,
       -103.4,
       -117.5
      ],
@@ -3876,11 +3876,11 @@
      ],
      "cv_v": [
       -5.71,
-      -6.81,
-      -10.79,
-      -23.91
+      -6.82,
+      -10.8,
+      -23.92
      ],
-     "cv_min_v": -24.04
+     "cv_min_v": -24.05
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -3893,8 +3893,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 4.97,
-     "thd_pct": 0.064
+     "out_dbm": 4.99,
+     "thd_pct": 0.055
     },
     "failed": [
      "gain_reduction",
@@ -3922,7 +3922,7 @@
      },
      "idle_quiet": {
       "passes": true,
-      "value": -181.10968747796224,
+      "value": -190.71529881906105,
       "limit": -80.0
      },
      "b_plus": {
@@ -3957,29 +3957,29 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 25.03,
+      "value": 25.05,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
-       6.36,
+       6.37,
        8.62,
-       10.05
+       10.06
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": true,
       "value": {
-       "spur_db": -92.6,
+       "spur_db": -92.5,
        "at_hz": 1480
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.067,
+      "value": 0.033,
       "limit": 5.0
      }
     },
@@ -3989,8 +3989,8 @@
      "zero": 1.0
     },
     "idle": {
-     "out_peak_dbfs": -181.1,
-     "out_peak_hz": 15922,
+     "out_peak_dbfs": -190.7,
+     "out_peak_hz": 29058,
      "rails_v": {
       "ur": 423.77,
       "bp": 302.56,
@@ -4012,15 +4012,15 @@
      ],
      "gr_db": [
       0.0,
-      6.36,
-      14.97,
-      25.03
+      6.37,
+      14.99,
+      25.05
      ],
      "spur_db": [
-      -101.2,
-      -97.7,
-      -92.6,
-      -95.6
+      -101.1,
+      -97.8,
+      -92.5,
+      -95.4
      ],
      "spur_hz": [
       1360,
@@ -4029,12 +4029,12 @@
       1360
      ],
      "cv_v": [
-      -58.69,
-      -95.48,
-      -118.02,
-      -136.83
+      -58.85,
+      -95.58,
+      -118.06,
+      -136.86
      ],
-     "cv_min_v": -137.62
+     "cv_min_v": -137.65
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -4047,8 +4047,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 2.43,
-     "thd_pct": 0.067
+     "out_dbm": 2.45,
+     "thd_pct": 0.033
     },
     "failed": [
      "b_plus"
@@ -4077,7 +4077,7 @@
      },
      "idle_quiet": {
       "passes": true,
-      "value": -215.06080634414172,
+      "value": -233.36330370277,
       "limit": -80.0
      },
      "b_plus": {
@@ -4112,7 +4112,7 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 24.64,
+      "value": 24.65,
       "limit": 6.0
      },
      "gr_rises": {
@@ -4128,13 +4128,13 @@
       "passes": true,
       "value": {
        "spur_db": -105.0,
-       "at_hz": 1400
+       "at_hz": 1340
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": true,
-      "value": 0.1282,
+      "value": 0.1562,
       "limit": 5.0
      }
     },
@@ -4144,7 +4144,7 @@
      "zero": 0.0
     },
     "idle": {
-     "out_peak_dbfs": -215.1,
+     "out_peak_dbfs": -233.4,
      "out_peak_hz": 120,
      "rails_v": {
       "ur": 438.35,
@@ -4169,27 +4169,27 @@
       0.0,
       7.27,
       15.29,
-      24.64
+      24.65
      ],
      "spur_db": [
       -106.9,
       -105.5,
       -105.0,
-      -126.4
+      -126.5
      ],
      "spur_hz": [
-      1520,
-      1340,
       1400,
+      1340,
+      1340,
       1520
      ],
      "cv_v": [
-      -28.69,
-      -45.18,
-      -64.0,
-      -83.52
+      -28.75,
+      -45.25,
+      -64.05,
+      -83.56
      ],
-     "cv_min_v": -84.05
+     "cv_min_v": -84.09
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -4202,8 +4202,8 @@
      }
     },
     "nominal": {
-     "out_dbm": 11.91,
-     "thd_pct": 0.1282
+     "out_dbm": 11.93,
+     "thd_pct": 0.1562
     },
     "failed": [
      "grid_bias"
@@ -4231,7 +4231,7 @@
      },
      "idle_quiet": {
       "passes": true,
-      "value": -253.73766369535474,
+      "value": -214.5739790520923,
       "limit": -80.0
      },
      "b_plus": {
@@ -4266,29 +4266,29 @@
      },
      "gain_reduction": {
       "passes": true,
-      "value": 23.24,
+      "value": 23.25,
       "limit": 6.0
      },
      "gr_rises": {
       "passes": true,
       "value": [
        9.82,
-       7.28,
-       6.13
+       7.29,
+       6.14
       ],
       "limit": 0.5
      },
      "no_oscillation_under_signal": {
       "passes": true,
       "value": {
-       "spur_db": -96.9,
-       "at_hz": 40320
+       "spur_db": -97.7,
+       "at_hz": 38600
       },
       "limit": -50.0
      },
      "nominal_distortion": {
       "passes": false,
-      "value": 77.3509,
+      "value": 77.3037,
       "limit": 5.0
      }
     },
@@ -4298,8 +4298,8 @@
      "zero": 0.3
     },
     "idle": {
-     "out_peak_dbfs": -253.7,
-     "out_peak_hz": 5,
+     "out_peak_dbfs": -214.6,
+     "out_peak_hz": 10,
      "rails_v": {
       "ur": 434.96,
       "bp": 240.07,
@@ -4323,27 +4323,27 @@
       0.0,
       9.82,
       17.11,
-      23.24
+      23.25
      ],
      "spur_db": [
-      -96.9,
-      -102.8,
-      -104.6,
-      -107.5
+      -97.7,
+      -101.2,
+      -104.5,
+      -108.8
      ],
      "spur_hz": [
-      40320,
-      47480,
-      1360,
-      42640
+      38600,
+      46640,
+      1400,
+      37320
      ],
      "cv_v": [
-      -45.06,
-      -59.17,
-      -68.43,
-      -78.12
+      -45.11,
+      -59.21,
+      -68.47,
+      -78.15
      ],
-     "cv_min_v": -78.63
+     "cv_min_v": -78.67
     },
     "vs_670": {
      "unregulated_rail_v": {
@@ -4357,7 +4357,7 @@
     },
     "nominal": {
      "out_dbm": -6.31,
-     "thd_pct": 77.3509
+     "thd_pct": 77.3037
     },
     "failed": [
      "nominal_distortion"
@@ -4389,12 +4389,12 @@
      "timing_tc2": {
       "position": 2,
       "burst": "burst",
-      "gr_db": 10.07,
-      "attack_cv_10_ms": 1.702,
+      "gr_db": 10.11,
+      "attack_cv_10_ms": 1.703,
       "attack_cv_63_ms": 10.883,
-      "attack_gain_1db_ms": 32.5,
-      "attack_gain_3db_ms": 112.5,
-      "attack_gain_6db_ms": 297.0,
+      "attack_gain_1db_ms": 31.5,
+      "attack_gain_3db_ms": 111.0,
+      "attack_gain_6db_ms": 294.5,
       "release_cv_63_s": NaN,
       "release_cv_90_s": NaN,
       "release_cv_90_estimate_s": 208.321,
@@ -4405,9 +4405,9 @@
       "published_attack_ms": 0.2,
       "published_release_s": 0.8,
       "published_release_for": "fixed",
-      "cv_end_v": -65.08,
+      "cv_end_v": -65.13,
       "cv_before_v": -5.66,
-      "cv_burst_v": -66.39
+      "cv_burst_v": -66.45
      }
     },
     "failed": [

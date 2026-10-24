@@ -202,7 +202,10 @@ def render(
             progress(1.0)
         return r
 
-    workdir = JOB_DIR / key
+    # Per process and thread: two threads rendering the identical job (same key)
+    # must not share a work or temporary directory (WinError 32, found 2026-10-23).
+    unique = f"{key}.{os.getpid()}.{threading.get_ident()}"
+    workdir = JOB_DIR / unique
     if workdir.exists():
         shutil.rmtree(workdir)
     workdir.mkdir(parents=True)
@@ -241,7 +244,7 @@ def render(
         "key_parts": parts,
         "cached": False,
     }
-    tmp = path.with_name(path.name + ".tmp")
+    tmp = path.with_name(unique + ".tmp")
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
@@ -253,9 +256,19 @@ def render(
     write_audio(tmp / "out.wav", out, s.sample_rate)
     np.savez_compressed(tmp / "vectors.npz", **{k: v.astype("<f4") for k, v in vectors.items()})
     (tmp / "meta.json").write_text(json.dumps(meta, indent=1, default=str), encoding="utf-8")
-    if path.exists():
-        shutil.rmtree(path)
-    _replace_dir(tmp, path)
+    if (path / "meta.json").exists():
+        # The identical job finished first on another thread: its entry holds the same
+        # result, so keep it (it may be being read) and drop ours.
+        shutil.rmtree(tmp, ignore_errors=True)
+    else:
+        if path.exists():
+            shutil.rmtree(path)
+        try:
+            _replace_dir(tmp, path)
+        except OSError:
+            if not (path / "meta.json").exists():
+                raise
+            shutil.rmtree(tmp, ignore_errors=True)  # lost the race to the identical job
     _log_timing(meta)
     return Render(key, path, out, vectors, meta, cached=False)
 

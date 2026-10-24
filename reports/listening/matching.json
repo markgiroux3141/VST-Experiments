@@ -1,10 +1,10 @@
 {
- "code": "0.1.0+22f96f969280+cfg4f4d68be40",
+ "code": "0.1.0+429a4862465e+cfg3a527288a5",
  "summary": {
   "stimuli": 12,
   "solved": 12,
   "unreachable": [],
-  "worst_gr_error_db": 0.066,
+  "worst_gr_error_db": 0.064,
   "gr_tolerance_db": 0.1,
   "pairs": 12,
   "worst_lufs_diff": 0.0,
@@ -18,16 +18,16 @@
    "clip": "Arpeggio04b_120_m_D#_16b.WAV",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.5267,
-   "gr_db": 2.978,
-   "gr_error_db": -0.022
+   "ac_threshold": 0.5259,
+   "gr_db": 2.971,
+   "gr_error_db": -0.029
   },
   {
    "candidate": "nominal",
    "clip": "Arpeggio04b_120_m_D#_16b.WAV",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.755,
+   "ac_threshold": 0.7536,
    "gr_db": 6.037,
    "gr_error_db": 0.037
   },
@@ -36,7 +36,7 @@
    "clip": "Dry Guitar.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.6271,
+   "ac_threshold": 0.6257,
    "gr_db": 2.941,
    "gr_error_db": -0.059
   },
@@ -45,34 +45,34 @@
    "clip": "Dry Guitar.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.89,
-   "gr_db": 6.02,
-   "gr_error_db": 0.02
+   "ac_threshold": 0.8866,
+   "gr_db": 6.021,
+   "gr_error_db": 0.021
   },
   {
    "candidate": "t101_permalloy",
    "clip": "Arpeggio04b_120_m_D#_16b.WAV",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.5249,
-   "gr_db": 2.965,
-   "gr_error_db": -0.035
+   "ac_threshold": 0.5247,
+   "gr_db": 2.963,
+   "gr_error_db": -0.037
   },
   {
    "candidate": "t101_permalloy",
    "clip": "Arpeggio04b_120_m_D#_16b.WAV",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.7529,
-   "gr_db": 6.037,
-   "gr_error_db": 0.037
+   "ac_threshold": 0.7525,
+   "gr_db": 6.038,
+   "gr_error_db": 0.038
   },
   {
    "candidate": "t101_permalloy",
    "clip": "Dry Guitar.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.6289,
+   "ac_threshold": 0.6285,
    "gr_db": 2.944,
    "gr_error_db": -0.056
   },
@@ -81,18 +81,18 @@
    "clip": "Dry Guitar.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.8927,
-   "gr_db": 6.021,
-   "gr_error_db": 0.021
+   "ac_threshold": 0.8915,
+   "gr_db": 6.02,
+   "gr_error_db": 0.02
   },
   {
    "candidate": "built_seed1",
    "clip": "Arpeggio04b_120_m_D#_16b.WAV",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.507,
-   "gr_db": 3.037,
-   "gr_error_db": 0.037
+   "ac_threshold": 0.5061,
+   "gr_db": 3.027,
+   "gr_error_db": 0.027
   },
   {
    "candidate": "built_seed1",
@@ -100,26 +100,26 @@
    "gr_target_db": 6.0,
    "solved": true,
    "ac_threshold": 0.7,
-   "gr_db": 6.027,
-   "gr_error_db": 0.027
+   "gr_db": 6.04,
+   "gr_error_db": 0.04
   },
   {
    "candidate": "built_seed1",
    "clip": "Dry Guitar.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.5955,
-   "gr_db": 3.066,
-   "gr_error_db": 0.066
+   "ac_threshold": 0.5941,
+   "gr_db": 3.064,
+   "gr_error_db": 0.064
   },
   {
    "candidate": "built_seed1",
    "clip": "Dry Guitar.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.8195,
-   "gr_db": 6.025,
-   "gr_error_db": 0.025
+   "ac_threshold": 0.8168,
+   "gr_db": 6.026,
+   "gr_error_db": 0.026
   }
  ],
  "pairs": [
@@ -131,8 +131,8 @@
     "t101_permalloy"
    ],
    "lufs_before": [
-    -22.262,
-    -22.25
+    -22.23,
+    -22.248
    ],
    "lufs_after": [
     -23.0,
@@ -148,8 +148,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -22.262,
-    -22.311
+    -22.23,
+    -22.276
    ],
    "lufs_after": [
     -23.0,
@@ -165,8 +165,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -22.25,
-    -22.311
+    -22.248,
+    -22.276
    ],
    "lufs_after": [
     -23.0,
@@ -182,8 +182,8 @@
     "t101_permalloy"
    ],
    "lufs_before": [
-    -25.41,
-    -25.415
+    -25.384,
+    -25.414
    ],
    "lufs_after": [
     -23.0,
@@ -199,8 +199,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -25.41,
-    -25.388
+    -25.384,
+    -25.375
    ],
    "lufs_after": [
     -23.0,
@@ -216,8 +216,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -25.415,
-    -25.388
+    -25.414,
+    -25.375
    ],
    "lufs_after": [
     -23.0,
@@ -233,8 +233,8 @@
     "t101_permalloy"
    ],
    "lufs_before": [
-    -23.791,
-    -23.812
+    -23.744,
+    -23.809
    ],
    "lufs_after": [
     -23.0,
@@ -250,8 +250,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -23.791,
-    -23.902
+    -23.744,
+    -23.853
    ],
    "lufs_after": [
     -23.0,
@@ -267,8 +267,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -23.812,
-    -23.902
+    -23.809,
+    -23.853
    ],
    "lufs_after": [
     -23.0,
@@ -284,8 +284,8 @@
     "t101_permalloy"
    ],
    "lufs_before": [
-    -26.995,
-    -27.011
+    -26.947,
+    -27.007
    ],
    "lufs_after": [
     -23.0,
@@ -301,8 +301,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -26.995,
-    -26.975
+    -26.947,
+    -26.929
    ],
    "lufs_after": [
     -23.0,
@@ -318,8 +318,8 @@
     "built_seed1"
    ],
    "lufs_before": [
-    -27.011,
-    -26.975
+    -27.007,
+    -26.929
    ],
    "lufs_after": [
     -23.0,

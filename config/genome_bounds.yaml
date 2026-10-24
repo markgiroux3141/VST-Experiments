@@ -54,7 +54,7 @@ transformers:
     core_area_m2:           {min: 0.5e-4, max: 2.0e-4, unit: m2, source: "provisional: model knowledge (line input transformer cores; the replacement's can is 45 x 72 x 63 mm)"}
     core_path_m:            {min: 0.05, max: 0.10, unit: m, source: "provisional: model knowledge (E-I cores of that size)"}
     air_gap_m:              {min: 2.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints of a stacked core: a few to tens of micrometres)"}
-    turns:                  {min: 800, max: 2600, unit: turns, source: "provisional: model knowledge (nominal 1320 derived from the former 10 H primary with mumetall; the range spans 5-30 H at nominal geometry)", notes: "series primary"}
+    turns:                  {min: 800, max: 2600, unit: turns, source: "provisional: model knowledge (nominal 1320 derived from the former 10 H primary with mumetall at an origin permeability of 5,850; since the 2026-10-24 refit 17.7 H in the linear limit, the range spanning 6.5-69 H at nominal geometry)", notes: "series primary"}
     turns_ratio:            {min: 4.0, max: 5.0, unit: ratio, source: "web: https://www.don-audio.com/Sowter-8346E-Fairchild-Signal-amp-input-transformer-T101-201 (replacement 1+1:9+9 -> 4.5); +-11% is provisional", notes: "each secondary half / series primary"}
     leakage_h:              {min: 0.5e-3, max: 20.0e-3, unit: H, source: "provisional: model knowledge (0.005-0.2% of the primary inductance; the nominal 2.5 mH meets the published +-1 dB to 15 kHz, see the circuit file)", notes: "referred to the primary. Above ~5 mH the secondary resonance peaks in the audio band"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
@@ -76,7 +76,7 @@ transformers:
     core_area_m2:           {min: 0.2e-4, max: 1.0e-4, unit: m2, source: "provisional: model knowledge (small signal transformer cores)"}
     core_path_m:            {min: 0.03, max: 0.08, unit: m, source: "provisional: model knowledge"}
     air_gap_m:              {min: 2.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints)"}
-    turns:                  {min: 700, max: 2400, unit: turns, source: "provisional: model knowledge (nominal 1215 derived from the former 5 H primary with mumetall)", notes: "primary"}
+    turns:                  {min: 700, max: 2400, unit: turns, source: "provisional: model knowledge (nominal 1215 derived from the former 5 H primary with mumetall at an origin permeability of 5,850; 7.9 H in the linear limit since the 2026-10-24 refit)", notes: "primary"}
     turns_ratio:            {min: 7.5, max: 9.5, unit: ratio, source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html (replacement 8345E 600/170k, 17+17:1+1 -> 8.5); +-12% is provisional", notes: "each secondary half / series primary; sets the AC threshold range"}
     leakage_h:              {min: 2.0e-3, max: 30.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999; the nominal 5 mH keeps the 8.5 ratio flat to 20 kHz, see the circuit file)", notes: "referred to the primary. Above ~8 mH the sidechain loses HF in band (10 mH: -2 dB at 15 kHz)"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}

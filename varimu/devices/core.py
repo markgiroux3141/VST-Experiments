@@ -35,8 +35,9 @@ device. `accept` moves the state on. The integral runs in RK4 substeps:
 at most DB_MAX of B, at most DH_REL (a + |H|) of H at the starting slope
 (RK4 stays stable where the path is stiff, deep in saturation of a
 high-permeability material), and halved until the slopes at its start and
-end agree within SLOPE_TOL (curvature: mumetall's Rayleigh region from the
-demagnetized state is a fraction of a microtesla wide); a substep after an
+end agree within SLOPE_TOL (curvature: an almost all irreversible material's
+initial curve, e.g. mumetall's 2026-10-21 fit, bends within a fraction of a
+microtesla of the demagnetized state); a substep after an
 accepted one may be twice as long. The right-hand side is continuous (the
 irreversible term vanishes where its gate switches), so the halving
 converges. The state integrates H, not M: at high permeability H is the

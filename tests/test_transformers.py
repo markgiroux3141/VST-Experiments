@@ -5,13 +5,18 @@ visible hysteresis loop.
 Each of T101-T104 is the slice's own transformer (Jiles-Atherton core) between
 the slice's source and load impedances, the tubes as resistances
 (varimu.measure.transformers; scripts/transformer_report.py plots the same
-figures to reports/transformers/). Measured 2026-10-21 (re 1 kHz, 40 Hz /
-15 kHz; 30 Hz THD at 0.5 / ~1.05 of mu0 Ms):
+figures to reports/transformers/). Measured 2026-10-24, after mumetall's
+Rayleigh refit (re 1 kHz, 40 Hz / 15 kHz; 30 Hz THD at 0.5 of mu0 Ms / at
+the top drive, 0.87-1.0 of it):
 
-    T101 input (mumetall)          -0.29 / +0.60 dB   0.09% / 15.9%
+    T101 input (mumetall)          -0.02 / +0.56 dB   0.08% / 12.0%
     T102 output (GO steel)         -0.33 / -0.32 dB   0.33% / 11.5%
-    T103 sidechain in (mumetall)   -0.20 / +0.08 dB   0.10% / 13.6%   (2026-10-23: ratio 8.5)
+    T103 sidechain in (mumetall)   -0.04 / +0.06 dB   0.09% / 11.9%
     T104 sidechain out (GO steel)  -6.64 / -0.04 dB   2.07% / 17.0%
+
+Before the refit (2026-10-21 / -23): T101 -0.29 / +0.60 dB, 0.09% / 15.9%;
+T103 -0.20 / +0.08 dB, 0.10% / 13.6% (the old fit's low permeability at
+small drive cost bass).
 
 "Plausible" here is the 670's published response, 40 Hz - 15 kHz +-1 dB
 (reissue / dealer specs, see config/circuits/fairchild_670.yaml), for the
@@ -48,8 +53,10 @@ def test_frequency_response_is_plausible(measured):
     f, g = np.array(s["freqs_hz"]), np.array(s["gain_db"])
     band = (f >= lo) & (f <= hi)
     assert np.max(np.abs(g[band])) <= tol, dict(zip(f[band], g[band], strict=True))
-    # A transformer: it rolls off at the low end (magnetizing inductance).
-    assert g[f == 10][0] < g[f == 100][0] - 0.3
+    # A transformer: it rolls off at the low end (magnetizing inductance). Since
+    # mumetall's Rayleigh refit, T101 and T103 are nearly flat to 10 Hz (-0.23 dB
+    # there): check at the bottom of the sweep.
+    assert g[0] < g[f == 100][0] - 0.3, (f[0], g[0])
 
 
 def test_low_frequency_saturation_rises_with_level(measured):

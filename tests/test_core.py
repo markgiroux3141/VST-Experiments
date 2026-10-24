@@ -65,8 +65,9 @@ def test_inverse_map_agrees_with_the_forward_model(core):
     h_inv = np.array(core.trace(MU0 * (h_of_t(t) + m)))
     err = np.max(np.abs(h_inv - h_of_t(t))) / h_pk
     print(f"{core.name}: max H error {err:.1e} of the peak")
-    # Measured 2026-10-21: 2e-9 .. 5e-8; mumetall 4e-6 (its H is ~1e-5 of B / mu0, so
-    # the forward solve's tolerance on M shows).
+    # Measured 2026-10-21: 2e-9 .. 5e-8; mumetall 4e-6 with its 2026-10-21 fit (its H
+    # was ~1e-5 of B / mu0, so the forward solve's tolerance on M showed), 1e-7 since
+    # the Rayleigh refit (2026-10-24).
     assert err < 2e-5
 
 
@@ -90,7 +91,7 @@ def test_loops_have_width_and_saturate(core):
     for x in b[: np.argmax(b) + 1]:
         state = core.advance(float(x), state)
     _, dh = core.h_of_b(state.b + 1e-4, state)
-    # (mumetall: 85 at 0.99 Ms, against 250000 at its maximum)
+    # (mumetall: 22 at 0.99 Ms, against 250000 at its maximum; measured 2026-10-24)
     assert 1 / (MU0 * dh) < 200, (core.name, 1 / (MU0 * dh))
 
 
@@ -98,7 +99,7 @@ def test_loops_have_width_and_saturate(core):
 def test_the_map_is_rate_independent(core):
     """A B path (30 Hz into saturation, sampled at 192 kHz as a transient at 2x sees
     it) taken in the map's steps, and the same path cut into 50x finer pieces: H
-    agrees within 3e-6 of its peak-to-peak (measured 2026-10-21: 1e-6 for mumetall).
+    agrees within 3e-6 of its peak-to-peak (measured 2026-10-24: 9e-7 for mumetall).
     (A sine sampled 50x denser is another path: it reaches higher at every peak, by
     ~1e-8 T, and on mumetall's sharp knee that moves H by 2.4e-4 of its peak-to-peak:
     the material's sensitivity, not the map's error.)"""
@@ -114,7 +115,8 @@ def test_the_map_is_rate_independent(core):
 
 @pytest.mark.parametrize("core", cores(), ids=lambda c: c.name)
 def test_linear_limit_is_the_small_signal_slope(core):
-    # 10 pT: mumetall's Rayleigh region (the irreversible term) starts below 1 uT.
+    # 10 pT: well inside every material's linear region (mumetall's Rayleigh term
+    # moves its permeability 0.2% by 100 uT, 2026-10-24).
     i, g = core.port_current(1e-8, DEMAGNETIZED)
     assert math.isclose(g, core.linear_conductance(), rel_tol=1e-4)
     assert math.isclose(i, core.linear_conductance() * 1e-8, rel_tol=1e-4)

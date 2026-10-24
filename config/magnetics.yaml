@@ -33,11 +33,11 @@ materials:
     # JA parameters fitted to the datasheet figures below by
     # scripts/fit_core_material.py (tests/test_core.py checks they still meet them).
     ms_a_per_m: 6.366e+5
-    a_a_per_m: 0.661602
-    k_a_per_m: 1.58936
-    c: 0.000765012
-    alpha: 4.93314e-6
-    source: "fit (2026-10-21; mu4 -0.0%, mu_max -0.2%, Hc +1.3%, hysteresis loss at 0.5 T -1.5%): scripts/fit_core_material.py to the MUMETALL datasheet (web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf, Lamineries Matthey / Vacuumschmelze: ~76% Ni, 5% Mo, 5% Cu); Ms from its saturation polarization 0.8 T"
+    a_a_per_m: 3.18548
+    k_a_per_m: 1.66935
+    c: 0.289433
+    alpha: 1.76945e-5
+    source: "fit (2026-10-24; mu4 +0.5%, mu_max -0.3%, Hc +2.3%, hysteresis loss at 0.5 T -2.2%, Rayleigh-region mu at 0.04 A/m -0.5%; origin permeability ~29,300): scripts/fit_core_material.py to the MUMETALL datasheet figures and its Rayleigh region (the datasheet block). Replaces the 2026-10-21 fit to the four scalars alone (c 0.00077: almost all irreversible, H ~ sqrt(B) at program levels, origin permeability 246; Phase 2's 'Low-level core physics', Option 1). Datasheet (web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf, Lamineries Matthey / Vacuumschmelze: ~76% Ni, 5% Mo, 5% Cu); Ms from its saturation polarization 0.8 T"
     datasheet:
       mu_initial: 60000.0       # mu4, relative permeability at 0.4 A/m (static, 1.00 mm)
       h_initial_a_per_m: 0.4
@@ -48,7 +48,11 @@ materials:
       b_loss_t: 0.5
       strip_m: 0.20e-3
       density_kg_per_m3: 8700.0
-      source: "web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf (magnetic and physical properties tables)"
+      # Rayleigh region below h_initial: mu(H) = mu_i (1 + r H); the fit meets
+      # mu4 (1 + r h_rayleigh) / (1 + r 0.4) at h_rayleigh.
+      rayleigh_r_per_a_m: 2.8
+      h_rayleigh_a_per_m: 0.04
+      source: "web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf (magnetic and physical properties tables); the Rayleigh r from the same sheet's VAC graph of amplitude permeability, final-annealed (data/datasheets/matthey_mumetall_mu_a.csv, digitized: mu_a ~ 42,000 (1 + 2.8 H) over 0.1-0.6 A/m), cross-checked by a DC ring of 1J85 permalloy (web: https://pmc.ncbi.nlm.nih.gov/articles/PMC9608087: mu_i 72,100, r = 3.3 per A/m); h_rayleigh 0.04 A/m: a tenth of mu4's field, the law extrapolated below the graph's 0.1 A/m (the plan's Phase 2, Option 1)"
     lamination_m: 0.1e-3
     lamination_source: "provisional: model knowledge (nickel-alloy audio transformer laminations 0.1-0.35 mm)"
     resistivity_ohm_m: 5.5e-7

@@ -118,6 +118,43 @@ def test_render_reports_progress_and_caches(tmp_path, monkeypatch):
     np.testing.assert_allclose(again.output, r.output, rtol=1e-6, atol=1e-7)  # stored as f4
 
 
+def test_the_identical_job_on_two_threads_at_once(tmp_path, monkeypatch):
+    """Two threads rendering the same job (same cache key) at the same time: each
+    writes its own temporary directory (they once shared `<key>.tmp`: WinError 32),
+    both get the result, one cache entry is left and no temporary ones."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    import threading
+
+    import numpy as np
+
+    from varimu.sim import runner
+
+    monkeypatch.setattr(runner, "RENDER_DIR", tmp_path / "renders")
+    monkeypatch.setattr(runner, "JOB_DIR", tmp_path / "jobs")
+    x = 0.3 * np.sin(2 * np.pi * 1000 * np.arange(1000) / 96000)
+    gate = threading.Barrier(2)
+    got, errors = [], []
+
+    def one():
+        gate.wait()
+        try:
+            got.append(runner.render(runner.RenderJob(x)))
+        except Exception as e:  # noqa: BLE001 (reported below)
+            errors.append(e)
+
+    threads = [threading.Thread(target=one) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors and len(got) == 2 and got[0].key == got[1].key
+    np.testing.assert_array_equal(got[0].output, got[1].output)
+    left = sorted(p.name for p in (tmp_path / "renders").iterdir() if p.is_dir())
+    assert left == [got[0].key]
+    assert not list((tmp_path / "jobs").iterdir())
+    assert runner.render(runner.RenderJob(x)).cached
+
+
 def test_thread_priority_is_lowered_and_restored():
     import sys
 

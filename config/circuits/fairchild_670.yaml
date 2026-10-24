@@ -74,14 +74,16 @@ values:
   # This replaces the slice's lumped loss resistors (t10x_rloss) and the one
   # coupling coefficient (transformer_k): the eddy loss now damps the
   # windings' ultrasonic resonances. "Small-signal" is the core's linear
-  # limit (its susceptibility at the demagnetized origin). Mumetall's is far
-  # below its incremental permeability at audio levels (its fit is almost all
-  # irreversible: 5,850 at the origin, 60,000 at 0.4 A/m), so with the gap
-  # T101's and T103's inductance at program levels is up to ~2x the derived
-  # value; the slice compresses bass-rich program material up to ~2 dB
-  # differently with the Jiles-Atherton cores than with their linear limit
-  # (median 0.6 dB per 50 ms window on the arpeggio clip, 2026-10-21), while
-  # the 1 kHz curve agrees within 0.06 dB.
+  # limit (its susceptibility at the demagnetized origin). The turns are kept
+  # as derived (the physical quantity); the inductances follow the material.
+  # T101's and T103's were derived for a mumetall origin permeability of
+  # 5,850 (an earlier fit); since the Rayleigh refit (2026-10-24, the plan's
+  # Phase 2 "Low-level core physics", Option 1) it is ~29,300, and their
+  # linear-limit primaries are 17.7 H (T101) and 7.9 H (T103), computed from
+  # the build's own core and gap reluctances: the joint gap is 81% / 85% of
+  # the reluctance, so the inductance hardly moves with the material at low
+  # level. (The 2026-10-21 fit's origin permeability was 246: 0.75 H / 0.44 H.)
+  # T102 and T104 (grain-oriented steel) are 1.48 H (secondary) and 10.0 H.
   #
   # Saturation check (scratch calculation, 2026-10-21): T102's secondary
   # reaches 1 T at +21.9 dBu and saturation (~1.9 T) at +27.5 dBu, 30 Hz;
@@ -100,7 +102,7 @@ values:
   t101_core_area_m2: {value: 1.0e-4, genome: transformers.input.core_area_m2, source: "provisional: model knowledge (line input transformer core, ~1 cm^2; the replacement's can is 45 x 72 x 63 mm, same page)"}
   t101_core_path_m: {value: 0.07, genome: transformers.input.core_path_m, source: "provisional: model knowledge (E-I core of that size)"}
   t101_gap_m: {value: 10.0e-6, genome: transformers.input.air_gap_m, source: "provisional: model knowledge (butt joints of a stacked, ungapped core; no DC in T101)"}
-  t101_turns: {value: 1320, genome: transformers.input.turns, source: "provisional: derived (gives the former 10 H primary at nominal geometry and gap, see the transformer notes above)", notes: "series primary (the reference winding)"}
+  t101_turns: {value: 1320, genome: transformers.input.turns, source: "provisional: derived (gave the former 10 H primary at nominal geometry and gap with mumetall's origin permeability then, 5,850; 17.7 H in the linear limit since the 2026-10-24 refit, see the transformer notes above)", notes: "series primary (the reference winding)"}
   t101_leakage_h: {value: 2.5e-3, genome: transformers.input.leakage_h, source: "provisional: chosen so the slice meets the published 40 Hz - 15 kHz +-1 dB (web: https://www.telefunken-elektroakustik.com/product/fairchild-670, reissue/dealer specs): measured 2026-10-21 with ngspice .ac on the linear-core build, -0.4 dB at 40 Hz, +0.2 dB at 15 kHz, the T101 secondary resonance at 35.5 kHz (+1.4 dB). The slice's former k = 0.999 (20 mH) gave +15 dB at 17.8 kHz once the lumped loss resistors were gone", notes: "referred to the primary (0.2 H referred to the 50k secondary)"}
   t101_c_interwinding_f: {value: 0.0, genome: transformers.input.interwinding_capacitance_f, source: "provisional: nominal 0 = electrostatically screened (unknown for the original; unscreened line transformers have tens of pF)", notes: "half from each grid end of the secondary to the primary hot end (balanced). 20 pF here plus 50 pF on T102 made the 6386 stage oscillate at ~31 kHz at idle (tuned-plate tuned-grid; measured 2026-10-21): the plausibility checks (Phase 4) must catch such units"}
 
@@ -133,7 +135,7 @@ values:
   t103_core_area_m2: {value: 0.5e-4, genome: transformers.sidechain_input.core_area_m2, source: "provisional: model knowledge (small signal transformer core)"}
   t103_core_path_m: {value: 0.05, genome: transformers.sidechain_input.core_path_m, source: "provisional: model knowledge"}
   t103_gap_m: {value: 10.0e-6, genome: transformers.sidechain_input.air_gap_m, source: "provisional: model knowledge (butt joints; no DC)"}
-  t103_turns: {value: 1215, genome: transformers.sidechain_input.turns, source: "provisional: derived (gives the former 5 H primary at nominal geometry and gap)", notes: "series primary (the reference winding); each secondary half has t103_turns_half times as many (10,330 at 8.5). The primary inductance doesn't depend on the ratio, so the ratio change (2026-10-23) left this value"}
+  t103_turns: {value: 1215, genome: transformers.sidechain_input.turns, source: "provisional: derived (gave the former 5 H primary at nominal geometry and gap with mumetall's origin permeability then, 5,850; 7.9 H in the linear limit since the 2026-10-24 refit, see the transformer notes above)", notes: "series primary (the reference winding); each secondary half has t103_turns_half times as many (10,330 at 8.5). The primary inductance doesn't depend on the ratio, so the ratio change (2026-10-23) left this value"}
   t103_leakage_h: {value: 5.0e-3, genome: transformers.sidechain_input.leakage_h, source: "provisional: chosen so T103 standalone (its pads in front, the threshold pots' load behind) is within 0.5 dB from 40 Hz to 20 kHz, the era's rating for line-to-grid transformers (web: https://www.worldradiohistory.com/Archive-Electronics/40s/Electronics-1949-07.pdf, UTC's advertisement: +-1 dB 20-20,000 cycles; the replacement's response isn't published). Measured 2026-10-23: -0.20 / +0.08 / -0.45 dB at 40 Hz / 15 / 20 kHz. The former 10 mH (k = 0.999) gave -2.1 dB at 15 kHz once the ratio became 8.5 (it is 72x that referred to a secondary half)", notes: "referred to the primary"}
 
   # --- AC threshold and 12AX7 (V105) ----------------------------------------------
