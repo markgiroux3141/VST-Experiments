@@ -72,11 +72,14 @@ def _excerpt(name: str) -> tuple[np.ndarray, dict]:
 # grid current in the 6973s; 2026-10-21), vs converged: -83.0 / 0.003, -87.5 / 0.001,
 # -73.4 / 0.090, -67.4 / 0.033. CCIF's CV difference is at its attack onset (the CV
 # drops ~75 V in ~2 ms); the rails agree to mV.
+# 2026-10-23 (T103 at 8.5, the tapped AC THRESHOLD pots, the factory-adjusted DC
+# threshold): vs converged -81.2 / 0.005, -85.8 / 0.002, -72.2 / 0.012, -74.3 / 0.013;
+# vs ngspice -64.0 / 0.007, -60.4 / 0.014.
 EXCERPTS = {
-    "burst_1000hz_0dbfs": (-79.0, 0.01, True),
-    "ess_0dbfs": (-83.0, 0.005, True),
-    "ccif_-10dbfs": (-69.0, 0.13, False),
-    "multitone_-10dbfs": (-64.0, 0.05, False),
+    "burst_1000hz_0dbfs": (-78.0, 0.01, True),
+    "ess_0dbfs": (-82.0, 0.005, True),
+    "ccif_-10dbfs": (-69.0, 0.03, False),
+    "multitone_-10dbfs": (-71.0, 0.03, False),
 }
 
 

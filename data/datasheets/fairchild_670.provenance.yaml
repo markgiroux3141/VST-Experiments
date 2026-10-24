@@ -1,0 +1,25 @@
+device: "Fairchild 670"
+document: "Fairchild 670 stereo limiting amplifier, instructions and schematics"
+publisher: Fairchild Recording Equipment Corp.
+date: 1959-12
+local_copy: null  # 24 MB of scans, not committed (data/schematics/fairchild_670/README.md)
+local_copy_sha256: 0ede9ed8d1294ada7b3e05a6f8ef89e7487a7530a2c7a36481c5c297bac7c535
+scan_source: "web: http://thehistoryofrecording.com/Manuals/Fairchild/Fairchild_670_stereo_limiting_amplifier_instructions_Schematics.pdf"
+digitized_with: "PDF p.13 rendered at 200 dpi (pdftoppm); the eight vertical and six horizontal 5 dB grid lines located from pixel profiles; grid lines masked and curve 3 traced along pixel columns with a slope predictor; where the trace locked onto a grid line (+6.6 to +11 dBm in) the curve's own pixel runs were read column by column; the trace checked by overlaying it on the scan (scratch scripts not kept)"
+digitized_by: Claude Code
+digitized_on: 2026-10-23
+files:
+  fairchild_670_io_curve3.csv:
+    figure: "PDF p.13: 'INPUT VS. OUTPUT CURVES', curve 3, 'Factory-adjusted condition'"
+    columns: "in_dbm, out_dbm"
+    curves: "curve 3 from +2 dBm in, where it leaves curve 1 (straight amplifier, unity gain), to +25 dBm in"
+axis_calibration: "the labelled 5 dB grid lines: x -10..+25 dBm at 188.4 px per 5 dB, y -5..+20 dBm at 193.4 px per 5 dB (200 dpi)"
+estimated_error: "+-0.15 dB on out_dbm (line width 3 px = 0.08 dB; the scan's own registration unknown)"
+notes: >-
+  Curve 1 ('straight amplifier, AC THRESHOLD fully CCW') has unity gain within about
+  0.3 dB over the plot; the unit is set up that way first (manual p.8, threshold
+  adjustments, step 1). Read off curve 3: 3 dB of limiting at +6.7 dBm in (+3.7 out),
+  10 dB at +15.4 in (+5.4 out). The specifications (p.4) give the knee as 'predetermined
+  level factory-adjusted to +2 dbm'. Frequency and Time Constant position aren't stated.
+  Page 10 of the same PDF has IM distortion (60 Hz + 7 kHz, 4:1) vs dB limiting at
+  seven output levels, not digitized yet.

@@ -10,7 +10,7 @@ figures to reports/transformers/). Measured 2026-10-21 (re 1 kHz, 40 Hz /
 
     T101 input (mumetall)          -0.29 / +0.60 dB   0.09% / 15.9%
     T102 output (GO steel)         -0.33 / -0.32 dB   0.33% / 11.5%
-    T103 sidechain in (mumetall)   -0.26 / +1.02 dB   0.14% / 14.0%
+    T103 sidechain in (mumetall)   -0.20 / +0.08 dB   0.10% / 13.6%   (2026-10-23: ratio 8.5)
     T104 sidechain out (GO steel)  -6.64 / -0.04 dB   2.07% / 17.0%
 
 "Plausible" here is the 670's published response, 40 Hz - 15 kHz +-1 dB

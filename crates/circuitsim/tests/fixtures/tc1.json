@@ -54,6 +54,10 @@
   {
    "kind": "voltage",
    "node": "nb4"
+  },
+  {
+   "kind": "voltage",
+   "node": "in_s"
   }
  ],
  "models": [
@@ -1587,14 +1591,14 @@
      "name": "R217a",
      "a": "0",
      "b": "dw2",
-     "r_ohm": 0.001
+     "r_ohm": 25300.0
     },
     {
      "kind": "resistor",
      "name": "R217b",
      "a": "dw2",
      "b": "k1c2",
-     "r_ohm": 100000.0
+     "r_ohm": 74700.0
     },
     {
      "kind": "resistor",
@@ -1676,21 +1680,21 @@
      "name": "RAT1011",
      "a": "in_s",
      "b": "AT101_m",
-     "r_ohm": 311.6963119775494
+     "r_ohm": 336.1555247917901
     },
     {
      "kind": "resistor",
      "name": "RAT1012",
      "a": "AT101_m",
      "b": "pri",
-     "r_ohm": 311.6963119775494
+     "r_ohm": 336.1555247917901
     },
     {
      "kind": "resistor",
      "name": "RAT1013",
      "a": "AT101_m",
      "b": "0",
-     "r_ohm": 421.6370213557838
+     "r_ohm": 367.3886712183952
     },
     {
      "kind": "resistor",
@@ -2090,7 +2094,7 @@
      "name": "LT103_p_lk",
      "a": "s1",
      "b": "T103_p_l",
-     "l_h": 0.005
+     "l_h": 0.0025
     },
     {
      "kind": "winding",
@@ -2106,7 +2110,7 @@
      "name": "LT103_sa_lk",
      "a": "t5",
      "b": "T103_sa_l",
-     "l_h": 0.045
+     "l_h": 0.180625
     },
     {
      "kind": "winding",
@@ -2114,7 +2118,7 @@
      "a": "T103_sa_l",
      "b": "0",
      "core": "t103_core",
-     "turns": 3645.0,
+     "turns": 10327.5,
      "area_m2": 5e-05
     },
     {
@@ -2129,7 +2133,7 @@
      "name": "LT103_sb_lk",
      "a": "0",
      "b": "T103_sb_l",
-     "l_h": 0.045
+     "l_h": 0.180625
     },
     {
      "kind": "winding",
@@ -2137,7 +2141,7 @@
      "a": "T103_sb_l",
      "b": "t8",
      "core": "t103_core",
-     "turns": 3645.0,
+     "turns": 10327.5,
      "area_m2": 5e-05
     },
     {
@@ -2173,30 +2177,44 @@
     {
      "kind": "resistor",
      "name": "R115Aa",
-     "a": "t5",
-     "b": "w1a",
-     "r_ohm": 50000.0
-    },
-    {
-     "kind": "resistor",
-     "name": "R115Ab",
-     "a": "w1a",
+     "a": "0",
      "b": "x1a",
      "r_ohm": 50000.0
     },
     {
      "kind": "resistor",
+     "name": "R115Ab",
+     "a": "x1a",
+     "b": "w1a",
+     "r_ohm": 20899.999999999996
+    },
+    {
+     "kind": "resistor",
+     "name": "R115Ac",
+     "a": "w1a",
+     "b": "t5",
+     "r_ohm": 29100.000000000004
+    },
+    {
+     "kind": "resistor",
      "name": "R115Ba",
-     "a": "t8",
-     "b": "w1b",
-     "r_ohm": 90000.0
+     "a": "0",
+     "b": "x1b",
+     "r_ohm": 50000.0
     },
     {
      "kind": "resistor",
      "name": "R115Bb",
+     "a": "x1b",
+     "b": "w1b",
+     "r_ohm": 20899.999999999996
+    },
+    {
+     "kind": "resistor",
+     "name": "R115Bc",
      "a": "w1b",
-     "b": "x1b",
-     "r_ohm": 90000.0
+     "b": "t8",
+     "r_ohm": 29100.000000000004
     },
     {
      "kind": "resistor",
@@ -2277,14 +2295,14 @@
      "name": "R117a",
      "a": "0",
      "b": "dw",
-     "r_ohm": 0.001
+     "r_ohm": 25300.0
     },
     {
      "kind": "resistor",
      "name": "R117b",
      "a": "dw",
      "b": "k1",
-     "r_ohm": 100000.0
+     "r_ohm": 74700.0
     },
     {
      "kind": "capacitor",

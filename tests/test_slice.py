@@ -15,7 +15,7 @@ from varimu.sim import fast, ngspice
 from varimu.sim.io import TransientSettings, run_transient
 
 # Most sensitive front panel so a short signal shows strong compression.
-HOT = {"input_atten_db": 0.0, "ac_threshold": 1.0, "time_constant": 1}
+HOT = {"input_atten_db": 0.0, "ac_threshold": 1.0, "dc_threshold": 0.0, "time_constant": 1}
 
 
 def _ngspice_available() -> bool:

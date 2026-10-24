@@ -9,12 +9,13 @@ emission / mu / grid contact; a choice's corners are its first and last option):
 - nominal; all at their minimum; all at their maximum;
 - each parameter alone at its minimum and at its maximum (the rest nominal);
 - `--random` corners: every parameter at its minimum or maximum, drawn from
-  default_rng([seed, i]), with part tolerances on (passive_spread 1, a seed each).
+  default_rng([seed, i, crc32(parameter)]), with part tolerances on
+  (passive_spread 1, a seed each from default_rng([seed, i])).
 
 Each runs set up as a technician would (varimu.sim.setup: B+ ADJ, BALANCE, ZERO);
 the all-min / all-max / random corners also run as built (the trims at their
 defaults). The signal: 0.1 s of silence, then 1 kHz at -30, -20, -10 and 0 dBFS
-(0.06 s each), at the hottest front panel (pad 0 dB, threshold 1, TC1). Recorded
+(0.06 s each), at the hottest front panel (pad 0 dB, AC threshold 1, DC threshold 0, TC1). Recorded
 per genome: whether it simulated, the gain reduction per step and whether it rises,
 the idle output (over the silence; oscillation shows there), the rails, and wall
 time. Results: reports/corners/summary.json and the table printed at the end.
@@ -26,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+import zlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
@@ -41,7 +43,7 @@ from varimu.sim.ngspice import SimulationFailed
 
 OUT = REPO_ROOT / "reports" / "corners"
 FS = 96000
-HOT = {"input_atten_db": 0.0, "ac_threshold": 1.0, "time_constant": 1}
+HOT = {"input_atten_db": 0.0, "ac_threshold": 1.0, "dc_threshold": 0.0, "time_constant": 1}
 SILENCE_S = 0.1
 # Idle is measured over this part of the silence: the decimation filter (linear phase)
 # rings ahead of the first step, so the window ends well before it.
@@ -78,8 +80,14 @@ def genomes(n_random: int, seed: int, quick: bool) -> list[tuple[str, dict, bool
         ("all-max", {k: _corner(b, True) for k, b in ranged.items()}, True),
     ]
     for i in range(2 if quick else n_random):
+        # One generator per parameter (CLAUDE.md, reproducibility): a parameter added
+        # to the genome doesn't move the others' corners. (Phase 3's sweep drew them
+        # in sequence; its random corners are recorded in reports/corners/summary.json.)
+        def high(k: str, i: int = i) -> bool:
+            return bool(np.random.default_rng([seed, i, zlib.crc32(k.encode())]).integers(2))
+
+        g = {k: _corner(b, high(k)) for k, b in ranged.items()}
         rng = np.random.default_rng([seed, i])
-        g = {k: _corner(b, bool(rng.integers(2))) for k, b in ranged.items()}
         g |= {"passive_spread": 1.0, "passive_seed": int(rng.integers(2**31))}
         out.append((f"random-{i}", g, True))
     if quick:

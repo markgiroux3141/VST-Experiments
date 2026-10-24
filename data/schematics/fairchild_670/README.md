@@ -107,7 +107,7 @@ https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html
 | T301 (0531) | 26.8 V tapped at 24 V; "26.8V should be used if the original Selenium bridge rectifier is used" (https://www.sowter.co.uk/specs/0531.htm) |
 | L301 (1172) | 10 H, 200 mA, 71 ohms |
 | L302 (1221) | 5 H at 200 mA, 85 ohms. A GroupDIY search snippet says Drip's bias choke is 1.5 H. 85 ohm doesn't give -6.2 V at C303 with the current above, so the original's resistance is a genome parameter |
-| T103 (8345E) | 600 ohms/170k ohms, ratio 17+17:1+1. This bears on the slice's provisional T103 ratio |
+| T103 (8345E) | 600 ohms/170k ohms, ratio 17+17:1+1, mumetal core. The circuit's T103 ratio since 2026-10-23 (8.5 per secondary half re the series primary; it was a provisional 3.0) |
 
 **Legible vs genome parameters.**
 
@@ -140,11 +140,17 @@ the 6386 heaters, T304), the pilot lamp, S302, F301.
 - How the dual-gang BALANCE pot's two wipers connect. Modeled as one pot with
   its wiper on the cathode return (now C303, not ground).
 - C114, the trimmer between the grid lines, has no printed value and is omitted.
-- The AC THRESHOLD pots (R115A/B) are tapped pots with R113/R114 "hanging off
-  the taps to ground" (web: https://groupdiy.com/threads/whats-this-symbol-in-the-fairchild-670-diagram.35361/,
-  Walrus, reading the original manual), not resistors in series below the
-  pots as the slice has them. The same thread says R115B's "180K" reads as
-  100K on some prints.
+- Resolved 2026-10-23: the AC THRESHOLD pots (R115A/B) are tapped pots with
+  R113/R114 "hanging off the taps to ground" (web:
+  https://groupdiy.com/threads/whats-this-symbol-in-the-fairchild-670-diagram.35361/,
+  Walrus, reading the original manual). `sidechain_1.png` agrees: each section
+  runs from its T103 end (pins 5, 8) to the centre line (T103's centre tap,
+  pins 6/7, grounded), its wiper goes to a 12AX7 grid, and R113/R114 leave
+  the track at a point of their own and return to the centre line. The
+  circuit now has that (`netlist._tapped_pot`). Still open, so genome
+  parameters: where the tap is (the thread guesses 50%) and whether R115B is
+  180K, as this scan prints, or 100K ("the 100k looks like 180k on some
+  prints"; the original manual reads "a dual 100k lin tapped pot").
 - A search snippet (2026-10-21) reports a builder's note that one resistor on
   the 240 V dividers "reads 27K where the redrawn schematic shows 100K",
   possibly R315. Unverified: the drawing's 27K is used. It sets the 6973

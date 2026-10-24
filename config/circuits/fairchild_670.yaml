@@ -20,14 +20,21 @@
 
 controls:
   # Front panel and screwdriver trims. Not physical uncertainties, so not genome.
+  # The defaults of input_atten_db, ac_threshold and dc_threshold are the factory
+  # adjustment: [MAN] p.8's threshold procedure run to the manual's curve 3
+  # ("Factory-adjusted condition", p.13; data/datasheets/fairchild_670_io_curve3.csv)
+  # on the nominal unit by varimu.sim.setup.threshold (2026-10-23): unity gain with
+  # AC THRESHOLD at 0 (pad 11 dB: +0.39 dB at -10 dBm, the nearest 1 dB step), then
+  # 3 dB of limiting at +3.66 dBm out and 10 dB at +5.41 dBm out. The unit's 1 kHz
+  # curve is then within 0.17 dB of curve 3 from +1 to +25 dBm in.
   input_atten_db:
-    {value: 10.0, min: 0.0, max: 30.0, unit: dB, source: "sch: AT101 600 ohm T attenuator; [MAN] p.5 1 dB/step, p.9 ~10 dB for unity gain. Range end (30 dB) is provisional: step count not legible"}
+    {value: 11.0, min: 0.0, max: 30.0, unit: dB, source: "sch: AT101 600 ohm T attenuator; [MAN] p.5 1 dB/step. Default: the factory adjustment's unity gain (above; [MAN] p.9 says ~10 dB). Range end (30 dB) is provisional: step count not legible"}
   ac_threshold:
-    {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: R115A 100k / R115B 180k LIN dual pot (front-panel knob)", notes: "1 = most signal to the sidechain = lowest threshold"}
+    {value: 0.709, min: 0.0, max: 1.0, unit: rotation, source: "sch: R115A / R115B dual tapped pot (front-panel knob; values below). Default: the factory adjustment (above)", notes: "the wipers' fraction of the track from the centre line: 0 = no signal to the sidechain (the manual's 'fully CCW', curve 1), 1 = the whole T103 secondary = lowest threshold"}
   time_constant:
     {value: 2, min: 1, max: 6, unit: position, source: "sch: S102 positions 1-6"}
   dc_threshold:
-    {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "sch: R117 100k (screwdriver beneath front panel)", notes: "0 = 12AX7 cathodes at ~3.6 V (lowest threshold), 1 = ~16 V"}
+    {value: 0.253, min: 0.0, max: 1.0, unit: rotation, source: "sch: R117 100k (screwdriver beneath front panel). Default: the factory adjustment (above)", notes: "0 = 12AX7 cathodes at ~3.6 V (lowest threshold; the manual's 'fully CW', curves 4 and 5), 1 = ~16 V"}
   balance:
     {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: R105A/B dual 100 ohm (screwdriver, front panel)"}
   zero:
@@ -121,18 +128,28 @@ values:
   # --- Sidechain pick-off: T102 secondary -> pads -> T103 -------------------------
   r145_r148_ohm: {value: 150, source: "sch: R145-R148 150 5% series legs"}
   r149_r150_ohm: {value: 1360, source: "sch: R149, R150 680 5% shunts; the two pads are combined in series here (one output winding)"}
-  t103_turns_half: {value: 3.0, genome: transformers.sidechain_input.turns_ratio, source: "provisional: ratio not printed and no replacement spec found"}
-  t103_core_material: {value: mumetall, genome: transformers.sidechain_input.core_material, source: "provisional: model knowledge (a small signal transformer; no replacement spec found)"}
+  t103_turns_half: {value: 8.5, genome: transformers.sidechain_input.turns_ratio, source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html (replacement 8345E: 600 ohms/170k ohms, ratio 17+17:1+1) -> each secondary half = 8.5x the series primary (the two pads feed one primary here); the original's ratio isn't printed"}
+  t103_core_material: {value: mumetall, genome: transformers.sidechain_input.core_material, source: "web: same page (the replacement has a mumetal core); the original's is not documented"}
   t103_core_area_m2: {value: 0.5e-4, genome: transformers.sidechain_input.core_area_m2, source: "provisional: model knowledge (small signal transformer core)"}
   t103_core_path_m: {value: 0.05, genome: transformers.sidechain_input.core_path_m, source: "provisional: model knowledge"}
   t103_gap_m: {value: 10.0e-6, genome: transformers.sidechain_input.air_gap_m, source: "provisional: model knowledge (butt joints; no DC)"}
-  t103_turns: {value: 1215, genome: transformers.sidechain_input.turns, source: "provisional: derived (gives the former 5 H primary at nominal geometry and gap)", notes: "primary (the reference winding)"}
-  t103_leakage_h: {value: 0.01, genome: transformers.sidechain_input.leakage_h, source: "provisional: model knowledge (keeps the slice's k = 0.999: 2 (1 - k) x 5 H)", notes: "referred to the primary"}
+  t103_turns: {value: 1215, genome: transformers.sidechain_input.turns, source: "provisional: derived (gives the former 5 H primary at nominal geometry and gap)", notes: "series primary (the reference winding); each secondary half has t103_turns_half times as many (10,330 at 8.5). The primary inductance doesn't depend on the ratio, so the ratio change (2026-10-23) left this value"}
+  t103_leakage_h: {value: 5.0e-3, genome: transformers.sidechain_input.leakage_h, source: "provisional: chosen so T103 standalone (its pads in front, the threshold pots' load behind) is within 0.5 dB from 40 Hz to 20 kHz, the era's rating for line-to-grid transformers (web: https://www.worldradiohistory.com/Archive-Electronics/40s/Electronics-1949-07.pdf, UTC's advertisement: +-1 dB 20-20,000 cycles; the replacement's response isn't published). Measured 2026-10-23: -0.20 / +0.08 / -0.45 dB at 40 Hz / 15 / 20 kHz. The former 10 mH (k = 0.999) gave -2.1 dB at 15 kHz once the ratio became 8.5 (it is 72x that referred to a secondary half)", notes: "referred to the primary"}
 
   # --- AC threshold and 12AX7 (V105) ----------------------------------------------
+  # R115A/B are a dual-gang tapped pot: each section from its T103 secondary end to
+  # the centre line, the wiper to a 12AX7 grid, and R113/R114 from the section's
+  # fixed tap to the centre line (sch: drawn from a point on each track; web:
+  # https://groupdiy.com/threads/whats-this-symbol-in-the-fairchild-670-diagram.35361/,
+  # Walrus reading the original manual: "a dual 100k lin tapped pot with 24K
+  # resistors hanging off the taps to ground"). Below the tap the 24K shunts the
+  # track, so the knob's first part of travel is a gentler slope: two linear ranges
+  # (JohnRoberts, same thread). AC THRESHOLD at 0 puts the wipers on the centre
+  # line: no signal to the sidechain (the manual's curve 1, "straight amplifier").
   r115a_ohm: {value: 100.0e+3, source: "sch: R115A 100K LIN"}
-  r115b_ohm: {value: 180.0e+3, source: "sch: R115B printed 180K LIN"}
-  r113_r114_ohm: {value: 24.0e+3, source: "sch: R113, R114 24K 5%; sch-interp: in series below each pot section"}
+  r115b_ohm: {value: 100.0e+3, genome: sidechain_threshold.r115b_ohm, source: "sch: R115B printed 180K LIN on this scan; web: https://groupdiy.com/threads/whats-this-symbol-in-the-fairchild-670-diagram.35361/ (Walrus: the original manual shows 'a dual 100k lin tapped pot'; CJ: 'the 100k looks like 180k on some prints'). Nominal 100K: two readers of other prints, and matched sections give both 12AX7 grids the same drive (180K with a 50% tap gives that grid 3 dB less below the tap)"}
+  ac_threshold_tap: {value: 0.5, genome: sidechain_threshold.pot_tap, source: "web: same thread (CJ: 'i think it would have to be a 50% tap'); the drawing doesn't show where the tap is", notes: "fraction of each section's track from its centre-line end"}
+  r113_r114_ohm: {value: 24.0e+3, source: "sch: R113, R114 24K 5%, from each pot section's tap to the centre line (web: same thread)"}
   r116_ohm: {value: 270.0e+3, source: "sch: R116 270K from B+ to the R117 wiper"}
   r117_ohm: {value: 100.0e+3, source: "sch: R117 100K DC THRESHOLD"}
   r118_ohm: {value: 1.0e+6, source: "sch: R118 1M"}

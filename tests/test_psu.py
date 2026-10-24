@@ -20,7 +20,7 @@ from varimu.sim import fast, io
 pytestmark = pytest.mark.skipif(not fast.available(), reason="needs `uv sync --extra fast`")
 
 FS = 96000
-HOT = {"input_atten_db": 0.0, "ac_threshold": 1.0, "time_constant": 1}
+HOT = {"input_atten_db": 0.0, "ac_threshold": 1.0, "dc_threshold": 0.0, "time_constant": 1}
 NODES = ("out", "cv", "bp", "ur", "sg", "nb1", "nb2", "nb3", "nb4", "ka", "ta", "kb", "tb", "k1")
 
 

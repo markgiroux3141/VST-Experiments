@@ -83,14 +83,45 @@ def test_pots_follow_their_controls():
     hi_ov = {"ac_threshold": 1.0, "dc_threshold": 1.0, "zero": 1.0, "balance": 0.25}
     lo = nl.build(lo_ov, cores="linear").text
     hi = nl.build(hi_ov, cores="linear").text
-    # AC threshold fully up: wiper at the transformer end (all of the signal).
-    assert _value(hi, "R115Aa") == pytest.approx(1e-3) and _value(lo, "R115Ab") == pytest.approx(
-        1e-3
-    )
+    # AC threshold fully up: wiper at the transformer end (all of the signal); at 0 on
+    # the centre line (none). Segments a / b / c from the centre-line end up.
+    assert _value(hi, "R115Ac") == pytest.approx(1e-3)
+    assert _value(lo, "R115Aa") == pytest.approx(1e-3)
     # ZERO: wiper from ground (0) to the bias rail (1).
     assert _value(lo, "R142a") == pytest.approx(1e-3) and _value(hi, "R142a") == pytest.approx(2500)
     # Balance splits R105 between the two cathode returns.
     assert _value(lo, "R105a") == pytest.approx(25.0) and _value(lo, "R105b") == pytest.approx(75.0)
+
+
+def _divider(els, top: str, wiper: str) -> float:
+    """Voltage at `wiper` per volt at `top` of a resistor network to ground (DC)."""
+    nodes = sorted({n for r in els for n in (r.a, r.b) if n not in ("0", top)})
+    idx = {n: i for i, n in enumerate(nodes)}
+    g, b = np.zeros((len(nodes), len(nodes))), np.zeros(len(nodes))
+    for r in els:
+        for x, y in ((r.a, r.b), (r.b, r.a)):
+            if x in idx:
+                g[idx[x], idx[x]] += 1 / r.r_ohm
+                if y in idx:
+                    g[idx[x], idx[y]] -= 1 / r.r_ohm
+                elif y == top:
+                    b[idx[x]] += 1 / r.r_ohm
+    return float(np.linalg.solve(g, b)[idx[wiper]])
+
+
+def test_ac_threshold_tapped_pot():
+    """R113 off the tap: below the tap the wiper sees the tap's divided voltage, a
+    gentler slope; above it, linear up to the whole secondary."""
+    p = nl.resolve({})
+    tap, r, rt = p["ac_threshold_tap"], p["r115a_ohm"], p["r113_r114_ohm"]
+    lo = tap * r * rt / (tap * r + rt)
+    v_tap = lo / (lo + (1 - tap) * r)
+    for th in (0.0, 0.2, tap, 0.7, 1.0):
+        els = nl._tapped_pot("115A", "t5", "w", "x", r, th, tap) + [nl._r("113", "x", "0", rt)]
+        want = v_tap * th / tap if th <= tap else v_tap + (1 - v_tap) * (th - tap) / (1 - tap)
+        assert _divider(els, "t5", "w") == pytest.approx(want, abs=1e-6), th
+    # The load on the secondary doesn't depend on the wiper.
+    assert nl.threshold_section_load_ohm(p, r) == pytest.approx((1 - tap) * r + lo)
 
 
 def test_t_pad_gives_its_attenuation_into_its_own_impedance():

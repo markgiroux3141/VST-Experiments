@@ -72,13 +72,13 @@ transformers:
     winding_capacitance_f:  {min: 100.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull output transformer primaries)", notes: "per primary half"}
     interwinding_capacitance_f: {min: 0.0, max: 200.0e-12, unit: F, source: "provisional: model knowledge (output transformers without screen, tens to 100+ pF)"}
   sidechain_input:
-    core_material:          {choices: [mumetall, permalloy_fluxgate, grain_oriented_si_steel], source: "provisional: model knowledge (no replacement spec found); materials: config/magnetics.yaml"}
+    core_material:          {choices: [mumetall, permalloy_fluxgate, grain_oriented_si_steel], source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html (replacement 8345E: mumetal core); materials: config/magnetics.yaml"}
     core_area_m2:           {min: 0.2e-4, max: 1.0e-4, unit: m2, source: "provisional: model knowledge (small signal transformer cores)"}
     core_path_m:            {min: 0.03, max: 0.08, unit: m, source: "provisional: model knowledge"}
     air_gap_m:              {min: 2.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints)"}
     turns:                  {min: 700, max: 2400, unit: turns, source: "provisional: model knowledge (nominal 1215 derived from the former 5 H primary with mumetall)", notes: "primary"}
-    turns_ratio:            {min: 1.0, max: 8.0, unit: ratio, source: "provisional: not printed on A-96039, no replacement spec found", notes: "each secondary half / primary; sets the AC threshold range"}
-    leakage_h:              {min: 2.0e-3, max: 30.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999)", notes: "referred to the primary"}
+    turns_ratio:            {min: 7.5, max: 9.5, unit: ratio, source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html (replacement 8345E 600/170k, 17+17:1+1 -> 8.5); +-12% is provisional", notes: "each secondary half / series primary; sets the AC threshold range"}
+    leakage_h:              {min: 2.0e-3, max: 30.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999; the nominal 5 mH keeps the 8.5 ratio flat to 20 kHz, see the circuit file)", notes: "referred to the primary. Above ~8 mH the sidechain loses HF in band (10 mH: -2 dB at 15 kHz)"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
     winding_capacitance_f:  {min: 50.0e-12, max: 200.0e-12, unit: F, source: "provisional: model knowledge (secondaries of a small step-up transformer)", notes: "per secondary half"}
   sidechain_output:
@@ -91,6 +91,13 @@ transformers:
     leakage_h:              {min: 5.0e-3, max: 60.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999)", notes: "referred to a primary half"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
     winding_capacitance_f:  {min: 100.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull primaries)", notes: "per primary half"}
+
+sidechain_threshold:
+  # The AC THRESHOLD dual tapped pot (R115A/B) and R113/R114 off its taps
+  # (config/circuits/fairchild_670.yaml, "AC threshold"). Neither the tap's
+  # position nor R115B's value is settled by the drawing.
+  pot_tap:   {min: 0.3, max: 0.7, unit: ratio, source: "web: https://groupdiy.com/threads/whats-this-symbol-in-the-fairchild-670-diagram.35361/ (CJ: 'i think it would have to be a 50% tap'); the range is provisional: model knowledge (taps of the era's tapped pots sat around mid-track)", notes: "fraction of each section's track from its centre-line end"}
+  r115b_ohm: {choices: [100.0e+3, 180.0e+3], unit: ohm, source: "sch: R115B printed 180K on this scan of A-96039; web: same thread (the original manual reads 'a dual 100k lin tapped pot'; '180k on some prints')"}
 
 psu:
   # Shared by the audio path and sidechain (plan: Coupling Checklist). The

@@ -80,13 +80,13 @@ def fixture(key: str, overrides: Mapping[str, Any] | None = None, cores: str = "
             _r("load", "out", "0", p["load_ohm"]),
         ]
         out = ("out", "0")
-    elif key == "t103":  # the output pads in front, the threshold pots behind (at mid)
+    elif key == "t103":  # the output pads in front, the threshold pots behind
         around = [
             _r("145", "in", "s1", p["r145_r148_ohm"]),
             _r("147", "0", "s2", p["r145_r148_ohm"]),
             _r("149", "s1", "s2", p["r149_r150_ohm"]),
-            _r("t5", "t5", "0", p["r115a_ohm"] + p["r113_r114_ohm"]),
-            _r("t8", "t8", "0", p["r115b_ohm"] + p["r113_r114_ohm"]),
+            _r("t5", "t5", "0", nl.threshold_section_load_ohm(p, p["r115a_ohm"])),
+            _r("t8", "t8", "0", nl.threshold_section_load_ohm(p, p["r115b_ohm"])),
         ]
         out = ("t5", "t8")
     elif key == "t104":  # plate to plate through two 6973 resistances; R136; feedback loads
