@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::ir::{CircuitIr, IR_VERSION};
-use crate::transient::{Method, Options, Solver};
+use crate::transient::{ErrorNorm, Method, Options, Solver};
 
 create_exception!(
     circuitsim,
@@ -51,7 +51,8 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
     ir_json, input, dt, method = "trap", *, solver = None, reltol = None, vntol = None,
     max_iter = None, max_halvings = None, gmin = None, extrapolate = None, input_order = None,
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
-    newton_reuse = None, stats = false, progress = None
+    newton_reuse = None, step_selection = None, error_norm = None, stats = false,
+    progress = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -73,6 +74,8 @@ fn simulate<'py>(
     error_reltol: Option<f64>,
     max_error_halvings: Option<u32>,
     newton_reuse: Option<bool>,
+    step_selection: Option<bool>,
+    error_norm: Option<&str>,
     stats: bool,
     progress: Option<Py<PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -95,6 +98,12 @@ fn simulate<'py>(
         error_reltol: error_reltol.unwrap_or(d.error_reltol),
         max_error_halvings: max_error_halvings.unwrap_or(d.max_error_halvings),
         newton_reuse: newton_reuse.unwrap_or(d.newton_reuse),
+        step_selection: step_selection.unwrap_or(d.step_selection),
+        error_norm: error_norm
+            .map_or(Ok(d.error_norm), ErrorNorm::parse)
+            .map_err(invalid)?,
+        // Python gets the probes only.
+        all_unknowns: false,
         ..d
     };
     let x = input.as_array().to_vec();
@@ -145,6 +154,8 @@ fn simulate<'py>(
     st.set_item("device_evaluations", s.device_evaluations)?;
     st.set_item("factorizations", s.factorizations)?;
     st.set_item("exact_retries", s.exact_retries)?;
+    st.set_item("accepted_by_level", s.accepted_by_level.to_vec())?;
+    st.set_item("rejected_by_level", s.rejected_by_level.to_vec())?;
     Ok((probes, st).into_pyobject(py)?.into_any())
 }
 

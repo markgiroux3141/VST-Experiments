@@ -1,7 +1,7 @@
 {
- "when": "2026-10-22T03:23:41",
- "code": "0.1.0+22e115c94fdb",
- "engine_build": "0df1daecdac5aa6d",
+ "when": "2026-10-23T16:57:50",
+ "code": "0.1.0+22f96f969280",
+ "engine_build": "407e23b8b1c0a1be",
  "overrides": {},
  "program_clip": "clip:Arpeggio04b_120_m_D#_16b.WAV",
  "tolerance": {
@@ -17,38 +17,38 @@
   "triode_formulation": "exact"
  },
  "behaviour_vs_ngspice": {
-  "gr_max_diff_db": 0.08,
-  "clip_gain_max_diff_db": 0.022,
+  "gr_max_diff_db": 0.01,
+  "clip_gain_max_diff_db": 0.035,
   "burst_relative_time_diff": {
    "1": {
     "attack_cv_63_ms": 0.0,
     "release_cv_63_s": 0.0,
     "release_cv_90_s": 0.0,
-    "gain_reduction_db": 0.01
+    "gain_reduction_db": 0.0
    },
    "2": {
     "attack_cv_63_ms": 0.0,
     "release_cv_63_s": 0.0,
-    "release_cv_90_s": 0.0015,
+    "release_cv_90_s": 0.0,
     "gain_reduction_db": 0.0
    },
    "3": {
     "attack_cv_63_ms": 0.0,
     "release_cv_63_s": 0.0,
-    "release_cv_90_s": 0.0005,
-    "gain_reduction_db": -0.01
+    "release_cv_90_s": 0.0,
+    "gain_reduction_db": 0.0
    },
    "4": {
     "attack_cv_63_ms": 0.0,
     "release_cv_63_s": 0.0,
-    "release_cv_90_s": 0.0005,
-    "gain_reduction_db": 0.0
+    "release_cv_90_s": 0.0,
+    "gain_reduction_db": 0.01
    }
   },
   "passes": true
  },
  "curve_chunking": {
-  "gr_max_diff_db": 0.0081,
+  "gr_max_diff_db": 0.0026,
   "tolerance_db": 0.01,
   "passes": true
  },
@@ -56,9 +56,9 @@
   "burst_tc1": {
    "excerpt": "excerpt:burst_tc1",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -80.9,
-   "cv_max_v": 0.0029,
-   "cv_min_v": -75.15,
+   "out_rms_db": -81.9,
+   "cv_max_v": 0.0036,
+   "cv_min_v": -64.18,
    "passes": true,
    "bound": [
     -77.0,
@@ -68,9 +68,9 @@
   "burst_tc2": {
    "excerpt": "excerpt:burst_tc2",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -81.9,
-   "cv_max_v": 0.0022,
-   "cv_min_v": -75.09,
+   "out_rms_db": -82.5,
+   "cv_max_v": 0.0029,
+   "cv_min_v": -64.1,
    "passes": true,
    "bound": [
     -78.0,
@@ -80,9 +80,9 @@
   "burst_tc3": {
    "excerpt": "excerpt:burst_tc3",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -84.9,
-   "cv_max_v": 0.0015,
-   "cv_min_v": -75.01,
+   "out_rms_db": -84.4,
+   "cv_max_v": 0.0022,
+   "cv_min_v": -64.02,
    "passes": true,
    "bound": [
     -81.0,
@@ -92,9 +92,9 @@
   "burst_tc4": {
    "excerpt": "excerpt:burst_tc4",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -85.2,
-   "cv_max_v": 0.0018,
-   "cv_min_v": -74.93,
+   "out_rms_db": -85.4,
+   "cv_max_v": 0.0019,
+   "cv_min_v": -63.95,
    "passes": true,
    "bound": [
     -81.0,
@@ -105,8 +105,8 @@
    "excerpt": "excerpt:clip_loudest:clip:Arpeggio04b_120_m_D#_16b.WAV@0.600-0.850s",
    "reference": "exact ngspice (linear)",
    "out_rms_db": -76.2,
-   "cv_max_v": 0.0035,
-   "cv_min_v": -88.6,
+   "cv_max_v": 0.0049,
+   "cv_min_v": -80.33,
    "passes": true,
    "bound": [
     -72.0,
@@ -116,9 +116,9 @@
   "clip_hf": {
    "excerpt": "excerpt:clip_hf:clip:Arpeggio04b_120_m_D#_16b.WAV@2.350-2.600s",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -70.8,
-   "cv_max_v": 0.0052,
-   "cv_min_v": -84.45,
+   "out_rms_db": -71.3,
+   "cv_max_v": 0.0055,
+   "cv_min_v": -75.39,
    "passes": true,
    "bound": [
     -67.0,
@@ -128,9 +128,9 @@
   "clip_vs_converged": {
    "excerpt": "clip:Arpeggio04b_120_m_D#_16b.WAV",
    "reference": "circuitsim converged",
-   "out_rms_db": -56.8,
-   "cv_max_v": 0.1945,
-   "cv_min_v": -95.19,
+   "out_rms_db": -77.2,
+   "cv_max_v": 0.0704,
+   "cv_min_v": -86.93,
    "passes": true,
    "bound": [
     -55.0,

@@ -93,6 +93,11 @@ class TransientSettings:
     newton_reltol: float = 1e-6  # circuitsim only: Newton's update tolerance, relative
     newton_vntol: float = 1e-6  # circuitsim only: ... plus this, V
     newton_reuse: bool = True  # circuitsim only: lagged Jacobian and device bypass (dk)
+    # circuitsim only, with error control: choose substep sizes from the error
+    # estimate (else halve recursively), and what the estimate is measured on:
+    # "nodes" (every node voltage) or "ports_states" (device ports and state nodes).
+    step_selection: bool = True
+    error_norm: str = "nodes"
     # Seconds run before the input starts, with the input held at its first sample
     # (start.settle_s): the power supply settles from its DC operating point (mains
     # at its peak) into its ripple. Both engines; the outputs leave it out.
@@ -141,6 +146,8 @@ class TransientSettings:
                 newton_reltol=float(cs.get("newton_reltol", 1e-6)),
                 newton_vntol=float(cs.get("newton_vntol", 1e-6)),
                 newton_reuse=bool(cs.get("newton_reuse", True)),
+                step_selection=bool(cs.get("step_selection", True)),
+                error_norm=str(cs.get("error_norm", "nodes")),
                 cores=str(s.data["devices"].get("cores", "ja")),
             )
         return st
@@ -236,9 +243,11 @@ def input_chunks(x: np.ndarray, rate: float, chunk: int | None = None):
     return out
 
 
-def write_input_chunks(directory: Path, x: np.ndarray, rate: float) -> list[str]:
+def write_input_chunks(
+    directory: Path, x: np.ndarray, rate: float, chunk: int | None = None
+) -> list[str]:
     names = []
-    for k, (t, v) in enumerate(input_chunks(x, rate)):
+    for k, (t, v) in enumerate(input_chunks(x, rate, chunk)):
         name = INPUT_FILE.format(k)
         write_filesource(directory / name, t, v)
         names.append(name)
@@ -393,8 +402,18 @@ def run_transient(
     files: Mapping[str, Path | str] | None = None,
     max_step_div: int = 1,
     grid_breakpoints: bool = False,
+    chunk_lines: int | None = None,
 ) -> TransientResult:
     """Drive `input_node` (to ground) with `input_v` volts and run a transient.
+
+    ngspice can stop at its very first step on the 670 depending only on how the
+    input is split into filesource chunks (`chunk_lines`, default CHUNK_LINES):
+    found 2026-10-23 at the default front panel, where every render split into
+    four chunks stopped at t = h / 100 at a bridge diode on T104's floating
+    secondary (3, 5 and 7 chunks ran), whatever the input, method (trap or gear),
+    rshunt or added capacitance. So a run that stops within its first sample is
+    retried once split into one chunk more: the same input values, another
+    plumbing.
 
     `netlist` is the circuit body without analysis or `.end` lines.
     `input_v` is sampled at settings.sample_rate. Every vector in `save` comes
@@ -421,7 +440,7 @@ def run_transient(
     with tempfile.TemporaryDirectory() as td:
         wd = Path(workdir) if workdir else Path(td)
         wd.mkdir(parents=True, exist_ok=True)
-        chunks = write_input_chunks(wd, x_up, s.sim_rate)
+        chunks = write_input_chunks(wd, x_up, s.sim_rate, chunk_lines)
         for name, src in (files or {}).items():
             _place(wd / name, src)
         # spinit sets num_threads=8 (OpenMP); one per job is enough for these circuits.
@@ -464,7 +483,23 @@ def run_transient(
         vec = read_raw(raw)
 
     t = vec.pop("time")
-    if len(t) == 0 or t[-1] < t_end * (1 - 1e-9):
+    stopped = len(t) == 0 or t[-1] < t_end * (1 - 1e-9)
+    if stopped and chunk_lines is None and (len(t) == 0 or t[-1] < 1.0 / s.sim_rate):
+        return run_transient(
+            netlist,
+            input_v,
+            input_node=input_node,
+            save=save,
+            settings=s,
+            workdir=workdir,
+            progress=progress,
+            timeout_s=timeout_s,
+            files=files,
+            max_step_div=max_step_div,
+            grid_breakpoints=grid_breakpoints,
+            chunk_lines=-(-n_up // (len(chunks) + 1)),
+        )
+    if stopped:
         raise SimulationFailed(
             f"transient stopped at t={t[-1] if len(t) else 0:.6g} s of {t_end:.6g} s:\n"
             f"{log_text[-3000:]}"

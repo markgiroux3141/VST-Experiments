@@ -176,6 +176,8 @@ def run_transient(
             input_order=s.input_order,
             error_abstol=s.error_abstol,
             error_reltol=s.error_reltol,
+            step_selection=s.step_selection,
+            error_norm=s.error_norm,
             progress=progress,
         )
     except circuitsim.SimulationError as e:

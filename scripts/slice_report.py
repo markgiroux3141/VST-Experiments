@@ -105,27 +105,27 @@ FADE_IN_S = 0.01  # raised cosine, so a clip excerpt starts from the operating p
 EXCERPT_SETTLE_S = 0.0
 
 # Regression bounds (rms dB re signal, CV V) at the default front panel and
-# clip, a few dB outside the values measured 2026-10-22 on the Phase 3 circuit
-# (the power supply and idle channel 2 in it; circuitsim production vs exact
-# ngspice, both on linear cores; the converged row on the Jiles-Atherton cores).
+# clip, a few dB outside the values measured 2026-10-23: T103 at 8.5, the tapped
+# AC THRESHOLD pots and the factory-adjusted default panel (VARIMU_PROJECT_PLAN.md,
+# Phase 3), and circuitsim's step selection with the ports-and-states error norm
+# (CIRCUIT_SIM_PLAN.md, "Speed after Phase 3"); circuitsim production vs exact
+# ngspice, both on linear cores; the converged row on the Jiles-Atherton cores.
 # Re-measure when the circuit changes.
-#   burst_tc1 -80.9 / 0.0029    burst_tc2 -81.9 / 0.0022
-#   burst_tc3 -84.9 / 0.0015    burst_tc4 -85.2 / 0.0018
-#   clip_loudest -76.2 / 0.0035    clip_hf -70.8 / 0.0052
-#   clip vs converged -56.8 / 0.1945: its error is at the clip's first attack
-#   from rest (the CV falls ~80 V in ~2 ms); the bound is the plan's tolerance.
-#   10x tighter error tolerances give 0.07 V (+19% time), 4x 0.04 V (+43%):
-#   VARIMU_PROJECT_PLAN.md, Phase 3 findings.
-# (Phase 2, 2026-10-21: -78.6 / 0.023, -79.9 / 0.024, -80.7 / 0.015,
-# -74.8 / 0.007; -67.7 / 0.021, -61.8 / 0.035; -76.3 / 0.006.)
+#   burst_tc1 -81.9 / 0.0036    burst_tc2 -82.5 / 0.0029
+#   burst_tc3 -84.4 / 0.0022    burst_tc4 -85.4 / 0.0019
+#   clip_loudest -76.2 / 0.0049    clip_hf -71.3 / 0.0055
+#   clip vs converged -77.2 / 0.070 (Phase 3: -56.8 / 0.19, at the plan's tolerance;
+#   10x tighter error tolerances now give -78.5 / 0.040, 4x -83.9 / 0.007)
+# (Phase 3, 2026-10-22: -80.9 / 0.0029, -81.9 / 0.0022, -84.9 / 0.0015,
+# -85.2 / 0.0018; -76.2 / 0.0035, -70.8 / 0.0052; -56.8 / 0.1945.)
 BOUNDS = {
-    "burst_tc1": (-77.0, 0.01),
-    "burst_tc2": (-78.0, 0.01),
+    "burst_tc1": (-78.0, 0.01),
+    "burst_tc2": (-79.0, 0.01),
     "burst_tc3": (-81.0, 0.01),
-    "burst_tc4": (-81.0, 0.01),
-    "clip_loudest": (-72.0, 0.01),
-    "clip_hf": (-67.0, 0.015),
-    "clip_vs_converged": (-55.0, 0.2),
+    "burst_tc4": (-82.0, 0.01),
+    "clip_loudest": (-73.0, 0.01),
+    "clip_hf": (-68.0, 0.015),
+    "clip_vs_converged": (-73.0, 0.15),
 }
 
 # [MAN] p.4 (Fairchild 670 manual, 1959): attack, and release from 10 dB of limiting.

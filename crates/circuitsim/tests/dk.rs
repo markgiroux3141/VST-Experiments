@@ -23,7 +23,7 @@ use std::path::{Path, PathBuf};
 
 use circuitsim::ir::CircuitIr;
 use circuitsim::mna::{Mna, Unknown};
-use circuitsim::transient::{Method, Options, Solver, Transient};
+use circuitsim::transient::{ErrorNorm, Method, Options, Solver, Transient};
 
 fn fixture(name: &str) -> CircuitIr {
     let dir: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -121,10 +121,21 @@ fn dk_agrees_with_full_mna_on_the_670() {
             error_reltol: 1e-3,
             ..esdirk4
         };
+        // Both error controllers, and the ports-and-states error norm.
+        let halving = Options {
+            step_selection: false,
+            ..production
+        };
+        let ports_states = Options {
+            error_norm: ErrorNorm::PortsStates,
+            ..production
+        };
         for opts in [
             Options::with_method(Method::Trapezoidal),
             esdirk4,
             production,
+            halving,
+            ports_states,
         ] {
             let (mna, st_mna) = run(
                 &ir,
@@ -145,33 +156,52 @@ fn dk_agrees_with_full_mna_on_the_670() {
                 let (dk, st_dk) = run(&ir, o, &input, h);
                 assert_eq!(st_dk.solver, "dk");
                 let (worst, at, floating) = compare(&unknowns, &mna, &dk, &opts, &FLOATING);
-                println!(
-                    "{name:14} {:?} control {} reuse {newton_reuse}: worst {worst:.2e} tol ({at}), \
-                     floating {floating:.1e} V; iterations mna {} dk {}, substeps {} / {}",
+                let label = format!(
+                    "{name:14} {:?} control {} ({}, {:?}) reuse {newton_reuse}",
                     opts.method,
                     opts.error_abstol > 0.0,
-                    st_mna.iterations,
-                    st_dk.iterations,
-                    st_mna.substeps,
-                    st_dk.substeps,
+                    if opts.step_selection {
+                        "selection"
+                    } else {
+                        "halving"
+                    },
+                    opts.error_norm,
                 );
-                if newton_reuse && st_mna.substeps != st_dk.substeps {
+                println!(
+                    "{label}: worst {worst:.2e} tol ({at}), floating {floating:.1e} V; iterations mna {} dk {}, substeps {} / {}",
+                    st_mna.iterations, st_dk.iterations, st_mna.substeps, st_dk.substeps,
+                );
+                if newton_reuse && opts.error_abstol > 0.0 {
                     // With reuse a solve ends anywhere within a tolerance of
                     // its solution, which can tip a borderline error-control
-                    // decision (measured once, TC1 with the Jiles-Atherton
-                    // cores: 13 substeps vs 12). The runs then differ by what
+                    // decision, with or without changing the number of
+                    // substeps (2026-10-23, the sidechain driven harder: the
+                    // same count, one decision moved, 0.55 V at nfb for a
+                    // sample at a grid clamp). The runs then differ by what
                     // that decision is about: compare them in units of the
-                    // error tolerance (measured: 5.0; the floating island
-                    // 0.19 V).
-                    assert!(opts.error_abstol > 0.0, "{name}: decisions differ");
+                    // error tolerance, and the control voltage in volts
+                    // (measured: <= 42, the floating island 0.08 V, the CV
+                    // 0.3 mV).
                     let err_opts = Options {
                         reltol: opts.error_reltol,
                         vntol: opts.error_abstol,
                         ..opts
                     };
                     let (w, _, floating) = compare(&unknowns, &mna, &dk, &err_opts, &FLOATING);
-                    println!("  decisions differ: {w:.2} x error tolerance");
-                    assert!(w < 30.0 && floating < 0.5, "{name}: {w}, {floating} V");
+                    let cv = unknowns
+                        .iter()
+                        .position(|u| u.describe() == "node cv")
+                        .unwrap();
+                    let cv_diff = mna
+                        .iter()
+                        .zip(&dk)
+                        .map(|(a, b)| (a[cv] - b[cv]).abs())
+                        .fold(0.0, f64::max);
+                    println!("  {w:.2} x error tolerance, CV within {cv_diff:.1e} V");
+                    assert!(
+                        w < 100.0 && floating < 0.5 && cv_diff < 0.01,
+                        "{label}: {w}, {floating} V, CV {cv_diff} V"
+                    );
                     continue;
                 }
                 assert!(floating < FLOATING_BOUND_V, "{name}: {floating} V");

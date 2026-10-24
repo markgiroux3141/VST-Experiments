@@ -183,6 +183,7 @@ fn main() {
         &mna.waves,
         &ports,
         &sup,
+        &[],
     )
     .unwrap();
     println!(
@@ -193,7 +194,7 @@ fn main() {
     );
     let (m, r) = (sys.m, sys.r);
     let xs: Vec<f64> = sup.iter().map(|&s| x[s]).collect();
-    let mut base = vec![0.0; sys.rows()];
+    let mut base = vec![0.0; sys.rows_for(true)];
     println!(
         "  step base: {:.2} us",
         time(reps, || sys.step_base(&xs, &mut base))

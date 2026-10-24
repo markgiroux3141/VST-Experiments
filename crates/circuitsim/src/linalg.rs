@@ -120,7 +120,27 @@ impl SparseRows {
 /// every `y_i` sums its terms in column order, exactly like a row-wise dot
 /// product, but the inner loop runs down a column with no reduction and
 /// vectorizes.
+///
+/// With AVX2 (detected at run time) the same loop runs 4 lanes wide: every
+/// `y_i` is the same sequence of IEEE operations either way (no fused
+/// multiply-add), so the results are identical.
 pub fn gemv_add(y: &mut [f64], a: &[f64], row0: usize, lda: usize, x: &[f64]) {
+    #[cfg(target_arch = "x86_64")]
+    if y.len() >= 8 && std::is_x86_feature_detected!("avx2") {
+        // SAFETY: the CPU has AVX2 (checked just above).
+        return unsafe { gemv_add_avx2(y, a, row0, lda, x) };
+    }
+    gemv_add_impl(y, a, row0, lda, x)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "avx2")]
+fn gemv_add_avx2(y: &mut [f64], a: &[f64], row0: usize, lda: usize, x: &[f64]) {
+    gemv_add_impl(y, a, row0, lda, x)
+}
+
+#[inline(always)]
+fn gemv_add_impl(y: &mut [f64], a: &[f64], row0: usize, lda: usize, x: &[f64]) {
     let m = y.len();
     let col = |j: usize| &a[row0 + j * lda..row0 + j * lda + m];
     let mut j = 0;
@@ -178,8 +198,25 @@ impl ColLu {
     }
 
     /// Factor the column-major `a` (n x n). On error the storage holds
-    /// garbage until the next successful factorization.
+    /// garbage until the next successful factorization. With AVX2 the same
+    /// loops run 4 lanes wide (identical results, see [`gemv_add`]).
     pub fn factor(&mut self, a: &[f64]) -> Result<(), Singular> {
+        #[cfg(target_arch = "x86_64")]
+        if self.n >= 8 && std::is_x86_feature_detected!("avx2") {
+            // SAFETY: the CPU has AVX2 (checked just above).
+            return unsafe { self.factor_avx2(a) };
+        }
+        self.factor_impl(a)
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2")]
+    fn factor_avx2(&mut self, a: &[f64]) -> Result<(), Singular> {
+        self.factor_impl(a)
+    }
+
+    #[inline(always)]
+    fn factor_impl(&mut self, a: &[f64]) -> Result<(), Singular> {
         let n = self.n;
         if n == 0 {
             return Ok(());
@@ -449,6 +486,44 @@ impl Lu {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Deterministic values spread over many magnitudes (a fixed LCG).
+    fn values(n: usize, seed: u64) -> Vec<f64> {
+        let mut s = seed;
+        (0..n)
+            .map(|_| {
+                s = s
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                let u = (s >> 11) as f64 / (1u64 << 53) as f64 - 0.5;
+                u * 10f64.powi(((s >> 3) % 7) as i32 - 3)
+            })
+            .collect()
+    }
+
+    /// The AVX2 paths (taken when the CPU has it) give exactly the portable
+    /// loops' results: the same IEEE operations per element.
+    #[test]
+    fn avx2_paths_are_bitwise_the_portable_ones() {
+        let (rows, cols) = (131, 86);
+        let a = values(rows * cols, 1);
+        let x = values(cols, 2);
+        let y0 = values(rows, 3);
+        let (mut y1, mut y2) = (y0.clone(), y0.clone());
+        gemv_add(&mut y1, &a, 0, rows, &x);
+        gemv_add_impl(&mut y2, &a, 0, rows, &x);
+        assert_eq!(y1, y2);
+        let n = 45;
+        let mut m = values(n * n, 4);
+        for i in 0..n {
+            m[i * n + i] += 3.0;
+        }
+        let (mut l1, mut l2) = (ColLu::with_size(n), ColLu::with_size(n));
+        l1.factor(&m).unwrap();
+        l2.factor_impl(&m).unwrap();
+        assert_eq!(l1.lu, l2.lu);
+        assert_eq!(l1.perm, l2.perm);
+    }
 
     fn matrix(rows: &[&[f64]]) -> Matrix {
         let mut m = Matrix::zeros(rows.len());

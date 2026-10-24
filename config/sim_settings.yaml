@@ -80,6 +80,15 @@ circuitsim:
   newton_reltol: 1.0e-4
   newton_vntol: 1.0e-3   # V
   newton_reuse: true
+  # Error control (2026-10-23, CIRCUIT_SIM_PLAN.md "Speed after Phase 3"): each
+  # substep's size is chosen from the error estimate (a rejected step goes straight
+  # to the level the estimate predicts, the steps after an event coarsen as soon as
+  # it allows) instead of halving recursively from the sample's starting level:
+  # ~4x fewer rejected steps on the 670, the same accuracy. The estimate is
+  # measured on the device port voltages and the state nodes (the rest are
+  # algebraic in those), so a step only computes the unknowns it outputs.
+  step_selection: true
+  error_norm: ports_states   # nodes | ports_states
 
 transient:
   # Input is band-limited upsampled by this factor before simulation, and the

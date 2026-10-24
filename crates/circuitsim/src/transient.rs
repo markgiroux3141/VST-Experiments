@@ -70,6 +70,76 @@ use crate::mna::{Mna, SPICE_GMIN};
 use crate::newton::{Failure, Newton, NewtonOptions, Reduced};
 use crate::timing::{self, Part};
 
+/// What local error control measures the error estimate on, against
+/// `error_abstol + error_reltol |v|` each.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ErrorNorm {
+    /// Every node voltage.
+    Nodes,
+    /// The device port voltages and the state node voltages (nodes with
+    /// capacitance). The other nodes are algebraic in those, the input and
+    /// the sources; leaving them out means a DK step only needs the
+    /// unknowns it outputs (`Options::all_unknowns`).
+    PortsStates,
+}
+
+impl ErrorNorm {
+    pub const NAMES: [&'static str; 2] = ["nodes", "ports_states"];
+
+    pub fn parse(name: &str) -> Result<ErrorNorm, Error> {
+        match name {
+            "nodes" => Ok(ErrorNorm::Nodes),
+            "ports_states" => Ok(ErrorNorm::PortsStates),
+            _ => Err(Error::new(format!(
+                "unknown error norm {name:?} ({})",
+                ErrorNorm::NAMES.join(" | ")
+            ))),
+        }
+    }
+}
+
+/// Accepted / rejected steps are counted per level up to this (`Stats`).
+pub const LEVEL_STATS: usize = 8;
+
+/// Step selection (`Options::step_selection`): the error ratio a refined
+/// step aims at, the ratio a coarsened one may be predicted to reach, and
+/// the most levels a step may coarsen by at once. The predictions assume the
+/// error scales as h^4 (the embedded solution is 3rd order): one level is a
+/// factor 16.
+const REFINE_TARGET: f64 = 0.5;
+const COARSEN_TARGET: f64 = 0.8;
+const MAX_COARSEN: usize = 2;
+
+/// Levels to refine a step rejected with error ratio `q` (> 1) by: at least
+/// one, enough for the redone step to reach [`REFINE_TARGET`].
+fn refine_levels(q: f64) -> usize {
+    ((q / REFINE_TARGET).log2() / 4.0).ceil().max(1.0) as usize
+}
+
+/// Levels the step after one accepted with error ratio `q` may coarsen by
+/// (0 ..= [`MAX_COARSEN`]) and stay below [`COARSEN_TARGET`].
+fn coarsen_levels(q: f64) -> usize {
+    if q <= 0.0 {
+        return MAX_COARSEN;
+    }
+    ((COARSEN_TARGET / q).log2() / 4.0)
+        .floor()
+        .clamp(0.0, MAX_COARSEN as f64) as usize
+}
+
+/// The largest error / tolerance over the entries of a step's error
+/// estimate `err` that `keep` selects, at the new values `x` (tolerance
+/// `error_abstol + error_reltol |x|`).
+fn error_ratio(err: &[f64], x: &[f64], keep: &[bool], opts: &Options) -> f64 {
+    let (at, rt) = (opts.error_abstol, opts.error_reltol);
+    err.iter()
+        .zip(x)
+        .zip(keep)
+        .filter(|(_, k)| **k)
+        .map(|((e, x), _)| e.abs() / (at + rt * x.abs()))
+        .fold(0.0, f64::max)
+}
+
 /// How a step's nonlinear system is solved.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Solver {
@@ -405,6 +475,18 @@ pub struct Options {
     pub error_abstol: f64,
     pub error_reltol: f64,
     pub max_error_halvings: u32,
+    /// With error control: choose each substep's size from the error
+    /// estimate (see [`Transient::advance_selected`]) instead of halving a
+    /// rejected step recursively from the sample's starting level.
+    pub step_selection: bool,
+    /// What the error estimate is measured on (see [`ErrorNorm`]).
+    pub error_norm: ErrorNorm,
+    /// Keep every unknown current at every step ([`Transient::x`]); without
+    /// it the DK solver only computes the probes' unknowns at a step's end
+    /// (the rest of `x` is stale), which is all a run's output needs.
+    /// [`Transient::update`] needs every unknown. The full-MNA solver
+    /// always has them.
+    pub all_unknowns: bool,
     /// DK solver: reuse the factored Newton matrix across iterations,
     /// stages and steps until convergence slows, and skip re-evaluating
     /// devices whose ports moved less than the tolerance (see
@@ -430,6 +512,9 @@ impl Default for Options {
             error_abstol: 0.0,
             error_reltol: 0.0,
             max_error_halvings: 4,
+            step_selection: true,
+            error_norm: ErrorNorm::Nodes,
+            all_unknowns: true,
             newton_reuse: true,
         }
     }
@@ -473,8 +558,12 @@ pub struct Stats {
     pub substeps: u64,
     /// Samples that took more than one step (Newton or error halvings).
     pub halved_steps: u64,
-    /// Steps (or substeps) redone as halves because of the error estimate.
+    /// Steps (or substeps) redone because of the error estimate.
     pub error_rejections: u64,
+    /// Accepted steps and error rejections by halving level (0 = the full
+    /// step; the last entry counts that level and deeper ones).
+    pub accepted_by_level: [u64; LEVEL_STATS],
+    pub rejected_by_level: [u64; LEVEL_STATS],
     /// Newton solves (one per implicit stage of a diagonally implicit
     /// method, one per step otherwise) and iterations over all steps (DC
     /// excluded). `max_iterations` is per solve.
@@ -519,8 +608,9 @@ struct Coupled {
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum StepFail {
     Newton(Failure),
-    /// The error estimate exceeded the tolerance.
-    Inaccurate,
+    /// The error estimate exceeded the tolerance, by this factor (the
+    /// largest error / tolerance over the node voltages).
+    Inaccurate(f64),
     /// The DK solver's step matrix is singular at this unknown.
     Matrix(usize),
 }
@@ -565,6 +655,15 @@ struct Dk {
     /// A stage's initial guess and limiting reference, for an exact retry.
     v_guess: Vec<f64>,
     v_lin_guess: Vec<f64>,
+    /// The probes' unknowns (first in the DK systems' third block), the end
+    /// point's unknowns in that block's order, and for the ports-and-states
+    /// error norm: the estimate and the new values on ports then states, and
+    /// which of those it measures (ports, and states that are nodes).
+    probes: Vec<usize>,
+    xu: Vec<f64>,
+    e_ps: Vec<f64>,
+    v_ps: Vec<f64>,
+    keep_ps: Vec<bool>,
 }
 
 impl Dk {
@@ -598,6 +697,18 @@ impl Dk {
             wv: vec![0.0; mna.waves.len()],
             v_guess: vec![0.0; m],
             v_lin_guess: vec![0.0; m],
+            probes: mna.probes.iter().filter_map(|(_, i)| *i).collect(),
+            xu: vec![0.0; mna.len()],
+            e_ps: vec![0.0; m + r],
+            v_ps: vec![0.0; m + r],
+            keep_ps: (0..m)
+                .map(|_| true)
+                .chain(
+                    support
+                        .iter()
+                        .map(|&k| matches!(mna.unknowns[k], crate::mna::Unknown::Node(_))),
+                )
+                .collect(),
             support,
         }
     }
@@ -632,6 +743,10 @@ pub struct Transient {
     /// previous one (where error control starts the next).
     deepest: usize,
     level_hint: usize,
+    /// The step-selecting controller's level for the next sample, and the
+    /// error ratio of the last accepted step (NaN: not checked).
+    next_level: usize,
+    err_ratio: f64,
     stats: Stats,
     // Scratch.
     rhs: Vec<f64>,
@@ -646,6 +761,44 @@ pub struct Transient {
     /// Which unknowns are node voltages (the error control looks at those).
     is_node: Vec<bool>,
     err: Vec<f64>,
+    /// The ports-and-states error norm's layout for the full-MNA solver.
+    norm_ps: NormPs,
+}
+
+/// Ports and state nodes, as the DK solver's ports-and-states error norm
+/// sees them, for the full-MNA solver: the same decisions from the same
+/// estimate.
+#[derive(Debug)]
+struct NormPs {
+    ports: Ports,
+    states: Vec<usize>,
+    keep: Vec<bool>,
+    e: Vec<f64>,
+    v: Vec<f64>,
+}
+
+impl NormPs {
+    fn new(mna: &Mna) -> NormPs {
+        let ports = Ports::new(&mna.devices);
+        let states = dk::support(&mna.c);
+        let m = ports.len();
+        let keep = (0..m)
+            .map(|_| true)
+            .chain(
+                states
+                    .iter()
+                    .map(|&k| matches!(mna.unknowns[k], crate::mna::Unknown::Node(_))),
+            )
+            .collect();
+        let len = m + states.len();
+        NormPs {
+            ports,
+            states,
+            keep,
+            e: vec![0.0; len],
+            v: vec![0.0; len],
+        }
+    }
 }
 
 impl Transient {
@@ -700,6 +853,8 @@ impl Transient {
             n: 0,
             deepest: 0,
             level_hint: 0,
+            next_level: 0,
+            err_ratio: f64::NAN,
             stats: Stats::default(),
             rhs: vec![0.0; n],
             y: vec![0.0; n],
@@ -719,6 +874,7 @@ impl Transient {
                 .map(|u| matches!(u, crate::mna::Unknown::Node(_)))
                 .collect(),
             err: vec![0.0; n],
+            norm_ps: NormPs::new(&mna),
             tab,
             device_nodes,
             mna,
@@ -866,25 +1022,30 @@ impl Transient {
     /// the previous step's end input).
     pub fn step_input(&mut self, inp: &StepInput) -> Result<(), Error> {
         let substeps_before = self.stats.substeps;
-        // With error control, start one level above the deepest the previous
-        // sample needed (fewer rejected attempts through a hard passage, and
-        // back to full steps one level per sample after it).
-        let start = if self.opts.error_abstol > 0.0 {
-            self.level_hint.saturating_sub(1)
-        } else {
-            0
-        };
         self.deepest = 0;
-        let m = 1usize << start;
-        let mut res = Ok(());
-        for j in 0..m {
-            let (a, b) = (j as f64 / m as f64, (j + 1) as f64 / m as f64);
-            res = self.advance(start, a, b, inp);
-            if res.is_err() {
-                break;
+        let res = if self.opts.error_abstol > 0.0 && self.opts.step_selection {
+            self.advance_selected(inp)
+        } else {
+            // With error control, start one level above the deepest the
+            // previous sample needed (fewer rejected attempts through a hard
+            // passage, and back to full steps one level per sample after it).
+            let start = if self.opts.error_abstol > 0.0 {
+                self.level_hint.saturating_sub(1)
+            } else {
+                0
+            };
+            let m = 1usize << start;
+            let mut res = Ok(());
+            for j in 0..m {
+                let (a, b) = (j as f64 / m as f64, (j + 1) as f64 / m as f64);
+                res = self.advance(start, a, b, inp);
+                if res.is_err() {
+                    break;
+                }
             }
-        }
-        self.level_hint = self.deepest;
+            self.level_hint = self.deepest;
+            res
+        };
         self.stats.steps += 1;
         if self.stats.substeps > substeps_before {
             self.stats.halved_steps += 1;
@@ -907,9 +1068,67 @@ impl Transient {
                     let sys = self.levels[level].as_ref().expect("built");
                     self.failure_error(sys, f, &what)
                 }
-                (StepFail::Inaccurate, _) => unreachable!("inaccurate steps are halved"),
+                (StepFail::Inaccurate(_), _) => unreachable!("inaccurate steps are redone"),
             }
         })
+    }
+
+    /// Advance through one sample in substeps of `h / 2^level` whose level
+    /// the error estimate selects (`Options::step_selection`):
+    ///
+    /// - a step rejected with error ratio q (error / tolerance > 1) is redone
+    ///   at the level predicted to bring q to [`REFINE_TARGET`], at least
+    ///   one level deeper ([`refine_levels`]);
+    /// - after an accepted substep with ratio q, the next one may be coarser
+    ///   by up to [`MAX_COARSEN`] levels ([`coarsen_levels`]), where the
+    ///   substep grid allows it (a substep of level l starts at a multiple of
+    ///   h / 2^l);
+    /// - the next sample starts at the level the last substep chose.
+    ///
+    /// So a local event (a grid starting to conduct) costs the substeps it
+    /// needs, and the steps after it go back to full size as soon as the
+    /// estimate allows, not one level per sample. Newton failures halve, as
+    /// in [`Transient::advance`]. Substeps at the deepest error level are
+    /// accepted without the error check, as there.
+    fn advance_selected(&mut self, inp: &StepInput) -> Result<(), (usize, StepFail)> {
+        let top = self.opts.max_halvings as usize;
+        let err_top = self.opts.max_error_halvings.min(self.opts.max_halvings) as usize;
+        let end = 1u64 << top;
+        let mut pos = 0u64; // in units of h / 2^top
+        let mut level = self.next_level.min(err_top);
+        while pos < end {
+            // The coarsest level at or below `level` that this position allows.
+            while !pos.is_multiple_of(1u64 << (top - level)) {
+                level += 1;
+            }
+            let len = 1u64 << (top - level);
+            let (th0, th1) = (pos as f64 / end as f64, (pos + len) as f64 / end as f64);
+            let res = if self.dk.is_some() {
+                self.try_step_dk(level, th0, th1, inp)
+            } else if self.tab.diagonal {
+                self.try_step_dirk(level, th0, th1, inp)
+            } else {
+                self.try_step_coupled(level, th0, th1, inp)
+            };
+            match res {
+                Ok(()) => {
+                    pos += len;
+                    let q = self.err_ratio;
+                    // Not checked (the deepest error level): one up.
+                    let up = if q.is_nan() { 1 } else { coarsen_levels(q) };
+                    level -= up.min(level);
+                }
+                Err(StepFail::Inaccurate(q)) => {
+                    self.reject(level);
+                    level = (level + refine_levels(q)).min(err_top);
+                }
+                Err(f @ StepFail::Matrix(_)) => return Err((level, f)),
+                Err(f @ StepFail::Newton(_)) if level >= top => return Err((level, f)),
+                Err(StepFail::Newton(_)) => level += 1,
+            }
+        }
+        self.next_level = level;
+        Ok(())
     }
 
     /// Advance by `h / 2^level`, over step fractions `th0` to `th1` of
@@ -930,7 +1149,7 @@ impl Transient {
         };
         match res {
             Ok(()) => return Ok(()),
-            Err(StepFail::Inaccurate) => self.stats.error_rejections += 1,
+            Err(StepFail::Inaccurate(_)) => self.reject(level),
             Err(f @ StepFail::Matrix(_)) => return Err((level, f)),
             Err(f @ StepFail::Newton(_)) if level as u32 >= self.opts.max_halvings => {
                 return Err((level, f));
@@ -991,6 +1210,13 @@ impl Transient {
         if level > 0 {
             self.stats.substeps += 1;
         }
+        self.stats.accepted_by_level[level.min(LEVEL_STATS - 1)] += 1;
+    }
+
+    /// A step at `level` rejected by the error estimate.
+    fn reject(&mut self, level: usize) {
+        self.stats.error_rejections += 1;
+        self.stats.rejected_by_level[level.min(LEVEL_STATS - 1)] += 1;
     }
 
     fn try_step_dirk(
@@ -1122,16 +1348,26 @@ impl Transient {
             self.newton
                 .solve_jacobian(&mut self.rn[..nn], &mut self.work[..nn]);
             sys.expand(&self.y[..nl], &self.rn[..nn], &mut self.err);
-            let (at, rt) = (self.opts.error_abstol, self.opts.error_reltol);
-            let too_big = self
-                .err
-                .iter()
-                .zip(&self.x_new)
-                .zip(&self.is_node)
-                .any(|((e, x), &node)| node && e.abs() > at + rt * x.abs());
-            if too_big {
-                return Err(StepFail::Inaccurate);
+            let ratio = match self.opts.error_norm {
+                ErrorNorm::Nodes => error_ratio(&self.err, &self.x_new, &self.is_node, &self.opts),
+                ErrorNorm::PortsStates => {
+                    let ps = &mut self.norm_ps;
+                    let m = ps.ports.len();
+                    ps.ports.voltages(&self.err, &mut ps.e[..m]);
+                    ps.ports.voltages(&self.x_new, &mut ps.v[..m]);
+                    for (j, &k) in ps.states.iter().enumerate() {
+                        ps.e[m + j] = self.err[k];
+                        ps.v[m + j] = self.x_new[k];
+                    }
+                    error_ratio(&ps.e, &ps.v, &ps.keep, &self.opts)
+                }
+            };
+            if ratio > 1.0 {
+                return Err(StepFail::Inaccurate(ratio));
             }
+            self.err_ratio = ratio;
+        } else {
+            self.err_ratio = f64::NAN;
         }
 
         // Stiffly accurate: the last stage is the end point.
@@ -1171,15 +1407,19 @@ impl Transient {
                 &self.mna.waves,
                 &dk.ports,
                 &dk.support,
+                &dk.probes,
             )
             .map_err(|Singular { column }| StepFail::Matrix(column))?;
             dk.levels[level] = Some(sys);
         }
         let sys = dk.levels[level].as_ref().expect("just built");
         let (m, r) = (sys.m, sys.r);
+        // Every unknown, or (enough for the outputs and this error norm) the probes'.
+        let all = self.opts.all_unknowns || self.opts.error_norm == ErrorNorm::Nodes;
+        let rows = sys.rows_for(all);
         dk.newton.v_lin.copy_from_slice(&self.ports);
         let t0 = timing::now();
-        dk.base.resize(sys.rows(), 0.0);
+        dk.base.resize(rows, 0.0);
         sys.step_base(&dk.xs, &mut dk.base);
         timing::add(Part::Step, t0);
 
@@ -1284,15 +1524,11 @@ impl Transient {
         }
         let t0 = timing::now();
         // Stiffly accurate: the last stage is the end point.
-        sys.unknowns(
-            &dk.base,
-            u,
-            &dk.wv,
-            &dk.w,
-            &dk.newton.i,
-            &mut self.x_new,
-            &mut dk.neg,
-        );
+        let xu = &mut dk.xu[..rows - m - r];
+        sys.unknowns(&dk.base, u, &dk.wv, &dk.w, &dk.newton.i, xu, &mut dk.neg);
+        for (&v, &k) in xu.iter().zip(sys.order()) {
+            self.x_new[k] = v;
+        }
 
         if self.opts.error_abstol > 0.0
             && (level as u32) < self.opts.max_error_halvings.min(self.opts.max_halvings)
@@ -1308,25 +1544,42 @@ impl Transient {
                     }
                 }
             }
-            sys.solve_linearized(
-                &dk.newton,
-                &dk.ports,
-                &dk.w,
-                &mut self.err,
-                &mut dk.wm,
-                &mut dk.neg,
-            );
-            let (at, rt) = (self.opts.error_abstol, self.opts.error_reltol);
-            let too_big = self
-                .err
-                .iter()
-                .zip(&self.x_new)
-                .zip(&self.is_node)
-                .any(|((e, x), &node)| node && e.abs() > at + rt * x.abs());
-            if too_big {
+            let ratio = match self.opts.error_norm {
+                ErrorNorm::Nodes => {
+                    sys.solve_linearized(
+                        &dk.newton,
+                        &dk.ports,
+                        &dk.w,
+                        &mut dk.xu,
+                        &mut dk.wm,
+                        &mut dk.neg,
+                    );
+                    for (&e, &k) in dk.xu.iter().zip(sys.order()) {
+                        self.err[k] = e;
+                    }
+                    error_ratio(&self.err, &self.x_new, &self.is_node, &self.opts)
+                }
+                ErrorNorm::PortsStates => {
+                    sys.solve_linearized_ports_states(
+                        &dk.newton,
+                        &dk.ports,
+                        &dk.w,
+                        &mut dk.e_ps,
+                        &mut dk.wm,
+                        &mut dk.neg,
+                    );
+                    dk.v_ps[..m].copy_from_slice(&dk.v);
+                    dk.v_ps[m..].copy_from_slice(&dk.out[m..m + r]);
+                    error_ratio(&dk.e_ps, &dk.v_ps, &dk.keep_ps, &self.opts)
+                }
+            };
+            if ratio > 1.0 {
                 timing::add(Part::Step, t0);
-                return Err(StepFail::Inaccurate);
+                return Err(StepFail::Inaccurate(ratio));
             }
+            self.err_ratio = ratio;
+        } else {
+            self.err_ratio = f64::NAN;
         }
         timing::add(Part::Step, t0);
 
@@ -1471,6 +1724,11 @@ impl Transient {
     /// first use, one per step size (for the 670: ~1 ms each; see
     /// `tests/update.rs`). Devices with memory start over from their model.
     pub fn update(&mut self, ir: &CircuitIr) -> Result<(), Error> {
+        if !self.opts.all_unknowns && self.dk.is_some() {
+            return Err(Error::new(
+                "update: needs every unknown (Options::all_unknowns), this run keeps the probes",
+            ));
+        }
         let mna = Mna::from_ir(ir, self.opts.gmin)?;
         if mna.unknowns != self.mna.unknowns {
             return Err(Error::new(

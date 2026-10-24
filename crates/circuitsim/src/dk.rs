@@ -158,10 +158,12 @@ pub fn support(c: &Matrix) -> Vec<usize> {
 ///
 /// Everything is a response of `A^-1` to an input column, read out on
 /// three blocks of rows: the M port voltages, the r state unknowns `x_S`,
-/// and all n unknowns. Input columns: the state (`C e_s / (g h)` for each s
-/// in S), the stage inputs (`e_s`: the F history), the M port currents
-/// (`N^T e_j`), the sources `b`, the input `e_in` and each sine source's
-/// row (its wave, [`crate::mna::Wave`]).
+/// and all n unknowns, those given as `first` (the probes) first, so a run
+/// that only reads them computes just the top of that block. Input
+/// columns: the state (`C e_s / (g h)` for each s in S), the stage inputs
+/// (`e_s`: the F history), the M port currents (`N^T e_j`), the sources
+/// `b`, the input `e_in` and each sine source's row (its wave,
+/// [`crate::mna::Wave`]).
 #[derive(Debug, Clone)]
 pub struct DkSystem {
     /// Unique per system built, so a factored Newton matrix knows its K.
@@ -171,6 +173,10 @@ pub struct DkSystem {
     pub n: usize,
     /// Rows of every response: m + r + n.
     rows: usize,
+    /// The unknown on each row of the third block, and how many of them
+    /// came first (`first` of [`DkSystem::new`]).
+    order: Vec<usize>,
+    n_first: usize,
     /// Response to the state, rows x r, column-major.
     xa: Vec<f64>,
     /// Response to the stage inputs, rows x r, column-major.
@@ -199,10 +205,19 @@ impl DkSystem {
         waves: &[Wave],
         ports: &Ports,
         support: &[usize],
+        first: &[usize],
     ) -> Result<DkSystem, Singular> {
         let n = g.n();
         let (m, r) = (ports.len(), support.len());
         let rows = m + r + n;
+        let mut order: Vec<usize> = Vec::with_capacity(n);
+        for &k in first {
+            if !order.contains(&k) {
+                order.push(k);
+            }
+        }
+        let n_first = order.len();
+        order.extend((0..n).filter(|k| !first.contains(k)));
         let mut a = g.plus_scaled(inv, c);
         for (&(p, rf), &g0) in ports.nodes.iter().zip(&ports.shunts) {
             if g0 != 0.0 {
@@ -224,7 +239,9 @@ impl DkSystem {
             for (o, &s) in out[m..m + r].iter_mut().zip(support) {
                 *o = z[s];
             }
-            out[m + r..].copy_from_slice(z);
+            for (o, &k) in out[m + r..].iter_mut().zip(&order) {
+                *o = z[k];
+            }
         };
         let mut z = vec![0.0; n];
         let mut xa = vec![0.0; rows * r];
@@ -272,6 +289,8 @@ impl DkSystem {
             r,
             n,
             rows,
+            order,
+            n_first,
             xa,
             qa,
             ia,
@@ -282,10 +301,21 @@ impl DkSystem {
     }
 
     /// The part of every stage that only depends on the step's start: the
-    /// response to `b` and to the state `x_S`, on all rows.
+    /// response to `b` and to the state `x_S`, on the ports, the states and
+    /// the first `unknowns` rows of the third block (`base` that long).
     pub fn step_base(&self, xs: &[f64], base: &mut [f64]) {
-        base.copy_from_slice(&self.b0);
+        base.copy_from_slice(&self.b0[..base.len()]);
         gemv_add(base, &self.xa, 0, self.rows, xs);
+    }
+
+    /// Rows a step needs for `all` unknowns or only the first ones.
+    pub fn rows_for(&self, all: bool) -> usize {
+        self.m + self.r + if all { self.n } else { self.n_first }
+    }
+
+    /// The unknown on each row of the third block (see [`DkSystem::new`]).
+    pub fn order(&self) -> &[usize] {
+        &self.order
     }
 
     /// Port voltages and state without device currents, for the stage
@@ -306,8 +336,9 @@ impl DkSystem {
         gemv_sub(ys, &self.ia, self.m, self.rows, i, neg);
     }
 
-    /// All unknowns of a stage: `x = A^-1 (b + u e_in + sum wv_k e_k + C x_S
-    /// / (g h) + w) - A^-1 N^T i`.
+    /// The unknowns of a stage, `x = A^-1 (b + u e_in + sum wv_k e_k + C x_S
+    /// / (g h) + w) - A^-1 N^T i`, on the first `x.len()` rows of the third
+    /// block (in [`DkSystem::order`]; `base` at least that long).
     #[allow(clippy::too_many_arguments)]
     pub fn unknowns(
         &self,
@@ -328,7 +359,29 @@ impl DkSystem {
         gemv_sub(x, &self.ia, k, self.rows, i, neg);
     }
 
-    /// `(A + N^T G_d N)^-1 E_S e` on all unknowns, for a vector `e` on the
+    /// As [`DkSystem::solve_linearized`], on the port and state rows only:
+    /// `out[..m]` the ports, `out[m..m + r]` the states.
+    pub fn solve_linearized_ports_states(
+        &self,
+        newton: &DkNewton,
+        ports: &Ports,
+        e: &[f64],
+        out: &mut [f64],
+        w: &mut [f64],
+        neg: &mut [f64],
+    ) {
+        w.fill(0.0);
+        gemv_add(w, &self.qa, 0, self.rows, e);
+        newton.factored().lu.solve(w);
+        gd_mul(&newton.factored().gd, ports, w, neg);
+        w.copy_from_slice(&neg[..self.m]);
+        let out = &mut out[..self.m + self.r];
+        out.fill(0.0);
+        gemv_add(out, &self.qa, 0, self.rows, e);
+        gemv_sub(out, &self.ia, 0, self.rows, w, neg);
+    }
+
+    /// `(A + N^T G_d N)^-1 E_S e` on all unknowns (in [`DkSystem::order`]), for a vector `e` on the
     /// state rows, with the device Jacobians and factored Newton matrix of
     /// `newton`'s last iteration (Woodbury: `A^-1 E_S e - A^-1 N^T G_d
     /// (I + K G_d)^-1 N A^-1 E_S e`). `w` has length m.

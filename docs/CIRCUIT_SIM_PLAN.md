@@ -1027,6 +1027,84 @@ measured on 1 s of the clip:
   recursively from the full step, or not re-deriving the whole step on a
   local event. Open, with M5's deferred speed target.
 
+**Speed after Phase 3: step selection, probe-only steps, AVX2 (2026-10-23).**
+Asked for before main-plan Phase 4, with the obvious lever named: step-size
+selection that doesn't halve recursively from the full step. Measured first
+(1 s of the arpeggio clip at the slice report's clip panel, `examples/bench.rs`,
+the Phase 3 circuit with T103 at 8.5):
+
+- **Halving wasn't the cost.** Error control costs ~1.34x over none (25.2x vs
+  33.9x real time), but rejected steps are only 6% of step attempts (13.7k of
+  223k). The rest is substeps the accuracy needs (error control off: -55 dB /
+  CV 0.26 V from the converged solution, against -79 dB / 0.039 V on).
+- **Where the events are:** 97% of rejections are at `nfa` / `nfb`, the 6973
+  plate-to-grid feedback nodes (47K into 20 pF: ~0.94 us against the 5.2 us
+  step), each time a 6973 grid clamps.
+- **Where a step's time goes** (cycle counts, `--features timing`): devices 27%,
+  factorizations 14%, the rest of the iterations 18%, stage linear algebra 21%,
+  per-step linear algebra 19%. The linear algebra grew with the state (86 rows)
+  and the 250 unknowns every step computed three times (step base, end point,
+  error estimate) while a render reads 14 probes.
+
+What went in (`transient.rs`, `dk.rs`, `linalg.rs`):
+
+- **Step selection** (`Options::step_selection`, default on;
+  `Transient::advance_selected`): a rejected step is redone at the level its
+  error ratio predicts (h^4 scaling, target 0.5), at least one deeper; after an
+  accepted substep the next coarsens by up to 2 levels when its ratio predicts
+  < 0.8 and the substep grid allows; the next sample starts at the level the
+  last substep chose. Rejections drop 4x (13.7k -> 3.4k on the clip second);
+  accepted substeps rise (30.8k -> 40.1k): the total attempts barely move
+  (223k -> 218k), but the level switches stop refactoring stale Jacobians
+  (1.22 -> 1.08 factorizations per sample). Its constants barely matter (a
+  sweep of the targets and the coarsening limit: within 1% of the attempts and
+  0.6 dB). `Stats::{accepted,rejected}_by_level` count steps per level.
+- **The ports-and-states error norm** (`Options::error_norm`, production
+  `ports_states` in sim_settings): the estimate is measured on the device port
+  voltages and the state nodes; the other nodes are algebraic in those. With it
+  a DK step computes only the probes' unknowns (`Options::all_unknowns`;
+  the Python binding always keeps only the probes; the DK systems put them
+  first in their unknown block), and the estimate only on ports and states:
+  per-step linear algebra 19.8% -> 12.4% of the run. Same accuracy (-79.9 vs
+  -79.2 dB on the clip second). `Transient::update` refuses a probes-only run.
+- **AVX2** for the matrix-vector products and the port matrix's LU, detected at
+  run time like the 6386 sections: the same scalar loops 4 lanes wide, no fused
+  multiply-add, bit-identical results (tested; and outputs `cmp`-identical):
+  6-10%.
+
+Speed (one job at a time, best of three back to back; "before" is the same
+binary's old paths: halving, every node, every unknown, SSE2): **1 s of the clip
+20.9x -> 16.6x real time (1.26x faster), 1 s of the TC1 burst 22.1x -> 19.1x
+(1.16x)**. The remaining levers are M5's (the 6386 sections' exponentials, the
+reuse thresholds) and the stage linear algebra (86 states); the 10x target over
+ngspice stays deferred.
+
+Found on the way:
+
+- **The error estimate misses a diode turning off within a step.** An RC clamped
+  by two steep diodes, with a 1 us node behind it, at 2x 96 kHz: 17 mV off the
+  converged solution at the knee (8x, 16x and trapezoidal at 64x agree to
+  0.3 mV there), and the estimate never asks for a substep: it uses the end
+  point's Jacobian, after the diode has switched. The 670's events are caught
+  (their kinks reach the 1 us feedback nodes), so production meets its rows; a
+  circuit whose error sits only at a switching junction may not be.
+- **DK with Jacobian reuse vs full MNA** on the sidechain driven 9 dB harder
+  (T103 at 8.5): a decision can move without changing the number of substeps
+  (0.55 V at `nfb` for one sample at a grid clamp; the CV within 0.3 mV).
+  `tests/dk.rs` now compares reuse runs with error control in error-tolerance
+  units always (measured <= 45; bound 100), the CV within 10 mV; exact Newton
+  still agrees within 0.14 Newton tolerance everywhere, with the same decisions,
+  under both controllers and both norms. `tests/control.rs`: both controllers on
+  the 670 against its converged solution (-101 dB each), probe-only runs
+  bit-identical to full ones, `update` refused without every unknown.
+- **ngspice can stop at its first step depending only on the input's chunking**
+  (`varimu.sim.io.run_transient`): at the default front panel, 4 and 4.5 s
+  renders stopped at t = h / 100 at a bridge diode on T104's floating
+  secondary, whatever the input, method (gear too), rshunt (1e10), gmin, or
+  added capacitance on the secondary; 3.5 s renders, and the same input split
+  into 200k- or 1M-line filesources, ran. A run that stops within its first
+  sample is retried once with another split.
+
 **Milestone order after M6 (decided 2026-10-21; main plan Phase 2 done the
 same day, and M7 / M8 stay deferred after it: nothing in main-plan Phases
 3-5 needs them; next is main-plan Phase 3).** The simulator is fast
