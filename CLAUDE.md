@@ -3,12 +3,17 @@
 The project plan is [VARIMU_PROJECT_PLAN.md](VARIMU_PROJECT_PLAN.md) (the plan's
 layout calls it `PLAN.md`). Read it before starting work.
 
-**Phases 0-3 are done (Phase 3, full circuit netlist: 2026-10-22; the plan's
-Phase 3 status has what was built, measured, and which genomes oscillate).
-Phase 4 (Simulation Runner and Measurement Suite) is in progress, its
-done-when met 2026-10-23: `varimu unit` (genome -> setup -> renders ->
-reports/units/NAME/) and `varimu.measure.plausibility`; the plan's Phase 4
-status lists what's left.** Since 2026-10-23 the default front panel is the
+**Phases 0-4 are done (Phase 4, measurement suite: 2026-10-23; noise waits
+for noise sources). Phase 5 (Listening App and Preference Data) is in
+progress: blind A/B at `/ab` of `varimu listen`, stimuli matched by
+`varimu ab-prepare` (varimu/listen/: candidates, stimuli, prepare, session,
+store; the plan's Phase 5 status). Next: the Phase 2 follow-up the user
+chose 2026-10-23 (Option 1, a JA refit of mumetall with its Rayleigh region;
+the plan's Phase 2, "Low-level core physics"), then Phase 5's planned
+listening aids (difference listening, ABX with an exaggeration staircase).** Plausibility (`varimu.measure.plausibility`) rejects only what no
+working unit could do; comparisons with the 670's published figures are the
+report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
+Since 2026-10-23 the default front panel is the
 factory adjustment (the manual's threshold procedure to its curve 3,
 `varimu.sim.setup.threshold`), T103 is 8.5 and the AC THRESHOLD pots are
 tapped (Phase 3's sourced leftovers). Phase 2's decision (the user's): the hysteretic
@@ -117,6 +122,8 @@ uv run --extra fast python scripts/calibrate_psu.py    # re-derive T302's voltag
 uv run --extra fast python scripts/corner_sweep.py [--quick]   # genome corners: simulates? GR rises? quiet at idle? -> reports/corners/
 uv run --extra fast varimu unit --name NAME [--genome FILE] [--set k=v ...] [--no-clips]   # Phase 4: genome -> setup -> renders -> reports/units/NAME/ (exit 2: rejected)
 uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
+uv run --extra listen --extra fast varimu ab-prepare [--candidates NAME ...] [--swap KEY=VALUE ...] [--targets 3 6]   # Phase 5: match the pool (config/listening.yaml) on data/clips -> SQLite + reports/listening/matching.json
+uv run --extra listen --extra fast varimu listen   # then http://127.0.0.1:8765/ab: blind A/B session (keys: Space, 1/2, A/B/N)
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 ```
@@ -326,6 +333,31 @@ tests skip when ngspice is missing.
   in LF response (bass-rich program compresses up to ~2 dB differently).
   The core's map is piecewise smooth (substep and direction changes), so
   Jacobian tests compare it only within 10 uT of its state.
+- **Mumetall at low fields (2026-10-23).** The production fit's permeability at
+  the demagnetized origin is 246, not the 5,850 the circuit file's comment
+  says (T101's and T103's turns were derived at 5,850): its initial curve is
+  H ~ sqrt(B) over the audio range, the source of Phase 4's low-level THD and
+  of a level-dependent bass response. A Rayleigh refit is measured and chosen
+  (Option 1, the plan's Phase 2, "Low-level core physics"), not yet applied.
+- **Attack is current-limited (2026-10-23).** The 6973 pair (its zero-bias
+  current at the ~150 V screen tap) sets the CV's slope into C109; the
+  bridge diodes and T104's leakage don't matter. A long burst's CV keeps
+  creeping at constant gain (it tracks the supply's sag), so measure attack
+  against the CV a few tens of ms in (`metrics.cv_attack`), not the burst's
+  end.
+- **Listening renders are excerpts (Phase 5).** A GR-matched stimulus takes
+  ~8-12 renders of its excerpt (the pool's `excerpt_s`, 8 s: the clip's
+  loudest window); `ab-prepare` on 3 candidates x 2 clips x 2 targets is
+  ~100 renders. Judgments go to data/judgments/judgments.sqlite (never
+  committed); stimuli are stored per code and config version
+  (`prepare.code_version`: a material refit counts), so a circuit change
+  means preparing again.
+- **One render job twice at once collides (found 2026-10-23).** Two threads
+  rendering the identical job (same cache key) both write
+  `cache/renders/<key>.tmp` and one fails with WinError 32. Callers avoid it
+  (`listen.prepare` runs a candidate's targets in turn); the fix (a unique
+  temporary name in `runner.render`) touches the cache key, so it waits for
+  the next cache-invalidating batch.
 - **The power supply and the start of a run (Phase 3, 2026-10-21).** A run
   starts at the DC operating point with the mains sine sources at their t = 0
   value (phase 90: the peak), so the reservoirs start charged to the peak;

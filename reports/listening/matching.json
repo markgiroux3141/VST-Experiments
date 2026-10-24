@@ -1,0 +1,331 @@
+{
+ "code": "0.1.0+22f96f969280+cfg4f4d68be40",
+ "summary": {
+  "stimuli": 12,
+  "solved": 12,
+  "unreachable": [],
+  "worst_gr_error_db": 0.066,
+  "gr_tolerance_db": 0.1,
+  "pairs": 12,
+  "worst_lufs_diff": 0.0,
+  "lufs_tolerance": 0.1,
+  "verified": true,
+  "rejected_candidates": {}
+ },
+ "stimuli": [
+  {
+   "candidate": "nominal",
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.5267,
+   "gr_db": 2.978,
+   "gr_error_db": -0.022
+  },
+  {
+   "candidate": "nominal",
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.755,
+   "gr_db": 6.037,
+   "gr_error_db": 0.037
+  },
+  {
+   "candidate": "nominal",
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.6271,
+   "gr_db": 2.941,
+   "gr_error_db": -0.059
+  },
+  {
+   "candidate": "nominal",
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.89,
+   "gr_db": 6.02,
+   "gr_error_db": 0.02
+  },
+  {
+   "candidate": "t101_permalloy",
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.5249,
+   "gr_db": 2.965,
+   "gr_error_db": -0.035
+  },
+  {
+   "candidate": "t101_permalloy",
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.7529,
+   "gr_db": 6.037,
+   "gr_error_db": 0.037
+  },
+  {
+   "candidate": "t101_permalloy",
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.6289,
+   "gr_db": 2.944,
+   "gr_error_db": -0.056
+  },
+  {
+   "candidate": "t101_permalloy",
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8927,
+   "gr_db": 6.021,
+   "gr_error_db": 0.021
+  },
+  {
+   "candidate": "built_seed1",
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.507,
+   "gr_db": 3.037,
+   "gr_error_db": 0.037
+  },
+  {
+   "candidate": "built_seed1",
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.7,
+   "gr_db": 6.027,
+   "gr_error_db": 0.027
+  },
+  {
+   "candidate": "built_seed1",
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.5955,
+   "gr_db": 3.066,
+   "gr_error_db": 0.066
+  },
+  {
+   "candidate": "built_seed1",
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8195,
+   "gr_db": 6.025,
+   "gr_error_db": 0.025
+  }
+ ],
+ "pairs": [
+  {
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "nominal",
+    "t101_permalloy"
+   ],
+   "lufs_before": [
+    -22.262,
+    -22.25
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "nominal",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -22.262,
+    -22.311
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "t101_permalloy",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -22.25,
+    -22.311
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "t101_permalloy"
+   ],
+   "lufs_before": [
+    -25.41,
+    -25.415
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -25.41,
+    -25.388
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "t101_permalloy",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -25.415,
+    -25.388
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "nominal",
+    "t101_permalloy"
+   ],
+   "lufs_before": [
+    -23.791,
+    -23.812
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "nominal",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -23.791,
+    -23.902
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "t101_permalloy",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -23.812,
+    -23.902
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "t101_permalloy"
+   ],
+   "lufs_before": [
+    -26.995,
+    -27.011
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -26.995,
+    -26.975
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "Dry Guitar.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "t101_permalloy",
+    "built_seed1"
+   ],
+   "lufs_before": [
+    -27.011,
+    -26.975
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  }
+ ]
+}

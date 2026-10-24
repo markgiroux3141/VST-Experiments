@@ -192,6 +192,18 @@ Findings that change later work:
 - Decided 2026-10-21 (the user delegating): Phase 2's provisional choices stand (T101 leakage 2.5 mH, interwinding capacitance nominal 0, the effective-field JA form, the mumetall fit); they are genome parameters, free to move later. Next is Phase 3; circuit-sim M7 / M8 stay deferred.
 - Open: a Cauer ladder for frequency-dependent eddy loss (skin effect makes the classical term wrong above ~100 Hz in high-permeability laminations); per-winding resistance bounds.
 
+**Low-level core physics (follow-up, 2026-10-23). Decided by the user 2026-10-23: Option 1, to be applied next (production unchanged until then).** Phase 4 found 0.16% THD (H3) at -10 dBm with the JA cores, 0.003% with their linear limit, falling as the level rises. Real permalloy at low fields follows Rayleigh's law, mu(H) = mu_i (1 + r H), with a finite initial permeability, so its hysteresis distortion vanishes as the level falls. Numbers: `reports/phase2/mumetall_rayleigh_options.json`.
+
+- **Why.** The production mumetall fit has c = 0.00077: its initial curve is M ~ c chi_an H + chi_an H^2 / (2k), and with c that small the quadratic term rules from ~0.04 A/m up, so the core runs at H ~ sqrt(B) over the whole audio range. Its permeability at the demagnetized origin is 246 (the circuit file's comment says 5,850: the turns were derived to give 10 H at that value, so the linear-limit T101 is ~0.75 H today, -4.6 dB at 40 Hz standalone). On its initial curve it reads 1,270 at 0.01 A/m and 11,200 at 0.1 A/m; the datasheet's own graph reads ~55,000 at 0.1 A/m. T101 and T103 sit at ~0.001-0.006 A/m on program material.
+- **Data** (sourced, in the repo): the Mumetall sheet's VAC graph of amplitude permeability, final-annealed (`data/datasheets/matthey_mumetall_mu_a.csv`, digitized with provenance): mu_a ~ 42,000 (1 + 2.8 H) over 0.1-0.6 A/m. Independently, a DC ring of 1J85 permalloy (80Ni-5Mo): mu_i 72,100, r = 3.3 per A/m (web: https://pmc.ncbi.nlm.nih.gov/articles/PMC9608087). Both give r ~ 3 per A/m; the production fit implies ~23.
+- **Option 1 (recommended): refit JA with the Rayleigh region as a fifth target.** `scripts/fit_core_material.py` now takes `rayleigh_r_per_a_m` and `h_rayleigh_a_per_m` in a material's datasheet block (mu at h_rayleigh = mu4 (1 + r h_r) / (1 + r 0.4)). With r = 2.8, h_r = 0.04 A/m: a 3.18548, k 1.66935, c 0.289433, alpha 1.76945e-5; mu4 +0.5%, mu_max -0.3%, Hc +2.3%, loss -2.2%, mu(0.04) -0.5%. Its origin permeability 29,300; H3/H1 of the field under sinusoidal B 5.5e-5 / 5.5e-4 / 5.2e-3 at 10 uT / 100 uT / 1 mT (linear in amplitude: Rayleigh); loop loss ~ Hm^3.0. (r = 3.3 gives nearly the same set.) No model or engine change: the Python reference and circuitsim stay as tested.
+  - In the nominal unit (no limiting, THD %): 1 kHz -30 / -10 / +4 / +18 dBm in: 0.0001 / 0.0031 / 0.062 / 0.66 (production 0.31 / 0.16 / 0.065 / 0.69; linear limit 0.0001 / 0.0030 / 0.061 / 0.66). 100 Hz: 0.0004 / 0.0061 / 0.073 / 0.64 (production 1.53 / 0.56 / 0.22 / 0.74; linear 0.0000 / 0.0027 / 0.059 / 0.53): the core's distortion now rises with level and adds to the tubes at LF.
+  - Standalone, re 1 kHz at 40 Hz: T101 -0.02 dB at any level, JA and linear alike (production JA -1.36 dB at small drive to -0.14 dB at large: a level-dependent bass response; production linear -4.55 dB); T103 -0.01 dB (production -0.48 to -0.05, linear -2.59).
+  - Its JA minor loops are Rayleigh-like (loss ~ Hm^3) but their amplitude permeability rises about half as fast as the initial curve does (Rayleigh: equally fast).
+  - Consequences: every render with a mumetall core changes (the whole cache); the linear-limit builds change too (ngspice's cross-check cores), so `--verify`'s bounds, `test_transformers.py`, `test_circuitsim_slice.py`, the IR / device fixtures and Phase 2's "JA and linear builds differ up to 2 dB in LF compression" need re-measuring; T101's and T103's linear-limit inductances become ~18 H and ~8 H (the gap now dominates their reluctance at low level; the derived turns' "10 H" / "5 H" notes go stale).
+- **Option 2: another JA variant** (e.g. a field-dependent reversibility, or a second anhysteretic term), only if Option 1's minor-loop shape matters: Option 1 already meets every datasheet figure.
+- **Option 3: another hysteresis model** (Preisach, or a sum of play operators), Rayleigh by construction with return-point memory (JA's minor loops don't close exactly). A new device in both the Python reference and circuitsim, with a state of reversal points; days of work and an unknown speed cost.
+
 ### Phase 3: Full Circuit Netlist
 
 **Goal:** A parametric netlist generator that turns a genome into a complete, coupled compressor circuit.
@@ -289,7 +301,7 @@ Findings that change later work:
 
 **Done when:** A single command takes a genome and produces a measurement report plus rendered audio clips, and the plausibility checks catch deliberately broken genomes.
 
-*Status (2026-10-23): in progress, the done-when met* (see "What's left").
+*Status (2026-10-23): done* (noise waits for noise sources; "Closing Phase 4" below has the last changes).
 
 - **The runner** existed from the slice (cached, parallel, `timing.csv`). New: a fresh render returns exactly what its cached copy will (float32), so anything measured from it, a level that sets the next render's input, gives the same next cache key either way; ngspice's start-up stop at four input chunks is retried with five (circuit-sim plan, "Speed after Phase 3").
 - **The one command:** `varimu unit --name NAME [--genome FILE] [--set k=v ...]` (`varimu.measure.suite`) -> `reports/units/NAME/` (report.json, plots, rendered clips in `audio/`, not committed). Exit status 2 when the unit is rejected.
@@ -306,7 +318,7 @@ Findings that change later work:
   - thump (6 kHz bursts with 5 ms edges, the output low-passed at 1 kHz, with the input's own floor);
   - the program clips.
   - Not yet: noise (no noise sources).
-- **Plausibility checks.** The screen:
+- **Plausibility checks** (as first built; split into broken / not a 670 when Phase 4 closed, below). The screen:
   - idle quiet (< -80 dBFS);
   - B+ 232-248 V, the unregulated rail 380-480 V;
   - bank currents 10-50 mA, the grid bias on ZERO's divider;
@@ -343,11 +355,29 @@ Findings that change later work:
 
 Findings that change later work:
 
-- **Attack is ~8x the published 0.2-0.4 ms** (CV 63% at 1.7 ms for TC1/2/6 from a burst to 10 dB of limiting). Either the manual's attack is defined differently (e.g. the CV's first movement, or a bigger overload) or the sidechain's source impedance / bridge in the model is slower than the original's. Worth a look before Phase 5's listening.
-- **Low-level distortion comes from the transformer cores.** 0.16% THD (H3) at -10 dBm with the Jiles-Atherton cores, 0.003% with their linear limit; it falls as the level rises (0.07% at +4 dBm, where the tubes take over). Real permalloy at low fields follows Rayleigh's law, its hysteresis distortion falling with level. The effective-field JA fit of mumetall is almost all irreversible (Phase 2), so at low fields it overstates hysteresis. Within the manual's < 1%, but it is character: a Phase 2 follow-up (a fit with a Rayleigh region, or another hysteresis model).
+- **Attack is ~8x the published 0.2-0.4 ms** (CV 63% at 1.7 ms for TC1/2/6 from a burst to 10 dB of limiting). Either the manual's attack is defined differently (e.g. the CV's first movement, or a bigger overload) or the sidechain's source impedance / bridge in the model is slower than the original's. Worth a look before Phase 5's listening. *Resolved (closing Phase 4, below): current-limited by the 6973 pair, as physics says; the onset matches the published figures.*
+- **Low-level distortion comes from the transformer cores.** 0.16% THD (H3) at -10 dBm with the Jiles-Atherton cores, 0.003% with their linear limit; it falls as the level rises (0.07% at +4 dBm, where the tubes take over). Real permalloy at low fields follows Rayleigh's law, its hysteresis distortion falling with level. The effective-field JA fit of mumetall is almost all irreversible (Phase 2), so at low fields it overstates hysteresis. Within the manual's < 1%, but it is character: a Phase 2 follow-up (a fit with a Rayleigh region, or another hysteresis model). *Options measured: Phase 2, "Low-level core physics".*
 - **The error estimate misses a diode turning off within a step** (circuit-sim plan, "Speed after Phase 3"): fine on the 670's events, worth knowing for other circuits.
 
-What's left: re-measure the timing check's TC5 / TC6 short-peak release (a burst short enough to be an "individual peak"), and decide the attack question above.
+**Closing Phase 4 (2026-10-23)**, after the aim was restated (Vision): the 670's figures are anchors, not targets.
+
+- **Plausibility split into "broken" and "not a 670"** (`varimu.measure.plausibility`). Rejecting checks are only what no working unit could do:
+  - oscillation: idle quiet, no spur under any tone;
+  - runaway DC or collapsed bias: the regulator regulating (B+ within 3% of B+ ADJ's 240 V after setup, 10% as built: the 5651's +-6% and the divider's 10% resistors), bank currents 10-50 mA, the grids negative on ZERO's divider;
+  - no gain reduction, or gain reduction folding back, on any curve;
+  - absurd distortion: THD > 5% at +4 dBm out or SMPTE > 10% with no limiting;
+  - a CV that never returns: its 90% release, extrapolated past the window from the remaining distance's decay, over a minute (`metrics.cv_release_estimate`).
+- **The comparisons with the 670 moved to the report's `vs_670`**, which rejects nothing: the factory curve against curve 3, limiting at +25 dBm, attack and release per burst against the manual, the response against +-1 dB, the unregulated rail against its printed 420-450 V. Moved out of rejection: release vs the manual, attack < 20 ms, curve 3 within 3 dB, response +-3 dB, the unregulated rail 380-480 V, the hot CV above -150 V; none had been the only check rejecting a case. `scripts/plausibility_check.py`: all 23 cases judged right again (the nominal passes; Phase 3's 17 and the 5 broken genomes rejected, each by a physical check). `slow_release` is now C109 x300 (rejected by `cv_returns`: TC2 releases in ~208 s; x100 gave 69 s, too near the minute to be a clear case).
+- **Attack: no physics missing; the old figure measured a different thing.** Measured on TC1 bursts to 10 dB of limiting with the sidechain probed (one suspect at a time):
+  - The bridge current is pinned near 145 mA whatever the bridge diodes (ideal or 1N4007-like), T104's leakage (20 / 5 / 1 mH), R136 or C105. The 6973 grids clamp at about +2 V. So the CV's slope is limited by what the 6973 pair can deliver at the 670's ~150 V screen tap: ~70-79 mA a plate, x2 through T104's 2:1 into C109, at most ~72 V/ms on TC1's 2 uF.
+  - The 6973 model in that region agrees with RCA's Vg1 = 0 plate curves (DATA 1 p.6, not used in its two-point fit): 67.5 vs ~65 mA at Vg2 = 150 V, 134.5 vs ~127-135 mA at 250 V.
+  - A 54 V swing in 0.2 ms would need ~540 mA, more than the pair can deliver even at a 300 V screen. So "full limiting in 1/5000 s" (the 660 brochure; the manual doesn't say how attack was measured) can't be the CV's 63% point in this circuit.
+  - The old 1.7 ms was 63% of the swing at the end of a 1 s burst, whose CV keeps creeping (-58.6 to -67.6 V) at constant gain while it tracks the supply's sag; against the fast swing (the CV 20 ms in) it is 0.88 ms.
+  - The CV's **onset** (its first 10%) reproduces the published pattern: 0.16 ms on TC1/2/6 (published 0.2), 0.25 on TC3/5 (0.4), 0.42 on TC4 (0.4); the 2x step between 2 uF and the larger networks included. The gain: 1 dB in the first half period of the 1 kHz tone, 3 dB in 1.0-1.5 ms.
+  - The report now gives attack as the CV's 10% and 63% of the fast swing and the gain's 1 / 3 / 6 dB per half period (`metrics.cv_attack`, `metrics.gain_attack`), and compares the onset with the manual (informative).
+  - Sensitivity worth knowing for the parts sandbox: the attack scales with the 6973's zero-bias current, i.e. with the screen tap (R315; a redraw reportedly reads 100K, README open questions) and the screen supply's sag.
+- **Positions 5 and 6 get an individual peak** (20 ms to the 10 dB point; `suite.PEAK_S`) besides the 1 s burst (a consistently high level) and the train (multiple peaks), each against its own published figure (`suite.PUBLISHED_RELEASE`). Nominal unit, CV 90%: TC6 peak 0.26 s (published 0.3), TC5 peak 2.75 s (2), TC5 train 6.5 s (10), TC6 train 13.9 s (10), TC6 1 s burst 11.2 s (25). The peak's length barely matters (10 / 20 / 50 ms: TC6 0.24 / 0.26 / 0.31 s, TC5 2.6 / 2.75 / 3.0 s). TC6's 25 s probably needs a level sustained long enough to charge C112 (R140 C112 = 2 s; a 1 s burst charges it partly), not a model change.
+- Noise stays open until noise sources exist (Coupling Checklist).
 
 ### Phase 5: Listening App and Preference Data
 
@@ -364,6 +394,32 @@ What's left: re-measure the timing check's TC5 / TC6 short-peak release (a burst
 - Program material: only recordings the user owns or has rights to.
 
 **Done when:** A session can be run end to end, judgments land in SQLite, and the matching is verified by measurement.
+
+*Status (2026-10-23): in progress, the done-when met* (see the end). What exists (`varimu/listen/`):
+
+- **Candidates** (`candidates.py`, pool in `config/listening.yaml`): a candidate is a name and a physical genome; front-panel controls are refused. Its id is the genome's content address. The pool: nominal, a parts-sandbox swap (T101's core a harder nickel-iron), a unit built from parts anywhere in tolerance (spread 1, seed 1).
+- **The parts sandbox** (`candidates.catalog`, `candidates.swap`, `varimu ab-prepare --swap KEY=VALUE`): every genome-linked circuit value is a swappable part, a choice (core materials) or a value within its bounds (out of bounds is refused), each with its source. A swap is a candidate like any other: screened, set up and matched the same way. Capacitor types aren't swappable yet: dielectric physics (absorption, ESR) isn't modelled.
+- **Matching** (`stimuli.py`):
+  - each candidate set up as the factory would (the DC trims; pad and DC THRESHOLD at the factory adjustment);
+  - **gain reduction**: AC THRESHOLD solved so the average GR on the excerpt is the target (3 and 6 dB), GR measured against the same unit at AC THRESHOLD 0 per 50 ms window, gated 30 dB below the loudest; a parallel grid, then refinements rendering the estimate and a neighbour either side, to 0.1 dB; an unreachable target is flagged, not faked;
+  - **loudness**: each pair is matched to one integrated LUFS at playback (lowered together if a peak would clip).
+  - Program material: data/clips only (none: `ab-prepare` says so and stops); clips longer than the pool's 8 s play their loudest 8 s window, faded (renders run ~17x slower than real time).
+- **Verified by measurement** (`prepare.py`, `varimu ab-prepare` -> SQLite and `reports/listening/matching.json`): every stimulus's GR re-measured from its cached renders, every pair's LUFS after matching; candidates the plausibility screen rejects are left out. `tests/test_ab_matching.py` does it on real renders (two candidates, 3 dB, a 1.5 s program-like excerpt).
+- **Protocol** (`session.py`, `/ab` in `varimu listen`, `ab.html`): blind (the page sees trial ids and audio, never candidates), randomized sides and order (one seeded generator per session, the first-heard side too), keyboard (Space, 1 / 2 to switch sides in sync, R, A / B / N to answer), repeated pairs (15% after the 4th trial, at least 3 trials back, sides redrawn) for the listener's consistency, a session timer with a break banner at 25 minutes.
+- **Storage** (`store.py`, data/judgments/judgments.sqlite, never committed): candidates, stimuli (per code and config version), sessions, trials (clip, category, GR target, sides, repeat-of, the loudness match applied and measured, choice, preferred candidate, response time, plays per side).
+- Tests: `tests/test_ab.py` (no renders: the GR measure and solve on a synthetic compressor, planning, a whole session through the app into SQLite; the HTTP-level variant through `httpx`, a dev dependency).
+- **Measured on the user's two clips** (2026-10-23, `reports/listening/matching.json`): the pool's 3 candidates x 2 clips (the arpeggio whole, 4 s; the guitar's loudest 8 s) x 3 and 6 dB: all 12 solved in 7-13 renders each, worst GR error 0.066 dB; all 12 pairs within 0.00 LU after matching; all three candidates pass the screen. Thresholds land close together (3 dB on the guitar: AC 0.627 nominal, 0.629 with T101 permalloy, 0.596 for the built unit), so the pairs differ in character, not amount. A smoke session on a copy of the database: a trial loads in 0.5 s, both sides at -23.0 LUFS.
+- The done-when is met by those tests and measurements. Left: a first real session by the listener, then Phase 6 needs judgments.
+- **First real session (2026-10-23, 12 trials, a pilot):** the listener found every pair extremely close and chose A 10 of 12 times (sides randomized: ~4% by chance), never "no preference", and got no repeated pair (repeats are drawn at 15% a trial: a 12-trial session gets none ~27% of the time). Read as near chance with a position bias: kept in the database as a pilot, not preference data. The units differ by little once gain reduction and loudness are matched, so preference answers need a check that the pair can be told apart at all.
+
+**Planned next (decided 2026-10-23), after the Phase 2 core refit (Option 1), which changes every unit, so `ab-prepare` runs again:**
+
+1. **Difference listening and exaggeration in the A/B page** (no new renders: the matched renders exist). Play the residual A - B (after a least-squares gain alignment) turned up, to hear what a part changes; and A + k (B - A) for k = 2, 4, 8, which extrapolates along the difference (the colour-saturation analogy), loudness matched again after the extrapolation. Artifacts at large k where the gain envelopes differ: report them, don't hide them.
+2. **ABX discrimination with an adaptive k staircase, and guaranteed repeats.** X is secretly A or B; hits over 12-16 trials and a binomial p-value say whether the listener can tell the pair apart at all. The staircase starts at a large k, steps down after each correct answer and up after each miss, and converges on the listener's just-noticeable k per pair: k ~ 1.5 means the real difference is just audible, k ~ 6 means preference answers on it are mostly noise. Sessions get a fixed number of repeated pairs (e.g. 3), not a chance draw; position bias (share of A answers) is recorded per session for Phase 6 to correct or discount. An obvious anchor pair checks the listener can hear a real difference in the setup.
+3. **Condition search with the measurement suite** (physical, within bounds): for a pair, find the conditions where its difference is largest (gain-reduction target, Time Constant, program material: bass-heavy and quiet passages for core materials, heavy limiting for tube mismatch and thump, transients for the timing parts), measured as the residual's level, and listen there.
+4. **Physical caricatures, a flagged diagnostic in the parts sandbox:** a part pushed k times further from nominal than its bounds allow (mismatch x3, a much smaller core, part spread 3; a material "amount" by interpolating or extrapolating two materials' parameters). Real circuit physics, so what is heard is a real mechanism, but not linear in k, never a genome value.
+
+Rules for all of these: they train the ear and show what to listen for; judgments on exaggerated or caricatured stimuli are stored separately and flagged, never used as preference data or by the optimizer (liking a cranked difference doesn't mean liking the real one); everything played is still matched for gain reduction and loudness.
 
 ### Phase 6: Preference Model
 

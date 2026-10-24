@@ -1,7 +1,10 @@
-"""Tweak-and-listen page for the 670 slice (offline renders, not live).
+"""Tweak-and-listen page for the 670 slice (offline renders, not live), and blind A/B.
 
     uv sync --extra listen --extra fast
-    uv run varimu listen            # http://127.0.0.1:8765
+    uv run varimu listen            # http://127.0.0.1:8765  (blind A/B: /ab)
+
+Blind A/B (Phase 5, /ab): sessions over the stimuli `varimu ab-prepare` matched
+(varimu.listen.prepare); see the AB class below and varimu.listen.session.
 
 Pick a clip from data/clips/ (or a test signal), move the sliders, press
 Render. Renders run in the background through varimu.sim.runner (cached, at
@@ -295,20 +298,169 @@ class RenderRequest(BaseModel):
     values: dict[str, float]
 
 
+class SessionRequest(BaseModel):
+    listener: str = ""
+    seed: int | None = None
+
+
+class AnswerRequest(BaseModel):
+    trial_id: int
+    choice: str  # "A" | "B" | "none"
+    response_ms: float
+    plays_a: int = 0
+    plays_b: int = 0
+
+
+# --- Blind A/B (Phase 5) ---------------------------------------------------------------------
+
+
+class AB:
+    """The blind A/B side of the app: sessions over the prepared stimuli
+    (varimu.listen.prepare), judgments into SQLite (varimu.listen.store). The page
+    sees trial ids and audio only, never which candidate is which."""
+
+    def __init__(self, db=None, version: str | None = None, render_audio=None):
+        from varimu.listen import prepare, store
+
+        self.db = db or store.connect()
+        self.version = version or prepare.code_version()
+        self.render_audio = render_audio or prepare._render_audio
+        self.lock = threading.Lock()
+        self.audio: dict[int, tuple[bytes, bytes]] = {}
+
+    def status(self) -> dict[str, Any]:
+        from varimu.listen import store
+
+        rows = store.stimuli(self.db, self.version)
+        conds = {(r["clip"], r["start_s"], r["seconds"], r["time_constant"], r["gr_target_db"])
+                 for r in rows}  # fmt: skip
+        return {
+            "stimuli": len(rows),
+            "conditions": len(conds),
+            "candidates": len({r["candidate_id"] for r in rows}),
+            "ready": len(rows) >= 2,
+            "hint": ""
+            if len(rows) >= 2
+            else "run `varimu ab-prepare` first (program clips "
+            "in data/clips, candidates in config/listening.yaml)",
+        }
+
+    def start(self, listener: str, seed: int | None) -> dict[str, Any]:
+        from varimu.listen import session, store
+
+        with self.lock:
+            stims = store.stimuli(self.db, self.version)
+            if len(stims) < 2:
+                raise LookupError(self.status()["hint"])
+            sid = session.start(self.db, stims, listener=listener, code_version=self.version,
+                                seed=seed)  # fmt: skip
+            return session.progress(self.db, sid)
+
+    def next(self, sid: str) -> dict[str, Any]:
+        from varimu.listen import session, stimuli, store
+
+        with self.lock:
+            prog = session.progress(self.db, sid)
+            t = session.next_trial(self.db, sid)
+            if t is None:
+                store.end_session(self.db, sid)
+                return {"done": True, "progress": session.progress(self.db, sid)}
+            if t["id"] not in self.audio:
+                keys = {
+                    r["id"]: r["render_key"]
+                    for r in self.db.execute(
+                        "SELECT id, render_key FROM stimuli WHERE id IN (?, ?)",
+                        (t["stimulus_a"], t["stimulus_b"]),
+                    )
+                }
+                fs = load_sim_settings().sample_rate
+                ya, yb = (self.render_audio(keys[t[k]]) for k in ("stimulus_a", "stimulus_b"))
+                n = min(len(ya), len(yb))
+                v = stimuli.verify_pair(ya[:n], yb[:n], fs)
+                store.presented(self.db, t["id"], v["gains_db"], v["lufs_after"])
+                self.audio = {t["id"]: tuple(_wav_bytes(y, fs) for y in v["audio"])}
+            seed = self.db.execute("SELECT seed FROM sessions WHERE id = ?", (sid,)).fetchone()
+            first = "AB"[int(np.random.default_rng([seed["seed"], 3, t["id"]]).integers(2))]
+            return {
+                "done": False,
+                "trial_id": t["id"],
+                "first": first,  # the side that sounds first (seeded, like the rest)
+                "audio": {s: f"/api/ab/audio/{t['id']}/{s}.wav" for s in ("A", "B")},
+                "progress": prog,
+            }
+
+    def answer(self, req: AnswerRequest) -> dict[str, Any]:
+        from varimu.listen import session, store
+
+        if req.choice not in ("A", "B", "none"):
+            raise ValueError(f"choice must be A, B or none, not {req.choice!r}")
+        with self.lock:
+            store.answer(self.db, req.trial_id, req.choice, req.response_ms, req.plays_a,
+                         req.plays_b)  # fmt: skip
+            sid = self.db.execute(
+                "SELECT session_id FROM trials WHERE id = ?", (req.trial_id,)
+            ).fetchone()["session_id"]
+            return session.progress(self.db, sid)
+
+
 # --- App ---------------------------------------------------------------------------------------
 
 
-def create_app(workers: int | None = None):
+def create_app(workers: int | None = None, ab: AB | None = None):
     from fastapi import FastAPI, HTTPException
     from fastapi.responses import HTMLResponse, Response
 
     app = FastAPI(title="varimu listen")
     jobs = Jobs(workers or runner.default_jobs())
     audio_cache: dict[str, bytes] = {}
+    ab_box: list[AB] = [ab] if ab else []
+
+    def get_ab() -> AB:
+        if not ab_box:
+            ab_box.append(AB())
+        return ab_box[0]
 
     @app.get("/", response_class=HTMLResponse)
     def index():
         return (Path(__file__).parent / "page.html").read_text(encoding="utf-8")
+
+    @app.get("/ab", response_class=HTMLResponse)
+    def ab_page():
+        return (Path(__file__).parent / "ab.html").read_text(encoding="utf-8")
+
+    @app.get("/api/ab/status")
+    def ab_status():
+        return get_ab().status()
+
+    @app.post("/api/ab/session")
+    def ab_session(req: SessionRequest):
+        try:
+            return get_ab().start(req.listener, req.seed)
+        except LookupError as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.get("/api/ab/next")
+    def ab_next(session: str):
+        try:
+            return get_ab().next(session)
+        except KeyError as e:
+            raise HTTPException(404, f"unknown session {e}") from e
+
+    @app.get("/api/ab/audio/{trial_id}/{side}.wav")
+    def ab_audio(trial_id: int, side: str):
+        clips = get_ab().audio.get(trial_id)
+        if clips is None or side not in ("A", "B"):
+            raise HTTPException(404)
+        return Response(clips[0 if side == "A" else 1], media_type="audio/wav")
+
+    @app.post("/api/ab/answer")
+    def ab_answer(req: AnswerRequest):
+        try:
+            return get_ab().answer(req)
+        except KeyError as e:
+            raise HTTPException(404, f"unknown trial {e}") from e
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
 
     @app.get("/api/controls")
     def controls():

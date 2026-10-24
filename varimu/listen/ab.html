@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vari-Mu Blind A/B</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #dedcd6;
+    --accent: #b5562b; --accent-ink: #ffffff; --a: #b5562b; --b: #3f6f9a; --warn: #8a5a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161614; --panel: #1f1f1c; --ink: #ecebe6; --muted: #a09e97; --line: #34332f;
+      --accent: #e0814f; --accent-ink: #161614; --a: #e0814f; --b: #7fb0dc; --warn: #e6b450;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); display: flex;
+           align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  header a { color: var(--muted); font-size: 13px; margin-left: auto; }
+  main { max-width: 760px; margin: 0 auto; padding: 20px 16px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+            padding: 18px 20px; margin-bottom: 16px; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+       margin: 0 0 12px; font-weight: 600; }
+  .muted { color: var(--muted); font-size: 13px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+           border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
+                   font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  input[type=text] { font: inherit; padding: 8px 10px; border: 1px solid var(--line);
+                     border-radius: 6px; background: var(--bg); color: var(--ink); }
+  .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 14px; }
+  .side { font-size: 28px; font-weight: 700; padding: 22px 0; border-width: 2px; }
+  .side.on[data-s=A] { border-color: var(--a); color: var(--a); }
+  .side.on[data-s=B] { border-color: var(--b); color: var(--b); }
+  .votes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  #seek { width: 100%; accent-color: var(--accent); margin: 4px 0 10px; }
+  kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px;
+        padding: 0 5px; color: var(--muted); }
+  .stat { font-variant-numeric: tabular-nums; }
+  .banner { border: 1px solid var(--warn); color: var(--warn); border-radius: 8px;
+            padding: 10px 14px; margin-bottom: 16px; display: none; }
+  .hidden { display: none; }
+  @media (max-width: 520px) { .side { font-size: 22px; padding: 16px 0; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Blind A/B</h1>
+  <span class="sub">matched for gain reduction and loudness</span>
+  <a href="/">tweak and listen</a>
+</header>
+<main>
+  <div class="banner" id="break">You have been listening for over 25 minutes. Take a break:
+    ears tire, and tired judgments are noise.</div>
+
+  <section id="setup">
+    <h2>Session</h2>
+    <p class="muted" id="status">Checking the prepared stimuli...</p>
+    <div class="row">
+      <input type="text" id="listener" placeholder="listener (optional)">
+      <button class="primary" id="start" disabled>Start session</button>
+    </div>
+  </section>
+
+  <section id="trial" class="hidden">
+    <h2>Trial <span class="stat" id="count"></span></h2>
+    <div class="sides">
+      <button class="side" data-s="A">A</button>
+      <button class="side" data-s="B">B</button>
+    </div>
+    <input type="range" id="seek" min="0" max="1000" value="0">
+    <div class="row muted" style="margin-bottom: 14px">
+      <button id="play">Play</button>
+      <span><kbd>Space</kbd> play / pause, <kbd>1</kbd> <kbd>2</kbd> listen to A / B,
+        <kbd>R</kbd> restart</span>
+    </div>
+    <h2>Which do you prefer?</h2>
+    <div class="votes">
+      <button data-v="A">A <kbd>A</kbd></button>
+      <button data-v="none">No preference <kbd>N</kbd></button>
+      <button data-v="B">B <kbd>B</kbd></button>
+    </div>
+    <p class="muted" id="loading"></p>
+  </section>
+
+  <section id="done" class="hidden">
+    <h2>Session finished</h2>
+    <p id="summary"></p>
+  </section>
+
+  <section>
+    <h2>Session time</h2>
+    <p class="stat" id="timer">-</p>
+  </section>
+</main>
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const BREAK_S = 25 * 60;
+let sid = null, trial = null, ctx = null, bufs = {}, side = "A";
+let sources = [], gains = {}, playing = false, startAt = 0, offset = 0, shownAt = 0;
+let plays = {A: 0, B: 0}, startedAt = null, busy = false;
+
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+async function init() {
+  const s = await api("/api/ab/status");
+  $("#status").textContent = s.ready
+    ? `${s.stimuli} matched stimuli, ${s.candidates} candidates, ${s.conditions} conditions.`
+    : s.hint;
+  $("#start").disabled = !s.ready;
+}
+
+function duration() { return bufs.A ? Math.min(bufs.A.duration, bufs.B.duration) : 0; }
+function position() {
+  if (!playing) return offset;
+  return (offset + ctx.currentTime - startAt) % duration();
+}
+
+function stop() {
+  for (const s of sources) { try { s.stop(); } catch (e) {} }
+  sources = [];
+}
+
+function play(from) {
+  stop();
+  offset = from;
+  startAt = ctx.currentTime;
+  for (const k of ["A", "B"]) {
+    const src = ctx.createBufferSource();
+    src.buffer = bufs[k];
+    src.loop = true;
+    src.connect(gains[k]);
+    src.start(0, from);
+    sources.push(src);
+  }
+  playing = true;
+  $("#play").textContent = "Pause";
+}
+
+function pause() { offset = position(); stop(); playing = false; $("#play").textContent = "Play"; }
+
+function select(s) {
+  side = s;
+  for (const k of ["A", "B"]) gains[k].gain.setTargetAtTime(k === s ? 1 : 0, ctx.currentTime, 0.005);
+  document.querySelectorAll(".side").forEach(b => b.classList.toggle("on", b.dataset.s === s));
+  if (playing) plays[s] += 1;
+}
+
+async function load() {
+  busy = true;
+  $("#loading").textContent = "Loading...";
+  const n = await api(`/api/ab/next?session=${encodeURIComponent(sid)}`);
+  showProgress(n.progress);
+  if (n.done) return finish(n.progress);
+  trial = n;
+  pause();
+  const get = async u => ctx.decodeAudioData(await (await fetch(u)).arrayBuffer());
+  bufs = {A: await get(n.audio.A), B: await get(n.audio.B)};
+  plays = {A: 0, B: 0};
+  offset = 0;
+  select(n.first);  // which side sounds first: drawn by the server, seeded
+  $("#count").textContent = `${n.progress.answered + 1} of ~${n.progress.planned}`;
+  $("#loading").textContent = "";
+  shownAt = performance.now();
+  busy = false;
+}
+
+async function vote(v) {
+  if (!trial || busy) return;
+  busy = true;
+  const ms = performance.now() - shownAt;
+  pause();
+  const p = await api("/api/ab/answer", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({trial_id: trial.trial_id, choice: v, response_ms: ms,
+                          plays_a: plays.A, plays_b: plays.B}),
+  });
+  showProgress(p);
+  await load();
+}
+
+function finish(p) {
+  $("#trial").classList.add("hidden");
+  $("#done").classList.remove("hidden");
+  const c = p.consistency;
+  $("#summary").textContent = `${p.answered} judgments saved.` +
+    (c.repeats ? ` Repeated pairs answered the same: ${c.same} of ${c.repeats}.` : "");
+  trial = null;
+}
+
+function showProgress(p) {
+  if (p.break_suggested) $("#break").style.display = "block";
+}
+
+$("#start").onclick = async () => {
+  ctx = new AudioContext();
+  for (const k of ["A", "B"]) { gains[k] = ctx.createGain(); gains[k].connect(ctx.destination); }
+  const p = await api("/api/ab/session", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({listener: $("#listener").value}),
+  });
+  sid = p.session;
+  startedAt = Date.now();
+  $("#setup").classList.add("hidden");
+  $("#trial").classList.remove("hidden");
+  await load();
+};
+
+$("#play").onclick = () => { if (!trial) return; playing ? pause() : (play(offset), plays[side] += 1); };
+document.querySelectorAll(".side").forEach(b => b.onclick = () => trial && select(b.dataset.s));
+document.querySelectorAll(".votes button").forEach(b => b.onclick = () => vote(b.dataset.v));
+$("#seek").oninput = e => { if (trial) { const t = e.target.value / 1000 * duration();
+                                          playing ? play(t) : (offset = t); } };
+
+document.addEventListener("keydown", e => {
+  if (!trial || e.target.tagName === "INPUT" && e.target.type === "text") return;
+  const k = e.key.toLowerCase();
+  if (k === " ") { e.preventDefault(); $("#play").click(); }
+  else if (k === "1" || k === "arrowleft") select("A");
+  else if (k === "2" || k === "arrowright") select("B");
+  else if (k === "r") { play(0); plays[side] += 1; }
+  else if (k === "a") vote("A");
+  else if (k === "b") vote("B");
+  else if (k === "n") vote("none");
+});
+
+setInterval(() => {
+  if (trial && duration()) $("#seek").value = Math.round(position() / duration() * 1000);
+  if (startedAt) {
+    const s = (Date.now() - startedAt) / 1000;
+    $("#timer").textContent = `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, "0")} s`;
+    if (s > BREAK_S) $("#break").style.display = "block";
+  }
+}, 200);
+
+init().catch(e => { $("#status").textContent = e.message; });
+</script>
+</body>
+</html>

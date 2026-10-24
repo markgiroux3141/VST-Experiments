@@ -1,0 +1,33 @@
+# Blind A/B listening (main plan Phase 5): the candidate pool and the listening conditions.
+# Read by varimu/listen/candidates.py; `varimu ab-prepare` matches every candidate on
+# every program clip (data/clips, the user's material) at every gain-reduction target.
+#
+# A candidate is a physical genome: overrides of circuit values and tube parameters
+# (config/circuits/fairchild_670.yaml, config/genome_bounds.yaml). No front-panel
+# controls: the Time Constant below is the condition, AC THRESHOLD is solved per
+# stimulus for the target, the pad and DC THRESHOLD stay at the factory adjustment,
+# and every candidate gets the manual's DC trims (setup.adjust).
+#
+# Parts sandbox: a candidate that is a base unit with one part's physical property
+# swapped (varimu.listen.candidates.swap; `varimu ab-prepare --swap KEY=VALUE` adds
+# one on the fly). Swappable parts and their bounds: candidates.catalog().
+
+gr_targets_db: [3.0, 6.0]  # plan, Phase 5 ("e.g. 3 dB or 6 dB")
+time_constant: 2  # the circuit's default position
+excerpt_s: 8.0  # longer clips play their loudest window of this length (renders ~17x real time)
+
+# Per clip (file name in data/clips): category (vocal, drum bus, bass, full mix, ...)
+# and optionally the excerpt (start_s, seconds). Clips not listed: category "unknown",
+# the loudest window. Kept here or in data/clips/clips.yaml (the user's, not committed).
+clips: {}
+
+candidates:
+  nominal:
+    genome: {}
+    note: "every part at its printed value (spread 0)"
+  t101_permalloy:
+    genome: {t101_core_material: permalloy_fluxgate}
+    note: "parts sandbox: T101's core a harder nickel-iron (coercivity ~40 A/m against mumetall's 1.5; config/magnetics.yaml)"
+  built_seed1:
+    genome: {passive_spread: 1.0, passive_seed: 1}
+    note: "a unit built from parts anywhere in their tolerance bands (seed 1), then set up"

@@ -176,6 +176,35 @@ def _cmd_listen(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_ab_prepare(args: argparse.Namespace) -> int:
+    """Match the listening pool's stimuli (Phase 5) and verify the matching."""
+    from varimu.listen import candidates, prepare
+    from varimu.sim import runner
+
+    _engine_settings(None)  # fails early without the engine
+    pool = candidates.load_pool()
+    extra = []
+    for pair in args.swap or []:
+        (key, value), = runner.parse_overrides([pair]).items()  # fmt: skip
+        base = pool.candidates[args.swap_base]
+        extra.append(candidates.swap(base, key, value))
+    report = prepare.prepare(
+        pool,
+        candidates=args.candidates,
+        extra=extra,
+        targets=args.targets,
+        clips=args.clips,
+    )
+    s = report.get("summary")
+    if not s:
+        return 0
+    print(f"GR within {s['gr_tolerance_db']} dB: worst {s['worst_gr_error_db']} dB; "
+          f"pairs' LUFS within {s['lufs_tolerance']}: worst {s['worst_lufs_diff']}")  # fmt: skip
+    for u in s["unreachable"]:
+        print(f"  unreachable (left out of sessions): {u}")
+    return 0 if s["verified"] else 1
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="varimu")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -225,6 +254,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--jobs", type=int, help="parallel renders (default: cpu_count - 2)")
     p.set_defaults(func=_cmd_listen)
+
+    p = sub.add_parser(
+        "ab-prepare", help="match the listening pool for blind A/B (Phase 5; listen extra)"
+    )
+    p.add_argument("--candidates", nargs="+", metavar="NAME", help="pool candidates (default all)")
+    p.add_argument("--swap", nargs="+", metavar="KEY=VALUE", help="parts sandbox: add a swap")
+    p.add_argument("--swap-base", default="nominal", help="the unit the swaps start from")
+    p.add_argument("--targets", nargs="+", type=float, metavar="DB", help="GR targets (dB)")
+    p.add_argument("--clips", nargs="+", metavar="FILE", help="clips in data/clips (default all)")
+    p.set_defaults(func=_cmd_ab_prepare)
 
     args = parser.parse_args(argv)
     return args.func(args)
