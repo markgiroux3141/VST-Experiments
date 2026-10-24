@@ -4,7 +4,11 @@
     uv run varimu listen            # http://127.0.0.1:8765  (blind A/B: /ab)
 
 Blind A/B (Phase 5, /ab): sessions over the stimuli `varimu ab-prepare` matched
-(varimu.listen.prepare); see the AB class below and varimu.listen.session.
+(varimu.listen.prepare); see the AB class below and varimu.listen.session. The
+same page has the listening aids (no new renders): difference listening (the
+residual A - B turned up, A + k (B - A) exaggerated; varimu.listen.difference)
+and ABX discrimination with an exaggeration staircase (varimu.listen.abx), whose
+judgments are stored apart from the preference data.
 
 Pick a clip from data/clips/ (or a test signal), move the sliders, press
 Render. Renders run in the background through varimu.sim.runner (cached, at
@@ -311,6 +315,22 @@ class AnswerRequest(BaseModel):
     plays_b: int = 0
 
 
+class AbxSessionRequest(BaseModel):
+    listener: str = ""
+    seed: int | None = None
+    pairs: list[tuple[int, int]] | None = None  # stimulus ids; None: every pair
+    mode: str = "staircase"  # or "fixed"
+    k: float = 1.0  # mode "fixed"
+    trials_per_pair: int = 12
+
+
+class AbxAnswerRequest(BaseModel):
+    trial_id: int
+    answer: str  # what X is: "A" | "B"
+    response_ms: float
+    plays: dict[str, int] = {}
+
+
 # --- Blind A/B (Phase 5) ---------------------------------------------------------------------
 
 
@@ -327,6 +347,151 @@ class AB:
         self.render_audio = render_audio or prepare._render_audio
         self.lock = threading.Lock()
         self.audio: dict[int, tuple[bytes, bytes]] = {}
+        self.abx_audio: dict[int, dict[str, bytes]] = {}
+        self.explore_audio: dict[str, bytes] = {}
+        self._arrays: dict[str, np.ndarray] = {}
+        self._residuals: dict[tuple[int, int], float] = {}
+
+    # --- The listening aids: shared helpers ---
+
+    def _array(self, key: str) -> np.ndarray:
+        """A render's output, kept for a while (loading one reads every vector)."""
+        if key not in self._arrays:
+            while len(self._arrays) >= 24:
+                self._arrays.pop(next(iter(self._arrays)))
+            self._arrays[key] = np.asarray(self.render_audio(key), float)
+        return self._arrays[key]
+
+    def _stim(self, sid: int):
+        r = self.db.execute(
+            "SELECT s.*, c.name AS candidate FROM stimuli s JOIN candidates c "
+            "ON c.id = s.candidate_id WHERE s.id = ? AND s.code_version = ?",
+            (sid, self.version),
+        ).fetchone()
+        if r is None:
+            raise KeyError(sid)
+        return r
+
+    def _audio4(self, base, other) -> tuple[np.ndarray, ...]:
+        """(base, other, base's reference, other's reference) outputs."""
+        return tuple(self._array(s[k]) for k in ("render_key", "reference_key")
+                     for s in (base, other))  # fmt: skip
+
+    def _residual_db(self, a, b) -> float:
+        from varimu.listen import difference
+
+        key = (min(a["id"], b["id"]), max(a["id"], b["id"]))
+        if key not in self._residuals:
+            sa, sb = self._stim(key[0]), self._stim(key[1])
+            self._residuals[key] = difference.residual_db(
+                self._array(sa["render_key"]), self._array(sb["render_key"])
+            )
+        return self._residuals[key]
+
+    def pairs(self) -> list[dict[str, Any]]:
+        """Every prepared pair (per condition) with its residual level: what the aids
+        work on. Names are included: the page shows them only on request."""
+        from varimu.listen import session, store
+
+        with self.lock:
+            out = []
+            for a, b in session.pairs(store.stimuli(self.db, self.version)):
+                out.append({
+                    "a": a["id"], "b": b["id"], "names": [a["candidate"], b["candidate"]],
+                    "clip": a["clip"], "gr_target_db": a["gr_target_db"],
+                    "time_constant": a["time_constant"],
+                    "residual_db": round(self._residual_db(a, b), 2),
+                })  # fmt: skip
+            return out
+
+    def explore(self, a: int, b: int) -> dict[str, Any]:
+        """Difference listening on a pair: A, B, the residual turned up and A + k (B - A)
+        for k = 2, 4, 8, each loudness matched, with its GR, envelope and artifacts."""
+        from varimu.listen import difference
+
+        with self.lock:
+            sa, sb = self._stim(a), self._stim(b)
+            fs = load_sim_settings().sample_rate
+            ya, yb, ra, rb = self._audio4(sa, sb)
+            res = difference.streams(ya, yb, ra, rb, fs)
+            self.explore_audio.clear()
+            stamp = f"{a}-{b}-{time.time_ns()}"
+            for i, st in enumerate([*res["streams"], res["residual"]]):
+                token = f"{stamp}-{i}"
+                self.explore_audio[token] = _wav_bytes(st.pop("audio"), fs)
+                st["audio"] = f"/api/ab/explore/audio/{token}.wav"
+            res["names"] = [sa["candidate"], sb["candidate"]]
+            return res
+
+    # --- ABX discrimination (varimu.listen.abx) ---
+
+    def abx_start(self, req: AbxSessionRequest) -> dict[str, Any]:
+        from varimu.listen import abx, store
+
+        with self.lock:
+            stims = store.stimuli(self.db, self.version)
+            if len(stims) < 2:
+                raise LookupError(self.status()["hint"])
+            sid = abx.start(
+                self.db, stims, residual_db=self._residual_db, code_version=self.version,
+                listener=req.listener, seed=req.seed, chosen=req.pairs, mode=req.mode,
+                k_fixed=req.k, trials_per_pair=req.trials_per_pair,
+            )  # fmt: skip
+            return self._abx_progress(sid)
+
+    def _abx_progress(self, sid: str) -> dict[str, Any]:
+        from varimu.listen import abx
+
+        s = abx.summary(self.db, sid)
+        return {k: s[k] for k in ("session", "mode", "answered", "planned", "share_x_is_a")}
+
+    def abx_next(self, sid: str) -> dict[str, Any]:
+        from varimu.listen import abx, difference, store
+
+        with self.lock:
+            prog = self._abx_progress(sid)
+            t = abx.next_trial(self.db, sid)
+            if t is None:
+                s = abx.summary(self.db, sid)
+                store.end_abx_session(self.db, sid, s["share_x_is_a"])
+                return {"done": True, "summary": s}
+            if t["id"] not in self.abx_audio:
+                p = self.db.execute(
+                    "SELECT * FROM abx_pairs WHERE id = ?", (t["pair_id"],)
+                ).fetchone()
+                fs = load_sim_settings().sample_rate
+                ya, yb, ra, rb = self._audio4(self._stim(p["base"]), self._stim(p["other"]))
+                v = difference.exaggerated_pair(ya, yb, ra, rb, t["k"], fs)
+                order = (0, 1) if t["a_is_base"] else (1, 0)  # which is labelled A, B
+                wav = {s: _wav_bytes(v["audio"][i], fs) for s, i in zip("AB", order, strict=True)}
+                # X is the same file as the side it is (a WAV's PEAK chunk carries the time
+                # it was written: encoding it again would differ in that byte).
+                wav["X"] = wav[t["x_is"]]
+                store.abx_presented(self.db, t["id"], [v["gains_db"][i] for i in order],
+                                    [v["lufs_after"][i] for i in order],
+                                    [v["gr_db"][i] for i in order], v["artifacts"])  # fmt: skip
+                self.abx_audio = {t["id"]: wav}
+            return {
+                "done": False,
+                "trial_id": t["id"],
+                "audio": {s: f"/api/ab/abx/audio/{t['id']}/{s}.wav" for s in "ABX"},
+                "progress": prog,
+            }
+
+    def abx_answer(self, req: AbxAnswerRequest) -> dict[str, Any]:
+        from varimu.listen import abx
+
+        with self.lock:
+            hit = abx.answer(self.db, req.trial_id, req.answer, req.response_ms, req.plays)
+            t = self.db.execute("SELECT * FROM abx_trials WHERE id = ?", (req.trial_id,)).fetchone()
+            return {"correct": hit, "k": t["k"], "anchor": bool(t["anchor"]),
+                    "progress": self._abx_progress(t["session_id"])}  # fmt: skip
+
+    def abx_summary(self, sid: str) -> dict[str, Any]:
+        from varimu.listen import abx
+
+        with self.lock:
+            return abx.summary(self.db, sid)
 
     def status(self) -> dict[str, Any]:
         from varimu.listen import store
@@ -461,6 +626,63 @@ def create_app(workers: int | None = None, ab: AB | None = None):
             raise HTTPException(404, f"unknown trial {e}") from e
         except ValueError as e:
             raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/ab/pairs")
+    def ab_pairs():
+        return get_ab().pairs()
+
+    @app.get("/api/ab/explore")
+    def ab_explore(a: int, b: int):
+        try:
+            return get_ab().explore(a, b)
+        except KeyError as e:
+            raise HTTPException(404, f"unknown stimulus {e}") from e
+
+    @app.get("/api/ab/explore/audio/{token}.wav")
+    def ab_explore_audio(token: str):
+        clip = get_ab().explore_audio.get(token)
+        if clip is None:
+            raise HTTPException(404)
+        return Response(clip, media_type="audio/wav")
+
+    @app.post("/api/ab/abx/session")
+    def abx_session(req: AbxSessionRequest):
+        try:
+            return get_ab().abx_start(req)
+        except LookupError as e:
+            raise HTTPException(409, str(e)) from e
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/ab/abx/next")
+    def abx_next(session: str):
+        try:
+            return get_ab().abx_next(session)
+        except KeyError as e:
+            raise HTTPException(404, f"unknown session {e}") from e
+
+    @app.get("/api/ab/abx/audio/{trial_id}/{side}.wav")
+    def abx_audio(trial_id: int, side: str):
+        clips = get_ab().abx_audio.get(trial_id)
+        if clips is None or side not in clips:
+            raise HTTPException(404)
+        return Response(clips[side], media_type="audio/wav")
+
+    @app.post("/api/ab/abx/answer")
+    def abx_answer(req: AbxAnswerRequest):
+        try:
+            return get_ab().abx_answer(req)
+        except KeyError as e:
+            raise HTTPException(404, f"unknown trial {e}") from e
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+
+    @app.get("/api/ab/abx/summary")
+    def abx_summary(session: str):
+        try:
+            return get_ab().abx_summary(session)
+        except KeyError as e:
+            raise HTTPException(404, f"unknown session {e}") from e
 
     @app.get("/api/controls")
     def controls():

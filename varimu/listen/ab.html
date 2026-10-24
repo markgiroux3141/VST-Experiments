@@ -7,12 +7,14 @@
 <style>
   :root {
     --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #dedcd6;
-    --accent: #b5562b; --accent-ink: #ffffff; --a: #b5562b; --b: #3f6f9a; --warn: #8a5a00;
+    --accent: #b5562b; --accent-ink: #ffffff; --a: #b5562b; --b: #3f6f9a; --x: #4d7a3a;
+    --warn: #8a5a00; --good: #2f7a3a; --bad: #a2342a;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #161614; --panel: #1f1f1c; --ink: #ecebe6; --muted: #a09e97; --line: #34332f;
-      --accent: #e0814f; --accent-ink: #161614; --a: #e0814f; --b: #7fb0dc; --warn: #e6b450;
+      --accent: #e0814f; --accent-ink: #161614; --a: #e0814f; --b: #7fb0dc; --x: #93c47d;
+      --warn: #e6b450; --good: #7fc48a; --bad: #e67a6e;
     }
   }
   * { box-sizing: border-box; }
@@ -23,7 +25,10 @@
   header h1 { font-size: 17px; margin: 0; font-weight: 650; }
   header .sub { color: var(--muted); font-size: 13px; }
   header a { color: var(--muted); font-size: 13px; margin-left: auto; }
-  main { max-width: 760px; margin: 0 auto; padding: 20px 16px; }
+  nav { display: flex; gap: 6px; max-width: 760px; margin: 16px auto 0; padding: 0 16px;
+        flex-wrap: wrap; }
+  nav button.on { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 16px 20px; }
   section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
             padding: 18px 20px; margin-bottom: 16px; }
   h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
@@ -35,22 +40,41 @@
   button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent);
                    font-weight: 600; }
   button:disabled { opacity: .45; cursor: default; }
-  input[type=text] { font: inherit; padding: 8px 10px; border: 1px solid var(--line);
-                     border-radius: 6px; background: var(--bg); color: var(--ink); }
-  .sides { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 6px 0 14px; }
+  input[type=text], input[type=number], select {
+    font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--ink); }
+  input[type=number] { width: 80px; }
+  .sides { display: grid; grid-template-columns: repeat(var(--n, 2), 1fr); gap: 12px;
+           margin: 6px 0 14px; }
   .side { font-size: 28px; font-weight: 700; padding: 22px 0; border-width: 2px; }
   .side.on[data-s=A] { border-color: var(--a); color: var(--a); }
   .side.on[data-s=B] { border-color: var(--b); color: var(--b); }
+  .side.on[data-s=X] { border-color: var(--x); color: var(--x); }
+  .streams { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 6px 0 14px; }
+  .streams button { padding: 12px 6px; }
+  .streams button.on { border-color: var(--accent); color: var(--accent); font-weight: 650; }
   .votes { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+  .votes.two { grid-template-columns: 1fr 1fr; }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  #seek { width: 100%; accent-color: var(--accent); margin: 4px 0 10px; }
+  .seek { width: 100%; accent-color: var(--accent); margin: 4px 0 10px; }
   kbd { font: 12px ui-monospace, monospace; border: 1px solid var(--line); border-radius: 3px;
         padding: 0 5px; color: var(--muted); }
   .stat { font-variant-numeric: tabular-nums; }
   .banner { border: 1px solid var(--warn); color: var(--warn); border-radius: 8px;
             padding: 10px 14px; margin-bottom: 16px; display: none; }
+  .note { border-left: 3px solid var(--warn); padding: 4px 10px; color: var(--warn);
+          font-size: 13px; margin: 10px 0; }
+  .feedback { min-height: 1.5em; font-weight: 600; }
+  .feedback.good { color: var(--good); } .feedback.bad { color: var(--bad); }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line);
+           font-variant-numeric: tabular-nums; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; }
+  .tablewrap { overflow-x: auto; }
+  .pairs label { display: block; padding: 3px 0; font-size: 14px; }
   .hidden { display: none; }
-  @media (max-width: 520px) { .side { font-size: 22px; padding: 16px 0; } }
+  @media (max-width: 520px) { .side { font-size: 22px; padding: 16px 0; }
+                              .streams { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
 <body>
@@ -59,44 +83,138 @@
   <span class="sub">matched for gain reduction and loudness</span>
   <a href="/">tweak and listen</a>
 </header>
+<nav>
+  <button data-mode="pref" class="on">Preference</button>
+  <button data-mode="abx">Can I hear it? (ABX)</button>
+  <button data-mode="diff">Difference listening</button>
+</nav>
 <main>
   <div class="banner" id="break">You have been listening for over 25 minutes. Take a break:
     ears tire, and tired judgments are noise.</div>
 
-  <section id="setup">
-    <h2>Session</h2>
-    <p class="muted" id="status">Checking the prepared stimuli...</p>
-    <div class="row">
-      <input type="text" id="listener" placeholder="listener (optional)">
-      <button class="primary" id="start" disabled>Start session</button>
-    </div>
-  </section>
+  <!-- Preference ------------------------------------------------------------------>
+  <div data-pane="pref">
+    <section id="setup">
+      <h2>Session</h2>
+      <p class="muted" id="status">Checking the prepared stimuli...</p>
+      <div class="row">
+        <input type="text" class="listener" placeholder="listener (optional)">
+        <button class="primary" id="start" disabled>Start session</button>
+      </div>
+    </section>
 
-  <section id="trial" class="hidden">
-    <h2>Trial <span class="stat" id="count"></span></h2>
-    <div class="sides">
-      <button class="side" data-s="A">A</button>
-      <button class="side" data-s="B">B</button>
-    </div>
-    <input type="range" id="seek" min="0" max="1000" value="0">
-    <div class="row muted" style="margin-bottom: 14px">
-      <button id="play">Play</button>
-      <span><kbd>Space</kbd> play / pause, <kbd>1</kbd> <kbd>2</kbd> listen to A / B,
-        <kbd>R</kbd> restart</span>
-    </div>
-    <h2>Which do you prefer?</h2>
-    <div class="votes">
-      <button data-v="A">A <kbd>A</kbd></button>
-      <button data-v="none">No preference <kbd>N</kbd></button>
-      <button data-v="B">B <kbd>B</kbd></button>
-    </div>
-    <p class="muted" id="loading"></p>
-  </section>
+    <section id="trial" class="hidden">
+      <h2>Trial <span class="stat" id="count"></span></h2>
+      <div class="sides">
+        <button class="side" data-s="A">A</button>
+        <button class="side" data-s="B">B</button>
+      </div>
+      <input type="range" class="seek" min="0" max="1000" value="0">
+      <div class="row muted" style="margin-bottom: 14px">
+        <button class="play">Play</button>
+        <span><kbd>Space</kbd> play / pause, <kbd>1</kbd> <kbd>2</kbd> listen to A / B,
+          <kbd>R</kbd> restart</span>
+      </div>
+      <h2>Which do you prefer?</h2>
+      <div class="votes">
+        <button data-v="A">A <kbd>A</kbd></button>
+        <button data-v="none">No preference <kbd>N</kbd></button>
+        <button data-v="B">B <kbd>B</kbd></button>
+      </div>
+      <p class="muted" id="loading"></p>
+    </section>
 
-  <section id="done" class="hidden">
-    <h2>Session finished</h2>
-    <p id="summary"></p>
-  </section>
+    <section id="done" class="hidden">
+      <h2>Session finished</h2>
+      <p id="summary"></p>
+    </section>
+  </div>
+
+  <!-- ABX ------------------------------------------------------------------------>
+  <div data-pane="abx" class="hidden">
+    <section id="abx-setup">
+      <h2>ABX discrimination</h2>
+      <p class="muted">Can you tell a pair apart at all? X is secretly A or B. The staircase
+        starts with the difference exaggerated 8x (A + k(B &minus; A)), makes it smaller after
+        each right answer and larger after each wrong one, and settles where you are right
+        3 times in 4: your just-noticeable k for that pair. These answers are stored apart from
+        your preferences and never count as preference data.</p>
+      <div class="row" style="margin: 10px 0">
+        <input type="text" class="listener" placeholder="listener (optional)">
+        <select id="abx-mode">
+          <option value="staircase">Staircase (adaptive k)</option>
+          <option value="fixed">Real pairs only (k = 1)</option>
+        </select>
+        <label class="muted">trials per pair <input type="number" id="abx-n" value="12"
+          min="2" max="40"></label>
+      </div>
+      <div class="pairs" id="abx-pairs"><span class="muted">Loading pairs...</span></div>
+      <div class="row" style="margin-top: 12px">
+        <button class="primary" id="abx-start" disabled>Start ABX</button>
+        <label class="muted"><input type="checkbox" class="reveal"> show candidate names</label>
+      </div>
+    </section>
+
+    <section id="abx-trial" class="hidden">
+      <h2>ABX trial <span class="stat" id="abx-count"></span></h2>
+      <div class="sides" style="--n: 3">
+        <button class="side" data-s="A">A</button>
+        <button class="side" data-s="B">B</button>
+        <button class="side" data-s="X">X</button>
+      </div>
+      <input type="range" class="seek" min="0" max="1000" value="0">
+      <div class="row muted" style="margin-bottom: 14px">
+        <button class="play">Play</button>
+        <span><kbd>Space</kbd> play / pause, <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> listen to
+          A / B / X, <kbd>R</kbd> restart</span>
+      </div>
+      <h2>X is</h2>
+      <div class="votes two">
+        <button data-x="A">A <kbd>A</kbd></button>
+        <button data-x="B">B <kbd>B</kbd></button>
+      </div>
+      <p class="feedback" id="abx-feedback"></p>
+    </section>
+
+    <section id="abx-done" class="hidden">
+      <h2>ABX finished</h2>
+      <p id="abx-bias" class="muted"></p>
+      <div class="tablewrap"><table id="abx-table"></table></div>
+      <p class="muted">p: the chance of at least that many hits by guessing (one-sided).
+        JND k: the staircase's estimate (geometric mean of k at its reversals). k &asymp; 1.5
+        means the real difference is just audible; k &asymp; 6, preference answers on the pair
+        are mostly noise. The anchor is the most different pair at k = 8: missing it means
+        the setup or the attention is off.</p>
+    </section>
+  </div>
+
+  <!-- Difference listening -------------------------------------------------------->
+  <div data-pane="diff" class="hidden">
+    <section>
+      <h2>Difference listening</h2>
+      <p class="muted">What does the part change? Pick a matched pair and listen to the
+        residual A &minus; B (B aligned to A by a least-squares gain, then turned up) and to
+        the difference exaggerated, A + k(B &minus; A). Everything plays at one loudness.
+        Exaggerations are not units: training for the ear, never judgments.</p>
+      <div class="row" style="margin: 10px 0">
+        <select id="diff-pair"><option>Loading pairs...</option></select>
+        <button class="primary" id="diff-load" disabled>Load</button>
+        <label class="muted"><input type="checkbox" class="reveal"> show candidate names</label>
+      </div>
+    </section>
+    <section id="diff-player" class="hidden">
+      <h2>Streams <span class="muted" id="diff-names"></span></h2>
+      <div class="streams" id="diff-streams"></div>
+      <input type="range" class="seek" min="0" max="1000" value="0">
+      <div class="row muted" style="margin-bottom: 10px">
+        <button class="play">Play</button>
+        <span><kbd>Space</kbd> play / pause, <kbd>1</kbd>&ndash;<kbd>6</kbd> switch,
+          <kbd>R</kbd> restart</span>
+      </div>
+      <div id="diff-notes"></div>
+      <div class="tablewrap"><table id="diff-table"></table></div>
+    </section>
+  </div>
 
   <section>
     <h2>Session time</h2>
@@ -105,17 +223,96 @@
 </main>
 <script>
 "use strict";
-const $ = s => document.querySelector(s);
+const $ = (s, root = document) => root.querySelector(s);
+const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 const BREAK_S = 25 * 60;
-let sid = null, trial = null, ctx = null, bufs = {}, side = "A";
-let sources = [], gains = {}, playing = false, startAt = 0, offset = 0, shownAt = 0;
-let plays = {A: 0, B: 0}, startedAt = null, busy = false;
+let ctx = null, startedAt = null, mode = "pref", pairs = [], reveal = false;
 
 async function api(path, opts) {
   const r = await fetch(path, opts);
   if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
   return r.json();
 }
+const post = (path, body) => api(path, {method: "POST",
+  headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+function audioCtx() { return ctx || (ctx = new AudioContext()); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;",
+  ">": "&gt;", '"': "&quot;"}[c])); }
+function fmt(v, d = 2) { return v === null || v === undefined ? "-" : Number(v).toFixed(d); }
+
+// A player of several streams in sync: one plays, switching keeps the position.
+class Player {
+  constructor(root) {
+    this.root = root; this.bufs = {}; this.gains = {}; this.sources = []; this.playing = false;
+    this.offset = 0; this.startAt = 0; this.cur = null; this.plays = {};
+    $(".play", root).onclick = () => this.toggle();
+    $(".seek", root).oninput = e => { if (!this.ready()) return;
+      const t = e.target.value / 1000 * this.duration();
+      this.playing ? this.play(t) : (this.offset = t); };
+  }
+  ready() { return Object.keys(this.bufs).length > 0; }
+  async load(urls, first) {
+    this.pause();
+    const c = audioCtx();
+    const get = async u => c.decodeAudioData(await (await fetch(u)).arrayBuffer());
+    const names = Object.keys(urls);
+    const bufs = await Promise.all(names.map(k => get(urls[k])));
+    for (const g of Object.values(this.gains)) g.disconnect();
+    this.bufs = {}; this.gains = {}; this.plays = {};
+    names.forEach((k, i) => {
+      this.bufs[k] = bufs[i];
+      this.gains[k] = c.createGain(); this.gains[k].connect(c.destination);
+      this.plays[k] = 0;
+    });
+    this.offset = 0;
+    this.select(first || names[0]);
+  }
+  duration() { return Math.min(...Object.values(this.bufs).map(b => b.duration)); }
+  position() { return this.playing
+    ? (this.offset + ctx.currentTime - this.startAt) % this.duration() : this.offset; }
+  stop() { for (const s of this.sources) { try { s.stop(); } catch (e) {} } this.sources = []; }
+  play(from) {
+    this.stop(); this.offset = from; this.startAt = ctx.currentTime;
+    for (const k in this.bufs) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.bufs[k]; src.loop = true; src.connect(this.gains[k]); src.start(0, from);
+      this.sources.push(src);
+    }
+    this.playing = true; $(".play", this.root).textContent = "Pause";
+  }
+  pause() { if (this.playing) this.offset = this.position(); this.stop(); this.playing = false;
+    $(".play", this.root).textContent = "Play"; }
+  toggle() { if (!this.ready()) return;
+    this.playing ? this.pause() : (this.play(this.offset), this.plays[this.cur] += 1); }
+  restart() { if (!this.ready()) return; this.play(0); this.plays[this.cur] += 1; }
+  select(k) {
+    if (!(k in this.bufs)) return;
+    this.cur = k;
+    for (const n in this.gains) this.gains[n].gain.setTargetAtTime(n === k ? 1 : 0,
+                                                                   ctx.currentTime, 0.005);
+    $$("[data-s]", this.root).forEach(b => b.classList.toggle("on", b.dataset.s === k));
+    if (this.playing) this.plays[k] += 1;
+  }
+  tick() { if (this.ready()) $(".seek", this.root).value =
+    Math.round(this.position() / this.duration() * 1000); }
+}
+
+const players = {pref: new Player($("#trial")), abx: new Player($("#abx-trial")),
+                 diff: new Player($("#diff-player"))};
+$$(".side").forEach(b => b.onclick = () => players[mode].select(b.dataset.s));
+
+function setMode(m) {
+  for (const p of Object.values(players)) p.pause();
+  mode = m;
+  $$("nav button").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+  $$("[data-pane]").forEach(p => p.classList.toggle("hidden", p.dataset.pane !== m));
+}
+$$("nav button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+function startClock() { if (!startedAt) startedAt = Date.now(); }
+function listener() { return $$(".listener").map(i => i.value).find(v => v) || ""; }
+
+// --- Preference ---------------------------------------------------------------------------
+let sid = null, trial = null, shownAt = 0, busy = false;
 
 async function init() {
   const s = await api("/api/ab/status");
@@ -123,42 +320,7 @@ async function init() {
     ? `${s.stimuli} matched stimuli, ${s.candidates} candidates, ${s.conditions} conditions.`
     : s.hint;
   $("#start").disabled = !s.ready;
-}
-
-function duration() { return bufs.A ? Math.min(bufs.A.duration, bufs.B.duration) : 0; }
-function position() {
-  if (!playing) return offset;
-  return (offset + ctx.currentTime - startAt) % duration();
-}
-
-function stop() {
-  for (const s of sources) { try { s.stop(); } catch (e) {} }
-  sources = [];
-}
-
-function play(from) {
-  stop();
-  offset = from;
-  startAt = ctx.currentTime;
-  for (const k of ["A", "B"]) {
-    const src = ctx.createBufferSource();
-    src.buffer = bufs[k];
-    src.loop = true;
-    src.connect(gains[k]);
-    src.start(0, from);
-    sources.push(src);
-  }
-  playing = true;
-  $("#play").textContent = "Pause";
-}
-
-function pause() { offset = position(); stop(); playing = false; $("#play").textContent = "Play"; }
-
-function select(s) {
-  side = s;
-  for (const k of ["A", "B"]) gains[k].gain.setTargetAtTime(k === s ? 1 : 0, ctx.currentTime, 0.005);
-  document.querySelectorAll(".side").forEach(b => b.classList.toggle("on", b.dataset.s === s));
-  if (playing) plays[s] += 1;
+  if (s.ready) await loadPairs();
 }
 
 async function load() {
@@ -168,13 +330,9 @@ async function load() {
   showProgress(n.progress);
   if (n.done) return finish(n.progress);
   trial = n;
-  pause();
-  const get = async u => ctx.decodeAudioData(await (await fetch(u)).arrayBuffer());
-  bufs = {A: await get(n.audio.A), B: await get(n.audio.B)};
-  plays = {A: 0, B: 0};
-  offset = 0;
-  select(n.first);  // which side sounds first: drawn by the server, seeded
-  $("#count").textContent = `${n.progress.answered + 1} of ~${n.progress.planned}`;
+  await players.pref.load(n.audio, n.first);  // which side sounds first: seeded, server side
+  const p = n.progress;
+  $("#count").textContent = `${p.answered + 1} of ${p.planned + p.repeats_planned}`;
   $("#loading").textContent = "";
   shownAt = performance.now();
   busy = false;
@@ -183,13 +341,10 @@ async function load() {
 async function vote(v) {
   if (!trial || busy) return;
   busy = true;
-  const ms = performance.now() - shownAt;
-  pause();
-  const p = await api("/api/ab/answer", {
-    method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({trial_id: trial.trial_id, choice: v, response_ms: ms,
-                          plays_a: plays.A, plays_b: plays.B}),
-  });
+  const ms = performance.now() - shownAt, pl = players.pref;
+  pl.pause();
+  const p = await post("/api/ab/answer", {trial_id: trial.trial_id, choice: v, response_ms: ms,
+                                         plays_a: pl.plays.A, plays_b: pl.plays.B});
   showProgress(p);
   await load();
 }
@@ -199,48 +354,181 @@ function finish(p) {
   $("#done").classList.remove("hidden");
   const c = p.consistency;
   $("#summary").textContent = `${p.answered} judgments saved.` +
-    (c.repeats ? ` Repeated pairs answered the same: ${c.same} of ${c.repeats}.` : "");
+    (c.repeats ? ` Repeated pairs answered the same: ${c.same} of ${c.repeats}.` : "") +
+    (p.share_a !== null ? ` A chosen in ${Math.round(p.share_a * 100)}% of the A / B answers` +
+     " (sides are random: far from 50% is a position bias)." : "");
   trial = null;
 }
 
-function showProgress(p) {
-  if (p.break_suggested) $("#break").style.display = "block";
-}
+function showProgress(p) { if (p.break_suggested) $("#break").style.display = "block"; }
 
 $("#start").onclick = async () => {
-  ctx = new AudioContext();
-  for (const k of ["A", "B"]) { gains[k] = ctx.createGain(); gains[k].connect(ctx.destination); }
-  const p = await api("/api/ab/session", {
-    method: "POST", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({listener: $("#listener").value}),
-  });
+  audioCtx(); startClock();
+  const p = await post("/api/ab/session", {listener: listener()});
   sid = p.session;
-  startedAt = Date.now();
   $("#setup").classList.add("hidden");
   $("#trial").classList.remove("hidden");
   await load();
 };
+$$("#trial .votes button").forEach(b => b.onclick = () => vote(b.dataset.v));
 
-$("#play").onclick = () => { if (!trial) return; playing ? pause() : (play(offset), plays[side] += 1); };
-document.querySelectorAll(".side").forEach(b => b.onclick = () => trial && select(b.dataset.s));
-document.querySelectorAll(".votes button").forEach(b => b.onclick = () => vote(b.dataset.v));
-$("#seek").oninput = e => { if (trial) { const t = e.target.value / 1000 * duration();
-                                          playing ? play(t) : (offset = t); } };
+// --- Pairs (ABX and difference listening) ----------------------------------------------
+function pairLabel(p, i) {
+  const who = reveal ? `${p.names[0]} vs ${p.names[1]}` : `pair ${i + 1}`;
+  return `${who}: ${p.clip}, ${p.gr_target_db} dB GR, TC ${p.time_constant}` +
+         ` (residual ${fmt(p.residual_db, 1)} dB)`;
+}
 
+function renderPairs() {
+  const box = $("#abx-pairs"), keep = new Set($$("input", box).filter(i => i.checked)
+    .map(i => i.value));
+  box.innerHTML = pairs.map((p, i) => `<label><input type="checkbox" value="${i}"
+    ${keep.size === 0 || keep.has(String(i)) ? "checked" : ""}> ${esc(pairLabel(p, i))}</label>`)
+    .join("");
+  const sel = $("#diff-pair"), cur = sel.value;
+  sel.innerHTML = pairs.map((p, i) => `<option value="${i}">${esc(pairLabel(p, i))}</option>`)
+    .join("");
+  if (cur !== "" && pairs[cur]) sel.value = cur;
+  $("#abx-start").disabled = $("#diff-load").disabled = pairs.length === 0;
+}
+
+async function loadPairs() { pairs = await api("/api/ab/pairs"); renderPairs(); }
+$$(".reveal").forEach(c => c.onchange = () => {
+  reveal = c.checked; $$(".reveal").forEach(o => o.checked = reveal); renderPairs();
+  if (diffNames) $("#diff-names").textContent = reveal ? diffNames : "";
+});
+
+// --- ABX ----------------------------------------------------------------------------------
+let abxSid = null, abxTrial = null, abxShown = 0, abxBusy = false;
+
+$("#abx-start").onclick = async () => {
+  audioCtx(); startClock();
+  const chosen = $$("#abx-pairs input").filter(i => i.checked).map(i => pairs[i.value]);
+  if (!chosen.length) return;
+  const p = await post("/api/ab/abx/session", {
+    listener: listener(), mode: $("#abx-mode").value, k: 1.0,
+    trials_per_pair: Number($("#abx-n").value) || 12,
+    pairs: chosen.map(p => [p.a, p.b]),
+  });
+  abxSid = p.session;
+  $("#abx-setup").classList.add("hidden");
+  $("#abx-trial").classList.remove("hidden");
+  await abxLoad();
+};
+
+async function abxLoad() {
+  abxBusy = true;
+  const n = await api(`/api/ab/abx/next?session=${encodeURIComponent(abxSid)}`);
+  if (n.done) return abxFinish(n.summary);
+  abxTrial = n;
+  await players.abx.load(n.audio, "X");
+  $("#abx-count").textContent = `${n.progress.answered + 1} of ${n.progress.planned}`;
+  abxShown = performance.now();
+  abxBusy = false;
+}
+
+async function abxAnswer(x) {
+  if (!abxTrial || abxBusy) return;
+  abxBusy = true;
+  const pl = players.abx, ms = performance.now() - abxShown;
+  pl.pause();
+  const r = await post("/api/ab/abx/answer", {trial_id: abxTrial.trial_id, answer: x,
+                                             response_ms: ms, plays: pl.plays});
+  const fb = $("#abx-feedback");
+  fb.textContent = `${r.correct ? "Right" : "Wrong"} (k = ${fmt(r.k, 2)}` +
+                   `${r.anchor ? ", anchor" : ""})`;
+  fb.className = "feedback " + (r.correct ? "good" : "bad");
+  await new Promise(res => setTimeout(res, 700));
+  fb.textContent = "";
+  await abxLoad();
+}
+$$("#abx-trial [data-x]").forEach(b => b.onclick = () => abxAnswer(b.dataset.x));
+
+function abxFinish(s) {
+  abxTrial = null;
+  $("#abx-trial").classList.add("hidden");
+  $("#abx-done").classList.remove("hidden");
+  const byIds = Object.fromEntries(pairs.map((p, i) => [`${Math.min(p.a, p.b)}-` +
+    `${Math.max(p.a, p.b)}`, [p, i]]));
+  $("#abx-bias").textContent = `${s.answered} trials. "X is A" answered in ` +
+    `${s.share_x_is_a === null ? "-" : Math.round(s.share_x_is_a * 100)}% (X is A half the ` +
+    "time: far from 50% is a position bias).";
+  const rows = s.pairs.map(p => {
+    const [q, i] = byIds[p.pair] || [null, 0];
+    const name = p.anchor ? "anchor" : (q ? esc(pairLabel(q, i)) : p.pair);
+    return `<tr><td>${name}</td><td>${p.hits} / ${p.trials}</td><td>${fmt(p.p, 3)}</td>` +
+      `<td>${p.hits_k_le_1} / ${p.trials_k_le_1}</td><td>${fmt(p.jnd_k, 2)}</td>` +
+      `<td>${p.k_track.map(k => fmt(k, 1)).join(" ")}</td></tr>`;
+  });
+  $("#abx-table").innerHTML = "<tr><th>Pair</th><th>Hits</th><th>p</th><th>Hits at k &le; 1" +
+    "</th><th>JND k</th><th>k track</th></tr>" + rows.join("");
+}
+
+// --- Difference listening -------------------------------------------------------------
+let diffNames = "", diffKeys = [];
+
+$("#diff-load").onclick = async () => {
+  audioCtx(); startClock();
+  const p = pairs[$("#diff-pair").value];
+  $("#diff-load").disabled = true;
+  $("#diff-load").textContent = "Loading...";
+  try {
+    const r = await api(`/api/ab/explore?a=${p.a}&b=${p.b}`);
+    const all = [...r.streams, r.residual];
+    diffKeys = all.map(s => s.name);
+    $("#diff-streams").innerHTML = all.map((s, i) => `<button data-s="${esc(s.name)}">` +
+      `${esc(s.name.replace("-", "−"))} <kbd>${i + 1}</kbd></button>`).join("");
+    $$("#diff-streams button").forEach(b => b.onclick = () => players.diff.select(b.dataset.s));
+    const urls = Object.fromEntries(all.map(s => [s.name, s.audio]));
+    $("#diff-player").classList.remove("hidden");
+    await players.diff.load(urls, "A");
+    diffNames = `A = ${r.names[0]}, B = ${r.names[1]}`;
+    $("#diff-names").textContent = reveal ? diffNames : "";
+    const notes = [];
+    if (r.peak_limited) notes.push(`All streams lowered together to ${r.target_lufs} LUFS so ` +
+                                   "the loudest peaks don't clip.");
+    for (const s of r.streams) for (const w of s.artifacts) notes.push(`${s.name}: ${w}`);
+    notes.push(`Residual: ${fmt(r.residual.level_db, 1)} dB re A, turned up ` +
+               `${fmt(r.residual.gain_db, 1)} dB (B aligned by ${fmt(r.align_gain_db, 2)} dB).`);
+    $("#diff-notes").innerHTML = notes.map(n => `<div class="note">${esc(n)}</div>`).join("");
+    $("#diff-table").innerHTML = "<tr><th>Stream</th><th>k</th><th>GR (dB)</th>" +
+      "<th>Envelope vs A, worst / rms (dB)</th><th>Loudness gain (dB)</th></tr>" +
+      r.streams.map(s => `<tr><td>${esc(s.name)}</td><td>${fmt(s.k, 0)}</td>` +
+        `<td>${fmt(s.gr_db)}</td><td>${fmt(s.envelope.worst_db)} / ${fmt(s.envelope.rms_db)}` +
+        `</td><td>${fmt(s.gain_db)}</td></tr>`).join("");
+  } finally {
+    $("#diff-load").disabled = false;
+    $("#diff-load").textContent = "Load";
+  }
+};
+
+// --- Keys and the clock ------------------------------------------------------------------
 document.addEventListener("keydown", e => {
-  if (!trial || e.target.tagName === "INPUT" && e.target.type === "text") return;
-  const k = e.key.toLowerCase();
-  if (k === " ") { e.preventDefault(); $("#play").click(); }
-  else if (k === "1" || k === "arrowleft") select("A");
-  else if (k === "2" || k === "arrowright") select("B");
-  else if (k === "r") { play(0); plays[side] += 1; }
-  else if (k === "a") vote("A");
-  else if (k === "b") vote("B");
-  else if (k === "n") vote("none");
+  if (e.target.tagName === "INPUT" && e.target.type !== "range" || e.target.tagName === "SELECT")
+    return;
+  const k = e.key.toLowerCase(), pl = players[mode];
+  if (k === " ") { e.preventDefault(); pl.toggle(); return; }
+  if (k === "r") { pl.restart(); return; }
+  if (mode === "pref" && trial) {
+    if (k === "1" || k === "arrowleft") pl.select("A");
+    else if (k === "2" || k === "arrowright") pl.select("B");
+    else if (k === "a") vote("A");
+    else if (k === "b") vote("B");
+    else if (k === "n") vote("none");
+  } else if (mode === "abx" && abxTrial) {
+    if (k === "1") pl.select("A");
+    else if (k === "2") pl.select("B");
+    else if (k === "3" || k === "x") pl.select("X");
+    else if (k === "a") abxAnswer("A");
+    else if (k === "b") abxAnswer("B");
+  } else if (mode === "diff") {
+    const i = Number(k) - 1;
+    if (i >= 0 && i < diffKeys.length) pl.select(diffKeys[i]);
+  }
 });
 
 setInterval(() => {
-  if (trial && duration()) $("#seek").value = Math.round(position() / duration() * 1000);
+  players[mode].tick();
   if (startedAt) {
     const s = (Date.now() - startedAt) / 1000;
     $("#timer").textContent = `${Math.floor(s / 60)} min ${String(Math.floor(s % 60)).padStart(2, "0")} s`;

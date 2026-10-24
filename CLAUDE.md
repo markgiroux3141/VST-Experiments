@@ -7,10 +7,12 @@ layout calls it `PLAN.md`). Read it before starting work.
 for noise sources). Phase 5 (Listening App and Preference Data) is in
 progress: blind A/B at `/ab` of `varimu listen`, stimuli matched by
 `varimu ab-prepare` (varimu/listen/: candidates, stimuli, prepare, session,
-store; the plan's Phase 5 status). Mumetall's Rayleigh refit (the plan's
-Phase 2, "Low-level core physics", Option 1) is applied (2026-10-24). Next:
-Phase 5's planned listening aids (difference listening, ABX with an
-exaggeration staircase).** Plausibility (`varimu.measure.plausibility`) rejects only what no
+store; the plan's Phase 5 status), with its first listening aids (2026-10-24:
+difference listening and an ABX exaggeration staircase on the same page;
+`difference`, `abx`). Mumetall's Rayleigh refit (the plan's Phase 2, "Low-level
+core physics", Option 1) is applied (2026-10-24). Next: Phase 5's planned
+items 3 (condition search) and 4 (physical caricatures), and a first real
+ABX session by the listener.** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the
@@ -123,7 +125,7 @@ uv run --extra fast python scripts/corner_sweep.py [--quick]   # genome corners:
 uv run --extra fast varimu unit --name NAME [--genome FILE] [--set k=v ...] [--no-clips]   # Phase 4: genome -> setup -> renders -> reports/units/NAME/ (exit 2: rejected)
 uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
 uv run --extra listen --extra fast varimu ab-prepare [--candidates NAME ...] [--swap KEY=VALUE ...] [--targets 3 6]   # Phase 5: match the pool (config/listening.yaml) on data/clips -> SQLite + reports/listening/matching.json
-uv run --extra listen --extra fast varimu listen   # then http://127.0.0.1:8765/ab: blind A/B session (keys: Space, 1/2, A/B/N)
+uv run --extra listen --extra fast varimu listen   # then http://127.0.0.1:8765/ab: blind A/B session (keys: Space, 1/2, A/B/N), ABX staircase, difference listening
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 ```
@@ -358,7 +360,11 @@ tests skip when ngspice is missing.
   ~100 renders. Judgments go to data/judgments/judgments.sqlite (never
   committed); stimuli are stored per code and config version
   (`prepare.code_version`: a material refit counts), so a circuit change
-  means preparing again.
+  means preparing again. The listening aids (difference listening, ABX:
+  `varimu.listen.difference`, `abx`) render nothing: they work on the
+  matched renders in the cache. ABX judgments live in their own tables
+  (`abx_*`, every trial at k != 1 flagged `exaggerated`) and are never
+  preference data.
 - **One render job twice at once (fixed 2026-10-24).** Two threads rendering
   the identical job (same cache key) used to share `cache/renders/<key>.tmp`
   and `cache/jobs/<key>` (WinError 32). Each render now has its own (key, pid,

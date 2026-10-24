@@ -6,11 +6,26 @@ Tables:
 - `stimuli`: one matched render per (candidate, clip excerpt, Time Constant, GR
   target): the solved AC THRESHOLD, the measured GR, the render keys (the cache
   holds the audio), the clip's category;
-- `sessions`: id, seed, listener, start and end, the code version;
+- `sessions`: id, seed, listener, start and end, the code version, the number of
+  repeated pairs planned (NULL: a session from before 2026-10-24, when repeats
+  were a chance draw) and the position bias (share of A among the A / B
+  answers, stored at the end);
 - `trials`: one presentation of a pair in a session: which stimulus played as A
   and as B (randomized), whether it repeats an earlier trial, the loudness
   match applied and measured, and the answer: A / B / none, the preferred
   candidate, response time, how often each side was played.
+
+Discrimination (varimu.listen.abx), kept apart from the preference tables and
+never preference data:
+
+- `abx_sessions`: id, seed, listener, code version, start and end, its settings
+  (JSON: mode, staircase steps, trials per pair) and position bias (share of
+  "X is A" answers, at the end);
+- `abx_pairs`: the session's pairs: the base stimulus of the extrapolation
+  (A + k (B - A)) and the other, whether it is the anchor, its residual level;
+- `abx_trials`: one ABX trial: the pair, k and the `exaggerated` flag (k != 1),
+  which of the two was labelled A, what X was, the loudness match and GRs as
+  played and any artifacts, the answer, hit, response time, plays per side.
 
 Times are Unix seconds (UTC).
 """
@@ -60,7 +75,9 @@ CREATE TABLE IF NOT EXISTS sessions (
     listener TEXT NOT NULL DEFAULT '',
     code_version TEXT NOT NULL,
     started_at REAL NOT NULL,
-    ended_at REAL
+    ended_at REAL,
+    repeats INTEGER,
+    share_a REAL
 );
 CREATE TABLE IF NOT EXISTS trials (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -85,7 +102,50 @@ CREATE TABLE IF NOT EXISTS trials (
     plays_b INTEGER,
     UNIQUE (session_id, idx)
 );
+CREATE TABLE IF NOT EXISTS abx_sessions (
+    id TEXT PRIMARY KEY,
+    seed INTEGER NOT NULL,
+    listener TEXT NOT NULL DEFAULT '',
+    code_version TEXT NOT NULL,
+    settings TEXT NOT NULL,
+    started_at REAL NOT NULL,
+    ended_at REAL,
+    share_x_is_a REAL
+);
+CREATE TABLE IF NOT EXISTS abx_pairs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES abx_sessions(id),
+    base INTEGER NOT NULL REFERENCES stimuli(id),
+    other INTEGER NOT NULL REFERENCES stimuli(id),
+    anchor INTEGER NOT NULL,
+    residual_db REAL
+);
+CREATE TABLE IF NOT EXISTS abx_trials (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL REFERENCES abx_sessions(id),
+    pair_id INTEGER NOT NULL REFERENCES abx_pairs(id),
+    idx INTEGER NOT NULL,
+    k REAL NOT NULL,
+    exaggerated INTEGER NOT NULL,
+    anchor INTEGER NOT NULL,
+    a_is_base INTEGER NOT NULL,
+    x_is TEXT NOT NULL CHECK (x_is IN ('A', 'B')),
+    gains_db TEXT,
+    lufs_after TEXT,
+    gr_db TEXT,
+    artifacts TEXT,
+    presented_at REAL,
+    answered_at REAL,
+    answer TEXT CHECK (answer IN ('A', 'B')),
+    hit INTEGER,
+    response_ms REAL,
+    plays TEXT,
+    UNIQUE (session_id, idx)
+);
 """
+
+# Columns added after a table was first created: (table, column, declaration).
+ADDED_COLUMNS = (("sessions", "repeats", "INTEGER"), ("sessions", "share_a", "REAL"))
 
 
 def connect(path: Path | None = None) -> sqlite3.Connection:
@@ -95,6 +155,10 @@ def connect(path: Path | None = None) -> sqlite3.Connection:
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA)
+    for table, col, decl in ADDED_COLUMNS:
+        if col not in {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {decl}")
+    db.commit()
     return db
 
 
@@ -140,11 +204,13 @@ def stimuli(db, code_version: str, solved_only: bool = True) -> list[sqlite3.Row
     return db.execute(q + " ORDER BY s.id", (code_version,)).fetchall()
 
 
-def new_session(db, sid: str, seed: int, listener: str, code_version: str) -> None:
+def new_session(
+    db, sid: str, seed: int, listener: str, code_version: str, repeats: int | None = None
+) -> None:
     db.execute(
-        "INSERT INTO sessions (id, seed, listener, code_version, started_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (sid, seed, listener, code_version, time.time()),
+        "INSERT INTO sessions (id, seed, listener, code_version, started_at, repeats) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (sid, seed, listener, code_version, time.time(), repeats),
     )
     db.commit()
 
@@ -195,7 +261,59 @@ def answer(db, trial_id: int, choice: str, response_ms: float, plays_a: int, pla
     db.commit()
 
 
+def share_a(db, sid: str) -> float | None:
+    """Position bias: the share of A among the session's A / B answers."""
+    r = db.execute(
+        "SELECT SUM(choice = 'A') AS a, SUM(choice IN ('A', 'B')) AS n FROM trials "
+        "WHERE session_id = ? AND answered_at IS NOT NULL",
+        (sid,),
+    ).fetchone()
+    return r["a"] / r["n"] if r["n"] else None
+
+
 def end_session(db, sid: str) -> None:
-    db.execute("UPDATE sessions SET ended_at = ? WHERE id = ? AND ended_at IS NULL",
-               (time.time(), sid))  # fmt: skip
+    db.execute("UPDATE sessions SET ended_at = ?, share_a = ? WHERE id = ? AND ended_at IS NULL",
+               (time.time(), share_a(db, sid), sid))  # fmt: skip
+    db.commit()
+
+
+# --- Discrimination (varimu.listen.abx) ---
+
+
+def new_abx_session(
+    db, sid: str, seed: int, listener: str, code_version: str, settings: Mapping[str, Any]
+) -> None:
+    db.execute(
+        "INSERT INTO abx_sessions (id, seed, listener, code_version, settings, started_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (sid, seed, listener, code_version, json.dumps(dict(settings), sort_keys=True),
+         time.time()),
+    )  # fmt: skip
+    db.commit()
+
+
+def add_abx_pairs(db, sid: str, rows: Iterable[Mapping[str, Any]]) -> None:
+    db.executemany(
+        "INSERT INTO abx_pairs (session_id, base, other, anchor, residual_db) "
+        "VALUES (?, ?, ?, ?, ?)",
+        [(sid, r["base"], r["other"], int(r["anchor"]), r["residual_db"]) for r in rows],
+    )
+    db.commit()
+
+
+def abx_presented(db, trial_id: int, gains_db, lufs_after, gr_db, artifacts) -> None:
+    db.execute(
+        "UPDATE abx_trials SET presented_at = COALESCE(presented_at, ?), gains_db = ?, "
+        "lufs_after = ?, gr_db = ?, artifacts = ? WHERE id = ?",
+        (time.time(), json.dumps(gains_db), json.dumps(lufs_after), json.dumps(gr_db),
+         json.dumps(list(artifacts)), trial_id),
+    )  # fmt: skip
+    db.commit()
+
+
+def end_abx_session(db, sid: str, share_x_is_a: float | None) -> None:
+    db.execute(
+        "UPDATE abx_sessions SET ended_at = ?, share_x_is_a = ? WHERE id = ? AND ended_at IS NULL",
+        (time.time(), share_x_is_a, sid),
+    )
     db.commit()

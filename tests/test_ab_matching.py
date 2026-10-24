@@ -65,3 +65,26 @@ def test_the_pair_plays_at_one_loudness(matched):
     a, b = (runner.load_render(runner.RENDER_DIR / s.render_key).output for s in matched.values())
     v = stimuli.verify_pair(a, b, fs)
     assert v["lufs_diff"] <= prepare.LUFS_TOL, v
+
+
+def test_the_listening_aids_on_the_real_pair(matched):
+    """Difference listening and exaggeration (varimu.listen.difference) on the matched
+    renders: every stream at one loudness, the extrapolated unit's GR A's at k = 0 and
+    B's at k = 1 (re-measured from the cached renders), a finite residual below A."""
+    from varimu.listen import difference, matching
+
+    fs = load_sim_settings().sample_rate
+    s = list(matched.values())
+    a, b, ra, rb = (runner.load_render(runner.RENDER_DIR / getattr(x, k)).output
+                    for k in ("render_key", "reference_key") for x in s)  # fmt: skip
+    res = difference.streams(a, b, ra, rb, fs)
+    lufs = [matching.integrated_lufs(st["audio"], fs) for st in res["streams"]]
+    assert max(lufs) - min(lufs) <= prepare.LUFS_TOL, lufs
+    gr = {st["k"]: st["gr_db"] for st in res["streams"]}
+    assert abs(gr[0.0] - TARGET_DB) <= stimuli.GR_TOL_DB and abs(gr[1.0] - TARGET_DB) <= 0.1
+    assert -80 < res["residual"]["level_db"] < 0, res["residual"]
+    for st in res["streams"]:
+        print(st["name"], st["gr_db"], st["envelope"], st["artifacts"])
+    print("residual", res["residual"]["level_db"], "dB re A")
+    v = difference.exaggerated_pair(a, b, ra, rb, 4.0, fs)
+    assert abs(v["lufs_after"][0] - v["lufs_after"][1]) <= prepare.LUFS_TOL, v["lufs_after"]
