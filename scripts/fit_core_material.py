@@ -10,7 +10,12 @@ four free JA parameters (a, k, c, alpha; Ms is the saturation) to
 - mu_max: its maximum;
 - coercivity of the major loop (driven to near saturation);
 - hysteresis loss per cycle at b_loss: the datasheet's total loss per cycle
-  minus classical eddy loss in its strip (pi^2 d^2 B^2 f / (6 rho) per cycle).
+  minus classical eddy loss in its strip (pi^2 d^2 B^2 f / (6 rho) per cycle);
+- optionally the Rayleigh region (`rayleigh_r_per_a_m`, `h_rayleigh_a_per_m`): below
+  mu_initial's field the permeability follows Rayleigh's law, mu(H) = mu_i (1 + r H),
+  so the initial curve at h_rayleigh is mu_initial (1 + r h_rayleigh) / (1 + r
+  h_initial). Without it, the fit is free to put the initial curve's whole rise
+  below h_initial (an almost all irreversible JA set: H ~ sqrt(B) at low fields).
 
 tests/test_core.py checks that the stored parameters still meet the targets.
 """
@@ -26,7 +31,7 @@ from scipy.optimize import least_squares
 from varimu.devices.core import MU0, MagneticCore, materials
 
 
-def figures(core: MagneticCore, b_loss: float) -> dict[str, float]:
+def figures(core: MagneticCore, b_loss: float, h_rayleigh: float | None = None) -> dict[str, float]:
     """The datasheet figures of a JA material (see the module docstring)."""
     js = MU0 * core.ms_a_per_m
     # Initial curve from the demagnetized state, in fine B steps.
@@ -48,12 +53,19 @@ def figures(core: MagneticCore, b_loss: float) -> dict[str, float]:
     hcyc = np.array(core.trace(bc))
     last = t >= 2
     loss = float(np.trapezoid(hcyc[last], bc[last]))  # oint H dB, J/m^3
-    return {
+    out = {
         "mu_initial": float(np.interp(math.log(0.4), np.log(h[ok]), mu[ok])),
         "mu_max": float(np.max(mu[ok])),
         "coercivity_a_per_m": float(hc),
         "loss_j_per_m3": abs(loss),
     }
+    if h_rayleigh is not None:
+        out["mu_rayleigh"] = float(np.interp(math.log(h_rayleigh), np.log(h[ok]), mu[ok]))
+    return out
+
+
+def h_rayleigh(name: str) -> float | None:
+    return materials()[name]["datasheet"].get("h_rayleigh_a_per_m")
 
 
 def targets(name: str) -> tuple[dict[str, float], float, float]:
@@ -62,16 +74,16 @@ def targets(name: str) -> tuple[dict[str, float], float, float]:
     d, rho, f, b = ds["strip_m"], m["resistivity_ohm_m"], ds["loss_hz"], ds["b_loss_t"]
     eddy = math.pi**2 * d**2 * b**2 * f / (6 * rho)  # J/m^3 per cycle
     total = ds["loss_w_per_kg"] / f * ds["density_kg_per_m3"]
-    return (
-        {
-            "mu_initial": ds["mu_initial"],
-            "mu_max": ds["mu_max"],
-            "coercivity_a_per_m": ds["coercivity_a_per_m"],
-            "loss_j_per_m3": total - eddy,
-        },
-        b,
-        ds["h_initial_a_per_m"],
-    )
+    want = {
+        "mu_initial": ds["mu_initial"],
+        "mu_max": ds["mu_max"],
+        "coercivity_a_per_m": ds["coercivity_a_per_m"],
+        "loss_j_per_m3": total - eddy,
+    }
+    if "rayleigh_r_per_a_m" in ds:
+        r, h0, hr = ds["rayleigh_r_per_a_m"], ds["h_initial_a_per_m"], ds["h_rayleigh_a_per_m"]
+        want["mu_rayleigh"] = ds["mu_initial"] * (1 + r * hr) / (1 + r * h0)
+    return want, b, ds["h_initial_a_per_m"]
 
 
 def fit(name: str) -> MagneticCore:
@@ -87,14 +99,17 @@ def fit(name: str) -> MagneticCore:
         c = core(x)
         if c.validate():
             return np.full(len(want), 10.0)
-        got = figures(c, b_loss)
+        got = figures(c, b_loss, h_rayleigh(name))
         return np.array([math.log(got[k] / want[k]) for k in want])
 
+    # With a Rayleigh region to meet, start from a mostly reversible set: an almost all
+    # irreversible start (c ~ 1e-3) sits in a different basin.
+    c0 = max(m["c"], 0.2) if "mu_rayleigh" in want else m["c"]
     x0 = np.log([m["a_a_per_m"], m["k_a_per_m"]]).tolist()
-    x0 += [math.log(m["c"] / (1 - m["c"])), math.log(m["alpha"])]
+    x0 += [math.log(c0 / (1 - c0)), math.log(m["alpha"])]
     sol = least_squares(resid, x0, diff_step=1e-3, xtol=1e-10, ftol=1e-10)
     best = core(sol.x)
-    got = figures(best, b_loss)
+    got = figures(best, b_loss, h_rayleigh(name))
     print(f"{name}: a {best.a_a_per_m:.6g}, k {best.k_a_per_m:.6g}, c {best.c:.6g}, "
           f"alpha {best.alpha:.6g}  (Ms {ms:.6g})")  # fmt: skip
     for key in want:

@@ -1,0 +1,25 @@
+device: "MUMETALL"
+document: "MUMETALL(R) F105 (Lamineries Matthey data sheet; the graph's source: Vacuumschmelze)"
+publisher: Lamineries MATTHEY (Notz Metall AG)
+date: 2022 (PDF created 2024-04-16)
+local_copy: sources/matthey_mumetall.pdf
+local_copy_sha256: 70bad91c4a01800b256a80a9daf7148d28f6af8dc704759420cdb2eefbe1a630
+scan_source: "web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf"
+digitized_with: "the graph's embedded raster (pdfimages, 658 x 690 px); grid lines from pixel profiles (x: 0.001-1 A/cm at 150.0 / 254.5 / 360.0 / 463.5 px; y: 10-100000 at 586.5 .. 167.0 px), the curve as the topmost dark stroke per pixel column (strokes under 3 px and grid-line rows dropped), one point per 1/20 decade; checked by eye as an overlay (Claude Code, scratch script not kept)"
+digitized_by: Claude Code
+digitized_on: 2026-10-23
+files:
+  matthey_mumetall_mu_a.csv:
+    figure: "PDF p.2: 'Effect of final heat treatment on MUMETALL (Source Vacuumschmelze)', amplitude permeability mu_a vs H"
+    columns: "h_a_per_m, mu_a"
+    curves: "the 'Magnetically final-annealed' curve only (not 'cold-worked'), 0.11-590 A/m"
+axis_calibration: "labelled grid lines (log-log; H printed in A/cm, converted to A/m)"
+estimated_error: "+-3 px: ~+-7% in mu_a, ~+-7% in H"
+notes: >-
+  The graph's conditions (strip thickness, frequency) aren't printed; its mu_a at 0.4 A/m
+  (~90,000) is above the table's mu4 (60,000, static, 1.00 mm), so the graph is used for
+  the shape of the low-field (Rayleigh) region, mu_a = mu_i (1 + r H): a straight-line fit
+  over 0.1-0.6 A/m gives r ~ 2.8 per A/m (mu_i ~ 42,000, nu ~ 119,000 per A/m). An
+  independent DC ring measurement of 1J85 permalloy (80Ni-5Mo, mumetal's class) gives
+  B = 0.3001 H^2 + 0.0906 H (T, A/m): mu_i 72,097, r = 3.3 per A/m (web:
+  https://pmc.ncbi.nlm.nih.gov/articles/PMC9608087, Materials 15 (2022) 7353).

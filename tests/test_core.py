@@ -139,6 +139,6 @@ def test_fitted_materials_meet_their_datasheet():
     assert fitted
     for name in fitted:
         want, b_loss, _ = fcm.targets(name)
-        got = fcm.figures(core_model(name, name, 0.1), b_loss)
+        got = fcm.figures(core_model(name, name, 0.1), b_loss, fcm.h_rayleigh(name))
         for k, v in want.items():
             assert abs(got[k] / v - 1) < 0.03, (name, k, got[k], v)
