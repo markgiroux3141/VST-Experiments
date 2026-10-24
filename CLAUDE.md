@@ -4,8 +4,14 @@ The project plan is [VARIMU_PROJECT_PLAN.md](VARIMU_PROJECT_PLAN.md) (the plan's
 layout calls it `PLAN.md`). Read it before starting work.
 
 **Phases 0-3 are done (Phase 3, full circuit netlist: 2026-10-22; the plan's
-Phase 3 status has what was built, measured, and which genomes oscillate);
-next is Phase 4 (Simulation Runner and Measurement Suite).** Phase 2's decision (the user's): the hysteretic
+Phase 3 status has what was built, measured, and which genomes oscillate).
+Phase 4 (Simulation Runner and Measurement Suite) is in progress, its
+done-when met 2026-10-23: `varimu unit` (genome -> setup -> renders ->
+reports/units/NAME/) and `varimu.measure.plausibility`; the plan's Phase 4
+status lists what's left.** Since 2026-10-23 the default front panel is the
+factory adjustment (the manual's threshold procedure to its curve 3,
+`varimu.sim.setup.threshold`), T103 is 8.5 and the AC THRESHOLD pots are
+tapped (Phase 3's sourced leftovers). Phase 2's decision (the user's): the hysteretic
 core has a Python reference and a circuitsim device, no SPICE
 implementation; ngspice cross-checks the rest with the cores in their linear
 limit (Hard rules). Work one phase at a time. Don't start the next phase until
@@ -109,6 +115,8 @@ uv run --extra fast python scripts/transformer_report.py [--only t101 ...]   # e
 uv run python scripts/fit_core_material.py mumetall   # refit a core material's JA parameters to its datasheet figures
 uv run --extra fast python scripts/calibrate_psu.py    # re-derive T302's voltage, L302's resistance, B+ ADJ from the printed/measured rails
 uv run --extra fast python scripts/corner_sweep.py [--quick]   # genome corners: simulates? GR rises? quiet at idle? -> reports/corners/
+uv run --extra fast varimu unit --name NAME [--genome FILE] [--set k=v ...] [--no-clips]   # Phase 4: genome -> setup -> renders -> reports/units/NAME/ (exit 2: rejected)
+uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 ```
@@ -256,7 +264,12 @@ tests skip when ngspice is missing.
     oversampled sample of every render saw input 0);
   - for agreement tests, `run_transient(..., max_step_div=8,
     grid_breakpoints=True)` makes ngspice a reference: plain runs straddle
-    the input's sample kinks and interpolate, about -55 to -75 dB re signal.
+    the input's sample kinks and interpolate, about -55 to -75 dB re signal;
+  - ngspice can stop at its first step (t = h / 100, at a bridge diode on
+    T104's floating secondary) depending only on how the input is split into
+    filesources (found 2026-10-23: 4 and 4.5 s renders at the default panel;
+    no method, rshunt, gmin or capacitance helped); `run_transient` retries a
+    run that stops within its first sample once with another split.
 - **Fixed-step engine accuracy (decided 2026-10-15, plan M4).** Trapezoidal
   frequency-warps the transformers' resonances (the slice peaks +10 dB near
   17 kHz from the pre-Phase 2 provisional winding capacitances; Phase 2's
@@ -326,12 +339,19 @@ tests skip when ngspice is missing.
 - **Speed since Phase 3 (measured 2026-10-21).** circuitsim 14x slower than
   real time on the 7 s TC1 burst and 36x on the 4 s clip (Phase 2: 5.8x /
   7.3x), plus 1 s of settling per render: 45 device ports instead of 22, and
-  error-control halvings at every 6973 grid clamp (pentodes have grid current
+  error-control substeps at every 6973 grid clamp (pentodes have grid current
   since Phase 3; without it the 6973 grids ran to +251 V). Cold `--verify`:
-  see the circuit-sim plan's "Phase 3 in circuitsim".
+  see the circuit-sim plan's "Phase 3 in circuitsim". 2026-10-23 (the
+  circuit-sim plan's "Speed after Phase 3"): step selection, probe-only steps
+  with the ports-and-states error norm, and AVX2 linear algebra, 1.16-1.26x
+  faster at the same accuracy; the substeps are needed by accuracy (the 6973
+  feedback nodes nfa / nfb), not wasted by halving.
 - **Genomes that oscillate** (`reports/corners/summary.json`, flagged): some
   random corners oscillate at 19-30 kHz or wander at LF (weak-supply corners:
-  the regulator in dropout). Phase 4's plausibility checks must reject them.
+  the regulator in dropout). `varimu.measure.plausibility` rejects every one
+  (`scripts/plausibility_check.py`). Its oscillation check looks for spurs away
+  from the tone's harmonics: at the hottest panel the CV is still settling
+  within a short step, and that modulation isn't an oscillation.
 - **Benchmarking on this desktop.** Timings drift +-35% between runs:
   VS Code's rust-analyzer recompiles the crate on all cores for ~2 minutes
   after each Rust edit, and explorer.exe often holds a core. Wait until no

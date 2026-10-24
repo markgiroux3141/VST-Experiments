@@ -255,9 +255,11 @@ Findings that change later work:
   - What would help is engine work: step-size selection instead of recursive halving, and M5's deferred speed target (circuit-sim plan, "Phase 3 in circuitsim").
 - **Production accuracy on the clip's first attack.** Production circuitsim against its converged solution: -56.8 dB / CV 0.19 V on the whole clip (Phase 2: -76.3 dB / 0.006 V). That is inside the plan's -55 dB / 0.2 V, with the error at the clip's first attack from rest, where the CV falls ~80 V in ~2 ms. 10x tighter error tolerances give 0.07 V (+19% time), 4x oversampling 0.04 V (+43%). Not changed (speed); the user's call.
 - **ngspice needed the rectifier's capacitance.** Production ngspice stopped ~1 ms in, where the GZ34 first cuts off, until T302's winding capacitance and the selenium cells' capacitance went in. Both are physical: an inductive kick into a node with nothing on it.
-- **Sourced values not yet applied** (they change the slice's behaviour; separate steps):
-  - T103's ratio: Sowter's replacement is 17+17:1+1, i.e. 8.5 per secondary half, against the provisional 3.0.
-  - The AC THRESHOLD pots are tapped, with R113/R114 hanging off the taps (GroupDIY); R115B may be 100K on some prints.
+- **Sourced values applied (2026-10-23), and the factory adjustment:**
+  - **T103's ratio** is Sowter's replacement, 17+17:1+1 (8.5 per secondary half re the series primary; was a provisional 3.0): +9 dB of sidechain drive. Bounds 7.5-9.5. The old leakage (10 mH, the "k = 0.999" placeholder) is 72x that referred to a secondary half and rolled the sidechain off -2.1 dB at 15 kHz; the nominal is now 5 mH, chosen like T101's (within 0.5 dB, 40 Hz-20 kHz, standalone).
+  - **The AC THRESHOLD pots are tapped** (GroupDIY, Walrus reading the original manual; `sidechain_1.png` agrees): each section from its T103 end to the centre line, R113/R114 from the tap to the centre line, the wiper to a 12AX7 grid. AC THRESHOLD 0 now gives no sidechain signal (the manual's curve 1); before, it left 19%. New genome parameters: the tap position (0.3-0.7, nominal 0.5: CJ's "50% tap") and R115B (a choice of 100K / 180K; nominal 100K: the original manual reads "a dual 100k lin tapped pot", "180k on some prints", and 180K with a 50% tap would drive one 12AX7 grid 3 dB less below the tap).
+  - **The manual's threshold procedure** (p.8) is `varimu.sim.setup.threshold`: unity gain with AC THRESHOLD at 0 (the input pad in 1 dB steps), then DC THRESHOLD for the desired output at 3 dB of limiting and AC THRESHOLD at 10 dB, repeated until both hold (alternating converges slowly, each moves the other's point by ~0.84 of its own change, so the repeats run as Newton on both: 3 iterations). Run to **curve 3** ("Factory-adjusted condition", PDF p.13, digitized: `data/datasheets/fairchild_670_io_curve3.csv`), the nominal unit lands at pad 11 dB, DC THRESHOLD 0.253, AC THRESHOLD 0.709, and its 1 kHz curve is then **within 0.17 dB of curve 3 from +1 to +25 dBm in** (+0.4 dB below the knee: the pad's 1 dB step). The model reaches the factory curve's shape (knee at +2 dBm, 10 dB of limiting at +15.4 dBm in, +6 dBm out at +25) with the thresholds inside their ranges. These are now the circuit's default front panel.
+  - Tests and bounds re-measured: `test_slice.py`, `test_psu.py` (their hottest panel now names DC THRESHOLD 0, the old default), `test_transformers.py` (T103 -0.20 / +0.08 dB at 40 Hz / 15 kHz), `test_circuitsim_slice.py` (vs converged -81.2 / -85.8 / -72.2 / -74.3 dB; vs ngspice -64.0 / -60.4 dB), and `--verify` with the engine changes of the circuit-sim plan's "Speed after Phase 3" (2026-10-23, passes, bounds re-measured in `slice_report.py`): behaviour vs production ngspice 0.01 dB on the curve, 0.035 dB on the clip, TC1-4 times identical; excerpts vs exact ngspice -81.9 to -85.4 dB (bursts), -76.2 / -71.3 dB (clip); the clip vs the converged solution **-77.2 dB / CV 0.070 V** (Phase 3: -56.8 / 0.19). So the pending tolerance decision (Phase 3 findings) is far less pressing: 10x tighter tolerances now give -78.5 / 0.040, 4x oversampling -83.9 / 0.007.
 - **Open:**
   - the 5651's ignition (it is lit from the DC point on);
   - electrolytic ESR;
@@ -284,6 +286,66 @@ Findings that change later work:
 - Plausibility checks that automatically reject broken units: no gain reduction at all, oscillation, runaway DC, absurd distortion at nominal level, release times far outside the vari-mu range.
 
 **Done when:** A single command takes a genome and produces a measurement report plus rendered audio clips, and the plausibility checks catch deliberately broken genomes.
+
+*Status (2026-10-23): in progress, the done-when met* (see "What's left").
+
+- **The runner** existed from the slice (cached, parallel, `timing.csv`). New: a fresh render returns exactly what its cached copy will (float32), so anything measured from it, a level that sets the next render's input, gives the same next cache key either way; ngspice's start-up stop at four input chunks is retried with five (circuit-sim plan, "Speed after Phase 3").
+- **The one command:** `varimu unit --name NAME [--genome FILE] [--set k=v ...]` (`varimu.measure.suite`) -> `reports/units/NAME/` (report.json, plots, rendered clips in `audio/`, not committed). Exit status 2 when the unit is rejected.
+  1. the plausibility screen (`varimu.measure.plausibility.screen`, three short renders);
+  2. setup: `setup.adjust` (B+ ADJ, BALANCE, ZERO on the DC point), then `setup.threshold` to curve 3 (the input pad for unity gain, DC and AC THRESHOLD). The unit pipeline now applies the manual's setup; renders elsewhere still take the trims as given;
+  3. every section's renders as one parallel batch, then the measurements and the full checks.
+- **Levels are the manual's:** dBm at the 600 ohm terminals (`varimu.measure.levels`, the input measured at its terminals, `in_s`, a new probe). The gain-reduction points are curve 3's 0 / 3 / 10 dB of limiting (-10 / +6.66 / +15.41 dBm in), which setup puts the unit on.
+- **Sections:**
+  - static curves at 1 kHz: AC THRESHOLD 0 (no limiting, to +28 dBm), 0.4, factory, 1; factory at 100 Hz and 6 kHz; the factory curve against curve 3;
+  - THD and harmonics from every curve step (vs level, frequency, gain reduction), and the manual's two distortion specs;
+  - attack and release for all six Time Constants from a burst to 10 dB of limiting (positions 5 and 6 also a train of short bursts);
+  - frequency response at 0 / 3 / 10 dB of limiting (a 1 kHz pilot holds the reduction, a 31-tone probe 40 dB down reads the response);
+  - SMPTE (60 Hz + 7 kHz, 4:1, as p.10) and CCIF IMD at the three points;
+  - thump (6 kHz bursts with 5 ms edges, the output low-passed at 1 kHz, with the input's own floor);
+  - the program clips.
+  - Not yet: noise (no noise sources).
+- **Plausibility checks.** The screen:
+  - idle quiet (< -80 dBFS);
+  - B+ 232-248 V, the unregulated rail 380-480 V;
+  - bank currents 10-50 mA, the grid bias on ZERO's divider;
+  - at the hottest panel: gain reduction > 6 dB at 0 dBFS and rising > 0.5 dB per 10 dB step, no spur > -50 dB away from the tone's harmonics, the CV above -150 V;
+  - THD < 5% at +4 dBm out with no limiting.
+
+  The full checks:
+  - the factory curve within 3 dB of curve 3 and limiting > 10 dB by +25 dBm;
+  - gain reduction rising on every limiting curve, no spur under any curve's tone;
+  - attack < 20 ms;
+  - the 90% CV release within 0.25-4x the published value (or range: TC5 2-10 s, TC6 0.3-25 s, program dependent);
+  - the CV back after TC1-4;
+  - response within +-3 dB 40 Hz-15 kHz and SMPTE < 10% at no limiting.
+- **Done when** (`scripts/plausibility_check.py`, `tests/test_plausibility.py`):
+  - **Phase 3's flagged runs:** all 17 rejected (each in the state it was flagged in, set up or as built):
+    - the HF oscillators by idle and spur checks;
+    - the weak-supply corners by idle wander, B+ and the unregulated rail;
+    - T101's 20 mH leakage by the grid bias, the spur check and the CV range.
+  - **The nominal unit:** passes.
+  - **Deliberately broken genomes, each rejected by the check it targets:** no sidechain drive (T103 at 0.05), the regulator's reference above its rail, dead 6386s, a saturating T101 (1e4 x the flux per volt), C109 x 100 (release).
+  - **Two of my first guesses weren't broken in this circuit:**
+    - Phase 2's unscreened transformers (20 + 50 pF) now idle at -164 dBFS;
+    - a 150 V reference is trimmed back to 240.9 V by B+ ADJ.
+- **The nominal unit's report** (`reports/units/nominal/`):
+  - factory curve within 0.48 dB of curve 3 (with the pad's +0.39 dB);
+  - THD with no limiting 0.07% at +4 dBm out, 0.43% at most to +18 dBm (spec < 1%), 1% at +20.6 dBm;
+  - 0.23% at 10 dB of limiting, there at +5.4 dBm out (spec: < 1% at +12 dBm);
+  - SMPTE 0.10 / 0.61 / 2.4% at 0 / 3 / 10 dB of limiting (p.10's curves: ~0.3-1% at 0 dB, rising with limiting);
+  - response re 1 kHz, 40 Hz-15 kHz: -0.5..0 dB at no limiting, -1.6..+0.4 at 3 dB, -3.9..+1.0 at 10 dB: the response tilts under limiting;
+  - 90% CV release 0.24 / 0.69 / 2.03 / 4.06 s at TC1-4 (published 0.3 / 0.8 / 2 / 5), TC5 5.9 s, TC6 11.2 s after a 1 s burst;
+  - attack (63% of the CV) 1.7-3.3 ms against the published 0.2-0.4 ms;
+  - thump: the output below 1 kHz peaks -47.7 dB re the tone (-64 dBFS) when a burst drives 10 dB of limiting, at the measurement's floor (-101.5 dB) with no limiting: the CV's step reaching the output through the push-pull stage even with every part at its printed value;
+  - about 23 minutes per unit on this desktop with nothing else running (the 17 s Time Constant renders are the long pole).
+
+Findings that change later work:
+
+- **Attack is ~8x the published 0.2-0.4 ms** (CV 63% at 1.7 ms for TC1/2/6 from a burst to 10 dB of limiting). Either the manual's attack is defined differently (e.g. the CV's first movement, or a bigger overload) or the sidechain's source impedance / bridge in the model is slower than the original's. Worth a look before Phase 5's listening.
+- **Low-level distortion comes from the transformer cores.** 0.16% THD (H3) at -10 dBm with the Jiles-Atherton cores, 0.003% with their linear limit; it falls as the level rises (0.07% at +4 dBm, where the tubes take over). Real permalloy at low fields follows Rayleigh's law, its hysteresis distortion falling with level. The effective-field JA fit of mumetall is almost all irreversible (Phase 2), so at low fields it overstates hysteresis. Within the manual's < 1%, but it is character: a Phase 2 follow-up (a fit with a Rayleigh region, or another hysteresis model).
+- **The error estimate misses a diode turning off within a step** (circuit-sim plan, "Speed after Phase 3"): fine on the 670's events, worth knowing for other circuits.
+
+What's left: re-measure the timing check's TC5 / TC6 short-peak release (a burst short enough to be an "individual peak"), and decide the attack question above.
 
 ### Phase 5: Listening App and Preference Data
 

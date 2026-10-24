@@ -25,3 +25,39 @@ def test_cv_timing_reads_time_constants_between_samples(tau_s):
     assert r.attack_s == pytest.approx(tau_s, rel=2e-3, abs=0.05 / fs)
     assert r.release_63_s == pytest.approx(tau_s, rel=2e-3, abs=0.05 / fs)
     assert r.release_90_s == pytest.approx(tau_s * np.log(10), rel=2e-3, abs=0.05 / fs)
+
+
+FS = 96000
+
+
+def test_harmonics_reads_amplitudes_and_the_residual():
+    t = np.arange(FS // 10) / FS  # 100 periods of 1 kHz
+    y = 2.0 * np.sin(2 * np.pi * 1000 * t) + 0.02 * np.cos(2 * np.pi * 2000 * t + 0.3)
+    y += 0.002 * np.sin(2 * np.pi * 3000 * t) + 0.5 + 1e-3 * np.sin(2 * np.pi * 23456 * t)
+    h = metrics.harmonics(y, 1000.0, FS)
+    assert h.amps[:3] == pytest.approx([2.0, 0.02, 0.002], abs=1e-6)
+    assert h.thd == pytest.approx(np.hypot(0.02, 0.002) / 2.0, rel=1e-4)
+    assert h.db(2) == pytest.approx(-40.0, abs=1e-3)
+    # The residual is the non-harmonic tone (the DC is fitted away).
+    assert h.residual_hz == pytest.approx(23456, abs=20)
+    assert h.residual_db == pytest.approx(20 * np.log10(1e-3 / 2.0), abs=0.2)
+    # The non-harmonic tone is a spur; modulation sidebands next to a harmonic aren't.
+    assert h.spur_hz == pytest.approx(23456, abs=20)
+    # (within the Hann window's scalloping loss, <= 1.42 dB between bins)
+    assert h.spur_db == pytest.approx(20 * np.log10(1e-3 / 2.0), abs=1.5)
+    am = 2.0 * (1 + 0.05 * np.sin(2 * np.pi * 30 * t)) * np.sin(2 * np.pi * 1000 * t)
+    assert metrics.harmonics(am, 1000.0, FS).spur_db < -100
+
+
+def test_intermodulation_reads_known_sidebands():
+    t = np.arange(FS // 2) / FS
+    c = np.sin(2 * np.pi * 7000 * t)
+    y = 4 * np.sin(2 * np.pi * 60 * t) + c
+    y += 0.01 * (np.sin(2 * np.pi * 6940 * t) + np.sin(2 * np.pi * 7060 * t))
+    y += 0.005 * np.sin(2 * np.pi * 7120 * t)
+    assert metrics.smpte_imd(y, 60, 7000, FS) == pytest.approx(np.sqrt(2e-4 + 0.25e-4), rel=1e-6)
+    y = np.sin(2 * np.pi * 19000 * t) + np.sin(2 * np.pi * 20000 * t)
+    y += 0.003 * np.sin(2 * np.pi * 1000 * t) + 0.004 * np.sin(2 * np.pi * 18000 * t)
+    r = metrics.ccif_imd(y, 19000, 20000, FS)
+    assert r["d2"] == pytest.approx(0.003 / np.sqrt(2), rel=1e-6)
+    assert r["d3"] == pytest.approx(0.004 / np.sqrt(2), rel=1e-6)

@@ -177,6 +177,20 @@ def stepped_sine(
     return Signal(x, sample_rate, {"freq_hz": freq_hz, "segments": segs})
 
 
+def stepped_levels(
+    *,
+    freq_hz: float,
+    levels_dbfs: Sequence[float | None],
+    hold_s: float,
+    ramp_s: float = 0.002,
+    sample_rate: int,
+) -> Signal:
+    """A staircase through any list of levels (None: silence), each held hold_s;
+    otherwise as stepped_sine."""
+    x, segs = _stepped_sine(freq_hz, [(hold_s, lv) for lv in levels_dbfs], sample_rate, ramp_s)
+    return Signal(x, sample_rate, {"freq_hz": freq_hz, "segments": segs})
+
+
 def exp_sweep(
     *,
     f_start_hz: float,

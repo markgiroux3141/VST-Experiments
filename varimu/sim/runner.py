@@ -58,15 +58,18 @@ def _sha(data: bytes) -> str:
 
 
 # The code that can change a render's result. Edits elsewhere (the listen app,
-# measurements, the CLI) must not invalidate the cache.
+# measurements, the CLI) must not invalidate the cache. sim/setup.py only chooses
+# overrides (trims), which are keyed through the circuit itself.
 RESULT_CODE = ("sim/*.py", "circuit/*.py", "devices/*.py", "config.py")
+NOT_RESULT_CODE = ("sim/setup.py",)
 
 
 def code_version() -> str:
     """varimu version plus a hash of the sources in RESULT_CODE."""
     h = hashlib.sha256()
     pkg = Path(varimu.__file__).parent
-    for path in sorted(p for pattern in RESULT_CODE for p in pkg.glob(pattern)):
+    skip = {pkg / x for x in NOT_RESULT_CODE}
+    for path in sorted(p for pattern in RESULT_CODE for p in pkg.glob(pattern) if p not in skip):
         h.update(path.relative_to(pkg).as_posix().encode())
         h.update(path.read_bytes())
     return f"{varimu.__version__}+{h.hexdigest()[:12]}"
@@ -242,15 +245,19 @@ def render(
     if tmp.exists():
         shutil.rmtree(tmp)
     tmp.mkdir(parents=True)
-    out = res.vectors["v(out)"] / s.full_scale_volts_peak
+    # What the cache keeps (float32), so a fresh render returns exactly what a cached
+    # one will: anything computed from it (a measured level that sets the next
+    # render's input) is the same either way, and so are the next cache keys.
+    vectors = {k: v.astype("<f4").astype(float) for k, v in res.vectors.items()}
+    out = vectors["v(out)"] / s.full_scale_volts_peak
     write_audio(tmp / "out.wav", out, s.sample_rate)
-    np.savez_compressed(tmp / "vectors.npz", **{k: v.astype("<f4") for k, v in res.vectors.items()})
+    np.savez_compressed(tmp / "vectors.npz", **{k: v.astype("<f4") for k, v in vectors.items()})
     (tmp / "meta.json").write_text(json.dumps(meta, indent=1, default=str), encoding="utf-8")
     if path.exists():
         shutil.rmtree(path)
     _replace_dir(tmp, path)
     _log_timing(meta)
-    return Render(key, path, out, res.vectors, meta, cached=False)
+    return Render(key, path, out, vectors, meta, cached=False)
 
 
 def render_many(

@@ -142,6 +142,26 @@ def _cmd_render(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_unit(args: argparse.Namespace) -> int:
+    """Genome -> set-up unit -> renders -> measurement report (varimu.measure.suite)."""
+    import json
+
+    import yaml
+
+    from varimu.measure import suite
+    from varimu.sim import runner
+
+    _engine_settings(None)  # fails early without the engine
+    genome: dict = {}
+    if args.genome:
+        text = args.genome.read_text(encoding="utf-8")
+        genome = json.loads(text) if args.genome.suffix == ".json" else yaml.safe_load(text)
+        genome = genome.get("genome", genome)  # a report or corner-sweep row: its genome
+    genome.update(runner.parse_overrides(args.set or []))
+    report = suite.run(args.name, genome, clips=not args.no_clips)
+    return 0 if report["plausible"] else 2
+
+
 def _cmd_listen(args: argparse.Namespace) -> int:
     try:
         from varimu.listen.app import serve
@@ -190,6 +210,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         "ngspice is the reference)",
     )
     p.set_defaults(func=_cmd_render)
+
+    p = sub.add_parser(
+        "unit", help="set up a genome as the factory would and measure it (Phase 4 suite)"
+    )
+    p.add_argument("--name", required=True, help="report folder: reports/units/NAME")
+    p.add_argument("--genome", type=Path, help="YAML / JSON mapping of genome overrides")
+    p.add_argument("--set", nargs="+", metavar="KEY=VALUE", help="more genome overrides")
+    p.add_argument("--no-clips", action="store_true", help="leave out the program clips")
+    p.set_defaults(func=_cmd_unit)
 
     p = sub.add_parser("listen", help="tweak-and-listen web page (needs the listen extra)")
     p.add_argument("--host", default="127.0.0.1")
