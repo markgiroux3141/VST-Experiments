@@ -5,8 +5,8 @@ Each genome runs the cheap screen (three short renders, ~1-2 min) or, for the sl
 release, the suite's TC2 burst; they run in parallel. Covered here: one of each kind
 Phase 3's corner sweep flagged (an HF oscillator, a weak-supply corner wandering at
 LF, gain reduction folding back at T101's 20 mH leakage bound) and three
-deliberately broken genomes (no sidechain drive, absurd distortion, a release 100x
-too slow).
+deliberately broken genomes (no sidechain drive, absurd distortion, a CV that never
+returns: C109 300x). Comparisons with the 670's published figures don't reject.
 """
 
 from concurrent.futures import ThreadPoolExecutor

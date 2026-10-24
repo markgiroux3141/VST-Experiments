@@ -92,10 +92,9 @@ def plot_timing(report: dict, renders: dict, unit: Any, out_dir: Path) -> str:
 
     fs = load_sim_settings().sample_rate
     fig, ax = plt.subplots(2, 1, figsize=(12, 7), sharex=True)
-    for key in report["timing"]:
+    for key, row in report["timing"].items():
         r = renders[key]
-        tc = int(key[len("timing_tc")])
-        x, meta = suite.burst_signal(unit, tc, key.endswith("_train"), fs)
+        x, meta = suite.burst_signal(unit, row["position"], row["burst"], fs)
         a = meta["burst_start"]
         t = (np.arange(len(x)) - a) / fs
         g = metrics.envelope_db(r.output, fs, 0.005) - metrics.envelope_db(x, fs, 0.005)

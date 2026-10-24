@@ -27,6 +27,44 @@ def test_cv_timing_reads_time_constants_between_samples(tau_s):
     assert r.release_90_s == pytest.approx(tau_s * np.log(10), rel=2e-3, abs=0.05 / fs)
 
 
+def test_cv_attack_is_read_against_the_fast_swing_not_a_later_creep():
+    """A 1 ms attack to -55 V, then a slow creep to -65 V (the supply's sag under a
+    long burst): the attack's 10% / 63% points are those of the fast move."""
+    fs, tau = 96000, 1e-3
+    a, n = fs // 10, fs // 10 + fs
+    t = (np.arange(n) - a) / fs
+    cv = np.where(t < 0, -5.0, -5.0 - 50.0 * (1 - np.exp(-t / tau)) - 10.0 * np.clip(t, 0, 1))
+    a10, a63 = metrics.cv_attack(cv, fs, a, a + int(0.02 * fs))
+    assert a10 == pytest.approx(tau * np.log(1 / 0.9), rel=0.05)
+    assert a63 == pytest.approx(tau, rel=0.05)
+
+
+@pytest.mark.parametrize("tau_s", [0.5, 3.0, 40.0])
+def test_cv_release_estimate_extrapolates_past_the_window(tau_s):
+    """An exponential release seen through a 10 s window: 90% at tau ln 10, read off
+    when the window holds it, extrapolated when it doesn't; a stuck CV is inf."""
+    fs = 2000
+    b, n = fs, fs + 10 * fs
+    t = (np.arange(n) - b) / fs
+    cv = np.where(t < 0, -60.0, -5.0 - 55.0 * np.exp(-np.clip(t, 0, None) / tau_s))
+    est, extrapolated = metrics.cv_release_estimate(cv, fs, b, -5.0, -60.0)
+    assert extrapolated == (tau_s * np.log(10) > 10)
+    assert est == pytest.approx(tau_s * np.log(10), rel=0.01)
+    stuck = np.where(t < 0, -60.0, -60.0)
+    assert metrics.cv_release_estimate(stuck, fs, b, -5.0, -60.0)[0] == float("inf")
+
+
+def test_gain_attack_reads_the_reduction_per_half_period():
+    """A 1 kHz tone whose gain drops 1.1 dB per half period after the burst starts."""
+    fs, f = 96000, 1000.0
+    a, n = 4800, 4800 + 960
+    x = np.sin(2 * np.pi * f * np.arange(n) / fs)
+    half = np.clip((np.arange(n) - a) // 48 + 1, 0, None)
+    y = x * 10 ** (-1.1 * np.minimum(half, 8) / 20)
+    g1, g3, g6 = metrics.gain_attack(x, y, fs, f, a, n)
+    assert (g1, g3, g6) == pytest.approx((0.5e-3, 1.5e-3, 3.0e-3))
+
+
 FS = 96000
 
 

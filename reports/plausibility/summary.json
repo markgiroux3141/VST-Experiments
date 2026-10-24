@@ -24,16 +24,8 @@
       "passes": true,
       "value": 240.07,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 435.0,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -79,11 +71,6 @@
        "at_hz": 1480
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -107.23,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -143,6 +130,16 @@
       -106.53
      ],
      "cv_min_v": -107.23
+    },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 435.0,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": true
+     }
     },
     "nominal": {
      "out_dbm": 4.4,
@@ -238,16 +235,8 @@
       "passes": true,
       "value": 245.87,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 350.7,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -293,11 +282,6 @@
        "at_hz": 1360
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -80.82,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -358,13 +342,22 @@
      ],
      "cv_min_v": -80.82
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 350.7,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 4.82,
      "thd_pct": 0.0679
     },
     "failed": [
-     "idle_quiet",
-     "unregulated_rail"
+     "idle_quiet"
     ]
    },
    "judged_right": true
@@ -455,16 +448,8 @@
       "passes": false,
       "value": 223.88,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 337.8,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -510,11 +495,6 @@
        "at_hz": 1500
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -103.33,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -575,6 +555,16 @@
      ],
      "cv_min_v": -103.33
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 337.8,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 6.02,
      "thd_pct": 0.4866
@@ -582,7 +572,6 @@
     "failed": [
      "idle_quiet",
      "b_plus",
-     "unregulated_rail",
      "grid_bias",
      "no_oscillation_under_signal"
     ]
@@ -672,19 +661,11 @@
       "limit": -80.0
      },
      "b_plus": {
-      "passes": false,
+      "passes": true,
       "value": 251.35,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 405.6,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -730,11 +711,6 @@
        "at_hz": 300
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -132.69,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -795,12 +771,21 @@
      ],
      "cv_min_v": -132.69
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 405.6,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 6.73,
      "thd_pct": 0.306
     },
     "failed": [
-     "b_plus",
      "no_oscillation_under_signal"
     ]
    },
@@ -892,16 +877,8 @@
       "passes": true,
       "value": 240.39,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 384.0,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -947,11 +924,6 @@
        "at_hz": 19400
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": false,
-      "value": -205.84,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -1012,6 +984,16 @@
      ],
      "cv_min_v": -205.84
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 384.0,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 6.41,
      "thd_pct": 2.1544
@@ -1021,8 +1003,7 @@
      "grid_bias",
      "gain_reduction",
      "gr_rises",
-     "no_oscillation_under_signal",
-     "cv_in_range"
+     "no_oscillation_under_signal"
     ]
    },
    "judged_right": true
@@ -1110,19 +1091,11 @@
       "limit": -80.0
      },
      "b_plus": {
-      "passes": false,
+      "passes": true,
       "value": 254.62,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 382.6,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -1168,11 +1141,6 @@
        "at_hz": 19400
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": false,
-      "value": -214.71,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -1233,18 +1201,26 @@
      ],
      "cv_min_v": -214.71
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 382.6,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 5.79,
      "thd_pct": 2.6802
     },
     "failed": [
      "idle_quiet",
-     "b_plus",
      "grid_bias",
      "gain_reduction",
      "gr_rises",
-     "no_oscillation_under_signal",
-     "cv_in_range"
+     "no_oscillation_under_signal"
     ]
    },
    "judged_right": true
@@ -1335,16 +1311,8 @@
       "passes": true,
       "value": 239.99,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 382.5,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -1390,11 +1358,6 @@
        "at_hz": 19300
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": false,
-      "value": -169.64,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -1455,6 +1418,16 @@
      ],
      "cv_min_v": -169.64
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 382.5,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 6.22,
      "thd_pct": 3.5627
@@ -1464,8 +1437,7 @@
      "grid_bias",
      "gain_reduction",
      "gr_rises",
-     "no_oscillation_under_signal",
-     "cv_in_range"
+     "no_oscillation_under_signal"
     ]
    },
    "judged_right": true
@@ -1553,19 +1525,11 @@
       "limit": -80.0
      },
      "b_plus": {
-      "passes": false,
+      "passes": true,
       "value": 223.59,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 374.9,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -1611,11 +1575,6 @@
        "at_hz": 19300
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": false,
-      "value": -154.27,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -1676,19 +1635,26 @@
      ],
      "cv_min_v": -154.27
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 374.9,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 7.62,
      "thd_pct": 3.2339
     },
     "failed": [
      "idle_quiet",
-     "b_plus",
-     "unregulated_rail",
      "grid_bias",
      "gain_reduction",
      "gr_rises",
-     "no_oscillation_under_signal",
-     "cv_in_range"
+     "no_oscillation_under_signal"
     ]
    },
    "judged_right": true
@@ -1779,16 +1745,8 @@
       "passes": false,
       "value": 226.17,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 360.3,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -1834,11 +1792,6 @@
        "at_hz": 1300
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -105.99,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -1899,14 +1852,23 @@
      ],
      "cv_min_v": -105.99
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 360.3,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 5.96,
      "thd_pct": 0.2395
     },
     "failed": [
      "idle_quiet",
-     "b_plus",
-     "unregulated_rail"
+     "b_plus"
     ]
    },
    "judged_right": true
@@ -1997,16 +1959,8 @@
       "passes": false,
       "value": 200.94,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 356.2,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -2052,11 +2006,6 @@
        "at_hz": 1360
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -102.62,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -2117,14 +2066,23 @@
      ],
      "cv_min_v": -102.62
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 356.2,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 8.66,
      "thd_pct": 0.0873
     },
     "failed": [
      "idle_quiet",
-     "b_plus",
-     "unregulated_rail"
+     "b_plus"
     ]
    },
    "judged_right": true
@@ -2215,16 +2173,8 @@
       "passes": false,
       "value": 226.88,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 350.7,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -2270,11 +2220,6 @@
        "at_hz": 47520
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -117.12,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -2335,6 +2280,16 @@
      ],
      "cv_min_v": -117.12
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 350.7,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 2.83,
      "thd_pct": 0.3812
@@ -2342,7 +2297,6 @@
     "failed": [
      "idle_quiet",
      "b_plus",
-     "unregulated_rail",
      "grid_bias",
      "no_oscillation_under_signal"
     ]
@@ -2435,16 +2389,8 @@
       "passes": false,
       "value": 202.08,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 340.1,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -2490,11 +2436,6 @@
        "at_hz": 47680
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -113.98,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -2555,6 +2496,16 @@
      ],
      "cv_min_v": -113.98
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 340.1,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 4.86,
      "thd_pct": 0.265
@@ -2562,7 +2513,6 @@
     "failed": [
      "idle_quiet",
      "b_plus",
-     "unregulated_rail",
      "grid_bias",
      "no_oscillation_under_signal"
     ]
@@ -2655,16 +2605,8 @@
       "passes": true,
       "value": 240.28,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 467.6,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -2710,11 +2652,6 @@
        "at_hz": 11680
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -86.14,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -2774,6 +2711,16 @@
       -81.63
      ],
      "cv_min_v": -86.14
+    },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 467.6,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
     },
     "nominal": {
      "out_dbm": -3.36,
@@ -2871,19 +2818,11 @@
       "limit": -80.0
      },
      "b_plus": {
-      "passes": false,
+      "passes": true,
       "value": 250.79,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 466.2,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -2929,11 +2868,6 @@
        "at_hz": 47700
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -92.24,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -2994,13 +2928,22 @@
      ],
      "cv_min_v": -92.24
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 466.2,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": -4.46,
      "thd_pct": 0.9241
     },
     "failed": [
      "idle_quiet",
-     "b_plus",
      "grid_bias",
      "gr_rises",
      "no_oscillation_under_signal"
@@ -3094,16 +3037,8 @@
       "passes": false,
       "value": 223.91,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 349.7,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -3149,11 +3084,6 @@
        "at_hz": 300
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -115.14,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -3214,6 +3144,16 @@
      ],
      "cv_min_v": -115.14
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 349.7,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 3.73,
      "thd_pct": 0.1096
@@ -3221,7 +3161,6 @@
     "failed": [
      "idle_quiet",
      "b_plus",
-     "unregulated_rail",
      "grid_bias"
     ]
    },
@@ -3313,16 +3252,8 @@
       "passes": false,
       "value": 201.15,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": false,
-      "value": 342.6,
-      "limit": [
-       380.0,
-       480.0
+       216.0,
+       264.0
       ]
      },
      "bank_current": {
@@ -3368,11 +3299,6 @@
        "at_hz": 300
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -104.47,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -3433,6 +3359,16 @@
      ],
      "cv_min_v": -104.47
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 342.6,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": false
+     }
+    },
     "nominal": {
      "out_dbm": 6.28,
      "thd_pct": 0.0954
@@ -3440,7 +3376,6 @@
     "failed": [
      "idle_quiet",
      "b_plus",
-     "unregulated_rail",
      "grid_bias"
     ]
    },
@@ -3532,16 +3467,8 @@
       "passes": true,
       "value": 239.81,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 437.6,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -3587,11 +3514,6 @@
        "at_hz": 300
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -128.11,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -3652,6 +3574,16 @@
      ],
      "cv_min_v": -128.11
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 437.6,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": true
+     }
+    },
     "nominal": {
      "out_dbm": 3.98,
      "thd_pct": 0.2413
@@ -3689,16 +3621,8 @@
       "passes": true,
       "value": 240.14,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 438.4,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -3744,11 +3668,6 @@
        "at_hz": 34320
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": false,
-      "value": -153.06,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -3809,14 +3728,23 @@
      ],
      "cv_min_v": -153.06
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 438.4,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": true
+     }
+    },
     "nominal": {
      "out_dbm": -4.83,
      "thd_pct": 0.4872
     },
     "failed": [
      "grid_bias",
-     "no_oscillation_under_signal",
-     "cv_in_range"
+     "no_oscillation_under_signal"
     ]
    },
    "judged_right": true
@@ -3847,16 +3775,8 @@
       "passes": true,
       "value": 240.07,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 435.0,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -3902,11 +3822,6 @@
        "at_hz": 1360
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -24.04,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -3967,6 +3882,16 @@
      ],
      "cv_min_v": -24.04
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 435.0,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": true
+     }
+    },
     "nominal": {
      "out_dbm": 4.97,
      "thd_pct": 0.064
@@ -4004,16 +3929,8 @@
       "passes": false,
       "value": 302.56,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 423.8,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -4059,11 +3976,6 @@
        "at_hz": 1480
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -137.62,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -4124,6 +4036,16 @@
      ],
      "cv_min_v": -137.62
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 423.8,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": true
+     }
+    },
     "nominal": {
      "out_dbm": 2.43,
      "thd_pct": 0.067
@@ -4162,16 +4084,8 @@
       "passes": true,
       "value": 240.11,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 438.4,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -4217,11 +4131,6 @@
        "at_hz": 1400
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -84.05,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": true,
@@ -4282,6 +4191,16 @@
      ],
      "cv_min_v": -84.05
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 438.4,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": true
+     }
+    },
     "nominal": {
      "out_dbm": 11.91,
      "thd_pct": 0.1282
@@ -4319,16 +4238,8 @@
       "passes": true,
       "value": 240.07,
       "limit": [
-       232.0,
-       248.0
-      ]
-     },
-     "unregulated_rail": {
-      "passes": true,
-      "value": 435.0,
-      "limit": [
-       380.0,
-       480.0
+       232.8,
+       247.2
       ]
      },
      "bank_current": {
@@ -4374,11 +4285,6 @@
        "at_hz": 40320
       },
       "limit": -50.0
-     },
-     "cv_in_range": {
-      "passes": true,
-      "value": -78.63,
-      "limit": -150.0
      },
      "nominal_distortion": {
       "passes": false,
@@ -4439,6 +4345,16 @@
      ],
      "cv_min_v": -78.63
     },
+    "vs_670": {
+     "unregulated_rail_v": {
+      "value": 435.0,
+      "published": [
+       420.0,
+       450.0
+      ],
+      "agrees": true
+     }
+    },
     "nominal": {
      "out_dbm": -6.31,
      "thd_pct": 77.3509
@@ -4451,67 +4367,50 @@
   },
   "broken:slow_release": {
    "genome": {
-    "c109_f": 0.0002
+    "c109_f": 0.0006
    },
    "adjust": true,
    "stage": "timing",
    "expect": [
-    "cv_returns",
-    "release"
+    "cv_returns"
    ],
    "result": {
     "passes": false,
     "checks": {
-     "attack": {
-      "passes": false,
-      "value": {
-       "timing_tc2": 101.849
-      },
-      "limit": 20.0
-     },
-     "release": {
-      "passes": false,
-      "value": {
-       "timing_tc2": null
-      },
-      "limit": {
-       "ratio_to_published_range": [
-        0.25,
-        4.0
-       ]
-      }
-     },
      "cv_returns": {
       "passes": false,
       "value": {
-       "timing_tc2": 56.3
+       "timing_tc2": 208.321
       },
-      "limit": 1.0
+      "limit": 60.0
      }
     },
     "timing": {
      "timing_tc2": {
-      "gr_db": 10.36,
-      "attack_cv_63_ms": 101.849,
-      "attack_gain_63_ms": 98.073,
+      "position": 2,
+      "burst": "burst",
+      "gr_db": 10.07,
+      "attack_cv_10_ms": 1.702,
+      "attack_cv_63_ms": 10.883,
+      "attack_gain_1db_ms": 32.5,
+      "attack_gain_3db_ms": 112.5,
+      "attack_gain_6db_ms": 297.0,
       "release_cv_63_s": NaN,
       "release_cv_90_s": NaN,
+      "release_cv_90_estimate_s": 208.321,
+      "release_cv_90_extrapolated": true,
       "release_gain_63_s": NaN,
       "release_gain_90_s": NaN,
       "window_s": 3.0,
       "published_attack_ms": 0.2,
       "published_release_s": 0.8,
-      "published_release_range_s": [
-       0.8,
-       0.8
-      ],
-      "cv_end_v": -61.96,
-      "cv_before_v": -5.66
+      "published_release_for": "fixed",
+      "cv_end_v": -65.08,
+      "cv_before_v": -5.66,
+      "cv_burst_v": -66.39
      }
     },
     "failed": [
-     "attack",
-     "release",
      "cv_returns"
     ]
    },

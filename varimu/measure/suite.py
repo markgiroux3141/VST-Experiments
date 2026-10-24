@@ -26,8 +26,9 @@ from the cache):
   no limiting, < 1% at 10 dB of limiting and +12 dBm out);
 - timing: a 1 kHz burst from -10 dBm to the 10 dB point and back, for each Time
   Constant position: attack, and release from 10 dB of limiting as the manual
-  specifies it (p.4), from the control voltage and from the gain; for positions
-  5 and 6 also a train of short bursts ("multiple peaks");
+  specifies it (p.4), from the control voltage and from the gain; for the
+  program-dependent positions 5 and 6 also an individual peak and a train of
+  short bursts ("multiple peaks"), each compared with its own published figure;
 - response: the frequency response at 0, 3 and 10 dB of gain reduction: a 1 kHz
   pilot at the gain-reduction point holds the reduction, a multitone probe 40 dB
   below it (per tone) reads the response;
@@ -39,8 +40,10 @@ from the cache):
   skipped where missing), rendered through the unit: audio to the report's
   audio/ folder (not committed) and the gain over 50 ms windows.
 
-Results: reports/units/<name>/report.json and a plot per section. Not modelled yet:
-noise (the plan's noise floor waits for noise sources).
+Results: reports/units/<name>/report.json and a plot per section. The report's
+`checks` reject a broken unit (varimu.measure.plausibility); its `vs_670` compares
+it with the 670's published figures and rejects nothing. Not modelled yet: noise
+(the plan's noise floor waits for noise sources).
 """
 
 from __future__ import annotations
@@ -70,28 +73,51 @@ NO_LIMIT_DBM = tuple(float(x) for x in np.arange(-10.0, 28.01, 2.0))
 CURVE_AC = (0.0, 0.4, "factory", 1.0)
 CURVE_FREQS_HZ = (100.0, 1000.0, 6000.0)  # 6 kHz: whole periods at 96 kHz
 HARMONICS_REPORTED = (2, 3, 4, 5)
-# [MAN] p.4 attack and release (from 10 dB of limiting) per Time Constant; 5 and 6
-# are program dependent: their single-peak release here, the rest in `notes`.
-PUBLISHED_TIMING = {
-    1: (0.2e-3, 0.3),
-    2: (0.2e-3, 0.8),
-    3: (0.4e-3, 2.0),
-    4: (0.4e-3, 5.0),
-    5: (0.4e-3, 2.0),
-    6: (0.2e-3, 0.3),
-}
-# The published release range per position: 5 and 6 depend on the program.
-PUBLISHED_RELEASE_RANGE_S = {1: (0.3, 0.3), 2: (0.8, 0.8), 3: (2.0, 2.0), 4: (5.0, 5.0),
-                             5: (2.0, 10.0), 6: (0.3, 25.0)}  # fmt: skip
-PUBLISHED_TIMING_NOTES = {
-    5: "automatic: 2 s for individual peaks, 10 s for multiple peaks",
-    6: "automatic: 0.3 s for individual peaks, 10 s for multiple peaks, 25 s for "
-    "consistently high program level",
+# [MAN] p.4 attack per Time Constant position (the manual doesn't say how it was
+# measured: the 660's brochure says "full limiting in the first 5,000th of a second").
+PUBLISHED_ATTACK_S = {1: 0.2e-3, 2: 0.2e-3, 3: 0.4e-3, 4: 0.4e-3, 5: 0.4e-3, 6: 0.2e-3}
+# The bursts each position gets: "burst" (BURST_S at one level: for 5 and 6 a
+# consistently high level), "peak" (an individual peak, PEAK_S) and "train" (multiple
+# peaks, TRAIN) for the program-dependent positions.
+TIMING_KINDS = {1: ("burst",), 2: ("burst",), 3: ("burst",), 4: ("burst",),
+                5: ("burst", "peak", "train"), 6: ("burst", "peak", "train")}  # fmt: skip
+# [MAN] p.4 release (from 10 dB of limiting) per position and burst: 5 and 6 are
+# "automatic: a function of the program material". None: no figure for that burst.
+PUBLISHED_RELEASE = {
+    (1, "burst"): (0.3, "fixed"),
+    (2, "burst"): (0.8, "fixed"),
+    (3, "burst"): (2.0, "fixed"),
+    (4, "burst"): (5.0, "fixed"),
+    (5, "peak"): (2.0, "individual peaks"),
+    (5, "train"): (10.0, "multiple peaks"),
+    # No figure for 5 at a consistent level (the 660's brochure gives its position 5
+    # 25 s there, as the 670's manual gives position 6).
+    (5, "burst"): (None, "consistently high program level"),
+    (6, "peak"): (0.3, "individual peaks"),
+    (6, "train"): (10.0, "multiple peaks"),
+    (6, "burst"): (25.0, "consistently high program level"),
 }
 BURST_BASE_DBM = -10.0
 BURST_PRE_S, BURST_S = 0.5, 1.0
+# An individual peak: long enough for the CV to reach its fast swing (63% at
+# ~0.9-1.8 ms, the reduction in place within ~5 ms) and still a short transient
+# (a drum hit) against positions 5 and 6's slow capacitors (R139 C110 0.8 s,
+# R140 C112 2 s). The release from a peak depends on its length; see the plan.
+PEAK_S = 0.02
+ATTACK_REF_S = 0.02  # the attack's reference: the CV this far into the burst
 RELEASE_WINDOW_S = {1: 2.0, 2: 3.0, 3: 6.0, 4: 15.0, 5: 15.0, 6: 15.0}
 TRAIN = (6, 0.15, 0.35)  # multiple peaks: bursts, on s, off s
+
+
+def timing_keys() -> list[tuple[int, str, str]]:
+    """(position, burst kind, report key) of every timing render."""
+    return [
+        (tc, kind, f"timing_tc{tc}" + ("" if kind == "burst" else f"_{kind}"))
+        for tc, kinds in TIMING_KINDS.items()
+        for kind in kinds
+    ]
+
+
 PROBE_PERIOD_S = 0.25
 PROBE_TONES = 31
 PROBE_DB = -40.0  # each probe tone re the pilot's amplitude
@@ -216,21 +242,26 @@ def twin_signal(f1: float, f2: float, ratio: float, peak_dbfs: float, fs: int) -
     return _held(ratio * a2 * np.sin(2 * np.pi * f1 * t) + a2 * np.sin(2 * np.pi * f2 * t), fs)
 
 
-def burst_signal(unit: Unit, tc: int, train: bool, fs: int) -> tuple[np.ndarray, dict]:
-    """-10 dBm, the 10 dB point (one burst, or TRAIN's short ones), back to -10 dBm."""
+def burst_signal(unit: Unit, tc: int, kind: str, fs: int) -> tuple[np.ndarray, dict]:
+    """-10 dBm, the 10 dB point (one BURST_S burst, an individual PEAK_S peak, or
+    TRAIN's short bursts), back to -10 dBm."""
     base, hot = unit.emf(BURST_BASE_DBM), unit.emf(unit.gr_points_dbm["10"])
     segs = [(BURST_PRE_S, base)]
-    if train:
+    if kind == "train":
         k, on, off = TRAIN
         for i in range(k):
             segs += [(on, hot), (off if i < k - 1 else 0.0, base)]
         segs = [s for s in segs if s[0] > 0]
     else:
-        segs.append((BURST_S, hot))
+        segs.append((PEAK_S if kind == "peak" else BURST_S, hot))
     segs.append((RELEASE_WINDOW_S[tc], base))
     x, meta = signals._stepped_sine(1000.0, segs, fs)
     hot_segs = [s for s in meta if s["level_dbfs"] == hot]
-    return x, {"burst_start": hot_segs[0]["start"], "burst_stop": hot_segs[-1]["stop"]}
+    return x, {
+        "burst_start": hot_segs[0]["start"],
+        "first_stop": hot_segs[0]["stop"],
+        "burst_stop": hot_segs[-1]["stop"],
+    }
 
 
 # --- Jobs -----------------------------------------------------------------------------------
@@ -257,11 +288,9 @@ def jobs(unit: Unit, *, clips: bool = True) -> dict[str, runner.RenderJob]:
     """Every render the report needs (staircases separately: curve_staircases)."""
     fs, seed = _fs(), load_sim_settings().seed
     j: dict[str, runner.RenderJob] = {}
-    for tc in range(1, 7):
-        for train in (False, True) if tc in (5, 6) else (False,):
-            x, _ = burst_signal(unit, tc, train, fs)
-            key = f"timing_tc{tc}" + ("_train" if train else "")
-            j[key] = runner.RenderJob(x, unit.panel(time_constant=tc), f"{unit.name}:{key}")
+    for tc, kind, key in timing_keys():
+        x, _ = burst_signal(unit, tc, kind, fs)
+        j[key] = runner.RenderJob(x, unit.panel(time_constant=tc), f"{unit.name}:{key}")
     for gr, dbm in unit.gr_points_dbm.items():
         x, _ = response_signal(unit.emf(dbm), fs, seed)
         j[f"response_{gr}db"] = runner.RenderJob(x, unit.panel(), f"{unit.name}:response_{gr}db")
@@ -365,36 +394,54 @@ def measure_distortion(curves: dict) -> dict:
 
 
 def measure_timing(unit: Unit, renders: dict, fs: int) -> dict:
-    """Every timing render in `renders` (keys timing_tc<n>[_train])."""
+    """Every timing render in `renders` (keys from timing_keys).
+
+    Attack: the CV's first 10% and 63% of its fast swing (ATTACK_REF_S in; for a
+    peak, its end), and the gain's 1 / 3 / 6 dB of reduction per half period of the
+    tone. Release: from the end of the (last) burst to the CV's and the gain's 63%
+    and 90% of the way back, against the burst's settled CV and gain (its last
+    quarter), with the 90% CV release extrapolated when the window ends first."""
     rows = {}
-    for tc in range(1, 7):
-        for train in (False, True) if tc in (5, 6) else (False,):
-            key = f"timing_tc{tc}" + ("_train" if train else "")
-            if key not in renders:
-                continue
-            r = renders[key]
-            x, meta = burst_signal(unit, tc, train, fs)
-            a, b = meta["burst_start"], meta["burst_stop"]
-            cvt = metrics.cv_timing(r.vectors["v(cv)"], fs, a, b)
-            gt = metrics.burst_timing(x, r.output, fs, a, b)
-            pub_a, pub_r = PUBLISHED_TIMING[tc]
-            rows[key] = {
-                "gr_db": round(gt.gain_before_db - gt.gain_burst_db, 2),
-                "attack_cv_63_ms": round(cvt.attack_s * 1e3, 3),
-                "attack_gain_63_ms": round(gt.attack_s * 1e3, 3),
-                "release_cv_63_s": round(cvt.release_63_s, 3),
-                "release_cv_90_s": round(cvt.release_90_s, 3),
-                "release_gain_63_s": round(gt.release_s, 3),
-                "release_gain_90_s": round(gt.release_90_s, 3),
-                "window_s": RELEASE_WINDOW_S[tc],
-                "published_attack_ms": pub_a * 1e3,
-                "published_release_s": pub_r,
-                "published_release_range_s": list(PUBLISHED_RELEASE_RANGE_S[tc]),
-                "cv_end_v": round(float(np.median(r.vectors["v(cv)"][-fs // 10 :])), 2),
-                "cv_before_v": round(cvt.cv_before_v, 2),
-            }
-            if tc in PUBLISHED_TIMING_NOTES:
-                rows[key]["published_notes"] = PUBLISHED_TIMING_NOTES[tc]
+    for tc, kind, key in timing_keys():
+        if key not in renders:
+            continue
+        r = renders[key]
+        cv = r.vectors["v(cv)"]
+        x, meta = burst_signal(unit, tc, kind, fs)
+        a, b = meta["burst_start"], meta["burst_stop"]
+        ref = min(a + int(ATTACK_REF_S * fs), meta["first_stop"])
+        cvt = metrics.cv_timing(cv, fs, a, b)
+        gt = metrics.burst_timing(x, r.output, fs, a, b)
+        a10, a63 = metrics.cv_attack(cv, fs, a, ref)
+        g1, g3, g6 = metrics.gain_attack(x, r.output, fs, 1000.0, a, meta["first_stop"])
+        rel90, extrapolated = metrics.cv_release_estimate(
+            cv, fs, b, cvt.cv_before_v, cvt.cv_burst_v
+        )
+        pub_r, pub_as = PUBLISHED_RELEASE[(tc, kind)]
+        ms = lambda s: round(s * 1e3, 3)  # noqa: E731
+        rows[key] = {
+            "position": tc,
+            "burst": kind,
+            "gr_db": round(gt.gain_before_db - gt.gain_burst_db, 2),
+            "attack_cv_10_ms": ms(a10),
+            "attack_cv_63_ms": ms(a63),
+            "attack_gain_1db_ms": ms(g1),
+            "attack_gain_3db_ms": ms(g3),
+            "attack_gain_6db_ms": ms(g6),
+            "release_cv_63_s": round(cvt.release_63_s, 3),
+            "release_cv_90_s": round(cvt.release_90_s, 3),
+            "release_cv_90_estimate_s": round(rel90, 3),
+            "release_cv_90_extrapolated": extrapolated,
+            "release_gain_63_s": round(gt.release_s, 3),
+            "release_gain_90_s": round(gt.release_90_s, 3),
+            "window_s": RELEASE_WINDOW_S[tc],
+            "published_attack_ms": PUBLISHED_ATTACK_S[tc] * 1e3,
+            "published_release_s": pub_r,
+            "published_release_for": pub_as,
+            "cv_end_v": round(float(np.median(cv[-fs // 10 :])), 2),
+            "cv_before_v": round(cvt.cv_before_v, 2),
+            "cv_burst_v": round(cvt.cv_burst_v, 2),
+        }
     return rows
 
 
@@ -591,6 +638,7 @@ def run(
     report["thump"] = measure_thump(unit, renders, fs, s.full_scale_volts_peak)
     report["clips"] = measure_clips(unit, renders, fs, out_dir)
     report["checks"] = plausibility.full_checks(report)
+    report["vs_670"] = plausibility.vs_670(report)
     report["plausible"] = all(v["passes"] for v in report["checks"].values())
     report["rejected_by"] = [c for c, v in report["checks"].items() if not v["passes"]]
     report["wall_s"] = round(time.perf_counter() - t0, 1)

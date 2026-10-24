@@ -88,6 +88,79 @@ def cv_timing(cv: np.ndarray, sample_rate: int, burst_start: int, burst_stop: in
     return CvTiming(before, during, first(attack, tc), first(release, tc), first(release, 0.9))
 
 
+def cv_attack(
+    cv: np.ndarray, sample_rate: int, burst_start: int, ref_stop: int, fractions=(0.1, 0.63)
+) -> list[float]:
+    """Times (s) for the CV to cover each fraction of its fast swing: from its value
+    before the burst to its median over the 4 ms ending at `ref_stop` (a few tens of
+    ms in). A long burst's CV keeps creeping after that (it tracks the supply's sag
+    under the burst at constant gain), so the end of the burst isn't the attack's
+    reference."""
+    ms = max(1, int(0.001 * sample_rate))
+    before = float(np.median(cv[max(0, burst_start - 50 * ms) : burst_start - ms]))
+    ref = float(np.median(cv[ref_stop - 4 * ms : ref_stop]))
+    p = (cv[burst_start:ref_stop] - before) / (ref - before)
+    out = []
+    for f in fractions:
+        hit = np.flatnonzero(p >= f)
+        if not len(hit):
+            out.append(float("nan"))
+            continue
+        i = hit[0]
+        out.append(0.0 if i == 0 else (i - 1 + (f - p[i - 1]) / (p[i] - p[i - 1])) / sample_rate)
+    return out
+
+
+def cv_release_estimate(
+    cv: np.ndarray, sample_rate: int, burst_stop: int, before_v: float, during_v: float
+) -> tuple[float, bool]:
+    """The CV's 90% release time (s) after `burst_stop`, and whether it was
+    extrapolated: when the window ends before the CV is 90% back, the remaining
+    distance's decay rate over the window's second half carries it on (the slowest
+    part of a multi-capacitor release, so an upper estimate). inf if the CV isn't
+    coming back at all."""
+    rem = (cv[burst_stop:] - before_v) / (during_v - before_v)  # 1 at release start, 0 back
+    hit = np.flatnonzero(rem <= 0.1)
+    if len(hit):
+        return hit[0] / sample_rate, False
+    n = len(rem)
+    ms = max(1, int(0.001 * sample_rate))
+    r1 = float(np.median(rem[n // 2 - 10 * ms : n // 2 + 10 * ms]))
+    r2 = float(np.median(rem[n - 20 * ms :]))
+    if not (0 < r2 < r1):
+        return float("inf"), True
+    rate = np.log(r1 / r2) / ((n - 10 * ms - n // 2) / sample_rate)
+    return (n - 10 * ms) / sample_rate + np.log(r2 / 0.1) / rate, True
+
+
+def gain_attack(
+    x: np.ndarray,
+    y: np.ndarray,
+    sample_rate: int,
+    freq_hz: float,
+    burst_start: int,
+    burst_stop: int,
+    levels_db=(1.0, 3.0, 6.0),
+) -> list[float]:
+    """Times (s, at the end of the half period that gets there) for the gain to fall by
+    each of `levels_db`: the output's peak per half period of the tone re the input's,
+    against the gain over the 50 ms before the burst. No smoothing window, so this
+    resolves a sub-millisecond attack (an envelope's window would smear it)."""
+    hp = round(sample_rate / freq_hz / 2)
+    pre = slice(max(0, burst_start - int(0.05 * sample_rate)), burst_start)
+    g0 = 20 * np.log10(np.max(np.abs(y[pre])) / np.max(np.abs(x[pre])))
+    n = (burst_stop - burst_start) // hp * hp
+    seg = slice(burst_start, burst_start + n)
+    gy = np.abs(y[seg]).reshape(-1, hp).max(1)
+    gx = np.abs(x[seg]).reshape(-1, hp).max(1)
+    gr = g0 - 20 * np.log10(gy / gx)
+    out = []
+    for db in levels_db:
+        hit = np.flatnonzero(gr >= db)
+        out.append((hit[0] + 1) * hp / sample_rate if len(hit) else float("nan"))
+    return out
+
+
 @dataclass(frozen=True)
 class BurstTiming:
     gain_before_db: float  # steady gain before the burst
@@ -105,7 +178,8 @@ def burst_timing(
     ms = int(0.005 * sample_rate)
     before = float(np.median(g[max(0, burst_start - 20 * ms) : burst_start - ms]))
     dur = burst_stop - burst_start
-    during = float(np.median(g[burst_stop - dur // 4 : burst_stop - ms]))
+    # The burst's last quarter, short of its end (for a short peak, by less than ms).
+    during = float(np.median(g[burst_stop - dur // 4 : burst_stop - min(ms, dur // 8)]))
     drop = before - during
 
     target = before - 0.63 * drop

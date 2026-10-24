@@ -1,30 +1,39 @@
-"""Plausibility checks that reject broken units (main plan Phase 4).
+"""Plausibility checks (main plan Phase 4): reject what is broken, report what isn't a 670.
 
-Two stages, so a broken genome costs little:
+The 670's published curves and specs are calibration anchors, not targets (the
+plan's "Aim, restated"): a unit is rejected only for what no working unit could
+do, and its distance from the 670 is reported beside, never rejecting.
+
+Rejecting checks, each {"passes", "value", "limit"}, in two stages so a broken
+genome costs little:
 
 - `screen(genome)`: after the DC trims (varimu.sim.setup.adjust), three renders:
-  - idle (no input) at the unit's default front panel: the output must be quiet
-    (an oscillation, or low-frequency wander when the regulator is in dropout),
-    the rails and the 6386 bias where a working unit has them;
+  - idle (no input) at the unit's default front panel: the output quiet (no
+    oscillation, no low-frequency wander from a regulator in dropout), the
+    regulator regulating, the 6386 banks conducting with their grids biased
+    negative on ZERO's divider (no runaway DC, no collapsed bias);
   - the hottest front panel's staircase (pad 0 dB, AC THRESHOLD 1, DC THRESHOLD
     0, TC1; 1 kHz from -30 to 0 dBFS in 10 dB steps after silence, as Phase 3's
-    corner sweep): gain reduction present and rising at every step, no
-    oscillation riding on the signal (output that isn't the tone's harmonics),
-    the control voltage within reach of a real sidechain;
+    corner sweep): gain reduction present and rising at every step (none, or
+    folding back, is broken), no oscillation riding on the signal (output that
+    isn't the tone's harmonics);
   - 1 kHz at the nominal level (+4 dBm out) with no limiting (AC THRESHOLD 0):
-    distortion far beyond the manual's < 1% is absurd.
-- `full_checks(report)`: on the full report (varimu.measure.suite): the factory
-  curve reachable, gain reduction rising on every curve, attack and release
-  within reach of the published Time Constants, the control voltage coming back
-  after a burst, the response and intermodulation at no limiting, and no
-  oscillation under any curve's tone.
+    absurd distortion.
+- `full_checks(report)`: on the full report (varimu.measure.suite): gain
+  reduction rising on every curve, no oscillation under any curve's tone, absurd
+  distortion or intermodulation at no limiting, and a control voltage that never
+  returns after a burst.
 
-Each check is {"passes", "value", "limit"}; limits are deliberately loose, a
-factor of several around the manual's specifications (what is "far outside the
-vari-mu range"), so a plausible unit with character passes and a broken one
-doesn't. Found by Phase 3's corner sweep (reports/corners/summary.json): HF
-oscillators (19-30 kHz), low-frequency wander in weak-supply corners, gain
-reduction folding back with T101's leakage at its 20 mH bound.
+Informative comparisons with the 670 (`vs_670(report)`, and the screen's own
+`vs_670`), each {"value", "published", ...}: the factory curve against curve 3,
+attack and release against the manual's Time Constants (each burst against the
+matching figure: positions 5 and 6 are program dependent), the frequency
+response against +-1 dB, the unregulated rail against its printed range, the
+control voltage's reach.
+
+Found by Phase 3's corner sweep (reports/corners/summary.json): HF oscillators
+(19-30 kHz), low-frequency wander in weak-supply corners, gain reduction folding
+back with T101's leakage at its 20 mH bound; all are rejected.
 """
 
 from __future__ import annotations
@@ -51,26 +60,38 @@ NOMINAL_OUT_DBM = 4.0  # the 670's nominal output level, [MAN] p.4 ("+4 or +8 VU
 NOMINAL_K_DB = 15.81  # terminals re the EMF at the default pad (setup.threshold, nominal unit)
 BANK_R_OHM = 680 + 50  # a bank's cathode resistor plus half the BALANCE pot (for its current)
 
+# What rejects a unit: what no working unit could do. Deliberately loose.
 LIMITS = {
     "idle_out_dbfs": -80.0,  # Phase 3: oscillating / wandering units sat at -76 .. -14 dBFS
-    "b_plus_v": (232.0, 248.0),  # [MAN]: adjusted to 240 V (+-3%: as built, too)
-    "unregulated_v": (380.0, 480.0),  # printed 420-450 V
-    "bank_ma": (10.0, 50.0),  # measured ~26 mA
+    # The regulator regulates: after B+ ADJ, the rail within 3% of the procedure's 240 V
+    # ([MAN] p.7). As built (trims as given) within 10%: the 5651's spread (82-92 V,
+    # +-6%) and the divider's 10% resistors move an unadjusted rail that far, not more.
+    "b_plus_adjusted_pct": 3.0,
+    "b_plus_as_built_pct": 10.0,
+    "bank_ma": (10.0, 50.0),  # a bank conducting, not running away (measured ~26 mA)
     "cv_idle_v": -1.5,  # grids biased negative (the 6386's grid current starts near -0.7 V)
     "cv_vs_zero_v": 0.5,  # the idle CV is ZERO's divider
     "hot_gr_db": 6.0,  # gain reduction at 0 dBFS at the hottest panel
     "gr_step_db": 0.5,  # ... rising by more than this per 10 dB step
     "spur_db": -50.0,  # output far from the tone's harmonics re the tone: an oscillation
-    "cv_min_v": -150.0,  # Phase 3's oscillator pinned its CV at -212 V; units reach ~-90 V
-    "nominal_thd_pct": 5.0,  # [MAN] p.4: < 1% up to +18 dBm out, no limiting
-    "curve3_db": 3.0,  # the factory curve within this of curve 3
-    "factory_gr_db": 10.0,  # the factory curve limits at least this by +25 dBm in
-    "attack_ms": 20.0,  # published 0.2-0.4 ms
-    "release_ratio": (0.25, 4.0),  # 90% CV release re the published release
-    "cv_return_v": 1.0,  # the CV back within this of its idle value after the release window
-    "response_db": 3.0,  # 40 Hz - 15 kHz at no limiting; published +-1 dB
+    "nominal_thd_pct": 5.0,  # 5x the manual's < 1% (p.4, no limiting): absurd
     "smpte_pct": 10.0,  # at no limiting; [MAN] p.10 shows 0.3-4% at 0 dB limiting
+    # The CV never returns: its 90% release (extrapolated past the window when it
+    # isn't there yet) beyond a minute, longer than any program phrase and over twice
+    # the slowest vari-mu release published (the 670's 25 s, consistently high level).
+    "cv_return_s": 60.0,
 }
+
+# The 670's published values the informative comparisons (vs_670) are made against.
+B_PLUS_V = 240.0  # [MAN] p.7
+PUBLISHED = {
+    "unregulated_v": (420.0, 450.0),  # printed on A-96039
+    "response_db": 1.0,  # 40 Hz - 15 kHz, +-1 dB (reissue/dealer specs; config/circuits)
+}
+# Times by position: suite.PUBLISHED_ATTACK_S, suite.PUBLISHED_RELEASE.
+# Informative tolerances: "agrees" within these (the measurement's own slack, the
+# pad's 1 dB step for the curve; a factor for times quoted to one figure).
+AGREES = {"curve3_db": 1.0, "time_ratio": (0.67, 1.5)}
 
 
 def _check(passes: bool, value: Any, limit: Any) -> dict:
@@ -137,11 +158,10 @@ def screen(
         "cv_v": round(m["cv"], 3),
         "bank_ma": [round(x, 2) for x in banks],
     }
-    lo, hi = LIMITS["b_plus_v"]
     checks["idle_quiet"] = _check(peak < LIMITS["idle_out_dbfs"], peak, LIMITS["idle_out_dbfs"])
-    checks["b_plus"] = _check(lo <= m["bp"] <= hi, round(m["bp"], 2), LIMITS["b_plus_v"])
-    lo, hi = LIMITS["unregulated_v"]
-    checks["unregulated_rail"] = _check(lo <= m["ur"] <= hi, round(m["ur"], 1), (lo, hi))
+    pct = LIMITS["b_plus_adjusted_pct" if adjust else "b_plus_as_built_pct"]
+    lim = (round(B_PLUS_V * (1 - pct / 100), 1), round(B_PLUS_V * (1 + pct / 100), 1))
+    checks["b_plus"] = _check(lim[0] <= m["bp"] <= lim[1], round(m["bp"], 2), lim)
     lo, hi = LIMITS["bank_ma"]
     checks["bank_current"] = _check(
         all(lo <= x <= hi for x in banks), out["idle"]["bank_ma"], (lo, hi)
@@ -186,10 +206,14 @@ def screen(
         {"spur_db": round(max(spurs), 1), "at_hz": round(spur_hz[int(np.argmax(spurs))])},
         LIMITS["spur_db"],
     )
-    cv_min = float(np.min(hot.vectors["v(cv)"]))
-    checks["cv_in_range"] = _check(
-        cv_min > LIMITS["cv_min_v"], round(cv_min, 2), LIMITS["cv_min_v"]
-    )
+    lo, hi = PUBLISHED["unregulated_v"]
+    out["vs_670"] = {
+        "unregulated_rail_v": {
+            "value": round(m["ur"], 1),
+            "published": [lo, hi],
+            "agrees": lo <= m["ur"] <= hi,
+        },
+    }
 
     # Distortion at the nominal level, no limiting.
     tail = slice(-int(levels.MEASURE_S * fs) // 96 * 96, None)
@@ -206,15 +230,9 @@ def screen(
 
 
 def full_checks(report: Mapping[str, Any]) -> dict[str, dict]:
-    """Checks on a full report (varimu.measure.suite.run)."""
+    """The rejecting checks on a full report (varimu.measure.suite.run)."""
     c: dict[str, dict] = {}
     curves = report["curves"]
-    d = curves["vs_curve3"]["max_abs_diff_db"]
-    c["factory_curve"] = _check(d is not None and d < LIMITS["curve3_db"], d, LIMITS["curve3_db"])
-    fac = curves["1000hz_factory"]["gr_max_db"]
-    c["factory_gain_reduction"] = _check(
-        fac > LIMITS["factory_gr_db"], fac, LIMITS["factory_gr_db"]
-    )
     bad = [k for k, v in curves.items() if isinstance(v, dict) and v.get("gr_monotonic") is False]
     c["gr_rises_on_every_curve"] = _check(not bad, bad, "no curve folds back")
     res = {
@@ -231,56 +249,83 @@ def full_checks(report: Mapping[str, Any]) -> dict[str, dict]:
         thd is not None and thd < LIMITS["nominal_thd_pct"], thd, LIMITS["nominal_thd_pct"]
     )
     c.update(timing_checks(report["timing"]))
-    band = report["response"]["0"]["band_40hz_15khz_db"]
-    c["response"] = _check(
-        max(abs(band[0]), abs(band[1])) < LIMITS["response_db"], band, LIMITS["response_db"]
-    )
     smpte = report["imd"]["0"]["smpte_pct"]
     c["intermodulation"] = _check(smpte < LIMITS["smpte_pct"], smpte, LIMITS["smpte_pct"])
     return c
 
 
 def timing_checks(timing: Mapping[str, Any]) -> dict[str, dict]:
-    """Attack, release (re the published, single bursts) and the CV's return, on the
-    timing rows of a report (suite.measure_timing; any subset of the positions)."""
-    c: dict[str, dict] = {}
-    attacks, releases, returns = {}, {}, {}
-    lo, hi = LIMITS["release_ratio"]
-    for key, t in timing.items():
-        if key.endswith("_train"):
-            continue
-        attacks[key] = t["attack_cv_63_ms"]
-        returns[key] = round(abs(t["cv_end_v"] - t["cv_before_v"]), 3)
-        # Re the published range (a single value for positions 1-4; 5 and 6 are
-        # program dependent: 2-10 s and 0.3-25 s): 1 inside it, else the factor by
-        # which the release is outside it (> 1 slower, < 1 faster); None when it
-        # didn't release within the window.
-        r_lo, r_hi = t.get("published_release_range_s", [t["published_release_s"]] * 2)
-        rel = t["release_cv_90_s"]
-        if not np.isfinite(rel):
-            releases[key] = None
-            continue
-        ratio = rel / r_hi if rel > r_hi else (rel / r_lo if rel < r_lo else 1.0)
-        releases[key] = round(ratio, 3)
-    c["attack"] = _check(
-        all(np.isfinite(a) and a < LIMITS["attack_ms"] for a in attacks.values()),
-        attacks,
-        LIMITS["attack_ms"],
-    )
-    c["release"] = _check(
-        all(r is not None and lo <= r <= hi for r in releases.values()),
-        releases,
-        {"ratio_to_published_range": (lo, hi)},
-    )
-    fixed = {
-        k: v
-        for k, v in returns.items()
-        if k in ("timing_tc1", "timing_tc2", "timing_tc3", "timing_tc4")
+    """The CV comes back after every burst (suite.measure_timing's rows; any subset):
+    its 90% release, extrapolated past the window when needed, within a minute."""
+    est = {k: t["release_cv_90_estimate_s"] for k, t in timing.items()}
+    return {
+        "cv_returns": _check(
+            all(np.isfinite(v) and v < LIMITS["cv_return_s"] for v in est.values()),
+            est,
+            LIMITS["cv_return_s"],
+        )
     }
-    c["cv_returns"] = _check(
-        all(v < LIMITS["cv_return_v"] for v in fixed.values()), fixed, LIMITS["cv_return_v"]
-    )
-    return c
+
+
+def _ratio_entry(value: float, published: float) -> dict:
+    lo, hi = AGREES["time_ratio"]
+    ratio = value / published if np.isfinite(value) else None
+    return {
+        "value": value,
+        "published": published,
+        "ratio": None if ratio is None else round(ratio, 3),
+        "agrees": ratio is not None and lo <= ratio <= hi,
+    }
+
+
+def vs_670(report: Mapping[str, Any]) -> dict[str, Any]:
+    """The unit against the 670's published figures: informative, rejects nothing.
+    Each entry {"value", "published", "agrees", ...}; "agrees" within the
+    measurement's slack (AGREES: the pad's 1 dB step on the curve, a factor of 1.5
+    on times the manual quotes to one figure)."""
+    out: dict[str, Any] = {}
+    curves = report["curves"]
+    d = curves["vs_curve3"]["max_abs_diff_db"]
+    out["factory_curve_vs_curve3_db"] = {
+        "value": d,
+        "published": "curve 3 ([MAN] p.13), the factory adjustment",
+        "agrees": d is not None and d <= AGREES["curve3_db"],
+    }
+    fac = curves["1000hz_factory"]["gr_max_db"]
+    x3, y3 = setup.curve3()
+    pub = round(float(x3[-1] - y3[-1]), 2)  # curve 3's limiting at its top, +25 dBm in
+    out["factory_limiting_at_25dbm_db"] = {
+        "value": fac,
+        "published": pub,
+        "agrees": abs(fac - pub) <= AGREES["curve3_db"],
+    }
+    # Attack: the manual doesn't say how it was measured. Its 0.2 / 0.4 ms by position
+    # compare with the CV's onset (its first 10%; measured 2026-10-23: the 63% point
+    # is current-limited by the 6973 pair, ~0.9-2.7 ms; the plan's Phase 4 status).
+    attack = {
+        k: _ratio_entry(t["attack_cv_10_ms"], t["published_attack_ms"])
+        | {"cv_63_ms": t["attack_cv_63_ms"], "gain_3db_ms": t["attack_gain_3db_ms"]}
+        for k, t in report["timing"].items()
+        if t["burst"] == "burst"
+    }
+    out["attack_onset_ms"] = attack
+    # Release: each burst against the figure published for it (positions 5 and 6:
+    # an individual peak, multiple peaks, a consistently high level).
+    out["release_cv_90_s"] = {
+        k: _ratio_entry(t["release_cv_90_estimate_s"], t["published_release_s"])
+        | {"for": t["published_release_for"], "extrapolated": t["release_cv_90_extrapolated"]}
+        for k, t in report["timing"].items()
+        if t["published_release_s"] is not None
+    }
+    band = report["response"]["0"]["band_40hz_15khz_db"]
+    out["response_40hz_15khz_db"] = {
+        "value": band,
+        "published": [-PUBLISHED["response_db"], PUBLISHED["response_db"]],
+        "agrees": max(abs(band[0]), abs(band[1])) <= PUBLISHED["response_db"],
+    }
+    if "screen" in report:
+        out.update(report["screen"].get("vs_670", {}))
+    return out
 
 
 # --- Genomes the checks must reject (Phase 4's "done when") ---------------------------------
@@ -314,8 +359,9 @@ BROKEN = {
         {"nominal_distortion"},
         "screen",
     ),
-    # Release far outside the vari-mu range: C109 100x (2 uF -> 200 uF).
-    "slow_release": ({"c109_f": 200e-6}, {"release", "cv_returns"}, "timing"),
+    # A CV that never returns: C109 300x (2 uF -> 600 uF). TC2's release scales with
+    # it (100x: 69 s, measured 2026-10-23, too close to the minute to be a clear case).
+    "slow_release": ({"c109_f": 600e-6}, {"cv_returns"}, "timing"),
 }
 
 

@@ -55,16 +55,21 @@ def _report(**changes):
         },
         "distortion": {"no_limiting_thd_pct_at_4dbm_out": 0.2},
         "timing": {
-            f"timing_tc{tc}": {
-                "attack_cv_63_ms": 1.5,
-                "release_cv_90_s": 0.8 * pub,
-                "published_release_s": pub,
-                "cv_end_v": -5.7,
-                "cv_before_v": -5.66,
+            key: {
+                "burst": kind,
+                "attack_cv_10_ms": 0.17,
+                "attack_cv_63_ms": 0.9,
+                "attack_gain_3db_ms": 1.0,
+                "published_attack_ms": suite.PUBLISHED_ATTACK_S[tc] * 1e3,
+                "release_cv_90_estimate_s": 0.8 * (suite.PUBLISHED_RELEASE[(tc, kind)][0] or 5),
+                "release_cv_90_extrapolated": False,
+                "published_release_s": suite.PUBLISHED_RELEASE[(tc, kind)][0],
+                "published_release_for": suite.PUBLISHED_RELEASE[(tc, kind)][1],
             }
-            for tc, (_, pub) in suite.PUBLISHED_TIMING.items()
+            for tc, kind, key in suite.timing_keys()
         },
         "response": {"0": {"band_40hz_15khz_db": [-0.4, 0.3]}},
+        "screen": {"vs_670": {}},
         "imd": {"0": {"smpte_pct": 0.5}},
     }
     for path, v in changes.items():
@@ -79,21 +84,43 @@ def _report(**changes):
 def test_full_checks_pass_a_working_unit_and_name_what_breaks():
     assert all(c["passes"] for c in plausibility.full_checks(_report()).values())
     cases = {
-        "factory_curve": {"curves__vs_curve3__max_abs_diff_db": 6.0},
-        "release": {"timing__timing_tc2__release_cv_90_s": 9.0},
-        "attack": {"timing__timing_tc1__attack_cv_63_ms": 50.0},
-        "cv_returns": {"timing__timing_tc3__cv_end_v": -30.0},
-        "response": {"response__0__band_40hz_15khz_db": [-6.0, 0.2]},
+        "cv_returns": {"timing__timing_tc3__release_cv_90_estimate_s": 75.0},
         "nominal_distortion": {"distortion__no_limiting_thd_pct_at_4dbm_out": 12.0},
+        "intermodulation": {"imd__0__smpte_pct": 15.0},
+        "gr_rises_on_every_curve": {"curves__1000hz_factory__gr_monotonic": False},
     }
     for check, change in cases.items():
         failed = [
             k for k, c in plausibility.full_checks(_report(**change)).items() if not c["passes"]
         ]
         assert failed == [check], (check, failed)
-    # A release too long for its window reads NaN: rejected, not passed.
-    r = _report(timing__timing_tc4__release_cv_90_s=float("nan"))
-    assert not plausibility.full_checks(r)["release"]["passes"]
+    # A CV not coming back at all reads inf: rejected.
+    r = _report(timing__timing_tc6_peak__release_cv_90_estimate_s=float("inf"))
+    assert not plausibility.full_checks(r)["cv_returns"]["passes"]
+
+
+def test_differences_from_the_670_inform_but_dont_reject():
+    """A unit far from curve 3, slow to attack and release, with a tilted response,
+    is a different unit, not a broken one: vs_670 says so, the checks pass."""
+    r = _report(
+        curves__vs_curve3__max_abs_diff_db=6.0,
+        timing__timing_tc2__release_cv_90_estimate_s=9.0,
+        timing__timing_tc1__attack_cv_10_ms=5.0,
+        response__0__band_40hz_15khz_db=[-6.0, 0.2],
+    )
+    assert all(c["passes"] for c in plausibility.full_checks(r).values())
+    v = plausibility.vs_670(r)
+    assert not v["factory_curve_vs_curve3_db"]["agrees"]
+    assert not v["release_cv_90_s"]["timing_tc2"]["agrees"]
+    assert v["release_cv_90_s"]["timing_tc2"]["ratio"] == pytest.approx(9.0 / 0.8, abs=1e-3)
+    assert not v["attack_onset_ms"]["timing_tc1"]["agrees"]
+    assert not v["response_40hz_15khz_db"]["agrees"]
+    good = plausibility.vs_670(_report())
+    assert good["release_cv_90_s"]["timing_tc6_peak"]["for"] == "individual peaks"
+    assert good["release_cv_90_s"]["timing_tc6_peak"]["agrees"]
+    # Every burst with a published figure is compared; 5 at a consistent level has none.
+    assert "timing_tc5" not in good["release_cv_90_s"]
+    assert {"timing_tc5_peak", "timing_tc5_train", "timing_tc6"} <= set(good["release_cv_90_s"])
 
 
 def test_curve3_and_the_factory_target():
