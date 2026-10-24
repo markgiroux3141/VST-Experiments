@@ -4,6 +4,8 @@
 
 Build a physically plausible variable-mu tube compressor, modeled after the Fairchild 660/670 topology, whose character **emerges from circuit physics** rather than being designed in as DSP effects. There is no reference hardware, so the goal is not to clone a specific unit. The goal is a simulation faithful enough that the interactions between tubes, transformers, power supply and sidechain produce the "magic" on their own.
 
+**Aim, restated (2026-10-23).** The 670's published curves, specs and parts are ground truth so the model isn't built blind: calibration anchors, not targets. When a measurement disagrees with them, the question is whether physics is missing, not how to tune toward the number. What matters is that every component's physics that shapes the sound is simulated. The end state includes designing new devices from parts (transformers, capacitors, tubes ...) and hearing how their physical properties change the sound. So plausibility checks reject what no real unit could do, not what isn't a 670.
+
 On top of the simulator sits a human-in-the-loop optimization system. The developer A/B-tests candidate units by ear, a preference model learns their taste, and an evolutionary search explores the space of physically realizable units to find ones they love. The end product may be a single "definitive" unit, a palette of distinct characters, or both, and eventually a real-time model (neural or wave digital filter) suitable for a plugin.
 
 ## Guiding Principles
