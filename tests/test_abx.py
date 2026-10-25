@@ -90,12 +90,71 @@ def test_streams_are_a_b_and_their_extrapolations_at_one_loudness():
     assert res["peak_limited"] == (res["target_lufs"] < matching.TARGET_LUFS)
 
 
-def test_extrapolation_scales_the_difference_linearly():
+def _noise(seconds=3.0, seed=11):
+    """Broadband program (noise bursts at varying level): every frequency excited."""
+    return 0.5 * _program(seconds, seed)
+
+
+def test_the_parts_add_up_to_the_difference():
     a, b, *_ = _pair()
-    g = difference.align_gain(a, b)
-    d1 = difference.extrapolate(a, b, 1, g) - a
-    d4 = difference.extrapolate(a, b, 4, g) - a
-    np.testing.assert_allclose(d4, 4 * d1, atol=1e-12)
+    dec = difference.decompose(a, b)
+    np.testing.assert_allclose(dec.tone + dec.character, dec.g * b - a, atol=1e-12)
+    np.testing.assert_allclose(dec.part("all"), dec.g * b - a, atol=1e-12)
+    with pytest.raises(ValueError):
+        dec.part("colour")
+
+
+def test_a_filter_is_tone_not_character():
+    """B = A through an EQ bump and a 2-sample delay (an LTI filter): the difference is
+    all tone; the character part is the fit's own error, far below it."""
+    from scipy.signal import lfilter
+
+    a = _noise()
+    w0, q, gain = 2 * np.pi * 2000 / FS, 1.0, 10 ** (3 / 40)  # +3 dB peaking at 2 kHz
+    alpha = np.sin(w0) / (2 * q)
+    num = [1 + alpha * gain, -2 * np.cos(w0), 1 - alpha * gain]
+    den = [1 + alpha / gain, -2 * np.cos(w0), 1 - alpha / gain]
+    b = np.concatenate([[0.0, 0.0], lfilter(num, den, a)[:-2]])
+    lv = difference.levels(a, b)
+    assert lv["tone"] == pytest.approx(lv["all"], abs=0.1), lv
+    assert lv["character"] < lv["tone"] - 35, lv
+
+
+def test_distortion_and_pumping_are_character_not_tone():
+    """B = A plus a cubic term, or A with a 3 Hz gain modulation (+-0.5 dB): what no
+    fixed filter explains. The character part is the distortion less its share that a
+    filter can take (its correlation with A), within 1 dB; the tone part is far below."""
+    a = _noise()
+    d = 0.05 * a**3
+    d_perp = d - np.dot(d, a) / np.dot(a, a) * a  # what a gain can't take
+    lv = difference.levels(a, a + d)
+    assert lv["character"] == pytest.approx(difference._rms_db(d_perp, a), abs=1.0), lv
+    assert lv["tone"] < lv["character"] - 20, lv
+    t = np.arange(len(a)) / FS
+    pumped = a * 10 ** (0.5 * np.sin(2 * np.pi * 3 * t) / 20)
+    lv = difference.levels(a, pumped)
+    assert lv["tone"] < lv["character"] - 20, lv
+
+
+def test_part_streams_and_their_k_1_hybrids():
+    """Character at k = 1 is H B' (B's character in A's tone), tone at k = 1 is A + T;
+    every part's streams are at one loudness and flagged exaggerated."""
+    a, b, ra, rb = _pair(colour=0.08)
+    dec = difference.decompose(a, b)
+    hb = difference.apply_linear(dec.h, dec.g * b)
+    one = difference.exaggerated_pair(a, b, ra, rb, 1.0, FS, part="character")
+    assert np.corrcoef(one["audio"][1], hb)[0, 1] > 1 - 1e-9
+    one = difference.exaggerated_pair(a, b, ra, rb, 1.0, FS, part="tone")
+    assert np.corrcoef(one["audio"][1], a + dec.tone)[0, 1] > 1 - 1e-9
+    for part in difference.PARTS:
+        res = difference.streams(a, b, ra, rb, FS, part=part)
+        assert res["part"] == part and set(res["levels_db"]) == set(difference.PARTS)
+        lufs = [matching.integrated_lufs(s["audio"], FS) for s in res["streams"]]
+        assert max(lufs) - min(lufs) <= prepare.LUFS_TOL
+        assert [s["exaggerated"] for s in res["streams"]] == [False, False, True, True, True]
+        assert res["residual"]["level_db"] == res["levels_db"][part]
+    with pytest.raises(ValueError):
+        difference.streams(a, b, ra, rb, FS, part="colour")
 
 
 def test_envelope_differences_grow_with_k_and_are_reported():
@@ -373,3 +432,65 @@ def test_an_old_database_gains_the_new_columns(tmp_path):
     db = store.connect(path)
     s = db.execute("SELECT * FROM sessions").fetchone()
     assert s["id"] == "pilot" and s["repeats"] is None and s["share_a"] is None
+
+
+def test_the_pool_plays_its_clips_only(tmp_path, monkeypatch):
+    """`pool_clips` (config/listening.yaml): prepare matches only those clips in data/clips
+    (a listed clip that is missing is left out, said so), and the page's AB, given the
+    list, offers no stimulus of another clip."""
+    import dataclasses
+
+    fake = Coloured()
+    clips = {"one.wav": _program(3.0, 1), "two.wav": _program(3.0, 2)}
+    monkeypatch.setattr(stimuli, "_clip", lambda name: clips[name])
+    monkeypatch.setattr(stimuli, "clip_names", lambda: sorted(clips))
+    monkeypatch.setattr(stimuli, "unit_overrides", lambda c: dict(c.genome))
+    monkeypatch.setattr(prepare, "REPORT", tmp_path / "matching.json")
+    db = store.connect(tmp_path / "j.sqlite")
+    pool = dataclasses.replace(candidates.load_pool(), pool_clips=("two.wav", "gone.wav"))
+    said = []
+    rep = prepare.prepare(pool, candidates=["nominal", "t101_permalloy"], targets=[3.0], db=db,
+                          render=fake, render_audio=fake.audio.get, log=said.append,
+                          screen=lambda c: {"passes": True, "checks": {}})  # fmt: skip
+    assert {s["clip"] for s in rep["stimuli"]} == {"two.wav"}
+    assert any("gone.wav" in m for m in said)
+    ok = {"passes": True, "checks": {}}
+    prepare.prepare(pool, candidates=["nominal", "t101_permalloy"], targets=[3.0], db=db,
+                    clips=["one.wav"], render=fake, render_audio=fake.audio.get,
+                    log=lambda m: None, screen=lambda c: ok)  # fmt: skip
+    listen_app, _ = _ab(db, fake)
+    ab = listen_app.AB(db=db, version=prepare.code_version(), render_audio=fake.audio.get,
+                       clips=pool.pool_clips)  # fmt: skip
+    assert {p["clip"] for p in ab.pairs()} == {"two.wav"} and ab.status()["stimuli"] == 2
+    everything = listen_app.AB(db=db, version=prepare.code_version(), render_audio=fake.audio.get)
+    assert everything.status()["stimuli"] == 4
+
+
+def test_abx_and_explore_by_part(coloured):
+    """A session exaggerating the character: every trial flagged exaggerated, even at
+    k = 1 (H B' alone isn't a unit); the part is in the summary; the anchor is the pair
+    with the most character. Explore takes the part too, and refuses an unknown one."""
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    db, fake = coloured
+    listen_app, ab = _ab(db, fake)
+    req = listen_app.AbxSessionRequest(seed=4, mode="fixed", k=1.0, trials_per_pair=2,
+                                       part="character")  # fmt: skip
+    sid = ab.abx_start(req)["session"]
+    summary, _ = _run_abx(ab, listen_app, sid, correct_from_k=0.5)
+    assert summary["part"] == "character"
+    flags = db.execute("SELECT exaggerated FROM abx_trials WHERE session_id = ?", (sid,))
+    assert all(f["exaggerated"] for f in flags)
+    pairs = ab.pairs()
+    anchor = next(p for p in summary["pairs"] if p["anchor"])
+    assert anchor["residual_db"] == max(p["levels_db"]["character"] for p in pairs)
+    with pytest.raises(ValueError):
+        ab.abx_start(listen_app.AbxSessionRequest(part="colour"))
+    client = TestClient(listen_app.create_app(workers=1, ab=ab))
+    a, b = pairs[0]["a"], pairs[0]["b"]
+    r = client.get("/api/ab/explore", params={"a": a, "b": b, "part": "tone"})
+    assert r.status_code == 200 and r.json()["part"] == "tone"
+    assert r.json()["residual"]["name"] == "T" and len(r.json()["streams"]) == 5
+    bad = client.get("/api/ab/explore", params={"a": a, "b": b, "part": "colour"})
+    assert bad.status_code == 400

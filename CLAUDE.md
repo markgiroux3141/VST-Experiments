@@ -10,9 +10,10 @@ progress: blind A/B at `/ab` of `varimu listen`, stimuli matched by
 store; the plan's Phase 5 status), with its first listening aids (2026-10-24:
 difference listening and an ABX exaggeration staircase on the same page;
 `difference`, `abx`). Mumetall's Rayleigh refit (the plan's Phase 2, "Low-level
-core physics", Option 1) is applied (2026-10-24). Next: Phase 5's planned
-items 3 (condition search) and 4 (physical caricatures), and a first real
-ABX session by the listener.** Plausibility (`varimu.measure.plausibility`) rejects only what no
+core physics", Option 1) is applied (2026-10-24). Since then: multitrack
+program material and a tone / character split of each pair's difference (the
+plan's Phase 5). Next (the user's choice, 2026-10-24): Phase 5's item 4,
+physical caricatures, aimed at character differences; then item 3.** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the
@@ -23,6 +24,11 @@ core has a Python reference and a circuitsim device, no SPICE
 implementation; ngspice cross-checks the rest with the cores in their linear
 limit (Hard rules). Work one phase at a time. Don't start the next phase until
 the current phase's "done when" criterion is met and covered by tests.
+
+Ideas for after Phase 8 (aging, general circuits and KiCad import, stray coupling,
+temperature, tape, vinyl, the plugin UI) are brainstormed and prioritized in
+[docs/FUTURE_DIRECTIONS.md](docs/FUTURE_DIRECTIONS.md) (2026-10-24; the plan's
+"Future Directions"). Nothing in it is built, and none of it interrupts Phases 5-8.
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
@@ -124,6 +130,7 @@ uv run --extra fast python scripts/calibrate_psu.py    # re-derive T302's voltag
 uv run --extra fast python scripts/corner_sweep.py [--quick]   # genome corners: simulates? GR rises? quiet at idle? -> reports/corners/
 uv run --extra fast varimu unit --name NAME [--genome FILE] [--set k=v ...] [--no-clips]   # Phase 4: genome -> setup -> renders -> reports/units/NAME/ (exit 2: rejected)
 uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
+uv run --extra listen python scripts/build_clips.py --root DIR [--only NAME ...]   # Phase 5: program clips from multitrack stems (config/listening.yaml mixes) -> data/clips
 uv run --extra listen --extra fast varimu ab-prepare [--candidates NAME ...] [--swap KEY=VALUE ...] [--targets 3 6]   # Phase 5: match the pool (config/listening.yaml) on data/clips -> SQLite + reports/listening/matching.json
 uv run --extra listen --extra fast varimu listen   # then http://127.0.0.1:8765/ab: blind A/B session (keys: Space, 1/2, A/B/N), ABX staircase, difference listening
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
@@ -363,8 +370,15 @@ tests skip when ngspice is missing.
   means preparing again. The listening aids (difference listening, ABX:
   `varimu.listen.difference`, `abx`) render nothing: they work on the
   matched renders in the cache. ABX judgments live in their own tables
-  (`abx_*`, every trial at k != 1 flagged `exaggerated`) and are never
-  preference data.
+  (`abx_*`, every trial that isn't the real pair flagged `exaggerated`) and
+  are never preference data. A pair's difference splits into tone (what a
+  fixed filter explains) and character (`difference.decompose`); a big
+  gain-only residual can be just a bass shelf (T101 permalloy). The pool
+  plays `pool_clips` (config/listening.yaml), built from the user's
+  multitracks by `scripts/build_clips.py` (Cambridge-MT: educational use
+  only; never commit them); the arpeggio stays in data/clips for `--verify`.
+  Editing listening.yaml doesn't invalidate stimuli (it is outside
+  `prepare.code_version`).
 - **One render job twice at once (fixed 2026-10-24).** Two threads rendering
   the identical job (same cache key) used to share `cache/renders/<key>.tmp`
   and `cache/jobs/<key>` (WinError 32). Each render now has its own (key, pid,

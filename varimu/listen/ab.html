@@ -137,13 +137,20 @@
       <p class="muted">Can you tell a pair apart at all? X is secretly A or B. The staircase
         starts with the difference exaggerated 8x (A + k(B &minus; A)), makes it smaller after
         each right answer and larger after each wrong one, and settles where you are right
-        3 times in 4: your just-noticeable k for that pair. These answers are stored apart from
-        your preferences and never count as preference data.</p>
+        3 times in 4: your just-noticeable k for that pair. "Character only" exaggerates just
+        what no fixed EQ could explain (distortion, pumping, thump); "tone only" just the EQ
+        and phase part. These answers are stored apart from your preferences and never count
+        as preference data.</p>
       <div class="row" style="margin: 10px 0">
         <input type="text" class="listener" placeholder="listener (optional)">
         <select id="abx-mode">
           <option value="staircase">Staircase (adaptive k)</option>
           <option value="fixed">Real pairs only (k = 1)</option>
+        </select>
+        <select id="abx-part" title="what is exaggerated">
+          <option value="all">Whole difference</option>
+          <option value="character">Character only</option>
+          <option value="tone">Tone only</option>
         </select>
         <label class="muted">trials per pair <input type="number" id="abx-n" value="12"
           min="2" max="40"></label>
@@ -192,12 +199,19 @@
   <div data-pane="diff" class="hidden">
     <section>
       <h2>Difference listening</h2>
-      <p class="muted">What does the part change? Pick a matched pair and listen to the
-        residual A &minus; B (B aligned to A by a least-squares gain, then turned up) and to
-        the difference exaggerated, A + k(B &minus; A). Everything plays at one loudness.
-        Exaggerations are not units: training for the ear, never judgments.</p>
+      <p class="muted">What does the part change? The difference between a matched pair splits
+        in two: its <b>tone</b> (T: what a fixed EQ / phase filter turning B into A explains)
+        and its <b>character</b> (C: what no fixed filter explains: distortion, pumping,
+        thump). Pick a pair and a part, then listen to the part on its own, turned up, and to
+        A + k &times; the part. Everything plays at one loudness. Exaggerations are not units:
+        training for the ear, never judgments.</p>
       <div class="row" style="margin: 10px 0">
         <select id="diff-pair"><option>Loading pairs...</option></select>
+        <select id="diff-part" title="what is exaggerated">
+          <option value="all">Whole difference</option>
+          <option value="character">Character only</option>
+          <option value="tone">Tone only</option>
+        </select>
         <button class="primary" id="diff-load" disabled>Load</button>
         <label class="muted"><input type="checkbox" class="reveal"> show candidate names</label>
       </div>
@@ -375,8 +389,9 @@ $$("#trial .votes button").forEach(b => b.onclick = () => vote(b.dataset.v));
 // --- Pairs (ABX and difference listening) ----------------------------------------------
 function pairLabel(p, i) {
   const who = reveal ? `${p.names[0]} vs ${p.names[1]}` : `pair ${i + 1}`;
+  const lv = p.levels_db || {};
   return `${who}: ${p.clip}, ${p.gr_target_db} dB GR, TC ${p.time_constant}` +
-         ` (residual ${fmt(p.residual_db, 1)} dB)`;
+         ` (character ${fmt(lv.character, 1)} dB, tone ${fmt(lv.tone, 1)} dB re A)`;
 }
 
 function renderPairs() {
@@ -406,7 +421,7 @@ $("#abx-start").onclick = async () => {
   const chosen = $$("#abx-pairs input").filter(i => i.checked).map(i => pairs[i.value]);
   if (!chosen.length) return;
   const p = await post("/api/ab/abx/session", {
-    listener: listener(), mode: $("#abx-mode").value, k: 1.0,
+    listener: listener(), mode: $("#abx-mode").value, k: 1.0, part: $("#abx-part").value,
     trials_per_pair: Number($("#abx-n").value) || 12,
     pairs: chosen.map(p => [p.a, p.b]),
   });
@@ -450,7 +465,9 @@ function abxFinish(s) {
   $("#abx-done").classList.remove("hidden");
   const byIds = Object.fromEntries(pairs.map((p, i) => [`${Math.min(p.a, p.b)}-` +
     `${Math.max(p.a, p.b)}`, [p, i]]));
-  $("#abx-bias").textContent = `${s.answered} trials. "X is A" answered in ` +
+  const what = {all: "the whole difference", character: "the character", tone: "the tone"};
+  $("#abx-bias").textContent = `${s.answered} trials, exaggerating ${what[s.part]}. ` +
+    `"X is A" answered in ` +
     `${s.share_x_is_a === null ? "-" : Math.round(s.share_x_is_a * 100)}% (X is A half the ` +
     "time: far from 50% is a position bias).";
   const rows = s.pairs.map(p => {
@@ -473,7 +490,8 @@ $("#diff-load").onclick = async () => {
   $("#diff-load").disabled = true;
   $("#diff-load").textContent = "Loading...";
   try {
-    const r = await api(`/api/ab/explore?a=${p.a}&b=${p.b}`);
+    const part = $("#diff-part").value;
+    const r = await api(`/api/ab/explore?a=${p.a}&b=${p.b}&part=${part}`);
     const all = [...r.streams, r.residual];
     diffKeys = all.map(s => s.name);
     $("#diff-streams").innerHTML = all.map((s, i) => `<button data-s="${esc(s.name)}">` +
@@ -488,8 +506,11 @@ $("#diff-load").onclick = async () => {
     if (r.peak_limited) notes.push(`All streams lowered together to ${r.target_lufs} LUFS so ` +
                                    "the loudest peaks don't clip.");
     for (const s of r.streams) for (const w of s.artifacts) notes.push(`${s.name}: ${w}`);
-    notes.push(`Residual: ${fmt(r.residual.level_db, 1)} dB re A, turned up ` +
-               `${fmt(r.residual.gain_db, 1)} dB (B aligned by ${fmt(r.align_gain_db, 2)} dB).`);
+    const lv = r.levels_db;
+    notes.push(`${r.residual.name} on its own: ${fmt(r.residual.level_db, 1)} dB re A, turned ` +
+               `up ${fmt(r.residual.gain_db, 1)} dB. The pair: character ${fmt(lv.character, 1)} ` +
+               `dB, tone ${fmt(lv.tone, 1)} dB, whole ${fmt(lv.all, 1)} dB re A (B aligned by ` +
+               `${fmt(r.align_gain_db, 2)} dB).`);
     $("#diff-notes").innerHTML = notes.map(n => `<div class="note">${esc(n)}</div>`).join("");
     $("#diff-table").innerHTML = "<tr><th>Stream</th><th>k</th><th>GR (dB)</th>" +
       "<th>Envelope vs A, worst / rms (dB)</th><th>Loudness gain (dB)</th></tr>" +

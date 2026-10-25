@@ -21,6 +21,49 @@ excerpt_s: 8.0  # longer clips play their loudest window of this length (renders
 # the loudest window. Kept here or in data/clips/clips.yaml (the user's, not committed).
 clips: {}
 
+# The clips the pool matches and sessions play (absent: every clip in data/clips). The
+# slice report's arpeggio stays in data/clips for --verify without being listened to.
+pool_clips: [bass_areasontoleave.wav, drums_setmefree.wav, vocal_longwayhome.wav,
+             mix_longwayhome.wav]
+
+# Program material built from multitrack stems by scripts/build_clips.py --root DIR
+# (DIR: the folder holding the songs' folders; the stems are the user's, never
+# committed). A mix is a plain sum of stems, each with a static gain (dB, default 0:
+# the levels as tracked) and optionally its polarity inverted, summed to mono, then one
+# gain so its loudest excerpt_s window reads MIX_LUFS (peaks kept below MIX_PEAK_DBFS;
+# the script). No other processing. Written to data/clips/<name>.wav with its category
+# in data/clips/clips.yaml and the stems' hashes in data/clips/mixes.json.
+# All four songs: Cambridge-MT multitracks (www.cambridge-mt.com), "provided for
+# educational purposes only ... should not be used for any commercial purpose without
+# the express permission of the copyright holders" (each song's Readme.txt).
+mixes:
+  bass_areasontoleave:
+    category: bass
+    song: PatrickTalbot_AReasonToLeave
+    stems: {17_BassDI: 0}
+    note: "raw bass DI, active 98% of the 23 s, 34% of its energy below 150 Hz: the cores' material"
+  drums_setmefree:
+    category: drum bus
+    song: PatrickTalbot_SetMeFree
+    stems: {01_KickIn: 0, 02_KickOut: 0, 03_SnareUp: 0, 04_SnareDown: 0, 05_HiHat: 0,
+            06_Overheads: 0, 07_DrumsRoom1: 0, 08_DrumsRoom2: 0}
+    note: "acoustic kit, close mics, overheads and rooms (the song's drum loop left out). Polarity as tracked: every close-mic pair sums louder in phase at zero lag (kick in/out +5.1 dB re their difference, snare up/down +2.2, snare/overheads +2.3; measured 2026-10-24)"
+  vocal_longwayhome:
+    category: vocal
+    song: DavidTyo_LongWayHome
+    stems: {17_LeadVox: 0}
+    note: "lead vocal, active 93% of the 42 s, crest 16 dB"
+  mix_longwayhome:
+    category: full mix
+    song: DavidTyo_LongWayHome
+    stems: {01_Kick: 0, 02_SnareUp: 0, 03_SnareDown: 0, 04_Tom1: 0, 05_Tom2: 0,
+            06_Overheads: 0, 08_Tambourine: 0, 09_Bass: 0, 10_AcousticGtr1: 0,
+            11_AcousticGtr2: 0, 12_ElecGtr1: 0, 13_ElecGtr2: 0, 14_ElecGtr3: 0, 15_Piano: 0,
+            16_Organ: 0, 17_LeadVox: 0, 18_BackingVox1: 0, 19_BackingVox2: 0,
+            20_BackingVox3: 0, 21_BackingVox3DT: 0}
+    invert: [06_Overheads]
+    note: "every stem at its tracked level (a sum, not a mix; 07_Cymbal is silent and left out). Overheads inverted: as tracked they sum quieter than their difference with the snare (-2.5 dB) and the kick (-1.1 dB) at zero lag (measured 2026-10-24)"
+
 candidates:
   nominal:
     genome: {}

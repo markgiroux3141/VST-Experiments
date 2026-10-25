@@ -80,7 +80,16 @@ def prepare(
             log(f"{c.name}: rejected by the plausibility screen {rejected[c.name]}: left out")
     cands = [c for c in cands if c.name not in rejected]
     targets = list(targets or pool.gr_targets_db)
-    clips = list(clips or stimuli.clip_names())
+    available = stimuli.clip_names()
+    if clips is None and pool.pool_clips:
+        missing = [c for c in pool.pool_clips if c not in available]
+        if missing:
+            log(
+                f"pool clips not in data/clips (scripts/build_clips.py builds the mixes): "
+                f"{missing}: left out"
+            )
+        clips = [c for c in pool.pool_clips if c in available]
+    clips = list(clips or available)
     db = db or store.connect()
     version = code_version()
     if not clips:
@@ -118,7 +127,7 @@ def prepare(
         done = [s for group in pex.map(one, todo) for s in group]
     for s in done:
         store.put_stimulus(db, s.public(), excerpts[s.clip][2], version)
-    report = verify(db, version, render_audio)
+    report = verify(db, version, render_audio, clips=clips)
     report["summary"]["rejected_candidates"] = rejected
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=1, default=str), "utf-8")
@@ -138,12 +147,13 @@ def _render_audio(key: str) -> np.ndarray:
     return runner.load_render(runner.RENDER_DIR / key).output
 
 
-def verify(db, version: str, render_audio=None) -> dict[str, Any]:
-    """Re-measure every stored stimulus's GR from its renders and every pair's
-    loudness after matching (render_audio: render key -> output samples)."""
+def verify(db, version: str, render_audio=None, clips=None) -> dict[str, Any]:
+    """Re-measure every stored stimulus's GR (of `clips`, default all) from its renders
+    and every pair's loudness after matching (render_audio: render key -> output
+    samples)."""
     render_audio = render_audio or _render_audio
     fs = load_sim_settings().sample_rate
-    rows = store.stimuli(db, version, solved_only=False)
+    rows = store.stimuli(db, version, solved_only=False, clips=clips)
     out_stim, by_cond = [], defaultdict(list)
     for r in rows:
         y = render_audio(r["render_key"])

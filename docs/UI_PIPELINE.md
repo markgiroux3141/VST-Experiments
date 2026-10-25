@@ -270,6 +270,11 @@ Grep the stderr for `CONSOLE` to catch script errors. Check by eye:
 
 ## 9. Toward the plugin (JUCE)
 
+The framework is not decided yet (2026-10-24): it's chosen in the plan's Phase 10.
+The current lean is nih-plug (Rust) with a webview editor that reuses this page, and
+JUCE is the alternative ([FUTURE_DIRECTIONS.md](FUTURE_DIRECTIONS.md), section 7).
+What follows holds for either.
+
 What carries over unchanged:
 - `knob-strip` (`--png`): a standard filmstrip knob. Frame = `round(angle / 2.5) mod 144`.
 - `lit-*` overlays: draw over the background with opacity, using the same timings.

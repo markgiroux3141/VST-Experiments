@@ -431,6 +431,13 @@ Findings that change later work:
 - **On the user's clips** (the pool re-prepared after the refit, 2026-10-24; smoke-tested through the app on a copy of the database): residuals re A, T101 permalloy against either other unit -21 to -26 dB, the built unit against nominal -34 to -41 dB (so the anchor is a permalloy pair); every played pair at -23.0 LUFS; artifacts flagged only at k = 8, on 4 of the 12 pairs (all on the guitar: GR 3.92 / 2.38 dB against the pair's 3.0, envelopes up to 4.5 dB off A's). A pair's streams load in 0.2-0.9 s, the pair list in 2.3 s.
 - Tests: `tests/test_abx.py` (fake renders: the streams, the exaggerated pair, the staircase's rule and convergence, whole ABX sessions through the app and over HTTP, reproducibility from the seed, fixed repeats, the database migration); `tests/test_ab_matching.py` runs the aids on its real matched pair.
 
+**The first ABX attempt, multitrack material, and tone vs character (2026-10-24).** The listener found the pairs very hard to tell apart even in ABX (one trial answered, a miss at k = 8 on the most different pair). Two things followed, decided with the user: better program material, and a difference measure that separates what is EQ from what is compressor physics. Then the physical caricatures (item 4 below).
+
+- **Program material from multitracks** (`scripts/build_clips.py --root DIR`, recipes in `config/listening.yaml` `mixes`): four Cambridge-MT multitracks the user supplied ("educational purposes only, no commercial use without permission": local research listening, never committed). Mixes are plain sums of stems (static gains, polarity where a zero-lag sum measured it inverted: Long Way Home's overheads), mono, normalized to -14 LUFS over the loudest 8 s or lowered to keep peaks at -0.5 dBFS; data/clips/mixes.json records the stems' SHA-256s and gains. One clip per category: bass (A Reason To Leave, the bass DI), drum bus (Set Me Free, close mics, overheads and rooms; -23.1 LUFS, peak limited), vocal (Long Way Home, the lead), full mix (Long Way Home, all 20 stems as tracked; -16.8 LUFS). `pool_clips` in the pool file names what the pool matches and the page plays (the arpeggio stays in data/clips for `--verify`).
+- **Matched** (`ab-prepare`, 2026-10-24): 24 stimuli, worst GR error 0.088 dB, pairs within 0.00 LU; 6 dB is out of reach for nominal and T101-permalloy on the vocal and the mix (5.3 / 5.9 dB at AC THRESHOLD 1.0, flagged and left out: the pad stays at the factory adjustment), so 18 pairs: every clip at 3 dB, bass and drums at 6 dB.
+- **Tone vs character** (`difference.decompose`): B aligned to A by gain, then the LTI filter H that best maps it onto A (Welch H1 at 2.9 Hz resolution, smoothed over 1/12 octave around its bulk delay) splits the difference into **tone** T (what a fixed EQ / phase filter explains) and **character** C (what none does: distortion, pumping, thump), B' - A = T + C. On synthetic pairs a filter's character leaks -53 / -62 dB re A (3 / 8 s), distortion's and pumping's tone 26-33 dB below their character; a 20 Hz high-pass, the hardest case, 12 dB below its tone. The difference streams, ABX (`part`: all / character / tone, per session; any trial that isn't the real pair is flagged exaggerated) and the pair list all use it.
+- **What it shows** (character / tone, dB re A): T101 permalloy against mumetall is nearly all tone, a low shelf (+1.0 to +1.8 dB at 20 Hz, +0.3 at 50 Hz, ~0 above 100 Hz: the harder core's lower inductance), its character -31 to -52 dB; that is why its -21 dB "residual" didn't help in ABX. The built unit against nominal is mostly character. On the arpeggio and the guitar every pair's character is at -32 to -52 dB; on the new material, bass and drums at 6 dB, it is -24.6 to -31.3 dB (built vs either other unit -24.6 to -27.7): heavier limiting on LF-rich material roughly doubles it, as the condition search (item 3) expected. Character differences are where to listen, and where the caricatures should push.
+
 **Planned next (decided 2026-10-23), after the Phase 2 core refit (Option 1), which changes every unit, so `ab-prepare` runs again** (1 and 2 done 2026-10-24, above):
 
 1. **Difference listening and exaggeration in the A/B page** (no new renders: the matched renders exist). Play the residual A - B (after a least-squares gain alignment) turned up, to hear what a part changes; and A + k (B - A) for k = 2, 4, 8, which extrapolates along the difference (the colour-saturation analogy), loudness matched again after the extrapolation. Artifacts at large k where the gain envelopes differ: report them, don't hide them.
@@ -497,6 +504,17 @@ Rules for all of these: they train the ear and show what to listen for; judgment
 - Option A: a neural model distilled from full simulations of the chosen genome(s), conditioned on the front-panel controls (input, threshold, Time Constant).
 - Option B: a wave digital filter or nodal DK-method implementation of the same circuit, preserving the physics directly.
 - Compare A and B by measurement suite and by blind listening.
+- The plugin framework is decided here (2026-10-24, the user's): the research tools stay web-based. The current lean is nih-plug (Rust, no FFI to circuitsim) with a webview editor reusing `ui-mockup/`; JUCE is the alternative. See [docs/FUTURE_DIRECTIONS.md](docs/FUTURE_DIRECTIONS.md), section 7.
+
+## Future Directions (after Phase 8)
+
+Brainstormed and prioritized 2026-10-24; nothing is built yet. The details are in [docs/FUTURE_DIRECTIONS.md](docs/FUTURE_DIRECTIONS.md): what exists, what to build, starting formulas, open questions. None of it interrupts Phases 5-8. In the user's priority order:
+
+1. **Aging, together with noise sources:** a unit history (years, powered hours, storage, service) mapped to per-part parameter drift by sourced laws with Arrhenius acceleration, applied where `apply_tolerances` applies the tolerance draws.
+2. **General circuits:** a generic circuit file with a macro-part library (the 670 first, byte-identical IR), KiCad as the drawing tool, and new devices (BJT, JFET, op-amp, LDR ...). This is circuit-sim M7.
+3. **Stray coupling and ground networks:** layout as physical genome parameters, dipole-law magnetic coupling from the supply into T101, ground impedance, stray capacitance, channel 2 as a full channel.
+4. **Temperature:** static ambient and warm-up first; electrothermal nodes only where measurement shows they matter.
+5. **Tape machine and vinyl,** each with its own plan doc. Both share a new "spatial medium" block: a medium written in space, read by a transducer moving relative to it.
 
 ## Coupling Checklist
 
@@ -550,7 +568,8 @@ Every entry carries a `source` field. "TBD" is acceptable during development; an
 ## Open Decisions
 
 - **One unit or a palette?** Preferential BO and CMA-ES aim for a single best unit; MAP-Elites yields a palette of characters. The default plan implements both and decides based on results.
-- **Mono first, or stereo/lateral-vertical from the start?** Default: mono first.
+- **Mono first, or stereo/lateral-vertical from the start?** Default: mono first. (A vinyl simulator would force this: 45/45 grooves are two-channel. docs/FUTURE_DIRECTIONS.md.)
+- **Tape and "one coupled simulation"** (open, 2026-10-24): may a tape machine chain record circuit -> tape medium -> playback circuit across the tape's physical boundary, or must both circuits share one simulation and supply? docs/FUTURE_DIRECTIONS.md, "Open questions".
 - **Noise modeling:** include from Phase 3, or add after the optimization loop works? Default: add after.
 - **Primary simulator:** Xyce vs ngspice, decided after Phase 2 testing of transformer core support and speed.
   - *Decided 2026-10-13:* build a fast netlist-driven simulator in Rust (`crates/circuitsim`),

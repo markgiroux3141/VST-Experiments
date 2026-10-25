@@ -20,12 +20,15 @@ X is secretly one of them (seeded); the listener says which.
   not the units.
 - **Position bias** per session: the share of "X is A" answers.
 - Mode "fixed": every trial at one k (1: plain ABX on the real pairs).
+- Part (`difference.PARTS`): B is exaggerated by the pair's whole difference
+  ("all"), its character (what no fixed filter explains) or its tone (what one
+  does), per session.
 
 Judgments here are discrimination, never preference data: they live in their
-own tables (varimu.listen.store, `abx_*`), and every trial at k != 1 is flagged
-`exaggerated`. Everything played is loudness matched and its GR measured
-(`difference.exaggerated_pair`). All randomness: one generator per draw, seeded
-from the session's seed.
+own tables (varimu.listen.store, `abx_*`), and every trial that isn't the real pair
+(k != 1, or a part other than "all") is flagged `exaggerated`. Everything played
+is loudness matched and its GR measured (`difference.exaggerated_pair`). All
+randomness: one generator per draw, seeded from the session's seed.
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ from typing import Any
 
 import numpy as np
 
-from varimu.listen import store
+from varimu.listen import difference, store
 
 K_START = 8.0
 K_MIN = 0.25
@@ -127,14 +130,18 @@ def start(
     k_fixed: float = 1.0,
     trials_per_pair: int = TRIALS_PER_PAIR,
     anchor_trials: int = ANCHOR_TRIALS,
+    part: str = "all",
 ) -> str:
     """A new ABX session over the condition pairs of `stims` (or the `chosen` stimulus
-    id pairs). `residual_db(stim_a, stim_b)`: the pair's residual level (dB re A),
-    which picks the anchor (the largest)."""
+    id pairs). `residual_db(stim_a, stim_b)`: the level of the pair's `part` (dB re A),
+    which picks the anchor (the largest). `part`: what B is exaggerated by (A + k d,
+    d the pair's whole difference, its character or its tone: difference.PARTS)."""
     if mode not in ("staircase", "fixed"):
         raise ValueError(f"mode must be staircase or fixed, not {mode!r}")
     if not 1 <= trials_per_pair <= 100:
         raise ValueError(f"trials per pair must be 1-100, not {trials_per_pair}")
+    if part not in difference.PARTS:
+        raise ValueError(f"part must be one of {difference.PARTS}, not {part!r}")
     if not K_MIN <= k_fixed <= K_MAX:
         raise ValueError(f"k must be within {K_MIN}-{K_MAX}, not {k_fixed}")
     seed = int(secrets.randbits(31)) if seed is None else int(seed)
@@ -157,7 +164,7 @@ def start(
     store.new_abx_session(db, sid, seed, listener, code_version, {
         "mode": mode, "k_fixed": k_fixed, "trials_per_pair": trials_per_pair,
         "anchor_trials": anchor_trials, "k_start": K_START, "k_anchor": K_ANCHOR,
-        "step_down_oct": STEP_DOWN_OCT, "up_down_ratio": UP_DOWN_RATIO,
+        "step_down_oct": STEP_DOWN_OCT, "up_down_ratio": UP_DOWN_RATIO, "part": part,
     })  # fmt: skip
     rows = []
     for a, b in sel:
@@ -177,7 +184,12 @@ def _settings(db, sid: str) -> dict[str, Any]:
     s = db.execute("SELECT * FROM abx_sessions WHERE id = ?", (sid,)).fetchone()
     if s is None:
         raise KeyError(sid)
-    return {"seed": s["seed"], **json.loads(s["settings"])}
+    return {"seed": s["seed"], "part": "all", **json.loads(s["settings"])}
+
+
+def session_part(db, sid: str) -> str:
+    """What the session exaggerates (sessions from before parts existed: "all")."""
+    return _settings(db, sid)["part"]
 
 
 def _k_for(db, pair, st: dict[str, Any]) -> float:
@@ -225,7 +237,16 @@ def next_trial(db, sid: str):
     db.execute(
         "INSERT INTO abx_trials (session_id, pair_id, idx, k, exaggerated, anchor, a_is_base, "
         "x_is) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-        (sid, p["id"], idx, k, int(k != 1.0), p["anchor"], int(a_is_base), x_is),
+        (
+            sid,
+            p["id"],
+            idx,
+            k,
+            int(k != 1.0 or st["part"] != "all"),
+            p["anchor"],
+            int(a_is_base),
+            x_is,
+        ),
     )
     db.commit()
     return db.execute(
@@ -284,6 +305,7 @@ def summary(db, sid: str) -> dict[str, Any]:
     return {
         "session": sid,
         "mode": st["mode"],
+        "part": st["part"],
         "answered": n,
         "planned": sum(st["anchor_trials"] if p["anchor"] else st["trials_per_pair"] for p in out),
         "share_x_is_a": sum(r["answer"] == "A" for r in said) / n if n else None,

@@ -198,10 +198,17 @@ def put_stimulus(db, s: Mapping[str, Any], category: str, code_version: str) -> 
     return int(row["id"])
 
 
-def stimuli(db, code_version: str, solved_only: bool = True) -> list[sqlite3.Row]:
+def stimuli(
+    db, code_version: str, solved_only: bool = True, clips: Iterable[str] | None = None
+) -> list[sqlite3.Row]:
+    """The stored stimuli of a code version (of `clips` only, if given)."""
     q = "SELECT s.*, c.name AS candidate FROM stimuli s JOIN candidates c ON c.id = s.candidate_id"
     q += " WHERE s.code_version = ?" + (" AND s.solved = 1" if solved_only else "")
-    return db.execute(q + " ORDER BY s.id", (code_version,)).fetchall()
+    rows = db.execute(q + " ORDER BY s.id", (code_version,)).fetchall()
+    if clips is not None:
+        keep = set(clips)
+        rows = [r for r in rows if r["clip"] in keep]
+    return rows
 
 
 def new_session(

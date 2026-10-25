@@ -322,6 +322,7 @@ class AbxSessionRequest(BaseModel):
     mode: str = "staircase"  # or "fixed"
     k: float = 1.0  # mode "fixed"
     trials_per_pair: int = 12
+    part: str = "all"  # what is exaggerated: "all", "character" or "tone" (difference.PARTS)
 
 
 class AbxAnswerRequest(BaseModel):
@@ -339,10 +340,11 @@ class AB:
     (varimu.listen.prepare), judgments into SQLite (varimu.listen.store). The page
     sees trial ids and audio only, never which candidate is which."""
 
-    def __init__(self, db=None, version: str | None = None, render_audio=None):
+    def __init__(self, db=None, version: str | None = None, render_audio=None, clips=None):
         from varimu.listen import prepare, store
 
         self.db = db or store.connect()
+        self.clips = tuple(clips) if clips else None  # sessions play these (None: all)
         self.version = version or prepare.code_version()
         self.render_audio = render_audio or prepare._render_audio
         self.lock = threading.Lock()
@@ -350,7 +352,7 @@ class AB:
         self.abx_audio: dict[int, dict[str, bytes]] = {}
         self.explore_audio: dict[str, bytes] = {}
         self._arrays: dict[str, np.ndarray] = {}
-        self._residuals: dict[tuple[int, int], float] = {}
+        self._levels: dict[tuple[int, int], dict[str, float]] = {}
 
     # --- The listening aids: shared helpers ---
 
@@ -377,16 +379,20 @@ class AB:
         return tuple(self._array(s[k]) for k in ("render_key", "reference_key")
                      for s in (base, other))  # fmt: skip
 
-    def _residual_db(self, a, b) -> float:
+    def _pair_levels(self, a, b) -> dict[str, float]:
+        """The pair's difference per part, dB re the lower stimulus id (difference.levels)."""
         from varimu.listen import difference
 
         key = (min(a["id"], b["id"]), max(a["id"], b["id"]))
-        if key not in self._residuals:
+        if key not in self._levels:
             sa, sb = self._stim(key[0]), self._stim(key[1])
-            self._residuals[key] = difference.residual_db(
+            self._levels[key] = difference.levels(
                 self._array(sa["render_key"]), self._array(sb["render_key"])
             )
-        return self._residuals[key]
+        return self._levels[key]
+
+    def _residual_db(self, a, b, part: str = "all") -> float:
+        return self._pair_levels(a, b)[part]
 
     def pairs(self) -> list[dict[str, Any]]:
         """Every prepared pair (per condition) with its residual level: what the aids
@@ -395,25 +401,27 @@ class AB:
 
         with self.lock:
             out = []
-            for a, b in session.pairs(store.stimuli(self.db, self.version)):
+            for a, b in session.pairs(store.stimuli(self.db, self.version, clips=self.clips)):
                 out.append({
                     "a": a["id"], "b": b["id"], "names": [a["candidate"], b["candidate"]],
                     "clip": a["clip"], "gr_target_db": a["gr_target_db"],
                     "time_constant": a["time_constant"],
-                    "residual_db": round(self._residual_db(a, b), 2),
+                    "residual_db": self._residual_db(a, b),
+                    "levels_db": self._pair_levels(a, b),
                 })  # fmt: skip
             return out
 
-    def explore(self, a: int, b: int) -> dict[str, Any]:
-        """Difference listening on a pair: A, B, the residual turned up and A + k (B - A)
-        for k = 2, 4, 8, each loudness matched, with its GR, envelope and artifacts."""
+    def explore(self, a: int, b: int, part: str = "all") -> dict[str, Any]:
+        """Difference listening on a pair: A, B, the part's difference turned up and
+        A + k d for k = 2, 4, 8 (d: the pair's `part`, difference.PARTS), each loudness
+        matched, with its GR, envelope and artifacts."""
         from varimu.listen import difference
 
         with self.lock:
             sa, sb = self._stim(a), self._stim(b)
             fs = load_sim_settings().sample_rate
             ya, yb, ra, rb = self._audio4(sa, sb)
-            res = difference.streams(ya, yb, ra, rb, fs)
+            res = difference.streams(ya, yb, ra, rb, fs, part=part)
             self.explore_audio.clear()
             stamp = f"{a}-{b}-{time.time_ns()}"
             for i, st in enumerate([*res["streams"], res["residual"]]):
@@ -429,13 +437,14 @@ class AB:
         from varimu.listen import abx, store
 
         with self.lock:
-            stims = store.stimuli(self.db, self.version)
+            stims = store.stimuli(self.db, self.version, clips=self.clips)
             if len(stims) < 2:
                 raise LookupError(self.status()["hint"])
             sid = abx.start(
-                self.db, stims, residual_db=self._residual_db, code_version=self.version,
-                listener=req.listener, seed=req.seed, chosen=req.pairs, mode=req.mode,
-                k_fixed=req.k, trials_per_pair=req.trials_per_pair,
+                self.db, stims, residual_db=lambda x, y: self._residual_db(x, y, req.part),
+                code_version=self.version, listener=req.listener, seed=req.seed,
+                chosen=req.pairs, mode=req.mode, k_fixed=req.k,
+                trials_per_pair=req.trials_per_pair, part=req.part,
             )  # fmt: skip
             return self._abx_progress(sid)
 
@@ -461,7 +470,8 @@ class AB:
                 ).fetchone()
                 fs = load_sim_settings().sample_rate
                 ya, yb, ra, rb = self._audio4(self._stim(p["base"]), self._stim(p["other"]))
-                v = difference.exaggerated_pair(ya, yb, ra, rb, t["k"], fs)
+                part = abx.session_part(self.db, sid)
+                v = difference.exaggerated_pair(ya, yb, ra, rb, t["k"], fs, part=part)
                 order = (0, 1) if t["a_is_base"] else (1, 0)  # which is labelled A, B
                 wav = {s: _wav_bytes(v["audio"][i], fs) for s, i in zip("AB", order, strict=True)}
                 # X is the same file as the side it is (a WAV's PEAK chunk carries the time
@@ -496,7 +506,7 @@ class AB:
     def status(self) -> dict[str, Any]:
         from varimu.listen import store
 
-        rows = store.stimuli(self.db, self.version)
+        rows = store.stimuli(self.db, self.version, clips=self.clips)
         conds = {(r["clip"], r["start_s"], r["seconds"], r["time_constant"], r["gr_target_db"])
                  for r in rows}  # fmt: skip
         return {
@@ -514,7 +524,7 @@ class AB:
         from varimu.listen import session, store
 
         with self.lock:
-            stims = store.stimuli(self.db, self.version)
+            stims = store.stimuli(self.db, self.version, clips=self.clips)
             if len(stims) < 2:
                 raise LookupError(self.status()["hint"])
             sid = session.start(self.db, stims, listener=listener, code_version=self.version,
@@ -582,7 +592,9 @@ def create_app(workers: int | None = None, ab: AB | None = None):
 
     def get_ab() -> AB:
         if not ab_box:
-            ab_box.append(AB())
+            from varimu.listen.candidates import load_pool
+
+            ab_box.append(AB(clips=load_pool().pool_clips))
         return ab_box[0]
 
     @app.get("/", response_class=HTMLResponse)
@@ -632,11 +644,13 @@ def create_app(workers: int | None = None, ab: AB | None = None):
         return get_ab().pairs()
 
     @app.get("/api/ab/explore")
-    def ab_explore(a: int, b: int):
+    def ab_explore(a: int, b: int, part: str = "all"):
         try:
-            return get_ab().explore(a, b)
+            return get_ab().explore(a, b, part)
         except KeyError as e:
             raise HTTPException(404, f"unknown stimulus {e}") from e
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
 
     @app.get("/api/ab/explore/audio/{token}.wav")
     def ab_explore_audio(token: str):
