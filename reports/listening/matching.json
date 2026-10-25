@@ -1,21 +1,20 @@
 {
  "code": "0.1.0+429a4862465e+cfg3a527288a5",
  "summary": {
-  "stimuli": 24,
-  "solved": 20,
+  "stimuli": 32,
+  "solved": 28,
   "unreachable": [
    "nominal vocal_longwayhome.wav 6 dB",
    "nominal mix_longwayhome.wav 6 dB",
-   "t101_permalloy vocal_longwayhome.wav 6 dB",
-   "t101_permalloy mix_longwayhome.wav 6 dB"
+   "survey_05 vocal_longwayhome.wav 6 dB",
+   "survey_05 mix_longwayhome.wav 6 dB"
   ],
-  "worst_gr_error_db": 0.088,
+  "worst_gr_error_db": 0.093,
   "gr_tolerance_db": 0.1,
-  "pairs": 18,
+  "pairs": 38,
   "worst_lufs_diff": 0.0,
   "lufs_tolerance": 0.1,
-  "verified": true,
-  "rejected_candidates": {}
+  "verified": true
  },
  "stimuli": [
   {
@@ -91,148 +90,220 @@
    "gr_error_db": -0.134
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "bass_areasontoleave.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.633,
-   "gr_db": 2.947,
-   "gr_error_db": -0.053
+   "ac_threshold": 0.6323,
+   "gr_db": 2.927,
+   "gr_error_db": -0.073
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "bass_areasontoleave.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.9483,
-   "gr_db": 6.009,
-   "gr_error_db": 0.009
+   "ac_threshold": 0.8836,
+   "gr_db": 5.97,
+   "gr_error_db": -0.03
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "drums_setmefree.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.6412,
-   "gr_db": 2.923,
-   "gr_error_db": -0.077
+   "ac_threshold": 0.6384,
+   "gr_db": 3.001,
+   "gr_error_db": 0.001
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "drums_setmefree.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.8907,
-   "gr_db": 6.027,
-   "gr_error_db": 0.027
+   "ac_threshold": 0.8206,
+   "gr_db": 5.914,
+   "gr_error_db": -0.086
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "vocal_longwayhome.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.7158,
-   "gr_db": 3.006,
-   "gr_error_db": 0.006
+   "ac_threshold": 0.7194,
+   "gr_db": 3.014,
+   "gr_error_db": 0.014
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "vocal_longwayhome.wav",
    "gr_target_db": 6.0,
    "solved": false,
    "ac_threshold": 1.0,
-   "gr_db": 5.287,
-   "gr_error_db": -0.713
+   "gr_db": 5.23,
+   "gr_error_db": -0.77
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "mix_longwayhome.wav",
    "gr_target_db": 3.0,
    "solved": true,
    "ac_threshold": 0.7,
-   "gr_db": 3.086,
-   "gr_error_db": 0.086
+   "gr_db": 3.011,
+   "gr_error_db": 0.011
   },
   {
-   "candidate": "t101_permalloy",
+   "candidate": "survey_05",
    "clip": "mix_longwayhome.wav",
    "gr_target_db": 6.0,
    "solved": false,
    "ac_threshold": 1.0,
-   "gr_db": 5.872,
-   "gr_error_db": -0.128
+   "gr_db": 5.74,
+   "gr_error_db": -0.26
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "bass_areasontoleave.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.5881,
-   "gr_db": 2.919,
-   "gr_error_db": -0.081
+   "ac_threshold": 0.5081,
+   "gr_db": 3.073,
+   "gr_error_db": 0.073
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "bass_areasontoleave.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.8301,
-   "gr_db": 6.024,
-   "gr_error_db": 0.024
+   "ac_threshold": 0.7359,
+   "gr_db": 6.034,
+   "gr_error_db": 0.034
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "drums_setmefree.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.5953,
-   "gr_db": 3.031,
-   "gr_error_db": 0.031
+   "ac_threshold": 0.4886,
+   "gr_db": 3.018,
+   "gr_error_db": 0.018
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "drums_setmefree.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.8,
-   "gr_db": 5.955,
-   "gr_error_db": -0.045
+   "ac_threshold": 0.6612,
+   "gr_db": 5.923,
+   "gr_error_db": -0.077
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "vocal_longwayhome.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.6645,
-   "gr_db": 3.035,
-   "gr_error_db": 0.035
+   "ac_threshold": 0.5621,
+   "gr_db": 3.01,
+   "gr_error_db": 0.01
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "vocal_longwayhome.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 1.0,
-   "gr_db": 5.975,
-   "gr_error_db": -0.025
+   "ac_threshold": 0.9056,
+   "gr_db": 6.019,
+   "gr_error_db": 0.019
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "mix_longwayhome.wav",
    "gr_target_db": 3.0,
    "solved": true,
-   "ac_threshold": 0.6466,
-   "gr_db": 3.059,
-   "gr_error_db": 0.059
+   "ac_threshold": 0.55,
+   "gr_db": 3.04,
+   "gr_error_db": 0.04
   },
   {
-   "candidate": "built_seed1",
+   "candidate": "survey_12",
    "clip": "mix_longwayhome.wav",
    "gr_target_db": 6.0,
    "solved": true,
-   "ac_threshold": 0.9282,
-   "gr_db": 6.022,
-   "gr_error_db": 0.022
+   "ac_threshold": 0.85,
+   "gr_db": 6.093,
+   "gr_error_db": 0.093
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.6871,
+   "gr_db": 3.007,
+   "gr_error_db": 0.007
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8643,
+   "gr_db": 6.009,
+   "gr_error_db": 0.009
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.7,
+   "gr_db": 3.019,
+   "gr_error_db": 0.019
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8686,
+   "gr_db": 6.047,
+   "gr_error_db": 0.047
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "vocal_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.7344,
+   "gr_db": 3.042,
+   "gr_error_db": 0.042
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "vocal_longwayhome.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.9625,
+   "gr_db": 6.042,
+   "gr_error_db": 0.042
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "mix_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "solved": true,
+   "ac_threshold": 0.7121,
+   "gr_db": 3.03,
+   "gr_error_db": 0.03
+  },
+  {
+   "candidate": "survey_14",
+   "clip": "mix_longwayhome.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8999,
+   "gr_db": 6.04,
+   "gr_error_db": 0.04
   }
  ],
  "pairs": [
@@ -241,11 +312,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "t101_permalloy"
+    "survey_05"
    ],
    "lufs_before": [
     -26.08,
-    -26.118
+    -26.449
    ],
    "lufs_after": [
     -23.0,
@@ -258,11 +329,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "built_seed1"
+    "survey_12"
    ],
    "lufs_before": [
     -26.08,
-    -26.041
+    -26.703
    ],
    "lufs_after": [
     -23.0,
@@ -274,12 +345,63 @@
    "clip": "bass_areasontoleave.wav",
    "gr_target_db": 3.0,
    "candidates": [
-    "t101_permalloy",
-    "built_seed1"
+    "nominal",
+    "survey_14"
    ],
    "lufs_before": [
-    -26.118,
-    -26.041
+    -26.08,
+    -25.277
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_12"
+   ],
+   "lufs_before": [
+    -26.449,
+    -26.703
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -26.449,
+    -25.277
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -26.703,
+    -25.277
    ],
    "lufs_after": [
     -23.0,
@@ -292,11 +414,11 @@
    "gr_target_db": 6.0,
    "candidates": [
     "nominal",
-    "t101_permalloy"
+    "survey_05"
    ],
    "lufs_before": [
     -29.36,
-    -29.441
+    -29.531
    ],
    "lufs_after": [
     -23.0,
@@ -309,11 +431,11 @@
    "gr_target_db": 6.0,
    "candidates": [
     "nominal",
-    "built_seed1"
+    "survey_12"
    ],
    "lufs_before": [
     -29.36,
-    -29.316
+    -29.789
    ],
    "lufs_after": [
     -23.0,
@@ -325,12 +447,63 @@
    "clip": "bass_areasontoleave.wav",
    "gr_target_db": 6.0,
    "candidates": [
-    "t101_permalloy",
-    "built_seed1"
+    "nominal",
+    "survey_14"
    ],
    "lufs_before": [
-    -29.441,
-    -29.316
+    -29.36,
+    -28.388
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey_05",
+    "survey_12"
+   ],
+   "lufs_before": [
+    -29.531,
+    -29.789
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey_05",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -29.531,
+    -28.388
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -29.789,
+    -28.388
    ],
    "lufs_after": [
     -23.0,
@@ -343,11 +516,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "t101_permalloy"
+    "survey_05"
    ],
    "lufs_before": [
     -32.673,
-    -32.831
+    -33.137
    ],
    "lufs_after": [
     -23.0,
@@ -360,11 +533,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "built_seed1"
+    "survey_12"
    ],
    "lufs_before": [
     -32.673,
-    -32.696
+    -33.08
    ],
    "lufs_after": [
     -23.0,
@@ -376,12 +549,63 @@
    "clip": "drums_setmefree.wav",
    "gr_target_db": 3.0,
    "candidates": [
-    "t101_permalloy",
-    "built_seed1"
+    "nominal",
+    "survey_14"
    ],
    "lufs_before": [
-    -32.831,
-    -32.696
+    -32.673,
+    -32.129
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_12"
+   ],
+   "lufs_before": [
+    -33.137,
+    -33.08
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -33.137,
+    -32.129
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -33.08,
+    -32.129
    ],
    "lufs_after": [
     -23.0,
@@ -394,11 +618,11 @@
    "gr_target_db": 6.0,
    "candidates": [
     "nominal",
-    "t101_permalloy"
+    "survey_05"
    ],
    "lufs_before": [
     -36.008,
-    -36.202
+    -35.863
    ],
    "lufs_after": [
     -23.699,
@@ -411,11 +635,28 @@
    "gr_target_db": 6.0,
    "candidates": [
     "nominal",
-    "built_seed1"
+    "survey_12"
    ],
    "lufs_before": [
     -36.008,
-    -35.813
+    -35.81
+   ],
+   "lufs_after": [
+    -23.759,
+    -23.759
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -36.008,
+    -35.698
    ],
    "lufs_after": [
     -23.699,
@@ -427,16 +668,50 @@
    "clip": "drums_setmefree.wav",
    "gr_target_db": 6.0,
    "candidates": [
-    "t101_permalloy",
-    "built_seed1"
+    "survey_05",
+    "survey_12"
    ],
    "lufs_before": [
-    -36.202,
-    -35.813
+    -35.863,
+    -35.81
    ],
    "lufs_after": [
-    -23.657,
-    -23.657
+    -23.759,
+    -23.759
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey_05",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -35.863,
+    -35.698
+   ],
+   "lufs_after": [
+    -23.385,
+    -23.385
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -35.81,
+    -35.698
+   ],
+   "lufs_after": [
+    -23.759,
+    -23.759
    ],
    "lufs_diff": 0.0
   },
@@ -445,11 +720,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "t101_permalloy"
+    "survey_05"
    ],
    "lufs_before": [
     -25.563,
-    -25.575
+    -25.966
    ],
    "lufs_after": [
     -23.0,
@@ -462,11 +737,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "built_seed1"
+    "survey_12"
    ],
    "lufs_before": [
     -25.563,
-    -25.524
+    -25.828
    ],
    "lufs_after": [
     -23.0,
@@ -478,12 +753,63 @@
    "clip": "vocal_longwayhome.wav",
    "gr_target_db": 3.0,
    "candidates": [
-    "t101_permalloy",
-    "built_seed1"
+    "nominal",
+    "survey_14"
    ],
    "lufs_before": [
-    -25.575,
-    -25.524
+    -25.563,
+    -24.45
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "vocal_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_12"
+   ],
+   "lufs_before": [
+    -25.966,
+    -25.828
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "vocal_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -25.966,
+    -24.45
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "vocal_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -25.828,
+    -24.45
    ],
    "lufs_after": [
     -23.0,
@@ -496,11 +822,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "t101_permalloy"
+    "survey_05"
    ],
    "lufs_before": [
     -26.082,
-    -26.095
+    -26.43
    ],
    "lufs_after": [
     -23.0,
@@ -513,11 +839,11 @@
    "gr_target_db": 3.0,
    "candidates": [
     "nominal",
-    "built_seed1"
+    "survey_12"
    ],
    "lufs_before": [
     -26.082,
-    -26.034
+    -26.469
    ],
    "lufs_after": [
     -23.0,
@@ -529,12 +855,97 @@
    "clip": "mix_longwayhome.wav",
    "gr_target_db": 3.0,
    "candidates": [
-    "t101_permalloy",
-    "built_seed1"
+    "nominal",
+    "survey_14"
    ],
    "lufs_before": [
-    -26.095,
-    -26.034
+    -26.082,
+    -25.012
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "mix_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_12"
+   ],
+   "lufs_before": [
+    -26.43,
+    -26.469
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "mix_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_05",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -26.43,
+    -25.012
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "mix_longwayhome.wav",
+   "gr_target_db": 3.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -26.469,
+    -25.012
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "vocal_longwayhome.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -30.472,
+    -29.015
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "mix_longwayhome.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey_12",
+    "survey_14"
+   ],
+   "lufs_before": [
+    -29.662,
+    -28.111
    ],
    "lufs_after": [
     -23.0,

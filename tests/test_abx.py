@@ -464,6 +464,10 @@ def test_the_pool_plays_its_clips_only(tmp_path, monkeypatch):
     assert {p["clip"] for p in ab.pairs()} == {"two.wav"} and ab.status()["stimuli"] == 2
     everything = listen_app.AB(db=db, version=prepare.code_version(), render_audio=fake.audio.get)
     assert everything.status()["stimuli"] == 4
+    nom = pool.candidates["nominal"].id  # session_candidates: the page plays only those units
+    one = listen_app.AB(db=db, version=prepare.code_version(), render_audio=fake.audio.get,
+                        candidates=[nom])  # fmt: skip
+    assert one.status()["stimuli"] == 2 and one.status()["candidates"] == 1
 
 
 def test_abx_and_explore_by_part(coloured):

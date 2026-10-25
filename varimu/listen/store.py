@@ -199,15 +199,23 @@ def put_stimulus(db, s: Mapping[str, Any], category: str, code_version: str) -> 
 
 
 def stimuli(
-    db, code_version: str, solved_only: bool = True, clips: Iterable[str] | None = None
+    db,
+    code_version: str,
+    solved_only: bool = True,
+    clips: Iterable[str] | None = None,
+    candidate_ids: Iterable[str] | None = None,
 ) -> list[sqlite3.Row]:
-    """The stored stimuli of a code version (of `clips` only, if given)."""
+    """The stored stimuli of a code version (of `clips` and `candidate_ids` only, if
+    given)."""
     q = "SELECT s.*, c.name AS candidate FROM stimuli s JOIN candidates c ON c.id = s.candidate_id"
     q += " WHERE s.code_version = ?" + (" AND s.solved = 1" if solved_only else "")
     rows = db.execute(q + " ORDER BY s.id", (code_version,)).fetchall()
     if clips is not None:
         keep = set(clips)
         rows = [r for r in rows if r["clip"] in keep]
+    if candidate_ids is not None:
+        ids = set(candidate_ids)
+        rows = [r for r in rows if r["candidate_id"] in ids]
     return rows
 
 

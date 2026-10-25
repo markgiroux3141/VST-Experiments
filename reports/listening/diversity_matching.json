@@ -1,0 +1,456 @@
+{
+ "code": "0.1.0+429a4862465e+cfg3a527288a5",
+ "summary": {
+  "stimuli": 10,
+  "solved": 9,
+  "unreachable": [
+   "survey-06 drums_setmefree.wav 6 dB"
+  ],
+  "worst_gr_error_db": 0.075,
+  "gr_tolerance_db": 0.1,
+  "pairs": 16,
+  "worst_lufs_diff": 0.0,
+  "lufs_tolerance": 0.1,
+  "verified": true,
+  "rejected_candidates": {
+   "survey-00": [
+    "no_oscillation_under_signal"
+   ],
+   "survey-01": [
+    "no_oscillation_under_signal"
+   ],
+   "survey-02": [
+    "no_oscillation_under_signal"
+   ],
+   "survey-03": [
+    "no_oscillation_under_signal"
+   ],
+   "survey-04": [
+    "idle_quiet",
+    "grid_bias",
+    "no_oscillation_under_signal"
+   ],
+   "survey-07": [
+    "idle_quiet",
+    "grid_bias"
+   ],
+   "survey-08": [
+    "idle_quiet",
+    "grid_bias",
+    "no_oscillation_under_signal"
+   ],
+   "survey-09": [
+    "gr_rises",
+    "no_oscillation_under_signal"
+   ],
+   "survey-10": [
+    "gr_rises",
+    "no_oscillation_under_signal"
+   ],
+   "survey-11": [
+    "idle_quiet",
+    "grid_bias",
+    "no_oscillation_under_signal"
+   ],
+   "survey-13": [
+    "idle_quiet",
+    "grid_bias",
+    "gain_reduction",
+    "gr_rises",
+    "no_oscillation_under_signal"
+   ],
+   "survey-15": [
+    "idle_quiet",
+    "grid_bias",
+    "no_oscillation_under_signal"
+   ],
+   "survey-16": [
+    "idle_quiet",
+    "grid_bias",
+    "no_oscillation_under_signal"
+   ],
+   "survey-17": [
+    "idle_quiet",
+    "b_plus",
+    "grid_bias"
+   ],
+   "survey-18": [
+    "idle_quiet",
+    "grid_bias",
+    "gain_reduction",
+    "gr_rises",
+    "no_oscillation_under_signal",
+    "nominal_distortion"
+   ],
+   "survey-19": [
+    "no_oscillation_under_signal"
+   ]
+  }
+ },
+ "stimuli": [
+  {
+   "candidate": "nominal",
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.9341,
+   "gr_db": 6.004,
+   "gr_error_db": 0.004
+  },
+  {
+   "candidate": "nominal",
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8748,
+   "gr_db": 6.033,
+   "gr_error_db": 0.033
+  },
+  {
+   "candidate": "survey-05",
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.9249,
+   "gr_db": 6.039,
+   "gr_error_db": 0.039
+  },
+  {
+   "candidate": "survey-05",
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.836,
+   "gr_db": 5.985,
+   "gr_error_db": -0.015
+  },
+  {
+   "candidate": "survey-06",
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8789,
+   "gr_db": 6.019,
+   "gr_error_db": 0.019
+  },
+  {
+   "candidate": "survey-06",
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "solved": false,
+   "ac_threshold": 1.0,
+   "gr_db": 5.413,
+   "gr_error_db": -0.587
+  },
+  {
+   "candidate": "survey-12",
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.7443,
+   "gr_db": 6.016,
+   "gr_error_db": 0.016
+  },
+  {
+   "candidate": "survey-12",
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.6669,
+   "gr_db": 5.925,
+   "gr_error_db": -0.075
+  },
+  {
+   "candidate": "survey-14",
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.85,
+   "gr_db": 6.005,
+   "gr_error_db": 0.005
+  },
+  {
+   "candidate": "survey-14",
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "solved": true,
+   "ac_threshold": 0.8668,
+   "gr_db": 6.061,
+   "gr_error_db": 0.061
+  }
+ ],
+ "pairs": [
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey-05"
+   ],
+   "lufs_before": [
+    -28.669,
+    -29.038
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey-06"
+   ],
+   "lufs_before": [
+    -28.669,
+    -28.894
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey-12"
+   ],
+   "lufs_before": [
+    -28.669,
+    -29.088
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey-14"
+   ],
+   "lufs_before": [
+    -28.669,
+    -27.624
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-05",
+    "survey-06"
+   ],
+   "lufs_before": [
+    -29.038,
+    -28.894
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-05",
+    "survey-12"
+   ],
+   "lufs_before": [
+    -29.038,
+    -29.088
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-05",
+    "survey-14"
+   ],
+   "lufs_before": [
+    -29.038,
+    -27.624
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-06",
+    "survey-12"
+   ],
+   "lufs_before": [
+    -28.894,
+    -29.088
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-06",
+    "survey-14"
+   ],
+   "lufs_before": [
+    -28.894,
+    -27.624
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "bass_areasontoleave.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-12",
+    "survey-14"
+   ],
+   "lufs_before": [
+    -29.088,
+    -27.624
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey-05"
+   ],
+   "lufs_before": [
+    -35.922,
+    -35.826
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey-12"
+   ],
+   "lufs_before": [
+    -35.922,
+    -35.557
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "nominal",
+    "survey-14"
+   ],
+   "lufs_before": [
+    -35.922,
+    -35.54
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-05",
+    "survey-12"
+   ],
+   "lufs_before": [
+    -35.826,
+    -35.557
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-05",
+    "survey-14"
+   ],
+   "lufs_before": [
+    -35.826,
+    -35.54
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  },
+  {
+   "clip": "drums_setmefree.wav",
+   "gr_target_db": 6.0,
+   "candidates": [
+    "survey-12",
+    "survey-14"
+   ],
+   "lufs_before": [
+    -35.557,
+    -35.54
+   ],
+   "lufs_after": [
+    -23.0,
+    -23.0
+   ],
+   "lufs_diff": 0.0
+  }
+ ]
+}

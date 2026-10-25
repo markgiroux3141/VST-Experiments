@@ -69,7 +69,7 @@ def prepare(
     for the circuit renderer, the render cache and the plausibility screen, for tests).
     A candidate the screen rejects is left out: a broken unit isn't listened to."""
     pool = pool or load_pool()
-    names = list(candidates or pool.candidates)
+    names = list(candidates or pool.session_candidates or pool.candidates)
     cands = [pool.candidates[n] for n in names] + list(extra)
     screen = screen or _screen
     rejected = {}
@@ -127,7 +127,7 @@ def prepare(
         done = [s for group in pex.map(one, todo) for s in group]
     for s in done:
         store.put_stimulus(db, s.public(), excerpts[s.clip][2], version)
-    report = verify(db, version, render_audio, clips=clips)
+    report = verify(db, version, render_audio, clips=clips, candidate_ids=[c.id for c in cands])
     report["summary"]["rejected_candidates"] = rejected
     REPORT.parent.mkdir(parents=True, exist_ok=True)
     REPORT.write_text(json.dumps(report, indent=1, default=str), "utf-8")
@@ -147,13 +147,13 @@ def _render_audio(key: str) -> np.ndarray:
     return runner.load_render(runner.RENDER_DIR / key).output
 
 
-def verify(db, version: str, render_audio=None, clips=None) -> dict[str, Any]:
-    """Re-measure every stored stimulus's GR (of `clips`, default all) from its renders
-    and every pair's loudness after matching (render_audio: render key -> output
-    samples)."""
+def verify(db, version: str, render_audio=None, clips=None, candidate_ids=None) -> dict[str, Any]:
+    """Re-measure every stored stimulus's GR (of `clips` and `candidate_ids`, default
+    all) from its renders and every pair's loudness after matching (render_audio:
+    render key -> output samples)."""
     render_audio = render_audio or _render_audio
     fs = load_sim_settings().sample_rate
-    rows = store.stimuli(db, version, solved_only=False, clips=clips)
+    rows = store.stimuli(db, version, solved_only=False, clips=clips, candidate_ids=candidate_ids)
     out_stim, by_cond = [], defaultdict(list)
     for r in rows:
         y = render_audio(r["render_key"])

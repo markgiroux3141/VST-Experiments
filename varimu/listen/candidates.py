@@ -57,6 +57,7 @@ class Pool:
     excerpt_s: float
     clips: dict[str, dict[str, Any]]  # file name -> {category, start_s, seconds}
     pool_clips: tuple[str, ...] | None = None  # what the pool plays (None: every clip)
+    session_candidates: tuple[str, ...] | None = None  # what sessions play (None: all)
 
 
 def load_pool(path: Path = POOL_FILE) -> Pool:
@@ -79,6 +80,7 @@ def load_pool(path: Path = POOL_FILE) -> Pool:
         float(data["excerpt_s"]),
         clips,
         tuple(data["pool_clips"]) if data.get("pool_clips") else None,
+        tuple(data["session_candidates"]) if data.get("session_candidates") else None,
     )
 
 

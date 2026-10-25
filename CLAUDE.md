@@ -3,17 +3,22 @@
 The project plan is [VARIMU_PROJECT_PLAN.md](VARIMU_PROJECT_PLAN.md) (the plan's
 layout calls it `PLAN.md`). Read it before starting work.
 
-**Phases 0-4 are done (Phase 4, measurement suite: 2026-10-23; noise waits
-for noise sources). Phase 5 (Listening App and Preference Data) is in
-progress: blind A/B at `/ab` of `varimu listen`, stimuli matched by
-`varimu ab-prepare` (varimu/listen/: candidates, stimuli, prepare, session,
-store; the plan's Phase 5 status), with its first listening aids (2026-10-24:
-difference listening and an ABX exaggeration staircase on the same page;
-`difference`, `abx`). Mumetall's Rayleigh refit (the plan's Phase 2, "Low-level
-core physics", Option 1) is applied (2026-10-24). Since then: multitrack
-program material and a tone / character split of each pair's difference (the
-plan's Phase 5). Next (the user's choice, 2026-10-24): Phase 5's item 4,
-physical caricatures, aimed at character differences; then item 3.** Plausibility (`varimu.measure.plausibility`) rejects only what no
+**Phases 0-5 are done (Phase 4, measurement suite: 2026-10-23; noise waits
+for noise sources; Phase 5, listening: closed 2026-10-25). Phase 5 built blind
+A/B at `/ab` of `varimu listen` with stimuli matched by `varimu ab-prepare`
+(varimu/listen/), difference listening and ABX with a tone / character split
+(`difference`, `abx`), and multitrack program material
+(`scripts/build_clips.py`). Its finding: units with realistic values are too
+close to choose between by preference (audible only exaggerated 6-8x); by the
+user's rule that answers the experiment (no more listening aids for subtle
+differences). The diversity survey across the whole genome
+(`scripts/diversity_survey.py`, 2026-10-25): 16 of 20 sampled units don't
+work (mostly oscillation: constrain the space before Phase 7); the plausible
+ones differ ~10 dB more than the first pool, and three of them with nominal are
+now the session pool (`session_candidates`). Next: one preference session on
+it, which decides Phase 6 or the user's alternatives (the plan's Phase 5,
+"Closed"). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+(2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the

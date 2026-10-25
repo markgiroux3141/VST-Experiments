@@ -340,11 +340,14 @@ class AB:
     (varimu.listen.prepare), judgments into SQLite (varimu.listen.store). The page
     sees trial ids and audio only, never which candidate is which."""
 
-    def __init__(self, db=None, version: str | None = None, render_audio=None, clips=None):
+    def __init__(
+        self, db=None, version: str | None = None, render_audio=None, clips=None, candidates=None
+    ):
         from varimu.listen import prepare, store
 
         self.db = db or store.connect()
         self.clips = tuple(clips) if clips else None  # sessions play these (None: all)
+        self.candidates = tuple(candidates) if candidates else None  # candidate ids, ditto
         self.version = version or prepare.code_version()
         self.render_audio = render_audio or prepare._render_audio
         self.lock = threading.Lock()
@@ -353,6 +356,12 @@ class AB:
         self.explore_audio: dict[str, bytes] = {}
         self._arrays: dict[str, np.ndarray] = {}
         self._levels: dict[tuple[int, int], dict[str, float]] = {}
+
+    def _stimuli(self):
+        from varimu.listen import store
+
+        return store.stimuli(self.db, self.version, clips=self.clips,
+                             candidate_ids=self.candidates)  # fmt: skip
 
     # --- The listening aids: shared helpers ---
 
@@ -397,11 +406,11 @@ class AB:
     def pairs(self) -> list[dict[str, Any]]:
         """Every prepared pair (per condition) with its residual level: what the aids
         work on. Names are included: the page shows them only on request."""
-        from varimu.listen import session, store
+        from varimu.listen import session
 
         with self.lock:
             out = []
-            for a, b in session.pairs(store.stimuli(self.db, self.version, clips=self.clips)):
+            for a, b in session.pairs(self._stimuli()):
                 out.append({
                     "a": a["id"], "b": b["id"], "names": [a["candidate"], b["candidate"]],
                     "clip": a["clip"], "gr_target_db": a["gr_target_db"],
@@ -434,10 +443,10 @@ class AB:
     # --- ABX discrimination (varimu.listen.abx) ---
 
     def abx_start(self, req: AbxSessionRequest) -> dict[str, Any]:
-        from varimu.listen import abx, store
+        from varimu.listen import abx
 
         with self.lock:
-            stims = store.stimuli(self.db, self.version, clips=self.clips)
+            stims = self._stimuli()
             if len(stims) < 2:
                 raise LookupError(self.status()["hint"])
             sid = abx.start(
@@ -504,9 +513,8 @@ class AB:
             return abx.summary(self.db, sid)
 
     def status(self) -> dict[str, Any]:
-        from varimu.listen import store
 
-        rows = store.stimuli(self.db, self.version, clips=self.clips)
+        rows = self._stimuli()
         conds = {(r["clip"], r["start_s"], r["seconds"], r["time_constant"], r["gr_target_db"])
                  for r in rows}  # fmt: skip
         return {
@@ -521,10 +529,10 @@ class AB:
         }
 
     def start(self, listener: str, seed: int | None) -> dict[str, Any]:
-        from varimu.listen import session, store
+        from varimu.listen import session
 
         with self.lock:
-            stims = store.stimuli(self.db, self.version, clips=self.clips)
+            stims = self._stimuli()
             if len(stims) < 2:
                 raise LookupError(self.status()["hint"])
             sid = session.start(self.db, stims, listener=listener, code_version=self.version,
@@ -594,7 +602,9 @@ def create_app(workers: int | None = None, ab: AB | None = None):
         if not ab_box:
             from varimu.listen.candidates import load_pool
 
-            ab_box.append(AB(clips=load_pool().pool_clips))
+            pool = load_pool()
+            ids = [pool.candidates[n].id for n in pool.session_candidates or pool.candidates]
+            ab_box.append(AB(clips=pool.pool_clips, candidates=ids))
         return ab_box[0]
 
     @app.get("/", response_class=HTMLResponse)
