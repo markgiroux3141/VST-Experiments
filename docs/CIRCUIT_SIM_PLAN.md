@@ -1120,7 +1120,8 @@ the ~17 kHz resonance that chose esdirk4 at 2x comes from provisional
 winding capacitances).
 
 **M7. Beyond the 670.** (Deferred until main plan Phase 2 is done; see
-"Milestone order after M6" above.) Device library growth, and a second circuit as proof
+"Milestone order after M6" above. Since 2026-10-25 it is the device builder
+plan's B2, after B1's generic circuit format: docs/DEVICE_BUILDER_PLAN.md.) Device library growth, and a second circuit as proof
 of generality: a passive tube EQ (LC network plus tube make-up stage), with
 its own sourced YAML and ngspice agreement tests. Then BJT, JFET, op-amp and
 opto-cell models as circuits need them.

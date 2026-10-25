@@ -15,9 +15,11 @@ differences). The diversity survey across the whole genome
 (`scripts/diversity_survey.py`, 2026-10-25): 16 of 20 sampled units don't
 work (mostly oscillation: constrain the space before Phase 7); the plausible
 ones differ ~10 dB more than the first pool, and three of them with nominal are
-now the session pool (`session_candidates`). Next: one preference session on
-it, which decides Phase 6 or the user's alternatives (the plan's Phase 5,
-"Closed"). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+now the session pool (`session_candidates`). A preference session on it gave
+consistent, transitive preferences. Then the user parked Phases 6-8
+(2026-10-25). Next is the device builder,
+[docs/DEVICE_BUILDER_PLAN.md](docs/DEVICE_BUILDER_PLAN.md), B1 first: a
+generic circuit format with the 670 as its first file, byte-identical IR. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").

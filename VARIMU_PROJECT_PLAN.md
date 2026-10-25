@@ -456,6 +456,21 @@ Rules for all of these: they train the ear and show what to listen for; judgment
 - So the pool for the preference session (`session_candidates` in config/listening.yaml, which `ab-prepare` and the page now follow): nominal and survey units 05, 12 and 14, genomes exactly as sampled.
 - **The preference session on it (2026-10-25, 41 trials, 38 pairs + 3 repeats, ~6 minutes, median answer 7 s):** all 3 repeats answered the same (a guesser: 1 in 8); A chosen in 18 of 36 decided answers (no position bias, the pilot's 10 of 12 gone); 5 "no preference", on pairs that measure closer (median -23 dB whole difference against -20 dB where decided). Bradley-Terry (log strength, 90% bootstrap): survey_05 +0.76 [+0.29, +1.47], survey_12 +0.45 [-0.15, +1.25], nominal -0.37 [-1.02, +0.19], survey_14 -0.85 [-1.57, -0.33]; every pair head-to-head in that order (05 vs 14 5-0, 05 vs nominal 4-0, 12 vs 14 5-2, nominal vs 14 4-2, 12 vs nominal 4-2) except the top two (05 vs 12 2-3), no cycles. **So the listener has consistent preferences between plausible units spread across the genome, where units within factory tolerance were interchangeable:** Phase 6's premise holds. Pilot-sized (4 units, wide intervals).
 
+### Next: the device builder (decided 2026-10-25, the user's call)
+
+After Phase 5, Phases 6-8 are **parked, not dropped**. Phase 5 showed consistent taste between plausible units, but the user would rather build and hear devices from parts in an editor than judge random variations, which makes later preference work more useful. Next is [docs/DEVICE_BUILDER_PLAN.md](docs/DEVICE_BUILDER_PLAN.md):
+
+- B1, a generic circuit format with the 670 as its first file;
+- B2, a second circuit (the circuit-sim plan's M7);
+- B3, KiCad import;
+- B4, the editor loop;
+- B5, noise sources;
+- B6, component physics;
+- B7, aging;
+- B8, speed for interactive editing, measured first.
+
+It absorbs Future Directions 1-2 (aging with noise, general circuits). The diversity survey's finding stands for whenever Phases 7-8 resume: 80% of the bounded genome doesn't work, so constrain the space first.
+
 ### Phase 6: Preference Model
 
 **Goal:** A learned score that predicts which of two units the listener will prefer.
