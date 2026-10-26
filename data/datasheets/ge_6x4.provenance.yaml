@@ -1,0 +1,18 @@
+device: 6X4
+document: "GE 6X4 Twin Diode for full-wave power-rectifier applications, ET-T865A"
+publisher: General Electric
+date: 1958-05
+local_copy: sources/ge_6x4_ET-T865A.pdf
+local_copy_sha256: a23006df860e4801ce9c7e67759a96ddd1ab42de560526bd661a5db145dfcd04
+scan_source: "web: https://frank.pocnet.net/sheets/093/6/6X4.pdf"
+digitized_with: "page 4 rendered at 300 dpi (pdftoppm), axes calibrated on the frame and the labelled 0 / 300 mA and 0 / 50 V lines, the curve's crossings located along pixel columns just off the grid lines and checked by eye (Claude Code, scratch script not kept)"
+digitized_by: Claude Code
+digitized_on: 2026-10-26
+files:
+  published_points.yaml:
+    figure: "p.4, 'Average plate characteristics, each section' (K-55611-TD35-4, April 14, 1958): plate current vs plate voltage, heater at rated value"
+    entry: "6X4.plate_curve_read_off_render (six points, 10-45 V)"
+axis_calibration: "frame lines 0 V / 50 V, 0 mA; labelled grid line 300 mA"
+estimated_error: "about +-2 mA or +-3%, whichever is larger; below 10 V the curve runs into the grid and wasn't read"
+notes: >-
+  Cross-check in the text (p.2): tube voltage drop 22 V at 70 mA DC per plate.

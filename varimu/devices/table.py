@@ -17,6 +17,7 @@ Grid current and interelectrode capacitances stay analytic (they're cheap).
 from __future__ import annotations
 
 import hashlib
+import inspect
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -24,6 +25,7 @@ from pathlib import Path
 import numpy as np
 
 from varimu.config import REPO_ROOT
+from varimu.devices import triode as triode_module
 from varimu.devices.triode import Triode, num
 
 TABLE_DIR = REPO_ROOT / "cache" / "tables"
@@ -60,6 +62,8 @@ GRIDS = {
     "6386": GRID_6386,
     "12AX7": TableGrid(_ranges((-60.0, -10.0, 0.5), (-10.0, 5.0, 0.02)), _VP_SMALL),
     "12BH7": TableGrid(_ranges((-150.0, -40.0, 2.0), (-40.0, 5.0, 0.1)), _VP_SMALL),
+    # The Pultec EQP-1A's output stage (idles near Vg -9 V, Vp 250 V).
+    "12AU7": TableGrid(_ranges((-100.0, -30.0, 1.0), (-30.0, 5.0, 0.05)), _VP_SMALL),
     # The regulator's pass tube (idles near Vg -5 V, Vp 195 V; Vp to 700 V for start-up).
     "EL34T": TableGrid(
         _ranges((-100.0, -20.0, 1.0), (-20.0, 5.0, 0.05)),
@@ -140,13 +144,15 @@ def interpolation_error(
 
 
 def _table_key(triode: Triode, grid: TableGrid) -> str:
-    """Hash of everything a table depends on: the model, the grid, and the code that makes it."""
+    """Hash of everything a table depends on: the model, the grid, and the code that makes
+    it (table_text and the triode models). The source comes through `inspect`, so its
+    newlines are normalized (a CRLF checkout keys the same as LF) and the grids above
+    aren't part of it (each table's own grid is)."""
     h = hashlib.sha256(repr(triode).encode())
     h.update(np.ascontiguousarray(grid.vg, "<f8").tobytes())
     h.update(np.ascontiguousarray(grid.vp, "<f8").tobytes())
-    here = Path(__file__).parent
-    for src in ("table.py", "triode.py"):
-        h.update((here / src).read_bytes())
+    h.update(inspect.getsource(table_text).encode())
+    h.update(inspect.getsource(triode_module).encode())
     return h.hexdigest()[:32]
 
 

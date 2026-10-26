@@ -75,6 +75,28 @@ def test_gz34_matches_anode_curve_points():
         assert d.i(pt["va_v"]) == pytest.approx(pt["ia_a"], rel=0.08)
 
 
+def test_6x4_matches_its_plate_curve_and_printed_drop():
+    """The Child-law fit to the plate curve (GE ET-T865A p.4) also gives the drop the
+    sheet prints in its text (p.2): 22 V at 70 mA DC per plate."""
+    d = load_device("6X4")
+    for pt in PUB["6X4"]["plate_curve_read_off_render"]:
+        assert d.i(pt["va_v"]) == pytest.approx(pt["ia_a"], rel=0.10)
+    drop = (0.070 / d.perveance) ** (2 / 3)
+    assert drop == pytest.approx(PUB["6X4"]["tube_drop_v_at_70ma_dc_per_plate"], rel=0.05)
+
+
+def test_12au7_is_korens_table():
+    t = load_device("12AU7")
+    k = PUB["12AU7"]["koren"]
+    assert (t.plate.mu, t.plate.ex, t.plate.kg1, t.plate.kp) == (
+        k["mu"],
+        k["ex"],
+        k["kg1"],
+        k["kp"],
+    )
+    assert t.ip(-8.5, 250.0) == pytest.approx(10e-3, rel=0.2)  # ~10 mA at the usual point
+
+
 # --- 6386: the done-when criterion for Phase 1 --------------------------------------
 #
 # Acceptance thresholds (documented error). The data are "average" curves,
@@ -151,7 +173,7 @@ def test_cascode_solver_matches_bruteforce(t6386):
 def test_all_device_files_have_sources():
     for name in (
         "6386", "12AX7", "12BH7", "6973", "GZ34", "SI_RECTIFIER", "EL34T", "6084", "5651",
-        "SELENIUM",
+        "SELENIUM", "12AU7", "6X4",
     ):  # fmt: skip
         dev = load_device(name)
         assert dev is not None

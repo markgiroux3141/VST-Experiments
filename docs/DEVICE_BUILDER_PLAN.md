@@ -140,6 +140,34 @@ in the profile).
 changes beyond device models; its measurement report and plausibility screen run
 from its profile; the 670's reports are unchanged.
 
+*Decided 2026-10-26 (the user): the Pultec EQP-1A.* Sources found the same day:
+the Pulse Techniques manual (web: https://archive.org/details/Pultec_EQP-1A_owners_manual,
+8 pages): brochure specs (boost / cut frequencies and ranges, 0.15% at +10 dBm,
+noise -92 dB re +10 dBm, amplifier 20 Hz-20 kHz +0 / -1 dB), the published
+response curves for every switch position (the measurement anchors), the
+potentiometers (A-B types, values and tapers), and drawing DWG E-72,658-2 (the
+amplifier, power supply and transformers with printed values and voltages; the
+passive network is a box on it). The passive network's values come from a
+redraw (web: https://www.recproaudio.com/diy_pro_audio/diy_files/eqp_1a/eqp1a_filter_schematic.jpg,
+"Hoef 7-11-97"): its inductor / capacitor pairs resonate at the panel's
+frequencies (33 mH with 8.2 nF: 9.7 kHz on 10 k), and a vendor's figures for the
+original 5-tap coil (web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html:
+32.0, 51.1, 84.3, 100.2, 150.5 mH, 14-34 ohm) bound the inductances as genome
+parameters. New devices: the 12AU7 (Koren's table, like the 12AX7) and the 6X4
+(GE ET-T865A, plate curve). Steps, each checked before the next:
+
+1. Sources archived (`data/schematics/pultec_eqp1a/`, provenance), the 12AU7 and
+   6X4 device files.
+2. Format additions the EQP-1A needs: potentiometer tapers (audio taper, sourced),
+   controls with discrete choices (switch positions named by frequency).
+3. `config/circuits/pultec_eqp1a.yaml`: input transformer, passive network,
+   interstage transformer, 12AX7 / 12AU7 push-pull with feedback, output
+   transformer, power supply; it builds, idles at the drawing's voltages.
+4. Both engines agree on it (linear cores), as M7 asks.
+5. Per-circuit profiles: the EQ's measurements (response per setting against the
+   published curves, THD vs level) and plausibility screen; the 670's reports
+   unchanged.
+
 **B3. KiCad as the schematic editor.** A KiCad symbol library for the macro parts
 whose fields carry value, source, genome bounds and tolerance class; an importer
 from KiCad's exported netlist (`kicad-cli`) to the circuit format; a check that

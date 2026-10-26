@@ -167,6 +167,19 @@ def build_12ax7() -> dict[str, Any]:
     }
 
 
+def build_12au7() -> dict[str, Any]:
+    pub = _published()["12AU7"]
+    caps = pub["capacitances_f"]
+    return {
+        "name": "12AU7",
+        "kind": "triode",
+        "source": pub["source"],
+        "plate": {"model": "koren", **pub["koren"]},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {**caps, "source": pub["source"]},
+    }
+
+
 def build_12bh7() -> dict[str, Any]:
     pub = _published()["12BH7"]
     a = pub["class_a1"]
@@ -231,6 +244,21 @@ def build_gz34() -> dict[str, Any]:
         "smooth_v": 0.1,
         "source": f"Child-law least-squares fit to 3 points read off the anode curve "
         f"({pub['source']}); per anode",
+    }
+
+
+def build_6x4() -> dict[str, Any]:
+    pub = _published()["6X4"]
+    v = np.array([p["va_v"] for p in pub["plate_curve_read_off_render"]])
+    i = np.array([p["ia_a"] for p in pub["plate_curve_read_off_render"]])
+    perv = float(np.sum(i * v**1.5) / np.sum(v**3))  # least squares through the origin
+    return {
+        "name": "6X4",
+        "kind": "vacuum_diode",
+        "perveance": perv,
+        "smooth_v": 0.1,
+        "source": f"Child-law least-squares fit to 6 points read off the plate curve "
+        f"({pub['source']}); per section",
     }
 
 
@@ -365,6 +393,7 @@ BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
     "12BH7": build_12bh7,
+    "12AU7": build_12au7,
     "6973": build_6973,
     "GZ34": build_gz34,
     "SI_RECTIFIER": build_si_rectifier,
@@ -372,6 +401,7 @@ BUILDERS = {
     "6084": build_6084,
     "5651": build_5651,
     "SELENIUM": build_selenium,
+    "6X4": build_6x4,
 }
 
 
