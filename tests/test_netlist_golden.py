@@ -1,7 +1,8 @@
 """The emitted SPICE netlist is byte-identical to the captured goldens.
 
 The goldens were captured before netlist.py was split into IR + SPICE emitter
-(circuit-sim plan, M1). Regenerate with
+(circuit-sim plan, M1), and still matched after the 670 became a circuit file
+(device builder, B1). Regenerate with
 `uv run python scripts/export_circuit_fixtures.py --golden` only when the
 circuit is meant to change.
 """

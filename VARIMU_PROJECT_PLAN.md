@@ -460,7 +460,7 @@ Rules for all of these: they train the ear and show what to listen for; judgment
 
 After Phase 5, Phases 6-8 are **parked, not dropped**. Phase 5 showed consistent taste between plausible units, but the user would rather build and hear devices from parts in an editor than judge random variations, which makes later preference work more useful. Next is [docs/DEVICE_BUILDER_PLAN.md](docs/DEVICE_BUILDER_PLAN.md):
 
-- B1, a generic circuit format with the 670 as its first file;
+- B1, a generic circuit format with the 670 as its first file (done 2026-10-25: byte-identical IR and SPICE goldens);
 - B2, a second circuit (the circuit-sim plan's M7);
 - B3, KiCad import;
 - B4, the editor loop;

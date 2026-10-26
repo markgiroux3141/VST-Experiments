@@ -18,8 +18,9 @@ ones differ ~10 dB more than the first pool, and three of them with nominal are
 now the session pool (`session_candidates`). A preference session on it gave
 consistent, transitive preferences. Then the user parked Phases 6-8
 (2026-10-25). Next is the device builder,
-[docs/DEVICE_BUILDER_PLAN.md](docs/DEVICE_BUILDER_PLAN.md), B1 first: a
-generic circuit format with the 670 as its first file, byte-identical IR. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+[docs/DEVICE_BUILDER_PLAN.md](docs/DEVICE_BUILDER_PLAN.md): B1 (a generic
+circuit format with the 670 as its first file, byte-identical IR) is done
+(2026-10-25); next is B2. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
@@ -39,7 +40,8 @@ temperature, tape, vinyl, the plugin UI) are brainstormed and prioritized in
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
-(`config/circuits/fairchild_670.yaml` -> `varimu/circuit/netlist.py`), audio
+(`config/circuits/fairchild_670.yaml` -> `varimu/circuit/builder.py`; see
+"Circuit files" below), audio
 I/O and a cached parallel runner (`varimu/sim/io.py`, `runner.py`), and a
 tweak-and-listen page (`varimu/listen/`). Results are in `reports/slice/`
 (compression curve, Time Constant bursts, program clip, `--verify`) and
@@ -59,6 +61,21 @@ calibrated by `scripts/calibrate_psu.py`. Every part and tube instance
 deviates by its own seeded draw (`passive_seed`, `passive_spread`; the
 nominal genome has spread 0), each 6386 bank is its four triodes, and
 `varimu.sim.setup.adjust` sets B+ ADJ / BALANCE / ZERO per the manual.
+
+**Circuit files (device builder B1, 2026-10-25).** A circuit is a YAML file in
+`config/circuits/`: parameters with sources (`controls`, `values`,
+`device_params`, `derived`), `mains`, `tolerance`, `devices` (model instances)
+and `sections` of macro parts (`NAME: {<macro>: <nodes>, params}`). The format's
+reference is the docstrings of `varimu/circuit/spec.py` (loading, `resolve`,
+genome links) and `varimu/circuit/builder.py` (the macros, devices, tolerance
+draws, `build` -> IR + SPICE); the macros expand with the parts library
+`varimu/circuit/parts.py`. A physical value is a parameter key or
+`{value, source}` inline, never a bare number (load error). `varimu/circuit/netlist.py`
+is the 670's API on top (`nl.build`, `nl.resolve`, ... unchanged for callers);
+its derived values (channel 2 lumped) are in `varimu/circuit/fairchild_670.py`.
+`config/circuits/triode_stage.yaml` is the small second circuit
+(`tests/test_circuit_format.py`). A change to a circuit file that should leave the
+circuit alone must leave `export_circuit_fixtures.py --golden` without a diff.
 
 A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
@@ -188,8 +205,9 @@ uv sync --extra fast             # build circuitsim (maturin, abi3) into .venv: 
 Renders are cached in `cache/renders/<hash>/` (key: netlist, tables, input,
 settings, and the source of `varimu/{sim,circuit,devices}` + `config.py`).
 `cache/renders/timing.csv` logs wall-clock per second of audio for every render.
-`--set` keys are the names in `config/circuits/fairchild_670.yaml` plus
-`v6386_{a,b}.{emission_scale,mu_spread,grid_contact_v}`.
+`--set` keys are the `controls`, `values` and `device_params` of
+`config/circuits/fairchild_670.yaml` (the latter are
+`v6386_{a,b}.{emission_scale,mu_spread,grid_contact_v}`).
 
 The dev machine runs Windows. Use `pathlib` for paths and never hardcode separators.
 
@@ -442,6 +460,10 @@ tests skip when ngspice is missing.
   `.op` agreement tests written before then ran at ngspice's default
   tolerances. Pass `digits=16` for full-precision output (the default prints
   ~10 significant digits, ~5e-7 V at B+).
+- **A cold test suite takes hours (measured 2026-10-25, B1).** Any edit to
+  `varimu/{sim,circuit,devices}` or `config.py` changes every render's cache key,
+  and the next full `pytest` re-renders everything: 10 h 27 min instead of ~50 min
+  warm. Don't edit those directories while the suite runs (the key moves again).
 - **Renders and the desktop.** ngspice runs at below-normal priority with one
   thread, and parallel renders default to cpu_count - 2 (`runner:` in
   `sim_settings.yaml`). Don't kill ngspice by walking up process trees: two

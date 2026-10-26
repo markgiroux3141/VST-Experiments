@@ -1,0 +1,60 @@
+# A 12AX7 common-cathode stage behind an RC input network: the device builder's second
+# circuit (B1), deliberately small, to show that the circuit format (varimu/circuit/
+# spec.py, builder.py) holds nothing 670-shaped. It is the circuit of
+# tests/test_circuitsim_nonlinear.py's `triode_stage` fixture (tests/test_circuit_format.py
+# checks both engines on it), with tolerance classes to show the draws are generic.
+# Test circuit, not modelled hardware: round numbers.
+
+title: "12AX7 common-cathode stage"
+input: in
+probes: [g, p, k, o]
+
+values:
+  b_plus_v: {value: 250.0, source: "provisional: model knowledge (a textbook 12AX7 plate supply, 250-300 V)"}
+  r_source_ohm: {value: 10.0e+3, source: "provisional: model knowledge (a source impedance that lets the grid-current peaks show)"}
+  c_in_f: {value: 100.0e-9, source: "provisional: model knowledge (coupling capacitor: 1.6 Hz with the grid leak)"}
+  r_grid_ohm: {value: 1.0e+6, source: "provisional: model knowledge (12AX7 grid leak, 0.5-1 MOhm)"}
+  r_plate_ohm: {value: 100.0e+3, source: "provisional: model knowledge (12AX7 plate load, 100k)"}
+  r_cathode_ohm: {value: 1.5e+3, source: "provisional: model knowledge (12AX7 self-bias with a 100k plate load, 1.5k)"}
+  c_cathode_f: {value: 22.0e-6, source: "provisional: model knowledge (cathode bypass, a few Hz)"}
+  c_out_f: {value: 100.0e-9, source: "provisional: model knowledge (output coupling capacitor)"}
+  r_load_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the next stage's grid leak)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "numerical: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (carbon film resistors, 5%)"}
+  tol_film_pct: {value: 10.0, source: "provisional: model knowledge (film capacitors, 10%)"}
+  tol_electrolytic_minus_pct: {value: 20.0, source: "provisional: model knowledge (electrolytics, -20%)"}
+  tol_electrolytic_plus_pct: {value: 50.0, source: "provisional: model knowledge (electrolytics, +50%)"}
+  tube_emission_pct: {value: 10.0, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+tolerance:
+  source: "provisional: model knowledge (generic parts; the bands are the values above)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    resistor: tol_resistor_pct
+    film: tol_film_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    resistor: [RS, RG, RP, RK, RL]
+    film: [CI, CO]
+    electrolytic: [CK]
+
+devices:
+  V1: {device: 12AX7, tolerance: tube}
+
+sections:
+  - title: stage
+    parts:
+      VB: {V: [bp, "0"], v: b_plus_v}
+      RS: {R: [in, a], r: r_source_ohm}
+      CI: {C: [a, g], c: c_in_f}
+      RG: {R: [g, "0"], r: r_grid_ohm}
+      XV1: {device: [p, g, k], model: V1}
+      RP: {R: [bp, p], r: r_plate_ohm}
+      RK: {R: [k, "0"], r: r_cathode_ohm}
+      CK: {C: [k, "0"], c: c_cathode_f}
+      CO: {C: [p, o], c: c_out_f}
+      RL: {R: [o, "0"], r: r_load_ohm}

@@ -1,5 +1,12 @@
 """Fairchild 670 (one channel) -> one coupled circuit (IR) -> SPICE netlist.
 
+Since the device builder's B1 the 670 is a circuit file,
+config/circuits/fairchild_670.yaml (parameters with sources, devices, parts),
+built by the generic builder (varimu.circuit.builder) with the parts library
+(varimu.circuit.parts). This module is the 670's API on top of them, as the
+sim, measure and listen layers use it: `build()`, `resolve()`, `load_spec()`,
+`genome_links()`, the transformers, the tube instances and the tolerance draws.
+
 Audio path, sidechain and power supply are a single circuit. The control
 voltage reaches the 6386 grids through the input transformer's centre tap,
 the sidechain is fed from the output transformer (feedback topology), and
@@ -20,19 +27,15 @@ Channel 2 shares the supply. It is idle (left/right mode, no input) and
 lumped: its two 6386 banks as one device of eight triodes, its 12BH7 and
 6973 pairs as one double device each, on their own bias networks, so it
 draws its own operating current from every rail and moves with the rails as
-channel 1 loads them (see _channel_2).
-
-Component values and their sources are in config/circuits/fairchild_670.yaml.
-`build()` takes overrides for any control or value, by the same key names.
-It builds the circuit IR (varimu.circuit.ir; the Rust engine's input) and
-emits ngspice text from it (varimu.circuit.spice).
+channel 1 loads them (the circuit file's "channel 2" section; its lumped
+values are varimu.circuit.fairchild_670's derived values).
 
 Transformers (Phase 2): windings on a Jiles-Atherton core (varimu.devices.core)
 with winding resistance, leakage inductance, self- and interwinding
-capacitance, the core's joint gap and classical eddy-current loss (see
-_transformer). `cores="linear"` builds the same circuit with each core in its
-linear limit: ngspice can only run that (there is no SPICE core), so the
-agreement tests compare both engines on it.
+capacitance, the core's joint gap and classical eddy-current loss
+(varimu.circuit.parts.transformer). `cores="linear"` builds the same circuit
+with each core in its linear limit: ngspice can only run that (there is no
+SPICE core), so the agreement tests compare both engines on it.
 
 Simplifications in this slice (each is a later fidelity step):
 - eddy-current loss is the classical thin-lamination term (frequency
@@ -45,260 +48,122 @@ Simplifications in this slice (each is a later fidelity step):
 
 Per-instance tolerance (Phase 3): every part of channel 1 and the power supply
 and every tube instance deviates from nominal by its own seeded draw (the
-circuit file's "Per-instance tolerance and mismatch", `parts`); each 6386 bank
-is its four triodes, so mismatch is within a bank too (the Rust engine solves a
-bank as one parallel device: the same ports as one triode).
+circuit file's "Per-instance tolerance and mismatch" and `tolerance`); each
+6386 bank is its four triodes, so mismatch is within a bank too (the Rust
+engine solves a bank as one parallel device: the same ports as one triode).
 """
 
 from __future__ import annotations
 
-import dataclasses
-import math
 import re
-import zlib
 from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
-import yaml
 
-from varimu.circuit import spice
-from varimu.circuit.ir import (
-    Capacitor,
-    CircuitIR,
-    Device,
-    DeviceModel,
-    Element,
-    Inductor,
-    Resistor,
-    Section,
-    SineSource,
-    VoltageProbe,
-    VoltageSource,
-    Winding,
-)
-from varimu.config import CONFIG_DIR, ConfigError, load_genome_bounds, load_sim_settings
-from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
-from varimu.devices.diode import VT_TNOM
-from varimu.devices.library import V5651_REF_A, load_device
-from varimu.devices.pentode import Pentode
-from varimu.devices.table import GRIDS
-from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
+from varimu.circuit import builder, parts
+from varimu.circuit import spec as spec_mod
+from varimu.circuit.builder import CORE_MODES, Circuit
+from varimu.circuit.fairchild_670 import BANK_TRIODES, threshold_section_load_ohm
+from varimu.circuit.ir import CircuitIR, Element, Resistor
+from varimu.circuit.parts import pentode_instance, tube_instance
+from varimu.circuit.spec import CircuitSpec
+from varimu.config import CONFIG_DIR
+from varimu.devices.core import MagneticCore
+
+__all__ = [
+    "BANK_TRIODES",
+    "CIRCUIT_FILE",
+    "CORE_MODES",
+    "Circuit",
+    "CircuitSpec",
+    "TRANSFORMERS",
+    "build",
+    "build_ir",
+    "check_genome_links",
+    "genome_links",
+    "load_spec",
+    "part_designator",
+    "part_factor",
+    "pentode_instance",
+    "resolve",
+    "threshold_section_load_ohm",
+    "transformer",
+    "transformer_core",
+    "tube_deviation",
+    "tube_instance",
+    "unit_draws",
+]
 
 CIRCUIT_FILE = CONFIG_DIR / "circuits" / "fairchild_670.yaml"
-TITLE = "Fairchild 670, one channel: generated by varimu.circuit.netlist"
-INPUT_NODE = "in"
-
-# Node voltages every render saves (see varimu.sim.io.run_transient). "in_s" is the
-# unit's input terminals (behind the source impedance): input levels in dBm.
-PROBE_NODES = (
-    "out", "cv", "tcb", "bp", "ga", "gb", "ka", "kb", "ur", "sg", "nb2", "nb3", "nb4", "in_s",
-)  # fmt: skip
-SAVE = tuple(f"v({n})" for n in PROBE_NODES)
-
-# Genome parameters that act on device instances rather than on a netlist value.
-TUBE_PARAMS = {
-    "v6386_a.emission_scale": 1.0,
-    "v6386_a.mu_spread": 1.0,
-    "v6386_a.grid_contact_v": None,  # None -> the device file's value
-    "v6386_b.emission_scale": 1.0,
-    "v6386_b.mu_spread": 1.0,
-    "v6386_b.grid_contact_v": None,
-}
-
-_MIN_R = 1e-3  # ohm; stands in for the zero end of a pot
-_STRING_VALUES = {
-    "bridge_diode",
-    "rectifier_tube",
-    "bias_rectifier",
-    "t101_core_material",
-    "t102_core_material",
-    "t103_core_material",
-    "t104_core_material",
-}
-CORE_MODES = ("ja", "linear")
 TRANSFORMERS = ("t101", "t102", "t103", "t104")
+
+
+def load_spec(path: Path = CIRCUIT_FILE) -> CircuitSpec:
+    return spec_mod.load_circuit(path)
+
+
+def __getattr__(name: str) -> Any:
+    """Constants read from the circuit file: TITLE, INPUT_NODE, PROBE_NODES, SAVE (the
+    node voltages every render saves, see varimu.sim.io.run_transient) and TUBE_PARAMS
+    (the genome parameters that act on device instances, with their defaults; None:
+    the device file's value)."""
+    if name in ("TITLE", "INPUT_NODE", "PROBE_NODES", "SAVE", "TUBE_PARAMS"):
+        s = load_spec()
+        return {
+            "TITLE": s.title,
+            "INPUT_NODE": s.input_node,
+            "PROBE_NODES": s.probes,
+            "SAVE": tuple(f"v({n})" for n in s.probes),
+            "TUBE_PARAMS": {k: e["value"] for k, e in s.device_params.items()},
+        }[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 # --- Parameters --------------------------------------------------------------------
 
 
-# The 6386 triodes of each bank (sch: V101A/V102A + V103B/V104B on one side).
-BANK_TRIODES = {
-    "a": ("V101A", "V102A", "V103B", "V104B"),
-    "b": ("V101B", "V102B", "V103A", "V104A"),
-}
-
-
-@dataclass(frozen=True)
-class CircuitSpec:
-    controls: dict[str, dict[str, Any]]
-    values: dict[str, dict[str, Any]]
-    parts: dict[str, Any] = dataclasses.field(default_factory=dict)
-
-    def part_classes(self) -> dict[str, str]:
-        """Designator -> tolerance class."""
-        return {d: c for c, ds in self.parts.get("classes", {}).items() for d in ds}
-
-    def defaults(self) -> dict[str, Any]:
-        d = {k: e["value"] for k, e in self.controls.items()}
-        d.update({k: e["value"] for k, e in self.values.items()})
-        d.update({k: v for k, v in TUBE_PARAMS.items() if v is not None})
-        return d
-
-
-def load_spec(path: Path = CIRCUIT_FILE) -> CircuitSpec:
-    with open(path, encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    errors = []
-    for section in ("controls", "values"):
-        for k, e in data[section].items():
-            if not isinstance(e, Mapping) or "value" not in e:
-                errors.append(f"{section}.{k}: needs a `value`")
-            elif not str(e.get("source", "")).strip():
-                errors.append(f"{section}.{k}: needs a `source`")
-            elif isinstance(e["value"], str) and k not in _STRING_VALUES:
-                # PyYAML reads 1.0e6 as a string; write 1.0e+6.
-                errors.append(f"{section}.{k}: value {e['value']!r} is not a number")
-    parts = data.get("parts", {})
-    if parts and not str(parts.get("source", "")).strip():
-        errors.append("parts: needs a `source`")
-    seen: dict[str, str] = {}
-    for c, ds in parts.get("classes", {}).items():
-        for d in ds:
-            if d in seen:
-                errors.append(f"parts: {d} in both {seen[d]} and {c}")
-            seen[d] = c
-    if errors:
-        raise ConfigError(f"{path}:\n  " + "\n  ".join(errors))
-    return CircuitSpec(data["controls"], data["values"], parts)
-
-
 def resolve(overrides: Mapping[str, Any] | None = None, spec: CircuitSpec | None = None):
     """Defaults merged with overrides. Unknown keys and out-of-range controls are errors."""
-    spec = spec or load_spec()
-    p = spec.defaults()
-    known = set(p) | set(TUBE_PARAMS)
-    for k, v in (overrides or {}).items():
-        if k not in known:
-            raise KeyError(f"unknown circuit parameter {k!r}")
-        p[k] = v
-    for k, e in spec.controls.items():
-        if not e["min"] <= p[k] <= e["max"]:
-            raise ValueError(f"control {k}={p[k]} outside [{e['min']}, {e['max']}]")
-    p["time_constant"] = int(p["time_constant"])
-    return p
+    return spec_mod.resolve(spec or load_spec(), overrides)
 
 
 def genome_links(spec: CircuitSpec | None = None) -> dict[str, str]:
     """Circuit value key -> genome_bounds.yaml path, for the uncertain values."""
-    spec = spec or load_spec()
-    return {k: e["genome"] for k, e in spec.values.items() if "genome" in e}
+    return spec_mod.genome_links(spec or load_spec())
 
 
 def check_genome_links(spec: CircuitSpec | None = None) -> list[str]:
     """Problems with the circuit <-> genome_bounds links (empty list = fine)."""
-    spec = spec or load_spec()
-    bounds = load_genome_bounds()
-    problems = []
-    for key, path in genome_links(spec).items():
-        b = bounds.get(path)
-        v = spec.values[key]["value"]
-        if b is None:
-            problems.append(f"{key}: genome path {path} not in genome_bounds.yaml")
-        elif not b.resolved:
-            problems.append(f"{key}: genome bounds {path} still TBD")
-        elif b.choices is not None:
-            if v not in b.choices:
-                problems.append(f"{key}: nominal {v!r} not in {list(b.choices)} ({path})")
-        elif not b.min <= v <= b.max:
-            problems.append(f"{key}: nominal {v} outside [{b.min}, {b.max}] ({path})")
-    return problems
-
-
-# --- Device instances --------------------------------------------------------------------
-
-
-def tube_instance(
-    base: Triode,
-    name: str,
-    *,
-    n_parallel: int = 1,
-    emission_scale: float = 1.0,
-    mu_spread: float = 1.0,
-    grid_contact_v: float | None = None,
-) -> Triode:
-    """A triode instance: n identical sections in parallel, with this instance's spreads.
-
-    Emission scales plate current (Kg1 / scale), mu_spread scales every
-    section's mu, and the grid current, capacitances and current scale with n.
-    """
-    k = n_parallel * emission_scale
-    pl = base.plate
-    if isinstance(pl, VariMuTriode):
-        plate = dataclasses.replace(pl, mus=tuple(m * mu_spread for m in pl.mus), kg1=pl.kg1 / k)
-    elif isinstance(pl, KorenTriode):
-        plate = dataclasses.replace(pl, mu=pl.mu * mu_spread, kg1=pl.kg1 / k)
-    else:
-        raise TypeError(type(pl))
-    grid = base.grid
-    if grid is not None:
-        grid = GridCurrent(
-            grid.perveance * n_parallel,
-            grid.contact_v if grid_contact_v is None else grid_contact_v,
-            grid.smooth_v,
-        )
-    return Triode(
-        name,
-        plate,
-        grid,
-        c_gk=base.c_gk * n_parallel,
-        c_gp=base.c_gp * n_parallel,
-        c_pk=base.c_pk * n_parallel,
-    )
-
-
-def pentode_instance(
-    base: Pentode,
-    name: str,
-    *,
-    n_parallel: int = 1,
-    emission_scale: float = 1.0,
-    mu_spread: float = 1.0,
-) -> Pentode:
-    """n identical pentodes in parallel: n times the plate, screen and grid current and
-    the capacitances; emission scales the plate and screen current, mu_spread mu."""
-    m, k = base.model, n_parallel * emission_scale
-    model = dataclasses.replace(m, mu=m.mu * mu_spread, kg1=m.kg1 / k, kg2=m.kg2 / k)
-    g = base.grid
-    grid = None if g is None else dataclasses.replace(g, perveance=g.perveance * n_parallel)
-    return Pentode(
-        name,
-        model,
-        grid,
-        c_g1k=base.c_g1k * n_parallel,
-        c_g1p=base.c_g1p * n_parallel,
-        c_pk=base.c_pk * n_parallel,
-    )
+    return spec_mod.check_genome_links(spec or load_spec())
 
 
 # --- Per-instance tolerance ---------------------------------------------------------------
+
+
+def _tolerance(p: Mapping[str, Any]) -> parts.Tolerance:
+    spec = load_spec()
+    tol = builder.tolerance(spec, p)
+    assert tol is not None
+    return tol
 
 
 def unit_draws(p: Mapping[str, Any], designator: str, n: int = 1) -> np.ndarray:
     """n draws uniform in [-1, 1] for part `designator` of the unit (passive_seed),
     times passive_spread: default_rng([seed, crc32(designator)]), so adding a part
     doesn't move the others' draws."""
-    rng = np.random.default_rng([int(p["passive_seed"]), zlib.crc32(designator.encode())])
-    return float(p["passive_spread"]) * rng.uniform(-1.0, 1.0, n)
+    return _tolerance(p).draws(designator, n)
 
 
 def tube_deviation(p: Mapping[str, Any], designator: str) -> tuple[float, float]:
     """(emission factor, mu factor) of tube `designator`."""
-    ue, um = unit_draws(p, designator, 2)
-    return 1 + ue * p["tube_emission_pct"] / 100, 1 + um * p["tube_mu_pct"] / 100
+    return _tolerance(p).tube_deviation(designator)
+
+
+def part_factor(p: Mapping[str, Any], designator: str, cls: str) -> float:
+    """The value factor of one part: its draw in its class's band."""
+    return _tolerance(p).part_factor(designator, cls)
 
 
 _PART = re.compile(r"([RC])(\d{3}[A-Z]?)([abc])?")
@@ -307,7 +172,8 @@ _PART = re.compile(r"([RC])(\d{3}[A-Z]?)([abc])?")
 def part_designator(element: str) -> str | None:
     """The designator of a channel 1 / power supply part an element is (R105a -> R105,
     a tapped pot's R115Ac -> R115A, RAT1011 -> AT101), None for anything else
-    (sources, loads, transformer parts, channel 2, numerical)."""
+    (sources, loads, transformer parts, channel 2, numerical). The circuit file names
+    each part's designator itself; this reads it back from an element's name."""
     if element.startswith("RAT101"):
         return "AT101"
     m = _PART.fullmatch(element)
@@ -316,291 +182,41 @@ def part_designator(element: str) -> str | None:
     return m.group(1) + m.group(2)
 
 
-def part_factor(p: Mapping[str, Any], designator: str, cls: str) -> float:
-    """The value factor of one part: its draw in its class's band."""
-    u = float(unit_draws(p, designator)[0])
-    if cls == "electrolytic":
-        pct = p["tol_electrolytic_minus_pct"] if u < 0 else p["tol_electrolytic_plus_pct"]
-    else:
-        pct = {
-            "r1": 1.0,
-            "r5": 5.0,
-            "r10": p["tol_resistor_unmarked_pct"],
-            "pot": p["tol_pot_pct"],
-            "attenuator": p["tol_attenuator_pct"],
-            "paper": p["tol_paper_pct"],
-            "mica": p["tol_mica_pct"],
-        }[cls]
-    return 1 + u * pct / 100
-
-
-def apply_tolerances(sections: list[Section], p: Mapping[str, Any], spec: CircuitSpec):
-    """Every part's value times its draw (spec.parts). Raises ConfigError for a part
-    without a tolerance class."""
-    classes, combined = spec.part_classes(), spec.parts.get("combined", {})
-    missing = set()
-    out = []
-    for s in sections:
-        els = []
-        for el in s.elements:
-            d = part_designator(el.name) if isinstance(el, Resistor | Capacitor) else None
-            if d is None:
-                els.append(el)
-                continue
-            parts = combined.get(d, [d])
-            if any(x not in classes for x in parts):
-                missing |= {x for x in parts if x not in classes}
-                els.append(el)
-                continue
-            f = float(np.mean([part_factor(p, x, classes[x]) for x in parts]))
-            if isinstance(el, Resistor):
-                els.append(dataclasses.replace(el, r_ohm=el.r_ohm * f))
-            else:
-                els.append(dataclasses.replace(el, c_f=el.c_f * f))
-        out.append(Section(s.title, tuple(els)))
-    if missing:
-        raise ConfigError(f"parts without a tolerance class: {sorted(missing)}")
-    return out
-
-
-# --- Netlist building blocks ---------------------------------------------------------------
+# --- Building blocks (the parts library, with the 670's old signatures) -------------------
 
 
 def _r(name: str, a: str, b: str, ohms: float) -> Resistor:
-    return Resistor(f"R{name}", a, b, max(ohms, _MIN_R))
+    return parts.resistor(f"R{name}", a, b, ohms)
 
 
 def _pot(name: str, end_a: str, wiper: str, end_b: str, total: float, pos: float) -> list[Resistor]:
-    """Potentiometer; pos = 0 puts the wiper at end_a, 1 at end_b."""
-    return [
-        _r(f"{name}a", end_a, wiper, pos * total),
-        _r(f"{name}b", wiper, end_b, (1 - pos) * total),
-    ]
+    """Potentiometer R<name>; pos = 0 puts the wiper at end_a, 1 at end_b."""
+    return parts.pot(f"R{name}", end_a, wiper, end_b, total, pos)
 
 
 def _tapped_pot(
     name: str, top: str, wiper: str, tap: str, total: float, pos: float, tap_pos: float
 ) -> list[Resistor]:
-    """Potentiometer from `top` to ground with a fixed tap; `pos` (wiper) and `tap_pos`
-    are fractions of the track from the ground end. Three segments, a / b / c from the
-    ground end up, between the ground end, the tap and the wiper in track order (a
-    wiper at the tap counts as above it)."""
-    if pos >= tap_pos:
-        stops = [("0", 0.0), (tap, tap_pos), (wiper, pos), (top, 1.0)]
-    else:
-        stops = [("0", 0.0), (wiper, pos), (tap, tap_pos), (top, 1.0)]
-    return [
-        _r(f"{name}{s}", a, b, (xb - xa) * total)
-        for s, (a, xa), (b, xb) in zip("abc", stops, stops[1:], strict=False)
-    ]
-
-
-def threshold_section_load_ohm(p: Mapping[str, Any], total: float) -> float:
-    """What one AC THRESHOLD section and its tap resistor load a T103 secondary half
-    with (the wiper's 12AX7 grid draws nothing): the track above the tap in series with
-    the rest of it in parallel with R113 / R114."""
-    lo, r = p["ac_threshold_tap"] * total, p["r113_r114_ohm"]
-    return (1 - p["ac_threshold_tap"]) * total + lo * r / (lo + r)
+    """Potentiometer R<name> from `top` to ground with a fixed tap (parts.tapped_pot)."""
+    return parts.tapped_pot(f"R{name}", "0", tap, wiper, top, total, pos, tap_pos)
 
 
 def _t_pad(name: str, a: str, b: str, z: float, atten_db: float) -> list[Resistor]:
     """Symmetric T attenuator between a and b (to ground), characteristic impedance z."""
-    if atten_db <= 0:
-        return [_r(f"{name}s", a, b, 0.0)]
-    k = 10 ** (atten_db / 20)
-    r1 = z * (k - 1) / (k + 1)
-    r2 = 2 * z * k / (k * k - 1)
-    return [
-        _r(f"{name}1", a, f"{name}_m", r1),
-        _r(f"{name}2", f"{name}_m", b, r1),
-        _r(f"{name}3", f"{name}_m", "0", r2),
-    ]
+    return parts.t_pad(name, a, b, "0", z, atten_db)
 
 
 def transformer_core(key: str, p: Mapping[str, Any]) -> MagneticCore:
     """The JA core of transformer `key` (t101..t104) from its material and path length."""
-    return core_model(f"CORE_{key.upper()}", p[f"{key}_core_material"], p[f"{key}_core_path_m"])
-
-
-def _transformer(
-    key: str,
-    windings: list[tuple[str, str, str, float, float, float]],
-    p: Mapping[str, Any],
-    cores: str,
-    interwinding: tuple[tuple[str, str], str] | None = None,
-) -> list[Element]:
-    """A transformer: windings on one core (varimu.devices.core).
-
-    windings: (label, dot_node, other_node, turns relative to the reference
-    winding, r_ohm, c_f). Per winding: its DC resistance, its leakage
-    inductance (half the transformer's leakage `<key>_leakage_h`, which is
-    referred to the reference winding, times turns^2), the Winding on the
-    core node, and its self-capacitance across the terminals (0 = none). A
-    positive voltage from dot to other on one winding gives the same on the
-    others. On the core node: the core (a MagneticCore, or its linear limit
-    as a resistor), the joint gap (B g / mu0 of magnetomotive force) and
-    classical eddy-current loss in the laminations (l_e sigma d^2 / 12 dB/dt).
-    `interwinding` ((end_a, end_b), other): `<key>_c_interwinding_f` split in half
-    from both ends of a balanced winding to a terminal of the other side, as
-    the replacements' balanced two-chamber construction has it (common mode
-    only; one capacitor at one end couples in differential mode, and that
-    made the 6386 stage oscillate at ~32 kHz, measured 2026-10-21).
-    """
-    name = key.upper()
-    n_ref, area = p[f"{key}_turns"], p[f"{key}_core_area_m2"]
-    path, gap = p[f"{key}_core_path_m"], p[f"{key}_gap_m"]
-    mat = materials()[p[f"{key}_core_material"]]
-    u = f"{key}_core"
-    els: list[Element] = []
-    for label, dot, other, rel, r, c in windings:
-        n = f"{name}_{label}"
-        top = dot
-        if r > 0:
-            els.append(_r(n, top, f"{n}_r", r))
-            top = f"{n}_r"
-        leak = 0.5 * p[f"{key}_leakage_h"] * rel * rel
-        if leak > 0:
-            els.append(Inductor(f"L{n}_lk", top, f"{n}_l", leak))
-            top = f"{n}_l"
-        els.append(Winding(f"L{n}", top, other, u, rel * n_ref, area))
-        if c > 0:
-            els.append(Capacitor(f"C{n}", dot, other, c))
-    if interwinding and p[f"{key}_c_interwinding_f"] > 0:
-        (end_a, end_b), other = interwinding
-        half = 0.5 * p[f"{key}_c_interwinding_f"]
-        els.append(Capacitor(f"C{name}_iwa", end_a, other, half))
-        els.append(Capacitor(f"C{name}_iwb", end_b, other, half))
-    core = transformer_core(key, p)
-    if cores == "linear":
-        els.append(Resistor(f"R{name}_core", u, "0", 1 / core.linear_conductance()))
-    else:
-        els.append(Device(f"X{name}_CORE", core.name, (u, "0")))
-    if gap > 0:
-        els.append(Resistor(f"R{name}_gap", u, "0", MU0 / (gap * TESLA_PER_V)))
-    eddy = path * mat["lamination_m"] ** 2 / (12 * mat["resistivity_ohm_m"]) * TESLA_PER_V
-    els.append(Capacitor(f"C{name}_eddy", u, "0", eddy))
-    return els
-
-
-def transformer_windings(key: str, p: Mapping[str, Any]):
-    """The windings of the 670's transformer `key` with their circuit nodes, as
-    _transformer takes them, and its interwinding capacitance placement."""
-    if key == "t101":
-        half = (p["t101_turns_half"], p["t101_r_half_ohm"], p["t101_c_half_f"])
-        return [
-            ("p", "pri", "0", 1.0, p["t101_r_pri_ohm"], 0.0),
-            ("sa", "ga", "cv", *half),
-            ("sb", "cv", "gb", *half),
-        ], (("ga", "gb"), "pri")
-    if key == "t102":
-        half = (p["t102_turns_half"], p["t102_r_half_ohm"], p["t102_c_half_f"])
-        return [
-            ("pa", "pa", "t3", *half),
-            ("pb", "t2", "pb", *half),
-            ("s", "out", "0", 1.0, p["t102_r_sec_ohm"], 0.0),
-        ], (("pa", "pb"), "out")
-    if key == "t103":
-        t3 = p["t103_turns_half"]
-        return [
-            ("p", "s1", "s2", 1.0, 0.0, 0.0),
-            ("sa", "t5", "0", t3, 0.0, p["t103_c_half_f"]),
-            ("sb", "0", "t8", t3, 0.0, p["t103_c_half_f"]),
-        ], None
-    if key == "t104":
-        return [
-            ("pa", "pa3", "ur", 1.0, 0.0, p["t104_c_half_f"]),
-            ("pb", "ur", "pb3", 1.0, 0.0, p["t104_c_half_f"]),
-            ("s", "ay", "bk", p["t104_sec_per_half"], 0.0, 0.0),
-            ("f", "fy", "fg", p["t104_fb_per_half"], 0.0, 0.0),
-        ], None
-    raise KeyError(key)
+    return builder.transformer_core(load_spec(), key.upper(), p)
 
 
 def transformer(key: str, p: Mapping[str, Any], cores: str = "ja") -> list[Element]:
     """The 670's transformer `key` (t101..t104) on its circuit nodes."""
-    windings, interwinding = transformer_windings(key, p)
-    return _transformer(key, windings, p, cores, interwinding)
-
-
-def _time_constant(position: int, p: Mapping[str, Any], top: str, bot: str) -> list[Element]:
-    """S102: R137 || C109 always, plus the parts each position switches in."""
-    els: list[Element] = [
-        _r("137", top, bot, p["r137_ohm"]),
-        Capacitor("C109", top, bot, p["c109_f"]),
-    ]
-    if position == 1:
-        els.append(_r("141", top, bot, p["r141_ohm"]))
-    if position == 2:
-        els.append(_r("138", top, bot, p["r138_ohm"]))
-    if position in (3, 4, 5):
-        els.append(Capacitor("C113", top, bot, p["c113_f"]))
-    if position == 4:
-        els.append(Capacitor("C111", top, bot, p["c111_f"]))
-    if position in (5, 6):
-        els += [
-            _r("139", top, "tc139", p["r139_ohm"]),
-            Capacitor("C110", "tc139", bot, p["c110_f"]),
-        ]
-    if position == 6:
-        els += [
-            _r("140", top, "tc140", p["r140_ohm"]),
-            Capacitor("C112", "tc140", bot, p["c112_f"]),
-        ]
-    return els
-
-
-def _channel_2(p: Mapping[str, Any], dev2: Mapping[str, DeviceModel]) -> list[Element]:
-    """Channel 2, idle, as its draw on the shared rails: channel 1's printed values
-    with each pair of parallel parts lumped, and `dev2`'s lumped devices (8 x 6386,
-    2 x 12BH7, 2 x 6973) on their own bias networks. Its 6386 grids sit on its ZERO
-    wiper (no grid current at idle), its 12AX7 is cut off (only the threshold
-    networks draw), transformer windings are their DC resistance. Its trims are set
-    like channel 1's."""
-    b, rk, rp = p["balance"], p["r103_r104_ohm"], p["r105_ohm"]
-    # The two banks' cathode branches (680 + their part of the BALANCE pot) in parallel.
-    ka, kb = rk + b * rp, rk + (1 - b) * rp
-    r_k6386 = ka * kb / (ka + kb)
-    r_p6386 = p["r111_ohm"] + 0.5 * (p["r107_r108_ohm"] + p["t102_r_half_ohm"])
-    # 12BH7 cathodes: R224 || R225, and both feedback resistors to R234 || R235.
-    r34, r35 = p["r134_ohm"], p["r135_ohm"]
-    r_fb = p["r_fb_ohm"] / 2 + r34 * r35 / (r34 + r35)
-    r_k12bh7 = 1 / (2 / p["r124_r125_ohm"] + 1 / r_fb)
-    return [
-        # 6386 banks: plates from 240 V through R211 and the T202 halves, cathodes to
-        # the bias supply's C303 node, grids on ZERO.
-        _r("211", "bp", "p6c2", r_p6386),
-        Device("XV2_6386", dev2["6386"].name, ("p6c2", "g6c2", "k6c2")),
-        _r("203", "k6c2", "nb2", r_k6386),
-        *_pot("242", "0", "g6c2", "nb3", p["r142_ohm"], p["zero"]),
-        # 12AX7 threshold networks (the tube is cut off at idle).
-        _r("216", "bp", "dw2", p["r116_ohm"]),
-        *_pot("217", "0", "dw2", "k1c2", p["r117_ohm"], p["dc_threshold"]),
-        _r("218", "bp", "k1c2", p["r118_ohm"]),
-        _r("219", "k1c2", "0", p["r119_ohm"]),
-        # 12BH7 pair: grids grounded through R222/R223, plates from the unregulated rail.
-        _r("226", "ur", "p2c2", p["r126_r127_ohm"] / 2),
-        Device("XV2_12BH7", dev2["12BH7"].name, ("p2c2", "0", "k2c2")),
-        _r("224", "k2c2", "0", r_k12bh7),
-        # 6973 pair: plates on the unregulated rail (T204's centre tap), screens from the
-        # C307B tap, grid leaks to the bias supply's R303 node.
-        Device("XV2_6973", dev2["6973"].name, ("ur", "s3c2", "g3c2", "0")),
-        _r("232", "sg", "s3c2", p["r132_r133_ohm"] / 2),
-        _r("230", "g3c2", "nb4", p["r130_r131_ohm"] / 2),
-    ]
+    return builder.part_elements(load_spec(), key.upper(), p, cores)
 
 
 # --- The circuit -------------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Circuit:
-    text: str | None  # SPICE; None when the cores are Jiles-Atherton (circuitsim only)
-    input_node: str
-    save: tuple[str, ...]
-    params: dict[str, Any]
-    files: dict[str, Path]  # extra files the netlist reads (job-dir name -> source), e.g. tables
-    ir: CircuitIR  # what `text` was emitted from; the Rust engine's input
-    cores: str = "ja"  # "ja" (then text is None: no SPICE core) or "linear"
 
 
 def build(
@@ -613,292 +229,12 @@ def build(
     """The netlist for one channel. `triode_formulation` is "table" or "exact"
     (default from sim_settings.yaml, devices.triode_formulation); `cores` is
     "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text."""
-    p = resolve(overrides, spec)
-    devices = load_sim_settings().data["devices"]
-    form = triode_formulation or devices["triode_formulation"]
-    if form not in spice.FORMULATIONS:
-        raise ValueError(f"unknown triode formulation {form!r}")
-    cores = cores or devices.get("cores", "ja")
-    if cores not in CORE_MODES:
-        raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
-    ir = build_ir(p, cores, spec)
-    # Each triode instance's table grid is its tube type's (model names "<type>_<designator>").
-    grids = {m.name: GRIDS[m.name.split("_")[0]] for m in ir.models if isinstance(m, Triode)}
-    text, files = None, {}
-    if cores == "linear":
-        text, files = spice.emit(ir, triode_formulation=form, table_grids=grids)
-    save = tuple(pr.spice for pr in ir.probes)
-    return Circuit(text, ir.input_node, save, p, files, ir, cores)
+    return builder.build(
+        spec or load_spec(), overrides, triode_formulation=triode_formulation, cores=cores
+    )
 
 
 def build_ir(p: Mapping[str, Any], cores: str = "ja", spec: CircuitSpec | None = None) -> CircuitIR:
     """The circuit IR for resolved parameters `p` (see `resolve()`); `cores`: "ja" or
     "linear" (each core in its linear limit)."""
-    spec = spec or load_spec()
-    base6386 = load_device("6386")
-    v12bh7 = load_device("12BH7")
-    v6973: Pentode = load_device("6973")
-    diode = load_device(p["bridge_diode"])
-
-    def tube(base: Triode, designator: str, *, emission=1.0, mu=1.0, contact=None) -> Triode:
-        """Tube `designator`'s instance of `base`, with its own deviation (unit_draws)."""
-        ef, mf = tube_deviation(p, designator)
-        return tube_instance(
-            base,
-            f"{base.name}_{designator}",
-            emission_scale=emission * ef,
-            mu_spread=mu * mf,
-            grid_contact_v=contact,
-        )
-
-    def pentode(base: Pentode, designator: str) -> Pentode:
-        ef, mf = tube_deviation(p, designator)
-        return pentode_instance(base, f"{base.name}_{designator}", emission_scale=ef, mu_spread=mf)
-
-    v12ax7 = {s: tube(load_device("12AX7"), f"V105{s}") for s in "AB"}
-    v12bh7_ = {s: tube(v12bh7, f"V106{s}") for s in "AB"}
-    v6973_ = {d: pentode(v6973, d) for d in ("V107", "V108")}
-    el34 = tube(load_device("EL34T"), "V302")
-    v6084 = pentode(load_device("6084"), "V303")
-    gz34 = load_device(p["rectifier_tube"])
-    rect = dataclasses.replace(
-        gz34, name=f"{gz34.name}_V301", perveance=gz34.perveance * tube_deviation(p, "V301")[0]
-    )
-    v5651 = load_device("5651")
-    # The 5651 is that diode in series with its burning voltage: the drop at
-    # V5651_REF_A is the operating voltage.
-    d_ref = v5651.n * VT_TNOM * math.log1p(V5651_REF_A / v5651.is_a) + V5651_REF_A * v5651.rs_ohm
-    v5651_burn = p["v5651_operating_v"] - d_ref
-    cell = load_device(p["bias_rectifier"])
-    area = p["gr301_cell_area_in2"]  # the device file is per sq. in.
-    selenium = dataclasses.replace(
-        cell, name=f"{cell.name}_GR301", is_a=cell.is_a * area, rs_ohm=cell.rs_ohm / area
-    )
-    ch2 = {
-        "6386": tube_instance(base6386, "6386_CH2", n_parallel=2 * int(p["v6386_per_side"])),
-        "12BH7": tube_instance(v12bh7, "12BH7_CH2", n_parallel=2),
-        "6973": pentode_instance(v6973, "6973_CH2", n_parallel=2),
-    }
-    if int(p["v6386_per_side"]) != len(BANK_TRIODES["a"]):
-        raise ValueError("v6386_per_side: the banks are the drawing's four triodes each")
-    # Each 6386 bank: its four triodes, each deviating around the bank's genome values.
-    bank = {
-        side: [
-            tube(
-                base6386,
-                d,
-                emission=p[f"v6386_{side}.emission_scale"],
-                mu=p[f"v6386_{side}.mu_spread"],
-                contact=p.get(f"v6386_{side}.grid_contact_v"),
-            )
-            for d in BANK_TRIODES[side]
-        ]
-        for side in ("a", "b")
-    }
-
-    sections: list[Section] = []
-
-    def section(title: str, *parts: Element | list[Element]) -> None:
-        els: list[Element] = []
-        for x in parts:
-            els += x if isinstance(x, list) else [x]
-        sections.append(Section(title, tuple(els)))
-
-    def dev(name: str, model: DeviceModel, *nodes: str) -> Device:
-        return Device(name, model.name, nodes)
-
-    # Main supply (see the module docstring): T302's HV halves, the mains at phase 90,
-    # so the run starts at the peak from a DC point with the reservoirs charged.
-    mains = p["mains_v_rms"] / 117.0  # the transformer voltages are at 117 V
-    hv_pk = math.sqrt(2) * p["t302_hv_half_rms_v"] * mains
-    section(
-        "power supply",
-        SineSource("VHVA", "hva", "0", 0.0, hv_pk, p["mains_hz"], 90.0),
-        SineSource("VHVB", "hvb", "0", 0.0, hv_pk, p["mains_hz"], 270.0),
-        _r("T302A", "hva", "hva_r", p["t302_r_half_ohm"]),
-        Inductor("LT302A", "hva_r", "rka", p["t302_leakage_h"]),
-        _r("T302B", "hvb", "hvb_r", p["t302_r_half_ohm"]),
-        Inductor("LT302B", "hvb_r", "rkb", p["t302_leakage_h"]),
-        Capacitor("CT302A", "rka", "0", p["t302_c_half_f"]),
-        Capacitor("CT302B", "rkb", "0", p["t302_c_half_f"]),
-        dev("XV301A", rect, "rka", "raw"),
-        dev("XV301B", rect, "rkb", "raw"),
-        Capacitor("C304", "raw", "0", p["c304_f"]),
-        _r("L301", "raw", "l301", p["l301_r_ohm"]),
-        Inductor("L301", "l301", "ur", p["l301_h"]),
-        Capacitor("C305", "ur", "c305", p["c305_c306_f"]),
-        _r("305", "ur", "c305", p["r305_r306_ohm"]),
-        Capacitor("C306", "c305", "0", p["c305_c306_f"]),
-        _r("306", "c305", "0", p["r305_r306_ohm"]),
-        # The regulator.
-        dev("XV302", el34, "ur", "eg", "bp"),
-        _r("309", "ur", "eg", p["r309_ohm"]),
-        dev("XV303", v6084, "eg", "es", "eadj", "ref"),
-        _r("310", "bp", "es", p["r310_ohm"]),
-        _r("311", "es", "ref", p["r311_ohm"]),
-        dev("DV304", v5651, "ref", "ref_v"),
-        VoltageSource("V304", "ref_v", "0", v5651_burn),
-        _r("312", "bp", "adj_t", p["r312_ohm"]),
-        _pot("313", "adj_t", "eadj", "adj_b", p["r313_ohm"], p["b_plus_adj"]),
-        _r("314", "adj_b", "0", p["r314_ohm"]),
-        Capacitor("C307A", "bp", "0", p["c307a_f"]),
-        _r("315", "bp", "sg", p["r315_ohm"]),
-        _r("316", "sg", "0", p["r316_ohm"]),
-        Capacitor("C307B", "sg", "0", p["c307b_f"]),
-        _r("307", "bp", "hct", p["r307_r308_ohm"]),
-        _r("308", "hct", "0", p["r307_r308_ohm"]),
-    )
-
-    # Bias supply: T301 (floating; a numerical leak gives it DC) into GR301, "+" to
-    # ground. L302 from C302 to C303 (the 6386 cathode return); R301 from C302 to the
-    # C108 node (ZERO), R302 / R303 on to the 6973 grid-leak return.
-    bs_pk = math.sqrt(2) * p["t301_rms_v"] * mains
-    c_cell = p["selenium_c_f_per_in2"] * p["gr301_cell_area_in2"]
-    section(
-        "bias supply",
-        SineSource("VBS", "bs1", "bsb", 0.0, bs_pk, p["mains_hz"], 90.0),
-        _r("T301", "bs1", "bs1_r", p["t301_r_ohm"]),
-        Inductor("LT301", "bs1_r", "bsa", p["t301_leakage_h"]),
-        _r("bsleak", "bsb", "0", p["numerical_leak_ohm"]),
-        dev("DGR301A", selenium, "bsa", "0"),
-        dev("DGR301B", selenium, "bsb", "0"),
-        dev("DGR301C", selenium, "nb1", "bsa"),
-        dev("DGR301D", selenium, "nb1", "bsb"),
-        # The cells' own capacitance, across each arm.
-        Capacitor("CGR301A", "bsa", "0", c_cell),
-        Capacitor("CGR301B", "bsb", "0", c_cell),
-        Capacitor("CGR301C", "nb1", "bsa", c_cell),
-        Capacitor("CGR301D", "nb1", "bsb", c_cell),
-        Capacitor("C302", "nb1", "0", p["c302_f"]),
-        _r("L302", "nb1", "l302", p["l302_r_ohm"]),
-        Inductor("L302", "l302", "nb2", p["l302_h"]),
-        Capacitor("C303", "nb2", "0", p["c303_f"]),
-        _r("301", "nb1", "nb3", p["r301_ohm"]),
-        Capacitor("C108B", "nb3", "0", p["c108_bias_f"]),
-        _r("302", "nb3", "nb4", p["r302_ohm"]),
-        Capacitor("C308", "nb4", "0", p["c308_f"]),
-        _r("303", "nb4", "0", p["r303_ohm"]),
-    )
-    section("channel 2 (idle, lumped)", _channel_2(p, ch2))
-
-    # Input: source impedance, AT101, T101 (secondary centre tap = control voltage).
-    section(
-        "input",
-        _r("src", INPUT_NODE, "in_s", p["source_impedance_ohm"]),
-        _t_pad("AT101", "in_s", "pri", p["attenuator_z_ohm"], p["input_atten_db"]),
-        _r("101", "pri", "0", p["r101_r102_ohm"]),
-        transformer("t101", p, cores),
-    )
-
-    # 6386 banks: plates to T102, cathodes through R103/R104 and the balance pot.
-    section(
-        "6386 push-pull",
-        *(
-            dev(f"X{d}", t, "pa", "ga", "ka")
-            for d, t in zip(BANK_TRIODES["a"], bank["a"], strict=True)
-        ),
-        *(
-            dev(f"X{d}", t, "pb", "gb", "kb")
-            for d, t in zip(BANK_TRIODES["b"], bank["b"], strict=True)
-        ),
-        _r("103", "ka", "ta", p["r103_r104_ohm"]),
-        _r("104", "kb", "tb", p["r103_r104_ohm"]),
-        _pot("105", "ta", "nb2", "tb", p["r105_ohm"], p["balance"]),
-        Capacitor("C101", "ka", "kb", p["c101_f"]),
-        _r("111", "bp", "ctr", p["r111_ohm"]),
-        _r("107", "ctr", "t3", p["r107_r108_ohm"]),
-        _r("108", "ctr", "t2", p["r107_r108_ohm"]),
-        transformer("t102", p, cores),
-        _r("load", "out", "0", p["load_ohm"]),
-    )
-
-    # Sidechain pick-off from the output, T103, the AC THRESHOLD tapped pots with
-    # R113 / R114 from their taps to the centre line.
-    th, tap = p["ac_threshold"], p["ac_threshold_tap"]
-    section(
-        "sidechain input",
-        _r("145", "out", "s1", p["r145_r148_ohm"]),
-        _r("147", "0", "s2", p["r145_r148_ohm"]),
-        _r("149", "s1", "s2", p["r149_r150_ohm"]),
-        transformer("t103", p, cores),
-        _tapped_pot("115A", "t5", "w1a", "x1a", p["r115a_ohm"], th, tap),
-        _tapped_pot("115B", "t8", "w1b", "x1b", p["r115b_ohm"], th, tap),
-        _r("113", "x1a", "0", p["r113_r114_ohm"]),
-        _r("114", "x1b", "0", p["r113_r114_ohm"]),
-    )
-
-    # 12AX7, biased beyond cutoff by the DC threshold network.
-    section(
-        "12AX7",
-        dev("XV105A", v12ax7["A"], "p1a", "w1a", "k1"),
-        dev("XV105B", v12ax7["B"], "p1b", "w1b", "k1"),
-        _r("120", "bp", "p1a", p["r120_r121_ohm"]),
-        _r("121", "bp", "p1b", p["r120_r121_ohm"]),
-        _r("118", "bp", "k1", p["r118_ohm"]),
-        _r("119", "k1", "0", p["r119_ohm"]),
-        _r("116", "bp", "dw", p["r116_ohm"]),
-        _pot("117", "0", "dw", "k1", p["r117_ohm"], p["dc_threshold"]),
-        Capacitor("C103", "p1a", "g2a", p["c103_c104_f"]),
-        Capacitor("C104", "p1b", "g2b", p["c103_c104_f"]),
-    )
-
-    # 12BH7 with feedback from T104's tertiary winding into its cathodes.
-    section(
-        "12BH7",
-        _r("122", "g2a", "0", p["r122_r123_ohm"]),
-        _r("123", "g2b", "0", p["r122_r123_ohm"]),
-        dev("XV106A", v12bh7_["A"], "p2a", "g2a", "k2a"),
-        dev("XV106B", v12bh7_["B"], "p2b", "g2b", "k2b"),
-        _r("124", "k2a", "0", p["r124_r125_ohm"]),
-        _r("125", "k2b", "0", p["r124_r125_ohm"]),
-        _r("126", "ur", "p2a", p["r126_r127_ohm"]),
-        _r("127", "ur", "p2b", p["r126_r127_ohm"]),
-        _r("128", "fy", "k2a", p["r_fb_ohm"]),
-        _r("129", "fg", "k2b", p["r_fb_ohm"]),
-        _r("134", "fy", "0", p["r134_ohm"]),
-        _r("135", "fg", "0", p["r135_ohm"]),
-        Capacitor("C107", "p2a", "g3a", p["c107_c108_f"]),
-        Capacitor("C108", "p2b", "g3b", p["c107_c108_f"]),
-    )
-
-    # 6973 push-pull into T104.
-    section(
-        "6973",
-        _r("130", "g3a", "nb4", p["r130_r131_ohm"]),
-        _r("131", "g3b", "nb4", p["r130_r131_ohm"]),
-        dev("XV107", v6973_["V107"], "pa3", "sa3", "g3a", "0"),
-        dev("XV108", v6973_["V108"], "pb3", "sb3", "g3b", "0"),
-        _r("132", "sg", "sa3", p["r132_r133_ohm"]),
-        _r("133", "sg", "sb3", p["r132_r133_ohm"]),
-        _r("143", "g3a", "nfa", p["r143_r144_ohm"]),
-        Capacitor("C105", "nfa", "pa3", p["c105_c106_f"]),
-        _r("144", "g3b", "nfb", p["r143_r144_ohm"]),
-        Capacitor("C106", "nfb", "pb3", p["c105_c106_f"]),
-        transformer("t104", p, cores),
-    )
-
-    # Bridge rectifier, time constant network, ZERO.
-    section(
-        "rectifier and time constant",
-        _r("136", "ay", "bk", p["r136_ohm"]),
-        _r("leak", "bk", "0", p["numerical_leak_ohm"]),
-        dev("DCR101", diode, "ay", "tcb"),
-        dev("DCR102", diode, "bk", "tcb"),
-        dev("DCR103", diode, "cv", "ay"),
-        dev("DCR104", diode, "cv", "bk"),
-        _time_constant(p["time_constant"], p, "cv", "tcb"),
-        Capacitor("C115", "tcb", "0", p["c115_f"]),
-        _pot("142", "0", "tcb", "nb3", p["r142_ohm"], p["zero"]),
-    )
-
-    sections = apply_tolerances(sections, p, spec)
-    return CircuitIR(
-        title=TITLE,
-        input_node=INPUT_NODE,
-        probes=tuple(VoltageProbe(n) for n in PROBE_NODES),
-        models=(*bank["a"], *bank["b"], *v12ax7.values(), *v12bh7_.values(), *v6973_.values())
-        + (diode, rect, el34, v6084, v5651, selenium)
-        + tuple(ch2.values())
-        + (() if cores == "linear" else tuple(transformer_core(k, p) for k in TRANSFORMERS)),
-        sections=tuple(sections),
-    )
+    return builder.build_ir(spec or load_spec(), p, cores)

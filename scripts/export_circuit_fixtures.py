@@ -7,7 +7,8 @@ SPICE goldens (tests/fixtures/netlist_golden/): the netlist text and the table
 file names for a set of builds that cover every switch position, the pot
 extremes, tube mismatch and both triode formulations. They were first captured
 before netlist.py was refactored to build an IR (circuit-sim plan, M1), so the
-test that compares against them proves the refactor changed nothing. Re-capture
+test that compares against them proves the refactor changed nothing; the same
+held for the device builder's B1 (the 670 rebuilt from its circuit file). Re-capture
 them only when the circuit is meant to change, and review the diff.
 
 IR JSON (crates/circuitsim/tests/fixtures/): the same builds as IR, which the
