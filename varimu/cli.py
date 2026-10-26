@@ -206,6 +206,89 @@ def _cmd_ab_prepare(args: argparse.Namespace) -> int:
     return 0 if s["verified"] else 1
 
 
+KICAD_LIBRARY = Path(__file__).resolve().parents[1] / "kicad" / "varimu.kicad_sym"
+IMPORT_MARK = "Imported from"
+
+
+def _circuit_file(args: argparse.Namespace) -> Path:
+    from varimu.circuit.spec import circuit_path
+
+    return Path(args.file) if args.file else circuit_path(args.circuit)
+
+
+def _cmd_check(args: argparse.Namespace) -> int:
+    from varimu.circuit.spec import load_circuit
+    from varimu.preflight import check_circuit, switch_configs
+
+    spec = load_circuit(_circuit_file(args))
+    problems = check_circuit(spec)
+    n = len(switch_configs(spec))
+    for pr in problems:
+        print(pr)
+    print(f"{spec.path.name}: {len(problems)} problem(s) over {n} switch combination(s)")
+    return 1 if problems else 0
+
+
+def _cmd_kicad_library(args: argparse.Namespace) -> int:
+    from varimu.kicad.symbols import SYMBOLS, write_library
+
+    print(f"wrote {len(SYMBOLS)} symbols to {write_library(args.out)}")
+    return 0
+
+
+def _cmd_kicad_export(args: argparse.Namespace) -> int:
+    import os
+
+    from varimu.kicad.export import export_circuit
+
+    lib = Path(os.path.relpath(args.library.resolve(), args.out.resolve())).as_posix()
+    files = export_circuit(_circuit_file(args), args.out, args.project or _circuit_file(args).stem,
+                           "${KIPRJMOD}/" + lib)  # fmt: skip
+    print(f"wrote {len(files)} files to {args.out}")
+    return 0
+
+
+def _cmd_kicad_import(args: argparse.Namespace) -> int:
+    from varimu.circuit.spec import load_circuit
+    from varimu.config import REPO_ROOT
+    from varimu.kicad.importer import import_netlist, load_sidecar, sidecar_path, to_yaml
+    from varimu.kicad.netlist import export_netlist, read_netlist
+    from varimu.preflight import check_circuit
+
+    sch = Path(args.schematic)
+    out = Path(args.out)
+    if out.exists() and IMPORT_MARK not in out.read_text(encoding="utf-8")[:500] and not args.force:
+        raise SystemExit(f"{out} wasn't written by kicad-import; --force to overwrite it")
+    if sch.suffix.lower() == ".xml":  # an exported netlist
+        if not args.sidecar:
+            raise SystemExit("an XML netlist needs --sidecar")
+        nl = read_netlist(sch)
+    else:
+        netlist = args.netlist or REPO_ROOT / "cache" / "kicad" / f"{sch.stem}.xml"
+        nl = read_netlist(export_netlist(sch, netlist))
+    imp = import_netlist(nl, load_sidecar(args.sidecar or sidecar_path(sch)))
+    try:
+        rel = sch.resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        rel = sch.name
+    text = to_yaml(imp.data, f"{IMPORT_MARK} {rel} by `varimu kicad-import` (device builder B3):\n"
+                   "edit the drawing and its sidecar, not this file.")  # fmt: skip
+    tmp = REPO_ROOT / "cache" / "kicad" / f"{out.stem}.check.yaml"
+    tmp.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_text(text, encoding="utf-8")
+    problems = [*imp.problems, *(str(pr) for pr in check_circuit(load_circuit(tmp)))]
+    for pr in problems:
+        print(pr)
+    if problems and not args.no_check:
+        print(f"{len(problems)} problem(s): {out} not written (--no-check writes it anyway)")
+        return 2
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text, encoding="utf-8")
+    print(f"wrote {out} ({sum(len(s['parts']) for s in imp.data['sections'])} parts in "
+          f"{len(imp.data['sections'])} sections)")  # fmt: skip
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="varimu")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -270,6 +353,34 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--targets", nargs="+", type=float, metavar="DB", help="GR targets (dB)")
     p.add_argument("--clips", nargs="+", metavar="FILE", help="clips in data/clips (default all)")
     p.set_defaults(func=_cmd_ab_prepare)
+
+    p = sub.add_parser("check", help="pre-flight checks of a circuit file (varimu.preflight)")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--circuit", help="a circuit in config/circuits")
+    g.add_argument("--file", type=Path, help="a circuit file")
+    p.set_defaults(func=_cmd_check)
+
+    p = sub.add_parser("kicad-library", help="write the KiCad symbol library of the macro parts")
+    p.add_argument("--out", type=Path, default=KICAD_LIBRARY)
+    p.set_defaults(func=_cmd_kicad_library)
+
+    p = sub.add_parser("kicad-export", help="a circuit file as a label-connected KiCad project")
+    g = p.add_mutually_exclusive_group(required=True)
+    g.add_argument("--circuit", help="a circuit in config/circuits")
+    g.add_argument("--file", type=Path, help="a circuit file")
+    p.add_argument("--out", type=Path, required=True, help="the project's folder")
+    p.add_argument("--project", help="project name (default: the circuit file's)")
+    p.add_argument("--library", type=Path, default=KICAD_LIBRARY, help="varimu.kicad_sym")
+    p.set_defaults(func=_cmd_kicad_export)
+
+    p = sub.add_parser("kicad-import", help="a KiCad schematic (+ sidecar) -> a circuit file")
+    p.add_argument("schematic", type=Path, help="the root .kicad_sch (or an XML netlist)")
+    p.add_argument("--out", type=Path, required=True, help="the circuit file to write")
+    p.add_argument("--sidecar", type=Path, help="default: <project>.params.yaml")
+    p.add_argument("--netlist", type=Path, help="where kicad-cli writes the XML netlist")
+    p.add_argument("--no-check", action="store_true", help="write it despite check problems")
+    p.add_argument("--force", action="store_true", help="overwrite a file not from kicad-import")
+    p.set_defaults(func=_cmd_kicad_import)
 
     args = parser.parse_args(argv)
     return args.func(args)

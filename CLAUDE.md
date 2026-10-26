@@ -21,7 +21,9 @@ consistent, transitive preferences. Then the user parked Phases 6-8
 [docs/DEVICE_BUILDER_PLAN.md](docs/DEVICE_BUILDER_PLAN.md): B1 (a generic
 circuit format with the 670 as its first file, byte-identical IR) is done
 (2026-10-25); B2 (the Pultec EQP-1A, the user's choice, and per-circuit
-measurement profiles) is done (2026-10-26); next is B3. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+measurement profiles) is done (2026-10-26); B3 (KiCad as the schematic editor) is built
+(2026-10-26) and its done-when waits for the user's own drawing of the EQP-1A
+(`kicad/pultec_eqp1a/`). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
@@ -81,6 +83,27 @@ EQP-1A (B2: sources in `data/schematics/pultec_eqp1a/`, tests in
 the 670's suite as before, the EQP-1A's `varimu.measure.eq_suite`; render jobs name
 their circuit (`RenderJob.circuit`, None = the 670). A change to a circuit file that should leave the
 circuit alone must leave `export_circuit_fixtures.py --golden` without a diff.
+
+**KiCad (device builder B3, 2026-10-26).** Circuits can be drawn in KiCad 10 with the
+symbol library `kicad/varimu.kicad_sym` (one symbol per macro part; generated from
+`varimu/kicad/symbols.py`, whose docstring and `kicad/README.md` list the fields:
+Reference = part name, Value = main value or key, Source / Param / Genome / Tol, lowercase
+fields = the macro's other params). `varimu kicad-import` reads kicad-cli's XML netlist
+(`varimu/kicad/netlist.py`) plus the sidecar `<project>.params.yaml` (what isn't a part)
+and writes a circuit file (`varimu/kicad/importer.py`: sheets are sections, rotary
+switch decks are resolved into `switch` parts, Core + Winding symbols are transformers).
+`varimu kicad-export` writes a circuit file as a label-connected project
+(`varimu/kicad/export.py`). The pre-flight checks are `varimu/preflight.py` (unconnected,
+floating, source / inductor loops, rectifier nodes fed by an inductance without a
+capacitor, probes) at every switch combination; the import runs them and writes nothing
+when they find a problem. An imported circuit builds the hand-written one's IR up to
+element order (`varimu/kicad/compare.py`; order moves renders ~-130 dB, measured in the
+plan's B3). `kicad/generated/` (the EQP-1A and a deliberately broken copy) and
+`tests/fixtures/kicad/*.xml` come from `scripts/make_kicad_fixtures.py`; tests that need
+kicad-cli skip without it. KiCad 10.0.7 is installed per user
+(`%LOCALAPPDATA%\Programs\KiCad\10.0`, not on PATH); `find_kicad_cli` looks at
+`$VARIMU_KICAD_CLI`, PATH, then the installer's folders. None of `varimu/kicad` or
+`preflight.py` is in the render cache key.
 
 A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
@@ -160,6 +183,10 @@ uv run --extra fast python scripts/corner_sweep.py [--quick]   # genome corners:
 uv run --extra fast varimu unit --name NAME [--genome FILE] [--set k=v ...] [--no-clips]   # Phase 4: genome -> setup -> renders -> reports/units/NAME/ (exit 2: rejected)
 uv run --extra fast varimu unit --circuit pultec_eqp1a --name NAME [--set k=v ...]   # B2: the EQP-1A's profile (response vs published curves, THD) -> reports/units/NAME/
 uv run --extra fast python scripts/calibrate_pultec_psu.py   # B2: the PCC-55's HV voltage from the drawing's +325 V rail
+uv run varimu kicad-import kicad/NAME/NAME.kicad_sch --out cache/kicad/NAME.yaml   # B3: drawing (+ NAME.params.yaml) -> circuit file; exit 2 = check problems
+uv run varimu check --circuit NAME                 # B3: pre-flight checks at every switch combination
+uv run varimu kicad-export --circuit NAME --out DIR   # B3: a circuit file as a label-connected KiCad project
+uv run python scripts/make_kicad_fixtures.py       # B3: kicad/varimu.kicad_sym, kicad/generated/, tests/fixtures/kicad/ (needs kicad-cli)
 uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
 uv run --extra listen python scripts/build_clips.py --root DIR [--only NAME ...]   # Phase 5: program clips from multitrack stems (config/listening.yaml mixes) -> data/clips
 uv run --extra listen --extra fast varimu ab-prepare [--candidates NAME ...] [--swap KEY=VALUE ...] [--targets 3 6]   # Phase 5: match the pool (config/listening.yaml) on data/clips -> SQLite + reports/listening/matching.json
@@ -428,6 +455,10 @@ tests skip when ngspice is missing.
   where the GZ34 first cuts off and its leakage inductance kicks into a node
   with nothing on it, until T302's winding capacitance and the selenium cells'
   capacitance went in: keep a capacitance on every rectifier node.
+  `varimu.preflight` checks this for diode nodes an inductor or winding feeds (a node
+  fed through resistance, like the EQP-1A's 6X4 cathode, is fine); the 670's T104
+  bridge nodes ay / bk fail it (R136 across, no capacitor; reported in the device
+  builder plan's B3, not changed).
 - **Speed since Phase 3 (measured 2026-10-21).** circuitsim 14x slower than
   real time on the 7 s TC1 burst and 36x on the 4 s clip (Phase 2: 5.8x /
   7.3x), plus 1 s of settling per render: 45 device ports instead of 22, and

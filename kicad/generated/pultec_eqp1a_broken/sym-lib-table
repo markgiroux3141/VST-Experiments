@@ -1,0 +1,10 @@
+(sym_lib_table
+	(version 7)
+	(lib
+		(name "varimu")
+		(type "KiCad")
+		(uri "${KIPRJMOD}/../../varimu.kicad_sym")
+		(options "")
+		(descr "varimu macro parts")
+	)
+)

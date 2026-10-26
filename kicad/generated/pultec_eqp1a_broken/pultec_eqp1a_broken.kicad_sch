@@ -1,0 +1,222 @@
+(kicad_sch
+	(version 20250114)
+	(generator "varimu")
+	(generator_version "1.0")
+	(uuid "bc3e7085-749c-561d-89cc-738c706a3bed")
+	(paper "A3")
+	(title_block
+		(title "Pultec EQP-1A program equalizer")
+	)
+	(lib_symbols)
+	(sheet
+		(at 25.4 25.4)
+		(size 63.5 30.48)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "8c3980b5-849e-5fb3-b36f-421fe8db63bf")
+		(property "Sheetname" "power supply"
+			(at 25.4 24.7 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sheet1.kicad_sch"
+			(at 25.4 56.6 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "pultec_eqp1a_broken"
+				(path "/bc3e7085-749c-561d-89cc-738c706a3bed"
+					(page "2")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 101.6 25.4)
+		(size 63.5 30.48)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "fdf60499-aace-5c55-b20c-3b8e46cf97c5")
+		(property "Sheetname" "input"
+			(at 101.6 24.7 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sheet2.kicad_sch"
+			(at 101.6 56.6 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "pultec_eqp1a_broken"
+				(path "/bc3e7085-749c-561d-89cc-738c706a3bed"
+					(page "3")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 177.8 25.4)
+		(size 63.5 30.48)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "ddb3308b-a57f-5d7a-9646-9556595bf870")
+		(property "Sheetname" "passive network"
+			(at 177.8 24.7 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sheet3.kicad_sch"
+			(at 177.8 56.6 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "pultec_eqp1a_broken"
+				(path "/bc3e7085-749c-561d-89cc-738c706a3bed"
+					(page "4")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 254 25.4)
+		(size 63.5 30.48)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "d654d4ba-343f-5797-aa88-c3e4e3e704d4")
+		(property "Sheetname" "interstage and 12AX7"
+			(at 254 24.7 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sheet4.kicad_sch"
+			(at 254 56.6 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "pultec_eqp1a_broken"
+				(path "/bc3e7085-749c-561d-89cc-738c706a3bed"
+					(page "5")
+				)
+			)
+		)
+	)
+	(sheet
+		(at 25.4 76.2)
+		(size 63.5 30.48)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(stroke
+			(width 0)
+			(type solid)
+		)
+		(fill
+			(color 0 0 0 0)
+		)
+		(uuid "1787ef98-69c7-578c-b406-03e3f43119b5")
+		(property "Sheetname" "12AU7 and output"
+			(at 25.4 75.5 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left bottom)
+			)
+		)
+		(property "Sheetfile" "sheet5.kicad_sch"
+			(at 25.4 107.4 0)
+			(effects
+				(font
+					(size 1.524 1.524)
+				)
+				(justify left top)
+			)
+		)
+		(instances
+			(project "pultec_eqp1a_broken"
+				(path "/bc3e7085-749c-561d-89cc-738c706a3bed"
+					(page "6")
+				)
+			)
+		)
+	)
+	(sheet_instances
+		(path "/"
+			(page "1")
+		)
+	)
+	(embedded_fonts no)
+)

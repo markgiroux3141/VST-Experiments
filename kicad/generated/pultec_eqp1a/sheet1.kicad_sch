@@ -1,0 +1,4441 @@
+(kicad_sch
+	(version 20250114)
+	(generator "varimu")
+	(generator_version "1.0")
+	(uuid "9c5b61d6-da7b-5002-888f-4a418e4cdebe")
+	(paper "A3")
+	(lib_symbols
+		(symbol "varimu:C"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "C"
+				(at 2.54 1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "C"
+				(at 2.54 -1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Capacitor (pins 1, 2)"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Source" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Param" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Genome" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Tol" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "C_0_1"
+				(polyline
+					(pts (xy -2.032 0.762) (xy 2.032 0.762))
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts (xy -2.032 -0.762) (xy 2.032 -0.762))
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "C_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 3.048)
+					(name "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 3.048)
+					(name "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "varimu:Diode_Dual"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "V"
+				(at 5.842 1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "6X4"
+				(at 5.842 -1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Dual diode (a full-wave rectifier), units A (pins 1, 2) and B (3, 4)"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Tol" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Model" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "emission" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "mu" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "grid_contact_v" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "parallel" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "area" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "instance" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "name" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "Diode_Dual_0_1"
+				(polyline
+					(pts (xy -1.27 1.016) (xy 1.27 1.016) (xy 0 -1.016) (xy -1.27 1.016))
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(polyline
+					(pts (xy -1.27 -1.016) (xy 1.27 -1.016))
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "Diode_Dual_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 2.794)
+					(name "a"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 2.794)
+					(name "k"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(symbol "Diode_Dual_2_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 2.794)
+					(name "a"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "3"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 2.794)
+					(name "k"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "4"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "varimu:GND"
+			(power)
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom no)
+			(on_board no)
+			(property "Reference" "#PWR"
+				(at 2.54 1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+					(hide yes)
+				)
+			)
+			(property "Value" "GND"
+				(at 2.54 -1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Ground: node 0"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "GND_0_1"
+				(polyline
+					(pts (xy 0 0) (xy 0 -1.27) (xy 1.27 -1.27) (xy 0 -2.54) (xy -1.27 -1.27) (xy 0 -1.27))
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "GND_1_1"
+				(pin power_in line
+					(at 0 0 270)
+					(length 0)
+					(hide yes)
+					(name "GND"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "varimu:L"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "L"
+				(at 2.54 1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "L"
+				(at 2.54 -1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Inductor (current from pin 1, the dotted end, to pin 2)"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Source" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Param" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Genome" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "L_0_1"
+				(arc
+					(start 0 2.54)
+					(mid 0.635 1.905)
+					(end 0 1.27)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 1.27)
+					(mid 0.635 0.635)
+					(end 0 0)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 0)
+					(mid 0.635 -0.635)
+					(end 0 -1.27)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(arc
+					(start 0 -1.27)
+					(mid 0.635 -1.905)
+					(end 0 -2.54)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(circle
+					(center -1.27 2.54)
+					(radius 0.254)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type outline)
+					)
+				)
+			)
+			(symbol "L_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 1.27)
+					(name "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 1.27)
+					(name "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "varimu:Mains"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "V"
+				(at 3.302 1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "Mains"
+				(at 3.302 -1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "A winding fed from the mains (the circuit's `mains` block): pin 1 +, 2 -; Value is its rms voltage at the rated mains"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Source" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Param" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Genome" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "phase_deg" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "Mains_0_1"
+				(circle
+					(center 0 0)
+					(radius 2.54)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+				(text "+"
+					(at 0 1.524 0)
+					(effects
+						(font
+							(size 1 1)
+						)
+					)
+				)
+				(text "~"
+					(at 0 -0.508 0)
+					(effects
+						(font
+							(size 1.524 1.524)
+						)
+					)
+				)
+				(text "AC"
+					(at 0 -3.81 0)
+					(effects
+						(font
+							(size 1 1)
+						)
+					)
+				)
+			)
+			(symbol "Mains_1_1"
+				(pin passive line
+					(at 0 5.08 270)
+					(length 2.54)
+					(name "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -5.08 90)
+					(length 2.54)
+					(name "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+		(symbol "varimu:R"
+			(pin_numbers
+				(hide yes)
+			)
+			(pin_names
+				(offset 0)
+				(hide yes)
+			)
+			(exclude_from_sim no)
+			(in_bom yes)
+			(on_board yes)
+			(property "Reference" "R"
+				(at 2.54 1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Value" "R"
+				(at 2.54 -1.27 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(justify left)
+				)
+			)
+			(property "Footprint" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Datasheet" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Description" "Resistor (pins 1, 2)"
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Source" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Param" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Genome" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "Tol" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "parallel" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(symbol "R_0_1"
+				(rectangle
+					(start -1.016 -2.54)
+					(end 1.016 2.54)
+					(stroke
+						(width 0.254)
+						(type default)
+					)
+					(fill
+						(type none)
+					)
+				)
+			)
+			(symbol "R_1_1"
+				(pin passive line
+					(at 0 3.81 270)
+					(length 1.27)
+					(name "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "1"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+				(pin passive line
+					(at 0 -3.81 90)
+					(length 1.27)
+					(name "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+					(number "2"
+						(effects
+							(font
+								(size 1.27 1.27)
+							)
+						)
+					)
+				)
+			)
+			(embedded_fonts no)
+		)
+	)
+	(wire
+		(pts (xy 38.1 33.02) (xy 38.1 30.48))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7d319faf-3a11-5608-acfc-849c032e2993")
+	)
+	(label "hva"
+		(at 38.1 30.48 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "aea6d1b0-6be7-5928-91ba-e8876c9acf77")
+	)
+	(wire
+		(pts (xy 38.1 43.18) (xy 38.1 45.72))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "8b80e9dc-2419-5a43-8b8b-c1f365d31a44")
+	)
+	(wire
+		(pts (xy 76.2 33.02) (xy 76.2 30.48))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "0afc8242-c527-51f5-8350-bb3cebb46e6c")
+	)
+	(label "hvb"
+		(at 76.2 30.48 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "ada7f94e-d86b-5207-b50c-cc19f28dba52")
+	)
+	(wire
+		(pts (xy 76.2 43.18) (xy 76.2 45.72))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f8b4f3fe-c5d5-5f6d-82ad-9fd90e30290b")
+	)
+	(wire
+		(pts (xy 114.3 34.29) (xy 114.3 31.75))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d554e693-8620-5f73-96a9-356197963e5c")
+	)
+	(label "hva"
+		(at 114.3 31.75 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "50bbb5d4-7217-538c-a1c0-8527b96ff594")
+	)
+	(wire
+		(pts (xy 114.3 41.91) (xy 114.3 44.45))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ba310130-a286-558b-beb1-4fd0a672cf5e")
+	)
+	(label "hva_r"
+		(at 114.3 44.45 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c15bc3d5-ecf1-5bca-b27d-79fa94e98547")
+	)
+	(wire
+		(pts (xy 152.4 34.29) (xy 152.4 31.75))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5adfe870-1613-5400-9262-76c9228ac571")
+	)
+	(label "hva_r"
+		(at 152.4 31.75 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "ecdfb2c1-6601-50f6-946c-c7c2e1e4833c")
+	)
+	(wire
+		(pts (xy 152.4 41.91) (xy 152.4 44.45))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "489075bc-b133-57b9-9982-7ebba107bd37")
+	)
+	(label "rka"
+		(at 152.4 44.45 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "5cf3baad-2346-5d75-967b-629a38d3a90c")
+	)
+	(wire
+		(pts (xy 190.5 34.29) (xy 190.5 31.75))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e7a43f87-3471-5795-9db1-7142a47678c5")
+	)
+	(label "hvb"
+		(at 190.5 31.75 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "6e706520-bae9-5f68-a5d8-71b07307e5e5")
+	)
+	(wire
+		(pts (xy 190.5 41.91) (xy 190.5 44.45))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fbe8eeaf-d30a-580f-b298-c0a225712348")
+	)
+	(label "hvb_r"
+		(at 190.5 44.45 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "ab7cc7c6-c0ae-5bbd-bf3b-986c90a3aa99")
+	)
+	(wire
+		(pts (xy 228.6 34.29) (xy 228.6 31.75))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "20604fc1-d96a-5ae4-9ec0-6521c46c1b8c")
+	)
+	(label "hvb_r"
+		(at 228.6 31.75 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "cf29862a-6cc6-5162-9748-fe2c25f74680")
+	)
+	(wire
+		(pts (xy 228.6 41.91) (xy 228.6 44.45))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "6e28db1a-eadc-5e58-a083-968e9256aa70")
+	)
+	(label "rkb"
+		(at 228.6 44.45 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "6a9ee1b4-f309-5fb5-83b4-579759a28163")
+	)
+	(wire
+		(pts (xy 266.7 34.29) (xy 266.7 31.75))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "5da516e2-a95b-58d8-8d9b-8bff214e7a37")
+	)
+	(label "rka"
+		(at 266.7 31.75 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "e3fad6bf-27bd-56ee-ad07-f1196d9e16f9")
+	)
+	(wire
+		(pts (xy 266.7 41.91) (xy 266.7 44.45))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "e1f1a039-bd47-5987-a262-e44b1bffaa1a")
+	)
+	(wire
+		(pts (xy 304.8 34.29) (xy 304.8 31.75))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2adc66a0-3d84-5378-ad99-9899267eafa0")
+	)
+	(label "rkb"
+		(at 304.8 31.75 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "bea02806-d2df-5e82-a571-b092fd345cee")
+	)
+	(wire
+		(pts (xy 304.8 41.91) (xy 304.8 44.45))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "211b1ac9-76de-539b-a441-67c8a28ed9bb")
+	)
+	(wire
+		(pts (xy 342.9 34.29) (xy 342.9 31.75))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b5efd73d-5856-5dca-a301-3200fe45bd9c")
+	)
+	(label "b0"
+		(at 342.9 31.75 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "7c2a7406-af41-50fe-a16f-082a3981b1ab")
+	)
+	(wire
+		(pts (xy 342.9 41.91) (xy 342.9 44.45))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bdd6cbf9-2fd1-56c3-8a6b-15e8918c4620")
+	)
+	(label "b1"
+		(at 342.9 44.45 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "c9d53741-9847-5159-a5fb-3cd4c3e51424")
+	)
+	(wire
+		(pts (xy 38.1 72.39) (xy 38.1 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2d5478a7-4582-568d-b002-f834b70b310c")
+	)
+	(label "b1"
+		(at 38.1 69.85 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "0eb3f5e1-a9b4-57f8-9c4b-90aacc7f33d0")
+	)
+	(wire
+		(pts (xy 38.1 80.01) (xy 38.1 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d58f0f9e-568e-5f30-a6c0-fbfe2a22aba4")
+	)
+	(wire
+		(pts (xy 76.2 72.39) (xy 76.2 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "fdc58eed-3a46-5985-a809-8d0502156616")
+	)
+	(label "b1"
+		(at 76.2 69.85 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "a3d3baf3-5eb6-5f10-8f60-dbad5df02142")
+	)
+	(wire
+		(pts (xy 76.2 80.01) (xy 76.2 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "68a544bf-0cc4-5f2e-b06b-7de65d51f038")
+	)
+	(label "b2"
+		(at 76.2 82.55 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "a2b3e1d8-09e9-5f80-b7f0-3e807522e233")
+	)
+	(wire
+		(pts (xy 114.3 72.39) (xy 114.3 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "bae02515-f2df-5b89-b79a-5acc8a1d7a9c")
+	)
+	(label "b2"
+		(at 114.3 69.85 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "cde7685b-7d12-580e-aa73-9ea7a901320a")
+	)
+	(wire
+		(pts (xy 114.3 80.01) (xy 114.3 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9184db90-4dbe-5429-a4ea-3129dd9db839")
+	)
+	(wire
+		(pts (xy 152.4 72.39) (xy 152.4 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "131b89d7-54cf-5daf-b3df-2ed07934ea37")
+	)
+	(label "b2"
+		(at 152.4 69.85 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "5a52d94c-31a3-567c-ac86-e0d0a30dca9a")
+	)
+	(wire
+		(pts (xy 152.4 80.01) (xy 152.4 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "449a5965-c147-53a9-bedd-1ae2da1fb44b")
+	)
+	(global_label "b3"
+		(shape passive)
+		(at 152.4 82.55 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "128e8ecb-13b8-58b2-9512-5cfb1db87518")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 152.4 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+	)
+	(wire
+		(pts (xy 190.5 72.39) (xy 190.5 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "b54b3622-5f30-5b47-896d-b7626905fec5")
+	)
+	(global_label "b3"
+		(shape passive)
+		(at 190.5 69.85 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "22f96444-49ea-5369-b3a9-f83e8bdf8655")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 190.5 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+	)
+	(wire
+		(pts (xy 190.5 80.01) (xy 190.5 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "a2a51cc0-e5d6-5f62-bccc-c49a7e846331")
+	)
+	(wire
+		(pts (xy 228.6 72.39) (xy 228.6 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f3a35dfb-7872-50ce-8069-f56c8efb5d1d")
+	)
+	(label "b2"
+		(at 228.6 69.85 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "4f7f3cba-7315-504b-b9ce-8872681ec48d")
+	)
+	(wire
+		(pts (xy 228.6 80.01) (xy 228.6 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "87369d96-d690-55e4-bcaa-02234369e8fa")
+	)
+	(global_label "b4"
+		(shape passive)
+		(at 228.6 82.55 270)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "be9a94b9-b33c-51e6-812f-0d30768f7d81")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 228.6 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+	)
+	(wire
+		(pts (xy 266.7 72.39) (xy 266.7 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "7d8dec2d-3f21-54dd-84dc-c54d2a0b7d59")
+	)
+	(global_label "b4"
+		(shape passive)
+		(at 266.7 69.85 90)
+		(fields_autoplaced yes)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "b96926a5-2e5b-5133-9fb5-da0ccd653b3b")
+		(property "Intersheetrefs" "${INTERSHEET_REFS}"
+			(at 266.7 69.85 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+	)
+	(wire
+		(pts (xy 266.7 80.01) (xy 266.7 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f89e3a22-1193-56d7-9806-81f34a9bea0b")
+	)
+	(wire
+		(pts (xy 304.8 72.39) (xy 304.8 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "de4c7d16-6e57-5f4b-ada3-0c49fc1750c2")
+	)
+	(label "b2"
+		(at 304.8 69.85 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "4622e0dc-ca01-5fe6-836b-808d1abd8b7c")
+	)
+	(wire
+		(pts (xy 304.8 80.01) (xy 304.8 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "01468ef5-060b-5efd-a753-616a85a89cc8")
+	)
+	(label "htr"
+		(at 304.8 82.55 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "e6e6e694-1f89-5bc7-8b5c-310584b3641f")
+	)
+	(wire
+		(pts (xy 342.9 72.39) (xy 342.9 69.85))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "331a8511-e282-5ab5-9fb7-21e067f7e635")
+	)
+	(label "htr"
+		(at 342.9 69.85 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "c734dece-f538-5c70-a9e5-5f256d9ea4e0")
+	)
+	(wire
+		(pts (xy 342.9 80.01) (xy 342.9 82.55))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "9b7f4c99-b767-5cff-b341-86b59b9194a6")
+	)
+	(wire
+		(pts (xy 38.1 110.49) (xy 38.1 107.95))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "2d5400f9-1ee5-52ab-a1b7-b12d401fbfc4")
+	)
+	(label "htr"
+		(at 38.1 107.95 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "cea59e42-ca78-5252-b2c2-98a2e688b35c")
+	)
+	(wire
+		(pts (xy 38.1 118.11) (xy 38.1 120.65))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "110218a7-b52f-5b7b-9e56-e5504c9ac375")
+	)
+	(wire
+		(pts (xy 76.2 110.49) (xy 76.2 107.95))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "f18d06ac-b4cd-56a4-9071-201f533d35c2")
+	)
+	(label "rka"
+		(at 76.2 107.95 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "0a49fc01-8c2f-58af-9736-55b07605e9f1")
+	)
+	(wire
+		(pts (xy 76.2 118.11) (xy 76.2 120.65))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "d16f535b-a971-512e-8838-b84c3cdd1e78")
+	)
+	(label "b0"
+		(at 76.2 120.65 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "a45d0495-3e91-5b54-b041-6e9704d569b5")
+	)
+	(wire
+		(pts (xy 114.3 110.49) (xy 114.3 107.95))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "ba21be24-02ee-5597-b636-b9865837b2cb")
+	)
+	(label "rkb"
+		(at 114.3 107.95 90)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify left)
+		)
+		(uuid "61901a5f-ac10-58a6-b236-243811ed1d73")
+	)
+	(wire
+		(pts (xy 114.3 118.11) (xy 114.3 120.65))
+		(stroke
+			(width 0)
+			(type default)
+		)
+		(uuid "13979e9a-f706-5b2a-9715-849d83849d28")
+	)
+	(label "b0"
+		(at 114.3 120.65 270)
+		(effects
+			(font
+				(size 1.27 1.27)
+			)
+			(justify right)
+		)
+		(uuid "aa2adc1a-c7d6-51f8-b51d-e70c64bb4e8c")
+	)
+	(symbol
+		(lib_id "varimu:Mains")
+		(at 38.1 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "97fb863a-9ff4-5d32-a162-d37216f5ef55")
+		(property "Reference" "VHVA"
+			(at 41.402 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "292.5"
+			(at 41.402 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_hv_half_rms_v"
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)"
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_hv_half_rms_v"
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Notes" "open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V"
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "phase_deg" "90.0"
+			(at 38.1 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "7d319faf-3a11-5608-acfc-849c032e2993")
+		)
+		(pin "2"
+			(uuid "8b80e9dc-2419-5a43-8b8b-c1f365d31a44")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "VHVA")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:Mains")
+		(at 76.2 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "228cce4f-0a82-5bb8-8ba8-fe4e4e0bbf48")
+		(property "Reference" "VHVB"
+			(at 79.502 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "292.5"
+			(at 79.502 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_hv_half_rms_v"
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)"
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_hv_half_rms_v"
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Notes" "open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V"
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "phase_deg" "270.0"
+			(at 76.2 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "0afc8242-c527-51f5-8350-bb3cebb46e6c")
+		)
+		(pin "2"
+			(uuid "f8b4f3fe-c5d5-5f6d-82ad-9fd90e30290b")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "VHVB")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 114.3 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "be8488aa-0b8d-5e4a-8d74-6e1c48adcb8e")
+		(property "Reference" "RPCCA"
+			(at 116.84 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100.0"
+			(at 116.84 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 114.3 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 114.3 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 114.3 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_r_half_ohm"
+			(at 114.3 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)"
+			(at 114.3 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_r_half_ohm"
+			(at 114.3 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "none"
+			(at 114.3 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "d554e693-8620-5f73-96a9-356197963e5c")
+		)
+		(pin "2"
+			(uuid "ba310130-a286-558b-beb1-4fd0a672cf5e")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RPCCA")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:L")
+		(at 152.4 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "2757afce-4ae4-5588-9feb-a0354b528475")
+		(property "Reference" "LPCCA"
+			(at 154.94 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "5m"
+			(at 154.94 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 152.4 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 152.4 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 152.4 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_leakage_h"
+			(at 152.4 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "provisional: model knowledge (leakage per HV half)"
+			(at 152.4 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_leakage_h"
+			(at 152.4 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "5adfe870-1613-5400-9262-76c9228ac571")
+		)
+		(pin "2"
+			(uuid "489075bc-b133-57b9-9982-7ebba107bd37")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "LPCCA")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 190.5 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "6d953391-5325-55cc-bf1d-67ca5b3b5b17")
+		(property "Reference" "RPCCB"
+			(at 193.04 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "100.0"
+			(at 193.04 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 190.5 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 190.5 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 190.5 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_r_half_ohm"
+			(at 190.5 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)"
+			(at 190.5 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_r_half_ohm"
+			(at 190.5 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "none"
+			(at 190.5 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "e7a43f87-3471-5795-9db1-7142a47678c5")
+		)
+		(pin "2"
+			(uuid "fbe8eeaf-d30a-580f-b298-c0a225712348")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RPCCB")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:L")
+		(at 228.6 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "65267ff6-fb75-5a25-a262-dad9b37f5c96")
+		(property "Reference" "LPCCB"
+			(at 231.14 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "5m"
+			(at 231.14 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 228.6 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 228.6 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 228.6 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_leakage_h"
+			(at 228.6 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "provisional: model knowledge (leakage per HV half)"
+			(at 228.6 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_leakage_h"
+			(at 228.6 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "20604fc1-d96a-5ae4-9ec0-6521c46c1b8c")
+		)
+		(pin "2"
+			(uuid "6e28db1a-eadc-5e58-a083-968e9256aa70")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "LPCCB")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:C")
+		(at 266.7 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "a1314be9-f938-52d6-80a1-23c6c68f2013")
+		(property "Reference" "CPCCA"
+			(at 269.24 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "300p"
+			(at 269.24 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 266.7 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 266.7 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 266.7 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_c_half_f"
+			(at 266.7 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"
+			(at 266.7 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_winding_capacitance_f"
+			(at 266.7 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "none"
+			(at 266.7 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "5da516e2-a95b-58d8-8d9b-8bff214e7a37")
+		)
+		(pin "2"
+			(uuid "e1f1a039-bd47-5987-a262-e44b1bffaa1a")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "CPCCA")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:C")
+		(at 304.8 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e9533102-9d11-575a-8b3d-8f90cc8db049")
+		(property "Reference" "CPCCB"
+			(at 307.34 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "300p"
+			(at 307.34 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 304.8 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 304.8 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 304.8 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "pcc55_c_half_f"
+			(at 304.8 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"
+			(at 304.8 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Genome" "pultec.psu.pcc55_winding_capacitance_f"
+			(at 304.8 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "none"
+			(at 304.8 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2adc66a0-3d84-5378-ad99-9899267eafa0")
+		)
+		(pin "2"
+			(uuid "211b1ac9-76de-539b-a441-67c8a28ed9bb")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "CPCCB")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 342.9 38.1 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "96b8eeb5-d0c1-5b1a-a29b-b2d53ebb6b0e")
+		(property "Reference" "RPSU1"
+			(at 345.44 36.83 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "470"
+			(at 345.44 39.37 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 342.9 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 342.9 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 342.9 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "r_psu1_ohm"
+			(at 342.9 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 470 2W from the 6X4 cathode (+355 V) to +345 V"
+			(at 342.9 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "r10"
+			(at 342.9 38.1 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b5efd73d-5856-5dca-a301-3200fe45bd9c")
+		)
+		(pin "2"
+			(uuid "bdd6cbf9-2fd1-56c3-8a6b-15e8918c4620")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RPSU1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:C")
+		(at 38.1 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "05df2851-009e-55b8-80fc-8d6fd633203b")
+		(property "Reference" "CPSU1"
+			(at 40.64 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "40u"
+			(at 40.64 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 38.1 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "c_psu_f"
+			(at 38.1 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 40/450 V at +345, +325, +290 and +250 V"
+			(at 38.1 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "electrolytic"
+			(at 38.1 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2d5478a7-4582-568d-b002-f834b70b310c")
+		)
+		(pin "2"
+			(uuid "d58f0f9e-568e-5f30-a6c0-fbfe2a22aba4")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "CPSU1")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 76.2 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "bb3cd8a7-b33c-51c8-8bbb-5358c0ff4cda")
+		(property "Reference" "RPSU2"
+			(at 78.74 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "1000"
+			(at 78.74 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 76.2 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 76.2 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 76.2 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "r_psu2_ohm"
+			(at 76.2 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 1000 1W from +345 V to +325 V"
+			(at 76.2 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "r10"
+			(at 76.2 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "fdc58eed-3a46-5985-a809-8d0502156616")
+		)
+		(pin "2"
+			(uuid "68a544bf-0cc4-5f2e-b06b-7de65d51f038")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RPSU2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:C")
+		(at 114.3 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "28fa1300-1611-54dc-990e-e2786943a3aa")
+		(property "Reference" "CPSU2"
+			(at 116.84 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "40u"
+			(at 116.84 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 114.3 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 114.3 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 114.3 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "c_psu_f"
+			(at 114.3 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 40/450 V at +345, +325, +290 and +250 V"
+			(at 114.3 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "electrolytic"
+			(at 114.3 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "bae02515-f2df-5b89-b79a-5acc8a1d7a9c")
+		)
+		(pin "2"
+			(uuid "9184db90-4dbe-5429-a4ea-3129dd9db839")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "CPSU2")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 152.4 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "51fe4d2f-5fd4-5f73-ac70-fe8328e78d2c")
+		(property "Reference" "RPSU3"
+			(at 154.94 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "2200"
+			(at 154.94 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 152.4 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 152.4 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 152.4 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "r_psu3_ohm"
+			(at 152.4 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 2200 1W from +325 V to the output transformer's centre tap (+290 V)"
+			(at 152.4 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "r10"
+			(at 152.4 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "131b89d7-54cf-5daf-b3df-2ed07934ea37")
+		)
+		(pin "2"
+			(uuid "449a5965-c147-53a9-bedd-1ae2da1fb44b")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RPSU3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:C")
+		(at 190.5 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "a94f3c77-e57b-5f5a-b582-21b98caa746a")
+		(property "Reference" "CPSU3"
+			(at 193.04 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "40u"
+			(at 193.04 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 190.5 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 190.5 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 190.5 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "c_psu_f"
+			(at 190.5 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 40/450 V at +345, +325, +290 and +250 V"
+			(at 190.5 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "electrolytic"
+			(at 190.5 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b54b3622-5f30-5b47-896d-b7626905fec5")
+		)
+		(pin "2"
+			(uuid "a2a51cc0-e5d6-5f62-bccc-c49a7e846331")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "CPSU3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 228.6 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "8b5243f7-c420-528e-8dff-11d9ed3ae754")
+		(property "Reference" "RPSU4"
+			(at 231.14 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "47k"
+			(at 231.14 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 228.6 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 228.6 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 228.6 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "r_psu4_ohm"
+			(at 228.6 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 47K from +325 V to the 12AX7 plate loads (+250 V)"
+			(at 228.6 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "r10"
+			(at 228.6 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "f3a35dfb-7872-50ce-8069-f56c8efb5d1d")
+		)
+		(pin "2"
+			(uuid "87369d96-d690-55e4-bcaa-02234369e8fa")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RPSU4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:C")
+		(at 266.7 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "1e0ebbd8-e79d-5d2f-8b78-14ee4308db12")
+		(property "Reference" "CPSU4"
+			(at 269.24 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "40u"
+			(at 269.24 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 266.7 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 266.7 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 266.7 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "c_psu_f"
+			(at 266.7 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 40/450 V at +345, +325, +290 and +250 V"
+			(at 266.7 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "electrolytic"
+			(at 266.7 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "7d8dec2d-3f21-54dd-84dc-c54d2a0b7d59")
+		)
+		(pin "2"
+			(uuid "f89e3a22-1193-56d7-9806-81f34a9bea0b")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "CPSU4")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 304.8 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "4a166a44-239f-5ef8-8f55-cf55d75b9f60")
+		(property "Reference" "RHTR_T"
+			(at 307.34 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "270k"
+			(at 307.34 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 304.8 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 304.8 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 304.8 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "r_heater_top_ohm"
+			(at 304.8 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 270K from +325 V to the heaters' tap (+60 V)"
+			(at 304.8 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "r10"
+			(at 304.8 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "de4c7d16-6e57-5f4b-ada3-0c49fc1750c2")
+		)
+		(pin "2"
+			(uuid "01468ef5-060b-5efd-a753-616a85a89cc8")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RHTR_T")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:R")
+		(at 342.9 76.2 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "796f827a-5de0-5780-b81f-7ae7dcb9417d")
+		(property "Reference" "RHTR_B"
+			(at 345.44 74.93 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "62k"
+			(at 345.44 77.47 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 342.9 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 342.9 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 342.9 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "r_heater_bot_ohm"
+			(at 342.9 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: 62K from the heaters' tap to ground"
+			(at 342.9 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "r10"
+			(at 342.9 76.2 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "331a8511-e282-5ab5-9fb7-21e067f7e635")
+		)
+		(pin "2"
+			(uuid "9b7f4c99-b767-5cff-b341-86b59b9194a6")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "RHTR_B")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:C")
+		(at 38.1 114.3 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "8b29edbd-ce7e-5d39-a4b8-82666775bca6")
+		(property "Reference" "CHTR"
+			(at 40.64 113.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "300n"
+			(at 40.64 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 38.1 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Param" "c_heater_f"
+			(at 38.1 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Source" "dwg: .3 across the 62K"
+			(at 38.1 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "paper"
+			(at 38.1 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "2d5400f9-1ee5-52ab-a1b7-b12d401fbfc4")
+		)
+		(pin "2"
+			(uuid "110218a7-b52f-5b7b-9e56-e5504c9ac375")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "CHTR")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:Diode_Dual")
+		(at 76.2 114.3 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "e1619a3c-f837-58a0-8870-b09cf9951b37")
+		(property "Reference" "V3"
+			(at 82.042 113.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "rectifier_tube"
+			(at 82.042 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 76.2 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 76.2 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 76.2 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Model" "V3"
+			(at 76.2 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "tube"
+			(at 76.2 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "f18d06ac-b4cd-56a4-9071-201f533d35c2")
+		)
+		(pin "2"
+			(uuid "d16f535b-a971-512e-8838-b84c3cdd1e78")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "V3")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:Diode_Dual")
+		(at 114.3 114.3 0)
+		(unit 2)
+		(exclude_from_sim no)
+		(in_bom yes)
+		(on_board yes)
+		(dnp no)
+		(uuid "f97f0c8e-4db1-5335-80d0-b7069f29c841")
+		(property "Reference" "V3"
+			(at 120.142 113.03 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Value" "rectifier_tube"
+			(at 120.142 115.57 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 114.3 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 114.3 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 114.3 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Model" "V3"
+			(at 114.3 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Tol" "tube"
+			(at 114.3 114.3 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "3"
+			(uuid "ba21be24-02ee-5597-b636-b9865837b2cb")
+		)
+		(pin "4"
+			(uuid "13979e9a-f706-5b2a-9715-849d83849d28")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "V3")
+					(unit 2)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 38.1 45.72 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "2ad1ef29-1fcd-5236-b12a-014a75ee7d34")
+		(property "Reference" "#PWR001"
+			(at 40.64 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 40.64 46.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 38.1 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "7b51e3d2-2278-5c5f-80fe-ed289035928f")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR001")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 76.2 45.72 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "6ad032fa-b442-5ce8-83b3-ac8166ee7548")
+		(property "Reference" "#PWR002"
+			(at 78.74 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 78.74 46.99 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 76.2 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 76.2 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 76.2 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "586a63a7-ba71-5094-99de-e78883bc840c")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR002")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 266.7 44.45 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "e40c1ba9-8526-5721-8940-e9e1685afaca")
+		(property "Reference" "#PWR003"
+			(at 269.24 43.18 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 269.24 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 266.7 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 266.7 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 266.7 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "1a848ea0-901f-5d4b-9859-ac6bc6780928")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR003")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 304.8 44.45 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "15ccd4dd-9dae-5b3c-9b35-c02200521ab4")
+		(property "Reference" "#PWR004"
+			(at 307.34 43.18 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 307.34 45.72 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 304.8 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 304.8 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 304.8 44.45 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "96e8e4b9-e90e-537f-86c6-8ec5dc78c52e")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR004")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 38.1 82.55 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "0f17fe43-0c83-5047-b7b5-311e6d25af58")
+		(property "Reference" "#PWR005"
+			(at 40.64 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 40.64 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 38.1 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "1b68fff5-35ae-5405-81e4-0277224bbcc1")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR005")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 114.3 82.55 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "adcc11ec-63d7-51e7-b175-785b64fd5f3c")
+		(property "Reference" "#PWR006"
+			(at 116.84 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 116.84 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 114.3 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 114.3 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 114.3 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "b76b603c-185b-575a-af90-05097d0eaeb9")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR006")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 190.5 82.55 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "7ca49d3c-7a02-5a03-b7fc-38ae6d901025")
+		(property "Reference" "#PWR007"
+			(at 193.04 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 193.04 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 190.5 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 190.5 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 190.5 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "14f173ce-2038-53b8-ae20-ec2a0555ff6d")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR007")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 266.7 82.55 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "d992c5bd-32c7-5873-8b37-6c869c82e231")
+		(property "Reference" "#PWR008"
+			(at 269.24 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 269.24 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 266.7 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 266.7 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 266.7 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "e3d82d2c-ea8a-5bf3-ac75-5aa442ad99e8")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR008")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 342.9 82.55 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "9efb45f6-dc2a-5817-87dd-9bf1822b0d66")
+		(property "Reference" "#PWR009"
+			(at 345.44 81.28 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 345.44 83.82 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 342.9 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 342.9 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 342.9 82.55 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "68f5eda5-fc42-5ecf-828f-053d1cb86cf7")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR009")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(symbol
+		(lib_id "varimu:GND")
+		(at 38.1 120.65 0)
+		(unit 1)
+		(exclude_from_sim no)
+		(in_bom no)
+		(on_board no)
+		(dnp no)
+		(uuid "730c4b08-0d67-59c4-89ba-46c565bf3aad")
+		(property "Reference" "#PWR010"
+			(at 40.64 119.38 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+				(hide yes)
+			)
+		)
+		(property "Value" "GND"
+			(at 40.64 121.92 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(justify left)
+			)
+		)
+		(property "Footprint" ""
+			(at 38.1 120.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Datasheet" ""
+			(at 38.1 120.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(property "Description" ""
+			(at 38.1 120.65 0)
+			(effects
+				(font
+					(size 1.27 1.27)
+				)
+				(hide yes)
+			)
+		)
+		(pin "1"
+			(uuid "4e3d1f6e-c65e-5198-ae66-fd073efc1aef")
+		)
+		(instances
+			(project "pultec_eqp1a"
+				(path "/b5ad499d-67a1-5ef3-99f5-c21b6fd91732/9c5b61d6-da7b-5002-888f-4a418e4cdebe"
+					(reference "#PWR010")
+					(unit 1)
+				)
+			)
+		)
+	)
+	(embedded_fonts no)
+)

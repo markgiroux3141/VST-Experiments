@@ -1,0 +1,88 @@
+# Sidecar of pultec_eqp1a.kicad_sch: what isn't a part (varimu.kicad.importer).
+# Written by `varimu kicad-export` from pultec_eqp1a.yaml; the parts' values
+# are on the drawing (Value, Param, Source, Genome).
+
+title: Pultec EQP-1A program equalizer
+
+input: in
+
+probes: [out, in_s, eq_in, eq_m, eq_out, g1a, g1b, k1a, k1b, fbs, p1a, p1b, g2a, g2b, gb2, k2a, k2b, p2a, p2b, b0, b1, b2, b3, b4, htr]
+
+controls:
+  lf_freq_hz: {value: 60, choices: [20, 30, 60, 100], unit: position, source: 'man: LOW FREQUENCY selector, 20 / 30 / 60 / 100 cps (p.1)'}
+  lf_boost: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: left BOOST knob (low frequency), 0 to 13.5 dB (p.1)'}
+  lf_atten: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: left ATTEN knob (low frequency), 0 to 17.5 dB (p.1)'}
+  hf_boost_freq_khz: {value: 10, choices: [3, 4, 5, 8, 10, 12, 16], unit: position, source: 'man: HIGH FREQUENCY selector, 3 / 4 / 5 / 8 / 10 / 12 / 16 kcs peak boost (p.1)'}
+  hf_boost: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: right BOOST knob, 0 to 18 dB (p.1)'}
+  bandwidth: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: 'man: BANDWIDTH, continuously variable sharp to broad (p.4)', notes: '0 = sharp, 1 = broad'}
+  hf_atten_freq_khz: {value: 10, choices: [5, 10, 20], unit: position, source: 'man: ATTEN SEL, 5 / 10 / 20 kcs shelf attenuate (p.1)'}
+  hf_atten: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: right ATTEN knob, 0 to 16 dB (p.1)'}
+  mains_v_rms: {value: 117.0, min: 105.0, max: 127.0, unit: V, source: 'man: power required 117 volts, 50/60 cps (p.1, p.4). The range is provisional: model knowledge (US line voltage)'}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: 'man: 50/60 cps (p.1)'}
+
+values:
+  hs56_r_pri_ohm: {value: 54.57, source: 'web: https://www.triadmagnetics.com/item/audio-transformers/hermetically-sealed-low-level-audio-transformers/hs-56 (DCR 1-2 9.46, 2-3 16.60, 4-5 17.80, 5-6 10.71 ohm, in series for 600 ohm)'}
+  hs56_r_sec_ohm: {value: 55.0, source: 'web: same page (DCR 7-8 8.40, 8-9 15.10, 10-11 19.70, 11-12 11.80 ohm, in series)'}
+  hs56_core_material: {value: mumetall, genome: pultec.hs56.core_material, source: 'provisional: model knowledge (high-nickel cores in Triad''s low-level HS series; the case is mu-metal: Triad HS-56 sheet)'}
+  hs56_core_area_m2: {value: 5.0e-05, genome: pultec.hs56.core_area_m2, source: 'provisional: model knowledge (GP-4 case, 1-3/8 x 1-3/8 x 2-1/2 in, 12 oz: Triad HS series 1958 catalogue)'}
+  hs56_core_path_m: {value: 0.05, genome: pultec.hs56.core_path_m, source: 'provisional: model knowledge (a core in that case)'}
+  hs56_gap_m: {value: 1.0e-05, genome: pultec.hs56.air_gap_m, source: 'provisional: model knowledge (butt joints; no DC)'}
+  hs56_turns: {value: 2554, genome: pultec.hs56.turns, source: 'derived: 35 H primary in the core''s linear limit at the nominal geometry (parts.turns_for_inductance), the middle of Triad''s 21-49 H (HS-56 sheet: 5 V at 60 Hz, 1-6 with 3-4 shorted)', notes: 'primary (the reference winding); the ratio is 1:1'}
+  hs56_leakage_h: {value: 0.002, genome: pultec.hs56.leakage_h, source: 'provisional: model knowledge (puts the 600 / 600 ohm corner near 95 kHz: Triad''s sheet gives -0.48 dB at 30 kHz)'}
+  hs56_c_f: {value: 1.0e-10, genome: pultec.hs56.winding_capacitance_f, source: 'provisional: model knowledge (self-capacitance of a 600 ohm line winding)'}
+  audio_taper_mid: {value: 0.1, genome: pultec.pots.audio_taper_mid, source: 'provisional: model knowledge (an ''audio'' or ''A'' taper: ~10% of the track at half rotation; [MAN] p.5 names the taper, not its law)', notes: 'both LF pots; which end their wipers are tied to isn''t drawn: resistance follows the taper with rotation'}
+  hs29_r_pri_ohm: {value: 1955, source: 'web: Triad HS-29 sheet (DCR 1-2 935, 3-4 1020 ohm, in series), https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/6536/HS-29.pdf'}
+  hs29_r_sec_a_ohm: {value: 1647, source: 'web: same sheet (DCR 5-6)'}
+  hs29_r_sec_b_ohm: {value: 2272, source: 'web: same sheet (DCR 7-8)'}
+  hs29_core_material: {value: mumetall, genome: pultec.hs29.core_material, source: 'provisional: model knowledge (as the HS-56)'}
+  hs29_core_area_m2: {value: 5.0e-05, genome: pultec.hs29.core_area_m2, source: 'provisional: model knowledge (GP-4 case, as the HS-56: Triad HS series 1958 catalogue)'}
+  hs29_core_path_m: {value: 0.05, genome: pultec.hs29.core_path_m, source: 'provisional: model knowledge'}
+  hs29_gap_m: {value: 1.0e-05, genome: pultec.hs29.air_gap_m, source: 'provisional: model knowledge (butt joints; no DC)'}
+  hs29_turns: {value: 10574, genome: pultec.hs29.turns, source: 'derived: 600 H primary in the core''s linear limit at the nominal geometry (parts.turns_for_inductance), Triad''s minimum (HS-29 sheet: 1-4 with 2-3 joined, 1 V at 60 Hz, 600 H min)', notes: 'primary (the reference winding); each secondary half has as many (1:2 overall)'}
+  hs29_leakage_h: {value: 0.02, genome: pultec.hs29.leakage_h, source: 'provisional: model knowledge (a high-impedance interstage)'}
+  hs29_c_half_f: {value: 3.0e-10, genome: pultec.hs29.winding_capacitance_f, source: 'provisional: model knowledge (150 pF across the 80k secondary puts the corner near 26 kHz with Rs 20k / RL 80k: Triad''s sheet gives -2.35 dB at 20 kHz)'}
+  s217_turns_half: {value: 1575, genome: pultec.s217.turns_half, source: 'web: https://groupdiy.com/threads/peerless-s-217-d-diy.51046 (a rebuild: primary 1575 turns per coil, two coils; unverified)', notes: each primary half (the reference winding)}
+  s217_sec_per_half: {value: 0.22349, genome: pultec.s217.sec_ratio, source: 'web: same thread (secondary 352 turns per coil): 352 / 1575, so 12.6k plate to plate into 600 ohm; a replacement is sold as 12,500 ohm (web: https://www.don-audio.com/CineMag-CM-S217D-transformer-Peerless-S217D-replacement)', notes: 'each secondary half (7-9, 10-12) per primary half'}
+  s217_ter_per_half: {value: 0.04508, genome: pultec.s217.tertiary_ratio, source: 'web: same thread (tertiary 71 turns per coil): 71 / 1575', notes: 'each half of the feedback winding (3-S, S-5)'}
+  s217_r_half_ohm: {value: 150.0, genome: pultec.s217.r_half_ohm, source: 'provisional: model knowledge (each half of a 12.5k CT primary)'}
+  s217_r_sec_half_ohm: {value: 12.0, genome: pultec.s217.r_sec_half_ohm, source: 'provisional: model knowledge (each half of a 600 ohm secondary)'}
+  s217_r_ter_half_ohm: {value: 2.0, genome: pultec.s217.r_ter_half_ohm, source: 'provisional: model knowledge (71 turns of the feedback winding)'}
+  s217_core_material: {value: grain_oriented_si_steel, genome: pultec.s217.core_material, source: 'provisional: model knowledge (the original''s L12 laminations aren''t documented: web: https://www.don-audio.com/CineMag-CM-S217D-transformer-Peerless-S217D-replacement)'}
+  s217_core_area_m2: {value: 0.0002, genome: pultec.s217.core_area_m2, source: 'provisional: model knowledge (gives 115 H across the primary with the thread''s turns: a 12.5k primary flat to below 20 Hz, as [MAN]''s 20 cps-20 kcs +0 / -1 dB needs)'}
+  s217_core_path_m: {value: 0.08, genome: pultec.s217.core_path_m, source: 'provisional: model knowledge (L12 lamination stack)'}
+  s217_gap_m: {value: 2.0e-05, genome: pultec.s217.air_gap_m, source: 'provisional: model knowledge (butt joints; push-pull)'}
+  s217_leakage_h: {value: 0.015, genome: pultec.s217.leakage_h, source: 'provisional: model knowledge (k ~ 0.9999 per primary half)'}
+  s217_c_half_f: {value: 1.5e-10, genome: pultec.s217.winding_capacitance_f, source: 'provisional: model knowledge (push-pull primaries, 100-500 pF)'}
+  rectifier_tube: {value: 6X4, source: 'dwg: 6X4 full-wave rectifier; config/devices/6x4.yaml (per section)'}
+  numerical_leak_ohm: {value: 1000000000.0, source: 'numerical: DC path for floating nodes (not physical)'}
+  passive_seed: {value: 0, genome: passives.seed, source: 'numerical: which set of parts a unit is built from'}
+  passive_spread: {value: 0.0, genome: passives.spread, source: 'provisional: fraction of each part''s tolerance band its deviation spans (0 = every part at its printed value)'}
+  tol_resistor_pct: {value: 10.0, source: 'provisional: model knowledge (carbon composition resistors of the era, 10%; the drawing prints none)'}
+  tol_matched_pct: {value: 1.0, source: 'provisional: model knowledge (the 4700s are ''selected alike'', dwg)'}
+  tol_pot_pct: {value: 20.0, genome: passives.pot_pct, source: 'provisional: model knowledge (carbon potentiometers, +-10..20%)'}
+  tol_paper_pct: {value: 20.0, genome: passives.paper_capacitor_pct, source: 'provisional: model knowledge (paper capacitors of the 1950s, +-10..20%)'}
+  tol_network_c_pct: {value: 5.0, source: 'provisional: model knowledge (the network''s capacitors set its frequencies: close-tolerance mica or film, 5%)'}
+  tol_mica_pct: {value: 10.0, genome: passives.mica_capacitor_pct, source: 'provisional: model knowledge (small mica capacitors, +-5..20%)'}
+  tol_electrolytic_minus_pct: {value: 20.0, genome: passives.electrolytic_minus_pct, source: 'provisional: model knowledge (1950s electrolytics, -10..-20%)'}
+  tol_electrolytic_plus_pct: {value: 50.0, genome: passives.electrolytic_plus_pct, source: 'provisional: model knowledge (1950s electrolytics, +50..+100%)'}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: 'provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)'}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: 'provisional: model knowledge (grid-pitch tolerance, a few %)'}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 117.0, source: 'man: power required 117 volts (p.1); the PCC-55''s voltages are taken at it'}
+
+tolerance:
+  source: 'provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)'
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r10: tol_resistor_pct
+    matched: tol_matched_pct
+    pot: tol_pot_pct
+    paper: tol_paper_pct
+    network: tol_network_c_pct
+    mica: tol_mica_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]

@@ -1,0 +1,3550 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<export version="E">
+  <design>
+    <source>kicad/generated/pultec_eqp1a_broken/pultec_eqp1a_broken.kicad_sch</source>
+    <date>(fixture)</date>
+    <tool>Eeschema 10.0.7</tool>
+    <sheet number="1" name="/" tstamps="/">
+      <title_block>
+        <title>Pultec EQP-1A program equalizer</title>
+        <company/>
+        <rev/>
+        <date/>
+        <source>pultec_eqp1a_broken.kicad_sch</source>
+        <comment number="1" value=""/>
+        <comment number="2" value=""/>
+        <comment number="3" value=""/>
+        <comment number="4" value=""/>
+        <comment number="5" value=""/>
+        <comment number="6" value=""/>
+        <comment number="7" value=""/>
+        <comment number="8" value=""/>
+        <comment number="9" value=""/>
+      </title_block>
+    </sheet>
+    <sheet number="2" name="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/">
+      <title_block>
+        <title/>
+        <company/>
+        <rev/>
+        <date/>
+        <source>sheet1.kicad_sch</source>
+        <comment number="1" value=""/>
+        <comment number="2" value=""/>
+        <comment number="3" value=""/>
+        <comment number="4" value=""/>
+        <comment number="5" value=""/>
+        <comment number="6" value=""/>
+        <comment number="7" value=""/>
+        <comment number="8" value=""/>
+        <comment number="9" value=""/>
+      </title_block>
+    </sheet>
+    <sheet number="3" name="/input/" tstamps="/fdf60499-aace-5c55-b20c-3b8e46cf97c5/">
+      <title_block>
+        <title/>
+        <company/>
+        <rev/>
+        <date/>
+        <source>sheet2.kicad_sch</source>
+        <comment number="1" value=""/>
+        <comment number="2" value=""/>
+        <comment number="3" value=""/>
+        <comment number="4" value=""/>
+        <comment number="5" value=""/>
+        <comment number="6" value=""/>
+        <comment number="7" value=""/>
+        <comment number="8" value=""/>
+        <comment number="9" value=""/>
+      </title_block>
+    </sheet>
+    <sheet number="4" name="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/">
+      <title_block>
+        <title/>
+        <company/>
+        <rev/>
+        <date/>
+        <source>sheet3.kicad_sch</source>
+        <comment number="1" value=""/>
+        <comment number="2" value=""/>
+        <comment number="3" value=""/>
+        <comment number="4" value=""/>
+        <comment number="5" value=""/>
+        <comment number="6" value=""/>
+        <comment number="7" value=""/>
+        <comment number="8" value=""/>
+        <comment number="9" value=""/>
+      </title_block>
+    </sheet>
+    <sheet number="5" name="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/">
+      <title_block>
+        <title/>
+        <company/>
+        <rev/>
+        <date/>
+        <source>sheet4.kicad_sch</source>
+        <comment number="1" value=""/>
+        <comment number="2" value=""/>
+        <comment number="3" value=""/>
+        <comment number="4" value=""/>
+        <comment number="5" value=""/>
+        <comment number="6" value=""/>
+        <comment number="7" value=""/>
+        <comment number="8" value=""/>
+        <comment number="9" value=""/>
+      </title_block>
+    </sheet>
+    <sheet number="6" name="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/">
+      <title_block>
+        <title/>
+        <company/>
+        <rev/>
+        <date/>
+        <source>sheet5.kicad_sch</source>
+        <comment number="1" value=""/>
+        <comment number="2" value=""/>
+        <comment number="3" value=""/>
+        <comment number="4" value=""/>
+        <comment number="5" value=""/>
+        <comment number="6" value=""/>
+        <comment number="7" value=""/>
+        <comment number="8" value=""/>
+        <comment number="9" value=""/>
+      </title_block>
+    </sheet>
+  </design>
+  <components>
+    <comp ref="CHTR">
+      <value>300n</value>
+      <fields>
+        <field name="Param">c_heater_f</field>
+        <field name="Source">dwg: .3 across the 62K</field>
+        <field name="Tol">paper</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_heater_f"/>
+      <property name="Source" value="dwg: .3 across the 62K"/>
+      <property name="Tol" value="paper"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>c8eb404b-9c70-5f7f-87a6-ddb75812ebb8</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CPCCB">
+      <value>300p</value>
+      <fields>
+        <field name="Param">pcc55_c_half_f</field>
+        <field name="Source">provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)</field>
+        <field name="Genome">pultec.psu.pcc55_winding_capacitance_f</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="pcc55_c_half_f"/>
+      <property name="Source" value="provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"/>
+      <property name="Genome" value="pultec.psu.pcc55_winding_capacitance_f"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>e977c5aa-3cbf-502a-9240-a5c66523f69e</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CPSU1">
+      <value>40u</value>
+      <fields>
+        <field name="Param">c_psu_f</field>
+        <field name="Source">dwg: 40/450 V at +345, +325, +290 and +250 V</field>
+        <field name="Tol">electrolytic</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_psu_f"/>
+      <property name="Source" value="dwg: 40/450 V at +345, +325, +290 and +250 V"/>
+      <property name="Tol" value="electrolytic"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>1e89332c-312c-5604-ad3a-d5d86a78fa71</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CPSU2">
+      <value>40u</value>
+      <fields>
+        <field name="Param">c_psu_f</field>
+        <field name="Source">dwg: 40/450 V at +345, +325, +290 and +250 V</field>
+        <field name="Tol">electrolytic</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_psu_f"/>
+      <property name="Source" value="dwg: 40/450 V at +345, +325, +290 and +250 V"/>
+      <property name="Tol" value="electrolytic"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>74ae1e50-690b-5896-aa4b-b46a76cf7319</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CPSU3">
+      <value>40u</value>
+      <fields>
+        <field name="Param">c_psu_f</field>
+        <field name="Source">dwg: 40/450 V at +345, +325, +290 and +250 V</field>
+        <field name="Tol">electrolytic</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_psu_f"/>
+      <property name="Source" value="dwg: 40/450 V at +345, +325, +290 and +250 V"/>
+      <property name="Tol" value="electrolytic"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>8204133a-01a2-5c98-9662-f0c9c31d77a8</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CPSU4">
+      <value>40u</value>
+      <fields>
+        <field name="Param">c_psu_f</field>
+        <field name="Source">dwg: 40/450 V at +345, +325, +290 and +250 V</field>
+        <field name="Tol">electrolytic</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_psu_f"/>
+      <property name="Source" value="dwg: 40/450 V at +345, +325, +290 and +250 V"/>
+      <property name="Tol" value="electrolytic"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>622bad8e-b286-5177-bbd3-acd391c125c9</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LBAD">
+      <value>5m</value>
+      <fields>
+        <field name="Param">pcc55_leakage_h</field>
+        <field name="Source">provisional: model knowledge (leakage per HV half)</field>
+        <field name="Genome">pultec.psu.pcc55_leakage_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="pcc55_leakage_h"/>
+      <property name="Source" value="provisional: model knowledge (leakage per HV half)"/>
+      <property name="Genome" value="pultec.psu.pcc55_leakage_h"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>c69ff904-18d5-58b7-8504-68ea41252a68</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LPCCA">
+      <value>5m</value>
+      <fields>
+        <field name="Param">pcc55_leakage_h</field>
+        <field name="Source">provisional: model knowledge (leakage per HV half)</field>
+        <field name="Genome">pultec.psu.pcc55_leakage_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="pcc55_leakage_h"/>
+      <property name="Source" value="provisional: model knowledge (leakage per HV half)"/>
+      <property name="Genome" value="pultec.psu.pcc55_leakage_h"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>14921a89-2298-5e44-8aac-a272e86af5c9</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LPCCB">
+      <value>5m</value>
+      <fields>
+        <field name="Param">pcc55_leakage_h</field>
+        <field name="Source">provisional: model knowledge (leakage per HV half)</field>
+        <field name="Genome">pultec.psu.pcc55_leakage_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="pcc55_leakage_h"/>
+      <property name="Source" value="provisional: model knowledge (leakage per HV half)"/>
+      <property name="Genome" value="pultec.psu.pcc55_leakage_h"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>6f05aa3e-1e00-5a34-9003-345dc39748ed</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RHTR_B">
+      <value>62k</value>
+      <fields>
+        <field name="Param">r_heater_bot_ohm</field>
+        <field name="Source">dwg: 62K from the heaters' tap to ground</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_heater_bot_ohm"/>
+      <property name="Source" value="dwg: 62K from the heaters' tap to ground"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>d3021fdd-8c55-5c85-9114-e6a6e3ca8a54</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RHTR_T">
+      <value>270k</value>
+      <fields>
+        <field name="Param">r_heater_top_ohm</field>
+        <field name="Source">dwg: 270K from +325 V to the heaters' tap (+60 V)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_heater_top_ohm"/>
+      <property name="Source" value="dwg: 270K from +325 V to the heaters' tap (+60 V)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>c39c03d7-73bb-5107-8785-a7e517dc26e5</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPCCA">
+      <value>100.0</value>
+      <fields>
+        <field name="Param">pcc55_r_half_ohm</field>
+        <field name="Source">provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)</field>
+        <field name="Genome">pultec.psu.pcc55_r_half_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="pcc55_r_half_ohm"/>
+      <property name="Source" value="provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)"/>
+      <property name="Genome" value="pultec.psu.pcc55_r_half_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>516d8428-4fbd-5a00-a992-a29d97d59f61</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPCCB">
+      <value>100.0</value>
+      <fields>
+        <field name="Param">pcc55_r_half_ohm</field>
+        <field name="Source">provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)</field>
+        <field name="Genome">pultec.psu.pcc55_r_half_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="pcc55_r_half_ohm"/>
+      <property name="Source" value="provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)"/>
+      <property name="Genome" value="pultec.psu.pcc55_r_half_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>ae01f858-1149-5af1-a076-1958042a2f92</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPSU1">
+      <value>470</value>
+      <fields>
+        <field name="Param">r_psu1_ohm</field>
+        <field name="Source">dwg: 470 2W from the 6X4 cathode (+355 V) to +345 V</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_psu1_ohm"/>
+      <property name="Source" value="dwg: 470 2W from the 6X4 cathode (+355 V) to +345 V"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>970074f6-cefb-5087-8e0c-60005ff1a091</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPSU2">
+      <value>1000</value>
+      <fields>
+        <field name="Param">r_psu2_ohm</field>
+        <field name="Source">dwg: 1000 1W from +345 V to +325 V</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_psu2_ohm"/>
+      <property name="Source" value="dwg: 1000 1W from +345 V to +325 V"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>f0d1d8cd-f0f5-5cc3-9edb-65c9d8840f5a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPSU3">
+      <value>2200</value>
+      <fields>
+        <field name="Param">r_psu3_ohm</field>
+        <field name="Source">dwg: 2200 1W from +325 V to the output transformer's centre tap (+290 V)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_psu3_ohm"/>
+      <property name="Source" value="dwg: 2200 1W from +325 V to the output transformer's centre tap (+290 V)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>f5eb04a5-ce58-593b-be49-5ad62bf5484d</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPSU4">
+      <value>47k</value>
+      <fields>
+        <field name="Param">r_psu4_ohm</field>
+        <field name="Source">dwg: 47K from +325 V to the 12AX7 plate loads (+250 V)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_psu4_ohm"/>
+      <property name="Source" value="dwg: 47K from +325 V to the 12AX7 plate loads (+250 V)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>c56b6365-f52d-5420-ab19-aeaf5d635694</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="V3">
+      <value>rectifier_tube</value>
+      <fields>
+        <field name="Model">V3</field>
+        <field name="Tol">tube</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Diode_Dual" description="Dual diode (a full-wave rectifier), units A (pins 1, 2) and B (3, 4)"/>
+      <property name="Model" value="V3"/>
+      <property name="Tol" value="tube"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>a0ade14d-20be-59f5-a989-b890d38e71f2 5cd04de8-b252-534a-8f46-870421d007d7</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+        <unit name="B">
+          <pins>
+            <pin num="3"/>
+            <pin num="4"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="VHVA">
+      <value>292.5</value>
+      <fields>
+        <field name="Param">pcc55_hv_half_rms_v</field>
+        <field name="Source">derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)</field>
+        <field name="Genome">pultec.psu.pcc55_hv_half_rms_v</field>
+        <field name="Notes">open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V</field>
+        <field name="phase_deg">90.0</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Mains" description="A winding fed from the mains (the circuit's `mains` block): pin 1 +, 2 -; Value is its rms voltage at the rated mains"/>
+      <property name="Param" value="pcc55_hv_half_rms_v"/>
+      <property name="Source" value="derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)"/>
+      <property name="Genome" value="pultec.psu.pcc55_hv_half_rms_v"/>
+      <property name="Notes" value="open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V"/>
+      <property name="phase_deg" value="90.0"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>befa7cb4-a6d9-5df1-bf96-336347c51e16</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="VHVB">
+      <value>292.5</value>
+      <fields>
+        <field name="Param">pcc55_hv_half_rms_v</field>
+        <field name="Source">derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)</field>
+        <field name="Genome">pultec.psu.pcc55_hv_half_rms_v</field>
+        <field name="Notes">open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V</field>
+        <field name="phase_deg">270.0</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Mains" description="A winding fed from the mains (the circuit's `mains` block): pin 1 +, 2 -; Value is its rms voltage at the rated mains"/>
+      <property name="Param" value="pcc55_hv_half_rms_v"/>
+      <property name="Source" value="derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)"/>
+      <property name="Genome" value="pultec.psu.pcc55_hv_half_rms_v"/>
+      <property name="Notes" value="open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V"/>
+      <property name="phase_deg" value="270.0"/>
+      <property name="Sheetname" value="power supply"/>
+      <property name="Sheetfile" value="sheet1.kicad_sch"/>
+      <sheetpath names="/power supply/" tstamps="/8c3980b5-849e-5fb3-b36f-421fe8db63bf/"/>
+      <tstamps>54c54c9e-7451-5453-a349-1723b4329309</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RIN_TERM">
+      <value>620</value>
+      <fields>
+        <field name="Param">hs56_r_in_term_ohm</field>
+        <field name="Source">dwg: 620 across the HS-56 secondary</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="hs56_r_in_term_ohm"/>
+      <property name="Source" value="dwg: 620 across the HS-56 secondary"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="input"/>
+      <property name="Sheetfile" value="sheet2.kicad_sch"/>
+      <sheetpath names="/input/" tstamps="/fdf60499-aace-5c55-b20c-3b8e46cf97c5/"/>
+      <tstamps>6d4d3e88-77bc-5488-a6a4-e7c7a98a6fd6</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="Rsrc">
+      <value>600</value>
+      <fields>
+        <field name="Param">source_impedance_ohm</field>
+        <field name="Source">man: input impedance 600 ohms, matching (p.4)</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="source_impedance_ohm"/>
+      <property name="Source" value="man: input impedance 600 ohms, matching (p.4)"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="input"/>
+      <property name="Sheetfile" value="sheet2.kicad_sch"/>
+      <sheetpath names="/input/" tstamps="/fdf60499-aace-5c55-b20c-3b8e46cf97c5/"/>
+      <tstamps>8a166e9f-c31a-5d18-b018-17304e07ae6e</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="T1">
+      <value>core</value>
+      <fields>
+        <field name="material">hs56_core_material</field>
+        <field name="area_m2">hs56_core_area_m2</field>
+        <field name="path_m">hs56_core_path_m</field>
+        <field name="gap_m">hs56_gap_m</field>
+        <field name="turns">hs56_turns</field>
+        <field name="leakage_h">hs56_leakage_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})"/>
+      <property name="material" value="hs56_core_material"/>
+      <property name="area_m2" value="hs56_core_area_m2"/>
+      <property name="path_m" value="hs56_core_path_m"/>
+      <property name="gap_m" value="hs56_gap_m"/>
+      <property name="turns" value="hs56_turns"/>
+      <property name="leakage_h" value="hs56_leakage_h"/>
+      <property name="Sheetname" value="input"/>
+      <property name="Sheetfile" value="sheet2.kicad_sch"/>
+      <sheetpath names="/input/" tstamps="/fdf60499-aace-5c55-b20c-3b8e46cf97c5/"/>
+      <tstamps>554a5196-307b-50a0-ab39-29e9c1302211</tstamps>
+      <units>
+        <unit name="A">
+          <pins/>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W1">
+      <value>p</value>
+      <fields>
+        <field name="Transformer">T1</field>
+        <field name="r">hs56_r_pri_ohm</field>
+        <field name="c">hs56_c_f</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T1"/>
+      <property name="r" value="hs56_r_pri_ohm"/>
+      <property name="c" value="hs56_c_f"/>
+      <property name="Sheetname" value="input"/>
+      <property name="Sheetfile" value="sheet2.kicad_sch"/>
+      <sheetpath names="/input/" tstamps="/fdf60499-aace-5c55-b20c-3b8e46cf97c5/"/>
+      <tstamps>6e0e4e53-36b0-5266-970c-0a7477bdf71b</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W2">
+      <value>s</value>
+      <fields>
+        <field name="Transformer">T1</field>
+        <field name="r">hs56_r_sec_ohm</field>
+        <field name="c">hs56_c_f</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T1"/>
+      <property name="r" value="hs56_r_sec_ohm"/>
+      <property name="c" value="hs56_c_f"/>
+      <property name="Sheetname" value="input"/>
+      <property name="Sheetfile" value="sheet2.kicad_sch"/>
+      <sheetpath names="/input/" tstamps="/fdf60499-aace-5c55-b20c-3b8e46cf97c5/"/>
+      <tstamps>f5cfb349-915d-53be-865f-2cdfac2a6179</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHA5K">
+      <value>220n</value>
+      <fields>
+        <field name="Param">c_ha_5k_f</field>
+        <field name="Source">redraw: 220nF, switched in on 5k</field>
+        <field name="Genome">pultec.network.c_ha_5k_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_ha_5k_f"/>
+      <property name="Source" value="redraw: 220nF, switched in on 5k"/>
+      <property name="Genome" value="pultec.network.c_ha_5k_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>dfe665fb-7645-52e0-a8f0-115daa9c3c0d</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHA10K">
+      <value>68n</value>
+      <fields>
+        <field name="Param">c_ha_10k_f</field>
+        <field name="Source">redraw: the second 68nF, switched in on 10k</field>
+        <field name="Genome">pultec.network.c_ha_10k_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_ha_10k_f"/>
+      <property name="Source" value="redraw: the second 68nF, switched in on 10k"/>
+      <property name="Genome" value="pultec.network.c_ha_10k_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>b199252e-c641-548a-b634-fe9cc386759a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHA68">
+      <value>68n</value>
+      <fields>
+        <field name="Param">c_ha_68n_f</field>
+        <field name="Source">redraw: 68nF from the 75 ohm to the LF-boost node, in on every position</field>
+        <field name="Genome">pultec.network.c_ha_68n_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_ha_68n_f"/>
+      <property name="Source" value="redraw: 68nF from the 75 ohm to the LF-boost node, in on every position"/>
+      <property name="Genome" value="pultec.network.c_ha_68n_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>eee24477-df7d-5627-9938-a52af50582af</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHB15">
+      <value>15n</value>
+      <fields>
+        <field name="Param">c_hb_15n_f</field>
+        <field name="Source">redraw: 15nF on 5k</field>
+        <field name="Genome">pultec.network.c_hb_15n_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_hb_15n_f"/>
+      <property name="Source" value="redraw: 15nF on 5k"/>
+      <property name="Genome" value="pultec.network.c_hb_15n_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>4acb0735-269d-586c-84dd-be5c98f5f744</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHB18">
+      <value>18n</value>
+      <fields>
+        <field name="Param">c_hb_18n_f</field>
+        <field name="Source">redraw: 18nF on 3k and 4k</field>
+        <field name="Genome">pultec.network.c_hb_18n_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_hb_18n_f"/>
+      <property name="Source" value="redraw: 18nF on 3k and 4k"/>
+      <property name="Genome" value="pultec.network.c_hb_18n_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>a00ff54e-d2a3-5b5d-a8d6-c97f1d119006</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHB33">
+      <value>3.3n</value>
+      <fields>
+        <field name="Param">c_hb_3n3_f</field>
+        <field name="Source">redraw: 3.3nF on 16k</field>
+        <field name="Genome">pultec.network.c_hb_3n3_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_hb_3n3_f"/>
+      <property name="Source" value="redraw: 3.3nF on 16k"/>
+      <property name="Genome" value="pultec.network.c_hb_3n3_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>db218e9e-2af8-5517-8b3a-b1f61411e85d</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHB56">
+      <value>5.6n</value>
+      <fields>
+        <field name="Param">c_hb_5n6_f</field>
+        <field name="Source">redraw: 5.6nF on 12k</field>
+        <field name="Genome">pultec.network.c_hb_5n6_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_hb_5n6_f"/>
+      <property name="Source" value="redraw: 5.6nF on 12k"/>
+      <property name="Genome" value="pultec.network.c_hb_5n6_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>73a0086f-6053-5d43-a1ec-55b8c5851f41</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CHB82">
+      <value>8.2n</value>
+      <fields>
+        <field name="Param">c_hb_8n2_f</field>
+        <field name="Source">redraw: 8.2nF on 8k and 10k</field>
+        <field name="Genome">pultec.network.c_hb_8n2_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_hb_8n2_f"/>
+      <property name="Source" value="redraw: 8.2nF on 8k and 10k"/>
+      <property name="Genome" value="pultec.network.c_hb_8n2_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>2ff1138c-d5ad-5841-ae32-2dbe708c3dd6</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLA12">
+      <value>12n</value>
+      <fields>
+        <field name="Param">c_la_12n_f</field>
+        <field name="Source">dwg-interp: redraw 12nF, wired to the switch's common (in on every position; 100 cps alone)</field>
+        <field name="Genome">pultec.network.c_la_12n_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_la_12n_f"/>
+      <property name="Source" value="dwg-interp: redraw 12nF, wired to the switch's common (in on every position; 100 cps alone)"/>
+      <property name="Genome" value="pultec.network.c_la_12n_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>7d9af514-19a7-5271-b2df-0c71c3685c0a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLA20">
+      <value>56n</value>
+      <fields>
+        <field name="Param">c_la_20_f</field>
+        <field name="Source">redraw: 56nF on 20</field>
+        <field name="Genome">pultec.network.c_la_20_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_la_20_f"/>
+      <property name="Source" value="redraw: 56nF on 20"/>
+      <property name="Genome" value="pultec.network.c_la_20_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>d86e2286-3643-52c5-8f2c-bd29b162f101</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLA30">
+      <value>27n</value>
+      <fields>
+        <field name="Param">c_la_30_f</field>
+        <field name="Source">redraw: 27nF on 30</field>
+        <field name="Genome">pultec.network.c_la_30_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_la_30_f"/>
+      <property name="Source" value="redraw: 27nF on 30"/>
+      <property name="Genome" value="pultec.network.c_la_30_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>5fbd8220-dbd6-5360-8c9e-c95b86f2304d</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLA60">
+      <value>8.2n</value>
+      <fields>
+        <field name="Param">c_la_60_f</field>
+        <field name="Source">redraw: 8.2nF on 60</field>
+        <field name="Genome">pultec.network.c_la_60_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_la_60_f"/>
+      <property name="Source" value="redraw: 8.2nF on 60"/>
+      <property name="Genome" value="pultec.network.c_la_60_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>07d255cb-d970-5422-a12f-e0fd720b8ace</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLB20">
+      <value>1.5u</value>
+      <fields>
+        <field name="Param">c_lb_20_f</field>
+        <field name="Source">redraw: 1.5uF on 20</field>
+        <field name="Genome">pultec.network.c_lb_20_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_lb_20_f"/>
+      <property name="Source" value="redraw: 1.5uF on 20"/>
+      <property name="Genome" value="pultec.network.c_lb_20_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>32dd4cd0-791f-5c52-a61c-3eb613227962</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLB30">
+      <value>820n</value>
+      <fields>
+        <field name="Param">c_lb_30_f</field>
+        <field name="Source">redraw: 820nF on 30</field>
+        <field name="Genome">pultec.network.c_lb_30_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_lb_30_f"/>
+      <property name="Source" value="redraw: 820nF on 30"/>
+      <property name="Genome" value="pultec.network.c_lb_30_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>0599a1d4-8279-54c3-a75c-fbdccc99e903</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLB60">
+      <value>220n</value>
+      <fields>
+        <field name="Param">c_lb_60_f</field>
+        <field name="Source">redraw: 220nF on 60</field>
+        <field name="Genome">pultec.network.c_lb_60_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_lb_60_f"/>
+      <property name="Source" value="redraw: 220nF on 60"/>
+      <property name="Genome" value="pultec.network.c_lb_60_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>43e033ed-713d-5200-88d5-264817d4007f</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CLB330">
+      <value>330n</value>
+      <fields>
+        <field name="Param">c_lb_330n_f</field>
+        <field name="Source">dwg-interp: redraw 330nF, wired to the switch's common (in on every position; 100 cps alone)</field>
+        <field name="Genome">pultec.network.c_lb_330n_f</field>
+        <field name="Tol">network</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_lb_330n_f"/>
+      <property name="Source" value="dwg-interp: redraw 330nF, wired to the switch's common (in on every position; 100 cps alone)"/>
+      <property name="Genome" value="pultec.network.c_lb_330n_f"/>
+      <property name="Tol" value="network"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>521a30b8-e182-588d-b26e-d5e81d249067</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LHB27">
+      <value>27m</value>
+      <fields>
+        <field name="Param">l_hb_27m_h</field>
+        <field name="Source">redraw: 27mH on 16k</field>
+        <field name="Genome">pultec.network.l_hb_27m_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="l_hb_27m_h"/>
+      <property name="Source" value="redraw: 27mH on 16k"/>
+      <property name="Genome" value="pultec.network.l_hb_27m_h"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>d7bbe2e7-3241-5753-a409-224b85846f16</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LHB33">
+      <value>33m</value>
+      <fields>
+        <field name="Param">l_hb_33m_h</field>
+        <field name="Source">redraw: 33mH on 10k and 12k (vendor's original tap 32.0 mH, same page)</field>
+        <field name="Genome">pultec.network.l_hb_33m_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="l_hb_33m_h"/>
+      <property name="Source" value="redraw: 33mH on 10k and 12k (vendor's original tap 32.0 mH, same page)"/>
+      <property name="Genome" value="pultec.network.l_hb_33m_h"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>c81e989e-f813-5889-a01e-f7feb6f293be</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LHB47">
+      <value>47m</value>
+      <fields>
+        <field name="Param">l_hb_47m_h</field>
+        <field name="Source">redraw: 47mH on 8k (vendor's original tap 51.1 mH, same page)</field>
+        <field name="Genome">pultec.network.l_hb_47m_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="l_hb_47m_h"/>
+      <property name="Source" value="redraw: 47mH on 8k (vendor's original tap 51.1 mH, same page)"/>
+      <property name="Genome" value="pultec.network.l_hb_47m_h"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>d8f39416-f264-58ee-ba08-e63e03152969</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LHB68">
+      <value>68m</value>
+      <fields>
+        <field name="Param">l_hb_68m_h</field>
+        <field name="Source">redraw: 68mH on 5k</field>
+        <field name="Genome">pultec.network.l_hb_68m_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="l_hb_68m_h"/>
+      <property name="Source" value="redraw: 68mH on 5k"/>
+      <property name="Genome" value="pultec.network.l_hb_68m_h"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>fbf50558-e5f3-53c8-a81f-4c7819f1a980</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LHB82">
+      <value>82m</value>
+      <fields>
+        <field name="Param">l_hb_82m_h</field>
+        <field name="Source">redraw: 82mH on 4k (vendor's original tap 84.3 mH, same page)</field>
+        <field name="Genome">pultec.network.l_hb_82m_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="l_hb_82m_h"/>
+      <property name="Source" value="redraw: 82mH on 4k (vendor's original tap 84.3 mH, same page)"/>
+      <property name="Genome" value="pultec.network.l_hb_82m_h"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>e8987bae-a2ec-56e0-8d88-508c420d9893</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="LHB150">
+      <value>150m</value>
+      <fields>
+        <field name="Param">l_hb_150m_h</field>
+        <field name="Source">redraw: 150mH on 3k (vendor's original tap 150.5 mH: web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)</field>
+        <field name="Genome">pultec.network.l_hb_150m_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="L" description="Inductor (current from pin 1, the dotted end, to pin 2)"/>
+      <property name="Param" value="l_hb_150m_h"/>
+      <property name="Source" value="redraw: 150mH on 3k (vendor's original tap 150.5 mH: web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)"/>
+      <property name="Genome" value="pultec.network.l_hb_150m_h"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>408b0c5f-6cba-5e3f-9842-f1a2f0df4c5a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RBW">
+      <value>2500</value>
+      <fields>
+        <field name="Param">bandwidth_pot_ohm</field>
+        <field name="Source">man: bandwidth control A-B JU-2521, 2500 ohm linear (p.5)</field>
+        <field name="Tol">pot</field>
+        <field name="at">bandwidth</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Rheostat" description="Variable resistor (pins 1, 2): at = 0 is no resistance"/>
+      <property name="Param" value="bandwidth_pot_ohm"/>
+      <property name="Source" value="man: bandwidth control A-B JU-2521, 2500 ohm linear (p.5)"/>
+      <property name="Tol" value="pot"/>
+      <property name="at" value="bandwidth"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>d4f59c85-57b2-574a-be95-ee39585142fe</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RHA">
+      <value>1000</value>
+      <fields>
+        <field name="Param">hf_atten_pot_ohm</field>
+        <field name="Source">man: high attenuate control A-B JU-1021, 1000 ohm linear (p.5)</field>
+        <field name="Tol">pot</field>
+        <field name="at">hf_atten</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Pot" description="Potentiometer: pin 1 end_a, 2 wiper, 3 end_b; at = 0 puts the wiper at pin 1"/>
+      <property name="Param" value="hf_atten_pot_ohm"/>
+      <property name="Source" value="man: high attenuate control A-B JU-1021, 1000 ohm linear (p.5)"/>
+      <property name="Tol" value="pot"/>
+      <property name="at" value="hf_atten"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>76f16a27-0f88-5947-9645-b95af3f4b74e</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="3"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RHA75">
+      <value>75</value>
+      <fields>
+        <field name="Param">hf_atten_r_ohm</field>
+        <field name="Source">redraw: 75 from the HF atten wiper to its capacitors (Barrera's netlist: 75 too)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="hf_atten_r_ohm"/>
+      <property name="Source" value="redraw: 75 from the HF atten wiper to its capacitors (Barrera's netlist: 75 too)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>256d1aff-be27-5ff9-8fe1-f2f40d851237</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RHB">
+      <value>10k</value>
+      <fields>
+        <field name="Param">hf_boost_pot_ohm</field>
+        <field name="Source">man: high boost control A-B JU-1031, 10,000 ohm linear (p.5)</field>
+        <field name="Tol">pot</field>
+        <field name="at">hf_boost</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Pot" description="Potentiometer: pin 1 end_a, 2 wiper, 3 end_b; at = 0 puts the wiper at pin 1"/>
+      <property name="Param" value="hf_boost_pot_ohm"/>
+      <property name="Source" value="man: high boost control A-B JU-1031, 10,000 ohm linear (p.5)"/>
+      <property name="Tol" value="pot"/>
+      <property name="at" value="hf_boost"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>4ae39bde-dbbb-5d10-ae42-634c2e594904</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="3"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLA">
+      <value>100k</value>
+      <fields>
+        <field name="Param">lf_atten_pot_ohm</field>
+        <field name="Source">man: low attenuate control A-B JA-1041, 100,000 ohm audio taper (p.5)</field>
+        <field name="Tol">pot</field>
+        <field name="at">lf_atten</field>
+        <field name="taper_mid">audio_taper_mid</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Rheostat" description="Variable resistor (pins 1, 2): at = 0 is no resistance"/>
+      <property name="Param" value="lf_atten_pot_ohm"/>
+      <property name="Source" value="man: low attenuate control A-B JA-1041, 100,000 ohm audio taper (p.5)"/>
+      <property name="Tol" value="pot"/>
+      <property name="at" value="lf_atten"/>
+      <property name="taper_mid" value="audio_taper_mid"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>38824080-50e8-50f2-8f7c-5cc99c4578da</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLA_SER">
+      <value>1000</value>
+      <fields>
+        <field name="Param">lf_atten_series_ohm</field>
+        <field name="Source">redraw: 1k from the LF atten network to the output (HS-29 pin 4); Barrera's netlist: 1k</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="lf_atten_series_ohm"/>
+      <property name="Source" value="redraw: 1k from the LF atten network to the output (HS-29 pin 4); Barrera's netlist: 1k"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>9f7dbca8-152d-55bf-9624-d3684b4f338c</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLB">
+      <value>10k</value>
+      <fields>
+        <field name="Param">lf_boost_pot_ohm</field>
+        <field name="Source">man: low boost control A-B JA-1031, 10,000 ohm audio taper (p.5)</field>
+        <field name="Tol">pot</field>
+        <field name="at">lf_boost</field>
+        <field name="taper_mid">audio_taper_mid</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Rheostat" description="Variable resistor (pins 1, 2): at = 0 is no resistance"/>
+      <property name="Param" value="lf_boost_pot_ohm"/>
+      <property name="Source" value="man: low boost control A-B JA-1031, 10,000 ohm audio taper (p.5)"/>
+      <property name="Tol" value="pot"/>
+      <property name="at" value="lf_boost"/>
+      <property name="taper_mid" value="audio_taper_mid"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>ec874bcc-40dd-58fd-8549-d0fa7372f66a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLHB27">
+      <value>14.0</value>
+      <fields>
+        <field name="Param">r_hb_27m_ohm</field>
+        <field name="Source">derived: the vendor's first tap, 14 ohm (same)</field>
+        <field name="Genome">pultec.network.r_hb_27m_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_hb_27m_ohm"/>
+      <property name="Source" value="derived: the vendor's first tap, 14 ohm (same)"/>
+      <property name="Genome" value="pultec.network.r_hb_27m_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>0e273843-9dbb-5ae9-a30c-db9d5edb303a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLHB33">
+      <value>15.5</value>
+      <fields>
+        <field name="Param">r_hb_33m_ohm</field>
+        <field name="Source">derived: 14 ohm x sqrt(33 / 27), same</field>
+        <field name="Genome">pultec.network.r_hb_33m_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_hb_33m_ohm"/>
+      <property name="Source" value="derived: 14 ohm x sqrt(33 / 27), same"/>
+      <property name="Genome" value="pultec.network.r_hb_33m_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>7f4af880-34fd-59fa-9339-b0709c50b5ec</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLHB47">
+      <value>18.5</value>
+      <fields>
+        <field name="Param">r_hb_47m_ohm</field>
+        <field name="Source">derived: 14 ohm x sqrt(47 / 27), same</field>
+        <field name="Genome">pultec.network.r_hb_47m_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_hb_47m_ohm"/>
+      <property name="Source" value="derived: 14 ohm x sqrt(47 / 27), same"/>
+      <property name="Genome" value="pultec.network.r_hb_47m_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>0b96d4b4-6520-5346-b5d5-f74295c823a1</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLHB68">
+      <value>22.2</value>
+      <fields>
+        <field name="Param">r_hb_68m_ohm</field>
+        <field name="Source">derived: 14 ohm x sqrt(68 / 27), same</field>
+        <field name="Genome">pultec.network.r_hb_68m_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_hb_68m_ohm"/>
+      <property name="Source" value="derived: 14 ohm x sqrt(68 / 27), same"/>
+      <property name="Genome" value="pultec.network.r_hb_68m_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>aa1ff474-4fab-5039-94e1-b4d3f8a6e5a6</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLHB82">
+      <value>24.4</value>
+      <fields>
+        <field name="Param">r_hb_82m_ohm</field>
+        <field name="Source">derived: 14 ohm x sqrt(82 / 27), same</field>
+        <field name="Genome">pultec.network.r_hb_82m_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_hb_82m_ohm"/>
+      <property name="Source" value="derived: 14 ohm x sqrt(82 / 27), same"/>
+      <property name="Genome" value="pultec.network.r_hb_82m_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>b9f000fc-9ec9-5d77-aab9-50f1e4b01d74</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RLHB150">
+      <value>33.0</value>
+      <fields>
+        <field name="Param">r_hb_150m_ohm</field>
+        <field name="Source">derived: 14 ohm x sqrt(150 / 27), within the vendor's 14-34 ohm (web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)</field>
+        <field name="Genome">pultec.network.r_hb_150m_ohm</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_hb_150m_ohm"/>
+      <property name="Source" value="derived: 14 ohm x sqrt(150 / 27), within the vendor's 14-34 ohm (web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)"/>
+      <property name="Genome" value="pultec.network.r_hb_150m_ohm"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>5983d0c7-0eb8-591a-ab63-7435c72b3bbe</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RSHUNT">
+      <value>10k</value>
+      <fields>
+        <field name="Param">shunt_ohm</field>
+        <field name="Source">redraw: 10k from the output to the LF-boost node; Barrera's netlist: 10k (the EQP-1R's is 12K: [MAN] p.6)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="shunt_ohm"/>
+      <property name="Source" value="redraw: 10k from the output to the LF-boost node; Barrera's netlist: 10k (the EQP-1R's is 12K: [MAN] p.6)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>24758ec1-f05e-5764-9681-20599ad1ad9c</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="SHA">
+      <value>hf_atten_freq_khz</value>
+      <fields>
+        <field name="Control">hf_atten_freq_khz</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="SW_Rotary_3" description="Rotary switch deck, 3 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged"/>
+      <property name="Control" value="hf_atten_freq_khz"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>84aa23e2-6bda-5d8e-8b7b-fa3a02a58a42</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="C"/>
+            <pin num="1"/>
+            <pin num="2"/>
+            <pin num="3"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="SHB">
+      <value>hf_boost_freq_khz</value>
+      <fields>
+        <field name="Control">hf_boost_freq_khz</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="SW_Rotary_7" description="Rotary switch deck, 7 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged"/>
+      <property name="Control" value="hf_boost_freq_khz"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>6d8a8921-cde1-50ff-a77e-edd5d20ae3b0</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="C"/>
+            <pin num="1"/>
+            <pin num="2"/>
+            <pin num="3"/>
+            <pin num="4"/>
+            <pin num="5"/>
+            <pin num="6"/>
+            <pin num="7"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="SHB_B">
+      <value>hf_boost_freq_khz</value>
+      <fields>
+        <field name="Control">hf_boost_freq_khz</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="SW_Rotary_7" description="Rotary switch deck, 7 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged"/>
+      <property name="Control" value="hf_boost_freq_khz"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>7a192fb5-96d1-5772-8262-c6124d6b4b5e</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="C"/>
+            <pin num="1"/>
+            <pin num="2"/>
+            <pin num="3"/>
+            <pin num="4"/>
+            <pin num="5"/>
+            <pin num="6"/>
+            <pin num="7"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="SLA">
+      <value>lf_freq_hz</value>
+      <fields>
+        <field name="Control">lf_freq_hz</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="SW_Rotary_4" description="Rotary switch deck, 4 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged"/>
+      <property name="Control" value="lf_freq_hz"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>b22ad24b-c6ab-581b-a185-c3a3e9e87f40</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="C"/>
+            <pin num="1"/>
+            <pin num="2"/>
+            <pin num="3"/>
+            <pin num="4"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="SLB">
+      <value>lf_freq_hz</value>
+      <fields>
+        <field name="Control">lf_freq_hz</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="SW_Rotary_4" description="Rotary switch deck, 4 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged"/>
+      <property name="Control" value="lf_freq_hz"/>
+      <property name="Sheetname" value="passive network"/>
+      <property name="Sheetfile" value="sheet3.kicad_sch"/>
+      <sheetpath names="/passive network/" tstamps="/ddb3308b-a57f-5d7a-9646-9556595bf870/"/>
+      <tstamps>6ff566da-4737-5038-b1c8-8621952660dc</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="C"/>
+            <pin num="1"/>
+            <pin num="2"/>
+            <pin num="3"/>
+            <pin num="4"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CPP1">
+      <value>20p</value>
+      <fields>
+        <field name="Param">c_plates1_f</field>
+        <field name="Source">dwg: .00002 (uF) from plate to plate</field>
+        <field name="Tol">mica</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_plates1_f"/>
+      <property name="Source" value="dwg: .00002 (uF) from plate to plate"/>
+      <property name="Tol" value="mica"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>0576ae7b-7033-5633-8169-66bea3a255c1</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CZIN">
+      <value>270p</value>
+      <fields>
+        <field name="Param">c_zobel_in_f</field>
+        <field name="Source">dwg: .00027 (uF)</field>
+        <field name="Tol">mica</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_zobel_in_f"/>
+      <property name="Source" value="dwg: .00027 (uF)"/>
+      <property name="Tol" value="mica"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>7e8f0939-354e-5b2e-9f9d-db68a1df2f1b</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RFBA">
+      <value>360</value>
+      <fields>
+        <field name="Param">r_fb_ohm</field>
+        <field name="Source">dwg: 360, each cathode to an end of the output transformer's feedback winding</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_fb_ohm"/>
+      <property name="Source" value="dwg: 360, each cathode to an end of the output transformer's feedback winding"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>ace8be31-6a54-5aec-99a3-5c659e77d0bc</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RFBB">
+      <value>360</value>
+      <fields>
+        <field name="Param">r_fb_ohm</field>
+        <field name="Source">dwg: 360, each cathode to an end of the output transformer's feedback winding</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_fb_ohm"/>
+      <property name="Source" value="dwg: 360, each cathode to an end of the output transformer's feedback winding"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>5a9b5c6d-8679-5b03-b616-8ff7bb2ca89a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RFBR">
+      <value>1000</value>
+      <fields>
+        <field name="Param">r_fb_return_ohm</field>
+        <field name="Source">dwg: 1000 from the feedback winding's tap S to ground (+1.1 V)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_fb_return_ohm"/>
+      <property name="Source" value="dwg: 1000 from the feedback winding's tap S to ground (+1.1 V)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>6d47d05c-7714-530a-a4a8-50583c6b746a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RK1">
+      <value>820</value>
+      <fields>
+        <field name="Param">r_cathodes1_ohm</field>
+        <field name="Source">dwg: 820 between the cathodes (pins 3, 8)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_cathodes1_ohm"/>
+      <property name="Source" value="dwg: 820 between the cathodes (pins 3, 8)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>9438c3c5-1dd9-5660-8fc7-4a1585f88e82</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPL1A">
+      <value>200k</value>
+      <fields>
+        <field name="Param">r_plate1_ohm</field>
+        <field name="Source">dwg: 200K 1W plate loads</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_plate1_ohm"/>
+      <property name="Source" value="dwg: 200K 1W plate loads"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>d290e2be-792c-53ca-9aba-59a8cb5d7b30</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RPL1B">
+      <value>200k</value>
+      <fields>
+        <field name="Param">r_plate1_ohm</field>
+        <field name="Source">dwg: 200K 1W plate loads</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_plate1_ohm"/>
+      <property name="Source" value="dwg: 200K 1W plate loads"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>55f781a3-783c-5824-8dc2-137ab8b218d7</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RZIN">
+      <value>43k</value>
+      <fields>
+        <field name="Param">r_zobel_in_ohm</field>
+        <field name="Source">dwg: 43K in series with .00027 across the HS-29 secondary</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_zobel_in_ohm"/>
+      <property name="Source" value="dwg: 43K in series with .00027 across the HS-29 secondary"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>c34e5362-f549-593c-bbac-f434ea342bad</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="T2">
+      <value>core</value>
+      <fields>
+        <field name="material">hs29_core_material</field>
+        <field name="area_m2">hs29_core_area_m2</field>
+        <field name="path_m">hs29_core_path_m</field>
+        <field name="gap_m">hs29_gap_m</field>
+        <field name="turns">hs29_turns</field>
+        <field name="leakage_h">hs29_leakage_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})"/>
+      <property name="material" value="hs29_core_material"/>
+      <property name="area_m2" value="hs29_core_area_m2"/>
+      <property name="path_m" value="hs29_core_path_m"/>
+      <property name="gap_m" value="hs29_gap_m"/>
+      <property name="turns" value="hs29_turns"/>
+      <property name="leakage_h" value="hs29_leakage_h"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>c761752e-0104-5c8b-bd50-bcc3d833a3c5</tstamps>
+      <units>
+        <unit name="A">
+          <pins/>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="V1">
+      <value>12AX7</value>
+      <fields>
+        <field name="Tol">tube</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Triode_Dual" description="Dual triode, units A (pins 1-3) and B (6-8); each unit is one device instance"/>
+      <property name="Tol" value="tube"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>4503a0dd-a54c-504f-bb7e-cfa7ea6c5e62 02d4455d-b5f5-5874-bd25-1a406b508680</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="2"/>
+            <pin num="1"/>
+            <pin num="3"/>
+          </pins>
+        </unit>
+        <unit name="B">
+          <pins>
+            <pin num="7"/>
+            <pin num="6"/>
+            <pin num="8"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W3">
+      <value>p</value>
+      <fields>
+        <field name="Transformer">T2</field>
+        <field name="r">hs29_r_pri_ohm</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T2"/>
+      <property name="r" value="hs29_r_pri_ohm"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>75dd8d7a-6885-5de5-84e8-37cfb085ac93</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W4">
+      <value>sa</value>
+      <fields>
+        <field name="Transformer">T2</field>
+        <field name="r">hs29_r_sec_a_ohm</field>
+        <field name="c">hs29_c_half_f</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T2"/>
+      <property name="r" value="hs29_r_sec_a_ohm"/>
+      <property name="c" value="hs29_c_half_f"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>b0bdeaa5-0f91-5a3c-8798-a26ffc4f12e2</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W5">
+      <value>sb</value>
+      <fields>
+        <field name="Transformer">T2</field>
+        <field name="r">hs29_r_sec_b_ohm</field>
+        <field name="c">hs29_c_half_f</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T2"/>
+      <property name="r" value="hs29_r_sec_b_ohm"/>
+      <property name="c" value="hs29_c_half_f"/>
+      <property name="Sheetname" value="interstage and 12AX7"/>
+      <property name="Sheetfile" value="sheet4.kicad_sch"/>
+      <sheetpath names="/interstage and 12AX7/" tstamps="/d654d4ba-343f-5797-aa88-c3e4e3e704d4/"/>
+      <tstamps>614aa943-23fe-542a-85c0-9a5668e1746a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CC2A">
+      <value>250n</value>
+      <fields>
+        <field name="Param">c_couple_f</field>
+        <field name="Source">dwg: .25 coupling capacitors</field>
+        <field name="Tol">paper</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_couple_f"/>
+      <property name="Source" value="dwg: .25 coupling capacitors"/>
+      <property name="Tol" value="paper"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>1aa67b29-5ee9-5942-a7b0-9edd23c4d121</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CC2B">
+      <value>250n</value>
+      <fields>
+        <field name="Param">c_couple_f</field>
+        <field name="Source">dwg: .25 coupling capacitors</field>
+        <field name="Tol">paper</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_couple_f"/>
+      <property name="Source" value="dwg: .25 coupling capacitors"/>
+      <property name="Tol" value="paper"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>f931b084-2661-59c1-840f-8e989b8aa693</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CK2A">
+      <value>50u</value>
+      <fields>
+        <field name="Param">c_cathode2_f</field>
+        <field name="Source">dwg: 50/50 V across each 4700</field>
+        <field name="Tol">electrolytic</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_cathode2_f"/>
+      <property name="Source" value="dwg: 50/50 V across each 4700"/>
+      <property name="Tol" value="electrolytic"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>d7c22490-1099-5527-8ac9-bc14472e1905</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CK2B">
+      <value>50u</value>
+      <fields>
+        <field name="Param">c_cathode2_f</field>
+        <field name="Source">dwg: 50/50 V across each 4700</field>
+        <field name="Tol">electrolytic</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_cathode2_f"/>
+      <property name="Source" value="dwg: 50/50 V across each 4700"/>
+      <property name="Tol" value="electrolytic"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>64bfca1a-88b5-5caa-80e1-7b1e26fa4245</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="CZOUT">
+      <value>3n</value>
+      <fields>
+        <field name="Param">c_zobel_out_f</field>
+        <field name="Source">dwg: .003 (uF)</field>
+        <field name="Tol">paper</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="C" description="Capacitor (pins 1, 2)"/>
+      <property name="Param" value="c_zobel_out_f"/>
+      <property name="Source" value="dwg: .003 (uF)"/>
+      <property name="Tol" value="paper"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>b83958fa-becd-591c-90e4-350c8869eac7</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RBIAS_B">
+      <value>62k</value>
+      <fields>
+        <field name="Param">r_bias_bot_ohm</field>
+        <field name="Source">dwg: 62K from the grid divider to ground</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_bias_bot_ohm"/>
+      <property name="Source" value="dwg: 62K from the grid divider to ground"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>7b36915a-5397-5068-91e7-b939af7eca03</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RBIAS_T">
+      <value>470k</value>
+      <fields>
+        <field name="Param">r_bias_top_ohm</field>
+        <field name="Source">dwg: 470K from +250 V to the grid divider (+31 V)</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_bias_top_ohm"/>
+      <property name="Source" value="dwg: 470K from +250 V to the grid divider (+31 V)"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>aeafa06f-3fc5-52d4-8bd5-58b40e601184</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RG2B">
+      <value>1M</value>
+      <fields>
+        <field name="Param">r_grid2_ohm</field>
+        <field name="Source">dwg: 1M grid resistors, from the grids to the 470K / 62K divider</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_grid2_ohm"/>
+      <property name="Source" value="dwg: 1M grid resistors, from the grids to the 470K / 62K divider"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>4b5bca1b-b5ce-5fb2-a83f-59f52dbf9079</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RK2A">
+      <value>4700</value>
+      <fields>
+        <field name="Param">r_cathode2_ohm</field>
+        <field name="Source">dwg: 4700 1W from each cathode to ground (* resistors selected alike)</field>
+        <field name="Tol">matched</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_cathode2_ohm"/>
+      <property name="Source" value="dwg: 4700 1W from each cathode to ground (* resistors selected alike)"/>
+      <property name="Tol" value="matched"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>67861196-808d-5eb0-9d2b-e02f048f5d7d</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RK2B">
+      <value>4700</value>
+      <fields>
+        <field name="Param">r_cathode2_ohm</field>
+        <field name="Source">dwg: 4700 1W from each cathode to ground (* resistors selected alike)</field>
+        <field name="Tol">matched</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_cathode2_ohm"/>
+      <property name="Source" value="dwg: 4700 1W from each cathode to ground (* resistors selected alike)"/>
+      <property name="Tol" value="matched"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>240d2699-c2e6-5974-b587-ea2136ec999b</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="Rload">
+      <value>600</value>
+      <fields>
+        <field name="Param">load_ohm</field>
+        <field name="Source">man: output feeds a 600 ohm load (p.4)</field>
+        <field name="Tol">none</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="load_ohm"/>
+      <property name="Source" value="man: output feeds a 600 ohm load (p.4)"/>
+      <property name="Tol" value="none"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>1d0f0415-d707-50eb-8557-c8172cecf99a</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="RZOUT">
+      <value>620</value>
+      <fields>
+        <field name="Param">r_zobel_out_ohm</field>
+        <field name="Source">dwg: 620 in series with .003 across the output</field>
+        <field name="Tol">r10</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="R" description="Resistor (pins 1, 2)"/>
+      <property name="Param" value="r_zobel_out_ohm"/>
+      <property name="Source" value="dwg: 620 in series with .003 across the output"/>
+      <property name="Tol" value="r10"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>10000c17-fa53-5e74-ad8e-25bec657ac1e</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="T3">
+      <value>core</value>
+      <fields>
+        <field name="material">s217_core_material</field>
+        <field name="area_m2">s217_core_area_m2</field>
+        <field name="path_m">s217_core_path_m</field>
+        <field name="gap_m">s217_gap_m</field>
+        <field name="turns">s217_turns_half</field>
+        <field name="leakage_h">s217_leakage_h</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})"/>
+      <property name="material" value="s217_core_material"/>
+      <property name="area_m2" value="s217_core_area_m2"/>
+      <property name="path_m" value="s217_core_path_m"/>
+      <property name="gap_m" value="s217_gap_m"/>
+      <property name="turns" value="s217_turns_half"/>
+      <property name="leakage_h" value="s217_leakage_h"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>9389647a-e70d-5d39-9638-6508777faebc</tstamps>
+      <units>
+        <unit name="A">
+          <pins/>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="V2">
+      <value>12AU7</value>
+      <fields>
+        <field name="Tol">tube</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Triode_Dual" description="Dual triode, units A (pins 1-3) and B (6-8); each unit is one device instance"/>
+      <property name="Tol" value="tube"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>c4e5d105-c578-582e-b011-a4067012c5f7 c000771d-224c-587f-8e24-9130905b3a76</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="2"/>
+            <pin num="1"/>
+            <pin num="3"/>
+          </pins>
+        </unit>
+        <unit name="B">
+          <pins>
+            <pin num="7"/>
+            <pin num="6"/>
+            <pin num="8"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W6">
+      <value>pa</value>
+      <fields>
+        <field name="Transformer">T3</field>
+        <field name="r">s217_r_half_ohm</field>
+        <field name="c">s217_c_half_f</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T3"/>
+      <property name="r" value="s217_r_half_ohm"/>
+      <property name="c" value="s217_c_half_f"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>5535e959-b17a-57f2-9d5e-db916b2ef1dc</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W7">
+      <value>pb</value>
+      <fields>
+        <field name="Transformer">T3</field>
+        <field name="r">s217_r_half_ohm</field>
+        <field name="c">s217_c_half_f</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T3"/>
+      <property name="r" value="s217_r_half_ohm"/>
+      <property name="c" value="s217_c_half_f"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>f2106ee6-5e56-5811-b8dd-acfa7d053bce</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W8">
+      <value>sa</value>
+      <fields>
+        <field name="Transformer">T3</field>
+        <field name="ratio">s217_sec_per_half</field>
+        <field name="r">s217_r_sec_half_ohm</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T3"/>
+      <property name="ratio" value="s217_sec_per_half"/>
+      <property name="r" value="s217_r_sec_half_ohm"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>4720c975-2fc3-53ef-9c1b-d4d169c2e91c</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W9">
+      <value>sb</value>
+      <fields>
+        <field name="Transformer">T3</field>
+        <field name="ratio">s217_sec_per_half</field>
+        <field name="r">s217_r_sec_half_ohm</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T3"/>
+      <property name="ratio" value="s217_sec_per_half"/>
+      <property name="r" value="s217_r_sec_half_ohm"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>c068fada-aebf-520d-9cd3-27abfe0c7c49</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W10">
+      <value>fa</value>
+      <fields>
+        <field name="Transformer">T3</field>
+        <field name="ratio">s217_ter_per_half</field>
+        <field name="r">s217_r_ter_half_ohm</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T3"/>
+      <property name="ratio" value="s217_ter_per_half"/>
+      <property name="r" value="s217_r_ter_half_ohm"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>ef42ef08-05b6-5447-94e4-0ed278ddf4c3</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+    <comp ref="W11">
+      <value>fb</value>
+      <fields>
+        <field name="Transformer">T3</field>
+        <field name="ratio">s217_ter_per_half</field>
+        <field name="r">s217_r_ter_half_ohm</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description"/>
+      </fields>
+      <libsource lib="varimu" part="Winding" description="Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c"/>
+      <property name="Transformer" value="T3"/>
+      <property name="ratio" value="s217_ter_per_half"/>
+      <property name="r" value="s217_r_ter_half_ohm"/>
+      <property name="Sheetname" value="12AU7 and output"/>
+      <property name="Sheetfile" value="sheet5.kicad_sch"/>
+      <sheetpath names="/12AU7 and output/" tstamps="/1787ef98-69c7-578c-b406-03e3f43119b5/"/>
+      <tstamps>d8740a68-2b92-5cac-85c6-fca2c0196388</tstamps>
+      <units>
+        <unit name="A">
+          <pins>
+            <pin num="1"/>
+            <pin num="2"/>
+          </pins>
+        </unit>
+      </units>
+    </comp>
+  </components>
+  <libparts>
+    <libpart lib="varimu" part="C">
+      <description>Capacitor (pins 1, 2)</description>
+      <fields>
+        <field name="Reference">C</field>
+        <field name="Value">C</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Capacitor (pins 1, 2)</field>
+        <field name="Source"/>
+        <field name="Param"/>
+        <field name="Genome"/>
+        <field name="Tol"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="Core">
+      <description>Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})</description>
+      <fields>
+        <field name="Reference">T</field>
+        <field name="Value">core</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})</field>
+        <field name="material"/>
+        <field name="area_m2"/>
+        <field name="path_m"/>
+        <field name="gap_m"/>
+        <field name="turns"/>
+        <field name="leakage_h"/>
+        <field name="interwinding"/>
+      </fields>
+    </libpart>
+    <libpart lib="varimu" part="Diode_Dual">
+      <description>Dual diode (a full-wave rectifier), units A (pins 1, 2) and B (3, 4)</description>
+      <fields>
+        <field name="Reference">V</field>
+        <field name="Value">6X4</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Dual diode (a full-wave rectifier), units A (pins 1, 2) and B (3, 4)</field>
+        <field name="Tol"/>
+        <field name="Model"/>
+        <field name="emission"/>
+        <field name="mu"/>
+        <field name="grid_contact_v"/>
+        <field name="parallel"/>
+        <field name="area"/>
+        <field name="instance"/>
+        <field name="name"/>
+      </fields>
+      <pins>
+        <pin num="1" name="a" type="passive"/>
+        <pin num="2" name="k" type="passive"/>
+        <pin num="3" name="a" type="passive"/>
+        <pin num="4" name="k" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="L">
+      <description>Inductor (current from pin 1, the dotted end, to pin 2)</description>
+      <fields>
+        <field name="Reference">L</field>
+        <field name="Value">L</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Inductor (current from pin 1, the dotted end, to pin 2)</field>
+        <field name="Source"/>
+        <field name="Param"/>
+        <field name="Genome"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="Mains">
+      <description>A winding fed from the mains (the circuit's `mains` block): pin 1 +, 2 -; Value is its rms voltage at the rated mains</description>
+      <fields>
+        <field name="Reference">V</field>
+        <field name="Value">Mains</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">A winding fed from the mains (the circuit's `mains` block): pin 1 +, 2 -; Value is its rms voltage at the rated mains</field>
+        <field name="Source"/>
+        <field name="Param"/>
+        <field name="Genome"/>
+        <field name="phase_deg"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="Pot">
+      <description>Potentiometer: pin 1 end_a, 2 wiper, 3 end_b; at = 0 puts the wiper at pin 1</description>
+      <fields>
+        <field name="Reference">R</field>
+        <field name="Value">Pot</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Potentiometer: pin 1 end_a, 2 wiper, 3 end_b; at = 0 puts the wiper at pin 1</field>
+        <field name="Source"/>
+        <field name="Param"/>
+        <field name="Genome"/>
+        <field name="Tol"/>
+        <field name="at"/>
+        <field name="taper_mid"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+        <pin num="3" name="3" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="R">
+      <description>Resistor (pins 1, 2)</description>
+      <fields>
+        <field name="Reference">R</field>
+        <field name="Value">R</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Resistor (pins 1, 2)</field>
+        <field name="Source"/>
+        <field name="Param"/>
+        <field name="Genome"/>
+        <field name="Tol"/>
+        <field name="parallel"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="Rheostat">
+      <description>Variable resistor (pins 1, 2): at = 0 is no resistance</description>
+      <fields>
+        <field name="Reference">R</field>
+        <field name="Value">Rheostat</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Variable resistor (pins 1, 2): at = 0 is no resistance</field>
+        <field name="Source"/>
+        <field name="Param"/>
+        <field name="Genome"/>
+        <field name="Tol"/>
+        <field name="at"/>
+        <field name="taper_mid"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="SW_Rotary_3">
+      <description>Rotary switch deck, 3 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged</description>
+      <fields>
+        <field name="Reference">S</field>
+        <field name="Value">SW</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Rotary switch deck, 3 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged</field>
+        <field name="Control"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+        <pin num="3" name="3" type="passive"/>
+        <pin num="C" name="C" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="SW_Rotary_4">
+      <description>Rotary switch deck, 4 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged</description>
+      <fields>
+        <field name="Reference">S</field>
+        <field name="Value">SW</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Rotary switch deck, 4 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged</field>
+        <field name="Control"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+        <pin num="3" name="3" type="passive"/>
+        <pin num="4" name="4" type="passive"/>
+        <pin num="C" name="C" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="SW_Rotary_7">
+      <description>Rotary switch deck, 7 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged</description>
+      <fields>
+        <field name="Reference">S</field>
+        <field name="Value">SW</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Rotary switch deck, 7 positions: contact k is the control's k-th choice (or position min + k - 1); decks with the same Control are ganged</field>
+        <field name="Control"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+        <pin num="3" name="3" type="passive"/>
+        <pin num="4" name="4" type="passive"/>
+        <pin num="5" name="5" type="passive"/>
+        <pin num="6" name="6" type="passive"/>
+        <pin num="7" name="7" type="passive"/>
+        <pin num="C" name="C" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="Triode_Dual">
+      <description>Dual triode, units A (pins 1-3) and B (6-8); each unit is one device instance</description>
+      <fields>
+        <field name="Reference">V</field>
+        <field name="Value">12AX7</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Dual triode, units A (pins 1-3) and B (6-8); each unit is one device instance</field>
+        <field name="Tol"/>
+        <field name="Model"/>
+        <field name="emission"/>
+        <field name="mu"/>
+        <field name="grid_contact_v"/>
+        <field name="parallel"/>
+        <field name="area"/>
+        <field name="instance"/>
+        <field name="name"/>
+      </fields>
+      <pins>
+        <pin num="1" name="p" type="passive"/>
+        <pin num="2" name="g" type="passive"/>
+        <pin num="3" name="k" type="passive"/>
+        <pin num="6" name="p" type="passive"/>
+        <pin num="7" name="g" type="passive"/>
+        <pin num="8" name="k" type="passive"/>
+      </pins>
+    </libpart>
+    <libpart lib="varimu" part="Winding">
+      <description>Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c</description>
+      <fields>
+        <field name="Reference">W</field>
+        <field name="Value">p</field>
+        <field name="Footprint"/>
+        <field name="Datasheet"/>
+        <field name="Description">Transformer winding: pin 1 the dotted end; Value is its label, Transformer its core's Reference; ratio (turns over the reference winding's), r, c</field>
+        <field name="Transformer"/>
+        <field name="ratio"/>
+        <field name="r"/>
+        <field name="c"/>
+      </fields>
+      <pins>
+        <pin num="1" name="1" type="passive"/>
+        <pin num="2" name="2" type="passive"/>
+      </pins>
+    </libpart>
+  </libparts>
+  <libraries>
+    <library logical="varimu">
+      <uri>${KIPRJMOD}/../../varimu.kicad_sym</uri>
+    </library>
+  </libraries>
+  <nets>
+    <net code="1" name="/12AU7 and output/g2a" class="Default">
+      <node ref="CC2A" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="V2" pin="2" pinfunction="g_2" pintype="passive"/>
+    </net>
+    <net code="2" name="/12AU7 and output/g2b" class="Default">
+      <node ref="CC2B" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RG2B" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="V2" pin="7" pinfunction="g_7" pintype="passive"/>
+    </net>
+    <net code="3" name="/12AU7 and output/gb2" class="Default">
+      <node ref="RBIAS_B" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RBIAS_T" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RG2B" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="4" name="/12AU7 and output/k2a" class="Default">
+      <node ref="CK2A" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RK2A" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="V2" pin="3" pinfunction="k_3" pintype="passive"/>
+    </net>
+    <net code="5" name="/12AU7 and output/k2b" class="Default">
+      <node ref="CK2B" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RK2B" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="V2" pin="8" pinfunction="k_8" pintype="passive"/>
+    </net>
+    <net code="6" name="/12AU7 and output/out" class="Default">
+      <node ref="CZOUT" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="Rload" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="W8" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="7" name="/12AU7 and output/p2a" class="Default">
+      <node ref="V2" pin="1" pinfunction="p_1" pintype="passive"/>
+      <node ref="W6" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="8" name="/12AU7 and output/p2b" class="Default">
+      <node ref="V2" pin="6" pinfunction="p_6" pintype="passive"/>
+      <node ref="W7" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="9" name="/12AU7 and output/s9" class="Default">
+      <node ref="W8" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W9" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="10" name="/12AU7 and output/zout" class="Default">
+      <node ref="CZOUT" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RZOUT" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="11" name="/input/in" class="Default">
+      <node ref="Rsrc" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="12" name="/input/in_s" class="Default">
+      <node ref="Rsrc" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W1" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="13" name="/interstage and 12AX7/g1a" class="Default">
+      <node ref="CZIN" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="V1" pin="2" pinfunction="g_2" pintype="passive"/>
+      <node ref="W4" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="14" name="/interstage and 12AX7/g1b" class="Default">
+      <node ref="RZIN" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="V1" pin="7" pinfunction="g_7" pintype="passive"/>
+      <node ref="W5" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="15" name="/interstage and 12AX7/k1a" class="Default">
+      <node ref="RFBA" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RK1" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="V1" pin="3" pinfunction="k_3" pintype="passive"/>
+    </net>
+    <net code="16" name="/interstage and 12AX7/k1b" class="Default">
+      <node ref="RFBB" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RK1" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="V1" pin="8" pinfunction="k_8" pintype="passive"/>
+    </net>
+    <net code="17" name="/interstage and 12AX7/zin" class="Default">
+      <node ref="CZIN" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RZIN" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="18" name="/passive network/eq_m" class="Default">
+      <node ref="CLA12" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RBW" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RHA" pin="3" pinfunction="3_3" pintype="passive"/>
+      <node ref="RHB" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RLA" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SLA" pin="C" pinfunction="C_C" pintype="passive"/>
+    </net>
+    <net code="19" name="/passive network/hac" class="Default">
+      <node ref="CHA68" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RHA75" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="SHA" pin="C" pinfunction="C_C" pintype="passive"/>
+    </net>
+    <net code="20" name="/passive network/haw" class="Default">
+      <node ref="RHA" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RHA75" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="21" name="/passive network/hbc" class="Default">
+      <node ref="SHB" pin="C" pinfunction="C_C" pintype="passive"/>
+      <node ref="SHB_B" pin="C" pinfunction="C_C" pintype="passive"/>
+    </net>
+    <net code="22" name="/passive network/hbl27" class="Default">
+      <node ref="LHB27" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB27" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="23" name="/passive network/hbl33" class="Default">
+      <node ref="LHB33" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB33" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="24" name="/passive network/hbl47" class="Default">
+      <node ref="LHB47" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB47" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="25" name="/passive network/hbl68" class="Default">
+      <node ref="LHB68" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB68" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="26" name="/passive network/hbl82" class="Default">
+      <node ref="LHB82" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB82" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="27" name="/passive network/hbl150" class="Default">
+      <node ref="LHB150" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB150" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="28" name="/passive network/hbr" class="Default">
+      <node ref="RBW" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RLHB150" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB27" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB33" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB47" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB68" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLHB82" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="29" name="/passive network/hbw" class="Default">
+      <node ref="CHB15" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="CHB18" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="CHB33" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="CHB56" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="CHB82" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RHB" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="30" name="/passive network/la" class="Default">
+      <node ref="CLA12" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLA20" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLA30" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLA60" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLA" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLA_SER" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="31" name="/passive network/lb" class="Default">
+      <node ref="CHA10K" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CHA5K" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CHA68" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLB330" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RHA" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RLB" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RSHUNT" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="SLB" pin="C" pinfunction="C_C" pintype="passive"/>
+    </net>
+    <net code="32" name="/passive network/sha_cha5k" class="Default">
+      <node ref="CHA5K" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHA" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="33" name="/passive network/sha_cha10k" class="Default">
+      <node ref="CHA10K" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHA" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="34" name="/passive network/shb_chb15" class="Default">
+      <node ref="CHB15" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="SHB" pin="3" pinfunction="3_3" pintype="passive"/>
+    </net>
+    <net code="35" name="/passive network/shb_chb18" class="Default">
+      <node ref="CHB18" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="SHB" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHB" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="36" name="/passive network/shb_chb33" class="Default">
+      <node ref="CHB33" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="SHB" pin="7" pinfunction="7_7" pintype="passive"/>
+    </net>
+    <net code="37" name="/passive network/shb_chb56" class="Default">
+      <node ref="CHB56" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="SHB" pin="6" pinfunction="6_6" pintype="passive"/>
+    </net>
+    <net code="38" name="/passive network/shb_chb82" class="Default">
+      <node ref="CHB82" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="SHB" pin="4" pinfunction="4_4" pintype="passive"/>
+      <node ref="SHB" pin="5" pinfunction="5_5" pintype="passive"/>
+    </net>
+    <net code="39" name="/passive network/shb_lhb27" class="Default">
+      <node ref="LHB27" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHB_B" pin="7" pinfunction="7_7" pintype="passive"/>
+    </net>
+    <net code="40" name="/passive network/shb_lhb33" class="Default">
+      <node ref="LHB33" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHB_B" pin="5" pinfunction="5_5" pintype="passive"/>
+      <node ref="SHB_B" pin="6" pinfunction="6_6" pintype="passive"/>
+    </net>
+    <net code="41" name="/passive network/shb_lhb47" class="Default">
+      <node ref="LHB47" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHB_B" pin="4" pinfunction="4_4" pintype="passive"/>
+    </net>
+    <net code="42" name="/passive network/shb_lhb68" class="Default">
+      <node ref="LHB68" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHB_B" pin="3" pinfunction="3_3" pintype="passive"/>
+    </net>
+    <net code="43" name="/passive network/shb_lhb82" class="Default">
+      <node ref="LHB82" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHB_B" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="44" name="/passive network/shb_lhb150" class="Default">
+      <node ref="LHB150" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SHB_B" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="45" name="/passive network/sla_cla20" class="Default">
+      <node ref="CLA20" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SLA" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="46" name="/passive network/sla_cla30" class="Default">
+      <node ref="CLA30" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SLA" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="47" name="/passive network/sla_cla60" class="Default">
+      <node ref="CLA60" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SLA" pin="3" pinfunction="3_3" pintype="passive"/>
+    </net>
+    <net code="48" name="/passive network/slb_clb20" class="Default">
+      <node ref="CLB20" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SLB" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="49" name="/passive network/slb_clb30" class="Default">
+      <node ref="CLB30" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SLB" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="50" name="/passive network/slb_clb60" class="Default">
+      <node ref="CLB60" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="SLB" pin="3" pinfunction="3_3" pintype="passive"/>
+    </net>
+    <net code="51" name="/power supply/b0" class="Default">
+      <node ref="RPSU1" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="V3" pin="2" pinfunction="k_2" pintype="passive"/>
+      <node ref="V3" pin="4" pinfunction="k_4" pintype="passive"/>
+    </net>
+    <net code="52" name="/power supply/b1" class="Default">
+      <node ref="CPSU1" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPSU1" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RPSU2" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="53" name="/power supply/b2" class="Default">
+      <node ref="CPSU2" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RHTR_T" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPSU2" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RPSU3" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPSU4" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="54" name="/power supply/htr" class="Default">
+      <node ref="CHTR" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RHTR_B" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RHTR_T" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="55" name="/power supply/hva" class="Default">
+      <node ref="RPCCA" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="VHVA" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="56" name="/power supply/hva_r" class="Default">
+      <node ref="LBAD" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="LPCCA" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPCCA" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="57" name="/power supply/hvb" class="Default">
+      <node ref="RPCCB" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="VHVB" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="58" name="/power supply/hvb_r" class="Default">
+      <node ref="LPCCB" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPCCB" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="59" name="/power supply/rka" class="Default">
+      <node ref="LBAD" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="LPCCA" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="V3" pin="1" pinfunction="a_1" pintype="passive"/>
+    </net>
+    <net code="60" name="/power supply/rkb" class="Default">
+      <node ref="CPCCB" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="LPCCB" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="V3" pin="3" pinfunction="a_3" pintype="passive"/>
+    </net>
+    <net code="61" name="GND" class="Default">
+      <node ref="CHTR" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CK2A" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CK2B" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLB20" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLB30" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLB330" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CLB60" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CPCCB" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CPSU1" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CPSU2" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CPSU3" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="CPSU4" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RFBR" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RHTR_B" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RIN_TERM" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RK2A" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RK2B" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RLB" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RZOUT" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="Rload" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="VHVA" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="VHVB" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W1" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W2" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W3" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="W4" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W5" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="W9" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="62" name="b3" class="Default">
+      <node ref="CPSU3" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPSU3" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W6" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W7" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="63" name="b4" class="Default">
+      <node ref="CPSU4" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RBIAS_T" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPL1A" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPL1B" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPSU4" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="64" name="eq_in" class="Default">
+      <node ref="RHB" pin="3" pinfunction="3_3" pintype="passive"/>
+      <node ref="RIN_TERM" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="W2" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="65" name="eq_out" class="Default">
+      <node ref="RLA_SER" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RSHUNT" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="W3" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="66" name="fba" class="Default">
+      <node ref="RFBA" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W10" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="67" name="fbb" class="Default">
+      <node ref="RFBB" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W11" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="68" name="fbs" class="Default">
+      <node ref="RFBR" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="W10" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="W11" pin="1" pinfunction="1_1" pintype="passive"/>
+    </net>
+    <net code="69" name="p1a" class="Default">
+      <node ref="CC2A" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="CPP1" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="RPL1A" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="V1" pin="1" pinfunction="p_1" pintype="passive"/>
+    </net>
+    <net code="70" name="p1b" class="Default">
+      <node ref="CC2B" pin="1" pinfunction="1_1" pintype="passive"/>
+      <node ref="CPP1" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="RPL1B" pin="2" pinfunction="2_2" pintype="passive"/>
+      <node ref="V1" pin="6" pinfunction="p_6" pintype="passive"/>
+    </net>
+    <net code="71" name="unconnected-(RBIAS_B-Pad2)" class="Default">
+      <node ref="RBIAS_B" pin="2" pinfunction="2_2" pintype="passive"/>
+    </net>
+    <net code="72" name="unconnected-(SHA-Pad3)" class="Default">
+      <node ref="SHA" pin="3" pinfunction="3_3" pintype="passive+no_connect"/>
+    </net>
+    <net code="73" name="unconnected-(SLA-Pad4)" class="Default">
+      <node ref="SLA" pin="4" pinfunction="4_4" pintype="passive+no_connect"/>
+    </net>
+    <net code="74" name="unconnected-(SLB-Pad4)" class="Default">
+      <node ref="SLB" pin="4" pinfunction="4_4" pintype="passive+no_connect"/>
+    </net>
+  </nets>
+</export>

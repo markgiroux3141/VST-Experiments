@@ -1,7 +1,8 @@
 # Device builder: audio devices from schematics, parts with physics, an editor to play
 
 Drafted 2026-10-25 with the user, who started B1 the same day (B1 done
-2026-10-25, B2 done 2026-10-26; next is B3). It replaces
+2026-10-25, B2 done 2026-10-26, B3 built 2026-10-26, its done-when waiting for the
+user's drawing of the EQP-1A). It replaces
 the main plan's Phases 6-8 as the next work (decided 2026-10-25, the user's call;
 the plan's Phase 5, "Closed"). Work milestones in order, each ending with its
 "done when" met and covered by tests, like the main plan and
@@ -223,6 +224,92 @@ reports unconnected pins, floating nodes, loops of voltage sources or inductors,
 rectifier nodes without capacitance, before anything renders.
 *Done when:* B2's circuit drawn in KiCad imports to a file that builds the same IR
 as the hand-written one, and the checks catch a deliberately broken drawing.
+
+*Status 2026-10-26: built; the done-when waits for the user's drawing.*
+
+**Decided with the user.** KiCad 10.0.7 is installed per user (the official
+installer, its signature checked against kicad.org's certificate serial), at
+`%LOCALAPPDATA%\Programs\KiCad\10.0`. The EQP-1A is generated, label-connected, as the
+importer's fixture. The user redraws it later in `kicad/pultec_eqp1a/`, and B3's
+"drawn in KiCad" closes when that drawing imports to the same IR
+(`tests/test_kicad.py::test_user_drawing_imports_to_the_same_ir`, skipped until then).
+
+**What was built.**
+- **The library**: `kicad/varimu.kicad_sym`, 32 symbols from one table
+  (`varimu/kicad/symbols.py`).
+- **The importer** (`varimu/kicad/importer.py`, reading kicad-cli's XML netlist:
+  `netlist.py`).
+- **The exporter** (`export.py`): circuit file to a label-connected project; the
+  fixtures' source and a starting point for drawings.
+- **The pre-flight checks**: `varimu/preflight.py`, kept outside `varimu/circuit`, so
+  the render cache stayed warm.
+- **Commands**: `kicad-import`, `kicad-export`, `kicad-library`, `check`.
+- **The how-to**: `kicad/README.md`.
+
+**Decisions** (the user's request: propose, then take the recommendation):
+- **Fields.** Reference is the part's name. Value is the main value: an engineering
+  number, read exactly through `decimal`, so `40u` is `40.0e-6` and an int stays an
+  int, or a key. Source, Param (makes a number a `values` entry), Genome (the
+  genome_bounds path only: bounds stay in one file), Tol (class, `none`, `tube`).
+  Lowercase fields are the macro's other params, verbatim YAML.
+- **The sidecar.** `<project>.params.yaml` holds what isn't a part.
+- **Sections** are hierarchical sheets.
+- **Rotary switches** are real switch decks (`SW_Rotary_N`, a `Control` field;
+  ganged decks share it). The importer resolves every combination of positions: the
+  common joins the selected contact; what an open contact leaves hanging by one node
+  (chains of two-terminal parts) drops out; parts that come and go become `switch`
+  sub-parts with `in:`.
+- **Transformers** are one pinless `Core` symbol plus `Winding` symbols that name it
+  and can sit on any sheet (T3's feedback winding).
+- **Tubes** are per-type symbols with pins named by role; dual symbols' units are
+  instances `X<ref><unit>`, and `Model` shares one model (the 6X4's halves).
+- **The rectifier check** applies to diode nodes an inductance feeds. Literally
+  ("every rectifier node needs a capacitance") it rejects the working EQP-1A, whose
+  6X4 cathode node has only its 470 ohm on it. CLAUDE.md's failure was an inductance
+  kicking into an empty node.
+- **Element order**: an order-insensitive IR comparison (`varimu/kicad/compare.py`:
+  per section, every element by name equal, every model equal) is the importer's
+  promise. Reproducing the hand-written order would need an order field on every
+  part. What order changes, measured on circuitsim (0.3 s of 1 kHz + 7.3 kHz at 2 V
+  peak after the 1 s settle):
+  - the same IR twice: bit-identical;
+  - imported vs hand-written order: -139.5 dB rms re signal on the EQP-1A (boosts
+    and attenuation in; max 0.9 uV) and -128.9 dB on the 670 (threshold 0.8, TC1;
+    max 4 uV). That is the Newton tolerance's level, far below the engines'
+    agreement with each other.
+  - An imported file has its own render cache keys.
+
+**Measured.**
+- **EQP-1A**: the generated project (5 sheets, 66 parts, 11 windings, 5 switch decks: SHB's capacitors and coil taps on two)
+  imports to the hand-written file's IR with both core models, at the pots' ends and
+  with drawn tolerances (spread 1, seed 7), and with linear cores at all 84 switch
+  combinations. Its values come back with their sources and genome links. Export
+  takes 0.16 s, import 0.07 s, the checks over the 84 combinations ~2 s.
+- **The 670 and the triode stage** round-trip through kicad-cli too (every Time
+  Constant position, a drawn unit). The 670 brings the macros the EQP-1A lacks:
+  T-pad, tapped pot, bridge, VR tube, interwinding capacitance, pentodes, lumped
+  `combined` parts, derived values.
+- **The broken drawing** (`kicad/generated/pultec_eqp1a_broken/`) has four faults, one
+  per check, and all four are caught:
+  - CPCCA left out: the 6X4 plate node rka is fed by the PCC-55's leakage with no
+    capacitor;
+  - RBIAS_B's ground pin open: an unconnected pin, at the netlist and in the IR;
+  - RG2A left out: V2A's grid floats;
+  - an inductor across LPCCA: an inductor loop.
+
+  The import writes nothing (exit 2).
+- **KiCad's own ERC** on the generated project gives 2 warnings: the input label
+  has one pin by design, and GND has no PWR_FLAG.
+- **Tests**: `tests/test_kicad.py`, 15 tests (4 need kicad-cli; the drawing's skips until
+  it exists), 15 s.
+
+**Open, for the user.**
+- **The EQP-1A drawn by hand** (see above).
+- **The 670's T104 bridge.** The checks find one thing in the hand-written 670: its
+  bridge nodes `ay` / `bk`. T104's secondary leakage feeds them, R136 is across them,
+  and there is no capacitor, which is where CLAUDE.md records ngspice stopping.
+  circuitsim runs it. A sourced secondary capacitance (as T104's primaries have)
+  would be a model change, so it comes as an option, not applied.
 
 **B4. The editor loop.** The tweak-and-listen page generalized to any circuit:
 its parameters come from the circuit file (with sources and bounds; front-panel
