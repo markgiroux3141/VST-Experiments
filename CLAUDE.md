@@ -460,10 +460,10 @@ tests skip when ngspice is missing.
   `.op` agreement tests written before then ran at ngspice's default
   tolerances. Pass `digits=16` for full-precision output (the default prints
   ~10 significant digits, ~5e-7 V at B+).
-- **A cold test suite takes hours (measured 2026-10-25, B1).** Any edit to
+- **Edits that invalidate the render cache (B1, 2026-10-25).** Any edit to
   `varimu/{sim,circuit,devices}` or `config.py` changes every render's cache key,
-  and the next full `pytest` re-renders everything: 10 h 27 min instead of ~50 min
-  warm. Don't edit those directories while the suite runs (the key moves again).
+  so the next full `pytest` re-renders. Don't edit those directories while the
+  suite runs (the key moves again mid-run).
 - **Renders and the desktop.** ngspice runs at below-normal priority with one
   thread, and parallel renders default to cpu_count - 2 (`runner:` in
   `sim_settings.yaml`). Don't kill ngspice by walking up process trees: two

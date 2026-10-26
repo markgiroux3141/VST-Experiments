@@ -123,8 +123,7 @@ time, a cold parse is 79 ms). The second circuit, `config/circuits/triode_stage.
 is `test_circuitsim_nonlinear.py`'s triode_stage fixture element for element
 and agrees between circuitsim and ngspice within that fixture's bound
 (`tests/test_circuit_format.py`, which also covers the format's errors). Full
-suite: 343 passed (10 h 27 min cold: the edit invalidates every cached render;
-~50 min warm); cargo test, clippy and fmt clean.
+suite: 343 passed; cargo test, clippy and fmt clean.
 
 **B2. A second real circuit, and per-circuit measurement.** The circuit-sim
 plan's M7: a published tube device built only from the format, preferably with
