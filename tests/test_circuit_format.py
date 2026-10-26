@@ -310,3 +310,27 @@ def test_transformer_part_matches_the_library(tmp_path):
         assert list(ir.elements())[1:] == els
         assert ir.models == (() if cores == "linear" else (core,))
     assert builder.transformer_core(spec, "T1", resolve(spec)) == core
+
+
+def test_tapers_rheostats_and_turns():
+    assert parts.taper(0.3) == 0.3  # linear
+    assert parts.taper(0.5, 0.1) == pytest.approx(0.1)  # audio: 10% at half rotation
+    assert parts.taper(0.0, 0.1) == 0.0 and parts.taper(1.0, 0.1) == pytest.approx(1.0)
+    assert parts.taper(0.25, 0.1) < 0.25 * 0.1 * 2  # log: fine at the bottom
+    r = parts.rheostat("R1", "a", "b", 1e4, 0.5, 0.1)
+    assert r.r_ohm == pytest.approx(1e3)
+    assert parts.rheostat("R1", "a", "b", 1e4, 0.0).r_ohm == parts.MIN_R_OHM
+    a, b = parts.pot("R2", "x", "w", "y", 1e4, 0.5, 0.1)
+    assert (a.r_ohm, b.r_ohm) == (pytest.approx(1e3), pytest.approx(9e3))
+    # Turns for an inductance, back through the transformer's own linear core and gap.
+    core = parts.CoreSpec("mumetall", 0.5e-4, 0.05, 10e-6)
+    n = parts.turns_for_inductance(35.0, core)
+    els, model = parts.transformer(
+        "T9", [parts.WindingSpec("p", "a", "0")], core, turns=n, leakage_h=0.0, cores="linear"
+    )
+    g = sum(
+        1 / e.r_ohm for e in els if isinstance(e, Resistor) and e.name in ("RT9_core", "RT9_gap")
+    )
+    from varimu.devices.core import TESLA_PER_V
+
+    assert n**2 * core.area_m2 * TESLA_PER_V / g == pytest.approx(35.0, rel=1e-9)

@@ -131,3 +131,75 @@ passives:
   mica_capacitor_pct:     {min: 5.0, max: 20.0, unit: pct, source: "provisional: model knowledge (high-voltage mica or ceramic)"}
   electrolytic_minus_pct: {min: 10.0, max: 20.0, unit: pct, source: "provisional: model knowledge (1950s electrolytics)"}
   electrolytic_plus_pct:  {min: 50.0, max: 100.0, unit: pct, source: "provisional: model knowledge (1950s electrolytics)"}
+
+pultec:
+  # Pultec EQP-1A (device builder B2; config/circuits/pultec_eqp1a.yaml has the sources
+  # of the nominal values). Materials: config/magnetics.yaml.
+  hs56:
+    core_material:          {choices: [mumetall, permalloy_fluxgate, grain_oriented_si_steel], source: "provisional: model knowledge (Triad's low-level HS series: high-nickel cores in mu-metal cases)"}
+    core_area_m2:           {min: 0.3e-4, max: 1.0e-4, unit: m2, source: "provisional: model knowledge (a core in a GP-4 case: Triad HS series 1958 catalogue)"}
+    core_path_m:            {min: 0.03, max: 0.07, unit: m, source: "provisional: model knowledge"}
+    air_gap_m:              {min: 2.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints)"}
+    turns:                  {min: 1900, max: 3100, unit: turns, source: "derived: 21-49 H in the linear limit at the nominal geometry, Triad's range (HS-56 sheet)", notes: "primary"}
+    leakage_h:              {min: 0.5e-3, max: 10.0e-3, unit: H, source: "provisional: model knowledge (a 600 ohm line transformer flat to 30 kHz: Triad's -0.48 dB)"}
+    winding_capacitance_f:  {min: 30.0e-12, max: 300.0e-12, unit: F, source: "provisional: model knowledge (600 ohm line windings)"}
+  hs29:
+    core_material:          {choices: [mumetall, permalloy_fluxgate, grain_oriented_si_steel], source: "provisional: model knowledge (as the HS-56)"}
+    core_area_m2:           {min: 0.3e-4, max: 1.0e-4, unit: m2, source: "provisional: model knowledge (GP-4 case)"}
+    core_path_m:            {min: 0.03, max: 0.07, unit: m, source: "provisional: model knowledge"}
+    air_gap_m:              {min: 2.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints)"}
+    turns:                  {min: 10500, max: 16800, unit: turns, source: "derived: 600-1500 H in the linear limit at the nominal geometry; 600 H is Triad's minimum (HS-29 sheet), the top provisional", notes: "primary"}
+    leakage_h:              {min: 5.0e-3, max: 100.0e-3, unit: H, source: "provisional: model knowledge (high-impedance interstage)"}
+    winding_capacitance_f:  {min: 100.0e-12, max: 600.0e-12, unit: F, source: "provisional: model knowledge (Triad's -2.35 dB at 20 kHz with Rs 20k / RL 80k)", notes: "per secondary half"}
+  s217:
+    core_material:          {choices: [grain_oriented_si_steel, mumetall, permalloy_fluxgate], source: "provisional: model knowledge (L12 laminations, material undocumented)"}
+    core_area_m2:           {min: 1.0e-4, max: 4.0e-4, unit: m2, source: "provisional: model knowledge (57-230 H across the primary with the rebuild's turns)"}
+    core_path_m:            {min: 0.06, max: 0.12, unit: m, source: "provisional: model knowledge"}
+    air_gap_m:              {min: 5.0e-6, max: 50.0e-6, unit: m, source: "provisional: model knowledge (butt joints; push-pull)"}
+    turns_half:             {min: 1400, max: 1750, unit: turns, source: "web: https://groupdiy.com/threads/peerless-s-217-d-diy.51046 (1575 per coil, unverified); +-10% provisional"}
+    sec_ratio:              {min: 0.21, max: 0.24, unit: ratio, source: "web: same thread (352 / 1575 = 0.2235); +-6% provisional"}
+    tertiary_ratio:         {min: 0.04, max: 0.05, unit: ratio, source: "web: same thread (71 / 1575 = 0.0451); +-10% provisional"}
+    r_half_ohm:             {min: 80.0, max: 300.0, unit: ohm, source: "provisional: model knowledge (12.5k CT primary halves)"}
+    r_sec_half_ohm:         {min: 5.0, max: 30.0, unit: ohm, source: "provisional: model knowledge"}
+    r_ter_half_ohm:         {min: 0.5, max: 5.0, unit: ohm, source: "provisional: model knowledge"}
+    leakage_h:              {min: 5.0e-3, max: 50.0e-3, unit: H, source: "provisional: model knowledge"}
+    winding_capacitance_f:  {min: 50.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull primaries)"}
+  psu:
+    pcc55_hv_half_rms_v:    {min: 240.0, max: 320.0, unit: V, source: "provisional: model knowledge (around the value that gives the drawing's +355 V at the 6X4 cathode)"}
+    pcc55_r_half_ohm:       {min: 50.0, max: 200.0, unit: ohm, source: "provisional: model knowledge (25 W mains transformer HV halves)"}
+    pcc55_leakage_h:        {min: 1.0e-3, max: 20.0e-3, unit: H, source: "provisional: model knowledge"}
+    pcc55_winding_capacitance_f: {min: 100.0e-12, max: 1.0e-9, unit: F, source: "provisional: model knowledge"}
+  pots:
+    audio_taper_mid:        {min: 0.05, max: 0.2, unit: ratio, source: "provisional: model knowledge (audio tapers put 5-20% of the track at half rotation)"}
+  network:
+    # Capacitors: +-10% (HF), +-20% (LF banks: spans the EQP-1R's values, [MAN] p.6).
+    # Coils: span the redraw and a vendor's figures for the original taps (web:
+    # https://vintagewindings.com/products/VintageWindings%20EQ-1A.html).
+    c_hb_18n_f:   {min: 16.2e-9, max: 19.8e-9, unit: F, source: "provisional: redraw 18nF +-10%"}
+    c_hb_15n_f:   {min: 13.5e-9, max: 16.5e-9, unit: F, source: "provisional: redraw 15nF +-10%"}
+    c_hb_8n2_f:   {min: 7.4e-9, max: 9.0e-9, unit: F, source: "provisional: redraw 8.2nF +-10%"}
+    c_hb_5n6_f:   {min: 5.0e-9, max: 6.2e-9, unit: F, source: "provisional: redraw 5.6nF +-10%"}
+    c_hb_3n3_f:   {min: 3.0e-9, max: 3.6e-9, unit: F, source: "provisional: redraw 3.3nF +-10%"}
+    l_hb_150m_h:  {min: 0.140, max: 0.160, unit: H, source: "web: vendor's original tap 150.5 mH and recalculation 156 mH; redraw 150 mH"}
+    l_hb_82m_h:   {min: 0.078, max: 0.092, unit: H, source: "web: vendor 84.3 / 87.9 mH; redraw 82 mH"}
+    l_hb_68m_h:   {min: 0.064, max: 0.072, unit: H, source: "web: vendor 67.5 mH; redraw 68 mH"}
+    l_hb_47m_h:   {min: 0.045, max: 0.053, unit: H, source: "web: vendor 48.2 / 51.1 mH; redraw 47 mH"}
+    l_hb_33m_h:   {min: 0.030, max: 0.035, unit: H, source: "web: vendor 31.4 / 32.0 mH; redraw 33 mH"}
+    l_hb_27m_h:   {min: 0.025, max: 0.031, unit: H, source: "web: vendor 29.9 mH; redraw 27 mH"}
+    r_hb_150m_ohm: {min: 10.0, max: 40.0, unit: ohm, source: "web: vendor, original taps 14-34 ohm (widened)"}
+    r_hb_82m_ohm:  {min: 10.0, max: 40.0, unit: ohm, source: "web: same"}
+    r_hb_68m_ohm:  {min: 10.0, max: 40.0, unit: ohm, source: "web: same"}
+    r_hb_47m_ohm:  {min: 10.0, max: 40.0, unit: ohm, source: "web: same"}
+    r_hb_33m_ohm:  {min: 10.0, max: 40.0, unit: ohm, source: "web: same"}
+    r_hb_27m_ohm:  {min: 10.0, max: 40.0, unit: ohm, source: "web: same"}
+    c_ha_68n_f:   {min: 61.0e-9, max: 75.0e-9, unit: F, source: "provisional: redraw 68nF +-10%"}
+    c_ha_10k_f:   {min: 61.0e-9, max: 75.0e-9, unit: F, source: "provisional: redraw 68nF +-10% (with the first: 136 nF on 10k; the EQP-1R's .13 uF)"}
+    c_ha_5k_f:    {min: 198.0e-9, max: 242.0e-9, unit: F, source: "provisional: redraw 220nF +-10%"}
+    c_la_12n_f:   {min: 9.6e-9, max: 14.4e-9, unit: F, source: "provisional: redraw 12nF +-20% (the EQP-1R's 100 cps: 10 nF)"}
+    c_la_20_f:    {min: 44.8e-9, max: 67.2e-9, unit: F, source: "provisional: redraw 56nF +-20%"}
+    c_la_30_f:    {min: 21.6e-9, max: 32.4e-9, unit: F, source: "provisional: redraw 27nF +-20% (the EQP-1R's 30 cps total: 36.2 nF)"}
+    c_la_60_f:    {min: 6.6e-9, max: 9.8e-9, unit: F, source: "provisional: redraw 8.2nF +-20% (the EQP-1R's 60 cps total: 20 nF)"}
+    c_lb_330n_f:  {min: 264.0e-9, max: 396.0e-9, unit: F, source: "provisional: redraw 330nF +-20% (the EQP-1R's 100 cps: .28 uF)"}
+    c_lb_20_f:    {min: 1.2e-6, max: 1.8e-6, unit: F, source: "provisional: redraw 1.5uF +-20%"}
+    c_lb_30_f:    {min: 656.0e-9, max: 984.0e-9, unit: F, source: "provisional: redraw 820nF +-20% (the EQP-1R's 30 cps total: 1 uF)"}
+    c_lb_60_f:    {min: 176.0e-9, max: 264.0e-9, unit: F, source: "provisional: redraw 220nF +-20% (the EQP-1R's 60 cps total: .47 uF)"}

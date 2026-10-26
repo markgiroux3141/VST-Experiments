@@ -168,6 +168,31 @@ parameters. New devices: the 12AU7 (Koren's table, like the 12AX7) and the 6X4
    published curves, THD vs level) and plausibility screen; the 670's reports
    unchanged.
 
+*Status 2026-10-26: steps 1-4 done.* (1) Sources, 12AU7, 6X4 (its fit gives the
+sheet's 22 V drop at 70 mA: 22.03 V). (2) `rheostat` macro, potentiometer tapers
+(`taper_mid`: audio taper through (0.5, mid)), controls with `choices`;
+`parts.turns_for_inductance`; the 670's IR stays identical. (3)
+`config/circuits/pultec_eqp1a.yaml`: 116 elements, 5 tube models, 3 transformers
+(HS-56 and HS-29 from Triad's sheets: ratios, winding resistances, inductances; the
+S-217-D's turns from a rebuild, unverified). The passive network's topology is
+Pulse Techniques' EQP-1R drawing and Barrera's EQP-1A netlist (they agree); its
+values the redraw's, read with one capacitor always in per LF bank (then within
+~15% of the EQP-1R's). One derived supply value (`scripts/calibrate_pultec_psu.py`:
+PCC-55 292.5 V rms per HV half) puts the rails at 353 / 344 / 325 / 288 / 256 / 61 V
+against the drawing's 355 / 345 / 325 / 290 / 250 / 60 V; the 12AU7 cathodes idle at
+36.6 V (40 printed), the 12AX7's at 1.13 V (1.3). Small-signal (circuitsim
+multitone): overall gain +0.4 dB at 1 kHz (drawing: 0 dB); LF boost +13.1 dB at
+20 Hz (brochure 13.5), LF atten -17.1 dB (17.5), HF atten 20k -16.0 dB at 20 kHz
+(16), HF boost peaks on every selected frequency at +20.5 dB sharp (brochure 18:
+only the coils' 14-33 ohm limit the Q; core loss isn't modeled), +11.3 dB broad;
+the flat response droops to -1.9 dB at 20 kHz (the amplifier's spec is +0 / -1 dB:
+the provisional HS-29 capacitance is the likely cause; for step 5). Runs at ~2.5x
+slower than real time. (4) Both engines on the linear-core build, ngspice as a
+reference with tabulated triodes: -63 / -67 dB of the swing at the output (k = 4 /
+8), the network and transformer nodes -69 / -80 dB (second order); ngspice's exact
+triode formulation stalled at reference tolerances (over 700 s of CPU for 10 ms).
+Tests: `tests/test_pultec.py`.
+
 **B3. KiCad as the schematic editor.** A KiCad symbol library for the macro parts
 whose fields carry value, source, genome bounds and tolerance class; an importer
 from KiCad's exported netlist (`kicad-cli`) to the circuit format; a check that

@@ -60,13 +60,43 @@ def resistor(name: str, a: str, b: str, ohms: float) -> Resistor:
     return Resistor(name, a, b, max(ohms, MIN_R_OHM))
 
 
-def pot(name: str, end_a: str, wiper: str, end_b: str, total: float, pos: float) -> list[Resistor]:
+def taper(pos: float, mid: float | None = None) -> float:
+    """The fraction of a track between its start and a wiper at rotation `pos` (0..1).
+    Linear (mid None): pos. An audio (logarithmic) taper with `mid` of the track at half
+    rotation: (a^pos - 1) / (a - 1), a = ((1 - mid) / mid)^2, which passes through 0,
+    (0.5, mid) and 1."""
+    if mid is None:
+        return pos
+    if not 0 < mid < 0.5:
+        raise ValueError(f"taper mid {mid} must be in (0, 0.5)")
+    a = ((1 - mid) / mid) ** 2
+    return (a**pos - 1) / (a - 1)
+
+
+def pot(
+    name: str,
+    end_a: str,
+    wiper: str,
+    end_b: str,
+    total: float,
+    pos: float,
+    taper_mid: float | None = None,
+) -> list[Resistor]:
     """Potentiometer `name` (elements <name>a, <name>b); pos = 0 puts the wiper at end_a,
-    1 at end_b."""
+    1 at end_b; the track follows `taper` from end_a (linear by default)."""
+    f = pos if taper_mid is None else taper(pos, taper_mid)
     return [
-        resistor(f"{name}a", end_a, wiper, pos * total),
-        resistor(f"{name}b", wiper, end_b, (1 - pos) * total),
+        resistor(f"{name}a", end_a, wiper, f * total),
+        resistor(f"{name}b", wiper, end_b, (1 - f) * total),
     ]
+
+
+def rheostat(
+    name: str, a: str, b: str, total: float, pos: float, taper_mid: float | None = None
+) -> Resistor:
+    """A potentiometer used as a variable resistor (its wiper tied to one end): the track
+    between the other end and the wiper, taper(pos) x total (0 = no resistance)."""
+    return resistor(name, a, b, taper(pos, taper_mid) * total)
 
 
 def tapped_pot(
@@ -130,6 +160,17 @@ class CoreSpec:
     area_m2: float
     path_m: float
     gap_m: float
+
+
+def turns_for_inductance(l_h: float, core: CoreSpec) -> float:
+    """Turns of a winding whose inductance is `l_h` in the core's linear limit (its
+    susceptibility at the demagnetized origin) with the joint gap: the magnetic circuit
+    is G u = N i with G the core's and the gap's conductance on the core node, and the
+    winding's voltage N A TESLA_PER_V du/dt, so L = N^2 A TESLA_PER_V / G."""
+    g = transformer_core("x", core).linear_conductance()
+    if core.gap_m > 0:
+        g += core.gap_m * TESLA_PER_V / MU0
+    return math.sqrt(l_h * g / (core.area_m2 * TESLA_PER_V))
 
 
 def transformer_core(name: str, core: CoreSpec) -> MagneticCore:

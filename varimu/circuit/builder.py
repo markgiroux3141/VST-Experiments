@@ -24,7 +24,9 @@ Macro parts (connection; params, * = required):
     sine        [pos, neg]; amplitude_v*, freq_hz*, offset_v, phase_deg
     mains       [pos, neg]; v_rms* (at the rated mains), phase_deg  (the file's `mains`)
     device      [pins...] (the model's pin order); model* (a `devices` key)
-    pot         [end_a, wiper, end_b]; r*, at* (0 = wiper at end_a)
+    pot         [end_a, wiper, end_b]; r*, at* (0 = wiper at end_a), taper_mid (an
+                audio taper: the track's fraction at half rotation; default linear)
+    rheostat    [a, b]; r*, at* (0 = no resistance), taper_mid
     tapped_pot  [end_a, tap, wiper, end_b]; r*, at*, tap* (fractions from end_a)
     t_pad       [a, b, common]; z*, atten_db*
     switch      <control key>; parts* (sub-parts, each with `in: [positions]` or always)
@@ -35,7 +37,7 @@ Macro parts (connection; params, * = required):
     bridge      [ac_a, ac_b, plus, minus]; model*, arm_c_f_per_area, area
     vr_tube     [anode, mid, cathode]; model*, operating_v*, ref_current_a*
 
-R, C, pot, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
+R, C, pot, rheostat, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
 the file's tolerance classes); a switch's sub-parts take their own.
 
 A `devices` entry: {device* (a device file, or a parameter naming one),
@@ -368,9 +370,15 @@ for _name, _macro in {
     "mains": Macro(_mains, 2, {"v_rms": _P, "phase_deg": Param("number", 0.0)}),
     "device": Macro(_nodes_device, None, {"model": Param("device")}),
     "pot": Macro(
-        lambda ctx, n, c, a: parts.pot(n, *c, a["r"], a["at"]),
+        lambda ctx, n, c, a: parts.pot(n, *c, a["r"], a["at"], a["taper_mid"]),
         3,
-        {"r": _P, "at": _N},
+        {"r": _P, "at": _N, "taper_mid": Param("physical", None)},
+        toleranced=True,
+    ),
+    "rheostat": Macro(
+        lambda ctx, n, c, a: [parts.rheostat(n, *c, a["r"], a["at"], a["taper_mid"])],
+        2,
+        {"r": _P, "at": _N, "taper_mid": Param("physical", None)},
         toleranced=True,
     ),
     "tapped_pot": Macro(

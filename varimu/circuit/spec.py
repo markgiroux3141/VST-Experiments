@@ -7,7 +7,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     title: ...                      # the IR's title
     input: in                       # the node the audio input drives
     probes: [out, cv, ...]          # node voltages every render saves
-    controls: {key: {value, min, max, source, unit?, notes?}}
+    controls: {key: {value, min, max | choices, source, unit?, notes?}}
     values: {key: {value, source, genome?, unit?, notes?}}
     device_params: {key: {value, source, genome?}}   # act on device instances
     derived: {module: python.module, values: {key: {source}}}
@@ -18,8 +18,9 @@ varimu.circuit.builder, which expands its parts with the parts library
 
 Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
-any control, value or device parameter. A control with `unit: position` is an
-integer switch position. Values linked to the genome (`genome:`) have their
+any control, value or device parameter. A control has `min` and `max`, or
+`choices` (a switch's positions, e.g. its frequencies); one with `unit: position`
+is an integer switch position. Values linked to the genome (`genome:`) have their
 bounds in config/genome_bounds.yaml. A device parameter may be null: the
 device file's value. Derived values are functions of the resolved parameters,
 named in the file with their source and computed by the module's function of
@@ -137,8 +138,10 @@ def load_circuit(path: Path) -> CircuitSpec:
     device_params = data.get("device_params") or {}
     for k, e in controls.items():
         _sourced(f"controls.{k}", e, errors)
-        if isinstance(e, Mapping) and not {"min", "max"} <= set(e):
-            errors.append(f"controls.{k}: needs `min` and `max`")
+        if isinstance(e, Mapping) and not ({"min", "max"} <= set(e) or "choices" in e):
+            errors.append(f"controls.{k}: needs `min` and `max`, or `choices`")
+        elif isinstance(e, Mapping) and "choices" in e and e.get("value") not in e["choices"]:
+            errors.append(f"controls.{k}: value {e.get('value')!r} not in its choices")
     for k, e in values.items():
         _sourced(f"values.{k}", e, errors)
     for k, e in device_params.items():
@@ -207,7 +210,10 @@ def resolve(spec: CircuitSpec, overrides: Mapping[str, Any] | None = None) -> di
             raise KeyError(f"unknown circuit parameter {k!r}")
         p[k] = v
     for k, e in spec.controls.items():
-        if not e["min"] <= p[k] <= e["max"]:
+        if "choices" in e:
+            if p[k] not in e["choices"]:
+                raise ValueError(f"control {k}={p[k]} not one of {e['choices']}")
+        elif not e["min"] <= p[k] <= e["max"]:
             raise ValueError(f"control {k}={p[k]} outside [{e['min']}, {e['max']}]")
     for k, e in spec.controls.items():
         if e.get("unit") == "position":
