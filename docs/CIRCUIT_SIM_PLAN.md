@@ -1121,7 +1121,9 @@ winding capacitances).
 
 **M7. Beyond the 670.** (Deferred until main plan Phase 2 is done; see
 "Milestone order after M6" above. Since 2026-10-25 it is the device builder
-plan's B2, after B1's generic circuit format: docs/DEVICE_BUILDER_PLAN.md.) Device library growth, and a second circuit as proof
+plan's B2, after B1's generic circuit format: docs/DEVICE_BUILDER_PLAN.md.
+*Done 2026-10-26 as B2: the Pultec EQP-1A on both engines, ngspice agreement
+-67 dB at k = 8 with tabulated triodes, no engine changes; new devices 12AU7, 6X4.*) Device library growth, and a second circuit as proof
 of generality: a passive tube EQ (LC network plus tube make-up stage), with
 its own sourced YAML and ngspice agreement tests. Then BJT, JFET, op-amp and
 opto-cell models as circuits need them.

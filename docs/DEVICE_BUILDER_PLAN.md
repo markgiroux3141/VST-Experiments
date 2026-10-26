@@ -1,7 +1,7 @@
 # Device builder: audio devices from schematics, parts with physics, an editor to play
 
 Drafted 2026-10-25 with the user, who started B1 the same day (B1 done
-2026-10-25; next is B2). It replaces
+2026-10-25, B2 done 2026-10-26; next is B3). It replaces
 the main plan's Phases 6-8 as the next work (decided 2026-10-25, the user's call;
 the plan's Phase 5, "Closed"). Work milestones in order, each ending with its
 "done when" met and covered by tests, like the main plan and
@@ -192,6 +192,29 @@ reference with tabulated triodes: -63 / -67 dB of the swing at the output (k = 4
 8), the network and transformer nodes -69 / -80 dB (second order); ngspice's exact
 triode formulation stalled at reference tolerances (over 700 s of CPU for 10 ms).
 Tests: `tests/test_pultec.py`.
+
+*Status 2026-10-26: step 5 done, so B2 is done.* Per-circuit profiles
+(`varimu/measure/profiles.py`): the 670's is today's suite (`varimu.measure.suite`,
+setup procedures, plausibility), untouched; render jobs name a circuit file
+(`RenderJob.circuit`), and a job without one builds the 670 through
+`netlist.build` as before (a test pins its cache keys). The EQP-1A's profile is
+`varimu.measure.eq_suite` (`varimu unit --circuit pultec_eqp1a --name NAME`, ~60 s
+cold): the generic screen (`varimu.measure.generic`: idle quiet, supply rails within
+10% of the drawing after 6 s of idle, no spurs on a tone, overall gain within 6 dB),
+the response at every published family's extreme against the manual's curves
+(`data/datasheets/pultec_eqp1a_curves.csv`: 68 points of 24 panels read by eye at
+400 dpi, +-1.5 dB, with provenance), the brochure's ranges at the selected
+frequencies, THD vs level. Nominal unit (reports/units/pultec_nominal/): passes;
+rails within 2.1%; ranges LF boost 13.4 / LF atten 17.6 / HF atten 16.7 / HF boost
+sharp 20.6 dB against 13.5 / 17.5 / 16 / 18; 65 of 68 curve points within 2 dB
+(the worst: the sharp HF peaks, ~2 dB high, and the 5 kc attenuate's knee, 2.3 dB);
+THD at +10 dBm 0.0055% with matched tubes, 0.073-0.074% for two units with drawn
+part and tube tolerances (seeds 3, 11), against the brochure's 0.15%; at +21 dBm
+0.026% / 0.26%. The heaters' +60 V tap is reported, not checked: a divider of two
+10% resistors, it read +12.9% on a working unit. Open, for the user (new physics
+comes as options): the sharp HF boost's Q (the coil's core loss isn't modeled; only
+its 14-33 ohm) and the flat response's -1.9 dB at 20 kHz (the provisional HS-29
+capacitance; the brochure's amplifier is +0 / -1 dB). Noise waits for B5.
 
 **B3. KiCad as the schematic editor.** A KiCad symbol library for the macro parts
 whose fields carry value, source, genome bounds and tolerance class; an importer

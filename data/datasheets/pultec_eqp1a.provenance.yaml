@@ -1,0 +1,20 @@
+device: Pultec EQP-1A program equalizer
+document: "Installation and operating instructions, Pultec model EQP-1A program equalizer (Pulse Techniques, Inc.)"
+publisher: Pulse Techniques, Inc.
+date: TBD (not printed; the drawing in the same manual is DWG E-72,658-2)
+local_copy: "not committed: data/schematics/pultec_eqp1a/response_curves.png is the page (200 dpi)"
+local_copy_sha256: 2bb99d5fcf170884aa06e2f5996e3f534f693d5f36b5e4f3465357498b8abdb1
+scan_source: "web: https://archive.org/details/Pultec_EQP-1A_owners_manual (Pultec_EQP-1A_owners_manual.pdf, page 3)"
+digitized_with: "page 3 rendered at 400 dpi (pdftoppm), rotated, each panel cropped and read by eye on its grid: x from the labelled 20 / 100 / 1KC / 10KC lines (log axis, 10 Hz to 20 kHz, ~255 px per decade at 400 dpi), y from the labelled 0 and 16 / 20 dB lines (Claude Code, 2026-10-26)"
+digitized_by: Claude Code
+digitized_on: 2026-10-26
+files:
+  pultec_eqp1a_curves.csv:
+    figure: "page 3: the response families of every LF boost / attenuate (20 / 30 / 60 / 100 cps), HF peak boost sharp and broad (3-16 kc) and HF attenuate (5 / 10 / 20 kc) position"
+    columns: "panel (the family: control_frequency), freq_hz, db (boost +, attenuation -)"
+    curves: "the extreme curve of each family only, taken as the knob at its maximum (the page says the curves 'represent typical settings, not steps'); HF boost panels: the peak and a few skirt points; panels not legible enough at 400 dpi (8k sharp, broad 8-16k) left out"
+axis_calibration: "labelled grid lines of each panel"
+estimated_error: "about +-1.5 dB and +-10% in frequency (small, heavy-lined panels; overlapping curves near their crossings)"
+notes: >-
+  Relative to each panel's 0 dB line (the unit's flat response). Used as anchors for
+  the equalizer profile's comparison (varimu.measure.eq_suite), never as a target.

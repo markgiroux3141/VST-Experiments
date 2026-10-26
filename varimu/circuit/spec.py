@@ -201,6 +201,16 @@ def load_circuit(path: Path) -> CircuitSpec:
     )
 
 
+def circuit_path(name: str) -> Path:
+    """config/circuits/<name>.yaml (KeyError: no such circuit)."""
+    from varimu.config import CONFIG_DIR
+
+    path = CONFIG_DIR / "circuits" / f"{name}.yaml"
+    if not path.exists():
+        raise KeyError(f"no circuit file {path}")
+    return path
+
+
 def resolve(spec: CircuitSpec, overrides: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Defaults merged with overrides. Unknown keys and out-of-range controls are errors."""
     p = spec.defaults()

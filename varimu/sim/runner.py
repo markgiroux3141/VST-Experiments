@@ -20,6 +20,10 @@ Every render, cached or not, appends a line to cache/renders/timing.csv
 
 Device tables are generated once per tube model under cache/tables/ (see
 varimu.devices.table.cached_table) and hard-linked into each job directory.
+
+A job renders the Fairchild 670 (varimu.circuit.netlist) unless it names another
+circuit file in config/circuits/ (`RenderJob.circuit`, device builder B2); its
+overrides are that circuit's parameters.
 """
 
 from __future__ import annotations
@@ -41,6 +45,7 @@ from typing import Any
 import numpy as np
 
 import varimu
+from varimu.circuit import builder, spec
 from varimu.circuit import netlist as nl
 from varimu.config import REPO_ROOT, load_sim_settings
 from varimu.sim import fast
@@ -100,6 +105,15 @@ class RenderJob:
     samples: np.ndarray  # input, dBFS-scaled, at settings.sample_rate
     overrides: dict[str, Any] = field(default_factory=dict)
     label: str = ""  # free text for logs (e.g. clip name)
+    circuit: str | None = None  # a circuit file in config/circuits/ (None: the 670)
+
+
+def build_circuit(job: RenderJob, s: TransientSettings) -> nl.Circuit:
+    """The job's circuit: the 670 through its API, or the named circuit file."""
+    if job.circuit is None:
+        return nl.build(job.overrides, triode_formulation=s.triode_formulation, cores=s.cores)
+    c = spec.load_circuit(spec.circuit_path(job.circuit))
+    return builder.build(c, job.overrides, triode_formulation=s.triode_formulation, cores=s.cores)
 
 
 def _key(circuit: nl.Circuit, samples: np.ndarray, s: TransientSettings) -> tuple[str, dict]:
@@ -190,7 +204,7 @@ def render(
     s = settings or TransientSettings.from_sim_settings(engine="configured")
     if s.engine == "ngspice" and s.cores != "linear":
         raise ValueError("ngspice has no Jiles-Atherton core: render with cores='linear'")
-    circuit = nl.build(job.overrides, triode_formulation=s.triode_formulation, cores=s.cores)
+    circuit = build_circuit(job, s)
     samples = np.asarray(job.samples, float)
     key, parts = _key(circuit, samples, s)
     path = RENDER_DIR / key

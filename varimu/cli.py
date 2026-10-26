@@ -143,12 +143,13 @@ def _cmd_render(args: argparse.Namespace) -> int:
 
 
 def _cmd_unit(args: argparse.Namespace) -> int:
-    """Genome -> set-up unit -> renders -> measurement report (varimu.measure.suite)."""
+    """Genome -> set-up unit -> renders -> measurement report (the circuit's profile:
+    varimu.measure.profiles; the 670's is varimu.measure.suite)."""
     import json
 
     import yaml
 
-    from varimu.measure import suite
+    from varimu.measure import profiles
     from varimu.sim import runner
 
     _engine_settings(None)  # fails early without the engine
@@ -158,7 +159,7 @@ def _cmd_unit(args: argparse.Namespace) -> int:
         genome = json.loads(text) if args.genome.suffix == ".json" else yaml.safe_load(text)
         genome = genome.get("genome", genome)  # a report or corner-sweep row: its genome
     genome.update(runner.parse_overrides(args.set or []))
-    report = suite.run(args.name, genome, clips=not args.no_clips)
+    report = profiles.profile(args.circuit).run(args.name, genome, clips=not args.no_clips)
     return 0 if report["plausible"] else 2
 
 
@@ -247,6 +248,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--genome", type=Path, help="YAML / JSON mapping of genome overrides")
     p.add_argument("--set", nargs="+", metavar="KEY=VALUE", help="more genome overrides")
     p.add_argument("--no-clips", action="store_true", help="leave out the program clips")
+    p.add_argument(
+        "--circuit",
+        default="fairchild_670",
+        help="circuit file in config/circuits (its measurement profile: varimu.measure.profiles)",
+    )
     p.set_defaults(func=_cmd_unit)
 
     p = sub.add_parser("listen", help="tweak-and-listen web page (needs the listen extra)")
