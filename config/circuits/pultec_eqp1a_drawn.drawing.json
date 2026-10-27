@@ -1,0 +1,3943 @@
+{
+ "format": "varimu-drawing",
+ "version": 1,
+ "circuit": {
+  "title": "Pultec EQP-1A program equalizer",
+  "input": "in",
+  "probes": [
+   "out",
+   "in_s",
+   "eq_in",
+   "eq_m",
+   "eq_out",
+   "g1a",
+   "g1b",
+   "k1a",
+   "k1b",
+   "fbs",
+   "p1a",
+   "p1b",
+   "g2a",
+   "g2b",
+   "gb2",
+   "k2a",
+   "k2b",
+   "p2a",
+   "p2b",
+   "b0",
+   "b1",
+   "b2",
+   "b3",
+   "b4",
+   "htr"
+  ],
+  "controls": {
+   "lf_freq_hz": {
+    "value": 60,
+    "choices": [
+     20,
+     30,
+     60,
+     100
+    ],
+    "unit": "position",
+    "source": "man: LOW FREQUENCY selector, 20 / 30 / 60 / 100 cps (p.1)"
+   },
+   "lf_boost": {
+    "value": 0.0,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "man: left BOOST knob (low frequency), 0 to 13.5 dB (p.1)"
+   },
+   "lf_atten": {
+    "value": 0.0,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "man: left ATTEN knob (low frequency), 0 to 17.5 dB (p.1)"
+   },
+   "hf_boost_freq_khz": {
+    "value": 10,
+    "choices": [
+     3,
+     4,
+     5,
+     8,
+     10,
+     12,
+     16
+    ],
+    "unit": "position",
+    "source": "man: HIGH FREQUENCY selector, 3 / 4 / 5 / 8 / 10 / 12 / 16 kcs peak boost (p.1)"
+   },
+   "hf_boost": {
+    "value": 0.0,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "man: right BOOST knob, 0 to 18 dB (p.1)"
+   },
+   "bandwidth": {
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "man: BANDWIDTH, continuously variable sharp to broad (p.4)",
+    "notes": "0 = sharp, 1 = broad"
+   },
+   "hf_atten_freq_khz": {
+    "value": 10,
+    "choices": [
+     5,
+     10,
+     20
+    ],
+    "unit": "position",
+    "source": "man: ATTEN SEL, 5 / 10 / 20 kcs shelf attenuate (p.1)"
+   },
+   "hf_atten": {
+    "value": 0.0,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "man: right ATTEN knob, 0 to 16 dB (p.1)"
+   },
+   "mains_v_rms": {
+    "value": 117.0,
+    "min": 105.0,
+    "max": 127.0,
+    "unit": "V",
+    "source": "man: power required 117 volts, 50/60 cps (p.1, p.4). The range is provisional: model knowledge (US line voltage)"
+   },
+   "mains_hz": {
+    "value": 60.0,
+    "min": 50.0,
+    "max": 60.0,
+    "unit": "Hz",
+    "source": "man: 50/60 cps (p.1)"
+   }
+  },
+  "values": {
+   "hs56_r_pri_ohm": {
+    "value": 54.57,
+    "source": "web: https://www.triadmagnetics.com/item/audio-transformers/hermetically-sealed-low-level-audio-transformers/hs-56 (DCR 1-2 9.46, 2-3 16.60, 4-5 17.80, 5-6 10.71 ohm, in series for 600 ohm)"
+   },
+   "hs56_r_sec_ohm": {
+    "value": 55.0,
+    "source": "web: same page (DCR 7-8 8.40, 8-9 15.10, 10-11 19.70, 11-12 11.80 ohm, in series)"
+   },
+   "hs56_core_material": {
+    "value": "mumetall",
+    "genome": "pultec.hs56.core_material",
+    "source": "provisional: model knowledge (high-nickel cores in Triad's low-level HS series; the case is mu-metal: Triad HS-56 sheet)"
+   },
+   "hs56_core_area_m2": {
+    "value": 5e-05,
+    "genome": "pultec.hs56.core_area_m2",
+    "source": "provisional: model knowledge (GP-4 case, 1-3/8 x 1-3/8 x 2-1/2 in, 12 oz: Triad HS series 1958 catalogue)"
+   },
+   "hs56_core_path_m": {
+    "value": 0.05,
+    "genome": "pultec.hs56.core_path_m",
+    "source": "provisional: model knowledge (a core in that case)"
+   },
+   "hs56_gap_m": {
+    "value": 1e-05,
+    "genome": "pultec.hs56.air_gap_m",
+    "source": "provisional: model knowledge (butt joints; no DC)"
+   },
+   "hs56_turns": {
+    "value": 2554,
+    "genome": "pultec.hs56.turns",
+    "source": "derived: 35 H primary in the core's linear limit at the nominal geometry (parts.turns_for_inductance), the middle of Triad's 21-49 H (HS-56 sheet: 5 V at 60 Hz, 1-6 with 3-4 shorted)",
+    "notes": "primary (the reference winding); the ratio is 1:1"
+   },
+   "hs56_leakage_h": {
+    "value": 0.002,
+    "genome": "pultec.hs56.leakage_h",
+    "source": "provisional: model knowledge (puts the 600 / 600 ohm corner near 95 kHz: Triad's sheet gives -0.48 dB at 30 kHz)"
+   },
+   "hs56_c_f": {
+    "value": 1e-10,
+    "genome": "pultec.hs56.winding_capacitance_f",
+    "source": "provisional: model knowledge (self-capacitance of a 600 ohm line winding)"
+   },
+   "audio_taper_mid": {
+    "value": 0.1,
+    "genome": "pultec.pots.audio_taper_mid",
+    "source": "provisional: model knowledge (an 'audio' or 'A' taper: ~10% of the track at half rotation; [MAN] p.5 names the taper, not its law)",
+    "notes": "both LF pots; which end their wipers are tied to isn't drawn: resistance follows the taper with rotation"
+   },
+   "hs29_r_pri_ohm": {
+    "value": 1955,
+    "source": "web: Triad HS-29 sheet (DCR 1-2 935, 3-4 1020 ohm, in series), https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/6536/HS-29.pdf"
+   },
+   "hs29_r_sec_a_ohm": {
+    "value": 1647,
+    "source": "web: same sheet (DCR 5-6)"
+   },
+   "hs29_r_sec_b_ohm": {
+    "value": 2272,
+    "source": "web: same sheet (DCR 7-8)"
+   },
+   "hs29_core_material": {
+    "value": "mumetall",
+    "genome": "pultec.hs29.core_material",
+    "source": "provisional: model knowledge (as the HS-56)"
+   },
+   "hs29_core_area_m2": {
+    "value": 5e-05,
+    "genome": "pultec.hs29.core_area_m2",
+    "source": "provisional: model knowledge (GP-4 case, as the HS-56: Triad HS series 1958 catalogue)"
+   },
+   "hs29_core_path_m": {
+    "value": 0.05,
+    "genome": "pultec.hs29.core_path_m",
+    "source": "provisional: model knowledge"
+   },
+   "hs29_gap_m": {
+    "value": 1e-05,
+    "genome": "pultec.hs29.air_gap_m",
+    "source": "provisional: model knowledge (butt joints; no DC)"
+   },
+   "hs29_turns": {
+    "value": 10574,
+    "genome": "pultec.hs29.turns",
+    "source": "derived: 600 H primary in the core's linear limit at the nominal geometry (parts.turns_for_inductance), Triad's minimum (HS-29 sheet: 1-4 with 2-3 joined, 1 V at 60 Hz, 600 H min)",
+    "notes": "primary (the reference winding); each secondary half has as many (1:2 overall)"
+   },
+   "hs29_leakage_h": {
+    "value": 0.02,
+    "genome": "pultec.hs29.leakage_h",
+    "source": "provisional: model knowledge (a high-impedance interstage)"
+   },
+   "hs29_c_half_f": {
+    "value": 3e-10,
+    "genome": "pultec.hs29.winding_capacitance_f",
+    "source": "provisional: model knowledge (150 pF across the 80k secondary puts the corner near 26 kHz with Rs 20k / RL 80k: Triad's sheet gives -2.35 dB at 20 kHz)"
+   },
+   "s217_turns_half": {
+    "value": 1575,
+    "genome": "pultec.s217.turns_half",
+    "source": "web: https://groupdiy.com/threads/peerless-s-217-d-diy.51046 (a rebuild: primary 1575 turns per coil, two coils; unverified)",
+    "notes": "each primary half (the reference winding)"
+   },
+   "s217_sec_per_half": {
+    "value": 0.22349,
+    "genome": "pultec.s217.sec_ratio",
+    "source": "web: same thread (secondary 352 turns per coil): 352 / 1575, so 12.6k plate to plate into 600 ohm; a replacement is sold as 12,500 ohm (web: https://www.don-audio.com/CineMag-CM-S217D-transformer-Peerless-S217D-replacement)",
+    "notes": "each secondary half (7-9, 10-12) per primary half"
+   },
+   "s217_ter_per_half": {
+    "value": 0.04508,
+    "genome": "pultec.s217.tertiary_ratio",
+    "source": "web: same thread (tertiary 71 turns per coil): 71 / 1575",
+    "notes": "each half of the feedback winding (3-S, S-5)"
+   },
+   "s217_r_half_ohm": {
+    "value": 150.0,
+    "genome": "pultec.s217.r_half_ohm",
+    "source": "provisional: model knowledge (each half of a 12.5k CT primary)"
+   },
+   "s217_r_sec_half_ohm": {
+    "value": 12.0,
+    "genome": "pultec.s217.r_sec_half_ohm",
+    "source": "provisional: model knowledge (each half of a 600 ohm secondary)"
+   },
+   "s217_r_ter_half_ohm": {
+    "value": 2.0,
+    "genome": "pultec.s217.r_ter_half_ohm",
+    "source": "provisional: model knowledge (71 turns of the feedback winding)"
+   },
+   "s217_core_material": {
+    "value": "grain_oriented_si_steel",
+    "genome": "pultec.s217.core_material",
+    "source": "provisional: model knowledge (the original's L12 laminations aren't documented: web: https://www.don-audio.com/CineMag-CM-S217D-transformer-Peerless-S217D-replacement)"
+   },
+   "s217_core_area_m2": {
+    "value": 0.0002,
+    "genome": "pultec.s217.core_area_m2",
+    "source": "provisional: model knowledge (gives 115 H across the primary with the thread's turns: a 12.5k primary flat to below 20 Hz, as [MAN]'s 20 cps-20 kcs +0 / -1 dB needs)"
+   },
+   "s217_core_path_m": {
+    "value": 0.08,
+    "genome": "pultec.s217.core_path_m",
+    "source": "provisional: model knowledge (L12 lamination stack)"
+   },
+   "s217_gap_m": {
+    "value": 2e-05,
+    "genome": "pultec.s217.air_gap_m",
+    "source": "provisional: model knowledge (butt joints; push-pull)"
+   },
+   "s217_leakage_h": {
+    "value": 0.015,
+    "genome": "pultec.s217.leakage_h",
+    "source": "provisional: model knowledge (k ~ 0.9999 per primary half)"
+   },
+   "s217_c_half_f": {
+    "value": 1.5e-10,
+    "genome": "pultec.s217.winding_capacitance_f",
+    "source": "provisional: model knowledge (push-pull primaries, 100-500 pF)"
+   },
+   "rectifier_tube": {
+    "value": "6X4",
+    "source": "dwg: 6X4 full-wave rectifier; config/devices/6x4.yaml (per section)"
+   },
+   "numerical_leak_ohm": {
+    "value": 1000000000.0,
+    "source": "numerical: DC path for floating nodes (not physical)"
+   },
+   "passive_seed": {
+    "value": 0,
+    "genome": "passives.seed",
+    "source": "numerical: which set of parts a unit is built from"
+   },
+   "passive_spread": {
+    "value": 0.0,
+    "genome": "passives.spread",
+    "source": "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"
+   },
+   "tol_resistor_pct": {
+    "value": 10.0,
+    "source": "provisional: model knowledge (carbon composition resistors of the era, 10%; the drawing prints none)"
+   },
+   "tol_matched_pct": {
+    "value": 1.0,
+    "source": "provisional: model knowledge (the 4700s are 'selected alike', dwg)"
+   },
+   "tol_pot_pct": {
+    "value": 20.0,
+    "genome": "passives.pot_pct",
+    "source": "provisional: model knowledge (carbon potentiometers, +-10..20%)"
+   },
+   "tol_paper_pct": {
+    "value": 20.0,
+    "genome": "passives.paper_capacitor_pct",
+    "source": "provisional: model knowledge (paper capacitors of the 1950s, +-10..20%)"
+   },
+   "tol_network_c_pct": {
+    "value": 5.0,
+    "source": "provisional: model knowledge (the network's capacitors set its frequencies: close-tolerance mica or film, 5%)"
+   },
+   "tol_mica_pct": {
+    "value": 10.0,
+    "genome": "passives.mica_capacitor_pct",
+    "source": "provisional: model knowledge (small mica capacitors, +-5..20%)"
+   },
+   "tol_electrolytic_minus_pct": {
+    "value": 20.0,
+    "genome": "passives.electrolytic_minus_pct",
+    "source": "provisional: model knowledge (1950s electrolytics, -10..-20%)"
+   },
+   "tol_electrolytic_plus_pct": {
+    "value": 50.0,
+    "genome": "passives.electrolytic_plus_pct",
+    "source": "provisional: model knowledge (1950s electrolytics, +50..+100%)"
+   },
+   "tube_emission_pct": {
+    "value": 10.0,
+    "genome": "tubes.instance.emission_pct",
+    "source": "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"
+   },
+   "tube_mu_pct": {
+    "value": 3.0,
+    "genome": "tubes.instance.mu_pct",
+    "source": "provisional: model knowledge (grid-pitch tolerance, a few %)"
+   }
+  },
+  "mains": {
+   "v_rms": "mains_v_rms",
+   "hz": "mains_hz",
+   "rated_v_rms": {
+    "value": 117.0,
+    "source": "man: power required 117 volts (p.1); the PCC-55's voltages are taken at it"
+   }
+  },
+  "tolerance": {
+   "source": "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)",
+   "seed": "passive_seed",
+   "spread": "passive_spread",
+   "tube": {
+    "emission_pct": "tube_emission_pct",
+    "mu_pct": "tube_mu_pct"
+   },
+   "bands": {
+    "r10": "tol_resistor_pct",
+    "matched": "tol_matched_pct",
+    "pot": "tol_pot_pct",
+    "paper": "tol_paper_pct",
+    "network": "tol_network_c_pct",
+    "mica": "tol_mica_pct",
+    "electrolytic": [
+     "tol_electrolytic_minus_pct",
+     "tol_electrolytic_plus_pct"
+    ]
+   }
+  }
+ },
+ "frames": [
+  {
+   "title": "input",
+   "x": 0,
+   "y": 0,
+   "w": 55.88,
+   "h": 40.64
+  },
+  {
+   "title": "passive network",
+   "x": 63.5,
+   "y": 0,
+   "w": 228.6,
+   "h": 127
+  },
+  {
+   "title": "interstage and 12AX7",
+   "x": 299.72,
+   "y": 0,
+   "w": 96.52,
+   "h": 127
+  },
+  {
+   "title": "12AU7 and output",
+   "x": 403.86,
+   "y": 0,
+   "w": 137.16,
+   "h": 127
+  },
+  {
+   "title": "power supply",
+   "x": 299.72,
+   "y": 139.7,
+   "w": 152.4,
+   "h": 63.5
+  }
+ ],
+ "symbols": {
+  "VHVA": {
+   "symbol": "Mains",
+   "value": "292.5",
+   "fields": {
+    "Param": "pcc55_hv_half_rms_v",
+    "Source": "derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)",
+    "Genome": "pultec.psu.pcc55_hv_half_rms_v",
+    "Notes": "open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V",
+    "phase_deg": "90.0"
+   },
+   "units": {
+    "1": {
+     "x": 312.42,
+     "y": 165.1
+    }
+   }
+  },
+  "VHVB": {
+   "symbol": "Mains",
+   "value": "292.5",
+   "fields": {
+    "Param": "pcc55_hv_half_rms_v",
+    "Source": "derived: puts the settled +325 V node at the drawing's 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing's 355 / 345 / 290 / 250 / 60 V)",
+    "Genome": "pultec.psu.pcc55_hv_half_rms_v",
+    "Notes": "open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V",
+    "phase_deg": "270.0"
+   },
+   "units": {
+    "1": {
+     "x": 312.42,
+     "y": 185.42
+    }
+   }
+  },
+  "RPCCA": {
+   "symbol": "R",
+   "value": "100.0",
+   "fields": {
+    "Param": "pcc55_r_half_ohm",
+    "Source": "provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)",
+    "Genome": "pultec.psu.pcc55_r_half_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 322.58,
+     "y": 160.02,
+     "rot": 90
+    }
+   }
+  },
+  "LPCCA": {
+   "symbol": "L",
+   "value": "5m",
+   "fields": {
+    "Param": "pcc55_leakage_h",
+    "Source": "provisional: model knowledge (leakage per HV half)",
+    "Genome": "pultec.psu.pcc55_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 335.28,
+     "y": 160.02,
+     "rot": 90
+    }
+   }
+  },
+  "CPCCA": {
+   "symbol": "C",
+   "value": "300p",
+   "fields": {
+    "Param": "pcc55_c_half_f",
+    "Source": "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)",
+    "Genome": "pultec.psu.pcc55_winding_capacitance_f",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 344.17,
+     "y": 163.83
+    }
+   }
+  },
+  "RPCCB": {
+   "symbol": "R",
+   "value": "100.0",
+   "fields": {
+    "Param": "pcc55_r_half_ohm",
+    "Source": "provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)",
+    "Genome": "pultec.psu.pcc55_r_half_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 322.58,
+     "y": 180.34,
+     "rot": 90
+    }
+   }
+  },
+  "LPCCB": {
+   "symbol": "L",
+   "value": "5m",
+   "fields": {
+    "Param": "pcc55_leakage_h",
+    "Source": "provisional: model knowledge (leakage per HV half)",
+    "Genome": "pultec.psu.pcc55_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 335.28,
+     "y": 180.34,
+     "rot": 90
+    }
+   }
+  },
+  "CPCCB": {
+   "symbol": "C",
+   "value": "300p",
+   "fields": {
+    "Param": "pcc55_c_half_f",
+    "Source": "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)",
+    "Genome": "pultec.psu.pcc55_winding_capacitance_f",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 344.17,
+     "y": 176.53,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "RPSU1": {
+   "symbol": "R",
+   "value": "470",
+   "fields": {
+    "Param": "r_psu1_ohm",
+    "Source": "dwg: 470 2W from the 6X4 cathode (+355 V) to +345 V",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 372.11,
+     "y": 170.18,
+     "rot": 90
+    }
+   }
+  },
+  "CPSU1": {
+   "symbol": "C",
+   "value": "40u",
+   "fields": {
+    "Param": "c_psu_f",
+    "Source": "dwg: 40/450 V at +345, +325, +290 and +250 V",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 379.73,
+     "y": 173.99
+    }
+   }
+  },
+  "RPSU2": {
+   "symbol": "R",
+   "value": "1000",
+   "fields": {
+    "Param": "r_psu2_ohm",
+    "Source": "dwg: 1000 1W from +345 V to +325 V",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 393.7,
+     "y": 170.18,
+     "rot": 90
+    }
+   }
+  },
+  "CPSU2": {
+   "symbol": "C",
+   "value": "40u",
+   "fields": {
+    "Param": "c_psu_f",
+    "Source": "dwg: 40/450 V at +345, +325, +290 and +250 V",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 401.32,
+     "y": 173.99
+    }
+   }
+  },
+  "RPSU3": {
+   "symbol": "R",
+   "value": "2200",
+   "fields": {
+    "Param": "r_psu3_ohm",
+    "Source": "dwg: 2200 1W from +325 V to the output transformer's centre tap (+290 V)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 426.72,
+     "y": 170.18,
+     "rot": 90
+    }
+   }
+  },
+  "CPSU3": {
+   "symbol": "C",
+   "value": "40u",
+   "fields": {
+    "Param": "c_psu_f",
+    "Source": "dwg: 40/450 V at +345, +325, +290 and +250 V",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 435.61,
+     "y": 173.99
+    }
+   }
+  },
+  "RPSU4": {
+   "symbol": "R",
+   "value": "47k",
+   "fields": {
+    "Param": "r_psu4_ohm",
+    "Source": "dwg: 47K from +325 V to the 12AX7 plate loads (+250 V)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 411.48,
+     "y": 152.4,
+     "rot": 90
+    }
+   }
+  },
+  "CPSU4": {
+   "symbol": "C",
+   "value": "40u",
+   "fields": {
+    "Param": "c_psu_f",
+    "Source": "dwg: 40/450 V at +345, +325, +290 and +250 V",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 421.64,
+     "y": 156.21
+    }
+   }
+  },
+  "RHTR_T": {
+   "symbol": "R",
+   "value": "270k",
+   "fields": {
+    "Param": "r_heater_top_ohm",
+    "Source": "dwg: 270K from +325 V to the heaters' tap (+60 V)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 414.02,
+     "y": 173.99
+    }
+   }
+  },
+  "RHTR_B": {
+   "symbol": "R",
+   "value": "62k",
+   "fields": {
+    "Param": "r_heater_bot_ohm",
+    "Source": "dwg: 62K from the heaters' tap to ground",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 414.02,
+     "y": 181.61
+    }
+   }
+  },
+  "CHTR": {
+   "symbol": "C",
+   "value": "300n",
+   "fields": {
+    "Param": "c_heater_f",
+    "Source": "dwg: .3 across the 62K",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 426.72,
+     "y": 181.61
+    }
+   }
+  },
+  "V3": {
+   "symbol": "Diode_Dual",
+   "value": "rectifier_tube",
+   "fields": {
+    "Model": "V3",
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 358.14,
+     "y": 160.02,
+     "rot": 90
+    },
+    "2": {
+     "x": 358.14,
+     "y": 180.34,
+     "rot": 90
+    }
+   }
+  },
+  "Rsrc": {
+   "symbol": "R",
+   "value": "600",
+   "fields": {
+    "Param": "source_impedance_ohm",
+    "Source": "man: input impedance 600 ohms, matching (p.4)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 12.7,
+     "y": 20.32,
+     "rot": 90
+    }
+   }
+  },
+  "W1": {
+   "symbol": "Winding",
+   "value": "p",
+   "fields": {
+    "Transformer": "T1",
+    "r": "hs56_r_pri_ohm",
+    "c": "hs56_c_f"
+   },
+   "units": {
+    "1": {
+     "x": 25.4,
+     "y": 24.13
+    }
+   }
+  },
+  "T1": {
+   "symbol": "Core",
+   "value": "core",
+   "fields": {
+    "material": "hs56_core_material",
+    "area_m2": "hs56_core_area_m2",
+    "path_m": "hs56_core_path_m",
+    "gap_m": "hs56_gap_m",
+    "turns": "hs56_turns",
+    "leakage_h": "hs56_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 27.94,
+     "y": 24.13
+    }
+   }
+  },
+  "W2": {
+   "symbol": "Winding",
+   "value": "s",
+   "fields": {
+    "Transformer": "T1",
+    "r": "hs56_r_sec_ohm",
+    "c": "hs56_c_f"
+   },
+   "units": {
+    "1": {
+     "x": 30.48,
+     "y": 24.13,
+     "mirror": true
+    }
+   }
+  },
+  "RIN_TERM": {
+   "symbol": "R",
+   "value": "620",
+   "fields": {
+    "Param": "hs56_r_in_term_ohm",
+    "Source": "dwg: 620 across the HS-56 secondary",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 43.18,
+     "y": 24.13
+    }
+   }
+  },
+  "RHB": {
+   "symbol": "Pot",
+   "value": "10k",
+   "fields": {
+    "Param": "hf_boost_pot_ohm",
+    "Source": "man: high boost control A-B JU-1031, 10,000 ohm linear (p.5)",
+    "Tol": "pot",
+    "at": "hf_boost"
+   },
+   "units": {
+    "1": {
+     "x": 97.79,
+     "y": 20.32,
+     "rot": 270
+    }
+   }
+  },
+  "CHB18": {
+   "symbol": "C",
+   "value": "18n",
+   "fields": {
+    "Param": "c_hb_18n_f",
+    "Source": "redraw: 18nF on 3k and 4k",
+    "Genome": "pultec.network.c_hb_18n_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 88.9,
+     "y": 34.29
+    }
+   }
+  },
+  "CHB15": {
+   "symbol": "C",
+   "value": "15n",
+   "fields": {
+    "Param": "c_hb_15n_f",
+    "Source": "redraw: 15nF on 5k",
+    "Genome": "pultec.network.c_hb_15n_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 101.6,
+     "y": 34.29
+    }
+   }
+  },
+  "CHB82": {
+   "symbol": "C",
+   "value": "8.2n",
+   "fields": {
+    "Param": "c_hb_8n2_f",
+    "Source": "redraw: 8.2nF on 8k and 10k",
+    "Genome": "pultec.network.c_hb_8n2_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 114.3,
+     "y": 34.29
+    }
+   }
+  },
+  "CHB56": {
+   "symbol": "C",
+   "value": "5.6n",
+   "fields": {
+    "Param": "c_hb_5n6_f",
+    "Source": "redraw: 5.6nF on 12k",
+    "Genome": "pultec.network.c_hb_5n6_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 127,
+     "y": 34.29
+    }
+   }
+  },
+  "CHB33": {
+   "symbol": "C",
+   "value": "3.3n",
+   "fields": {
+    "Param": "c_hb_3n3_f",
+    "Source": "redraw: 3.3nF on 16k",
+    "Genome": "pultec.network.c_hb_3n3_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 139.7,
+     "y": 34.29
+    }
+   }
+  },
+  "LHB150": {
+   "symbol": "L",
+   "value": "150m",
+   "fields": {
+    "Param": "l_hb_150m_h",
+    "Source": "redraw: 150mH on 3k (vendor's original tap 150.5 mH: web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)",
+    "Genome": "pultec.network.l_hb_150m_h"
+   },
+   "units": {
+    "1": {
+     "x": 76.2,
+     "y": 95.25
+    }
+   }
+  },
+  "RLHB150": {
+   "symbol": "R",
+   "value": "33.0",
+   "fields": {
+    "Param": "r_hb_150m_ohm",
+    "Source": "derived: 14 ohm x sqrt(150 / 27), within the vendor's 14-34 ohm (web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)",
+    "Genome": "pultec.network.r_hb_150m_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 76.2,
+     "y": 106.68
+    }
+   }
+  },
+  "RBW": {
+   "symbol": "Rheostat",
+   "value": "2500",
+   "fields": {
+    "Param": "bandwidth_pot_ohm",
+    "Source": "man: bandwidth control A-B JU-2521, 2500 ohm linear (p.5)",
+    "Tol": "pot",
+    "at": "bandwidth"
+   },
+   "units": {
+    "1": {
+     "x": 152.4,
+     "y": 114.3,
+     "rot": 90
+    }
+   }
+  },
+  "RLA": {
+   "symbol": "Rheostat",
+   "value": "100k",
+   "fields": {
+    "Param": "lf_atten_pot_ohm",
+    "Source": "man: low attenuate control A-B JA-1041, 100,000 ohm audio taper (p.5)",
+    "Tol": "pot",
+    "at": "lf_atten",
+    "taper_mid": "audio_taper_mid"
+   },
+   "units": {
+    "1": {
+     "x": 218.44,
+     "y": 50.8
+    }
+   }
+  },
+  "LHB82": {
+   "symbol": "L",
+   "value": "82m",
+   "fields": {
+    "Param": "l_hb_82m_h",
+    "Source": "redraw: 82mH on 4k (vendor's original tap 84.3 mH, same page)",
+    "Genome": "pultec.network.l_hb_82m_h"
+   },
+   "units": {
+    "1": {
+     "x": 88.9,
+     "y": 95.25
+    }
+   }
+  },
+  "RLHB82": {
+   "symbol": "R",
+   "value": "24.4",
+   "fields": {
+    "Param": "r_hb_82m_ohm",
+    "Source": "derived: 14 ohm x sqrt(82 / 27), same",
+    "Genome": "pultec.network.r_hb_82m_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 88.9,
+     "y": 106.68
+    }
+   }
+  },
+  "LHB68": {
+   "symbol": "L",
+   "value": "68m",
+   "fields": {
+    "Param": "l_hb_68m_h",
+    "Source": "redraw: 68mH on 5k",
+    "Genome": "pultec.network.l_hb_68m_h"
+   },
+   "units": {
+    "1": {
+     "x": 101.6,
+     "y": 95.25
+    }
+   }
+  },
+  "RLHB68": {
+   "symbol": "R",
+   "value": "22.2",
+   "fields": {
+    "Param": "r_hb_68m_ohm",
+    "Source": "derived: 14 ohm x sqrt(68 / 27), same",
+    "Genome": "pultec.network.r_hb_68m_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 101.6,
+     "y": 106.68
+    }
+   }
+  },
+  "LHB47": {
+   "symbol": "L",
+   "value": "47m",
+   "fields": {
+    "Param": "l_hb_47m_h",
+    "Source": "redraw: 47mH on 8k (vendor's original tap 51.1 mH, same page)",
+    "Genome": "pultec.network.l_hb_47m_h"
+   },
+   "units": {
+    "1": {
+     "x": 114.3,
+     "y": 95.25
+    }
+   }
+  },
+  "RLHB47": {
+   "symbol": "R",
+   "value": "18.5",
+   "fields": {
+    "Param": "r_hb_47m_ohm",
+    "Source": "derived: 14 ohm x sqrt(47 / 27), same",
+    "Genome": "pultec.network.r_hb_47m_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 114.3,
+     "y": 106.68
+    }
+   }
+  },
+  "LHB33": {
+   "symbol": "L",
+   "value": "33m",
+   "fields": {
+    "Param": "l_hb_33m_h",
+    "Source": "redraw: 33mH on 10k and 12k (vendor's original tap 32.0 mH, same page)",
+    "Genome": "pultec.network.l_hb_33m_h"
+   },
+   "units": {
+    "1": {
+     "x": 127,
+     "y": 95.25
+    }
+   }
+  },
+  "RLHB33": {
+   "symbol": "R",
+   "value": "15.5",
+   "fields": {
+    "Param": "r_hb_33m_ohm",
+    "Source": "derived: 14 ohm x sqrt(33 / 27), same",
+    "Genome": "pultec.network.r_hb_33m_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 127,
+     "y": 106.68
+    }
+   }
+  },
+  "LHB27": {
+   "symbol": "L",
+   "value": "27m",
+   "fields": {
+    "Param": "l_hb_27m_h",
+    "Source": "redraw: 27mH on 16k",
+    "Genome": "pultec.network.l_hb_27m_h"
+   },
+   "units": {
+    "1": {
+     "x": 139.7,
+     "y": 95.25
+    }
+   }
+  },
+  "RLHB27": {
+   "symbol": "R",
+   "value": "14.0",
+   "fields": {
+    "Param": "r_hb_27m_ohm",
+    "Source": "derived: the vendor's first tap, 14 ohm (same)",
+    "Genome": "pultec.network.r_hb_27m_ohm",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 139.7,
+     "y": 106.68
+    }
+   }
+  },
+  "SHB": {
+   "symbol": "SW_Rotary_7",
+   "value": "hf_boost_freq_khz",
+   "fields": {
+    "Control": "hf_boost_freq_khz"
+   },
+   "units": {
+    "1": {
+     "x": 114.3,
+     "y": 55.88,
+     "rot": 90
+    }
+   }
+  },
+  "SHB_B": {
+   "symbol": "SW_Rotary_7",
+   "value": "hf_boost_freq_khz",
+   "fields": {
+    "Control": "hf_boost_freq_khz"
+   },
+   "units": {
+    "1": {
+     "x": 114.3,
+     "y": 73.66,
+     "rot": 90,
+     "mirror": true
+    }
+   }
+  },
+  "RHA": {
+   "symbol": "Pot",
+   "value": "1000",
+   "fields": {
+    "Param": "hf_atten_pot_ohm",
+    "Source": "man: high attenuate control A-B JU-1021, 1000 ohm linear (p.5)",
+    "Tol": "pot",
+    "at": "hf_atten"
+   },
+   "units": {
+    "1": {
+     "x": 170.18,
+     "y": 27.94,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "RHA75": {
+   "symbol": "R",
+   "value": "75",
+   "fields": {
+    "Param": "hf_atten_r_ohm",
+    "Source": "redraw: 75 from the HF atten wiper to its capacitors (Barrera's netlist: 75 too)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 177.8,
+     "y": 31.75
+    }
+   }
+  },
+  "CHA68": {
+   "symbol": "C",
+   "value": "68n",
+   "fields": {
+    "Param": "c_ha_68n_f",
+    "Source": "redraw: 68nF from the 75 ohm to the LF-boost node, in on every position",
+    "Genome": "pultec.network.c_ha_68n_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 185.42,
+     "y": 43.18
+    }
+   }
+  },
+  "RLB": {
+   "symbol": "Rheostat",
+   "value": "10k",
+   "fields": {
+    "Param": "lf_boost_pot_ohm",
+    "Source": "man: low boost control A-B JA-1031, 10,000 ohm audio taper (p.5)",
+    "Tol": "pot",
+    "at": "lf_boost",
+    "taper_mid": "audio_taper_mid"
+   },
+   "units": {
+    "1": {
+     "x": 218.44,
+     "y": 78.74
+    }
+   }
+  },
+  "CHA10K": {
+   "symbol": "C",
+   "value": "68n",
+   "fields": {
+    "Param": "c_ha_10k_f",
+    "Source": "redraw: the second 68nF, switched in on 10k",
+    "Genome": "pultec.network.c_ha_10k_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 205.74,
+     "y": 60.96
+    }
+   }
+  },
+  "CLB330": {
+   "symbol": "C",
+   "value": "330n",
+   "fields": {
+    "Param": "c_lb_330n_f",
+    "Source": "dwg-interp: redraw 330nF, wired to the switch's common (in on every position; 100 cps alone)",
+    "Genome": "pultec.network.c_lb_330n_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 228.6,
+     "y": 78.74
+    }
+   }
+  },
+  "CHA5K": {
+   "symbol": "C",
+   "value": "220n",
+   "fields": {
+    "Param": "c_ha_5k_f",
+    "Source": "redraw: 220nF, switched in on 5k",
+    "Genome": "pultec.network.c_ha_5k_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 190.5,
+     "y": 60.96
+    }
+   }
+  },
+  "SHA": {
+   "symbol": "SW_Rotary_3",
+   "value": "hf_atten_freq_khz",
+   "fields": {
+    "Control": "hf_atten_freq_khz"
+   },
+   "units": {
+    "1": {
+     "x": 198.12,
+     "y": 46.99,
+     "rot": 90,
+     "mirror": true
+    }
+   }
+  },
+  "CLA12": {
+   "symbol": "C",
+   "value": "12n",
+   "fields": {
+    "Param": "c_la_12n_f",
+    "Source": "dwg-interp: redraw 12nF, wired to the switch's common (in on every position; 100 cps alone)",
+    "Genome": "pultec.network.c_la_12n_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 228.6,
+     "y": 50.8
+    }
+   }
+  },
+  "RLA_SER": {
+   "symbol": "R",
+   "value": "1000",
+   "fields": {
+    "Param": "lf_atten_series_ohm",
+    "Source": "redraw: 1k from the LF atten network to the output (HS-29 pin 4); Barrera's netlist: 1k",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 269.24,
+     "y": 58.42,
+     "rot": 90
+    }
+   }
+  },
+  "RSHUNT": {
+   "symbol": "R",
+   "value": "10k",
+   "fields": {
+    "Param": "shunt_ohm",
+    "Source": "redraw: 10k from the output to the LF-boost node; Barrera's netlist: 10k (the EQP-1R's is 12K: [MAN] p.6)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 279.4,
+     "y": 62.23
+    }
+   }
+  },
+  "CLA20": {
+   "symbol": "C",
+   "value": "56n",
+   "fields": {
+    "Param": "c_la_20_f",
+    "Source": "redraw: 56nF on 20",
+    "Genome": "pultec.network.c_la_20_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 238.76,
+     "y": 50.8
+    }
+   }
+  },
+  "CLA30": {
+   "symbol": "C",
+   "value": "27n",
+   "fields": {
+    "Param": "c_la_30_f",
+    "Source": "redraw: 27nF on 30",
+    "Genome": "pultec.network.c_la_30_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 248.92,
+     "y": 50.8
+    }
+   }
+  },
+  "CLA60": {
+   "symbol": "C",
+   "value": "8.2n",
+   "fields": {
+    "Param": "c_la_60_f",
+    "Source": "redraw: 8.2nF on 60",
+    "Genome": "pultec.network.c_la_60_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 259.08,
+     "y": 50.8
+    }
+   }
+  },
+  "SLA": {
+   "symbol": "SW_Rotary_4",
+   "value": "lf_freq_hz",
+   "fields": {
+    "Control": "lf_freq_hz"
+   },
+   "units": {
+    "1": {
+     "x": 250.19,
+     "y": 33.02,
+     "rot": 90,
+     "mirror": true
+    }
+   }
+  },
+  "CLB20": {
+   "symbol": "C",
+   "value": "1.5u",
+   "fields": {
+    "Param": "c_lb_20_f",
+    "Source": "redraw: 1.5uF on 20",
+    "Genome": "pultec.network.c_lb_20_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 238.76,
+     "y": 101.6
+    }
+   }
+  },
+  "CLB30": {
+   "symbol": "C",
+   "value": "820n",
+   "fields": {
+    "Param": "c_lb_30_f",
+    "Source": "redraw: 820nF on 30",
+    "Genome": "pultec.network.c_lb_30_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 248.92,
+     "y": 101.6
+    }
+   }
+  },
+  "CLB60": {
+   "symbol": "C",
+   "value": "220n",
+   "fields": {
+    "Param": "c_lb_60_f",
+    "Source": "redraw: 220nF on 60",
+    "Genome": "pultec.network.c_lb_60_f",
+    "Tol": "network"
+   },
+   "units": {
+    "1": {
+     "x": 259.08,
+     "y": 101.6
+    }
+   }
+  },
+  "SLB": {
+   "symbol": "SW_Rotary_4",
+   "value": "lf_freq_hz",
+   "fields": {
+    "Control": "lf_freq_hz"
+   },
+   "units": {
+    "1": {
+     "x": 250.19,
+     "y": 83.82,
+     "rot": 90,
+     "mirror": true
+    }
+   }
+  },
+  "T2": {
+   "symbol": "Core",
+   "value": "core",
+   "fields": {
+    "material": "hs29_core_material",
+    "area_m2": "hs29_core_area_m2",
+    "path_m": "hs29_core_path_m",
+    "gap_m": "hs29_gap_m",
+    "turns": "hs29_turns",
+    "leakage_h": "hs29_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 314.96,
+     "y": 62.23
+    }
+   }
+  },
+  "W3": {
+   "symbol": "Winding",
+   "value": "p",
+   "fields": {
+    "Transformer": "T2",
+    "r": "hs29_r_pri_ohm"
+   },
+   "units": {
+    "1": {
+     "x": 312.42,
+     "y": 62.23,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "W4": {
+   "symbol": "Winding",
+   "value": "sa",
+   "fields": {
+    "Transformer": "T2",
+    "r": "hs29_r_sec_a_ohm",
+    "c": "hs29_c_half_f"
+   },
+   "units": {
+    "1": {
+     "x": 317.5,
+     "y": 58.42,
+     "mirror": true
+    }
+   }
+  },
+  "W5": {
+   "symbol": "Winding",
+   "value": "sb",
+   "fields": {
+    "Transformer": "T2",
+    "r": "hs29_r_sec_b_ohm",
+    "c": "hs29_c_half_f"
+   },
+   "units": {
+    "1": {
+     "x": 317.5,
+     "y": 66.04,
+     "mirror": true
+    }
+   }
+  },
+  "CZIN": {
+   "symbol": "C",
+   "value": "270p",
+   "fields": {
+    "Param": "c_zobel_in_f",
+    "Source": "dwg: .00027 (uF)",
+    "Tol": "mica"
+   },
+   "units": {
+    "1": {
+     "x": 332.74,
+     "y": 58.42
+    }
+   }
+  },
+  "RZIN": {
+   "symbol": "R",
+   "value": "43k",
+   "fields": {
+    "Param": "r_zobel_in_ohm",
+    "Source": "dwg: 43K in series with .00027 across the HS-29 secondary",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 332.74,
+     "y": 66.04
+    }
+   }
+  },
+  "RPL1A": {
+   "symbol": "R",
+   "value": "200k",
+   "fields": {
+    "Param": "r_plate1_ohm",
+    "Source": "dwg: 200K 1W plate loads",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 384.81,
+     "y": 54.61,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "CPP1": {
+   "symbol": "C",
+   "value": "20p",
+   "fields": {
+    "Param": "c_plates1_f",
+    "Source": "dwg: .00002 (uF) from plate to plate",
+    "Tol": "mica"
+   },
+   "units": {
+    "1": {
+     "x": 374.65,
+     "y": 62.23
+    }
+   }
+  },
+  "RPL1B": {
+   "symbol": "R",
+   "value": "200k",
+   "fields": {
+    "Param": "r_plate1_ohm",
+    "Source": "dwg: 200K 1W plate loads",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 384.81,
+     "y": 69.85
+    }
+   }
+  },
+  "RK1": {
+   "symbol": "R",
+   "value": "820",
+   "fields": {
+    "Param": "r_cathodes1_ohm",
+    "Source": "dwg: 820 between the cathodes (pins 3, 8)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 347.98,
+     "y": 62.23
+    }
+   }
+  },
+  "RFBB": {
+   "symbol": "R",
+   "value": "360",
+   "fields": {
+    "Param": "r_fb_ohm",
+    "Source": "dwg: 360, each cathode to an end of the output transformer's feedback winding",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 355.6,
+     "y": 69.85,
+     "rot": 90
+    }
+   }
+  },
+  "RFBA": {
+   "symbol": "R",
+   "value": "360",
+   "fields": {
+    "Param": "r_fb_ohm",
+    "Source": "dwg: 360, each cathode to an end of the output transformer's feedback winding",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 355.6,
+     "y": 54.61,
+     "rot": 90
+    }
+   }
+  },
+  "RFBR": {
+   "symbol": "R",
+   "value": "1000",
+   "fields": {
+    "Param": "r_fb_return_ohm",
+    "Source": "dwg: 1000 from the feedback winding's tap S to ground (+1.1 V)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 369.57,
+     "y": 104.14
+    }
+   }
+  },
+  "V1": {
+   "symbol": "Triode_Dual",
+   "value": "12AX7",
+   "fields": {
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 347.98,
+     "y": 46.99
+    },
+    "2": {
+     "x": 347.98,
+     "y": 77.47,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "CC2A": {
+   "symbol": "C",
+   "value": "250n",
+   "fields": {
+    "Param": "c_couple_f",
+    "Source": "dwg: .25 coupling capacitors",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 416.56,
+     "y": 36.83,
+     "rot": 90
+    }
+   }
+  },
+  "RG2A": {
+   "symbol": "R",
+   "value": "1M",
+   "fields": {
+    "Param": "r_grid2_ohm",
+    "Source": "dwg: 1M grid resistors, from the grids to the 470K / 62K divider",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 429.26,
+     "y": 54.61
+    }
+   }
+  },
+  "RBIAS_B": {
+   "symbol": "R",
+   "value": "62k",
+   "fields": {
+    "Param": "r_bias_bot_ohm",
+    "Source": "dwg: 62K from the grid divider to ground",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 439.42,
+     "y": 66.04
+    }
+   }
+  },
+  "CC2B": {
+   "symbol": "C",
+   "value": "250n",
+   "fields": {
+    "Param": "c_couple_f",
+    "Source": "dwg: .25 coupling capacitors",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 416.56,
+     "y": 87.63,
+     "rot": 90
+    }
+   }
+  },
+  "RG2B": {
+   "symbol": "R",
+   "value": "1M",
+   "fields": {
+    "Param": "r_grid2_ohm",
+    "Source": "dwg: 1M grid resistors, from the grids to the 470K / 62K divider",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 429.26,
+     "y": 69.85,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "RBIAS_T": {
+   "symbol": "R",
+   "value": "470k",
+   "fields": {
+    "Param": "r_bias_top_ohm",
+    "Source": "dwg: 470K from +250 V to the grid divider (+31 V)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 421.64,
+     "y": 62.23,
+     "rot": 90
+    }
+   }
+  },
+  "RK2A": {
+   "symbol": "R",
+   "value": "4700",
+   "fields": {
+    "Param": "r_cathode2_ohm",
+    "Source": "dwg: 4700 1W from each cathode to ground (* resistors selected alike)",
+    "Tol": "matched"
+   },
+   "units": {
+    "1": {
+     "x": 457.2,
+     "y": 55.88
+    }
+   }
+  },
+  "CK2A": {
+   "symbol": "C",
+   "value": "50u",
+   "fields": {
+    "Param": "c_cathode2_f",
+    "Source": "dwg: 50/50 V across each 4700",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 467.36,
+     "y": 55.88
+    }
+   }
+  },
+  "RK2B": {
+   "symbol": "R",
+   "value": "4700",
+   "fields": {
+    "Param": "r_cathode2_ohm",
+    "Source": "dwg: 4700 1W from each cathode to ground (* resistors selected alike)",
+    "Tol": "matched"
+   },
+   "units": {
+    "1": {
+     "x": 457.2,
+     "y": 68.58,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "CK2B": {
+   "symbol": "C",
+   "value": "50u",
+   "fields": {
+    "Param": "c_cathode2_f",
+    "Source": "dwg: 50/50 V across each 4700",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 467.36,
+     "y": 68.58,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "T3": {
+   "symbol": "Core",
+   "value": "core",
+   "fields": {
+    "material": "s217_core_material",
+    "area_m2": "s217_core_area_m2",
+    "path_m": "s217_core_path_m",
+    "gap_m": "s217_gap_m",
+    "turns": "s217_turns_half",
+    "leakage_h": "s217_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 490.22,
+     "y": 62.23
+    }
+   }
+  },
+  "W6": {
+   "symbol": "Winding",
+   "value": "pa",
+   "fields": {
+    "Transformer": "T3",
+    "r": "s217_r_half_ohm",
+    "c": "s217_c_half_f"
+   },
+   "units": {
+    "1": {
+     "x": 487.68,
+     "y": 58.42
+    }
+   }
+  },
+  "W7": {
+   "symbol": "Winding",
+   "value": "pb",
+   "fields": {
+    "Transformer": "T3",
+    "r": "s217_r_half_ohm",
+    "c": "s217_c_half_f"
+   },
+   "units": {
+    "1": {
+     "x": 487.68,
+     "y": 66.04
+    }
+   }
+  },
+  "W8": {
+   "symbol": "Winding",
+   "value": "sa",
+   "fields": {
+    "Transformer": "T3",
+    "ratio": "s217_sec_per_half",
+    "r": "s217_r_sec_half_ohm"
+   },
+   "units": {
+    "1": {
+     "x": 492.76,
+     "y": 58.42,
+     "mirror": true
+    }
+   }
+  },
+  "W9": {
+   "symbol": "Winding",
+   "value": "sb",
+   "fields": {
+    "Transformer": "T3",
+    "ratio": "s217_sec_per_half",
+    "r": "s217_r_sec_half_ohm"
+   },
+   "units": {
+    "1": {
+     "x": 492.76,
+     "y": 66.04,
+     "mirror": true
+    }
+   }
+  },
+  "W10": {
+   "symbol": "Winding",
+   "value": "fa",
+   "fields": {
+    "Transformer": "T3",
+    "ratio": "s217_ter_per_half",
+    "r": "s217_r_ter_half_ohm"
+   },
+   "units": {
+    "1": {
+     "x": 492.76,
+     "y": 81.28,
+     "mirror": true
+    }
+   }
+  },
+  "W11": {
+   "symbol": "Winding",
+   "value": "fb",
+   "fields": {
+    "Transformer": "T3",
+    "ratio": "s217_ter_per_half",
+    "r": "s217_r_ter_half_ohm"
+   },
+   "units": {
+    "1": {
+     "x": 492.76,
+     "y": 88.9,
+     "mirror": true
+    }
+   }
+  },
+  "CZOUT": {
+   "symbol": "C",
+   "value": "3n",
+   "fields": {
+    "Param": "c_zobel_out_f",
+    "Source": "dwg: .003 (uF)",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 508,
+     "y": 50.8
+    }
+   }
+  },
+  "RZOUT": {
+   "symbol": "R",
+   "value": "620",
+   "fields": {
+    "Param": "r_zobel_out_ohm",
+    "Source": "dwg: 620 in series with .003 across the output",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 508,
+     "y": 58.42
+    }
+   }
+  },
+  "Rload": {
+   "symbol": "R",
+   "value": "600",
+   "fields": {
+    "Param": "load_ohm",
+    "Source": "man: output feeds a 600 ohm load (p.4)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 520.7,
+     "y": 50.8
+    }
+   }
+  },
+  "V2": {
+   "symbol": "Triode_Dual",
+   "value": "12AU7",
+   "fields": {
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 449.58,
+     "y": 44.45
+    },
+    "2": {
+     "x": 449.58,
+     "y": 80.01,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  }
+ },
+ "wires": [
+  [
+   [
+    3.81,
+    20.32
+   ],
+   [
+    8.89,
+    20.32
+   ]
+  ],
+  [
+   [
+    16.51,
+    20.32
+   ],
+   [
+    25.4,
+    20.32
+   ]
+  ],
+  [
+   [
+    25.4,
+    27.94
+   ],
+   [
+    25.4,
+    30.48
+   ]
+  ],
+  [
+   [
+    30.48,
+    27.94
+   ],
+   [
+    30.48,
+    30.48
+   ]
+  ],
+  [
+   [
+    43.18,
+    27.94
+   ],
+   [
+    43.18,
+    30.48
+   ]
+  ],
+  [
+   [
+    30.48,
+    20.32
+   ],
+   [
+    93.98,
+    20.32
+   ]
+  ],
+  [
+   [
+    97.79,
+    24.13
+   ],
+   [
+    97.79,
+    30.48
+   ]
+  ],
+  [
+   [
+    88.9,
+    30.48
+   ],
+   [
+    139.7,
+    30.48
+   ]
+  ],
+  [
+   [
+    88.9,
+    38.1
+   ],
+   [
+    88.9,
+    44.45
+   ],
+   [
+    106.68,
+    44.45
+   ],
+   [
+    106.68,
+    48.26
+   ]
+  ],
+  [
+   [
+    106.68,
+    48.26
+   ],
+   [
+    109.22,
+    48.26
+   ]
+  ],
+  [
+   [
+    101.6,
+    38.1
+   ],
+   [
+    101.6,
+    41.91
+   ],
+   [
+    111.76,
+    41.91
+   ],
+   [
+    111.76,
+    48.26
+   ]
+  ],
+  [
+   [
+    114.3,
+    38.1
+   ],
+   [
+    114.3,
+    48.26
+   ]
+  ],
+  [
+   [
+    114.3,
+    48.26
+   ],
+   [
+    116.84,
+    48.26
+   ]
+  ],
+  [
+   [
+    127,
+    38.1
+   ],
+   [
+    127,
+    41.91
+   ],
+   [
+    119.38,
+    41.91
+   ],
+   [
+    119.38,
+    48.26
+   ]
+  ],
+  [
+   [
+    139.7,
+    38.1
+   ],
+   [
+    139.7,
+    44.45
+   ],
+   [
+    121.92,
+    44.45
+   ],
+   [
+    121.92,
+    48.26
+   ]
+  ],
+  [
+   [
+    114.3,
+    63.5
+   ],
+   [
+    114.3,
+    66.04
+   ]
+  ],
+  [
+   [
+    76.2,
+    99.06
+   ],
+   [
+    76.2,
+    102.87
+   ]
+  ],
+  [
+   [
+    88.9,
+    99.06
+   ],
+   [
+    88.9,
+    102.87
+   ]
+  ],
+  [
+   [
+    101.6,
+    99.06
+   ],
+   [
+    101.6,
+    102.87
+   ]
+  ],
+  [
+   [
+    114.3,
+    99.06
+   ],
+   [
+    114.3,
+    102.87
+   ]
+  ],
+  [
+   [
+    127,
+    99.06
+   ],
+   [
+    127,
+    102.87
+   ]
+  ],
+  [
+   [
+    139.7,
+    99.06
+   ],
+   [
+    139.7,
+    102.87
+   ]
+  ],
+  [
+   [
+    106.68,
+    81.28
+   ],
+   [
+    106.68,
+    83.82
+   ],
+   [
+    76.2,
+    83.82
+   ],
+   [
+    76.2,
+    91.44
+   ]
+  ],
+  [
+   [
+    109.22,
+    81.28
+   ],
+   [
+    109.22,
+    86.36
+   ],
+   [
+    88.9,
+    86.36
+   ],
+   [
+    88.9,
+    91.44
+   ]
+  ],
+  [
+   [
+    111.76,
+    81.28
+   ],
+   [
+    111.76,
+    88.9
+   ],
+   [
+    101.6,
+    88.9
+   ],
+   [
+    101.6,
+    91.44
+   ]
+  ],
+  [
+   [
+    114.3,
+    81.28
+   ],
+   [
+    114.3,
+    91.44
+   ]
+  ],
+  [
+   [
+    116.84,
+    81.28
+   ],
+   [
+    116.84,
+    88.9
+   ],
+   [
+    127,
+    88.9
+   ],
+   [
+    127,
+    91.44
+   ]
+  ],
+  [
+   [
+    116.84,
+    81.28
+   ],
+   [
+    119.38,
+    81.28
+   ]
+  ],
+  [
+   [
+    121.92,
+    81.28
+   ],
+   [
+    121.92,
+    86.36
+   ],
+   [
+    139.7,
+    86.36
+   ],
+   [
+    139.7,
+    91.44
+   ]
+  ],
+  [
+   [
+    76.2,
+    110.49
+   ],
+   [
+    76.2,
+    114.3
+   ],
+   [
+    148.59,
+    114.3
+   ]
+  ],
+  [
+   [
+    88.9,
+    110.49
+   ],
+   [
+    88.9,
+    114.3
+   ]
+  ],
+  [
+   [
+    101.6,
+    110.49
+   ],
+   [
+    101.6,
+    114.3
+   ]
+  ],
+  [
+   [
+    114.3,
+    110.49
+   ],
+   [
+    114.3,
+    114.3
+   ]
+  ],
+  [
+   [
+    127,
+    110.49
+   ],
+   [
+    127,
+    114.3
+   ]
+  ],
+  [
+   [
+    139.7,
+    110.49
+   ],
+   [
+    139.7,
+    114.3
+   ]
+  ],
+  [
+   [
+    156.21,
+    114.3
+   ],
+   [
+    156.21,
+    20.32
+   ]
+  ],
+  [
+   [
+    170.18,
+    24.13
+   ],
+   [
+    170.18,
+    20.32
+   ]
+  ],
+  [
+   [
+    173.99,
+    27.94
+   ],
+   [
+    177.8,
+    27.94
+   ]
+  ],
+  [
+   [
+    177.8,
+    35.56
+   ],
+   [
+    177.8,
+    39.37
+   ],
+   [
+    198.12,
+    39.37
+   ]
+  ],
+  [
+   [
+    195.58,
+    54.61
+   ],
+   [
+    195.58,
+    57.15
+   ],
+   [
+    190.5,
+    57.15
+   ]
+  ],
+  [
+   [
+    198.12,
+    54.61
+   ],
+   [
+    198.12,
+    57.15
+   ],
+   [
+    205.74,
+    57.15
+   ]
+  ],
+  [
+   [
+    101.6,
+    20.32
+   ],
+   [
+    250.19,
+    20.32
+   ],
+   [
+    250.19,
+    25.4
+   ]
+  ],
+  [
+   [
+    218.44,
+    46.99
+   ],
+   [
+    218.44,
+    20.32
+   ]
+  ],
+  [
+   [
+    228.6,
+    46.99
+   ],
+   [
+    228.6,
+    20.32
+   ]
+  ],
+  [
+   [
+    246.38,
+    40.64
+   ],
+   [
+    246.38,
+    43.18
+   ],
+   [
+    238.76,
+    43.18
+   ],
+   [
+    238.76,
+    46.99
+   ]
+  ],
+  [
+   [
+    248.92,
+    40.64
+   ],
+   [
+    248.92,
+    46.99
+   ]
+  ],
+  [
+   [
+    251.46,
+    40.64
+   ],
+   [
+    251.46,
+    43.18
+   ],
+   [
+    259.08,
+    43.18
+   ],
+   [
+    259.08,
+    46.99
+   ]
+  ],
+  [
+   [
+    218.44,
+    54.61
+   ],
+   [
+    218.44,
+    58.42
+   ],
+   [
+    265.43,
+    58.42
+   ]
+  ],
+  [
+   [
+    228.6,
+    54.61
+   ],
+   [
+    228.6,
+    58.42
+   ]
+  ],
+  [
+   [
+    238.76,
+    54.61
+   ],
+   [
+    238.76,
+    58.42
+   ]
+  ],
+  [
+   [
+    248.92,
+    54.61
+   ],
+   [
+    248.92,
+    58.42
+   ]
+  ],
+  [
+   [
+    259.08,
+    54.61
+   ],
+   [
+    259.08,
+    58.42
+   ]
+  ],
+  [
+   [
+    170.18,
+    31.75
+   ],
+   [
+    170.18,
+    71.12
+   ],
+   [
+    279.4,
+    71.12
+   ],
+   [
+    279.4,
+    66.04
+   ]
+  ],
+  [
+   [
+    185.42,
+    46.99
+   ],
+   [
+    185.42,
+    71.12
+   ]
+  ],
+  [
+   [
+    190.5,
+    64.77
+   ],
+   [
+    190.5,
+    71.12
+   ]
+  ],
+  [
+   [
+    205.74,
+    64.77
+   ],
+   [
+    205.74,
+    71.12
+   ]
+  ],
+  [
+   [
+    218.44,
+    74.93
+   ],
+   [
+    218.44,
+    71.12
+   ]
+  ],
+  [
+   [
+    228.6,
+    74.93
+   ],
+   [
+    228.6,
+    71.12
+   ]
+  ],
+  [
+   [
+    250.19,
+    76.2
+   ],
+   [
+    250.19,
+    71.12
+   ]
+  ],
+  [
+   [
+    218.44,
+    82.55
+   ],
+   [
+    218.44,
+    85.09
+   ]
+  ],
+  [
+   [
+    228.6,
+    82.55
+   ],
+   [
+    228.6,
+    85.09
+   ]
+  ],
+  [
+   [
+    238.76,
+    105.41
+   ],
+   [
+    238.76,
+    107.95
+   ]
+  ],
+  [
+   [
+    248.92,
+    105.41
+   ],
+   [
+    248.92,
+    107.95
+   ]
+  ],
+  [
+   [
+    259.08,
+    105.41
+   ],
+   [
+    259.08,
+    107.95
+   ]
+  ],
+  [
+   [
+    246.38,
+    91.44
+   ],
+   [
+    246.38,
+    93.98
+   ],
+   [
+    238.76,
+    93.98
+   ],
+   [
+    238.76,
+    97.79
+   ]
+  ],
+  [
+   [
+    248.92,
+    91.44
+   ],
+   [
+    248.92,
+    97.79
+   ]
+  ],
+  [
+   [
+    251.46,
+    91.44
+   ],
+   [
+    251.46,
+    93.98
+   ],
+   [
+    259.08,
+    93.98
+   ],
+   [
+    259.08,
+    97.79
+   ]
+  ],
+  [
+   [
+    273.05,
+    58.42
+   ],
+   [
+    312.42,
+    58.42
+   ]
+  ],
+  [
+   [
+    312.42,
+    66.04
+   ],
+   [
+    312.42,
+    68.58
+   ]
+  ],
+  [
+   [
+    317.5,
+    54.61
+   ],
+   [
+    337.82,
+    54.61
+   ],
+   [
+    337.82,
+    46.99
+   ],
+   [
+    340.36,
+    46.99
+   ]
+  ],
+  [
+   [
+    317.5,
+    69.85
+   ],
+   [
+    337.82,
+    69.85
+   ],
+   [
+    337.82,
+    77.47
+   ],
+   [
+    340.36,
+    77.47
+   ]
+  ],
+  [
+   [
+    347.98,
+    54.61
+   ],
+   [
+    347.98,
+    58.42
+   ]
+  ],
+  [
+   [
+    347.98,
+    66.04
+   ],
+   [
+    347.98,
+    69.85
+   ]
+  ],
+  [
+   [
+    347.98,
+    54.61
+   ],
+   [
+    351.79,
+    54.61
+   ]
+  ],
+  [
+   [
+    347.98,
+    69.85
+   ],
+   [
+    351.79,
+    69.85
+   ]
+  ],
+  [
+   [
+    374.65,
+    58.42
+   ],
+   [
+    374.65,
+    36.83
+   ]
+  ],
+  [
+   [
+    374.65,
+    66.04
+   ],
+   [
+    374.65,
+    87.63
+   ]
+  ],
+  [
+   [
+    384.81,
+    50.8
+   ],
+   [
+    384.81,
+    36.83
+   ]
+  ],
+  [
+   [
+    384.81,
+    73.66
+   ],
+   [
+    384.81,
+    87.63
+   ]
+  ],
+  [
+   [
+    384.81,
+    58.42
+   ],
+   [
+    384.81,
+    66.04
+   ]
+  ],
+  [
+   [
+    369.57,
+    107.95
+   ],
+   [
+    369.57,
+    107.95
+   ]
+  ],
+  [
+   [
+    420.37,
+    36.83
+   ],
+   [
+    429.26,
+    36.83
+   ],
+   [
+    429.26,
+    50.8
+   ]
+  ],
+  [
+   [
+    420.37,
+    87.63
+   ],
+   [
+    429.26,
+    87.63
+   ],
+   [
+    429.26,
+    73.66
+   ]
+  ],
+  [
+   [
+    429.26,
+    58.42
+   ],
+   [
+    429.26,
+    66.04
+   ]
+  ],
+  [
+   [
+    425.45,
+    62.23
+   ],
+   [
+    429.26,
+    62.23
+   ]
+  ],
+  [
+   [
+    384.81,
+    62.23
+   ],
+   [
+    417.83,
+    62.23
+   ]
+  ],
+  [
+   [
+    347.98,
+    39.37
+   ],
+   [
+    347.98,
+    36.83
+   ],
+   [
+    412.75,
+    36.83
+   ]
+  ],
+  [
+   [
+    347.98,
+    85.09
+   ],
+   [
+    347.98,
+    87.63
+   ],
+   [
+    412.75,
+    87.63
+   ]
+  ],
+  [
+   [
+    429.26,
+    62.23
+   ],
+   [
+    439.42,
+    62.23
+   ]
+  ],
+  [
+   [
+    439.42,
+    69.85
+   ],
+   [
+    439.42,
+    72.39
+   ]
+  ],
+  [
+   [
+    441.96,
+    44.45
+   ],
+   [
+    429.26,
+    44.45
+   ]
+  ],
+  [
+   [
+    441.96,
+    80.01
+   ],
+   [
+    429.26,
+    80.01
+   ]
+  ],
+  [
+   [
+    449.58,
+    52.07
+   ],
+   [
+    467.36,
+    52.07
+   ]
+  ],
+  [
+   [
+    449.58,
+    72.39
+   ],
+   [
+    467.36,
+    72.39
+   ]
+  ],
+  [
+   [
+    457.2,
+    59.69
+   ],
+   [
+    467.36,
+    59.69
+   ]
+  ],
+  [
+   [
+    457.2,
+    64.77
+   ],
+   [
+    467.36,
+    64.77
+   ]
+  ],
+  [
+   [
+    462.28,
+    59.69
+   ],
+   [
+    462.28,
+    64.77
+   ]
+  ],
+  [
+   [
+    449.58,
+    36.83
+   ],
+   [
+    449.58,
+    31.75
+   ],
+   [
+    477.52,
+    31.75
+   ],
+   [
+    477.52,
+    54.61
+   ],
+   [
+    487.68,
+    54.61
+   ]
+  ],
+  [
+   [
+    449.58,
+    87.63
+   ],
+   [
+    449.58,
+    92.71
+   ],
+   [
+    477.52,
+    92.71
+   ],
+   [
+    477.52,
+    69.85
+   ],
+   [
+    487.68,
+    69.85
+   ]
+  ],
+  [
+   [
+    492.76,
+    69.85
+   ],
+   [
+    492.76,
+    72.39
+   ]
+  ],
+  [
+   [
+    508,
+    62.23
+   ],
+   [
+    508,
+    64.77
+   ]
+  ],
+  [
+   [
+    520.7,
+    54.61
+   ],
+   [
+    520.7,
+    57.15
+   ]
+  ],
+  [
+   [
+    492.76,
+    54.61
+   ],
+   [
+    501.65,
+    54.61
+   ],
+   [
+    501.65,
+    46.99
+   ],
+   [
+    528.32,
+    46.99
+   ]
+  ],
+  [
+   [
+    359.41,
+    54.61
+   ],
+   [
+    364.49,
+    54.61
+   ],
+   [
+    364.49,
+    95.25
+   ],
+   [
+    502.92,
+    95.25
+   ],
+   [
+    502.92,
+    77.47
+   ],
+   [
+    492.76,
+    77.47
+   ]
+  ],
+  [
+   [
+    359.41,
+    69.85
+   ],
+   [
+    361.95,
+    69.85
+   ],
+   [
+    361.95,
+    97.79
+   ],
+   [
+    492.76,
+    97.79
+   ],
+   [
+    492.76,
+    92.71
+   ]
+  ],
+  [
+   [
+    492.76,
+    85.09
+   ],
+   [
+    510.54,
+    85.09
+   ],
+   [
+    510.54,
+    100.33
+   ],
+   [
+    369.57,
+    100.33
+   ]
+  ],
+  [
+   [
+    312.42,
+    170.18
+   ],
+   [
+    312.42,
+    172.72
+   ]
+  ],
+  [
+   [
+    312.42,
+    160.02
+   ],
+   [
+    318.77,
+    160.02
+   ]
+  ],
+  [
+   [
+    326.39,
+    160.02
+   ],
+   [
+    331.47,
+    160.02
+   ]
+  ],
+  [
+   [
+    339.09,
+    160.02
+   ],
+   [
+    354.33,
+    160.02
+   ]
+  ],
+  [
+   [
+    312.42,
+    190.5
+   ],
+   [
+    312.42,
+    193.04
+   ]
+  ],
+  [
+   [
+    312.42,
+    180.34
+   ],
+   [
+    318.77,
+    180.34
+   ]
+  ],
+  [
+   [
+    326.39,
+    180.34
+   ],
+   [
+    331.47,
+    180.34
+   ]
+  ],
+  [
+   [
+    339.09,
+    180.34
+   ],
+   [
+    354.33,
+    180.34
+   ]
+  ],
+  [
+   [
+    344.17,
+    167.64
+   ],
+   [
+    344.17,
+    172.72
+   ]
+  ],
+  [
+   [
+    361.95,
+    160.02
+   ],
+   [
+    364.49,
+    160.02
+   ],
+   [
+    364.49,
+    180.34
+   ],
+   [
+    361.95,
+    180.34
+   ]
+  ],
+  [
+   [
+    364.49,
+    170.18
+   ],
+   [
+    368.3,
+    170.18
+   ]
+  ],
+  [
+   [
+    375.92,
+    170.18
+   ],
+   [
+    389.89,
+    170.18
+   ]
+  ],
+  [
+   [
+    397.51,
+    170.18
+   ],
+   [
+    422.91,
+    170.18
+   ]
+  ],
+  [
+   [
+    430.53,
+    170.18
+   ],
+   [
+    441.96,
+    170.18
+   ]
+  ],
+  [
+   [
+    379.73,
+    177.8
+   ],
+   [
+    379.73,
+    180.34
+   ]
+  ],
+  [
+   [
+    401.32,
+    177.8
+   ],
+   [
+    401.32,
+    180.34
+   ]
+  ],
+  [
+   [
+    435.61,
+    177.8
+   ],
+   [
+    435.61,
+    180.34
+   ]
+  ],
+  [
+   [
+    403.86,
+    170.18
+   ],
+   [
+    403.86,
+    152.4
+   ],
+   [
+    407.67,
+    152.4
+   ]
+  ],
+  [
+   [
+    415.29,
+    152.4
+   ],
+   [
+    441.96,
+    152.4
+   ]
+  ],
+  [
+   [
+    421.64,
+    160.02
+   ],
+   [
+    421.64,
+    162.56
+   ]
+  ],
+  [
+   [
+    414.02,
+    177.8
+   ],
+   [
+    426.72,
+    177.8
+   ]
+  ],
+  [
+   [
+    414.02,
+    185.42
+   ],
+   [
+    414.02,
+    187.96
+   ]
+  ],
+  [
+   [
+    426.72,
+    185.42
+   ],
+   [
+    426.72,
+    187.96
+   ]
+  ]
+ ],
+ "labels": [
+  {
+   "name": "in",
+   "x": 3.81,
+   "y": 20.32,
+   "rot": 180
+  },
+  {
+   "name": "in_s",
+   "x": 19.05,
+   "y": 20.32
+  },
+  {
+   "name": "eq_in",
+   "x": 48.26,
+   "y": 20.32
+  },
+  {
+   "name": "hbw",
+   "x": 93.98,
+   "y": 30.48
+  },
+  {
+   "name": "hbc",
+   "x": 114.3,
+   "y": 63.5,
+   "rot": 180
+  },
+  {
+   "name": "hbl150",
+   "x": 76.2,
+   "y": 100.33
+  },
+  {
+   "name": "hbl82",
+   "x": 88.9,
+   "y": 100.33
+  },
+  {
+   "name": "hbl68",
+   "x": 101.6,
+   "y": 100.33
+  },
+  {
+   "name": "hbl47",
+   "x": 114.3,
+   "y": 100.33
+  },
+  {
+   "name": "hbl33",
+   "x": 127,
+   "y": 100.33
+  },
+  {
+   "name": "hbl27",
+   "x": 139.7,
+   "y": 100.33
+  },
+  {
+   "name": "hbr",
+   "x": 143.51,
+   "y": 114.3
+  },
+  {
+   "name": "haw",
+   "x": 173.99,
+   "y": 27.94
+  },
+  {
+   "name": "hac",
+   "x": 180.34,
+   "y": 39.37
+  },
+  {
+   "name": "eq_m",
+   "x": 106.68,
+   "y": 20.32
+  },
+  {
+   "name": "la",
+   "x": 261.62,
+   "y": 58.42
+  },
+  {
+   "name": "eq_out",
+   "x": 284.48,
+   "y": 58.42
+  },
+  {
+   "name": "lb",
+   "x": 175.26,
+   "y": 71.12
+  },
+  {
+   "name": "zin",
+   "x": 332.74,
+   "y": 62.23,
+   "rot": 180
+  },
+  {
+   "name": "g1a",
+   "x": 325.12,
+   "y": 54.61
+  },
+  {
+   "name": "g1b",
+   "x": 325.12,
+   "y": 69.85
+  },
+  {
+   "name": "k1a",
+   "x": 347.98,
+   "y": 57.15,
+   "rot": 180
+  },
+  {
+   "name": "k1b",
+   "x": 347.98,
+   "y": 67.31,
+   "rot": 180
+  },
+  {
+   "name": "p1a",
+   "x": 355.6,
+   "y": 36.83
+  },
+  {
+   "name": "p1b",
+   "x": 355.6,
+   "y": 87.63
+  },
+  {
+   "name": "b4",
+   "x": 384.81,
+   "y": 62.23,
+   "rot": 180
+  },
+  {
+   "name": "g2a",
+   "x": 421.64,
+   "y": 36.83
+  },
+  {
+   "name": "g2b",
+   "x": 421.64,
+   "y": 87.63
+  },
+  {
+   "name": "gb2",
+   "x": 434.34,
+   "y": 62.23
+  },
+  {
+   "name": "k2a",
+   "x": 452.12,
+   "y": 52.07
+  },
+  {
+   "name": "k2b",
+   "x": 452.12,
+   "y": 72.39
+  },
+  {
+   "name": "b3",
+   "x": 487.68,
+   "y": 62.23,
+   "rot": 180
+  },
+  {
+   "name": "p2a",
+   "x": 467.36,
+   "y": 31.75
+  },
+  {
+   "name": "p2b",
+   "x": 467.36,
+   "y": 92.71
+  },
+  {
+   "name": "s9",
+   "x": 492.76,
+   "y": 62.23
+  },
+  {
+   "name": "zout",
+   "x": 508,
+   "y": 54.61,
+   "rot": 180
+  },
+  {
+   "name": "out",
+   "x": 528.32,
+   "y": 46.99
+  },
+  {
+   "name": "fba",
+   "x": 502.92,
+   "y": 91.44
+  },
+  {
+   "name": "fbb",
+   "x": 472.44,
+   "y": 97.79
+  },
+  {
+   "name": "fbs",
+   "x": 505.46,
+   "y": 85.09
+  },
+  {
+   "name": "hva",
+   "x": 314.96,
+   "y": 160.02
+  },
+  {
+   "name": "hva_r",
+   "x": 327.66,
+   "y": 160.02
+  },
+  {
+   "name": "rka",
+   "x": 340.36,
+   "y": 160.02
+  },
+  {
+   "name": "hvb",
+   "x": 314.96,
+   "y": 180.34
+  },
+  {
+   "name": "hvb_r",
+   "x": 327.66,
+   "y": 180.34
+  },
+  {
+   "name": "rkb",
+   "x": 340.36,
+   "y": 180.34
+  },
+  {
+   "name": "b0",
+   "x": 365.76,
+   "y": 170.18
+  },
+  {
+   "name": "b1",
+   "x": 384.81,
+   "y": 170.18
+  },
+  {
+   "name": "b2",
+   "x": 406.4,
+   "y": 170.18
+  },
+  {
+   "name": "b3",
+   "x": 441.96,
+   "y": 170.18
+  },
+  {
+   "name": "b4",
+   "x": 441.96,
+   "y": 152.4
+  },
+  {
+   "name": "htr",
+   "x": 419.1,
+   "y": 177.8
+  }
+ ],
+ "grounds": [
+  {
+   "x": 25.4,
+   "y": 30.48
+  },
+  {
+   "x": 30.48,
+   "y": 30.48
+  },
+  {
+   "x": 43.18,
+   "y": 30.48
+  },
+  {
+   "x": 218.44,
+   "y": 85.09
+  },
+  {
+   "x": 228.6,
+   "y": 85.09
+  },
+  {
+   "x": 238.76,
+   "y": 107.95
+  },
+  {
+   "x": 248.92,
+   "y": 107.95
+  },
+  {
+   "x": 259.08,
+   "y": 107.95
+  },
+  {
+   "x": 312.42,
+   "y": 68.58
+  },
+  {
+   "x": 317.5,
+   "y": 62.23,
+   "rot": 90
+  },
+  {
+   "x": 369.57,
+   "y": 107.95
+  },
+  {
+   "x": 439.42,
+   "y": 72.39
+  },
+  {
+   "x": 462.28,
+   "y": 62.23,
+   "rot": 90
+  },
+  {
+   "x": 492.76,
+   "y": 72.39
+  },
+  {
+   "x": 508,
+   "y": 64.77
+  },
+  {
+   "x": 520.7,
+   "y": 57.15
+  },
+  {
+   "x": 312.42,
+   "y": 172.72
+  },
+  {
+   "x": 312.42,
+   "y": 193.04
+  },
+  {
+   "x": 344.17,
+   "y": 170.18,
+   "rot": 90
+  },
+  {
+   "x": 379.73,
+   "y": 180.34
+  },
+  {
+   "x": 401.32,
+   "y": 180.34
+  },
+  {
+   "x": 435.61,
+   "y": 180.34
+  },
+  {
+   "x": 421.64,
+   "y": 162.56
+  },
+  {
+   "x": 414.02,
+   "y": 187.96
+  },
+  {
+   "x": 426.72,
+   "y": 187.96
+  }
+ ]
+}

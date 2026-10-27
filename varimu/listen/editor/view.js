@@ -88,35 +88,28 @@ export class View {
     out.push('</g><g class="wires">');
     d.wires.forEach((w, i) => out.push(`<path class="wire" data-wire="${i}" data-net="${this.wireNet[i]}" d="M${w.map(p => p.join(',')).join(' L')}"/>`));
     out.push('</g><g class="syms">');
+    const spans = coreSpans(d, lib);
     for (const [ref, s] of Object.entries(d.symbols)) {
       const sym = lib[s.symbol]; if (!sym) continue;
       const multi = sym.units.length > 1;
       let box = null;
       for (const [u, pl] of Object.entries(s.units)) {
-        out.push(unitSvg(sym, +u, pl, `data-ref="${esc(ref)}"`));
+        const span = sym.kind === 'core' ? spans.get(ref) : null;
+        if (span) out.push(`<g class="g" data-ref="${esc(ref)}"><path d="M${pl.x - 0.508},${span[0]} V${span[1]} M${pl.x + 0.508},${span[0]} V${span[1]}"/></g>`);
+        else out.push(unitSvg(sym, +u, pl, `data-ref="${esc(ref)}"`));
         for (const p of sym.units[u - 1] || []) {
           const [x, y] = tf(p.x, p.y, pl);
           this.pins.push({ x, y, ref, unit: +u, number: p.number, name: p.name, net: this.pinNet.get(`${ref}/${u}/${p.number}`) ?? -1 });
         }
         const c = [[sym.box[0], sym.box[1]], [sym.box[2], sym.box[1]], [sym.box[0], sym.box[3]], [sym.box[2], sym.box[3]]].map(([x, y]) => tf(x, y, pl));
-        const ub = [Math.min(...c.map(p => p[0])) - 0.6, Math.min(...c.map(p => p[1])) - 0.6, Math.max(...c.map(p => p[0])) + 0.6, Math.max(...c.map(p => p[1])) + 0.6];
+        const ub = span ? [pl.x - 1.1, span[0] - 0.6, pl.x + 1.1, span[1] + 0.6]
+          : [Math.min(...c.map(p => p[0])) - 0.6, Math.min(...c.map(p => p[1])) - 0.6, Math.max(...c.map(p => p[0])) + 0.6, Math.max(...c.map(p => p[1])) + 0.6];
         this.boxes.set(`${ref}/${u}`, ub);
         box = box ? [Math.min(box[0], ub[0]), Math.min(box[1], ub[1]), Math.max(box[2], ub[2]), Math.max(box[3], ub[3])] : ub;
         const [rl, vl] = textFor(ref, s, sym, params);
         const refText = multi ? `${rl}${String.fromCharCode(64 + +u)}` : rl;
-        if ((pl.rot || 0) % 180 === 90 && sym.kind !== 'device') {
-          // A part turned on its side: name above it, value below, both centred on it.
-          const body = sym.graphics.length ? graphicsBox(sym, pl) : ub;
-          const cx = (body[0] + body[2]) / 2;
-          texts.push(`<text class="ref" x="${cx}" y="${body[1] - 1.5}" text-anchor="middle">${refText}</text>`);
-          if (vl) texts.push(`<text class="val" x="${cx}" y="${body[3] + 1.6}" text-anchor="middle">${vl}</text>`);
-        } else for (const [txt, pos, cls] of [[refText, sym.text.ref, 'ref'], [vl, sym.text.value, 'val']]) {
-          if (!txt) continue;
-          const [x, y] = tf(pos[0], pos[1], pl), [ox, oy] = tf(0, 0, pl);
-          const dx = x - ox, dy = y - oy, horiz = Math.abs(dx) >= Math.abs(dy) - 1e-6;
-          const anchor = !horiz ? 'middle' : dx >= 0 ? 'start' : 'end';
-          texts.push(`<text class="${cls}" x="${x}" y="${y}" text-anchor="${anchor}">${txt}</text>`);
-        }
+        const body = span ? [pl.x - 0.508, span[0], pl.x + 0.508, span[1]] : sym.graphics.length ? graphicsBox(sym, pl) : ub;
+        texts.push(...unitTexts(sym, +u, pl, body, refText, vl));
       }
       if (box) this.boxes.set(ref, box);
     }
@@ -126,8 +119,9 @@ export class View {
     out.push('</g><g class="texts">', ...texts, '</g><g class="junctions">');
     if (!preview) for (const [x, y] of analysis.junctions) out.push(`<circle class="jn" cx="${x}" cy="${y}" r="0.42"/>`);
     out.push('</g><g class="openpins">');
-    // Pins with nothing on them: what still needs a wire.
-    if (!preview) for (const p of this.pins) if (p.net < 0 || (analysis.nets[p.net]?.pins.length === 1 && !analysis.nets[p.net].labels.length && !analysis.nets[p.net].grounds.length))
+    // Pins with nothing on them: what still needs a wire (a deck's spare contacts don't).
+    const spare = p => lib[d.symbols[p.ref].symbol].kind === 'switch' && p.number !== 'C';
+    if (!preview) for (const p of this.pins) if (!spare(p) && (p.net < 0 || (analysis.nets[p.net]?.pins.length === 1 && !analysis.nets[p.net].labels.length && !analysis.nets[p.net].grounds.length)))
       out.push(`<circle class="openpin" cx="${p.x}" cy="${p.y}" r="0.55"/>`);
     out.push('</g><g id="markers"></g><g id="selection"></g><g id="overlay"></g><g id="ghost"></g>');
     this.world.innerHTML = out.join('');
@@ -326,6 +320,62 @@ export class View {
 }
 
 /** The box of a placed symbol's body (its graphics, without the pins). */
+const textSvg = (cls, txt, x, y, anchor) => `<text class="${cls}" x="${x}" y="${y}" text-anchor="${anchor}">${txt}</text>`;
+
+/** A placed unit's name and value, upright, the name above the value: beside an upright
+ * part (a winding's on the side away from its turns), above and below a part on its side
+ * (both on the side no pin leaves from), beside a switch deck on its side (clear of the
+ * wires into its contacts), above a core. `body`: the unit's drawn body (world). */
+function unitTexts(sym, unit, pl, body, refText, vl) {
+  const out = [], put = (cls, txt, x, y, anchor) => { if (txt) out.push(textSvg(cls, txt, x, y, anchor)); };
+  const cx = (body[0] + body[2]) / 2, cy = (body[1] + body[3]) / 2;
+  const sideways = (pl.rot || 0) % 180 === 90, pins = (sym.units[unit - 1] || []).map(p => tf(p.x, p.y, pl));
+  const over = (x) => x > body[0] - 1e-6 && x < body[2] + 1e-6;
+  const above = () => { put('ref', refText, cx, body[1] - 3.3, 'middle'); put('val', vl, cx, body[1] - 1.5, 'middle'); };
+  if (sym.kind === 'core') { put('ref', refText, cx, body[1] - 4.4, 'middle'); put('val', vl, cx, body[1] - 2.6, 'middle'); return out; }
+  if (sideways && sym.kind === 'switch') {
+    put('ref', refText, body[2] + 1.2, cy - 0.9, 'start'); put('val', vl, body[2] + 1.2, cy + 0.9, 'start');
+    return out;
+  }
+  if (sideways && (sym.kind !== 'device' || pins.length <= 2)) {
+    const down = pins.some(([x, y]) => over(x) && y > body[3] + 1e-6), up = pins.some(([x, y]) => over(x) && y < body[1] - 1e-6);
+    if (down && !up) above();
+    else if (up && !down) { put('ref', refText, cx, body[3] + 1.6, 'middle'); put('val', vl, cx, body[3] + 3.3, 'middle'); }
+    else { put('ref', refText, cx, body[1] - 1.5, 'middle'); put('val', vl, cx, body[3] + 1.6, 'middle'); }
+    return out;
+  }
+  const side = sym.kind === 'winding' ? -1 : 1, [ox, oy] = tf(0, 0, pl);
+  let [rx, ry] = tf(side * sym.text.ref[0], sym.text.ref[1], pl);
+  let [vx, vy] = tf(side * sym.text.value[0], sym.text.value[1], pl);
+  if (Math.abs(rx - vx) < 1e-6 && ry > vy) [ry, vy] = [vy, ry]; // flipped: keep the name on top
+  for (const [cls, txt, x, y] of [['ref', refText, rx, ry], ['val', vl, vx, vy]]) {
+    const dx = x - ox, dy = y - oy, horiz = Math.abs(dx) >= Math.abs(dy) - 1e-6;
+    put(cls, txt, x, y, !horiz ? 'middle' : dx >= 0 ? 'start' : 'end');
+  }
+  return out;
+}
+
+/** ref -> [y0, y1]: an upright core's lines run the length of the windings beside it
+ * (within 12 mm), as a transformer is drawn; a core with none keeps its symbol. */
+function coreSpans(d, lib) {
+  const spans = new Map();
+  for (const [ref, s] of Object.entries(d.symbols)) {
+    const pl = s.units[1];
+    if (lib[s.symbol]?.kind !== 'core' || !pl || (pl.rot || 0) % 180) continue;
+    let y0 = Infinity, y1 = -Infinity;
+    for (const w of Object.values(d.symbols)) {
+      if (lib[w.symbol]?.kind !== 'winding' || w.fields.Transformer !== ref) continue;
+      for (const [u, wp] of Object.entries(w.units))
+        for (const p of lib[w.symbol].units[u - 1]) {
+          const [x, y] = tf(p.x, p.y, wp);
+          if (Math.abs(x - pl.x) <= 12) { y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        }
+    }
+    if (y0 < y1) spans.set(ref, [Math.min(y0 + 1.27, pl.y - 5.08), Math.max(y1 - 1.27, pl.y + 5.08)]);
+  }
+  return spans;
+}
+
 function graphicsBox(sym, pl) {
   // The library's box includes the pins; the body is the box less the pin lengths.
   const pins = sym.units.flat(), b = sym.box;

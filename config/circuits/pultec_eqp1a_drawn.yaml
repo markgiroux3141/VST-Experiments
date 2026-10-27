@@ -1,0 +1,276 @@
+# Generated from pultec_eqp1a_drawn.drawing.json (from scripts/draw_pultec_eqp1a.py) by the schematic editor (varimu.editor): edit the drawing, not this file.
+
+title: Pultec EQP-1A program equalizer
+
+input: in
+
+probes: [out, in_s, eq_in, eq_m, eq_out, g1a, g1b, k1a, k1b, fbs, p1a, p1b, g2a, g2b, gb2, k2a, k2b, p2a, p2b, b0, b1, b2, b3, b4, htr]
+
+controls:
+  lf_freq_hz: {value: 60, choices: [20, 30, 60, 100], unit: position, source: 'man: LOW FREQUENCY selector, 20 / 30 / 60 / 100 cps (p.1)'}
+  lf_boost: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: left BOOST knob (low frequency), 0 to 13.5 dB (p.1)'}
+  lf_atten: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: left ATTEN knob (low frequency), 0 to 17.5 dB (p.1)'}
+  hf_boost_freq_khz: {value: 10, choices: [3, 4, 5, 8, 10, 12, 16], unit: position, source: 'man: HIGH FREQUENCY selector, 3 / 4 / 5 / 8 / 10 / 12 / 16 kcs peak boost (p.1)'}
+  hf_boost: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: right BOOST knob, 0 to 18 dB (p.1)'}
+  bandwidth: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: 'man: BANDWIDTH, continuously variable sharp to broad (p.4)', notes: '0 = sharp, 1 = broad'}
+  hf_atten_freq_khz: {value: 10, choices: [5, 10, 20], unit: position, source: 'man: ATTEN SEL, 5 / 10 / 20 kcs shelf attenuate (p.1)'}
+  hf_atten: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'man: right ATTEN knob, 0 to 16 dB (p.1)'}
+  mains_v_rms: {value: 117.0, min: 105.0, max: 127.0, unit: V, source: 'man: power required 117 volts, 50/60 cps (p.1, p.4). The range is provisional: model knowledge (US line voltage)'}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: 'man: 50/60 cps (p.1)'}
+
+values:
+  hs56_r_pri_ohm: {value: 54.57, source: 'web: https://www.triadmagnetics.com/item/audio-transformers/hermetically-sealed-low-level-audio-transformers/hs-56 (DCR 1-2 9.46, 2-3 16.60, 4-5 17.80, 5-6 10.71 ohm, in series for 600 ohm)'}
+  hs56_r_sec_ohm: {value: 55.0, source: 'web: same page (DCR 7-8 8.40, 8-9 15.10, 10-11 19.70, 11-12 11.80 ohm, in series)'}
+  hs56_core_material: {value: mumetall, genome: pultec.hs56.core_material, source: 'provisional: model knowledge (high-nickel cores in Triad''s low-level HS series; the case is mu-metal: Triad HS-56 sheet)'}
+  hs56_core_area_m2: {value: 5.0e-05, genome: pultec.hs56.core_area_m2, source: 'provisional: model knowledge (GP-4 case, 1-3/8 x 1-3/8 x 2-1/2 in, 12 oz: Triad HS series 1958 catalogue)'}
+  hs56_core_path_m: {value: 0.05, genome: pultec.hs56.core_path_m, source: 'provisional: model knowledge (a core in that case)'}
+  hs56_gap_m: {value: 1.0e-05, genome: pultec.hs56.air_gap_m, source: 'provisional: model knowledge (butt joints; no DC)'}
+  hs56_turns: {value: 2554, genome: pultec.hs56.turns, source: 'derived: 35 H primary in the core''s linear limit at the nominal geometry (parts.turns_for_inductance), the middle of Triad''s 21-49 H (HS-56 sheet: 5 V at 60 Hz, 1-6 with 3-4 shorted)', notes: 'primary (the reference winding); the ratio is 1:1'}
+  hs56_leakage_h: {value: 0.002, genome: pultec.hs56.leakage_h, source: 'provisional: model knowledge (puts the 600 / 600 ohm corner near 95 kHz: Triad''s sheet gives -0.48 dB at 30 kHz)'}
+  hs56_c_f: {value: 1.0e-10, genome: pultec.hs56.winding_capacitance_f, source: 'provisional: model knowledge (self-capacitance of a 600 ohm line winding)'}
+  audio_taper_mid: {value: 0.1, genome: pultec.pots.audio_taper_mid, source: 'provisional: model knowledge (an ''audio'' or ''A'' taper: ~10% of the track at half rotation; [MAN] p.5 names the taper, not its law)', notes: 'both LF pots; which end their wipers are tied to isn''t drawn: resistance follows the taper with rotation'}
+  hs29_r_pri_ohm: {value: 1955, source: 'web: Triad HS-29 sheet (DCR 1-2 935, 3-4 1020 ohm, in series), https://mm.digikey.com/Volume0/opasdata/d220001/medias/docus/6536/HS-29.pdf'}
+  hs29_r_sec_a_ohm: {value: 1647, source: 'web: same sheet (DCR 5-6)'}
+  hs29_r_sec_b_ohm: {value: 2272, source: 'web: same sheet (DCR 7-8)'}
+  hs29_core_material: {value: mumetall, genome: pultec.hs29.core_material, source: 'provisional: model knowledge (as the HS-56)'}
+  hs29_core_area_m2: {value: 5.0e-05, genome: pultec.hs29.core_area_m2, source: 'provisional: model knowledge (GP-4 case, as the HS-56: Triad HS series 1958 catalogue)'}
+  hs29_core_path_m: {value: 0.05, genome: pultec.hs29.core_path_m, source: 'provisional: model knowledge'}
+  hs29_gap_m: {value: 1.0e-05, genome: pultec.hs29.air_gap_m, source: 'provisional: model knowledge (butt joints; no DC)'}
+  hs29_turns: {value: 10574, genome: pultec.hs29.turns, source: 'derived: 600 H primary in the core''s linear limit at the nominal geometry (parts.turns_for_inductance), Triad''s minimum (HS-29 sheet: 1-4 with 2-3 joined, 1 V at 60 Hz, 600 H min)', notes: 'primary (the reference winding); each secondary half has as many (1:2 overall)'}
+  hs29_leakage_h: {value: 0.02, genome: pultec.hs29.leakage_h, source: 'provisional: model knowledge (a high-impedance interstage)'}
+  hs29_c_half_f: {value: 3.0e-10, genome: pultec.hs29.winding_capacitance_f, source: 'provisional: model knowledge (150 pF across the 80k secondary puts the corner near 26 kHz with Rs 20k / RL 80k: Triad''s sheet gives -2.35 dB at 20 kHz)'}
+  s217_turns_half: {value: 1575, genome: pultec.s217.turns_half, source: 'web: https://groupdiy.com/threads/peerless-s-217-d-diy.51046 (a rebuild: primary 1575 turns per coil, two coils; unverified)', notes: each primary half (the reference winding)}
+  s217_sec_per_half: {value: 0.22349, genome: pultec.s217.sec_ratio, source: 'web: same thread (secondary 352 turns per coil): 352 / 1575, so 12.6k plate to plate into 600 ohm; a replacement is sold as 12,500 ohm (web: https://www.don-audio.com/CineMag-CM-S217D-transformer-Peerless-S217D-replacement)', notes: 'each secondary half (7-9, 10-12) per primary half'}
+  s217_ter_per_half: {value: 0.04508, genome: pultec.s217.tertiary_ratio, source: 'web: same thread (tertiary 71 turns per coil): 71 / 1575', notes: 'each half of the feedback winding (3-S, S-5)'}
+  s217_r_half_ohm: {value: 150.0, genome: pultec.s217.r_half_ohm, source: 'provisional: model knowledge (each half of a 12.5k CT primary)'}
+  s217_r_sec_half_ohm: {value: 12.0, genome: pultec.s217.r_sec_half_ohm, source: 'provisional: model knowledge (each half of a 600 ohm secondary)'}
+  s217_r_ter_half_ohm: {value: 2.0, genome: pultec.s217.r_ter_half_ohm, source: 'provisional: model knowledge (71 turns of the feedback winding)'}
+  s217_core_material: {value: grain_oriented_si_steel, genome: pultec.s217.core_material, source: 'provisional: model knowledge (the original''s L12 laminations aren''t documented: web: https://www.don-audio.com/CineMag-CM-S217D-transformer-Peerless-S217D-replacement)'}
+  s217_core_area_m2: {value: 0.0002, genome: pultec.s217.core_area_m2, source: 'provisional: model knowledge (gives 115 H across the primary with the thread''s turns: a 12.5k primary flat to below 20 Hz, as [MAN]''s 20 cps-20 kcs +0 / -1 dB needs)'}
+  s217_core_path_m: {value: 0.08, genome: pultec.s217.core_path_m, source: 'provisional: model knowledge (L12 lamination stack)'}
+  s217_gap_m: {value: 2.0e-05, genome: pultec.s217.air_gap_m, source: 'provisional: model knowledge (butt joints; push-pull)'}
+  s217_leakage_h: {value: 0.015, genome: pultec.s217.leakage_h, source: 'provisional: model knowledge (k ~ 0.9999 per primary half)'}
+  s217_c_half_f: {value: 1.5e-10, genome: pultec.s217.winding_capacitance_f, source: 'provisional: model knowledge (push-pull primaries, 100-500 pF)'}
+  rectifier_tube: {value: 6X4, source: 'dwg: 6X4 full-wave rectifier; config/devices/6x4.yaml (per section)'}
+  numerical_leak_ohm: {value: 1000000000.0, source: 'numerical: DC path for floating nodes (not physical)'}
+  passive_seed: {value: 0, genome: passives.seed, source: 'numerical: which set of parts a unit is built from'}
+  passive_spread: {value: 0.0, genome: passives.spread, source: 'provisional: fraction of each part''s tolerance band its deviation spans (0 = every part at its printed value)'}
+  tol_resistor_pct: {value: 10.0, source: 'provisional: model knowledge (carbon composition resistors of the era, 10%; the drawing prints none)'}
+  tol_matched_pct: {value: 1.0, source: 'provisional: model knowledge (the 4700s are ''selected alike'', dwg)'}
+  tol_pot_pct: {value: 20.0, genome: passives.pot_pct, source: 'provisional: model knowledge (carbon potentiometers, +-10..20%)'}
+  tol_paper_pct: {value: 20.0, genome: passives.paper_capacitor_pct, source: 'provisional: model knowledge (paper capacitors of the 1950s, +-10..20%)'}
+  tol_network_c_pct: {value: 5.0, source: 'provisional: model knowledge (the network''s capacitors set its frequencies: close-tolerance mica or film, 5%)'}
+  tol_mica_pct: {value: 10.0, genome: passives.mica_capacitor_pct, source: 'provisional: model knowledge (small mica capacitors, +-5..20%)'}
+  tol_electrolytic_minus_pct: {value: 20.0, genome: passives.electrolytic_minus_pct, source: 'provisional: model knowledge (1950s electrolytics, -10..-20%)'}
+  tol_electrolytic_plus_pct: {value: 50.0, genome: passives.electrolytic_plus_pct, source: 'provisional: model knowledge (1950s electrolytics, +50..+100%)'}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: 'provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)'}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: 'provisional: model knowledge (grid-pitch tolerance, a few %)'}
+  bandwidth_pot_ohm: {value: 2500, source: 'man: bandwidth control A-B JU-2521, 2500 ohm linear (p.5)'}
+  c_cathode2_f: {value: 5.0e-05, source: 'dwg: 50/50 V across each 4700'}
+  c_couple_f: {value: 2.5e-07, source: 'dwg: .25 coupling capacitors'}
+  c_ha_10k_f: {value: 6.8e-08, source: 'redraw: the second 68nF, switched in on 10k', genome: pultec.network.c_ha_10k_f}
+  c_ha_5k_f: {value: 2.2e-07, source: 'redraw: 220nF, switched in on 5k', genome: pultec.network.c_ha_5k_f}
+  c_ha_68n_f: {value: 6.8e-08, source: 'redraw: 68nF from the 75 ohm to the LF-boost node, in on every position', genome: pultec.network.c_ha_68n_f}
+  c_hb_15n_f: {value: 1.5e-08, source: 'redraw: 15nF on 5k', genome: pultec.network.c_hb_15n_f}
+  c_hb_18n_f: {value: 1.8e-08, source: 'redraw: 18nF on 3k and 4k', genome: pultec.network.c_hb_18n_f}
+  c_hb_3n3_f: {value: 3.3e-09, source: 'redraw: 3.3nF on 16k', genome: pultec.network.c_hb_3n3_f}
+  c_hb_5n6_f: {value: 5.6e-09, source: 'redraw: 5.6nF on 12k', genome: pultec.network.c_hb_5n6_f}
+  c_hb_8n2_f: {value: 8.2e-09, source: 'redraw: 8.2nF on 8k and 10k', genome: pultec.network.c_hb_8n2_f}
+  c_heater_f: {value: 3.0e-07, source: 'dwg: .3 across the 62K'}
+  c_la_12n_f: {value: 1.2e-08, source: 'dwg-interp: redraw 12nF, wired to the switch''s common (in on every position; 100 cps alone)', genome: pultec.network.c_la_12n_f}
+  c_la_20_f: {value: 5.6e-08, source: 'redraw: 56nF on 20', genome: pultec.network.c_la_20_f}
+  c_la_30_f: {value: 2.7e-08, source: 'redraw: 27nF on 30', genome: pultec.network.c_la_30_f}
+  c_la_60_f: {value: 8.2e-09, source: 'redraw: 8.2nF on 60', genome: pultec.network.c_la_60_f}
+  c_lb_20_f: {value: 1.5e-06, source: 'redraw: 1.5uF on 20', genome: pultec.network.c_lb_20_f}
+  c_lb_30_f: {value: 8.2e-07, source: 'redraw: 820nF on 30', genome: pultec.network.c_lb_30_f}
+  c_lb_330n_f: {value: 3.3e-07, source: 'dwg-interp: redraw 330nF, wired to the switch''s common (in on every position; 100 cps alone)', genome: pultec.network.c_lb_330n_f}
+  c_lb_60_f: {value: 2.2e-07, source: 'redraw: 220nF on 60', genome: pultec.network.c_lb_60_f}
+  c_plates1_f: {value: 2.0e-11, source: 'dwg: .00002 (uF) from plate to plate'}
+  c_psu_f: {value: 4.0e-05, source: 'dwg: 40/450 V at +345, +325, +290 and +250 V'}
+  c_zobel_in_f: {value: 2.7e-10, source: 'dwg: .00027 (uF)'}
+  c_zobel_out_f: {value: 3.0e-09, source: 'dwg: .003 (uF)'}
+  hf_atten_pot_ohm: {value: 1000, source: 'man: high attenuate control A-B JU-1021, 1000 ohm linear (p.5)'}
+  hf_atten_r_ohm: {value: 75, source: 'redraw: 75 from the HF atten wiper to its capacitors (Barrera''s netlist: 75 too)'}
+  hf_boost_pot_ohm: {value: 10000.0, source: 'man: high boost control A-B JU-1031, 10,000 ohm linear (p.5)'}
+  hs56_r_in_term_ohm: {value: 620, source: 'dwg: 620 across the HS-56 secondary'}
+  l_hb_150m_h: {value: 0.15, source: 'redraw: 150mH on 3k (vendor''s original tap 150.5 mH: web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)', genome: pultec.network.l_hb_150m_h}
+  l_hb_27m_h: {value: 0.027, source: 'redraw: 27mH on 16k', genome: pultec.network.l_hb_27m_h}
+  l_hb_33m_h: {value: 0.033, source: 'redraw: 33mH on 10k and 12k (vendor''s original tap 32.0 mH, same page)', genome: pultec.network.l_hb_33m_h}
+  l_hb_47m_h: {value: 0.047, source: 'redraw: 47mH on 8k (vendor''s original tap 51.1 mH, same page)', genome: pultec.network.l_hb_47m_h}
+  l_hb_68m_h: {value: 0.068, source: 'redraw: 68mH on 5k', genome: pultec.network.l_hb_68m_h}
+  l_hb_82m_h: {value: 0.082, source: 'redraw: 82mH on 4k (vendor''s original tap 84.3 mH, same page)', genome: pultec.network.l_hb_82m_h}
+  lf_atten_pot_ohm: {value: 100000.0, source: 'man: low attenuate control A-B JA-1041, 100,000 ohm audio taper (p.5)'}
+  lf_atten_series_ohm: {value: 1000, source: 'redraw: 1k from the LF atten network to the output (HS-29 pin 4); Barrera''s netlist: 1k'}
+  lf_boost_pot_ohm: {value: 10000.0, source: 'man: low boost control A-B JA-1031, 10,000 ohm audio taper (p.5)'}
+  load_ohm: {value: 600, source: 'man: output feeds a 600 ohm load (p.4)'}
+  pcc55_c_half_f: {value: 3.0e-10, source: 'provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)', genome: pultec.psu.pcc55_winding_capacitance_f}
+  pcc55_hv_half_rms_v: {value: 292.5, source: 'derived: puts the settled +325 V node at the drawing''s 325 V at the nominal genome (scripts/calibrate_pultec_psu.py, 2026-10-26; the other rails then read 353 / 344 / 288 / 256 / 61 V against the drawing''s 355 / 345 / 290 / 250 / 60 V)', genome: pultec.psu.pcc55_hv_half_rms_v, notes: 'open-circuit rms per HV half behind pcc55_r_half_ohm, at mains_v_rms = 117 V'}
+  pcc55_leakage_h: {value: 0.005, source: 'provisional: model knowledge (leakage per HV half)', genome: pultec.psu.pcc55_leakage_h}
+  pcc55_r_half_ohm: {value: 100.0, source: 'provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)', genome: pultec.psu.pcc55_r_half_ohm}
+  r_bias_bot_ohm: {value: 62000.0, source: 'dwg: 62K from the grid divider to ground'}
+  r_bias_top_ohm: {value: 470000.0, source: 'dwg: 470K from +250 V to the grid divider (+31 V)'}
+  r_cathode2_ohm: {value: 4700, source: 'dwg: 4700 1W from each cathode to ground (* resistors selected alike)'}
+  r_cathodes1_ohm: {value: 820, source: 'dwg: 820 between the cathodes (pins 3, 8)'}
+  r_fb_ohm: {value: 360, source: 'dwg: 360, each cathode to an end of the output transformer''s feedback winding'}
+  r_fb_return_ohm: {value: 1000, source: 'dwg: 1000 from the feedback winding''s tap S to ground (+1.1 V)'}
+  r_grid2_ohm: {value: 1000000.0, source: 'dwg: 1M grid resistors, from the grids to the 470K / 62K divider'}
+  r_hb_150m_ohm: {value: 33.0, source: 'derived: 14 ohm x sqrt(150 / 27), within the vendor''s 14-34 ohm (web: https://vintagewindings.com/products/VintageWindings%20EQ-1A.html)', genome: pultec.network.r_hb_150m_ohm}
+  r_hb_27m_ohm: {value: 14.0, source: 'derived: the vendor''s first tap, 14 ohm (same)', genome: pultec.network.r_hb_27m_ohm}
+  r_hb_33m_ohm: {value: 15.5, source: 'derived: 14 ohm x sqrt(33 / 27), same', genome: pultec.network.r_hb_33m_ohm}
+  r_hb_47m_ohm: {value: 18.5, source: 'derived: 14 ohm x sqrt(47 / 27), same', genome: pultec.network.r_hb_47m_ohm}
+  r_hb_68m_ohm: {value: 22.2, source: 'derived: 14 ohm x sqrt(68 / 27), same', genome: pultec.network.r_hb_68m_ohm}
+  r_hb_82m_ohm: {value: 24.4, source: 'derived: 14 ohm x sqrt(82 / 27), same', genome: pultec.network.r_hb_82m_ohm}
+  r_heater_bot_ohm: {value: 62000.0, source: 'dwg: 62K from the heaters'' tap to ground'}
+  r_heater_top_ohm: {value: 270000.0, source: 'dwg: 270K from +325 V to the heaters'' tap (+60 V)'}
+  r_plate1_ohm: {value: 200000.0, source: 'dwg: 200K 1W plate loads'}
+  r_psu1_ohm: {value: 470, source: 'dwg: 470 2W from the 6X4 cathode (+355 V) to +345 V'}
+  r_psu2_ohm: {value: 1000, source: 'dwg: 1000 1W from +345 V to +325 V'}
+  r_psu3_ohm: {value: 2200, source: 'dwg: 2200 1W from +325 V to the output transformer''s centre tap (+290 V)'}
+  r_psu4_ohm: {value: 47000.0, source: 'dwg: 47K from +325 V to the 12AX7 plate loads (+250 V)'}
+  r_zobel_in_ohm: {value: 43000.0, source: 'dwg: 43K in series with .00027 across the HS-29 secondary'}
+  r_zobel_out_ohm: {value: 620, source: 'dwg: 620 in series with .003 across the output'}
+  shunt_ohm: {value: 10000.0, source: 'redraw: 10k from the output to the LF-boost node; Barrera''s netlist: 10k (the EQP-1R''s is 12K: [MAN] p.6)'}
+  source_impedance_ohm: {value: 600, source: 'man: input impedance 600 ohms, matching (p.4)'}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 117.0, source: 'man: power required 117 volts (p.1); the PCC-55''s voltages are taken at it'}
+
+tolerance:
+  source: 'provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)'
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r10: tol_resistor_pct
+    matched: tol_matched_pct
+    pot: tol_pot_pct
+    paper: tol_paper_pct
+    network: tol_network_c_pct
+    mica: tol_mica_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    r10: [RBIAS_B, RBIAS_T, RFBA, RFBB, RFBR, RG2A, RG2B, RHA75, RHTR_B, RHTR_T, RIN_TERM, RK1, RLA_SER, RPL1A, RPL1B, RPSU1, RPSU2, RPSU3, RPSU4, RSHUNT, RZIN, RZOUT]
+    matched: [RK2A, RK2B]
+    pot: [RBW, RHA, RHB, RLA, RLB]
+    paper: [CC2A, CC2B, CHTR, CZOUT]
+    network: [CHA5K, CHA10K, CHA68, CHB15, CHB18, CHB33, CHB56, CHB82, CLA12, CLA20, CLA30, CLA60, CLB20, CLB30, CLB60, CLB330]
+    mica: [CPP1, CZIN]
+    electrolytic: [CK2A, CK2B, CPSU1, CPSU2, CPSU3, CPSU4]
+
+devices:
+  V1A: {device: 12AX7, tolerance: tube}
+  V1B: {device: 12AX7, tolerance: tube}
+  V2A: {device: 12AU7, tolerance: tube}
+  V2B: {device: 12AU7, tolerance: tube}
+  V3: {device: rectifier_tube, tolerance: tube}
+
+sections:
+  - title: input
+    parts:
+      RIN_TERM: {R: [eq_in, '0'], r: hs56_r_in_term_ohm}
+      Rsrc: {R: [in, in_s], r: source_impedance_ohm, tolerance: none}
+      T1: {transformer: {p: {nodes: [in_s, '0'], r: hs56_r_pri_ohm, c: hs56_c_f}, s: {nodes: [eq_in, '0'], r: hs56_r_sec_ohm, c: hs56_c_f}}, core: {material: hs56_core_material, area_m2: hs56_core_area_m2, path_m: hs56_core_path_m, gap_m: hs56_gap_m}, turns: hs56_turns, leakage_h: hs56_leakage_h}
+  - title: passive network
+    parts:
+      CHA68: {C: [hac, lb], c: c_ha_68n_f}
+      CLA12: {C: [eq_m, la], c: c_la_12n_f}
+      CLB330: {C: [lb, '0'], c: c_lb_330n_f}
+      RBW: {rheostat: [hbr, eq_m], r: bandwidth_pot_ohm, at: bandwidth}
+      RHA: {pot: [lb, haw, eq_m], r: hf_atten_pot_ohm, at: hf_atten}
+      RHA75: {R: [haw, hac], r: hf_atten_r_ohm}
+      RHB: {pot: [eq_m, hbw, eq_in], r: hf_boost_pot_ohm, at: hf_boost}
+      RLA: {rheostat: [eq_m, la], r: lf_atten_pot_ohm, at: lf_atten, taper_mid: audio_taper_mid}
+      RLA_SER: {R: [la, eq_out], r: lf_atten_series_ohm}
+      RLB: {rheostat: [lb, '0'], r: lf_boost_pot_ohm, at: lf_boost, taper_mid: audio_taper_mid}
+      RSHUNT: {R: [eq_out, lb], r: shunt_ohm}
+      SHA:
+        switch: hf_atten_freq_khz
+        parts:
+          CHA5K: {C: [hac, lb], c: c_ha_5k_f, in: [5]}
+          CHA10K: {C: [hac, lb], c: c_ha_10k_f, in: [10]}
+      SHB:
+        switch: hf_boost_freq_khz
+        parts:
+          CHB15: {C: [hbw, hbc], c: c_hb_15n_f, in: [5]}
+          CHB18: {C: [hbw, hbc], c: c_hb_18n_f, in: [3, 4]}
+          CHB33: {C: [hbw, hbc], c: c_hb_3n3_f, in: [16]}
+          CHB56: {C: [hbw, hbc], c: c_hb_5n6_f, in: [12]}
+          CHB82: {C: [hbw, hbc], c: c_hb_8n2_f, in: [8, 10]}
+          LHB27: {L: [hbc, hbl27], l: l_hb_27m_h, in: [16]}
+          LHB33: {L: [hbc, hbl33], l: l_hb_33m_h, in: [10, 12]}
+          LHB47: {L: [hbc, hbl47], l: l_hb_47m_h, in: [8]}
+          LHB68: {L: [hbc, hbl68], l: l_hb_68m_h, in: [5]}
+          LHB82: {L: [hbc, hbl82], l: l_hb_82m_h, in: [4]}
+          LHB150: {L: [hbc, hbl150], l: l_hb_150m_h, in: [3]}
+          RLHB27: {R: [hbl27, hbr], r: r_hb_27m_ohm, tolerance: none, in: [16]}
+          RLHB33: {R: [hbl33, hbr], r: r_hb_33m_ohm, tolerance: none, in: [10, 12]}
+          RLHB47: {R: [hbl47, hbr], r: r_hb_47m_ohm, tolerance: none, in: [8]}
+          RLHB68: {R: [hbl68, hbr], r: r_hb_68m_ohm, tolerance: none, in: [5]}
+          RLHB82: {R: [hbl82, hbr], r: r_hb_82m_ohm, tolerance: none, in: [4]}
+          RLHB150: {R: [hbl150, hbr], r: r_hb_150m_ohm, tolerance: none, in: [3]}
+      SLA:
+        switch: lf_freq_hz
+        parts:
+          CLA20: {C: [eq_m, la], c: c_la_20_f, in: [20]}
+          CLA30: {C: [eq_m, la], c: c_la_30_f, in: [30]}
+          CLA60: {C: [eq_m, la], c: c_la_60_f, in: [60]}
+          CLB20: {C: [lb, '0'], c: c_lb_20_f, in: [20]}
+          CLB30: {C: [lb, '0'], c: c_lb_30_f, in: [30]}
+          CLB60: {C: [lb, '0'], c: c_lb_60_f, in: [60]}
+  - title: interstage and 12AX7
+    parts:
+      CPP1: {C: [p1a, p1b], c: c_plates1_f}
+      CZIN: {C: [g1a, zin], c: c_zobel_in_f}
+      RFBA: {R: [k1a, fba], r: r_fb_ohm}
+      RFBB: {R: [k1b, fbb], r: r_fb_ohm}
+      RFBR: {R: [fbs, '0'], r: r_fb_return_ohm}
+      RK1: {R: [k1a, k1b], r: r_cathodes1_ohm}
+      RPL1A: {R: [b4, p1a], r: r_plate1_ohm}
+      RPL1B: {R: [b4, p1b], r: r_plate1_ohm}
+      RZIN: {R: [zin, g1b], r: r_zobel_in_ohm}
+      T2: {transformer: {p: {nodes: ['0', eq_out], r: hs29_r_pri_ohm}, sa: {nodes: [g1a, '0'], r: hs29_r_sec_a_ohm, c: hs29_c_half_f}, sb: {nodes: ['0', g1b], r: hs29_r_sec_b_ohm, c: hs29_c_half_f}}, core: {material: hs29_core_material, area_m2: hs29_core_area_m2, path_m: hs29_core_path_m, gap_m: hs29_gap_m}, turns: hs29_turns, leakage_h: hs29_leakage_h}
+      XV1A: {device: [p1a, g1a, k1a], model: V1A}
+      XV1B: {device: [p1b, g1b, k1b], model: V1B}
+  - title: 12AU7 and output
+    parts:
+      CC2A: {C: [p1a, g2a], c: c_couple_f}
+      CC2B: {C: [p1b, g2b], c: c_couple_f}
+      CK2A: {C: [k2a, '0'], c: c_cathode2_f}
+      CK2B: {C: [k2b, '0'], c: c_cathode2_f}
+      CZOUT: {C: [out, zout], c: c_zobel_out_f}
+      RBIAS_B: {R: [gb2, '0'], r: r_bias_bot_ohm}
+      RBIAS_T: {R: [b4, gb2], r: r_bias_top_ohm}
+      RG2A: {R: [g2a, gb2], r: r_grid2_ohm}
+      RG2B: {R: [g2b, gb2], r: r_grid2_ohm}
+      RK2A: {R: [k2a, '0'], r: r_cathode2_ohm}
+      RK2B: {R: [k2b, '0'], r: r_cathode2_ohm}
+      RZOUT: {R: [zout, '0'], r: r_zobel_out_ohm}
+      Rload: {R: [out, '0'], r: load_ohm, tolerance: none}
+      T3: {transformer: {pa: {nodes: [p2a, b3], r: s217_r_half_ohm, c: s217_c_half_f}, pb: {nodes: [b3, p2b], r: s217_r_half_ohm, c: s217_c_half_f}, sa: {nodes: [out, s9], ratio: s217_sec_per_half, r: s217_r_sec_half_ohm}, sb: {nodes: [s9, '0'], ratio: s217_sec_per_half, r: s217_r_sec_half_ohm}, fa: {nodes: [fba, fbs], ratio: s217_ter_per_half, r: s217_r_ter_half_ohm}, fb: {nodes: [fbs, fbb], ratio: s217_ter_per_half, r: s217_r_ter_half_ohm}}, core: {material: s217_core_material, area_m2: s217_core_area_m2, path_m: s217_core_path_m, gap_m: s217_gap_m}, turns: s217_turns_half, leakage_h: s217_leakage_h}
+      XV2A: {device: [p2a, g2a, k2a], model: V2A}
+      XV2B: {device: [p2b, g2b, k2b], model: V2B}
+  - title: power supply
+    parts:
+      CHTR: {C: [htr, '0'], c: c_heater_f}
+      CPCCA: {C: [rka, '0'], c: pcc55_c_half_f, tolerance: none}
+      CPCCB: {C: [rkb, '0'], c: pcc55_c_half_f, tolerance: none}
+      CPSU1: {C: [b1, '0'], c: c_psu_f}
+      CPSU2: {C: [b2, '0'], c: c_psu_f}
+      CPSU3: {C: [b3, '0'], c: c_psu_f}
+      CPSU4: {C: [b4, '0'], c: c_psu_f}
+      LPCCA: {L: [hva_r, rka], l: pcc55_leakage_h}
+      LPCCB: {L: [hvb_r, rkb], l: pcc55_leakage_h}
+      RHTR_B: {R: [htr, '0'], r: r_heater_bot_ohm}
+      RHTR_T: {R: [b2, htr], r: r_heater_top_ohm}
+      RPCCA: {R: [hva, hva_r], r: pcc55_r_half_ohm, tolerance: none}
+      RPCCB: {R: [hvb, hvb_r], r: pcc55_r_half_ohm, tolerance: none}
+      RPSU1: {R: [b0, b1], r: r_psu1_ohm}
+      RPSU2: {R: [b1, b2], r: r_psu2_ohm}
+      RPSU3: {R: [b2, b3], r: r_psu3_ohm}
+      RPSU4: {R: [b2, b4], r: r_psu4_ohm}
+      VHVA: {mains: [hva, '0'], v_rms: pcc55_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hvb, '0'], v_rms: pcc55_hv_half_rms_v, phase_deg: 270.0}
+      XV3A: {device: [rka, b0], model: V3}
+      XV3B: {device: [rkb, b0], model: V3}
