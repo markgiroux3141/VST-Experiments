@@ -5,6 +5,7 @@
 
 import { editSource, paramHome, setInline, setParam, unlink, valueKey } from './edits.js';
 import { esc, parseEng, unitOf, withUnit } from './eng.js';
+import { renameRef, selSize } from './geom.js';
 
 const META = new Set(['Source', 'Param', 'Genome', 'Tol', 'Unit', 'Notes']);
 const KIND = { macro: 'part', device: 'tube or diode', winding: 'transformer winding', core: 'transformer core',
@@ -12,6 +13,7 @@ const KIND = { macro: 'part', device: 'tube or diode', winding: 'transformer win
 const DEVICE_KINDS = { Triode: ['triode'], Triode_Dual: ['triode'], Pentode: ['pentode'],
                        Diode: ['vacuum_diode', 'junction_diode'], Diode_Dual: ['vacuum_diode', 'junction_diode'] };
 
+const openFields = new Set(); // parts whose "All fields" are open
 const field = (label, html, extra = '') => `<div class="field"${extra}><label>${esc(label)}</label>${html}</div>`;
 
 export function placeholder(el, info) {
@@ -23,15 +25,22 @@ export function showSymbol(el, ref, ctx) {
   const { drawing, lib, analysis, view } = ctx;
   const s = drawing.symbols[ref], sym = lib[s.symbol], params = analysis.params || {};
   const f = s.fields, out = [];
-  out.push(`<div class="ihead"><b>${esc(ref)}</b><span>${esc(s.symbol.replace(/_/g, ' '))}</span></div>`);
+  out.push(`<div class="ihead"><input class="refin" id="v-ref" value="${esc(ref)}" size="${Math.max(3, ref.length + 1)}" spellcheck="false" title="The part's name: its elements, tolerance draw and seed"><span>${esc(s.symbol.replace(/_/g, ' '))}</span></div>`);
   out.push(`<div class="crumb">${esc(view.section.get(ref) || 'main')} · ${esc(KIND[sym.kind] || sym.kind)}</div>`);
   out.push(`<div class="desc">${esc(sym.description)}</div>`);
 
   if (sym.kind === 'device') out.push(deviceFields(s, sym, f, params, ctx));
-  else if (sym.kind === 'winding') out.push(field('Transformer', `<div class="box">${esc(f.Transformer || '–')}, winding <b>${esc(s.value)}</b></div>`));
-  else if (sym.kind === 'switch') {
-    const c = params[f.Control];
-    out.push(field('Control', `<div class="box">${esc(f.Control || '–')}${c ? ` <span class="note">· ${esc((c.choices || []).join(' / '))}</span>` : ''}</div>`));
+  else if (sym.kind === 'winding') {
+    const cores = Object.entries(drawing.symbols).filter(([, o]) => o.symbol === 'Core').map(([r]) => r);
+    out.push(field('Transformer', `<select class="sel" data-field="Transformer">${['', ...cores].map(r => `<option${r === (f.Transformer || '') ? ' selected' : ''}>${esc(r)}</option>`).join('')}</select>
+      <div class="hintline">its core: a Core symbol's name</div>`));
+    out.push(field('Winding label', `<input class="val" data-value="1" value="${esc(s.value)}" spellcheck="false" style="font-size:15px">
+      <div class="hintline">p, s, sa, … unique on its core; terminals are &lt;label&gt;.dot and .other</div>`));
+  } else if (sym.kind === 'switch') {
+    const ctl = Object.entries(drawing.circuit.controls || {}).filter(([, c]) => c.choices || c.unit === 'position').map(([k]) => k);
+    const c = params[f.Control] || drawing.circuit.controls?.[f.Control];
+    out.push(field('Control', `<select class="sel" data-field="Control">${['', ...ctl].map(k => `<option${k === (f.Control || '') ? ' selected' : ''}>${esc(k)}</option>`).join('')}</select>
+      <div class="hintline">${c ? esc((c.choices || [`${c.min} … ${c.max}`]).join(' / ')) : 'a control with positions (the circuit panel adds one)'}</div>`));
   } else if (sym.primary) out.push(valueFields(ref, s, sym, f, params, drawing));
 
   if (f.Tol) out.push(field('Tolerance', tolBox(f.Tol, analysis.bands)));
@@ -53,8 +62,115 @@ export function showSymbol(el, ref, ctx) {
     const ws = Object.entries(drawing.symbols).filter(([, w]) => w.symbol === 'Winding' && w.fields.Transformer === ref);
     out.push(field('Windings', `<div class="box">${ws.map(([r, w]) => `<span class="tag gray" data-ref="${esc(r)}" style="cursor:pointer">${esc(w.value)}</span>`).join(' ') || '–'}</div>`));
   }
+  // Every field, as the circuit file reads it (lowercase: the macro's params, as YAML).
+  const names = [...new Set([...sym.fields, ...Object.keys(f)])];
+  out.push(`<details class="field" id="f-all"${openFields.has(ref) ? ' open' : ''}><summary style="cursor:pointer;color:var(--muted);font:600 10.5px var(--label);letter-spacing:.08em;text-transform:uppercase">All fields</summary>
+    <table class="kv fields">${names.map(n => `<tr><td>${esc(n)}</td><td><input class="num" data-raw="${esc(n)}" value="${esc(f[n] ?? '')}" spellcheck="false"></td></tr>`).join('')}
+    <tr><td><input class="num" id="f-new-name" placeholder="name" spellcheck="false"></td><td><input class="num" id="f-new-val" placeholder="value (YAML)" spellcheck="false"></td></tr></table>
+    <div class="hintline">Capitalized fields are metadata (kicad/README.md); an empty field is removed.</div></details>`);
   el.innerHTML = out.join('');
   wire(el, ref, s, sym, params, ctx);
+  wireTopology(el, ref, s, ctx);
+}
+
+/** The reference, the select fields and the raw fields. */
+function wireTopology(el, ref, s, ctx) {
+  el.querySelector('#f-all')?.addEventListener('toggle', e => { if (e.target.open) openFields.add(ref); else openFields.delete(ref); });
+  const rin = el.querySelector('#v-ref');
+  rin.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { rin.value = ref; rin.blur(); }
+    if (e.key === 'Enter') rin.blur();
+  });
+  rin.addEventListener('blur', () => {
+    const to = rin.value.trim();
+    if (to === ref) return;
+    if (ctx.drawing.symbols[to] || !/^[A-Za-z][A-Za-z0-9_]*$/.test(to)) { rin.classList.add('bad'); rin.title = ctx.drawing.symbols[to] ? `${to} is taken` : 'letters, digits and _'; return; }
+    ctx.apply(`rename ${ref} → ${to}`, d => renameRef(d, ref, to)).then(() => ctx.select?.(to));
+  });
+  for (const sel of el.querySelectorAll('select[data-field]')) {
+    sel.addEventListener('change', () => ctx.apply(`${ref} ${sel.dataset.field} → ${sel.value || '–'}`, d => {
+      if (sel.value) d.symbols[ref].fields[sel.dataset.field] = sel.value; else delete d.symbols[ref].fields[sel.dataset.field];
+    }));
+  }
+  const lbl = el.querySelector('[data-value]');
+  lbl?.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') lbl.blur(); });
+  lbl?.addEventListener('blur', () => { const v = lbl.value.trim(); if (v && v !== s.value) ctx.apply(`${ref} label → ${v}`, d => { d.symbols[ref].value = v; }); });
+  for (const inp of el.querySelectorAll('[data-raw]')) {
+    const n = inp.dataset.raw, old = s.fields[n] ?? '';
+    inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') { inp.value = old; inp.blur(); } });
+    inp.addEventListener('blur', () => {
+      const v = inp.value.trim();
+      if (v === old) return;
+      ctx.apply(`${ref} ${n}`, d => { if (v) d.symbols[ref].fields[n] = v; else delete d.symbols[ref].fields[n]; });
+    });
+  }
+  const nn = el.querySelector('#f-new-name'), nv = el.querySelector('#f-new-val');
+  for (const inp of [nn, nv]) inp?.addEventListener('keydown', e => {
+    e.stopPropagation();
+    if (e.key !== 'Enter') return;
+    const n = nn.value.trim(), v = nv.value.trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(n) || !v) return;
+    openFields.add(ref);
+    ctx.apply(`${ref} ${n}`, d => { d.symbols[ref].fields[n] = v; });
+  });
+}
+
+/** Several items selected. */
+export function showMany(el, sel, ctx) {
+  const parts = sel.symbols.length, n = selSize(sel);
+  el.innerHTML = `<div class="ihead"><b>${n} items</b><span>selected</span></div>
+    <div class="crumb">${[[parts, 'part'], [sel.wires.length, 'wire'], [sel.labels.length, 'label'], [sel.grounds.length, 'ground'], [sel.frames.length, 'section']]
+      .filter(([k]) => k).map(([k, w]) => `${k} ${w}${k > 1 ? 's' : ''}`).join(' · ')}</div>
+    ${parts ? field('Parts', `<div class="box">${sel.symbols.slice(0, 40).map(r => `<span class="tag gray" data-ref="${esc(r)}" style="cursor:pointer">${esc(r)}</span>`).join(' ')}${parts > 40 ? ' …' : ''}</div>`) : ''}
+    <div class="note" style="margin-top:14px;line-height:1.8">Drag to move them · <kbd>R</kbd> rotate · <kbd>X</kbd> mirror · arrows nudge<br>
+    <kbd>Ctrl C</kbd> copy · <kbd>Ctrl D</kbd> duplicate · <kbd>Del</kbd> delete</div>`;
+}
+
+/** Nothing selected: the circuit's own settings (what isn't a part). */
+export function showCircuit(el, ctx) {
+  const { drawing, analysis } = ctx, c = drawing.circuit;
+  const ctl = Object.entries(c.controls || {});
+  el.innerHTML = `<div class="ihead"><b>Circuit</b><span>${esc(ctx.name)}</span></div>
+    <div class="crumb">${Object.keys(drawing.symbols).length} parts · ${analysis.nets.length} nets · ${drawing.frames.length} sections</div>
+    ${field('Title', `<input class="val" data-circ="title" value="${esc(c.title || '')}" style="font:600 14px var(--ui)" spellcheck="false">`)}
+    <div class="row2">
+      ${field('Input node', `<input class="val" data-circ="input" value="${esc(c.input || 'in')}" style="font-size:14px" spellcheck="false">`)}
+      ${field('Output node', `<div class="box" style="font:600 14px var(--mono)">out <span class="note">${analysis.has_output ? '✓' : 'not drawn'}</span></div>`)}
+    </div>
+    ${field('Probes', `<input class="val" data-circ="probes" value="${esc((c.probes || []).join(', '))}" style="font-size:13px" spellcheck="false">
+      <div class="hintline">node voltages every render saves, besides out</div>`)}
+    ${field('Controls', `${ctl.map(([k, e]) => `<div class="ctlrow"><span><b style="font-weight:600">${esc(k)}</b> <span class="note">${esc(e.choices ? e.choices.join(' / ') : `${e.min} … ${e.max}${e.unit ? ' ' + e.unit : ''}`)}</span></span>
+        <button class="linkbtn" data-delctl="${esc(k)}">remove</button></div>`).join('') || '<div class="note">none</div>'}
+      <details style="margin-top:8px"><summary class="linkbtn">Add a control</summary>
+        <div class="row2" style="margin-top:6px"><input class="num" id="c-key" placeholder="key, e.g. tc"><input class="num" id="c-range" placeholder="0..1 or 1,2,3"></div>
+        <input class="num" id="c-src" placeholder="source (e.g. man: TIME CONSTANT, 6 positions)" style="margin-top:6px">
+        <div class="hintline">A range is a knob; a list is a switch's positions (rotary decks follow it).<button class="linkbtn" id="c-add" style="margin-left:auto">Add</button></div>
+      </details>`)}
+    <div class="note" style="margin-top:14px;line-height:1.7">Values without a part, device parameters, mains and tolerance bands come with the circuit (its sidecar) and are edited in the file for now.</div>`;
+  for (const inp of el.querySelectorAll('[data-circ]')) {
+    const k = inp.dataset.circ;
+    inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') inp.blur(); });
+    inp.addEventListener('blur', () => {
+      const v = k === 'probes' ? inp.value.split(',').map(x => x.trim()).filter(Boolean) : inp.value.trim();
+      if (JSON.stringify(v) === JSON.stringify(c[k] ?? (k === 'probes' ? [] : ''))) return;
+      ctx.apply(`circuit ${k}`, d => { d.circuit[k] = v; });
+    });
+  }
+  for (const b of el.querySelectorAll('[data-delctl]')) b.addEventListener('click', () => ctx.apply(`remove control ${b.dataset.delctl}`, d => { delete d.circuit.controls[b.dataset.delctl]; }));
+  for (const inp of el.querySelectorAll('#c-key, #c-range, #c-src')) inp.addEventListener('keydown', e => e.stopPropagation());
+  el.querySelector('#c-add')?.addEventListener('click', () => {
+    const key = el.querySelector('#c-key').value.trim(), range = el.querySelector('#c-range').value.trim(), source = el.querySelector('#c-src').value.trim();
+    if (!/^[a-z_][a-z0-9_]*$/.test(key) || !range || !source) { el.querySelector('#c-src').classList.toggle('bad', !source); return; }
+    let entry;
+    const m = /^(-?[\d.]+)\s*\.\.\s*(-?[\d.]+)$/.exec(range);
+    if (m) entry = { value: +m[1], min: +m[1], max: +m[2], source };
+    else {
+      const choices = range.split(',').map(x => x.trim()).filter(Boolean).map(x => (isFinite(+x) ? +x : x));
+      entry = { value: choices[0], choices, unit: 'position', source };
+    }
+    ctx.apply(`add control ${key}`, d => { d.circuit.controls = { ...(d.circuit.controls || {}), [key]: entry }; });
+  });
 }
 
 function valueFields(ref, s, sym, f, params, drawing) {

@@ -24,8 +24,9 @@ circuit format with the 670 as its first file, byte-identical IR) is done
 measurement profiles) is done (2026-10-26); B3 (KiCad as the schematic editor) is done
 (2026-10-26: closed by the user, who turned KiCad down as the editor; it stays an
 import / export path). B4a, a schematic editor in our own web app (`/editor` of
-`varimu listen`), is in progress: step 1 (the read-only view) and step 2 (editing values,
-swapping parts, renders and A/B, Save as) done 2026-10-26. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+`varimu listen`), is in progress: steps 1-3 (view; editing values, renders and A/B, Save as;
+drawing topology, with the triode stage drawn from scratch as `triode_stage_drawn`) done
+2026-10-26; step 4 is polish, and the EQP-1A drawn by hand is the user's. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
@@ -122,8 +123,12 @@ saved over them) that compile back to their IR (`tests/test_editor.py`); edits t
 save as a new circuit (Save as writes `<name>.drawing.json` and the compiled `<name>.yaml`).
 Edits render on a loop through the listen app's queue (`RenderJob.circuit` takes a .yaml
 path: the compiled drawing in `cache/editor/`), A/B loudness-matched; a drawing needs an
-`out` node to be heard. The page's edit rules are tested in Node's own runner
-(`tests/editor_js/`, from pytest; skipped without Node). The page is plain ES modules (`varimu/listen/editor.html`,
+`out` node to be heard (a drawing with one always probes it). Topology edits are
+`varimu/listen/editor/geom.js` (place, move with rubber-banding wires, turn, delete,
+copy / paste), the tools `tools.js`. The page's rules are tested in Node's own runner
+(`tests/editor_js/`, from pytest, on the real symbol table; skipped without Node);
+`scripts/editor_draw_triode.py` draws the triode stage through the UI (Playwright via
+`uv run --no-project --with playwright`, the installed Chrome). The page is plain ES modules (`varimu/listen/editor.html`,
 `varimu/listen/editor/*.js`, no npm, no build step) on the API in
 `varimu/listen/editor_api.py`; the look is the dark "studio" direction the user chose
 (`docs/editor_mockups/`). Symbols come from `varimu/kicad/symbols.py`'s table as JSON.

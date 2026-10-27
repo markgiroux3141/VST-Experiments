@@ -39,7 +39,7 @@ export class Listen {
     sel.value = r.sources.includes(saved.source) ? saved.source : r.sources[0];
     if (saved.start !== undefined) $('#lstart').value = saved.start;
     if (saved.len !== undefined) $('#llen').value = saved.len;
-    this.status(`Edit a value to hear it. <kbd>R</kbd> renders now (${esc(this.engine)}).`);
+    this.status(`Edit a value to hear it. <kbd>Ctrl Enter</kbd> renders now (${esc(this.engine)}).`);
   }
 
   saveSettings() { this.store.set('listen', { source: $('#lsource').value, start: +$('#lstart').value, len: +$('#llen').value }); }

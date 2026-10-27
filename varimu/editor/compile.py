@@ -26,6 +26,7 @@ from varimu.kicad.symbols import SYMBOLS
 from varimu.preflight import Problem, check_circuit
 
 CACHE = REPO_ROOT / "cache" / "editor"
+OUTPUT_NODE = "out"  # the node renders save as their output (varimu.sim.runner)
 GENERATED_MARK = "Generated from"
 
 
@@ -52,7 +53,20 @@ def compile_drawing(d: Drawing) -> Compiled:
         lines = [ln.strip() for ln in str(e).splitlines()]
         errors = [ln for ln in lines if ln and ln != "import:"]
         return Compiled(None, errors or [str(e)], [], conn, list(conn.warnings))
-    return Compiled(imp.data, [], list(imp.problems), conn, list(conn.warnings))
+    data = imp.data
+    # Renders read node `out` (varimu.sim.runner) from the saved probes: a drawing with an
+    # `out` node probes it, whatever its probes say.
+    probes = list(data.get("probes") or [])
+    if OUTPUT_NODE not in probes and any(n.node == OUTPUT_NODE for n in conn.nets):
+        out: dict = {}
+        for k, v in data.items():  # in the file's key order, probes after the input
+            if k != "probes":
+                out[k] = v
+            if k == "input":
+                out["probes"] = [OUTPUT_NODE, *probes]
+        out.setdefault("probes", [OUTPUT_NODE, *probes])
+        data = out
+    return Compiled(data, [], list(imp.problems), conn, list(conn.warnings))
 
 
 def circuit_text(c: Compiled, origin: str) -> str:

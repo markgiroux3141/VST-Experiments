@@ -39,16 +39,20 @@ PARALLEL_MATCHES = 4  # (candidate, clip) groups at once; each renders its grid 
 def code_version() -> str:
     """What a stored stimulus is valid for: the code (runner.code_version) and every
     config file that defines the circuit (a material refit changes renders without
-    touching code). The pool file is left out: adding a candidate keeps the others."""
+    touching code). The pool file is left out: adding a candidate keeps the others. So
+    are the other circuits' files (the pool is the 670's): a circuit saved from the
+    schematic editor keeps the stimuli."""
     import hashlib
 
+    from varimu.circuit.netlist import CIRCUIT_FILE
     from varimu.config import CONFIG_DIR
     from varimu.sim import runner
 
     h = hashlib.sha256()
     for p in sorted(CONFIG_DIR.rglob("*.yaml")):
-        if p.name != "listening.yaml":
-            h.update(p.relative_to(CONFIG_DIR).as_posix().encode() + p.read_bytes())
+        if p.name == "listening.yaml" or (p.parent.name == "circuits" and p != CIRCUIT_FILE):
+            continue
+        h.update(p.relative_to(CONFIG_DIR).as_posix().encode() + p.read_bytes())
     return f"{runner.code_version()}+cfg{h.hexdigest()[:10]}"
 
 

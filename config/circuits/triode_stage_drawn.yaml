@@ -1,0 +1,26 @@
+# Generated from triode_stage_drawn.drawing.json (from untitled) by the schematic editor (varimu.editor): edit the drawing, not this file.
+
+title: 12AX7 common-cathode stage (drawn in the editor)
+
+input: in
+
+probes: [out, g, p, k]
+
+values:
+
+devices:
+  V1: {device: 12AX7}
+
+sections:
+  - title: main
+    parts:
+      CI: {C: [a, g], c: {value: 1.0e-07, source: 'provisional: model knowledge (coupling capacitor: 1.6 Hz with the grid leak)'}}
+      CK: {C: [k, '0'], c: {value: 2.2e-05, source: 'provisional: model knowledge (cathode bypass, a few Hz)'}}
+      CO: {C: [p, out], c: {value: 1.0e-07, source: 'provisional: model knowledge (output coupling capacitor)'}}
+      RG: {R: [g, '0'], r: {value: 1000000.0, source: 'provisional: model knowledge (12AX7 grid leak, 0.5-1 MOhm)'}}
+      RK: {R: [k, '0'], r: {value: 1500.0, source: 'provisional: model knowledge (12AX7 self-bias with a 100k plate load, 1.5k)'}}
+      RL: {R: [out, '0'], r: {value: 470000.0, source: 'provisional: model knowledge (the next stage''s grid leak)'}}
+      RP: {R: [bp, p], r: {value: 100000.0, source: 'provisional: model knowledge (12AX7 plate load, 100k)'}}
+      RS: {R: [in, a], r: {value: 10000.0, source: 'provisional: model knowledge (a source impedance that lets the grid-current peaks show)'}}
+      VB: {V: [bp, '0'], v: {value: 250, source: 'provisional: model knowledge (a textbook 12AX7 plate supply, 250-300 V)'}}
+      XV1: {device: [p, g, k], model: V1}

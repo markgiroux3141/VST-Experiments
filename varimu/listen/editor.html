@@ -30,7 +30,7 @@
   .brand a { color: var(--muted); text-decoration: none; font-weight: 500; }
   .brand a:hover { color: var(--ink); }
   .picker { position: relative; }
-  .picker select { appearance: none; font: 600 13px var(--ui); color: var(--ink); background: var(--chrome2);
+  .picker select { max-width: 250px; text-overflow: ellipsis; appearance: none; font: 600 13px var(--ui); color: var(--ink); background: var(--chrome2);
                    border: 1px solid var(--line); border-radius: 7px; padding: 5px 30px 5px 10px; cursor: pointer; }
   .picker select:hover { border-color: var(--faint); }
   .picker::after { content: ""; position: absolute; right: 11px; top: 50%; width: 6px; height: 6px; margin-top: -5px;
@@ -49,7 +49,8 @@
   .iconbtn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line);
              background: var(--chrome2); color: var(--ink); cursor: pointer; white-space: nowrap; }
   .iconbtn:hover { border-color: var(--faint); }
-  .zoom { font: 12px var(--mono); color: var(--muted); min-width: 46px; text-align: right; }
+  .zoom { font: 12px var(--mono); color: var(--muted); min-width: 40px; text-align: right; }
+  @media (max-width: 1500px) { .tools kbd, #fit kbd { display: none; } .zoom { display: none; } }
 
   /* --- Side panels --- */
   aside { background: var(--chrome); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
@@ -135,7 +136,9 @@
   .ref { font: 600 1.55px var(--label); fill: var(--text-part); dominant-baseline: central; }
   .val { font: 1.35px var(--mono); fill: var(--muted); dominant-baseline: central; }
   .lbl { font: 600 1.35px var(--mono); fill: var(--wire); dominant-baseline: central; }
-  .lbltick { stroke: var(--wire); stroke-width: 1.2px; vector-effect: non-scaling-stroke; }
+  .lbldot { fill: var(--wire); }
+  .lblg.hl .lbl, .lblg.hl .lbldot { fill: var(--net); }
+  .lblg.bad .lbl, .lblg.bad .lbldot { fill: var(--fault); }
   .hit { fill: transparent; stroke: none; }
   svg.far .ref, svg.far .val, svg.far .lbl { display: none; }
 
@@ -207,6 +210,51 @@
   .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 4px; }
   .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
 
+  /* --- Tools --- */
+  .tools { display: flex; gap: 2px; padding: 3px; background: var(--chrome2); border: 1px solid var(--line); border-radius: 8px; }
+  .tools button { all: unset; display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 12.5px; }
+  .tools button:hover { color: var(--ink); background: var(--chrome3); }
+  .tools button.on { background: var(--accent); color: var(--accent-ink); }
+  .tools button.on kbd { color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent-ink) 40%, transparent); }
+  .palette { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px; margin: 0 2px; }
+  .tile { display: grid; justify-items: center; gap: 1px; padding: 5px 2px 3px; border-radius: 7px; border: 1px solid transparent;
+          color: var(--muted); font-size: 10.5px; cursor: pointer; user-select: none; }
+  .tile:hover { border-color: var(--line); background: var(--chrome2); color: var(--ink); }
+  .tile.on { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+  .tile svg { width: 34px; height: 30px; overflow: visible; }
+  .tile svg path, .tile svg line { fill: none; stroke: var(--part); stroke-width: 1.3px; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+  .tile svg path.fill { fill: var(--part); }
+  .tile svg text { fill: var(--part); font: 1.27px var(--label); text-anchor: middle; dominant-baseline: central; }
+  .tile span { max-width: 52px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .more { margin: 4px 6px 0; }
+  main[data-mode=wire], main[data-mode=label], main[data-mode=ground], main[data-mode=frame], main[data-mode=place] { cursor: crosshair; }
+  .openpin { fill: none; stroke: var(--warn); stroke-width: 1px; vector-effect: non-scaling-stroke; opacity: .75; }
+  .selwire { fill: none; stroke: var(--accent); stroke-width: 3px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; opacity: .9; }
+  .selpt { fill: var(--accent); }
+  .selframe { fill: none; stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  .handle { fill: var(--accent); stroke: var(--bg); stroke-width: 1px; vector-effect: non-scaling-stroke; cursor: nwse-resize; }
+  .ftitle.on { color: var(--accent); }
+  .boxsel { fill: color-mix(in srgb, var(--accent) 7%, transparent); stroke: var(--accent); stroke-width: 1px; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+  .frameghost { fill: rgba(255,255,255,.02); stroke: var(--frame); }
+  .wireghost { fill: none; stroke: var(--accent); stroke-width: 1.6px; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
+  .cursorpt { fill: var(--accent); }
+  .ghostpart { opacity: .6; }
+  .ghostpart path, .ghostpart line { stroke: var(--accent) !important; }
+  #prompt { position: absolute; z-index: 30; display: none; padding: 6px; border-radius: 8px; background: var(--chrome2);
+            border: 1px solid var(--accent); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+  #prompt.on { display: block; }
+  #prompt small { display: block; color: var(--muted); font-size: 11px; margin: 0 2px 4px; }
+  #prompt input { font: 600 13px var(--mono); color: var(--ink); background: var(--chrome); border: 1px solid var(--line);
+                  border-radius: 5px; padding: 4px 7px; width: 200px; outline: none; }
+  .fields td:first-child { padding-top: 9px; }
+  .fields input { width: 100%; }
+  .refin { font: 650 21px var(--label); color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 6px;
+           padding: 0 4px; margin-left: -5px; width: auto; outline: none; }
+  .refin:hover { border-color: var(--line); }
+  .refin:focus { border-color: var(--accent); background: var(--chrome2); }
+  .refin.bad { border-color: var(--fault); }
+  .ctlrow { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; padding: 4px 0; border-top: 1px solid var(--line); }
+
   /* --- Footer --- */
   footer { grid-area: bot; display: flex; align-items: center; gap: 18px; padding: 0 12px; background: var(--chrome);
            border-top: 1px solid var(--line); color: var(--muted); font: 11.5px var(--mono); white-space: nowrap; overflow: hidden; }
@@ -218,6 +266,13 @@
 <header>
   <div class="brand"><i></i>varimu <a href="/">listen</a> <a href="/ab">A/B</a></div>
   <div class="picker"><select id="circuit" title="Circuit"></select></div>
+  <div class="tools" id="tools">
+    <button data-mode="select" class="on" title="Select, move, box-select (V)">Select <kbd>V</kbd></button>
+    <button data-mode="wire" title="Draw wires (W)">Wire <kbd>W</kbd></button>
+    <button data-mode="label" title="Name a net (L)">Label <kbd>L</kbd></button>
+    <button data-mode="ground" title="Ground (G)">Ground <kbd>G</kbd></button>
+    <button data-mode="frame" title="A section: drag a frame (S)">Section <kbd>S</kbd></button>
+  </div>
   <span class="badge" id="kind"></span>
   <span class="badge edited" id="edited" hidden></span>
   <div class="spacer"></div>
@@ -231,12 +286,14 @@
 
 <aside id="left">
   <label class="find"><input id="find" placeholder="Find a part or node" autocomplete="off" spellcheck="false"><kbd>/</kbd></label>
-  <h4>Sections <span id="nsec"></span></h4>
-  <div class="list" id="sections"></div>
+  <h4>Problems <span id="nprob"></span></h4>
+  <div class="list" id="problems" style="max-height:190px;overflow:auto"><div class="empty">checking…</div></div>
+  <h4>Parts <span>click, then place</span></h4>
+  <div class="palette" id="palette"></div>
   <h4>Front panel <span id="nctl"></span></h4>
   <div class="list" id="controls"></div>
-  <h4>Problems <span id="nprob"></span></h4>
-  <div class="list" id="problems"><div class="empty">checking…</div></div>
+  <h4>Sections <span id="nsec"></span></h4>
+  <div class="list" id="sections"></div>
 </aside>
 
 <main id="canvas">
@@ -244,6 +301,7 @@
   <div id="titles"></div>
   <div id="chip"></div>
   <div id="loading">Loading…</div>
+  <div id="prompt"><small id="prompttitle"></small><input id="promptin" spellcheck="false" autocomplete="off" list="promptlist"><datalist id="promptlist"></datalist></div>
 </main>
 
 <aside id="right"><div id="inspector"></div></aside>
@@ -269,13 +327,13 @@
     <button class="play" id="play">▶ Play <kbd>Space</kbd></button>
   </div>
   <canvas id="wave"></canvas>
-  <div id="lstatus">Edit a value to hear it. <kbd>R</kbd> renders now.<div class="bar"><div id="lbar"></div></div></div>
+  <div id="lstatus">Edit a value to hear it. <kbd>Ctrl Enter</kbd> renders now.<div class="bar"><div id="lbar"></div></div></div>
 </div>
 
 <footer>
   <span><span class="k">x</span> <span id="cx">–</span> <span class="k">y</span> <span id="cy">–</span> <span class="k">mm</span></span>
   <span id="stats"></span>
-  <span id="hint">Scroll to zoom · drag to pan · click a part to edit it · <kbd>Ctrl Z</kbd> undo · <kbd>Esc</kbd> clears</span>
+  <span id="hint">Scroll to zoom · right-drag or Space-drag to pan · drag to select · <kbd>R</kbd> rotate · <kbd>Del</kbd> delete · <kbd>Ctrl Z</kbd> undo</span>
 </footer>
 
 <script type="module" src="/editor/main.js"></script>

@@ -294,17 +294,22 @@ def test_editor_api():
 # --- Step 2: editing, saving, rendering ---------------------------------------------------------
 
 
-def test_page_modules():
-    """The page's edit rules, in Node's own test runner (no npm); skipped without Node."""
+def test_page_modules(tmp_path):
+    """The page's edit rules and topology edits, in Node's own test runner (no npm), on
+    the real symbol table; skipped without Node."""
+    import os
     import shutil
     import subprocess
 
     node = shutil.which("node")
     if node is None:
         pytest.skip("node not installed")
+    symbols = tmp_path / "symbols.json"
+    symbols.write_text(json.dumps(library_json()), encoding="utf-8")
     files = sorted(str(p) for p in (REPO_ROOT / "tests" / "editor_js").glob("*.test.mjs"))
+    env = {**os.environ, "EDITOR_SYMBOLS": str(symbols)}
     r = subprocess.run([node, "--test", *files], capture_output=True, text=True, encoding="utf-8",
-                       cwd=REPO_ROOT, check=False)  # fmt: skip
+                       cwd=REPO_ROOT, env=env, check=False)  # fmt: skip
     assert r.returncode == 0, r.stdout + r.stderr
 
 
@@ -389,3 +394,75 @@ def test_editor_render_and_compare():
     assert save("Bad Name").status_code == 400
     lib = client.get("/api/editor/library").json()
     assert {"12AX7", "6X4"} <= {x["name"] for x in lib["devices"]} and lib["materials"]
+
+
+# --- Step 3: drawing topology ------------------------------------------------------------------
+
+
+def _hand_written_stage_as_drawn(tmp_path, title: str):
+    """triode_stage.yaml with what the drawing does differently: its output node is `out`
+    (renders read it) and it is probed, its one section is `main` (no frame drawn)."""
+    import yaml
+
+    data = yaml.safe_load(circuit_path("triode_stage").read_text(encoding="utf-8"))
+    data["title"], data["probes"] = title, ["out", "g", "p", "k"]
+    data["sections"][0]["title"] = "main"
+    for e in data["sections"][0]["parts"].values():
+        for k, v in e.items():
+            if isinstance(v, list):
+                e[k] = ["out" if n == "o" else n for n in v]
+    path = tmp_path / "stage.yaml"
+    path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+    return load_circuit(path)
+
+
+def test_triode_stage_drawn_in_the_editor(tmp_path):
+    """B4a's done-when: the triode stage drawn from scratch in the editor (through its UI:
+    scripts/editor_draw_triode.py) compiles, passes the checks, and builds the hand-written
+    stage's IR; its compiled file is current."""
+    import yaml
+
+    from varimu.editor.drawing import drawing_path
+
+    d = load_drawing(drawing_path("triode_stage_drawn"))
+    assert d.frames == [] and len(d.symbols) == 10 and d.wires and d.labels and d.grounds
+    c, found = check_drawing(d)
+    assert c.ok and found == []
+    b = compiled_spec(c)
+    a = _hand_written_stage_as_drawn(tmp_path, b.title)
+    for cores in ("linear", "ja"):
+        ia, ib = builder.build_ir(a, resolve(a), cores), builder.build_ir(b, resolve(b), cores)
+        assert ir_differences(ia, ib) == []
+    committed = yaml.safe_load(circuit_path("triode_stage_drawn").read_text(encoding="utf-8"))
+    committed = {k: {} if v is None else v for k, v in committed.items()}  # `values:` is empty
+    assert committed == c.data, "stale: open and save triode_stage_drawn in the editor"
+
+
+def test_a_drawing_probes_its_output():
+    d = _drawing([_r("R1", 0, 0)], wires=[[(0, -3.81), (0, -6.35)]],
+                 labels=[Label("out", 0, -6.35)], grounds=[Placement(0, 3.81)])  # fmt: skip
+    d.circuit["probes"] = ["x"]
+    c = compile_drawing(d)
+    assert c.data["probes"] == ["out", "x"]
+    assert list(c.data)[:3] == ["title", "input", "probes"]
+
+
+def test_listening_stimuli_ignore_other_circuits(tmp_path, monkeypatch):
+    """Saving a circuit from the editor keeps the 670's prepared A/B stimuli; changing the
+    670's file doesn't."""
+    import shutil
+
+    import varimu.config
+    from varimu.circuit import netlist
+    from varimu.listen import prepare
+
+    cfg = tmp_path / "config"
+    shutil.copytree(varimu.config.CONFIG_DIR, cfg, ignore=shutil.ignore_patterns("*.json"))
+    monkeypatch.setattr(varimu.config, "CONFIG_DIR", cfg)
+    monkeypatch.setattr(netlist, "CIRCUIT_FILE", cfg / "circuits" / "fairchild_670.yaml")
+    v1 = prepare.code_version()
+    (cfg / "circuits" / "mine.yaml").write_text("title: x\n", encoding="utf-8")
+    assert prepare.code_version() == v1
+    with open(cfg / "circuits" / "fairchild_670.yaml", "a", encoding="utf-8") as f:
+        f.write("\n# changed\n")
+    assert prepare.code_version() != v1

@@ -501,6 +501,65 @@ B4's first part: its step 2 is most of B4's loop.
   through the API and Save as.
 - **Screenshot:** `docs/editor_mockups/step2_edit_ab.png`.
 
+*Status 2026-10-26: step 3 done* (the hand drawing of the EQP-1A is the user's).
+- **Tools.**
+  - Select (V): click, shift-click, box-drag; drag to move (wires rubber-band); drag
+    from a pin to draw a wire; R rotates, X mirrors, arrows nudge, Delete; Ctrl+C / X /
+    V / D / A.
+  - Wire (W): L-shaped corners, `/` flips; ends on a pin or wire, Enter, a double click
+    or Esc.
+  - Label (L) names a net, with completion; Ground (G); labels and grounds point away
+    from the wire they sit on.
+  - Section (S): drag a frame and name it. A frame title drags the section with its
+    contents; a corner handle resizes it; a double click renames it.
+  - Parts are placed from a palette drawn from the symbol table (R / X turn the ghost).
+    Rotary decks ask for their number of positions.
+  - Pan moved to the right or middle button, or space + drag. A space tap still plays.
+    Render-now is Ctrl+Enter, so R can rotate.
+- **Topology edits** are `varimu/listen/editor/geom.js`:
+  - place, move and turn, with rubber-banding that keeps wires orthogonal;
+  - box select, delete;
+  - copy and paste, renumbering references, a pasted winding following its pasted core;
+  - routes, tidy (merging straight runs), renames.
+
+  They are tested in Node on the real symbol table (`tests/editor_js/geom.test.mjs`,
+  7 tests).
+- **The inspector also edits:**
+  - the reference (windings follow a renamed core);
+  - a winding's core and label, and a deck's control;
+  - every raw field (YAML), and adding fields;
+  - with nothing selected, the circuit: title, input, probes, and controls (a range is
+    a knob, a list is a switch's positions).
+
+  The circuit picker has "New circuit"; a `.drawing.json` dropped on the canvas opens.
+- **Live checks.** The drawing recompiles after every edit (~50 ms on small drawings)
+  and the checks follow 0.6 s later. Open pins are marked while drawing and listed per
+  part.
+- **A drawing probes `out`.** Renders save only the probes and read `out`, so a
+  drawing with an `out` node probes it whatever its probes say.
+- **The A/B stimuli stay valid.** `varimu.listen.prepare.code_version` now hashes only
+  the 670's circuit file among `config/circuits/`. A circuit saved from the editor no
+  longer marks the 670's prepared A/B stimuli stale. This session's `runner.py` change
+  had already invalidated them, so the narrowing cost nothing.
+- **The triode stage drawn from scratch** through the UI (`scripts/editor_draw_triode.py`
+  drives Chrome with Playwright from uv's cache):
+  - it places, rotates and renames 10 parts, draws 9 wires (two ending on others as T
+    junctions), adds 7 labels and 5 grounds, and enters every value with its source;
+  - it takes 13.3 s of scripted UI;
+  - saved as `config/circuits/triode_stage_drawn`, it compiles and passes every check;
+  - it builds the hand-written stage's IR with both core models. The only differences
+    are what the drawing names differently: `out` for `o`, section `main`, its title.
+  - It is heard 3 s after Ctrl+Enter (a 2 s burst).
+- **The broken EQP-1A shows its four faults on the canvas**
+  (`docs/editor_mockups/step3_broken_*.png`):
+  - g2a's wire and label in red;
+  - LPCCA / LBAD ringed;
+  - V3 ringed;
+  - RBIAS_B's open pin ringed.
+- **Checked in Chrome:** moving RL (its wire bent, its ground and label followed, the
+  checks still pass), box select + Delete (2 problems), undo, duplicate.
+- **Tests:** `tests/test_editor.py`, 24 tests.
+
 **B4. The editor loop.** The tweak-and-listen page generalized to any circuit:
 its parameters come from the circuit file (with sources and bounds; front-panel
 controls separate from parts), renders run on short loops in the background as
