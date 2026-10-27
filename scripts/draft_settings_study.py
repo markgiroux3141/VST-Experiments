@@ -12,8 +12,9 @@ signal), the largest octave-band level difference from 31 Hz to 16 kHz (a tilt o
 lost top octave), and on the 670 the control voltage (rms and largest difference, V).
 Speed is the wall time per second of audio, the 1 s of supply settling included, and
 per simulated second (settling counted as audio: in real time it is a one-time cost).
-Renders run one at a time through the render cache (varimu.sim.runner); timings taken
-while other renders run are inflated. Results -> reports/realtime/draft_study.json.
+Renders run one at a time through the render cache (varimu.sim.runner); --fresh
+bypasses it and times every render (--repeat N: the best of N). Timings taken while
+other renders run are inflated. Results -> reports/realtime/draft_study.json.
 """
 
 from __future__ import annotations
@@ -94,26 +95,37 @@ def excerpt(clip: str, start_s: float, seconds: float, rate: int) -> np.ndarray:
     return x
 
 
-def _speed(r: runner.Render, settle_s: float) -> dict:
-    audio, wall = r.meta["duration_s"], r.meta["wall_s"]
+def _speed(r: runner.Render, wall: float, settle_s: float) -> dict:
+    audio = r.meta["duration_s"]
     return {"x_realtime": wall / audio, "x_realtime_steady": wall / (audio + settle_s)}
 
 
-def run_case(name, circuit, panel, clip, start_s, seconds, base: TransientSettings) -> dict:
+def _render(job: runner.RenderJob, s: TransientSettings, fresh: bool, repeat: int):
+    """The render, and the best wall time of `repeat` runs (fresh: bypassing the cache,
+    so every run is timed; else a cached render reports the wall time it was made in)."""
+    walls, r = [], None
+    for _ in range(repeat if fresh else 1):
+        r = runner.render(job, settings=s, use_cache=not fresh)
+        walls.append(r.meta["wall_s"])
+    return r, min(walls)
+
+
+def run_case(name, circuit, panel, clip, start_s, seconds, base: TransientSettings,
+             fresh: bool = False, repeat: int = 1) -> dict:  # fmt: skip
     x96 = excerpt(clip, start_s, seconds, base.sample_rate)
     x48 = resample_poly(x96, 1, 2)  # the input: zero-padded, as rendered
     label = f"draft-study:{name}"
-    hq = runner.render(runner.RenderJob(x96, panel, label, circuit), settings=base)
+    hq, wall = _render(runner.RenderJob(x96, panel, label, circuit), base, fresh, repeat)
     ref = _half(hq.output)
     ref_cv = _half(hq.vectors["v(cv)"]) if "v(cv)" in hq.vectors else None
     e0 = int(TRIM_S * 48000)
     ref_bands = _bands(ref[e0 : len(ref) - e0], 48000)
-    rows = [{"setting": "production", **_speed(hq, base.settle_s), "cached": hq.cached}]
+    rows = [{"setting": "production", **_speed(hq, wall, base.settle_s), "cached": hq.cached}]
     for setting, change in LADDER:
         s = dataclasses.replace(base, **change)
         x = x48 if s.sample_rate == 48000 else x96
         try:
-            r = runner.render(runner.RenderJob(x, panel, label, circuit), settings=s)
+            r, wall = _render(runner.RenderJob(x, panel, label, circuit), s, fresh, repeat)
         except SimulationFailed as e:
             rows.append({"setting": setting, "failed": str(e)[:200]})
             continue
@@ -123,7 +135,7 @@ def run_case(name, circuit, panel, clip, start_s, seconds, base: TransientSettin
         y, ref_n = y[e : n - e], ref[e : n - e]
         row = {
             "setting": setting,
-            **_speed(r, s.settle_s),
+            **_speed(r, wall, s.settle_s),
             "cached": r.cached,
             "null_db": _db(_rms(y - ref_n) / _rms(ref_n)),
             "band_max_db": float(np.max(np.abs(_bands(y, 48000) - ref_bands))),
@@ -136,7 +148,8 @@ def run_case(name, circuit, panel, clip, start_s, seconds, base: TransientSettin
                        cv_mean_v=float(np.mean(ref_cv[e : n - e])))  # fmt: skip
         rows.append(row)
     return {"case": name, "circuit": circuit or "fairchild_670", "panel": panel, "clip": clip,
-            "start_s": start_s, "seconds": seconds, "rows": rows}  # fmt: skip
+            "start_s": start_s, "seconds": seconds, "fresh": fresh, "repeat": repeat,
+            "rows": rows}  # fmt: skip
 
 
 def _cell(row: dict, key: str, fmt: str) -> str:
@@ -164,6 +177,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--only", choices=sorted(CASES), action="append")
     ap.add_argument("--seconds", type=float, default=3.0)
+    ap.add_argument("--fresh", action="store_true", help="bypass the cache: time every render")
+    ap.add_argument("--repeat", type=int, default=1, help="with --fresh: best of N runs")
     args = ap.parse_args()
     base = TransientSettings.from_sim_settings(engine="configured")
     if base.engine != "circuitsim":
@@ -174,7 +189,7 @@ def main() -> None:
     t0 = time.perf_counter()
     for group in args.only or sorted(CASES):
         for case in CASES[group]:
-            res = run_case(*case, args.seconds, base)
+            res = run_case(*case, args.seconds, base, args.fresh, args.repeat)
             results[res["case"]] = res
             print(table(res), flush=True)
             path.write_text(json.dumps(results, indent=1), encoding="utf-8", newline="\n")
