@@ -27,8 +27,9 @@ import / export path). B4a, a schematic editor in our own web app (`/editor` of
 `varimu listen`), is built (2026-10-26): steps 1-3 (view; editing values, renders and A/B,
 Save as; drawing topology, with the triode stage drawn from scratch as `triode_stage_drawn`)
 and a first polish pass (Ctrl+K command palette, ? keys, ↑ / ↓ step values through E12,
-segment dragging). Its done-when waits for the user: the EQP-1A drawn by hand in the
-editor, and the look reviewed (`docs/editor_mockups/step*.png`). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+segment dragging). Its done-when is met (2026-10-27): the EQP-1A and the 670 drawn as
+schematics after their originals (`pultec_eqp1a_drawn`, `fairchild_670_drawn`), building
+the hand-written IR, the look accepted by the user (`docs/editor_mockups/drawn_*.png`). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
@@ -130,7 +131,11 @@ path: the compiled drawing in `cache/editor/`), A/B loudness-matched; a drawing 
 copy / paste), the tools `tools.js`. The page's rules are tested in Node's own runner
 (`tests/editor_js/`, from pytest, on the real symbol table; skipped without Node);
 `scripts/editor_draw_triode.py` draws the triode stage through the UI (Playwright via
-`uv run --no-project --with playwright`, the installed Chrome). The page is plain ES modules (`varimu/listen/editor.html`,
+`uv run --no-project --with playwright`, the installed Chrome). The hand-written
+circuits' schematics are drawn by scripts (`scripts/draw_pultec_eqp1a.py`,
+`draw_fairchild_670.py`) on `varimu/editor/sketch.py`, which checks a layout pin by pin
+against its circuit (`problems()`); rerun a script after a change to its circuit (part
+or node names), and `tests/test_editor_drawings.py` tells when that's due. The page is plain ES modules (`varimu/listen/editor.html`,
 `varimu/listen/editor/*.js`, no npm, no build step) on the API in
 `varimu/listen/editor_api.py`; the look is the dark "studio" direction the user chose
 (`docs/editor_mockups/`). Symbols come from `varimu/kicad/symbols.py`'s table as JSON.
@@ -220,6 +225,8 @@ uv run --extra fast python scripts/calibrate_pultec_psu.py   # B2: the PCC-55's 
 uv run varimu kicad-import kicad/NAME/NAME.kicad_sch --out cache/kicad/NAME.yaml   # B3: drawing (+ NAME.params.yaml) -> circuit file; exit 2 = check problems
 uv run varimu check --circuit NAME                 # B3: pre-flight checks at every switch combination
 uv run varimu kicad-export --circuit NAME --out DIR   # B3: a circuit file as a label-connected KiCad project
+uv run python scripts/draw_fairchild_670.py [--check] [--dry-run]   # B4a: the 670's schematic -> config/circuits/fairchild_670_drawn.* (also draw_pultec_eqp1a.py)
+uv run --extra fast python scripts/draft_settings_study.py [--only eqp1a|670]   # cheaper engine settings: speed vs sound against production -> reports/realtime/
 uv run python scripts/make_kicad_fixtures.py       # B3: kicad/varimu.kicad_sym, kicad/generated/, tests/fixtures/kicad/ (needs kicad-cli)
 uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
 uv run --extra listen python scripts/build_clips.py --root DIR [--only NAME ...]   # Phase 5: program clips from multitrack stems (config/listening.yaml mixes) -> data/clips

@@ -596,15 +596,29 @@ B4's first part: its step 2 is most of B4's loop.
 - **Tests:** Node, 7 edit and 9 geometry tests.
 - **Screenshots:** `docs/editor_mockups/step4_*.png`.
 
-*B4a's done-when, 2026-10-26:*
-- **Met:** the hand-written circuits open and compile back to their IR; the triode stage
-  drawn from scratch; the broken EQP-1A's faults on the canvas; tweak-to-hear measured.
-- **Open, for the user:**
-  - the EQP-1A drawn by hand in the editor, saved as `pultec_eqp1a_drawn`
-    (`tests/test_editor.py::test_eqp1a_drawn_by_hand` compares it with the hand-written
-    IR at all 84 switch combinations; skipped until it exists). The generated drawing
-    shows the part and node names to use;
-  - the look at each step: `docs/editor_mockups/step*.png`, or the page itself.
+*B4a's done-when: met (2026-10-27).*
+- The hand-written circuits open and compile back to their IR; the triode stage drawn
+  from scratch; the broken EQP-1A's faults on the canvas; tweak-to-hear measured.
+- **The EQP-1A and the 670 drawn as schematics** after their original drawings
+  (`data/schematics/`): `pultec_eqp1a_drawn` and `fairchild_670_drawn`, signal left to
+  right, real wires, labels only for rails and the feeds that cross the sheet (the 670:
+  out, cv, T104's feedback fy / fg). They are planned by hand in scripts
+  (`scripts/draw_pultec_eqp1a.py`, `draw_fairchild_670.py`) on a small drawing kit,
+  `varimu/editor/sketch.py` (place, wire pin to pin, label, ground, frame; it checks a
+  drawing against its circuit pin by pin), rather than with the mouse, as the handoff
+  the user passed on proposed. Both build the hand-written
+  IR: the EQP-1A at all 84 switch combinations (`test_eqp1a_drawn_by_hand`), the 670 at
+  every Time Constant position with both core models; both with drawn tolerances
+  (`tests/test_editor_drawings.py`, which also checks the scripts still draw the saved
+  files). The 670's drawing went in with commit 7bc4246 (T104's capacitance).
+- **The look, accepted by the user** (2026-10-27): `docs/editor_mockups/drawn_*.png`.
+  The page's text rules grew for drawn schematics (`view.js`, `unitTexts`): a winding's
+  name away from its turns, a core's above it with its lines the length of its
+  windings, decks labelled above (upright) or beside their contacts (on their side),
+  parts on their side labelled clear of their pins, flipped parts' names above their
+  values, no open-pin marks on a deck's spare contacts.
+- The 6386 banks (four tubes a side) share grid, plate and cathode buses; three plate
+  leads a side cross the grid bus without joining (no side-by-side layout avoids it).
 
 **B4. The editor loop.** The tweak-and-listen page generalized to any circuit:
 its parameters come from the circuit file (with sources and bounds; front-panel

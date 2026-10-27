@@ -1136,6 +1136,28 @@ measured. This hands over to main plan Phase 10.
 *Done when:* a benchmark processes audio in real time on one core with knob
 changes, and the output matches offline renders.
 
+*A first look at a draft mode (2026-10-27, `scripts/draft_settings_study.py`, no engine
+changes; `reports/realtime/draft_study.json`).* Cheaper settings, one lever at a time,
+against production on 3 s excerpts; timed while a full test suite ran, so the
+absolute numbers are inflated and the ratios are the result (x = slower than real time,
+per simulated second; null re signal; CV of the 670, mean -60 to -77 V):
+
+| setting | EQP-1A x | EQP-1A null | 670 x | 670 null | 670 CV rms |
+|---|---|---|---|---|---|
+| production | 6.3-20.5 | | 23.5-41.5 | | |
+| error control off | 5.7-11.4 | identical | 20.9-30.8 | -62 / -73 dB | 0.006-0.015 V |
+| + 48 kHz | 2.9-3.1 | -52 / -68 dB | 14.1-16.9 | -54 / -61 dB | 0.02-0.04 V |
+| + TR-BDF2 | 1.7-1.9 | -47 / -60 dB | 8.2-8.3 | -54 / -58 dB | 0.025-0.036 V |
+| + trapezoidal, loose Newton | 1.0-1.3 | -43 / -55 dB | 4.5-5.6 | -43 / -50 dB | 0.09-0.14 V |
+| + 1x oversampling | 0.6 | -27 / -41 dB | 3.9-4.1 | -36 / -38 dB | 0.17-0.24 V |
+
+Octave bands stay within 0.4 dB of production down to trapezoidal at 2x; 1x loses 1-2 dB
+(the top octave). The EQP-1A is near real time on settings alone; the 670 is 5-7x faster
+and still ~5x short, which leaves the structural levers: one port per paralleled 6386
+bank (exact), tabulated tube models, the idle channel 2 at its operating point, and (the
+user's call: the one-coupled-simulation rule) a slower rate for the supplies. Not yet
+listened to; re-time on an idle machine.
+
 Phase 2's nonlinear transformer core lands in circuitsim when Phase 2 does,
 not in ngspice (decided 2026-10-21, Open decisions). The device trait
 carries state from M3 so that isn't a redesign.
