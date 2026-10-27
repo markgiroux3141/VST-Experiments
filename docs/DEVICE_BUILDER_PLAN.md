@@ -456,6 +456,51 @@ B4's first part: its step 2 is most of B4's loop.
 - **Tests:** `tests/test_editor.py`, 17 tests, ~9 s.
 - **Screenshots:** `docs/editor_mockups/step1_*.png`.
 
+*Status 2026-10-26: step 2 done.*
+- **Editing values.** The inspector edits a part's value and source.
+  - A shared Param changes on every part on it. "Only this part" unlinks one; the genome
+    link stays with the parameter.
+  - An edit's default source is `edit <date>: by ear; was <old> (<old source>)`. An
+    empty source shows in red and doesn't compile.
+  - Values outside their genome bounds are flagged, not blocked.
+- **Swaps and controls.**
+  - Tubes and diodes swap among the device files of their kind; core materials among
+    `config/magnetics.yaml`'s.
+  - Numeric parameters (core geometry, turns, leakage) edit inline.
+  - The front panel's controls are sliders and position chips in the sidebar.
+- **History and saving.** Every edit is undoable (Ctrl+Z / Ctrl+Shift+Z). Save as
+  (Ctrl+S) writes `<name>.drawing.json` and the compiled `<name>.yaml`. It refuses a
+  hand-written circuit's name and a drawing that doesn't compile. The edit rules are
+  in `varimu/listen/editor/edits.js`, tested in Node's own test runner
+  (`tests/editor_js/`, run from pytest, skipped without Node; no npm).
+- **Renders and A/B.**
+  - Each edit, 0.45 s after the last, renders the drawing on a loop (default 4 s of a
+    chosen clip). The first edit renders the unedited drawing too.
+  - B is the drawing as it is, A the render before the last edit. Dry, A and B are
+    loudness-matched and switched at the same position, looped.
+  - Renders go through the listen app's queue: `RenderJob.circuit` now takes a .yaml
+    path. That was the planned one-line `runner.py` change, and it invalidated the
+    render cache once.
+  - A drawing needs a node named `out` to be heard (the runner's output); the page says
+    so.
+- **Tweak to hear**, measured in Chrome from the edit to B's audio being ready, cold
+  (nothing cached), 4 s of the arpeggio, circuitsim, one render at a time:
+
+  | Circuit | Edit | Edit to heard | Render | Speed |
+  |---|---|---|---|---|
+  | EQP-1A | CC2A 250n → 330n | 19.9 s | 15.1 s | 3.8x slower than real time |
+  | 670 | C103 50n → 100n | 118 s | 114.7 s | 28.7x slower than real time |
+
+  Rendering the unedited drawing runs in parallel. A cached render is heard in 2.3 s.
+  The 670's two minutes is B8's question (the user's call with these numbers). The
+  options are the plan's: shorter loops (the 1 s settle is a fixed cost), the
+  circuit-sim plan's speed work, or fewer oversampled stages. Rendering the loop in
+  parallel chunks isn't one of them: the 670's release outlasts any warm-up, so the
+  chunks would join audibly.
+- **Tests:** `tests/test_editor.py`, 21 tests, including a real render and compare
+  through the API and Save as.
+- **Screenshot:** `docs/editor_mockups/step2_edit_ab.png`.
+
 **B4. The editor loop.** The tweak-and-listen page generalized to any circuit:
 its parameters come from the circuit file (with sources and bounds; front-panel
 controls separate from parts), renders run on short loops in the background as

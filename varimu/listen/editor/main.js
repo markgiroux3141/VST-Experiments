@@ -1,10 +1,14 @@
-// The schematic editor page (device builder B4a, step 1: the read-only view).
-// State lives here; drawing and hit testing in view.js, pan and zoom in camera.js, the
-// side panel in inspector.js. The server compiles and checks (varimu.listen.editor_api).
+// The schematic editor page (device builder B4a): steps 1 and 2, the view and editing parts
+// in place with renders and A/B. State lives here; drawing and hit testing in view.js,
+// pan and zoom in camera.js, the side panel in inspector.js, edits and their history in
+// edits.js, renders and playback in listen.js. The server compiles, checks and renders
+// (varimu.listen.editor_api).
 
 import { Camera } from './camera.js';
+import { History, setParam } from './edits.js';
 import { esc } from './eng.js';
 import { placeholder, showNet, showSymbol } from './inspector.js';
+import { Listen } from './listen.js';
 import { View } from './view.js';
 
 const $ = s => document.querySelector(s);
@@ -14,36 +18,57 @@ const store = {
   set(k, v) { try { localStorage.setItem('editor.' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 
-let lib = null, view = null, cam = null, state = null; // state: {name, kind, drawing, analysis, markers}
+let lib = null, partLib = null, view = null, cam = null, state = null; // state: {name, kind, drawing, analysis, markers}
+const hist = new History(h => {
+  $('#undo').disabled = !h.past.length; $('#redo').disabled = !h.future.length;
+  $('#undo').title = h.past.length ? `Undo ${h.past.at(-1).label} (Ctrl+Z)` : 'Undo (Ctrl+Z)';
+  $('#redo').title = h.future.length ? `Redo ${h.future.at(-1).label} (Ctrl+Shift+Z)` : 'Redo (Ctrl+Shift+Z)';
+});
 
 async function api(path, body) {
   const r = await fetch(path, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {});
-  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  if (!r.ok) {
+    let msg = await r.text();
+    try { msg = JSON.parse(msg).detail ?? msg; } catch { /* plain text */ }
+    throw new Error(msg);
+  }
   return r.json();
 }
 
+const listen = new Listen({ api, store });
+
 async function init() {
-  const [symbols, circuits] = await Promise.all([api('/api/editor/symbols'), api('/api/editor/circuits')]);
-  lib = symbols;
+  const [symbols, circuits, parts] = await Promise.all([api('/api/editor/symbols'), api('/api/editor/circuits'), api('/api/editor/library')]);
+  lib = symbols; partLib = parts;
   view = new View(svg, $('#world'), $('#titles'), lib);
   cam = new Camera(canvas, c => { view.onCamera(c); $('#zoom').textContent = `${Math.round(c.k / 4 * 100)}%`; });
+  fillCircuits(circuits);
   const sel = $('#circuit');
-  sel.innerHTML = circuits.map(c => `<option value="${esc(c.name)}">${esc(c.title)}</option>`).join('');
   const wanted = new URLSearchParams(location.hash.slice(1)).get('c') || store.get('circuit', 'pultec_eqp1a');
   sel.value = circuits.some(c => c.name === wanted) ? wanted : circuits[0].name;
-  sel.addEventListener('change', () => open(sel.value));
+  sel.addEventListener('change', () => {
+    if (hist.isEdited(state.drawing) && !confirm('Leave the unsaved edits?')) { sel.value = state.name; return; }
+    open(sel.value);
+  });
+  await listen.init();
   await open(sel.value);
+}
+
+function fillCircuits(circuits) {
+  $('#circuit').innerHTML = circuits.map(c => `<option value="${esc(c.name)}">${esc(c.title)}${c.kind === 'drawn' ? ' · drawn' : ''}</option>`).join('');
 }
 
 async function open(name) {
   $('#loading').style.display = '';
   store.set('circuit', name);
   const hash = new URLSearchParams(location.hash.slice(1));
-  if (hash.get('c') !== name) history.replaceState(null, '', `#c=${encodeURIComponent(name)}`);
+  if (hash.get('c') !== name) window.history.replaceState(null, '', `#c=${encodeURIComponent(name)}`);
   const r = await api(`/api/editor/open?circuit=${encodeURIComponent(name)}`);
   state = { name, kind: r.kind, drawing: r.drawing, analysis: r, markers: [] };
+  hist.reset(state.drawing);
+  listen.origin = name;
+  listen.reset(JSON.stringify(state.drawing));
   view.load(state.drawing, state.analysis);
-  $('#kind').textContent = r.kind === 'drawn' ? 'drawing' : 'hand-written · generated layout · read-only';
   $('#loading').style.display = 'none';
   // A link may name a section (s=) or a part (sel=) to show; else the last view of it.
   const frame = state.drawing.frames.find(f => f.title === hash.get('s'));
@@ -54,24 +79,104 @@ async function open(name) {
   else if (saved) cam.set(saved.x, saved.y, saved.k);
   else cam.show(view.bounds(), { animate: false, kMax: 8 });
   renderSections();
+  renderControls();
+  badges();
   select(ref ? { kind: 'symbol', ref } : null);
-  $('#stats').textContent = `${Object.keys(state.drawing.symbols).length} parts · ${state.analysis.nets.length} nets`;
   runChecks();
 }
 
+// --- Editing ------------------------------------------------------------------------------------
+
+/** Apply an edit: record the drawing before it, change it, recompile, re-check, re-render. */
+async function apply(label, mutate) {
+  const t0 = performance.now();
+  hist.push(state.drawing, label);
+  mutate(state.drawing);
+  await refresh(label, t0);
+}
+
+async function refresh(label, t0 = performance.now()) {
+  const name = state.name, sel = view.selected;
+  const analysis = await api('/api/editor/analyze', { drawing: state.drawing });
+  if (state.name !== name) return;
+  state.analysis = analysis;
+  view.load(state.drawing, analysis);
+  view.setMarkers(state.markers.filter(m => m.check !== 'import'));
+  renderControls();
+  badges();
+  select(sel && (sel.kind !== 'symbol' || state.drawing.symbols[sel.ref]) ? sel : null);
+  scheduleChecks();
+  if (!analysis.ok) listen.status(`<span style="color:var(--fault)">doesn't compile: ${esc(analysis.errors[0] || '')}</span>`);
+  else if (!analysis.has_output) listen.status('label the output node <b>out</b> to hear the circuit');
+  else listen.edited(state.drawing, label, t0);
+}
+
+function badges() {
+  const edited = hist.isEdited(state.drawing);
+  $('#kind').textContent = state.kind === 'drawn' ? 'drawing' : 'hand-written · generated layout';
+  const e = $('#edited');
+  e.hidden = !edited;
+  e.textContent = state.kind === 'drawn' ? '● unsaved' : '● edited · save as a new circuit';
+  $('#stats').textContent = `${Object.keys(state.drawing.symbols).length} parts · ${state.analysis.nets.length} nets`;
+}
+
+async function undoRedo(which) {
+  const r = which === 'undo' ? hist.undo(state.drawing) : hist.redo(state.drawing);
+  if (!r) return;
+  state.drawing = r.drawing;
+  await refresh(`${which} ${r.label}`);
+}
+$('#undo').addEventListener('click', () => undoRedo('undo'));
+$('#redo').addEventListener('click', () => undoRedo('redo'));
+
+// --- Front panel ----------------------------------------------------------------------------------
+
+function renderControls() {
+  const ctl = state.drawing.circuit.controls || {}, base = JSON.parse(hist.base || '{}').circuit?.controls || {};
+  const keys = Object.keys(ctl);
+  $('#nctl').textContent = keys.length || '';
+  $('#controls').innerHTML = keys.length ? keys.map(k => {
+    const e = ctl[k], changed = base[k] && base[k].value !== e.value;
+    const head = `<div class="top"><b title="${esc(e.source || '')}">${esc(k)}</b><span class="${changed ? 'changed' : ''}">${esc(fmtCtl(e.value, e))}</span></div>`;
+    if (e.choices) return `<div class="ctl">${head}<div class="chips">${e.choices.map(c => `<button data-ctl="${esc(k)}" data-v="${esc(JSON.stringify(c))}" class="${c === e.value ? 'on' : ''}">${esc(String(c))}</button>`).join('')}</div></div>`;
+    const step = e.unit === 'position' ? 1 : (e.max - e.min) / 100;
+    return `<div class="ctl">${head}<input type="range" data-ctl="${esc(k)}" min="${e.min}" max="${e.max}" step="${step}" value="${e.value}"></div>`;
+  }).join('') : '<div class="empty">no controls</div>';
+}
+const fmtCtl = (v, e) => typeof v === 'number' ? `${+v.toPrecision(4)}${e.unit && !['rotation', 'position'].includes(e.unit) ? ' ' + e.unit : ''}` : String(v);
+
+$('#controls').addEventListener('click', e => {
+  const b = e.target.closest('button[data-ctl]'); if (!b) return;
+  const k = b.dataset.ctl, v = JSON.parse(b.dataset.v), old = state.drawing.circuit.controls[k].value;
+  if (v !== old) apply(`${k} ${old} → ${v}`, d => setParam(d, k, v));
+});
+$('#controls').addEventListener('input', e => {
+  const r = e.target.closest('input[data-ctl]'); if (!r) return;
+  const span = r.parentElement.querySelector('.top span'), c = state.drawing.circuit.controls[r.dataset.ctl];
+  span.textContent = fmtCtl(+r.value, c);
+});
+$('#controls').addEventListener('change', e => {
+  const r = e.target.closest('input[data-ctl]'); if (!r) return;
+  const k = r.dataset.ctl, v = +r.value, old = state.drawing.circuit.controls[k].value;
+  if (v !== old) apply(`${k} ${+old.toPrecision(3)} → ${+v.toPrecision(3)}`, d => setParam(d, k, v));
+});
+
+// --- Checks ---------------------------------------------------------------------------------------
+
+let checkTimer = null, checkSeq = 0;
+function scheduleChecks() { clearTimeout(checkTimer); checkTimer = setTimeout(runChecks, 700); }
+
 async function runChecks() {
-  const pill = $('#checks');
+  const pill = $('#checks'), seq = ++checkSeq;
   pill.className = 'pill busy'; pill.querySelector('span').textContent = 'checking…';
-  $('#problems').innerHTML = '<div class="empty">checking every switch combination…</div>';
   const name = state.name, t0 = performance.now();
   let markers;
   try {
     markers = (await api('/api/editor/check', { drawing: state.drawing })).markers;
   } catch (e) {
-    markers = [{ check: 'build', message: String(e), config: '', nets: [], symbols: [] }];
+    markers = [{ check: 'build', message: String(e.message), config: '', nets: [], symbols: [] }];
   }
-  if (state.name !== name) return;
-  // Compile errors and drawing warnings come with the analysis; checks add the rest.
+  if (state.name !== name || seq !== checkSeq) return;
   state.markers = markers;
   view.setMarkers(markers);
   const faults = markers.filter(m => m.check !== 'drawing').length;
@@ -81,7 +186,7 @@ async function runChecks() {
   renderProblems();
 }
 
-// --- Side lists ---------------------------------------------------------------------------------
+// --- Side lists -----------------------------------------------------------------------------------
 
 function renderSections() {
   const count = new Map();
@@ -121,31 +226,63 @@ $('#problems').addEventListener('click', e => {
 });
 $('#checks').addEventListener('click', () => { const first = document.querySelector('#problems .item'); if (first) first.click(); });
 
-// --- Selection ----------------------------------------------------------------------------------
+// --- Selection ------------------------------------------------------------------------------------
 
 function select(sel) {
   view.select(sel);
-  const el = $('#inspector'), ctx = { drawing: state.drawing, lib, analysis: state.analysis, view };
+  const el = $('#inspector'), ctx = { drawing: state.drawing, lib, partLib, analysis: state.analysis, view, apply };
   if (!sel) placeholder(el, { title: state.drawing.circuit.title || state.name, parts: Object.keys(state.drawing.symbols).length,
                               nets: state.analysis.nets.length, sections: state.drawing.frames.length });
   else if (sel.kind === 'symbol') showSymbol(el, sel.ref, ctx);
-  else showNet(el, sel.net, ctx);
+  else if (state.analysis.nets[sel.net]) showNet(el, sel.net, ctx);
+  else select(null);
 }
 
 $('#inspector').addEventListener('click', e => {
+  if (e.target.closest('input, textarea, select, button')) return;
   const n = e.target.closest('[data-net]'), r = e.target.closest('[data-ref]');
   if (n) { const i = +n.dataset.net; select({ kind: 'net', net: i }); const b = view.netBox(i); if (b) cam.show(pad(b, 8), { kMax: 10 }); }
   else if (r) { select({ kind: 'symbol', ref: r.dataset.ref }); cam.show(pad(view.boxes.get(r.dataset.ref), 12), { kMax: 10 }); }
 });
 $('#inspector').addEventListener('mouseover', e => {
-  const n = e.target.closest('[data-net]'); view.setHover(n ? { net: +n.dataset.net } : null);
+  const n = e.target.closest('.tag[data-net]'); view.setHover(n ? { net: +n.dataset.net } : null);
 });
 
 const pad = (b, m) => [b[0] - m, b[1] - m, b[2] + m, b[3] + m];
 
-// --- Pointer ------------------------------------------------------------------------------------
+// --- Save as --------------------------------------------------------------------------------------
 
-let drag = null, space = false, lastMove = null;
+function openSave() {
+  const box = $('#savebox');
+  box.classList.add('on');
+  const suggestion = state.kind === 'drawn' ? state.name : `${state.name}_mine`;
+  $('#savename').value = suggestion; $('#saveerr').textContent = '';
+  $('#savename').focus(); $('#savename').select();
+}
+async function doSave() {
+  const name = $('#savename').value.trim();
+  try {
+    await api('/api/editor/save', { drawing: state.drawing, name, origin: state.name });
+  } catch (e) { $('#saveerr').textContent = e.message; return; }
+  $('#savebox').classList.remove('on');
+  fillCircuits(await api('/api/editor/circuits'));
+  $('#circuit').value = name;
+  const cam0 = { x: cam.x, y: cam.y, k: cam.k };
+  await open(name);
+  cam.set(cam0.x, cam0.y, cam0.k);
+}
+$('#save').addEventListener('click', openSave);
+$('#savecancel').addEventListener('click', () => $('#savebox').classList.remove('on'));
+$('#savego').addEventListener('click', doSave);
+$('#savename').addEventListener('keydown', e => {
+  e.stopPropagation();
+  if (e.key === 'Enter') doSave();
+  if (e.key === 'Escape') $('#savebox').classList.remove('on');
+});
+
+// --- Pointer --------------------------------------------------------------------------------------
+
+let drag = null, space = null, lastMove = null; // space: {used} while the space bar is held
 
 function local(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
 
@@ -155,6 +292,7 @@ canvas.addEventListener('pointerdown', e => {
   const [wx, wy] = cam.toWorld(sx, sy);
   const target = view.hit(wx, wy, 7 / cam.k);
   const pan = e.button === 1 || (e.button === 0 && (space || !target));
+  if (space) space.used = true;
   drag = { sx, sy, x0: cam.x, y0: cam.y, pan, moved: false, target, id: e.pointerId };
   canvas.setPointerCapture(e.pointerId);
   cam.stop();
@@ -219,20 +357,29 @@ function hover() {
   chip.classList.add('on');
 }
 
-// --- Keys and find ------------------------------------------------------------------------------
+// --- Keys and find --------------------------------------------------------------------------------
 
 function fit() { cam.show(view.bounds(), { kMax: 8 }); }
 $('#fit').addEventListener('click', fit);
 
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+  if (e.target.closest?.('input, textarea, select')) {
     if (e.key === 'Escape') e.target.blur();
     return;
   }
-  if (e.key === ' ' && !space) { space = true; canvas.classList.add('spacepan'); e.preventDefault(); }
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undoRedo(e.shiftKey ? 'redo' : 'undo'); return; }
+  if (mod && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); undoRedo('redo'); return; }
+  if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); openSave(); return; }
+  if (mod) return;
+  if (e.key === ' ') { e.preventDefault(); if (!space) { space = { used: false }; canvas.classList.add('spacepan'); } }
   else if (e.key === 'f' || e.key === 'F') fit();
-  else if (e.key === 'Escape') { select(null); view.setMarkers(state.markers); }
+  else if (e.key === 'Escape') { select(null); view.setMarkers(state.markers); $('#savebox').classList.remove('on'); }
   else if (e.key === '/') { e.preventDefault(); $('#find').focus(); $('#find').select(); }
+  else if (e.key === '1') listen.choose('dry');
+  else if (e.key === '2') listen.choose('a');
+  else if (e.key === '3') listen.choose('b');
+  else if (e.key === 'r' || e.key === 'R') { if (state.analysis.ok) listen.render(state.drawing, 'render now'); }
   else if (e.key === 'z' || e.key === 'Z') {
     const s = view.selected;
     if (s?.kind === 'symbol') cam.show(pad(view.boxes.get(s.ref), 12), { kMax: 10 });
@@ -240,7 +387,12 @@ document.addEventListener('keydown', e => {
   } else if (e.key === '+' || e.key === '=') { const r = canvas.getBoundingClientRect(); cam.zoomAt(r.width / 2, r.height / 2, cam.k * 1.4); }
   else if (e.key === '-') { const r = canvas.getBoundingClientRect(); cam.zoomAt(r.width / 2, r.height / 2, cam.k / 1.4); }
 });
-document.addEventListener('keyup', e => { if (e.key === ' ') { space = false; canvas.classList.remove('spacepan'); } });
+document.addEventListener('keyup', e => {
+  if (e.key !== ' ' || !space) return;
+  const tap = !space.used;
+  space = null; canvas.classList.remove('spacepan');
+  if (tap && !e.target.closest?.('input, textarea, select')) listen.toggle(); // a tap plays, a hold pans
+});
 
 $('#find').addEventListener('keydown', e => {
   if (e.key !== 'Enter') return;
@@ -253,6 +405,8 @@ $('#find').addEventListener('keydown', e => {
   if (j >= 0) { select({ kind: 'net', net: j }); const b = view.netBox(j); if (b) cam.show(pad(b, 8), { kMax: 10 }); }
   else e.target.animate([{ transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'none' }], 160);
 });
+
+window.addEventListener('beforeunload', e => { if (state && hist.isEdited(state.drawing)) { e.preventDefault(); e.returnValue = ''; } });
 
 // Remember where each circuit was looked at.
 let saveTimer = null;

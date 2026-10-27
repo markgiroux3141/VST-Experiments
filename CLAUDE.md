@@ -24,7 +24,8 @@ circuit format with the 670 as its first file, byte-identical IR) is done
 measurement profiles) is done (2026-10-26); B3 (KiCad as the schematic editor) is done
 (2026-10-26: closed by the user, who turned KiCad down as the editor; it stays an
 import / export path). B4a, a schematic editor in our own web app (`/editor` of
-`varimu listen`), is in progress: step 1, the read-only view, done 2026-10-26. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+`varimu listen`), is in progress: step 1 (the read-only view) and step 2 (editing values,
+swapping parts, renders and A/B, Save as) done 2026-10-26. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
@@ -118,7 +119,11 @@ another wire is a T, crossings don't join, same-named labels are one net) and
 carry their nodes and elements, mapped back onto symbols and nets). Hand-written
 circuits (670, EQP-1A, triode stage) open as generated drawings (`layout.py`, never
 saved over them) that compile back to their IR (`tests/test_editor.py`); edits to them
-save as a new circuit. The page is plain ES modules (`varimu/listen/editor.html`,
+save as a new circuit (Save as writes `<name>.drawing.json` and the compiled `<name>.yaml`).
+Edits render on a loop through the listen app's queue (`RenderJob.circuit` takes a .yaml
+path: the compiled drawing in `cache/editor/`), A/B loudness-matched; a drawing needs an
+`out` node to be heard. The page's edit rules are tested in Node's own runner
+(`tests/editor_js/`, from pytest; skipped without Node). The page is plain ES modules (`varimu/listen/editor.html`,
 `varimu/listen/editor/*.js`, no npm, no build step) on the API in
 `varimu/listen/editor_api.py`; the look is the dark "studio" direction the user chose
 (`docs/editor_mockups/`). Symbols come from `varimu/kicad/symbols.py`'s table as JSON.

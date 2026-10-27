@@ -18,7 +18,7 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; }
   body { background: var(--bg); color: var(--ink); font: 13px/1.4 var(--ui);
-         display: grid; grid-template: "top top top" 48px "left can right" 1fr "bot bot bot" 26px / 236px 1fr 330px; }
+         display: grid; grid-template: "top top top" 48px "left can right" 1fr "lis lis lis" 58px "bot bot bot" 26px / 236px 1fr 330px; }
   button { font: inherit; color: inherit; }
   kbd { font: 10.5px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
 
@@ -150,6 +150,63 @@
   .ring { fill: color-mix(in srgb, var(--fault) 8%, transparent); stroke: var(--fault); stroke-width: 1.6px; vector-effect: non-scaling-stroke; }
   .ring.focus { stroke-width: 2.6px; filter: drop-shadow(0 0 6px var(--fault)); }
 
+  /* --- Editing --- */
+  .edited { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+  .iconbtn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650; }
+  .iconbtn:disabled { opacity: .4; cursor: default; }
+  input.val, textarea.src, select.sel, input.num { width: 100%; font: inherit; color: var(--ink); background: var(--chrome2);
+           border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; outline: none; }
+  input.val { font: 600 19px var(--mono); }
+  input.num { font: 12px var(--mono); padding: 3px 6px; border-radius: 5px; }
+  textarea.src { font: 12.5px/1.45 var(--ui); resize: vertical; min-height: 54px; }
+  input.val:focus, textarea.src:focus, select.sel:focus, input.num:focus { border-color: var(--accent);
+           box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
+  input.val.bad, input.num.bad { border-color: var(--fault); }
+  textarea.src.missing { border-color: var(--fault); background: color-mix(in srgb, var(--fault) 8%, transparent); }
+  select.sel { appearance: none; cursor: pointer; padding-right: 26px; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+           linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+           background-size: 5px 5px; background-repeat: no-repeat; }
+  .hintline { display: flex; gap: 8px; align-items: baseline; margin-top: 4px; font-size: 11.5px; color: var(--muted); min-height: 16px; }
+  .hintline .warn { color: var(--warn); }
+  .hintline .err { color: var(--fault); }
+  .linkbtn { all: unset; cursor: pointer; color: var(--muted); font-size: 11.5px; text-decoration: underline dotted; }
+  .linkbtn:hover { color: var(--ink); }
+  .ctl { padding: 6px 8px 8px; border-radius: 6px; }
+  .ctl:hover { background: var(--chrome2); }
+  .ctl .top { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+  .ctl .top b { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ctl .top span { font: 11.5px var(--mono); color: var(--muted); }
+  .ctl .top span.changed { color: var(--accent); }
+  .ctl input[type=range] { width: 100%; accent-color: var(--accent); margin: 4px 0 0; height: 14px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 5px; }
+  .chips button { font: 11px var(--mono); padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--chrome2);
+                  color: var(--muted); cursor: pointer; }
+  .chips button.on { border-color: var(--accent); color: var(--accent-ink); background: var(--accent); }
+  .savebox { position: absolute; top: 52px; right: 12px; z-index: 20; width: 340px; padding: 14px; border-radius: 10px;
+             background: var(--chrome2); border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0,0,0,.5); display: none; }
+  .savebox.on { display: block; }
+  .savebox input { margin: 8px 0; }
+
+  /* --- Listen bar --- */
+  #listen { grid-area: lis; display: flex; align-items: center; gap: 14px; padding: 0 12px; background: var(--chrome);
+            border-top: 1px solid var(--line); min-width: 0; }
+  #listen select, #listen input { font: 12px var(--ui); color: var(--ink); background: var(--chrome2); border: 1px solid var(--line);
+            border-radius: 6px; padding: 4px 6px; }
+  #listen select { max-width: 190px; }
+  #listen input[type=number] { width: 54px; font-family: var(--mono); }
+  #listen label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+  .transport { display: flex; gap: 3px; }
+  .transport button { padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--chrome2); cursor: pointer;
+                      display: flex; align-items: center; gap: 5px; }
+  .transport button:disabled { opacity: .35; cursor: default; }
+  .transport button.on { border-color: var(--accent); color: var(--accent); font-weight: 650; }
+  .transport button.play { min-width: 92px; justify-content: center; }
+  #wave { flex: 1; height: 40px; min-width: 120px; cursor: pointer; }
+  #lstatus { width: 260px; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+  #lstatus b { color: var(--ink); font-weight: 600; }
+  .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 4px; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+
   /* --- Footer --- */
   footer { grid-area: bot; display: flex; align-items: center; gap: 18px; padding: 0 12px; background: var(--chrome);
            border-top: 1px solid var(--line); color: var(--muted); font: 11.5px var(--mono); white-space: nowrap; overflow: hidden; }
@@ -162,7 +219,11 @@
   <div class="brand"><i></i>varimu <a href="/">listen</a> <a href="/ab">A/B</a></div>
   <div class="picker"><select id="circuit" title="Circuit"></select></div>
   <span class="badge" id="kind"></span>
+  <span class="badge edited" id="edited" hidden></span>
   <div class="spacer"></div>
+  <button class="iconbtn" id="undo" title="Undo (Ctrl+Z)" disabled>Undo</button>
+  <button class="iconbtn" id="redo" title="Redo (Ctrl+Shift+Z)" disabled>Redo</button>
+  <button class="iconbtn primary" id="save" title="Save the drawing as a circuit">Save as…</button>
   <div class="pill" id="checks" title="Pre-flight checks at every combination of switch positions"><i></i><span>checks</span></div>
   <span class="zoom" id="zoom">100%</span>
   <button class="iconbtn" id="fit" title="Fit the drawing">Fit <kbd>F</kbd></button>
@@ -172,6 +233,8 @@
   <label class="find"><input id="find" placeholder="Find a part or node" autocomplete="off" spellcheck="false"><kbd>/</kbd></label>
   <h4>Sections <span id="nsec"></span></h4>
   <div class="list" id="sections"></div>
+  <h4>Front panel <span id="nctl"></span></h4>
+  <div class="list" id="controls"></div>
   <h4>Problems <span id="nprob"></span></h4>
   <div class="list" id="problems"><div class="empty">checking…</div></div>
 </aside>
@@ -185,10 +248,34 @@
 
 <aside id="right"><div id="inspector"></div></aside>
 
+<div class="savebox" id="savebox">
+  <b>Save as a new circuit</b>
+  <div class="note" id="savenote">The drawing becomes config/circuits/&lt;name&gt;.drawing.json, compiled to &lt;name&gt;.yaml. Hand-written circuits are never overwritten.</div>
+  <input class="val" id="savename" placeholder="name, e.g. pultec_eqp1a_mine" style="font-size:14px" spellcheck="false">
+  <div class="hintline"><span id="saveerr" class="err"></span></div>
+  <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:6px">
+    <button class="iconbtn" id="savecancel">Cancel</button><button class="iconbtn primary" id="savego">Save</button>
+  </div>
+</div>
+
+<div id="listen">
+  <label>Listen through <select id="lsource"></select></label>
+  <label>from <input id="lstart" type="number" min="0" step="0.5" value="0"> s</label>
+  <label>for <input id="llen" type="number" min="0.5" max="30" step="0.5" value="4"> s</label>
+  <div class="transport">
+    <button data-k="dry" title="The input, loudness-matched">Dry <kbd>1</kbd></button>
+    <button data-k="a" title="The render before the last edit">A <kbd>2</kbd></button>
+    <button data-k="b" title="The render of the drawing as it is">B <kbd>3</kbd></button>
+    <button class="play" id="play">▶ Play <kbd>Space</kbd></button>
+  </div>
+  <canvas id="wave"></canvas>
+  <div id="lstatus">Edit a value to hear it. <kbd>R</kbd> renders now.<div class="bar"><div id="lbar"></div></div></div>
+</div>
+
 <footer>
   <span><span class="k">x</span> <span id="cx">–</span> <span class="k">y</span> <span id="cy">–</span> <span class="k">mm</span></span>
   <span id="stats"></span>
-  <span id="hint">Scroll to zoom · drag to pan · click a part or wire · <kbd>Esc</kbd> clears</span>
+  <span id="hint">Scroll to zoom · drag to pan · click a part to edit it · <kbd>Ctrl Z</kbd> undo · <kbd>Esc</kbd> clears</span>
 </footer>
 
 <script type="module" src="/editor/main.js"></script>

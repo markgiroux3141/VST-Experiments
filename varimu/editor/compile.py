@@ -79,6 +79,29 @@ def compiled_spec(c: Compiled) -> CircuitSpec:
     return load_circuit(cached_circuit(c))
 
 
+def save_circuit(d: Drawing, name: str, origin: str = "", root: Path | None = None) -> list[Path]:
+    """Save a drawing as circuit `name`: <name>.drawing.json (the source) and <name>.yaml
+    (compiled, what renders read) in config/circuits/ (or `root`). A hand-written
+    circuit (a .yaml without a drawing) is never overwritten; a drawn one is. Raises
+    ValueError when the drawing doesn't compile."""
+    from varimu.config import CONFIG_DIR
+    from varimu.editor.drawing import save_drawing
+
+    root = Path(root) if root else CONFIG_DIR / "circuits"
+    yaml_path, json_path = root / f"{name}.yaml", root / f"{name}.drawing.json"
+    if yaml_path.exists() and not json_path.exists():
+        raise FileExistsError(f"{name} is a hand-written circuit: save under a new name")
+    c = compile_drawing(d)
+    if not c.ok:
+        raise ValueError("the drawing doesn't compile: " + "; ".join(c.errors))
+    note = f" (from {origin})" if origin else ""
+    text = circuit_text(c, f"{json_path.name}{note}")
+    save_drawing(d, json_path)
+    root.mkdir(parents=True, exist_ok=True)
+    yaml_path.write_text(text, encoding="utf-8", newline="\n")
+    return [json_path, yaml_path]
+
+
 # --- Problems on the drawing -----------------------------------------------------------------
 
 

@@ -289,3 +289,103 @@ def test_editor_api():
     again = client.post("/api/editor/analyze", json={"drawing": r["drawing"]}).json()
     assert again["nets"] == r["nets"]
     assert client.post("/api/editor/analyze", json={"drawing": {}}).status_code == 400
+
+
+# --- Step 2: editing, saving, rendering ---------------------------------------------------------
+
+
+def test_page_modules():
+    """The page's edit rules, in Node's own test runner (no npm); skipped without Node."""
+    import shutil
+    import subprocess
+
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed")
+    files = sorted(str(p) for p in (REPO_ROOT / "tests" / "editor_js").glob("*.test.mjs"))
+    r = subprocess.run([node, "--test", *files], capture_output=True, text=True, encoding="utf-8",
+                       cwd=REPO_ROOT, check=False)  # fmt: skip
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_save_circuit(tmp_path):
+    from varimu.editor.compile import save_circuit
+
+    d = generated_drawing(load_circuit(circuit_path("pultec_eqp1a")))
+    for ref in ("CC2A", "CC2B"):  # what the page does to a shared Param
+        d.symbols[ref].value = "470n"
+        d.symbols[ref].fields["Source"] = "edit 2026-10-26: by ear; was 250n (dwg: .25)"
+    files = save_circuit(d, "eqp_mine", origin="pultec_eqp1a", root=tmp_path)
+    assert [f.name for f in files] == ["eqp_mine.drawing.json", "eqp_mine.yaml"]
+    saved = load_circuit(tmp_path / "eqp_mine.yaml")
+    edited = {"value": 4.7e-7, "source": "edit 2026-10-26: by ear; was 250n (dwg: .25)"}
+    assert saved.values["c_couple_f"] == edited
+    assert (tmp_path / "eqp_mine.yaml").read_text(encoding="utf-8").startswith("# Generated from")
+    assert load_drawing(files[0]).to_json() == d.to_json()
+    save_circuit(d, "eqp_mine", root=tmp_path)  # a drawn circuit may be saved over
+    (tmp_path / "hand.yaml").write_text("title: x\n", encoding="utf-8")
+    with pytest.raises(FileExistsError, match="hand-written"):
+        save_circuit(d, "hand", root=tmp_path)
+    d.symbols["CC2A"].fields["Source"] = ""
+    d.symbols["CC2B"].fields["Source"] = ""
+    with pytest.raises(ValueError, match="doesn't compile"):
+        save_circuit(d, "eqp_mine", root=tmp_path)
+
+
+def test_render_job_takes_a_circuit_path():
+    from varimu.sim import runner
+    from varimu.sim.io import TransientSettings
+
+    c = compile_drawing(generated_drawing(load_circuit(circuit_path("triode_stage"))))
+    from varimu.editor.compile import cached_circuit
+
+    path = cached_circuit(c)
+    s = TransientSettings.from_sim_settings()
+    by_path = runner.build_circuit(runner.RenderJob([0.0], circuit=str(path)), s)
+    by_name = runner.build_circuit(runner.RenderJob([0.0], circuit="triode_stage"), s)
+    assert ir_differences(by_path.ir, by_name.ir) == []
+
+
+def test_editor_render_and_compare():
+    """A drawing renders through the page's queue and comes back loudness-matched."""
+    pytest.importorskip("fastapi")
+    pytest.importorskip("circuitsim")
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from varimu.listen.app import AB, create_app
+
+    client = TestClient(create_app(workers=1, ab=AB.__new__(AB)))
+    stage = client.get("/api/editor/open", params={"circuit": "triode_stage"}).json()
+    assert not stage["has_output"]  # its output node is `o`: renders read `out`
+    body = {"drawing": stage["drawing"], "source": "signal:burst_1000hz_-10dbfs", "seconds": 0.05}
+    assert (
+        "label the output out to hear it"
+        in client.post("/api/editor/render", json=body).json()["detail"]
+    )
+    r = client.get("/api/editor/open", params={"circuit": "pultec_eqp1a"}).json()
+    assert r["has_output"]
+    d = r["drawing"]
+    body = {"drawing": d, "source": "signal:burst_1000hz_-10dbfs", "start_s": 0.0, "seconds": 0.05}
+    job = client.post("/api/editor/render", json=body).json()
+    assert job["circuit"].endswith(".yaml")
+    for _ in range(600):
+        [j] = client.get("/api/jobs", params={"ids": job["id"]}).json()
+        if j["status"] in ("done", "failed"):
+            break
+        time.sleep(0.1)
+    assert j["status"] == "done", j["error"]
+    assert client.get("/api/jobs").json() == []  # the 670 page doesn't see the editor's renders
+    r = client.get("/api/editor/compare", params={"ids": str(job["id"])}).json()
+    assert len(r["audio"]) == 2 and len(r["envelopes"]) == 2  # dry and the render
+    assert client.get(r["audio"][1]).headers["content-type"] == "audio/wav"
+    assert abs(r["match"]["measured_lufs"][0] - r["match"]["measured_lufs"][1]) > 0  # matched after
+    unsourced = {**d["symbols"], "RK1": {**d["symbols"]["RK1"], "fields": {}}}
+    bad = {**body, "drawing": {**d, "symbols": unsourced}}
+    assert "needs a Source" in client.post("/api/editor/render", json=bad).json()["detail"]
+    save = lambda name: client.post("/api/editor/save", json={"drawing": d, "name": name})  # noqa: E731
+    assert save("triode_stage").status_code == 409  # hand-written: never overwritten
+    assert save("Bad Name").status_code == 400
+    lib = client.get("/api/editor/library").json()
+    assert {"12AX7", "6X4"} <= {x["name"] for x in lib["devices"]} and lib["materials"]

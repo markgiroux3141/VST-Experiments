@@ -22,8 +22,9 @@ Device tables are generated once per tube model under cache/tables/ (see
 varimu.devices.table.cached_table) and hard-linked into each job directory.
 
 A job renders the Fairchild 670 (varimu.circuit.netlist) unless it names another
-circuit file in config/circuits/ (`RenderJob.circuit`, device builder B2); its
-overrides are that circuit's parameters.
+circuit file (`RenderJob.circuit`, device builder B2): a name in config/circuits/, or a
+path to a .yaml file (the schematic editor's compiled drawings in cache/editor/, B4a);
+its overrides are that circuit's parameters.
 """
 
 from __future__ import annotations
@@ -105,14 +106,20 @@ class RenderJob:
     samples: np.ndarray  # input, dBFS-scaled, at settings.sample_rate
     overrides: dict[str, Any] = field(default_factory=dict)
     label: str = ""  # free text for logs (e.g. clip name)
-    circuit: str | None = None  # a circuit file in config/circuits/ (None: the 670)
+    circuit: str | Path | None = None  # a name in config/circuits/ or a .yaml path (None: 670)
+
+
+def circuit_file(circuit: str | Path) -> Path:
+    """A circuit named in config/circuits/, or the path of a .yaml file."""
+    p = Path(circuit)
+    return p if p.suffix in (".yaml", ".yml") else spec.circuit_path(str(circuit))
 
 
 def build_circuit(job: RenderJob, s: TransientSettings) -> nl.Circuit:
     """The job's circuit: the 670 through its API, or the named circuit file."""
     if job.circuit is None:
         return nl.build(job.overrides, triode_formulation=s.triode_formulation, cores=s.cores)
-    c = spec.load_circuit(spec.circuit_path(job.circuit))
+    c = spec.load_circuit(circuit_file(job.circuit))
     return builder.build(c, job.overrides, triode_formulation=s.triode_formulation, cores=s.cores)
 
 

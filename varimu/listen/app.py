@@ -192,6 +192,7 @@ class Job:
     start_s: float
     seconds: float | None
     values: dict[str, float]
+    circuit: str | None = None  # a circuit file (None: the 670 with the page's sliders)
     status: str = "queued"  # queued | running | done | failed
     progress: float = 0.0
     error: str = ""
@@ -200,13 +201,14 @@ class Job:
     finished: float = 0.0
     wall_s: float = 0.0
     realtime_factor: float = 0.0
+    cached: bool = False
 
     def public(self) -> dict[str, Any]:
         return {
             k: getattr(self, k)
             for k in (
-                "id", "source", "start_s", "seconds", "values", "status", "progress", "error",
-                "key", "wall_s", "realtime_factor",
+                "id", "source", "start_s", "seconds", "values", "circuit", "status", "progress",
+                "error", "key", "wall_s", "realtime_factor", "cached",
             )
         }  # fmt: skip
 
@@ -218,8 +220,9 @@ class Jobs:
         self.jobs: dict[int, Job] = {}
         self.pool = ThreadPoolExecutor(max_workers=workers)
 
-    def submit(self, source: str, start_s: float, seconds: float | None, values: dict) -> Job:
-        job = Job(next(self._ids), source, start_s, seconds, values)
+    def submit(self, source: str, start_s: float, seconds: float | None, values: dict,
+               circuit: str | None = None) -> Job:  # fmt: skip
+        job = Job(next(self._ids), source, start_s, seconds, values, circuit)
         with self._lock:
             self.jobs[job.id] = job
         self.pool.submit(self._run, job)
@@ -233,11 +236,14 @@ class Jobs:
             def cb(f: float) -> None:
                 job.progress = f
 
-            r = runner.render(
-                runner.RenderJob(x, to_overrides(job.values), label=job.source), progress=cb
-            )
+            if job.circuit is None:
+                rj = runner.RenderJob(x, to_overrides(job.values), label=job.source)
+            else:  # the schematic editor's compiled drawing: its parameters as they are
+                rj = runner.RenderJob(x, dict(job.values), label=job.source, circuit=job.circuit)
+            r = runner.render(rj, progress=cb)
             job.key, job.status, job.progress = r.key, "done", 1.0
             job.wall_s, job.realtime_factor = r.meta["wall_s"], r.meta["realtime_factor"]
+            job.cached = bool(r.cached)
         except Exception as e:  # shown in the page
             job.status, job.error = "failed", f"{type(e).__name__}: {e}"[-2000:]
         job.finished = time.time()
@@ -609,7 +615,7 @@ def create_app(workers: int | None = None, ab: AB | None = None):
 
     from varimu.listen.editor_api import register as register_editor
 
-    register_editor(app)
+    register_editor(app, jobs)
 
     @app.get("/", response_class=HTMLResponse)
     def index():
@@ -733,8 +739,11 @@ def create_app(workers: int | None = None, ab: AB | None = None):
         return jobs.submit(req.source, req.start_s, req.seconds, req.values).public()
 
     @app.get("/api/jobs")
-    def list_jobs():
-        return [j.public() for j in sorted(jobs.jobs.values(), key=lambda j: -j.id)]
+    def list_jobs(ids: str = ""):
+        """The 670 page's renders, or the ones asked for by id (the editor's)."""
+        want = {int(i) for i in ids.split(",") if i.strip().isdigit()}
+        return [j.public() for j in sorted(jobs.jobs.values(), key=lambda j: -j.id)
+                if (j.id in want if want else j.circuit is None)]  # fmt: skip
 
     @app.get("/api/source_info")
     def source_info(source: str):

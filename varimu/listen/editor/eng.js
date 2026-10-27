@@ -6,13 +6,14 @@ const UNIT = '(?:ohms?|Ω|F|H|V|A|Hz)?';
 const PLAIN = new RegExp(`^([-+]?(?:\\d+\\.?\\d*|\\.\\d+))(?:[eE]([-+]?\\d+))?\\s*([pnuµmkMG]?)\\s*${UNIT}$`);
 const EMBEDDED = new RegExp(`^(\\d+)([pnuµmkMGR])(\\d+)\\s*${UNIT}$`);
 
-/** The number `text` writes, or null when it isn't one (then it is a key). */
+/** The number `text` writes, or null when it isn't one (then it is a key). Built from a
+ *  decimal string, so it is the double Python's reader gives ("0.47u" is 4.7e-7 exactly). */
 export function parseEng(text) {
   const s = String(text).trim();
   let m = PLAIN.exec(s);
-  if (m) return Number(m[1]) * 10 ** ((+m[2] || 0) + PREFIX[m[3]]);
+  if (m) return Number(`${m[1]}e${(+m[2] || 0) + PREFIX[m[3]]}`);
   m = EMBEDDED.exec(s);
-  if (m) return Number(`${m[1]}.${m[3]}`) * 10 ** (PREFIX[m[2]] ?? 0);
+  if (m) return Number(`${m[1]}.${m[3]}e${PREFIX[m[2]] ?? 0}`);
   return null;
 }
 
@@ -23,6 +24,7 @@ export function withUnit(x, unit) {
   if (typeof x !== 'number' || !isFinite(x)) return String(x);
   if (!unit) return trim(x);
   if (unit === '%') return `${trim(x)} %`;
+  if (/[²³]/.test(unit)) return `${trim(x)} ${unit}`; // a prefix doesn't scale a squared unit
   if (x === 0) return `0 ${unit}`;
   const a = Math.abs(x);
   const [scale, p] = SI.find(([s]) => a >= s * 0.9995) || SI[SI.length - 1];
@@ -31,6 +33,7 @@ export function withUnit(x, unit) {
 
 function trim(x) {
   const a = Math.abs(x);
+  if (Number.isInteger(x) && a < 1e6) return String(x);
   if (a !== 0 && (a >= 1e6 || a < 1e-3)) return x.toExponential(3).replace(/\.?0+e/, 'e');
   return String(+x.toPrecision(4));
 }
