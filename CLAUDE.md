@@ -168,7 +168,10 @@ solve; it bends "one coupled simulation" for the draft only, the user's call). T
 runs 1.1-1.2x slower than real time on two cores (production: 14-18x). `--quality
 draft-1x` (`circuitsim_draft_1x`: a 48 kHz host at 1x via `TransientSettings.host_rate`,
 the engine resampling to it and back) runs it at 0.81-0.86x, within ~-45 dB of
-production (top octave up to 0.7 dB off): a ballpark while playing. Production is
+production (top octave up to 0.7 dB off): a ballpark while playing. **The Play page**
+(`varimu listen`, then /play) loops a clip through it in real time while the front panel
+turns (`varimu/sim/live.py`, `varimu/listen/play.py`; `circuitsim.Stream`: block-by-block
+runs equal to a whole run, `update` for knob changes, `stream.rs`). Production is
 untouched (every new option off). The periodic
 agreement test against ngspice is
 `slice_report.py --verify` (Commands); run it after changes to the engine,
@@ -227,7 +230,7 @@ uv run --extra fast varimu render --clip data/clips/x.wav --set ac_threshold=0.7
 uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached
 uv run varimu render --signal burst_1000hz_0dbfs --engine ngspice   # the reference engine
 uv run --extra fast varimu render --clip data/clips/x.wav --quality draft   # M8's fast draft (sim_settings circuitsim_draft; also unit, listen)
-uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765 (editor: /editor, blind A/B: /ab)
+uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765 (editor: /editor, blind A/B: /ab, real-time play: /play)
 uv run --extra fast python scripts/slice_report.py [--engine ngspice] [--clip NAME]   # curve, TC bursts, program clip -> reports/slice/
 uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~70 min cold since Phase 3, ~1 min warm)
 uv run --extra fast python scripts/transformer_report.py [--only t101 ...]   # each transformer standalone -> reports/transformers/
@@ -550,7 +553,10 @@ tests skip when ngspice is missing.
   second thread spins between samples (a core busy for the run). Most of the 670's
   refactors are the sidechain bridge switching against a stale Jacobian; low-rank
   (Woodbury) refactors of just those devices made it slower (plan, M8). `Transient::update`
-  refuses partitioned runs (externals). Draft and production renders cache apart.
+  takes partitioned runs and unknowns renumbered by a rewiring (a tapped pot's wiper
+  crossing its tap); changes of structure (the pad's 0 dB end, TC 5-6) restart a live
+  stream instead. Draft and production renders cache apart. The Play page needs the
+  `websockets` package (listen extra); a stuck page usually means the server stopped.
 - **Floating nodes and Newton tolerance (measured 2026-10-14).** At DC the 670's
   T104 secondary is a 1 mOhm winding held only by bridge-diode leakage and a
   1 GOhm leak; double precision resolves it to ~1e-6..1e-5 V in any engine.

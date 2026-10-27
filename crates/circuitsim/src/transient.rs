@@ -755,6 +755,9 @@ pub struct Transient {
     /// the next sample, linear in between.
     ext0: Vec<f64>,
     ext1: Vec<f64>,
+    /// Whether `x` holds every unknown (else only the probes' and outputs' are
+    /// current: a DK step without `Options::all_unknowns`).
+    x_full: bool,
     /// Deepest halving level accepted in the current sample, and in the
     /// previous one (where error control starts the next).
     deepest: usize,
@@ -899,6 +902,7 @@ impl Transient {
             n: 0,
             ext0: ext.to_vec(),
             ext1: ext.to_vec(),
+            x_full: true,
             deepest: 0,
             level_hint: 0,
             next_level: 0,
@@ -1467,6 +1471,7 @@ impl Transient {
         let (m, r) = (sys.m, sys.r);
         // Every unknown, or (enough for the outputs and this error norm) the probes'.
         let all = self.opts.all_unknowns || self.opts.error_norm == ErrorNorm::Nodes;
+        self.x_full = all;
         let rows = sys.rows_for(all);
         dk.newton.v_lin.copy_from_slice(&self.ports);
         let t0 = timing::now();
@@ -1778,29 +1783,67 @@ impl Transient {
     /// (every method is stiffly accurate). The step matrices are rebuilt on
     /// first use, one per step size (for the 670: ~1 ms each; see
     /// `tests/update.rs`). Devices with memory start over from their model.
+    ///
+    /// The externals ([`Mna::externals`], [`Mna::outputs`]) stay on the same rows,
+    /// at their values at the current point.
     pub fn update(&mut self, ir: &CircuitIr) -> Result<(), Error> {
-        if !self.mna.externals.is_empty() {
-            return Err(Error::new("update: not with externals (a partitioned run)"));
-        }
-        if !self.opts.all_unknowns && self.dk.is_some() {
+        if !self.x_full {
             return Err(Error::new(
-                "update: needs every unknown (Options::all_unknowns), this run keeps the probes",
+                "update: needs every unknown at the current point, and the last step kept \
+                 only the probes (Transient::set_all_unknowns for one step first)",
             ));
         }
         let mut mna = Mna::from_ir(ir, self.opts.gmin)?;
         if self.opts.tube_tables {
             mna.tabulate_tubes();
         }
-        if mna.unknowns != self.mna.unknowns {
-            return Err(Error::new(
+        // The same unknowns, possibly in another order (MNA numbers nodes by first
+        // appearance: a tapped pot's wiper crossing its tap rewires its segments
+        // among the same nodes): old index -> new index.
+        let changed = || {
+            Error::new(
                 "update: the circuit's nodes, sources or inductors changed (only values may)",
-            ));
+            )
+        };
+        if mna.unknowns.len() != self.mna.unknowns.len() {
+            return Err(changed());
         }
-        let same_devices =
-            mna.devices.len() == self.mna.devices.len()
-                && mna.devices.iter().zip(&self.mna.devices).all(|(a, b)| {
-                    a.name == b.name && a.pins == b.pins && a.pin_names == b.pin_names
-                });
+        let perm: Vec<usize> = if mna.unknowns == self.mna.unknowns {
+            (0..mna.unknowns.len()).collect()
+        } else {
+            let index: std::collections::HashMap<String, usize> = mna
+                .unknowns
+                .iter()
+                .enumerate()
+                .map(|(i, u)| (u.describe(), i))
+                .collect();
+            let perm: Option<Vec<usize>> = self
+                .mna
+                .unknowns
+                .iter()
+                .map(|u| index.get(&u.describe()).copied())
+                .collect();
+            let perm = perm.ok_or_else(changed)?;
+            if self.coupled.is_some() {
+                return Err(Error::new(
+                    "update: the circuit's unknowns moved, which needs a diagonally implicit method",
+                ));
+            }
+            perm
+        };
+        let moved = perm.iter().enumerate().any(|(i, &j)| i != j);
+        mna.externals = self.mna.externals.iter().map(|&r| perm[r]).collect();
+        mna.outputs = self.mna.outputs.iter().map(|&r| perm[r]).collect();
+        let same_devices = mna.devices.len() == self.mna.devices.len()
+            && mna.devices.iter().zip(&self.mna.devices).all(|(a, b)| {
+                a.name == b.name
+                    && a.pin_names == b.pin_names
+                    && a.pins.len() == b.pins.len()
+                    && a.pins
+                        .iter()
+                        .zip(&b.pins)
+                        .all(|(&pa, &pb)| pa == pb.map(|i| perm[i]))
+            });
         if !same_devices {
             return Err(Error::new(
                 "update: the circuit's devices or their connections changed (only values may)",
@@ -1815,12 +1858,41 @@ impl Transient {
         self.mna = mna;
         self.levels.iter_mut().for_each(|l| *l = None);
         let n = self.x.len();
+        if moved {
+            // The state follows its unknowns; what is indexed by them is rebuilt.
+            for v in [&mut self.x, &mut self.x_prev] {
+                let old = v.clone();
+                for (i, &j) in perm.iter().enumerate() {
+                    v[j] = old[i];
+                }
+            }
+            let mut device_nodes = Vec::new();
+            for d in &self.mna.devices {
+                for &p in d.pins.iter().flatten() {
+                    if !device_nodes.contains(&p) {
+                        device_nodes.push(p);
+                    }
+                }
+            }
+            self.newton = Newton::new(&self.mna.devices, &device_nodes);
+            self.device_nodes = device_nodes;
+            self.is_node = self
+                .mna
+                .unknowns
+                .iter()
+                .map(|u| matches!(u, crate::mna::Unknown::Node(_)))
+                .collect();
+            self.norm_ps = NormPs::new(&self.mna);
+        }
 
         // F = C x' from the new circuit at x: b + u e_in - G x - d(x) on the
         // rows of C, with d the device currents at the current ports.
         let mut f = self.mna.b.clone();
         f[self.mna.input_row] += self.u;
         self.mna.add_waves(self.time(0.0), &mut f);
+        for (&row, &e) in self.mna.externals.iter().zip(&self.ext1) {
+            f[row] += e;
+        }
         let mut gx = vec![0.0; n];
         self.mna.g.mul_vec(&self.x, &mut gx);
         for (f, g) in f.iter_mut().zip(&gx) {
@@ -1899,6 +1971,13 @@ impl Transient {
     }
 
     /// The current solution (node voltages, then branch currents; see `Mna`).
+    /// Compute every unknown at each step from now on (`Options::all_unknowns`),
+    /// or only the probes' and outputs'. [`Transient::update`] needs a step with
+    /// every unknown first.
+    pub fn set_all_unknowns(&mut self, on: bool) {
+        self.opts.all_unknowns = on;
+    }
+
     /// The externals' values ([`Mna::externals`]) over the next sample: `start`
     /// at its start, `end` at its end, linear in between (stage times).
     pub fn set_externals(&mut self, start: &[f64], end: &[f64]) {

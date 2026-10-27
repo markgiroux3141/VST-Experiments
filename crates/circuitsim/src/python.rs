@@ -8,6 +8,7 @@ use pyo3::types::PyDict;
 
 use crate::ir::{CircuitIr, IR_VERSION};
 use crate::partition::{Coupling, simulate_partitioned};
+use crate::stream::Stream;
 use crate::transient::{ErrorNorm, Method, Options, Solver};
 
 create_exception!(
@@ -174,6 +175,134 @@ fn simulate<'py>(
     Ok((probes, st).into_pyobject(py)?.into_any())
 }
 
+/// A run fed block by block, for real time (`stream.rs`): the same output as
+/// `simulate` (or a partitioned `simulate`) on the same input, lagging it by the
+/// input interpolation's lookahead, with component values changed while running.
+///
+/// `Stream(ir_json, dt, u0, method, *, solver, reltol, vntol, input_order,
+/// newton_reuse, tube_tables, partition, partition_coupling)`: at the DC
+/// operating point with input `u0` (sample 0). Keywords as `simulate`'s (no
+/// error control). Methods release the GIL; errors raise SimulationError.
+#[pyclass(name = "Stream")]
+struct PyStream {
+    inner: Stream,
+}
+
+/// {probe name: float64 array} from per-probe values.
+fn probe_dict<'py>(
+    py: Python<'py>,
+    names: &[String],
+    values: Vec<Vec<f64>>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    for (name, v) in names.iter().zip(values) {
+        d.set_item(name, v.into_pyarray(py))?;
+    }
+    Ok(d)
+}
+
+#[pymethods]
+impl PyStream {
+    #[new]
+    #[pyo3(signature = (
+        ir_json, dt, u0, method = "trap", *, solver = None, reltol = None, vntol = None,
+        input_order = None, newton_reuse = None, tube_tables = None, partition = None,
+        partition_coupling = None
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        py: Python<'_>,
+        ir_json: &str,
+        dt: f64,
+        u0: f64,
+        method: &str,
+        solver: Option<&str>,
+        reltol: Option<f64>,
+        vntol: Option<f64>,
+        input_order: Option<usize>,
+        newton_reuse: Option<bool>,
+        tube_tables: Option<bool>,
+        partition: Option<Vec<String>>,
+        partition_coupling: Option<&str>,
+    ) -> PyResult<PyStream> {
+        let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
+        let d = Options::default();
+        let opts = Options {
+            method: Method::parse(method).map_err(invalid)?,
+            solver: solver
+                .map_or(Ok(d.solver), Solver::parse)
+                .map_err(invalid)?,
+            reltol: reltol.unwrap_or(d.reltol),
+            vntol: vntol.unwrap_or(d.vntol),
+            input_order: input_order.unwrap_or(d.input_order),
+            newton_reuse: newton_reuse.unwrap_or(d.newton_reuse),
+            tube_tables: tube_tables.unwrap_or(d.tube_tables),
+            all_unknowns: false,
+            ..d
+        };
+        let coupling =
+            Coupling::parse(partition_coupling.unwrap_or("extrapolate")).map_err(invalid)?;
+        let second = partition.unwrap_or_default();
+        let inner = py
+            .detach(|| Stream::new(&ir, &second, coupling, dt, &opts, u0))
+            .map_err(|e| SimulationError::new_err(e.to_string()))?;
+        Ok(PyStream { inner })
+    }
+
+    /// The probes' names (`v(node)`), in the IR's order.
+    #[getter]
+    fn names(&self) -> Vec<String> {
+        self.inner.names().to_vec()
+    }
+
+    /// Samples stepped so far.
+    #[getter]
+    fn steps(&self) -> usize {
+        self.inner.steps()
+    }
+
+    /// The probes at sample 0: {name: float}.
+    fn initial<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let d = PyDict::new(py);
+        for (name, v) in self.inner.names().iter().zip(self.inner.initial()) {
+            d.set_item(name, v)?;
+        }
+        Ok(d)
+    }
+
+    /// Feed input samples (volts); returns {probe: array} for the samples stepped.
+    fn process<'py>(
+        &mut self,
+        py: Python<'py>,
+        input: PyReadonlyArray1<'py, f64>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let x = input.as_array().to_vec();
+        let inner = &mut self.inner;
+        let vals = py
+            .detach(|| inner.process(&x))
+            .map_err(|e| SimulationError::new_err(e.to_string()))?;
+        probe_dict(py, self.inner.names(), vals)
+    }
+
+    /// The input has ended: the samples the lookahead held back.
+    fn finish<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        let inner = &mut self.inner;
+        let vals = py
+            .detach(|| inner.finish())
+            .map_err(|e| SimulationError::new_err(e.to_string()))?;
+        probe_dict(py, self.inner.names(), vals)
+    }
+
+    /// New component values (the same circuit's IR), applied at the next
+    /// sample boundaries the stream steps across. Raises ValueError for an IR
+    /// that can't be split as the stream is; a change the step can't apply
+    /// (nodes added or removed) raises SimulationError from `process`.
+    fn update(&mut self, ir_json: &str) -> PyResult<()> {
+        let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
+        self.inner.update(&ir).map_err(invalid)
+    }
+}
+
 #[pymodule]
 fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", crate::VERSION)?;
@@ -182,5 +311,6 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("SimulationError", m.py().get_type::<SimulationError>())?;
     m.add_function(wrap_pyfunction!(ir_roundtrip, m)?)?;
     m.add_function(wrap_pyfunction!(simulate, m)?)?;
+    m.add_class::<PyStream>()?;
     Ok(())
 }

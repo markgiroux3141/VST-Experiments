@@ -18,7 +18,12 @@ dependencies = [
 
 [project.optional-dependencies]
 # Later-phase stacks, installed when their phase starts (`uv sync --extra listen`, ...).
-listen = ["fastapi", "uvicorn", "pyloudnorm"]     # Phase 5
+listen = [
+    "fastapi",
+    "uvicorn",
+    "pyloudnorm",
+    "websockets>=17.3",
+]     # Phase 5
 ml = ["torch"]                                    # Phases 6, 7, 10
 optimize = ["botorch", "cma", "ribs"]             # Phase 8
 fast = ["circuitsim"]                             # Rust simulator (docs/CIRCUIT_SIM_PLAN.md); needs cargo

@@ -27,6 +27,9 @@
 //!
 //! Grid currents (one per tube) are evaluated exactly; identical ones once.
 
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, OnceLock};
+
 use super::triode::{Triode, grid_current};
 use super::{Device, softplus};
 use crate::fastmath;
@@ -166,10 +169,35 @@ impl Group {
     }
 }
 
+/// Tables built so far, by their sections' exact values: a parameter change
+/// (`Transient::update`, a knob turned while playing) rebuilds the devices, and
+/// a 6386 bank's table takes tens of milliseconds. Bounded: cleared when full.
+const CACHED_GROUPS: usize = 64;
+
+fn cached_group(kp: f64, ex: f64, kvb: f64, sections: Vec<(f64, f64)>) -> Arc<Group> {
+    static CACHE: OnceLock<Mutex<HashMap<Vec<u64>, Arc<Group>>>> = OnceLock::new();
+    let key: Vec<u64> = [kp, ex, kvb]
+        .into_iter()
+        .chain(sections.iter().flat_map(|&(a, b)| [a, b]))
+        .map(f64::to_bits)
+        .collect();
+    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    if let Some(g) = cache.lock().expect("table cache").get(&key) {
+        return Arc::clone(g);
+    }
+    let g = Arc::new(Group::new(kp, ex, kvb, sections));
+    let mut c = cache.lock().expect("table cache");
+    if c.len() >= CACHED_GROUPS {
+        c.clear();
+    }
+    c.insert(key, Arc::clone(&g));
+    g
+}
+
 /// Tabulated triodes on the same pins (one tube, or a bank in parallel).
 #[derive(Debug, Clone)]
 pub struct TriodeTable {
-    groups: Vec<Group>,
+    groups: Vec<Arc<Group>>,
     /// Distinct grid-current laws, and how many tubes have each.
     grids: Vec<(ir::GridCurrent, f64)>,
 }
@@ -199,7 +227,7 @@ impl TriodeTable {
         TriodeTable {
             groups: keyed
                 .into_iter()
-                .map(|((kp, ex, kvb), s)| Group::new(kp, ex, kvb, s))
+                .map(|((kp, ex, kvb), s)| cached_group(kp, ex, kvb, s))
                 .collect(),
             grids,
         }

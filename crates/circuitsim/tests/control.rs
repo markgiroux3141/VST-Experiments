@@ -141,4 +141,10 @@ fn update_needs_every_unknown() {
     tr.step(0.0).unwrap();
     let e = tr.update(&ir).unwrap_err().to_string();
     assert!(e.contains("every unknown"), "{e}");
+    // One step with every unknown, and it goes through.
+    tr.set_all_unknowns(true);
+    tr.step(0.0).unwrap();
+    tr.update(&ir).unwrap();
+    tr.set_all_unknowns(false);
+    tr.step(0.0).unwrap();
 }

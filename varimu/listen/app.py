@@ -624,6 +624,10 @@ def create_app(workers: int | None = None, ab: AB | None = None):
 
     register_editor(app, jobs)
 
+    from varimu.listen.play import register as register_play
+
+    register_play(app)
+
     @app.get("/", response_class=HTMLResponse)
     def index():
         return (Path(__file__).parent / "page.html").read_text(encoding="utf-8")

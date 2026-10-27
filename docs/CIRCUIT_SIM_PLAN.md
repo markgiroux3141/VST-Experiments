@@ -1279,6 +1279,37 @@ octave is where 1x shows (up to 0.7 dB on the 670, 2.6 dB on the EQP-1A's drums 
 its 10 kHz boost). Only 1.4x faster than the draft at half the steps: the larger step
 takes more Newton iterations. Not yet listened to.
 
+*Real-time playback (2026-10-27, the user's request: loop a clip and turn the knobs, like
+a plugin; draft-1x for playing).* What M8 asks for, driven from the web app:
+
+- **`stream.rs` (`Stream`, Python `circuitsim.Stream`)**: a run fed block by block, the
+  second partition on a persistent thread. Fed the same input in blocks of any size it
+  gives the whole run's output bit for bit (`tests/stream.rs`), lagging the input by the
+  interpolation's lookahead (3 samples at order 5). `simulate_partitioned` is now a stream
+  fed the whole input (same numbers as before).
+- **Parameter changes while running** (`Stream::update`): applied at a sample boundary in
+  both partitions; `Transient::update` now takes a partition's externals, needs every
+  unknown only for the step before (`set_all_unknowns`), and accepts the same unknowns in
+  another order: the AC THRESHOLD pot's wiper crossing its tap rewires the tapped pot's
+  segments among the same nodes, which MNA numbered differently and `update` refused.
+  The state follows its unknowns by name. Changes of structure (the pad's 0 dB end, Time
+  Constant 5-6) are still refused. No ramping was needed: threshold 0.3 -> 0.95, pad 20 ->
+  1 dB, DC threshold 0.9 -> 0 and TC 1 -> 4 all update in one step. An update costs
+  ~2.4 ms (the DK systems rebuilt); tube tables are cached per process
+  (`triode_table.rs`), and parsed device files per (path, mtime) (`devices/library.py`):
+  a circuit build went from ~96 ms to ~40 ms.
+- **`varimu.sim.live.Live`**: a clip resampled to the host rate, looped (10 ms crossfade
+  at the seam), knob values built into IRs on a thread of their own; an in-place update
+  when the structure is the same, else a new stream settled in the background and a
+  crossfade over one block. **0.69x real time** on the mix excerpt, worst block 1.6-1.8x
+  (an update; the buffer absorbs it).
+- **The Play page** (`/play`, `varimu/listen/play.py`, `play.html`, `play_worklet.js`):
+  the front panel (pad, AC threshold, Time Constant, DC threshold) live; audio as float32
+  frames over a WebSocket (`websockets` joins the listen extra) into an AudioWorklet ring
+  buffer; the server keeps 250 ms ahead of what the page reports played; meters (gain,
+  CV, output level, engine load, buffer, dropouts, restarts). Checked with a simulated
+  real-time listener: 8 s with a threshold change, no starvation.
+
 *Status.* The 670 runs in real time on two cores at draft-1x (0.81-0.86x); the draft
 (2x-equivalent) is 1.1-1.2x slower than real time (the handoff's target was one core at
 0.5-0.7x; M8's real-time API, smoothing and the in-Rust resampling are still to do). What's left, each a few percent to ~10%:

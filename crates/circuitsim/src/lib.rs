@@ -19,6 +19,7 @@ pub mod linalg;
 pub mod mna;
 pub mod newton;
 pub mod partition;
+pub mod stream;
 pub mod timing;
 pub mod transient;
 

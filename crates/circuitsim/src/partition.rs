@@ -26,12 +26,12 @@
 //! measure it against the one solve (the draft study does).
 
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use crate::Error;
 use crate::ir::{CircuitIr, Element, GROUND, Probe, Resistor, Section, VoltageSource};
-use crate::mna::Mna;
-use crate::transient::{Options, Output, StepInput, Transient};
+use crate::stream::Stream;
+use crate::transient::{Options, Output};
 
 /// How a partition sees the other's values within a sample.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,12 +58,15 @@ impl Coupling {
 }
 
 /// Prefix of the elements a split adds.
-const SOURCE_PREFIX: &str = "VPART_";
+pub(crate) const SOURCE_PREFIX: &str = "VPART_";
 /// The second partition's input node (it has no audio input).
 const STUB_INPUT: &str = "partition_input";
 
 /// The circuit split by section title: (first, second, shared nodes).
-fn split(ir: &CircuitIr, second: &[String]) -> Result<(CircuitIr, CircuitIr, Vec<String>), Error> {
+pub(crate) fn split(
+    ir: &CircuitIr,
+    second: &[String],
+) -> Result<(CircuitIr, CircuitIr, Vec<String>), Error> {
     for t in second {
         if !ir.sections.iter().any(|s| &s.title == t) {
             return Err(Error::new(format!("partition: no section titled {t:?}")));
@@ -178,7 +181,7 @@ fn split(ir: &CircuitIr, second: &[String]) -> Result<(CircuitIr, CircuitIr, Vec
 
 /// Values one partition publishes per sample, read by the other: a ring of
 /// three samples (the reader is at most one sample behind the writer).
-struct Ring {
+pub(crate) struct Ring {
     slots: Vec<AtomicU64>,
     width: usize,
     /// Samples published (sample n is in slot n % 3).
@@ -186,7 +189,7 @@ struct Ring {
 }
 
 impl Ring {
-    fn new(width: usize) -> Ring {
+    pub(crate) fn new(width: usize) -> Ring {
         Ring {
             slots: (0..3 * width).map(|_| AtomicU64::new(0)).collect(),
             width,
@@ -194,7 +197,7 @@ impl Ring {
         }
     }
 
-    fn publish(&self, n: usize, values: &[f64]) {
+    pub(crate) fn publish(&self, n: usize, values: &[f64]) {
         let s = (n % 3) * self.width;
         for (slot, v) in self.slots[s..s + self.width].iter().zip(values) {
             slot.store(v.to_bits(), Ordering::Relaxed);
@@ -202,24 +205,12 @@ impl Ring {
         self.done.store(n + 1, Ordering::Release);
     }
 
-    /// Wait until sample `n` is published (or `stop`); false if stopped.
-    fn wait(&self, n: usize, stop: &AtomicBool) -> bool {
-        let mut spins = 0u32;
-        while self.done.load(Ordering::Acquire) <= n {
-            if stop.load(Ordering::Relaxed) {
-                return false;
-            }
-            spins += 1;
-            if spins < 1 << 14 {
-                std::hint::spin_loop();
-            } else {
-                std::thread::yield_now();
-            }
-        }
-        true
+    /// Whether sample `n` is published.
+    pub(crate) fn published(&self, n: usize) -> bool {
+        self.done.load(Ordering::Acquire) > n
     }
 
-    fn read(&self, n: usize, out: &mut [f64]) {
+    pub(crate) fn read(&self, n: usize, out: &mut [f64]) {
         let s = (n % 3) * self.width;
         for (o, slot) in out.iter_mut().zip(&self.slots[s..s + self.width]) {
             *o = f64::from_bits(slot.load(Ordering::Relaxed));
@@ -229,7 +220,7 @@ impl Ring {
 
 /// The other partition's values over sample n -> n + 1 (`e0` at its start,
 /// `e1` at its end) from that partition's samples n and n - 1.
-fn ends(
+pub(crate) fn ends(
     coupling: Coupling,
     ring: &Ring,
     n: usize,
@@ -249,38 +240,12 @@ fn ends(
     }
 }
 
-/// One partition's run: its transient, the unknowns it publishes to the other
-/// (the coupling values), and its probes over the run.
-struct Part {
-    tr: Transient,
-    publish: Vec<usize>,
-    probes: Vec<Vec<f64>>,
-}
-
-impl Part {
-    fn record(&mut self) {
-        for (v, y) in self
-            .probes
-            .iter_mut()
-            .zip(self.tr.mna().probe_values(self.tr.x()))
-        {
-            v.push(y);
-        }
-    }
-
-    fn published(&self, out: &mut [f64]) {
-        for (o, &k) in out.iter_mut().zip(&self.publish) {
-            *o = self.tr.x()[k];
-        }
-    }
-}
-
 /// Run `ir` partitioned (see the module docs): the sections titled in
 /// `second` on a thread of their own. Same input, step and options as
 /// [`crate::simulate_with_progress`] (DK solver and a diagonally implicit
-/// method only); `progress` is called from the calling thread, which runs
-/// the first partition. The output has the IR's probes in its order; the
-/// stats are the first partition's.
+/// method only): a [`Stream`] fed the whole input. `progress` is called from
+/// the calling thread, which runs the first partition. The output has the IR's
+/// probes in its order; the stats are the first partition's.
 #[allow(clippy::too_many_arguments)]
 pub fn simulate_partitioned(
     ir: &CircuitIr,
@@ -299,152 +264,36 @@ pub fn simulate_partitioned(
     let Some((&u0, rest)) = input.split_first() else {
         return Err(Error::new("partition: empty input"));
     };
-    let (a_ir, b_ir, shared) = split(ir, second)?;
-    let k = shared.len();
-
-    // The DC operating point of the whole circuit: the shared nodes' voltages.
-    let whole = Transient::new(Mna::from_ir(ir, opts.gmin)?, h, *opts, u0)?;
-    let v_dc: Vec<f64> = shared
-        .iter()
-        .map(|n| whole.mna().node(n).map_or(0.0, |i| whole.x()[i]))
-        .collect();
-    drop(whole);
-
-    // First partition: the shared nodes as sources (externals on their rows,
-    // so the IR's 0 V plus the external is the voltage), publishing the
-    // sources' currents (+: from the node into the source, i.e. what the
-    // first partition delivers into the node).
-    let mut ma = Mna::from_ir(&a_ir, opts.gmin)?;
-    let src: Vec<usize> = shared
-        .iter()
-        .map(|n| ma.branch(&format!("{SOURCE_PREFIX}{n}")).expect("added"))
-        .collect();
-    ma.externals = src.clone();
-    ma.outputs = src.clone();
-    let mut a = Part {
-        tr: Transient::with_externals(ma, h, *opts, u0, &v_dc)?,
-        publish: src,
-        probes: Vec::new(),
-    };
-    let i_dc: Vec<f64> = {
-        let mut v = vec![0.0; k];
-        a.published(&mut v);
-        v
-    };
-    // Second partition: those currents injected into the shared nodes,
-    // publishing the nodes' voltages.
-    let mut mb = Mna::from_ir(&b_ir, opts.gmin)?;
-    let nodes: Vec<usize> = shared.iter().map(|n| mb.node(n).expect("shared")).collect();
-    mb.externals = nodes.clone();
-    mb.outputs = nodes.clone();
-    let mut b = Part {
-        tr: Transient::with_externals(mb, h, *opts, 0.0, &i_dc)?,
-        publish: nodes,
-        probes: Vec::new(),
-    };
-    let series = |n: usize| (0..n).map(|_| Vec::with_capacity(input.len())).collect();
-    a.probes = series(a.tr.mna().probes.len());
-    b.probes = series(b.tr.mna().probes.len());
-    a.record();
-    b.record();
-
-    // Sample 0 (DC) published by both; sample n (after n steps) in slot n % 3.
-    let (ring_a, ring_b) = (Ring::new(k), Ring::new(k));
-    let mut buf = vec![0.0; k];
-    a.published(&mut buf);
-    ring_a.publish(0, &buf);
-    b.published(&mut buf);
-    ring_b.publish(0, &buf);
-    let stop = AtomicBool::new(false);
-    let order = 5i64.min(opts.input_order as i64);
-    let len = input.len() as i64;
-    let steps = rest.len();
-
-    let result_b = std::thread::scope(|scope| {
-        let (ring_a, ring_b, stop) = (&ring_a, &ring_b, &stop);
-        let handle = scope.spawn(move || -> Result<Part, Error> {
-            let (mut e0, mut e1, mut prev) = (vec![0.0; k], vec![0.0; k], vec![0.0; k]);
-            let mut out = vec![0.0; k];
-            for n in 0..steps {
-                if !ring_a.wait(n, stop) {
-                    return Err(Error::new("stopped"));
-                }
-                ends(coupling, ring_a, n, &mut e0, &mut e1, &mut prev);
-                b.tr.set_externals(&e0, &e1);
-                if let Err(e) = b.tr.step_input(&StepInput::linear(0.0, 0.0)) {
-                    stop.store(true, Ordering::Relaxed);
-                    return Err(Error::new(format!("partition {:?}: {e}", second)));
-                }
-                b.record();
-                b.published(&mut out);
-                ring_b.publish(n + 1, &out);
-            }
-            Ok(b)
-        });
-
-        let run_a = (|| -> Result<(), Error> {
-            let (mut e0, mut e1, mut prev) = (vec![0.0; k], vec![0.0; k], vec![0.0; k]);
-            let mut out = vec![0.0; k];
-            for (i, &u) in rest.iter().enumerate() {
-                if !ring_b.wait(i, stop) {
-                    return Err(Error::new("stopped"));
-                }
-                ends(coupling, ring_b, i, &mut e0, &mut e1, &mut prev);
-                a.tr.set_externals(&e0, &e1);
-                if order == 1 {
-                    a.tr.step(u)?;
-                } else {
-                    let n = i as i64;
-                    let lo = (n - (order - 1) / 2).max(0);
-                    let hi = (n + 1 + (order - 1) / 2).min(len - 1);
-                    let w = &input[lo as usize..=hi as usize];
-                    a.tr.step_input(&StepInput::lagrange(w, (lo - n) as i32))?;
-                }
-                a.record();
-                a.published(&mut out);
-                ring_a.publish(i + 1, &out);
-                if (i + 2) % every == 0 {
-                    progress(i + 2)?;
-                }
-            }
-            Ok(())
-        })();
-        if run_a.is_err() {
-            stop.store(true, Ordering::Relaxed);
-        }
-        let b = handle
-            .join()
-            .map_err(|_| Error::new("partition thread panicked"))?;
-        // The first failure: a partition that stopped because the other
-        // failed reports "stopped".
-        match (run_a, b) {
-            (Err(e), Err(f)) if e.0 == "stopped" => Err(f),
-            (Err(e), _) => Err(e),
-            (Ok(()), b) => b,
-        }
-    })?;
-    let b = result_b;
-
-    // The IR's probes in its order, from whichever partition has them.
-    let (mut names, mut values) = (Vec::new(), Vec::new());
-    let (pa, pb) = (&a.tr.mna().probes, &b.tr.mna().probes);
-    let (mut va, mut vb) = (a.probes, b.probes);
-    for p in &ir.probes {
-        let Probe::Voltage { node } = p;
-        let name = format!("v({node})");
-        let v = if let Some(j) = pb.iter().position(|(n, _)| *n == name) {
-            std::mem::take(&mut vb[j])
-        } else if let Some(j) = pa.iter().position(|(n, _)| *n == name) {
-            std::mem::take(&mut va[j])
-        } else {
-            return Err(Error::new(format!("partition: probe {name} lost")));
-        };
-        names.push(name);
-        values.push(v);
+    if second.is_empty() {
+        return Err(Error::new(
+            "partition: no sections named for the second thread",
+        ));
     }
+    let mut stream = Stream::new(ir, second, coupling, h, opts, u0)?;
+    let mut values: Vec<Vec<f64>> = stream
+        .initial()
+        .into_iter()
+        .map(|v| {
+            let mut s = Vec::with_capacity(input.len());
+            s.push(v);
+            s
+        })
+        .collect();
+    let mut add = |vals: Vec<Vec<f64>>| {
+        for (v, mut x) in values.iter_mut().zip(vals) {
+            v.append(&mut x);
+        }
+    };
+    for (j, chunk) in rest.chunks(every).enumerate() {
+        add(stream.process(chunk)?);
+        if every < input.len() {
+            progress(((j + 1) * every + 1).min(input.len()))?;
+        }
+    }
+    add(stream.finish()?);
     Ok(Output {
-        names,
+        names: stream.names().to_vec(),
         values,
-        stats: a.tr.stats().clone(),
+        stats: stream.stats().clone(),
     })
 }

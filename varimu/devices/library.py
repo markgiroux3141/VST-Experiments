@@ -8,6 +8,7 @@ from a datasheet, and are expected to become genome parameters or be replaced.
 
 from __future__ import annotations
 
+import copy
 import datetime as _dt
 from collections.abc import Iterable
 from pathlib import Path
@@ -51,12 +52,21 @@ PROVISIONAL_GRID = {
 # --- Loading -------------------------------------------------------------------
 
 
+# Parsed device files by (path, modification time, size): a circuit build reads dozens,
+# and a knob turned while playing (varimu.sim.live) rebuilds the circuit each step.
+_PARSED: dict[tuple[Path, int, int], dict[str, Any]] = {}
+
+
 def _read(name: str, root: Path) -> dict[str, Any]:
     path = root / f"{name.lower()}.yaml"
     if not path.exists():
         raise FileNotFoundError(f"{path} not found; run `uv run varimu fit-devices`")
-    with open(path, encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    st = path.stat()
+    key = (path.resolve(), st.st_mtime_ns, st.st_size)
+    if key not in _PARSED:
+        with open(path, encoding="utf-8") as f:
+            _PARSED[key] = yaml.safe_load(f)
+    return copy.deepcopy(_PARSED[key])
 
 
 def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
