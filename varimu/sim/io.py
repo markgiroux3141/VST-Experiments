@@ -59,9 +59,16 @@ LOG_FILE = "ngspice.log"
 ENGINES = ("ngspice", "circuitsim")
 
 
-# Render quality (circuitsim): "production" (the `circuitsim` block) or "draft" (that
-# block with `circuitsim_draft` on top: the fast settings, CIRCUIT_SIM_PLAN.md M8).
-QUALITIES = ("production", "draft")
+# Render quality (circuitsim): "production" (the `circuitsim` block), "draft" (that
+# block with `circuitsim_draft` on top: the fast settings, CIRCUIT_SIM_PLAN.md M8) and
+# "draft-1x" (with `circuitsim_draft_1x` on top of that: a 48 kHz host at 1x, the
+# cheapest, for a ballpark while playing).
+QUALITY_BLOCKS = {
+    "production": (),
+    "draft": ("circuitsim_draft",),
+    "draft-1x": ("circuitsim_draft", "circuitsim_draft_1x"),
+}
+QUALITIES = tuple(QUALITY_BLOCKS)
 # The quality of the renders that take the configured settings (engine="configured"),
 # for a whole process and its reloads: the CLI's --quality sets it.
 QUALITY_ENV = "VARIMU_QUALITY"
@@ -125,6 +132,10 @@ class TransientSettings:
     tube_tables: bool = False
     partition: tuple[str, ...] = ()
     partition_coupling: str = "extrapolate"  # hold | extrapolate
+    # circuitsim only: the rate the simulation's host runs at, Hz (0: sample_rate). A
+    # render's input and outputs stay at sample_rate; the engine resamples to the host
+    # rate and back, so a 48 kHz plugin's result can be heard in a 96 kHz project.
+    host_rate: int = 0
 
     @classmethod
     def from_sim_settings(
@@ -135,8 +146,9 @@ class TransientSettings:
         (`run_transient` here, agreement tests). circuitsim takes its oversampling
         and method from the `circuitsim` block; reltol, abstol and vntol stay
         ngspice's and don't apply to it. `quality` "draft" puts the
-        `circuitsim_draft` block on top (circuitsim only); None is production, or
-        for engine="configured" the configured quality ($VARIMU_QUALITY)."""
+        `circuitsim_draft` block on top, "draft-1x" `circuitsim_draft_1x` on top of
+        that (circuitsim only, QUALITY_BLOCKS); None is production, or for
+        engine="configured" the configured quality ($VARIMU_QUALITY)."""
         s = s or load_sim_settings()
         if quality is None:
             quality = configured_quality() if engine == "configured" else "production"
@@ -179,28 +191,30 @@ class TransientSettings:
                 error_norm=str(cs.get("error_norm", "nodes")),
                 cores=str(s.data["devices"].get("cores", "ja")),
             )
-        if quality == "draft":
-            if engine != "circuitsim":
-                raise ValueError("the draft quality is circuitsim's (--engine circuitsim)")
-            d = s.data["circuitsim_draft"]
-            kinds = {"oversample": int, "method": str, "input_order": int, "solver": str,
-                     "error_abstol": float, "error_reltol": float, "newton_reltol": float,
-                     "newton_vntol": float, "newton_reuse": bool, "cores": str,
-                     "tube_tables": bool, "partition_coupling": str}  # fmt: skip
+        if QUALITY_BLOCKS[quality] and engine != "circuitsim":
+            raise ValueError(f"the {quality} quality is circuitsim's (--engine circuitsim)")
+        kinds = {"oversample": int, "method": str, "input_order": int, "solver": str,
+                 "error_abstol": float, "error_reltol": float, "newton_reltol": float,
+                 "newton_vntol": float, "newton_reuse": bool, "cores": str,
+                 "tube_tables": bool, "partition_coupling": str, "host_rate": int}  # fmt: skip
+        for block in QUALITY_BLOCKS[quality]:
+            d = s.data[block]
             unknown = set(d) - set(kinds) - {"partition"}
             if unknown:
-                raise ValueError(f"sim_settings circuitsim_draft: unknown keys {sorted(unknown)}")
-            st = replace(
-                st,
-                quality=quality,
-                partition=tuple(str(t) for t in d.get("partition", ())),
-                **{k: kinds[k](v) for k, v in d.items() if k != "partition"},
-            )
-        return st
+                raise ValueError(f"sim_settings {block}: unknown keys {sorted(unknown)}")
+            if "partition" in d:
+                st = replace(st, partition=tuple(str(t) for t in d["partition"]))
+            st = replace(st, **{k: kinds[k](v) for k, v in d.items() if k != "partition"})
+        return replace(st, quality=quality)
+
+    @property
+    def host(self) -> int:
+        """The rate the simulation's host runs at (`host_rate`, or `sample_rate`)."""
+        return self.host_rate or self.sample_rate
 
     @property
     def sim_rate(self) -> int:
-        return self.sample_rate * self.oversample
+        return self.host * self.oversample
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -221,6 +235,15 @@ def with_settle(x: np.ndarray, s: TransientSettings) -> tuple[np.ndarray, int]:
 def upsample(x: np.ndarray, k: int) -> np.ndarray:
     """Band-limited upsampling of the input to the simulation rate."""
     return resample_poly(x, k, 1) if k > 1 else x
+
+
+def resample(x: np.ndarray, rate_in: int, rate_out: int) -> np.ndarray:
+    """Band-limited resampling between two rates (polyphase), edges padded with their
+    values (a control voltage sits at tens of volts)."""
+    if rate_in == rate_out:
+        return x
+    g = gcd(rate_in, rate_out)
+    return resample_poly(x, rate_out // g, rate_in // g, padtype="edge")
 
 
 def decimate(v: np.ndarray, k: int, n: int) -> np.ndarray:

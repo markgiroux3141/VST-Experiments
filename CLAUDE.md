@@ -165,8 +165,11 @@ one 1-D table per bank, 9e-8 of the exact model), the cores' linear limit, and t
 supplies (power, bias, idle channel 2) on a second thread coupled through the rails
 with one sample of latency (`partition.rs`, `Mna::externals`: -103 dB from the one
 solve; it bends "one coupled simulation" for the draft only, the user's call). The 670
-runs 1.1-1.2x slower than real time on two cores (production: 14-18x); not yet the
-handoff's target. Production is untouched (every new option off). The periodic
+runs 1.1-1.2x slower than real time on two cores (production: 14-18x). `--quality
+draft-1x` (`circuitsim_draft_1x`: a 48 kHz host at 1x via `TransientSettings.host_rate`,
+the engine resampling to it and back) runs it at 0.81-0.86x, within ~-45 dB of
+production (top octave up to 0.7 dB off): a ballpark while playing. Production is
+untouched (every new option off). The periodic
 agreement test against ngspice is
 `slice_report.py --verify` (Commands); run it after changes to the engine,
 the circuit or the device models. It checks behaviour (GR, attack/release)

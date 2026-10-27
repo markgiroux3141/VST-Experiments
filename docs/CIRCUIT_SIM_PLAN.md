@@ -1261,8 +1261,27 @@ matches the real-time configuration (48 kHz 2x) in speed and sound. So: the 670 
 faster than production, within -52 dB of it, its CV within 0.06 V rms; the EQP-1A 3x
 faster than real time (it only moves its power supply to the second thread).
 
-*Status.* Not done: the 670 runs 1.1-1.2x slower than real time on two cores (the
-handoff's target was one core at 0.5-0.7x). What's left, each a few percent to ~10%:
+*Draft-1x (2026-10-27, the user's request: while playing, a ballpark is enough; the
+final render is production).* `--quality draft-1x` (sim_settings `circuitsim_draft_1x`
+on top of the draft): a 48 kHz host at 1x, so a 48 kHz internal rate.
+`TransientSettings.host_rate` makes it hearable in the 96 kHz project: the engine
+resamples a render's input to the host rate and its outputs back (`fast.run_transient`).
+Same study, fresh, best of 2:
+
+| quality | 670 x | 670 null | 670 band | 670 CV rms | EQP-1A x | EQP-1A null | EQP-1A band |
+|---|---|---|---|---|---|---|---|
+| draft | 1.2 / 1.13 | -52 / -55 dB | 0.03 dB | 0.042 / 0.054 V | 0.32 | -48 / -58 dB | 0.25 dB |
+| draft-1x | **0.86 / 0.81** | -49 / -45 dB | 0.3 / 0.7 dB | 0.061 / 0.068 V | 0.16 | -33 / -46 dB | 2.6 / 1.0 dB |
+
+**The 670 runs faster than real time on two cores at draft-1x** (0.81-0.86x, ~20%
+headroom), within about -45 dB of production and its CV within 0.07 V rms; the top
+octave is where 1x shows (up to 0.7 dB on the 670, 2.6 dB on the EQP-1A's drums with
+its 10 kHz boost). Only 1.4x faster than the draft at half the steps: the larger step
+takes more Newton iterations. Not yet listened to.
+
+*Status.* The 670 runs in real time on two cores at draft-1x (0.81-0.86x); the draft
+(2x-equivalent) is 1.1-1.2x slower than real time (the handoff's target was one core at
+0.5-0.7x; M8's real-time API, smoothing and the in-Rust resampling are still to do). What's left, each a few percent to ~10%:
 the small-matrix kernels (the 22 x 22 LU and solve, the iteration bookkeeping), the
 partition's own ~1 us per step, and moving the sidechain bridge to the second core
 (per-node coupling roles: T104's floating secondary must receive current, not voltage;

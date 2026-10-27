@@ -341,9 +341,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p.add_argument(
         "--quality",
-        choices=["production", "draft"],
-        help="circuitsim settings: production (default) or the fast draft "
-        "(sim_settings.yaml circuitsim_draft)",
+        choices=["production", "draft", "draft-1x"],
+        help="circuitsim settings: production (default), the fast draft (sim_settings.yaml "
+        "circuitsim_draft) or draft-1x (a 48 kHz host at 1x: a ballpark)",
     )
     p.set_defaults(func=_cmd_render)
 
@@ -361,9 +361,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     p.add_argument(
         "--quality",
-        choices=["production", "draft"],
-        help="circuitsim settings: production (default) or the fast draft "
-        "(sim_settings.yaml circuitsim_draft)",
+        choices=["production", "draft", "draft-1x"],
+        help="circuitsim settings: production (default), the fast draft (sim_settings.yaml "
+        "circuitsim_draft) or draft-1x (a 48 kHz host at 1x: a ballpark)",
     )
     p.set_defaults(func=_cmd_unit)
 
@@ -373,9 +373,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--jobs", type=int, help="parallel renders (default: cpu_count - 2)")
     p.add_argument(
         "--quality",
-        choices=["production", "draft"],
-        help="circuitsim settings: production (default) or the fast draft "
-        "(sim_settings.yaml circuitsim_draft)",
+        choices=["production", "draft", "draft-1x"],
+        help="circuitsim settings: production (default), the fast draft (sim_settings.yaml "
+        "circuitsim_draft) or draft-1x (a 48 kHz host at 1x: a ballpark)",
     )
     p.set_defaults(func=_cmd_listen)
 

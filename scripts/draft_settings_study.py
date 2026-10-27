@@ -9,9 +9,9 @@ at a ladder of draft settings, each adding one lever: local error control off, t
 host rate at 48 kHz, a cheaper method (TR-BDF2 / trapezoidal), looser Newton
 tolerances, 1x oversampling; then from TR-BDF2 on (2026-10-27, engine levers): tube
 tables, loose Newton, the cores' linear limit, the supplies on a second thread (the
-real-time configuration, 48 kHz at 2x), and last the draft quality as
-sim_settings.yaml's circuitsim_draft defines it (96 kHz at 1x: the same internal
-rate). Every draft is compared with the production render at 48 kHz (the production
+real-time configuration, 48 kHz at 2x), the draft quality as sim_settings.yaml's
+circuitsim_draft defines it (96 kHz at 1x: the same internal rate), and draft-1x (a
+48 kHz host at 1x). Every draft is compared with the production render at 48 kHz (the production
 output decimated): the null (rms of the difference, dB re the
 signal), the largest octave-band level difference from 31 Hz to 16 kHz (a tilt or a
 lost top octave), and on the 670 the control voltage (rms and largest difference, V).
@@ -78,6 +78,7 @@ LADDER = [
     ("  + supplies on a 2nd thread", {**LINEAR, "partition": SUPPLIES}),
 ]
 DRAFT_ROW = "draft quality (96 kHz 1x)"  # sim_settings circuitsim_draft, added in main()
+DRAFT_1X_ROW = "draft-1x quality (48 kHz 1x)"  # ... and circuitsim_draft_1x
 
 
 def _db(x: float) -> float:
@@ -207,7 +208,13 @@ def main() -> None:
     draft = TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
     draft = dataclasses.asdict(draft)
     ref = dataclasses.asdict(base)
-    ladder = [*LADDER, (DRAFT_ROW, {k: v for k, v in draft.items() if v != ref[k]})]
+    draft_1x = TransientSettings.from_sim_settings(engine="circuitsim", quality="draft-1x")
+    draft_1x = dataclasses.asdict(draft_1x)
+    ladder = [
+        *LADDER,
+        (DRAFT_ROW, {k: v for k, v in draft.items() if v != ref[k]}),
+        (DRAFT_1X_ROW, {k: v for k, v in draft_1x.items() if v != ref[k]}),
+    ]
     if args.rows:
         ladder = [r for r in ladder if any(r[0].strip().startswith(p) for p in args.rows)]
     OUT.mkdir(parents=True, exist_ok=True)

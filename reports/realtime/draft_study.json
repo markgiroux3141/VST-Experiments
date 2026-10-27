@@ -16,17 +16,9 @@
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 3.4911094666458666,
-    "x_realtime_steady": 2.6183320999844,
+    "x_realtime": 3.453189866617322,
+    "x_realtime_steady": 2.5898923999629915,
     "cached": false
-   },
-   {
-    "setting": "error control off",
-    "x_realtime": 3.1444399665730693,
-    "x_realtime_steady": 2.358329974929802,
-    "cached": false,
-    "null_db": -240.0,
-    "band_max_db": 0.0
    },
    {
     "setting": "+ 48 kHz",
@@ -102,11 +94,19 @@
    },
    {
     "setting": "draft quality (96 kHz 1x)",
-    "x_realtime": 0.44220910004029673,
-    "x_realtime_steady": 0.33165682503022254,
+    "x_realtime": 0.42581279994919896,
+    "x_realtime_steady": 0.3193595999618992,
     "cached": false,
     "null_db": -47.76832804440518,
     "band_max_db": 0.25241070911509667
+   },
+   {
+    "setting": "draft-1x quality (48 kHz 1x)",
+    "x_realtime": 0.2168699000030756,
+    "x_realtime_steady": 0.1626524250023067,
+    "cached": false,
+    "null_db": -32.66445287095549,
+    "band_max_db": 2.5965621247707986
    }
   ]
  },
@@ -127,17 +127,9 @@
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 3.859620166787257,
-    "x_realtime_steady": 2.8947151250904426,
+    "x_realtime": 3.8561915333072343,
+    "x_realtime_steady": 2.892143649980426,
     "cached": false
-   },
-   {
-    "setting": "error control off",
-    "x_realtime": 3.4924105666577816,
-    "x_realtime_steady": 2.619307924993336,
-    "cached": false,
-    "null_db": -240.0,
-    "band_max_db": 0.0
    },
    {
     "setting": "+ 48 kHz",
@@ -213,11 +205,19 @@
    },
    {
     "setting": "draft quality (96 kHz 1x)",
-    "x_realtime": 0.45817453336591524,
-    "x_realtime_steady": 0.3436309000244364,
+    "x_realtime": 0.43091946669543785,
+    "x_realtime_steady": 0.32318960002157837,
     "cached": false,
     "null_db": -58.3316989394229,
     "band_max_db": 0.13462921213513113
+   },
+   {
+    "setting": "draft-1x quality (48 kHz 1x)",
+    "x_realtime": 0.22190959999958673,
+    "x_realtime_steady": 0.16643219999969006,
+    "cached": false,
+    "null_db": -46.06436808912838,
+    "band_max_db": 1.021926853601407
    }
   ]
  },
@@ -237,20 +237,9 @@
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 24.08951996670415,
-    "x_realtime_steady": 18.067139975028113,
+    "x_realtime": 23.887429266702384,
+    "x_realtime_steady": 17.915571950026788,
     "cached": false
-   },
-   {
-    "setting": "error control off",
-    "x_realtime": 17.880928833348054,
-    "x_realtime_steady": 13.410696625011042,
-    "cached": false,
-    "null_db": -62.33516235069829,
-    "band_max_db": 0.0041609194452689735,
-    "cv_rms_v": 0.014608199858905612,
-    "cv_max_v": 0.13314554445967985,
-    "cv_mean_v": -77.435691261394
    },
    {
     "setting": "+ 48 kHz",
@@ -353,13 +342,24 @@
    },
    {
     "setting": "draft quality (96 kHz 1x)",
-    "x_realtime": 1.6102021667174995,
-    "x_realtime_steady": 1.2076516250381246,
+    "x_realtime": 1.5978182999727626,
+    "x_realtime_steady": 1.198363724979572,
     "cached": false,
     "null_db": -51.76053621738841,
     "band_max_db": 0.031448760982584645,
     "cv_rms_v": 0.04231635899239984,
     "cv_max_v": 0.24993858937280322,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "draft-1x quality (48 kHz 1x)",
+    "x_realtime": 1.1468066999999185,
+    "x_realtime_steady": 0.8601050249999389,
+    "cached": false,
+    "null_db": -48.56506727690593,
+    "band_max_db": 0.2769000368186312,
+    "cv_rms_v": 0.06050595734053584,
+    "cv_max_v": 0.39958164027792975,
     "cv_mean_v": -77.435691261394
    }
   ]
@@ -380,20 +380,9 @@
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 18.248326866732288,
-    "x_realtime_steady": 13.686245150049217,
+    "x_realtime": 18.4365437667196,
+    "x_realtime_steady": 13.8274078250397,
     "cached": false
-   },
-   {
-    "setting": "error control off",
-    "x_realtime": 15.83693793322891,
-    "x_realtime_steady": 11.877703449921682,
-    "cached": false,
-    "null_db": -72.55089548915052,
-    "band_max_db": 0.0008661397480196342,
-    "cv_rms_v": 0.0062662505102929105,
-    "cv_max_v": 0.05659420343933874,
-    "cv_mean_v": -59.53136859601691
    },
    {
     "setting": "+ 48 kHz",
@@ -496,13 +485,24 @@
    },
    {
     "setting": "draft quality (96 kHz 1x)",
-    "x_realtime": 1.5405402334096532,
-    "x_realtime_steady": 1.1554051750572398,
+    "x_realtime": 1.508156400018682,
+    "x_realtime_steady": 1.1311173000140116,
     "cached": false,
     "null_db": -54.802394162019354,
     "band_max_db": 0.025728100712321123,
     "cv_rms_v": 0.05356566831519353,
     "cv_max_v": 0.30418951731281396,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "draft-1x quality (48 kHz 1x)",
+    "x_realtime": 1.0839039334096014,
+    "x_realtime_steady": 0.8129279500572011,
+    "cached": false,
+    "null_db": -44.6475145365683,
+    "band_max_db": 0.6795085671443601,
+    "cv_rms_v": 0.06793133521253586,
+    "cv_max_v": 0.553792723396981,
     "cv_mean_v": -59.53136859601691
    }
   ]

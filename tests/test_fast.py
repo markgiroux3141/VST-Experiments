@@ -231,5 +231,12 @@ def test_draft_renders_the_670_partitioned(tmp_path, monkeypatch):
     assert fast.partition_sections(ir, prod) == []
     d, p = runner.render(job, settings=draft), runner.render(job, settings=prod)
     assert d.meta["settings"]["quality"] == "draft"
+    level = np.sqrt(np.mean(p.output[480:] ** 2))
     e = d.output[480:] - p.output[480:]
-    assert np.sqrt(np.mean(e**2)) < 10 ** (-40 / 20) * np.sqrt(np.mean(p.output[480:] ** 2))
+    assert np.sqrt(np.mean(e**2)) < 10 ** (-40 / 20) * level
+    # draft-1x: a 48 kHz host, resampled there and back; same length and rate.
+    d1 = runner.render(job, settings=TransientSettings.from_sim_settings(
+        engine="circuitsim", quality="draft-1x"))  # fmt: skip
+    assert d1.sample_rate == p.sample_rate and len(d1.output) == len(p.output)
+    e = d1.output[480:-480] - p.output[480:-480]
+    assert np.sqrt(np.mean(e**2)) < 10 ** (-30 / 20) * level

@@ -40,7 +40,14 @@ import numpy as np
 
 from varimu.circuit.ir import CircuitIR
 from varimu.config import REPO_ROOT
-from varimu.sim.io import TransientResult, TransientSettings, decimate, upsample, with_settle
+from varimu.sim.io import (
+    TransientResult,
+    TransientSettings,
+    decimate,
+    resample,
+    upsample,
+    with_settle,
+)
 from varimu.sim.ngspice import SimulationFailed
 
 CRATE_DIR = REPO_ROOT / "crates" / "circuitsim"
@@ -169,7 +176,10 @@ def run_transient(
     s = settings or TransientSettings.from_sim_settings(engine="circuitsim")
     x, n0 = with_settle(np.asarray(input_v, float), s)
     n, k = len(x), s.oversample
-    x_up = upsample(x, k)
+    # At a host rate of its own (s.host_rate) the input goes there and the outputs
+    # come back to sample_rate.
+    xh = resample(x, s.sample_rate, s.host)
+    x_up = upsample(xh, k)
     t0 = time.perf_counter()
     try:
         raw = circuitsim.simulate(
@@ -194,5 +204,9 @@ def run_transient(
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e
     wall = time.perf_counter() - t0
-    out = {p.spice: decimate(raw[p.spice], k, n)[n0:] for p in ir.probes}
+
+    def back(v: np.ndarray) -> np.ndarray:
+        return resample(decimate(v, k, len(xh)), s.host, s.sample_rate)[:n][n0:]
+
+    out = {p.spice: back(raw[p.spice]) for p in ir.probes}
     return TransientResult(out, s.sample_rate, wall, len(x_up))

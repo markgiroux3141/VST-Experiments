@@ -112,6 +112,16 @@ circuitsim_draft:
   partition: [power supply, bias supply, "channel 2 (idle, lumped)"]
   partition_coupling: extrapolate   # hold | extrapolate
 
+circuitsim_draft_1x:
+  # `--quality draft-1x` (2026-10-27, the user's request): the draft at a 48 kHz host
+  # rate with no oversampling, a 48 kHz internal rate, for a ballpark while playing
+  # (the final render is production). The render's input is resampled to 48 kHz and
+  # its outputs back to the project's rate, so it plays like the others. Measured
+  # (draft study): the 670 0.81-0.86x real time on two cores, -49 / -45 dB from
+  # production, CV 0.06-0.07 V rms, the top octave up to 0.7 dB off (EQP-1A: 2.6 dB).
+  host_rate: 48000
+  oversample: 1
+
 transient:
   # Input is band-limited upsampled by this factor before simulation, and the
   # output is decimated with an anti-alias filter (see varimu/sim/io.py). The

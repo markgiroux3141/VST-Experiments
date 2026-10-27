@@ -81,7 +81,7 @@
         <select id="source"></select>
         <label class="small">Start (s)<input id="start" type="number" min="0" step="0.5" value="0"></label>
         <label class="small">Length (s, blank = all)<input id="seconds" type="number" min="0.5" step="0.5"></label>
-        <label class="small" title="Draft: the fast settings (sim_settings.yaml circuitsim_draft), 11-15x faster on the 670, within -52 dB of production">Quality<select id="quality"><option value="production">production</option><option value="draft">draft</option></select></label>
+        <label class="small" title="Draft: the fast settings (sim_settings.yaml circuitsim_draft), 11-15x faster on the 670, within -52 dB of production. Draft 1x: a 48 kHz host at 1x, faster still, a ballpark">Quality<select id="quality"><option value="production">production</option><option value="draft">draft</option><option value="draft-1x">draft 1x</option></select></label>
       </div>
       <div class="small" id="srcinfo"></div>
     </section>
@@ -189,7 +189,7 @@ async function pollJobs() {
       .map(([k, v]) => `${k}=${fmt(v, schema.find(c => c.key === k)?.step ?? 0.01)}`).join(', ') || 'defaults';
     const tr = document.createElement('tr');
     const tags = (j.id === current ? '<span class="tag">current</span>' : '') + (j.id === previous ? '<span class="tag">previous</span>' : '')
-      + (j.quality === 'draft' ? '<span class="tag">draft</span>' : '');
+      + (j.quality && j.quality !== 'production' ? `<span class="tag">${j.quality}</span>` : '');
     const status = j.status === 'running' ? `running ${(j.progress * 100).toFixed(0)}%<div class="bar"><div style="width:${j.progress * 100}%"></div></div>`
       : j.status === 'done' ? `<span class="st-done">done</span> <span class="small">${j.wall_s.toFixed(0)} s, ${rtf(j.realtime_factor)}x</span>`
       : j.status === 'failed' ? `<span class="st-failed">failed</span><div class="err">${j.error}</div>` : j.status;
