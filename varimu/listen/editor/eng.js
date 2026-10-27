@@ -50,3 +50,18 @@ export function unitOf(key, primary) {
 export function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
+
+const E12 = [1.0, 1.2, 1.5, 1.8, 2.2, 2.7, 3.3, 3.9, 4.7, 5.6, 6.8, 8.2];
+const E24 = [1.0, 1.1, 1.2, 1.3, 1.5, 1.6, 1.8, 2.0, 2.2, 2.4, 2.7, 3.0, 3.3, 3.6, 3.9, 4.3, 4.7, 5.1, 5.6, 6.2, 6.8, 7.5, 8.2, 9.1];
+
+/** The next standard value above (dir 1) or below (dir -1) x in the E12 (or E24) series:
+ *  how a part's value is stepped by ear. */
+export function stepE(x, dir, series = 12) {
+  if (!(x > 0)) return x;
+  const s = series === 24 ? E24 : E12;
+  const dec = Math.floor(Math.log10(x) + 1e-9);
+  const m = x / 10 ** dec;
+  const all = [...s.map(v => v / 10), ...s, ...s.map(v => v * 10)];
+  const cand = dir > 0 ? all.find(v => v > m * (1 + 1e-6)) : [...all].reverse().find(v => v < m * (1 - 1e-6));
+  return Number(`${+cand.toPrecision(3)}e${dec}`);
+}

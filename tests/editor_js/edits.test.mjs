@@ -71,9 +71,9 @@ test('unlinking a part keeps the parameter whole on the others', () => {
 
 test('an edit source says whose it is and what it replaced', () => {
   assert.match(editSource('250n', 'dwg: .25 coupling'), /^edit \d{4}-\d\d-\d\d: by ear; was 250n \(dwg: \.25 coupling\)$/);
-  // Editing an edit doesn't nest the attribution.
+  // Editing an edit keeps what the first one replaced.
   const twice = editSource('330n', editSource('250n', 'dwg'));
-  assert.equal((twice.match(/by ear/g) || []).length, 1);
+  assert.match(twice, /^edit [\d-]+: by ear; was 250n \(dwg\)$/);
 });
 
 test('history: undo and redo restore drawings', () => {
@@ -91,4 +91,15 @@ test('history: undo and redo restore drawings', () => {
   assert.equal(r.drawing.symbols.CC2A.value, '1u');
   assert.equal(h.undo(r.drawing).drawing.symbols.CC2A.value, '250n');
   assert.equal(h.undo(drawing()), null);
+});
+
+test('stepping a value through the E12 and E24 series', async () => {
+  const { stepE } = await import('../../varimu/listen/editor/eng.js');
+  assert.equal(stepE(250e-9, 1), 270e-9);
+  assert.equal(stepE(250e-9, -1), 220e-9);
+  assert.equal(stepE(100e3, 1), 120e3);
+  assert.equal(stepE(100e3, -1), 82e3);
+  assert.equal(stepE(8.2, 1), 10);
+  assert.equal(stepE(1.5e3, 1, 24), 1.6e3);
+  assert.equal(stepE(470e3, -1), 390e3);
 });

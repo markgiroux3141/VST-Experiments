@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 
 import {
-  addWire, copyItems, deleteItems, emptySel, moveItems, nextRef, pasteItems, pinPoints, placeSymbol,
+  addWire, copyItems, deleteItems, dragSegment, emptySel, moveItems, nextRef, pasteItems, pinPoints, placeSymbol,
   renameRef, route, selectBox, snap, tidy, turnItems,
 } from '../../varimu/listen/editor/geom.js';
 
@@ -112,4 +112,33 @@ test('routes and renames', () => {
   assert.equal(d.symbols.W1.fields.Transformer, 'T9');
   assert.ok(!renameRef(d, 'W1', 'T9'));
   assert.ok(!renameRef(d, 'W1', '9x'));
+});
+
+test('dragging a wire segment sideways keeps its ends', () => {
+  const d = blank();
+  placeSymbol(d, lib, 'R', 0, 0);
+  placeSymbol(d, lib, 'R', 20.32, 0);
+  addWire(d, [[0, 3.81], [0, 7.62], [20.32, 7.62], [20.32, 3.81]]);
+  dragSegment(d, lib, 0, 1, 3, 5.08); // the horizontal middle segment, down by 5.08 (dx ignored)
+  assert.deepEqual(d.wires[0], [[0, 3.81], [0, 12.7], [20.32, 12.7], [20.32, 3.81]]);
+  dragSegment(d, lib, 0, 0, 2.54, 0); // the first (vertical) segment: its end at the pin stays
+  assert.deepEqual(d.wires[0][0], [0, 3.81]);
+  assert.deepEqual(d.wires[0][1], [2.54, 3.81]);
+  for (let i = 1; i < d.wires[0].length; i++) {
+    const [p, q] = [d.wires[0][i - 1], d.wires[0][i]];
+    assert.ok(p[0] === q[0] || p[1] === q[1], 'orthogonal');
+  }
+});
+
+test('what sits on a dragged segment goes with it', () => {
+  const d = blank();
+  placeSymbol(d, lib, 'R', 0, 0);
+  placeSymbol(d, lib, 'R', 20.32, 0);
+  addWire(d, [[0, -3.81], [0, -10.16], [20.32, -10.16], [20.32, -3.81]]);
+  addWire(d, [[10.16, -10.16], [10.16, -15.24]]); // a T on the top segment
+  d.labels.push({ name: 'bp', x: 5.08, y: -10.16 });
+  dragSegment(d, lib, 0, 1, 0, -2.54);
+  assert.deepEqual([d.labels[0].x, d.labels[0].y], [5.08, -12.7]);
+  assert.deepEqual(d.wires[1][0], [10.16, -12.7]);
+  assert.deepEqual(d.wires[0][0], [0, -3.81]);
 });

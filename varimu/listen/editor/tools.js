@@ -14,7 +14,7 @@
 //   section  drag a frame, then name it
 
 import {
-  addWire, copyItems, deleteItems, emptySel, frameContents, moveItems, pasteItems, placeSymbol,
+  addWire, copyItems, deleteItems, dragSegment, emptySel, frameContents, moveItems, pasteItems, placeSymbol,
   round4, route, selectBox, selSize, snap, tf, turnItems,
 } from './geom.js';
 import { groundSvg, unitSvg } from './view.js';
@@ -72,6 +72,12 @@ export class Tools {
     const t = this.view.hit(wx, wy, r);
     if (t?.t === 'pin') { this.op = { kind: 'pinwire', from: [t.p.x, t.p.y], target: t, sx, sy }; return; }
     if (!t) { this.op = { kind: 'box', a: [wx, wy], sx, sy, add: e.shiftKey }; return; }
+    if (t.t === 'wire' && !e.shiftKey && !(this.sel.wires.includes(t.i) && selSize(this.sel) > 1)) {
+      // A wire on its own: dragging moves the segment under the pointer sideways.
+      this.select(only({ kind: 'wires', id: t.i }), t.net ?? -1);
+      this.op = { kind: 'segment', wi: t.i, j: t.j, sx, sy, w0: [wx, wy], snapshot: clone(this.d), last: [0, 0] };
+      return;
+    }
     const item = itemOf(t);
     let sel = this.sel;
     if (e.shiftKey) sel = toggle(sel, item);
@@ -99,6 +105,16 @@ export class Tools {
       op.last = [dx, dy];
       const tmp = clone(op.snapshot);
       moveItems(tmp, this.lib, op.sel, dx, dy);
+      op.preview = true;
+      this.view.load(tmp, this.state().analysis, { preview: true });
+      return;
+    }
+    if (op?.kind === 'segment' && op.moved) {
+      const dx = snap(this.world[0] - op.w0[0]), dy = snap(this.world[1] - op.w0[1]);
+      if (dx === op.last[0] && dy === op.last[1]) return;
+      op.last = [dx, dy];
+      const tmp = clone(op.snapshot);
+      dragSegment(tmp, this.lib, op.wi, op.j, dx, dy);
       op.preview = true;
       this.view.load(tmp, this.state().analysis, { preview: true });
       return;
@@ -137,6 +153,12 @@ export class Tools {
         const [dx, dy] = op.last, n = selSize(op.sel);
         this.state().drawing = op.snapshot; // the drag previewed a copy
         this.apply(`move ${n === 1 ? describe(op.sel) : `${n} items`}`, d => moveItems(d, this.lib, op.sel, dx, dy));
+      } else if (op.preview) this.view.load(this.d, this.state().analysis);
+    } else if (op.kind === 'segment') {
+      if (op.moved && (op.last[0] || op.last[1])) {
+        this.state().drawing = op.snapshot;
+        const [dx, dy] = op.last;
+        this.apply('drag a wire', d => dragSegment(d, this.lib, op.wi, op.j, dx, dy));
       } else if (op.preview) this.view.load(this.d, this.state().analysis);
     } else if (op.kind === 'resize') {
       if (op.frame) {

@@ -560,6 +560,38 @@ B4's first part: its step 2 is most of B4's loop.
   checks still pass), box select + Delete (2 problems), undo, duplicate.
 - **Tests:** `tests/test_editor.py`, 24 tests.
 
+*Status 2026-10-26: step 4 (polish), a first pass.*
+- **Value stepping.** ↑ / ↓ in a value field step to the next standard value (E12;
+  Shift: E24) and apply at once. The field keeps the focus, so a value can be walked
+  and listened to (220n, 270n, 330n, …). An edit of an edit keeps what the first one
+  replaced.
+- **Wire segments.** Dragging a wire moves the segment under the pointer sideways. The
+  wire's ends stay on their pins (jogs are added), and labels, grounds and T junctions
+  on the segment go with it. A wire in a multi-selection moves with the selection.
+- **Command palette** (Ctrl+K): place any part (rotary decks by size), pick a tool, go
+  to a section, find a part or node, render, save, undo, start a new circuit; typed
+  words filter.
+- **Shortcut sheet** (? or the header's ?).
+- **Hover.** The hovered pin is ringed in select mode ("drag to wire").
+- **Speed.** A full redraw of the 670 (154 parts, 313 wires) takes 10 ms in Chrome, so
+  dragging previews redraw whole on each grid step.
+- **Checked in Chrome:**
+  - RL stepped 470k → 560k → 680k, keeping its first provenance;
+  - the B+ segment dragged up with its `bp` label (the checks pass);
+  - `scripts/editor_draw_triode.py` still draws the identical file.
+- **Tests:** Node, 7 edit and 9 geometry tests.
+- **Screenshots:** `docs/editor_mockups/step4_*.png`.
+
+*B4a's done-when, 2026-10-26:*
+- **Met:** the hand-written circuits open and compile back to their IR; the triode stage
+  drawn from scratch; the broken EQP-1A's faults on the canvas; tweak-to-hear measured.
+- **Open, for the user:**
+  - the EQP-1A drawn by hand in the editor, saved as `pultec_eqp1a_drawn`
+    (`tests/test_editor.py::test_eqp1a_drawn_by_hand` compares it with the hand-written
+    IR at all 84 switch combinations; skipped until it exists). The generated drawing
+    shows the part and node names to use;
+  - the look at each step: `docs/editor_mockups/step*.png`, or the page itself.
+
 **B4. The editor loop.** The tweak-and-listen page generalized to any circuit:
 its parameters come from the circuit file (with sources and bounds; front-panel
 controls separate from parts), renders run on short loops in the background as

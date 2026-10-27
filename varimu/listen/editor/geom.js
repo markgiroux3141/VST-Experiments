@@ -293,3 +293,29 @@ export function renameRef(d, from, to) {
   for (const s of Object.values(d.symbols)) if (s.fields.Transformer === from) s.fields.Transformer = to;
   return true;
 }
+
+/** Drag segment j of wire wi sideways by (dx, dy): a horizontal segment moves up or down,
+ *  a vertical one left or right; the wire's ends stay put (a jog is added at an end that
+ *  moved), and wires ending on a moved corner follow it. */
+export function dragSegment(d, lib, wi, j, dx, dy) {
+  const w = d.wires[wi].map(p => [...p]), a = w[j], b = w[j + 1];
+  const horiz = Math.abs(a[1] - b[1]) < EPS, vert = Math.abs(a[0] - b[0]) < EPS;
+  const mx = snap(vert || !horiz ? dx : 0), my = snap(horiz || !vert ? dy : 0);
+  if (!mx && !my) return;
+  const moves = new Map();
+  const shift = p => [round4(p[0] + mx), round4(p[1] + my)];
+  const startIsEnd = j === 0, endIsEnd = j + 1 === w.length - 1;
+  if (!startIsEnd) moves.set(key(...a), shift(a));
+  if (!endIsEnd) moves.set(key(...b), shift(b));
+  // What sits on the segment goes with it: labels, grounds, wires ending on it (T junctions).
+  const onSeg = p => onSegment(p, a, b) && !(startIsEnd && same(p, a)) && !(endIsEnd && same(p, b));
+  for (const l of [...d.labels, ...d.grounds]) if (onSeg([l.x, l.y])) [l.x, l.y] = shift([l.x, l.y]);
+  d.wires.forEach((o, i) => { if (i !== wi) for (const p of [o[0], o.at(-1)]) if (onSeg(p)) moves.set(key(...p), shift(p)); });
+  d.wires[wi] = [...w.slice(0, j), ...(startIsEnd ? [a] : []), shift(a), shift(b), ...(endIsEnd ? [b] : []), ...w.slice(j + 2)];
+  reattach(d, { ...emptySel(), wires: [wi], labels: d.labels.map((_, i) => i), grounds: d.grounds.map((_, i) => i) }, moves);
+}
+
+function onSegment(p, a, b) {
+  if (Math.abs((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) > EPS * Math.max(1, Math.hypot(b[0] - a[0], b[1] - a[1]))) return false;
+  return p[0] >= Math.min(a[0], b[0]) - EPS && p[0] <= Math.max(a[0], b[0]) + EPS && p[1] >= Math.min(a[1], b[1]) - EPS && p[1] <= Math.max(a[1], b[1]) + EPS;
+}

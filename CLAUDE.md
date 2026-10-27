@@ -24,9 +24,11 @@ circuit format with the 670 as its first file, byte-identical IR) is done
 measurement profiles) is done (2026-10-26); B3 (KiCad as the schematic editor) is done
 (2026-10-26: closed by the user, who turned KiCad down as the editor; it stays an
 import / export path). B4a, a schematic editor in our own web app (`/editor` of
-`varimu listen`), is in progress: steps 1-3 (view; editing values, renders and A/B, Save as;
-drawing topology, with the triode stage drawn from scratch as `triode_stage_drawn`) done
-2026-10-26; step 4 is polish, and the EQP-1A drawn by hand is the user's. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+`varimu listen`), is built (2026-10-26): steps 1-3 (view; editing values, renders and A/B,
+Save as; drawing topology, with the triode stage drawn from scratch as `triode_stage_drawn`)
+and a first polish pass (Ctrl+K command palette, ? keys, ↑ / ↓ step values through E12,
+segment dragging). Its done-when waits for the user: the EQP-1A drawn by hand in the
+editor, and the look reviewed (`docs/editor_mockups/step*.png`). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").

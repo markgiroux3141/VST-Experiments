@@ -466,3 +466,24 @@ def test_listening_stimuli_ignore_other_circuits(tmp_path, monkeypatch):
     with open(cfg / "circuits" / "fairchild_670.yaml", "a", encoding="utf-8") as f:
         f.write("\n# changed\n")
     assert prepare.code_version() != v1
+
+
+USER_DRAWING = "pultec_eqp1a_drawn"
+
+
+@pytest.mark.skipif(
+    not (REPO_ROOT / "config" / "circuits" / f"{USER_DRAWING}.drawing.json").exists(),
+    reason="the EQP-1A isn't drawn by hand in the editor yet",
+)
+def test_eqp1a_drawn_by_hand():
+    """B4a's done-when (moved from B3): the EQP-1A drawn by hand in the editor, saved as
+    pultec_eqp1a_drawn, passes the checks and builds the hand-written IR at every switch
+    combination and with drawn tolerances. Name parts and nodes as the hand-written file
+    does (its generated drawing shows them)."""
+    from varimu.editor.drawing import drawing_path
+
+    c, found = check_drawing(load_drawing(drawing_path(USER_DRAWING)))
+    assert c.ok and [m.message for m in found] == []
+    a, b = load_circuit(circuit_path("pultec_eqp1a")), compiled_spec(c)
+    for ov in [*switch_configs(a), {"passive_spread": 1.0, "passive_seed": 7}]:
+        assert _same_ir(a, b, ov) == [], ov

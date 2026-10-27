@@ -238,6 +238,7 @@
   .frameghost { fill: rgba(255,255,255,.02); stroke: var(--frame); }
   .wireghost { fill: none; stroke: var(--accent); stroke-width: 1.6px; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; stroke-linejoin: round; }
   .cursorpt { fill: var(--accent); }
+  .pinhover { fill: none; stroke: var(--accent); stroke-width: 1.4px; vector-effect: non-scaling-stroke; }
   .ghostpart { opacity: .6; }
   .ghostpart path, .ghostpart line { stroke: var(--accent) !important; }
   #prompt { position: absolute; z-index: 30; display: none; padding: 6px; border-radius: 8px; background: var(--chrome2);
@@ -254,6 +255,26 @@
   .refin:focus { border-color: var(--accent); background: var(--chrome2); }
   .refin.bad { border-color: var(--fault); }
   .ctlrow { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; padding: 4px 0; border-top: 1px solid var(--line); }
+
+  /* --- Command palette and shortcut sheet --- */
+  .modal { position: fixed; inset: 0; z-index: 50; display: none; background: rgba(6, 7, 9, .55); backdrop-filter: blur(2px); }
+  .modal.on { display: block; }
+  .modal .panel { position: absolute; left: 50%; top: 14%; transform: translateX(-50%); width: min(620px, 92vw);
+                  background: var(--chrome); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.6); overflow: hidden; }
+  #cmdkin { width: 100%; font: 500 15px var(--ui); color: var(--ink); background: transparent; border: none; border-bottom: 1px solid var(--line);
+            padding: 14px 16px; outline: none; }
+  #cmdklist { max-height: 52vh; overflow: auto; padding: 6px; }
+  .cmd { display: flex; align-items: baseline; gap: 12px; padding: 8px 10px; border-radius: 7px; cursor: pointer; }
+  .cmd.on { background: var(--chrome3); }
+  .cmd.on span { color: var(--accent); }
+  .cmd small { margin-left: auto; color: var(--faint); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+  #help .panel { top: 8%; width: min(860px, 94vw); padding: 18px 22px 22px; }
+  #help h3 { margin: 0 0 12px; font: 650 15px var(--label); letter-spacing: .03em; }
+  #help .sheet { columns: 2 300px; column-gap: 34px; }
+  #help section { break-inside: avoid; margin-bottom: 16px; }
+  #help h5 { margin: 0 0 6px; font: 600 10.5px var(--label); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+  #help section div { display: flex; gap: 10px; align-items: baseline; padding: 3px 0; font-size: 12.5px; }
+  #help kbd { min-width: 92px; text-align: center; color: var(--ink); background: var(--chrome2); padding: 1px 6px; flex: none; }
 
   /* --- Footer --- */
   footer { grid-area: bot; display: flex; align-items: center; gap: 18px; padding: 0 12px; background: var(--chrome);
@@ -282,6 +303,7 @@
   <div class="pill" id="checks" title="Pre-flight checks at every combination of switch positions"><i></i><span>checks</span></div>
   <span class="zoom" id="zoom">100%</span>
   <button class="iconbtn" id="fit" title="Fit the drawing">Fit <kbd>F</kbd></button>
+  <button class="iconbtn" id="helpbtn" title="Keys (?)">?</button>
 </header>
 
 <aside id="left">
@@ -305,6 +327,12 @@
 </main>
 
 <aside id="right"><div id="inspector"></div></aside>
+
+<div class="modal" id="cmdk"><div class="panel">
+  <input id="cmdkin" placeholder="Place a part, pick a tool, go to a section, find a part or node…" spellcheck="false" autocomplete="off">
+  <div id="cmdklist"></div>
+</div></div>
+<div class="modal" id="help"><div class="panel"><h3>Keys</h3><div class="sheet"></div></div></div>
 
 <div class="savebox" id="savebox">
   <b>Save as a new circuit</b>
@@ -333,7 +361,7 @@
 <footer>
   <span><span class="k">x</span> <span id="cx">–</span> <span class="k">y</span> <span id="cy">–</span> <span class="k">mm</span></span>
   <span id="stats"></span>
-  <span id="hint">Scroll to zoom · right-drag or Space-drag to pan · drag to select · <kbd>R</kbd> rotate · <kbd>Del</kbd> delete · <kbd>Ctrl Z</kbd> undo</span>
+  <span id="hint"><kbd>Ctrl K</kbd> commands · <kbd>?</kbd> keys · right-drag to pan · drag to select · <kbd>Ctrl Z</kbd> undo</span>
 </footer>
 
 <script type="module" src="/editor/main.js"></script>

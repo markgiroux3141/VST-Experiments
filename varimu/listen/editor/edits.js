@@ -8,10 +8,12 @@ import { parseEng } from './eng.js';
 
 export const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
-/** The default source of an edited value: whose it is, and what it replaced. */
+/** The default source of an edited value: whose it is, and what it replaced. Editing an
+ *  edit keeps what the first edit replaced (the value's real provenance). */
 export function editSource(oldValue, oldSource) {
-  const was = oldSource ? `; was ${oldValue} (${oldSource.replace(/^edit [\d-]+: (by ear; )?/, '')})` : `; was ${oldValue}`;
-  return `edit ${today()}: by ear${was}`;
+  const earlier = /^edit [\d-]+: by ear; (was .*)$/.exec(oldSource || '');
+  if (earlier) return `edit ${today()}: by ear; ${earlier[1]}`;
+  return `edit ${today()}: by ear; was ${oldValue}${oldSource ? ` (${oldSource})` : ''}`;
 }
 
 /** Where parameter `key` lives: the symbols that carry it as their Param, or the
@@ -27,7 +29,7 @@ export function paramHome(d, key) {
 /** The value text a symbol shows for a number: what varimu.kicad.values reads exactly. */
 export function engText(x) {
   if (typeof x !== 'number') return String(x);
-  if (Number.isInteger(x) && Math.abs(x) < 1e15) return String(x);
+  if (Number.isInteger(x) && Math.abs(x) < 1000) return String(x); // an int stays an int
   const a = Math.abs(x);
   const pre = [[1e9, 'G'], [1e6, 'M'], [1e3, 'k'], [1, ''], [1e-3, 'm'], [1e-6, 'u'], [1e-9, 'n'], [1e-12, 'p']]
     .find(([s]) => a >= s * 0.9995);

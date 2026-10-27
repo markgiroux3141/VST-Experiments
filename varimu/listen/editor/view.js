@@ -168,7 +168,7 @@ export class View {
     this.d.wires.forEach((w, i) => {
       for (let j = 0; j + 1 < w.length; j++) {
         const [a, b] = [w[j], w[j + 1]];
-        add(Math.min(a[0], b[0]) - 1, Math.min(a[1], b[1]) - 1, Math.max(a[0], b[0]) + 1, Math.max(a[1], b[1]) + 1, { t: 'wire', i, a, b, net: this.wireNet[i] });
+        add(Math.min(a[0], b[0]) - 1, Math.min(a[1], b[1]) - 1, Math.max(a[0], b[0]) + 1, Math.max(a[1], b[1]) + 1, { t: 'wire', i, j, a, b, net: this.wireNet[i] });
       }
     });
     for (const p of this.pins) add(p.x - 1, p.y - 1, p.x + 1, p.y + 1, { t: 'pin', p, net: p.net });
@@ -232,8 +232,9 @@ export class View {
 
   setHover(h) {
     const net = h && h.net !== undefined ? h.net : -1, ref = h && h.t === 'symbol' ? h.ref : null;
-    if (net === this.hover.net && ref === this.hover.ref) return;
-    this.hover = { net, ref };
+    const pin = h && h.t === 'pin' ? [h.p.x, h.p.y] : null;
+    if (net === this.hover.net && ref === this.hover.ref && String(pin) === String(this.hover.pin)) return;
+    this.hover = { net, ref, pin };
     this.drawOverlay();
   }
 
@@ -268,6 +269,7 @@ export class View {
       for (const el of this.netEls.get(i) || []) el.classList.add('hl');
       for (const p of this.pins) if (p.net === i) out.push(`<circle class="pindot" cx="${p.x}" cy="${p.y}" r="0.5"/>`);
     }
+    if (this.hover.pin) out.push(`<circle class="pinhover" cx="${this.hover.pin[0]}" cy="${this.hover.pin[1]}" r="0.95"/>`);
     if (this.hover.ref && !this.sel.symbols.includes(this.hover.ref)) for (const [k, b] of this.boxes) if (k.startsWith(this.hover.ref + '/'))
       out.unshift(`<rect class="hov" x="${b[0]}" y="${b[1]}" width="${b[2] - b[0]}" height="${b[3] - b[1]}" rx="0.8"/>`);
     this.overlay.innerHTML = out.join('');

@@ -3,8 +3,8 @@
 // pins. A number without a source is shown as missing and doesn't compile (CLAUDE.md,
 // hard rules); an edit's default source says it is the user's and what it replaced.
 
-import { editSource, paramHome, setInline, setParam, unlink, valueKey } from './edits.js';
-import { esc, parseEng, unitOf, withUnit } from './eng.js';
+import { editSource, engText, paramHome, setInline, setParam, unlink, valueKey } from './edits.js';
+import { esc, parseEng, stepE, unitOf, withUnit } from './eng.js';
 import { renameRef, selSize } from './geom.js';
 
 const META = new Set(['Source', 'Param', 'Genome', 'Tol', 'Unit', 'Notes']);
@@ -14,6 +14,7 @@ const DEVICE_KINDS = { Triode: ['triode'], Triode_Dual: ['triode'], Pentode: ['p
                        Diode: ['vacuum_diode', 'junction_diode'], Diode_Dual: ['vacuum_diode', 'junction_diode'] };
 
 const openFields = new Set(); // parts whose "All fields" are open
+let refocus = null; // the value field keeps the focus while ↑ / ↓ step it
 const field = (label, html, extra = '') => `<div class="field"${extra}><label>${esc(label)}</label>${html}</div>`;
 
 export function placeholder(el, info) {
@@ -71,6 +72,11 @@ export function showSymbol(el, ref, ctx) {
   el.innerHTML = out.join('');
   wire(el, ref, s, sym, params, ctx);
   wireTopology(el, ref, s, ctx);
+  if (refocus) {
+    const f = el.querySelector(`#${refocus}`);
+    refocus = null;
+    if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
+  }
 }
 
 /** The reference, the select fields and the raw fields. */
@@ -253,6 +259,7 @@ function wire(el, ref, s, sym, params, ctx) {
   const key = valueKey(s), p = key ? params[key] : null, unit = unitOf(key, sym.primary);
   const original = vin?.value, originalSrc = vsrc?.value;
   if (vin) {
+    vin.title = '↑ / ↓ step through standard values (E12; E24 with Shift)';
     vin.addEventListener('input', () => {
       const x = parseEng(vin.value);
       const isKey = x === null && params[vin.value.trim()];
@@ -262,6 +269,18 @@ function wire(el, ref, s, sym, params, ctx) {
       if (!srcTouched && vsrc && vin.value.trim() === original) vsrc.value = originalSrc;
     });
     vin.addEventListener('keydown', e => {
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !vin.disabled) {
+        // Step through the E12 series (E24 with Shift) and hear it: the value applies at once.
+        e.preventDefault();
+        const x = parseEng(vin.value) ?? (typeof p?.value === 'number' ? p.value : null);
+        if (x === null || x <= 0) return;
+        vin.value = engText(stepE(x, e.key === 'ArrowUp' ? 1 : -1, e.shiftKey ? 24 : 12));
+        vin.dispatchEvent(new Event('input'));
+        refocus = 'v-in';
+        commitValue();
+        e.stopPropagation();
+        return;
+      }
       if (e.key === 'Enter') { e.preventDefault(); commitValue(); vin.blur(); }
       if (e.key === 'Escape') { vin.value = original; vsrc.value = originalSrc; vin.dispatchEvent(new Event('input')); vin.blur(); }
       e.stopPropagation();

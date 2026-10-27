@@ -6,6 +6,7 @@
 // recompiled, re-checked, re-rendered.
 
 import { Camera } from './camera.js';
+import { Commands } from './commands.js';
 import { History, setParam } from './edits.js';
 import { esc } from './eng.js';
 import { emptySel, selSize } from './geom.js';
@@ -41,6 +42,26 @@ async function api(path, body) {
 }
 
 const listen = new Listen({ api, store });
+
+// Everything the palette (Ctrl+K) offers, from the page's state.
+const commands = new Commands(() => {
+  const out = [];
+  for (const [name, label] of PALETTE) if (lib[name]) out.push({ label: `Place ${label}`, hint: lib[name].description, run: () => tools.setMode('place', name) });
+  for (let n = 2; n <= 12; n++) out.push({ label: `Place rotary switch, ${n} positions`, hint: `SW_Rotary_${n}`, run: () => tools.setMode('place', `SW_Rotary_${n}`) });
+  for (const [mode, label, k] of [['select', 'Select', 'V'], ['wire', 'Wire', 'W'], ['label', 'Label a net', 'L'], ['ground', 'Ground', 'G'], ['frame', 'Section frame', 'S']])
+    out.push({ label: `Tool: ${label}`, hint: k, run: () => tools.setMode(mode) });
+  state.drawing.frames.forEach(f => out.push({ label: `Go to section: ${f.title}`, hint: 'section', run: () => showFrame(f) }));
+  for (const ref of Object.keys(state.drawing.symbols)) out.push({ label: `Find ${ref}`, hint: `${state.drawing.symbols[ref].symbol} · ${state.drawing.symbols[ref].value}`,
+    run: () => { select(ref, -1); cam.show(pad(view.boxes.get(ref), 14), { kMax: 10 }); } });
+  state.analysis.nets.forEach((n, i) => { if (!n.node.startsWith('n_')) out.push({ label: `Find node ${n.node === '0' ? 'ground' : n.node}`, hint: `${n.pins.length} pins`,
+    run: () => { select(emptySel(), i); const b = view.netBox(i); if (b) cam.show(pad(b, 8), { kMax: 10 }); } }); });
+  out.push({ label: 'Fit the drawing', hint: 'F', run: fit }, { label: 'Render now', hint: 'Ctrl Enter', run: () => state.analysis.ok && listen.render(state.drawing, 'render now') },
+           { label: 'Save as a circuit', hint: 'Ctrl S', run: openSave }, { label: 'Undo', hint: 'Ctrl Z', run: () => undoRedo('undo') },
+           { label: 'Redo', hint: 'Ctrl Shift Z', run: () => undoRedo('redo') }, { label: 'Keys', hint: '?', run: () => commands.openHelp() },
+           { label: 'New circuit', hint: 'a blank drawing', run: () => { $('#circuit').value = NEW; $('#circuit').dispatchEvent(new Event('change')); } });
+  return out;
+});
+$('#helpbtn').addEventListener('click', () => commands.openHelp());
 
 async function init() {
   const [symbols, circuits, parts] = await Promise.all([api('/api/editor/symbols'), api('/api/editor/circuits'), api('/api/editor/library')]);
@@ -472,6 +493,9 @@ document.addEventListener('keydown', e => {
   }
   if (!state) return;
   const mod = e.ctrlKey || e.metaKey;
+  if (commands.helpOpen()) { if (e.key === 'Escape' || e.key === '?') commands.closeHelp(); return; }
+  if (mod && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); commands.open(); return; }
+  if (e.key === '?') { commands.openHelp(); return; }
   if (mod && (e.key === 'z' || e.key === 'Z')) { e.preventDefault(); undoRedo(e.shiftKey ? 'redo' : 'undo'); return; }
   if (mod && (e.key === 'y' || e.key === 'Y')) { e.preventDefault(); undoRedo('redo'); return; }
   if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); openSave(); return; }
