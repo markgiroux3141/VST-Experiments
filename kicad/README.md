@@ -139,5 +139,6 @@ The checks run at every combination of switch positions:
   it; CLAUDE.md's lesson from the 670's supply.
 - **probe:** a probe or input that names no node.
 
-The hand-written 670 has one such finding: its T104 bridge nodes `ay` / `bk` (see
+Every hand-written circuit passes them. The 670's T104 bridge nodes `ay` / `bk` failed
+the rectifier check until T104's secondary got its self-capacitance (see
 docs/DEVICE_BUILDER_PLAN.md, B3).

@@ -359,6 +359,7 @@ CT104_pa pa3 ur 2e-10
 LT104_pb ur pb3 9.97174325972044
 CT104_pb ur pb3 2e-10
 LT104_s ay bk 2.49293581493011
+CT104_s ay bk 1e-10
 LT104_f fy fg 0.441850436774028
 * --- rectifier and time constant ---
 R136 ay bk 3900

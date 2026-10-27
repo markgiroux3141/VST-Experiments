@@ -309,12 +309,25 @@ importer's fixture.
 - **Tests**: `tests/test_kicad.py`, 15 tests (4 need kicad-cli; the drawing's skips until
   it exists), 15 s.
 
-**Open, for the user.**
-- **The 670's T104 bridge.** The checks find one thing in the hand-written 670: its
-  bridge nodes `ay` / `bk`. T104's secondary leakage feeds them, R136 is across them,
-  and there is no capacitor, which is where CLAUDE.md records ngspice stopping.
-  circuitsim runs it. A sourced secondary capacitance (as T104's primaries have)
-  would be a model change, so it comes as an option, not applied.
+**The 670's T104 bridge (decided 2026-10-26, the user: option 2).** The checks found
+one thing in the hand-written 670: its bridge nodes `ay` / `bk`. T104's secondary
+leakage feeds them, R136 is across them, and there was no capacitor, which is where
+CLAUDE.md records ngspice stopping (circuitsim ran it). The fix is a self-capacitance
+across T104's 600 ohm secondary:
+- `t104_c_sec_f`, 100 pF, provisional (a 600 ohm line winding, as the EQP-1A's HS-56);
+- a genome parameter `transformers.sidechain_output.secondary_capacitance_f`,
+  bounded 30-300 pF.
+
+Measured on circuitsim, at the default panel, before and after:
+
+| | Output difference (rms, re signal) | Peak difference | Gain reduction |
+|---|---|---|---|
+| 7 s TC1 burst | -106 dB | -91 dB | median -5.759 dB both, max difference 0.0001 dB |
+| 4 s arpeggio | -80 dB | -72 dB | median -11.407 dB both, max difference 0.003 dB |
+
+The control voltage moved by at most 2.8 mV / 18 mV of 69 / 51 V. Each fixture's IR
+gained one element (`CT104_s ay bk 1e-10`). Every hand-written circuit now passes the
+checks.
 
 **B4a. A schematic editor in our web app.** Drawing and editing circuits in
 `varimu listen` (page `/editor`) instead of KiCad, with no external tool. It's
@@ -446,7 +459,8 @@ B4's first part: its step 2 is most of B4's loop.
     Clicking one zooms to it.
   - A link can name a section or part: `#c=pultec_eqp1a&s=<section>&sel=<part>`.
   - Text hides when zoomed out, and frame titles are screen-sized overlays.
-- **On the canvas:** the 670's ay / bk finding rings its four bridge diodes. The
+- **On the canvas:** the 670's ay / bk finding rang its four bridge diodes (fixed
+  since: see B3). The
   broken EQP-1A, as a generated drawing, shows all four faults on the right parts and
   nets:
   - floating g2a;

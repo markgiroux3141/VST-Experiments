@@ -324,8 +324,9 @@ const textSvg = (cls, txt, x, y, anchor) => `<text class="${cls}" x="${x}" y="${
 
 /** A placed unit's name and value, upright, the name above the value: beside an upright
  * part (a winding's on the side away from its turns), above and below a part on its side
- * (both on the side no pin leaves from), beside a switch deck on its side (clear of the
- * wires into its contacts), above a core. `body`: the unit's drawn body (world). */
+ * (both on the side no pin leaves from; at its upper right when pins leave up and down),
+ * above an upright switch deck and beside one on its side (clear of the wires into its
+ * contacts), above a core. `body`: the unit's drawn body (world). */
 function unitTexts(sym, unit, pl, body, refText, vl) {
   const out = [], put = (cls, txt, x, y, anchor) => { if (txt) out.push(textSvg(cls, txt, x, y, anchor)); };
   const cx = (body[0] + body[2]) / 2, cy = (body[1] + body[3]) / 2;
@@ -333,7 +334,8 @@ function unitTexts(sym, unit, pl, body, refText, vl) {
   const over = (x) => x > body[0] - 1e-6 && x < body[2] + 1e-6;
   const above = () => { put('ref', refText, cx, body[1] - 3.3, 'middle'); put('val', vl, cx, body[1] - 1.5, 'middle'); };
   if (sym.kind === 'core') { put('ref', refText, cx, body[1] - 4.4, 'middle'); put('val', vl, cx, body[1] - 2.6, 'middle'); return out; }
-  if (sideways && sym.kind === 'switch') {
+  if (sym.kind === 'switch') {
+    if (!sideways) { above(); return out; }
     put('ref', refText, body[2] + 1.2, cy - 0.9, 'start'); put('val', vl, body[2] + 1.2, cy + 0.9, 'start');
     return out;
   }
@@ -341,6 +343,7 @@ function unitTexts(sym, unit, pl, body, refText, vl) {
     const down = pins.some(([x, y]) => over(x) && y > body[3] + 1e-6), up = pins.some(([x, y]) => over(x) && y < body[1] - 1e-6);
     if (down && !up) above();
     else if (up && !down) { put('ref', refText, cx, body[3] + 1.6, 'middle'); put('val', vl, cx, body[3] + 3.3, 'middle'); }
+    else if (up && down) { put('ref', refText, body[2] + 0.6, body[1] - 2.2, 'start'); put('val', vl, body[2] + 0.6, body[1] - 0.5, 'start'); }
     else { put('ref', refText, cx, body[1] - 1.5, 'middle'); put('val', vl, cx, body[3] + 1.6, 'middle'); }
     return out;
   }

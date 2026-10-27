@@ -209,13 +209,10 @@ def test_round_trip_through_kicad(name, tmp_path):
 def test_preflight_on_the_hand_written_circuits():
     assert check_circuit(load_circuit(circuit_path("pultec_eqp1a"))) == []
     assert check_circuit(load_circuit(circuit_path("triode_stage"))) == []
-    # The 670's T104 bridge: its secondary's leakage feeds ay / bk, with R136 across them
-    # and no capacitor (the node where ngspice stops: CLAUDE.md). Reported, not changed.
-    found = sorted(p.message for p in check_circuit(load_circuit(circuit_path("fairchild_670"))))
-    assert found == [
-        "node ay (DCR101, DCR103) is fed by an inductance and has no capacitor on it",
-        "node bk (DCR102, DCR104) is fed by an inductance and has no capacitor on it",
-    ]
+    # The 670's T104 bridge nodes ay / bk failed the rectifier check until T104's secondary
+    # got its self-capacitance (t104_c_sec_f, 2026-10-26; tests/test_editor.py checks the
+    # finding without it).
+    assert check_circuit(load_circuit(circuit_path("fairchild_670"))) == []
 
 
 # --- Importer errors (netlists made by hand) ----------------------------------------------------

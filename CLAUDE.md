@@ -490,9 +490,11 @@ tests skip when ngspice is missing.
   with nothing on it, until T302's winding capacitance and the selenium cells'
   capacitance went in: keep a capacitance on every rectifier node.
   `varimu.preflight` checks this for diode nodes an inductor or winding feeds (a node
-  fed through resistance, like the EQP-1A's 6X4 cathode, is fine); the 670's T104
-  bridge nodes ay / bk fail it (R136 across, no capacitor; reported in the device
-  builder plan's B3, not changed).
+  fed through resistance, like the EQP-1A's 6X4 cathode, is fine). The 670's T104
+  bridge nodes ay / bk failed it until T104's secondary got a self-capacitance
+  (`t104_c_sec_f`, 100 pF, provisional, genome-bounded 30-300 pF; 2026-10-26, the
+  user's choice): renders moved by -106 dB (TC1 burst) / -80 dB (clip) rms, gain
+  reduction by <= 0.003 dB. Every hand-written circuit now passes the checks.
 - **Speed since Phase 3 (measured 2026-10-21).** circuitsim 14x slower than
   real time on the 7 s TC1 burst and 36x on the 4 s clip (Phase 2: 5.8x /
   7.3x), plus 1 s of settling per render: 45 device ports instead of 22, and

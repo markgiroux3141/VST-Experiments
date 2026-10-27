@@ -2559,6 +2559,13 @@
      "area_m2": 0.0004
     },
     {
+     "kind": "capacitor",
+     "name": "CT104_s",
+     "a": "ay",
+     "b": "bk",
+     "c_f": 1e-10
+    },
+    {
      "kind": "inductor",
      "name": "LT104_f_lk",
      "a": "fy",

@@ -71,6 +71,7 @@ values:
   t102_c_half_f: {value: 200.0e-12, genome: transformers.output.winding_capacitance_f, source: "provisional: model knowledge (push-pull output primaries, 100-500 pF)"}
   t103_c_half_f: {value: 100.0e-12, genome: transformers.sidechain_input.winding_capacitance_f, source: "provisional: model knowledge (secondaries of a small step-up transformer, 50-200 pF)"}
   t104_c_half_f: {value: 200.0e-12, genome: transformers.sidechain_output.winding_capacitance_f, source: "provisional: model knowledge (push-pull primaries, 100-500 pF)"}
+  t104_c_sec_f: {value: 100.0e-12, genome: transformers.sidechain_output.secondary_capacitance_f, source: "provisional: model knowledge (self-capacitance of a 600 ohm line winding, as the EQP-1A's HS-56)", notes: "across the secondary (the bridge's ay / bk): it takes the leakage's current when the bridge cuts off (the pre-flight rectifier check; added 2026-10-26, the user's choice)"}
   # Phase 2: every transformer is windings on a Jiles-Atherton core
   # (varimu.devices.core; materials in config/magnetics.yaml), with the
   # core's joint gap and classical eddy-current loss on the core node. Per
@@ -577,7 +578,7 @@ sections:
         transformer:
           pa: {nodes: [pa3, ur], c: t104_c_half_f}
           pb: {nodes: [ur, pb3], c: t104_c_half_f}
-          s: {nodes: [ay, bk], ratio: t104_sec_per_half}
+          s: {nodes: [ay, bk], ratio: t104_sec_per_half, c: t104_c_sec_f}
           f: {nodes: [fy, fg], ratio: t104_fb_per_half}
         core: {material: t104_core_material, area_m2: t104_core_area_m2, path_m: t104_core_path_m, gap_m: t104_gap_m}
         turns: t104_turns

@@ -91,6 +91,7 @@ transformers:
     leakage_h:              {min: 5.0e-3, max: 60.0e-3, unit: H, source: "provisional: model knowledge (around the slice's k = 0.999)", notes: "referred to a primary half"}
     winding_resistance_ohm: {min: TBD, max: TBD, unit: ohm, source: TBD}
     winding_capacitance_f:  {min: 100.0e-12, max: 500.0e-12, unit: F, source: "provisional: model knowledge (push-pull primaries)", notes: "per primary half"}
+    secondary_capacitance_f: {min: 30.0e-12, max: 300.0e-12, unit: F, source: "provisional: model knowledge (600 ohm line windings, as the EQP-1A's HS-56)", notes: "across the 600 ohm secondary"}
 
 sidechain_threshold:
   # The AC THRESHOLD dual tapped pot (R115A/B) and R113/R114 off its taps

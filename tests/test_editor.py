@@ -211,8 +211,19 @@ def test_other_circuits_compile_to_the_same_ir(name):
             assert _same_ir(a, b, ov, cores) == [], (ov, cores)
 
 
-def test_670_findings_land_on_the_bridge():
-    d = generated_drawing(load_circuit(circuit_path("fairchild_670")))
+def test_670_bridge_without_its_secondary_capacitance():
+    """The 670 passes the checks; without T104's secondary capacitance (added 2026-10-26)
+    its bridge nodes fail the rectifier check, and the finding lands on the bridge."""
+    import copy
+    import dataclasses
+
+    spec = load_circuit(circuit_path("fairchild_670"))
+    assert check_drawing(generated_drawing(spec))[1] == []
+    sections = copy.deepcopy(list(spec.sections))
+    for s in sections:
+        if "T104" in s["parts"]:
+            del s["parts"]["T104"]["transformer"]["s"]["c"]
+    d = generated_drawing(dataclasses.replace(spec, sections=tuple(sections)))
     c, found = check_drawing(d)
     rect = [m for m in found if m.check == "rectifier"]
     assert len(rect) == 2

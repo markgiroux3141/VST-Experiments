@@ -1,6 +1,6 @@
 {
- "when": "2026-10-24T04:25:08",
- "code": "0.1.0+429a4862465e",
+ "when": "2026-10-27T02:37:41",
+ "code": "0.1.0+57d1b04eeaf4",
  "engine_build": "407e23b8b1c0a1be",
  "overrides": {},
  "program_clip": "clip:Arpeggio04b_120_m_D#_16b.WAV",
@@ -39,7 +39,7 @@
     "gain_reduction_db": 0.0
    },
    "4": {
-    "attack_cv_63_ms": -0.0003,
+    "attack_cv_63_ms": 0.0,
     "release_cv_63_s": 0.0,
     "release_cv_90_s": 0.0,
     "gain_reduction_db": 0.0
@@ -56,8 +56,8 @@
   "burst_tc1": {
    "excerpt": "excerpt:burst_tc1",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -82.5,
-   "cv_max_v": 0.0036,
+   "out_rms_db": -82.9,
+   "cv_max_v": 0.0043,
    "cv_min_v": -64.35,
    "passes": true,
    "bound": [
@@ -69,7 +69,7 @@
    "excerpt": "excerpt:burst_tc2",
    "reference": "exact ngspice (linear)",
    "out_rms_db": -82.5,
-   "cv_max_v": 0.0033,
+   "cv_max_v": 0.0031,
    "cv_min_v": -64.27,
    "passes": true,
    "bound": [
@@ -81,7 +81,7 @@
    "excerpt": "excerpt:burst_tc3",
    "reference": "exact ngspice (linear)",
    "out_rms_db": -84.5,
-   "cv_max_v": 0.002,
+   "cv_max_v": 0.0022,
    "cv_min_v": -64.19,
    "passes": true,
    "bound": [
@@ -92,8 +92,8 @@
   "burst_tc4": {
    "excerpt": "excerpt:burst_tc4",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -85.0,
-   "cv_max_v": 0.0019,
+   "out_rms_db": -84.6,
+   "cv_max_v": 0.0022,
    "cv_min_v": -64.11,
    "passes": true,
    "bound": [
@@ -104,9 +104,9 @@
   "clip_loudest": {
    "excerpt": "excerpt:clip_loudest:clip:Arpeggio04b_120_m_D#_16b.WAV@0.600-0.850s",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -76.2,
-   "cv_max_v": 0.0046,
-   "cv_min_v": -80.75,
+   "out_rms_db": -76.1,
+   "cv_max_v": 0.006,
+   "cv_min_v": -80.74,
    "passes": true,
    "bound": [
     -73.0,
@@ -117,7 +117,7 @@
    "excerpt": "excerpt:clip_hf:clip:Arpeggio04b_120_m_D#_16b.WAV@2.350-2.600s",
    "reference": "exact ngspice (linear)",
    "out_rms_db": -71.7,
-   "cv_max_v": 0.0076,
+   "cv_max_v": 0.006,
    "cv_min_v": -76.57,
    "passes": true,
    "bound": [
@@ -128,8 +128,8 @@
   "clip_vs_converged": {
    "excerpt": "clip:Arpeggio04b_120_m_D#_16b.WAV",
    "reference": "circuitsim converged",
-   "out_rms_db": -77.1,
-   "cv_max_v": 0.102,
+   "out_rms_db": -77.3,
+   "cv_max_v": 0.0899,
    "cv_min_v": -86.92,
    "passes": true,
    "bound": [

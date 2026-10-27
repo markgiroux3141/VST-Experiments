@@ -1,0 +1,312 @@
+{
+ "eqp1a drums": {
+  "case": "eqp1a drums",
+  "circuit": "pultec_eqp1a",
+  "panel": {
+   "lf_boost": 0.6,
+   "lf_freq_hz": 60,
+   "hf_boost": 0.5,
+   "hf_boost_freq_khz": 10
+  },
+  "clip": "drums_setmefree.wav",
+  "start_s": 1.0,
+  "seconds": 3.0,
+  "rows": [
+   {
+    "setting": "production",
+    "x_realtime": 27.399943000016112,
+    "x_realtime_steady": 20.549957250012085,
+    "cached": true
+   },
+   {
+    "setting": "error control off",
+    "x_realtime": 15.23575993332391,
+    "x_realtime_steady": 11.426819949992932,
+    "cached": true,
+    "null_db": -240.0,
+    "band_max_db": 0.0
+   },
+   {
+    "setting": "+ 48 kHz",
+    "x_realtime": 4.09278183337301,
+    "x_realtime_steady": 3.0695863750297576,
+    "cached": true,
+    "null_db": -52.259656081517846,
+    "band_max_db": 0.06489390936141604
+   },
+   {
+    "setting": "+ 48 kHz trbdf2",
+    "x_realtime": 2.5027696999410787,
+    "x_realtime_steady": 1.8770772749558091,
+    "cached": true,
+    "null_db": -47.12110455297888,
+    "band_max_db": 0.2776962087130883
+   },
+   {
+    "setting": "+ 48 kHz trap",
+    "x_realtime": 1.6358135333284736,
+    "x_realtime_steady": 1.2268601499963552,
+    "cached": true,
+    "null_db": -42.50463552259411,
+    "band_max_db": 0.39271888260484644
+   },
+   {
+    "setting": "+ 48 kHz trap, loose Newton",
+    "x_realtime": 1.303065966659536,
+    "x_realtime_steady": 0.977299474994652,
+    "cached": true,
+    "null_db": -42.50471905422059,
+    "band_max_db": 0.39291038173010406
+   },
+   {
+    "setting": "+ 48 kHz trap 1x, loose Newton",
+    "x_realtime": 0.8389186666657528,
+    "x_realtime_steady": 0.6291889999993145,
+    "cached": true,
+    "null_db": -26.937976558861806,
+    "band_max_db": 2.25629832561134
+   }
+  ]
+ },
+ "eqp1a mix": {
+  "case": "eqp1a mix",
+  "circuit": "pultec_eqp1a",
+  "panel": {
+   "lf_boost": 0.6,
+   "lf_freq_hz": 60,
+   "hf_boost": 0.5,
+   "hf_boost_freq_khz": 10
+  },
+  "clip": "mix_longwayhome.wav",
+  "start_s": 10.0,
+  "seconds": 3.0,
+  "rows": [
+   {
+    "setting": "production",
+    "x_realtime": 8.388324766575048,
+    "x_realtime_steady": 6.291243574931286,
+    "cached": true
+   },
+   {
+    "setting": "error control off",
+    "x_realtime": 7.656402866666515,
+    "x_realtime_steady": 5.742302149999887,
+    "cached": true,
+    "null_db": -240.0,
+    "band_max_db": 0.0
+   },
+   {
+    "setting": "+ 48 kHz",
+    "x_realtime": 3.856917066654811,
+    "x_realtime_steady": 2.8926877999911085,
+    "cached": true,
+    "null_db": -67.66349699987691,
+    "band_max_db": 0.013793052069758005
+   },
+   {
+    "setting": "+ 48 kHz trbdf2",
+    "x_realtime": 2.3320787333262465,
+    "x_realtime_steady": 1.7490590499946848,
+    "cached": true,
+    "null_db": -60.00781482700628,
+    "band_max_db": 0.12668652518427592
+   },
+   {
+    "setting": "+ 48 kHz trap",
+    "x_realtime": 1.410349166796853,
+    "x_realtime_steady": 1.0577618750976399,
+    "cached": true,
+    "null_db": -54.6546334223918,
+    "band_max_db": 0.19896371155290637
+   },
+   {
+    "setting": "+ 48 kHz trap, loose Newton",
+    "x_realtime": 1.7267484332745273,
+    "x_realtime_steady": 1.2950613249558955,
+    "cached": true,
+    "null_db": -54.65469636168539,
+    "band_max_db": 0.1991122207167635
+   },
+   {
+    "setting": "+ 48 kHz trap 1x, loose Newton",
+    "x_realtime": 0.8422758666177591,
+    "x_realtime_steady": 0.6317068999633193,
+    "cached": true,
+    "null_db": -40.6200024096913,
+    "band_max_db": 1.0328421999301085
+   }
+  ]
+ },
+ "670 arpeggio": {
+  "case": "670 arpeggio",
+  "circuit": "fairchild_670",
+  "panel": {
+   "input_atten_db": 0.0,
+   "ac_threshold": 0.8,
+   "time_constant": 2
+  },
+  "clip": "Arpeggio04b_120_m_D#_16b.WAV",
+  "start_s": 0.0,
+  "seconds": 3.0,
+  "rows": [
+   {
+    "setting": "production",
+    "x_realtime": 55.39826200002184,
+    "x_realtime_steady": 41.548696500016376,
+    "cached": true
+   },
+   {
+    "setting": "error control off",
+    "x_realtime": 41.01191573326165,
+    "x_realtime_steady": 30.75893679994624,
+    "cached": true,
+    "null_db": -62.33516235069829,
+    "band_max_db": 0.0041609194452689735,
+    "cv_rms_v": 0.014608199858905612,
+    "cv_max_v": 0.13314554445967985,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "+ 48 kHz",
+    "x_realtime": 22.534307933412492,
+    "x_realtime_steady": 16.90073095005937,
+    "cached": true,
+    "null_db": -53.80553741512593,
+    "band_max_db": 0.011259786236038849,
+    "cv_rms_v": 0.03961596689825447,
+    "cv_max_v": 0.23853860045770148,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "+ 48 kHz trbdf2",
+    "x_realtime": 11.001147233260175,
+    "x_realtime_steady": 8.250860424945131,
+    "cached": true,
+    "null_db": -54.1907657952737,
+    "band_max_db": 0.015514861148773207,
+    "cv_rms_v": 0.03556764000760397,
+    "cv_max_v": 0.25347129900319487,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "+ 48 kHz trap",
+    "x_realtime": 9.358912399969995,
+    "x_realtime_steady": 7.019184299977496,
+    "cached": true,
+    "null_db": -43.298587405711196,
+    "band_max_db": 0.055911612430627144,
+    "cv_rms_v": 0.13839992597872847,
+    "cv_max_v": 0.8312326936951564,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "+ 48 kHz trap, loose Newton",
+    "x_realtime": 7.466362133311729,
+    "x_realtime_steady": 5.5997715999837965,
+    "cached": true,
+    "null_db": -43.40714714429447,
+    "band_max_db": 0.055275605120336024,
+    "cv_rms_v": 0.13631509350563673,
+    "cv_max_v": 0.8283716707459376,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "+ 48 kHz trap 1x, loose Newton",
+    "x_realtime": 5.4237931667206185,
+    "x_realtime_steady": 4.067844875040464,
+    "cached": true,
+    "null_db": -38.3159125632953,
+    "band_max_db": 0.34922025616124586,
+    "cv_rms_v": 0.23926200359687322,
+    "cv_max_v": 1.33556699944414,
+    "cv_mean_v": -77.435691261394
+   }
+  ]
+ },
+ "670 mix": {
+  "case": "670 mix",
+  "circuit": "fairchild_670",
+  "panel": {
+   "input_atten_db": 0.0,
+   "ac_threshold": 0.8,
+   "time_constant": 2
+  },
+  "clip": "mix_longwayhome.wav",
+  "start_s": 10.0,
+  "seconds": 3.0,
+  "rows": [
+   {
+    "setting": "production",
+    "x_realtime": 31.339105600025505,
+    "x_realtime_steady": 23.50432920001913,
+    "cached": true
+   },
+   {
+    "setting": "error control off",
+    "x_realtime": 27.86987549997866,
+    "x_realtime_steady": 20.902406624983996,
+    "cached": true,
+    "null_db": -72.55089548915052,
+    "band_max_db": 0.0008661397480196342,
+    "cv_rms_v": 0.0062662505102929105,
+    "cv_max_v": 0.05659420343933874,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "+ 48 kHz",
+    "x_realtime": 18.735746166668832,
+    "x_realtime_steady": 14.051809625001624,
+    "cached": true,
+    "null_db": -61.020174486304825,
+    "band_max_db": 0.014106870101059599,
+    "cv_rms_v": 0.020589210332716636,
+    "cv_max_v": 0.1452913540948373,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "+ 48 kHz trbdf2",
+    "x_realtime": 10.873961799933264,
+    "x_realtime_steady": 8.155471349949948,
+    "cached": true,
+    "null_db": -58.02254189561359,
+    "band_max_db": 0.020791693249208265,
+    "cv_rms_v": 0.024606014499030618,
+    "cv_max_v": 0.1537599820245248,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "+ 48 kHz trap",
+    "x_realtime": 6.878923200070858,
+    "x_realtime_steady": 5.1591924000531435,
+    "cached": true,
+    "null_db": -49.437892708514696,
+    "band_max_db": 0.022131936062663726,
+    "cv_rms_v": 0.08621344137119753,
+    "cv_max_v": 0.5862038953417681,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "+ 48 kHz trap, loose Newton",
+    "x_realtime": 5.980407466801505,
+    "x_realtime_steady": 4.485305600101128,
+    "cached": true,
+    "null_db": -49.521651957029356,
+    "band_max_db": 0.022616056241190563,
+    "cv_rms_v": 0.0855344678677319,
+    "cv_max_v": 0.5768273694628618,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "+ 48 kHz trap 1x, loose Newton",
+    "x_realtime": 5.187453499995172,
+    "x_realtime_steady": 3.890590124996379,
+    "cached": true,
+    "null_db": -35.72106695644284,
+    "band_max_db": 0.48733971100636353,
+    "cv_rms_v": 0.1689869760815368,
+    "cv_max_v": 0.9111059171721649,
+    "cv_mean_v": -59.53136859601691
+   }
+  ]
+ }
+}
