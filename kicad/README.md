@@ -1,6 +1,8 @@
-# KiCad as the schematic editor (device builder B3)
+# KiCad import and export (device builder B3)
 
-Draw a circuit in KiCad (10.x) with the `varimu` symbol library, and
+Circuits are drawn in our own schematic editor (`varimu listen`, page `/editor`; device
+builder B4a). KiCad stays as an import / export path, for other people's designs: draw a
+circuit in KiCad (10.x) with the `varimu` symbol library, and
 `varimu kicad-import` turns the drawing into a circuit file
 (`config/circuits/*.yaml`, the format of `varimu/circuit/spec.py` and `builder.py`).
 The import runs the pre-flight checks before writing anything.
@@ -10,7 +12,6 @@ The import runs the pre-flight checks before writing anything.
 | `varimu.kicad_sym` | the symbol library, one symbol per macro part (written by `uv run varimu kicad-library` from `varimu/kicad/symbols.py`) |
 | `generated/pultec_eqp1a/` | the EQP-1A exported from its hand-written file: label-connected, a parts list rather than a drawing. It's the importer's test fixture and a starting point for a drawing |
 | `generated/pultec_eqp1a_broken/` | the same with four deliberate faults (the checks' test fixture) |
-| `pultec_eqp1a/` | where the real drawing of the EQP-1A goes (`tests/test_kicad.py` checks it once it exists) |
 
 `generated/` is rewritten by `uv run python scripts/make_kicad_fixtures.py`; don't
 edit it by hand.

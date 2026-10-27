@@ -1,8 +1,8 @@
 # Device builder: audio devices from schematics, parts with physics, an editor to play
 
 Drafted 2026-10-25 with the user, who started B1 the same day (B1 done
-2026-10-25, B2 done 2026-10-26, B3 built 2026-10-26, its done-when waiting for the
-user's drawing of the EQP-1A). It replaces
+2026-10-25, B2 done 2026-10-26, B3 done 2026-10-26; B4a, a schematic editor in our
+web app, planned 2026-10-26 after the user turned KiCad down as the editor). It replaces
 the main plan's Phases 6-8 as the next work (decided 2026-10-25, the user's call;
 the plan's Phase 5, "Closed"). Work milestones in order, each ending with its
 "done when" met and covered by tests, like the main plan and
@@ -225,14 +225,20 @@ rectifier nodes without capacitance, before anything renders.
 *Done when:* B2's circuit drawn in KiCad imports to a file that builds the same IR
 as the hand-written one, and the checks catch a deliberately broken drawing.
 
-*Status 2026-10-26: built; the done-when waits for the user's drawing.*
+*Status 2026-10-26: done (closed by the user's decision, see below).*
+
+**Closed 2026-10-26 (the user).** The user tried KiCad and doesn't want it as the
+editor ("it looks like a tool created in the 90s"; memory: "build own tools over
+legacy ones"): schematics are drawn in our own web app instead (B4a). B3 closes on what
+was measured: the generated EQP-1A imports to the hand-written IR at all 84 switch
+combinations, and the broken drawing's four faults are caught. "The EQP-1A drawn by
+hand" moves to B4a's done-when, drawn in the new editor. The KiCad route stays as an
+import / export path for other people's designs, not extended.
 
 **Decided with the user.** KiCad 10.0.7 is installed per user (the official
 installer, its signature checked against kicad.org's certificate serial), at
 `%LOCALAPPDATA%\Programs\KiCad\10.0`. The EQP-1A is generated, label-connected, as the
-importer's fixture. The user redraws it later in `kicad/pultec_eqp1a/`, and B3's
-"drawn in KiCad" closes when that drawing imports to the same IR
-(`tests/test_kicad.py::test_user_drawing_imports_to_the_same_ir`, skipped until then).
+importer's fixture.
 
 **What was built.**
 - **The library**: `kicad/varimu.kicad_sym`, 32 symbols from one table
@@ -304,12 +310,151 @@ importer's fixture. The user redraws it later in `kicad/pultec_eqp1a/`, and B3's
   it exists), 15 s.
 
 **Open, for the user.**
-- **The EQP-1A drawn by hand** (see above).
 - **The 670's T104 bridge.** The checks find one thing in the hand-written 670: its
   bridge nodes `ay` / `bk`. T104's secondary leakage feeds them, R136 is across them,
   and there is no capacitor, which is where CLAUDE.md records ngspice stopping.
   circuitsim runs it. A sourced secondary capacitance (as T104's primaries have)
   would be a model change, so it comes as an option, not applied.
+
+**B4a. A schematic editor in our web app.** Drawing and editing circuits in
+`varimu listen` (page `/editor`) instead of KiCad, with no external tool. It's
+B4's first part: its step 2 is most of B4's loop.
+*Done when:*
+- the EQP-1A, the 670 and the triode stage open as drawings and compile back to
+  their hand-written IR (`varimu.kicad.compare`: every switch combination, both core
+  models, drawn tolerances);
+- a circuit drawn from scratch in the editor (the triode stage) is saved as a new
+  circuit, compiles, passes the checks and renders;
+- the EQP-1A drawn by hand in the editor (moved from B3) compiles to the
+  hand-written IR at all 84 switch combinations;
+- the broken EQP-1A shows its four faults on the canvas;
+- the time from a value tweak to hearing it is measured on the EQP-1A and the 670
+  (B4, B8);
+- the user has seen and accepted the look at each step (screenshots).
+
+*Decided 2026-10-26 (the user).*
+- **Look:** a dark studio console. Near-black canvas, gray wires, amber selection,
+  cyan net highlight (`docs/editor_mockups/`: the three directions shown, `?theme=studio`
+  the one chosen).
+- **Sections:** one canvas with sections as titled frames, not pages. Wires may cross
+  frames. A part belongs to the frame its origin is in.
+- **Hand-written circuits stay the reference.** The 670, the EQP-1A and the triode
+  stage are never rewritten by the editor. A value tweak is an override (as `--set`)
+  until saved, and anything saved is a new circuit, e.g. `pultec_eqp1a_mine`, whose
+  drawing is its source.
+
+*Architecture (the plan's default; reconsider only with a reason).*
+- **The drawing is the source.** A circuit made in the editor is
+  `config/circuits/<name>.drawing.json`. It holds:
+  - the sidecar's content: title, input, probes, controls, values no part carries,
+    device parameters, derived values, mains, the tolerance block;
+  - frames (the sections, in order);
+  - symbols, one entry per Reference: symbol, Value, fields, a placement per unit
+    (x, y, rotation, mirror);
+  - wires (polylines), net labels and ground symbols.
+
+  Coordinates are mm, y down, on a 1.27 mm grid: `varimu/kicad/symbols.py`'s pin
+  geometry as it is. Saving also writes the compiled `<name>.yaml`, whose header says
+  it's generated and not to be edited; renders read that, unchanged.
+- **Compiling reuses the importer.** Connectivity is computed in Python
+  (`varimu/editor/`):
+  - a pin joins a wire at any point of it;
+  - a wire's end on another wire's segment is a T junction;
+  - crossing wires don't join;
+  - labels with the same name are one net (one canvas, so every label is global);
+  - ground is node 0.
+
+  The connectivity becomes a `varimu.kicad.netlist.Netlist` (frames as sheets) and goes
+  through `import_netlist` into a circuit file. The importer already resolves switch
+  decks, Core + Winding transformers, dual tubes, Param / Source / Genome values and
+  tolerance classes, and blocks a number without a source. The pre-flight checks
+  (`varimu.preflight`) and the importer's problems are mapped back onto the drawing: a
+  node to its wires and pins, a part to its symbol.
+- **Hand-written circuits get a generated drawing.** It is built from the exporter's
+  parts (`varimu.kicad.export`: symbols, fields, pin nets) in a label-connected
+  layout. It is generated on open and never saved over the hand-written file.
+- **One symbol table.** The page draws `symbols.py`'s symbols from JSON the server
+  makes from the table: SVG path data, pins with roles, field names.
+- **No dependencies.** The page is plain ES modules served by FastAPI: no npm, no
+  build step. SVG canvas, pan and zoom by a transform. A library only with the user's
+  OK, if the interaction work clearly needs one.
+- **The render cache stays warm.** Nothing goes in `varimu/{sim,circuit,devices}`:
+  - the editor lives in `varimu/editor/` and `varimu/listen/`;
+  - rendering an unsaved edit needs `RenderJob.circuit` to take a path. That one-line
+    change in `varimu/sim/runner.py` invalidates every cached render once, so it
+    comes in step 2 on its own.
+
+*Steps, each checked (tests, screenshots to the user) before the next.*
+1. **A read-only view.** `/editor`: pick a circuit, see its drawing, pan and zoom,
+   hover a net to highlight it everywhere (its labels too), click a part to see its
+   fields (value, source, genome link and bounds, tolerance class). The document
+   format, connectivity, the compiler and the generated drawings, with the round-trip
+   tests of the first done-when.
+2. **Editing parts in place.** Change a value with its source (an empty source blocks
+   compiling, as in the importer; a shared Param edits every part on it, or unlinks
+   one), swap a part type from the library (tube type, core material). Renders on a
+   short loop run in the background on every change, and the previous render is one
+   key away, loudness-matched (the listen page's machinery). "Save as" writes a new
+   circuit. The tweak-to-hear time is measured.
+3. **Drawing topology.** Place, move, rotate and mirror parts; grid-snapped wires;
+   labels and ground; delete; undo / redo; copy / paste; rotary switch decks and
+   windings as in `kicad/README.md`. The pre-flight checks run live after each edit,
+   with the problems drawn on the canvas (a floating node's wires, an unconnected
+   pin, a loop's parts). The triode stage drawn from scratch; the broken EQP-1A's
+   faults shown.
+4. **Polish.** Keyboard shortcuts, smooth wire dragging (rubber-banding wires when
+   parts move), box selection, a command palette for parts. The feel is the point of
+   this milestone, so this step gets real time.
+
+*Status 2026-10-26: step 1 done.*
+- **Code.**
+  - `varimu/editor/`:
+    - `symbols.py`: the table as JSON (SVG path data, y down; pins with their direction
+      into the body) and the placement transform;
+    - `drawing.py`: the document;
+    - `connect.py`: connectivity and the `Netlist`;
+    - `compile.py`: the importer, the checks, problems mapped onto the drawing;
+    - `layout.py`: generated drawings.
+  - The page: `varimu/listen/editor.html` with `editor/{main,view,camera,inspector,eng}.js`.
+  - The API: `varimu/listen/editor_api.py`.
+- **Problems carry their targets.** `varimu.preflight.Problem` now names the nodes and
+  IR elements each problem is about. These fields are outside equality, and messages
+  are unchanged. A loop names every element on it.
+- **Generated drawings.** Parts are in signal-flow order, a breadth-first walk from the
+  input. Two-terminal parts stack into wired vertical chains with ground at the
+  bottom; everything else gets stubs and labels. Every node keeps its name on a
+  label.
+- **Compiling back to the IR.** The generated drawings compile to the hand-written IR
+  (`varimu.kicad.compare`):
+  - the EQP-1A at all 84 switch combinations, with both core models, at the pots'
+    ends, and with drawn tolerances; its values, devices and tolerance classes come
+    back equal;
+  - the 670 at every Time Constant position, and with drawn tolerances;
+  - the triode stage.
+- **Timing.**
+  - Layout plus compile: EQP-1A 0.02 + 0.06 s, 670 0.14 + 0.08 s.
+  - The checks at every switch combination: EQP-1A 2.7 s, 670 1.2 s. The page fetches
+    them after the drawing.
+- **The page.**
+  - Pan and zoom: wheel at the cursor, a pinch, drag on the empty canvas, space + drag,
+    the middle button. F fits the drawing, Z zooms to the selection.
+  - Hovering highlights the whole net, its labels on other frames too, with a chip
+    listing its pins. Clicking a part or wire shows its fields or net in the
+    inspector.
+  - Find (`/`) jumps to a part or node.
+  - The problems are listed and drawn on the canvas: wires in red, parts ringed.
+    Clicking one zooms to it.
+  - A link can name a section or part: `#c=pultec_eqp1a&s=<section>&sel=<part>`.
+  - Text hides when zoomed out, and frame titles are screen-sized overlays.
+- **On the canvas:** the 670's ay / bk finding rings its four bridge diodes. The
+  broken EQP-1A, as a generated drawing, shows all four faults on the right parts and
+  nets:
+  - floating g2a;
+  - the loop LBAD / LPCCA;
+  - the rectifier at rka on V3;
+  - RBIAS_B's open pin.
+- **Tests:** `tests/test_editor.py`, 17 tests, ~9 s.
+- **Screenshots:** `docs/editor_mockups/step1_*.png`.
 
 **B4. The editor loop.** The tweak-and-listen page generalized to any circuit:
 its parameters come from the circuit file (with sources and bounds; front-panel
@@ -392,5 +537,6 @@ first) is kept within the physics milestones.
   and no expression language; derived values in library code. *Taken (B1,
   2026-10-25): the 670 needed no expression language, only four derived values.*
 - **Editor scope (B4).** Default: grow the existing web page; Tauri only if a
-  native window is wanted (FUTURE_DIRECTIONS.md, Decisions 3).
+  native window is wanted (FUTURE_DIRECTIONS.md, Decisions 3). *Taken (2026-10-26):
+  our own schematic editor in the web app, not KiCad (B4a).*
 - **Whether B8 comes earlier.** Default: after B4 measures it.

@@ -21,9 +21,10 @@ consistent, transitive preferences. Then the user parked Phases 6-8
 [docs/DEVICE_BUILDER_PLAN.md](docs/DEVICE_BUILDER_PLAN.md): B1 (a generic
 circuit format with the 670 as its first file, byte-identical IR) is done
 (2026-10-25); B2 (the Pultec EQP-1A, the user's choice, and per-circuit
-measurement profiles) is done (2026-10-26); B3 (KiCad as the schematic editor) is built
-(2026-10-26) and its done-when waits for the user's own drawing of the EQP-1A
-(`kicad/pultec_eqp1a/`). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+measurement profiles) is done (2026-10-26); B3 (KiCad as the schematic editor) is done
+(2026-10-26: closed by the user, who turned KiCad down as the editor; it stays an
+import / export path). B4a, a schematic editor in our own web app (`/editor` of
+`varimu listen`), is in progress: step 1, the read-only view, done 2026-10-26. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
@@ -105,6 +106,27 @@ kicad-cli skip without it. KiCad 10.0.7 is installed per user
 `$VARIMU_KICAD_CLI`, PATH, then the installer's folders. None of `varimu/kicad` or
 `preflight.py` is in the render cache key.
 
+**The schematic editor (device builder B4a, 2026-10-26).** Circuits are drawn in our
+own web app, not KiCad (the user's decision): `varimu listen`, then
+http://127.0.0.1:8765/editor (`#c=<circuit>&s=<section>&sel=<part>` links). A drawn
+circuit's source is `config/circuits/<name>.drawing.json` (`varimu/editor/drawing.py`:
+the sidecar's content, frames = sections, symbols with placements, wires, labels,
+grounds; mm, y down, 1.27 mm grid). `varimu/editor/connect.py` turns it into a
+`varimu.kicad.netlist.Netlist` (a pin joins any wire through its point, a wire's end on
+another wire is a T, crossings don't join, same-named labels are one net) and
+`compile.py` runs the KiCad importer's core on it, then `varimu.preflight` (problems
+carry their nodes and elements, mapped back onto symbols and nets). Hand-written
+circuits (670, EQP-1A, triode stage) open as generated drawings (`layout.py`, never
+saved over them) that compile back to their IR (`tests/test_editor.py`); edits to them
+save as a new circuit. The page is plain ES modules (`varimu/listen/editor.html`,
+`varimu/listen/editor/*.js`, no npm, no build step) on the API in
+`varimu/listen/editor_api.py`; the look is the dark "studio" direction the user chose
+(`docs/editor_mockups/`). Symbols come from `varimu/kicad/symbols.py`'s table as JSON.
+None of `varimu/editor` is in the render cache key. For page work, run the server with
+reload: `uv run python -m uvicorn varimu.listen.app:create_app --factory --port 8790
+--reload --reload-dir varimu/editor --reload-dir varimu/listen` (the JS is read per
+request).
+
 A fast Rust circuit simulator (`crates/circuitsim`, ngspice stays the
 reference) is planned in [docs/CIRCUIT_SIM_PLAN.md](docs/CIRCUIT_SIM_PLAN.md).
 Work its milestones in order, with the same "done when" discipline.
@@ -173,7 +195,7 @@ uv run python scripts/digitize_ge6386.py --overlays DIR   # re-digitize the 6386
 uv run --extra fast varimu render --clip data/clips/x.wav --set ac_threshold=0.7 time_constant=3 --out r.wav
 uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached
 uv run varimu render --signal burst_1000hz_0dbfs --engine ngspice   # the reference engine
-uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765
+uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765 (editor: /editor, blind A/B: /ab)
 uv run --extra fast python scripts/slice_report.py [--engine ngspice] [--clip NAME]   # curve, TC bursts, program clip -> reports/slice/
 uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~70 min cold since Phase 3, ~1 min warm)
 uv run --extra fast python scripts/transformer_report.py [--only t101 ...]   # each transformer standalone -> reports/transformers/

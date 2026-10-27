@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schematic Editor Directions</title>
+<!--
+  Static mockup of the web schematic editor's look (device builder, 2026-10-26).
+  ?theme=studio | paper | panel. Not the editor: no interaction beyond the theme switch.
+  The drawing is the EQP-1A's "interstage and 12AX7" section (config/circuits/pultec_eqp1a.yaml),
+  laid out by hand; the fault marker on fbb is an illustration, not a finding.
+-->
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--bg); color: var(--ink); font: 13px/1.4 var(--ui); display: grid;
+         grid-template: "top top top" 52px "pal can ins" 1fr "bot bot bot" 60px / 210px 1fr 320px; }
+
+  /* ---------------- Themes ---------------- */
+  body.studio {
+    --ui: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; --label: "Bahnschrift", "Segoe UI", sans-serif;
+    --mono: "Cascadia Mono", Consolas, monospace;
+    --bg: #0f1114; --chrome: #16191d; --chrome2: #1c2025; --line: #2a2f36; --ink: #e3e7ec; --muted: #8b95a1;
+    --canvas: #121519; --grid: #232830; --part: #d5dbe2; --wire: #7f93a8; --pin: #9fb0c2;
+    --accent: #f0a238; --accent-ink: #15120c; --net: #3fd0c0; --fault: #ff5d5d; --frame: #39414b; --frametitle: #8b95a1;
+    --chip: #232830; --wire-w: 2; --part-w: 2;
+  }
+  body.paper {
+    --ui: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; --label: "Segoe UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", Consolas, monospace;
+    --bg: #f3f3f1; --chrome: #ffffff; --chrome2: #f7f7f5; --line: #e2e1dc; --ink: #1c1e21; --muted: #6b6f76;
+    --canvas: #fcfcfb; --grid: #e6e6e2; --part: #1c1e21; --wire: #1f3a5f; --pin: #1f3a5f;
+    --accent: #2563eb; --accent-ink: #ffffff; --net: #e8590c; --fault: #d92d20; --frame: #b9b8b1; --frametitle: #6b6f76;
+    --chip: #ffffff; --wire-w: 1.6; --part-w: 1.6;
+  }
+  body.panel {
+    --ui: "Bahnschrift", "Segoe UI", sans-serif; --label: "Bahnschrift", "Segoe UI", sans-serif;
+    --mono: "Cascadia Mono", Consolas, monospace;
+    --bg: #14110e; --chrome: #1c1814; --chrome2: #241f19; --line: #3a3128; --ink: #eadcc0; --muted: #a8977a;
+    --canvas: #e6dcc6; --grid: #d6caaf; --part: #1e1a15; --wire: #2c251d; --pin: #2c251d;
+    --accent: #e3913a; --accent-ink: #1c1814; --net: #c0561c; --fault: #a3231a; --frame: #5b4d3b; --frametitle: #3b3127;
+    --chip: #f3ead6; --wire-w: 2.2; --part-w: 2.2;
+  }
+
+  /* ---------------- Chrome ---------------- */
+  header { grid-area: top; display: flex; align-items: center; gap: 14px; padding: 0 14px;
+           background: var(--chrome); border-bottom: 1px solid var(--line); }
+  .brand { font: 600 14px var(--label); letter-spacing: .02em; display: flex; align-items: center; gap: 8px; }
+  .brand i { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .picker { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--line);
+            border-radius: 7px; background: var(--chrome2); }
+  .picker b { font-weight: 600; }
+  .picker span { color: var(--muted); }
+  .tools { display: flex; gap: 2px; padding: 3px; background: var(--chrome2); border: 1px solid var(--line); border-radius: 8px; }
+  .tools button { all: unset; display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 6px; color: var(--muted); cursor: default; }
+  .tools button.on { background: var(--accent); color: var(--accent-ink); }
+  kbd { font: 10.5px var(--mono); opacity: .75; border: 1px solid currentColor; border-radius: 3px; padding: 0 3px; }
+  .spacer { flex: 1; }
+  .pill { display: flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px;
+          border: 1px solid color-mix(in srgb, var(--fault) 50%, transparent);
+          color: var(--fault); background: color-mix(in srgb, var(--fault) 10%, transparent); font-weight: 600; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--fault); }
+  .btn { padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--chrome2); color: var(--ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 650; }
+
+  aside { background: var(--chrome); overflow: hidden; }
+  #pal { grid-area: pal; border-right: 1px solid var(--line); padding: 12px 10px; }
+  #ins { grid-area: ins; border-left: 1px solid var(--line); padding: 14px 16px; }
+  h4 { margin: 14px 4px 6px; font: 600 11px var(--label); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  h4:first-child { margin-top: 2px; }
+  .search { padding: 6px 9px; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); background: var(--chrome2); }
+  .parts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; }
+  .tile { display: grid; justify-items: center; gap: 2px; padding: 6px 2px 4px; border-radius: 7px; border: 1px solid transparent; color: var(--muted); font-size: 11px; }
+  .tile:hover, .tile.hot { border-color: var(--line); background: var(--chrome2); color: var(--ink); }
+  .tile svg { width: 36px; height: 36px; }
+  .tile svg * { stroke: var(--ink); fill: none; stroke-width: 2.4; }
+
+  /* ---------------- Inspector ---------------- */
+  .ihead { display: flex; align-items: baseline; gap: 8px; }
+  .ihead b { font: 650 20px var(--label); letter-spacing: .01em; }
+  .ihead span { color: var(--muted); }
+  .crumb { color: var(--muted); font-size: 12px; margin: 2px 0 12px; }
+  .field { margin: 10px 0; }
+  .field label { display: block; font: 600 11px var(--label); text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin-bottom: 4px; }
+  .input { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--chrome2); }
+  .input.big { font: 600 18px var(--mono); }
+  .input.big small { font: 12px var(--ui); color: var(--muted); margin-left: auto; }
+  .input.focus { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .src { font-size: 12.5px; line-height: 1.35; }
+  .tag { display: inline-block; font: 600 10.5px var(--mono); padding: 1px 6px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .tag.gray { background: var(--chrome2); color: var(--muted); border: 1px solid var(--line); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .note { font-size: 12px; color: var(--muted); }
+  .ab { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 12px; }
+  .variant { display: grid; grid-template-columns: 26px 1fr auto; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 7px; border: 1px solid var(--line); margin-top: 6px; }
+  .variant.on { border-color: var(--accent); }
+  .variant .k { font: 700 12px var(--mono); width: 22px; height: 22px; display: grid; place-items: center; border-radius: 5px; background: var(--chrome2); }
+  .variant.on .k { background: var(--accent); color: var(--accent-ink); }
+
+  /* ---------------- Bottom ---------------- */
+  footer { grid-area: bot; display: flex; align-items: center; gap: 16px; padding: 0 14px; background: var(--chrome); border-top: 1px solid var(--line); }
+  .transport { display: flex; gap: 4px; }
+  .transport span { padding: 6px 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--chrome2); }
+  .transport span.on { border-color: var(--accent); color: var(--accent); font-weight: 650; }
+  .progress { width: 160px; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .progress div { width: 63%; height: 100%; background: var(--accent); }
+  .wave { flex: 1; height: 34px; }
+  .wave path { fill: none; stroke-width: 1.2; }
+
+  /* ---------------- Canvas ---------------- */
+  main { grid-area: can; position: relative; background: var(--canvas); overflow: hidden; }
+  main svg.sch { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .wire { stroke: var(--wire); stroke-width: var(--wire-w); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .part { stroke: var(--part); stroke-width: var(--part-w); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .part.fill { fill: var(--part); }
+  .lead { stroke: var(--part); stroke-width: var(--part-w); }
+  .jn { fill: var(--wire); }
+  .ref { font: 600 13px var(--label); fill: var(--part); }
+  .val { font: 12.5px var(--mono); fill: var(--muted); }
+  body.paper .val, body.panel .val { fill: #5b5348; }
+  body.paper .val { fill: #5a6270; }
+  .netlbl { font: 600 12px var(--mono); fill: var(--wire); }
+  .glabel { fill: var(--canvas); stroke: var(--wire); stroke-width: 1.4; }
+  .frame { fill: none; stroke: var(--frame); stroke-width: 1.2; stroke-dasharray: 6 5; }
+  .frametitle { font: 600 12px var(--label); fill: var(--frametitle); letter-spacing: .08em; text-transform: uppercase; }
+  .hl { stroke: var(--net); stroke-width: calc(var(--wire-w) * 2.2); filter: drop-shadow(0 0 4px color-mix(in srgb, var(--net) 60%, transparent)); }
+  .hlpin { fill: var(--net); }
+  .sel { fill: color-mix(in srgb, var(--accent) 10%, transparent); stroke: var(--accent); stroke-width: 1.5; rx: 6; }
+  .fault { fill: none; stroke: var(--fault); stroke-width: 2.4; }
+  .faulttext { font: 600 12px var(--ui); fill: var(--fault); }
+  .chip { fill: var(--chip); stroke: var(--line); }
+  .chiptext { font: 12px var(--mono); fill: var(--ink); }
+  body.panel .chiptext { fill: #1e1a15; }
+
+  /* Studio: dot grid, soft glow on the selection. */
+  body.studio .sel { filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 45%, transparent)); }
+  /* Panel: engraved frames, a paper texture, uppercase labels. */
+  body.panel main { background:
+      radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.35), transparent 60%),
+      radial-gradient(ellipse at 80% 90%, rgba(120,90,50,.18), transparent 55%), var(--canvas); }
+  body.panel main::after { content: ""; position: absolute; inset: 0; pointer-events: none; box-shadow: inset 0 0 0 10px #2a231b, inset 0 0 0 12px #5b4d3b, inset 0 0 60px rgba(60,40,15,.35); }
+  body.panel .frame { stroke-dasharray: none; stroke-width: 1; }
+  body.panel .frame2 { fill: none; stroke: var(--frame); stroke-width: .6; }
+  body.panel .ref { letter-spacing: .06em; }
+  body.panel .glabel { fill: #efe6d1; }
+  body.panel header .brand { font: 700 15px var(--label); letter-spacing: .14em; text-transform: uppercase; }
+  body.panel h4, body.panel .field label { letter-spacing: .14em; }
+  body.panel .ihead b { letter-spacing: .08em; }
+  body.panel .tools button.on { box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 60%, transparent); }
+  body.paper .tools button.on { background: var(--ink); color: #fff; }
+</style>
+</head>
+<body class="studio">
+<header>
+  <div class="brand"><i></i>varimu · circuit</div>
+  <div class="picker"><b>Pultec EQP-1A</b><span>▾</span></div>
+  <div class="tools">
+    <button class="on">Select <kbd>V</kbd></button><button>Wire <kbd>W</kbd></button>
+    <button>Label <kbd>L</kbd></button><button>Part <kbd>P</kbd></button>
+  </div>
+  <div class="spacer"></div>
+  <div class="pill"><i></i>1 problem · 84 switch combinations</div>
+  <span class="btn">Undo</span>
+  <span class="btn primary">Render <kbd>R</kbd></span>
+</header>
+
+<aside id="pal">
+  <div class="search">Search parts…  <kbd>/</kbd></div>
+  <h4>Passive</h4>
+  <div class="parts" id="p-passive"></div>
+  <h4>Tubes</h4>
+  <div class="parts" id="p-tubes"></div>
+  <h4>Magnetics</h4>
+  <div class="parts" id="p-mag"></div>
+  <h4>Switches · sources</h4>
+  <div class="parts" id="p-src"></div>
+</aside>
+
+<main><svg class="sch" id="sch" viewBox="-20 0 1210 770" preserveAspectRatio="xMidYMid meet"></svg></main>
+
+<aside id="ins">
+  <div class="ihead"><b>CC2A</b><span>Capacitor</span></div>
+  <div class="crumb">12AU7 and output · p1a → g2a</div>
+  <div class="field"><label>Value</label>
+    <div class="input big focus">0.47 µF<small>was 0.25 µF</small></div></div>
+  <div class="field"><label>Parameter</label>
+    <div class="input"><span class="tag">c_couple_f</span><span class="note">shared with CC2B</span></div></div>
+  <div class="field"><label>Source</label>
+    <div class="input src">my change · was <i>dwg: .25 coupling capacitors</i></div></div>
+  <div class="row2">
+    <div class="field"><label>Tolerance</label><div class="input">paper ±20%</div></div>
+    <div class="field"><label>Genome</label><div class="input"><span class="tag gray">none</span></div></div>
+  </div>
+  <div class="field"><label>Dielectric</label><div class="input">paper ▾ <span class="note">(B6)</span></div></div>
+  <div class="ab">
+    <h4 style="margin-left:0">Listen</h4>
+    <div class="variant"><span class="k">A</span><span>c_couple_f = 0.25 µF</span><span class="note">cached</span></div>
+    <div class="variant on"><span class="k">B</span><span>c_couple_f = 0.47 µF</span><span class="note">63%</span></div>
+    <p class="note">Loops of 4 s render in the background as you edit; A/B is loudness-matched.</p>
+  </div>
+</aside>
+
+<footer>
+  <div class="transport"><span>Dry <kbd>1</kbd></span><span>A <kbd>2</kbd></span><span class="on">B <kbd>3</kbd></span><span>▶ <kbd>Space</kbd></span></div>
+  <svg class="wave" id="wave" viewBox="0 0 600 34" preserveAspectRatio="none"></svg>
+  <div><div class="note">rendering B · arpeggio 0-4 s</div><div class="progress"><div></div></div></div>
+</footer>
+
+<script>
+const theme = new URLSearchParams(location.search).get('theme') || 'studio';
+document.body.className = theme;
+
+// --- Symbols (px; a grid of 10, pins on multiples of 10) ---
+const L = (x1, y1, x2, y2, c = 'part') => `<line class="${c}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"/>`;
+const P = (pts, c = 'wire') => `<polyline class="${c}" points="${pts.map(p => p.join(',')).join(' ')}"/>`;
+const T = (x, y, s, c, anchor = 'start') => `<text class="${c}" x="${x}" y="${y}" text-anchor="${anchor}">${s}</text>`;
+function res(x, y, h = true, ref = '', val = '') { // centre, horizontal?
+  if (h) return L(x - 40, y, x - 20, y, 'lead') + L(x + 20, y, x + 40, y, 'lead') +
+    `<rect class="part" x="${x - 20}" y="${y - 7}" width="40" height="14" rx="1.5"/>` + T(x, y - 14, ref, 'ref', 'middle') + T(x, y + 26, val, 'val', 'middle');
+  return L(x, y - 40, x, y - 20, 'lead') + L(x, y + 20, x, y + 40, 'lead') +
+    `<rect class="part" x="${x - 7}" y="${y - 20}" width="14" height="40" rx="1.5"/>` + T(x + 16, y - 3, ref, 'ref') + T(x + 16, y + 14, val, 'val');
+}
+function cap(x, y, h = true, ref = '', val = '') {
+  if (h) return L(x - 30, y, x - 5, y, 'lead') + L(x + 5, y, x + 30, y, 'lead') + L(x - 5, y - 14, x - 5, y + 14) + L(x + 5, y - 14, x + 5, y + 14) +
+    T(x, y - 22, ref, 'ref', 'middle') + T(x, y + 32, val, 'val', 'middle');
+  return L(x, y - 30, x, y - 5, 'lead') + L(x, y + 5, x, y + 30, 'lead') + L(x - 14, y - 5, x + 14, y - 5) + L(x - 14, y + 5, x + 14, y + 5) +
+    T(x + 20, y - 3, ref, 'ref') + T(x + 20, y + 14, val, 'val');
+}
+function triode(x, y, ref, val) {
+  return `<circle class="part" cx="${x}" cy="${y}" r="40"/>` +
+    L(x, y - 60, x, y - 20, 'lead') + L(x - 16, y - 20, x + 16, y - 20) +
+    L(x - 60, y, x - 22, y, 'lead') + [-20, -9, 2, 13].map(d => L(x + d, y, x + d + 6, y)).join('') +
+    P([[x - 16, y + 14], [x - 16, y + 20], [x + 16, y + 20], [x + 16, y + 40], [x, y + 40], [x, y + 60]], 'part') +
+    T(x + 48, y - 28, ref, 'ref') + T(x + 48, y - 12, val, 'val');
+}
+function coil(x, y0, y1, side) { // bumps toward `side` (+1 right, -1 left)
+  const n = Math.round((y1 - y0) / 20), h = (y1 - y0) / n; let d = `M${x},${y0}`;
+  for (let i = 0; i < n; i++) d += ` a${h / 2},${h / 2} 0 0 ${side > 0 ? 1 : 0} 0,${h}`;
+  return `<path class="part" d="${d}"/>`;
+}
+const gnd = (x, y) => L(x, y, x, y + 12) + L(x - 12, y + 12, x + 12, y + 12) + L(x - 7, y + 17, x + 7, y + 17) + L(x - 3, y + 22, x + 3, y + 22);
+const rail = (x, y, name) => L(x - 14, y, x + 14, y) + T(x, y - 7, name, 'netlbl', 'middle');
+function glabel(x, y, name, dir = 1) { // a global label at the end of a wire, pointing away
+  const w = 10 + name.length * 7.6, s = dir;
+  const pts = [[x, y], [x + s * 8, y - 9], [x + s * (w + 8), y - 9], [x + s * (w + 8), y + 9], [x + s * 8, y + 9]];
+  return `<polygon class="glabel" points="${pts.map(p => p.join(',')).join(' ')}"/>` + T(x + s * (w / 2 + 9), y + 4, name, 'netlbl', 'middle');
+}
+const jn = (x, y) => `<circle class="jn" cx="${x}" cy="${y}" r="4"/>`;
+const W = pts => P(pts);
+
+// --- The drawing: the EQP-1A's "interstage and 12AX7" (+ the start of "12AU7 and output") ---
+let s = '';
+// frames (one canvas, sections as framed regions)
+s += `<rect class="frame" x="34" y="22" width="874" height="736" rx="8"/>` + T(50, 16, 'interstage and 12AX7', 'frametitle');
+s += `<rect class="frame" x="924" y="22" width="256" height="736" rx="8"/>` + T(940, 16, '12AU7 and output', 'frametitle');
+if (theme === 'panel') s += `<rect class="frame2" x="38" y="26" width="866" height="728" rx="6"/><rect class="frame2" x="928" y="26" width="248" height="728" rx="6"/>`;
+// T2: HS-29
+s += coil(90, 330, 510, 1) + L(122, 210, 122, 630) + L(130, 210, 130, 630) + coil(162, 220, 620, -1);
+s += `<circle class="part fill" cx="101" cy="336" r="3"/><circle class="part fill" cx="151" cy="226" r="3"/>`;
+s += T(126, 196, 'T2', 'ref', 'middle') + T(126, 652, 'HS-29 · mumetall', 'val', 'middle');
+s += W([[90, 330], [90, 300], [70, 300]]) + glabel(70, 300, 'eq_out', -1);
+s += W([[90, 510], [90, 540]]) + gnd(90, 540);
+s += W([[162, 420], [230, 420], [230, 440]]) + gnd(230, 440);
+s += T(178, 214, 'sa', 'val') + T(178, 636, 'sb', 'val');
+// grids, Zobel
+s += W([[162, 220], [440, 220]]) + W([[162, 620], [440, 620]]) + jn(320, 220) + jn(320, 620);
+s += T(250, 212, 'g1a', 'netlbl', 'middle') + T(250, 612, 'g1b', 'netlbl', 'middle');
+s += W([[320, 220], [320, 290]]) + cap(320, 320, false, 'CZIN', '270p') + W([[320, 350], [320, 450]]);
+s += res(320, 490, false, 'RZIN', '43K') + W([[320, 530], [320, 620]]);
+// V1A, V1B with plate loads
+s += triode(500, 220, 'V1A', '12AX7') + triode(500, 620, 'V1B', '12AX7');
+s += rail(500, 50, 'b4') + res(500, 90, false, 'RPL1A', '200K') + W([[500, 130], [500, 160]]);
+s += rail(500, 430, 'b4') + res(500, 470, false, 'RPL1B', '200K') + W([[500, 510], [500, 560]]);
+// p1a, p1b to the coupling capacitors (section 2)
+const p1a = [[500, 145], [960, 145]], p1b = [[500, 535], [960, 535]];
+s += W(p1a) + jn(500, 145) + W(p1b) + jn(500, 535);
+// cathodes: RK1 between them, the feedback resistors
+s += W([[500, 280], [500, 310], [700, 310]]) + jn(640, 310) + res(740, 310, true, 'RFBA', '360') + W([[780, 310], [810, 310]]) + glabel(810, 310, 'fba');
+s += W([[500, 680], [500, 710], [700, 710]]) + jn(640, 710) + res(740, 710, true, 'RFBB', '360') + W([[780, 710], [810, 710]]) + glabel(810, 710, 'fbb');
+s += W([[640, 310], [640, 580]]) + res(640, 620, false, 'RK1', '820') + W([[640, 660], [640, 710]]);
+// section 2: coupling capacitors and grid resistors
+s += `<rect class="sel" x="948" y="112" width="84" height="78"/>`;
+s += cap(990, 145, true, 'CC2A', '.47u') + W([[1020, 145], [1100, 145]]) + glabel(1100, 145, 'g2a') + jn(1050, 145);
+s += cap(990, 535, true, 'CC2B', '.47u') + W([[1020, 535], [1100, 535]]) + glabel(1100, 535, 'g2b') + jn(1050, 535);
+s += W([[1050, 145], [1050, 210]]) + res(1050, 250, false, 'RG2A', '1M') + W([[1050, 290], [1050, 320]]) + L(1036, 320, 1064, 320) + T(1050, 338, 'gb2', 'netlbl', 'middle');
+s += W([[1050, 535], [1050, 600]]) + res(1050, 640, false, 'RG2B', '1M') + W([[1050, 680], [1050, 710]]) + L(1036, 710, 1064, 710) + T(1050, 728, 'gb2', 'netlbl', 'middle');
+// hover: net p1a highlighted, with its chip
+s += `<polyline class="wire hl" points="500,130 500,160"/><polyline class="wire hl" points="500,145 960,145"/>`;
+s += `<circle class="hlpin" cx="500" cy="130" r="4"/><circle class="hlpin" cx="500" cy="160" r="4"/><circle class="hlpin" cx="960" cy="145" r="4"/>`;
+s += `<rect class="chip" x="640" y="82" width="250" height="44" rx="7"/>` + T(654, 101, 'p1a · 3 pins', 'chiptext') + `<text class="chiptext" x="654" y="118" style="opacity:.7">RPL1A.2  V1A.p  CC2A.1</text>`;
+// a fault (illustration): fbb with only RFBB on it
+s += `<rect class="fault" x="804" y="696" width="58" height="28" rx="8"/>` + `<rect class="chip" x="700" y="728" width="200" height="24" rx="6" style="stroke:var(--fault)"/>` + T(710, 745, 'unconnected: fbb has only RFBB', 'faulttext');
+document.getElementById('sch').innerHTML = s;
+
+// --- Palette ---
+const icon = d => `<svg viewBox="-20 -20 40 40">${d}</svg>`;
+const tiles = {
+  'p-passive': [['R', icon('<line x1="0" y1="-18" x2="0" y2="-10"/><rect x="-5" y="-10" width="10" height="20"/><line x1="0" y1="10" x2="0" y2="18"/>')],
+                ['C', icon('<line x1="0" y1="-18" x2="0" y2="-4"/><line x1="-11" y1="-4" x2="11" y2="-4"/><line x1="-11" y1="4" x2="11" y2="4"/><line x1="0" y1="4" x2="0" y2="18"/>')],
+                ['L', icon('<path d="M0,-18 v4 a4,4 0 0 1 0,8 a4,4 0 0 1 0,8 a4,4 0 0 1 0,8 a4,4 0 0 1 0,8 v4"/>')],
+                ['Pot', icon('<rect x="-5" y="-12" width="10" height="24"/><line x1="0" y1="-18" x2="0" y2="-12"/><line x1="0" y1="12" x2="0" y2="18"/><polyline points="16,0 7,0"/><polyline points="10,-3 6,0 10,3"/>')],
+                ['Rheostat', icon('<rect x="-5" y="-12" width="10" height="24"/><line x1="-11" y1="11" x2="11" y2="-11"/>')],
+                ['T-pad', icon('<rect x="-12" y="-8" width="24" height="16"/><text x="0" y="5" font-size="12" text-anchor="middle" style="fill:currentColor;stroke:none">T</text>')]],
+  'p-tubes': [['Triode', icon('<circle r="14"/><line x1="-7" y1="-6" x2="7" y2="-6"/><line x1="-8" y1="1" x2="-4" y2="1"/><line x1="0" y1="1" x2="4" y2="1"/><polyline points="-7,6 7,6 7,12"/>')],
+              ['Dual', icon('<circle cx="-6" r="10"/><circle cx="7" r="10" style="opacity:.5"/>')],
+              ['Pentode', icon('<circle r="15"/><line x1="-7" y1="-8" x2="7" y2="-8"/><line x1="-8" y1="-2" x2="6" y2="-2" stroke-dasharray="3 2"/><line x1="-8" y1="3" x2="6" y2="3" stroke-dasharray="3 2"/><line x1="-7" y1="9" x2="7" y2="9"/>')],
+              ['Diode', icon('<polygon points="-8,-5 8,-5 0,6"/><line x1="-8" y1="6" x2="8" y2="6"/><line x1="0" y1="-18" x2="0" y2="-5"/><line x1="0" y1="6" x2="0" y2="18"/>')],
+              ['Bridge', icon('<polygon points="0,-13 13,0 0,13 -13,0"/>')],
+              ['VR tube', icon('<circle r="13"/><circle cx="3" cy="-3" r="2"/><line x1="-6" y1="6" x2="6" y2="6"/>')]],
+  'p-mag': [['Winding', icon('<path d="M0,-16 a4,4 0 0 1 0,8 a4,4 0 0 1 0,8 a4,4 0 0 1 0,8 a4,4 0 0 1 0,8"/>')],
+            ['Core', icon('<line x1="-3" y1="-16" x2="-3" y2="16"/><line x1="3" y1="-16" x2="3" y2="16"/>')],
+            ['K', icon('<text x="0" y="5" font-size="14" text-anchor="middle" style="fill:currentColor;stroke:none">K</text>')]],
+  'p-src': [['Rotary', icon('<circle cx="-12" cy="0" r="2"/><line x1="-10" y1="0" x2="10" y2="-8"/><circle cx="12" cy="-10" r="2"/><circle cx="12" cy="0" r="2"/><circle cx="12" cy="10" r="2"/>')],
+            ['Mains', icon('<circle r="12"/><path d="M-6,1 q3,-6 6,0 t6,0"/>')],
+            ['Ground', icon('<line x1="0" y1="-14" x2="0" y2="0"/><line x1="-12" y1="0" x2="12" y2="0"/><line x1="-7" y1="6" x2="7" y2="6"/><line x1="-3" y1="12" x2="3" y2="12"/>')]],
+};
+for (const [id, list] of Object.entries(tiles))
+  document.getElementById(id).innerHTML = list.map(([n, svg], i) => `<div class="tile${id === 'p-tubes' && i === 0 ? ' hot' : ''}">${svg}<span>${n}</span></div>`).join('');
+
+// --- A plausible-looking A/B waveform strip (decoration) ---
+let a = 'M0,17', b = 'M0,17';
+for (let i = 0; i <= 600; i += 3) { const env = 6 + 8 * Math.abs(Math.sin(i / 37)) * (0.6 + 0.4 * Math.sin(i / 11));
+  a += ` L${i},${17 + env * Math.sin(i * 0.9)}`; b += ` L${i},${17 + env * 0.92 * Math.sin(i * 0.9 + 0.3)}`; }
+document.getElementById('wave').innerHTML = `<path d="${a}" style="stroke:var(--muted);opacity:.6"/><path d="${b}" style="stroke:var(--accent)"/>`;
+</script>
+</body>
+</html>

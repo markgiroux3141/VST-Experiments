@@ -180,26 +180,6 @@ def test_fresh_netlist_imports_the_same(tmp_path):
     )
 
 
-USER_DRAWING = KICAD / "pultec_eqp1a" / "pultec_eqp1a.kicad_sch"
-
-
-@needs_kicad
-@pytest.mark.skipif(not USER_DRAWING.exists(), reason="the EQP-1A isn't drawn by hand yet")
-def test_user_drawing_imports_to_the_same_ir(tmp_path):
-    """B3's done-when on the real drawing (kicad/README.md): it imports with no problem
-    and builds the hand-written file's IR at every switch combination."""
-    xml = kn.export_netlist(USER_DRAWING, tmp_path / "n.xml")
-    imp = import_netlist(read_netlist(xml), load_sidecar(USER_DRAWING.with_name(
-        "pultec_eqp1a.params.yaml")))  # fmt: skip
-    assert imp.problems == []
-    f = tmp_path / "drawn.yaml"
-    f.write_text(to_yaml(imp.data), encoding="utf-8")
-    a, b = load_circuit(circuit_path("pultec_eqp1a")), load_circuit(f)
-    assert check_circuit(b) == []
-    for ov in [*switch_configs(a), {"passive_spread": 1.0, "passive_seed": 7}]:
-        assert _same_ir(a, b, ov) == [], ov
-
-
 @needs_kicad
 @pytest.mark.parametrize("name", ["fairchild_670", "triode_stage"])
 def test_round_trip_through_kicad(name, tmp_path):

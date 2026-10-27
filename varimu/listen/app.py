@@ -1,7 +1,7 @@
 """Tweak-and-listen page for the 670 slice (offline renders, not live), and blind A/B.
 
     uv sync --extra listen --extra fast
-    uv run varimu listen            # http://127.0.0.1:8765  (blind A/B: /ab)
+    uv run varimu listen            # http://127.0.0.1:8765  (blind A/B: /ab, editor: /editor)
 
 Blind A/B (Phase 5, /ab): sessions over the stimuli `varimu ab-prepare` matched
 (varimu.listen.prepare); see the AB class below and varimu.listen.session. The
@@ -606,6 +606,10 @@ def create_app(workers: int | None = None, ab: AB | None = None):
             ids = [pool.candidates[n].id for n in pool.session_candidates or pool.candidates]
             ab_box.append(AB(clips=pool.pool_clips, candidates=ids))
         return ab_box[0]
+
+    from varimu.listen.editor_api import register as register_editor
+
+    register_editor(app)
 
     @app.get("/", response_class=HTMLResponse)
     def index():

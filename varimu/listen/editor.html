@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Schematic Editor</title>
+<style>
+  :root {
+    --ui: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+    --label: "Bahnschrift", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --mono: "Cascadia Mono", "Cascadia Code", Consolas, ui-monospace, monospace;
+    --bg: #0f1114; --chrome: #16191d; --chrome2: #1c2025; --chrome3: #232830; --line: #2a2f36;
+    --ink: #e3e7ec; --muted: #8b95a1; --faint: #5d6672;
+    --canvas: #121519; --dot: #262c34; --part: #d5dbe2; --wire: #7f93a8; --text-part: #c9d1da;
+    --accent: #f0a238; --accent-ink: #15120c; --net: #3fd0c0; --fault: #ff5d5d; --warn: #f0c04a;
+    --frame: #3a424c; --ok: #5fd08a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { background: var(--bg); color: var(--ink); font: 13px/1.4 var(--ui);
+         display: grid; grid-template: "top top top" 48px "left can right" 1fr "bot bot bot" 26px / 236px 1fr 330px; }
+  button { font: inherit; color: inherit; }
+  kbd { font: 10.5px var(--mono); color: var(--muted); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; }
+
+  /* --- Header --- */
+  header { grid-area: top; display: flex; align-items: center; gap: 12px; padding: 0 12px;
+           background: var(--chrome); border-bottom: 1px solid var(--line); }
+  .brand { font: 600 13.5px var(--label); letter-spacing: .03em; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .brand i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+  .brand a { color: var(--muted); text-decoration: none; font-weight: 500; }
+  .brand a:hover { color: var(--ink); }
+  .picker { position: relative; }
+  .picker select { appearance: none; font: 600 13px var(--ui); color: var(--ink); background: var(--chrome2);
+                   border: 1px solid var(--line); border-radius: 7px; padding: 5px 30px 5px 10px; cursor: pointer; }
+  .picker select:hover { border-color: var(--faint); }
+  .picker::after { content: ""; position: absolute; right: 11px; top: 50%; width: 6px; height: 6px; margin-top: -5px;
+                   border: solid var(--muted); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); pointer-events: none; }
+  .badge { font-size: 11.5px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+  .spacer { flex: 1; }
+  .pill { display: flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; font-weight: 600; font-size: 12px;
+          border: 1px solid var(--line); color: var(--muted); background: var(--chrome2); white-space: nowrap; cursor: default; }
+  .pill i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+  .pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+  .pill.ok i { background: var(--ok); }
+  .pill.bad { color: var(--fault); border-color: color-mix(in srgb, var(--fault) 45%, transparent); background: color-mix(in srgb, var(--fault) 9%, transparent); cursor: pointer; }
+  .pill.bad i { background: var(--fault); }
+  .pill.busy i { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .iconbtn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line);
+             background: var(--chrome2); color: var(--ink); cursor: pointer; white-space: nowrap; }
+  .iconbtn:hover { border-color: var(--faint); }
+  .zoom { font: 12px var(--mono); color: var(--muted); min-width: 46px; text-align: right; }
+
+  /* --- Side panels --- */
+  aside { background: var(--chrome); overflow: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+  #left { grid-area: left; border-right: 1px solid var(--line); padding: 10px 8px; }
+  #right { grid-area: right; border-left: 1px solid var(--line); padding: 14px 16px 24px; }
+  h4 { margin: 16px 6px 6px; font: 600 10.5px var(--label); text-transform: uppercase; letter-spacing: .09em; color: var(--muted);
+       display: flex; justify-content: space-between; }
+  h4:first-child { margin-top: 4px; }
+  h4 span { color: var(--faint); letter-spacing: 0; font: 11px var(--mono); }
+  .find { display: flex; align-items: center; gap: 6px; margin: 0 2px; padding: 6px 9px; border: 1px solid var(--line);
+          border-radius: 7px; background: var(--chrome2); }
+  .find:focus-within { border-color: var(--accent); }
+  .find input { all: unset; flex: 1; min-width: 0; font: 12.5px var(--ui); color: var(--ink); }
+  .find input::placeholder { color: var(--faint); }
+  .list { display: grid; gap: 1px; }
+  .item { display: flex; align-items: baseline; gap: 8px; padding: 5px 8px; border-radius: 6px; cursor: pointer; color: var(--ink); }
+  .item:hover { background: var(--chrome2); }
+  .item.on { background: var(--chrome3); }
+  .item .n { margin-left: auto; color: var(--faint); font: 11px var(--mono); }
+  .item.prob { display: grid; grid-template-columns: 8px 1fr; align-items: start; gap: 8px; }
+  .item.prob i { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; background: var(--fault); }
+  .item.prob.drawing i { background: var(--warn); }
+  .item.prob b { font-weight: 600; color: var(--fault); text-transform: capitalize; }
+  .item.prob.drawing b { color: var(--warn); }
+  .item.prob small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 1px; }
+  .empty { color: var(--faint); font-size: 12px; padding: 4px 8px; }
+
+  /* --- Inspector --- */
+  .ihead { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+  .ihead b { font: 650 21px var(--label); letter-spacing: .01em; }
+  .ihead span { color: var(--muted); }
+  .crumb { color: var(--muted); font-size: 12px; margin: 3px 0 10px; }
+  .desc { color: var(--muted); font-size: 12px; margin: -2px 0 12px; line-height: 1.45; }
+  .field { margin: 11px 0; }
+  .field > label { display: block; font: 600 10.5px var(--label); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 4px; }
+  .box { padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--chrome2); overflow-wrap: anywhere; }
+  .box.big { display: flex; align-items: baseline; gap: 10px; font: 600 19px var(--mono); }
+  .box.big small { font: 12px var(--ui); color: var(--muted); margin-left: auto; text-align: right; }
+  .box.src { font-size: 12.5px; line-height: 1.45; }
+  .box.missing { border-color: var(--fault); color: var(--fault); background: color-mix(in srgb, var(--fault) 8%, transparent); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tag { display: inline-block; font: 600 11px var(--mono); padding: 1px 6px; border-radius: 4px;
+         background: color-mix(in srgb, var(--accent) 15%, transparent); color: var(--accent); }
+  .tag.gray { background: var(--chrome3); color: var(--muted); }
+  .tag.net { background: color-mix(in srgb, var(--net) 14%, transparent); color: var(--net); cursor: pointer; }
+  .note { color: var(--muted); font-size: 12px; }
+  table.kv { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.kv td { padding: 5px 0; border-top: 1px solid var(--line); vertical-align: top; }
+  table.kv td:first-child { color: var(--muted); width: 38%; padding-right: 8px; font: 12px var(--mono); }
+  table.kv td:last-child { font: 12px var(--mono); overflow-wrap: anywhere; }
+  table.kv tr:first-child td { border-top: none; }
+  .placeholder { color: var(--faint); margin-top: 40px; text-align: center; line-height: 1.7; }
+  .placeholder b { color: var(--muted); font-weight: 600; }
+
+  /* --- Canvas --- */
+  main { grid-area: can; position: relative; overflow: hidden; background-color: var(--canvas);
+         background-image: radial-gradient(circle, var(--dot) 1.1px, transparent 1.3px); cursor: default; touch-action: none; }
+  main.panning { cursor: grabbing; }
+  main.spacepan { cursor: grab; }
+  main svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #titles { position: absolute; inset: 0; pointer-events: none; }
+  .ftitle { position: absolute; transform: translateY(-100%); padding: 0 2px 5px; font: 600 11px var(--label);
+            letter-spacing: .09em; text-transform: uppercase; color: var(--muted); white-space: nowrap; pointer-events: auto; cursor: pointer; }
+  .ftitle:hover { color: var(--ink); }
+  .ftitle span { color: var(--faint); letter-spacing: 0; font: 11px var(--mono); margin-left: 6px; }
+  #chip { position: absolute; pointer-events: none; padding: 6px 9px; border-radius: 7px; background: rgba(28, 32, 37, .96);
+          border: 1px solid var(--line); box-shadow: 0 6px 20px rgba(0, 0, 0, .45); font: 12px var(--mono); color: var(--ink);
+          opacity: 0; transition: opacity .1s; max-width: 360px; }
+  #chip.on { opacity: 1; }
+  #chip b { color: var(--net); font-weight: 600; }
+  #chip b.sym { color: var(--accent); }
+  #chip small { display: block; color: var(--muted); margin-top: 2px; white-space: normal; }
+  #loading { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; }
+
+  /* drawing */
+  .frame { fill: rgba(255, 255, 255, .012); stroke: var(--frame); stroke-width: 1.2px; stroke-dasharray: 6 5; vector-effect: non-scaling-stroke; }
+  .wire { fill: none; stroke: var(--wire); stroke-width: 1.6px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .g path, .g line { fill: none; stroke: var(--part); stroke-width: 1.6px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+  .g path.fill { fill: var(--part); }
+  .g text { fill: var(--part); stroke: none; font: 1.27px var(--label); dominant-baseline: central; text-anchor: middle; }
+  .gnd line { stroke: var(--wire); stroke-width: 1.6px; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+  .jn { fill: var(--wire); }
+  .ref { font: 600 1.55px var(--label); fill: var(--text-part); dominant-baseline: central; }
+  .val { font: 1.35px var(--mono); fill: var(--muted); dominant-baseline: central; }
+  .lbl { font: 600 1.35px var(--mono); fill: var(--wire); dominant-baseline: central; }
+  .lbltick { stroke: var(--wire); stroke-width: 1.2px; vector-effect: non-scaling-stroke; }
+  .hit { fill: transparent; stroke: none; }
+  svg.far .ref, svg.far .val, svg.far .lbl { display: none; }
+
+  /* states */
+  .wire.hl, .gnd.hl line { stroke: var(--net); stroke-width: 3px; }
+  .lbl.hl { fill: var(--net); }
+  .pindot { fill: var(--net); }
+  .sel { fill: color-mix(in srgb, var(--accent) 9%, transparent); stroke: var(--accent); stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
+  .hov { fill: rgba(255, 255, 255, .035); stroke: rgba(255, 255, 255, .18); stroke-width: 1px; vector-effect: non-scaling-stroke; }
+  .wire.bad, .gnd.bad line { stroke: var(--fault); stroke-width: 2.6px; }
+  .lbl.bad { fill: var(--fault); }
+  .ring { fill: color-mix(in srgb, var(--fault) 8%, transparent); stroke: var(--fault); stroke-width: 1.6px; vector-effect: non-scaling-stroke; }
+  .ring.focus { stroke-width: 2.6px; filter: drop-shadow(0 0 6px var(--fault)); }
+
+  /* --- Footer --- */
+  footer { grid-area: bot; display: flex; align-items: center; gap: 18px; padding: 0 12px; background: var(--chrome);
+           border-top: 1px solid var(--line); color: var(--muted); font: 11.5px var(--mono); white-space: nowrap; overflow: hidden; }
+  footer .k { color: var(--faint); }
+  footer #hint { margin-left: auto; font-family: var(--ui); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><i></i>varimu <a href="/">listen</a> <a href="/ab">A/B</a></div>
+  <div class="picker"><select id="circuit" title="Circuit"></select></div>
+  <span class="badge" id="kind"></span>
+  <div class="spacer"></div>
+  <div class="pill" id="checks" title="Pre-flight checks at every combination of switch positions"><i></i><span>checks</span></div>
+  <span class="zoom" id="zoom">100%</span>
+  <button class="iconbtn" id="fit" title="Fit the drawing">Fit <kbd>F</kbd></button>
+</header>
+
+<aside id="left">
+  <label class="find"><input id="find" placeholder="Find a part or node" autocomplete="off" spellcheck="false"><kbd>/</kbd></label>
+  <h4>Sections <span id="nsec"></span></h4>
+  <div class="list" id="sections"></div>
+  <h4>Problems <span id="nprob"></span></h4>
+  <div class="list" id="problems"><div class="empty">checking…</div></div>
+</aside>
+
+<main id="canvas">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg"><g id="world"></g></svg>
+  <div id="titles"></div>
+  <div id="chip"></div>
+  <div id="loading">Loading…</div>
+</main>
+
+<aside id="right"><div id="inspector"></div></aside>
+
+<footer>
+  <span><span class="k">x</span> <span id="cx">–</span> <span class="k">y</span> <span id="cy">–</span> <span class="k">mm</span></span>
+  <span id="stats"></span>
+  <span id="hint">Scroll to zoom · drag to pan · click a part or wire · <kbd>Esc</kbd> clears</span>
+</footer>
+
+<script type="module" src="/editor/main.js"></script>
+</body>
+</html>

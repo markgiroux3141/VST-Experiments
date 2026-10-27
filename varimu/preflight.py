@@ -25,7 +25,7 @@ from __future__ import annotations
 import itertools
 from collections import defaultdict
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from varimu.circuit import builder
@@ -53,6 +53,10 @@ class Problem:
     check: str  # unconnected | floating | loop | rectifier | probe | build
     message: str
     config: str = ""  # the switch positions it shows at ("" = all, or no switches)
+    # What it is about, for the editor to mark (not part of equality): circuit nodes and
+    # IR element names.
+    nodes: tuple[str, ...] = field(default=(), compare=False)
+    elements: tuple[str, ...] = field(default=(), compare=False)
 
     def __str__(self) -> str:
         at = f" [{self.config}]" if self.config else ""
@@ -120,6 +124,25 @@ def _terminals(el) -> tuple[str, ...]:
     return (el.a, el.b) if isinstance(el, Winding) else element_nodes(el)
 
 
+def _path(tree: Mapping[str, list[tuple[str, str]]], a: str, b: str) -> list[str]:
+    """The elements on the way from node a to node b in a forest of joined elements."""
+    back: dict[str, tuple[str, str] | None] = {a: None}
+    queue = [a]
+    while queue:
+        n = queue.pop(0)
+        if n == b:
+            break
+        for m, el in tree.get(n, ()):
+            if m not in back:
+                back[m] = (n, el)
+                queue.append(m)
+    out, n = [], b
+    while back.get(n) is not None:
+        n, el = back[n]
+        out.append(el)
+    return [e for e in reversed(out) if e != "<input>"]
+
+
 def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     models = {m.name: m for m in ir.models}
     els = [el for s in ir.sections for el in s.elements]
@@ -129,23 +152,26 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
             nodes[n].append(el.name)
     out: list[Problem] = []
 
-    def problem(check: str, msg: str) -> None:
-        out.append(Problem(check, msg, config))
+    def problem(check: str, msg: str, nodes=(), elements=()) -> None:
+        out.append(Problem(check, msg, config, tuple(nodes), tuple(elements)))
 
     for n in [ir.input_node, *(p.node for p in ir.probes)]:
         if n not in nodes:
-            problem("probe", f"{n!r} is not a node of the circuit")
+            problem("probe", f"{n!r} is not a node of the circuit", nodes=[n])
     if ir.input_node in nodes:
         nodes[ir.input_node].append("<input>")
 
     for n, names in sorted(nodes.items()):
         if n != GROUND and len(names) == 1:
-            problem("unconnected", f"node {n} has only {names[0]} on it")
+            problem("unconnected", f"node {n} has only {names[0]} on it", [n], names[:1])
 
     dc, loops = _Union(), _Union()
     dc.find(GROUND)
     dc.join(ir.input_node, GROUND)
     loops.join(ir.input_node, GROUND)
+    tree: dict[str, list[tuple[str, str]]] = defaultdict(list)  # node -> (node, element)
+    tree[ir.input_node].append((GROUND, "<input>"))
+    tree[GROUND].append((ir.input_node, "<input>"))
     for el in els:
         t = _terminals(el)
         if isinstance(el, Resistor | Inductor | VoltageSource | SineSource | Winding):
@@ -155,8 +181,12 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
                 dc.join(el.nodes[0], n)
         if isinstance(el, Inductor | VoltageSource | SineSource | Winding):
             if not loops.join(*t):
+                path = _path(tree, t[0], t[1])
                 problem("loop", f"{el.name} closes a loop of sources, inductors and "
-                                "windings with no resistance")  # fmt: skip
+                                "windings with no resistance", t, [el.name, *path])  # fmt: skip
+            else:
+                tree[t[0]].append((t[1], el.name))
+                tree[t[1]].append((t[0], el.name))
         if isinstance(el, Winding):
             dc.find(el.core)
     islands: dict[str, list[str]] = defaultdict(list)
@@ -166,7 +196,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     for island in islands.values():
         island.sort()
         more = f" (+{len(island) - 6} more)" if len(island) > 6 else ""
-        problem("floating", f"no DC path to ground from {', '.join(island[:6])}{more}")
+        problem("floating", f"no DC path to ground from {', '.join(island[:6])}{more}", island)
 
     inductive = {n for el in els if isinstance(el, Inductor | Winding) for n in _terminals(el)}
     capacitive = {n for el in els if isinstance(el, Capacitor) for n in (el.a, el.b)}
@@ -178,7 +208,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     for n, names in sorted(rect_nodes.items()):
         if n != GROUND and n in inductive and n not in capacitive:
             problem("rectifier", f"node {n} ({', '.join(names)}) is fed by an inductance "
-                                 "and has no capacitor on it")  # fmt: skip
+                                 "and has no capacitor on it", [n], names)  # fmt: skip
     return out
 
 
@@ -197,8 +227,9 @@ def check_circuit(
         except Exception as e:  # noqa: BLE001 - a build error is the check's finding
             probs = [Problem("build", f"{type(e).__name__}: {e}")]
         for p in probs:
-            found.setdefault((p.check, p.message), []).append(tag)
+            found.setdefault((p.check, p.message), (p, []))[1].append(tag)
     out = []
-    for (check, msg), tags in found.items():
-        out.append(Problem(check, msg, "" if len(tags) == len(configs) else "; ".join(tags)))
+    for (check, msg), (p, tags) in found.items():
+        config = "" if len(tags) == len(configs) else "; ".join(tags)
+        out.append(Problem(check, msg, config, p.nodes, p.elements))
     return out
