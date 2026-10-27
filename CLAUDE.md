@@ -30,7 +30,10 @@ and a first polish pass (Ctrl+K command palette, ? keys, ↑ / ↓ step values t
 segment dragging). Its done-when is met (2026-10-27): the EQP-1A and the 670 drawn as
 schematics after their originals (`pultec_eqp1a_drawn`, `fairchild_670_drawn`), building
 the hand-written IR, the look accepted by the user (`docs/editor_mockups/drawn_*.png`). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
-(2026-10-24).** Plausibility (`varimu.measure.plausibility`) rejects only what no
+(2026-10-24). The user-facing product is now a native Rust app,
+[docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
+egui / eframe, the editor plus real-time play and production render, files and live
+input; milestones R0-R4; crates `varimu-circuit`, `varimu-app`).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the
@@ -261,6 +264,7 @@ cargo test                                            # Rust tests (IR round tri
 cargo run --release --example profile -- circuit.json [method] [oversample] [dk|mna] [reltol] [vntol]   # speed of a step
 cargo run --release --features timing --example profile -- ...   # plus where the DK step's time goes (cycle counts)
 cargo run --release [--features timing] --example bench -- circuit.json input.f64 2 [out.f64]   # a run on a recorded input; METHOD, RATE, ABSTOL, NRELTOL, TABLES, PARTITION, ... (its docstring)
+cargo run -p varimu-app                               # the native app (docs/NATIVE_APP_PLAN.md; R0: the window only)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check

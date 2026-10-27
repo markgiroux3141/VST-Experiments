@@ -36,6 +36,8 @@ it drives a render.
    with a webview editor that reuses the [ui-mockup/](../ui-mockup/) HTML.
    JUCE (C++, with JUCE 8's WebView UI) is the alternative
    ([UI_PIPELINE.md](UI_PIPELINE.md) section 9 assumed JUCE).
+   **Superseded 2026-10-27 (the user's):** the user-facing product is a standalone
+   native Rust app (egui / eframe, no plugin): [NATIVE_APP_PLAN.md](NATIVE_APP_PLAN.md).
 
 ## Open questions for the user
 

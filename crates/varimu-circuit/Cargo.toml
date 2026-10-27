@@ -1,0 +1,10 @@
+[package]
+name = "varimu-circuit"
+version = "0.1.0"
+description = "Circuit files, drawings and the builder (YAML -> circuitsim IR) for the native app (docs/NATIVE_APP_PLAN.md)"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+circuitsim = { path = "../circuitsim" }

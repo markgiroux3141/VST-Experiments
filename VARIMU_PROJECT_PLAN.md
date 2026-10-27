@@ -528,7 +528,7 @@ It absorbs Future Directions 1-2 (aging with noise, general circuits). The diver
 - Option A: a neural model distilled from full simulations of the chosen genome(s), conditioned on the front-panel controls (input, threshold, Time Constant).
 - Option B: a wave digital filter or nodal DK-method implementation of the same circuit, preserving the physics directly.
 - Compare A and B by measurement suite and by blind listening.
-- The plugin framework is decided here (2026-10-24, the user's): the research tools stay web-based. The current lean is nih-plug (Rust, no FFI to circuitsim) with a webview editor reusing `ui-mockup/`; JUCE is the alternative. See [docs/FUTURE_DIRECTIONS.md](docs/FUTURE_DIRECTIONS.md), section 7.
+- The research tools stay web-based (2026-10-24, the user's). **The user-facing product is a native Rust app (decided 2026-10-27, the user's; replaces the earlier lean, nih-plug with a webview editor):** standalone only (no plugin), egui / eframe, the schematic editor plus real-time playback (draft-1x) and production render as one thing, files and live input. Plan: [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md).
 
 ## Future Directions (after Phase 8)
 

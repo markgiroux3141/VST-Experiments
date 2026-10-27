@@ -1,5 +1,6 @@
 # Rust workspace. crates/circuitsim is the fast circuit simulator
-# (docs/CIRCUIT_SIM_PLAN.md); a plugin crate joins later (main plan, Phase 10).
+# (docs/CIRCUIT_SIM_PLAN.md); varimu-circuit and varimu-app are the native app
+# (docs/NATIVE_APP_PLAN.md).
 [workspace]
 members = ["crates/*"]
 resolver = "3"
