@@ -33,7 +33,11 @@ the hand-written IR, the look accepted by the user (`docs/editor_mockups/drawn_*
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
 egui / eframe, the editor plus real-time play and production render, files and live
-input; milestones R0-R4; crates `varimu-circuit`, `varimu-app`).** Plausibility (`varimu.measure.plausibility`) rejects only what no
+input; milestones R0-R4; crates `varimu-circuit`, `varimu-app`). R0 done; R1 done
+(2026-10-27): `varimu-circuit` builds every circuit file's IR bit for bit equal to Python's
+(`tests/agreement.rs` on `scripts/export_app_fixtures.py`'s fixtures; rerun the script after
+a change to a circuit, device file, material or the builder: `tests/test_app_fixtures.py`
+says when). Nominal units only (a nonzero tolerance spread is refused).** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the
@@ -255,6 +259,7 @@ uv run --extra listen --extra fast varimu ab-prepare [--candidates NAME ...] [--
 uv run --extra listen --extra fast varimu listen   # then http://127.0.0.1:8765/ab: blind A/B session (keys: Space, 1/2, A/B/N), ABX staircase, difference listening
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
+uv run python scripts/export_app_fixtures.py     # native app R1: Python-built IRs for varimu-circuit's agreement test
 ```
 
 Rust (`crates/circuitsim`; workspace `Cargo.toml` at the repo root, output in `target/`):

@@ -133,6 +133,33 @@ compared value by value to 1e-15 (relative), in `cargo test`; a nonzero spread i
 refused with a clear error; pytest fails when the fixtures are stale (as for
 `export_circuit_fixtures.py`).
 
+**Done (2026-10-27).** `crates/varimu-circuit`: `yaml` (yaml-rust2, plain scalars
+resolved with PyYAML's YAML 1.1 rules: a float needs a dot and a signed exponent),
+`spec` (load with Python's checks, `resolve`), `builder` (the macro parts, devices,
+tolerance, `build_ir`), `parts`, `devices` (device files, the 6386's pitch
+distribution in numpy's order of operations with its pairwise sum, materials; the
+linear-limit core from circuitsim's own core port), `derived` (the 670's four
+values; Python's module lookup is a table here). Python's order of floating-point
+operations is kept throughout (`**` as `powf`, `max` as Python's).
+
+- Fixtures: `scripts/export_app_fixtures.py` -> `crates/varimu-circuit/tests/fixtures/`
+  (one file per circuit, the default IR in full and per case only the sections and
+  models that differ: 198 cases + 6 defaults, ~520 kB). Per circuit: the defaults with
+  linear cores, every control one at a time (selectors at every position, the rest at
+  0 / 0.3 / 0.5 / 0.7 / 1 of their range), and for the 670 the tubes and T101's core
+  away from nominal. `tests/test_app_fixtures.py` fails when they're stale.
+- Result: **bit for bit**, 118,078 numbers in 204 builds, so `tests/agreement.rs`
+  requires that (stricter than 1e-15: R2's bit-for-bit renders need the same IR). A
+  deliberate one-ulp reordering in the T-pad and leakage formulas showed up as 294
+  differences (worst 1.4e-16), so the comparison is sensitive to it.
+- `tests/errors.rs`: a nonzero `passive_spread` is refused ("nominal units only"),
+  as are unknown or out-of-range parameters, an unknown material (naming the part) and
+  a bad circuit file (Python's load messages).
+- A 670 build takes ~1.7 ms (the 204 builds in 0.34 s), negligible against R2's
+  0.3 s from knob to ear.
+- Not ported (not needed by the app): the SPICE emission and table grids, the
+  genome-link checks, `register()` for circuit-specific macros (no circuit has one).
+
 ### R2. Player and render
 
 - **Files:** load (symphonia), resample to the device's rate (rubato), loop a region,

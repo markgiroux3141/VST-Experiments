@@ -1,27 +1,40 @@
 //! Circuit files and drawings for the native app (docs/NATIVE_APP_PLAN.md).
 //!
-//! This crate will hold the Rust side of what `varimu/circuit` (the circuit
-//! format, macros, parts, device loading) and `varimu/editor` (drawings,
-//! connect, compile, preflight) do in Python, building circuitsim's IR
-//! directly. Python stays the reference: R1 compares the IR built here with
-//! the IR Python builds, fixture by fixture.
+//! The Rust side of `varimu/circuit` (R1): circuit files (`spec`), the builder and its
+//! macro parts (`builder`, `parts`), device files and core materials (`devices`), the
+//! 670's derived values (`derived`), all building circuitsim's IR directly. Python
+//! stays the reference: tests/agreement.rs compares the IR built here with the IR
+//! Python builds (scripts/export_app_fixtures.py), case by case. `varimu/editor`'s
+//! drawings join in R3.
 //!
-//! R0 (scaffold): only the IR types, re-exported from circuitsim.
+//! ```no_run
+//! use varimu_circuit::{Cores, Library, spec, yaml::Value};
+//! let lib = Library::new("config");
+//! let c = spec::load_circuit(&spec::circuit_path(lib.config_dir(), "fairchild_670")?)?;
+//! let p = spec::resolve(&c, &[("time_constant".into(), Value::Int(3))])?;
+//! let ir = varimu_circuit::build_ir(&lib, &c, &p, Cores::Ja)?;
+//! # Ok::<(), varimu_circuit::Error>(())
+//! ```
 
+pub mod builder;
+pub mod derived;
+pub mod devices;
+pub mod parts;
+pub mod spec;
+pub mod yaml;
+
+pub use builder::{Cores, build_ir};
 pub use circuitsim::ir;
+pub use devices::Library;
 
-#[cfg(test)]
-mod tests {
-    use std::path::PathBuf;
+/// A load or build error, with the file and the part it's about.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Error(pub String);
 
-    /// The IR the builder will emit is circuitsim's own: a Python-exported
-    /// circuit reads through this crate's re-export.
-    #[test]
-    fn reads_an_exported_ir() {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../circuitsim/tests/fixtures/default.json");
-        let text = std::fs::read_to_string(&path).expect("fixture");
-        let ir = super::ir::CircuitIr::from_json(&text).expect("IR JSON");
-        assert!(!ir.sections.is_empty());
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
     }
 }
+
+impl std::error::Error for Error {}
