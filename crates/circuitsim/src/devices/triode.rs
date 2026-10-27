@@ -199,6 +199,16 @@ impl Triode {
         (ip, d_vg, d_vp)
     }
 
+    /// The sections' 1 / mu and 2 / Kg1, and Kp, Ex, Kvb (for [`super::TriodeTable`]).
+    pub fn koren(&self) -> (&[f64], &[f64], f64, f64, f64) {
+        (&self.inv_mu, &self.scale, self.kp, self.ex, self.kvb)
+    }
+
+    /// The grid-current law, if the model has one.
+    pub fn grid_model(&self) -> Option<&ir::GridCurrent> {
+        self.grid.as_ref()
+    }
+
     /// Grid current and d/dVg (zero without a grid-current model).
     pub fn grid(&self, vg: f64) -> (f64, f64) {
         self.grid
@@ -220,6 +230,14 @@ pub fn grid_current(g: &ir::GridCurrent, vg: f64) -> (f64, f64) {
 impl Device for Triode {
     fn ports(&self) -> usize {
         2
+    }
+
+    fn triode(&self) -> Option<&Triode> {
+        Some(self)
+    }
+
+    fn tabulate(&self) -> Option<Box<dyn Device>> {
+        Some(Box::new(super::TriodeTable::new(&[self])))
     }
 
     fn eval(&self, v: &[f64], i: &mut [f64], g: &mut [f64]) {

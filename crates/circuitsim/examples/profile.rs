@@ -180,7 +180,7 @@ fn main() {
         inv,
         &mna.b,
         mna.input_row,
-        &mna.waves,
+        &mna.source_rows(),
         &ports,
         &sup,
         &[],

@@ -59,6 +59,22 @@ LOG_FILE = "ngspice.log"
 ENGINES = ("ngspice", "circuitsim")
 
 
+# Render quality (circuitsim): "production" (the `circuitsim` block) or "draft" (that
+# block with `circuitsim_draft` on top: the fast settings, CIRCUIT_SIM_PLAN.md M8).
+QUALITIES = ("production", "draft")
+# The quality of the renders that take the configured settings (engine="configured"),
+# for a whole process and its reloads: the CLI's --quality sets it.
+QUALITY_ENV = "VARIMU_QUALITY"
+
+
+def configured_quality() -> str:
+    """The quality configured renders use: $VARIMU_QUALITY, production when unset."""
+    q = os.environ.get(QUALITY_ENV) or "production"
+    if q not in QUALITIES:
+        raise ValueError(f"{QUALITY_ENV} must be one of {QUALITIES}, got {q!r}")
+    return q
+
+
 def configured_engine(s: SimSettings | None = None) -> str:
     """sim_settings.yaml simulator.engine (circuitsim when absent)."""
     s = s or load_sim_settings()
@@ -102,17 +118,30 @@ class TransientSettings:
     # (start.settle_s): the power supply settles from its DC operating point (mains
     # at its peak) into its ripple. Both engines; the outputs leave it out.
     settle_s: float = 0.0
+    quality: str = "production"  # production | draft (circuitsim_draft on top)
+    # circuitsim only (draft): triodes evaluated from tables of the same model, and
+    # the sections titled in `partition` (those the circuit has) on a second thread,
+    # coupled through the nodes they share with one sample of latency.
+    tube_tables: bool = False
+    partition: tuple[str, ...] = ()
+    partition_coupling: str = "extrapolate"  # hold | extrapolate
 
     @classmethod
     def from_sim_settings(
-        cls, s: SimSettings | None = None, engine: str = "ngspice"
+        cls, s: SimSettings | None = None, engine: str = "ngspice", quality: str | None = None
     ) -> TransientSettings:
         """The settings for `engine` ("configured" = simulator.engine, which renders
         use). The default is ngspice's, for the ngspice-specific callers
         (`run_transient` here, agreement tests). circuitsim takes its oversampling
         and method from the `circuitsim` block; reltol, abstol and vntol stay
-        ngspice's and don't apply to it."""
+        ngspice's and don't apply to it. `quality` "draft" puts the
+        `circuitsim_draft` block on top (circuitsim only); None is production, or
+        for engine="configured" the configured quality ($VARIMU_QUALITY)."""
         s = s or load_sim_settings()
+        if quality is None:
+            quality = configured_quality() if engine == "configured" else "production"
+        if quality not in QUALITIES:
+            raise ValueError(f"unknown quality {quality!r} ({' | '.join(QUALITIES)})")
         if engine == "configured":
             engine = configured_engine(s)
         if engine not in ENGINES:
@@ -149,6 +178,23 @@ class TransientSettings:
                 step_selection=bool(cs.get("step_selection", True)),
                 error_norm=str(cs.get("error_norm", "nodes")),
                 cores=str(s.data["devices"].get("cores", "ja")),
+            )
+        if quality == "draft":
+            if engine != "circuitsim":
+                raise ValueError("the draft quality is circuitsim's (--engine circuitsim)")
+            d = s.data["circuitsim_draft"]
+            kinds = {"oversample": int, "method": str, "input_order": int, "solver": str,
+                     "error_abstol": float, "error_reltol": float, "newton_reltol": float,
+                     "newton_vntol": float, "newton_reuse": bool, "cores": str,
+                     "tube_tables": bool, "partition_coupling": str}  # fmt: skip
+            unknown = set(d) - set(kinds) - {"partition"}
+            if unknown:
+                raise ValueError(f"sim_settings circuitsim_draft: unknown keys {sorted(unknown)}")
+            st = replace(
+                st,
+                quality=quality,
+                partition=tuple(str(t) for t in d.get("partition", ())),
+                **{k: kinds[k](v) for k, v in d.items() if k != "partition"},
             )
         return st
 

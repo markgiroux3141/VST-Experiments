@@ -12,61 +12,101 @@
   "start_s": 1.0,
   "seconds": 3.0,
   "fresh": true,
-  "repeat": 3,
+  "repeat": 2,
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 3.446776666523268,
-    "x_realtime_steady": 2.585082499892451,
+    "x_realtime": 3.4911094666458666,
+    "x_realtime_steady": 2.6183320999844,
     "cached": false
    },
    {
     "setting": "error control off",
-    "x_realtime": 3.237992233441522,
-    "x_realtime_steady": 2.4284941750811413,
+    "x_realtime": 3.1444399665730693,
+    "x_realtime_steady": 2.358329974929802,
     "cached": false,
     "null_db": -240.0,
     "band_max_db": 0.0
    },
    {
     "setting": "+ 48 kHz",
-    "x_realtime": 1.7071590665727854,
-    "x_realtime_steady": 1.280369299929589,
+    "x_realtime": 1.6885314333873491,
+    "x_realtime_steady": 1.2663985750405118,
     "cached": false,
     "null_db": -52.259656081517846,
     "band_max_db": 0.06489390936141604
    },
    {
     "setting": "+ 48 kHz trbdf2",
-    "x_realtime": 0.9415311665895084,
-    "x_realtime_steady": 0.7061483749421313,
+    "x_realtime": 0.9517137000026802,
+    "x_realtime_steady": 0.7137852750020102,
     "cached": false,
     "null_db": -47.12110455297888,
     "band_max_db": 0.2776962087130883
    },
    {
     "setting": "+ 48 kHz trap",
-    "x_realtime": 0.6903180666267872,
-    "x_realtime_steady": 0.5177385499700904,
+    "x_realtime": 0.7193153666642805,
+    "x_realtime_steady": 0.5394865249982104,
     "cached": false,
     "null_db": -42.50463552259411,
     "band_max_db": 0.39271888260484644
    },
    {
     "setting": "+ 48 kHz trap, loose Newton",
-    "x_realtime": 0.6017118999734521,
-    "x_realtime_steady": 0.45128392498008907,
+    "x_realtime": 0.6301191334302226,
+    "x_realtime_steady": 0.472589350072667,
     "cached": false,
     "null_db": -42.50471905422059,
     "band_max_db": 0.39291038173010406
    },
    {
     "setting": "+ 48 kHz trap 1x, loose Newton",
-    "x_realtime": 0.31945089995861053,
-    "x_realtime_steady": 0.2395881749689579,
+    "x_realtime": 0.3368739332072437,
+    "x_realtime_steady": 0.25265544990543276,
     "cached": false,
     "null_db": -26.937976558861806,
     "band_max_db": 2.25629832561134
+   },
+   {
+    "setting": "48 kHz trbdf2 + tube tables",
+    "x_realtime": 0.9908193000592291,
+    "x_realtime_steady": 0.7431144750444219,
+    "cached": false,
+    "null_db": -47.12108894958453,
+    "band_max_db": 0.2776964067338241
+   },
+   {
+    "setting": "  + loose Newton",
+    "x_realtime": 0.8210015334188938,
+    "x_realtime_steady": 0.6157511500641704,
+    "cached": false,
+    "null_db": -47.12107317161095,
+    "band_max_db": 0.277661878238888
+   },
+   {
+    "setting": "  + linear cores",
+    "x_realtime": 0.6045596000428001,
+    "x_realtime_steady": 0.4534197000321001,
+    "cached": false,
+    "null_db": -46.318635816620116,
+    "band_max_db": 0.2776423802839858
+   },
+   {
+    "setting": "  + supplies on a 2nd thread",
+    "x_realtime": 0.4290480666483442,
+    "x_realtime_steady": 0.32178604998625815,
+    "cached": false,
+    "null_db": -46.31504020207437,
+    "band_max_db": 0.27763385236098514
+   },
+   {
+    "setting": "draft quality (96 kHz 1x)",
+    "x_realtime": 0.44220910004029673,
+    "x_realtime_steady": 0.33165682503022254,
+    "cached": false,
+    "null_db": -47.76832804440518,
+    "band_max_db": 0.25241070911509667
    }
   ]
  },
@@ -83,61 +123,101 @@
   "start_s": 10.0,
   "seconds": 3.0,
   "fresh": true,
-  "repeat": 3,
+  "repeat": 2,
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 4.014909766614437,
-    "x_realtime_steady": 3.011182324960828,
+    "x_realtime": 3.859620166787257,
+    "x_realtime_steady": 2.8947151250904426,
     "cached": false
    },
    {
     "setting": "error control off",
-    "x_realtime": 3.4075715999739864,
-    "x_realtime_steady": 2.55567869998049,
+    "x_realtime": 3.4924105666577816,
+    "x_realtime_steady": 2.619307924993336,
     "cached": false,
     "null_db": -240.0,
     "band_max_db": 0.0
    },
    {
     "setting": "+ 48 kHz",
-    "x_realtime": 1.824226133370151,
-    "x_realtime_steady": 1.3681696000276133,
+    "x_realtime": 1.8801870333651702,
+    "x_realtime_steady": 1.4101402750238776,
     "cached": false,
     "null_db": -67.66349699987691,
     "band_max_db": 0.013793052069758005
    },
    {
     "setting": "+ 48 kHz trbdf2",
-    "x_realtime": 1.0247506001032889,
-    "x_realtime_steady": 0.7685629500774667,
+    "x_realtime": 1.0412059666899343,
+    "x_realtime_steady": 0.7809044750174507,
     "cached": false,
     "null_db": -60.00781482700628,
     "band_max_db": 0.12668652518427592
    },
    {
     "setting": "+ 48 kHz trap",
-    "x_realtime": 0.7783525333118936,
-    "x_realtime_steady": 0.5837643999839202,
+    "x_realtime": 0.7646550998712579,
+    "x_realtime_steady": 0.5734913249034435,
     "cached": false,
     "null_db": -54.6546334223918,
     "band_max_db": 0.19896371155290637
    },
    {
     "setting": "+ 48 kHz trap, loose Newton",
-    "x_realtime": 0.6259917000619074,
-    "x_realtime_steady": 0.46949377504643053,
+    "x_realtime": 0.63543083332479,
+    "x_realtime_steady": 0.4765731249935925,
     "cached": false,
     "null_db": -54.65469636168539,
     "band_max_db": 0.1991122207167635
    },
    {
     "setting": "+ 48 kHz trap 1x, loose Newton",
-    "x_realtime": 0.3520119333018859,
-    "x_realtime_steady": 0.26400894997641444,
+    "x_realtime": 0.337004999940594,
+    "x_realtime_steady": 0.25275374995544553,
     "cached": false,
     "null_db": -40.6200024096913,
     "band_max_db": 1.0328421999301085
+   },
+   {
+    "setting": "48 kHz trbdf2 + tube tables",
+    "x_realtime": 1.0312397334103782,
+    "x_realtime_steady": 0.7734298000577837,
+    "cached": false,
+    "null_db": -60.0078246514585,
+    "band_max_db": 0.12668338065307694
+   },
+   {
+    "setting": "  + loose Newton",
+    "x_realtime": 0.8735498000557224,
+    "x_realtime_steady": 0.6551623500417918,
+    "cached": false,
+    "null_db": -60.01397967892296,
+    "band_max_db": 0.12672401304256908
+   },
+   {
+    "setting": "  + linear cores",
+    "x_realtime": 0.5918076333279411,
+    "x_realtime_steady": 0.4438557249959558,
+    "cached": false,
+    "null_db": -58.00560710797959,
+    "band_max_db": 0.12682477224411315
+   },
+   {
+    "setting": "  + supplies on a 2nd thread",
+    "x_realtime": 0.43023716658353806,
+    "x_realtime_steady": 0.32267787493765354,
+    "cached": false,
+    "null_db": -57.98594168392882,
+    "band_max_db": 0.12723255175325932
+   },
+   {
+    "setting": "draft quality (96 kHz 1x)",
+    "x_realtime": 0.45817453336591524,
+    "x_realtime_steady": 0.3436309000244364,
+    "cached": false,
+    "null_db": -58.3316989394229,
+    "band_max_db": 0.13462921213513113
    }
   ]
  },
@@ -157,14 +237,14 @@
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 23.6520275666068,
-    "x_realtime_steady": 17.7390206749551,
+    "x_realtime": 24.08951996670415,
+    "x_realtime_steady": 18.067139975028113,
     "cached": false
    },
    {
     "setting": "error control off",
-    "x_realtime": 17.84571286663413,
-    "x_realtime_steady": 13.384284649975598,
+    "x_realtime": 17.880928833348054,
+    "x_realtime_steady": 13.410696625011042,
     "cached": false,
     "null_db": -62.33516235069829,
     "band_max_db": 0.0041609194452689735,
@@ -174,8 +254,8 @@
    },
    {
     "setting": "+ 48 kHz",
-    "x_realtime": 11.626565833420804,
-    "x_realtime_steady": 8.719924375065602,
+    "x_realtime": 11.467158399987966,
+    "x_realtime_steady": 8.600368799990974,
     "cached": false,
     "null_db": -53.80553741512593,
     "band_max_db": 0.011259786236038849,
@@ -185,8 +265,8 @@
    },
    {
     "setting": "+ 48 kHz trbdf2",
-    "x_realtime": 5.80307936668396,
-    "x_realtime_steady": 4.35230952501297,
+    "x_realtime": 5.790625833285351,
+    "x_realtime_steady": 4.342969374964014,
     "cached": false,
     "null_db": -54.1907657952737,
     "band_max_db": 0.015514861148773207,
@@ -196,8 +276,8 @@
    },
    {
     "setting": "+ 48 kHz trap",
-    "x_realtime": 4.607573900061349,
-    "x_realtime_steady": 3.455680425046012,
+    "x_realtime": 4.64497119995455,
+    "x_realtime_steady": 3.483728399965912,
     "cached": false,
     "null_db": -43.298587405711196,
     "band_max_db": 0.055911612430627144,
@@ -207,8 +287,8 @@
    },
    {
     "setting": "+ 48 kHz trap, loose Newton",
-    "x_realtime": 3.9061814999828735,
-    "x_realtime_steady": 2.929636124987155,
+    "x_realtime": 3.883925133384764,
+    "x_realtime_steady": 2.912943850038573,
     "cached": false,
     "null_db": -43.40714714429447,
     "band_max_db": 0.055275605120336024,
@@ -218,13 +298,68 @@
    },
    {
     "setting": "+ 48 kHz trap 1x, loose Newton",
-    "x_realtime": 3.1338764666579664,
-    "x_realtime_steady": 2.350407349993475,
+    "x_realtime": 3.1788661666214466,
+    "x_realtime_steady": 2.384149624966085,
     "cached": false,
     "null_db": -38.3159125632953,
     "band_max_db": 0.34922025616124586,
     "cv_rms_v": 0.23926200359687322,
     "cv_max_v": 1.33556699944414,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "48 kHz trbdf2 + tube tables",
+    "x_realtime": 5.0424937334222095,
+    "x_realtime_steady": 3.7818703000666574,
+    "cached": false,
+    "null_db": -54.19119479581698,
+    "band_max_db": 0.015510239859153785,
+    "cv_rms_v": 0.035564999638976254,
+    "cv_max_v": 0.25347129900319487,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "  + loose Newton",
+    "x_realtime": 4.361777133308351,
+    "x_realtime_steady": 3.2713328499812633,
+    "cached": false,
+    "null_db": -53.55913100656295,
+    "band_max_db": 0.014147965767918436,
+    "cv_rms_v": 0.03909936737096278,
+    "cv_max_v": 0.2570952614055386,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "  + linear cores",
+    "x_realtime": 3.4334661665682993,
+    "x_realtime_steady": 2.5750996249262244,
+    "cached": false,
+    "null_db": -52.163071699547984,
+    "band_max_db": 0.027184358725676816,
+    "cv_rms_v": 0.038714446677029835,
+    "cv_max_v": 0.24075309831960112,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "  + supplies on a 2nd thread",
+    "x_realtime": 1.637607066736867,
+    "x_realtime_steady": 1.2282053000526503,
+    "cached": false,
+    "null_db": -51.86146996330737,
+    "band_max_db": 0.026190672245505198,
+    "cv_rms_v": 0.04128945424780663,
+    "cv_max_v": 0.24154655535085112,
+    "cv_mean_v": -77.435691261394
+   },
+   {
+    "setting": "draft quality (96 kHz 1x)",
+    "x_realtime": 1.6102021667174995,
+    "x_realtime_steady": 1.2076516250381246,
+    "cached": false,
+    "null_db": -51.76053621738841,
+    "band_max_db": 0.031448760982584645,
+    "cv_rms_v": 0.04231635899239984,
+    "cv_max_v": 0.24993858937280322,
     "cv_mean_v": -77.435691261394
    }
   ]
@@ -245,14 +380,14 @@
   "rows": [
    {
     "setting": "production",
-    "x_realtime": 18.397376966662705,
-    "x_realtime_steady": 13.798032724997029,
+    "x_realtime": 18.248326866732288,
+    "x_realtime_steady": 13.686245150049217,
     "cached": false
    },
    {
     "setting": "error control off",
-    "x_realtime": 15.708279666646073,
-    "x_realtime_steady": 11.781209749984555,
+    "x_realtime": 15.83693793322891,
+    "x_realtime_steady": 11.877703449921682,
     "cached": false,
     "null_db": -72.55089548915052,
     "band_max_db": 0.0008661397480196342,
@@ -262,8 +397,8 @@
    },
    {
     "setting": "+ 48 kHz",
-    "x_realtime": 10.156357533298433,
-    "x_realtime_steady": 7.617268149973825,
+    "x_realtime": 10.131794366675118,
+    "x_realtime_steady": 7.598845775006339,
     "cached": false,
     "null_db": -61.020174486304825,
     "band_max_db": 0.014106870101059599,
@@ -273,8 +408,8 @@
    },
    {
     "setting": "+ 48 kHz trbdf2",
-    "x_realtime": 5.471768899975966,
-    "x_realtime_steady": 4.103826674981974,
+    "x_realtime": 5.553264300028483,
+    "x_realtime_steady": 4.164948225021362,
     "cached": false,
     "null_db": -58.02254189561359,
     "band_max_db": 0.020791693249208265,
@@ -284,8 +419,8 @@
    },
    {
     "setting": "+ 48 kHz trap",
-    "x_realtime": 4.048223700063924,
-    "x_realtime_steady": 3.036167775047943,
+    "x_realtime": 4.106740599963814,
+    "x_realtime_steady": 3.0800554499728605,
     "cached": false,
     "null_db": -49.437892708514696,
     "band_max_db": 0.022131936062663726,
@@ -295,8 +430,8 @@
    },
    {
     "setting": "+ 48 kHz trap, loose Newton",
-    "x_realtime": 3.343781466751049,
-    "x_realtime_steady": 2.5078361000632867,
+    "x_realtime": 3.4240011000074446,
+    "x_realtime_steady": 2.5680008250055835,
     "cached": false,
     "null_db": -49.521651957029356,
     "band_max_db": 0.022616056241190563,
@@ -306,13 +441,68 @@
    },
    {
     "setting": "+ 48 kHz trap 1x, loose Newton",
-    "x_realtime": 2.7385064332435527,
-    "x_realtime_steady": 2.0538798249326646,
+    "x_realtime": 2.76013659996291,
+    "x_realtime_steady": 2.0701024499721825,
     "cached": false,
     "null_db": -35.72106695644284,
     "band_max_db": 0.48733971100636353,
     "cv_rms_v": 0.1689869760815368,
     "cv_max_v": 0.9111059171721649,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "48 kHz trbdf2 + tube tables",
+    "x_realtime": 4.682226233339558,
+    "x_realtime_steady": 3.5116696750046685,
+    "cached": false,
+    "null_db": -58.02249706658913,
+    "band_max_db": 0.020794978011259957,
+    "cv_rms_v": 0.02460577372511494,
+    "cv_max_v": 0.1537485379327279,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "  + loose Newton",
+    "x_realtime": 3.948897633391122,
+    "x_realtime_steady": 2.9616732250433415,
+    "cached": false,
+    "null_db": -57.92810677393514,
+    "band_max_db": 0.020578226806222233,
+    "cv_rms_v": 0.025205298561295646,
+    "cv_max_v": 0.1554689663995248,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "  + linear cores",
+    "x_realtime": 3.1255738333178065,
+    "x_realtime_steady": 2.3441803749883547,
+    "cached": false,
+    "null_db": -54.35266807723685,
+    "band_max_db": 0.02191795778396255,
+    "cv_rms_v": 0.05704370534711469,
+    "cv_max_v": 0.3070110839979492,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "  + supplies on a 2nd thread",
+    "x_realtime": 1.546307566575706,
+    "x_realtime_steady": 1.1597306749317795,
+    "cached": false,
+    "null_db": -54.3528221007897,
+    "band_max_db": 0.02195216314148496,
+    "cv_rms_v": 0.057020308278061704,
+    "cv_max_v": 0.30685468141005856,
+    "cv_mean_v": -59.53136859601691
+   },
+   {
+    "setting": "draft quality (96 kHz 1x)",
+    "x_realtime": 1.5405402334096532,
+    "x_realtime_steady": 1.1554051750572398,
+    "cached": false,
+    "null_db": -54.802394162019354,
+    "band_max_db": 0.025728100712321123,
+    "cv_rms_v": 0.05356566831519353,
+    "cv_max_v": 0.30418951731281396,
     "cv_mean_v": -59.53136859601691
    }
   ]

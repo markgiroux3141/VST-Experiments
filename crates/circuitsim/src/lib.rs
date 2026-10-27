@@ -18,6 +18,7 @@ pub mod ir;
 pub mod linalg;
 pub mod mna;
 pub mod newton;
+pub mod partition;
 pub mod timing;
 pub mod transient;
 

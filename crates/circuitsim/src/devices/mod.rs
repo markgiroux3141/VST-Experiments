@@ -18,11 +18,13 @@ pub mod core;
 pub mod diode;
 pub mod pentode;
 pub mod triode;
+pub mod triode_table;
 
 pub use self::core::MagneticCore;
 pub use diode::{JunctionDiode, VacuumDiode};
 pub use pentode::Pentode;
 pub use triode::Triode;
+pub use triode_table::TriodeTable;
 
 /// A nonlinear multi-port, as the Newton solver sees it.
 pub trait Device: fmt::Debug + Send + Sync {
@@ -69,6 +71,18 @@ pub trait Device: fmt::Debug + Send + Sync {
 
     /// Restore memory taken with [`Device::state`].
     fn set_state(&mut self, _state: &[f64]) {}
+
+    /// The device as a [`Triode`], if it is one.
+    fn triode(&self) -> Option<&Triode> {
+        None
+    }
+
+    /// The same model evaluated from a table, where that is much cheaper
+    /// (`Options::tube_tables`): variable-mu triodes and banks of triodes,
+    /// see [`TriodeTable`].
+    fn tabulate(&self) -> Option<Box<dyn Device>> {
+        None
+    }
 }
 
 /// Largest port count [`Parallel`] sums without allocating (a pentode has 3).
@@ -125,6 +139,12 @@ impl Device for Parallel {
 
     fn shunt(&self, port: usize) -> f64 {
         self.parts.iter().map(|d| d.shunt(port)).sum()
+    }
+
+    /// A bank of triodes as one table.
+    fn tabulate(&self) -> Option<Box<dyn Device>> {
+        let tubes: Option<Vec<&Triode>> = self.parts.iter().map(|d| d.triode()).collect();
+        tubes.map(|t| Box::new(TriodeTable::new(&t)) as Box<dyn Device>)
     }
 }
 

@@ -86,13 +86,27 @@ def _render_inputs(args: argparse.Namespace, sample_rate: int, seed: int):
     return [(label, x[a:b]) for label, x in items]
 
 
+def _set_quality(args: argparse.Namespace) -> None:
+    """--quality for every render this process (and a reloading server) makes."""
+    import os
+
+    from varimu.sim.io import QUALITY_ENV
+
+    if getattr(args, "quality", None):
+        os.environ[QUALITY_ENV] = args.quality
+
+
 def _engine_settings(engine: str | None):
-    """Transient settings for `engine` (None: the configured one), with the engine
-    checked first: a missing or stale circuitsim build stops here with its message."""
+    """Transient settings for `engine` (None: the configured one) at the configured
+    quality, with the engine checked first: a missing or stale circuitsim build stops
+    here with its message."""
     from varimu.sim import fast
     from varimu.sim.io import TransientSettings
 
-    ts = TransientSettings.from_sim_settings(engine=engine or "configured")
+    try:
+        ts = TransientSettings.from_sim_settings(engine=engine or "configured")
+    except ValueError as e:
+        raise SystemExit(f"error: {e}") from e
     if ts.engine == "circuitsim":
         try:
             fast.check_build()
@@ -107,9 +121,10 @@ def _cmd_render(args: argparse.Namespace) -> int:
     from varimu.sim import runner
     from varimu.sim.io import write_audio
 
+    _set_quality(args)
     ts = _engine_settings(args.engine)
     settings = load_sim_settings()
-    inputs = _render_inputs(args, settings.sample_rate, settings.seed)
+    inputs = _render_inputs(args, ts.sample_rate, settings.seed)
     base = runner.parse_overrides(args.set or [])
     axes = []
     for spec in args.vary or []:
@@ -126,7 +141,7 @@ def _cmd_render(args: argparse.Namespace) -> int:
 
     n = min(args.jobs or runner.default_jobs(), len(jobs))
     print(f"{len(jobs)} render(s), up to {n} in parallel")
-    print(f"engine: {ts.engine} ({ts.method}, {ts.oversample}x oversampling)")
+    print(f"engine: {ts.engine} ({ts.quality}: {ts.method}, {ts.oversample}x oversampling)")
     renders = runner.render_many(jobs, settings=ts, max_jobs=n)
     single = len(renders) == 1 and args.out and args.out.suffix.lower() == ".wav"
     for r, name in zip(renders, names, strict=True):
@@ -152,6 +167,7 @@ def _cmd_unit(args: argparse.Namespace) -> int:
     from varimu.measure import profiles
     from varimu.sim import runner
 
+    _set_quality(args)
     _engine_settings(None)  # fails early without the engine
     genome: dict = {}
     if args.genome:
@@ -170,8 +186,9 @@ def _cmd_listen(args: argparse.Namespace) -> int:
         raise SystemExit(
             f"{e}. Install the listen extra: uv sync --extra listen --extra fast"
         ) from e
+    _set_quality(args)
     ts = _engine_settings(None)
-    print(f"engine: {ts.engine} ({ts.method}, {ts.oversample}x oversampling)")
+    print(f"engine: {ts.engine} ({ts.quality}: {ts.method}, {ts.oversample}x oversampling)")
     print(f"varimu listen on http://{args.host}:{args.port}  (Ctrl-C to stop)")
     serve(args.host, args.port, args.jobs)
     return 0
@@ -322,6 +339,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="simulation engine (default: sim_settings.yaml simulator.engine, circuitsim; "
         "ngspice is the reference)",
     )
+    p.add_argument(
+        "--quality",
+        choices=["production", "draft"],
+        help="circuitsim settings: production (default) or the fast draft "
+        "(sim_settings.yaml circuitsim_draft)",
+    )
     p.set_defaults(func=_cmd_render)
 
     p = sub.add_parser(
@@ -336,12 +359,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="fairchild_670",
         help="circuit file in config/circuits (its measurement profile: varimu.measure.profiles)",
     )
+    p.add_argument(
+        "--quality",
+        choices=["production", "draft"],
+        help="circuitsim settings: production (default) or the fast draft "
+        "(sim_settings.yaml circuitsim_draft)",
+    )
     p.set_defaults(func=_cmd_unit)
 
     p = sub.add_parser("listen", help="tweak-and-listen web page (needs the listen extra)")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--jobs", type=int, help="parallel renders (default: cpu_count - 2)")
+    p.add_argument(
+        "--quality",
+        choices=["production", "draft"],
+        help="circuitsim settings: production (default) or the fast draft "
+        "(sim_settings.yaml circuitsim_draft)",
+    )
     p.set_defaults(func=_cmd_listen)
 
     p = sub.add_parser(

@@ -1,13 +1,18 @@
-"""How much cheaper settings cost in sound and save in time: a first look at a fast
-"draft" mode for real time (CIRCUIT_SIM_PLAN.md M8), with no engine changes.
+"""How much cheaper settings cost in sound and save in time: the fast "draft" quality
+for real time (CIRCUIT_SIM_PLAN.md M8, "Draft quality").
 
     uv run --extra fast python scripts/draft_settings_study.py [--only eqp1a|670] [--seconds 3]
+        [--fresh [--repeat N]] [--rows PREFIX ...]
 
 Each excerpt renders at production settings (config/sim_settings.yaml, untouched) and
 at a ladder of draft settings, each adding one lever: local error control off, the
 host rate at 48 kHz, a cheaper method (TR-BDF2 / trapezoidal), looser Newton
-tolerances, 1x oversampling. Every draft is compared with the production render at
-48 kHz (the production output decimated): the null (rms of the difference, dB re the
+tolerances, 1x oversampling; then from TR-BDF2 on (2026-10-27, engine levers): tube
+tables, loose Newton, the cores' linear limit, the supplies on a second thread (the
+real-time configuration, 48 kHz at 2x), and last the draft quality as
+sim_settings.yaml's circuitsim_draft defines it (96 kHz at 1x: the same internal
+rate). Every draft is compared with the production render at 48 kHz (the production
+output decimated): the null (rms of the difference, dB re the
 signal), the largest octave-band level difference from 31 Hz to 16 kHz (a tilt or a
 lost top octave), and on the 670 the control voltage (rms and largest difference, V).
 Speed is the wall time per second of audio, the 1 s of supply settling included, and
@@ -55,14 +60,24 @@ CASES = {
 NO_EC = {"error_abstol": 0.0, "error_reltol": 0.0}
 R48 = {**NO_EC, "sample_rate": 48000}
 LOOSE = {"newton_reltol": 1e-3, "newton_vntol": 1e-2}
+SUPPLIES = ("power supply", "bias supply", "channel 2 (idle, lumped)")
+TRB = {**R48, "method": "trbdf2"}
+TABLES = {**TRB, "tube_tables": True}
+TABLES_LOOSE = {**TABLES, **LOOSE}
+LINEAR = {**TABLES_LOOSE, "cores": "linear"}
 LADDER = [
     ("error control off", NO_EC),
     ("+ 48 kHz", R48),
-    ("+ 48 kHz trbdf2", {**R48, "method": "trbdf2"}),
+    ("+ 48 kHz trbdf2", TRB),
     ("+ 48 kHz trap", {**R48, "method": "trap"}),
     ("+ 48 kHz trap, loose Newton", {**R48, "method": "trap", **LOOSE}),
     ("+ 48 kHz trap 1x, loose Newton", {**R48, "method": "trap", "oversample": 1, **LOOSE}),
+    ("48 kHz trbdf2 + tube tables", TABLES),
+    ("  + loose Newton", TABLES_LOOSE),
+    ("  + linear cores", LINEAR),
+    ("  + supplies on a 2nd thread", {**LINEAR, "partition": SUPPLIES}),
 ]
+DRAFT_ROW = "draft quality (96 kHz 1x)"  # sim_settings circuitsim_draft, added in main()
 
 
 def _db(x: float) -> float:
@@ -111,7 +126,7 @@ def _render(job: runner.RenderJob, s: TransientSettings, fresh: bool, repeat: in
 
 
 def run_case(name, circuit, panel, clip, start_s, seconds, base: TransientSettings,
-             fresh: bool = False, repeat: int = 1) -> dict:  # fmt: skip
+             fresh: bool = False, repeat: int = 1, ladder=LADDER) -> dict:  # fmt: skip
     x96 = excerpt(clip, start_s, seconds, base.sample_rate)
     x48 = resample_poly(x96, 1, 2)  # the input: zero-padded, as rendered
     label = f"draft-study:{name}"
@@ -121,7 +136,7 @@ def run_case(name, circuit, panel, clip, start_s, seconds, base: TransientSettin
     e0 = int(TRIM_S * 48000)
     ref_bands = _bands(ref[e0 : len(ref) - e0], 48000)
     rows = [{"setting": "production", **_speed(hq, wall, base.settle_s), "cached": hq.cached}]
-    for setting, change in LADDER:
+    for setting, change in ladder:
         s = dataclasses.replace(base, **change)
         x = x48 if s.sample_rate == 48000 else x96
         try:
@@ -179,17 +194,33 @@ def main() -> None:
     ap.add_argument("--seconds", type=float, default=3.0)
     ap.add_argument("--fresh", action="store_true", help="bypass the cache: time every render")
     ap.add_argument("--repeat", type=int, default=1, help="with --fresh: best of N runs")
+    ap.add_argument(
+        "--rows",
+        nargs="+",
+        metavar="PREFIX",
+        help="only the ladder rows starting with these (production always runs)",
+    )
     args = ap.parse_args()
-    base = TransientSettings.from_sim_settings(engine="configured")
+    base = TransientSettings.from_sim_settings(engine="configured", quality="production")
     if base.engine != "circuitsim":
         sys.exit("the study is about circuitsim (simulator.engine)")
+    draft = TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
+    draft = dataclasses.asdict(draft)
+    ref = dataclasses.asdict(base)
+    ladder = [*LADDER, (DRAFT_ROW, {k: v for k, v in draft.items() if v != ref[k]})]
+    if args.rows:
+        ladder = [r for r in ladder if any(r[0].strip().startswith(p) for p in args.rows)]
     OUT.mkdir(parents=True, exist_ok=True)
     path = OUT / "draft_study.json"
     results = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     t0 = time.perf_counter()
     for group in args.only or sorted(CASES):
         for case in CASES[group]:
-            res = run_case(*case, args.seconds, base, args.fresh, args.repeat)
+            res = run_case(*case, args.seconds, base, args.fresh, args.repeat, ladder)
+            if args.rows and res["case"] in results:  # the other rows as they were
+                done = {r["setting"] for r in res["rows"]}
+                old = [r for r in results[res["case"]]["rows"] if r["setting"] not in done]
+                res["rows"] = res["rows"][:1] + old[1:] + res["rows"][1:]
             results[res["case"]] = res
             print(table(res), flush=True)
             path.write_text(json.dumps(results, indent=1), encoding="utf-8", newline="\n")

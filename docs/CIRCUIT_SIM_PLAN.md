@@ -1160,6 +1160,116 @@ point, and (the user's call: the one-coupled-simulation rule) a slower rate for 
 supplies. Not yet listened to. (A first run under a full test suite's load read 2-8x
 slower.)
 
+**Draft quality (2026-10-27).** Asked for: the 670 in real time on one core at 48 kHz,
+2x, TR-BDF2, no error control, with headroom (0.5-0.7x), within ~-45 dB of production
+and the CV within ~0.1 V rms; production unchanged.
+
+*Where the time went.* `examples/bench.rs` (now with the draft's settings as environment
+variables, `--features timing` in us per step, and partitioned runs) on the study's two
+670 excerpts at 48 kHz, 2x, TR-BDF2: **44 us per step against the 10.4 us of real time**
+at that 96 kHz internal rate: devices 35%, factorizations 25% (0.93 per step), the rest
+of the iterations 19%, stage linear algebra 15%. So the target needed 6-9x, not the
+2.5-4.4x the settings table suggests. Of the handoff's levers:
+
+- *One port per paralleled 6386 bank* was already in: `mna.rs` merges stateless devices
+  on the same pins into a `Parallel` since Phase 3 (the 45 ports are after it).
+- **Tube tables** (`devices/triode_table.rs`, `Options::tube_tables`): every Koren
+  section factors exactly into `(Vp/Kp)^Ex Phi(u)`, `u = Vg / sqrt(Kvb + Vp^2)`, so all
+  sections sharing (Kp, Ex, Kvb) (a 6386's 32, a bank's 128: mu and Kg1 carry the
+  per-tube spread) are one 1-D function: ln Phi as a cubic Hermite through its exact
+  values and slopes at spacing 0.05/Kp; below the grid every section is in its
+  exponential tail and ln Phi is linear (exact); above u = 0.5 the exact sections.
+  Within 9e-8 of the exact model over the 670's range (`tests/devices.rs`), -118 dB
+  from it on the 670; a bank costs ~1 lookup instead of 128 sections. 43 -> 37 us.
+- *The reuse thresholds* (THETA_REFACTOR / THETA_MAX) are at their optimum: looser
+  ones trade factorizations for iterations (37-42 us, and -63 dB at 1.0 / 0.95).
+- *Why the 670 refactors so often:* the sidechain bridge (DCR101-104 on T104's floating
+  secondary) is the worst port in 95% of the slowly contracting iterations and has all
+  the junction limiting: diodes switching against a stale Jacobian, coupled to the 6973s
+  through T104. Tried and dropped: a current convergence test for ports whose current
+  doesn't move (accepting on current alone diverges at DV304; capped at 0.1 V it saves
+  1.5%), and **low-rank (Woodbury) refactors** of just the devices whose Jacobian moved
+  (15.5-20 us instead of 13: the rest of the matrix goes stale, 5-12k exact retries).
+- *The 45 x 45 LU* runs at ~1 multiply-add per cycle (8.9 us); a left-looking,
+  4-updates-per-pass version (same arithmetic) was no faster, nor were AVX2 or FMA on
+  the kernel alone; the 22 x 22 solve (0.45 us) is latency-bound. Kernel work is worth
+  ~1 us per step at most; not done.
+
+*Speed ceilings of the model-level options* (the user's decisions; timing-only IR
+variants, draft settings with tables): channel 2's devices out of Newton -12%; every
+supply as an ideal rail -51% (and still 1.8x short: the audio path and sidechain alone
+are 18.9 us); the JA cores in their linear limit (`cores: linear`, as ngspice runs them)
+-21% at -54 dB / CV 0.03 V from the JA draft; all three 13.3 us (TR-BDF2, 1.27x) and
+10.6 us (trapezoidal, 1.01x). So one core can't reach the target with TR-BDF2 at this
+rate even with every option. The user allowed two cores and left the model choices to
+a recommendation: the cores' linear limit (yes), channel 2 linearized (no: small), the
+supplies on a second core (yes, measured below).
+
+- **Partitioned runs** (`partition.rs`, `Mna::externals` / `outputs`,
+  `Transient::with_externals` / `set_externals`): the IR's sections split by title, the
+  named ones (power supply, bias supply, the idle channel 2) on a second thread. At each
+  shared node (the six rails) the first partition sees a voltage source at the second's
+  voltage, the second a current injection, the first's source current; both start at
+  the whole circuit's DC point and step in lockstep, each with the other's values from
+  the end of the previous sample, extrapolated linearly over the sample (the rows are
+  "externals": sources whose values the caller sets per sample, a DK response column
+  each, like the mains' sine sources). The schedule is fixed, so results don't depend on
+  timing (bit-identical runs, tested). **-103 dB / CV 0.1 mV from the one solve** on the
+  arpeggio (held values: -90 dB; `tests/partition.rs`: -114 dB on a 0 dBFS tone). It
+  bends "one coupled simulation" for the draft only: still one circuit, its supply rails
+  coupled explicitly with 10 us of latency, against millisecond rail dynamics. Splits
+  through the signal path don't work: at T104's secondary the first side's source closes
+  a loop with the windings (singular DC), at a 6973 grid the second side has no DC path,
+  and with the 12BH7 in the second partition the lagged coupling diverges in 29 samples.
+  The supply side alone is 4.8 us per step (0.04 factorizations: the refactors are all
+  the audio side's), so the first partition sets the pace.
+- *Loose Newton* (1e-3 / 1e-2 V, a solver setting): -74 dB / CV 4 mV from production's
+  tolerances on the draft, 11% faster (3e-3 / 3e-2: -38 dB, rejected).
+
+Bench, 48 kHz 2x TR-BDF2, linear cores, tables, loose Newton, supplies on a second
+thread: **1.18x (arpeggio) and 1.10x (mix) slower than real time** (12.3 / 11.5 us per
+step; the audio thread alone with ideal rails 11.3 us: devices 2.1, factorizations 2.1,
+iterations 2.2, stage algebra 2.5, step algebra 1.3, other 1.2). The supply thread
+spins between samples (yielding sooner costs 4%).
+
+*Exposed as a quality* (the user's choice): `circuitsim_draft` in sim_settings.yaml on
+top of `circuitsim`, `--quality draft` on `render`, `unit` and `listen` (sets
+`$VARIMU_QUALITY` for the process; `TransientSettings.from_sim_settings(quality=...)`;
+callers that name an engine stay production), and a production / draft selector on the
+listen page and in the editor's listen panel (per render job). Offline the draft runs at
+the project's 96 kHz at 1x: the same 96 kHz internal rate and cost as a 48 kHz host at
+2x, without resampling every caller's input. Draft renders cache apart (the settings
+are in the key). Production is untouched: every new option is off in it, and the DK
+path computes the same numbers (the source rows generalize the sine sources' columns).
+
+The draft study with the new rows (`draft_settings_study.py --fresh --repeat 2`,
+2026-10-27; x per simulated second, settling counted; null and CV against production;
+the 670's arpeggio / mix, the EQP-1A's drums / mix):
+
+| setting | 670 x | 670 null | 670 CV rms | EQP-1A x | EQP-1A null |
+|---|---|---|---|---|---|
+| production | 18.1 / 13.7 | | | 2.6 / 2.9 | |
+| 48 kHz TR-BDF2 (as above) | 4.3 / 4.2 | -54 / -58 dB | 0.036 / 0.025 V | 0.7 / 0.8 | -47 / -60 dB |
+| + tube tables | 3.8 / 3.5 | -54 / -58 dB | 0.036 / 0.025 V | 0.7 / 0.8 | -47 / -60 dB |
+| + loose Newton | 3.3 / 3.0 | -54 / -58 dB | 0.039 / 0.025 V | 0.6 / 0.7 | -47 / -60 dB |
+| + linear cores | 2.6 / 2.3 | -52 / -54 dB | 0.039 / 0.057 V | 0.5 / 0.4 | -46 / -58 dB |
+| + supplies on a 2nd thread (48 kHz 2x) | 1.2 / 1.2 | -52 / -54 dB | 0.041 / 0.057 V | 0.3 / 0.3 | -46 / -58 dB |
+| **draft quality (96 kHz 1x)** | **1.2 / 1.2** | **-52 / -55 dB** | **0.042 / 0.054 V** | **0.3 / 0.3** | **-48 / -58 dB** |
+
+Octave bands within 0.03 dB on the 670 and 0.25 dB on the EQP-1A. The draft at 96 kHz 1x
+matches the real-time configuration (48 kHz 2x) in speed and sound. So: the 670 11-15x
+faster than production, within -52 dB of it, its CV within 0.06 V rms; the EQP-1A 3x
+faster than real time (it only moves its power supply to the second thread).
+
+*Status.* Not done: the 670 runs 1.1-1.2x slower than real time on two cores (the
+handoff's target was one core at 0.5-0.7x). What's left, each a few percent to ~10%:
+the small-matrix kernels (the 22 x 22 LU and solve, the iteration bookkeeping), the
+partition's own ~1 us per step, and moving the sidechain bridge to the second core
+(per-node coupling roles: T104's floating secondary must receive current, not voltage;
+its speed ceiling couldn't be measured cheaply, since the sidechain without its bridge
+runs unloaded). Listening to production against the draft in the blind A/B page comes
+next, with the user.
+
 Phase 2's nonlinear transformer core lands in circuitsim when Phase 2 does,
 not in ngspice (decided 2026-10-21, Open decisions). The device trait
 carries state from M3 so that isn't a redesign.

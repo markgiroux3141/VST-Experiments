@@ -143,6 +143,14 @@ def _kernel32():
     return k32
 
 
+def partition_sections(ir: CircuitIR, s: TransientSettings) -> list[str]:
+    """The sections of `ir` that `s.partition` puts on a second thread (the titles the
+    circuit has; none if that would leave nothing besides them)."""
+    titles = [sec.title for sec in ir.sections]
+    second = [t for t in s.partition if t in titles]
+    return second if len(second) < len(titles) else []
+
+
 def run_transient(
     ir: CircuitIR,
     input_v: np.ndarray,
@@ -178,6 +186,9 @@ def run_transient(
             error_reltol=s.error_reltol,
             step_selection=s.step_selection,
             error_norm=s.error_norm,
+            tube_tables=s.tube_tables,
+            partition=partition_sections(ir, s) or None,
+            partition_coupling=s.partition_coupling,
             progress=progress,
         )
     except circuitsim.SimulationError as e:

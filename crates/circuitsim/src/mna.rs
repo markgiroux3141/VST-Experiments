@@ -108,6 +108,14 @@ pub struct Mna {
     /// Index into `x` of each probe, `None` for ground.
     pub probes: Vec<(String, Option<usize>)>,
     pub devices: Vec<DeviceInstance>,
+    /// Rows of `b` driven from outside the circuit (empty from
+    /// [`Mna::from_ir`]): a partitioned run couples two circuits through them
+    /// (`partition.rs`). Their values, added to `b`, are set per step
+    /// ([`crate::transient::Transient::set_externals`]); DK solver only.
+    pub externals: Vec<usize>,
+    /// Unknowns a probes-only run computes at every step besides the probes
+    /// (the coupling values a partitioned run reads).
+    pub outputs: Vec<usize>,
 }
 
 /// Merge stateless instances of one kind on the same pins into one
@@ -314,7 +322,33 @@ impl Mna {
             input_row,
             probes,
             devices: instances,
+            externals: Vec::new(),
+            outputs: Vec::new(),
         })
+    }
+
+    /// Rows of the sources whose values change during a run: every sine
+    /// source's (see [`Mna::waves`]), then the [`Mna::externals`].
+    pub fn source_rows(&self) -> Vec<usize> {
+        self.waves
+            .iter()
+            .map(|w| w.row)
+            .chain(self.externals.iter().copied())
+            .collect()
+    }
+
+    /// The unknown index of node `name` (`None` for ground or no such node).
+    pub fn node(&self, name: &str) -> Option<usize> {
+        self.unknowns
+            .iter()
+            .position(|u| matches!(u, Unknown::Node(n) if n == name))
+    }
+
+    /// The unknown index of the branch current of element `name`.
+    pub fn branch(&self, name: &str) -> Option<usize> {
+        self.unknowns
+            .iter()
+            .position(|u| matches!(u, Unknown::Branch(n) if n == name))
     }
 
     /// Add every sine source's sinusoidal part at time `t` to `rhs`.
@@ -330,6 +364,19 @@ impl Mna {
 
     pub fn is_empty(&self) -> bool {
         self.unknowns.is_empty()
+    }
+
+    /// Replace every device that has a tabulated form ([`Device::tabulate`]:
+    /// variable-mu triodes, banks of triodes) by it. Returns how many.
+    pub fn tabulate_tubes(&mut self) -> usize {
+        let mut n = 0;
+        for d in &mut self.devices {
+            if let Some(t) = d.device.tabulate() {
+                d.device = t;
+                n += 1;
+            }
+        }
+        n
     }
 
     /// The probe values for the solution `x`.

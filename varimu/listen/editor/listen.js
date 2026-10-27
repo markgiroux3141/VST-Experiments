@@ -18,7 +18,7 @@ export class Listen {
     this.wave = $('#wave');
     for (const b of document.querySelectorAll('.transport [data-k]')) b.addEventListener('click', () => this.choose(b.dataset.k));
     $('#play').addEventListener('click', () => this.toggle());
-    for (const id of ['#lsource', '#lstart', '#llen']) $(id).addEventListener('change', () => { this.saveSettings(); this.rerender(); });
+    for (const id of ['#lsource', '#lstart', '#llen', '#lquality']) $(id).addEventListener('change', () => { this.saveSettings(); this.rerender(); });
     this.wave.addEventListener('pointerdown', e => {
       const r = this.wave.getBoundingClientRect(), d = this.duration();
       if (!d) return;
@@ -39,10 +39,11 @@ export class Listen {
     sel.value = r.sources.includes(saved.source) ? saved.source : r.sources[0];
     if (saved.start !== undefined) $('#lstart').value = saved.start;
     if (saved.len !== undefined) $('#llen').value = saved.len;
+    if (saved.quality) $('#lquality').value = saved.quality;
     this.status(`Edit a value to hear it. <kbd>Ctrl Enter</kbd> renders now (${esc(this.engine)}).`);
   }
 
-  saveSettings() { this.store.set('listen', { source: $('#lsource').value, start: +$('#lstart').value, len: +$('#llen').value }); }
+  saveSettings() { this.store.set('listen', { source: $('#lsource').value, start: +$('#lstart').value, len: +$('#llen').value, quality: $('#lquality').value }); }
 
   /** A new circuit: forget its renders. */
   reset(base = null) {
@@ -55,7 +56,7 @@ export class Listen {
     this.onState?.(this);
   }
 
-  excerpt() { return { source: $('#lsource').value, start_s: +$('#lstart').value || 0, seconds: +$('#llen').value || 4 }; }
+  excerpt() { return { source: $('#lsource').value, start_s: +$('#lstart').value || 0, seconds: +$('#llen').value || 4, quality: $('#lquality').value }; }
 
   /** The drawing changed by an edit labelled `label` at time t0 (performance.now()). */
   edited(drawing, label, t0) {

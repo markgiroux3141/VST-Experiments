@@ -7,6 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::ir::{CircuitIr, IR_VERSION};
+use crate::partition::{Coupling, simulate_partitioned};
 use crate::transient::{ErrorNorm, Method, Options, Solver};
 
 create_exception!(
@@ -37,7 +38,10 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
 /// `dt` seconds; sample 0 is the DC operating point. `method` is one of
 /// `Method::NAMES` ("trap", "radau5", ...), `solver` one of `Solver::NAMES`
 /// ("dk", "mna"). The other keywords are solver options (see `Options` in
-/// transient.rs; None keeps the default). Returns {probe name, e.g.
+/// transient.rs; None keeps the default). `partition` names sections of the
+/// IR to run on a second thread, coupled through the nodes they share with
+/// one sample of latency (`partition.rs`; `partition_coupling` "hold" or
+/// "extrapolate"); the stats are then the first partition's. Returns {probe name, e.g.
 /// "v(out)": float64 array like `input`}, and with `stats=True` also a dict
 /// of solver statistics. Raises ValueError for invalid arguments and
 /// SimulationError when the circuit can't be simulated.
@@ -51,8 +55,8 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
     ir_json, input, dt, method = "trap", *, solver = None, reltol = None, vntol = None,
     max_iter = None, max_halvings = None, gmin = None, extrapolate = None, input_order = None,
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
-    newton_reuse = None, step_selection = None, error_norm = None, stats = false,
-    progress = None
+    newton_reuse = None, step_selection = None, error_norm = None, tube_tables = None,
+    partition = None, partition_coupling = None, stats = false, progress = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -76,6 +80,9 @@ fn simulate<'py>(
     newton_reuse: Option<bool>,
     step_selection: Option<bool>,
     error_norm: Option<&str>,
+    tube_tables: Option<bool>,
+    partition: Option<Vec<String>>,
+    partition_coupling: Option<&str>,
     stats: bool,
     progress: Option<Py<PyAny>>,
 ) -> PyResult<Bound<'py, PyAny>> {
@@ -102,16 +109,18 @@ fn simulate<'py>(
         error_norm: error_norm
             .map_or(Ok(d.error_norm), ErrorNorm::parse)
             .map_err(invalid)?,
+        tube_tables: tube_tables.unwrap_or(d.tube_tables),
         // Python gets the probes only.
         all_unknowns: false,
         ..d
     };
+    let coupling = Coupling::parse(partition_coupling.unwrap_or("extrapolate")).map_err(invalid)?;
     let x = input.as_array().to_vec();
     let total = x.len();
     let mut raised: Option<PyErr> = None;
     let result = py.detach(|| {
         let every = total.div_ceil(PROGRESS_CALLS);
-        crate::simulate_with_progress(&ir, &x, dt, &opts, every, |done| {
+        let report = |done: usize| {
             Python::attach(|py| {
                 py.check_signals()?;
                 if let Some(f) = &progress {
@@ -123,7 +132,13 @@ fn simulate<'py>(
                 raised = Some(e);
                 crate::Error::new("interrupted")
             })
-        })
+        };
+        match &partition {
+            Some(second) if !second.is_empty() => {
+                simulate_partitioned(&ir, second, coupling, &x, dt, &opts, every, report)
+            }
+            _ => crate::simulate_with_progress(&ir, &x, dt, &opts, every, report),
+        }
     });
     if let Some(e) = raised {
         return Err(e);

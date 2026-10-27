@@ -256,3 +256,80 @@ fn parallel_devices_sum_their_parts() {
         ["XV101A+XV102A+XV103B+XV104B", "XV101B+XV102B+XV103A+XV104A"]
     );
 }
+
+/// Tabulated triodes (`Options::tube_tables`, `devices::TriodeTable`) against
+/// the exact sections: a 6386, a bank of four 6386s of two different models
+/// (other mu, Kg1 and grid contact), and a 12AX7 (one section), over the
+/// plate and grid range a 670 runs them in and beyond (the grid far above the
+/// plate falls back to the exact sections). Currents and Jacobians within
+/// 1e-6 of the exact ones (measured: ~1e-7), and the table's Jacobian is its
+/// own currents' derivative (Newton needs that consistency more than accuracy).
+#[test]
+fn tabulated_triodes_match_the_exact_model() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let ir = circuitsim::ir::CircuitIr::from_json(
+        &fs::read_to_string(dir.join("mismatch.json")).unwrap(),
+    )
+    .unwrap();
+    let triode = |name: &str| match ir.model(name) {
+        Some(DeviceModel::Triode(t)) => devices::Triode::new(t),
+        _ => panic!("{name}"),
+    };
+    let (a, b) = (triode("6386_V101A"), triode("6386_V101B"));
+    let ax7 = triode("12AX7_V105A");
+    let cases: Vec<(&str, Vec<&devices::Triode>)> = vec![
+        ("6386", vec![&a]),
+        ("6386 bank", vec![&a, &a, &b, &b]),
+        ("12AX7", vec![&ax7]),
+    ];
+    let mut worst = 0.0f64;
+    for (name, tubes) in cases {
+        let exact: Box<dyn Device> = if tubes.len() == 1 {
+            Box::new(tubes[0].clone())
+        } else {
+            Box::new(devices::Parallel::new(
+                tubes
+                    .iter()
+                    .map(|t| Box::new((*t).clone()) as Box<dyn Device>)
+                    .collect(),
+            ))
+        };
+        let table = devices::TriodeTable::new(&tubes);
+        for vp in [
+            -3.0, 0.0, 0.5, 2.0, 10.0, 37.0, 80.0, 133.0, 190.0, 250.0, 320.0, 450.0,
+        ] {
+            for k in 0..=200 {
+                let vg = -130.0 + 0.6537 * k as f64; // to +0.7 V, off the table's grid
+                for v in [[vp, vg], [vp.max(1.0), 10.0]] {
+                    let (ie, ge) = eval(exact.as_ref(), &v);
+                    let (it, gt) = eval(&table, &v);
+                    for (x, y) in it.iter().chain(&gt).zip(ie.iter().chain(&ge)) {
+                        let err = (x - y).abs() / (y.abs() + 1e-30);
+                        if y.abs() > 1e-300 {
+                            worst = worst.max(err);
+                        }
+                        assert!(
+                            err <= 1e-6 || (x - y).abs() <= 1e-300,
+                            "{name} at {v:?}: table {x:e}, exact {y:e} (rel {err:.1e})"
+                        );
+                    }
+                    // The table's own derivative (central differences).
+                    if v[0] > 1.0 {
+                        for (port, d) in [(0usize, 1e-4), (1, 1e-5)] {
+                            let (mut vp_, mut vm) = (v, v);
+                            vp_[port] += d;
+                            vm[port] -= d;
+                            let fd = (eval(&table, &vp_).0[0] - eval(&table, &vm).0[0]) / (2.0 * d);
+                            let an = gt[port];
+                            assert!(
+                                (fd - an).abs() <= 1e-5 * an.abs() + 1e-15,
+                                "{name} at {v:?}: d/dv{port} {an:e}, differences {fd:e}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+    println!("tabulated triodes: worst relative difference {worst:.1e}");
+}

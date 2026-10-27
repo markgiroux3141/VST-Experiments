@@ -42,7 +42,7 @@ from varimu.config import DATA_DIR, load_genome_bounds, load_sim_settings
 from varimu.listen import matching
 from varimu.measure import signals
 from varimu.sim import runner
-from varimu.sim.io import configured_engine, load_audio
+from varimu.sim.io import QUALITIES, TransientSettings, configured_engine, load_audio
 
 CLIP_DIR = DATA_DIR / "clips"
 AUDIO_EXT = {".wav", ".flac", ".aif", ".aiff", ".ogg"}
@@ -193,6 +193,7 @@ class Job:
     seconds: float | None
     values: dict[str, float]
     circuit: str | None = None  # a circuit file (None: the 670 with the page's sliders)
+    quality: str = ""  # production | draft ("": the configured one, --quality)
     status: str = "queued"  # queued | running | done | failed
     progress: float = 0.0
     error: str = ""
@@ -207,8 +208,8 @@ class Job:
         return {
             k: getattr(self, k)
             for k in (
-                "id", "source", "start_s", "seconds", "values", "circuit", "status", "progress",
-                "error", "key", "wall_s", "realtime_factor", "cached",
+                "id", "source", "start_s", "seconds", "values", "circuit", "quality", "status",
+                "progress", "error", "key", "wall_s", "realtime_factor", "cached",
             )
         }  # fmt: skip
 
@@ -221,8 +222,10 @@ class Jobs:
         self.pool = ThreadPoolExecutor(max_workers=workers)
 
     def submit(self, source: str, start_s: float, seconds: float | None, values: dict,
-               circuit: str | None = None) -> Job:  # fmt: skip
-        job = Job(next(self._ids), source, start_s, seconds, values, circuit)
+               circuit: str | None = None, quality: str | None = None) -> Job:  # fmt: skip
+        if quality and quality not in QUALITIES:
+            raise ValueError(f"unknown quality {quality!r} ({' | '.join(QUALITIES)})")
+        job = Job(next(self._ids), source, start_s, seconds, values, circuit, quality or "")
         with self._lock:
             self.jobs[job.id] = job
         self.pool.submit(self._run, job)
@@ -240,7 +243,10 @@ class Jobs:
                 rj = runner.RenderJob(x, to_overrides(job.values), label=job.source)
             else:  # the schematic editor's compiled drawing: its parameters as they are
                 rj = runner.RenderJob(x, dict(job.values), label=job.source, circuit=job.circuit)
-            r = runner.render(rj, progress=cb)
+            q = job.quality or None
+            s = TransientSettings.from_sim_settings(engine="configured", quality=q)
+            job.quality = s.quality
+            r = runner.render(rj, settings=s, progress=cb)
             job.key, job.status, job.progress = r.key, "done", 1.0
             job.wall_s, job.realtime_factor = r.meta["wall_s"], r.meta["realtime_factor"]
             job.cached = bool(r.cached)
@@ -306,6 +312,7 @@ class RenderRequest(BaseModel):
     start_s: float = 0.0
     seconds: float | None = None
     values: dict[str, float]
+    quality: str | None = None  # production | draft (None: the configured one)
 
 
 class SessionRequest(BaseModel):
@@ -736,7 +743,10 @@ def create_app(workers: int | None = None, ab: AB | None = None):
             nl.resolve(to_overrides(req.values))
         except (KeyError, ValueError) as e:
             raise HTTPException(400, str(e)) from e
-        return jobs.submit(req.source, req.start_s, req.seconds, req.values).public()
+        if req.quality and req.quality not in QUALITIES:
+            raise HTTPException(400, f"unknown quality {req.quality}")
+        job = jobs.submit(req.source, req.start_s, req.seconds, req.values, quality=req.quality)
+        return job.public()
 
     @app.get("/api/jobs")
     def list_jobs(ids: str = ""):

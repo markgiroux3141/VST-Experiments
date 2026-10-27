@@ -173,3 +173,63 @@ def test_thread_priority_is_lowered_and_restored():
     with fast.thread_priority("idle"):
         assert k32.GetThreadPriority(me) == -15
     assert k32.GetThreadPriority(me) == before
+
+
+def test_draft_quality_settings(monkeypatch):
+    """The draft (circuit-sim plan M8): the `circuitsim` block with `circuitsim_draft` on
+    top, chosen by name or, for configured renders, by $VARIMU_QUALITY (the CLI's
+    --quality); circuitsim only; a cache key of its own."""
+    from varimu.circuit import netlist as nl
+    from varimu.config import SimSettings
+    from varimu.sim import io, runner
+
+    monkeypatch.delenv(io.QUALITY_ENV, raising=False)
+    prod = TransientSettings.from_sim_settings(engine="circuitsim")
+    draft = TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
+    block = load_sim_settings().data["circuitsim_draft"]
+    assert (prod.quality, draft.quality) == ("production", "draft")
+    for k, v in block.items():
+        assert getattr(draft, k) == (tuple(v) if k == "partition" else v), k
+    assert draft.sample_rate == prod.sample_rate and draft.settle_s == prod.settle_s
+    assert TransientSettings.from_sim_settings(engine="configured").quality == "production"
+    monkeypatch.setenv(io.QUALITY_ENV, "draft")
+    assert TransientSettings.from_sim_settings(engine="configured") == draft
+    # Callers that name an engine stay production.
+    assert TransientSettings.from_sim_settings(engine="circuitsim") == prod
+    monkeypatch.setenv(io.QUALITY_ENV, "fine")
+    with pytest.raises(ValueError, match="VARIMU_QUALITY"):
+        TransientSettings.from_sim_settings(engine="configured")
+    with pytest.raises(ValueError, match="circuitsim"):
+        TransientSettings.from_sim_settings(engine="ngspice", quality="draft")
+    s = load_sim_settings()
+    bad = SimSettings(s.sample_rate, s.seed, {**s.data, "circuitsim_draft": {**block, "x": 1}})
+    with pytest.raises(ValueError, match="unknown keys"):
+        TransientSettings.from_sim_settings(bad, engine="circuitsim", quality="draft")
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    c, x = nl.build({}), [0.0] * 10
+    assert runner._key(c, x, draft)[0] != runner._key(c, x, prod)[0]
+
+
+def test_draft_renders_the_670_partitioned(tmp_path, monkeypatch):
+    """A draft render runs the 670's supplies on a second thread (the sections the
+    circuit has: the EQP-1A only has a power supply) and lands near production."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    import numpy as np
+
+    from varimu.circuit import builder, spec
+    from varimu.sim import runner
+
+    monkeypatch.setattr(runner, "RENDER_DIR", tmp_path / "renders")
+    monkeypatch.setattr(runner, "JOB_DIR", tmp_path / "jobs")
+    draft = TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
+    prod = TransientSettings.from_sim_settings(engine="circuitsim")
+    job = runner.RenderJob(0.3 * np.sin(2 * np.pi * 1000 * np.arange(4800) / 96000))
+    ir = runner.build_circuit(job, draft).ir
+    assert fast.partition_sections(ir, draft) == list(draft.partition)
+    eq = builder.build(spec.load_circuit(spec.circuit_path("pultec_eqp1a")), {}, cores="linear")
+    assert fast.partition_sections(eq.ir, draft) == ["power supply"]
+    assert fast.partition_sections(ir, prod) == []
+    d, p = runner.render(job, settings=draft), runner.render(job, settings=prod)
+    assert d.meta["settings"]["quality"] == "draft"
+    e = d.output[480:] - p.output[480:]
+    assert np.sqrt(np.mean(e**2)) < 10 ** (-40 / 20) * np.sqrt(np.mean(p.output[480:] ** 2))

@@ -155,7 +155,18 @@ lists where to start). M7 and M8 stay deferred after Phase 2 too (decided
 2026-10-21, the user delegating: nothing in main-plan Phases 3-5 needs a
 second circuit or real time, and renders at 6-7x real time are workable);
 next is main-plan Phase 3. Phase 2's core is in circuitsim (the circuit-sim
-plan's "Phase 2 in circuitsim").** The periodic
+plan's "Phase 2 in circuitsim").** **M8's draft quality (2026-10-27, in progress;
+the plan's M8 "Draft quality"):** `--quality draft` (render / unit / listen; the
+listen page's and the editor's quality selector; sim_settings.yaml
+`circuitsim_draft` on top of `circuitsim`): TR-BDF2 at a 96 kHz internal rate (1x at
+the project's 96 kHz = a 48 kHz host at 2x), no error control, Newton 1e-3 / 1e-2 V,
+tube tables (`devices/triode_table.rs`: every Koren section is `(Vp/Kp)^Ex Phi(u)`,
+one 1-D table per bank, 9e-8 of the exact model), the cores' linear limit, and the
+supplies (power, bias, idle channel 2) on a second thread coupled through the rails
+with one sample of latency (`partition.rs`, `Mna::externals`: -103 dB from the one
+solve; it bends "one coupled simulation" for the draft only, the user's call). The 670
+runs 1.1-1.2x slower than real time on two cores (production: 14-18x); not yet the
+handoff's target. Production is untouched (every new option off). The periodic
 agreement test against ngspice is
 `slice_report.py --verify` (Commands); run it after changes to the engine,
 the circuit or the device models. It checks behaviour (GR, attack/release)
@@ -212,6 +223,7 @@ uv run python scripts/digitize_ge6386.py --overlays DIR   # re-digitize the 6386
 uv run --extra fast varimu render --clip data/clips/x.wav --set ac_threshold=0.7 time_constant=3 --out r.wav
 uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached
 uv run varimu render --signal burst_1000hz_0dbfs --engine ngspice   # the reference engine
+uv run --extra fast varimu render --clip data/clips/x.wav --quality draft   # M8's fast draft (sim_settings circuitsim_draft; also unit, listen)
 uv run --extra listen --extra fast varimu listen   # http://127.0.0.1:8765 (editor: /editor, blind A/B: /ab)
 uv run --extra fast python scripts/slice_report.py [--engine ngspice] [--clip NAME]   # curve, TC bursts, program clip -> reports/slice/
 uv run --extra listen --extra fast python scripts/slice_report.py --verify   # periodic agreement test (both engines; ~70 min cold since Phase 3, ~1 min warm)
@@ -226,7 +238,7 @@ uv run varimu kicad-import kicad/NAME/NAME.kicad_sch --out cache/kicad/NAME.yaml
 uv run varimu check --circuit NAME                 # B3: pre-flight checks at every switch combination
 uv run varimu kicad-export --circuit NAME --out DIR   # B3: a circuit file as a label-connected KiCad project
 uv run python scripts/draw_fairchild_670.py [--check] [--dry-run]   # B4a: the 670's schematic -> config/circuits/fairchild_670_drawn.* (also draw_pultec_eqp1a.py)
-uv run --extra fast python scripts/draft_settings_study.py [--only eqp1a|670]   # cheaper engine settings: speed vs sound against production -> reports/realtime/
+uv run --extra fast python scripts/draft_settings_study.py [--only eqp1a|670] [--fresh --repeat 2] [--rows PREFIX ...]   # the draft's levers: speed vs sound against production -> reports/realtime/
 uv run python scripts/make_kicad_fixtures.py       # B3: kicad/varimu.kicad_sym, kicad/generated/, tests/fixtures/kicad/ (needs kicad-cli)
 uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
 uv run --extra listen python scripts/build_clips.py --root DIR [--only NAME ...]   # Phase 5: program clips from multitrack stems (config/listening.yaml mixes) -> data/clips
@@ -242,6 +254,7 @@ Rust (`crates/circuitsim`; workspace `Cargo.toml` at the repo root, output in `t
 cargo test                                            # Rust tests (IR round trip, ...)
 cargo run --release --example profile -- circuit.json [method] [oversample] [dk|mna] [reltol] [vntol]   # speed of a step
 cargo run --release --features timing --example profile -- ...   # plus where the DK step's time goes (cycle counts)
+cargo run --release [--features timing] --example bench -- circuit.json input.f64 2 [out.f64]   # a run on a recorded input; METHOD, RATE, ABSTOL, NRELTOL, TABLES, PARTITION, ... (its docstring)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check
@@ -525,6 +538,16 @@ tests skip when ngspice is missing.
   after each Rust edit, and explorer.exe often holds a core. Wait until no
   `rustc` runs, report the best of several runs, and compare engines back to
   back rather than against old numbers.
+- **The draft quality (M8, 2026-10-27).** A partitioned run (`partition.rs`) only
+  holds across stiff, capacitor-held nodes like the supply rails: splitting through
+  the signal path made DC singular (a source in a loop with T104's windings; a 6973
+  grid without a DC path) or diverged within 30 samples (the 12BH7 in the second
+  part). The partition names sections by title (`circuitsim_draft.partition`; titles a
+  circuit doesn't have are skipped, so the EQP-1A only moves its power supply). Its
+  second thread spins between samples (a core busy for the run). Most of the 670's
+  refactors are the sidechain bridge switching against a stale Jacobian; low-rank
+  (Woodbury) refactors of just those devices made it slower (plan, M8). `Transient::update`
+  refuses partitioned runs (externals). Draft and production renders cache apart.
 - **Floating nodes and Newton tolerance (measured 2026-10-14).** At DC the 670's
   T104 secondary is a 1 mOhm winding held only by bridge-diode leakage and a
   1 GOhm leak; double precision resolves it to ~1e-6..1e-5 V in any engine.

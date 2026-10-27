@@ -228,7 +228,12 @@ def register(app, jobs) -> None:
         path = cached_circuit(c, str(body.get("origin") or "a drawing"))
         start = float(body.get("start_s") or 0.0)
         seconds = body.get("seconds")
-        job = jobs.submit(source, start, float(seconds) if seconds else None, {}, str(path))
+        quality = body.get("quality") or None
+        try:
+            job = jobs.submit(source, start, float(seconds) if seconds else None, {}, str(path),
+                              quality=quality)  # fmt: skip
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
         return {**job.public(), "circuit_file": path.name}
 
     @app.get("/api/editor/compare")

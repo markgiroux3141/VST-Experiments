@@ -493,6 +493,11 @@ pub struct Options {
     /// `dk::DkNewton`). Off: Newton refactors every iteration and evaluates
     /// every device, like the full-MNA solver.
     pub newton_reuse: bool,
+    /// Evaluate variable-mu triodes and banks of triodes from tables of the
+    /// same model ([`crate::devices::TriodeTable`]: within ~1e-7 of the exact
+    /// current, ~40x cheaper for a bank of four 6386s). Off by default: a
+    /// setting for fast draft runs.
+    pub tube_tables: bool,
 }
 
 impl Default for Options {
@@ -516,6 +521,7 @@ impl Default for Options {
             error_norm: ErrorNorm::Nodes,
             all_unknowns: true,
             newton_reuse: true,
+            tube_tables: false,
         }
     }
 }
@@ -650,7 +656,8 @@ struct Dk {
     d: Vec<f64>,
     neg: Vec<f64>,
     wm: Vec<f64>,
-    /// Wave values (one per sine source) at the latest stage's time.
+    /// Values of the time-varying sources (sine sources, then externals) at
+    /// the latest stage's time.
     wv: Vec<f64>,
     /// A stage's initial guess and limiting reference, for an exact retry.
     v_guess: Vec<f64>,
@@ -694,10 +701,15 @@ impl Dk {
             d: vec![0.0; r],
             neg: vec![0.0; m.max(r)],
             wm: vec![0.0; m],
-            wv: vec![0.0; mna.waves.len()],
+            wv: vec![0.0; mna.waves.len() + mna.externals.len()],
             v_guess: vec![0.0; m],
             v_lin_guess: vec![0.0; m],
-            probes: mna.probes.iter().filter_map(|(_, i)| *i).collect(),
+            probes: mna
+                .probes
+                .iter()
+                .filter_map(|(_, i)| *i)
+                .chain(mna.outputs.iter().copied())
+                .collect(),
             xu: vec![0.0; mna.len()],
             e_ps: vec![0.0; m + r],
             v_ps: vec![0.0; m + r],
@@ -739,6 +751,10 @@ pub struct Transient {
     u: f64,
     /// Samples stepped so far (the sample index of `x`).
     n: u64,
+    /// The externals' values ([`Mna::externals`]) at the start and the end of
+    /// the next sample, linear in between.
+    ext0: Vec<f64>,
+    ext1: Vec<f64>,
     /// Deepest halving level accepted in the current sample, and in the
     /// previous one (where error control starts the next).
     deepest: usize,
@@ -804,10 +820,40 @@ impl NormPs {
 impl Transient {
     /// Solve the DC operating point with input `u0`, ready to step by `h`.
     pub fn new(mna: Mna, h: f64, opts: Options, u0: f64) -> Result<Transient, Error> {
+        let ext = vec![0.0; mna.externals.len()];
+        Transient::with_externals(mna, h, opts, u0, &ext)
+    }
+
+    /// As [`Transient::new`], with the externals ([`Mna::externals`]) at
+    /// `ext` for the DC operating point (and until [`Transient::set_externals`]).
+    pub fn with_externals(
+        mut mna: Mna,
+        h: f64,
+        opts: Options,
+        u0: f64,
+        ext: &[f64],
+    ) -> Result<Transient, Error> {
         if !(h.is_finite() && h > 0.0) {
             return Err(Error::new(format!("time step {h} must be > 0")));
         }
         opts.check()?;
+        if ext.len() != mna.externals.len() {
+            return Err(Error::new(format!(
+                "{} external values for {} externals",
+                ext.len(),
+                mna.externals.len()
+            )));
+        }
+        if !mna.externals.is_empty()
+            && (opts.solver != Solver::Dk || !opts.method.tableau().diagonal)
+        {
+            return Err(Error::new(
+                "externals need the DK solver and a diagonally implicit method",
+            ));
+        }
+        if opts.tube_tables {
+            mna.tabulate_tubes();
+        }
         let n = mna.len();
         let mut device_nodes = Vec::new();
         for d in &mna.devices {
@@ -851,6 +897,8 @@ impl Transient {
             ports,
             u: u0,
             n: 0,
+            ext0: ext.to_vec(),
+            ext1: ext.to_vec(),
             deepest: 0,
             level_hint: 0,
             next_level: 0,
@@ -892,6 +940,9 @@ impl Transient {
         let mut base = self.mna.b.clone();
         base[self.mna.input_row] += u0;
         self.mna.add_waves(0.0, &mut base);
+        for (&row, &e) in self.mna.externals.iter().zip(&self.ext0) {
+            base[row] += e;
+        }
         let o = self.opts;
         let opts = |gshunt: f64| NewtonOptions {
             reltol: o.reltol,
@@ -1404,7 +1455,7 @@ impl Transient {
                 inv,
                 &self.mna.b,
                 self.mna.input_row,
-                &self.mna.waves,
+                &self.mna.source_rows(),
                 &dk.ports,
                 &dk.support,
                 &dk.probes,
@@ -1447,8 +1498,12 @@ impl Transient {
             let th = th0 + ci * (th1 - th0);
             u = inp.at(th);
             let t = (self.n as f64 + th) * self.h;
+            let nw = self.mna.waves.len();
             for (v, wave) in dk.wv.iter_mut().zip(&self.mna.waves) {
                 *v = wave.at(t);
+            }
+            for ((v, &e0), &e1) in dk.wv[nw..].iter_mut().zip(&self.ext0).zip(&self.ext1) {
+                *v = e0 + th * (e1 - e0);
             }
             sys.stage(&dk.base, u, &dk.wv, &dk.w, &mut dk.out);
             // The initial guess, as try_step_dirk's on the device nodes (the
@@ -1724,12 +1779,18 @@ impl Transient {
     /// first use, one per step size (for the 670: ~1 ms each; see
     /// `tests/update.rs`). Devices with memory start over from their model.
     pub fn update(&mut self, ir: &CircuitIr) -> Result<(), Error> {
+        if !self.mna.externals.is_empty() {
+            return Err(Error::new("update: not with externals (a partitioned run)"));
+        }
         if !self.opts.all_unknowns && self.dk.is_some() {
             return Err(Error::new(
                 "update: needs every unknown (Options::all_unknowns), this run keeps the probes",
             ));
         }
-        let mna = Mna::from_ir(ir, self.opts.gmin)?;
+        let mut mna = Mna::from_ir(ir, self.opts.gmin)?;
+        if self.opts.tube_tables {
+            mna.tabulate_tubes();
+        }
         if mna.unknowns != self.mna.unknowns {
             return Err(Error::new(
                 "update: the circuit's nodes, sources or inductors changed (only values may)",
@@ -1838,6 +1899,13 @@ impl Transient {
     }
 
     /// The current solution (node voltages, then branch currents; see `Mna`).
+    /// The externals' values ([`Mna::externals`]) over the next sample: `start`
+    /// at its start, `end` at its end, linear in between (stage times).
+    pub fn set_externals(&mut self, start: &[f64], end: &[f64]) {
+        self.ext0.copy_from_slice(start);
+        self.ext1.copy_from_slice(end);
+    }
+
     pub fn x(&self) -> &[f64] {
         &self.x
     }
