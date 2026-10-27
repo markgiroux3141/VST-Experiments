@@ -74,7 +74,8 @@ def test_the_play_websocket():
     src = next((s for s in sources if s.startswith("signal:")), sources[0])
     client = TestClient(app.create_app(workers=1))
     info = client.get("/api/play/info").json()
-    assert info["rate"] == 48000 and {k["key"] for k in info["knobs"]} == set(play.KNOBS)
+    knobs = next(d["knobs"] for d in info["devices"] if d["id"] == "fairchild_670")
+    assert info["rate"] == 48000 and {k["key"] for k in knobs} == set(play.KNOBS)
     assert client.get("/play").status_code == 200
     assert "registerProcessor" in client.get("/play/worklet.js").text
     with client.websocket_connect("/ws/play") as ws:
@@ -91,4 +92,51 @@ def test_the_play_websocket():
                 meters += 1
             ws.send_json({"cmd": "played", "samples": audio * play.BLOCK})
         ws.send_json({"cmd": "set", "values": {"ac_threshold": 0.2}})
+        ws.send_json({"cmd": "stop"})
+
+
+def test_live_plays_the_eqp1a():
+    """The EQP-1A from its circuit file: the low boost turned up raises the level of a
+    low tone, in place; a frequency selector that rewires the network restarts."""
+    p = live.Live(_clip() * 0.5, {"lf_boost": 0.0, "lf_freq_hz": 60}, circuit="pultec_eqp1a")
+    try:
+        gains = []
+        for i in range(90):
+            if i == 30:
+                p.set({"lf_boost": 1.0, "lf_freq_hz": 60})
+                time.sleep(0.5)
+            if i == 60:
+                p.set({"lf_boost": 1.0, "lf_freq_hz": 100})
+                time.sleep(1.0)
+            y, m = p.next_block(480)
+            assert len(y) == 480 and np.all(np.isfinite(y)) and m.cv_v is None
+            gains.append(m.gain_db)
+        assert p.error is None, p.error
+        assert np.mean(gains[45:60]) > np.mean(gains[15:30]) + 3.0, gains
+    finally:
+        p.close()
+
+
+def test_the_play_page_lists_devices_and_plays_the_eq():
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from varimu.listen import app, play
+
+    client = TestClient(app.create_app(workers=1))
+    info = client.get("/api/play/info").json()
+    devices = {d["id"]: d for d in info["devices"]}
+    assert set(devices) == set(play.DEVICES)
+    eq = {k["key"]: k for k in devices["pultec_eqp1a"]["knobs"]}
+    assert eq["lf_freq_hz"]["choices"] == [20, 30, 60, 100] and "mains_hz" not in eq
+    src = next(s for s in info["sources"] if s.startswith("signal:"))
+    with client.websocket_connect("/ws/play") as ws:
+        ws.send_json({"cmd": "start", "device": "pultec_eqp1a", "source": src, "start_s": 0,
+                      "seconds": 1.0, "values": {"lf_boost": 0.5, "lf_freq_hz": 60}})  # fmt: skip
+        assert ws.receive_json()["type"] == "ready"
+        assert ws.receive().get("bytes") is not None
+        ws.send_json({"cmd": "start", "device": "nope", "source": src})
+        while (m := ws.receive()).get("bytes") is not None:
+            pass
+        assert "unknown device" in m["text"]
         ws.send_json({"cmd": "stop"})

@@ -1308,7 +1308,10 @@ a plugin; draft-1x for playing).* What M8 asks for, driven from the web app:
   frames over a WebSocket (`websockets` joins the listen extra) into an AudioWorklet ring
   buffer; the server keeps 250 ms ahead of what the page reports played; meters (gain,
   CV, output level, engine load, buffer, dropouts, restarts). Checked with a simulated
-  real-time listener: 8 s with a threshold change, no starvation.
+  real-time listener: 8 s with a threshold change, no starvation. A device selector
+  (`play.DEVICES`) switches between the 670 and the Pultec EQP-1A; a circuit file's
+  front panel comes from its `controls` (selectors as dropdowns, operating conditions
+  left off); the EQP-1A runs at ~0.16x real time.
 
 *Status.* The 670 runs in real time on two cores at draft-1x (0.81-0.86x); the draft
 (2x-equivalent) is 1.1-1.2x slower than real time (the handoff's target was one core at

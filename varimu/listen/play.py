@@ -4,7 +4,7 @@ front panel turns (varimu.sim.live; CIRCUIT_SIM_PLAN.md M8).
 Protocol over the WebSocket `/ws/play` (JSON text one way and the other, audio as
 binary frames of float32 samples at the session's rate):
 
-- client: {"cmd": "start", "source", "start_s", "seconds", "values"}, then
+- client: {"cmd": "start", "device", "source", "start_s", "seconds", "values"}, then
   {"cmd": "set", "values"} as knobs turn, {"cmd": "played", "samples"} (samples the
   page has played so far) and {"cmd": "stop"};
 - server: {"type": "ready", "rate", "loop_s"}, audio blocks, {"type": "meter", ...}
@@ -32,6 +32,43 @@ METER_EVERY = 5  # blocks per meter message
 KNOBS = ("input_atten_db", "ac_threshold", "time_constant", "dc_threshold")
 QUALITY = "draft-1x"  # the user's choice for playing (2026-10-27)
 
+# The devices the page plays: id -> (label, circuit file or None for the 670 through its
+# netlist API). Each brings its own front panel (`knobs`).
+DEVICES = {
+    "fairchild_670": ("Fairchild 670 (compressor)", None),
+    "pultec_eqp1a": ("Pultec EQP-1A (program EQ)", "pultec_eqp1a"),
+}
+# Labels for circuit-file controls (keys otherwise); controls left off the panel.
+LABELS = {
+    "lf_freq_hz": "Low frequency (Hz)",
+    "lf_boost": "Low boost",
+    "lf_atten": "Low atten",
+    "hf_boost_freq_khz": "High boost frequency (kHz)",
+    "hf_boost": "High boost",
+    "bandwidth": "Bandwidth (sharp to broad)",
+    "hf_atten_freq_khz": "High atten frequency (kHz)",
+    "hf_atten": "High atten",
+}
+OFF_PANEL = {"mains_v_rms", "mains_hz"}
+
+
+def circuit_knobs(circuit: str) -> list[dict[str, Any]]:
+    """A circuit file's front panel: its controls (operating conditions left out), in
+    file order; a selector's positions as `choices`."""
+    from varimu.circuit import spec
+
+    out = []
+    for key, e in spec.load_circuit(spec.circuit_path(circuit)).controls.items():
+        if key in OFF_PANEL:
+            continue
+        k = {"key": key, "label": LABELS.get(key, key), "default": e["value"]}
+        if "choices" in e:
+            k["choices"] = list(e["choices"])
+        else:
+            k.update(min=e["min"], max=e["max"], step=(e["max"] - e["min"]) / 200)
+        out.append(k)
+    return out
+
 
 def register(app) -> None:
     from fastapi.responses import FileResponse, HTMLResponse
@@ -50,11 +87,20 @@ def register(app) -> None:
     def play_worklet():
         return FileResponse(here / "play_worklet.js", media_type="text/javascript")
 
+    def knobs(device: str) -> list[dict[str, Any]]:
+        circuit = DEVICES[device][1]
+        if circuit is None:
+            return [c for c in control_schema() if c["key"] in KNOBS]
+        return circuit_knobs(circuit)
+
+    def overrides(device: str, values: dict[str, Any]) -> dict[str, Any]:
+        return to_overrides(values) if DEVICES[device][1] is None else dict(values)
+
     @app.get("/api/play/info")
     def play_info():
         s = TransientSettings.from_sim_settings(engine="circuitsim", quality=QUALITY)
-        knobs = [c for c in control_schema() if c["key"] in KNOBS]
-        return {"rate": s.host, "quality": QUALITY, "knobs": knobs, "sources": list_sources()}
+        devices = [{"id": d, "label": lab, "knobs": knobs(d)} for d, (lab, _) in DEVICES.items()]
+        return {"rate": s.host, "quality": QUALITY, "devices": devices, "sources": list_sources()}
 
     @app.websocket("/ws/play")
     async def play_ws(ws: WebSocket):
@@ -63,6 +109,7 @@ def register(app) -> None:
         pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="play")
         inbox: asyncio.Queue = asyncio.Queue()
         live: Live | None = None
+        device = "fairchild_670"
         sent = played = blocks = 0
 
         async def read() -> None:
@@ -98,15 +145,20 @@ def register(app) -> None:
                     elif cmd == "played":
                         played = int(m.get("samples", played))
                     elif cmd == "set" and live is not None:
-                        live.set(to_overrides(dict(m.get("values", {}))))
+                        live.set(overrides(device, dict(m.get("values", {}))))
                     elif cmd == "start":
                         if live is not None:
                             live.close()
                             live = None
                         try:
+                            device = str(m.get("device") or "fairchild_670")
+                            if device not in DEVICES:
+                                raise ValueError(f"unknown device {device!r}")
                             x = excerpt(m["source"], float(m.get("start_s") or 0), m.get("seconds"))
-                            ov = to_overrides(dict(m.get("values", {})))
-                            start = functools.partial(Live, x, ov, quality=QUALITY)
+                            ov = overrides(device, dict(m.get("values", {})))
+                            start = functools.partial(
+                                Live, x, ov, circuit=DEVICES[device][1], quality=QUALITY
+                            )
                             live = await loop.run_in_executor(pool, start)
                         except Exception as e:
                             await error(f"can't start: {type(e).__name__}: {e}")

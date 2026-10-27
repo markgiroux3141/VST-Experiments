@@ -170,7 +170,7 @@ draft-1x` (`circuitsim_draft_1x`: a 48 kHz host at 1x via `TransientSettings.hos
 the engine resampling to it and back) runs it at 0.81-0.86x, within ~-45 dB of
 production (top octave up to 0.7 dB off): a ballpark while playing. **The Play page**
 (`varimu listen`, then /play) loops a clip through it in real time while the front panel
-turns (`varimu/sim/live.py`, `varimu/listen/play.py`; `circuitsim.Stream`: block-by-block
+turns (the 670 or the EQP-1A: `play.DEVICES`) (`varimu/sim/live.py`, `varimu/listen/play.py`; `circuitsim.Stream`: block-by-block
 runs equal to a whole run, `update` for knob changes, `stream.rs`). Production is
 untouched (every new option off). The periodic
 agreement test against ngspice is

@@ -35,6 +35,7 @@
   .src { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
   .src select { grid-column: 1 / -1; }
   .src label { font-size: 12px; color: var(--muted); }
+  label.row select { grid-column: 1 / -1; }
   select, input[type=number] { width: 100%; padding: 6px 8px; border: 1px solid var(--line);
        border-radius: 6px; background: var(--bg); color: var(--ink); font: inherit; }
   button { font: inherit; border: 1px solid var(--line); background: var(--bg); color: var(--ink);
@@ -58,15 +59,16 @@
 <body>
 <header>
   <h1>Vari-Mu: play</h1>
-  <span class="sub">A loop through the 670 in real time while you turn its front panel (draft 1x: a ballpark; render production for the final).</span>
+  <span class="sub">A loop through the circuit in real time while you turn its front panel (draft 1x: a ballpark; render production for the final).</span>
   <a href="/" style="margin-left:auto">tweak and render</a>
   <a href="/editor">schematic editor</a>
 </header>
 <main>
   <div>
     <section>
-      <h2>Loop</h2>
+      <h2>Device and loop</h2>
       <div class="src">
+        <select id="device" title="The circuit the loop plays through"></select>
         <select id="source"></select>
         <label>From (s)<input id="start" type="number" min="0" step="0.5" value="0"></label>
         <label>Length (s)<input id="seconds" type="number" min="0.5" max="60" step="0.5" value="8"></label>
@@ -81,7 +83,7 @@
     <section>
       <h2>Front panel</h2>
       <div id="knobs"></div>
-      <div class="small">Changes reach the ear in about a quarter second. The input pad's 0 dB end and Time Constant 5-6 change the circuit's structure: the loop restarts its compression there.</div>
+      <div class="small" id="knobnote"></div>
     </section>
   </div>
   <div>
@@ -107,7 +109,37 @@ const store = { get: (k, d) => { try { const v = localStorage.getItem('play.' + 
 let info = null, ws = null, ctx = null, node = null, dropouts = 0, history = [];
 
 function fmt(v, step) { const d = step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step))); return (+v).toFixed(d); }
-function values() { const v = {}; document.querySelectorAll('#knobs input').forEach(i => v[i.dataset.key] = +i.value); return v; }
+function values() { const v = {}; document.querySelectorAll('#knobs [data-key]').forEach(i => v[i.dataset.key] = +i.value); return v; }
+const NOTES = {
+  fairchild_670: "Changes reach the ear in about a quarter second. The input pad's 0 dB end and Time Constant 5-6 change the circuit's structure: the loop crossfades to a fresh start there (its compression restarts).",
+  pultec_eqp1a: "Changes reach the ear in about a quarter second. A frequency selector that rewires the network crossfades to a fresh start of the circuit.",
+};
+function device() { return $('#device').value; }
+function deviceInfo() { return info.devices.find(d => d.id === device()); }
+
+function buildKnobs() {
+  const saved = store.get('knobs.' + device(), {});
+  $('#knobs').innerHTML = '';
+  for (const c of deviceInfo().knobs) {
+    const v = saved[c.key] ?? c.default;
+    const row = document.createElement('label'); row.className = 'row';
+    if (c.choices) {
+      row.innerHTML = `<span>${c.label}</span><span class="v"></span>
+        <select data-key="${c.key}">${c.choices.map(x => `<option value="${x}"${+x === +v ? ' selected' : ''}>${x}</option>`).join('')}</select>`;
+    } else {
+      const step = c.key === 'time_constant' || c.key === 'input_atten_db' ? 1 : (c.step || 0.005);
+      row.innerHTML = `<span>${c.label}</span><span class="v" id="v_${c.key}"></span>
+        <input type="range" min="${c.min}" max="${c.max}" step="${step}" value="${v}" data-key="${c.key}" data-step="${step}">`;
+    }
+    $('#knobs').appendChild(row);
+  }
+  document.querySelectorAll('#knobs [data-key]').forEach(i => {
+    const show = () => { const el = $('#v_' + i.dataset.key); if (el) el.textContent = fmt(i.value, +i.dataset.step); };
+    show();
+    i.addEventListener(i.tagName === 'SELECT' ? 'change' : 'input', () => { show(); store.set('knobs.' + device(), values()); sendSet(); });
+  });
+  $('#knobnote').textContent = NOTES[device()] || '';
+}
 
 async function init() {
   info = await (await fetch('/api/play/info')).json();
@@ -115,20 +147,13 @@ async function init() {
   sel.innerHTML = info.sources.map(s => `<option value="${s}">${s.replace(':', ': ')}</option>`).join('');
   sel.value = info.sources.includes(store.get('source')) ? store.get('source') : info.sources[0];
   $('#start').value = store.get('start', 0); $('#seconds').value = store.get('seconds', 8);
-  const saved = store.get('knobs', {});
-  $('#knobs').innerHTML = '';
-  for (const c of info.knobs) {
-    const step = c.key === 'time_constant' || c.key === 'input_atten_db' ? 1 : (c.step || 0.005);
-    const v = saved[c.key] ?? c.default;
-    const row = document.createElement('label'); row.className = 'row';
-    row.innerHTML = `<span>${c.label}</span><span class="v" id="v_${c.key}"></span>
-      <input type="range" min="${c.min}" max="${c.max}" step="${step}" value="${v}" data-key="${c.key}" data-step="${step}">`;
-    $('#knobs').appendChild(row);
-  }
-  document.querySelectorAll('#knobs input').forEach(i => {
-    const show = () => $('#v_' + i.dataset.key).textContent = fmt(i.value, +i.dataset.step);
-    show();
-    i.addEventListener('input', () => { show(); store.set('knobs', values()); sendSet(); });
+  const dsel = $('#device');
+  dsel.innerHTML = info.devices.map(d => `<option value="${d.id}">${d.label}</option>`).join('');
+  dsel.value = info.devices.some(d => d.id === store.get('device')) ? store.get('device') : info.devices[0].id;
+  buildKnobs();
+  dsel.addEventListener('change', () => {
+    store.set('device', device()); buildKnobs();
+    if (ws) play();  // playing: start over on the new device
   });
   for (const id of ['#source', '#start', '#seconds'])
     $(id).addEventListener('change', () => { store.set('source', $('#source').value); store.set('start', +$('#start').value); store.set('seconds', +$('#seconds').value); });
@@ -159,12 +184,12 @@ async function play() {
   };
   ws = new WebSocket(`ws://${location.host}/ws/play`);
   ws.binaryType = 'arraybuffer';
-  ws.onopen = () => ws.send(JSON.stringify({ cmd: 'start', source: $('#source').value,
+  ws.onopen = () => ws.send(JSON.stringify({ cmd: 'start', device: device(), source: $('#source').value,
     start_s: +$('#start').value || 0, seconds: +$('#seconds').value || null, values: values() }));
   ws.onmessage = e => {
     if (typeof e.data !== 'string') { node.port.postMessage(e.data, [e.data]); return; }
     const m = JSON.parse(e.data);
-    if (m.type === 'ready') { $('#state').textContent = `playing a ${m.loop_s.toFixed(1)} s loop at ${m.rate / 1000} kHz`; ctx.resume(); }
+    if (m.type === 'ready') { $('#state').textContent = `playing a ${m.loop_s.toFixed(1)} s loop through the ${deviceInfo().label.split(' (')[0]} at ${m.rate / 1000} kHz`; ctx.resume(); }
     else if (m.type === 'meter') meter(m);
     else if (m.type === 'error') { $('#err').textContent = m.message; }
   };
