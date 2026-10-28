@@ -347,6 +347,61 @@ types quoted, non-ASCII double-quoted, `.0` before an exponent; and `to_yaml`),
   them in order. A build error's message names Python's exception type as
   `ConfigError`.
 
+**R3b and R3c done (2026-10-28); R3's done-when is met.** The web editor's page logic
+(`varimu/listen/editor/*.js`) is ported to `varimu-app`'s library, `src/editor/`, so it is
+driven and tested without a window; `src/editor_view.rs` paints it:
+
+- `eng` (eng.js and `engText`: numbers as JavaScript writes them, E12 / E24 stepping),
+  `geom` (geom.js: place, move with rubber-banding wires, rotate, mirror, delete, copy /
+  paste, wires, segment dragging, with `Math.round`'s rounding), `edits` (edits.js:
+  parameter homes, edit sources, unlink, undo history), `analysis` (editor_api.py's
+  `analyze`: nets, parameters with their genome bounds, tolerance bands), `scene`
+  (view.js: the symbol table with y down, every pin's net, unit boxes, the parts' upright
+  texts, cores drawn the length of their windings, open pins, hit testing), `camera`
+  (camera.js), `session` (main.js, tools.js and inspector.js's behaviour: the editor's
+  state, every tool, the inspector's edits, the checks on a thread of their own 600 ms
+  after an edit, open, Save as). The JS tests (`tests/editor_js/*.test.mjs`) are ported
+  as unit tests.
+- **The done-when, headless** (`tests/editor_draw.rs`): the triode stage drawn from a
+  blank drawing through the editor's API, step for step as
+  `scripts/editor_draw_triode.py` drives the page (palette and clicks on the canvas
+  through the camera, R to turn, the reference and value fields, the wire tool, the
+  label prompt, grounds, the circuit's title and probes): the drawing comes out
+  `triode_stage_drawn.drawing.json` **byte for byte** (which the web editor drew), the
+  checks find nothing, Save as writes the committed `.drawing.json` and `.yaml`, and it
+  builds `triode_stage_drawn.yaml`'s IR bit for bit (linear and Jiles-Atherton cores).
+  Also: undo and redo through the whole drawing; on the drawn stage, E12 stepping keeps
+  the value's first provenance, a drag rubber-bands its wire, duplicate and delete.
+- **Edits heard live:** `live::Circuit::from_spec` (the compiled drawing, its device
+  files from the editor's library), `Live::set_circuit` / `Player::set_circuit` (built on
+  the background thread like a knob: the same structure updates the stream in place, a
+  new one restarts it with the crossfade). The drawing is a device of the Play view
+  ("Drawing: <title>", its controls as the panel), handed over at every edit that
+  compiles and has an `out` node; Space (or the listen bar) plays it through the Play
+  view's file and loop region. `tests/editor_live.rs`: a load edit (RL 470k -> 4.7k) is
+  heard in place (-10 dB or more, no restart), deleting the cathode bypass restarts the
+  stream once and lowers the gain. In the window: the drawn stage at 5% load, no
+  dropouts.
+- The window (checked by screenshots, driving it with synthetic mouse and keys): the bar
+  (circuit, tools, undo / redo with their labels, Save as, the checks pill, zoom, Fit),
+  the left column (find, problems with open pins per part, the parts palette drawn from
+  the symbol table, the drawing's front panel, sections), the canvas (dot grid, dashed
+  frames with their titles, symbols, wires, labels, grounds, junctions, open pins, net
+  highlight on hover, problem rings, selection, the hover chip, the tools' ghosts), the
+  inspector (a part's value with its source and E12 stepping, shared parameter and
+  "only this part", device and material swaps, its other parameters, pins and their
+  nets, every raw field; several items; a net; the circuit's title, input, probes and
+  controls), the listen bar, the label / section prompt, the Ctrl+K palette, the ? sheet.
+  Text uses Segoe UI, Cascadia Mono (or Consolas) and Segoe UI Symbol where Windows has
+  them (egui's fonts lack the arrows and dots the labels use). `varimu-app --edit NAME`
+  opens the editor on a drawn circuit.
+- Found on the way: a prompt opened by a click lost its focus to that click's release (the
+  page waits for it too); front-panel sliders wrote their snapped values back when shown
+  (opening the 670 marked it edited). Both fixed.
+- Not ported: hand-written circuits opened as generated drawings (`varimu/editor/layout.py`
+  and the KiCad exporter under it; the drawn copies cover the three circuits); the camera
+  remembered per circuit. A `.drawing.json` dropped on the window opens, as on the page.
+
 ### R4. Look and polish, with the user
 
 The studio editor look and hardware-art device panels.
@@ -355,3 +410,5 @@ The studio editor look and hardware-art device panels.
 
 - Matching numpy's tolerance draws in Rust (see Ground rules).
 - Live input on the 670 if draft-1x can't keep up live (R2 measures it).
+- The editor opening hand-written circuits as generated drawings (`layout.py`'s port,
+  R3's optional part).

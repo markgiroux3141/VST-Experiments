@@ -1,6 +1,10 @@
 //! The Play view: a device, a file and its loop region, the front panel and meters
 //! (R2; the web `/play` page's counterpart). Plays at draft-1x through
 //! `varimu_app::player`; knobs reach the player as they turn.
+//!
+//! R3b: the editor's drawing is a device too (`set_drawing`): each edit that compiles
+//! reaches the player as a new circuit (a value updates the stream in place, a change
+//! of topology restarts it).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -11,13 +15,15 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, Color32, RichText, Stroke};
 use varimu_app::audio;
 use varimu_app::live::Circuit;
-use varimu_app::panel::{self, DEVICES, Kind, Knob};
+use varimu_app::panel::{self, DEVICES, Device, Kind, Knob};
 use varimu_app::player::{
     AHEAD_S, INPUT_BUFFER_S, InputDevice, Playback, Player, Source, State, input_devices,
 };
 use varimu_app::prefs::{ALIGNMENT_DBFS, Prefs};
 use varimu_app::render::{Rendered, render};
 use varimu_app::settings::{Quality, Settings};
+use varimu_circuit::Library;
+use varimu_circuit::spec::CircuitSpec;
 use varimu_circuit::yaml::Value;
 
 use crate::theme;
@@ -71,6 +77,24 @@ struct RenderTask {
     label: String,
 }
 
+/// The editor's drawing as a device: its compiled circuit.
+#[derive(Clone)]
+pub struct DrawingDevice {
+    /// The drawing's name (its circuit's, once saved).
+    pub name: String,
+    pub title: String,
+    pub spec: CircuitSpec,
+    pub lib: Arc<Library>,
+}
+
+/// The drawing's panel: every control but the mains settings.
+const DRAWING: Device = Device {
+    id: "drawing",
+    label: "The editor's drawing",
+    circuit: "",
+    panel: None,
+};
+
 /// A finished render: where it was saved and what it was.
 struct Done {
     rendered: Rendered,
@@ -86,7 +110,9 @@ pub struct PlayView {
     prefs: Prefs,
     sources: Vec<(String, Vec<PathBuf>)>,
     settings: Result<Settings, String>,
+    /// An index into DEVICES, or DEVICES.len(): the editor's drawing.
     device: usize,
+    drawing: Option<DrawingDevice>,
     knobs: Vec<Knob>,
     clip: Option<Clip>,
     loading: Option<(PathBuf, Receiver<Result<Clip, String>>)>,
@@ -119,7 +145,7 @@ pub struct PlayView {
 }
 
 /// What the command line asks for:
-/// `varimu-app [FILE] [--play] [--device ID] [--input NAME [--channel N]]`.
+/// `varimu-app [FILE] [--play] [--device ID] [--input NAME [--channel N]] [--edit NAME]`.
 #[derive(Debug, Default)]
 pub struct Args {
     pub file: Option<PathBuf>,
@@ -128,6 +154,8 @@ pub struct Args {
     /// Live input from this device (and channel, from 1).
     pub input: Option<String>,
     pub channel: usize,
+    /// Open the editor on this drawn circuit.
+    pub edit: Option<String>,
 }
 
 impl Args {
@@ -138,6 +166,7 @@ impl Args {
             match x.as_str() {
                 "--play" => a.play = true,
                 "--device" => a.device = Some(it.next().ok_or("--device needs an id")?),
+                "--edit" => a.edit = Some(it.next().ok_or("--edit needs a circuit name")?),
                 "--input" => a.input = Some(it.next().ok_or("--input needs a device name")?),
                 "--channel" => {
                     let c = it.next().ok_or("--channel needs a number")?;
@@ -165,6 +194,7 @@ impl PlayView {
             sources: Vec::new(),
             settings,
             device: 0,
+            drawing: None,
             knobs: Vec::new(),
             clip: None,
             loading: None,
@@ -298,12 +328,159 @@ impl PlayView {
     }
 
     fn load_knobs(&mut self) {
+        if let Some(d) = self.drawing_device() {
+            self.knobs = panel::knobs(&DRAWING, &d.spec);
+            return;
+        }
         let dev = &DEVICES[self.device];
         match varimu_circuit::spec::circuit_path(&self.config_dir, dev.circuit)
             .and_then(|p| varimu_circuit::spec::load_circuit(&p))
         {
             Ok(spec) => self.knobs = panel::knobs(dev, &spec),
             Err(e) => self.error = Some(e.to_string()),
+        }
+    }
+
+    /// The drawing, when it is the device.
+    fn drawing_device(&self) -> Option<&DrawingDevice> {
+        self.drawing
+            .as_ref()
+            .filter(|_| self.device == DEVICES.len())
+    }
+
+    /// The device's circuit, built with `cores`.
+    fn circuit(&self, cores: varimu_circuit::Cores) -> Result<Circuit, String> {
+        match self.drawing_device() {
+            Some(d) => Ok(Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores)),
+            None => Circuit::load(&self.config_dir, DEVICES[self.device].circuit, cores),
+        }
+    }
+
+    /// The device's name and id (for files).
+    fn device_names(&self) -> (String, String) {
+        match self.drawing_device() {
+            Some(d) => (format!("Drawing: {}", d.title), d.name.clone()),
+            None => {
+                let dev = &DEVICES[self.device];
+                (dev.label.to_string(), dev.id.to_string())
+            }
+        }
+    }
+
+    /// The editor's drawing, compiled. When it is the device, the playing circuit
+    /// follows it; knobs keep their values unless the drawing changed their default.
+    /// (A drawing that can't be heard isn't passed: the last one plays on.)
+    pub fn set_drawing(&mut self, d: DrawingDevice) {
+        let was = self.drawing.replace(d.clone());
+        if self.device != DEVICES.len() {
+            return;
+        }
+        let old = std::mem::take(&mut self.knobs);
+        let old_defaults = was
+            .map(|w| panel::knobs(&DRAWING, &w.spec))
+            .unwrap_or_default();
+        self.knobs = panel::knobs(&DRAWING, &d.spec);
+        for k in &mut self.knobs {
+            let kept = old.iter().find(|o| o.key == k.key);
+            let same_default = old_defaults
+                .iter()
+                .any(|o| o.key == k.key && o.default.py_eq(&k.default) && o.kind == k.kind);
+            if let Some(o) = kept
+                && same_default
+            {
+                k.value = o.value.clone();
+            }
+        }
+        if let (Some(p), Ok(s)) = (&self.player, &self.settings)
+            && let Ok(cores) = s.cores()
+        {
+            p.set_circuit(
+                Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores),
+                panel::values(&self.knobs),
+            );
+        }
+    }
+
+    /// Play the drawing through the file's loop region (the first clip when none is
+    /// open), or stop it.
+    pub fn toggle_drawing(&mut self) {
+        if self.drawing_playing() {
+            self.stop();
+            return;
+        }
+        if self.drawing.is_none() {
+            self.error =
+                Some("the drawing can't be heard: it needs to compile and have an out node".into());
+            return;
+        }
+        if self.device != DEVICES.len() {
+            self.device = DEVICES.len();
+            self.load_knobs();
+        }
+        self.live_input = false;
+        if self.clip.is_some() {
+            self.start();
+        } else if self.loading.is_none() {
+            match self.sources.first().and_then(|(_, f)| f.first()).cloned() {
+                Some(p) => {
+                    self.autoplay = true;
+                    self.open(p);
+                }
+                None => self.error = Some("no audio file to play: open one in Play".into()),
+            }
+        } else {
+            self.autoplay = true;
+        }
+    }
+
+    /// Whether the drawing is what plays.
+    pub fn drawing_playing(&self) -> bool {
+        self.player.is_some() && self.device == DEVICES.len()
+    }
+
+    /// A line on what plays, for the editor's listen bar.
+    pub fn listen_line(&self) -> String {
+        let file = self
+            .clip
+            .as_ref()
+            .and_then(|c| c.path.file_name())
+            .map_or("no file".into(), |n| n.to_string_lossy().into_owned());
+        let (a, b) = self.region;
+        let mut line = format!("{file} · {a:.1}-{b:.1} s");
+        if let Some(p) = self
+            .player
+            .as_ref()
+            .filter(|_| self.device == DEVICES.len())
+        {
+            let st = p.status();
+            match &st.state {
+                State::Starting => line.push_str(" · settling…"),
+                State::Failed(e) => line = format!("{line} · stopped: {e}"),
+                State::Playing => {
+                    line.push_str(&format!(" · load {:.0}%", st.load * 100.0));
+                    if st.restarts > 0 {
+                        line.push_str(&format!(" · {} restarts", st.restarts));
+                    }
+                    if let Some(e) = &st.build_error {
+                        line = format!("{line} · build: {e}");
+                    }
+                }
+            }
+        } else if self.loading.is_some() {
+            line.push_str(" · loading…");
+        }
+        if let Some(e) = &self.error {
+            line = format!("{line} · {e}");
+        }
+        line
+    }
+
+    /// Keep the view's background work going (the editor view calls this when Play
+    /// isn't shown).
+    pub fn tick(&mut self, ctx: &egui::Context) {
+        self.poll_loading();
+        if self.player.is_some() || self.loading.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(100));
         }
     }
 
@@ -382,14 +559,10 @@ impl PlayView {
             return;
         };
         let clip = self.clip.as_ref().expect("a region needs a clip");
-        let dev = &DEVICES[self.device];
-        let result = s
-            .cores()
-            .and_then(|c| Circuit::load(&self.config_dir, dev.circuit, c))
-            .and_then(|c| {
-                let v = panel::values(&self.knobs);
-                Player::start(Source::Loop(x), v, c, s.clone(), self.gain(), AHEAD_S)
-            });
+        let result = s.cores().and_then(|c| self.circuit(c)).and_then(|c| {
+            let v = panel::values(&self.knobs);
+            Player::start(Source::Loop(x), v, c, s.clone(), self.gain(), AHEAD_S)
+        });
         match result {
             Ok(p) => {
                 self.player = Some(p);
@@ -407,19 +580,15 @@ impl PlayView {
             self.error = Some("no input device".into());
             return;
         };
-        let dev = &DEVICES[self.device];
         let source = Source::Input {
             device: Some(dev_in.name.clone()),
             channel: self.channel,
         };
         let buffer = self.input_buffer_ms / 1000.0;
-        let result = s
-            .cores()
-            .and_then(|c| Circuit::load(&self.config_dir, dev.circuit, c))
-            .and_then(|c| {
-                let v = panel::values(&self.knobs);
-                Player::start(source, v, c, s.clone(), self.gain(), buffer)
-            });
+        let result = s.cores().and_then(|c| self.circuit(c)).and_then(|c| {
+            let v = panel::values(&self.knobs);
+            Player::start(source, v, c, s.clone(), self.gain(), buffer)
+        });
         match result {
             Ok(p) => {
                 self.player = Some(p);
@@ -494,7 +663,9 @@ impl PlayView {
             }
         }
         let clip = self.clip.as_ref().expect("a region needs a clip");
-        let dev = DEVICES[self.device];
+        let (label, id) = self.device_names();
+        let drawing = self.drawing_device().cloned();
+        let dev = DEVICES[self.device.min(DEVICES.len() - 1)];
         let (a, b) = self.region;
         let stem = clip
             .path
@@ -502,8 +673,8 @@ impl PlayView {
             .unwrap_or_default()
             .to_string_lossy()
             .into_owned();
-        let label = format!("{} · {stem} {a:.2}-{b:.2} s", dev.label);
-        let file_stem = format!("{stem}_{}_{:.2}-{:.2}", dev.id, a, b);
+        let label = format!("{label} · {stem} {a:.2}-{b:.2} s");
+        let file_stem = format!("{stem}_{id}_{a:.2}-{b:.2}");
         let values = panel::values(&self.knobs);
         let config = self.config_dir.clone();
         let out_dir = config
@@ -517,7 +688,10 @@ impl PlayView {
         std::thread::spawn(move || {
             let r = (|| {
                 let s = Settings::load(&config, Quality::Production)?;
-                let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?;
+                let circuit = match drawing {
+                    Some(d) => Circuit::from_spec(d.lib, d.spec, s.cores()?),
+                    None => Circuit::load(&config, dev.circuit, s.cores()?)?,
+                };
                 render(
                     &circuit,
                     &values,
@@ -738,12 +912,23 @@ impl PlayView {
     fn side(&mut self, ui: &mut egui::Ui) {
         Self::heading(ui, "DEVICE");
         let before = self.device;
+        let (shown, _) = self.device_names();
+        let drawing_title = self
+            .drawing
+            .as_ref()
+            .map(|d| format!("Drawing: {}", d.title));
         egui::ComboBox::from_id_salt("device")
             .width(ui.available_width())
-            .selected_text(DEVICES[self.device].label)
+            .selected_text(shown)
             .show_ui(ui, |ui| {
                 for (i, d) in DEVICES.iter().enumerate() {
                     ui.selectable_value(&mut self.device, i, d.label);
+                }
+                if let Some(t) = drawing_title {
+                    ui.selectable_value(&mut self.device, DEVICES.len(), t)
+                        .on_hover_text(
+                            "The editor's drawing, as it is now: edits are heard as they are made",
+                        );
                 }
             });
         if self.device != before {
@@ -1152,7 +1337,10 @@ impl PlayView {
             State::Playing => {}
         }
         let m = st.meter;
-        let gain_label = if DEVICES[self.device].id == "fairchild_670" {
+        let gain_label = if DEVICES
+            .get(self.device)
+            .is_some_and(|d| d.id == "fairchild_670")
+        {
             "Gain (GR)"
         } else {
             "Gain"

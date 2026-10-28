@@ -54,6 +54,23 @@ impl Map {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut Value> {
+        self.0.iter_mut().find(|(k, _)| k == key).map(|(_, v)| v)
+    }
+
+    /// Set `key` (in place when it exists, else at the end: a dict's assignment).
+    pub fn insert(&mut self, key: &str, value: Value) {
+        match self.get_mut(key) {
+            Some(v) => *v = value,
+            None => self.0.push((key.to_string(), value)),
+        }
+    }
+
+    pub fn remove(&mut self, key: &str) -> Option<Value> {
+        let i = self.0.iter().position(|(k, _)| k == key)?;
+        Some(self.0.remove(i).1)
+    }
 }
 
 impl Value {

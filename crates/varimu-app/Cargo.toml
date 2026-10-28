@@ -21,4 +21,4 @@ varimu-circuit = { path = "../varimu-circuit" }
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
 [target."cfg(windows)".dependencies]
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Threading"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_SystemInformation", "Win32_System_Threading"] }

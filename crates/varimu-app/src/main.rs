@@ -2,11 +2,13 @@
 //! real-time play at draft-1x and production render, in one window.
 //!
 //! R0 (scaffold): the window, the studio look and the two views. R2: the Play view
-//! (`play_view`); the rest is the library (`varimu_app`).
+//! (`play_view`). R3: the Editor view (`editor_view`), its drawing heard through the
+//! Play view's player. The rest is the library (`varimu_app`).
 
 // No console window in release builds (debug builds keep it for logs).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod editor_view;
 mod play_view;
 mod theme;
 
@@ -19,7 +21,7 @@ fn main() -> eframe::Result {
         Ok(a) => a,
         Err(e) => {
             eprintln!(
-                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a] [--input NAME [--channel N]]"
+                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a] [--input NAME [--channel N]] [--edit DRAWN_CIRCUIT]"
             );
             std::process::exit(2);
         }
@@ -74,12 +76,23 @@ enum View {
 struct App {
     view: View,
     play: play_view::PlayView,
+    editor: editor_view::EditorView,
 }
 
 impl App {
     fn new(config_dir: PathBuf, args: play_view::Args) -> App {
+        let view = if args.edit.is_some() {
+            View::Editor
+        } else {
+            View::Play
+        };
+        let name = args
+            .edit
+            .clone()
+            .unwrap_or_else(|| "pultec_eqp1a_drawn".into());
         App {
-            view: View::Play,
+            view,
+            editor: editor_view::EditorView::new(&config_dir, &name),
             play: play_view::PlayView::new(config_dir, args),
         }
     }
@@ -104,25 +117,11 @@ impl eframe::App for App {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
             .show(ui, |ui| match self.view {
-                View::Editor => canvas_dots(ui),
-                View::Play => self.play.ui(ui),
+                View::Editor => self.editor.ui(ui, &mut self.play),
+                View::Play => {
+                    self.editor.sync_player(&mut self.play);
+                    self.play.ui(ui);
+                }
             });
-    }
-}
-
-/// The editor canvas's dot grid, at a fixed spacing until the editor has a
-/// camera (R3).
-fn canvas_dots(ui: &mut egui::Ui) {
-    let rect = ui.max_rect();
-    let painter = ui.painter_at(rect);
-    let step = 24.0;
-    let mut y = rect.top() + step;
-    while y < rect.bottom() {
-        let mut x = rect.left() + step;
-        while x < rect.right() {
-            painter.circle_filled(egui::pos2(x, y), 1.0, theme::DOT);
-            x += step;
-        }
-        y += step;
     }
 }

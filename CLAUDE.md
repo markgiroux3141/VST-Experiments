@@ -42,7 +42,14 @@ says when). Nominal units only (a nonzero tolerance spread is refused). R2 done
 input measured on silence only): `varimu-app`'s Play view plays files and live input at
 draft-1x (bypass, gain compensation, input normalization, takes), and its production
 render equals Python's bit for bit (`scripts/app_render_agreement.py`); the resampler is
-scipy's `resample_poly` ported bit for bit. Next: R3, the editor.** Plausibility (`varimu.measure.plausibility`) rejects only what no
+scipy's `resample_poly` ported bit for bit. R3 done (2026-10-28): the Editor view
+(`varimu-app`'s `src/editor/`: the web editor's page logic ported and tested, the drawing
+format, compile and checks `varimu-circuit`'s, R3a; `src/editor_view.rs`: the egui
+canvas in the studio look), edits heard live (the drawing is a Play device: a value
+updates the stream, a new topology restarts it); the triode stage drawn from scratch
+through the editor's API comes out `triode_stage_drawn` byte for byte
+(`tests/editor_draw.rs`). Hand-written circuits don't open as generated drawings yet
+(`layout.py` isn't ported). Next: R4, the look and polish with the user.** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the
@@ -266,6 +273,7 @@ uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> rep
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 uv run python scripts/export_app_fixtures.py     # native app R1: Python-built IRs for varimu-circuit's agreement test
 uv run python scripts/export_audio_fixtures.py   # native app R2: scipy resample_poly fixtures for varimu-app's resampler
+uv run python scripts/export_editor_fixtures.py  # native app R3a: Python's compile of the drawn circuits (and broken copies) for varimu-circuit's tests/editor.rs
 uv run --extra fast python scripts/app_render_agreement.py [--quality production|draft-1x]   # R2: the app's render vs Python's, bit for bit
 ```
 
@@ -277,6 +285,7 @@ cargo run --release --example profile -- circuit.json [method] [oversample] [dk|
 cargo run --release --features timing --example profile -- ...   # plus where the DK step's time goes (cycle counts)
 cargo run --release [--features timing] --example bench -- circuit.json input.f64 2 [out.f64]   # a run on a recorded input; METHOD, RATE, ABSTOL, NRELTOL, TABLES, PARTITION, ... (its docstring)
 cargo run --release -p varimu-app [-- FILE --play --device pultec_eqp1a]   # the native app (docs/NATIVE_APP_PLAN.md; R2: the Play view)
+cargo run --release -p varimu-app -- --edit triode_stage_drawn   # R3: the Editor view on a drawn circuit (config/circuits/*.drawing.json)
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
 cargo run -p varimu-app --example devices             # the audio devices cpal sees
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)

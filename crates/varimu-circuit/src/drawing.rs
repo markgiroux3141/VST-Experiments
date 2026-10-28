@@ -56,6 +56,23 @@ impl Symbol {
             .find(|(k, _)| k == name)
             .map(|(_, v)| v.as_str())
     }
+
+    /// Set a field (in place when it exists, else at the end).
+    pub fn set_field(&mut self, name: &str, value: &str) {
+        match self.fields.iter_mut().find(|(k, _)| k == name) {
+            Some((_, v)) => *v = value.to_string(),
+            None => self.fields.push((name.to_string(), value.to_string())),
+        }
+    }
+
+    pub fn remove_field(&mut self, name: &str) {
+        self.fields.retain(|(k, _)| k != name);
+    }
+
+    /// A placed unit.
+    pub fn unit(&self, unit: i64) -> Option<&Placement> {
+        self.units.iter().find(|(u, _)| *u == unit).map(|(_, p)| p)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -351,6 +368,13 @@ impl Drawing {
     pub fn symbol(&self, reference: &str) -> Option<&Symbol> {
         self.symbols
             .iter()
+            .find(|(r, _)| r == reference)
+            .map(|(_, s)| s)
+    }
+
+    pub fn symbol_mut(&mut self, reference: &str) -> Option<&mut Symbol> {
+        self.symbols
+            .iter_mut()
             .find(|(r, _)| r == reference)
             .map(|(_, s)| s)
     }

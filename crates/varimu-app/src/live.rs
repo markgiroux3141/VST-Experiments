@@ -14,6 +14,9 @@
 //! rewires: other nodes or elements) starts a new stream in the background, settled
 //! like a render's start, and the output crossfades to it over one block.
 //!
+//! A new circuit ([`Live::set_circuit`]: the editor's drawing, edited) takes the same
+//! path: the same structure updates the stream, another one restarts it.
+//!
 //! Blocks must keep up with real time on average; the caller's buffer absorbs the rest.
 
 use std::collections::BTreeSet;
@@ -42,7 +45,7 @@ pub type Values = Vec<(String, Value)>;
 
 /// A circuit file built into IRs: what [`Live`] and renders build from.
 pub struct Circuit {
-    lib: Library,
+    lib: Arc<Library>,
     spec: CircuitSpec,
     cores: Cores,
 }
@@ -56,10 +59,16 @@ impl Circuit {
             spec::circuit_path(config_dir, name).map_err(|e| e.to_string())?
         };
         Ok(Circuit {
-            lib: Library::new(config_dir),
+            lib: Arc::new(Library::new(config_dir)),
             spec: spec::load_circuit(&path).map_err(|e| e.to_string())?,
             cores,
         })
+    }
+
+    /// A circuit already read (the editor's compiled drawing), its device files and
+    /// materials from `lib`.
+    pub fn from_spec(lib: Arc<Library>, spec: CircuitSpec, cores: Cores) -> Circuit {
+        Circuit { lib, spec, cores }
     }
 
     pub fn spec(&self) -> &CircuitSpec {
@@ -180,6 +189,8 @@ enum Ready {
 /// What the caller and the builder thread share.
 struct Shared {
     wanted: Mutex<Option<Values>>,
+    /// A new circuit to build the wanted values with.
+    circuit: Mutex<Option<Circuit>>,
     wake: Condvar,
     closed: AtomicBool,
     /// The next input sample (f64 bits): a restarted stream starts there.
@@ -248,6 +259,7 @@ impl Live {
         let run = Running::new(&ir, u0, &s)?;
         let shared = Arc::new(Shared {
             wanted: Mutex::new(None),
+            circuit: Mutex::new(None),
             wake: Condvar::new(),
             closed: AtomicBool::new(false),
             u0: AtomicU64::new(u0.to_bits()),
@@ -304,6 +316,13 @@ impl Live {
     pub fn set(&self, values: Values) {
         *self.shared.wanted.lock().expect("wanted") = Some(values);
         self.shared.wake.notify_one();
+    }
+
+    /// A new circuit and its values: built in the background like [`Live::set`], the
+    /// stream updated in place when the structure is the same, else restarted.
+    pub fn set_circuit(&self, circuit: Circuit, values: Values) {
+        *self.shared.circuit.lock().expect("circuit") = Some(circuit);
+        self.set(values);
     }
 
     /// The last background build's error, if it failed (the stream plays on unchanged).
@@ -419,7 +438,7 @@ impl Drop for Live {
 
 /// The builder thread: the newest wanted values into an update or a settled new stream.
 fn build_loop(
-    circuit: Circuit,
+    mut circuit: Circuit,
     s: Settings,
     shared: Arc<Shared>,
     tx: Sender<Ready>,
@@ -441,6 +460,9 @@ fn build_loop(
             return;
         }
         let Some(values) = wanted else { continue };
+        if let Some(c) = shared.circuit.lock().expect("circuit").take() {
+            circuit = c;
+        }
         let result = circuit.build(&values).and_then(|ir| {
             let st = structure(&ir);
             if st == current {

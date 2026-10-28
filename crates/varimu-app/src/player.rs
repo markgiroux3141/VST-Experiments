@@ -178,6 +178,8 @@ impl Status {
 struct Shared {
     stop: AtomicBool,
     wanted: Mutex<Option<Values>>,
+    /// A new circuit for the wanted values (the editor's drawing, edited).
+    circuit: Mutex<Option<Circuit>>,
     /// When the newest wanted values were set.
     set_at: Mutex<Option<Instant>>,
     status: Mutex<Status>,
@@ -229,6 +231,7 @@ impl Player {
         let shared = Arc::new(Shared {
             stop: AtomicBool::new(false),
             wanted: Mutex::new(None),
+            circuit: Mutex::new(None),
             set_at: Mutex::new(None),
             status: Mutex::new(Status::new()),
             // Both sources start once the buffer is queued: a loop's first blocks run
@@ -297,6 +300,13 @@ impl Player {
     pub fn set(&self, values: Values) {
         *self.shared.wanted.lock().expect("wanted") = Some(values);
         *self.shared.set_at.lock().expect("set_at") = Some(Instant::now());
+    }
+
+    /// A new circuit with its values (the editor's drawing, edited): the same structure
+    /// updates the stream in place, another one restarts it with a crossfade.
+    pub fn set_circuit(&self, circuit: Circuit, values: Values) {
+        *self.shared.circuit.lock().expect("circuit") = Some(circuit);
+        self.set(values);
     }
 
     pub fn status(&self) -> Status {
@@ -439,7 +449,10 @@ fn work(
     }
     let forward_values = |live: &mut Live| {
         if let Some(v) = shared.wanted.lock().expect("wanted").take() {
-            live.set(v);
+            match shared.circuit.lock().expect("circuit").take() {
+                Some(c) => live.set_circuit(c, v),
+                None => live.set(v),
+            }
         }
         live.gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
     };
