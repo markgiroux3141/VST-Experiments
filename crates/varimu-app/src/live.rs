@@ -1,0 +1,419 @@
+//! Real-time playback: audio through a device's circuit while its front panel turns.
+//! The Rust port of `varimu/sim/live.py` (the web Play page's engine).
+//!
+//! A [`Live`] session runs a circuitsim [`Stream`] at a quality fast enough for real
+//! time (draft-1x: a 48 kHz host at 1x, the supplies on a second thread; the user's
+//! choice for playing) and hands out its output in blocks at the host rate. The input
+//! is a file's loop region (resampled to the host rate once, its seam crossfaded) or
+//! blocks the caller passes in (live input, [`Live::process`]).
+//!
+//! Knob changes ([`Live::set`]) are built into a circuit IR on a thread of their own,
+//! and the newest is handed to the stream at the next block: the same circuit with
+//! other values updates it in place ([`Stream::update`]); a change of structure (the
+//! 670's input pad at its 0 dB end, Time Constant 5-6, an EQP-1A selector that
+//! rewires: other nodes or elements) starts a new stream in the background, settled
+//! like a render's start, and the output crossfades to it over one block.
+//!
+//! Blocks must keep up with real time on average; the caller's buffer absorbs the rest.
+
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Condvar, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
+use circuitsim::ir::{CircuitIr, Element};
+use circuitsim::stream::Stream;
+use varimu_circuit::spec::{self, CircuitSpec};
+use varimu_circuit::yaml::Value;
+use varimu_circuit::{Cores, Library, build_ir};
+
+use crate::resample::resample;
+use crate::settings::Settings;
+
+/// The loop's seam: its end crossfades into its start over this long.
+pub const LOOP_FADE_S: f64 = 0.01;
+
+/// Values for a circuit's parameters (controls, values, device parameters), as a
+/// render's overrides.
+pub type Values = Vec<(String, Value)>;
+
+/// A circuit file built into IRs: what [`Live`] and renders build from.
+pub struct Circuit {
+    lib: Library,
+    spec: CircuitSpec,
+    cores: Cores,
+}
+
+impl Circuit {
+    /// `config/circuits/<name>.yaml` (or a .yaml path), built with `cores`.
+    pub fn load(config_dir: &Path, name: &str, cores: Cores) -> Result<Circuit, String> {
+        let path = if name.ends_with(".yaml") {
+            PathBuf::from(name)
+        } else {
+            spec::circuit_path(config_dir, name).map_err(|e| e.to_string())?
+        };
+        Ok(Circuit {
+            lib: Library::new(config_dir),
+            spec: spec::load_circuit(&path).map_err(|e| e.to_string())?,
+            cores,
+        })
+    }
+
+    pub fn spec(&self) -> &CircuitSpec {
+        &self.spec
+    }
+
+    pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
+        let p = spec::resolve(&self.spec, values).map_err(|e| e.to_string())?;
+        build_ir(&self.lib, &self.spec, &p, self.cores).map_err(|e| e.to_string())
+    }
+}
+
+/// What a stream can't change in place: its elements (kind, name) and nodes
+/// (`live.structure`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Structure {
+    elements: BTreeSet<(&'static str, String)>,
+    nodes: BTreeSet<String>,
+}
+
+pub fn structure(ir: &CircuitIr) -> Structure {
+    let mut elements = BTreeSet::new();
+    let mut nodes = BTreeSet::new();
+    for e in ir.sections.iter().flat_map(|s| &s.elements) {
+        let (kind, name, ns): (&'static str, &str, Vec<&String>) = match e {
+            Element::Resistor(r) => ("Resistor", &r.name, vec![&r.a, &r.b]),
+            Element::Capacitor(c) => ("Capacitor", &c.name, vec![&c.a, &c.b]),
+            Element::Inductor(l) => ("Inductor", &l.name, vec![&l.a, &l.b]),
+            Element::Coupling(k) => ("Coupling", &k.name, vec![]),
+            Element::VoltageSource(v) => ("VoltageSource", &v.name, vec![&v.pos, &v.neg]),
+            Element::SineSource(v) => ("SineSource", &v.name, vec![&v.pos, &v.neg]),
+            Element::Winding(w) => ("Winding", &w.name, vec![&w.a, &w.b]),
+            Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
+        };
+        elements.insert((kind, name.to_string()));
+        nodes.extend(ns.into_iter().cloned());
+    }
+    Structure { elements, nodes }
+}
+
+/// numpy's `linspace(0.0, 1.0, n)`: `i * (1 / (n - 1))`, the last point exactly 1.
+pub fn linspace01(n: usize) -> Vec<f64> {
+    if n < 2 {
+        return vec![0.0; n];
+    }
+    let step = 1.0 / (n - 1) as f64;
+    let mut w: Vec<f64> = (0..n).map(|i| i as f64 * step + 0.0).collect();
+    w[n - 1] = 1.0;
+    w
+}
+
+/// `x` as a loop: its last LOOP_FADE_S crossfaded into its start (`live.make_loop`).
+pub fn make_loop(x: &[f64], rate: u32) -> Vec<f64> {
+    let n = ((LOOP_FADE_S * rate as f64) as usize).min(x.len() / 4);
+    if n < 2 {
+        return x.to_vec();
+    }
+    let mut y = x[..x.len() - n].to_vec();
+    let tail = &x[x.len() - n..];
+    for (i, w) in linspace01(n).into_iter().enumerate() {
+        y[i] = x[i] * w + tail[i] * (1.0 - w);
+    }
+    y
+}
+
+/// One block's levels.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Meter {
+    /// Output vs input, dB (rms).
+    pub gain_db: f64,
+    /// Output level, dBFS (rms of a sine of that peak: rms * sqrt 2).
+    pub out_dbfs: f64,
+    /// The 670's control voltage (mean over the block), V.
+    pub cv_v: Option<f64>,
+    /// Compute time / audio time of the block.
+    pub load: f64,
+}
+
+/// A stream and where its probes are.
+struct Running {
+    stream: Stream,
+    structure: Structure,
+    out: usize,
+    cv: Option<usize>,
+}
+
+impl Running {
+    fn new(ir: &CircuitIr, u0: f64, s: &Settings) -> Result<Running, String> {
+        let v = s.full_scale_volts_peak;
+        let opts = s.stream_options()?;
+        let second = s.partition_sections(ir);
+        let h = 1.0 / s.sim_rate() as f64;
+        let mut stream =
+            Stream::new(ir, &second, s.coupling()?, h, &opts, u0 * v).map_err(|e| e.to_string())?;
+        let n0 = (s.settle_s * s.host() as f64) as usize;
+        if n0 > 0 {
+            stream
+                .process(&vec![u0 * v; n0])
+                .map_err(|e| e.to_string())?;
+        }
+        let find = |name: &str| stream.names().iter().position(|n| n == name);
+        let out = find("v(out)").ok_or("the circuit has no `out` probe")?;
+        let cv = find("v(cv)");
+        Ok(Running {
+            stream,
+            structure: structure(ir),
+            out,
+            cv,
+        })
+    }
+}
+
+enum Ready {
+    Update(Box<CircuitIr>, Values),
+    Restart(Box<Running>, Values),
+}
+
+/// What the caller and the builder thread share.
+struct Shared {
+    wanted: Mutex<Option<Values>>,
+    wake: Condvar,
+    closed: AtomicBool,
+    /// The next input sample (f64 bits): a restarted stream starts there.
+    u0: AtomicU64,
+    error: Mutex<Option<String>>,
+}
+
+/// Audio through a circuit in real time, its values changeable (see the module docs).
+pub struct Live {
+    s: Settings,
+    /// The host rate: input and output samples per second.
+    pub rate: u32,
+    looped: Vec<f64>,
+    pos: usize,
+    run: Running,
+    fade: Option<Box<Running>>,
+    shared: Arc<Shared>,
+    ready: Receiver<Ready>,
+    builder: Option<JoinHandle<()>>,
+    /// Streams restarted for changes of structure.
+    pub restarts: usize,
+    /// The values playing now.
+    pub values: Values,
+}
+
+impl Live {
+    /// A session on `circuit` with `values`, looping `clip` (at the project's rate,
+    /// `s.sample_rate`; empty for live input, fed through [`Live::process`]).
+    pub fn new(
+        clip: &[f64],
+        values: Values,
+        circuit: Circuit,
+        s: Settings,
+    ) -> Result<Live, String> {
+        if s.oversample != 1 {
+            return Err("live playback runs circuitsim at 1x (a quality with oversample 1)".into());
+        }
+        let rate = s.host();
+        let looped = if clip.is_empty() {
+            Vec::new()
+        } else {
+            let x = resample(clip, s.sample_rate, rate);
+            if x.len() < (rate / 10) as usize {
+                return Err("the loop is shorter than 0.1 s".into());
+            }
+            make_loop(&x, rate)
+        };
+        let u0 = looped.first().copied().unwrap_or(0.0);
+        let ir = circuit.build(&values)?;
+        let run = Running::new(&ir, u0, &s)?;
+        let shared = Arc::new(Shared {
+            wanted: Mutex::new(None),
+            wake: Condvar::new(),
+            closed: AtomicBool::new(false),
+            u0: AtomicU64::new(u0.to_bits()),
+            error: Mutex::new(None),
+        });
+        let (tx, ready) = mpsc::channel();
+        let builder = {
+            let (shared, s, current) = (shared.clone(), s.clone(), run.structure.clone());
+            std::thread::Builder::new()
+                .name("live builds".into())
+                .spawn(move || build_loop(circuit, s, shared, tx, current))
+                .map_err(|e| e.to_string())?
+        };
+        Ok(Live {
+            s,
+            rate,
+            looped,
+            pos: 0,
+            run,
+            fade: None,
+            shared,
+            ready,
+            builder: Some(builder),
+            restarts: 0,
+            values,
+        })
+    }
+
+    /// The loop's length in samples at the host rate (0: live input).
+    pub fn loop_len(&self) -> usize {
+        self.looped.len()
+    }
+
+    /// Where the loop is (the next input sample).
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+
+    /// New values (all of them, as for a render): built in the background, the newest
+    /// applied at a coming block.
+    pub fn set(&self, values: Values) {
+        *self.shared.wanted.lock().expect("wanted") = Some(values);
+        self.shared.wake.notify_one();
+    }
+
+    /// The last background build's error, if it failed (the stream plays on unchanged).
+    pub fn error(&self) -> Option<String> {
+        self.shared.error.lock().expect("error").clone()
+    }
+
+    /// The next `n` samples of the loop through the circuit.
+    pub fn next_block(&mut self, n: usize) -> Result<(Vec<f32>, Meter), String> {
+        if self.looped.is_empty() {
+            return Err("no loop: feed live input through `process`".into());
+        }
+        let mut x = Vec::with_capacity(n);
+        for _ in 0..n {
+            x.push(self.looped[self.pos]);
+            self.pos = (self.pos + 1) % self.looped.len();
+        }
+        self.shared
+            .u0
+            .store(self.looped[self.pos].to_bits(), Ordering::Relaxed);
+        self.process(&x)
+    }
+
+    /// `x` (full scale 1.0, at the host rate) through the circuit: as many output
+    /// samples (float32, full scale 1.0; the first block's start is padded with the
+    /// stream's lag).
+    pub fn process(&mut self, x: &[f64]) -> Result<(Vec<f32>, Meter), String> {
+        let t0 = Instant::now();
+        while let Ok(r) = self.ready.try_recv() {
+            match r {
+                Ready::Update(ir, values) => {
+                    self.run.stream.update(&ir).map_err(|e| e.to_string())?;
+                    self.values = values;
+                }
+                Ready::Restart(run, values) => {
+                    self.fade = Some(run);
+                    self.values = values;
+                }
+            }
+        }
+        if let Some(&last) = x.last()
+            && self.looped.is_empty()
+        {
+            self.shared.u0.store(last.to_bits(), Ordering::Relaxed);
+        }
+        let v = self.s.full_scale_volts_peak;
+        let xv: Vec<f64> = x.iter().map(|u| u * v).collect();
+        let out = self.run.stream.process(&xv).map_err(|e| e.to_string())?;
+        let mut y: Vec<f64> = out[self.run.out].iter().map(|o| o / v).collect();
+        let mut cv = self.run.cv.map(|i| out[i].clone());
+        if let Some(new) = self.fade.take() {
+            let mut new = *new;
+            let o2 = new.stream.process(&xv).map_err(|e| e.to_string())?;
+            let y2: Vec<f64> = o2[new.out].iter().map(|o| o / v).collect();
+            let m = y.len().min(y2.len());
+            let (a, b) = (&y[y.len() - m..], &y2[y2.len() - m..]);
+            y = linspace01(m)
+                .into_iter()
+                .enumerate()
+                .map(|(i, w)| a[i] * (1.0 - w) + b[i] * w)
+                .collect();
+            cv = new.cv.map(|i| o2[i].clone());
+            self.run = new;
+            self.restarts += 1;
+        }
+        // A stream's output lags its input by a few samples (the input's
+        // interpolation); pad its first block to keep the block size.
+        if y.len() < x.len() {
+            let mut p = vec![0.0; x.len() - y.len()];
+            p.extend_from_slice(&y);
+            y = p;
+        }
+        let rms = |a: &[f64]| (a.iter().map(|t| t * t).sum::<f64>() / a.len().max(1) as f64).sqrt();
+        let (rms_in, rms_out) = (rms(x) + 1e-12, rms(&y) + 1e-12);
+        let meter = Meter {
+            gain_db: 20.0 * (rms_out / rms_in).log10(),
+            out_dbfs: 20.0 * (rms_out * 2f64.sqrt()).log10(),
+            cv_v: cv
+                .filter(|c| !c.is_empty())
+                .map(|c| c.iter().sum::<f64>() / c.len() as f64),
+            load: t0.elapsed().as_secs_f64() / (x.len().max(1) as f64 / self.rate as f64),
+        };
+        Ok((y.iter().map(|&t| t as f32).collect(), meter))
+    }
+}
+
+impl Drop for Live {
+    fn drop(&mut self) {
+        self.shared.closed.store(true, Ordering::Relaxed);
+        self.shared.wake.notify_one();
+        if let Some(h) = self.builder.take() {
+            let _ = h.join();
+        }
+    }
+}
+
+/// The builder thread: the newest wanted values into an update or a settled new stream.
+fn build_loop(
+    circuit: Circuit,
+    s: Settings,
+    shared: Arc<Shared>,
+    tx: Sender<Ready>,
+    mut current: Structure,
+) {
+    loop {
+        let wanted = {
+            let mut w = shared.wanted.lock().expect("wanted");
+            if w.is_none() && !shared.closed.load(Ordering::Relaxed) {
+                w = shared
+                    .wake
+                    .wait_timeout(w, Duration::from_millis(200))
+                    .expect("wanted")
+                    .0;
+            }
+            w.take()
+        };
+        if shared.closed.load(Ordering::Relaxed) {
+            return;
+        }
+        let Some(values) = wanted else { continue };
+        let result = circuit.build(&values).and_then(|ir| {
+            let st = structure(&ir);
+            if st == current {
+                Ok(Ready::Update(Box::new(ir), values))
+            } else {
+                let u0 = f64::from_bits(shared.u0.load(Ordering::Relaxed));
+                let run = Running::new(&ir, u0, &s)?;
+                current = st;
+                Ok(Ready::Restart(Box::new(run), values))
+            }
+        });
+        match result {
+            Ok(r) => {
+                *shared.error.lock().expect("error") = None;
+                if tx.send(r).is_err() {
+                    return;
+                }
+            }
+            Err(e) => *shared.error.lock().expect("error") = Some(e),
+        }
+    }
+}

@@ -1,0 +1,118 @@
+//! The real-time engine without an audio device: the EQP-1A (the cheaper device, ~6x
+//! faster than real time at draft-1x) looping a tone while knobs turn.
+
+use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+use varimu_app::live::{Circuit, Live, Values, make_loop, structure};
+use varimu_app::panel::{DEVICES, knobs, values};
+use varimu_app::settings::{Quality, Settings};
+use varimu_circuit::yaml::Value;
+
+fn config() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config")
+}
+
+fn tone(s: &Settings, seconds: f64, f_hz: f64, amp: f64) -> Vec<f64> {
+    let n = (seconds * s.sample_rate as f64) as usize;
+    (0..n)
+        .map(|i| amp * (2.0 * std::f64::consts::PI * f_hz * i as f64 / s.sample_rate as f64).sin())
+        .collect()
+}
+
+fn set(v: &Values, key: &str, to: Value) -> Values {
+    v.iter()
+        .map(|(k, x)| (k.clone(), if k == key { to.clone() } else { x.clone() }))
+        .collect()
+}
+
+/// Play blocks until the session plays `want` (or time runs out); returns the blocks.
+fn play_until(live: &mut Live, want: &Values) -> Vec<f32> {
+    let t0 = Instant::now();
+    let mut y = Vec::new();
+    while live.values != *want {
+        assert!(
+            t0.elapsed() < Duration::from_secs(60),
+            "values never applied"
+        );
+        assert_eq!(live.error(), None);
+        y.extend(live.next_block(480).unwrap().0);
+    }
+    for _ in 0..20 {
+        y.extend(live.next_block(480).unwrap().0);
+    }
+    y
+}
+
+#[test]
+fn eqp1a_plays_and_turns() {
+    let s = Settings::load(&config(), Quality::Draft1x).unwrap();
+    let dev = &DEVICES[1];
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let k = knobs(dev, circuit.spec());
+    let v0 = values(&k);
+    let mut live = Live::new(&tone(&s, 0.5, 1000.0, 0.1), v0.clone(), circuit, s.clone()).unwrap();
+    assert_eq!(live.rate, 48_000);
+    assert_eq!(live.loop_len(), 24_000 - 480); // the seam's 10 ms folded in
+
+    let mut y = Vec::new();
+    let mut gain = 0.0;
+    for _ in 0..60 {
+        let (b, m) = live.next_block(480).unwrap();
+        assert_eq!(b.len(), 480);
+        y.extend(b);
+        gain = m.gain_db;
+    }
+    assert!(y.iter().all(|v| v.is_finite()));
+    // Python's Live on the same tone: -5.0264 dB (its samples are equal to these bit for
+    // bit; checked 2026-10-27).
+    assert!(
+        (gain + 5.0264).abs() < 1e-3,
+        "gain at the defaults {gain} dB"
+    );
+
+    // A knob: the same structure, updated in place.
+    let v1 = set(&v0, "hf_boost", Value::Float(1.0));
+    live.set(v1.clone());
+    play_until(&mut live, &v1);
+    assert_eq!(live.restarts, 0);
+
+    // Every selector position plays (in place or by a restarted stream).
+    let lf = k.iter().find(|k| k.key == "lf_freq_hz").unwrap();
+    let varimu_app::panel::Kind::Choices(choices) = &lf.kind else {
+        panic!("lf_freq_hz is a selector")
+    };
+    let mut v = v1;
+    for c in choices {
+        v = set(&v, "lf_freq_hz", c.clone());
+        live.set(v.clone());
+        let y = play_until(&mut live, &v);
+        assert!(y.iter().all(|t| t.is_finite() && t.abs() < 2.0));
+    }
+}
+
+#[test]
+fn loop_seam_is_crossfaded() {
+    let x: Vec<f64> = (0..10_000).map(|i| i as f64).collect();
+    let y = make_loop(&x, 48_000);
+    assert_eq!(y.len(), 10_000 - 480);
+    assert_eq!(y[0], x[10_000 - 480]); // starts where the end left off
+    assert_eq!(y[479], x[479]); // numpy's linspace ends exactly at 1
+    assert_eq!(y[1000], 1000.0);
+}
+
+#[test]
+fn structure_tells_values_from_rewiring() {
+    let s = Settings::load(&config(), Quality::Draft1x).unwrap();
+    let c = Circuit::load(&config(), "fairchild_670", s.cores().unwrap()).unwrap();
+    let v = values(&knobs(&DEVICES[0], c.spec()));
+    let base = structure(&c.build(&v).unwrap());
+    let thr = structure(
+        &c.build(&set(&v, "ac_threshold", Value::Float(0.3)))
+            .unwrap(),
+    );
+    assert_eq!(base, thr);
+    // Time Constant 5 adds parts (live.py: a change of structure).
+    let tc5 = structure(&c.build(&set(&v, "time_constant", Value::Int(5))).unwrap());
+    assert_ne!(base, tc5);
+}

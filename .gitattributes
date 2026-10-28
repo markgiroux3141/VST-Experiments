@@ -1,3 +1,4 @@
 tests/fixtures/** -text
 crates/circuitsim/tests/fixtures/** -text
 crates/varimu-circuit/tests/fixtures/** -text
+crates/varimu-app/tests/fixtures/** -text

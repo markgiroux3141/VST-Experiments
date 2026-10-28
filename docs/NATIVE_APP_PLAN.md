@@ -183,6 +183,74 @@ operations is kept throughout (`**` as `powf`, `max` as Python's).
 - a Rust production render equals a Python production render of the same input and
   values bit for bit (same engine, same IR).
 
+**In progress (2026-10-27).** `crates/varimu-app` is now a library (`src/lib.rs`, tested
+on its own) plus the window (`main.rs`, `play_view.rs`):
+
+- `resample`: scipy's `resample_poly` (Kaiser 5 window, Cephes `i0`, numpy's `sinc` and
+  pairwise sum, `upfirdn`'s loop) ported operation for operation, **bit for bit** with
+  scipy on every ratio and padding the project uses (`tests/resample.rs` on
+  `scripts/export_audio_fixtures.py`'s fixture; `tests/test_audio_fixtures.py` says when
+  it's stale). It replaces rubato from the plan: the render has to resample exactly as
+  Python does, and one resampler serves both.
+- `audio`: symphonia 0.6 decoding (power-of-two integer scaling, channels averaged as
+  numpy's `mean`, then `resample_poly`): the six clips in data/clips (16-bit and float,
+  mono and stereo, 44.1 kHz) load bit for bit equal to `load_audio`. Float32 WAV out.
+- `settings`: the qualities of `sim_settings.yaml` stacked as `TransientSettings` does.
+- `live`: `varimu/sim/live.py` ported (loop seam, background builds, update or restart
+  with a crossfade, meters). On the EQP-1A its output equals Python's `Live` bit for bit
+  (60 blocks of a tone; numpy's `linspace` matters at the seam).
+- `player`: the session on a worker thread feeding a lock-free ring (rtrb) that a cpal
+  output stream at the host rate copies out of (WASAPI converts rates for outputs);
+  callbacks it can't fill are counted as dropouts. A file's loop is kept 150 ms ahead.
+  Live input: a cpal input stream (the device's default format; one channel) into a
+  second ring, `StreamResampler` (the same filter, streaming) to 48 kHz, blocks through
+  the circuit as they arrive, the output starting at a 30 ms queue; a block of input is
+  skipped when the queue passes the buffer plus two blocks (clock drift). Input to
+  output is reported from cpal's timestamps (input device + half a block + compute +
+  queue + output device), knob to ear from `set` to the first block built with it
+  playing. Record keeps the input as a take (`cache/app_takes/`, float32 WAV at the
+  device's rate), which then opens as the file. The process runs at high priority
+  (`raise_priority`). `Playback` loops a finished render.
+- `render`: `fast.run_transient` and the runner's float32 output ported, with progress
+  and cancel. **Bit for bit with Python** at production and at draft-1x, both devices
+  (0.25 s of the arpeggio with knobs away from their defaults, every probe:
+  `scripts/app_render_agreement.py`, which runs the `render` example).
+- The Play view: device, file (data/clips or Open…), the loop region dragged on a
+  waveform, Play / Stop, the front panel (sliders and selectors), meters (gain, output,
+  CV, load, queued audio, dropouts, restarts), Render (production) with progress,
+  cancel, Play render and Save as (renders also go to `cache/app_renders/`).
+  `varimu-app [FILE] [--play] [--device ID]` opens and plays from the command line.
+
+The live-input UI: File / Live input, the input device (↻ lists them again), channel,
+buffer (10-150 ms), Monitor, Record; `varimu-app --input NAME --channel N --play`.
+
+**Measurements (2026-10-27,** `examples/play.rs`: a line per second and a summary; the
+desktop ~30% busy with the user's other work, so not the idle desktop the done-when
+asks for; UA Twin USB in and out, WASAPI shared mode, 48 kHz, 10 ms device buffers):
+
+| Run | Load (mean / worst block) | Dropouts | Notes |
+|---|---|---|---|
+| EQP-1A, file loop, 20 s, High boost flipped every 2 s | ~30% / 361% (first second) | 0 | knob to ear 182 ms mean, 186 max |
+| 670, file loop, 30 s, threshold 0.709 / 0.9, normal priority | ~100% / 402% | 152 | knob to ear 127 ms mean, 194 max |
+| 670, file loop, 25 s, defaults, high priority | ~95% / 199% | 12 | |
+| 670, file loop, 60 s, threshold flipped, high priority | ~103% / 247% | 116 | knob to ear 139 ms mean, 195 max |
+| 670, file loop, 30 s, defaults, high priority | ~90% / 215% | 8 | |
+| EQP-1A, live input, 5 min, 30 ms buffer, normal priority | ~26% / 417% | 2 | input to output 60-80 ms (80 mean); each dropout added 10 ms of queue |
+| 670, live input, 60 s, 50 ms buffer, high priority | ~45% / 84% | 0 | 86 ms; the input was silent |
+
+Of the input-to-output latency, 32 ms is the output device (WASAPI shared mode) and
+the starting queue is the buffer; the rest is the input device, half a block and the
+compute. Silence is cheap for the 670 (45% load against ~90% on program material), so
+its live-input run doesn't show what an instrument would cost. The dropouts come from
+isolated stalls (single blocks taking 2-4x their time; the supplies' partition steps in
+lockstep with the main thread, so a stall on either costs a block), and on the 670 from
+its mean load near 100%: draft-1x runs the 670 at about real time here (the M8 study:
+0.69-0.86x on an idle desktop), harder compression costing more.
+
+Found: cpal 0.18 overflows (debug builds panic) listing the formats of inputs with many
+channels (the UA Twin's 22, `supported_input_configs`), so inputs use
+`default_input_config`.
+
 ### R3. Editor
 
 Open, edit and save `.drawing.json`; place, move, rotate, delete, wire and label; an

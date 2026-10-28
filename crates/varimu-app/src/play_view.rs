@@ -1,0 +1,1089 @@
+//! The Play view: a device, a file and its loop region, the front panel and meters
+//! (R2; the web `/play` page's counterpart). Plays at draft-1x through
+//! `varimu_app::player`; knobs reach the player as they turn.
+
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{self, Receiver};
+use std::time::{Duration, Instant};
+
+use eframe::egui::{self, Color32, RichText, Stroke};
+use varimu_app::audio;
+use varimu_app::live::Circuit;
+use varimu_app::panel::{self, DEVICES, Kind, Knob};
+use varimu_app::player::{
+    AHEAD_S, INPUT_BUFFER_S, InputDevice, Playback, Player, Source, State, input_devices,
+};
+use varimu_app::render::{Rendered, render};
+use varimu_app::settings::{Quality, Settings};
+use varimu_circuit::yaml::Value;
+
+use crate::theme;
+
+/// Waveform overview columns.
+const OVERVIEW: usize = 1200;
+/// The shortest loop region (s).
+const MIN_REGION_S: f64 = 0.25;
+
+/// A loaded file.
+struct Clip {
+    path: PathBuf,
+    /// Mono at the project's rate.
+    samples: Vec<f64>,
+    rate: u32,
+    /// Min and max per overview column.
+    overview: Vec<(f32, f32)>,
+}
+
+impl Clip {
+    fn seconds(&self) -> f64 {
+        self.samples.len() as f64 / self.rate as f64
+    }
+}
+
+fn overview(x: &[f64]) -> Vec<(f32, f32)> {
+    let per = x.len().div_ceil(OVERVIEW).max(1);
+    x.chunks(per)
+        .map(|c| {
+            c.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &v| {
+                (lo.min(v as f32), hi.max(v as f32))
+            })
+        })
+        .collect()
+}
+
+/// A production render running on a thread of its own.
+struct RenderTask {
+    /// Fraction done (f64 bits).
+    progress: Arc<AtomicU64>,
+    cancel: Arc<AtomicBool>,
+    /// The render and where it was saved (None: saving failed).
+    result: Receiver<Result<(Rendered, Option<PathBuf>), String>>,
+    started: Instant,
+    label: String,
+}
+
+/// A finished render: where it was saved and what it was.
+struct Done {
+    rendered: Rendered,
+    path: Option<PathBuf>,
+    label: String,
+}
+
+pub struct PlayView {
+    config_dir: PathBuf,
+    clips_dir: PathBuf,
+    settings: Result<Settings, String>,
+    device: usize,
+    knobs: Vec<Knob>,
+    clip: Option<Clip>,
+    loading: Option<(PathBuf, Receiver<Result<Clip, String>>)>,
+    /// The loop region (s).
+    region: (f64, f64),
+    /// Where a drag on the overview started (s).
+    drag_from: Option<f64>,
+    player: Option<Player>,
+    /// The region and device the player plays (a change restarts it).
+    playing: Option<((f64, f64), usize, PathBuf)>,
+    /// Start playing once the file being loaded is in.
+    autoplay: bool,
+    task: Option<RenderTask>,
+    done: Option<Done>,
+    playback: Option<Playback>,
+    /// Live input instead of the file: the device, channel and starting queue.
+    live_input: bool,
+    inputs: Vec<InputDevice>,
+    input: usize,
+    channel: usize,
+    input_buffer_ms: f64,
+    /// The last take, saved (it is then the file).
+    take_saved: Option<PathBuf>,
+    error: Option<String>,
+}
+
+/// What the command line asks for:
+/// `varimu-app [FILE] [--play] [--device ID] [--input NAME [--channel N]]`.
+#[derive(Debug, Default)]
+pub struct Args {
+    pub file: Option<PathBuf>,
+    pub play: bool,
+    pub device: Option<String>,
+    /// Live input from this device (and channel, from 1).
+    pub input: Option<String>,
+    pub channel: usize,
+}
+
+impl Args {
+    pub fn parse(args: impl Iterator<Item = String>) -> Result<Args, String> {
+        let mut a = Args::default();
+        let mut it = args.skip(1);
+        while let Some(x) = it.next() {
+            match x.as_str() {
+                "--play" => a.play = true,
+                "--device" => a.device = Some(it.next().ok_or("--device needs an id")?),
+                "--input" => a.input = Some(it.next().ok_or("--input needs a device name")?),
+                "--channel" => {
+                    let c = it.next().ok_or("--channel needs a number")?;
+                    a.channel = c.parse().map_err(|_| format!("--channel {c}"))?;
+                }
+                s if s.starts_with("--") => return Err(format!("unknown option {s}")),
+                _ => a.file = Some(PathBuf::from(x)),
+            }
+        }
+        Ok(a)
+    }
+}
+
+impl PlayView {
+    pub fn new(config_dir: PathBuf, args: Args) -> PlayView {
+        let clips_dir = config_dir.parent().map_or_else(
+            || PathBuf::from("data/clips"),
+            |r| r.join("data").join("clips"),
+        );
+        let settings = Settings::load(&config_dir, Quality::Draft1x);
+        let mut v = PlayView {
+            config_dir,
+            clips_dir,
+            settings,
+            device: 0,
+            knobs: Vec::new(),
+            clip: None,
+            loading: None,
+            region: (0.0, 0.0),
+            drag_from: None,
+            player: None,
+            playing: None,
+            autoplay: args.play,
+            task: None,
+            done: None,
+            playback: None,
+            live_input: false,
+            inputs: Vec::new(),
+            input: 0,
+            channel: 0,
+            input_buffer_ms: INPUT_BUFFER_S * 1000.0,
+            take_saved: None,
+            error: None,
+        };
+        if let Some(id) = &args.device {
+            match DEVICES.iter().position(|d| d.id == id.as_str()) {
+                Some(i) => v.device = i,
+                None => v.error = Some(format!("unknown device {id}")),
+            }
+        }
+        v.load_knobs();
+        if let Some(name) = &args.input {
+            v.live_input = true;
+            v.inputs = input_devices();
+            match v.inputs.iter().position(|d| &d.name == name) {
+                Some(i) => v.input = i,
+                None => v.error = Some(format!("no input device {name}")),
+            }
+            v.channel = args.channel.saturating_sub(1);
+            if args.play && v.error.is_none() {
+                v.start();
+            }
+        }
+        if let Some(f) = args.file {
+            v.open(f);
+        }
+        v
+    }
+
+    fn load_knobs(&mut self) {
+        let dev = &DEVICES[self.device];
+        match varimu_circuit::spec::circuit_path(&self.config_dir, dev.circuit)
+            .and_then(|p| varimu_circuit::spec::load_circuit(&p))
+        {
+            Ok(spec) => self.knobs = panel::knobs(dev, &spec),
+            Err(e) => self.error = Some(e.to_string()),
+        }
+    }
+
+    fn open(&mut self, path: PathBuf) {
+        let Ok(s) = &self.settings else { return };
+        let rate = s.sample_rate;
+        let (tx, rx) = mpsc::channel();
+        let p = path.clone();
+        std::thread::spawn(move || {
+            let r = audio::load(&p, rate).map(|samples| Clip {
+                overview: overview(&samples),
+                path: p.clone(),
+                samples,
+                rate,
+            });
+            let _ = tx.send(r);
+        });
+        self.loading = Some((path, rx));
+    }
+
+    fn poll_loading(&mut self) {
+        let Some((_, rx)) = &self.loading else { return };
+        match rx.try_recv() {
+            Ok(Ok(clip)) => {
+                // A default region: the first 8 s, as the web page's excerpts.
+                self.region = (0.0, clip.seconds().min(8.0));
+                self.clip = Some(clip);
+                self.loading = None;
+                self.error = None;
+                if (self.player.is_some() && !self.live_input) || std::mem::take(&mut self.autoplay)
+                {
+                    self.start();
+                }
+            }
+            Ok(Err(e)) => {
+                self.error = Some(e);
+                self.loading = None;
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(mpsc::TryRecvError::Disconnected) => self.loading = None,
+        }
+    }
+
+    /// The loop region's samples (at the project's rate).
+    fn region_samples(&self) -> Option<Vec<f64>> {
+        let clip = self.clip.as_ref()?;
+        let (a, b) = self.region;
+        let n = clip.samples.len();
+        let (i, j) = (
+            (a * clip.rate as f64) as usize,
+            (b * clip.rate as f64) as usize,
+        );
+        Some(clip.samples[i.min(n)..j.min(n)].to_vec())
+    }
+
+    fn start(&mut self) {
+        self.player = None; // the old one stops first (its output and threads)
+        self.playing = None;
+        self.playback = None;
+        if self.live_input {
+            return self.start_input();
+        }
+        let (Some(x), Ok(s)) = (self.region_samples(), &self.settings) else {
+            return;
+        };
+        let clip = self.clip.as_ref().expect("a region needs a clip");
+        let dev = &DEVICES[self.device];
+        let result = s
+            .cores()
+            .and_then(|c| Circuit::load(&self.config_dir, dev.circuit, c))
+            .and_then(|c| {
+                let v = panel::values(&self.knobs);
+                Player::start(Source::Loop(x), v, c, s.clone(), AHEAD_S)
+            });
+        match result {
+            Ok(p) => {
+                self.player = Some(p);
+                self.playing = Some((self.region, self.device, clip.path.clone()));
+                self.error = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// Monitor the chosen input through the device.
+    fn start_input(&mut self) {
+        let Ok(s) = &self.settings else { return };
+        let Some(dev_in) = self.inputs.get(self.input) else {
+            self.error = Some("no input device".into());
+            return;
+        };
+        let dev = &DEVICES[self.device];
+        let source = Source::Input {
+            device: Some(dev_in.name.clone()),
+            channel: self.channel,
+        };
+        let buffer = self.input_buffer_ms / 1000.0;
+        let result = s
+            .cores()
+            .and_then(|c| Circuit::load(&self.config_dir, dev.circuit, c))
+            .and_then(|c| Player::start(source, panel::values(&self.knobs), c, s.clone(), buffer));
+        match result {
+            Ok(p) => {
+                self.player = Some(p);
+                self.error = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    fn stop(&mut self) {
+        if let Some(p) = &self.player {
+            p.record(false);
+        }
+        self.collect_take();
+        self.player = None;
+        self.playing = None;
+    }
+
+    /// A take the worker has handed over, without waiting.
+    fn collect_take_now(&mut self) {
+        if let Some(t) = self.player.as_ref().and_then(Player::take) {
+            self.save_take(t);
+        }
+    }
+
+    /// A finished take: saved as a WAV at the input's rate (float32, as it came in),
+    /// then opened as the file (loop it, render it).
+    fn collect_take(&mut self) {
+        let Some(take) = self.player.as_ref().and_then(|p| {
+            // The worker hands the take over at its next input chunk.
+            for _ in 0..50 {
+                if let Some(t) = p.take() {
+                    return Some(t);
+                }
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            None
+        }) else {
+            return;
+        };
+        self.save_take(take);
+    }
+
+    fn save_take(&mut self, take: varimu_app::player::Take) {
+        let when = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs());
+        let dir = self
+            .config_dir
+            .parent()
+            .map_or_else(|| PathBuf::from("cache"), |r| r.join("cache"))
+            .join("app_takes");
+        let path = dir.join(format!("take_{when}.wav"));
+        match audio::write_wav(&path, &take.samples, take.rate) {
+            Ok(()) => {
+                self.take_saved = Some(path.clone());
+                self.open(path);
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// Render the loop region at production on a thread of its own.
+    fn start_render(&mut self) {
+        let Some(x) = self.region_samples() else {
+            return;
+        };
+        let clip = self.clip.as_ref().expect("a region needs a clip");
+        let dev = DEVICES[self.device];
+        let (a, b) = self.region;
+        let stem = clip
+            .path
+            .file_stem()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        let label = format!("{} · {stem} {a:.2}-{b:.2} s", dev.label);
+        let file_stem = format!("{stem}_{}_{:.2}-{:.2}", dev.id, a, b);
+        let values = panel::values(&self.knobs);
+        let config = self.config_dir.clone();
+        let out_dir = config
+            .parent()
+            .map_or_else(|| PathBuf::from("cache"), |r| r.join("cache"))
+            .join("app_renders");
+        let progress = Arc::new(AtomicU64::new(0f64.to_bits()));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = mpsc::channel();
+        let (p, c) = (progress.clone(), cancel.clone());
+        std::thread::spawn(move || {
+            let r = (|| {
+                let s = Settings::load(&config, Quality::Production)?;
+                let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?;
+                render(
+                    &circuit,
+                    &values,
+                    &x,
+                    &s,
+                    |f| p.store(f.to_bits(), Ordering::Relaxed),
+                    &c,
+                )
+            })();
+            let _ = tx.send(r.map(|r| {
+                let when = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |d| d.as_secs());
+                let path = out_dir.join(format!("{file_stem}_{when}.wav"));
+                let saved = audio::write_wav(&path, &r.out, r.sample_rate)
+                    .ok()
+                    .map(|()| path);
+                (r, saved)
+            }));
+        });
+        self.task = Some(RenderTask {
+            progress,
+            cancel,
+            result: rx,
+            started: Instant::now(),
+            label,
+        });
+    }
+
+    fn poll_render(&mut self) {
+        let Some(t) = &self.task else { return };
+        match t.result.try_recv() {
+            Ok(Ok((rendered, path))) => {
+                self.done = Some(Done {
+                    path,
+                    label: t.label.clone(),
+                    rendered,
+                });
+                self.task = None;
+            }
+            Ok(Err(e)) => {
+                if !t.cancel.load(Ordering::Relaxed) {
+                    self.error = Some(format!("render: {e}"));
+                }
+                self.task = None;
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
+            Err(mpsc::TryRecvError::Disconnected) => self.task = None,
+        }
+    }
+
+    /// The render row: start / progress / cancel, then play back and save.
+    fn render_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if let Some(t) = &self.task {
+                let f = f64::from_bits(t.progress.load(Ordering::Relaxed));
+                let el = t.started.elapsed().as_secs_f64();
+                let eta = if f > 0.02 {
+                    format!(", ~{:.0} s left", el / f - el)
+                } else {
+                    String::new()
+                };
+                ui.add(
+                    egui::ProgressBar::new(f as f32)
+                        .desired_width(260.0)
+                        .text(format!("rendering at production {:.0} %{eta}", f * 100.0)),
+                );
+                if ui.button("Cancel").clicked() {
+                    t.cancel.store(true, Ordering::Relaxed);
+                }
+            } else if ui
+                .add_enabled(
+                    self.clip.is_some(),
+                    egui::Button::new("Render (production)"),
+                )
+                .on_hover_text("The loop region and panel at production settings, saved as a WAV")
+                .clicked()
+            {
+                self.start_render();
+            }
+            let Some(d) = &self.done else { return };
+            ui.add_space(12.0);
+            if self.playback.is_none() {
+                if ui.button("▶ Play render").clicked() {
+                    self.player = None;
+                    self.playing = None;
+                    match Playback::start(&d.rendered.out, d.rendered.sample_rate) {
+                        Ok(p) => self.playback = Some(p),
+                        Err(e) => self.error = Some(e),
+                    }
+                }
+            } else if ui.button("■ Stop render").clicked() {
+                self.playback = None;
+            }
+            if ui.button("Save as…").clicked()
+                && let Some(p) = rfd::FileDialog::new()
+                    .add_filter("WAV", &["wav"])
+                    .save_file()
+            {
+                match audio::write_wav(&p, &d.rendered.out, d.rendered.sample_rate) {
+                    Ok(()) => {
+                        if let Some(d) = &mut self.done {
+                            d.path = Some(p);
+                        }
+                    }
+                    Err(e) => self.error = Some(e),
+                }
+            }
+        });
+        if let Some(d) = &self.done {
+            let saved = d
+                .path
+                .as_ref()
+                .map_or("(not saved)".to_string(), |p| p.display().to_string());
+            ui.label(
+                RichText::new(format!(
+                    "{} · {:.1} s in {:.0} s ({:.1}x real time) · saved to {saved}",
+                    d.label,
+                    d.rendered.out.len() as f64 / d.rendered.sample_rate as f64,
+                    d.rendered.wall_s,
+                    d.rendered.realtime_factor(),
+                ))
+                .small()
+                .color(theme::MUTED),
+            );
+        }
+    }
+
+    pub fn ui(&mut self, ui: &mut egui::Ui) {
+        self.poll_loading();
+        self.poll_render();
+        if self.player.as_ref().is_some_and(|p| !p.recording()) {
+            self.collect_take_now();
+        }
+        if let Err(e) = &self.settings {
+            ui.colored_label(theme::FAULT, format!("can't read the settings: {e}"));
+            return;
+        }
+        egui::Panel::left("play_panel")
+            .resizable(false)
+            .exact_size(320.0)
+            .frame(
+                egui::Frame::NONE
+                    .fill(theme::CHROME)
+                    .inner_margin(egui::Margin::same(14)),
+            )
+            .show(ui, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| self.side(ui));
+            });
+        egui::CentralPanel::default()
+            .frame(
+                egui::Frame::NONE
+                    .fill(theme::CANVAS)
+                    .inner_margin(egui::Margin::same(18)),
+            )
+            .show(ui, |ui| self.main(ui));
+        if self.player.is_some()
+            || self.loading.is_some()
+            || self.task.is_some()
+            || self.playback.is_some()
+        {
+            ui.ctx().request_repaint_after(Duration::from_millis(33));
+        }
+    }
+
+    fn heading(ui: &mut egui::Ui, text: &str) {
+        ui.add_space(6.0);
+        ui.label(RichText::new(text).small().color(theme::FAINT));
+        ui.add_space(2.0);
+    }
+
+    /// The left column: device, file, front panel.
+    fn side(&mut self, ui: &mut egui::Ui) {
+        Self::heading(ui, "DEVICE");
+        let before = self.device;
+        egui::ComboBox::from_id_salt("device")
+            .width(ui.available_width())
+            .selected_text(DEVICES[self.device].label)
+            .show_ui(ui, |ui| {
+                for (i, d) in DEVICES.iter().enumerate() {
+                    ui.selectable_value(&mut self.device, i, d.label);
+                }
+            });
+        if self.device != before {
+            self.load_knobs();
+            if self.player.is_some() {
+                self.start();
+            }
+        }
+
+        Self::heading(ui, "SOURCE");
+        let before = self.live_input;
+        ui.horizontal(|ui| {
+            ui.selectable_value(&mut self.live_input, false, "File");
+            ui.selectable_value(&mut self.live_input, true, "Live input");
+        });
+        if self.live_input != before {
+            self.stop();
+            if self.live_input && self.inputs.is_empty() {
+                self.inputs = input_devices();
+            }
+        }
+        if self.live_input {
+            self.input_ui(ui);
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new("Recorded take / file")
+                    .small()
+                    .color(theme::FAINT),
+            );
+        }
+        let current = self
+            .clip
+            .as_ref()
+            .and_then(|c| c.path.file_name())
+            .map_or("(none)".to_string(), |n| n.to_string_lossy().into_owned());
+        let mut pick: Option<PathBuf> = None;
+        egui::ComboBox::from_id_salt("clip")
+            .width(ui.available_width())
+            .selected_text(current)
+            .show_ui(ui, |ui| {
+                for p in list_clips(&self.clips_dir) {
+                    let name = p
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned();
+                    if ui.selectable_label(false, name).clicked() {
+                        pick = Some(p);
+                    }
+                }
+            });
+        if ui.button("Open file…").clicked()
+            && let Some(p) = rfd::FileDialog::new()
+                .add_filter("Audio", &["wav", "aif", "aiff", "flac", "ogg", "mp3"])
+                .pick_file()
+        {
+            pick = Some(p);
+        }
+        if let Some(p) = pick {
+            self.open(p);
+        }
+        if let Some((p, _)) = &self.loading {
+            ui.label(
+                RichText::new(format!(
+                    "loading {}…",
+                    p.file_name().unwrap_or_default().display()
+                ))
+                .color(theme::MUTED),
+            );
+        }
+
+        Self::heading(ui, "FRONT PANEL");
+        let mut changed = false;
+        for k in &mut self.knobs {
+            changed |= knob_ui(ui, k);
+        }
+        if ui.small_button("Defaults").clicked() {
+            for k in &mut self.knobs {
+                k.value = k.default.clone();
+            }
+            changed = true;
+        }
+        if changed && let Some(p) = &self.player {
+            p.set(panel::values(&self.knobs));
+        }
+    }
+
+    /// Live input's device, channel and buffer.
+    fn input_ui(&mut self, ui: &mut egui::Ui) {
+        let (input, channel, buffer) = (self.input, self.channel, self.input_buffer_ms);
+        ui.horizontal(|ui| {
+            let name = self
+                .inputs
+                .get(self.input)
+                .map_or("(no inputs)", |d| d.name.as_str());
+            egui::ComboBox::from_id_salt("input")
+                .width(ui.available_width() - 34.0)
+                .selected_text(name)
+                .show_ui(ui, |ui| {
+                    for (i, d) in self.inputs.iter().enumerate() {
+                        let label =
+                            format!("{} ({} ch, {} kHz)", d.name, d.channels, d.rate / 1000);
+                        ui.selectable_value(&mut self.input, i, label);
+                    }
+                });
+            if ui
+                .button("↻")
+                .on_hover_text("List the input devices again")
+                .clicked()
+            {
+                self.inputs = input_devices();
+                self.input = self.input.min(self.inputs.len().saturating_sub(1));
+            }
+        });
+        let channels = self
+            .inputs
+            .get(self.input)
+            .map_or(1, |d| d.channels as usize);
+        self.channel = self.channel.min(channels - 1);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Channel").color(theme::MUTED));
+            egui::ComboBox::from_id_salt("channel")
+                .width(60.0)
+                .selected_text(format!("{}", self.channel + 1))
+                .show_ui(ui, |ui| {
+                    for c in 0..channels {
+                        ui.selectable_value(&mut self.channel, c, format!("{}", c + 1));
+                    }
+                });
+            ui.label(RichText::new("Buffer").color(theme::MUTED));
+            egui::ComboBox::from_id_salt("buffer")
+                .width(70.0)
+                .selected_text(format!("{:.0} ms", self.input_buffer_ms))
+                .show_ui(ui, |ui| {
+                    for ms in [10.0, 20.0, 30.0, 50.0, 80.0, 150.0] {
+                        ui.selectable_value(&mut self.input_buffer_ms, ms, format!("{ms:.0} ms"));
+                    }
+                });
+        });
+        let changed = (input, channel, buffer) != (self.input, self.channel, self.input_buffer_ms);
+        if changed && self.player.is_some() {
+            self.start();
+        }
+    }
+
+    /// Transport, the waveform with its loop region, meters.
+    fn main(&mut self, ui: &mut egui::Ui) {
+        if self.live_input {
+            self.input_transport(ui);
+        } else {
+            self.file_transport(ui);
+        }
+        ui.add_space(8.0);
+        self.render_ui(ui);
+        ui.add_space(8.0);
+        self.waveform(ui);
+        // A region changed while playing: restart on release.
+        if self.drag_from.is_none()
+            && let Some((region, dev, path)) = &self.playing
+            && (*region != self.region || *dev != self.device)
+            && self.clip.as_ref().is_some_and(|c| &c.path == path)
+        {
+            self.start();
+        }
+        ui.add_space(16.0);
+        self.meters(ui);
+        if let Some(e) = &self.error {
+            ui.add_space(8.0);
+            ui.colored_label(theme::FAULT, e);
+        }
+    }
+
+    fn input_transport(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if self.player.is_none() {
+                let go = egui::Button::new(
+                    RichText::new("▶  Monitor")
+                        .strong()
+                        .color(theme::ACCENT_INK),
+                )
+                .fill(theme::ACCENT)
+                .min_size(egui::vec2(110.0, 30.0));
+                if ui.add_enabled(!self.inputs.is_empty(), go).clicked() {
+                    self.start();
+                }
+            } else if ui
+                .add(egui::Button::new("■  Stop").min_size(egui::vec2(110.0, 30.0)))
+                .clicked()
+            {
+                self.stop();
+            }
+            let recording = self.player.as_ref().is_some_and(Player::recording);
+            let rec = if recording {
+                egui::Button::new(RichText::new("■  Stop recording").color(Color32::WHITE))
+                    .fill(theme::FAULT)
+            } else {
+                egui::Button::new("●  Record")
+            };
+            if ui
+                .add_enabled(self.player.is_some(), rec.min_size(egui::vec2(130.0, 30.0)))
+                .on_hover_text("Keep the input as a take: it becomes the file (loop it, render it)")
+                .clicked()
+                && let Some(p) = &self.player
+            {
+                p.record(!recording);
+                if recording {
+                    self.collect_take();
+                }
+            }
+            if let Some(t) = &self.take_saved {
+                ui.label(
+                    RichText::new(format!("take saved: {}", t.display()))
+                        .small()
+                        .color(theme::MUTED),
+                );
+            }
+        });
+    }
+
+    fn file_transport(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            let can_play = self.clip.is_some();
+            if self.player.is_none() {
+                let play =
+                    egui::Button::new(RichText::new("▶  Play").strong().color(theme::ACCENT_INK))
+                        .fill(theme::ACCENT)
+                        .min_size(egui::vec2(96.0, 30.0));
+                if ui.add_enabled(can_play, play).clicked() {
+                    self.start();
+                }
+            } else if ui
+                .add(egui::Button::new("■  Stop").min_size(egui::vec2(96.0, 30.0)))
+                .clicked()
+            {
+                self.stop();
+            }
+            ui.add_space(12.0);
+            if let Some(c) = &self.clip {
+                let (a, b) = self.region;
+                ui.label(
+                    RichText::new(format!(
+                        "loop {:.2} – {:.2} s ({:.2} s of {:.1} s)",
+                        a,
+                        b,
+                        b - a,
+                        c.seconds()
+                    ))
+                    .color(theme::MUTED),
+                );
+            } else {
+                ui.label(RichText::new("Open a file to play it").color(theme::MUTED));
+            }
+            if let Ok(s) = &self.settings {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        RichText::new(format!("{} · {} kHz", s.quality.name(), s.host() / 1000))
+                            .small()
+                            .color(theme::FAINT),
+                    );
+                });
+            }
+        });
+    }
+
+    fn waveform(&mut self, ui: &mut egui::Ui) {
+        let h = 140.0;
+        let (rect, resp) =
+            ui.allocate_exact_size(egui::vec2(ui.available_width(), h), egui::Sense::drag());
+        let painter = ui.painter_at(rect);
+        painter.rect_filled(rect, 4.0, theme::BG);
+        let Some(clip) = &self.clip else {
+            return;
+        };
+        let secs = clip.seconds();
+        let x_of = |t: f64| rect.left() + (t / secs) as f32 * rect.width();
+        let t_of = |x: f32| (((x - rect.left()) / rect.width()) as f64 * secs).clamp(0.0, secs);
+        // The region.
+        let (a, b) = self.region;
+        let sel = egui::Rect::from_x_y_ranges(x_of(a)..=x_of(b), rect.y_range());
+        painter.rect_filled(sel, 0.0, theme::ACCENT.gamma_multiply(0.12));
+        // The overview.
+        let mid = rect.center().y;
+        let n = clip.overview.len().max(1) as f32;
+        for (i, &(lo, hi)) in clip.overview.iter().enumerate() {
+            let x = rect.left() + (i as f32 + 0.5) / n * rect.width();
+            let t = (i as f64 + 0.5) / n as f64 * secs;
+            let c = if t >= a && t <= b {
+                theme::INK
+            } else {
+                theme::FAINT
+            };
+            let (y0, y1) = (mid - hi.max(0.0) * h * 0.48, mid - lo.min(0.0) * h * 0.48);
+            painter.line_segment(
+                [egui::pos2(x, y0), egui::pos2(x, y1.max(y0 + 1.0))],
+                Stroke::new(1.0, c),
+            );
+        }
+        for x in [sel.left(), sel.right()] {
+            painter.line_segment(
+                [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
+                Stroke::new(1.5, theme::ACCENT),
+            );
+        }
+        // The playhead.
+        if let Some(p) = &self.player {
+            let st = p.status();
+            if st.state == State::Playing && st.loop_s > 0.0 {
+                let x = x_of(a + st.position_s);
+                painter.line_segment(
+                    [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
+                    Stroke::new(1.0, Color32::WHITE),
+                );
+            }
+        }
+        if let Some(pb) = &self.playback {
+            let x = x_of(a + pb.position_s());
+            painter.line_segment(
+                [egui::pos2(x, rect.top()), egui::pos2(x, rect.bottom())],
+                Stroke::new(1.0, theme::ACCENT),
+            );
+        }
+        // Drag selects a new region.
+        if resp.drag_started()
+            && let Some(pos) = resp.interact_pointer_pos()
+        {
+            self.drag_from = Some(t_of(pos.x));
+        }
+        if let (Some(t0), Some(pos)) = (self.drag_from, resp.interact_pointer_pos())
+            && resp.dragged()
+        {
+            let t1 = t_of(pos.x);
+            self.region = (t0.min(t1), t0.max(t1));
+        }
+        if resp.drag_stopped() {
+            self.drag_from = None;
+            let (a, b) = self.region;
+            if b - a < MIN_REGION_S {
+                let b = (a + MIN_REGION_S).min(secs);
+                self.region = ((b - MIN_REGION_S).max(0.0), b);
+            }
+        }
+        resp.on_hover_text("Drag to choose the loop");
+    }
+
+    fn meters(&mut self, ui: &mut egui::Ui) {
+        let Some(p) = &self.player else {
+            return;
+        };
+        let st = p.status();
+        match &st.state {
+            State::Starting => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(
+                        RichText::new("building and settling the circuit…").color(theme::MUTED),
+                    );
+                });
+                return;
+            }
+            State::Failed(e) => {
+                ui.colored_label(theme::FAULT, e);
+                return;
+            }
+            State::Playing => {}
+        }
+        let m = st.meter;
+        let gain_label = if DEVICES[self.device].id == "fairchild_670" {
+            "Gain (GR)"
+        } else {
+            "Gain"
+        };
+        bar(
+            ui,
+            gain_label,
+            m.gain_db,
+            -30.0,
+            10.0,
+            format!("{:+.1} dB", m.gain_db),
+        );
+        bar(
+            ui,
+            "Output",
+            m.out_dbfs,
+            -60.0,
+            0.0,
+            format!("{:.1} dBFS", m.out_dbfs),
+        );
+        if let Some(cv) = m.cv_v {
+            bar(ui, "Control voltage", -cv, 0.0, 60.0, format!("{cv:.2} V"));
+        }
+        bar(
+            ui,
+            "Load",
+            st.load * 100.0,
+            0.0,
+            100.0,
+            format!("{:.0} %", st.load * 100.0),
+        );
+        ui.add_space(8.0);
+        let knob = st.knob_to_ear_s.map_or(String::new(), |k| {
+            format!(" · last knob heard after {:.0} ms", k * 1000.0)
+        });
+        let line = format!(
+            "{} · {} Hz · queued {:.0} ms · dropouts {} · restarts {}{knob}",
+            st.device,
+            st.rate,
+            p.queued_s() * 1000.0,
+            p.dropouts(),
+            st.restarts,
+        );
+        ui.label(RichText::new(line).small().color(theme::MUTED));
+        if let (Some(input), Some(lat)) = (&st.input, st.latency_s) {
+            let (lost, skipped) = p.input_losses();
+            let line = format!(
+                "input {input} · input to output {:.1} ms (output device {:.1} ms) · lost {lost} samples, skipped {skipped} blocks",
+                lat * 1000.0,
+                p.output_latency_s() * 1000.0,
+            );
+            ui.label(RichText::new(line).small().color(theme::MUTED));
+        }
+        if let Some(e) = &st.build_error {
+            ui.colored_label(theme::WARN, format!("knob change not applied: {e}"));
+        }
+    }
+}
+
+/// One knob; true if it moved.
+fn knob_ui(ui: &mut egui::Ui, k: &mut Knob) -> bool {
+    ui.label(RichText::new(&k.label).color(theme::INK));
+    let w = ui.available_width();
+    let changed = match &k.kind {
+        Kind::Range { min, max } => {
+            let mut v = k.number();
+            let r = ui.add_sized(
+                [w, 18.0],
+                egui::Slider::new(&mut v, *min..=*max).max_decimals(3),
+            );
+            if r.changed() {
+                k.value = Value::Float(v);
+            }
+            r.changed()
+        }
+        Kind::Steps { min, max, int } => {
+            let mut v = k.number().round();
+            let r = ui.add_sized(
+                [w, 18.0],
+                egui::Slider::new(&mut v, *min..=*max)
+                    .step_by(1.0)
+                    .max_decimals(0),
+            );
+            if r.changed() {
+                k.value = if *int {
+                    Value::Int(v as i64)
+                } else {
+                    Value::Float(v)
+                };
+            }
+            r.changed()
+        }
+        Kind::Choices(choices) => {
+            let mut i = k.number() as usize;
+            let before = i;
+            egui::ComboBox::from_id_salt(&k.key)
+                .width(w)
+                .selected_text(choices[i].py_str())
+                .show_ui(ui, |ui| {
+                    for (j, c) in choices.iter().enumerate() {
+                        ui.selectable_value(&mut i, j, c.py_str());
+                    }
+                });
+            if i != before {
+                k.value = choices[i].clone();
+            }
+            i != before
+        }
+    };
+    ui.add_space(4.0);
+    changed
+}
+
+/// A horizontal meter bar from `lo` to `hi`.
+fn bar(ui: &mut egui::Ui, label: &str, v: f64, lo: f64, hi: f64, text: String) {
+    ui.horizontal(|ui| {
+        ui.add_sized(
+            [120.0, 18.0],
+            egui::Label::new(RichText::new(label).color(theme::MUTED)),
+        );
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(260.0, 12.0), egui::Sense::hover());
+        let p = ui.painter_at(rect);
+        p.rect_filled(rect, 2.0, theme::BG);
+        let f = (((v - lo) / (hi - lo)).clamp(0.0, 1.0)) as f32;
+        let mut fill = rect;
+        fill.set_width(rect.width() * f);
+        p.rect_filled(fill, 2.0, theme::ACCENT);
+        ui.label(RichText::new(text).monospace().color(theme::INK));
+    });
+}
+
+/// The audio files in `dir` (data/clips), by name.
+fn list_clips(dir: &Path) -> Vec<PathBuf> {
+    let ext = ["wav", "aif", "aiff", "flac", "ogg", "mp3"];
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| ext.contains(&e.to_ascii_lowercase().as_str()))
+        })
+        .collect();
+    v.sort();
+    v
+}

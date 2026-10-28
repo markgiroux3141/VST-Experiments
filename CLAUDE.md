@@ -260,6 +260,8 @@ uv run --extra listen --extra fast varimu listen   # then http://127.0.0.1:8765/
 uv run python scripts/tolerance_study.py    # solver settings vs accuracy -> reports/slice/
 uv run python scripts/export_circuit_fixtures.py [--golden]   # IR + device fixtures for Rust tests (+ SPICE goldens)
 uv run python scripts/export_app_fixtures.py     # native app R1: Python-built IRs for varimu-circuit's agreement test
+uv run python scripts/export_audio_fixtures.py   # native app R2: scipy resample_poly fixtures for varimu-app's resampler
+uv run --extra fast python scripts/app_render_agreement.py [--quality production|draft-1x]   # R2: the app's render vs Python's, bit for bit
 ```
 
 Rust (`crates/circuitsim`; workspace `Cargo.toml` at the repo root, output in `target/`):
@@ -269,7 +271,10 @@ cargo test                                            # Rust tests (IR round tri
 cargo run --release --example profile -- circuit.json [method] [oversample] [dk|mna] [reltol] [vntol]   # speed of a step
 cargo run --release --features timing --example profile -- ...   # plus where the DK step's time goes (cycle counts)
 cargo run --release [--features timing] --example bench -- circuit.json input.f64 2 [out.f64]   # a run on a recorded input; METHOD, RATE, ABSTOL, NRELTOL, TABLES, PARTITION, ... (its docstring)
-cargo run -p varimu-app                               # the native app (docs/NATIVE_APP_PLAN.md; R0: the window only)
+cargo run --release -p varimu-app [-- FILE --play --device pultec_eqp1a]   # the native app (docs/NATIVE_APP_PLAN.md; R2: the Play view)
+cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
+cargo run -p varimu-app --example devices             # the audio devices cpal sees
+cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check

@@ -1,16 +1,30 @@
 //! The native Vari-Mu app (docs/NATIVE_APP_PLAN.md): the schematic editor,
 //! real-time play at draft-1x and production render, in one window.
 //!
-//! R0 (scaffold): the window, the studio look and the two views, empty.
+//! R0 (scaffold): the window, the studio look and the two views. R2: the Play view
+//! (`play_view`); the rest is the library (`varimu_app`).
 
 // No console window in release builds (debug builds keep it for logs).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod play_view;
 mod theme;
+
+use std::path::{Path, PathBuf};
 
 use eframe::egui;
 
 fn main() -> eframe::Result {
+    let args = match play_view::Args::parse(std::env::args()) {
+        Ok(a) => a,
+        Err(e) => {
+            eprintln!(
+                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a] [--input NAME [--channel N]]"
+            );
+            std::process::exit(2);
+        }
+    };
+    varimu_app::player::raise_priority();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Vari-Mu")
@@ -23,21 +37,52 @@ fn main() -> eframe::Result {
         options,
         Box::new(|cc| {
             theme::apply(&cc.egui_ctx);
-            Ok(Box::new(App::default()))
+            Ok(Box::new(App::new(config_dir(), args)))
         }),
     )
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+/// The project's `config/` directory: `$VARIMU_CONFIG`, else the first `config/`
+/// with a `sim_settings.yaml` above the working directory or the executable.
+fn config_dir() -> PathBuf {
+    if let Some(p) = std::env::var_os("VARIMU_CONFIG") {
+        return PathBuf::from(p);
+    }
+    let starts = [
+        std::env::current_dir().ok(),
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(Path::to_path_buf)),
+    ];
+    for start in starts.into_iter().flatten() {
+        for dir in start.ancestors() {
+            let c = dir.join("config");
+            if c.join("sim_settings.yaml").is_file() {
+                return c;
+            }
+        }
+    }
+    PathBuf::from("config")
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
 enum View {
-    #[default]
     Editor,
     Play,
 }
 
-#[derive(Default)]
 struct App {
     view: View,
+    play: play_view::PlayView,
+}
+
+impl App {
+    fn new(config_dir: PathBuf, args: play_view::Args) -> App {
+        App {
+            view: View::Play,
+            play: play_view::PlayView::new(config_dir, args),
+        }
+    }
 }
 
 impl eframe::App for App {
@@ -60,11 +105,7 @@ impl eframe::App for App {
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
             .show(ui, |ui| match self.view {
                 View::Editor => canvas_dots(ui),
-                View::Play => {
-                    ui.centered_and_justified(|ui| {
-                        ui.label(egui::RichText::new("Play: R2").color(theme::FAINT));
-                    });
-                }
+                View::Play => self.play.ui(ui),
             });
     }
 }
