@@ -24,12 +24,19 @@ listen = [
     "pyloudnorm",
     "websockets>=17.3",
 ]     # Phase 5
-ml = ["torch"]                                    # Phases 6, 7, 10
+ml = ["torch"]                                    # Phases 6, 7, 10; spike/neural_core
 optimize = ["botorch", "cma", "ribs"]             # Phase 8
 fast = ["circuitsim"]                             # Rust simulator (docs/CIRCUIT_SIM_PLAN.md); needs cargo
 
 [tool.uv.sources]
 circuitsim = { path = "crates/circuitsim" }
+# CUDA wheels on Windows / Linux (PyPI's Windows torch is CPU-only); macOS keeps PyPI's.
+torch = [{ index = "pytorch-cu128", marker = "sys_platform == 'win32' or sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
 
 [project.scripts]
 varimu = "varimu.cli:main"
