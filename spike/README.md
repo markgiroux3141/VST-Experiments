@@ -7,4 +7,4 @@ by `varimu/` or `crates/`, and nothing here is in the render cache key.
 
 | Spike | Question | Status |
 |---|---|---|
-| [neural_core/](neural_core/) | Can a recurrent network, trained on an accurate (slow) simulation of a component with memory, stand in for it inside a circuit? | Stage 1 in progress (2026-10-28) |
+| [neural_core/](neural_core/) | Can a recurrent network, trained on an accurate (slow) simulation of a component with memory, stand in for it inside a circuit? | Stage 1: 3 of 4 checks pass; where we left off: [STATUS.md](neural_core/STATUS.md) (2026-10-28) |
