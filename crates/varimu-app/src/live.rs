@@ -201,6 +201,11 @@ pub struct Live {
     builder: Option<JoinHandle<()>>,
     /// Streams restarted for changes of structure.
     pub restarts: usize,
+    /// Input gain (linear): the source's level into the unit, as a console's fader
+    /// sets it (1: as recorded). Applied before everything else, so it changes at once.
+    pub gain: f64,
+    /// The last block's input as the circuit took it (after the gain).
+    last_input: Vec<f64>,
     /// The values playing now.
     pub values: Values,
 }
@@ -213,6 +218,17 @@ impl Live {
         values: Values,
         circuit: Circuit,
         s: Settings,
+    ) -> Result<Live, String> {
+        Live::with_gain(clip, values, circuit, s, 1.0)
+    }
+
+    /// [`Live::new`] at an input gain: the circuit settles at the gained first sample.
+    pub fn with_gain(
+        clip: &[f64],
+        values: Values,
+        circuit: Circuit,
+        s: Settings,
+        gain: f64,
     ) -> Result<Live, String> {
         if s.oversample != 1 {
             return Err("live playback runs circuitsim at 1x (a quality with oversample 1)".into());
@@ -227,7 +243,7 @@ impl Live {
             }
             make_loop(&x, rate)
         };
-        let u0 = looped.first().copied().unwrap_or(0.0);
+        let u0 = looped.first().copied().unwrap_or(0.0) * gain;
         let ir = circuit.build(&values)?;
         let run = Running::new(&ir, u0, &s)?;
         let shared = Arc::new(Shared {
@@ -256,11 +272,24 @@ impl Live {
             ready,
             builder: Some(builder),
             restarts: 0,
+            gain,
+            last_input: Vec::new(),
             values,
         })
     }
 
     /// The loop's length in samples at the host rate (0: live input).
+    /// The last block's input, after the gain: what the device was fed.
+    pub fn last_input(&self) -> &[f64] {
+        &self.last_input
+    }
+
+    /// Samples the output lags the input by (the input interpolation's lookahead,
+    /// `Stream`'s docs).
+    pub fn lag(&self) -> usize {
+        (self.s.input_order.max(1) - 1) / 2 + 1
+    }
+
     pub fn loop_len(&self) -> usize {
         self.looped.len()
     }
@@ -292,9 +321,10 @@ impl Live {
             x.push(self.looped[self.pos]);
             self.pos = (self.pos + 1) % self.looped.len();
         }
-        self.shared
-            .u0
-            .store(self.looped[self.pos].to_bits(), Ordering::Relaxed);
+        self.shared.u0.store(
+            (self.looped[self.pos] * self.gain).to_bits(),
+            Ordering::Relaxed,
+        );
         self.process(&x)
     }
 
@@ -306,7 +336,14 @@ impl Live {
         while let Ok(r) = self.ready.try_recv() {
             match r {
                 Ready::Update(ir, values) => {
-                    self.run.stream.update(&ir).map_err(|e| e.to_string())?;
+                    // The builder compares with the last structure it built (live.py
+                    // with the one playing), so an update is for the newest: a stream
+                    // waiting to fade in has it, the one playing may not.
+                    let target = match &mut self.fade {
+                        Some(new) => &mut new.stream,
+                        None => &mut self.run.stream,
+                    };
+                    target.update(&ir).map_err(|e| e.to_string())?;
                     self.values = values;
                 }
                 Ready::Restart(run, values) => {
@@ -315,11 +352,20 @@ impl Live {
                 }
             }
         }
+        let scaled: Vec<f64>;
+        let x = if self.gain == 1.0 {
+            x
+        } else {
+            scaled = x.iter().map(|u| u * self.gain).collect();
+            &scaled
+        };
         if let Some(&last) = x.last()
             && self.looped.is_empty()
         {
             self.shared.u0.store(last.to_bits(), Ordering::Relaxed);
         }
+        self.last_input.clear();
+        self.last_input.extend_from_slice(x);
         let v = self.s.full_scale_volts_peak;
         let xv: Vec<f64> = x.iter().map(|u| u * v).collect();
         let out = self.run.stream.process(&xv).map_err(|e| e.to_string())?;

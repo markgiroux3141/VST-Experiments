@@ -30,13 +30,16 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SizedSample};
 
 use crate::live::{Circuit, Live, Meter, Values};
+use crate::monitor::Monitor;
 use crate::resample::StreamResampler;
 use crate::settings::Settings;
 
 /// Samples per block the worker computes (10 ms at 48 kHz, as the web player).
 pub const BLOCK: usize = 480;
-/// Audio kept ahead of playback for a file's loop (s).
-pub const AHEAD_S: f64 = 0.15;
+/// Audio kept ahead of playback for a file's loop (s): absorbs the compute's jitter,
+/// and is most of the time a knob takes to be heard. 0.1 s: on an idle desktop the
+/// draft 670's worst second stayed under 100% load (2026-10-28).
+pub const AHEAD_S: f64 = 0.1;
 /// The output queue live input starts with (s): absorbs the compute's jitter.
 pub const INPUT_BUFFER_S: f64 = 0.03;
 
@@ -146,6 +149,8 @@ pub struct Status {
     /// The last knob change: from `Player::set` until the first block built with it
     /// starts playing (s; the block's compute counted in).
     pub knob_to_ear_s: Option<f64>,
+    /// The gain compensation applied to the device's output now (dB).
+    pub compensation_db: f64,
 }
 
 impl Status {
@@ -164,6 +169,7 @@ impl Status {
             rate: 0,
             latency_s: None,
             knob_to_ear_s: None,
+            compensation_db: 0.0,
         }
     }
 }
@@ -175,7 +181,7 @@ struct Shared {
     /// When the newest wanted values were set.
     set_at: Mutex<Option<Instant>>,
     status: Mutex<Status>,
-    /// The output starts once this many samples are queued.
+    /// The output starts once this many samples are queued (the buffer).
     prefill: usize,
     /// Samples the output has played, and callbacks it couldn't fill once playing.
     played: AtomicU64,
@@ -190,6 +196,11 @@ struct Shared {
     skipped: AtomicU64,
     recording: AtomicBool,
     take: Mutex<Option<Take>>,
+    /// Input gain (f64 bits), applied by the worker at every block.
+    gain: AtomicU64,
+    /// The device bypassed (its input played), and gain compensation on.
+    bypass: AtomicBool,
+    compensate: AtomicBool,
 }
 
 /// A session playing out of the default output.
@@ -202,25 +213,27 @@ pub struct Player {
 }
 
 impl Player {
-    /// Start `source` through `circuit` with `values`, `buffer_s` queued (a loop's
-    /// lead, or live input's starting queue). Returns at once: the circuit settles on
-    /// the worker (`State::Starting`).
+    /// Start `source` through `circuit` with `values` at input `gain` (linear),
+    /// `buffer_s` queued (a loop's lead, or live input's starting queue). Returns at
+    /// once: the circuit settles on the worker (`State::Starting`).
     pub fn start(
         source: Source,
         values: Values,
         circuit: Circuit,
         s: Settings,
+        gain: f64,
         buffer_s: f64,
     ) -> Result<Player, String> {
         let rate = s.host();
         let buffer = ((buffer_s * rate as f64) as usize).max(BLOCK);
-        let live_input = matches!(source, Source::Input { .. });
         let shared = Arc::new(Shared {
             stop: AtomicBool::new(false),
             wanted: Mutex::new(None),
             set_at: Mutex::new(None),
             status: Mutex::new(Status::new()),
-            prefill: if live_input { buffer } else { BLOCK },
+            // Both sources start once the buffer is queued: a loop's first blocks run
+            // slow (warming up) and dropped out at the start when it started at one.
+            prefill: buffer,
             played: AtomicU64::new(0),
             dropouts: AtomicU64::new(0),
             queued: AtomicUsize::new(0),
@@ -230,6 +243,9 @@ impl Player {
             skipped: AtomicU64::new(0),
             recording: AtomicBool::new(false),
             take: Mutex::new(None),
+            gain: AtomicU64::new(gain.to_bits()),
+            bypass: AtomicBool::new(false),
+            compensate: AtomicBool::new(true),
         });
         // Room for the buffer, the drift allowance and a block in flight.
         let (producer, consumer) = rtrb::RingBuffer::<f32>::new(buffer + 4 * BLOCK);
@@ -316,6 +332,21 @@ impl Player {
         self.shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6
     }
 
+    /// The input gain (linear; 1: as recorded), from the next block on.
+    /// Bypass the device (play its input) or not; crossfades over 10 ms.
+    pub fn set_bypass(&self, on: bool) {
+        self.shared.bypass.store(on, Ordering::Relaxed);
+    }
+
+    /// Match the device's output to its input's loudness (monitoring only).
+    pub fn set_compensation(&self, on: bool) {
+        self.shared.compensate.store(on, Ordering::Relaxed);
+    }
+
+    pub fn set_gain(&self, gain: f64) {
+        self.shared.gain.store(gain.to_bits(), Ordering::Relaxed);
+    }
+
     /// Start or stop recording live input. A stopped take is collected by [`Player::take`].
     pub fn record(&self, on: bool) {
         self.shared.recording.store(on, Ordering::Relaxed);
@@ -386,19 +417,31 @@ fn work(
         WorkerSource::Loop(x) => x.as_slice(),
         WorkerSource::Input(..) => &[],
     };
-    let mut live = Live::new(clip, values, circuit, s).map_err(|e| format!("can't start: {e}"))?;
+    let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
+    let mut live =
+        Live::with_gain(clip, values, circuit, s, gain).map_err(|e| format!("can't start: {e}"))?;
     let rate = live.rate;
     let capacity = ring.buffer().capacity();
+    let mut monitor = Monitor::new(rate, live.lag());
+    // The device's output on its way out: bypass and gain compensation.
+    let mut monitored = |live: &Live, y: &[f32]| {
+        monitor.bypass = shared.bypass.load(Ordering::Relaxed);
+        monitor.compensate = shared.compensate.load(Ordering::Relaxed);
+        let out = monitor.process(live.last_input(), y);
+        shared.status.lock().expect("status").compensation_db = monitor.compensation_db();
+        out
+    };
     let mut loads = Loads(Vec::new(), (rate as usize / BLOCK).max(1));
     {
         let mut st = shared.status.lock().expect("status");
         st.state = State::Playing;
         st.loop_s = live.loop_len() as f64 / rate as f64;
     }
-    let forward_values = |live: &Live| {
+    let forward_values = |live: &mut Live| {
         if let Some(v) = shared.wanted.lock().expect("wanted").take() {
             live.set(v);
         }
+        live.gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
     };
     // The values playing, to see a change applied (a block built with them).
     let mut playing = live.values.clone();
@@ -425,7 +468,7 @@ fn work(
         WorkerSource::Loop(_) => {
             let len = live.loop_len();
             while !shared.stop.load(Ordering::Relaxed) {
-                forward_values(&live);
+                forward_values(&mut live);
                 let queued = capacity - ring.slots();
                 shared.queued.store(queued, Ordering::Relaxed);
                 if queued >= buffer || ring.slots() < BLOCK {
@@ -436,7 +479,7 @@ fn work(
                     .next_block(BLOCK)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                push(&mut ring, &y);
+                push(&mut ring, &monitored(&live, &y));
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let pos = (live.position() + len - (capacity - ring.slots()) % len) % len;
@@ -452,7 +495,7 @@ fn work(
             let (mut raw, mut pending) = (Vec::new(), Vec::new());
             let mut take: Vec<f64> = Vec::new();
             while !shared.stop.load(Ordering::Relaxed) {
-                forward_values(&live);
+                forward_values(&mut live);
                 let n = input.slots();
                 if n == 0 {
                     std::thread::sleep(Duration::from_micros(300));
@@ -487,7 +530,7 @@ fn work(
                         .process(block)
                         .map_err(|e| format!("the circuit stopped: {e}"))?;
                     let before = capacity - ring.slots();
-                    push(&mut ring, &y);
+                    push(&mut ring, &monitored(&live, &y));
                     heard(&live, before);
                     let queued = capacity - ring.slots();
                     shared.queued.store(queued, Ordering::Relaxed);

@@ -116,3 +116,49 @@ fn structure_tells_values_from_rewiring() {
     let tc5 = structure(&c.build(&set(&v, "time_constant", Value::Int(5))).unwrap());
     assert_ne!(base, tc5);
 }
+
+/// A restart and then an update for the restarted circuit, both ready before the next
+/// block: the update belongs to the new stream (it failed on the old one, whose
+/// structure it doesn't have: "update: the circuit's nodes, sources or inductors
+/// changed", found moving the 670's pad across its 0 dB end, 2026-10-28).
+#[test]
+fn update_after_restart_goes_to_the_new_stream() {
+    let s = Settings::load(&config(), Quality::Draft1x).unwrap();
+    let dev = &DEVICES[1];
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let v0 = values(&knobs(dev, circuit.spec()));
+    let mut live = Live::new(&tone(&s, 0.5, 1000.0, 0.1), v0.clone(), circuit, s).unwrap();
+    for _ in 0..5 {
+        live.next_block(480).unwrap();
+    }
+    // A selector that rewires: a restart (built and settled in the background).
+    let v1 = set(&v0, "hf_boost_freq_khz", Value::Int(5));
+    live.set(v1.clone());
+    std::thread::sleep(Duration::from_secs(3));
+    // A value on the new structure: an update, also ready before the next block.
+    let v2 = set(&v1, "hf_boost", Value::Float(0.5));
+    live.set(v2.clone());
+    std::thread::sleep(Duration::from_secs(1));
+    let y = play_until(&mut live, &v2);
+    assert!(y.iter().all(|t| t.is_finite()));
+    assert_eq!(live.restarts, 1);
+}
+
+/// The input gain is the source's level: a clip at gain 2 plays exactly as the clip
+/// doubled (powers of two scale exactly, through the resampler too).
+#[test]
+fn gain_equals_a_louder_clip() {
+    let s = Settings::load(&config(), Quality::Draft1x).unwrap();
+    let dev = &DEVICES[1];
+    let run = |clip: &[f64], gain: f64| -> Vec<f32> {
+        let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+        let v = values(&knobs(dev, circuit.spec()));
+        let mut live = Live::with_gain(clip, v, circuit, s.clone(), gain).unwrap();
+        (0..20)
+            .flat_map(|_| live.next_block(480).unwrap().0)
+            .collect()
+    };
+    let x = tone(&s, 0.5, 1000.0, 0.05);
+    let x2: Vec<f64> = x.iter().map(|v| 2.0 * v).collect();
+    assert_eq!(run(&x, 2.0), run(&x2, 1.0));
+}

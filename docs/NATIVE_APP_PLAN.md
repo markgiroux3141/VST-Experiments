@@ -183,7 +183,9 @@ operations is kept throughout (`**` as `powf`, `max` as Python's).
 - a Rust production render equals a Python production render of the same input and
   values bit for bit (same engine, same IR).
 
-**In progress (2026-10-27).** `crates/varimu-app` is now a library (`src/lib.rs`, tested
+**Done (2026-10-28), except two points** (below: selectors that rewire take
+0.3-0.55 s to be heard; the 670 on live input is measured on a silent input only).
+`crates/varimu-app` is now a library (`src/lib.rs`, tested
 on its own) plus the window (`main.rs`, `play_view.rs`):
 
 - `resample`: scipy's `resample_poly` (Kaiser 5 window, Cephes `i0`, numpy's `sinc` and
@@ -219,7 +221,20 @@ on its own) plus the window (`main.rs`, `play_view.rs`):
   waveform, Play / Stop, the front panel (sliders and selectors), meters (gain, output,
   CV, load, queued audio, dropouts, restarts), Render (production) with progress,
   cancel, Play render and Save as (renders also go to `cache/app_renders/`).
-  `varimu-app [FILE] [--play] [--device ID]` opens and plays from the command line.
+  `varimu-app [FILE] [--play] [--device ID] [--input NAME --channel N]` opens and plays
+  from the command line.
+- Sources (2026-10-28): data/clips and folders the user adds (Add folder…, scanned with
+  their subfolders, grouped per folder), kept per user outside the repo
+  (`prefs`: `%APPDATA%\varimu\app.json`; multitracks for educational use must never be
+  committed). A file's loop starts on its loudest 8 s.
+- Input level: each file's loudest 8 s normalized to -18 dBFS (sine-equivalent rms; the
+  studio alignment the 670's factory adjustment assumes, +4 dBu), changeable or off,
+  plus a trim; a console fader's job, ahead of the device (`Live::with_gain`: the circuit
+  settles at the gained first sample). Renders take the same gain.
+- `monitor`: Device in / Bypass (B; the input, delayed by the engine's lag, crossfaded
+  over 10 ms, the circuit running on) and gain compensation (K-weighted as BS.1770,
+  ~3 s, applied to the device's output, smoothed over ~1 s, held below -70 LUFS), so the
+  device is compared with itself off at the same loudness. Monitoring only.
 
 The live-input UI: File / Live input, the input device (↻ lists them again), channel,
 buffer (10-150 ms), Monitor, Record; `varimu-app --input NAME --channel N --play`.
@@ -250,6 +265,38 @@ its mean load near 100%: draft-1x runs the 670 at about real time here (the M8 s
 Found: cpal 0.18 overflows (debug builds panic) listing the formats of inputs with many
 channels (the UA Twin's 22, `supported_input_configs`), so inputs use
 `default_input_config`.
+
+**On an idle desktop (2026-10-28,** CPU 5-12% before each run, high priority, UA Twin USB):
+
+| Run | Mean load (worst second) | Dropouts | Latency |
+|---|---|---|---|
+| 670, arpeggio loop, defaults, 60 s | 84% | 0 | |
+| 670, arpeggio, threshold 0.709 / 0.9 every 2 s, 60 s | 86% (98%) | 0 | knob to ear 186 ms mean, 202 max (150 ms lead) |
+| 670, dense mix, pad 6 dB (-5 dB mean gain), 2 min | 74% (95%) | 0 | |
+| EQP-1A, dense mix, HF frequency selector flipped, 60 s | 25% | 0 | selector to ear 365 ms (150 ms lead), 325 ms (100 ms lead) |
+| EQP-1A, live input, 5 min, 30 ms buffer | 23% | 0 | input to output 64 ms mean, 71 max |
+| 670, live input, 5 min, 30 ms buffer | 43% | 0 | 75 ms mean, 82 max (silent input) |
+| 670, dense mix, Time Constant 2 / 5 every 2 s, 60 s, 100 ms lead | 79% (96%) | 0 | selector to ear 538 ms mean, 579 max |
+| 670, dense mix, threshold flipped, 30 s, 100 ms lead | | 0 | knob to ear 135 ms mean, 143 max |
+
+The busy-desktop dropouts were contention: idle, every run is clean, the 670 at 74-86%
+of real time (heavier compression costs more). A loop's output now starts once its lead
+is queued (the one remaining dropout was the first blocks warming up), and the lead is
+100 ms (knobs heard in ~135 ms). Open:
+
+- **Selectors that rewire** (the EQP-1A's frequency selectors, the 670's Time Constant
+  5-6, the pad's 0 dB end) restart the stream, which first runs `settle_s` (1 s) of its
+  supply: 0.3 s (EQP-1A) to 0.55 s (670) to the ear. The lead isn't the lever; a shorter
+  settle for restarts (a supply not quite settled when it fades in) or streams kept
+  warm for neighbouring positions would be.
+- **The 670 on live input** was measured on a silent input (43% load against ~80% on
+  program): a run with an instrument into the interface is still to do.
+
+Fixed on the way: a knob change after a restart, both ready before the next block, was
+applied to the playing stream rather than the one fading in, which stopped playback
+("update: the circuit's nodes, sources or inductors changed"; the pad across 0 dB). The
+port's builder compares with the last structure built, `live.py` with the one playing,
+which is why only the port had it (`tests/live.rs`, `tests/test_live.py` guard both).
 
 ### R3. Editor
 

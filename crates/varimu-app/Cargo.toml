@@ -13,6 +13,7 @@ eframe = "0.35.0"
 hound = "3.5.1"
 rfd = "0.17.2"
 rtrb = "0.4.1"
+serde_json = "1.0.154"
 symphonia = { version = "0.6.1", features = ["mp3"] }
 varimu-circuit = { path = "../varimu-circuit" }
 

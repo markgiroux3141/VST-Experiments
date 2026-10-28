@@ -117,6 +117,30 @@ def test_live_plays_the_eqp1a():
         p.close()
 
 
+def test_an_update_after_a_restart_goes_to_the_new_stream():
+    """A restart, then a change for the restarted circuit, both ready before the next
+    block, play on (a guard: the native app's port of this module applied such an update
+    to the old stream and stopped, "the circuit's nodes, sources or inductors changed",
+    2026-10-28; here each build is compared with the structure playing, so the second
+    change is a restart too)."""
+    p = live.Live(_clip() * 0.5, {"hf_boost_freq_khz": 10}, circuit="pultec_eqp1a")
+    try:
+        for _ in range(5):
+            p.next_block(480)
+        p.set({"hf_boost_freq_khz": 5})  # rewires: a restart, settled in the background
+        time.sleep(3.0)
+        p.set({"hf_boost_freq_khz": 5, "hf_boost": 0.5})  # an update on the new structure
+        time.sleep(1.0)
+        for _ in range(20):
+            y, _m = p.next_block(480)
+            assert np.all(np.isfinite(y))
+        assert p.error is None, p.error
+        assert p.restarts == 1
+        assert p.overrides == {"hf_boost_freq_khz": 5, "hf_boost": 0.5}
+    finally:
+        p.close()
+
+
 def test_the_play_page_lists_devices_and_plays_the_eq():
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient

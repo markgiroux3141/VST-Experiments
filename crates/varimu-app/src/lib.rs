@@ -8,8 +8,10 @@
 
 pub mod audio;
 pub mod live;
+pub mod monitor;
 pub mod panel;
 pub mod player;
+pub mod prefs;
 pub mod render;
 pub mod resample;
 pub mod settings;

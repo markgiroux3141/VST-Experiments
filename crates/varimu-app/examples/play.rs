@@ -107,6 +107,12 @@ fn main() -> Result<(), String> {
             let x = audio::load(Path::new(f), s.sample_rate)?;
             let a = ((start * s.sample_rate as f64) as usize).min(x.len());
             let b = (a + (excerpt * s.sample_rate as f64) as usize).min(x.len());
+            if b - a < s.sample_rate as usize / 10 {
+                return Err(format!(
+                    "{f} is {:.1} s long: --start {start} leaves less than 0.1 s",
+                    x.len() as f64 / s.sample_rate as f64
+                ));
+            }
             (Source::Loop(x[a..b].to_vec()), buffer.unwrap_or(AHEAD_S))
         }
         (None, Some(name)) => (
@@ -121,7 +127,7 @@ fn main() -> Result<(), String> {
     if !normal_priority {
         varimu_app::player::raise_priority();
     }
-    let player = Player::start(source, v.clone(), circuit, s, buffer)?;
+    let player = Player::start(source, v.clone(), circuit, s, 1.0, buffer)?;
     let t0 = Instant::now();
     while player.status().state == State::Starting {
         std::thread::sleep(Duration::from_millis(20));

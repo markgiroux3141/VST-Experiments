@@ -15,6 +15,7 @@ use varimu_app::panel::{self, DEVICES, Kind, Knob};
 use varimu_app::player::{
     AHEAD_S, INPUT_BUFFER_S, InputDevice, Playback, Player, Source, State, input_devices,
 };
+use varimu_app::prefs::{ALIGNMENT_DBFS, Prefs};
 use varimu_app::render::{Rendered, render};
 use varimu_app::settings::{Quality, Settings};
 use varimu_circuit::yaml::Value;
@@ -23,6 +24,8 @@ use crate::theme;
 
 /// Waveform overview columns.
 const OVERVIEW: usize = 1200;
+/// A new file's loop region (s): its loudest stretch this long.
+const DEFAULT_REGION_S: f64 = 8.0;
 /// The shortest loop region (s).
 const MIN_REGION_S: f64 = 0.25;
 
@@ -34,6 +37,10 @@ struct Clip {
     rate: u32,
     /// Min and max per overview column.
     overview: Vec<(f32, f32)>,
+    /// Its loudest stretch (the default loop region) and that stretch's level (dBFS,
+    /// sine-equivalent rms: rms * sqrt 2, as the output meter reads).
+    loudest: (f64, f64),
+    level_dbfs: f64,
 }
 
 impl Clip {
@@ -74,6 +81,10 @@ struct Done {
 pub struct PlayView {
     config_dir: PathBuf,
     clips_dir: PathBuf,
+    /// The user's settings (source folders), and the sources found: per group (a
+    /// folder of files), its label and files.
+    prefs: Prefs,
+    sources: Vec<(String, Vec<PathBuf>)>,
     settings: Result<Settings, String>,
     device: usize,
     knobs: Vec<Knob>,
@@ -99,6 +110,11 @@ pub struct PlayView {
     input_buffer_ms: f64,
     /// The last take, saved (it is then the file).
     take_saved: Option<PathBuf>,
+    /// Input trim (dB) on top of the normalization.
+    trim_db: f64,
+    /// The device bypassed (its input played), and gain compensation on (monitoring).
+    bypass: bool,
+    compensate: bool,
     error: Option<String>,
 }
 
@@ -145,6 +161,8 @@ impl PlayView {
         let mut v = PlayView {
             config_dir,
             clips_dir,
+            prefs: Prefs::load(),
+            sources: Vec::new(),
             settings,
             device: 0,
             knobs: Vec::new(),
@@ -164,6 +182,9 @@ impl PlayView {
             channel: 0,
             input_buffer_ms: INPUT_BUFFER_S * 1000.0,
             take_saved: None,
+            trim_db: 0.0,
+            bypass: false,
+            compensate: true,
             error: None,
         };
         if let Some(id) = &args.device {
@@ -173,6 +194,7 @@ impl PlayView {
             }
         }
         v.load_knobs();
+        v.scan_sources();
         if let Some(name) = &args.input {
             v.live_input = true;
             v.inputs = input_devices();
@@ -191,6 +213,90 @@ impl PlayView {
         v
     }
 
+    /// The normalization's gain (dB) for the file: its loudest stretch to the target
+    /// (live input: none), within +-40 dB (a silent file stays silent).
+    fn normalize_db(&self) -> f64 {
+        match (self.prefs.normalize_dbfs, &self.clip) {
+            (Some(target), Some(c)) if !self.live_input => {
+                (target - c.level_dbfs).clamp(-40.0, 40.0)
+            }
+            _ => 0.0,
+        }
+    }
+
+    /// The input gain (linear): normalization and trim.
+    fn gain(&self) -> f64 {
+        10f64.powf((self.normalize_db() + self.trim_db) / 20.0)
+    }
+
+    /// Normalization and trim: the source's level into the unit.
+    fn level_ui(&mut self, ui: &mut egui::Ui) {
+        Self::heading(ui, "INPUT LEVEL");
+        let before = self.prefs.normalize_dbfs;
+        if !self.live_input {
+            ui.horizontal(|ui| {
+                let mut on = self.prefs.normalize_dbfs.is_some();
+                ui.checkbox(&mut on, "Normalize to")
+                    .on_hover_text(
+                        "Bring the file's loudest 8 s to this level (sine-equivalent rms). \
+                         -18 dBFS = +4 dBu, the studio alignment the 670's factory adjustment assumes.",
+                    );
+                let mut t = self.prefs.normalize_dbfs.unwrap_or(ALIGNMENT_DBFS);
+                ui.add_enabled(
+                    on,
+                    egui::DragValue::new(&mut t).range(-40.0..=0.0).speed(0.2).suffix(" dBFS"),
+                );
+                self.prefs.normalize_dbfs = on.then_some(t);
+            });
+            if let Some(c) = &self.clip {
+                ui.label(
+                    RichText::new(format!(
+                        "file at {:.1} dBFS (its loudest 8 s) · normalize {:+.1} dB",
+                        c.level_dbfs,
+                        self.normalize_db()
+                    ))
+                    .small()
+                    .color(theme::MUTED),
+                );
+            }
+        }
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Trim").color(theme::MUTED));
+            ui.add(
+                egui::Slider::new(&mut self.trim_db, -24.0..=24.0)
+                    .step_by(0.5)
+                    .suffix(" dB"),
+            );
+        });
+        ui.label(
+            RichText::new(format!("input gain {:+.1} dB", 20.0 * self.gain().log10()))
+                .small()
+                .color(theme::INK),
+        );
+        if self.prefs.normalize_dbfs != before {
+            self.save_prefs();
+        }
+    }
+
+    /// data/clips, then each source folder (a group per folder holding files).
+    fn scan_sources(&mut self) {
+        let mut groups = Vec::new();
+        let clips = list_audio(&self.clips_dir);
+        if !clips.is_empty() {
+            groups.push(("data/clips".to_string(), clips));
+        }
+        for root in &self.prefs.source_folders {
+            scan_folder(root, root, &mut groups);
+        }
+        self.sources = groups;
+    }
+
+    fn save_prefs(&mut self) {
+        if let Err(e) = self.prefs.save() {
+            self.error = Some(format!("can't save the settings: {e}"));
+        }
+    }
+
     fn load_knobs(&mut self) {
         let dev = &DEVICES[self.device];
         match varimu_circuit::spec::circuit_path(&self.config_dir, dev.circuit)
@@ -207,11 +313,22 @@ impl PlayView {
         let (tx, rx) = mpsc::channel();
         let p = path.clone();
         std::thread::spawn(move || {
-            let r = audio::load(&p, rate).map(|samples| Clip {
-                overview: overview(&samples),
-                path: p.clone(),
-                samples,
-                rate,
+            let r = audio::load(&p, rate).map(|samples| {
+                let loud = loudest(&samples, rate, DEFAULT_REGION_S);
+                let (i, j) = (
+                    (loud.0 * rate as f64) as usize,
+                    (loud.1 * rate as f64) as usize,
+                );
+                let w = &samples[i.min(samples.len())..j.min(samples.len())];
+                let rms = (w.iter().map(|v| v * v).sum::<f64>() / w.len().max(1) as f64).sqrt();
+                Clip {
+                    overview: overview(&samples),
+                    path: p.clone(),
+                    loudest: loud,
+                    level_dbfs: 20.0 * (rms * 2f64.sqrt()).max(1e-12).log10(),
+                    samples,
+                    rate,
+                }
             });
             let _ = tx.send(r);
         });
@@ -222,8 +339,9 @@ impl PlayView {
         let Some((_, rx)) = &self.loading else { return };
         match rx.try_recv() {
             Ok(Ok(clip)) => {
-                // A default region: the first 8 s, as the web page's excerpts.
-                self.region = (0.0, clip.seconds().min(8.0));
+                // A default region: the loudest 8 s (stems often start silent), as
+                // the listening pool's excerpts.
+                self.region = clip.loudest;
                 self.clip = Some(clip);
                 self.loading = None;
                 self.error = None;
@@ -270,7 +388,7 @@ impl PlayView {
             .and_then(|c| Circuit::load(&self.config_dir, dev.circuit, c))
             .and_then(|c| {
                 let v = panel::values(&self.knobs);
-                Player::start(Source::Loop(x), v, c, s.clone(), AHEAD_S)
+                Player::start(Source::Loop(x), v, c, s.clone(), self.gain(), AHEAD_S)
             });
         match result {
             Ok(p) => {
@@ -298,7 +416,10 @@ impl PlayView {
         let result = s
             .cores()
             .and_then(|c| Circuit::load(&self.config_dir, dev.circuit, c))
-            .and_then(|c| Player::start(source, panel::values(&self.knobs), c, s.clone(), buffer));
+            .and_then(|c| {
+                let v = panel::values(&self.knobs);
+                Player::start(source, v, c, s.clone(), self.gain(), buffer)
+            });
         match result {
             Ok(p) => {
                 self.player = Some(p);
@@ -363,9 +484,15 @@ impl PlayView {
 
     /// Render the loop region at production on a thread of its own.
     fn start_render(&mut self) {
-        let Some(x) = self.region_samples() else {
+        let Some(mut x) = self.region_samples() else {
             return;
         };
+        let g = self.gain();
+        if g != 1.0 {
+            for v in &mut x {
+                *v *= g;
+            }
+        }
         let clip = self.clip.as_ref().expect("a region needs a clip");
         let dev = DEVICES[self.device];
         let (a, b) = self.region;
@@ -440,6 +567,46 @@ impl PlayView {
             Err(mpsc::TryRecvError::Empty) => {}
             Err(mpsc::TryRecvError::Disconnected) => self.task = None,
         }
+    }
+
+    /// The device in or bypassed (B), and gain compensation.
+    fn monitor_ui(&mut self, ui: &mut egui::Ui) {
+        let typing = ui.ctx().egui_wants_keyboard_input();
+        if !typing && ui.input(|i| i.key_pressed(egui::Key::B)) {
+            self.bypass = !self.bypass;
+        }
+        ui.horizontal(|ui| {
+            let (text, fill, ink) = if self.bypass {
+                ("BYPASSED", theme::CHROME3, theme::MUTED)
+            } else {
+                ("DEVICE IN", theme::ACCENT, theme::ACCENT_INK)
+            };
+            let b = egui::Button::new(RichText::new(text).strong().color(ink))
+                .fill(fill)
+                .min_size(egui::vec2(110.0, 26.0));
+            if ui
+                .add(b)
+                .on_hover_text("Hear the device or its input (B); the circuit keeps running")
+                .clicked()
+            {
+                self.bypass = !self.bypass;
+            }
+            ui.checkbox(&mut self.compensate, "Gain compensation")
+                .on_hover_text(
+                    "Match the device's output to its input's loudness (K-weighted, ~3 s), so \
+                 bypass compares character, not level. Monitoring only: renders are the \
+                 device as it is.",
+                );
+            if let Some(p) = &self.player
+                && self.compensate
+            {
+                ui.label(
+                    RichText::new(format!("{:+.1} dB", p.status().compensation_db))
+                        .monospace()
+                        .color(theme::INK),
+                );
+            }
+        });
     }
 
     /// The render row: start / progress / cancel, then play back and save.
@@ -522,6 +689,11 @@ impl PlayView {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll_loading();
         self.poll_render();
+        if let Some(p) = &self.player {
+            p.set_gain(self.gain());
+            p.set_bypass(self.bypass);
+            p.set_compensation(self.compensate);
+        }
         if self.player.as_ref().is_some_and(|p| !p.recording()) {
             self.collect_take_now();
         }
@@ -608,27 +780,65 @@ impl PlayView {
             .and_then(|c| c.path.file_name())
             .map_or("(none)".to_string(), |n| n.to_string_lossy().into_owned());
         let mut pick: Option<PathBuf> = None;
+        let playing_path = self.clip.as_ref().map(|c| c.path.clone());
         egui::ComboBox::from_id_salt("clip")
             .width(ui.available_width())
+            .height(520.0)
             .selected_text(current)
             .show_ui(ui, |ui| {
-                for p in list_clips(&self.clips_dir) {
-                    let name = p
-                        .file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned();
-                    if ui.selectable_label(false, name).clicked() {
-                        pick = Some(p);
+                for (group, files) in &self.sources {
+                    ui.label(RichText::new(group).small().strong().color(theme::ACCENT));
+                    for p in files {
+                        let name = p.file_name().unwrap_or_default().to_string_lossy();
+                        let on = playing_path.as_ref() == Some(p);
+                        if ui.selectable_label(on, name).clicked() {
+                            pick = Some(p.clone());
+                        }
                     }
+                    ui.add_space(4.0);
                 }
             });
-        if ui.button("Open file…").clicked()
-            && let Some(p) = rfd::FileDialog::new()
-                .add_filter("Audio", &["wav", "aif", "aiff", "flac", "ogg", "mp3"])
-                .pick_file()
-        {
-            pick = Some(p);
+        ui.horizontal(|ui| {
+            if ui.button("Open file…").clicked()
+                && let Some(p) = rfd::FileDialog::new()
+                    .add_filter("Audio", &AUDIO_EXT)
+                    .pick_file()
+            {
+                pick = Some(p);
+            }
+            if ui
+                .button("Add folder…")
+                .on_hover_text("List a folder's audio files (and its subfolders') as sources")
+                .clicked()
+                && let Some(dir) = rfd::FileDialog::new().pick_folder()
+                && !self.prefs.source_folders.contains(&dir)
+            {
+                self.prefs.source_folders.push(dir);
+                self.save_prefs();
+                self.scan_sources();
+            }
+        });
+        let mut remove = None;
+        for (i, f) in self.prefs.source_folders.iter().enumerate() {
+            ui.horizontal(|ui| {
+                if ui
+                    .small_button("×")
+                    .on_hover_text("Stop listing this folder")
+                    .clicked()
+                {
+                    remove = Some(i);
+                }
+                ui.label(
+                    RichText::new(f.display().to_string())
+                        .small()
+                        .color(theme::MUTED),
+                );
+            });
+        }
+        if let Some(i) = remove {
+            self.prefs.source_folders.remove(i);
+            self.save_prefs();
+            self.scan_sources();
         }
         if let Some(p) = pick {
             self.open(p);
@@ -642,6 +852,8 @@ impl PlayView {
                 .color(theme::MUTED),
             );
         }
+
+        self.level_ui(ui);
 
         Self::heading(ui, "FRONT PANEL");
         let mut changed = false;
@@ -724,6 +936,8 @@ impl PlayView {
         } else {
             self.file_transport(ui);
         }
+        ui.add_space(8.0);
+        self.monitor_ui(ui);
         ui.add_space(8.0);
         self.render_ui(ui);
         ui.add_space(8.0);
@@ -1070,9 +1284,72 @@ fn bar(ui: &mut egui::Ui, label: &str, v: f64, lo: f64, hi: f64, text: String) {
     });
 }
 
-/// The audio files in `dir` (data/clips), by name.
-fn list_clips(dir: &Path) -> Vec<PathBuf> {
-    let ext = ["wav", "aif", "aiff", "flac", "ogg", "mp3"];
+/// The audio files the app reads (symphonia's formats).
+const AUDIO_EXT: [&str; 6] = ["wav", "aif", "aiff", "flac", "ogg", "mp3"];
+
+/// `dir` and its subfolders: a group per folder holding audio files, labelled by its
+/// path under `root` (a folder nested in one of the same name, as multitrack
+/// downloads unpack, shows once).
+fn scan_folder(root: &Path, dir: &Path, groups: &mut Vec<(String, Vec<PathBuf>)>) {
+    let files = list_audio(dir);
+    if !files.is_empty() {
+        let mut parts: Vec<String> = Vec::new();
+        let base = root.file_name().map(|n| n.to_string_lossy().into_owned());
+        let rel = dir.strip_prefix(root).unwrap_or(dir);
+        for c in base
+            .into_iter()
+            .chain(rel.iter().map(|c| c.to_string_lossy().into_owned()))
+        {
+            if parts.last() != Some(&c) {
+                parts.push(c);
+            }
+        }
+        groups.push((parts.join(" / "), files));
+    }
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
+    dirs.sort();
+    for d in dirs {
+        scan_folder(root, &d, groups);
+    }
+}
+
+/// The start and end (s) of `x`'s loudest stretch of `len_s` (by energy, in steps of
+/// a tenth of it); the whole file if it is shorter.
+fn loudest(x: &[f64], rate: u32, len_s: f64) -> (f64, f64) {
+    let total = x.len() as f64 / rate as f64;
+    if total <= len_s {
+        return (0.0, total);
+    }
+    let n = (len_s * rate as f64) as usize;
+    let hop = (n / 10).max(1);
+    let energy: Vec<f64> = x
+        .chunks(hop)
+        .map(|c| c.iter().map(|v| v * v).sum())
+        .collect();
+    let k = n / hop;
+    let mut best = (0, f64::MIN);
+    let mut sum: f64 = energy[..k].iter().sum();
+    for i in 0..=energy.len() - k {
+        if sum > best.1 {
+            best = (i, sum);
+        }
+        if i + k < energy.len() {
+            sum += energy[i + k] - energy[i];
+        }
+    }
+    let a = (best.0 * hop) as f64 / rate as f64;
+    (a, (a + len_s).min(total))
+}
+
+/// The audio files in `dir` (not its subfolders), by name.
+fn list_audio(dir: &Path) -> Vec<PathBuf> {
+    let ext = AUDIO_EXT;
     let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
         .into_iter()
         .flatten()
@@ -1086,4 +1363,30 @@ fn list_clips(dir: &Path) -> Vec<PathBuf> {
         .collect();
     v.sort();
     v
+}
+
+#[cfg(test)]
+mod tests {
+    use super::loudest;
+
+    #[test]
+    fn loudest_finds_the_loud_stretch() {
+        let rate = 1000;
+        let x: Vec<f64> = (0..60_000)
+            .map(|i| {
+                if (32_000..40_000).contains(&i) {
+                    0.5
+                } else {
+                    0.001
+                }
+            })
+            .collect();
+        assert_eq!(loudest(&x, rate, 8.0), (32.0, 40.0)); // on the 0.8 s grid
+        // At the very end, and a file shorter than the region.
+        let y: Vec<f64> = (0..20_000)
+            .map(|i| if i >= 12_000 { 0.5 } else { 0.0 })
+            .collect();
+        assert_eq!(loudest(&y, rate, 8.0), (12.0, 20.0));
+        assert_eq!(loudest(&y[..5000], rate, 8.0), (0.0, 5.0));
+    }
 }

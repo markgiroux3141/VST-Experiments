@@ -37,7 +37,12 @@ input; milestones R0-R4; crates `varimu-circuit`, `varimu-app`). R0 done; R1 don
 (2026-10-27): `varimu-circuit` builds every circuit file's IR bit for bit equal to Python's
 (`tests/agreement.rs` on `scripts/export_app_fixtures.py`'s fixtures; rerun the script after
 a change to a circuit, device file, material or the builder: `tests/test_app_fixtures.py`
-says when). Nominal units only (a nonzero tolerance spread is refused).** Plausibility (`varimu.measure.plausibility`) rejects only what no
+says when). Nominal units only (a nonzero tolerance spread is refused). R2 done
+(2026-10-28; open: selectors that rewire take 0.3-0.55 s to be heard, the 670 on live
+input measured on silence only): `varimu-app`'s Play view plays files and live input at
+draft-1x (bypass, gain compensation, input normalization, takes), and its production
+render equals Python's bit for bit (`scripts/app_render_agreement.py`); the resampler is
+scipy's `resample_poly` ported bit for bit. Next: R3, the editor.** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the
