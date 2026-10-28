@@ -8,5 +8,6 @@ publish.workspace = true
 
 [dependencies]
 circuitsim = { path = "../circuitsim" }
+regex = "1.13.1"
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 yaml-rust2 = "0.13.0"

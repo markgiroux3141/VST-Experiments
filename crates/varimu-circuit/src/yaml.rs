@@ -151,7 +151,7 @@ impl fmt::Display for Value {
 }
 
 /// Python's `repr(float)` for ordinary values (shortest round trip, `.0` on integers).
-fn py_float_repr(x: f64) -> String {
+pub fn py_float_repr(x: f64) -> String {
     if x.is_nan() {
         return "nan".into();
     }

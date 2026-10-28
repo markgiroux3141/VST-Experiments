@@ -311,6 +311,42 @@ live in the player.
 - drawing the triode stage from scratch works (`scripts/editor_draw_triode.py` does
   it for the web page).
 
+In three steps, as B4a went (2026-10-28):
+
+- **R3a, formats and compile** (`varimu-circuit`): the drawing document, the symbol
+  table and placement transform, the connectivity, the importer's core, the circuit
+  file's YAML as PyYAML writes it, the pre-flight checks and markers on the drawing.
+- **R3b, the canvas**: the drawing painted (frames, symbols, wires, labels, grounds,
+  junctions), pan and zoom, selection, an inspector for values and fields, compile
+  with markers on symbols and nets, edits heard live in the player (a compiled drawing
+  is a circuit like the others).
+- **R3c, topology**: place, move with rubber-banding wires, rotate, mirror, delete,
+  copy / paste, the wire tool, labels and grounds, E12 stepping, Save as.
+
+**R3a done (2026-10-28).** New modules in `crates/varimu-circuit`, each a port of its
+Python counterpart with Python's orders and messages: `json` (JSON with keys in file
+order, written as `json.dumps(indent=1, ensure_ascii=False)`), `drawing`
+(`varimu/editor/drawing.py`), `symbols` (`varimu/kicad/symbols.py`'s table, graphics
+as shapes, and `varimu/editor/symbols.py`'s transform), `values` (`parse_eng`, natural
+order), `connect`, `importer` (`varimu/kicad/importer.py` without the KiCad XML),
+`yaml_out` (PyYAML's `safe_dump` for the subset circuit files use: YAML 1.1 implicit
+types quoted, non-ASCII double-quoted, `.0` before an exponent; and `to_yaml`),
+`preflight`, `compile` (compile, the file's text, markers, `save_circuit`).
+`spec::circuit_from_value` builds a spec from content in memory.
+
+- The three drawn circuits round-trip byte for byte (`tests/drawings.rs`), and compiling
+  each writes exactly the circuit file the Python editor wrote (`<name>_drawn.yaml`).
+- `tests/editor.rs` against `scripts/export_editor_fixtures.py`'s fixtures (the three
+  drawings and four broken copies of the triode stage: a wire removed, a Source removed,
+  two labels on one net, a stray resistor): the connectivity, compile errors and
+  problems, the compiled content, the file's text, the IR (bit for bit) and the markers
+  all equal Python's; the symbol table too. `tests/test_editor_fixtures.py` says when
+  the fixtures are stale (`uv run python scripts/export_editor_fixtures.py`).
+- Known difference: Python iterates a wire's two ends as a set (order from float
+  hashing), which only orders error messages when a drawing has several; Rust takes
+  them in order. A build error's message names Python's exception type as
+  `ConfigError`.
+
 ### R4. Look and polish, with the user
 
 The studio editor look and hardware-art device panels.

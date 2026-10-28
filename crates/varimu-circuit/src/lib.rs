@@ -17,11 +17,20 @@
 //! ```
 
 pub mod builder;
+pub mod compile;
+pub mod connect;
 pub mod derived;
 pub mod devices;
+pub mod drawing;
+pub mod importer;
+pub mod json;
 pub mod parts;
+pub mod preflight;
 pub mod spec;
+pub mod symbols;
+pub mod values;
 pub mod yaml;
+pub mod yaml_out;
 
 pub use builder::{Cores, build_ir};
 pub use circuitsim::ir;

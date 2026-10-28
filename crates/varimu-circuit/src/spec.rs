@@ -122,9 +122,14 @@ fn map_or_empty(v: Option<&Value>) -> Map {
 /// Read and check a circuit file (parameters and their sources, the tolerance block, the
 /// shape of devices and sections; the builder checks the parts).
 pub fn load_circuit(path: &Path) -> Result<CircuitSpec, Error> {
-    let data = yaml::load(path)?;
+    circuit_from_value(&yaml::load(path)?, path)
+}
+
+/// A circuit file's content (as `load_circuit` reads it) checked into a spec; `path`
+/// names it in messages (a compiled drawing has no file).
+pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Error> {
     let empty = Map::default();
-    let data = match &data {
+    let data = match data {
         Value::Map(m) => m,
         Value::Null => &empty,
         _ => return Err(Error(format!("{}: not a mapping", path.display()))),
