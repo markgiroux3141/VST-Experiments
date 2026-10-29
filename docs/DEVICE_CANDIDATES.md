@@ -24,6 +24,10 @@ a source is given. Confirm each on the schematic before it goes into a circuit f
    values); the V76 second, because its schematic still has to be found (see below).
 3. Everything else on this list stays as candidates, in the order of "The rest of the
    list".
+4. **Started 2026-10-29 (the user's):** the 5E3 and the V76 are milestones B9 and B10 of
+   [DEVICE_BUILDER_PLAN.md](DEVICE_BUILDER_PLAN.md), worked together with the component
+   editor ([COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md)); the 5E3 first, the V76
+   when its schematic is found.
 
 ## First: guitar amps
 
@@ -51,6 +55,10 @@ circuit, so it is a strong test of "how analog does it sound":
 
 ### What a guitar amp needs that we don't have
 
+The 5E3's output transformer is the component editor's first designed component
+(2026-10-29, the user's decision: [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md), C2),
+built alongside the 5E3 itself.
+
 - **Tube fits** for the amp's tubes: preamp triodes (12AY7), output pentodes / beam
   tetrodes (6V6GT, EL84, KT66, 6L6) on the existing pentode model, rectifiers (5Y3) on
   the vacuum-diode model. Same procedure as the 670's tubes (`fit-devices`, datasheet
@@ -68,6 +76,9 @@ circuit, so it is a strong test of "how analog does it sound":
   transformer resonances).
 
 ### Open decisions (the user's, before the first render)
+
+*Decided 2026-10-29:* a physical speaker model (option 3 below; the component editor's
+C3) and DIs as a voltage at the input jack (DEVICE_BUILDER_PLAN.md, B9).
 
 - **What we listen to.** The output transformer's secondary across the speaker load is
   the last electrical node. Heard raw, an overdriven amp is fizzy, because the speaker
@@ -99,8 +110,10 @@ A German broadcast tube microphone preamp, highly regarded for its character.
 - **Transformers:** input and output transformers. Their data are probably unpublished;
   start from modern replacement transformers' datasheets where any exist, otherwise
   provisional genome parameters as for the 670.
-- **Schematic:** not yet found. A first web search (2026-10-28) turned up listings and
-  forum threads but no drawing. Where to look next: Telefunken / IRT broadcast
+- **Schematic: found 2026-10-29.** IRT's "Braunbuch-Beschreibung V 76" (1959, on the
+  Wayback Machine) with drawing S 1176, all values printed:
+  `data/schematics/telefunken_v76/README.md`. The notes below predate it. A first web
+  search (2026-10-28) had turned up listings and forum threads but no drawing. Where to look next: Telefunken / IRT broadcast
   documentation, GroupDIY's V76 threads (a simplified two-tube variant was posted there,
   not the original), diyaudio. This is the gating item.
 - **Fit with the app:** a preamp suits real-time play (live input), and the existing

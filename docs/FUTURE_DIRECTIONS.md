@@ -5,6 +5,12 @@ is the starting point for future sessions. It records what the repo already
 has for each idea, what is missing, the formulas to start from, and the
 priorities the user agreed to.
 
+**Added 2026-10-29:** designing tubes and transformers from geometry and materials
+(a component editor whose compiled components appear in the circuit editor) has its own
+plan, [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md), including how deep physical
+simulation is worth going. It takes the "Missing: winding geometry" row of the transformer
+in section 1's table; nothing in it is built.
+
 Ground rules carry over unchanged (CLAUDE.md "Hard rules"):
 - Every value needs a `source`.
 - The genome is physical only.

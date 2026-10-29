@@ -32,7 +32,14 @@ schematics after their originals (`pultec_eqp1a_drawn`, `fairchild_670_drawn`), 
 the hand-written IR, the look accepted by the user (`docs/editor_mockups/drawn_*.png`).
 The devices to build next are listed in [docs/DEVICE_CANDIDATES.md](docs/DEVICE_CANDIDATES.md)
 (2026-10-28; the user's picks: guitar amps, the Fender 5E3 Deluxe proposed first, and the
-Telefunken V76). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+Telefunken V76). A component editor (tubes and transformers designed from geometry and
+materials, compiled to device files the circuit editors offer) is planned in
+[docs/COMPONENT_EDITOR_PLAN.md](docs/COMPONENT_EDITOR_PLAN.md) (2026-10-29; milestones
+C1-C8, nothing built; the user's decisions: it starts alongside the 5E3, whose output
+transformer is the first designed component; component versions are immutable and every
+circuit pins one; the editor is native-app only, compiled in Rust, Python only reads; field
+solvers only on demand). The user intends to retire the web app (`varimu listen`,
+2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
 egui / eframe, the editor plus real-time play and production render, files and live

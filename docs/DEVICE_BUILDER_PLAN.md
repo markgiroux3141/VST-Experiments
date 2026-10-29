@@ -676,6 +676,91 @@ the user decides with the numbers.
 cell, thermistor, lamp) arrive when a chosen circuit needs them, each with its
 three-way test pattern.
 
+**B9. The Fender 5E3 Deluxe** ([DEVICE_CANDIDATES.md](DEVICE_CANDIDATES.md), the
+user's first pick; planned 2026-10-29). A guitar amp built from the format like the
+EQP-1A, its output transformer the component editor's first designed component
+([COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md), C2). Steps, each checked before
+the next:
+1. *Sources* in `data/schematics/fender_5e3/` (README with provenance, like the
+   EQP-1A's): the schematic with printed values and voltages, the layout, the power and
+   output transformers (original part numbers; reproductions' published impedance,
+   resistance and inductance figures), the speaker (original Jensen; Thiele-Small data
+   of the original or its reissue), published measured DC voltages (Rob Robinette's
+   pages) and tube datasheets. *Done 2026-10-29:* `data/schematics/fender_5e3/README.md`
+   (Fender's F-EE schematic and layout; no DC voltages or mains on them, so the DC
+   targets are kits' published measurements at unstated mains; no original transformer
+   data, the output transformer's version 1 from Amplified Parts' P-TGO-002 figures;
+   Jensen P12R reissue Thiele-Small data).
+2. *Device fits* as component versions (C1): 12AY7 (Koren triode), 6V6GT (Koren
+   pentode, as the 6973), 5Y3GT (vacuum diode, as the GZ34 and 6X4), each from a
+   digitized datasheet with a provenance sidecar.
+3. *The circuit* `config/circuits/fender_5e3.yaml`: both channels with their
+   interactive volumes, the tone control, the phase inverter and cathode-biased 6V6GT
+   pair as the schematic draws them, the 5Y3 supply, the output transformer's version 1
+   (lumped values from published figures, like the 670's transformers), the speaker's
+   electrical equivalent as its load (a first version from the reissue's Thiele-Small
+   parameters; C3 makes it the physical speaker) and the input as decided below.
+   Pre-flight checks pass; floating windings get the T104 treatment.
+4. *Its profile* (`varimu/measure/profiles.py`): gain per volume setting, response per
+   tone setting, clipping onset, THD vs level, output power into the load, supply sag
+   and recovery on bursts, and aliasing at the internal rate (production 2x, draft).
+5. *The drawing and play*: `scripts/draw_fender_5e3.py` on `varimu/editor/sketch.py`
+   (`fender_5e3_drawn`), opened in the native editor; a Play device in `varimu-app`
+   with its front panel, on files and live input (a guitar through the interface),
+   load and dropouts measured (`examples/play.rs`).
+6. *The designed output transformer* (C2): version 2 by construction, heard against
+   version 1 in the 5E3.
+7. *The physical speaker* (C3): the 5E3 heard as sound pressure at a listening point
+   in front of its speaker and open-back cabinet.
+
+*Decided 2026-10-29 (the user's):* the 5E3 is heard through a physical speaker model
+(C3), not a cabinet impulse response; until C3 exists, the load voltage serves for
+checks only. Guitar audio (recorded DIs, a live guitar on the interface's Hi-Z input)
+drives the input jack as a voltage: a Hi-Z input loads the pickup about like the
+amp's 1 MOhm input, so the DI already carries the pickup's response. Its level is a
+per-circuit volts-per-full-scale convention (a hot pickup peaks just under 1 V:
+web: https://www.sound-au.com/articles/guitar-voltage.htm), trimmed by the Play view's
+input gain. A pickup model is for later.
+*Done when:* the 5E3 builds equal IR in Python and Rust (`tests/agreement.rs`) and
+runs on both engines with an agreement test (ngspice on linear cores); its DC operating
+point is within a stated tolerance of the printed voltages at the schematic's mains;
+its profile report runs; it plays live in the native app at draft-1x (or the speed
+work it needs is measured and brought to the user); the user has heard it through the
+physical speaker, with both output transformer versions.
+
+**B10. The Telefunken V76** (the user's second pick). A broadcast microphone preamp
+(three EF804S and an E83F, confirmed on the drawing). *Gate cleared 2026-10-29:* IRT's
+Braunbuch V 76 (1959) with drawing S 1176, every value, voltage and current printed
+(`data/schematics/telefunken_v76/README.md`); its one undrawn part is the input's RF
+trap. The wound parts are broadcaster build specs (BV 511-517a) without winding data. Steps as
+B9's: sources in `data/schematics/telefunken_v76/`; pentode fits for the EF804S and the
+E83F as component versions; the circuit with its input and output transformers as
+transformer components (version 1 from replacement datasheets, designed versions with
+C2's designer); a preamp profile (gain per step, response per filter, THD vs level,
+clipping; equivalent input noise waits for B5's noise sources); the drawing; play on
+live input.
+*Done when:* as B9's, against the V76's published figures.
+
+## Devices and components together (2026-10-29, the user's call)
+
+B9-B10 and [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md) run interleaved, each
+device the first user of the component milestone next to it:
+
+1. **Now, in parallel:** C1 (the component library and versions; invisible, identical
+   IR); B9 step 1 (the 5E3's sources); the V76 schematic search (B10's gate); the
+   user's 5E3 decisions (what we listen to, the input convention).
+2. **B9 step 2** (the 5E3's tube fits; as device files they can start before C1 ends,
+   C1 wraps them as version 1).
+3. **B9 steps 3-5** on C1: the 5E3 with its output transformer's version 1, profiled,
+   drawn, playing in the native app.
+4. **C2 with B9 step 6:** the transformer designer, the 5E3's output transformer as
+   version 2, A/B in the 5E3.
+5. **C3 with B9 step 7:** the physical speaker; the 5E3 heard through it. B9 done.
+6. **B10** (its schematic is found), its transformers designed with C2's tool; C4
+   (the existing circuits' transformers as components) fits in here or whenever a
+   670 / EQP-1A transformer is to be redesigned.
+7. **C5-C7** (tube designer, ratings, physical tolerances), then C8 only on demand.
+
 ## Order and why
 
 B1 first: noise, component physics, aging and temperature all attach where a part

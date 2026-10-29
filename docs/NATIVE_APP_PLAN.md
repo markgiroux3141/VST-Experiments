@@ -20,6 +20,11 @@ Python and no browser at runtime.
 
 Out of scope: the research tools (blind A/B, ABX, reports, studies). They stay in the
 Python / web lab. The web app keeps working.
+**Update 2026-10-29 (the user's):** the user intends to retire the web app. Nothing new
+goes into it (the component editor, [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md),
+is native only). Retiring it isn't planned yet: the blind A/B, ABX and difference
+listening have no native counterpart, and `layout.py` (hand-written circuits opened as
+generated drawings) isn't ported.
 
 ## Decisions (2026-10-27, the user's)
 
