@@ -64,7 +64,8 @@ def test_5e3_drawn_builds_the_hand_written_ir():
     c, found = check_drawing(load_drawing(drawing_path("fender_5e3_drawn")))
     assert c.ok and [m.message for m in found] == []
     a, b = load_circuit(circuit_path("fender_5e3")), compiled_spec(c)
-    assert b.full_scale == a.full_scale == (1.0, 60.0)
+    assert b.full_scale == a.full_scale == (1.0, 50.0)
+    assert b.full_scale_unit == a.full_scale_unit == "Pa"
     configs = [*switch_configs(a), {"passive_spread": 1.0, "passive_seed": 7}]
     assert len(configs) == 5
     for ov in configs:

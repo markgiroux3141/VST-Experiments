@@ -12,6 +12,8 @@ names and returns IR elements (or a device model):
   limit), the joint gap and classical eddy loss;
 - bridge: four diodes (and their cells' capacitance), vr_tube: a glow-discharge
   regulator, mains_sine: a winding fed from the mains;
+- speaker: a moving-coil driver's electrical equivalent with its breakup modes, and
+  the pressure at a listening point in front of its cabinet (varimu.devices.speaker);
 - tube_instance, pentode_instance, device_instance: a device model's instance
   (parallel sections, emission and mu spreads, grid contact, junction area);
 - Tolerance: per-part seeded draws in each part's tolerance band, and tubes'
@@ -41,9 +43,11 @@ from varimu.circuit.ir import (
     Inductor,
     Resistor,
     SineSource,
+    Vccs,
     VoltageSource,
     Winding,
 )
+from varimu.devices import speaker as spk
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.pentode import Pentode
@@ -302,6 +306,117 @@ def mains_sine(
     actual mains (phase 90 starts a run at the peak)."""
     scale = mains_v_rms / rated_mains_v_rms
     return SineSource(name, pos, neg, 0.0, math.sqrt(2) * v_rms * scale, mains_hz, phase_deg)
+
+
+# --- Speakers --------------------------------------------------------------------------------
+
+
+def speaker_driver(
+    name: str, plus: str, minus: str, s: spk.Speaker
+) -> tuple[list[Element], list[tuple[str, float]]]:
+    """The driver's electrical equivalent (varimu.devices.speaker): the elements, and each
+    radiating node (its voltage to `minus` is BL times a velocity) with its area. Element
+    names: R<name>_re, L<name>_le, L<name>_l2 || R<name>_r2, then C<name>_m, L<name>_cms,
+    R<name>_rms on the coil's node <name>_m, and per mode k (from 1) R<name>_k || L<name>_k
+    to its node <name>_k<k>, C<name>_k<k> from there to minus."""
+    n, upper = name.lower(), name.upper()
+    bl2 = s.bl_tm * s.bl_tm
+    # Plain left-to-right sums (Python 3.12's sum() compensates; Rust's builder doesn't).
+    modes_kg, modes_m2 = 0.0, 0.0
+    for m in s.modes:
+        modes_kg += m.mass_kg
+        modes_m2 += m.area_m2
+    m0 = s.mms_kg - modes_kg
+    s0 = s.sd_m2 - modes_m2
+    coil = f"{n}_m"
+    els: list[Element] = [
+        Resistor(f"R{upper}_re", plus, f"{n}_l", s.re_ohm),
+        Inductor(f"L{upper}_le", f"{n}_l", f"{n}_e", s.le_h),
+        Inductor(f"L{upper}_l2", f"{n}_e", coil, s.l2_h),
+        Resistor(f"R{upper}_r2", f"{n}_e", coil, s.r2_ohm),
+        Capacitor(f"C{upper}_m", coil, minus, m0 / bl2),
+        Inductor(f"L{upper}_cms", coil, minus, s.cms_m_per_n * bl2),
+        Resistor(f"R{upper}_rms", coil, minus, bl2 / s.rms_ns_per_m),
+    ]
+    radiating = [(coil, s0)]
+    for k, m in enumerate(s.modes, 1):
+        w = 2 * math.pi * m.f_hz
+        stiffness = m.mass_kg * (w * w)
+        damping = w * m.mass_kg / m.q
+        node = f"{n}_k{k}"
+        els += [
+            Resistor(f"R{upper}_k{k}", coil, node, bl2 / damping),
+            Inductor(f"L{upper}_k{k}", coil, node, bl2 / stiffness),
+            Capacitor(f"C{upper}_k{k}", node, minus, m.mass_kg / bl2),
+        ]
+        radiating.append((node, m.area_m2))
+    return els, radiating
+
+
+def speaker_readout(
+    name: str,
+    minus: str,
+    out: str,
+    s: spk.Speaker,
+    radiating: Sequence[tuple[str, float]],
+    cabinet: spk.Cabinet,
+    distance_m: float,
+) -> list[Element]:
+    """The sound pressure at `out` (pascals as volts, to ground), on axis at `distance_m`
+    in front of the cabinet: front wave, back wave around the edges (varimu.devices
+    .speaker). It draws no current from the driver (every coupling is a Vccs)."""
+    n, upper = name.lower(), name.upper()
+    r0 = spk.READOUT_OHM
+    pf, lp = f"{n}_pf", f"{n}_b"
+    els: list[Element] = []
+    # Front: rho S a / (2 pi r) per radiating node, as currents through one 1 H inductor
+    # (its voltage is the derivative of the current, the voltage BL v giving BL a).
+    for i, (node, area) in enumerate(radiating):
+        gm = spk.RHO_AIR_KG_M3 * area / (2 * math.pi * distance_m * s.bl_tm)
+        if gm != 0:
+            els.append(Vccs(f"G{upper}_a{i}", GROUND, pf, node, minus, gm))
+    els.append(Inductor(f"L{upper}_pf", pf, GROUND, 1.0))
+    # Back: the directivity pole, then a doubly terminated delay line, tapped per edge.
+    fb = spk.directivity_pole_hz(s.sd_m2)
+    els += [
+        Vccs(f"G{upper}_b", GROUND, lp, pf, GROUND, 1 / r0),
+        Resistor(f"R{upper}_b", lp, GROUND, r0),
+        Capacitor(f"C{upper}_b", lp, GROUND, 1 / (2 * math.pi * fb * r0)),
+    ]
+    taps = spk.edge_taps(cabinet, distance_m)
+    last = max(t for t, _ in taps)
+    tau = spk.LADDER_SECTION_S
+    els += [
+        Vccs(f"G{upper}_d", GROUND, f"{n}_d0", lp, GROUND, 2 / r0),
+        Resistor(f"R{upper}_d0", f"{n}_d0", GROUND, r0),
+        Capacitor(f"C{upper}_d0", f"{n}_d0", GROUND, tau / r0 / 2),
+    ]
+    for i in range(1, last + 1):
+        els.append(Inductor(f"L{upper}_d{i}", f"{n}_d{i - 1}", f"{n}_d{i}", tau * r0))
+        c = tau / r0 if i < last else tau / r0 / 2
+        els.append(Capacitor(f"C{upper}_d{i}", f"{n}_d{i}", GROUND, c))
+    els.append(Resistor(f"R{upper}_dt", f"{n}_d{last}", GROUND, r0))
+    # Heard: p_f minus the edges' back waves.
+    els.append(Vccs(f"G{upper}_o", GROUND, out, pf, GROUND, 1 / r0))
+    for e, (tap, weight) in enumerate(taps):
+        if weight != 0:
+            els.append(Vccs(f"G{upper}_o{e}", GROUND, out, f"{n}_d{tap}", GROUND, -weight / r0))
+    els.append(Resistor(f"R{upper}_o", out, GROUND, r0))
+    return els
+
+
+def speaker(
+    name: str,
+    plus: str,
+    minus: str,
+    out: str,
+    s: spk.Speaker,
+    cabinet: spk.Cabinet,
+    distance_m: float,
+) -> list[Element]:
+    """Speaker `name` between plus and minus, its sound pressure on `out`."""
+    els, radiating = speaker_driver(name, plus, minus, s)
+    return els + speaker_readout(name, minus, out, s, radiating, cabinet, distance_m)
 
 
 # --- Device instances -----------------------------------------------------------------------

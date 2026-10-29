@@ -7,7 +7,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     title: ...                      # the IR's title
     input: in                       # the node the audio input drives
     probes: [out, cv, ...]          # node voltages every render saves
-    full_scale: {input_volts_peak: {value, source}, output_volts_peak: {value, source}}
+    full_scale: {input_volts_peak: {value, source}, output_volts_peak | output_pascals_peak: {...}}
     controls: {key: {value, min, max | choices, source, unit?, notes?}}
     values: {key: {value, source, genome?, unit?, notes?}}
     device_params: {key: {value, source, genome?}}   # act on device instances
@@ -31,8 +31,11 @@ parts); they can't be overridden.
 `full_scale` (optional, device builder B9) is the circuit's own audio convention: the
 volts a full-scale input sample (1.0) puts on the input node, and the `v(out)` that
 reads as 1.0 (a guitar amp takes a pickup's ~1 V and drives a speaker with ~50 V).
-Without it both are sim_settings' `audio.full_scale_volts_peak`. It is no parameter
-and not in the IR: renders and the native app scale around the circuit with it
+The output is `output_volts_peak` or, when `out` is a sound pressure (a `speaker`
+part's readout: pascals as volts, component editor C3), `output_pascals_peak`: the
+same number to every render path, its unit for display (`full_scale_unit`). Without the
+block both are sim_settings' `audio.full_scale_volts_peak`. It is no parameter and not
+in the IR: renders and the native app scale around the circuit with it
 (`varimu.sim.io.full_scale`).
 
 Parts and devices are read by varimu.circuit.builder (its docstring has the
@@ -90,6 +93,7 @@ class CircuitSpec:
     # (input, output) volts peak at full scale; None: sim_settings' (the module docstring).
     full_scale: tuple[float, float] | None = None
     full_scale_block: dict[str, Any] | None = None  # as written, with its sources
+    full_scale_unit: str = "V"  # the output's: "V", or "Pa" (output_pascals_peak)
 
     def part_classes(self) -> dict[str, str]:
         """Designator -> tolerance class."""
@@ -195,7 +199,7 @@ def load_circuit(path: Path) -> CircuitSpec:
     for k, e in (data.get("devices") or {}).items():
         if not isinstance(e, Mapping) or "device" not in e:
             errors.append(f"devices.{k}: needs a `device`")
-    full_scale = _full_scale(data.get("full_scale"), errors)
+    full_scale, unit = _full_scale(data.get("full_scale"), errors)
     if errors:
         raise ConfigError(f"{path}:\n  " + "\n  ".join(errors))
     return CircuitSpec(
@@ -213,31 +217,36 @@ def load_circuit(path: Path) -> CircuitSpec:
         path=Path(path),
         full_scale=full_scale,
         full_scale_block=data.get("full_scale"),
+        full_scale_unit=unit,
     )
 
 
-_FULL_SCALE_KEYS = ("input_volts_peak", "output_volts_peak")
+_FULL_SCALE_OUTPUTS = {"output_volts_peak": "V", "output_pascals_peak": "Pa"}
 
 
-def _full_scale(fs: Any, errors: list[str]) -> tuple[float, float] | None:
-    """The `full_scale` block as (input, output) volts peak (None: absent)."""
+def _full_scale(fs: Any, errors: list[str]) -> tuple[tuple[float, float] | None, str]:
+    """The `full_scale` block as ((input, output) peak, the output's unit); (None, "V"):
+    absent, or an error appended."""
     if fs is None:
-        return None
-    if not isinstance(fs, Mapping) or set(fs) != set(_FULL_SCALE_KEYS):
-        errors.append(f"full_scale: needs exactly {list(_FULL_SCALE_KEYS)}")
-        return None
+        return None, "V"
+    outs = [k for k in _FULL_SCALE_OUTPUTS if isinstance(fs, Mapping) and k in fs]
+    if not isinstance(fs, Mapping) or len(outs) != 1 or set(fs) != {"input_volts_peak", *outs}:
+        errors.append(
+            f"full_scale: needs exactly input_volts_peak and one of {list(_FULL_SCALE_OUTPUTS)}"
+        )
+        return None, "V"
     out = []
-    for k in _FULL_SCALE_KEYS:
+    for k in ("input_volts_peak", outs[0]):
         n = len(errors)
         _sourced(f"full_scale.{k}", fs[k], errors)
         if len(errors) > n:
-            return None
+            return None, "V"
         v = fs[k]["value"]
         if isinstance(v, bool) or not isinstance(v, int | float) or not v > 0:
             errors.append(f"full_scale.{k}: value {v!r} is not a positive number")
-            return None
+            return None, "V"
         out.append(float(v))
-    return out[0], out[1]
+    return (out[0], out[1]), _FULL_SCALE_OUTPUTS[outs[0]]
 
 
 def circuit_path(name: str) -> Path:

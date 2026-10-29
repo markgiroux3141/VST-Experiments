@@ -237,6 +237,67 @@ within a stated tolerance up to the band where the curve ends; the pressure outp
 computed identically in both builders' renders (the app's production render equal to
 Python's); the 5E3 renders through it and the user has heard it.
 
+*Status: the model is built (2026-10-29, the design the user approved); open: the user
+hears it, and Play's real-time load (below).*
+- *The component.* `P12R@1` (`config/components/p12r/1.yaml`, kind `speaker`: voice coil,
+  moving system, modes, fit report), saved by `varimu fit-devices --only P12R`
+  (`varimu/devices/speaker_fit.py`; Python, like the tube fits: a Rust compiler comes with
+  `varimu-components` in C2). The sheet's two curves are vector paths in its PDF, read
+  exactly (`scripts/digitize_jensen_p12r.py`, `data/datasheets/jensen_p12r.provenance.yaml`):
+  the page clips the plot at 8.5 kHz, the paths run to 20 kHz. The impedance trace reads as
+  kz 20 log10 |Z| + z0 (both traces and the Thiele-Small Zmax agree on kz ~1.25-1.37).
+- *The model* (`varimu/devices/speaker.py`'s docstring): Re, Le and the eddy-current pair
+  L2 || R2; the moving system through BL (mobility analogy: mass a capacitor, compliance an
+  inductor); eight breakup modes from 300 Hz, each a mass on a spring and damper hung from
+  the coil, with a signed radiating share. The pressure readout: a new IR element `Vccs`
+  (SPICE `G`: Python `ir.py`, circuitsim `ir.rs` / `mna.rs`, the SPICE emitter,
+  varimu-circuit; other circuits' JSON is unchanged, IR_VERSION stays 3) senses each
+  radiating node's BL v and drives one 1 H inductor: p_front = rho sum(S a) / (2 pi r), a
+  baffled piston's on-axis far field. The back wave reaches the listener around each of the
+  four baffle edges: inverted, low-passed at ka = 1.616 (705 Hz for the P12R: a piston's
+  directivity at 90 degrees), delayed by its extra path (cabinet depth, edge distance,
+  listening distance) on taps of one lumped delay line (62.5 us sections), each edge
+  weighted by the angle it subtends. Heard: p_front - sum(w p_back). Everything is in the
+  netlist; the readout draws no current (a far field doesn't push on the cone; the air
+  load that does is in the sheet's free-air Mms and Qms). The macro `speaker: [plus, minus,
+  out]` (`component`, `distance_m`, `width_m`, `height_m`, `depth_m`, `offset_x_m`,
+  `offset_y_m`) in both builders, bit for bit (`tests/agreement.rs`); the symbol `Speaker`.
+- *The fit* (`reports/devices/p12r_fit.png`): Re 6.05 ohm, Fs 79.7 Hz, Qms 13.13, Qes 2.525,
+  Qts 2.118 read off the model's impedance the way they are measured (sheet: 80, 13.07,
+  2.50, 2.1); impedance shape 0.5 dB of |Z| rms; the response on the IEC baffle 1.01 dB rms,
+  2.6 dB worst over 20 Hz-8.5 kHz (4.8 dB rms on the unprinted 8.5-20 kHz). The finite IEC
+  baffle (1650 x 1350 mm) explains why the curve shows no Qts 2.1 peak at Fs: the same edge
+  model, so it is checked on the sheet before it models the cabinet. Twelve modal parameters
+  sit at their bounds: the shares are a modal expansion, not ring geometry (two near-massless
+  modes carry the 2-3.5 kHz presence peak with the cone's whole area). Variants with
+  physical shares (area per mass at most 4x the cone's) fit 1.7-1.9 dB rms. Modal Q is
+  capped at 10: the curve's points are ~1/12 octave apart and a sharper mode rang as a tone
+  the sheet doesn't show. `tests/test_speaker.py` holds the tolerances (Fs +-1 Hz, Qts +-2%,
+  shape 1.5 dB rms, response 2 dB rms and 4 dB worst on the printed band).
+- *The engines:* circuitsim's transient (production) gives the AC model's pressure within
+  0.5% at 60 Hz-8 kHz; ngspice's AC analysis within 1e-6 (`tests/test_speaker.py`).
+- *The 5E3* hears `out`, the pressure 1 m on axis in front of its open-back cabinet (a
+  1956 5E3's 19 7/8 x 16 1/4 x 9 1/2 in; the speaker centred, provisional); `spk` is the
+  terminal voltage. Full scale 50 Pa (`full_scale.output_pascals_peak`, both parsers; the
+  guitar take peaks at 40 Pa at full volume); Play shows a dB SPL meter. On the guitar
+  take's loudest 8 s (production): 10-20 kHz falls from -35.5 to -59.2 dB of the power at
+  volume 0.5 (-23.2 to -47.7 at full volume), 2-5 kHz rises from -17.7 to -9.8 dB; ~110 dB
+  SPL rms at 1 m. The profile (`amp_suite.py`) keeps its electrical figures on `spk` and adds
+  the pressure response per tone setting and SPL per row.
+- *Play's load, measured* (`examples/load_profile.rs`, the guitar take, draft-2x, volume
+  0.6): 1.61x real time, every block over budget (the 5E3 before C3: 0.48x). Newton's work is
+  unchanged; DK's dense state update grows with the square of the states (39 -> ~120: the
+  delay line 58, the modes 16). With 250 us delay sections (7 instead of 29): 0.80x, 487 of
+  5844 blocks over (782 at full volume). At draft-1x: 0.85x / 0.92x (volume 0.6 / 1.0), and
+  0.43x / 0.50x with the 7-section line. Through the speaker draft-1x aliases much less than
+  it did on the terminal voltage: the hard-clipped 2902 Hz leaves -28.1 dB of inharmonic
+  content re the harmonics at draft-1x and -34.5 at draft-2x (`tests/live.rs`; on the
+  terminal voltage -7.2 and -24.1, which is why the 5E3 moved to draft-2x). Brought to the
+  user as options (not built): the readout on the partition's second thread (it reads the
+  driver and never acts back, so a one-way coupling is exact up to one sample of latency;
+  `partition.rs` today only couples rails the second part holds), the shorter delay line,
+  draft-1x for the 5E3 again, or a combination.
+
 **C4. The existing circuits' transformers as components.** The 670's T101-T104, T302,
 L301, L302 and the EQP-1A's transformers become version 1 of transformer components
 (their current parameters as the compiled form; construction unknown where it is),

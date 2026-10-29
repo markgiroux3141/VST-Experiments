@@ -321,7 +321,8 @@ impl Importer<'_> {
                     .push(format!("{} ({}): {e}", c.reference, c.part));
             }
         }
-        // Netlist-level: unconnected pins.
+        // Netlist-level: unconnected pins. A pin alone on the input or the heard output
+        // (`out`, e.g. a speaker's pressure pin) is connected: the render drives or reads it.
         let input = self.input();
         for c in &self.nl.components {
             let Some(sym) = symbols::get(&c.part) else {
@@ -335,7 +336,8 @@ impl Importer<'_> {
                     let Some(net) = self.pin_net.get(&(c.reference.clone(), pin.clone())) else {
                         continue;
                     };
-                    if self.net_size[net] == 1 && self.node_of(net) != Some(input.as_str()) {
+                    let end = matches!(self.node_of(net), Some(n) if n == input || n == "out");
+                    if self.net_size[net] == 1 && !end {
                         self.problems
                             .push(format!("unconnected: pin {pin} of {}", c.reference));
                     }

@@ -6,7 +6,7 @@ use std::f64::consts::PI;
 
 use circuitsim::ir::{
     Capacitor, CircuitIr, Coupling, Element, IR_VERSION, Inductor, Probe, Resistor, Section,
-    SineSource, VoltageSource,
+    SineSource, Vccs, VoltageSource,
 };
 use circuitsim::{Error, Method, Options, Solver, simulate, simulate_with_progress};
 
@@ -216,6 +216,64 @@ fn rc_lowpass_matches_closed_form_with_second_order_convergence() {
     let b1 = max_err(&ir, H, 5e-3, f, Method::BackwardEuler, exact);
     let b2 = max_err(&ir, H / 2.0, 5e-3, f, Method::BackwardEuler, exact);
     assert!((0.45..0.55).contains(&(b2 / b1)), "Euler ratio {}", b2 / b1);
+}
+
+fn g(name: &str, pos: &str, neg: &str, cp: &str, cn: &str, gm_s: f64) -> Element {
+    Element::Vccs(Vccs {
+        name: name.into(),
+        pos: pos.into(),
+        neg: neg.into(),
+        ctrl_pos: cp.into(),
+        ctrl_neg: cn.into(),
+        gm_s,
+    })
+}
+
+/// A voltage-controlled current source (SPICE G, a speaker's readout): its control draws
+/// nothing (an RC it reads keeps its closed form), gm v(ctrl) flows from pos to neg (into
+/// a resistor from ground: + gm R v), and through a 1 H inductor it gives the control's
+/// derivative (the readout's acceleration).
+#[test]
+fn vccs_reads_without_loading_and_differentiates_through_an_inductor() {
+    let (rr, cc, f, gm) = (1e3, 1e-6, 1e3, 2e-3);
+    let (w, tau) = (2.0 * PI * f, rr * cc);
+    let rc = |t: f64| {
+        let wt = w * tau;
+        ((w * t).sin() - wt * (w * t).cos() + wt * (-t / tau).exp()) / (1.0 + wt * wt)
+    };
+    let els = || {
+        vec![
+            r("R1", "in", "a", rr),
+            c("C1", "a", "0", cc),
+            g("GR", "0", "o", "a", "0", gm),
+            r("RO", "o", "0", 500.0),
+            g("GD", "0", "d", "in", "0", 1e-3),
+            l("LD", "d", "0", 1.0),
+        ]
+    };
+    let t_end = 5e-3;
+    let read = |p: &str| circuit(els(), &[p]);
+    assert!(max_err(&read("a"), H, t_end, f, Method::Trapezoidal, rc) < 3e-5);
+    // gm R = 1: the resistor's voltage is the control's.
+    assert!(max_err(&read("o"), H, t_end, f, Method::Trapezoidal, rc) < 3e-5);
+    // 1 H x 1e-3 S x d/dt (1 - cos w t) = 1e-3 w sin(w t) (6.3 V peak; the drive starts
+    // with zero slope, as a settled run does: trapezoidal never damps an inconsistent
+    // start), off by ~(w h)^2 / 12 of it.
+    let n = (t_end / H).round() as usize + 1;
+    let u: Vec<f64> = (0..n).map(|i| 1.0 - (w * i as f64 * H).cos()).collect();
+    let out = simulate(
+        &read("d"),
+        &u,
+        H,
+        &Options::with_method(Method::Trapezoidal),
+    )
+    .unwrap();
+    let e = out.values[0]
+        .iter()
+        .enumerate()
+        .map(|(i, y)| (y - 1e-3 * w * (w * i as f64 * H).sin()).abs())
+        .fold(0.0, f64::max);
+    assert!(e < 1e-3 * 1e-3 * w, "derivative error {e:e}");
 }
 
 #[test]

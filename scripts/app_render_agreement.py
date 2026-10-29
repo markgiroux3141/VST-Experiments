@@ -7,7 +7,9 @@ For each device, an excerpt of the arpeggio clip with some knobs away from their
 defaults goes through `varimu.sim.fast.run_transient` (Python, the reference) and
 through crates/varimu-app's render (`cargo run --release --example render`); every
 probe is compared value by value, and so is the output audio (`v(out)` over the
-circuit's output full scale: the 5E3 has its own, `full_scale` in its file). Same IR,
+circuit's output full scale: the 5E3 has its own, `full_scale` in its file; its `out` is
+the sound pressure in front of its speaker, component editor C3, in pascals, and its
+speaker's terminal voltage the probe `spk`). Same IR,
 engine and resampling, so every value must be equal: exit 1 otherwise. Run it after a
 change to the app's render or resampling, or to circuitsim, the builder or a circuit
 (renders take ~15x real time at production, plus 1 s of settling each).

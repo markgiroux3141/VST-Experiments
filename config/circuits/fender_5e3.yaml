@@ -16,18 +16,19 @@
 # lamp, the AC switch's .05 ground capacitor and the speaker jacks' contacts (the
 # speaker is always connected; the extra speaker jack is empty).
 #
-# The output is the speaker's terminal voltage (`out`): a check only until the physical
-# speaker (component editor C3), the user's decision (2026-10-29).
+# The output (`out`) is the sound pressure 1 m in front of the speaker, on axis: the
+# P12R as a component (P12R@1) in the tweed Deluxe's open-back cabinet (component editor
+# C3, the user's decisions 2026-10-29). `spk` is the speaker's terminal voltage.
 
 title: "Fender 5E3 Deluxe"
 input: in
-probes: [out, j1b, j1n, g1b, g1n, k1, p1b, p1n, vb, vn, g2, k2, p2, g3, p3, k3, kj, oa, ob, g6a, g6b, p6a, p6b, k6, b1, b2, b3, hva, hvb]
+probes: [out, spk, j1b, j1n, g1b, g1n, k1, p1b, p1n, vb, vn, g2, k2, p2, g3, p3, k3, kj, oa, ob, g6a, g6b, p6a, p6b, k6, b1, b2, b3, hva, hvb]
 # Guitar audio drives the input jack as a voltage (a DI through a Hi-Z input carries the
-# pickup's response); the output is the speaker's terminal voltage (the user's decisions,
-# DEVICE_BUILDER_PLAN.md B9).
+# pickup's response); the output is the sound pressure at the listening point (the user's
+# decisions, DEVICE_BUILDER_PLAN.md B9 and COMPONENT_EDITOR_PLAN.md C3).
 full_scale:
   input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)"}
-  output_volts_peak: {value: 60.0, source: "derived: the speaker voltage's peak, 53.6 V (production render, 1 kHz at 1 V peak into bright input 1, volume 0.5, 2026-10-29), rounded up for headroom"}
+  output_pascals_peak: {value: 50.0, source: "derived: the pressure's peak, 40.0 Pa (production render 2026-10-29: the guitar take's loudest 8 s at Play's -11.5 dBFS into bright input 1, volume 1.0), rounded up for headroom"}
 
 controls:
   # The front panel. Knobs are rotations 0..1 (the panel's 1..12).
@@ -93,15 +94,17 @@ values:
   ot_leakage_h: {value: 29.9e-3, genome: fender_5e3.ot.leakage_h, source: "derived: the mean of the reproduction's leakage per primary half, 40.47 / 19.31 mH (same sheet)", notes: "the format splits leakage evenly between the windings; the measured asymmetry isn't modeled"}
   ot_c_half_f: {value: 300.0e-12, genome: fender_5e3.ot.winding_capacitance_f, source: "provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF)"}
 
-  # --- Speaker: Jensen P12R reissue, electrical equivalent (until C3) ------------------
-  # Voice coil Re + Le in series with the motional impedance, a parallel RLC from the
-  # Thiele-Small figures: Res = BL^2 / Rms (Rms = 2 pi Fs Mms / Qms), Lces = Cms BL^2,
-  # Cmes = Mms / BL^2 (resonance 80 Hz, Qes 2.5 as the sheet).
-  spk_re_ohm: {value: 6.05, source: "web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (Re)"}
-  spk_le_h: {value: 0.5e-3, source: "web: same sheet (Le)"}
-  spk_res_ohm: {value: 31.55, source: "derived: BL 5.53, Mms 25.2 g, Fs 80 Hz, Qms 13.07 (same sheet): BL^2 / (2 pi Fs Mms / Qms)"}
-  spk_lces_h: {value: 4.801e-3, source: "derived: Cms 157 um/N x BL^2 (same sheet)"}
-  spk_cmes_f: {value: 824.0e-6, source: "derived: Mms / BL^2 (same sheet)"}
+  # --- Speaker, cabinet and listening point (component editor C3) ----------------------
+  # The P12R reissue as a component (its sources and fit: config/components/p12r/1.yaml);
+  # the original was a Jensen P12R or P12Q (README, "Speaker"). The tweed Deluxe's
+  # open-back pine cabinet: a vintage 1956 5E3's outer dimensions.
+  speaker_model: {value: P12R@1, source: "web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (the reissue's sheet; the component's fit)"}
+  listen_distance_m: {value: 1.0, source: "the user's choice (2026-10-29): 1 m on axis, the sheet's measuring distance and in the far field"}
+  cab_width_m: {value: 0.504825, source: "web: https://retrofret.com/products/fender-deluxe-5e3-tube-amplifier-1956-10761 (19 7/8 in wide, a 1956 5E3)"}
+  cab_height_m: {value: 0.41275, source: "web: same listing (16 1/4 in tall)"}
+  cab_depth_m: {value: 0.2413, source: "web: same listing (9 1/2 in deep); a 1960 example and a reproduction cabinet give 20 x 15 3/4..16 x 9 1/2 in (README)"}
+  cab_offset_x_m: {value: 0.0, source: "provisional: model knowledge (the speaker centred left to right on the baffle)"}
+  cab_offset_y_m: {value: 0.0, genome: fender_5e3.speaker.offset_y_m, source: "provisional: model knowledge (the speaker about centred top to bottom on the baffle)"}
 
   # --- Power supply ----------------------------------------------------------------------
   # Triad 6452 original, no data; Amplified Parts' reproduction P-TGP-002 (120 V
@@ -266,13 +269,18 @@ sections:
         transformer:
           pa: {nodes: [p6a, b1], r: ot_r_half_a_ohm, c: ot_c_half_f}
           pb: {nodes: [b1, p6b], r: ot_r_half_b_ohm, c: ot_c_half_f}
-          s: {nodes: [out, "0"], ratio: ot_sec_per_half, r: ot_r_sec_ohm}
+          s: {nodes: [spk, "0"], ratio: ot_sec_per_half, r: ot_r_sec_ohm}
         core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}
         turns: ot_turns_half
         leakage_h: ot_leakage_h
-      # The speaker's electrical equivalent (the P12R reissue).
-      RSPK_E: {R: [out, spk_l], r: spk_re_ohm, tolerance: none}
-      LSPK_E: {L: [spk_l, spk_m], l: spk_le_h}
-      RSPK_M: {R: [spk_m, "0"], r: spk_res_ohm, tolerance: none}
-      LSPK_M: {L: [spk_m, "0"], l: spk_lces_h}
-      CSPK_M: {C: [spk_m, "0"], c: spk_cmes_f, tolerance: none}
+      # The speaker on the secondary; `out` is its sound pressure at the listening point
+      # (pascals as volts: varimu.devices.speaker).
+      SPK:
+        speaker: [spk, "0", out]
+        component: speaker_model
+        distance_m: listen_distance_m
+        width_m: cab_width_m
+        height_m: cab_height_m
+        depth_m: cab_depth_m
+        offset_x_m: cab_offset_x_m
+        offset_y_m: cab_offset_y_m

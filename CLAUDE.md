@@ -61,7 +61,15 @@ Play device in varimu-app, played at `draft-2x` (the user's choice: hard clipped
 aliases at -8 dB re the harmonics, draft -31; a 48 kHz host with the stream at 2x,
 varimu-app only, `panel::Device::quality`; the plan's B9 step 5). **Next (2026-10-29, the user's call):
 C3's model before C2**: the 5E3 heard as sound pressure through its physical speaker
-(COMPONENT_EDITOR_PLAN.md C3; its sound isn't judged until then), then `6V6GT@2`, then C2. The user intends to retire the web app (`varimu listen`,
+(COMPONENT_EDITOR_PLAN.md C3; its sound isn't judged until then), then `6V6GT@2`, then C2.
+**C3's model built (2026-10-29):** the speaker component `P12R@1` (kind `speaker`:
+`varimu/devices/speaker.py`; fitted to the Jensen sheet's curves by `speaker_fit.py`,
+`varimu fit-devices --only P12R`), the `speaker` macro in both builders (`speaker: [plus,
+minus, out]`, the cabinet and the listening distance as params), its pressure readout on
+the new IR element `Vccs` (SPICE `G`; it draws no current). The 5E3's `out` is the sound
+pressure 1 m on axis (pascals as volts; `full_scale.output_pascals_peak` 50 Pa, both
+parsers), `spk` its terminal voltage. Open: the user hears it, and Play's load (1.61x real
+time at draft-2x: the options are in C3's status). The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
@@ -281,6 +289,7 @@ uv run varimu signals [--seed N] [--only NAME ...] [--list]
 uv run varimu genome-status
 uv run varimu fit-devices [--only 6386 ...]   # refit device models; a changed fit -> a new version config/components/<name>/<N>.yaml
 uv run python scripts/digitize_ge6386.py --overlays DIR   # re-digitize the 6386 sheet
+uv run --with pymupdf python scripts/digitize_jensen_p12r.py   # C3: the P12R sheet's curves from the PDF's vector paths
 uv run --extra fast varimu render --clip data/clips/x.wav --set ac_threshold=0.7 time_constant=3 --out r.wav
 uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached
 uv run varimu render --signal burst_1000hz_0dbfs --engine ngspice   # the reference engine
@@ -655,6 +664,14 @@ tests skip when ngspice is missing.
   thread, and parallel renders default to cpu_count - 2 (`runner:` in
   `sim_settings.yaml`). Don't kill ngspice by walking up process trees: two
   renders launched from one shell share ancestors.
+- **Float sums in the builders (2026-10-29).** Python 3.12's `sum()` of floats is
+  compensated (Neumaier), Rust's fold isn't: builder code that both languages run sums in
+  a plain loop (`parts.speaker_driver`), or tests/agreement.rs finds 1e-16 differences.
+- **DK's cost grows with the square of the states (2026-10-29).** Linear elements aren't
+  free in real time: the 5E3's speaker readout (a 29-section delay line and 8 modes, ~80
+  states) took Play's draft-2x from 0.48x to 1.61x real time with the same Newton work
+  (COMPONENT_EDITOR_PLAN.md, C3's status). Measure `examples/load_profile.rs` before and
+  after adding networks to a played circuit.
 - **Patching files from Bash heredocs:** this shell collapses a doubled
   backslash to a single one inside heredocs, so an escaped `\n` meant for a
   Python string arrives as a real newline. Write patch scripts with the Write

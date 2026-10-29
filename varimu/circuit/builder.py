@@ -36,6 +36,12 @@ Macro parts (connection; params, * = required):
                 interwinding {ends: [a, b], to, c}
     bridge      [ac_a, ac_b, plus, minus]; model*, arm_c_f_per_area, area
     vr_tube     [anode, mid, cathode]; model*, operating_v*, ref_current_a*
+    speaker     [plus, minus, out]; component* (a speaker component version, NAME@N, or
+                a parameter naming one), distance_m* (the listening point, on axis), the
+                cabinet: width_m*, height_m*, depth_m* (0: a flat baffle), offset_x_m,
+                offset_y_m (the driver's centre from the baffle's): the driver between
+                plus and minus, the sound pressure at the listening point on `out`
+                (pascals as volts; varimu.devices.speaker)
 
 R, C, pot, rheostat, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
 the file's tolerance classes); a switch's sub-parts take their own.
@@ -77,8 +83,9 @@ from varimu.config import ConfigError, load_sim_settings
 from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode
-from varimu.devices.library import load_device
+from varimu.devices.library import load_device, load_speaker
 from varimu.devices.pentode import Pentode
+from varimu.devices.speaker import Cabinet
 from varimu.devices.table import GRIDS
 from varimu.devices.triode import Triode
 
@@ -344,6 +351,16 @@ def _vr_tube(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]
     return parts.vr_tube(name, *conn, a["model"], a["operating_v"], a["ref_current_a"])
 
 
+def _speaker(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    where = f"{name}.component"
+    try:
+        model = load_speaker(str(versions.require_pinned(ctx.text(where, a["component"]))))
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    cab = Cabinet(a["width_m"], a["height_m"], a["depth_m"], a["offset_x_m"], a["offset_y_m"])
+    return parts.speaker(name, *conn, model, cab, a["distance_m"])
+
+
 def _r(ctx, name, c, a):
     r = a["r"] if a["parallel"] == 1 else a["r"] / a["parallel"]
     return [parts.resistor(name, *c, r)]
@@ -418,6 +435,19 @@ for _name, _macro in {
         _vr_tube,
         3,
         {"model": Param("device"), "operating_v": _P, "ref_current_a": _P},
+    ),
+    "speaker": Macro(
+        _speaker,
+        3,
+        {
+            "component": Param("raw"),
+            "distance_m": _P,
+            "width_m": _P,
+            "height_m": _P,
+            "depth_m": _P,
+            "offset_x_m": Param("physical", 0.0),
+            "offset_y_m": Param("physical", 0.0),
+        },
     ),
 }.items():
     register(_name, _macro)

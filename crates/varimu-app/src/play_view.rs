@@ -1384,6 +1384,8 @@ impl PlayView {
             .is_some_and(|d| d.id == "fairchild_670")
         {
             "Gain (GR)"
+        } else if m.spl_db.is_some() {
+            "Gain (Pa/V)"
         } else {
             "Gain"
         };
@@ -1403,6 +1405,16 @@ impl PlayView {
             0.0,
             format!("{:.1} dBFS", m.out_dbfs),
         );
+        if let Some(spl) = m.spl_db {
+            bar(
+                ui,
+                "Sound pressure",
+                spl,
+                60.0,
+                130.0,
+                format!("{spl:.1} dB SPL"),
+            );
+        }
         if let Some(cv) = m.cv_v {
             bar(ui, "Control voltage", -cv, 0.0, 60.0, format!("{cv:.2} V"));
         }

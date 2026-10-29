@@ -104,6 +104,30 @@ BL 5.53, Vas 54 L, Le 0.5 mH, Sd 490.9 cm^2, 93.7 dB) and the matching P12Q shee
 sheet has a response curve and an impedance curve (the latter without an ohm axis:
 shape only).
 
+Since component editor C3 (2026-10-29) the speaker is the component `P12R@1`
+(`config/components/p12r/1.yaml`): the sheet's Thiele-Small figures
+(`data/datasheets/published_points.yaml`, P12R), the voice coil's eddy-current pair and
+eight breakup modes fitted to both curves. The curves are vector paths in the PDF, read
+exactly (`scripts/digitize_jensen_p12r.py`, `data/datasheets/jensen_p12r.provenance.yaml`;
+local copy `data/datasheets/sources/jensen_p12r_2022.pdf`); the plot runs to 20 kHz
+though the page clips it at 8.5 kHz. The response was measured on the IEC 60268-5
+(DIN 45575) standard baffle, 1650 x 1350 mm with the driver 225 / 150 mm off its centre
+lines: web: https://psqca.com.pk/cs/newitems2021/electronics/28-PS%20IEC%2060268-5-2014_FINAL.pdf
+(PS: IEC 60268-5/2014, Figure 2), the size also in Klippel's "The infinite baffle", web:
+https://www.klippel.de/fileadmin/klippel/Files/News/ALMA2016%20-%20The%20infinite%20baffle.pdf.
+
+## Cabinet
+
+The tweed Deluxe's open-back pine combo cabinet, outer dimensions: a 1956 5E3 19 7/8 in
+wide, 16 1/4 in tall, 9 1/2 in deep (web:
+https://retrofret.com/products/fender-deluxe-5e3-tube-amplifier-1956-10761); a 1960 one
+20 x 15 3/4 x 9 1/2 in (web:
+https://retrofret.com/products/fender-deluxe-5e3-tube-amplifier-1960-8386); a
+reproduction cabinet 20 x 16 x 9.5 in (web: https://www.cedist.com/node/47924). The
+speaker's position on the baffle and the back panels' sizes weren't found: the speaker is
+taken as centred (provisional; its vertical offset is the genome parameter
+`fender_5e3.speaker.offset_y_m`) and the back as fully open (the panels aren't modelled).
+
 ## Tube datasheets (all with curves to digitize)
 
 Digitized and fitted 2026-10-29 (B9 step 2): local copies in `data/datasheets/sources/`,

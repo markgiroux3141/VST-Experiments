@@ -4,10 +4,12 @@
 
 A unit is the circuit file with the genome's overrides (no setup procedure: the 5E3 has
 no trims). Levels are volts at the input jack (the circuit's full scale: 0 dBFS is 1 V
-peak, a hot pickup) and at the speaker's terminals (`out`); power is what the speaker's
-electrical equivalent takes (`speaker_power_w`: from v(out) and the load's admittance,
-the file's linear Re, Le and motional RLC), with the 8 ohm nominal figure V^2 / 8 beside
-it. The
+peak, a hot pickup), at the speaker's terminals (`spk`) and, since component editor C3,
+the sound pressure the circuit outputs (`out`: 1 m on axis in front of the P12R in its
+cabinet). Gain, THD, power, sag and aliasing are the terminal voltage's (comparable with
+B9's figures); power is what the speaker takes (`speaker_power_w`: from v(spk) and the
+speaker component's electrical admittance, varimu.circuit.ac on its driver elements), with
+the 8 ohm nominal figure V^2 / 8 beside it. The
 bright channel is input 1 of its pair (input_jack 1), the normal one input 3; the other
 channel's volume is at 0. Sections:
 
@@ -17,7 +19,8 @@ channel's volume is at 0. Sections:
   oscillation riding on it);
 - gain: 1 kHz at SMALL_V, each channel at each volume in VOLUMES (V/V, dB);
 - response: the small-signal response (a multitone, MULTI_V per tone) at half volume,
-  each channel at each tone setting in TONE_SETTINGS, out / in (dB);
+  each channel at each tone setting in TONE_SETTINGS: the speaker's volts / in (dB), and
+  the sound pressure / in (dB re 1 Pa/V, `response_pressure`);
 - distortion: 1 kHz from DIST_DBV_PEAK in (dB re 1 V peak) on the bright channel at
   DIST_VOLUMES: THD, H2 / H3, the speaker's power; the clipping onset (the input and
   power where THD first reaches ONSET_THD_PCT) and the most power;
@@ -30,9 +33,8 @@ channel's volume is at 0. Sections:
   mains sidebands (+-HARMONIC_GUARD_HZ), re the harmonics' power. Hum intermodulation
   further out counts as aliasing too: compare qualities, not the absolute figure.
 
-Results: reports/units/<name>/report.json, gain.png, response.png, distortion.png,
-sag.png, aliasing.png. Not modelled: noise (B5), the physical speaker (C3: until then
-the speaker's terminal voltage serves for checks only, the user's decision).
+Results: reports/units/<name>/report.json, gain.png, response.png,
+response_pressure.png, distortion.png, sag.png, aliasing.png. Not modelled: noise (B5).
 """
 
 from __future__ import annotations
@@ -47,8 +49,10 @@ from typing import Any
 
 import numpy as np
 
-from varimu.circuit import spec
+from varimu.circuit import ac, parts, spec
+from varimu.circuit.ir import GROUND
 from varimu.config import REPO_ROOT
+from varimu.devices.library import load_speaker
 from varimu.measure import generic, metrics
 from varimu.sim import runner
 from varimu.sim.io import TransientSettings, full_scale
@@ -82,7 +86,8 @@ DIST_DBV_PEAK = tuple(float(x) for x in np.arange(-48.0, 1.0, 3.0))
 DIST_VOLUMES = (0.25, 0.5, 1.0)
 ONSET_THD_PCT = 1.0
 
-SPEAKER = ("spk_re_ohm", "spk_le_h", "spk_res_ohm", "spk_lces_h", "spk_cmes_f")
+SPEAKER_PARAM = "speaker_model"  # the circuit's speaker component version
+P_REF_PA = 20e-6
 
 SAG_V, SAG_VOLUME = 0.5, 0.75
 SAG_HZ = (82.4, 1000.0)  # the guitar's low E, and a tone
@@ -135,28 +140,34 @@ def burst(f_hz: float, fs: int) -> np.ndarray:
     return x
 
 
+@functools.cache
+def _speaker_admittance(component: str, f_key: tuple[float, ...]) -> np.ndarray:
+    s = load_speaker(component)
+    drv, _ = parts.speaker_driver("SPK", "spk", GROUND, s)
+    f = np.asarray(f_key, float)
+    y = np.full(len(f), 1 / s.re_ohm, complex)  # DC: the voice coil's resistance
+    ac_f = f > 0
+    y[ac_f] = 1 / ac.solve(drv, f[ac_f], ("spk", GROUND), ["spk"])["spk"]
+    return y
+
+
 def speaker_admittance(p: Mapping[str, Any], f_hz: np.ndarray) -> np.ndarray:
-    """The speaker's electrical equivalent (the circuit's `RSPK_E` .. `CSPK_M`) as an
-    admittance: Re + jw Le in series with Res || Lces || Cmes."""
-    jw = 2j * np.pi * np.asarray(f_hz, float)
-    with np.errstate(divide="ignore", invalid="ignore"):
-        y_m = 1 / p["spk_res_ohm"] + np.where(jw == 0, np.inf, 1 / (jw * p["spk_lces_h"]))
-    y_m = y_m + jw * p["spk_cmes_f"]
-    z = p["spk_re_ohm"] + jw * p["spk_le_h"] + np.where(np.isinf(y_m), 0.0, 1 / y_m)
-    return 1 / z
+    """The speaker's electrical admittance (its component's driver elements: the voice
+    coil and the motional network with the breakup modes; the readout draws nothing)."""
+    return _speaker_admittance(str(p[SPEAKER_PARAM]), tuple(np.asarray(f_hz, float)))
 
 
 def speaker_power_w(r: runner.Render, n: int) -> float:
     """Mean power into the speaker over the last n samples (a whole number of the tone's
     periods): sum over bins of |V|^2 Re(Y), the load being linear."""
-    v = r.vectors["v(out)"][-n:]
+    v = r.vectors["v(spk)"][-n:]
     spec = np.fft.rfft(v) / n
     f = np.fft.rfftfreq(n, 1 / r.sample_rate)
     w = np.full(len(f), 2.0)  # each bin's power counts twice (its negative frequency) ...
     w[0] = 1.0
     if n % 2 == 0:
         w[-1] = 1.0  # ... but DC's and Nyquist's
-    y = speaker_admittance({k: float(r.meta["params"][k]) for k in SPEAKER}, f)
+    y = speaker_admittance(r.meta["params"], f)
     return float(np.sum(w * np.abs(spec) ** 2 * y.real))
 
 
@@ -168,13 +179,14 @@ def input_v(job: runner.RenderJob) -> np.ndarray:
 def tone_row(r: runner.Render, job: runner.RenderJob, f_hz: float = 1000.0) -> dict[str, Any]:
     fs = r.sample_rate
     n = int(MEASURE_S * fs)
-    out, inp = r.vectors["v(out)"][-n:], input_v(job)[-n:]
+    out, inp = r.vectors["v(spk)"][-n:], input_v(job)[-n:]
     h = metrics.harmonics(out, f_hz, fs)
     a1_in = metrics.harmonics(inp, f_hz, fs).amps[0]
     v_rms = float(np.sqrt(np.mean((out - np.mean(out)) ** 2)))
     return {
         "in_v_peak": round(float(a1_in), 6),
         "out_v_rms": round(v_rms, 4),
+        "spl_db": spl_db(r.vectors["v(out)"][-n:]),
         "gain_db": round(float(20 * np.log10(h.amps[0] / a1_in)), 2),
         "thd_pct": round(100 * h.thd, 4),
         "h2_db": round(h.db(2), 1),
@@ -184,6 +196,12 @@ def tone_row(r: runner.Render, job: runner.RenderJob, f_hz: float = 1000.0) -> d
         "spur": {"db": round(h.spur_db, 1), "hz": h.spur_hz},
         "harmonics": h,
     }
+
+
+def spl_db(p: np.ndarray) -> float:
+    """The rms sound pressure level of `p` (pascals), dB SPL."""
+    rms = float(np.sqrt(np.mean((p - np.mean(p)) ** 2)))
+    return round(20 * float(np.log10(max(rms, 1e-12) / P_REF_PA)), 1)
 
 
 def _clean(row: Mapping[str, Any]) -> dict:
@@ -219,14 +237,17 @@ def screen(genome: Mapping[str, Any], s: TransientSettings) -> tuple[dict, dict]
     }
     info = {
         "idle_out_dbfs": checks["idle_quiet"]["value"],
-        "idle_out_mv_rms": round(1e3 * float(np.std(idle.vectors["v(out)"][a:b])), 3),
+        "idle_out_mv_rms": round(1e3 * float(np.std(idle.vectors["v(spk)"][a:b])), 3),
+        "idle_spl_db": spl_db(idle.vectors["v(out)"][a:b]),
         "nominal": {"overrides": nominal_ov, **_clean(row)},
         "idle_v": reported,
     }
     return checks, info
 
 
-def response_db(r: runner.Render, job: runner.RenderJob) -> np.ndarray:
+def response_db(r: runner.Render, job: runner.RenderJob, node: str = "spk") -> np.ndarray:
+    """v(node) / input per tone (dB): the speaker's volts, or with node "out" the
+    pressure (dB re 1 Pa/V)."""
     fs = r.sample_rate
     k, n = int(PRE_S * fs), int(WIN_S * fs)
     bins = np.round(TONES * WIN_S).astype(int)
@@ -234,7 +255,7 @@ def response_db(r: runner.Render, job: runner.RenderJob) -> np.ndarray:
     def at(w):
         return np.fft.rfft(w[k : k + n])[bins]
 
-    return 20 * np.log10(np.abs(at(r.vectors["v(out)"]) / at(input_v(job))))
+    return 20 * np.log10(np.abs(at(r.vectors[f"v({node})"]) / at(input_v(job))))
 
 
 def onset(rows: list[dict]) -> dict[str, Any]:
@@ -276,7 +297,7 @@ def sag(r: runner.Render) -> dict[str, Any]:
             "change_pct": round(100 * drop / idle, 2),
             "recover_63_s": round(float(back[0] / fs), 3) if len(back) else None,
         }
-    y = r.vectors["v(out)"]
+    y = r.vectors["v(spk)"]
     w = int(0.05 * fs)
     first = float(np.sqrt(np.mean(y[n0 + int(0.03 * fs) : n0 + int(0.03 * fs) + w] ** 2)))
     last = float(np.sqrt(np.mean(y[n1 - w - int(0.01 * fs) : n1 - int(0.01 * fs)] ** 2)))
@@ -287,7 +308,7 @@ def sag(r: runner.Render) -> dict[str, Any]:
 def alias_spectrum(r: runner.Render) -> tuple[np.ndarray, np.ndarray]:
     fs = r.sample_rate
     n = int(WIN_S * fs)
-    y = r.vectors["v(out)"][-n:]
+    y = r.vectors["v(spk)"][-n:]
     y = y - np.mean(y)
     w = np.blackman(n)
     return np.fft.rfftfreq(n, 1 / fs), np.abs(np.fft.rfft(y * w)) ** 2
@@ -371,13 +392,22 @@ def run(
     report["gain"] = {"in_v_peak": SMALL_V, "f_hz": 1000.0, **gain}
 
     resp: dict[str, Any] = {c: {} for c in CHANNELS}
+    resp_p: dict[str, Any] = {c: {} for c in CHANNELS}
     for c, t in resp_keys:
-        resp[c][str(t)] = np.round(response_db(*next(renders)), 3).tolist()
+        r_, j_ = next(renders)
+        resp[c][str(t)] = np.round(response_db(r_, j_), 3).tolist()
+        resp_p[c][str(t)] = np.round(response_db(r_, j_, "out"), 3).tolist()
     report["response"] = {
         "volume": NOMINAL_VOLUME,
         "tones_hz": TONES.tolist(),
         "in_v_peak_per_tone": MULTI_V,
         **resp,
+    }
+    report["response_pressure"] = {
+        "volume": NOMINAL_VOLUME,
+        "tones_hz": TONES.tolist(),
+        "unit": "dB re 1 Pa per V in (1 m on axis)",
+        **resp_p,
     }
 
     dist: dict[str, Any] = {}
@@ -466,6 +496,21 @@ def _plots(out_dir: Path, report: Mapping[str, Any], traces: dict, spectra: dict
     fig.savefig(out_dir / "response.png", dpi=110)
     plt.close(fig)
 
+    rp = report["response_pressure"]
+    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), sharey=True)
+    for ax, c in zip(axes, CHANNELS, strict=True):
+        for t, db in rp[c].items():
+            ax.semilogx(f, db, label=f"tone {t}")
+        ax.set_title(f"{c} channel, volume {rp['volume']}: sound pressure at 1 m")
+        ax.set_xlim(30, 20000)
+        ax.grid(True, which="both", alpha=0.3)
+        ax.set_xlabel("Hz")
+        ax.legend(fontsize=8)
+    axes[0].set_ylabel("pressure / input V (dB re 1 Pa/V)")
+    fig.tight_layout()
+    fig.savefig(out_dir / "response_pressure.png", dpi=110)
+    plt.close(fig)
+
     d = report["distortion"]
     fig, (a1, a2) = plt.subplots(1, 2, figsize=(12, 4.5))
     for v in DIST_VOLUMES:
@@ -490,13 +535,13 @@ def _plots(out_dir: Path, report: Mapping[str, Any], traces: dict, spectra: dict
     for j, (key, r) in enumerate(traces.items()):
         fs = r.sample_rate
         n = round(fs / float(r.meta["params"]["mains_hz"]))
-        t = np.arange(len(r.vectors["v(out)"])) / fs
+        t = np.arange(len(r.vectors["v(spk)"])) / fs
         for i, node in enumerate(SAG_NODES):
             axes[i, j].plot(t, smoothed(r.vectors[f"v({node})"], n))
             axes[i, j].set_ylabel(f"{node} (V)")
             axes[i, j].grid(True, alpha=0.3)
-        axes[-1, j].plot(t, r.vectors["v(out)"], lw=0.3)
-        axes[-1, j].set_ylabel("out (V)")
+        axes[-1, j].plot(t, r.vectors["v(spk)"], lw=0.3)
+        axes[-1, j].set_ylabel("speaker (V)")
         axes[-1, j].set_xlabel("s")
         axes[0, j].set_title(f"Burst {key.replace('_', ' ')}, {SAG_V} V peak, volume {SAG_VOLUME}")
     fig.tight_layout()

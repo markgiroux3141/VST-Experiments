@@ -76,19 +76,23 @@ fn bad_circuit_files_are_refused_at_load() {
     assert!(err.contains("values.r2: needs a `source`"), "{err}");
 }
 
+/// The 5E3's output: pascals at full scale (its file's `output_pascals_peak`).
+const FENDER_5E3_PASCALS: f64 = 50.0;
+
 #[test]
 fn full_scale_is_read_and_checked() {
     let lib = lib();
     let load = |name: &str| {
         spec::load_circuit(&spec::circuit_path(lib.config_dir(), name).unwrap()).unwrap()
     };
-    // The 5E3 takes a pickup's volts and gives the speaker's (spec.py, `full_scale`); the
-    // others use sim_settings' for both.
+    // The 5E3 takes a pickup's volts and gives the sound pressure in front of its speaker
+    // (spec.py, `full_scale`); the others use sim_settings' for both.
     assert_eq!(
         load("fender_5e3").full_scale,
         Some(spec::FullScale {
             input_v: 1.0,
-            output_v: 60.0
+            output_v: FENDER_5E3_PASCALS,
+            output_pascals: true,
         })
     );
     assert_eq!(load("fairchild_670").full_scale, None);
@@ -109,6 +113,10 @@ fn full_scale_is_read_and_checked() {
         (
             "full_scale:\n  input_volts_peak: {value: 1.0, source: x}\n  output_volts_peak: {value: 0, source: x}",
             "full_scale.output_volts_peak: value 0 is not a positive number",
+        ),
+        (
+            "full_scale:\n  input_volts_peak: {value: 1.0, source: x}\n  output_volts_peak: {value: 9, source: x}\n  output_pascals_peak: {value: 9, source: x}",
+            "full_scale: needs exactly input_volts_peak and one of",
         ),
     ];
     for (text, message) in cases {

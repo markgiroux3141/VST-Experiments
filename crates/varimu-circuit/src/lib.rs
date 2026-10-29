@@ -27,6 +27,7 @@ pub mod importer;
 pub mod json;
 pub mod parts;
 pub mod preflight;
+pub mod speaker;
 pub mod spec;
 pub mod symbols;
 pub mod values;

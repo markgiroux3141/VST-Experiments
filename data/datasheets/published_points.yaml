@@ -203,3 +203,27 @@
   max_ratings: {vinv_v: 1400, iap_a: 0.440, iap_transient_a: 2.5}
   heater: {v: 5.0, a: 2.0}   # filament (directly heated cathode)
   pins: "2, 8 filament; 4 plate 2; 6 plate 1 (5T)"
+
+"P12R":
+  source: "Jensen P12R (reissue) specification sheet, 2022-03-02, p.1 'Thiele-Small Parameters' and 'Electrical Characteristics', 8 ohm column; local copy sources/jensen_p12r_2022.pdf (web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf)"
+  thiele_small:
+    re_ohm: 6.05
+    fs_hz: 80.0
+    qms: 13.07
+    qts: 2.1
+    qes: 2.50
+    mms_kg: 25.2e-3
+    cms_m_per_n: 157.0e-6
+    bl_tm: 5.53
+    vas_m3: 54.0e-3
+    xmax_m: 1.0e-3        # +-1 mm
+    eta0_pct: 1.56
+    sd_m2: 490.9e-4
+    res_ohm: 39           # "losses electrical resistance": BL^2 / Rms
+    le_h_1khz: 0.5e-3
+  nominal_impedance_ohm: 8
+  rated_power_w: 25
+  sensitivity_db_1w_1m: 93.7
+  voice_coil_diameter_m: 25.0e-3
+  flux_density_t: 0.96
+  cone: "paper; integrated paper surround; solid paper dust dome; alnico magnet, 200 g"

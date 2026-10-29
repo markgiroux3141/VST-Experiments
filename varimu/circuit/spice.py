@@ -56,6 +56,7 @@ from varimu.circuit.ir import (
     IRError,
     Resistor,
     SineSource,
+    Vccs,
     VoltageSource,
     Winding,
     element_nodes,
@@ -96,6 +97,8 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
             f"{el.name} {el.pos} {el.neg} dc {num(el.at(0.0))} sin({num(el.offset_v)} "
             f"{num(el.amplitude_v)} {num(el.freq_hz)} 0 0 {num(el.phase_deg)})"
         )
+    if isinstance(el, Vccs):
+        return f"{el.name} {el.pos} {el.neg} {el.ctrl_pos} {el.ctrl_neg} {num(el.gm_s)}"
     if isinstance(el, Device):
         return f"{el.name} {' '.join(el.nodes)} {instance_target(models[el.model])}"
     raise TypeError(type(el))

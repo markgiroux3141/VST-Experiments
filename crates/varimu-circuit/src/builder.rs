@@ -18,6 +18,7 @@ use circuitsim::ir::{
 
 use crate::devices::Library;
 use crate::parts::{self, CoreSpec, Instance, WindingSpec};
+use crate::speaker::{self, Cabinet};
 use crate::spec::{CircuitSpec, Params};
 use crate::yaml::{Map, Value};
 use crate::{Error, derived, versions};
@@ -223,7 +224,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 16] = [
+const MACROS: [&str; 17] = [
     "R",
     "C",
     "L",
@@ -240,6 +241,7 @@ const MACROS: [&str; 16] = [
     "transformer",
     "bridge",
     "vr_tube",
+    "speaker",
 ];
 
 fn macro_of(kind: &str) -> Macro {
@@ -317,6 +319,19 @@ fn macro_of(kind: &str) -> Macro {
                 p("model", Device),
                 p("operating_v", Physical),
                 p("ref_current_a", Physical),
+            ],
+            false,
+        ),
+        "speaker" => (
+            Some(3),
+            vec![
+                p("component", Raw),
+                p("distance_m", Physical),
+                p("width_m", Physical),
+                p("height_m", Physical),
+                p("depth_m", Physical),
+                Param("offset_x_m", Physical, Some(Value::Float(0.0))),
+                Param("offset_y_m", Physical, Some(Value::Float(0.0))),
             ],
             false,
         ),
@@ -587,8 +602,34 @@ fn expand(
                 f("ref_current_a")?,
             )
         }
+        "speaker" => return speaker_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
+}
+
+fn speaker_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.speaker(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let f = |k: &str| ctx.float(&format!("{name}.{k}"), &a[k]);
+    let cab = Cabinet {
+        width_m: f("width_m")?,
+        height_m: f("height_m")?,
+        depth_m: f("depth_m")?,
+        offset_x_m: f("offset_x_m")?,
+        offset_y_m: f("offset_y_m")?,
+    };
+    let distance = f("distance_m")?;
+    Ok(speaker::speaker(
+        name, &nodes[0], &nodes[1], &nodes[2], &model, &cab, distance,
+    ))
 }
 
 fn switch(

@@ -6,6 +6,7 @@
   "input": "in",
   "probes": [
    "out",
+   "spk",
    "j1b",
    "j1n",
    "g1b",
@@ -40,9 +41,9 @@
     "value": 1.0,
     "source": "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)"
    },
-   "output_volts_peak": {
-    "value": 60.0,
-    "source": "derived: the speaker voltage's peak, 53.6 V (production render, 1 kHz at 1 V peak into bright input 1, volume 0.5, 2026-10-29), rounded up for headroom"
+   "output_pascals_peak": {
+    "value": 50.0,
+    "source": "derived: the pressure's peak, 40.0 Pa (production render 2026-10-29: the guitar take's loudest 8 s at Play's -11.5 dBFS into bright input 1, volume 1.0), rounded up for headroom"
    }
   },
   "controls": {
@@ -156,6 +157,35 @@
     "value": 3e-10,
     "genome": "fender_5e3.ot.winding_capacitance_f",
     "source": "provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF)"
+   },
+   "speaker_model": {
+    "value": "P12R@1",
+    "source": "web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (the reissue's sheet; the component's fit)"
+   },
+   "listen_distance_m": {
+    "value": 1.0,
+    "source": "the user's choice (2026-10-29): 1 m on axis, the sheet's measuring distance and in the far field"
+   },
+   "cab_width_m": {
+    "value": 0.504825,
+    "source": "web: https://retrofret.com/products/fender-deluxe-5e3-tube-amplifier-1956-10761 (19 7/8 in wide, a 1956 5E3)"
+   },
+   "cab_height_m": {
+    "value": 0.41275,
+    "source": "web: same listing (16 1/4 in tall)"
+   },
+   "cab_depth_m": {
+    "value": 0.2413,
+    "source": "web: same listing (9 1/2 in deep); a 1960 example and a reproduction cabinet give 20 x 15 3/4..16 x 9 1/2 in (README)"
+   },
+   "cab_offset_x_m": {
+    "value": 0.0,
+    "source": "provisional: model knowledge (the speaker centred left to right on the baffle)"
+   },
+   "cab_offset_y_m": {
+    "value": 0.0,
+    "genome": "fender_5e3.speaker.offset_y_m",
+    "source": "provisional: model knowledge (the speaker about centred top to bottom on the baffle)"
    },
    "rectifier_tube": {
     "value": "5Y3GT@1",
@@ -1390,78 +1420,21 @@
     }
    }
   },
-  "RSPK_E": {
-   "symbol": "R",
-   "value": "6.05",
+  "SPK": {
+   "symbol": "Speaker",
+   "value": "speaker_model",
    "fields": {
-    "Param": "spk_re_ohm",
-    "Source": "web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (Re)",
-    "Tol": "none"
+    "distance_m": "listen_distance_m",
+    "width_m": "cab_width_m",
+    "height_m": "cab_height_m",
+    "depth_m": "cab_depth_m",
+    "offset_x_m": "cab_offset_x_m",
+    "offset_y_m": "cab_offset_y_m"
    },
    "units": {
     "1": {
-     "x": 303.53,
-     "y": 45.72,
-     "rot": 90
-    }
-   }
-  },
-  "LSPK_E": {
-   "symbol": "L",
-   "value": "500u",
-   "fields": {
-    "Param": "spk_le_h",
-    "Source": "web: same sheet (Le)"
-   },
-   "units": {
-    "1": {
-     "x": 314.96,
-     "y": 45.72,
-     "rot": 90
-    }
-   }
-  },
-  "RSPK_M": {
-   "symbol": "R",
-   "value": "31.55",
-   "fields": {
-    "Param": "spk_res_ohm",
-    "Source": "derived: BL 5.53, Mms 25.2 g, Fs 80 Hz, Qms 13.07 (same sheet): BL^2 / (2 pi Fs Mms / Qms)",
-    "Tol": "none"
-   },
-   "units": {
-    "1": {
-     "x": 322.58,
-     "y": 53.34
-    }
-   }
-  },
-  "LSPK_M": {
-   "symbol": "L",
-   "value": "4.801m",
-   "fields": {
-    "Param": "spk_lces_h",
-    "Source": "derived: Cms 157 um/N x BL^2 (same sheet)"
-   },
-   "units": {
-    "1": {
-     "x": 330.2,
-     "y": 53.34
-    }
-   }
-  },
-  "CSPK_M": {
-   "symbol": "C",
-   "value": "824u",
-   "fields": {
-    "Param": "spk_cmes_f",
-    "Source": "derived: Mms / BL^2 (same sheet)",
-    "Tol": "none"
-   },
-   "units": {
-    "1": {
-     "x": 337.82,
-     "y": 53.34
+     "x": 307.34,
+     "y": 48.26
     }
    }
   }
@@ -2501,82 +2474,28 @@
     45.72
    ],
    [
-    299.72,
+    302.26,
     45.72
    ]
   ],
   [
    [
-    307.34,
-    45.72
+    302.26,
+    50.8
    ],
    [
-    311.15,
-    45.72
-   ]
-  ],
-  [
-   [
-    322.58,
-    57.15
-   ],
-   [
-    322.58,
+    302.26,
     60.96
    ]
   ],
   [
    [
-    330.2,
-    57.15
+    313.69,
+    48.26
    ],
    [
-    330.2,
-    60.96
-   ]
-  ],
-  [
-   [
-    337.82,
-    57.15
-   ],
-   [
-    337.82,
-    60.96
-   ]
-  ],
-  [
-   [
-    318.77,
-    45.72
-   ],
-   [
-    337.82,
-    45.72
-   ],
-   [
-    337.82,
-    49.53
-   ]
-  ],
-  [
-   [
-    322.58,
-    45.72
-   ],
-   [
-    322.58,
-    49.53
-   ]
-  ],
-  [
-   [
-    330.2,
-    45.72
-   ],
-   [
-    330.2,
-    49.53
+    320.04,
+    48.26
    ]
   ],
   [
@@ -3029,22 +2948,15 @@
    "rot": 180
   },
   {
-   "name": "out",
+   "name": "spk",
    "x": 294.64,
    "y": 45.72,
    "rot": 90
   },
   {
-   "name": "spk_l",
-   "x": 307.34,
-   "y": 45.72,
-   "rot": 90
-  },
-  {
-   "name": "spk_m",
-   "x": 322.58,
-   "y": 45.72,
-   "rot": 90
+   "name": "out",
+   "x": 320.04,
+   "y": 48.26
   },
   {
    "name": "hv_a",
@@ -3171,15 +3083,7 @@
    "y": 63.5
   },
   {
-   "x": 322.58,
-   "y": 60.96
-  },
-  {
-   "x": 330.2,
-   "y": 60.96
-  },
-  {
-   "x": 337.82,
+   "x": 302.26,
    "y": 60.96
   },
   {

@@ -22,7 +22,10 @@ Conventions:
 - a transformer on a nonlinear core (Phase 2) is Windings on a core node,
   whose voltage is the flux density B (1 V = 1 mT, varimu.devices.core),
   plus a MagneticCore device from that node to ground (or a resistor, in
-  the core's linear limit). See Winding.
+  the core's linear limit). See Winding;
+- a Vccs is SPICE's G (component editor C3: a speaker's pressure readout senses
+  the cone's motion without loading it). A new element kind, not a new schema:
+  circuits without one write the same JSON.
 """
 
 from __future__ import annotations
@@ -141,6 +144,20 @@ class Winding:
 
 
 @dataclass(frozen=True)
+class Vccs:
+    """Voltage-controlled current source (SPICE G): a current
+    gm_s (v(ctrl_pos) - v(ctrl_neg)) flows from pos through the source to neg. Its
+    control draws no current."""
+
+    name: str
+    pos: str
+    neg: str
+    ctrl_pos: str
+    ctrl_neg: str
+    gm_s: float
+
+
+@dataclass(frozen=True)
 class Device:
     """An instance of a device model; nodes follow the model's PINS order."""
 
@@ -149,7 +166,17 @@ class Device:
     nodes: tuple[str, ...]
 
 
-Element = Resistor | Capacitor | Inductor | Coupling | VoltageSource | SineSource | Winding | Device
+Element = (
+    Resistor
+    | Capacitor
+    | Inductor
+    | Coupling
+    | VoltageSource
+    | SineSource
+    | Winding
+    | Vccs
+    | Device
+)
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
 
 PINS: dict[type, tuple[str, ...]] = {
@@ -168,6 +195,7 @@ _PREFIX = {
     VoltageSource: "V",
     SineSource: "V",
     Winding: "L",
+    Vccs: "G",
 }
 
 
@@ -183,6 +211,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.pos, el.neg)
     if isinstance(el, Winding):
         return (el.a, el.b, el.core)
+    if isinstance(el, Vccs):
+        return (el.pos, el.neg, el.ctrl_pos, el.ctrl_neg)
     if isinstance(el, Device):
         return el.nodes
     return ()
@@ -292,6 +322,12 @@ class CircuitIR:
                 _positive(f"{el.name}.area_m2", el.area_m2)
                 if el.core == GROUND or el.core in (el.a, el.b):
                     raise IRError(f"{el.name}: core node {el.core} must be its own node")
+            elif isinstance(el, Vccs):
+                if not (math.isfinite(el.gm_s) and el.gm_s != 0):
+                    raise IRError(f"{el.name}.gm_s = {el.gm_s} must be finite and nonzero")
+                for a, b in ((el.pos, el.neg), (el.ctrl_pos, el.ctrl_neg)):
+                    if a == b:
+                        raise IRError(f"{el.name}: both ends on node {a}")
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
@@ -319,6 +355,15 @@ class CircuitIR:
                         raise IRError(f"{el.name}: {ind} is not an inductor")
                 if el.l_a == el.l_b:
                     raise IRError(f"{el.name}: couples {el.l_a} to itself")
+
+        # A source's nodes need other elements: its control draws no current and its
+        # output alone would be a current into nothing.
+        others = {n for e in self.elements() if not isinstance(e, Vccs) for n in element_nodes(e)}
+        for el in self.elements():
+            if isinstance(el, Vccs):
+                for n in element_nodes(el):
+                    if n != GROUND and n not in others:
+                        raise IRError(f"{el.name}: node {n} has no other element")
 
         if GROUND not in nodes:
             raise IRError('no element connects to ground (node "0")')
@@ -435,6 +480,7 @@ _ELEMENT_KINDS = {
     "voltage_source": VoltageSource,
     "sine_source": SineSource,
     "winding": Winding,
+    "vccs": Vccs,
     "device": Device,
 }
 _MODEL_KINDS = {

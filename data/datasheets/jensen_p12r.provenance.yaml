@@ -1,0 +1,40 @@
+device: P12R
+document: "Jensen Loudspeakers, 12\" - 25 W Vintage Alnico Loudspeaker P12R - 8 ohm / 16 ohm, specification sheet"
+publisher: Jensen Loudspeakers (the reissue)
+date: "2022-03-02 (printed in the footer: 02/03/2022 - 19:18)"
+local_copy: sources/jensen_p12r_2022.pdf
+local_copy_sha256: 61df954363855c047c8022f966859438aecfb3a732b5898d3f0e859d2e657b19
+scan_source: "web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf"
+digitized_with: >-
+  scripts/digitize_jensen_p12r.py (PyMuPDF): the plot on page 2 is vector graphics, so each
+  curve's path vertices are the data, nothing traced. Axes by least squares on the grey grid
+  lines (22 vertical lines at 30 Hz-6 kHz, max residual 7e-6 decades) and the 11 tick labels
+  +55..+105 matched to horizontal grid lines (max residual 0.08 dB)
+digitized_by: Claude Code
+digitized_on: 2026-10-29
+files:
+  jensen_p12r_response.csv:
+    figure: "p.2, 'Frequency Response on IEC Baffle (DIN45575) @ 1W, 1 m': the red 'P12R - 8 ohm' curve"
+    columns: "f_hz, spl_db (dB SPL at 1 m; '1W' into the nominal 8 ohm, taken as 2.83 V)"
+    coverage: >-
+      20 Hz-20 kHz, 108 vertices. The page clips the plot at its right edge, 8527 Hz: the
+      vertices above it are in the file but were never printed (they look like measured data,
+      jagged, with a notch at 18 kHz). The fit weights them less (varimu.devices.speaker_fit)
+  jensen_p12r_impedance.csv:
+    figure: "p.2, '- Free Air Impedance': the red curve near the bottom, on the same dB SPL axis"
+    columns: "f_hz, trace_db (plot units: the axis has no ohm scale)"
+    coverage: >-
+      20 Hz-20 kHz, 67 vertices; above ~10 kHz a straight line through few points (looks
+      interpolated). The trace reads as kz 20 log10 |Z| + z0: with the sheet's Re and
+      Zmax = Re (1 + Qms / Qes), kz comes out 1.26 (8 ohm) and 1.24 (16 ohm curve), and the
+      gap between the two traces (5.95 dB of impedance) 1.26 again; the fit takes kz and z0 as
+      free parameters (the shape is what the curve gives)
+axis_calibration: "grid lines 30 Hz-6 kHz (log); ticks +55 to +105 dB every 5 dB"
+estimated_error: >-
+  The vertices are the plotting program's own points: the error is the measurement's, not
+  the digitizing's (axis calibration below 0.1 dB, 1e-5 decades). The measurement conditions
+  beyond the title (smoothing, baffle mounting) aren't printed.
+notes: >-
+  The Thiele-Small table (p.1) is in published_points.yaml (P12R). The IEC (DIN 45575) baffle's
+  dimensions are IEC 60268-5's (varimu.devices.speaker.IEC_BAFFLE). Fit:
+  varimu.devices.speaker_fit (`varimu fit-devices --only P12R`).

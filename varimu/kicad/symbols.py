@@ -316,6 +316,26 @@ _SYMBOLS: list[SymbolDef] = [
         toleranced=False,
         text=(3.302, 1.27, -1.27, "left"),
     ),
+    _macro(
+        "Speaker",
+        "speaker",
+        "LS",
+        "Speaker in its cabinet (varimu.devices.speaker): pin 1 +, 2 -, 3 the sound "
+        "pressure at the listening point (pascals as volts); Value is its component version",
+        (
+            Pin("1", "1", -5.08, 2.54, 0, 2.54),
+            Pin("2", "2", -5.08, -2.54, 0, 2.54),
+            Pin("3", "3", 6.35, 0, 180, 2.54),
+        ),  # fmt: skip
+        [
+            rect(-2.54, -1.524, 0, 1.524),
+            poly((0, 1.524), (3.81, 3.81), (3.81, -3.81), (0, -1.524), (0, 1.524)),
+        ],
+        "component",
+        ("distance_m", "width_m", "height_m", "depth_m", "offset_x_m", "offset_y_m"),
+        toleranced=False,
+        text=(0, 6.35, 4.826, "left"),
+    ),
 ]
 
 _DEVICE_FIELDS = ("Tol", "Model", "emission", "mu", "grid_contact_v", "parallel", "area",

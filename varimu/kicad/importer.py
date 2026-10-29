@@ -207,7 +207,10 @@ class _Importer:
                 getattr(self, f"_{sym.kind}")(c, sym)
             except _Fail as e:
                 self.errors.append(f"{ref} ({c.part}): {e}")
-        for ref, c in self.nl.components.items():  # netlist-level: unconnected pins
+        # Netlist-level: unconnected pins. A pin alone on the input or the heard output
+        # (`out`, e.g. a speaker's pressure pin) is connected: the render drives or reads it.
+        ends = (self.side.get("input", "in"), "out")
+        for ref, c in self.nl.components.items():
             sym = SYMBOLS.get(c.part)
             if sym is None or sym.kind in ("switch", "power"):
                 continue
@@ -217,7 +220,7 @@ class _Importer:
                     if (
                         net is not None
                         and self.net_size[net] == 1
-                        and (self.node_of[net] != self.side.get("input", "in"))
+                        and self.node_of[net] not in ends
                     ):
                         self.problems.append(f"unconnected: pin {pin} of {ref}")
 

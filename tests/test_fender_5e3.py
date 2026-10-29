@@ -37,11 +37,12 @@ def test_builds_and_every_value_is_sourced(deluxe):
     assert moved > 25
 
 
-def test_guitar_level_in_speaker_volts_out(deluxe):
-    # 0 dBFS is a hot pickup's ~1 V peak; the output reads the speaker voltage, with
-    # room for its hardest spikes (~54 V).
-    assert deluxe.full_scale == (1.0, 60.0)
-    assert builder.build(deluxe).full_scale == (1.0, 60.0)
+def test_guitar_level_in_sound_pressure_out(deluxe):
+    # 0 dBFS is a hot pickup's ~1 V peak; the output is the sound pressure 1 m in front of
+    # the speaker (component editor C3), with room for its peaks on a guitar take (40 Pa).
+    assert deluxe.full_scale == (1.0, 50.0)
+    assert deluxe.full_scale_unit == "Pa"
+    assert builder.build(deluxe).full_scale == (1.0, 50.0)
     # A drawing made from it keeps the convention (the KiCad export's sidecar, which
     # the editor's layouts start from).
     from varimu.kicad.export import _Exporter

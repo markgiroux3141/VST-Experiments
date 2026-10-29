@@ -86,6 +86,7 @@ impl Circuit {
         self.spec.full_scale.unwrap_or(FullScale {
             input_v: s.full_scale_volts_peak,
             output_v: s.full_scale_volts_peak,
+            output_pascals: false,
         })
     }
 
@@ -115,6 +116,11 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::VoltageSource(v) => ("VoltageSource", &v.name, vec![&v.pos, &v.neg]),
             Element::SineSource(v) => ("SineSource", &v.name, vec![&v.pos, &v.neg]),
             Element::Winding(w) => ("Winding", &w.name, vec![&w.a, &w.b]),
+            Element::Vccs(g) => (
+                "Vccs",
+                &g.name,
+                vec![&g.pos, &g.neg, &g.ctrl_pos, &g.ctrl_neg],
+            ),
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
         };
         elements.insert((kind, name.to_string()));
@@ -151,10 +157,13 @@ pub fn make_loop(x: &[f64], rate: u32) -> Vec<f64> {
 /// One block's levels.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Meter {
-    /// The circuit's gain, output volts vs input volts, dB (rms).
+    /// The circuit's gain, output volts (or pascals) vs input volts, dB (rms).
     pub gain_db: f64,
     /// Output level, dBFS (rms of a sine of that peak: rms * sqrt 2).
     pub out_dbfs: f64,
+    /// The sound pressure level, dB SPL (rms re 20 uPa), when the output is a pressure
+    /// (a speaker's readout: the file's `output_pascals_peak`).
+    pub spl_db: Option<f64>,
     /// The 670's control voltage (mean over the block), V.
     pub cv_v: Option<f64>,
     /// Compute time / audio time of the block.
@@ -493,11 +502,14 @@ impl Live {
         }
         let rms = |a: &[f64]| (a.iter().map(|t| t * t).sum::<f64>() / a.len().max(1) as f64).sqrt();
         let (rms_in, rms_out) = (rms(x) + 1e-12, rms(&y) + 1e-12);
-        // The circuit's gain, V/V (0 dB more when the scales in and out differ).
+        // The circuit's gain, V/V or Pa/V (0 dB more when the scales in and out differ).
         let fs = self.run.fs;
         let meter = Meter {
             gain_db: 20.0 * (rms_out * fs.output_v / (rms_in * fs.input_v)).log10(),
             out_dbfs: 20.0 * (rms_out * 2f64.sqrt()).log10(),
+            spl_db: fs
+                .output_pascals
+                .then(|| 20.0 * (rms_out * fs.output_v / 20e-6).log10()),
             cv_v: cv
                 .filter(|c| !c.is_empty())
                 .map(|c| c.iter().sum::<f64>() / c.len() as f64),

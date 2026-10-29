@@ -221,6 +221,8 @@ fender_5e3:
     air_gap_m:              {min: 50.0e-6, max: 300.0e-6, unit: m, source: "provisional: model knowledge (an effective joint gap; with turns_half it sets the primary inductance, 3.67 H per half on the reproduction)"}
     leakage_h:              {min: 15.0e-3, max: 45.0e-3, unit: H, source: "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf (19.31 / 40.47 mH per primary half), widened"}
     winding_capacitance_f:  {min: 100.0e-12, max: 600.0e-12, unit: F, source: "provisional: model knowledge (push-pull primary halves)"}
+  speaker:
+    offset_y_m:             {min: -0.06, max: 0.06, unit: m, source: "provisional: model knowledge (a 12 in speaker on the 5E3's 16 1/4 in baffle sits within a few cm of its centre)"}
   psu:
     pt_hv_half_rms_v:       {min: 330.0, max: 380.0, unit: V, source: "web: README's reproductions (HV 330-0-330 to 380-0-380 V) and P-TGP-002's 350.7 V unloaded"}
     pt_r_half_ohm:          {min: 80.0, max: 160.0, unit: ohm, source: "provisional: model knowledge (around P-TGP-002's 116 ohm per half with the primary referred)"}

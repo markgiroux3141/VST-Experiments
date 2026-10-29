@@ -805,6 +805,15 @@ the next:
    version 1 in the 5E3.
 7. *The physical speaker* (C3): the 5E3 heard as sound pressure at a listening point
    in front of its speaker and open-back cabinet.
+   *Built 2026-10-29* (COMPONENT_EDITOR_PLAN.md, C3's status): `out` is the pressure 1 m
+   on axis in front of `P12R@1` in the 1956 cabinet's dimensions, `spk` the terminal
+   voltage; full scale 50 Pa. On the guitar take the 10-20 kHz share of the power falls by
+   ~24 dB against the terminal voltage. Into the component the step 4 profile moved where
+   the load did: gain at half volume 46.9 / 41.4 dB (was 45.5 / 40.0: the P12R's ~8 ohm at
+   1 kHz with its eddy currents against the equivalent circuit's 6.7), 1% THD at 30 mV in
+   (2.3 W), at most 15.5 W; sag and aliasing as before (aliasing still measured on the
+   terminal voltage). Open: the user's listening, and Play's load (1.61x real time at
+   draft-2x; options in C3's status).
 
 *Decided 2026-10-29 (the user's):* the 5E3 is heard through a physical speaker model
 (C3), not a cabinet impulse response; until C3 exists, the load voltage serves for
@@ -849,7 +858,8 @@ device the first user of the component milestone next to it:
 4. **C3's model with B9 step 7** (reordered 2026-10-29, the user's call: the 5E3's
    sound isn't judged until it is heard through its speaker; C3 doesn't need C2): the
    physical speaker as a component, its pressure the heard output; the speaker's view
-   in the Components view waits for C2's.
+   in the Components view waits for C2's. *Model built 2026-10-29; open: heard, and
+   Play's speed (C3's status).*
 5. **`6V6GT@2`** (B9 step 2's beam-tetrode follow-up), heard against `@1` through the
    speaker.
 6. **C2 with B9 step 6:** the transformer designer (and the Components view, the

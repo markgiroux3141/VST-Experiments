@@ -4,11 +4,11 @@ title: Fender 5E3 Deluxe
 
 input: in
 
-probes: [out, j1b, j1n, g1b, g1n, k1, p1b, p1n, vb, vn, g2, k2, p2, g3, p3, k3, kj, oa, ob, g6a, g6b, p6a, p6b, k6, b1, b2, b3, hva, hvb]
+probes: [out, spk, j1b, j1n, g1b, g1n, k1, p1b, p1n, vb, vn, g2, k2, p2, g3, p3, k3, kj, oa, ob, g6a, g6b, p6a, p6b, k6, b1, b2, b3, hva, hvb]
 
 full_scale:
   input_volts_peak: {value: 1.0, source: 'web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)'}
-  output_volts_peak: {value: 60.0, source: 'derived: the speaker voltage''s peak, 53.6 V (production render, 1 kHz at 1 V peak into bright input 1, volume 0.5, 2026-10-29), rounded up for headroom'}
+  output_pascals_peak: {value: 50.0, source: 'derived: the pressure''s peak, 40.0 Pa (production render 2026-10-29: the guitar take''s loudest 8 s at Play''s -11.5 dBFS into bright input 1, volume 1.0), rounded up for headroom'}
 
 controls:
   input_jack: {value: 1, choices: [1, 2, 3, 4], unit: position, source: 'sch: two inputs per channel', notes: 'the jack the guitar is plugged into: 1 bright input 1, 2 bright input 2, 3 normal input 1, 4 normal input 2 (input 1: both 68K in parallel; input 2: the 68K / 68K divider)'}
@@ -31,6 +31,13 @@ values:
   ot_gap_m: {value: 0.000145, genome: fender_5e3.ot.air_gap_m, source: 'derived: gives 3.67 H per primary half in the core''s linear limit with ot_turns_half (the reproduction''s measured inductance at 1 kHz, 1 V, same sheet). An effective joint gap: it also stands in for the lower initial permeability of the era''s non-oriented steel'}
   ot_leakage_h: {value: 0.0299, genome: fender_5e3.ot.leakage_h, source: 'derived: the mean of the reproduction''s leakage per primary half, 40.47 / 19.31 mH (same sheet)', notes: the format splits leakage evenly between the windings; the measured asymmetry isn't modeled}
   ot_c_half_f: {value: 3.0e-10, genome: fender_5e3.ot.winding_capacitance_f, source: 'provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF)'}
+  speaker_model: {value: P12R@1, source: 'web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (the reissue''s sheet; the component''s fit)'}
+  listen_distance_m: {value: 1.0, source: 'the user''s choice (2026-10-29): 1 m on axis, the sheet''s measuring distance and in the far field'}
+  cab_width_m: {value: 0.504825, source: 'web: https://retrofret.com/products/fender-deluxe-5e3-tube-amplifier-1956-10761 (19 7/8 in wide, a 1956 5E3)'}
+  cab_height_m: {value: 0.41275, source: 'web: same listing (16 1/4 in tall)'}
+  cab_depth_m: {value: 0.2413, source: 'web: same listing (9 1/2 in deep); a 1960 example and a reproduction cabinet give 20 x 15 3/4..16 x 9 1/2 in (README)'}
+  cab_offset_x_m: {value: 0.0, source: 'provisional: model knowledge (the speaker centred left to right on the baffle)'}
+  cab_offset_y_m: {value: 0.0, genome: fender_5e3.speaker.offset_y_m, source: 'provisional: model knowledge (the speaker about centred top to bottom on the baffle)'}
   rectifier_tube: {value: 5Y3GT@1, source: 'sch: 5Y3GT full-wave rectifier, B+ from its filament; config/components/5y3gt/1.yaml (per section)'}
   passive_seed: {value: 0, genome: passives.seed, source: 'numerical: which set of parts a unit is built from'}
   passive_spread: {value: 0.0, genome: passives.spread, source: 'provisional: fraction of each part''s tolerance band its deviation spans (0 = every part at its printed value)'}
@@ -74,11 +81,6 @@ values:
   r_plate2_ohm: {value: 100000.0, source: 'sch: 100K plate load'}
   r_plate3_ohm: {value: 56000.0, source: 'sch: 56K plate load'}
   r_tail_ohm: {value: 56000.0, source: 'sch: 56K tail to ground'}
-  spk_cmes_f: {value: 0.000824, source: 'derived: Mms / BL^2 (same sheet)'}
-  spk_lces_h: {value: 0.004801, source: 'derived: Cms 157 um/N x BL^2 (same sheet)'}
-  spk_le_h: {value: 0.0005, source: 'web: same sheet (Le)'}
-  spk_re_ohm: {value: 6.05, source: 'web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (Re)'}
-  spk_res_ohm: {value: 31.55, source: 'derived: BL 5.53, Mms 25.2 g, Fs 80 Hz, Qms 13.07 (same sheet): BL^2 / (2 pi Fs Mms / Qms)'}
   tone_pot_ohm: {value: 1000000.0, source: 'sch: 1 MEG tone'}
   volume_pot_ohm: {value: 1000000.0, source: 'sch: 1 MEG volumes'}
 
@@ -172,13 +174,9 @@ sections:
   - title: output
     parts:
       CK6: {C: [k6, '0'], c: c_cathode6_f}
-      CSPK_M: {C: [spk_m, '0'], c: spk_cmes_f, tolerance: none}
-      LSPK_E: {L: [spk_l, spk_m], l: spk_le_h}
-      LSPK_M: {L: [spk_m, '0'], l: spk_lces_h}
       RK6: {R: [k6, '0'], r: r_cathode6_ohm}
-      RSPK_E: {R: [out, spk_l], r: spk_re_ohm, tolerance: none}
-      RSPK_M: {R: [spk_m, '0'], r: spk_res_ohm, tolerance: none}
-      T1: {transformer: {pa: {nodes: [p6a, b1], r: ot_r_half_a_ohm, c: ot_c_half_f}, pb: {nodes: [b1, p6b], r: ot_r_half_b_ohm, c: ot_c_half_f}, s: {nodes: [out, '0'], ratio: ot_sec_per_half, r: ot_r_sec_ohm}}, core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}, turns: ot_turns_half, leakage_h: ot_leakage_h}
+      SPK: {speaker: [spk, '0', out], component: speaker_model, distance_m: listen_distance_m, width_m: cab_width_m, height_m: cab_height_m, depth_m: cab_depth_m, offset_x_m: cab_offset_x_m, offset_y_m: cab_offset_y_m}
+      T1: {transformer: {pa: {nodes: [p6a, b1], r: ot_r_half_a_ohm, c: ot_c_half_f}, pb: {nodes: [b1, p6b], r: ot_r_half_b_ohm, c: ot_c_half_f}, s: {nodes: [spk, '0'], ratio: ot_sec_per_half, r: ot_r_sec_ohm}}, core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}, turns: ot_turns_half, leakage_h: ot_leakage_h}
       XV6A: {device: [p6a, b2, g6a, k6], model: V6A}
       XV6B: {device: [p6b, b2, g6b, k6], model: V6B}
   - title: power supply

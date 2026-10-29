@@ -24,6 +24,10 @@
 //! A [`SineSource`] is SPICE's `SIN` source (the mains, main plan Phase 3):
 //! the DC operating point takes it at its t = 0 value, as ngspice's
 //! transient operating point does.
+//!
+//! A [`Vccs`] is SPICE's `G` (component editor C3: a speaker's pressure
+//! readout, which senses the cone's motion without loading it). It is a new
+//! element kind, not a new schema: circuits without one write the same JSON.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -77,6 +81,7 @@ pub enum Element {
     VoltageSource(VoltageSource),
     SineSource(SineSource),
     Winding(Winding),
+    Vccs(Vccs),
     Device(Device),
 }
 
@@ -174,6 +179,20 @@ pub struct Winding {
     pub core: String,
     pub turns: f64,
     pub area_m2: f64,
+}
+
+/// Voltage-controlled current source (SPICE `G`): a current
+/// `gm_s (v(ctrl_pos) - v(ctrl_neg))` flows from `pos` through the source to
+/// `neg`. Its control draws no current.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Vccs {
+    pub name: String,
+    pub pos: String,
+    pub neg: String,
+    pub ctrl_pos: String,
+    pub ctrl_neg: String,
+    pub gm_s: f64,
 }
 
 /// An instance of a device model; `nodes` follow the model's pin order
@@ -348,6 +367,7 @@ impl Element {
             Element::VoltageSource(e) => &e.name,
             Element::SineSource(e) => &e.name,
             Element::Winding(e) => &e.name,
+            Element::Vccs(e) => &e.name,
             Element::Device(e) => &e.name,
         }
     }
@@ -362,6 +382,7 @@ impl Element {
             Element::VoltageSource(e) => vec![&e.pos, &e.neg],
             Element::SineSource(e) => vec![&e.pos, &e.neg],
             Element::Winding(e) => vec![&e.a, &e.b, &e.core],
+            Element::Vccs(e) => vec![&e.pos, &e.neg, &e.ctrl_pos, &e.ctrl_neg],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
         }
     }
@@ -484,6 +505,20 @@ impl CircuitIr {
                     }
                     'L'
                 }
+                Element::Vccs(e) => {
+                    if !(e.gm_s.is_finite() && e.gm_s != 0.0) {
+                        return err(format!(
+                            "{name}.gm_s = {} must be finite and nonzero",
+                            e.gm_s
+                        ));
+                    }
+                    for (a, b) in [(&e.pos, &e.neg), (&e.ctrl_pos, &e.ctrl_neg)] {
+                        if a == b {
+                            return err(format!("{name}: both ends on node {a}"));
+                        }
+                    }
+                    'G'
+                }
                 Element::Device(e) => {
                     let Some(m) = models.get(e.model.as_str()) else {
                         return err(format!("{name}: unknown model {}", e.model));
@@ -523,6 +558,23 @@ impl CircuitIr {
                 }
                 if c.l_a == c.l_b {
                     return err(format!("{}: couples {} to itself", c.name, c.l_a));
+                }
+            }
+        }
+
+        // A source's nodes need other elements: its control draws no current and
+        // its output alone would be a current into nothing.
+        let others: HashSet<&str> = self
+            .elements()
+            .filter(|e| !matches!(e, Element::Vccs(_)))
+            .flat_map(|e| e.nodes())
+            .collect();
+        for el in self.elements() {
+            if let Element::Vccs(g) = el {
+                for n in el.nodes() {
+                    if n != GROUND && !others.contains(n) {
+                        return err(format!("{}: node {n} has no other element", g.name));
+                    }
                 }
             }
         }

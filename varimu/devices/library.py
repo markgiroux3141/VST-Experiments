@@ -38,6 +38,7 @@ from varimu.devices.fit import (
     load_csv,
 )
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
+from varimu.devices.speaker import Speaker, speaker_from_data
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_spec
 
 DEVICE_DIR = versions.COMPONENT_DIR
@@ -114,7 +115,14 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return JunctionDiode(d["name"], d["is_a"], d["n"], d["rs_ohm"])
     if kind == "vacuum_diode":
         return VacuumDiode(d["name"], d["perveance"], d.get("smooth_v", 0.1))
+    if kind == "speaker":
+        raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
     raise ValueError(f"{name}: unknown device kind {kind!r}")
+
+
+def load_speaker(name: str, root: Path = DEVICE_DIR) -> Speaker:
+    """Speaker component `name` (`NAME@N`, or `NAME` for its latest version)."""
+    return speaker_from_data(_read(name, root), name)
 
 
 # --- Building --------------------------------------------------------------------
@@ -547,6 +555,54 @@ def build_5y3gt() -> dict[str, Any]:
     }
 
 
+def build_p12r() -> dict[str, Any]:
+    """The 5E3's speaker: the Jensen P12R reissue (8 ohm), its sheet's Thiele-Small figures
+    with the voice coil's eddy-current pair and eight breakup modes fitted to its response
+    and impedance curves (varimu.devices.speaker_fit)."""
+    from varimu.devices import speaker_fit
+
+    pub = _published()["P12R"]
+    ts = pub["thiele_small"]
+    fit = speaker_fit.fit(ts, speaker_fit.load_curves(DATASHEETS, "jensen_p12r"), "P12R")
+    s = fit.speaker
+    sheet = "web: " + pub["source"].split("(web: ")[1].rstrip(")")
+    return {
+        "name": "P12R",
+        "kind": "speaker",
+        "source": "fit: varimu.devices.speaker_fit on the Jensen P12R reissue sheet (2022), "
+        "8 ohm: its Thiele-Small table (data/datasheets/published_points.yaml P12R) and its "
+        "response (IEC baffle, 2.83 V, 1 m) and free-air impedance curves (digitized: "
+        "data/datasheets/jensen_p12r.provenance.yaml)",
+        "voice_coil": {
+            "re_ohm": s.re_ohm,
+            "le_h": s.le_h,
+            "l2_h": s.l2_h,
+            "r2_ohm": s.r2_ohm,
+            "source": f"Re: {sheet} (Re); Le, L2 || R2 (eddy-current 'LR-2' model): fit to the "
+            "impedance curve's shape and the response",
+        },
+        "moving_system": {
+            "mms_kg": s.mms_kg,
+            "cms_m_per_n": s.cms_m_per_n,
+            "rms_ns_per_m": s.rms_ns_per_m,
+            "bl_tm": s.bl_tm,
+            "sd_m2": s.sd_m2,
+            "source": f"{sheet} (Mms, Cms, BxL, Sd; Rms = 2 pi Fs Mms / Qms with Fs 80 Hz, "
+            "Qms 13.07): free-air figures, the air load included",
+        },
+        "modes": {
+            "list": [
+                {"mass_kg": m.mass_kg, "f_hz": m.f_hz, "q": m.q, "area_m2": m.area_m2}
+                for m in sorted(s.modes, key=lambda m: m.f_hz)
+            ],
+            "source": "fit: a modal expansion of the cone's breakup (signed radiating "
+            "shares, not ring geometry) to the response on the IEC baffle and the impedance "
+            "shape; modes from 300 Hz up, each at most the cone's area",
+        },
+        "fit_report": fit.report,
+    }
+
+
 BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
@@ -563,6 +619,7 @@ BUILDERS = {
     "12AY7": build_12ay7,
     "6V6GT": build_6v6gt,
     "5Y3GT": build_5y3gt,
+    "P12R": build_p12r,
 }
 
 REPORT_FOR = {
@@ -570,6 +627,7 @@ REPORT_FOR = {
     "12AY7": "12ay7_fit.png",
     "6V6GT": "6v6gt_fit.png",
     "5Y3GT": "5y3gt_fit.png",
+    "P12R": "p12r_fit.png",
 }
 
 
@@ -578,6 +636,18 @@ def plot_fit(name: str, root: Path = DEVICE_DIR) -> Path:
     from varimu.devices import plots
 
     path = REPORT_DIR / REPORT_FOR[name]
+    if name == "P12R":
+        from varimu.devices import speaker_fit
+
+        ref, text = versions.read_text(name, root)
+        meta = yaml.safe_load(text)["fit_report"]
+        return speaker_fit.plot_fit(
+            load_speaker(str(ref), root),
+            speaker_fit.load_curves(DATASHEETS, "jensen_p12r"),
+            meta,
+            path,
+            f"{ref}: the model against the Jensen sheet (IEC baffle, 2.83 V, 1 m)",
+        )
     dev = load_device(name, root)
     pub = _published()
     if name == "6386":

@@ -20,6 +20,9 @@
 //!   `v_a - v_b - turns area TESLA_PER_V du/dt = 0` (so `C` is not symmetric
 //!   here), and `-turns` in u's KCL row: the winding feeds `turns i` into the
 //!   core node, whose KCL is `sum(turns i)` = what the core device draws.
+//! - Voltage-controlled current source (SPICE `G`): `gm` in `G` from the
+//!   control's columns into the output's KCL rows (not symmetric), so the
+//!   control draws nothing.
 //! - Device (tube, diode, core): its interelectrode capacitances go into `C`, and
 //!   each junction diode gets SPICE's GMIN across it in `G` (ngspice puts
 //!   1e-12 S across every `D` junction). The nonlinear currents themselves are
@@ -289,6 +292,16 @@ impl Mna {
                         pins,
                         pin_names: model.pins(),
                     });
+                }
+                Element::Vccs(s) => {
+                    // gm (v_cp - v_cn) leaves `pos` and enters `neg`.
+                    for (row, sr) in [(node(&s.pos), 1.0), (node(&s.neg), -1.0)] {
+                        for (col, sc) in [(node(&s.ctrl_pos), 1.0), (node(&s.ctrl_neg), -1.0)] {
+                            if let (Some(i), Some(j)) = (row, col) {
+                                g.add(i, j, sr * sc * s.gm_s);
+                            }
+                        }
+                    }
                 }
                 Element::Coupling(_) => {}
             }

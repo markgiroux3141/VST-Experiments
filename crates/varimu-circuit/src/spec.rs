@@ -58,27 +58,39 @@ pub struct CircuitSpec {
 }
 
 /// Circuit volts peak at full scale: what a sample of 1.0 puts on the input node, and
-/// the `v(out)` that reads as 1.0 (spec.py's docstring, `full_scale`).
+/// the `v(out)` that reads as 1.0 (spec.py's docstring, `full_scale`). When `out` is a
+/// sound pressure (a `speaker` part's readout, pascals as volts), `output_v` is pascals
+/// and `output_pascals` says so (for display; every path scales by the number alike).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FullScale {
     pub input_v: f64,
     pub output_v: f64,
+    pub output_pascals: bool,
 }
 
-const FULL_SCALE_KEYS: [&str; 2] = ["input_volts_peak", "output_volts_peak"];
+const FULL_SCALE_OUTPUTS: [&str; 2] = ["output_volts_peak", "output_pascals_peak"];
 
 /// The `full_scale` block (None: absent, or an error pushed).
 fn full_scale(fs: Option<&Value>, errors: &mut Vec<String>) -> Option<FullScale> {
     let fs = fs.filter(|v| !v.is_null())?;
+    let outs: Vec<&str> = fs.as_map().map_or_else(Vec::new, |m| {
+        FULL_SCALE_OUTPUTS
+            .into_iter()
+            .filter(|k| m.contains(k))
+            .collect()
+    });
     let Some(m) = fs
         .as_map()
-        .filter(|m| m.len() == 2 && FULL_SCALE_KEYS.iter().all(|k| m.contains(k)))
+        .filter(|m| m.len() == 2 && m.contains("input_volts_peak") && outs.len() == 1)
     else {
-        errors.push(format!("full_scale: needs exactly {FULL_SCALE_KEYS:?}"));
+        errors.push(format!(
+            "full_scale: needs exactly input_volts_peak and one of {FULL_SCALE_OUTPUTS:?}"
+        ));
         return None;
     };
+    let keys = ["input_volts_peak", outs[0]];
     let mut out = [0.0; 2];
-    for (k, o) in FULL_SCALE_KEYS.iter().zip(&mut out) {
+    for (k, o) in keys.iter().zip(&mut out) {
         let n = errors.len();
         let e = m.get(k).unwrap();
         sourced(&format!("full_scale.{k}"), e, errors, false);
@@ -99,6 +111,7 @@ fn full_scale(fs: Option<&Value>, errors: &mut Vec<String>) -> Option<FullScale>
     Some(FullScale {
         input_v: out[0],
         output_v: out[1],
+        output_pascals: outs[0] == "output_pascals_peak",
     })
 }
 

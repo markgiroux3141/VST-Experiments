@@ -253,22 +253,15 @@ def output(sk: Sketch) -> None:
     sk.label("b1", (None, None), "left")
     sk.wire("W3.2", (None, 63.5))
     sk.ground((None, None))
-    # The speaker's electrical equivalent: Re + Le, then the motional RLC.
-    sk.place("RSPK_E", 64.77, 45.72, **H)
-    sk.place("LSPK_E", 76.2, 45.72, **H)
-    sk.wire("W3.1", (None, 45.72), "RSPK_E.1")
-    sk.label("out", (55.88, 45.72), "up")
-    sk.wire("RSPK_E.2", "LSPK_E.1")
-    sk.label("spk_l", (68.58, 45.72), "up")
-    for i, part in enumerate(("RSPK_M", "LSPK_M", "CSPK_M")):
-        x = 83.82 + 7.62 * i
-        sk.place(part, x, 53.34)
-        sk.wire(f"{part}.2", (None, 60.96))
-        sk.ground((None, None))
-    sk.wire("LSPK_E.2", (99.06, None), "CSPK_M.1")
-    sk.wire((83.82, 45.72), "RSPK_M.1")
-    sk.wire((91.44, 45.72), "LSPK_M.1")
-    sk.label("spk_m", (83.82, 45.72), "up")
+    # The speaker on the secondary; its third pin is the sound pressure at the listening
+    # point (`out`).
+    sk.place("SPK", 68.58, 48.26)
+    sk.wire("W3.1", (None, 45.72), "SPK.1")
+    sk.label("spk", (55.88, 45.72), "up")
+    sk.wire("SPK.2", (None, 60.96))
+    sk.ground((None, None))
+    sk.wire("SPK.3", (81.28, None))
+    sk.label("out", (None, None), "right")
 
 
 def power_supply(sk: Sketch) -> None:

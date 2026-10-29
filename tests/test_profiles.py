@@ -73,7 +73,7 @@ def test_eq_profile_measures_the_nominal_pultec(tmp_path, monkeypatch):
 
 
 def test_speaker_power_is_mean_v_times_i():
-    """amp_suite's speaker power from v(out) and the load's admittance equals mean(v i) of
+    """amp_suite's speaker power from v(spk) and the load's admittance equals mean(v i) of
     a periodic signal, the current from the admittance bin by bin."""
     from varimu.circuit.spec import circuit_path, load_circuit, resolve
     from varimu.measure import amp_suite
@@ -87,22 +87,24 @@ def test_speaker_power_is_mean_v_times_i():
 
     class R:
         sample_rate = fs
-        vectors = {"v(out)": v}
+        vectors = {"v(spk)": v}
         meta = {"params": p}
 
     assert amp_suite.speaker_power_w(R, n) == pytest.approx(float(np.mean(v * i)), rel=1e-9)
     z80 = abs(1 / amp_suite.speaker_admittance(p, np.array([80.0]))[0])
-    assert 35 < z80 < 40  # the P12R's resonance: Re + Res, 37.6 ohm
+    assert 35 < z80 < 40  # the P12R's resonance: Re (1 + Qms / Qes), 37.6 ohm
 
 
 def test_amp_profile_measures_the_nominal_5e3(tmp_path, monkeypatch):
-    """The 5E3's report (measured 2026-10-29): it passes its screen (B+1..3 within 0.5% of
-    the kit, idle -90 dBFS re 60 V); 1 kHz gain at half volume 45.5 dB bright, 40.0 normal
-    (the bright channel's .0005 around its volume), 60.8 / 60.6 dB at full; 1% THD at
-    28 mV peak in at half volume (1.8 W); at most ~13 W into the speaker; a full-drive
-    burst sags B+2 by ~10%, B+3 by ~8% (recovering in ~0.45 s, 22K x 16 uF), and lifts the
-    6V6 cathodes ~20%; aliasing of a hard-clipped 2902 Hz -40 dB at production, -31 at
-    draft, -8 at draft-1x."""
+    """The 5E3's report (measured 2026-10-29, into the P12R component since C3): it passes
+    its screen (B+1..3 within 0.5% of the kit, idle -94 dBFS re 50 Pa); 1 kHz gain at half
+    volume 46.9 dB bright, 41.4 normal (the bright channel's .0005 around its volume; 1.4 dB
+    above the equivalent circuit's: the P12R's ~8 ohm at 1 kHz with its eddy currents
+    against 6.7), 62.1 / 62.0 dB at full; 1% THD at 30 mV peak in at half volume (2.3 W);
+    at most ~15.5 W into the speaker; a full-drive burst sags B+2 by ~10%, B+3 by ~8%
+    (recovering in ~0.45 s, 22K x 16 uF), and lifts the 6V6 cathodes ~24%; aliasing of a
+    hard-clipped 2902 Hz (on the terminal voltage) -41 dB at production, -36 at draft,
+    -10 at draft-1x."""
     pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
     from varimu.measure import amp_suite
 
@@ -110,12 +112,12 @@ def test_amp_profile_measures_the_nominal_5e3(tmp_path, monkeypatch):
     r = amp_suite.run("nominal", {}, log=lambda _: None)
     assert r["plausible"], r["checks"]
     g = r["gain"]
-    assert g["bright"]["gain_db"][4] == pytest.approx(45.5, abs=1.0)
-    assert g["normal"]["gain_db"][4] == pytest.approx(40.0, abs=1.0)
+    assert g["bright"]["gain_db"][4] == pytest.approx(46.9, abs=1.0)
+    assert g["normal"]["gain_db"][4] == pytest.approx(41.4, abs=1.0)
     assert g["bright"]["gain_db"] == sorted(g["bright"]["gain_db"])
     half = r["distortion"]["0.5"]
     assert 0.02 < half["onset"]["in_v_peak"] < 0.04
-    assert 11.0 < half["max_power_w"] < 16.0
+    assert 13.0 < half["max_power_w"] < 18.0
     thd = [row["thd_pct"] for row in half["rows"]]
     assert thd[:10] == sorted(thd[:10])  # rising with level up to clipping
     sag = r["sag"]["1000_hz"]
