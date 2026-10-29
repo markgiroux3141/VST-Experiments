@@ -1,0 +1,3218 @@
+{
+ "format": "varimu-drawing",
+ "version": 1,
+ "circuit": {
+  "title": "Fender 5E3 Deluxe",
+  "input": "in",
+  "probes": [
+   "out",
+   "j1b",
+   "j1n",
+   "g1b",
+   "g1n",
+   "k1",
+   "p1b",
+   "p1n",
+   "vb",
+   "vn",
+   "g2",
+   "k2",
+   "p2",
+   "g3",
+   "p3",
+   "k3",
+   "kj",
+   "oa",
+   "ob",
+   "g6a",
+   "g6b",
+   "p6a",
+   "p6b",
+   "k6",
+   "b1",
+   "b2",
+   "b3",
+   "hva",
+   "hvb"
+  ],
+  "full_scale": {
+   "input_volts_peak": {
+    "value": 1.0,
+    "source": "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)"
+   },
+   "output_volts_peak": {
+    "value": 60.0,
+    "source": "derived: the speaker voltage's peak, 53.6 V (production render, 1 kHz at 1 V peak into bright input 1, volume 0.5, 2026-10-29), rounded up for headroom"
+   }
+  },
+  "controls": {
+   "input_jack": {
+    "value": 1,
+    "choices": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "unit": "position",
+    "source": "sch: two inputs per channel",
+    "notes": "the jack the guitar is plugged into: 1 bright input 1, 2 bright input 2, 3 normal input 1, 4 normal input 2 (input 1: both 68K in parallel; input 2: the 68K / 68K divider)"
+   },
+   "volume_bright": {
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "sch: the bright channel's 1 MEG volume"
+   },
+   "volume_normal": {
+    "value": 0.0,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "sch: the normal channel's 1 MEG volume"
+   },
+   "tone": {
+    "value": 0.5,
+    "min": 0.0,
+    "max": 1.0,
+    "unit": "rotation",
+    "source": "sch: the 1 MEG tone control",
+    "notes": "0 = dark (wiper at the .005 end)"
+   },
+   "mains_v_rms": {
+    "value": 120.0,
+    "min": 105.0,
+    "max": 127.0,
+    "unit": "V",
+    "source": "provisional: model knowledge (US line voltage; the drawing prints none); 120 V is the replacement power transformer's rated primary (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf)"
+   },
+   "mains_hz": {
+    "value": 60.0,
+    "min": 50.0,
+    "max": 60.0,
+    "unit": "Hz",
+    "source": "provisional: model knowledge (US mains)"
+   }
+  },
+  "values": {
+   "audio_taper_mid": {
+    "value": 0.1,
+    "genome": "fender_5e3.pots.audio_taper_mid",
+    "source": "provisional: model knowledge (the drawing prints no tapers; Fender's volume and tone pots of the era are commonly given as audio taper, ~10% of the track at half rotation)",
+    "notes": "all three pots"
+   },
+   "ot_r_half_a_ohm": {
+    "value": 147.2,
+    "source": "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf (primary DCR per half 147.2 / 195.3 ohm)"
+   },
+   "ot_r_half_b_ohm": {
+    "value": 195.3,
+    "source": "web: same sheet (the other half)"
+   },
+   "ot_r_sec_ohm": {
+    "value": 0.493,
+    "source": "web: same sheet (secondary DCR)"
+   },
+   "ot_sec_per_half": {
+    "value": 0.06325,
+    "genome": "fender_5e3.ot.sec_ratio",
+    "source": "derived: 8 k CT : 8 ohm (same sheet; the original's nominal), secondary turns per primary half 2 / sqrt(8000 / 8)",
+    "notes": "the sheet's inductances (3.67 H per half, 16.7 mH secondary, both at 1 V) give 0.0675: the secondary's 1 V is a much higher flux"
+   },
+   "ot_core_material": {
+    "value": "grain_oriented_si_steel",
+    "genome": "fender_5e3.ot.core_material",
+    "source": "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml)"
+   },
+   "ot_core_area_m2": {
+    "value": 0.0005,
+    "genome": "fender_5e3.ot.core_area_m2",
+    "source": "provisional: model knowledge (a ~7/8 in tongue in the 2-3/4 x 2-1/4 in frame of reproductions, 1 in stack (Tube Amp Doctor), 95% stacking; data/schematics/fender_5e3/README.md)"
+   },
+   "ot_core_path_m": {
+    "value": 0.12,
+    "genome": "fender_5e3.ot.core_path_m",
+    "source": "provisional: model knowledge (~5.6 x the tongue width for scrapless EI)"
+   },
+   "ot_turns_half": {
+    "value": 929,
+    "genome": "fender_5e3.ot.turns_half",
+    "source": "provisional: model knowledge (a design rule: 1.2 T at 15 W into 8 k at 70 Hz with the core's area; the reproduction is rated 15 W, same sheet)",
+    "notes": "each primary half (the reference winding)"
+   },
+   "ot_gap_m": {
+    "value": 0.000145,
+    "genome": "fender_5e3.ot.air_gap_m",
+    "source": "derived: gives 3.67 H per primary half in the core's linear limit with ot_turns_half (the reproduction's measured inductance at 1 kHz, 1 V, same sheet). An effective joint gap: it also stands in for the lower initial permeability of the era's non-oriented steel"
+   },
+   "ot_leakage_h": {
+    "value": 0.0299,
+    "genome": "fender_5e3.ot.leakage_h",
+    "source": "derived: the mean of the reproduction's leakage per primary half, 40.47 / 19.31 mH (same sheet)",
+    "notes": "the format splits leakage evenly between the windings; the measured asymmetry isn't modeled"
+   },
+   "ot_c_half_f": {
+    "value": 3e-10,
+    "genome": "fender_5e3.ot.winding_capacitance_f",
+    "source": "provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF)"
+   },
+   "rectifier_tube": {
+    "value": "5Y3GT@1",
+    "source": "sch: 5Y3GT full-wave rectifier, B+ from its filament; config/components/5y3gt/1.yaml (per section)"
+   },
+   "passive_seed": {
+    "value": 0,
+    "genome": "passives.seed",
+    "source": "numerical: which set of parts a unit is built from"
+   },
+   "passive_spread": {
+    "value": 0.0,
+    "genome": "passives.spread",
+    "source": "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"
+   },
+   "tol_resistor_pct": {
+    "value": 10.0,
+    "source": "provisional: model knowledge (carbon composition resistors of the era, 10%)"
+   },
+   "tol_wirewound_pct": {
+    "value": 5.0,
+    "source": "provisional: model knowledge (the 250-5W wirewound cathode resistor)"
+   },
+   "tol_pot_pct": {
+    "value": 20.0,
+    "genome": "passives.pot_pct",
+    "source": "provisional: model knowledge (carbon potentiometers, +-10..20%)"
+   },
+   "tol_paper_pct": {
+    "value": 20.0,
+    "genome": "passives.paper_capacitor_pct",
+    "source": "provisional: model knowledge (paper capacitors of the 1950s, +-10..20%)"
+   },
+   "tol_mica_pct": {
+    "value": 10.0,
+    "genome": "passives.mica_capacitor_pct",
+    "source": "provisional: model knowledge (small mica capacitors, +-5..20%)"
+   },
+   "tol_electrolytic_minus_pct": {
+    "value": 20.0,
+    "genome": "passives.electrolytic_minus_pct",
+    "source": "provisional: model knowledge (1950s electrolytics, -10..-20%)"
+   },
+   "tol_electrolytic_plus_pct": {
+    "value": 50.0,
+    "genome": "passives.electrolytic_plus_pct",
+    "source": "provisional: model knowledge (1950s electrolytics, +50..+100%)"
+   },
+   "tube_emission_pct": {
+    "value": 10.0,
+    "genome": "tubes.instance.emission_pct",
+    "source": "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"
+   },
+   "tube_mu_pct": {
+    "value": 3.0,
+    "genome": "tubes.instance.mu_pct",
+    "source": "provisional: model knowledge (grid-pitch tolerance, a few %)"
+   }
+  },
+  "mains": {
+   "v_rms": "mains_v_rms",
+   "hz": "mains_hz",
+   "rated_v_rms": {
+    "value": 120.0,
+    "source": "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf (the reproduction power transformer's primary; its voltages are taken at it)"
+   }
+  },
+  "tolerance": {
+   "source": "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)",
+   "seed": "passive_seed",
+   "spread": "passive_spread",
+   "tube": {
+    "emission_pct": "tube_emission_pct",
+    "mu_pct": "tube_mu_pct"
+   },
+   "bands": {
+    "r10": "tol_resistor_pct",
+    "wirewound": "tol_wirewound_pct",
+    "pot": "tol_pot_pct",
+    "paper": "tol_paper_pct",
+    "mica": "tol_mica_pct",
+    "electrolytic": [
+     "tol_electrolytic_minus_pct",
+     "tol_electrolytic_plus_pct"
+    ]
+   }
+  }
+ },
+ "frames": [
+  {
+   "title": "inputs",
+   "x": 0,
+   "y": 0,
+   "w": 73.66,
+   "h": 121.92
+  },
+  {
+   "title": "12AY7 and controls",
+   "x": 81.28,
+   "y": 0,
+   "w": 63.5,
+   "h": 121.92
+  },
+  {
+   "title": "12AX7 and inverter",
+   "x": 149.86,
+   "y": 0,
+   "w": 83.82,
+   "h": 121.92
+  },
+  {
+   "title": "output",
+   "x": 238.76,
+   "y": 0,
+   "w": 106.68,
+   "h": 121.92
+  },
+  {
+   "title": "power supply",
+   "x": 81.28,
+   "y": 132.08,
+   "w": 132.08,
+   "h": 50.8
+  }
+ ],
+ "symbols": {
+  "RB23": {
+   "symbol": "R",
+   "value": "22k",
+   "fields": {
+    "Param": "r_b23_ohm",
+    "Source": "sch: 22K from B+2 to B+3 (V1, V2A, the inverter)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 185.42,
+     "y": 156.21,
+     "rot": 90
+    }
+   }
+  },
+  "CB3": {
+   "symbol": "C",
+   "value": "16u",
+   "fields": {
+    "Param": "c_filter_f",
+    "Source": "sch: 16-450 at each of the three nodes",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 195.58,
+     "y": 160.02
+    }
+   }
+  },
+  "RB12": {
+   "symbol": "R",
+   "value": "5000",
+   "fields": {
+    "Param": "r_b12_ohm",
+    "Source": "sch: 5000 from the rectifier's filament (B+1, the output transformer's centre tap) to the screens (B+2)",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 165.1,
+     "y": 156.21,
+     "rot": 90
+    }
+   }
+  },
+  "CB2": {
+   "symbol": "C",
+   "value": "16u",
+   "fields": {
+    "Param": "c_filter_f",
+    "Source": "sch: 16-450 at each of the three nodes",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 175.26,
+     "y": 160.02
+    }
+   }
+  },
+  "CB1": {
+   "symbol": "C",
+   "value": "16u",
+   "fields": {
+    "Param": "c_filter_f",
+    "Source": "sch: 16-450 at each of the three nodes",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 147.32,
+     "y": 160.02
+    }
+   }
+  },
+  "RLEAK": {
+   "symbol": "R",
+   "value": "1G",
+   "fields": {
+    "Param": "numerical_leak_ohm",
+    "Source": "numerical: DC path for the B+ nodes (the 5E3 has no bleeder; not physical)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 154.94,
+     "y": 160.02
+    }
+   }
+  },
+  "V5": {
+   "symbol": "Diode_Dual",
+   "value": "rectifier_tube",
+   "fields": {
+    "Model": "V5",
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 132.08,
+     "y": 147.32,
+     "rot": 90
+    },
+    "2": {
+     "x": 132.08,
+     "y": 165.1,
+     "rot": 90
+    }
+   }
+  },
+  "LPTA": {
+   "symbol": "L",
+   "value": "10m",
+   "fields": {
+    "Param": "pt_leakage_h",
+    "Source": "provisional: model knowledge (leakage per HV half of a ~50 W mains transformer)",
+    "Genome": "fender_5e3.psu.pt_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 113.03,
+     "y": 147.32,
+     "rot": 90
+    }
+   }
+  },
+  "CPTA": {
+   "symbol": "C",
+   "value": "300p",
+   "fields": {
+    "Param": "pt_c_half_f",
+    "Source": "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)",
+    "Genome": "fender_5e3.psu.pt_winding_capacitance_f",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 121.92,
+     "y": 151.13
+    }
+   }
+  },
+  "LPTB": {
+   "symbol": "L",
+   "value": "10m",
+   "fields": {
+    "Param": "pt_leakage_h",
+    "Source": "provisional: model knowledge (leakage per HV half of a ~50 W mains transformer)",
+    "Genome": "fender_5e3.psu.pt_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 113.03,
+     "y": 165.1,
+     "rot": 90
+    }
+   }
+  },
+  "CPTB": {
+   "symbol": "C",
+   "value": "300p",
+   "fields": {
+    "Param": "pt_c_half_f",
+    "Source": "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)",
+    "Genome": "fender_5e3.psu.pt_winding_capacitance_f",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 121.92,
+     "y": 168.91
+    }
+   }
+  },
+  "RPTA": {
+   "symbol": "R",
+   "value": "116.0",
+   "fields": {
+    "Param": "pt_r_half_ohm",
+    "Source": "derived: HV DCR 174 ohm end to end (half: 87) + the primary's 3.4 ohm referred to a half, 3.4 x (350.7 / 120)^2 = 29 (same sheet)",
+    "Genome": "fender_5e3.psu.pt_r_half_ohm",
+    "Notes": "the heaters' load on the primary (~0.5% sag) isn't modeled",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 101.6,
+     "y": 147.32,
+     "rot": 90
+    }
+   }
+  },
+  "RPTB": {
+   "symbol": "R",
+   "value": "116.0",
+   "fields": {
+    "Param": "pt_r_half_ohm",
+    "Source": "derived: HV DCR 174 ohm end to end (half: 87) + the primary's 3.4 ohm referred to a half, 3.4 x (350.7 / 120)^2 = 29 (same sheet)",
+    "Genome": "fender_5e3.psu.pt_r_half_ohm",
+    "Notes": "the heaters' load on the primary (~0.5% sag) isn't modeled",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 101.6,
+     "y": 165.1,
+     "rot": 90
+    }
+   }
+  },
+  "VHVA": {
+   "symbol": "Mains",
+   "value": "350.7",
+   "fields": {
+    "Param": "pt_hv_half_rms_v",
+    "Source": "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf (350.7 V per half unloaded at 120 V)",
+    "Genome": "fender_5e3.psu.pt_hv_half_rms_v",
+    "Notes": "open-circuit rms per HV half behind pt_r_half_ohm, at mains_v_rms = 120 V",
+    "phase_deg": "90.0"
+   },
+   "units": {
+    "1": {
+     "x": 91.44,
+     "y": 152.4
+    }
+   }
+  },
+  "VHVB": {
+   "symbol": "Mains",
+   "value": "350.7",
+   "fields": {
+    "Param": "pt_hv_half_rms_v",
+    "Source": "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf (350.7 V per half unloaded at 120 V)",
+    "Genome": "fender_5e3.psu.pt_hv_half_rms_v",
+    "Notes": "open-circuit rms per HV half behind pt_r_half_ohm, at mains_v_rms = 120 V",
+    "phase_deg": "270.0"
+   },
+   "units": {
+    "1": {
+     "x": 91.44,
+     "y": 170.18
+    }
+   }
+  },
+  "RJ1B_IN": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 30.48,
+     "y": 6.35,
+     "rot": 270
+    }
+   }
+  },
+  "SINB_B": {
+   "symbol": "SW_Rotary_4",
+   "value": "input_jack",
+   "fields": {
+    "Control": "input_jack"
+   },
+   "units": {
+    "1": {
+     "x": 15.24,
+     "y": 45.72
+    }
+   }
+  },
+  "RJ1N_IN": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 30.48,
+     "y": 72.39,
+     "rot": 270
+    }
+   }
+  },
+  "SINN_B": {
+   "symbol": "SW_Rotary_4",
+   "value": "input_jack",
+   "fields": {
+    "Control": "input_jack"
+   },
+   "units": {
+    "1": {
+     "x": 15.24,
+     "y": 106.68
+    }
+   }
+  },
+  "SINB": {
+   "symbol": "SW_Rotary_4",
+   "value": "input_jack",
+   "fields": {
+    "Control": "input_jack"
+   },
+   "units": {
+    "1": {
+     "x": 15.24,
+     "y": 10.16
+    }
+   }
+  },
+  "RJ2B_IN": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 30.48,
+     "y": 44.45,
+     "rot": 90
+    }
+   }
+  },
+  "RJ2B_J1": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 30.48,
+     "y": 24.13,
+     "rot": 270
+    }
+   }
+  },
+  "SINN": {
+   "symbol": "SW_Rotary_4",
+   "value": "input_jack",
+   "fields": {
+    "Control": "input_jack"
+   },
+   "units": {
+    "1": {
+     "x": 15.24,
+     "y": 71.12
+    }
+   }
+  },
+  "RJ2N_IN": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 30.48,
+     "y": 110.49,
+     "rot": 90
+    }
+   }
+  },
+  "RJ2N_J1": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 30.48,
+     "y": 85.09,
+     "rot": 270
+    }
+   }
+  },
+  "RIN1B": {
+   "symbol": "R",
+   "value": "1M",
+   "fields": {
+    "Param": "r_input_ohm",
+    "Source": "sch: 1 MEG from input 1's tip to ground, each channel",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 40.64,
+     "y": 13.97
+    }
+   }
+  },
+  "RGAB": {
+   "symbol": "R",
+   "value": "68k",
+   "fields": {
+    "Param": "r_grid_stop_ohm",
+    "Source": "sch: 68K from each input's tip to the 12AY7 grid",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 48.26,
+     "y": 13.97
+    }
+   }
+  },
+  "RGBB": {
+   "symbol": "R",
+   "value": "68k",
+   "fields": {
+    "Param": "r_grid_stop_ohm",
+    "Source": "sch: 68K from each input's tip to the 12AY7 grid",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 48.26,
+     "y": 24.13
+    }
+   }
+  },
+  "SINB_C": {
+   "symbol": "SW_Rotary_4",
+   "value": "input_jack",
+   "fields": {
+    "Control": "input_jack"
+   },
+   "units": {
+    "1": {
+     "x": 15.24,
+     "y": 27.94
+    }
+   }
+  },
+  "RJ1B_GND": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 25.4,
+     "y": 17.78
+    }
+   }
+  },
+  "RIN1N": {
+   "symbol": "R",
+   "value": "1M",
+   "fields": {
+    "Param": "r_input_ohm",
+    "Source": "sch: 1 MEG from input 1's tip to ground, each channel",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 40.64,
+     "y": 74.93
+    }
+   }
+  },
+  "RGAN": {
+   "symbol": "R",
+   "value": "68k",
+   "fields": {
+    "Param": "r_grid_stop_ohm",
+    "Source": "sch: 68K from each input's tip to the 12AY7 grid",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 48.26,
+     "y": 74.93
+    }
+   }
+  },
+  "RGBN": {
+   "symbol": "R",
+   "value": "68k",
+   "fields": {
+    "Param": "r_grid_stop_ohm",
+    "Source": "sch: 68K from each input's tip to the 12AY7 grid",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 48.26,
+     "y": 85.09
+    }
+   }
+  },
+  "SINN_C": {
+   "symbol": "SW_Rotary_4",
+   "value": "input_jack",
+   "fields": {
+    "Control": "input_jack"
+   },
+   "units": {
+    "1": {
+     "x": 15.24,
+     "y": 88.9
+    }
+   }
+  },
+  "RJ1N_GND": {
+   "symbol": "R",
+   "value": "10m",
+   "fields": {
+    "Param": "jack_contact_ohm",
+    "Source": "provisional: model knowledge (a phone jack's contact, ~10 mOhm)",
+    "Notes": "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 25.4,
+     "y": 78.74
+    }
+   }
+  },
+  "V1B": {
+   "symbol": "Triode",
+   "value": "12AY7@1",
+   "fields": {
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 96.52,
+     "y": 25.4
+    }
+   }
+  },
+  "V1N": {
+   "symbol": "Triode",
+   "value": "12AY7@1",
+   "fields": {
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 96.52,
+     "y": 83.82,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "RPL1B": {
+   "symbol": "R",
+   "value": "100k",
+   "fields": {
+    "Param": "r_plate1_ohm",
+    "Source": "sch: 100K plate loads",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 106.68,
+     "y": 11.43
+    }
+   }
+  },
+  "CC1B": {
+   "symbol": "C",
+   "value": "100n",
+   "fields": {
+    "Param": "c_couple1_f",
+    "Source": "sch: .1-400 from each plate to its volume's wiper",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 116.84,
+     "y": 15.24,
+     "rot": 90
+    }
+   }
+  },
+  "CTT": {
+   "symbol": "C",
+   "value": "500p",
+   "fields": {
+    "Param": "c_tone_treble_f",
+    "Source": "sch: .0005 from the bright volume's wiper to the tone pot's top (mica on the layout)",
+    "Tol": "mica"
+   },
+   "units": {
+    "1": {
+     "x": 121.92,
+     "y": 24.13
+    }
+   }
+  },
+  "RK1": {
+   "symbol": "R",
+   "value": "820",
+   "fields": {
+    "Param": "r_cathode1_ohm",
+    "Source": "sch: 820 from the shared cathodes to ground",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 106.68,
+     "y": 58.42
+    }
+   }
+  },
+  "CK1": {
+   "symbol": "C",
+   "value": "25u",
+   "fields": {
+    "Param": "c_cathode1_f",
+    "Source": "sch: 25-25 (25 uF 25 V) across the 820",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 114.3,
+     "y": 58.42
+    }
+   }
+  },
+  "RPL1N": {
+   "symbol": "R",
+   "value": "100k",
+   "fields": {
+    "Param": "r_plate1_ohm",
+    "Source": "sch: 100K plate loads",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 106.68,
+     "y": 97.79,
+     "rot": 180
+    }
+   }
+  },
+  "CC1N": {
+   "symbol": "C",
+   "value": "100n",
+   "fields": {
+    "Param": "c_couple1_f",
+    "Source": "sch: .1-400 from each plate to its volume's wiper",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 116.84,
+     "y": 93.98,
+     "rot": 90
+    }
+   }
+  },
+  "RVOLB": {
+   "symbol": "Pot",
+   "value": "1M",
+   "fields": {
+    "Param": "volume_pot_ohm",
+    "Source": "sch: 1 MEG volumes",
+    "Tol": "pot",
+    "at": "volume_bright",
+    "taper_mid": "audio_taper_mid"
+   },
+   "units": {
+    "1": {
+     "x": 127,
+     "y": 15.24,
+     "mirror": true
+    }
+   }
+  },
+  "RVOLN": {
+   "symbol": "Pot",
+   "value": "1M",
+   "fields": {
+    "Param": "volume_pot_ohm",
+    "Source": "sch: 1 MEG volumes",
+    "Tol": "pot",
+    "at": "volume_normal",
+    "taper_mid": "audio_taper_mid"
+   },
+   "units": {
+    "1": {
+     "x": 127,
+     "y": 93.98,
+     "rot": 180
+    }
+   }
+  },
+  "RTONE": {
+   "symbol": "Pot",
+   "value": "1M",
+   "fields": {
+    "Param": "tone_pot_ohm",
+    "Source": "sch: 1 MEG tone",
+    "Tol": "pot",
+    "at": "tone",
+    "taper_mid": "audio_taper_mid"
+   },
+   "units": {
+    "1": {
+     "x": 121.92,
+     "y": 34.29,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "CTB": {
+   "symbol": "C",
+   "value": "5n",
+   "fields": {
+    "Param": "c_tone_bass_f",
+    "Source": "sch: .005-600 from the tone pot's bottom to ground",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 121.92,
+     "y": 43.18
+    }
+   }
+  },
+  "RPL2": {
+   "symbol": "R",
+   "value": "100k",
+   "fields": {
+    "Param": "r_plate2_ohm",
+    "Source": "sch: 100K plate load",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 165.1,
+     "y": 35.56
+    }
+   }
+  },
+  "CC2": {
+   "symbol": "C",
+   "value": "20n",
+   "fields": {
+    "Param": "c_couple2_f",
+    "Source": "lay: .02 MFD 600 V from V2A's plate to the inverter's grid (the schematic prints no value)",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 175.26,
+     "y": 41.91,
+     "rot": 90
+    }
+   }
+  },
+  "RG3": {
+   "symbol": "R",
+   "value": "1M",
+   "fields": {
+    "Param": "r_grid3_ohm",
+    "Source": "sch: 1 MEG grid leak to the 1500 / 56K junction",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 181.61,
+     "y": 62.23
+    }
+   }
+  },
+  "RTAIL": {
+   "symbol": "R",
+   "value": "56k",
+   "fields": {
+    "Param": "r_tail_ohm",
+    "Source": "sch: 56K tail to ground",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 190.5,
+     "y": 76.2
+    }
+   }
+  },
+  "RPL3": {
+   "symbol": "R",
+   "value": "56k",
+   "fields": {
+    "Param": "r_plate3_ohm",
+    "Source": "sch: 56K plate load",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 190.5,
+     "y": 35.56
+    }
+   }
+  },
+  "CC3A": {
+   "symbol": "C",
+   "value": "100n",
+   "fields": {
+    "Param": "c_couple3_plate_f",
+    "Source": "sch: .1-400 from the plate",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 205.74,
+     "y": 41.91,
+     "rot": 90
+    }
+   }
+  },
+  "RGSA": {
+   "symbol": "R",
+   "value": "1500",
+   "fields": {
+    "Param": "r_grid6_stop_ohm",
+    "Source": "sch: 1500 grid stoppers",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 220.98,
+     "y": 41.91,
+     "rot": 90
+    }
+   }
+  },
+  "V2": {
+   "symbol": "Triode_Dual",
+   "value": "12AX7@1",
+   "fields": {
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 165.1,
+     "y": 50.8
+    },
+    "2": {
+     "x": 190.5,
+     "y": 50.8
+    }
+   }
+  },
+  "RGSB": {
+   "symbol": "R",
+   "value": "1500",
+   "fields": {
+    "Param": "r_grid6_stop_ohm",
+    "Source": "sch: 1500 grid stoppers",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 220.98,
+     "y": 59.69,
+     "rot": 90
+    }
+   }
+  },
+  "RK2": {
+   "symbol": "R",
+   "value": "1500",
+   "fields": {
+    "Param": "r_cathode2_ohm",
+    "Source": "sch: 1500 cathode resistor",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 165.1,
+     "y": 64.77
+    }
+   }
+  },
+  "CK2": {
+   "symbol": "C",
+   "value": "25u",
+   "fields": {
+    "Param": "c_cathode2_f",
+    "Source": "sch: 25-25 across the 1500",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 172.72,
+     "y": 64.77
+    }
+   }
+  },
+  "RGLA": {
+   "symbol": "R",
+   "value": "220k",
+   "fields": {
+    "Param": "r_grid6_ohm",
+    "Source": "sch: 220K grid leaks",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 213.36,
+     "y": 48.26
+    }
+   }
+  },
+  "RK3": {
+   "symbol": "R",
+   "value": "1500",
+   "fields": {
+    "Param": "r_cathode3_ohm",
+    "Source": "sch: 1500 from the cathode to the tail",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 190.5,
+     "y": 64.77
+    }
+   }
+  },
+  "CC3B": {
+   "symbol": "C",
+   "value": "100n",
+   "fields": {
+    "Param": "c_couple3_cathode_f",
+    "Source": "sch: .1-200 from the cathode",
+    "Tol": "paper"
+   },
+   "units": {
+    "1": {
+     "x": 205.74,
+     "y": 59.69,
+     "rot": 90
+    }
+   }
+  },
+  "RGLB": {
+   "symbol": "R",
+   "value": "220k",
+   "fields": {
+    "Param": "r_grid6_ohm",
+    "Source": "sch: 220K grid leaks",
+    "Tol": "r10"
+   },
+   "units": {
+    "1": {
+     "x": 213.36,
+     "y": 66.04
+    }
+   }
+  },
+  "V6A": {
+   "symbol": "Pentode",
+   "value": "6V6GT@1",
+   "fields": {
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 254,
+     "y": 30.48
+    }
+   }
+  },
+  "V6B": {
+   "symbol": "Pentode",
+   "value": "6V6GT@1",
+   "fields": {
+    "Tol": "tube"
+   },
+   "units": {
+    "1": {
+     "x": 254,
+     "y": 76.2,
+     "rot": 180,
+     "mirror": true
+    }
+   }
+  },
+  "W1": {
+   "symbol": "Winding",
+   "value": "pa",
+   "fields": {
+    "Transformer": "T1",
+    "r": "ot_r_half_a_ohm",
+    "c": "ot_c_half_f"
+   },
+   "units": {
+    "1": {
+     "x": 284.48,
+     "y": 45.72
+    }
+   }
+  },
+  "W2": {
+   "symbol": "Winding",
+   "value": "pb",
+   "fields": {
+    "Transformer": "T1",
+    "r": "ot_r_half_b_ohm",
+    "c": "ot_c_half_f"
+   },
+   "units": {
+    "1": {
+     "x": 284.48,
+     "y": 57.15
+    }
+   }
+  },
+  "RK6": {
+   "symbol": "R",
+   "value": "250",
+   "fields": {
+    "Param": "r_cathode6_ohm",
+    "Source": "sch: 250-5W from the 6V6 cathodes to ground",
+    "Tol": "wirewound"
+   },
+   "units": {
+    "1": {
+     "x": 261.62,
+     "y": 57.15
+    }
+   }
+  },
+  "CK6": {
+   "symbol": "C",
+   "value": "25u",
+   "fields": {
+    "Param": "c_cathode6_f",
+    "Source": "sch: 25-25 across the 250",
+    "Tol": "electrolytic"
+   },
+   "units": {
+    "1": {
+     "x": 269.24,
+     "y": 57.15
+    }
+   }
+  },
+  "T1": {
+   "symbol": "Core",
+   "value": "core",
+   "fields": {
+    "material": "ot_core_material",
+    "area_m2": "ot_core_area_m2",
+    "path_m": "ot_core_path_m",
+    "gap_m": "ot_gap_m",
+    "turns": "ot_turns_half",
+    "leakage_h": "ot_leakage_h"
+   },
+   "units": {
+    "1": {
+     "x": 287.02,
+     "y": 50.8
+    }
+   }
+  },
+  "W3": {
+   "symbol": "Winding",
+   "value": "s",
+   "fields": {
+    "Transformer": "T1",
+    "ratio": "ot_sec_per_half",
+    "r": "ot_r_sec_ohm"
+   },
+   "units": {
+    "1": {
+     "x": 289.56,
+     "y": 53.34,
+     "mirror": true
+    }
+   }
+  },
+  "RSPK_E": {
+   "symbol": "R",
+   "value": "6.05",
+   "fields": {
+    "Param": "spk_re_ohm",
+    "Source": "web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (Re)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 303.53,
+     "y": 45.72,
+     "rot": 90
+    }
+   }
+  },
+  "LSPK_E": {
+   "symbol": "L",
+   "value": "500u",
+   "fields": {
+    "Param": "spk_le_h",
+    "Source": "web: same sheet (Le)"
+   },
+   "units": {
+    "1": {
+     "x": 314.96,
+     "y": 45.72,
+     "rot": 90
+    }
+   }
+  },
+  "RSPK_M": {
+   "symbol": "R",
+   "value": "31.55",
+   "fields": {
+    "Param": "spk_res_ohm",
+    "Source": "derived: BL 5.53, Mms 25.2 g, Fs 80 Hz, Qms 13.07 (same sheet): BL^2 / (2 pi Fs Mms / Qms)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 322.58,
+     "y": 53.34
+    }
+   }
+  },
+  "LSPK_M": {
+   "symbol": "L",
+   "value": "4.801m",
+   "fields": {
+    "Param": "spk_lces_h",
+    "Source": "derived: Cms 157 um/N x BL^2 (same sheet)"
+   },
+   "units": {
+    "1": {
+     "x": 330.2,
+     "y": 53.34
+    }
+   }
+  },
+  "CSPK_M": {
+   "symbol": "C",
+   "value": "824u",
+   "fields": {
+    "Param": "spk_cmes_f",
+    "Source": "derived: Mms / BL^2 (same sheet)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 337.82,
+     "y": 53.34
+    }
+   }
+  }
+ },
+ "wires": [
+  [
+   [
+    7.62,
+    10.16
+   ],
+   [
+    7.62,
+    27.94
+   ]
+  ],
+  [
+   [
+    7.62,
+    10.16
+   ],
+   [
+    3.81,
+    10.16
+   ]
+  ],
+  [
+   [
+    7.62,
+    45.72
+   ],
+   [
+    3.81,
+    45.72
+   ]
+  ],
+  [
+   [
+    22.86,
+    6.35
+   ],
+   [
+    26.67,
+    6.35
+   ]
+  ],
+  [
+   [
+    34.29,
+    6.35
+   ],
+   [
+    36.83,
+    6.35
+   ]
+  ],
+  [
+   [
+    22.86,
+    8.89
+   ],
+   [
+    22.86,
+    13.97
+   ],
+   [
+    25.4,
+    13.97
+   ]
+  ],
+  [
+   [
+    25.4,
+    21.59
+   ],
+   [
+    25.4,
+    22.86
+   ]
+  ],
+  [
+   [
+    22.86,
+    24.13
+   ],
+   [
+    26.67,
+    24.13
+   ]
+  ],
+  [
+   [
+    25.4,
+    24.13
+   ],
+   [
+    25.4,
+    31.75
+   ],
+   [
+    22.86,
+    31.75
+   ]
+  ],
+  [
+   [
+    22.86,
+    29.21
+   ],
+   [
+    25.4,
+    29.21
+   ]
+  ],
+  [
+   [
+    22.86,
+    44.45
+   ],
+   [
+    26.67,
+    44.45
+   ]
+  ],
+  [
+   [
+    34.29,
+    24.13
+   ],
+   [
+    34.29,
+    44.45
+   ]
+  ],
+  [
+   [
+    38.1,
+    10.16
+   ],
+   [
+    48.26,
+    10.16
+   ]
+  ],
+  [
+   [
+    40.64,
+    17.78
+   ],
+   [
+    40.64,
+    20.32
+   ]
+  ],
+  [
+   [
+    48.26,
+    17.78
+   ],
+   [
+    48.26,
+    20.32
+   ]
+  ],
+  [
+   [
+    48.26,
+    19.05
+   ],
+   [
+    55.88,
+    19.05
+   ]
+  ],
+  [
+   [
+    48.26,
+    27.94
+   ],
+   [
+    34.29,
+    27.94
+   ]
+  ],
+  [
+   [
+    7.62,
+    71.12
+   ],
+   [
+    7.62,
+    88.9
+   ]
+  ],
+  [
+   [
+    7.62,
+    71.12
+   ],
+   [
+    3.81,
+    71.12
+   ]
+  ],
+  [
+   [
+    7.62,
+    106.68
+   ],
+   [
+    3.81,
+    106.68
+   ]
+  ],
+  [
+   [
+    22.86,
+    72.39
+   ],
+   [
+    26.67,
+    72.39
+   ]
+  ],
+  [
+   [
+    34.29,
+    72.39
+   ],
+   [
+    36.83,
+    72.39
+   ]
+  ],
+  [
+   [
+    22.86,
+    67.31
+   ],
+   [
+    22.86,
+    69.85
+   ],
+   [
+    25.4,
+    69.85
+   ],
+   [
+    25.4,
+    74.93
+   ]
+  ],
+  [
+   [
+    22.86,
+    74.93
+   ],
+   [
+    25.4,
+    74.93
+   ]
+  ],
+  [
+   [
+    25.4,
+    82.55
+   ],
+   [
+    25.4,
+    83.82
+   ]
+  ],
+  [
+   [
+    22.86,
+    85.09
+   ],
+   [
+    26.67,
+    85.09
+   ]
+  ],
+  [
+   [
+    22.86,
+    85.09
+   ],
+   [
+    22.86,
+    90.17
+   ]
+  ],
+  [
+   [
+    22.86,
+    110.49
+   ],
+   [
+    26.67,
+    110.49
+   ]
+  ],
+  [
+   [
+    34.29,
+    85.09
+   ],
+   [
+    34.29,
+    110.49
+   ]
+  ],
+  [
+   [
+    38.1,
+    71.12
+   ],
+   [
+    48.26,
+    71.12
+   ]
+  ],
+  [
+   [
+    40.64,
+    78.74
+   ],
+   [
+    40.64,
+    81.28
+   ]
+  ],
+  [
+   [
+    48.26,
+    78.74
+   ],
+   [
+    48.26,
+    81.28
+   ]
+  ],
+  [
+   [
+    48.26,
+    80.01
+   ],
+   [
+    55.88,
+    80.01
+   ]
+  ],
+  [
+   [
+    48.26,
+    88.9
+   ],
+   [
+    34.29,
+    88.9
+   ]
+  ],
+  [
+   [
+    88.9,
+    25.4
+   ],
+   [
+    83.82,
+    25.4
+   ]
+  ],
+  [
+   [
+    88.9,
+    83.82
+   ],
+   [
+    83.82,
+    83.82
+   ]
+  ],
+  [
+   [
+    96.52,
+    33.02
+   ],
+   [
+    96.52,
+    76.2
+   ]
+  ],
+  [
+   [
+    96.52,
+    54.61
+   ],
+   [
+    114.3,
+    54.61
+   ]
+  ],
+  [
+   [
+    106.68,
+    62.23
+   ],
+   [
+    106.68,
+    64.77
+   ]
+  ],
+  [
+   [
+    114.3,
+    62.23
+   ],
+   [
+    114.3,
+    64.77
+   ]
+  ],
+  [
+   [
+    96.52,
+    17.78
+   ],
+   [
+    96.52,
+    15.24
+   ],
+   [
+    106.68,
+    15.24
+   ]
+  ],
+  [
+   [
+    106.68,
+    15.24
+   ],
+   [
+    113.03,
+    15.24
+   ]
+  ],
+  [
+   [
+    106.68,
+    7.62
+   ],
+   [
+    106.68,
+    5.08
+   ]
+  ],
+  [
+   [
+    96.52,
+    91.44
+   ],
+   [
+    96.52,
+    93.98
+   ],
+   [
+    106.68,
+    93.98
+   ]
+  ],
+  [
+   [
+    106.68,
+    93.98
+   ],
+   [
+    113.03,
+    93.98
+   ]
+  ],
+  [
+   [
+    106.68,
+    101.6
+   ],
+   [
+    106.68,
+    104.14
+   ]
+  ],
+  [
+   [
+    120.65,
+    15.24
+   ],
+   [
+    123.19,
+    15.24
+   ]
+  ],
+  [
+   [
+    120.65,
+    93.98
+   ],
+   [
+    123.19,
+    93.98
+   ]
+  ],
+  [
+   [
+    127,
+    11.43
+   ],
+   [
+    127,
+    10.16
+   ]
+  ],
+  [
+   [
+    127,
+    97.79
+   ],
+   [
+    127,
+    99.06
+   ]
+  ],
+  [
+   [
+    121.92,
+    15.24
+   ],
+   [
+    121.92,
+    20.32
+   ]
+  ],
+  [
+   [
+    121.92,
+    27.94
+   ],
+   [
+    121.92,
+    30.48
+   ]
+  ],
+  [
+   [
+    121.92,
+    38.1
+   ],
+   [
+    121.92,
+    39.37
+   ]
+  ],
+  [
+   [
+    121.92,
+    46.99
+   ],
+   [
+    121.92,
+    49.53
+   ]
+  ],
+  [
+   [
+    127,
+    19.05
+   ],
+   [
+    127,
+    21.59
+   ],
+   [
+    132.08,
+    21.59
+   ],
+   [
+    132.08,
+    87.63
+   ],
+   [
+    127,
+    87.63
+   ],
+   [
+    127,
+    90.17
+   ]
+  ],
+  [
+   [
+    125.73,
+    34.29
+   ],
+   [
+    132.08,
+    34.29
+   ]
+  ],
+  [
+   [
+    132.08,
+    54.61
+   ],
+   [
+    139.7,
+    54.61
+   ]
+  ],
+  [
+   [
+    157.48,
+    50.8
+   ],
+   [
+    152.4,
+    50.8
+   ]
+  ],
+  [
+   [
+    165.1,
+    39.37
+   ],
+   [
+    165.1,
+    43.18
+   ]
+  ],
+  [
+   [
+    165.1,
+    31.75
+   ],
+   [
+    165.1,
+    29.21
+   ]
+  ],
+  [
+   [
+    165.1,
+    58.42
+   ],
+   [
+    165.1,
+    60.96
+   ]
+  ],
+  [
+   [
+    165.1,
+    60.96
+   ],
+   [
+    172.72,
+    60.96
+   ]
+  ],
+  [
+   [
+    165.1,
+    68.58
+   ],
+   [
+    165.1,
+    71.12
+   ]
+  ],
+  [
+   [
+    172.72,
+    68.58
+   ],
+   [
+    172.72,
+    71.12
+   ]
+  ],
+  [
+   [
+    165.1,
+    41.91
+   ],
+   [
+    171.45,
+    41.91
+   ]
+  ],
+  [
+   [
+    179.07,
+    41.91
+   ],
+   [
+    181.61,
+    41.91
+   ],
+   [
+    181.61,
+    58.42
+   ]
+  ],
+  [
+   [
+    181.61,
+    50.8
+   ],
+   [
+    182.88,
+    50.8
+   ]
+  ],
+  [
+   [
+    190.5,
+    39.37
+   ],
+   [
+    190.5,
+    43.18
+   ]
+  ],
+  [
+   [
+    190.5,
+    31.75
+   ],
+   [
+    190.5,
+    29.21
+   ]
+  ],
+  [
+   [
+    190.5,
+    58.42
+   ],
+   [
+    190.5,
+    60.96
+   ]
+  ],
+  [
+   [
+    190.5,
+    68.58
+   ],
+   [
+    190.5,
+    72.39
+   ]
+  ],
+  [
+   [
+    181.61,
+    66.04
+   ],
+   [
+    181.61,
+    69.85
+   ],
+   [
+    190.5,
+    69.85
+   ]
+  ],
+  [
+   [
+    190.5,
+    80.01
+   ],
+   [
+    190.5,
+    82.55
+   ]
+  ],
+  [
+   [
+    190.5,
+    41.91
+   ],
+   [
+    201.93,
+    41.91
+   ]
+  ],
+  [
+   [
+    209.55,
+    41.91
+   ],
+   [
+    217.17,
+    41.91
+   ]
+  ],
+  [
+   [
+    213.36,
+    41.91
+   ],
+   [
+    213.36,
+    44.45
+   ]
+  ],
+  [
+   [
+    213.36,
+    52.07
+   ],
+   [
+    213.36,
+    54.61
+   ]
+  ],
+  [
+   [
+    224.79,
+    41.91
+   ],
+   [
+    228.6,
+    41.91
+   ]
+  ],
+  [
+   [
+    190.5,
+    59.69
+   ],
+   [
+    201.93,
+    59.69
+   ]
+  ],
+  [
+   [
+    209.55,
+    59.69
+   ],
+   [
+    217.17,
+    59.69
+   ]
+  ],
+  [
+   [
+    213.36,
+    59.69
+   ],
+   [
+    213.36,
+    62.23
+   ]
+  ],
+  [
+   [
+    213.36,
+    69.85
+   ],
+   [
+    213.36,
+    72.39
+   ]
+  ],
+  [
+   [
+    224.79,
+    59.69
+   ],
+   [
+    228.6,
+    59.69
+   ]
+  ],
+  [
+   [
+    245.11,
+    31.75
+   ],
+   [
+    241.3,
+    31.75
+   ]
+  ],
+  [
+   [
+    262.89,
+    29.21
+   ],
+   [
+    266.7,
+    29.21
+   ]
+  ],
+  [
+   [
+    245.11,
+    74.93
+   ],
+   [
+    241.3,
+    74.93
+   ]
+  ],
+  [
+   [
+    262.89,
+    77.47
+   ],
+   [
+    266.7,
+    77.47
+   ]
+  ],
+  [
+   [
+    254,
+    39.37
+   ],
+   [
+    254,
+    67.31
+   ]
+  ],
+  [
+   [
+    254,
+    53.34
+   ],
+   [
+    269.24,
+    53.34
+   ]
+  ],
+  [
+   [
+    261.62,
+    60.96
+   ],
+   [
+    261.62,
+    63.5
+   ]
+  ],
+  [
+   [
+    269.24,
+    60.96
+   ],
+   [
+    269.24,
+    63.5
+   ]
+  ],
+  [
+   [
+    254,
+    21.59
+   ],
+   [
+    254,
+    17.78
+   ],
+   [
+    284.48,
+    17.78
+   ],
+   [
+    284.48,
+    41.91
+   ]
+  ],
+  [
+   [
+    254,
+    85.09
+   ],
+   [
+    254,
+    88.9
+   ],
+   [
+    284.48,
+    88.9
+   ],
+   [
+    284.48,
+    60.96
+   ]
+  ],
+  [
+   [
+    284.48,
+    49.53
+   ],
+   [
+    284.48,
+    53.34
+   ]
+  ],
+  [
+   [
+    284.48,
+    50.8
+   ],
+   [
+    279.4,
+    50.8
+   ]
+  ],
+  [
+   [
+    289.56,
+    57.15
+   ],
+   [
+    289.56,
+    63.5
+   ]
+  ],
+  [
+   [
+    289.56,
+    49.53
+   ],
+   [
+    289.56,
+    45.72
+   ],
+   [
+    299.72,
+    45.72
+   ]
+  ],
+  [
+   [
+    307.34,
+    45.72
+   ],
+   [
+    311.15,
+    45.72
+   ]
+  ],
+  [
+   [
+    322.58,
+    57.15
+   ],
+   [
+    322.58,
+    60.96
+   ]
+  ],
+  [
+   [
+    330.2,
+    57.15
+   ],
+   [
+    330.2,
+    60.96
+   ]
+  ],
+  [
+   [
+    337.82,
+    57.15
+   ],
+   [
+    337.82,
+    60.96
+   ]
+  ],
+  [
+   [
+    318.77,
+    45.72
+   ],
+   [
+    337.82,
+    45.72
+   ],
+   [
+    337.82,
+    49.53
+   ]
+  ],
+  [
+   [
+    322.58,
+    45.72
+   ],
+   [
+    322.58,
+    49.53
+   ]
+  ],
+  [
+   [
+    330.2,
+    45.72
+   ],
+   [
+    330.2,
+    49.53
+   ]
+  ],
+  [
+   [
+    91.44,
+    147.32
+   ],
+   [
+    97.79,
+    147.32
+   ]
+  ],
+  [
+   [
+    105.41,
+    147.32
+   ],
+   [
+    109.22,
+    147.32
+   ]
+  ],
+  [
+   [
+    91.44,
+    157.48
+   ],
+   [
+    91.44,
+    160.02
+   ]
+  ],
+  [
+   [
+    121.92,
+    154.94
+   ],
+   [
+    121.92,
+    157.48
+   ]
+  ],
+  [
+   [
+    91.44,
+    165.1
+   ],
+   [
+    97.79,
+    165.1
+   ]
+  ],
+  [
+   [
+    105.41,
+    165.1
+   ],
+   [
+    109.22,
+    165.1
+   ]
+  ],
+  [
+   [
+    91.44,
+    175.26
+   ],
+   [
+    91.44,
+    177.8
+   ]
+  ],
+  [
+   [
+    121.92,
+    172.72
+   ],
+   [
+    121.92,
+    175.26
+   ]
+  ],
+  [
+   [
+    116.84,
+    147.32
+   ],
+   [
+    128.27,
+    147.32
+   ]
+  ],
+  [
+   [
+    116.84,
+    165.1
+   ],
+   [
+    128.27,
+    165.1
+   ]
+  ],
+  [
+   [
+    135.89,
+    147.32
+   ],
+   [
+    139.7,
+    147.32
+   ],
+   [
+    139.7,
+    165.1
+   ],
+   [
+    135.89,
+    165.1
+   ]
+  ],
+  [
+   [
+    139.7,
+    156.21
+   ],
+   [
+    161.29,
+    156.21
+   ]
+  ],
+  [
+   [
+    168.91,
+    156.21
+   ],
+   [
+    181.61,
+    156.21
+   ]
+  ],
+  [
+   [
+    189.23,
+    156.21
+   ],
+   [
+    200.66,
+    156.21
+   ]
+  ],
+  [
+   [
+    147.32,
+    163.83
+   ],
+   [
+    147.32,
+    167.64
+   ]
+  ],
+  [
+   [
+    154.94,
+    163.83
+   ],
+   [
+    154.94,
+    167.64
+   ]
+  ],
+  [
+   [
+    175.26,
+    163.83
+   ],
+   [
+    175.26,
+    167.64
+   ]
+  ],
+  [
+   [
+    195.58,
+    163.83
+   ],
+   [
+    195.58,
+    167.64
+   ]
+  ]
+ ],
+ "labels": [
+  {
+   "name": "j1b",
+   "x": 3.81,
+   "y": 10.16,
+   "rot": 180
+  },
+  {
+   "name": "in",
+   "x": 3.81,
+   "y": 45.72,
+   "rot": 180
+  },
+  {
+   "name": "in",
+   "x": 36.83,
+   "y": 6.35
+  },
+  {
+   "name": "j2b",
+   "x": 34.29,
+   "y": 34.29
+  },
+  {
+   "name": "j1b",
+   "x": 38.1,
+   "y": 10.16,
+   "rot": 180
+  },
+  {
+   "name": "g1b",
+   "x": 55.88,
+   "y": 19.05
+  },
+  {
+   "name": "j1n",
+   "x": 3.81,
+   "y": 71.12,
+   "rot": 180
+  },
+  {
+   "name": "in",
+   "x": 3.81,
+   "y": 106.68,
+   "rot": 180
+  },
+  {
+   "name": "in",
+   "x": 36.83,
+   "y": 72.39
+  },
+  {
+   "name": "j2n",
+   "x": 34.29,
+   "y": 95.25
+  },
+  {
+   "name": "j1n",
+   "x": 38.1,
+   "y": 71.12,
+   "rot": 180
+  },
+  {
+   "name": "g1n",
+   "x": 55.88,
+   "y": 80.01
+  },
+  {
+   "name": "g1b",
+   "x": 83.82,
+   "y": 25.4,
+   "rot": 180
+  },
+  {
+   "name": "g1n",
+   "x": 83.82,
+   "y": 83.82,
+   "rot": 180
+  },
+  {
+   "name": "k1",
+   "x": 96.52,
+   "y": 54.61,
+   "rot": 180
+  },
+  {
+   "name": "p1b",
+   "x": 96.52,
+   "y": 15.24,
+   "rot": 180
+  },
+  {
+   "name": "b3",
+   "x": 106.68,
+   "y": 5.08,
+   "rot": 90
+  },
+  {
+   "name": "p1n",
+   "x": 96.52,
+   "y": 93.98,
+   "rot": 180
+  },
+  {
+   "name": "b3",
+   "x": 106.68,
+   "y": 104.14,
+   "rot": 270
+  },
+  {
+   "name": "vb",
+   "x": 121.92,
+   "y": 15.24,
+   "rot": 90
+  },
+  {
+   "name": "vn",
+   "x": 121.92,
+   "y": 93.98,
+   "rot": 270
+  },
+  {
+   "name": "tt",
+   "x": 121.92,
+   "y": 29.21,
+   "rot": 180
+  },
+  {
+   "name": "tb",
+   "x": 121.92,
+   "y": 38.1,
+   "rot": 180
+  },
+  {
+   "name": "g2",
+   "x": 139.7,
+   "y": 54.61
+  },
+  {
+   "name": "g2",
+   "x": 152.4,
+   "y": 50.8,
+   "rot": 180
+  },
+  {
+   "name": "b3",
+   "x": 165.1,
+   "y": 29.21,
+   "rot": 90
+  },
+  {
+   "name": "k2",
+   "x": 165.1,
+   "y": 60.96,
+   "rot": 180
+  },
+  {
+   "name": "p2",
+   "x": 165.1,
+   "y": 41.91,
+   "rot": 180
+  },
+  {
+   "name": "g3",
+   "x": 181.61,
+   "y": 41.91,
+   "rot": 90
+  },
+  {
+   "name": "b3",
+   "x": 190.5,
+   "y": 29.21,
+   "rot": 90
+  },
+  {
+   "name": "kj",
+   "x": 181.61,
+   "y": 69.85,
+   "rot": 180
+  },
+  {
+   "name": "oa",
+   "x": 213.36,
+   "y": 41.91,
+   "rot": 90
+  },
+  {
+   "name": "g6a",
+   "x": 228.6,
+   "y": 41.91
+  },
+  {
+   "name": "ob",
+   "x": 213.36,
+   "y": 59.69,
+   "rot": 90
+  },
+  {
+   "name": "g6b",
+   "x": 228.6,
+   "y": 59.69
+  },
+  {
+   "name": "p3",
+   "x": 190.5,
+   "y": 41.91,
+   "rot": 180
+  },
+  {
+   "name": "k3",
+   "x": 190.5,
+   "y": 59.69,
+   "rot": 180
+  },
+  {
+   "name": "g6a",
+   "x": 241.3,
+   "y": 31.75,
+   "rot": 180
+  },
+  {
+   "name": "b2",
+   "x": 266.7,
+   "y": 29.21
+  },
+  {
+   "name": "g6b",
+   "x": 241.3,
+   "y": 74.93,
+   "rot": 180
+  },
+  {
+   "name": "b2",
+   "x": 266.7,
+   "y": 77.47
+  },
+  {
+   "name": "k6",
+   "x": 254,
+   "y": 53.34,
+   "rot": 180
+  },
+  {
+   "name": "p6a",
+   "x": 254,
+   "y": 17.78,
+   "rot": 180
+  },
+  {
+   "name": "p6b",
+   "x": 254,
+   "y": 88.9,
+   "rot": 180
+  },
+  {
+   "name": "b1",
+   "x": 279.4,
+   "y": 50.8,
+   "rot": 180
+  },
+  {
+   "name": "out",
+   "x": 294.64,
+   "y": 45.72,
+   "rot": 90
+  },
+  {
+   "name": "spk_l",
+   "x": 307.34,
+   "y": 45.72,
+   "rot": 90
+  },
+  {
+   "name": "spk_m",
+   "x": 322.58,
+   "y": 45.72,
+   "rot": 90
+  },
+  {
+   "name": "hv_a",
+   "x": 91.44,
+   "y": 147.32,
+   "rot": 90
+  },
+  {
+   "name": "hv_ar",
+   "x": 105.41,
+   "y": 147.32,
+   "rot": 90
+  },
+  {
+   "name": "hv_b",
+   "x": 91.44,
+   "y": 165.1,
+   "rot": 90
+  },
+  {
+   "name": "hv_br",
+   "x": 105.41,
+   "y": 165.1,
+   "rot": 90
+  },
+  {
+   "name": "hva",
+   "x": 121.92,
+   "y": 147.32,
+   "rot": 90
+  },
+  {
+   "name": "hvb",
+   "x": 121.92,
+   "y": 165.1,
+   "rot": 90
+  },
+  {
+   "name": "b1",
+   "x": 139.7,
+   "y": 156.21,
+   "rot": 180
+  },
+  {
+   "name": "b2",
+   "x": 168.91,
+   "y": 156.21,
+   "rot": 90
+  },
+  {
+   "name": "b3",
+   "x": 200.66,
+   "y": 156.21
+  }
+ ],
+ "grounds": [
+  {
+   "x": 25.4,
+   "y": 22.86
+  },
+  {
+   "x": 40.64,
+   "y": 20.32
+  },
+  {
+   "x": 25.4,
+   "y": 83.82
+  },
+  {
+   "x": 40.64,
+   "y": 81.28
+  },
+  {
+   "x": 106.68,
+   "y": 64.77
+  },
+  {
+   "x": 114.3,
+   "y": 64.77
+  },
+  {
+   "x": 127,
+   "y": 10.16,
+   "rot": 180
+  },
+  {
+   "x": 127,
+   "y": 99.06
+  },
+  {
+   "x": 121.92,
+   "y": 49.53
+  },
+  {
+   "x": 165.1,
+   "y": 71.12
+  },
+  {
+   "x": 172.72,
+   "y": 71.12
+  },
+  {
+   "x": 190.5,
+   "y": 82.55
+  },
+  {
+   "x": 213.36,
+   "y": 54.61
+  },
+  {
+   "x": 213.36,
+   "y": 72.39
+  },
+  {
+   "x": 261.62,
+   "y": 63.5
+  },
+  {
+   "x": 269.24,
+   "y": 63.5
+  },
+  {
+   "x": 289.56,
+   "y": 63.5
+  },
+  {
+   "x": 322.58,
+   "y": 60.96
+  },
+  {
+   "x": 330.2,
+   "y": 60.96
+  },
+  {
+   "x": 337.82,
+   "y": 60.96
+  },
+  {
+   "x": 91.44,
+   "y": 160.02
+  },
+  {
+   "x": 121.92,
+   "y": 157.48
+  },
+  {
+   "x": 91.44,
+   "y": 177.8
+  },
+  {
+   "x": 121.92,
+   "y": 175.26
+  },
+  {
+   "x": 147.32,
+   "y": 167.64
+  },
+  {
+   "x": 154.94,
+   "y": 167.64
+  },
+  {
+   "x": 175.26,
+   "y": 167.64
+  },
+  {
+   "x": 195.58,
+   "y": 167.64
+  }
+ ]
+}

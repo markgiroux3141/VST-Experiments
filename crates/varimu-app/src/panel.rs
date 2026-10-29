@@ -22,7 +22,7 @@ pub struct Device {
     pub ahead_s: f64,
 }
 
-pub const DEVICES: [Device; 2] = [
+pub const DEVICES: [Device; 3] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -45,13 +45,20 @@ pub const DEVICES: [Device; 2] = [
         panel: None,
         ahead_s: AHEAD_S,
     },
+    Device {
+        id: "fender_5e3",
+        label: "Fender 5E3 Deluxe (guitar amp)",
+        circuit: "fender_5e3",
+        panel: None,
+        ahead_s: AHEAD_S,
+    },
 ];
 
 /// Controls never on a panel (operating conditions).
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 12] = [
+const LABELS: [(&str, &str); 16] = [
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
     ("time_constant", "Time constant"),
@@ -64,6 +71,10 @@ const LABELS: [(&str, &str); 12] = [
     ("bandwidth", "Bandwidth (sharp to broad)"),
     ("hf_atten_freq_khz", "High atten frequency (kHz)"),
     ("hf_atten", "High atten"),
+    ("input_jack", "Input (1-2 bright, 3-4 normal)"),
+    ("volume_bright", "Volume, bright"),
+    ("volume_normal", "Volume, normal"),
+    ("tone", "Tone"),
 ];
 
 /// How a knob moves.
@@ -180,5 +191,12 @@ mod tests {
         let lf = k.iter().find(|k| k.key == "lf_freq_hz").unwrap();
         assert!(matches!(&lf.kind, Kind::Choices(c) if c.len() == 4));
         assert_eq!(lf.number(), 2.0); // 60 Hz
+        let k = knobs(&DEVICES[2], &spec_of("fender_5e3"));
+        let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
+        assert_eq!(
+            keys,
+            ["input_jack", "volume_bright", "volume_normal", "tone"]
+        );
+        assert!(matches!(&k[0].kind, Kind::Choices(c) if c.len() == 4));
     }
 }

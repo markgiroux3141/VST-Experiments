@@ -753,10 +753,43 @@ the next:
 4. *Its profile* (`varimu/measure/profiles.py`): gain per volume setting, response per
    tone setting, clipping onset, THD vs level, output power into the load, supply sag
    and recovery on bursts, and aliasing at the internal rate (production 2x, draft).
+   *Done 2026-10-29* (`varimu/measure/amp_suite.py`, `varimu unit --circuit fender_5e3`,
+   84 renders, ~1.5 min; `reports/units/fender_5e3_nominal/`; `tests/test_profiles.py`).
+   Levels are volts at the jack and at the speaker; power is what the speaker's
+   equivalent takes (from v(out) and its admittance: 6 ohm at DC, 37.6 at the 80 Hz
+   resonance, 6.7 at 1 kHz, 32 at 10 kHz). The screen: B+1..3 within 0.5% of the kit,
+   the speaker -90 dBFS (1.3 mV) at idle. Gain at 1 kHz, 3 mV in: bright 34.4 dB at
+   volume 0.1 to 50.6 at 0.9 and 60.8 at full; normal 6 dB lower at low volume (the
+   bright channel's .0005 bypasses part of its volume), equal at full. Response: the
+   speaker's voltage follows its impedance (a pentode pair, no feedback: the resonance
+   bump, +10 dB toward 16 kHz from Le); the tone adds up to ~+25 dB of treble on the
+   bright channel and cuts the normal channel's at full rotation (through the grounded
+   bright wiper). 1% THD at half volume at 28 mV peak in (1.8 W); about 13 W into the
+   speaker at most (V^2 / 8 says 17-19 W); at full volume 1% at 4 mV. A full-drive burst
+   sags B+1 3-4%, B+2 ~10%, B+3 ~8% (recovering 63% in 0.1 / 0.45 s: 5000 and 22K x
+   16 uF), lifts the 6V6 cathodes 20-25%, and the output falls 0.5-0.6 dB over 1 s.
+   Aliasing (a 2902 Hz tone at 0.5 V, full volume, hard clipped): -40 dB re the
+   harmonics at production, -31 at draft, -8 at draft-1x, discrete inharmonic lines at
+   -15 to -20 dB re the fundamental. The speaker voltage's harmonics barely fall
+   (the impedance rises with frequency), so a clipped 5E3 folds much more than the
+   670 or the EQP-1A: draft-1x is a ballpark at best for it (step 5).
 5. *The drawing and play*: `scripts/draw_fender_5e3.py` on `varimu/editor/sketch.py`
    (`fender_5e3_drawn`), opened in the native editor; a Play device in `varimu-app`
    with its front panel, on files and live input (a guitar through the interface),
    load and dropouts measured (`examples/play.rs`).
+   *Drawn and playable 2026-10-29:* `scripts/draw_fender_5e3.py` lays the circuit out
+   after F-EE (`config/circuits/fender_5e3_drawn.*`: the jacks as three switch decks
+   per channel, the 12AY7 pair around one cathode, the volumes and tone, the 12AX7 and
+   cathodyne, the 6V6 pair on the output transformer and the speaker, the supply below);
+   it builds the hand-written IR at every jack and with drawn tolerances, both cores
+   (`tests/test_editor_drawings.py`), its full scale included. The look is the user's to
+   review in the native editor (`--edit fender_5e3_drawn`). varimu-app's Play has the
+   device `fender_5e3` (the input jack, both volumes, the tone). Load on the 62 s dry
+   guitar take (`examples/load_profile.rs`, no audio device; volume 0.6): 0.27x real
+   time at draft-1x (one block of 5844 over 1.0), 0.46x at draft (96 kHz, 5 of 11688).
+   Open, the user's call: play the 5E3 at draft (aliasing -31 dB, not -8) instead of
+   draft-1x; the Play view has one quality for every device today. Not yet done: a
+   guitar on the interface's Hi-Z input (`examples/play.rs`, with an audio device).
 6. *The designed output transformer* (C2): version 2 by construction, heard against
    version 1 in the 5E3.
 7. *The physical speaker* (C3): the 5E3 heard as sound pressure at a listening point

@@ -1,7 +1,8 @@
 """The hand-planned drawings of the hand-written circuits (scripts/draw_*.py, device
 builder B4a): each script still draws the saved drawing, the drawing kit
-(varimu.editor.sketch) finds nothing wrong with it, and the 670's builds the hand-written
-IR. The EQP-1A's IR comparison is tests/test_editor.py's (test_eqp1a_drawn_by_hand)."""
+(varimu.editor.sketch) finds nothing wrong with it, and the 670's and the 5E3's build the
+hand-written IR. The EQP-1A's IR comparison is tests/test_editor.py's
+(test_eqp1a_drawn_by_hand)."""
 
 from __future__ import annotations
 
@@ -21,6 +22,7 @@ from varimu.preflight import switch_configs
 SCRIPTS = {
     "pultec_eqp1a_drawn": "draw_pultec_eqp1a.py",
     "fairchild_670_drawn": "draw_fairchild_670.py",
+    "fender_5e3_drawn": "draw_fender_5e3.py",
 }
 
 
@@ -48,6 +50,23 @@ def test_670_drawn_builds_the_hand_written_ir():
     a, b = load_circuit(circuit_path("fairchild_670")), compiled_spec(c)
     configs = [*switch_configs(a), {"passive_spread": 1.0, "passive_seed": 7}]
     assert len(configs) == 7
+    for ov in configs:
+        for cores in ("linear", "ja"):
+            diff = ir_differences(builder.build_ir(a, resolve(a, ov), cores),
+                                  builder.build_ir(b, resolve(b, ov), cores))  # fmt: skip
+            assert diff == [], (ov, cores)
+
+
+def test_5e3_drawn_builds_the_hand_written_ir():
+    """The 5E3 drawn after F-EE (B9 step 5) passes the checks and builds the hand-written
+    IR at every input jack and with drawn tolerances, with both core models; its full
+    scale (guitar level) comes along."""
+    c, found = check_drawing(load_drawing(drawing_path("fender_5e3_drawn")))
+    assert c.ok and [m.message for m in found] == []
+    a, b = load_circuit(circuit_path("fender_5e3")), compiled_spec(c)
+    assert b.full_scale == a.full_scale == (1.0, 60.0)
+    configs = [*switch_configs(a), {"passive_spread": 1.0, "passive_seed": 7}]
+    assert len(configs) == 5
     for ov in configs:
         for cores in ("linear", "ja"):
             diff = ir_differences(builder.build_ir(a, resolve(a, ov), cores),

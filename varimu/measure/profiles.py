@@ -10,6 +10,9 @@ checks of varimu.measure.generic and the circuit's own).
   thump, program clips; its checks are varimu.measure.plausibility's.
 - pultec_eqp1a (equalizer): varimu.measure.eq_suite: response at every published
   family's extreme against the curves, THD vs level, the generic screen.
+- fender_5e3 (guitar amplifier, B9): varimu.measure.amp_suite: gain per volume,
+  response per tone, THD and power vs level (the clipping onset), supply sag on bursts,
+  aliasing per quality; the generic screen with the kit's voltages at +-20%.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ from typing import Any
 @dataclass(frozen=True)
 class Profile:
     circuit: str
-    kind: str  # "compressor" | "equalizer"
+    kind: str  # "compressor" | "equalizer" | "guitar_amp"
     run: Callable[..., dict[str, Any]]
 
 
@@ -38,9 +41,16 @@ def _run_eq(*args, **kwargs):
     return eq_suite.run(*args, **kwargs)
 
 
+def _run_amp(*args, **kwargs):
+    from varimu.measure import amp_suite
+
+    return amp_suite.run(*args, **kwargs)
+
+
 PROFILES = {
     "fairchild_670": Profile("fairchild_670", "compressor", _run_670),
     "pultec_eqp1a": Profile("pultec_eqp1a", "equalizer", _run_eq),
+    "fender_5e3": Profile("fender_5e3", "guitar_amp", _run_amp),
 }
 
 

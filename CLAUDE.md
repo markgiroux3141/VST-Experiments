@@ -53,7 +53,12 @@ circuit to it is an explicit edit (the native editor's model picker lists every 
 step 5, the user's call), `5Y3GT@1` fitted to digitized sheets (plots in `reports/devices/`);
 `config/circuits/fender_5e3.yaml` idles within the layout's +-20% of a kit's published
 voltages (`tests/test_fender_5e3.py`); its input is guitar level (the circuit file's
-`full_scale`: 0 dBFS = 1 V peak in, 60 V at the speaker out). The user intends to retire the web app (`varimu listen`,
+`full_scale`: 0 dBFS = 1 V peak in, 60 V at the speaker out). **B9 steps 4-5 done
+(2026-10-29):** its profile `varimu/measure/amp_suite.py` (`varimu unit --circuit
+fender_5e3`: gain per volume, response per tone, THD and power, sag, aliasing per
+quality), its drawing `fender_5e3_drawn` (`scripts/draw_fender_5e3.py`, after F-EE) and a
+Play device in varimu-app; open: Play's quality for it (hard clipped, draft-1x aliases at
+-8 dB re the harmonics, draft -31, production -40; the plan's B9 step 5). The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
@@ -286,11 +291,12 @@ uv run --extra fast python scripts/calibrate_psu.py    # re-derive T302's voltag
 uv run --extra fast python scripts/corner_sweep.py [--quick]   # genome corners: simulates? GR rises? quiet at idle? -> reports/corners/
 uv run --extra fast varimu unit --name NAME [--genome FILE] [--set k=v ...] [--no-clips]   # Phase 4: genome -> setup -> renders -> reports/units/NAME/ (exit 2: rejected)
 uv run --extra fast varimu unit --circuit pultec_eqp1a --name NAME [--set k=v ...]   # B2: the EQP-1A's profile (response vs published curves, THD) -> reports/units/NAME/
+uv run --extra fast varimu unit --circuit fender_5e3 --name NAME [--set k=v ...]   # B9: the 5E3's profile (gain, response, THD / power, sag, aliasing) -> reports/units/NAME/
 uv run --extra fast python scripts/calibrate_pultec_psu.py   # B2: the PCC-55's HV voltage from the drawing's +325 V rail
 uv run varimu kicad-import kicad/NAME/NAME.kicad_sch --out cache/kicad/NAME.yaml   # B3: drawing (+ NAME.params.yaml) -> circuit file; exit 2 = check problems
 uv run varimu check --circuit NAME                 # B3: pre-flight checks at every switch combination
 uv run varimu kicad-export --circuit NAME --out DIR   # B3: a circuit file as a label-connected KiCad project
-uv run python scripts/draw_fairchild_670.py [--check] [--dry-run]   # B4a: the 670's schematic -> config/circuits/fairchild_670_drawn.* (also draw_pultec_eqp1a.py)
+uv run python scripts/draw_fairchild_670.py [--check] [--dry-run]   # B4a: the 670's schematic -> config/circuits/fairchild_670_drawn.* (also draw_pultec_eqp1a.py, draw_fender_5e3.py)
 uv run --extra fast python scripts/draft_settings_study.py [--only eqp1a|670] [--fresh --repeat 2] [--rows PREFIX ...]   # the draft's levers: speed vs sound against production -> reports/realtime/
 uv run python scripts/make_kicad_fixtures.py       # B3: kicad/varimu.kicad_sym, kicad/generated/, tests/fixtures/kicad/ (needs kicad-cli)
 uv run --extra fast python scripts/plausibility_check.py [--only NAME ...]   # the checks on nominal, Phase 3's flagged and deliberately broken genomes -> reports/plausibility/
@@ -317,7 +323,7 @@ cargo run --release -p varimu-app -- --edit triode_stage_drawn   # R3: the Edito
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
 cargo run -p varimu-app --example devices             # the audio devices cpal sees
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)
-cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
+cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--quality draft] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check

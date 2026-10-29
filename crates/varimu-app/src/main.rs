@@ -21,7 +21,7 @@ fn main() -> eframe::Result {
         Ok(a) => a,
         Err(e) => {
             eprintln!(
-                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a] [--input NAME [--channel N]] [--edit DRAWN_CIRCUIT]"
+                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a|fender_5e3] [--input NAME [--channel N]] [--edit DRAWN_CIRCUIT]"
             );
             std::process::exit(2);
         }
