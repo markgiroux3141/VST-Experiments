@@ -30,7 +30,7 @@ def _op(netlist_lines, vectors):
     return {v: float(r[v][0]) for v in vectors}
 
 
-@pytest.mark.parametrize("name", ["6386", "12AX7", "12BH7"])
+@pytest.mark.parametrize("name", ["6386", "12AX7", "12BH7", "12AY7"])
 def test_triode_plate_and_grid_current_agree(name):
     t = load_device(name)
     pts = [(vg, vp) for vg in (-70, -40, -20, -10, -4, -1, 0, 0.5) for vp in range(0, 401, 25)]
@@ -49,8 +49,9 @@ def test_triode_plate_and_grid_current_agree(name):
     np.testing.assert_allclose(ig, t.ig(vg), rtol=RTOL, atol=ATOL, err_msg=f"{name} Ig")
 
 
-def test_pentode_agrees():
-    p = load_device("6973")
+@pytest.mark.parametrize("name", ["6973", "6V6GT"])
+def test_pentode_agrees(name):
+    p = load_device(name)
     pts = [
         (vg, vs, vp)
         for vg in (-60, -40, -25, -15, -5)
@@ -73,7 +74,7 @@ def test_pentode_agrees():
     np.testing.assert_allclose(is2, p.ig2(vg, vs), rtol=RTOL, atol=ATOL)
 
 
-@pytest.mark.parametrize("name,vmax", [("GZ34", 60.0), ("SI_RECTIFIER", 1.2)])
+@pytest.mark.parametrize("name,vmax", [("GZ34", 60.0), ("5Y3GT", 150.0), ("SI_RECTIFIER", 1.2)])
 def test_diodes_agree(name, vmax):
     d = load_device(name)
     v = np.linspace(-5, vmax, 41)

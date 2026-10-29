@@ -145,3 +145,61 @@
   max_ratings: {vinv_v: 1250, iap_a: 0.245, iap_transient_a: 1.1, io_a: 0.070}
   heater: {v: 6.3, a: 0.6}
   pins: "1 plate 2, 6 plate 1, 7 cathode, 3-4 heater (EIA 5BS)"
+
+# --- Fender 5E3 Deluxe (device builder B9 step 2, transcribed 2026-10-29) ---
+
+"12AY7":
+  source: "RCA 12AY7 tentative data, Apr. 1, 1953, p.1-2; local copy sources/rca_12ay7_1953.pdf (web: https://frank.pocnet.net/sheets/049/1/12AY7.pdf)"
+  class_a1:   # each unit
+    vp_v: 250
+    vg_v: -4
+    ip_a: 3.0e-3
+    gm_s: 1.75e-3
+    mu: 40
+    rp_ohm: 22800
+  cutoff:     # "Grid voltage (approx.) for plate current of 10 uamp"
+    vp_v: 250
+    vg_v: -11
+    ip_a: 10.0e-6
+  tungsol_class_a1:   # the same point on Tung-Sol's sheet: mu and rp disagree with RCA's
+    source: "Tung-Sol 12AY7, Feb. 1, 1956 (plate 4583), p.1; local copy sources/tungsol_12ay7_1956.pdf (web: https://frank.pocnet.net/sheets/127/1/12AY7.pdf)"
+    vp_v: 250
+    vg_v: -4
+    ip_a: 3.0e-3
+    gm_s: 1.75e-3
+    mu: 44
+    rp_ohm: 25000
+  capacitances_f: {gp: 1.3e-12, input: 1.3e-12, output: 0.6e-12}   # no external shield; both sheets
+  max_ratings: {vp_v: 300, pd_w: 1.5, ik_a: 10.0e-3, vg_min_v: -50, vhk_v: 90}
+  heater: {v: 6.3, a: 0.3}
+  pins: "1 plate 2, 2 grid 2, 3 cathode 2, 4-5 heater, 6 plate 1, 7 grid 1, 8 cathode 1, 9 heater mid-tap (9A)"
+
+"6V6GT":
+  source: "GE 6V6-GT / 5V6-GT ET-T914 (3-55) p.1-2; local copy sources/ge_6v6gt_ET-T914.pdf (web: https://frank.pocnet.net/sheets/093/6/6V6GT.pdf)"
+  class_a1:   # the 250 V column
+    vp_v: 250
+    vg2_v: 250
+    vg1_v: -12.5
+    rp_ohm: 50000      # "approximate"
+    gm_s: 4.1e-3
+    ip_a: 45.0e-3
+    ig2_a: 4.5e-3
+  class_a1_other:
+    - {vp_v: 180, vg2_v: 180, vg1_v: -8.5, rp_ohm: 50000, gm_s: 3.7e-3, ip_a: 29.0e-3, ig2_a: 3.0e-3}
+    - {vp_v: 315, vg2_v: 225, vg1_v: -13.0, rp_ohm: 80000, gm_s: 3.75e-3, ip_a: 34.0e-3, ig2_a: 2.2e-3}
+  push_pull_ab1:   # two tubes; zero-signal currents are for both
+    - {vp_v: 250, vg2_v: 250, vg1_v: -15, ip_zero_a: 70.0e-3, ig2_zero_a: 5.0e-3, rl_pp_ohm: 10000, power_w: 10, thd_pct: 5}
+    - {vp_v: 285, vg2_v: 285, vg1_v: -19, ip_zero_a: 70.0e-3, ig2_zero_a: 4.0e-3, rl_pp_ohm: 8000, power_w: 14, thd_pct: 3.5}
+  triode_connection: {vp_v: 250, vg_v: -12.5, mu: 9.8, rp_ohm: 1960, gm_s: 5.0e-3, ip_a: 49.5e-3}
+  capacitances_f: {g1p: 0.7e-12, input: 9.0e-12, output: 7.5e-12}   # without external shield
+  max_ratings: {vp_v: 315, vg2_v: 285, pd_w: 12, pg2_w: 2.0, rg1_fixed_bias_ohm: 1.0e+5, rg1_cathode_bias_ohm: 5.0e+5}
+  heater: {v: 6.3, a: 0.45}
+  pins: "1 no connection, 2 heater, 3 plate, 4 screen, 5 grid 1, 7 heater, 8 cathode and beam plates (7AC)"
+
+"5Y3GT":
+  source: "GE 5Y3-GT ET-T965 (10-55) p.1-2; local copy sources/ge_5y3gt_ET-T965.pdf (web: https://frank.pocnet.net/sheets/093/5/5Y3GT.pdf)"
+  tube_drop_v_at_125ma_dc_per_plate: 50
+  capacitor_input_typical: {vac_rms_per_plate_v: 350, c_f: 20.0e-6, rs_per_plate_ohm: 50, idc_a: 0.125, vdc_v: 360}
+  max_ratings: {vinv_v: 1400, iap_a: 0.440, iap_transient_a: 2.5}
+  heater: {v: 5.0, a: 2.0}   # filament (directly heated cathode)
+  pins: "2, 8 filament; 4 plate 2; 6 plate 1 (5T)"

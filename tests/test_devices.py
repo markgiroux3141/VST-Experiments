@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import yaml
 
-from varimu.devices import versions
+from varimu.devices import library, versions
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.fit import DATASHEETS, cascode_gm, evaluate_6386, load_6386
 from varimu.devices.library import load_device
@@ -84,6 +84,56 @@ def test_6x4_matches_its_plate_curve_and_printed_drop():
         assert d.i(pt["va_v"]) == pytest.approx(pt["ia_a"], rel=0.10)
     drop = (0.070 / d.perveance) ** (2 / 3)
     assert drop == pytest.approx(PUB["6X4"]["tube_drop_v_at_70ma_dc_per_plate"], rel=0.05)
+
+
+def test_12ay7_matches_both_sheets():
+    """The Koren fit to RCA's curves (B9) at the point both sheets print (250 V, -4 V):
+    current and gm as printed; mu and rp between or near RCA's (40, 22.8 k) and Tung-Sol's
+    (44, 25 k), which disagree. Tung-Sol's curves, not fitted, agree within 0.2 mA rms."""
+    t, a = load_device("12AY7"), PUB["12AY7"]["class_a1"]
+    ts = PUB["12AY7"]["tungsol_class_a1"]
+    vg, vp = a["vg_v"], a["vp_v"]
+    assert t.ip(vg, vp) == pytest.approx(a["ip_a"], rel=0.05)
+    assert t.gm(vg, vp) == pytest.approx(a["gm_s"], rel=0.10)
+    assert a["mu"] - 2 < t.gm(vg, vp) * t.rp(vg, vp) < ts["mu"] + 2
+    assert a["rp_ohm"] * 0.95 < t.rp(vg, vp) < ts["rp_ohm"] * 1.10
+    _, tung = library.load_12ay7()
+    err = t.ip(tung[:, 0], tung[:, 1]) - tung[:, 2]
+    assert np.sqrt(np.mean(err**2)) < 0.2e-3
+
+
+def test_6v6gt_matches_its_sheet():
+    """The Koren pentode fit to GE's ET-T914 curves (B9): the printed class-A and push-pull
+    idle points, and the plate curves above the knee within 2 mA rms. Known limits of
+    Koren's form, recorded so a refit that changes them shows: the knee (Va < 60 V) is
+    off by ~5 mA rms, and rp at the class-A point is about twice the printed 50 k."""
+    p, pub = load_device("6V6GT"), PUB["6V6GT"]
+    a = pub["class_a1"]
+    vg1, vg2, va = a["vg1_v"], a["vg2_v"], a["vp_v"]
+    assert p.ip(vg1, vg2, va) == pytest.approx(a["ip_a"], rel=0.05)
+    gm = (p.ip(vg1 + 1e-3, vg2, va) - p.ip(vg1 - 1e-3, vg2, va)) / 2e-3
+    assert gm == pytest.approx(a["gm_s"], rel=0.10)
+    assert p.ig2(vg1, vg2) == pytest.approx(a["ig2_a"], rel=0.20)
+    for q in pub["push_pull_ab1"]:  # idle current of each tube of the pair
+        idle = p.ip(q["vg1_v"], q["vg2_v"], q["vp_v"])
+        assert idle == pytest.approx(q["ip_zero_a"] / 2, rel=0.05)
+    pl = library.load_6v6gt()["plate"]  # vg2, vg1, va, ia
+    err = p.ip(pl[:, 1], pl[:, 0], pl[:, 2]) - pl[:, 3]
+    above = pl[:, 2] >= 60
+    assert np.sqrt(np.mean(err[above] ** 2)) < 2e-3
+    rp = 2e-3 / (p.ip(vg1, vg2, va + 1e-3) - p.ip(vg1, vg2, va - 1e-3))
+    assert 1.5 * a["rp_ohm"] < rp < 3 * a["rp_ohm"]
+
+
+def test_5y3gt_matches_its_plate_curve_and_printed_drop():
+    """The Child-law fit to GE's ET-T965 plate curve (B9) gives the drop printed on p.2:
+    50 V at 125 mA DC per plate."""
+    d = load_device("5Y3GT")
+    v, i = library.load_csv("ge_5y3gt_plate.csv").T
+    sel = v >= 10
+    np.testing.assert_allclose(d.i(v[sel]), i[sel], rtol=0.06)
+    drop = (0.125 / d.perveance) ** (2 / 3)
+    assert drop == pytest.approx(PUB["5Y3GT"]["tube_drop_v_at_125ma_dc_per_plate"], rel=0.03)
 
 
 def test_12au7_is_korens_table():
@@ -174,7 +224,7 @@ def test_cascode_solver_matches_bruteforce(t6386):
 def test_all_device_files_have_sources():
     for name in (
         "6386", "12AX7", "12BH7", "6973", "GZ34", "SI_RECTIFIER", "EL34T", "6084", "5651",
-        "SELENIUM", "12AU7", "6X4",
+        "SELENIUM", "12AU7", "6X4", "12AY7", "6V6GT", "5Y3GT",
     ):  # fmt: skip
         dev = load_device(name)
         assert dev is not None

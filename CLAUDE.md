@@ -48,7 +48,11 @@ device files are component versions**, `config/components/<name>/<N>.yaml` (the 
 Circuits pin `NAME@N` (`device: 12AX7@1`, `rectifier_tube: {value: GZ34@1, ...}`, a drawn
 symbol's value): the builders refuse a bare name, which tools and tests may use for the
 latest version. `varimu fit-devices` saves a new version only when a fit changed; moving a
-circuit to it is an explicit edit (the native editor's model picker lists every version). The user intends to retire the web app (`varimu listen`,
+circuit to it is an explicit edit (the native editor's model picker lists every version).
+**B9 steps 2-3 done (2026-10-29):** `12AY7@1`, `6V6GT@1` (Koren; a beam-tetrode `@2` after
+step 5, the user's call), `5Y3GT@1` fitted to digitized sheets (plots in `reports/devices/`);
+`config/circuits/fender_5e3.yaml` idles within the layout's +-20% of a kit's published
+voltages (`tests/test_fender_5e3.py`); open: its per-circuit input level. The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,

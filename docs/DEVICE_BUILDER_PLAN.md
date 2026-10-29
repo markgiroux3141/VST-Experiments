@@ -694,6 +694,25 @@ the next:
 2. *Device fits* as component versions (C1): 12AY7 (Koren triode), 6V6GT (Koren
    pentode, as the 6973), 5Y3GT (vacuum diode, as the GZ34 and 6X4), each from a
    digitized datasheet with a provenance sidecar.
+   *Fitted 2026-10-29* (`12AY7@1`, `6V6GT@1`, `5Y3GT@1`; builders in
+   `varimu/devices/library.py`, plots in `reports/devices/`; the user reviews the plots
+   before step 3). Curves digitized from RCA's and Tung-Sol's 12AY7 sheets, GE's
+   ET-T914 (6V6-GT) and ET-T965 (5Y3-GT) (`data/datasheets/*.provenance.yaml`). The
+   12AY7 fits RCA's curves (250 V, -4 V: 3.06 mA, gm 1646 umho, mu 42.4, rp 25.8 k against
+   RCA's 3 mA, 1750, 40, 22.8 k and Tung-Sol's mu 44, 25 k; Tung-Sol's curves within
+   0.13 mA rms). The 5Y3GT is Child's law within 3% rms and gives the printed 50 V drop at
+   125 mA. The 6V6GT fits the plate and transfer curves to 1.6 mA rms above Va 60 V and
+   the class-A and push-pull idle points within 1%, but Koren's form can't draw its knee
+   (5.3 mA rms below 60 V), puts rp at the class-A point at 112 k against the printed
+   ~50 k (pinning rp to 50 k only reaches 81 k and costs the knee 50%), and fits the
+   screen curves to ~57% rms (the 6084's ~40%). *Decided 2026-10-29 (the user, on
+   Claude's recommendation):* the 5E3 is built on Koren `6V6GT@1`; after step 5 a
+   beam-tetrode model (a sharper knee, the plate slope, screen current that rises as the
+   plate swings into the knee: the screen supply's sag) becomes `6V6GT@2`, sourced from a
+   published model, heard against `@1` in the 5E3 and dropped if the difference is subtle.
+   Why later: through the 8 k : 8 ohm transformer, rp 112 k against ~50-70 k moves the
+   speaker's resonance peak by roughly 1-2 dB, and the knee and screen law matter only at
+   full drive, where the comparison can be heard.
 3. *The circuit* `config/circuits/fender_5e3.yaml`: both channels with their
    interactive volumes, the tone control, the phase inverter and cathode-biased 6V6GT
    pair as the schematic draws them, the 5Y3 supply, the output transformer's version 1
@@ -701,6 +720,26 @@ the next:
    electrical equivalent as its load (a first version from the reissue's Thiele-Small
    parameters; C3 makes it the physical speaker) and the input as decided below.
    Pre-flight checks pass; floating windings get the T104 treatment.
+   *Built 2026-10-29* (`config/circuits/fender_5e3.yaml`, `tests/test_fender_5e3.py`):
+   as drawn on F-EE, which corrects the README in two places: each channel's coupling
+   capacitor drives its volume pot's wiper (ends to ground and V2A's grid: the
+   interacting volumes), and the tone's .0005 goes to the bright wiper. The jacks are a
+   switch control `input_jack` (bright / normal, input 1 / 2: 34k or the -6 dB divider).
+   Output transformer version 1: Amplified Parts P-TGO-002's DCRs, mean leakage (29.9 mH)
+   and 3.67 H per half, with turns from a design rule (929 per half: 1.2 T at 15 W, 70 Hz)
+   and the joint gap solved for that inductance (145 um, provisional). Power transformer:
+   P-TGP-002 (350.7 V per half at 120 V, its DCRs), no calibration. The speaker load: the
+   P12R reissue's Re, Le and motional RLC. A 1 GOhm leak on B+1 (no bleeder). Pre-flight
+   passes at all four jacks; no floating windings (the secondary and the HV centre tap
+   are grounded). Idle against Amplified Parts' kit: B+ 370.0 / 324.2 / 239.6 V (370 /
+   325.5 / 240.8), 6V6 cathodes 20.2 V (21.1), inverter 200.8 / 39.9 V (195.1 / 45.9),
+   V2A 163.6 / 1.14 V (157.7 / 1.22), V1 117.2 / 2.01 V (136.2 and 128.5 / 1.76): all
+   within the layout's +-20% (the 12AY7 fit draws ~15% more than the kit's tubes). IR
+   equal in Rust (`tests/agreement.rs`, 30 cases); ngspice (linear cores) runs it, its
+   output -54.5 dB from circuitsim's on a 440 Hz tone. 1 kHz: ~1 W clean at half volume,
+   15-16 W in hard overdrive. Open: the input level (0 dBFS is still the global 13.8 V
+   peak; the per-circuit volts-per-full-scale convention needs a circuit-file key read by
+   both the Python renders and varimu-app).
 4. *Its profile* (`varimu/measure/profiles.py`): gain per volume setting, response per
    tone setting, clipping onset, THD vs level, output power into the load, supply sag
    and recovery on bursts, and aliasing at the internal rate (production 2x, draft).

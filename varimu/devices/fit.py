@@ -283,7 +283,7 @@ class CurveFit:
         return {k: float(v) for k, v in self.__dict__.items()}
 
 
-def _report(model_i, data_i, sigma) -> CurveFit:
+def curve_report(model_i, data_i, sigma) -> CurveFit:
     z = (model_i - data_i) / sigma
     return CurveFit(
         float(np.sqrt(np.mean(z**2))),
@@ -292,9 +292,22 @@ def _report(model_i, data_i, sigma) -> CurveFit:
     )
 
 
-def fit_koren_triode(vg, vp, ip, sigma):
+def effective_sigma(x, y, groups, half_width, sigma_x, rel, abs_):
+    """Per-point error of a digitized curve y(x): sqrt((rel * y + abs_)^2 + (slope * sigma_x)^2),
+    the effective variance for errors in both coordinates (as the 6386 fit), so a steep
+    stretch (a pentode's knee) isn't over-weighted. Slopes over +-half_width per curve."""
+    x, y = np.asarray(x, float), np.asarray(y, float)
+    slope = _curve_slopes(x, y, np.asarray(groups, float), half_width)
+    return np.sqrt((rel * y + abs_) ** 2 + (slope * sigma_x) ** 2)
+
+
+KOREN_TRIODE_STARTS = ([10.0, 1.35, 1000.0, 50.0, 30.0], [10.0, 1.4, 500.0, 300.0, 300.0])
+
+
+def fit_koren_triode(vg, vp, ip, sigma, starts=KOREN_TRIODE_STARTS):
     """Koren triode (mu, ex, kg1, kp, kvb) by least squares on plate-curve points
-    (each weighted by its sigma). Returns (KorenTriode, CurveFit)."""
+    (each weighted by its sigma), the best of the starting points `starts`. Returns
+    (KorenTriode, CurveFit)."""
     from varimu.devices.triode import KorenTriode
 
     vg, vp, ip, sigma = (np.asarray(a, float) for a in (vg, vp, ip, sigma))
@@ -306,12 +319,12 @@ def fit_koren_triode(vg, vp, ip, sigma):
         return (make(x).ip(vg, vp) - ip) / sigma
 
     best = None
-    for x0 in ([10.0, 1.35, 1000.0, 50.0, 30.0], [10.0, 1.4, 500.0, 300.0, 300.0]):
+    for x0 in starts:
         sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000)
         if best is None or sol.cost < best.cost:
             best = sol
     m = make(best.x)
-    return m, _report(m.ip(vg, vp), ip, sigma)
+    return m, curve_report(m.ip(vg, vp), ip, sigma)
 
 
 def fit_koren_pentode(plate, screen, plate_sigma, screen_sigma, ex: float | None = None):
@@ -342,8 +355,8 @@ def fit_koren_pentode(plate, screen, plate_sigma, screen_sigma, ex: float | None
     m = make(sol.x)
     return (
         m,
-        _report(m.ip(plate[:, 0], plate[:, 1], plate[:, 2]), plate[:, 3], plate_sigma),
-        _report(m.ig2(screen[:, 0], screen[:, 1]), screen[:, 2], screen_sigma),
+        curve_report(m.ip(plate[:, 0], plate[:, 1], plate[:, 2]), plate[:, 3], plate_sigma),
+        curve_report(m.ig2(screen[:, 0], screen[:, 1]), screen[:, 2], screen_sigma),
     )
 
 
@@ -366,4 +379,4 @@ def fit_junction_diode(v, i, sigma, name: str = "fit"):
         if best is None or sol.cost < best.cost:
             best = sol
     m = make(best.x)
-    return m, _report(m.i(v), i, sigma)
+    return m, curve_report(m.i(v), i, sigma)

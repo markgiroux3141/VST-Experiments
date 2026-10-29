@@ -1,0 +1,50 @@
+device: 6V6GT
+document: "GE 6V6-GT / 5V6-GT Beam Pentode, ET-T914"
+publisher: General Electric
+date: 1955-03
+local_copy: sources/ge_6v6gt_ET-T914.pdf
+local_copy_sha256: 392c296ae0a71ac30cbcd41c44db318a678f7a6edfb1f40160f609e33320bb3e
+scan_source: "web: https://frank.pocnet.net/sheets/093/6/6V6GT.pdf"
+digitized_with: >-
+  pages rendered at 300 dpi (pdftoppm; the scan's native 1-bit resolution); axes by an
+  affine least-squares fit to the grid-line intersections (residuals 0.02-0.3 V and
+  0.006-0.15 mA rms); the grid, the dashed screen-current and load lines and the labels
+  removed by a 4-5 px morphological opening and a minimum stroke length; curves traced as
+  stroke centres per pixel column and read at round values by local linear fits; every
+  overlay checked by eye (Claude Code, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-10-29
+files:
+  ge_6v6gt_plate.csv:
+    figure: "p.3 upper, 'Average plate characteristics': Ib vs Eb at Ec2 = 250 V"
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    curves: "Vg1 = 0, -2.5, -5, -7.5, -10, -12.5, -15, -17.5, -20, -22.5, -25, -30 V (no -27.5 V curve is drawn)"
+    coverage: >-
+      Va 20-390 V; the steep knee below ~20-40 V (the 0 V curve below 40 V) wasn't traced;
+      -17.5 V only from 160 V (its trace below that ran onto a neighbouring curve and was
+      dropped). The dashed screen-current curves and the triode/positive-grid figures of
+      p.3-4 weren't digitized.
+  ge_6v6gt_plate_vg2.csv:
+    figure: "p.4 upper, 'Average plate characteristics': Ib vs Eb at Ec1 = 0 V"
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    curves: "Vg2 = 250, 200, 150, 100 V"
+    coverage: "Va 25-390 V (250 and 200 V curves from 45 V)"
+  ge_6v6gt_transfer.csv:
+    figure: "p.5 upper, 'Average transfer characteristics': Ib vs Ec1 at Eb = 250 V"
+    columns: "va_v, vg2_v, vg1_v, ia_a"
+    curves: "Vg2 = 250, 200, 150, 100 V"
+    coverage: "Vg1 -0.5 V down to each curve's end (Ia ~1 mA): -33, -26, -19, -13 V"
+  ge_6v6gt_screen.csv:
+    figure: "p.5 lower, 'Average transfer characteristics': Ic2 vs Ec1 at Eb = 250 V"
+    columns: "va_v, vg1_v, vg2_v, ig2_a"
+    curves: "Vg2 = 250, 200, 150, 100 V"
+    coverage: "Vg1 -0.5 V down to each curve's end: -36, -27, -17, -8 V"
+axis_calibration: "grid lines: plate figures 0-500 V (5 V apart) x 0-140 mA (2 mA apart); transfer -40-0 V (0.4 V apart) x 0-140 mA (2 mA) and 0-14 mA (0.2 mA)"
+estimated_error: >-
+  About +-0.5 mA or +-2% on the plate and transfer curves, +-0.05 mA or +-3% on the screen
+  current; worse in the knee. Checks: the Vg1 = 0, Vg2 = 250 V curve reads 112.0 mA at
+  250 V on both p.3 and p.4; at the printed class-A point (250 / 250 V, -12.5 V: 45 mA,
+  screen 4.5 mA, p.2) the plate curves give 45.0 mA, the transfer curve 44.7 mA, the
+  screen curve 4.5 mA; at -15 V the plate curves give 35.8 mA against the push-pull
+  column's 70 mA for two tubes.
+notes: "Fit: varimu.devices.library.build_6v6gt (Koren pentode, least squares)."

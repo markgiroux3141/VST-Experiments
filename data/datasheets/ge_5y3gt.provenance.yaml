@@ -1,0 +1,25 @@
+device: 5Y3GT
+document: "GE 5Y3-GT Twin Diode for full-wave power-rectifier applications, ET-T965"
+publisher: General Electric
+date: 1955-10
+local_copy: sources/ge_5y3gt_ET-T965.pdf
+local_copy_sha256: 51ab1ed44878486684bed9b36efbfe0e25422600481e332a8217ce1199679d9c
+scan_source: "web: https://frank.pocnet.net/sheets/093/5/5Y3GT.pdf"
+digitized_with: >-
+  page rendered at 300 dpi (pdftoppm; the scan's native 1-bit resolution); axes by an
+  affine least-squares fit to all 609 grid-line intersections (residual 0.2 mA rms; the
+  scan is skewed ~0.3 deg); the curve traced as the stroke centre per pixel column,
+  stepping over grid lines, and read at round voltages by local linear fits; overlay
+  checked by eye (Claude Code, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-10-29
+files:
+  ge_5y3gt_plate.csv:
+    figure: "p.5, 'Average plate characteristics, each section': plate current vs plate voltage, Ef = rated value"
+    columns: "va_v, ia_a"
+    coverage: "Va 5-115 V (Ia 4.6-437 mA), every 5 V"
+axis_calibration: "grid lines 0-140 V (5 V apart), 0-500 mA (25 mA apart)"
+estimated_error: >-
+  About +-1 mA or +-2%, whichever is larger. Check: the curve gives 124 mA at 50 V against
+  the printed tube voltage drop of 50 V at Ib = 125 mA DC per plate (p.2).
+notes: "Fit: varimu.devices.library.build_5y3gt (Child law, least squares through the origin)."

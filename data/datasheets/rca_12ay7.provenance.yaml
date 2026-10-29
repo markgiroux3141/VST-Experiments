@@ -1,0 +1,32 @@
+device: 12AY7
+document: "RCA 12AY7 Medium-Mu Twin Triode, tentative data"
+publisher: RCA
+date: "1953-04-01 (text); curves 1952-11-05 (92CM-7861)"
+local_copy: sources/rca_12ay7_1953.pdf
+local_copy_sha256: f6aa02176de2fc6096158cff34647333c4fed677bc801f2d4ba2913a0c594060
+scan_source: "web: https://frank.pocnet.net/sheets/049/1/12AY7.pdf"
+digitized_with: >-
+  p.3 rendered at 300 dpi (pdftoppm) and turned 90 deg (the figure is printed sideways);
+  axes by an affine least-squares fit to the grid-line intersections (residual 0.25 V,
+  0.007 mA rms); grid lines erased except where a stroke crosses them (dark on both sides),
+  the remaining dashes grouped into one curve each by connectivity after a 7 px dilation,
+  each curve read as its stroke centre per pixel column (columns where a label touches it
+  skipped) and at round voltages by local quadratic fits; overlay checked by eye (Claude
+  Code, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-10-29
+files:
+  rca_12ay7_plate.csv:
+    figure: "p.3, 'Average plate characteristics, each unit', Ef = 6.3 V, parallel heaters"
+    columns: "vg_v, vp_v, ip_a"
+    curves: "Ec = +1, 0, -1, -2, -3, -4, -5, -6, -7 V"
+    coverage: "Ip 0.05-9.9 mA, Vp up to 300 V; small gaps where the curve labels sit on the curves"
+axis_calibration: "grid lines 0-425 V (5 V apart; 300 V is the last labelled), 0-10 mA (0.2 mA apart)"
+estimated_error: >-
+  About +-0.05 mA or +-2%, whichever is larger. Check: the -4 V curve gives 3.04 mA at
+  250 V against the printed class-A point (250 V, -4 V: 3 mA, p.1); Tung-Sol's curves at
+  the same point give 3.03 mA (tungsol_12ay7.provenance.yaml).
+notes: >-
+  Fit: varimu.devices.library.build_12ay7 (Koren triode, least squares, grid <= 0 V; the
+  +1 V curve is plotted, not fitted). The sheet's printed mu 40 / rp 22.8 kOhm disagree
+  with Tung-Sol's 44 / 25 kOhm at the same point.

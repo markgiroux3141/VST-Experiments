@@ -106,6 +106,11 @@ shape only).
 
 ## Tube datasheets (all with curves to digitize)
 
+Digitized and fitted 2026-10-29 (B9 step 2): local copies in `data/datasheets/sources/`,
+curves and provenance in `data/datasheets/` (`rca_12ay7`, `tungsol_12ay7`, `ge_6v6gt`,
+`ge_5y3gt`), printed figures in `published_points.yaml`, components `12AY7@1`, `6V6GT@1`,
+`5Y3GT@1`.
+
 - 12AY7: RCA web: https://frank.pocnet.net/sheets/049/1/12AY7.pdf (250 V, -4 V: mu 40,
   rp 22.8 k, gm 1750 umho, 3 mA) and Tung-Sol web:
   https://frank.pocnet.net/sheets/127/1/12AY7.pdf (same point: mu 44, rp 25 k; the two

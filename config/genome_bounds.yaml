@@ -205,3 +205,24 @@ pultec:
     c_lb_20_f:    {min: 1.2e-6, max: 1.8e-6, unit: F, source: "provisional: redraw 1.5uF +-20%"}
     c_lb_30_f:    {min: 656.0e-9, max: 984.0e-9, unit: F, source: "provisional: redraw 820nF +-20% (the EQP-1R's 30 cps total: 1 uF)"}
     c_lb_60_f:    {min: 176.0e-9, max: 264.0e-9, unit: F, source: "provisional: redraw 220nF +-20% (the EQP-1R's 60 cps total: .47 uF)"}
+
+fender_5e3:
+  # Fender 5E3 Deluxe (device builder B9; config/circuits/fender_5e3.yaml has the sources
+  # of the nominal values). Materials: config/magnetics.yaml.
+  pots:
+    audio_taper_mid:        {min: 0.05, max: 0.2, unit: ratio, source: "provisional: model knowledge (audio tapers put 5-20% of the track at half rotation)"}
+  ot:
+    # Output transformer version 1 (Amplified Parts P-TGO-002's figures; construction provisional).
+    core_material:          {choices: [grain_oriented_si_steel, permalloy_fluxgate, mumetall], source: "provisional: model knowledge (silicon-steel EI laminations)"}
+    core_area_m2:           {min: 3.5e-4, max: 7.0e-4, unit: m2, source: "provisional: model knowledge (reproductions' 2-3/4 x 2-1/4 in frame, ~1 in stack)"}
+    core_path_m:            {min: 0.09, max: 0.15, unit: m, source: "provisional: model knowledge (EI path for that frame)"}
+    turns_half:             {min: 700, max: 1200, unit: turns, source: "provisional: model knowledge (1.0-1.5 T at 15 W into 8 k at 55-85 Hz)", notes: "each primary half"}
+    sec_ratio:              {min: 0.0600, max: 0.0675, unit: ratio, source: "derived: 8.9 k to 7.0 k plate to plate into 8 ohm (8 k nominal; the reproduction's inductance ratio gives 7.0 k)"}
+    air_gap_m:              {min: 50.0e-6, max: 300.0e-6, unit: m, source: "provisional: model knowledge (an effective joint gap; with turns_half it sets the primary inductance, 3.67 H per half on the reproduction)"}
+    leakage_h:              {min: 15.0e-3, max: 45.0e-3, unit: H, source: "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf (19.31 / 40.47 mH per primary half), widened"}
+    winding_capacitance_f:  {min: 100.0e-12, max: 600.0e-12, unit: F, source: "provisional: model knowledge (push-pull primary halves)"}
+  psu:
+    pt_hv_half_rms_v:       {min: 330.0, max: 380.0, unit: V, source: "web: README's reproductions (HV 330-0-330 to 380-0-380 V) and P-TGP-002's 350.7 V unloaded"}
+    pt_r_half_ohm:          {min: 80.0, max: 160.0, unit: ohm, source: "provisional: model knowledge (around P-TGP-002's 116 ohm per half with the primary referred)"}
+    pt_leakage_h:           {min: 2.0e-3, max: 30.0e-3, unit: H, source: "provisional: model knowledge"}
+    pt_winding_capacitance_f: {min: 100.0e-12, max: 1.0e-9, unit: F, source: "provisional: model knowledge"}

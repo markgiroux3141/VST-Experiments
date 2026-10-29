@@ -1,0 +1,272 @@
+# Fender 5E3 Deluxe guitar amplifier, as a circuit file (device builder B9 step 3).
+# Built by varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/fender_5e3/README.md has their provenance):
+#   "sch: ..."         printed on Fender's schematic F-EE (schematic_f-ee.png)
+#   "lay: ..."         printed on Fender's layout F-EE only (layout_f-ee.png)
+#   "web: <url> ..."   a published figure (reproduction transformers, the speaker's reissue)
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# The drawing prints no designators: parts are named by function. "Bright" is the
+# channel whose volume wiper also feeds the tone control's .0005 (the upper channel on
+# the drawing), "normal" the other. As drawn, each channel's coupling capacitor drives
+# its volume pot's wiper; the pot's ends go to ground and to V2A's grid, so the two
+# volumes (and the tone control) load each other. Not modeled: the heaters, the pilot
+# lamp, the AC switch's .05 ground capacitor and the speaker jacks' contacts (the
+# speaker is always connected; the extra speaker jack is empty).
+#
+# The output is the speaker's terminal voltage (`out`): a check only until the physical
+# speaker (component editor C3), the user's decision (2026-10-29).
+
+title: "Fender 5E3 Deluxe"
+input: in
+probes: [out, j1b, j1n, g1b, g1n, k1, p1b, p1n, vb, vn, g2, k2, p2, g3, p3, k3, kj, oa, ob, g6a, g6b, p6a, p6b, k6, b1, b2, b3, hva, hvb]
+
+controls:
+  # The front panel. Knobs are rotations 0..1 (the panel's 1..12).
+  input_jack: {value: 1, choices: [1, 2, 3, 4], unit: position, source: "sch: two inputs per channel", notes: "the jack the guitar is plugged into: 1 bright input 1, 2 bright input 2, 3 normal input 1, 4 normal input 2 (input 1: both 68K in parallel; input 2: the 68K / 68K divider)"}
+  volume_bright: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: the bright channel's 1 MEG volume"}
+  volume_normal: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "sch: the normal channel's 1 MEG volume"}
+  tone: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: the 1 MEG tone control", notes: "0 = dark (wiper at the .005 end)"}
+  # Operating conditions.
+  mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage; the drawing prints none); 120 V is the replacement power transformer's rated primary (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf)"}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
+
+values:
+  # --- Inputs (sch) ------------------------------------------------------------------
+  r_input_ohm: {value: 1.0e+6, source: "sch: 1 MEG from input 1's tip to ground, each channel"}
+  r_grid_stop_ohm: {value: 68.0e+3, source: "sch: 68K from each input's tip to the 12AY7 grid"}
+  jack_contact_ohm: {value: 0.01, source: "provisional: model knowledge (a phone jack's contact, ~10 mOhm)", notes: "input 1's contact grounds its tip when it's empty; input 2's ties its tip to input 1's when it's empty (sch)"}
+
+  # --- V1, 12AY7 (sch) -----------------------------------------------------------------
+  r_plate1_ohm: {value: 100.0e+3, source: "sch: 100K plate loads"}
+  r_cathode1_ohm: {value: 820, source: "sch: 820 from the shared cathodes to ground"}
+  c_cathode1_f: {value: 25.0e-6, source: "sch: 25-25 (25 uF 25 V) across the 820"}
+  c_couple1_f: {value: 0.1e-6, source: "sch: .1-400 from each plate to its volume's wiper"}
+
+  # --- Volumes and tone (sch) ----------------------------------------------------------
+  volume_pot_ohm: {value: 1.0e+6, source: "sch: 1 MEG volumes"}
+  tone_pot_ohm: {value: 1.0e+6, source: "sch: 1 MEG tone"}
+  audio_taper_mid: {value: 0.1, genome: fender_5e3.pots.audio_taper_mid, source: "provisional: model knowledge (the drawing prints no tapers; Fender's volume and tone pots of the era are commonly given as audio taper, ~10% of the track at half rotation)", notes: "all three pots"}
+  c_tone_treble_f: {value: 0.5e-9, source: "sch: .0005 from the bright volume's wiper to the tone pot's top (mica on the layout)"}
+  c_tone_bass_f: {value: 5.0e-9, source: "sch: .005-600 from the tone pot's bottom to ground"}
+
+  # --- V2A, 12AX7 (sch, lay) -----------------------------------------------------------
+  r_plate2_ohm: {value: 100.0e+3, source: "sch: 100K plate load"}
+  r_cathode2_ohm: {value: 1500, source: "sch: 1500 cathode resistor"}
+  c_cathode2_f: {value: 25.0e-6, source: "sch: 25-25 across the 1500"}
+  c_couple2_f: {value: 0.02e-6, source: "lay: .02 MFD 600 V from V2A's plate to the inverter's grid (the schematic prints no value)"}
+
+  # --- V2B, 12AX7 cathodyne inverter (sch) ---------------------------------------------
+  r_plate3_ohm: {value: 56.0e+3, source: "sch: 56K plate load"}
+  r_cathode3_ohm: {value: 1500, source: "sch: 1500 from the cathode to the tail"}
+  r_tail_ohm: {value: 56.0e+3, source: "sch: 56K tail to ground"}
+  r_grid3_ohm: {value: 1.0e+6, source: "sch: 1 MEG grid leak to the 1500 / 56K junction"}
+  c_couple3_plate_f: {value: 0.1e-6, source: "sch: .1-400 from the plate"}
+  c_couple3_cathode_f: {value: 0.1e-6, source: "sch: .1-200 from the cathode"}
+  r_grid6_ohm: {value: 220.0e+3, source: "sch: 220K grid leaks"}
+  r_grid6_stop_ohm: {value: 1500, source: "sch: 1500 grid stoppers"}
+
+  # --- 6V6GT pair (sch) ----------------------------------------------------------------
+  r_cathode6_ohm: {value: 250, source: "sch: 250-5W from the 6V6 cathodes to ground"}
+  c_cathode6_f: {value: 25.0e-6, source: "sch: 25-25 across the 250"}
+
+  # --- Output transformer, version 1 (Triad 50246 original; no original data) ---------
+  # Amplified Parts' reproduction P-TGO-002's measured figures where there are some,
+  # construction provisional (C2's designer makes version 2 by construction).
+  ot_r_half_a_ohm: {value: 147.2, source: "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf (primary DCR per half 147.2 / 195.3 ohm)"}
+  ot_r_half_b_ohm: {value: 195.3, source: "web: same sheet (the other half)"}
+  ot_r_sec_ohm: {value: 0.493, source: "web: same sheet (secondary DCR)"}
+  ot_sec_per_half: {value: 0.06325, genome: fender_5e3.ot.sec_ratio, source: "derived: 8 k CT : 8 ohm (same sheet; the original's nominal), secondary turns per primary half 2 / sqrt(8000 / 8)", notes: "the sheet's inductances (3.67 H per half, 16.7 mH secondary, both at 1 V) give 0.0675: the secondary's 1 V is a much higher flux"}
+  ot_core_material: {value: grain_oriented_si_steel, genome: fender_5e3.ot.core_material, source: "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml)"}
+  ot_core_area_m2: {value: 5.0e-4, genome: fender_5e3.ot.core_area_m2, source: "provisional: model knowledge (a ~7/8 in tongue in the 2-3/4 x 2-1/4 in frame of reproductions, 1 in stack (Tube Amp Doctor), 95% stacking; data/schematics/fender_5e3/README.md)"}
+  ot_core_path_m: {value: 0.12, genome: fender_5e3.ot.core_path_m, source: "provisional: model knowledge (~5.6 x the tongue width for scrapless EI)"}
+  ot_turns_half: {value: 929, genome: fender_5e3.ot.turns_half, source: "provisional: model knowledge (a design rule: 1.2 T at 15 W into 8 k at 70 Hz with the core's area; the reproduction is rated 15 W, same sheet)", notes: "each primary half (the reference winding)"}
+  ot_gap_m: {value: 145.0e-6, genome: fender_5e3.ot.air_gap_m, source: "derived: gives 3.67 H per primary half in the core's linear limit with ot_turns_half (the reproduction's measured inductance at 1 kHz, 1 V, same sheet). An effective joint gap: it also stands in for the lower initial permeability of the era's non-oriented steel"}
+  ot_leakage_h: {value: 29.9e-3, genome: fender_5e3.ot.leakage_h, source: "derived: the mean of the reproduction's leakage per primary half, 40.47 / 19.31 mH (same sheet)", notes: "the format splits leakage evenly between the windings; the measured asymmetry isn't modeled"}
+  ot_c_half_f: {value: 300.0e-12, genome: fender_5e3.ot.winding_capacitance_f, source: "provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF)"}
+
+  # --- Speaker: Jensen P12R reissue, electrical equivalent (until C3) ------------------
+  # Voice coil Re + Le in series with the motional impedance, a parallel RLC from the
+  # Thiele-Small figures: Res = BL^2 / Rms (Rms = 2 pi Fs Mms / Qms), Lces = Cms BL^2,
+  # Cmes = Mms / BL^2 (resonance 80 Hz, Qes 2.5 as the sheet).
+  spk_re_ohm: {value: 6.05, source: "web: https://cdn.shopify.com/s/files/1/0543/2003/8061/files/Specification_Sheet_-_P12R___Jensen_Loudspeakers.pdf (Re)"}
+  spk_le_h: {value: 0.5e-3, source: "web: same sheet (Le)"}
+  spk_res_ohm: {value: 31.55, source: "derived: BL 5.53, Mms 25.2 g, Fs 80 Hz, Qms 13.07 (same sheet): BL^2 / (2 pi Fs Mms / Qms)"}
+  spk_lces_h: {value: 4.801e-3, source: "derived: Cms 157 um/N x BL^2 (same sheet)"}
+  spk_cmes_f: {value: 824.0e-6, source: "derived: Mms / BL^2 (same sheet)"}
+
+  # --- Power supply ----------------------------------------------------------------------
+  # Triad 6452 original, no data; Amplified Parts' reproduction P-TGP-002 (120 V
+  # primary): 350.7 V per HV half unloaded, DCR primary 3.4, HV 174 ohm. Its kit's
+  # measured voltages are the DC targets (README, "Published voltages").
+  pt_hv_half_rms_v: {value: 350.7, genome: fender_5e3.psu.pt_hv_half_rms_v, source: "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf (350.7 V per half unloaded at 120 V)", notes: "open-circuit rms per HV half behind pt_r_half_ohm, at mains_v_rms = 120 V"}
+  pt_r_half_ohm: {value: 116.0, genome: fender_5e3.psu.pt_r_half_ohm, source: "derived: HV DCR 174 ohm end to end (half: 87) + the primary's 3.4 ohm referred to a half, 3.4 x (350.7 / 120)^2 = 29 (same sheet)", notes: "the heaters' load on the primary (~0.5% sag) isn't modeled"}
+  pt_leakage_h: {value: 10.0e-3, genome: fender_5e3.psu.pt_leakage_h, source: "provisional: model knowledge (leakage per HV half of a ~50 W mains transformer)"}
+  pt_c_half_f: {value: 300.0e-12, genome: fender_5e3.psu.pt_winding_capacitance_f, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
+  rectifier_tube: {value: 5Y3GT@1, source: "sch: 5Y3GT full-wave rectifier, B+ from its filament; config/components/5y3gt/1.yaml (per section)"}
+  c_filter_f: {value: 16.0e-6, source: "sch: 16-450 at each of the three nodes"}
+  r_b12_ohm: {value: 5000, source: "sch: 5000 from the rectifier's filament (B+1, the output transformer's centre tap) to the screens (B+2)"}
+  r_b23_ohm: {value: 22.0e+3, source: "sch: 22K from B+2 to B+3 (V1, V2A, the inverter)"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: DC path for the B+ nodes (the 5E3 has no bleeder; not physical)"}
+
+  # --- Per-instance tolerance (the drawing prints no tolerances) --------------------------
+  passive_seed: {value: 0, genome: passives.seed, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, genome: passives.spread, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"}
+  tol_resistor_pct: {value: 10.0, source: "provisional: model knowledge (carbon composition resistors of the era, 10%)"}
+  tol_wirewound_pct: {value: 5.0, source: "provisional: model knowledge (the 250-5W wirewound cathode resistor)"}
+  tol_pot_pct: {value: 20.0, genome: passives.pot_pct, source: "provisional: model knowledge (carbon potentiometers, +-10..20%)"}
+  tol_paper_pct: {value: 20.0, genome: passives.paper_capacitor_pct, source: "provisional: model knowledge (paper capacitors of the 1950s, +-10..20%)"}
+  tol_mica_pct: {value: 10.0, genome: passives.mica_capacitor_pct, source: "provisional: model knowledge (small mica capacitors, +-5..20%)"}
+  tol_electrolytic_minus_pct: {value: 20.0, genome: passives.electrolytic_minus_pct, source: "provisional: model knowledge (1950s electrolytics, -10..-20%)"}
+  tol_electrolytic_plus_pct: {value: 50.0, genome: passives.electrolytic_plus_pct, source: "provisional: model knowledge (1950s electrolytics, +50..+100%)"}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 120.0, source: "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgp-002.pdf (the reproduction power transformer's primary; its voltages are taken at it)"}
+
+tolerance:
+  source: "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r10: tol_resistor_pct
+    wirewound: tol_wirewound_pct
+    pot: tol_pot_pct
+    paper: tol_paper_pct
+    mica: tol_mica_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    r10: [RIN1B, RIN1N, RGAB, RGBB, RGAN, RGBN, RPL1B, RPL1N, RK1, RPL2, RK2, RPL3, RK3, RTAIL, RG3, RGLA, RGLB, RGSA, RGSB, RB12, RB23]
+    wirewound: [RK6]
+    pot: [RVOLB, RVOLN, RTONE]
+    paper: [CC1B, CC1N, CTB, CC2, CC3A, CC3B]
+    mica: [CTT]
+    electrolytic: [CK1, CK2, CK6, CB1, CB2, CB3]
+
+devices:
+  V1B: {device: 12AY7@1, tolerance: tube}
+  V1N: {device: 12AY7@1, tolerance: tube}
+  V2A: {device: 12AX7@1, tolerance: tube}
+  V2B: {device: 12AX7@1, tolerance: tube}
+  V6A: {device: 6V6GT@1, tolerance: tube}
+  V6B: {device: 6V6GT@1, tolerance: tube}
+  V5: {device: rectifier_tube, tolerance: tube}
+
+sections:
+  - title: power supply
+    parts:
+      # The HV halves from the mains at phase 90 / 270 (a run starts at the peak), the
+      # 5Y3GT (its filament is B+1), then 5000 and 22K to the other filter nodes (sch).
+      VHVA: {mains: [hv_a, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hv_b, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 270.0}
+      RPTA: {R: [hv_a, hv_ar], r: pt_r_half_ohm, tolerance: none}
+      LPTA: {L: [hv_ar, hva], l: pt_leakage_h}
+      RPTB: {R: [hv_b, hv_br], r: pt_r_half_ohm, tolerance: none}
+      LPTB: {L: [hv_br, hvb], l: pt_leakage_h}
+      CPTA: {C: [hva, "0"], c: pt_c_half_f, tolerance: none}
+      CPTB: {C: [hvb, "0"], c: pt_c_half_f, tolerance: none}
+      XV5A: {device: [hva, b1], model: V5}
+      XV5B: {device: [hvb, b1], model: V5}
+      CB1: {C: [b1, "0"], c: c_filter_f}
+      RB12: {R: [b1, b2], r: r_b12_ohm}
+      CB2: {C: [b2, "0"], c: c_filter_f}
+      RB23: {R: [b2, b3], r: r_b23_ohm}
+      CB3: {C: [b3, "0"], c: c_filter_f}
+      RLEAK: {R: [b1, "0"], r: numerical_leak_ohm, tolerance: none}
+
+  - title: inputs
+    parts:
+      # Each channel (sch): 1 MEG from input 1's tip j1 to ground, 68K from j1 to the
+      # grid, 68K from the grid to input 2's tip j2. Input 1's contact grounds j1 when
+      # it's empty; input 2's ties j2 to j1 when it's empty.
+      RIN1B: {R: [j1b, "0"], r: r_input_ohm}
+      RGAB: {R: [j1b, g1b], r: r_grid_stop_ohm}
+      RGBB: {R: [g1b, j2b], r: r_grid_stop_ohm}
+      SINB:
+        switch: input_jack
+        parts:
+          RJ1B_IN: {R: [in, j1b], r: jack_contact_ohm, tolerance: none, in: [1]}
+          RJ1B_GND: {R: [j1b, "0"], r: jack_contact_ohm, tolerance: none, in: [2, 3, 4]}
+          RJ2B_IN: {R: [in, j2b], r: jack_contact_ohm, tolerance: none, in: [2]}
+          RJ2B_J1: {R: [j2b, j1b], r: jack_contact_ohm, tolerance: none, in: [1, 3, 4]}
+      RIN1N: {R: [j1n, "0"], r: r_input_ohm}
+      RGAN: {R: [j1n, g1n], r: r_grid_stop_ohm}
+      RGBN: {R: [g1n, j2n], r: r_grid_stop_ohm}
+      SINN:
+        switch: input_jack
+        parts:
+          RJ1N_IN: {R: [in, j1n], r: jack_contact_ohm, tolerance: none, in: [3]}
+          RJ1N_GND: {R: [j1n, "0"], r: jack_contact_ohm, tolerance: none, in: [1, 2, 4]}
+          RJ2N_IN: {R: [in, j2n], r: jack_contact_ohm, tolerance: none, in: [4]}
+          RJ2N_J1: {R: [j2n, j1n], r: jack_contact_ohm, tolerance: none, in: [1, 2, 3]}
+
+  - title: 12AY7 and controls
+    parts:
+      # Both triodes on one cathode resistor (sch).
+      XV1B: {device: [p1b, g1b, k1], model: V1B}
+      XV1N: {device: [p1n, g1n, k1], model: V1N}
+      RK1: {R: [k1, "0"], r: r_cathode1_ohm}
+      CK1: {C: [k1, "0"], c: c_cathode1_f}
+      RPL1B: {R: [b3, p1b], r: r_plate1_ohm}
+      RPL1N: {R: [b3, p1n], r: r_plate1_ohm}
+      # Each plate drives its volume's wiper; the volumes' ends: ground (rotation 0) and
+      # V2A's grid g2 (sch).
+      CC1B: {C: [p1b, vb], c: c_couple1_f}
+      CC1N: {C: [p1n, vn], c: c_couple1_f}
+      RVOLB: {pot: ["0", vb, g2], r: volume_pot_ohm, at: volume_bright, taper_mid: audio_taper_mid}
+      RVOLN: {pot: ["0", vn, g2], r: volume_pot_ohm, at: volume_normal, taper_mid: audio_taper_mid}
+      # Tone: the pot's wiper on g2, its top through .0005 to the bright wiper vb, its
+      # bottom through .005 to ground (sch).
+      CTT: {C: [vb, tt], c: c_tone_treble_f}
+      RTONE: {pot: [tb, g2, tt], r: tone_pot_ohm, at: tone, taper_mid: audio_taper_mid}
+      CTB: {C: [tb, "0"], c: c_tone_bass_f}
+
+  - title: 12AX7 and inverter
+    parts:
+      XV2A: {device: [p2, g2, k2], model: V2A}
+      RK2: {R: [k2, "0"], r: r_cathode2_ohm}
+      CK2: {C: [k2, "0"], c: c_cathode2_f}
+      RPL2: {R: [b3, p2], r: r_plate2_ohm}
+      CC2: {C: [p2, g3], c: c_couple2_f}
+      # Cathodyne (sch): 56K plate load, 1500 + 56K from the cathode, the grid leak to
+      # their junction kj; outputs from the plate and the cathode.
+      XV2B: {device: [p3, g3, k3], model: V2B}
+      RPL3: {R: [b3, p3], r: r_plate3_ohm}
+      RK3: {R: [k3, kj], r: r_cathode3_ohm}
+      RTAIL: {R: [kj, "0"], r: r_tail_ohm}
+      RG3: {R: [g3, kj], r: r_grid3_ohm}
+      CC3A: {C: [p3, oa], c: c_couple3_plate_f}
+      CC3B: {C: [k3, ob], c: c_couple3_cathode_f}
+      RGLA: {R: [oa, "0"], r: r_grid6_ohm}
+      RGLB: {R: [ob, "0"], r: r_grid6_ohm}
+      RGSA: {R: [oa, g6a], r: r_grid6_stop_ohm}
+      RGSB: {R: [ob, g6b], r: r_grid6_stop_ohm}
+
+  - title: output
+    parts:
+      # The 6V6GT pair on one cathode resistor, screens on B+2, plates on the output
+      # transformer's ends, its centre tap on B+1 (sch).
+      XV6A: {device: [p6a, b2, g6a, k6], model: V6A}
+      XV6B: {device: [p6b, b2, g6b, k6], model: V6B}
+      RK6: {R: [k6, "0"], r: r_cathode6_ohm}
+      CK6: {C: [k6, "0"], c: c_cathode6_f}
+      T1:
+        transformer:
+          pa: {nodes: [p6a, b1], r: ot_r_half_a_ohm, c: ot_c_half_f}
+          pb: {nodes: [b1, p6b], r: ot_r_half_b_ohm, c: ot_c_half_f}
+          s: {nodes: [out, "0"], ratio: ot_sec_per_half, r: ot_r_sec_ohm}
+        core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}
+        turns: ot_turns_half
+        leakage_h: ot_leakage_h
+      # The speaker's electrical equivalent (the P12R reissue).
+      RSPK_E: {R: [out, spk_l], r: spk_re_ohm, tolerance: none}
+      LSPK_E: {L: [spk_l, spk_m], l: spk_le_h}
+      RSPK_M: {R: [spk_m, "0"], r: spk_res_ohm, tolerance: none}
+      LSPK_M: {L: [spk_m, "0"], l: spk_lces_h}
+      CSPK_M: {C: [spk_m, "0"], c: spk_cmes_f, tolerance: none}
