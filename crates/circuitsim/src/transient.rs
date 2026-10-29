@@ -1996,6 +1996,14 @@ impl Transient {
             .map(|dk| dk.newton.device_evaluations.as_slice())
     }
 
+    /// DK only: iterations with junction limiting per device, and
+    /// factorizations by what asked for them (`dk::Refactor`'s order).
+    pub fn newton_counts(&self) -> Option<(&[u64], &[u64])> {
+        self.dk
+            .as_ref()
+            .map(|dk| (dk.newton.device_limits.as_slice(), &dk.newton.refactors[..]))
+    }
+
     /// Port voltages of every device at the current solution (device by
     /// device, as `dk::Ports` lays them out).
     pub fn port_voltages(&self) -> &[f64] {

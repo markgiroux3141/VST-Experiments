@@ -4,8 +4,9 @@
 //!
 //!     cargo run --release -p varimu-app --example play -- --device fairchild_670
 //!         (--file FILE [--start S] [--seconds S] | --input [NAME] [--channel N])
-//!         [--for SECONDS] [--buffer S] [--set KEY=VALUE ...] [--turn KEY=A,B]
+//!         [--for SECONDS] [--buffer S] [--gain-db G] [--set KEY=VALUE ...] [--turn KEY=A,B]
 //!
+//! `--gain-db G` is the input gain (the Play view's normalization and trim).
 //! `--record FILE` records live input for the run and saves the take (as the app does).
 //! The process runs at high priority, as the app does (`--normal-priority`: not).
 //! `--turn` switches a knob between two values every 2 s and reports how long each
@@ -18,7 +19,7 @@ use std::time::{Duration, Instant};
 use varimu_app::audio;
 use varimu_app::live::Circuit;
 use varimu_app::panel::{DEVICES, knobs, values};
-use varimu_app::player::{AHEAD_S, INPUT_BUFFER_S, Player, Source, State, input_devices};
+use varimu_app::player::{INPUT_BUFFER_S, Player, Source, State, input_devices};
 use varimu_app::settings::{Quality, Settings};
 use varimu_circuit::yaml::Value;
 
@@ -50,6 +51,7 @@ fn main() -> Result<(), String> {
     let (mut device, mut file, mut input) = ("fairchild_670".to_string(), None, None);
     let (mut channel, mut seconds, mut start, mut excerpt) = (0usize, 30.0, 0.0, 8.0);
     let mut buffer: Option<f64> = None;
+    let mut gain_db = 0.0;
     let mut sets = Vec::new();
     let mut turn: Option<(String, Value, Value)> = None;
     let mut normal_priority = false;
@@ -70,6 +72,7 @@ fn main() -> Result<(), String> {
             "--start" => start = num(args.next(), &a)?,
             "--seconds" => excerpt = num(args.next(), &a)?,
             "--buffer" => buffer = Some(num(args.next(), &a)?),
+            "--gain-db" => gain_db = num(args.next(), &a)?,
             "--set" | "--turn" => {
                 let kv = args.next().ok_or(format!("{a} needs KEY=VALUE"))?;
                 let (k, v) = kv.split_once('=').ok_or(format!("{a} KEY=VALUE"))?;
@@ -113,7 +116,10 @@ fn main() -> Result<(), String> {
                     x.len() as f64 / s.sample_rate as f64
                 ));
             }
-            (Source::Loop(x[a..b].to_vec()), buffer.unwrap_or(AHEAD_S))
+            (
+                Source::Loop(x[a..b].to_vec()),
+                buffer.unwrap_or(dev.ahead_s),
+            )
         }
         (None, Some(name)) => (
             Source::Input {
@@ -127,7 +133,8 @@ fn main() -> Result<(), String> {
     if !normal_priority {
         varimu_app::player::raise_priority();
     }
-    let player = Player::start(source, v.clone(), circuit, s, 1.0, buffer)?;
+    let gain = 10f64.powf(gain_db / 20.0);
+    let player = Player::start(source, v.clone(), circuit, s, gain, buffer)?;
     let t0 = Instant::now();
     while player.status().state == State::Starting {
         std::thread::sleep(Duration::from_millis(20));

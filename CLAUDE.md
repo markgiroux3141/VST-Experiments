@@ -293,6 +293,7 @@ cargo run --release -p varimu-app -- --edit triode_stage_drawn   # R3: the Edito
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
 cargo run -p varimu-app --example devices             # the audio devices cpal sees
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)
+cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check
@@ -576,6 +577,14 @@ tests skip when ngspice is missing.
   after each Rust edit, and explorer.exe often holds a core. Wait until no
   `rustc` runs, report the best of several runs, and compare engines back to
   back rather than against old numbers.
+- **Floating windings cost Newton iterations (2026-10-28).** A node held only by diode
+  leakage (the bridge on T104's floating secondary) makes Newton wander its common mode
+  each time the diodes switch (jumps of 10-700 V, then one nVt per iteration back, a
+  refactorization nearly every time): HF-rich input ran the draft 670 at 3-4x real time.
+  A capacitance from the winding to ground (`CT104A/B`, the secondary to its core; the
+  user's choice) holds it within a step. Check a new circuit's floating windings the same
+  way (`examples/load_profile.rs`, its `--add-c`), and see `DkNewton::refactors` /
+  `device_limits` for where the iterations go (NATIVE_APP_PLAN.md, R2).
 - **The draft quality (M8, 2026-10-27).** A partitioned run (`partition.rs`) only
   holds across stiff, capacitor-held nodes like the supply rails: splitting through
   the signal path made DC singular (a source in a loop with T104's windings; a 6973

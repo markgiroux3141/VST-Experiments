@@ -10,6 +10,8 @@
 //!   the difference to the output, smoothed over ~1 s so it doesn't act as a second
 //!   compressor. It holds while the input is below BS.1770's absolute gate (-70 LUFS).
 //!   Monitoring only: renders are the device as it is.
+//! - **Output gain** is a manual gain on the device's output (not the bypassed input),
+//!   on top of the compensation. Monitoring only too.
 
 /// BS.1770's K-weighting: a high shelf (the head) and a high pass (RLB), as biquads
 /// designed for any rate (libebur128's formulas; at 48 kHz they give BS.1770's
@@ -81,6 +83,8 @@ const LOUDNESS_S: f64 = 3.0;
 const FOLLOW_S: f64 = 1.0;
 /// Bypass crossfade (s).
 const FADE_S: f64 = 0.01;
+/// How fast the output gain follows its slider (s): no zipper noise.
+const GLIDE_S: f64 = 0.02;
 /// BS.1770's absolute gate: -70 LUFS (mean square of the K-weighted signal, with its
 /// -0.691 dB offset).
 const GATE_MS: f64 = 1.1724653e-7;
@@ -92,6 +96,8 @@ const MAX_COMP_DB: f64 = 24.0;
 pub struct Monitor {
     pub bypass: bool,
     pub compensate: bool,
+    /// The manual gain on the device's output (dB).
+    pub output_db: f64,
     /// The dry input, delayed by the engine's lag.
     delay: Vec<f64>,
     at: usize,
@@ -104,9 +110,12 @@ pub struct Monitor {
     /// The compensation applied now and its target (dB).
     comp_db: f64,
     target_db: f64,
+    /// The output gain applied now (dB, gliding toward `output_db`).
+    out_db: f64,
     // Per-sample coefficients.
     a_loud: f64,
     a_follow: f64,
+    a_glide: f64,
     step_mix: f64,
 }
 
@@ -117,6 +126,7 @@ impl Monitor {
         Monitor {
             bypass: false,
             compensate: true,
+            output_db: 0.0,
             delay: vec![0.0; lag.max(1)],
             at: 0,
             mix: 0.0,
@@ -126,8 +136,10 @@ impl Monitor {
             ms_out: 0.0,
             comp_db: 0.0,
             target_db: 0.0,
+            out_db: 0.0,
             a_loud: 1.0 / (LOUDNESS_S * r),
             a_follow: 1.0 / (FOLLOW_S * r),
+            a_glide: 1.0 / (GLIDE_S * r),
             step_mix: 1.0 / (FADE_S * r),
         }
     }
@@ -156,7 +168,8 @@ impl Monitor {
                         .clamp(-MAX_COMP_DB, MAX_COMP_DB);
                 }
                 self.comp_db += (self.target_db - self.comp_db) * self.a_follow;
-                let g = 10f64.powf(self.compensation_db() / 20.0);
+                self.out_db += (self.output_db - self.out_db) * self.a_glide;
+                let g = 10f64.powf((self.compensation_db() + self.out_db) / 20.0);
                 if self.mix < target_mix {
                     self.mix = (self.mix + self.step_mix).min(1.0);
                 } else if self.mix > target_mix {
@@ -216,6 +229,35 @@ mod tests {
         m.compensate = false;
         let y = m.process(&dry[..480], &wet[..480]);
         assert!(y.iter().zip(&wet[..480]).all(|(a, b)| a == b));
+    }
+
+    #[test]
+    fn output_gain_scales_the_device_not_the_bypass() {
+        let mut m = Monitor::new(48_000, 1);
+        m.compensate = false;
+        m.output_db = -6.0;
+        let dry = sine(480, 0.1);
+        let wet: Vec<f32> = dry.iter().map(|&v| v as f32).collect();
+        // It glides there (no zipper noise): half a second is 25 time constants.
+        let y = m.process(&dry, &wet);
+        assert!(y[1].abs() > 0.99 * wet[1].abs());
+        for _ in 0..50 {
+            m.process(&dry, &wet);
+        }
+        let y = m.process(&dry, &wet);
+        let g = 10f64.powf(-6.0 / 20.0);
+        assert!(
+            y.iter()
+                .zip(&wet)
+                .all(|(a, b)| (*a as f64 - *b as f64 * g).abs() < 1e-6)
+        );
+        // Bypassed (after the fade): the input as it is.
+        m.bypass = true;
+        m.process(&dry, &wet);
+        let y = m.process(&dry, &wet);
+        for (i, &v) in y.iter().enumerate().skip(1) {
+            assert_eq!(v, dry[i - 1] as f32);
+        }
     }
 
     #[test]

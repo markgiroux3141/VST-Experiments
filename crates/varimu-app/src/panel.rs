@@ -7,9 +7,10 @@ use varimu_circuit::spec::CircuitSpec;
 use varimu_circuit::yaml::Value;
 
 use crate::live::Values;
+use crate::player::AHEAD_S;
 
 /// A device: a circuit file and what its panel shows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Device {
     pub id: &'static str,
     pub label: &'static str,
@@ -17,6 +18,8 @@ pub struct Device {
     pub circuit: &'static str,
     /// The controls on its panel (None: every control but the mains settings).
     pub panel: Option<&'static [&'static str]>,
+    /// Audio kept ahead of playback for a file's loop (s; see [`AHEAD_S`]).
+    pub ahead_s: f64,
 }
 
 pub const DEVICES: [Device; 2] = [
@@ -30,12 +33,17 @@ pub const DEVICES: [Device; 2] = [
             "time_constant",
             "dc_threshold",
         ]),
+        // HF-rich input (a drum stem's hi-hat at -11.5 dBFS) runs the draft 670's
+        // sidechain bridge at 3-4x real time for up to ~170 ms at a time
+        // (`examples/load_profile.rs`, 2026-10-28): 0.1 s ran dry.
+        ahead_s: 0.25,
     },
     Device {
         id: "pultec_eqp1a",
         label: "Pultec EQP-1A (program EQ)",
         circuit: "pultec_eqp1a",
         panel: None,
+        ahead_s: AHEAD_S,
     },
 ];
 

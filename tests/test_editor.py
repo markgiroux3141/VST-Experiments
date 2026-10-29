@@ -212,8 +212,9 @@ def test_other_circuits_compile_to_the_same_ir(name):
 
 
 def test_670_bridge_without_its_secondary_capacitance():
-    """The 670 passes the checks; without T104's secondary capacitance (added 2026-10-26)
-    its bridge nodes fail the rectifier check, and the finding lands on the bridge."""
+    """The 670 passes the checks; without T104's secondary capacitances (across it, added
+    2026-10-26, and to ground, CT104A/B, 2026-10-28) its bridge nodes fail the rectifier
+    check, and the finding lands on the bridge."""
     import copy
     import dataclasses
 
@@ -223,6 +224,8 @@ def test_670_bridge_without_its_secondary_capacitance():
     for s in sections:
         if "T104" in s["parts"]:
             del s["parts"]["T104"]["transformer"]["s"]["c"]
+        for ref in ("CT104A", "CT104B"):
+            s["parts"].pop(ref, None)
     d = generated_drawing(dataclasses.replace(spec, sections=tuple(sections)))
     c, found = check_drawing(d)
     rect = [m for m in found if m.check == "rectifier"]

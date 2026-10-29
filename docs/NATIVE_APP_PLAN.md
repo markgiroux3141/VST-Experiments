@@ -292,6 +292,38 @@ is queued (the one remaining dropout was the first blocks warming up), and the l
 - **The 670 on live input** was measured on a silent input (43% load against ~80% on
   program): a run with an instrument into the interface is still to do.
 
+**HF-rich input (2026-10-28).** A drum stem (normalized to -11.5 dBFS) dropped out at
+every hi-hat on the 670. `examples/load_profile.rs` (a file through a device at draft-1x
+without an audio device: each block's load next to the solver's counters, per device and
+per refactorization cause; `--add-c NODE=F` tries a capacitor to ground) found:
+
+- the load is the sidechain's bridge (DCR101-104), not level: at the same level, HF-rich
+  blocks ran at 3-4x real time, dull ones at 0.6x; with no signal into the sidechain the
+  stem ran at 0.45x with no block over 1.0;
+- the bridge sits on T104's floating secondary, whose common mode only the diodes'
+  leakage (~1e-7 S) held. Each time HF peaks switched the bridge, Newton moved that
+  common mode by tens to hundreds of volts and walked it back one nVt (47 mV) per
+  iteration, refactoring nearly every time (28 iterations and 22 factorizations per
+  sample in the hits; whole stem 0.97x, every 8 s loop 0.92-1.02x, backlogs to 570 ms
+  against the 100 ms lead). Junction limiting doesn't cover a walk down; inverting the
+  diode's curve on downward steps saved 13% and nothing once the island was held, and
+  caching factorizations wouldn't cut iterations;
+- the fix (the user's choice): the secondary's capacitance to its grounded core,
+  `CT104A/B` (`t104_c_sec_gnd_f`, 100 pF each, provisional, genome-bounded 30-300 pF; the
+  value barely matters from 100 pF to 1 nF). The stem then runs at 0.68x, the worst 8 s
+  loop at 0.71x, 0.49 factorizations per sample, the worst backlog 115 ms; what remains
+  is the 6973s seeing the bridge switch through T104. The 670 keeps a 250 ms lead
+  (`panel::Device::ahead_s`; other devices 100 ms).
+- checked: in real time (`examples/play.rs --gain-db 5.9`, the stem's first 8 s, 15 s,
+  idle desktop) 0 dropouts at 62-68% load, single blocks up to 485% absorbed by the lead;
+  `slice_report.py --verify` passes (behaviour within 0.01 dB of ngspice, every waveform
+  row within its regression bound, the largest move 1.3 dB).
+
+The Play view also has a manual Output gain (+-24 dB, on top of the compensation,
+monitoring only): the compensation can sit low for seconds after quiet stretches (a
+likely cause, not yet measured: quiet input above its -70 LUFS gate while the device's
+own floor reads louder).
+
 Fixed on the way: a knob change after a restart, both ready before the next block, was
 applied to the playing stream rather than the one fading in, which stopped playback
 ("update: the circuit's nodes, sources or inductors changed"; the pad across 0 dB). The

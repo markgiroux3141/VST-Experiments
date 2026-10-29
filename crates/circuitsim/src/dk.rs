@@ -443,6 +443,27 @@ const THETA_MAX: f64 = 0.5;
 /// control moves between the full step and a few halvings).
 const SLOTS: usize = 6;
 
+/// What asked for a factorization (counted in [`DkNewton::refactors`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refactor {
+    /// No factored matrix for this step size (or no reuse).
+    Matrix,
+    /// The last solve with it contracted by more than [`THETA_REFACTOR`].
+    Lagging,
+    /// A device was junction-limited in this iteration.
+    Limited,
+    /// The iteration after one with limiting.
+    AfterLimit,
+    /// An iteration contracted by more than [`THETA_MAX`].
+    Contraction,
+}
+
+impl Refactor {
+    pub const COUNT: usize = 5;
+    pub const NAMES: [&'static str; Refactor::COUNT] =
+        ["matrix", "lagging", "limited", "after_limit", "contraction"];
+}
+
 /// A factored Newton matrix `I + K G`.
 #[derive(Debug, Clone)]
 struct Factored {
@@ -502,6 +523,10 @@ pub struct DkNewton {
     pub evaluations: u64,
     pub device_evaluations: Vec<u64>,
     pub factorizations: u64,
+    /// Iterations with junction limiting, per device, and factorizations by
+    /// what asked for them (see [`Refactor`]).
+    pub device_limits: Vec<u64>,
+    pub refactors: [u64; Refactor::COUNT],
     // Scratch.
     ieq: Vec<f64>,
     j: Vec<f64>,
@@ -538,6 +563,8 @@ impl DkNewton {
             evaluations: 0,
             device_evaluations: vec![0; ports.offsets.len()],
             factorizations: 0,
+            device_limits: vec![0; ports.offsets.len()],
+            refactors: [0; Refactor::COUNT],
             ieq: vec![0.0; m],
             j: vec![0.0; m * m],
             rhs: vec![0.0; m],
@@ -591,6 +618,11 @@ impl DkNewton {
         let slot = &mut self.slots[self.cur];
         slot.used = self.solves;
         let mut refactor = !self.reuse || slot.id != sys.id || slot.theta > THETA_REFACTOR;
+        let mut why = if !self.reuse || slot.id != sys.id {
+            Refactor::Matrix
+        } else {
+            Refactor::Lagging
+        };
         let mut r_prev = f64::INFINITY;
         let mut worst = (0, f64::NAN);
         for iter in 1..=opts.max_iter {
@@ -627,13 +659,18 @@ impl DkNewton {
                 self.device_evaluations[d] += 1;
                 if lim {
                     // Far from its last linearization: refactor.
+                    if !refactor {
+                        why = Refactor::Limited;
+                    }
                     refactor = true;
+                    self.device_limits[d] += 1;
                 }
             }
 
             timing::add(Part::Devices, t0);
             if refactor || !self.reuse {
                 let t0 = timing::now();
+                self.refactors[why as usize] += 1;
                 self.slots[self.cur].gd.copy_from_slice(&self.gd);
                 self.factor(sys, ports)?;
                 refactor = false;
@@ -675,6 +712,7 @@ impl DkNewton {
                 slot.theta = if r_prev > 0.0 { r / r_prev } else { 0.0 };
                 if slot.theta > THETA_MAX {
                     refactor = true;
+                    why = Refactor::Contraction;
                 }
             } else {
                 slot.theta = 0.0;
@@ -683,6 +721,9 @@ impl DkNewton {
                 // This matrix holds the limited linearizations; the next
                 // iteration's devices sit elsewhere (a chord step from here
                 // cycles at a diode turning on).
+                if !refactor {
+                    why = Refactor::AfterLimit;
+                }
                 refactor = true;
             }
             r_prev = r;

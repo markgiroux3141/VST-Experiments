@@ -2722,6 +2722,40 @@
     }
    }
   },
+  "CT104A": {
+   "symbol": "C",
+   "value": "100p",
+   "fields": {
+    "Param": "t104_c_sec_gnd_f",
+    "Source": "provisional: model knowledge (winding-to-core and screen capacitance of a line transformer's winding, tens to a few hundred pF)",
+    "Genome": "transformers.sidechain_output.secondary_ground_capacitance_f",
+    "Notes": "each end of the secondary (ay, bk) to the grounded core: holds the floating secondary's common mode while the bridge is off, which the diodes' leakage alone barely does (added 2026-10-28, the user's choice: circuitsim's Newton wandered there on HF-rich input, NATIVE_APP_PLAN.md R2)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 312.42,
+     "y": 149.86
+    }
+   }
+  },
+  "CT104B": {
+   "symbol": "C",
+   "value": "100p",
+   "fields": {
+    "Param": "t104_c_sec_gnd_f",
+    "Source": "provisional: model knowledge (winding-to-core and screen capacitance of a line transformer's winding, tens to a few hundred pF)",
+    "Genome": "transformers.sidechain_output.secondary_ground_capacitance_f",
+    "Notes": "each end of the secondary (ay, bk) to the grounded core: holds the floating secondary's common mode while the bridge is off, which the diodes' leakage alone barely does (added 2026-10-28, the user's choice: circuitsim's Newton wandered there on HF-rich input, NATIVE_APP_PLAN.md R2)",
+    "Tol": "none"
+   },
+   "units": {
+    "1": {
+     "x": 307.34,
+     "y": 187.96
+    }
+   }
+  },
   "R137": {
    "symbol": "R",
    "value": "220k",
@@ -4914,6 +4948,36 @@
   ],
   [
    [
+    312.42,
+    153.67
+   ],
+   [
+    312.42,
+    156.21
+   ]
+  ],
+  [
+   [
+    307.34,
+    172.72
+   ],
+   [
+    307.34,
+    184.15
+   ]
+  ],
+  [
+   [
+    307.34,
+    191.77
+   ],
+   [
+    307.34,
+    194.31
+   ]
+  ],
+  [
+   [
     325.12,
     149.86
    ],
@@ -5968,6 +6032,14 @@
   {
    "x": 312.42,
    "y": 180.34
+  },
+  {
+   "x": 312.42,
+   "y": 156.21
+  },
+  {
+   "x": 307.34,
+   "y": 194.31
   },
   {
    "x": 388.62,

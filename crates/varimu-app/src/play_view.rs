@@ -93,6 +93,7 @@ const DRAWING: Device = Device {
     label: "The editor's drawing",
     circuit: "",
     panel: None,
+    ahead_s: AHEAD_S,
 };
 
 /// A finished render: where it was saved and what it was.
@@ -141,6 +142,8 @@ pub struct PlayView {
     /// The device bypassed (its input played), and gain compensation on (monitoring).
     bypass: bool,
     compensate: bool,
+    /// A manual gain on the device's output (dB, monitoring only).
+    output_db: f64,
     error: Option<String>,
 }
 
@@ -215,6 +218,7 @@ impl PlayView {
             trim_db: 0.0,
             bypass: false,
             compensate: true,
+            output_db: 0.0,
             error: None,
         };
         if let Some(id) = &args.device {
@@ -561,7 +565,8 @@ impl PlayView {
         let clip = self.clip.as_ref().expect("a region needs a clip");
         let result = s.cores().and_then(|c| self.circuit(c)).and_then(|c| {
             let v = panel::values(&self.knobs);
-            Player::start(Source::Loop(x), v, c, s.clone(), self.gain(), AHEAD_S)
+            let ahead_s = DEVICES.get(self.device).unwrap_or(&DRAWING).ahead_s;
+            Player::start(Source::Loop(x), v, c, s.clone(), self.gain(), ahead_s)
         });
         match result {
             Ok(p) => {
@@ -780,6 +785,23 @@ impl PlayView {
                         .color(theme::INK),
                 );
             }
+            ui.add_space(12.0);
+            ui.add_enabled_ui(!self.bypass, |ui| {
+                ui.label(RichText::new("Output").color(theme::MUTED));
+                let r = ui
+                    .add(
+                        egui::Slider::new(&mut self.output_db, -24.0..=24.0)
+                            .step_by(0.5)
+                            .suffix(" dB"),
+                    )
+                    .on_hover_text(
+                        "A manual gain on the device's output, on top of the compensation \
+                         (double-click: 0 dB). Monitoring only: renders are the device as it is.",
+                    );
+                if r.double_clicked() {
+                    self.output_db = 0.0;
+                }
+            });
         });
     }
 
@@ -867,6 +889,7 @@ impl PlayView {
             p.set_gain(self.gain());
             p.set_bypass(self.bypass);
             p.set_compensation(self.compensate);
+            p.set_output_db(self.output_db);
         }
         if self.player.as_ref().is_some_and(|p| !p.recording()) {
             self.collect_take_now();

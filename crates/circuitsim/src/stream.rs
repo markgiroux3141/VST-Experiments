@@ -326,6 +326,11 @@ impl Stream {
             .collect()
     }
 
+    /// The first partition's run (its devices, per-device counters).
+    pub fn transient(&self) -> &crate::transient::Transient {
+        &self.a
+    }
+
     /// The first partition's solver statistics.
     pub fn stats(&self) -> &crate::transient::Stats {
         self.a.stats()

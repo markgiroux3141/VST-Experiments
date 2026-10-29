@@ -72,6 +72,7 @@ values:
   t103_c_half_f: {value: 100.0e-12, genome: transformers.sidechain_input.winding_capacitance_f, source: "provisional: model knowledge (secondaries of a small step-up transformer, 50-200 pF)"}
   t104_c_half_f: {value: 200.0e-12, genome: transformers.sidechain_output.winding_capacitance_f, source: "provisional: model knowledge (push-pull primaries, 100-500 pF)"}
   t104_c_sec_f: {value: 100.0e-12, genome: transformers.sidechain_output.secondary_capacitance_f, source: "provisional: model knowledge (self-capacitance of a 600 ohm line winding, as the EQP-1A's HS-56)", notes: "across the secondary (the bridge's ay / bk): it takes the leakage's current when the bridge cuts off (the pre-flight rectifier check; added 2026-10-26, the user's choice)"}
+  t104_c_sec_gnd_f: {value: 100.0e-12, genome: transformers.sidechain_output.secondary_ground_capacitance_f, source: "provisional: model knowledge (winding-to-core and screen capacitance of a line transformer's winding, tens to a few hundred pF)", notes: "each end of the secondary (ay, bk) to the grounded core: holds the floating secondary's common mode while the bridge is off, which the diodes' leakage alone barely does (added 2026-10-28, the user's choice: circuitsim's Newton wandered there on HF-rich input, NATIVE_APP_PLAN.md R2)"}
   # Phase 2: every transformer is windings on a Jiles-Atherton core
   # (varimu.devices.core; materials in config/magnetics.yaml), with the
   # core's joint gap and classical eddy-current loss on the core node. Per
@@ -589,6 +590,8 @@ sections:
       # Bridge rectifier, time constant network (S102), ZERO.
       R136: {R: [ay, bk], r: r136_ohm}
       Rleak: {R: [bk, "0"], r: numerical_leak_ohm, tolerance: none}
+      CT104A: {C: [ay, "0"], c: t104_c_sec_gnd_f, tolerance: none}
+      CT104B: {C: [bk, "0"], c: t104_c_sec_gnd_f, tolerance: none}
       DCR101: {device: [ay, tcb], model: CR101-104}
       DCR102: {device: [bk, tcb], model: CR101-104}
       DCR103: {device: [cv, ay], model: CR101-104}

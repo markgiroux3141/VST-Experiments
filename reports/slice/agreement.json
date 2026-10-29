@@ -1,7 +1,7 @@
 {
- "when": "2026-10-27T02:37:41",
- "code": "0.1.0+57d1b04eeaf4",
- "engine_build": "407e23b8b1c0a1be",
+ "when": "2026-10-29T01:35:29",
+ "code": "0.1.0+0ce79d347fee",
+ "engine_build": "e10a3c9e726f5d85",
  "overrides": {},
  "program_clip": "clip:Arpeggio04b_120_m_D#_16b.WAV",
  "tolerance": {
@@ -18,7 +18,7 @@
  },
  "behaviour_vs_ngspice": {
   "gr_max_diff_db": 0.009,
-  "clip_gain_max_diff_db": 0.008,
+  "clip_gain_max_diff_db": 0.006,
   "burst_relative_time_diff": {
    "1": {
     "attack_cv_63_ms": 0.0,
@@ -56,8 +56,8 @@
   "burst_tc1": {
    "excerpt": "excerpt:burst_tc1",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -82.9,
-   "cv_max_v": 0.0043,
+   "out_rms_db": -82.0,
+   "cv_max_v": 0.0035,
    "cv_min_v": -64.35,
    "passes": true,
    "bound": [
@@ -68,8 +68,8 @@
   "burst_tc2": {
    "excerpt": "excerpt:burst_tc2",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -82.5,
-   "cv_max_v": 0.0031,
+   "out_rms_db": -82.3,
+   "cv_max_v": 0.003,
    "cv_min_v": -64.27,
    "passes": true,
    "bound": [
@@ -80,8 +80,8 @@
   "burst_tc3": {
    "excerpt": "excerpt:burst_tc3",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -84.5,
-   "cv_max_v": 0.0022,
+   "out_rms_db": -83.2,
+   "cv_max_v": 0.0024,
    "cv_min_v": -64.19,
    "passes": true,
    "bound": [
@@ -92,8 +92,8 @@
   "burst_tc4": {
    "excerpt": "excerpt:burst_tc4",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -84.6,
-   "cv_max_v": 0.0022,
+   "out_rms_db": -83.3,
+   "cv_max_v": 0.0025,
    "cv_min_v": -64.11,
    "passes": true,
    "bound": [
@@ -104,8 +104,8 @@
   "clip_loudest": {
    "excerpt": "excerpt:clip_loudest:clip:Arpeggio04b_120_m_D#_16b.WAV@0.600-0.850s",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -76.1,
-   "cv_max_v": 0.006,
+   "out_rms_db": -76.0,
+   "cv_max_v": 0.0057,
    "cv_min_v": -80.74,
    "passes": true,
    "bound": [
@@ -116,9 +116,9 @@
   "clip_hf": {
    "excerpt": "excerpt:clip_hf:clip:Arpeggio04b_120_m_D#_16b.WAV@2.350-2.600s",
    "reference": "exact ngspice (linear)",
-   "out_rms_db": -71.7,
-   "cv_max_v": 0.006,
-   "cv_min_v": -76.57,
+   "out_rms_db": -71.8,
+   "cv_max_v": 0.0068,
+   "cv_min_v": -76.56,
    "passes": true,
    "bound": [
     -68.0,
@@ -128,8 +128,8 @@
   "clip_vs_converged": {
    "excerpt": "clip:Arpeggio04b_120_m_D#_16b.WAV",
    "reference": "circuitsim converged",
-   "out_rms_db": -77.3,
-   "cv_max_v": 0.0899,
+   "out_rms_db": -77.1,
+   "cv_max_v": 0.071,
    "cv_min_v": -86.92,
    "passes": true,
    "bound": [

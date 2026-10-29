@@ -37,8 +37,8 @@ use crate::settings::Settings;
 /// Samples per block the worker computes (10 ms at 48 kHz, as the web player).
 pub const BLOCK: usize = 480;
 /// Audio kept ahead of playback for a file's loop (s): absorbs the compute's jitter,
-/// and is most of the time a knob takes to be heard. 0.1 s: on an idle desktop the
-/// draft 670's worst second stayed under 100% load (2026-10-28).
+/// and is most of the time a knob takes to be heard. The default; a device can keep
+/// more (`panel::Device::ahead_s`: the 670, for its bursts on HF-rich input).
 pub const AHEAD_S: f64 = 0.1;
 /// The output queue live input starts with (s): absorbs the compute's jitter.
 pub const INPUT_BUFFER_S: f64 = 0.03;
@@ -203,6 +203,8 @@ struct Shared {
     /// The device bypassed (its input played), and gain compensation on.
     bypass: AtomicBool,
     compensate: AtomicBool,
+    /// The manual gain on the device's output (dB, f64 bits).
+    output_db: AtomicU64,
 }
 
 /// A session playing out of the default output.
@@ -249,6 +251,7 @@ impl Player {
             gain: AtomicU64::new(gain.to_bits()),
             bypass: AtomicBool::new(false),
             compensate: AtomicBool::new(true),
+            output_db: AtomicU64::new(0f64.to_bits()),
         });
         // Room for the buffer, the drift allowance and a block in flight.
         let (producer, consumer) = rtrb::RingBuffer::<f32>::new(buffer + 4 * BLOCK);
@@ -353,6 +356,12 @@ impl Player {
         self.shared.compensate.store(on, Ordering::Relaxed);
     }
 
+    /// A manual gain (dB) on the device's output, on top of the compensation
+    /// (monitoring only).
+    pub fn set_output_db(&self, db: f64) {
+        self.shared.output_db.store(db.to_bits(), Ordering::Relaxed);
+    }
+
     pub fn set_gain(&self, gain: f64) {
         self.shared.gain.store(gain.to_bits(), Ordering::Relaxed);
     }
@@ -437,6 +446,7 @@ fn work(
     let mut monitored = |live: &Live, y: &[f32]| {
         monitor.bypass = shared.bypass.load(Ordering::Relaxed);
         monitor.compensate = shared.compensate.load(Ordering::Relaxed);
+        monitor.output_db = f64::from_bits(shared.output_db.load(Ordering::Relaxed));
         let out = monitor.process(live.last_input(), y);
         shared.status.lock().expect("status").compensation_db = monitor.compensation_db();
         out

@@ -146,6 +146,7 @@ values:
   r316_ohm: {value: 100000.0, source: 'sch: R316 100K 1W'}
   r_fb_ohm: {value: 2700, source: 'sch: R128 (printed ''R120'', a repeat of the 12AX7 load''s designator) and R129 2700 1W 5%, T104 feedback winding to the 12BH7 cathodes'}
   source_impedance_ohm: {value: 600, source: '[MAN] p.4: 600 ohm input'}
+  t104_c_sec_gnd_f: {value: 1.0e-10, source: 'provisional: model knowledge (winding-to-core and screen capacitance of a line transformer''s winding, tens to a few hundred pF)', genome: transformers.sidechain_output.secondary_ground_capacitance_f, notes: 'each end of the secondary (ay, bk) to the grounded core: holds the floating secondary''s common mode while the bridge is off, which the diodes'' leakage alone barely does (added 2026-10-28, the user''s choice: circuitsim''s Newton wandered there on HF-rich input, NATIVE_APP_PLAN.md R2)'}
   t301_leakage_h: {value: 0.001, source: 'provisional: model knowledge (leakage referred to the secondary)', genome: psu.t301_leakage_h}
   t301_r_ohm: {value: 1.0, source: 'provisional: model knowledge (secondary plus referred primary resistance of a small 0.5 A bias transformer)', genome: psu.t301_r_ohm}
   t301_rms_v: {value: 26.8, source: 'web: https://www.sowter.co.uk/specs/0531.htm (replacement T301: 26.8 V, ''26.8V should be used if the original Selenium bridge rectifier is used''); not printed on A-96039', genome: psu.t301_rms_v, notes: at mains_v_rms = 117 V}
@@ -375,6 +376,8 @@ sections:
     parts:
       C109: {C: [cv, tcb], c: c109_f}
       C115: {C: [tcb, '0'], c: c115_f}
+      CT104A: {C: [ay, '0'], c: t104_c_sec_gnd_f, tolerance: none}
+      CT104B: {C: [bk, '0'], c: t104_c_sec_gnd_f, tolerance: none}
       DCR101: {device: [ay, tcb], model: CR101-104}
       DCR102: {device: [bk, tcb], model: CR101-104}
       DCR103: {device: [cv, ay], model: CR101-104}

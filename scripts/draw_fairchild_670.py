@@ -423,6 +423,14 @@ def rectifier(sk: Sketch) -> None:
     sk.place("Rleak", 7.62, y + 19.05)
     sk.wire("Rleak.2", (None, y + 22.86))
     sk.ground((None, None))
+    # The secondary's ends to its grounded core (CT104A off ay, CT104B off bk).
+    sk.place("CT104A", 7.62, y - 7.62)
+    sk.wire("CT104A.2", (None, y - 1.27))
+    sk.ground((None, None))
+    sk.wire((2.54, y + 15.24), (None, y + 26.67))
+    sk.place("CT104B", 2.54, y + 30.48)
+    sk.wire("CT104B.2", (None, y + 36.83))
+    sk.ground((None, None))
     # The Time Constant switch: S102 and S102_B from cv, each position's parts to tcb.
     sk.place("S102", 27.94, y + 30.48)
     sk.place("S102_B", 27.94, y + 57.15)

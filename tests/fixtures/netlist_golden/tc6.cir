@@ -379,6 +379,8 @@ LT104_f fy fg 0.441850436774028
 * --- rectifier and time constant ---
 R136 ay bk 3900
 Rleak bk 0 1000000000
+CT104A ay 0 1e-10
+CT104B bk 0 1e-10
 DCR101 ay tcb D_SI_RECTIFIER
 DCR102 bk tcb D_SI_RECTIFIER
 DCR103 cv ay D_SI_RECTIFIER

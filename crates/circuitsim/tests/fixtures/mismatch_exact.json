@@ -2638,6 +2638,20 @@
      "r_ohm": 1000000000.0
     },
     {
+     "kind": "capacitor",
+     "name": "CT104A",
+     "a": "ay",
+     "b": "0",
+     "c_f": 1e-10
+    },
+    {
+     "kind": "capacitor",
+     "name": "CT104B",
+     "a": "bk",
+     "b": "0",
+     "c_f": 1e-10
+    },
+    {
      "kind": "device",
      "name": "DCR101",
      "model": "SI_RECTIFIER",
