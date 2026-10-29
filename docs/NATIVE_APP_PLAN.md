@@ -406,6 +406,41 @@ driven and tested without a window; `src/editor_view.rs` paints it:
 
 The studio editor look and hardware-art device panels.
 
+**Paused 2026-10-28 (the user's call: the artwork isn't a priority now).** Where it
+stands, to pick up from:
+
+- **The art.** `assets/Compressor/` is a 670-style rack panel (`UI Lit.png`,
+  `UI Unlit.png`, 2244 x 701) plus parts (large and small knob, three toggle states, a VU
+  needle); its controls match the circuit's: Input Gain 0-30, Threshold, Time Constant
+  1-6, and the Balance and Zero screwdriver trims (`balance`, `zero` in
+  `fairchild_670.yaml`). `assets/Test/` and `ui-mockup/` are the older "Valvechild"
+  concept (its controls aren't a 670's). There is no EQP-1A art.
+- **Prepared:** `scripts/build_panel_art.py` writes the 670's textures to
+  `crates/varimu-app/assets/fairchild_670/`: channel 1 and the centre section with the
+  left rack ear mirrored on the right (one channel is simulated; it reads like the mono
+  660), the knobs centred on their pivots, the needle turned upright, the two screw
+  heads cut out to turn, and `layout.json` (holes, sweeps, VU face and pivot, tick
+  angles, all measured on the art). Not yet used by the app.
+- **Art flaws found:** the Time Constant scale reads 2, 2, 3, 4, 5, 6 (the leftmost should
+  be 1); the lit and unlit images are different pictures (scales, text, escutcheons), so
+  they can't be crossfaded as `docs/UI_PIPELINE.md` does (use the lit one, dim the meter
+  face and lamp when stopped); the VU scale's arc centres ~100 px below the face (the
+  needle pivots there, clipped to the face); DC THRESHOLD has no place on the panel.
+  `ui-mockup/relight_knob.py` is fitted to the Valvechild knob only: the 670 knobs would
+  turn with their highlights unless it is refitted.
+- **Three directions to prototype and show** (screenshots, then the user picks):
+  *Faceplate* (the 670 art as is, knobs and trims turning over it, needle on the VU;
+  other circuits fall back to Built), *Built* (a plate painted by egui with the same knob,
+  screw and needle textures, scales from the circuit's ranges: works for the EQP-1A and
+  drawings), *Studio* (flat vector dials in the editor's tokens, no textures). Planned as
+  `src/panel_view.rs` with a look switch (and `--look`) in the Play view, the panel at the
+  top of its main area.
+- **Questions for the user:** the input knob's direction (printed "Input Gain" 0-30 vs
+  the circuit's attenuation: clockwise louder = 30 - `input_atten_db`?); what the VU
+  reads (`Meter::gain_db` is output over input, not GR: output level as VU, or GR
+  calibrated from the control voltage); Balance and Zero on the panel (they'd join the
+  670's `panel` list); where DC threshold goes (a trim strip under the panel?).
+
 ## Open
 
 - Matching numpy's tolerance draws in Rust (see Ground rules).

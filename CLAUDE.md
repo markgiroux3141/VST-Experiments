@@ -52,7 +52,8 @@ canvas in the studio look), edits heard live (the drawing is a Play device: a va
 updates the stream, a new topology restarts it); the triode stage drawn from scratch
 through the editor's API comes out `triode_stage_drawn` byte for byte
 (`tests/editor_draw.rs`). Hand-written circuits don't open as generated drawings yet
-(`layout.py` isn't ported). Next: R4, the look and polish with the user.** Plausibility (`varimu.measure.plausibility`) rejects only what no
+(`layout.py` isn't ported). R4 (the look and polish with the user) is paused
+(2026-10-28: the artwork isn't a priority now); the plan's R4 says where it stands.** Plausibility (`varimu.measure.plausibility`) rejects only what no
 working unit could do; comparisons with the 670's published figures are the
 report's `vs_670` and never reject (the plan's Vision: "Aim, restated").
 Since 2026-10-23 the default front panel is the

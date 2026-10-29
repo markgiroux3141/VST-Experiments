@@ -1,0 +1,130 @@
+{
+ "source": "assets/Compressor/UI Lit.png and its parts; scripts/build_panel_art.py",
+ "size": [
+  1292,
+  447
+ ],
+ "knobs": {
+  "input_atten_db": {
+   "at": [
+    204.6,
+    227.0
+   ],
+   "sweep_deg": [
+    -138.0,
+    138.0
+   ],
+   "texture": "large",
+   "diameter": 128.0
+  },
+  "ac_threshold": {
+   "at": [
+    435.1,
+    226.8
+   ],
+   "sweep_deg": [
+    -138.0,
+    138.0
+   ],
+   "texture": "large",
+   "diameter": 128.0
+  },
+  "time_constant": {
+   "at": [
+    630.1,
+    226.4
+   ],
+   "sweep_deg": [
+    -90.0,
+    90.0
+   ],
+   "texture": "small",
+   "diameter": 92.0
+  }
+ },
+ "trims": {
+  "balance": {
+   "at": [
+    789.8,
+    344.5
+   ],
+   "radius": 21,
+   "slot_deg": 95.0,
+   "sweep_deg": [
+    -135.0,
+    135.0
+   ]
+  },
+  "zero": {
+   "at": [
+    929.8,
+    344.0
+   ],
+   "radius": 21,
+   "slot_deg": 30.0,
+   "sweep_deg": [
+    -135.0,
+    135.0
+   ]
+  }
+ },
+ "vu": {
+  "face": [
+   741.0,
+   124.0,
+   975.0,
+   259.0
+  ],
+  "pivot": [
+   859.7,
+   354.7
+  ],
+  "needle_length": 186.0,
+  "ticks": [
+   [
+    -20,
+    -30.9
+   ],
+   [
+    -10,
+    -21.9
+   ],
+   [
+    -7,
+    -15.5
+   ],
+   [
+    -5,
+    -8.8
+   ],
+   [
+    -3,
+    -0.3
+   ],
+   [
+    -1,
+    7.2
+   ],
+   [
+    0,
+    11.5
+   ],
+   [
+    1,
+    17.1
+   ],
+   [
+    2,
+    23.7
+   ],
+   [
+    3,
+    30.5
+   ]
+  ]
+ },
+ "lamp": [
+  1110.0,
+  241.0
+ ]
+}
