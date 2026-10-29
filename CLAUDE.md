@@ -29,7 +29,10 @@ Save as; drawing topology, with the triode stage drawn from scratch as `triode_s
 and a first polish pass (Ctrl+K command palette, ? keys, ↑ / ↓ step values through E12,
 segment dragging). Its done-when is met (2026-10-27): the EQP-1A and the 670 drawn as
 schematics after their originals (`pultec_eqp1a_drawn`, `fairchild_670_drawn`), building
-the hand-written IR, the look accepted by the user (`docs/editor_mockups/drawn_*.png`). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
+the hand-written IR, the look accepted by the user (`docs/editor_mockups/drawn_*.png`).
+The devices to build next are listed in [docs/DEVICE_CANDIDATES.md](docs/DEVICE_CANDIDATES.md)
+(2026-10-28; the user's picks: guitar amps, the Fender 5E3 Deluxe proposed first, and the
+Telefunken V76). Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
 egui / eframe, the editor plus real-time play and production render, files and live

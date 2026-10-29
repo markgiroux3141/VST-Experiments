@@ -6,7 +6,9 @@ web app, planned 2026-10-26 after the user turned KiCad down as the editor). It 
 the main plan's Phases 6-8 as the next work (decided 2026-10-25, the user's call;
 the plan's Phase 5, "Closed"). Work milestones in order, each ending with its
 "done when" met and covered by tests, like the main plan and
-[CIRCUIT_SIM_PLAN.md](CIRCUIT_SIM_PLAN.md).
+[CIRCUIT_SIM_PLAN.md](CIRCUIT_SIM_PLAN.md). Which devices come after the 670 and the
+EQP-1A: [DEVICE_CANDIDATES.md](DEVICE_CANDIDATES.md) (2026-10-28; the user's picks:
+guitar amps and the Telefunken V76 first).
 
 ## Why
 
