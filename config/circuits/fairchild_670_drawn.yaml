@@ -60,11 +60,11 @@ values:
   t104_gap_m: {value: 2.0e-05, genome: transformers.sidechain_output.air_gap_m, source: 'provisional: model knowledge (butt joints; push-pull, so no deliberate gap)'}
   t104_turns: {value: 670, genome: transformers.sidechain_output.turns, source: 'provisional: derived (gives the former 10 H per primary half at nominal geometry and gap)', notes: each primary half (the reference winding)}
   t104_leakage_h: {value: 0.02, genome: transformers.sidechain_output.leakage_h, source: 'provisional: model knowledge (keeps the slice''s k = 0.999: 2 (1 - k) x 10 H)', notes: referred to a primary half}
-  bridge_diode: {value: SI_RECTIFIER, source: 'sch: CR101-104 1N538 silicon; modeled with config/devices/si_rectifier.yaml (provisional 1N4007-like)'}
-  rectifier_tube: {value: GZ34, source: 'sch: V301 printed ''6234'', which is the GZ34: [MAN] p.5 tube complement ''1-GZ34 (5V4)'', p.2 chassis photo label ''GZ34 (5AR4)''; config/devices/gz34.yaml (per anode)'}
+  bridge_diode: {value: SI_RECTIFIER@1, source: 'sch: CR101-104 1N538 silicon; modeled with config/components/si_rectifier/1.yaml (provisional 1N4007-like)'}
+  rectifier_tube: {value: GZ34@1, source: 'sch: V301 printed ''6234'', which is the GZ34: [MAN] p.5 tube complement ''1-GZ34 (5V4)'', p.2 chassis photo label ''GZ34 (5AR4)''; config/components/gz34/1.yaml (per anode)'}
   selenium_c_f_per_in2: {value: 1.25e-07, source: 'Sarkes Tarzian handbook (1950) p.54: ''the approximate capacity ranges from .1 to .15 microfarads per square inch of rectifying area'' (the middle; data/datasheets/published_points.yaml)', notes: across each GR301 arm}
   gr301_cell_area_in2: {value: 1.0, genome: psu.gr301_cell_area_in2, source: 'provisional: Sarkes Tarzian handbook (1950) p.61 ratings: a bridge of 1-inch-square cells (size 2) carries 0.225 A continuous, 80% into a capacitor, the smallest size above the ~0.14 A this bias supply draws; GR301''s cells aren''t documented', notes: 'rectifying area per arm; one cell per arm (Tarzian''s 26 V AC bridge, code 1B1)'}
-  bias_rectifier: {value: SELENIUM, source: 'sch: GR301 bridge (selenium: web: https://www.radiomuseum.org/r/fairchild_stereo_limiter_670.html; Sowter 0531 notes ''the original Selenium bridge rectifier''); config/devices/selenium.yaml per arm'}
+  bias_rectifier: {value: SELENIUM@1, source: 'sch: GR301 bridge (selenium: web: https://www.radiomuseum.org/r/fairchild_stereo_limiter_670.html; Sowter 0531 notes ''the original Selenium bridge rectifier''); config/components/selenium/1.yaml per arm'}
   passive_seed: {value: 0, genome: passives.seed, source: 'numerical: which set of parts a unit is built from'}
   passive_spread: {value: 0.0, genome: passives.spread, source: 'provisional: fraction of each part''s tolerance band its deviation spans (0 = every part at its printed value)'}
   tol_resistor_unmarked_pct: {value: 10.0, source: 'sch: note 1, ''RESISTORS DESIGNATED IN OHMS, 10% & 1/2W UNLESS OTHERWISE SPECIFIED'''}
@@ -154,15 +154,15 @@ values:
   t302_hv_half_rms_v: {value: 404.3, source: 'derived: puts the settled unregulated rail at 435 V, the middle of the printed ''(420V TO 450V)'' (scripts/calibrate_psu.py, 2026-10-21); open-circuit rms per HV half behind t302_r_half_ohm (the replacement is web: https://www.sowter.co.uk/specs/0526.htm, 375-0-375 V at 200 mA; the original''s isn''t published)', genome: psu.t302_hv_half_rms_v, notes: at mains_v_rms = 117 V; scales with the mains}
   t302_leakage_h: {value: 0.005, source: 'provisional: model knowledge (leakage per HV half, referred to the secondary)', genome: psu.t302_leakage_h}
   t302_r_half_ohm: {value: 60.0, source: 'provisional: model knowledge (HV winding resistance per half, secondary plus primary referred, of a ~100 VA mains transformer)', genome: psu.t302_r_half_ohm}
-  v5651_operating_v: {value: 87.0, source: 'RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage av. 87 V (min 82, max 92) over 1.5-3.5 mA', genome: tubes.v5651.operating_v, notes: the tube's drop at 2.5 mA (library.V5651_REF_A); the slope is Tung-Sol's (config/devices/5651.yaml)}
+  v5651_operating_v: {value: 87.0, source: 'RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage av. 87 V (min 82, max 92) over 1.5-3.5 mA', genome: tubes.v5651.operating_v, notes: the tube's drop at 2.5 mA (library.V5651_REF_A); the slope is Tung-Sol's (config/components/5651/1.yaml)}
 
 device_params:
-  v6386_a.emission_scale: {value: 1.0, genome: tubes.v6386_a.emission_scale, source: 'nominal 1: the device file''s fit (config/devices/6386.yaml); bank A (V101A, V102A, V103B, V104B)'}
-  v6386_a.mu_spread: {value: 1.0, genome: tubes.v6386_a.mu_spread, source: 'nominal 1: the device file''s fit (config/devices/6386.yaml); bank A'}
-  v6386_a.grid_contact_v: {value: null, genome: tubes.v6386_a.grid_contact_v, source: 'null: the device file''s grid contact potential (config/devices/6386.yaml); bank A'}
-  v6386_b.emission_scale: {value: 1.0, genome: tubes.v6386_b.emission_scale, source: 'nominal 1: the device file''s fit (config/devices/6386.yaml); bank B (V101B, V102B, V103A, V104A)'}
-  v6386_b.mu_spread: {value: 1.0, genome: tubes.v6386_b.mu_spread, source: 'nominal 1: the device file''s fit (config/devices/6386.yaml); bank B'}
-  v6386_b.grid_contact_v: {value: null, genome: tubes.v6386_b.grid_contact_v, source: 'null: the device file''s grid contact potential (config/devices/6386.yaml); bank B'}
+  v6386_a.emission_scale: {value: 1.0, genome: tubes.v6386_a.emission_scale, source: 'nominal 1: the device file''s fit (config/components/6386/1.yaml); bank A (V101A, V102A, V103B, V104B)'}
+  v6386_a.mu_spread: {value: 1.0, genome: tubes.v6386_a.mu_spread, source: 'nominal 1: the device file''s fit (config/components/6386/1.yaml); bank A'}
+  v6386_a.grid_contact_v: {value: null, genome: tubes.v6386_a.grid_contact_v, source: 'null: the device file''s grid contact potential (config/components/6386/1.yaml); bank A'}
+  v6386_b.emission_scale: {value: 1.0, genome: tubes.v6386_b.emission_scale, source: 'nominal 1: the device file''s fit (config/components/6386/1.yaml); bank B (V101B, V102B, V103A, V104A)'}
+  v6386_b.mu_spread: {value: 1.0, genome: tubes.v6386_b.mu_spread, source: 'nominal 1: the device file''s fit (config/components/6386/1.yaml); bank B'}
+  v6386_b.grid_contact_v: {value: null, genome: tubes.v6386_b.grid_contact_v, source: 'null: the device file''s grid contact potential (config/components/6386/1.yaml); bank B'}
 
 derived:
   module: varimu.circuit.fairchild_670
@@ -205,29 +205,29 @@ tolerance:
     electrolytic: [C108B, C110, C111, C112, C302, C303, C305, C306, C307A, C307B, C308]
 
 devices:
-  CH2_12BH7: {device: 12BH7, name: 12BH7_CH2, parallel: 2}
-  CH2_6386: {device: '6386', name: 6386_CH2, parallel: ch2_6386_parallel}
-  CH2_6973: {device: '6973', name: 6973_CH2, parallel: 2}
+  CH2_12BH7: {device: 12BH7@1, name: 12BH7_CH2, parallel: 2}
+  CH2_6386: {device: 6386@1, name: 6386_CH2, parallel: ch2_6386_parallel}
+  CH2_6973: {device: 6973@1, name: 6973_CH2, parallel: 2}
   CR101-104: {device: bridge_diode, instance: false}
   GR301: {device: bias_rectifier, area: gr301_cell_area_in2}
-  V101A: {device: '6386', tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V101B: {device: '6386', tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V102A: {device: '6386', tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V102B: {device: '6386', tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V103A: {device: '6386', tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V103B: {device: '6386', tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V104A: {device: '6386', tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V104B: {device: '6386', tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V105A: {device: 12AX7, tolerance: tube}
-  V105B: {device: 12AX7, tolerance: tube}
-  V106A: {device: 12BH7, tolerance: tube}
-  V106B: {device: 12BH7, tolerance: tube}
-  V107: {device: '6973', tolerance: tube}
-  V108: {device: '6973', tolerance: tube}
+  V101A: {device: 6386@1, tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V101B: {device: 6386@1, tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V102A: {device: 6386@1, tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V102B: {device: 6386@1, tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V103A: {device: 6386@1, tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V103B: {device: 6386@1, tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V104A: {device: 6386@1, tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V104B: {device: 6386@1, tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V105A: {device: 12AX7@1, tolerance: tube}
+  V105B: {device: 12AX7@1, tolerance: tube}
+  V106A: {device: 12BH7@1, tolerance: tube}
+  V106B: {device: 12BH7@1, tolerance: tube}
+  V107: {device: 6973@1, tolerance: tube}
+  V108: {device: 6973@1, tolerance: tube}
   V301: {device: rectifier_tube, tolerance: tube}
-  V302: {device: EL34T, tolerance: tube}
-  V303: {device: '6084', tolerance: tube}
-  V304: {device: '5651', instance: false}
+  V302: {device: EL34T@1, tolerance: tube}
+  V303: {device: 6084@1, tolerance: tube}
+  V304: {device: 5651@1, instance: false}
 
 sections:
   - title: power supply

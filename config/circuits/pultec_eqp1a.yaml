@@ -161,7 +161,7 @@ values:
   pcc55_r_half_ohm: {value: 100.0, genome: pultec.psu.pcc55_r_half_ohm, source: "provisional: model knowledge (HV winding resistance per half of a 25 W mains transformer)"}
   pcc55_leakage_h: {value: 5.0e-3, genome: pultec.psu.pcc55_leakage_h, source: "provisional: model knowledge (leakage per HV half)"}
   pcc55_c_half_f: {value: 300.0e-12, genome: pultec.psu.pcc55_winding_capacitance_f, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
-  rectifier_tube: {value: 6X4, source: "dwg: 6X4 full-wave rectifier; config/devices/6x4.yaml (per section)"}
+  rectifier_tube: {value: 6X4@1, source: "dwg: 6X4 full-wave rectifier; config/components/6x4/1.yaml (per section)"}
   r_psu1_ohm: {value: 470, source: "dwg: 470 2W from the 6X4 cathode (+355 V) to +345 V"}
   r_psu2_ohm: {value: 1000, source: "dwg: 1000 1W from +345 V to +325 V"}
   r_psu3_ohm: {value: 2200, source: "dwg: 2200 1W from +325 V to the output transformer's centre tap (+290 V)"}
@@ -214,10 +214,10 @@ tolerance:
     electrolytic: [CK2A, CK2B, CPSU1, CPSU2, CPSU3, CPSU4]
 
 devices:
-  V1A: {device: 12AX7, tolerance: tube}
-  V1B: {device: 12AX7, tolerance: tube}
-  V2A: {device: 12AU7, tolerance: tube}
-  V2B: {device: 12AU7, tolerance: tube}
+  V1A: {device: 12AX7@1, tolerance: tube}
+  V1B: {device: 12AX7@1, tolerance: tube}
+  V2A: {device: 12AU7@1, tolerance: tube}
+  V2B: {device: 12AU7@1, tolerance: tube}
   V3: {device: rectifier_tube, tolerance: tube}
 
 sections:

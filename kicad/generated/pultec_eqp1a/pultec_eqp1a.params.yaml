@@ -53,7 +53,7 @@ values:
   s217_gap_m: {value: 2.0e-05, genome: pultec.s217.air_gap_m, source: 'provisional: model knowledge (butt joints; push-pull)'}
   s217_leakage_h: {value: 0.015, genome: pultec.s217.leakage_h, source: 'provisional: model knowledge (k ~ 0.9999 per primary half)'}
   s217_c_half_f: {value: 1.5e-10, genome: pultec.s217.winding_capacitance_f, source: 'provisional: model knowledge (push-pull primaries, 100-500 pF)'}
-  rectifier_tube: {value: 6X4, source: 'dwg: 6X4 full-wave rectifier; config/devices/6x4.yaml (per section)'}
+  rectifier_tube: {value: 6X4@1, source: 'dwg: 6X4 full-wave rectifier; config/components/6x4/1.yaml (per section)'}
   numerical_leak_ohm: {value: 1000000000.0, source: 'numerical: DC path for floating nodes (not physical)'}
   passive_seed: {value: 0, genome: passives.seed, source: 'numerical: which set of parts a unit is built from'}
   passive_spread: {value: 0.0, genome: passives.spread, source: 'provisional: fraction of each part''s tolerance band its deviation spans (0 = every part at its printed value)'}

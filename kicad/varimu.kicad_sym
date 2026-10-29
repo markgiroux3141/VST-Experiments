@@ -2187,7 +2187,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "12AX7"
+		(property "Value" "12AX7@1"
 			(at 5.842 -1.27 0)
 			(effects
 				(font
@@ -2455,7 +2455,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "12AX7"
+		(property "Value" "12AX7@1"
 			(at 5.842 -1.27 0)
 			(effects
 				(font
@@ -2779,7 +2779,7 @@
 				(justify right)
 			)
 		)
-		(property "Value" "6973"
+		(property "Value" "6973@1"
 			(at -3.81 7.366 0)
 			(effects
 				(font
@@ -3105,7 +3105,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "6X4"
+		(property "Value" "6X4@1"
 			(at 5.842 -1.27 0)
 			(effects
 				(font
@@ -3304,7 +3304,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "6X4"
+		(property "Value" "6X4@1"
 			(at 5.842 -1.27 0)
 			(effects
 				(font

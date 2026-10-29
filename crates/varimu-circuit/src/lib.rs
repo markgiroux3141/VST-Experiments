@@ -1,7 +1,8 @@
 //! Circuit files and drawings for the native app (docs/NATIVE_APP_PLAN.md).
 //!
 //! The Rust side of `varimu/circuit` (R1): circuit files (`spec`), the builder and its
-//! macro parts (`builder`, `parts`), device files and core materials (`devices`), the
+//! macro parts (`builder`, `parts`), device files and core materials (`devices`; device
+//! files are component versions, `versions`), the
 //! 670's derived values (`derived`), all building circuitsim's IR directly. Python
 //! stays the reference: tests/agreement.rs compares the IR built here with the IR
 //! Python builds (scripts/export_app_fixtures.py), case by case. `varimu/editor`'s
@@ -29,6 +30,7 @@ pub mod preflight;
 pub mod spec;
 pub mod symbols;
 pub mod values;
+pub mod versions;
 pub mod yaml;
 pub mod yaml_out;
 

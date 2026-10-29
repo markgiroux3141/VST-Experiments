@@ -524,7 +524,7 @@ fn table() -> Vec<SymbolDef> {
         "Triode (p, g, k); Value is the device file",
         vec![triode_pins("1", "2", "3")],
         triode(),
-        "12AX7",
+        "12AX7@1",
         "V",
         dev_text,
     ));
@@ -533,7 +533,7 @@ fn table() -> Vec<SymbolDef> {
         "Dual triode, units A (pins 1-3) and B (6-8); each unit is one device instance",
         vec![triode_pins("1", "2", "3"), triode_pins("6", "7", "8")],
         triode(),
-        "12AX7",
+        "12AX7@1",
         "V",
         dev_text,
     ));
@@ -557,7 +557,7 @@ fn table() -> Vec<SymbolDef> {
             pin("4", "k", 0.0, -8.89, 90, 5.08),
         ]],
         pentode,
-        "6973",
+        "6973@1",
         "V",
         (-3.81, 8.89, 7.366, "right"),
     ));
@@ -566,7 +566,7 @@ fn table() -> Vec<SymbolDef> {
         "Diode, vacuum or junction (a, k); Value is the device file",
         vec![diode_pins("1", "2")],
         diode(),
-        "6X4",
+        "6X4@1",
         "D",
         dev_text,
     ));
@@ -575,7 +575,7 @@ fn table() -> Vec<SymbolDef> {
         "Dual diode (a full-wave rectifier), units A (pins 1, 2) and B (3, 4)",
         vec![diode_pins("1", "2"), diode_pins("3", "4")],
         diode(),
-        "6X4",
+        "6X4@1",
         "V",
         dev_text,
     ));

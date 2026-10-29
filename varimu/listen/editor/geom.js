@@ -49,8 +49,8 @@ export function nextRef(d, prefix) {
 // Placeholder values for a new part: shown in the inspector to be replaced, never compiled
 // without a source (the importer blocks a number without one).
 const DEFAULT_VALUE = { R: '10k', C: '100n', L: '10m', Pot: '100k', Rheostat: '10k', Pot_Tapped: '1M', T_Pad: '600',
-                        V: '250', Sine: '1', Mains: '117', Triode: '12AX7', Triode_Dual: '12AX7', Pentode: '6973',
-                        Diode: '6X4', Diode_Dual: '6X4', Winding: 'p', K: '0.99', VR_Tube: '150' };
+                        V: '250', Sine: '1', Mains: '117', Triode: '12AX7@1', Triode_Dual: '12AX7@1', Pentode: '6973@1',
+                        Diode: '6X4@1', Diode_Dual: '6X4@1', Winding: 'p', K: '0.99', VR_Tube: '150' };
 
 /** Place a new unit of symbol `name` at (x, y); returns its reference. */
 export function placeSymbol(d, lib, name, x, y, rot = 0, mirror = false) {

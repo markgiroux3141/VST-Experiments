@@ -307,12 +307,12 @@
     "notes": "referred to a primary half"
    },
    "bridge_diode": {
-    "value": "SI_RECTIFIER",
-    "source": "sch: CR101-104 1N538 silicon; modeled with config/devices/si_rectifier.yaml (provisional 1N4007-like)"
+    "value": "SI_RECTIFIER@1",
+    "source": "sch: CR101-104 1N538 silicon; modeled with config/components/si_rectifier/1.yaml (provisional 1N4007-like)"
    },
    "rectifier_tube": {
-    "value": "GZ34",
-    "source": "sch: V301 printed '6234', which is the GZ34: [MAN] p.5 tube complement '1-GZ34 (5V4)', p.2 chassis photo label 'GZ34 (5AR4)'; config/devices/gz34.yaml (per anode)"
+    "value": "GZ34@1",
+    "source": "sch: V301 printed '6234', which is the GZ34: [MAN] p.5 tube complement '1-GZ34 (5V4)', p.2 chassis photo label 'GZ34 (5AR4)'; config/components/gz34/1.yaml (per anode)"
    },
    "selenium_c_f_per_in2": {
     "value": 1.25e-07,
@@ -326,8 +326,8 @@
     "notes": "rectifying area per arm; one cell per arm (Tarzian's 26 V AC bridge, code 1B1)"
    },
    "bias_rectifier": {
-    "value": "SELENIUM",
-    "source": "sch: GR301 bridge (selenium: web: https://www.radiomuseum.org/r/fairchild_stereo_limiter_670.html; Sowter 0531 notes 'the original Selenium bridge rectifier'); config/devices/selenium.yaml per arm"
+    "value": "SELENIUM@1",
+    "source": "sch: GR301 bridge (selenium: web: https://www.radiomuseum.org/r/fairchild_stereo_limiter_670.html; Sowter 0531 notes 'the original Selenium bridge rectifier'); config/components/selenium/1.yaml per arm"
    },
    "passive_seed": {
     "value": 0,
@@ -388,32 +388,32 @@
    "v6386_a.emission_scale": {
     "value": 1.0,
     "genome": "tubes.v6386_a.emission_scale",
-    "source": "nominal 1: the device file's fit (config/devices/6386.yaml); bank A (V101A, V102A, V103B, V104B)"
+    "source": "nominal 1: the device file's fit (config/components/6386/1.yaml); bank A (V101A, V102A, V103B, V104B)"
    },
    "v6386_a.mu_spread": {
     "value": 1.0,
     "genome": "tubes.v6386_a.mu_spread",
-    "source": "nominal 1: the device file's fit (config/devices/6386.yaml); bank A"
+    "source": "nominal 1: the device file's fit (config/components/6386/1.yaml); bank A"
    },
    "v6386_a.grid_contact_v": {
     "value": null,
     "genome": "tubes.v6386_a.grid_contact_v",
-    "source": "null: the device file's grid contact potential (config/devices/6386.yaml); bank A"
+    "source": "null: the device file's grid contact potential (config/components/6386/1.yaml); bank A"
    },
    "v6386_b.emission_scale": {
     "value": 1.0,
     "genome": "tubes.v6386_b.emission_scale",
-    "source": "nominal 1: the device file's fit (config/devices/6386.yaml); bank B (V101B, V102B, V103A, V104A)"
+    "source": "nominal 1: the device file's fit (config/components/6386/1.yaml); bank B (V101B, V102B, V103A, V104A)"
    },
    "v6386_b.mu_spread": {
     "value": 1.0,
     "genome": "tubes.v6386_b.mu_spread",
-    "source": "nominal 1: the device file's fit (config/devices/6386.yaml); bank B"
+    "source": "nominal 1: the device file's fit (config/components/6386/1.yaml); bank B"
    },
    "v6386_b.grid_contact_v": {
     "value": null,
     "genome": "tubes.v6386_b.grid_contact_v",
-    "source": "null: the device file's grid contact potential (config/devices/6386.yaml); bank B"
+    "source": "null: the device file's grid contact potential (config/components/6386/1.yaml); bank B"
    }
   },
   "derived": {
@@ -851,9 +851,9 @@
     "Param": "v5651_operating_v",
     "Source": "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage av. 87 V (min 82, max 92) over 1.5-3.5 mA",
     "Genome": "tubes.v5651.operating_v",
-    "Notes": "the tube's drop at 2.5 mA (library.V5651_REF_A); the slope is Tung-Sol's (config/devices/5651.yaml)",
+    "Notes": "the tube's drop at 2.5 mA (library.V5651_REF_A); the slope is Tung-Sol's (config/components/5651/1.yaml)",
     "ref_current_a": "{source: 'RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage over 1.5-3.5 mA, at its middle (varimu.devices.library.V5651_REF_A, the slope fit''s reference)', value: 0.0025}",
-    "device": "'5651'",
+    "device": "5651@1",
     "instance": "false",
     "Mid": "ref_v"
    },
@@ -1022,7 +1022,7 @@
   },
   "V302": {
    "symbol": "Triode",
-   "value": "EL34T",
+   "value": "EL34T@1",
    "fields": {
     "Tol": "tube"
    },
@@ -1035,7 +1035,7 @@
   },
   "V303": {
    "symbol": "Pentode",
-   "value": "6084",
+   "value": "6084@1",
    "fields": {
     "Tol": "tube"
    },
@@ -1439,7 +1439,7 @@
   },
   "V2_6386": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Model": "CH2_6386",
     "name": "6386_CH2",
@@ -1454,7 +1454,7 @@
   },
   "V2_12BH7": {
    "symbol": "Triode",
-   "value": "12BH7",
+   "value": "12BH7@1",
    "fields": {
     "Model": "CH2_12BH7",
     "name": "12BH7_CH2",
@@ -1469,7 +1469,7 @@
   },
   "V2_6973": {
    "symbol": "Pentode",
-   "value": "6973",
+   "value": "6973@1",
    "fields": {
     "Model": "CH2_6973",
     "name": "6973_CH2",
@@ -1790,7 +1790,7 @@
   },
   "V101A": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_a.emission_scale",
@@ -1806,7 +1806,7 @@
   },
   "V102A": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_a.emission_scale",
@@ -1822,7 +1822,7 @@
   },
   "V103B": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_a.emission_scale",
@@ -1838,7 +1838,7 @@
   },
   "V104B": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_a.emission_scale",
@@ -1854,7 +1854,7 @@
   },
   "V101B": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_b.emission_scale",
@@ -1872,7 +1872,7 @@
   },
   "V102B": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_b.emission_scale",
@@ -1890,7 +1890,7 @@
   },
   "V103A": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_b.emission_scale",
@@ -1908,7 +1908,7 @@
   },
   "V104A": {
    "symbol": "Triode",
-   "value": "6386",
+   "value": "6386@1",
    "fields": {
     "Tol": "tube",
     "emission": "v6386_b.emission_scale",
@@ -2231,7 +2231,7 @@
   },
   "V105": {
    "symbol": "Triode_Dual",
-   "value": "12AX7",
+   "value": "12AX7@1",
    "fields": {
     "Tol": "tube"
    },
@@ -2442,7 +2442,7 @@
   },
   "V106": {
    "symbol": "Triode_Dual",
-   "value": "12BH7",
+   "value": "12BH7@1",
    "fields": {
     "Tol": "tube"
    },
@@ -2666,7 +2666,7 @@
   },
   "V107": {
    "symbol": "Pentode",
-   "value": "6973",
+   "value": "6973@1",
    "fields": {
     "Tol": "tube"
    },
@@ -2679,7 +2679,7 @@
   },
   "V108": {
    "symbol": "Pentode",
-   "value": "6973",
+   "value": "6973@1",
    "fields": {
     "Tol": "tube"
    },

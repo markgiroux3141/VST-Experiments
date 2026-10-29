@@ -197,7 +197,7 @@ values:
   t104_turns: {value: 670, genome: transformers.sidechain_output.turns, source: "provisional: derived (gives the former 10 H per primary half at nominal geometry and gap)", notes: "each primary half (the reference winding)"}
   t104_leakage_h: {value: 0.02, genome: transformers.sidechain_output.leakage_h, source: "provisional: model knowledge (keeps the slice's k = 0.999: 2 (1 - k) x 10 H)", notes: "referred to a primary half"}
   r136_ohm: {value: 3900, source: "sch: R136 ('A136') 3900 1W across the secondary"}
-  bridge_diode: {value: SI_RECTIFIER, source: "sch: CR101-104 1N538 silicon; modeled with config/devices/si_rectifier.yaml (provisional 1N4007-like)"}
+  bridge_diode: {value: SI_RECTIFIER@1, source: "sch: CR101-104 1N538 silicon; modeled with config/components/si_rectifier/1.yaml (provisional 1N4007-like)"}
 
   # --- Time constant network (S102) ----------------------------------------------
   r137_ohm: {value: 220.0e+3, source: "sch: R137 220K (always in)"}
@@ -226,7 +226,7 @@ values:
   t302_r_half_ohm: {value: 60.0, genome: psu.t302_r_half_ohm, source: "provisional: model knowledge (HV winding resistance per half, secondary plus primary referred, of a ~100 VA mains transformer)"}
   t302_leakage_h: {value: 5.0e-3, genome: psu.t302_leakage_h, source: "provisional: model knowledge (leakage per HV half, referred to the secondary)"}
   t302_c_half_f: {value: 300.0e-12, genome: psu.t302_winding_capacitance_f, source: "provisional: model knowledge (self-capacitance of each HV half of a mains transformer, ~100 pF to 1 nF)", notes: "from each GZ34 anode to the centre tap; it takes the leakage's current when the rectifier turns off (without it, an inductive kick into a node with nothing on it: ngspice stopped there, 2026-10-21)"}
-  rectifier_tube: {value: GZ34, source: "sch: V301 printed '6234', which is the GZ34: [MAN] p.5 tube complement '1-GZ34 (5V4)', p.2 chassis photo label 'GZ34 (5AR4)'; config/devices/gz34.yaml (per anode)"}
+  rectifier_tube: {value: GZ34@1, source: "sch: V301 printed '6234', which is the GZ34: [MAN] p.5 tube complement '1-GZ34 (5V4)', p.2 chassis photo label 'GZ34 (5AR4)'; config/components/gz34/1.yaml (per anode)"}
   c304_f: {value: 4.0e-6, source: "sch: C304 4 440 VAC"}
   l301_h: {value: 10.0, genome: psu.l301_h, source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html (replacement L301: 10 H, 200 mA, 71 ohms); not printed on A-96039"}
   l301_r_ohm: {value: 71.0, genome: psu.l301_r_ohm, source: "web: same page (71 ohms)"}
@@ -243,14 +243,14 @@ values:
   r316_ohm: {value: 100.0e+3, source: "sch: R316 100K 1W"}
   c307b_f: {value: 60.0e-6, source: "sch: C307B 60 350V, on the R315/R316 tap"}
   r307_r308_ohm: {value: 100.0e+3, source: "sch: R307, R308 100K 1W, across 240 V; their tap is T304's centre tap (heater elevation of V302/V303)"}
-  v5651_operating_v: {value: 87.0, genome: tubes.v5651.operating_v, source: "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage av. 87 V (min 82, max 92) over 1.5-3.5 mA", notes: "the tube's drop at 2.5 mA (library.V5651_REF_A); the slope is Tung-Sol's (config/devices/5651.yaml)"}
+  v5651_operating_v: {value: 87.0, genome: tubes.v5651.operating_v, source: "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage av. 87 V (min 82, max 92) over 1.5-3.5 mA", notes: "the tube's drop at 2.5 mA (library.V5651_REF_A); the slope is Tung-Sol's (config/components/5651/1.yaml)"}
   # Bias supply.
   t301_rms_v: {value: 26.8, genome: psu.t301_rms_v, source: "web: https://www.sowter.co.uk/specs/0531.htm (replacement T301: 26.8 V, '26.8V should be used if the original Selenium bridge rectifier is used'); not printed on A-96039", notes: "at mains_v_rms = 117 V"}
   t301_r_ohm: {value: 1.0, genome: psu.t301_r_ohm, source: "provisional: model knowledge (secondary plus referred primary resistance of a small 0.5 A bias transformer)"}
   t301_leakage_h: {value: 1.0e-3, genome: psu.t301_leakage_h, source: "provisional: model knowledge (leakage referred to the secondary)"}
   selenium_c_f_per_in2: {value: 0.125e-6, source: "Sarkes Tarzian handbook (1950) p.54: 'the approximate capacity ranges from .1 to .15 microfarads per square inch of rectifying area' (the middle; data/datasheets/published_points.yaml)", notes: "across each GR301 arm"}
   gr301_cell_area_in2: {value: 1.0, genome: psu.gr301_cell_area_in2, source: "provisional: Sarkes Tarzian handbook (1950) p.61 ratings: a bridge of 1-inch-square cells (size 2) carries 0.225 A continuous, 80% into a capacitor, the smallest size above the ~0.14 A this bias supply draws; GR301's cells aren't documented", notes: "rectifying area per arm; one cell per arm (Tarzian's 26 V AC bridge, code 1B1)"}
-  bias_rectifier: {value: SELENIUM, source: "sch: GR301 bridge (selenium: web: https://www.radiomuseum.org/r/fairchild_stereo_limiter_670.html; Sowter 0531 notes 'the original Selenium bridge rectifier'); config/devices/selenium.yaml per arm"}
+  bias_rectifier: {value: SELENIUM@1, source: "sch: GR301 bridge (selenium: web: https://www.radiomuseum.org/r/fairchild_stereo_limiter_670.html; Sowter 0531 notes 'the original Selenium bridge rectifier'); config/components/selenium/1.yaml per arm"}
   c302_f: {value: 250.0e-6, source: "sch: C302 250 50V"}
   l302_h: {value: 5.0, genome: psu.l302_h, source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-COMPRESSOR-TRANSFORMERS-A-to-K.html (replacement L302: 5 H at 200 mA); a Drip choke is reportedly 1.5 H; not printed on A-96039"}
   l302_r_ohm: {value: 284.0, genome: psu.l302_r_ohm, source: "derived: puts the settled C303 node at -6.2 V (measured, web: https://groupdiy.com/threads/fairchild-670-questions.32169/; also a Drip 670 check value) with both channels' 6386 current through L302 (scripts/calibrate_psu.py, 2026-10-21). Sowter's replacement is 85 ohms"}
@@ -286,12 +286,12 @@ device_params:
   # Genome parameters that act on device instances (the 6386 banks' entries under
   # `devices`) rather than on a value; bounds at the `genome` path. Null: the device
   # file's value.
-  v6386_a.emission_scale: {value: 1.0, genome: tubes.v6386_a.emission_scale, source: "nominal 1: the device file's fit (config/devices/6386.yaml); bank A (V101A, V102A, V103B, V104B)"}
-  v6386_a.mu_spread: {value: 1.0, genome: tubes.v6386_a.mu_spread, source: "nominal 1: the device file's fit (config/devices/6386.yaml); bank A"}
-  v6386_a.grid_contact_v: {value: null, genome: tubes.v6386_a.grid_contact_v, source: "null: the device file's grid contact potential (config/devices/6386.yaml); bank A"}
-  v6386_b.emission_scale: {value: 1.0, genome: tubes.v6386_b.emission_scale, source: "nominal 1: the device file's fit (config/devices/6386.yaml); bank B (V101B, V102B, V103A, V104A)"}
-  v6386_b.mu_spread: {value: 1.0, genome: tubes.v6386_b.mu_spread, source: "nominal 1: the device file's fit (config/devices/6386.yaml); bank B"}
-  v6386_b.grid_contact_v: {value: null, genome: tubes.v6386_b.grid_contact_v, source: "null: the device file's grid contact potential (config/devices/6386.yaml); bank B"}
+  v6386_a.emission_scale: {value: 1.0, genome: tubes.v6386_a.emission_scale, source: "nominal 1: the device file's fit (config/components/6386/1.yaml); bank A (V101A, V102A, V103B, V104B)"}
+  v6386_a.mu_spread: {value: 1.0, genome: tubes.v6386_a.mu_spread, source: "nominal 1: the device file's fit (config/components/6386/1.yaml); bank A"}
+  v6386_a.grid_contact_v: {value: null, genome: tubes.v6386_a.grid_contact_v, source: "null: the device file's grid contact potential (config/components/6386/1.yaml); bank A"}
+  v6386_b.emission_scale: {value: 1.0, genome: tubes.v6386_b.emission_scale, source: "nominal 1: the device file's fit (config/components/6386/1.yaml); bank B (V101B, V102B, V103A, V104A)"}
+  v6386_b.mu_spread: {value: 1.0, genome: tubes.v6386_b.mu_spread, source: "nominal 1: the device file's fit (config/components/6386/1.yaml); bank B"}
+  v6386_b.grid_contact_v: {value: null, genome: tubes.v6386_b.grid_contact_v, source: "null: the device file's grid contact potential (config/components/6386/1.yaml); bank B"}
 
 derived:
   # Channel 2's pairs of parallel parts lumped into one (varimu/circuit/fairchild_670.py,
@@ -348,31 +348,31 @@ devices:
   # Every device model instance, in the IR's model order. `tolerance: tube` draws the
   # instance's emission and mu by its designator (the key); the 6386 triodes deviate
   # around their bank's genome values (device_params).
-  V101A: {device: "6386", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V102A: {device: "6386", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V103B: {device: "6386", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V104B: {device: "6386", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
-  V101B: {device: "6386", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V102B: {device: "6386", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V103A: {device: "6386", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V104A: {device: "6386", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
-  V105A: {device: 12AX7, tolerance: tube}
-  V105B: {device: 12AX7, tolerance: tube}
-  V106A: {device: 12BH7, tolerance: tube}
-  V106B: {device: 12BH7, tolerance: tube}
-  V107: {device: "6973", tolerance: tube}
-  V108: {device: "6973", tolerance: tube}
+  V101A: {device: "6386@1", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V102A: {device: "6386@1", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V103B: {device: "6386@1", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V104B: {device: "6386@1", tolerance: tube, emission: v6386_a.emission_scale, mu: v6386_a.mu_spread, grid_contact_v: v6386_a.grid_contact_v}
+  V101B: {device: "6386@1", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V102B: {device: "6386@1", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V103A: {device: "6386@1", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V104A: {device: "6386@1", tolerance: tube, emission: v6386_b.emission_scale, mu: v6386_b.mu_spread, grid_contact_v: v6386_b.grid_contact_v}
+  V105A: {device: 12AX7@1, tolerance: tube}
+  V105B: {device: 12AX7@1, tolerance: tube}
+  V106A: {device: 12BH7@1, tolerance: tube}
+  V106B: {device: 12BH7@1, tolerance: tube}
+  V107: {device: "6973@1", tolerance: tube}
+  V108: {device: "6973@1", tolerance: tube}
   CR101-104: {device: bridge_diode, instance: false}
   V301: {device: rectifier_tube, tolerance: tube}
-  V302: {device: EL34T, tolerance: tube}
-  V303: {device: "6084", tolerance: tube}
-  V304: {device: "5651", instance: false}
+  V302: {device: EL34T@1, tolerance: tube}
+  V303: {device: "6084@1", tolerance: tube}
+  V304: {device: "5651@1", instance: false}
   GR301: {device: bias_rectifier, area: gr301_cell_area_in2}
   # Channel 2 (idle, lumped): its two 6386 banks as one device, its 12BH7 and 6973 pairs
   # as one double device each, nominal.
-  CH2_6386: {device: "6386", name: "6386_CH2", parallel: ch2_6386_parallel}
-  CH2_12BH7: {device: 12BH7, name: "12BH7_CH2", parallel: 2}
-  CH2_6973: {device: "6973", name: "6973_CH2", parallel: 2}
+  CH2_6386: {device: "6386@1", name: "6386_CH2", parallel: ch2_6386_parallel}
+  CH2_12BH7: {device: 12BH7@1, name: "12BH7_CH2", parallel: 2}
+  CH2_6973: {device: "6973@1", name: "6973_CH2", parallel: 2}
 
 sections:
   # Each part: NAME: {<macro>: <nodes>, params} (varimu/circuit/builder.py lists the

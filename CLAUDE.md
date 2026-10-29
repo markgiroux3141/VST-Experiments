@@ -35,10 +35,20 @@ The devices to build next are listed in [docs/DEVICE_CANDIDATES.md](docs/DEVICE_
 Telefunken V76). A component editor (tubes and transformers designed from geometry and
 materials, compiled to device files the circuit editors offer) is planned in
 [docs/COMPONENT_EDITOR_PLAN.md](docs/COMPONENT_EDITOR_PLAN.md) (2026-10-29; milestones
-C1-C8, nothing built; the user's decisions: it starts alongside the 5E3, whose output
-transformer is the first designed component; component versions are immutable and every
-circuit pins one; the editor is native-app only, compiled in Rust, Python only reads; field
-solvers only on demand). The user intends to retire the web app (`varimu listen`,
+C1-C8; the user's decisions: it starts alongside the 5E3, whose output transformer is the
+first designed component, heard through a physical speaker (C3); component versions are
+immutable and every circuit pins one; the editor is native-app only, compiled in Rust,
+Python only reads; field solvers only on demand), interleaved with the device builder's B9
+(the 5E3) and B10 (the V76; its schematic found 2026-10-29): the order is
+DEVICE_BUILDER_PLAN.md's "Devices and components together". **C1 done (2026-10-29):
+device files are component versions**, `config/components/<name>/<N>.yaml` (the former
+`config/devices/*.yaml` are version 1, bytes unchanged), each version's sha256 in
+`config/components/versions.lock`; `varimu/devices/versions.py` and `varimu-circuit`'s
+`versions.rs` read them the same way (a version edited after saving is a load error).
+Circuits pin `NAME@N` (`device: 12AX7@1`, `rectifier_tube: {value: GZ34@1, ...}`, a drawn
+symbol's value): the builders refuse a bare name, which tools and tests may use for the
+latest version. `varimu fit-devices` saves a new version only when a fit changed; moving a
+circuit to it is an explicit edit (the native editor's model picker lists every version). The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
@@ -254,7 +264,7 @@ uv run pytest                    # tests
 uv run ruff check . && uv run ruff format --check .
 uv run varimu signals [--seed N] [--only NAME ...] [--list]
 uv run varimu genome-status
-uv run varimu fit-devices [--only 6386 ...]   # refit device models -> config/devices/*.yaml
+uv run varimu fit-devices [--only 6386 ...]   # refit device models; a changed fit -> a new version config/components/<name>/<N>.yaml
 uv run python scripts/digitize_ge6386.py --overlays DIR   # re-digitize the 6386 sheet
 uv run --extra fast varimu render --clip data/clips/x.wav --set ac_threshold=0.7 time_constant=3 --out r.wav
 uv run --extra fast varimu render --signal steps_1000hz --vary time_constant=1,2,3   # parallel, cached

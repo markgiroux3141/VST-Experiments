@@ -74,6 +74,7 @@ from varimu.circuit.ir import (
 )
 from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.config import ConfigError, load_sim_settings
+from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode
 from varimu.devices.library import load_device
@@ -439,7 +440,10 @@ def make_models(ctx: Context) -> dict[str, str]:
         unknown = set(e) - _DEVICE_KEYS
         if unknown:
             raise ctx.fail(where, f"unknown keys {sorted(unknown)}")
-        base = load_device(ctx.text(where, e["device"]))
+        try:  # a circuit names the component version it uses (versions.require_pinned)
+            base = load_device(str(versions.require_pinned(ctx.text(where, e["device"]))))
+        except versions.VersionError as err:
+            raise ctx.fail(where, str(err)) from err
         if e.get("instance", True) is False:
             if set(e) - {"device", "instance", "source", "notes"}:
                 raise ctx.fail(where, "instance: false takes the device file's model as is")

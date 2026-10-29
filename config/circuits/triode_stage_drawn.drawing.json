@@ -14,7 +14,7 @@
  "symbols": {
   "V1": {
    "symbol": "Triode",
-   "value": "12AX7",
+   "value": "12AX7@1",
    "fields": {},
    "units": {
     "1": {

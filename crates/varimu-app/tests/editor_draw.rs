@@ -294,3 +294,43 @@ fn editing_the_drawn_stage() {
     assert!(ed.drawing.symbol("RL1").is_none());
     assert!(ed.playable().is_some(), "it can be heard");
 }
+
+/// Component versions (docs/COMPONENT_EDITOR_PLAN.md, C1): the model picker offers every
+/// saved version as `NAME@N`; swapping one is an edit that rebuilds the circuit (a
+/// different IR), its source saying what it was; undo takes it back.
+#[test]
+fn swapping_a_pinned_device_version() {
+    let mut ed = Editor::new(&config());
+    let refs: Vec<&str> = ed.parts.devices.iter().map(|(r, _)| r.as_str()).collect();
+    for want in ["12AX7@1", "12AU7@1", "6386@1", "GZ34@1", "6973@1"] {
+        assert!(refs.contains(&want), "{want} in {refs:?}");
+    }
+    assert!(refs.iter().all(|r| r.contains('@')), "{refs:?}");
+
+    ed.open("triode_stage_drawn").unwrap();
+    let ir = |ed: &Editor| {
+        let s = compiled_spec(&ed.analysis.compiled).unwrap();
+        let ir = build_ir(&ed.lib, &s, &resolve(&s, &[]).unwrap(), Cores::Linear).unwrap();
+        serde_json::to_string(&ir).unwrap()
+    };
+    let before = ir(&ed);
+    assert_eq!(ed.drawing.symbol("V1").unwrap().value, "12AX7@1");
+    ed.set_device("V1", "12AU7@1");
+    let v1 = ed.drawing.symbol("V1").unwrap();
+    assert_eq!(v1.value, "12AU7@1");
+    assert!(
+        v1.field("Source").unwrap_or("").contains("12AX7@1"),
+        "{:?}",
+        v1.field("Source")
+    );
+    assert!(ed.analysis.ok(), "{:?}", ed.analysis.errors());
+    assert_eq!(ed.check_now(), &[]);
+    assert_ne!(
+        ir(&ed),
+        before,
+        "a different tube builds a different circuit"
+    );
+    ed.undo();
+    assert_eq!(ed.drawing.symbol("V1").unwrap().value, "12AX7@1");
+    assert_eq!(ir(&ed), before);
+}

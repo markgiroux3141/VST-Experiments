@@ -407,7 +407,7 @@ def test_editor_render_and_compare():
     assert save("triode_stage").status_code == 409  # hand-written: never overwritten
     assert save("Bad Name").status_code == 400
     lib = client.get("/api/editor/library").json()
-    assert {"12AX7", "6X4"} <= {x["name"] for x in lib["devices"]} and lib["materials"]
+    assert {"12AX7@1", "6X4@1"} <= {x["name"] for x in lib["devices"]} and lib["materials"]
 
 
 # --- Step 3: drawing topology ------------------------------------------------------------------

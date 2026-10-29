@@ -1626,7 +1626,10 @@ impl EditorView {
         if let Some(k) = &key {
             h.push_str(&format!("parameter {k} · "));
         }
-        h.push_str(&format!("config/devices/{}.yaml", file.to_lowercase()));
+        match file.split_once('@') {
+            Some((n, v)) => h.push_str(&format!("config/components/{}/{v}.yaml", n.to_lowercase())),
+            None => h.push_str(&format!("{file}: not pinned to a version")),
+        }
         hint(ui, &h);
         if let Some(m) = s.field("Model") {
             field(ui, "MODEL");

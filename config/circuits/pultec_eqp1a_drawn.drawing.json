@@ -281,8 +281,8 @@
     "source": "provisional: model knowledge (push-pull primaries, 100-500 pF)"
    },
    "rectifier_tube": {
-    "value": "6X4",
-    "source": "dwg: 6X4 full-wave rectifier; config/devices/6x4.yaml (per section)"
+    "value": "6X4@1",
+    "source": "dwg: 6X4 full-wave rectifier; config/components/6x4/1.yaml (per section)"
    },
    "numerical_leak_ohm": {
     "value": 1000000000.0,
@@ -1672,7 +1672,7 @@
   },
   "V1": {
    "symbol": "Triode_Dual",
-   "value": "12AX7",
+   "value": "12AX7@1",
    "fields": {
     "Tol": "tube"
    },
@@ -2007,7 +2007,7 @@
   },
   "V2": {
    "symbol": "Triode_Dual",
-   "value": "12AU7",
+   "value": "12AU7@1",
    "fields": {
     "Tol": "tube"
    },

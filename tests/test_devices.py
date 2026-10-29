@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 import yaml
 
+from varimu.devices import versions
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.fit import DATASHEETS, cascode_gm, evaluate_6386, load_6386
 from varimu.devices.library import load_device
@@ -177,11 +178,7 @@ def test_all_device_files_have_sources():
     ):  # fmt: skip
         dev = load_device(name)
         assert dev is not None
-        d = yaml.safe_load(
-            (DATASHEETS.parents[1] / "config" / "devices" / f"{name.lower()}.yaml").read_text(
-                encoding="utf-8"
-            )
-        )
+        d = yaml.safe_load(versions.read_text(name)[1])
         assert d["source"]
         for block in ("grid_current", "capacitances_f"):
             if block in d:

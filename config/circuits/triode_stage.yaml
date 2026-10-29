@@ -43,7 +43,7 @@ tolerance:
     electrolytic: [CK]
 
 devices:
-  V1: {device: 12AX7, tolerance: tube}
+  V1: {device: 12AX7@1, tolerance: tube}
 
 sections:
   - title: stage

@@ -1,4 +1,5 @@
-//! Device files (config/devices/*.yaml) as IR device models, and core materials
+//! Device files (component versions, config/components/<name>/<N>.yaml: `versions`) as
+//! IR device models, and core materials
 //! (config/magnetics.yaml): the load path of `varimu/devices/library.py` and
 //! `varimu/devices/core.py` (fitting stays Python).
 //!
@@ -15,8 +16,8 @@ use circuitsim::ir::{
     Triode, VacuumDiode, VariMuTriode,
 };
 
-use crate::Error;
 use crate::yaml::{self, Map, Value};
+use crate::{Error, versions};
 
 /// A core material's Jiles-Atherton fields and lamination (config/magnetics.yaml).
 #[derive(Debug, Clone, PartialEq)]
@@ -50,20 +51,22 @@ impl Library {
         &self.config_dir
     }
 
-    /// The model of device file `name` (config/devices/<name lowercased>.yaml).
+    /// Where the component versions are (config/components).
+    pub fn components_dir(&self) -> PathBuf {
+        self.config_dir.join("components")
+    }
+
+    /// The model of device file `name` (`NAME@N`, or `NAME` for its latest version),
+    /// checked against versions.lock.
     pub fn device(&self, name: &str) -> Result<DeviceModel, Error> {
-        let key = name.to_lowercase();
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
         if let Some(m) = self.devices.lock().unwrap().get(&key) {
             return Ok(m.clone());
         }
-        let path = self.config_dir.join("devices").join(format!("{key}.yaml"));
-        if !path.exists() {
-            return Err(Error(format!(
-                "{} not found; run `uv run varimu fit-devices`",
-                path.display()
-            )));
-        }
-        let model = load_device(&yaml::load(&path)?, name)?;
+        let (_, text) = versions::read_text(&root, &r)?;
+        let model = load_device(&yaml::parse(&text, name)?, name)?;
         self.devices.lock().unwrap().insert(key, model.clone());
         Ok(model)
     }

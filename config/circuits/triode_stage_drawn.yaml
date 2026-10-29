@@ -9,7 +9,7 @@ probes: [out, g, p, k]
 values:
 
 devices:
-  V1: {device: 12AX7}
+  V1: {device: 12AX7@1}
 
 sections:
   - title: main

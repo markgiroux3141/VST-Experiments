@@ -345,14 +345,14 @@ _SYMBOLS += [
         "Triode (p, g, k); Value is the device file",
         (_triode_pins(("1", "2", "3")),),
         _triode(),
-        "12AX7",
+        "12AX7@1",
     ),  # fmt: skip
     _device(
         "Triode_Dual",
         "Dual triode, units A (pins 1-3) and B (6-8); each unit is one device instance",
         (_triode_pins(("1", "2", "3")), _triode_pins(("6", "7", "8"))),
         _triode(),
-        "12AX7",
+        "12AX7@1",
     ),
     _device(
         "Pentode",
@@ -372,7 +372,7 @@ _SYMBOLS += [
             *[poly((x, -1.27), (x + 0.762, -1.27)) for x in (-2.54, -1.27, 0.0, 1.27)],
             poly((-2.54, -3.048), (-2.54, -3.81), (2.54, -3.81)),
         ],
-        "6973",
+        "6973@1",
         text=(-3.81, 8.89, 7.366, "right"),
     ),  # fmt: skip
     _device(
@@ -380,7 +380,7 @@ _SYMBOLS += [
         "Diode, vacuum or junction (a, k); Value is the device file",
         (_diode_pins("1", "2"),),
         _diode(),
-        "6X4",
+        "6X4@1",
         prefix="D",
     ),  # fmt: skip
     _device(
@@ -388,7 +388,7 @@ _SYMBOLS += [
         "Dual diode (a full-wave rectifier), units A (pins 1, 2) and B (3, 4)",
         (_diode_pins("1", "2"), _diode_pins("3", "4")),
         _diode(),
-        "6X4",
+        "6X4@1",
     ),
     SymbolDef(
         "Winding",

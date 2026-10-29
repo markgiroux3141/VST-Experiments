@@ -72,18 +72,19 @@ def open_circuit(name: str) -> tuple[Drawing, str]:
 
 
 def part_library() -> dict[str, Any]:
-    """Device files by kind and core materials, with their sources: what the inspector
-    offers when a part's type is swapped."""
+    """Device files (every saved component version, by its `NAME@N` reference) by kind
+    and core materials, with their sources: what the inspector offers when a part's type
+    is swapped."""
     import yaml
 
-    from varimu.devices.library import DEVICE_DIR
+    from varimu.devices import versions
 
     devices = []
-    for p in sorted(DEVICE_DIR.glob("*.yaml")):
-        with open(p, encoding="utf-8") as f:
-            d = yaml.safe_load(f) or {}
-        devices.append({"name": str(d.get("name", p.stem)), "kind": d.get("kind"),
-                        "source": d.get("source", "")})  # fmt: skip
+    for folder in versions.names():
+        for n in versions.versions(folder):
+            d = yaml.safe_load(versions.path(f"{folder}@{n}").read_text(encoding="utf-8")) or {}
+            devices.append({"name": f"{d.get('name', folder)}@{n}", "kind": d.get("kind"),
+                            "source": d.get("source", "")})  # fmt: skip
     with open(CONFIG_DIR / "magnetics.yaml", encoding="utf-8") as f:
         mats = (yaml.safe_load(f) or {}).get("materials") or {}
     materials = [{"name": k, "source": v.get("source", "")} for k, v in mats.items()]

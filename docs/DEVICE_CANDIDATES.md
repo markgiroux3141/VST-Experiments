@@ -122,7 +122,7 @@ A German broadcast tube microphone preamp, highly regarded for its character.
 ## The rest of the list
 
 Sorted by how much of the current engine each one reuses. Today's device library is all
-tubes and rectifiers (`config/devices/`: 12AX7, 12AU7, 12BH7, 6386, 6973, 5651, 6084,
+tubes and rectifiers (`config/components/`: 12AX7, 12AU7, 12BH7, 6386, 6973, 5651, 6084,
 EL34 triode-connected, 6X4, GZ34, selenium, silicon); no transistors, FETs, op-amps or
 optical cells.
 

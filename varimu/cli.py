@@ -59,8 +59,8 @@ def _cmd_fit_devices(args: argparse.Namespace) -> int:
         raise SystemExit(
             f"unknown device(s): {', '.join(unknown)} (known: {', '.join(library.BUILDERS)})"
         )
-    for path in library.write_devices(names):
-        print(f"wrote {path}")
+    for what, path in library.write_devices(names):
+        print(f"{what}: {path}")
     return 0
 
 
@@ -320,7 +320,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     p = sub.add_parser("genome-status", help="list genome parameters still TBD")
     p.set_defaults(func=_cmd_genome_status)
 
-    p = sub.add_parser("fit-devices", help="fit device models and write config/devices/*.yaml")
+    p = sub.add_parser(
+        "fit-devices",
+        help="fit device models; a changed fit is saved as a new component version "
+        "(config/components/<name>/<N>.yaml)",
+    )
     p.add_argument("--only", nargs="+", metavar="NAME", help="build only these devices")
     p.set_defaults(func=_cmd_fit_devices)
 

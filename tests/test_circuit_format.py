@@ -237,8 +237,8 @@ def test_devices_and_switches(tmp_path):
     controls:
       pos: {value: 2, min: 1, max: 3, unit: position, source: "test"}
     devices:
-      V1: {device: 12AX7}
-      V2: {device: 12AX7, parallel: 2}
+      V1: {device: 12AX7@1}
+      V2: {device: 12AX7@1, parallel: 2}
     sections:
       - title: t
         parts:
@@ -269,7 +269,7 @@ def test_devices_and_switches(tmp_path):
     with pytest.raises(ConfigError, match="has pins"):
         _build(tmp_path, body.replace('[p, g, "0"], model: V1', "[p, g], model: V1"))
     with pytest.raises(ConfigError, match=r"no part uses: \['V3'\]"):
-        _build(tmp_path, body.replace("devices:\n", "devices:\n      V3: {device: 12AX7}\n"))
+        _build(tmp_path, body.replace("devices:\n", "devices:\n      V3: {device: 12AX7@1}\n"))
 
 
 def test_transformer_part_matches_the_library(tmp_path):

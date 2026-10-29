@@ -187,30 +187,28 @@ pub enum Checking {
 /// Device files and core materials: what a part's type can be swapped for.
 #[derive(Debug, Clone, Default)]
 pub struct PartLib {
-    /// (name, kind) of each device file.
+    /// (reference `NAME@N`, kind) of every saved device version.
     pub devices: Vec<(String, String)>,
     pub materials: Vec<String>,
 }
 
 impl PartLib {
     pub fn load(config_dir: &Path) -> PartLib {
+        use varimu_circuit::versions;
+        let root = config_dir.join("components");
         let mut devices = Vec::new();
-        if let Ok(rd) = std::fs::read_dir(config_dir.join("devices")) {
-            let mut paths: Vec<PathBuf> = rd
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.extension().is_some_and(|x| x == "yaml"))
-                .collect();
-            paths.sort();
-            for p in paths {
-                if let Ok(Value::Map(m)) = varimu_circuit::yaml::load(&p) {
-                    let stem = p
-                        .file_stem()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .into_owned();
+        for folder in versions::names(&root) {
+            for v in versions::versions(&root, &folder) {
+                let r = versions::Ref {
+                    name: folder.clone(),
+                    version: Some(v),
+                };
+                if let Ok((_, text)) = versions::read_text(&root, &r)
+                    && let Ok(Value::Map(m)) = varimu_circuit::yaml::parse(&text, &folder)
+                {
+                    let name = m.get("name").map_or(folder.clone(), Value::py_str);
                     devices.push((
-                        m.get("name").map_or(stem, Value::py_str),
+                        format!("{name}@{v}"),
                         m.get("kind").map(Value::py_str).unwrap_or_default(),
                     ));
                 }

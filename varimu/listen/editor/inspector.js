@@ -230,7 +230,7 @@ function deviceFields(s, sym, f, params, ctx) {
     `<option value="${esc(d.name)}"${d.name.toLowerCase() === String(file).toLowerCase() ? ' selected' : ''}>${esc(d.name)} · ${esc(d.kind.replace('_', ' '))}</option>`));
   return [
     field('Device', `<select class="sel" id="v-device">${opts.join('')}</select>
-      <div class="hintline">${key ? `parameter <span class="tag">${esc(key)}</span>` : ''} config/devices/${esc(String(file).toLowerCase())}.yaml</div>`),
+      <div class="hintline">${key ? `parameter <span class="tag">${esc(key)}</span>` : ''} config/components/${esc(String(file).split('@')[0].toLowerCase())}/${esc(String(file).split('@')[1] ?? '(unpinned)')}.yaml</div>`),
     ...(f.Model ? [field('Model', `<div class="box"><span class="tag">${esc(f.Model)}</span> <span class="note">one instance shared by both units</span></div>`)] : []),
     ...(f.Source ? [field('Source', `<div class="box src">${esc(f.Source)}</div>`)] : []),
   ].join('');

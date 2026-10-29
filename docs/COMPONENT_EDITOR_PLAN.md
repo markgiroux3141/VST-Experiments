@@ -151,6 +151,35 @@ after saving is a load error that names it, in Rust and Python; the native edito
 offers every library model, and choosing another one rebuilds and is heard; moving a
 circuit to another version is an explicit action that saves the new pin.
 
+*Status: done 2026-10-29.* The store: `config/components/<name>/<N>.yaml` (folder = the
+lowercased name), each version's sha256 (its text with LF line ends, so a CRLF checkout
+hashes the same) in `config/components/versions.lock`, a small `name:` / `  N: sha256`
+file both languages parse. The twelve former `config/devices/*.yaml` are version 1 of
+their components, moved with `git mv`, bytes unchanged. Readers:
+`varimu/devices/versions.py` (parse, resolve, read with the lock check, save) under
+`varimu.devices.library.load_device`, and `varimu-circuit`'s `versions.rs` under
+`Library::device` (reading only; saving stays Python's until `varimu-components`).
+References are `NAME@N`; a bare `NAME` is the latest version for tools and tests, and
+both builders refuse it in a circuit (`devices.V1: '12AX7' names no version: a circuit
+pins one, e.g. 12AX7@1`). Pinned: the hand-written circuits' device entries and their
+device-choice parameters (`rectifier_tube`, `bridge_diode`, `bias_rectifier`), the drawn
+circuits (redrawn by their scripts; the triode stage's value edited), the symbol table's
+and both editors' placement defaults (`12AX7@1`, `6973@1`, `6X4@1`), the KiCad fixtures
+(regenerated). The native editor's model picker lists every version (`PartLib`), the web
+editor's part list too (kept working until the web app is retired). `varimu
+fit-devices` compares a fit with the latest version's data and saves the next version
+only when it differs. Checked: `export_circuit_fixtures.py --golden` and
+`export_app_fixtures.py` without a diff (identical IR and SPICE for every circuit and
+case); `export_editor_fixtures.py` changed only by the pins and the device files' new
+paths in source strings; tests: `tests/test_versions.py`,
+`crates/varimu-circuit/tests/versions.rs` (an edited version and an unrecorded one
+refused, a bare name in a circuit refused, CRLF hashes alike, fit-devices saves only a
+changed fit), `crates/varimu-app/tests/editor_draw.rs` (the picker offers every version;
+swapping one rebuilds a different IR with a source naming the old version; undo).
+Not done here: a new version's SPICE model name (a circuit using two versions of one
+tube would clash in SPICE), and a new tube type's SPICE table grid
+(`varimu.devices.table.GRIDS` is keyed by the device file's `name`); both are C5's.
+
 **C2. Transformer designer, Tier A: the 5E3's output transformer.** The transformer
 component (core material, lamination, stack, gap, windings) and its designer in the
 Components view. A transformer specified by construction: a lamination from a standard
@@ -290,8 +319,8 @@ demand.
 
 ## Open
 
-- **Version syntax and layout** (C1): `name@N` in circuit files, and where versions
-  live (one directory per component is the starting sketch).
+- ~~Version syntax and layout~~ (C1): taken 2026-10-29: `NAME@N`, one folder per
+  component (C1's status).
 - **Ratings in Python's `varimu check`** (C6): default no, the native app's checks only.
 
 ## Sources (starting points; verify each before it sources a value)

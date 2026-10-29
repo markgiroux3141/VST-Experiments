@@ -569,7 +569,7 @@
 					(justify left)
 				)
 			)
-			(property "Value" "12AX7"
+			(property "Value" "12AX7@1"
 				(at 5.842 -1.27 0)
 				(effects
 					(font
@@ -2977,7 +2977,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "12AX7"
+		(property "Value" "12AX7@1"
 			(at 196.342 77.47 0)
 			(effects
 				(font
@@ -3058,7 +3058,7 @@
 				(justify left)
 			)
 		)
-		(property "Value" "12AX7"
+		(property "Value" "12AX7@1"
 			(at 234.442 77.47 0)
 			(effects
 				(font

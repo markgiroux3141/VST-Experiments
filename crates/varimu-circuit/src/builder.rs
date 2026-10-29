@@ -20,7 +20,7 @@ use crate::devices::Library;
 use crate::parts::{self, CoreSpec, Instance, WindingSpec};
 use crate::spec::{CircuitSpec, Params};
 use crate::yaml::{Map, Value};
-use crate::{Error, derived};
+use crate::{Error, derived, versions};
 
 /// IR version Python writes (`IR_VERSION` in varimu/circuit/ir.py).
 pub const IR_VERSION: u32 = 3;
@@ -739,9 +739,9 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
             return Err(ctx.fail(&where_, format!("unknown keys {unknown:?}")));
         }
         let file = ctx.text(&where_, e.get("device").unwrap())?;
-        let base = ctx
-            .lib
-            .device(&file)
+        // A circuit names the component version it uses (versions::require_pinned).
+        let base = versions::require_pinned(&ctx.lib.components_dir(), &file)
+            .and_then(|r| ctx.lib.device(&r.to_string()))
             .map_err(|err| ctx.fail(&where_, err.0))?;
         let model = if e.get("instance") == Some(&Value::Bool(false)) {
             if e.keys()
