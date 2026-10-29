@@ -54,7 +54,8 @@ pub fn render(
     }
     let t0 = std::time::Instant::now();
     let ir = circuit.build(values)?;
-    let v = s.full_scale_volts_peak;
+    let fs = circuit.full_scale(s);
+    let v = fs.input_v;
     // with_settle: `round(settle_s * sample_rate)` of the first sample in front.
     let n0 = (s.settle_s * s.sample_rate as f64).round_ties_even() as usize;
     let mut x: Vec<f64> = Vec::with_capacity(n0 + samples.len());
@@ -109,7 +110,10 @@ pub fn render(
         .find(|(n, _)| n == "v(out)")
         .ok_or("the circuit has no `out` probe")?
         .1;
-    let out = vout.iter().map(|&y| (y as f32 as f64) / v).collect();
+    let out = vout
+        .iter()
+        .map(|&y| (y as f32 as f64) / fs.output_v)
+        .collect();
     Ok(Rendered {
         out,
         probes,

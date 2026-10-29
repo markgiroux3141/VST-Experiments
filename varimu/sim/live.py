@@ -29,9 +29,10 @@ from typing import Any
 
 import numpy as np
 
+from varimu.circuit import spec
 from varimu.circuit.ir import CircuitIR
 from varimu.sim import fast, runner
-from varimu.sim.io import TransientSettings, resample
+from varimu.sim.io import TransientSettings, full_scale, resample
 
 LOOP_FADE_S = 0.01  # the loop's seam: the end crossfades into the start
 
@@ -90,6 +91,9 @@ class Live:
             raise ValueError("live playback runs circuitsim at 1x (a quality with oversample 1)")
         fast.check_build()
         self.s, self.circuit = s, circuit
+        # The circuit's volts at full scale in and out (its file's, or sim_settings').
+        file_spec = None if circuit is None else spec.load_circuit(runner.circuit_file(circuit))
+        self.v_in, self.v_out = full_scale(s, file_spec)
         self.rate = s.host
         x = resample(np.asarray(clip, float), s.sample_rate, self.rate)
         if len(x) < self.rate // 10:
@@ -121,7 +125,7 @@ class Live:
         with the input held (as a render starts)."""
         import circuitsim
 
-        s, v = self.s, self.s.full_scale_volts_peak
+        s, v = self.s, self.v_in
         st = circuitsim.Stream(
             ir.to_json(),
             1.0 / s.sim_rate,
@@ -186,15 +190,15 @@ class Live:
                 self._fade = what
             self.overrides = values
         x = self._input(n)
-        v = self.s.full_scale_volts_peak
+        v, vo = self.v_in, self.v_out
         out = self.stream.process(x * v)
-        y = out["v(out)"] / v
+        y = out["v(out)"] / vo
         cv = out.get("v(cv)")
         if self._fade is not None:
             new, struct = self._fade
             self._fade = None
             o2 = new.process(x * v)
-            y2 = o2["v(out)"] / v
+            y2 = o2["v(out)"] / vo
             m = min(len(y), len(y2))
             w = np.linspace(0.0, 1.0, m)
             y = y[-m:] * (1 - w) + y2[-m:] * w
@@ -208,7 +212,8 @@ class Live:
         rms_in = float(np.sqrt(np.mean(x**2))) + 1e-12
         rms_out = float(np.sqrt(np.mean(y**2))) + 1e-12
         meter = Meter(
-            gain_db=20 * np.log10(rms_out / rms_in),
+            # The circuit's gain, V/V (0 dB more when the scales in and out differ).
+            gain_db=20 * np.log10(rms_out * vo / (rms_in * v)),
             out_dbfs=20 * np.log10(rms_out * np.sqrt(2)),
             cv_v=float(np.mean(cv)) if cv is not None and len(cv) else None,
             load=(time.perf_counter() - t0) / (n / self.rate),

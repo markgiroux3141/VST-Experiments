@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 use crate::yaml::{self, Map, Value};
 
-const TOP_KEYS: [&str; 11] = [
+const TOP_KEYS: [&str; 12] = [
     "title",
     "input",
     "probes",
+    "full_scale",
     "controls",
     "values",
     "device_params",
@@ -52,6 +53,53 @@ pub struct CircuitSpec {
     pub tolerance: Map,
     pub devices: Map,
     pub sections: Vec<SectionSpec>,
+    /// The file's audio convention (`full_scale`; None: sim_settings' for both).
+    pub full_scale: Option<FullScale>,
+}
+
+/// Circuit volts peak at full scale: what a sample of 1.0 puts on the input node, and
+/// the `v(out)` that reads as 1.0 (spec.py's docstring, `full_scale`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct FullScale {
+    pub input_v: f64,
+    pub output_v: f64,
+}
+
+const FULL_SCALE_KEYS: [&str; 2] = ["input_volts_peak", "output_volts_peak"];
+
+/// The `full_scale` block (None: absent, or an error pushed).
+fn full_scale(fs: Option<&Value>, errors: &mut Vec<String>) -> Option<FullScale> {
+    let fs = fs.filter(|v| !v.is_null())?;
+    let Some(m) = fs
+        .as_map()
+        .filter(|m| m.len() == 2 && FULL_SCALE_KEYS.iter().all(|k| m.contains(k)))
+    else {
+        errors.push(format!("full_scale: needs exactly {FULL_SCALE_KEYS:?}"));
+        return None;
+    };
+    let mut out = [0.0; 2];
+    for (k, o) in FULL_SCALE_KEYS.iter().zip(&mut out) {
+        let n = errors.len();
+        let e = m.get(k).unwrap();
+        sourced(&format!("full_scale.{k}"), e, errors, false);
+        if errors.len() > n {
+            return None;
+        }
+        let v = e.as_map().and_then(|m| m.get("value")).unwrap();
+        match v.as_f64().filter(|x| *x > 0.0) {
+            Some(x) => *o = x,
+            None => {
+                errors.push(format!(
+                    "full_scale.{k}: value {v} is not a positive number"
+                ));
+                return None;
+            }
+        }
+    }
+    Some(FullScale {
+        input_v: out[0],
+        output_v: out[1],
+    })
 }
 
 fn has_source(e: &Map) -> bool {
@@ -260,6 +308,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             errors.push(format!("devices.{k}: needs a `device`"));
         }
     }
+    let full_scale = full_scale(data.get("full_scale"), &mut errors);
     if !errors.is_empty() {
         return Err(Error(format!(
             "{}:\n  {}",
@@ -288,6 +337,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         tolerance: tol,
         devices,
         sections,
+        full_scale,
     })
 }
 

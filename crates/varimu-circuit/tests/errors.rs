@@ -75,3 +75,46 @@ fn bad_circuit_files_are_refused_at_load() {
     );
     assert!(err.contains("values.r2: needs a `source`"), "{err}");
 }
+
+#[test]
+fn full_scale_is_read_and_checked() {
+    let lib = lib();
+    let load = |name: &str| {
+        spec::load_circuit(&spec::circuit_path(lib.config_dir(), name).unwrap()).unwrap()
+    };
+    // The 5E3 takes a pickup's volts and gives the speaker's (spec.py, `full_scale`); the
+    // others use sim_settings' for both.
+    assert_eq!(
+        load("fender_5e3").full_scale,
+        Some(spec::FullScale {
+            input_v: 1.0,
+            output_v: 60.0
+        })
+    );
+    assert_eq!(load("fairchild_670").full_scale, None);
+
+    let dir = std::env::temp_dir().join(format!("varimu-circuit-fs-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("bad.yaml");
+    let cases = [
+        ("full_scale: 1.0", "full_scale: needs exactly"),
+        (
+            "full_scale:\n  input_volts_peak: {value: 1.0, source: x}",
+            "full_scale: needs exactly",
+        ),
+        (
+            "full_scale:\n  input_volts_peak: {value: 1.0}\n  output_volts_peak: {value: 60, source: x}",
+            "full_scale.input_volts_peak: needs a `source`",
+        ),
+        (
+            "full_scale:\n  input_volts_peak: {value: 1.0, source: x}\n  output_volts_peak: {value: 0, source: x}",
+            "full_scale.output_volts_peak: value 0 is not a positive number",
+        ),
+    ];
+    for (text, message) in cases {
+        std::fs::write(&path, format!("title: bad\n{text}\n")).unwrap();
+        let err = spec::load_circuit(&path).unwrap_err().0;
+        assert!(err.contains(message), "{text}: {err}");
+    }
+    std::fs::remove_dir_all(&dir).ok();
+}

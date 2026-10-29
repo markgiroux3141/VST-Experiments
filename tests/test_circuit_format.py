@@ -206,6 +206,43 @@ def test_bad_parameters_are_errors(tmp_path, extra, message):
         _spec(tmp_path, RC, BASE + extra)
 
 
+FULL_SCALE = (
+    "full_scale:\n"
+    '  input_volts_peak: {value: 1.0, source: "test"}\n'
+    '  output_volts_peak: {value: 60, source: "test"}\n'
+)
+
+
+def test_full_scale_is_the_circuits_or_the_settings(tmp_path):
+    from varimu.sim.io import TransientSettings, full_scale
+
+    s = TransientSettings.from_sim_settings()
+    plain = _spec(tmp_path, RC)
+    own = _spec(tmp_path, RC, BASE + FULL_SCALE)
+    assert plain.full_scale is None and own.full_scale == (1.0, 60.0)
+    assert full_scale(s, plain) == (s.full_scale_volts_peak,) * 2
+    assert full_scale(s, None) == (s.full_scale_volts_peak,) * 2
+    assert full_scale(s, own) == (1.0, 60.0)
+    # Not a parameter, not in the IR: the circuit itself is the same.
+    assert builder.build_ir(own, resolve(own)) == builder.build_ir(plain, resolve(plain))
+    assert builder.build(own).full_scale == (1.0, 60.0)
+
+
+@pytest.mark.parametrize(
+    "block, message",
+    [
+        ("full_scale: 1.0\n", "needs exactly"),
+        ('full_scale:\n  input_volts_peak: {value: 1.0, source: "test"}\n', "needs exactly"),
+        (FULL_SCALE.replace(', source: "test"}', "}", 1), "input_volts_peak: needs a `source`"),
+        (FULL_SCALE.replace("60", "0"), "output_volts_peak: value 0 is not a positive"),
+        (FULL_SCALE.replace("60", "high"), "output_volts_peak: value 'high' is not a positive"),
+    ],
+)
+def test_bad_full_scale_is_an_error(tmp_path, block, message):
+    with pytest.raises(ConfigError, match=message):
+        _spec(tmp_path, RC, BASE + block)
+
+
 TOL = """
   seed: {value: 0, source: "test"}
   spread: {value: 1.0, source: "test"}

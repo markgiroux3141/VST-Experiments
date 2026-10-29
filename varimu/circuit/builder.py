@@ -489,6 +489,8 @@ class Circuit:
     files: dict[str, Path]  # extra files the netlist reads (job-dir name -> source), e.g. tables
     ir: CircuitIR  # what `text` was emitted from; the Rust engine's input
     cores: str = "ja"  # "ja" (then text is None: no SPICE core) or "linear"
+    # The file's (input, output) volts peak at full scale; None: sim_settings' (spec.py).
+    full_scale: tuple[float, float] | None = None
 
 
 def tolerance(spec: CircuitSpec, q: Mapping[str, Any]) -> parts.Tolerance | None:
@@ -592,7 +594,7 @@ def build(
     if cores == "linear":
         text, files = spice.emit(ir, triode_formulation=form, table_grids=grids)
     save = tuple(pr.spice for pr in ir.probes)
-    return Circuit(text, ir.input_node, save, p, files, ir, cores)
+    return Circuit(text, ir.input_node, save, p, files, ir, cores, spec.full_scale)
 
 
 def find_part(spec: CircuitSpec, name: str) -> Mapping:

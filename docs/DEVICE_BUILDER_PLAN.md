@@ -737,9 +737,19 @@ the next:
    within the layout's +-20% (the 12AY7 fit draws ~15% more than the kit's tubes). IR
    equal in Rust (`tests/agreement.rs`, 30 cases); ngspice (linear cores) runs it, its
    output -54.5 dB from circuitsim's on a 440 Hz tone. 1 kHz: ~1 W clean at half volume,
-   15-16 W in hard overdrive. Open: the input level (0 dBFS is still the global 13.8 V
-   peak; the per-circuit volts-per-full-scale convention needs a circuit-file key read by
-   both the Python renders and varimu-app).
+   15-16 W in hard overdrive.
+   *The input level, done 2026-10-29* (the design the user approved): a circuit file's
+   optional `full_scale: {input_volts_peak, output_volts_peak}` (each `{value, source}`;
+   `spec.py`'s docstring), the 5E3's 1 V in (a hot pickup) and 60 V out (the speaker's
+   peak, 53.6 V at 1 kHz, 1 V in, volume 0.5, rounded up). Without it both are
+   sim_settings' 13.8 V, so the other circuits are unchanged bit for bit (their IR,
+   goldens and app fixtures: no diff; `app_render_agreement.py` equal at production and
+   draft-1x, now with the 5E3 and the output audio compared). It is no parameter and not
+   in the IR: Python's `varimu.sim.io.full_scale` (renders, with the pair in the cache key
+   and meta.json; `live.py`; `eq_suite.py`) and varimu-app's `Circuit::full_scale`
+   (render, live, `load_profile`) scale around the circuit. Play's gain meter shows the
+   circuit's gain in V/V (0 dB more for circuits on the global scale). The KiCad export and
+   import (both parsers) carry it, so a drawing of the 5E3 keeps it.
 4. *Its profile* (`varimu/measure/profiles.py`): gain per volume setting, response per
    tone setting, clipping onset, THD vs level, output power into the load, supply sag
    and recovery on bursts, and aliasing at the internal rate (production 2x, draft).

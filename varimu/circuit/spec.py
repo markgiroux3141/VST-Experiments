@@ -7,6 +7,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     title: ...                      # the IR's title
     input: in                       # the node the audio input drives
     probes: [out, cv, ...]          # node voltages every render saves
+    full_scale: {input_volts_peak: {value, source}, output_volts_peak: {value, source}}
     controls: {key: {value, min, max | choices, source, unit?, notes?}}
     values: {key: {value, source, genome?, unit?, notes?}}
     device_params: {key: {value, source, genome?}}   # act on device instances
@@ -26,6 +27,13 @@ device file's value. Derived values are functions of the resolved parameters,
 named in the file with their source and computed by the module's function of
 the same name (for arithmetic the parts can't express, e.g. lumping parallel
 parts); they can't be overridden.
+
+`full_scale` (optional, device builder B9) is the circuit's own audio convention: the
+volts a full-scale input sample (1.0) puts on the input node, and the `v(out)` that
+reads as 1.0 (a guitar amp takes a pickup's ~1 V and drives a speaker with ~50 V).
+Without it both are sim_settings' `audio.full_scale_volts_peak`. It is no parameter
+and not in the IR: renders and the native app scale around the circuit with it
+(`varimu.sim.io.full_scale`).
 
 Parts and devices are read by varimu.circuit.builder (its docstring has the
 macro parts and their parameters).
@@ -53,6 +61,7 @@ _TOP_KEYS = {
     "title",
     "input",
     "probes",
+    "full_scale",
     "controls",
     "values",
     "device_params",
@@ -78,6 +87,9 @@ class CircuitSpec:
     devices: dict[str, dict[str, Any]] = dataclasses.field(default_factory=dict)
     sections: tuple[dict[str, Any], ...] = ()
     path: Path | None = None
+    # (input, output) volts peak at full scale; None: sim_settings' (the module docstring).
+    full_scale: tuple[float, float] | None = None
+    full_scale_block: dict[str, Any] | None = None  # as written, with its sources
 
     def part_classes(self) -> dict[str, str]:
         """Designator -> tolerance class."""
@@ -183,6 +195,7 @@ def load_circuit(path: Path) -> CircuitSpec:
     for k, e in (data.get("devices") or {}).items():
         if not isinstance(e, Mapping) or "device" not in e:
             errors.append(f"devices.{k}: needs a `device`")
+    full_scale = _full_scale(data.get("full_scale"), errors)
     if errors:
         raise ConfigError(f"{path}:\n  " + "\n  ".join(errors))
     return CircuitSpec(
@@ -198,7 +211,33 @@ def load_circuit(path: Path) -> CircuitSpec:
         devices=data.get("devices") or {},
         sections=tuple(sections),
         path=Path(path),
+        full_scale=full_scale,
+        full_scale_block=data.get("full_scale"),
     )
+
+
+_FULL_SCALE_KEYS = ("input_volts_peak", "output_volts_peak")
+
+
+def _full_scale(fs: Any, errors: list[str]) -> tuple[float, float] | None:
+    """The `full_scale` block as (input, output) volts peak (None: absent)."""
+    if fs is None:
+        return None
+    if not isinstance(fs, Mapping) or set(fs) != set(_FULL_SCALE_KEYS):
+        errors.append(f"full_scale: needs exactly {list(_FULL_SCALE_KEYS)}")
+        return None
+    out = []
+    for k in _FULL_SCALE_KEYS:
+        n = len(errors)
+        _sourced(f"full_scale.{k}", fs[k], errors)
+        if len(errors) > n:
+            return None
+        v = fs[k]["value"]
+        if isinstance(v, bool) or not isinstance(v, int | float) or not v > 0:
+            errors.append(f"full_scale.{k}: value {v!r} is not a positive number")
+            return None
+        out.append(float(v))
+    return out[0], out[1]
 
 
 def circuit_path(name: str) -> Path:

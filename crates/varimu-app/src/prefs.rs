@@ -17,7 +17,8 @@ pub struct Prefs {
 }
 
 /// The studio alignment the 670's factory adjustment assumes: -18 dBFS = +4 dBu
-/// (`sim_settings.yaml`, audio.full_scale_volts_peak).
+/// (`sim_settings.yaml`, audio.full_scale_volts_peak); a circuit with its own `full_scale`
+/// (the 5E3: a pickup's volts) needs its own target.
 pub const ALIGNMENT_DBFS: f64 = -18.0;
 
 impl Default for Prefs {

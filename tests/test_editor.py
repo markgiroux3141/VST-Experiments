@@ -197,12 +197,15 @@ def test_eqp1a_drawing_compiles_to_the_same_ir():
     assert check_circuit(b) == []
 
 
-@pytest.mark.parametrize("name", ["fairchild_670", "triode_stage"])
+@pytest.mark.parametrize("name", ["fairchild_670", "triode_stage", "fender_5e3"])
 def test_other_circuits_compile_to_the_same_ir(name):
+    """The 5E3: its jacks switch parts that aren't on one common node (a deck each), and
+    its own full scale comes back."""
     a = load_circuit(circuit_path(name))
     c = compile_drawing(_round_trip(generated_drawing(a)))
     assert c.errors == [] and c.problems == []
     b = compiled_spec(c)
+    assert b.full_scale == a.full_scale
     overrides = [*switch_configs(a)]
     if "passive_spread" in a.values:
         overrides.append({"passive_spread": 1.0, "passive_seed": 7})

@@ -1,12 +1,13 @@
 //! Where a device's real-time load goes, block by block, without an audio device: a
-//! file through the device at draft-1x (the Play view's quality), each block's compute
+//! file through the device at draft-1x (the Play view's quality; `--quality draft`: the
+//! project's 96 kHz at 1x), each block's compute
 //! time over its audio time next to the solver's counters (Newton iterations,
 //! factorizations, device evaluations, halved steps) and the input's level and top
 //! octaves. Writes a CSV and prints the heaviest blocks.
 //!
 //!     cargo run --release -p varimu-app --example load_profile -- --file F
 //!         [--device fairchild_670] [--normalize -11.5] [--block 512] [--out load.csv]
-//!         [--set KEY=VALUE ...] [--add-c NODE=FARADS ...]
+//!         [--set KEY=VALUE ...] [--add-c NODE=FARADS ...] [--quality draft-1x|draft]
 //!
 //! The input is normalized as the Play view does: the file's loudest 8 s to
 //! `--normalize` dBFS (sine-equivalent rms).
@@ -53,6 +54,7 @@ fn main() -> Result<(), String> {
     let (mut device, mut file, mut out) = ("fairchild_670".to_string(), None, None);
     let (mut target, mut block) = (-11.5, 512usize);
     let mut sets = Vec::new();
+    let mut quality = Quality::Draft1x;
     let mut added: Vec<(String, f64)> = Vec::new();
     while let Some(a) = args.next() {
         let mut next = || args.next().ok_or(format!("{a} needs a value"));
@@ -62,6 +64,13 @@ fn main() -> Result<(), String> {
             "--out" => out = Some(next()?),
             "--normalize" => target = next()?.parse().map_err(|e| format!("{e}"))?,
             "--block" => block = next()?.parse().map_err(|e| format!("{e}"))?,
+            "--quality" => {
+                quality = match next()?.as_str() {
+                    "draft" => Quality::Draft,
+                    "draft-1x" => Quality::Draft1x,
+                    q => return Err(format!("--quality {q}: draft or draft-1x (1x streams)")),
+                }
+            }
             "--add-c" => {
                 let kv = next()?;
                 let (k, v) = kv.split_once('=').ok_or("--add-c NODE=FARADS")?;
@@ -77,7 +86,7 @@ fn main() -> Result<(), String> {
     }
     let file = file.ok_or("--file is required")?;
     let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
-    let s = Settings::load(&config, Quality::Draft1x)?;
+    let s = Settings::load(&config, quality)?;
     let dev = DEVICES
         .iter()
         .find(|d| d.id == device)
@@ -119,7 +128,7 @@ fn main() -> Result<(), String> {
         .iter()
         .map(|t| t * gain)
         .collect();
-    let vfs = s.full_scale_volts_peak;
+    let vfs = circuit.full_scale(&s).input_v;
 
     let opts = s.stream_options()?;
     let second = s.partition_sections(&ir);

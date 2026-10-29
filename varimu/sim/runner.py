@@ -24,7 +24,9 @@ varimu.devices.table.cached_table) and hard-linked into each job directory.
 A job renders the Fairchild 670 (varimu.circuit.netlist) unless it names another
 circuit file (`RenderJob.circuit`, device builder B2): a name in config/circuits/, or a
 path to a .yaml file (the schematic editor's compiled drawings in cache/editor/, B4a);
-its overrides are that circuit's parameters.
+its overrides are that circuit's parameters. Its input and output are scaled by the
+circuit's full scale (`varimu.sim.io.full_scale`: the file's `full_scale`, or
+sim_settings' `audio.full_scale_volts_peak`), stored in meta.json as `full_scale_v`.
 """
 
 from __future__ import annotations
@@ -50,7 +52,7 @@ from varimu.circuit import builder, spec
 from varimu.circuit import netlist as nl
 from varimu.config import REPO_ROOT, load_sim_settings
 from varimu.sim import fast
-from varimu.sim.io import TransientSettings, run_transient, write_audio
+from varimu.sim.io import TransientSettings, full_scale, run_transient, write_audio
 
 CACHE_DIR = REPO_ROOT / "cache"
 RENDER_DIR = CACHE_DIR / "renders"
@@ -133,6 +135,7 @@ def _key(circuit: nl.Circuit, samples: np.ndarray, s: TransientSettings) -> tupl
         "input": _sha(np.ascontiguousarray(samples, "<f8").tobytes()),
         "settings": s.as_dict(),
         "save": list(circuit.save),
+        "full_scale_v": list(full_scale(s, circuit)),
         "code": code_version(),
     }
     if s.engine == "circuitsim":
@@ -195,7 +198,7 @@ def load_render(path: Path) -> Render:
     meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
     with np.load(path / "vectors.npz") as z:
         vectors = {k: z[k].astype(float) for k in z.files}
-    out = vectors["v(out)"] / meta["settings"]["full_scale_volts_peak"]
+    out = vectors["v(out)"] / meta["full_scale_v"][1]
     return Render(meta["key"], path, out, vectors, meta, cached=True)
 
 
@@ -214,6 +217,7 @@ def render(
     circuit = build_circuit(job, s)
     samples = np.asarray(job.samples, float)
     key, parts = _key(circuit, samples, s)
+    v_in, v_out = full_scale(s, circuit)
     path = RENDER_DIR / key
     if use_cache and (path / "meta.json").exists():
         r = load_render(path)
@@ -233,13 +237,11 @@ def render(
     try:
         if s.engine == "circuitsim":
             with fast.thread_priority(s.priority):
-                res = fast.run_transient(
-                    circuit.ir, samples * s.full_scale_volts_peak, settings=s, progress=progress
-                )
+                res = fast.run_transient(circuit.ir, samples * v_in, settings=s, progress=progress)
         else:
             res = run_transient(
                 circuit.text,
-                samples * s.full_scale_volts_peak,
+                samples * v_in,
                 input_node=circuit.input_node,
                 save=circuit.save,
                 settings=s,
@@ -262,6 +264,7 @@ def render(
         "params": {k: v for k, v in circuit.params.items()},
         "overrides": dict(job.overrides),
         "settings": s.as_dict(),
+        "full_scale_v": [v_in, v_out],
         "key_parts": parts,
         "cached": False,
     }
@@ -273,7 +276,7 @@ def render(
     # one will: anything computed from it (a measured level that sets the next
     # render's input) is the same either way, and so are the next cache keys.
     vectors = {k: v.astype("<f4").astype(float) for k, v in res.vectors.items()}
-    out = vectors["v(out)"] / s.full_scale_volts_peak
+    out = vectors["v(out)"] / v_out
     write_audio(tmp / "out.wav", out, s.sample_rate)
     np.savez_compressed(tmp / "vectors.npz", **{k: v.astype("<f4") for k, v in vectors.items()})
     (tmp / "meta.json").write_text(json.dumps(meta, indent=1, default=str), encoding="utf-8")

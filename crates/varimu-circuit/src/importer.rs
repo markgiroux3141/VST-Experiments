@@ -33,10 +33,11 @@ use crate::yaml::{self, Map, Value};
 
 const GROUND: &str = "0";
 const GROUND_NETS: [&str; 2] = ["GND", "0"];
-pub const SIDECAR_KEYS: [&str; 9] = [
+pub const SIDECAR_KEYS: [&str; 10] = [
     "title",
     "input",
     "probes",
+    "full_scale",
     "controls",
     "values",
     "device_params",
@@ -1222,7 +1223,7 @@ impl Importer<'_> {
         }
 
         let mut data = Map::default();
-        for k in ["title", "input", "probes", "controls"] {
+        for k in ["title", "input", "probes", "full_scale", "controls"] {
             if let Some(v) = self.side.get(k) {
                 set(&mut data, k, v.clone());
             }

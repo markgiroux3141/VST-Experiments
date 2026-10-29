@@ -56,8 +56,8 @@ from varimu.kicad.symbols import LIBRARY, SYMBOLS, SymbolDef
 from varimu.kicad.values import parse_eng
 
 GROUND_NETS = {"GND", "0"}
-SIDECAR_KEYS = ("title", "input", "probes", "controls", "values", "device_params", "derived",
-                "mains", "tolerance")  # fmt: skip
+SIDECAR_KEYS = ("title", "input", "probes", "full_scale", "controls", "values", "device_params",
+                "derived", "mains", "tolerance")  # fmt: skip
 _TOLERANCED = {"R", "C", "pot", "rheostat", "tapped_pot", "t_pad"}
 _PRUNABLE = {"R", "C", "L", "V", "sine", "mains", "rheostat"}  # two-terminal macros
 _ROOT_SECTION = "main"
@@ -607,7 +607,7 @@ class _Importer:
             sections.append({"title": _section_title(sheet), "parts": ordered})
 
         data: dict[str, Any] = {}
-        for k in ("title", "input", "probes", "controls"):
+        for k in ("title", "input", "probes", "full_scale", "controls"):
             if k in self.side:
                 data[k] = self.side[k]
         data.setdefault("title", self.nl.title)

@@ -22,6 +22,12 @@
 title: "Fender 5E3 Deluxe"
 input: in
 probes: [out, j1b, j1n, g1b, g1n, k1, p1b, p1n, vb, vn, g2, k2, p2, g3, p3, k3, kj, oa, ob, g6a, g6b, p6a, p6b, k6, b1, b2, b3, hva, hvb]
+# Guitar audio drives the input jack as a voltage (a DI through a Hi-Z input carries the
+# pickup's response); the output is the speaker's terminal voltage (the user's decisions,
+# DEVICE_BUILDER_PLAN.md B9).
+full_scale:
+  input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)"}
+  output_volts_peak: {value: 60.0, source: "derived: the speaker voltage's peak, 53.6 V (production render, 1 kHz at 1 V peak into bright input 1, volume 0.5, 2026-10-29), rounded up for headroom"}
 
 controls:
   # The front panel. Knobs are rotations 0..1 (the panel's 1..12).

@@ -37,6 +37,18 @@ def test_builds_and_every_value_is_sourced(deluxe):
     assert moved > 25
 
 
+def test_guitar_level_in_speaker_volts_out(deluxe):
+    # 0 dBFS is a hot pickup's ~1 V peak; the output reads the speaker voltage, with
+    # room for its hardest spikes (~54 V).
+    assert deluxe.full_scale == (1.0, 60.0)
+    assert builder.build(deluxe).full_scale == (1.0, 60.0)
+    # A drawing made from it keeps the convention (the KiCad export's sidecar, which
+    # the editor's layouts start from).
+    from varimu.kicad.export import _Exporter
+
+    assert _Exporter(deluxe).sidecar()["full_scale"] == deluxe.full_scale_block
+
+
 def test_preflight_passes_at_every_jack(deluxe):
     assert preflight.check_circuit(deluxe) == []
     assert len(preflight.switch_configs(deluxe)) == 4

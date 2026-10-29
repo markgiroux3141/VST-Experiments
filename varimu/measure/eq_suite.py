@@ -36,11 +36,12 @@ from typing import Any
 
 import numpy as np
 
+from varimu.circuit import spec
 from varimu.config import DATA_DIR, REPO_ROOT
 from varimu.measure import generic, metrics
 from varimu.measure.levels import DBM_V_RMS, dbm
 from varimu.sim import runner
-from varimu.sim.io import TransientSettings
+from varimu.sim.io import TransientSettings, full_scale
 
 CIRCUIT = "pultec_eqp1a"
 REPORT_DIR = REPO_ROOT / "reports" / "units"
@@ -96,7 +97,10 @@ def published_curves() -> list[dict[str, Any]]:
 
 def _job(samples_v: np.ndarray, genome: Mapping[str, Any], ov: Mapping, label: str, s) -> Any:
     return runner.RenderJob(
-        samples_v / s.full_scale_volts_peak, {**genome, **ov}, label, circuit=CIRCUIT
+        samples_v / full_scale(s, spec.load_circuit(spec.circuit_path(CIRCUIT)))[0],
+        {**genome, **ov},
+        label,
+        circuit=CIRCUIT,
     )
 
 

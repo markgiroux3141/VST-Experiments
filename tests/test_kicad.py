@@ -181,7 +181,7 @@ def test_fresh_netlist_imports_the_same(tmp_path):
 
 
 @needs_kicad
-@pytest.mark.parametrize("name", ["fairchild_670", "triode_stage"])
+@pytest.mark.parametrize("name", ["fairchild_670", "triode_stage", "fender_5e3"])
 def test_round_trip_through_kicad(name, tmp_path):
     """The other circuits through KiCad and back: the 670 has the macros the EQP-1A
     lacks (T-pad, tapped pot, bridge, VR tube, interwinding capacitance, pentodes,

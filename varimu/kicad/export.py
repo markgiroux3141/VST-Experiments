@@ -14,7 +14,10 @@ What goes where (the inverse of varimu.kicad.importer):
 - a switch becomes rotary switch decks on its control: the node most of its sub-parts
   share is the common, each switched part's pin on it goes to a contact net wired to
   the contacts of its positions, and parts with overlapping positions go on separate
-  decks (a ganged switch). Sub-parts not on the common hang off switched ones;
+  decks (a ganged switch). Sub-parts not on the common hang off switched ones, through
+  a node only the switch uses (the importer drops them with that branch); a switched one
+  whose nodes the rest of the circuit uses too gets a deck of its own common, its node
+  most switched parts share (the 5E3's jacks: `in` to input 2's tip only at input 2);
 - device parts become Triode / Pentode / Diode symbols, two with identical `devices`
   entries named <ref>A / <ref>B a dual symbol's units.
 """
@@ -227,36 +230,65 @@ class _Exporter:
         subs = e["parts"]
         counts = Counter(n for s in subs.values() if "in" in s
                          for n in self.nodes_of(s))  # fmt: skip
-        common = max(counts, key=lambda n: (counts[n], -list(counts).index(n)))
-        decks: list[tuple[set, dict[int, str]]] = []
+
+        def shared(n: str) -> tuple[int, int]:  # how many switched parts share n; first wins
+            return counts[n], -list(counts).index(n)
+
+        common = max(counts, key=shared)
+        outside = self.nodes_outside(name)
+        decks: list[tuple[str, set, dict[int, str]]] = []  # (common, positions, contacts)
         out = []
         for sub, s in subs.items():
             p = self.part(sub, s, section_tol)
             [p] = p
-            if "in" not in s or common not in self.nodes_of(s):
+            nodes = self.nodes_of(s)
+            if "in" not in s or (common not in nodes and not set(nodes) <= outside):
                 out.append(p)
                 continue
+            here = common if common in nodes else max(nodes, key=shared)
             pos = set(s["in"])
-            deck = next((d for d in decks if not d[0] & pos), None)
+            deck = next((d for d in decks if d[0] == here and not d[1] & pos), None)
             if deck is None:
-                deck = (set(), {})
+                deck = (here, set(), {})
                 decks.append(deck)
-            used, contacts = deck
+            _, used, contacts = deck
             used |= pos
             net = f"{name}_{sub}".lower()
             for k in pos:
                 contacts[positions.index(k) + 1] = net
-            pin = next(num for num, n in p.nets.items() if n == common)
+            pin = next(num for num, n in p.nets.items() if n == here)
             p.nets[pin] = net
             out.append(p)
         sym = SYMBOLS[f"SW_Rotary_{len(positions)}"]
-        for i, (_, contacts) in enumerate(decks):
+        for i, (deck_common, _, contacts) in enumerate(decks):
             d = Placed(sym, name if i == 0 else f"{name}_{chr(ord('B') + i - 1)}", 0, 0,
                        value=control, fields={"Control": control})  # fmt: skip
-            d.nets = {"C": common}
+            d.nets = {"C": deck_common}
             for k in range(1, len(positions) + 1):
                 d.nets[str(k)] = contacts.get(k)
             out.append(d)
+        return out
+
+    def nodes_outside(self, switch: str) -> set[str]:
+        """The nodes every part but `switch` uses, ground, the input and the probes."""
+        out = {"0", self.spec.input_node, *self.spec.probes}
+
+        def walk(v: Any) -> None:
+            if isinstance(v, Mapping):
+                for k, x in v.items():
+                    if k != "in":
+                        walk(x)
+            elif isinstance(v, list):
+                if all(isinstance(x, str) for x in v):
+                    out.update(v)
+                else:
+                    for x in v:
+                        walk(x)
+
+        for section in self.spec.sections:
+            for ref, e in section["parts"].items():
+                if ref != switch:
+                    walk(e)
         return out
 
     def nodes_of(self, entry: Mapping) -> list[str]:
@@ -316,6 +348,8 @@ class _Exporter:
         spec = self.spec
         out: dict[str, Any] = {"title": spec.title, "input": spec.input_node,
                                "probes": list(spec.probes)}  # fmt: skip
+        if spec.full_scale_block:
+            out["full_scale"] = spec.full_scale_block
         if spec.controls:
             out["controls"] = spec.controls
         out["values"] = {k: v for k, v in spec.values.items() if k not in self.drawn}

@@ -52,7 +52,8 @@ circuit to it is an explicit edit (the native editor's model picker lists every 
 **B9 steps 2-3 done (2026-10-29):** `12AY7@1`, `6V6GT@1` (Koren; a beam-tetrode `@2` after
 step 5, the user's call), `5Y3GT@1` fitted to digitized sheets (plots in `reports/devices/`);
 `config/circuits/fender_5e3.yaml` idles within the layout's +-20% of a kit's published
-voltages (`tests/test_fender_5e3.py`); open: its per-circuit input level. The user intends to retire the web app (`varimu listen`,
+voltages (`tests/test_fender_5e3.py`); its input is guitar level (the circuit file's
+`full_scale`: 0 dBFS = 1 V peak in, 60 V at the speaker out). The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
@@ -123,7 +124,9 @@ reference is the docstrings of `varimu/circuit/spec.py` (loading, `resolve`,
 genome links) and `varimu/circuit/builder.py` (the macros, devices, tolerance
 draws, `build` -> IR + SPICE); the macros expand with the parts library
 `varimu/circuit/parts.py`. A physical value is a parameter key or
-`{value, source}` inline, never a bare number (load error). `varimu/circuit/netlist.py`
+`{value, source}` inline, never a bare number (load error). An optional `full_scale`
+block gives a circuit its own volts at 0 dBFS in and out (else sim_settings' 13.8 V;
+`varimu.sim.io.full_scale`, varimu-app's `Circuit::full_scale`). `varimu/circuit/netlist.py`
 is the 670's API on top (`nl.build`, `nl.resolve`, ... unchanged for callers);
 its derived values (channel 2 lumped) are in `varimu/circuit/fairchild_670.py`.
 `config/circuits/triode_stage.yaml` is the small second circuit

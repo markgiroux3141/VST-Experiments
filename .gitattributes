@@ -2,3 +2,5 @@ tests/fixtures/** -text
 crates/circuitsim/tests/fixtures/** -text
 crates/varimu-circuit/tests/fixtures/** -text
 crates/varimu-app/tests/fixtures/** -text
+config/circuits/*.drawing.json -text
+config/circuits/*_drawn.yaml -text

@@ -220,6 +220,14 @@ class TransientSettings:
         return asdict(self)
 
 
+def full_scale(s: TransientSettings, circuit: Any = None) -> tuple[float, float]:
+    """(input, output) circuit volts peak at full scale: the circuit's own (its file's
+    `full_scale`, varimu.circuit.spec) or the settings' for both. `circuit` is a built
+    circuit or a spec (anything with a `full_scale` attribute), or None."""
+    fs = getattr(circuit, "full_scale", None)
+    return fs if fs is not None else (s.full_scale_volts_peak, s.full_scale_volts_peak)
+
+
 # --- Oversampling and settling (shared by both engines) ---------------------------
 
 

@@ -29,7 +29,7 @@ use std::time::{Duration, Instant};
 
 use circuitsim::ir::{CircuitIr, Element};
 use circuitsim::stream::Stream;
-use varimu_circuit::spec::{self, CircuitSpec};
+use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
 use varimu_circuit::{Cores, Library, build_ir};
 
@@ -73,6 +73,15 @@ impl Circuit {
 
     pub fn spec(&self) -> &CircuitSpec {
         &self.spec
+    }
+
+    /// Its volts at full scale in and out: the file's `full_scale`, or the settings'
+    /// `full_scale_volts_peak` for both (`varimu.sim.io.full_scale`).
+    pub fn full_scale(&self, s: &Settings) -> FullScale {
+        self.spec.full_scale.unwrap_or(FullScale {
+            input_v: s.full_scale_volts_peak,
+            output_v: s.full_scale_volts_peak,
+        })
     }
 
     pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
@@ -137,7 +146,7 @@ pub fn make_loop(x: &[f64], rate: u32) -> Vec<f64> {
 /// One block's levels.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Meter {
-    /// Output vs input, dB (rms).
+    /// The circuit's gain, output volts vs input volts, dB (rms).
     pub gain_db: f64,
     /// Output level, dBFS (rms of a sine of that peak: rms * sqrt 2).
     pub out_dbfs: f64,
@@ -153,11 +162,13 @@ struct Running {
     structure: Structure,
     out: usize,
     cv: Option<usize>,
+    /// Its circuit's volts at full scale.
+    fs: FullScale,
 }
 
 impl Running {
-    fn new(ir: &CircuitIr, u0: f64, s: &Settings) -> Result<Running, String> {
-        let v = s.full_scale_volts_peak;
+    fn new(ir: &CircuitIr, u0: f64, s: &Settings, fs: FullScale) -> Result<Running, String> {
+        let v = fs.input_v;
         let opts = s.stream_options()?;
         let second = s.partition_sections(ir);
         let h = 1.0 / s.sim_rate() as f64;
@@ -177,6 +188,7 @@ impl Running {
             structure: structure(ir),
             out,
             cv,
+            fs,
         })
     }
 }
@@ -256,7 +268,7 @@ impl Live {
         };
         let u0 = looped.first().copied().unwrap_or(0.0) * gain;
         let ir = circuit.build(&values)?;
-        let run = Running::new(&ir, u0, &s)?;
+        let run = Running::new(&ir, u0, &s, circuit.full_scale(&s))?;
         let shared = Arc::new(Shared {
             wanted: Mutex::new(None),
             circuit: Mutex::new(None),
@@ -385,15 +397,22 @@ impl Live {
         }
         self.last_input.clear();
         self.last_input.extend_from_slice(x);
-        let v = self.s.full_scale_volts_peak;
-        let xv: Vec<f64> = x.iter().map(|u| u * v).collect();
-        let out = self.run.stream.process(&xv).map_err(|e| e.to_string())?;
-        let mut y: Vec<f64> = out[self.run.out].iter().map(|o| o / v).collect();
+        let volts = |fs: FullScale| x.iter().map(|u| u * fs.input_v).collect::<Vec<f64>>();
+        let fs = self.run.fs;
+        let out = self
+            .run
+            .stream
+            .process(&volts(fs))
+            .map_err(|e| e.to_string())?;
+        let mut y: Vec<f64> = out[self.run.out].iter().map(|o| o / fs.output_v).collect();
         let mut cv = self.run.cv.map(|i| out[i].clone());
         if let Some(new) = self.fade.take() {
             let mut new = *new;
-            let o2 = new.stream.process(&xv).map_err(|e| e.to_string())?;
-            let y2: Vec<f64> = o2[new.out].iter().map(|o| o / v).collect();
+            let o2 = new
+                .stream
+                .process(&volts(new.fs))
+                .map_err(|e| e.to_string())?;
+            let y2: Vec<f64> = o2[new.out].iter().map(|o| o / new.fs.output_v).collect();
             let m = y.len().min(y2.len());
             let (a, b) = (&y[y.len() - m..], &y2[y2.len() - m..]);
             y = linspace01(m)
@@ -414,8 +433,10 @@ impl Live {
         }
         let rms = |a: &[f64]| (a.iter().map(|t| t * t).sum::<f64>() / a.len().max(1) as f64).sqrt();
         let (rms_in, rms_out) = (rms(x) + 1e-12, rms(&y) + 1e-12);
+        // The circuit's gain, V/V (0 dB more when the scales in and out differ).
+        let fs = self.run.fs;
         let meter = Meter {
-            gain_db: 20.0 * (rms_out / rms_in).log10(),
+            gain_db: 20.0 * (rms_out * fs.output_v / (rms_in * fs.input_v)).log10(),
             out_dbfs: 20.0 * (rms_out * 2f64.sqrt()).log10(),
             cv_v: cv
                 .filter(|c| !c.is_empty())
@@ -444,6 +465,7 @@ fn build_loop(
     tx: Sender<Ready>,
     mut current: Structure,
 ) {
+    let mut current_fs = circuit.full_scale(&s);
     loop {
         let wanted = {
             let mut w = shared.wanted.lock().expect("wanted");
@@ -465,12 +487,14 @@ fn build_loop(
         }
         let result = circuit.build(&values).and_then(|ir| {
             let st = structure(&ir);
-            if st == current {
+            let fs = circuit.full_scale(&s);
+            if st == current && fs == current_fs {
                 Ok(Ready::Update(Box::new(ir), values))
             } else {
                 let u0 = f64::from_bits(shared.u0.load(Ordering::Relaxed));
-                let run = Running::new(&ir, u0, &s)?;
+                let run = Running::new(&ir, u0, &s, fs)?;
                 current = st;
+                current_fs = fs;
                 Ok(Ready::Restart(Box::new(run), values))
             }
         });
