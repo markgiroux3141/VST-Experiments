@@ -845,14 +845,20 @@ device the first user of the component milestone next to it:
 2. **B9 step 2** (the 5E3's tube fits; as device files they can start before C1 ends,
    C1 wraps them as version 1).
 3. **B9 steps 3-5** on C1: the 5E3 with its output transformer's version 1, profiled,
-   drawn, playing in the native app.
-4. **C2 with B9 step 6:** the transformer designer, the 5E3's output transformer as
-   version 2, A/B in the 5E3.
-5. **C3 with B9 step 7:** the physical speaker; the 5E3 heard through it. B9 done.
-6. **B10** (its schematic is found), its transformers designed with C2's tool; C4
+   drawn, playing in the native app. *Done 2026-10-29.*
+4. **C3's model with B9 step 7** (reordered 2026-10-29, the user's call: the 5E3's
+   sound isn't judged until it is heard through its speaker; C3 doesn't need C2): the
+   physical speaker as a component, its pressure the heard output; the speaker's view
+   in the Components view waits for C2's.
+5. **`6V6GT@2`** (B9 step 2's beam-tetrode follow-up), heard against `@1` through the
+   speaker.
+6. **C2 with B9 step 6:** the transformer designer (and the Components view, the
+   speaker's included), the 5E3's output transformer as version 2, A/B in the 5E3.
+   B9 done.
+7. **B10** (its schematic is found), its transformers designed with C2's tool; C4
    (the existing circuits' transformers as components) fits in here or whenever a
    670 / EQP-1A transformer is to be redesigned.
-7. **C5-C7** (tube designer, ratings, physical tolerances), then C8 only on demand.
+8. **C5-C7** (tube designer, ratings, physical tolerances), then C8 only on demand.
 
 ## Order and why
 

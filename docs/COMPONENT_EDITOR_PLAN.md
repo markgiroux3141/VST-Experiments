@@ -206,7 +206,16 @@ a second version of the OT (a different winding plan) is made in the Components 
 and heard against the first in the 5E3.
 
 **C3. Speakers, physical: the 5E3's Jensen.** The user's choice for what the 5E3 is
-heard through (2026-10-29): a physical speaker, not a cabinet impulse response. A
+heard through (2026-10-29): a physical speaker, not a cabinet impulse response.
+*Reordered 2026-10-29 (the user's call):* C3's model comes before C2 (it doesn't need
+it; the 5E3's sound isn't judged until it is heard through its speaker); the speaker's
+page in the Components view comes with C2's view. Where it starts: the 5E3 already
+loads its output transformer with the P12R reissue's electrical equivalent
+(`config/circuits/fender_5e3.yaml`, `RSPK_E` .. `CSPK_M`: Re, Le, the motional
+parallel RLC from the Thiele-Small figures; 6 ohm at DC, 37.6 at 80 Hz, 32 at 10 kHz).
+The voltage across the motional branch is BL times the cone's velocity. Heard without a
+speaker (the terminal voltage), the overdriven 5E3 is fizzy: 10-20 kHz is -34.5 dB of
+its output's power on a guitar take (B9 step 5). A
 speaker component specified by physical quantities: moving mass, suspension compliance
 and mechanical loss, motor strength (BL), voice-coil resistance and inductance (with
 the eddy-current losses that make it frequency-dependent), cone area; the cabinet
@@ -299,7 +308,7 @@ is the sequence. Within this plan: C1 first: everything needs versions and pins,
 next, alongside the 5E3: its output transformer is a component the 5E3 needs anyway,
 transformer formulas are textbook engineering with good cross-checks (FEMM), and it
 proves the whole loop (design, compile, pin, hear) on a new circuit with nothing to
-keep byte-identical. C3 next: the 5E3 is heard through its speaker (the user's
+keep byte-identical. C3 (its model) before C2 since 2026-10-29: the 5E3 is heard through its speaker (the user's
 choice), and a speaker is a component the same way. C4 brings the existing transformers into the library without
 changing them. C5 after the transformer: tube geometry data is thinner and it needs the
 Rust fitter. C6 and C7 make designed components safe and realistic to use. C8 only on

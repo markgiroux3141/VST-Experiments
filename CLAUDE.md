@@ -59,7 +59,9 @@ fender_5e3`: gain per volume, response per tone, THD and power, sag, aliasing pe
 quality), its drawing `fender_5e3_drawn` (`scripts/draw_fender_5e3.py`, after F-EE) and a
 Play device in varimu-app, played at `draft-2x` (the user's choice: hard clipped, draft-1x
 aliases at -8 dB re the harmonics, draft -31; a 48 kHz host with the stream at 2x,
-varimu-app only, `panel::Device::quality`; the plan's B9 step 5). The user intends to retire the web app (`varimu listen`,
+varimu-app only, `panel::Device::quality`; the plan's B9 step 5). **Next (2026-10-29, the user's call):
+C3's model before C2**: the 5E3 heard as sound pressure through its physical speaker
+(COMPONENT_EDITOR_PLAN.md C3; its sound isn't judged until then), then `6V6GT@2`, then C2. The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
