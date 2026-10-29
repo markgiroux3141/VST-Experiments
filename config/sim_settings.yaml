@@ -122,6 +122,16 @@ circuitsim_draft_1x:
   host_rate: 48000
   oversample: 1
 
+circuitsim_draft_2x:
+  # `draft-2x` (2026-10-29, the user's choice for the Fender 5E3): the native app's Play
+  # quality for devices that clip hard. The draft's 96 kHz internal rate behind a 48 kHz
+  # host (the audio device's rate): the stream's input is upsampled 2x and its output
+  # decimated in blocks (varimu-app's Live). A hard-clipped 5E3 aliases -31 dB re its
+  # harmonics at draft against -8 at draft-1x (amp_suite's aliasing); it plays a guitar
+  # take at ~0.46x real time. Read by varimu-app only (Python has no such quality).
+  host_rate: 48000
+  oversample: 2
+
 transient:
   # Input is band-limited upsampled by this factor before simulation, and the
   # output is decimated with an anti-alias filter (see varimu/sim/io.py). The

@@ -94,6 +94,7 @@ const DRAWING: Device = Device {
     circuit: "",
     panel: None,
     ahead_s: AHEAD_S,
+    quality: Quality::Draft1x,
 };
 
 /// A finished render: where it was saved and what it was.
@@ -111,6 +112,8 @@ pub struct PlayView {
     prefs: Prefs,
     sources: Vec<(String, Vec<PathBuf>)>,
     settings: Result<Settings, String>,
+    /// The settings at each device's quality (its `quality`: draft-1x, draft-2x).
+    by_quality: Vec<(Quality, Result<Settings, String>)>,
     /// An index into DEVICES, or DEVICES.len(): the editor's drawing.
     device: usize,
     drawing: Option<DrawingDevice>,
@@ -190,12 +193,19 @@ impl PlayView {
             |r| r.join("data").join("clips"),
         );
         let settings = Settings::load(&config_dir, Quality::Draft1x);
+        let mut by_quality: Vec<(Quality, Result<Settings, String>)> = Vec::new();
+        for q in DEVICES.iter().chain([&DRAWING]).map(|d| d.quality) {
+            if !by_quality.iter().any(|(x, _)| *x == q) {
+                by_quality.push((q, Settings::load(&config_dir, q)));
+            }
+        }
         let mut v = PlayView {
             config_dir,
             clips_dir,
             prefs: Prefs::load(),
             sources: Vec::new(),
             settings,
+            by_quality,
             device: 0,
             drawing: None,
             knobs: Vec::new(),
@@ -559,7 +569,7 @@ impl PlayView {
         if self.live_input {
             return self.start_input();
         }
-        let (Some(x), Ok(s)) = (self.region_samples(), &self.settings) else {
+        let (Some(x), Ok(s)) = (self.region_samples(), self.play_settings()) else {
             return;
         };
         let clip = self.clip.as_ref().expect("a region needs a clip");
@@ -578,9 +588,18 @@ impl PlayView {
         }
     }
 
+    /// The settings the chosen device plays at (its quality).
+    fn play_settings(&self) -> &Result<Settings, String> {
+        let q = DEVICES.get(self.device).unwrap_or(&DRAWING).quality;
+        self.by_quality
+            .iter()
+            .find(|(x, _)| *x == q)
+            .map_or(&self.settings, |(_, s)| s)
+    }
+
     /// Monitor the chosen input through the device.
     fn start_input(&mut self) {
-        let Ok(s) = &self.settings else { return };
+        let Ok(s) = self.play_settings() else { return };
         let Some(dev_in) = self.inputs.get(self.input) else {
             self.error = Some("no input device".into());
             return;
@@ -1246,7 +1265,7 @@ impl PlayView {
             } else {
                 ui.label(RichText::new("Open a file to play it").color(theme::MUTED));
             }
-            if let Ok(s) = &self.settings {
+            if let Ok(s) = self.play_settings() {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
                         RichText::new(format!("{} · {} kHz", s.quality.name(), s.host() / 1000))

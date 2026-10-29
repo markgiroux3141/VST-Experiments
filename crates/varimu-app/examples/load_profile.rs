@@ -1,13 +1,14 @@
 //! Where a device's real-time load goes, block by block, without an audio device: a
-//! file through the device at draft-1x (the Play view's quality; `--quality draft`: the
-//! project's 96 kHz at 1x), each block's compute
+//! file through the device at its Play quality (draft-1x; the 5E3 draft-2x, its input
+//! upsampled 2x as Live does; `--quality draft`: the project's 96 kHz at 1x), each
+//! block's compute
 //! time over its audio time next to the solver's counters (Newton iterations,
 //! factorizations, device evaluations, halved steps) and the input's level and top
 //! octaves. Writes a CSV and prints the heaviest blocks.
 //!
 //!     cargo run --release -p varimu-app --example load_profile -- --file F
 //!         [--device fairchild_670] [--normalize -11.5] [--block 512] [--out load.csv]
-//!         [--set KEY=VALUE ...] [--add-c NODE=FARADS ...] [--quality draft-1x|draft]
+//!         [--set KEY=VALUE ...] [--add-c NODE=FARADS ...] [--quality draft-1x|draft-2x|draft]
 //!
 //! The input is normalized as the Play view does: the file's loudest 8 s to
 //! `--normalize` dBFS (sine-equivalent rms).
@@ -22,7 +23,7 @@ use circuitsim::stream::Stream;
 use varimu_app::audio;
 use varimu_app::live::Circuit;
 use varimu_app::panel::{DEVICES, knobs, values};
-use varimu_app::resample::resample;
+use varimu_app::resample::{StreamResampler, resample};
 use varimu_app::settings::{Quality, Settings};
 use varimu_circuit::yaml::Value;
 
@@ -54,7 +55,7 @@ fn main() -> Result<(), String> {
     let (mut device, mut file, mut out) = ("fairchild_670".to_string(), None, None);
     let (mut target, mut block) = (-11.5, 512usize);
     let mut sets = Vec::new();
-    let mut quality = Quality::Draft1x;
+    let mut quality = None;
     let mut added: Vec<(String, f64)> = Vec::new();
     while let Some(a) = args.next() {
         let mut next = || args.next().ok_or(format!("{a} needs a value"));
@@ -65,11 +66,12 @@ fn main() -> Result<(), String> {
             "--normalize" => target = next()?.parse().map_err(|e| format!("{e}"))?,
             "--block" => block = next()?.parse().map_err(|e| format!("{e}"))?,
             "--quality" => {
-                quality = match next()?.as_str() {
+                quality = Some(match next()?.as_str() {
                     "draft" => Quality::Draft,
                     "draft-1x" => Quality::Draft1x,
-                    q => return Err(format!("--quality {q}: draft or draft-1x (1x streams)")),
-                }
+                    "draft-2x" => Quality::Draft2x,
+                    q => return Err(format!("--quality {q}: draft, draft-1x or draft-2x")),
+                })
             }
             "--add-c" => {
                 let kv = next()?;
@@ -86,11 +88,12 @@ fn main() -> Result<(), String> {
     }
     let file = file.ok_or("--file is required")?;
     let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
-    let s = Settings::load(&config, quality)?;
     let dev = DEVICES
         .iter()
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
+    let s = Settings::load(&config, quality.unwrap_or(dev.quality))?;
+    let k = s.oversample as usize;
     let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?;
     let mut v = values(&knobs(dev, circuit.spec()));
     for (k, x) in sets {
@@ -137,7 +140,12 @@ fn main() -> Result<(), String> {
     let mut stream =
         Stream::new(&ir, &second, s.coupling()?, h, &opts, u0).map_err(|e| e.to_string())?;
     let n0 = (s.settle_s * rate as f64) as usize;
-    stream.process(&vec![u0; n0]).map_err(|e| e.to_string())?;
+    stream
+        .process(&vec![u0; n0 * k])
+        .map_err(|e| e.to_string())?;
+    // Oversampled, the input goes up to the simulation's rate as Live takes it.
+    let mut up = StreamResampler::new(k, 1);
+    up.process(&vec![x[0]; n0], &mut Vec::new());
     let cv = stream.names().iter().position(|n| n == "v(cv)");
     println!(
         "{} at {} ({} Hz host, {} Hz engine), gain {:+.1} dB, {:.1} s, blocks of {block}",
@@ -189,7 +197,9 @@ fn main() -> Result<(), String> {
     let audio_s = block as f64 / rate as f64;
     let wall = Instant::now();
     for (i, chunk) in x.chunks(block).enumerate() {
-        let xv: Vec<f64> = chunk.iter().map(|u| u * vfs).collect();
+        let mut xu = Vec::with_capacity(chunk.len() * k);
+        up.process(chunk, &mut xu);
+        let xv: Vec<f64> = xu.iter().map(|u| u * vfs).collect();
         let t0 = Instant::now();
         let o = stream.process(&xv).map_err(|e| e.to_string())?;
         let el = t0.elapsed().as_secs_f64();

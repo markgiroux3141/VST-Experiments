@@ -17,6 +17,11 @@
 //! A new circuit ([`Live::set_circuit`]: the editor's drawing, edited) takes the same
 //! path: the same structure updates the stream, another one restarts it.
 //!
+//! At a quality with oversampling (draft-2x: the draft's 96 kHz behind a 48 kHz host),
+//! each block's input is upsampled into the stream and each stream's output decimated
+//! back (`StreamResampler`, scipy's `resample_poly` filter): the host and the audio
+//! device stay at the host rate. At 1x both pass samples through unchanged.
+//!
 //! Blocks must keep up with real time on average; the caller's buffer absorbs the rest.
 
 use std::collections::BTreeSet;
@@ -33,7 +38,7 @@ use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
 use varimu_circuit::{Cores, Library, build_ir};
 
-use crate::resample::resample;
+use crate::resample::{StreamResampler, resample};
 use crate::settings::Settings;
 
 /// The loop's seam: its end crossfades into its start over this long.
@@ -164,33 +169,70 @@ struct Running {
     cv: Option<usize>,
     /// Its circuit's volts at full scale.
     fs: FullScale,
+    /// Its output from the simulation's rate to the host's (1x: unchanged).
+    down: StreamResampler,
 }
 
 impl Running {
+    /// A stream at the DC point with input `u0`, settled for `settle_s` with the input
+    /// held at the simulation's rate (its decimator primed with that output).
     fn new(ir: &CircuitIr, u0: f64, s: &Settings, fs: FullScale) -> Result<Running, String> {
         let v = fs.input_v;
+        let k = s.oversample as usize;
         let opts = s.stream_options()?;
         let second = s.partition_sections(ir);
         let h = 1.0 / s.sim_rate() as f64;
         let mut stream =
             Stream::new(ir, &second, s.coupling()?, h, &opts, u0 * v).map_err(|e| e.to_string())?;
-        let n0 = (s.settle_s * s.host() as f64) as usize;
-        if n0 > 0 {
-            stream
-                .process(&vec![u0 * v; n0])
-                .map_err(|e| e.to_string())?;
-        }
         let find = |name: &str| stream.names().iter().position(|n| n == name);
         let out = find("v(out)").ok_or("the circuit has no `out` probe")?;
         let cv = find("v(cv)");
+        let mut down = StreamResampler::new(1, k);
+        let n0 = (s.settle_s * s.host() as f64) as usize;
+        if n0 > 0 {
+            let o = stream
+                .process(&vec![u0 * v; n0 * k])
+                .map_err(|e| e.to_string())?;
+            down.process(&o[out], &mut Vec::new());
+        }
         Ok(Running {
             stream,
             structure: structure(ir),
             out,
             cv,
             fs,
+            down,
         })
     }
+}
+
+/// Host samples a stream's output lags its input: the input interpolation's lookahead
+/// (`Stream`'s docs, `l_sim` samples at the simulation's rate) and, oversampled, the
+/// resamplers' (each output is index-aligned; the lag is what hasn't come out yet).
+/// Counts samples through the chain as [`Live`] runs it: `n0` settling samples held
+/// (the upsampler primed, the stream fed at its own rate), then a block.
+fn chain_lag(k: usize, l_sim: usize, n0: usize) -> usize {
+    let (mut up, mut down) = (StreamResampler::new(k, 1), StreamResampler::new(1, k));
+    let (mut u, mut y) = (Vec::new(), Vec::new());
+    let (mut held, mut pending) = (0.0, 0.0);
+    let mut first = true;
+    let mut stream_out = |n: usize| {
+        let lost = if first { l_sim.min(n) } else { 0 };
+        first = false;
+        n - lost
+    };
+    if n0 > 0 {
+        up.process(&vec![0.0; n0], &mut u);
+        pending = (n0 * k - u.len()) as f64 / k as f64; // in the upsampler, host samples
+        down.process(&vec![0.0; stream_out(n0 * k)], &mut y);
+        held = n0 as f64 - y.len() as f64;
+    }
+    let n = 4096;
+    u.clear();
+    y.clear();
+    up.process(&vec![0.0; n], &mut u);
+    down.process(&vec![0.0; stream_out(u.len())], &mut y);
+    (held + pending + n.saturating_sub(y.len()) as f64).round() as usize
 }
 
 enum Ready {
@@ -231,6 +273,10 @@ pub struct Live {
     last_input: Vec<f64>,
     /// The values playing now.
     pub values: Values,
+    /// The input from the host's rate to the simulation's (1x: unchanged), shared by a
+    /// stream and the one fading in.
+    up: StreamResampler,
+    lag: usize,
 }
 
 impl Live {
@@ -253,9 +299,6 @@ impl Live {
         s: Settings,
         gain: f64,
     ) -> Result<Live, String> {
-        if s.oversample != 1 {
-            return Err("live playback runs circuitsim at 1x (a quality with oversample 1)".into());
-        }
         let rate = s.host();
         let looped = if clip.is_empty() {
             Vec::new()
@@ -269,6 +312,12 @@ impl Live {
         let u0 = looped.first().copied().unwrap_or(0.0) * gain;
         let ir = circuit.build(&values)?;
         let run = Running::new(&ir, u0, &s, circuit.full_scale(&s))?;
+        // The upsampler continues from the settling's held input.
+        let k = s.oversample as usize;
+        let mut up = StreamResampler::new(k, 1);
+        let n0 = (s.settle_s * rate as f64) as usize;
+        up.process(&vec![u0; n0], &mut Vec::new());
+        let lag = chain_lag(k, (s.input_order.max(1) - 1) / 2 + 1, n0);
         let shared = Arc::new(Shared {
             wanted: Mutex::new(None),
             circuit: Mutex::new(None),
@@ -299,6 +348,8 @@ impl Live {
             gain,
             last_input: Vec::new(),
             values,
+            up,
+            lag,
         })
     }
 
@@ -309,9 +360,9 @@ impl Live {
     }
 
     /// Samples the output lags the input by (the input interpolation's lookahead,
-    /// `Stream`'s docs).
+    /// `Stream`'s docs; oversampled, the resamplers' too: [`chain_lag`]).
     pub fn lag(&self) -> usize {
-        (self.s.input_order.max(1) - 1) / 2 + 1
+        self.lag
     }
 
     pub fn loop_len(&self) -> usize {
@@ -397,14 +448,23 @@ impl Live {
         }
         self.last_input.clear();
         self.last_input.extend_from_slice(x);
-        let volts = |fs: FullScale| x.iter().map(|u| u * fs.input_v).collect::<Vec<f64>>();
+        let mut xu = Vec::with_capacity(x.len() * self.s.oversample as usize);
+        self.up.process(x, &mut xu);
+        let volts = |fs: FullScale| xu.iter().map(|u| u * fs.input_v).collect::<Vec<f64>>();
+        // A stream's `v(out)` at the host rate, over its full scale.
+        let heard = |run: &mut Running, out: &[Vec<f64>]| {
+            let mut y = Vec::with_capacity(x.len());
+            run.down.process(&out[run.out], &mut y);
+            y.iter_mut().for_each(|o| *o /= run.fs.output_v);
+            y
+        };
         let fs = self.run.fs;
         let out = self
             .run
             .stream
             .process(&volts(fs))
             .map_err(|e| e.to_string())?;
-        let mut y: Vec<f64> = out[self.run.out].iter().map(|o| o / fs.output_v).collect();
+        let mut y = heard(&mut self.run, &out);
         let mut cv = self.run.cv.map(|i| out[i].clone());
         if let Some(new) = self.fade.take() {
             let mut new = *new;
@@ -412,7 +472,7 @@ impl Live {
                 .stream
                 .process(&volts(new.fs))
                 .map_err(|e| e.to_string())?;
-            let y2: Vec<f64> = o2[new.out].iter().map(|o| o / new.fs.output_v).collect();
+            let y2 = heard(&mut new, &o2);
             let m = y.len().min(y2.len());
             let (a, b) = (&y[y.len() - m..], &y2[y2.len() - m..]);
             y = linspace01(m)
@@ -507,5 +567,22 @@ fn build_loop(
             }
             Err(e) => *shared.error.lock().expect("error") = Some(e),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::chain_lag;
+
+    #[test]
+    fn lag_at_1x_is_the_interpolation_lookahead() {
+        for l in 1..4 {
+            assert_eq!(chain_lag(1, l, 48_000), l);
+            assert_eq!(chain_lag(1, l, 0), l);
+        }
+        // 2x: the upsampler's and decimator's filters (10 samples each side at the
+        // host rate) on top.
+        let lag = chain_lag(2, 1, 48_000);
+        assert!((15..=30).contains(&lag), "{lag}");
     }
 }

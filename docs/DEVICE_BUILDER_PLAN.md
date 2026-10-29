@@ -787,9 +787,20 @@ the next:
    device `fender_5e3` (the input jack, both volumes, the tone). Load on the 62 s dry
    guitar take (`examples/load_profile.rs`, no audio device; volume 0.6): 0.27x real
    time at draft-1x (one block of 5844 over 1.0), 0.46x at draft (96 kHz, 5 of 11688).
-   Open, the user's call: play the 5E3 at draft (aliasing -31 dB, not -8) instead of
-   draft-1x; the Play view has one quality for every device today. Not yet done: a
-   guitar on the interface's Hi-Z input (`examples/play.rs`, with an audio device).
+   *Decided 2026-10-29 (the user):* the 5E3 plays at the draft's 96 kHz. Built as
+   `draft-2x` (varimu-app only; `sim_settings.yaml` `circuitsim_draft_2x`): a 48 kHz
+   host (the audio device's rate) with the stream at 2x, Live upsampling each block in
+   and decimating each stream's output back (`StreamResampler`; at 1x both pass
+   through, so the other devices play bit for bit as before). Each device names its
+   Play quality (`panel::Device::quality`: the 670 and the EQP-1A draft-1x, the 5E3
+   draft-2x). Through Live, the hard-clipped 2902 Hz leaves -7.2 dB of inharmonic
+   content re the harmonics at draft-1x and -24.1 at draft-2x (`tests/live.rs`; hum
+   sidebands counted too). Load on the guitar take: 0.47x real time at volume 0.6
+   (worst backlog 8 ms), 0.51x at full volume, where hard clipping runs blocks at up to
+   2.3x real time (worst backlog 170 ms): the 5E3 keeps 0.25 s ahead on a loop, as
+   the 670 does. Live input at full volume needs an input buffer of that order. Not
+   yet done: a guitar on the interface's Hi-Z input (`examples/play.rs`, with an audio
+   device).
 6. *The designed output transformer* (C2): version 2 by construction, heard against
    version 1 in the 5E3.
 7. *The physical speaker* (C3): the 5E3 heard as sound pressure at a listening point

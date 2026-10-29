@@ -8,6 +8,7 @@ use varimu_circuit::yaml::Value;
 
 use crate::live::Values;
 use crate::player::AHEAD_S;
+use crate::settings::Quality;
 
 /// A device: a circuit file and what its panel shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -20,6 +21,8 @@ pub struct Device {
     pub panel: Option<&'static [&'static str]>,
     /// Audio kept ahead of playback for a file's loop (s; see [`AHEAD_S`]).
     pub ahead_s: f64,
+    /// The quality it plays at (draft-1x; draft-2x for a device whose clipping aliases).
+    pub quality: Quality,
 }
 
 pub const DEVICES: [Device; 3] = [
@@ -37,6 +40,7 @@ pub const DEVICES: [Device; 3] = [
         // sidechain bridge at 3-4x real time for up to ~170 ms at a time
         // (`examples/load_profile.rs`, 2026-10-28): 0.1 s ran dry.
         ahead_s: 0.25,
+        quality: Quality::Draft1x,
     },
     Device {
         id: "pultec_eqp1a",
@@ -44,13 +48,21 @@ pub const DEVICES: [Device; 3] = [
         circuit: "pultec_eqp1a",
         panel: None,
         ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
     },
     Device {
         id: "fender_5e3",
         label: "Fender 5E3 Deluxe (guitar amp)",
         circuit: "fender_5e3",
         panel: None,
-        ahead_s: AHEAD_S,
+        // At full volume a guitar take (data/clips' dry guitar) clips hard enough to run
+        // blocks at up to 2.3x real time, a backlog of 170 ms at worst (draft-2x,
+        // `examples/load_profile.rs`, 2026-10-29); at volume 0.6, 8 ms.
+        ahead_s: 0.25,
+        // Hard clipped, it aliases -8 dB re its harmonics at draft-1x, -31 at the draft's
+        // 96 kHz (amp_suite); 0.46x real time there on a guitar take (the user's choice,
+        // 2026-10-29).
+        quality: Quality::Draft2x,
     },
 ];
 

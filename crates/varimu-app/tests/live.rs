@@ -1,5 +1,6 @@
 //! The real-time engine without an audio device: the EQP-1A (the cheaper device, ~6x
-//! faster than real time at draft-1x) looping a tone while knobs turn.
+//! faster than real time at draft-1x) looping a tone while knobs turn; the 5E3 at its
+//! oversampled quality (draft-2x).
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -161,4 +162,49 @@ fn gain_equals_a_louder_clip() {
     let x = tone(&s, 0.5, 1000.0, 0.05);
     let x2: Vec<f64> = x.iter().map(|v| 2.0 * v).collect();
     assert_eq!(run(&x, 2.0), run(&x2, 1.0));
+}
+
+/// The 5E3 hard clipped (2902 Hz at 0.5 V, full volume) through Live at draft-1x and at
+/// draft-2x (its Play quality: the input upsampled into a 96 kHz stream, the output
+/// decimated back): what isn't a harmonic of the tone (aliases, the supply's hum and its
+/// sidebands) falls by more than 10 dB at 2x. amp_suite's renders: -8 dB re the
+/// harmonics at draft-1x, -31 at draft.
+#[test]
+fn fender_5e3_oversampled_aliases_less() {
+    let dev = DEVICES.iter().find(|d| d.id == "fender_5e3").unwrap();
+    assert_eq!(dev.quality, Quality::Draft2x);
+    let other_db = |q: Quality| -> f64 {
+        let s = Settings::load(&config(), q).unwrap();
+        assert_eq!((s.host(), s.sim_rate()), (48_000, 48_000 * s.oversample));
+        let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+        let v = set(
+            &values(&knobs(dev, circuit.spec())),
+            "volume_bright",
+            Value::Float(1.0),
+        );
+        let f = 2902.0;
+        let mut live = Live::new(&tone(&s, 1.0, f, 0.5), v, circuit, s.clone()).unwrap();
+        // 0.3 s in, then 0.5 s: 24000 samples, exactly 1451 periods of the tone.
+        let y: Vec<f64> = (0..80)
+            .flat_map(|_| live.next_block(480).unwrap().0)
+            .skip(14_400)
+            .take(24_000)
+            .map(f64::from)
+            .collect();
+        let n = y.len() as f64;
+        let mean = y.iter().sum::<f64>() / n;
+        let total = y.iter().map(|v| (v - mean).powi(2)).sum::<f64>() / n;
+        let harmonic: f64 = (1..=8) // 8 x 2902 = 23.2 kHz, below 24 kHz
+            .map(|k| {
+                let w = 2.0 * std::f64::consts::PI * f * k as f64 / 48_000.0;
+                let (c, s) = y.iter().enumerate().fold((0.0, 0.0), |(c, s), (i, v)| {
+                    (c + v * (w * i as f64).cos(), s + v * (w * i as f64).sin())
+                });
+                2.0 * (c * c + s * s) / (n * n)
+            })
+            .sum();
+        10.0 * ((total - harmonic) / harmonic).log10()
+    };
+    let (x1, x2) = (other_db(Quality::Draft1x), other_db(Quality::Draft2x));
+    assert!(x2 < x1 - 10.0, "draft-1x {x1:.1} dB, draft-2x {x2:.1} dB");
 }

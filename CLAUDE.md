@@ -57,8 +57,9 @@ voltages (`tests/test_fender_5e3.py`); its input is guitar level (the circuit fi
 (2026-10-29):** its profile `varimu/measure/amp_suite.py` (`varimu unit --circuit
 fender_5e3`: gain per volume, response per tone, THD and power, sag, aliasing per
 quality), its drawing `fender_5e3_drawn` (`scripts/draw_fender_5e3.py`, after F-EE) and a
-Play device in varimu-app; open: Play's quality for it (hard clipped, draft-1x aliases at
--8 dB re the harmonics, draft -31, production -40; the plan's B9 step 5). The user intends to retire the web app (`varimu listen`,
+Play device in varimu-app, played at `draft-2x` (the user's choice: hard clipped, draft-1x
+aliases at -8 dB re the harmonics, draft -31; a 48 kHz host with the stream at 2x,
+varimu-app only, `panel::Device::quality`; the plan's B9 step 5). The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,
@@ -323,7 +324,7 @@ cargo run --release -p varimu-app -- --edit triode_stage_drawn   # R3: the Edito
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
 cargo run -p varimu-app --example devices             # the audio devices cpal sees
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)
-cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--quality draft] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
+cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--quality draft|draft-1x|draft-2x] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check

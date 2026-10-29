@@ -3,7 +3,8 @@
 //! reads them: the `circuitsim` block, then `circuitsim_draft` for draft, then
 //! `circuitsim_draft_1x` for draft-1x (only the circuitsim fields; ngspice's don't apply).
 //! Production is what a render uses, draft-1x what the player uses (the user's choice,
-//! 2026-10-27).
+//! 2026-10-27), draft-2x what it uses for devices that clip hard (the 5E3, 2026-10-29:
+//! `circuitsim_draft_2x`, the app's own quality; Python has none such).
 
 use std::path::Path;
 
@@ -20,6 +21,8 @@ pub enum Quality {
     Production,
     Draft,
     Draft1x,
+    /// The draft's 96 kHz internal rate behind a 48 kHz host (2x oversampling in a stream).
+    Draft2x,
 }
 
 impl Quality {
@@ -28,6 +31,7 @@ impl Quality {
             Quality::Production => "production",
             Quality::Draft => "draft",
             Quality::Draft1x => "draft-1x",
+            Quality::Draft2x => "draft-2x",
         }
     }
 
@@ -36,6 +40,7 @@ impl Quality {
             Quality::Production => &[],
             Quality::Draft => &["circuitsim_draft"],
             Quality::Draft1x => &["circuitsim_draft", "circuitsim_draft_1x"],
+            Quality::Draft2x => &["circuitsim_draft", "circuitsim_draft_2x"],
         }
     }
 }

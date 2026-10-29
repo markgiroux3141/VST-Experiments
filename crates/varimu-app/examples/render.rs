@@ -47,6 +47,7 @@ fn main() -> Result<(), String> {
                     "production" => Quality::Production,
                     "draft" => Quality::Draft,
                     "draft-1x" => Quality::Draft1x,
+                    "draft-2x" => Quality::Draft2x,
                     q => return Err(format!("unknown quality {q}")),
                 }
             }

@@ -20,7 +20,7 @@ use varimu_app::audio;
 use varimu_app::live::Circuit;
 use varimu_app::panel::{DEVICES, knobs, values};
 use varimu_app::player::{INPUT_BUFFER_S, Player, Source, State, input_devices};
-use varimu_app::settings::{Quality, Settings};
+use varimu_app::settings::Settings;
 use varimu_circuit::yaml::Value;
 
 fn value(s: &str) -> Value {
@@ -95,11 +95,11 @@ fn main() -> Result<(), String> {
         }
     }
     let config = Path::new("config");
-    let s = Settings::load(config, Quality::Draft1x)?;
     let dev = DEVICES
         .iter()
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
+    let s = Settings::load(config, dev.quality)?;
     let circuit = Circuit::load(config, dev.circuit, s.cores()?)?;
     let mut v = values(&knobs(dev, circuit.spec()));
     for (k, x) in sets {
