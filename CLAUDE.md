@@ -69,7 +69,10 @@ minus, out]`, the cabinet and the listening distance as params), its pressure re
 the new IR element `Vccs` (SPICE `G`; it draws no current). The 5E3's `out` is the sound
 pressure 1 m on axis (pascals as volts; `full_scale.output_pascals_peak` 50 Pa, both
 parsers), `spk` its terminal voltage. Open: the user hears it, and Play's load (1.61x real
-time at draft-2x: the options are in C3's status). The user intends to retire the web app (`varimu listen`,
+time at draft-2x: the 5E3 drops out in Play until the user picks an option). **Paused
+2026-10-29** (the user may do the synthesizer first): COMPONENT_EDITOR_PLAN.md, C3's status,
+lists where to pick up (listen, decide Play's speed, `6V6GT@2`, C2) and the future
+optimizations. The user intends to retire the web app (`varimu listen`,
 2026-10-29): add nothing to it; retiring it isn't planned yet. Mumetall's Rayleigh refit (the plan's Phase 2) is applied
 (2026-10-24). The user-facing product is now a native Rust app,
 [docs/NATIVE_APP_PLAN.md](docs/NATIVE_APP_PLAN.md) (2026-10-27: standalone only,

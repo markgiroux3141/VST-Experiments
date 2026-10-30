@@ -297,6 +297,40 @@ hears it, and Play's real-time load (below).*
   driver and never acts back, so a one-way coupling is exact up to one sample of latency;
   `partition.rs` today only couples rails the second part holds), the shorter delay line,
   draft-1x for the 5E3 again, or a combination.
+- *Listening files* (production, the whole guitar take, git-ignored, regenerate from the
+  take): `reports/speaker/audio/5e3_take_vol{0.5,1.0}_speaker_pressure.wav` and the terminal
+  voltage LUFS-matched beside each.
+
+*Paused 2026-10-29 (the user's call: a synthesizer session may come first).* Where to pick
+up, in order:
+1. The user listens to the files above (C3's last done-when item).
+2. The user decides Play's speed (the options above; Claude's recommendation: the one-way
+   partition if the engine work is wanted, else draft-1x with the shorter delay line). Until
+   then the 5E3 plays at draft-2x and can't keep up (1.61x real time): it drops out in Play.
+3. Then `6V6GT@2` against `@1` through the speaker, then C2
+   (DEVICE_BUILDER_PLAN.md, "Devices and components together").
+
+*Future optimizations and options (none built):*
+- *Speed, keeping the model:* the readout as a one-way partition (exact up to one sample's
+  latency; or, without latency, the engine stepping a one-way linear subnetwork after the
+  main solve on its own sparse factorization: its delay line is tridiagonal, so O(n) per
+  step instead of DK's dense O(r^2)); DK exploiting the block-triangular structure of
+  one-way networks in general.
+- *Speed, changing the model (each a new speaker part or setting, heard against the
+  current one):* a shorter delay line (7 sections at 250 us: the back wave cut above
+  ~1.3 kHz, where its directivity pole has it -6 dB already); a delay of fewer states (an
+  all-pass / Bessel cascade on Vccs and capacitors: about half the states of the LC line for
+  the same delay-bandwidth); fewer modes (2 states each; the driver alone with 8 modes costs
+  ~0.6x at draft-2x by the measured scaling).
+- *Fidelity:* modes with physical shares (a cone model from its geometry and paper: the
+  plan's "speakers designed from cone material"); excursion nonlinearity (Xmax is +-1 mm:
+  BL(x), Cms(x), provisional and bounded); the radiation resistance's rise with frequency;
+  the cabinet's back panels and internal resonance; the speaker's position on the baffle
+  (a source; now provisional, centred); other listening points (off axis, a close
+  microphone: a near-field model); a room.
+- *The profile:* aliasing measured on the heard pressure as well as the terminal voltage;
+  the high-frequency share on program material as a profile figure (now only in this
+  status).
 
 **C4. The existing circuits' transformers as components.** The 670's T101-T104, T302,
 L301, L302 and the EQP-1A's transformers become version 1 of transformer components

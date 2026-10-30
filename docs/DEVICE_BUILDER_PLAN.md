@@ -859,7 +859,8 @@ device the first user of the component milestone next to it:
    sound isn't judged until it is heard through its speaker; C3 doesn't need C2): the
    physical speaker as a component, its pressure the heard output; the speaker's view
    in the Components view waits for C2's. *Model built 2026-10-29; open: heard, and
-   Play's speed (C3's status).*
+   Play's speed (C3's status). Paused 2026-10-29 (the user's call: a synthesizer session
+   may come first); C3's status lists where to pick up and the future optimizations.*
 5. **`6V6GT@2`** (B9 step 2's beam-tetrode follow-up), heard against `@1` through the
    speaker.
 6. **C2 with B9 step 6:** the transformer designer (and the Components view, the
