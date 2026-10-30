@@ -162,6 +162,8 @@ pub struct PlayView {
     /// The device's noise sources on (device builder B5; only devices whose file has
     /// them): off saves their CPU. Renders follow it.
     noise: bool,
+    /// The next start is a power-on (heated cathodes cold), then back to warm (B6).
+    power_on: bool,
     compensate: bool,
     /// A manual gain on the device's output (dB, monitoring only).
     output_db: f64,
@@ -256,6 +258,7 @@ impl PlayView {
             trim_db: 0.0,
             bypass: false,
             noise: true,
+            power_on: false,
             compensate: true,
             output_db: 0.0,
             error: None,
@@ -414,7 +417,12 @@ impl PlayView {
             Some(d) => Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores),
             None => Circuit::load(&self.config_dir, DEVICES[self.device].circuit, cores)?,
         };
-        Ok(c.with_noise(self.noise))
+        let heaters = if self.power_on {
+            varimu_circuit::Heaters::Cold
+        } else {
+            varimu_circuit::Heaters::File
+        };
+        Ok(c.with_noise(self.noise).with_heaters(heaters))
     }
 
     /// The device's name and id (for files).
@@ -883,6 +891,25 @@ impl PlayView {
         let Ok(c) = self.circuit(cores) else {
             return;
         };
+        if c.has_heaters()
+            && self.player.is_some()
+            && ui
+                .button("Power on (cold)")
+                .on_hover_text(
+                    "Restart with the tubes' cathodes cold (device builder B6): they warm \
+                     over ~10 s, the sound comes as they emit and the pitch settles over \
+                     tens of seconds. Restarts after it start warm.",
+                )
+                .clicked()
+        {
+            self.power_on = true;
+            self.start();
+            self.power_on = false;
+            // Later rebuilds are warm: an in-place update, the temperature carried over.
+            if let (Some(p), Ok(c)) = (&self.player, self.circuit(cores)) {
+                p.set_circuit(c, panel::values(&self.knobs));
+            }
+        }
         if !c.has_noise() {
             return;
         }

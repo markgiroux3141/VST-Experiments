@@ -23,9 +23,13 @@ a grid made more positive by
 
     dV = V_m(T0) - V_m(T) = (k / q) [T0 ln(I / I_s0) - T ln(I / I_s(T))]
 
-zero at T0: the tube models' fits (at rated heater) hold there. I is the tube's current at
-its unshifted operating point (`shift_v`), so the shift is a function of the port voltages and
-T. ~+1.7 mV/K for a tube at 1% of its emission (phi 1.2 eV).
+zero at T0: the tube models' fits (at rated heater) hold there. In a circuit (`heated`) I is
+a fixed reference, the tube's emission at T0 over the oxide's emission reserve (`reserve`,
+~50): then the shift is one function of T for every tube (`Oxide.shift_t`), ~+1.8 mV/K. The
+shift's weak dependence on the tube's own current, (k dT / q) per e-fold of it (~3 mV at
+40 K off: a ~mV signal-dependent term), is left out: taken from the instantaneous current it
+is an implicit loop, from the last step a staircase the engines disagree on (measured: -41
+dB between circuitsim and ngspice on the triode stage at a 90% heater).
 
 Values (`EC92`, fitted to Phywe LEP 4.1.10's Fig. 4 by scripts/fit_cathode.py) and the
 provisional ones carry their sources in CATHODE_SOURCES.
@@ -165,6 +169,13 @@ class Oxide:
     phi_ev: float
     n: float
     emission_a_per_w: float
+    reserve: float
+
+    def shift_t(self, t_k: float) -> float:
+        """The space-charge shift at t_k for a tube at 1 / reserve of its emission at T0: the
+        same for every tube (is0 cancels)."""
+        c = Cathode(1.0, 1.0, 1.0, self.phi_ev, self.n, t0_k=self.t0_k)
+        return float(c.shift_v(t_k, 1.0 / self.reserve))
 
 
 def load_cathodes(path=None) -> tuple[Oxide, dict[str, dict]]:
@@ -185,15 +196,13 @@ def instance_is0_a(ox: Oxide, tube: dict, parallel: int = 1) -> float:
     return ox.emission_a_per_w * w * parallel
 
 
-def heated(currents, v, shift_port: int, t_k: float, i_ref: float, is0_a: float, ox: Oxide):
+def heated(currents, v, shift_port: int, t_k: float, is0_a: float, ox: Oxide):
     """A heated tube's port currents (the reference the engines port): the inner model
     `currents(v)` (port voltages -> port currents) at its control port moved by the space-
-    charge shift for (t_k, i_ref), every current then under the emission ceiling. The shift's
-    current `i_ref` is the tube's own at its last operating point (the engines: the last
-    accepted step), so the device stays a function of its port voltages."""
+    charge shift for t_k (`Oxide.shift_t`), every current then under the emission ceiling."""
     c = Cathode(1.0, 1.0, is0_a, ox.phi_ev, ox.n, t0_k=ox.t0_k)
     v2 = np.array(v, float)
-    v2[shift_port] += float(c.shift_v(t_k, i_ref))
+    v2[shift_port] += ox.shift_t(t_k)
     i = np.asarray(currents(v2), float)
     ik = max(float(np.sum(i)), 0.0)
     # Relative to T0's: the inner models were fitted at the rated heater, so their curves
@@ -239,9 +248,34 @@ def cathode_fixtures_json() -> str:
         pts = []
         for v in volts:
             for t in (750.0, 900.0, 1000.0, ox.t0_k, 1080.0):
-                for i_ref in (1e-6, 1e-3, 2e-2):
-                    i = heated(lambda x, m=m: port_currents(m, x), v, port, t, i_ref, is0, ox)
-                    pts.append({"v": list(v), "t_k": t, "i_ref": i_ref, "currents": i.tolist()})
+                i = heated(lambda x, m=m: port_currents(m, x), v, port, t, is0, ox)
+                pts.append({"v": list(v), "t_k": t, "currents": i.tolist()})
         out.append({"model": model_to_dict(m), "port": port, "is0_a": is0, "points": pts})
-    d = {"phi_ev": ox.phi_ev, "n": ox.n, "t0_k": ox.t0_k, "devices": out}
+    d = {"phi_ev": ox.phi_ev, "n": ox.n, "t0_k": ox.t0_k, "reserve": ox.reserve, "devices": out}
     return json.dumps(d, indent=1) + "\n"
+
+
+def temperatures(heaters, m, rate_hz: float, n: int) -> np.ndarray:
+    """The circuit's cathode temperature at samples 0 .. n of a grid of `rate_hz` (the
+    engines step it once per sample, explicit Euler): from the start (`heaters.start`: warm,
+    the temperature `heater_ratio` holds; cold, ambient), the heater at `heater_ratio` times
+    1 + m (B5's mains wander, a sequence; None: none). `heaters` is the IR's HeaterSpec."""
+    c = Cathode(
+        1.0,
+        1.0,
+        1.0,
+        heaters.phi_ev,
+        heaters.n,
+        t0_k=heaters.t0_k,
+        t_amb_k=heaters.t_amb_k,
+        alpha=heaters.alpha,
+        tau_s=heaters.tau_s,
+    )
+    t = c.t_amb_k if heaters.start == "cold" else c.steady_k(volts=heaters.heater_ratio)
+    out = np.empty(n)
+    dt = 1.0 / rate_hz
+    for k in range(n):
+        out[k] = t
+        mk = 0.0 if m is None else float(m[k])
+        t = t + dt * c.dt_dt(t, heaters.heater_ratio * (1.0 + mk))
+    return out

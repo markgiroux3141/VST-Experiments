@@ -225,6 +225,7 @@ class HeaterSpec:
     tau_s: float
     phi_ev: float
     n: float
+    reserve: float
     heater_ratio: float
     start: str = "warm"
 
@@ -539,7 +540,7 @@ class CircuitIR:
                     raise IRError(f"noise.mains_sources: {m} is not a sine source")
         if self.heaters is not None:
             h = self.heaters
-            for what in ("t0_k", "t_amb_k", "tau_s", "phi_ev", "n", "heater_ratio"):
+            for what in ("t0_k", "t_amb_k", "tau_s", "phi_ev", "n", "reserve", "heater_ratio"):
                 _positive(f"heaters.{what}", getattr(h, what))
             _nonneg("heaters.alpha", h.alpha)
             if h.start not in ("warm", "cold"):

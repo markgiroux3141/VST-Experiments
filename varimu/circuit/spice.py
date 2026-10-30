@@ -41,6 +41,7 @@ the island's 1 GOhm leak and far below every other conductance.
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -54,9 +55,12 @@ from varimu.circuit.ir import (
     Device,
     DeviceModel,
     Element,
+    HeatedCathode,
+    HeaterSpec,
     Inductor,
     IRError,
     NoiseCurrent,
+    NoiseSpec,
     Resistor,
     SineSource,
     TubeNoise,
@@ -100,11 +104,40 @@ class NoiseStream:
         return nz.unit_stream(self.seed, self.name, self.stream, self.flicker, self.rate_hz, n)
 
 
-def noise_streams(ir: CircuitIR) -> list[NoiseStream]:
-    """The unit streams `emit`'s noise elements read, in IR order."""
+TEMP_NODE = "th_cathode"
+
+
+@dataclass(frozen=True)
+class TemperatureStream:
+    """The circuit's cathode temperature (B6; volts = kelvin) on TEMP_NODE: its heaters from
+    the start, with B5's mains wander when the noise has it (varimu.devices.cathode.
+    temperatures, the engines' steps)."""
+
+    node: str
+    heaters: HeaterSpec
+    noise: NoiseSpec | None
+    rate_hz: float
+
+    def samples(self, n: int):
+        from varimu.devices import cathode
+
+        m = None
+        if self.noise is not None and self.noise.mains_rms > 0:
+            m = nz.mains_wander(self.noise.seed, self.noise.mains_rms, self.rate_hz, n)
+        return cathode.temperatures(self.heaters, m, self.rate_hz, n)
+
+
+def noise_streams(ir: CircuitIR) -> list:
+    """The streams `emit`'s noise and heated-cathode elements read (NoiseStream,
+    TemperatureStream: a node and samples(n)), in IR order."""
+    out: list = []
+    if ir.heaters is not None:
+        from varimu.config import load_sim_settings
+
+        rate = ir.noise.rate_hz if ir.noise else float(load_sim_settings().sample_rate)
+        out.append(TemperatureStream(TEMP_NODE, ir.heaters, ir.noise, rate))
     if ir.noise is None:
-        return []
-    out = []
+        return out
     if ir.noise.mains_sources:
         out.append(
             NoiseStream(
@@ -153,6 +186,74 @@ def mains_line(el: SineSource) -> str:
         f"B{el.name} {el.pos} {el.neg} V={{{num(el.offset_v)}+{num(el.amplitude_v)}"
         f"*(1+v({MAINS_NODE}))*sin({num(w)}*time+{num(ph)})}}"
     )
+
+
+def heated_lines(
+    el: HeatedCathode,
+    h: HeaterSpec,
+    devices: Mapping[str, Device],
+    models: Mapping[str, DeviceModel],
+) -> list[str]:
+    """A heated tube in SPICE (B6; the reference is varimu.devices.cathode.heated): a copy of
+    the tube on E sources (it loads nothing), its control pin moved by the space-charge shift
+    (a B voltage source on the cathode temperature's node), each of its pins sensed by a
+    zero-volt source; B current sources drive the tube's pins with the copy's currents under
+    the ceiling, and its interelectrode capacitances go on the pins."""
+    d = devices[el.device]
+    m = models[d.model]
+    # The copy: the model without interelectrode capacitance (emit adds that subcircuit).
+    target = (
+        dataclasses.replace(m, name=bare_name(m)).subckt_name
+        if isinstance(m, Triode | Pentode)
+        else instance_target(m)
+    )
+    b = el.name.lower()
+    pins = list(d.nodes)
+    k = len(pins) - 1  # the cathode
+    ctl = 1 if isinstance(m, Triode) else 2 if isinstance(m, Pentode) else 0
+    th = f"v({TEMP_NODE})"
+    kev = num(cathode_k_ev())
+    t0 = num(h.t0_k)
+    # I_s(T) / I_s0, and the shift at a current of 1 / reserve of the emission (is0 cancels).
+    g = f"(pwr({th}/{t0},2)*exp(-{num(h.phi_ev)}/{kev}*(1/{th}-1/{t0})))"
+    r = num(1.0 / h.reserve)
+    shift = f"{num(cathode_k_ev() * h.t0_k)}*ln({r})-{kev}*{th}*ln(min({r}/{g},1))"
+    lines = [f"* heated cathode of {d.name} (B6)"]
+    for i, n in enumerate(pins):
+        lines.append(f"E{b}_e{i} {b}_e{i} 0 {n} 0 1")
+    lines.append(f"B{b}_sh {b}_ctl {b}_e{ctl} V={{{shift}}}")
+    nodes = []
+    for i in range(k):
+        src = f"{b}_ctl" if i == ctl else f"{b}_e{i}"
+        lines.append(f"V{b}_s{i} {src} {b}_p{i} dc 0")
+        nodes.append(f"{b}_p{i}")
+    lines.append(f"X{b}_c {' '.join(nodes)} {b}_e{k} {target}")
+    i1 = [f"i(V{b}_s{i})" for i in range(k)]
+    ik = f"max({'+'.join(i1)},0)"
+    is0, n_ = num(el.is0_a), num(h.n)
+    f = f"pwr(1+pwr({ik}/({is0}*{g}),{n_}),-1/{n_})/pwr(1+pwr({ik}/{is0},{n_}),-1/{n_})"
+    for i in range(k):
+        lines.append(f"B{b}_o{i} {pins[i]} {pins[k]} I={{{i1[i]}*{f}}}")
+    caps = []
+    if isinstance(m, Triode):
+        caps = [("gk", 1, k, m.c_gk), ("gp", 1, 0, m.c_gp), ("pk", 0, k, m.c_pk)]
+    elif isinstance(m, Pentode):
+        caps = [("g1k", 2, k, m.c_g1k), ("g1p", 2, 0, m.c_g1p), ("pk", 0, k, m.c_pk)]
+    for nm, a, c, cf in caps:
+        if cf > 0:
+            lines.append(f"C{b}_{nm} {pins[a]} {pins[c]} {num(cf)}")
+    return lines
+
+
+def bare_name(m) -> str:
+    """The name of a heated tube's copy model: no interelectrode capacitance."""
+    return m.name + "_BARE"
+
+
+def cathode_k_ev() -> float:
+    from varimu.devices.cathode import K_EV
+
+    return K_EV
 
 
 def noise_lines(
@@ -379,6 +480,18 @@ def emit(
             lines.append(m.subckt())
     models = {m.name: m for m in ir.models}
     devices = {e.name: e for e in ir.elements() if isinstance(e, Device)}
+    heated = {e.device for e in ir.elements() if isinstance(e, HeatedCathode)}
+    # A heated tube's copy carries no interelectrode capacitance (its pins do): the copy's
+    # model without them, as a subcircuit of its own (a triode table keeps its file).
+    for name in sorted({devices[d].model for d in heated}):
+        m = models[name]
+        if isinstance(m, Triode | Pentode):
+            caps = ("c_gk", "c_gp", "c_pk") if isinstance(m, Triode) else ("c_g1k", "c_g1p", "c_pk")
+            bare = dataclasses.replace(m, name=bare_name(m), **dict.fromkeys(caps, 0.0))
+            if isinstance(m, Triode) and triode_formulation == "table":
+                lines.append(table_subckt(bare, table_file(m)))
+            else:
+                lines.append(bare.subckt())
     cores = linear_cores(ir)
     folded = {n for c in cores.values() for n in c["parts"]}
     for s in ir.sections:
@@ -386,6 +499,10 @@ def emit(
         for el in s.elements:
             if isinstance(el, Winding):
                 lines.append(winding_line(el, cores[el.core]))
+            elif isinstance(el, Device) and el.name in heated:
+                continue  # its HeatedCathode emits it
+            elif isinstance(el, HeatedCathode):
+                lines += heated_lines(el, ir.heaters, devices, models)
             elif isinstance(el, NoiseCurrent | TubeNoise):
                 assert ir.noise is not None  # validated
                 lines += noise_lines(el, ir.noise.rate_hz, devices, models)

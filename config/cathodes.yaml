@@ -11,6 +11,7 @@ oxide:
   tau_s: {value: 7.0, source: "provisional: model knowledge (anchored to a patent's ~5.5 s to 10% current from cold for a 1.5 W oxide cathode: this model gives 5.5 s at ~7 s, 7.8 s at 10 s; RCA prints 'heater warm-up time 11 s' for series-string types, a different test)"}
   phi_ev: {value: 1.217, source: "fit: scripts/fit_cathode.py to Phywe LEP 4.1.10 Fig. 4 (EC92 forward curves at heater 100-120 mA; rms 0.28 mA; T0 1050 K); oxide cathodes' work function is ~1.0-1.3 eV (Herrmann & Wagener)"}
   n: {value: 1.29, source: "fit: scripts/fit_cathode.py (the ceiling's sharpness; soft, as the sheet's knees, which also rise ~20% from 3 to 8 V with field-enhanced emission)"}
+  reserve: {value: 50.0, source: "fit: scripts/fit_cathode.py (the EC92's emission at T0, 0.54 A, over its ~10 mA working current: 54); provisional: model knowledge (oxide cathodes' emission reserve; the space-charge shift is taken at a tube current of 1 / reserve of its emission)"}
   emission_a_per_w: {value: 0.569, source: "fit: scripts/fit_cathode.py, the EC92's emission at T0 (0.538 A) over its heater's 0.945 W; provisional: model knowledge (an oxide cathode's area, so its emission at one temperature, goes with its heater power)"}
 
 # Heater ratings: volts, amps for the whole tube, and the cathodes sharing that heater (the

@@ -249,6 +249,7 @@ fn heater_spec(ctx: &Context, start: &str) -> Result<HeaterSpec, Error> {
         tau_s: oxide_value(&ox, "tau_s")?,
         phi_ev: oxide_value(&ox, "phi_ev")?,
         n: oxide_value(&ox, "n")?,
+        reserve: oxide_value(&ox, "reserve")?,
         heater_ratio: ratio,
         start: start.to_string(),
     })

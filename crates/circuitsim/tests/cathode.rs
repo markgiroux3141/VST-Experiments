@@ -15,6 +15,7 @@ struct Fixture {
     phi_ev: f64,
     n: f64,
     t0_k: f64,
+    reserve: f64,
     devices: Vec<Entry>,
 }
 
@@ -30,7 +31,6 @@ struct Entry {
 struct Point {
     v: Vec<f64>,
     t_k: f64,
-    i_ref: f64,
     currents: Vec<f64>,
 }
 
@@ -45,9 +45,10 @@ fn heated(fx: &Fixture, e: &Entry, p: &Point) -> Heated {
         phi_ev: fx.phi_ev,
         n: fx.n,
         t0_k: fx.t0_k,
+        reserve: fx.reserve,
     };
     let mut h = Heated::new(devices::from_model(&e.model), e.port, em);
-    h.set_cathode(p.t_k, p.i_ref);
+    h.set_cathode(p.t_k);
     h
 }
 
@@ -64,11 +65,10 @@ fn heated_tubes_equal_the_reference() {
                 let tol = 1e-12 * b.abs().max(1e-12);
                 assert!(
                     (a - b).abs() <= tol,
-                    "{:?} at {:?} T {} i_ref {}: {a} vs {b}",
+                    "{:?} at {:?} T {}: {a} vs {b}",
                     e.model.name(),
                     p.v,
-                    p.t_k,
-                    p.i_ref
+                    p.t_k
                 );
             }
         }

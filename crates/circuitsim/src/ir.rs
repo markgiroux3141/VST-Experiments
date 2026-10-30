@@ -95,6 +95,7 @@ pub struct HeaterSpec {
     pub tau_s: f64,
     pub phi_ev: f64,
     pub n: f64,
+    pub reserve: f64,
     pub heater_ratio: f64,
     pub start: String,
 }
@@ -816,6 +817,7 @@ impl CircuitIr {
                 ("tau_s", h.tau_s),
                 ("phi_ev", h.phi_ev),
                 ("n", h.n),
+                ("reserve", h.reserve),
                 ("heater_ratio", h.heater_ratio),
             ] {
                 positive(&format!("heaters.{what}"), x)?;

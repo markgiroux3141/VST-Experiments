@@ -715,7 +715,9 @@ def _heater_spec(ctx: Context) -> HeaterSpec:
     if m:
         rated = ctx.physical("mains.rated_v_rms", m["rated_v_rms"])
         ratio = float(ctx.ref("mains", m["v_rms"])) / float(rated)
-    return HeaterSpec(ox.t0_k, ox.t_amb_k, ox.alpha, ox.tau_s, ox.phi_ev, ox.n, ratio, ctx.heaters)
+    return HeaterSpec(
+        ox.t0_k, ox.t_amb_k, ox.alpha, ox.tau_s, ox.phi_ev, ox.n, ox.reserve, ratio, ctx.heaters
+    )
 
 
 def _noise(ctx: Context, noise: bool | int | None) -> Noise | None:

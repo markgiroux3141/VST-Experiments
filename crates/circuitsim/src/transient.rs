@@ -944,75 +944,22 @@ impl Transient {
             device_nodes,
             mna,
         };
-        // Heated cathodes: the start's temperature (and a nominal current) for the DC point,
-        // then the operating point's own currents.
-        tr.apply_heat(None);
+        // Heated cathodes: the start's temperature for the DC point.
+        tr.apply_heat();
         tr.dc(u0)?;
-        if tr.mna.heat.is_some() {
-            let i = tr.heated_currents_eval();
-            tr.apply_heat(Some(&i));
-        }
         // The noise sources' first amplitudes, at the operating point (itself noise-free).
         tr.observe_noise();
         Ok(tr)
     }
 
-    /// The heated tubes' currents (each instance's ports summed) from evaluating them at the
-    /// current port voltages: for the DC point and a rebuilt circuit.
-    fn heated_currents_eval(&self) -> Vec<f64> {
-        let Some(heat) = &self.mna.heat else {
-            return Vec::new();
-        };
-        let mut off = vec![0; self.mna.devices.len()];
-        let mut o = 0;
-        for (k, d) in self.mna.devices.iter().enumerate() {
-            off[k] = o;
-            o += d.device.ports();
-        }
-        heat.tubes
-            .iter()
-            .map(|&d| {
-                let dev = &self.mna.devices[d].device;
-                let np = dev.ports();
-                let (mut i, mut g) = ([0.0; 4], [0.0; 16]);
-                dev.eval(
-                    &self.ports[off[d]..off[d] + np],
-                    &mut i[..np],
-                    &mut g[..np * np],
-                );
-                i[..np].iter().sum()
-            })
-            .collect()
-    }
-
-    /// The heated tubes' currents at the last DK solution (free: no evaluation).
-    fn heated_currents_dk(&self) -> Option<Vec<f64>> {
-        let (heat, dk) = (self.mna.heat.as_ref()?, self.dk.as_ref()?);
-        Some(
-            heat.tubes
-                .iter()
-                .map(|&d| {
-                    let (o, np) = (dk.ports.offsets[d], dk.ports.widths[d]);
-                    dk.newton.i[o..o + np].iter().sum()
-                })
-                .collect(),
-        )
-    }
-
-    /// Give the heated tubes the temperature and their reference currents `i` (None: the
-    /// last given, a nominal 1 mA at first), and have DK evaluate them afresh.
-    fn apply_heat(&mut self, i: Option<&[f64]>) {
+    /// Give the heated tubes the temperature, and have DK evaluate them afresh.
+    fn apply_heat(&mut self) {
         let Some(heat) = &mut self.mna.heat else {
             return;
         };
-        if let Some(i) = i {
-            heat.set_i.copy_from_slice(i);
-        }
         heat.set_t = heat.t_k;
-        for (k, &d) in heat.tubes.iter().enumerate() {
-            self.mna.devices[d]
-                .device
-                .set_cathode(heat.t_k, heat.set_i[k].max(crate::cathode::I_MIN_A));
+        for &d in &heat.tubes {
+            self.mna.devices[d].device.set_cathode(heat.t_k);
             if let Some(dk) = &mut self.dk {
                 dk.newton.invalidate_device(d);
             }
@@ -1020,7 +967,7 @@ impl Transient {
     }
 
     /// Before sample `n`: the cathodes' temperature one step on (the heater at its ratio
-    /// times the mains wander), the tubes refreshed when it or their currents moved.
+    /// times the mains wander), the tubes refreshed when it moved.
     fn advance_heat(&mut self) {
         let Some(heat) = &self.mna.heat else {
             return;
@@ -1028,13 +975,10 @@ impl Transient {
         let m = self.mna.noise.as_ref().map_or(0.0, |n| n.mains_m(0.0));
         let ratio = heat.spec.heater_ratio * (1.0 + m);
         let h = self.h;
-        if let Some(heat) = &mut self.mna.heat {
-            heat.step(h, ratio);
-        }
-        let i = self.heated_currents_dk().unwrap_or_default();
-        let heat = self.mna.heat.as_ref().expect("checked");
-        if heat.stale(&i) {
-            self.apply_heat(Some(&i));
+        let heat = self.mna.heat.as_mut().expect("checked");
+        heat.step(h, ratio);
+        if heat.stale() {
+            self.apply_heat();
         }
     }
 
@@ -2033,21 +1977,9 @@ impl Transient {
                 new.carry(old);
             }
         }
-        let old_i = self.mna.heat.as_ref().map(|h| h.set_i.clone());
         self.mna = mna;
-        // The new devices start at T0: give them the carried temperature and currents.
-        match old_i {
-            Some(i)
-                if self
-                    .mna
-                    .heat
-                    .as_ref()
-                    .is_some_and(|h| h.set_i.len() == i.len()) =>
-            {
-                self.apply_heat(Some(&i));
-            }
-            _ => self.apply_heat(None),
-        }
+        // The new devices start at T0: give them the carried temperature.
+        self.apply_heat();
         self.levels.iter_mut().for_each(|l| *l = None);
         let n = self.x.len();
         if moved {

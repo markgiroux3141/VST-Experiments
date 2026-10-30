@@ -53,6 +53,8 @@ def test_the_shift_and_the_ceiling():
     is0 = ca.instance_is0_a(ox, tubes["12AX7"])
     c = ca.Cathode(1.0, 1.0, is0, ox.phi_ev, ox.n)
     assert c.shift_v(ox.t0_k, 1e-3) == 0.0
+    assert ox.shift_t(ox.t0_k) == 0.0
+    assert 1.5e-3 < ox.shift_t(ox.t0_k + 1) < 2.2e-3  # ~mV per K, the same for every tube
     # Hotter: a deeper potential minimum, the grid as if more positive (~mV per K).
     s = float(c.shift_v(ox.t0_k + 4.0, 1e-3))
     assert 4e-3 < s < 10e-3
@@ -68,12 +70,10 @@ def test_a_heated_tube_at_its_rated_temperature_is_its_model():
         return [float(m.ip(v[1], v[0])), float(m.ig(v[1]))]
 
     for v in ([250.0, -1.5], [100.0, -0.5], [300.0, 0.5]):
-        assert ca.heated(currents, v, 1, ox.t0_k, 1e-3, is0, ox) == pytest.approx(
-            currents(v), rel=1e-12
-        )
+        assert ca.heated(currents, v, 1, ox.t0_k, is0, ox) == pytest.approx(currents(v), rel=1e-12)
     # Cold: the emission ceiling; hot: more current (the shift).
-    cold = ca.heated(currents, [250.0, -1.5], 1, 750.0, 1e-3, is0, ox)
-    hot = ca.heated(currents, [250.0, -1.5], 1, ox.t0_k + 20, 1e-3, is0, ox)
+    cold = ca.heated(currents, [250.0, -1.5], 1, 750.0, is0, ox)
+    hot = ca.heated(currents, [250.0, -1.5], 1, ox.t0_k + 20, is0, ox)
     nominal = currents([250.0, -1.5])[0]
     assert cold[0] < 0.5 * nominal and hot[0] > nominal
 
@@ -105,3 +105,56 @@ def test_a_heated_run():
     assert at(2.0) > plain[-1] + 75  # no emission yet: the plate at B+
     assert at(11.9) < plain[-1] + 15  # alive, still creeping
     assert at(11.9) > plain[-1] + 1
+
+
+def _ngspice():
+    from varimu.sim import ngspice
+
+    try:
+        ngspice.find_ngspice()
+    except ngspice.SimulatorNotFound:
+        pytest.skip("ngspice not available")
+
+
+def _both(start: str, ratio: float, seconds: float, tone: bool, reference: bool):
+    import dataclasses
+
+    from varimu.circuit import builder, spec, spice
+    from varimu.sim import fast, io
+
+    sp = spec.load_circuit(spec.circuit_path("triode_stage"))
+    ir = builder.build_ir(sp, spec.resolve(sp), cores="linear", heaters=start)
+    ir = dataclasses.replace(ir, heaters=dataclasses.replace(ir.heaters, heater_ratio=ratio))
+    fs = 96000
+    t = np.arange(int(seconds * fs)) / fs
+    x = 0.3 * np.sin(2 * np.pi * 1000 * t) * np.minimum(t / 0.01, 1) if tone else 0 * t
+    cs = fast.run_transient(ir, x).vectors["v(p)"]
+    text, files = spice.emit(ir, triode_formulation="exact")
+    s = io.TransientSettings.from_sim_settings(engine="ngspice")
+    if start == "cold":
+        s = dataclasses.replace(s, settle_s=0.0)
+    ng = io.run_transient(
+        text, x, input_node=ir.input_node, save=("v(p)",), settings=s, files=files,
+        noise=spice.noise_streams(ir), max_step_div=8 if reference else 1,
+        grid_breakpoints=reference,
+    ).vectors["v(p)"]  # fmt: skip
+    return cs, ng
+
+
+def test_the_engines_agree_on_a_cooler_cathode():
+    """The triode stage at a 90% heater (~40 K cool: the plate ~2 V higher), a tone through
+    it, ngspice as a reference: measured -82.6 dB re signal, the same as unheated."""
+    pytest.importorskip("circuitsim")
+    _ngspice()
+    cs, ng = _both("warm", 0.9, 0.05, tone=True, reference=True)
+    assert abs(np.mean(cs) - np.mean(ng)) < 1e-3
+    assert 20 * np.log10(np.std(cs - ng) / np.std(cs - np.mean(cs))) < -70
+
+
+def test_the_engines_agree_on_a_cold_start():
+    """5 s from cold (ngspice at its production settings): measured to the millivolt."""
+    pytest.importorskip("circuitsim")
+    _ngspice()
+    cs, ng = _both("cold", 1.0, 5.0, tone=False, reference=False)
+    assert np.max(np.abs(cs - ng)) < 0.01
+    assert cs[-1] < cs[0] - 20  # alive by 5 s

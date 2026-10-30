@@ -74,6 +74,11 @@ full_scale:
 noise:
   seed: 1
 
+# Heated cathodes (device builder B6, varimu.devices.cathode; config/cathodes.yaml): every
+# tube follows one cathode temperature, its heater at the MAINS setting's ratio to the rated
+# 120 V and the mains wander; runs start warm (a cold start on demand: power on).
+heaters: {}
+
 controls:
   cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from the -45 V rail (0) to ground (1))"}
   resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RESONANCE pot, the share of V5B's output fed back to the filter node; linear)"}

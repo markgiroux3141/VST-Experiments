@@ -450,6 +450,7 @@ impl Mna {
                                 phi_ev: h.phi_ev,
                                 n: h.n,
                                 t0_k: h.t0_k,
+                                reserve: h.reserve,
                             };
                             Some((c.device.as_str(), (port, em)))
                         }

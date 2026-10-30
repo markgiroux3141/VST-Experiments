@@ -4,9 +4,9 @@
 //!
 //! A [`Heated`] device wraps a tube model: its control port (a triode's grid, a pentode's
 //! control grid, a diode's anode) moved by the space-charge shift for the cathode's
-//! temperature and a reference current (the tube's own at its last accepted step), every
-//! current then scaled by the emission ceiling relative to its value at the rated
-//! temperature. [`HeatRun`] carries the circuit's one cathode temperature through a run.
+//! temperature (at a tube current of 1 / reserve of its emission: one function of T, the
+//! same for every tube), every current then scaled by the emission ceiling relative to its
+//! value at the rated temperature. [`HeatRun`] carries the circuit's one cathode temperature through a run.
 
 use crate::devices::Device;
 use crate::ir::HeaterSpec;
@@ -23,6 +23,7 @@ pub struct Emission {
     pub phi_ev: f64,
     pub n: f64,
     pub t0_k: f64,
+    pub reserve: f64,
 }
 
 impl Emission {
@@ -140,18 +141,15 @@ impl Device for Heated {
     fn tabulate(&self) -> Option<Box<dyn Device>> {
         self.inner.tabulate().map(|t| {
             let mut h = Heated::new(t, self.port, self.em);
-            h.set_cathode(self.t_k, f64::NAN);
-            h.shift = self.shift;
+            h.set_cathode(self.t_k);
             Box::new(h) as Box<dyn Device>
         })
     }
 
-    fn set_cathode(&mut self, t_k: f64, i_ref: f64) {
+    fn set_cathode(&mut self, t_k: f64) {
         self.t_k = t_k;
         self.is_t = self.em.is_a(t_k);
-        if i_ref.is_finite() {
-            self.shift = self.em.shift_v(t_k, i_ref);
-        }
+        self.shift = self.em.shift_v(t_k, self.em.is0_a / self.em.reserve);
     }
 }
 
@@ -160,12 +158,10 @@ impl Device for Heated {
 pub struct HeatRun {
     pub spec: HeaterSpec,
     pub t_k: f64,
-    /// The device instances it heats (a bank merged into one: once; it shares its current
-    /// among its tubes, [`Device::set_cathode`]).
+    /// The device instances it heats (a bank merged into one: once).
     pub tubes: Vec<usize>,
-    /// The temperature and reference currents last given to the devices.
+    /// The temperature last given to the devices.
     pub set_t: f64,
-    pub set_i: Vec<f64>,
 }
 
 impl HeatRun {
@@ -176,13 +172,11 @@ impl HeatRun {
         } else {
             steady_k(&spec, spec.heater_ratio)
         };
-        let n = tubes.len();
         HeatRun {
             spec,
             t_k,
             tubes,
             set_t: f64::NAN,
-            set_i: vec![1e-3; n],
         }
     }
 
@@ -197,14 +191,11 @@ impl HeatRun {
         self.t_k += h * self.dt_dt(self.t_k, ratio);
     }
 
-    /// Whether the devices need new values: the temperature moved by more than 1e-4 K or a
-    /// reference current by more than 1% since they were last given.
-    pub fn stale(&self, i_ref: &[f64]) -> bool {
-        !((self.t_k - self.set_t).abs() <= 1e-4
-            && i_ref
-                .iter()
-                .zip(&self.set_i)
-                .all(|(a, b)| (a.max(I_MIN_A) / b.max(I_MIN_A)).ln().abs() <= 0.01))
+    /// Whether the devices need the temperature again: it moved by more than 1e-4 K
+    /// (~0.2 uV of shift) since they were last given it.
+    pub fn stale(&self) -> bool {
+        // NaN (never given) is stale too.
+        (self.t_k - self.set_t).abs() > 1e-4 || self.set_t.is_nan()
     }
 }
 

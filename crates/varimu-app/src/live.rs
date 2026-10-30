@@ -36,7 +36,7 @@ use circuitsim::ir::{CircuitIr, Element};
 use circuitsim::stream::Stream;
 use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Library, Noise, build_ir_noise};
+use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_with};
 
 use crate::resample::{StreamResampler, resample};
 use crate::settings::Settings;
@@ -55,6 +55,8 @@ pub struct Circuit {
     cores: Cores,
     /// Noise sources on (the file's `noise` block; off: none, and their CPU saved).
     noise: bool,
+    /// Heated cathodes: the file's `heaters` block, or a start (cold: power on).
+    heaters: Heaters,
 }
 
 impl Circuit {
@@ -70,6 +72,7 @@ impl Circuit {
             spec: spec::load_circuit(&path).map_err(|e| e.to_string())?,
             cores,
             noise: true,
+            heaters: Heaters::File,
         })
     }
 
@@ -81,6 +84,7 @@ impl Circuit {
             spec,
             cores,
             noise: true,
+            heaters: Heaters::File,
         }
     }
 
@@ -93,6 +97,19 @@ impl Circuit {
     /// Whether the file has noise sources to turn on.
     pub fn has_noise(&self) -> bool {
         self.spec.noise.is_some()
+    }
+
+    /// Its heated cathodes' start (device builder B6): `Heaters::Cold` is a power-on (a
+    /// stream starting from it warms up); later builds want the file's (warm), which an
+    /// in-place update gets with the temperature carried over.
+    pub fn with_heaters(mut self, h: Heaters) -> Circuit {
+        self.heaters = h;
+        self
+    }
+
+    /// Whether the file heats its cathodes (a power-on means something).
+    pub fn has_heaters(&self) -> bool {
+        self.spec.heaters.is_some()
     }
 
     pub fn spec(&self) -> &CircuitSpec {
@@ -112,7 +129,8 @@ impl Circuit {
     pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
         let p = spec::resolve(&self.spec, values).map_err(|e| e.to_string())?;
         let noise = if self.noise { Noise::File } else { Noise::Off };
-        build_ir_noise(&self.lib, &self.spec, &p, self.cores, noise).map_err(|e| e.to_string())
+        build_ir_with(&self.lib, &self.spec, &p, self.cores, noise, self.heaters)
+            .map_err(|e| e.to_string())
     }
 }
 
