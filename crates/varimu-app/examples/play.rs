@@ -17,6 +17,7 @@
 //! like NAME; `--list-midi` lists them): its keys play the test oscillator
 //! (`midi::TestOsc`) into the device's input, and its mod wheel turns the device's
 //! `mod_wheel` control over its range (the reactor filter's cutoff).
+//! `--no-noise` plays a device whose file has noise sources (device builder B5) without them.
 
 use std::path::Path;
 use std::time::{Duration, Instant};
@@ -58,6 +59,7 @@ fn main() -> Result<(), String> {
     let (mut channel, mut seconds, mut start, mut excerpt) = (0usize, 30.0, 0.0, 8.0);
     let mut buffer: Option<f64> = None;
     let mut gain_db = 0.0;
+    let mut noise = true;
     let mut sets = Vec::new();
     let mut turn: Option<(String, Value, Value)> = None;
     let mut normal_priority = false;
@@ -100,6 +102,7 @@ fn main() -> Result<(), String> {
             "--seconds" => excerpt = num(args.next(), &a)?,
             "--buffer" => buffer = Some(num(args.next(), &a)?),
             "--gain-db" => gain_db = num(args.next(), &a)?,
+            "--no-noise" => noise = false,
             "--set" | "--turn" => {
                 let kv = args.next().ok_or(format!("{a} needs KEY=VALUE"))?;
                 let (k, v) = kv.split_once('=').ok_or(format!("{a} KEY=VALUE"))?;
@@ -127,7 +130,7 @@ fn main() -> Result<(), String> {
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
     let s = dev.play_settings(&Settings::load(config, dev.quality)?);
-    let circuit = Circuit::load(config, dev.circuit, s.cores()?)?;
+    let circuit = Circuit::load(config, dev.circuit, s.cores()?)?.with_noise(noise);
     let panel = knobs(dev, circuit.spec());
     let mut v = values(&panel);
     for (k, x) in sets {

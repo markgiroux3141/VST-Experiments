@@ -503,12 +503,15 @@ the circuit's noise alone / the mains wander alone, at 475 Hz and 1.3 kHz):
   production, loudness-matched; blind pair in `reports/tube_synth/noise_ab/renders/`): with
   this seed the mains sits low through the phrase, so every held note is 2-16 cents flatter
   with noise on (the lowest note most); that pitch offset is the audible difference, not
-  hiss. Not yet heard by the user.
+  hiss. **The user (2026-10-30): "really hard to tell 1 and 2 apart"**, guessed 1 had the
+  noise (right, but not confidently): subtle, as measured.
 - **Live:** the app plays it at ~88% load (worst block 133%, no dropouts in 10 s at 50 ms)
   against 60% / 91% without noise; the resistors' and tubes' noise cost ~0.15x real time
-  each and isn't measurable in the sound; the mains wander is free. Open (the user's): keep
-  it all in the app, or play the mains wander alone live and keep everything for
-  production renders.
+  each and isn't measurable in the sound; the mains wander is free. **The user's call: a
+  switch.** The Play view's "Noise" checkbox (devices whose file has a `noise` block):
+  off builds without the noise sources (`live::Circuit::with_noise`, `Noise::Off`) and
+  saves their CPU; a change restarts the stream with a crossfade; renders follow it.
+  `examples/play.rs --no-noise`.
 
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model

@@ -248,3 +248,27 @@ fn tube_voice_opens_while_its_gate_is_down() {
         "{before} {after}"
     );
 }
+
+/// The noise switch (device builder B5): the tube synth builds with its noise sources,
+/// and without them when switched off (another structure: the stream restarts); a device
+/// without a `noise` block has none to switch.
+#[test]
+fn the_noise_switch_drops_the_noise_sources() {
+    let s = Settings::load(&config(), Quality::Draft2x).unwrap();
+    let c = Circuit::load(&config(), "tube_synth", s.cores().unwrap()).unwrap();
+    assert!(c.has_noise());
+    let v = values(&knobs(
+        DEVICES.iter().find(|d| d.id == "tube_synth").unwrap(),
+        c.spec(),
+    ));
+    let on = c.build(&v).unwrap();
+    let off = Circuit::load(&config(), "tube_synth", s.cores().unwrap())
+        .unwrap()
+        .with_noise(false)
+        .build(&v)
+        .unwrap();
+    assert!(on.noise.is_some() && off.noise.is_none());
+    assert_ne!(structure(&on), structure(&off));
+    let other = Circuit::load(&config(), "fairchild_670", s.cores().unwrap()).unwrap();
+    assert!(!other.has_noise());
+}

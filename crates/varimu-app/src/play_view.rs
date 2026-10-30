@@ -159,6 +159,9 @@ pub struct PlayView {
     trim_db: f64,
     /// The device bypassed (its input played), and gain compensation on (monitoring).
     bypass: bool,
+    /// The device's noise sources on (device builder B5; only devices whose file has
+    /// them): off saves their CPU. Renders follow it.
+    noise: bool,
     compensate: bool,
     /// A manual gain on the device's output (dB, monitoring only).
     output_db: f64,
@@ -252,6 +255,7 @@ impl PlayView {
             take_saved: None,
             trim_db: 0.0,
             bypass: false,
+            noise: true,
             compensate: true,
             output_db: 0.0,
             error: None,
@@ -404,12 +408,13 @@ impl PlayView {
             .filter(|_| self.device == DEVICES.len())
     }
 
-    /// The device's circuit, built with `cores`.
+    /// The device's circuit, built with `cores`, its noise as the switch says.
     fn circuit(&self, cores: varimu_circuit::Cores) -> Result<Circuit, String> {
-        match self.drawing_device() {
-            Some(d) => Ok(Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores)),
-            None => Circuit::load(&self.config_dir, DEVICES[self.device].circuit, cores),
-        }
+        let c = match self.drawing_device() {
+            Some(d) => Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores),
+            None => Circuit::load(&self.config_dir, DEVICES[self.device].circuit, cores)?,
+        };
+        Ok(c.with_noise(self.noise))
     }
 
     /// The device's name and id (for files).
@@ -451,7 +456,7 @@ impl PlayView {
             && let Ok(cores) = s.cores()
         {
             p.set_circuit(
-                Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores),
+                Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores).with_noise(self.noise),
                 panel::values(&self.knobs),
             );
         }
@@ -790,6 +795,7 @@ impl PlayView {
         let (label, id) = self.device_names();
         let drawing = self.drawing_device().cloned();
         let dev = DEVICES[self.device.min(DEVICES.len() - 1)];
+        let noise = self.noise;
         let (a, b) = self.region;
         let stem = clip
             .path
@@ -815,7 +821,8 @@ impl PlayView {
                 let circuit = match drawing {
                     Some(d) => Circuit::from_spec(d.lib, d.spec, s.cores()?),
                     None => Circuit::load(&config, dev.circuit, s.cores()?)?,
-                };
+                }
+                .with_noise(noise);
                 render(
                     &circuit,
                     &values,
@@ -867,6 +874,31 @@ impl PlayView {
         }
     }
 
+    /// The noise switch, for a device whose file has noise sources: a change restarts
+    /// the stream (other elements) with a crossfade.
+    fn noise_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(cores) = self.settings.as_ref().ok().and_then(|s| s.cores().ok()) else {
+            return;
+        };
+        let Ok(c) = self.circuit(cores) else {
+            return;
+        };
+        if !c.has_noise() {
+            return;
+        }
+        let r = ui.checkbox(&mut self.noise, "Noise").on_hover_text(
+            "The circuit's noise sources (device builder B5): Johnson noise of its \
+             resistors, its tubes' shot and flicker noise, the mains wander. Off saves their \
+             CPU (tube synth: ~0.3x real time); renders follow this switch.",
+        );
+        if r.changed()
+            && let Some(p) = &self.player
+            && let Ok(c) = self.circuit(cores)
+        {
+            p.set_circuit(c, panel::values(&self.knobs));
+        }
+    }
+
     /// The device in or bypassed (B), and gain compensation.
     fn monitor_ui(&mut self, ui: &mut egui::Ui) {
         let typing = ui.ctx().egui_wants_keyboard_input();
@@ -889,6 +921,7 @@ impl PlayView {
             {
                 self.bypass = !self.bypass;
             }
+            self.noise_ui(ui);
             ui.checkbox(&mut self.compensate, "Gain compensation")
                 .on_hover_text(
                     "Match the device's output to its input's loudness (K-weighted, ~3 s), so \

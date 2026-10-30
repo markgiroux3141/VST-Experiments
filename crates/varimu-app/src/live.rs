@@ -36,7 +36,7 @@ use circuitsim::ir::{CircuitIr, Element};
 use circuitsim::stream::Stream;
 use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Library, build_ir};
+use varimu_circuit::{Cores, Library, Noise, build_ir_noise};
 
 use crate::resample::{StreamResampler, resample};
 use crate::settings::Settings;
@@ -53,6 +53,8 @@ pub struct Circuit {
     lib: Arc<Library>,
     spec: CircuitSpec,
     cores: Cores,
+    /// Noise sources on (the file's `noise` block; off: none, and their CPU saved).
+    noise: bool,
 }
 
 impl Circuit {
@@ -67,13 +69,30 @@ impl Circuit {
             lib: Arc::new(Library::new(config_dir)),
             spec: spec::load_circuit(&path).map_err(|e| e.to_string())?,
             cores,
+            noise: true,
         })
     }
 
     /// A circuit already read (the editor's compiled drawing), its device files and
     /// materials from `lib`.
     pub fn from_spec(lib: Arc<Library>, spec: CircuitSpec, cores: Cores) -> Circuit {
-        Circuit { lib, spec, cores }
+        Circuit {
+            lib,
+            spec,
+            cores,
+            noise: true,
+        }
+    }
+
+    /// With its noise sources (device builder B5: the file's `noise` block) on or off.
+    pub fn with_noise(mut self, on: bool) -> Circuit {
+        self.noise = on;
+        self
+    }
+
+    /// Whether the file has noise sources to turn on.
+    pub fn has_noise(&self) -> bool {
+        self.spec.noise.is_some()
     }
 
     pub fn spec(&self) -> &CircuitSpec {
@@ -92,7 +111,8 @@ impl Circuit {
 
     pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
         let p = spec::resolve(&self.spec, values).map_err(|e| e.to_string())?;
-        build_ir(&self.lib, &self.spec, &p, self.cores).map_err(|e| e.to_string())
+        let noise = if self.noise { Noise::File } else { Noise::Off };
+        build_ir_noise(&self.lib, &self.spec, &p, self.cores, noise).map_err(|e| e.to_string())
     }
 }
 
