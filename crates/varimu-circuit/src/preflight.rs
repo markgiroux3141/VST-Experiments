@@ -144,7 +144,14 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
             Probe::Voltage { node } => node.as_str(),
         })
         .collect();
-    for n in std::iter::once(ir.input_node.as_str()).chain(probes) {
+    let driven: Vec<(String, String)> = std::iter::once((ir.input_node.clone(), INPUT.to_string()))
+        .chain(
+            ir.controls
+                .iter()
+                .map(|c| (c.node.clone(), format!("<control {}>", c.name))),
+        )
+        .collect();
+    for n in driven.iter().map(|(n, _)| n.as_str()).chain(probes) {
         if !nodes.contains_key(n) {
             problem(
                 "probe",
@@ -154,8 +161,10 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
             );
         }
     }
-    if let Some(v) = nodes.get_mut(&ir.input_node) {
-        v.push(INPUT.into());
+    for (n, label) in &driven {
+        if let Some(v) = nodes.get_mut(n) {
+            v.push(label.clone());
+        }
     }
     let sorted: BTreeMap<&String, &Vec<String>> = nodes.iter().collect();
     for (n, names) in &sorted {
@@ -171,15 +180,17 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
 
     let (mut dc, mut loops) = (Union::default(), Union::default());
     dc.find(GROUND);
-    dc.join(&ir.input_node, GROUND);
-    loops.join(&ir.input_node, GROUND);
     let mut tree: HashMap<String, Vec<(String, String)>> = HashMap::new();
-    tree.entry(ir.input_node.clone())
-        .or_default()
-        .push((GROUND.into(), INPUT.into()));
-    tree.entry(GROUND.into())
-        .or_default()
-        .push((ir.input_node.clone(), INPUT.into()));
+    for (n, label) in &driven {
+        dc.join(n, GROUND);
+        loops.join(n, GROUND);
+        tree.entry(n.clone())
+            .or_default()
+            .push((GROUND.into(), label.clone()));
+        tree.entry(GROUND.into())
+            .or_default()
+            .push((n.clone(), label.clone()));
+    }
     for el in &els {
         let t = terminals(el);
         let conducts = matches!(

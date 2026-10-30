@@ -27,7 +27,8 @@ pub mod transient;
 mod python;
 
 pub use transient::{
-    Method, Options, Output, Solver, Stats, StepInput, simulate, simulate_with_progress,
+    Method, Options, Output, Solver, Stats, StepInput, simulate, simulate_controls,
+    simulate_with_progress,
 };
 
 /// Crate version (also `circuitsim.__version__` in Python).

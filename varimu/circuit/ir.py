@@ -230,6 +230,16 @@ class VoltageProbe:
 
 
 @dataclass(frozen=True)
+class Control:
+    """A control input (a gate, a pitch voltage; the tube synth's S3): `node` to ground
+    driven by its own samples beside the audio input, linear between samples (circuitsim;
+    ngspice runs no circuit with control inputs)."""
+
+    name: str
+    node: str
+
+
+@dataclass(frozen=True)
 class Section:
     """A titled group of elements (one stage). Only for readability."""
 
@@ -248,6 +258,9 @@ class CircuitIR:
     models: tuple[DeviceModel, ...]
     sections: tuple[Section, ...]
     version: int = IR_VERSION
+    # Control inputs (Control), each driven by its own samples. Optional: an IR without
+    # any reads and writes as before (in JSON they follow input_node, as in Rust).
+    controls: tuple[Control, ...] = ()
 
     def __post_init__(self):
         self.validate()
@@ -369,6 +382,13 @@ class CircuitIR:
             raise IRError('no element connects to ground (node "0")')
         if self.input_node not in nodes:
             raise IRError(f"input node {self.input_node} is not connected")
+        for i, c in enumerate(self.controls):
+            if c.node in (GROUND, self.input_node):
+                raise IRError(f"control {c.name}: node {c.node} is ground or the input")
+            if c.node not in nodes:
+                raise IRError(f"control {c.name}: node {c.node} is not connected")
+            if any(d.name == c.name or d.node == c.node for d in self.controls[:i]):
+                raise IRError(f"control {c.name}: a name or node twice")
         for p in self.probes:
             if p.node not in nodes:
                 raise IRError(f"probe node {p.node} is not connected")
@@ -376,23 +396,27 @@ class CircuitIR:
     # --- JSON ---
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        d: dict[str, Any] = {
             "version": self.version,
             "title": self.title,
             "input_node": self.input_node,
-            "probes": [_encode(p) for p in self.probes],
-            "models": [_encode(m) for m in self.models],
-            "sections": [_encode(s) for s in self.sections],
         }
+        if self.controls:
+            d["controls"] = [{"name": c.name, "node": c.node} for c in self.controls]
+        d.update(
+            probes=[_encode(p) for p in self.probes],
+            models=[_encode(m) for m in self.models],
+            sections=[_encode(s) for s in self.sections],
+        )
+        return d
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=1, allow_nan=False) + "\n"
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> CircuitIR:
-        _check_keys(
-            "circuit", d, {"version", "title", "input_node", "probes", "models", "sections"}
-        )
+        keys = {"version", "title", "input_node", "probes", "models", "sections"}
+        _check_keys("circuit", d, keys | ({"controls"} & set(d)))
         if d["version"] != IR_VERSION:
             raise IRError(f"version {d['version']} (this code reads {IR_VERSION})")
         return cls(
@@ -410,6 +434,7 @@ class CircuitIR:
                 for s in d["sections"]
             ),
             version=d["version"],
+            controls=tuple(_fields(Control, c, tagged=False) for c in d.get("controls", ())),
         )
 
     @classmethod

@@ -6,6 +6,7 @@ varimu.circuit.builder, which expands its parts with the parts library
 
     title: ...                      # the IR's title
     input: in                       # the node the audio input drives
+    cv_inputs: {gate: g, ...}       # control inputs: nodes driven by their own samples
     probes: [out, cv, ...]          # node voltages every render saves
     full_scale: {input_volts_peak: {value, source}, output_volts_peak | output_pascals_peak: {...}}
     controls: {key: {value, min, max | choices, source, unit?, notes?}}
@@ -63,6 +64,7 @@ _NUMBER_LIKE = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
 _TOP_KEYS = {
     "title",
     "input",
+    "cv_inputs",
     "probes",
     "full_scale",
     "controls",
@@ -84,6 +86,8 @@ class CircuitSpec:
     device_params: dict[str, dict[str, Any]] = dataclasses.field(default_factory=dict)
     title: str = ""
     input_node: str = "in"
+    # Control inputs (cv_inputs: {name: node}, file order): a gate, a pitch voltage.
+    cv_inputs: tuple[tuple[str, str], ...] = ()
     probes: tuple[str, ...] = ()
     mains: dict[str, Any] | None = None
     derived: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -209,6 +213,7 @@ def load_circuit(path: Path) -> CircuitSpec:
         device_params=device_params,
         title=data.get("title", ""),
         input_node=data.get("input", "in"),
+        cv_inputs=tuple((str(k), str(v)) for k, v in (data.get("cv_inputs") or {}).items()),
         probes=tuple(data.get("probes") or ()),
         mains=data.get("mains"),
         derived=derived,

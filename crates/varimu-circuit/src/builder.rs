@@ -999,6 +999,14 @@ pub fn build_ir(
         version: IR_VERSION,
         title: spec.title.clone(),
         input_node: spec.input_node.clone(),
+        controls: spec
+            .cv_inputs
+            .iter()
+            .map(|(name, node)| circuitsim::ir::Control {
+                name: name.clone(),
+                node: node.clone(),
+            })
+            .collect(),
         probes: spec
             .probes
             .iter()

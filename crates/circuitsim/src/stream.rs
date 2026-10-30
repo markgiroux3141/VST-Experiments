@@ -160,6 +160,9 @@ pub struct Stream {
     /// Every input sample from `hist0` on (index = sample number - hist0).
     hist: Vec<f64>,
     hist0: usize,
+    /// The control inputs' samples, indexed as `hist` (IR order; empty without
+    /// control inputs).
+    chist: Vec<Vec<f64>>,
     /// Samples stepped: the state is at sample `n`.
     n: usize,
     /// The input has ended ([`Stream::finish`]): `len` samples in all.
@@ -190,9 +193,40 @@ impl Stream {
         opts: &Options,
         u0: f64,
     ) -> Result<Stream, Error> {
+        Stream::with_controls(ir, second, coupling, h, opts, u0, &[])
+    }
+
+    /// [`Stream::new`] with the control inputs at `c0` for sample 0 (IR order;
+    /// empty: all 0 V).
+    pub fn with_controls(
+        ir: &CircuitIr,
+        second: &[String],
+        coupling: Coupling,
+        h: f64,
+        opts: &Options,
+        u0: f64,
+        c0: &[f64],
+    ) -> Result<Stream, Error> {
         if !u0.is_finite() {
             return Err(Error::new("input sample 0 is not finite"));
         }
+        let c0: Vec<f64> = if c0.is_empty() {
+            vec![0.0; ir.controls.len()]
+        } else {
+            c0.to_vec()
+        };
+        let streams: Vec<&[f64]> = c0.iter().map(std::slice::from_ref).collect();
+        crate::transient::check_controls(ir, &streams, 1)?;
+        // A transient on `mna` at the DC point with the controls at c0, then `ext`.
+        let start = |mna: Mna, ext: &[f64], u: f64| {
+            let mut all = c0.clone();
+            all.extend_from_slice(ext);
+            if all.is_empty() {
+                Transient::new(mna, h, *opts, u)
+            } else {
+                Transient::with_externals(mna, h, *opts, u, &all)
+            }
+        };
         let names: Vec<String> = ir
             .probes
             .iter()
@@ -210,6 +244,7 @@ impl Stream {
             order: opts.input_order.max(1),
             hist: vec![u0],
             hist0: 0,
+            chist: c0.iter().map(|&c| vec![c]).collect(),
             n: 0,
             len: None,
             initial_b: Vec::new(),
@@ -221,7 +256,7 @@ impl Stream {
             out: vec![0.0; k],
         };
         if second.is_empty() {
-            let tr = Transient::new(Mna::from_ir(ir, opts.gmin)?, h, *opts, u0)?;
+            let tr = start(Mna::from_ir(ir, opts.gmin)?, &[], u0)?;
             let sources = (0..names.len()).map(Source::First).collect();
             return Ok(base(tr, None, sources, 0));
         }
@@ -229,7 +264,7 @@ impl Stream {
         let (a_ir, b_ir, shared_nodes) = split(ir, second)?;
         let k = shared_nodes.len();
         // The shared nodes at the whole circuit's DC operating point.
-        let whole = Transient::new(Mna::from_ir(ir, opts.gmin)?, h, *opts, u0)?;
+        let whole = start(Mna::from_ir(ir, opts.gmin)?, &[], u0)?;
         let v_dc: Vec<f64> = shared_nodes
             .iter()
             .map(|n| whole.mna().node(n).map_or(0.0, |i| whole.x()[i]))
@@ -243,9 +278,10 @@ impl Stream {
             .iter()
             .map(|n| ma.branch(&format!("{SOURCE_PREFIX}{n}")).expect("added"))
             .collect();
-        ma.externals = src.clone();
+        ma.externals.truncate(ma.n_controls);
+        ma.externals.extend_from_slice(&src);
         ma.outputs = src.clone();
-        let a = Transient::with_externals(ma, h, *opts, u0, &v_dc)?;
+        let a = start(ma, &v_dc, u0)?;
         let i_dc: Vec<f64> = src.iter().map(|&i| a.x()[i]).collect();
         // Second: those currents injected into the shared nodes, publishing the
         // nodes' voltages.
@@ -361,8 +397,35 @@ impl Stream {
     /// returns the probes' values (IR order) at every sample stepped, which lag
     /// the input by the interpolation's lookahead.
     pub fn process(&mut self, input: &[f64]) -> Result<Vec<Vec<f64>>, Error> {
+        self.process_with(input, &[])
+    }
+
+    /// [`Stream::process`] with the control inputs' samples over the same span
+    /// (IR order, each as long as `input`; empty: each holds its last value).
+    pub fn process_with(
+        &mut self,
+        input: &[f64],
+        controls: &[&[f64]],
+    ) -> Result<Vec<Vec<f64>>, Error> {
         if self.len.is_some() {
             return Err(Error::new("the stream is finished"));
+        }
+        if !controls.is_empty() {
+            if controls.len() != self.chist.len() {
+                return Err(Error::new(format!(
+                    "{} control streams for {} control inputs",
+                    controls.len(),
+                    self.chist.len()
+                )));
+            }
+            if let Some(i) = controls
+                .iter()
+                .position(|c| c.len() != input.len() || c.iter().any(|v| !v.is_finite()))
+            {
+                return Err(Error::new(format!(
+                    "control stream {i}: not as long as the input, or not finite"
+                )));
+            }
         }
         if let Some(i) = input.iter().position(|u| !u.is_finite()) {
             return Err(Error::new(format!(
@@ -371,6 +434,15 @@ impl Stream {
             )));
         }
         self.hist.extend_from_slice(input);
+        for (k, h) in self.chist.iter_mut().enumerate() {
+            match controls.get(k) {
+                Some(c) => h.extend_from_slice(c),
+                None => {
+                    let last = *h.last().expect("sample 0");
+                    h.resize(h.len() + input.len(), last);
+                }
+            }
+        }
         let ahead = (self.order - 1) / 2 + 1;
         let known = self.hist0 + self.hist.len(); // samples 0..known have arrived
         let until = known.saturating_sub(ahead);
@@ -452,6 +524,13 @@ impl Stream {
             );
             self.a.set_externals(&self.e0, &self.e1);
         }
+        // The control inputs over the step, as simulate's loop takes them.
+        if !self.chist.is_empty() {
+            let i = n - self.hist0;
+            let c0: Vec<f64> = self.chist.iter().map(|h| h[i]).collect();
+            let c1: Vec<f64> = self.chist.iter().map(|h| h[i + 1]).collect();
+            self.a.set_controls(&c0, &c1);
+        }
         // The input around the step, as simulate's loop takes it.
         if self.order == 1 {
             let (u0, u1) = (self.hist[n - self.hist0], self.hist[n + 1 - self.hist0]);
@@ -484,6 +563,9 @@ impl Stream {
         let keep_from = self.n.saturating_sub((self.order - 1) / 2 + 1);
         if keep_from > self.hist0 + 4096 {
             self.hist.drain(..keep_from - self.hist0);
+            for h in &mut self.chist {
+                h.drain(..keep_from - self.hist0);
+            }
             self.hist0 = keep_from;
         }
         Ok(())

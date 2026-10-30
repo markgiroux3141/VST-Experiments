@@ -50,6 +50,8 @@ pub enum Unknown {
     Branch(String),
     /// Current of the audio input source.
     Input,
+    /// Current of a control input's source (its name).
+    Control(String),
 }
 
 impl Unknown {
@@ -59,6 +61,7 @@ impl Unknown {
             Unknown::Node(n) => format!("node {n}"),
             Unknown::Branch(e) => format!("branch current of {e}"),
             Unknown::Input => "input source current".to_string(),
+            Unknown::Control(c) => format!("control {c} source current"),
         }
     }
 }
@@ -115,7 +118,12 @@ pub struct Mna {
     /// [`Mna::from_ir`]): a partitioned run couples two circuits through them
     /// (`partition.rs`). Their values, added to `b`, are set per step
     /// ([`crate::transient::Transient::set_externals`]); DK solver only.
+    /// The IR's control inputs come first ([`Mna::n_controls`] of them, set by
+    /// [`crate::transient::Transient::set_controls`]); a partition's couplings
+    /// follow.
     pub externals: Vec<usize>,
+    /// How many of [`Mna::externals`] are control inputs (IR order).
+    pub n_controls: usize,
     /// Unknowns a probes-only run computes at every step besides the probes
     /// (the coupling values a partitioned run reads).
     pub outputs: Vec<usize>,
@@ -192,6 +200,15 @@ impl Mna {
         }
         let input_row = unknowns.len();
         unknowns.push(Unknown::Input);
+        // Control inputs after it: an IR without any has the same unknowns.
+        let control_rows: Vec<usize> = ir
+            .controls
+            .iter()
+            .map(|c| {
+                unknowns.push(Unknown::Control(c.name.clone()));
+                unknowns.len() - 1
+            })
+            .collect();
 
         let n = unknowns.len();
         let mut g = Matrix::zeros(n);
@@ -315,6 +332,9 @@ impl Mna {
             }
         }
         incidence(&mut g, input_row, node(&ir.input_node), None);
+        for (c, &row) in ir.controls.iter().zip(&control_rows) {
+            incidence(&mut g, row, node(&c.node), None);
+        }
         let instances = merge_parallel(instances);
 
         let probes = ir
@@ -335,7 +355,8 @@ impl Mna {
             input_row,
             probes,
             devices: instances,
-            externals: Vec::new(),
+            n_controls: control_rows.len(),
+            externals: control_rows,
             outputs: Vec::new(),
         })
     }

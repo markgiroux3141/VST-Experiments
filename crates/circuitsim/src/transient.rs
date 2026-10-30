@@ -851,7 +851,8 @@ impl Transient {
             && (opts.solver != Solver::Dk || !opts.method.tableau().diagonal)
         {
             return Err(Error::new(
-                "externals need the DK solver and a diagonally implicit method",
+                "externals (control inputs, a partition's couplings) need the DK solver \
+                 and a diagonally implicit method",
             ));
         }
         if opts.tube_tables {
@@ -1980,9 +1981,19 @@ impl Transient {
 
     /// The externals' values ([`Mna::externals`]) over the next sample: `start`
     /// at its start, `end` at its end, linear in between (stage times).
+    /// (The externals past the control inputs: a partition's couplings.)
     pub fn set_externals(&mut self, start: &[f64], end: &[f64]) {
-        self.ext0.copy_from_slice(start);
-        self.ext1.copy_from_slice(end);
+        let k = self.mna.n_controls;
+        self.ext0[k..].copy_from_slice(start);
+        self.ext1[k..].copy_from_slice(end);
+    }
+
+    /// The control inputs' values over the next sample ([`Mna::n_controls`],
+    /// IR order): `start` at its start, `end` at its end, linear in between.
+    pub fn set_controls(&mut self, start: &[f64], end: &[f64]) {
+        let k = self.mna.n_controls;
+        self.ext0[..k].copy_from_slice(start);
+        self.ext1[..k].copy_from_slice(end);
     }
 
     pub fn x(&self) -> &[f64] {
@@ -2034,6 +2045,39 @@ pub fn simulate(ir: &CircuitIr, input: &[f64], h: f64, opts: &Options) -> Result
     simulate_with_progress(ir, input, h, opts, usize::MAX, |_| Ok(()))
 }
 
+/// The control inputs' samples at `n` (IR order).
+fn controls_at(controls: &[&[f64]], n: usize) -> Vec<f64> {
+    controls.iter().map(|c| c[n]).collect()
+}
+
+/// Check `controls` against `ir`'s control inputs: one sample stream each, as
+/// long as the input, finite.
+pub(crate) fn check_controls(ir: &CircuitIr, controls: &[&[f64]], len: usize) -> Result<(), Error> {
+    if controls.len() != ir.controls.len() {
+        return Err(Error::new(format!(
+            "{} control streams for {} control inputs",
+            controls.len(),
+            ir.controls.len()
+        )));
+    }
+    for (c, x) in ir.controls.iter().zip(controls) {
+        if x.len() != len {
+            return Err(Error::new(format!(
+                "control {}: {} samples for {len} of input",
+                c.name,
+                x.len()
+            )));
+        }
+        if let Some(i) = x.iter().position(|v| !v.is_finite()) {
+            return Err(Error::new(format!(
+                "control {} sample {i} is not finite",
+                c.name
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// [`simulate`], calling `progress(samples done)` every `every` samples. An
 /// error from `progress` stops the run and is returned (e.g. an interrupt).
 pub fn simulate_with_progress(
@@ -2042,9 +2086,24 @@ pub fn simulate_with_progress(
     h: f64,
     opts: &Options,
     every: usize,
+    progress: impl FnMut(usize) -> Result<(), Error>,
+) -> Result<Output, Error> {
+    simulate_controls(ir, input, &[], h, opts, every, progress)
+}
+
+/// [`simulate_with_progress`] with the control inputs' samples (`controls`, IR
+/// order, each as long as `input`; linear between samples).
+pub fn simulate_controls(
+    ir: &CircuitIr,
+    input: &[f64],
+    controls: &[&[f64]],
+    h: f64,
+    opts: &Options,
+    every: usize,
     mut progress: impl FnMut(usize) -> Result<(), Error>,
 ) -> Result<Output, Error> {
     let every = every.max(1);
+    check_controls(ir, controls, input.len())?;
     if let Some(i) = input.iter().position(|u| !u.is_finite()) {
         return Err(Error::new(format!("input sample {i} is not finite")));
     }
@@ -2058,7 +2117,11 @@ pub fn simulate_with_progress(
             stats: Stats::default(),
         });
     };
-    let mut tr = Transient::new(mna, h, *opts, u0)?;
+    let mut tr = if controls.is_empty() {
+        Transient::new(mna, h, *opts, u0)?
+    } else {
+        Transient::with_externals(mna, h, *opts, u0, &controls_at(controls, 0))?
+    };
     let mut record = |tr: &Transient| {
         for (v, y) in values.iter_mut().zip(tr.mna().probe_values(tr.x())) {
             v.push(y);
@@ -2070,6 +2133,9 @@ pub fn simulate_with_progress(
     let order = opts.input_order as i64;
     let len = input.len() as i64;
     for (i, &u) in rest.iter().enumerate() {
+        if !controls.is_empty() {
+            tr.set_controls(&controls_at(controls, i), &controls_at(controls, i + 1));
+        }
         if order == 1 {
             tr.step(u)?;
         } else {

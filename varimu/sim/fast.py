@@ -32,7 +32,7 @@ from __future__ import annotations
 import ctypes
 import sys
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from functools import cache
 
@@ -158,6 +158,34 @@ def partition_sections(ir: CircuitIR, s: TransientSettings) -> list[str]:
     return second if len(second) < len(titles) else []
 
 
+def control_streams(
+    ir: CircuitIR,
+    controls: Mapping[str, np.ndarray] | None,
+    n: int,
+    n0: int,
+    rate: int,
+    sim_rate: int,
+    n_sim: int,
+) -> list[np.ndarray]:
+    """The IR's control inputs (IR order) on the simulation's grid: each of `controls`
+    ({name: volts at `rate`}, `n` samples) behind `n0` samples of its first value,
+    interpolated linearly onto `n_sim` samples at `sim_rate` (held past its end)."""
+    controls = dict(controls or {})
+    names = [c.name for c in ir.controls]
+    if set(controls) != set(names):
+        raise ValueError(f"control inputs {sorted(controls)} for the circuit's {names}")
+    t_in = np.arange(n0 + n) / rate
+    t_sim = np.arange(n_sim) / sim_rate
+    out = []
+    for name in names:
+        c = np.asarray(controls[name], float)
+        if len(c) != n:
+            raise ValueError(f"control {name}: {len(c)} samples for {n} of input")
+        c = np.concatenate([np.full(n0, c[0] if n else 0.0), c])
+        out.append(np.ascontiguousarray(np.interp(t_sim, t_in, c)))
+    return out
+
+
 def run_transient(
     ir: CircuitIR,
     input_v: np.ndarray,
@@ -165,11 +193,15 @@ def run_transient(
     settings: TransientSettings | None = None,
     method: str | None = None,
     progress: Callable[[float], None] | None = None,
+    controls: Mapping[str, np.ndarray] | None = None,
 ) -> TransientResult:
     """Drive `ir.input_node` (to ground) with `input_v` volts; every IR probe comes back
     on the input's sample grid, keyed like ngspice vectors ("v(out)"). `method`
     overrides `settings.method`. `progress(fraction)` is called ~200 times during
-    the run; Ctrl-C stops it (KeyboardInterrupt)."""
+    the run; Ctrl-C stops it (KeyboardInterrupt). `controls` drives the IR's control
+    inputs ({name: volts}, each as long as `input_v`): held at their first sample while
+    the circuit settles, and linear between samples at every rate (a gate's step stays a
+    step, where band-limited resampling would ring)."""
     check_build()
     import circuitsim
 
@@ -180,6 +212,7 @@ def run_transient(
     # come back to sample_rate.
     xh = resample(x, s.sample_rate, s.host)
     x_up = upsample(xh, k)
+    ctl = control_streams(ir, controls, len(input_v), n0, s.sample_rate, s.sim_rate, len(x_up))
     t0 = time.perf_counter()
     try:
         raw = circuitsim.simulate(
@@ -200,6 +233,7 @@ def run_transient(
             partition=partition_sections(ir, s) or None,
             partition_coupling=s.partition_coupling,
             progress=progress,
+            controls=ctl or None,
         )
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e

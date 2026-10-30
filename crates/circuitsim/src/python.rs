@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyDict;
 
 use crate::ir::{CircuitIr, IR_VERSION};
-use crate::partition::{Coupling, simulate_partitioned};
+use crate::partition::Coupling;
 use crate::stream::Stream;
 use crate::transient::{ErrorNorm, Method, Options, Solver};
 
@@ -57,7 +57,7 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
     max_iter = None, max_halvings = None, gmin = None, extrapolate = None, input_order = None,
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
     newton_reuse = None, step_selection = None, error_norm = None, tube_tables = None,
-    partition = None, partition_coupling = None, stats = false, progress = None
+    partition = None, partition_coupling = None, stats = false, progress = None, controls = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -86,8 +86,15 @@ fn simulate<'py>(
     partition_coupling: Option<&str>,
     stats: bool,
     progress: Option<Py<PyAny>>,
+    controls: Option<Vec<PyReadonlyArray1<'py, f64>>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
+    // The control inputs' samples (IR order), as long as the input.
+    let ctl: Vec<Vec<f64>> = controls
+        .unwrap_or_default()
+        .iter()
+        .map(|c| c.as_array().to_vec())
+        .collect();
     let d = Options::default();
     let opts = Options {
         method: Method::parse(method).map_err(invalid)?,
@@ -134,11 +141,12 @@ fn simulate<'py>(
                 crate::Error::new("interrupted")
             })
         };
+        let ctl: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
         match &partition {
-            Some(second) if !second.is_empty() => {
-                simulate_partitioned(&ir, second, coupling, &x, dt, &opts, every, report)
-            }
-            _ => crate::simulate_with_progress(&ir, &x, dt, &opts, every, report),
+            Some(second) if !second.is_empty() => crate::partition::simulate_partitioned_controls(
+                &ir, second, coupling, &x, &ctl, dt, &opts, every, report,
+            ),
+            _ => crate::transient::simulate_controls(&ir, &x, &ctl, dt, &opts, every, report),
         }
     });
     if let Some(e) = raised {
@@ -207,7 +215,7 @@ impl PyStream {
     #[pyo3(signature = (
         ir_json, dt, u0, method = "trap", *, solver = None, reltol = None, vntol = None,
         input_order = None, newton_reuse = None, tube_tables = None, partition = None,
-        partition_coupling = None
+        partition_coupling = None, c0 = None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -224,6 +232,7 @@ impl PyStream {
         tube_tables: Option<bool>,
         partition: Option<Vec<String>>,
         partition_coupling: Option<&str>,
+        c0: Option<Vec<f64>>,
     ) -> PyResult<PyStream> {
         let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
         let d = Options::default();
@@ -244,7 +253,17 @@ impl PyStream {
             Coupling::parse(partition_coupling.unwrap_or("extrapolate")).map_err(invalid)?;
         let second = partition.unwrap_or_default();
         let inner = py
-            .detach(|| Stream::new(&ir, &second, coupling, dt, &opts, u0))
+            .detach(|| {
+                Stream::with_controls(
+                    &ir,
+                    &second,
+                    coupling,
+                    dt,
+                    &opts,
+                    u0,
+                    &c0.unwrap_or_default(),
+                )
+            })
             .map_err(|e| SimulationError::new_err(e.to_string()))?;
         Ok(PyStream { inner })
     }
@@ -270,16 +289,28 @@ impl PyStream {
         Ok(d)
     }
 
-    /// Feed input samples (volts); returns {probe: array} for the samples stepped.
+    /// Feed input samples (volts), and the control inputs' over the same span
+    /// (IR order; None: each holds its last value); returns {probe: array} for
+    /// the samples stepped.
+    #[pyo3(signature = (input, controls = None))]
     fn process<'py>(
         &mut self,
         py: Python<'py>,
         input: PyReadonlyArray1<'py, f64>,
+        controls: Option<Vec<PyReadonlyArray1<'py, f64>>>,
     ) -> PyResult<Bound<'py, PyDict>> {
         let x = input.as_array().to_vec();
+        let ctl: Vec<Vec<f64>> = controls
+            .unwrap_or_default()
+            .iter()
+            .map(|c| c.as_array().to_vec())
+            .collect();
         let inner = &mut self.inner;
         let vals = py
-            .detach(|| inner.process(&x))
+            .detach(|| {
+                let ctl: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
+                inner.process_with(&x, &ctl)
+            })
             .map_err(|e| SimulationError::new_err(e.to_string()))?;
         probe_dict(py, self.inner.names(), vals)
     }

@@ -10,9 +10,10 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 use crate::yaml::{self, Map, Value};
 
-const TOP_KEYS: [&str; 12] = [
+const TOP_KEYS: [&str; 13] = [
     "title",
     "input",
+    "cv_inputs",
     "probes",
     "full_scale",
     "controls",
@@ -41,6 +42,9 @@ pub struct CircuitSpec {
     pub path: PathBuf,
     pub title: String,
     pub input_node: String,
+    /// Control inputs (`cv_inputs: {name: node}`, file order): nodes driven by
+    /// their own samples beside the audio input (a gate, a pitch voltage).
+    pub cv_inputs: Vec<(String, String)>,
     pub probes: Vec<String>,
     pub controls: Map,
     pub values: Map,
@@ -340,6 +344,11 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         path: path.to_path_buf(),
         title: data.get("title").map_or_else(String::new, Value::py_str),
         input_node: data.get("input").map_or_else(|| "in".into(), Value::py_str),
+        cv_inputs: data
+            .get("cv_inputs")
+            .and_then(Value::as_map)
+            .map(|m| m.iter().map(|(k, v)| (k.to_string(), v.py_str())).collect())
+            .unwrap_or_default(),
         probes,
         controls,
         values,

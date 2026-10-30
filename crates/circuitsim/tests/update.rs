@@ -23,6 +23,7 @@ fn rc(r_ohm: f64) -> CircuitIr {
         version: IR_VERSION,
         title: "rc".into(),
         input_node: "in".into(),
+        controls: vec![],
         probes: vec![Probe::Voltage { node: "out".into() }],
         models: vec![],
         sections: vec![Section {

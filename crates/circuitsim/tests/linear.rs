@@ -53,6 +53,7 @@ fn circuit(elements: Vec<Element>, probes: &[&str]) -> CircuitIr {
         version: IR_VERSION,
         title: "test".into(),
         input_node: "in".into(),
+        controls: vec![],
         probes: probes
             .iter()
             .map(|n| Probe::Voltage {

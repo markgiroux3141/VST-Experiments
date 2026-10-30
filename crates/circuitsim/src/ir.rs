@@ -50,9 +50,23 @@ pub struct CircuitIr {
     pub title: String,
     /// Driven by the audio input, relative to ground.
     pub input_node: String,
+    /// Control inputs ([`Control`]), each driven by its own samples. Optional: an
+    /// IR without any reads and writes as before.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub controls: Vec<Control>,
     pub probes: Vec<Probe>,
     pub models: Vec<DeviceModel>,
     pub sections: Vec<Section>,
+}
+
+/// A control input (a gate, a pitch voltage; the tube synth's S3): `node` to
+/// ground driven by its own samples beside the audio input, linear between
+/// samples (a step stays a ramp over one sample instead of ringing).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Control {
+    pub name: String,
+    pub node: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -584,6 +598,26 @@ impl CircuitIr {
         }
         if !nodes.contains(self.input_node.as_str()) {
             return err(format!("input node {} is not connected", self.input_node));
+        }
+        for (i, c) in self.controls.iter().enumerate() {
+            if c.node == GROUND || c.node == self.input_node {
+                return err(format!(
+                    "control {}: node {} is ground or the input",
+                    c.name, c.node
+                ));
+            }
+            if !nodes.contains(c.node.as_str()) {
+                return err(format!(
+                    "control {}: node {} is not connected",
+                    c.name, c.node
+                ));
+            }
+            if self.controls[..i]
+                .iter()
+                .any(|d| d.name == c.name || d.node == c.node)
+            {
+                return err(format!("control {}: a name or node twice", c.name));
+            }
         }
         for p in &self.probes {
             let Probe::Voltage { node } = p;

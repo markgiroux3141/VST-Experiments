@@ -68,6 +68,7 @@ from varimu.circuit.ir import (
     PINS,
     Capacitor,
     CircuitIR,
+    Control,
     Coupling,
     Device,
     DeviceModel,
@@ -595,6 +596,7 @@ def _build(spec: CircuitSpec, p: Mapping[str, Any], cores: str) -> tuple[Circuit
         probes=tuple(VoltageProbe(n) for n in spec.probes),
         models=(*ctx.models.values(), *ctx.core_models),
         sections=tuple(sections),
+        controls=tuple(Control(n, node) for n, node in spec.cv_inputs),
     )
     return ir, types
 
@@ -608,7 +610,8 @@ def build(
 ) -> Circuit:
     """The circuit for `spec` with `overrides`. `triode_formulation` is "table" or
     "exact" (default from sim_settings.yaml, devices.triode_formulation); `cores` is
-    "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text."""
+    "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text, nor
+    does one with control inputs (ngspice runs none)."""
     p = resolve(spec, overrides)
     devices = load_sim_settings().data["devices"]
     form = triode_formulation or devices["triode_formulation"]
@@ -621,7 +624,8 @@ def build(
     # Each triode instance's table grid is its tube type's.
     grids = {m.name: GRIDS[types[m.name]] for m in ir.models if isinstance(m, Triode)}
     text, files = None, {}
-    if cores == "linear":
+    # ngspice runs no circuit with control inputs (no SPICE text, as a "ja" build).
+    if cores == "linear" and not ir.controls:
         text, files = spice.emit(ir, triode_formulation=form, table_grids=grids)
     save = tuple(pr.spice for pr in ir.probes)
     return Circuit(text, ir.input_node, save, p, files, ir, cores, spec.full_scale)

@@ -155,11 +155,14 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     def problem(check: str, msg: str, nodes=(), elements=()) -> None:
         out.append(Problem(check, msg, config, tuple(nodes), tuple(elements)))
 
-    for n in [ir.input_node, *(p.node for p in ir.probes)]:
+    # The input and the control inputs: sources from their nodes to ground.
+    driven = [(ir.input_node, "<input>"), *((c.node, f"<control {c.name}>") for c in ir.controls)]
+    for n in [*(d[0] for d in driven), *(p.node for p in ir.probes)]:
         if n not in nodes:
             problem("probe", f"{n!r} is not a node of the circuit", nodes=[n])
-    if ir.input_node in nodes:
-        nodes[ir.input_node].append("<input>")
+    for n, label in driven:
+        if n in nodes:
+            nodes[n].append(label)
 
     for n, names in sorted(nodes.items()):
         if n != GROUND and len(names) == 1:
@@ -167,11 +170,12 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
 
     dc, loops = _Union(), _Union()
     dc.find(GROUND)
-    dc.join(ir.input_node, GROUND)
-    loops.join(ir.input_node, GROUND)
     tree: dict[str, list[tuple[str, str]]] = defaultdict(list)  # node -> (node, element)
-    tree[ir.input_node].append((GROUND, "<input>"))
-    tree[GROUND].append((ir.input_node, "<input>"))
+    for n, label in driven:
+        dc.join(n, GROUND)
+        loops.join(n, GROUND)
+        tree[n].append((GROUND, label))
+        tree[GROUND].append((n, label))
     for el in els:
         t = _terminals(el)
         if isinstance(el, Resistor | Inductor | VoltageSource | SineSource | Winding):

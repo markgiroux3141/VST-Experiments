@@ -521,7 +521,7 @@ fn table() -> Vec<SymbolDef> {
             "Speaker",
             "speaker",
             "LS",
-            "Speaker in its cabinet (varimu.devices.speaker): pin 1 +, 2 -, 3 the sound              pressure at the listening point (pascals as volts); Value is its component version",
+            "Speaker in its cabinet (varimu.devices.speaker): pin 1 +, 2 -, 3 the sound pressure at the listening point (pascals as volts); Value is its component version",
             vec![
                 pin("1", "1", -5.08, 2.54, 0, 2.54),
                 pin("2", "2", -5.08, -2.54, 0, 2.54),

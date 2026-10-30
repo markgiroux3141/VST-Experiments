@@ -183,16 +183,28 @@ struct Running {
 }
 
 impl Running {
-    /// A stream at the DC point with input `u0`, settled for `settle_s` with the input
-    /// held at the simulation's rate (its decimator primed with that output).
-    fn new(ir: &CircuitIr, u0: f64, s: &Settings, fs: FullScale) -> Result<Running, String> {
+    /// A stream at the DC point with input `u0` and the control inputs at `c0` (IR
+    /// order; empty: 0 V), settled for `settle_s` with both held at the simulation's
+    /// rate (its decimator primed with that output).
+    fn new(
+        ir: &CircuitIr,
+        u0: f64,
+        c0: &[f64],
+        s: &Settings,
+        fs: FullScale,
+    ) -> Result<Running, String> {
         let v = fs.input_v;
         let k = s.oversample as usize;
         let opts = s.stream_options()?;
         let second = s.partition_sections(ir);
         let h = 1.0 / s.sim_rate() as f64;
-        let mut stream =
-            Stream::new(ir, &second, s.coupling()?, h, &opts, u0 * v).map_err(|e| e.to_string())?;
+        let c0 = if c0.len() == ir.controls.len() {
+            c0
+        } else {
+            &[]
+        };
+        let mut stream = Stream::with_controls(ir, &second, s.coupling()?, h, &opts, u0 * v, c0)
+            .map_err(|e| e.to_string())?;
         let find = |name: &str| stream.names().iter().position(|n| n == name);
         let out = find("v(out)").ok_or("the circuit has no `out` probe")?;
         let cv = find("v(cv)");
@@ -258,6 +270,8 @@ struct Shared {
     closed: AtomicBool,
     /// The next input sample (f64 bits): a restarted stream starts there.
     u0: AtomicU64,
+    /// The control inputs' latest values: a restarted stream starts at them.
+    c0: Mutex<Vec<f64>>,
     error: Mutex<Option<String>>,
 }
 
@@ -286,6 +300,8 @@ pub struct Live {
     /// stream and the one fading in.
     up: StreamResampler,
     lag: usize,
+    /// The control inputs' last values (IR order): where their next block starts.
+    controls: Vec<f64>,
 }
 
 impl Live {
@@ -308,6 +324,19 @@ impl Live {
         s: Settings,
         gain: f64,
     ) -> Result<Live, String> {
+        Live::with_controls(clip, values, circuit, s, gain, &[])
+    }
+
+    /// [`Live::with_gain`] with the circuit's control inputs at `c0` to start (IR order;
+    /// empty: 0 V), fed through [`Live::process_with`].
+    pub fn with_controls(
+        clip: &[f64],
+        values: Values,
+        circuit: Circuit,
+        s: Settings,
+        gain: f64,
+        c0: &[f64],
+    ) -> Result<Live, String> {
         let rate = s.host();
         let looped = if clip.is_empty() {
             Vec::new()
@@ -320,7 +349,12 @@ impl Live {
         };
         let u0 = looped.first().copied().unwrap_or(0.0) * gain;
         let ir = circuit.build(&values)?;
-        let run = Running::new(&ir, u0, &s, circuit.full_scale(&s))?;
+        let c0: Vec<f64> = if c0.len() == ir.controls.len() {
+            c0.to_vec()
+        } else {
+            vec![0.0; ir.controls.len()]
+        };
+        let run = Running::new(&ir, u0, &c0, &s, circuit.full_scale(&s))?;
         // The upsampler continues from the settling's held input.
         let k = s.oversample as usize;
         let mut up = StreamResampler::new(k, 1);
@@ -333,6 +367,7 @@ impl Live {
             wake: Condvar::new(),
             closed: AtomicBool::new(false),
             u0: AtomicU64::new(u0.to_bits()),
+            c0: Mutex::new(c0.clone()),
             error: Mutex::new(None),
         });
         let (tx, ready) = mpsc::channel();
@@ -359,6 +394,7 @@ impl Live {
             values,
             up,
             lag,
+            controls: c0,
         })
     }
 
@@ -423,7 +459,43 @@ impl Live {
     /// samples (float32, full scale 1.0; the first block's start is padded with the
     /// stream's lag).
     pub fn process(&mut self, x: &[f64]) -> Result<(Vec<f32>, Meter), String> {
+        self.process_with(x, &[])
+    }
+
+    /// [`Live::process`] with the control inputs' samples over the block (IR order,
+    /// volts, at the host rate, as long as `x`; empty: each holds its last value).
+    /// Linear between samples at every rate, as the engine takes them.
+    pub fn process_with(
+        &mut self,
+        x: &[f64],
+        controls: &[&[f64]],
+    ) -> Result<(Vec<f32>, Meter), String> {
         let t0 = Instant::now();
+        let k = self.s.oversample as usize;
+        // The controls at the simulation's rate: linear from each block's previous
+        // last value (k = 1: as given).
+        let ctl: Vec<Vec<f64>> = if controls.len() == self.controls.len() && !controls.is_empty() {
+            controls
+                .iter()
+                .zip(self.controls.iter_mut())
+                .map(|(c, last)| {
+                    let mut up = Vec::with_capacity(c.len() * k);
+                    for &v in c.iter() {
+                        for j in 1..=k {
+                            up.push(*last + (v - *last) * j as f64 / k as f64);
+                        }
+                        *last = v;
+                    }
+                    up
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        if !ctl.is_empty() {
+            *self.shared.c0.lock().expect("c0") = self.controls.clone();
+        }
+        let ctl_refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
         while let Ok(r) = self.ready.try_recv() {
             match r {
                 Ready::Update(ir, values) => {
@@ -471,7 +543,7 @@ impl Live {
         let out = self
             .run
             .stream
-            .process(&volts(fs))
+            .process_with(&volts(fs), &ctl_refs)
             .map_err(|e| e.to_string())?;
         let mut y = heard(&mut self.run, &out);
         let mut cv = self.run.cv.map(|i| out[i].clone());
@@ -479,7 +551,7 @@ impl Live {
             let mut new = *new;
             let o2 = new
                 .stream
-                .process(&volts(new.fs))
+                .process_with(&volts(new.fs), &ctl_refs)
                 .map_err(|e| e.to_string())?;
             let y2 = heard(&mut new, &o2);
             let m = y.len().min(y2.len());
@@ -564,7 +636,8 @@ fn build_loop(
                 Ok(Ready::Update(Box::new(ir), values))
             } else {
                 let u0 = f64::from_bits(shared.u0.load(Ordering::Relaxed));
-                let run = Running::new(&ir, u0, &s, fs)?;
+                let c0 = shared.c0.lock().expect("c0").clone();
+                let run = Running::new(&ir, u0, &c0, &s, fs)?;
                 current = st;
                 current_fs = fs;
                 Ok(Ready::Restart(Box::new(run), values))

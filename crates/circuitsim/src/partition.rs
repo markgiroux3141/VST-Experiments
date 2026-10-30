@@ -88,6 +88,12 @@ pub(crate) fn split(
             "partition: the input node must stay in the first partition",
         ));
     }
+    if let Some(c) = ir.controls.iter().find(|c| !na.contains(&c.node)) {
+        return Err(Error::new(format!(
+            "partition: control {}'s node must stay in the first partition",
+            c.name
+        )));
+    }
     // Shared nodes in order of first appearance in the IR.
     let mut shared: Vec<String> = Vec::new();
     for e in ir.elements() {
@@ -145,6 +151,7 @@ pub(crate) fn split(
         version: ir.version,
         title: format!("{} (first partition)", ir.title),
         input_node: ir.input_node.clone(),
+        controls: ir.controls.clone(),
         probes: probes(&na),
         models: used(&a_sections.iter().collect::<Vec<_>>()),
         sections: a_sections,
@@ -166,6 +173,7 @@ pub(crate) fn split(
         version: ir.version,
         title: format!("{} (second partition)", ir.title),
         input_node: STUB_INPUT.into(),
+        controls: Vec::new(),
         probes: probes(&nb)
             .into_iter()
             .filter(|p| {
@@ -255,9 +263,27 @@ pub fn simulate_partitioned(
     h: f64,
     opts: &Options,
     every: usize,
+    progress: impl FnMut(usize) -> Result<(), Error>,
+) -> Result<Output, Error> {
+    simulate_partitioned_controls(ir, second, coupling, input, &[], h, opts, every, progress)
+}
+
+/// [`simulate_partitioned`] with the control inputs' samples (IR order, each as
+/// long as `input`).
+#[allow(clippy::too_many_arguments)]
+pub fn simulate_partitioned_controls(
+    ir: &CircuitIr,
+    second: &[String],
+    coupling: Coupling,
+    input: &[f64],
+    controls: &[&[f64]],
+    h: f64,
+    opts: &Options,
+    every: usize,
     mut progress: impl FnMut(usize) -> Result<(), Error>,
 ) -> Result<Output, Error> {
     let every = every.max(1);
+    crate::transient::check_controls(ir, controls, input.len())?;
     if let Some(i) = input.iter().position(|u| !u.is_finite()) {
         return Err(Error::new(format!("input sample {i} is not finite")));
     }
@@ -269,7 +295,8 @@ pub fn simulate_partitioned(
             "partition: no sections named for the second thread",
         ));
     }
-    let mut stream = Stream::new(ir, second, coupling, h, opts, u0)?;
+    let c0: Vec<f64> = controls.iter().map(|c| c[0]).collect();
+    let mut stream = Stream::with_controls(ir, second, coupling, h, opts, u0, &c0)?;
     let mut values: Vec<Vec<f64>> = stream
         .initial()
         .into_iter()
@@ -285,7 +312,9 @@ pub fn simulate_partitioned(
         }
     };
     for (j, chunk) in rest.chunks(every).enumerate() {
-        add(stream.process(chunk)?);
+        let (a, b) = (1 + j * every, 1 + j * every + chunk.len());
+        let ctl: Vec<&[f64]> = controls.iter().map(|c| &c[a..b]).collect();
+        add(stream.process_with(chunk, &ctl)?);
         if every < input.len() {
             progress(((j + 1) * every + 1).min(input.len()))?;
         }
