@@ -85,6 +85,7 @@ controls:
   attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
   release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1); linear)"}
+  range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
 
@@ -199,6 +200,8 @@ values:
   r_mix_ext_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: from the external input into the mixer; its foot, the input's source)"}
   # --- the oscillator (vco_lc.yaml's)
   osc_c_tank_f: {value: 56.0e-9, source: "provisional: model knowledge (design: ~68 Hz at the bottom of the sweep, ~1.8 kHz at the top)"}
+  osc_c_tank_low_f: {value: 168.0e-9, source: "provisional: model knowledge (design: the RANGE switch's LOW capacitor; with the tank's 56 nF, 224 nF puts E1-A2 at 4-5 semitones per volt instead of 6-8.5, docs/SYNTH_LOW_END.md)"}
+  osc_r_range_open_ohm: {value: 1.0e+10, source: "provisional: model knowledge (an open switch contact's insulation, 1e10-1e12 ohm; closed it is a pot's end, MIN_R_OHM)"}
   osc_r_tail_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the pair's tail to the -50 V rail, ~0.5 mA: the square current into the tank. On the voice's supply, 68k (vco_lc's) saturated the cores below ~90 Hz (a plateau at ~50 Hz); 100k keeps the law monotonic down to ~20 Hz)"}
   osc_r_plate_a_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1A's plate load, the square output)"}
   osc_r_plate_b_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1B's plate load, parallel feed to the tank)"}
@@ -402,6 +405,11 @@ sections:
         turns: osc_signal_turns
         leakage_h: osc_leakage_h
       COT: {C: [o_t, "0"], c: osc_c_tank_f}
+      # The RANGE switch: its contact grounds the LOW capacitor (range 0) or leaves it
+      # floating on the tank (1). Always in the circuit, so switching is a value change
+      # (a live stream updates in place; a switch part's position would restart it).
+      COTL: {C: [o_t, o_tl], c: osc_c_tank_low_f}
+      RRANGE: {rheostat: [o_tl, "0"], r: osc_r_range_open_ohm, at: range}
       ROGS: {R: [o_t, o_g2], r: osc_r_grid_stop_ohm}
       XOV2: {device: [o_p2, o_g2, o_k2], model: OV2}
       ROP2: {R: [b3, o_p2], r: osc_r_plate2_ohm}

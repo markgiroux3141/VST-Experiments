@@ -49,13 +49,106 @@ pub struct Device {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Pitch {
     pub control: &'static str,
+    /// The tuning (with a range switch: at HIGH, position 1).
     pub tuning: &'static [(f64, f64)],
+    /// The oscillator's range switch, if it has one.
+    pub range: Option<RangeSwitch>,
+}
+
+/// An oscillator's range switch: the circuit's selector `control` (0 LOW, 1 HIGH), the
+/// LOW position's tuning, and where AUTO changes range: keys below `split_hz` play on
+/// LOW, the rest on HIGH (each note on the gentler stretch of a pitch law; see
+/// docs/SYNTH_LOW_END.md). On the panel it is a LOW / HIGH / AUTO selector
+/// ([`RANGE_MODES`]); the circuit only ever sees 0 or 1.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RangeSwitch {
+    pub control: &'static str,
+    pub low: &'static [(f64, f64)],
+    pub split_hz: f64,
+}
+
+/// A range switch's positions on the panel.
+pub const RANGE_MODES: [&str; 3] = ["LOW", "HIGH", "AUTO"];
+
+/// Where a range switch is set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RangeMode {
+    Low,
+    High,
+    /// The keys choose: LOW below the split, HIGH above.
+    Auto,
+}
+
+impl RangeMode {
+    pub fn from_value(v: &Value) -> Option<RangeMode> {
+        match v.as_str()? {
+            "LOW" => Some(RangeMode::Low),
+            "HIGH" => Some(RangeMode::High),
+            "AUTO" => Some(RangeMode::Auto),
+            _ => None,
+        }
+    }
+
+    pub fn index(self) -> u8 {
+        self as u8
+    }
+
+    pub fn from_index(i: u8) -> RangeMode {
+        match i {
+            0 => RangeMode::Low,
+            1 => RangeMode::High,
+            _ => RangeMode::Auto,
+        }
+    }
+}
+
+impl RangeSwitch {
+    /// Whether a key of `hz` plays on LOW at `mode` (`current` when AUTO has no key).
+    pub fn low_for(&self, mode: RangeMode, hz: Option<f64>, current: bool) -> bool {
+        match mode {
+            RangeMode::Low => true,
+            RangeMode::High => false,
+            RangeMode::Auto => hz.map_or(current, |hz| hz < self.split_hz),
+        }
+    }
+
+    /// `values` with the switch at LOW (`low`) or HIGH: the circuit's position.
+    pub fn with_position(&self, values: &Values, low: bool) -> Values {
+        let pos = Value::Int(if low { 0 } else { 1 });
+        let mut v: Values = values
+            .iter()
+            .filter(|(k, _)| k != self.control)
+            .cloned()
+            .collect();
+        v.push((self.control.to_string(), pos));
+        v
+    }
+
+    /// Whether `values` put the switch at LOW.
+    pub fn is_low(&self, values: &Values) -> bool {
+        values
+            .iter()
+            .find(|(k, _)| k == self.control)
+            .and_then(|(_, v)| v.as_f64())
+            .is_some_and(|p| p == 0.0)
+    }
 }
 
 impl Pitch {
-    /// The control's volts for `hz`.
+    /// The control's volts for `hz` (at HIGH, with a range switch).
     pub fn volts(&self, hz: f64) -> f64 {
-        let t = self.tuning;
+        Self::interpolate(self.tuning, hz)
+    }
+
+    /// The control's volts for `hz` with the range switch at LOW (`low`) or HIGH.
+    pub fn volts_in(&self, hz: f64, low: bool) -> f64 {
+        match self.range {
+            Some(r) if low => Self::interpolate(r.low, hz),
+            _ => self.volts(hz),
+        }
+    }
+
+    fn interpolate(t: &[(f64, f64)], hz: f64) -> f64 {
         let (first, last) = (t[0], t[t.len() - 1]);
         if hz <= first.0 {
             return first.1;
@@ -240,6 +333,7 @@ pub const DEVICES: [Device; 8] = [
         pitch: Some(Pitch {
             control: "pitch",
             tuning: VCO_LC_TUNING,
+            range: None,
         }),
         partition: None,
     },
@@ -256,6 +350,11 @@ pub const DEVICES: [Device; 8] = [
         pitch: Some(Pitch {
             control: "pitch",
             tuning: TUBE_SYNTH_TUNING,
+            range: Some(RangeSwitch {
+                control: "range",
+                low: TUBE_SYNTH_TUNING_LOW,
+                split_hz: TUBE_SYNTH_SPLIT_HZ,
+            }),
         }),
         // Four threads: the VCA and envelope (with the keys), the input stage and the
         // filter, the oscillator, the supplies (each partition owns the nodes it
@@ -278,34 +377,225 @@ pub const DEVICES: [Device; 8] = [
     },
 ];
 
-/// tube_synth's keyboard tuning: `scripts/vco_study.py --only synth --tuning draft`
-/// (reports/tube_synth/vco/synth_tuning.json, 2026-10-30), from -23 V: 59 Hz to 1.74 kHz.
-/// Below -23 V the tank's swing saturates the cores and the law isn't monotonic.
+/// Where AUTO changes range: keys below it play on LOW (`range` 0, the tank's 224 nF),
+/// the rest on HIGH. At 330 Hz (E4) the two sound most alike (measured at draft, the same
+/// pitch on each: LOW 1.4 dB louder, the harmonics within 2 dB; at 440-660 Hz LOW has 7-9 dB
+/// more 2nd harmonic); crossing it adds no pop or glide beyond the supply ripple's FM (the
+/// key waits a block or two for the switch). LOW's pitch is steadier up to its top (17
+/// against 27 cents cycle to cycle at 330 Hz), so the split trades that for the tone.
+const TUBE_SYNTH_SPLIT_HZ: f64 = 330.0;
+
+/// tube_synth's keyboard tuning at HIGH (`range` 1, the tank's 56 nF): `scripts/vco_study.py
+/// --only synth --tuning draft --step 0.25 --set range=1 --floor -24.5 --suffix _high`
+/// (reports/tube_synth/vco/synth_tuning_high.json, 2026-10-30): 26 Hz to 1.74 kHz. Below
+/// -24.5 V a plateau (17-19 Hz down to -26.5 V: the cores saturated, another regime).
 const TUBE_SYNTH_TUNING: &[(f64, f64)] = &[
-    (58.64, -23.0),
-    (88.73, -22.0),
-    (128.4, -21.0),
-    (174.66, -20.0),
-    (225.33, -19.0),
-    (280.76, -18.0),
-    (341.4, -17.0),
-    (407.37, -16.0),
-    (478.54, -15.0),
-    (552.57, -14.0),
-    (628.81, -13.0),
-    (707.67, -12.0),
-    (788.95, -11.0),
-    (872.27, -10.0),
-    (957.27, -9.0),
-    (1043.53, -8.0),
-    (1130.7, -7.0),
-    (1218.37, -6.0),
-    (1306.28, -5.0),
-    (1394.07, -4.0),
-    (1481.47, -3.0),
-    (1568.24, -2.0),
-    (1654.11, -1.0),
-    (1738.95, 0.0),
+    (26.25, -24.5),
+    (30.65, -24.25),
+    (35.59, -24.0),
+    (40.38, -23.75),
+    (46.2, -23.5),
+    (52.0, -23.25),
+    (58.25, -23.0),
+    (64.76, -22.75),
+    (71.88, -22.5),
+    (79.57, -22.25),
+    (87.86, -22.0),
+    (96.83, -21.75),
+    (106.42, -21.5),
+    (116.66, -21.25),
+    (127.19, -21.0),
+    (138.25, -20.75),
+    (149.64, -20.5),
+    (161.31, -20.25),
+    (173.27, -20.0),
+    (185.49, -19.75),
+    (197.99, -19.5),
+    (210.77, -19.25),
+    (223.83, -19.0),
+    (237.2, -18.75),
+    (250.86, -18.5),
+    (264.84, -18.25),
+    (279.14, -18.0),
+    (293.76, -17.75),
+    (308.72, -17.5),
+    (324.02, -17.25),
+    (339.64, -17.0),
+    (355.6, -16.75),
+    (371.9, -16.5),
+    (388.52, -16.25),
+    (405.48, -16.0),
+    (422.77, -15.75),
+    (440.37, -15.5),
+    (458.3, -15.25),
+    (476.53, -15.0),
+    (494.97, -14.75),
+    (513.38, -14.5),
+    (531.88, -14.25),
+    (550.51, -14.0),
+    (569.3, -13.75),
+    (588.26, -13.5),
+    (607.38, -13.25),
+    (626.67, -13.0),
+    (646.12, -12.75),
+    (665.74, -12.5),
+    (685.51, -12.25),
+    (705.44, -12.0),
+    (725.52, -11.75),
+    (745.75, -11.5),
+    (766.11, -11.25),
+    (786.61, -11.0),
+    (807.25, -10.75),
+    (828.0, -10.5),
+    (848.87, -10.25),
+    (869.85, -10.0),
+    (890.94, -9.75),
+    (912.12, -9.5),
+    (933.4, -9.25),
+    (954.76, -9.0),
+    (976.2, -8.75),
+    (997.72, -8.5),
+    (1019.3, -8.25),
+    (1040.94, -8.0),
+    (1062.64, -7.75),
+    (1084.39, -7.5),
+    (1106.19, -7.25),
+    (1128.02, -7.0),
+    (1149.89, -6.75),
+    (1171.78, -6.5),
+    (1193.7, -6.25),
+    (1215.63, -6.0),
+    (1237.58, -5.75),
+    (1259.54, -5.5),
+    (1281.51, -5.25),
+    (1303.46, -5.0),
+    (1325.41, -4.75),
+    (1347.35, -4.5),
+    (1369.27, -4.25),
+    (1391.19, -4.0),
+    (1413.07, -3.75),
+    (1434.93, -3.5),
+    (1456.74, -3.25),
+    (1478.53, -3.0),
+    (1500.26, -2.75),
+    (1521.98, -2.5),
+    (1543.61, -2.25),
+    (1565.22, -2.0),
+    (1586.76, -1.75),
+    (1608.25, -1.5),
+    (1629.68, -1.25),
+    (1651.07, -1.0),
+    (1672.34, -0.75),
+    (1693.56, -0.5),
+    (1714.73, -0.25),
+    (1735.78, 0.0),
+];
+
+/// tube_synth's keyboard tuning at LOW (`range` 0, 224 nF): as the HIGH table with
+/// `--set range=0 --floor -24.75 --suffix _low` (synth_tuning_low.json): 18.8 Hz to 789 Hz;
+/// a gentler law, so less of the supply's ripple FM in cents (9 cents cycle to cycle at
+/// 110 Hz against ~30 at HIGH).
+const TUBE_SYNTH_TUNING_LOW: &[(f64, f64)] = &[
+    (18.84, -24.75),
+    (21.44, -24.5),
+    (24.09, -24.25),
+    (26.96, -24.0),
+    (30.05, -23.75),
+    (33.01, -23.5),
+    (36.18, -23.25),
+    (39.45, -23.0),
+    (42.8, -22.75),
+    (46.27, -22.5),
+    (49.87, -22.25),
+    (53.6, -22.0),
+    (57.47, -21.75),
+    (61.4, -21.5),
+    (65.57, -21.25),
+    (69.88, -21.0),
+    (74.36, -20.75),
+    (79.0, -20.5),
+    (83.83, -20.25),
+    (88.84, -20.0),
+    (94.05, -19.75),
+    (99.46, -19.5),
+    (105.08, -19.25),
+    (110.91, -19.0),
+    (116.97, -18.75),
+    (123.21, -18.5),
+    (129.71, -18.25),
+    (136.43, -18.0),
+    (143.38, -17.75),
+    (150.56, -17.5),
+    (157.97, -17.25),
+    (165.6, -17.0),
+    (173.46, -16.75),
+    (181.53, -16.5),
+    (189.83, -16.25),
+    (198.34, -16.0),
+    (207.04, -15.75),
+    (215.96, -15.5),
+    (225.04, -15.25),
+    (234.31, -15.0),
+    (243.71, -14.75),
+    (253.07, -14.5),
+    (262.49, -14.25),
+    (271.96, -14.0),
+    (281.5, -13.75),
+    (291.11, -13.5),
+    (300.77, -13.25),
+    (310.49, -13.0),
+    (320.25, -12.75),
+    (330.06, -12.5),
+    (339.91, -12.25),
+    (349.79, -12.0),
+    (359.7, -11.75),
+    (369.63, -11.5),
+    (379.58, -11.25),
+    (389.54, -11.0),
+    (399.51, -10.75),
+    (409.49, -10.5),
+    (419.47, -10.25),
+    (429.45, -10.0),
+    (439.41, -9.75),
+    (449.37, -9.5),
+    (459.31, -9.25),
+    (469.25, -9.0),
+    (479.15, -8.75),
+    (489.04, -8.5),
+    (498.9, -8.25),
+    (508.73, -8.0),
+    (518.53, -7.75),
+    (528.3, -7.5),
+    (538.03, -7.25),
+    (547.71, -7.0),
+    (557.35, -6.75),
+    (566.94, -6.5),
+    (576.47, -6.25),
+    (585.95, -6.0),
+    (595.36, -5.75),
+    (604.72, -5.5),
+    (614.01, -5.25),
+    (623.23, -5.0),
+    (632.38, -4.75),
+    (641.46, -4.5),
+    (650.45, -4.25),
+    (659.37, -4.0),
+    (668.2, -3.75),
+    (676.95, -3.5),
+    (685.6, -3.25),
+    (694.17, -3.0),
+    (702.64, -2.75),
+    (711.02, -2.5),
+    (719.29, -2.25),
+    (727.46, -2.0),
+    (735.53, -1.75),
+    (743.49, -1.5),
+    (751.34, -1.25),
+    (759.08, -1.0),
+    (766.71, -0.75),
+    (774.22, -0.5),
+    (781.61, -0.25),
+    (788.88, 0.0),
 ];
 
 /// vco_lc's keyboard tuning: `scripts/vco_study.py --only lc --tuning draft`
@@ -362,7 +652,8 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 24] = [
+const LABELS: [(&str, &str); 25] = [
+    ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
     ("time_constant", "Time constant"),
@@ -429,9 +720,22 @@ pub fn knobs(device: &Device, spec: &CircuitSpec) -> Vec<Knob> {
             continue;
         }
         let Some(e) = e.as_map() else { continue };
-        let default = e.get("value").cloned().unwrap_or(Value::Null);
+        let mut default = e.get("value").cloned().unwrap_or(Value::Null);
         let num = |k: &str| e.get(k).and_then(Value::as_f64);
-        let kind = if let Some(c) = e.get("choices").and_then(Value::as_list) {
+        let range = device
+            .pitch
+            .and_then(|p| p.range)
+            .filter(|r| r.control == key);
+        let kind = if range.is_some() {
+            // LOW / HIGH / AUTO; the circuit gets 0 or 1 (`values`, the player).
+            default = Value::Str("AUTO".into());
+            Kind::Choices(
+                RANGE_MODES
+                    .iter()
+                    .map(|m| Value::Str(m.to_string()))
+                    .collect(),
+            )
+        } else if let Some(c) = e.get("choices").and_then(Value::as_list) {
             Kind::Choices(c.to_vec())
         } else {
             let (min, max) = (num("min").unwrap_or(0.0), num("max").unwrap_or(1.0));
@@ -466,12 +770,25 @@ pub fn knobs(device: &Device, spec: &CircuitSpec) -> Vec<Knob> {
     out
 }
 
-/// The knobs' values as overrides.
+/// The knobs' values as overrides. A range switch goes to the circuit as its position:
+/// LOW 0, HIGH 1, and AUTO 1 until the keys choose (the player, [`range_mode`]).
 pub fn values(knobs: &[Knob]) -> Values {
     knobs
         .iter()
-        .map(|k| (k.key.clone(), k.value.clone()))
+        .map(|k| {
+            let v = match RangeMode::from_value(&k.value) {
+                Some(RangeMode::Low) => Value::Int(0),
+                Some(_) => Value::Int(1),
+                None => k.value.clone(),
+            };
+            (k.key.clone(), v)
+        })
         .collect()
+}
+
+/// Where the panel's range switch is set, if it has one.
+pub fn range_mode(knobs: &[Knob]) -> Option<RangeMode> {
+    knobs.iter().find_map(|k| RangeMode::from_value(&k.value))
 }
 
 #[cfg(test)]
@@ -539,7 +856,28 @@ mod tests {
         let synth = spec_of("tube_synth");
         let k = knobs(&DEVICES[7], &synth);
         let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
-        assert_eq!(keys, ["cutoff", "resonance", "attack", "release", "wave"]);
+        assert_eq!(
+            keys,
+            ["cutoff", "resonance", "attack", "release", "wave", "range"]
+        );
+        // The range switch: LOW / HIGH / AUTO on the panel, 0 or 1 to the circuit.
+        let mut k = k;
+        let r = k.iter().position(|k| k.key == "range").unwrap();
+        assert!(matches!(&k[r].kind, Kind::Choices(c) if c.len() == 3));
+        assert_eq!(range_mode(&k), Some(RangeMode::Auto));
+        let at = |k: &[Knob]| {
+            values(k)
+                .into_iter()
+                .find(|(key, _)| key == "range")
+                .unwrap()
+                .1
+        };
+        assert_eq!(at(&k), Value::Int(1));
+        k[r].value = Value::Str("LOW".into());
+        assert_eq!(
+            (at(&k), range_mode(&k)),
+            (Value::Int(0), Some(RangeMode::Low))
+        );
         assert_eq!(
             key_feeds(&DEVICES[7], &synth),
             Ok(vec![
@@ -556,6 +894,7 @@ mod tests {
         let p = Pitch {
             control: "pitch",
             tuning: &[(100.0, -10.0), (400.0, 0.0)],
+            range: None,
         };
         assert_eq!(p.volts(50.0), -10.0);
         assert_eq!(p.volts(1000.0), 0.0);
@@ -564,5 +903,33 @@ mod tests {
         assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
         let t = DEVICES[7].pitch.unwrap().tuning;
         assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
+        let t = DEVICES[7].pitch.unwrap().range.unwrap().low;
+        assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
+    }
+
+    /// The range switch: AUTO plays keys below the split on LOW and the rest on HIGH
+    /// (holding where it was with no key); a key's volts come from its range's table.
+    #[test]
+    fn the_range_switch_follows_the_keys_in_auto() {
+        let p = DEVICES[7].pitch.unwrap();
+        let r = p.range.unwrap();
+        let below = r.split_hz * 0.9;
+        let above = r.split_hz * 1.1;
+        assert!(r.low_for(RangeMode::Auto, Some(below), false));
+        assert!(!r.low_for(RangeMode::Auto, Some(above), true));
+        assert!(r.low_for(RangeMode::Auto, None, true));
+        assert!(!r.low_for(RangeMode::Auto, None, false));
+        assert!(r.low_for(RangeMode::Low, Some(above), false));
+        assert!(!r.low_for(RangeMode::High, Some(below), true));
+        // The same key needs a higher control on LOW (the bigger capacitor).
+        assert!(p.volts_in(220.0, true) > p.volts_in(220.0, false));
+        assert_eq!(p.volts_in(220.0, false), p.volts(220.0));
+        let v: Values = vec![
+            ("range".into(), Value::Int(1)),
+            ("wave".into(), Value::Float(0.5)),
+        ];
+        let low = r.with_position(&v, true);
+        assert!(r.is_low(&low) && !r.is_low(&v));
+        assert_eq!(low.len(), 2);
     }
 }

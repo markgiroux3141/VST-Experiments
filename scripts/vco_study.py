@@ -19,9 +19,11 @@ Measured at production, draft (96 kHz internal: the native app's draft-2x) and d
 Results: reports/tube_synth/vco/<candidate>.json and .png.
 
 `--tuning QUALITY` instead measures a candidate's keyboard tuning: pitch against the
-control in TUNING_STEP_V steps at the quality the native app plays it at, kept where the
-pitch rises (the points varimu-app's `panel::Pitch::tuning` interpolates), and each
-output's peak -> reports/tube_synth/vco/<candidate>_tuning.json, printed as a Rust table.
+control in `--step` volts (TUNING_STEP_V by default) at the quality the native app plays it
+at, with `--set` overrides (the synth's `range=0`), kept on the stretch where the pitch rises
+monotonically to the top (the points varimu-app's `panel::Pitch::tuning` interpolates), with
+each point's cycle-to-cycle spread and each output's peak ->
+reports/tube_synth/vco/<candidate>_tuning<--suffix>.json, printed as a Rust table.
 
     uv run --extra fast python scripts/vco_study.py [--only lc ...]
         [--qualities production draft draft-1x]
@@ -324,24 +326,64 @@ def plot(name: str, res: dict, path: Path) -> None:
 
 
 TUNING_STEP_V = 1.0
-TUNING_MIN_RISE = 1.003  # a point is kept when its pitch is this far above the last kept
+TUNING_MIN_RISE = 1.003  # a point is kept when its pitch is this far above the next lower kept
 
 
-def tuning(name: str, c: Candidate, quality: str, workers: int) -> dict:
-    """The keyboard's tuning of candidate `c` at `quality` (the module docstring)."""
+def tuning(
+    name: str,
+    c: Candidate,
+    quality: str,
+    workers: int,
+    step_v: float = TUNING_STEP_V,
+    sets: dict | None = None,
+    floor_v: float | None = None,
+) -> dict:
+    """The keyboard's tuning of candidate `c` at `quality` (the module docstring): the
+    stretch where the pitch rises monotonically up to the sweep's top (below it the law
+    can dip and rise again: the tank's swing saturating the cores), points at least
+    TUNING_MIN_RISE apart, none below `floor_v` (a plateau under the law's knee: another
+    regime, not playable). Each point's cycle-to-cycle spread (the 2.5-97.5 percentiles of
+    the per-cycle pitch, in cents) is reported, to judge where the oscillation is clean."""
     fs = io.load_sim_settings().sample_rate
     lo, hi = min(c.sweep_v), max(c.sweep_v)
-    vs = np.arange(lo, hi + 0.5 * TUNING_STEP_V, TUNING_STEP_V)
+    vs = np.arange(lo, hi + 0.5 * step_v, step_v)
     with ThreadPoolExecutor(workers) as ex:
-        runs = list(ex.map(lambda v: held(c, quality, v), vs))
-    pts, peaks = [], {o: 0.0 for o in c.outputs}
+        runs = list(ex.map(lambda v: held(c, quality, v, sets=sets), vs))
+    peaks = {o: 0.0 for o in c.outputs}
+    meas = []
     for v, (r, _) in zip(vs, runs, strict=True):
-        f = vco.frequency(r[c.pitch_probe], fs, lowpass_hz=c.pitch_lowpass_hz)
+        p = r[c.pitch_probe]
+        f = vco.frequency(p, fs, lowpass_hz=c.pitch_lowpass_hz)
+        fc = vco.cycle_frequencies(p, fs, lowpass_hz=c.pitch_lowpass_hz)[1]
+        spread = (
+            float(1200 * np.log2(np.percentile(fc, 97.5) / np.percentile(fc, 2.5)))
+            if np.isfinite(f) and len(fc) > 3
+            else float("nan")
+        )
         for o in c.outputs:
             peaks[o] = max(peaks[o], float(np.max(np.abs(r[o] - np.mean(r[o])))))
-        if np.isfinite(f) and (not pts or f > TUNING_MIN_RISE * pts[-1][0]):
-            pts.append((round(float(f), 2), round(float(v), 3)))
-    return {"circuit": c.circuit, "quality": quality, "hz_v": pts, "output_peak_v": peaks}
+        meas.append((float(v), float(f), spread))
+    # Down from the top while the pitch keeps falling.
+    pts = [meas[-1]]
+    for m in reversed(meas[:-1]):
+        if not np.isfinite(m[1]) or m[1] >= pts[-1][1] or (floor_v is not None and m[0] < floor_v):
+            break
+        if m[1] * TUNING_MIN_RISE < pts[-1][1]:
+            pts.append(m)
+    pts.reverse()
+    return {
+        "circuit": c.circuit,
+        "quality": quality,
+        "sets": sets or {},
+        "step_v": step_v,
+        "floor_v": floor_v,
+        "hz_v": [(round(f, 2), round(v, 3)) for v, f, _ in pts],
+        "spread_cents": [
+            (round(v, 3), None if not np.isfinite(s) else round(s, 1)) for v, _, s in pts
+        ],
+        "all": [(round(v, 3), round(f, 2) if np.isfinite(f) else None) for v, f, _ in meas],
+        "output_peak_v": peaks,
+    }
 
 
 def main() -> None:
@@ -351,14 +393,22 @@ def main() -> None:
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 2))
     ap.add_argument("--out", type=Path, default=OUT_DIR)
     ap.add_argument("--tuning", choices=list(QUALITIES), help="the keyboard tuning at a quality")
+    ap.add_argument("--step", type=float, default=TUNING_STEP_V, help="--tuning's step (V)")
+    ap.add_argument(
+        "--set", nargs="*", default=[], metavar="KEY=VALUE", help="--tuning's overrides"
+    )
+    ap.add_argument("--suffix", default="", help="--tuning's file: <name>_tuning<suffix>.json")
+    ap.add_argument("--floor", type=float, default=None, help="--tuning's lowest control (V)")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     if a.tuning:
+        sets = {k: float(v) for k, v in (kv.split("=", 1) for kv in a.set)}
         for name in a.only or CANDIDATES:
-            t = tuning(name, CANDIDATES[name], a.tuning, a.workers)
-            (a.out / f"{name}_tuning.json").write_text(json.dumps(t, indent=1) + "\n")
+            t = tuning(name, CANDIDATES[name], a.tuning, a.workers, a.step, sets, a.floor)
+            (a.out / f"{name}_tuning{a.suffix}.json").write_text(json.dumps(t, indent=1) + "\n")
             rows = ", ".join(f"({f}, {v})" for f, v in t["hz_v"])
-            print(f"{name} at {a.tuning}: output peaks {t['output_peak_v']}")
+            print(f"{name} at {a.tuning} {sets}: output peaks {t['output_peak_v']}")
+            print(f"cycle-to-cycle spread (V, cents): {t['spread_cents']}")
             print(f"&[{rows}]")
         return
     for name in a.only or CANDIDATES:

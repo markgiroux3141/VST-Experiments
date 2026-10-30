@@ -549,6 +549,11 @@ note: at 479 Hz it rises from -62 to -43 dB). Scratch variants: those loads fed 
 the tuning). A fix is a design change (a filter section, a choke the period's choice;
 re-measure the tuning after); not made, the user's call.
 
+**The RANGE switch (2026-10-30, the user's pick).** A second tank capacitor (168 nF) on a
+contact, the `range` control: LOW 224 nF (18.8-789 Hz), HIGH 56 nF (26-1736 Hz); the app's
+panel has LOW / HIGH / AUTO, AUTO switching per key at 330 Hz (E4), each range with its own
+0.25 V tuning table. Measured and built: docs/SYNTH_LOW_END.md, "Built: the RANGE switch".
+
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
   code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity

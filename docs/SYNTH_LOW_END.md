@@ -159,6 +159,34 @@ Semitones per volt at the bass notes (where the note falls on the law):
 (~58-1736 Hz), each with a tuning table at 0.25 V steps, puts E1-A2 on a 4-5 semitones/V
 stretch; with the ripple filtered first.
 
+## Built: the RANGE switch (2026-10-30, the user's pick: LOW / HIGH / AUTO)
+
+- **The circuit** (`tube_synth.yaml`): a control `range` (0 LOW, 1 HIGH, the file's default
+  1: every render as before) and two parts beside the tank: `COTL` (168 nF, from `o_t`) and
+  `RRANGE`, a contact from it to ground (a rheostat at `range`: closed, a pot's end; open,
+  1e10 ohm of insulation). LOW is 56 + 168 = 224 nF. The contact is always in the circuit,
+  so switching is a value change: a live stream updates in place (`tests/live.rs`: 477 ->
+  235 Hz at -15 V, no restart); a `switch` part would have restarted it (about a second).
+- **The tuning, re-measured at 0.25 V** (`scripts/vco_study.py --tuning draft --step 0.25
+  --set range=1|0 --floor ... --suffix _high|_low`; the tables in varimu-app's `panel.rs`):
+  HIGH 26 Hz (-24.5 V) to 1736 Hz, LOW 18.8 Hz (-24.75 V) to 789 Hz. Below each floor a
+  plateau (the cores saturated: 17-19 Hz at HIGH down to -26.5 V, 13.6-15 Hz at LOW), not
+  playable. Cycle to cycle the pitch wobbles by the supply ripple's FM, less on LOW's
+  gentler law: 9 cents at 110 Hz (HIGH ~30), 17 at 330 Hz (HIGH 27).
+- **The app**: RANGE on the panel as LOW / HIGH / AUTO (default AUTO). The circuit only sees
+  0 or 1: the panel sends 1 for AUTO, and the keyboard loop (`player.rs`) picks the
+  position per key (`panel::RangeSwitch`: below 330 Hz LOW, else HIGH), asks the stream for
+  it, and holds the key (gate up, the last pitch) until the switch has moved, a block or
+  two; a key's volts come from the applied range's table. Without a keyboard (a file,
+  live input) AUTO plays HIGH.
+- **The split, measured** (draft, the app's partition; a note a semitone under the split on
+  LOW, 15 ms key-up while the stream updates, a note a semitone over on HIGH, against the
+  same phrase on HIGH alone): notes land within 0.5 cents of their targets (+2.5 at 349
+  Hz); no pop (the gap's peak 0.86-0.99 of the note's, as without the switch); no added
+  glide. The tone differs between the ranges at one pitch: LOW ~1.5 dB louder and richer
+  in the 2nd harmonic. Smallest at 330 Hz (level 1.4 dB, H2 / H3 / H5 within 2.1 dB); at
+  440-660 Hz H2 differs 7-9 dB. So AUTO splits at 330 Hz (E4).
+
 ## How the measurements were made
 
 `builder.build_ir(spec, spec.resolve(spec, overrides), cores="ja")` with probes on the

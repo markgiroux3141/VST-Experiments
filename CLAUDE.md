@@ -139,7 +139,10 @@ supply (the 6V6GT's screen on two 5651s: unregulated, the VCA's sag dropped held
 ~780 cents), the app's `tube_synth` device (keys -> gate and pitch; `panel::Device::
 partition`: four threads, the VCA | the input and filter | the oscillator | the
 supplies): ~62% load, worst block ~99% at a 50 ms buffer (TUBE_SYNTH_PLAN.md, S4's
-status). **Partitions in N parts (2026-10-30):** a `partition` list's `"|"` (or, in
+status). Its oscillator has a RANGE switch (`range`: 0 LOW 224 nF 18.8-789 Hz, 1 HIGH
+56 nF 26-1736 Hz; a contact always in the circuit, so a flip updates a stream in place),
+the app's panel LOW / HIGH / AUTO (AUTO per key, split at 330 Hz; `panel::RangeSwitch`,
+a tuning table per range: docs/SYNTH_LOW_END.md). **Partitions in N parts (2026-10-30):** a `partition` list's `"|"` (or, in
 sim_settings.yaml, a nested list) separates groups, each on a thread of its own
 (`circuitsim::partition::GROUP_BREAK`); a shared node is owned by the highest-numbered
 part with it (list the stiff drivers, the supplies, last), the others see it as a

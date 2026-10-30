@@ -21,7 +21,7 @@
 //! opens WASAPI outputs with automatic rate conversion, so a device mixing at another
 //! rate still plays it; inputs open at their own (mix) rate.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -32,7 +32,7 @@ use cpal::{FromSample, Sample, SizedSample};
 use crate::live::{Circuit, Live, Meter, Values};
 use crate::midi::{Keys, TestOsc, Wave};
 use crate::monitor::Monitor;
-use crate::panel::Feed;
+use crate::panel::{Feed, RangeMode};
 use crate::resample::StreamResampler;
 use crate::settings::Settings;
 
@@ -213,6 +213,8 @@ struct Shared {
     compensate: AtomicBool,
     /// The manual gain on the device's output (dB, f64 bits).
     output_db: AtomicU64,
+    /// Where an oscillator's range switch is set (`RangeMode::index`; keys only).
+    range_mode: AtomicU8,
 }
 
 /// A session playing out of the default output.
@@ -260,6 +262,7 @@ impl Player {
             bypass: AtomicBool::new(false),
             compensate: AtomicBool::new(true),
             output_db: AtomicU64::new(0f64.to_bits()),
+            range_mode: AtomicU8::new(RangeMode::Auto.index()),
         });
         // Room for the buffer, the drift allowance and a block in flight.
         let (producer, consumer) = rtrb::RingBuffer::<f32>::new(buffer + 4 * BLOCK);
@@ -327,6 +330,15 @@ impl Player {
     pub fn set(&self, values: Values) {
         *self.shared.wanted.lock().expect("wanted") = Some(values);
         *self.shared.set_at.lock().expect("set_at") = Some(Instant::now());
+    }
+
+    /// Where the oscillator's range switch is set (a keyboard playing a device with one:
+    /// LOW, HIGH, or AUTO, the keys choosing). Its circuit position follows from the
+    /// keys, so it isn't among the values.
+    pub fn set_range_mode(&self, mode: RangeMode) {
+        self.shared
+            .range_mode
+            .store(mode.index(), Ordering::Relaxed);
     }
 
     /// A new circuit with its values (the editor's drawing, edited): the same structure
@@ -423,8 +435,9 @@ enum WorkerSource {
 /// The note a pitch feed holds until the first key (A3).
 const START_NOTE: u8 = 57;
 
-/// A feed's volts with `sounding` held (a key, or none) and `last_note` the last key.
-fn feed_volts(f: &Feed, sounding: Option<(u8, u8)>, last_note: u8) -> f64 {
+/// A feed's volts with `sounding` held (a key, or none), `last_note` the last key and
+/// the oscillator's range switch at LOW (`low`) or HIGH.
+fn feed_volts(f: &Feed, sounding: Option<(u8, u8)>, last_note: u8, low: bool) -> f64 {
     match f {
         Feed::Gate(up, down) => {
             if sounding.is_some() {
@@ -433,7 +446,7 @@ fn feed_volts(f: &Feed, sounding: Option<(u8, u8)>, last_note: u8) -> f64 {
                 *up
             }
         }
-        Feed::Pitch(p) => p.volts(TestOsc::note_hz(last_note)),
+        Feed::Pitch(p) => p.volts_in(TestOsc::note_hz(last_note), low),
     }
 }
 
@@ -483,7 +496,7 @@ fn work(
     let c0: Vec<f64> = match &source {
         WorkerSource::Keys(_, _, feeds) => feeds
             .iter()
-            .map(|f| feed_volts(f, None, START_NOTE))
+            .map(|f| feed_volts(f, None, START_NOTE, false))
             .collect(),
         _ => Vec::new(),
     };
@@ -639,15 +652,53 @@ fn work(
             let mut block = vec![0.0; BLOCK];
             let mut ctl = vec![vec![0.0; BLOCK]; feeds.len()];
             let mut last_note = START_NOTE;
+            // The oscillator's range switch: the panel's values (its position is the
+            // keys'), the position asked for, and (in `live.values`) the one applied.
+            let range = feeds.iter().find_map(|f| match f {
+                Feed::Pitch(p) => p.range,
+                Feed::Gate(..) => None,
+            });
+            let mut panel_values = live.values.clone();
+            let mut asked_low = range.is_some_and(|r| r.is_low(&live.values));
             while !shared.stop.load(Ordering::Relaxed) {
-                forward_values(&mut live);
+                match range {
+                    // The panel's values go on with the switch where the keys put it.
+                    Some(r) => {
+                        if let Some(v) = shared.wanted.lock().expect("wanted").take() {
+                            panel_values = v;
+                            let v = r.with_position(&panel_values, asked_low);
+                            match shared.circuit.lock().expect("circuit").take() {
+                                Some(c) => live.set_circuit(c, v),
+                                None => live.set(v),
+                            }
+                        }
+                        live.gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
+                    }
+                    None => forward_values(&mut live),
+                }
                 let queued = capacity - ring.slots();
                 shared.queued.store(queued, Ordering::Relaxed);
                 if queued >= buffer || ring.slots() < BLOCK {
                     std::thread::sleep(Duration::from_micros(300));
                     continue;
                 }
-                let sounding = keys.sounding();
+                let mut sounding = keys.sounding();
+                let mut low = false;
+                if let Some(r) = range {
+                    let mode = RangeMode::from_index(shared.range_mode.load(Ordering::Relaxed));
+                    let hz = sounding.map(|(n, _)| TestOsc::note_hz(n));
+                    let want = r.low_for(mode, hz, asked_low);
+                    if want != asked_low {
+                        asked_low = want;
+                        live.set(r.with_position(&panel_values, want));
+                    }
+                    // A key waits (gate up, the last pitch held) until the switch has
+                    // moved: a block or two after a key that crosses the split.
+                    low = r.is_low(&live.values);
+                    if want != low {
+                        sounding = None;
+                    }
+                }
                 if let Some((note, _)) = sounding {
                     last_note = note;
                 }
@@ -657,7 +708,7 @@ fn work(
                     osc.fill(sounding, &mut block);
                 }
                 for (c, f) in ctl.iter_mut().zip(&feeds) {
-                    c.fill(feed_volts(f, sounding, last_note));
+                    c.fill(feed_volts(f, sounding, last_note, low));
                 }
                 let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
                 let (y, meter) = live

@@ -712,6 +712,9 @@ impl PlayView {
             };
             let source = Source::Keys(kb.keys.clone(), self.wave, feeds);
             let p = Player::start(source, v, c, s.clone(), self.gain(), buffer)?;
+            if let Some(m) = panel::range_mode(&self.knobs) {
+                p.set_range_mode(m);
+            }
             self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
             Ok((kb, p))
         });
@@ -1285,6 +1288,9 @@ impl PlayView {
             changed = true;
         }
         if changed && let Some(p) = &self.player {
+            if let Some(m) = panel::range_mode(&self.knobs) {
+                p.set_range_mode(m);
+            }
             p.set(panel::values(&self.knobs));
         }
     }

@@ -345,6 +345,61 @@ fn the_synth_follows_its_keys_after_a_restart() {
     assert!((b2 / a2 - 2.0).abs() < 0.2, "after: {a2} / {b2}");
 }
 
+/// The tube synth's RANGE switch (docs/SYNTH_LOW_END.md): a value change, so the stream
+/// updates in place (no restart: AUTO flips it per key) and the held note drops to the
+/// LOW capacitor's pitch (224 nF against 56 nF: 477 -> 234 Hz at -15 V, measured at
+/// draft by `scripts/vco_study.py`).
+#[test]
+fn the_synth_range_switch_updates_in_place() {
+    use varimu_app::panel::Feed;
+    let dev = DEVICES.iter().find(|d| d.id == "tube_synth").unwrap();
+    let s = dev.play_settings(&Settings::load(&config(), dev.quality).unwrap());
+    let c = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let range = dev.pitch.unwrap().range.unwrap();
+    let v = values(&knobs(dev, c.spec()));
+    assert!(!range.is_low(&v), "AUTO starts at HIGH");
+    let feeds = varimu_app::panel::key_feeds(dev, c.spec()).unwrap();
+    let held: Vec<f64> = feeds
+        .iter()
+        .map(|f| match f {
+            Feed::Gate(_, down) => *down,
+            Feed::Pitch(_) => -15.0,
+        })
+        .collect();
+    let mut live = Live::with_controls(&[], v.clone(), c, s.clone(), 1.0, &held).unwrap();
+    let (rate, block) = (live.rate as f64, 480);
+    let lanes: Vec<Vec<f64>> = held.iter().map(|&x| vec![x; block]).collect();
+    let refs: Vec<&[f64]> = lanes.iter().map(Vec::as_slice).collect();
+    let play = |live: &mut Live, secs: f64| -> Vec<f32> {
+        let mut y = Vec::new();
+        for _ in 0..(secs * rate / block as f64) as usize {
+            assert_eq!(live.error(), None);
+            y.extend(live.process_with(&vec![0.0; block], &refs).unwrap().0);
+        }
+        y
+    };
+    let freq = |y: &[f32]| -> f64 {
+        let y = &y[y.len() - rate as usize..];
+        let m = y.iter().map(|&x| x as f64).sum::<f64>() / y.len() as f64;
+        y.windows(2)
+            .filter(|w| (w[0] as f64) < m && (w[1] as f64) >= m)
+            .count() as f64
+    };
+    let high = freq(&play(&mut live, 2.0));
+    let low_v = range.with_position(&v, true);
+    live.set(low_v.clone());
+    let t0 = Instant::now();
+    while live.values != low_v {
+        assert!(t0.elapsed() < Duration::from_secs(60), "never applied");
+        play(&mut live, 0.01);
+    }
+    let low = freq(&play(&mut live, 2.0));
+    println!("-15 V: HIGH {high} Hz, LOW {low} Hz");
+    assert_eq!(live.restarts, 0, "the switch restarted the stream");
+    assert!(range.is_low(&live.values));
+    assert!((low / high - 234.0 / 477.0).abs() < 0.03, "{high} -> {low}");
+}
+
 /// A power-on (device builder B6): the tube synth started with its cathodes cold, the warm
 /// circuit handed over at once (as the app does: an in-place update, the temperature
 /// carried), keys held: silent for its first seconds, then sounding and following the keys.
