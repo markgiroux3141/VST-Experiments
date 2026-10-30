@@ -1,0 +1,131 @@
+# The tube synth's filter and VCA (docs/TUBE_SYNTH_PLAN.md, S2): the saturable-reactor
+# low-pass (reactor_filter.yaml) between tube stages, with a tube setting its cutoff and a
+# variable-mu tube as the VCA. An audio processor: a keyboard plays it through the native
+# app's test oscillator until S3 brings notes into the circuit.
+#   V1A  12AU7 gain stage (unbypassed cathode, ~x11)
+#   V1B  12AU7 cathode follower: drives the reactor through CC1 (~400 ohm source)
+#   TA/TB  the reactor's signal windings in series into CF; the load RL + RRES sets the
+#        damping (RES knob: a 100k log rheostat over 1k, damped to resonant)
+#   V2A  12AU7 cathode follower off the filter node (its grid is the only other load)
+#   V3   6386 section, the VCA: its grid bias from the LEVEL pot (-100 V off to ~-2 V
+#        full), the signal attenuated ~1/23 into its grid (variable-mu: it distorts and
+#        compresses as the bias moves, its character)
+#   V4   6V6GT pentode drawing its plate current through the reactor's control windings
+#        (anti-series): a current source, the CUTOFF pot setting its grid; RK4 makes the
+#        current follow the grid voltage
+# Supplies are ideal for now (250 V, -45 V, -100 V for the VCA); the shared real supply (sag couples every
+# stage) comes in a later step. Invented circuit, not modelled hardware: round numbers,
+# every value a design choice.
+
+title: "Tube reactor filter and VCA"
+input: in
+probes: [out, f, s, p4, g3, ta_core, tb_core]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "provisional: model knowledge (line level into the first stage, ~1 V peak)"}
+  output_volts_peak: {value: 5.0, source: "provisional: model knowledge (the VCA's output at full level and full input, ~2.5 V of fundamental, ~5 V peak on a saw: set from a render, 2026-10-29)"}
+
+controls:
+  cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from the -45 V rail (0) to ground (1))"}
+  resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RES rheostat, 100k log over 1k across the filter node)"}
+  level: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the LEVEL pot, V3's grid bias from -100 V (0) to ~-2 V (1))"}
+
+values:
+  b_plus_v: {value: 250.0, source: "provisional: model knowledge (an ideal B+ for now, a textbook 250 V)"}
+  bias_rail_v: {value: -45.0, source: "provisional: model knowledge (an ideal negative bias rail for now: past the 6386's and 6V6GT's cutoff)"}
+  r_grid_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (grid leak)"}
+  r_stopper_ohm: {value: 10.0e+3, source: "provisional: model knowledge (grid stopper)"}
+  r_plate1_ohm: {value: 47.0e+3, source: "provisional: model knowledge (12AU7 plate load)"}
+  r_cathode1_ohm: {value: 1.5e+3, source: "provisional: model knowledge (12AU7 self bias, unbypassed: gain ~11)"}
+  r_follower1_ohm: {value: 22.0e+3, source: "provisional: model knowledge (12AU7 follower to ground, ~7 mA)"}
+  c_couple1_f: {value: 4.7e-6, source: "provisional: model knowledge (into the reactor: 17 Hz with its 18 H, below the passband)"}
+  c_filter_f: {value: 47.0e-9, source: "provisional: model knowledge (as reactor_filter.yaml: ~110 Hz unbiased, ~4 kHz at full cutoff)"}
+  r_load_min_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the most damping)"}
+  r_res_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the RES rheostat's track)"}
+  res_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper, 10% at half rotation)"}
+  r_follower2_ohm: {value: 22.0e+3, source: "provisional: model knowledge (V2A's cathode to the -45 V rail, ~2 mA)"}
+  c_couple2_f: {value: 0.1e-6, source: "provisional: model knowledge (into the VCA's divider: 7 Hz)"}
+  r_vca_series_ohm: {value: 220.0e+3, source: "provisional: model knowledge (with the grid leak, ~1/23 into V3: ~0.5 V peak at full input)"}
+  r_vca_grid_ohm: {value: 10.0e+3, source: "provisional: model knowledge (V3's grid leak to the LEVEL wiper)"}
+  r_level_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the LEVEL pot)"}
+  r_level_floor_ohm: {value: 2.0e+3, source: "provisional: model knowledge (below the LEVEL pot to ground: its top end ~-2 V)"}
+  vca_rail_v: {value: -100.0, source: "provisional: model knowledge (an ideal rail for the VCA's bias: the 6386 is remote cutoff and still passes ~-18 dB at -45 V)"}
+  c_level_f: {value: 1.0e-6, source: "provisional: model knowledge (on the LEVEL wiper: a bias node for V3's grid leak)"}
+  r_plate3_ohm: {value: 47.0e+3, source: "provisional: model knowledge (6386 plate load)"}
+  c_out_f: {value: 0.47e-6, source: "provisional: model knowledge (output coupling)"}
+  r_out_load_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the next stage's grid leak)"}
+  r_cutoff_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the CUTOFF pot)"}
+  c_cutoff_f: {value: 0.1e-6, source: "provisional: model knowledge (on V4's grid: smooths the cutoff, 10 ms with the pot)"}
+  r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen feed)"}
+  r_cathode4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT cathode: current feedback, ~0-15 mA over the pot)"}
+  signal_turns: {value: 500.0, source: "provisional: model knowledge (as saturable_reactor.yaml)"}
+  r_signal_winding_ohm: {value: 10.0, source: "provisional: model knowledge (500 turns of ~0.2 mm copper on a small toroid)"}
+  r_control_winding_ohm: {value: 30.0, source: "provisional: model knowledge (1000 turns of ~0.15 mm copper)"}
+  leakage_h: {value: 0.0, source: "provisional: model knowledge (windings on a toroid couple closely; leakage neglected)"}
+  core_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (a small tape-wound toroid, 1 cm^2)"}
+  core_path_m: {value: 0.1, source: "provisional: model knowledge (10 cm mean path)"}
+  core_gap_m: {value: 0.0, source: "provisional: model knowledge (a tape-wound toroid has no joint gap)"}
+
+devices:
+  V1A: {device: 12AU7@1}
+  V1B: {device: 12AU7@1}
+  V2A: {device: 12AU7@1}
+  V3: {device: 6386@1}
+  V4: {device: 6V6GT@1}
+
+sections:
+  - title: supplies
+    parts:
+      VB: {V: [bp, "0"], v: b_plus_v}
+      VN: {V: [neg, "0"], v: bias_rail_v}
+      VN2: {V: [neg2, "0"], v: vca_rail_v}
+  - title: input
+    parts:
+      RG1: {R: [in, "0"], r: r_grid_in_ohm}
+      RST1: {R: [in, g1], r: r_stopper_ohm}
+      XV1A: {device: [p1, g1, k1], model: V1A}
+      RP1: {R: [bp, p1], r: r_plate1_ohm}
+      RK1: {R: [k1, "0"], r: r_cathode1_ohm}
+      XV1B: {device: [bp, p1, k1b], model: V1B}
+      RK1B: {R: [k1b, "0"], r: r_follower1_ohm}
+      CC1: {C: [k1b, s], c: c_couple1_f}
+  - title: filter
+    parts:
+      TA:
+        transformer:
+          sig: {nodes: [s, m], r: r_signal_winding_ohm}
+          ctl: {nodes: [bp, c2], ratio: 2.0, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      TB:
+        transformer:
+          sig: {nodes: [m, f], r: r_signal_winding_ohm}
+          ctl: {nodes: [p4, c2], ratio: 2.0, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      CF: {C: [f, "0"], c: c_filter_f}
+      RLMIN: {R: [f, fr], r: r_load_min_ohm}
+      RRES: {rheostat: [fr, "0"], r: r_res_ohm, at: resonance, taper_mid: res_taper_mid}
+      XV2A: {device: [bp, f, k2], model: V2A}
+      RK2: {R: [k2, neg], r: r_follower2_ohm}
+  - title: vca
+    parts:
+      CC2: {C: [k2, a3], c: c_couple2_f}
+      RA3: {R: [a3, g3], r: r_vca_series_ohm}
+      RG3: {R: [g3, vbias], r: r_vca_grid_ohm}
+      RLEV: {pot: [neg2, vbias, vlo], r: r_level_pot_ohm, at: level}
+      RLEVLO: {R: [vlo, "0"], r: r_level_floor_ohm}
+      CLEV: {C: [vbias, "0"], c: c_level_f}
+      XV3: {device: [p3, g3, "0"], model: V3}
+      RP3: {R: [bp, p3], r: r_plate3_ohm}
+      CO: {C: [p3, out], c: c_out_f}
+      RLO: {R: [out, "0"], r: r_out_load_ohm}
+  - title: cutoff
+    parts:
+      RCUT: {pot: [neg, g4, "0"], r: r_cutoff_pot_ohm, at: cutoff}
+      CCUT: {C: [g4, "0"], c: c_cutoff_f}
+      XV4: {device: [p4, s4, g4, k4], model: V4}
+      RS4: {R: [bp, s4], r: r_screen4_ohm}
+      RK4: {R: [k4, "0"], r: r_cathode4_ohm}

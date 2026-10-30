@@ -121,7 +121,9 @@ the track goes in the order is also the user's open decision. Playable since 202
 the passive reactor low-pass `config/circuits/reactor_filter.yaml` is the native app's
 `reactor_filter` device (JA cores live: `panel::Device::cores`), played from a MIDI
 keyboard (`varimu-app`'s `midi` module: a test oscillator into the device, not part of it;
-`varimu-app --device reactor_filter --midi masterkey --play`).
+`varimu-app --device reactor_filter --midi masterkey --play`). S2's circuit,
+`config/circuits/tube_filter.yaml` (tube stages around the reactor, a 6V6GT setting the
+cutoff, a 6386 VCA; ideal supplies so far), is the `tube_filter` device.
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist

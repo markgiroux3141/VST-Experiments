@@ -213,6 +213,25 @@ ports and echoes what a keyboard sends. The user's keyboard: "masterkey 61". Mea
 62 ms key-to-ear at a 30 ms queue on the user's interface (UA Twin USB, ~32 ms of output
 latency of its own).
 
+*Status 2026-10-29: S2's circuit built, on ideal supplies.* `config/circuits/tube_filter.yaml`:
+- V1A, a 12AU7 gain stage (x11), then V1B, a follower driving the reactor through 4.7 uF.
+- The reactor low-pass into 47 nF, damped by 1k plus a 100k log rheostat (RESONANCE).
+- V2A, a 12AU7 follower off the filter node.
+- V3, a 6386 section as the VCA: the signal about 1/23 into its grid, its bias from the
+  LEVEL pot (-100 V to -2 V).
+- V4, a 6V6GT drawing 0.06-18 mA through the control windings (CUTOFF on its grid,
+  current feedback in its cathode). That's a current source, so the reactor runs with
+  forced magnetization.
+- Supplies ideal: 250 V, -45 V, and -100 V for the VCA. At -45 V the remote-cutoff 6386
+  still passed ~-18 dB, so it gets its own rail.
+
+`tests/test_tube_filter.py`: CUTOFF sweeps the filter, LEVEL runs from off (-112 dB) to
+full, RESONANCE lifts the cutoff region. Draft-1x runs it at 0.30-0.45x real time with JA
+cores. In the app it's the `tube_filter` device. Not yet: no real supply (no sag);
+RESONANCE is passive damping, not triode feedback; the VCA is single-ended, so a fast
+bias change will thump (push-pull, like the 670, when S3's envelope moves it); no
+ratings check.
+
 **S3. Notes in: control inputs, the envelope, the score.** Named control inputs beyond
 `in` (pitch CV, gate) as IR sources fed per sample, in both builders; notes from a MIDI
 file for renders and from a MIDI device in the app (`midir`), timed to the sample; a take

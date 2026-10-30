@@ -42,7 +42,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 4] = [
+pub const DEVICES: [Device; 5] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -99,13 +99,25 @@ pub const DEVICES: [Device; 4] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff_v"),
     },
+    Device {
+        id: "tube_filter",
+        label: "Tube reactor filter + VCA (tube synth)",
+        circuit: "tube_filter",
+        panel: None,
+        ahead_s: AHEAD_S,
+        // 0.30-0.45x real time at draft-1x with its JA cores (Python's circuitsim on a
+        // 110 Hz saw, 2026-10-29).
+        quality: Quality::Draft1x,
+        cores: Some("ja"),
+        mod_wheel: Some("cutoff"),
+    },
 ];
 
 /// Controls never on a panel (operating conditions).
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 18] = [
+const LABELS: [(&str, &str); 21] = [
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
     ("time_constant", "Time constant"),
@@ -124,6 +136,9 @@ const LABELS: [(&str, &str); 18] = [
     ("tone", "Tone"),
     ("cutoff_v", "Cutoff (control V)"),
     ("r_load_ohm", "Load (damping to resonance, ohm)"),
+    ("cutoff", "Cutoff"),
+    ("resonance", "Resonance"),
+    ("level", "Level (VCA)"),
 ];
 
 /// How a knob moves.
@@ -251,5 +266,9 @@ mod tests {
         let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
         assert_eq!(keys, ["cutoff_v", "r_load_ohm"]);
         assert!(keys.contains(&DEVICES[3].mod_wheel.unwrap()));
+        let k = knobs(&DEVICES[4], &spec_of("tube_filter"));
+        let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
+        assert_eq!(keys, ["cutoff", "resonance", "level"]);
+        assert!(keys.contains(&DEVICES[4].mod_wheel.unwrap()));
     }
 }
