@@ -199,3 +199,49 @@ def heated(currents, v, shift_port: int, t_k: float, i_ref: float, is0_a: float,
     # Relative to T0's: the inner models were fitted at the rated heater, so their curves
     # already hold whatever the ceiling takes there; a tube at T0 is its model exactly.
     return i * float(c.ceiling(ik, c.is_a(t_k)) / c.ceiling(ik, is0_a))
+
+
+def port_currents(m, v) -> list[float]:
+    """A tube model's port currents in the engines' convention (varimu.devices.fixtures):
+    triode (Vpk, Vgk) -> (Ip, Ig), pentode (Vpk, Vg2k, Vg1k) -> (Ip, Ig2, Ig1), diode (Vak)."""
+    from varimu.devices.diode import VacuumDiode
+    from varimu.devices.pentode import Pentode
+    from varimu.devices.triode import Triode
+
+    if isinstance(m, Triode):
+        return [float(m.ip(v[1], v[0])), float(m.ig(v[1]))]
+    if isinstance(m, Pentode):
+        return [float(m.ip(v[2], v[1], v[0])), float(m.ig2(v[2], v[1])), float(m.ig1(v[2]))]
+    if isinstance(m, VacuumDiode):
+        return [float(m.i(v[0]))]
+    raise TypeError(type(m))
+
+
+def cathode_fixtures_json() -> str:
+    """Fixtures for crates/circuitsim/tests/cathode.rs: `heated` on a triode, a pentode and a
+    vacuum diode over port voltages, temperatures and reference currents (written by
+    scripts/export_circuit_fixtures.py; tests/test_cathode.py checks the file is current)."""
+    import json
+
+    from varimu.circuit.ir import model_to_dict
+    from varimu.devices.library import load_device
+
+    ox, tubes = load_cathodes()
+    cases = [
+        ("12AX7@1", "12AX7", 1, [(250.0, -1.5), (100.0, -0.5), (300.0, 0.3), (150.0, -4.0)]),
+        ("6V6GT@1", "6V6GT", 2, [(250.0, 250.0, -12.5), (100.0, 250.0, -5.0), (300.0, 200.0, 0.5)]),
+        ("6X4@1", "6X4", 0, [(5.0,), (20.0,), (50.0,), (-1.0,)]),
+    ]
+    out = []
+    for device, kind, port, volts in cases:
+        m = load_device(device)
+        is0 = instance_is0_a(ox, tubes[kind])
+        pts = []
+        for v in volts:
+            for t in (750.0, 900.0, 1000.0, ox.t0_k, 1080.0):
+                for i_ref in (1e-6, 1e-3, 2e-2):
+                    i = heated(lambda x, m=m: port_currents(m, x), v, port, t, i_ref, is0, ox)
+                    pts.append({"v": list(v), "t_k": t, "i_ref": i_ref, "currents": i.tolist()})
+        out.append({"model": model_to_dict(m), "port": port, "is0_a": is0, "points": pts})
+    d = {"phi_ev": ox.phi_ev, "n": ox.n, "t0_k": ox.t0_k, "devices": out}
+    return json.dumps(d, indent=1) + "\n"

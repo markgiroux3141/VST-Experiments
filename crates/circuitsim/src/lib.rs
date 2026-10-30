@@ -11,6 +11,7 @@
 
 use std::fmt;
 
+pub mod cathode;
 pub mod devices;
 pub mod dk;
 pub mod fastmath;

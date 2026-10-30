@@ -30,6 +30,7 @@ parallel renders are threads of one process (varimu.sim.runner);
 from __future__ import annotations
 
 import ctypes
+import dataclasses
 import sys
 import time
 from collections.abc import Callable, Iterator, Mapping
@@ -221,6 +222,9 @@ def run_transient(
     import circuitsim
 
     s = settings or TransientSettings.from_sim_settings(engine="circuitsim")
+    if ir.heaters is not None and ir.heaters.start == "cold":
+        # A cold start is the power-on: its warm-up from the first sample, no settle.
+        s = dataclasses.replace(s, settle_s=0.0)
     x, n0 = with_settle(np.asarray(input_v, float), s)
     n, k = len(x), s.oversample
     # At a host rate of its own (s.host_rate) the input goes there and the outputs

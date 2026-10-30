@@ -64,6 +64,12 @@ electrical); other macros' internals (mains, bridge, vr_tube, speaker) get none.
 triode or pentode instance of a `device` part gets a TubeNoise `BN_<name>` (shot_k from
 varimu.devices.noise, a pentode's partition factor, flicker_v2 over its `parallel` count:
 independent cathodes average).
+
+Heated cathodes (device builder B6; the file's `heaters` block, or `build(..., heaters=)`):
+every triode, pentode and vacuum diode instance of a `device` part gets a HeatedCathode
+`BH_<name>` after its noise (its emission from config/cathodes.yaml's heater ratings, times
+its `parallel` count); the IR's `heaters` block has the oxide constants and the heater
+ratio (the mains setting over the rated mains; 1 without a `mains` block).
 """
 
 from __future__ import annotations
@@ -83,6 +89,8 @@ from varimu.circuit.ir import (
     Device,
     DeviceModel,
     Element,
+    HeatedCathode,
+    HeaterSpec,
     Inductor,
     NoiseCurrent,
     NoiseSpec,
@@ -96,10 +104,11 @@ from varimu.circuit.ir import (
 )
 from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.config import ConfigError, load_sim_settings
+from varimu.devices import cathode as cathode_mod
 from varimu.devices import noise as noise_mod
 from varimu.devices import versions
 from varimu.devices.core import MagneticCore
-from varimu.devices.diode import JunctionDiode
+from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.library import load_device, load_speaker
 from varimu.devices.pentode import Pentode
 from varimu.devices.speaker import Cabinet
@@ -132,6 +141,8 @@ class Context:
     mains_sines: list[str] = field(default_factory=list)  # the mains macro's sources
     noise: Noise | None = None  # noise sources on (B5)
     parallel: dict[str, int] = field(default_factory=dict)  # model name -> `parallel`
+    types: dict[str, str] = field(default_factory=dict)  # model name -> its device's name
+    heaters: str | None = None  # heated cathodes (B6): "warm" | "cold" start, None: off
 
     def fail(self, where: str, msg: str) -> ConfigError:
         return ConfigError(f"{self.spec.path}: {where}: {msg}")
@@ -317,7 +328,26 @@ def expand_part(ctx: Context, name: str, entry: Mapping, *, extra=()) -> list[El
             ctx.missing_class.update(e.args[0])
     if ctx.noise is not None:
         els = els + _noise_elements(ctx, kind, entry, els)
+    if ctx.heaters is not None and kind == "device":
+        els = els + _heated(ctx, els)
     return els
+
+
+def _heated(ctx: Context, els: list[Element]) -> list[Element]:
+    """A `device` part's heated cathodes (B6)."""
+    ox, tubes = cathode_mod.load_cathodes()
+    by_name = {m.name: m for m in ctx.models.values()}
+    out: list[Element] = []
+    for e in els:
+        m = by_name.get(e.model) if isinstance(e, Device) else None
+        if not isinstance(m, Triode | Pentode | VacuumDiode):
+            continue
+        kind = ctx.types.get(m.name, m.name)
+        if kind not in tubes:
+            raise ctx.fail(e.name, f"no heater rating for {kind} in config/cathodes.yaml")
+        is0 = cathode_mod.instance_is0_a(ox, tubes[kind], ctx.parallel.get(m.name, 1))
+        out.append(HeatedCathode(f"BH_{e.name}", e.name, is0))
+    return out
 
 
 def _nodes_device(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
@@ -594,6 +624,7 @@ def make_models(ctx: Context) -> dict[str, str]:
             1 if e.get("instance", True) is False else ctx.count(where, e.get("parallel", 1))
         )
         types[model.name] = base.name
+        ctx.types[model.name] = base.name
     return types
 
 
@@ -642,17 +673,49 @@ def tolerance(spec: CircuitSpec, q: Mapping[str, Any]) -> parts.Tolerance | None
 
 
 def context(
-    spec: CircuitSpec, p: Mapping[str, Any], cores: str = "ja", noise: bool | int | None = None
+    spec: CircuitSpec,
+    p: Mapping[str, Any],
+    cores: str = "ja",
+    noise: bool | int | None = None,
+    heaters: bool | str | None = None,
 ) -> Context:
-    """A build's context for resolved parameters `p` (see spec.resolve); `noise` as
-    build_ir's."""
+    """A build's context for resolved parameters `p` (see spec.resolve); `noise` and
+    `heaters` as build_ir's."""
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
     q = dict(p)
     q.update(spec.derive(p))
     ctx = Context(spec, q, cores, tolerance(spec, q))
     ctx.noise = _noise(ctx, noise)
+    ctx.heaters = _heaters(spec, heaters)
     return ctx
+
+
+def _heaters(spec: CircuitSpec, heaters: bool | str | None) -> str | None:
+    """The build's heated cathodes: None, the file's `heaters` block; False, off; True, on
+    (the block's start, else warm); "warm" / "cold", on with that start."""
+    block = spec.heaters
+    if heaters is None:
+        return None if block is None else block.get("start", "warm")
+    if heaters is False:
+        return None
+    if heaters is True:
+        return (block or {}).get("start", "warm")
+    if heaters in ("warm", "cold"):
+        return heaters
+    raise ValueError(f"heaters: {heaters!r} (None, a bool, warm or cold)")
+
+
+def _heater_spec(ctx: Context) -> HeaterSpec:
+    """The IR's heaters block: the oxide constants and the heater's ratio (the mains setting
+    over the rated mains)."""
+    ox, _ = cathode_mod.load_cathodes()
+    ratio = 1.0
+    m = ctx.spec.mains
+    if m:
+        rated = ctx.physical("mains.rated_v_rms", m["rated_v_rms"])
+        ratio = float(ctx.ref("mains", m["v_rms"])) / float(rated)
+    return HeaterSpec(ox.t0_k, ox.t_amb_k, ox.alpha, ox.tau_s, ox.phi_ev, ox.n, ratio, ctx.heaters)
 
 
 def _noise(ctx: Context, noise: bool | int | None) -> Noise | None:
@@ -682,18 +745,27 @@ def _noise(ctx: Context, noise: bool | int | None) -> Noise | None:
 
 
 def build_ir(
-    spec: CircuitSpec, p: Mapping[str, Any], cores: str = "ja", noise: bool | int | None = None
+    spec: CircuitSpec,
+    p: Mapping[str, Any],
+    cores: str = "ja",
+    noise: bool | int | None = None,
+    heaters: bool | str | None = None,
 ) -> CircuitIR:
     """The circuit IR for resolved parameters `p`; `cores`: "ja" or "linear" (each core
     in its linear limit); `noise`: None, the file's `noise` block; False, none; True, on
-    (the block's seed or 0); an integer, on with that seed."""
-    return _build(spec, p, cores, noise)[0]
+    (the block's seed or 0); an integer, on with that seed; `heaters`: None, the file's
+    `heaters` block; False, none; True, on; "warm" / "cold", on with that start."""
+    return _build(spec, p, cores, noise, heaters)[0]
 
 
 def _build(
-    spec: CircuitSpec, p: Mapping[str, Any], cores: str, noise: bool | int | None = None
+    spec: CircuitSpec,
+    p: Mapping[str, Any],
+    cores: str,
+    noise: bool | int | None = None,
+    heaters: bool | str | None = None,
 ) -> tuple[CircuitIR, dict]:
-    ctx = context(spec, p, cores, noise)
+    ctx = context(spec, p, cores, noise, heaters)
     types = make_models(ctx)
     sections = []
     for s in spec.sections:
@@ -723,6 +795,7 @@ def _build(
         sections=tuple(sections),
         controls=tuple(Control(n, node) for n, node in spec.cv_inputs),
         noise=None if ctx.noise is None else _noise_spec(ctx, sections),
+        heaters=None if ctx.heaters is None else _heater_spec(ctx),
     )
     return ir, types
 
@@ -744,11 +817,12 @@ def build(
     triode_formulation: str | None = None,
     cores: str | None = None,
     noise: bool | int | None = None,
+    heaters: bool | str | None = None,
 ) -> Circuit:
     """The circuit for `spec` with `overrides`. `triode_formulation` is "table" or
     "exact" (default from sim_settings.yaml, devices.triode_formulation); `cores` is
     "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text, nor
-    does one with control inputs (ngspice runs none). `noise` as build_ir's."""
+    does one with control inputs (ngspice runs none). `noise`, `heaters` as build_ir's."""
     p = resolve(spec, overrides)
     devices = load_sim_settings().data["devices"]
     form = triode_formulation or devices["triode_formulation"]
@@ -757,7 +831,7 @@ def build(
     cores = cores or devices.get("cores", "ja")
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
-    ir, types = _build(spec, p, cores, noise)
+    ir, types = _build(spec, p, cores, noise, heaters)
     # Each triode instance's table grid is its tube type's.
     grids = {m.name: GRIDS[types[m.name]] for m in ir.models if isinstance(m, Triode)}
     text, files = None, {}

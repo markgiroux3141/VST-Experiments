@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as Json;
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Library, Noise, build_ir_noise, spec};
+use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_with, spec};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -142,8 +142,13 @@ fn rust_builds_the_ir_python_builds() {
                 Some(Json::Bool(true)) => Noise::On,
                 Some(n) => Noise::Seed(n.as_u64().expect("a seed")),
             };
+            let heaters = match case.get("heaters").and_then(Json::as_str) {
+                None => Heaters::File,
+                Some("cold") => Heaters::Cold,
+                Some(_) => Heaters::Warm,
+            };
             let built = spec::resolve(&c, &overrides)
-                .and_then(|p| build_ir_noise(&lib, &c, &p, cores, noise));
+                .and_then(|p| build_ir_with(&lib, &c, &p, cores, noise, heaters));
             let ir = match built {
                 Ok(ir) => ir,
                 Err(e) => {
@@ -157,6 +162,13 @@ fn rust_builds_the_ir_python_builds() {
             }
             if let Some(m) = case.get("models") {
                 want["models"] = m.clone();
+            }
+            match case.get("heaters_block") {
+                Some(Json::Null) => {
+                    want.as_object_mut().unwrap().remove("heaters");
+                }
+                Some(b) => want["heaters"] = b.clone(),
+                None => {}
             }
             match case.get("noise_block") {
                 Some(Json::Null) => {

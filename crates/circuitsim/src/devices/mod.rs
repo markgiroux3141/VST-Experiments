@@ -77,6 +77,10 @@ pub trait Device: fmt::Debug + Send + Sync {
         None
     }
 
+    /// A heated cathode's temperature (K) and reference current (A: the tube's at its last
+    /// operating point), [`crate::cathode::Heated`]; other devices ignore it.
+    fn set_cathode(&mut self, _t_k: f64, _i_ref: f64) {}
+
     /// The same model evaluated from a table, where that is much cheaper
     /// (`Options::tube_tables`): variable-mu triodes and banks of triodes,
     /// see [`TriodeTable`].
@@ -139,6 +143,14 @@ impl Device for Parallel {
 
     fn shunt(&self, port: usize) -> f64 {
         self.parts.iter().map(|d| d.shunt(port)).sum()
+    }
+
+    /// Each tube of the bank its share of the bank's current.
+    fn set_cathode(&mut self, t_k: f64, i_ref: f64) {
+        let n = self.parts.len() as f64;
+        for d in &mut self.parts {
+            d.set_cathode(t_k, i_ref / n);
+        }
     }
 
     /// A bank of triodes as one table.

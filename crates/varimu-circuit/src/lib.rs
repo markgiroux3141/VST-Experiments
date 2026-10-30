@@ -35,7 +35,7 @@ pub mod versions;
 pub mod yaml;
 pub mod yaml_out;
 
-pub use builder::{Cores, Noise, build_ir, build_ir_noise};
+pub use builder::{Cores, Heaters, Noise, build_ir, build_ir_noise, build_ir_with};
 pub use circuitsim::ir;
 pub use devices::Library;
 

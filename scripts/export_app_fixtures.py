@@ -6,9 +6,10 @@ For every circuit file in config/circuits/, the IR Python builds (varimu.circuit
 the reference) at its defaults and over a sweep of its controls, one control at a time:
 every selector position or choice, every other control at 0 / 0.3 / 0.5 / 0.7 / 1 of
 its range; plus the defaults with linear cores, with noise forced on (device builder B5:
-a seed past 2^63; off too where the file has a `noise` block) and, for the 670, a few
-values and device parameters away from nominal. crates/varimu-circuit's tests build the same cases in Rust
-and compare value by value (tests/agreement.rs).
+a seed past 2^63; off too where the file has a `noise` block), heated (B6: cold, and warm at
+the lowest mains, where every tube has a heater rating) and, for the 670, a few values and
+device parameters away from nominal. crates/varimu-circuit's tests build the same cases in
+Rust and compare value by value (tests/agreement.rs).
 
 One file per circuit, crates/varimu-circuit/tests/fixtures/<circuit>.json: the default
 IR in full, and per case only the sections (and the models) that differ from it, which
@@ -59,29 +60,59 @@ def control_cases(c: spec.CircuitSpec) -> list[tuple[str, dict[str, Any]]]:
 
 
 def ir_dict(
-    c: spec.CircuitSpec, overrides: dict[str, Any], cores: str, noise: bool | int | None = None
+    c: spec.CircuitSpec,
+    overrides: dict[str, Any],
+    cores: str,
+    noise: bool | int | None = None,
+    heaters: bool | str | None = None,
 ) -> dict[str, Any]:
-    return builder.build_ir(c, spec.resolve(c, overrides), cores, noise).to_dict()
+    return builder.build_ir(c, spec.resolve(c, overrides), cores, noise, heaters).to_dict()
+
+
+def heated(c: spec.CircuitSpec) -> bool:
+    """Whether every tube of the circuit has a heater rating (config/cathodes.yaml): its
+    heated build is a case."""
+    from varimu.config import ConfigError
+
+    try:
+        builder.build_ir(c, spec.resolve(c), heaters="warm")
+    except ConfigError as e:
+        if "no heater rating" in str(e):
+            return False
+        raise
+    return True
 
 
 def fixture(name: str) -> dict[str, Any]:
     c = spec.load_circuit(CONFIG_DIR / "circuits" / f"{name}.yaml")
     default = ir_dict(c, {}, "ja")
-    cases: list[tuple[str, dict, str, bool | int | None]] = [("linear", {}, "linear", None)]
-    cases += [(n, o, "ja", None) for n, o in control_cases(c)]
-    cases += [(n, o, "ja", None) for n, o in EXTRA.get(name, {}).items()]
-    cases.append(("noise", {}, "ja", NOISE_SEED))
+    cases: list[tuple[str, dict, str, bool | int | None, Any]] = [
+        ("linear", {}, "linear", None, None)
+    ]
+    cases += [(n, o, "ja", None, None) for n, o in control_cases(c)]
+    cases += [(n, o, "ja", None, None) for n, o in EXTRA.get(name, {}).items()]
+    cases.append(("noise", {}, "ja", NOISE_SEED, None))
     if c.noise is not None:
-        cases.append(("noise=off", {}, "ja", False))
+        cases.append(("noise=off", {}, "ja", False, None))
+    if heated(c):
+        cases.append(("heaters=cold", {}, "ja", None, "cold"))
+        mains = c.mains["v_rms"] if c.mains else None
+        if mains:  # the heater's ratio follows the mains setting
+            lo = c.controls[mains]["min"]
+            cases.append((f"heaters, {mains}={lo}", {mains: lo}, "ja", None, "warm"))
     out = []
-    for case, overrides, cores, noise in cases:
-        ir = ir_dict(c, overrides, cores, noise)
+    for case, overrides, cores, noise, heat in cases:
+        ir = ir_dict(c, overrides, cores, noise, heat)
         for k in ("version", "title", "input_node", "probes"):
             assert ir[k] == default[k], (name, case, k)
         assert len(ir["sections"]) == len(default["sections"]), (name, case)
         entry: dict[str, Any] = {"name": case, "overrides": overrides, "cores": cores}
         if noise is not None:
             entry["noise"] = noise  # the build's setting: a seed, or false
+        if heat is not None:
+            entry["heaters"] = heat  # the build's setting: warm or cold
+        if ir.get("heaters") != default.get("heaters"):
+            entry["heaters_block"] = ir.get("heaters")
         if ir.get("noise") != default.get("noise"):
             entry["noise_block"] = ir.get("noise")  # null: none
         entry["sections"] = {

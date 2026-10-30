@@ -266,6 +266,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             } else {
                 Vec::new()
             },
+            heaters: ir.heaters.clone(),
             // Every part keeps the noise spec (streams are keyed by element name), with the
             // mains wander on the mains sources it has.
             noise: ir.noise.as_ref().map(|n| {
@@ -277,8 +278,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 };
                 let mains: Vec<String> =
                     n.mains_sources.iter().filter(|m| has(m)).cloned().collect();
+                // The wander's rms stays (heated cathodes follow it in every part).
                 crate::ir::NoiseSpec {
-                    mains_rms: if mains.is_empty() { 0.0 } else { n.mains_rms },
                     mains_sources: mains,
                     ..n.clone()
                 }

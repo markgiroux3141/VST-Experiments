@@ -36,6 +36,7 @@
 use std::collections::HashMap;
 
 use crate::Error;
+use crate::cathode::{Emission, HeatRun, Heated};
 use crate::devices::{self, Device};
 use crate::ir::{CircuitIr, DeviceModel, Element, GROUND, Probe, TESLA_PER_V};
 use crate::linalg::{Matrix, SparseRows};
@@ -136,6 +137,9 @@ pub struct Mna {
     /// Noise sources (device builder B5; `None`: the IR has none), current columns
     /// after the time-varying sources' (see [`Mna::source_rows`]). DK solver only.
     pub noise: Option<NoiseRun>,
+    /// Heated cathodes (device builder B6; `None`: the IR has none): the circuit's cathode
+    /// temperature and the instances it heats (their devices are [`Heated`]). DK only.
+    pub heat: Option<HeatRun>,
 }
 
 /// Merge stateless instances of one kind on the same pins into one
@@ -177,6 +181,16 @@ fn merge_parallel(instances: Vec<DeviceInstance>) -> Vec<DeviceInstance> {
             }
         })
         .collect()
+}
+
+/// The model name of device element `device`.
+fn ir_model(ir: &CircuitIr, device: &str) -> String {
+    ir.elements()
+        .find_map(|e| match e {
+            Element::Device(d) if d.name == device => Some(d.model.clone()),
+            _ => None,
+        })
+        .expect("validated: a device")
 }
 
 /// The IR's noise sources as a [`NoiseRun`] on these unknowns and device instances
@@ -230,7 +244,9 @@ fn noise_run(
         .iter()
         .filter_map(|m| wave_names.iter().position(|w| w == m))
         .collect();
-    let mains = (spec.mains_rms > 0.0 && !waves.is_empty()).then_some((spec.mains_rms, waves));
+    // The wander's stream whenever it is on (heated cathodes follow it too), multiplying
+    // the mains sources this part has.
+    let mains = (spec.mains_rms > 0.0).then_some((spec.mains_rms, waves));
     Some(NoiseRun::new(
         spec.seed,
         spec.rate_hz,
@@ -398,7 +414,10 @@ impl Mna {
                         }
                     }
                 }
-                Element::Coupling(_) | Element::NoiseCurrent(_) | Element::TubeNoise(_) => {}
+                Element::Coupling(_)
+                | Element::NoiseCurrent(_)
+                | Element::TubeNoise(_)
+                | Element::HeatedCathode(_) => {}
             }
         }
         for el in ir.elements() {
@@ -413,7 +432,57 @@ impl Mna {
         for (c, &row) in ir.controls.iter().zip(&control_rows) {
             incidence(&mut g, row, node(&c.node), None);
         }
+        // Heated cathodes: their tubes' devices wrapped before banks merge.
+        let instances = match &ir.heaters {
+            None => instances,
+            Some(h) => {
+                let heated: HashMap<&str, (usize, Emission)> = ir
+                    .elements()
+                    .filter_map(|e| match e {
+                        Element::HeatedCathode(c) => {
+                            let port = match ir.model(&ir_model(ir, &c.device)) {
+                                Some(DeviceModel::Triode(_)) => 1,
+                                Some(DeviceModel::Pentode(_)) => 2,
+                                _ => 0,
+                            };
+                            let em = Emission {
+                                is0_a: c.is0_a,
+                                phi_ev: h.phi_ev,
+                                n: h.n,
+                                t0_k: h.t0_k,
+                            };
+                            Some((c.device.as_str(), (port, em)))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                instances
+                    .into_iter()
+                    .map(|d| match heated.get(d.name.as_str()) {
+                        Some(&(port, em)) => DeviceInstance {
+                            device: Box::new(Heated::new(d.device, port, em)),
+                            ..d
+                        },
+                        None => d,
+                    })
+                    .collect()
+            }
+        };
         let instances = merge_parallel(instances);
+        let heat = ir.heaters.as_ref().map(|h| {
+            let mut tubes: Vec<usize> = Vec::new();
+            for el in ir.elements() {
+                if let Element::HeatedCathode(c) = el
+                    && let Some(i) = instances
+                        .iter()
+                        .position(|d| d.name.split('+').any(|n| n == c.device))
+                    && !tubes.contains(&i)
+                {
+                    tubes.push(i);
+                }
+            }
+            HeatRun::new(h.clone(), tubes)
+        });
         let noise = noise_run(ir, &instances, &node, &wave_names);
 
         let probes = ir
@@ -439,6 +508,7 @@ impl Mna {
             outputs: Vec::new(),
             dc_starts,
             noise,
+            heat,
         })
     }
 

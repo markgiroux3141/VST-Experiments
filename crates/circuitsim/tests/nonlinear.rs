@@ -55,6 +55,7 @@ fn circuit(models: Vec<DeviceModel>, elements: Vec<Element>, probes: &[&str]) ->
         input_node: "in".into(),
         controls: vec![],
         noise: None,
+        heaters: None,
         probes: probes
             .iter()
             .map(|n| Probe::Voltage {

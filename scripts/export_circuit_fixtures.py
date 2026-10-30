@@ -32,6 +32,7 @@ from pathlib import Path
 
 from varimu.circuit import netlist as nl
 from varimu.config import REPO_ROOT
+from varimu.devices.cathode import cathode_fixtures_json
 from varimu.devices.fixtures import MISMATCH, device_fixtures_json
 from varimu.devices.noise import noise_fixtures_json
 
@@ -39,6 +40,7 @@ GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "netlist_golden"
 RUST_FIXTURE_DIR = REPO_ROOT / "crates" / "circuitsim" / "tests" / "fixtures"
 DEVICE_FIXTURE = RUST_FIXTURE_DIR / "devices" / "devices.json"
 NOISE_FIXTURE = RUST_FIXTURE_DIR / "noise" / "noise.json"
+CATHODE_FIXTURE = RUST_FIXTURE_DIR / "cathode" / "cathode.json"
 
 _MISMATCH = MISMATCH
 
@@ -127,6 +129,12 @@ def write_noise(path: Path = NOISE_FIXTURE) -> None:
     print(f"{path.name}: {path.stat().st_size} bytes")
 
 
+def write_cathode(path: Path = CATHODE_FIXTURE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(cathode_fixtures_json().encode("utf-8"))
+    print(f"{path.name}: {path.stat().st_size} bytes")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--golden", action="store_true", help="re-capture the SPICE goldens too")
@@ -136,6 +144,7 @@ def main() -> None:
     write_ir()
     write_devices()
     write_noise()
+    write_cathode()
 
 
 if __name__ == "__main__":

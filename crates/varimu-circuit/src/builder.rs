@@ -16,8 +16,8 @@
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use circuitsim::ir::{
-    CircuitIr, Coupling, Device, DeviceModel, Element, Inductor, MagneticCore, NoiseCurrent,
-    NoiseSpec, Probe, Section, SineSource, TubeNoise, VoltageSource,
+    CircuitIr, Coupling, Device, DeviceModel, Element, HeatedCathode, HeaterSpec, Inductor,
+    MagneticCore, NoiseCurrent, NoiseSpec, Probe, Section, SineSource, TubeNoise, VoltageSource,
 };
 use circuitsim::noise as nz;
 
@@ -133,6 +133,125 @@ struct Context<'a> {
     mains_sines: Vec<String>,
     /// Model name -> its `devices` entry's `parallel` (1 for `instance: false`).
     parallel: HashMap<String, i64>,
+    /// Model name -> its device file's model name (the tube type).
+    types: HashMap<String, String>,
+    /// Heated cathodes (B6): "warm" | "cold" start, None: off.
+    heaters: Option<String>,
+}
+
+/// A build's heated cathodes, as Python's `build_ir(..., heaters=)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Heaters {
+    /// The file's `heaters` block (none without one).
+    File,
+    Off,
+    /// On, with the block's start (warm without a block).
+    On,
+    Warm,
+    Cold,
+}
+
+fn heaters_setting(spec: &CircuitSpec, h: Heaters) -> Option<String> {
+    let start = || {
+        spec.heaters
+            .as_ref()
+            .and_then(|b| b.get("start"))
+            .and_then(Value::as_str)
+            .unwrap_or("warm")
+            .to_string()
+    };
+    match h {
+        Heaters::File => spec.heaters.as_ref().map(|_| start()),
+        Heaters::Off => None,
+        Heaters::On => Some(start()),
+        Heaters::Warm => Some("warm".into()),
+        Heaters::Cold => Some("cold".into()),
+    }
+}
+
+/// config/cathodes.yaml: the oxide constants (values) and the tube types' heaters.
+fn load_cathodes(lib: &Library) -> Result<(Map, Map), Error> {
+    let path = lib.config_dir().join("cathodes.yaml");
+    let d = crate::yaml::load(&path)?;
+    let m = d
+        .as_map()
+        .ok_or_else(|| Error(format!("{}: not a mapping", path.display())))?;
+    let get = |k: &str| {
+        m.get(k)
+            .and_then(Value::as_map)
+            .cloned()
+            .ok_or_else(|| Error(format!("{}: no `{k}`", path.display())))
+    };
+    Ok((get("oxide")?, get("tubes")?))
+}
+
+fn oxide_value(ox: &Map, k: &str) -> Result<f64, Error> {
+    ox.get(k)
+        .and_then(Value::as_map)
+        .and_then(|e| e.get("value"))
+        .and_then(Value::as_f64)
+        .ok_or_else(|| Error(format!("config/cathodes.yaml: oxide.{k}")))
+}
+
+/// A `device` part's heated cathodes (Python's `_heated`).
+fn heated_elements(ctx: &Context, els: &[Element]) -> Result<Vec<Element>, Error> {
+    let (ox, tubes) = load_cathodes(ctx.lib)?;
+    let per_w = oxide_value(&ox, "emission_a_per_w")?;
+    let mut out = Vec::new();
+    for e in els {
+        let Element::Device(d) = e else { continue };
+        let Some((_, m)) = ctx.models.iter().find(|(_, m)| m.name() == d.model) else {
+            continue;
+        };
+        if !matches!(
+            m,
+            DeviceModel::Triode(_) | DeviceModel::Pentode(_) | DeviceModel::VacuumDiode(_)
+        ) {
+            continue;
+        }
+        let kind = ctx
+            .types
+            .get(m.name())
+            .cloned()
+            .unwrap_or_else(|| m.name().to_string());
+        let Some(t) = tubes.get(&kind).and_then(Value::as_map) else {
+            return Err(ctx.fail(
+                &d.name,
+                format!("no heater rating for {kind} in config/cathodes.yaml"),
+            ));
+        };
+        let num = |k: &str| t.get(k).and_then(Value::as_f64).unwrap_or(f64::NAN);
+        let w = num("heater_v") * num("heater_a") / num("cathodes");
+        let parallel = ctx.parallel.get(m.name()).copied().unwrap_or(1) as f64;
+        out.push(Element::HeatedCathode(HeatedCathode {
+            name: format!("BH_{}", d.name),
+            device: d.name.clone(),
+            is0_a: per_w * w * parallel,
+        }));
+    }
+    Ok(out)
+}
+
+/// The IR's heaters block (Python's `_heater_spec`).
+fn heater_spec(ctx: &Context, start: &str) -> Result<HeaterSpec, Error> {
+    let (ox, _) = load_cathodes(ctx.lib)?;
+    let mut ratio = 1.0;
+    if let Some(m) = &ctx.spec.mains {
+        let get = |k: &str| m.get(k).cloned().unwrap_or(Value::Null);
+        let mains_v = ctx.reference("mains", &get("v_rms").py_str())?;
+        let rated = ctx.physical("mains.rated_v_rms", &get("rated_v_rms"))?;
+        ratio = ctx.float("mains", &mains_v)? / ctx.float("mains.rated_v_rms", &rated)?;
+    }
+    Ok(HeaterSpec {
+        t0_k: oxide_value(&ox, "t0_k")?,
+        t_amb_k: oxide_value(&ox, "t_amb_k")?,
+        alpha: oxide_value(&ox, "alpha")?,
+        tau_s: oxide_value(&ox, "tau_s")?,
+        phi_ev: oxide_value(&ox, "phi_ev")?,
+        n: oxide_value(&ox, "n")?,
+        heater_ratio: ratio,
+        start: start.to_string(),
+    })
 }
 
 /// A build's noise ([`build_ir_noise`]), as Python's `build_ir(..., noise=)`.
@@ -584,6 +703,10 @@ fn expand_part(
         let extra = noise_elements(ctx, kind, entry, &els);
         els.extend(extra);
     }
+    if ctx.heaters.is_some() && kind == "device" {
+        let extra = heated_elements(ctx, &els)?;
+        els.extend(extra);
+    }
     Ok(els)
 }
 
@@ -936,6 +1059,7 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
         let base = versions::require_pinned(&ctx.lib.components_dir(), &file)
             .and_then(|r| ctx.lib.device(&r.to_string()))
             .map_err(|err| ctx.fail(&where_, err.0))?;
+        let base_name = base.name().to_string();
         let model = if e.get("instance") == Some(&Value::Bool(false)) {
             if e.keys()
                 .any(|k| !["device", "instance", "source", "notes"].contains(&k))
@@ -1012,6 +1136,7 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
             )
             .map_err(|err| ctx.fail(&where_, err.0))?
         };
+        ctx.types.insert(model.name().to_string(), base_name);
         ctx.models.push((key.to_string(), model));
     }
     Ok(())
@@ -1107,6 +1232,19 @@ pub fn build_ir_noise(
     cores: Cores,
     noise: Noise,
 ) -> Result<CircuitIr, Error> {
+    build_ir_with(lib, spec, p, cores, noise, Heaters::File)
+}
+
+/// [`build_ir`] with the noise and the heaters set: Python's
+/// `build_ir(..., noise=, heaters=)`.
+pub fn build_ir_with(
+    lib: &Library,
+    spec: &CircuitSpec,
+    p: &Params,
+    cores: Cores,
+    noise: Noise,
+    heaters: Heaters,
+) -> Result<CircuitIr, Error> {
     let mut q = p.clone();
     if let Some(module) = &spec.derived_module {
         for k in &spec.derived {
@@ -1128,6 +1266,8 @@ pub fn build_ir_noise(
         noise: None,
         mains_sines: Vec::new(),
         parallel: HashMap::new(),
+        types: HashMap::new(),
+        heaters: heaters_setting(spec, heaters),
     };
     ctx.noise = noise_setting(&ctx, noise)?;
     ctx.tolerance = tolerance(&ctx)?;
@@ -1207,6 +1347,10 @@ pub fn build_ir_noise(
             })
         }
     };
+    let heaters = match &ctx.heaters {
+        Some(start) => Some(heater_spec(&ctx, start)?),
+        None => None,
+    };
     let mut models: Vec<DeviceModel> = ctx.models.into_iter().map(|(_, m)| m).collect();
     models.extend(ctx.core_models.into_iter().map(DeviceModel::MagneticCore));
     let ir = CircuitIr {
@@ -1221,6 +1365,7 @@ pub fn build_ir_noise(
                 node: node.clone(),
             })
             .collect(),
+        heaters,
         noise,
         probes: spec
             .probes

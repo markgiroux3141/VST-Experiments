@@ -29,7 +29,10 @@ Conventions:
 - noise (device builder B5, varimu.devices.noise): the circuit's `noise` block (its
   seed) and the elements NoiseCurrent (a resistor's Johnson noise) and TubeNoise (a tube
   instance's shot, grid-current shot and flicker noise), all optional: an IR without
-  noise reads and writes as before.
+  noise reads and writes as before;
+- heated cathodes (device builder B6, varimu.devices.cathode): the circuit's `heaters` block
+  (the oxide constants, the heater's voltage ratio, warm or cold start) and a HeatedCathode
+  per tube instance; optional as noise is.
 """
 
 from __future__ import annotations
@@ -197,6 +200,36 @@ class TubeNoise:
 
 
 @dataclass(frozen=True)
+class HeatedCathode:
+    """Device element `device` (a triode, pentode or vacuum diode instance) has a heated
+    cathode (B6): its currents follow the circuit's cathode temperature through the
+    space-charge shift and the emission ceiling (varimu.devices.cathode.heated), `is0_a` its
+    emission at the rated temperature."""
+
+    name: str
+    device: str
+    is0_a: float
+
+
+@dataclass(frozen=True)
+class HeaterSpec:
+    """The circuit's heaters (B6): one cathode temperature for every HeatedCathode (they
+    share the oxide constants and the heater winding), heated by `heater_ratio` (the heater
+    winding's volts over their rating: the mains setting's ratio) times B5's mains wander
+    when the noise has it; `start` "warm" (at the temperature that ratio holds) or "cold"
+    (at t_amb_k: power on)."""
+
+    t0_k: float
+    t_amb_k: float
+    alpha: float
+    tau_s: float
+    phi_ev: float
+    n: float
+    heater_ratio: float
+    start: str = "warm"
+
+
+@dataclass(frozen=True)
 class NoiseSpec:
     """The circuit's noise: the seed every source's stream is keyed by (an integer) and the
     sample grid its samples sit on (the project's rate, sim_settings' sample_rate). Mains
@@ -230,6 +263,7 @@ Element = (
     | Vccs
     | NoiseCurrent
     | TubeNoise
+    | HeatedCathode
     | Device
 )
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
@@ -253,6 +287,7 @@ _PREFIX = {
     Vccs: "G",
     NoiseCurrent: "I",
     TubeNoise: "B",
+    HeatedCathode: "B",
 }
 
 
@@ -322,6 +357,8 @@ class CircuitIR:
     controls: tuple[Control, ...] = ()
     # Noise (B5): None, none (an IR without reads and writes as before).
     noise: NoiseSpec | None = None
+    # Heated cathodes (B6): None, none.
+    heaters: HeaterSpec | None = None
 
     def __post_init__(self):
         self.validate()
@@ -351,7 +388,9 @@ class CircuitIR:
         sections = tuple(
             Section(
                 s.title,
-                tuple(e for e in s.elements if not isinstance(e, Device | TubeNoise)),
+                tuple(
+                    e for e in s.elements if not isinstance(e, Device | TubeNoise | HeatedCathode)
+                ),
             )
             for s in self.sections
         )
@@ -412,6 +451,8 @@ class CircuitIR:
             elif isinstance(el, TubeNoise):
                 for what in ("shot_k", "partition", "flicker_v2"):
                     _nonneg(f"{el.name}.{what}", getattr(el, what))
+            elif isinstance(el, HeatedCathode):
+                _positive(f"{el.name}.is0_a", el.is0_a)
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
@@ -434,6 +475,7 @@ class CircuitIR:
                 nodes.add(n)
         devices = {e.name: e for e in self.elements() if isinstance(e, Device)}
         noisy: set[str] = set()
+        heated: set[str] = set()
         for el in self.elements():
             if isinstance(el, TubeNoise):
                 d = devices.get(el.device)
@@ -445,6 +487,16 @@ class CircuitIR:
                 if el.device in noisy:
                     raise IRError(f"{el.name}: {el.device} has noise twice")
                 noisy.add(el.device)
+            if isinstance(el, HeatedCathode):
+                d = devices.get(el.device)
+                m = None if d is None else models[d.model]
+                if not isinstance(m, Triode | Pentode | VacuumDiode):
+                    raise IRError(f"{el.name}: {el.device} is not a tube instance")
+                if el.device in heated:
+                    raise IRError(f"{el.name}: {el.device} is heated twice")
+                if self.heaters is None:
+                    raise IRError(f"{el.name}: a heated cathode needs the `heaters` block")
+                heated.add(el.device)
             if isinstance(el, Coupling):
                 for ind in (el.l_a, el.l_b):
                     if ind not in inductors:
@@ -485,6 +537,15 @@ class CircuitIR:
             for m in self.noise.mains_sources:
                 if m not in sines:
                     raise IRError(f"noise.mains_sources: {m} is not a sine source")
+        if self.heaters is not None:
+            h = self.heaters
+            for what in ("t0_k", "t_amb_k", "tau_s", "phi_ev", "n", "heater_ratio"):
+                _positive(f"heaters.{what}", getattr(h, what))
+            _nonneg("heaters.alpha", h.alpha)
+            if h.start not in ("warm", "cold"):
+                raise IRError(f"heaters.start {h.start!r}: warm or cold")
+            if not h.t_amb_k < h.t0_k:
+                raise IRError("heaters: t_amb_k must be below t0_k")
 
     # --- JSON ---
 
@@ -502,6 +563,8 @@ class CircuitIR:
             if self.noise.mains_sources:
                 d["noise"]["mains_rms"] = float(self.noise.mains_rms)
                 d["noise"]["mains_sources"] = list(self.noise.mains_sources)
+        if self.heaters is not None:
+            d["heaters"] = _encode(self.heaters)
         d.update(
             probes=[_encode(p) for p in self.probes],
             models=[_encode(m) for m in self.models],
@@ -515,7 +578,7 @@ class CircuitIR:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> CircuitIR:
         keys = {"version", "title", "input_node", "probes", "models", "sections"}
-        _check_keys("circuit", d, keys | ({"controls", "noise"} & set(d)))
+        _check_keys("circuit", d, keys | ({"controls", "noise", "heaters"} & set(d)))
         if d["version"] != IR_VERSION:
             raise IRError(f"version {d['version']} (this code reads {IR_VERSION})")
         return cls(
@@ -535,6 +598,7 @@ class CircuitIR:
             version=d["version"],
             controls=tuple(_fields(Control, c, tagged=False) for c in d.get("controls", ())),
             noise=_decode_noise(d["noise"]) if "noise" in d else None,
+            heaters=_fields(HeaterSpec, d["heaters"], tagged=False) if "heaters" in d else None,
         )
 
     @classmethod
@@ -626,6 +690,7 @@ _ELEMENT_KINDS = {
     "vccs": Vccs,
     "noise_current": NoiseCurrent,
     "tube_noise": TubeNoise,
+    "heated_cathode": HeatedCathode,
     "device": Device,
 }
 _MODEL_KINDS = {

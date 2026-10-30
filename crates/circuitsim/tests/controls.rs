@@ -40,6 +40,7 @@ fn circuit() -> CircuitIr {
             node: "g".into(),
         }],
         noise: None,
+        heaters: None,
         probes: ["out", "a", "out2"]
             .iter()
             .map(|n| Probe::Voltage { node: (*n).into() })

@@ -51,6 +51,7 @@ fn circuit(seed: u64) -> CircuitIr {
         title: "noise".into(),
         input_node: "in".into(),
         controls: vec![],
+        heaters: None,
         noise: Some(NoiseSpec {
             seed,
             rate_hz: RATE,
@@ -231,6 +232,7 @@ fn the_mains_wander_multiplies_the_mains_amplitude() {
         title: "mains".into(),
         input_node: "in".into(),
         controls: vec![],
+        heaters: None,
         noise: Some(NoiseSpec {
             seed: m["seed"].as_u64().unwrap(),
             rate_hz: RATE,
@@ -283,6 +285,7 @@ fn a_partitioned_run_keeps_the_mains_wander_where_the_mains_are() {
         title: "mains, partitioned".into(),
         input_node: "in".into(),
         controls: vec![],
+        heaters: None,
         noise: Some(NoiseSpec {
             seed: 3,
             rate_hz: RATE,

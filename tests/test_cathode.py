@@ -76,3 +76,32 @@ def test_a_heated_tube_at_its_rated_temperature_is_its_model():
     hot = ca.heated(currents, [250.0, -1.5], 1, ox.t0_k + 20, 1e-3, is0, ox)
     nominal = currents([250.0, -1.5])[0]
     assert cold[0] < 0.5 * nominal and hot[0] > nominal
+
+
+def test_cathode_fixture_is_current():
+    path = REPO_ROOT / "crates/circuitsim/tests/fixtures/cathode/cathode.json"
+    assert path.read_text("utf-8") == ca.cathode_fixtures_json(), (
+        "rerun scripts/export_circuit_fixtures.py"
+    )
+
+
+def test_a_heated_run():
+    """The triode stage: warm at the rated heater equals the circuit unheated; from cold it is
+    silent ~3 s, comes alive by ~6 s and creeps to its warm operating point over tens of
+    seconds (the space-charge shift as the cathode's last kelvins come)."""
+    pytest.importorskip("circuitsim")
+    from varimu.circuit import builder, spec
+    from varimu.sim import fast
+
+    sp = spec.load_circuit(spec.circuit_path("triode_stage"))
+    p = spec.resolve(sp)
+    x = np.zeros(48000)
+    plain = fast.run_transient(builder.build_ir(sp, p), x).vectors["v(p)"]
+    warm = fast.run_transient(builder.build_ir(sp, p, heaters="warm"), x).vectors["v(p)"]
+    assert np.max(np.abs(warm - plain)) < 1e-9
+    cold = fast.run_transient(builder.build_ir(sp, p, heaters="cold"), np.zeros(96000 * 12))
+    vp = cold.vectors["v(p)"]
+    at = lambda s: vp[int(s * 96000)]  # noqa: E731
+    assert at(2.0) > plain[-1] + 75  # no emission yet: the plate at B+
+    assert at(11.9) < plain[-1] + 15  # alive, still creeping
+    assert at(11.9) > plain[-1] + 1

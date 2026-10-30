@@ -636,6 +636,17 @@ impl NoiseRun {
         }
     }
 
+    /// The mains wander m (relative) at step fraction `theta`: 0 without one.
+    pub fn mains_m(&self, theta: f64) -> f64 {
+        match &self.mains {
+            Some((m, scale, _)) => {
+                let local = (self.rem as f64 + theta * self.p as f64) / self.q as f64;
+                scale * m.at(local)
+            }
+            None => 0.0,
+        }
+    }
+
     /// Add the columns' values `vals` to a right-hand side (KCL rows).
     pub fn add_to(&self, vals: &[f64], rhs: &mut [f64]) {
         for (&(pos, neg), &v) in self.columns.iter().zip(vals) {

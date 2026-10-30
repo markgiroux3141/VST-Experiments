@@ -16,6 +16,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     mains: {v_rms: <control>, hz: <control>, rated_v_rms: <param or {value, source}>}
     tolerance: {source, seed, spread, tube: {emission_pct, mu_pct}, bands, classes, combined}
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
+    heaters: {start?: warm | cold}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
     sections: [{title, tolerance?, parts: {NAME: {<macro>: <nodes>, ...}}}]
 
@@ -47,6 +48,12 @@ on its resistors, shot, grid-current shot and flicker noise on its tubes
 `flicker_v2` (K_f, V^2) are parameters or {value, source}, by default varimu.devices.noise's
 RESISTOR_T_K and FLICKER_V2; so is `mains_rms`, the mains wander of a circuit with `mains`
 parts (default MAINS_RMS, 0 for none). Renders can override it (`build(..., noise=)`).
+
+`heaters` (optional, device builder B6) heats the tubes' cathodes: every triode, pentode and
+vacuum diode instance follows one cathode temperature (varimu.devices.cathode; constants and
+heater ratings in config/cathodes.yaml), its heater at the mains setting's ratio to the
+rated mains (and B5's mains wander when the noise has it); `start` warm (default) or cold
+(power on). Renders can override it (`build(..., heaters=)`).
 
 Parts and devices are read by varimu.circuit.builder (its docstring has the
 macro parts and their parameters).
@@ -85,6 +92,7 @@ _TOP_KEYS = {
     "devices",
     "sections",
     "noise",
+    "heaters",
 }
 
 
@@ -109,6 +117,7 @@ class CircuitSpec:
     full_scale_block: dict[str, Any] | None = None  # as written, with its sources
     full_scale_unit: str = "V"  # the output's: "V", or "Pa" (output_pascals_peak)
     noise: dict[str, Any] | None = None  # the `noise` block as written (None: no noise)
+    heaters: dict[str, Any] | None = None  # the `heaters` block (None: cathodes not heated)
 
     def part_classes(self) -> dict[str, str]:
         """Designator -> tolerance class."""
@@ -215,6 +224,12 @@ def load_circuit(path: Path) -> CircuitSpec:
         if not isinstance(e, Mapping) or "device" not in e:
             errors.append(f"devices.{k}: needs a `device`")
     full_scale, unit = _full_scale(data.get("full_scale"), errors)
+    heaters = data.get("heaters")
+    if heaters is not None:
+        if not isinstance(heaters, Mapping) or set(heaters) - {"start"}:
+            errors.append("heaters: a mapping {start?: warm | cold}")
+        elif heaters.get("start", "warm") not in ("warm", "cold"):
+            errors.append(f"heaters.start: {heaters['start']!r} (warm | cold)")
     noise = data.get("noise")
     if noise is not None:
         if not isinstance(noise, Mapping) or "seed" not in noise:
@@ -245,6 +260,7 @@ def load_circuit(path: Path) -> CircuitSpec:
         full_scale_block=data.get("full_scale"),
         full_scale_unit=unit,
         noise=noise,
+        heaters=heaters,
     )
 
 

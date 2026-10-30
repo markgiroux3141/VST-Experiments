@@ -33,6 +33,7 @@ fn circuit() -> CircuitIr {
         input_node: "in".into(),
         controls: vec![],
         noise: None,
+        heaters: None,
         probes: vec![
             Probe::Voltage { node: "c".into() },
             Probe::Voltage { node: "o".into() },

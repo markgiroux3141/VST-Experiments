@@ -17,8 +17,8 @@ oxide:
 # sections of a twin triode, a rectifier's two diodes on one cathode): each device instance
 # gets emission_a_per_w x V x A / cathodes.
 tubes:
-  12AX7: {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AX7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
-  12AU7: {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AU7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
-  6386: {heater_v: 6.3, heater_a: 0.35, cathodes: 2, source: "GE ET-T1113 p.1 (data/datasheets/published_points.yaml '6386' heater)"}
-  6V6GT: {heater_v: 6.3, heater_a: 0.45, cathodes: 1, source: "GE ET-T914 (data/datasheets/published_points.yaml '6V6GT' heater)"}
-  6X4: {heater_v: 6.3, heater_a: 0.6, cathodes: 2, source: "GE ET-T865A (data/datasheets/published_points.yaml '6X4' heater; one cathode for both plates: each diode instance half)"}
+  "12AX7": {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AX7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
+  "12AU7": {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AU7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
+  "6386": {heater_v: 6.3, heater_a: 0.35, cathodes: 2, source: "GE ET-T1113 p.1 (data/datasheets/published_points.yaml '6386' heater)"}
+  "6V6GT": {heater_v: 6.3, heater_a: 0.45, cathodes: 1, source: "GE ET-T914 (data/datasheets/published_points.yaml '6V6GT' heater)"}
+  "6X4": {heater_v: 6.3, heater_a: 0.6, cathodes: 2, source: "GE ET-T865A (data/datasheets/published_points.yaml '6X4' heater; one cathode for both plates: each diode instance half)"}

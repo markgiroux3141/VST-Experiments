@@ -33,6 +33,9 @@
 //! circuit's [`NoiseSpec`] and the elements [`NoiseCurrent`] (a resistor's Johnson
 //! noise) and [`TubeNoise`] (a tube instance's shot, grid-current shot and flicker
 //! noise), all optional: an IR without noise reads and writes as before.
+//!
+//! Heated cathodes (device builder B6, `varimu/devices/cathode.py`, [`crate::cathode`]):
+//! the circuit's [`HeaterSpec`] and a [`HeatedCathode`] per tube instance; optional as noise.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -62,6 +65,9 @@ pub struct CircuitIr {
     /// Noise (B5): absent, none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub noise: Option<NoiseSpec>,
+    /// Heated cathodes (B6): absent, none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub heaters: Option<HeaterSpec>,
     pub probes: Vec<Probe>,
     pub models: Vec<DeviceModel>,
     pub sections: Vec<Section>,
@@ -75,6 +81,22 @@ pub struct CircuitIr {
 pub struct Control {
     pub name: String,
     pub node: String,
+}
+
+/// The circuit's heaters (B6): one cathode temperature for every [`HeatedCathode`], heated
+/// by `heater_ratio` (the heater winding's volts over their rating) times B5's mains wander
+/// when the noise has it; `start` "warm" or "cold" (power on).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HeaterSpec {
+    pub t0_k: f64,
+    pub t_amb_k: f64,
+    pub alpha: f64,
+    pub tau_s: f64,
+    pub phi_ev: f64,
+    pub n: f64,
+    pub heater_ratio: f64,
+    pub start: String,
 }
 
 /// The circuit's noise: the seed every source's stream is keyed by, and the sample
@@ -125,6 +147,7 @@ pub enum Element {
     Vccs(Vccs),
     NoiseCurrent(NoiseCurrent),
     TubeNoise(TubeNoise),
+    HeatedCathode(HeatedCathode),
     Device(Device),
 }
 
@@ -269,6 +292,18 @@ pub struct TubeNoise {
     pub shot_k: f64,
     pub partition: f64,
     pub flicker_v2: f64,
+}
+
+/// Device element `device` (a triode, pentode or vacuum diode instance) has a heated
+/// cathode (B6): its currents follow the circuit's cathode temperature (the space-charge
+/// shift and the emission ceiling, [`crate::cathode`]); `is0_a` its emission at the rated
+/// temperature.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HeatedCathode {
+    pub name: String,
+    pub device: String,
+    pub is0_a: f64,
 }
 
 /// An instance of a device model; `nodes` follow the model's pin order
@@ -446,6 +481,7 @@ impl Element {
             Element::Vccs(e) => &e.name,
             Element::NoiseCurrent(e) => &e.name,
             Element::TubeNoise(e) => &e.name,
+            Element::HeatedCathode(e) => &e.name,
             Element::Device(e) => &e.name,
         }
     }
@@ -462,7 +498,7 @@ impl Element {
             Element::Winding(e) => vec![&e.a, &e.b, &e.core],
             Element::Vccs(e) => vec![&e.pos, &e.neg, &e.ctrl_pos, &e.ctrl_neg],
             Element::NoiseCurrent(e) => vec![&e.a, &e.b],
-            Element::TubeNoise(_) => vec![],
+            Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
         }
     }
@@ -620,6 +656,10 @@ impl CircuitIr {
                     nonneg(&format!("{name}.flicker_v2"), e.flicker_v2)?;
                     'B'
                 }
+                Element::HeatedCathode(e) => {
+                    positive(&format!("{name}.is0_a"), e.is0_a)?;
+                    'B'
+                }
                 Element::Device(e) => {
                     let Some(m) = models.get(e.model.as_str()) else {
                         return err(format!("{name}: unknown model {}", e.model));
@@ -658,7 +698,32 @@ impl CircuitIr {
             })
             .collect();
         let mut noisy = HashSet::new();
+        let mut heated = HashSet::new();
         for el in self.elements() {
+            if let Element::HeatedCathode(h) = el {
+                let tube = matches!(
+                    devices
+                        .get(h.device.as_str())
+                        .map(|d| models[d.model.as_str()]),
+                    Some(
+                        DeviceModel::Triode(_)
+                            | DeviceModel::Pentode(_)
+                            | DeviceModel::VacuumDiode(_)
+                    )
+                );
+                if !tube {
+                    return err(format!("{}: {} is not a tube instance", h.name, h.device));
+                }
+                if !heated.insert(h.device.as_str()) {
+                    return err(format!("{}: {} is heated twice", h.name, h.device));
+                }
+                if self.heaters.is_none() {
+                    return err(format!(
+                        "{}: a heated cathode needs the `heaters` block",
+                        h.name
+                    ));
+                }
+            }
             if let Element::TubeNoise(t) = el {
                 let m = devices
                     .get(t.device.as_str())
@@ -742,6 +807,25 @@ impl CircuitIr {
             let Probe::Voltage { node } = p;
             if !nodes.contains(node.as_str()) {
                 return err(format!("probe node {node} is not connected"));
+            }
+        }
+        if let Some(h) = &self.heaters {
+            for (what, x) in [
+                ("t0_k", h.t0_k),
+                ("t_amb_k", h.t_amb_k),
+                ("tau_s", h.tau_s),
+                ("phi_ev", h.phi_ev),
+                ("n", h.n),
+                ("heater_ratio", h.heater_ratio),
+            ] {
+                positive(&format!("heaters.{what}"), x)?;
+            }
+            nonneg("heaters.alpha", h.alpha)?;
+            if h.start != "warm" && h.start != "cold" {
+                return err(format!("heaters.start {:?}: warm or cold", h.start));
+            }
+            if h.t_amb_k >= h.t0_k {
+                return err("heaters: t_amb_k must be below t0_k");
             }
         }
         if let Some(n) = &self.noise {

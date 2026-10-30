@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 use crate::yaml::{self, Map, Value};
 
-const TOP_KEYS: [&str; 14] = [
+const TOP_KEYS: [&str; 15] = [
     "title",
     "input",
     "cv_inputs",
@@ -25,6 +25,7 @@ const TOP_KEYS: [&str; 14] = [
     "devices",
     "sections",
     "noise",
+    "heaters",
 ];
 
 /// Resolved parameters: every control, value and non-null device parameter (plus, in a
@@ -62,6 +63,8 @@ pub struct CircuitSpec {
     pub full_scale: Option<FullScale>,
     /// The `noise` block as written (device builder B5; None: no noise).
     pub noise: Option<Map>,
+    /// The `heaters` block (device builder B6; None: cathodes not heated).
+    pub heaters: Option<Map>,
 }
 
 /// Circuit volts peak at full scale: what a sample of 1.0 puts on the input node, and
@@ -352,6 +355,20 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         }
     }
     let noise = noise.and_then(Value::as_map).cloned();
+    let heaters = data.get("heaters").filter(|v| !v.is_null());
+    if let Some(h) = heaters {
+        match h.as_map() {
+            Some(m) if m.keys().all(|k| k == "start") => {
+                if let Some(s) = m.get("start")
+                    && !matches!(s.as_str(), Some("warm" | "cold"))
+                {
+                    errors.push(format!("heaters.start: {s} (warm | cold)"));
+                }
+            }
+            _ => errors.push("heaters: a mapping {start?: warm | cold}".into()),
+        }
+    }
+    let heaters = heaters.and_then(Value::as_map).cloned();
     if !errors.is_empty() {
         return Err(Error(format!(
             "{}:\n  {}",
@@ -387,6 +404,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         sections,
         full_scale,
         noise,
+        heaters,
     })
 }
 
