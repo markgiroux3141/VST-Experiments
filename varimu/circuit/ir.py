@@ -25,7 +25,11 @@ Conventions:
   the core's linear limit). See Winding;
 - a Vccs is SPICE's G (component editor C3: a speaker's pressure readout senses
   the cone's motion without loading it). A new element kind, not a new schema:
-  circuits without one write the same JSON.
+  circuits without one write the same JSON;
+- noise (device builder B5, varimu.devices.noise): the circuit's `noise` block (its
+  seed) and the elements NoiseCurrent (a resistor's Johnson noise) and TubeNoise (a tube
+  instance's shot, grid-current shot and flicker noise), all optional: an IR without
+  noise reads and writes as before.
 """
 
 from __future__ import annotations
@@ -165,6 +169,43 @@ class Vccs:
 
 
 @dataclass(frozen=True)
+class NoiseCurrent:
+    """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
+    source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
+    stream varimu.devices.noise.key(seed, name, STREAM_MAIN)."""
+
+    name: str
+    a: str
+    b: str
+    psd_a2_hz: float
+
+
+@dataclass(frozen=True)
+class TubeNoise:
+    """A tube instance's noise (B5), on device element `device` (a triode or pentode):
+    plate shot noise from the plate to the cathode, density shot_k gm (A^2/Hz; with
+    `partition` > 0, a pentode's (Ib / Ik) shot_k (gm + partition Ic2)), full shot noise of
+    the control grid's current (2 q |Ig|), both at the last accepted step's currents, and
+    flicker as a voltage in series with the control grid, one-sided density
+    flicker_v2 / f (V^2). varimu.devices.noise has the streams."""
+
+    name: str
+    device: str
+    shot_k: float
+    partition: float
+    flicker_v2: float
+
+
+@dataclass(frozen=True)
+class NoiseSpec:
+    """The circuit's noise: the seed every source's stream is keyed by (an integer) and the
+    sample grid its samples sit on (the project's rate, sim_settings' sample_rate)."""
+
+    seed: int
+    rate_hz: float
+
+
+@dataclass(frozen=True)
 class Device:
     """An instance of a device model; nodes follow the model's PINS order."""
 
@@ -182,6 +223,8 @@ Element = (
     | SineSource
     | Winding
     | Vccs
+    | NoiseCurrent
+    | TubeNoise
     | Device
 )
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
@@ -203,6 +246,8 @@ _PREFIX = {
     SineSource: "V",
     Winding: "L",
     Vccs: "G",
+    NoiseCurrent: "I",
+    TubeNoise: "B",
 }
 
 
@@ -220,6 +265,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.a, el.b, el.core)
     if isinstance(el, Vccs):
         return (el.pos, el.neg, el.ctrl_pos, el.ctrl_neg)
+    if isinstance(el, NoiseCurrent):
+        return (el.a, el.b)
     if isinstance(el, Device):
         return el.nodes
     return ()
@@ -268,6 +315,8 @@ class CircuitIR:
     # Control inputs (Control), each driven by its own samples. Optional: an IR without
     # any reads and writes as before (in JSON they follow input_node, as in Rust).
     controls: tuple[Control, ...] = ()
+    # Noise (B5): None, none (an IR without reads and writes as before).
+    noise: NoiseSpec | None = None
 
     def __post_init__(self):
         self.validate()
@@ -295,7 +344,10 @@ class CircuitIR:
         Probes on nodes that only devices connected are dropped.
         """
         sections = tuple(
-            Section(s.title, tuple(e for e in s.elements if not isinstance(e, Device)))
+            Section(
+                s.title,
+                tuple(e for e in s.elements if not isinstance(e, Device | TubeNoise)),
+            )
             for s in self.sections
         )
         nodes = {n for s in sections for e in s.elements for n in element_nodes(e)}
@@ -350,6 +402,11 @@ class CircuitIR:
                 for a, b in ((el.pos, el.neg), (el.ctrl_pos, el.ctrl_neg)):
                     if a == b:
                         raise IRError(f"{el.name}: both ends on node {a}")
+            elif isinstance(el, NoiseCurrent):
+                _nonneg(f"{el.name}.psd_a2_hz", el.psd_a2_hz)
+            elif isinstance(el, TubeNoise):
+                for what in ("shot_k", "partition", "flicker_v2"):
+                    _nonneg(f"{el.name}.{what}", getattr(el, what))
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
@@ -370,7 +427,19 @@ class CircuitIR:
                 if not n or any(c.isspace() for c in n):
                     raise IRError(f"{el.name}: bad node name {n!r}")
                 nodes.add(n)
+        devices = {e.name: e for e in self.elements() if isinstance(e, Device)}
+        noisy: set[str] = set()
         for el in self.elements():
+            if isinstance(el, TubeNoise):
+                d = devices.get(el.device)
+                m = None if d is None else models[d.model]
+                if not isinstance(m, Triode | Pentode):
+                    raise IRError(f"{el.name}: {el.device} is not a triode or pentode instance")
+                if el.partition > 0 and not isinstance(m, Pentode):
+                    raise IRError(f"{el.name}: partition noise needs a pentode")
+                if el.device in noisy:
+                    raise IRError(f"{el.name}: {el.device} has noise twice")
+                noisy.add(el.device)
             if isinstance(el, Coupling):
                 for ind in (el.l_a, el.l_b):
                     if ind not in inductors:
@@ -401,6 +470,11 @@ class CircuitIR:
         for p in self.probes:
             if p.node not in nodes:
                 raise IRError(f"probe node {p.node} is not connected")
+        if self.noise is not None:
+            seed = self.noise.seed
+            if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64:
+                raise IRError(f"noise seed {seed!r} must be an integer in [0, 2^64)")
+            _positive("noise.rate_hz", self.noise.rate_hz)
 
     # --- JSON ---
 
@@ -412,6 +486,9 @@ class CircuitIR:
         }
         if self.controls:
             d["controls"] = [{"name": c.name, "node": c.node} for c in self.controls]
+        if self.noise is not None:
+            # The seed as an integer, not the codec's float.
+            d["noise"] = {"seed": self.noise.seed, "rate_hz": float(self.noise.rate_hz)}
         d.update(
             probes=[_encode(p) for p in self.probes],
             models=[_encode(m) for m in self.models],
@@ -425,7 +502,7 @@ class CircuitIR:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> CircuitIR:
         keys = {"version", "title", "input_node", "probes", "models", "sections"}
-        _check_keys("circuit", d, keys | ({"controls"} & set(d)))
+        _check_keys("circuit", d, keys | ({"controls", "noise"} & set(d)))
         if d["version"] != IR_VERSION:
             raise IRError(f"version {d['version']} (this code reads {IR_VERSION})")
         return cls(
@@ -444,11 +521,24 @@ class CircuitIR:
             ),
             version=d["version"],
             controls=tuple(_fields(Control, c, tagged=False) for c in d.get("controls", ())),
+            noise=_decode_noise(d["noise"]) if "noise" in d else None,
         )
 
     @classmethod
     def from_json(cls, text: str) -> CircuitIR:
         return cls.from_dict(json.loads(text))
+
+
+def _decode_noise(d: Any) -> NoiseSpec:
+    if not isinstance(d, dict):
+        raise IRError("noise: an object {seed, rate_hz}")
+    _check_keys("noise", d, {"seed", "rate_hz"})
+    return NoiseSpec(seed=d["seed"], rate_hz=d["rate_hz"])
+
+
+def _nonneg(what: str, x: float) -> None:
+    if not (math.isfinite(x) and x >= 0):
+        raise IRError(f"{what} = {x} must be finite and >= 0")
 
 
 def _positive(what: str, x: float) -> None:
@@ -515,6 +605,8 @@ _ELEMENT_KINDS = {
     "sine_source": SineSource,
     "winding": Winding,
     "vccs": Vccs,
+    "noise_current": NoiseCurrent,
+    "tube_noise": TubeNoise,
     "device": Device,
 }
 _MODEL_KINDS = {

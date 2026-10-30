@@ -39,6 +39,7 @@ use crate::Error;
 use crate::devices::{self, Device};
 use crate::ir::{CircuitIr, DeviceModel, Element, GROUND, Probe, TESLA_PER_V};
 use crate::linalg::{Matrix, SparseRows};
+use crate::noise::{NoiseRun, NoiseSpec};
 
 /// SPICE's default GMIN (S), across every junction diode.
 pub const SPICE_GMIN: f64 = 1e-12;
@@ -132,6 +133,9 @@ pub struct Mna {
     /// Capacitors with a start voltage (`Capacitor::v0_v`): their nodes (None =
     /// ground) and the voltage, held during the DC operating point only.
     pub dc_starts: Vec<(Option<usize>, Option<usize>, f64)>,
+    /// Noise sources (device builder B5; `None`: the IR has none), current columns
+    /// after the time-varying sources' (see [`Mna::source_rows`]). DK solver only.
+    pub noise: Option<NoiseRun>,
 }
 
 /// Merge stateless instances of one kind on the same pins into one
@@ -173,6 +177,53 @@ fn merge_parallel(instances: Vec<DeviceInstance>) -> Vec<DeviceInstance> {
             }
         })
         .collect()
+}
+
+/// The IR's noise sources as a [`NoiseRun`] on these unknowns and device instances
+/// (a tube merged into a bank takes its share of the bank's currents).
+fn noise_run(
+    ir: &CircuitIr,
+    instances: &[DeviceInstance],
+    node: &dyn Fn(&str) -> Option<usize>,
+) -> Option<NoiseRun> {
+    let spec = ir.noise.as_ref()?;
+    let (mut specs, mut columns) = (Vec::new(), Vec::new());
+    for el in ir.elements() {
+        match el {
+            Element::NoiseCurrent(n) => {
+                specs.push(NoiseSpec::White {
+                    name: n.name.clone(),
+                    psd_a2_hz: n.psd_a2_hz,
+                });
+                columns.push((node(&n.a), node(&n.b)));
+            }
+            Element::TubeNoise(t) => {
+                let (d, inst) = instances
+                    .iter()
+                    .enumerate()
+                    .find(|(_, i)| i.name.split('+').any(|n| n == t.device))
+                    .expect("validated: a tube instance");
+                let bank = inst.name.split('+').count();
+                // Triode pins (p, g, k), pentode (p, g2, g1, k): the control grid is the
+                // last pin before the cathode, and its port has the same index.
+                let k = inst.pins.len() - 1;
+                let grid = k - 1;
+                specs.push(NoiseSpec::Tube {
+                    name: t.name.clone(),
+                    device: d,
+                    share: 1.0 / bank as f64,
+                    grid_port: grid,
+                    shot_k: t.shot_k,
+                    partition: t.partition,
+                    flicker_v2: t.flicker_v2,
+                });
+                columns.push((inst.pins[0], inst.pins[k]));
+                columns.push((inst.pins[grid], inst.pins[k]));
+            }
+            _ => {}
+        }
+    }
+    Some(NoiseRun::new(spec.seed, spec.rate_hz, specs, columns))
 }
 
 impl Mna {
@@ -331,7 +382,7 @@ impl Mna {
                         }
                     }
                 }
-                Element::Coupling(_) => {}
+                Element::Coupling(_) | Element::NoiseCurrent(_) | Element::TubeNoise(_) => {}
             }
         }
         for el in ir.elements() {
@@ -347,6 +398,7 @@ impl Mna {
             incidence(&mut g, row, node(&c.node), None);
         }
         let instances = merge_parallel(instances);
+        let noise = noise_run(ir, &instances, &node);
 
         let probes = ir
             .probes
@@ -370,6 +422,7 @@ impl Mna {
             externals: control_rows,
             outputs: Vec::new(),
             dc_starts,
+            noise,
         })
     }
 

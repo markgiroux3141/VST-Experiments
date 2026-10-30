@@ -28,6 +28,11 @@
 //! A [`Vccs`] is SPICE's `G` (component editor C3: a speaker's pressure
 //! readout, which senses the cone's motion without loading it). It is a new
 //! element kind, not a new schema: circuits without one write the same JSON.
+//!
+//! Noise (device builder B5, `varimu/devices/noise.py`, [`crate::noise`]): the
+//! circuit's [`NoiseSpec`] and the elements [`NoiseCurrent`] (a resistor's Johnson
+//! noise) and [`TubeNoise`] (a tube instance's shot, grid-current shot and flicker
+//! noise), all optional: an IR without noise reads and writes as before.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -54,6 +59,9 @@ pub struct CircuitIr {
     /// IR without any reads and writes as before.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub controls: Vec<Control>,
+    /// Noise (B5): absent, none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub noise: Option<NoiseSpec>,
     pub probes: Vec<Probe>,
     pub models: Vec<DeviceModel>,
     pub sections: Vec<Section>,
@@ -67,6 +75,15 @@ pub struct CircuitIr {
 pub struct Control {
     pub name: String,
     pub node: String,
+}
+
+/// The circuit's noise: the seed every source's stream is keyed by, and the sample
+/// grid its samples sit on (the project's rate).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoiseSpec {
+    pub seed: u64,
+    pub rate_hz: f64,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -96,6 +113,8 @@ pub enum Element {
     SineSource(SineSource),
     Winding(Winding),
     Vccs(Vccs),
+    NoiseCurrent(NoiseCurrent),
+    TubeNoise(TubeNoise),
     Device(Device),
 }
 
@@ -214,6 +233,32 @@ pub struct Vccs {
     pub ctrl_pos: String,
     pub ctrl_neg: String,
     pub gm_s: f64,
+}
+
+/// White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from `a` through
+/// the source to `b`: a resistor's Johnson noise as its Norton source (B5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NoiseCurrent {
+    pub name: String,
+    pub a: String,
+    pub b: String,
+    pub psd_a2_hz: f64,
+}
+
+/// A tube instance's noise (B5) on device element `device` (a triode or pentode):
+/// plate shot noise, density `shot_k gm` (with `partition` > 0, a pentode's
+/// `(Ib / Ik) shot_k (gm + partition Ic2)`), the control grid's full shot noise
+/// `2 q |Ig|`, and flicker as a voltage in series with the control grid of
+/// one-sided density `flicker_v2 / f` (V^2), entered as the plate current `gm e_f`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TubeNoise {
+    pub name: String,
+    pub device: String,
+    pub shot_k: f64,
+    pub partition: f64,
+    pub flicker_v2: f64,
 }
 
 /// An instance of a device model; `nodes` follow the model's pin order
@@ -389,6 +434,8 @@ impl Element {
             Element::SineSource(e) => &e.name,
             Element::Winding(e) => &e.name,
             Element::Vccs(e) => &e.name,
+            Element::NoiseCurrent(e) => &e.name,
+            Element::TubeNoise(e) => &e.name,
             Element::Device(e) => &e.name,
         }
     }
@@ -404,6 +451,8 @@ impl Element {
             Element::SineSource(e) => vec![&e.pos, &e.neg],
             Element::Winding(e) => vec![&e.a, &e.b, &e.core],
             Element::Vccs(e) => vec![&e.pos, &e.neg, &e.ctrl_pos, &e.ctrl_neg],
+            Element::NoiseCurrent(e) => vec![&e.a, &e.b],
+            Element::TubeNoise(_) => vec![],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
         }
     }
@@ -431,6 +480,14 @@ fn positive(what: &str, x: f64) -> Result<(), IrError> {
         Ok(())
     } else {
         err(format!("{what} = {x} must be finite and > 0"))
+    }
+}
+
+fn nonneg(what: &str, x: f64) -> Result<(), IrError> {
+    if x.is_finite() && x >= 0.0 {
+        Ok(())
+    } else {
+        err(format!("{what} = {x} must be finite and >= 0"))
     }
 }
 
@@ -543,6 +600,16 @@ impl CircuitIr {
                     }
                     'G'
                 }
+                Element::NoiseCurrent(e) => {
+                    nonneg(&format!("{name}.psd_a2_hz"), e.psd_a2_hz)?;
+                    'I'
+                }
+                Element::TubeNoise(e) => {
+                    nonneg(&format!("{name}.shot_k"), e.shot_k)?;
+                    nonneg(&format!("{name}.partition"), e.partition)?;
+                    nonneg(&format!("{name}.flicker_v2"), e.flicker_v2)?;
+                    'B'
+                }
                 Element::Device(e) => {
                     let Some(m) = models.get(e.model.as_str()) else {
                         return err(format!("{name}: unknown model {}", e.model));
@@ -570,6 +637,38 @@ impl CircuitIr {
                     return err(format!("{name}: bad node name {n:?}"));
                 }
                 nodes.insert(n);
+            }
+        }
+        // Tube noise names a tube instance, once.
+        let devices: HashMap<&str, &Device> = self
+            .elements()
+            .filter_map(|e| match e {
+                Element::Device(d) => Some((d.name.as_str(), d)),
+                _ => None,
+            })
+            .collect();
+        let mut noisy = HashSet::new();
+        for el in self.elements() {
+            if let Element::TubeNoise(t) = el {
+                let m = devices
+                    .get(t.device.as_str())
+                    .map(|d| models[d.model.as_str()]);
+                let pentode = match m {
+                    Some(DeviceModel::Triode(_)) => false,
+                    Some(DeviceModel::Pentode(_)) => true,
+                    _ => {
+                        return err(format!(
+                            "{}: {} is not a triode or pentode instance",
+                            t.name, t.device
+                        ));
+                    }
+                };
+                if t.partition > 0.0 && !pentode {
+                    return err(format!("{}: partition noise needs a pentode", t.name));
+                }
+                if !noisy.insert(t.device.as_str()) {
+                    return err(format!("{}: {} has noise twice", t.name, t.device));
+                }
             }
         }
         // Couplings are checked once every inductor is known.
@@ -634,6 +733,9 @@ impl CircuitIr {
             if !nodes.contains(node.as_str()) {
                 return err(format!("probe node {node} is not connected"));
             }
+        }
+        if let Some(n) = &self.noise {
+            positive("noise.rate_hz", n.rate_hz)?;
         }
         Ok(())
     }

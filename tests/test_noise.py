@@ -116,3 +116,78 @@ def test_densities():
     assert nz.grid_shot_a2(-1e-6) == pytest.approx(2 * nz.Q_E * 1e-6)
     assert nz.white_sigma(2.0, 96000.0) == pytest.approx(math.sqrt(96000.0))
     assert 10 * np.log10(nz.interp_gain(20e3, 96000.0)) == pytest.approx(-0.62, abs=0.01)
+
+
+# --- The IR and the builders ------------------------------------------------------------
+
+
+def _triode_stage(noise=None):
+    from varimu.circuit import builder, spec
+
+    c = spec.load_circuit(spec.circuit_path("triode_stage"))
+    return builder.build_ir(c, spec.resolve(c), noise=noise)
+
+
+def test_noise_is_opt_in():
+    from varimu.circuit import builder, ir, spec
+    from varimu.config import CONFIG_DIR
+
+    for path in sorted((CONFIG_DIR / "circuits").glob("*.yaml")):
+        c = spec.load_circuit(path)
+        if c.noise is not None:
+            continue
+        x = builder.build_ir(c, spec.resolve(c))
+        assert x.noise is None and "noise" not in x.to_dict(), path.stem
+        assert not any(isinstance(e, ir.NoiseCurrent | ir.TubeNoise) for e in x.elements())
+
+
+def test_noise_elements_follow_their_parts_and_round_trip():
+    from varimu.circuit import ir
+
+    off, on = _triode_stage(), _triode_stage(noise=2**64 - 1)
+    assert on.noise == ir.NoiseSpec(2**64 - 1, 96000.0)
+    # Without the noise elements, the same circuit in the same order.
+    strip = tuple(e for e in on.elements() if not isinstance(e, ir.NoiseCurrent | ir.TubeNoise))
+    assert strip == tuple(off.elements())
+    resistors = [e for e in on.elements() if isinstance(e, ir.Resistor)]
+    noise = {e.name: e for e in on.elements() if isinstance(e, ir.NoiseCurrent)}
+    for r in resistors:
+        n = noise[f"IN_{r.name}"]
+        assert (n.a, n.b) == (r.a, r.b)
+        assert n.psd_a2_hz == 4.0 * nz.K_B * nz.RESISTOR_T_K / r.r_ohm
+    tubes = [e for e in on.elements() if isinstance(e, ir.TubeNoise)]
+    assert [t.device for t in tubes] == [e.name for e in on.elements() if isinstance(e, ir.Device)]
+    assert all(t.flicker_v2 == nz.FLICKER_V2 and t.partition == 0.0 for t in tubes)
+    assert ir.CircuitIR.from_json(on.to_json()) == on
+    assert '"seed": 18446744073709551615' in on.to_json()  # an integer, all 64 bits
+
+
+def test_the_ir_refuses_bad_noise():
+    import dataclasses
+
+    from varimu.circuit import ir
+
+    on = _triode_stage(noise=1)
+    with pytest.raises(ir.IRError, match="seed"):
+        dataclasses.replace(on, noise=ir.NoiseSpec(-1, 96000.0))
+    t = next(e for e in on.elements() if isinstance(e, ir.TubeNoise))
+    bad = dataclasses.replace(t, partition=8.0)  # a triode has no screen
+    secs = tuple(
+        dataclasses.replace(s, elements=tuple(bad if e is t else e for e in s.elements))
+        for s in on.sections
+    )
+    with pytest.raises(ir.IRError, match="partition"):
+        dataclasses.replace(on, sections=secs)
+
+
+def test_a_noisy_run_reproduces_from_its_seed():
+    pytest.importorskip("circuitsim")
+    from varimu.sim import fast
+
+    x = np.zeros(4800)
+    out = [fast.run_transient(_triode_stage(noise=s), x).vectors["v(o)"] for s in (1, 1, 2)]
+    quiet = fast.run_transient(_triode_stage(), x).vectors["v(o)"]
+    assert np.array_equal(out[0], out[1])
+    hiss = out[0] - quiet
+    assert np.std(hiss) > 0
+    assert np.std(out[2] - out[0]) > 0.5 * np.std(hiss)

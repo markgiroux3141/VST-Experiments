@@ -13,6 +13,22 @@
 pub const K_B: f64 = 1.380649e-23;
 pub const Q_E: f64 = 1.602176634e-19;
 
+/// Tube shot noise as R_eq = SHOT_BETA / gm at SHOT_T0_K; a pentode's partition factor
+/// (`varimu/devices/noise.py` has the sources).
+pub const SHOT_BETA: f64 = 2.5;
+pub const SHOT_T0_K: f64 = 290.0;
+pub const PARTITION: f64 = 8.0;
+/// A circuit's `noise` block defaults: the resistors' temperature (K) and flicker's K_f
+/// (V^2).
+pub const RESISTOR_T_K: f64 = 313.0;
+pub const FLICKER_V2: f64 = 2.5e-14;
+
+/// 4 k T0 beta: a triode's plate noise density per siemens of gm (A^2/Hz/S), as Python's
+/// `shot_k()` computes it.
+pub fn shot_k() -> f64 {
+    4.0 * K_B * SHOT_T0_K * SHOT_BETA
+}
+
 /// The streams of one source (the low word of its key's second half).
 pub const STREAM_MAIN: u32 = 0;
 pub const STREAM_GRID: u32 = 1;
@@ -282,6 +298,389 @@ impl Flicker {
     /// The index of the sample [`Flicker::next`] returns next.
     pub fn position(&self) -> u64 {
         self.input.position()
+    }
+}
+
+// --- A run's noise sources -----------------------------------------------------------
+
+/// A stream's samples, white or flicker, and the window of them around the current
+/// engine sample: `vals[i]` is grid sample `start + i`.
+#[derive(Debug, Clone)]
+struct Stream {
+    white: Normals,
+    flicker: Option<Flicker>,
+    start: u64,
+    vals: Vec<f64>,
+}
+
+impl Stream {
+    fn new(white: Normals, flicker: Option<Flicker>) -> Stream {
+        Stream {
+            white,
+            flicker,
+            start: 0,
+            vals: Vec::new(),
+        }
+    }
+
+    fn next(&mut self, filter: Option<&FlickerFilter>) -> f64 {
+        match (&mut self.flicker, filter) {
+            (Some(f), Some(filter)) => f.next(filter),
+            _ => self.white.next(),
+        }
+    }
+
+    /// Hold samples `k0 .. k0 + w` (the run only moves forward).
+    fn seek(&mut self, k0: u64, w: usize, filter: Option<&FlickerFilter>) {
+        while self.start < k0 {
+            // Sample `start` is the window's first, or (window empty) the generator's next.
+            if self.vals.is_empty() {
+                self.next(filter);
+            } else {
+                self.vals.remove(0);
+            }
+            self.start += 1;
+        }
+        while self.vals.len() < w {
+            let x = self.next(filter);
+            self.vals.push(x);
+        }
+    }
+
+    /// Linear between the window's samples at `local` (grid samples past its start).
+    fn at(&self, local: f64) -> f64 {
+        let i = (local.floor() as usize).min(self.vals.len() - 2);
+        let frac = local - i as f64;
+        self.vals[i] + frac * (self.vals[i + 1] - self.vals[i])
+    }
+}
+
+// One Vec of them per run, built once: the variants' sizes don't matter.
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone)]
+enum Source {
+    /// A white current (a resistor's Johnson noise) of sample deviation `sigma`.
+    White {
+        name: String,
+        col: usize,
+        sigma: f64,
+        z: Stream,
+    },
+    /// A tube's noise (`ir::TubeNoise`): plate column `col`, grid column `col + 1`.
+    Tube {
+        name: String,
+        col: usize,
+        device: usize,
+        /// This tube's share of the device instance (1 / the bank it is merged into).
+        share: f64,
+        /// Port of the control grid (triode 1, pentode 2).
+        grid_port: usize,
+        shot_k: f64,
+        partition: f64,
+        flicker_rt: f64,
+        shot: Stream,
+        grid: Stream,
+        flicker: Stream,
+        /// From the last accepted step: deviations of the shot streams, and gm.
+        sig_shot: f64,
+        sig_grid: f64,
+        gm: f64,
+    },
+}
+
+/// What [`NoiseRun::new`] takes per source.
+#[derive(Debug, Clone)]
+pub enum NoiseSpec {
+    White {
+        name: String,
+        psd_a2_hz: f64,
+    },
+    Tube {
+        name: String,
+        device: usize,
+        share: f64,
+        grid_port: usize,
+        shot_k: f64,
+        partition: f64,
+        flicker_v2: f64,
+    },
+}
+
+/// A run's noise sources (B5), as current columns of the circuit: a resistor's one
+/// (its two nodes), a tube's two (plate to cathode, control grid to cathode). The
+/// columns' values at a stage come from the streams' grid samples, linear between them,
+/// and for tubes the gm and currents of the last accepted step ([`NoiseRun::observe`]).
+#[derive(Debug, Clone)]
+pub struct NoiseRun {
+    pub seed: u64,
+    pub rate_hz: f64,
+    /// Each column: (pos, neg) unknowns, the current flowing from pos through the
+    /// source to neg (`None` = ground).
+    pub columns: Vec<(Option<usize>, Option<usize>)>,
+    sources: Vec<Source>,
+    filter: Option<FlickerFilter>,
+    /// Grid samples per engine sample: p / q, one of them 1 ([`NoiseRun::set_step`]).
+    p: u64,
+    q: u64,
+    /// The current engine sample's first grid sample, and n p - k0 q.
+    k0: u64,
+    rem: u64,
+}
+
+impl NoiseRun {
+    /// Sources in IR order; `columns` as [`NoiseRun::columns`], a white source's one,
+    /// then a tube's two, in the same order.
+    pub fn new(
+        seed: u64,
+        rate_hz: f64,
+        specs: Vec<NoiseSpec>,
+        columns: Vec<(Option<usize>, Option<usize>)>,
+    ) -> NoiseRun {
+        let tubes = specs.iter().any(|s| matches!(s, NoiseSpec::Tube { .. }));
+        let filter = tubes.then(|| FlickerFilter::new(rate_hz));
+        let mut sources = Vec::with_capacity(specs.len());
+        let mut col = 0;
+        for s in specs {
+            match s {
+                NoiseSpec::White { name, psd_a2_hz } => {
+                    let k = key(seed, &name, STREAM_MAIN);
+                    sources.push(Source::White {
+                        sigma: white_sigma(psd_a2_hz, rate_hz),
+                        z: Stream::new(Normals::new(k, 0), None),
+                        name,
+                        col,
+                    });
+                    col += 1;
+                }
+                NoiseSpec::Tube {
+                    name,
+                    device,
+                    share,
+                    grid_port,
+                    shot_k,
+                    partition,
+                    flicker_v2,
+                } => {
+                    let white =
+                        |stream| Stream::new(Normals::new(key(seed, &name, stream), 0), None);
+                    let flick = Flicker::new(
+                        filter.as_ref().expect("made when there are tubes"),
+                        key(seed, &name, STREAM_FLICKER),
+                        key(seed, &name, STREAM_FLICKER_START),
+                    );
+                    sources.push(Source::Tube {
+                        shot: white(STREAM_MAIN),
+                        grid: white(STREAM_GRID),
+                        flicker: Stream::new(
+                            Normals::new(key(seed, &name, STREAM_FLICKER), 0),
+                            Some(flick),
+                        ),
+                        name,
+                        col,
+                        device,
+                        share,
+                        grid_port,
+                        shot_k,
+                        partition,
+                        flicker_rt: flicker_v2.sqrt(),
+                        sig_shot: 0.0,
+                        sig_grid: 0.0,
+                        gm: 0.0,
+                    });
+                    col += 2;
+                }
+            }
+        }
+        assert_eq!(
+            col,
+            columns.len(),
+            "a column per white source, two per tube"
+        );
+        NoiseRun {
+            seed,
+            rate_hz,
+            columns,
+            sources,
+            filter,
+            p: 1,
+            q: 1,
+            k0: 0,
+            rem: 0,
+        }
+    }
+
+    /// The engine's step `h` (one sample): grid samples per engine sample must be an
+    /// integer or one over an integer (draft-1x: 2; production at 2x: 1/2).
+    pub fn set_step(&mut self, h: f64) -> Result<(), String> {
+        let r = self.rate_hz * h;
+        let near = |x: f64| (x - x.round()).abs() <= 1e-9 * x && x.round() >= 1.0;
+        if r >= 1.0 && near(r) {
+            (self.p, self.q) = (r.round() as u64, 1);
+        } else if r < 1.0 && near(1.0 / r) {
+            (self.p, self.q) = (1, (1.0 / r).round() as u64);
+        } else {
+            return Err(format!(
+                "noise: the engine's rate {} Hz isn't an integer multiple or fraction of the \
+                 noise grid's {} Hz",
+                1.0 / h,
+                self.rate_hz
+            ));
+        }
+        Ok(())
+    }
+
+    /// Before engine sample `n`: the streams' windows over its grid samples.
+    pub fn begin_sample(&mut self, n: u64) {
+        let (p, q) = (self.p, self.q);
+        self.k0 = n * p / q;
+        self.rem = n * p - self.k0 * q;
+        let w = p as usize + 1;
+        let (k0, f) = (self.k0, self.filter.as_ref());
+        for s in &mut self.sources {
+            match s {
+                Source::White { z, .. } => z.seek(k0, w, f),
+                Source::Tube {
+                    shot,
+                    grid,
+                    flicker,
+                    ..
+                } => {
+                    shot.seek(k0, w, None);
+                    grid.seek(k0, w, None);
+                    flicker.seek(k0, w, f);
+                }
+            }
+        }
+    }
+
+    /// The columns' values at step fraction `theta` of the current engine sample.
+    pub fn fill(&self, theta: f64, out: &mut [f64]) {
+        let local = (self.rem as f64 + theta * self.p as f64) / self.q as f64;
+        for s in &self.sources {
+            match s {
+                Source::White { col, sigma, z, .. } => out[*col] = sigma * z.at(local),
+                Source::Tube {
+                    col,
+                    flicker_rt,
+                    shot,
+                    grid,
+                    flicker,
+                    sig_shot,
+                    sig_grid,
+                    gm,
+                    ..
+                } => {
+                    out[*col] = sig_shot * shot.at(local) + gm * flicker_rt * flicker.at(local);
+                    out[*col + 1] = sig_grid * grid.at(local);
+                }
+            }
+        }
+    }
+
+    /// Add the columns' values `vals` to a right-hand side (KCL rows).
+    pub fn add_to(&self, vals: &[f64], rhs: &mut [f64]) {
+        for (&(pos, neg), &v) in self.columns.iter().zip(vals) {
+            if let Some(i) = pos {
+                rhs[i] -= v;
+            }
+            if let Some(j) = neg {
+                rhs[j] += v;
+            }
+        }
+    }
+
+    /// Take the tubes' gm and currents at the accepted point: `ports` is every
+    /// device's port voltages, device by device (`port_offsets[d]` its first).
+    pub fn observe(
+        &mut self,
+        devices: &[crate::mna::DeviceInstance],
+        port_offsets: &[usize],
+        ports: &[f64],
+    ) {
+        let rate = self.rate_hz;
+        let (mut i, mut g) = ([0.0; 4], [0.0; 16]);
+        for s in &mut self.sources {
+            let Source::Tube {
+                device,
+                share,
+                grid_port,
+                shot_k,
+                partition,
+                sig_shot,
+                sig_grid,
+                gm,
+                ..
+            } = s
+            else {
+                continue;
+            };
+            let d = &devices[*device];
+            let np = d.device.ports();
+            let off = port_offsets[*device];
+            d.device
+                .eval(&ports[off..off + np], &mut i[..np], &mut g[..np * np]);
+            // Port 0 is the plate; gm is d Ip / d V(control grid).
+            let gm_t = (g[*grid_port] * *share).max(0.0);
+            let psd = if *partition > 0.0 {
+                let (ib, ic2) = ((i[0] * *share).max(0.0), (i[1] * *share).max(0.0));
+                if ib + ic2 > 0.0 {
+                    ib / (ib + ic2) * *shot_k * (gm_t + *partition * ic2)
+                } else {
+                    0.0
+                }
+            } else {
+                *shot_k * gm_t
+            };
+            *gm = gm_t;
+            *sig_shot = white_sigma(psd, rate);
+            *sig_grid = white_sigma(2.0 * Q_E * (i[*grid_port] * *share).abs(), rate);
+        }
+    }
+
+    /// Carry the streams and the tubes' last readings over from `old` (a parameter
+    /// change rebuilds the circuit), by source name.
+    pub fn carry(&mut self, old: &NoiseRun) {
+        (self.p, self.q, self.k0, self.rem) = (old.p, old.q, old.k0, old.rem);
+        for s in &mut self.sources {
+            for o in &old.sources {
+                match (&mut *s, o) {
+                    (
+                        Source::White { name, z, .. },
+                        Source::White {
+                            name: on, z: oz, ..
+                        },
+                    ) if name == on => {
+                        *z = oz.clone();
+                    }
+                    (
+                        Source::Tube {
+                            name,
+                            shot,
+                            grid,
+                            flicker,
+                            sig_shot,
+                            sig_grid,
+                            gm,
+                            ..
+                        },
+                        Source::Tube {
+                            name: on,
+                            shot: os,
+                            grid: og,
+                            flicker: of,
+                            sig_shot: oss,
+                            sig_grid: osg,
+                            gm: ogm,
+                            ..
+                        },
+                    ) if name == on => {
+                        (*shot, *grid, *flicker) = (os.clone(), og.clone(), of.clone());
+                        (*sig_shot, *sig_grid, *gm) = (*oss, *osg, *ogm);
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 }
 

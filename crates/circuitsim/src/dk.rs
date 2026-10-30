@@ -164,7 +164,8 @@ pub fn support(c: &Matrix) -> Vec<usize> {
 /// (`e_s`: the F history), the M port currents (`N^T e_j`), the sources
 /// `b`, the input `e_in` and each time-varying source's row (a sine
 /// source's wave, [`crate::mna::Wave`], or an external,
-/// [`crate::mna::Mna::externals`]).
+/// [`crate::mna::Mna::externals`]), then each current column (a noise source,
+/// [`crate::noise::NoiseRun::columns`]: `e_neg - e_pos`).
 #[derive(Debug, Clone)]
 pub struct DkSystem {
     /// Unique per system built, so a factored Newton matrix knows its K.
@@ -188,16 +189,17 @@ pub struct DkSystem {
     /// Responses to `b` and to the input.
     b0: Vec<f64>,
     be: Vec<f64>,
-    /// Response to each time-varying source's row, rows x sources,
-    /// column-major.
+    /// Response to each time-varying source's row, then each current
+    /// column, rows x (sources + currents), column-major.
     bw: Vec<f64>,
 }
 
 impl DkSystem {
     /// For a circuit with conductance and reactive matrices `g` and `c`,
-    /// sources `b`, the input on row `input_row` and time-varying sources on
-    /// the rows `sources` ([`crate::mna::Mna::source_rows`]), stepped with
-    /// `inv = 1 / (g h)`. Fails if the step matrix is singular.
+    /// sources `b`, the input on row `input_row`, time-varying sources on
+    /// the rows `sources` ([`crate::mna::Mna::source_rows`]) and current
+    /// sources `currents` ((pos, neg): from pos through the source to neg),
+    /// stepped with `inv = 1 / (g h)`. Fails if the step matrix is singular.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         g: &Matrix,
@@ -206,6 +208,7 @@ impl DkSystem {
         b: &[f64],
         input_row: usize,
         sources: &[usize],
+        currents: &[(Option<usize>, Option<usize>)],
         ports: &Ports,
         support: &[usize],
         first: &[usize],
@@ -279,10 +282,21 @@ impl DkSystem {
         z.fill(0.0);
         z[input_row] = 1.0;
         respond(&mut z, &mut be);
-        let mut bw = vec![0.0; rows * sources.len()];
-        for (col, &row) in bw.chunks_exact_mut(rows).zip(sources) {
+        let mut bw = vec![0.0; rows * (sources.len() + currents.len())];
+        let (bw_rows, bw_currents) = bw.split_at_mut(rows * sources.len());
+        for (col, &row) in bw_rows.chunks_exact_mut(rows).zip(sources) {
             z.fill(0.0);
             z[row] = 1.0;
+            respond(&mut z, col);
+        }
+        for (col, &(pos, neg)) in bw_currents.chunks_exact_mut(rows).zip(currents) {
+            z.fill(0.0);
+            if let Some(i) = pos {
+                z[i] -= 1.0;
+            }
+            if let Some(j) = neg {
+                z[j] += 1.0;
+            }
             respond(&mut z, col);
         }
         static NEXT_ID: AtomicU64 = AtomicU64::new(1);

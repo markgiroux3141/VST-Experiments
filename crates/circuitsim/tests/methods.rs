@@ -32,6 +32,7 @@ fn circuit() -> CircuitIr {
         title: "rlc".into(),
         input_node: "in".into(),
         controls: vec![],
+        noise: None,
         probes: vec![
             Probe::Voltage { node: "c".into() },
             Probe::Voltage { node: "o".into() },

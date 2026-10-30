@@ -181,6 +181,7 @@ fn main() {
         &mna.b,
         mna.input_row,
         &mna.source_rows(),
+        &[],
         &ports,
         &sup,
         &[],

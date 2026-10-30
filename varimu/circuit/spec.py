@@ -15,6 +15,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     derived: {module: python.module, values: {key: {source}}}
     mains: {v_rms: <control>, hz: <control>, rated_v_rms: <param or {value, source}>}
     tolerance: {source, seed, spread, tube: {emission_pct, mu_pct}, bands, classes, combined}
+    noise: {seed, temperature_k?, flicker_v2?}   # noise sources on (device builder B5)
     devices: {key: {device, ...}}   # device model instances, in IR model order
     sections: [{title, tolerance?, parts: {NAME: {<macro>: <nodes>, ...}}}]
 
@@ -38,6 +39,13 @@ same number to every render path, its unit for display (`full_scale_unit`). With
 block both are sim_settings' `audio.full_scale_volts_peak`. It is no parameter and not
 in the IR: renders and the native app scale around the circuit with it
 (`varimu.sim.io.full_scale`).
+
+`noise` (optional, device builder B5) turns the circuit's noise sources on: Johnson noise
+on its resistors, shot, grid-current shot and flicker noise on its tubes
+(varimu.devices.noise; the builder's docstring says which parts). `seed` is an integer
+(every source's stream is keyed by it and its name); `temperature_k` (the resistors') and
+`flicker_v2` (K_f, V^2) are parameters or {value, source}, by default varimu.devices.noise's
+RESISTOR_T_K and FLICKER_V2. Renders can override it (`build(..., noise=)`).
 
 Parts and devices are read by varimu.circuit.builder (its docstring has the
 macro parts and their parameters).
@@ -75,6 +83,7 @@ _TOP_KEYS = {
     "tolerance",
     "devices",
     "sections",
+    "noise",
 }
 
 
@@ -98,6 +107,7 @@ class CircuitSpec:
     full_scale: tuple[float, float] | None = None
     full_scale_block: dict[str, Any] | None = None  # as written, with its sources
     full_scale_unit: str = "V"  # the output's: "V", or "Pa" (output_pascals_peak)
+    noise: dict[str, Any] | None = None  # the `noise` block as written (None: no noise)
 
     def part_classes(self) -> dict[str, str]:
         """Designator -> tolerance class."""
@@ -204,6 +214,16 @@ def load_circuit(path: Path) -> CircuitSpec:
         if not isinstance(e, Mapping) or "device" not in e:
             errors.append(f"devices.{k}: needs a `device`")
     full_scale, unit = _full_scale(data.get("full_scale"), errors)
+    noise = data.get("noise")
+    if noise is not None:
+        if not isinstance(noise, Mapping) or "seed" not in noise:
+            errors.append("noise: a mapping {seed, temperature_k?, flicker_v2?}")
+        else:
+            if extra := set(noise) - {"seed", "temperature_k", "flicker_v2"}:
+                errors.append(f"noise: unknown keys {sorted(extra)}")
+            seed = noise["seed"]
+            if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64:
+                errors.append(f"noise.seed: {seed!r} is not an integer in [0, 2^64)")
     if errors:
         raise ConfigError(f"{path}:\n  " + "\n  ".join(errors))
     return CircuitSpec(
@@ -223,6 +243,7 @@ def load_circuit(path: Path) -> CircuitSpec:
         full_scale=full_scale,
         full_scale_block=data.get("full_scale"),
         full_scale_unit=unit,
+        noise=noise,
     )
 
 

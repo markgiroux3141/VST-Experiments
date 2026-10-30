@@ -39,6 +39,7 @@ fn circuit() -> CircuitIr {
             name: "gate".into(),
             node: "g".into(),
         }],
+        noise: None,
         probes: ["out", "a", "out2"]
             .iter()
             .map(|n| Probe::Voltage { node: (*n).into() })

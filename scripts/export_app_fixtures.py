@@ -5,8 +5,9 @@
 For every circuit file in config/circuits/, the IR Python builds (varimu.circuit.builder,
 the reference) at its defaults and over a sweep of its controls, one control at a time:
 every selector position or choice, every other control at 0 / 0.3 / 0.5 / 0.7 / 1 of
-its range; plus the defaults with linear cores and, for the 670, a few values and device
-parameters away from nominal. crates/varimu-circuit's tests build the same cases in Rust
+its range; plus the defaults with linear cores, with noise forced on (device builder B5:
+a seed past 2^63; off too where the file has a `noise` block) and, for the 670, a few
+values and device parameters away from nominal. crates/varimu-circuit's tests build the same cases in Rust
 and compare value by value (tests/agreement.rs).
 
 One file per circuit, crates/varimu-circuit/tests/fixtures/<circuit>.json: the default
@@ -24,6 +25,7 @@ from varimu.config import CONFIG_DIR, REPO_ROOT
 
 FIXTURE_DIR = REPO_ROOT / "crates" / "varimu-circuit" / "tests" / "fixtures"
 FRACTIONS = (0.0, 0.3, 0.5, 0.7, 1.0)
+NOISE_SEED = 2**63 + 12345  # past i64: the seed is a u64 everywhere
 
 # Away from nominal (values and device parameters; nonzero tolerance spread is refused
 # in Rust for now, so passive_spread stays 0).
@@ -56,23 +58,32 @@ def control_cases(c: spec.CircuitSpec) -> list[tuple[str, dict[str, Any]]]:
     return cases
 
 
-def ir_dict(c: spec.CircuitSpec, overrides: dict[str, Any], cores: str) -> dict[str, Any]:
-    return builder.build_ir(c, spec.resolve(c, overrides), cores).to_dict()
+def ir_dict(
+    c: spec.CircuitSpec, overrides: dict[str, Any], cores: str, noise: bool | int | None = None
+) -> dict[str, Any]:
+    return builder.build_ir(c, spec.resolve(c, overrides), cores, noise).to_dict()
 
 
 def fixture(name: str) -> dict[str, Any]:
     c = spec.load_circuit(CONFIG_DIR / "circuits" / f"{name}.yaml")
     default = ir_dict(c, {}, "ja")
-    cases = [("linear", {}, "linear")]
-    cases += [(n, o, "ja") for n, o in control_cases(c)]
-    cases += [(n, o, "ja") for n, o in EXTRA.get(name, {}).items()]
+    cases: list[tuple[str, dict, str, bool | int | None]] = [("linear", {}, "linear", None)]
+    cases += [(n, o, "ja", None) for n, o in control_cases(c)]
+    cases += [(n, o, "ja", None) for n, o in EXTRA.get(name, {}).items()]
+    cases.append(("noise", {}, "ja", NOISE_SEED))
+    if c.noise is not None:
+        cases.append(("noise=off", {}, "ja", False))
     out = []
-    for case, overrides, cores in cases:
-        ir = ir_dict(c, overrides, cores)
+    for case, overrides, cores, noise in cases:
+        ir = ir_dict(c, overrides, cores, noise)
         for k in ("version", "title", "input_node", "probes"):
             assert ir[k] == default[k], (name, case, k)
         assert len(ir["sections"]) == len(default["sections"]), (name, case)
         entry: dict[str, Any] = {"name": case, "overrides": overrides, "cores": cores}
+        if noise is not None:
+            entry["noise"] = noise  # the build's setting: a seed, or false
+        if ir.get("noise") != default.get("noise"):
+            entry["noise_block"] = ir.get("noise")  # null: none
         entry["sections"] = {
             str(i): s for i, s in enumerate(ir["sections"]) if s != default["sections"][i]
         }

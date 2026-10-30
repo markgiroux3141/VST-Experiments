@@ -121,6 +121,8 @@ pub fn structure(ir: &CircuitIr) -> Structure {
                 &g.name,
                 vec![&g.pos, &g.neg, &g.ctrl_pos, &g.ctrl_neg],
             ),
+            Element::NoiseCurrent(n) => ("NoiseCurrent", &n.name, vec![&n.a, &n.b]),
+            Element::TubeNoise(t) => ("TubeNoise", &t.name, vec![]),
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
         };
         elements.insert((kind, name.to_string()));

@@ -13,9 +13,10 @@ is word pair (k % 4) // 2 of the block numpy's fresh `Philox(key)` emits (k // 4
 Box-Muller: u1 = ((w0 >> 11) + 1) 2^-53 in (0, 1], u2 = (w1 >> 11) 2^-53,
 r = sqrt(-2 ln u1), samples 2p, 2p + 1 = r cos(2 pi u2), r sin(2 pi u2).
 
-**The grid.** Samples sit on the project's sample grid (sim_settings' sample_rate), sample 0
-at the first output sample, linear between samples, as control inputs are; the DC
-operating point and the settle hold every source at sample 0, as the input is held. A white
+**The grid.** Samples sit on the project's sample grid (sim_settings' sample_rate; the IR's
+`noise.rate_hz`), sample 0 at the run's start (t = 0, the settle included: renders and the
+native app settle for the same `settle_s`, so a take's noise lines up across qualities),
+linear between samples, as control inputs are. The DC operating point is noise-free. A white
 stream of one-sided density S then has sample variance S fs / 2, and the linear
 interpolation shapes its density by sinc^2(f / fs) (`interp_gain`: -0.6 dB at 20 kHz at
 96 kHz), which the tests count in.
@@ -28,7 +29,9 @@ in its stationary state at sample 0 (the state drawn from its own stream), so no
 **Densities** (one-sided, per hertz): `johnson_a2` (4kT/R), `shot_a2` (a tube's plate
 current: 4 k T0 beta gm, beta 2.5 at T0 290 K, i.e. R_eq = 2.5 / gm; a pentode's partition
 noise (Ib / Ik)(4 k T0 beta)(gm + 8 Ic2)), `grid_shot_a2` (2 q |Ig|), and flicker as a
-voltage in series with the grid, K_f / f.
+voltage in series with the grid, K_f / f. The engines put flicker in as the plate current
+gm e_f, which is that voltage to first order: e_f is microvolts, so the rest is ~1e-6 of it.
+Shot noise and gm e_f take the tube's gm and currents at the last accepted step.
 """
 
 from __future__ import annotations
@@ -55,7 +58,23 @@ SHOT_SOURCE = (
     "tubes-201-how-vacuum-tubes-really-work_90.html (the same forms)"
 )
 
+# Defaults of a circuit's `noise` block (varimu.circuit.spec).
+RESISTOR_T_K = 313.0
+RESISTOR_T_SOURCE = (
+    "provisional: model knowledge (resistors inside a warm tube chassis, ~40 C; Johnson noise "
+    "goes as sqrt(T): 313 K is 0.3 dB above 290 K)"
+)
 # Flicker: one-sided density K_f / f of a voltage in series with the grid.
+FLICKER_V2 = 2.5e-14
+FLICKER_SOURCE = (
+    "provisional: model knowledge (estimate, device builder B5: space-charge-limited, a "
+    "relative emission fluctuation dJ/J moves the potential minimum by (kTc/q) dJ/J, a "
+    "grid-referred voltage independent of the operating point, K_f = (kTc/q)^2 A with "
+    "kTc/q ~0.09 V (1050 K) and A ~3e-12, the order of oxide cathodes' emission flicker in "
+    "temperature-limited diodes (Johnson 1925, Schottky 1926); a corner ~1 kHz for a 12AX7 "
+    "at gm 1.6 mA/V, the user's pick 2026-10-30; bounds 2.5e-15..2.5e-13, corners "
+    "100 Hz..10 kHz)"
+)
 F_LO_HZ = 1e-3  # flat below: ~17 minutes
 FLICKER_SECTIONS = 15
 

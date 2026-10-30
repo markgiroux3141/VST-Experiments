@@ -54,6 +54,16 @@ transformer cores in order of appearance.
 
 Circuit-specific macros: `register()` adds one (a module that a circuit file
 names under `derived` can register its macros on import).
+
+Noise (device builder B5; the file's `noise` block, or `build(..., noise=)`): each part's
+noise elements follow its own. Every Resistor of an R, pot, rheostat, tapped_pot or t_pad
+part and a transformer's winding resistances get a NoiseCurrent `IN_<name>` (4kT/R at the
+block's temperature_k), except parts whose value's source is `numerical:` (a leak for the
+solver, not a part) and resistors on a core node (a gap or core loss: magnetic, not
+electrical); other macros' internals (mains, bridge, vr_tube, speaker) get none. Every
+triode or pentode instance of a `device` part gets a TubeNoise `BN_<name>` (shot_k from
+varimu.devices.noise, a pentode's partition factor, flicker_v2 over its `parallel` count:
+independent cathodes average).
 """
 
 from __future__ import annotations
@@ -74,13 +84,19 @@ from varimu.circuit.ir import (
     DeviceModel,
     Element,
     Inductor,
+    NoiseCurrent,
+    NoiseSpec,
+    Resistor,
     Section,
     SineSource,
+    TubeNoise,
     VoltageProbe,
     VoltageSource,
+    Winding,
 )
 from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.config import ConfigError, load_sim_settings
+from varimu.devices import noise as noise_mod
 from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode
@@ -113,6 +129,8 @@ class Context:
     designators: set[str] = field(default_factory=set)
     missing_class: set[str] = field(default_factory=set)
     section_tolerance: str | None = None  # the current section's `tolerance`
+    noise: Noise | None = None  # noise sources on (B5)
+    parallel: dict[str, int] = field(default_factory=dict)  # model name -> `parallel`
 
     def fail(self, where: str, msg: str) -> ConfigError:
         return ConfigError(f"{self.spec.path}: {where}: {msg}")
@@ -157,6 +175,63 @@ class Context:
             raise self.fail(where, f"unknown device {key!r} (not in `devices`)")
         self.used_devices.add(key)
         return self.models[key]
+
+
+@dataclass(frozen=True)
+class Noise:
+    """A build's noise (B5): the seed, the resistors' temperature, K_f."""
+
+    seed: int
+    temperature_k: float
+    flicker_v2: float
+
+
+# Parts whose resistors are resistors (their noise), and the param holding their value.
+_NOISY = {
+    "R": "r", "pot": "r", "rheostat": "r", "tapped_pot": "r", "t_pad": "z", "transformer": None,
+}  # fmt: skip
+
+
+def _numerical(ctx: Context, x: Any) -> bool:
+    """Whether a part's value `x` (a key or {value, source}) is sourced `numerical:`."""
+    if isinstance(x, str):
+        for table in (ctx.spec.values, ctx.spec.controls, ctx.spec.device_params):
+            if x in table:
+                return str(table[x].get("source", "")).strip().startswith("numerical")
+        return False
+    if isinstance(x, Mapping):
+        return str(x.get("source", "")).strip().startswith("numerical")
+    return False
+
+
+def _noise_elements(ctx: Context, kind: str, entry: Mapping, els: list[Element]) -> list[Element]:
+    """A part's noise elements (the module docstring says which)."""
+    nz = ctx.noise
+    out: list[Element] = []
+    if kind in _NOISY:
+        key = _NOISY[kind]
+        if key is not None and _numerical(ctx, entry.get(key)):
+            return out
+        cores = {e.core for e in els if isinstance(e, Winding)}
+        for e in els:
+            if isinstance(e, Resistor) and e.a not in cores and e.b not in cores:
+                psd = 4.0 * noise_mod.K_B * nz.temperature_k / e.r_ohm
+                out.append(NoiseCurrent(f"IN_{e.name}", e.a, e.b, psd))
+    elif kind == "device":
+        by_name = {m.name: m for m in ctx.models.values()}
+        for e in els:
+            m = by_name.get(e.model) if isinstance(e, Device) else None
+            if isinstance(m, Triode | Pentode):
+                out.append(
+                    TubeNoise(
+                        f"BN_{e.name}",
+                        e.name,
+                        noise_mod.shot_k(),
+                        noise_mod.PARTITION if isinstance(m, Pentode) else 0.0,
+                        nz.flicker_v2 / ctx.parallel.get(m.name, 1),
+                    )
+                )
+    return out
 
 
 # --- Macro parts --------------------------------------------------------------------------------
@@ -237,6 +312,8 @@ def expand_part(ctx: Context, name: str, entry: Mapping, *, extra=()) -> list[El
             els = ctx.tolerance.apply(els, name)
         except KeyError as e:
             ctx.missing_class.update(e.args[0])
+    if ctx.noise is not None:
+        els = els + _noise_elements(ctx, kind, entry, els)
     return els
 
 
@@ -509,6 +586,9 @@ def make_models(ctx: Context) -> dict[str, str]:
             except (TypeError, ValueError) as err:
                 raise ctx.fail(where, str(err)) from err
         ctx.models[key] = model
+        ctx.parallel[model.name] = (
+            1 if e.get("instance", True) is False else ctx.count(where, e.get("parallel", 1))
+        )
         types[model.name] = base.name
     return types
 
@@ -557,23 +637,56 @@ def tolerance(spec: CircuitSpec, q: Mapping[str, Any]) -> parts.Tolerance | None
     )
 
 
-def context(spec: CircuitSpec, p: Mapping[str, Any], cores: str = "ja") -> Context:
-    """A build's context for resolved parameters `p` (see spec.resolve)."""
+def context(
+    spec: CircuitSpec, p: Mapping[str, Any], cores: str = "ja", noise: bool | int | None = None
+) -> Context:
+    """A build's context for resolved parameters `p` (see spec.resolve); `noise` as
+    build_ir's."""
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
     q = dict(p)
     q.update(spec.derive(p))
-    return Context(spec, q, cores, tolerance(spec, q))
+    ctx = Context(spec, q, cores, tolerance(spec, q))
+    ctx.noise = _noise(ctx, noise)
+    return ctx
 
 
-def build_ir(spec: CircuitSpec, p: Mapping[str, Any], cores: str = "ja") -> CircuitIR:
+def _noise(ctx: Context, noise: bool | int | None) -> Noise | None:
+    """The build's noise: None, the file's block; False, off; True, on (the block's seed,
+    else 0); an integer, on with that seed (the block's values or the defaults)."""
+    block = ctx.spec.noise
+    if noise is None:
+        noise = block is not None
+    if noise is False:
+        return None
+    block = block or {}
+    if noise is True:
+        seed = int(block.get("seed", 0))
+    elif isinstance(noise, int) and 0 <= noise < 2**64:
+        seed = noise
+    else:
+        raise ValueError(f"noise: {noise!r} (None, a bool, or a seed)")
+    t, kf = noise_mod.RESISTOR_T_K, noise_mod.FLICKER_V2
+    if "temperature_k" in block:
+        t = ctx.physical("noise.temperature_k", block["temperature_k"])
+    if "flicker_v2" in block:
+        kf = ctx.physical("noise.flicker_v2", block["flicker_v2"])
+    return Noise(seed, float(t), float(kf))
+
+
+def build_ir(
+    spec: CircuitSpec, p: Mapping[str, Any], cores: str = "ja", noise: bool | int | None = None
+) -> CircuitIR:
     """The circuit IR for resolved parameters `p`; `cores`: "ja" or "linear" (each core
-    in its linear limit)."""
-    return _build(spec, p, cores)[0]
+    in its linear limit); `noise`: None, the file's `noise` block; False, none; True, on
+    (the block's seed or 0); an integer, on with that seed."""
+    return _build(spec, p, cores, noise)[0]
 
 
-def _build(spec: CircuitSpec, p: Mapping[str, Any], cores: str) -> tuple[CircuitIR, dict]:
-    ctx = context(spec, p, cores)
+def _build(
+    spec: CircuitSpec, p: Mapping[str, Any], cores: str, noise: bool | int | None = None
+) -> tuple[CircuitIR, dict]:
+    ctx = context(spec, p, cores, noise)
     types = make_models(ctx)
     sections = []
     for s in spec.sections:
@@ -602,6 +715,9 @@ def _build(spec: CircuitSpec, p: Mapping[str, Any], cores: str) -> tuple[Circuit
         models=(*ctx.models.values(), *ctx.core_models),
         sections=tuple(sections),
         controls=tuple(Control(n, node) for n, node in spec.cv_inputs),
+        noise=None
+        if ctx.noise is None
+        else NoiseSpec(ctx.noise.seed, float(load_sim_settings().data["sample_rate"])),
     )
     return ir, types
 
@@ -612,11 +728,12 @@ def build(
     *,
     triode_formulation: str | None = None,
     cores: str | None = None,
+    noise: bool | int | None = None,
 ) -> Circuit:
     """The circuit for `spec` with `overrides`. `triode_formulation` is "table" or
     "exact" (default from sim_settings.yaml, devices.triode_formulation); `cores` is
     "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text, nor
-    does one with control inputs (ngspice runs none)."""
+    does one with control inputs (ngspice runs none). `noise` as build_ir's."""
     p = resolve(spec, overrides)
     devices = load_sim_settings().data["devices"]
     form = triode_formulation or devices["triode_formulation"]
@@ -625,7 +742,7 @@ def build(
     cores = cores or devices.get("cores", "ja")
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
-    ir, types = _build(spec, p, cores)
+    ir, types = _build(spec, p, cores, noise)
     # Each triode instance's table grid is its tube type's.
     grids = {m.name: GRIDS[types[m.name]] for m in ir.models if isinstance(m, Triode)}
     text, files = None, {}

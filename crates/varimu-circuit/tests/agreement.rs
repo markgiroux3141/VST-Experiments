@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as Json;
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Library, build_ir, spec};
+use varimu_circuit::{Cores, Library, Noise, build_ir_noise, spec};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -136,7 +136,14 @@ fn rust_builds_the_ir_python_builds() {
                 .map(|(k, v)| (k.clone(), to_value(v)))
                 .collect();
             let cores = Cores::parse(case["cores"].as_str().unwrap()).unwrap();
-            let built = spec::resolve(&c, &overrides).and_then(|p| build_ir(&lib, &c, &p, cores));
+            let noise = match case.get("noise") {
+                None => Noise::File,
+                Some(Json::Bool(false)) => Noise::Off,
+                Some(Json::Bool(true)) => Noise::On,
+                Some(n) => Noise::Seed(n.as_u64().expect("a seed")),
+            };
+            let built = spec::resolve(&c, &overrides)
+                .and_then(|p| build_ir_noise(&lib, &c, &p, cores, noise));
             let ir = match built {
                 Ok(ir) => ir,
                 Err(e) => {
@@ -150,6 +157,13 @@ fn rust_builds_the_ir_python_builds() {
             }
             if let Some(m) = case.get("models") {
                 want["models"] = m.clone();
+            }
+            match case.get("noise_block") {
+                Some(Json::Null) => {
+                    want.as_object_mut().unwrap().remove("noise");
+                }
+                Some(b) => want["noise"] = b.clone(),
+                None => {}
             }
             let got = serde_json::to_value(&ir).unwrap();
             compare(&label, &want, &got, &mut t, &mut errors);

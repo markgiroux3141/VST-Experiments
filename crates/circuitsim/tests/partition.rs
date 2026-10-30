@@ -54,6 +54,7 @@ fn rc(external: bool) -> CircuitIr {
         title: "rc".into(),
         input_node: if external { "in" } else { "src" }.into(),
         controls: vec![],
+        noise: None,
         probes: vec![Probe::Voltage { node: "out".into() }],
         models: vec![],
         sections: vec![Section {

@@ -266,6 +266,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             } else {
                 Vec::new()
             },
+            // Every part keeps the noise spec: streams are keyed by element name.
+            noise: ir.noise.clone(),
             probes,
             models: used(&sections.iter().collect::<Vec<_>>()),
             sections,

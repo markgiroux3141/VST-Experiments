@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 use crate::yaml::{self, Map, Value};
 
-const TOP_KEYS: [&str; 13] = [
+const TOP_KEYS: [&str; 14] = [
     "title",
     "input",
     "cv_inputs",
@@ -24,6 +24,7 @@ const TOP_KEYS: [&str; 13] = [
     "tolerance",
     "devices",
     "sections",
+    "noise",
 ];
 
 /// Resolved parameters: every control, value and non-null device parameter (plus, in a
@@ -59,6 +60,8 @@ pub struct CircuitSpec {
     pub sections: Vec<SectionSpec>,
     /// The file's audio convention (`full_scale`; None: sim_settings' for both).
     pub full_scale: Option<FullScale>,
+    /// The `noise` block as written (device builder B5; None: no noise).
+    pub noise: Option<Map>,
 }
 
 /// Circuit volts peak at full scale: what a sample of 1.0 puts on the input node, and
@@ -326,6 +329,29 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         }
     }
     let full_scale = full_scale(data.get("full_scale"), &mut errors);
+    let noise = data.get("noise").filter(|v| !v.is_null());
+    if let Some(n) = noise {
+        match n.as_map().filter(|m| m.contains("seed")) {
+            None => errors.push("noise: a mapping {seed, temperature_k?, flicker_v2?}".into()),
+            Some(m) => {
+                let mut extra: Vec<&str> = m
+                    .keys()
+                    .filter(|k| !["seed", "temperature_k", "flicker_v2"].contains(k))
+                    .collect();
+                extra.sort_unstable();
+                if !extra.is_empty() {
+                    errors.push(format!("noise: unknown keys {extra:?}"));
+                }
+                if !matches!(m.get("seed"), Some(Value::Int(i)) if *i >= 0) {
+                    errors.push(format!(
+                        "noise.seed: {} is not an integer in [0, 2^64)",
+                        m.get("seed").unwrap()
+                    ));
+                }
+            }
+        }
+    }
+    let noise = noise.and_then(Value::as_map).cloned();
     if !errors.is_empty() {
         return Err(Error(format!(
             "{}:\n  {}",
@@ -360,6 +386,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         devices,
         sections,
         full_scale,
+        noise,
     })
 }
 

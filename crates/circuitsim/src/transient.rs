@@ -660,8 +660,8 @@ struct Dk {
     d: Vec<f64>,
     neg: Vec<f64>,
     wm: Vec<f64>,
-    /// Values of the time-varying sources (sine sources, then externals) at
-    /// the latest stage's time.
+    /// Values of the time-varying sources (sine sources, then externals, then
+    /// noise columns) at the latest stage's time.
     wv: Vec<f64>,
     /// A stage's initial guess and limiting reference, for an exact retry.
     v_guess: Vec<f64>,
@@ -705,7 +705,12 @@ impl Dk {
             d: vec![0.0; r],
             neg: vec![0.0; m.max(r)],
             wm: vec![0.0; m],
-            wv: vec![0.0; mna.waves.len() + mna.externals.len()],
+            wv: vec![
+                0.0;
+                mna.waves.len()
+                    + mna.externals.len()
+                    + mna.noise.as_ref().map_or(0, |n| n.columns.len())
+            ],
             v_guess: vec![0.0; m],
             v_lin_guess: vec![0.0; m],
             probes: mna
@@ -851,13 +856,16 @@ impl Transient {
                 mna.externals.len()
             )));
         }
-        if !mna.externals.is_empty()
+        if (!mna.externals.is_empty() || mna.noise.is_some())
             && (opts.solver != Solver::Dk || !opts.method.tableau().diagonal)
         {
             return Err(Error::new(
-                "externals (control inputs, a partition's couplings) need the DK solver \
-                 and a diagonally implicit method",
+                "externals (control inputs, a partition's couplings) and noise need the DK \
+                 solver and a diagonally implicit method",
             ));
+        }
+        if let Some(noise) = &mut mna.noise {
+            noise.set_step(h).map_err(Error::new)?;
         }
         if opts.tube_tables {
             mna.tabulate_tubes();
@@ -937,7 +945,16 @@ impl Transient {
             mna,
         };
         tr.dc(u0)?;
+        // The noise sources' first amplitudes, at the operating point (itself noise-free).
+        tr.observe_noise();
         Ok(tr)
+    }
+
+    /// The noise sources take the tubes' gm and currents at the accepted point.
+    fn observe_noise(&mut self) {
+        if let (Some(noise), Some(dk)) = (&mut self.mna.noise, &self.dk) {
+            noise.observe(&self.mna.devices, &dk.ports.offsets, &self.ports);
+        }
     }
 
     /// The DC operating point: plain Newton, then gmin stepping, then source
@@ -1099,6 +1116,7 @@ impl Transient {
             }
             off += np;
         }
+        self.observe_noise();
     }
 
     /// Advance one step to the time where the input is `u`, the input
@@ -1111,6 +1129,9 @@ impl Transient {
     /// the previous step's end input).
     pub fn step_input(&mut self, inp: &StepInput) -> Result<(), Error> {
         let substeps_before = self.stats.substeps;
+        if let Some(noise) = &mut self.mna.noise {
+            noise.begin_sample(self.n);
+        }
         self.deepest = 0;
         let res = if self.opts.error_abstol > 0.0 && self.opts.step_selection {
             self.advance_selected(inp)
@@ -1494,6 +1515,7 @@ impl Transient {
                 &self.mna.b,
                 self.mna.input_row,
                 &self.mna.source_rows(),
+                self.mna.noise.as_ref().map_or(&[], |n| &n.columns),
                 &dk.ports,
                 &dk.support,
                 &dk.probes,
@@ -1543,6 +1565,9 @@ impl Transient {
             }
             for ((v, &e0), &e1) in dk.wv[nw..].iter_mut().zip(&self.ext0).zip(&self.ext1) {
                 *v = e0 + th * (e1 - e0);
+            }
+            if let Some(noise) = &self.mna.noise {
+                noise.fill(th, &mut dk.wv[nw + self.ext0.len()..]);
             }
             sys.stage(&dk.base, u, &dk.wv, &dk.w, &mut dk.out);
             // The initial guess, as try_step_dirk's on the device nodes (the
@@ -1889,6 +1914,13 @@ impl Transient {
         for (new, old) in mna.devices.iter_mut().zip(&self.mna.devices) {
             new.device.set_state(&old.device.state());
         }
+        // Noise streams carry on where they were (by source name).
+        if let Some(new) = &mut mna.noise {
+            new.set_step(self.h).map_err(Error::new)?;
+            if let Some(old) = &self.mna.noise {
+                new.carry(old);
+            }
+        }
         self.mna = mna;
         self.levels.iter_mut().for_each(|l| *l = None);
         let n = self.x.len();
@@ -1926,6 +1958,13 @@ impl Transient {
         self.mna.add_waves(self.time(0.0), &mut f);
         for (&row, &e) in self.mna.externals.iter().zip(&self.ext1) {
             f[row] += e;
+        }
+        if let Some(noise) = &mut self.mna.noise {
+            // At the current point: the next sample's start.
+            noise.begin_sample(self.n);
+            let mut vals = vec![0.0; noise.columns.len()];
+            noise.fill(0.0, &mut vals);
+            noise.add_to(&vals, &mut f);
         }
         let mut gx = vec![0.0; n];
         self.mna.g.mul_vec(&self.x, &mut gx);

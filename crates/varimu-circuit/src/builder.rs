@@ -8,13 +8,18 @@
 //! Tolerance: nominal units only. A nonzero `spread` is refused, because the draws are
 //! numpy's (PCG64) and porting them is a separate decision (docs/NATIVE_APP_PLAN.md); at
 //! spread 0 every factor is exactly 1, as in Python.
+//!
+//! Noise (device builder B5): the file's `noise` block, or [`build_ir_noise`]'s setting;
+//! each part's noise elements follow its own, as Python's builder places them (its
+//! docstring says which parts get which).
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 use circuitsim::ir::{
-    CircuitIr, Coupling, Device, DeviceModel, Element, Inductor, MagneticCore, Probe, Section,
-    SineSource, VoltageSource,
+    CircuitIr, Coupling, Device, DeviceModel, Element, Inductor, MagneticCore, NoiseCurrent,
+    NoiseSpec, Probe, Section, SineSource, TubeNoise, VoltageSource,
 };
+use circuitsim::noise as nz;
 
 use crate::devices::Library;
 use crate::parts::{self, CoreSpec, Instance, WindingSpec};
@@ -121,6 +126,137 @@ struct Context<'a> {
     designators: HashSet<String>,
     missing_class: BTreeSet<String>,
     section_tolerance: Option<Value>,
+    /// Noise sources on (B5): the seed, the resistors' temperature, K_f.
+    noise: Option<(u64, f64, f64)>,
+    /// Model name -> its `devices` entry's `parallel` (1 for `instance: false`).
+    parallel: HashMap<String, i64>,
+}
+
+/// A build's noise ([`build_ir_noise`]), as Python's `build_ir(..., noise=)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Noise {
+    /// The file's `noise` block (none without one).
+    File,
+    Off,
+    /// On, with the block's seed (0 without a block).
+    On,
+    /// On, with this seed.
+    Seed(u64),
+}
+
+/// Parts whose resistors are resistors (their noise), and the param holding their value.
+const NOISY: [(&str, Option<&str>); 6] = [
+    ("R", Some("r")),
+    ("pot", Some("r")),
+    ("rheostat", Some("r")),
+    ("tapped_pot", Some("r")),
+    ("t_pad", Some("z")),
+    ("transformer", None),
+];
+
+/// Whether a part's value (a key or {value, source}) is sourced `numerical:`.
+fn numerical(ctx: &Context, x: Option<&Value>) -> bool {
+    let starts =
+        |src: Option<&Value>| src.is_some_and(|s| s.py_str().trim().starts_with("numerical"));
+    match x {
+        Some(Value::Str(k)) => {
+            for table in [
+                &ctx.spec.values,
+                &ctx.spec.controls,
+                &ctx.spec.device_params,
+            ] {
+                if let Some(e) = table.get(k) {
+                    return starts(e.as_map().and_then(|m| m.get("source")));
+                }
+            }
+            false
+        }
+        Some(Value::Map(m)) => starts(m.get("source")),
+        _ => false,
+    }
+}
+
+/// A part's noise elements (Python's `_noise_elements`).
+fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Vec<Element> {
+    let Some((_, temperature, kf)) = ctx.noise else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    if let Some((_, key)) = NOISY.iter().find(|(k, _)| *k == kind) {
+        if key.is_some_and(|k| numerical(ctx, entry.get(k))) {
+            return out;
+        }
+        let cores: HashSet<&str> = els
+            .iter()
+            .filter_map(|e| match e {
+                Element::Winding(w) => Some(w.core.as_str()),
+                _ => None,
+            })
+            .collect();
+        for e in els {
+            if let Element::Resistor(r) = e
+                && !cores.contains(r.a.as_str())
+                && !cores.contains(r.b.as_str())
+            {
+                out.push(Element::NoiseCurrent(NoiseCurrent {
+                    name: format!("IN_{}", r.name),
+                    a: r.a.clone(),
+                    b: r.b.clone(),
+                    psd_a2_hz: 4.0 * nz::K_B * temperature / r.r_ohm,
+                }));
+            }
+        }
+    } else if kind == "device" {
+        for e in els {
+            let Element::Device(d) = e else { continue };
+            let Some((_, m)) = ctx.models.iter().find(|(_, m)| m.name() == d.model) else {
+                continue;
+            };
+            let pentode = match m {
+                DeviceModel::Triode(_) => false,
+                DeviceModel::Pentode(_) => true,
+                _ => continue,
+            };
+            let n = ctx.parallel.get(m.name()).copied().unwrap_or(1);
+            out.push(Element::TubeNoise(TubeNoise {
+                name: format!("BN_{}", d.name),
+                device: d.name.clone(),
+                shot_k: nz::shot_k(),
+                partition: if pentode { nz::PARTITION } else { 0.0 },
+                flicker_v2: kf / n as f64,
+            }));
+        }
+    }
+    out
+}
+
+/// The build's noise (Python's `_noise`).
+fn noise_setting(ctx: &Context, noise: Noise) -> Result<Option<(u64, f64, f64)>, Error> {
+    let block = ctx.spec.noise.as_ref();
+    let seed = match noise {
+        Noise::Off => return Ok(None),
+        Noise::File if block.is_none() => return Ok(None),
+        Noise::File | Noise::On => match block.and_then(|b| b.get("seed")) {
+            Some(Value::Int(i)) => *i as u64,
+            _ => 0,
+        },
+        Noise::Seed(s) => s,
+    };
+    let get = |k: &str, default: f64| -> Result<f64, Error> {
+        match block.and_then(|b| b.get(k)) {
+            None => Ok(default),
+            Some(x) => {
+                let w = format!("noise.{k}");
+                let v = ctx.physical(&w, x)?;
+                ctx.float(&w, &v)
+            }
+        }
+    };
+    Ok(Some((
+        seed,
+        get("temperature_k", nz::RESISTOR_T_K)?,
+        get("flicker_v2", nz::FLICKER_V2)?,
+    )))
 }
 
 impl Context<'_> {
@@ -426,15 +562,20 @@ fn expand_part(
             format!("tolerance: {tol} (a part's class is in the tolerance block)"),
         ));
     }
+    let mut els = els;
     if m.toleranced
         && tol != none
         && let Some(t) = &ctx.tolerance
     {
         ctx.designators.insert(name.to_string());
         match t.apply(els.clone(), name) {
-            Ok(applied) => return Ok(applied),
+            Ok(applied) => els = applied,
             Err(missing) => ctx.missing_class.extend(missing),
         }
+    }
+    if ctx.noise.is_some() {
+        let extra = noise_elements(ctx, kind, entry, &els);
+        els.extend(extra);
     }
     Ok(els)
 }
@@ -840,6 +981,13 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
                 &format!("{where_}.parallel"),
                 e.get("parallel").unwrap_or(&Value::Int(1)),
             )?;
+            ctx.parallel.insert(
+                match e.get("name").map(Value::py_str).filter(|n| !n.is_empty()) {
+                    Some(n) => n,
+                    None => format!("{}_{key}", base.name()),
+                },
+                n_parallel,
+            );
             let name = match e.get("name").map(Value::py_str).filter(|n| !n.is_empty()) {
                 Some(n) => n,
                 None => format!("{}_{key}", base.name()),
@@ -863,6 +1011,16 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
 }
 
 // --- The circuit -------------------------------------------------------------------------
+
+/// The project's sample rate (sim_settings.yaml `sample_rate`): the noise grid.
+fn sample_rate(lib: &Library) -> Result<f64, Error> {
+    let path = lib.config_dir().join("sim_settings.yaml");
+    crate::yaml::load(&path)?
+        .as_map()
+        .and_then(|m| m.get("sample_rate"))
+        .and_then(Value::as_f64)
+        .ok_or_else(|| Error(format!("{}: no sample_rate", path.display())))
+}
 
 fn tolerance(ctx: &Context) -> Result<Option<Tolerance>, Error> {
     let t = &ctx.spec.tolerance;
@@ -923,12 +1081,24 @@ fn tolerance(ctx: &Context) -> Result<Option<Tolerance>, Error> {
     }))
 }
 
-/// The circuit IR for resolved parameters `p` (see `spec::resolve`).
+/// The circuit IR for resolved parameters `p` (see `spec::resolve`), with the file's
+/// noise.
 pub fn build_ir(
     lib: &Library,
     spec: &CircuitSpec,
     p: &Params,
     cores: Cores,
+) -> Result<CircuitIr, Error> {
+    build_ir_noise(lib, spec, p, cores, Noise::File)
+}
+
+/// [`build_ir`] with the noise set: Python's `build_ir(..., noise=)`.
+pub fn build_ir_noise(
+    lib: &Library,
+    spec: &CircuitSpec,
+    p: &Params,
+    cores: Cores,
+    noise: Noise,
 ) -> Result<CircuitIr, Error> {
     let mut q = p.clone();
     if let Some(module) = &spec.derived_module {
@@ -948,7 +1118,10 @@ pub fn build_ir(
         designators: HashSet::new(),
         missing_class: BTreeSet::new(),
         section_tolerance: None,
+        noise: None,
+        parallel: HashMap::new(),
     };
+    ctx.noise = noise_setting(&ctx, noise)?;
     ctx.tolerance = tolerance(&ctx)?;
     make_models(&mut ctx)?;
     let mut sections = Vec::new();
@@ -997,6 +1170,13 @@ pub fn build_ir(
             spec.path.display()
         )));
     }
+    let noise = match ctx.noise {
+        None => None,
+        Some((seed, _, _)) => Some(NoiseSpec {
+            seed,
+            rate_hz: sample_rate(lib)?,
+        }),
+    };
     let mut models: Vec<DeviceModel> = ctx.models.into_iter().map(|(_, m)| m).collect();
     models.extend(ctx.core_models.into_iter().map(DeviceModel::MagneticCore));
     let ir = CircuitIr {
@@ -1011,6 +1191,7 @@ pub fn build_ir(
                 node: node.clone(),
             })
             .collect(),
+        noise,
         probes: spec
             .probes
             .iter()
