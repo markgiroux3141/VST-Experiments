@@ -51,7 +51,11 @@
 #        load on it) for a ~0.5 ms time constant at the fastest (4.7 uF gave 16 ms to
 #        90%; a clamp at 0 V with the bus aimed past it dropped ~5 V in a vacuum diode
 #        at its current and drove the grids positive).
-#   V4   6V6GT drawing its plate current through the reactor's control windings (CUTOFF)
+#   V4   6V6GT drawing its plate current through the reactor's control windings (CUTOFF).
+#        Its screen is on two 5651s of its own (VRCA/VRCB, ~177 V): on b1 a key's VCA sag
+#        pulled the cutoff down 70-810 cents (most at low CUTOFF; 2026-10-30), now 20-140.
+#        At 177 V the 6V6GT cuts off near -27 V, so the pot's low end is fed from the
+#        -45 V rail through RCUTL (68k: -27 V)
 # The supply is tube_filter.yaml's: a 6X4 full-wave rectifier, CRC filtering (b1 the
 # 6V6GT, b4 the VCA's center tap, b3 the small stages), a selenium bridge for the bias
 # (-105 V, -46 V, and an RC stage of its own for the envelope's rail).
@@ -80,7 +84,7 @@ noise:
 heaters: {}
 
 controls:
-  cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from the -45 V rail (0) to ground (1))"}
+  cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from ~-27 V (0; the -45 V rail through RCUTL) to ground (1))"}
   resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RESONANCE pot, the share of V5B's output fed back to the filter node; linear)"}
   attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
   release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
@@ -175,7 +179,9 @@ values:
   # --- cutoff
   r_cutoff_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the CUTOFF pot)"}
   c_cutoff_f: {value: 0.1e-6, source: "provisional: model knowledge (on V4's grid: smooths the cutoff, 10 ms with the pot)"}
-  r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen feed)"}
+  r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen stopper from its 5651 pair)"}
+  r_cutoff_low_ohm: {value: 68.0e+3, source: "provisional: model knowledge (design, 2026-10-30: from the -45 V rail to the CUTOFF pot's low end, ~-27 V, where the 6V6GT on its regulated screen draws ~0.1 mA: the cutoff held 315 Hz (0) to 5 kHz (1), 1.23 kHz at 0.3 (on b1 with the pot from -45 V: 290 Hz, 4.9 kHz, 1.14 kHz); 56k reached 186 Hz with its lowest tenth nearly dead, 82k only 440 Hz)"}
+  r_cut_vr_feed_ohm: {value: 39.0e+3, source: "provisional: model knowledge (design: b1 to V4's 5651 pair: ~3.1 mA idle at b1 ~297 V, ~1.8 mA in the tubes with b1 sagged to ~268 V and the screen drawing its most, 0.6 mA; RCA's range 1.5-3.5 mA (33k ran 3.7 mA idle, 22k 5.3 mA))"}
   r_cathode4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT cathode: current feedback, ~0-15 mA over the pot)"}
   # --- the reactor
   signal_turns: {value: 500.0, source: "provisional: model knowledge (as saturable_reactor.yaml)"}
@@ -383,10 +389,15 @@ sections:
       RREL: {rheostat: [er2, ba], r: r_release_ohm, at: release, taper_mid: env_taper_mid}
   - title: cutoff
     parts:
-      RCUT: {pot: [neg, g4, "0"], r: r_cutoff_pot_ohm, at: cutoff}
+      RCUTL: {R: [neg, c_lo], r: r_cutoff_low_ohm}
+      RCUT: {pot: [c_lo, g4, "0"], r: r_cutoff_pot_ohm, at: cutoff}
       CCUT: {C: [g4, "0"], c: c_cutoff_f}
       XV4: {device: [p4, s4, g4, k4], model: V4}
-      RS4: {R: [b1, s4], r: r_screen4_ohm}
+      RCVR: {R: [b1, c_vr], r: r_cut_vr_feed_ohm}
+      VRCA: {vr_tube: [c_vr, c_vra, c_vrm], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a}
+      VRCB: {vr_tube: [c_vrm, c_vrb, "0"], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a}
+      RCVRL: {R: [c_vrm, "0"], r: osc_r_vr_leak_ohm}
+      RS4: {R: [c_vr, s4], r: r_screen4_ohm}
       RK4: {R: [k4, "0"], r: r_cathode4_ohm}
   - title: oscillator
     parts:

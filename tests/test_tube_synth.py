@@ -82,6 +82,29 @@ def test_a_key_sounds_the_oscillator_at_its_pitch():
     assert rms_dbfs(before) < rms_dbfs(held) - 50
 
 
+def test_a_key_barely_moves_the_cutoff_driver():
+    """V4's screen is on its own 5651s: the VCA's sag on b1 no longer pulls its current
+    (and the cutoff) down while a key is held (on b1 at CUTOFF 0.15: 0.86 -> 0.39 mA,
+    ~800 cents of cutoff; regulated ~10%, ~140 cents)."""
+    s = spec.load_circuit(CIRCUIT)
+    ir = builder.build_ir(s, spec.resolve(s, {"cutoff": 0.15}), cores="ja")
+    ir = dataclasses.replace(ir, probes=(VoltageProbe("k4"),))
+    st = dataclasses.replace(
+        io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
+        full_scale_volts_peak=1.0,
+        partition=PARTITION,
+    )
+    n = int(1.5 * FS)
+    t = np.arange(n) / FS
+    gate = np.where(t >= 0.5, KEY_DOWN_V, KEY_UP_V)
+    k4 = fast.run_transient(
+        ir, np.zeros(n), settings=st, controls={"gate": gate, "pitch": np.full(n, -15.0)}
+    ).vectors["v(k4)"]
+    up, held = np.mean(k4[int(0.3 * FS) : int(0.5 * FS)]), np.mean(k4[int(1.3 * FS) :])
+    print(up, held)  # V4's cathode current in mA (1k)
+    assert 0.85 < held / up < 1.0
+
+
 def test_a_held_note_droops_by_tens_of_cents_not_semitones():
     """The VCA opening sags the supply; the regulated screen keeps the pitch within ~20
     cents of where it started (unregulated, ~780 cents)."""

@@ -619,6 +619,15 @@ into CCUT (100 us; a scratch `cut` control input).
   (RS4): the mechanism that dropped held notes ~780 cents before the oscillator's screen went
   on the 5651s. V4's screen on the 5651 rail would remove it (a design change; tuning
   unaffected).
+- **Built (2026-10-30, the user's go):** V4's screen on two 5651s of its own (VRCA / VRCB,
+  ~175 V, 39k from b1: 3.1 mA idle, 1.8 mA at the worst corner; sharing the oscillator's
+  pair would couple the cutoff into the pitch). At 175 V the 6V6GT cuts off near -27 V, so
+  the CUTOFF pot's low end is fed from the -45 V rail through RCUTL (68k; 56k reached 186 Hz
+  with its lowest tenth dead, 82k only 440 Hz). Cutoff held: 315 Hz (0) to 4.99 kHz (1),
+  1.23 kHz at the default 0.3 (was 290 Hz, 4.92 kHz, 1.14 kHz); a key moves it 23-142 cents
+  (was 67-808). b1's load changed, so the pitch moved 1-12 cents flat (most at the bottom):
+  both keyboard tuning tables re-measured (`vco_study.py --tuning`, panel.rs).
+  `tests/test_tube_synth.py`: V4's current held / released 0.93 (was ~0.45).
 
 **How fast the pitch follows the `pitch` input** (key held, per-cycle frequency of `o_t`). The
 6V6GT's grid RC (10k, 0.1 uF) reaches 90% in 2.3 ms. Within 10 cents (50 ms mean) by: HIGH
