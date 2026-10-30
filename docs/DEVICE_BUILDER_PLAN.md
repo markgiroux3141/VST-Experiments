@@ -789,6 +789,38 @@ resistors (excess noise, voltage coefficient), each with options first.
   heaters don't load the power transformer; the app's live stream settles its first second
   (a power-on's warm-up starts within it).
 
+*Pot end stop, measured 2026-10-30 (options to the user; nothing built).* Reproduced on
+`tube_filter` at draft: RESONANCE 0.99 -> 1 throws the output to +-72 V (a thump decaying
+over ~30 ms), 0.5 -> 1 to 180 V; CUTOFF, LEVEL and the 5E3's volume reach their ends cleanly.
+**The cause is the engine, not the pot:** `Transient::update` carries every node voltage and
+takes `C x'` from the new circuit at the old point. RQ's end segment (1 kOhm -> 1 mOhm) lies
+between the wiper and a node on a series capacitor (CR5), so `G x` there is ~100 A, a
+derivative outside C's range that the first (explicit) stage injects as charge. It scales
+with the jump's ratio (1k -> 10 Ohm 0.8 V, -> 1 Ohm 7.5 V), and approached a decade per
+update the same 1 mOhm end is clean. Renders never update mid-run, so only live play sees it.
+- *Engine restart (prototyped, reverted):* the step after an update starts with backward
+  Euler (implicit, L-stable; SPICE drops to first order at a breakpoint the same way), so the
+  change settles as a switch does: fast modes within the step, charges held (LEVEL to 0 joins
+  1 uF to 100 uF ~1 V apart: the 100 uF side moves 0.01 V, as charge sharing says). Every case
+  above clean, renders unchanged. Its cost on an update to the identical circuit (vs none):
+  BE over the whole sample -20 dB peak at 10 kHz (draft; a tick); BE over h/64 and the rest
+  of the sample in doubling substeps -41 dB (the draft's own local error, re-discretized);
+  to build: BE over h/64 then one method step over the other 63/64 (two cached step systems
+  per update; expected ~-85 dB). Today's code: -79 dB. A zero-time BE step of h/1024 was tried
+  first and fails: a 1 ns mode settles only to 1/11, and its derivative blows up as before.
+- *Pot end resistance:* sources: Bourns PDB18 (carbon) residual resistance 1% max; Taiwan
+  Alpha RV16 (16E spec sheet) 10 / 20 / 50 Ohm max for tracks <= 20k / <= 100k / <= 1M; the
+  EQP-1A's pots are Allen-Bradley type J (MIL-R-94: the scanned spec has no text layer, not
+  read). Spike with the end at 20 Ohm: none at 0.99 -> 1, 11 V on 0.5 -> 1; 50 Ohm 4 V; 1%
+  none. Renders (production, noise at -20 dBFS, the panel's defaults / knobs at their ends),
+  difference re output and the octave levels 31 Hz-16 kHz: Alpha's table: 670 -88.5 / -70.9
+  dB, <= 0.003 dB; EQP-1A -41.5 / -44.1 dB, <= 0.08 dB; 5E3 -74.3 / -57.8 dB, <= 0.014 dB.
+  1%: 670 -42.7 / -55.4 dB, +0.06 dB; EQP-1A -25.5 / -19.8 dB, -0.96..+0.28 dB; 5E3 -30.0 /
+  -13.8 dB, up to +1.8 dB (volume and tone at 10). Low-value pots (the 670's 100 Ohm BALANCE)
+  are likely wirewound: an end resistance per element type.
+- *Wiper contact resistance* (20 Ohm in series with the wiper): the spike unchanged (the end
+  segment is still 1 mOhm).
+
 **B7. Aging.** FUTURE_DIRECTIONS.md section 2: a unit history (years since build,
 powered hours, storage temperature and humidity, service events: recapped,
 retubed) mapped to per-part drift by sourced laws with Arrhenius acceleration
