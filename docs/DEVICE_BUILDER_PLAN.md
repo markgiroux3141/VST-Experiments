@@ -679,6 +679,56 @@ style, never a rejection).
   sqrt(gm) (gm from a duplicate instance at +1 mV). Opt-in: a circuit file's `noise:`
   block (tube_synth only), `--noise` overrides; the seed is in the IR (the cache key).
 
+*Status 2026-10-30: built (commits f5ef8f4..; the done-when's spectra and engine agreement
+met).*
+- **Streams** (`varimu/devices/noise.py`, circuitsim `noise.rs`): Philox words equal numpy's
+  bit for bit, normals and the flicker filter to 1e-14 / 1e-9 (`tests/noise.rs`); the 1/f
+  filter within 0.05 dB of 1/f over 0.01 Hz-10 kHz, stationary from sample 0. The grid's
+  linear interpolation shapes every density by **sinc^4**(f / fs) (a triangle pulse per
+  sample; first written as sinc^2, found by the spectra): -0.3 dB at 10 kHz, -1.3 at 20.
+- **The IR and builders:** `noise: {seed, rate_hz, mains_rms?, mains_sources?}`,
+  `NoiseCurrent`, `TubeNoise`; a circuit file's `noise:` block (seed; temperature_k,
+  flicker_v2, mains_rms default to noise.py's), `build(..., noise=)` (None: the file's;
+  False; True; a seed). Both builders bit for bit (`agreement.rs`: a noise case per circuit,
+  a seed past 2^63). Without the block nothing moves: fixtures, goldens and every other
+  circuit's IR unchanged.
+- **circuitsim** (DK only): current columns after the sine sources and externals, each
+  stream a window of grid samples (production: two engine samples per grid sample;
+  draft-1x: two grid samples per engine sample, aliasing the noise's top octave, stated not
+  fixed); tubes' amplitudes from the last accepted step; flicker as gm e_f; streams carry
+  over `Transient::update`. `tests/noise_run.rs`: kT/C on every capacitor (1.005 / 0.984),
+  the same noise at 1x and 2x (2.3e-4), seeds reproduce, blocks bit for bit, partitions
+  within their coupling (0.8%).
+- **SPICE:** G sources on filesource streams (Python's generator), tubes' gm from two copies
+  on E sources (they load nothing), B sources; `varimu.sim.io.run_transient(..., noise=)`,
+  renders on ngspice pass them. ngspice's operating point takes sample 0 (circuitsim's is
+  noise-free): microvolts, gone within the settle.
+- **The done-when** (`tests/test_noise_spectra.py`, `varimu/measure/noise_theory.py`): a
+  resistor across a capacitor, a 12AX7 and a 6V6GT on stiff sources (tube noise only:
+  shot, flicker, a pentode's partition noise), every octave 16 Hz-16 kHz within 0.5 dB of
+  the closed forms in circuitsim (4 s; measured within 0.47), 64 Hz-16 kHz in ngspice (1 s;
+  within 0.45). The engines on the same streams: -61 dB below 20 kHz on that triode
+  (ngspice as a reference: at its production settings its interpolation leaves -31 dB),
+  -51 dB on triode_stage.yaml (a 0.1-0.2% level offset in ngspice; circuitsim's 2x and 8x
+  agree to -53 dB); resistors alone -100 dB (slow RC) / -76 dB (16 kHz corner).
+- **Mains wander:** the mains' amplitude times 1 + m(t), one stream for every `mains` part;
+  unit flicker through a one-pole at 2 Hz, nominal 0.5% rms (MAINS_SOURCE: provisional; no
+  published spectrum of the band between flicker and EN 50160's 10-minute means was found).
+  circuitsim equals Python's m to 5e-15; the engines agree to -182 dB.
+- **The 670's idle noise** (`scripts/noise_670.py` -> `reports/noise/670_idle.json`; noise
+  forced on, defaults, production, 20 Hz-20 kHz across its 600 ohm load): **-115 dBm**,
+  49 dB under the published ~70 dB below +4 dBm (-66 dBm; dealers' and the reissue's spec
+  sheets, bandwidth unstated, not checked against an original document): vs_670 style, not
+  a rejection. The noiseless model is silent at idle (-247 dBm: no hum reaches the output),
+  so the published figure is mostly what isn't modelled yet: heater hum, carbon
+  resistors' excess noise (B6), aged tubes.
+- **Cost in real time:** tube_synth at draft with the app's partition, 0.84-0.89x real time
+  without noise, +0.15 with the resistors' (73 white streams; ~16 ns per normal, the
+  Box-Muller transform), +0.15 with the tubes' (amplitudes now from DK's own last
+  evaluation, no extra device evaluations: that saved little), free for the mains wander;
+  all of it ~1.08-1.16x. In the app: ~88% load, worst block 133% (no dropouts in 10 s at
+  a 50 ms buffer), against 60% / 91% without, back to back.
+
 **B6. Component physics.** The part non-idealities of FUTURE_DIRECTIONS.md
 section 1, each a sourced, bounded parameter of its part class, tested on its
 own and measured for audibility on the 670 before it becomes a default:

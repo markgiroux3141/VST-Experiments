@@ -272,3 +272,71 @@ fn the_mains_wander_multiplies_the_mains_amplitude() {
     println!("mains wander: worst {worst:.2e} against m's rms {rms:.2e}");
     assert!(worst < 1e-9 * (1.0 + rms), "worst {worst:e}");
 }
+
+/// A partitioned run keeps the mains wander on the part with the mains (the others'
+/// noise specs name only the sources they have; regression: every part was given every
+/// mains source and failed validation).
+#[test]
+fn a_partitioned_run_keeps_the_mains_wander_where_the_mains_are() {
+    let ir = CircuitIr {
+        version: IR_VERSION,
+        title: "mains, partitioned".into(),
+        input_node: "in".into(),
+        controls: vec![],
+        noise: Some(NoiseSpec {
+            seed: 3,
+            rate_hz: RATE,
+            mains_rms: 0.005,
+            mains_sources: vec!["VM".into()],
+        }),
+        probes: vec![Probe::Voltage { node: "out".into() }],
+        models: vec![],
+        sections: vec![
+            Section {
+                title: "first".into(),
+                elements: vec![
+                    r("RIN", "in", "0", 1e3),
+                    r("R1", "m", "out", 1e4),
+                    noise("R1", "m", "out", 1e4),
+                    c("C1", "out", "0", C_F),
+                ],
+            },
+            Section {
+                title: "mains".into(),
+                elements: vec![
+                    Element::SineSource(SineSource {
+                        name: "VM".into(),
+                        pos: "m".into(),
+                        neg: "0".into(),
+                        offset_v: 0.0,
+                        amplitude_v: 10.0,
+                        freq_hz: 60.0,
+                        phase_deg: 90.0,
+                    }),
+                    r("RM", "m", "0", 1e3),
+                ],
+            },
+        ],
+    };
+    ir.validate().unwrap();
+    let x = vec![0.0; 4800];
+    let o = opts();
+    let whole = circuitsim::simulate(&ir, &x, 1.0 / RATE, &o).unwrap();
+    let part = simulate_partitioned(
+        &ir,
+        &["mains".to_string()],
+        Coupling::Extrapolate,
+        &x,
+        1.0 / RATE,
+        &o,
+        usize::MAX,
+        |_| Ok(()),
+    )
+    .unwrap();
+    let d = rms_diff(
+        &probe(&whole, "v(out)")[100..],
+        &probe(&part, "v(out)")[100..],
+    );
+    println!("mains partitioned: {d:.2e}");
+    assert!(d < 1e-2, "partitioned: rms difference {d:e}");
+}

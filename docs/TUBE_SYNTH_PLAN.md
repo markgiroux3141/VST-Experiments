@@ -483,6 +483,33 @@ Caveat noted with the result: part of the difference is the waveform's shape, wh
 digital pulse could imitate; a spectrally matched pair would isolate the drift, glide and
 pitch-dependent level (not run).
 
+**Noise (device builder B5, 2026-10-30).** `tube_synth.yaml` has a `noise: {seed: 1}` block:
+Johnson noise on its 73 resistors (not the three `numerical:` / core-gap ones), shot,
+grid-current shot and flicker noise on its 14 tube sections, the mains wander on its three
+mains windings (DEVICE_BUILDER_PLAN.md B5 has the models and their tests). The app's
+`tube_synth` device plays it (the Rust builder reads the block). What it does to a held note
+(`scripts/noise_synth_study.py` -> `reports/tube_synth/noise/`; 10 s at production; noise off /
+the circuit's noise alone / the mains wander alone, at 475 Hz and 1.3 kHz):
+- **The circuit's own noise (resistors, tubes) is not measurable in the synth**, as estimated
+  before building it: cycle-to-cycle jitter 9.84 / 2.34 cents with and without it (that
+  jitter is the supply ripple's deterministic FM), slow wander (100 ms means) 0.14 / 0.06
+  cents rms with and without, the floor between the harmonics -138 -> -137 dB per bin re the
+  fundamental, the output with no key down -95 dBFS either way (hum).
+- **The mains wander is audible as drift:** 1.83 cents rms (8.9 peak to peak) over 10 s at
+  475 Hz, 0.89 (3.9) at 1.3 kHz; the level wanders 0.03 dB. 0.5% of 120 V is 0.6 V rms, so
+  ~3 cents per volt of mains here (vco_lc's 43 cents/V before the screen went on the 5651s).
+  The FM smears the harmonics: the floor between them rises to -111 / -128 dB per bin.
+- **A/B** (`scripts/noise_ab.py`: osc_ab's phrase, the tube oscillator, noise off / on at
+  production, loudness-matched; blind pair in `reports/tube_synth/noise_ab/renders/`): with
+  this seed the mains sits low through the phrase, so every held note is 2-16 cents flatter
+  with noise on (the lowest note most); that pitch offset is the audible difference, not
+  hiss. Not yet heard by the user.
+- **Live:** the app plays it at ~88% load (worst block 133%, no dropouts in 10 s at 50 ms)
+  against 60% / 91% without noise; the resistors' and tubes' noise cost ~0.15x real time
+  each and isn't measurable in the sound; the mains wander is free. Open (the user's): keep
+  it all in the app, or play the mains wander alone live and keep everything for
+  production renders.
+
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
   code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity

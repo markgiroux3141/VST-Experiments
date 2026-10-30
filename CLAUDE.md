@@ -148,6 +148,20 @@ on the new `6AL5@1`, doesn't run cleanly yet; (c) isn't started (TUBE_SYNTH_PLAN
 status). Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
 for the DC operating point only; absent = unchanged IR).
 
+**Noise (device builder B5, 2026-10-30; DEVICE_BUILDER_PLAN.md B5's status):** a circuit
+file's `noise: {seed}` block turns on Johnson noise (IR `NoiseCurrent` per resistor of R /
+pot / t_pad parts and windings, not `numerical:` leaks or core-node resistors), tube shot /
+partition / grid-current shot and flicker noise (`TubeNoise` per triode and pentode; flicker
+a grid-referred K_f / f, provisional, a ~1 kHz corner for a 12AX7) and the mains wander (the
+`mains` parts' amplitude times 1 + m(t), 0.5% rms, provisional); `build(..., noise=)`
+overrides (None / False / True / a seed). Only tube_synth has the block: nothing else moved.
+Streams: Philox4x64-10 keyed (seed, crc32(name) << 32 | stream), sample k a pure function of
+k, on the project's 96 kHz grid from the run's start (settle included), linear between
+samples (the density times sinc^4(f / fs)); `varimu/devices/noise.py` is the reference,
+circuitsim's `noise.rs` the port (DK solver only: current columns), SPICE via filesources
+(`io.run_transient(..., noise=)`). Spectra vs theory and the engines' agreement:
+`tests/test_noise_spectra.py`.
+
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
 (`config/circuits/fairchild_670.yaml` -> `varimu/circuit/builder.py`; see

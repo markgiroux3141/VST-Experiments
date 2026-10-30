@@ -1,0 +1,10 @@
+{
+ "seconds": 3.0,
+ "idle_off_dbm": -246.92756286906234,
+ "idle_on_dbm": -115.15241272264448,
+ "noise_alone_dbm": -115.15241271733245,
+ "published_dbm": -66.0,
+ "published_source": "~70 dB below +4 dBm (dealers' / reissue spec sheets)",
+ "wall_s": 66.40879799984396,
+ "noise_vs_published_db": -49.15241271733245
+}

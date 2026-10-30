@@ -266,8 +266,23 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             } else {
                 Vec::new()
             },
-            // Every part keeps the noise spec: streams are keyed by element name.
-            noise: ir.noise.clone(),
+            // Every part keeps the noise spec (streams are keyed by element name), with the
+            // mains wander on the mains sources it has.
+            noise: ir.noise.as_ref().map(|n| {
+                let has = |m: &String| {
+                    sections
+                        .iter()
+                        .flat_map(|s| s.elements.iter())
+                        .any(|e| matches!(e, Element::SineSource(v) if &v.name == m))
+                };
+                let mains: Vec<String> =
+                    n.mains_sources.iter().filter(|m| has(m)).cloned().collect();
+                crate::ir::NoiseSpec {
+                    mains_rms: if mains.is_empty() { 0.0 } else { n.mains_rms },
+                    mains_sources: mains,
+                    ..n.clone()
+                }
+            }),
             probes,
             models: used(&sections.iter().collect::<Vec<_>>()),
             sections,

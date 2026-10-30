@@ -950,10 +950,26 @@ impl Transient {
         Ok(tr)
     }
 
-    /// The noise sources take the tubes' gm and currents at the accepted point.
+    /// The noise sources take the tubes' gm and currents at the operating point.
     fn observe_noise(&mut self) {
         if let (Some(noise), Some(dk)) = (&mut self.mna.noise, &self.dk) {
             noise.observe(&self.mna.devices, &dk.ports.offsets, &self.ports);
+        }
+    }
+
+    /// ... and after a step, from the DK solve's own last evaluation (the port currents
+    /// at the solution, the Jacobians within its tolerance): no device is evaluated again.
+    fn observe_noise_step(&mut self) {
+        if let (Some(noise), Some(dk)) = (&mut self.mna.noise, &self.dk) {
+            let (ports, newton) = (&dk.ports, &dk.newton);
+            let jac = newton.jacobians();
+            noise.observe_with(|d| {
+                let (o, np, go) = (ports.offsets[d], ports.widths[d], ports.g_offset(d));
+                let (mut i, mut g) = ([0.0; 4], [0.0; 16]);
+                i[..np].copy_from_slice(&newton.i[o..o + np]);
+                g[..np * np].copy_from_slice(&jac[go..go + np * np]);
+                (i, g)
+            });
         }
     }
 
@@ -1116,7 +1132,7 @@ impl Transient {
             }
             off += np;
         }
-        self.observe_noise();
+        self.observe_noise_step();
     }
 
     /// Advance one step to the time where the input is `u`, the input

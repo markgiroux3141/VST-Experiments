@@ -127,6 +127,11 @@ impl Ports {
         self.nodes.len()
     }
 
+    /// First entry of device `d`'s Jacobian in the packed list.
+    pub fn g_offset(&self, d: usize) -> usize {
+        self.g_offsets[d]
+    }
+
     pub fn is_empty(&self) -> bool {
         self.nodes.is_empty()
     }
@@ -550,6 +555,12 @@ pub struct DkNewton {
 }
 
 impl DkNewton {
+    /// The devices' Jacobians at their last evaluation (packed, see [`Ports`]): within
+    /// the tolerance of the last solution.
+    pub fn jacobians(&self) -> &[f64] {
+        &self.gd
+    }
+
     pub fn new(ports: &Ports, reuse: bool) -> DkNewton {
         let m = ports.len();
         let widest = ports.widths.iter().copied().max().unwrap_or(0);

@@ -648,16 +648,28 @@ impl NoiseRun {
         }
     }
 
-    /// Take the tubes' gm and currents at the accepted point: `ports` is every
-    /// device's port voltages, device by device (`port_offsets[d]` its first).
+    /// Take the tubes' gm and currents at the accepted point, evaluating them: `ports`
+    /// is every device's port voltages, device by device (`port_offsets[d]` its first).
     pub fn observe(
         &mut self,
         devices: &[crate::mna::DeviceInstance],
         port_offsets: &[usize],
         ports: &[f64],
     ) {
-        let rate = self.rate_hz;
         let (mut i, mut g) = ([0.0; 4], [0.0; 16]);
+        self.observe_with(|d| {
+            let dev = &devices[d].device;
+            let np = dev.ports();
+            let off = port_offsets[d];
+            dev.eval(&ports[off..off + np], &mut i[..np], &mut g[..np * np]);
+            (i, g)
+        });
+    }
+
+    /// [`NoiseRun::observe`] from a solver's own last evaluation: `eval(d)` gives device
+    /// `d`'s port currents and Jacobian (row-major) in fixed-size arrays.
+    pub fn observe_with(&mut self, mut eval: impl FnMut(usize) -> ([f64; 4], [f64; 16])) {
+        let rate = self.rate_hz;
         for s in &mut self.sources {
             let Source::Tube {
                 device,
@@ -673,11 +685,7 @@ impl NoiseRun {
             else {
                 continue;
             };
-            let d = &devices[*device];
-            let np = d.device.ports();
-            let off = port_offsets[*device];
-            d.device
-                .eval(&ports[off..off + np], &mut i[..np], &mut g[..np * np]);
+            let (i, g) = eval(*device);
             // Port 0 is the plate; gm is d Ip / d V(control grid).
             let gm_t = (g[*grid_port] * *share).max(0.0);
             let psd = if *partition > 0.0 {
