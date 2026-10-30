@@ -1321,10 +1321,20 @@ impl PlayView {
                 self.midi_port = self.midi_port.min(self.midi_ports.len().saturating_sub(1));
             }
         });
+        // A device with an oscillator of its own (a pitch control input) plays it from the
+        // keys; the test oscillator stays silent, so its waveform does nothing there.
+        let own_oscillator = DEVICES.get(self.device).is_some_and(|d| d.pitch.is_some());
         ui.horizontal(|ui| {
-            ui.label(RichText::new("Wave").color(theme::MUTED));
-            ui.selectable_value(&mut self.wave, Wave::Saw, "Saw");
-            ui.selectable_value(&mut self.wave, Wave::Square, "Square");
+            ui.add_enabled_ui(!own_oscillator, |ui| {
+                ui.label(RichText::new("Wave").color(theme::MUTED));
+                ui.selectable_value(&mut self.wave, Wave::Saw, "Saw");
+                ui.selectable_value(&mut self.wave, Wave::Square, "Square");
+            })
+            .response
+            .on_disabled_hover_text(
+                "The test oscillator's waveform: this device plays its own oscillator \
+                 (its WAVE knob on the front panel)",
+            );
             ui.label(RichText::new("Buffer").color(theme::MUTED));
             egui::ComboBox::from_id_salt("midi_buffer")
                 .width(70.0)
@@ -1345,7 +1355,12 @@ impl PlayView {
         });
         ui.label(
             RichText::new(held.unwrap_or_else(|| {
-                "a test oscillator (band-limited, one voice) plays into the device: not part of it".into()
+                if own_oscillator {
+                    "the keys play the device's own oscillator (the test oscillator is off)".into()
+                } else {
+                    "a test oscillator (band-limited, one voice) plays into the device: not part of it"
+                        .into()
+                }
             }))
             .small()
             .color(theme::MUTED),
