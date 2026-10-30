@@ -363,10 +363,12 @@ pub const DEVICES: [Device; 8] = [
         // bench, 3 s at -15 V: 1.38x real time on two, 0.89x on four, within 0.1 cent
         // and 0.01 dB of the one solve.
         partition: Some(&[
+            "resonance",
+            "|",
             "input",
             "filter",
-            "resonance",
             "cutoff",
+            "envelope",
             "|",
             "oscillator",
             "pitch",

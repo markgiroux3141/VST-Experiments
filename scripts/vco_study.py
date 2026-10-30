@@ -97,10 +97,12 @@ CANDIDATES = {
         plot_v=(-30.0, -15.0, 0.0),
         controls=(("gate", -1.0),),
         partition=(
+            "resonance",
+            "|",
             "input",
             "filter",
-            "resonance",
             "cutoff",
+            "envelope",
             "|",
             "oscillator",
             "pitch",

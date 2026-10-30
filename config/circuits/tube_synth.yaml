@@ -56,6 +56,12 @@
 #        pulled the cutoff down 70-810 cents (most at low CUTOFF; 2026-10-30), now 20-140.
 #        At 177 V the 6V6GT cuts off near -27 V, so the pot's low end is fed from the
 #        -45 V rail through RCUTL (68k: -27 V)
+#   V7   ENV AMOUNT: a second 6V6GT beside V4 on the control windings (its plate on p4),
+#        its grid on the envelope node (never positive: no load on it, where a pot summed
+#        into V4's grid would hold the VCA shut at slow attacks), so the envelope adds
+#        control current and opens the filter with the VCA. AMOUNT is its screen voltage,
+#        a pot from b1 (0: the screen grounded, V7 off), bypassed by CS7 (it also takes
+#        b1's ripple off the screen). 2.2k in its cathode: ~10 mA at full AMOUNT
 # The supply is tube_filter.yaml's: a 6X4 full-wave rectifier, CRC filtering (b1 the
 # 6V6GT, b4 the VCA's center tap, b3 the small stages), a selenium bridge for the bias
 # (-105 V, -46 V, and an RC stage of its own for the envelope's rail).
@@ -88,6 +94,7 @@ controls:
   resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RESONANCE pot, the share of V5B's output fed back to the filter node; linear)"}
   attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
   release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
+  env_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-30: the ENV AMOUNT pot, V7's screen from ground (0: off) to b1 (1); linear)"}
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1); linear)"}
   range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
@@ -177,6 +184,12 @@ values:
   c_env_f: {value: 0.47e-6, source: "provisional: model knowledge (the envelope's capacitor, film)"}
   envelope_diode: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4's two sections as the envelope's steering diodes; config/components/6x4/1.yaml, per section)"}
   # --- cutoff
+  r_grid7_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (V7's grid stopper from the envelope node)"}
+  r_cathode7_ohm: {value: 2.2e+3, source: "provisional: model knowledge (design: V7's cathode, current feedback: ~10 mA at full AMOUNT with the envelope open, enough to reach the cutoff's top from CUTOFF 0.15; at 1k ~20 mA, sagging b1 ~30 V)"}
+  r_amount_pot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: the ENV AMOUNT pot, b1 to ground, ~0.3 mA)"}
+  c_screen7_f: {value: 0.22e-6, source: "provisional: model knowledge (design: V7's screen bypass on the AMOUNT wiper: holds the screen while the envelope moves the grid; with the pot's up to 250k, b1's 120 Hz ripple ~-26 dB)"}
+  r_screen7_ohm: {value: 1.0e+3, source: "provisional: model knowledge (V7's screen stopper)"}
+  c_ba_f: {value: 0.1e-6, source: "provisional: model knowledge (design: on the keyboard bus's end of the envelope (RBUS's far side): 0.1 ms with RBUS; in the draft's partition the bus and the envelope are on different threads, coupled at this node)"}
   r_cutoff_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the CUTOFF pot)"}
   c_cutoff_f: {value: 0.1e-6, source: "provisional: model knowledge (on V4's grid: smooths the cutoff, 10 ms with the pot)"}
   r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen stopper from its 5651 pair)"}
@@ -253,6 +266,7 @@ devices:
   VDA: {device: envelope_diode}
   VDR: {device: envelope_diode}
   V4: {device: 6V6GT@1}
+  V7: {device: 6V6GT@1}
   VR: {device: rectifier_tube}
   DB: {device: bias_rectifier}
   OV1A: {device: 12AU7@1}
@@ -379,7 +393,7 @@ sections:
       RLO: {R: [out, "0"], r: r_out_load_ohm}
   - title: envelope
     parts:
-      RBUS: {R: [bus, ba], r: r_bus_ohm}
+      CBA: {C: [ba, "0"], c: c_ba_f}
       RATT: {rheostat: [ba, bd], r: r_attack_ohm, at: attack, taper_mid: env_taper_mid}
       XVDA: {device: [bd, env], model: VDA}
       CENV: {C: [env, "0"], c: c_env_f}
@@ -387,8 +401,19 @@ sections:
       XVDR: {device: [env, er], model: VDR}
       RRELMIN: {R: [er, er2], r: r_release_min_ohm}
       RREL: {rheostat: [er2, ba], r: r_release_ohm, at: release, taper_mid: env_taper_mid}
+  - title: keyboard bus
+    parts:
+      # The keyboard bus's source resistance (the control input stays on the draft
+      # partition's first thread; the envelope is with the cutoff driver, V7 on both)
+      RBUS: {R: [bus, ba], r: r_bus_ohm}
   - title: cutoff
     parts:
+      RG7: {R: [env, g7], r: r_grid7_stop_ohm}
+      XV7: {device: [p4, s7, g7, k7], model: V7}
+      RK7: {R: [k7, "0"], r: r_cathode7_ohm}
+      RAMT: {pot: ["0", s7w, b1], r: r_amount_pot_ohm, at: env_amount}
+      CS7: {C: [s7w, "0"], c: c_screen7_f}
+      RS7: {R: [s7w, s7], r: r_screen7_ohm}
       RCUTL: {R: [neg, c_lo], r: r_cutoff_low_ohm}
       RCUT: {pot: [c_lo, g4, "0"], r: r_cutoff_pot_ohm, at: cutoff}
       CCUT: {C: [g4, "0"], c: c_cutoff_f}

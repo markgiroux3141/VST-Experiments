@@ -661,6 +661,33 @@ grid current, so no load), AMOUNT its cathode rheostat (1k + 0-100k).
   envelope node with it) or another split: not solved.
 - CPU method: 3 s at -15 V plus the 1 s settle, one run at a time: 1.245 / 1.259 / 1.287 s
   wall for the plain synth / A / B (0.93x real time on the bench's four threads).
+- **Built: A, ENV AMOUNT (2026-10-30, the user's go).** V7 (6V6GT) beside V4, its grid on
+  `env`, 2.2k in its cathode. AMOUNT is its screen voltage, a 1M pot from b1, bypassed
+  0.22 uF. At 0 the screen is grounded and V7 is off; the default is 0, so the panel's sound
+  is unchanged. The other placements of AMOUNT failed: a cathode rheostat leaks at 0 and its law sits in the last
+  20%; reversing it needs an extra pot end. V7's screen stays off the regulated rail: with V4's
+  screen and b1's 260-297 V the 5651s' 1.5-3.5 mA window can't hold a second screen (a
+  wide-range VR such as the 0A2 would be a new component). After a note V7 is off, so b1's
+  recovery doesn't touch it.
+  - Held cutoff at CUTOFF 0.15 (rest 622 Hz): AMOUNT 0 / 0.5 / 0.75 / 1: 589 Hz / 2.8 / 3.8
+    / 4.7 kHz from the control current (the filter's -10 dB point: 579 Hz / 2.8 / 3.9 kHz).
+    Attack 0: 10-90% up in 1-2 ms, down in 4-21 ms (release 0.2); attack 0.3 / release 0.4:
+    29-75 / 13-71 ms. The cutoff after a note (-82 cents at 0.2 s to -18 at 0.9 s) is V4's
+    leftover sag, the same at every AMOUNT.
+  - **The partition:** V7 drives p4, and V7 on a thread that saw p4 as a source failed at key
+    up. So V7 and the envelope are with the cutoff driver: a section `keyboard bus` (RBUS)
+    keeps the control input on the first thread, and CBA (0.1 uF) holds `ba`, where the
+    threads meet. The app's split is now **five threads**: the VCA | the resonance pair |
+    input, filter, cutoff and envelope | the oscillator | the supplies (the pair sees the
+    filter node, capacitor-held, as a source). Bench (key held, 3 s): 0.87 / 0.95-0.98 s per s
+    at AMOUNT 0 / 1, against four threads' 0.96 / 1.06-1.08; the output within -64 / -48 dB.
+  - **App load** (`examples/play.rs --hold 69`, new: a key held without a keyboard, 50 ms
+    buffer, 8 s): the synth before V7 68-70% (worst block 97-101%); now AMOUNT 0 67-70%
+    (85-101%), AMOUNT 1 77-80% (103-108%); no dropouts. On four threads AMOUNT 1 ran 89-94%
+    with a dropout. A 12AU7 for V7 (cathode rheostat) cost as much: 86-88% at AMOUNT 0 (a
+    near-cut-off triode on a high-impedance cathode), 78-79% at 1.
+  - The tuning moved -0.3 cents (-15 V): tables kept. `tests/test_tube_synth.py`: V7 at
+    AMOUNT 0 never conducts; at 1 ~10 mA held, off within 0.1 s of the release.
 
 **The LFO (a 12AX7 phase-shift oscillator, three high-pass RC sections, RATE ganged
 rheostats, a cathode follower, DEPTH into the pitch grid): not oscillating yet.** Ladders of

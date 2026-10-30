@@ -30,10 +30,12 @@ CIRCUIT = Path(CONFIG_DIR / "circuits" / "tube_synth.yaml")
 FS = 96000
 FULL_SCALE_V = 3.5
 PARTITION = (
+    "resonance",
+    "|",
     "input",
     "filter",
-    "resonance",
     "cutoff",
+    "envelope",
     "|",
     "oscillator",
     "pitch",
@@ -103,6 +105,39 @@ def test_a_key_barely_moves_the_cutoff_driver():
     up, held = np.mean(k4[int(0.3 * FS) : int(0.5 * FS)]), np.mean(k4[int(1.3 * FS) :])
     print(up, held)  # V4's cathode current in mA (1k)
     assert 0.85 < held / up < 1.0
+
+
+@pytest.mark.parametrize("amount", [0.0, 1.0])
+def test_env_amount_adds_control_current_only_while_the_envelope_is_open(amount):
+    """ENV AMOUNT: V7 beside V4 on the control windings, its grid on the envelope, AMOUNT
+    its screen. At 0 it never conducts; at 1 it adds ~10 mA with a key held (CUTOFF 0.15:
+    ~600 Hz -> ~4 kHz) and stops within a few ms of the release."""
+    s = spec.load_circuit(CIRCUIT)
+    ir = builder.build_ir(
+        s, spec.resolve(s, {"cutoff": 0.15, "env_amount": amount, "release": 0.0}), cores="ja"
+    )
+    ir = dataclasses.replace(ir, probes=(VoltageProbe("k7"),))
+    st = dataclasses.replace(
+        io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
+        full_scale_volts_peak=1.0,
+        partition=PARTITION,
+    )
+    n = int(1.0 * FS)
+    t = np.arange(n) / FS
+    gate = np.where((t >= 0.2) & (t < 0.6), KEY_DOWN_V, KEY_UP_V)
+    i7 = (
+        fast.run_transient(
+            ir, np.zeros(n), settings=st, controls={"gate": gate, "pitch": np.full(n, -15.0)}
+        ).vectors["v(k7)"]
+        / 2.2
+    )  # mA, V7's cathode (2.2k)
+    up, held, after = i7[int(0.15 * FS)], i7[int(0.55 * FS)], i7[int(0.7 * FS)]
+    print(amount, up, held, after)
+    assert abs(up) < 0.01 and abs(after) < 0.01
+    if amount == 0.0:
+        assert abs(held) < 0.01
+    else:
+        assert 7.0 < held < 13.0
 
 
 def test_a_held_note_droops_by_tens_of_cents_not_semitones():

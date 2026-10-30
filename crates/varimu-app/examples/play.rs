@@ -4,7 +4,7 @@
 //!
 //!     cargo run --release -p varimu-app --example play -- --device fairchild_670
 //!         (--file FILE [--start S] [--seconds S] | --input [NAME] [--channel N]
-//!          | --midi [NAME] [--wave saw|square])
+//!          | --midi [NAME] [--wave saw|square] | --hold NOTE)
 //!         [--for SECONDS] [--buffer S] [--gain-db G] [--set KEY=VALUE ...] [--turn KEY=A,B]
 //!
 //! `--gain-db G` is the input gain (the Play view's normalization and trim).
@@ -17,15 +17,18 @@
 //! like NAME; `--list-midi` lists them): its keys play the test oscillator
 //! (`midi::TestOsc`) into the device's input, and its mod wheel turns the device's
 //! `mod_wheel` control over its range (the reactor filter's cutoff).
+//! `--hold NOTE` plays as `--midi` does with one key held for the whole run (a MIDI note
+//! number, 60 = C4; no keyboard needed): a voice's load with its envelope open.
 //! `--noise` plays a device whose file has noise sources (device builder B5) with them (off
 //! by default, as in the app).
 
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use varimu_app::audio;
 use varimu_app::live::Circuit;
-use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Wave};
+use varimu_app::midi::{self, Keyboard, Keys, MOD_WHEEL, Wave};
 use varimu_app::panel::{DEVICES, Kind, knobs, values};
 use varimu_app::player::{INPUT_BUFFER_S, Player, Source, State, input_devices};
 use varimu_app::settings::Settings;
@@ -66,6 +69,7 @@ fn main() -> Result<(), String> {
     let mut normal_priority = false;
     let mut record: Option<String> = None;
     let (mut midi_name, mut wave): (Option<Option<String>>, Wave) = (None, Wave::Saw);
+    let mut hold: Option<u8> = None;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--device" => device = args.next().ok_or("--device needs a value")?,
@@ -91,6 +95,7 @@ fn main() -> Result<(), String> {
                     _ => return Err("--wave saw|square".into()),
                 }
             }
+            "--hold" => hold = Some(num(args.next(), &a)? as u8),
             "--list-midi" => {
                 for p in midi::ports()? {
                     println!("{p}");
@@ -152,7 +157,16 @@ fn main() -> Result<(), String> {
             })
     });
     let feeds = varimu_app::panel::key_feeds(dev, circuit.spec())?;
+    let held = hold.map(|note| {
+        let keys = Arc::new(Keys::default());
+        keys.message(&[0x90, note, 100]);
+        keys
+    });
     let (source, buffer) = match (&file, input) {
+        _ if held.is_some() => (
+            Source::Keys(held.clone().expect("a held key"), wave, feeds),
+            buffer.unwrap_or(INPUT_BUFFER_S),
+        ),
         _ if keyboard.is_some() => {
             let kb = keyboard.as_ref().expect("a keyboard");
             (
@@ -182,7 +196,7 @@ fn main() -> Result<(), String> {
             },
             buffer.unwrap_or(INPUT_BUFFER_S),
         ),
-        (None, None) => return Err("--file, --input or --midi".into()),
+        (None, None) => return Err("--file, --input, --midi or --hold".into()),
     };
     if !normal_priority {
         varimu_app::player::raise_priority();
