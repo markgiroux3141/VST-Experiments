@@ -23,6 +23,7 @@ fn capacitor(name: &str, a: &str, b: &str, c_f: f64) -> Element {
         a: a.into(),
         b: b.into(),
         c_f,
+        v0_v: None,
     })
 }
 

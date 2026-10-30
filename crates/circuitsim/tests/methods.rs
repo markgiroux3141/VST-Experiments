@@ -24,6 +24,7 @@ fn circuit() -> CircuitIr {
             a: a.into(),
             b: b.into(),
             c_f,
+            v0_v: None,
         })
     };
     CircuitIr {

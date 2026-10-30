@@ -135,3 +135,26 @@ def test_json_rejects_unknown_fields_and_versions(default_ir):
     d["sections"][0]["elements"][0]["kind"] = "fuse"
     with pytest.raises(IRError, match="unknown kind"):
         CircuitIR.from_dict(d)
+
+
+def test_a_capacitor_start_voltage_round_trips_and_is_absent_when_unset():
+    """`Capacitor.v0_v` (a start state, held for the DC operating point) is written only
+    when set, so IRs without it read and write as before."""
+    from varimu.circuit.ir import Capacitor, CircuitIR, Resistor, Section, VoltageProbe
+
+    def ir(v0):
+        return CircuitIR(
+            title="t",
+            input_node="in",
+            probes=(VoltageProbe("a"),),
+            models=(),
+            sections=(
+                Section("s", (Resistor("R1", "in", "a", 1e3), Capacitor("C1", "a", "0", 1e-6, v0))),
+            ),
+        )
+
+    plain, started = ir(None), ir(5.0)
+    assert '"v0_v"' not in plain.to_json()
+    assert '"v0_v": 5.0' in started.to_json()
+    assert CircuitIR.from_json(plain.to_json()) == plain
+    assert CircuitIR.from_json(started.to_json()) == started

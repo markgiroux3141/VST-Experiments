@@ -63,10 +63,17 @@ class Resistor:
 
 @dataclass(frozen=True)
 class Capacitor:
+    """`v0_v`: the voltage (a - b) the capacitor holds at the start of a run, None: none.
+    The DC operating point is solved with it held there (a start state, as SPICE's IC=), so
+    a run can start away from a balance point the circuit would otherwise sit at, such as
+    a symmetric multivibrator's (a noiseless simulation never leaves it). Absent from the
+    JSON when None. ngspice starts from its own operating point and ignores it."""
+
     name: str
     a: str
     b: str
     c_f: float
+    v0_v: float | None = None
 
 
 @dataclass(frozen=True)
@@ -317,6 +324,8 @@ class CircuitIR:
                 _positive(f"{el.name}.r_ohm", el.r_ohm)
             elif isinstance(el, Capacitor):
                 _positive(f"{el.name}.c_f", el.c_f)
+                if el.v0_v is not None:
+                    _finite(f"{el.name}.v0_v", el.v0_v)
             elif isinstance(el, Inductor):
                 _positive(f"{el.name}.l_h", el.l_h)
                 inductors.add(el.name)
@@ -516,6 +525,8 @@ _MODEL_KINDS = {
     "magnetic_core": MagneticCore,
 }
 _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
+# Optional fields written only when set, so IRs without them read and write as before.
+_OMITTED_WHEN_NONE = {(Capacitor, "v0_v")}
 _PROBE_KINDS = {"voltage": VoltageProbe}
 _KIND_OF = {
     cls: kind
@@ -527,7 +538,13 @@ _KIND_OF = {
 def _encode(x: Any) -> Any:
     if dataclasses.is_dataclass(x):
         d = {"kind": _KIND_OF[type(x)]} if type(x) in _KIND_OF else {}
-        d.update({f.name: _encode(getattr(x, f.name)) for f in dataclasses.fields(x)})
+        d.update(
+            {
+                f.name: _encode(getattr(x, f.name))
+                for f in dataclasses.fields(x)
+                if not ((type(x), f.name) in _OMITTED_WHEN_NONE and getattr(x, f.name) is None)
+            }
+        )
         return d
     if isinstance(x, tuple | list):
         return [_encode(v) for v in x]
@@ -551,9 +568,10 @@ def _check_keys(what: str, d: dict, expected: set[str]) -> None:
 
 def _fields(cls, d: dict, tagged: bool, **nested) -> Any:
     names = {f.name for f in dataclasses.fields(cls)}
-    _check_keys(cls.__name__, d, names | ({"kind"} if tagged else set()))
+    omitted = {n for n in names if (cls, n) in _OMITTED_WHEN_NONE and n not in d}
+    _check_keys(cls.__name__, d, names - omitted | ({"kind"} if tagged else set()))
     kw = {}
-    for n in names:
+    for n in names - omitted:
         v = d[n]
         if n in nested:
             v = nested[n](v)

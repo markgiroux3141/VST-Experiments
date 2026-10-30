@@ -120,6 +120,7 @@ fn main() -> Result<(), String> {
             a: node.clone(),
             b: "0".into(),
             c_f: *c_f,
+            v0_v: None,
         }));
         println!("added {c_f:e} F from {node} to ground");
     }

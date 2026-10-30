@@ -115,6 +115,13 @@ pub struct Capacitor {
     pub a: String,
     pub b: String,
     pub c_f: f64,
+    /// The voltage (a - b) it holds at the start of a run: the DC operating point is
+    /// solved with it held there (a start state, as SPICE's IC=), so a run can start away
+    /// from a balance point the circuit would otherwise sit at (a symmetric
+    /// multivibrator's: a noiseless simulation never leaves it). Absent: none. The first
+    /// step takes the start's derivative as zero, as at a DC point (about half a step late).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub v0_v: Option<f64>,
 }
 
 /// Current flows from `a` to `b` through the inductor; `a` is the dotted end
@@ -487,6 +494,9 @@ impl CircuitIr {
                 }
                 Element::Capacitor(e) => {
                     positive(&format!("{name}.c_f"), e.c_f)?;
+                    if let Some(v0) = e.v0_v {
+                        finite(&format!("{name}.v0_v"), v0)?;
+                    }
                     'C'
                 }
                 Element::Inductor(e) => {

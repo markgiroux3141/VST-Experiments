@@ -27,6 +27,7 @@ fn c(name: &str, a: &str, b: &str, c_f: f64) -> Element {
         a: a.into(),
         b: b.into(),
         c_f,
+        v0_v: None,
     })
 }
 
@@ -521,4 +522,63 @@ fn progress_is_reported_and_can_stop_a_run() {
     })
     .unwrap_err();
     assert_eq!(e.to_string(), "stop");
+}
+
+// --- Start voltages ---------------------------------------------------------------------
+
+fn c_start(name: &str, a: &str, b: &str, c_f: f64, v0: f64) -> Element {
+    Element::Capacitor(Capacitor {
+        name: name.into(),
+        a: a.into(),
+        b: b.into(),
+        c_f,
+        v0_v: Some(v0),
+    })
+}
+
+/// A capacitor with a start voltage begins the run holding it (the DC operating point is
+/// solved with it held) and then discharges as an ordinary capacitor: grounded, and
+/// floating between two resistors (v(a) - v(b) = v0 at the start, split by symmetry).
+/// The first step takes the start's derivative as zero, as at a DC point, so the decay
+/// runs about half a step late: within 0.5% here, not the 1e-3 of a DC start.
+#[test]
+fn a_start_voltage_holds_for_the_operating_point_then_discharges() {
+    let tau = 1e-3;
+    let n = 400;
+    for floating in [false, true] {
+        let (ir, probe, v_start, tau_run) = if floating {
+            let ir = circuit(
+                vec![
+                    r("R1", "in", "a", 500.0),
+                    c_start("C1", "a", "b", 1e-6, 2.0),
+                    r("R2", "b", "0", 500.0),
+                ],
+                &["a", "b"],
+            );
+            (ir, 0usize, 1.0, tau)
+        } else {
+            let ir = circuit(
+                vec![r("R1", "in", "a", 1e3), c_start("C1", "a", "0", 1e-6, 5.0)],
+                &["a"],
+            );
+            (ir, 0usize, 5.0, tau)
+        };
+        let out = simulate(&ir, &vec![0.0; n], H, &Options::default()).unwrap();
+        let v = &out.values[probe];
+        let worst = v
+            .iter()
+            .enumerate()
+            .map(|(i, x)| (x - v_start * (-(i as f64) * H / tau_run).exp()).abs())
+            .fold(0.0, f64::max);
+        assert!(
+            (v[0] - v_start).abs() < 1e-5,
+            "floating {floating}: start {}",
+            v[0]
+        );
+        assert!(worst < 5e-3 * v_start, "floating {floating}: worst {worst}");
+        if floating {
+            let vb = &out.values[1];
+            assert!((v[0] - vb[0] - 2.0).abs() < 1e-5, "{} {}", v[0], vb[0]);
+        }
+    }
 }

@@ -240,6 +240,7 @@ pub fn capacitor(name: &str, a: &str, b: &str, c_f: f64) -> Element {
         a: s(a),
         b: s(b),
         c_f,
+        v0_v: None,
     })
 }
 

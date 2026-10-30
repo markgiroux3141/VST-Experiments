@@ -6,7 +6,9 @@
 //! element order), then the current of the audio input source.
 //!
 //! - Resistor: conductance stamp in `G`.
-//! - Capacitor: capacitance stamp in `C`.
+//! - Capacitor: capacitance stamp in `C`. One with a start voltage is held at it
+//!   for the DC operating point ([`Mna::dc_starts`]): a stiff conductance across it
+//!   with the matching current source (a Norton source), in that solve only.
 //! - Voltage source and the input (`input_node` to ground): KCL entries plus a
 //!   row `v_pos - v_neg = V`.
 //! - Sine source: the same, its offset in `b` and its sine a [`Wave`] on its
@@ -127,6 +129,9 @@ pub struct Mna {
     /// Unknowns a probes-only run computes at every step besides the probes
     /// (the coupling values a partitioned run reads).
     pub outputs: Vec<usize>,
+    /// Capacitors with a start voltage (`Capacitor::v0_v`): their nodes (None =
+    /// ground) and the voltage, held during the DC operating point only.
+    pub dc_starts: Vec<(Option<usize>, Option<usize>, f64)>,
 }
 
 /// Merge stateless instances of one kind on the same pins into one
@@ -243,12 +248,18 @@ impl Mna {
         }
 
         let mut waves = Vec::new();
+        let mut dc_starts = Vec::new();
         let mut inductance: HashMap<&str, f64> = HashMap::new();
         let mut instances = Vec::new();
         for el in ir.elements() {
             match el {
                 Element::Resistor(r) => stamp(&mut g, node(&r.a), node(&r.b), 1.0 / r.r_ohm),
-                Element::Capacitor(cap) => stamp(&mut c, node(&cap.a), node(&cap.b), cap.c_f),
+                Element::Capacitor(cap) => {
+                    stamp(&mut c, node(&cap.a), node(&cap.b), cap.c_f);
+                    if let Some(v0) = cap.v0_v {
+                        dc_starts.push((node(&cap.a), node(&cap.b), v0));
+                    }
+                }
                 Element::VoltageSource(v) => {
                     let k = branch_index[v.name.as_str()];
                     incidence(&mut g, k, node(&v.pos), node(&v.neg));
@@ -358,6 +369,7 @@ impl Mna {
             n_controls: control_rows.len(),
             externals: control_rows,
             outputs: Vec::new(),
+            dc_starts,
         })
     }
 

@@ -70,6 +70,10 @@ use crate::mna::{Mna, SPICE_GMIN};
 use crate::newton::{Failure, Newton, NewtonOptions, Reduced};
 use crate::timing::{self, Part};
 
+/// The conductance that holds a capacitor at its start voltage during the DC
+/// operating point (1 mOhm: ~uV across it at mA).
+const DC_START_S: f64 = 1.0e3;
+
 /// What local error control measures the error estimate on, against
 /// `error_abstol + error_reltol |v|` each.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -939,10 +943,39 @@ impl Transient {
     /// The DC operating point: plain Newton, then gmin stepping, then source
     /// stepping.
     fn dc(&mut self, u0: f64) -> Result<(), Error> {
-        let sys = Reduced::new(&self.mna.g, &self.device_nodes);
+        // Capacitors with a start voltage are held at it here (Mna::dc_starts): a
+        // Norton source of DC_START_S across each, in this solve's matrix only.
+        let mut g_start;
+        let g = if self.mna.dc_starts.is_empty() {
+            &self.mna.g
+        } else {
+            g_start = self.mna.g.clone();
+            for &(a, b, _) in &self.mna.dc_starts {
+                if let Some(i) = a {
+                    g_start.add(i, i, DC_START_S);
+                }
+                if let Some(j) = b {
+                    g_start.add(j, j, DC_START_S);
+                }
+                if let (Some(i), Some(j)) = (a, b) {
+                    g_start.add(i, j, -DC_START_S);
+                    g_start.add(j, i, -DC_START_S);
+                }
+            }
+            &g_start
+        };
+        let sys = Reduced::new(g, &self.device_nodes);
         let nn = sys.n_len();
         let nl = sys.l_len();
         let mut base = self.mna.b.clone();
+        for &(a, b, v0) in &self.mna.dc_starts {
+            if let Some(i) = a {
+                base[i] += DC_START_S * v0;
+            }
+            if let Some(j) = b {
+                base[j] -= DC_START_S * v0;
+            }
+        }
         base[self.mna.input_row] += u0;
         self.mna.add_waves(0.0, &mut base);
         for (&row, &e) in self.mna.externals.iter().zip(&self.ext0) {

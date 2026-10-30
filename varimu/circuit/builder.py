@@ -370,7 +370,12 @@ def _r(ctx, name, c, a):
 _P, _N = Param("physical"), Param("number")
 for _name, _macro in {
     "R": Macro(_r, 2, {"r": _P, "parallel": Param("count", 1)}, toleranced=True),
-    "C": Macro(lambda ctx, n, c, a: [Capacitor(n, *c, a["c"])], 2, {"c": _P}, toleranced=True),
+    "C": Macro(
+        lambda ctx, n, c, a: [Capacitor(n, *c, a["c"], a["v0"])],
+        2,
+        {"c": _P, "v0": Param("physical", None)},
+        toleranced=True,
+    ),
     "L": Macro(lambda ctx, n, c, a: [Inductor(n, *c, a["l"])], 2, {"l": _P}),
     "K": Macro(lambda ctx, n, c, a: [Coupling(n, *c, a["k"])], 2, {"k": _P}),
     "V": Macro(lambda ctx, n, c, a: [VoltageSource(n, *c, a["v"])], 2, {"v": _P}),

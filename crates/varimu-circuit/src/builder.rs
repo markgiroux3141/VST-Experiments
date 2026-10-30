@@ -258,7 +258,7 @@ fn macro_of(kind: &str) -> Macro {
             ],
             true,
         ),
-        "C" => (Some(2), vec![p("c", Physical)], true),
+        "C" => (Some(2), vec![p("c", Physical), opt("v0", Physical)], true),
         "L" => (Some(2), vec![p("l", Physical)], false),
         "K" => (Some(2), vec![p("k", Physical)], false),
         "V" => (Some(2), vec![p("v", Physical)], false),
@@ -469,7 +469,11 @@ fn expand(
         }
         "C" => {
             let (x, y) = n2(nodes);
-            vec![parts::capacitor(name, x, y, f("c")?)]
+            let mut el = parts::capacitor(name, x, y, f("c")?);
+            if let (Some(v0), Element::Capacitor(c)) = (opt("v0")?, &mut el) {
+                c.v0_v = Some(v0);
+            }
+            vec![el]
         }
         "L" => vec![Element::Inductor(Inductor {
             name: s(name),

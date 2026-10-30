@@ -37,6 +37,7 @@ fn rc(external: bool) -> CircuitIr {
             a: "out".into(),
             b: "0".into(),
             c_f: 1e-6,
+            v0_v: None,
         }),
     ];
     if external {
