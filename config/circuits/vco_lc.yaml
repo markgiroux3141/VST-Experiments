@@ -10,6 +10,10 @@
 #   V1A/V1B  12AU7 cathode-coupled pair, the limiter: V2's plate into V1B's grid, V1B's
 #          plate driving the tank through CD (in phase with it), a square current of the
 #          tail's size whatever the tank does. V1A's plate is the square output
+#   WAVE a pot blending the tank (near sine; a 1M / 100k divider, so it barely loads the
+#        tank) and V1A's square (a 470k / 100k divider), both AC-coupled: the wiper is `out`.
+#        The dividers keep the pot's ends stiff (~90 kOhm against its 1M), so each end
+#        hears ~-20 dB of the other
 #   V4   6V6GT drawing its plate current through the control windings (anti-series, as in
 #        tube_filter.yaml): its grid is the `pitch` control input, -45 V (low) to 0 V
 #        (high); the current sets the cores' bias, the bias the tank's inductance
@@ -25,9 +29,10 @@ probes: [t, out, p2, p1a, p1b, k1, g4, b1, b3, ta_core, tb_core]
 
 full_scale:
   input_volts_peak: {value: 1.0, source: "provisional: model knowledge (the audio input is unused: the oscillator is the source)"}
-  output_volts_peak: {value: 20.0, source: "provisional: model knowledge (the tank's swing, set from a render)"}
+  output_volts_peak: {value: 12.0, source: "provisional: model knowledge (the WAVE pot's wiper: up to 6.6 V peak over the sweep at the pot's middle (scripts/vco_study.py --tuning draft, 2026-10-30), ~10 V at its square end)"}
 
 controls:
+  wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the WAVE pot, tank (0) to square (1); linear)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
 
@@ -66,8 +71,11 @@ values:
   r_cathode2_ohm: {value: 1.5e+3, source: "provisional: model knowledge (12AX7 self bias, unbypassed: gain ~30)"}
   c_couple2_f: {value: 0.1e-6, source: "provisional: model knowledge (V2's plate into V1B's grid: 1.6 Hz with its leak)"}
   r_grid1b_ohm: {value: 1.0e+6, source: "provisional: model knowledge (V1B's grid leak)"}
-  c_out_f: {value: 0.1e-6, source: "provisional: model knowledge (output coupling)"}
-  r_out_load_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the next stage's grid leak)"}
+  c_out_f: {value: 0.1e-6, source: "provisional: model knowledge (output coupling, each side of the WAVE pot)"}
+  r_wave_tank_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: from the tank to the WAVE pot's end: ~1/11 of the tank, ~1 MOhm of load on it)"}
+  r_wave_square_ohm: {value: 470.0e+3, source: "provisional: model knowledge (design: from V1A's plate to the WAVE pot's other end: ~1/6 of the square)"}
+  r_wave_end_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: each end of the WAVE pot to ground, the dividers' feet)"}
+  r_wave_pot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the WAVE pot, ten times its ends' impedance)"}
   # --- pitch
   r_pitch_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (V4's grid stopper from the pitch input)"}
   r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design: 6V6GT screen feed from the decoupled b3: off the reservoir b1 its ripple frequency-modulated the pitch +-20 cents at 120 Hz)"}
@@ -157,8 +165,13 @@ sections:
       RPA: {R: [b3, p1a], r: r_plate_a_ohm}
       RPB: {R: [b3, p1b], r: r_plate_b_ohm}
       CD: {C: [p1b, t], c: c_drive_f}
-      CO: {C: [p1a, out], c: c_out_f}
-      RLO: {R: [out, "0"], r: r_out_load_ohm}
+      COT: {C: [t, wt], c: c_out_f}
+      RWT: {R: [wt, wa], r: r_wave_tank_ohm}
+      COS: {C: [p1a, ws], c: c_out_f}
+      RWS: {R: [ws, wb], r: r_wave_square_ohm}
+      RWTG: {R: [wa, "0"], r: r_wave_end_ohm}
+      RWSG: {R: [wb, "0"], r: r_wave_end_ohm}
+      RWAVE: {pot: [wa, out, wb], r: r_wave_pot_ohm, at: wave}
   - title: pitch
     parts:
       RPS: {R: [pv, g4], r: r_pitch_stop_ohm}

@@ -18,6 +18,11 @@ Measured at production, draft (96 kHz internal: the native app's draft-2x) and d
 - speed: wall clock per second of audio, one run at a time.
 Results: reports/tube_synth/vco/<candidate>.json and .png.
 
+`--tuning QUALITY` instead measures a candidate's keyboard tuning: pitch against the
+control in TUNING_STEP_V steps at the quality the native app plays it at, kept where the
+pitch rises (the points varimu-app's `panel::Pitch::tuning` interpolates), and each
+output's peak -> reports/tube_synth/vco/<candidate>_tuning.json, printed as a Rust table.
+
     uv run --extra fast python scripts/vco_study.py [--only lc ...]
         [--qualities production draft draft-1x]
 """
@@ -288,14 +293,44 @@ def plot(name: str, res: dict, path: Path) -> None:
     plt.close(fig)
 
 
+TUNING_STEP_V = 1.0
+TUNING_MIN_RISE = 1.003  # a point is kept when its pitch is this far above the last kept
+
+
+def tuning(name: str, c: Candidate, quality: str, workers: int) -> dict:
+    """The keyboard's tuning of candidate `c` at `quality` (the module docstring)."""
+    fs = io.load_sim_settings().sample_rate
+    lo, hi = min(c.sweep_v), max(c.sweep_v)
+    vs = np.arange(lo, hi + 0.5 * TUNING_STEP_V, TUNING_STEP_V)
+    with ThreadPoolExecutor(workers) as ex:
+        runs = list(ex.map(lambda v: held(c, quality, v), vs))
+    pts, peaks = [], {o: 0.0 for o in c.outputs}
+    for v, (r, _) in zip(vs, runs, strict=True):
+        f = vco.frequency(r[c.pitch_probe], fs, lowpass_hz=c.pitch_lowpass_hz)
+        for o in c.outputs:
+            peaks[o] = max(peaks[o], float(np.max(np.abs(r[o] - np.mean(r[o])))))
+        if np.isfinite(f) and (not pts or f > TUNING_MIN_RISE * pts[-1][0]):
+            pts.append((round(float(f), 2), round(float(v), 3)))
+    return {"circuit": c.circuit, "quality": quality, "hz_v": pts, "output_peak_v": peaks}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--only", nargs="*", choices=list(CANDIDATES))
     ap.add_argument("--qualities", nargs="*", default=list(QUALITIES), choices=list(QUALITIES))
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 2))
     ap.add_argument("--out", type=Path, default=OUT_DIR)
+    ap.add_argument("--tuning", choices=list(QUALITIES), help="the keyboard tuning at a quality")
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
+    if a.tuning:
+        for name in a.only or CANDIDATES:
+            t = tuning(name, CANDIDATES[name], a.tuning, a.workers)
+            (a.out / f"{name}_tuning.json").write_text(json.dumps(t, indent=1) + "\n")
+            rows = ", ".join(f"({f}, {v})" for f, v in t["hz_v"])
+            print(f"{name} at {a.tuning}: output peaks {t['output_peak_v']}")
+            print(f"&[{rows}]")
+        return
     for name in a.only or CANDIDATES:
         res = measure(name, CANDIDATES[name], tuple(a.qualities), a.workers)
         plot(name, res, a.out / f"{name}.png")

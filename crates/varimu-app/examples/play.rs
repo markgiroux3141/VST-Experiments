@@ -147,15 +147,12 @@ fn main() -> Result<(), String> {
                 _ => None,
             })
     });
-    let gate = dev
-        .gate
-        .map(|g| varimu_app::panel::gate_levels(circuit.spec(), g))
-        .transpose()?;
+    let feeds = varimu_app::panel::key_feeds(dev, circuit.spec())?;
     let (source, buffer) = match (&file, input) {
         _ if keyboard.is_some() => {
             let kb = keyboard.as_ref().expect("a keyboard");
             (
-                Source::Keys(kb.keys.clone(), wave, gate),
+                Source::Keys(kb.keys.clone(), wave, feeds),
                 buffer.unwrap_or(INPUT_BUFFER_S),
             )
         }

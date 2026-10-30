@@ -385,6 +385,24 @@ the readings are `varimu/synth/vco.py`.
 - Speed: draft (96 kHz internal, the app's draft-2x) **0.56x real time**; production 3.4x;
   draft-1x 3.5x (slower than draft on this circuit: its larger step fights the edges).
 
+**(b) is playable (2026-10-30, the user's call: hear it before more work on (a) or (c)).**
+The native app's `vco_lc` device, `varimu-app --device vco_lc --midi masterkey --play`:
+- S4 step 2: `panel::Device::pitch` (`panel::Pitch`: a control input and the keyboard's
+  tuning, (Hz, volts) points; a key's frequency is interpolated in log2(Hz) between them,
+  held at the ends: a period keyboard's divider string set to the oscillator's curve,
+  nothing correcting drift). The tuning is measured at the quality the app plays it at,
+  `scripts/vco_study.py --only lc --tuning draft` -> reports/tube_synth/vco/lc_tuning.json.
+- The keys feed every control input per block (`panel::key_feeds`: gate and / or pitch, in
+  the circuit's order); with a pitch feed the audio input stays silent and the gain
+  compensation is off (against a silent input it ran to +260 dB). Pitch holds the last
+  key; before the first, A3.
+- A WAVE pot (the mod wheel's too) blends the tank and the square, each from a divider so
+  the pot's ends stay stiff (~-20 dB of the other at each end): -12 dBFS at the tank end,
+  -1.4 at the square end (full scale 12 V).
+- Draft-2x: ~55% load, worst block ~80%, no dropouts, ~68 ms key to ear at a 30 ms queue
+  (`examples/play.rs`, no key pressed). No envelope yet: it drones at the last key.
+  `tests/test_vco_lc.py`.
+
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
   code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity

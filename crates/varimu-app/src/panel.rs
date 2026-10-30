@@ -32,6 +32,67 @@ pub struct Device {
     /// The circuit's control input a keyboard's keys gate (its key-up and key-down volts
     /// are the circuit file's `<name>_off_v` and `<name>_on_v` values; None: none).
     pub gate: Option<&'static str>,
+    /// The circuit's control input a keyboard's keys set the pitch on, for a device with
+    /// an oscillator of its own (its audio input then stays silent; None: none).
+    pub pitch: Option<Pitch>,
+}
+
+/// A keyboard's pitch into a circuit's control input: the control and the keyboard's
+/// tuning, (Hz, volts) points rising in Hz, measured on the circuit at the quality it
+/// plays at (`scripts/vco_study.py --tuning`). A key's frequency goes on the control by
+/// interpolating linearly in log2(Hz) between the points, held at the ends: a period
+/// keyboard's divider string set to its oscillator's curve. Nothing corrects the
+/// oscillator's drift (TUBE_SYNTH_PLAN.md decision 2).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pitch {
+    pub control: &'static str,
+    pub tuning: &'static [(f64, f64)],
+}
+
+impl Pitch {
+    /// The control's volts for `hz`.
+    pub fn volts(&self, hz: f64) -> f64 {
+        let t = self.tuning;
+        let (first, last) = (t[0], t[t.len() - 1]);
+        if hz <= first.0 {
+            return first.1;
+        }
+        if hz >= last.0 {
+            return last.1;
+        }
+        let i = t.partition_point(|&(f, _)| f <= hz);
+        let ((f0, v0), (f1, v1)) = (t[i - 1], t[i]);
+        v0 + (v1 - v0) * (hz / f0).log2() / (f1 / f0).log2()
+    }
+}
+
+/// What feeds one of a circuit's control inputs while a keyboard plays it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Feed {
+    /// The keys' gate: (key up, key down) volts.
+    Gate(f64, f64),
+    /// The last key's pitch.
+    Pitch(Pitch),
+}
+
+/// The feeds of `spec`'s control inputs in its order, for `device` played from keys
+/// (every control input needs one: the device's gate or pitch).
+pub fn key_feeds(device: &Device, spec: &CircuitSpec) -> Result<Vec<Feed>, String> {
+    spec.cv_inputs
+        .iter()
+        .map(|(name, _)| {
+            if device.gate == Some(name.as_str()) {
+                let (up, down) = gate_levels(spec, name)?;
+                Ok(Feed::Gate(up, down))
+            } else if let Some(p) = device.pitch.filter(|p| p.control == name) {
+                Ok(Feed::Pitch(p))
+            } else {
+                Err(format!(
+                    "nothing plays the control input {name} from the keys"
+                ))
+            }
+        })
+        .collect()
 }
 
 /// A gate control input's (key up, key down) volts: the circuit file's `<name>_off_v`
@@ -59,7 +120,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 6] = [
+pub const DEVICES: [Device; 7] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -78,6 +139,7 @@ pub const DEVICES: [Device; 6] = [
         cores: None,
         mod_wheel: None,
         gate: None,
+        pitch: None,
     },
     Device {
         id: "pultec_eqp1a",
@@ -89,6 +151,7 @@ pub const DEVICES: [Device; 6] = [
         cores: None,
         mod_wheel: None,
         gate: None,
+        pitch: None,
     },
     Device {
         id: "fender_5e3",
@@ -106,6 +169,7 @@ pub const DEVICES: [Device; 6] = [
         cores: None,
         mod_wheel: None,
         gate: None,
+        pitch: None,
     },
     Device {
         id: "reactor_filter",
@@ -119,6 +183,7 @@ pub const DEVICES: [Device; 6] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff_v"),
         gate: None,
+        pitch: None,
     },
     Device {
         id: "tube_filter",
@@ -132,6 +197,7 @@ pub const DEVICES: [Device; 6] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff"),
         gate: None,
+        pitch: None,
     },
     Device {
         id: "tube_voice",
@@ -145,14 +211,80 @@ pub const DEVICES: [Device; 6] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff"),
         gate: Some("gate"),
+        pitch: None,
     },
+    Device {
+        id: "vco_lc",
+        label: "Tube synth VCO (b): reactor-tuned LC",
+        circuit: "vco_lc",
+        panel: None,
+        ahead_s: AHEAD_S,
+        // Draft (96 kHz internal) runs it at 0.56x real time, draft-1x at 3.5x: its 48 kHz
+        // step fights the square's edges (Python's circuitsim, 2026-10-30).
+        quality: Quality::Draft2x,
+        cores: Some("ja"),
+        mod_wheel: Some("wave"),
+        gate: None,
+        pitch: Some(Pitch {
+            control: "pitch",
+            tuning: VCO_LC_TUNING,
+        }),
+    },
+];
+
+/// vco_lc's keyboard tuning: `scripts/vco_study.py --only lc --tuning draft`
+/// (reports/tube_synth/vco/lc_tuning.json, 2026-10-30). Steep at the bottom, where the
+/// tank's swing saturates the cores.
+const VCO_LC_TUNING: &[(f64, f64)] = &[
+    (51.87, -42.0),
+    (54.62, -41.0),
+    (56.79, -40.0),
+    (57.25, -39.0),
+    (63.52, -37.0),
+    (94.83, -36.0),
+    (125.68, -35.0),
+    (154.84, -34.0),
+    (183.27, -33.0),
+    (211.65, -32.0),
+    (240.31, -31.0),
+    (269.54, -30.0),
+    (299.5, -29.0),
+    (330.37, -28.0),
+    (362.27, -27.0),
+    (395.29, -26.0),
+    (429.55, -25.0),
+    (465.15, -24.0),
+    (502.19, -23.0),
+    (540.77, -22.0),
+    (580.96, -21.0),
+    (622.85, -20.0),
+    (666.54, -19.0),
+    (711.03, -18.0),
+    (756.06, -17.0),
+    (802.16, -16.0),
+    (849.48, -15.0),
+    (897.86, -14.0),
+    (947.82, -13.0),
+    (998.71, -12.0),
+    (1050.72, -11.0),
+    (1103.68, -10.0),
+    (1157.15, -9.0),
+    (1212.0, -8.0),
+    (1267.72, -7.0),
+    (1324.91, -6.0),
+    (1382.01, -5.0),
+    (1438.56, -4.0),
+    (1494.36, -3.0),
+    (1548.99, -2.0),
+    (1603.06, -1.0),
+    (1655.77, 0.0),
 ];
 
 /// Controls never on a panel (operating conditions).
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 23] = [
+const LABELS: [(&str, &str); 24] = [
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
     ("time_constant", "Time constant"),
@@ -176,6 +308,7 @@ const LABELS: [(&str, &str); 23] = [
     ("level", "Level (VCA)"),
     ("attack", "Attack"),
     ("release", "Release"),
+    ("wave", "Wave (tank to square)"),
 ];
 
 /// How a knob moves.
@@ -315,5 +448,30 @@ mod tests {
             gate_levels(&voice, DEVICES[5].gate.unwrap()),
             Ok((-110.0, -1.0))
         );
+        assert_eq!(
+            key_feeds(&DEVICES[5], &voice),
+            Ok(vec![Feed::Gate(-110.0, -1.0)])
+        );
+        let vco = spec_of("vco_lc");
+        let k = knobs(&DEVICES[6], &vco);
+        let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
+        assert_eq!(keys, ["wave"]);
+        let pitch = DEVICES[6].pitch.unwrap();
+        assert_eq!(key_feeds(&DEVICES[6], &vco), Ok(vec![Feed::Pitch(pitch)]));
+        // A device without a feed for a control input can't be played from keys.
+        assert!(key_feeds(&DEVICES[4], &voice).is_err());
+    }
+
+    #[test]
+    fn a_tuning_interpolates_in_octaves_and_holds_at_its_ends() {
+        let p = Pitch {
+            control: "pitch",
+            tuning: &[(100.0, -10.0), (400.0, 0.0)],
+        };
+        assert_eq!(p.volts(50.0), -10.0);
+        assert_eq!(p.volts(1000.0), 0.0);
+        assert!((p.volts(200.0) + 5.0).abs() < 1e-12);
+        let t = DEVICES[6].pitch.unwrap().tuning;
+        assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
     }
 }

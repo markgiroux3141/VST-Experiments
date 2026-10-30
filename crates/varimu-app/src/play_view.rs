@@ -99,6 +99,7 @@ const DRAWING: Device = Device {
     cores: None,
     mod_wheel: None,
     gate: None,
+    pitch: None,
 };
 
 /// A finished render: where it was saved and what it was.
@@ -679,12 +680,11 @@ impl PlayView {
         let result = Keyboard::open(Some(&port)).and_then(|kb| {
             let c = s.cores().and_then(|c| self.circuit(c))?;
             let v = panel::values(&self.knobs);
-            let gate = DEVICES
-                .get(self.device)
-                .and_then(|d| d.gate)
-                .map(|g| panel::gate_levels(c.spec(), g))
-                .transpose()?;
-            let source = Source::Keys(kb.keys.clone(), self.wave, gate);
+            let feeds = match DEVICES.get(self.device) {
+                Some(d) => panel::key_feeds(d, c.spec())?,
+                None => Vec::new(),
+            };
+            let source = Source::Keys(kb.keys.clone(), self.wave, feeds);
             let p = Player::start(source, v, c, s.clone(), self.gain(), buffer)?;
             self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
             Ok((kb, p))

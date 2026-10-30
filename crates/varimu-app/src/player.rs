@@ -32,6 +32,7 @@ use cpal::{FromSample, Sample, SizedSample};
 use crate::live::{Circuit, Live, Meter, Values};
 use crate::midi::{Keys, TestOsc, Wave};
 use crate::monitor::Monitor;
+use crate::panel::Feed;
 use crate::resample::StreamResampler;
 use crate::settings::Settings;
 
@@ -72,10 +73,12 @@ pub enum Source {
         device: Option<String>,
         channel: usize,
     },
-    /// A MIDI keyboard's keys playing the test oscillator (`midi::TestOsc`), and for a
-    /// device whose circuit has a gate control input, its (key up, key down) volts:
-    /// the gate follows the keys and the oscillator keeps sounding the last one.
-    Keys(Arc<Keys>, Wave, Option<(f64, f64)>),
+    /// A MIDI keyboard's keys, and what they feed into the circuit's control inputs (in
+    /// its order: `panel::key_feeds`). Without a pitch feed they play the test oscillator
+    /// (`midi::TestOsc`) into the audio input, which keeps sounding the last key when a
+    /// gate keys the circuit's own envelope. With one, the circuit is the oscillator: the
+    /// last key's pitch goes on its control and the audio input stays silent.
+    Keys(Arc<Keys>, Wave, Vec<Feed>),
 }
 
 /// An input device and its default (shared-mode mix) format.
@@ -274,16 +277,21 @@ impl Player {
                 ));
                 (Some(stream), WorkerSource::Input(ring, info.rate))
             }
-            Source::Keys(keys, wave, gate) => {
+            Source::Keys(keys, wave, feeds) => {
+                let gate = feeds.iter().any(|f| matches!(f, Feed::Gate(..)));
+                let pitch = feeds.iter().any(|f| matches!(f, Feed::Pitch(..)));
                 shared.status.lock().expect("status").input = Some(
-                    if gate.is_some() {
-                        "MIDI keyboard: test oscillator, the gate into the circuit"
-                    } else {
-                        "MIDI keyboard: test oscillator"
+                    match (pitch, gate) {
+                        (true, true) => "MIDI keyboard: pitch and gate into the circuit",
+                        (true, false) => "MIDI keyboard: pitch into the circuit's oscillator",
+                        (false, true) => {
+                            "MIDI keyboard: test oscillator, the gate into the circuit"
+                        }
+                        (false, false) => "MIDI keyboard: test oscillator",
                     }
                     .into(),
                 );
-                (None, WorkerSource::Keys(keys, wave, gate))
+                (None, WorkerSource::Keys(keys, wave, feeds))
             }
         };
         {
@@ -409,7 +417,24 @@ impl Drop for Player {
 enum WorkerSource {
     Loop(Vec<f64>),
     Input(rtrb::Consumer<f32>, u32),
-    Keys(Arc<Keys>, Wave, Option<(f64, f64)>),
+    Keys(Arc<Keys>, Wave, Vec<Feed>),
+}
+
+/// The note a pitch feed holds until the first key (A3).
+const START_NOTE: u8 = 57;
+
+/// A feed's volts with `sounding` held (a key, or none) and `last_note` the last key.
+fn feed_volts(f: &Feed, sounding: Option<(u8, u8)>, last_note: u8) -> f64 {
+    match f {
+        Feed::Gate(up, down) => {
+            if sounding.is_some() {
+                *down
+            } else {
+                *up
+            }
+        }
+        Feed::Pitch(p) => p.volts(TestOsc::note_hz(last_note)),
+    }
 }
 
 /// Write `y` into the ring (all of it; the callers leave room).
@@ -454,9 +479,12 @@ fn work(
         WorkerSource::Input(..) | WorkerSource::Keys(..) => &[],
     };
     let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
-    // A gate starts up (no key).
+    // A gate starts up (no key), a pitch at START_NOTE.
     let c0: Vec<f64> = match &source {
-        WorkerSource::Keys(_, _, Some((up, _))) => vec![*up],
+        WorkerSource::Keys(_, _, feeds) => feeds
+            .iter()
+            .map(|f| feed_volts(f, None, START_NOTE))
+            .collect(),
         _ => Vec::new(),
     };
     let mut live = Live::with_controls(clip, values, circuit, s, gain, &c0)
@@ -464,13 +492,21 @@ fn work(
     let rate = live.rate;
     let capacity = ring.buffer().capacity();
     let mut monitor = Monitor::new(rate, live.lag());
+    // A circuit with an oscillator of its own has a silent input: nothing to compensate
+    // against (the compensation ran to +260 dB).
+    let own_oscillator = matches!(&source, WorkerSource::Keys(_, _, feeds)
+        if feeds.iter().any(|f| matches!(f, Feed::Pitch(..))));
     // The device's output on its way out: bypass and gain compensation.
     let mut monitored = |live: &Live, y: &[f32]| {
         monitor.bypass = shared.bypass.load(Ordering::Relaxed);
-        monitor.compensate = shared.compensate.load(Ordering::Relaxed);
+        monitor.compensate = shared.compensate.load(Ordering::Relaxed) && !own_oscillator;
         monitor.output_db = f64::from_bits(shared.output_db.load(Ordering::Relaxed));
         let out = monitor.process(live.last_input(), y);
-        shared.status.lock().expect("status").compensation_db = monitor.compensation_db();
+        shared.status.lock().expect("status").compensation_db = if own_oscillator {
+            0.0
+        } else {
+            monitor.compensation_db()
+        };
         out
     };
     let mut loads = Loads(Vec::new(), (rate as usize / BLOCK).max(1));
@@ -594,14 +630,15 @@ fn work(
                 pending.drain(..used);
             }
         }
-        WorkerSource::Keys(keys, wave, gate) => {
+        WorkerSource::Keys(keys, wave, feeds) => {
             // Blocks are made as the queue drains, each from the keys held as it starts:
             // a key is heard within the queue, a block and the output's latency.
             let mut osc = TestOsc::new(rate as f64);
             osc.wave = wave;
-            osc.steady = gate.is_some();
+            osc.steady = feeds.iter().any(|f| matches!(f, Feed::Gate(..)));
             let mut block = vec![0.0; BLOCK];
-            let mut gate_block = vec![0.0; BLOCK];
+            let mut ctl = vec![vec![0.0; BLOCK]; feeds.len()];
+            let mut last_note = START_NOTE;
             while !shared.stop.load(Ordering::Relaxed) {
                 forward_values(&mut live);
                 let queued = capacity - ring.slots();
@@ -611,15 +648,21 @@ fn work(
                     continue;
                 }
                 let sounding = keys.sounding();
-                osc.fill(sounding, &mut block);
-                let (y, meter) = match gate {
-                    Some((up, down)) => {
-                        gate_block.fill(if sounding.is_some() { down } else { up });
-                        live.process_with(&block, &[&gate_block])
-                    }
-                    None => live.process(&block),
+                if let Some((note, _)) = sounding {
+                    last_note = note;
                 }
-                .map_err(|e| format!("the circuit stopped: {e}"))?;
+                if own_oscillator {
+                    block.fill(0.0);
+                } else {
+                    osc.fill(sounding, &mut block);
+                }
+                for (c, f) in ctl.iter_mut().zip(&feeds) {
+                    c.fill(feed_volts(f, sounding, last_note));
+                }
+                let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
+                let (y, meter) = live
+                    .process_with(&block, &refs)
+                    .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
                 push(&mut ring, &monitored(&live, &y));
                 heard(&live, before);

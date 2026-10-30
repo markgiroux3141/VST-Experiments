@@ -132,7 +132,9 @@ bus gating a diode-steered envelope into a push-pull 6386 VCA) is the `tube_voic
 S4, the oscillator (2026-10-30; the user's priority: the sound's character, drift fine):
 prototypes measured by `scripts/vco_study.py` -> `reports/tube_synth/vco/`. (b), the
 reactor-tuned LC `config/circuits/vco_lc.yaml`, works: 52-1655 Hz, a 0.57 s glide (the
-ratchet), 0.56x real time at draft. (a), the diode-timed multivibrator `vco_diode.yaml`
+ratchet), 0.56x real time at draft; it is the app's `vco_lc` device (draft-2x), its pitch
+from the keys through a measured tuning (`panel::Pitch`, `panel::key_feeds`; `vco_study.py
+--tuning`). (a), the diode-timed multivibrator `vco_diode.yaml`
 on the new `6AL5@1`, doesn't run cleanly yet; (c) isn't started (TUBE_SYNTH_PLAN.md, S4's
 status). Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
 for the DC operating point only; absent = unchanged IR).
