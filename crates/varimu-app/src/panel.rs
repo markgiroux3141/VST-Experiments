@@ -29,6 +29,23 @@ pub struct Device {
     pub cores: Option<&'static str>,
     /// The control a MIDI keyboard's mod wheel turns (None: none).
     pub mod_wheel: Option<&'static str>,
+    /// The circuit's control input a keyboard's keys gate (its key-up and key-down volts
+    /// are the circuit file's `<name>_off_v` and `<name>_on_v` values; None: none).
+    pub gate: Option<&'static str>,
+}
+
+/// A gate control input's (key up, key down) volts: the circuit file's `<name>_off_v`
+/// and `<name>_on_v` values.
+pub fn gate_levels(spec: &CircuitSpec, name: &str) -> Result<(f64, f64), String> {
+    let get = |key: String| {
+        spec.values
+            .get(&key)
+            .and_then(Value::as_map)
+            .and_then(|m| m.get("value"))
+            .and_then(Value::as_f64)
+            .ok_or(format!("the circuit has no value {key} for its gate"))
+    };
+    Ok((get(format!("{name}_off_v"))?, get(format!("{name}_on_v"))?))
 }
 
 impl Device {
@@ -42,7 +59,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 5] = [
+pub const DEVICES: [Device; 6] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -60,6 +77,7 @@ pub const DEVICES: [Device; 5] = [
         quality: Quality::Draft1x,
         cores: None,
         mod_wheel: None,
+        gate: None,
     },
     Device {
         id: "pultec_eqp1a",
@@ -70,6 +88,7 @@ pub const DEVICES: [Device; 5] = [
         quality: Quality::Draft1x,
         cores: None,
         mod_wheel: None,
+        gate: None,
     },
     Device {
         id: "fender_5e3",
@@ -86,6 +105,7 @@ pub const DEVICES: [Device; 5] = [
         quality: Quality::Draft2x,
         cores: None,
         mod_wheel: None,
+        gate: None,
     },
     Device {
         id: "reactor_filter",
@@ -98,6 +118,7 @@ pub const DEVICES: [Device; 5] = [
         quality: Quality::Draft1x,
         cores: Some("ja"),
         mod_wheel: Some("cutoff_v"),
+        gate: None,
     },
     Device {
         id: "tube_filter",
@@ -110,6 +131,20 @@ pub const DEVICES: [Device; 5] = [
         quality: Quality::Draft1x,
         cores: Some("ja"),
         mod_wheel: Some("cutoff"),
+        gate: None,
+    },
+    Device {
+        id: "tube_voice",
+        label: "Tube synth voice (envelope, push-pull VCA)",
+        circuit: "tube_voice",
+        panel: None,
+        ahead_s: AHEAD_S,
+        // 0.55-0.62x real time at draft-1x with its JA cores (Python's circuitsim on a
+        // 110 Hz saw with a gate, 2026-10-29).
+        quality: Quality::Draft1x,
+        cores: Some("ja"),
+        mod_wheel: Some("cutoff"),
+        gate: Some("gate"),
     },
 ];
 
@@ -117,7 +152,7 @@ pub const DEVICES: [Device; 5] = [
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 21] = [
+const LABELS: [(&str, &str); 23] = [
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
     ("time_constant", "Time constant"),
@@ -139,6 +174,8 @@ const LABELS: [(&str, &str); 21] = [
     ("cutoff", "Cutoff"),
     ("resonance", "Resonance"),
     ("level", "Level (VCA)"),
+    ("attack", "Attack"),
+    ("release", "Release"),
 ];
 
 /// How a knob moves.
@@ -270,5 +307,13 @@ mod tests {
         let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
         assert_eq!(keys, ["cutoff", "resonance", "level"]);
         assert!(keys.contains(&DEVICES[4].mod_wheel.unwrap()));
+        let voice = spec_of("tube_voice");
+        let k = knobs(&DEVICES[5], &voice);
+        let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
+        assert_eq!(keys, ["cutoff", "resonance", "attack", "release"]);
+        assert_eq!(
+            gate_levels(&voice, DEVICES[5].gate.unwrap()),
+            Ok((-110.0, -2.0))
+        );
     }
 }

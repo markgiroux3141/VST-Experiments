@@ -124,7 +124,11 @@ keyboard (`varimu-app`'s `midi` module: a test oscillator into the device, not p
 `varimu-app --device reactor_filter --midi masterkey --play`). S2's circuit,
 `config/circuits/tube_filter.yaml` (tube stages around the reactor, a 6V6GT setting the
 cutoff, a 12AX7 Q multiplier, a 6386 VCA, its own 6X4 / selenium supply), is the
-`tube_filter` device.
+`tube_filter` device. S3 (2026-10-30): circuits can have **control inputs** (`cv_inputs:
+{name: node}` in a circuit file, `controls` in the IR, driven by their own samples, linear
+between them; circuitsim, `fast.run_transient(..., controls=)`, the app's `Live`; ngspice
+runs none; IRs without them unchanged), and `config/circuits/tube_voice.yaml` (a keyboard
+bus gating a diode-steered envelope into a push-pull 6386 VCA) is the `tube_voice` device.
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist

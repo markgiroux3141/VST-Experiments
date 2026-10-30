@@ -133,6 +133,9 @@ pub struct TestOsc {
     pub wave: Wave,
     /// The level at velocity 127 (1.0 is the device's full scale).
     pub level: f64,
+    /// Keep sounding the last key after it is released (a device whose circuit has an
+    /// envelope keyed by the gate shapes the notes itself).
+    pub steady: bool,
 }
 
 /// Attack and release (s).
@@ -162,6 +165,7 @@ impl TestOsc {
             target: 0.0,
             wave: Wave::Saw,
             level: 0.8,
+            steady: false,
         }
     }
 
@@ -175,7 +179,7 @@ impl TestOsc {
         if let Some((note, vel)) = sounding {
             self.freq = Self::note_hz(note);
             self.target = vel as f64 / 127.0;
-        } else {
+        } else if !self.steady {
             self.target = 0.0;
         }
         let up = 1.0 / (ATTACK_S * self.rate);

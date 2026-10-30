@@ -210,3 +210,41 @@ fn fender_5e3_oversampled_aliases_less() {
     let (x1, x2) = (other_db(Quality::Draft1x), other_db(Quality::Draft2x));
     assert!(x2 < x1 - 5.0, "draft-1x {x1:.1} dB, draft-2x {x2:.1} dB");
 }
+
+#[test]
+fn tube_voice_opens_while_its_gate_is_down() {
+    // The keyboard's path: a saw through `Live::process_with` with the gate control input
+    // (the device's levels from its circuit file) up, down, up again.
+    let dev = DEVICES.iter().find(|d| d.id == "tube_voice").unwrap();
+    let s = dev.play_settings(&Settings::load(&config(), dev.quality).unwrap());
+    let circuit = Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let (up, down) = varimu_app::panel::gate_levels(circuit.spec(), dev.gate.unwrap()).unwrap();
+    let v0 = values(&knobs(dev, circuit.spec()));
+    let mut live = Live::with_controls(&[], v0, circuit, s.clone(), 1.0, &[up]).unwrap();
+    let rate = live.rate as usize;
+    let mut phase = 0.0;
+    let mut level = |live: &mut Live, gate_v: f64, seconds: f64| {
+        let mut y = Vec::new();
+        for _ in 0..(seconds * rate as f64 / 480.0) as usize {
+            let x: Vec<f64> = (0..480)
+                .map(|_| {
+                    phase = (phase + 110.0 / rate as f64) % 1.0;
+                    0.5 * (2.0 * phase - 1.0)
+                })
+                .collect();
+            y.extend(live.process_with(&x, &[&vec![gate_v; 480]]).unwrap().0);
+        }
+        let tail = &y[y.len() / 2..];
+        (tail.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / tail.len() as f64).sqrt()
+    };
+    let before = level(&mut live, up, 0.3);
+    let held = level(&mut live, down, 0.5);
+    let after = level(&mut live, up, 1.5);
+    println!("before {before:.2e} held {held:.2e} after {after:.2e}");
+    assert!(held > 0.05, "{held}");
+    // Measured 2026-10-29: 1.9e-4 / 0.126 / 3.4e-4 (-56 dB either side).
+    assert!(
+        before < held * 1e-2 && after < held * 1e-2,
+        "{before} {after}"
+    );
+}

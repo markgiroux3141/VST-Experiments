@@ -266,6 +266,58 @@ played at draft re-renders at production; the builders agree on circuits with co
 inputs (`export_app_fixtures.py`, `tests/agreement.rs`); envelope shapes are measured
 against the gate; key-to-ear latency is measured in the app.
 
+*Status 2026-10-30: notes reach the circuit; the voice plays from the keyboard.*
+
+**Control inputs, in every layer.** A circuit can have control inputs beside its audio
+input: a circuit file's `cv_inputs: {name: node}`, the IR's `controls`. Each one is a node
+driven to ground by its own samples, linear between samples, because a gate's step would
+ring if band-limited.
+- An IR without controls reads, writes and simulates exactly as before. Fixtures and
+  goldens are unchanged, and IR_VERSION stays.
+- circuitsim: rows after the input's, entered as the first `Mna::externals`
+  (`Transient::set_controls`; a partition's couplings follow them), so DK solver only.
+  `simulate_controls`, `Stream::with_controls` / `process_with` (a control without samples
+  holds its last value), partitioned runs (controls stay in the first partition), Python's
+  `simulate(..., controls=)` and `Stream(c0=)` / `process(input, controls=)`.
+- `varimu-circuit` builds them, and both pre-flights take them as sources.
+- `fast.run_transient(..., controls={name: volts})`. ngspice runs none: no SPICE text.
+- The app: `Live::with_controls` / `process_with`.
+- Tests: `crates/circuitsim/tests/controls.rs`, `tests/test_controls.py`, the app's
+  `tests/live.rs`.
+
+**The voice: `config/circuits/tube_voice.yaml`.**
+- tube_filter.yaml's filter, Q multiplier, cutoff driver and supply.
+- A 12AU7 cathodyne phase splitter, on a decoupled supply of its own. On b3's rail it
+  passed the ripple to one VCA grid only: 120 Hz at -60 dBFS.
+- A push-pull pair of 6386 sections into an output transformer (3000 turns CT : 600,
+  steel).
+- **The envelope is keyed as the Novachord keyed its notes.** The `gate` control input is
+  the keyboard bus: -110 V with no key, -2 V with a key down (the file's `gate_off_v` /
+  `gate_on_v`). A 6X4's two sections steer it: with a key down, the bus charges the
+  envelope node through ATTACK; with the key up, the node discharges through RELEASE. The
+  node is the VCA grids' common bias. A release resistor to a rail held the key-down
+  level at a divider (-13 V); with steering diodes it reaches -2 V.
+- The envelope's movement is common mode at the transformer, so it barely thumps.
+
+`tests/test_tube_voice.py`:
+- The envelope runs -109.9 V to -2.0 V.
+- Attack 16-294 ms to 90% (rotation 0-0.7); release 42-366 ms to 10% (0-0.4).
+- A full-scale saw: -74 dBFS with no key (bleed), -10 dBFS held.
+- The gate's thump with silence in: ~5.5 mV. Hum with a key held: -85 dBFS.
+
+The app plays it as the `tube_voice` device: `panel::Device::gate` names the control the
+keys gate, at the file's voltages. With a gate, the test oscillator keeps sounding the
+last key, so the circuit's envelope shapes the notes. 37% load idle, worst block 61%, no
+dropouts.
+
+Not yet:
+- The gate changes at block boundaries (10 ms), not on the MIDI events' timestamps.
+- Velocity sets only the oscillator's level.
+- No envelope to the cutoff.
+- A take isn't recorded as MIDI or re-rendered at production (S3's done-when).
+- A draft-only 48 kHz component (the draft's Nyquist, up to 0.14 V on the splitter's
+  plate; production has none) never reaches the output.
+
 **S4. The oscillator, drift as character.** First, cheap prototypes of the three
 candidates (triode multivibrator with a vacuum-diode exponential converter, reactor-tuned
 LC, thyratron or neon relaxation), each measured for pitch against control, range,

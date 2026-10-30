@@ -72,8 +72,10 @@ pub enum Source {
         device: Option<String>,
         channel: usize,
     },
-    /// A MIDI keyboard's keys playing the test oscillator (`midi::TestOsc`).
-    Keys(Arc<Keys>, Wave),
+    /// A MIDI keyboard's keys playing the test oscillator (`midi::TestOsc`), and for a
+    /// device whose circuit has a gate control input, its (key up, key down) volts:
+    /// the gate follows the keys and the oscillator keeps sounding the last one.
+    Keys(Arc<Keys>, Wave, Option<(f64, f64)>),
 }
 
 /// An input device and its default (shared-mode mix) format.
@@ -272,10 +274,16 @@ impl Player {
                 ));
                 (Some(stream), WorkerSource::Input(ring, info.rate))
             }
-            Source::Keys(keys, wave) => {
-                shared.status.lock().expect("status").input =
-                    Some("MIDI keyboard: test oscillator".into());
-                (None, WorkerSource::Keys(keys, wave))
+            Source::Keys(keys, wave, gate) => {
+                shared.status.lock().expect("status").input = Some(
+                    if gate.is_some() {
+                        "MIDI keyboard: test oscillator, the gate into the circuit"
+                    } else {
+                        "MIDI keyboard: test oscillator"
+                    }
+                    .into(),
+                );
+                (None, WorkerSource::Keys(keys, wave, gate))
             }
         };
         {
@@ -401,7 +409,7 @@ impl Drop for Player {
 enum WorkerSource {
     Loop(Vec<f64>),
     Input(rtrb::Consumer<f32>, u32),
-    Keys(Arc<Keys>, Wave),
+    Keys(Arc<Keys>, Wave, Option<(f64, f64)>),
 }
 
 /// Write `y` into the ring (all of it; the callers leave room).
@@ -446,8 +454,13 @@ fn work(
         WorkerSource::Input(..) | WorkerSource::Keys(..) => &[],
     };
     let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
-    let mut live =
-        Live::with_gain(clip, values, circuit, s, gain).map_err(|e| format!("can't start: {e}"))?;
+    // A gate starts up (no key).
+    let c0: Vec<f64> = match &source {
+        WorkerSource::Keys(_, _, Some((up, _))) => vec![*up],
+        _ => Vec::new(),
+    };
+    let mut live = Live::with_controls(clip, values, circuit, s, gain, &c0)
+        .map_err(|e| format!("can't start: {e}"))?;
     let rate = live.rate;
     let capacity = ring.buffer().capacity();
     let mut monitor = Monitor::new(rate, live.lag());
@@ -581,12 +594,14 @@ fn work(
                 pending.drain(..used);
             }
         }
-        WorkerSource::Keys(keys, wave) => {
+        WorkerSource::Keys(keys, wave, gate) => {
             // Blocks are made as the queue drains, each from the keys held as it starts:
             // a key is heard within the queue, a block and the output's latency.
             let mut osc = TestOsc::new(rate as f64);
             osc.wave = wave;
+            osc.steady = gate.is_some();
             let mut block = vec![0.0; BLOCK];
+            let mut gate_block = vec![0.0; BLOCK];
             while !shared.stop.load(Ordering::Relaxed) {
                 forward_values(&mut live);
                 let queued = capacity - ring.slots();
@@ -595,10 +610,16 @@ fn work(
                     std::thread::sleep(Duration::from_micros(300));
                     continue;
                 }
-                osc.fill(keys.sounding(), &mut block);
-                let (y, meter) = live
-                    .process(&block)
-                    .map_err(|e| format!("the circuit stopped: {e}"))?;
+                let sounding = keys.sounding();
+                osc.fill(sounding, &mut block);
+                let (y, meter) = match gate {
+                    Some((up, down)) => {
+                        gate_block.fill(if sounding.is_some() { down } else { up });
+                        live.process_with(&block, &[&gate_block])
+                    }
+                    None => live.process(&block),
+                }
+                .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
                 push(&mut ring, &monitored(&live, &y));
                 heard(&live, before);

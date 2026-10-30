@@ -1,0 +1,276 @@
+# The tube synth's voice (docs/TUBE_SYNTH_PLAN.md, S3): tube_filter.yaml's filter, supply
+# and cutoff driver, with notes in: the keyboard's gate drives an envelope that opens a
+# push-pull variable-mu VCA. The tone itself still comes from the native app's test
+# oscillator (S4 brings the synth's own).
+#   V1A/V1B  12AU7 gain stage and follower into the reactor low-pass (TA/TB, CF, RL)
+#   V5   12AX7 cathode-coupled pair: the RESONANCE Q multiplier
+#   V2A  12AU7 follower off the filter node
+#   V6   12AU7 cathodyne phase splitter: the signal in antiphase to the VCA's grids
+#   V3A/V3B  6386 sections in push-pull into the output transformer TOUT: their grids'
+#        common bias is the envelope, so the envelope's own movement (and the supply's
+#        hum) is common mode and cancels in TOUT, where a single-ended VCA thumps
+#   The envelope, keyed as the Hammond Novachord keyed its notes: a key switches the
+#        keyboard bus (the `gate` control input) between -110 V (no key) and -2 V (a key
+#        down). A 6X4's two sections steer it: with a key down the bus charges the
+#        envelope node through the ATTACK rheostat and VDA; with the key up VDA blocks
+#        and the node discharges into the bus through the RELEASE rheostat and VDR. CENV
+#        holds it. The node is the VCA grids' common bias: -110 V shut, ~-2 V open, and
+#        with steering diodes it reaches both (a release resistor to a rail held it at a
+#        divider, -13 V, with the key down).
+#   V4   6V6GT drawing its plate current through the reactor's control windings (CUTOFF)
+# The supply is tube_filter.yaml's: a 6X4 full-wave rectifier, CRC filtering (b1 the
+# 6V6GT, b4 the VCA's center tap, b3 the small stages), a selenium bridge for the bias
+# (-105 V, -46 V, and an RC stage of its own for the envelope's rail).
+# Invented circuit, not modelled hardware: round numbers, every value a design choice.
+
+title: "Tube synth voice"
+input: in
+cv_inputs:
+  gate: bus
+probes: [out, f, env, bus, p3a, p3b, b1, b3, neg2, ta_core, tb_core]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "provisional: model knowledge (line level into the first stage, ~1 V peak)"}
+  output_volts_peak: {value: 1.5, source: "provisional: model knowledge (the output transformer's secondary at a full envelope and a full-scale saw peaks ~0.9 V: set from a render, 2026-10-29)"}
+
+controls:
+  cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from the -45 V rail (0) to ground (1))"}
+  resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RESONANCE pot, the share of V5B's output fed back to the filter node; linear)"}
+  attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 100k log into 4.7 uF: ~5 ms to ~0.5 s)"}
+  release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 2.2k + 470k log from 4.7 uF: ~10 ms to ~2 s)"}
+  mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
+
+values:
+  # --- supply
+  pt_hv_half_rms_v: {value: 250.0, source: "provisional: model knowledge (design: a small power transformer's HV half, sized for ~250 V at b3)"}
+  pt_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (a ~25 W transformer's HV half with the primary referred, ~150 ohm)"}
+  pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (leakage per HV half of a small mains transformer)"}
+  pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
+  rectifier_tube: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4 full-wave rectifier, as small studio gear of the era used; config/components/6x4/1.yaml, per section)"}
+  c_reservoir_f: {value: 20.0e-6, source: "provisional: model knowledge (reservoir and filter electrolytics, 20 uF 450 V)"}
+  r_b12_ohm: {value: 1.0e+3, source: "provisional: model knowledge (filter resistor b1 to b2)"}
+  r_b23_ohm: {value: 2.2e+3, source: "provisional: model knowledge (filter resistor b2 to b3, the small stages' and the VCA's decoupling)"}
+  r_b24_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: the VCA's own RC branch off b2: at b3, the input stages' signal currents leaked through its plate resistor with it cut off, -34 dB)"}
+  c_decouple_f: {value: 47.0e-6, source: "provisional: model knowledge (b2 and b3 electrolytics: the VCA hums at b2's ripple otherwise)"}
+  r_bleeder_ohm: {value: 220.0e+3, source: "provisional: model knowledge (a bleeder across the reservoir)"}
+  bias_winding_rms_v: {value: 85.0, source: "provisional: model knowledge (design: a bias winding for ~-100 V)"}
+  bias_winding_r_ohm: {value: 200.0, source: "provisional: model knowledge (a small bias winding's resistance)"}
+  bias_rectifier: {value: SELENIUM@1, source: "provisional: model knowledge (design: a selenium bridge for the bias, as the 670 has; config/components/selenium/1.yaml; full-wave: a half-wave bias hummed at -26 dBFS through the VCA's grid)"}
+  c_bias_arm_f: {value: 1.0e-9, source: "provisional: model knowledge (each selenium arm's capacitance; a capacitance on the rectifier nodes)"}
+  bias_arm_area: {value: 1.0, source: "numerical: the arm capacitance is given per arm (the macro's per-area form)"}
+  c_bias_winding_f: {value: 1.0e-9, source: "provisional: model knowledge (the floating bias winding's capacitance to the core: holds its common mode, as CT104A/B in the 670)"}
+  r_bias_winding_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the floating bias winding (its insulation's leakage; the pre-flight checks need one)"}
+  c_bias_f: {value: 100.0e-6, source: "provisional: model knowledge (bias filter electrolytics)"}
+  r_vca_bias_filter_ohm: {value: 2.2e+3, source: "provisional: model knowledge (design: an RC stage of its own for the envelope's rail: the VCA's grids hear every millivolt there)"}
+  r_bias_drop_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: -100 V to the -45 V node)"}
+  r_bias_ground_ohm: {value: 8.2e+3, source: "provisional: model knowledge (design: the -45 V node to ground, with its loads)"}
+  # --- input
+  r_grid_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (grid leak)"}
+  r_stopper_ohm: {value: 10.0e+3, source: "provisional: model knowledge (grid stopper)"}
+  r_plate1_ohm: {value: 47.0e+3, source: "provisional: model knowledge (12AU7 plate load)"}
+  r_cathode1_ohm: {value: 1.5e+3, source: "provisional: model knowledge (12AU7 self bias, unbypassed: gain ~11)"}
+  r_follower1_ohm: {value: 22.0e+3, source: "provisional: model knowledge (12AU7 follower to ground, ~5 mA)"}
+  c_couple1_f: {value: 4.7e-6, source: "provisional: model knowledge (into the reactor: 17 Hz with its 18 H, below the passband)"}
+  # --- filter
+  c_filter_f: {value: 47.0e-9, source: "provisional: model knowledge (as reactor_filter.yaml: ~110 Hz unbiased, ~4 kHz at full cutoff)"}
+  r_load_ohm: {value: 4.7e+3, source: "provisional: model knowledge (the filter's damping with the resonance off: Q ~0.25 at the bottom, ~6 at the top)"}
+  r_tail_ohm: {value: 47.0e+3, source: "provisional: model knowledge (V5's tail to the -45 V rail, ~1 mA for the pair)"}
+  r_plate5_ohm: {value: 100.0e+3, source: "provisional: model knowledge (V5B's plate load, a 12AX7's usual)"}
+  c_res_f: {value: 0.22e-6, source: "provisional: model knowledge (V5B's output into the RESONANCE pot)"}
+  r_res_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the RESONANCE pot)"}
+  r_feedback_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design: from the pot's wiper to the filter node; with V5's gain sets where the filter starts to oscillate)"}
+  r_follower2_ohm: {value: 22.0e+3, source: "provisional: model knowledge (V2A's cathode to the -45 V rail, ~2.6 mA)"}
+  # --- phase splitter and push-pull VCA
+  c_couple2_f: {value: 0.1e-6, source: "provisional: model knowledge (from V2A into the attenuator)"}
+  r_atten_series_ohm: {value: 220.0e+3, source: "provisional: model knowledge (with r_atten_shunt_ohm, ~1/19 of the filter's output into the splitter: ~0.5 V peak at the VCA's grids)"}
+  r_atten_shunt_ohm: {value: 12.0e+3, source: "provisional: model knowledge (the attenuator's lower leg)"}
+  c_couple3_f: {value: 0.1e-6, source: "provisional: model knowledge (into the splitter's grid)"}
+  r_split_bias_top_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the splitter's grid bias from b3, ~90 V)"}
+  r_split_bias_bottom_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the splitter's grid bias to ground: ~78 V, a third of its supply)"}
+  r_split_supply_ohm: {value: 4.7e+3, source: "provisional: model knowledge (the splitter's own decoupled supply off b3: its plate load passed b3's ripple to one VCA grid only, a differential hum of 24 mV at the plates)"}
+  c_split_supply_f: {value: 100.0e-6, source: "provisional: model knowledge (the splitter's supply electrolytic)"}
+  c_split_bias_f: {value: 10.0e-6, source: "provisional: model knowledge (decouples the splitter's bias divider: fed straight to the grid it passed b3's ripple to the VCA in antiphase, 120 Hz at -60 dBFS)"}
+  r_split_grid_ohm: {value: 1.0e+6, source: "provisional: model knowledge (from the decoupled divider to the splitter's grid)"}
+  r_env_leak_ohm: {value: 1.0e+8, source: "provisional: model knowledge (the envelope capacitor's and steering diodes' leakage; the pre-flight checks need a DC path)"}
+  r_split_load_ohm: {value: 22.0e+3, source: "provisional: model knowledge (the cathodyne's plate and cathode loads, equal)"}
+  c_couple4_f: {value: 0.1e-6, source: "provisional: model knowledge (from the splitter to each VCA grid)"}
+  r_vca_grid_ohm: {value: 2.2e+6, source: "provisional: model knowledge (each VCA grid's leak to the envelope node: high, so the pair loads the envelope little)"}
+  # --- the output transformer (a small push-pull interstage: 3000 turns CT : 600)
+  tout_turns_half: {value: 1500.0, source: "provisional: model knowledge (design: each primary half)"}
+  tout_sec_ratio: {value: 0.4, source: "provisional: model knowledge (design: 600 turns of secondary for 1500 per half)"}
+  tout_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (each primary half's resistance)"}
+  tout_r_sec_ohm: {value: 20.0, source: "provisional: model knowledge (the secondary's resistance)"}
+  tout_c_half_f: {value: 100.0e-12, source: "provisional: model knowledge (each primary half's self-capacitance)"}
+  tout_leakage_h: {value: 20.0e-3, source: "provisional: model knowledge (leakage referred to a primary half)"}
+  tout_area_m2: {value: 2.0e-4, source: "provisional: model knowledge (a small EI core, 2 cm^2)"}
+  tout_path_m: {value: 0.1, source: "provisional: model knowledge (10 cm magnetic path)"}
+  tout_gap_m: {value: 20.0e-6, source: "provisional: model knowledge (butt-stacked laminations' joint gap; the push-pull currents cancel, little DC)"}
+  r_out_load_ohm: {value: 10.0e+3, source: "provisional: model knowledge (the secondary's load: the next stage's input)"}
+  # --- the envelope
+  gate_off_v: {value: -110.0, source: "provisional: model knowledge (design: the keyboard bus with no key down, the VCA shut past its remote cutoff's tail)"}
+  gate_on_v: {value: -2.0, source: "provisional: model knowledge (design: the keyboard bus with a key down: the VCA's grids open, short of grid current)"}
+  r_bus_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the keyboard bus's source resistance and the attack's minimum)"}
+  r_attack_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the ATTACK rheostat's track)"}
+  r_release_min_ohm: {value: 2.2e+3, source: "provisional: model knowledge (the release's minimum)"}
+  r_release_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the RELEASE rheostat's track)"}
+  env_taper_mid: {value: 0.1, source: "provisional: model knowledge (audio-taper rheostats, 10% at half rotation: times spread evenly over the rotation)"}
+  c_env_f: {value: 4.7e-6, source: "provisional: model knowledge (the envelope's capacitor, film)"}
+  envelope_diode: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4's two sections as the envelope's steering diodes; config/components/6x4/1.yaml, per section)"}
+  # --- cutoff
+  r_cutoff_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the CUTOFF pot)"}
+  c_cutoff_f: {value: 0.1e-6, source: "provisional: model knowledge (on V4's grid: smooths the cutoff, 10 ms with the pot)"}
+  r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen feed)"}
+  r_cathode4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT cathode: current feedback, ~0-15 mA over the pot)"}
+  # --- the reactor
+  signal_turns: {value: 500.0, source: "provisional: model knowledge (as saturable_reactor.yaml)"}
+  r_signal_winding_ohm: {value: 10.0, source: "provisional: model knowledge (500 turns of ~0.2 mm copper on a small toroid)"}
+  r_control_winding_ohm: {value: 30.0, source: "provisional: model knowledge (1000 turns of ~0.15 mm copper)"}
+  leakage_h: {value: 0.0, source: "provisional: model knowledge (windings on a toroid couple closely; leakage neglected)"}
+  core_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (a small tape-wound toroid, 1 cm^2)"}
+  core_path_m: {value: 0.1, source: "provisional: model knowledge (10 cm mean path)"}
+  core_gap_m: {value: 0.0, source: "provisional: model knowledge (a tape-wound toroid has no joint gap)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 120.0, source: "provisional: model knowledge (the power transformer's rated primary; its secondaries are given at it)"}
+
+devices:
+  V1A: {device: 12AU7@1}
+  V1B: {device: 12AU7@1}
+  V2A: {device: 12AU7@1}
+  V5A: {device: 12AX7@1}
+  V5B: {device: 12AX7@1}
+  V3A: {device: 6386@1}
+  V3B: {device: 6386@1}
+  V6: {device: 12AU7@1}
+  VDA: {device: envelope_diode}
+  VDR: {device: envelope_diode}
+  V4: {device: 6V6GT@1}
+  VR: {device: rectifier_tube}
+  DB: {device: bias_rectifier}
+
+sections:
+  - title: power supply
+    parts:
+      VHVA: {mains: [hv_a, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hv_b, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 270.0}
+      RPTA: {R: [hv_a, hv_ar], r: pt_r_half_ohm}
+      LPTA: {L: [hv_ar, hva], l: pt_leakage_h}
+      RPTB: {R: [hv_b, hv_br], r: pt_r_half_ohm}
+      LPTB: {L: [hv_br, hvb], l: pt_leakage_h}
+      CPTA: {C: [hva, "0"], c: pt_c_half_f}
+      CPTB: {C: [hvb, "0"], c: pt_c_half_f}
+      XVRA: {device: [hva, b1], model: VR}
+      XVRB: {device: [hvb, b1], model: VR}
+      CB1: {C: [b1, "0"], c: c_reservoir_f}
+      RBLEED: {R: [b1, "0"], r: r_bleeder_ohm}
+      RB12: {R: [b1, b2], r: r_b12_ohm}
+      CB2: {C: [b2, "0"], c: c_decouple_f}
+      RB23: {R: [b2, b3], r: r_b23_ohm}
+      CB3: {C: [b3, "0"], c: c_decouple_f}
+      RB24: {R: [b2, b4], r: r_b24_ohm}
+      CB4: {C: [b4, "0"], c: c_decouple_f}
+  - title: bias supply
+    parts:
+      # A floating bias winding (at its peak at the start) into a selenium bridge, its
+      # positive side to ground: -100 V, then -45 V by RN / RNG, and an RC stage of its
+      # own for the VCA's bias.
+      VBW: {mains: [bwa, bwb], v_rms: bias_winding_rms_v, phase_deg: 90.0}
+      RBW: {R: [bwa, bwar], r: bias_winding_r_ohm}
+      CBW: {C: [bwb, "0"], c: c_bias_winding_f}
+      RBWL: {R: [bwb, "0"], r: r_bias_winding_leak_ohm}
+      GRB: {bridge: [bwar, bwb, "0", neg2], model: DB, arm_c_f_per_area: c_bias_arm_f, area: bias_arm_area}
+      CN2: {C: [neg2, "0"], c: c_bias_f}
+      RVF: {R: [neg2, nv], r: r_vca_bias_filter_ohm}
+      CVF: {C: [nv, "0"], c: c_bias_f}
+      RN: {R: [neg2, neg], r: r_bias_drop_ohm}
+      CN: {C: [neg, "0"], c: c_bias_f}
+      RNG: {R: [neg, "0"], r: r_bias_ground_ohm}
+  - title: input
+    parts:
+      RG1: {R: [in, "0"], r: r_grid_in_ohm}
+      RST1: {R: [in, g1], r: r_stopper_ohm}
+      XV1A: {device: [p1, g1, k1], model: V1A}
+      RP1: {R: [b3, p1], r: r_plate1_ohm}
+      RK1: {R: [k1, "0"], r: r_cathode1_ohm}
+      XV1B: {device: [b3, p1, k1b], model: V1B}
+      RK1B: {R: [k1b, "0"], r: r_follower1_ohm}
+      CC1: {C: [k1b, s], c: c_couple1_f}
+  - title: filter
+    parts:
+      TA:
+        transformer:
+          sig: {nodes: [s, m], r: r_signal_winding_ohm}
+          ctl: {nodes: [b1, c2], ratio: 2.0, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      TB:
+        transformer:
+          sig: {nodes: [m, f], r: r_signal_winding_ohm}
+          ctl: {nodes: [p4, c2], ratio: 2.0, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      CF: {C: [f, "0"], c: c_filter_f}
+      RL: {R: [f, "0"], r: r_load_ohm}
+      XV2A: {device: [b3, f, k2], model: V2A}
+      RK2: {R: [k2, neg], r: r_follower2_ohm}
+  - title: resonance
+    parts:
+      XV5A: {device: [b3, f, k5], model: V5A}
+      XV5B: {device: [pb5, "0", k5], model: V5B}
+      RT5: {R: [k5, neg], r: r_tail_ohm}
+      RP5: {R: [b3, pb5], r: r_plate5_ohm}
+      CR5: {C: [pb5, rt], c: c_res_f}
+      RQ: {pot: ["0", rw, rt], r: r_res_pot_ohm, at: resonance}
+      RFB: {R: [rw, f], r: r_feedback_ohm}
+  - title: vca
+    parts:
+      CC2: {C: [k2, a6], c: c_couple2_f}
+      RA6: {R: [a6, a6d], r: r_atten_series_ohm}
+      RB6: {R: [a6d, "0"], r: r_atten_shunt_ohm}
+      CC3: {C: [a6d, g6], c: c_couple3_f}
+      RG6T: {R: [b3, g6b], r: r_split_bias_top_ohm}
+      RG6B: {R: [g6b, "0"], r: r_split_bias_bottom_ohm}
+      CG6B: {C: [g6b, "0"], c: c_split_bias_f}
+      RG6: {R: [g6b, g6], r: r_split_grid_ohm}
+      XV6: {device: [p6, g6, k6], model: V6}
+      RB5: {R: [b3, b5], r: r_split_supply_ohm}
+      CB5: {C: [b5, "0"], c: c_split_supply_f}
+      RP6: {R: [b5, p6], r: r_split_load_ohm}
+      RK6: {R: [k6, "0"], r: r_split_load_ohm}
+      CC4A: {C: [p6, g3a], c: c_couple4_f}
+      CC4B: {C: [k6, g3b], c: c_couple4_f}
+      RG3A: {R: [g3a, env], r: r_vca_grid_ohm}
+      RG3B: {R: [g3b, env], r: r_vca_grid_ohm}
+      XV3A: {device: [p3a, g3a, "0"], model: V3A}
+      XV3B: {device: [p3b, g3b, "0"], model: V3B}
+      TOUT:
+        transformer:
+          pa: {nodes: [p3a, b4], r: tout_r_half_ohm, c: tout_c_half_f}
+          pb: {nodes: [b4, p3b], r: tout_r_half_ohm, c: tout_c_half_f}
+          sec: {nodes: [out, "0"], ratio: tout_sec_ratio, r: tout_r_sec_ohm}
+        core: {material: grain_oriented_si_steel, area_m2: tout_area_m2, path_m: tout_path_m, gap_m: tout_gap_m}
+        turns: tout_turns_half
+        leakage_h: tout_leakage_h
+      RLO: {R: [out, "0"], r: r_out_load_ohm}
+  - title: envelope
+    parts:
+      RBUS: {R: [bus, ba], r: r_bus_ohm}
+      RATT: {rheostat: [ba, bd], r: r_attack_ohm, at: attack, taper_mid: env_taper_mid}
+      XVDA: {device: [bd, env], model: VDA}
+      CENV: {C: [env, "0"], c: c_env_f}
+      RENVL: {R: [env, "0"], r: r_env_leak_ohm}
+      XVDR: {device: [env, er], model: VDR}
+      RRELMIN: {R: [er, er2], r: r_release_min_ohm}
+      RREL: {rheostat: [er2, ba], r: r_release_ohm, at: release, taper_mid: env_taper_mid}
+  - title: cutoff
+    parts:
+      RCUT: {pot: [neg, g4, "0"], r: r_cutoff_pot_ohm, at: cutoff}
+      CCUT: {C: [g4, "0"], c: c_cutoff_f}
+      XV4: {device: [p4, s4, g4, k4], model: V4}
+      RS4: {R: [b1, s4], r: r_screen4_ohm}
+      RK4: {R: [k4, "0"], r: r_cathode4_ohm}
