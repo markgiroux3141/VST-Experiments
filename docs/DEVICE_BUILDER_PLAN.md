@@ -837,6 +837,11 @@ update the same 1 mOhm end is clean. Renders never update mid-run, so only live 
 - *Wiper contact resistance* (20 Ohm in series with the wiper): the spike unchanged (the end
   segment is still 1 mOhm).
 
+*B6's rest backlogged (2026-10-30, the user: diminishing returns):* capacitor leakage and
+DA (below: inaudible for new parts; leakage belongs with aging, B7), carbon resistors'
+excess noise and voltage coefficient, capacitor ESR and voltage coefficient. Picked up with
+B7 or when a circuit needs them.
+
 *Capacitor leakage and dielectric absorption, measured 2026-10-30 (options to the user;
 nothing built; prototype in the session's scratch, the builder's C macro wrapped).*
 - **The model:** Dow's (Kundert, *Modeling Dielectric Absorption in Capacitors*, designers-
