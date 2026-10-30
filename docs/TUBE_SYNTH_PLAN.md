@@ -535,6 +535,20 @@ model). Warm at the rated mains it plays as before. `scripts/heater_synth_study.
   -18 at 18 s, -6 at 24 s, -2 at 30 s, under half a cent by ~40 s; the level settles by
   ~12 s.
 
+**The beating at low cutoff (measured 2026-10-30; the user heard a low-frequency beating as
+the cutoff comes down).** Not a simulator bug: the circuit's supply ripple. b1, the
+reservoir (20 uF, ~278 V), carries ~6 V of 120 Hz ripple (b3: 1-2 mV), and the filter's
+reactor control chain (TA / TB control windings to V4's plate), V4's screen (RS4), the
+oscillator's control winding and its 5651 feed (ROVR) all hang on b1. The ripple wobbles the
+oscillator and the cutoff at 120 Hz: sidebands around every note, heard as a beat at
+|f - 120 k| (8.9 Hz at a 128.8 Hz note). Draft, the app's partition, held notes, dB re the
+note at `out`: 128.8 Hz -31 to -37 dB, 479 Hz -23 to -29 dB (-35 already at the tank). Lowering
+the cutoff removes the harmonics that mask it (and passes the 120 Hz product while cutting the
+note: at 479 Hz it rises from -62 to -43 dB). Scratch variants: those loads fed from an RC node
+(1k, 100 uF) -50 / -65 dB; a 1000x reservoir -50 / -55 dB (and the pitch moves: b1's sag sets
+the tuning). A fix is a design change (a filter section, a choke the period's choice;
+re-measure the tuning after); not made, the user's call.
+
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
   code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity

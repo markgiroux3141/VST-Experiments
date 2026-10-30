@@ -119,6 +119,46 @@ The study to run (outside the repo, or as a `scripts/vco_study.py` option): swee
 That shows which value puts E1-A1 on a usable stretch of the law, and whether the divider
 (E) is needed at all.
 
+## The tank sweep (measured 2026-10-30)
+
+The study recommended above, at draft with the app's partition, 1 V steps from -32 to 0 V,
+1 s held per point (scratch script; `vco_study.held(..., sets={"osc_c_tank_f": C})`).
+Pitch in Hz:
+
+| V | -26 | -25 | -24 | -23 | -22 | -21 | -20 | -15 | -10 | -5 | -3 | -1 | 0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 56 nF (today) | 17 | 19 | 36 | 58 | 88 | 127 | 173 | 477 | 870 | 1303 | 1479 | 1651 | 1736 |
+| 112 nF | 16 | 17 | 32 | 50 | 73 | 99 | 128 | 335 | 613 | 909 | 1025 | 1137 | 1191 |
+| 224 nF | 14 | 16 | 27 | 39 | 54 | 70 | 89 | 234 | 429 | 623 | 694 | 759 | 789 |
+| 470 nF | 12 | 14 | 20 | 27 | 35 | 45 | 58 | 161 | 290 | 398 | 429 | 105 | 78 |
+
+Semitones per volt at the bass notes (where the note falls on the law):
+
+| | E1 41 Hz | A1 55 Hz | E2 82 Hz | A2 110 Hz | A3 220 Hz |
+|---|---|---|---|---|---|
+| 56 nF | 8.5 | 8.5 | 7.1 | 6.4 | 4.4 |
+| 112 nF | 8.0 | 6.5 | 5.3 | 4.5 | 3.3 |
+| 224 nF | 5.3 | 4.6 | 4.2 | 3.8 | 2.9 |
+
+- **As predicted, a bigger C moves the law down and a given bass note lands on a gentler
+  stretch:** at 224 nF E1-A2 sit at 4-5 semitones/V instead of 6-8.5, so a grid wobble
+  moves them ~40% less in cents. The top falls with it: 789 Hz (G5) at 224 nF.
+- **470 nF breaks the top:** above -3 V (429 Hz) the oscillation collapses (105 / 78 Hz
+  readings, -73 dBFS out). Not usable alone.
+- **Below the old floor:** at every C the law runs on below -23 V (56 nF: 36 Hz at -24 V,
+  19 at -25), but at 8-11 semitones/V; the waveforms there weren't checked (the earlier
+  note: the tank's swing saturates the cores).
+- **Level:** 224 nF's bottom is louder (-21 dBFS rms at its quietest, 56 nF's -31).
+- **Cost:** the same per run at every C (3.1-3.3 s wall per 2 s run, three at once).
+- **The supply ripple matters more down here:** the 120 Hz ripple on b1 beats with notes
+  at |f - 120 k| (TUBE_SYNTH_PLAN.md, "The beating at low cutoff"), so bass notes below
+  120 Hz flutter at 10-80 Hz unless the ripple is filtered. Filtering it shifts the tuning
+  (b1's sag), so it goes before any re-tuning.
+
+**Reading:** an octave switch with 224 nF for the low range (~27-790 Hz) beside today's 56 nF
+(~58-1736 Hz), each with a tuning table at 0.25 V steps, puts E1-A2 on a 4-5 semitones/V
+stretch; with the ripple filtered first.
+
 ## How the measurements were made
 
 `builder.build_ir(spec, spec.resolve(spec, overrides), cores="ja")` with probes on the
