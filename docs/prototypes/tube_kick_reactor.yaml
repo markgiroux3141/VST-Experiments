@@ -1,0 +1,226 @@
+# PROTOTYPE, not a circuit file of the project (its values are scratch: "numerical: scratch"),
+# kept so the work can be picked up: docs/TUBE_SYNTH_PLAN.md, S5's status, "A tube kick".
+# Measured with these overrides (2026-10-30): r_sense_a_ohm 100k, r_out_a_ohm 10k,
+# r_trig_cathode_ohm 15k, r_cathode_s_ohm 2.2k, tune 0, depth 1, sweep_time 0.3.
+# Build with heaters="warm" (the 6X4 clamp has a heater rating; the 6AL5 has none).
+# A tube kick drum (prototype, scratch): a struck resonator, as the 808's bass drum is, and
+# as the Wurlitzer Sideman (1959) made its drums with shock-excited LC circuits.
+#   trigger  the keyboard bus (the `gate` control input: -110 V up, -1 V down, as the
+#            synth's) through RTR and CTR (a differentiator) onto V1A's grid, which rests at
+#            the -45 V rail (cut off): a key's edge drives it on for ~1-2 ms. CTS slows the
+#            edge (the draft's step)
+#   tank     V1A's plate current flows through LK (a winding on a gapped mumetall toroid)
+#            from b3; CK across it. When V1A cuts off, LK's current rings in the tank: a
+#            hit. A large hit swings the core toward saturation, where the inductance falls
+#            and the pitch rises: the pitch falls as the ring decays (the hypothesis)
+#   decay    V2, a 12AX7 cathode-coupled pair, senses the tank (CQ1, a 1/11 divider) and
+#            feeds it back in phase through CQ2, the DECAY pot and RFB: a negative
+#            resistance across the tank's loss (RD, the winding, the core)
+#   out      V1B, a cathode follower off a 1/11 divider of the tank
+title: "Tube kick (prototype)"
+input: in
+cv_inputs:
+  gate: bus
+probes: [out, t, g1, tr, b3, b1, ta_core, tb_core, gs, ks]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: scratch"}
+  output_volts_peak: {value: 10.0, source: "numerical: scratch"}
+
+controls:
+  tune: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "numerical: scratch"}
+  depth: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "numerical: scratch"}
+  sweep_time: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "numerical: scratch"}
+  decay: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "numerical: scratch"}
+  mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
+
+values:
+  pt_hv_half_rms_v: {value: 250.0, source: "provisional: model knowledge (tube_filter.yaml's supply)"}
+  pt_r_half_ohm: {value: 150.0, source: "provisional: model knowledge"}
+  pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge"}
+  pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge"}
+  rectifier_tube: {value: 6X4@1, source: "provisional: model knowledge"}
+  c_reservoir_f: {value: 20.0e-6, source: "provisional: model knowledge"}
+  r_b12_ohm: {value: 1.0e+3, source: "provisional: model knowledge"}
+  r_b23_ohm: {value: 2.2e+3, source: "provisional: model knowledge"}
+  c_decouple_f: {value: 47.0e-6, source: "provisional: model knowledge"}
+  r_bleeder_ohm: {value: 220.0e+3, source: "provisional: model knowledge"}
+  bias_winding_rms_v: {value: 85.0, source: "provisional: model knowledge"}
+  bias_winding_r_ohm: {value: 200.0, source: "provisional: model knowledge"}
+  bias_rectifier: {value: SELENIUM@1, source: "provisional: model knowledge"}
+  c_bias_arm_f: {value: 1.0e-9, source: "provisional: model knowledge"}
+  bias_arm_area: {value: 1.0, source: "numerical: per arm"}
+  c_bias_winding_f: {value: 1.0e-9, source: "provisional: model knowledge"}
+  r_bias_winding_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path"}
+  c_bias_f: {value: 100.0e-6, source: "provisional: model knowledge"}
+  r_bias_drop_ohm: {value: 4.7e+3, source: "provisional: model knowledge"}
+  r_bias_ground_ohm: {value: 8.2e+3, source: "provisional: model knowledge"}
+  r_grid_in_ohm: {value: 1.0e+6, source: "numerical: scratch"}
+  gate_off_v: {value: -110.0, source: "numerical: scratch"}
+  gate_on_v: {value: -1.0, source: "numerical: scratch"}
+  # trigger
+  r_trig_ohm: {value: 10.0e+3, source: "numerical: scratch"}
+  c_trig_f: {value: 10.0e-9, source: "numerical: scratch"}
+  c_trig_slow_f: {value: 2.2e-9, source: "numerical: scratch"}
+  r_trig_bias_ohm: {value: 220.0e+3, source: "numerical: scratch"}
+  r_grid_stop_ohm: {value: 10.0e+3, source: "numerical: scratch"}
+  r_screen_t_ohm: {value: 1.0e+3, source: "numerical: scratch"}
+  # tank (reactor)
+  signal_turns: {value: 2000.0, source: "numerical: scratch"}
+  control_ratio: {value: 1.0, source: "numerical: scratch"}
+  r_signal_winding_ohm: {value: 160.0, source: "numerical: scratch"}
+  r_control_winding_ohm: {value: 30.0, source: "numerical: scratch"}
+  core_area_m2: {value: 1.0e-4, source: "numerical: scratch"}
+  core_path_m: {value: 0.1, source: "numerical: scratch"}
+  core_gap_m: {value: 0.0, source: "numerical: scratch"}
+  r_trig_cathode_ohm: {value: 4.7e+3, source: "numerical: scratch"}
+  # sweep
+  r_tune_low_ohm: {value: 22.0e+3, source: "numerical: scratch"}
+  r_tune_pot_ohm: {value: 100.0e+3, source: "numerical: scratch"}
+  r_tune_sum_ohm: {value: 100.0e+3, source: "numerical: scratch"}
+  r_sw_in_ohm: {value: 10.0e+3, source: "numerical: scratch"}
+  c_sw_f: {value: 0.47e-6, source: "numerical: scratch"}
+  r_sw_min_ohm: {value: 10.0e+3, source: "numerical: scratch"}
+  r_sw_ohm: {value: 470.0e+3, source: "numerical: scratch"}
+  r_depth_pot_ohm: {value: 250.0e+3, source: "numerical: scratch"}
+  r_sweep_sum_ohm: {value: 470.0e+3, source: "numerical: scratch"}
+  c_gs_f: {value: 1.0e-9, source: "numerical: scratch"}
+  r_screen_s_ohm: {value: 1.0e+3, source: "numerical: scratch"}
+  r_cathode_s_ohm: {value: 470.0, source: "numerical: scratch"}
+  lk_turns: {value: 965.0, source: "numerical: scratch"}
+  lk_r_ohm: {value: 60.0, source: "numerical: scratch"}
+  lk_area_m2: {value: 2.0e-4, source: "numerical: scratch"}
+  lk_path_m: {value: 0.1, source: "numerical: scratch"}
+  lk_gap_m: {value: 20.0e-6, source: "numerical: scratch"}
+  lk_c_f: {value: 100.0e-12, source: "numerical: scratch"}
+  leakage_h: {value: 0.0, source: "numerical: scratch"}
+  c_tank_f: {value: 1.0e-6, source: "numerical: scratch"}
+  r_damp_ohm: {value: 47.0e+3, source: "numerical: scratch"}
+  # decay (Q multiplier)
+  c_sense_f: {value: 0.1e-6, source: "numerical: scratch"}
+  r_sense_a_ohm: {value: 1.0e+6, source: "numerical: scratch"}
+  r_sense_b_ohm: {value: 100.0e+3, source: "numerical: scratch"}
+  r_tail_ohm: {value: 47.0e+3, source: "numerical: scratch"}
+  r_plate2_ohm: {value: 100.0e+3, source: "numerical: scratch"}
+  c_fb_f: {value: 0.47e-6, source: "numerical: scratch"}
+  r_decay_pot_ohm: {value: 100.0e+3, source: "numerical: scratch"}
+  r_fb_ohm: {value: 47.0e+3, source: "numerical: scratch"}
+  # out
+  c_out_f: {value: 0.1e-6, source: "numerical: scratch"}
+  r_out_a_ohm: {value: 1.0e+6, source: "numerical: scratch"}
+  r_out_b_ohm: {value: 100.0e+3, source: "numerical: scratch"}
+  r_follower_ohm: {value: 47.0e+3, source: "numerical: scratch"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 120.0, source: "provisional: model knowledge"}
+
+devices:
+  VDS: {device: 6X4@1}
+  VS: {device: 6V6GT@1}
+  VT: {device: 6V6GT@1}
+  V1B: {device: 12AU7@1}
+  V2A: {device: 12AX7@1}
+  V2B: {device: 12AX7@1}
+  VR: {device: rectifier_tube}
+  DB: {device: bias_rectifier}
+
+sections:
+  - title: power supply
+    parts:
+      VHVA: {mains: [hv_a, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hv_b, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 270.0}
+      RPTA: {R: [hv_a, hv_ar], r: pt_r_half_ohm}
+      LPTA: {L: [hv_ar, hva], l: pt_leakage_h}
+      RPTB: {R: [hv_b, hv_br], r: pt_r_half_ohm}
+      LPTB: {L: [hv_br, hvb], l: pt_leakage_h}
+      CPTA: {C: [hva, "0"], c: pt_c_half_f}
+      CPTB: {C: [hvb, "0"], c: pt_c_half_f}
+      XVRA: {device: [hva, b1], model: VR}
+      XVRB: {device: [hvb, b1], model: VR}
+      CB1: {C: [b1, "0"], c: c_reservoir_f}
+      RBLEED: {R: [b1, "0"], r: r_bleeder_ohm}
+      RB12: {R: [b1, b2], r: r_b12_ohm}
+      CB2: {C: [b2, "0"], c: c_decouple_f}
+      RB23: {R: [b2, b3], r: r_b23_ohm}
+      CB3: {C: [b3, "0"], c: c_decouple_f}
+  - title: bias supply
+    parts:
+      VBW: {mains: [bwa, bwb], v_rms: bias_winding_rms_v, phase_deg: 90.0}
+      RBW: {R: [bwa, bwar], r: bias_winding_r_ohm}
+      CBW: {C: [bwb, "0"], c: c_bias_winding_f}
+      RBWL: {R: [bwb, "0"], r: r_bias_winding_leak_ohm}
+      GRB: {bridge: [bwar, bwb, "0", neg2], model: DB, arm_c_f_per_area: c_bias_arm_f, area: bias_arm_area}
+      CN2: {C: [neg2, "0"], c: c_bias_f}
+      RN: {R: [neg2, neg], r: r_bias_drop_ohm}
+      CN: {C: [neg, "0"], c: c_bias_f}
+      RNG: {R: [neg, "0"], r: r_bias_ground_ohm}
+  - title: input
+    parts:
+      RG1: {R: [in, "0"], r: r_grid_in_ohm}
+  - title: trigger
+    parts:
+      RTR: {R: [bus, ba], r: r_trig_ohm}
+      CTR: {C: [ba, tr], c: c_trig_f}
+      CTS: {C: [tr, "0"], c: c_trig_slow_f}
+      RTB: {R: [tr, neg], r: r_trig_bias_ohm}
+      RGS: {R: [tr, g1], r: r_grid_stop_ohm}
+      XVT: {device: [t, st, g1, kt], model: VT}
+      RKT: {R: [kt, "0"], r: r_trig_cathode_ohm}
+      RST: {R: [b3, st], r: r_screen_t_ohm}
+  - title: tank
+    parts:
+      TA:
+        transformer:
+          sig: {nodes: [b3, m], r: r_signal_winding_ohm}
+          ctl: {nodes: [b1, c2], ratio: control_ratio, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      TB:
+        transformer:
+          sig: {nodes: [m, t], r: r_signal_winding_ohm}
+          ctl: {nodes: [ps, c2], ratio: control_ratio, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      CK: {C: [t, b3], c: c_tank_f}
+      RD: {R: [t, b3], r: r_damp_ohm}
+  - title: sweep
+    parts:
+      RTUL: {R: [neg, tlo], r: r_tune_low_ohm}
+      RTUNE: {pot: [tlo, tw, "0"], r: r_tune_pot_ohm, at: tune}
+      RTU: {R: [tw, gs], r: r_tune_sum_ohm}
+      RSWI: {R: [bus, swa], r: r_sw_in_ohm}
+      CSW: {C: [swa, se], c: c_sw_f}
+      RSWM: {R: [se, sem], r: r_sw_min_ohm}
+      XVDS: {device: ["0", se], model: VDS}
+      RSWT: {rheostat: [sem, "0"], r: r_sw_ohm, at: sweep_time}
+      RDEP: {pot: ["0", sw, se], r: r_depth_pot_ohm, at: depth}
+      RSE: {R: [sw, gs], r: r_sweep_sum_ohm}
+      CGS: {C: [gs, "0"], c: c_gs_f}
+      XVS: {device: [ps, ss, gs, ks], model: VS}
+      RSS: {R: [b3, ss], r: r_screen_s_ohm}
+      RKS: {R: [ks, "0"], r: r_cathode_s_ohm}
+  - title: decay
+    parts:
+      CQ1: {C: [t, qs], c: c_sense_f}
+      RQA: {R: [qs, g2a], r: r_sense_a_ohm}
+      RQB: {R: [g2a, "0"], r: r_sense_b_ohm}
+      XV2A: {device: [b3, g2a, k2], model: V2A}
+      XV2B: {device: [p2b, "0", k2], model: V2B}
+      RT2: {R: [k2, neg], r: r_tail_ohm}
+      RP2: {R: [b3, p2b], r: r_plate2_ohm}
+      CQ2: {C: [p2b, qt], c: c_fb_f}
+      RDEC: {pot: ["0", qw, qt], r: r_decay_pot_ohm, at: decay}
+      RFB: {R: [qw, qf], r: r_fb_ohm}
+      CQ3: {C: [qf, t], c: c_fb_f}
+  - title: output
+    parts:
+      COA: {C: [t, oa], c: c_out_f}
+      ROA: {R: [oa, og], r: r_out_a_ohm}
+      ROB: {R: [og, "0"], r: r_out_b_ohm}
+      XV1B: {device: [b3, og, out], model: V1B}
+      RKF: {R: [out, neg], r: r_follower_ohm}

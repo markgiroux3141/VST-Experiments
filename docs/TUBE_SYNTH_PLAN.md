@@ -720,6 +720,38 @@ thread. Draft:
   reactor's signal windings, the control current a decaying pulse from the trigger (two more
   JA cores).
 - Not measured yet: the click (the trigger's edge leaking to the output) and the drive stage.
+- **The reactor sweep (2026-10-30, the user's pick; prototype in
+  `docs/prototypes/tube_kick_reactor.yaml`, not a project circuit).** The tank's inductor is
+  a two-core reactor (the synth oscillator's cores: 2000 : 1000 turns, ungapped mumetall),
+  1 uF across it. A 6V6GT sweep tube draws the control current: its grid sums TUNE (its rest
+  bias) through 100k and a DEPTH pot's wiper through 470k. The pot sits on a differentiator
+  of the keyboard bus (0.47 uF, SWEEP TIME rheostat; 0 V at rest, so DEPTH leaves TUNE
+  alone).
+  - **A biased reactor tank also rises in pitch as it decays,** more strongly. With the
+    6V6GT trigger's ~110-140 V hits the cores swing through saturation every cycle: 38-53
+    Hz at the hit, chirping up to the rest pitch (218-407 Hz) as it dies. With small hits
+    (3-14 V, the trigger current-limited by 15k in its cathode) it's still 44 -> 96 Hz at
+    rest bias ~1.8 mA. Large swings average more permeability than the biased point. The
+    arithmetic: mumetall at mu ~5000 stores ~1 J/m^3 at 0.1 T, so a ~1 mJ hit would need
+    ~1.6 litres of core at 0.1 T; in 10 cm^3 every loud hit moves the pitch.
+  - **The sweep overpowers it:** TUNE 0 (rest ~1.8 mA, 2.2k in the sweep tube's cathode),
+    DEPTH 1, SWEEP TIME 0.3: **~120 -> 80 -> 55 -> 50 Hz at 15 / 50 / 100 / 150 ms**, the 808's
+    direction (DEPTH 0.6: 79 -> 52 Hz; 0.3: barely; SWEEP TIME 0.6 slower). After ~150 ms the
+    pitch creeps up ~5-15 Hz (the amplitude effect) at -40 dB.
+  - **Key up re-struck the tank** (-9 dB re the hit: the differentiator's negative step dips
+    the control current). A 6X4 section clamping the sweep node at ground: -27 dB.
+  - **The body is short:** -20 dB in 18-22 ms at any DECAY; DECAY 0.5 / 0.8 / 0.95 stretches
+    only the tail (-40 dB at 64 / 151 / 152 ms). Hard bias at the hit is where JA mumetall's
+    loss is largest: the energy goes while the pitch falls. A thud, not an 808's boom. The
+    tank peaks at ~2.5 V (a gain stage before the output).
+  - Speed: ~0.4-0.5x real time at draft (supplies on a second thread).
+  - **Options for a longer body (the user's):** (1) the kick as a gated oscillator: the
+    synth's reactor VCO (sustained, so the amplitude effect is a fixed offset) with the same
+    decaying sweep current as its pitch envelope and an envelope-keyed VCA for the decay:
+    proven parts, more tubes, the VCO's Newton cost at 50-120 Hz; (2) a lower-loss tank:
+    gapped cores (less hysteresis per stored energy) with the reactor only tuning, less sweep
+    range; (3) accept the thud and strengthen the Q multiplier, which can't track a loss that
+    changes with bias.
 
 **Later, not planned yet:** more voices (paraphony from one supply first: sag coupling
 between voices), gas-tube devices if S4 doesn't choose one, the reactor designed by
