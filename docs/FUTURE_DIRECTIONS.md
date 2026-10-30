@@ -285,7 +285,8 @@ History:
 - Seeded randomness for particle noise.
 - The listening, preference and optimization stack.
 
-**New: the spatial medium.**
+**New: the spatial medium.** (Its first user may be reverb: springs and plates coupled
+at transducer ports, [REVERB_PLAN.md](REVERB_PLAN.md), 2026-10-30, parked.)
 - A 1D array of hysteretic cells moving at v(t), written by one transducer
   and read by another.
 - Only cells within a few gap lengths of a head are active, so it's feasible

@@ -156,7 +156,9 @@ optical cells.
 | SSL bus compressor, dbx 160 | VCA chips are black boxes, a poor fit for "the genome is physical only"; low priority |
 
 Mechanical devices (EMT 140 plate, spring reverbs, tape echo) belong to the "spatial
-medium" idea in [FUTURE_DIRECTIONS.md](FUTURE_DIRECTIONS.md), not here.
+medium" idea in [FUTURE_DIRECTIONS.md](FUTURE_DIRECTIONS.md), not here. Springs and
+plates are drafted in [REVERB_PLAN.md](REVERB_PLAN.md) (2026-10-30, parked until the user
+asks).
 
 ## Mapping a schematic: what decides how hard a device is
 

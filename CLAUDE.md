@@ -175,6 +175,11 @@ heater ratings per tube type); `varimu/devices/cathode.py` the reference, circui
 has the block. `build(..., heaters=)` overrides (None / False / True / "warm" / "cold"); a
 cold start (power on) skips the settle; the app's "Power on (cold)" button.
 
+Reverbs (spring first, then plate) as physical media coupled to the netlist at transducer
+ports are drafted in [docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; milestones
+E1-E7, the Fender 6G15 as the first device). **Parked: nothing in it starts until the user
+asks for it.**
+
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
 (`config/circuits/fairchild_670.yaml` -> `varimu/circuit/builder.py`; see
