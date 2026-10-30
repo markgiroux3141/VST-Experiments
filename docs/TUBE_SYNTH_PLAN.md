@@ -318,6 +318,23 @@ Not yet:
 - A draft-only 48 kHz component (the draft's Nyquist, up to 0.14 V on the splitter's
   plate; production has none) never reaches the output.
 
+*2026-10-30, after the user played it: "the fast attack is still fairly slow".* The fault
+was the coupling, not the envelope. The cathodyne fed the VCA's grids through 0.1 uF
+coupling capacitors, and the envelope reached them only through 2.2M grid leaks: a 220 ms
+low-pass on the bias, ~390 ms 10-90% at any attack. A coupling network can't be fast for
+the bias and pass the bass at once.
+- **Now:** a parallel-fed 12AU7 driver into an interstage transformer (mumetall, 1000 : 2
+  x 60), whose center-tapped secondary drives the grids, the envelope into the center tap,
+  as the 670's input transformer takes its control voltage.
+- CENV is 0.47 uF with the pots widened (ATTACK 1k + 2.2M, RELEASE 4.7k + 4.7M), and the
+  bus aims a volt past the open bias (-1 V), so the diode's creep doesn't slow the last
+  volt.
+- **Result:** the level rises 10-90% in **2.0 ms** at attack 0 (52 ms at 0.2); release to
+  10% in 7 ms at minimum; bleed -74..-87 dBFS; thump 1.3 mV; hum -71 dBFS (re the output's
+  full scale, now 2.5 V).
+- Tried and dropped: aiming the bus past a clamp diode at 0 V. A vacuum diode drops ~5 V
+  at the clamp's 20 mA and drove the grids positive.
+
 **S4. The oscillator, drift as character.** First, cheap prototypes of the three
 candidates (triode multivibrator with a vacuum-diode exponential converter, reactor-tuned
 LC, thyratron or neon relaxation), each measured for pitch against control, range,

@@ -5,18 +5,28 @@
 #   V1A/V1B  12AU7 gain stage and follower into the reactor low-pass (TA/TB, CF, RL)
 #   V5   12AX7 cathode-coupled pair: the RESONANCE Q multiplier
 #   V2A  12AU7 follower off the filter node
-#   V6   12AU7 cathodyne phase splitter: the signal in antiphase to the VCA's grids
+#   V6   12AU7 driver, parallel-fed (no DC in the core) into the interstage
+#        transformer TIN, whose center-tapped secondary drives the VCA's grids in
+#        antiphase, as the 670's input transformer does: the envelope goes straight into
+#        the center tap. (Through a phase splitter's coupling capacitors and 2.2M grid
+#        leaks the grids followed the envelope with a 220 ms time constant: no attack
+#        was faster than that, and a coupling network can't be fast for the bias and
+#        pass the bass at once.)
 #   V3A/V3B  6386 sections in push-pull into the output transformer TOUT: their grids'
 #        common bias is the envelope, so the envelope's own movement (and the supply's
 #        hum) is common mode and cancels in TOUT, where a single-ended VCA thumps
 #   The envelope, keyed as the Hammond Novachord keyed its notes: a key switches the
-#        keyboard bus (the `gate` control input) between -110 V (no key) and -2 V (a key
+#        keyboard bus (the `gate` control input) between -110 V (no key) and -1 V (a key
 #        down). A 6X4's two sections steer it: with a key down the bus charges the
 #        envelope node through the ATTACK rheostat and VDA; with the key up VDA blocks
 #        and the node discharges into the bus through the RELEASE rheostat and VDR. CENV
-#        holds it. The node is the VCA grids' common bias: -110 V shut, ~-2 V open, and
-#        with steering diodes it reaches both (a release resistor to a rail held it at a
-#        divider, -13 V, with the key down).
+#        holds it. The node is the VCA grids' common bias: -110 V shut, ~-2 V open (the
+#        bus a volt past it, so the diode's creep near zero current doesn't slow the
+#        last volt). The VCA's loudness comes in its last few volts of bias, so the
+#        attack is heard as the RC's tail: CENV is small (0.47 uF, the grid leaks no DC
+#        load on it) for a ~0.5 ms time constant at the fastest (4.7 uF gave 16 ms to
+#        90%; a clamp at 0 V with the bus aimed past it dropped ~5 V in a vacuum diode
+#        at its current and drove the grids positive).
 #   V4   6V6GT drawing its plate current through the reactor's control windings (CUTOFF)
 # The supply is tube_filter.yaml's: a 6X4 full-wave rectifier, CRC filtering (b1 the
 # 6V6GT, b4 the VCA's center tap, b3 the small stages), a selenium bridge for the bias
@@ -31,13 +41,13 @@ probes: [out, f, env, bus, p3a, p3b, b1, b3, neg2, ta_core, tb_core]
 
 full_scale:
   input_volts_peak: {value: 1.0, source: "provisional: model knowledge (line level into the first stage, ~1 V peak)"}
-  output_volts_peak: {value: 1.5, source: "provisional: model knowledge (the output transformer's secondary at a full envelope and a full-scale saw peaks ~0.9 V: set from a render, 2026-10-29)"}
+  output_volts_peak: {value: 2.5, source: "provisional: model knowledge (the output transformer's secondary at a full envelope: a full-scale saw at -7 dBFS rms, headroom for its peaks; set from a render, 2026-10-30)"}
 
 controls:
   cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from the -45 V rail (0) to ground (1))"}
   resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RESONANCE pot, the share of V5B's output fed back to the filter node; linear)"}
-  attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 100k log into 4.7 uF: ~5 ms to ~0.5 s)"}
-  release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 2.2k + 470k log from 4.7 uF: ~10 ms to ~2 s)"}
+  attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
+  release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
 
@@ -85,17 +95,24 @@ values:
   c_couple2_f: {value: 0.1e-6, source: "provisional: model knowledge (from V2A into the attenuator)"}
   r_atten_series_ohm: {value: 220.0e+3, source: "provisional: model knowledge (with r_atten_shunt_ohm, ~1/19 of the filter's output into the splitter: ~0.5 V peak at the VCA's grids)"}
   r_atten_shunt_ohm: {value: 12.0e+3, source: "provisional: model knowledge (the attenuator's lower leg)"}
-  c_couple3_f: {value: 0.1e-6, source: "provisional: model knowledge (into the splitter's grid)"}
-  r_split_bias_top_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the splitter's grid bias from b3, ~90 V)"}
-  r_split_bias_bottom_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the splitter's grid bias to ground: ~78 V, a third of its supply)"}
-  r_split_supply_ohm: {value: 4.7e+3, source: "provisional: model knowledge (the splitter's own decoupled supply off b3: its plate load passed b3's ripple to one VCA grid only, a differential hum of 24 mV at the plates)"}
-  c_split_supply_f: {value: 100.0e-6, source: "provisional: model knowledge (the splitter's supply electrolytic)"}
-  c_split_bias_f: {value: 10.0e-6, source: "provisional: model knowledge (decouples the splitter's bias divider: fed straight to the grid it passed b3's ripple to the VCA in antiphase, 120 Hz at -60 dBFS)"}
-  r_split_grid_ohm: {value: 1.0e+6, source: "provisional: model knowledge (from the decoupled divider to the splitter's grid)"}
+  c_couple3_f: {value: 0.1e-6, source: "provisional: model knowledge (into the driver's grid)"}
+  r_driver_grid_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the driver's grid leak)"}
+  r_driver_cathode_ohm: {value: 1.5e+3, source: "provisional: model knowledge (the driver's self bias)"}
+  c_driver_cathode_f: {value: 47.0e-6, source: "provisional: model knowledge (its bypass)"}
+  r_split_supply_ohm: {value: 4.7e+3, source: "provisional: model knowledge (the driver's own decoupled supply off b3: on b3's rail the stage before the VCA passed its ripple on, 120 Hz at -60 dBFS)"}
+  c_split_supply_f: {value: 100.0e-6, source: "provisional: model knowledge (the driver's supply electrolytic)"}
+  r_driver_load_ohm: {value: 22.0e+3, source: "provisional: model knowledge (the driver's plate load: parallel feed, the transformer carries no DC)"}
+  c_driver_feed_f: {value: 1.0e-6, source: "provisional: model knowledge (the parallel-feed capacitor into TIN's primary)"}
+  # --- the interstage transformer (1000 turns : 2 x 60, mumetall, no DC)
+  tin_turns: {value: 1000.0, source: "provisional: model knowledge (design: the primary, ~36 H on a 1 cm^2 mumetall core)"}
+  tin_sec_ratio: {value: 0.06, source: "provisional: model knowledge (design: each secondary half, ~0.5 V peak at the VCA's grids at full input)"}
+  tin_r_pri_ohm: {value: 60.0, source: "provisional: model knowledge (the primary's resistance)"}
+  tin_r_sec_ohm: {value: 5.0, source: "provisional: model knowledge (each secondary half's resistance)"}
+  tin_leakage_h: {value: 5.0e-3, source: "provisional: model knowledge (leakage referred to the primary)"}
+  tin_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (a small mumetall core, 1 cm^2)"}
+  tin_path_m: {value: 0.08, source: "provisional: model knowledge (8 cm magnetic path)"}
+  tin_gap_m: {value: 0.0, source: "provisional: model knowledge (interleaved laminations, no DC: no gap)"}
   r_env_leak_ohm: {value: 1.0e+8, source: "provisional: model knowledge (the envelope capacitor's and steering diodes' leakage; the pre-flight checks need a DC path)"}
-  r_split_load_ohm: {value: 22.0e+3, source: "provisional: model knowledge (the cathodyne's plate and cathode loads, equal)"}
-  c_couple4_f: {value: 0.1e-6, source: "provisional: model knowledge (from the splitter to each VCA grid)"}
-  r_vca_grid_ohm: {value: 2.2e+6, source: "provisional: model knowledge (each VCA grid's leak to the envelope node: high, so the pair loads the envelope little)"}
   # --- the output transformer (a small push-pull interstage: 3000 turns CT : 600)
   tout_turns_half: {value: 1500.0, source: "provisional: model knowledge (design: each primary half)"}
   tout_sec_ratio: {value: 0.4, source: "provisional: model knowledge (design: 600 turns of secondary for 1500 per half)"}
@@ -109,13 +126,13 @@ values:
   r_out_load_ohm: {value: 10.0e+3, source: "provisional: model knowledge (the secondary's load: the next stage's input)"}
   # --- the envelope
   gate_off_v: {value: -110.0, source: "provisional: model knowledge (design: the keyboard bus with no key down, the VCA shut past its remote cutoff's tail)"}
-  gate_on_v: {value: -2.0, source: "provisional: model knowledge (design: the keyboard bus with a key down: the VCA's grids open, short of grid current)"}
-  r_bus_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the keyboard bus's source resistance and the attack's minimum)"}
-  r_attack_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the ATTACK rheostat's track)"}
-  r_release_min_ohm: {value: 2.2e+3, source: "provisional: model knowledge (the release's minimum)"}
-  r_release_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the RELEASE rheostat's track)"}
+  gate_on_v: {value: -1.0, source: "provisional: model knowledge (design: the keyboard bus with a key down, a volt past the VCA's open bias)"}
+  r_bus_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the keyboard bus's source resistance and the attack's minimum: ~0.5 ms into 0.47 uF)"}
+  r_attack_ohm: {value: 2.2e+6, source: "provisional: model knowledge (the ATTACK rheostat's track: up to ~1 s)"}
+  r_release_min_ohm: {value: 4.7e+3, source: "provisional: model knowledge (the release's minimum)"}
+  r_release_ohm: {value: 4.7e+6, source: "provisional: model knowledge (the RELEASE rheostat's track: up to ~2 s)"}
   env_taper_mid: {value: 0.1, source: "provisional: model knowledge (audio-taper rheostats, 10% at half rotation: times spread evenly over the rotation)"}
-  c_env_f: {value: 4.7e-6, source: "provisional: model knowledge (the envelope's capacitor, film)"}
+  c_env_f: {value: 0.47e-6, source: "provisional: model knowledge (the envelope's capacitor, film)"}
   envelope_diode: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4's two sections as the envelope's steering diodes; config/components/6x4/1.yaml, per section)"}
   # --- cutoff
   r_cutoff_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the CUTOFF pot)"}
@@ -233,19 +250,22 @@ sections:
       RA6: {R: [a6, a6d], r: r_atten_series_ohm}
       RB6: {R: [a6d, "0"], r: r_atten_shunt_ohm}
       CC3: {C: [a6d, g6], c: c_couple3_f}
-      RG6T: {R: [b3, g6b], r: r_split_bias_top_ohm}
-      RG6B: {R: [g6b, "0"], r: r_split_bias_bottom_ohm}
-      CG6B: {C: [g6b, "0"], c: c_split_bias_f}
-      RG6: {R: [g6b, g6], r: r_split_grid_ohm}
+      RG6: {R: [g6, "0"], r: r_driver_grid_ohm}
       XV6: {device: [p6, g6, k6], model: V6}
+      RK6: {R: [k6, "0"], r: r_driver_cathode_ohm}
+      CK6: {C: [k6, "0"], c: c_driver_cathode_f}
       RB5: {R: [b3, b5], r: r_split_supply_ohm}
       CB5: {C: [b5, "0"], c: c_split_supply_f}
-      RP6: {R: [b5, p6], r: r_split_load_ohm}
-      RK6: {R: [k6, "0"], r: r_split_load_ohm}
-      CC4A: {C: [p6, g3a], c: c_couple4_f}
-      CC4B: {C: [k6, g3b], c: c_couple4_f}
-      RG3A: {R: [g3a, env], r: r_vca_grid_ohm}
-      RG3B: {R: [g3b, env], r: r_vca_grid_ohm}
+      RP6: {R: [b5, p6], r: r_driver_load_ohm}
+      CP6: {C: [p6, tp], c: c_driver_feed_f}
+      TIN:
+        transformer:
+          pri: {nodes: [tp, "0"], r: tin_r_pri_ohm}
+          sa: {nodes: [g3a, env], ratio: tin_sec_ratio, r: tin_r_sec_ohm}
+          sb: {nodes: [env, g3b], ratio: tin_sec_ratio, r: tin_r_sec_ohm}
+        core: {material: mumetall, area_m2: tin_area_m2, path_m: tin_path_m, gap_m: tin_gap_m}
+        turns: tin_turns
+        leakage_h: tin_leakage_h
       XV3A: {device: [p3a, g3a, "0"], model: V3A}
       XV3B: {device: [p3b, g3b, "0"], model: V3B}
       TOUT:

@@ -313,7 +313,7 @@ mod tests {
         assert_eq!(keys, ["cutoff", "resonance", "attack", "release"]);
         assert_eq!(
             gate_levels(&voice, DEVICES[5].gate.unwrap()),
-            Ok((-110.0, -2.0))
+            Ok((-110.0, -1.0))
         );
     }
 }
