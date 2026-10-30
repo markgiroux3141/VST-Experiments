@@ -111,6 +111,18 @@ temperature, tape, vinyl, the plugin UI) are brainstormed and prioritized in
 [docs/FUTURE_DIRECTIONS.md](docs/FUTURE_DIRECTIONS.md) (2026-10-24; the plan's
 "Future Directions"). Nothing in it is built, and none of it interrupts Phases 5-8.
 
+An invented tube synth (older parts in place of solid state; drift as character; draft to
+play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)
+(2026-10-29; milestones S1-S5, the saturable-reactor filter first). S1 is built except one
+decision: the reactor `config/circuits/saturable_reactor.yaml` (two `transformer` parts),
+`varimu/synth/` (outside the render cache key), `tests/test_reactor.py`; open: how to
+treat the JA core's ratcheting minor loops (the plan's S1 status, three options). Where
+the track goes in the order is also the user's open decision. Playable since 2026-10-29:
+the passive reactor low-pass `config/circuits/reactor_filter.yaml` is the native app's
+`reactor_filter` device (JA cores live: `panel::Device::cores`), played from a MIDI
+keyboard (`varimu-app`'s `midi` module: a test oscillator into the device, not part of it;
+`varimu-app --device reactor_filter --midi masterkey --play`).
+
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
 (`config/circuits/fairchild_670.yaml` -> `varimu/circuit/builder.py`; see

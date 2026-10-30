@@ -3,7 +3,8 @@
 //! default output, with a line of stats per second and a summary.
 //!
 //!     cargo run --release -p varimu-app --example play -- --device fairchild_670
-//!         (--file FILE [--start S] [--seconds S] | --input [NAME] [--channel N])
+//!         (--file FILE [--start S] [--seconds S] | --input [NAME] [--channel N]
+//!          | --midi [NAME] [--wave saw|square])
 //!         [--for SECONDS] [--buffer S] [--gain-db G] [--set KEY=VALUE ...] [--turn KEY=A,B]
 //!
 //! `--gain-db G` is the input gain (the Play view's normalization and trim).
@@ -12,13 +13,18 @@
 //! `--turn` switches a knob between two values every 2 s and reports how long each
 //! change took to reach the output (`Status::knob_to_ear_s`). `--input` without a
 //! name is the default input device; `--list-inputs` lists them.
+//! `--midi` plays the device from a MIDI keyboard (the first port, or the first named
+//! like NAME; `--list-midi` lists them): its keys play the test oscillator
+//! (`midi::TestOsc`) into the device's input, and its mod wheel turns the device's
+//! `mod_wheel` control over its range (the reactor filter's cutoff).
 
 use std::path::Path;
 use std::time::{Duration, Instant};
 
 use varimu_app::audio;
 use varimu_app::live::Circuit;
-use varimu_app::panel::{DEVICES, knobs, values};
+use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Wave};
+use varimu_app::panel::{DEVICES, Kind, knobs, values};
 use varimu_app::player::{INPUT_BUFFER_S, Player, Source, State, input_devices};
 use varimu_app::settings::Settings;
 use varimu_circuit::yaml::Value;
@@ -56,6 +62,7 @@ fn main() -> Result<(), String> {
     let mut turn: Option<(String, Value, Value)> = None;
     let mut normal_priority = false;
     let mut record: Option<String> = None;
+    let (mut midi_name, mut wave): (Option<Option<String>>, Wave) = (None, Wave::Saw);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--device" => device = args.next().ok_or("--device needs a value")?,
@@ -66,6 +73,26 @@ fn main() -> Result<(), String> {
                     _ => None,
                 };
                 input = Some(name);
+            }
+            "--midi" => {
+                let name = match args.peek() {
+                    Some(n) if !n.starts_with("--") => args.next(),
+                    _ => None,
+                };
+                midi_name = Some(name);
+            }
+            "--wave" => {
+                wave = match args.next().as_deref() {
+                    Some("saw") => Wave::Saw,
+                    Some("square") => Wave::Square,
+                    _ => return Err("--wave saw|square".into()),
+                }
+            }
+            "--list-midi" => {
+                for p in midi::ports()? {
+                    println!("{p}");
+                }
+                return Ok(());
             }
             "--channel" => channel = num(args.next(), &a)? as usize,
             "--for" => seconds = num(args.next(), &a)?,
@@ -99,13 +126,35 @@ fn main() -> Result<(), String> {
         .iter()
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
-    let s = Settings::load(config, dev.quality)?;
+    let s = dev.play_settings(&Settings::load(config, dev.quality)?);
     let circuit = Circuit::load(config, dev.circuit, s.cores()?)?;
-    let mut v = values(&knobs(dev, circuit.spec()));
+    let panel = knobs(dev, circuit.spec());
+    let mut v = values(&panel);
     for (k, x) in sets {
         set(&mut v, &k, x);
     }
+    let keyboard = match &midi_name {
+        Some(name) => Some(Keyboard::open(name.as_deref())?),
+        None => None,
+    };
+    // The mod wheel's control and its range.
+    let wheel = dev.mod_wheel.and_then(|key| {
+        panel
+            .iter()
+            .find(|k| k.key == key)
+            .and_then(|k| match k.kind {
+                Kind::Range { min, max } => Some((key, min, max)),
+                _ => None,
+            })
+    });
     let (source, buffer) = match (&file, input) {
+        _ if keyboard.is_some() => {
+            let kb = keyboard.as_ref().expect("a keyboard");
+            (
+                Source::Keys(kb.keys.clone(), wave),
+                buffer.unwrap_or(INPUT_BUFFER_S),
+            )
+        }
         (Some(f), _) => {
             let x = audio::load(Path::new(f), s.sample_rate)?;
             let a = ((start * s.sample_rate as f64) as usize).min(x.len());
@@ -128,7 +177,7 @@ fn main() -> Result<(), String> {
             },
             buffer.unwrap_or(INPUT_BUFFER_S),
         ),
-        (None, None) => return Err("--file or --input".into()),
+        (None, None) => return Err("--file, --input or --midi".into()),
     };
     if !normal_priority {
         varimu_app::player::raise_priority();
@@ -154,6 +203,12 @@ fn main() -> Result<(), String> {
         buffer * 1000.0,
         t0.elapsed().as_secs_f64()
     );
+    if let Some(kb) = &keyboard {
+        let w = wheel.map_or(String::new(), |(k, a, b)| {
+            format!("; the mod wheel turns {k} from {a} to {b}")
+        });
+        println!("playing from {}{w}", kb.name);
+    }
     if record.is_some() {
         player.record(true);
     }
@@ -161,8 +216,21 @@ fn main() -> Result<(), String> {
     let mut worst_load = 0.0f64;
     let (mut knob_times, mut latencies) = (Vec::new(), Vec::new());
     let (mut flip, mut last_turn, mut last_knob) = (false, Instant::now(), None);
+    let (mut last_print, mut wheel_seen) = (Instant::now(), 0u64);
     while t1.elapsed().as_secs_f64() < seconds {
-        std::thread::sleep(Duration::from_secs(1));
+        std::thread::sleep(Duration::from_millis(20));
+        if let (Some(kb), Some((key, a, b))) = (&keyboard, wheel) {
+            let (cc, n) = kb.keys.cc(MOD_WHEEL);
+            if n != wheel_seen {
+                wheel_seen = n;
+                set(&mut v, key, Value::Float(a + (b - a) * cc as f64 / 127.0));
+                player.set(v.clone());
+            }
+        }
+        if last_print.elapsed() < Duration::from_secs(1) {
+            continue;
+        }
+        last_print = Instant::now();
         let st = player.status();
         if let State::Failed(e) = &st.state {
             return Err(e.clone());
@@ -184,9 +252,20 @@ fn main() -> Result<(), String> {
                 l * 1000.0
             )
         });
-        let knob = st.knob_to_ear_s.map_or(String::new(), |k| {
+        let mut knob = st.knob_to_ear_s.map_or(String::new(), |k| {
             format!("  knob->ear {:.0} ms", k * 1000.0)
         });
+        if let (Some(kb), Some((key, ..))) = (&keyboard, wheel) {
+            let at = v
+                .iter()
+                .find(|(k, _)| k == key)
+                .and_then(|(_, x)| x.as_f64());
+            let note = kb
+                .keys
+                .sounding()
+                .map_or("-".into(), |(n, vel)| format!("{n}/{vel}"));
+            knob += &format!("  key {note}  {key} {:.1}", at.unwrap_or(f64::NAN));
+        }
         println!(
             "{:5.0} s  load {:3.0}% (worst block {:4.0}%)  queued {:4.0} ms  dropouts {}  gain {:+5.1} dB  out {:6.1} dBFS{live}{knob}",
             t1.elapsed().as_secs_f64(),

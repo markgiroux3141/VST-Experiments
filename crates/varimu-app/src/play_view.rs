@@ -15,6 +15,7 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, Color32, RichText, Stroke};
 use varimu_app::audio;
 use varimu_app::live::Circuit;
+use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Wave};
 use varimu_app::panel::{self, DEVICES, Device, Kind, Knob};
 use varimu_app::player::{
     AHEAD_S, INPUT_BUFFER_S, InputDevice, Playback, Player, Source, State, input_devices,
@@ -95,6 +96,8 @@ const DRAWING: Device = Device {
     panel: None,
     ahead_s: AHEAD_S,
     quality: Quality::Draft1x,
+    cores: None,
+    mod_wheel: None,
 };
 
 /// A finished render: where it was saved and what it was.
@@ -138,6 +141,15 @@ pub struct PlayView {
     input: usize,
     channel: usize,
     input_buffer_ms: f64,
+    /// A MIDI keyboard instead (live, `live_input` set too): its ports, the one chosen,
+    /// the test oscillator's waveform, the keyboard while playing, and how many mod
+    /// wheel messages have been applied.
+    midi: bool,
+    midi_ports: Vec<String>,
+    midi_port: usize,
+    wave: Wave,
+    keyboard: Option<Keyboard>,
+    wheel_seen: u64,
     /// The last take, saved (it is then the file).
     take_saved: Option<PathBuf>,
     /// Input trim (dB) on top of the normalization.
@@ -151,7 +163,8 @@ pub struct PlayView {
 }
 
 /// What the command line asks for:
-/// `varimu-app [FILE] [--play] [--device ID] [--input NAME [--channel N]] [--edit NAME]`.
+/// `varimu-app [FILE] [--play] [--device ID] [--input NAME [--channel N]] [--midi NAME]
+/// [--edit NAME]` (`--midi`: a MIDI keyboard, the first port named like NAME).
 #[derive(Debug, Default)]
 pub struct Args {
     pub file: Option<PathBuf>,
@@ -160,6 +173,8 @@ pub struct Args {
     /// Live input from this device (and channel, from 1).
     pub input: Option<String>,
     pub channel: usize,
+    /// A MIDI keyboard (the first port whose name contains this).
+    pub midi: Option<String>,
     /// Open the editor on this drawn circuit.
     pub edit: Option<String>,
 }
@@ -174,6 +189,7 @@ impl Args {
                 "--device" => a.device = Some(it.next().ok_or("--device needs an id")?),
                 "--edit" => a.edit = Some(it.next().ok_or("--edit needs a circuit name")?),
                 "--input" => a.input = Some(it.next().ok_or("--input needs a device name")?),
+                "--midi" => a.midi = Some(it.next().ok_or("--midi needs a port name")?),
                 "--channel" => {
                     let c = it.next().ok_or("--channel needs a number")?;
                     a.channel = c.parse().map_err(|_| format!("--channel {c}"))?;
@@ -224,6 +240,12 @@ impl PlayView {
             input: 0,
             channel: 0,
             input_buffer_ms: INPUT_BUFFER_S * 1000.0,
+            midi: false,
+            midi_ports: Vec::new(),
+            midi_port: 0,
+            wave: Wave::Saw,
+            keyboard: None,
+            wheel_seen: 0,
             take_saved: None,
             trim_db: 0.0,
             bypass: false,
@@ -247,6 +269,23 @@ impl PlayView {
                 None => v.error = Some(format!("no input device {name}")),
             }
             v.channel = args.channel.saturating_sub(1);
+            if args.play && v.error.is_none() {
+                v.start();
+            }
+        }
+        if let Some(name) = &args.midi {
+            v.live_input = true;
+            v.midi = true;
+            v.midi_ports = midi::ports().unwrap_or_default();
+            let want = name.to_lowercase();
+            match v
+                .midi_ports
+                .iter()
+                .position(|p| p.to_lowercase().contains(&want))
+            {
+                Some(i) => v.midi_port = i,
+                None => v.error = Some(format!("no MIDI input named like {name}")),
+            }
             if args.play && v.error.is_none() {
                 v.start();
             }
@@ -588,18 +627,24 @@ impl PlayView {
         }
     }
 
-    /// The settings the chosen device plays at (its quality).
-    fn play_settings(&self) -> &Result<Settings, String> {
-        let q = DEVICES.get(self.device).unwrap_or(&DRAWING).quality;
+    /// The settings the chosen device plays at (its quality, its cores).
+    fn play_settings(&self) -> Result<Settings, String> {
+        let dev = DEVICES.get(self.device).unwrap_or(&DRAWING);
         self.by_quality
             .iter()
-            .find(|(x, _)| *x == q)
+            .find(|(x, _)| *x == dev.quality)
             .map_or(&self.settings, |(_, s)| s)
+            .as_ref()
+            .map(|s| dev.play_settings(s))
+            .map_err(Clone::clone)
     }
 
     /// Monitor the chosen input through the device.
     fn start_input(&mut self) {
         let Ok(s) = self.play_settings() else { return };
+        if self.midi {
+            return self.start_keys(s);
+        }
         let Some(dev_in) = self.inputs.get(self.input) else {
             self.error = Some("no input device".into());
             return;
@@ -622,6 +667,53 @@ impl PlayView {
         }
     }
 
+    /// Play the device from the chosen MIDI keyboard (the test oscillator into it).
+    fn start_keys(&mut self, s: Settings) {
+        self.keyboard = None;
+        let Some(port) = self.midi_ports.get(self.midi_port).cloned() else {
+            self.error = Some("no MIDI input".into());
+            return;
+        };
+        let buffer = self.input_buffer_ms / 1000.0;
+        let result = Keyboard::open(Some(&port)).and_then(|kb| {
+            let c = s.cores().and_then(|c| self.circuit(c))?;
+            let v = panel::values(&self.knobs);
+            let source = Source::Keys(kb.keys.clone(), self.wave);
+            let p = Player::start(source, v, c, s.clone(), self.gain(), buffer)?;
+            self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
+            Ok((kb, p))
+        });
+        match result {
+            Ok((kb, p)) => {
+                self.keyboard = Some(kb);
+                self.player = Some(p);
+                self.error = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// The mod wheel turns the device's `mod_wheel` knob over its range.
+    fn follow_mod_wheel(&mut self) {
+        let (Some(kb), Some(p)) = (&self.keyboard, &self.player) else {
+            return;
+        };
+        let Some(key) = DEVICES.get(self.device).and_then(|d| d.mod_wheel) else {
+            return;
+        };
+        let (cc, n) = kb.keys.cc(MOD_WHEEL);
+        if n == self.wheel_seen {
+            return;
+        }
+        self.wheel_seen = n;
+        if let Some(k) = self.knobs.iter_mut().find(|k| k.key == key)
+            && let Kind::Range { min, max } = k.kind
+        {
+            k.value = Value::Float(min + (max - min) * cc as f64 / 127.0);
+            p.set(panel::values(&self.knobs));
+        }
+    }
+
     fn stop(&mut self) {
         if let Some(p) = &self.player {
             p.record(false);
@@ -629,6 +721,7 @@ impl PlayView {
         self.collect_take();
         self.player = None;
         self.playing = None;
+        self.keyboard = None;
     }
 
     /// A take the worker has handed over, without waiting.
@@ -913,6 +1006,7 @@ impl PlayView {
         if self.player.as_ref().is_some_and(|p| !p.recording()) {
             self.collect_take_now();
         }
+        self.follow_mod_wheel();
         if let Err(e) = &self.settings {
             ui.colored_label(theme::FAULT, format!("can't read the settings: {e}"));
             return;
@@ -981,18 +1075,36 @@ impl PlayView {
         }
 
         Self::heading(ui, "SOURCE");
-        let before = self.live_input;
+        // 0: the file, 1: live input, 2: a MIDI keyboard (live too).
+        let mode = |v: &Self| match (v.live_input, v.midi) {
+            (false, _) => 0,
+            (true, false) => 1,
+            (true, true) => 2,
+        };
+        let before = mode(self);
+        let mut now = before;
         ui.horizontal(|ui| {
-            ui.selectable_value(&mut self.live_input, false, "File");
-            ui.selectable_value(&mut self.live_input, true, "Live input");
+            ui.selectable_value(&mut now, 0, "File");
+            ui.selectable_value(&mut now, 1, "Live input");
+            ui.selectable_value(&mut now, 2, "MIDI keyboard")
+                .on_hover_text("Play the device from a keyboard: its keys play a test oscillator into the device's input");
         });
-        if self.live_input != before {
+        if now != before {
             self.stop();
-            if self.live_input && self.inputs.is_empty() {
+            self.live_input = now != 0;
+            self.midi = now == 2;
+            if now == 1 && self.inputs.is_empty() {
                 self.inputs = input_devices();
             }
+            if now == 2 && self.midi_ports.is_empty() {
+                self.midi_ports = midi::ports().unwrap_or_default();
+            }
         }
-        if self.live_input {
+        if self.midi {
+            self.midi_ui(ui);
+            ui.add_space(6.0);
+            ui.label(RichText::new("File").small().color(theme::FAINT));
+        } else if self.live_input {
             self.input_ui(ui);
             ui.add_space(6.0);
             ui.label(
@@ -1098,6 +1210,67 @@ impl PlayView {
         }
     }
 
+    /// The MIDI keyboard's port, the test oscillator's waveform, the buffer, and what is
+    /// held.
+    fn midi_ui(&mut self, ui: &mut egui::Ui) {
+        let (port, wave, buffer) = (self.midi_port, self.wave, self.input_buffer_ms);
+        ui.horizontal(|ui| {
+            let name = self
+                .midi_ports
+                .get(self.midi_port)
+                .map_or("(no MIDI inputs)", String::as_str);
+            egui::ComboBox::from_id_salt("midi_port")
+                .width(ui.available_width() - 34.0)
+                .selected_text(name)
+                .show_ui(ui, |ui| {
+                    for (i, p) in self.midi_ports.iter().enumerate() {
+                        ui.selectable_value(&mut self.midi_port, i, p);
+                    }
+                });
+            if ui
+                .button("↻")
+                .on_hover_text("List the MIDI inputs again")
+                .clicked()
+            {
+                self.midi_ports = midi::ports().unwrap_or_default();
+                self.midi_port = self.midi_port.min(self.midi_ports.len().saturating_sub(1));
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Wave").color(theme::MUTED));
+            ui.selectable_value(&mut self.wave, Wave::Saw, "Saw");
+            ui.selectable_value(&mut self.wave, Wave::Square, "Square");
+            ui.label(RichText::new("Buffer").color(theme::MUTED));
+            egui::ComboBox::from_id_salt("midi_buffer")
+                .width(70.0)
+                .selected_text(format!("{:.0} ms", self.input_buffer_ms))
+                .show_ui(ui, |ui| {
+                    for ms in [10.0, 20.0, 30.0, 50.0] {
+                        ui.selectable_value(&mut self.input_buffer_ms, ms, format!("{ms:.0} ms"));
+                    }
+                });
+        });
+        let held = self.keyboard.as_ref().map(|kb| match kb.keys.sounding() {
+            Some((n, v)) => format!(
+                "key {} ({:.0} Hz), velocity {v}",
+                note_name(n),
+                midi::TestOsc::note_hz(n)
+            ),
+            None => "no key held".into(),
+        });
+        ui.label(
+            RichText::new(held.unwrap_or_else(|| {
+                "a test oscillator (band-limited, one voice) plays into the device: not part of it".into()
+            }))
+            .small()
+            .color(theme::MUTED),
+        );
+        let changed = (port, wave, buffer) != (self.midi_port, self.wave, self.input_buffer_ms);
+        if changed && self.player.is_some() {
+            self.start();
+        }
+    }
+
     /// Live input's device, channel and buffer.
     fn input_ui(&mut self, ui: &mut egui::Ui) {
         let (input, channel, buffer) = (self.input, self.channel, self.input_buffer_ms);
@@ -1195,7 +1368,12 @@ impl PlayView {
                 )
                 .fill(theme::ACCENT)
                 .min_size(egui::vec2(110.0, 30.0));
-                if ui.add_enabled(!self.inputs.is_empty(), go).clicked() {
+                let can = if self.midi {
+                    !self.midi_ports.is_empty()
+                } else {
+                    !self.inputs.is_empty()
+                };
+                if ui.add_enabled(can, go).clicked() {
                     self.start();
                 }
             } else if ui
@@ -1212,7 +1390,10 @@ impl PlayView {
                 egui::Button::new("●  Record")
             };
             if ui
-                .add_enabled(self.player.is_some(), rec.min_size(egui::vec2(130.0, 30.0)))
+                .add_enabled(
+                    self.player.is_some() && !self.midi,
+                    rec.min_size(egui::vec2(130.0, 30.0)),
+                )
                 .on_hover_text("Keep the input as a take: it becomes the file (loop it, render it)")
                 .clicked()
                 && let Some(p) = &self.player
@@ -1605,6 +1786,14 @@ fn list_audio(dir: &Path) -> Vec<PathBuf> {
         .collect();
     v.sort();
     v
+}
+
+/// A MIDI note's name (C4 = 60).
+fn note_name(n: u8) -> String {
+    const NAMES: [&str; 12] = [
+        "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+    ];
+    format!("{}{}", NAMES[n as usize % 12], n as i32 / 12 - 1)
 }
 
 #[cfg(test)]

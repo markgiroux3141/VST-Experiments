@@ -8,7 +8,7 @@ use varimu_circuit::yaml::Value;
 
 use crate::live::Values;
 use crate::player::AHEAD_S;
-use crate::settings::Quality;
+use crate::settings::{Quality, Settings};
 
 /// A device: a circuit file and what its panel shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -23,9 +23,26 @@ pub struct Device {
     pub ahead_s: f64,
     /// The quality it plays at (draft-1x; draft-2x for a device whose clipping aliases).
     pub quality: Quality,
+    /// The cores it plays with, over its quality's (None: the quality's; "ja" for a
+    /// device whose sound is its cores' hysteresis: the draft's linear cores would
+    /// leave a saturable reactor a fixed inductor).
+    pub cores: Option<&'static str>,
+    /// The control a MIDI keyboard's mod wheel turns (None: none).
+    pub mod_wheel: Option<&'static str>,
 }
 
-pub const DEVICES: [Device; 3] = [
+impl Device {
+    /// The settings it plays at: `s` (its quality's) with its cores.
+    pub fn play_settings(&self, s: &Settings) -> Settings {
+        let mut s = s.clone();
+        if let Some(c) = self.cores {
+            s.cores = c.to_string();
+        }
+        s
+    }
+}
+
+pub const DEVICES: [Device; 4] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -41,6 +58,8 @@ pub const DEVICES: [Device; 3] = [
         // (`examples/load_profile.rs`, 2026-10-28): 0.1 s ran dry.
         ahead_s: 0.25,
         quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
     },
     Device {
         id: "pultec_eqp1a",
@@ -49,6 +68,8 @@ pub const DEVICES: [Device; 3] = [
         panel: None,
         ahead_s: AHEAD_S,
         quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
     },
     Device {
         id: "fender_5e3",
@@ -63,6 +84,20 @@ pub const DEVICES: [Device; 3] = [
         // 96 kHz (amp_suite); 0.46x real time there on a guitar take (the user's choice,
         // 2026-10-29).
         quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+    },
+    Device {
+        id: "reactor_filter",
+        label: "Saturable-reactor low-pass (tube synth)",
+        circuit: "reactor_filter",
+        panel: None,
+        ahead_s: AHEAD_S,
+        // Its two hysteretic cores run 0.16-0.21x real time at draft-1x (Python's
+        // circuitsim on a 110 Hz saw, 2026-10-29).
+        quality: Quality::Draft1x,
+        cores: Some("ja"),
+        mod_wheel: Some("cutoff_v"),
     },
 ];
 
@@ -70,7 +105,7 @@ pub const DEVICES: [Device; 3] = [
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 16] = [
+const LABELS: [(&str, &str); 18] = [
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
     ("time_constant", "Time constant"),
@@ -87,6 +122,8 @@ const LABELS: [(&str, &str); 16] = [
     ("volume_bright", "Volume, bright"),
     ("volume_normal", "Volume, normal"),
     ("tone", "Tone"),
+    ("cutoff_v", "Cutoff (control V)"),
+    ("r_load_ohm", "Load (damping to resonance, ohm)"),
 ];
 
 /// How a knob moves.
@@ -210,5 +247,9 @@ mod tests {
             ["input_jack", "volume_bright", "volume_normal", "tone"]
         );
         assert!(matches!(&k[0].kind, Kind::Choices(c) if c.len() == 4));
+        let k = knobs(&DEVICES[3], &spec_of("reactor_filter"));
+        let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
+        assert_eq!(keys, ["cutoff_v", "r_load_ohm"]);
+        assert!(keys.contains(&DEVICES[3].mod_wheel.unwrap()));
     }
 }

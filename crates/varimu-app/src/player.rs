@@ -30,6 +30,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SizedSample};
 
 use crate::live::{Circuit, Live, Meter, Values};
+use crate::midi::{Keys, TestOsc, Wave};
 use crate::monitor::Monitor;
 use crate::resample::StreamResampler;
 use crate::settings::Settings;
@@ -71,6 +72,8 @@ pub enum Source {
         device: Option<String>,
         channel: usize,
     },
+    /// A MIDI keyboard's keys playing the test oscillator (`midi::TestOsc`).
+    Keys(Arc<Keys>, Wave),
 }
 
 /// An input device and its default (shared-mode mix) format.
@@ -269,6 +272,11 @@ impl Player {
                 ));
                 (Some(stream), WorkerSource::Input(ring, info.rate))
             }
+            Source::Keys(keys, wave) => {
+                shared.status.lock().expect("status").input =
+                    Some("MIDI keyboard: test oscillator".into());
+                (None, WorkerSource::Keys(keys, wave))
+            }
         };
         {
             let mut st = shared.status.lock().expect("status");
@@ -393,6 +401,7 @@ impl Drop for Player {
 enum WorkerSource {
     Loop(Vec<f64>),
     Input(rtrb::Consumer<f32>, u32),
+    Keys(Arc<Keys>, Wave),
 }
 
 /// Write `y` into the ring (all of it; the callers leave room).
@@ -434,7 +443,7 @@ fn work(
 ) -> Result<(), String> {
     let clip = match &source {
         WorkerSource::Loop(x) => x.as_slice(),
-        WorkerSource::Input(..) => &[],
+        WorkerSource::Input(..) | WorkerSource::Keys(..) => &[],
     };
     let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
     let mut live =
@@ -570,6 +579,35 @@ fn work(
                     shared.status.lock().expect("status").latency_s = Some(latency);
                 }
                 pending.drain(..used);
+            }
+        }
+        WorkerSource::Keys(keys, wave) => {
+            // Blocks are made as the queue drains, each from the keys held as it starts:
+            // a key is heard within the queue, a block and the output's latency.
+            let mut osc = TestOsc::new(rate as f64);
+            osc.wave = wave;
+            let mut block = vec![0.0; BLOCK];
+            while !shared.stop.load(Ordering::Relaxed) {
+                forward_values(&mut live);
+                let queued = capacity - ring.slots();
+                shared.queued.store(queued, Ordering::Relaxed);
+                if queued >= buffer || ring.slots() < BLOCK {
+                    std::thread::sleep(Duration::from_micros(300));
+                    continue;
+                }
+                osc.fill(keys.sounding(), &mut block);
+                let (y, meter) = live
+                    .process(&block)
+                    .map_err(|e| format!("the circuit stopped: {e}"))?;
+                let before = capacity - ring.slots();
+                push(&mut ring, &monitored(&live, &y));
+                heard(&live, before);
+                report(&live, meter, loads.push(meter.load));
+                let block_s = BLOCK as f64 / rate as f64;
+                let latency = block_s * (1.0 + meter.load)
+                    + before as f64 / rate as f64
+                    + shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6;
+                shared.status.lock().expect("status").latency_s = Some(latency);
             }
         }
     }
