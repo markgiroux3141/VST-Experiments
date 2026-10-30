@@ -18,6 +18,10 @@ Device fixtures (crates/circuitsim/tests/fixtures/devices/devices.json): every
 device model of the 670 (plus mismatch, a triode without grid current, a
 series-resistance-free diode and the GZ34) evaluated by the Python reference
 on grids, for the Rust device tests (varimu.devices.fixtures).
+
+Noise fixtures (crates/circuitsim/tests/fixtures/noise/noise.json): the noise
+streams' raw Philox words, normals and the flicker filter, from the Python
+reference (varimu.devices.noise), for crates/circuitsim/tests/noise.rs.
 """
 
 from __future__ import annotations
@@ -29,10 +33,12 @@ from pathlib import Path
 from varimu.circuit import netlist as nl
 from varimu.config import REPO_ROOT
 from varimu.devices.fixtures import MISMATCH, device_fixtures_json
+from varimu.devices.noise import noise_fixtures_json
 
 GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "netlist_golden"
 RUST_FIXTURE_DIR = REPO_ROOT / "crates" / "circuitsim" / "tests" / "fixtures"
 DEVICE_FIXTURE = RUST_FIXTURE_DIR / "devices" / "devices.json"
+NOISE_FIXTURE = RUST_FIXTURE_DIR / "noise" / "noise.json"
 
 _MISMATCH = MISMATCH
 
@@ -115,6 +121,12 @@ def write_devices(path: Path = DEVICE_FIXTURE) -> None:
     print(f"{path.name}: {path.stat().st_size} bytes")
 
 
+def write_noise(path: Path = NOISE_FIXTURE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(noise_fixtures_json().encode("utf-8"))
+    print(f"{path.name}: {path.stat().st_size} bytes")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--golden", action="store_true", help="re-capture the SPICE goldens too")
@@ -123,6 +135,7 @@ def main() -> None:
         write_golden()
     write_ir()
     write_devices()
+    write_noise()
 
 
 if __name__ == "__main__":

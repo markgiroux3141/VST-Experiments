@@ -18,6 +18,7 @@ pub mod ir;
 pub mod linalg;
 pub mod mna;
 pub mod newton;
+pub mod noise;
 pub mod partition;
 pub mod stream;
 pub mod timing;

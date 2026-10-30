@@ -644,6 +644,41 @@ a stated tolerance in both engines; renders reproduce from the seed; the 670's
 idle noise is measured and, if a published figure exists, compared (`vs_670`
 style, never a rejection).
 
+*Design decided 2026-10-30 (the user, for the tube synth; TUBE_SYNTH_PLAN.md S4):*
+- **Expectation (estimates, to measure):** in tube_synth B5 gives a hiss ~-95..-100 dB re
+  the note (the mixer's 1M || 1M at the first grid), gated with the VCA; pitch jitter and
+  wander from it are far below a cent (the pitch driver's grid at ~256 cents/V sees ~0.4 uV
+  of flicker below 20 Hz; the LC tank's phase noise ~-140 dBc/Hz at 1 Hz). Audible: the
+  filter near self-oscillation, oscillator start-up, S5's noise source. The audible drift is
+  B6 and the mains (vco_lc: 43 cents per volt of mains), so **slow mains-voltage wander joins
+  B5** as an opt-in noise source on the mains (provisional spectrum, the user's call).
+- **IR** (optional, absent when off: existing IRs, fixtures, goldens and renders unchanged,
+  IR_VERSION stays): `noise: {seed, temperature_k}`; `NoiseCurrent` (white Norton current,
+  4kT/R, per physical resistor: not `numerical:` leaks, core-node resistors or MIN_R_OHM
+  contacts); `TubeNoise` per tube instance (shot as plate current 4 k T0 beta gm, beta 2.5
+  at T0 290 K, i.e. R_eq = 2.5 / gm; pentodes (Ib / Ik)(2.5 / gm)(1 + 8 Ic2 / gm), as
+  Spangenberg, *Vacuum Tubes* (1948) gives it; grid-current shot 2q|Ig|; flicker as a
+  voltage in series with the grid, K_f / f). No noise on diodes, selenium, the 5651s.
+- **Flicker from physics (provisional):** space-charge-limited, a relative emission
+  fluctuation moves the potential minimum by (kTc/q) dJ/J, a grid-referred voltage
+  independent of the operating point: K_f = (kTc/q)^2 A, A ~3e-12 (oxide cathodes' emission
+  flicker, order of magnitude) -> K_f ~2.5e-14 V^2, a corner ~1 kHz for a 12AX7 at
+  1.6 mA/V (the user's pick), bounded 100 Hz-10 kHz; one default for oxide cathodes; flat
+  below 1e-3 Hz.
+- **Generation:** counter-based Philox4x64-10 (numpy's `np.random.Philox`), key (seed,
+  crc32(name) << 32 | stream): sample k is a pure function of (key, k), so chunks,
+  partitions and a re-render at another quality see the same samples. Python's numpy
+  Philox + Box-Muller is the reference; Rust's uniforms equal it bit for bit, and every
+  engine uses circuitsim's generator (ngspice's streams through the binding). Flicker: 15
+  first-order sections, 2 per decade, stationary at sample 0. On the project's 96 kHz grid,
+  sample 0 the first output sample, linear between samples (-0.6 dB at 20 kHz, in the
+  theory the tests use); held at sample 0 for the DC point and the settle, as the input is.
+  Shot amplitude from gm at the last accepted step.
+- **Engines:** circuitsim: `NoiseCurrent` a time-varying source column, `TubeNoise` at the
+  device's ports. SPICE: filesource-driven G sources, a grid-lead V source, a B source on
+  sqrt(gm) (gm from a duplicate instance at +1 mV). Opt-in: a circuit file's `noise:`
+  block (tube_synth only), `--noise` overrides; the seed is in the IR (the cache key).
+
 **B6. Component physics.** The part non-idealities of FUTURE_DIRECTIONS.md
 section 1, each a sourced, bounded parameter of its part class, tested on its
 own and measured for audibility on the 670 before it becomes a default:
