@@ -37,7 +37,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, replace
 from math import gcd
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import soundfile as sf
@@ -45,6 +45,9 @@ from scipy.signal import resample_poly
 
 from varimu.config import SimSettings, load_sim_settings
 from varimu.sim.ngspice import SimulationFailed, find_ngspice
+
+if TYPE_CHECKING:
+    from varimu.circuit.spice import NoiseStream
 
 INPUT_FILE = "in{}.txt"  # one per chunk
 CHUNK_LINES = 250_000
@@ -338,11 +341,11 @@ def input_chunks(x: np.ndarray, rate: float, chunk: int | None = None):
 
 
 def write_input_chunks(
-    directory: Path, x: np.ndarray, rate: float, chunk: int | None = None
+    directory: Path, x: np.ndarray, rate: float, chunk: int | None = None, pattern: str = INPUT_FILE
 ) -> list[str]:
     names = []
     for k, (t, v) in enumerate(input_chunks(x, rate, chunk)):
-        name = INPUT_FILE.format(k)
+        name = pattern.format(k)
         write_filesource(directory / name, t, v)
         names.append(name)
     return names
@@ -424,14 +427,28 @@ def _priority_kwargs(priority: str) -> dict[str, Any]:
     return {"preexec_fn": lambda: os.nice(nice)}
 
 
-def _input_sources(input_node: str, chunks: Sequence[str]) -> str:
+def _input_sources(input_node: str, chunks: Sequence[str], tag: str = "audio") -> str:
     """Filesources in series from input_node to ground, one per chunk file."""
-    nodes = [input_node] + [f"audio_in_{k}" for k in range(1, len(chunks))] + ["0"]
+    nodes = [input_node] + [f"{tag}_in_{k}" for k in range(1, len(chunks))] + ["0"]
     lines = []
     for k, name in enumerate(chunks):
-        lines.append(f"a_audio_in{k} %vd([{nodes[k]} {nodes[k + 1]}]) audio_fsrc{k}")
-        lines.append(f'.model audio_fsrc{k} filesource(file="{name}" amploffset=[0] amplscale=[1])')
+        lines.append(f"a_{tag}_in{k} %vd([{nodes[k]} {nodes[k + 1]}]) {tag}_fsrc{k}")
+        lines.append(f'.model {tag}_fsrc{k} filesource(file="{name}" amploffset=[0] amplscale=[1])')
     return "\n".join(lines) + "\n"
+
+
+def _noise_files(wd: Path, noise: Sequence[NoiseStream], t_end: float, chunk: int | None) -> str:
+    """Write every noise stream's samples over [0, t_end] (and one past) as filesources;
+    the deck lines that drive their nodes."""
+    from varimu.devices.noise import unit_stream
+
+    out = []
+    for st in noise:
+        n = int(np.ceil(t_end * st.rate_hz)) + 2
+        x = unit_stream(st.seed, st.name, st.stream, st.flicker, st.rate_hz, n)
+        names = write_input_chunks(wd, x, st.rate_hz, chunk, pattern=st.node + "_{}.txt")
+        out.append(_input_sources(st.node, names, tag=st.node))
+    return "".join(out)
 
 
 def _deck(
@@ -443,6 +460,7 @@ def _deck(
     chunks: Sequence[str],
     max_step_div: int = 1,
     grid_breakpoints: bool = False,
+    noise_sources: str = "",
 ) -> str:
     dt = 1.0 / s.sim_rate
     # A pulse with corners every dt / 2 on an isolated node: its breakpoints put
@@ -457,6 +475,7 @@ def _deck(
         f"{netlist.rstrip()}\n"
         f"* --- audio input (varimu.sim.io) ---\n"
         f"{_input_sources(input_node, chunks)}"
+        f"{noise_sources}"
         f"{brk}"
         f".options reltol={s.reltol:g} abstol={s.abstol:g} vntol={s.vntol:g} method={s.method}\n"
         f".save {' '.join(save)}\n"
@@ -497,8 +516,15 @@ def run_transient(
     max_step_div: int = 1,
     grid_breakpoints: bool = False,
     chunk_lines: int | None = None,
+    noise: Sequence[NoiseStream] = (),
 ) -> TransientResult:
     """Drive `input_node` (to ground) with `input_v` volts and run a transient.
+
+    `noise` (device builder B5): the unit streams the netlist's noise elements read
+    (varimu.circuit.spice.noise_streams), each a node driven by filesources of its
+    samples on the noise grid from the run's start (the settle included), as circuitsim
+    has them; ngspice's operating point takes sample 0 (circuitsim's is noise-free: a
+    microvolt-scale difference that decays within the settle).
 
     ngspice can stop at its very first step on the 670 depending only on how the
     input is split into filesource chunks (`chunk_lines`, default CHUNK_LINES):
@@ -539,13 +565,24 @@ def run_transient(
         wd = Path(workdir) if workdir else Path(td)
         wd.mkdir(parents=True, exist_ok=True)
         chunks = write_input_chunks(wd, x_up, s.sim_rate, chunk_lines)
+        noise_sources = _noise_files(wd, noise, t_end, chunk_lines)
         for name, src in (files or {}).items():
             _place(wd / name, src)
         # spinit sets num_threads=8 (OpenMP); one per job is enough for these circuits.
         (wd / ".spiceinit").write_text(
             f"set filetype=binary\nset num_threads={s.threads}\n", encoding="utf-8"
         )
-        deck = _deck(netlist, input_node, save, s, t_end, chunks, max_step_div, grid_breakpoints)
+        deck = _deck(
+            netlist,
+            input_node,
+            save,
+            s,
+            t_end,
+            chunks,
+            max_step_div,
+            grid_breakpoints,
+            noise_sources,
+        )
         (wd / NETLIST_FILE).write_text("* varimu transient\n" + deck, encoding="utf-8")
         raw = wd / RAW_FILE
         raw.unlink(missing_ok=True)
@@ -596,6 +633,7 @@ def run_transient(
             max_step_div=max_step_div,
             grid_breakpoints=grid_breakpoints,
             chunk_lines=-(-n_up // (len(chunks) + 1)),
+            noise=noise,
         )
     if stopped:
         raise SimulationFailed(

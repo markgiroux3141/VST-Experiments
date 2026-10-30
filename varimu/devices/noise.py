@@ -18,7 +18,8 @@ r = sqrt(-2 ln u1), samples 2p, 2p + 1 = r cos(2 pi u2), r sin(2 pi u2).
 native app settle for the same `settle_s`, so a take's noise lines up across qualities),
 linear between samples, as control inputs are. The DC operating point is noise-free. A white
 stream of one-sided density S then has sample variance S fs / 2, and the linear
-interpolation shapes its density by sinc^2(f / fs) (`interp_gain`: -0.6 dB at 20 kHz at
+interpolation (a triangle pulse per sample, sinc^2 in amplitude) shapes its density by
+sinc^4(f / fs) (`interp_gain`: -0.3 dB at 10 kHz, -1.3 dB at 20 kHz at
 96 kHz), which the tests count in.
 
 **Flicker** (1/f) is the unit stream through `FlickerFilter`: 15 first-order pole-zero
@@ -126,8 +127,9 @@ def white_sigma(psd: float, rate_hz: float) -> float:
 
 
 def interp_gain(f_hz, rate_hz: float):
-    """The density's gain from linear interpolation between grid samples: sinc^2(f / fs)."""
-    return np.sinc(np.asarray(f_hz, float) / rate_hz) ** 2
+    """The density's gain from linear interpolation between grid samples: each sample is a
+    triangle pulse, sinc^2(f / fs) in amplitude, sinc^4 in power."""
+    return np.sinc(np.asarray(f_hz, float) / rate_hz) ** 4
 
 
 # --- Densities ---------------------------------------------------------------------------
@@ -238,6 +240,30 @@ class FlickerFilter:
                 y += s[i]
             out[t] = self.gain * y
         return out
+
+
+def flicker_samples(
+    f: FlickerFilter, k: tuple[int, int], k_start: tuple[int, int], n: int
+) -> np.ndarray:
+    """`FlickerFilter.run`'s samples, vectorized (scipy's lfilter per section; the same to
+    rounding): for long streams, such as ngspice's noise files."""
+    from scipy.signal import lfilter
+
+    z0 = normals(k_start, 0, len(f.poles))
+    s0 = f.start_chol @ z0
+    u = normals(k, 0, n)
+    y = f.direct * u
+    for p, r, s in zip(f.poles, f.residues, s0, strict=True):
+        y = y + lfilter([r], [1.0, -p], u, zi=[p * s])[0]
+    return f.gain * y
+
+
+def unit_stream(seed: int, name: str, stream: int, flicker: bool, rate_hz: float, n: int):
+    """Samples 0 .. n of a source's unit stream (white, or unit flicker: density 1 / f)."""
+    if not flicker:
+        return normals(key(seed, name, stream), 0, n)
+    f = FlickerFilter.design(rate_hz)
+    return flicker_samples(f, key(seed, name, stream), key(seed, name, STREAM_FLICKER_START), n)
 
 
 def noise_fixtures_json(rate_hz: float = 96000.0) -> str:

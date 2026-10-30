@@ -48,7 +48,7 @@ from typing import Any
 import numpy as np
 
 import varimu
-from varimu.circuit import builder, spec
+from varimu.circuit import builder, spec, spice
 from varimu.circuit import netlist as nl
 from varimu.config import REPO_ROOT, load_sim_settings
 from varimu.sim import fast
@@ -248,6 +248,7 @@ def render(
                 workdir=workdir,
                 progress=progress,
                 files=circuit.files,
+                noise=spice.noise_streams(circuit.ir),
             )
     finally:
         shutil.rmtree(workdir, ignore_errors=True)

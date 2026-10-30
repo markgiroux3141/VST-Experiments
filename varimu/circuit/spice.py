@@ -41,7 +41,9 @@ the island's 1 GOhm leak and far below every other conductance.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 
 from varimu.circuit.ir import (
@@ -54,19 +56,126 @@ from varimu.circuit.ir import (
     Element,
     Inductor,
     IRError,
+    NoiseCurrent,
     Resistor,
     SineSource,
+    TubeNoise,
     Vccs,
     VoltageSource,
     Winding,
     element_nodes,
 )
+from varimu.devices import noise as nz
 from varimu.devices.core import TESLA_PER_V, MagneticCore
 from varimu.devices.diode import JunctionDiode
+from varimu.devices.pentode import Pentode
 from varimu.devices.table import TableGrid, cached_table, table_subckt
 from varimu.devices.triode import Triode, num
 
 FORMULATIONS = ("table", "exact")
+
+# Noise (device builder B5): the grid offset that gives a tube's gm by difference.
+GM_DELTA_V = 1e-3
+
+
+@dataclass(frozen=True)
+class NoiseStream:
+    """A unit noise stream ngspice reads as a node's voltage (varimu.sim.io writes its
+    samples for the run's length): stream `stream` of source `name` under `seed`, white or
+    unit flicker (varimu.devices.noise.unit_stream)."""
+
+    node: str
+    seed: int
+    name: str
+    stream: int
+    flicker: bool
+    rate_hz: float  # the noise grid (the IR's noise.rate_hz)
+
+
+def noise_streams(ir: CircuitIR) -> list[NoiseStream]:
+    """The unit streams `emit`'s noise elements read, in IR order."""
+    if ir.noise is None:
+        return []
+    out = []
+    for el in ir.elements():
+        if isinstance(el, NoiseCurrent):
+            out.append(
+                NoiseStream(
+                    _nz(el.name), ir.noise.seed, el.name, nz.STREAM_MAIN, False, ir.noise.rate_hz
+                )
+            )
+        elif isinstance(el, TubeNoise):
+            for suffix, stream, flicker in (
+                ("s", nz.STREAM_MAIN, False),
+                ("g", nz.STREAM_GRID, False),
+                ("f", nz.STREAM_FLICKER, True),
+            ):
+                node = _nz(f"{el.name}_{suffix}")
+                out.append(
+                    NoiseStream(node, ir.noise.seed, el.name, stream, flicker, ir.noise.rate_hz)
+                )
+    return out
+
+
+def _nz(name: str) -> str:
+    return "nz_" + name.lower()
+
+
+def noise_lines(
+    el: NoiseCurrent | TubeNoise,
+    rate_hz: float,
+    devices: Mapping[str, Device],
+    models: Mapping[str, DeviceModel],
+) -> list[str]:
+    """A noise element in SPICE (B5): a resistor's Norton current is a G source on its unit
+    stream's node. A tube's noise reads gm and the currents off two copies of the tube on E
+    sources (they load nothing; one with its control grid GM_DELTA_V up), sensed by
+    zero-volt sources: B sources for the plate (shot, or a pentode's partition noise, and
+    gm e_f) and the control grid (full shot noise of its current)."""
+    half = rate_hz / 2.0
+    if isinstance(el, NoiseCurrent):
+        sigma = math.sqrt(el.psd_a2_hz * half)
+        return [f"G{el.name} {el.a} {el.b} {_nz(el.name)} 0 {num(sigma)}"]
+    d = devices[el.device]
+    m = models[d.model]
+    target = instance_target(m)
+    b = el.name.lower()
+    pins = list(d.nodes)
+    k, g = pins[-1], pins[-2]  # cathode; the control grid is the pin before it
+    lines = [f"* noise of {d.name} (B5): gm and currents from copies of the tube"]
+    copied = {}
+    for i, n in enumerate(pins):
+        copied[i] = f"{b}_e{i}"
+        lines.append(f"E{b}_e{i} {copied[i]} 0 {n} 0 1")
+    lines.append(f"V{b}_d {b}_gd {copied[len(pins) - 2]} dc {num(GM_DELTA_V)}")
+    for c, grid in ((0, copied[len(pins) - 2]), (1, f"{b}_gd")):
+        # Copy c's pins: each sensed (V source: i() is the current into that pin).
+        nodes = []
+        for i in range(len(pins)):
+            src = grid if i == len(pins) - 2 else copied[i]
+            if i == len(pins) - 1:
+                nodes.append(src)  # the cathode: its current returns through E
+                continue
+            node = f"{b}_c{c}p{i}"
+            lines.append(f"V{b}_c{c}s{i} {src} {node} dc 0")
+            nodes.append(node)
+        lines.append(f"X{b}_c{c} {' '.join(nodes)} {target}")
+    ip0, ip1 = f"i(V{b}_c0s0)", f"i(V{b}_c1s0)"
+    gm = f"max(({ip1}-{ip0})/{num(GM_DELTA_V)},0)"
+    ig = f"i(V{b}_c0s{len(pins) - 2})"
+    if isinstance(m, Pentode) and el.partition > 0:
+        ib, ic2 = f"max({ip0},0)", f"max(i(V{b}_c0s1),0)"
+        psd = f"{ib}/({ib}+{ic2}+1e-30)*{num(el.shot_k)}*({gm}+{num(el.partition)}*{ic2})"
+    else:
+        psd = f"{num(el.shot_k)}*{gm}"
+    rt = num(math.sqrt(el.flicker_v2))
+    lines += [
+        f"B{b}_p {pins[0]} {k} I={{sqrt({psd}*{num(half)}+1e-60)*v({_nz(el.name + '_s')})"
+        f"+{gm}*{rt}*v({_nz(el.name + '_f')})}}",
+        f"B{b}_g {g} {k} I={{sqrt({num(2 * nz.Q_E * half)}*abs({ig})+1e-60)"
+        f"*v({_nz(el.name + '_g')})}}",
+    ]
+    return lines
 
 
 def instance_target(model: DeviceModel) -> str:
@@ -235,6 +344,7 @@ def emit(
         else:
             lines.append(m.subckt())
     models = {m.name: m for m in ir.models}
+    devices = {e.name: e for e in ir.elements() if isinstance(e, Device)}
     cores = linear_cores(ir)
     folded = {n for c in cores.values() for n in c["parts"]}
     for s in ir.sections:
@@ -242,6 +352,9 @@ def emit(
         for el in s.elements:
             if isinstance(el, Winding):
                 lines.append(winding_line(el, cores[el.core]))
+            elif isinstance(el, NoiseCurrent | TubeNoise):
+                assert ir.noise is not None  # validated
+                lines += noise_lines(el, ir.noise.rate_hz, devices, models)
             elif el.name not in folded:
                 lines.append(element_line(el, models))
     if cores:

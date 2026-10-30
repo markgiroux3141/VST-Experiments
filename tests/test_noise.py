@@ -115,7 +115,7 @@ def test_densities():
     assert nz.shot_a2(gm, ib, ic2, nz.PARTITION) == pytest.approx(gm**2 * 4 * nz.K_B * 290 * r_eq)
     assert nz.grid_shot_a2(-1e-6) == pytest.approx(2 * nz.Q_E * 1e-6)
     assert nz.white_sigma(2.0, 96000.0) == pytest.approx(math.sqrt(96000.0))
-    assert 10 * np.log10(nz.interp_gain(20e3, 96000.0)) == pytest.approx(-0.62, abs=0.01)
+    assert 10 * np.log10(nz.interp_gain(20e3, 96000.0)) == pytest.approx(-1.25, abs=0.01)
 
 
 # --- The IR and the builders ------------------------------------------------------------

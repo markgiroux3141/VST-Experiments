@@ -671,7 +671,7 @@ style, never a rejection).
   Philox + Box-Muller is the reference; Rust's uniforms equal it bit for bit, and every
   engine uses circuitsim's generator (ngspice's streams through the binding). Flicker: 15
   first-order sections, 2 per decade, stationary at sample 0. On the project's 96 kHz grid,
-  sample 0 the first output sample, linear between samples (-0.6 dB at 20 kHz, in the
+  sample 0 the first output sample, linear between samples (sinc^4: -0.3 dB at 10 kHz, -1.3 dB at 20 kHz, in the
   theory the tests use); held at sample 0 for the DC point and the settle, as the input is.
   Shot amplitude from gm at the last accepted step.
 - **Engines:** circuitsim: `NoiseCurrent` a time-varying source column, `TubeNoise` at the
