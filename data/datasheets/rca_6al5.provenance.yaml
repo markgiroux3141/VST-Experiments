@@ -1,0 +1,19 @@
+device: 6AL5
+document: "RCA 6AL5 Twin Diode, miniature type"
+publisher: RCA Tube Division
+date: 1954-05-03
+local_copy: sources/rca_6al5_1954.pdf
+local_copy_sha256: 54c80b57a61ec43b5b64a66d6f636e104160c010f4f23f735b660049012e668b
+scan_source: "web: https://frank.pocnet.net/sheets/049/6/6AL5.pdf"
+digitized_with: "not digitized: the fit uses GE's 1954 curve as tabulated by kurvmatch (web: http://ludd.ltu.se/~ragge/kurvmatch/tubedir/6AL5/, a third party's reading of the GE sheet, whose scan we don't have); the RCA curve (p.2, 92CM-6560T) is a cross-check by eye at 2, 4, 6, 8 V"
+digitized_by: Claude Code
+digitized_on: 2026-10-30
+files:
+  published_points.yaml:
+    figure: "RCA p.2, 'Average plate characteristic', Ef = 6.3 V, one plate"
+    entry: "6AL5.plate_curve_tabulated (ten points, 1-10 V)"
+axis_calibration: "n/a (tabulated)"
+estimated_error: "the GE table and the RCA curve differ by up to ~20% at 2 V and ~5% above 6 V"
+notes: >-
+  The retarding-field region (negative plate voltage) isn't on either sheet; its slope comes
+  from the Phywe measurement of an EC92 (phywe_lep_4_1_10.provenance.yaml).

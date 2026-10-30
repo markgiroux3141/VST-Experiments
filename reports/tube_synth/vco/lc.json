@@ -1,0 +1,558 @@
+{
+ "circuit": "vco_lc",
+ "sample_rate": 96000,
+ "qualities": {
+  "production": {
+   "sweep": {
+    "pitch_v": [
+     -42.0,
+     -38.0,
+     -34.0,
+     -30.0,
+     -25.0,
+     -20.0,
+     -15.0,
+     -10.0,
+     -5.0,
+     0.0
+    ],
+    "hz": [
+     52.3,
+     52.77,
+     153.42,
+     267.35,
+     426.45,
+     618.91,
+     845.2,
+     1099.68,
+     1378.81,
+     1654.49
+    ],
+    "octaves_per_v": 0.1238,
+    "range_octaves": 4.98,
+    "cents_off_exponential": [
+     -448.0,
+     -1027.0,
+     226.0,
+     593.0,
+     659.0,
+     561.0,
+     357.0,
+     70.0,
+     -282.0,
+     -709.0
+    ]
+   },
+   "outputs": {
+    "-42.0": {
+     "t": {
+      "peak_to_peak_v": 151.96752104275726,
+      "pitch_spread_hz": 0.49,
+      "harmonics_db": [
+       0.0,
+       -2.7,
+       -5.9,
+       -10.5,
+       -18.2,
+       -15.7,
+       -13.8,
+       -15.2,
+       -18.9,
+       -21.7,
+       -19.8,
+       -19.2
+      ],
+      "inharmonic_db": -34.9,
+      "inharmonic_off_ripple_db": -96.0
+     },
+     "out": {
+      "peak_to_peak_v": 105.53860437174419,
+      "pitch_spread_hz": 0.49,
+      "harmonics_db": [
+       0.0,
+       -2.5,
+       -7.5,
+       -20.1,
+       -17.5,
+       -12.7,
+       -13.8,
+       -20.4,
+       -30.2,
+       -18.6,
+       -17.3,
+       -20.9
+      ],
+      "inharmonic_db": -25.1,
+      "inharmonic_off_ripple_db": -83.2
+     }
+    },
+    "-25.0": {
+     "t": {
+      "peak_to_peak_v": 92.55449527375619,
+      "pitch_spread_hz": 2.38,
+      "harmonics_db": [
+       0.0,
+       -32.1,
+       -19.3,
+       -31.2,
+       -38.4,
+       -41.6,
+       -39.3,
+       -50.8,
+       -44.1,
+       -57.0,
+       -49.8,
+       -75.2
+      ],
+      "inharmonic_db": -53.4,
+      "inharmonic_off_ripple_db": -86.9
+     },
+     "out": {
+      "peak_to_peak_v": 102.49542205476655,
+      "pitch_spread_hz": 2.38,
+      "harmonics_db": [
+       0.0,
+       -35.4,
+       -9.6,
+       -35.4,
+       -14.0,
+       -35.4,
+       -17.0,
+       -35.7,
+       -19.5,
+       -36.5,
+       -22.0,
+       -36.4
+      ],
+      "inharmonic_db": -19.6,
+      "inharmonic_off_ripple_db": -66.9
+     }
+    },
+    "0.0": {
+     "t": {
+      "peak_to_peak_v": 32.70762391324968,
+      "pitch_spread_hz": 3.76,
+      "harmonics_db": [
+       0.0,
+       -33.0,
+       -25.4,
+       -46.1,
+       -39.8,
+       -52.0,
+       -45.7,
+       -57.5,
+       -52.4,
+       -63.0,
+       -58.7,
+       -68.3
+      ],
+      "inharmonic_db": -52.9,
+      "inharmonic_off_ripple_db": -74.1
+     },
+     "out": {
+      "peak_to_peak_v": 101.7373751763959,
+      "pitch_spread_hz": 3.76,
+      "harmonics_db": [
+       0.0,
+       -49.0,
+       -9.5,
+       -48.9,
+       -14.0,
+       -49.2,
+       -17.3,
+       -50.5,
+       -20.8,
+       -52.4,
+       -24.2,
+       -54.0
+      ],
+      "inharmonic_db": -24.2,
+      "inharmonic_off_ripple_db": -47.7
+     }
+    }
+   },
+   "glide": {
+    "from_v": -30.0,
+    "to_v": -20.0,
+    "to_within_10_cents_s": 0.573
+   },
+   "held_note": {
+    "pitch_v": -25.0,
+    "hz": 425.85,
+    "cycle_cents_rms": 2.01,
+    "cycle_cents_pp": 11.11,
+    "first_vs_last_second_cents": -1.43
+   },
+   "mains_cents_per_v": 43.03,
+   "speed_x_real_time": 3.29
+  },
+  "draft": {
+   "sweep": {
+    "pitch_v": [
+     -42.0,
+     -38.0,
+     -34.0,
+     -30.0,
+     -25.0,
+     -20.0,
+     -15.0,
+     -10.0,
+     -5.0,
+     0.0
+    ],
+    "hz": [
+     52.3,
+     52.77,
+     153.42,
+     267.38,
+     426.5,
+     619.01,
+     845.34,
+     1099.86,
+     1379.01,
+     1654.81
+    ],
+    "octaves_per_v": 0.1239,
+    "range_octaves": 4.98,
+    "cents_off_exponential": [
+     -448.0,
+     -1027.0,
+     226.0,
+     594.0,
+     659.0,
+     561.0,
+     357.0,
+     70.0,
+     -282.0,
+     -709.0
+    ]
+   },
+   "outputs": {
+    "-42.0": {
+     "t": {
+      "peak_to_peak_v": 151.97558211398194,
+      "pitch_spread_hz": 0.49,
+      "harmonics_db": [
+       0.0,
+       -2.7,
+       -5.9,
+       -10.5,
+       -18.2,
+       -15.7,
+       -13.8,
+       -15.2,
+       -18.9,
+       -21.7,
+       -19.8,
+       -19.2
+      ],
+      "inharmonic_db": -35.0,
+      "inharmonic_off_ripple_db": -93.1
+     },
+     "out": {
+      "peak_to_peak_v": 99.92290915165057,
+      "pitch_spread_hz": 0.49,
+      "harmonics_db": [
+       0.0,
+       -2.5,
+       -7.5,
+       -20.1,
+       -17.5,
+       -12.7,
+       -13.8,
+       -20.4,
+       -30.2,
+       -18.6,
+       -17.3,
+       -20.9
+      ],
+      "inharmonic_db": -25.1,
+      "inharmonic_off_ripple_db": -79.4
+     }
+    },
+    "-25.0": {
+     "t": {
+      "peak_to_peak_v": 92.53989317596101,
+      "pitch_spread_hz": 2.39,
+      "harmonics_db": [
+       0.0,
+       -32.1,
+       -19.3,
+       -31.2,
+       -38.4,
+       -41.6,
+       -39.3,
+       -50.7,
+       -44.0,
+       -56.6,
+       -49.4,
+       -75.9
+      ],
+      "inharmonic_db": -52.8,
+      "inharmonic_off_ripple_db": -66.4
+     },
+     "out": {
+      "peak_to_peak_v": 91.8949224916238,
+      "pitch_spread_hz": 2.39,
+      "harmonics_db": [
+       0.0,
+       -35.4,
+       -9.6,
+       -35.4,
+       -14.0,
+       -35.4,
+       -17.0,
+       -35.5,
+       -19.3,
+       -36.0,
+       -21.5,
+       -36.8
+      ],
+      "inharmonic_db": -19.4,
+      "inharmonic_off_ripple_db": -49.0
+     }
+    },
+    "0.0": {
+     "t": {
+      "peak_to_peak_v": 32.68398642164006,
+      "pitch_spread_hz": 4.51,
+      "harmonics_db": [
+       0.0,
+       -33.1,
+       -25.4,
+       -46.1,
+       -40.0,
+       -51.9,
+       -45.7,
+       -56.3,
+       -51.5,
+       -60.6,
+       -56.9,
+       -65.3
+      ],
+      "inharmonic_db": -39.5,
+      "inharmonic_off_ripple_db": -41.8
+     },
+     "out": {
+      "peak_to_peak_v": 91.13645583436039,
+      "pitch_spread_hz": 4.51,
+      "harmonics_db": [
+       0.0,
+       -55.0,
+       -9.5,
+       -54.8,
+       -14.0,
+       -54.9,
+       -17.1,
+       -55.0,
+       -19.5,
+       -55.6,
+       -21.9,
+       -56.9
+      ],
+      "inharmonic_db": -26.6,
+      "inharmonic_off_ripple_db": -34.6
+     }
+    }
+   },
+   "glide": {
+    "from_v": -30.0,
+    "to_v": -20.0,
+    "to_within_10_cents_s": 0.573
+   },
+   "held_note": {
+    "pitch_v": -25.0,
+    "hz": 425.9,
+    "cycle_cents_rms": 2.02,
+    "cycle_cents_pp": 11.13,
+    "first_vs_last_second_cents": -1.46
+   },
+   "mains_cents_per_v": 43.03,
+   "speed_x_real_time": 0.57
+  },
+  "draft-1x": {
+   "sweep": {
+    "pitch_v": [
+     -42.0,
+     -38.0,
+     -34.0,
+     -30.0,
+     -25.0,
+     -20.0,
+     -15.0,
+     -10.0,
+     -5.0,
+     0.0
+    ],
+    "hz": [
+     52.3,
+     52.77,
+     153.48,
+     267.43,
+     426.56,
+     618.97,
+     845.11,
+     1099.61,
+     1380.18,
+     1655.17
+    ],
+    "octaves_per_v": 0.1239,
+    "range_octaves": 4.98,
+    "cents_off_exponential": [
+     -448.0,
+     -1027.0,
+     227.0,
+     594.0,
+     659.0,
+     560.0,
+     356.0,
+     69.0,
+     -281.0,
+     -709.0
+    ]
+   },
+   "outputs": {
+    "-42.0": {
+     "t": {
+      "peak_to_peak_v": 152.3225769055004,
+      "pitch_spread_hz": 0.49,
+      "harmonics_db": [
+       0.0,
+       -2.7,
+       -5.9,
+       -10.5,
+       -18.2,
+       -15.7,
+       -13.8,
+       -15.2,
+       -18.9,
+       -21.7,
+       -19.7,
+       -19.1
+      ],
+      "inharmonic_db": -35.3,
+      "inharmonic_off_ripple_db": -87.4
+     },
+     "out": {
+      "peak_to_peak_v": 117.59582877788128,
+      "pitch_spread_hz": 0.49,
+      "harmonics_db": [
+       0.0,
+       -2.5,
+       -7.5,
+       -20.1,
+       -17.5,
+       -12.7,
+       -13.8,
+       -20.4,
+       -30.1,
+       -18.5,
+       -17.3,
+       -21.0
+      ],
+      "inharmonic_db": -24.8,
+      "inharmonic_off_ripple_db": -70.9
+     }
+    },
+    "-25.0": {
+     "t": {
+      "peak_to_peak_v": 92.62297779376632,
+      "pitch_spread_hz": 2.7,
+      "harmonics_db": [
+       0.0,
+       -32.1,
+       -19.4,
+       -31.2,
+       -38.4,
+       -41.6,
+       -39.5,
+       -50.7,
+       -44.3,
+       -57.3,
+       -50.0,
+       -77.0
+      ],
+      "inharmonic_db": -47.6,
+      "inharmonic_off_ripple_db": -55.2
+     },
+     "out": {
+      "peak_to_peak_v": 115.14877223721541,
+      "pitch_spread_hz": 2.7,
+      "harmonics_db": [
+       0.0,
+       -35.2,
+       -9.5,
+       -35.2,
+       -14.0,
+       -35.2,
+       -17.1,
+       -35.3,
+       -19.6,
+       -36.4,
+       -22.0,
+       -37.3
+      ],
+      "inharmonic_db": -18.3,
+      "inharmonic_off_ripple_db": -37.7
+     }
+    },
+    "0.0": {
+     "t": {
+      "peak_to_peak_v": 32.6685081444231,
+      "pitch_spread_hz": 0.89,
+      "harmonics_db": [
+       0.0,
+       -33.8,
+       -25.5,
+       -47.5,
+       -40.3,
+       -53.3,
+       -46.1,
+       -57.6,
+       -52.1,
+       -61.1,
+       -57.2,
+       -63.4
+      ],
+      "inharmonic_db": -59.7,
+      "inharmonic_off_ripple_db": -63.1
+     },
+     "out": {
+      "peak_to_peak_v": 112.93243004356256,
+      "pitch_spread_hz": 0.89,
+      "harmonics_db": [
+       0.0,
+       -25.8,
+       -9.5,
+       -25.6,
+       -13.9,
+       -25.3,
+       -16.7,
+       -24.9,
+       -18.8,
+       -24.3,
+       -20.4,
+       -23.6
+      ],
+      "inharmonic_db": -81.6,
+      "inharmonic_off_ripple_db": -86.1
+     }
+    }
+   },
+   "glide": {
+    "from_v": -30.0,
+    "to_v": -20.0,
+    "to_within_10_cents_s": 0.576
+   },
+   "held_note": {
+    "pitch_v": -25.0,
+    "hz": 426.07,
+    "cycle_cents_rms": 2.18,
+    "cycle_cents_pp": 12.11,
+    "first_vs_last_second_cents": -1.52
+   },
+   "mains_cents_per_v": 43.02,
+   "speed_x_real_time": 3.48
+  }
+ }
+}

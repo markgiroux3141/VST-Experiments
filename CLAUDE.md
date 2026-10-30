@@ -129,6 +129,13 @@ cutoff, a 12AX7 Q multiplier, a 6386 VCA, its own 6X4 / selenium supply), is the
 between them; circuitsim, `fast.run_transient(..., controls=)`, the app's `Live`; ngspice
 runs none; IRs without them unchanged), and `config/circuits/tube_voice.yaml` (a keyboard
 bus gating a diode-steered envelope into a push-pull 6386 VCA) is the `tube_voice` device.
+S4, the oscillator (2026-10-30; the user's priority: the sound's character, drift fine):
+prototypes measured by `scripts/vco_study.py` -> `reports/tube_synth/vco/`. (b), the
+reactor-tuned LC `config/circuits/vco_lc.yaml`, works: 52-1655 Hz, a 0.57 s glide (the
+ratchet), 0.56x real time at draft. (a), the diode-timed multivibrator `vco_diode.yaml`
+on the new `6AL5@1`, doesn't run cleanly yet; (c) isn't started (TUBE_SYNTH_PLAN.md, S4's
+status). Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
+for the DC operating point only; absent = unchanged IR).
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist

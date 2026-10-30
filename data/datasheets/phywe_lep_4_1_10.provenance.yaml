@@ -1,0 +1,21 @@
+device: EC92 (as a diode)
+document: "Phywe LEP 4.1.10, Characteristic curves of electron tubes (diode, triode)"
+publisher: PHYWE SYSTEME GmbH, Goettingen
+date: "undated (catalogue no. 24110)"
+local_copy: sources/phywe_lep_4_1_10.pdf
+local_copy_sha256: f5818b645ab66c9f0f47db79035291d52d427b08aa7aa843a4ecd52daac46232
+scan_source: "web: https://www.nikhef.nl/~h73/kn1c/praktikum/phywe/LEP/Experim/4_1_10.pdf"
+digitized_with: "the fitted slopes B are printed (p.3); two Fig. 5 points read by eye off the log plot"
+digitized_by: Claude Code
+digitized_on: 2026-10-30
+files:
+  published_points.yaml:
+    figure: "p.3 (printed exponents B and cathode temperatures), Fig. 5 (initial current at 130 / 140 / 150 mA heater), Fig. 4 (forward curve)"
+    entry: "EC92_initial_current"
+axis_calibration: "Fig. 5: decades 0.1 / 1 / 10 / 100 uA, -0.05 to -0.65 V"
+estimated_error: "the printed slopes as given; the read-off points ~+-20%"
+notes: >-
+  A teaching lab's measurement of one tube, not a manufacturer's figure. The slope-derived
+  temperature at the highest heater current (1390 K) is above an oxide cathode's usual
+  ~1050 K (Spangenberg); a retarding-field slope often reads hot (patchy work function,
+  series resistance), and what a circuit sees is the slope itself, so the slope is used.

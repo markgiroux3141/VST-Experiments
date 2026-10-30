@@ -1,0 +1,183 @@
+# The tube synth's S4 candidate (a) (docs/TUBE_SYNTH_PLAN.md): a triode multivibrator timed
+# by vacuum diodes in their retarding-field region, the exponential converter. A prototype,
+# measured against the other two candidates.
+#   V1A/V1B  12AX7 plate-coupled astable multivibrator (Abraham and Bloch's, 1919), its grid
+#        leaks replaced by diodes. After each flip the grid of the tube just cut off is thrown
+#        ~90 V negative through its coupling capacitor (CA / CB):
+#   DCA/DCB  6AL5 clamps catch it at the clamp rail (-1.5 V), so the flip's charge goes into
+#        that rail and not into the pitch node
+#   DXA/DXB  6AL5 timing diodes from the pitch node `vd` (each through 4.7k, so the flip's
+#        forward pulse stays off vd: ~2 mV at the crawl's uA) then lift it to about vd quickly
+#        (forward, space-charge region), and on above vd only by their initial-velocity
+#        current, I0 exp((vd - Vg) / V_T) (config/components/6al5/1.yaml: V_T 0.12 V): the
+#        grid crawls exponentially slowly to the tube's cutoff, and the tube flips. The crawl
+#        to the threshold takes ~C V_T / I0 exp(d / V_T) for a distance d from vd, so the
+#        period is exponential in vd: an octave per V_T ln 2 = 83 mV
+#   vd   the pitch node: the `pitch` control input through a divider (~0.076, ~1.1 V per
+#        octave at the input) whose foot is the offset node voff (~-0.9 V), bypassed. The
+#        crawl's constant C V_T / I0 is only ~0.4 us (I0 ~150 uA), so vd sits ~0.75-1.35 V
+#        below the threshold (~+0.35 V) for ~2.6 kHz down to ~17 Hz
+# The cathodes share a bypassed resistor, so the threshold sits a little above ground. Every
+# millivolt there is pitch (a semitone is ~7 mV): the threshold follows the cathode voltage,
+# the plate voltage through the 12AX7's mu, and the heater through the diodes' V_T (not yet
+# modelled: device builder B6). Drift is character (TUBE_SYNTH_PLAN.md decision 2).
+# The tubes' interelectrode capacitances are in their device models; the wiring's and the
+# diodes' are explicit here. Together they set the edges' speed.
+# A noiseless simulation of a symmetric multivibrator stays at its balance point (the solver's
+# implicit steps damp the sub-microsecond regeneration a real one starts from on noise), so CB
+# has a start voltage (C's v0: held for the DC operating point only) that puts V1B's grid at
+# the bottom of its crawl: the run starts mid-cycle.
+# The supply is tube_filter.yaml's (6X4 full wave, CRC; a selenium bridge for -105 / -45 V).
+# Invented circuit, not modelled hardware: round numbers, every value a design choice.
+
+title: "Tube synth VCO (a): diode-timed multivibrator"
+input: in
+cv_inputs:
+  pitch: pv
+probes: [ga, gb, out, pa, pb, k1, vd, voff, vcl, b3]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "provisional: model knowledge (the audio input is unused: the oscillator is the source)"}
+  output_volts_peak: {value: 50.0, source: "provisional: model knowledge (the plate's swing, set from a render)"}
+
+controls:
+  mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
+
+values:
+  # --- supply (tube_filter.yaml's)
+  pt_hv_half_rms_v: {value: 250.0, source: "provisional: model knowledge (design: a small power transformer's HV half, sized for ~250 V at b3)"}
+  pt_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (a ~25 W transformer's HV half with the primary referred, ~150 ohm)"}
+  pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (leakage per HV half of a small mains transformer)"}
+  pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
+  rectifier_tube: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4 full-wave rectifier; config/components/6x4/1.yaml, per section)"}
+  c_reservoir_f: {value: 20.0e-6, source: "provisional: model knowledge (reservoir and filter electrolytics, 20 uF 450 V)"}
+  r_b12_ohm: {value: 1.0e+3, source: "provisional: model knowledge (filter resistor b1 to b2)"}
+  r_b23_ohm: {value: 2.2e+3, source: "provisional: model knowledge (filter resistor b2 to b3, the small stages' decoupling)"}
+  c_decouple_f: {value: 47.0e-6, source: "provisional: model knowledge (b2 and b3 electrolytics)"}
+  r_bleeder_ohm: {value: 220.0e+3, source: "provisional: model knowledge (a bleeder across the reservoir)"}
+  bias_winding_rms_v: {value: 85.0, source: "provisional: model knowledge (design: a bias winding for ~-100 V)"}
+  bias_winding_r_ohm: {value: 200.0, source: "provisional: model knowledge (a small bias winding's resistance)"}
+  bias_rectifier: {value: SELENIUM@1, source: "provisional: model knowledge (design: a selenium bridge for the bias; config/components/selenium/1.yaml)"}
+  c_bias_arm_f: {value: 1.0e-9, source: "provisional: model knowledge (each selenium arm's capacitance; a capacitance on the rectifier nodes)"}
+  bias_arm_area: {value: 1.0, source: "numerical: the arm capacitance is given per arm (the macro's per-area form)"}
+  c_bias_winding_f: {value: 1.0e-9, source: "provisional: model knowledge (the floating bias winding's capacitance to the core: holds its common mode)"}
+  r_bias_winding_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the floating bias winding (its insulation's leakage; the pre-flight checks need one)"}
+  c_bias_f: {value: 100.0e-6, source: "provisional: model knowledge (bias filter electrolytics)"}
+  r_bias_drop_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: -100 V to the -45 V node)"}
+  r_bias_ground_ohm: {value: 8.2e+3, source: "provisional: model knowledge (design: the -45 V node to ground, with its loads)"}
+  # --- input (unused)
+  r_grid_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a load on the unused audio input)"}
+  # --- multivibrator
+  r_plate_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: 12AX7 plate loads; with the strays, edges of a few us)"}
+  r_cathode_ohm: {value: 1.5e+3, source: "provisional: model knowledge (design: the shared cathode resistor, ~3 V: the threshold a volt or so above ground)"}
+  c_cathode_f: {value: 47.0e-6, source: "provisional: model knowledge (its bypass)"}
+  c_timing_f: {value: 470.0e-12, source: "provisional: model knowledge (design: the coupling capacitors: ~5 nA at the end of the crawl at 50 Hz, ~0.5 uA at 4 kHz)"}
+  cb_start_v: {value: 290.0, source: "numerical: CB's start voltage (V1A's plate less V1B's grid): V1A's plate ~290 V puts V1B's grid at about the pitch node, the bottom of its crawl (a start state, not a part's value)"}
+  c_out_f: {value: 0.1e-6, source: "provisional: model knowledge (output coupling)"}
+  r_out_load_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the next stage's grid leak)"}
+  r_grid_leak_ohm: {value: 1.0e+10, source: "numerical: a DC path for each grid beside its diodes (the pre-flight checks need one; 10 GOhm, ~0.1 nA, below the crawl's currents)"}
+  # --- stray capacitances (the tubes' own are in their device models)
+  c_wiring_f: {value: 5.0e-12, source: "provisional: model knowledge (wiring and socket at each plate and grid)"}
+  c_diode_f: {value: 2.5e-12, source: "web: https://frank.pocnet.net/sheets/049/6/6AL5.pdf (RCA 6AL5, 1954: plate to cathode, heater and internal shield, 2.5 pF; local copy data/datasheets/sources/rca_6al5_1954.pdf)"}
+  # --- the diodes and the pitch node
+  converter_diode: {value: 6AL5@1, source: "provisional: model knowledge (design: a 6AL5 twin diode for the two timing diodes, one envelope so they share a heater; config/components/6al5/1.yaml, per section)"}
+  clamp_diode: {value: 6AL5@1, source: "provisional: model knowledge (design: a second 6AL5 for the clamps)"}
+  r_pitch_in_ohm: {value: 6.8e+3, source: "provisional: model knowledge (design: the pitch divider's top: ~0.076 of the pitch input at vd)"}
+  r_pitch_ground_ohm: {value: 560.0, source: "provisional: model knowledge (design: the pitch divider's foot to voff: vd stiff, ~520 ohm, against the timing diodes' pulses)"}
+  r_offset_drop_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: -45 V to the offset node)"}
+  r_offset_ground_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design: the offset node to ground, ~-0.9 V: vd ~1 V under the threshold at the pitch input's 0)"}
+  c_offset_f: {value: 100.0e-6, source: "provisional: model knowledge (the offset node's bypass)"}
+  c_pitch_f: {value: 1.0e-6, source: "provisional: model knowledge (design: vd's bypass, ~0.5 ms)"}
+  r_clamp_drop_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design: -45 V to the clamp rail)"}
+  r_clamp_ground_ohm: {value: 680.0, source: "provisional: model knowledge (design: the clamp rail to ground, ~-1.35 V: ~0.4 V under the pitch node's lowest, so the clamps' own initial-velocity current stays a few % of the timing diodes')"}
+  r_timing_series_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: in series with each timing diode: the flip's forward pulse limited to ~0.3 mA, ~2 mV at the crawl's 0.5 uA)"}
+  c_clamp_f: {value: 100.0e-6, source: "provisional: model knowledge (the clamp rail's bypass: it takes each flip's charge)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 120.0, source: "provisional: model knowledge (the power transformer's rated primary; its secondaries are given at it)"}
+
+devices:
+  V1A: {device: 12AX7@1}
+  V1B: {device: 12AX7@1}
+  DX: {device: converter_diode}
+  DC: {device: clamp_diode}
+  VR: {device: rectifier_tube}
+  DB: {device: bias_rectifier}
+
+sections:
+  - title: power supply
+    parts:
+      VHVA: {mains: [hv_a, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hv_b, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 270.0}
+      RPTA: {R: [hv_a, hv_ar], r: pt_r_half_ohm}
+      LPTA: {L: [hv_ar, hva], l: pt_leakage_h}
+      RPTB: {R: [hv_b, hv_br], r: pt_r_half_ohm}
+      LPTB: {L: [hv_br, hvb], l: pt_leakage_h}
+      CPTA: {C: [hva, "0"], c: pt_c_half_f}
+      CPTB: {C: [hvb, "0"], c: pt_c_half_f}
+      XVRA: {device: [hva, b1], model: VR}
+      XVRB: {device: [hvb, b1], model: VR}
+      CB1: {C: [b1, "0"], c: c_reservoir_f}
+      RBLEED: {R: [b1, "0"], r: r_bleeder_ohm}
+      RB12: {R: [b1, b2], r: r_b12_ohm}
+      CB2: {C: [b2, "0"], c: c_decouple_f}
+      RB23: {R: [b2, b3], r: r_b23_ohm}
+      CB3: {C: [b3, "0"], c: c_decouple_f}
+  - title: bias supply
+    parts:
+      VBW: {mains: [bwa, bwb], v_rms: bias_winding_rms_v, phase_deg: 90.0}
+      RBW: {R: [bwa, bwar], r: bias_winding_r_ohm}
+      CBW: {C: [bwb, "0"], c: c_bias_winding_f}
+      RBWL: {R: [bwb, "0"], r: r_bias_winding_leak_ohm}
+      GRB: {bridge: [bwar, bwb, "0", neg2], model: DB, arm_c_f_per_area: c_bias_arm_f, area: bias_arm_area}
+      CN2: {C: [neg2, "0"], c: c_bias_f}
+      RN: {R: [neg2, neg], r: r_bias_drop_ohm}
+      CN: {C: [neg, "0"], c: c_bias_f}
+      RNG: {R: [neg, "0"], r: r_bias_ground_ohm}
+      RCL1: {R: [neg, vcl], r: r_clamp_drop_ohm}
+      RCL2: {R: [vcl, "0"], r: r_clamp_ground_ohm}
+      CCL: {C: [vcl, "0"], c: c_clamp_f}
+  - title: input
+    parts:
+      RG1: {R: [in, "0"], r: r_grid_in_ohm}
+  - title: pitch
+    parts:
+      RPI: {R: [pv, vd], r: r_pitch_in_ohm}
+      RPG: {R: [vd, voff], r: r_pitch_ground_ohm}
+      ROF1: {R: [neg, voff], r: r_offset_drop_ohm}
+      ROF2: {R: [voff, "0"], r: r_offset_ground_ohm}
+      COF: {C: [voff, "0"], c: c_offset_f}
+      CPD: {C: [vd, "0"], c: c_pitch_f}
+  - title: multivibrator
+    parts:
+      XV1A: {device: [pa, ga, k1], model: V1A}
+      XV1B: {device: [pb, gb, k1], model: V1B}
+      RPA: {R: [b3, pa], r: r_plate_ohm}
+      RPB: {R: [b3, pb], r: r_plate_ohm}
+      RK: {R: [k1, "0"], r: r_cathode_ohm}
+      CK: {C: [k1, "0"], c: c_cathode_f}
+      CA: {C: [pb, ga], c: c_timing_f}
+      CB: {C: [pa, gb], c: c_timing_f, v0: cb_start_v}
+      RXA: {R: [vd, xa], r: r_timing_series_ohm}
+      RXB: {R: [vd, xb], r: r_timing_series_ohm}
+      XDXA: {device: [xa, ga], model: DX}
+      XDXB: {device: [xb, gb], model: DX}
+      XDCA: {device: [vcl, ga], model: DC}
+      XDCB: {device: [vcl, gb], model: DC}
+      RLA: {R: [ga, vd], r: r_grid_leak_ohm}
+      RLB: {R: [gb, vd], r: r_grid_leak_ohm}
+      CO: {C: [pa, out], c: c_out_f}
+      RLO: {R: [out, "0"], r: r_out_load_ohm}
+  - title: strays
+    parts:
+      CWPA: {C: [pa, "0"], c: c_wiring_f}
+      CWPB: {C: [pb, "0"], c: c_wiring_f}
+      CWGA: {C: [ga, "0"], c: c_wiring_f}
+      CWGB: {C: [gb, "0"], c: c_wiring_f}
+      CDXA: {C: [xa, ga], c: c_diode_f}
+      CDXB: {C: [xb, gb], c: c_diode_f}
+      CDCA: {C: [vcl, ga], c: c_diode_f}
+      CDCB: {C: [vcl, gb], c: c_diode_f}

@@ -286,6 +286,34 @@ def build_6x4() -> dict[str, Any]:
     }
 
 
+def build_6al5() -> dict[str, Any]:
+    """A signal diode whose retarding-field region is the tube synth's exponential converter
+    (TUBE_SYNTH_PLAN.md, S4). VacuumDiode's form is P (s softplus(V / s))^1.5: below zero
+    its tail is P s^1.5 exp(1.5 V / s), the initial-velocity law I0 exp(V / V_T) when
+    s = 1.5 V_T, so the slope is set from a measured one and the perveance from the
+    forward curve (no new form). On the Phywe EC92 the same construction predicts the
+    measured prefactor within ~10% (P ~2.6 mA/V^1.5 from its forward curve: 199 uA against
+    182 uA), with no contact-potential offset needed."""
+    pub = _published()
+    d, ec = pub["6AL5"], pub["EC92_initial_current"]
+    vt = 1.0 / ec["slope_per_v"]["heater_0_150_a"]
+    s = 1.5 * vt
+    v = np.array([p["va_v"] for p in d["plate_curve_tabulated"]])
+    i = np.array([p["ia_a"] for p in d["plate_curve_tabulated"]])
+    x = (s * np.logaddexp(0.0, v / s)) ** 1.5
+    perv = float(np.sum(i * x) / np.sum(x * x))  # least squares through the origin
+    return {
+        "name": "6AL5",
+        "kind": "vacuum_diode",
+        "perveance": perv,
+        "smooth_v": s,
+        "source": f"Child-law least-squares fit to 10 tabulated points ({d['source']}); per "
+        f"section. smooth_v = 1.5 V_T, V_T = {vt:.4f} V the retarding-field slope measured on an "
+        f"EC92 at its rated heater current ({ec['source']}): the form's tail below 0 V is "
+        "then the initial-velocity law I0 exp(V / V_T)",
+    }
+
+
 def build_si_rectifier() -> dict[str, Any]:
     return {
         "name": "SI_RECTIFIER",
@@ -616,6 +644,7 @@ BUILDERS = {
     "5651": build_5651,
     "SELENIUM": build_selenium,
     "6X4": build_6x4,
+    "6AL5": build_6al5,
     "12AY7": build_12ay7,
     "6V6GT": build_6v6gt,
     "5Y3GT": build_5y3gt,

@@ -1,0 +1,167 @@
+# The tube synth's S4 candidate (b) (docs/TUBE_SYNTH_PLAN.md): an LC oscillator tuned by
+# the saturable reactor. A prototype, measured against the other two candidates.
+#   TA/TB  S1's two-core reactor; its signal windings in series (the tank's inductance),
+#          parallel-fed so no DC flows in them (DC there would bias the two cores unequally
+#          and break the control windings' cancellation), CT across them
+#   V2   12AX7 gain stage (x ~30, inverting) off the tank, so the pair switches fully even
+#        where the tank is small: the core's own hysteresis loss (Q ~3-8 at swings near its
+#        coercivity) otherwise sets the amplitude, 0.03 V at the top of the sweep and
+#        100 V at the bottom
+#   V1A/V1B  12AU7 cathode-coupled pair, the limiter: V2's plate into V1B's grid, V1B's
+#          plate driving the tank through CD (in phase with it), a square current of the
+#          tail's size whatever the tank does. V1A's plate is the square output
+#   V4   6V6GT drawing its plate current through the control windings (anti-series, as in
+#        tube_filter.yaml): its grid is the `pitch` control input, -45 V (low) to 0 V
+#        (high); the current sets the cores' bias, the bias the tank's inductance
+# The supply is tube_filter.yaml's (6X4 full wave, CRC; a selenium bridge for -105 / -45 V),
+# so its sag and ripple reach the pitch as they will in the voice.
+# Invented circuit, not modelled hardware: round numbers, every value a design choice.
+
+title: "Tube synth VCO (b): reactor-tuned LC"
+input: in
+cv_inputs:
+  pitch: pv
+probes: [t, out, p2, p1a, p1b, k1, g4, b1, b3, ta_core, tb_core]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "provisional: model knowledge (the audio input is unused: the oscillator is the source)"}
+  output_volts_peak: {value: 20.0, source: "provisional: model knowledge (the tank's swing, set from a render)"}
+
+controls:
+  mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
+
+values:
+  # --- supply (tube_filter.yaml's)
+  pt_hv_half_rms_v: {value: 250.0, source: "provisional: model knowledge (design: a small power transformer's HV half, sized for ~250 V at b3)"}
+  pt_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (a ~25 W transformer's HV half with the primary referred, ~150 ohm)"}
+  pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (leakage per HV half of a small mains transformer)"}
+  pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
+  rectifier_tube: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4 full-wave rectifier; config/components/6x4/1.yaml, per section)"}
+  c_reservoir_f: {value: 20.0e-6, source: "provisional: model knowledge (reservoir and filter electrolytics, 20 uF 450 V)"}
+  r_b12_ohm: {value: 1.0e+3, source: "provisional: model knowledge (filter resistor b1 to b2)"}
+  r_b23_ohm: {value: 2.2e+3, source: "provisional: model knowledge (filter resistor b2 to b3, the small stages' decoupling)"}
+  c_decouple_f: {value: 47.0e-6, source: "provisional: model knowledge (b2 and b3 electrolytics)"}
+  r_bleeder_ohm: {value: 220.0e+3, source: "provisional: model knowledge (a bleeder across the reservoir)"}
+  bias_winding_rms_v: {value: 85.0, source: "provisional: model knowledge (design: a bias winding for ~-100 V)"}
+  bias_winding_r_ohm: {value: 200.0, source: "provisional: model knowledge (a small bias winding's resistance)"}
+  bias_rectifier: {value: SELENIUM@1, source: "provisional: model knowledge (design: a selenium bridge for the bias; config/components/selenium/1.yaml)"}
+  c_bias_arm_f: {value: 1.0e-9, source: "provisional: model knowledge (each selenium arm's capacitance; a capacitance on the rectifier nodes)"}
+  bias_arm_area: {value: 1.0, source: "numerical: the arm capacitance is given per arm (the macro's per-area form)"}
+  c_bias_winding_f: {value: 1.0e-9, source: "provisional: model knowledge (the floating bias winding's capacitance to the core: holds its common mode)"}
+  r_bias_winding_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the floating bias winding (its insulation's leakage; the pre-flight checks need one)"}
+  c_bias_f: {value: 100.0e-6, source: "provisional: model knowledge (bias filter electrolytics)"}
+  r_bias_drop_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: -100 V to the -45 V node)"}
+  r_bias_ground_ohm: {value: 8.2e+3, source: "provisional: model knowledge (design: the -45 V node to ground, with its loads)"}
+  # --- input (unused)
+  r_grid_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a load on the unused audio input)"}
+  # --- oscillator
+  c_tank_f: {value: 56.0e-9, source: "provisional: model knowledge (design: ~58 Hz at the bottom of the sweep, ~1.8 kHz at the top)"}
+  r_tail_ohm: {value: 33.0e+3, source: "provisional: model knowledge (design: the pair's tail to the -45 V rail, ~1.5 mA: the square current into the tank)"}
+  r_plate_a_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1A's plate load, the square output)"}
+  r_plate_b_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1B's plate load, parallel feed to the tank)"}
+  c_drive_f: {value: 0.47e-6, source: "provisional: model knowledge (design: V1B's plate into the tank, below the sweep's bottom)"}
+  r_grid_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: V2's grid stopper off the tank)"}
+  r_plate2_ohm: {value: 100.0e+3, source: "provisional: model knowledge (12AX7 plate load)"}
+  r_cathode2_ohm: {value: 1.5e+3, source: "provisional: model knowledge (12AX7 self bias, unbypassed: gain ~30)"}
+  c_couple2_f: {value: 0.1e-6, source: "provisional: model knowledge (V2's plate into V1B's grid: 1.6 Hz with its leak)"}
+  r_grid1b_ohm: {value: 1.0e+6, source: "provisional: model knowledge (V1B's grid leak)"}
+  c_out_f: {value: 0.1e-6, source: "provisional: model knowledge (output coupling)"}
+  r_out_load_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the next stage's grid leak)"}
+  # --- pitch
+  r_pitch_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (V4's grid stopper from the pitch input)"}
+  r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design: 6V6GT screen feed from the decoupled b3: off the reservoir b1 its ripple frequency-modulated the pitch +-20 cents at 120 Hz)"}
+  r_cathode4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT cathode: current feedback, ~0-20 mA over the pitch input's range)"}
+  # --- the reactor (saturable_reactor.yaml's cores, twice the signal turns)
+  signal_turns: {value: 2000.0, source: "provisional: model knowledge (design: 2000 turns per core on a 1 cm^2, 10 cm mumetall toroid: at 1000 the tank's impedance at strong bias fell under the tubes' loading and the oscillation stopped above ~100 Hz)"}
+  control_ratio: {value: 1.0, source: "provisional: model knowledge (design: 1000 control turns per core, as tube_filter.yaml's)"}
+  r_signal_winding_ohm: {value: 160.0, source: "provisional: model knowledge (2000 turns of ~0.1 mm copper on a small toroid, ~160 Ohm)"}
+  r_control_winding_ohm: {value: 30.0, source: "provisional: model knowledge (1000 turns of ~0.15 mm copper)"}
+  leakage_h: {value: 0.0, source: "provisional: model knowledge (windings on a toroid couple closely; leakage neglected)"}
+  core_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (a small tape-wound toroid, 1 cm^2)"}
+  core_path_m: {value: 0.1, source: "provisional: model knowledge (10 cm mean path)"}
+  core_gap_m: {value: 0.0, source: "provisional: model knowledge (a tape-wound toroid has no joint gap)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 120.0, source: "provisional: model knowledge (the power transformer's rated primary; its secondaries are given at it)"}
+
+devices:
+  V1A: {device: 12AU7@1}
+  V1B: {device: 12AU7@1}
+  V2: {device: 12AX7@1}
+  V4: {device: 6V6GT@1}
+  VR: {device: rectifier_tube}
+  DB: {device: bias_rectifier}
+
+sections:
+  - title: power supply
+    parts:
+      VHVA: {mains: [hv_a, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hv_b, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 270.0}
+      RPTA: {R: [hv_a, hv_ar], r: pt_r_half_ohm}
+      LPTA: {L: [hv_ar, hva], l: pt_leakage_h}
+      RPTB: {R: [hv_b, hv_br], r: pt_r_half_ohm}
+      LPTB: {L: [hv_br, hvb], l: pt_leakage_h}
+      CPTA: {C: [hva, "0"], c: pt_c_half_f}
+      CPTB: {C: [hvb, "0"], c: pt_c_half_f}
+      XVRA: {device: [hva, b1], model: VR}
+      XVRB: {device: [hvb, b1], model: VR}
+      CB1: {C: [b1, "0"], c: c_reservoir_f}
+      RBLEED: {R: [b1, "0"], r: r_bleeder_ohm}
+      RB12: {R: [b1, b2], r: r_b12_ohm}
+      CB2: {C: [b2, "0"], c: c_decouple_f}
+      RB23: {R: [b2, b3], r: r_b23_ohm}
+      CB3: {C: [b3, "0"], c: c_decouple_f}
+  - title: bias supply
+    parts:
+      VBW: {mains: [bwa, bwb], v_rms: bias_winding_rms_v, phase_deg: 90.0}
+      RBW: {R: [bwa, bwar], r: bias_winding_r_ohm}
+      CBW: {C: [bwb, "0"], c: c_bias_winding_f}
+      RBWL: {R: [bwb, "0"], r: r_bias_winding_leak_ohm}
+      GRB: {bridge: [bwar, bwb, "0", neg2], model: DB, arm_c_f_per_area: c_bias_arm_f, area: bias_arm_area}
+      CN2: {C: [neg2, "0"], c: c_bias_f}
+      RN: {R: [neg2, neg], r: r_bias_drop_ohm}
+      CN: {C: [neg, "0"], c: c_bias_f}
+      RNG: {R: [neg, "0"], r: r_bias_ground_ohm}
+  - title: input
+    parts:
+      RG1: {R: [in, "0"], r: r_grid_in_ohm}
+  - title: oscillator
+    parts:
+      TA:
+        transformer:
+          sig: {nodes: [t, m], r: r_signal_winding_ohm}
+          ctl: {nodes: [b1, c2], ratio: control_ratio, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      TB:
+        transformer:
+          sig: {nodes: [m, "0"], r: r_signal_winding_ohm}
+          ctl: {nodes: [p4, c2], ratio: control_ratio, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      CT: {C: [t, "0"], c: c_tank_f}
+      RGS: {R: [t, g2], r: r_grid_stop_ohm}
+      XV2: {device: [p2, g2, k2], model: V2}
+      RP2: {R: [b3, p2], r: r_plate2_ohm}
+      RK2: {R: [k2, "0"], r: r_cathode2_ohm}
+      CC2: {C: [p2, g1b], c: c_couple2_f}
+      RG1B: {R: [g1b, "0"], r: r_grid1b_ohm}
+      XV1B: {device: [p1b, g1b, k1], model: V1B}
+      XV1A: {device: [p1a, "0", k1], model: V1A}
+      RT: {R: [k1, neg], r: r_tail_ohm}
+      RPA: {R: [b3, p1a], r: r_plate_a_ohm}
+      RPB: {R: [b3, p1b], r: r_plate_b_ohm}
+      CD: {C: [p1b, t], c: c_drive_f}
+      CO: {C: [p1a, out], c: c_out_f}
+      RLO: {R: [out, "0"], r: r_out_load_ohm}
+  - title: pitch
+    parts:
+      RPS: {R: [pv, g4], r: r_pitch_stop_ohm}
+      XV4: {device: [p4, s4, g4, k4], model: V4}
+      RS4: {R: [b3, s4], r: r_screen4_ohm}
+      RK4: {R: [k4, "0"], r: r_cathode4_ohm}

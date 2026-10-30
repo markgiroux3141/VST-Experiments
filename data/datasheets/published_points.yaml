@@ -227,3 +227,29 @@
   voice_coil_diameter_m: 25.0e-3
   flux_density_t: 0.96
   cone: "paper; integrated paper surround; solid paper dust dome; alnico magnet, 200 g"
+
+# --- Tube synth S4 (the oscillator's exponential converter, transcribed 2026-10-30) ---
+
+"6AL5":
+  source: "GE 6AL5 (1954) plate characteristic as tabulated by kurvmatch (web: http://ludd.ltu.se/~ragge/kurvmatch/tubedir/6AL5/); cross-checked by eye on RCA 6AL5 (May 3, 1954) p.2 'Average plate characteristic' (~8 mA at 2 V, ~47 mA at 8 V), local copy sources/rca_6al5_1954.pdf (web: https://frank.pocnet.net/sheets/049/6/6AL5.pdf)"
+  plate_curve_tabulated:   # one section, heater 6.3 V; see rca_6al5.provenance.yaml
+    - {va_v: 1.0, ia_a: 0.0023}
+    - {va_v: 2.0, ia_a: 0.0065}
+    - {va_v: 3.0, ia_a: 0.0116}
+    - {va_v: 4.0, ia_a: 0.0175}
+    - {va_v: 5.0, ia_a: 0.0236}
+    - {va_v: 6.0, ia_a: 0.0300}
+    - {va_v: 7.0, ia_a: 0.0370}
+    - {va_v: 8.0, ia_a: 0.0450}
+    - {va_v: 9.0, ia_a: 0.0525}
+    - {va_v: 10.0, ia_a: 0.0610}
+  max_ratings: {vinv_v: 330, iap_a: 0.054, io_a: 0.009, vhk_v: 330}   # RCA p.1, per plate
+  heater: {v: 6.3, a: 0.3}
+  capacitances_f: {plate_cathode: 2.5e-12, cathode_plate: 3.4e-12, plate1_plate2_max: 0.068e-12}   # RCA p.1
+  pins: "1 cathode 1, 2 plate 2, 3-4 heater, 5 cathode 2, 6 internal shield, 7 plate 1 (6BT)"
+
+"EC92_initial_current":
+  source: "Phywe LEP 4.1.10, 'Characteristic curves of electron tubes (diode, triode)', p.2-3 and Fig. 5: an EC92 (grid and anode joined) measured in its initial-current (retarding-field) region, I = A exp(B U) fitted per heater current; local copy sources/phywe_lep_4_1_10.pdf (web: https://www.nikhef.nl/~h73/kn1c/praktikum/phywe/LEP/Experim/4_1_10.pdf)"
+  slope_per_v: {heater_0_150_a: 8.36, heater_0_140_a: 9.84, heater_0_130_a: 11.24}   # B; the sheet's cathode temperatures e / (k B): 1390 / 1180 / 1030 K
+  fig5_points_heater_0_150_a: [{u_v: -0.10, ia_a: 80.0e-6}, {u_v: -0.65, ia_a: 0.8e-6}]   # read by eye off the log plot
+  fig4_forward_heater_0_150_a: {u_v: 4.0, ia_a: 0.021}   # read by eye: ~21 mA at 4 V

@@ -351,6 +351,68 @@ production render's oversampling set so aliases stay below a threshold the user 
 to; drift is measured over a held note and over a warm-up; **the user has heard it and
 decides whether drift stays as character** (decision 2's checkpoint).
 
+*Status 2026-10-30: prototypes (b) and (a) built; (b) measured, (a) not yet oscillating
+cleanly, (c) not started.* The user deferred S4's design calls and set the priority: **the
+sound's analog character first; drift, even very noticeable, is fine** (fixes later). Each
+candidate is its own circuit file with a `pitch` control input and tube_filter.yaml's
+supply. `scripts/vco_study.py` measures them (pitch against the control, glide, held-note
+FM, mains sensitivity, waveforms and harmonics, inharmonic power with the ripple's FM
+sidebands masked, speed) at production, draft and draft-1x -> `reports/tube_synth/vco/`;
+the readings are `varimu/synth/vco.py`.
+
+**(b) `config/circuits/vco_lc.yaml`, the reactor-tuned LC oscillator: works.**
+- The reactor's signal windings (2000 turns per core) are the tank's L, parallel-fed (DC in
+  them would bias the cores unequally). A 12AX7 stage (x30) off the tank drives a 12AU7
+  cathode-coupled pair, which drives the tank with a square current of the tail's size.
+  Without the gain stage, the core's own hysteresis loss set the amplitude: JA mumetall's
+  Q is 60+ at tiny swings but 3-8 at swings near its coercivity (1-5 A/m pp), so the tank
+  ran 0.03 V at the top and 100 V at the bottom. At 1000 turns, the oscillation stopped
+  above ~100 Hz. A 6V6GT sets the bias through the control windings; its grid is `pitch`.
+- **Range 52-1655 Hz (5.0 octaves)** over -42..0 V, the same to the hertz at every
+  quality. The law is an S, not exponential (+-800 cents from the best fit): a keyboard
+  needs the reactor's curve in its resistor string. At the bottom the tank's swing
+  saturates the cores every half cycle (flat tops, fast flips: a saturating-core
+  oscillator, and the pitch bunches at ~52 Hz).
+- Outputs: the tank (near sine from ~400 Hz up: 2nd / 3rd harmonics -20 to -33 dB), and
+  V1A's plate, a square (3rd -9.5 dB, 5th -14 dB).
+- **Glide 0.57 s** to within 10 cents after a -30 -> -20 V step: S1's ratcheting minor
+  loops, now as pitch. Production still drifts ~4 cents in the second after the settling.
+- Held note: 2.0 cents rms cycle to cycle (120 Hz ripple). With the 6V6GT's screen on the
+  reservoir b1 it was +-20 cents: the screen moved to b3. **Mains: 43 cents per volt.**
+- Aliasing (the square's inharmonic power off the ripple sidebands, 426 Hz): production
+  -67 dB, draft -49, draft-1x -38. At the top note the reading isn't clean yet (production
+  still glides there; draft-1x reads -86 dB on a differently shaped wave).
+- Speed: draft (96 kHz internal, the app's draft-2x) **0.56x real time**; production 3.4x;
+  draft-1x 3.5x (slower than draft on this circuit: its larger step fights the edges).
+
+**(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
+- The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
+  code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity
+  law I0 exp(V / V_T) when s = 1.5 V_T. V_T = 0.1196 V is the retarding-field slope
+  Phywe measured on an EC92 at its rated heater (LEP 4.1.10: 8.36 / 9.84 / 11.24 per V at
+  150 / 140 / 130 mA, data/datasheets/published_points.yaml `EC92_initial_current`). The
+  perveance (1.98 mA/V^1.5) is fitted to GE's 1954 curve as kurvmatch tabulates it,
+  checked against RCA's 1954 sheet. On the EC92 the construction predicts the measured
+  prefactor within ~10% with no contact-potential offset. The 6AL5's tail is ~150 uA
+  exp(V / 0.12 V): an octave per 83 mV.
+- A noiseless simulation of a symmetric multivibrator sits at its balance point: the
+  regeneration grows on a sub-microsecond scale, and the implicit methods' steps damp it
+  (h lambda ~100). So **capacitors can now have a start voltage**: a C part's optional
+  `v0`, the IR's `Capacitor.v0_v`, held for the DC operating point only, by a Norton
+  source in that solve (SPICE's IC=). Absent from the JSON when unset, so every existing
+  IR and fixture is unchanged. Both builders take it, and circuitsim's DC solve holds it;
+  ngspice ignores it. The first step takes the start's derivative as zero, about half a
+  step late (`tests/linear.rs`).
+- With CB's start voltage it runs, but not as designed. I0 is large (C V_T / I0 is ~0.4
+  us), so the pitch node has to sit 0.75-1.35 V under the threshold, and each flip
+  throws a grid ~100 V against diodes that conduct forward. The current design oscillates
+  at ~23 kHz (the plates' RC), drives the grids to +15..25 V and the shared cathode to
+  13 V, and Newton fails at the clamps at some pitches. Production runs ~80x real time on
+  it: the flips are microsecond events. Next, if pursued: grid stoppers and a design
+  whose flip doesn't drive the timing node, and edges slow enough for the draft's step.
+  **Relaxation oscillators with fast edges are expensive here:** the draft can't resolve
+  their flips and production subdivides heavily. (c), the thyratron, would share this.
+
 **S5. A voice.** One monophonic voice: two oscillators, a mixer with noise, the
 reactor filter, the VCA, envelopes, an LFO, the ring modulator if wanted, all on one
 supply. Drawn, played live, takes re-rendered at production. The user's Odyssey 2800
