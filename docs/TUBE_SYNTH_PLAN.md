@@ -511,7 +511,13 @@ the circuit's noise alone / the mains wander alone, at 475 Hz and 1.3 kHz):
   switch.** The Play view's "Noise" checkbox (devices whose file has a `noise` block):
   off builds without the noise sources (`live::Circuit::with_noise`, `Noise::Off`) and
   saves their CPU; a change restarts the stream with a crossfade; renders follow it.
-  `examples/play.rs --no-noise`.
+  **Off by default** (the user's call, 2026-10-30); `examples/play.rs --noise` turns it on.
+  *Fixed after the user played it ("a low warble the same for every note" after the switch
+  or Power on):* both rebuilt the circuit with the app's default settings instead of the
+  device's, so the tube synth got linear cores (its reactor a fixed inductor: the
+  oscillator stopped tuning), and Power on's follow-up replaced the cold start with that
+  restart (no warm-up heard). They use the device's play settings now
+  (`tests/live.rs`: the keys after a restart, a power-on from cold).
 
 **Heated cathodes (device builder B6, 2026-10-30).** `tube_synth.yaml` has `heaters: {}`:
 its 18 tube instances follow one cathode temperature (DEVICE_BUILDER_PLAN.md B6 has the

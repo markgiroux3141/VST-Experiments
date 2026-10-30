@@ -160,10 +160,14 @@ pub struct PlayView {
     /// The device bypassed (its input played), and gain compensation on (monitoring).
     bypass: bool,
     /// The device's noise sources on (device builder B5; only devices whose file has
-    /// them): off saves their CPU. Renders follow it.
+    /// them): off by default (the user's call), which saves their CPU. Renders follow it.
     noise: bool,
     /// The next start is a power-on (heated cathodes cold), then back to warm (B6).
     power_on: bool,
+    /// Whether the chosen device's file has noise sources / heated cathodes (read with its
+    /// knobs: the switches show only then).
+    has_noise: bool,
+    has_heaters: bool,
     compensate: bool,
     /// A manual gain on the device's output (dB, monitoring only).
     output_db: f64,
@@ -257,8 +261,10 @@ impl PlayView {
             take_saved: None,
             trim_db: 0.0,
             bypass: false,
-            noise: true,
+            noise: false,
             power_on: false,
+            has_noise: false,
+            has_heaters: false,
             compensate: true,
             output_db: 0.0,
             error: None,
@@ -392,14 +398,20 @@ impl PlayView {
 
     fn load_knobs(&mut self) {
         if let Some(d) = self.drawing_device() {
-            self.knobs = panel::knobs(&DRAWING, &d.spec);
+            let k = panel::knobs(&DRAWING, &d.spec);
+            let flags = (d.spec.noise.is_some(), d.spec.heaters.is_some());
+            self.knobs = k;
+            (self.has_noise, self.has_heaters) = flags;
             return;
         }
         let dev = &DEVICES[self.device];
         match varimu_circuit::spec::circuit_path(&self.config_dir, dev.circuit)
             .and_then(|p| varimu_circuit::spec::load_circuit(&p))
         {
-            Ok(spec) => self.knobs = panel::knobs(dev, &spec),
+            Ok(spec) => {
+                self.knobs = panel::knobs(dev, &spec);
+                (self.has_noise, self.has_heaters) = (spec.noise.is_some(), spec.heaters.is_some());
+            }
             Err(e) => self.error = Some(e.to_string()),
         }
     }
@@ -885,13 +897,13 @@ impl PlayView {
     /// The noise switch, for a device whose file has noise sources: a change restarts
     /// the stream (other elements) with a crossfade.
     fn noise_ui(&mut self, ui: &mut egui::Ui) {
-        let Some(cores) = self.settings.as_ref().ok().and_then(|s| s.cores().ok()) else {
+        // The device's own settings (its quality, and its cores: the tube synth plays on
+        // Jiles-Atherton cores whatever its quality's are; with the app's default settings
+        // the replacement circuit had linear cores, and its reactor stopped tuning).
+        let Some(cores) = self.play_settings().ok().and_then(|s| s.cores().ok()) else {
             return;
         };
-        let Ok(c) = self.circuit(cores) else {
-            return;
-        };
-        if c.has_heaters()
+        if self.has_heaters
             && self.player.is_some()
             && ui
                 .button("Power on (cold)")
@@ -910,7 +922,7 @@ impl PlayView {
                 p.set_circuit(c, panel::values(&self.knobs));
             }
         }
-        if !c.has_noise() {
+        if !self.has_noise {
             return;
         }
         let r = ui.checkbox(&mut self.noise, "Noise").on_hover_text(

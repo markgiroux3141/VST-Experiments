@@ -272,3 +272,132 @@ fn the_noise_switch_drops_the_noise_sources() {
     let other = Circuit::load(&config(), "fairchild_670", s.cores().unwrap()).unwrap();
     assert!(!other.has_noise());
 }
+
+/// The tube synth played from keys (its own oscillator: gate and pitch control inputs):
+/// the oscillator follows the key, and still does after a restart (a structure change:
+/// the noise switched off). Regression: after a restart every key sounded the same low
+/// warble until the stream was started afresh.
+#[test]
+fn the_synth_follows_its_keys_after_a_restart() {
+    use varimu_app::panel::{Feed, key_feeds};
+    let dev = DEVICES.iter().find(|d| d.id == "tube_synth").unwrap();
+    let s = dev.play_settings(&Settings::load(&config(), dev.quality).unwrap());
+    let load = || Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let c = load();
+    let v = values(&knobs(dev, c.spec()));
+    let feeds = key_feeds(dev, c.spec()).unwrap();
+    let volts = |note: Option<u8>, last: u8| -> Vec<f64> {
+        feeds
+            .iter()
+            .map(|f| match f {
+                Feed::Gate(up, down) => {
+                    if note.is_some() {
+                        *down
+                    } else {
+                        *up
+                    }
+                }
+                Feed::Pitch(p) => p.volts(440.0 * 2f64.powf((last as f64 - 69.0) / 12.0)),
+            })
+            .collect()
+    };
+    let mut live =
+        Live::with_controls(&[], v.clone(), c, s.clone(), 1.0, &volts(None, 57)).unwrap();
+    let rate = live.rate as f64;
+    let block = 480;
+    let play = |live: &mut Live, note: Option<u8>, last: u8, secs: f64| -> Vec<f32> {
+        let ctl = volts(note, last);
+        let lanes: Vec<Vec<f64>> = ctl.iter().map(|&x| vec![x; block]).collect();
+        let refs: Vec<&[f64]> = lanes.iter().map(Vec::as_slice).collect();
+        let mut y = Vec::new();
+        for _ in 0..(secs * rate / block as f64) as usize {
+            assert_eq!(live.error(), None);
+            y.extend(live.process_with(&vec![0.0; block], &refs).unwrap().0);
+        }
+        y
+    };
+    // The frequency of the last second (mean-removed upward zero crossings).
+    let freq = |y: &[f32]| -> f64 {
+        let y = &y[y.len() - rate as usize..];
+        let m = y.iter().map(|&x| x as f64).sum::<f64>() / y.len() as f64;
+        let ups = y
+            .windows(2)
+            .filter(|w| (w[0] as f64) < m && (w[1] as f64) >= m)
+            .count();
+        ups as f64
+    };
+    play(&mut live, None, 57, 0.5);
+    let a = freq(&play(&mut live, Some(57), 57, 2.0));
+    let b = freq(&play(&mut live, Some(69), 69, 2.0));
+    println!("before: A3 {a} Hz, A4 {b} Hz");
+    live.set_circuit(load().with_noise(false), v.clone());
+    let mut waited = 0.0;
+    while live.restarts == 0 {
+        play(&mut live, None, 69, 0.1);
+        waited += 0.1;
+        assert!(waited < 60.0, "never restarted");
+    }
+    play(&mut live, None, 69, 0.5);
+    let a2 = freq(&play(&mut live, Some(57), 57, 2.0));
+    let b2 = freq(&play(&mut live, Some(69), 69, 2.0));
+    println!("after the restart: A3 {a2} Hz, A4 {b2} Hz");
+    assert!((b / a - 2.0).abs() < 0.2, "before: {a} / {b}");
+    assert!((b2 / a2 - 2.0).abs() < 0.2, "after: {a2} / {b2}");
+}
+
+/// A power-on (device builder B6): the tube synth started with its cathodes cold, the warm
+/// circuit handed over at once (as the app does: an in-place update, the temperature
+/// carried), keys held: silent for its first seconds, then sounding and following the keys.
+#[test]
+fn the_synth_powers_on_from_cold() {
+    use varimu_app::panel::{Feed, key_feeds};
+    let dev = DEVICES.iter().find(|d| d.id == "tube_synth").unwrap();
+    let s = dev.play_settings(&Settings::load(&config(), dev.quality).unwrap());
+    let load = || Circuit::load(&config(), dev.circuit, s.cores().unwrap()).unwrap();
+    let c = load().with_heaters(varimu_circuit::Heaters::Cold);
+    let v = values(&knobs(dev, c.spec()));
+    let feeds = key_feeds(dev, c.spec()).unwrap();
+    let volts = |note: u8| -> Vec<f64> {
+        feeds
+            .iter()
+            .map(|f| match f {
+                Feed::Gate(_, down) => *down,
+                Feed::Pitch(p) => p.volts(440.0 * 2f64.powf((note as f64 - 69.0) / 12.0)),
+            })
+            .collect()
+    };
+    let mut live = Live::with_controls(&[], v.clone(), c, s.clone(), 1.0, &volts(57)).unwrap();
+    live.set_circuit(load(), v);
+    let (rate, block) = (live.rate as f64, 480);
+    let second = |live: &mut Live, note: u8| -> (f64, f64) {
+        let lanes: Vec<Vec<f64>> = volts(note).iter().map(|&x| vec![x; block]).collect();
+        let refs: Vec<&[f64]> = lanes.iter().map(Vec::as_slice).collect();
+        let mut y: Vec<f64> = Vec::new();
+        for _ in 0..(rate / block as f64) as usize {
+            y.extend(
+                live.process_with(&vec![0.0; block], &refs)
+                    .unwrap()
+                    .0
+                    .iter()
+                    .map(|&x| x as f64),
+            );
+        }
+        let tail = &y[y.len() / 2..];
+        let m = tail.iter().sum::<f64>() / tail.len() as f64;
+        let ups = tail.windows(2).filter(|w| w[0] < m && w[1] >= m).count();
+        let rms = (tail.iter().map(|x| (x - m).powi(2)).sum::<f64>() / tail.len() as f64).sqrt();
+        (2.0 * ups as f64, rms)
+    };
+    let mut seen = Vec::new();
+    for t in 0..14 {
+        let note = if t % 2 == 0 { 57 } else { 69 };
+        seen.push(second(&mut live, note));
+    }
+    println!("{seen:?}");
+    assert!(seen[2].1 < 1e-3, "sounding at 3 s already: {:?}", seen[2]);
+    let (a, b) = (seen[12].0, seen[13].0);
+    assert!(
+        seen[13].1 > 0.05 && (b / a - 2.0).abs() < 0.2,
+        "at 13-14 s: {a} / {b}"
+    );
+}
