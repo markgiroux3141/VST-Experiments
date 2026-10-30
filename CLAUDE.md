@@ -186,6 +186,14 @@ ports are drafted in [docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; mil
 E1-E7, the Fender 6G15 as the first device). **Parked: nothing in it starts until the user
 asks for it.**
 
+Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
+layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)
+(2026-10-30; milestones T1-T6; nothing built, its place in the order the user's call). A take
+is stored as its events (keys, knob changes at the sample they landed, from a defined start)
+plus the draft audio heard. Tracks play that audio back while the user iterates, so they cost
+almost no CPU. Production is a final render from the events, on demand (the user's call). T2
+closes S3's open done-when.
+
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
 (`config/circuits/fairchild_670.yaml` -> `varimu/circuit/builder.py`; see

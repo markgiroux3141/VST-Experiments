@@ -18,6 +18,9 @@ Python and no browser at runtime.
    draft-1x quality, as `/play` does. A Render action renders the same audio at
    production settings, offline with progress, and saves a WAV.
 
+Recording (a click, takes, layered tracks) is its own plan,
+[RECORDING_PLAN.md](RECORDING_PLAN.md) (2026-10-30, not started).
+
 Out of scope: the research tools (blind A/B, ABX, reports, studies). They stay in the
 Python / web lab. The web app keeps working.
 **Update 2026-10-29 (the user's):** the user intends to retire the web app. Nothing new
