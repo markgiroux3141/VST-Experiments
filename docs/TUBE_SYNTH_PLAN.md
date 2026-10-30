@@ -460,6 +460,16 @@ worst block ~99%**, no dropouts in 10 s at a 50 ms buffer (was ~96% / ~150%). A 
 side. The mixer node got a 100 pF stray (wiring and grid), as the one soft node a
 partition couples across. `tests/partition.rs`: the 670 in three parts.
 
+*Knobs on other threads (2026-10-30, the user: "cutoff and wave don't do anything").* A
+partition past the first read its queued commands (a knob's update) before waiting for
+the sample that carries them; running ahead, it missed them for good. The two-way split had
+the same order, unnoticed with only the supplies (no knobs) on the second thread. Now it
+waits first (`tests/stream.rs`: a change in the 670's power supply moves the control
+voltage 0.3970 V partitioned, 0.3969 V in one solve; 0 V before the fix). Seen while at
+it: a pot reaching an end stop (0 or 1) in a running stream spikes for a moment (its end
+segment is MIN_R_OHM, 1 mOhm, a 1e8 jump from the step before); moving within the range
+is smooth. A pot's end resistance would be a model change (every circuit): not done.
+
 **The A/B (2026-10-30): the tube oscillator is audible.** `scripts/osc_ab.py` renders one
 phrase through tube_synth.yaml twice at production, loudness-matched: A, the app's test
 square into the external input (the tube oscillator muted at the mixer, still running, so

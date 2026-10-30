@@ -153,12 +153,19 @@ fn run_part(
     let mut out = vec![0.0; tr.mna().outputs.len()];
     let mut n = 0usize;
     loop {
-        // Commands for this sample: queued before the first partition publishes it.
+        // Every partition's sample n first: the first partition queues the commands
+        // for sample n before it publishes it, so they are all here after this (read
+        // before the wait, a partition running ahead missed them and never applied a
+        // knob turned on its sections).
+        if !shared.feeds(coupling, &feeds, n, &mut e0, &mut e1) {
+            return;
+        }
+        // Commands for this sample.
         loop {
             let cmd = {
                 let mut q = shared.commands[p].lock().expect("commands");
                 match q.front() {
-                    Some((at, _)) if *at == n => q.pop_front().map(|c| c.1),
+                    Some((at, _)) if *at <= n => q.pop_front().map(|c| c.1),
                     _ => None,
                 }
             };
@@ -174,9 +181,6 @@ fn run_part(
                 shared.fail(Error::new(format!("partition {titles:?}: {e}")));
                 return;
             }
-        }
-        if !shared.feeds(coupling, &feeds, n, &mut e0, &mut e1) {
-            return;
         }
         tr.set_externals(&e0, &e1);
         if let Err(e) = tr.step_input(&StepInput::linear(0.0, 0.0)) {

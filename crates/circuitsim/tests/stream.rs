@@ -169,6 +169,55 @@ fn a_stream_takes_parameter_changes() {
     }
 }
 
+/// A change in another partition's sections (the 670's power supply resistors,
+/// x1.5) reaches it: the control voltage moves as in the one solve. (The other
+/// partitions once read their commands before waiting for the sample that
+/// carries them; one running ahead missed them, and a knob on its sections did
+/// nothing.)
+#[test]
+fn a_partitioned_stream_takes_changes_in_its_other_partitions() {
+    let ir = fixture("default.json");
+    let mut v: serde_json::Value = serde_json::to_value(&ir).unwrap();
+    for sec in v["sections"].as_array_mut().unwrap() {
+        if sec["title"] != "power supply" {
+            continue;
+        }
+        for e in sec["elements"].as_array_mut().unwrap() {
+            if e["kind"] == "resistor" {
+                e["r_ohm"] = (e["r_ohm"].as_f64().unwrap() * 1.5).into();
+            }
+        }
+    }
+    let changed: CircuitIr = serde_json::from_value(v).unwrap();
+    let x = tone(4800);
+    let opts = draft(5);
+    let mut moved = Vec::new();
+    for second in [Vec::new(), supplies()] {
+        let cv = |s: &Stream| s.names().iter().position(|n| n == "v(cv)").unwrap();
+        let mut plain = Stream::new(&ir, &second, Coupling::Extrapolate, H, &opts, x[0]).unwrap();
+        let mut switched =
+            Stream::new(&ir, &second, Coupling::Extrapolate, H, &opts, x[0]).unwrap();
+        let j = cv(&plain);
+        plain.process(&x[1..2400]).unwrap();
+        switched.process(&x[1..2400]).unwrap();
+        switched.update(&changed).unwrap();
+        let a = switched.process(&x[2400..]).unwrap();
+        let p = plain.process(&x[2400..]).unwrap();
+        moved.push(a[j].last().unwrap() - p[j].last().unwrap());
+    }
+    println!(
+        "CV moved by the change: one solve {:.4} V, partitioned {:.4} V",
+        moved[0], moved[1]
+    );
+    assert!(moved[0].abs() > 1e-3, "the change did nothing in one solve");
+    assert!(
+        (moved[1] - moved[0]).abs() < 0.1 * moved[0].abs(),
+        "partitioned {} V against one solve {} V",
+        moved[1],
+        moved[0]
+    );
+}
+
 /// The AC threshold's tapped pot (R115A/B: 100k, tap at half) turned from 0.709
 /// to 0.3, past its tap: its three segments rewire among the same nodes, so MNA
 /// numbers them in another order. The update carries the state over by name,
