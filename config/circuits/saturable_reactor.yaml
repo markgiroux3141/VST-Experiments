@@ -1,0 +1,49 @@
+# A two-core saturable reactor: the tube synth's S1 test circuit (docs/TUBE_SYNTH_PLAN.md).
+# Two toroids, each with a signal winding and a control winding: the signal windings in
+# series aiding, the control windings in anti-series, so the signal's fundamental (and every
+# odd harmonic) cancels in the control circuit and the cores sit at opposite DC bias (the
+# magnetic-amplifier arrangement; Storm, Magnetic Amplifiers, 1955). The control current
+# sets the incremental inductance the signal sees. tests/test_reactor.py checks circuitsim
+# against an exact solution of this circuit and the inductance against
+# varimu.synth.reactor's core-alone measurement.
+# Test circuit, not modelled hardware: round numbers. Control: 0-100 V through 10 kOhm is
+# 0-10 mA in 1000 turns on a 0.1 m path, 0-100 A/m of bias.
+
+title: "Two-core saturable reactor"
+input: in
+probes: [s, m, c1, c2, ta_core, tb_core]
+
+controls:
+  control_v: {value: 0.0, min: 0.0, max: 150.0, unit: V, source: "provisional: model knowledge (test circuit: the control supply, ~1 V per A/m of bias through 10 kOhm and the windings)"}
+
+values:
+  r_signal_ohm: {value: 10.0e+3, source: "provisional: model knowledge (test circuit: a signal source of 10 kOhm, about a triode's plate resistance)"}
+  r_control_ohm: {value: 10.0e+3, source: "provisional: model knowledge (test circuit: the control feed, high against the control windings' resistance)"}
+  signal_turns: {value: 500.0, source: "provisional: model knowledge (test circuit: 500 turns, ~9 H per core unbiased on a 1 cm^2, 10 cm mumetall toroid)"}
+  r_signal_winding_ohm: {value: 10.0, source: "provisional: model knowledge (500 turns of ~0.2 mm copper on a small toroid, ~10 Ohm)"}
+  r_control_winding_ohm: {value: 30.0, source: "provisional: model knowledge (1000 turns of ~0.15 mm copper on the same toroid, ~30 Ohm)"}
+  leakage_h: {value: 0.0, source: "provisional: model knowledge (windings on a toroid couple closely; leakage neglected in the test circuit)"}
+  core_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (test circuit: a small tape-wound toroid, 1 cm^2)"}
+  core_path_m: {value: 0.1, source: "provisional: model knowledge (test circuit: 10 cm mean path, ~32 mm mean diameter)"}
+  core_gap_m: {value: 0.0, source: "provisional: model knowledge (a tape-wound toroid has no joint gap)"}
+
+sections:
+  - title: reactor
+    parts:
+      RS: {R: [in, s], r: r_signal_ohm}
+      VC: {V: [cv, "0"], v: control_v}
+      RC: {R: [cv, c1], r: r_control_ohm}
+      TA:
+        transformer:
+          sig: {nodes: [s, m], r: r_signal_winding_ohm}
+          ctl: {nodes: [c1, c2], ratio: 2.0, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h
+      TB:
+        transformer:
+          sig: {nodes: [m, "0"], r: r_signal_winding_ohm}
+          ctl: {nodes: ["0", c2], ratio: 2.0, r: r_control_winding_ohm}
+        core: {material: mumetall, area_m2: core_area_m2, path_m: core_path_m, gap_m: core_gap_m}
+        turns: signal_turns
+        leakage_h: leakage_h

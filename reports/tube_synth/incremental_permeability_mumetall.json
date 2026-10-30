@@ -1,0 +1,246 @@
+{
+  "material": "mumetall",
+  "source": "fit (2026-10-24; mu4 +0.5%, mu_max -0.3%, Hc +2.3%, hysteresis loss at 0.5 T -2.2%, Rayleigh-region mu at 0.04 A/m -0.5%; origin permeability ~29,300): scripts/fit_core_material.py to the MUMETALL datasheet figures and its Rayleigh region (the datasheet block). Replaces the 2026-10-21 fit to the four scalars alone (c 0.00077: almost all irreversible, H ~ sqrt(B) at program levels, origin permeability 246; Phase 2's 'Low-level core physics', Option 1). Datasheet (web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf, Lamineries Matthey / Vacuumschmelze: ~76% Ni, 5% Mo, 5% Cu); Ms from its saturation polarization 0.8 T",
+  "reference": "Gans' law (provisional: model knowledge), normalized to the JA value at zero bias for the same ripple",
+  "rows": [
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 0.0,
+      "b_dc_t": 0.0,
+      "m_over_ms": 0.0,
+      "mu_inc": 29435.155684933594,
+      "mu_gans": 29435.155684933594,
+      "ja_over_gans": 1.0
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 0.1,
+      "b_dc_t": 0.004250708451408568,
+      "m_over_ms": 0.005313393507036503,
+      "mu_inc": 29246.79994366712,
+      "mu_gans": 29433.65986257489,
+      "ja_over_gans": 0.9936514888131407
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 0.3,
+      "b_dc_t": 0.018503083847307887,
+      "m_over_ms": 0.02312910190967441,
+      "mu_inc": 29021.333829239426,
+      "mu_gans": 29406.815462291637,
+      "ja_over_gans": 0.9868914186391071
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 1.0,
+      "b_dc_t": 0.3130521753625604,
+      "m_over_ms": 0.39132580213241813,
+      "mu_inc": 15115.097825092902,
+      "mu_gans": 21634.530356146453,
+      "ja_over_gans": 0.6986561564438418
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 3.0,
+      "b_dc_t": 0.5188364727454576,
+      "m_over_ms": 0.6485610214330111,
+      "mu_inc": 5899.388823087646,
+      "mu_gans": 10029.933760418493,
+      "ja_over_gans": 0.588178243645898
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 10.0,
+      "b_dc_t": 0.6573595599266545,
+      "m_over_ms": 0.8217092624417718,
+      "mu_inc": 1740.3574433785504,
+      "mu_gans": 2803.1115564221013,
+      "ja_over_gans": 0.6208662796139113
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 30.0,
+      "b_dc_t": 0.7346224370728455,
+      "m_over_ms": 0.9182594415858502,
+      "mu_inc": 450.17925493513775,
+      "mu_gans": 590.0146385334391,
+      "ja_over_gans": 0.7629967555620636
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 100.0,
+      "b_dc_t": 0.7766294382397066,
+      "m_over_ms": 0.9706598647442973,
+      "mu_inc": 94.10146825921734,
+      "mu_gans": 76.01719058025543,
+      "ja_over_gans": 1.2378972116822624
+    },
+    {
+      "ripple_t": 0.0005,
+      "h_dc_a_per_m": 300.0,
+      "b_dc_t": 0.7918819803300551,
+      "m_over_ms": 0.989411965491035,
+      "mu_inc": 20.590019091582057,
+      "mu_gans": 9.899614613816935,
+      "ja_over_gans": 2.0798808736296137
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 0.0,
+      "b_dc_t": 0.0,
+      "m_over_ms": 0.0,
+      "mu_inc": 30975.70260673426,
+      "mu_gans": 30975.70260673426,
+      "ja_over_gans": 1.0
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 0.1,
+      "b_dc_t": 0.004250708451408568,
+      "m_over_ms": 0.005313393507036503,
+      "mu_inc": 29923.454934589987,
+      "mu_gans": 30974.128497562502,
+      "ja_over_gans": 0.9660789951505755
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 0.3,
+      "b_dc_t": 0.018503083847307887,
+      "m_over_ms": 0.02312910190967441,
+      "mu_inc": 29162.964890892716,
+      "mu_gans": 30945.87914265062,
+      "ja_over_gans": 0.9423860526456773
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 1.0,
+      "b_dc_t": 0.3130521753625604,
+      "m_over_ms": 0.39132580213241813,
+      "mu_inc": 17119.355298872866,
+      "mu_gans": 22766.816167762663,
+      "ja_over_gans": 0.7519433184124145
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 3.0,
+      "b_dc_t": 0.5188364727454576,
+      "m_over_ms": 0.6485610214330111,
+      "mu_inc": 7390.329160470578,
+      "mu_gans": 10554.87012378844,
+      "ja_over_gans": 0.7001819135428624
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 10.0,
+      "b_dc_t": 0.6573595599266545,
+      "m_over_ms": 0.8217092624417718,
+      "mu_inc": 2537.801533952259,
+      "mu_gans": 2949.8179277398613,
+      "ja_over_gans": 0.860324805164064
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 30.0,
+      "b_dc_t": 0.7346224370728455,
+      "m_over_ms": 0.9182594415858502,
+      "mu_inc": 794.3987355394482,
+      "mu_gans": 620.8942182081363,
+      "ja_over_gans": 1.2794429586283402
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 100.0,
+      "b_dc_t": 0.7766294382397066,
+      "m_over_ms": 0.9706598647442973,
+      "mu_inc": 155.77834110189096,
+      "mu_gans": 79.99570016266912,
+      "ja_over_gans": 1.9473339290126825
+    },
+    {
+      "ripple_t": 0.005,
+      "h_dc_a_per_m": 300.0,
+      "b_dc_t": 0.7918819803300551,
+      "m_over_ms": 0.989411965491035,
+      "mu_inc": 21.470563286691075,
+      "mu_gans": 10.417730467647282,
+      "ja_over_gans": 2.0609635998328857
+    }
+  ],
+  "cutoff_span_over_bias_a_per_m": [
+    0.0,
+    100.0
+  ],
+  "spans": [
+    {
+      "ripple_t": 0.0005,
+      "gap_ratio": 0.0,
+      "mu_eff_max": 29435.155684933594,
+      "mu_eff_min": 94.10146825921734,
+      "inductance_ratio": 312.8022997882436,
+      "cutoff_octaves": 4.144553654728053
+    },
+    {
+      "ripple_t": 0.0005,
+      "gap_ratio": 1e-05,
+      "mu_eff_max": 22741.237130802077,
+      "mu_eff_min": 94.0130006452556,
+      "inductance_ratio": 241.89459941410476,
+      "cutoff_octaves": 3.959117374780956
+    },
+    {
+      "ripple_t": 0.0005,
+      "gap_ratio": 0.0001,
+      "mu_eff_max": 7464.191575685714,
+      "mu_eff_min": 93.22421471105505,
+      "inductance_ratio": 80.06708985235966,
+      "cutoff_octaves": 3.161568732660676
+    },
+    {
+      "ripple_t": 0.0005,
+      "gap_ratio": 0.001,
+      "mu_eff_max": 967.143259907981,
+      "mu_eff_min": 86.0079901080277,
+      "inductance_ratio": 11.244807124236136,
+      "cutoff_octaves": 1.7455935052450122
+    },
+    {
+      "ripple_t": 0.005,
+      "gap_ratio": 0.0,
+      "mu_eff_max": 30975.70260673426,
+      "mu_eff_min": 155.77834110189096,
+      "inductance_ratio": 198.84473276341913,
+      "cutoff_octaves": 3.8177492682980256
+    },
+    {
+      "ripple_t": 0.005,
+      "gap_ratio": 1e-05,
+      "mu_eff_max": 23649.961015854562,
+      "mu_eff_min": 155.53604962397134,
+      "inductance_ratio": 152.05453059294885,
+      "cutoff_octaves": 3.6242224965495273
+    },
+    {
+      "ripple_t": 0.005,
+      "gap_ratio": 0.0001,
+      "mu_eff_max": 7559.529339624667,
+      "mu_eff_min": 153.3888746581182,
+      "inductance_ratio": 49.28342656189228,
+      "cutoff_octaves": 2.811515330817138
+    },
+    {
+      "ripple_t": 0.005,
+      "gap_ratio": 0.001,
+      "mu_eff_max": 968.7262540467401,
+      "mu_eff_min": 134.78219444169173,
+      "inductance_ratio": 7.1873459106337805,
+      "cutoff_octaves": 1.4227295606827985
+    }
+  ],
+  "worst_ja_over_gans": 1.9473339290126825,
+  "worst_at": {
+    "h_dc_a_per_m": 100.0,
+    "ripple_t": 0.005
+  },
+  "within_tolerance": true,
+  "tolerance_factor": 2.0
+}
