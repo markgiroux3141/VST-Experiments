@@ -513,6 +513,19 @@ the circuit's noise alone / the mains wander alone, at 475 Hz and 1.3 kHz):
   saves their CPU; a change restarts the stream with a crossfade; renders follow it.
   `examples/play.rs --no-noise`.
 
+**Heated cathodes (device builder B6, 2026-10-30).** `tube_synth.yaml` has `heaters: {}`:
+its 18 tube instances follow one cathode temperature (DEVICE_BUILDER_PLAN.md B6 has the
+model). Warm at the rated mains it plays as before. `scripts/heater_synth_study.py` ->
+`reports/tube_synth/heaters/` (draft with the app's partition, a held note at -15 V, 476 Hz):
+- **The MAINS knob:** 5.5 cents per volt with the heaters, 3.8 without (B+ alone): at 110 V
+  the note is 56 cents flat (39 without), at 127 V 37 sharp (26).
+- **The mains wander:** no measurable change (1.76 cents rms either way over 20 s): the
+  7 s thermal lag filters its fast part, and its slow part barely moves in 20 s.
+- **A cold start** (power on; the app's "Power on (cold)" button): silent ~6 s, the sound
+  within 20 dB of full at 7.8 s, then the pitch glides up: -230 cents at 9 s, -70 at 12 s,
+  -18 at 18 s, -6 at 24 s, -2 at 30 s, under half a cent by ~40 s; the level settles by
+  ~12 s.
+
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
   code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity

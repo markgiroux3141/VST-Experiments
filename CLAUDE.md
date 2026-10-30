@@ -160,7 +160,20 @@ k, on the project's 96 kHz grid from the run's start (settle included), linear b
 samples (the density times sinc^4(f / fs)); `varimu/devices/noise.py` is the reference,
 circuitsim's `noise.rs` the port (DK solver only: current columns), SPICE via filesources
 (`io.run_transient(..., noise=)`). Spectra vs theory and the engines' agreement:
-`tests/test_noise_spectra.py`.
+`tests/test_noise_spectra.py`. The app's Play view has a "Noise" switch (off saves the CPU).
+
+**Heated cathodes (device builder B6, the heater, 2026-10-30; DEVICE_BUILDER_PLAN.md B6's
+status):** a circuit file's `heaters: {start?: warm | cold}` block gives every triode, pentode
+and vacuum diode one cathode temperature (IR `heaters` block + `HeatedCathode` per tube),
+heated at the mains setting's ratio to the rated mains times B5's mains wander, through a
+7 s thermal lag; it acts through the space-charge shift (+1.7 mV/K as on the grid, zero at
+the rated temperature) and a Richardson emission ceiling (relative to the rated
+temperature's, so a tube at the rated heater is its fitted model exactly). Constants in
+`config/cathodes.yaml` (phi 1.22 eV fitted to Phywe's EC92 by `scripts/fit_cathode.py`;
+heater ratings per tube type); `varimu/devices/cathode.py` the reference, circuitsim's
+`cathode.rs` (DK only), SPICE via a copy of the tube (`spice.heated_lines`). Only tube_synth
+has the block. `build(..., heaters=)` overrides (None / False / True / "warm" / "cold"); a
+cold start (power on) skips the settle; the app's "Power on (cold)" button.
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist

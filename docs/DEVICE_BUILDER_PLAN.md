@@ -762,6 +762,33 @@ resistors (excess noise, voltage coefficient), each with options first.
   Fig. 4's ceilings fit a work function of ~1.17 eV, inside oxide cathodes' 1.0-1.3 eV, and
   the same model moves Fig. 5's 10 uA point by ~0.22 V (measured ~0.35: the order holds).
 
+*Status 2026-10-30: the heater built (commits 2f292ed..01cc0c1).*
+- **The physics** (`varimu/devices/cathode.py`, `config/cathodes.yaml`, `scripts/fit_cathode.py`
+  -> `reports/devices/cathode_ec92.{json,png}`): Fig. 4 (every point read by eye into
+  published_points.yaml `EC92_forward_by_heater`) fits with phi **1.22 eV**, a soft ceiling (n
+  1.29), the EC92's emission at T0 0.54 A (54x its ~10 mA), rms 0.28 mA; Fig. 5's retarding
+  shift comes out ~2/3 of the measured; tau **7 s** (the model's 10% current from cold at
+  5.5 s for 1.5 W). Each tube type's emission goes with its heater power (0.57 A/W).
+- **The space-charge shift at a fixed reference** (the tube at 1 / reserve of its emission,
+  reserve 50): one function of T for every tube, +1.7 mV/K (-67 mV at 40 K cool). From the
+  tube's own current it was a signal-dependent ~mV term the engines disagreed on (-41 dB):
+  dropped. The ceiling relative to T0's: a tube at the rated heater is its fitted model
+  exactly.
+- **The IR, builders, engines:** a `heaters` block (the oxide constants, the heater ratio =
+  the mains setting over the rated mains, warm / cold) and `HeatedCathode` per triode,
+  pentode and vacuum diode; a circuit file's `heaters: {start?}`, `build(..., heaters=)`;
+  both builders bit for bit. circuitsim: `cathode.rs`'s `Heated` wraps a tube (equal to
+  Python's `heated` to 1e-12, Jacobian checked), `HeatRun` steps the one temperature per
+  sample with B5's mains wander, refreshing the tubes past 1e-4 K; a cold start skips the
+  settle. SPICE: a capacitance-free copy of the tube on E sources, its control pin shifted,
+  B sources driving the pins; the temperature a stream. The triode stage, ngspice against
+  circuitsim: -82.6 dB at the rated and at a 90% heater (as unheated), a cold start to the
+  millivolt; from cold it is silent ~3 s, alive by ~6 s, and creeps to its operating point
+  over tens of seconds (`tests/test_cathode.py`).
+- Not modelled: directly heated filaments (the 5Y3GT) are treated as oxide cathodes; the
+  heaters don't load the power transformer; the app's live stream settles its first second
+  (a power-on's warm-up starts within it).
+
 **B7. Aging.** FUTURE_DIRECTIONS.md section 2: a unit history (years since build,
 powered hours, storage temperature and humidity, service events: recapped,
 retubed) mapped to per-part drift by sourced laws with Arrhenius acceleration
