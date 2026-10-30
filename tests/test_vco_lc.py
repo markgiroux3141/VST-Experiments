@@ -2,8 +2,9 @@
 by the saturable reactor, its pitch on the `pitch` control input.
 
 At draft (the native app plays it at draft-2x, the same 96 kHz internal rate), measured
-2026-10-30 (scripts/vco_study.py; reports/tube_synth/vco/): ~431 Hz at -25 V and ~1658 Hz
-at 0 V (the keyboard tuning, lc_tuning.json); the WAVE pot moves the output from the
+2026-10-30 (scripts/vco_study.py; reports/tube_synth/vco/): ~68 Hz at -42 V, ~624 Hz at
+-25 V and ~1800 Hz at 0 V (the keyboard tuning, lc_tuning.json); the WAVE pot moves the
+output from the
 tank to V1A's square: the 3rd harmonic at 431 Hz -14.4 dB at the tank end (the tank's own
 ~-19 dB, from the cores and the square drive, plus ~-20 dB of the square through the
 passive blend) and -9.3 dB at the square end.
@@ -47,7 +48,7 @@ def test_passes_the_preflight_checks_with_its_pitch_input():
     assert check_circuit(s) == []
 
 
-@pytest.mark.parametrize(("pitch_v", "hz"), [(-25.0, 431.0), (0.0, 1658.0)])
+@pytest.mark.parametrize(("pitch_v", "hz"), [(-42.0, 68.1), (-25.0, 624.5), (0.0, 1799.9)])
 def test_the_pitch_input_sets_the_pitch(pitch_v, hz):
     t, _ = run(pitch_v)
     f = vco.frequency(t, FS)

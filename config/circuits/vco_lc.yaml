@@ -29,7 +29,7 @@ probes: [t, out, p2, p1a, p1b, k1, g4, b1, b3, ta_core, tb_core]
 
 full_scale:
   input_volts_peak: {value: 1.0, source: "provisional: model knowledge (the audio input is unused: the oscillator is the source)"}
-  output_volts_peak: {value: 12.0, source: "provisional: model knowledge (the WAVE pot's wiper: up to 6.6 V peak over the sweep at the pot's middle (scripts/vco_study.py --tuning draft, 2026-10-30), ~10 V at its square end)"}
+  output_volts_peak: {value: 7.0, source: "provisional: model knowledge (the WAVE pot's wiper: up to 2.5 V peak over the sweep at the pot's middle (scripts/vco_study.py --tuning draft, 2026-10-30), ~5.6 V at its square end at A3)"}
 
 controls:
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the WAVE pot, tank (0) to square (1); linear)"}
@@ -62,7 +62,7 @@ values:
   r_grid_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a load on the unused audio input)"}
   # --- oscillator
   c_tank_f: {value: 56.0e-9, source: "provisional: model knowledge (design: ~58 Hz at the bottom of the sweep, ~1.8 kHz at the top)"}
-  r_tail_ohm: {value: 33.0e+3, source: "provisional: model knowledge (design: the pair's tail to the -45 V rail, ~1.5 mA: the square current into the tank)"}
+  r_tail_ohm: {value: 68.0e+3, source: "provisional: model knowledge (design: the pair's tail to the -45 V rail, ~0.7 mA: the square current into the tank. At 33k (~1.5 mA) the tank swung ~95 V at the bottom and saturated the cores: below ~65 Hz the pitch went chaotic and plateaued (the user heard it, 2026-10-30); at 68k the law is smooth and monotonic from 67 Hz at -42 V to 1.8 kHz at 0 V)"}
   r_plate_a_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1A's plate load, the square output)"}
   r_plate_b_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1B's plate load, parallel feed to the tank)"}
   c_drive_f: {value: 0.47e-6, source: "provisional: model knowledge (design: V1B's plate into the tank, below the sweep's bottom)"}

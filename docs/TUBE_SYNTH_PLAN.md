@@ -402,6 +402,18 @@ The native app's `vco_lc` device, `varimu-app --device vco_lc --midi masterkey -
 - Draft-2x: ~55% load, worst block ~80%, no dropouts, ~68 ms key to ear at a 30 ms queue
   (`examples/play.rs`, no key pressed). No envelope yet: it drones at the last key.
   `tests/test_vco_lc.py`.
+- *After the user played it:* "too low, the pitch is very chaotic; beyond a certain note it
+  stops changing". The bottom was the tank's swing (~95 V) saturating the cores (the
+  plateau and the non-monotonic law below ~65 Hz); the stop, the tuning held at its ends.
+  The pair's tail went 33k -> 68k (~0.7 mA): the law is now smooth and monotonic from
+  **68 Hz at -42 V to 1.8 kHz at 0 V** (624 Hz at -25 V), the keyboard's C2 to ~A6; below
+  -42 V it saturates again, so the tuning stops there. The study's numbers above are from
+  the 33k design.
+- Load: the oscillator is costly to solve. Its tank swings both JA cores around their loops
+  every cycle, so Newton takes ~10 iterations and 1.3-3.3 refactorizations per sample
+  (tube_voice: 4 and 0.05): ~0.5 of a core at mid pitch, ~1.0 at the top at draft-2x,
+  4.6x real time at draft-1x. Less gain-stage gain or a capacitor holding the 6V6GT's
+  plate (it then barely moves) didn't change that.
 
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
