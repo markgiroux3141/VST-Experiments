@@ -148,7 +148,7 @@ sim_settings.yaml, a nested list) separates groups, each on a thread of its own
 part with it (list the stiff drivers, the supplies, last), the others see it as a
 source; the owner needs a DC path there. One group is the old two-way split, bit for bit. (a), the diode-timed multivibrator `vco_diode.yaml`
 on the new `6AL5@1`, doesn't run cleanly yet; (c) isn't started (TUBE_SYNTH_PLAN.md, S4's
-status). Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
+status). **S5's modulation measured (2026-10-30; TUBE_SYNTH_PLAN.md S5's status, options to the user, nothing built):** the cutoff follows V4's grid within ~5 ms, pitch steps settle in 17-45 ms (big drops 0.1-0.24 s); ENV -> CUTOFF as a second 6V6GT on the control windings (+1-3% CPU); a key's VCA sag already pulls the cutoff ~half an octave down (V4's screen on b1); a tube kick prototype rings at ~0.3x real time but its core's saturation gives no pitch drop. Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
 for the DC operating point only; absent = unchanged IR).
 
 **Noise (device builder B5, 2026-10-30; DEVICE_BUILDER_PLAN.md B5's status):** a circuit

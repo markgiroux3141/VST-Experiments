@@ -594,6 +594,97 @@ is reported (next to the Odyssey's figures if the user has recorded them by then
 measurements are "further down the road", the user's call 2026-10-29, so they don't gate
 S5); every part passes the ratings.
 
+*Status 2026-10-30: modulation measured; options to the user; nothing built.* All at draft
+with the app's partition, JA cores, noise off, warm, `tube_synth.yaml` unchanged; scratch
+scripts (session scratchpad), the method in each bullet.
+
+**How fast the cutoff follows V4's grid.** Probe: 33 tones of 3 mV at the external input on a
+240 Hz grid (the ripple's sidebands fall on the 8.33 ms lock-in's nulls), the oscillator cut
+from the mixer (`r_mix_osc_ohm` 1e12), RESONANCE 0, read at the filter node `f`; "cutoff" is
+the -10 dB frequency (the -3 dB point is confused by a shelf at the top: ~330 Hz at CUTOFF 0,
+~1.1 kHz at 0.3, ~2.3 kHz at 0.5, ~5 kHz at 1). Steps 0.3 <-> 0.7, 0.1 <-> 1, 0.45 <-> 0.55,
+two ways: the knob (`Stream.update`, the mod wheel's path) and V4's grid driven through 1k
+into CCUT (100 us; a scratch `cut` control input).
+- **The control current follows the grid within ~0.2 ms** (10-90%). No slew limit: the
+  cores sit at 470-790 mT (near mumetall's 0.8 T), so the control windings' incremental
+  inductance is small. V4's plate swings to 3-23 V on a fast up-step and kicks to 410-450 V
+  (~170 V over b1, under 1 ms) on a fast down-step: above the 6V6GT's plate rating for a
+  moment.
+- **The cutoff lands within ~5 ms** (the lock-in's resolution), overshoots 50-150 cents in its
+  first ~40 ms and has settled by 0.1-0.2 s, including 1 -> 0.1 (the ratchet is small here).
+- **The knob path is the pot's RC**: CCUT with the pot's own impedance, 10-90% in ~5 ms at mid
+  rotation, ~0 at the ends.
+- **A key already moves the cutoff down ~half an octave:** at CUTOFF 0.3 the -10 dB point is
+  1749 Hz with no key and 1240 Hz held. The VCA opening sags b1 and V4's screen hangs on b1
+  (RS4): the mechanism that dropped held notes ~780 cents before the oscillator's screen went
+  on the 5651s. V4's screen on the 5651 rail would remove it (a design change; tuning
+  unaffected).
+
+**How fast the pitch follows the `pitch` input** (key held, per-cycle frequency of `o_t`). The
+6V6GT's grid RC (10k, 0.1 uF) reaches 90% in 2.3 ms. Within 10 cents (50 ms mean) by: HIGH
+-20 -> -10 V (175 -> 872 Hz) 26 ms, back 31 ms; -22 -> -5 V (89 -> 1306 Hz) 27 ms, back **239 ms**
+(-30 cents for ~100 ms, then +-10 cents to 1 s); -15.25 <-> -15 V (a semitone) 17-19 ms; LOW
+-20 <-> -10 V 28 / **100 ms**, -24 -> -12 V 45 ms. Up is fast, big drops are slow (S1's minor
+loops). vco_lc's 0.57 s glide (its 33k tail, b3-fed screen) isn't in the synth.
+
+**ENV -> CUTOFF, options (prototypes as scratch variants of tube_synth.yaml).** An AMOUNT pot
+summed into V4's grid would load the envelope node, which is the VCA's bias. A 1M pot to the
+-100 V rail at the slowest attack (2.2M) holds the open envelope near -69 V, so the VCA
+doesn't open. Both prototypes add current instead: V7, a second 6V6GT, plate on p4 beside
+V4 (its current adds in the control windings), its grid on an envelope (it never conducts
+grid current, so no load), AMOUNT its cathode rheostat (1k + 0-100k).
+- **A, the VCA's own envelope on V7's grid.** CUTOFF 0.15, AMOUNT full, attack 0: the cutoff
+  goes 931 -> ~4.4 kHz, 90% of the rise 8 ms after the key, 90% of the fall 15 ms after key up;
+  attack 0.3 / release 0.4: 69 / 49 ms. Held at CUTOFF 0.3, AMOUNT 0 / 0.5 / 0.8 / 1: 1436 /
+  1531 / 1786 / 4983 Hz. The rheostat's law is lopsided (most of the sweep in the last 20%),
+  and 100k still leaks ~0.24 mA (AMOUNT 0 isn't off): a log taper and a larger track.
+  **CPU +1%.**
+- **B, a second envelope** (its own 6X4 and 0.47 uF from the same keyboard bus, ATTACK2 and
+  RELEASE2) on V7's grid: the same sweep with independent times. **CPU +3%.**
+- **Found in both: the sweep sags the supply.** V7's ~20 mA at full AMOUNT pulls b1 from 300 to
+  267 V. After key up b1 recovers over ~0.5-1 s and V4's current with it, so the cutoff sits
+  4-5 dB low at 1-2 kHz for ~0.5 s after each note. With a 1000x reservoir there's no sag and no
+  dip. The fix is the same as above: V4's and V7's screens on a regulated rail. Fewer
+  milliamps for the same sweep (a separate control winding with more turns for V7) would help too.
+- **In the app's partition V7 fails at key up** (Newton at V7's screen and cathode, its grid at
+  -110 V; the one solve runs). V7 is on the VCA's thread and drives p4, the inductive
+  high-impedance node another thread owns. Building it means placing V7 with V4 (and the
+  envelope node with it) or another split: not solved.
+- CPU method: 3 s at -15 V plus the 1 s settle, one run at a time: 1.245 / 1.259 / 1.287 s
+  wall for the plain synth / A / B (0.93x real time on the bench's four threads).
+
+**The LFO (a 12AX7 phase-shift oscillator, three high-pass RC sections, RATE ganged
+rheostats, a cathode follower, DEPTH into the pitch grid): not oscillating yet.** Ladders of
+220k / 1 uF and 1M / 0.1 uF, the cathode bypassed with 100 uF or 1000 uF, or grounded: the
+start kick (a capacitor's `v0`) decays every time, so the loop gain is under the 29 a
+three-section ladder needs, for a reason not found. Its parts cost +0.4% (not oscillating; a
+slow sine should cost about the same).
+
+**A tube kick (Track 2, prototype; scratch `tube_kick.yaml`).** The keyboard bus differentiated
+(10k, 10 nF; 2.2 nF slowing the edge) onto a trigger tube's grid, which rests cut off at
+-45 V; its plate current through LK, ~10 H on a gapped mumetall toroid, with 1 uF across it
+(~50 Hz). When the trigger cuts off, LK's current rings in the tank. A 12AX7 cathode-coupled
+pair senses the tank (1/11) and feeds it back through the DECAY pot as a negative resistance.
+A 12AU7 cathode follower is the output. tube_filter's supply, the supplies on a second
+thread. Draft:
+- **It rings and plays cheaply: ~0.3x real time.** DECAY 0 / 0.5 / 0.8: -40 dB at 157 / 229 /
+  261 ms (12AU7 trigger, ~37 V peak); a 6V6GT trigger hits harder (~150 V peak, 818 mT).
+- **The hypothesis was wrong: the pitch doesn't fall, it rises** (46.6 -> 51.4 Hz over 300 ms).
+  The core saturates only during the trigger's pulse, in the first half-cycle. A shock-excited
+  tank can't store flux past saturation, so the ring starts below it (+-600 mT) and stays
+  there. Below saturation mumetall's permeability grows with amplitude (its Rayleigh region),
+  so the inductance falls as the ring decays. A wider gap (100 um) flattens that to ~2%
+  but doesn't make a sweep.
+- **A sweep needs the tank tuned by a decaying control.** Tried: a reactance tube (a 6V6GT
+  whose grid hears the tank through an RC phase network, so it looks like L = RC/gm across
+  the tank: the period's FM modulator), its bias from a second differentiator on the bus. Two
+  iterations swept the wrong way (series-fed, its 50-100 mA DC through LK; parallel-fed, the
+  1 uF coupling in series with its L_eq is net capacitive at 50 Hz) and damped the ring
+  (-40 dB in 43-131 ms). The alternative: the synth's VCO principle, LK as a two-core
+  reactor's signal windings, the control current a decaying pulse from the trigger (two more
+  JA cores).
+- Not measured yet: the click (the trigger's edge leaking to the output) and the drive stage.
+
 **Later, not planned yet:** more voices (paraphony from one supply first: sag coupling
 between voices), gas-tube devices if S4 doesn't choose one, the reactor designed by
 construction with C2's transformer designer, a divided-down keyboard if drift proves
