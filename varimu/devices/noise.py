@@ -77,6 +77,19 @@ FLICKER_SOURCE = (
     "100 Hz..10 kHz)"
 )
 F_LO_HZ = 1e-3  # flat below: ~17 minutes
+# Mains wander (B5, the user's call 2026-10-30): the mains' amplitude times (1 + m(t)), m one
+# stream shared by every mains source: unit flicker through a one-pole low-pass at
+# MAINS_F_HI_HZ, scaled to MAINS_RMS (nominal: the density's integral, ln(f_hi / F_LO) + 1).
+MAINS_RMS = 0.005
+MAINS_F_HI_HZ = 2.0
+MAINS_SOURCE = (
+    "provisional: model knowledge (household mains wander: a 1/f process smoothed above ~2 Hz "
+    "by load switching and the grid's inertia, ~0.5% rms over seconds to minutes; EN 50160 "
+    "bounds only 10-minute means (+-10%), and no published spectrum of the band between "
+    "flicker and 10-minute values was found (Bollen & Gu, IEEE Trans. Power Delivery 2005, "
+    "name the gap); bounds 0.1-2%)"
+)
+MAINS_STREAM_NAME = "MAINS"
 FLICKER_SECTIONS = 15
 
 # Streams of a source (the low word of the key's second half).
@@ -266,6 +279,27 @@ def unit_stream(seed: int, name: str, stream: int, flicker: bool, rate_hz: float
     return flicker_samples(f, key(seed, name, stream), key(seed, name, STREAM_FLICKER_START), n)
 
 
+def mains_scale(rms: float) -> float:
+    """m = mains_scale(rms) * the low-passed unit flicker: its nominal rms is `rms`."""
+    return rms / math.sqrt(math.log(MAINS_F_HI_HZ / F_LO_HZ) + 1.0)
+
+
+def mains_alpha(rate_hz: float) -> float:
+    """The one-pole low-pass's coefficient: y += alpha (x - y)."""
+    return 1.0 - math.exp(-2.0 * math.pi * MAINS_F_HI_HZ / rate_hz)
+
+
+def mains_wander(seed: int, rms: float, rate_hz: float, n: int) -> np.ndarray:
+    """Samples 0 .. n of m(t), the mains' relative amplitude change: unit flicker (key
+    MAINS_STREAM_NAME) low-passed, starting at its first sample, times mains_scale."""
+    from scipy.signal import lfilter
+
+    x = unit_stream(seed, MAINS_STREAM_NAME, STREAM_FLICKER, True, rate_hz, n)
+    a = mains_alpha(rate_hz)
+    y = lfilter([a], [1.0, -(1.0 - a)], x, zi=[(1.0 - a) * x[0]])[0]
+    return mains_scale(rms) * y
+
+
 def noise_fixtures_json(rate_hz: float = 96000.0) -> str:
     """Fixtures for crates/circuitsim/tests/noise.rs: raw Philox words, normals from several
     starts, the flicker filter's design and its first samples (written by
@@ -301,6 +335,11 @@ def noise_fixtures_json(rate_hz: float = 96000.0) -> str:
             "seed": 3,
             "name": "BN_XV1A",
             "samples": f.run(fk, fs, 2000).tolist(),
+        },
+        "mains": {
+            "seed": 3,
+            "rms": MAINS_RMS,
+            "samples": mains_wander(3, MAINS_RMS, rate_hz, 2000).tolist(),
         },
     }
     return json.dumps(d, indent=1) + "\n"

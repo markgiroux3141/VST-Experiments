@@ -129,6 +129,7 @@ class Context:
     designators: set[str] = field(default_factory=set)
     missing_class: set[str] = field(default_factory=set)
     section_tolerance: str | None = None  # the current section's `tolerance`
+    mains_sines: list[str] = field(default_factory=list)  # the mains macro's sources
     noise: Noise | None = None  # noise sources on (B5)
     parallel: dict[str, int] = field(default_factory=dict)  # model name -> `parallel`
 
@@ -179,11 +180,13 @@ class Context:
 
 @dataclass(frozen=True)
 class Noise:
-    """A build's noise (B5): the seed, the resistors' temperature, K_f."""
+    """A build's noise (B5): the seed, the resistors' temperature, K_f, the mains wander's
+    rms."""
 
     seed: int
     temperature_k: float
     flicker_v2: float
+    mains_rms: float
 
 
 # Parts whose resistors are resistors (their noise), and the param holding their value.
@@ -330,6 +333,7 @@ def _mains(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     if not m:
         raise ctx.fail(name, "a mains part needs the file's `mains` block")
     w = "mains"
+    ctx.mains_sines.append(name)
     return [
         parts.mains_sine(
             name,
@@ -671,7 +675,10 @@ def _noise(ctx: Context, noise: bool | int | None) -> Noise | None:
         t = ctx.physical("noise.temperature_k", block["temperature_k"])
     if "flicker_v2" in block:
         kf = ctx.physical("noise.flicker_v2", block["flicker_v2"])
-    return Noise(seed, float(t), float(kf))
+    mains = noise_mod.MAINS_RMS
+    if "mains_rms" in block:
+        mains = ctx.physical("noise.mains_rms", block["mains_rms"])
+    return Noise(seed, float(t), float(kf), float(mains))
 
 
 def build_ir(
@@ -715,11 +722,19 @@ def _build(
         models=(*ctx.models.values(), *ctx.core_models),
         sections=tuple(sections),
         controls=tuple(Control(n, node) for n, node in spec.cv_inputs),
-        noise=None
-        if ctx.noise is None
-        else NoiseSpec(ctx.noise.seed, float(load_sim_settings().data["sample_rate"])),
+        noise=None if ctx.noise is None else _noise_spec(ctx, sections),
     )
     return ir, types
+
+
+def _noise_spec(ctx: Context, sections: list[Section]) -> NoiseSpec:
+    """The IR's noise block: the mains wander on the mains parts the build kept (a switch
+    may leave one out)."""
+    nz = ctx.noise
+    rate = float(load_sim_settings().data["sample_rate"])
+    kept = {e.name for sec in sections for e in sec.elements if isinstance(e, SineSource)}
+    mains = tuple(n for n in ctx.mains_sines if n in kept) if nz.mains_rms > 0 else ()
+    return NoiseSpec(nz.seed, rate, nz.mains_rms if mains else 0.0, mains)
 
 
 def build(

@@ -78,12 +78,22 @@ pub struct Control {
 }
 
 /// The circuit's noise: the seed every source's stream is keyed by, and the sample
-/// grid its samples sit on (the project's rate).
+/// grid its samples sit on (the project's rate). Mains wander: the [`SineSource`]s named
+/// in `mains_sources` (the mains) have their amplitude times `1 + m(t)`, `m` one shared
+/// stream of nominal rms `mains_rms` ([`crate::noise::MainsWander`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NoiseSpec {
     pub seed: u64,
     pub rate_hz: f64,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub mains_rms: f64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mains_sources: Vec<String>,
+}
+
+fn is_zero(x: &f64) -> bool {
+    *x == 0.0
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -736,6 +746,15 @@ impl CircuitIr {
         }
         if let Some(n) = &self.noise {
             positive("noise.rate_hz", n.rate_hz)?;
+            nonneg("noise.mains_rms", n.mains_rms)?;
+            for m in &n.mains_sources {
+                if !self
+                    .elements()
+                    .any(|e| matches!(e, Element::SineSource(s) if &s.name == m))
+                {
+                    return err(format!("noise.mains_sources: {m} is not a sine source"));
+                }
+            }
         }
         Ok(())
     }

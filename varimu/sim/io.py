@@ -440,12 +440,10 @@ def _input_sources(input_node: str, chunks: Sequence[str], tag: str = "audio") -
 def _noise_files(wd: Path, noise: Sequence[NoiseStream], t_end: float, chunk: int | None) -> str:
     """Write every noise stream's samples over [0, t_end] (and one past) as filesources;
     the deck lines that drive their nodes."""
-    from varimu.devices.noise import unit_stream
-
     out = []
     for st in noise:
         n = int(np.ceil(t_end * st.rate_hz)) + 2
-        x = unit_stream(st.seed, st.name, st.stream, st.flicker, st.rate_hz, n)
+        x = st.samples(n)
         names = write_input_chunks(wd, x, st.rate_hz, chunk, pattern=st.node + "_{}.txt")
         out.append(_input_sources(st.node, names, tag=st.node))
     return "".join(out)

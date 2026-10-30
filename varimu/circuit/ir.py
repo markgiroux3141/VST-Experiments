@@ -199,10 +199,15 @@ class TubeNoise:
 @dataclass(frozen=True)
 class NoiseSpec:
     """The circuit's noise: the seed every source's stream is keyed by (an integer) and the
-    sample grid its samples sit on (the project's rate, sim_settings' sample_rate)."""
+    sample grid its samples sit on (the project's rate, sim_settings' sample_rate). Mains
+    wander: the SineSources named in `mains_sources` (the mains) have their amplitude times
+    (1 + m(t)), m one shared stream of nominal rms `mains_rms` (varimu.devices.noise.
+    mains_wander); written only when there are mains sources."""
 
     seed: int
     rate_hz: float
+    mains_rms: float = 0.0
+    mains_sources: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -475,6 +480,11 @@ class CircuitIR:
             if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64:
                 raise IRError(f"noise seed {seed!r} must be an integer in [0, 2^64)")
             _positive("noise.rate_hz", self.noise.rate_hz)
+            _nonneg("noise.mains_rms", self.noise.mains_rms)
+            sines = {e.name for e in self.elements() if isinstance(e, SineSource)}
+            for m in self.noise.mains_sources:
+                if m not in sines:
+                    raise IRError(f"noise.mains_sources: {m} is not a sine source")
 
     # --- JSON ---
 
@@ -489,6 +499,9 @@ class CircuitIR:
         if self.noise is not None:
             # The seed as an integer, not the codec's float.
             d["noise"] = {"seed": self.noise.seed, "rate_hz": float(self.noise.rate_hz)}
+            if self.noise.mains_sources:
+                d["noise"]["mains_rms"] = float(self.noise.mains_rms)
+                d["noise"]["mains_sources"] = list(self.noise.mains_sources)
         d.update(
             probes=[_encode(p) for p in self.probes],
             models=[_encode(m) for m in self.models],
@@ -532,8 +545,14 @@ class CircuitIR:
 def _decode_noise(d: Any) -> NoiseSpec:
     if not isinstance(d, dict):
         raise IRError("noise: an object {seed, rate_hz}")
-    _check_keys("noise", d, {"seed", "rate_hz"})
-    return NoiseSpec(seed=d["seed"], rate_hz=d["rate_hz"])
+    mains = {"mains_rms", "mains_sources"} & set(d)
+    _check_keys("noise", d, {"seed", "rate_hz"} | (mains and {"mains_rms", "mains_sources"}))
+    return NoiseSpec(
+        seed=d["seed"],
+        rate_hz=d["rate_hz"],
+        mains_rms=d.get("mains_rms", 0.0),
+        mains_sources=tuple(d.get("mains_sources", ())),
+    )
 
 
 def _nonneg(what: str, x: float) -> None:

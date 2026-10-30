@@ -15,7 +15,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     derived: {module: python.module, values: {key: {source}}}
     mains: {v_rms: <control>, hz: <control>, rated_v_rms: <param or {value, source}>}
     tolerance: {source, seed, spread, tube: {emission_pct, mu_pct}, bands, classes, combined}
-    noise: {seed, temperature_k?, flicker_v2?}   # noise sources on (device builder B5)
+    noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
     devices: {key: {device, ...}}   # device model instances, in IR model order
     sections: [{title, tolerance?, parts: {NAME: {<macro>: <nodes>, ...}}}]
 
@@ -45,7 +45,8 @@ on its resistors, shot, grid-current shot and flicker noise on its tubes
 (varimu.devices.noise; the builder's docstring says which parts). `seed` is an integer
 (every source's stream is keyed by it and its name); `temperature_k` (the resistors') and
 `flicker_v2` (K_f, V^2) are parameters or {value, source}, by default varimu.devices.noise's
-RESISTOR_T_K and FLICKER_V2. Renders can override it (`build(..., noise=)`).
+RESISTOR_T_K and FLICKER_V2; so is `mains_rms`, the mains wander of a circuit with `mains`
+parts (default MAINS_RMS, 0 for none). Renders can override it (`build(..., noise=)`).
 
 Parts and devices are read by varimu.circuit.builder (its docstring has the
 macro parts and their parameters).
@@ -219,7 +220,7 @@ def load_circuit(path: Path) -> CircuitSpec:
         if not isinstance(noise, Mapping) or "seed" not in noise:
             errors.append("noise: a mapping {seed, temperature_k?, flicker_v2?}")
         else:
-            if extra := set(noise) - {"seed", "temperature_k", "flicker_v2"}:
+            if extra := set(noise) - {"seed", "temperature_k", "flicker_v2", "mains_rms"}:
                 errors.append(f"noise: unknown keys {sorted(extra)}")
             seed = noise["seed"]
             if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64:

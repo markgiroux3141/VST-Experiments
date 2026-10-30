@@ -191,3 +191,26 @@ def test_a_noisy_run_reproduces_from_its_seed():
     hiss = out[0] - quiet
     assert np.std(hiss) > 0
     assert np.std(out[2] - out[0]) > 0.5 * np.std(hiss)
+
+
+def test_the_mains_wander_rides_on_the_mains_parts():
+    from varimu.circuit import builder, ir, spec
+
+    c = spec.load_circuit(spec.circuit_path("tube_synth"))
+    x = builder.build_ir(c, spec.resolve(c), noise=4)
+    sines = [e.name for e in x.elements() if isinstance(e, ir.SineSource)]
+    assert x.noise.mains_sources == tuple(sines) and len(sines) == 3
+    assert x.noise.mains_rms == nz.MAINS_RMS
+    assert ir.CircuitIR.from_json(x.to_json()) == x
+    # Without mains parts, no wander (and the JSON keeps its old shape).
+    t = _triode_stage(noise=4)
+    assert t.noise.mains_sources == () and "mains_rms" not in t.to_json()
+
+
+def test_the_mains_wander_has_its_nominal_rms():
+    """Its density's integral (flicker flat below F_LO, low-passed above MAINS_F_HI): over
+    many independent starts, the rms 0.25 s in (past the low-pass's start, which takes the
+    flicker's first sample with its full band: 1.5x for ~80 ms, inside the settle) is the
+    nominal rms within the statistics."""
+    at = [nz.mains_wander(s, 0.01, 96000.0, 24001)[-1] for s in range(200)]
+    assert np.sqrt(np.mean(np.square(at))) == pytest.approx(0.01, rel=0.15)

@@ -5,6 +5,7 @@
 
 use circuitsim::ir::{
     Capacitor, CircuitIr, Element, IR_VERSION, NoiseCurrent, NoiseSpec, Probe, Resistor, Section,
+    SineSource,
 };
 use circuitsim::noise::K_B;
 use circuitsim::partition::{Coupling, simulate_partitioned};
@@ -53,6 +54,8 @@ fn circuit(seed: u64) -> CircuitIr {
         noise: Some(NoiseSpec {
             seed,
             rate_hz: RATE,
+            mains_rms: 0.0,
+            mains_sources: vec![],
         }),
         probes: vec![
             Probe::Voltage { node: "out".into() },
@@ -201,4 +204,71 @@ fn blocks_and_partitions_see_the_same_noise() {
         println!("{p} partitioned: {d:.2e}");
         assert!(d < 1e-2, "{p} partitioned: rms difference {d:e}");
     }
+}
+
+/// The mains wander multiplies a mains source's amplitude by 1 + m, m from the Python
+/// reference (`varimu.devices.noise.mains_wander`, in the noise fixture).
+#[test]
+fn the_mains_wander_multiplies_the_mains_amplitude() {
+    let fx: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/noise/noise.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    let m = &fx["mains"];
+    let want: Vec<f64> = m["samples"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_f64().unwrap())
+        .collect();
+    let (amp, hz) = (100.0, 60.0);
+    let ir = CircuitIr {
+        version: IR_VERSION,
+        title: "mains".into(),
+        input_node: "in".into(),
+        controls: vec![],
+        noise: Some(NoiseSpec {
+            seed: m["seed"].as_u64().unwrap(),
+            rate_hz: RATE,
+            mains_rms: m["rms"].as_f64().unwrap(),
+            mains_sources: vec!["VM".into()],
+        }),
+        probes: vec![Probe::Voltage { node: "m".into() }],
+        models: vec![],
+        sections: vec![Section {
+            title: "t".into(),
+            elements: vec![
+                r("RIN", "in", "0", 1e3),
+                Element::SineSource(SineSource {
+                    name: "VM".into(),
+                    pos: "m".into(),
+                    neg: "0".into(),
+                    offset_v: 0.0,
+                    amplitude_v: amp,
+                    freq_hz: hz,
+                    phase_deg: 90.0,
+                }),
+                r("RM", "m", "0", 1e3),
+            ],
+        }],
+    };
+    let n = want.len();
+    let out = circuitsim::simulate(&ir, &vec![0.0; n], 1.0 / RATE, &opts()).unwrap();
+    let v = probe(&out, "v(m)");
+    let mut worst = 0.0f64;
+    for (k, (&got, &mk)) in v.iter().zip(&want).enumerate().skip(1) {
+        let s = amp
+            * (2.0 * std::f64::consts::PI * hz * k as f64 / RATE + std::f64::consts::FRAC_PI_2)
+                .sin();
+        if s.abs() > 0.5 * amp {
+            worst = worst.max((got / s - 1.0 - mk).abs());
+        }
+    }
+    let rms = (want.iter().map(|x| x * x).sum::<f64>() / n as f64).sqrt();
+    println!("mains wander: worst {worst:.2e} against m's rms {rms:.2e}");
+    assert!(worst < 1e-9 * (1.0 + rms), "worst {worst:e}");
 }

@@ -68,3 +68,35 @@ def test_the_engines_agree_on_the_noise_waveform():
     a, b = (sosfiltfilt(sos, x - np.mean(x))[480:] for x in (a, b))
     d_db = 20 * np.log10(np.std(a - b) / np.std(a))
     assert d_db < -55.0, f"engines differ by {d_db:.1f} dB re the noise"
+
+
+def test_the_engines_agree_on_the_mains_wander():
+    """A mains source with the wander, the same stream through both engines: measured
+    -182 dB re signal (both multiply the sine by 1 + m from one reference stream)."""
+    _ngspice()
+    from varimu.circuit import ir as I
+    from varimu.circuit import spice
+    from varimu.sim import fast, io
+
+    els = (
+        I.Resistor("RIN", "in", "0", 1e3),
+        I.SineSource("VM", "m", "0", 0.0, 100.0, 60.0, 90.0),
+        I.Resistor("RM", "m", "0", 1e3),
+    )
+    ir = I.CircuitIR(
+        title="mains",
+        input_node="in",
+        probes=(I.VoltageProbe("m"),),
+        models=(),
+        sections=(I.Section("t", els),),
+        noise=I.NoiseSpec(3, nt.RATE, 0.005, ("VM",)),
+    )
+    x = np.zeros(4800)
+    text, _ = spice.emit(ir)
+    s = io.TransientSettings.from_sim_settings(engine="ngspice")
+    ng = io.run_transient(
+        text, x, input_node="in", save=("v(m)",), settings=s,
+        noise=spice.noise_streams(ir), max_step_div=8, grid_breakpoints=True,
+    ).vectors["v(m)"]  # fmt: skip
+    cs = fast.run_transient(ir, x).vectors["v(m)"]
+    assert 20 * np.log10(np.std(ng - cs) / np.std(cs)) < -120

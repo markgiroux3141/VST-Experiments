@@ -22,6 +22,20 @@ pub const PARTITION: f64 = 8.0;
 /// (V^2).
 pub const RESISTOR_T_K: f64 = 313.0;
 pub const FLICKER_V2: f64 = 2.5e-14;
+/// Mains wander: nominal rms, the low-pass corner, the shared stream's name.
+pub const MAINS_RMS: f64 = 0.005;
+pub const MAINS_F_HI_HZ: f64 = 2.0;
+pub const MAINS_STREAM_NAME: &str = "MAINS";
+
+/// m = mains_scale(rms) times the low-passed unit flicker (Python's `mains_scale`).
+pub fn mains_scale(rms: f64) -> f64 {
+    rms / ((MAINS_F_HI_HZ / F_LO_HZ).ln() + 1.0).sqrt()
+}
+
+/// The mains wander's one-pole low-pass: y += alpha (x - y).
+pub fn mains_alpha(rate_hz: f64) -> f64 {
+    1.0 - (-2.0 * std::f64::consts::PI * MAINS_F_HI_HZ / rate_hz).exp()
+}
 
 /// 4 k T0 beta: a triode's plate noise density per siemens of gm (A^2/Hz/S), as Python's
 /// `shot_k()` computes it.
@@ -309,6 +323,8 @@ impl Flicker {
 struct Stream {
     white: Normals,
     flicker: Option<Flicker>,
+    /// A one-pole low-pass after it (the mains wander): (alpha, its output so far).
+    lowpass: Option<(f64, Option<f64>)>,
     start: u64,
     vals: Vec<f64>,
 }
@@ -318,15 +334,24 @@ impl Stream {
         Stream {
             white,
             flicker,
+            lowpass: None,
             start: 0,
             vals: Vec::new(),
         }
     }
 
     fn next(&mut self, filter: Option<&FlickerFilter>) -> f64 {
-        match (&mut self.flicker, filter) {
+        let x = match (&mut self.flicker, filter) {
             (Some(f), Some(filter)) => f.next(filter),
             _ => self.white.next(),
+        };
+        match &mut self.lowpass {
+            None => x,
+            // Starting at the first sample, as Python's `mains_wander`.
+            Some((a, y)) => *y.insert(match *y {
+                None => x,
+                Some(prev) => prev + *a * (x - prev),
+            }),
         }
     }
 
@@ -419,6 +444,9 @@ pub struct NoiseRun {
     pub columns: Vec<(Option<usize>, Option<usize>)>,
     sources: Vec<Source>,
     filter: Option<FlickerFilter>,
+    /// The mains wander: its stream (m before scaling), scale, and the sine sources it
+    /// multiplies (indices into `Mna::waves`).
+    mains: Option<(Stream, f64, Vec<usize>)>,
     /// Grid samples per engine sample: p / q, one of them 1 ([`NoiseRun::set_step`]).
     p: u64,
     q: u64,
@@ -429,15 +457,30 @@ pub struct NoiseRun {
 
 impl NoiseRun {
     /// Sources in IR order; `columns` as [`NoiseRun::columns`], a white source's one,
-    /// then a tube's two, in the same order.
+    /// then a tube's two, in the same order. `mains`: the wander's rms and the sine
+    /// sources it multiplies (indices into `Mna::waves`; none: no wander).
     pub fn new(
         seed: u64,
         rate_hz: f64,
         specs: Vec<NoiseSpec>,
         columns: Vec<(Option<usize>, Option<usize>)>,
+        mains: Option<(f64, Vec<usize>)>,
     ) -> NoiseRun {
         let tubes = specs.iter().any(|s| matches!(s, NoiseSpec::Tube { .. }));
-        let filter = tubes.then(|| FlickerFilter::new(rate_hz));
+        let filter = (tubes || mains.is_some()).then(|| FlickerFilter::new(rate_hz));
+        let mains = mains.map(|(rms, waves)| {
+            let f = filter.as_ref().expect("made with a mains wander");
+            let mut s = Stream::new(
+                Normals::new(key(seed, MAINS_STREAM_NAME, STREAM_FLICKER), 0),
+                Some(Flicker::new(
+                    f,
+                    key(seed, MAINS_STREAM_NAME, STREAM_FLICKER),
+                    key(seed, MAINS_STREAM_NAME, STREAM_FLICKER_START),
+                )),
+            );
+            s.lowpass = Some((mains_alpha(rate_hz), None));
+            (s, mains_scale(rms), waves)
+        });
         let mut sources = Vec::with_capacity(specs.len());
         let mut col = 0;
         for s in specs {
@@ -502,6 +545,7 @@ impl NoiseRun {
             columns,
             sources,
             filter,
+            mains,
             p: 1,
             q: 1,
             k0: 0,
@@ -536,6 +580,9 @@ impl NoiseRun {
         self.rem = n * p - self.k0 * q;
         let w = p as usize + 1;
         let (k0, f) = (self.k0, self.filter.as_ref());
+        if let Some((m, _, _)) = &mut self.mains {
+            m.seek(k0, w, f);
+        }
         for s in &mut self.sources {
             match s {
                 Source::White { z, .. } => z.seek(k0, w, f),
@@ -573,6 +620,18 @@ impl NoiseRun {
                     out[*col] = sig_shot * shot.at(local) + gm * flicker_rt * flicker.at(local);
                     out[*col + 1] = sig_grid * grid.at(local);
                 }
+            }
+        }
+    }
+
+    /// The mains wander at step fraction `theta`: multiply the mains' sine values
+    /// (`waves`, one per `Mna::waves`, the sinusoidal part only) by 1 + m.
+    pub fn modulate_waves(&self, theta: f64, waves: &mut [f64]) {
+        if let Some((m, scale, idx)) = &self.mains {
+            let local = (self.rem as f64 + theta * self.p as f64) / self.q as f64;
+            let g = 1.0 + scale * m.at(local);
+            for &i in idx {
+                waves[i] *= g;
             }
         }
     }
@@ -641,6 +700,9 @@ impl NoiseRun {
     /// change rebuilds the circuit), by source name.
     pub fn carry(&mut self, old: &NoiseRun) {
         (self.p, self.q, self.k0, self.rem) = (old.p, old.q, old.k0, old.rem);
+        if let (Some((m, _, _)), Some((om, _, _))) = (&mut self.mains, &old.mains) {
+            *m = om.clone();
+        }
         for s in &mut self.sources {
             for o in &old.sources {
                 match (&mut *s, o) {

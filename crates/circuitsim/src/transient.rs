@@ -1563,6 +1563,9 @@ impl Transient {
             for (v, wave) in dk.wv.iter_mut().zip(&self.mna.waves) {
                 *v = wave.at(t);
             }
+            if let Some(noise) = &self.mna.noise {
+                noise.modulate_waves(th, &mut dk.wv[..nw]);
+            }
             for ((v, &e0), &e1) in dk.wv[nw..].iter_mut().zip(&self.ext0).zip(&self.ext1) {
                 *v = e0 + th * (e1 - e0);
             }
@@ -1955,16 +1958,21 @@ impl Transient {
         // rows of C, with d the device currents at the current ports.
         let mut f = self.mna.b.clone();
         f[self.mna.input_row] += self.u;
-        self.mna.add_waves(self.time(0.0), &mut f);
         for (&row, &e) in self.mna.externals.iter().zip(&self.ext1) {
             f[row] += e;
         }
+        let t0 = self.time(0.0);
+        let mut waves: Vec<f64> = self.mna.waves.iter().map(|w| w.at(t0)).collect();
         if let Some(noise) = &mut self.mna.noise {
             // At the current point: the next sample's start.
             noise.begin_sample(self.n);
+            noise.modulate_waves(0.0, &mut waves);
             let mut vals = vec![0.0; noise.columns.len()];
             noise.fill(0.0, &mut vals);
             noise.add_to(&vals, &mut f);
+        }
+        for (w, v) in self.mna.waves.iter().zip(&waves) {
+            f[w.row] += v;
         }
         let mut gx = vec![0.0; n];
         self.mna.g.mul_vec(&self.x, &mut gx);

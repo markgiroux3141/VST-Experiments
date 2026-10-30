@@ -185,6 +185,7 @@ fn noise_run(
     ir: &CircuitIr,
     instances: &[DeviceInstance],
     node: &dyn Fn(&str) -> Option<usize>,
+    wave_names: &[&str],
 ) -> Option<NoiseRun> {
     let spec = ir.noise.as_ref()?;
     let (mut specs, mut columns) = (Vec::new(), Vec::new());
@@ -223,7 +224,20 @@ fn noise_run(
             _ => {}
         }
     }
-    Some(NoiseRun::new(spec.seed, spec.rate_hz, specs, columns))
+    // The mains wander on the sine sources this circuit (or partition) has.
+    let waves: Vec<usize> = spec
+        .mains_sources
+        .iter()
+        .filter_map(|m| wave_names.iter().position(|w| w == m))
+        .collect();
+    let mains = (spec.mains_rms > 0.0 && !waves.is_empty()).then_some((spec.mains_rms, waves));
+    Some(NoiseRun::new(
+        spec.seed,
+        spec.rate_hz,
+        specs,
+        columns,
+        mains,
+    ))
 }
 
 impl Mna {
@@ -299,6 +313,7 @@ impl Mna {
         }
 
         let mut waves = Vec::new();
+        let mut wave_names: Vec<&str> = Vec::new();
         let mut dc_starts = Vec::new();
         let mut inductance: HashMap<&str, f64> = HashMap::new();
         let mut instances = Vec::new();
@@ -321,6 +336,7 @@ impl Mna {
                     incidence(&mut g, k, node(&v.pos), node(&v.neg));
                     b[k] = v.offset_v;
                     let (omega, phase) = v.omega_phase();
+                    wave_names.push(&v.name);
                     waves.push(Wave {
                         row: k,
                         amplitude: v.amplitude_v,
@@ -398,7 +414,7 @@ impl Mna {
             incidence(&mut g, row, node(&c.node), None);
         }
         let instances = merge_parallel(instances);
-        let noise = noise_run(ir, &instances, &node);
+        let noise = noise_run(ir, &instances, &node, &wave_names);
 
         let probes = ir
             .probes

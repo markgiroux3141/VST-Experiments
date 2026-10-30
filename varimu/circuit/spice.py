@@ -80,9 +80,11 @@ GM_DELTA_V = 1e-3
 
 @dataclass(frozen=True)
 class NoiseStream:
-    """A unit noise stream ngspice reads as a node's voltage (varimu.sim.io writes its
-    samples for the run's length): stream `stream` of source `name` under `seed`, white or
-    unit flicker (varimu.devices.noise.unit_stream)."""
+    """A noise stream ngspice reads as a node's voltage (varimu.sim.io writes its samples
+    for the run's length): stream `stream` of source `name` under `seed`, white or unit
+    flicker (varimu.devices.noise.unit_stream), or (`mains_rms` > 0) the mains wander m(t)
+    (varimu.devices.noise.mains_wander).
+    """
 
     node: str
     seed: int
@@ -90,6 +92,12 @@ class NoiseStream:
     stream: int
     flicker: bool
     rate_hz: float  # the noise grid (the IR's noise.rate_hz)
+    mains_rms: float = 0.0
+
+    def samples(self, n: int):
+        if self.mains_rms > 0:
+            return nz.mains_wander(self.seed, self.mains_rms, self.rate_hz, n)
+        return nz.unit_stream(self.seed, self.name, self.stream, self.flicker, self.rate_hz, n)
 
 
 def noise_streams(ir: CircuitIR) -> list[NoiseStream]:
@@ -97,6 +105,18 @@ def noise_streams(ir: CircuitIR) -> list[NoiseStream]:
     if ir.noise is None:
         return []
     out = []
+    if ir.noise.mains_sources:
+        out.append(
+            NoiseStream(
+                MAINS_NODE,
+                ir.noise.seed,
+                nz.MAINS_STREAM_NAME,
+                nz.STREAM_FLICKER,
+                True,
+                ir.noise.rate_hz,
+                ir.noise.mains_rms,
+            )
+        )
     for el in ir.elements():
         if isinstance(el, NoiseCurrent):
             out.append(
@@ -119,6 +139,20 @@ def noise_streams(ir: CircuitIR) -> list[NoiseStream]:
 
 def _nz(name: str) -> str:
     return "nz_" + name.lower()
+
+
+MAINS_NODE = "nz_mains"
+
+
+def mains_line(el: SineSource) -> str:
+    """A mains source with the wander (B5): amplitude times 1 + m(t), m the voltage of
+    MAINS_NODE."""
+    w = 2 * math.pi * el.freq_hz
+    ph = math.radians(el.phase_deg)
+    return (
+        f"B{el.name} {el.pos} {el.neg} V={{{num(el.offset_v)}+{num(el.amplitude_v)}"
+        f"*(1+v({MAINS_NODE}))*sin({num(w)}*time+{num(ph)})}}"
+    )
 
 
 def noise_lines(
@@ -355,6 +389,8 @@ def emit(
             elif isinstance(el, NoiseCurrent | TubeNoise):
                 assert ir.noise is not None  # validated
                 lines += noise_lines(el, ir.noise.rate_hz, devices, models)
+            elif ir.noise is not None and el.name in ir.noise.mains_sources:
+                lines.append(mains_line(el))
             elif el.name not in folded:
                 lines.append(element_line(el, models))
     if cores:

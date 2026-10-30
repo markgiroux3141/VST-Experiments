@@ -126,8 +126,11 @@ struct Context<'a> {
     designators: HashSet<String>,
     missing_class: BTreeSet<String>,
     section_tolerance: Option<Value>,
-    /// Noise sources on (B5): the seed, the resistors' temperature, K_f.
-    noise: Option<(u64, f64, f64)>,
+    /// Noise sources on (B5): the seed, the resistors' temperature, K_f, the mains
+    /// wander's rms.
+    noise: Option<(u64, f64, f64, f64)>,
+    /// The `mains` parts' sources, in order of expansion.
+    mains_sines: Vec<String>,
     /// Model name -> its `devices` entry's `parallel` (1 for `instance: false`).
     parallel: HashMap<String, i64>,
 }
@@ -178,7 +181,7 @@ fn numerical(ctx: &Context, x: Option<&Value>) -> bool {
 
 /// A part's noise elements (Python's `_noise_elements`).
 fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Vec<Element> {
-    let Some((_, temperature, kf)) = ctx.noise else {
+    let Some((_, temperature, kf, _)) = ctx.noise else {
         return Vec::new();
     };
     let mut out = Vec::new();
@@ -231,7 +234,7 @@ fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Ve
 }
 
 /// The build's noise (Python's `_noise`).
-fn noise_setting(ctx: &Context, noise: Noise) -> Result<Option<(u64, f64, f64)>, Error> {
+fn noise_setting(ctx: &Context, noise: Noise) -> Result<Option<(u64, f64, f64, f64)>, Error> {
     let block = ctx.spec.noise.as_ref();
     let seed = match noise {
         Noise::Off => return Ok(None),
@@ -256,6 +259,7 @@ fn noise_setting(ctx: &Context, noise: Noise) -> Result<Option<(u64, f64, f64)>,
         seed,
         get("temperature_k", nz::RESISTOR_T_K)?,
         get("flicker_v2", nz::FLICKER_V2)?,
+        get("mains_rms", nz::MAINS_RMS)?,
     )))
 }
 
@@ -550,6 +554,9 @@ fn expand_part(
     };
     let a = resolve_params(ctx, name, &m, entry)?;
     let els = expand(ctx, kind, name, conn, &nodes, &a)?;
+    if kind == "mains" {
+        ctx.mains_sines.push(name.to_string());
+    }
     let tol = entry
         .get("tolerance")
         .cloned()
@@ -1119,6 +1126,7 @@ pub fn build_ir_noise(
         missing_class: BTreeSet::new(),
         section_tolerance: None,
         noise: None,
+        mains_sines: Vec::new(),
         parallel: HashMap::new(),
     };
     ctx.noise = noise_setting(&ctx, noise)?;
@@ -1170,12 +1178,34 @@ pub fn build_ir_noise(
             spec.path.display()
         )));
     }
+    // The mains wander on the mains parts the build kept (a switch may leave one out).
     let noise = match ctx.noise {
         None => None,
-        Some((seed, _, _)) => Some(NoiseSpec {
-            seed,
-            rate_hz: sample_rate(lib)?,
-        }),
+        Some((seed, _, _, mains_rms)) => {
+            let kept: HashSet<&str> = sections
+                .iter()
+                .flat_map(|s| s.elements.iter())
+                .filter_map(|e| match e {
+                    Element::SineSource(s) => Some(s.name.as_str()),
+                    _ => None,
+                })
+                .collect();
+            let mains: Vec<String> = if mains_rms > 0.0 {
+                ctx.mains_sines
+                    .iter()
+                    .filter(|n| kept.contains(n.as_str()))
+                    .cloned()
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            Some(NoiseSpec {
+                seed,
+                rate_hz: sample_rate(lib)?,
+                mains_rms: if mains.is_empty() { 0.0 } else { mains_rms },
+                mains_sources: mains,
+            })
+        }
     };
     let mut models: Vec<DeviceModel> = ctx.models.into_iter().map(|(_, m)| m).collect();
     models.extend(ctx.core_models.into_iter().map(DeviceModel::MagneticCore));
