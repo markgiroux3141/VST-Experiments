@@ -837,6 +837,42 @@ update the same 1 mOhm end is clean. Renders never update mid-run, so only live 
 - *Wiper contact resistance* (20 Ohm in series with the wiper): the spike unchanged (the end
   segment is still 1 mOhm).
 
+*Capacitor leakage and dielectric absorption, measured 2026-10-30 (options to the user;
+nothing built; prototype in the session's scratch, the builder's C macro wrapped).*
+- **The model:** Dow's (Kundert, *Modeling Dielectric Absorption in Capacitors*, designers-
+  guide.org): series RC branches across C, one per decade of time constant (10 us-1000 s,
+  nine), each k C: equal capacitance per decade is also what makes a dielectric's
+  dissipation factor nearly flat with frequency, so one k per dielectric sets both the DA
+  and the audio-band loss (tan d ~ 0.68 k). C_inf scaled so the total at the measuring
+  frequency (1 kHz; 120 Hz for electrolytics) is the nominal. Leakage: a parallel resistor.
+- **k fitted per dielectric** (the IEC 60384-1 test simulated: 60 min charged, 10 s shorted,
+  the peak recovery in 15 min): aluminium electrolytic DA 12% (IEC 60384-1 data via
+  Wikipedia, 10-15%) -> k 14.5% per decade; paper from Sprague Vitamin Q type 132P's
+  dissipation factor, 1.0% max -> k 1.5%, its DA 2.4% (paper: "a few %", no table found);
+  mica DA 0.5% (Kyocera-AVX MLO note, 0.3-0.7%) -> k 0.28% (its 1 kHz loss 0.19%, above real
+  mica's: mica's DA is high for its loss, so constant k overstates it); polyester 0.35%
+  (0.2-0.5%) -> k 0.19%; polypropylene 0.02% -> k 0.011%. Leakage: paper 1500 MOhm uF
+  (MIL-C-25 at 25 C), electrolytic 0.01 CV uA at rated voltage (Nichicon UVZ, 2 min: an
+  insulation time constant of 100 s), mica / film provisional.
+- **Dielectrics as assigned:** uF-range supply, bias and bypass parts electrolytic; the 670's
+  C101 / C109 / C304 and the EQP-1A's .3 oil or paper; coupling caps paper; <= 3 nF mica;
+  strays (winding, wiring) ideal; the synth's signal caps paper or polyester (its design).
+- **Renders** (production, noise at -20 dBFS, default panels; difference re output, octave
+  levels 31 Hz-16 kHz, render time): leakage: 670 -78 dB / 0.001 dB, EQP-1A -68 / 0.003, 5E3
+  -50 / 0.04, 1.0x. DA (nine branches): 670 -58 dB / 0.012 dB, EQP-1A -62 / 0.008, 5E3 -47 /
+  0.10, 2.2-5.2x the time. Lean (four branches, one per two decades, k doubled): the same
+  sizes, 1.5-2.3x. Both: <= 0.13 dB (the 5E3 at 31 Hz).
+- **The tube synth** (draft, the app's partition, a held note at -15 V, release, a second
+  note): paper DA moves the held pitch -3.0 cents (a fixed offset, the tank's capacitance at
+  475 Hz: the tuning absorbs it) and the level -0.02 dB; the envelope's release a hair slower
+  (no audible memory: the second note -0.01 dB); polyester -0.9 cents; leakage +0.2 cents,
+  -0.04 dB. Cost: 40 -> 256 capacitors, 1.34x -> 2.02x real time offline (lean: 136, 1.54x);
+  in the app (~62% load today) that would be past real time.
+- **Reading:** new parts' leakage and DA are inaudible in all four circuits and cost 1.5-5x
+  the time. Where they matter is aging (B7): an aged paper coupling cap leaks 10-100 MOhm
+  (estimate), so the 5E3's 0.1 uF from a ~250 V plate into a 220k grid leak at 50 MOhm puts
+  ~+1 V on a 6V6 grid: an operating-point change, audible.
+
 **B7. Aging.** FUTURE_DIRECTIONS.md section 2: a unit history (years since build,
 powered hours, storage temperature and humidity, service events: recapped,
 retubed) mapped to per-part drift by sourced laws with Arrhenius acceleration
