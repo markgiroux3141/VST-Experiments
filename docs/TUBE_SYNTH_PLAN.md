@@ -470,7 +470,8 @@ it: a pot reaching an end stop (0 or 1) in a running stream spikes for a moment 
 segment is MIN_R_OHM, 1 mOhm, a 1e8 jump from the step before); moving within the range
 is smooth. A pot's end resistance would be a model change (every circuit): not done.
 *Measured 2026-10-30:* the stream's update, not the pot (the RESONANCE pot's end next to a
-series capacitor); options in DEVICE_BUILDER_PLAN.md B6, "Pot end stop".
+series capacitor); fixed in the engine the same day (an update restarts at first order:
+DEVICE_BUILDER_PLAN.md B6, "Pot end stop"). Knobs reach their ends cleanly in the app.
 
 **The A/B (2026-10-30): the tube oscillator is audible.** `scripts/osc_ab.py` renders one
 phrase through tube_synth.yaml twice at production, loudness-matched: A, the app's test

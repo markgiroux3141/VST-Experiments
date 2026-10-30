@@ -789,7 +789,23 @@ resistors (excess noise, voltage coefficient), each with options first.
   heaters don't load the power transformer; the app's live stream settles its first second
   (a power-on's warm-up starts within it).
 
-*Pot end stop, measured 2026-10-30 (options to the user; nothing built).* Reproduced on
+*Pot end stop, decided and built 2026-10-30 (the user: the engine restart; no end
+resistance for now, nothing audible to gain at realistic values).* `Transient::update` now
+sets a restart: the next sample takes backward Euler over its first h / 256
+(`RESTART_LEVEL` 8, the deepest halving; halving further on failure), then the method over
+the other 255/256 in one step (its own step system, `rest_slot`; doubling substeps if it
+fails), without extrapolating across the change; both solvers (DK and the full MNA), every
+method with an explicit first stage (the coupled ones take no derivative in). Measured: the
+tube filter's RESONANCE to 1 (and 0.5 -> 1 at once) peaks as within the range; an update to
+the identical circuit costs what it did before (draft, 10 kHz: the 670 -79.7 dB, the EQP-1A
+-79.2 dB peak re the signal; production -122 dB; at h / 64 it was -68), the next block
+~1-4 ms more on the 670; the 670's pots thrown to their ends in one update now run (Newton
+failed in both solvers before) and the solvers agree within 0.21 tolerance. Renders never
+update, so none moves. Tests: `crates/circuitsim/tests/update.rs` (a pot's end next to a
+series capacitor, at once vs a decade per sample, within 1.6 uV; the 670's pots thrown).
+The measurement that led there:
+
+*Pot end stop, measured 2026-10-30.* Reproduced on
 `tube_filter` at draft: RESONANCE 0.99 -> 1 throws the output to +-72 V (a thump decaying
 over ~30 ms), 0.5 -> 1 to 180 V; CUTOFF, LEVEL and the 5E3's volume reach their ends cleanly.
 **The cause is the engine, not the pot:** `Transient::update` carries every node voltage and

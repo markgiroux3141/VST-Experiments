@@ -175,6 +175,12 @@ heater ratings per tube type); `varimu/devices/cathode.py` the reference, circui
 has the block. `build(..., heaters=)` overrides (None / False / True / "warm" / "cold"); a
 cold start (power on) skips the settle; the app's "Power on (cold)" button.
 
+**Knob changes restart at first order (B6, the pot end stop, 2026-10-30):** after
+`Transient::update` the next sample starts with backward Euler over h / 256, then the method
+(a pot thrown to its 1 mOhm end next to a series capacitor used to thump tens of volts:
+the carried-in derivative). Live streams only; renders never update. No pot end resistance
+(the user's call: inaudible at realistic values). DEVICE_BUILDER_PLAN.md B6 has the numbers.
+
 Reverbs (spring first, then plate) as physical media coupled to the netlist at transducer
 ports are drafted in [docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; milestones
 E1-E7, the Fender 6G15 as the first device). **Parked: nothing in it starts until the user

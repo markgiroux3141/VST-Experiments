@@ -116,6 +116,14 @@ const MAX_COARSEN: usize = 2;
 
 /// Levels to refine a step rejected with error ratio `q` (> 1) by: at least
 /// one, enough for the redone step to reach [`REFINE_TARGET`].
+/// The sample after an update starts with backward Euler over h / 2^RESTART_LEVEL
+/// ([`Transient::restart_sample`]), the deepest halving by default: its first-order
+/// error on an update to the identical circuit is then as small as before the
+/// restart existed (the 670 and the EQP-1A at 10 kHz, draft: -80 dB peak re the
+/// signal, against -68 at h / 64; production -122 dB), and the modes a change
+/// makes fast (a pot's end, 1 mOhm, on a capacitor: nanoseconds) settle within it.
+const RESTART_LEVEL: usize = 8;
+
 fn refine_levels(q: f64) -> usize {
     ((q / REFINE_TARGET).log2() / 4.0).ceil().max(1.0) as usize
 }
@@ -639,8 +647,11 @@ struct Dk {
     support: Vec<usize>,
     /// C on those rows and columns.
     css: SparseRows,
-    /// DK system per halving level (built on first use).
+    /// DK system per halving level (built on first use), and one more for the
+    /// remainder of a sample after a restart ([`Transient::rest_slot`]).
     levels: Vec<Option<DkSystem>>,
+    /// Backward Euler's, per level (the first step after an update).
+    levels_be: Vec<Option<DkSystem>>,
     newton: DkNewton,
     /// `x_S` and `F_S` at `x`.
     xs: Vec<f64>,
@@ -693,7 +704,8 @@ impl Dk {
             newton: DkNewton::new(&ports, opts.newton_reuse),
             ports,
             css: SparseRows::new(&css),
-            levels: vec![None; opts.max_halvings as usize + 1],
+            levels: vec![None; opts.max_halvings as usize + 2],
+            levels_be: vec![None; opts.max_halvings as usize + 1],
             xs: vec![0.0; r],
             f: vec![0.0; r],
             stage_f: vec![0.0; stages * r],
@@ -748,6 +760,11 @@ pub struct Transient {
     dk: Option<Dk>,
     /// Reduced step matrix per halving level (built on first use).
     levels: Vec<Option<Reduced>>,
+    /// Backward Euler's tableau and step systems, for the sample after an update.
+    tab_be: Tableau,
+    levels_be: Vec<Option<Reduced>>,
+    /// The next sample restarts at first order (set by `update`).
+    restart: bool,
     x: Vec<f64>,
     x_prev: Vec<f64>,
     /// Step that led to `x` (0 before the first step: nothing to extrapolate).
@@ -904,7 +921,10 @@ impl Transient {
             newton,
             coupled,
             dk,
-            levels: vec![None; opts.max_halvings as usize + 1],
+            levels: vec![None; opts.max_halvings as usize + 2],
+            tab_be: Method::BackwardEuler.tableau(),
+            levels_be: vec![None; opts.max_halvings as usize + 1],
+            restart: false,
             x: vec![0.0; n],
             x_prev: vec![0.0; n],
             h_prev: 0.0,
@@ -1182,7 +1202,9 @@ impl Transient {
         }
         self.advance_heat();
         self.deepest = 0;
-        let res = if self.opts.error_abstol > 0.0 && self.opts.step_selection {
+        let res = if self.restart {
+            self.restart_sample(inp)
+        } else if self.opts.error_abstol > 0.0 && self.opts.step_selection {
             self.advance_selected(inp)
         } else {
             // With error control, start one level above the deepest the
@@ -1290,6 +1312,79 @@ impl Transient {
         Ok(())
     }
 
+    /// The sample after an update: backward Euler over its first h / 2^RESTART_LEVEL
+    /// (halving on failure, as any step), then the method over the rest in one step
+    /// (its own step system, [`Transient::rest_slot`]; in doubling substeps if that
+    /// fails or misses the error tolerance).
+    ///
+    /// Why: `update` carries every node voltage over, but a change can make a mode
+    /// fast (a pot's section from kOhms to its 1 mOhm end, next to a series
+    /// capacitor), and the derivative at the carried point is then far outside what
+    /// the capacitors can hold (~100 A through 1 mOhm). An explicit first stage
+    /// injects it as charge: a thump of tens of volts (DEVICE_BUILDER_PLAN.md B6,
+    /// "Pot end stop"). Backward Euler's stage takes no derivative in and settles
+    /// the change as a switch does (fast modes within the step, charges held), and
+    /// the method resumes from that stage's derivative. SPICE restarts at first
+    /// order after a breakpoint the same way.
+    fn restart_sample(&mut self, inp: &StepInput) -> Result<(), (usize, StepFail)> {
+        let lb = RESTART_LEVEL.min(self.opts.max_halvings as usize);
+        let end = 1.0 / (1u64 << lb) as f64;
+        self.swap_backward_euler();
+        let res = self.advance(lb, 0.0, end, inp);
+        self.swap_backward_euler();
+        res?;
+        self.restart = false;
+        // Don't extrapolate the switching step's jump into the next guess.
+        self.h_prev = 0.0;
+        if lb == 0 {
+            return Ok(());
+        }
+        let rest = self.rest_slot();
+        let res = if self.dk.is_some() {
+            self.try_step_dk(rest, end, 1.0, inp)
+        } else {
+            self.try_step_dirk(rest, end, 1.0, inp)
+        };
+        match res {
+            Ok(()) => Ok(()),
+            Err(f @ StepFail::Matrix(_)) => Err((0, f)),
+            Err(f) => {
+                if let StepFail::Inaccurate(_) = f {
+                    self.reject(0);
+                }
+                for k in (1..=lb).rev() {
+                    let a = 1.0 / (1u64 << k) as f64;
+                    self.advance(k, a, 2.0 * a, inp)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    /// The step-system slot of a restart's remainder (a step of its own length).
+    fn rest_slot(&self) -> usize {
+        self.opts.max_halvings as usize + 1
+    }
+
+    /// The step length of `level` over step fractions `th0..th1`: h / 2^level, or
+    /// the span itself for the restart's remainder.
+    fn step_len(&self, level: usize, th0: f64, th1: f64) -> f64 {
+        if level == self.rest_slot() {
+            self.h * (th1 - th0)
+        } else {
+            self.h / (1u64 << level) as f64
+        }
+    }
+
+    /// Swap the method for backward Euler (tableau and step systems), and back.
+    fn swap_backward_euler(&mut self) {
+        std::mem::swap(&mut self.tab, &mut self.tab_be);
+        std::mem::swap(&mut self.levels, &mut self.levels_be);
+        if let Some(dk) = &mut self.dk {
+            std::mem::swap(&mut dk.levels, &mut dk.levels_be);
+        }
+    }
+
     /// Advance by `h / 2^level`, over step fractions `th0` to `th1` of
     /// `inp`, halving on failure.
     fn advance(
@@ -1385,7 +1480,7 @@ impl Transient {
         th1: f64,
         inp: &StepInput,
     ) -> Result<(), StepFail> {
-        let hk = self.h / (1u64 << level) as f64;
+        let hk = self.step_len(level, th0, th1);
         let n = self.x.len();
         let s = self.tab.s;
         let g = self.tab.gamma;
@@ -1395,6 +1490,8 @@ impl Transient {
             self.levels[level] = Some(Reduced::new(&a, &self.device_nodes));
         }
         let sys = self.levels[level].as_ref().expect("just built");
+        // A restart's remainder counts as a full step (error control, stats).
+        let level = if level == self.rest_slot() { 0 } else { level };
         let (nn, nl) = (sys.n_len(), sys.l_len());
         let slope = self.extrapolation(hk);
         let opts = self.newton_options();
@@ -1549,7 +1646,8 @@ impl Transient {
         th1: f64,
         inp: &StepInput,
     ) -> Result<(), StepFail> {
-        let hk = self.h / (1u64 << level) as f64;
+        let hk = self.step_len(level, th0, th1);
+        let rest = self.rest_slot();
         let s = self.tab.s;
         let g = self.tab.gamma;
         let inv = 1.0 / (g * hk);
@@ -1573,6 +1671,8 @@ impl Transient {
             dk.levels[level] = Some(sys);
         }
         let sys = dk.levels[level].as_ref().expect("just built");
+        // A restart's remainder counts as a full step (error control, stats).
+        let level = if level == rest { 0 } else { level };
         let (m, r) = (sys.m, sys.r);
         // Every unknown, or (enough for the outputs and this error norm) the probes'.
         let all = self.opts.all_unknowns || self.opts.error_norm == ErrorNorm::Nodes;
@@ -1887,11 +1987,12 @@ impl Transient {
     /// switched capacitor).
     ///
     /// The state (every node voltage and inductor current) carries over, and
-    /// the integration restarts from it: the derivative `C x'` is taken from
-    /// the new circuit at the current point (`b + u - G x - d(x)` on the
-    /// rows of `C`), and the next step doesn't extrapolate across the change.
-    /// Nodes without capacitance settle to the new circuit within that step
-    /// (every method is stiffly accurate). The step matrices are rebuilt on
+    /// the integration restarts from it at first order: the next sample starts
+    /// with a short backward-Euler step ([`Transient::restart_sample`]), which
+    /// settles what the change made fast as a real switch does (charges held),
+    /// and doesn't extrapolate across the change. (The derivative `C x'` from the
+    /// new circuit at the current point, `b + u - G x - d(x)` on the rows of `C`,
+    /// is still set, but no step reads it before the restart replaces it.) The step matrices are rebuilt on
     /// first use, one per step size (for the 670: ~1 ms each; see
     /// `tests/update.rs`). Devices with memory start over from their model.
     ///
@@ -1981,6 +2082,7 @@ impl Transient {
         // The new devices start at T0: give them the carried temperature.
         self.apply_heat();
         self.levels.iter_mut().for_each(|l| *l = None);
+        self.levels_be.iter_mut().for_each(|l| *l = None);
         let n = self.x.len();
         if moved {
             // The state follows its unknowns; what is indexed by them is rebuilt.
@@ -2074,6 +2176,9 @@ impl Transient {
         // No extrapolation across the change.
         self.x_prev.copy_from_slice(&self.x);
         self.h_prev = 0.0;
+        // Methods that carry the derivative in restart at first order (the
+        // fully implicit ones take none).
+        self.restart = self.tab.explicit_first() && self.coupled.is_none();
         Ok(())
     }
 

@@ -94,6 +94,91 @@ fn switching_a_resistor_follows_the_closed_form() {
     }
 }
 
+/// in -- 10k -- p -- 0.22 uF -- t -- R_end -- w -- 22k -- 0: a pot's end segment
+/// (R_end) between a series capacitor and the rest of the circuit, as the tube
+/// filter's RESONANCE pot sits.
+fn pot_end(r_end_ohm: f64) -> CircuitIr {
+    let r = |name: &str, a: &str, b: &str, r_ohm: f64| {
+        Element::Resistor(Resistor {
+            name: name.into(),
+            a: a.into(),
+            b: b.into(),
+            r_ohm,
+        })
+    };
+    CircuitIr {
+        version: IR_VERSION,
+        title: "pot end".into(),
+        input_node: "in".into(),
+        controls: vec![],
+        noise: None,
+        heaters: None,
+        probes: vec![Probe::Voltage { node: "w".into() }],
+        models: vec![],
+        sections: vec![Section {
+            title: "t".into(),
+            elements: vec![
+                r("R1", "in", "p", 10e3),
+                Element::Capacitor(Capacitor {
+                    name: "C1".into(),
+                    a: "p".into(),
+                    b: "t".into(),
+                    c_f: 0.22e-6,
+                    v0_v: None,
+                }),
+                r("RQ", "t", "w", r_end_ohm),
+                r("RFB", "w", "0", 22e3),
+            ],
+        }],
+    }
+}
+
+/// A pot's section dropped from 1 kOhm to its 1 mOhm end in one update, against
+/// the same change a decade per sample: the same run within millivolts. (Before
+/// the first-order restart, the derivative at the carried point, ~100 A through
+/// 1 mOhm, came out as a thump of volts: DEVICE_BUILDER_PLAN.md B6, "Pot end stop".)
+#[test]
+fn a_pot_thrown_to_its_end_next_to_a_capacitor_stays_quiet() {
+    let h = 1.0 / 96_000.0;
+    let input: Vec<f64> = (0..960)
+        .map(|i| (2.0 * std::f64::consts::PI * 220.0 * i as f64 * h).sin())
+        .collect();
+    let at = 400;
+    let ends = [1e3, 1e2, 1e1, 1.0, 0.1, 0.01, 1e-3];
+    let decades: Vec<(usize, CircuitIr)> = ends[1..]
+        .iter()
+        .enumerate()
+        .map(|(k, &r)| (at + k, pot_end(r)))
+        .collect();
+    for solver in [Solver::Dk, Solver::Mna] {
+        for method in [Method::TrBdf2, Method::Esdirk4, Method::Trapezoidal] {
+            let opts = Options {
+                solver,
+                ..Options::with_method(method)
+            };
+            let probe = Mna::from_ir(&pot_end(1e3), opts.gmin).unwrap().probes[0]
+                .1
+                .unwrap();
+            let once = run(&pot_end(1e3), &[(at, pot_end(1e-3))], &input, h, opts);
+            let gradual = run(&pot_end(1e3), &decades, &input, h, opts);
+            let peak = |xs: &[Vec<f64>]| xs.iter().map(|x| x[probe].abs()).fold(0.0, f64::max);
+            let worst = once
+                .iter()
+                .zip(&gradual)
+                .skip(at + ends.len())
+                .map(|(a, b)| (a[probe] - b[probe]).abs())
+                .fold(0.0, f64::max);
+            println!(
+                "{solver:?} {method:?}: peak {:.4} V (gradual {:.4} V), then within {worst:.1e} V",
+                peak(&once),
+                peak(&gradual)
+            );
+            assert!(peak(&once) < 1.05 * peak(&gradual), "{solver:?} {method:?}");
+            assert!(worst < 2e-3, "{solver:?} {method:?}: {worst:e} V");
+        }
+    }
+}
+
 /// A 1 kHz tone at 0 dBFS (13.8 V at the 670's input), faded in over 1 ms.
 fn tone(n: usize, h: f64) -> Vec<f64> {
     (0..n)
@@ -185,27 +270,27 @@ fn updating_to_the_same_circuit_barely_changes_the_run() {
     let opts = Options::with_method(Method::Esdirk4);
     let plain = run(&ir, &[], &input, h, opts);
     let updated = run(&ir, &[(400, ir.clone())], &input, h, opts);
-    // The restart takes the derivative from the circuit instead of the
-    // integrator (they agree to the Newton tolerance) and doesn't
+    // The restart starts the sample with backward Euler over h / 256 and doesn't
     // extrapolate the first guess. Measured: within 0.2 tolerance before the
     // power supply went in; 5.2 since (main plan Phase 3, 2026-10-21), at the
     // 6973 feedback node nfb (47k into 20 pF, behind a pentode idling near
-    // cutoff), which is the most sensitive node since.
+    // cutoff), which is the most sensitive node since; 24.3 with the
+    // first-order restart (2026-10-30; 86 with it over h / 64). At the output
+    // that is -122 dB peak re the signal at 10 kHz (production).
     let w = worst(&plain, &updated, &ir, &opts);
     println!("same circuit: {w:.2} x tolerance");
-    assert!(w < 10.0, "{w}");
+    assert!(w < 40.0, "{w}");
 }
 
 /// Time Constant 2 (default) to 1 mid-run, and the pots (input attenuator,
 /// thresholds) swept 90% of the way from their defaults to the other end
-/// over 32 samples. Measured: within 0.13 tolerance.
+/// over 32 samples, and thrown to their ends at once. Measured: within 0.13
+/// tolerance (thrown: 0.21 with trapezoidal, 0.03 with ESDIRK4).
 ///
-/// Thrown to the end at once (or over the last part of the travel in one
-/// sample, where pot sections drop from kOhms to their 1 mOhm ends), Newton
-/// doesn't converge in either solver, even with halving: an instantaneous
-/// change of the algebraic part looks the same at any step size. The
-/// `pots_max` build itself runs fine from rest. Knob moves that large need
-/// smoothing at control rate (M8).
+/// Thrown to the end at once (pot sections from kOhms to their 1 mOhm ends in
+/// one update), Newton didn't converge in either solver before the first-order
+/// restart (2026-10-30): the derivative carried in across the change was ~100 A
+/// through 1 mOhm (DEVICE_BUILDER_PLAN.md B6, "Pot end stop").
 #[test]
 fn dk_and_full_mna_agree_through_a_switch() {
     let h = 1.0 / 192_000.0;
@@ -217,6 +302,7 @@ fn dk_and_full_mna_agree_through_a_switch() {
             "pots swept",
             sweep(&a, &fixture("pots_max.json"), 0.9, 500, 32),
         ),
+        ("pots thrown", vec![(500, fixture("pots_max.json"))]),
     ];
     for (name, updates) in &cases {
         for method in [Method::Trapezoidal, Method::Esdirk4] {
