@@ -41,6 +41,7 @@ import numpy as np
 from varimu.circuit.ir import CircuitIR
 from varimu.config import REPO_ROOT
 from varimu.sim.io import (
+    GROUP_BREAK,
     TransientResult,
     TransientSettings,
     decimate,
@@ -151,11 +152,25 @@ def _kernel32():
 
 
 def partition_sections(ir: CircuitIR, s: TransientSettings) -> list[str]:
-    """The sections of `ir` that `s.partition` puts on a second thread (the titles the
-    circuit has; none if that would leave nothing besides them)."""
+    """The sections of `ir` that `s.partition` puts on other threads (the titles the
+    circuit has, groups separated by GROUP_BREAK, empty groups dropped; none if that
+    would leave nothing besides them)."""
     titles = [sec.title for sec in ir.sections]
-    second = [t for t in s.partition if t in titles]
-    return second if len(second) < len(titles) else []
+    groups: list[list[str]] = [[]]
+    for t in s.partition:
+        if t == GROUP_BREAK:
+            groups.append([])
+        elif t in titles:
+            groups[-1].append(t)
+    groups = [g for g in groups if g]
+    if sum(len(g) for g in groups) >= len(titles):
+        return []
+    out: list[str] = []
+    for g in groups:
+        if out:
+            out.append(GROUP_BREAK)
+        out.extend(g)
+    return out
 
 
 def control_streams(

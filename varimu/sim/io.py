@@ -203,7 +203,7 @@ class TransientSettings:
             if unknown:
                 raise ValueError(f"sim_settings {block}: unknown keys {sorted(unknown)}")
             if "partition" in d:
-                st = replace(st, partition=tuple(str(t) for t in d["partition"]))
+                st = replace(st, partition=flat_partition(d["partition"]))
             st = replace(st, **{k: kinds[k](v) for k, v in d.items() if k != "partition"})
         return replace(st, quality=quality)
 
@@ -229,6 +229,23 @@ def full_scale(s: TransientSettings, circuit: Any = None) -> tuple[float, float]
 
 
 # --- Oversampling and settling (shared by both engines) ---------------------------
+
+
+GROUP_BREAK = "|"  # between groups of a partition's titles (circuitsim's partition.rs)
+
+
+def flat_partition(items) -> tuple[str, ...]:
+    """A `partition` setting as circuitsim takes it: a title, or a list of titles (a group
+    on a thread of its own), flattened with GROUP_BREAK between groups."""
+    flat: list[str] = []
+    for t in items:
+        if isinstance(t, list | tuple):
+            if flat:
+                flat.append(GROUP_BREAK)
+            flat.extend(str(x) for x in t)
+        else:
+            flat.append(str(t))
+    return tuple(flat)
 
 
 def with_settle(x: np.ndarray, s: TransientSettings) -> tuple[np.ndarray, int]:

@@ -9,7 +9,7 @@
 use std::path::Path;
 
 use circuitsim::ir::CircuitIr;
-use circuitsim::partition::Coupling;
+use circuitsim::partition::{self, Coupling, GROUP_BREAK};
 use circuitsim::transient::ErrorNorm;
 use circuitsim::{Method, Options, Solver};
 use varimu_circuit::Cores;
@@ -199,12 +199,26 @@ impl Settings {
                     "partition_coupling" => s.partition_coupling = string(v, k)?,
                     "host_rate" => s.host_rate = int(v, k)? as u32,
                     "partition" => {
-                        s.partition = v
+                        // A title, or a list of titles: a group on a thread of its own
+                        // (flattened with the group break between groups).
+                        let mut flat = Vec::new();
+                        for t in v
                             .as_list()
                             .ok_or("sim_settings: `partition` is not a list")?
-                            .iter()
-                            .map(|t| string(t, k))
-                            .collect::<Result<_, _>>()?;
+                        {
+                            match t.as_list() {
+                                Some(g) => {
+                                    if !flat.is_empty() {
+                                        flat.push(GROUP_BREAK.to_string());
+                                    }
+                                    for t in g {
+                                        flat.push(string(t, k)?);
+                                    }
+                                }
+                                None => flat.push(string(t, k)?),
+                            }
+                        }
+                        s.partition = flat;
                     }
                     _ => return Err(format!("sim_settings {name}: unknown key `{k}`")),
                 }
@@ -275,21 +289,25 @@ impl Settings {
         })
     }
 
-    /// The sections of `ir` that `partition` puts on a second thread: the titles the
-    /// circuit has, none if that would leave nothing else (`fast.partition_sections`).
+    /// The sections of `ir` that `partition` puts on other threads: the titles the
+    /// circuit has, groups separated by the group break (`partition::GROUP_BREAK`;
+    /// empty groups dropped), none if that would leave nothing else
+    /// (`fast.partition_sections`).
     pub fn partition_sections(&self, ir: &CircuitIr) -> Vec<String> {
         let titles: Vec<&str> = ir.sections.iter().map(|s| s.title.as_str()).collect();
-        let second: Vec<String> = self
-            .partition
-            .iter()
-            .filter(|t| titles.contains(&t.as_str()))
-            .cloned()
+        let groups: Vec<Vec<String>> = partition::groups(&self.partition)
+            .into_iter()
+            .map(|g| {
+                g.into_iter()
+                    .filter(|t| titles.contains(&t.as_str()))
+                    .collect::<Vec<_>>()
+            })
+            .filter(|g| !g.is_empty())
             .collect();
-        if second.len() < titles.len() {
-            second
-        } else {
-            Vec::new()
+        if groups.iter().map(Vec::len).sum::<usize>() >= titles.len() {
+            return Vec::new();
         }
+        groups.join(&GROUP_BREAK.to_string())
     }
 }
 

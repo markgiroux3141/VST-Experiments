@@ -7,7 +7,7 @@ use circuitsim::ir::{
     Capacitor, CircuitIr, Element, IR_VERSION, Probe, Resistor, Section, VoltageSource,
 };
 use circuitsim::mna::Mna;
-use circuitsim::partition::{Coupling, simulate_partitioned};
+use circuitsim::partition::{Coupling, GROUP_BREAK, simulate_partitioned};
 use circuitsim::transient::{Method, Options, Output, Transient};
 
 fn fixture(name: &str) -> CircuitIr {
@@ -133,6 +133,23 @@ fn rms(x: impl Iterator<Item = f64>) -> f64 {
 /// result doesn't depend on timing: two runs are identical.
 #[test]
 fn the_670_partitioned_follows_the_one_solve() {
+    follows_the_one_solve(&SUPPLIES);
+}
+
+/// The same in three partitions (groups separated by `GROUP_BREAK`): the
+/// power supply with the idle channel 2 on one thread, the bias supply on
+/// another; the nodes all three share are the bias supply's (the last group's).
+#[test]
+fn the_670_in_three_partitions_follows_the_one_solve() {
+    follows_the_one_solve(&[
+        "power supply",
+        "channel 2 (idle, lumped)",
+        GROUP_BREAK,
+        "bias supply",
+    ]);
+}
+
+fn follows_the_one_solve(second: &[&str]) {
     let ir = fixture("default.json");
     let h = 1.0 / 96_000.0;
     let x = tone((0.03 / h) as usize, h);
@@ -145,7 +162,7 @@ fn the_670_partitioned_follows_the_one_solve() {
         ..Options::with_method(Method::TrBdf2)
     };
     let one = circuitsim::simulate(&ir, &x, h, &opts).unwrap();
-    let second: Vec<String> = SUPPLIES.iter().map(|s| s.to_string()).collect();
+    let second: Vec<String> = second.iter().map(|s| s.to_string()).collect();
     let run = || {
         simulate_partitioned(
             &ir,
@@ -195,5 +212,6 @@ fn partitions_are_checked() {
     };
     assert!(run(&["no such section"]).contains("no section titled"));
     assert!(run(&["input"]).contains("input node"));
+    assert!(run(&["bias supply", GROUP_BREAK, "bias supply"]).contains("in two groups"));
     assert!(Coupling::parse("lagged").is_err());
 }

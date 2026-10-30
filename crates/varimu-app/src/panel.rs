@@ -257,9 +257,24 @@ pub const DEVICES: [Device; 8] = [
             control: "pitch",
             tuning: TUBE_SYNTH_TUNING,
         }),
-        // The oscillator with the supplies on the second thread: alone, either half of
-        // the instrument takes most of a core.
-        partition: Some(&["power supply", "bias supply", "oscillator", "pitch"]),
+        // Four threads: the VCA and envelope (with the keys), the input stage and the
+        // filter, the oscillator, the supplies (each partition owns the nodes it
+        // drives stiffly: the filter's follower, the oscillator's buffer, the rails).
+        // On two (the oscillator and the supplies on the second) it ran ~96% load;
+        // bench, 3 s at -15 V: 1.38x real time on two, 0.89x on four, within 0.1 cent
+        // and 0.01 dB of the one solve.
+        partition: Some(&[
+            "input",
+            "filter",
+            "resonance",
+            "cutoff",
+            "|",
+            "oscillator",
+            "pitch",
+            "|",
+            "power supply",
+            "bias supply",
+        ]),
     },
 ];
 

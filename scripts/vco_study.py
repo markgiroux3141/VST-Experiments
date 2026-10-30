@@ -94,7 +94,18 @@ CANDIDATES = {
         note_v=-15.0,
         plot_v=(-30.0, -15.0, 0.0),
         controls=(("gate", -1.0),),
-        partition=("power supply", "bias supply", "oscillator", "pitch"),
+        partition=(
+            "input",
+            "filter",
+            "resonance",
+            "cutoff",
+            "|",
+            "oscillator",
+            "pitch",
+            "|",
+            "power supply",
+            "bias supply",
+        ),
     ),
 }
 

@@ -3,12 +3,12 @@ tube_voice.yaml's voice with S4's candidate (b), the reactor-tuned LC oscillator
 voice's one supply. The keys give both control inputs: `gate` (the keyboard bus) and
 `pitch` (the 6V6GT's grid through the keyboard tuning, varimu-app's `panel::Pitch`).
 
-At draft with the native app's partition (the oscillator and the supplies on the second
-thread), measured 2026-10-30: the pitch ~59 Hz at -23 V, ~479 Hz at -15 V, ~1739 Hz at
-0 V (reports/tube_synth/vco/synth_tuning.json); below -23 V the tank's swing saturates
-the cores. The 6V6GT's screen is on two 5651s: on b3 the VCA's opening sagged it and a
-held note fell ~780 cents over ~2 s; regulated, ~19 cents. A held key at -15 V: ~-11 dBFS
-out at the panel's defaults; key up, the VCA's bleed ~-80 dBFS or less.
+At draft with the native app's partition (four threads: the VCA, the filter, the
+oscillator, the supplies), measured 2026-10-30: the pitch ~59 Hz at -23 V, ~479 Hz at
+-15 V, ~1739 Hz at 0 V (reports/tube_synth/vco/synth_tuning.json); below -23 V the tank's
+swing saturates the cores. The 6V6GT's screen is on two 5651s: on b3 the VCA's opening
+sagged it and a held note fell ~780 cents over ~2 s; regulated, ~19 cents. A held key at
+-15 V: ~-11 dBFS out at the panel's defaults; key up, the VCA's bleed ~-80 dBFS or less.
 """
 
 import dataclasses
@@ -29,7 +29,18 @@ pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
 CIRCUIT = Path(CONFIG_DIR / "circuits" / "tube_synth.yaml")
 FS = 96000
 FULL_SCALE_V = 3.5
-PARTITION = ("power supply", "bias supply", "oscillator", "pitch")
+PARTITION = (
+    "input",
+    "filter",
+    "resonance",
+    "cutoff",
+    "|",
+    "oscillator",
+    "pitch",
+    "|",
+    "power supply",
+    "bias supply",
+)  # the native app's (panel.rs)
 KEY_UP_V, KEY_DOWN_V = -110.0, -1.0
 
 

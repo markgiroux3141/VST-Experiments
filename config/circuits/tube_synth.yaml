@@ -184,6 +184,7 @@ values:
   osc_v5651_ref_current_a: {value: 2.5e-3, source: "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage over 1.5-3.5 mA, at its middle (the slope fit's reference, as fairchild_670.yaml's V304)"}
   osc_r_vr_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the node between the 5651s (the pre-flight checks don't count a diode's slope as one)"}
   osc_c_grid4_f: {value: 0.1e-6, source: "provisional: model knowledge (design: on the 6V6GT's grid: 1 ms with the stopper, as the voice's cutoff driver has)"}
+  c_mix_stray_f: {value: 100.0e-12, source: "provisional: model knowledge (the mixer node's wiring and the first grid's input capacitance; it also holds the node the draft's partition couples the external input across)"}
   r_mix_ext_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: from the external input into the mixer; its foot, the input's source)"}
   # --- the oscillator (vco_lc.yaml's)
   osc_c_tank_f: {value: 56.0e-9, source: "provisional: model knowledge (design: ~68 Hz at the bottom of the sweep, ~1.8 kHz at the top)"}
@@ -286,6 +287,7 @@ sections:
     parts:
       CMXO: {C: [o_buf, o_bc], c: c_mix_osc_f}
       RMXO: {R: [o_bc, mix], r: r_mix_osc_ohm}
+      CMIX: {C: [mix, "0"], c: c_mix_stray_f}
       RST1: {R: [mix, g1], r: r_stopper_ohm}
       XV1A: {device: [p1, g1, k1], model: V1A}
       RP1: {R: [b3, p1], r: r_plate1_ohm}

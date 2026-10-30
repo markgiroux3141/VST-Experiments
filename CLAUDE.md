@@ -137,8 +137,13 @@ from the keys through a measured tuning (`panel::Pitch`, `panel::key_feeds`; `vc
 --tuning`). `config/circuits/tube_synth.yaml` is the voice with that oscillator on one
 supply (the 6V6GT's screen on two 5651s: unregulated, the VCA's sag dropped held notes
 ~780 cents), the app's `tube_synth` device (keys -> gate and pitch; `panel::Device::
-partition`: the oscillator and supplies on the second thread); ~96% load, not yet
-comfortably real time (TUBE_SYNTH_PLAN.md, S4's status). (a), the diode-timed multivibrator `vco_diode.yaml`
+partition`: four threads, the VCA | the input and filter | the oscillator | the
+supplies): ~62% load, worst block ~99% at a 50 ms buffer (TUBE_SYNTH_PLAN.md, S4's
+status). **Partitions in N parts (2026-10-30):** a `partition` list's `"|"` (or, in
+sim_settings.yaml, a nested list) separates groups, each on a thread of its own
+(`circuitsim::partition::GROUP_BREAK`); a shared node is owned by the highest-numbered
+part with it (list the stiff drivers, the supplies, last), the others see it as a
+source; the owner needs a DC path there. One group is the old two-way split, bit for bit. (a), the diode-timed multivibrator `vco_diode.yaml`
 on the new `6AL5@1`, doesn't run cleanly yet; (c) isn't started (TUBE_SYNTH_PLAN.md, S4's
 status). Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
 for the DC operating point only; absent = unchanged IR).

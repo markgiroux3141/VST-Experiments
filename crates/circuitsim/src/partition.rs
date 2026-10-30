@@ -1,24 +1,29 @@
-//! A circuit run as two partitions on two threads, coupled through the nodes
-//! they share with one sample of latency: a fast "draft" setting for real
+//! A circuit run as partitions on threads of their own, coupled through the
+//! nodes they share with one sample of latency: a fast "draft" setting for real
 //! time (`docs/CIRCUIT_SIM_PLAN.md`, M8). Off by default; the default is one
 //! coupled solve of the whole circuit.
 //!
-//! The IR's sections are split in two: the named ones (`second`, e.g. the
-//! power supplies) and the rest (the "first" partition, which has the audio
-//! input). At each node they share:
+//! The IR's sections are split by title: the named ones (`second`, e.g. the
+//! power supplies; [`GROUP_BREAK`] separates groups, each a partition of its
+//! own) and the rest (the "first" partition, which has the audio input and the
+//! control inputs). A node two or more partitions have is owned by the
+//! highest-numbered of them (so list the stiff drivers, the supplies, last):
 //!
-//! - the first partition sees the node as a voltage source, the second
-//!   partition's voltage there;
-//! - the second sees a current injected into the node, the current the first
-//!   partition's source takes from its own side.
+//! - the others see the node as a voltage source, the owner's voltage there;
+//! - the owner sees a current injected into the node, the sum of the currents
+//!   the others' sources take from their own sides.
 //!
-//! Both start at the DC operating point of the whole circuit, solved as one:
-//! the first partition's sources at those node voltages, its currents into
-//! the second. Then each sample, both partitions step at once on their own
-//! threads, each with the other's coupling values from the end of the
-//! previous sample: held, or extrapolated linearly through the last two over
-//! the sample ([`Coupling`]). They wait for each other once per sample, so the
-//! result doesn't depend on timing (only the waits do).
+//! With one group this is the two-way split: the first partition sources every
+//! shared node, the second owns them.
+//!
+//! All start at the DC operating point of the whole circuit, solved as one:
+//! each partition's sources at those node voltages, their currents into the
+//! owners (built in order, so a node's users are solved before its owner). Then
+//! each sample, every partition steps at once on its own thread, with the
+//! others' coupling values from the end of the previous sample: held, or
+//! extrapolated linearly through the last two over the sample ([`Coupling`]).
+//! They wait for each other once per sample, so the result doesn't depend on
+//! timing (only the waits do).
 //!
 //! What it costs in accuracy is the lag: the coupling is explicit, first
 //! order in the step (second with extrapolation), where the one solve is
@@ -62,18 +67,83 @@ pub(crate) const SOURCE_PREFIX: &str = "VPART_";
 /// The second partition's input node (it has no audio input).
 const STUB_INPUT: &str = "partition_input";
 
-/// The circuit split by section title: (first, second, shared nodes).
-pub(crate) fn split(
-    ir: &CircuitIr,
-    second: &[String],
-) -> Result<(CircuitIr, CircuitIr, Vec<String>), Error> {
-    for t in second {
-        if !ir.sections.iter().any(|s| &s.title == t) {
-            return Err(Error::new(format!("partition: no section titled {t:?}")));
+/// Separates groups in a list of section titles: `[a, b, "|", c]` runs a and b on
+/// one thread and c on another.
+pub const GROUP_BREAK: &str = "|";
+
+/// The titles split at [`GROUP_BREAK`] into groups (empty ones dropped).
+pub fn groups(titles: &[String]) -> Vec<Vec<String>> {
+    titles
+        .split(|t| t == GROUP_BREAK)
+        .filter(|g| !g.is_empty())
+        .map(<[String]>::to_vec)
+        .collect()
+}
+
+/// A node two or more parts have: the part that owns it (the highest-numbered
+/// one with it: it sees the current the others draw there) and the others (they
+/// see it as a voltage source, the owner's voltage).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct SharedNode {
+    pub name: String,
+    pub owner: usize,
+    pub users: Vec<usize>,
+}
+
+/// The circuit split into parts: part 0 the sections no group names (it keeps the
+/// audio input and the control inputs), part g + 1 group g's.
+#[derive(Debug, Clone)]
+pub(crate) struct Split {
+    pub parts: Vec<CircuitIr>,
+    pub shared: Vec<SharedNode>,
+}
+
+impl Split {
+    /// Part `p`'s owned shared nodes (indices into `shared`, in its order): its
+    /// externals' second half and its outputs' first.
+    pub fn owned(&self, p: usize) -> Vec<usize> {
+        (0..self.shared.len())
+            .filter(|&i| self.shared[i].owner == p && !self.shared[i].users.is_empty())
+            .collect()
+    }
+
+    /// The shared nodes part `p` sees as sources (in `shared`'s order): its
+    /// externals' first half and its outputs' second.
+    pub fn sourced(&self, p: usize) -> Vec<usize> {
+        (0..self.shared.len())
+            .filter(|&i| self.shared[i].users.contains(&p))
+            .collect()
+    }
+}
+
+/// The circuit split by section title (`second`: groups separated by
+/// [`GROUP_BREAK`]; one group is the two-way split).
+pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
+    let groups = groups(second);
+    let mut part_of: Vec<Option<usize>> = vec![None; ir.sections.len()];
+    for (g, titles) in groups.iter().enumerate() {
+        for t in titles {
+            let Some(i) = ir.sections.iter().position(|s| &s.title == t) else {
+                return Err(Error::new(format!("partition: no section titled {t:?}")));
+            };
+            if part_of[i].is_some() {
+                return Err(Error::new(format!("partition: {t:?} is in two groups")));
+            }
+            part_of[i] = Some(g + 1);
         }
     }
-    let (b_secs, a_secs): (Vec<&Section>, Vec<&Section>) =
-        ir.sections.iter().partition(|s| second.contains(&s.title));
+    let n_parts = groups.len() + 1;
+    let part = |i: usize| part_of[i].unwrap_or(0);
+    let secs: Vec<Vec<&Section>> = (0..n_parts)
+        .map(|p| {
+            ir.sections
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| part(*i) == p)
+                .map(|(_, s)| s)
+                .collect()
+        })
+        .collect();
     let nodes = |secs: &[&Section]| -> HashSet<String> {
         secs.iter()
             .flat_map(|s| s.elements.iter())
@@ -82,29 +152,43 @@ pub(crate) fn split(
             .map(str::to_string)
             .collect()
     };
-    let (na, nb) = (nodes(&a_secs), nodes(&b_secs));
-    if !na.contains(&ir.input_node) {
+    let node_sets: Vec<HashSet<String>> = secs.iter().map(|s| nodes(s)).collect();
+    if !node_sets[0].contains(&ir.input_node) {
         return Err(Error::new(
             "partition: the input node must stay in the first partition",
         ));
     }
-    if let Some(c) = ir.controls.iter().find(|c| !na.contains(&c.node)) {
+    if let Some(c) = ir.controls.iter().find(|c| !node_sets[0].contains(&c.node)) {
         return Err(Error::new(format!(
             "partition: control {}'s node must stay in the first partition",
             c.name
         )));
     }
     // Shared nodes in order of first appearance in the IR.
-    let mut shared: Vec<String> = Vec::new();
+    let mut shared: Vec<SharedNode> = Vec::new();
     for e in ir.elements() {
         for n in e.nodes() {
-            if na.contains(n) && nb.contains(n) && !shared.iter().any(|s| s == n) {
-                shared.push(n.to_string());
+            if shared.iter().any(|s| s.name == n) {
+                continue;
+            }
+            let with: Vec<usize> = (0..n_parts).filter(|&p| node_sets[p].contains(n)).collect();
+            if with.len() >= 2 {
+                let owner = *with.last().expect("two or more");
+                shared.push(SharedNode {
+                    name: n.to_string(),
+                    owner,
+                    users: with[..with.len() - 1].to_vec(),
+                });
             }
         }
     }
-    if shared.is_empty() {
-        return Err(Error::new("partition: the two parts share no node"));
+    for p in 1..n_parts {
+        if !shared.iter().any(|s| s.owner == p || s.users.contains(&p)) {
+            return Err(Error::new(format!(
+                "partition: {:?} shares no node with the rest",
+                groups[p - 1]
+            )));
+        }
     }
     // Models a part's devices use (unused ones are harmless, but keep it tidy).
     let used = |secs: &[&Section]| -> Vec<_> {
@@ -122,69 +206,72 @@ pub(crate) fn split(
             .cloned()
             .collect()
     };
-    let probes = |nodes: &HashSet<String>| -> Vec<Probe> {
-        ir.probes
+    let mut parts = Vec::with_capacity(n_parts);
+    for p in 0..n_parts {
+        let mut sections: Vec<Section> = secs[p].iter().map(|s| (*s).clone()).collect();
+        let sourced: Vec<&SharedNode> = shared.iter().filter(|s| s.users.contains(&p)).collect();
+        if !sourced.is_empty() {
+            sections.push(Section {
+                title: "partition: the shared nodes' voltages".into(),
+                elements: sourced
+                    .iter()
+                    .map(|s| {
+                        Element::VoltageSource(VoltageSource {
+                            name: format!("{SOURCE_PREFIX}{}", s.name),
+                            pos: s.name.clone(),
+                            neg: GROUND.into(),
+                            dc_v: 0.0,
+                        })
+                    })
+                    .collect(),
+            });
+        }
+        if p > 0 {
+            sections.push(Section {
+                title: "partition: input stub".into(),
+                elements: vec![Element::Resistor(Resistor {
+                    name: "RPART_INPUT".into(),
+                    a: STUB_INPUT.into(),
+                    b: GROUND.into(),
+                    r_ohm: 1e3,
+                })],
+            });
+        }
+        // A probe comes from the part with its node; a shared node's from its owner.
+        let probes = ir
+            .probes
             .iter()
-            .filter(|p| {
-                let Probe::Voltage { node } = p;
-                nodes.contains(node) || node == GROUND
+            .filter(|pr| {
+                let Probe::Voltage { node } = pr;
+                if node == GROUND {
+                    return true;
+                }
+                match shared.iter().find(|s| &s.name == node) {
+                    Some(s) => s.owner == p,
+                    None => node_sets[p].contains(node),
+                }
             })
             .cloned()
-            .collect()
-    };
-    let mut a_sections: Vec<Section> = a_secs.into_iter().cloned().collect();
-    a_sections.push(Section {
-        title: "partition: the shared nodes' voltages".into(),
-        elements: shared
-            .iter()
-            .map(|n| {
-                Element::VoltageSource(VoltageSource {
-                    name: format!("{SOURCE_PREFIX}{n}"),
-                    pos: n.clone(),
-                    neg: GROUND.into(),
-                    dc_v: 0.0,
-                })
-            })
-            .collect(),
-    });
-    let a = CircuitIr {
-        version: ir.version,
-        title: format!("{} (first partition)", ir.title),
-        input_node: ir.input_node.clone(),
-        controls: ir.controls.clone(),
-        probes: probes(&na),
-        models: used(&a_sections.iter().collect::<Vec<_>>()),
-        sections: a_sections,
-    };
-    let mut b_sections: Vec<Section> = b_secs.into_iter().cloned().collect();
-    b_sections.push(Section {
-        title: "partition: input stub".into(),
-        elements: vec![Element::Resistor(Resistor {
-            name: "RPART_INPUT".into(),
-            a: STUB_INPUT.into(),
-            b: GROUND.into(),
-            r_ohm: 1e3,
-        })],
-    });
-    // Probes on shared nodes come from the second partition (its voltage is
-    // the one the first partition's source copies).
-    let only_a: HashSet<String> = na.difference(&nb).cloned().collect();
-    let b = CircuitIr {
-        version: ir.version,
-        title: format!("{} (second partition)", ir.title),
-        input_node: STUB_INPUT.into(),
-        controls: Vec::new(),
-        probes: probes(&nb)
-            .into_iter()
-            .filter(|p| {
-                let Probe::Voltage { node } = p;
-                !only_a.contains(node)
-            })
-            .collect(),
-        models: used(&b_sections.iter().collect::<Vec<_>>()),
-        sections: b_sections,
-    };
-    Ok((a, b, shared))
+            .collect();
+        parts.push(CircuitIr {
+            version: ir.version,
+            title: format!("{} (partition {p})", ir.title),
+            input_node: if p == 0 {
+                ir.input_node.clone()
+            } else {
+                STUB_INPUT.into()
+            },
+            controls: if p == 0 {
+                ir.controls.clone()
+            } else {
+                Vec::new()
+            },
+            probes,
+            models: used(&sections.iter().collect::<Vec<_>>()),
+            sections,
+        });
+    }
+    Ok(Split { parts, shared })
 }
 
 /// Values one partition publishes per sample, read by the other: a ring of
@@ -218,33 +305,9 @@ impl Ring {
         self.done.load(Ordering::Acquire) > n
     }
 
-    pub(crate) fn read(&self, n: usize, out: &mut [f64]) {
-        let s = (n % 3) * self.width;
-        for (o, slot) in out.iter_mut().zip(&self.slots[s..s + self.width]) {
-            *o = f64::from_bits(slot.load(Ordering::Relaxed));
-        }
-    }
-}
-
-/// The other partition's values over sample n -> n + 1 (`e0` at its start,
-/// `e1` at its end) from that partition's samples n and n - 1.
-pub(crate) fn ends(
-    coupling: Coupling,
-    ring: &Ring,
-    n: usize,
-    e0: &mut [f64],
-    e1: &mut [f64],
-    prev: &mut [f64],
-) {
-    ring.read(n, e0);
-    match (coupling, n) {
-        (Coupling::Extrapolate, 1..) => {
-            ring.read(n - 1, prev);
-            for ((e1, &x0), &xm) in e1.iter_mut().zip(&*e0).zip(&*prev) {
-                *e1 = 2.0 * x0 - xm;
-            }
-        }
-        _ => e1.copy_from_slice(e0),
+    /// Slot `slot` of sample `n`.
+    pub(crate) fn value(&self, n: usize, slot: usize) -> f64 {
+        f64::from_bits(self.slots[(n % 3) * self.width + slot].load(Ordering::Relaxed))
     }
 }
 

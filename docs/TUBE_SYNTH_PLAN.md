@@ -445,6 +445,21 @@ tubes OV-, nodes o_-, values osc_-), and:
   one side was worse (1.6-1.8x). Next: partitions in N parts (voice's filter | VCA and
   envelope | oscillator and supplies).
 
+**Four threads (2026-10-30).** circuitsim's partitions now come in N parts: in the
+`partition` list, `"|"` (`GROUP_BREAK`; a nested list in sim_settings.yaml) separates
+groups, each a partition on its own thread. A node several partitions have is owned by the
+highest-numbered (it sees the summed current the others draw; they see its voltage as a
+source), so the stiff drivers go last; every partition waits for all to publish each
+sample (no ring is overwritten while read). One group is the old split, bit for bit (the
+synth's bench output compared byte for byte). tube_synth's device: the VCA and envelope
+(with the keys and the external input) | the input stage and the filter | the oscillator |
+the supplies. Bench, 3 s at -15 V: one solve 1.73x real time, two parts 1.38x, three
+1.22x, **four 0.89x**, within 0.1 cent and 0.01 dB of the one solve; the app: **~62% load,
+worst block ~99%**, no dropouts in 10 s at a 50 ms buffer (was ~96% / ~150%). A fifth
+(the input stage alone) left the node into the reactor without a DC path on its owner's
+side. The mixer node got a 100 pF stray (wiring and grid), as the one soft node a
+partition couples across. `tests/partition.rs`: the 670 in three parts.
+
 **The A/B (2026-10-30): the tube oscillator is audible.** `scripts/osc_ab.py` renders one
 phrase through tube_synth.yaml twice at production, loudness-matched: A, the app's test
 square into the external input (the tube oscillator muted at the mixer, still running, so
