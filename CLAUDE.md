@@ -123,7 +123,8 @@ the passive reactor low-pass `config/circuits/reactor_filter.yaml` is the native
 keyboard (`varimu-app`'s `midi` module: a test oscillator into the device, not part of it;
 `varimu-app --device reactor_filter --midi masterkey --play`). S2's circuit,
 `config/circuits/tube_filter.yaml` (tube stages around the reactor, a 6V6GT setting the
-cutoff, a 6386 VCA; ideal supplies so far), is the `tube_filter` device.
+cutoff, a 12AX7 Q multiplier, a 6386 VCA, its own 6X4 / selenium supply), is the
+`tube_filter` device.
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist

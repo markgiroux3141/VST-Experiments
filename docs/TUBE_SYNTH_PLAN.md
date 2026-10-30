@@ -213,24 +213,47 @@ ports and echoes what a keyboard sends. The user's keyboard: "masterkey 61". Mea
 62 ms key-to-ear at a 30 ms queue on the user's interface (UA Twin USB, ~32 ms of output
 latency of its own).
 
-*Status 2026-10-29: S2's circuit built, on ideal supplies.* `config/circuits/tube_filter.yaml`:
+*Status 2026-10-29: S2's circuit built, on its own supply.* `config/circuits/tube_filter.yaml`:
 - V1A, a 12AU7 gain stage (x11), then V1B, a follower driving the reactor through 4.7 uF.
-- The reactor low-pass into 47 nF, damped by 1k plus a 100k log rheostat (RESONANCE).
+- The reactor low-pass into 47 nF, damped by 4.7k.
+- V5, a 12AX7 cathode-coupled pair: the filter node amplified, in phase, fed back through
+  the RESONANCE pot and 22k. Gain above 1 makes it a negative resistance across the tank
+  (a Q multiplier).
 - V2A, a 12AU7 follower off the filter node.
 - V3, a 6386 section as the VCA: the signal about 1/23 into its grid, its bias from the
-  LEVEL pot (-100 V to -2 V).
-- V4, a 6V6GT drawing 0.06-18 mA through the control windings (CUTOFF on its grid,
-  current feedback in its cathode). That's a current source, so the reactor runs with
-  forced magnetization.
-- Supplies ideal: 250 V, -45 V, and -100 V for the VCA. At -45 V the remote-cutoff 6386
-  still passed ~-18 dB, so it gets its own rail.
+  LEVEL pot (-103 V to -2 V).
+- V4, a 6V6GT drawing 0.5-21 mA through the control windings (CUTOFF on its grid, current
+  feedback in its cathode). That's a current source, so the reactor runs with forced
+  magnetization.
+- The supply: mains into a power transformer (250 V per HV half), a 6X4 full-wave
+  rectifier, CRC filtering (b1 ~300 V for the 6V6GT, b3 ~245 V for the small stages, b4
+  for the VCA, its own RC branch off b2). The bias winding feeds a selenium bridge:
+  -105 V, -46 V through a divider, and an RC stage of its own for the VCA's bias.
+  - A half-wave bias hummed at -26 dBFS through the VCA's grid; full wave: -138 dBFS at
+    60 Hz, -86 at 120.
+  - With the VCA on b3, the input stages' signal currents leaked through its plate
+    resistor at -34 dB with it cut off.
 
-`tests/test_tube_filter.py`: CUTOFF sweeps the filter, LEVEL runs from off (-112 dB) to
-full, RESONANCE lifts the cutoff region. Draft-1x runs it at 0.30-0.45x real time with JA
-cores. In the app it's the `tube_filter` device. Not yet: no real supply (no sag);
-RESONANCE is passive damping, not triode feedback; the VCA is single-ended, so a fast
-bias change will thump (push-pull, like the 670, when S3's envelope moves it); no
-ratings check.
+`tests/test_tube_filter.py`:
+- **CUTOFF sweeps the filter:** the 20th harmonic -52 / -30 / -24 dB re the fundamental.
+- **LEVEL** -18.5 dB at half.
+- **Off is VCA bleed at -50 dB.** At -103 V with ~280 V on its plate, the 6386's remote
+  tail still passes ~4% of its grid signal; its plate supply carries 0.006 mV.
+- **RESONANCE** lifts the cutoff region +8 dB on a quiet saw.
+- **The filter self-oscillates at full resonance** at CUTOFF 0.25 (~700 Hz, -24 dBFS).
+
+The resonance has a character from its parts:
+- The 12AX7 pair runs out of headroom at playing levels, so louder input gets less lift.
+- It fades toward the top of the sweep (+2 dB at 0.75, +0.7 at 1). There the tank's
+  impedance falls to ~800 ohm, and the driving follower's ~400 ohm damps it more than the
+  feedback cancels.
+- Self-oscillation starts at ~0.8 at low cutoffs and not at all above ~0.4.
+
+Live: 0.23-0.24x real time at draft-1x on program material (an arpeggio and a bass part,
+`examples/load_profile.rs`, which now plays a device with its own cores); 25% load idle
+(the rectifiers). Not yet: the VCA is single-ended, so a fast bias change will thump
+(push-pull, like the 670, with S3's envelope); no ratings check (the 6V6GT at ~300 V and
+21 mA is within its plate and screen ratings by hand).
 
 **S3. Notes in: control inputs, the envelope, the score.** Named control inputs beyond
 `in` (pitch CV, gate) as IR sources fed per sample, in both builders; notes from a MIDI

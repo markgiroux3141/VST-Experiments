@@ -92,7 +92,7 @@ fn main() -> Result<(), String> {
         .iter()
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
-    let s = Settings::load(&config, quality.unwrap_or(dev.quality))?;
+    let s = dev.play_settings(&Settings::load(&config, quality.unwrap_or(dev.quality))?);
     let k = s.oversample as usize;
     let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?;
     let mut v = values(&knobs(dev, circuit.spec()));
