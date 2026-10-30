@@ -741,6 +741,27 @@ they change defaults.
 *Done when:* each element has its reference and engine implementations with
 agreement tests, a sourced default, bounds, and a measured audibility note.
 
+*Decided 2026-10-30 (the user, after B5):* the heater first, then pot end / wiper
+resistance (the end-stop spike), capacitor leakage and dielectric absorption, carbon
+resistors (excess noise, voltage coefficient), each with options first.
+- **The heater (the user's picks):** a cathode-temperature state per tube, heated by its
+  heater (rated volts x the circuit's mains setting x B5's mains wander) through a thermal
+  lag (~10 s, anchored to RCA's printed 11 s warm-up of series-string types and a patent's
+  ~5.5 s to 10% current for a 1.5 W oxide cathode); acting through **both** the space-charge
+  shift (the potential minimum deepens as the cathode heats: an effective grid shift,
+  ~+1.7 mV/K, ~7 mV per 1% of heater voltage; zero at the rated temperature, so the fitted
+  curves hold there) **and** a Richardson emission ceiling (tubes come alive from cold,
+  starve at low mains, rectifiers ramp B+). **Runs start warm**; a cold start (power on) is
+  an option (an app button, a render flag). Opt-in per circuit, so nothing existing moves;
+  Python reference, circuitsim and SPICE.
+- **The data:** Phywe LEP 4.1.10 (the EC92): Fig. 4's forward curves at heater currents
+  100-120 mA (rated 150) flatten at ~3.3 / 7.3 / 12.3 / ~21 mA (100 / 105 / 110 / 115 mA,
+  by eye); Fig. 5's retarding region moves ~0.35 V at a fixed 10 uA between 130 and 150 mA.
+  Under the sheet's current control a tungsten heater (R ~ T^1.2) gives T ~ I^0.71 (radiation
+  balance); with the rated cathode at 1050 K (provisional: oxide cathodes run ~1000-1100 K)
+  Fig. 4's ceilings fit a work function of ~1.17 eV, inside oxide cathodes' 1.0-1.3 eV, and
+  the same model moves Fig. 5's 10 uA point by ~0.22 V (measured ~0.35: the order holds).
+
 **B7. Aging.** FUTURE_DIRECTIONS.md section 2: a unit history (years since build,
 powered hours, storage temperature and humidity, service events: recapped,
 retubed) mapped to per-part drift by sourced laws with Arrhenius acceleration

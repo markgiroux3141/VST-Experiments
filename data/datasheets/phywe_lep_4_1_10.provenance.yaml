@@ -12,7 +12,10 @@ files:
   published_points.yaml:
     figure: "p.3 (printed exponents B and cathode temperatures), Fig. 5 (initial current at 130 / 140 / 150 mA heater), Fig. 4 (forward curve)"
     entry: "EC92_initial_current"
-axis_calibration: "Fig. 5: decades 0.1 / 1 / 10 / 100 uA, -0.05 to -0.65 V"
+  published_points.yaml (B6, 2026-10-30):
+    figure: "Fig. 4 (p.2: forward curves at heater 100 / 105 / 110 / 115 / 120 mA, every point read by eye, +-0.3 mA), Fig. 5 (p.3: the voltage at 10 uA per heater current, +-0.03 V)"
+    entry: "EC92_forward_by_heater, EC92_retarding_by_heater"
+axis_calibration: "Fig. 5: decades 0.1 / 1 / 10 / 100 uA, -0.05 to -0.65 V; Fig. 4: 0-25 mA, -1 to 9 V (gridlines every 5 mA / 2 V; the figure is an inverted raster image, 1021 x 738 px)"
 estimated_error: "the printed slopes as given; the read-off points ~+-20%"
 notes: >-
   A teaching lab's measurement of one tube, not a manufacturer's figure. The slope-derived

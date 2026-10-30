@@ -252,4 +252,18 @@
   source: "Phywe LEP 4.1.10, 'Characteristic curves of electron tubes (diode, triode)', p.2-3 and Fig. 5: an EC92 (grid and anode joined) measured in its initial-current (retarding-field) region, I = A exp(B U) fitted per heater current; local copy sources/phywe_lep_4_1_10.pdf (web: https://www.nikhef.nl/~h73/kn1c/praktikum/phywe/LEP/Experim/4_1_10.pdf)"
   slope_per_v: {heater_0_150_a: 8.36, heater_0_140_a: 9.84, heater_0_130_a: 11.24}   # B; the sheet's cathode temperatures e / (k B): 1390 / 1180 / 1030 K
   fig5_points_heater_0_150_a: [{u_v: -0.10, ia_a: 80.0e-6}, {u_v: -0.65, ia_a: 0.8e-6}]   # read by eye off the log plot
-  fig4_forward_heater_0_150_a: {u_v: 4.0, ia_a: 0.021}   # read by eye: ~21 mA at 4 V
+  fig4_forward_heater_0_120_a: {u_v: 4.0, ia_a: 0.021}   # read by eye: ~21 mA at 4 V (Fig. 4's highest curve is 120 mA, not 150: relabelled 2026-10-30; EC92_forward_by_heater has the full curves)
+
+"EC92_forward_by_heater":
+  source: "Phywe LEP 4.1.10, Fig. 4 'Current/voltage characteristic of the diode for different heater currents': an EC92 (grid and anode joined), anode current against anode voltage at heater currents 100-120 mA (rated 150 mA); local copy sources/phywe_lep_4_1_10.pdf, page 2 (a raster image, 1021 x 738 px, extracted with pymupdf); points read by eye against its axes, +-0.3 mA. The legend's 120 mA curve may be the sheet's rounding of 'I = 120mA'. Device builder B6 (the heater): the curves share one space-charge rise and flatten where the cathode's emission runs out; the flat parts still rise ~20% from 3 to 8 V (field-enhanced emission)."
+  heater_rated_a: 0.150
+  u_v: [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0]
+  ia_ma:   # per heater current, one value per u_v (null: not on the plot)
+    heater_0_100_a: [1.0, 2.3, 2.65, 2.8, 2.9, 3.0, 3.05, 3.1, 3.2, 3.25, 3.35, 3.4, 3.45, 3.5, 3.55]
+    heater_0_105_a: [null, 3.2, 4.95, 5.7, 6.15, 6.4, 6.6, 6.7, 6.8, 6.9, 7.05, 7.15, 7.3, 7.4, 7.55]
+    heater_0_110_a: [null, 3.8, 6.3, 8.3, 9.6, 10.3, 10.5, 10.9, 11.2, 11.35, 11.65, 11.8, 12.0, 12.2, 12.3]
+    heater_0_115_a: [null, 4.7, 7.6, 10.3, 12.7, 14.5, 15.9, 16.9, 17.7, 18.4, 19.2, 19.6, 20.4, null, null]
+    heater_0_120_a: [2.3, 5.3, 8.5, 11.9, 15.0, 17.7, 20.9, null, null, null, null, null, null, null, null]
+"EC92_retarding_by_heater":
+  source: "Phywe LEP 4.1.10, Fig. 5 'Initial current of the diode at different heater currents' (log scale), local copy sources/phywe_lep_4_1_10.pdf page 3; read by eye, the voltage at which each heater current's curve passes 10 uA (+-0.03 V). Device builder B6: the retarding region's shift with cathode temperature."
+  u_at_10ua_v: {heater_0_130_a: -0.07, heater_0_140_a: -0.25, heater_0_150_a: -0.42}
