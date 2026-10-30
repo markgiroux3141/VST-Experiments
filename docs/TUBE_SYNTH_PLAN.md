@@ -445,6 +445,19 @@ tubes OV-, nodes o_-, values osc_-), and:
   one side was worse (1.6-1.8x). Next: partitions in N parts (voice's filter | VCA and
   envelope | oscillator and supplies).
 
+**The A/B (2026-10-30): the tube oscillator is audible.** `scripts/osc_ab.py` renders one
+phrase through tube_synth.yaml twice at production, loudness-matched: A, the app's test
+square into the external input (the tube oscillator muted at the mixer, still running, so
+the supply's load is the same), driven to the tube oscillator's peak at the first grid; B,
+the tube oscillator at WAVE 1. Measured: B's "square" is asymmetric (2nd harmonic -8 to
+-16 dB, A's ~-30 to -37), 4-20 cents flat by note (the keyboard tuning and the drift), a
+short glide after each change. **The user picked B blind as "pretty clearly a tube, more
+analog and organic"**, and decided to continue: spread the synth over more threads, then
+more tube physics (noise, heater temperature: device builder B5 / B6, options first).
+Caveat noted with the result: part of the difference is the waveform's shape, which a
+digital pulse could imitate; a spectrally matched pair would isolate the drift, glide and
+pitch-dependent level (not run).
+
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
   code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity
