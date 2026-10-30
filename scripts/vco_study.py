@@ -68,6 +68,11 @@ class Candidate:
     note_v: float  # the held note, the mains test's and the waveform plots' middle pitch
     plot_v: tuple[float, ...]  # waveform plots
     pitch_lowpass_hz: float | None = None
+    # Other control inputs, held (a voice's gate: key down).
+    controls: tuple[tuple[str, float], ...] = ()
+    # The sections the draft puts on its second thread (None: the quality's), as the
+    # native app's device has them (`panel::Device::partition`).
+    partition: tuple[str, ...] | None = None
 
 
 CANDIDATES = {
@@ -79,6 +84,17 @@ CANDIDATES = {
         step_v=(-30.0, -20.0),
         note_v=-25.0,
         plot_v=(-42.0, -25.0, 0.0),
+    ),
+    "synth": Candidate(
+        circuit="tube_synth",
+        pitch_probe="o_t",
+        outputs=("o_t", "out"),
+        sweep_v=(-32.0, -30.0, -28.0, -25.0, -20.0, -15.0, -10.0, -5.0, 0.0),
+        step_v=(-20.0, -10.0),
+        note_v=-15.0,
+        plot_v=(-30.0, -15.0, 0.0),
+        controls=(("gate", -1.0),),
+        partition=("power supply", "bias supply", "oscillator", "pitch"),
     ),
 }
 
@@ -94,8 +110,11 @@ def render(
         io.TransientSettings.from_sim_settings(engine="circuitsim", quality=quality),
         full_scale_volts_peak=1.0,
     )
+    if c.partition is not None and quality != "production":
+        st = dataclasses.replace(st, partition=c.partition)
+    controls = {"pitch": pitch_v, **{k: np.full(len(pitch_v), v) for k, v in c.controls}}
     t0 = time.perf_counter()
-    v = fast.run_transient(ir, np.zeros(len(pitch_v)), settings=st, controls={"pitch": pitch_v})
+    v = fast.run_transient(ir, np.zeros(len(pitch_v)), settings=st, controls=controls)
     wall = time.perf_counter() - t0
     return {p: v.vectors[f"v({p})"] for p in probes}, wall
 

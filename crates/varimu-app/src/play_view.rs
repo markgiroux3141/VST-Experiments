@@ -100,6 +100,7 @@ const DRAWING: Device = Device {
     mod_wheel: None,
     gate: None,
     pitch: None,
+    partition: None,
 };
 
 /// A finished render: where it was saved and what it was.

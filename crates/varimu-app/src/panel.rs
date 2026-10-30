@@ -35,6 +35,9 @@ pub struct Device {
     /// The circuit's control input a keyboard's keys set the pitch on, for a device with
     /// an oscillator of its own (its audio input then stays silent; None: none).
     pub pitch: Option<Pitch>,
+    /// The sections its draft puts on the second thread, over its quality's
+    /// `partition` (None: the quality's).
+    pub partition: Option<&'static [&'static str]>,
 }
 
 /// A keyboard's pitch into a circuit's control input: the control and the keyboard's
@@ -116,11 +119,14 @@ impl Device {
         if let Some(c) = self.cores {
             s.cores = c.to_string();
         }
+        if let Some(p) = self.partition {
+            s.partition = p.iter().map(|t| t.to_string()).collect();
+        }
         s
     }
 }
 
-pub const DEVICES: [Device; 7] = [
+pub const DEVICES: [Device; 8] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -140,6 +146,7 @@ pub const DEVICES: [Device; 7] = [
         mod_wheel: None,
         gate: None,
         pitch: None,
+        partition: None,
     },
     Device {
         id: "pultec_eqp1a",
@@ -152,6 +159,7 @@ pub const DEVICES: [Device; 7] = [
         mod_wheel: None,
         gate: None,
         pitch: None,
+        partition: None,
     },
     Device {
         id: "fender_5e3",
@@ -170,6 +178,7 @@ pub const DEVICES: [Device; 7] = [
         mod_wheel: None,
         gate: None,
         pitch: None,
+        partition: None,
     },
     Device {
         id: "reactor_filter",
@@ -184,6 +193,7 @@ pub const DEVICES: [Device; 7] = [
         mod_wheel: Some("cutoff_v"),
         gate: None,
         pitch: None,
+        partition: None,
     },
     Device {
         id: "tube_filter",
@@ -198,6 +208,7 @@ pub const DEVICES: [Device; 7] = [
         mod_wheel: Some("cutoff"),
         gate: None,
         pitch: None,
+        partition: None,
     },
     Device {
         id: "tube_voice",
@@ -212,6 +223,7 @@ pub const DEVICES: [Device; 7] = [
         mod_wheel: Some("cutoff"),
         gate: Some("gate"),
         pitch: None,
+        partition: None,
     },
     Device {
         id: "vco_lc",
@@ -229,7 +241,56 @@ pub const DEVICES: [Device; 7] = [
             control: "pitch",
             tuning: VCO_LC_TUNING,
         }),
+        partition: None,
     },
+    Device {
+        id: "tube_synth",
+        label: "Tube synth (oscillator, filter, envelope, VCA)",
+        circuit: "tube_synth",
+        panel: None,
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft2x,
+        cores: Some("ja"),
+        mod_wheel: Some("cutoff"),
+        gate: Some("gate"),
+        pitch: Some(Pitch {
+            control: "pitch",
+            tuning: TUBE_SYNTH_TUNING,
+        }),
+        // The oscillator with the supplies on the second thread: alone, either half of
+        // the instrument takes most of a core.
+        partition: Some(&["power supply", "bias supply", "oscillator", "pitch"]),
+    },
+];
+
+/// tube_synth's keyboard tuning: `scripts/vco_study.py --only synth --tuning draft`
+/// (reports/tube_synth/vco/synth_tuning.json, 2026-10-30), from -23 V: 59 Hz to 1.74 kHz.
+/// Below -23 V the tank's swing saturates the cores and the law isn't monotonic.
+const TUBE_SYNTH_TUNING: &[(f64, f64)] = &[
+    (58.64, -23.0),
+    (88.73, -22.0),
+    (128.4, -21.0),
+    (174.66, -20.0),
+    (225.33, -19.0),
+    (280.76, -18.0),
+    (341.4, -17.0),
+    (407.37, -16.0),
+    (478.54, -15.0),
+    (552.57, -14.0),
+    (628.81, -13.0),
+    (707.67, -12.0),
+    (788.95, -11.0),
+    (872.27, -10.0),
+    (957.27, -9.0),
+    (1043.53, -8.0),
+    (1130.7, -7.0),
+    (1218.37, -6.0),
+    (1306.28, -5.0),
+    (1394.07, -4.0),
+    (1481.47, -3.0),
+    (1568.24, -2.0),
+    (1654.11, -1.0),
+    (1738.95, 0.0),
 ];
 
 /// vco_lc's keyboard tuning: `scripts/vco_study.py --only lc --tuning draft`
@@ -460,6 +521,17 @@ mod tests {
         assert_eq!(keys, ["wave"]);
         let pitch = DEVICES[6].pitch.unwrap();
         assert_eq!(key_feeds(&DEVICES[6], &vco), Ok(vec![Feed::Pitch(pitch)]));
+        let synth = spec_of("tube_synth");
+        let k = knobs(&DEVICES[7], &synth);
+        let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
+        assert_eq!(keys, ["cutoff", "resonance", "attack", "release", "wave"]);
+        assert_eq!(
+            key_feeds(&DEVICES[7], &synth),
+            Ok(vec![
+                Feed::Gate(-110.0, -1.0),
+                Feed::Pitch(DEVICES[7].pitch.unwrap())
+            ])
+        );
         // A device without a feed for a control input can't be played from keys.
         assert!(key_feeds(&DEVICES[4], &voice).is_err());
     }
@@ -474,6 +546,8 @@ mod tests {
         assert_eq!(p.volts(1000.0), 0.0);
         assert!((p.volts(200.0) + 5.0).abs() < 1e-12);
         let t = DEVICES[6].pitch.unwrap().tuning;
+        assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
+        let t = DEVICES[7].pitch.unwrap().tuning;
         assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
     }
 }

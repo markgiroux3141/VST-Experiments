@@ -134,7 +134,11 @@ prototypes measured by `scripts/vco_study.py` -> `reports/tube_synth/vco/`. (b),
 reactor-tuned LC `config/circuits/vco_lc.yaml`, works: 52-1655 Hz, a 0.57 s glide (the
 ratchet), 0.56x real time at draft; it is the app's `vco_lc` device (draft-2x), its pitch
 from the keys through a measured tuning (`panel::Pitch`, `panel::key_feeds`; `vco_study.py
---tuning`). (a), the diode-timed multivibrator `vco_diode.yaml`
+--tuning`). `config/circuits/tube_synth.yaml` is the voice with that oscillator on one
+supply (the 6V6GT's screen on two 5651s: unregulated, the VCA's sag dropped held notes
+~780 cents), the app's `tube_synth` device (keys -> gate and pitch; `panel::Device::
+partition`: the oscillator and supplies on the second thread); ~96% load, not yet
+comfortably real time (TUBE_SYNTH_PLAN.md, S4's status). (a), the diode-timed multivibrator `vco_diode.yaml`
 on the new `6AL5@1`, doesn't run cleanly yet; (c) isn't started (TUBE_SYNTH_PLAN.md, S4's
 status). Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
 for the DC operating point only; absent = unchanged IR).

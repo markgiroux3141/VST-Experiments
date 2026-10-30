@@ -415,6 +415,36 @@ The native app's `vco_lc` device, `varimu-app --device vco_lc --midi masterkey -
   4.6x real time at draft-1x. Less gain-stage gain or a capacitor holding the 6V6GT's
   plate (it then barely moves) didn't change that.
 
+**The synth: `config/circuits/tube_synth.yaml` (2026-10-30), oscillator and voice on one
+supply.** tube_voice.yaml with vco_lc's oscillator, pitch driver and WAVE pot (parts O-,
+tubes OV-, nodes o_-, values osc_-), and:
+- a cathode follower (the 12AX7's other half) off the WAVE wiper; a mixer: the follower
+  through 0.1 uF and 1M, the external input (the audio input, silent from the keys)
+  through 1M, into the filter's first grid (~1.2 V peak at mid WAVE, ~3 V at the square
+  end, the first stage overdriven a little). The wiper's own ~300k made a 150k / 47k
+  mixer leave 0.15 V.
+- **The shared supply moved the pitch by semitones.** On the voice's supply b3 sits at
+  ~217 V (vco_lc's ~340 V); the pitch range moved down, and the VCA opening sagged b3 by
+  43 V: with the 6V6GT's screen on b3, every held note fell ~780 cents over ~2 s and rose
+  after the key (950 -> 606 Hz at -15 V), an unplayable pitch envelope. The screen is now
+  on **two 5651 voltage-reference tubes** in series (~177 V, fed from b1 through 27k: the
+  period's practice for an oscillator's screen, not tuning compensation): ~19 cents of
+  droop over a held note.
+- For the shared supply, the pair's tail is 100k (vco_lc's 68k saturated the cores below
+  ~90 Hz) and the 6V6GT's cathode 470 ohm: **59 Hz at -23 V to 1.74 kHz at 0 V**, 4.9
+  octaves; below -23 V the law isn't monotonic, so the keyboard's tuning starts there.
+- The app's `tube_synth` device (draft-2x, JA cores, keys -> gate and pitch, mod wheel ->
+  cutoff), its own partition (`panel::Device::partition`): the oscillator, the pitch
+  driver and the supplies on the second thread. The 6V6GT's grid holds 0.1 uF and a 10M
+  leak (the pitch input's stopper stays in the first part, where control inputs live).
+  Against the one solve: +3.5 cents, -0.2 dB. `tests/test_tube_synth.py`.
+- **Not real time yet:** ~96% load idle, worst blocks ~150%, 0 dropouts in 8 s at a 50 ms
+  buffer (`examples/play.rs`). One thread: 18 us per step, 80 states and 44 ports, the
+  time spread over devices, linear algebra and Newton's bookkeeping (no hot spot). Split
+  as voice | oscillator + supplies: 1.08x real time on the bench; voice + oscillator on
+  one side was worse (1.6-1.8x). Next: partitions in N parts (voice's filter | VCA and
+  envelope | oscillator and supplies).
+
 **(a) `config/circuits/vco_diode.yaml`, the diode-timed multivibrator: not working yet.**
 - The diode: **`6AL5@1`**, a new component in the existing vacuum-diode form, so no model
   code changed. The form's tail below 0 V is P s^1.5 exp(1.5 V / s): the initial-velocity

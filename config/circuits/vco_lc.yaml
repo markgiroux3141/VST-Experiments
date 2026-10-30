@@ -61,7 +61,7 @@ values:
   # --- input (unused)
   r_grid_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a load on the unused audio input)"}
   # --- oscillator
-  c_tank_f: {value: 56.0e-9, source: "provisional: model knowledge (design: ~58 Hz at the bottom of the sweep, ~1.8 kHz at the top)"}
+  c_tank_f: {value: 56.0e-9, source: "provisional: model knowledge (design: ~68 Hz at the bottom of the sweep, ~1.8 kHz at the top)"}
   r_tail_ohm: {value: 68.0e+3, source: "provisional: model knowledge (design: the pair's tail to the -45 V rail, ~0.7 mA: the square current into the tank. At 33k (~1.5 mA) the tank swung ~95 V at the bottom and saturated the cores: below ~65 Hz the pitch went chaotic and plateaued (the user heard it, 2026-10-30); at 68k the law is smooth and monotonic from 67 Hz at -42 V to 1.8 kHz at 0 V)"}
   r_plate_a_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1A's plate load, the square output)"}
   r_plate_b_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1B's plate load, parallel feed to the tank)"}
