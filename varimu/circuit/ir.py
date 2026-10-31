@@ -172,6 +172,38 @@ class Vccs:
 
 
 @dataclass(frozen=True)
+class Plate:
+    """A plate reverb's medium (docs/REVERB_PLAN.md, E2 / E6; varimu.devices.plate is the
+    reference, circuitsim's plate.rs the port): a force force_per_v (v(sense_pos) -
+    v(sense_neg)) (the exciter coil's current sensed across its resistance, times BL over
+    that resistance; the sense draws no current) at drive_xy, and the acceleration at
+    pickup_xy times out_per_m_s2 driving `out` to ground one sample after the force
+    (one-way: the plate's load on the coil is the builder's resistor). Positions are
+    fractions of the sides; decay is the energy decay rate (1/s) against frequency (Hz),
+    rising in Hz. SPICE has no plate: ngspice sees `out` held at 0 V (the medium cut out at
+    its ports)."""
+
+    name: str
+    sense_pos: str
+    sense_neg: str
+    force_per_v: float
+    out: str
+    out_per_m_s2: float
+    lx_m: float
+    ly_m: float
+    thickness_m: float
+    density_kg_m3: float
+    youngs_pa: float
+    poisson: float
+    tension_n_m: float
+    drive_xy: tuple[float, float]
+    pickup_xy: tuple[float, float]
+    f_max_hz: float
+    decay: tuple[tuple[float, float], ...]
+    tail_db: float
+
+
+@dataclass(frozen=True)
 class NoiseCurrent:
     """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
     source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
@@ -266,6 +298,7 @@ Element = (
     | TubeNoise
     | HeatedCathode
     | Device
+    | Plate
 )
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
 
@@ -289,6 +322,7 @@ _PREFIX = {
     NoiseCurrent: "I",
     TubeNoise: "B",
     HeatedCathode: "B",
+    Plate: "V",
 }
 
 
@@ -310,6 +344,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.a, el.b)
     if isinstance(el, Device):
         return el.nodes
+    if isinstance(el, Plate):
+        return (el.sense_pos, el.sense_neg, el.out)
     return ()
 
 
@@ -454,6 +490,8 @@ class CircuitIR:
                     _nonneg(f"{el.name}.{what}", getattr(el, what))
             elif isinstance(el, HeatedCathode):
                 _positive(f"{el.name}.is0_a", el.is0_a)
+            elif isinstance(el, Plate):
+                _validate_plate(el, self.input_node)
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
@@ -693,6 +731,7 @@ _ELEMENT_KINDS = {
     "tube_noise": TubeNoise,
     "heated_cathode": HeatedCathode,
     "device": Device,
+    "plate": Plate,
 }
 _MODEL_KINDS = {
     "triode": Triode,
@@ -762,7 +801,34 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
     cls = kinds.get(d.get("kind"))
     if cls is None:
         raise IRError(f"unknown kind {d.get('kind')!r} (expected one of {sorted(kinds)})")
+    if cls is Plate:
+        return _fields(cls, d, tagged=True, decay=lambda v: tuple(tuple(x) for x in v))
     return _fields(cls, d, tagged=True)
+
+
+def _validate_plate(el: Plate, input_node: str) -> None:
+    """The same checks as the Rust IR's for a plate."""
+    for k in ("lx_m", "ly_m", "thickness_m", "density_kg_m3", "youngs_pa", "f_max_hz", "tail_db"):
+        _positive(f"{el.name}.{k}", getattr(el, k))
+    _nonneg(f"{el.name}.tension_n_m", el.tension_n_m)
+    for k in ("force_per_v", "out_per_m_s2"):
+        _finite(f"{el.name}.{k}", getattr(el, k))
+    if not 0 <= el.poisson < 0.5:
+        raise IRError(f"{el.name}.poisson = {el.poisson} must be in [0, 0.5)")
+    for xy in (el.drive_xy, el.pickup_xy):
+        if not all(0 < v < 1 for v in xy):
+            raise IRError(f"{el.name}: position {list(xy)} must be inside the plate (0..1)")
+    ok = (
+        bool(el.decay)
+        and all(f > 0 and s >= 0 and math.isfinite(s) for f, s in el.decay)
+        and all(b[0] > a[0] for a, b in zip(el.decay, el.decay[1:], strict=False))
+    )
+    if not ok:
+        raise IRError(f"{el.name}.decay: (Hz, 1/s) points rising in Hz, rates finite and >= 0")
+    if el.sense_pos == el.sense_neg:
+        raise IRError(f"{el.name}: its force senses {el.sense_pos} against itself")
+    if el.out in (GROUND, input_node):
+        raise IRError(f"{el.name}: its pickup drives {el.out} (ground or the input)")
 
 
 def _decode_model(d: dict) -> DeviceModel:

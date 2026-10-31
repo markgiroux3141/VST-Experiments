@@ -38,6 +38,7 @@ from varimu.devices.fit import (
     load_csv,
 )
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
+from varimu.devices.plate import PlateComponent, plate_from_data
 from varimu.devices.speaker import Speaker, speaker_from_data
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_spec
 
@@ -117,12 +118,22 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return VacuumDiode(d["name"], d["perveance"], d.get("smooth_v", 0.1))
     if kind == "speaker":
         raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
+    if kind == "plate":
+        raise ValueError(f"{name} is a plate, not a device model: place it with a `plate` part")
     raise ValueError(f"{name}: unknown device kind {kind!r}")
 
 
 def load_speaker(name: str, root: Path = DEVICE_DIR) -> Speaker:
     """Speaker component `name` (`NAME@N`, or `NAME` for its latest version)."""
     return speaker_from_data(_read(name, root), name)
+
+
+def load_plate(name: str, root: Path = DEVICE_DIR) -> PlateComponent:
+    """Plate component `name` (`NAME@N`, or `NAME` for its latest version)."""
+    d = _read(name, root)
+    if d.get("kind") != "plate":
+        raise ValueError(f"{name} is not a plate (kind {d.get('kind')!r})")
+    return plate_from_data(d, name)
 
 
 # --- Building --------------------------------------------------------------------
@@ -631,6 +642,110 @@ def build_p12r() -> dict[str, Any]:
     }
 
 
+# The decay curves' frequency grid: third octaves from 50 Hz to the plot's end (~14 kHz).
+EMT140_GRID_HZ = [
+    50.0,
+    63.0,
+    80.0,
+    100.0,
+    125.0,
+    160.0,
+    200.0,
+    250.0,
+    315.0,
+    400.0,
+    500.0,
+    630.0,
+    800.0,
+    1000.0,
+    1250.0,
+    1600.0,
+    2000.0,
+    2500.0,
+    3150.0,
+    4000.0,
+    5000.0,
+    6300.0,
+    8000.0,
+    10000.0,
+    12500.0,
+    14000.0,
+]
+
+
+def build_emt140() -> dict[str, Any]:
+    """An EMT 140 plate (docs/REVERB_PLAN.md, E6): the plate and its suspension from the
+    literature's model of it, its decay against frequency for three damper settings from
+    the 1971 brochure's plot (data/datasheets/emt_140ts_decay.csv, put on third octaves),
+    and provisional transducers (the exciter's and pickups' data aren't published)."""
+    rows = load_csv("emt_140ts_decay.csv")  # curve_t500_s, f_hz, t60_s
+    curves = []
+    for label in sorted(set(rows[:, 0].tolist()), reverse=True):
+        sel = rows[:, 0] == label
+        f, t60 = rows[sel, 1], rows[sel, 2]
+        # Linear in log frequency, held past the curve's ends (the 4,5 s curve below
+        # 100 Hz, every curve above the plot's ~14 kHz).
+        on_grid = np.interp(np.log(EMT140_GRID_HZ), np.log(f), t60)
+        curves.append({"label_s": label, "t60_s": [round(float(v), 3) for v in on_grid]})
+    brochure = "data/datasheets/emt_140ts.provenance.yaml"
+    russo = "web: https://projekter.aau.dk/projekter/files/517547034/Master_Thesis_Russo.pdf"
+    ducceschi = "web: https://mdphys.org/PDF/icaPLA_2016.pdf"
+    return {
+        "name": "EMT140",
+        "kind": "plate",
+        "source": "the EMT 140's plate as the literature models it (Russo 2021, Ducceschi & "
+        "Webb 2016), its measured decay curves (EMT 140 TS brochure, 1971) and provisional "
+        "transducers; varimu.devices.plate",
+        "plate": {
+            "lx_m": 2.0,
+            "ly_m": 1.0,
+            "thickness_m": 0.5e-3,
+            "density_kg_m3": 7872.0,
+            "youngs_pa": 2.0e11,
+            "poisson": 0.3,
+            "tension_n_m": 600.0,
+            "source": f"{russo} (pp.3, 48: 2 m x 1 m, 0.5 mm, SAE 1010 steel: E 2e11 Pa, "
+            f"nu 0.3, rho 7872 kg/m^3); tension: provisional, {ducceschi} (§6: '600N' for "
+            "a 2 m x 1 m x 0.5 mm steel plate, read as N/m; the EMT's tension isn't published)",
+        },
+        "positions": {
+            "drive_xy": [0.52, 0.53],
+            "pickup_xy": [0.47, 0.62],
+            "source": f"provisional: {ducceschi} (Fig. 3) and {russo} (p.48): the models' "
+            "exciter and pickup, fractions of the sides; the brochure (pp.3-4) puts the "
+            "exciter on the middle of three bridges across the frame and two pickups at "
+            "unequal distances either side, without dimensions",
+        },
+        "exciter": {
+            "re_ohm": 6.0,
+            "le_h": 0.3e-3,
+            "bl_tm": 2.5,
+            "source": "provisional: model knowledge (a small moving-coil exciter, ~8 ohm "
+            "nominal; the EMT's isn't published: brochure pp.3-4 'moving coil system')",
+        },
+        "pickup": {
+            "v_per_m_s2": 5.0e-3,
+            "c_f": 1.0e-9,
+            "source": f"provisional: model knowledge (a ceramic contact accelerometer, "
+            f"~50 mV/g, ~1 nF); accelerometers per {russo} (p.3), ceramic contact pickups "
+            "per the brochure (pp.3-4)",
+        },
+        "model": {
+            "f_max_hz": 20000.0,
+            "tail_db": 90.0,
+            "source": "numerical: the modes up to 20 kHz (below 0.45 of the rate), each "
+            "summed until 90 dB down",
+        },
+        "decay": {
+            "f_hz": EMT140_GRID_HZ,
+            "curves": curves,
+            "source": f"digitized: {brochure} (p.2's reverberation time against frequency "
+            "for three damper distances, emt_140ts_decay.csv), linear in log frequency onto "
+            "third octaves, held past each curve's ends",
+        },
+    }
+
+
 BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
@@ -649,6 +764,7 @@ BUILDERS = {
     "6V6GT": build_6v6gt,
     "5Y3GT": build_5y3gt,
     "P12R": build_p12r,
+    "EMT140": build_emt140,
 }
 
 REPORT_FOR = {

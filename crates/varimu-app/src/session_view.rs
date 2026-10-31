@@ -148,7 +148,7 @@ struct Audition {
     device: String,
     input: String,
     values: Values,
-    gains: (f64, f64, bool),
+    gains: (f64, f64, bool, f64),
 }
 
 /// A drag on the ruler: a locator's handle, or a new loop from a beat.
@@ -830,7 +830,7 @@ impl SessionView {
                         device: slot.device.clone(),
                         input,
                         values: slot.values.clone(),
-                        gains: (f64::NAN, f64::NAN, false),
+                        gains: (f64::NAN, f64::NAN, false, f64::NAN),
                     });
                     self.error = None;
                 }
@@ -862,11 +862,12 @@ impl SessionView {
             p.set(slot.values.clone());
             a.values = slot.values.clone();
         }
-        let gains = (slot.trim_db, slot.makeup_db, slot.bypass);
+        let gains = (slot.trim_db, slot.makeup_db, slot.bypass, slot.wet);
         if a.gains != gains {
             p.set_gain(10f64.powf(slot.trim_db / 20.0));
             p.set_output_db(slot.makeup_db);
             p.set_bypass(slot.bypass);
+            p.set_wet(slot.wet);
             p.set_compensation(false);
             a.gains = gains;
         }
@@ -929,6 +930,7 @@ impl SessionView {
         p.set_compensation(false);
         p.set_output_db(slot.makeup_db);
         p.set_bypass(slot.bypass);
+        p.set_wet(slot.wet);
         Ok(p)
     }
 
@@ -1235,6 +1237,20 @@ impl SessionView {
                 slot.makeup_db = ((slot.makeup_db + a - b) * 10.0).round() / 10.0;
                 changed = true;
             }
+            ui.add_space(8.0);
+            ui.label("Wet");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut slot.wet)
+                        .range(0.0..=1.0)
+                        .speed(0.01)
+                        .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+                )
+                .on_hover_text(
+                    "The device's share of the track (a console's wet / dry): 100% is the \
+                     device only, less mixes in the track as it came",
+                )
+                .changed();
             ui.add_space(8.0);
             changed |= ui.checkbox(&mut slot.bypass, "Bypass").changed();
             ui.add_space(8.0);

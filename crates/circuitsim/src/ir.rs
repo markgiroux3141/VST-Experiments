@@ -150,6 +150,7 @@ pub enum Element {
     TubeNoise(TubeNoise),
     HeatedCathode(HeatedCathode),
     Device(Device),
+    Plate(Plate),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -267,6 +268,36 @@ pub struct Vccs {
     pub ctrl_pos: String,
     pub ctrl_neg: String,
     pub gm_s: f64,
+}
+
+/// A plate reverb's medium (docs/REVERB_PLAN.md, E2 / E6; `crate::plate`): a force
+/// `force_per_v (v(sense_pos) - v(sense_neg))` (the exciter coil's current, sensed across
+/// its resistance, times BL over that resistance; the sense draws no current) at
+/// `drive_xy`, and the pickup's acceleration at `pickup_xy` times `out_per_m_s2` driving
+/// `out` to ground, one sample after the force (one-way coupling: the plate's load on the
+/// coil is the builder's, a resistor). Positions are fractions of the sides; `decay` is
+/// the energy decay rate (1/s) against frequency (Hz).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Plate {
+    pub name: String,
+    pub sense_pos: String,
+    pub sense_neg: String,
+    pub force_per_v: f64,
+    pub out: String,
+    pub out_per_m_s2: f64,
+    pub lx_m: f64,
+    pub ly_m: f64,
+    pub thickness_m: f64,
+    pub density_kg_m3: f64,
+    pub youngs_pa: f64,
+    pub poisson: f64,
+    pub tension_n_m: f64,
+    pub drive_xy: [f64; 2],
+    pub pickup_xy: [f64; 2],
+    pub f_max_hz: f64,
+    pub decay: Vec<[f64; 2]>,
+    pub tail_db: f64,
 }
 
 /// White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from `a` through
@@ -484,6 +515,7 @@ impl Element {
             Element::TubeNoise(e) => &e.name,
             Element::HeatedCathode(e) => &e.name,
             Element::Device(e) => &e.name,
+            Element::Plate(e) => &e.name,
         }
     }
 
@@ -501,6 +533,7 @@ impl Element {
             Element::NoiseCurrent(e) => vec![&e.a, &e.b],
             Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
+            Element::Plate(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
         }
     }
 }
@@ -660,6 +693,62 @@ impl CircuitIr {
                 Element::HeatedCathode(e) => {
                     positive(&format!("{name}.is0_a"), e.is0_a)?;
                     'B'
+                }
+                Element::Plate(e) => {
+                    for (k, v) in [
+                        ("lx_m", e.lx_m),
+                        ("ly_m", e.ly_m),
+                        ("thickness_m", e.thickness_m),
+                        ("density_kg_m3", e.density_kg_m3),
+                        ("youngs_pa", e.youngs_pa),
+                        ("f_max_hz", e.f_max_hz),
+                        ("tail_db", e.tail_db),
+                    ] {
+                        positive(&format!("{name}.{k}"), v)?;
+                    }
+                    nonneg(&format!("{name}.tension_n_m"), e.tension_n_m)?;
+                    for (k, v) in [
+                        ("force_per_v", e.force_per_v),
+                        ("out_per_m_s2", e.out_per_m_s2),
+                    ] {
+                        finite(&format!("{name}.{k}"), v)?;
+                    }
+                    if !(0.0..0.5).contains(&e.poisson) {
+                        return err(format!(
+                            "{name}.poisson = {} must be in [0, 0.5)",
+                            e.poisson
+                        ));
+                    }
+                    for xy in [e.drive_xy, e.pickup_xy] {
+                        if !xy.iter().all(|v| *v > 0.0 && *v < 1.0) {
+                            return err(format!(
+                                "{name}: position {xy:?} must be inside the plate (0..1)"
+                            ));
+                        }
+                    }
+                    if e.decay.is_empty()
+                        || e.decay
+                            .iter()
+                            .any(|d| !(d[0] > 0.0 && d[1] >= 0.0 && d[1].is_finite()))
+                        || e.decay.windows(2).any(|w| w[1][0] <= w[0][0])
+                    {
+                        return err(format!(
+                            "{name}.decay: (Hz, 1/s) points rising in Hz, rates finite and >= 0"
+                        ));
+                    }
+                    if e.sense_pos == e.sense_neg {
+                        return err(format!(
+                            "{name}: its force senses {} against itself",
+                            e.sense_pos
+                        ));
+                    }
+                    if e.out == GROUND || e.out == self.input_node {
+                        return err(format!(
+                            "{name}: its pickup drives {} (ground or the input)",
+                            e.out
+                        ));
+                    }
+                    'V'
                 }
                 Element::Device(e) => {
                     let Some(m) = models.get(e.model.as_str()) else {

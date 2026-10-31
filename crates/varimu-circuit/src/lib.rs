@@ -26,6 +26,7 @@ pub mod drawing;
 pub mod importer;
 pub mod json;
 pub mod parts;
+pub mod plate;
 pub mod preflight;
 pub mod speaker;
 pub mod spec;

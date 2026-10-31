@@ -549,6 +549,25 @@ fn table() -> Vec<SymbolDef> {
             false,
             (0.0, 6.35, 4.826, "left"),
         ),
+        macro_sym(
+            "Plate",
+            "plate",
+            "PL",
+            "Plate reverb's plate (varimu.devices.plate): pins 1 + and 2 - the exciter coil, 3 the pickup (behind its capacitance, to ground); Value is its component version",
+            vec![
+                pin("1", "1", -7.62, 2.54, 0, 2.54),
+                pin("2", "2", -7.62, -2.54, 0, 2.54),
+                pin("3", "3", 7.62, 0.0, 180, 2.54),
+            ],
+            vec![
+                rect(-5.08, -3.81, 5.08, 3.81),
+                rect(-3.81, -0.508, 3.81, 0.508),
+            ],
+            Some("component"),
+            &["decay_500hz_s"],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
     ];
     let dev_text = (5.842, 1.27, -1.27, "left");
     v.push(device(

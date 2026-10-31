@@ -484,7 +484,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 17] = [
+const MACROS: [&str; 18] = [
     "R",
     "C",
     "L",
@@ -502,6 +502,7 @@ const MACROS: [&str; 17] = [
     "bridge",
     "vr_tube",
     "speaker",
+    "plate",
 ];
 
 fn macro_of(kind: &str) -> Macro {
@@ -590,6 +591,11 @@ fn macro_of(kind: &str) -> Macro {
                 p("operating_v", Physical),
                 p("ref_current_a", Physical),
             ],
+            false,
+        ),
+        "plate" => (
+            Some(3),
+            vec![p("component", Raw), p("decay_500hz_s", Physical)],
             false,
         ),
         "speaker" => (
@@ -890,6 +896,7 @@ fn expand(
             )
         }
         "speaker" => return speaker_part(ctx, name, nodes, a),
+        "plate" => return plate_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
 }
@@ -916,6 +923,23 @@ fn speaker_part(
     let distance = f("distance_m")?;
     Ok(speaker::speaker(
         name, &nodes[0], &nodes[1], &nodes[2], &model, &cab, distance,
+    ))
+}
+
+fn plate_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.plate(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let decay = ctx.float(&format!("{name}.decay_500hz_s"), &a["decay_500hz_s"])?;
+    Ok(crate::plate::plate(
+        name, &nodes[0], &nodes[1], &nodes[2], &model, decay,
     ))
 }
 

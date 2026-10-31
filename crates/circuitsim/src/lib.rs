@@ -12,6 +12,7 @@
 use std::fmt;
 
 pub mod cathode;
+pub mod convolve;
 pub mod devices;
 pub mod dk;
 pub mod fastmath;
@@ -21,6 +22,7 @@ pub mod mna;
 pub mod newton;
 pub mod noise;
 pub mod partition;
+pub mod plate;
 pub mod stream;
 pub mod timing;
 pub mod transient;

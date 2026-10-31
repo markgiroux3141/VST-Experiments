@@ -9,8 +9,9 @@ another device"), and it is where the reverb track ([REVERB_PLAN.md](REVERB_PLAN
 gets used. Native only; nothing goes into the web app. Work the milestones in order, each
 ending with its "done when" met and covered by tests.
 
-**Status (2026-10-30): F1 done; F2 and F3 built** (F2 tried once by the user, F3 after
-their feedback; each milestone's status below it). The reverb for F4 is REVERB_PLAN.md's plate (decision 1).
+**Status (2026-10-31): F1 done; F2 and F3 built and tried by the user ("inserts work
+good"); the plate reverb is an insert with a wet / dry mix** (each milestone's status
+below it; the reverb: REVERB_PLAN.md's status). The reverb for F4 is REVERB_PLAN.md's plate (decision 1).
 
 ## The idea: print, don't play
 
@@ -215,6 +216,11 @@ audition takes the armed instrument's place while the panel is open.
   126% worst block, 0 dropouts, knob to ear 284 ms. Mix-only: 0% load, 0 dropouts.
 - **Not yet:** the audition against its print (done-when 2), the load with many tracks
   of prints playing.
+- **Wet / dry (2026-10-31, with the plate reverb):** an insert's `wet` share (`Slot::wet`,
+  the panel's Wet): the device's output after its make-up, the rest the track as it came
+  (before the trim: the console's dry path). A reverb (`print::WET_ONLY`) is added at 30%
+  wet with an 8 s tail; the live audition mixes the same way (`Monitor::wet`,
+  `Player::set_wet`). Until F4's sends, a plate on a track is an insert at its wet share.
 
 **F4. Sends and FX tracks.** FX tracks, send levels pre / post fader, the bus sum, prints
 with tails, the return strip.

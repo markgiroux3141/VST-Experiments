@@ -163,6 +163,7 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::TubeNoise(t) => ("TubeNoise", &t.name, vec![]),
             Element::HeatedCathode(h) => ("HeatedCathode", &h.name, vec![]),
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
+            Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
         };
         elements.insert((kind, name.to_string()));
         nodes.extend(ns.into_iter().cloned());
@@ -674,6 +675,9 @@ fn build_loop(
             let st = structure(&ir);
             let fs = circuit.full_scale(&s);
             if st == current && fs == current_fs {
+                // A plate's new response (a knob on its damper) computed here, off the
+                // audio thread: the stream's update finds it cached.
+                circuitsim::plate::prepare(&ir, s.sim_rate() as f64);
                 Ok(Ready::Update(Box::new(ir), values))
             } else {
                 let u0 = f64::from_bits(shared.u0.load(Ordering::Relaxed));

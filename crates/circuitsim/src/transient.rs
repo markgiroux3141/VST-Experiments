@@ -730,6 +730,7 @@ impl Dk {
                 .iter()
                 .filter_map(|(_, i)| *i)
                 .chain(mna.outputs.iter().copied())
+                .chain(mna.media_senses())
                 .collect(),
             xu: vec![0.0; mna.len()],
             e_ps: vec![0.0; m + r],
@@ -751,6 +752,8 @@ impl Dk {
 #[derive(Debug)]
 pub struct Transient {
     mna: Mna,
+    /// The media running beside the circuit ([`Mna::media`] order).
+    media: Vec<crate::plate::Medium>,
     opts: Options,
     tab: Tableau,
     h: f64,
@@ -866,6 +869,20 @@ impl Transient {
             return Err(Error::new(format!("time step {h} must be > 0")));
         }
         opts.check()?;
+        // The media's pickups are the transient's own: callers give the other externals
+        // (control inputs, then a partition's couplings), the media start silent.
+        let ext: Vec<f64> = if mna.n_media > 0 && ext.len() + mna.n_media == mna.externals.len() {
+            let k = mna.n_controls.min(ext.len());
+            ext[..k]
+                .iter()
+                .copied()
+                .chain(std::iter::repeat_n(0.0, mna.n_media))
+                .chain(ext[k..].iter().copied())
+                .collect()
+        } else {
+            ext.to_vec()
+        };
+        let ext = ext.as_slice();
         if ext.len() != mna.externals.len() {
             return Err(Error::new(format!(
                 "{} external values for {} externals",
@@ -915,7 +932,13 @@ impl Transient {
         let ports = vec![0.0; newton.v_lin.len()];
         let s = tab.s;
         let dk = (opts.solver == Solver::Dk && tab.diagonal).then(|| Dk::new(&mna, &opts, s));
+        let media = mna
+            .media
+            .iter()
+            .map(|m| crate::plate::Medium::new(&m.plate, 1.0 / h))
+            .collect();
         let mut tr = Transient {
+            media,
             opts,
             h,
             newton,
@@ -969,6 +992,9 @@ impl Transient {
         tr.dc(u0)?;
         // The noise sources' first amplitudes, at the operating point (itself noise-free).
         tr.observe_noise();
+        // The media take the operating point's force: the first step carries their
+        // pickups from silence (sample 0) to their sample 1.
+        tr.step_media();
         Ok(tr)
     }
 
@@ -1232,6 +1258,9 @@ impl Transient {
             self.stats.halved_steps += 1;
         }
         self.n += 1;
+        if res.is_ok() {
+            self.step_media();
+        }
         res.map_err(|(level, f)| {
             let what = format!(
                 "transient step to t = {:.9e} s (sample {}, after {} halvings)",
@@ -2046,6 +2075,12 @@ impl Transient {
         let moved = perm.iter().enumerate().any(|(i, &j)| i != j);
         mna.externals = self.mna.externals.iter().map(|&r| perm[r]).collect();
         mna.outputs = self.mna.outputs.iter().map(|&r| perm[r]).collect();
+        if mna.media.len() != self.media.len() {
+            return Err(changed());
+        }
+        for (m, new) in self.media.iter_mut().zip(&mna.media) {
+            m.update(&new.plate);
+        }
         let same_devices = mna.devices.len() == self.mna.devices.len()
             && mna.devices.iter().zip(&self.mna.devices).all(|(a, b)| {
                 a.name == b.name
@@ -2219,11 +2254,24 @@ impl Transient {
         self.opts.all_unknowns = on;
     }
 
+    /// The media's pickups after a sample: each plate takes the force sensed now and
+    /// gives its pickup's value at the next sample's end (its start is this one's).
+    fn step_media(&mut self) {
+        let k = self.mna.n_controls;
+        for (i, (m, ports)) in self.media.iter_mut().zip(&self.mna.media).enumerate() {
+            let at = |u: Option<usize>| u.map_or(0.0, |j| self.x[j]);
+            let v = at(ports.sense.0) - at(ports.sense.1);
+            let y = m.push(v);
+            self.ext0[k + i] = self.ext1[k + i];
+            self.ext1[k + i] = y;
+        }
+    }
+
     /// The externals' values ([`Mna::externals`]) over the next sample: `start`
     /// at its start, `end` at its end, linear in between (stage times).
-    /// (The externals past the control inputs: a partition's couplings.)
+    /// (The externals past the control inputs and the media: a partition's couplings.)
     pub fn set_externals(&mut self, start: &[f64], end: &[f64]) {
-        let k = self.mna.n_controls;
+        let k = self.mna.n_controls + self.mna.n_media;
         self.ext0[k..].copy_from_slice(start);
         self.ext1[k..].copy_from_slice(end);
     }

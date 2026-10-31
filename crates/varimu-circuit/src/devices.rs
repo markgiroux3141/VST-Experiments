@@ -16,6 +16,7 @@ use circuitsim::ir::{
     Triode, VacuumDiode, VariMuTriode,
 };
 
+use crate::plate::{self, PlateComponent};
 use crate::speaker::{self, Speaker};
 use crate::yaml::{self, Map, Value};
 use crate::{Error, versions};
@@ -37,6 +38,7 @@ pub struct Library {
     config_dir: PathBuf,
     devices: Mutex<HashMap<String, DeviceModel>>,
     speakers: Mutex<HashMap<String, Speaker>>,
+    plates: Mutex<HashMap<String, PlateComponent>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
 }
 
@@ -46,6 +48,7 @@ impl Library {
             config_dir: config_dir.into(),
             devices: Mutex::new(HashMap::new()),
             speakers: Mutex::new(HashMap::new()),
+            plates: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
         }
     }
@@ -87,6 +90,21 @@ impl Library {
         let s = speaker::from_data(&yaml::parse(&text, name)?, name)?;
         self.speakers.lock().unwrap().insert(key, s.clone());
         Ok(s)
+    }
+
+    /// Plate component `name` (`NAME@N`, or `NAME` for its latest version), checked
+    /// against versions.lock (`load_plate` in library.py).
+    pub fn plate(&self, name: &str) -> Result<PlateComponent, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(p) = self.plates.lock().unwrap().get(&key) {
+            return Ok(p.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let p = plate::from_data(&yaml::parse(&text, name)?, name)?;
+        self.plates.lock().unwrap().insert(key, p.clone());
+        Ok(p)
     }
 
     pub fn material(&self, name: &str) -> Result<Material, Error> {

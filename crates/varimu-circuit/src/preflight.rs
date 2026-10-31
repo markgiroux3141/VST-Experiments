@@ -150,6 +150,11 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
                 .iter()
                 .map(|c| (c.node.clone(), format!("<control {}>", c.name))),
         )
+        // A plate's pickup drives its node to ground, as a control input does.
+        .chain(ir.elements().filter_map(|e| match e {
+            Element::Plate(p) => Some((p.out.clone(), format!("<plate {}>", p.name))),
+            _ => None,
+        }))
         .collect();
     for n in driven.iter().map(|(n, _)| n.as_str()).chain(probes) {
         if !nodes.contains_key(n) {

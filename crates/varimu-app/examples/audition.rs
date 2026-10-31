@@ -63,9 +63,11 @@ fn main() -> Result<(), String> {
             .map(|&v| v as f32)
             .collect(),
     );
-    let mut transport = TransportSettings::default();
-    transport.count_in_bars = 0;
-    transport.pre_roll_bars = 0;
+    let transport = TransportSettings {
+        count_in_bars: 0,
+        pre_roll_bars: 0,
+        ..Default::default()
+    };
     let values = |v: &Value| {
         turn.as_ref()
             .map_or(Vec::new(), |(k, _, _)| vec![(k.clone(), v.clone())])

@@ -41,12 +41,14 @@ from varimu.circuit.ir import (
     DeviceModel,
     Element,
     Inductor,
+    Plate,
     Resistor,
     SineSource,
     Vccs,
     VoltageSource,
     Winding,
 )
+from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
@@ -594,3 +596,45 @@ class Tolerance:
             else:
                 out.append(el)
         return out
+
+
+# --- Media (docs/REVERB_PLAN.md) --------------------------------------------------------
+
+
+def plate(
+    name: str, plus: str, minus: str, out: str, c: plt.PlateComponent, decay_500hz_s: float
+) -> list[Element]:
+    """A plate reverb's plate between its exciter's terminals (plus, minus) and its pickup's
+    (out to ground): the exciter coil (L<name>_le, then R<name>_mot, the plate's resistive
+    load BL^2 / (8 sqrt(D rho H)), then R<name>_re into minus), the plate V<name> sensing
+    the coil's current across R<name>_re (force BL / Re per volt) and driving <name>_p with
+    the pickup's open-circuit voltage, and the pickup's capacitance C<name>_pu from there
+    to out. The damper set to decay_500hz_s at 500 Hz (varimu.devices.plate)."""
+    n, upper = name.lower(), name.upper()
+    bl = c.exciter_bl_tm
+    return [
+        Inductor(f"L{upper}_le", plus, f"{n}_a", c.exciter_le_h),
+        Resistor(f"R{upper}_mot", f"{n}_a", f"{n}_c", bl * bl / plt.plate_impedance_ns_per_m(c)),
+        Resistor(f"R{upper}_re", f"{n}_c", minus, c.exciter_re_ohm),
+        Plate(
+            name=f"V{upper}",
+            sense_pos=f"{n}_c",
+            sense_neg=minus,
+            force_per_v=bl / c.exciter_re_ohm,
+            out=f"{n}_p",
+            out_per_m_s2=c.pickup_v_per_m_s2,
+            lx_m=c.lx_m,
+            ly_m=c.ly_m,
+            thickness_m=c.thickness_m,
+            density_kg_m3=c.density_kg_m3,
+            youngs_pa=c.youngs_pa,
+            poisson=c.poisson,
+            tension_n_m=c.tension_n_m,
+            drive_xy=c.drive_xy,
+            pickup_xy=c.pickup_xy,
+            f_max_hz=c.f_max_hz,
+            decay=plt.decay_table(c, decay_500hz_s),
+            tail_db=c.tail_db,
+        ),
+        Capacitor(f"C{upper}_pu", f"{n}_p", out, c.pickup_c_f),
+    ]

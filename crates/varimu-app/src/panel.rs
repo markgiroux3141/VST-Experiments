@@ -228,7 +228,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 9] = [
+pub const DEVICES: [Device; 10] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -409,6 +409,20 @@ pub const DEVICES: [Device; 9] = [
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
         // oscillator and its pitch driver | the supplies.
         partition: Some(&["oscillator", "pitch", "|", "power supply", "bias supply"]),
+    },
+    Device {
+        id: "plate_reverb",
+        label: "Plate reverb (EMT 140 plate)",
+        circuit: "plate_reverb",
+        panel: Some(&["drive", "decay_500hz_s", "return_level"]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        pitch: None,
+        own_oscillator: false,
+        partition: None,
     },
 ];
 
@@ -687,7 +701,7 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 25] = [
+const LABELS: [(&str, &str); 28] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -713,6 +727,9 @@ const LABELS: [(&str, &str); 25] = [
     ("attack", "Attack"),
     ("release", "Release"),
     ("wave", "Wave (tank to square)"),
+    ("drive", "Drive (send level)"),
+    ("decay_500hz_s", "Decay at 500 Hz (s)"),
+    ("return_level", "Return"),
 ];
 
 /// How a knob moves.

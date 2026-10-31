@@ -336,6 +336,23 @@ _SYMBOLS: list[SymbolDef] = [
         toleranced=False,
         text=(0, 6.35, 4.826, "left"),
     ),
+    _macro(
+        "Plate",
+        "plate",
+        "PL",
+        "Plate reverb's plate (varimu.devices.plate): pins 1 + and 2 - the exciter coil, "
+        "3 the pickup (behind its capacitance, to ground); Value is its component version",
+        (
+            Pin("1", "1", -7.62, 2.54, 0, 2.54),
+            Pin("2", "2", -7.62, -2.54, 0, 2.54),
+            Pin("3", "3", 7.62, 0, 180, 2.54),
+        ),  # fmt: skip
+        [rect(-5.08, -3.81, 5.08, 3.81), rect(-3.81, -0.508, 3.81, 0.508)],
+        "component",
+        ("decay_500hz_s",),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
 ]
 
 _DEVICE_FIELDS = ("Tol", "Model", "emission", "mu", "grid_contact_v", "parallel", "area",

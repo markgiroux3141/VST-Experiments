@@ -99,6 +99,14 @@ pub struct DeviceInstance {
     pub pin_names: &'static [&'static str],
 }
 
+/// A medium in the circuit (a plate, `crate::plate`): its element and the unknowns of
+/// its force's sense nodes.
+#[derive(Debug, Clone)]
+pub struct MediumPorts {
+    pub plate: crate::ir::Plate,
+    pub sense: (Option<usize>, Option<usize>),
+}
+
 /// The circuit as matrices, ready for DC and transient analysis.
 #[derive(Debug)]
 pub struct Mna {
@@ -128,6 +136,11 @@ pub struct Mna {
     pub externals: Vec<usize>,
     /// How many of [`Mna::externals`] are control inputs (IR order).
     pub n_controls: usize,
+    /// How many of [`Mna::externals`], after the control inputs, are media's pickups
+    /// ([`Mna::media`]): the transient sets them itself after each sample.
+    pub n_media: usize,
+    /// The media (plates) and the unknowns their force senses (`None`: ground).
+    pub media: Vec<MediumPorts>,
     /// Unknowns a probes-only run computes at every step besides the probes
     /// (the coupling values a partitioned run reads).
     pub outputs: Vec<usize>,
@@ -296,6 +309,22 @@ impl Mna {
             })
             .collect();
 
+        // Media's pickups after them: each drives its `out` node like a control input.
+        let plates: Vec<&crate::ir::Plate> = ir
+            .elements()
+            .filter_map(|e| match e {
+                Element::Plate(p) => Some(p),
+                _ => None,
+            })
+            .collect();
+        let media_rows: Vec<usize> = plates
+            .iter()
+            .map(|p| {
+                unknowns.push(Unknown::Control(p.name.clone()));
+                unknowns.len() - 1
+            })
+            .collect();
+
         let n = unknowns.len();
         let mut g = Matrix::zeros(n);
         let mut c = Matrix::zeros(n);
@@ -417,7 +446,8 @@ impl Mna {
                 Element::Coupling(_)
                 | Element::NoiseCurrent(_)
                 | Element::TubeNoise(_)
-                | Element::HeatedCathode(_) => {}
+                | Element::HeatedCathode(_)
+                | Element::Plate(_) => {}
             }
         }
         for el in ir.elements() {
@@ -432,6 +462,16 @@ impl Mna {
         for (c, &row) in ir.controls.iter().zip(&control_rows) {
             incidence(&mut g, row, node(&c.node), None);
         }
+        for (p, &row) in plates.iter().zip(&media_rows) {
+            incidence(&mut g, row, node(&p.out), None);
+        }
+        let media: Vec<MediumPorts> = plates
+            .iter()
+            .map(|p| MediumPorts {
+                plate: (*p).clone(),
+                sense: (node(&p.sense_pos), node(&p.sense_neg)),
+            })
+            .collect();
         // Heated cathodes: their tubes' devices wrapped before banks merge.
         let instances = match &ir.heaters {
             None => instances,
@@ -505,7 +545,9 @@ impl Mna {
             probes,
             devices: instances,
             n_controls: control_rows.len(),
-            externals: control_rows,
+            n_media: media_rows.len(),
+            externals: control_rows.into_iter().chain(media_rows).collect(),
+            media,
             outputs: Vec::new(),
             dc_starts,
             noise,
@@ -520,6 +562,15 @@ impl Mna {
             .iter()
             .map(|w| w.row)
             .chain(self.externals.iter().copied())
+            .collect()
+    }
+
+    /// The unknowns a run must compute at each step for the media's forces.
+    pub fn media_senses(&self) -> Vec<usize> {
+        self.media
+            .iter()
+            .flat_map(|m| [m.sense.0, m.sense.1])
+            .flatten()
             .collect()
     }
 

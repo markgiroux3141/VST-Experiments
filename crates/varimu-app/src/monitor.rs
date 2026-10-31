@@ -98,6 +98,11 @@ pub struct Monitor {
     pub compensate: bool,
     /// The manual gain on the device's output (dB).
     pub output_db: f64,
+    /// The device's share of the output (an insert's wet / dry, the Session view's: 1 is
+    /// the device only), and what scales its input back to the dry signal (1 / the input
+    /// gain: the dry path is the console's, before the trim).
+    pub wet: f64,
+    pub dry_gain: f64,
     /// The dry input, delayed by the engine's lag.
     delay: Vec<f64>,
     at: usize,
@@ -127,6 +132,8 @@ impl Monitor {
             bypass: false,
             compensate: true,
             output_db: 0.0,
+            wet: 1.0,
+            dry_gain: 1.0,
             delay: vec![0.0; lag.max(1)],
             at: 0,
             mix: 0.0,
@@ -175,7 +182,8 @@ impl Monitor {
                 } else if self.mix > target_mix {
                     self.mix = (self.mix - self.step_mix).max(0.0);
                 }
-                (w * g * (1.0 - self.mix) + d * self.mix) as f32
+                let blend = self.wet * w * g + (1.0 - self.wet) * d * self.dry_gain;
+                (blend * (1.0 - self.mix) + d * self.mix) as f32
             })
             .collect()
     }

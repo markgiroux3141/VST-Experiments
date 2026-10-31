@@ -43,6 +43,10 @@ Macro parts (connection; params, * = required):
                 offset_y_m (the driver's centre from the baffle's): the driver between
                 plus and minus, the sound pressure at the listening point on `out`
                 (pascals as volts; varimu.devices.speaker)
+    plate       [plus, minus, out]; component* (a plate component version, NAME@N, or a
+                parameter naming one), decay_500hz_s* (the damper, as the decay at 500 Hz):
+                the exciter between plus and minus, the pickup (its capacitance in series)
+                from out to ground (varimu.devices.plate, varimu.circuit.parts.plate)
 
 R, C, pot, rheostat, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
 the file's tolerance classes); a switch's sub-parts take their own.
@@ -110,7 +114,7 @@ from varimu.devices import noise as noise_mod
 from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
-from varimu.devices.library import load_device, load_speaker
+from varimu.devices.library import load_device, load_plate, load_speaker
 from varimu.devices.pentode import Pentode
 from varimu.devices.speaker import Cabinet
 from varimu.devices.table import GRIDS
@@ -474,6 +478,15 @@ def _speaker(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]
     return parts.speaker(name, *conn, model, cab, a["distance_m"])
 
 
+def _plate(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    where = f"{name}.component"
+    try:
+        model = load_plate(str(versions.require_pinned(ctx.text(where, a["component"]))))
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.plate(name, *conn, model, a["decay_500hz_s"])
+
+
 def _r(ctx, name, c, a):
     r = a["r"] if a["parallel"] == 1 else a["r"] / a["parallel"]
     return [parts.resistor(name, *c, r)]
@@ -560,6 +573,11 @@ for _name, _macro in {
         _vr_tube,
         3,
         {"model": Param("device"), "operating_v": _P, "ref_current_a": _P},
+    ),
+    "plate": Macro(
+        _plate,
+        3,
+        {"component": Param("raw"), "decay_500hz_s": _P},
     ),
     "speaker": Macro(
         _speaker,

@@ -269,6 +269,8 @@ struct Shared {
     compensate: AtomicBool,
     /// The manual gain on the device's output (dB, f64 bits).
     output_db: AtomicU64,
+    /// The device's share of the output (f64 bits; 1: the device only).
+    wet: AtomicU64,
     /// Where an oscillator's range switch is set (`RangeMode::index`; keys only).
     range_mode: AtomicU8,
     transport: Mutex<TransportCtl>,
@@ -356,6 +358,7 @@ impl Player {
             bypass: AtomicBool::new(false),
             compensate: AtomicBool::new(true),
             output_db: AtomicU64::new(0f64.to_bits()),
+            wet: AtomicU64::new(1f64.to_bits()),
             range_mode: AtomicU8::new(RangeMode::Auto.index()),
             transport: Mutex::new(TransportCtl::default()),
             out_clock: Mutex::new(None),
@@ -510,6 +513,14 @@ impl Player {
     /// (monitoring only).
     pub fn set_output_db(&self, db: f64) {
         self.shared.output_db.store(db.to_bits(), Ordering::Relaxed);
+    }
+
+    /// The device's share of the output, the rest its input before the gain (an
+    /// insert's wet / dry; 1: the device only).
+    pub fn set_wet(&self, wet: f64) {
+        self.shared
+            .wet
+            .store(wet.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
     }
 
     pub fn set_gain(&self, gain: f64) {
@@ -838,6 +849,12 @@ fn work(
         monitor.bypass = shared.bypass.load(Ordering::Relaxed);
         monitor.compensate = shared.compensate.load(Ordering::Relaxed) && !own_oscillator;
         monitor.output_db = f64::from_bits(shared.output_db.load(Ordering::Relaxed));
+        monitor.wet = f64::from_bits(shared.wet.load(Ordering::Relaxed));
+        monitor.dry_gain = if live.gain > 0.0 {
+            1.0 / live.gain
+        } else {
+            0.0
+        };
         let out = monitor.process(live.last_input(), y);
         shared.status.lock().expect("status").compensation_db = if own_oscillator {
             0.0

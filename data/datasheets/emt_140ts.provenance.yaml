@@ -1,0 +1,31 @@
+device: EMT 140 TS
+document: "EMT 140 TS / EMT 140 FB-TS Reverberation Unit (product brochure)"
+publisher: EMT (Elektromesstechnik Wilhelm Franz KG)
+date: "April 1971 (as the brochure's back page prints it)"
+local_copy: sources/emt_140ts_1971.pdf
+local_copy_sha256: b709ea405733931829fd77a988d102f9a4cf9615e9719de56266d0117245e25f
+scan_source: "web: https://www.barryrudolph.com/recall/manuals/emt140ts.pdf"
+digitized_with: >-
+  scripts/digitize_emt140.py (PyMuPDF, numpy): page 2 rendered at 6x around the plot (a
+  raster scan); axes by least squares on the black grid lines: 19 vertical lines matched to
+  the printed ticks 40 Hz ... 10 kHz (log frequency; max residual 0.006 decades) and 8
+  horizontal lines 0 ... 14 s (max residual 0.06 s); each white curve tracked column by
+  column from a start point, one point every 6 px
+digitized_by: Claude Code
+digitized_on: 2026-10-31
+files:
+  emt_140ts_decay.csv:
+    figure: >-
+      p.2, "Reverberation times as a function of frequencies for various distances between
+      reverberation and damping plates": three curves labelled 4,5 s, 2 s and 1 s
+    columns: "curve_t500_s (the curve's label), f_hz, t60_s"
+    coverage: >-
+      the 4,5 s curve 103 Hz-14.3 kHz (the plot draws it from 100 Hz), the 2 s curve
+      50 Hz-14.1 kHz, the 1 s curve 106 Hz-14.3 kHz (the plot dashes it below 100 Hz,
+      which the tracking skips); the plot ends at about 14.4 kHz. Above ~8 kHz the 4,5 s
+      and 2 s curves run together
+estimated_error: "about +-0.1 s (the line's width is ~0.15 s; the axis fit's residuals are smaller)"
+notes: >-
+  The brochure's text (p.2): without added damping, "about 5 seconds at 500 cps", a rise
+  towards the low end and "to about 1.5 seconds at 10 kHz"; technical data (p.8): 1 to 4 s
+  at 500 Hz. The digitized 4,5 s curve reads 4.8 s at 500 Hz and 1.56 s at 10 kHz.

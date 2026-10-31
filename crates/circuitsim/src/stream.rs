@@ -218,7 +218,7 @@ fn couple(sp: &Split, p: usize, mna: &mut Mna) -> Vec<Feed> {
         .iter()
         .map(|&i| mna.node(&sp.shared[i].name).expect("shared"))
         .collect();
-    mna.externals.truncate(mna.n_controls);
+    mna.externals.truncate(mna.n_controls + mna.n_media);
     mna.externals.extend_from_slice(&src);
     mna.externals.extend_from_slice(&nodes);
     mna.outputs = nodes.iter().chain(&src).copied().collect();

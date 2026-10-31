@@ -185,6 +185,61 @@ The user's decision, taking Claude's recommendation (SESSION_FX_PLAN.md decision
   path against overload, and noise -50 dB unweighted at T 2 s (brochure p.8): a
   reference for our driver's headroom and the preamp's hiss.
 
+### Status (2026-10-31): the plate built (E6, E2 for the plate, E7)
+
+The user's ask: a reverb to put on recorded tracks in the Session view. Built in one go:
+
+- **The damping, decided on the way.** The sources' loss formulas (Russo 2021, Arcas &
+  Chaigne 2010) don't reproduce the EMT's measured decay: within ~20% up to 1 kHz, ~2x too
+  long at 10 kHz (`reports/reverb/plate_losses.png`, `plate_summary.json`). The sources
+  also write the rates as energy decay rates (T60 = 6 ln 10 / sigma) inside an equation that
+  makes them amplitude rates; read as energy rates (amplitude decays at half), thermoelastic
+  loss alone gives 4.0 s at 500 Hz against the brochure's 4.8. So the plate's modes come
+  from physics (dimensions, steel, tension, positions), and each mode's decay from the
+  EMT's own measured curves: the 1971 brochure's reverberation time against frequency for
+  three damper settings, digitized (`scripts/digitize_emt140.py` ->
+  `data/datasheets/emt_140ts_decay.csv`, provenance `emt_140ts.provenance.yaml`). DECAY
+  sets the damper as the decay at 500 Hz (the EMT's remote scale), interpolating between
+  the curves. The formulas stay as the report's cross-check. Hardly a model change to
+  bring as options: no plate existed before.
+- **E6, the plate medium.** `varimu/devices/plate.py` (the reference: modes in closed form,
+  a point force in, the acceleration at the pickup out (the EMT's pickups are
+  accelerometers), impulse invariance, each mode summed to -90 dB) and circuitsim's
+  `plate.rs` (the same, in fixed time segments on every core, bit for bit the same on any
+  thread count; a cache of responses). About 26,000 modes below 20 kHz (1.31 per Hz,
+  Russo's 1.3). Agree within 1e-8 (`tests/test_plate.py`); Rust tests check the closed form,
+  the modal density and the response against a direct modal sum.
+- **E2, the medium in the engine, one-way.** An IR element `Plate` (both IRs; SPICE holds
+  its pickup at 0 V: the medium cut out at its ports): it senses the exciter coil's current
+  across its resistance after each sample and drives its pickup node one sample later, the
+  force convolved with the response (`circuitsim::convolve`: zero latency, strictly causal,
+  a direct head of B taps and FFT-partitioned blocks, B 256 at 48 kHz). The pickup rides on
+  the externals after the control inputs (`Mna::n_media`, `Transient::step_media`); a
+  whole run, a stream (bit for bit) and a partitioned run agree (`crates/circuitsim/tests/
+  plate.rs`). A new response (DECAY turned) takes over the force while the old one rings
+  out; the app's builder thread computes it first (`plate::prepare`), off the audio thread.
+  The plate's load on the coil is a resistor, an infinite plate's driving-point impedance
+  8 sqrt(D rho H) times BL^2 (cheap two-way coupling where it matters).
+- **The component** `EMT140@1` (`varimu fit-devices --only EMT140`): the plate (Russo's 2 m
+  x 1 m x 0.5 mm SAE 1010), tension 600 N/m and the positions provisional (Ducceschi &
+  Webb's model values), the exciter (6 ohm, 0.3 mH, BL 2.5) and pickups (5 mV per m/s^2,
+  1 nF) provisional, the decay curves digitized. The `plate` part in both builders
+  (`[plus, minus, out]`, component, decay_500hz_s); symbols for the editors.
+- **E7, a plate device:** `config/circuits/plate_reverb.yaml`, our own electronics (the V54
+  has no public schematic): DRIVE into a 12AX7 stage, the 5E3's cathodyne, 6V6GT pair,
+  output transformer and supply, the plate, then a 10 MOhm 12AU7 pickup amplifier on its
+  own decoupled supply (B+3's ripple came through at first; now ~-120 dBFS), RETURN, a
+  12AU7 cathode follower. Output wet only. The app's `plate_reverb` device (DRIVE, DECAY,
+  RETURN).
+- **Measured** (`scripts/plate_report.py` -> `reports/reverb/`): the device's impulse
+  response per octave band follows the EMT curves at DECAY 1, 2, 2.5 and 4.5 s, mostly
+  within 10% (worst 17%, 500 Hz at DECAY 2; the curves' interpolation between settings is
+  coarse there); hum 0.012-0.021 mV rms at the output. Prints at draft-1x run at ~0.6x real
+  time; live, 0.55x mean load (`examples/load_profile.rs`), so it can be auditioned.
+- **Not yet:** the stereo pair (the EMT's two pickups: a two-channel print), the user's
+  listening, the exciter's and pickups' real figures (genome bounds), production renders'
+  cost (the response at 192 kHz), sends (SESSION_FX_PLAN.md F4).
+
 ### The spring, for later (same research)
 
 - Accutronics / Belton Type 4 part code (Belton's "Part Numbering Specifications",

@@ -185,11 +185,18 @@ the carried-in derivative). Live streams only; renders never update. No pot end 
 (the user's call: inaudible at realistic values). DEVICE_BUILDER_PLAN.md B6 has the numbers.
 
 Reverbs as physical media coupled to the netlist at transducer ports are drafted in
-[docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; milestones E1-E7). **Picked up
-2026-10-30, the plate first** (the user's call, revising decision 1: its first use is a send
-printed in the session, where real time doesn't decide): E6 (the plate's modes, an EMT
-140-sized plate; sourced figures in the plan's "The session's reverb"), E2, E7 (a plate
-device, electronics ours: the V54's schematic isn't public), then the spring and the 6G15.
+[docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; milestones E1-E7). **The plate is
+built (2026-10-31; the plan's "Status (2026-10-31)")**: `varimu/devices/plate.py` (the
+reference) and circuitsim's `plate.rs` (an EMT 140-sized plate's ~26,000 modes from its
+dimensions, steel and tension; each mode's decay from the EMT 140 TS brochure's measured
+curves, digitized by `scripts/digitize_emt140.py`; force at the exciter to acceleration at
+the pickup, as an impulse response), the IR element `Plate` (senses the exciter coil's
+current, drives its pickup node one sample later through `circuitsim::convolve`; SPICE holds
+the pickup at 0 V; `Mna::n_media`, `Transient::step_media`), the component `EMT140@1`, the
+`plate` part in both builders, and the device `config/circuits/plate_reverb.yaml` (our own
+tube drive and pickup amplifiers: the V54's schematic isn't public; DRIVE, DECAY at 500 Hz,
+RETURN; output wet only), the app's `plate_reverb`. `scripts/plate_report.py` ->
+`reports/reverb/`. Then the stereo pair, sends (F4), the spring and the 6G15.
 
 **Devices in the session** ([docs/SESSION_FX_PLAN.md](docs/SESSION_FX_PLAN.md), 2026-10-30;
 milestones F1-F5): processors move into the Session view as track inserts and sends,
@@ -206,7 +213,8 @@ bottom of the Session view. **F3 built** (after the user's first try): an open i
 plays that device live on the track where the transport is (`player::Source::Timeline`,
 `PlayView::adopt`), knobs heard in ~0.3 s (the 670: 53% load, 0 dropouts); the session plays
 without a device (`Source::Mix`, `Player::start_mix`); the worker's output stage is
-`player::Emitter`. The reverb isn't in the inserts yet: E6 / E7 come first.
+`player::Emitter`. An insert has a wet / dry share (`Slot::wet`, `Monitor::wet`): the
+plate reverb goes in at 30% wet with an 8 s tail.
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)

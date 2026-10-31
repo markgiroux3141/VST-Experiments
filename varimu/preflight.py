@@ -35,6 +35,7 @@ from varimu.circuit.ir import (
     CircuitIR,
     Device,
     Inductor,
+    Plate,
     Resistor,
     SineSource,
     VoltageSource,
@@ -157,6 +158,8 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
 
     # The input and the control inputs: sources from their nodes to ground.
     driven = [(ir.input_node, "<input>"), *((c.node, f"<control {c.name}>") for c in ir.controls)]
+    # A plate's pickup drives its node to ground, as a control input does.
+    driven += [(el.out, f"<plate {el.name}>") for el in ir.elements() if isinstance(el, Plate)]
     for n in [*(d[0] for d in driven), *(p.node for p in ir.probes)]:
         if n not in nodes:
             problem("probe", f"{n!r} is not a node of the circuit", nodes=[n])

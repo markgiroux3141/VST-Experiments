@@ -37,6 +37,8 @@ use crate::settings::{Quality, Settings};
 
 /// What a print runs past its input's end when the slot doesn't say (s).
 pub const DEFAULT_TAIL_S: f64 = 0.5;
+/// A reverb's tail: the plate's longest decay (about 10 s at 100 Hz, undamped) down 60 dB.
+pub const REVERB_TAIL_S: f64 = 8.0;
 
 /// An insert: a device on a track (or an FX track), its panel and gains.
 #[derive(Debug, Clone, PartialEq)]
@@ -56,7 +58,16 @@ pub struct Slot {
     pub tail_s: f64,
     /// Its noise sources on (the circuit file's `noise` block; seeded, so reproducible).
     pub noise: bool,
+    /// The device's share of the output, the rest the input before the trim (a console's
+    /// wet / dry: 1 is the device only; a reverb starts at [`REVERB_WET`]).
+    pub wet: f64,
 }
+
+/// A reverb's wet share when it's added as an insert (the dry signal passes too).
+pub const REVERB_WET: f64 = 0.3;
+
+/// Devices whose output is an effect only (a reverb's return): added with [`REVERB_WET`].
+pub const WET_ONLY: [&str; 1] = ["plate_reverb"];
 
 impl Slot {
     /// `device` at its play quality with its circuit's default values, unity gains.
@@ -68,8 +79,17 @@ impl Slot {
             makeup_db: 0.0,
             bypass: false,
             quality: find_device(device).map_or(Quality::Draft1x, |d| d.quality),
-            tail_s: DEFAULT_TAIL_S,
+            tail_s: if WET_ONLY.contains(&device) {
+                REVERB_TAIL_S
+            } else {
+                DEFAULT_TAIL_S
+            },
             noise: true,
+            wet: if WET_ONLY.contains(&device) {
+                REVERB_WET
+            } else {
+                1.0
+            },
         }
     }
 
@@ -88,6 +108,7 @@ impl Slot {
             "quality": self.quality.name(),
             "tail_s": self.tail_s,
             "noise": self.noise,
+            "wet": self.wet,
         })
     }
 
@@ -109,6 +130,7 @@ impl Slot {
         }
         s.tail_s = v["tail_s"].as_f64().unwrap_or(DEFAULT_TAIL_S);
         s.noise = v["noise"].as_bool().unwrap_or(true);
+        s.wet = v["wet"].as_f64().unwrap_or(1.0);
         Ok(s)
     }
 }
@@ -204,7 +226,7 @@ pub fn key(prep: &Prepared, slot: &Slot, input: &[f32], rate: u32) -> Result<Str
     h.update(serde_json::to_vec(&ir).map_err(|e| e.to_string())?);
     h.update(format!("{:?}", prep.settings).as_bytes());
     h.update(format!("{:?}", prep.circuit.full_scale(&prep.settings)).as_bytes());
-    for x in [slot.trim_db, slot.makeup_db, slot.tail_s] {
+    for x in [slot.trim_db, slot.makeup_db, slot.tail_s, slot.wet] {
         h.update(x.to_bits().to_le_bytes());
     }
     Ok(h.finalize()[..16]
@@ -238,9 +260,16 @@ pub fn print_uncached(
     )?;
     let mut y = resample(&r.out, s.sample_rate, rate);
     y.resize(n, 0.0);
-    let g = db(slot.makeup_db);
+    // The device's share after its make-up, the rest the input as it came (dry).
+    let (g, wet) = (db(slot.makeup_db), slot.wet.clamp(0.0, 1.0));
     Ok((
-        y.iter().map(|&v| (v * g) as f32).collect(),
+        y.iter()
+            .enumerate()
+            .map(|(i, &v)| {
+                let dry = input.get(i).map_or(0.0, |&u| u as f64);
+                (wet * v * g + (1.0 - wet) * dry) as f32
+            })
+            .collect(),
         r.realtime_factor(),
     ))
 }
