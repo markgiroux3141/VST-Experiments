@@ -1,8 +1,10 @@
 # Reverb: springs and plates as coupled physical media
 
 Drafted 2026-10-30 with the user, after asking where old analog reverbs (spring, plate)
-would fit what we've built, in keeping with the physical simulation. **Nothing here is
-built, and nothing starts until the user asks for it** (the user's call, 2026-10-30). It
+would fit what we've built, in keeping with the physical simulation. **Picked up
+2026-10-30 (the user): the reverb is first used as a printed send in the Session view
+([SESSION_FX_PLAN.md](SESSION_FX_PLAN.md)), and the plate goes first** (below, "The
+session's reverb"). It
 is its own track next to [DEVICE_BUILDER_PLAN.md](DEVICE_BUILDER_PLAN.md),
 [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md) and
 [TUBE_SYNTH_PLAN.md](TUBE_SYNTH_PLAN.md). When started, work milestones in order, each
@@ -13,9 +15,10 @@ the EMT 140 and spring tanks.
 
 ## Decisions (2026-10-30, the user's, taking Claude's recommendations)
 
-1. **Spring first, plate after.** A spring is 1D, cheap enough for real time, and
-   carries the most character per unit of work; it plays after the 5E3 and inside the
-   tube synth.
+1. **~~Spring first, plate after.~~ Plate first, spring after (revised 2026-10-30).**
+   The spring went first for being cheap enough for real time. The reverb's first use is
+   now a send printed offline in the session, where real time doesn't decide, and the
+   plate is the mix's reverb. The spring (the 6G15) follows for guitar and synth.
 2. **A standalone reverb is its own device.** A studio patches a separate box in with a
    cable, so rendering a take (the 5E3's, the synth's) and then rendering it through the
    reverb device is physically honest: "one coupled simulation" holds inside each box.
@@ -118,6 +121,85 @@ media only). Additionally:
 - **Model changes are new versions.** A tank or plate refit lands as a new component
   version; circuits pin theirs.
 
+## The session's reverb: the plate first (2026-10-30)
+
+The user's decision, taking Claude's recommendation (SESSION_FX_PLAN.md decision 1):
+
+- **Why the plate.** The reverb is used as a send printed in the background
+  (SESSION_FX_PLAN.md F4), so real-time cost no longer orders the media. The plate is the
+  studio's reverb for a mix. Its modes have closed forms to check against, so it is the
+  surer way to a first sound. The modes are independent, so a print spreads over every
+  core.
+- **The order of the milestones becomes:** E6 (the plate medium), E2 (the medium in
+  circuitsim, one-way, for the plate's modes), E7 (a plate device), and then E1, E3, E4
+  (the spring and the 6G15) and E5.
+- **The electronics are ours.** The EMT 140's tube amplifier, the V54, has a schematic
+  only for sale ($9.99 at Dan Alexander Audio, with a request not to repost), and its
+  tube line-up isn't published. E7's fallback applies: a driver and a pickup preamp
+  designed from the tubes and transformers we have, with values sourced or provisional
+  (memory: "analog magic, not a clone"). Buying the V54 sheet is the user's call.
+- **A linear medium is an impulse response.** With one-way coupling the plate between
+  the exciter's force and a pickup's motion is linear and time-invariant. A print can
+  convolve with the impulse response computed from the modes (FFT, partitioned), exact
+  to rounding and much cheaper than stepping 26,000 resonators. A test checks the two
+  forms against each other. The stepped form stays for anything time-varying (tension
+  drift, the damper moving during a take).
+
+### What the sources give (research 2026-10-30; to cite per value when E6 starts)
+
+- **The plate.** 2 m x 1 m, 0.5 mm steel (Russo, MSc thesis, Aalborg 2021, §1.1.1,
+  https://projekter.aau.dk/projekter/files/517547034/Master_Thesis_Russo.pdf; Ducceschi &
+  Webb, ICA 2016, https://mdphys.org/PDF/icaPLA_2016.pdf; Bilbao, DAFx-10 chapter
+  "Electromechanical effects", https://ccrma.stanford.edu/~bilbao/dafx10/electro.pdf).
+  Steel as modelled there: E 200 GPa, nu 0.3, rho 7850-7872 kg/m^3 (Russo §6.1: SAE 1010).
+  Hung by wires at the corners in a tubular frame (EMT 140 TS brochure, 1971, p.4,
+  https://www.barryrudolph.com/recall/manuals/emt140ts.pdf).
+- **Tension: not published.** Ducceschi & Webb model 600 (N/m, our reading). Provisional
+  and genome-bounded; it mostly moves the low modes.
+- **Decay (the anchors for E6's done-when).** The brochure (p.8): 1-4 s at 500 Hz with the
+  damper. Its p.2 plot of decay against frequency per damper setting: undamped about
+  5 s at 500 Hz, about 1.5 s at 10 kHz, rising towards the bass (about 10 s near 50 Hz
+  on the 4.5 s curve), and curves for 2 s and 1 s. The damper is a porous plate swung
+  parallel to the steel one, about 1/8 inch at its closest (brochure p.4); Russo gives
+  11-66 mm.
+- **Losses (Arcas & Chaigne 2010, as Russo §3 reproduces them):**
+  - thermoelastic loss, with SAE 1010's constants R1 9.664e-3 and C1 0.1855e-3, near
+    its high-frequency limit (about 3.6 1/s) above 500 Hz;
+  - radiation, weak in the audio band (the critical frequency is about 25 kHz);
+  - the porous damper as a function of distance (Cummings' model): at 11 mm about
+    2.3 1/s near 100 Hz falling to 0.2 1/s at 10 kHz, at 65.8 mm under 0.4 1/s;
+  - support losses, not modelled.
+  - Decay rate and T60: sigma = 6 ln 10 / T60.
+- **Transducers.** A moving-coil exciter on the middle of three bridges across the frame,
+  and two ceramic contact pickups at unequal distances on either side (the stereo pair:
+  their outputs are decorrelated; brochure pp.3-6). The coil's impedance and the
+  positions aren't published; Ducceschi & Webb's model puts the input at (0.52, 0.53)
+  and an output at (0.47, 0.62) of the sides.
+- **Modes and cost.** About 1.3 modes per Hz (our estimate from the plate's stiffness,
+  consistent with a 1.27 quoted in a ResearchGate snippet that we couldn't read), so
+  about 26,000 below 20 kHz. Ducceschi & Webb step about 10,000 modes at 44.1 kHz in
+  1.1 s per second of output on one core (double precision; 0.7 s single). At 96 kHz
+  with 26,000 modes that is roughly 6x real time on one core, so under real time across
+  this desktop's cores, and far less as a convolution.
+- **The transistor 140 TS** (1971, its EMT 162 amplifier) had a compressor in the drive
+  path against overload, and noise -50 dB unweighted at T 2 s (brochure p.8): a
+  reference for our driver's headroom and the preamp's hiss.
+
+### The spring, for later (same research)
+
+- Accutronics / Belton Type 4 part code (Belton's "Part Numbering Specifications",
+  https://www.tubetown.net/ttstore/media/products/Part%20Numbering%20Specifications%20Reverb%201%20and%204.pdf):
+  4AB3C1B = 8 Ohm in, 2250 Ohm out, long decay (2.75-4.0 s), input insulated, output
+  grounded, horizontal open side down: the 6G15's usual tank. Coil data (measured, Rod
+  Elliott, https://sound-au.com/articles/reverb.htm): input A 0.81 Ohm DC, 1.27 mH;
+  output B 200 Ohm DC, 270 mH.
+- Spring geometry (Parker & Bilbao, DAFx-09, Tables 1-2): wire 0.35 mm, helix 4.4-6.1
+  mm, 133-351 turns; with their formulas, delays of 34-51 ms and transition frequencies
+  of 2.6-5 kHz.
+- Fender 6G15: 12AT7, 6K6GT driver into a 125A12A (about 7.5 kOhm : 8 Ohm), 7025 recovery
+  and cathode-follower mixer, solid-state rectifier; voltages on the schematic
+  (https://www.thetubestore.com/lib/thetubestore/schematics/Fender/Fender-Reverb-6G15-Schematic.pdf).
+
 ## Milestones
 
 **E1. The spring medium (Python reference).** The helical-spring scheme from the
@@ -180,8 +262,12 @@ sourced; otherwise a plate driven by electronics we have, or a plate in the tube
 
 ## Open decisions (the user's)
 
-- **Where the track goes in the order.** Parked until the user asks (2026-10-30). Open
-  next to it: B5 noise, C3 (paused), the synth's S4 / S5, B10.
+- **~~Where the track goes in the order.~~** Picked up 2026-10-30 (the user), the plate
+  first, its first use the session's sends (SESSION_FX_PLAN.md).
+- **Stereo returns.** The EMT 140's two pickups make a stereo pair. Devices and prints
+  are mono today: a plate device with two outputs means a print with two channels and an
+  FX track with a stereo return. Recommended: one pickup first (mono, panned), the pair
+  right after E7.
 - **Live chaining in the app.** E4 chains offline (a render into a render). Playing a
   synth live through a reverb live needs two devices on one stream; the partition's
   one-sample coupling is a ready mechanism. Brought with numbers when E4 is done.
@@ -206,5 +292,13 @@ sourced; otherwise a plate driven by electronics we have, or a plate in the tube
   2010.
 - S. Bilbao, *Numerical Sound Synthesis*, Wiley, 2009 (finite-difference schemes for
   bars, springs and plates).
+- EMT 140 TS brochure (EMT, April 1971):
+  https://www.barryrudolph.com/recall/manuals/emt140ts.pdf.
+- F. Russo, *Plate reverberation* (MSc thesis, Aalborg University, 2021):
+  https://projekter.aau.dk/projekter/files/517547034/Master_Thesis_Russo.pdf.
+- M. Ducceschi, C. Webb, a plate reverberation model, ICA 2016, paper 559 (title to
+  copy from the PDF): https://mdphys.org/PDF/icaPLA_2016.pdf.
+- S. Bilbao, "Electromechanical effects", DAFx-10 chapter:
+  https://ccrma.stanford.edu/~bilbao/dafx10/electro.pdf.
 - Accutronics / Belton tank specifications and part-number code; the Fender 6G15
   schematic; EMT 140 documentation: to be located when E3, E4 and E6 start.

@@ -147,3 +147,70 @@ pub fn write_wav(path: &Path, x: &[f64], sample_rate: u32) -> Result<(), String>
     }
     w.finalize().map_err(|e| err(path, e))
 }
+
+/// The start and end (s) of `x`'s loudest stretch of `len_s` (by energy, in steps of
+/// a tenth of it); the whole file if it is shorter.
+pub fn loudest(x: &[f64], rate: u32, len_s: f64) -> (f64, f64) {
+    let total = x.len() as f64 / rate as f64;
+    if total <= len_s {
+        return (0.0, total);
+    }
+    let n = (len_s * rate as f64) as usize;
+    let hop = (n / 10).max(1);
+    let energy: Vec<f64> = x
+        .chunks(hop)
+        .map(|c| c.iter().map(|v| v * v).sum())
+        .collect();
+    let k = n / hop;
+    let mut best = (0, f64::MIN);
+    let mut sum: f64 = energy[..k].iter().sum();
+    for i in 0..=energy.len() - k {
+        if sum > best.1 {
+            best = (i, sum);
+        }
+        if i + k < energy.len() {
+            sum += energy[i + k] - energy[i];
+        }
+    }
+    let a = (best.0 * hop) as f64 / rate as f64;
+    (a, (a + len_s).min(total))
+}
+
+/// The level of `x`'s loudest `len_s` (the Play view's normalization measures a file
+/// this way): its rms as a sine's peak (dBFS), -240 for silence.
+pub fn level_dbfs(x: &[f64], rate: u32, len_s: f64) -> f64 {
+    if x.is_empty() {
+        return -240.0;
+    }
+    let (a, b) = loudest(x, rate, len_s);
+    let (i, j) = ((a * rate as f64) as usize, (b * rate as f64) as usize);
+    let w = &x[i.min(x.len())..j.min(x.len())];
+    let rms = (w.iter().map(|v| v * v).sum::<f64>() / w.len().max(1) as f64).sqrt();
+    20.0 * (rms * 2f64.sqrt()).max(1e-12).log10()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::loudest;
+
+    #[test]
+    fn loudest_finds_the_loud_stretch() {
+        let rate = 1000;
+        let x: Vec<f64> = (0..60_000)
+            .map(|i| {
+                if (32_000..40_000).contains(&i) {
+                    0.5
+                } else {
+                    0.001
+                }
+            })
+            .collect();
+        assert_eq!(loudest(&x, rate, 8.0), (32.0, 40.0)); // on the 0.8 s grid
+        // At the very end, and a file shorter than the region.
+        let y: Vec<f64> = (0..20_000)
+            .map(|i| if i >= 12_000 { 0.5 } else { 0.0 })
+            .collect();
+        assert_eq!(loudest(&y, rate, 8.0), (12.0, 20.0));
+        assert_eq!(loudest(&y[..5000], rate, 8.0), (0.0, 5.0));
+    }
+}

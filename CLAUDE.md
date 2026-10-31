@@ -184,10 +184,25 @@ cold start (power on) skips the settle; the app's "Power on (cold)" button.
 the carried-in derivative). Live streams only; renders never update. No pot end resistance
 (the user's call: inaudible at realistic values). DEVICE_BUILDER_PLAN.md B6 has the numbers.
 
-Reverbs (spring first, then plate) as physical media coupled to the netlist at transducer
-ports are drafted in [docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; milestones
-E1-E7, the Fender 6G15 as the first device). **Parked: nothing in it starts until the user
-asks for it.**
+Reverbs as physical media coupled to the netlist at transducer ports are drafted in
+[docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; milestones E1-E7). **Picked up
+2026-10-30, the plate first** (the user's call, revising decision 1: its first use is a send
+printed in the session, where real time doesn't decide): E6 (the plate's modes, an EMT
+140-sized plate; sourced figures in the plan's "The session's reverb"), E2, E7 (a plate
+device, electronics ours: the V54's schematic isn't public), then the spring and the 6G15.
+
+**Devices in the session** ([docs/SESSION_FX_PLAN.md](docs/SESSION_FX_PLAN.md), 2026-10-30;
+milestones F1-F5): processors move into the Session view as track inserts and sends,
+**printed** offline into cached audio rather than played live (one live device at a time:
+the one being adjusted, F3). Decisions (the user's): the plate first; an audition takes the
+live slot; an insert's trim is set once from the take (-18 dBFS), not re-normalized. **F1
+done:** `varimu-app`'s `print` (a slot's print of audio through a device at a quality, keyed
+by sha256 of the input, the built IR, the settings, gains and `SOURCE_HASH`, kept in
+`<session>/prints/<key>/`; chains; background `Job`s below normal priority;
+`examples/print.rs`): 30 s through the 670 prints at 0.42x real time at draft-1x, 11.4x at
+production. **F2 built** (not yet tried by the user): `Track::inserts` in `session.json`,
+the mix plays a track's print (`Track::playing`), insert chips under each strip and the
+selected insert's panel at the bottom of the Session view.
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)

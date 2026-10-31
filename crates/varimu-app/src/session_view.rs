@@ -34,7 +34,16 @@
 //! in, Delete deletes the selected take, Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves
 //! (while no text field has focus).
 //! Over the lanes, Shift+wheel scrolls in time, Ctrl+wheel zooms.
+//!
+//! **Inserts** (docs/SESSION_FX_PLAN.md, F2): under each track's strip its chain of devices
+//! (+ adds one; a click selects one, its panel opens at the bottom; right-click bypasses,
+//! moves or removes it). The chain is printed on the active take in the background
+//! (`varimu_app::print`, at most [`MAX_PRINT_JOBS`] at a time, none while recording or
+//! while a knob is held), and the track plays its print: ✓ printed, ◔ printing, … waiting
+//! (the older print plays meanwhile), ! failed. The first insert's trim is set once from
+//! the take's loudest stretch to the alignment level (-18 dBFS); later ones start at 0 dB.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
@@ -42,12 +51,19 @@ use std::time::Duration;
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 use serde_json::{Value, json};
+use varimu_app::audio;
 use varimu_app::loopback::{self, Analysis, Calibration, Run};
+use varimu_app::panel::{self as vpanel, DEVICES, Kind, Knob};
 use varimu_app::player::{BLOCK, InputDevice, State, input_devices};
+use varimu_app::prefs::ALIGNMENT_DBFS;
+use varimu_app::print::{Job, Slot, find_device};
 use varimu_app::session::{
-    OVERVIEW_BIN, Overview, Session, Take, Track, transport_from, transport_json,
+    OVERVIEW_BIN, Overview, Printed, Session, Take, Track, transport_from, transport_json,
 };
+use varimu_app::settings::Quality;
 use varimu_app::transport::{ClickMode, Grid, Phase, TransportSettings};
+use varimu_circuit::spec;
+use varimu_circuit::yaml::Value as YValue;
 
 use crate::play_view::PlayView;
 use crate::theme;
@@ -56,10 +72,12 @@ use crate::theme;
 const CALIBRATE_S: f64 = 8.0;
 /// The channel strips' width and a track's height (px).
 const STRIP_W: f32 = 250.0;
-const TRACK_H: f32 = 78.0;
+const TRACK_H: f32 = 102.0;
 const RULER_H: f32 = 26.0;
 /// A take's row when a track shows every take (px).
 const TAKE_H: f32 = 34.0;
+/// Prints running at once (each a chain on its own thread; a draft 670 uses two cores).
+const MAX_PRINT_JOBS: usize = 2;
 /// The rate a session starts at before a device has played (the app's devices' host rate).
 const DEFAULT_RATE: u32 = 48_000;
 const REC: Color32 = Color32::from_rgb(0xe0, 0x4a, 0x4a);
@@ -105,6 +123,14 @@ struct Drag {
     press_x: f32,
 }
 
+/// A track's chain printing: what it is made from, the take, the job.
+struct PrintJob {
+    signature: String,
+    take: String,
+    job: Job,
+    cancelled: bool,
+}
+
 /// A drag on the ruler: a locator's handle, or a new loop from a beat.
 #[derive(Clone, Copy)]
 enum RulerDrag {
@@ -147,6 +173,12 @@ pub struct SessionView {
     calibrate: Calibrate,
     last: Option<(String, Analysis)>,
     error: Option<String>,
+    /// Prints running, the chains whose print failed (by signature), the insert whose
+    /// panel is open (track, slot), each device's knobs (by id).
+    jobs: Vec<PrintJob>,
+    print_errors: HashMap<String, String>,
+    insert_sel: Option<(usize, usize)>,
+    knobs: HashMap<String, Result<Vec<Knob>, String>>,
 }
 
 fn prefs_path() -> Option<PathBuf> {
@@ -242,6 +274,10 @@ impl SessionView {
             calibrate: Calibrate::Idle,
             last: None,
             error,
+            jobs: Vec::new(),
+            print_errors: HashMap::new(),
+            insert_sel: None,
+            knobs: HashMap::new(),
         }
     }
 
@@ -301,6 +337,8 @@ impl SessionView {
             }
         }
         self.poll_recording(play);
+        let armed = play.player().is_some_and(|p| p.take_armed());
+        self.poll_prints(ui.ctx(), armed);
         self.keys(ui, play);
         egui::Panel::top("session_transport")
             .frame(
@@ -343,6 +381,15 @@ impl SessionView {
                     ui.colored_label(theme::FAULT, e);
                 }
             });
+        if self.insert_selected().is_some() {
+            egui::Panel::bottom("session_insert")
+                .frame(
+                    egui::Frame::NONE
+                        .fill(theme::CHROME2)
+                        .inner_margin(egui::Margin::symmetric(14, 10)),
+                )
+                .show(ui, |ui| self.insert_panel(ui));
+        }
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
             .show(ui, |ui| self.arrangement(ui, play));
@@ -659,6 +706,415 @@ impl SessionView {
                 Err(e) => self.error = Some(e),
             }
         }
+    }
+
+    /// Prints: finished ones to their tracks, ones no track wants any more cancelled, and
+    /// new ones started for chains whose print isn't current (not while recording or while
+    /// a gesture is in progress: a knob held prints once, when it's let go).
+    fn poll_prints(&mut self, ctx: &egui::Context, recording: bool) {
+        let rate = self.session.rate;
+        let mut i = 0;
+        while i < self.jobs.len() {
+            if !self.jobs[i].job.is_finished() {
+                i += 1;
+                continue;
+            }
+            let j = self.jobs.remove(i);
+            match j.job.join() {
+                Some(Ok(prints)) => {
+                    let Some(audio) = prints.last().map(|p| p.audio.clone()) else {
+                        continue;
+                    };
+                    let printed = Printed {
+                        signature: j.signature.clone(),
+                        take: j.take.clone(),
+                        overview: Arc::new(Overview::of(&audio, OVERVIEW_BIN)),
+                        audio,
+                    };
+                    for t in &mut self.session.tracks {
+                        if t.chain_signature(rate).as_deref() == Some(j.signature.as_str()) {
+                            t.printed = Some(printed.clone());
+                        }
+                    }
+                }
+                Some(Err(e)) if !j.cancelled => {
+                    self.print_errors.insert(j.signature, e);
+                }
+                _ => {}
+            }
+        }
+        let wanted: HashSet<String> = self
+            .session
+            .tracks
+            .iter()
+            .filter_map(|t| t.chain_signature(rate))
+            .collect();
+        for j in &mut self.jobs {
+            if !j.cancelled && !wanted.contains(&j.signature) {
+                j.job.cancel();
+                j.cancelled = true;
+            }
+        }
+        let busy = recording
+            || self.recording.is_some()
+            || ctx.input(|i| i.pointer.any_down())
+            || ctx.egui_wants_keyboard_input();
+        if !busy {
+            let config = self.root.join("config");
+            let cache = self.session.dir.join("prints");
+            for t in &self.session.tracks {
+                let running = self.jobs.iter().filter(|j| !j.cancelled).count();
+                if running >= MAX_PRINT_JOBS {
+                    break;
+                }
+                let (Some(sig), Some(k)) = (t.chain_signature(rate), t.active_take()) else {
+                    continue;
+                };
+                if t.print_current(rate)
+                    || self.print_errors.contains_key(&sig)
+                    || self.jobs.iter().any(|j| !j.cancelled && j.signature == sig)
+                {
+                    continue;
+                }
+                let slots: Vec<Slot> = t.inserts.iter().filter(|s| !s.bypass).cloned().collect();
+                self.jobs.push(PrintJob {
+                    job: Job::spawn(
+                        config.clone(),
+                        slots,
+                        k.audio.clone(),
+                        rate,
+                        Some(cache.clone()),
+                    ),
+                    signature: sig,
+                    take: k.id.clone(),
+                    cancelled: false,
+                });
+            }
+        }
+        if !self.jobs.is_empty() {
+            ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    /// Insert `k` of track `t`'s state: its glyph, colour and what it says on hover.
+    fn insert_state(&self, t: usize, k: usize) -> (String, Color32, String) {
+        let track = &self.session.tracks[t];
+        let rate = self.session.rate;
+        let slot = &track.inserts[k];
+        if slot.bypass {
+            return ("⏻".into(), theme::FAINT, "bypassed".into());
+        }
+        let Some(sig) = track.chain_signature(rate) else {
+            return ("".into(), theme::MUTED, "no take to print".into());
+        };
+        if let Some(e) = self.print_errors.get(&sig) {
+            return ("!".into(), theme::FAULT, format!("the print failed: {e}"));
+        }
+        if let Some(j) = self
+            .jobs
+            .iter()
+            .find(|j| !j.cancelled && j.signature == sig)
+        {
+            let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
+            let (at, f) = j.job.progress();
+            return match stage.cmp(&at) {
+                std::cmp::Ordering::Less => ("✓".into(), theme::OK, "printed".into()),
+                std::cmp::Ordering::Equal => (
+                    format!("◔ {:.0}%", f * 100.0),
+                    theme::ACCENT,
+                    "printing".into(),
+                ),
+                std::cmp::Ordering::Greater => (
+                    "…".into(),
+                    theme::MUTED,
+                    "waiting for the inserts before it".into(),
+                ),
+            };
+        }
+        if track.print_current(rate) {
+            ("✓".into(), theme::OK, "printed".into())
+        } else {
+            (
+                "…".into(),
+                theme::WARN,
+                "waiting to print (the older print plays meanwhile)".into(),
+            )
+        }
+    }
+
+    /// The selected insert, if it still exists.
+    fn insert_selected(&self) -> Option<(usize, usize)> {
+        self.insert_sel.filter(|&(t, k)| {
+            self.session
+                .tracks
+                .get(t)
+                .is_some_and(|x| k < x.inserts.len())
+        })
+    }
+
+    /// A device's knobs (its circuit's controls), loaded once.
+    fn knobs_for(&mut self, device: &str) -> Result<Vec<Knob>, String> {
+        let config = self.root.join("config");
+        self.knobs
+            .entry(device.to_string())
+            .or_insert_with(|| {
+                let d = find_device(device).ok_or(format!("no device {device}"))?;
+                let path = spec::circuit_path(&config, d.circuit).map_err(|e| e.to_string())?;
+                let s = spec::load_circuit(&path).map_err(|e| e.to_string())?;
+                Ok(vpanel::knobs(d, &s))
+            })
+            .clone()
+    }
+
+    /// `device` added at the end of track `t`'s chain, its panel opened. The first insert
+    /// that isn't bypassed gets its trim from the take (the take's loudest stretch to the
+    /// alignment level), set once.
+    fn add_insert(&mut self, t: usize, device: &str) {
+        let rate = self.session.rate;
+        let Some(track) = self.session.tracks.get_mut(t) else {
+            return;
+        };
+        let mut slot = Slot::new(device);
+        if track.inserts.iter().all(|s| s.bypass)
+            && let Some(k) = track.active_take()
+        {
+            let x: Vec<f64> = k.audio.iter().map(|&v| v as f64).collect();
+            let level = audio::level_dbfs(&x, rate, 8.0);
+            slot.trim_db = ((ALIGNMENT_DBFS - level).clamp(-40.0, 40.0) * 10.0).round() / 10.0;
+        }
+        track.inserts.push(slot);
+        self.insert_sel = Some((t, track.inserts.len() - 1));
+        self.save();
+    }
+
+    /// The selected insert's panel: its gains, bypass, quality, place in the chain, knobs.
+    fn insert_panel(&mut self, ui: &mut egui::Ui) {
+        let Some((t, k)) = self.insert_selected() else {
+            self.insert_sel = None;
+            return;
+        };
+        let device = self.session.tracks[t].inserts[k].device.clone();
+        let label = find_device(&device).map_or(device.clone(), |d| d.label.to_string());
+        let (glyph, colour, state) = self.insert_state(t, k);
+        let knobs = self.knobs_for(&device);
+        let rate = self.session.rate;
+        let mut changed = false;
+        let mut remove = false;
+        let mut moved: Option<usize> = None;
+        let n = self.session.tracks[t].inserts.len();
+        let last_on = self.session.tracks[t]
+            .inserts
+            .iter()
+            .rposition(|s| !s.bypass)
+            == Some(k);
+        // The take's and the print's levels, for Match.
+        let levels = {
+            let tr = &self.session.tracks[t];
+            match (tr.active_take(), &tr.printed) {
+                (Some(take), Some(p)) if tr.print_current(rate) => {
+                    let a: Vec<f64> = take.audio.iter().map(|&v| v as f64).collect();
+                    let b: Vec<f64> = p.audio.iter().map(|&v| v as f64).collect();
+                    Some((
+                        audio::level_dbfs(&a, rate, 8.0),
+                        audio::level_dbfs(&b, rate, 8.0),
+                    ))
+                }
+                _ => None,
+            }
+        };
+        let track_name = self.session.tracks[t].name.clone();
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(format!("{track_name} · {label}"))
+                    .strong()
+                    .color(theme::INK),
+            );
+            ui.label(RichText::new(glyph).color(colour))
+                .on_hover_text(&state);
+            ui.label(RichText::new(&state).small().color(theme::MUTED));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("✕").on_hover_text("Close the panel").clicked() {
+                    self.insert_sel = None;
+                }
+                if ui.button("Remove").clicked() {
+                    remove = true;
+                }
+                if ui
+                    .add_enabled(k + 1 < n, egui::Button::new("▶"))
+                    .on_hover_text("Later in the chain")
+                    .clicked()
+                {
+                    moved = Some(k + 1);
+                }
+                if ui
+                    .add_enabled(k > 0, egui::Button::new("◀"))
+                    .on_hover_text("Earlier in the chain")
+                    .clicked()
+                {
+                    moved = Some(k - 1);
+                }
+            });
+        });
+        ui.add_space(4.0);
+        let slot = &mut self.session.tracks[t].inserts[k];
+        let play_quality = find_device(&slot.device).map_or(Quality::Draft1x, |d| d.quality);
+        ui.horizontal(|ui| {
+            ui.label("Trim");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut slot.trim_db)
+                        .range(-40.0..=40.0)
+                        .speed(0.1)
+                        .max_decimals(1)
+                        .suffix(" dB"),
+                )
+                .on_hover_text("The fader in front of the device: how hard the take drives it")
+                .changed();
+            ui.add_space(8.0);
+            ui.label("Make-up");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut slot.makeup_db)
+                        .range(-40.0..=40.0)
+                        .speed(0.1)
+                        .max_decimals(1)
+                        .suffix(" dB"),
+                )
+                .on_hover_text("The gain after the device")
+                .changed();
+            if last_on
+                && let Some((a, b)) = levels
+                && ui
+                    .small_button("Match")
+                    .on_hover_text(format!(
+                        "Make-up so the chain's print is as loud as the take (take \
+                         {a:.1} dBFS, print {b:.1} dBFS)"
+                    ))
+                    .clicked()
+            {
+                slot.makeup_db = ((slot.makeup_db + a - b) * 10.0).round() / 10.0;
+                changed = true;
+            }
+            ui.add_space(8.0);
+            changed |= ui.checkbox(&mut slot.bypass, "Bypass").changed();
+            ui.add_space(8.0);
+            egui::ComboBox::from_id_salt(("insert_quality", t, k))
+                .selected_text(slot.quality.name())
+                .show_ui(ui, |ui| {
+                    for q in [play_quality, Quality::Production] {
+                        changed |= ui
+                            .selectable_value(&mut slot.quality, q, q.name())
+                            .changed();
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "The quality it prints at: its play quality while iterating, production \
+                     for the final mix (several times slower)",
+                );
+        });
+        ui.add_space(6.0);
+        match knobs {
+            Err(e) => {
+                ui.colored_label(theme::FAULT, e);
+            }
+            Ok(knobs) => {
+                ui.horizontal_wrapped(|ui| {
+                    for knob in &knobs {
+                        changed |= knob_ui(ui, knob, &mut slot.values, (t, k));
+                    }
+                });
+            }
+        }
+        if let Some(to) = moved {
+            let ins = &mut self.session.tracks[t].inserts;
+            let s = ins.remove(k);
+            ins.insert(to, s);
+            self.insert_sel = Some((t, to));
+            changed = true;
+        }
+        if remove {
+            self.session.tracks[t].inserts.remove(k);
+            self.insert_sel = None;
+            changed = true;
+        }
+        if changed {
+            self.save();
+        }
+    }
+
+    /// The row of insert chips under a track's strip (+ adds one).
+    fn inserts_row(&mut self, ui: &mut egui::Ui, i: usize) -> bool {
+        let mut changed = false;
+        let mut add: Option<&'static str> = None;
+        let mut action: Option<(usize, &'static str)> = None;
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            for k in 0..self.session.tracks[i].inserts.len() {
+                let slot = &self.session.tracks[i].inserts[k];
+                let name = find_device(&slot.device).map_or(slot.device.clone(), |d| {
+                    d.label.split(" (").next().unwrap_or(d.label).to_string()
+                });
+                let short = name.split_whitespace().last().unwrap_or(&name).to_string();
+                let (glyph, colour, state) = self.insert_state(i, k);
+                let selected = self.insert_selected() == Some((i, k));
+                let bypass = self.session.tracks[i].inserts[k].bypass;
+                let text = RichText::new(format!("{short} {glyph}"))
+                    .small()
+                    .color(if bypass { theme::FAINT } else { colour });
+                let b = egui::Button::new(text)
+                    .fill(if selected { theme::CHROME3 } else { theme::BG })
+                    .stroke(Stroke::new(
+                        1.0,
+                        if selected { theme::ACCENT } else { theme::LINE },
+                    ))
+                    .min_size(egui::vec2(0.0, 18.0));
+                let r = ui.add(b).on_hover_text(format!("{name}: {state}"));
+                if r.clicked() {
+                    self.insert_sel = if selected { None } else { Some((i, k)) };
+                }
+                r.context_menu(|ui| {
+                    if ui
+                        .button(if bypass { "Bypass off" } else { "Bypass" })
+                        .clicked()
+                    {
+                        action = Some((k, "bypass"));
+                        ui.close();
+                    }
+                    if ui.button("Remove").clicked() {
+                        action = Some((k, "remove"));
+                        ui.close();
+                    }
+                });
+            }
+            ui.menu_button(RichText::new("+").small(), |ui| {
+                for d in DEVICES.iter().filter(|d| !d.plays_own_oscillator()) {
+                    if ui.button(d.label).clicked() {
+                        add = Some(d.id);
+                        ui.close();
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Add a device to this track's chain (printed, not played live)");
+        });
+        if let Some((k, what)) = action {
+            let ins = &mut self.session.tracks[i].inserts;
+            if what == "bypass" {
+                ins[k].bypass = !ins[k].bypass;
+            } else {
+                ins.remove(k);
+                if self.insert_sel.is_some_and(|(t, _)| t == i) {
+                    self.insert_sel = None;
+                }
+            }
+            changed = true;
+        }
+        if let Some(d) = add {
+            self.add_insert(i, d);
+            changed = true;
+        }
+        changed
     }
 
     fn transport_ui(&mut self, ui: &mut egui::Ui, play: &mut PlayView) {
@@ -1403,15 +1859,28 @@ impl SessionView {
         }
         let track = &self.session.tracks[i];
         if let Some(k) = track.active_take() {
+            let printed = track
+                .playing(self.session.rate)
+                .is_some_and(|p| p.2)
+                .then_some(track.printed.as_ref())
+                .flatten();
+            let (len, overview) = match printed {
+                Some(p) => (p.audio.len(), &p.overview),
+                None => (k.audio.len(), &k.overview),
+            };
             draw_clip(
                 &lp,
                 lane,
                 view,
                 k.position,
-                k.audio.len(),
-                &k.overview,
+                len,
+                overview,
                 colour,
-                &k.id,
+                &if printed.is_some() {
+                    format!("{} · printed", k.id)
+                } else {
+                    k.id.clone()
+                },
             );
             if self.selected == track.active.map(|a| (i, a)) {
                 lp.rect_stroke(
@@ -1566,6 +2035,7 @@ impl SessionView {
                     .color(theme::FAINT),
             );
         }
+        changed |= self.inserts_row(&mut child, i);
         // Every take, stacked under the track: the one playing marked, a click plays another.
         if shown > 0 {
             for j in 0..self.session.tracks[i].takes.len() {
@@ -1900,6 +2370,69 @@ fn take_line(k: &Take, rate: u32) -> String {
 }
 
 /// The timeline's mapping between positions (samples) and x (px).
+/// A knob of an insert's panel as an egui widget, its value in `values` (the circuit's
+/// default while it isn't there). Returns whether it changed.
+fn knob_ui(
+    ui: &mut egui::Ui,
+    knob: &Knob,
+    values: &mut Vec<(String, YValue)>,
+    id: (usize, usize),
+) -> bool {
+    let cur = values
+        .iter()
+        .find(|(k, _)| *k == knob.key)
+        .map_or(knob.default.clone(), |(_, v)| v.clone());
+    let mut set: Option<YValue> = None;
+    ui.vertical(|ui| {
+        ui.label(RichText::new(&knob.label).small().color(theme::MUTED));
+        match &knob.kind {
+            Kind::Range { min, max } => {
+                let mut x = cur.as_f64().unwrap_or(*min);
+                if ui
+                    .add(egui::Slider::new(&mut x, *min..=*max).max_decimals(3))
+                    .changed()
+                {
+                    set = Some(YValue::Float(x));
+                }
+            }
+            Kind::Steps { min, max, int } => {
+                let mut x = cur.as_f64().unwrap_or(*min);
+                if ui
+                    .add(egui::Slider::new(&mut x, *min..=*max).step_by(1.0))
+                    .changed()
+                {
+                    set = Some(if *int {
+                        YValue::Int(x.round() as i64)
+                    } else {
+                        YValue::Float(x)
+                    });
+                }
+            }
+            Kind::Choices(choices) => {
+                egui::ComboBox::from_id_salt(("knob", id.0, id.1, knob.key.as_str()))
+                    .selected_text(cur.py_str())
+                    .show_ui(ui, |ui| {
+                        for c in choices {
+                            if ui.selectable_label(cur.py_eq(c), c.py_str()).clicked() {
+                                set = Some(c.clone());
+                            }
+                        }
+                    });
+            }
+        }
+    });
+    match set {
+        Some(v) => {
+            match values.iter_mut().find(|(k, _)| *k == knob.key) {
+                Some(e) => e.1 = v,
+                None => values.push((knob.key.clone(), v)),
+            }
+            true
+        }
+        None => false,
+    }
+}
+
 struct View {
     left: f32,
     view_s: f64,

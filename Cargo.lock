@@ -4035,6 +4035,7 @@ dependencies = [
  "rfd",
  "rtrb",
  "serde_json",
+ "sha2",
  "symphonia",
  "varimu-circuit",
  "windows-sys 0.61.2",

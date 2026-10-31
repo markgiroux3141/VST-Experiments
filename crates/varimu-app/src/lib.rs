@@ -13,6 +13,9 @@
 //! Recording (docs/RECORDING_PLAN.md), T1: `transport` (the session's clock and click),
 //! `loopback` (an output cabled back to an input: where the clicks come back, and the
 //! round trip).
+//!
+//! Devices in the session (docs/SESSION_FX_PLAN.md), F1: `print` (a track's audio through
+//! a device offline, kept as audio and cached by what it was made from).
 
 pub mod audio;
 pub mod editor;
@@ -23,6 +26,7 @@ pub mod monitor;
 pub mod panel;
 pub mod player;
 pub mod prefs;
+pub mod print;
 pub mod render;
 pub mod resample;
 pub mod session;

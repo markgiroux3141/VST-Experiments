@@ -26,6 +26,13 @@
 //! the session can be rebuilt from its JSON ([`Session::state`], [`Session::restore`]):
 //! the undo history is a list of them, kept in `history.json` beside `session.json`.
 //! [`Session::copy_to`] copies the whole folder (every take, the history) to a new one.
+//!
+//! **Inserts** (docs/SESSION_FX_PLAN.md, F2): a track's devices in a chain
+//! ([`crate::print::Slot`]), saved with the track. The view prints the chain on the active
+//! take in the background (`prints/` in the session's folder, [`crate::print`]) and hands
+//! the result to [`Track::printed`]; the mix plays a track's print in place of its take
+//! (a print of the same take with older settings while a new one renders: stale, shown),
+//! the dry take while it has none.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -33,6 +40,7 @@ use std::sync::Arc;
 
 use serde_json::{Value, json};
 
+use crate::print::Slot;
 use crate::transport::{ClickMode, TransportSettings};
 
 /// A stereo frame (left, right).
@@ -290,6 +298,17 @@ impl Take {
     }
 }
 
+/// A track's chain printed on one of its takes: what it was made from (the chain's
+/// signature, [`Track::chain_signature`]), the take, the audio (from the take's position,
+/// the tail past its end) and its outline.
+#[derive(Debug, Clone)]
+pub struct Printed {
+    pub signature: String,
+    pub take: String,
+    pub audio: Arc<Vec<f32>>,
+    pub overview: Arc<Overview>,
+}
+
 /// A track: its takes (the lane), the one playing, its channel strip.
 #[derive(Debug, Clone)]
 pub struct Track {
@@ -302,6 +321,10 @@ pub struct Track {
     pub solo: bool,
     /// Every take shown, stacked under the active one (a view setting, saved).
     pub show_takes: bool,
+    /// Its inserts, in signal order.
+    pub inserts: Vec<Slot>,
+    /// The chain's latest print (not saved: found again in the cache).
+    pub printed: Option<Printed>,
 }
 
 impl Track {
@@ -315,6 +338,8 @@ impl Track {
             mute: false,
             solo: false,
             show_takes: false,
+            inserts: Vec::new(),
+            printed: None,
         }
     }
 
@@ -324,6 +349,39 @@ impl Track {
 
     pub fn gains(&self) -> (f32, f32) {
         balance(self.volume_db, self.pan)
+    }
+
+    /// What the chain's print of the active take is made from (the take, the rate, every
+    /// insert that isn't bypassed); None when there's nothing to print.
+    pub fn chain_signature(&self, rate: u32) -> Option<String> {
+        let k = self.active_take()?;
+        let on: Vec<Value> = self
+            .inserts
+            .iter()
+            .filter(|s| !s.bypass)
+            .map(Slot::to_json)
+            .collect();
+        (!on.is_empty()).then(|| format!("{}|{rate}|{}", k.id, Value::Array(on)))
+    }
+
+    /// The audio the mix plays and where it starts: the print of the active take (stale
+    /// or not) while there's a chain to print, else the take.
+    pub fn playing(&self, rate: u32) -> Option<(i64, &Arc<Vec<f32>>, bool)> {
+        let k = self.active_take()?;
+        if self.chain_signature(rate).is_some()
+            && let Some(p) = self.printed.as_ref().filter(|p| p.take == k.id)
+        {
+            return Some((k.position, &p.audio, true));
+        }
+        Some((k.position, &k.audio, false))
+    }
+
+    /// Whether the print playing is the chain as it is now.
+    pub fn print_current(&self, rate: u32) -> bool {
+        match self.chain_signature(rate) {
+            None => true,
+            Some(s) => self.printed.as_ref().is_some_and(|p| p.signature == s),
+        }
     }
 }
 
@@ -363,9 +421,9 @@ impl Session {
             .iter()
             .filter(|t| audible(t))
             .filter_map(|t| {
-                t.active_take().map(|k| MixClip {
-                    start: k.position,
-                    audio: k.audio.clone(),
+                t.playing(self.rate).map(|(start, audio, _)| MixClip {
+                    start,
+                    audio: audio.clone(),
                     gain: t.gains(),
                 })
             })
@@ -437,6 +495,7 @@ impl Session {
                     "mute": t.mute,
                     "solo": t.solo,
                     "show_takes": t.show_takes,
+                    "inserts": t.inserts.iter().map(Slot::to_json).collect::<Vec<_>>(),
                     "takes": t.takes.iter().map(|k| k.id.clone()).collect::<Vec<_>>(),
                     "positions": t
                         .takes
@@ -468,6 +527,9 @@ impl Session {
             track.mute = t["mute"].as_bool().unwrap_or(false);
             track.solo = t["solo"].as_bool().unwrap_or(false);
             track.show_takes = t["show_takes"].as_bool().unwrap_or(false);
+            for s in t["inserts"].as_array().cloned().unwrap_or_default() {
+                track.inserts.push(Slot::from_json(&s)?);
+            }
             for id in t["takes"].as_array().cloned().unwrap_or_default() {
                 let id = id.as_str().ok_or("session state: a take id isn't text")?;
                 let mut take = match self.known.get(id) {
@@ -496,6 +558,22 @@ impl Session {
             .filter(|&i| i < tracks.len());
         self.rate = rate;
         self.transport = transport_from(&v["transport"]);
+        // Prints carry over to the restored tracks: the one made from the same chain on the
+        // same take, else any print of that take (stale until it is printed again).
+        let prints: Vec<Printed> = self
+            .tracks
+            .iter()
+            .filter_map(|t| t.printed.clone())
+            .collect();
+        for t in &mut tracks {
+            let (Some(k), sig) = (t.active_take(), t.chain_signature(rate)) else {
+                continue;
+            };
+            let same = prints.iter().find(|p| Some(&p.signature) == sig.as_ref());
+            t.printed = same
+                .or_else(|| prints.iter().find(|p| p.take == k.id))
+                .cloned();
+        }
         self.tracks = tracks;
         Ok(())
     }
@@ -843,6 +921,58 @@ mod tests {
         c.tracks.clear();
         assert!(s.copy_to(&base.join("b")).is_err()); // never over an existing folder
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn inserts_are_saved_and_the_mix_plays_their_print() {
+        let dir = std::env::temp_dir().join(format!("varimu_inserts_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        let rec = |v: f32| Recorded {
+            start: 10,
+            latency: 0,
+            samples: vec![v; 100],
+        };
+        s.add_take(0, rec(0.1), "x").expect("saved");
+        assert_eq!(s.tracks[0].chain_signature(1000), None);
+        let mut slot = Slot::new("pultec_eqp1a");
+        slot.trim_db = -3.0;
+        s.tracks[0].inserts.push(slot.clone());
+        let sig = s.tracks[0].chain_signature(1000).expect("a chain");
+        // No print yet: the dry take plays.
+        let mut out = vec![[0.0f32; 2]; 200];
+        s.mix().add(0, &mut out);
+        assert_eq!(out[50][0], 0.1);
+        s.tracks[0].printed = Some(Printed {
+            signature: sig.clone(),
+            take: "t0001".into(),
+            audio: Arc::new(vec![0.7; 150]),
+            overview: Arc::new(Overview::default()),
+        });
+        assert!(s.tracks[0].print_current(1000));
+        let mut out = vec![[0.0f32; 2]; 200];
+        s.mix().add(0, &mut out);
+        assert_eq!((out[50][0], out[150][0]), (0.7, 0.7)); // the tail past the take
+        // Another setting: the old print plays, stale.
+        s.tracks[0].inserts[0].makeup_db = 2.0;
+        assert!(!s.tracks[0].print_current(1000));
+        assert_eq!(s.tracks[0].playing(1000).map(|p| p.2), Some(true));
+        // Bypassed: nothing to print, the take plays.
+        s.tracks[0].inserts[0].bypass = true;
+        assert_eq!(s.tracks[0].playing(1000).map(|p| p.2), Some(false));
+        s.tracks[0].inserts[0].bypass = false;
+        // Another take: its own print is due, the take plays meanwhile.
+        s.add_take(0, rec(0.2), "x").expect("saved");
+        assert_eq!(s.tracks[0].playing(1000).map(|p| p.2), Some(false));
+        // Saved, loaded, undone: the inserts come back.
+        let state = s.state();
+        let u = Session::load(&dir).expect("loads");
+        assert_eq!(u.tracks[0].inserts.len(), 1);
+        assert_eq!(u.tracks[0].inserts[0].makeup_db, 2.0);
+        s.tracks[0].inserts.clear();
+        s.restore(&state).expect("restored");
+        assert_eq!(s.tracks[0].inserts[0].trim_db, -3.0);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

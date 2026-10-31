@@ -35,6 +35,18 @@ impl Quality {
         }
     }
 
+    /// The quality of a [`Quality::name`].
+    pub fn from_name(name: &str) -> Option<Quality> {
+        [
+            Quality::Production,
+            Quality::Draft,
+            Quality::Draft1x,
+            Quality::Draft2x,
+        ]
+        .into_iter()
+        .find(|q| q.name() == name)
+    }
+
     fn blocks(self) -> &'static [&'static str] {
         match self {
             Quality::Production => &[],
