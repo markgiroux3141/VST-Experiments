@@ -151,6 +151,14 @@ on the new `6AL5@1`, doesn't run cleanly yet; (c) isn't started (TUBE_SYNTH_PLAN
 status). **S5's modulation measured (2026-10-30; TUBE_SYNTH_PLAN.md S5's status, options to the user, nothing built):** the cutoff follows V4's grid within ~5 ms, pitch steps settle in 17-45 ms (big drops 0.1-0.24 s); ENV -> CUTOFF as a second 6V6GT on the control windings (+1-3% CPU); a key's VCA sag already pulls the cutoff ~half an octave down (V4's screen on b1); a tube kick prototype rings at ~0.3x real time but its core's saturation gives no pitch drop. Built since: V4's screen on its own 5651s (a key moves the cutoff 23-142 cents, was 67-808; tables re-measured) and ENV AMOUNT (`env_amount`: V7, a 6V6GT on the control windings, its grid on the envelope), the app's split now five threads (the VCA | the resonance pair | input, filter, cutoff and envelope | the oscillator | the supplies); `examples/play.rs --hold NOTE` measures a voice's load with a key held. **A tube kick** (2026-10-30): `config/circuits/tube_kick.yaml`, the app's `tube_kick` device (`panel::Device::own_oscillator`: keys gate it, the test oscillator off): the synth's reactor oscillator running, a key's edge sweeping its pitch (TUNE, DEPTH, SWEEP TIME) and opening a differential tube VCA that decays (DECAY), then TONE (a 12AX7 Sallen-Key low-pass, ~50 Hz-1.2 kHz, ~1.5 dB bump); `tests/test_tube_kick.py`. A `rheostat` part can be `reverse: 1` (a reverse-taper pot: resistance falls as it turns up). Capacitors can have a start voltage (a C part's `v0`, IR `Capacitor.v0_v`, held
 for the DC operating point only; absent = unchanged IR).
 
+Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
+diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
+distance; mics later). The cheap first experiment is built (`varimu/separation/`,
+`scripts/separation_study.py` -> `reports/separation/`, audio in
+`cache/separation/conditions/`): each track matched to -23 LUFS on its own, a glimpse
+pre-screen (energetic only, on the dry notes' cells), and the listening staircase
+`scripts/separation_listen.py` (`--with sounddevice`), whose results are pending (the user's).
+
 **Noise (device builder B5, 2026-10-30; DEVICE_BUILDER_PLAN.md B5's status):** a circuit
 file's `noise: {seed}` block turns on Johnson noise (IR `NoiseCurrent` per resistor of R /
 pot / t_pad parts and windings, not `numerical:` leaks or core-node resistors), tube shot /
