@@ -9,8 +9,8 @@ another device"), and it is where the reverb track ([REVERB_PLAN.md](REVERB_PLAN
 gets used. Native only; nothing goes into the web app. Work the milestones in order, each
 ending with its "done when" met and covered by tests.
 
-**Status (2026-10-30): F1 done; F2 built, waiting for the user's first try** (each
-milestone's status below it). The reverb for F4 is REVERB_PLAN.md's plate (decision 1).
+**Status (2026-10-30): F1 done; F2 and F3 built** (F2 tried once by the user, F3 after
+their feedback; each milestone's status below it). The reverb for F4 is REVERB_PLAN.md's plate (decision 1).
 
 ## The idea: print, don't play
 
@@ -183,6 +183,10 @@ carries the slots, undo covers them.
 - **Not yet:** the knob widget is plain egui, not the Play view's knobs; levels and
   gain-reduction meters in the panel; clean-up of unused prints; a print's progress in
   the lane.
+- **The user's first try (2026-10-30):** the 670 added, then the Play view's Start device
+  pressed: the print ran, but there was no way to hear it while turning its knobs, and
+  the session couldn't play without a live device. That pulled F3 forward, and the
+  session now plays without a device (below).
 
 **F3. Audition.** The selected insert plays live on its input at the playhead (a source
 in the player locked to the timeline). One live device in the session at a time: an
@@ -191,6 +195,26 @@ audition takes the armed instrument's place while the panel is open.
 - knob to ear is no worse than the Play view's (~0.3 s; rewiring selectors 0.3-0.55 s);
 - the live audition and the print are measured against each other after the settle;
 - the load is measured with the rest of the session playing prints.
+
+*Status (2026-10-30): built; the user to try it.*
+- **The player** (`player.rs`): `Source::Timeline { audio, start }`, a track's audio read
+  at the positions the transport gives each block (`timeline_block`, tested), and
+  `Source::Mix` / `Player::start_mix`, the session's tracks and click with no device. The
+  worker's last stage is now the `Emitter` (was a closure), shared by every source.
+- **The view**: an open insert panel is an audition (`sync_audition`): the Play view's
+  device stops (`PlayView::adopt` / `release`), the insert plays live on its input (the
+  prints of the inserts before it, `Printed::stages`, else the take), the track leaves the
+  mix and the live device plays through its strip (`Session::mix_audition`); knob,
+  trim, make-up and bypass changes go to the player as they happen. The track isn't
+  printed while auditioned; closing the panel prints it, and a session that was playing
+  plays on without a device. ▶ (Space) with nothing playing starts the mix-only player;
+  record still starts the Play view's device (an instrument). No recording while
+  auditioning.
+- **Measured** (`examples/audition.rs`, 12 s of `vocal_longwayhome.wav`, the 670 at
+  draft-1x, AC threshold turned 0.3 -> 0.9 halfway): started in 0.53 s, load 53% mean,
+  126% worst block, 0 dropouts, knob to ear 284 ms. Mix-only: 0% load, 0 dropouts.
+- **Not yet:** the audition against its print (done-when 2), the load with many tracks
+  of prints playing.
 
 **F4. Sends and FX tracks.** FX tracks, send levels pre / post fader, the bus sum, prints
 with tails, the return strip.

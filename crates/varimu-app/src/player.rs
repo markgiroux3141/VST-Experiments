@@ -2,7 +2,8 @@
 //! a cpal output stream's callback only copies out of (a callback it can't fill is a
 //! dropout, counted).
 //!
-//! Two sources:
+//! Four sources: a file's loop, an input device, a MIDI keyboard's keys, and a session
+//! track's audio at the transport's position (below).
 //!
 //! - **a file's loop**: the worker keeps the ring `buffer_s` ahead of the output; a
 //!   knob change reaches the ear after what the ring holds plus a build (a few ms) and
@@ -30,6 +31,12 @@
 //! ([`Player::set_mix`], `crate::session::Mix`) and the click. While a take is armed
 //! ([`Player::arm_take`]) the worker's `session::Recorder` keeps the device's output from
 //! the start bar on, before the monitor.
+//!
+//! **A timeline** ([`Source::Timeline`], docs/SESSION_FX_PLAN.md F3: an insert auditioned):
+//! the device's input is a track's audio placed on the session's timeline, read at the
+//! positions the transport gives each block (silence while it is stopped, outside the
+//! audio, and in the count-in), so the device plays in time with the session's other
+//! tracks while its knobs turn. Blocks are made as the queue drains, as for a loop.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -91,6 +98,11 @@ pub enum Source {
     /// gate keys the circuit's own envelope. With one, the circuit is the oscillator: the
     /// last key's pitch goes on its control and the audio input stays silent.
     Keys(Arc<Keys>, Wave, Vec<Feed>),
+    /// A track's audio (at the host rate) whose first sample sits at timeline position
+    /// `start`, read where the transport is.
+    Timeline { audio: Arc<Vec<f32>>, start: i64 },
+    /// No device: the session's tracks and the click only ([`Player::start_mix`]).
+    Mix,
 }
 
 /// An input device and its default (shared-mode mix) format.
@@ -302,6 +314,24 @@ impl Player {
         gain: f64,
         buffer_s: f64,
     ) -> Result<Player, String> {
+        Player::launch(output, source, values, Some(circuit), s, gain, buffer_s)
+    }
+
+    /// The session's tracks and click with no device playing (the Session view's play
+    /// while no insert is auditioned): at `s`'s host rate, `buffer_s` queued.
+    pub fn start_mix(output: Option<&str>, s: Settings, buffer_s: f64) -> Result<Player, String> {
+        Player::launch(output, Source::Mix, Vec::new(), None, s, 1.0, buffer_s)
+    }
+
+    fn launch(
+        output: Option<&str>,
+        source: Source,
+        values: Values,
+        circuit: Option<Circuit>,
+        s: Settings,
+        gain: f64,
+        buffer_s: f64,
+    ) -> Result<Player, String> {
         let rate = s.host();
         let buffer = ((buffer_s * rate as f64) as usize).max(BLOCK);
         let shared = Arc::new(Shared {
@@ -364,6 +394,16 @@ impl Player {
                 );
                 (None, WorkerSource::Keys(keys, wave, feeds))
             }
+            Source::Mix => {
+                shared.status.lock().expect("status").input =
+                    Some("no device: the session's tracks".into());
+                (None, WorkerSource::Mix)
+            }
+            Source::Timeline { audio, start } => {
+                shared.status.lock().expect("status").input =
+                    Some("the session's track, where the transport is".into());
+                (None, WorkerSource::Timeline(audio, start))
+            }
         };
         {
             let mut st = shared.status.lock().expect("status");
@@ -377,9 +417,15 @@ impl Player {
                 .spawn(move || {
                     let fail =
                         |e: String| shared.status.lock().expect("status").state = State::Failed(e);
-                    if let Err(e) =
-                        work(worker_source, values, circuit, s, buffer, producer, &shared)
-                    {
+                    let r = match (worker_source, circuit) {
+                        (WorkerSource::Mix, _) => {
+                            work_mix(rate, buffer, producer, &shared);
+                            Ok(())
+                        }
+                        (src, Some(c)) => work(src, values, c, s, buffer, producer, &shared),
+                        (_, None) => Err("no circuit to play".to_string()),
+                    };
+                    if let Err(e) = r {
                         fail(e);
                     }
                 })
@@ -544,6 +590,37 @@ enum WorkerSource {
     Loop(Vec<f64>),
     Input(rtrb::Consumer<f32>, u32),
     Keys(Arc<Keys>, Wave, Vec<Feed>),
+    Timeline(Arc<Vec<f32>>, i64),
+    Mix,
+}
+
+/// The transport's pending settings and play / stop, applied to the worker's clock.
+fn apply_transport(shared: &Shared, clock: &mut Clock) {
+    let mut t = shared.transport.lock().expect("transport");
+    if let Some(s) = t.settings.take() {
+        clock.configure(&s);
+    }
+    match t.run.take() {
+        Some(true) => clock.start(),
+        Some(false) => clock.stop(),
+        None => {}
+    }
+}
+
+/// A timeline's samples for a block over `segments` (position, offset, length): the
+/// audio where it is, silence elsewhere.
+fn timeline_block(audio: &[f32], start: i64, segments: &[(i64, usize, usize)], out: &mut [f64]) {
+    out.fill(0.0);
+    for &(pos, off, len) in segments {
+        for (i, o) in out[off..off + len].iter_mut().enumerate() {
+            let k = pos + i as i64 - start;
+            if k >= 0
+                && let Some(&v) = audio.get(k as usize)
+            {
+                *o = v as f64;
+            }
+        }
+    }
 }
 
 /// The note a pitch feed holds until the first key (A3).
@@ -591,6 +668,136 @@ impl Loads {
     }
 }
 
+/// The worker's last stage: each block on its way to the ring. The device's output `raw`
+/// recorded into a take (armed), the monitored `y` through the armed track's strip, the
+/// session's tracks and the transport's click mixed in; the transport's status.
+struct Emitter {
+    rate: u32,
+    clock: Clock,
+    /// Output samples pushed so far.
+    pushed: u64,
+    click: Vec<f32>,
+    /// The positions the last stretches of output carried: (first output sample,
+    /// position, length), to say which position is being heard across a loop's jumps.
+    history: std::collections::VecDeque<(u64, i64, usize)>,
+}
+
+impl Emitter {
+    fn new(rate: u32) -> Emitter {
+        Emitter {
+            rate,
+            clock: Clock::new(rate, TransportSettings::default()),
+            pushed: 0,
+            click: Vec::with_capacity(BLOCK),
+            history: std::collections::VecDeque::new(),
+        }
+    }
+
+    fn emit(
+        &mut self,
+        shared: &Shared,
+        ring: &mut rtrb::Producer<Frame>,
+        raw: &[f32],
+        y: Vec<f32>,
+    ) {
+        let rate = self.rate;
+        let clock = &mut self.clock;
+        apply_transport(shared, clock);
+        let running = clock.running();
+        // The block's positions: one stretch, or two across the loop's jump.
+        let segments = clock.segments(y.len());
+        // How far ahead of the ear this block is: the queue ahead of it, the output
+        // device, and (live input) the input device.
+        let queued = (ring.buffer().capacity() - ring.slots()) as i64;
+        let devices_s = (shared.out_latency_us.load(Ordering::Relaxed)
+            + shared.in_latency_us.load(Ordering::Relaxed)) as f64
+            * 1e-6;
+        let latency = queued + (devices_s * rate as f64).round() as i64;
+        {
+            let mut r = shared.recorder.lock().expect("recorder");
+            if running {
+                for &(pos, off, len) in &segments {
+                    r.capture(pos, &raw[off..off + len], clock.record_from(), latency);
+                }
+            } else {
+                r.stop();
+            }
+        }
+        let mix = shared.mix.lock().expect("mix").clone();
+        self.click.clear();
+        self.click.resize(y.len(), 0.0);
+        clock.process(&mut self.click);
+        let mut out: Vec<Frame> = y
+            .iter()
+            .map(|&v| [mix.live.0 * v, mix.live.1 * v])
+            .collect();
+        for &(pos, off, len) in &segments {
+            mix.add(pos, &mut out[off..off + len]);
+        }
+        for (o, &c) in out.iter_mut().zip(&self.click) {
+            o[0] += c;
+            o[1] += c;
+        }
+        push(ring, &out);
+        // Position 0's output sample: exact while no loop has jumped (T1's calibration
+        // runs without one).
+        let origin = segments
+            .first()
+            .map(|&(pos, _, _)| self.pushed as i64 - pos);
+        for &(pos, off, len) in &segments {
+            self.history.push_back((self.pushed + off as u64, pos, len));
+        }
+        while self.history.len() > 512 {
+            self.history.pop_front();
+        }
+        self.pushed += out.len() as u64;
+        let pushed = self.pushed;
+        let computed = clock.position();
+        let heard = if running {
+            let queued = (ring.buffer().capacity() - ring.slots()) as u64;
+            let out_s = shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6;
+            let ear = pushed
+                .saturating_sub(queued)
+                .saturating_sub((out_s * rate as f64).round() as u64);
+            self.history
+                .iter()
+                .rev()
+                .find(|&&(o, _, len)| o <= ear && ear < o + len as u64)
+                .map_or(computed - (pushed - ear) as i64, |&(o, pos, _)| {
+                    pos + (ear - o) as i64
+                })
+        } else {
+            computed
+        };
+        shared.status.lock().expect("status").transport = TransportStatus {
+            running,
+            grid: Some(clock.grid()),
+            computed,
+            heard,
+            phase: running.then(|| clock.phase_at(heard)),
+            origin,
+        };
+    }
+}
+
+/// The worker without a device (`Source::Mix`): the session's tracks and the click, blocks
+/// made as the queue drains.
+fn work_mix(rate: u32, buffer: usize, mut ring: rtrb::Producer<Frame>, shared: &Shared) {
+    let capacity = ring.buffer().capacity();
+    let mut em = Emitter::new(rate);
+    shared.status.lock().expect("status").state = State::Playing;
+    while !shared.stop.load(Ordering::Relaxed) {
+        let queued = capacity - ring.slots();
+        shared.queued.store(queued, Ordering::Relaxed);
+        if queued >= buffer || ring.slots() < BLOCK {
+            std::thread::sleep(Duration::from_millis(1));
+            continue;
+        }
+        let silence = vec![0.0f32; BLOCK];
+        em.emit(shared, &mut ring, &silence, silence.clone());
+    }
+}
+
 /// The worker: build the session, then feed the output ring from the source.
 fn work(
     source: WorkerSource,
@@ -603,7 +810,10 @@ fn work(
 ) -> Result<(), String> {
     let clip = match &source {
         WorkerSource::Loop(x) => x.as_slice(),
-        WorkerSource::Input(..) | WorkerSource::Keys(..) => &[],
+        WorkerSource::Input(..)
+        | WorkerSource::Keys(..)
+        | WorkerSource::Timeline(..)
+        | WorkerSource::Mix => &[],
     };
     let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
     // A gate starts up (no key), a pitch at START_NOTE.
@@ -636,100 +846,7 @@ fn work(
         };
         out
     };
-    // The block on its way to the ring: the device's output `raw` recorded into a take
-    // (armed), the monitored `y` through the armed track's strip, the session's tracks
-    // and the transport's click mixed in.
-    let mut clock = Clock::new(rate, TransportSettings::default());
-    let mut pushed: u64 = 0;
-    let mut click: Vec<f32> = Vec::with_capacity(BLOCK);
-    // The positions the last stretches of output carried: (first output sample, position,
-    // length), to say which position is being heard across a loop's jumps.
-    let mut history: std::collections::VecDeque<(u64, i64, usize)> =
-        std::collections::VecDeque::new();
-    let mut emit = |ring: &mut rtrb::Producer<Frame>, raw: &[f32], y: Vec<f32>| {
-        {
-            let mut t = shared.transport.lock().expect("transport");
-            if let Some(s) = t.settings.take() {
-                clock.configure(&s);
-            }
-            match t.run.take() {
-                Some(true) => clock.start(),
-                Some(false) => clock.stop(),
-                None => {}
-            }
-        }
-        let running = clock.running();
-        // The block's positions: one stretch, or two across the loop's jump.
-        let segments = clock.segments(y.len());
-        // How far ahead of the ear this block is: the queue ahead of it, the output
-        // device, and (live input) the input device.
-        let queued = (ring.buffer().capacity() - ring.slots()) as i64;
-        let devices_s = (shared.out_latency_us.load(Ordering::Relaxed)
-            + shared.in_latency_us.load(Ordering::Relaxed)) as f64
-            * 1e-6;
-        let latency = queued + (devices_s * rate as f64).round() as i64;
-        {
-            let mut r = shared.recorder.lock().expect("recorder");
-            if running {
-                for &(pos, off, len) in &segments {
-                    r.capture(pos, &raw[off..off + len], clock.record_from(), latency);
-                }
-            } else {
-                r.stop();
-            }
-        }
-        let mix = shared.mix.lock().expect("mix").clone();
-        click.clear();
-        click.resize(y.len(), 0.0);
-        clock.process(&mut click);
-        let mut out: Vec<Frame> = y
-            .iter()
-            .map(|&v| [mix.live.0 * v, mix.live.1 * v])
-            .collect();
-        for &(pos, off, len) in &segments {
-            mix.add(pos, &mut out[off..off + len]);
-        }
-        for (o, &c) in out.iter_mut().zip(&click) {
-            o[0] += c;
-            o[1] += c;
-        }
-        push(ring, &out);
-        // Position 0's output sample: exact while no loop has jumped (T1's calibration
-        // runs without one).
-        let origin = segments.first().map(|&(pos, _, _)| pushed as i64 - pos);
-        for &(pos, off, len) in &segments {
-            history.push_back((pushed + off as u64, pos, len));
-        }
-        while history.len() > 512 {
-            history.pop_front();
-        }
-        pushed += out.len() as u64;
-        let computed = clock.position();
-        let heard = if running {
-            let queued = (ring.buffer().capacity() - ring.slots()) as u64;
-            let out_s = shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6;
-            let ear = pushed
-                .saturating_sub(queued)
-                .saturating_sub((out_s * rate as f64).round() as u64);
-            history
-                .iter()
-                .rev()
-                .find(|&&(o, _, len)| o <= ear && ear < o + len as u64)
-                .map_or(computed - (pushed - ear) as i64, |&(o, pos, _)| {
-                    pos + (ear - o) as i64
-                })
-        } else {
-            computed
-        };
-        shared.status.lock().expect("status").transport = TransportStatus {
-            running,
-            grid: Some(clock.grid()),
-            computed,
-            heard,
-            phase: running.then(|| clock.phase_at(heard)),
-            origin,
-        };
-    };
+    let mut em = Emitter::new(rate);
     let mut loads = Loads(Vec::new(), (rate as usize / BLOCK).max(1));
     {
         let mut st = shared.status.lock().expect("status");
@@ -781,7 +898,7 @@ fn work(
                     .next_block(BLOCK)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                emit(&mut ring, &y, monitored(&live, &y));
+                em.emit(shared, &mut ring, &y, monitored(&live, &y));
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let pos = (live.position() + len - (capacity - ring.slots()) % len) % len;
@@ -832,7 +949,7 @@ fn work(
                         .process(block)
                         .map_err(|e| format!("the circuit stopped: {e}"))?;
                     let before = capacity - ring.slots();
-                    emit(&mut ring, &y, monitored(&live, &y));
+                    em.emit(shared, &mut ring, &y, monitored(&live, &y));
                     heard(&live, before);
                     let queued = capacity - ring.slots();
                     shared.queued.store(queued, Ordering::Relaxed);
@@ -849,6 +966,35 @@ fn work(
                     shared.status.lock().expect("status").latency_s = Some(latency);
                 }
                 pending.drain(..used);
+            }
+        }
+        WorkerSource::Mix => {}
+        WorkerSource::Timeline(audio, start) => {
+            let mut block = vec![0.0; BLOCK];
+            while !shared.stop.load(Ordering::Relaxed) {
+                forward_values(&mut live);
+                let queued = capacity - ring.slots();
+                shared.queued.store(queued, Ordering::Relaxed);
+                if queued >= buffer || ring.slots() < BLOCK {
+                    std::thread::sleep(Duration::from_millis(1));
+                    continue;
+                }
+                // The positions this block will carry (`emit` applies the same transport
+                // and advances the clock over them).
+                apply_transport(shared, &mut em.clock);
+                let segments = if em.clock.running() {
+                    em.clock.segments(BLOCK)
+                } else {
+                    Vec::new()
+                };
+                timeline_block(&audio, start, &segments, &mut block);
+                let (y, meter) = live
+                    .process(&block)
+                    .map_err(|e| format!("the circuit stopped: {e}"))?;
+                let before = capacity - ring.slots();
+                em.emit(shared, &mut ring, &y, monitored(&live, &y));
+                heard(&live, before);
+                report(&live, meter, loads.push(meter.load));
             }
         }
         WorkerSource::Keys(keys, wave, feeds) => {
@@ -923,7 +1069,7 @@ fn work(
                     .process_with(&block, &refs)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                emit(&mut ring, &y, monitored(&live, &y));
+                em.emit(shared, &mut ring, &y, monitored(&live, &y));
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let block_s = BLOCK as f64 / rate as f64;
@@ -1178,5 +1324,19 @@ impl Playback {
     /// Where playback is (s).
     pub fn position_s(&self) -> f64 {
         (self.pos.load(Ordering::Relaxed) % self.len) as f64 / self.rate as f64
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_timeline_block_reads_the_audio_where_the_transport_is() {
+        let audio: Vec<f32> = (0..10).map(|i| i as f32).collect();
+        let mut out = vec![9.0; 6];
+        // Positions 3..6, then a loop's jump back to 8..11 (the audio starts at 5).
+        super::timeline_block(&audio, 5, &[(3, 0, 3), (8, 3, 3)], &mut out);
+        assert_eq!(out, [0.0, 0.0, 0.0, 3.0, 4.0, 5.0]);
+        super::timeline_block(&audio, 5, &[], &mut out);
+        assert_eq!(out, [0.0; 6]);
     }
 }

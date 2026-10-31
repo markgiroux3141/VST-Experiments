@@ -132,6 +132,8 @@ pub struct PlayView {
     /// Where a drag on the overview started (s).
     drag_from: Option<f64>,
     player: Option<Player>,
+    /// The player is the Session view's (an insert auditioned), not this view's device.
+    adopted: bool,
     /// The region and device the player plays (a change restarts it).
     playing: Option<((f64, f64), usize, PathBuf)>,
     /// Start playing once the file being loaded is in.
@@ -243,6 +245,7 @@ impl PlayView {
             region: (0.0, 0.0),
             drag_from: None,
             player: None,
+            adopted: false,
             playing: None,
             autoplay: args.play,
             task: None,
@@ -564,7 +567,29 @@ impl PlayView {
 
     /// Start the chosen device from the chosen source, as Play's ▶ does.
     pub fn start_device(&mut self) {
+        self.adopted = false;
         self.start();
+    }
+
+    /// Play `p` (the Session view's audition of an insert) in place of this view's device,
+    /// which stops: one output, one live device.
+    pub fn adopt(&mut self, p: Player) {
+        self.stop();
+        self.player = Some(p);
+        self.adopted = true;
+    }
+
+    /// Stop an adopted player (this view's own device stays as it is).
+    pub fn release(&mut self) {
+        if self.adopted {
+            self.player = None;
+            self.adopted = false;
+        }
+    }
+
+    /// Whether the player playing is the Session view's.
+    pub fn adopted(&self) -> bool {
+        self.adopted
     }
 
     /// The chosen device: its label and id (a take records the id).
@@ -636,7 +661,8 @@ impl PlayView {
                 self.clip = Some(clip);
                 self.loading = None;
                 self.error = None;
-                if (self.player.is_some() && !self.live_input) || std::mem::take(&mut self.autoplay)
+                if (self.player.is_some() && !self.live_input && !self.adopted)
+                    || std::mem::take(&mut self.autoplay)
                 {
                     self.start();
                 }
@@ -664,6 +690,7 @@ impl PlayView {
 
     fn start(&mut self) {
         self.player = None; // the old one stops first (its output and threads)
+        self.adopted = false;
         self.playing = None;
         self.playback = None;
         if self.live_input {
@@ -794,6 +821,7 @@ impl PlayView {
         self.player = None;
         self.playing = None;
         self.keyboard = None;
+        self.adopted = false;
     }
 
     /// A take the worker has handed over, without waiting.

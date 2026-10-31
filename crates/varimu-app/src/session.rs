@@ -307,6 +307,9 @@ pub struct Printed {
     pub take: String,
     pub audio: Arc<Vec<f32>>,
     pub overview: Arc<Overview>,
+    /// Each insert's print, in order (the inserts not bypassed): the input of the one
+    /// after it, which an audition plays into it.
+    pub stages: Vec<Arc<Vec<f32>>>,
 }
 
 /// A track: its takes (the lane), the one playing, its channel strip.
@@ -436,6 +439,27 @@ impl Session {
                 |t| if audible(t) { t.gains() } else { (0.0, 0.0) },
             );
         Mix { clips, live }
+    }
+
+    /// The mix while track `t`'s insert is auditioned: its own audio comes from the live
+    /// device (through its strip), so it leaves the tracks.
+    pub fn mix_audition(&self, t: usize) -> Mix {
+        let mut m = self.mix();
+        let any_solo = self.tracks.iter().any(|x| x.solo);
+        let Some(track) = self.tracks.get(t) else {
+            return m;
+        };
+        let audible = if any_solo { track.solo } else { !track.mute };
+        if let Some((start, audio, _)) = track.playing(self.rate)
+            && let Some(i) = m
+                .clips
+                .iter()
+                .position(|c| c.start == start && Arc::ptr_eq(&c.audio, audio))
+        {
+            m.clips.remove(i);
+        }
+        m.live = if audible { track.gains() } else { (0.0, 0.0) };
+        m
     }
 
     /// Where the last take ends (0: none).
@@ -948,6 +972,7 @@ mod tests {
             take: "t0001".into(),
             audio: Arc::new(vec![0.7; 150]),
             overview: Arc::new(Overview::default()),
+            stages: Vec::new(),
         });
         assert!(s.tracks[0].print_current(1000));
         let mut out = vec![[0.0f32; 2]; 200];

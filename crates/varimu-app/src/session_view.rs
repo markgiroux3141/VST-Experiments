@@ -42,6 +42,14 @@
 //! while a knob is held), and the track plays its print: ✓ printed, ◔ printing, … waiting
 //! (the older print plays meanwhile), ! failed. The first insert's trim is set once from
 //! the take's loudest stretch to the alignment level (-18 dBFS); later ones start at 0 dB.
+//!
+//! **Audition** (F3): while an insert's panel is open, that device plays live in the
+//! session's player (the Play view's device stops: one live device), fed by the track's
+//! audio where the transport is (the prints of the inserts before it, else the take), so
+//! Space plays the session with it and its knobs, trim, make-up and bypass are heard as
+//! they turn. The other tracks play their prints; the inserts after it aren't heard. The
+//! track isn't printed while it is auditioned: closing the panel prints it. No recording
+//! while auditioning.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -52,15 +60,16 @@ use std::time::Duration;
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 use serde_json::{Value, json};
 use varimu_app::audio;
+use varimu_app::live::{Circuit, Values};
 use varimu_app::loopback::{self, Analysis, Calibration, Run};
 use varimu_app::panel::{self as vpanel, DEVICES, Kind, Knob};
-use varimu_app::player::{BLOCK, InputDevice, State, input_devices};
+use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, input_devices};
 use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, Slot, find_device};
 use varimu_app::session::{
     OVERVIEW_BIN, Overview, Printed, Session, Take, Track, transport_from, transport_json,
 };
-use varimu_app::settings::Quality;
+use varimu_app::settings::{Quality, Settings};
 use varimu_app::transport::{ClickMode, Grid, Phase, TransportSettings};
 use varimu_circuit::spec;
 use varimu_circuit::yaml::Value as YValue;
@@ -131,6 +140,17 @@ struct PrintJob {
     cancelled: bool,
 }
 
+/// An insert playing live (F3): which, what its input is (to see it change), and what
+/// was last sent to the player.
+struct Audition {
+    track: usize,
+    slot: usize,
+    device: String,
+    input: String,
+    values: Values,
+    gains: (f64, f64, bool),
+}
+
 /// A drag on the ruler: a locator's handle, or a new loop from a beat.
 #[derive(Clone, Copy)]
 enum RulerDrag {
@@ -179,6 +199,9 @@ pub struct SessionView {
     print_errors: HashMap<String, String>,
     insert_sel: Option<(usize, usize)>,
     knobs: HashMap<String, Result<Vec<Knob>, String>>,
+    audition: Option<Audition>,
+    /// The audition's state as the panel shows it (set each frame).
+    audition_status: Option<String>,
 }
 
 fn prefs_path() -> Option<PathBuf> {
@@ -278,6 +301,8 @@ impl SessionView {
             print_errors: HashMap::new(),
             insert_sel: None,
             knobs: HashMap::new(),
+            audition: None,
+            audition_status: None,
         }
     }
 
@@ -329,11 +354,18 @@ impl SessionView {
         play.live_controls();
         self.poll_calibration(play);
         let idle = matches!(self.calibrate, Calibrate::Idle);
+        self.sync_audition(play, idle);
         if idle {
-            play.apply_monitor();
+            if self.audition.is_none() {
+                play.apply_monitor();
+            }
             if let Some(p) = play.player() {
                 p.set_transport(&self.session.transport);
-                p.set_mix(Arc::new(self.session.mix()));
+                let mix = match &self.audition {
+                    Some(a) => self.session.mix_audition(a.track),
+                    None => self.session.mix(),
+                };
+                p.set_mix(Arc::new(mix));
             }
         }
         self.poll_recording(play);
@@ -464,8 +496,25 @@ impl SessionView {
     }
 
     fn play(&mut self, play: &mut PlayView, record: bool) {
-        let Some(p) = play.player() else {
+        if record && self.audition.is_some() {
+            self.error = Some("close the insert's panel to record (it plays live)".into());
+            return;
+        }
+        // Recording needs the live device (the Play view's choice); playing doesn't: with
+        // nothing playing, the session's tracks play on their own.
+        if record && play.adopted() {
             play.start_device();
+            self.error = Some("the live device is starting: record again once it plays".into());
+            return;
+        }
+        let Some(p) = play.player() else {
+            if record {
+                play.start_device();
+            } else if self.start_mix(play)
+                && let Some(p) = play.player()
+            {
+                p.transport_run(true);
+            }
             return;
         };
         if p.status().state != State::Playing || !matches!(self.calibrate, Calibrate::Idle) {
@@ -708,6 +757,181 @@ impl SessionView {
         }
     }
 
+    /// The selected insert's input for an audition: the print of the inserts before it
+    /// (if the track's print holds it), else the active take; where it starts, and a key
+    /// that changes when it does.
+    fn audition_input(&self, t: usize, k: usize) -> Option<(Arc<Vec<f32>>, i64, String)> {
+        let track = self.session.tracks.get(t)?;
+        let take = track.active_take()?;
+        let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
+        let printed = track
+            .printed
+            .as_ref()
+            .filter(|p| p.take == take.id && stage > 0 && p.stages.len() >= stage);
+        let audio = match printed {
+            Some(p) => p.stages[stage - 1].clone(),
+            None => take.audio.clone(),
+        };
+        let key = format!(
+            "{}|{}|{}|{}|{:p}",
+            take.id,
+            stage,
+            take.position,
+            audio.len(),
+            Arc::as_ptr(&audio)
+        );
+        Some((audio, take.position, key))
+    }
+
+    /// The audition follows the open panel: started (the Play view's device stops) when an
+    /// insert is selected or its input changes, its knobs and gains sent as they change,
+    /// stopped when the panel closes.
+    fn sync_audition(&mut self, play: &mut PlayView, idle: bool) {
+        let want = self
+            .insert_selected()
+            .filter(|_| idle && self.recording.is_none());
+        let Some((t, k)) = want else {
+            if self.audition.take().is_some() {
+                self.end_audition(play);
+            }
+            return;
+        };
+        let Some((audio, start, input)) = self.audition_input(t, k) else {
+            // Nothing to play into it yet (no take).
+            if self.audition.take().is_some() {
+                self.end_audition(play);
+            }
+            return;
+        };
+        let slot = self.session.tracks[t].inserts[k].clone();
+        let same = self.audition.as_ref().is_some_and(|a| {
+            a.track == t && a.slot == k && a.device == slot.device && a.input == input
+        }) && play.adopted();
+        if !same {
+            let running = play.player().is_some_and(|p| p.status().transport.running);
+            match self.start_audition(&slot, audio, start) {
+                Ok(p) => {
+                    if p.rate != self.session.rate && self.session.end() > 0 {
+                        self.error = Some(format!(
+                            "{} plays at {} Hz, the session is at {} Hz",
+                            slot.device, p.rate, self.session.rate
+                        ));
+                        self.insert_sel = None;
+                        return;
+                    }
+                    p.set_transport(&self.session.transport);
+                    if running {
+                        p.transport_run(true);
+                    }
+                    play.adopt(p);
+                    self.audition = Some(Audition {
+                        track: t,
+                        slot: k,
+                        device: slot.device.clone(),
+                        input,
+                        values: slot.values.clone(),
+                        gains: (f64::NAN, f64::NAN, false),
+                    });
+                    self.error = None;
+                }
+                Err(e) => {
+                    self.error = Some(format!("can't play {} live: {e}", slot.device));
+                    self.insert_sel = None;
+                    return;
+                }
+            }
+        }
+        let (Some(a), Some(p)) = (self.audition.as_mut(), play.player()) else {
+            return;
+        };
+        let st = p.status();
+        self.audition_status = Some(match &st.state {
+            State::Starting => "● live: starting…".to_string(),
+            State::Failed(e) => format!("live: stopped ({e})"),
+            State::Playing => format!(
+                "● live{} · load {:.0}%",
+                if st.transport.running {
+                    ", playing"
+                } else {
+                    " (Space plays)"
+                },
+                st.load * 100.0
+            ),
+        });
+        if a.values != slot.values {
+            p.set(slot.values.clone());
+            a.values = slot.values.clone();
+        }
+        let gains = (slot.trim_db, slot.makeup_db, slot.bypass);
+        if a.gains != gains {
+            p.set_gain(10f64.powf(slot.trim_db / 20.0));
+            p.set_output_db(slot.makeup_db);
+            p.set_bypass(slot.bypass);
+            p.set_compensation(false);
+            a.gains = gains;
+        }
+    }
+
+    /// The audition's player stopped; if the session was playing, it plays on without a
+    /// device.
+    fn end_audition(&mut self, play: &mut PlayView) {
+        let running = play.player().is_some_and(|p| p.status().transport.running);
+        play.release();
+        self.audition_status = None;
+        if running
+            && self.start_mix(play)
+            && let Some(p) = play.player()
+        {
+            p.transport_run(true);
+        }
+    }
+
+    /// The session's tracks playing with no device (`Player::start_mix`), in the Play
+    /// view's place.
+    fn start_mix(&mut self, play: &mut PlayView) -> bool {
+        let config = self.root.join("config");
+        match Settings::load(&config, Quality::Draft1x)
+            .and_then(|s| Player::start_mix(None, s, 0.05))
+        {
+            Ok(p) => {
+                p.set_transport(&self.session.transport);
+                p.set_mix(Arc::new(self.session.mix()));
+                play.adopt(p);
+                true
+            }
+            Err(e) => {
+                self.error = Some(e);
+                false
+            }
+        }
+    }
+
+    /// A player for `slot`'s device at its play quality, fed by `audio` from timeline
+    /// position `start`.
+    fn start_audition(
+        &self,
+        slot: &Slot,
+        audio: Arc<Vec<f32>>,
+        start: i64,
+    ) -> Result<Player, String> {
+        let config = self.root.join("config");
+        let d = find_device(&slot.device).ok_or(format!("no device {}", slot.device))?;
+        let s = d.play_settings(&Settings::load(&config, d.quality)?);
+        let circuit = Circuit::load(&config, d.circuit, s.cores()?)?.with_noise(slot.noise);
+        let p = Player::start(
+            Source::Timeline { audio, start },
+            slot.values.clone(),
+            circuit,
+            s,
+            10f64.powf(slot.trim_db / 20.0),
+            d.ahead_s,
+        )?;
+        p.set_compensation(false);
+        p.set_output_db(slot.makeup_db);
+        p.set_bypass(slot.bypass);
+        Ok(p)
+    }
+
     /// Prints: finished ones to their tracks, ones no track wants any more cancelled, and
     /// new ones started for chains whose print isn't current (not while recording or while
     /// a gesture is in progress: a knob held prints once, when it's let go).
@@ -730,6 +954,7 @@ impl SessionView {
                         take: j.take.clone(),
                         overview: Arc::new(Overview::of(&audio, OVERVIEW_BIN)),
                         audio,
+                        stages: prints.iter().map(|p| p.audio.clone()).collect(),
                     };
                     for t in &mut self.session.tracks {
                         if t.chain_signature(rate).as_deref() == Some(j.signature.as_str()) {
@@ -762,7 +987,11 @@ impl SessionView {
         if !busy {
             let config = self.root.join("config");
             let cache = self.session.dir.join("prints");
-            for t in &self.session.tracks {
+            let auditioned = self.audition.as_ref().map(|a| a.track);
+            for (ti, t) in self.session.tracks.iter().enumerate() {
+                if Some(ti) == auditioned {
+                    continue;
+                }
                 let running = self.jobs.iter().filter(|j| !j.cancelled).count();
                 if running >= MAX_PRINT_JOBS {
                     break;
@@ -923,6 +1152,10 @@ impl SessionView {
             }
         };
         let track_name = self.session.tracks[t].name.clone();
+        let live_line = match (&self.audition, self.audition_status.as_ref()) {
+            (Some(_), Some(s)) => s.clone(),
+            _ => "not playing live".to_string(),
+        };
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(format!("{track_name} · {label}"))
@@ -932,6 +1165,13 @@ impl SessionView {
             ui.label(RichText::new(glyph).color(colour))
                 .on_hover_text(&state);
             ui.label(RichText::new(&state).small().color(theme::MUTED));
+            ui.add_space(12.0);
+            ui.label(RichText::new(&live_line).small().color(theme::ACCENT))
+                .on_hover_text(
+                    "While this panel is open the device plays live on the track (Space plays \
+                     the session); closing it prints the chain again. The inserts after it \
+                     aren't heard meanwhile.",
+                );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("✕").on_hover_text("Close the panel").clicked() {
                     self.insert_sel = None;

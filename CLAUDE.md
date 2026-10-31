@@ -200,9 +200,13 @@ done:** `varimu-app`'s `print` (a slot's print of audio through a device at a qu
 by sha256 of the input, the built IR, the settings, gains and `SOURCE_HASH`, kept in
 `<session>/prints/<key>/`; chains; background `Job`s below normal priority;
 `examples/print.rs`): 30 s through the 670 prints at 0.42x real time at draft-1x, 11.4x at
-production. **F2 built** (not yet tried by the user): `Track::inserts` in `session.json`,
-the mix plays a track's print (`Track::playing`), insert chips under each strip and the
-selected insert's panel at the bottom of the Session view.
+production. **F2 built**: `Track::inserts` in `session.json`, the mix plays a track's print
+(`Track::playing`), insert chips under each strip and the selected insert's panel at the
+bottom of the Session view. **F3 built** (after the user's first try): an open insert panel
+plays that device live on the track where the transport is (`player::Source::Timeline`,
+`PlayView::adopt`), knobs heard in ~0.3 s (the 670: 53% load, 0 dropouts); the session plays
+without a device (`Source::Mix`, `Player::start_mix`); the worker's output stage is
+`player::Emitter`. The reverb isn't in the inserts yet: E6 / E7 come first.
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)
