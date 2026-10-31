@@ -342,9 +342,14 @@ and the production render (the done-when above).
   track's lane.
 - `examples/click.rs --take`: tube_synth played 8 s with notes, the take 8.00 s from bar
   1, placed 72 ms early (50 ms queue + the Twin's output), -13 dBFS rms, no dropouts.
+- **Editing** (after the user's first try: nothing in the lanes took a click): a click on
+  a track's strip or lane selects and arms it (a new track arms itself), a click on a take
+  selects it, a drag moves it (by whole beats; Alt: freely; where it sits now is in
+  `session.json`, `take.json` keeps where it was recorded), Delete or right-click deletes a
+  take, right-click on a strip a track (their files stay in the folder), Ctrl+Z undoes.
 - **Not yet:** events (step 2: a take re-renders from nothing yet), keys still land on
-  10 ms block boundaries, no undo, no deleting or moving takes, the session's rate is the
-  player's (48 kHz: decision 2 still open), the user's first try.
+  10 ms block boundaries, trimming and splitting takes (T6), the session's rate is the
+  player's (48 kHz: decision 2 still open).
 
 **T3. Tracks and overdub.** The session format, lanes, the playback mix, overdub, loop
 recording, mute / solo / volume / pan, save and load, undo.

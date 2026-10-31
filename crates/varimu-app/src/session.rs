@@ -17,8 +17,10 @@
 //! "Physical honesty").
 //!
 //! **On disk** (a folder the user owns, never the repo): `session.json` (rate, transport,
-//! tracks) and `takes/<id>/` with `take.json` (where it sits, the latency used, the device,
-//! the code version) and `draft.wav` (mono float32 at the session's rate).
+//! tracks, where each take sits now) and `takes/<id>/` with `take.json` (where it was
+//! recorded, the latency used, the device, the code version) and `draft.wav` (mono float32
+//! at the session's rate). A take moved on the timeline keeps its `take.json`; a take
+//! deleted from a track leaves the session's lists but keeps its folder.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -411,6 +413,11 @@ impl Session {
                     "mute": t.mute,
                     "solo": t.solo,
                     "takes": t.takes.iter().map(|k| k.id.clone()).collect::<Vec<_>>(),
+                    "positions": t
+                        .takes
+                        .iter()
+                        .map(|k| (k.id.clone(), json!(k.position)))
+                        .collect::<serde_json::Map<_, _>>(),
                     "active": t.active_take().map(|k| k.id.clone()),
                 })
             })
@@ -444,7 +451,11 @@ impl Session {
             track.solo = t["solo"].as_bool().unwrap_or(false);
             for id in t["takes"].as_array().cloned().unwrap_or_default() {
                 let id = id.as_str().ok_or("session.json: a take id isn't text")?;
-                track.takes.push(read_take(dir, id, rate)?);
+                let mut take = read_take(dir, id, rate)?;
+                if let Some(p) = t["positions"][id].as_i64() {
+                    take.position = p;
+                }
+                track.takes.push(take);
             }
             let active = t["active"].as_str();
             track.active = track
@@ -644,6 +655,12 @@ mod tests {
             t.tracks[1].active_take().map(|k| k.id.as_str()),
             Some("t0002")
         );
+        // A take moved on the timeline stays where it was moved.
+        let mut t = t;
+        t.tracks[0].takes[0].position = 48_000;
+        t.save().expect("saved");
+        let u = Session::load(&dir).expect("loads");
+        assert_eq!(u.tracks[0].takes[0].position, 48_000);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

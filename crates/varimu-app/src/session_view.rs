@@ -11,8 +11,14 @@
 //! the default transport and the calibrations are the user's prefs
 //! (`%APPDATA%\varimu\recording.json`, apart from `app.json`).
 //!
-//! Keys: Space plays / stops, R records (while no text field has focus). Over the lanes,
-//! Shift+wheel scrolls in time, Ctrl+wheel zooms.
+//! Mouse: a click on a track (its strip or lane) selects it: the selected track is the armed
+//! one, which records. A click on a take selects it, a drag moves it (by whole beats; Alt:
+//! freely), right-click deletes a take or a track. Deleted takes leave the session but
+//! their files stay in its folder. Ctrl+Z undoes moves and deletions.
+//!
+//! Keys: Space plays / stops, R records, Delete deletes the selected take, Ctrl+Z undoes
+//! (while no text field has focus). Over the lanes, Shift+wheel scrolls in time,
+//! Ctrl+wheel zooms.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -74,8 +80,23 @@ struct Recording {
     overview: Overview,
 }
 
+/// A take being dragged: its track and index, where it was, where the drag started (px),
+/// and the session before the drag (for undo).
+struct Drag {
+    track: usize,
+    take: usize,
+    from: i64,
+    press_x: f32,
+    before: Vec<Track>,
+}
+
 pub struct SessionView {
     session: Session,
+    /// The selected take (track, index), a drag in progress, the right-clicked take.
+    selected: Option<(usize, usize)>,
+    drag: Option<Drag>,
+    /// Earlier states of the tracks (and the armed one), for Ctrl+Z.
+    undo: Vec<(Vec<Track>, Option<usize>)>,
     /// Whether the session's folder has been written (a new one isn't, until a take).
     saved: bool,
     calibrations: Vec<Calibration>,
@@ -133,6 +154,9 @@ impl SessionView {
         };
         SessionView {
             session,
+            selected: None,
+            drag: None,
+            undo: Vec::new(),
             saved,
             calibrations,
             recording: None,
@@ -259,8 +283,20 @@ impl SessionView {
         if ui.ctx().egui_wants_keyboard_input() {
             return;
         }
-        let (space, r) =
-            ui.input(|i| (i.key_pressed(egui::Key::Space), i.key_pressed(egui::Key::R)));
+        let (space, r, delete, undo) = ui.input(|i| {
+            (
+                i.key_pressed(egui::Key::Space),
+                i.key_pressed(egui::Key::R) && !i.modifiers.command,
+                i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
+                i.key_pressed(egui::Key::Z) && i.modifiers.command,
+            )
+        });
+        if delete && let Some((t, k)) = self.selected {
+            self.delete_take(t, k);
+        }
+        if undo {
+            self.undo();
+        }
         let running = play.player().is_some_and(|p| p.status().transport.running);
         if space {
             if running {
@@ -311,12 +347,76 @@ impl SessionView {
         }
     }
 
+    /// A new track, selected (armed) for the next take.
     fn add_track(&mut self) {
+        self.snapshot();
         let n = self.session.tracks.len() + 1;
         self.session.tracks.push(Track::new(&format!("Track {n}")));
-        if self.session.armed.is_none() {
-            self.session.armed = Some(n - 1);
+        self.session.armed = Some(n - 1);
+        self.save();
+    }
+
+    /// Keep the tracks as they are for Ctrl+Z.
+    fn snapshot(&mut self) {
+        self.undo
+            .push((self.session.tracks.clone(), self.session.armed));
+        if self.undo.len() > 100 {
+            self.undo.remove(0);
         }
+    }
+
+    fn undo(&mut self) {
+        if self.recording.is_some() {
+            return;
+        }
+        if let Some((tracks, armed)) = self.undo.pop() {
+            self.session.tracks = tracks;
+            self.session.armed = armed;
+            self.selected = None;
+            self.drag = None;
+            self.save();
+        }
+    }
+
+    /// Take `k` out of track `t` (its files stay in the session's folder).
+    fn delete_take(&mut self, t: usize, k: usize) {
+        if self.recording.is_some()
+            || self
+                .session
+                .tracks
+                .get(t)
+                .is_none_or(|x| k >= x.takes.len())
+        {
+            return;
+        }
+        self.snapshot();
+        let track = &mut self.session.tracks[t];
+        track.takes.remove(k);
+        track.active = match track.active {
+            _ if track.takes.is_empty() => None,
+            Some(a) if a == k => Some(track.takes.len() - 1),
+            Some(a) if a > k => Some(a - 1),
+            a => a,
+        };
+        self.selected = None;
+        self.save();
+    }
+
+    /// Track `t` out of the session (its takes' files stay in the folder).
+    fn delete_track(&mut self, t: usize) {
+        if self.recording.is_some() || t >= self.session.tracks.len() {
+            return;
+        }
+        self.snapshot();
+        self.session.tracks.remove(t);
+        let n = self.session.tracks.len();
+        self.session.armed = match self.session.armed {
+            _ if n == 0 => None,
+            Some(a) if a == t => Some(t.min(n - 1)),
+            Some(a) if a > t => Some(a - 1),
+            a => a,
+        };
+        self.selected = None;
         self.save();
     }
 
@@ -657,8 +757,10 @@ impl SessionView {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                for i in 0..self.session.tracks.len() {
+                let mut i = 0;
+                while i < self.session.tracks.len() {
                     changed |= self.track_row(ui, i, &view, &grid, heard.filter(|_| running));
+                    i += 1;
                 }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
@@ -673,7 +775,8 @@ impl SessionView {
         }
     }
 
-    /// One track: its strip and its lane. Returns whether the strip changed.
+    /// One track: its strip and its lane, and what a click or drag on them does. Returns
+    /// whether the strip changed.
     fn track_row(
         &mut self,
         ui: &mut egui::Ui,
@@ -683,11 +786,113 @@ impl SessionView {
         playhead: Option<i64>,
     ) -> bool {
         let colour = COLOURS[i % COLOURS.len()];
-        let armed = self.session.armed == Some(i);
         let width = ui.available_width();
         let (row, _) = ui.allocate_exact_size(egui::vec2(width, TRACK_H), Sense::hover());
         let strip = Rect::from_min_size(row.min, egui::vec2(STRIP_W, TRACK_H));
         let lane = Rect::from_min_max(Pos2::new(row.left() + STRIP_W, row.top()), row.max);
+        // The strip and lane take clicks and drags; the strip's controls, added after, sit
+        // on top of them.
+        let strip_resp = ui.interact(strip, ui.id().with(("strip", i)), Sense::click());
+        let lane_resp = ui.interact(lane, ui.id().with(("lane", i)), Sense::click_and_drag());
+        let mut changed = false;
+        let clip_rect = |k: &Take| {
+            Rect::from_min_max(
+                Pos2::new(view.x(k.position), lane.top() + 4.0),
+                Pos2::new(
+                    view.x(k.end()).max(view.x(k.position) + 1.0),
+                    lane.bottom() - 4.0,
+                ),
+            )
+        };
+        let on_clip = |p: Option<Pos2>, t: &Track| {
+            p.zip(t.active_take())
+                .is_some_and(|(p, k)| clip_rect(k).contains(p))
+        };
+        // Select (and arm) the track; select a take, drag it, delete it.
+        if strip_resp.clicked() || lane_resp.clicked() || lane_resp.drag_started() {
+            if self.session.armed != Some(i) && self.recording.is_none() {
+                self.session.armed = Some(i);
+                changed = true;
+            }
+            let t = &self.session.tracks[i];
+            let hit = on_clip(lane_resp.interact_pointer_pos(), t)
+                && lane_resp
+                    .interact_pointer_pos()
+                    .is_some_and(|p| lane.contains(p));
+            self.selected = if hit { t.active.map(|k| (i, k)) } else { None };
+            if lane_resp.drag_started()
+                && hit
+                && let (Some(k), Some(p)) = (t.active, lane_resp.interact_pointer_pos())
+            {
+                self.drag = Some(Drag {
+                    track: i,
+                    take: k,
+                    from: t.takes[k].position,
+                    press_x: p.x,
+                    before: self.session.tracks.clone(),
+                });
+            }
+        }
+        if lane_resp.dragged()
+            && let Some(d) = &self.drag
+            && d.track == i
+            && let Some(p) = ui.ctx().pointer_interact_pos()
+        {
+            let free = ui.input(|x| x.modifiers.alt);
+            let delta = ((p.x - d.press_x) as f64 / view.px_per_s * view.rate).round() as i64;
+            let delta = if free {
+                delta
+            } else {
+                let spb = grid.samples_per_beat();
+                ((delta as f64 / spb).round() * spb).round() as i64
+            };
+            let (k, from) = (d.take, d.from);
+            if let Some(take) = self.session.tracks[i].takes.get_mut(k) {
+                take.position = from + delta;
+            }
+        }
+        if lane_resp.drag_stopped()
+            && let Some(d) = self.drag.take()
+        {
+            let moved = self.session.tracks[d.track]
+                .takes
+                .get(d.take)
+                .is_some_and(|k| k.position != d.from);
+            if moved {
+                self.undo.push((d.before, self.session.armed));
+                changed = true;
+            }
+        }
+        let mut delete_take = None;
+        lane_resp.context_menu(|ui| {
+            let t = &self.session.tracks[i];
+            match t.active {
+                Some(k) => {
+                    if ui
+                        .button(format!("Delete take {}", t.takes[k].id))
+                        .clicked()
+                    {
+                        delete_take = Some(k);
+                        ui.close();
+                    }
+                }
+                None => {
+                    ui.label(RichText::new("no take").color(theme::MUTED));
+                }
+            }
+        });
+        let mut delete_track = false;
+        strip_resp.context_menu(|ui| {
+            if ui
+                .button(format!("Delete track {}", self.session.tracks[i].name))
+                .clicked()
+            {
+                delete_track = true;
+                ui.close();
+            }
+        });
+        // Paint.
+        let armed = self.session.armed == Some(i);
         let painter = ui.painter_at(row);
         painter.rect_filled(
             strip,
@@ -699,15 +904,14 @@ impl SessionView {
             0.0,
             colour,
         );
-        painter.rect_filled(
-            lane,
-            0.0,
-            if i.is_multiple_of(2) {
-                theme::CANVAS
-            } else {
-                theme::BG
-            },
-        );
+        let lane_fill = if armed {
+            theme::CHROME2
+        } else if i.is_multiple_of(2) {
+            theme::CANVAS
+        } else {
+            theme::BG
+        };
+        painter.rect_filled(lane, 0.0, lane_fill);
         painter.line_segment(
             [
                 Pos2::new(row.left(), row.bottom()),
@@ -715,7 +919,14 @@ impl SessionView {
             ],
             Stroke::new(1.0, theme::LINE),
         );
-        // The lane: the beat grid, the active take, the take being recorded, the playhead.
+        if armed {
+            painter.rect_stroke(
+                strip.shrink(0.5),
+                0.0,
+                Stroke::new(1.0, REC.gamma_multiply(0.7)),
+                StrokeKind::Inside,
+            );
+        }
         let lp = ui.painter_at(lane);
         draw_grid(&lp, lane, view, grid);
         let track = &self.session.tracks[i];
@@ -730,6 +941,14 @@ impl SessionView {
                 colour,
                 &k.id,
             );
+            if self.selected == track.active.map(|a| (i, a)) {
+                lp.rect_stroke(
+                    clip_rect(k),
+                    3.0,
+                    Stroke::new(2.0, theme::INK),
+                    StrokeKind::Inside,
+                );
+            }
         }
         if armed && let Some(r) = &self.recording {
             draw_clip(
@@ -752,15 +971,25 @@ impl SessionView {
                 );
             }
         }
+        if lane_resp.hovered() && on_clip(ui.ctx().pointer_hover_pos(), track) {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+        }
         // The strip's controls.
-        let mut changed = false;
         let inner = strip.shrink2(egui::vec2(12.0, 8.0));
-        let mut child = ui.new_child(egui::UiBuilder::new().max_rect(inner));
+        let mut child = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(("strip_controls", i))
+                .max_rect(inner),
+        );
         let mut arm_clicked = false;
         let t = &mut self.session.tracks[i];
         child.horizontal(|ui| {
             changed |= ui
-                .add(egui::TextEdit::singleline(&mut t.name).desired_width(118.0))
+                .add(
+                    egui::TextEdit::singleline(&mut t.name)
+                        .id_salt(("track_name", i))
+                        .desired_width(118.0),
+                )
                 .lost_focus();
             let arm = egui::Button::new(RichText::new("●").color(if armed {
                 Color32::WHITE
@@ -771,7 +1000,9 @@ impl SessionView {
             .min_size(egui::vec2(24.0, 20.0));
             if ui
                 .add(arm)
-                .on_hover_text("Arm: this track records and plays the live device")
+                .on_hover_text(
+                    "Arm: this track records and plays the live device (or click the track)",
+                )
                 .clicked()
             {
                 arm_clicked = true;
@@ -793,7 +1024,7 @@ impl SessionView {
             changed |= toggle(ui, &mut t.mute, "M", theme::WARN, "Mute");
             changed |= toggle(ui, &mut t.solo, "S", theme::OK, "Solo");
         });
-        if arm_clicked {
+        if arm_clicked && self.recording.is_none() {
             self.session.armed = Some(i);
             changed = true;
         }
@@ -827,6 +1058,7 @@ impl SessionView {
                 let a = t.active.unwrap_or(0);
                 if ui
                     .add_enabled(a > 0, egui::Button::new("‹").small())
+                    .on_hover_text("The earlier take")
                     .clicked()
                 {
                     t.active = Some(a - 1);
@@ -839,6 +1071,7 @@ impl SessionView {
                 );
                 if ui
                     .add_enabled(a + 1 < n, egui::Button::new("›").small())
+                    .on_hover_text("The later take")
                     .clicked()
                 {
                     t.active = Some(a + 1);
@@ -852,6 +1085,12 @@ impl SessionView {
                     .small()
                     .color(theme::FAINT),
             );
+        }
+        if let Some(k) = delete_take {
+            self.delete_take(i, k);
+        }
+        if delete_track {
+            self.delete_track(i);
         }
         changed
     }
