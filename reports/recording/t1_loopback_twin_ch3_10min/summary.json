@@ -1,0 +1,31 @@
+{
+  "accent_minus_beat_samples": 9.121838957071304e-6,
+  "bpm": 120.0,
+  "capture": "Line (Universal Audio Twin USB), ch 3",
+  "capture_samples_lost": 0,
+  "click_off": {
+    "dropouts": 0,
+    "load_mean": 0.0,
+    "seconds": 0,
+    "worst_block": 0.0
+  },
+  "click_on": {
+    "dropouts": 0,
+    "load_mean": 0.04713821505016723,
+    "seconds": 598,
+    "worst_block": 0.12226
+  },
+  "cpal_round_trip_s": 0.03694040930984484,
+  "device": "reactor_filter",
+  "drift_ppm": -2.361444373377708e-7,
+  "found": 1199,
+  "max_residual_samples": 0.00011242227628827095,
+  "missed_under_other_sound": 0,
+  "rate_in": 48000,
+  "rate_out": 48000,
+  "rms_residual_samples": 0.000033980638636692815,
+  "round_trip_s": 0.04658156401804266,
+  "scheduled": 1199,
+  "seconds": 600.0,
+  "span_s": 599.0
+}

@@ -2,8 +2,8 @@
 
 Drafted 2026-10-30 at the user's request: record what's played (the tube synth from the
 keyboard, against a metronome click), play it back, and layer more tracks on top, as in
-a DAW. **T1 is built (2026-10-30, branch `recording`; its status below the milestone),
-except the cabled loopback, which needs an audio interface.** Open decision 1 was
+a DAW. **T1 is done (2026-10-30, built on the `recording` branch, merged; its status
+below the milestone).** Open decision 1 was
 answered by the user on 2026-10-30: T1 in parallel with the synth's modulation work,
 T2 after it lands (T2 changes `midi.rs`, `live.rs` and the renders the synth work
 touches). It is a track of the native app ([NATIVE_APP_PLAN.md](NATIVE_APP_PLAN.md)):
@@ -255,8 +255,8 @@ mixed after the devices, count-in, pre-roll, the latency shown, loopback calibra
 - the cpal estimate and the loopback measurement are both shown and compared;
 - the click adds no dropouts while a device plays (load measured with and without it).
 
-*Status (2026-10-30): built; met on the output's own mix, the cabled loopback waits for an
-interface.*
+*Status (2026-10-30): done. Met through the interface's own loopback (below); a physical
+cable would add only the converters.*
 - **What's there.**
   - `varimu-app`'s `transport` (the grid, the click, count-in, pre-roll, start bar; the
     worker's `Clock`) and `loopback` (capture of an input or of an output's own mix,
@@ -282,20 +282,26 @@ interface.*
   exactly: every miss sat under another program's test tones (-11 to -24 dBFS of a
   439 Hz square, the other session's) mixed into the same output. Clicks now carry the
   level around them, and misses under other sound are counted apart.
+- **Through the interface** (`--output "Speakers (Universal Audio Twin USB)" --loopback
+  input "Line (Universal Audio Twin USB)" --channel 3`;
+  `reports/recording/t1_loopback_twin_ch3_10min/`): the UA Twin's input channels 3-4
+  return its output digitally, bit-exact (scores 1.0000, no gap between the pitches; the
+  line inputs 1-2 had no cable). 1199 of 1199 clicks in 10 minutes, each exactly on its
+  line, drift 0.00 ppm, no dropouts. Round trip 46.58 ms measured, 36.94 ms by cpal:
+  cpal misses 9.6 ms of the interface's driver buffers. That path has everything a
+  recording sees except the converters (well under a millisecond).
 - **Two capture paths that don't work as references.** The Oculus virtual output is
   bit-exact (scores 1.0000, no gap between pitches) but its loopback lands each click 0
   or 48 samples late at random (1 ms packets): the device, not the transport. The
   webcam microphone is the only physical input here.
 - **The round trip** (output callback to capture callback): 77.9 ms measured on
   Realtek's loopback, 31.9 ms by cpal (its output latency plus the capture's), +46 ms.
-  A loopback of the output isn't the round trip a recording sees (no converters): the
-  cabled measurement is still to do, on an interface with a line input.
+  A loopback of the output isn't the round trip a recording sees: the Twin's is (above).
 - **The click's cost:** 0.0011% of real time (`transport` tests). With tube_synth
   playing notes, 80 s alternating every 10 s: load 83.8% with the click, 83.5% without;
   4 dropouts with it, 0 without, the worst blocks 136% and 210%: the synth at its limit
   on a busy desktop (the other session running), not the click.
-- **Open.** The cabled loopback (an interface); the user's first look at the Session
-  view; whether the cpal estimate or the loopback places takes when they disagree
+- **Open.** The user's first look at the Session view; whether the cpal estimate or the loopback places takes when they disagree
   (T2 uses the round trip for input takes and the output latency for keys).
 
 **T2. Takes as events** (closes S3's open done-when).
