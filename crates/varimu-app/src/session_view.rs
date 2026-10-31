@@ -48,7 +48,9 @@
 //! session's player (the Play view's device stops: one live device), fed by the track's
 //! audio where the transport is (the prints of the inserts before it, else the take), so
 //! Space plays the session with it and its knobs, trim, make-up and bypass are heard as
-//! they turn. The other tracks play their prints; the inserts after it aren't heard. The
+//! they turn (an instrument playing from the Play view gives way only to a panel just
+//! opened, and plays again when it closes; one started while a panel is open closes the
+//! panel). The other tracks play their prints; the inserts after it aren't heard. The
 //! track isn't rendered while it is auditioned: closing the panel renders it. No recording
 //! while auditioning.
 
@@ -227,6 +229,10 @@ pub struct SessionView {
     mix_failed: bool,
     /// Record was pressed while no instrument played: record once it plays.
     record_pending: bool,
+    /// The user opened an insert's panel this frame (an audition may take an instrument's
+    /// place only then), and the instrument to start again when the audition ends.
+    audition_request: bool,
+    resume_instrument: bool,
 }
 
 fn prefs_path() -> Option<PathBuf> {
@@ -331,6 +337,8 @@ impl SessionView {
             bake: None,
             mix_failed: false,
             record_pending: false,
+            audition_request: false,
+            resume_instrument: false,
         }
     }
 
@@ -840,6 +848,17 @@ impl SessionView {
     /// insert is selected or its input changes, its knobs and gains sent as they change,
     /// stopped when the panel closes.
     fn sync_audition(&mut self, play: &mut PlayView, idle: bool) {
+        let requested = std::mem::take(&mut self.audition_request);
+        // The instrument started from the Play view while an insert played: it wins, and
+        // the insert's panel closes (a panel left open never stops an instrument).
+        let instrument = play.player().is_some() && !play.adopted();
+        if self.audition.is_some() && instrument {
+            self.audition = None;
+            self.audition_status = None;
+            self.insert_sel = None;
+            self.resume_instrument = false;
+            return;
+        }
         let want = self
             .insert_selected()
             .filter(|_| idle && self.recording.is_none());
@@ -861,6 +880,15 @@ impl SessionView {
             a.track == t && a.slot == k && a.device == slot.device && a.input == input
         }) && play.adopted();
         if !same {
+            // An instrument plays: only a panel the user just opened takes its place (it
+            // comes back when the panel closes); a panel left open closes instead.
+            if self.audition.is_none() && instrument {
+                if !requested {
+                    self.insert_sel = None;
+                    return;
+                }
+                self.resume_instrument = true;
+            }
             let running = play.player().is_some_and(|p| p.status().transport.running);
             match self.start_audition(&slot, audio, start) {
                 Ok(p) => {
@@ -932,6 +960,11 @@ impl SessionView {
         let running = play.player().is_some_and(|p| p.status().transport.running);
         play.release();
         self.audition_status = None;
+        // The instrument the audition took the place of plays again.
+        if std::mem::take(&mut self.resume_instrument) {
+            play.start_device();
+            return;
+        }
         if running
             && self.start_mix(play)
             && let Some(p) = play.player()
@@ -1176,6 +1209,7 @@ impl SessionView {
         }
         track.inserts.push(slot);
         self.insert_sel = Some((t, track.inserts.len() - 1));
+        self.audition_request = true;
         self.save();
     }
 
@@ -1409,6 +1443,7 @@ impl SessionView {
                 let r = ui.add(b).on_hover_text(format!("{name}: {state}"));
                 if r.clicked() {
                     self.insert_sel = if selected { None } else { Some((i, k)) };
+                    self.audition_request = !selected;
                 }
                 r.context_menu(|ui| {
                     if ui
