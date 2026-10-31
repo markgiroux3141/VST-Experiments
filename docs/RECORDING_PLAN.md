@@ -347,6 +347,15 @@ and the production render (the done-when above).
   selects it, a drag moves it (by whole beats; Alt: freely; where it sits now is in
   `session.json`, `take.json` keeps where it was recorded), Delete or right-click deletes a
   take, right-click on a strip a track (their files stay in the folder), Ctrl+Z undoes.
+- **The timeline** (the user's next asks): a scrollbar under the lanes, −, + and Fit (G,
+  H; Ctrl+wheel), left and right locators (beats: Ctrl+click and Alt+click on the ruler, a
+  drag draws them, their handles drag, L / R fields as bar.beat) and a loop between them
+  (/ or the Loop button; `TransportSettings::loop_on`): play starts at the left locator
+  after the count-in, and the clock jumps back within a block (`Clock::segments`: the
+  click, the tracks, the recorder and the playhead follow the jump). Loop recording: the
+  recorder ends a take at the jump, so each pass is a take in the lane (T3's spec;
+  `examples/click.rs --take --loop 8`: two passes of 4.00 s and the last 1.01 s, all from
+  bar 1, no dropouts).
 - **Not yet:** events (step 2: a take re-renders from nothing yet), keys still land on
   10 ms block boundaries, trimming and splitting takes (T6), the session's rate is the
   player's (48 kHz: decision 2 still open).

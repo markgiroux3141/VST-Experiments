@@ -17,6 +17,13 @@
 //! recording waits) and before them `count_in_bars` (click only). So a start runs from
 //! `bar(start_bar - pre_roll - count_in)`, and positions in the count-in can be negative.
 //! Stop keeps the position; the next play starts from `start_bar` again.
+//!
+//! **Locators and the loop.** The left and right locators are beats. With the loop on,
+//! play starts at the left locator (after the count-in; no pre-roll) and, on reaching the
+//! right one, goes on from the left one within the block: [`Clock::segments`] says which
+//! positions a block's samples have (one stretch, or two across the jump), and the click,
+//! the tracks and the recorder follow it. A loop on while the position is past its end
+//! jumps back at the next block.
 
 use std::f64::consts::PI;
 
@@ -105,6 +112,11 @@ pub struct TransportSettings {
     pub pre_roll_bars: u32,
     /// The bar play starts at (from 1; recording starts here).
     pub start_bar: i64,
+    /// The left and right locators (beats from bar 1's downbeat) and whether play loops
+    /// between them.
+    pub left_beat: i64,
+    pub right_beat: i64,
+    pub loop_on: bool,
 }
 
 impl Default for TransportSettings {
@@ -118,6 +130,9 @@ impl Default for TransportSettings {
             count_in_bars: 1,
             pre_roll_bars: 0,
             start_bar: 1,
+            left_beat: 0,
+            right_beat: 16,
+            loop_on: false,
         }
     }
 }
@@ -138,6 +153,8 @@ impl TransportSettings {
         self.count_in_bars = self.count_in_bars.min(4);
         self.pre_roll_bars = self.pre_roll_bars.min(16);
         self.start_bar = self.start_bar.max(1);
+        self.left_beat = self.left_beat.max(0);
+        self.right_beat = self.right_beat.max(self.left_beat + 1);
         self
     }
 }
@@ -255,18 +272,58 @@ impl Clock {
     /// Where a start begins: the count-in's first sample.
     pub fn start_position(&self) -> i64 {
         let s = &self.settings;
+        if s.loop_on {
+            let per = self.grid.beats_per_bar as i64;
+            return self.grid.beat(s.left_beat - s.count_in_bars as i64 * per);
+        }
         self.grid
             .bar(s.start_bar - s.pre_roll_bars as i64 - s.count_in_bars as i64)
     }
 
-    /// Where the count-in ends and where recording starts.
+    /// Where the count-in ends and where recording starts (the loop's start, looping).
     pub fn count_in_end(&self) -> i64 {
         let s = &self.settings;
+        if s.loop_on {
+            return self.grid.beat(s.left_beat);
+        }
         self.grid.bar(s.start_bar - s.pre_roll_bars as i64)
     }
 
     pub fn record_from(&self) -> i64 {
+        if self.settings.loop_on {
+            return self.grid.beat(self.settings.left_beat);
+        }
         self.grid.bar(self.settings.start_bar)
+    }
+
+    /// The loop's start and end (positions), while it is on.
+    pub fn loop_range(&self) -> Option<(i64, i64)> {
+        let s = &self.settings;
+        s.loop_on
+            .then(|| (self.grid.beat(s.left_beat), self.grid.beat(s.right_beat)))
+    }
+
+    /// The positions of the next `n` samples while running: (position, offset in the
+    /// block, length) per stretch, two across the loop's jump (none while stopped).
+    pub fn segments(&self, n: usize) -> Vec<(i64, usize, usize)> {
+        let mut v = Vec::new();
+        if !self.running {
+            return v;
+        }
+        let (mut pos, mut off) = (self.pos, 0);
+        while off < n {
+            let mut len = n - off;
+            if let Some((a, b)) = self.loop_range() {
+                if pos >= b {
+                    pos = a;
+                }
+                len = len.min((b - pos) as usize);
+            }
+            v.push((pos, off, len));
+            pos += len as i64;
+            off += len;
+        }
+        v
     }
 
     pub fn start(&mut self) {
@@ -299,11 +356,18 @@ impl Clock {
 
     /// Mix the click into the next `out.len()` samples (while running) and move on.
     pub fn process(&mut self, out: &mut [f32]) {
-        if !self.running {
-            return;
+        let segments = self.segments(out.len());
+        for &(pos, off, len) in &segments {
+            self.click_into(pos, &mut out[off..off + len]);
         }
-        let (a, n) = (self.pos, out.len() as i64);
-        self.pos += n;
+        if let Some(&(pos, _, len)) = segments.last() {
+            self.pos = pos + len as i64;
+        }
+    }
+
+    /// The click into `out`, which holds positions `a..`.
+    fn click_into(&self, a: i64, out: &mut [f32]) {
+        let n = out.len() as i64;
         let click_end = match self.settings.click {
             ClickMode::Off => return,
             ClickMode::CountIn => self.count_in_end(),
@@ -453,6 +517,56 @@ mod tests {
         c.start();
         c.process(&mut z);
         assert!(z.iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn the_loop_jumps_back_within_a_block() {
+        let rate = 48_000;
+        let s = TransportSettings {
+            count_in_bars: 1,
+            left_beat: 4,
+            right_beat: 8,
+            loop_on: true,
+            ..settings(120.0)
+        };
+        let mut c = Clock::new(rate, s);
+        let g = c.grid();
+        c.start();
+        assert_eq!(c.position(), g.beat(0)); // a bar of count-in before the left locator
+        assert_eq!(c.record_from(), g.beat(4));
+        assert_eq!(c.phase_at(g.beat(2)), Phase::CountIn);
+        // Run to just before the right locator, then a block across it.
+        let mut y = vec![0.0f32; (g.beat(8) - g.beat(0) - 100) as usize];
+        c.process(&mut y);
+        assert_eq!(
+            c.segments(480),
+            vec![(g.beat(8) - 100, 0, 100), (g.beat(4), 100, 380)]
+        );
+        let mut z = vec![0.0f32; 480];
+        c.process(&mut z);
+        assert_eq!(c.position(), g.beat(4) + 380);
+        // The left locator's downbeat clicks right after the jump.
+        assert!(z[100] == 0.0 && z[101] != 0.0);
+        // Three passes later the position is still inside the loop.
+        let mut w = vec![0.0f32; 3 * (g.beat(8) - g.beat(4)) as usize];
+        c.process(&mut w);
+        assert_eq!(c.position(), g.beat(4) + 380);
+        // The loop turned on past its end: back to the start at the next block.
+        let mut c2 = Clock::new(
+            rate,
+            TransportSettings {
+                loop_on: false,
+                ..c.settings.clone()
+            },
+        );
+        c2.start();
+        let mut y = vec![0.0f32; g.beat(20) as usize];
+        c2.process(&mut y);
+        c2.configure(&TransportSettings {
+            loop_on: true,
+            ..c2.settings.clone()
+        });
+        assert_eq!(c2.segments(10), vec![(g.beat(4), 0, 10)]);
     }
 
     #[test]

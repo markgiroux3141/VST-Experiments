@@ -642,6 +642,10 @@ fn work(
     let mut clock = Clock::new(rate, TransportSettings::default());
     let mut pushed: u64 = 0;
     let mut click: Vec<f32> = Vec::with_capacity(BLOCK);
+    // The positions the last stretches of output carried: (first output sample, position,
+    // length), to say which position is being heard across a loop's jumps.
+    let mut history: std::collections::VecDeque<(u64, i64, usize)> =
+        std::collections::VecDeque::new();
     let mut emit = |ring: &mut rtrb::Producer<Frame>, raw: &[f32], y: Vec<f32>| {
         {
             let mut t = shared.transport.lock().expect("transport");
@@ -654,7 +658,9 @@ fn work(
                 None => {}
             }
         }
-        let (at, running) = (clock.position(), clock.running());
+        let running = clock.running();
+        // The block's positions: one stretch, or two across the loop's jump.
+        let segments = clock.segments(y.len());
         // How far ahead of the ear this block is: the queue ahead of it, the output
         // device, and (live input) the input device.
         let queued = (ring.buffer().capacity() - ring.slots()) as i64;
@@ -665,7 +671,9 @@ fn work(
         {
             let mut r = shared.recorder.lock().expect("recorder");
             if running {
-                r.capture(at, raw, clock.record_from(), latency);
+                for &(pos, off, len) in &segments {
+                    r.capture(pos, &raw[off..off + len], clock.record_from(), latency);
+                }
             } else {
                 r.stop();
             }
@@ -678,21 +686,38 @@ fn work(
             .iter()
             .map(|&v| [mix.live.0 * v, mix.live.1 * v])
             .collect();
-        if running {
-            mix.add(at, &mut out);
+        for &(pos, off, len) in &segments {
+            mix.add(pos, &mut out[off..off + len]);
         }
         for (o, &c) in out.iter_mut().zip(&click) {
             o[0] += c;
             o[1] += c;
         }
         push(ring, &out);
-        let origin = running.then(|| pushed as i64 - at);
+        // Position 0's output sample: exact while no loop has jumped (T1's calibration
+        // runs without one).
+        let origin = segments.first().map(|&(pos, _, _)| pushed as i64 - pos);
+        for &(pos, off, len) in &segments {
+            history.push_back((pushed + off as u64, pos, len));
+        }
+        while history.len() > 512 {
+            history.pop_front();
+        }
         pushed += out.len() as u64;
         let computed = clock.position();
         let heard = if running {
-            let queued = (ring.buffer().capacity() - ring.slots()) as i64;
+            let queued = (ring.buffer().capacity() - ring.slots()) as u64;
             let out_s = shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6;
-            computed - queued - (out_s * rate as f64).round() as i64
+            let ear = pushed
+                .saturating_sub(queued)
+                .saturating_sub((out_s * rate as f64).round() as u64);
+            history
+                .iter()
+                .rev()
+                .find(|&&(o, _, len)| o <= ear && ear < o + len as u64)
+                .map_or(computed - (pushed - ear) as i64, |&(o, pos, _)| {
+                    pos + (ear - o) as i64
+                })
         } else {
             computed
         };

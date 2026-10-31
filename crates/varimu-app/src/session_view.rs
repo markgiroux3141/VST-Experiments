@@ -16,9 +16,15 @@
 //! freely), right-click deletes a take or a track. Deleted takes leave the session but
 //! their files stay in its folder. Ctrl+Z undoes moves and deletions.
 //!
-//! Keys: Space plays / stops, R records, Delete deletes the selected take, Ctrl+Z undoes
-//! (while no text field has focus). Over the lanes, Shift+wheel scrolls in time,
-//! Ctrl+wheel zooms.
+//! The ruler: a click moves the start bar, Ctrl+click puts the left locator there,
+//! Alt+click the right one; a drag draws the loop between them (and turns it on), a drag on
+//! a locator's handle moves it. With the loop on, play (and recording) repeats from the
+//! left locator to the right one, each recorded pass a new take in the lane. Below the
+//! lanes a scrollbar scrolls in time; −, + and Fit zoom.
+//!
+//! Keys: Space plays / stops, R records, / turns the loop on or off, G and H zoom out and
+//! in, Delete deletes the selected take, Ctrl+Z undoes (while no text field has focus).
+//! Over the lanes, Shift+wheel scrolls in time, Ctrl+wheel zooms.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -90,8 +96,21 @@ struct Drag {
     before: Vec<Track>,
 }
 
+/// A drag on the ruler: a locator's handle, or a new loop from a beat.
+#[derive(Clone, Copy)]
+enum RulerDrag {
+    Left,
+    Right,
+    New(i64),
+}
+
 pub struct SessionView {
     session: Session,
+    ruler_drag: Option<RulerDrag>,
+    /// The lanes' width as last drawn (px): G and H zoom about its middle.
+    lanes_w: f64,
+    /// A drag on the scrollbar's thumb: where it started (px) and the view then (s).
+    scroll_drag: Option<(f32, f64)>,
     /// The selected take (track, index), a drag in progress, the right-clicked take.
     selected: Option<(usize, usize)>,
     drag: Option<Drag>,
@@ -154,6 +173,9 @@ impl SessionView {
         };
         SessionView {
             session,
+            ruler_drag: None,
+            lanes_w: 800.0,
+            scroll_drag: None,
             selected: None,
             drag: None,
             undo: Vec::new(),
@@ -291,6 +313,23 @@ impl SessionView {
                 i.key_pressed(egui::Key::Z) && i.modifiers.command,
             )
         });
+        let (slash, zoom_out, zoom_in) = ui.input(|i| {
+            (
+                i.key_pressed(egui::Key::Slash),
+                i.key_pressed(egui::Key::G),
+                i.key_pressed(egui::Key::H),
+            )
+        });
+        if slash {
+            self.session.transport.loop_on = !self.session.transport.loop_on;
+            self.save();
+        }
+        if zoom_out {
+            self.zoom(0.5, Some(self.lanes_w * 0.5));
+        }
+        if zoom_in {
+            self.zoom(2.0, Some(self.lanes_w * 0.5));
+        }
         if delete && let Some((t, k)) = self.selected {
             self.delete_take(t, k);
         }
@@ -441,10 +480,17 @@ impl SessionView {
             }
             None => self.recording = None,
         }
-        if let Some(rec) = p.finished_take() {
+        // A new pass of a loop started: its waveform from the beginning.
+        if let Some(r) = &self.recording
+            && let Some((start, _, len, _)) = p.take_tail(usize::MAX)
+            && (start != r.start || len < r.len)
+        {
             self.recording = None;
+        }
+        // Every finished take (a loop's passes: one each) into the armed track.
+        while let Some(rec) = p.finished_take() {
             if rec.samples.is_empty() {
-                return;
+                continue;
             }
             let track = self.session.armed.unwrap_or(0);
             let (_, device) = play.device_label_id();
@@ -620,6 +666,56 @@ impl SessionView {
             ui.add_space(8.0);
             ui.label("start bar");
             ui.add(egui::DragValue::new(&mut s.start_bar).range(1..=9999));
+            ui.add_space(14.0);
+            let per = s.beats_per_bar as i64;
+            let looping = s.loop_on;
+            let b = egui::Button::new(RichText::new("⟲ Loop").color(if looping {
+                theme::ACCENT_INK
+            } else {
+                theme::MUTED
+            }))
+            .fill(if looping {
+                theme::ACCENT
+            } else {
+                theme::CHROME2
+            });
+            if ui
+                .add(b)
+                .on_hover_text("Loop between the locators (/); recording makes a take per pass")
+                .clicked()
+            {
+                s.loop_on = !s.loop_on;
+            }
+            let beat_field = |ui: &mut egui::Ui, k: &mut i64, tip: &str| {
+                ui.add(
+                    egui::DragValue::new(k)
+                        .range(0..=99_999)
+                        .speed(0.1)
+                        .custom_formatter(move |v, _| {
+                            let v = v as i64;
+                            format!("{}.{}", v.div_euclid(per) + 1, v.rem_euclid(per) + 1)
+                        })
+                        .custom_parser(move |t| {
+                            let mut it = t.split('.');
+                            let bar: i64 = it.next()?.trim().parse().ok()?;
+                            let beat: i64 = it.next().map_or(Some(1), |b| b.trim().parse().ok())?;
+                            Some(((bar - 1) * per + beat - 1) as f64)
+                        }),
+                )
+                .on_hover_text(tip);
+            };
+            ui.label("L");
+            beat_field(
+                ui,
+                &mut s.left_beat,
+                "The left locator (bar.beat): Ctrl+click the ruler",
+            );
+            ui.label("R");
+            beat_field(
+                ui,
+                &mut s.right_beat,
+                "The right locator (bar.beat): Alt+click the ruler",
+            );
         });
         if self.session.transport != before {
             self.session.transport = self.session.transport.clone().clamped();
@@ -674,7 +770,26 @@ impl SessionView {
         }
     }
 
-    /// The ruler and the tracks.
+    /// Zoom by `factor` about `x` (px from the lanes' left).
+    fn zoom(&mut self, factor: f64, x: Option<f64>) {
+        let x = x.unwrap_or(0.0);
+        let at_s = self.view_s + x / self.px_per_s;
+        self.px_per_s = (self.px_per_s * factor).clamp(2.0, 2000.0);
+        self.view_s = at_s - x / self.px_per_s;
+    }
+
+    /// The span the scrollbar covers (s): the session and a margin around what's in view.
+    fn scroll_span(&self, lanes_w: f64) -> (f64, f64) {
+        let rate = self.session.rate as f64;
+        let grid = Grid::new(self.session.rate, &self.session.transport);
+        let end_s = (self.session.end() as f64 / rate)
+            .max(grid.beat(self.session.transport.right_beat) as f64 / rate)
+            + 30.0;
+        let visible = lanes_w / self.px_per_s;
+        (self.view_s.min(-1.0), end_s.max(self.view_s + visible))
+    }
+
+    /// The ruler, the tracks, the scrollbar.
     fn arrangement(&mut self, ui: &mut egui::Ui, play: &PlayView) {
         let rate = self.session.rate as f64;
         let grid = Grid::new(self.session.rate, &self.session.transport);
@@ -683,6 +798,7 @@ impl SessionView {
         let heard = st.as_ref().map(|s| s.transport.heard);
         let full = ui.available_rect_before_wrap();
         let lanes_w = (full.width() - STRIP_W).max(50.0) as f64;
+        self.lanes_w = lanes_w;
         // Wheel over the arrangement: Shift scrolls in time, Ctrl zooms about the pointer.
         if ui.rect_contains_pointer(full) {
             let (zoom, scroll, pointer) = ui.input(|i| {
@@ -693,21 +809,20 @@ impl SessionView {
                 )
             });
             if zoom != 1.0 {
-                let at_s = pointer.map_or(self.view_s, |p| {
-                    self.view_s + ((p.x - full.left() - STRIP_W) as f64).max(0.0) / self.px_per_s
+                let x = pointer.map_or(lanes_w * 0.5, |p| {
+                    ((p.x - full.left() - STRIP_W) as f64).max(0.0)
                 });
-                self.px_per_s = (self.px_per_s * zoom as f64).clamp(2.0, 2000.0);
-                if let Some(p) = pointer {
-                    self.view_s =
-                        at_s - ((p.x - full.left() - STRIP_W) as f64).max(0.0) / self.px_per_s;
-                }
+                self.zoom(zoom as f64, Some(x));
             }
             if scroll != 0.0 {
                 self.view_s -= scroll as f64 / self.px_per_s;
             }
         }
         // Follow the playhead.
-        if running && let Some(h) = heard {
+        if running
+            && self.scroll_drag.is_none()
+            && let Some(h) = heard
+        {
             let x = (h as f64 / rate - self.view_s) * self.px_per_s;
             if x > lanes_w * 0.92 || x < 0.0 {
                 self.view_s = h as f64 / rate - lanes_w * 0.1 / self.px_per_s;
@@ -719,29 +834,120 @@ impl SessionView {
             px_per_s: self.px_per_s,
             rate,
         };
-        // The ruler.
+        // The ruler: the header with the zoom, the bars, the loop, the start bar.
         let (ruler, resp) =
-            ui.allocate_exact_size(egui::vec2(full.width(), RULER_H), Sense::click());
+            ui.allocate_exact_size(egui::vec2(full.width(), RULER_H), Sense::click_and_drag());
         let painter = ui.painter_at(ruler);
         painter.rect_filled(ruler, 0.0, theme::CHROME2);
-        painter.text(
-            Pos2::new(ruler.left() + 10.0, ruler.center().y),
-            egui::Align2::LEFT_CENTER,
-            "TRACKS",
-            egui::FontId::proportional(11.0),
-            theme::FAINT,
-        );
         let lanes_rect = Rect::from_min_max(Pos2::new(view.left, ruler.top()), ruler.max);
         draw_ruler(&painter, lanes_rect, &view, &grid, &self.session.transport);
-        if resp.clicked()
-            && !running
-            && let Some(pos) = resp.interact_pointer_pos()
-            && pos.x >= view.left
+        let header = Rect::from_min_max(ruler.min, Pos2::new(view.left, ruler.bottom()));
+        let mut hui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("ruler_header")
+                .max_rect(header.shrink2(egui::vec2(10.0, 2.0)))
+                .layout(egui::Layout::left_to_right(egui::Align::Center)),
+        );
+        hui.label(RichText::new("TRACKS").small().color(theme::FAINT));
+        hui.add_space(hui.available_width() - 104.0);
+        if hui
+            .small_button("−")
+            .on_hover_text("Zoom out (G)")
+            .clicked()
         {
-            let p = view.position(pos.x);
-            let bar = grid.beat_at(p).div_euclid(grid.beats_per_bar as i64) + 1;
-            self.session.transport.start_bar = bar.max(1);
+            self.zoom(0.5, Some(lanes_w * 0.5));
+        }
+        if hui.small_button("+").on_hover_text("Zoom in (H)").clicked() {
+            self.zoom(2.0, Some(lanes_w * 0.5));
+        }
+        if hui
+            .small_button("Fit")
+            .on_hover_text("The whole session in view")
+            .clicked()
+        {
+            let end_s = (self.session.end() as f64 / rate).max(8.0);
+            self.px_per_s = (lanes_w / (end_s + 1.0)).clamp(2.0, 2000.0);
+            self.view_s = -0.5;
+        }
+        // Clicks and drags on the bars.
+        let snap = |x: f32| {
+            let p = view.position(x);
+            grid.beat_at(p + (grid.samples_per_beat() * 0.5) as i64)
+        };
+        let t = &mut self.session.transport;
+        let mut moved = false;
+        if resp.drag_started()
+            && let Some(p) = resp.interact_pointer_pos()
+            && p.x >= view.left
+        {
+            let (xl, xr) = (
+                view.x(grid.beat(t.left_beat)),
+                view.x(grid.beat(t.right_beat)),
+            );
+            self.ruler_drag = Some(if (p.x - xl).abs() < 7.0 {
+                RulerDrag::Left
+            } else if (p.x - xr).abs() < 7.0 {
+                RulerDrag::Right
+            } else {
+                RulerDrag::New(snap(p.x))
+            });
+        }
+        if resp.dragged()
+            && let (Some(d), Some(p)) = (self.ruler_drag, ui.ctx().pointer_interact_pos())
+        {
+            let k = snap(p.x).max(0);
+            match d {
+                RulerDrag::Left => t.left_beat = k.min(t.right_beat - 1),
+                RulerDrag::Right => t.right_beat = k.max(t.left_beat + 1),
+                RulerDrag::New(a) => {
+                    let a = a.max(0);
+                    if k != a {
+                        t.left_beat = a.min(k);
+                        t.right_beat = a.max(k);
+                        t.loop_on = true;
+                    }
+                }
+            }
+            moved = true;
+        }
+        if resp.drag_stopped() {
+            self.ruler_drag = None;
+            moved = true;
+        }
+        if resp.clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+            && p.x >= view.left
+        {
+            let (ctrl, alt) = ui.input(|i| (i.modifiers.command, i.modifiers.alt));
+            let k = snap(p.x).max(0);
+            if ctrl {
+                t.left_beat = k.min(t.right_beat - 1);
+            } else if alt {
+                t.right_beat = k.max(t.left_beat + 1);
+            } else if !running {
+                let bar = grid
+                    .beat_at(view.position(p.x))
+                    .div_euclid(grid.beats_per_bar as i64)
+                    + 1;
+                t.start_bar = bar.max(1);
+            }
+            moved = true;
+        }
+        if moved {
+            self.session.transport = self.session.transport.clone().clamped();
             self.save();
+        }
+        if resp.hovered()
+            && let Some(p) = ui.ctx().pointer_hover_pos()
+        {
+            let t = &self.session.transport;
+            let (xl, xr) = (
+                view.x(grid.beat(t.left_beat)),
+                view.x(grid.beat(t.right_beat)),
+            );
+            if (p.x - xl).abs() < 7.0 || (p.x - xr).abs() < 7.0 {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
         }
         if let Some(h) = heard.filter(|_| running) {
             let x = view.x(h);
@@ -752,10 +958,13 @@ impl SessionView {
                 );
             }
         }
-        // The tracks.
+        // The tracks, above the scrollbar.
+        const BAR_H: f32 = 16.0;
         let mut changed = false;
+        let tracks_h = (ui.available_height() - BAR_H - 4.0).max(40.0);
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
+            .max_height(tracks_h)
             .show(ui, |ui| {
                 let mut i = 0;
                 while i < self.session.tracks.len() {
@@ -772,6 +981,49 @@ impl SessionView {
             });
         if changed {
             self.save();
+        }
+        // The scrollbar: the thumb is what's in view, of the session and a margin.
+        ui.add_space(2.0);
+        let (bar, bresp) =
+            ui.allocate_exact_size(egui::vec2(full.width(), BAR_H), Sense::click_and_drag());
+        let track = Rect::from_min_max(Pos2::new(view.left, bar.top()), bar.max);
+        let (lo, hi) = self.scroll_span(lanes_w);
+        let visible = lanes_w / self.px_per_s;
+        let w = track.width() as f64;
+        let to_x = |t: f64| track.left() + ((t - lo) / (hi - lo) * w) as f32;
+        let thumb = Rect::from_min_max(
+            Pos2::new(to_x(self.view_s), track.top() + 3.0),
+            Pos2::new(
+                to_x(self.view_s + visible).max(to_x(self.view_s) + 12.0),
+                track.bottom() - 3.0,
+            ),
+        );
+        let bp = ui.painter_at(bar);
+        bp.rect_filled(track, 4.0, theme::CHROME);
+        let hot = bresp.hovered() || self.scroll_drag.is_some();
+        bp.rect_filled(thumb, 4.0, if hot { theme::MUTED } else { theme::FAINT });
+        if bresp.drag_started()
+            && let Some(p) = bresp.interact_pointer_pos()
+        {
+            if !thumb.contains(p) {
+                // Jump: the thumb centred under the pointer, then drag from there.
+                self.view_s = lo + ((p.x - track.left()) as f64 / w) * (hi - lo) - visible * 0.5;
+            }
+            self.scroll_drag = Some((p.x, self.view_s));
+        }
+        if bresp.dragged()
+            && let (Some((x0, v0)), Some(p)) = (self.scroll_drag, ui.ctx().pointer_interact_pos())
+        {
+            self.view_s = v0 + ((p.x - x0) as f64 / w) * (hi - lo);
+        }
+        if bresp.drag_stopped() {
+            self.scroll_drag = None;
+        }
+        if bresp.clicked()
+            && let Some(p) = bresp.interact_pointer_pos()
+            && !thumb.contains(p)
+        {
+            self.view_s = lo + ((p.x - track.left()) as f64 / w) * (hi - lo) - visible * 0.5;
         }
     }
 
@@ -929,6 +1181,24 @@ impl SessionView {
         }
         let lp = ui.painter_at(lane);
         draw_grid(&lp, lane, view, grid);
+        let t = &self.session.transport;
+        if t.loop_on {
+            let (xl, xr) = (
+                view.x(grid.beat(t.left_beat)),
+                view.x(grid.beat(t.right_beat)),
+            );
+            lp.rect_filled(
+                Rect::from_min_max(Pos2::new(xl, lane.top()), Pos2::new(xr, lane.bottom())),
+                0.0,
+                theme::ACCENT.gamma_multiply(0.05),
+            );
+            for x in [xl, xr] {
+                lp.line_segment(
+                    [Pos2::new(x, lane.top()), Pos2::new(x, lane.bottom())],
+                    Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.45)),
+                );
+            }
+        }
         let track = &self.session.tracks[i];
         if let Some(k) = track.active_take() {
             draw_clip(
@@ -1414,7 +1684,7 @@ fn draw_ruler(
                 Stroke::new(1.0, theme::MUTED),
             );
             painter.text(
-                Pos2::new(x + 3.0, rect.top() + 4.0),
+                Pos2::new(x + 3.0, rect.top() + 10.0),
                 egui::Align2::LEFT_TOP,
                 bar.to_string(),
                 egui::FontId::monospace(11.0),
@@ -1422,6 +1692,43 @@ fn draw_ruler(
             );
         }
         bar += step;
+    }
+    // The locators: a band between them (bright while looping), a handle at each.
+    let (xl, xr) = (
+        view.x(grid.beat(s.left_beat)),
+        view.x(grid.beat(s.right_beat)),
+    );
+    let band = Rect::from_min_max(
+        Pos2::new(xl.max(rect.left()), rect.top() + 2.0),
+        Pos2::new(xr.min(rect.right()), rect.top() + 9.0),
+    );
+    if band.width() > 0.0 {
+        let c = if s.loop_on {
+            theme::ACCENT.gamma_multiply(0.8)
+        } else {
+            theme::FAINT.gamma_multiply(0.7)
+        };
+        painter.rect_filled(band, 2.0, c);
+    }
+    for (x, name) in [(xl, "L"), (xr, "R")] {
+        if x >= rect.left() && x <= rect.right() {
+            let c = if s.loop_on {
+                theme::ACCENT
+            } else {
+                theme::MUTED
+            };
+            painter.line_segment(
+                [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+                Stroke::new(1.5, c),
+            );
+            painter.text(
+                Pos2::new(x + 3.0, rect.bottom() - 2.0),
+                egui::Align2::LEFT_BOTTOM,
+                name,
+                egui::FontId::proportional(9.0),
+                c,
+            );
+        }
     }
     // The start bar.
     let x = view.x(grid.bar(s.start_bar));

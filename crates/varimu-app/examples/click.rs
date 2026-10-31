@@ -13,7 +13,8 @@
 //! - `--ab S` turns the click off and on every S seconds and reports load and dropouts
 //!   per condition.
 //! - `--take` records a take of the device for the run (as the Session view's record
-//!   does) and reports it.
+//!   does) and reports it; with `--loop BEATS` the transport loops over the first BEATS
+//!   beats and every pass is a take.
 //! - `--output NAME` plays on that output device, not the default (one nothing else plays
 //!   into keeps other programs' sound out of an output's loopback).
 //! - `--loopback output` captures the output's own mix (WASAPI loopback: digital);
@@ -72,6 +73,11 @@ fn main() -> Result<(), String> {
             "--notes" => notes = true,
             "--hear-device" => hear_device = true,
             "--take" => take = true,
+            "--loop" => {
+                ts.loop_on = true;
+                ts.left_beat = 0;
+                ts.right_beat = num(args.next(), &a)? as i64;
+            }
             "--output" => output = Some(args.next().ok_or("--output needs a device name")?),
             "--for" => seconds = num(args.next(), &a)?,
             "--bpm" => ts.bpm = num(args.next(), &a)?,
@@ -233,31 +239,28 @@ fn main() -> Result<(), String> {
         let grid = player.status().transport.grid.ok_or("no transport")?;
         player.arm_take(false);
         player.transport_run(false);
-        let t = Instant::now();
-        let rec = loop {
-            if let Some(r) = player.finished_take() {
-                break r;
-            }
-            if t.elapsed() > Duration::from_secs(2) {
-                return Err("no take came back".into());
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        };
-        let rms = (rec
-            .samples
-            .iter()
-            .map(|&v| v as f64 * v as f64)
-            .sum::<f64>()
-            / rec.samples.len().max(1) as f64)
-            .sqrt();
-        println!(
-            "take: {:.2} s from {} (bar {}), placed {:.1} ms early, {:.1} dBFS rms",
-            rec.samples.len() as f64 / rate as f64,
-            rec.start,
-            grid.label(rec.start),
-            rec.latency as f64 / rate as f64 * 1e3,
-            20.0 * (rms * 2f64.sqrt()).max(1e-12).log10()
-        );
+        std::thread::sleep(Duration::from_millis(200));
+        let takes: Vec<_> = std::iter::from_fn(|| player.finished_take()).collect();
+        if takes.is_empty() {
+            return Err("no take came back".into());
+        }
+        for rec in takes {
+            let rms = (rec
+                .samples
+                .iter()
+                .map(|&v| v as f64 * v as f64)
+                .sum::<f64>()
+                / rec.samples.len().max(1) as f64)
+                .sqrt();
+            println!(
+                "take: {:.2} s from {} (bar {}), placed {:.1} ms early, {:.1} dBFS rms",
+                rec.samples.len() as f64 / rate as f64,
+                rec.start,
+                grid.label(rec.start),
+                rec.latency as f64 / rate as f64 * 1e3,
+                20.0 * (rms * 2f64.sqrt()).max(1e-12).log10()
+            );
+        }
     }
     if let Some(h) = notes_thread {
         let _ = h.join();

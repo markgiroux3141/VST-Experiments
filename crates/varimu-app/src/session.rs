@@ -97,13 +97,14 @@ pub struct Recorded {
 
 /// The worker's recorder: while armed and the transport is past the start bar, the
 /// device's output goes into a take, in chunks of a second (no reallocation of a long take
-/// on the audio thread).
+/// on the audio thread). A jump in the positions (the loop going back to its start) ends
+/// the take and starts the next one: loop recording, a take per pass.
 #[derive(Debug)]
 pub struct Recorder {
     pub armed: bool,
     chunk: usize,
     active: Option<Active>,
-    finished: Option<Recorded>,
+    finished: std::collections::VecDeque<Recorded>,
 }
 
 #[derive(Debug)]
@@ -120,7 +121,7 @@ impl Recorder {
             armed: false,
             chunk: rate.max(1) as usize,
             active: None,
-            finished: None,
+            finished: std::collections::VecDeque::new(),
         }
     }
 
@@ -130,6 +131,13 @@ impl Recorder {
         if !self.armed {
             self.stop();
             return;
+        }
+        if self
+            .active
+            .as_ref()
+            .is_some_and(|a| a.start + a.len as i64 != at)
+        {
+            self.stop();
         }
         let end = at + raw.len() as i64;
         if end <= record_from {
@@ -163,7 +171,7 @@ impl Recorder {
             for c in a.chunks {
                 samples.extend_from_slice(&c);
             }
-            self.finished = Some(Recorded {
+            self.finished.push_back(Recorded {
                 start: a.start,
                 latency: a.latency,
                 samples,
@@ -171,8 +179,9 @@ impl Recorder {
         }
     }
 
+    /// The oldest finished take not collected yet.
     pub fn take_finished(&mut self) -> Option<Recorded> {
-        self.finished.take()
+        self.finished.pop_front()
     }
 
     /// The take being recorded: its start, latency, length and its samples from `from` on.
@@ -488,6 +497,9 @@ pub fn transport_json(s: &TransportSettings) -> Value {
         "count_in_bars": s.count_in_bars,
         "pre_roll_bars": s.pre_roll_bars,
         "start_bar": s.start_bar,
+        "left_beat": s.left_beat,
+        "right_beat": s.right_beat,
+        "loop_on": s.loop_on,
     })
 }
 
@@ -506,6 +518,9 @@ pub fn transport_from(t: &Value) -> TransportSettings {
         count_in_bars: u("count_in_bars", d.count_in_bars),
         pre_roll_bars: u("pre_roll_bars", d.pre_roll_bars),
         start_bar: t["start_bar"].as_i64().unwrap_or(d.start_bar),
+        left_beat: t["left_beat"].as_i64().unwrap_or(d.left_beat),
+        right_beat: t["right_beat"].as_i64().unwrap_or(d.right_beat),
+        loop_on: t["loop_on"].as_bool().unwrap_or(d.loop_on),
     }
     .clamped()
 }
@@ -589,6 +604,36 @@ mod tests {
         assert_eq!(rec.start, 0);
         assert_eq!(rec.samples, expected);
         assert!(r.take_finished().is_none());
+    }
+
+    #[test]
+    fn a_loop_records_a_take_per_pass() {
+        let mut r = Recorder::new(1000);
+        r.armed = true;
+        // Passes over 100..400 in blocks of 150, the jump inside a block's segments.
+        let mut pos = 100;
+        for _ in 0..7 {
+            let mut left = 150;
+            while left > 0 {
+                let len = left.min((400 - pos) as usize);
+                r.capture(pos, &vec![pos as f32; len], 100, 5);
+                pos += len as i64;
+                left -= len;
+                if pos == 400 {
+                    pos = 100;
+                }
+            }
+        }
+        r.stop();
+        let takes: Vec<Recorded> = std::iter::from_fn(|| r.take_finished()).collect();
+        // 7 * 150 = 1050 samples: three full passes of 300 and 150 more.
+        assert_eq!(takes.len(), 4);
+        assert!(takes.iter().all(|t| t.start == 100 && t.latency == 5));
+        assert_eq!(
+            takes.iter().map(|t| t.samples.len()).collect::<Vec<_>>(),
+            vec![300, 300, 300, 150]
+        );
+        assert_eq!(takes[1].samples[0], 100.0);
     }
 
     #[test]
