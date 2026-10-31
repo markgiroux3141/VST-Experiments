@@ -25,5 +25,6 @@ pub mod player;
 pub mod prefs;
 pub mod render;
 pub mod resample;
+pub mod session;
 pub mod settings;
 pub mod transport;

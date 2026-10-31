@@ -4,20 +4,26 @@
 //!
 //!     cargo run --release -p varimu-app --example click -- [--device tube_synth]
 //!         [--file FILE] [--notes] [--for SECONDS] [--bpm B] [--meter 4] [--click-db G]
-//!         [--buffer S] [--ab SECONDS]
+//!         [--buffer S] [--ab SECONDS] [--take]
 //!         [--output NAME] [--loopback output | --loopback input [NAME] [--channel N]]
-//!         [--save DIR]
+//!         [--save DIR] [--save-audio] [--hear-device]
 //!
-//! Without `--file` the device plays from silent keys (`--notes`: a note every quarter of a
-//! second, so a synth works while the click runs). `--ab S` turns the click off and on
-//! every S seconds and reports load and dropouts per condition. `--loopback output`
-//! captures the output's own mix (`--output NAME`: play on that device, not the default;
-//! a device nothing else plays into keeps other programs' sound out of the capture) (WASAPI loopback: digital); `--loopback input`
-//! an input device (an output cabled to it). `--save DIR` writes the clicks found
-//! (`clicks.csv`, `summary.json`), `--save-audio` the capture too (`capture.wav`: generated
-//! audio, never committed; 115 MB for 10 minutes). With a loopback the device
-//! is muted at the monitor (it still computes: its load counts) so the capture holds only
-//! the click; `--hear-device` keeps it.
+//! - Without `--file` the device plays from silent keys (`--notes`: a note every quarter
+//!   of a second, so a synth works while the click runs).
+//! - `--ab S` turns the click off and on every S seconds and reports load and dropouts
+//!   per condition.
+//! - `--take` records a take of the device for the run (as the Session view's record
+//!   does) and reports it.
+//! - `--output NAME` plays on that output device, not the default (one nothing else plays
+//!   into keeps other programs' sound out of an output's loopback).
+//! - `--loopback output` captures the output's own mix (WASAPI loopback: digital);
+//!   `--loopback input` an input device (an output cabled to it, or an interface's channel
+//!   that returns its output). With a loopback the device is muted at the monitor (it
+//!   still computes: its load counts), so the capture holds only the click;
+//!   `--hear-device` keeps it.
+//! - `--save DIR` writes the clicks found (`clicks.csv`, `summary.json`), `--save-audio`
+//!   the capture too (`capture.wav`: generated audio, never committed; 115 MB for 10
+//!   minutes).
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -57,6 +63,7 @@ fn main() -> Result<(), String> {
     let mut save: Option<PathBuf> = None;
     let mut save_audio = false;
     let mut hear_device = false;
+    let mut take = false;
     let mut output: Option<String> = None;
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -64,6 +71,7 @@ fn main() -> Result<(), String> {
             "--file" => file = Some(args.next().ok_or("--file needs a value")?),
             "--notes" => notes = true,
             "--hear-device" => hear_device = true,
+            "--take" => take = true,
             "--output" => output = Some(args.next().ok_or("--output needs a device name")?),
             "--for" => seconds = num(args.next(), &a)?,
             "--bpm" => ts.bpm = num(args.next(), &a)?,
@@ -173,6 +181,7 @@ fn main() -> Result<(), String> {
     }
     ts.click = ClickMode::On;
     player.set_transport(&ts);
+    player.arm_take(take);
     player.transport_run(true);
     let t0 = Instant::now();
     let (mut off, mut on) = (Tally::default(), Tally::default());
@@ -220,6 +229,36 @@ fn main() -> Result<(), String> {
         }
     }
     playing.store(false, Ordering::Relaxed);
+    if take {
+        let grid = player.status().transport.grid.ok_or("no transport")?;
+        player.arm_take(false);
+        player.transport_run(false);
+        let t = Instant::now();
+        let rec = loop {
+            if let Some(r) = player.finished_take() {
+                break r;
+            }
+            if t.elapsed() > Duration::from_secs(2) {
+                return Err("no take came back".into());
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        let rms = (rec
+            .samples
+            .iter()
+            .map(|&v| v as f64 * v as f64)
+            .sum::<f64>()
+            / rec.samples.len().max(1) as f64)
+            .sqrt();
+        println!(
+            "take: {:.2} s from {} (bar {}), placed {:.1} ms early, {:.1} dBFS rms",
+            rec.samples.len() as f64 / rate as f64,
+            rec.start,
+            grid.label(rec.start),
+            rec.latency as f64 / rate as f64 * 1e3,
+            20.0 * (rms * 2f64.sqrt()).max(1e-12).log10()
+        );
+    }
     if let Some(h) = notes_thread {
         let _ = h.join();
     }

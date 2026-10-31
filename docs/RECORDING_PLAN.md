@@ -322,6 +322,30 @@ cable would add only the converters.*
 - the user plays to the click and the take sits on the beat by ear;
 - a note shorter than a block is no longer lost.
 
+*Status (2026-10-30): step 1 of 3 built.* The user asked for tracks to record and layer
+now, in a view like Cubase's but simpler, so T2 goes in three steps: (1) record and layer
+(with T3's tracks, lanes, mute / solo / fader / balance, save and load pulled forward);
+(2) the events in each take, keys placed at their sample; (3) the exact offline replay
+and the production render (the done-when above).
+- **Step 1.** `varimu-app`'s `session` (tracks of takes, the console's mix, the worker's
+  `Recorder`, `session.json` + `takes/<id>/{take.json, draft.wav}` in a folder of the
+  user's, new ones under Documents\Varimu Sessions), the player's output now stereo (the
+  live device through the armed track's strip, the tracks while the transport runs, the
+  click: `Player::set_mix`, `arm_take`, `take_tail`, `finished_take`), and the Session
+  view rebuilt as an arrangement: a transport bar (record, play, stop; Space, R), a bar
+  ruler (a click moves the start bar), tracks stacked vertically (strip: name, arm, M, S,
+  fader, balance, take ‹ n/N ›; lane: the active take's waveform, the take being
+  recorded drawn as it grows, the playhead), + Track. A take is the device's output
+  before the monitor, from the start bar (or where recording was punched in), placed
+  earlier by the latency at its start (the queue plus cpal's device latencies; the
+  loopback calibration isn't used yet). Takes are never replaced: each is added to its
+  track's lane.
+- `examples/click.rs --take`: tube_synth played 8 s with notes, the take 8.00 s from bar
+  1, placed 72 ms early (50 ms queue + the Twin's output), -13 dBFS rms, no dropouts.
+- **Not yet:** events (step 2: a take re-renders from nothing yet), keys still land on
+  10 ms block boundaries, no undo, no deleting or moving takes, the session's rate is the
+  player's (48 kHz: decision 2 still open), the user's first try.
+
 **T3. Tracks and overdub.** The session format, lanes, the playback mix, overdub, loop
 recording, mute / solo / volume / pan, save and load, undo.
 *Done when:*

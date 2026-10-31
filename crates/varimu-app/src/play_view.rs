@@ -567,6 +567,17 @@ impl PlayView {
         self.start();
     }
 
+    /// The chosen device: its label and id (a take records the id).
+    pub fn device_label_id(&self) -> (String, String) {
+        self.device_names()
+    }
+
+    /// What Play does every frame for a device played live, while another view is shown:
+    /// the mod wheel turns its knob.
+    pub fn live_controls(&mut self) {
+        self.follow_mod_wheel();
+    }
+
     /// The input gain and the monitor (bypass, compensation, output gain) to the player:
     /// every frame Play is shown, and after the Session view's calibration muted it.
     pub fn apply_monitor(&self) {

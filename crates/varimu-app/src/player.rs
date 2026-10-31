@@ -24,6 +24,12 @@
 //! Every source runs the session's transport (`crate::transport`, RECORDING_PLAN.md T1):
 //! the worker's [`Clock`] advances with each block it computes and mixes the click into
 //! the output after the monitor, so the click never reaches the device or a take.
+//!
+//! The output is stereo (RECORDING_PLAN.md T2-T3): the device (mono, through the monitor
+//! and the armed track's strip), the session's tracks while the transport runs
+//! ([`Player::set_mix`], `crate::session::Mix`) and the click. While a take is armed
+//! ([`Player::arm_take`]) the worker's `session::Recorder` keeps the device's output from
+//! the start bar on, before the monitor.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -38,6 +44,7 @@ use crate::midi::{Keys, TestOsc, Wave};
 use crate::monitor::Monitor;
 use crate::panel::{Feed, RangeMode};
 use crate::resample::StreamResampler;
+use crate::session::{Frame, Mix, Recorded, Recorder};
 use crate::settings::Settings;
 use crate::transport::{Clock, Grid, Phase, TransportSettings};
 
@@ -256,6 +263,9 @@ struct Shared {
     /// The last output callback: the first output sample it was asked for (counted from
     /// the stream's first) and when it ran.
     out_clock: Mutex<Option<(u64, Instant)>>,
+    /// The session's tracks and the live device's gains; the take being recorded.
+    mix: Mutex<Arc<Mix>>,
+    recorder: Mutex<Recorder>,
 }
 
 /// A session playing out of the default output.
@@ -319,9 +329,11 @@ impl Player {
             range_mode: AtomicU8::new(RangeMode::Auto.index()),
             transport: Mutex::new(TransportCtl::default()),
             out_clock: Mutex::new(None),
+            mix: Mutex::new(Arc::new(Mix::default())),
+            recorder: Mutex::new(Recorder::new(rate)),
         });
         // Room for the buffer, the drift allowance and a block in flight.
-        let (producer, consumer) = rtrb::RingBuffer::<f32>::new(buffer + 4 * BLOCK);
+        let (producer, consumer) = rtrb::RingBuffer::<Frame>::new(buffer + 4 * BLOCK);
         let (output, device) = open_output(output, rate, consumer, shared.clone())?;
         let (input, worker_source) = match source {
             Source::Loop(x) => (None, WorkerSource::Loop(x)),
@@ -487,6 +499,36 @@ impl Player {
     pub fn output_clock(&self) -> Option<(u64, Instant)> {
         *self.shared.out_clock.lock().expect("out_clock")
     }
+
+    /// What plays with the device while the transport runs (the session's tracks) and the
+    /// live device's gains.
+    pub fn set_mix(&self, mix: Arc<Mix>) {
+        *self.shared.mix.lock().expect("mix") = mix;
+    }
+
+    /// Record a take (from the start bar, while the transport runs) or stop recording it.
+    pub fn arm_take(&self, on: bool) {
+        self.shared.recorder.lock().expect("recorder").armed = on;
+    }
+
+    pub fn take_armed(&self) -> bool {
+        self.shared.recorder.lock().expect("recorder").armed
+    }
+
+    /// The take being recorded: its stream start, latency, length, and its samples from
+    /// `from` on (for its waveform as it grows).
+    pub fn take_tail(&self, from: usize) -> Option<(i64, i64, usize, Vec<f32>)> {
+        self.shared.recorder.lock().expect("recorder").tail(from)
+    }
+
+    /// The last take finished (the transport stopped, or recording disarmed), once.
+    pub fn finished_take(&self) -> Option<Recorded> {
+        self.shared
+            .recorder
+            .lock()
+            .expect("recorder")
+            .take_finished()
+    }
 }
 
 impl Drop for Player {
@@ -523,7 +565,7 @@ fn feed_volts(f: &Feed, sounding: Option<(u8, u8)>, last_note: u8, low: bool) ->
 }
 
 /// Write `y` into the ring (all of it; the callers leave room).
-fn push(ring: &mut rtrb::Producer<f32>, y: &[f32]) {
+fn push<T: Copy>(ring: &mut rtrb::Producer<T>, y: &[T]) {
     if let Ok(mut chunk) = ring.write_chunk_uninit(y.len().min(ring.slots())) {
         let (a, b) = chunk.as_mut_slices();
         for (d, s) in a.iter_mut().chain(b.iter_mut()).zip(y) {
@@ -556,7 +598,7 @@ fn work(
     circuit: Circuit,
     s: Settings,
     buffer: usize,
-    mut ring: rtrb::Producer<f32>,
+    mut ring: rtrb::Producer<Frame>,
     shared: &Shared,
 ) -> Result<(), String> {
     let clip = match &source {
@@ -594,10 +636,13 @@ fn work(
         };
         out
     };
-    // The monitored block on its way to the ring: the transport's click mixed in.
+    // The block on its way to the ring: the device's output `raw` recorded into a take
+    // (armed), the monitored `y` through the armed track's strip, the session's tracks
+    // and the transport's click mixed in.
     let mut clock = Clock::new(rate, TransportSettings::default());
     let mut pushed: u64 = 0;
-    let mut emit = |ring: &mut rtrb::Producer<f32>, mut y: Vec<f32>| {
+    let mut click: Vec<f32> = Vec::with_capacity(BLOCK);
+    let mut emit = |ring: &mut rtrb::Producer<Frame>, raw: &[f32], y: Vec<f32>| {
         {
             let mut t = shared.transport.lock().expect("transport");
             if let Some(s) = t.settings.take() {
@@ -610,10 +655,39 @@ fn work(
             }
         }
         let (at, running) = (clock.position(), clock.running());
-        clock.process(&mut y);
-        push(ring, &y);
+        // How far ahead of the ear this block is: the queue ahead of it, the output
+        // device, and (live input) the input device.
+        let queued = (ring.buffer().capacity() - ring.slots()) as i64;
+        let devices_s = (shared.out_latency_us.load(Ordering::Relaxed)
+            + shared.in_latency_us.load(Ordering::Relaxed)) as f64
+            * 1e-6;
+        let latency = queued + (devices_s * rate as f64).round() as i64;
+        {
+            let mut r = shared.recorder.lock().expect("recorder");
+            if running {
+                r.capture(at, raw, clock.record_from(), latency);
+            } else {
+                r.stop();
+            }
+        }
+        let mix = shared.mix.lock().expect("mix").clone();
+        click.clear();
+        click.resize(y.len(), 0.0);
+        clock.process(&mut click);
+        let mut out: Vec<Frame> = y
+            .iter()
+            .map(|&v| [mix.live.0 * v, mix.live.1 * v])
+            .collect();
+        if running {
+            mix.add(at, &mut out);
+        }
+        for (o, &c) in out.iter_mut().zip(&click) {
+            o[0] += c;
+            o[1] += c;
+        }
+        push(ring, &out);
         let origin = running.then(|| pushed as i64 - at);
-        pushed += y.len() as u64;
+        pushed += out.len() as u64;
         let computed = clock.position();
         let heard = if running {
             let queued = (ring.buffer().capacity() - ring.slots()) as i64;
@@ -682,7 +756,7 @@ fn work(
                     .next_block(BLOCK)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                emit(&mut ring, monitored(&live, &y));
+                emit(&mut ring, &y, monitored(&live, &y));
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let pos = (live.position() + len - (capacity - ring.slots()) % len) % len;
@@ -733,7 +807,7 @@ fn work(
                         .process(block)
                         .map_err(|e| format!("the circuit stopped: {e}"))?;
                     let before = capacity - ring.slots();
-                    emit(&mut ring, monitored(&live, &y));
+                    emit(&mut ring, &y, monitored(&live, &y));
                     heard(&live, before);
                     let queued = capacity - ring.slots();
                     shared.queued.store(queued, Ordering::Relaxed);
@@ -824,7 +898,7 @@ fn work(
                     .process_with(&block, &refs)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                emit(&mut ring, monitored(&live, &y));
+                emit(&mut ring, &y, monitored(&live, &y));
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let block_s = BLOCK as f64 / rate as f64;
@@ -842,7 +916,7 @@ fn work(
 fn open_output(
     name: Option<&str>,
     rate: u32,
-    ring: rtrb::Consumer<f32>,
+    ring: rtrb::Consumer<Frame>,
     shared: Arc<Shared>,
 ) -> Result<(cpal::Stream, String), String> {
     let host = cpal::default_host();
@@ -881,11 +955,24 @@ fn open_output(
 fn build_output<T: SizedSample + FromSample<f32>>(
     device: &cpal::Device,
     config: &cpal::StreamConfig,
-    mut ring: rtrb::Consumer<f32>,
+    mut ring: rtrb::Consumer<Frame>,
     shared: Arc<Shared>,
 ) -> Result<cpal::Stream, cpal::Error> {
     let channels = config.channels as usize;
     let mut started = false;
+    // A stereo frame onto the device's channels: left and right on the first two (a
+    // mono device gets their mean), silence on the rest.
+    let write = move |frame: &mut [T], s: Frame| {
+        if channels == 1 {
+            frame[0] = T::from_sample(0.5 * (s[0] + s[1]));
+        } else {
+            frame[0] = T::from_sample(s[0]);
+            frame[1] = T::from_sample(s[1]);
+            for x in &mut frame[2..] {
+                *x = T::from_sample(0.0f32);
+            }
+        }
+    };
     device.build_output_stream(
         *config,
         move |data: &mut [T], info: &cpal::OutputCallbackInfo| {
@@ -906,7 +993,7 @@ fn build_output<T: SizedSample + FromSample<f32>>(
             if let Ok(chunk) = ring.read_chunk(have) {
                 let (a, b) = chunk.as_slices();
                 for (frame, &s) in data.chunks_mut(channels).zip(a.iter().chain(b)) {
-                    frame.fill(T::from_sample(s));
+                    write(frame, s);
                     n += 1;
                 }
                 chunk.commit_all();
