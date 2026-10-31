@@ -507,8 +507,8 @@ fn work(
     let mut monitor = Monitor::new(rate, live.lag());
     // A circuit with an oscillator of its own has a silent input: nothing to compensate
     // against (the compensation ran to +260 dB).
-    let own_oscillator = matches!(&source, WorkerSource::Keys(_, _, feeds)
-        if feeds.iter().any(|f| matches!(f, Feed::Pitch(..))));
+    let own_oscillator = matches!(&source, WorkerSource::Keys(_, wave, feeds)
+        if *wave == Wave::Off || feeds.iter().any(|f| matches!(f, Feed::Pitch(..))));
     // The device's output on its way out: bypass and gain compensation.
     let mut monitored = |live: &Live, y: &[f32]| {
         monitor.bypass = shared.bypass.load(Ordering::Relaxed);

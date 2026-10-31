@@ -35,6 +35,9 @@ pub struct Device {
     /// The circuit's control input a keyboard's keys set the pitch on, for a device with
     /// an oscillator of its own (its audio input then stays silent; None: none).
     pub pitch: Option<Pitch>,
+    /// Its circuit makes its own sound without a pitch input (a drum's oscillator): the
+    /// keys only gate it, its audio input stays silent (as with a `pitch` input).
+    pub own_oscillator: bool,
     /// The sections its draft puts on the second thread, over its quality's
     /// `partition` (None: the quality's).
     pub partition: Option<&'static [&'static str]>,
@@ -206,6 +209,12 @@ pub fn gate_levels(spec: &CircuitSpec, name: &str) -> Result<(f64, f64), String>
 }
 
 impl Device {
+    /// Whether its circuit makes its own sound (a pitch input or `own_oscillator`): the
+    /// keys don't play the test oscillator into it.
+    pub fn plays_own_oscillator(&self) -> bool {
+        self.own_oscillator || self.pitch.is_some()
+    }
+
     /// The settings it plays at: `s` (its quality's) with its cores.
     pub fn play_settings(&self, s: &Settings) -> Settings {
         let mut s = s.clone();
@@ -219,7 +228,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 8] = [
+pub const DEVICES: [Device; 9] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -239,6 +248,7 @@ pub const DEVICES: [Device; 8] = [
         mod_wheel: None,
         gate: None,
         pitch: None,
+        own_oscillator: false,
         partition: None,
     },
     Device {
@@ -252,6 +262,7 @@ pub const DEVICES: [Device; 8] = [
         mod_wheel: None,
         gate: None,
         pitch: None,
+        own_oscillator: false,
         partition: None,
     },
     Device {
@@ -271,6 +282,7 @@ pub const DEVICES: [Device; 8] = [
         mod_wheel: None,
         gate: None,
         pitch: None,
+        own_oscillator: false,
         partition: None,
     },
     Device {
@@ -286,6 +298,7 @@ pub const DEVICES: [Device; 8] = [
         mod_wheel: Some("cutoff_v"),
         gate: None,
         pitch: None,
+        own_oscillator: false,
         partition: None,
     },
     Device {
@@ -301,6 +314,7 @@ pub const DEVICES: [Device; 8] = [
         mod_wheel: Some("cutoff"),
         gate: None,
         pitch: None,
+        own_oscillator: false,
         partition: None,
     },
     Device {
@@ -316,6 +330,7 @@ pub const DEVICES: [Device; 8] = [
         mod_wheel: Some("cutoff"),
         gate: Some("gate"),
         pitch: None,
+        own_oscillator: false,
         partition: None,
     },
     Device {
@@ -335,6 +350,7 @@ pub const DEVICES: [Device; 8] = [
             tuning: VCO_LC_TUNING,
             range: None,
         }),
+        own_oscillator: false,
         partition: None,
     },
     Device {
@@ -362,6 +378,7 @@ pub const DEVICES: [Device; 8] = [
         // On two (the oscillator and the supplies on the second) it ran ~96% load;
         // bench, 3 s at -15 V: 1.38x real time on two, 0.89x on four, within 0.1 cent
         // and 0.01 dB of the one solve.
+        own_oscillator: false,
         partition: Some(&[
             "resonance",
             "|",
@@ -376,6 +393,22 @@ pub const DEVICES: [Device; 8] = [
             "power supply",
             "bias supply",
         ]),
+    },
+    Device {
+        id: "tube_kick",
+        label: "Tube kick (oscillator, pitch sweep, decaying VCA)",
+        circuit: "tube_kick",
+        panel: None,
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft2x,
+        cores: Some("ja"),
+        mod_wheel: Some("depth"),
+        gate: Some("gate"),
+        pitch: None,
+        own_oscillator: true,
+        // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
+        // oscillator and its pitch driver | the supplies.
+        partition: Some(&["oscillator", "pitch", "|", "power supply", "bias supply"]),
     },
 ];
 
@@ -860,8 +893,30 @@ mod tests {
         let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
         assert_eq!(
             keys,
-            ["cutoff", "resonance", "attack", "release", "wave", "range"]
+            [
+                "cutoff",
+                "resonance",
+                "attack",
+                "release",
+                "env_amount",
+                "wave",
+                "range"
+            ]
         );
+        // The kick: the keys only gate it, its own oscillator sounds.
+        let kick = spec_of("tube_kick");
+        let kick_keys: Vec<String> = knobs(&DEVICES[8], &kick)
+            .into_iter()
+            .map(|k| k.key)
+            .collect();
+        assert_eq!(kick_keys, ["tune", "depth", "sweep_time", "decay", "wave"]);
+        assert!(kick_keys.iter().any(|k| k == DEVICES[8].mod_wheel.unwrap()));
+        assert_eq!(
+            key_feeds(&DEVICES[8], &kick),
+            Ok(vec![Feed::Gate(-110.0, -1.0)])
+        );
+        assert!(DEVICES[8].plays_own_oscillator() && DEVICES[7].plays_own_oscillator());
+        assert!(!DEVICES[5].plays_own_oscillator());
         // The range switch: LOW / HIGH / AUTO on the panel, 0 or 1 to the circuit.
         let mut k = k;
         let r = k.iter().position(|k| k.key == "range").unwrap();

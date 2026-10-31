@@ -100,6 +100,7 @@ const DRAWING: Device = Device {
     mod_wheel: None,
     gate: None,
     pitch: None,
+    own_oscillator: false,
     partition: None,
 };
 
@@ -710,7 +711,11 @@ impl PlayView {
                 Some(d) => panel::key_feeds(d, c.spec())?,
                 None => Vec::new(),
             };
-            let source = Source::Keys(kb.keys.clone(), self.wave, feeds);
+            let own = DEVICES
+                .get(self.device)
+                .is_some_and(|d| d.plays_own_oscillator());
+            let wave = if own { Wave::Off } else { self.wave };
+            let source = Source::Keys(kb.keys.clone(), wave, feeds);
             let p = Player::start(source, v, c, s.clone(), self.gain(), buffer)?;
             if let Some(m) = panel::range_mode(&self.knobs) {
                 p.set_range_mode(m);
@@ -1323,7 +1328,9 @@ impl PlayView {
         });
         // A device with an oscillator of its own (a pitch control input) plays it from the
         // keys; the test oscillator stays silent, so its waveform does nothing there.
-        let own_oscillator = DEVICES.get(self.device).is_some_and(|d| d.pitch.is_some());
+        let own_oscillator = DEVICES
+            .get(self.device)
+            .is_some_and(|d| d.plays_own_oscillator());
         ui.horizontal(|ui| {
             ui.add_enabled_ui(!own_oscillator, |ui| {
                 ui.label(RichText::new("Wave").color(theme::MUTED));

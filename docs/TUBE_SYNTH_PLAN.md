@@ -752,6 +752,52 @@ thread. Draft:
     gapped cores (less hysteresis per stored energy) with the reactor only tuning, less sweep
     range; (3) accept the thud and strengthen the Q multiplier, which can't track a loss that
     changes with bias.
+- **Built: option 1, the user's pick (2026-10-30): `config/circuits/tube_kick.yaml`, the app's
+  `tube_kick` device.** The synth's reactor oscillator (its LOW range's 224 nF) runs all the
+  time; a key's edge sweeps its pitch and opens a VCA that decays. The header lists the
+  parts; what each fix was for, in the order found:
+  - TUNE on a divider from a 5651 of its own (~-87 V): on the -45 V rail the VCA's tail
+    current sagged it and a hit's pitch rose ~2 semitones. That rail also needed 4.7k to
+    ground, not the synth's 8.2k: with this circuit's lighter loads it sat at -57 V.
+  - The sweep and the envelope are pumped through 6X4 sections, so a key up's edge is
+    blocked. A clamp let the release cut a tap's sweep short; the hit decays as an 808's
+    does, whatever the key does after.
+  - The envelope is charged by a 12AU7 cathode follower from a ~+55 V tap, its grid driven
+    by the key's edge (0.1 uF, 100k stopper). A 10 uF pump from the bus dumped ~1 mC per hit
+    into the -100 V rail (a 6 V swing, heard as a thump) and stayed connected while the key
+    was held. On b3 the follower idled ~30 V above its grid; with 10 nF and no stopper the
+    pulse drained through the grid.
+  - The VCA is a 12AU7 pair whose tail tube's grid is 0.8 of the envelope, closed at rest.
+    The tail current's common-mode swing is cancelled by a 12AX7 differential stage. Its
+    current sink's grid is on TUNE's 5651 through an RC, and its return is RC-filtered:
+    on the -45 V rail its grid followed the rail's sag and moved the output ~2 V, and the
+    -100 V rail's ripple put 0.3 V of 120 Hz hum on it. Both stages have their own RC
+    supplies, against the oscillator's draw on b3. The pair's cathode leak comes from its
+    supply (to ground, its current flowed through the pair). 100 pF at the pair's cathodes
+    stops the draft chattering when the tail cuts off.
+  - **Measured** (draft, the app's partition; `tests/test_tube_kick.py`):
+
+    | Control | Effect |
+    |---|---|
+    | DECAY 0 / 0.3 / 0.6 / 0.8 / 1 | -20 dB at 9 / 49 / 214 / 575 / 1497 ms |
+    | DEPTH 0 / 0.2 / 0.4 / 0.7 / 1 | peak pitch 56 / 96 / 159 / 276 / 451 Hz, back to ~56 Hz by 200 ms |
+    | SWEEP TIME 0 / 0.3 / 1 | the 50 ms pitch 72 / 108 / 128 Hz |
+    | TUNE 0 / 0.5 / 1 | rest pitch 50 / 83 / 129 Hz |
+
+    A hit peaks ~7 V (17 V at full DEPTH; full scale 12 V). Between hits the oscillator is
+    -92 dB under a hit, the hum (120 Hz) -78 dB, a key's release -54 dB. Eighths at 120 BPM
+    retrigger evenly (6.9-8.9 V); the envelope doesn't fall back between them at the
+    default DECAY, so they run together as an 808's do. Not measured yet: the click (the
+    attack is the follower's ~2 ms on an oscillator at whatever phase it is in, so each hit
+    starts differently) and production renders.
+  - **The app:** `panel::Device::own_oscillator` (new): the keys only gate it, the test
+    oscillator is off (`midi::Wave::Off`) and gain compensation with it, as with a pitch
+    input. The mod wheel turns DEPTH. Three threads: the trigger, envelopes and VCA | the
+    oscillator and its pitch driver | the supplies. Load with a key held (`play.rs --hold`,
+    50 ms buffer): ~50%, worst block 74-76%, no dropouts.
+  - Found while at it: since ENV AMOUNT moved the synth's envelope onto the filter's thread,
+    its bus node had no DC path there with cold cathodes, so Power on (cold) failed (fixed:
+    a 100M leak; `tests/live.rs`).
 
 **Later, not planned yet:** more voices (paraphony from one supply first: sag coupling
 between voices), gas-tube devices if S4 doesn't choose one, the reactor designed by

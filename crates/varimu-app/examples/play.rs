@@ -157,6 +157,9 @@ fn main() -> Result<(), String> {
             })
     });
     let feeds = varimu_app::panel::key_feeds(dev, circuit.spec())?;
+    if dev.plays_own_oscillator() {
+        wave = Wave::Off;
+    }
     let held = hold.map(|note| {
         let keys = Arc::new(Keys::default());
         keys.message(&[0x90, note, 100]);

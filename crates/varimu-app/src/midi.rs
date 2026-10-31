@@ -120,6 +120,8 @@ impl Keyboard {
 pub enum Wave {
     Saw,
     Square,
+    /// Silent: the device plays an oscillator of its own.
+    Off,
 }
 
 /// The test oscillator (the module docstring).
@@ -194,6 +196,7 @@ impl TestOsc {
             let t = self.phase;
             let saw = |t: f64| 2.0 * t - 1.0 - poly_blep(t, dt);
             let v = match self.wave {
+                Wave::Off => 0.0,
                 Wave::Saw => saw(t),
                 Wave::Square => {
                     let t2 = (t + 0.5) % 1.0;

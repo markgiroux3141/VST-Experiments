@@ -1,0 +1,336 @@
+# A tube kick drum (docs/TUBE_SYNTH_PLAN.md, S5's status, "A tube kick"): the tube synth's
+# reactor-tuned oscillator, running all the time, with a pitch sweep and a decaying VCA
+# keyed by the keyboard bus, on the synth's supply. A struck tank (an 808's way) lost its
+# energy in the cores' bias while the pitch fell (a 20 ms thud); a sustained oscillator
+# keeps its amplitude, so the sweep and the decay are separate controls.
+#   O...  the oscillator, its pitch driver and its WAVE pot, as in tube_synth.yaml (its LOW
+#        range's 224 nF fixed)
+#   TUNE  a pot on a divider from a 5651 (VRT, ~-87 V off the -100 V rail): the 6V6GT's grid
+#        at rest, ~50-130 Hz. On the -45 V rail the VCA's tail current sagged it and the
+#        pitch rose ~2 semitones while a hit sounded
+#   sweep a key's edge pumps SE through a 6X4 section (CSW, 10x SE's capacitor, from ground);
+#        SWEEP TIME discharges it. The DEPTH pot's share of it adds to the 6V6GT's grid
+#        through 2.2M: ~3x the pitch at the hit at DEPTH 0.4. A key up's negative edge is
+#        blocked, so a short tap doesn't cut the sweep
+#   decay a key's edge, differentiated (CPU), lifts the grid of a 12AU7 cathode follower (its
+#        plate on a ~+55 V tap, so it idles only a few volts above its grid), which charges
+#        the envelope CE through a 6X4 section toward the clamp at 0 V, then lets go;
+#        DECAY discharges it toward the -100 V rail. The charge comes from b3, not the bias
+#        supply (a pump from the bus dumped ~1 mC per hit into the -100 V rail: a thump),
+#        and a key up's edge is blocked: the hit decays as an 808's does
+#   VCA  a 12AU7 cathode-coupled pair (VA/VB, on their own RC supply), the oscillator into
+#        VA's grid; its tail a third section (VT) whose grid is 0.8 of the envelope, closed
+#        at rest (the oscillator ~-92 dB under a hit). The tail current's swing is common
+#        mode at the plates; a 12AX7 differential stage (VDA/VDB, its own RC supply) on a
+#        12AU7 current sink (VCS, its grid on TUNE's 5651 through an RC) takes their
+#        difference, so the thump cancels; its plate is the output
+# Invented circuit, not modelled hardware: round numbers, every value a design choice.
+
+title: "Tube kick (oscillator, sweep, decaying VCA)"
+input: in
+cv_inputs:
+  gate: bus
+probes: [out, o_t, o_g4, se, e, kc, b1, b3]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "provisional: model knowledge (the audio input is unused: the oscillator is the source)"}
+  output_volts_peak: {value: 12.0, source: "provisional: model knowledge (design: the differential stage's plate through COUT: a hit peaks ~7 V at the defaults, ~17 V at full DEPTH; set from renders, 2026-10-30)"}
+
+controls:
+  tune: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the TUNE pot, the oscillator's pitch at rest)"}
+  depth: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the DEPTH pot, the pitch sweep's height)"}
+  sweep_time: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the SWEEP TIME rheostat)"}
+  decay: {value: 0.6, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the DECAY rheostat)"}
+  wave: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1))"}
+  mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
+
+values:
+  # --- supply (tube_synth.yaml's)
+  pt_hv_half_rms_v: {value: 250.0, source: "provisional: model knowledge (design: a small power transformer's HV half)"}
+  pt_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (a ~25 W transformer's HV half with the primary referred)"}
+  pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (leakage per HV half of a small mains transformer)"}
+  pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node)"}
+  rectifier_tube: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4 full-wave rectifier)"}
+  c_reservoir_f: {value: 20.0e-6, source: "provisional: model knowledge (reservoir and filter electrolytics, 20 uF 450 V)"}
+  r_b12_ohm: {value: 1.0e+3, source: "provisional: model knowledge (filter resistor b1 to b2)"}
+  r_b23_ohm: {value: 2.2e+3, source: "provisional: model knowledge (filter resistor b2 to b3)"}
+  c_decouple_f: {value: 47.0e-6, source: "provisional: model knowledge (b2 and b3 electrolytics)"}
+  r_bleeder_ohm: {value: 220.0e+3, source: "provisional: model knowledge (a bleeder across the reservoir)"}
+  bias_winding_rms_v: {value: 85.0, source: "provisional: model knowledge (design: a bias winding for ~-100 V)"}
+  bias_winding_r_ohm: {value: 200.0, source: "provisional: model knowledge (a small bias winding's resistance)"}
+  bias_rectifier: {value: SELENIUM@1, source: "provisional: model knowledge (design: a selenium bridge for the bias)"}
+  c_bias_arm_f: {value: 1.0e-9, source: "provisional: model knowledge (each selenium arm's capacitance)"}
+  bias_arm_area: {value: 1.0, source: "numerical: the arm capacitance is given per arm (the macro's per-area form)"}
+  c_bias_winding_f: {value: 1.0e-9, source: "provisional: model knowledge (the floating bias winding's capacitance to the core)"}
+  r_bias_winding_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the floating bias winding"}
+  c_bias_f: {value: 100.0e-6, source: "provisional: model knowledge (bias filter electrolytics)"}
+  r_bias_drop_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: -100 V to the -45 V node)"}
+  r_bias_ground_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: the -45 V node to ground: with this circuit's lighter loads, 8.2k (the synth's) left it at -57 V)"}
+  r_grid_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a load on the unused audio input)"}
+  gate_off_v: {value: -110.0, source: "provisional: model knowledge (design: the keyboard bus with no key down, as tube_synth.yaml's)"}
+  gate_on_v: {value: -1.0, source: "provisional: model knowledge (design: the keyboard bus with a key down)"}
+  # --- tune and sweep
+  r_tune_vr_feed_ohm: {value: 6.8e+3, source: "provisional: model knowledge (design: the -100 V rail into TUNE's 5651 (-87 V), ~2.6 mA: on the -45 V rail the VCA's tail current sagged TUNE 0.5 V, the pitch 58 -> 66 Hz while a hit sounded)"}
+  r_tune_top_ohm: {value: 1.2e+6, source: "provisional: model knowledge (design: TUNE's reference (~-80 V) to the TUNE pot: its low end ~-24.4 V)"}
+  r_tune_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the TUNE pot)"}
+  r_tune_bottom_ohm: {value: 430.0e+3, source: "provisional: model knowledge (design: the TUNE pot to ground: its high end ~-19.8 V; the pitch ~32-108 Hz over TUNE (300k: 63-188 Hz))"}
+  r_tune_sum_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: from the TUNE wiper to the 6V6GT's grid)"}
+  r_sw_in_ohm: {value: 470.0, source: "provisional: model knowledge (design: the keyboard bus into the sweep's pump (10k with the pump's return made a divider: the sweep reached ~30 V, not ~100)"}
+  c_sw_f: {value: 0.47e-6, source: "provisional: model knowledge (design: the sweep's capacitor: 5-230 ms with SWEEP TIME)"}
+  c_sw_pump_f: {value: 4.7e-6, source: "provisional: model knowledge (design: the sweep's pump, 10x its capacitor: a key's edge lifts the sweep ~99 V through a 6X4 section, and the key up's negative edge is blocked (a clamp at ground cut the sweep short whenever the key came up before it ended))"}
+  r_sw_pump_return_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the pump's node back to ground, ~50 ms, from ground: no load on the supplies)"}
+  r_sw_min_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the sweep's shortest discharge)"}
+  r_sw_ohm: {value: 470.0e+3, source: "provisional: model knowledge (the SWEEP TIME rheostat)"}
+  r_depth_pot_ohm: {value: 250.0e+3, source: "provisional: model knowledge (the DEPTH pot)"}
+  r_sweep_sum_ohm: {value: 2.2e+6, source: "provisional: model knowledge (design: from the DEPTH wiper to the 6V6GT's grid: ~+4 V at full depth)"}
+  clamp_diode: {value: 6X4@1, source: "provisional: model knowledge (design: 6X4 sections as the sweep's clamp and the envelope's pump and clamp)"}
+  # --- decay envelope
+  r_env_in_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design: the keyboard bus into the trigger's differentiator)"}
+  c_pump_f: {value: 0.1e-6, source: "provisional: model knowledge (design: the trigger's differentiator: ~10 ms with r_pump_return_ohm, long enough to hold the follower's grid up while it charges the envelope (~2.5 ms). A 10 uF pump from the bus dumped ~1 mC per hit into the -100 V rail (a 6 V swing, the output's thump) and stayed connected while the key was held; 10 nF drained through the grid in microseconds)"}
+  r_pump_return_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the trigger follower's grid back to the -100 V rail between hits)"}
+  r_trig_plate_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: b3 to the trigger follower's plate tap, ~+55 V with its foot: at b3 the follower idled ~30 V above its grid, the envelope rested at -74 V and a hit lifted it only to -40 V)"}
+  r_trig_plate_foot_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design: the plate tap's foot)"}
+  c_trig_plate_f: {value: 10.0e-6, source: "provisional: model knowledge (design: the plate tap's bypass: a hit draws ~50 uC from it)"}
+  r_trig_grid_stop_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the trigger follower's grid stopper: limits its grid current while its cathode climbs with the envelope)"}
+  r_trig_cathode_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the trigger follower's cathode load to the -100 V rail, ~1 mA at the top)"}
+  c_env_f: {value: 0.47e-6, source: "provisional: model knowledge (design: the envelope's capacitor, film: ~5 ms to ~1 s with DECAY)"}
+  r_decay_min_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the shortest decay, ~10 ms)"}
+  r_decay_ohm: {value: 4.7e+6, source: "provisional: model knowledge (the DECAY rheostat: up to ~2 s into 0.47 uF)"}
+  env_taper_mid: {value: 0.1, source: "provisional: model knowledge (audio-taper rheostats, 10% at half rotation)"}
+  r_env_leak_ohm: {value: 1.0e+8, source: "numerical: the envelope node's DC path besides the diodes (the pre-flight checks)"}
+  # --- VCA
+  c_vca_in_f: {value: 0.1e-6, source: "provisional: model knowledge (design: the oscillator's buffer into the VCA)"}
+  r_vca_atten_ohm: {value: 150.0e+3, source: "provisional: model knowledge (design: with the grid leak, ~2/5 of the buffer at the pair's grid: enough signal that the tail's common-mode step is small beside it)"}
+  r_vca_grid_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the pair's grid leak and the attenuator's foot)"}
+  r_vca_plate_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design: each of the pair's plate loads)"}
+  r_tail_grid_top_ohm: {value: 5.6e+6, source: "provisional: model knowledge (design: the envelope into the tail tube's grid, 0.8 of it with r_tail_grid_bottom_ohm: at the envelope's ~-93 V rest the tail's grid is ~-74 V and it passes ~1.3 uA, less than the pair's leak supplies, so the pair is cut off: the oscillator ~-92 dB under a hit (at 0.6 the tail passed 4.6 uA, the pair the rest: -59 dB). It opens above ~-62 V of the envelope)"}
+  r_tail_grid_bottom_ohm: {value: 22.0e+6, source: "provisional: model knowledge (design: the tail grid divider's foot)"}
+  r_tail_cathode_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the tail tube's cathode to the -45 V rail: ~4 mA with the envelope at 0 V, off below ~-50 V)"}
+  r_kc_leak_ohm: {value: 1.0e+7, source: "numerical: a DC path for the pair's cathodes with the tail cut off (no standing current: no bleed)"}
+  r_sink_filter_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: an RC of its own for the current sink's return: the -100 V rail's ripple moved its current, ~0.5 V of hum at the output)"}
+  c_sink_filter_f: {value: 100.0e-6, source: "provisional: model knowledge (its electrolytic)"}
+  r_sink_grid_filter_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the current sink's grid from TUNE's 5651 through an RC (0.1 s): the reference passes ~12% of the -100 V rail's ripple)"}
+  c_sink_grid_filter_f: {value: 1.0e-6, source: "provisional: model knowledge (its capacitor, film)"}
+  c_kc_stray_f: {value: 100.0e-12, source: "provisional: model knowledge (the pair's cathodes, the tail's plate and their wiring: holds the node when the tail cuts off (without it the draft chattered there ~20 ms))"}
+  r_pair_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the pair's cathodes with the tail cut off (insulation), from the pair's supply: its ~3 uA then flows in the tail tube and lifts the cathodes until the pair is cut off (to ground, it flowed through the pair, which passed the oscillator at -50 dB)"}
+  c_diff_in_f: {value: 0.22e-6, source: "provisional: model knowledge (design: each VCA plate into the differential stage)"}
+  r_diff_series_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: with the grid leak, 1/11 of each VCA plate into the differential stage: unattenuated it swung its plate ~66 V and clipped)"}
+  r_diff_grid_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the differential stage's grid leaks, the dividers' feet)"}
+  r_vca_supply_ohm: {value: 2.2e+3, source: "provisional: model knowledge (design: the VCA pair's own supply off b3 (100 uF): on b3 the oscillator's current draw put its own frequency on both plates (~75 mV), past the closed VCA)"}
+  r_diff_supply_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the differential stage's own supply off b3: on b3 the VCA's opening sagged its plate ~2 V, the thump)"}
+  c_diff_supply_f: {value: 100.0e-6, source: "provisional: model knowledge (design: its electrolytic: 1 s)"}
+  r_diff_plate_ohm: {value: 100.0e+3, source: "provisional: model knowledge (12AX7 plate load)"}
+  r_diff_tail_ohm: {value: 12.0e+3, source: "provisional: model knowledge (design: the differential stage's current sink, a 12AU7 section, its grid on TUNE's regulated -80 V and 22k to the -100 V rail: ~1.2 mA (a 100k resistor tail let half the VCA's common-mode step through, a 4.7 V thump; its grid on the -45 V rail followed that rail's sag under the VCA's tail and moved the output ~2 V)"}
+  c_out_f: {value: 0.47e-6, source: "provisional: model knowledge (output coupling)"}
+  r_out_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the output's load)"}
+  # --- the oscillator (tube_synth.yaml's, its LOW range)
+  osc_c_tank_f: {value: 224.0e-9, source: "provisional: model knowledge (design: tube_synth.yaml's LOW range, 56 + 168 nF: ~39 Hz at -23 V, ~136 Hz at -18 V)"}
+  osc_r_tail_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the pair's tail to the -45 V rail, as tube_synth.yaml's)"}
+  osc_r_plate_a_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1A's plate load, the square output)"}
+  osc_r_plate_b_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: V1B's plate load, parallel feed to the tank)"}
+  osc_c_drive_f: {value: 0.47e-6, source: "provisional: model knowledge (design: V1B's plate into the tank)"}
+  osc_r_grid_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: V2's grid stopper off the tank)"}
+  osc_r_plate2_ohm: {value: 100.0e+3, source: "provisional: model knowledge (12AX7 plate load)"}
+  osc_r_cathode2_ohm: {value: 1.5e+3, source: "provisional: model knowledge (12AX7 self bias, unbypassed: gain ~30)"}
+  osc_c_couple2_f: {value: 0.1e-6, source: "provisional: model knowledge (V2's plate into V1B's grid)"}
+  osc_r_grid1b_ohm: {value: 1.0e+6, source: "provisional: model knowledge (V1B's grid leak)"}
+  osc_c_out_f: {value: 0.1e-6, source: "provisional: model knowledge (output coupling, each side of the WAVE pot)"}
+  osc_r_wave_tank_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: from the tank to the WAVE pot's end)"}
+  osc_r_wave_square_ohm: {value: 470.0e+3, source: "provisional: model knowledge (design: from V1A's plate to the WAVE pot's other end)"}
+  osc_r_wave_end_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: each end of the WAVE pot to ground)"}
+  osc_r_wave_pot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the WAVE pot)"}
+  osc_r_buffer_cathode_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: the buffer's cathode to the -45 V rail)"}
+  osc_r_vr_feed_ohm: {value: 27.0e+3, source: "provisional: model knowledge (design: b1 to the 5651 pair, as tube_synth.yaml's)"}
+  osc_v5651_operating_v: {value: 87.0, source: "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage av. 87 V (min 82, max 92) over 1.5-3.5 mA"}
+  osc_v5651_ref_current_a: {value: 2.5e-3, source: "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage over 1.5-3.5 mA, at its middle"}
+  osc_r_vr_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the node between the 5651s"}
+  osc_c_grid4_f: {value: 0.01e-6, source: "provisional: model knowledge (design: on the 6V6GT's grid: ~1 ms with the TUNE and sweep resistors, fast enough for the sweep)"}
+  osc_r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen stopper from the 5651 pair)"}
+  osc_r_cathode4_ohm: {value: 470.0, source: "provisional: model knowledge (design: 6V6GT cathode, as tube_synth.yaml's)"}
+  osc_signal_turns: {value: 2000.0, source: "provisional: model knowledge (design: 2000 turns per core on a 1 cm^2, 10 cm mumetall toroid)"}
+  osc_control_ratio: {value: 1.0, source: "provisional: model knowledge (design: 1000 control turns per core)"}
+  osc_r_signal_winding_ohm: {value: 160.0, source: "provisional: model knowledge (2000 turns of ~0.1 mm copper on a small toroid)"}
+  osc_r_control_winding_ohm: {value: 30.0, source: "provisional: model knowledge (1000 turns of ~0.15 mm copper)"}
+  osc_leakage_h: {value: 0.0, source: "provisional: model knowledge (windings on a toroid couple closely; leakage neglected)"}
+  osc_core_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (a small tape-wound toroid, 1 cm^2)"}
+  osc_core_path_m: {value: 0.1, source: "provisional: model knowledge (10 cm mean path)"}
+  osc_core_gap_m: {value: 0.0, source: "provisional: model knowledge (a tape-wound toroid has no joint gap)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 120.0, source: "provisional: model knowledge (the power transformer's rated primary)"}
+
+devices:
+  VR: {device: rectifier_tube}
+  DB: {device: bias_rectifier}
+  OV1A: {device: 12AU7@1}
+  OV1B: {device: 12AU7@1}
+  OV2: {device: 12AX7@1}
+  OV3: {device: 12AX7@1}
+  OV4: {device: 6V6GT@1}
+  VRO: {device: "5651@1", instance: false}
+  DSW: {device: clamp_diode}
+  DPU: {device: clamp_diode}
+  DCL: {device: clamp_diode}
+  VA: {device: 12AU7@1}
+  VB: {device: 12AU7@1}
+  VT: {device: 12AU7@1}
+  VDA: {device: 12AX7@1}
+  VDB: {device: 12AX7@1}
+  VCS: {device: 12AU7@1}
+  VX: {device: 12AU7@1}
+
+sections:
+  - title: power supply
+    parts:
+      VHVA: {mains: [hv_a, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 90.0}
+      VHVB: {mains: [hv_b, "0"], v_rms: pt_hv_half_rms_v, phase_deg: 270.0}
+      RPTA: {R: [hv_a, hv_ar], r: pt_r_half_ohm}
+      LPTA: {L: [hv_ar, hva], l: pt_leakage_h}
+      RPTB: {R: [hv_b, hv_br], r: pt_r_half_ohm}
+      LPTB: {L: [hv_br, hvb], l: pt_leakage_h}
+      CPTA: {C: [hva, "0"], c: pt_c_half_f}
+      CPTB: {C: [hvb, "0"], c: pt_c_half_f}
+      XVRA: {device: [hva, b1], model: VR}
+      XVRB: {device: [hvb, b1], model: VR}
+      CB1: {C: [b1, "0"], c: c_reservoir_f}
+      RBLEED: {R: [b1, "0"], r: r_bleeder_ohm}
+      RB12: {R: [b1, b2], r: r_b12_ohm}
+      CB2: {C: [b2, "0"], c: c_decouple_f}
+      RB23: {R: [b2, b3], r: r_b23_ohm}
+      CB3: {C: [b3, "0"], c: c_decouple_f}
+  - title: bias supply
+    parts:
+      VBW: {mains: [bwa, bwb], v_rms: bias_winding_rms_v, phase_deg: 90.0}
+      RBW: {R: [bwa, bwar], r: bias_winding_r_ohm}
+      CBW: {C: [bwb, "0"], c: c_bias_winding_f}
+      RBWL: {R: [bwb, "0"], r: r_bias_winding_leak_ohm}
+      GRB: {bridge: [bwar, bwb, "0", neg2], model: DB, arm_c_f_per_area: c_bias_arm_f, area: bias_arm_area}
+      CN2: {C: [neg2, "0"], c: c_bias_f}
+      RN: {R: [neg2, neg], r: r_bias_drop_ohm}
+      CN: {C: [neg, "0"], c: c_bias_f}
+      RNG: {R: [neg, "0"], r: r_bias_ground_ohm}
+  - title: input
+    parts:
+      RG1: {R: [in, "0"], r: r_grid_in_ohm}
+  - title: sweep
+    parts:
+      RSWI: {R: [bus, swa], r: r_sw_in_ohm}
+      CSW: {C: [swa, swx], c: c_sw_pump_f}
+      RSWX: {R: [swx, "0"], r: r_sw_pump_return_ohm}
+      XDSW: {device: [swx, se], model: DSW}
+      CSE: {C: [se, "0"], c: c_sw_f}
+      RSWM: {R: [se, sem], r: r_sw_min_ohm}
+      RSWT: {rheostat: [sem, "0"], r: r_sw_ohm, at: sweep_time}
+      RDEP: {pot: ["0", sw, se], r: r_depth_pot_ohm, at: depth}
+      RSE: {R: [sw, o_g4], r: r_sweep_sum_ohm}
+  - title: envelope
+    parts:
+      REI: {R: [bus, ea], r: r_env_in_ohm}
+      CPU: {C: [ea, gx], c: c_pump_f}
+      RPR: {R: [gx, neg2], r: r_pump_return_ohm}
+      RXP: {R: [b3, px], r: r_trig_plate_ohm}
+      RXPG: {R: [px, "0"], r: r_trig_plate_foot_ohm}
+      CXP: {C: [px, "0"], c: c_trig_plate_f}
+      RGX: {R: [gx, gxs], r: r_trig_grid_stop_ohm}
+      XVX: {device: [px, gxs, ex], model: VX}
+      RXK: {R: [ex, neg2], r: r_trig_cathode_ohm}
+      XDPU: {device: [ex, e], model: DPU}
+      XDCL: {device: [e, "0"], model: DCL}
+      CE: {C: [e, "0"], c: c_env_f}
+      RDM: {R: [e, ed], r: r_decay_min_ohm}
+      RDEC: {rheostat: [ed, neg2], r: r_decay_ohm, at: decay, taper_mid: env_taper_mid}
+      REL: {R: [e, "0"], r: r_env_leak_ohm}
+  - title: vca
+    parts:
+      CVI: {C: [o_buf, vi], c: c_vca_in_f}
+      RVA: {R: [vi, ga], r: r_vca_atten_ohm}
+      RVG: {R: [ga, "0"], r: r_vca_grid_ohm}
+      XVA: {device: [pa, ga, kc], model: VA}
+      XVB: {device: [pb, "0", kc], model: VB}
+      RBV: {R: [b3, bv], r: r_vca_supply_ohm}
+      CBV: {C: [bv, "0"], c: c_diff_supply_f}
+      RPA: {R: [bv, pa], r: r_vca_plate_ohm}
+      RPB: {R: [bv, pb], r: r_vca_plate_ohm}
+      RTG: {R: [e, gt], r: r_tail_grid_top_ohm}
+      RTG2: {R: [gt, "0"], r: r_tail_grid_bottom_ohm}
+      XVT: {device: [kc, gt, kt], model: VT}
+      RTK: {R: [kt, neg], r: r_tail_cathode_ohm}
+      RKCL: {R: [bv, kc], r: r_pair_leak_ohm}
+      CKC: {C: [kc, "0"], c: c_kc_stray_f}
+      CDA: {C: [pa, dai], c: c_diff_in_f}
+      RDAS: {R: [dai, da], r: r_diff_series_ohm}
+      RDA: {R: [da, "0"], r: r_diff_grid_ohm}
+      CDB: {C: [pb, dbi], c: c_diff_in_f}
+      RDBS: {R: [dbi, db], r: r_diff_series_ohm}
+      RDB: {R: [db, "0"], r: r_diff_grid_ohm}
+      RBD: {R: [b3, bd], r: r_diff_supply_ohm}
+      CBD: {C: [bd, "0"], c: c_diff_supply_f}
+      XVDA: {device: [bd, da, kd], model: VDA}
+      XVDB: {device: [pd, db, kd], model: VDB}
+      RVRF: {R: [vref, vrf], r: r_sink_grid_filter_ohm}
+      CVRF: {C: [vrf, "0"], c: c_sink_grid_filter_f}
+      XVCS: {device: [kd, vrf, kcs], model: VCS}
+      RSF: {R: [neg2, nsf], r: r_sink_filter_ohm}
+      CSF: {C: [nsf, "0"], c: c_sink_filter_f}
+      RCS: {R: [kcs, nsf], r: r_diff_tail_ohm}
+      RKDL: {R: [kd, "0"], r: r_kc_leak_ohm}
+      RPD: {R: [bd, pd], r: r_diff_plate_ohm}
+      COUT: {C: [pd, out], c: c_out_f}
+      RLO: {R: [out, "0"], r: r_out_load_ohm}
+  - title: oscillator
+    parts:
+      OTA:
+        transformer:
+          sig: {nodes: [o_t, o_m], r: osc_r_signal_winding_ohm}
+          ctl: {nodes: [b1, o_c2], ratio: osc_control_ratio, r: osc_r_control_winding_ohm}
+        core: {material: mumetall, area_m2: osc_core_area_m2, path_m: osc_core_path_m, gap_m: osc_core_gap_m}
+        turns: osc_signal_turns
+        leakage_h: osc_leakage_h
+      OTB:
+        transformer:
+          sig: {nodes: [o_m, "0"], r: osc_r_signal_winding_ohm}
+          ctl: {nodes: [o_p4, o_c2], ratio: osc_control_ratio, r: osc_r_control_winding_ohm}
+        core: {material: mumetall, area_m2: osc_core_area_m2, path_m: osc_core_path_m, gap_m: osc_core_gap_m}
+        turns: osc_signal_turns
+        leakage_h: osc_leakage_h
+      COT: {C: [o_t, "0"], c: osc_c_tank_f}
+      ROGS: {R: [o_t, o_g2], r: osc_r_grid_stop_ohm}
+      XOV2: {device: [o_p2, o_g2, o_k2], model: OV2}
+      ROP2: {R: [b3, o_p2], r: osc_r_plate2_ohm}
+      ROK2: {R: [o_k2, "0"], r: osc_r_cathode2_ohm}
+      COC2: {C: [o_p2, o_g1b], c: osc_c_couple2_f}
+      ROG1B: {R: [o_g1b, "0"], r: osc_r_grid1b_ohm}
+      XOV1B: {device: [o_p1b, o_g1b, o_k1], model: OV1B}
+      XOV1A: {device: [o_p1a, "0", o_k1], model: OV1A}
+      ROT: {R: [o_k1, neg], r: osc_r_tail_ohm}
+      ROPA: {R: [b3, o_p1a], r: osc_r_plate_a_ohm}
+      ROPB: {R: [b3, o_p1b], r: osc_r_plate_b_ohm}
+      COD: {C: [o_p1b, o_t], c: osc_c_drive_f}
+      COOT: {C: [o_t, o_wt], c: osc_c_out_f}
+      ROWT: {R: [o_wt, o_wa], r: osc_r_wave_tank_ohm}
+      COOS: {C: [o_p1a, o_ws], c: osc_c_out_f}
+      ROWS: {R: [o_ws, o_wb], r: osc_r_wave_square_ohm}
+      ROWTG: {R: [o_wa, "0"], r: osc_r_wave_end_ohm}
+      ROWSG: {R: [o_wb, "0"], r: osc_r_wave_end_ohm}
+      ROWAVE: {pot: [o_wa, o_out, o_wb], r: osc_r_wave_pot_ohm, at: wave}
+      XOV3: {device: [b3, o_out, o_buf], model: OV3}
+      ROK3: {R: [o_buf, neg], r: osc_r_buffer_cathode_ohm}
+  - title: pitch
+    parts:
+      RVF: {R: [neg2, vref], r: r_tune_vr_feed_ohm}
+      VRT: {vr_tube: ["0", vrt_m, vref], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a}
+      RTT: {R: [vref, tlo], r: r_tune_top_ohm}
+      RTUNE: {pot: [tlo, tw, thi], r: r_tune_pot_ohm, at: tune}
+      RTB: {R: [thi, "0"], r: r_tune_bottom_ohm}
+      RTS: {R: [tw, o_g4], r: r_tune_sum_ohm}
+      COG4: {C: [o_g4, "0"], c: osc_c_grid4_f}
+      XOV4: {device: [o_p4, o_s4, o_g4, o_k4], model: OV4}
+      ROVR: {R: [b1, o_vr], r: osc_r_vr_feed_ohm}
+      VROA: {vr_tube: [o_vr, o_vra, o_vrm], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a}
+      VROB: {vr_tube: [o_vrm, o_vrb, "0"], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a}
+      ROVRL: {R: [o_vrm, "0"], r: osc_r_vr_leak_ohm}
+      ROS4: {R: [o_vr, o_s4], r: osc_r_screen4_ohm}
+      ROK4: {R: [o_k4, "0"], r: osc_r_cathode4_ohm}
