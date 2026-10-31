@@ -20,6 +20,10 @@
 //! The output runs at the session's host rate (draft-1x: 48 kHz). On Windows, cpal
 //! opens WASAPI outputs with automatic rate conversion, so a device mixing at another
 //! rate still plays it; inputs open at their own (mix) rate.
+//!
+//! Every source runs the session's transport (`crate::transport`, RECORDING_PLAN.md T1):
+//! the worker's [`Clock`] advances with each block it computes and mixes the click into
+//! the output after the monitor, so the click never reaches the device or a take.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -35,6 +39,7 @@ use crate::monitor::Monitor;
 use crate::panel::{Feed, RangeMode};
 use crate::resample::StreamResampler;
 use crate::settings::Settings;
+use crate::transport::{Clock, Grid, Phase, TransportSettings};
 
 /// Samples per block the worker computes (10 ms at 48 kHz, as the web player).
 pub const BLOCK: usize = 480;
@@ -159,6 +164,23 @@ pub struct Status {
     pub knob_to_ear_s: Option<f64>,
     /// The gain compensation applied to the device's output now (dB).
     pub compensation_db: f64,
+    pub transport: TransportStatus,
+}
+
+/// Where the transport is, as of the last block.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TransportStatus {
+    pub running: bool,
+    pub grid: Option<Grid>,
+    /// The position of the next sample the worker computes, and of the sample being
+    /// heard now (the queue and the output device's latency behind it; cpal's estimate).
+    pub computed: i64,
+    pub heard: i64,
+    pub phase: Option<Phase>,
+    /// While running: the output sample (counted from the stream's first) that carries
+    /// position 0. Exact, so a click at position `p` left the app as sample
+    /// `origin + p` (`Player::output_clock` dates samples).
+    pub origin: Option<i64>,
 }
 
 impl Status {
@@ -178,8 +200,23 @@ impl Status {
             latency_s: None,
             knob_to_ear_s: None,
             compensation_db: 0.0,
+            transport: TransportStatus {
+                running: false,
+                grid: None,
+                computed: 0,
+                heard: 0,
+                phase: None,
+                origin: None,
+            },
         }
     }
+}
+
+/// The transport's settings and a pending play (true) or stop (false), for the worker.
+#[derive(Debug, Default)]
+struct TransportCtl {
+    settings: Option<TransportSettings>,
+    run: Option<bool>,
 }
 
 /// What the window, the worker and the audio callbacks share.
@@ -215,6 +252,10 @@ struct Shared {
     output_db: AtomicU64,
     /// Where an oscillator's range switch is set (`RangeMode::index`; keys only).
     range_mode: AtomicU8,
+    transport: Mutex<TransportCtl>,
+    /// The last output callback: the first output sample it was asked for (counted from
+    /// the stream's first) and when it ran.
+    out_clock: Mutex<Option<(u64, Instant)>>,
 }
 
 /// A session playing out of the default output.
@@ -231,6 +272,19 @@ impl Player {
     /// `buffer_s` queued (a loop's lead, or live input's starting queue). Returns at
     /// once: the circuit settles on the worker (`State::Starting`).
     pub fn start(
+        source: Source,
+        values: Values,
+        circuit: Circuit,
+        s: Settings,
+        gain: f64,
+        buffer_s: f64,
+    ) -> Result<Player, String> {
+        Player::start_on(None, source, values, circuit, s, gain, buffer_s)
+    }
+
+    /// [`Player::start`] on the output device named `output` (None: the default).
+    pub fn start_on(
+        output: Option<&str>,
         source: Source,
         values: Values,
         circuit: Circuit,
@@ -263,10 +317,12 @@ impl Player {
             compensate: AtomicBool::new(true),
             output_db: AtomicU64::new(0f64.to_bits()),
             range_mode: AtomicU8::new(RangeMode::Auto.index()),
+            transport: Mutex::new(TransportCtl::default()),
+            out_clock: Mutex::new(None),
         });
         // Room for the buffer, the drift allowance and a block in flight.
         let (producer, consumer) = rtrb::RingBuffer::<f32>::new(buffer + 4 * BLOCK);
-        let (output, device) = open_output(rate, consumer, shared.clone())?;
+        let (output, device) = open_output(output, rate, consumer, shared.clone())?;
         let (input, worker_source) = match source {
             Source::Loop(x) => (None, WorkerSource::Loop(x)),
             Source::Input { device, channel } => {
@@ -415,6 +471,22 @@ impl Player {
     pub fn take(&self) -> Option<Take> {
         self.shared.take.lock().expect("take").take()
     }
+
+    /// The transport's tempo, meter, click and start (from the next block on).
+    pub fn set_transport(&self, s: &TransportSettings) {
+        self.shared.transport.lock().expect("transport").settings = Some(s.clone());
+    }
+
+    /// Start the transport (from its start bar, count-in first) or stop it.
+    pub fn transport_run(&self, on: bool) {
+        self.shared.transport.lock().expect("transport").run = Some(on);
+    }
+
+    /// The last output callback: the first output sample it was asked for and when it
+    /// ran (None before the output started).
+    pub fn output_clock(&self) -> Option<(u64, Instant)> {
+        *self.shared.out_clock.lock().expect("out_clock")
+    }
 }
 
 impl Drop for Player {
@@ -522,6 +594,43 @@ fn work(
         };
         out
     };
+    // The monitored block on its way to the ring: the transport's click mixed in.
+    let mut clock = Clock::new(rate, TransportSettings::default());
+    let mut pushed: u64 = 0;
+    let mut emit = |ring: &mut rtrb::Producer<f32>, mut y: Vec<f32>| {
+        {
+            let mut t = shared.transport.lock().expect("transport");
+            if let Some(s) = t.settings.take() {
+                clock.configure(&s);
+            }
+            match t.run.take() {
+                Some(true) => clock.start(),
+                Some(false) => clock.stop(),
+                None => {}
+            }
+        }
+        let (at, running) = (clock.position(), clock.running());
+        clock.process(&mut y);
+        push(ring, &y);
+        let origin = running.then(|| pushed as i64 - at);
+        pushed += y.len() as u64;
+        let computed = clock.position();
+        let heard = if running {
+            let queued = (ring.buffer().capacity() - ring.slots()) as i64;
+            let out_s = shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6;
+            computed - queued - (out_s * rate as f64).round() as i64
+        } else {
+            computed
+        };
+        shared.status.lock().expect("status").transport = TransportStatus {
+            running,
+            grid: Some(clock.grid()),
+            computed,
+            heard,
+            phase: running.then(|| clock.phase_at(heard)),
+            origin,
+        };
+    };
     let mut loads = Loads(Vec::new(), (rate as usize / BLOCK).max(1));
     {
         let mut st = shared.status.lock().expect("status");
@@ -573,7 +682,7 @@ fn work(
                     .next_block(BLOCK)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                push(&mut ring, &monitored(&live, &y));
+                emit(&mut ring, monitored(&live, &y));
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let pos = (live.position() + len - (capacity - ring.slots()) % len) % len;
@@ -624,7 +733,7 @@ fn work(
                         .process(block)
                         .map_err(|e| format!("the circuit stopped: {e}"))?;
                     let before = capacity - ring.slots();
-                    push(&mut ring, &monitored(&live, &y));
+                    emit(&mut ring, monitored(&live, &y));
                     heard(&live, before);
                     let queued = capacity - ring.slots();
                     shared.queued.store(queued, Ordering::Relaxed);
@@ -715,7 +824,7 @@ fn work(
                     .process_with(&block, &refs)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                push(&mut ring, &monitored(&live, &y));
+                emit(&mut ring, monitored(&live, &y));
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let block_s = BLOCK as f64 / rate as f64;
@@ -731,14 +840,21 @@ fn work(
 
 /// The default output device at `rate`, playing from `ring` (mono to every channel).
 fn open_output(
+    name: Option<&str>,
     rate: u32,
     ring: rtrb::Consumer<f32>,
     shared: Arc<Shared>,
 ) -> Result<(cpal::Stream, String), String> {
     let host = cpal::default_host();
-    let device = host
-        .default_output_device()
-        .ok_or("no audio output device")?;
+    let device = match name {
+        None => host.default_output_device(),
+        Some(n) => host
+            .output_devices()
+            .into_iter()
+            .flatten()
+            .find(|d| device_name(d) == n),
+    }
+    .ok_or_else(|| format!("no output device {}", name.unwrap_or("(default)")))?;
     let name = device_name(&device);
     let def = device
         .default_output_config()
@@ -781,6 +897,9 @@ fn build_output<T: SizedSample + FromSample<f32>>(
             let frames = data.len() / channels;
             if !started && ring.slots() >= shared.prefill.min(ring.buffer().capacity()) {
                 started = true;
+            }
+            if started && let Ok(mut c) = shared.out_clock.try_lock() {
+                *c = Some((shared.played.load(Ordering::Relaxed), Instant::now()));
             }
             let have = if started { ring.slots().min(frames) } else { 0 };
             let mut n = 0;

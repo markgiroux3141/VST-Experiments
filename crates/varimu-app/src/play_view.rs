@@ -557,6 +557,27 @@ impl PlayView {
         line
     }
 
+    /// The player, while a device plays (the Session view runs its transport).
+    pub fn player(&self) -> Option<&Player> {
+        self.player.as_ref()
+    }
+
+    /// Start the chosen device from the chosen source, as Play's ▶ does.
+    pub fn start_device(&mut self) {
+        self.start();
+    }
+
+    /// The input gain and the monitor (bypass, compensation, output gain) to the player:
+    /// every frame Play is shown, and after the Session view's calibration muted it.
+    pub fn apply_monitor(&self) {
+        if let Some(p) = &self.player {
+            p.set_gain(self.gain());
+            p.set_bypass(self.bypass);
+            p.set_compensation(self.compensate);
+            p.set_output_db(self.output_db);
+        }
+    }
+
     /// Keep the view's background work going (the editor view calls this when Play
     /// isn't shown).
     pub fn tick(&mut self, ctx: &egui::Context) {
@@ -1084,12 +1105,7 @@ impl PlayView {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         self.poll_loading();
         self.poll_render();
-        if let Some(p) = &self.player {
-            p.set_gain(self.gain());
-            p.set_bypass(self.bypass);
-            p.set_compensation(self.compensate);
-            p.set_output_db(self.output_db);
-        }
+        self.apply_monitor();
         if self.player.as_ref().is_some_and(|p| !p.recording()) {
             self.collect_take_now();
         }

@@ -2,8 +2,11 @@
 
 Drafted 2026-10-30 at the user's request: record what's played (the tube synth from the
 keyboard, against a metronome click), play it back, and layer more tracks on top, as in
-a DAW. **Nothing here is built. Where it goes in the order is the user's call** (below,
-open decision 1). It is a track of the native app ([NATIVE_APP_PLAN.md](NATIVE_APP_PLAN.md)):
+a DAW. **T1 is built (2026-10-30, branch `recording`; its status below the milestone),
+except the cabled loopback, which needs an audio interface.** Open decision 1 was
+answered by the user on 2026-10-30: T1 in parallel with the synth's modulation work,
+T2 after it lands (T2 changes `midi.rs`, `live.rs` and the renders the synth work
+touches). It is a track of the native app ([NATIVE_APP_PLAN.md](NATIVE_APP_PLAN.md)):
 native only, nothing goes into the web app. When it's started, work the milestones in
 order, each ending with its "done when" met and covered by tests, like the other plans.
 
@@ -251,6 +254,49 @@ mixed after the devices, count-in, pre-roll, the latency shown, loopback calibra
   where it should be, with no drift between the transport and the output;
 - the cpal estimate and the loopback measurement are both shown and compared;
 - the click adds no dropouts while a device plays (load measured with and without it).
+
+*Status (2026-10-30): built; met on the output's own mix, the cabled loopback waits for an
+interface.*
+- **What's there.**
+  - `varimu-app`'s `transport` (the grid, the click, count-in, pre-roll, start bar; the
+    worker's `Clock`) and `loopback` (capture of an input or of an output's own mix,
+    callbacks dated; each click found by normalized correlation to a fraction of a
+    sample; drift and round trip).
+  - `player`: every source runs the clock, the click mixed after the monitor
+    (`Player::set_transport`, `transport_run`, `Status::transport` with the position
+    heard and `origin`, the output sample that carried position 0; `output_clock` dates
+    the output's callbacks; `Player::start_on` plays on a named output).
+  - The Session view (`session_view.rs`): play / stop, the position as heard, tempo,
+    meter, click mode and level, count-in, pre-roll, start bar, the latency, and
+    Calibrate (8 s of click, the device muted at the monitor; the result kept per output
+    and input in `%APPDATA%\varimu\session.json`, apart from `app.json`). It runs on
+    the Play view's player. Not yet tried by the user.
+  - `examples/click.rs`: the measurements below.
+- **The click lands where it should** (`examples/click.rs --loopback output`, the
+  reactor filter playing, muted; `reports/recording/t1_loopback_wasapi_10min_run2/`):
+  1199 of 1199 clicks in 10 minutes found, each within 0.0005 samples of its line,
+  drift 0.00 ppm, no dropouts. The downbeats (2 kHz) come back 3.54 samples after the
+  other beats (1.25 kHz) on every click: Realtek's endpoint filters its own mix (the
+  scores are 0.976 / 0.993, not 1), so the analysis fits one line per pitch and reports
+  the gap. A first 10-minute run (`t1_loopback_wasapi_10min/`) found 855 of 1199, as
+  exactly: every miss sat under another program's test tones (-11 to -24 dBFS of a
+  439 Hz square, the other session's) mixed into the same output. Clicks now carry the
+  level around them, and misses under other sound are counted apart.
+- **Two capture paths that don't work as references.** The Oculus virtual output is
+  bit-exact (scores 1.0000, no gap between pitches) but its loopback lands each click 0
+  or 48 samples late at random (1 ms packets): the device, not the transport. The
+  webcam microphone is the only physical input here.
+- **The round trip** (output callback to capture callback): 77.9 ms measured on
+  Realtek's loopback, 31.9 ms by cpal (its output latency plus the capture's), +46 ms.
+  A loopback of the output isn't the round trip a recording sees (no converters): the
+  cabled measurement is still to do, on an interface with a line input.
+- **The click's cost:** 0.0011% of real time (`transport` tests). With tube_synth
+  playing notes, 80 s alternating every 10 s: load 83.8% with the click, 83.5% without;
+  4 dropouts with it, 0 without, the worst blocks 136% and 210%: the synth at its limit
+  on a busy desktop (the other session running), not the click.
+- **Open.** The cabled loopback (an interface); the user's first look at the Session
+  view; whether the cpal estimate or the loopback places takes when they disagree
+  (T2 uses the round trip for input takes and the output latency for keys).
 
 **T2. Takes as events** (closes S3's open done-when).
 - Timestamped key events placed within the block, not polled at its boundaries.

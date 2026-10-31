@@ -1,0 +1,31 @@
+{
+  "accent_minus_beat_samples": 8.435069769238908,
+  "bpm": 120.0,
+  "capture": "Realtek Digital Output (Realtek(R) Audio) (loopback)",
+  "capture_samples_lost": 0,
+  "click_off": {
+    "dropouts": 0,
+    "load_mean": 0.8349258410256412,
+    "seconds": 39,
+    "worst_block": 2.1036599999999996
+  },
+  "click_on": {
+    "dropouts": 4,
+    "load_mean": 0.8384486699999998,
+    "seconds": 40,
+    "worst_block": 1.35648
+  },
+  "cpal_round_trip_s": 0.032145,
+  "device": "tube_synth",
+  "drift_ppm": 761.9592172083411,
+  "found": 64,
+  "max_residual_samples": 1271.9566106041239,
+  "missed_under_other_sound": 2,
+  "rate_in": 48000,
+  "rate_out": 48000,
+  "rms_residual_samples": 907.5834806761592,
+  "round_trip_s": 0.09590601758946685,
+  "scheduled": 159,
+  "seconds": 80.0,
+  "span_s": 69.5
+}
