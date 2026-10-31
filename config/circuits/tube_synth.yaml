@@ -189,6 +189,7 @@ values:
   r_amount_pot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: the ENV AMOUNT pot, b1 to ground, ~0.3 mA)"}
   c_screen7_f: {value: 0.22e-6, source: "provisional: model knowledge (design: V7's screen bypass on the AMOUNT wiper: holds the screen while the envelope moves the grid; with the pot's up to 250k, b1's 120 Hz ripple ~-26 dB)"}
   r_screen7_ohm: {value: 1.0e+3, source: "provisional: model knowledge (V7's screen stopper)"}
+  r_ba_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for `ba` on the envelope's thread of the draft's partition (the bus's resistor is on the first thread): with cold cathodes the steering diodes don't conduct and the DC point was singular (a power-on)"}
   c_ba_f: {value: 0.1e-6, source: "provisional: model knowledge (design: on the keyboard bus's end of the envelope (RBUS's far side): 0.1 ms with RBUS; in the draft's partition the bus and the envelope are on different threads, coupled at this node)"}
   r_cutoff_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the CUTOFF pot)"}
   c_cutoff_f: {value: 0.1e-6, source: "provisional: model knowledge (on V4's grid: smooths the cutoff, 10 ms with the pot)"}
@@ -394,6 +395,7 @@ sections:
   - title: envelope
     parts:
       CBA: {C: [ba, "0"], c: c_ba_f}
+      RBAL: {R: [ba, "0"], r: r_ba_leak_ohm}
       RATT: {rheostat: [ba, bd], r: r_attack_ohm, at: attack, taper_mid: env_taper_mid}
       XVDA: {device: [bd, env], model: VDA}
       CENV: {C: [env, "0"], c: c_env_f}
