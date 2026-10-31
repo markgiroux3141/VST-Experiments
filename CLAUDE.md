@@ -200,7 +200,7 @@ varimu-app's `transport` (the grid, a click on its exact sample mixed after the 
 count-in, pre-roll; the worker's `Clock` in every player source: `Player::set_transport`,
 `transport_run`, `Status::transport`), `loopback` (an input or an output's own mix captured
 with dated callbacks, clicks found per pitch to a fraction of a sample, drift, round trip vs
-cpal), the app's Session view (`session_view.rs`, settings in `%APPDATA%\varimu\session.json`)
+cpal), the app's Session view (`session_view.rs`, prefs in `%APPDATA%\varimu\recording.json`; sessions in the repo's git-ignored `sessions/`)
 and `examples/click.rs`. On Realtek's output loopback: 1199 of 1199 clicks in 10 min within
 0.0005 samples, 0 ppm; through the UA Twin's own loopback (its input channels 3-4, bit-exact):
 1199 of 1199 exactly, round trip 46.6 ms vs cpal's 36.9. The output loopback captures every

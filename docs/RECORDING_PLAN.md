@@ -269,7 +269,8 @@ cable would add only the converters.*
   - The Session view (`session_view.rs`): play / stop, the position as heard, tempo,
     meter, click mode and level, count-in, pre-roll, start bar, the latency, and
     Calibrate (8 s of click, the device muted at the monitor; the result kept per output
-    and input in `%APPDATA%\varimu\session.json`, apart from `app.json`). It runs on
+    and input in `%APPDATA%\varimu\session.json`, apart from `app.json`; `recording.json`
+    since T2). It runs on
     the Play view's player. Not yet tried by the user.
   - `examples/click.rs`: the measurements below.
 - **The click lands where it should** (`examples/click.rs --loopback output`, the
