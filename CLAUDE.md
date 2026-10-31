@@ -191,11 +191,19 @@ asks for it.**
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)
-(2026-10-30; milestones T1-T6; nothing built, its place in the order the user's call). A take
+(2026-10-30; milestones T1-T6). A take
 is stored as its events (keys, knob changes at the sample they landed, from a defined start)
 plus the draft audio heard. Tracks play that audio back while the user iterates, so they cost
 almost no CPU. Production is a final render from the events, on demand (the user's call). T2
-closes S3's open done-when.
+closes S3's open done-when. **T1 built (2026-10-30, merged from the `recording` worktree):**
+varimu-app's `transport` (the grid, a click on its exact sample mixed after the monitor,
+count-in, pre-roll; the worker's `Clock` in every player source: `Player::set_transport`,
+`transport_run`, `Status::transport`), `loopback` (an input or an output's own mix captured
+with dated callbacks, clicks found per pitch to a fraction of a sample, drift, round trip vs
+cpal), the app's Session view (`session_view.rs`, settings in `%APPDATA%\varimu\session.json`)
+and `examples/click.rs`. On Realtek's output loopback: 1199 of 1199 clicks in 10 min within
+0.0005 samples, 0 ppm. Open: the cabled loopback on an interface. The output loopback captures
+every program's sound on that output (another session's test tones masked clicks).
 
 A crude end-to-end slice exists ahead of plan order ("end-to-end early,
 fidelity later"): one 670 channel as one coupled netlist
@@ -424,6 +432,7 @@ cargo run --release -p varimu-app -- --edit triode_stage_drawn   # R3: the Edito
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
 cargo run -p varimu-app --example devices             # the audio devices cpal sees
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)
+cargo run --release -p varimu-app --example click -- [--device D] [--notes] [--for S] [--ab S] [--output NAME] [--loopback output | --loopback input NAME --channel N] [--save DIR]   # recording T1: the click's timing on a loopback, load with / without it
 cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--quality draft|draft-1x|draft-2x] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
