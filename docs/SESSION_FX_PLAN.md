@@ -221,6 +221,18 @@ audition takes the armed instrument's place while the panel is open.
   (before the trim: the console's dry path). A reverb (`print::WET_ONLY`) is added at 30%
   wet with an 8 s tail; the live audition mixes the same way (`Monitor::wet`,
   `Player::set_wet`). Until F4's sends, a plate on a track is an insert at its wet share.
+- **Render and the always-there ▶ (2026-10-31, the user's second try):** the background
+  render read as "printed" and looked like the effect was baked in, and ▶ vanished after an
+  audition (only "Start the device" was left). Now: the background render is called a
+  playback render ("✓ rendered for playback, still editable"; the lane says "with
+  inserts"); **⤓ Render** (under the strip, and "⤓ Render track" in the panel) renders the
+  track's chain at production into a new take where its source sits, then removes the
+  inserts (the source stays in the lane; Undo brings them back; the take's `take.json` has
+  `rendered_from`: the take, the inserts, the quality, the code). One at a time, with
+  progress and cancel; the plate at production renders at ~4.4x real time (10 s of vocal:
+  80 s with its 8 s tail). While no instrument or audition plays, the session runs the
+  tracks-only player, so ▶ is always there; ● starts the Play view's instrument and records
+  once it plays.
 
 **F4. Sends and FX tracks.** FX tracks, send levels pre / post fader, the bus sum, prints
 with tails, the return strip.

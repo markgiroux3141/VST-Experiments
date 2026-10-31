@@ -37,9 +37,10 @@
 //!
 //! **Inserts** (docs/SESSION_FX_PLAN.md, F2): under each track's strip its chain of devices
 //! (+ adds one; a click selects one, its panel opens at the bottom; right-click bypasses,
-//! moves or removes it). The chain is printed on the active take in the background
+//! moves or removes it). The chain is rendered on the active take in the background
 //! (`varimu_app::print`, at most [`MAX_PRINT_JOBS`] at a time, none while recording or
-//! while a knob is held), and the track plays its print: ✓ printed, ◔ printing, … waiting
+//! while a knob is held), and the track plays that render (a preview: the inserts stay
+//! editable): ✓ ready, ◔ rendering, … waiting
 //! (the older print plays meanwhile), ! failed. The first insert's trim is set once from
 //! the take's loudest stretch to the alignment level (-18 dBFS); later ones start at 0 dB.
 //!
@@ -48,7 +49,7 @@
 //! audio where the transport is (the prints of the inserts before it, else the take), so
 //! Space plays the session with it and its knobs, trim, make-up and bypass are heard as
 //! they turn. The other tracks play their prints; the inserts after it aren't heard. The
-//! track isn't printed while it is auditioned: closing the panel prints it. No recording
+//! track isn't rendered while it is auditioned: closing the panel renders it. No recording
 //! while auditioning.
 
 use std::collections::{HashMap, HashSet};
@@ -75,6 +76,16 @@ use varimu_circuit::spec;
 use varimu_circuit::yaml::Value as YValue;
 
 use crate::play_view::PlayView;
+
+// **Render** (⤓, the user's ask 2026-10-31): a track's chain rendered at production into a
+// new take on the track, its inserts then removed (the effect baked in). The source take
+// stays in the lane and Undo brings the inserts back; the new take's `take.json` says what
+// it was rendered from. One at a time, in the background.
+//
+// **No live device needed to play.** While neither the Play view's device nor an
+// audition plays, the session runs the tracks-only player (`Player::start_mix`), so the
+// transport always has ▶; ● (record) starts the Play view's device and records once it
+// plays.
 use crate::theme;
 
 /// How long a calibration plays the click (s).
@@ -151,6 +162,15 @@ struct Audition {
     gains: (f64, f64, bool, f64),
 }
 
+/// A track's chain rendering into a new take (⤓ Render): the track, its source take, the
+/// job.
+struct Bake {
+    track: usize,
+    take: String,
+    slots: Vec<Slot>,
+    job: Job,
+}
+
 /// A drag on the ruler: a locator's handle, or a new loop from a beat.
 #[derive(Clone, Copy)]
 enum RulerDrag {
@@ -202,6 +222,11 @@ pub struct SessionView {
     audition: Option<Audition>,
     /// The audition's state as the panel shows it (set each frame).
     audition_status: Option<String>,
+    bake: Option<Bake>,
+    /// The tracks-only player couldn't start (don't retry every frame).
+    mix_failed: bool,
+    /// Record was pressed while no instrument played: record once it plays.
+    record_pending: bool,
 }
 
 fn prefs_path() -> Option<PathBuf> {
@@ -303,6 +328,9 @@ impl SessionView {
             knobs: HashMap::new(),
             audition: None,
             audition_status: None,
+            bake: None,
+            mix_failed: false,
+            record_pending: false,
         }
     }
 
@@ -355,6 +383,25 @@ impl SessionView {
         self.poll_calibration(play);
         let idle = matches!(self.calibrate, Calibrate::Idle);
         self.sync_audition(play, idle);
+        // Nothing playing: the tracks-only player, so ▶ is always there.
+        if idle && self.audition.is_none() && play.player().is_none() && !self.mix_failed {
+            self.mix_failed = !self.start_mix(play);
+        }
+        // Record asked for while the instrument started: record once it plays.
+        if self.record_pending
+            && let Some(p) = play.player()
+            && !play.adopted()
+        {
+            match p.status().state {
+                State::Playing => {
+                    self.record_pending = false;
+                    self.play(play, true);
+                }
+                State::Failed(_) => self.record_pending = false,
+                State::Starting => {}
+            }
+        }
+        self.poll_bake();
         if idle {
             if self.audition.is_none() {
                 play.apply_monitor();
@@ -503,8 +550,14 @@ impl SessionView {
         // Recording needs the live device (the Play view's choice); playing doesn't: with
         // nothing playing, the session's tracks play on their own.
         if record && play.adopted() {
+            let (label, _) = play.device_label_id();
             play.start_device();
-            self.error = Some("the live device is starting: record again once it plays".into());
+            self.mix_failed = false;
+            self.record_pending = play.player().is_some();
+            self.error = None;
+            if self.record_pending {
+                self.error = Some(format!("starting {label}: recording begins once it plays"));
+            }
             return;
         }
         let Some(p) = play.player() else {
@@ -1039,7 +1092,7 @@ impl SessionView {
             return ("".into(), theme::MUTED, "no take to print".into());
         };
         if let Some(e) = self.print_errors.get(&sig) {
-            return ("!".into(), theme::FAULT, format!("the print failed: {e}"));
+            return ("!".into(), theme::FAULT, format!("the render failed: {e}"));
         }
         if let Some(j) = self
             .jobs
@@ -1049,11 +1102,15 @@ impl SessionView {
             let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
             let (at, f) = j.job.progress();
             return match stage.cmp(&at) {
-                std::cmp::Ordering::Less => ("✓".into(), theme::OK, "printed".into()),
+                std::cmp::Ordering::Less => (
+                    "✓".into(),
+                    theme::OK,
+                    "rendered for playback (still editable)".into(),
+                ),
                 std::cmp::Ordering::Equal => (
                     format!("◔ {:.0}%", f * 100.0),
                     theme::ACCENT,
-                    "printing".into(),
+                    "rendering for playback".into(),
                 ),
                 std::cmp::Ordering::Greater => (
                     "…".into(),
@@ -1063,12 +1120,16 @@ impl SessionView {
             };
         }
         if track.print_current(rate) {
-            ("✓".into(), theme::OK, "printed".into())
+            (
+                "✓".into(),
+                theme::OK,
+                "rendered for playback (still editable; ⤓ Render bakes it into a new take)".into(),
+            )
         } else {
             (
                 "…".into(),
                 theme::WARN,
-                "waiting to print (the older print plays meanwhile)".into(),
+                "waiting to render (the older render plays meanwhile)".into(),
             )
         }
     }
@@ -1131,6 +1192,7 @@ impl SessionView {
         let rate = self.session.rate;
         let mut changed = false;
         let mut remove = false;
+        let mut render = false;
         let mut moved: Option<usize> = None;
         let n = self.session.tracks[t].inserts.len();
         let last_on = self.session.tracks[t]
@@ -1171,7 +1233,8 @@ impl SessionView {
             ui.label(RichText::new(&live_line).small().color(theme::ACCENT))
                 .on_hover_text(
                     "While this panel is open the device plays live on the track (Space plays \
-                     the session); closing it prints the chain again. The inserts after it \
+                     the session); closing it renders the chain again for playback. The \
+                     inserts after it \
                      aren't heard meanwhile.",
                 );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1180,6 +1243,19 @@ impl SessionView {
                 }
                 if ui.button("Remove").clicked() {
                     remove = true;
+                }
+                if ui
+                    .add_enabled(
+                        self.bake.is_none(),
+                        egui::Button::new(RichText::new("⤓ Render track").color(theme::ACCENT)),
+                    )
+                    .on_hover_text(
+                        "Render the track through its inserts at production quality into a new \
+                         take, and remove the inserts (Undo brings them back)",
+                    )
+                    .clicked()
+                {
+                    render = true;
                 }
                 if ui
                     .add_enabled(k + 1 < n, egui::Button::new("▶"))
@@ -1294,6 +1370,10 @@ impl SessionView {
             self.insert_sel = None;
             changed = true;
         }
+        if render {
+            self.insert_sel = None;
+            self.start_bake(t);
+        }
         if changed {
             self.save();
         }
@@ -1302,6 +1382,7 @@ impl SessionView {
     /// The row of insert chips under a track's strip (+ adds one).
     fn inserts_row(&mut self, ui: &mut egui::Ui, i: usize) -> bool {
         let mut changed = false;
+        let mut bake = false;
         let mut add: Option<&'static str> = None;
         let mut action: Option<(usize, &'static str)> = None;
         ui.horizontal(|ui| {
@@ -1352,8 +1433,52 @@ impl SessionView {
                 }
             })
             .response
-            .on_hover_text("Add a device to this track's chain (printed, not played live)");
+            .on_hover_text(
+                "Add a device to this track's chain (rendered in the background for \
+                 playback; open it to hear it live while you turn it)",
+            );
+            if self.session.tracks[i].inserts.iter().any(|s| !s.bypass) {
+                match &self.bake {
+                    Some(b) if b.track == i => {
+                        let (at, f) = b.job.progress();
+                        let pct = (at as f64 + f) / b.slots.len().max(1) as f64 * 100.0;
+                        ui.label(
+                            RichText::new(format!("⤓ {pct:.0}%"))
+                                .small()
+                                .color(theme::ACCENT),
+                        )
+                        .on_hover_text("Rendering into a new take at production quality");
+                        if ui
+                            .small_button("✕")
+                            .on_hover_text("Cancel the render")
+                            .clicked()
+                        {
+                            b.job.cancel();
+                        }
+                    }
+                    _ => {
+                        if ui
+                            .add_enabled(
+                                self.bake.is_none() && self.recording.is_none(),
+                                egui::Button::new(RichText::new("⤓ Render").small()),
+                            )
+                            .on_hover_text(
+                                "Render this track through its inserts at production quality \
+                                 into a new take, and remove the inserts (the effect is baked \
+                                 in; the old take stays in the lane, Undo brings the inserts \
+                                 back)",
+                            )
+                            .clicked()
+                        {
+                            bake = true;
+                        }
+                    }
+                }
+            }
         });
+        if bake {
+            self.start_bake(i);
+        }
         if let Some((k, what)) = action {
             let ins = &mut self.session.tracks[i].inserts;
             if what == "bypass" {
@@ -1371,6 +1496,96 @@ impl SessionView {
             changed = true;
         }
         changed
+    }
+
+    /// Render track `t`'s chain (its inserts not bypassed, at production) into a new take.
+    fn start_bake(&mut self, t: usize) {
+        if self.bake.is_some() {
+            self.error = Some("one render at a time".into());
+            return;
+        }
+        let Some(track) = self.session.tracks.get(t) else {
+            return;
+        };
+        let Some(take) = track.active_take() else {
+            self.error = Some("the track has no take to render".into());
+            return;
+        };
+        let slots: Vec<Slot> = track
+            .inserts
+            .iter()
+            .filter(|s| !s.bypass)
+            .map(|s| Slot {
+                quality: Quality::Production,
+                ..s.clone()
+            })
+            .collect();
+        if slots.is_empty() {
+            return;
+        }
+        let job = Job::spawn(
+            self.root.join("config"),
+            slots.clone(),
+            take.audio.clone(),
+            self.session.rate,
+            Some(self.session.dir.join("prints")),
+        );
+        self.bake = Some(Bake {
+            track: t,
+            take: take.id.clone(),
+            slots,
+            job,
+        });
+        self.error = None;
+    }
+
+    /// A finished render: a new take on its track (where its source sits), the inserts it
+    /// went through removed.
+    fn poll_bake(&mut self) {
+        if !self.bake.as_ref().is_some_and(|b| b.job.is_finished()) {
+            return;
+        }
+        let b = self.bake.take().expect("a render");
+        let audio = match b.job.join() {
+            Some(Ok(prints)) => match prints.last() {
+                Some(p) => (*p.audio).clone(),
+                None => return,
+            },
+            Some(Err(e)) => {
+                if e != "cancelled" && !e.contains("cancelled") {
+                    self.error = Some(format!("the render failed: {e}"));
+                }
+                return;
+            }
+            None => return,
+        };
+        let Some(pos) = self
+            .session
+            .tracks
+            .get(b.track)
+            .and_then(|t| t.takes.iter().find(|k| k.id == b.take))
+            .map(|k| k.position)
+        else {
+            self.error = Some("the rendered take's track or source take is gone".into());
+            return;
+        };
+        let from = json!({
+            "take": b.take,
+            "inserts": b.slots.iter().map(Slot::to_json).collect::<Vec<_>>(),
+            "quality": Quality::Production.name(),
+            "code": circuitsim::SOURCE_HASH,
+        });
+        self.saved = true;
+        match self.session.add_rendered_take(b.track, audio, pos, from) {
+            Ok(_) => {
+                self.session.tracks[b.track].inserts.retain(|s| s.bypass);
+                if self.insert_sel.is_some_and(|(t, _)| t == b.track) {
+                    self.insert_sel = None;
+                }
+                self.save();
+            }
+            Err(e) => self.error = Some(e),
+        }
     }
 
     fn transport_ui(&mut self, ui: &mut egui::Ui, play: &mut PlayView) {
@@ -2133,7 +2348,7 @@ impl SessionView {
                 overview,
                 colour,
                 &if printed.is_some() {
-                    format!("{} · printed", k.id)
+                    format!("{} · with inserts", k.id)
                 } else {
                     k.id.clone()
                 },

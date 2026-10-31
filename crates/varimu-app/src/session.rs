@@ -290,6 +290,9 @@ pub struct Take {
     pub code: String,
     pub audio: Arc<Vec<f32>>,
     pub overview: Arc<Overview>,
+    /// A take rendered from another through a chain of inserts (Render): the take, the
+    /// inserts, the quality and the code version (None: recorded).
+    pub rendered_from: Option<Value>,
 }
 
 impl Take {
@@ -496,6 +499,7 @@ impl Session {
             code: circuitsim::SOURCE_HASH.to_string(),
             overview: Arc::new(Overview::of(&rec.samples, OVERVIEW_BIN)),
             audio: Arc::new(rec.samples),
+            rendered_from: None,
         };
         write_take(&self.dir, &take, self.rate)?;
         self.known.insert(take.id.clone(), take.clone());
@@ -503,6 +507,39 @@ impl Session {
         t.takes.push(take);
         t.active = Some(t.takes.len() - 1);
         self.save()
+    }
+
+    /// A track's chain rendered into a new take of `track` (now its active one) at
+    /// `position`, its files written; `from` says what it was rendered from (the take, the
+    /// inserts, the quality). Returns its id.
+    pub fn add_rendered_take(
+        &mut self,
+        track: usize,
+        samples: Vec<f32>,
+        position: i64,
+        from: Value,
+    ) -> Result<String, String> {
+        let id = self.next_id();
+        let take = Take {
+            id: id.clone(),
+            position,
+            latency: 0,
+            device: format!("render of {}", from["take"].as_str().unwrap_or("?")),
+            recorded_unix_s: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs()),
+            code: circuitsim::SOURCE_HASH.to_string(),
+            overview: Arc::new(Overview::of(&samples, OVERVIEW_BIN)),
+            audio: Arc::new(samples),
+            rendered_from: Some(from),
+        };
+        write_take(&self.dir, &take, self.rate)?;
+        self.known.insert(id.clone(), take.clone());
+        let t = self.tracks.get_mut(track).ok_or("no such track")?;
+        t.takes.push(take);
+        t.active = Some(t.takes.len() - 1);
+        self.save()?;
+        Ok(id)
     }
 
     /// The session as `session.json` holds it: rate, transport, tracks (their takes by id,
@@ -738,6 +775,10 @@ fn write_take(dir: &Path, k: &Take, rate: u32) -> Result<(), String> {
         "recorded_unix_s": k.recorded_unix_s,
         "code": k.code,
     });
+    let mut v = v;
+    if let Some(from) = &k.rendered_from {
+        v["rendered_from"] = from.clone();
+    }
     let p = d.join("take.json");
     std::fs::write(
         &p,
@@ -769,6 +810,7 @@ fn read_take(dir: &Path, id: &str, rate: u32) -> Result<Take, String> {
         code: v["code"].as_str().unwrap_or("").to_string(),
         overview: Arc::new(Overview::of(&audio, OVERVIEW_BIN)),
         audio: Arc::new(audio),
+        rendered_from: v.get("rendered_from").filter(|f| !f.is_null()).cloned(),
     })
 }
 
@@ -846,6 +888,7 @@ mod tests {
             code: String::new(),
             audio: Arc::new(vec![v; 10]),
             overview: Arc::new(Overview::default()),
+            rendered_from: None,
         };
         s.tracks[0].takes.push(take(5, 1.0));
         s.tracks[0].active = Some(0);
@@ -997,6 +1040,25 @@ mod tests {
         s.tracks[0].inserts.clear();
         s.restore(&state).expect("restored");
         assert_eq!(s.tracks[0].inserts[0].trim_db, -3.0);
+        // A render into a new take: placed where its source is, saved with what it came
+        // from, read back with it.
+        let pos = s.tracks[0]
+            .active_take()
+            .map(|k| k.position)
+            .expect("a take");
+        let from = json!({"take": "t0002", "quality": "production"});
+        let id = s
+            .add_rendered_take(0, vec![0.25; 120], pos, from.clone())
+            .expect("saved");
+        assert_eq!(
+            s.tracks[0].active_take().map(|k| k.id.clone()),
+            Some(id.clone())
+        );
+        let u = Session::load(&dir).expect("loads");
+        let k = u.tracks[0].active_take().expect("the render");
+        assert_eq!((k.id.clone(), k.position), (id, pos));
+        assert_eq!(k.rendered_from, Some(from));
+        assert_eq!(k.audio.len(), 120);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

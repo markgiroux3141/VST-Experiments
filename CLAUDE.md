@@ -214,7 +214,10 @@ plays that device live on the track where the transport is (`player::Source::Tim
 `PlayView::adopt`), knobs heard in ~0.3 s (the 670: 53% load, 0 dropouts); the session plays
 without a device (`Source::Mix`, `Player::start_mix`); the worker's output stage is
 `player::Emitter`. An insert has a wet / dry share (`Slot::wet`, `Monitor::wet`): the
-plate reverb goes in at 30% wet with an 8 s tail.
+plate reverb goes in at 30% wet with an 8 s tail. **⤓ Render** bakes a track's chain at
+production into a new take and removes its inserts (`Session::add_rendered_take`,
+`Take::rendered_from`; Undo restores); the session plays tracks-only when no instrument
+plays (▶ always there; ● starts the instrument and records once it plays).
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)
