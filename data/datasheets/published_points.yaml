@@ -267,3 +267,11 @@
 "EC92_retarding_by_heater":
   source: "Phywe LEP 4.1.10, Fig. 5 'Initial current of the diode at different heater currents' (log scale), local copy sources/phywe_lep_4_1_10.pdf page 3; read by eye, the voltage at which each heater current's curve passes 10 uA (+-0.03 V). Device builder B6: the retarding region's shift with cathode temperature."
   u_at_10ua_v: {heater_0_130_a: -0.07, heater_0_140_a: -0.25, heater_0_150_a: -0.42}
+
+"SCOTCH111":
+  source: "D. A. Eilers (ex-3M), '3M Audio Open Reel Tapes, in Customary Units', rev.2-cust 2011-07-24, AES Historical Committee, p.1, row 111 (111A, 1948, acetate); local copy tape/aes_3m_audio_open_reel_products.pdf (web: https://aes2.org/wp-content/uploads/2025/01/aorprod-cust.pdf)"
+  coercivity_a_m: 21486.0       # 270 Oe
+  retentivity_t: 0.090          # 900 G
+  remanence_wb_per_m: 1.008e-6  # 0.64 lines per 1/4"
+  oxide_m: 12.7e-6              # 0.5 mil
+  base_m: 36.1e-6               # 1.42 mil acetate

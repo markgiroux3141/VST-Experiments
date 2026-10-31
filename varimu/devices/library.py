@@ -40,6 +40,7 @@ from varimu.devices.fit import (
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
 from varimu.devices.plate import PlateComponent, plate_from_data
 from varimu.devices.speaker import Speaker, speaker_from_data
+from varimu.devices.tape import TapeFormulation, tape_from_data
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_spec
 
 DEVICE_DIR = versions.COMPONENT_DIR
@@ -120,6 +121,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
     if kind == "plate":
         raise ValueError(f"{name} is a plate, not a device model: place it with a `plate` part")
+    if kind == "tape":
+        raise ValueError(f"{name} is a tape, not a device model: load it with load_tape")
     raise ValueError(f"{name}: unknown device kind {kind!r}")
 
 
@@ -134,6 +137,14 @@ def load_plate(name: str, root: Path = DEVICE_DIR) -> PlateComponent:
     if d.get("kind") != "plate":
         raise ValueError(f"{name} is not a plate (kind {d.get('kind')!r})")
     return plate_from_data(d, name)
+
+
+def load_tape(name: str, root: Path = DEVICE_DIR) -> TapeFormulation:
+    """Tape component `name` (`NAME@N`, or `NAME` for its latest version)."""
+    d = _read(name, root)
+    if d.get("kind") != "tape":
+        raise ValueError(f"{name} is not a tape (kind {d.get('kind')!r})")
+    return tape_from_data(d, name)
 
 
 # --- Building --------------------------------------------------------------------
@@ -746,6 +757,72 @@ def build_emt140() -> dict[str, Any]:
     }
 
 
+# Scotch 111's easy-axis concentration (TAPE_PLAN.md TM2, step 7: No. 21 with the head image).
+SCOTCH111_KAPPA = 1.5
+
+
+def build_scotch111() -> dict[str, Any]:
+    """Scotch 111, the tape of the Ampex 350 / 351's era (docs/TAPE_PLAN.md, TM1): its
+    particles as a Preisach ensemble fitted to 3M's remanence curve (Sound Talk No. 20)
+    and Eilers' coercivity; coating and base from Eilers' table (varimu.devices.tape_fit)."""
+    from varimu.devices import tape_fit
+    from varimu.devices.tape import Orientation
+
+    pub = _published()["SCOTCH111"]
+    rows = load_csv("scotch_111_remanence.csv")  # h_peak_a_m, phi_r_wb_per_m
+    orientation = Orientation(SCOTCH111_KAPPA, 8)
+    fit = tape_fit.fit_preisach(
+        rows[:, 0], rows[:, 1], pub["coercivity_a_m"], pub["oxide_m"], orientation=orientation
+    )
+    p = fit.params
+    eilers = "data/datasheets/published_points.yaml SCOTCH111 (Eilers' table, AES, row 111)"
+    b20 = "data/datasheets/3m_sound_talk.provenance.yaml (Sound Talk No. 20, Type B, 4RBA)"
+    return {
+        "name": "SCOTCH111",
+        "kind": "tape",
+        "source": "Scotch 111 (gamma-Fe2O3 on acetate, 1948): a Preisach ensemble fitted to "
+        "3M's remanence curve and Eilers' coercivity; varimu.devices.tape_fit, "
+        "varimu.devices.preisach",
+        "coating": {
+            "thickness_m": pub["oxide_m"],
+            "source": f"{eilers}: 0.5 mil oxide",
+        },
+        "base": {
+            "thickness_m": pub["base_m"],
+            "source": f"{eilers}: 1.42 mil acetate",
+        },
+        "particles": {
+            "hc_median_a_m": p.hc_median_a_m,
+            "sigma_ln_hc": p.sigma_ln_hc,
+            "sigma_hi_a_m": p.sigma_hi_a_m,
+            "ms_a_m": fit.ms_a_m,
+            "h_max_a_m": p.h_max_a_m,
+            "n_table": p.n_table,
+            "source": f"fit: the remanence after symmetric loops ({b20}, digitized: "
+            "scotch_111_remanence.csv) and the loop's coercivity, 270 Oe +-10% "
+            f"({eilers}); Ms from the curve's saturated flux per width (0.636 lines per "
+            "1/4\") over the coating's thickness and the fit's saturation remanence "
+            "(the x component of the oriented ensemble). h_max, n_table: numerical (the "
+            "tables' range and points)",
+        },
+        "orientation": {
+            "kappa": SCOTCH111_KAPPA,
+            "n": orientation.n,
+            "source": "fit: the easy axes' axial von Mises concentration that reproduces "
+            "3M Sound Talk No. 21's bias curves (Type B on an Ampex 300, 15 ips) with the "
+            "vector Preisach model, its demagnetization and the head's image, among kappa "
+            "0.5-20 (docs/TAPE_PLAN.md, TM2's status, step 7); bulletin 20 alone fits "
+            "kappa >= 1. n: numerical (directions; 16 moves No. 21's curves < 0.2 dB)",
+        },
+        "fit_report": {
+            "remanence_rms_reading_errors": fit.rms_sigma,
+            "remanence_max_error_wb_per_m": fit.max_abs_wb_per_m,
+            "coercivity_a_m": fit.coercivity_a_m,
+            "saturation_remanence": fit.saturation_remanence,
+        },
+    }
+
+
 BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
@@ -765,6 +842,7 @@ BUILDERS = {
     "5Y3GT": build_5y3gt,
     "P12R": build_p12r,
     "EMT140": build_emt140,
+    "SCOTCH111": build_scotch111,
 }
 
 REPORT_FOR = {
@@ -773,6 +851,7 @@ REPORT_FOR = {
     "6V6GT": "6v6gt_fit.png",
     "5Y3GT": "5y3gt_fit.png",
     "P12R": "p12r_fit.png",
+    "SCOTCH111": "scotch111_fit.png",
 }
 
 
@@ -792,6 +871,23 @@ def plot_fit(name: str, root: Path = DEVICE_DIR) -> Path:
             meta,
             path,
             f"{ref}: the model against the Jensen sheet (IEC baffle, 2.83 V, 1 m)",
+        )
+    if name == "SCOTCH111":
+        from varimu.devices import tape_fit
+
+        ref, _ = versions.read_text(name, root)
+        tape = load_tape(str(ref), root)
+        rows = load_csv("scotch_111_remanence.csv")
+        return tape_fit.plot_fit(
+            tape.ensemble(),
+            tape.ms_a_m,
+            tape.coating_m,
+            rows[:, 0],
+            rows[:, 1],
+            _published()["SCOTCH111"]["coercivity_a_m"],
+            path,
+            f"{ref}: the Preisach ensemble against 3M Sound Talk No. 20 (Type B) and Eilers' Hc",
+            orientation=tape.orientation,
         )
     dev = load_device(name, root)
     pub = _published()

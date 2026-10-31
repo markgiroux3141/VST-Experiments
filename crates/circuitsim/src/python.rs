@@ -334,6 +334,114 @@ impl PyStream {
     }
 }
 
+/// The tape medium's recording kernel (`crate::tape::record`; the reference is
+/// `varimu.devices.tape.record`). `preisach`: (hc_median, sigma_ln_hc, sigma_hi, h_max,
+/// n_table); `head`: (gap, pole, relax) in metres; `heights` and `zones`: per layer;
+/// `s_rec`, `hg`: per bias sample; `axes`: (cos, sin, weight) per easy-axis direction,
+/// flattened; `h_static_x` / `_y` (during the pass), `h_end_x` / `_y` (after it): layers x
+/// cells, flattened, or None; `table_step`: the head field's table step over the layer's
+/// height (0: exact). Returns (M_x, M_y)
+/// / Ms, layers x cells flattened. Releases the GIL.
+#[pyfunction]
+#[pyo3(signature = (preisach, head, heights, zones, s_rec, hg, s_cells, axes, h_static_x = None, h_static_y = None, h_end_x = None, h_end_y = None, table_step = 0.0))]
+#[allow(clippy::too_many_arguments)]
+fn tape_record<'py>(
+    py: Python<'py>,
+    preisach: (f64, f64, f64, f64, usize),
+    head: (f64, f64, f64),
+    heights: PyReadonlyArray1<'py, f64>,
+    zones: PyReadonlyArray1<'py, f64>,
+    s_rec: PyReadonlyArray1<'py, f64>,
+    hg: PyReadonlyArray1<'py, f64>,
+    s_cells: PyReadonlyArray1<'py, f64>,
+    axes: PyReadonlyArray1<'py, f64>,
+    h_static_x: Option<PyReadonlyArray1<'py, f64>>,
+    h_static_y: Option<PyReadonlyArray1<'py, f64>>,
+    h_end_x: Option<PyReadonlyArray1<'py, f64>>,
+    h_end_y: Option<PyReadonlyArray1<'py, f64>>,
+    table_step: f64,
+) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
+    let (heights, zones) = (heights.as_array().to_vec(), zones.as_array().to_vec());
+    let (s_rec, hg) = (s_rec.as_array().to_vec(), hg.as_array().to_vec());
+    let s_cells = s_cells.as_array().to_vec();
+    let flat = axes.as_array().to_vec();
+    if !flat.len().is_multiple_of(3) || heights.len() != zones.len() || s_rec.len() != hg.len() {
+        return Err(invalid("tape_record: mismatched array lengths"));
+    }
+    let axes: Vec<[f64; 3]> = flat.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let n = heights.len() * s_cells.len();
+    let hx = h_static_x.map(|a| a.as_array().to_vec());
+    let hy = h_static_y.map(|a| a.as_array().to_vec());
+    if hx.as_ref().is_some_and(|v| v.len() != n) || hy.as_ref().is_some_and(|v| v.len() != n) {
+        return Err(invalid("tape_record: h_static must be layers x cells"));
+    }
+    let hy = match (&hx, hy) {
+        (Some(_), None) => Some(vec![0.0; n]),
+        (_, y) => y,
+    };
+    let ex = h_end_x.map(|a| a.as_array().to_vec());
+    let ey = h_end_y.map(|a| a.as_array().to_vec());
+    if ex.as_ref().is_some_and(|v| v.len() != n) || ey.as_ref().is_some_and(|v| v.len() != n) {
+        return Err(invalid("tape_record: h_end must be layers x cells"));
+    }
+    let ey = match (&ex, ey) {
+        (Some(_), None) => Some(vec![0.0; n]),
+        (_, y) => y,
+    };
+    let (mx, my) = py.detach(|| {
+        let p = crate::tape::preisach(preisach.0, preisach.1, preisach.2, preisach.3, preisach.4);
+        let rec = crate::tape::Recording {
+            preisach: &p,
+            head: crate::tape::Head {
+                gap: head.0,
+                pole: head.1,
+                relax: head.2,
+            },
+            heights: &heights,
+            zones: &zones,
+            s_rec: &s_rec,
+            hg: &hg,
+            s_cells: &s_cells,
+            axes: &axes,
+            h_static: match (&hx, &hy) {
+                (Some(x), Some(y)) => Some((x.as_slice(), y.as_slice())),
+                _ => None,
+            },
+            h_end: match (&ex, &ey) {
+                (Some(x), Some(y)) => Some((x.as_slice(), y.as_slice())),
+                _ => None,
+            },
+            table_step,
+        };
+        crate::tape::record(&rec)
+    });
+    Ok((
+        mx.into_pyarray(py).into_any(),
+        my.into_pyarray(py).into_any(),
+    ))
+}
+
+/// The tape particles' state after field histories (`crate::tape::Preisach::state_after`;
+/// the reference is `varimu.devices.preisach.Preisach.state_after`): `h` cells x samples,
+/// flattened row-major with `samples` per cell.
+#[pyfunction]
+fn tape_state_after<'py>(
+    py: Python<'py>,
+    preisach: (f64, f64, f64, f64, usize),
+    h: PyReadonlyArray1<'py, f64>,
+    samples: usize,
+) -> PyResult<Bound<'py, PyAny>> {
+    let h = h.as_array().to_vec();
+    if samples == 0 || !h.len().is_multiple_of(samples) {
+        return Err(invalid("tape_state_after: h must be cells x samples"));
+    }
+    let out: Vec<f64> = py.detach(|| {
+        let p = crate::tape::preisach(preisach.0, preisach.1, preisach.2, preisach.3, preisach.4);
+        h.chunks(samples).map(|c| p.state_after(c)).collect()
+    });
+    Ok(out.into_pyarray(py).into_any())
+}
+
 #[pymodule]
 fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", crate::VERSION)?;
@@ -342,6 +450,8 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("SimulationError", m.py().get_type::<SimulationError>())?;
     m.add_function(wrap_pyfunction!(ir_roundtrip, m)?)?;
     m.add_function(wrap_pyfunction!(simulate, m)?)?;
+    m.add_function(wrap_pyfunction!(tape_record, m)?)?;
+    m.add_function(wrap_pyfunction!(tape_state_after, m)?)?;
     m.add_class::<PyStream>()?;
     Ok(())
 }

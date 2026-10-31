@@ -1,0 +1,33 @@
+device: "Scotch 111 (Type B coating, #111 4RBA)"
+document: "Sound Talk, Bulletin No. 20: Remanent Flux Curves for Magnetic Recording Tapes"
+publisher: "Minnesota Mining and Manufacturing Co. (3M), Magnetic Products Division"
+date: "undated (between Bulletin 14, 1950-06, and Bulletin 21, 1953-02)"
+local_copy: tape/3m_Sound_Talk_20.pdf
+local_copy_sha256: 3c315b1fe9279244ddbffa81be958a0d76be585a8bc2d8ead09929da62c9775a
+scan_source: "web: http://bitsavers.org/pdf/3M/bulletins/sound_talk/Sound_Talk_20.pdf"
+digitized_with: >-
+  PyMuPDF 1.x render of p.1 at 800 dpi around the plot; points read by eye against the
+  printed grid (100 Oe and 0.1 line divisions; ~240 px per division at that resolution):
+  the plotted dots at 300 ... 900 Oe, the curve between them at 25-50 Oe steps
+digitized_by: Claude Code
+digitized_on: 2026-10-31
+files:
+  scotch_111_remanence.csv:
+    figure: >-
+      p.1, remanent flux (lines per 1/4" wide tape) against peak magnetizing field
+      (oersteds), the curve labelled "Type B" / "4RBA" (saturates at ~0.636 lines). Type B
+      lists #111 Tape (4RBA) among others; Type BQ (5RBA, #111A) is the other steep curve,
+      not digitized
+    columns: >-
+      h_peak_a_m (the loop's peak field, A/m = Oe x 1000 / 4 pi), phi_r_wb_per_m (the
+      remanent flux per track width, Wb/m = lines x 1e-8 / 6.35 mm)
+    method: >-
+      "a 60 cycle dynamic B-H meter. The remanent flux was read from various unsaturated
+      symmetrical loops, and these values plotted against the peak field intensity for each
+      loop" (p.1)
+estimated_error: "about +-0.01 lines per 1/4\" (1.6e-8 Wb/m) and +-5 Oe; samples vary +-10% (p.1)"
+notes: >-
+  The saturated value agrees with D. A. Eilers' table (data/datasheets/tape/
+  aes_3m_audio_open_reel_products.pdf: 0.64 lines per 1/4" for 111). Bulletin 22's loops
+  (same era, same meter) give B in gauss including H and over an unstated coating area;
+  their absolute scale disagrees with this curve's and they are not used for fitting.

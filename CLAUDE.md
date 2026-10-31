@@ -184,6 +184,28 @@ cold start (power on) skips the settle; the app's "Power on (cold)" button.
 the carried-in derivative). Live streams only; renders never update. No pot end resistance
 (the user's call: inaudible at realistic values). DEVICE_BUILDER_PLAN.md B6 has the numbers.
 
+**Tape** ([docs/TAPE_PLAN.md](docs/TAPE_PLAN.md), started 2026-10-31 ahead of the queue, the
+user's call; milestones TM1-TM7): an **Ampex 351** (tubes; the Sun slapback family) with
+**Scotch 111**, saturation from simulated particles, not curves. The user: quality before real
+time, rendering (a print) is fine at first, it may sit on the whole mix bus. Particles are a
+continuous Preisach ensemble (`varimu/devices/preisach.py`: a closed-form corner formula over
+suffix extrema, rate independent, so AC bias costs only its peaks; a discrete grid is the
+tests' oracle), not JA (minor-loop ratcheting). **TM1 done:** `SCOTCH111@1` (kind `tape`,
+`varimu fit-devices --only SCOTCH111`: 3M Sound Talk No. 20's remanence curve plus Eilers'
+Hc; `varimu/devices/tape_fit.py`); `SCOTCH111@2` adds the particles' orientation (kappa 1.5,
+vector Preisach). **TM2 mostly done:** `varimu/devices/tape.py` (head fields with finite poles,
+recording a 2D slab of cells at the bias peaks, reciprocity playback, slab demagnetization of
+the audio band with the head's image under the head, vector Preisach orientations) against
+No. 21's bias curves (Ampex 300): matched up to and past the peak; the model's curves are
+narrower in bias than the data (the user chose to move on; the plan's status, step 7, lists
+the candidates). **TM4 started:** circuitsim's `tape.rs` (the recording kernel, ~50x numpy;
+`record(..., engine="rust")`, agreement in `tests/test_tape.py`); the IR element isn't built.
+**The first print** (idealized NAB electronics, aligned as the 351 manual says;
+`varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
+scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->
+`reports/tape/audio/` (-18 dBFS rms = 0 VU; ~60-115x real time). Sources:
+`data/schematics/ampex_351/`, `data/datasheets/tape/` (READMEs).
+
 Reverbs as physical media coupled to the netlist at transducer ports are drafted in
 [docs/REVERB_PLAN.md](docs/REVERB_PLAN.md) (2026-10-30; milestones E1-E7). **The plate is
 built (2026-10-31; the plan's "Status (2026-10-31)")**: `varimu/devices/plate.py` (the

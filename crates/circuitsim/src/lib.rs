@@ -24,6 +24,7 @@ pub mod noise;
 pub mod partition;
 pub mod plate;
 pub mod stream;
+pub mod tape;
 pub mod timing;
 pub mod transient;
 
