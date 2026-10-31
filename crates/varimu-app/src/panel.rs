@@ -426,6 +426,10 @@ pub const DEVICES: [Device; 10] = [
     },
 ];
 
+/// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
+/// on a thread of its own). The 670 and the EQP-1A would fit too; the reverb first.
+pub const CHAIN_ENDS: [&str; 1] = ["plate_reverb"];
+
 /// Where AUTO changes range: keys below it play on LOW (`range` 0, the tank's 224 nF),
 /// the rest on HIGH. At 330 Hz (E4) the two sound most alike (measured at draft, the same
 /// pitch on each: LOW 1.4 dB louder, the harmonics within 2 dB; at 440-660 Hz LOW has 7-9 dB

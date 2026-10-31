@@ -5,6 +5,9 @@
 //! R3b: the editor's drawing is a device too (`set_drawing`): each edit that compiles
 //! reaches the player as a new circuit (a value updates the stream in place, a change
 //! of topology restarts it).
+//!
+//! A device can go at the chain's end (`panel::CHAIN_ENDS`, the plate reverb): after the
+//! device, on threads of its own (`player::EndDevice`), its knobs under CHAIN END.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -18,7 +21,8 @@ use varimu_app::live::Circuit;
 use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Wave};
 use varimu_app::panel::{self, DEVICES, Device, Kind, Knob};
 use varimu_app::player::{
-    AHEAD_S, INPUT_BUFFER_S, InputDevice, Playback, Player, Source, State, input_devices,
+    AHEAD_S, END_MIX, EndDevice, INPUT_BUFFER_S, InputDevice, Playback, Player, Source, State,
+    input_devices,
 };
 use varimu_app::prefs::{ALIGNMENT_DBFS, Prefs};
 use varimu_app::render::{Rendered, render};
@@ -174,6 +178,11 @@ pub struct PlayView {
     compensate: bool,
     /// A manual gain on the device's output (dB, monitoring only).
     output_db: f64,
+    /// The device at the chain's end (an index into DEVICES, one of `panel::CHAIN_ENDS`),
+    /// its knobs and its share of the output.
+    end: Option<usize>,
+    end_knobs: Vec<Knob>,
+    end_mix: f64,
     error: Option<String>,
 }
 
@@ -271,6 +280,9 @@ impl PlayView {
             has_heaters: false,
             compensate: true,
             output_db: 0.0,
+            end: None,
+            end_knobs: Vec::new(),
+            end_mix: END_MIX,
             error: None,
         };
         if let Some(id) = &args.device {
@@ -611,6 +623,9 @@ impl PlayView {
             p.set_bypass(self.bypass);
             p.set_compensation(self.compensate);
             p.set_output_db(self.output_db);
+            if !self.adopted {
+                p.set_end_mix(self.end_mix);
+            }
         }
     }
 
@@ -699,7 +714,12 @@ impl PlayView {
         let (Some(x), Ok(s)) = (self.region_samples(), self.play_settings()) else {
             return;
         };
-        let clip = self.clip.as_ref().expect("a region needs a clip");
+        let clip_path = self
+            .clip
+            .as_ref()
+            .expect("a region needs a clip")
+            .path
+            .clone();
         let result = s.cores().and_then(|c| self.circuit(c)).and_then(|c| {
             let v = panel::values(&self.knobs);
             let ahead_s = DEVICES.get(self.device).unwrap_or(&DRAWING).ahead_s;
@@ -707,8 +727,9 @@ impl PlayView {
         });
         match result {
             Ok(p) => {
+                self.attach_end(&p);
                 self.player = Some(p);
-                self.playing = Some((self.region, self.device, clip.path.clone()));
+                self.playing = Some((self.region, self.device, clip_path));
                 self.error = None;
             }
             Err(e) => self.error = Some(e),
@@ -717,7 +738,11 @@ impl PlayView {
 
     /// The settings the chosen device plays at (its quality, its cores).
     fn play_settings(&self) -> Result<Settings, String> {
-        let dev = DEVICES.get(self.device).unwrap_or(&DRAWING);
+        self.settings_for(DEVICES.get(self.device).unwrap_or(&DRAWING))
+    }
+
+    /// The settings `dev` plays at.
+    fn settings_for(&self, dev: &Device) -> Result<Settings, String> {
         self.by_quality
             .iter()
             .find(|(x, _)| *x == dev.quality)
@@ -748,6 +773,7 @@ impl PlayView {
         });
         match result {
             Ok(p) => {
+                self.attach_end(&p);
                 self.player = Some(p);
                 self.error = None;
             }
@@ -784,11 +810,105 @@ impl PlayView {
         });
         match result {
             Ok((kb, p)) => {
+                self.attach_end(&p);
                 self.keyboard = Some(kb);
                 self.player = Some(p);
                 self.error = None;
             }
             Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// The chain's end as chosen, built (None: none chosen).
+    fn end_device(&self) -> Option<Result<EndDevice, String>> {
+        let dev = &DEVICES[self.end?];
+        Some(self.settings_for(dev).and_then(|s| {
+            let c = Circuit::load(&self.config_dir, dev.circuit, s.cores()?)?.with_noise(false);
+            Ok(EndDevice {
+                label: dev.label.to_string(),
+                circuit: c,
+                values: panel::values(&self.end_knobs),
+                settings: s,
+            })
+        }))
+    }
+
+    /// Put the chosen end on `p` (or take it off).
+    fn attach_end(&mut self, p: &Player) {
+        match self.end_device() {
+            Some(Ok(d)) => p.set_end(Some(d)),
+            Some(Err(e)) => {
+                self.error = Some(format!("chain end: {e}"));
+                p.set_end(None);
+            }
+            None => p.set_end(None),
+        }
+        p.set_end_mix(self.end_mix);
+    }
+
+    /// The chain's end: which device, its share of the output, its knobs.
+    fn end_ui(&mut self, ui: &mut egui::Ui) {
+        Self::heading(ui, "CHAIN END");
+        let before = self.end;
+        let shown = self.end.map_or("(none)", |i| DEVICES[i].label);
+        egui::ComboBox::from_id_salt("chain_end")
+            .width(ui.available_width())
+            .selected_text(shown)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut self.end, None, "(none)");
+                for (i, d) in DEVICES.iter().enumerate() {
+                    if panel::CHAIN_ENDS.contains(&d.id) {
+                        ui.selectable_value(&mut self.end, Some(i), d.label);
+                    }
+                }
+            })
+            .response
+            .on_hover_text(
+                "A device after this one, on threads of its own (a block, 10 ms, later): \
+                 the synth's output through a reverb",
+            );
+        if self.end != before {
+            self.end_knobs = match self.end {
+                Some(i) => {
+                    let dev = &DEVICES[i];
+                    match varimu_circuit::spec::circuit_path(&self.config_dir, dev.circuit)
+                        .and_then(|p| varimu_circuit::spec::load_circuit(&p))
+                    {
+                        Ok(spec) => panel::knobs(dev, &spec),
+                        Err(e) => {
+                            self.error = Some(e.to_string());
+                            Vec::new()
+                        }
+                    }
+                }
+                None => Vec::new(),
+            };
+            if let Some(p) = self.player.take() {
+                if !self.adopted {
+                    self.attach_end(&p);
+                }
+                self.player = Some(p);
+            }
+        }
+        if self.end.is_none() {
+            return;
+        }
+        ui.label(RichText::new("Mix (its share of the output)").color(theme::INK));
+        let w = ui.available_width();
+        ui.add_sized(
+            [w, 18.0],
+            egui::Slider::new(&mut self.end_mix, 0.0..=1.0).max_decimals(2),
+        );
+        ui.add_space(4.0);
+        let mut changed = false;
+        for k in &mut self.end_knobs {
+            changed |= knob_ui(ui, k);
+        }
+        if changed
+            && !self.adopted
+            && let Some(p) = &self.player
+        {
+            p.set_end_values(panel::values(&self.end_knobs));
         }
     }
 
@@ -1353,6 +1473,7 @@ impl PlayView {
             }
             p.set(panel::values(&self.knobs));
         }
+        self.end_ui(ui);
     }
 
     /// The MIDI keyboard's port, the test oscillator's waveform, the buffer, and what is
@@ -1793,6 +1914,44 @@ impl PlayView {
         }
         if let Some(e) = &st.build_error {
             ui.colored_label(theme::WARN, format!("knob change not applied: {e}"));
+        }
+        if let Some(end) = &st.end {
+            ui.add_space(6.0);
+            match &end.state {
+                State::Starting => {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(
+                            RichText::new(format!("{}: settling (dry meanwhile)…", end.label))
+                                .color(theme::MUTED),
+                        );
+                    });
+                }
+                State::Failed(e) => {
+                    ui.colored_label(theme::FAULT, format!("{}: {e}", end.label));
+                }
+                State::Playing => {
+                    bar(
+                        ui,
+                        "End load",
+                        end.load * 100.0,
+                        0.0,
+                        100.0,
+                        format!("{:.0} %", end.load * 100.0),
+                    );
+                    let line = format!(
+                        "{} · worst block {:.0} % · out {:.1} dBFS · restarts {}",
+                        end.label,
+                        end.load_max * 100.0,
+                        end.out_dbfs,
+                        end.restarts
+                    );
+                    ui.label(RichText::new(line).small().color(theme::MUTED));
+                }
+            }
+            if let Some(e) = &end.build_error {
+                ui.colored_label(theme::WARN, format!("end knob not applied: {e}"));
+            }
         }
     }
 }

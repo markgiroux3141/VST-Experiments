@@ -21,6 +21,9 @@
 //! number, 60 = C4; no keyboard needed): a voice's load with its envelope open.
 //! `--noise` plays a device whose file has noise sources (device builder B5) with them (off
 //! by default, as in the app).
+//! `--end ID` puts a device at the chain's end (`panel::CHAIN_ENDS`: the plate reverb) on
+//! threads of its own, `--end-set KEY=VALUE` its knobs, `--end-mix M` its share (0.3);
+//! the stats then carry its load too.
 
 use std::path::Path;
 use std::sync::Arc;
@@ -30,7 +33,9 @@ use varimu_app::audio;
 use varimu_app::live::Circuit;
 use varimu_app::midi::{self, Keyboard, Keys, MOD_WHEEL, Wave};
 use varimu_app::panel::{DEVICES, Kind, knobs, values};
-use varimu_app::player::{INPUT_BUFFER_S, Player, Source, State, input_devices};
+use varimu_app::player::{
+    END_MIX, EndDevice, INPUT_BUFFER_S, Player, Source, State, input_devices,
+};
 use varimu_app::settings::Settings;
 use varimu_circuit::yaml::Value;
 
@@ -70,6 +75,8 @@ fn main() -> Result<(), String> {
     let mut record: Option<String> = None;
     let (mut midi_name, mut wave): (Option<Option<String>>, Wave) = (None, Wave::Saw);
     let mut hold: Option<u8> = None;
+    let (mut end, mut end_sets, mut end_mix): (Option<String>, Vec<(String, Value)>, f64) =
+        (None, Vec::new(), END_MIX);
     while let Some(a) = args.next() {
         match a.as_str() {
             "--device" => device = args.next().ok_or("--device needs a value")?,
@@ -94,6 +101,13 @@ fn main() -> Result<(), String> {
                     Some("square") => Wave::Square,
                     _ => return Err("--wave saw|square".into()),
                 }
+            }
+            "--end" => end = Some(args.next().ok_or("--end needs a device")?),
+            "--end-mix" => end_mix = num(args.next(), &a)?,
+            "--end-set" => {
+                let kv = args.next().ok_or("--end-set needs KEY=VALUE")?;
+                let (k, v) = kv.split_once('=').ok_or("--end-set KEY=VALUE")?;
+                end_sets.push((k.to_string(), value(v)));
             }
             "--hold" => hold = Some(num(args.next(), &a)? as u8),
             "--list-midi" => {
@@ -206,8 +220,32 @@ fn main() -> Result<(), String> {
     }
     let gain = 10f64.powf(gain_db / 20.0);
     let player = Player::start(source, v.clone(), circuit, s, gain, buffer)?;
+    if let Some(id) = &end {
+        let d = DEVICES
+            .iter()
+            .find(|d| d.id == id.as_str())
+            .ok_or(format!("unknown device {id}"))?;
+        let es = d.play_settings(&Settings::load(config, d.quality)?);
+        let c = Circuit::load(config, d.circuit, es.cores()?)?;
+        let mut ev = values(&knobs(d, c.spec()));
+        for (k, x) in end_sets {
+            set(&mut ev, &k, x);
+        }
+        player.set_end(Some(EndDevice {
+            label: d.label.to_string(),
+            circuit: c,
+            values: ev,
+            settings: es,
+        }));
+        player.set_end_mix(end_mix);
+    }
     let t0 = Instant::now();
-    while player.status().state == State::Starting {
+    while player.status().state == State::Starting
+        || player
+            .status()
+            .end
+            .is_some_and(|e| e.state == State::Starting)
+    {
         std::thread::sleep(Duration::from_millis(20));
     }
     if let State::Failed(e) = player.status().state {
@@ -235,7 +273,7 @@ fn main() -> Result<(), String> {
         player.record(true);
     }
     let t1 = Instant::now();
-    let mut worst_load = 0.0f64;
+    let (mut worst_load, mut worst_end) = (0.0f64, 0.0f64);
     let (mut knob_times, mut latencies) = (Vec::new(), Vec::new());
     let (mut flip, mut last_turn, mut last_knob) = (false, Instant::now(), None);
     let (mut last_print, mut wheel_seen) = (Instant::now(), 0u64);
@@ -288,6 +326,18 @@ fn main() -> Result<(), String> {
                 .map_or("-".into(), |(n, vel)| format!("{n}/{vel}"));
             knob += &format!("  key {note}  {key} {:.1}", at.unwrap_or(f64::NAN));
         }
+        if let Some(e) = &st.end {
+            if let State::Failed(x) = &e.state {
+                return Err(format!("{}: {x}", e.label));
+            }
+            worst_end = worst_end.max(e.load_max);
+            knob += &format!(
+                "  end load {:3.0}% (worst {:4.0}%) out {:6.1} dBFS",
+                e.load * 100.0,
+                e.load_max * 100.0,
+                e.out_dbfs
+            );
+        }
         println!(
             "{:5.0} s  load {:3.0}% (worst block {:4.0}%)  queued {:4.0} ms  dropouts {}  gain {:+5.1} dB  out {:6.1} dBFS{live}{knob}",
             t1.elapsed().as_secs_f64(),
@@ -336,6 +386,9 @@ fn main() -> Result<(), String> {
         worst_load * 100.0,
         player.status().restarts
     );
+    if end.is_some() {
+        println!("chain end: worst block load {:.0}%", worst_end * 100.0);
+    }
     if !latencies.is_empty() {
         println!(
             "live input: latency {:.1} ms mean, {:.1} ms max; input lost {over} samples, {skip} blocks skipped; output device {:.1} ms",

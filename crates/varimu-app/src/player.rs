@@ -37,8 +37,16 @@
 //! positions the transport gives each block (silence while it is stopped, outside the
 //! audio, and in the count-in), so the device plays in time with the session's other
 //! tracks while its knobs turn. Blocks are made as the queue drains, as for a loop.
+//!
+//! **A chain's end** ([`Player::set_end`]: a reverb after the synth): a second device on
+//! a thread of its own (its own partitions on theirs), fed the device's monitored output
+//! a block behind, so the two compute side by side. It costs one block of latency
+//! ([`BLOCK`], 10 ms); it can be put on, changed and taken off while playing (the end
+//! settles on its thread, the device's output going on dry meanwhile). The audio only
+//! flows one way (a reverb's input is a grid), so nothing couples it back.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -184,6 +192,30 @@ pub struct Status {
     /// The gain compensation applied to the device's output now (dB).
     pub compensation_db: f64,
     pub transport: TransportStatus,
+    /// The device at the chain's end, if one is on.
+    pub end: Option<EndStatus>,
+}
+
+/// A device at the end of the chain: its circuit and values at its own settings (its
+/// quality; its host rate must be the player's).
+pub struct EndDevice {
+    pub label: String,
+    pub circuit: Circuit,
+    pub values: Values,
+    pub settings: Settings,
+}
+
+/// The chain's end, as of its last block.
+#[derive(Debug, Clone)]
+pub struct EndStatus {
+    pub label: String,
+    pub state: State,
+    /// Its thread's load over the last second (compute / audio time) and the worst block.
+    pub load: f64,
+    pub load_max: f64,
+    pub out_dbfs: f64,
+    pub restarts: usize,
+    pub build_error: Option<String>,
 }
 
 /// Where the transport is, as of the last block.
@@ -227,6 +259,7 @@ impl Status {
                 phase: None,
                 origin: None,
             },
+            end: None,
         }
     }
 }
@@ -280,6 +313,13 @@ struct Shared {
     /// The session's tracks and the live device's gains; the take being recorded.
     mix: Mutex<Arc<Mix>>,
     recorder: Mutex<Recorder>,
+    /// A device to put at the chain's end (Some(Some)) or to take off (Some(None)), its
+    /// newest values, and its share of the output (f64 bits): the emitter applies them.
+    end_wanted: Mutex<Option<Option<EndDevice>>>,
+    end_values: Mutex<Option<Values>>,
+    end_mix: AtomicU64,
+    /// The end's status, written by its thread.
+    end_status: Mutex<Option<Arc<Mutex<EndStatus>>>>,
 }
 
 /// A session playing out of the default output.
@@ -364,6 +404,10 @@ impl Player {
             out_clock: Mutex::new(None),
             mix: Mutex::new(Arc::new(Mix::default())),
             recorder: Mutex::new(Recorder::new(rate)),
+            end_wanted: Mutex::new(None),
+            end_values: Mutex::new(None),
+            end_mix: AtomicU64::new(END_MIX.to_bits()),
+            end_status: Mutex::new(None),
         });
         // Room for the buffer, the drift allowance and a block in flight.
         let (producer, consumer) = rtrb::RingBuffer::<Frame>::new(buffer + 4 * BLOCK);
@@ -466,7 +510,33 @@ impl Player {
     }
 
     pub fn status(&self) -> Status {
-        self.shared.status.lock().expect("status").clone()
+        let mut st = self.shared.status.lock().expect("status").clone();
+        st.end = self
+            .shared
+            .end_status
+            .lock()
+            .expect("end_status")
+            .as_ref()
+            .map(|e| e.lock().expect("end status").clone());
+        st
+    }
+
+    /// Put `end` at the chain's end (replacing one there), or take it off (None).
+    pub fn set_end(&self, end: Option<EndDevice>) {
+        *self.shared.end_values.lock().expect("end_values") = None;
+        *self.shared.end_wanted.lock().expect("end_wanted") = Some(end);
+    }
+
+    /// New values for the end's knobs; the newest wins.
+    pub fn set_end_values(&self, values: Values) {
+        *self.shared.end_values.lock().expect("end_values") = Some(values);
+    }
+
+    /// The end's share of the output, the rest the device's output dry (0-1).
+    pub fn set_end_mix(&self, mix: f64) {
+        self.shared
+            .end_mix
+            .store(mix.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
     }
 
     /// Output callbacks that couldn't be filled since playing started.
@@ -679,6 +749,149 @@ impl Loads {
     }
 }
 
+/// The end's share of the output to start with (a send's 30%, as an insert's wet).
+pub const END_MIX: f64 = 0.3;
+
+enum TailMsg {
+    Block(Vec<f64>),
+    Set(Values),
+}
+
+/// The chain's end on its thread: a block in, the block before out (see the module
+/// docs). Dropping it lets the thread finish on its own (its stream's last block, or its
+/// settling) without stalling the worker.
+struct Tail {
+    tx: Sender<TailMsg>,
+    rx: Receiver<Vec<f32>>,
+    /// The thread has settled its stream and takes blocks.
+    ready: Arc<AtomicBool>,
+    status: Arc<Mutex<EndStatus>>,
+    /// The device's last block (what comes out dry with the end's next output).
+    pending: Vec<f32>,
+    in_flight: bool,
+}
+
+impl Tail {
+    fn start(d: EndDevice, rate: u32) -> Result<Tail, String> {
+        if d.settings.host() != rate {
+            return Err(format!(
+                "{} plays at {} Hz, the chain at {rate} Hz",
+                d.label,
+                d.settings.host()
+            ));
+        }
+        let status = Arc::new(Mutex::new(EndStatus {
+            label: d.label.clone(),
+            state: State::Starting,
+            load: 0.0,
+            load_max: 0.0,
+            out_dbfs: f64::NEG_INFINITY,
+            restarts: 0,
+            build_error: None,
+        }));
+        let ready = Arc::new(AtomicBool::new(false));
+        let (tx, blocks) = mpsc::channel();
+        let (outputs, rx) = mpsc::channel();
+        {
+            let (status, ready) = (status.clone(), ready.clone());
+            std::thread::Builder::new()
+                .name("chain end".into())
+                .spawn(move || tail_loop(d, rate, blocks, outputs, ready, status))
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(Tail {
+            tx,
+            rx,
+            ready,
+            status,
+            pending: Vec::new(),
+            in_flight: false,
+        })
+    }
+
+    fn set(&self, values: Values) {
+        let _ = self.tx.send(TailMsg::Set(values));
+    }
+
+    /// `y` (block n) to the end; block n - 1 out: `mix` of the end's output, the rest the
+    /// device's dry. The end computes block n while the worker computes block n + 1.
+    fn process(&mut self, y: &[f32], mix: f64) -> Vec<f32> {
+        let mut dry = std::mem::replace(&mut self.pending, y.to_vec());
+        dry.resize(y.len(), 0.0);
+        let wet = if std::mem::take(&mut self.in_flight) {
+            self.rx.recv().ok()
+        } else {
+            None
+        };
+        if self.ready.load(Ordering::Acquire)
+            && self
+                .tx
+                .send(TailMsg::Block(y.iter().map(|&v| v as f64).collect()))
+                .is_ok()
+        {
+            self.in_flight = true;
+        }
+        let m = mix as f32;
+        match wet {
+            Some(mut w) => {
+                w.resize(dry.len(), 0.0);
+                dry.iter()
+                    .zip(&w)
+                    .map(|(d, w)| d * (1.0 - m) + w * m)
+                    .collect()
+            }
+            None => dry.iter().map(|d| d * (1.0 - m)).collect(),
+        }
+    }
+}
+
+/// The end's thread: settle its stream, then each block through it.
+fn tail_loop(
+    d: EndDevice,
+    rate: u32,
+    blocks: Receiver<TailMsg>,
+    outputs: Sender<Vec<f32>>,
+    ready: Arc<AtomicBool>,
+    status: Arc<Mutex<EndStatus>>,
+) {
+    let fail = |e: String| status.lock().expect("end status").state = State::Failed(e);
+    let mut live = match Live::new(&[], d.values, d.circuit, d.settings) {
+        Ok(l) => l,
+        Err(e) => return fail(format!("can't start: {e}")),
+    };
+    // Knobs turned while it settled: the newest.
+    while let Ok(m) = blocks.try_recv() {
+        if let TailMsg::Set(v) = m {
+            live.set(v);
+        }
+    }
+    status.lock().expect("end status").state = State::Playing;
+    ready.store(true, Ordering::Release);
+    let mut loads = Loads(Vec::new(), (rate as usize / BLOCK).max(1));
+    for m in blocks {
+        match m {
+            TailMsg::Set(v) => live.set(v),
+            TailMsg::Block(x) => match live.process(&x) {
+                Ok((y, meter)) => {
+                    let (load, load_max) = loads.push(meter.load);
+                    {
+                        let mut st = status.lock().expect("end status");
+                        st.load = load;
+                        st.load_max = load_max;
+                        st.out_dbfs = meter.out_dbfs;
+                        st.restarts = live.restarts;
+                        st.build_error = live.error();
+                    }
+                    if outputs.send(y).is_err() {
+                        return;
+                    }
+                }
+                Err(e) => return fail(format!("the circuit stopped: {e}")),
+            },
+        }
+    }
+}
+
 /// The worker's last stage: each block on its way to the ring. The device's output `raw`
 /// recorded into a take (armed), the monitored `y` through the armed track's strip, the
 /// session's tracks and the transport's click mixed in; the transport's status.
@@ -691,6 +904,8 @@ struct Emitter {
     /// The positions the last stretches of output carried: (first output sample,
     /// position, length), to say which position is being heard across a loop's jumps.
     history: std::collections::VecDeque<(u64, i64, usize)>,
+    /// The device at the chain's end.
+    end: Option<Tail>,
 }
 
 impl Emitter {
@@ -701,6 +916,41 @@ impl Emitter {
             pushed: 0,
             click: Vec::with_capacity(BLOCK),
             history: std::collections::VecDeque::new(),
+            end: None,
+        }
+    }
+
+    /// The chain's end as the window last asked: put on, changed, taken off.
+    fn update_end(&mut self, shared: &Shared) {
+        if let Some(want) = shared.end_wanted.lock().expect("end_wanted").take() {
+            self.end = None;
+            let mut st = shared.end_status.lock().expect("end_status");
+            *st = None;
+            if let Some(d) = want {
+                let label = d.label.clone();
+                match Tail::start(d, self.rate) {
+                    Ok(t) => {
+                        *st = Some(t.status.clone());
+                        self.end = Some(t);
+                    }
+                    Err(e) => {
+                        *st = Some(Arc::new(Mutex::new(EndStatus {
+                            label,
+                            state: State::Failed(e),
+                            load: 0.0,
+                            load_max: 0.0,
+                            out_dbfs: f64::NEG_INFINITY,
+                            restarts: 0,
+                            build_error: None,
+                        })))
+                    }
+                }
+            }
+        }
+        if let Some(v) = shared.end_values.lock().expect("end_values").take()
+            && let Some(t) = &self.end
+        {
+            t.set(v);
         }
     }
 
@@ -711,6 +961,17 @@ impl Emitter {
         raw: &[f32],
         y: Vec<f32>,
     ) {
+        // Through the chain's end: what is heard is what a take keeps.
+        self.update_end(shared);
+        let chained: Vec<f32>;
+        let (raw, y) = match &mut self.end {
+            Some(t) => {
+                let mix = f64::from_bits(shared.end_mix.load(Ordering::Relaxed));
+                chained = t.process(&y, mix);
+                (chained.as_slice(), chained.clone())
+            }
+            None => (raw, y),
+        };
         let rate = self.rate;
         let clock = &mut self.clock;
         apply_transport(shared, clock);

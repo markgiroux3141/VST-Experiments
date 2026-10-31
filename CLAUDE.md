@@ -196,7 +196,10 @@ the pickup at 0 V; `Mna::n_media`, `Transient::step_media`), the component `EMT1
 `plate` part in both builders, and the device `config/circuits/plate_reverb.yaml` (our own
 tube drive and pickup amplifiers: the V54's schematic isn't public; DRIVE, DECAY at 500 Hz,
 RETURN; output wet only), the app's `plate_reverb`. `scripts/plate_report.py` ->
-`reports/reverb/`. Then the stereo pair, sends (F4), the spring and the 6G15.
+`reports/reverb/`. Then the stereo pair, sends (F4), the spring and the 6G15. **A chain's end** (2026-10-31):
+a device after the one played, on threads of its own a block behind (`player::EndDevice`,
+`panel::CHAIN_ENDS`: the plate; Play's CHAIN END; `examples/play.rs --end plate_reverb`):
+the synth through the plate plays without dropouts (REVERB_PLAN.md, "Live chaining").
 
 **Devices in the session** ([docs/SESSION_FX_PLAN.md](docs/SESSION_FX_PLAN.md), 2026-10-30;
 milestones F1-F5): processors move into the Session view as track inserts and sends,

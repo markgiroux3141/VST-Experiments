@@ -323,9 +323,15 @@ sourced; otherwise a plate driven by electronics we have, or a plate in the tube
   are mono today: a plate device with two outputs means a print with two channels and an
   FX track with a stereo return. Recommended: one pickup first (mono, panned), the pair
   right after E7.
-- **Live chaining in the app.** E4 chains offline (a render into a render). Playing a
-  synth live through a reverb live needs two devices on one stream; the partition's
-  one-sample coupling is a ready mechanism. Brought with numbers when E4 is done.
+- **~~Live chaining in the app.~~** Built 2026-10-31 (the user's call: a device that goes
+  at a chain's end, the Play view as the debug window): `player::EndDevice` /
+  `Player::set_end`, a second device on a thread of its own (its partitions on theirs),
+  fed the device's monitored output a block (10 ms) behind, so the two compute side by
+  side; no sample coupling (a reverb's input is a grid). `panel::CHAIN_ENDS` lists the
+  devices that can go there (the plate; the 670 and the EQP-1A would fit). Play's CHAIN
+  END section (device, mix, its knobs); `examples/play.rs --end ID`. Measured: tube_synth
+  with a key held, 30 s at a 30 ms buffer, 0 dropouts, the synth's load ~70% mean (65%
+  alone), the plate's thread ~50% mean (worst block 94%).
 - **A tank in the tube synth.** A spring tank on the voice's output fits
   TUBE_SYNTH_PLAN.md's spirit (the ARP 2600 had one); that track's order decides.
 - **The tank's crash** (nonlinear contact), and temperature drift of spring and plate
