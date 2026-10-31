@@ -96,11 +96,20 @@ def pot(
 
 
 def rheostat(
-    name: str, a: str, b: str, total: float, pos: float, taper_mid: float | None = None
+    name: str,
+    a: str,
+    b: str,
+    total: float,
+    pos: float,
+    taper_mid: float | None = None,
+    reverse: bool = False,
 ) -> Resistor:
     """A potentiometer used as a variable resistor (its wiper tied to one end): the track
-    between the other end and the wiper, taper(pos) x total (0 = no resistance)."""
-    return resistor(name, a, b, taper(pos, taper_mid) * total)
+    between the other end and the wiper, taper(pos) x total (0 = no resistance). `reverse`:
+    a reverse-taper (C) pot's track from the wiper to its far end, taper(1 - pos) x total
+    (full resistance at 0, none at 1: turning it up lowers the resistance, evenly in log
+    with an audio `taper_mid`)."""
+    return resistor(name, a, b, taper(1.0 - pos if reverse else pos, taper_mid) * total)
 
 
 def tapped_pot(

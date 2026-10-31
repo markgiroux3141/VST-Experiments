@@ -84,3 +84,19 @@ def test_depth_zero_holds_the_pitch():
     tc, f = vco.cycle_frequencies(tank[i0 : i0 + int(0.3 * FS)], FS)
     print(rest, f[:8])
     assert np.all(np.abs(vco.cents(f, rest)) < 100)
+
+
+def test_tone_takes_the_top_end_and_the_click_off():
+    """TONE, a Sallen-Key low-pass after the VCA: at 0.25 (-3 dB ~155 Hz) a hit's content
+    above 500 Hz, click included, is ~50 dB under its peak; at 1 (~1.2 kHz) ~23 dB."""
+    hp = butter(4, 500, "hp", fs=FS, output="sos")
+    i0 = int(HIT_S * FS)
+    above = {}
+    for tone in (0.25, 1.0):
+        out, _ = run(1.9, 0.05, {"tone": tone})
+        y = sosfiltfilt(butter(2, 20, "hp", fs=FS, output="sos"), out)[i0 : i0 + int(0.3 * FS)]
+        hf = sosfiltfilt(hp, out)[i0 : i0 + int(0.3 * FS)]
+        above[tone] = 20 * np.log10(np.abs(hf).max() / np.abs(y).max())
+    print(above)
+    assert above[0.25] < -40
+    assert above[1.0] > -30

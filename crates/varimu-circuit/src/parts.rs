@@ -65,8 +65,10 @@ pub fn rheostat(
     total: f64,
     pos: f64,
     taper_mid: Option<f64>,
+    reverse: bool,
 ) -> Result<Element, Error> {
-    Ok(resistor(name, a, b, taper(pos, taper_mid)? * total))
+    let at = if reverse { 1.0 - pos } else { pos };
+    Ok(resistor(name, a, b, taper(at, taper_mid)? * total))
 }
 
 #[allow(clippy::too_many_arguments)]

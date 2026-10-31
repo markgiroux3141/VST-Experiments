@@ -23,7 +23,14 @@
 #        at rest (the oscillator ~-92 dB under a hit). The tail current's swing is common
 #        mode at the plates; a 12AX7 differential stage (VDA/VDB, its own RC supply) on a
 #        12AU7 current sink (VCS, its grid on TUNE's 5651 through an RC) takes their
-#        difference, so the thump cancels; its plate is the output
+#        difference, so the thump cancels
+#   TONE  a low-pass after the VCA, for the waveform's harmonics and the hit's click: a 12AX7
+#        cathode follower with two RC sections around it (Sallen-Key, unity gain, 12 dB per
+#        octave), C1 / C2 ~5.5 for a slight bump at the cutoff (~1.5 dB). The legs are the
+#        TONE pot's two gangs (reverse audio taper: clockwise brighter, evenly in log); the
+#        first's fixed part is the differential stage's plate (~55k), the second's RF2M, so
+#        the legs match. -3 dB from ~50 Hz (0) to ~1.2 kHz (1), ~390 Hz at the middle. The
+#        follower's cathode is the output
 # Invented circuit, not modelled hardware: round numbers, every value a design choice.
 
 title: "Tube kick (oscillator, sweep, decaying VCA)"
@@ -40,6 +47,7 @@ controls:
   tune: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the TUNE pot, the oscillator's pitch at rest)"}
   depth: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the DEPTH pot, the pitch sweep's height)"}
   sweep_time: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the SWEEP TIME rheostat)"}
+  tone: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the TONE pot, a dual-gang reverse-audio-taper pot setting the low-pass's cutoff: -3 dB at ~50 Hz (0), ~155 Hz (0.25), ~390 Hz (0.5), ~800 Hz (0.75), ~1.2 kHz (1))"}
   decay: {value: 0.6, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the DECAY rheostat)"}
   wave: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1))"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
@@ -122,6 +130,12 @@ values:
   c_diff_supply_f: {value: 100.0e-6, source: "provisional: model knowledge (design: its electrolytic: 1 s)"}
   r_diff_plate_ohm: {value: 100.0e+3, source: "provisional: model knowledge (12AX7 plate load)"}
   r_diff_tail_ohm: {value: 12.0e+3, source: "provisional: model knowledge (design: the differential stage's current sink, a 12AU7 section, its grid on TUNE's regulated -80 V and 22k to the -100 V rail: ~1.2 mA (a 100k resistor tail let half the VCA's common-mode step through, a 4.7 V thump; its grid on the -45 V rail followed that rail's sag under the VCA's tail and moved the output ~2 V)"}
+  r_tone_leg2_ohm: {value: 56.0e+3, source: "provisional: model knowledge (design: the second low-pass leg's fixed part, matching the first leg's source, the differential stage's plate (~55k: 100k with its tube's ~125k): equal legs keep Q up across the TONE range; with the source in one leg only the bump vanished at the bright end)"}
+  r_tone_pot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the TONE pot, each gang)"}
+  tone_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper, 10% at half rotation, wired reversed: a reverse-audio (C) pot)"}
+  c_tone_feedback_f: {value: 8.2e-9, source: "provisional: model knowledge (design: the low-pass's capacitor from between the legs to the follower's cathode, ~5.5x the shunt's: with the 12AX7 follower's gain of ~0.98, a slight bump at the cutoff (5.6 nF / 820 pF: +2 dB and the range up to 2 kHz; a 12AU7 follower, gain ~0.9, left no bump))"}
+  c_tone_shunt_f: {value: 1.5e-9, source: "provisional: model knowledge (design: the low-pass's capacitor from the follower's grid to ground)"}
+  r_tone_cathode_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: the follower's cathode to the -45 V rail, ~1 mA)"}
   c_out_f: {value: 0.47e-6, source: "provisional: model knowledge (output coupling)"}
   r_out_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the output's load)"}
   # --- the oscillator (tube_synth.yaml's, its LOW range)
@@ -181,6 +195,7 @@ devices:
   VDB: {device: 12AX7@1}
   VCS: {device: 12AU7@1}
   VX: {device: 12AU7@1}
+  VF: {device: 12AX7@1}
 
 sections:
   - title: power supply
@@ -278,7 +293,18 @@ sections:
       RCS: {R: [kcs, nsf], r: r_diff_tail_ohm}
       RKDL: {R: [kd, "0"], r: r_kc_leak_ohm}
       RPD: {R: [bd, pd], r: r_diff_plate_ohm}
-      COUT: {C: [pd, out], c: c_out_f}
+      COUT: {C: [pd, fi], c: c_out_f}
+      RFI: {R: [fi, "0"], r: r_out_load_ohm}
+  - title: tone
+    parts:
+      RF1: {rheostat: [fi, f1], r: r_tone_pot_ohm, at: tone, taper_mid: tone_taper_mid, reverse: 1}
+      RF2M: {R: [f1, f2a], r: r_tone_leg2_ohm}
+      RF2: {rheostat: [f2a, f2], r: r_tone_pot_ohm, at: tone, taper_mid: tone_taper_mid, reverse: 1}
+      CF1: {C: [f1, fk], c: c_tone_feedback_f}
+      CF2: {C: [f2, "0"], c: c_tone_shunt_f}
+      XVF: {device: [bd, f2, fk], model: VF}
+      RFK: {R: [fk, neg], r: r_tone_cathode_ohm}
+      COUTF: {C: [fk, out], c: c_out_f}
       RLO: {R: [out, "0"], r: r_out_load_ohm}
   - title: oscillator
     parts:

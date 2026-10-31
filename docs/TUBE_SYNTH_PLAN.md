@@ -795,6 +795,36 @@ thread. Draft:
     input. The mod wheel turns DEPTH. Three threads: the trigger, envelopes and VCA | the
     oscillator and its pitch driver | the supplies. Load with a key held (`play.rs --hold`,
     50 ms buffer): ~50%, worst block 74-76%, no dropouts.
+- **TONE, a low-pass for a boomier kick (2026-10-30, the user's spec: after the VCA so it
+  takes the click too, a slight bump, the mod wheel stays on DEPTH).** Before it, a hit's
+  content above 500 Hz peaked at -16 dB re the hit and stayed there after the first 30 ms.
+  That is the waveform's harmonics (the tank flattens at these pitches) more than the click
+  (WAVE 0.5: ~0 dB).
+  - A 12AX7 cathode follower with two RC sections (Sallen-Key, unity gain, 12 dB per
+    octave), C1 / C2 = 8.2 nF / 1.5 nF, the legs the TONE pot's two gangs (1M, reverse
+    audio taper). The first leg's fixed part is the differential stage's plate (~55k), the
+    second's 56k, so they match.
+  - Steps that led there: with the source in one leg only and a 12AU7 follower (gain ~0.9)
+    the bump was gone (Q ~0.8-0.9) and the top of the range pinned at ~1 kHz.
+  - **Measured** (draft, the app's partition; a multitone through a 56k source):
+
+    | TONE | -3 dB | Bump | Hit's content above 500 Hz re its peak |
+    |---|---|---|---|
+    | 0 | 52 Hz | (below 43 Hz) | -57 dB |
+    | 0.25 | 155 Hz | +1.4 dB at 90 Hz | -51 dB |
+    | 0.5 (default) | 387 Hz | +1.6 dB at 224 Hz | -37 dB |
+    | 0.75 | 804 Hz | +1.5 dB at 387 Hz | -26 dB |
+    | 1 | 1.16 kHz | +1.5 dB at 670 Hz | -23 dB |
+
+    TONE 0 sits under the ~55 Hz fundamental: dark and ~14 dB quieter. A hit peaks ~8.9 V
+    at the default.
+  - App load with a key held: 51-54% (was ~50%), worst block 73-79%.
+  - **The builders' `rheostat` takes `reverse: 1`** (new, both languages): a reverse-taper
+    (C) pot's wiper-to-end track, taper(1 - rotation) x total, so turning it up lowers the
+    resistance evenly in log. Absent, every IR is as before (goldens unchanged). The KiCad
+    and editor symbols don't list it yet (`tests/test_kicad.py` only needs their fields to be
+    the part's).
+  - `tests/test_tube_kick.py`: above 500 Hz at TONE 0.25 under -40 dB, at 1 over -30 dB.
   - Found while at it: since ENV AMOUNT moved the synth's envelope onto the filter's thread,
     its bus node had no DC path there with cold cathodes, so Power on (cold) failed (fixed:
     a 100M leak; `tests/live.rs`).

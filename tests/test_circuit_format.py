@@ -357,6 +357,13 @@ def test_tapers_rheostats_and_turns():
     r = parts.rheostat("R1", "a", "b", 1e4, 0.5, 0.1)
     assert r.r_ohm == pytest.approx(1e3)
     assert parts.rheostat("R1", "a", "b", 1e4, 0.0).r_ohm == parts.MIN_R_OHM
+    # A reverse-taper pot's wiper-to-end track: full at 0, none at 1, the mirror image.
+    assert parts.rheostat("R1", "a", "b", 1e4, 0.0, 0.1, reverse=True).r_ohm == 1e4
+    assert parts.rheostat("R1", "a", "b", 1e4, 1.0, 0.1, reverse=True).r_ohm == parts.MIN_R_OHM
+    assert (
+        parts.rheostat("R1", "a", "b", 1e4, 0.3, 0.1, reverse=True).r_ohm
+        == parts.rheostat("R1", "a", "b", 1e4, 0.7, 0.1).r_ohm
+    )
     a, b = parts.pot("R2", "x", "w", "y", 1e4, 0.5, 0.1)
     assert (a.r_ohm, b.r_ohm) == (pytest.approx(1e3), pytest.approx(9e3))
     # Turns for an inductance, back through the transformer's own linear core and gap.

@@ -909,7 +909,10 @@ mod tests {
             .into_iter()
             .map(|k| k.key)
             .collect();
-        assert_eq!(kick_keys, ["tune", "depth", "sweep_time", "decay", "wave"]);
+        assert_eq!(
+            kick_keys,
+            ["tune", "depth", "sweep_time", "tone", "decay", "wave"]
+        );
         assert!(kick_keys.iter().any(|k| k == DEVICES[8].mod_wheel.unwrap()));
         assert_eq!(
             key_feeds(&DEVICES[8], &kick),

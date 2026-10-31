@@ -26,7 +26,8 @@ Macro parts (connection; params, * = required):
     device      [pins...] (the model's pin order); model* (a `devices` key)
     pot         [end_a, wiper, end_b]; r*, at* (0 = wiper at end_a), taper_mid (an
                 audio taper: the track's fraction at half rotation; default linear)
-    rheostat    [a, b]; r*, at* (0 = no resistance), taper_mid
+    rheostat    [a, b]; r*, at* (0 = no resistance), taper_mid, reverse (1: a reverse-taper
+                pot's wiper-to-end track, full resistance at 0, none at 1)
     tapped_pot  [end_a, tap, wiper, end_b]; r*, at*, tap* (fractions from end_a)
     t_pad       [a, b, common]; z*, atten_db*
     switch      <control key>; parts* (sub-parts, each with `in: [positions]` or always)
@@ -511,9 +512,16 @@ for _name, _macro in {
         toleranced=True,
     ),
     "rheostat": Macro(
-        lambda ctx, n, c, a: [parts.rheostat(n, *c, a["r"], a["at"], a["taper_mid"])],
+        lambda ctx, n, c, a: [
+            parts.rheostat(n, *c, a["r"], a["at"], a["taper_mid"], bool(a["reverse"]))
+        ],
         2,
-        {"r": _P, "at": _N, "taper_mid": Param("physical", None)},
+        {
+            "r": _P,
+            "at": _N,
+            "taper_mid": Param("physical", None),
+            "reverse": Param("number", 0.0),
+        },
         toleranced=True,
     ),
     "tapped_pot": Macro(
