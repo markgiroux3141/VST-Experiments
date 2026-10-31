@@ -16,6 +16,9 @@ data/test_signals/*
 data/clips/*
 !data/clips/.gitkeep
 
+# Recording sessions (the app's Session view): the user's performances, never committed
+sessions/
+
 # Listening results
 data/judgments/*
 !data/judgments/.gitkeep

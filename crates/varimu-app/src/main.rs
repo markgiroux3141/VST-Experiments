@@ -95,11 +95,15 @@ impl App {
             .edit
             .clone()
             .unwrap_or_else(|| "pultec_eqp1a_drawn".into());
+        // The repo (config/'s parent): the Session view keeps sessions in its sessions/.
+        let root = config_dir
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
         App {
             view,
             editor: editor_view::EditorView::new(&config_dir, &name),
             play: play_view::PlayView::new(config_dir, args),
-            session: session_view::SessionView::new(),
+            session: session_view::SessionView::new(&root),
         }
     }
 }

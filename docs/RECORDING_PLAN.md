@@ -329,7 +329,7 @@ now, in a view like Cubase's but simpler, so T2 goes in three steps: (1) record 
 and the production render (the done-when above).
 - **Step 1.** `varimu-app`'s `session` (tracks of takes, the console's mix, the worker's
   `Recorder`, `session.json` + `takes/<id>/{take.json, draft.wav}` in a folder of the
-  user's, new ones under Documents\Varimu Sessions), the player's output now stereo (the
+  user's, new ones in the repo's sessions/, git-ignored), the player's output now stereo (the
   live device through the armed track's strip, the tracks while the transport runs, the
   click: `Player::set_mix`, `arm_take`, `take_tail`, `finished_take`), and the Session
   view rebuilt as an arrangement: a transport bar (record, play, stop; Space, R), a bar
@@ -356,6 +356,15 @@ and the production render (the done-when above).
   recorder ends a take at the jump, so each pass is a take in the lane (T3's spec;
   `examples/click.rs --take --loop 8`: two passes of 4.00 s and the last 1.01 s, all from
   bar 1, no dropouts).
+- **Nothing lost** (the user: "it's really easy to overwrite things and lose them"): undo
+  covers every change to the session (`Session::state` / `restore`: a take's folder is
+  never deleted, so any earlier state comes back with its audio), one step per gesture (a
+  loop recording's passes together), Ctrl+Y / Ctrl+Shift+Z redo, the history saved in
+  `history.json` (it survives a restart). Save (Ctrl+S) and Save as… (`Session::copy_to`:
+  every take and the history into a new folder; the old one stays). Sessions now live in
+  the repo's `sessions/`, git-ignored (performances are never committed). Each track's
+  ▸ shows every take stacked under it (a click plays one): a new take no longer hides
+  the earlier ones.
 - **Not yet:** events (step 2: a take re-renders from nothing yet), keys still land on
   10 ms block boundaries, trimming and splitting takes (T6), the session's rate is the
   player's (48 kHz: decision 2 still open).

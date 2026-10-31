@@ -21,7 +21,13 @@
 //! recorded, the latency used, the device, the code version) and `draft.wav` (mono float32
 //! at the session's rate). A take moved on the timeline keeps its `take.json`; a take
 //! deleted from a track leaves the session's lists but keeps its folder.
+//!
+//! **Nothing recorded is lost.** A take's folder is never deleted, so any earlier state of
+//! the session can be rebuilt from its JSON ([`Session::state`], [`Session::restore`]):
+//! the undo history is a list of them, kept in `history.json` beside `session.json`.
+//! [`Session::copy_to`] copies the whole folder (every take, the history) to a new one.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -294,6 +300,8 @@ pub struct Track {
     pub pan: f64,
     pub mute: bool,
     pub solo: bool,
+    /// Every take shown, stacked under the active one (a view setting, saved).
+    pub show_takes: bool,
 }
 
 impl Track {
@@ -306,6 +314,7 @@ impl Track {
             pan: 0.0,
             mute: false,
             solo: false,
+            show_takes: false,
         }
     }
 
@@ -327,6 +336,9 @@ pub struct Session {
     pub tracks: Vec<Track>,
     /// The track that records (and whose strip the live device plays through).
     pub armed: Option<usize>,
+    /// Every take loaded or recorded in this session, by id, deleted ones too: a state
+    /// restored by undo takes them from here before reading their folders.
+    known: HashMap<String, Take>,
 }
 
 impl Session {
@@ -337,6 +349,7 @@ impl Session {
             transport,
             tracks: vec![Track::new("Track 1")],
             armed: Some(0),
+            known: HashMap::new(),
         }
     }
 
@@ -403,14 +416,16 @@ impl Session {
             audio: Arc::new(rec.samples),
         };
         write_take(&self.dir, &take, self.rate)?;
+        self.known.insert(take.id.clone(), take.clone());
         let t = self.tracks.get_mut(track).ok_or("no such track")?;
         t.takes.push(take);
         t.active = Some(t.takes.len() - 1);
         self.save()
     }
 
-    pub fn save(&self) -> Result<(), String> {
-        std::fs::create_dir_all(&self.dir).map_err(|e| format!("{}: {e}", self.dir.display()))?;
+    /// The session as `session.json` holds it: rate, transport, tracks (their takes by id,
+    /// where each sits, the active one), the armed track.
+    pub fn state(&self) -> Value {
         let tracks: Vec<Value> = self
             .tracks
             .iter()
@@ -421,6 +436,7 @@ impl Session {
                     "pan": t.pan,
                     "mute": t.mute,
                     "solo": t.solo,
+                    "show_takes": t.show_takes,
                     "takes": t.takes.iter().map(|k| k.id.clone()).collect::<Vec<_>>(),
                     "positions": t
                         .takes
@@ -431,26 +447,19 @@ impl Session {
                 })
             })
             .collect();
-        let v = json!({
+        json!({
             "version": 1,
             "rate": self.rate,
             "transport": transport_json(&self.transport),
             "tracks": tracks,
             "armed": self.armed,
-        });
-        let p = self.dir.join("session.json");
-        std::fs::write(
-            &p,
-            serde_json::to_string_pretty(&v).unwrap_or_default() + "\n",
-        )
-        .map_err(|e| format!("{}: {e}", p.display()))
+        })
     }
 
-    pub fn load(dir: &Path) -> Result<Session, String> {
-        let p = dir.join("session.json");
-        let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
-        let v: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?;
-        let rate = v["rate"].as_u64().ok_or("session.json: no rate")? as u32;
+    /// Back to a state from [`Session::state`] (its takes from memory, else from their
+    /// folders).
+    pub fn restore(&mut self, v: &Value) -> Result<(), String> {
+        let rate = v["rate"].as_u64().ok_or("session state: no rate")? as u32;
         let mut tracks = Vec::new();
         for t in v["tracks"].as_array().cloned().unwrap_or_default() {
             let mut track = Track::new(t["name"].as_str().unwrap_or("Track"));
@@ -458,9 +467,17 @@ impl Session {
             track.pan = t["pan"].as_f64().unwrap_or(0.0);
             track.mute = t["mute"].as_bool().unwrap_or(false);
             track.solo = t["solo"].as_bool().unwrap_or(false);
+            track.show_takes = t["show_takes"].as_bool().unwrap_or(false);
             for id in t["takes"].as_array().cloned().unwrap_or_default() {
-                let id = id.as_str().ok_or("session.json: a take id isn't text")?;
-                let mut take = read_take(dir, id, rate)?;
+                let id = id.as_str().ok_or("session state: a take id isn't text")?;
+                let mut take = match self.known.get(id) {
+                    Some(k) => k.clone(),
+                    None => {
+                        let k = read_take(&self.dir, id, rate)?;
+                        self.known.insert(id.to_string(), k.clone());
+                        k
+                    }
+                };
                 if let Some(p) = t["positions"][id].as_i64() {
                     take.position = p;
                 }
@@ -473,18 +490,97 @@ impl Session {
                 .position(|k| Some(k.id.as_str()) == active);
             tracks.push(track);
         }
-        let armed = v["armed"]
+        self.armed = v["armed"]
             .as_u64()
             .map(|i| i as usize)
             .filter(|&i| i < tracks.len());
-        Ok(Session {
-            dir: dir.to_path_buf(),
-            rate,
-            transport: transport_from(&v["transport"]),
-            tracks,
-            armed,
-        })
+        self.rate = rate;
+        self.transport = transport_from(&v["transport"]);
+        self.tracks = tracks;
+        Ok(())
     }
+
+    pub fn save(&self) -> Result<(), String> {
+        std::fs::create_dir_all(&self.dir).map_err(|e| format!("{}: {e}", self.dir.display()))?;
+        let p = self.dir.join("session.json");
+        std::fs::write(
+            &p,
+            serde_json::to_string_pretty(&self.state()).unwrap_or_default() + "\n",
+        )
+        .map_err(|e| format!("{}: {e}", p.display()))
+    }
+
+    pub fn load(dir: &Path) -> Result<Session, String> {
+        let p = dir.join("session.json");
+        let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+        let v: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?;
+        let mut s = Session {
+            dir: dir.to_path_buf(),
+            rate: v["rate"].as_u64().ok_or("session.json: no rate")? as u32,
+            transport: TransportSettings::default(),
+            tracks: Vec::new(),
+            armed: None,
+            known: HashMap::new(),
+        };
+        s.restore(&v)?;
+        Ok(s)
+    }
+
+    /// The undo history saved with the session (oldest first; none: empty).
+    pub fn load_history(&self) -> Vec<Value> {
+        std::fs::read_to_string(self.dir.join("history.json"))
+            .ok()
+            .and_then(|t| serde_json::from_str::<Value>(&t).ok())
+            .and_then(|v| v["undo"].as_array().cloned())
+            .unwrap_or_default()
+    }
+
+    pub fn save_history(&self, undo: &[Value]) -> Result<(), String> {
+        let p = self.dir.join("history.json");
+        std::fs::write(
+            &p,
+            serde_json::to_string(&json!({ "undo": undo })).unwrap_or_default(),
+        )
+        .map_err(|e| format!("{}: {e}", p.display()))
+    }
+
+    /// The session in a new folder `dir` (which must not exist): every take recorded in
+    /// this one (deleted ones too, so its history still works) and the history, copied.
+    /// The copy is returned; this one is left as it is.
+    pub fn copy_to(&self, dir: &Path) -> Result<Session, String> {
+        if dir.exists() {
+            return Err(format!("{} exists already", dir.display()));
+        }
+        std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+        let takes = self.dir.join("takes");
+        if takes.is_dir() {
+            copy_dir(&takes, &dir.join("takes"))?;
+        }
+        let history = self.dir.join("history.json");
+        if history.is_file() {
+            std::fs::copy(&history, dir.join("history.json"))
+                .map_err(|e| format!("{}: {e}", history.display()))?;
+        }
+        let mut copy = self.clone();
+        copy.dir = dir.to_path_buf();
+        copy.save()?;
+        Ok(copy)
+    }
+}
+
+/// Copy a folder and everything in it.
+fn copy_dir(from: &Path, to: &Path) -> Result<(), String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("{}: {e}", to.display()))?;
+    for e in std::fs::read_dir(from).map_err(|e| format!("{}: {e}", from.display()))? {
+        let e = e.map_err(|e| e.to_string())?;
+        let (src, dst) = (e.path(), to.join(e.file_name()));
+        if src.is_dir() {
+            copy_dir(&src, &dst)?;
+        } else {
+            std::fs::copy(&src, &dst).map_err(|e| format!("{}: {e}", src.display()))?;
+        }
+    }
+    Ok(())
 }
 
 pub fn transport_json(s: &TransportSettings) -> Value {
@@ -707,6 +803,46 @@ mod tests {
         let u = Session::load(&dir).expect("loads");
         assert_eq!(u.tracks[0].takes[0].position, 48_000);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn any_earlier_state_comes_back_and_copies_keep_everything() {
+        let base = std::env::temp_dir().join(format!("varimu_undo_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let mut s = Session::new(base.join("a"), 1000, TransportSettings::default());
+        let rec = |v: f32| Recorded {
+            start: 0,
+            latency: 0,
+            samples: vec![v; 100],
+        };
+        s.add_take(0, rec(0.1), "x").expect("saved");
+        let one = s.state();
+        s.add_take(0, rec(0.2), "x").expect("saved");
+        // Delete both takes; the first state comes back with its audio.
+        s.tracks[0].takes.clear();
+        s.tracks[0].active = None;
+        s.restore(&one).expect("restored");
+        assert_eq!(s.tracks[0].takes.len(), 1);
+        assert_eq!(s.tracks[0].takes[0].audio[0], 0.1);
+        // A copy holds every take (the deleted second one too) and the history.
+        s.save_history(std::slice::from_ref(&one)).expect("saved");
+        let mut c = s.copy_to(&base.join("b")).expect("copied");
+        assert!(base.join("b/takes/t0002/draft.wav").is_file());
+        assert_eq!(c.load_history().len(), 1);
+        let two = {
+            let mut t = c.state();
+            t["tracks"][0]["takes"] = json!(["t0001", "t0002"]);
+            t["tracks"][0]["active"] = json!("t0002");
+            t
+        };
+        let mut fresh = Session::load(&base.join("b")).expect("loads");
+        fresh
+            .restore(&two)
+            .expect("restored from the copy's folder");
+        assert_eq!(fresh.tracks[0].active_take().map(|k| k.audio[0]), Some(0.2));
+        c.tracks.clear();
+        assert!(s.copy_to(&base.join("b")).is_err()); // never over an existing folder
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

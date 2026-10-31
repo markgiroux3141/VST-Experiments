@@ -6,10 +6,18 @@
 //! grows. Below, the latency and the loopback calibration (T1).
 //!
 //! The device playing live is the Play view's choice (device and source): the armed track
-//! records it and plays it through its strip. The session lives in a folder of the user's
-//! (`crate::session` on disk; new ones under Documents\Varimu Sessions); the last one,
-//! the default transport and the calibrations are the user's prefs
-//! (`%APPDATA%\varimu\recording.json`, apart from `app.json`).
+//! records it and plays it through its strip. A session is a folder (`crate::session` on
+//! disk), new ones in the repo's `sessions/` (git-ignored: performances are never
+//! committed); Save as… copies the whole folder to a new one. The last session, the default
+//! transport and the calibrations are the user's prefs (`%APPDATA%\varimu\recording.json`,
+//! apart from `app.json`).
+//!
+//! **Undo.** Every change to the session is a step: takes recorded (a loop's passes
+//! together), moved, deleted, switched; tracks added or deleted; names, faders, balance,
+//! mute, solo; tempo, meter, click, locators. A step is kept when a gesture ends (the mouse
+//! released, a text field left, a recording stopped). Ctrl+Z undoes, Ctrl+Y or
+//! Ctrl+Shift+Z redoes; the history is saved with the session (`history.json`), so it
+//! survives a restart. Selecting a track and showing its takes aren't steps.
 //!
 //! Mouse: a click on a track (its strip or lane) selects it: the selected track is the armed
 //! one, which records. A click on a take selects it, a drag moves it (by whole beats; Alt:
@@ -23,7 +31,8 @@
 //! lanes a scrollbar scrolls in time; −, + and Fit zoom.
 //!
 //! Keys: Space plays / stops, R records, / turns the loop on or off, G and H zoom out and
-//! in, Delete deletes the selected take, Ctrl+Z undoes (while no text field has focus).
+//! in, Delete deletes the selected take, Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves
+//! (while no text field has focus).
 //! Over the lanes, Shift+wheel scrolls in time, Ctrl+wheel zooms.
 
 use std::path::{Path, PathBuf};
@@ -49,6 +58,8 @@ const CALIBRATE_S: f64 = 8.0;
 const STRIP_W: f32 = 250.0;
 const TRACK_H: f32 = 78.0;
 const RULER_H: f32 = 26.0;
+/// A take's row when a track shows every take (px).
+const TAKE_H: f32 = 34.0;
 /// The rate a session starts at before a device has played (the app's devices' host rate).
 const DEFAULT_RATE: u32 = 48_000;
 const REC: Color32 = Color32::from_rgb(0xe0, 0x4a, 0x4a);
@@ -86,14 +97,12 @@ struct Recording {
     overview: Overview,
 }
 
-/// A take being dragged: its track and index, where it was, where the drag started (px),
-/// and the session before the drag (for undo).
+/// A take being dragged: its track and index, where it was, where the drag started (px).
 struct Drag {
     track: usize,
     take: usize,
     from: i64,
     press_x: f32,
-    before: Vec<Track>,
 }
 
 /// A drag on the ruler: a locator's handle, or a new loop from a beat.
@@ -114,8 +123,15 @@ pub struct SessionView {
     /// The selected take (track, index), a drag in progress, the right-clicked take.
     selected: Option<(usize, usize)>,
     drag: Option<Drag>,
-    /// Earlier states of the tracks (and the armed one), for Ctrl+Z.
-    undo: Vec<(Vec<Track>, Option<usize>)>,
+    /// The session's states before each step (oldest first) and the ones undone; the
+    /// state the last step left (what the next change is compared with).
+    undo: Vec<Value>,
+    redo: Vec<Value>,
+    committed: Value,
+    /// The repo: sessions go in its `sessions/`.
+    root: PathBuf,
+    /// Save as…: the new session's name, while it is being typed.
+    save_as: Option<String>,
     /// Whether the session's folder has been written (a new one isn't, until a take).
     saved: bool,
     calibrations: Vec<Calibration>,
@@ -137,25 +153,50 @@ fn prefs_path() -> Option<PathBuf> {
     varimu_app::prefs::path().map(|p| p.with_file_name("recording.json"))
 }
 
-/// Where new sessions go: Documents\Varimu Sessions (the temp folder without a home).
-fn sessions_root() -> PathBuf {
-    std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
-        .map_or_else(std::env::temp_dir, |h| PathBuf::from(h).join("Documents"))
-        .join("Varimu Sessions")
+/// Where sessions go: the repo's `sessions/` (git-ignored).
+fn sessions_root(repo: &Path) -> PathBuf {
+    repo.join("sessions")
 }
 
 /// The first "Session N" folder that doesn't exist yet.
-fn new_session_dir() -> PathBuf {
-    let root = sessions_root();
+fn new_session_dir(repo: &Path) -> PathBuf {
+    let root = sessions_root(repo);
     (1..)
         .map(|n| root.join(format!("Session {n}")))
         .find(|d| !d.exists())
         .expect("a free name")
 }
 
+/// A folder name from what the user typed: no path separators or characters Windows
+/// refuses.
+fn folder_name(s: &str) -> String {
+    let t: String = s
+        .chars()
+        .map(|c| {
+            if "<>:\"/\\|?*".contains(c) || c.is_control() {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    t.trim().trim_end_matches('.').to_string()
+}
+
+/// A state as undo compares it: without what isn't a step (the armed track, takes shown).
+fn step_key(v: &Value) -> Value {
+    let mut v = v.clone();
+    v["armed"] = Value::Null;
+    if let Some(tracks) = v["tracks"].as_array_mut() {
+        for t in tracks {
+            t["show_takes"] = Value::Null;
+        }
+    }
+    v
+}
+
 impl SessionView {
-    pub fn new() -> SessionView {
+    pub fn new(repo: &Path) -> SessionView {
         let (last, transport, calibrations) = load_prefs();
         let (session, saved, error) = match last.as_deref().map(Session::load) {
             Some(Ok(s)) => (s, true, None),
@@ -165,20 +206,30 @@ impl SessionView {
                     _ => None,
                 };
                 (
-                    Session::new(new_session_dir(), DEFAULT_RATE, transport),
+                    Session::new(new_session_dir(repo), DEFAULT_RATE, transport),
                     false,
                     e,
                 )
             }
         };
+        let undo = if saved {
+            session.load_history()
+        } else {
+            Vec::new()
+        };
+        let committed = session.state();
         SessionView {
             session,
+            undo,
+            redo: Vec::new(),
+            committed,
+            root: repo.to_path_buf(),
+            save_as: None,
             ruler_drag: None,
             lanes_w: 800.0,
             scroll_drag: None,
             selected: None,
             drag: None,
-            undo: Vec::new(),
             saved,
             calibrations,
             recording: None,
@@ -295,6 +346,8 @@ impl SessionView {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
             .show(ui, |ui| self.arrangement(ui, play));
+        let armed = play.player().is_some_and(|p| p.take_armed());
+        self.commit(ui.ctx(), armed);
         if play.player().is_some() || !idle {
             ui.ctx().request_repaint_after(Duration::from_millis(33));
         }
@@ -310,9 +363,23 @@ impl SessionView {
                 i.key_pressed(egui::Key::Space),
                 i.key_pressed(egui::Key::R) && !i.modifiers.command,
                 i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
-                i.key_pressed(egui::Key::Z) && i.modifiers.command,
+                i.key_pressed(egui::Key::Z) && i.modifiers.command && !i.modifiers.shift,
             )
         });
+        let (redo, save) = ui.input(|i| {
+            (
+                i.modifiers.command
+                    && (i.key_pressed(egui::Key::Y)
+                        || (i.key_pressed(egui::Key::Z) && i.modifiers.shift)),
+                i.modifiers.command && i.key_pressed(egui::Key::S),
+            )
+        });
+        if redo {
+            self.redo();
+        }
+        if save {
+            self.save_now();
+        }
         let (slash, zoom_out, zoom_in) = ui.input(|i| {
             (
                 i.key_pressed(egui::Key::Slash),
@@ -388,33 +455,127 @@ impl SessionView {
 
     /// A new track, selected (armed) for the next take.
     fn add_track(&mut self) {
-        self.snapshot();
         let n = self.session.tracks.len() + 1;
         self.session.tracks.push(Track::new(&format!("Track {n}")));
         self.session.armed = Some(n - 1);
         self.save();
     }
 
-    /// Keep the tracks as they are for Ctrl+Z.
-    fn snapshot(&mut self) {
-        self.undo
-            .push((self.session.tracks.clone(), self.session.armed));
-        if self.undo.len() > 100 {
-            self.undo.remove(0);
+    /// A step for undo, if the session changed since the last one and no gesture is in
+    /// progress (a mouse button down, a text field being typed in, a recording).
+    fn commit(&mut self, ctx: &egui::Context, recording: bool) {
+        let busy = recording
+            || self.recording.is_some()
+            || self.drag.is_some()
+            || self.ruler_drag.is_some()
+            || ctx.input(|i| i.pointer.any_down())
+            || ctx.egui_wants_keyboard_input();
+        if busy {
+            return;
+        }
+        let now = self.session.state();
+        if now == self.committed {
+            return;
+        }
+        if step_key(&now) != step_key(&self.committed) {
+            let before = std::mem::replace(&mut self.committed, now);
+            self.undo.push(before);
+            if self.undo.len() > 200 {
+                self.undo.remove(0);
+            }
+            self.redo.clear();
+            self.save_history();
+        } else {
+            self.committed = now;
         }
     }
 
+    fn save_history(&mut self) {
+        if self.saved
+            && let Err(e) = self.session.save_history(&self.undo)
+        {
+            self.error = Some(e);
+        }
+    }
+
+    /// Back one step (Ctrl+Z).
     fn undo(&mut self) {
         if self.recording.is_some() {
             return;
         }
-        if let Some((tracks, armed)) = self.undo.pop() {
-            self.session.tracks = tracks;
-            self.session.armed = armed;
-            self.selected = None;
-            self.drag = None;
-            self.save();
+        if let Some(prev) = self.undo.pop() {
+            self.redo.push(self.session.state());
+            self.go_to(prev);
         }
+    }
+
+    /// Forward one step undone (Ctrl+Y).
+    fn redo(&mut self) {
+        if self.recording.is_some() {
+            return;
+        }
+        if let Some(next) = self.redo.pop() {
+            self.undo.push(self.session.state());
+            self.go_to(next);
+        }
+    }
+
+    fn go_to(&mut self, state: Value) {
+        match self.session.restore(&state) {
+            Ok(()) => {
+                self.committed = state;
+                self.selected = None;
+                self.drag = None;
+                self.save();
+                self.save_history();
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// Write the session now (Ctrl+S), a new one's folder too.
+    fn save_now(&mut self) {
+        self.saved = true;
+        self.save();
+        self.save_history();
+    }
+
+    /// The session copied to `sessions/<name>` and carried on there; the old folder stays
+    /// as it was.
+    fn save_as(&mut self, name: &str) {
+        let name = folder_name(name);
+        if name.is_empty() {
+            self.error = Some("a session needs a name".into());
+            return;
+        }
+        let dir = sessions_root(&self.root).join(&name);
+        match self.session.copy_to(&dir) {
+            Ok(copy) => {
+                self.session = copy;
+                self.saved = true;
+                self.save_history();
+                self.save_prefs();
+                self.error = None;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// Another session in place of this one (its history with it).
+    fn switch_to(&mut self, session: Session, saved: bool) {
+        self.session = session;
+        self.saved = saved;
+        self.undo = if saved {
+            self.session.load_history()
+        } else {
+            Vec::new()
+        };
+        self.redo.clear();
+        self.committed = self.session.state();
+        self.selected = None;
+        self.drag = None;
+        self.recording = None;
+        self.save_prefs();
     }
 
     /// Take `k` out of track `t` (its files stay in the session's folder).
@@ -428,7 +589,6 @@ impl SessionView {
         {
             return;
         }
-        self.snapshot();
         let track = &mut self.session.tracks[t];
         track.takes.remove(k);
         track.active = match track.active {
@@ -446,7 +606,6 @@ impl SessionView {
         if self.recording.is_some() || t >= self.session.tracks.len() {
             return;
         }
-        self.snapshot();
         self.session.tracks.remove(t);
         let n = self.session.tracks.len();
         self.session.armed = match self.session.armed {
@@ -724,8 +883,24 @@ impl SessionView {
     }
 
     /// The session's folder, New and Open.
+    /// Undo, redo, and the session's folder: Save, Save as…, New, Open….
     fn session_line(&mut self, ui: &mut egui::Ui) {
         ui.add_space(16.0);
+        if ui
+            .add_enabled(!self.undo.is_empty(), egui::Button::new("↶ Undo").small())
+            .on_hover_text(format!("Ctrl+Z ({} steps)", self.undo.len()))
+            .clicked()
+        {
+            self.undo();
+        }
+        if ui
+            .add_enabled(!self.redo.is_empty(), egui::Button::new("↷ Redo").small())
+            .on_hover_text(format!("Ctrl+Y ({} steps)", self.redo.len()))
+            .clicked()
+        {
+            self.redo();
+        }
+        ui.add_space(12.0);
         let name = self
             .session
             .dir
@@ -736,31 +911,57 @@ impl SessionView {
                 "{}{}",
                 self.session.dir.display(),
                 if self.saved {
-                    ""
+                    " (saved as you go)"
                 } else {
-                    " (written with the first take)"
+                    " (written with the first take, or Save)"
                 }
             ));
+        if ui
+            .small_button("Save")
+            .on_hover_text("Ctrl+S: the session is also saved after every change")
+            .clicked()
+        {
+            self.save_now();
+        }
+        match &mut self.save_as {
+            None => {
+                if ui
+                    .small_button("Save as…")
+                    .on_hover_text("Copy the session, every take's audio with it, to a new folder in sessions/ and carry on there (this one stays as it is)")
+                    .clicked()
+                {
+                    self.save_as = Some(format!("{name} copy"));
+                }
+            }
+            Some(text) => {
+                let edit = ui.add(egui::TextEdit::singleline(text).desired_width(160.0));
+                let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                if ui.small_button("Save").clicked() || enter {
+                    let n = text.clone();
+                    self.save_as = None;
+                    self.save_as(&n);
+                } else if ui.small_button("Cancel").clicked() {
+                    self.save_as = None;
+                }
+            }
+        }
         if ui.small_button("New").clicked() {
-            self.session = Session::new(
-                new_session_dir(),
+            let s = Session::new(
+                new_session_dir(&self.root),
                 self.session.rate,
                 self.session.transport.clone(),
             );
-            self.saved = false;
-            self.save_prefs();
+            self.switch_to(s, false);
         }
         if ui.small_button("Open…").clicked()
             && let Some(dir) = rfd::FileDialog::new()
-                .set_directory(sessions_root())
+                .set_directory(sessions_root(&self.root))
                 .pick_folder()
         {
             match Session::load(&dir) {
                 Ok(s) => {
-                    self.session = s;
-                    self.saved = true;
+                    self.switch_to(s, true);
                     self.error = None;
-                    self.save_prefs();
                 }
                 Err(e) => self.error = Some(e),
             }
@@ -1039,7 +1240,13 @@ impl SessionView {
     ) -> bool {
         let colour = COLOURS[i % COLOURS.len()];
         let width = ui.available_width();
-        let (row, _) = ui.allocate_exact_size(egui::vec2(width, TRACK_H), Sense::hover());
+        let t = &self.session.tracks[i];
+        let shown = if t.show_takes { t.takes.len() } else { 0 };
+        let (whole, _) = ui.allocate_exact_size(
+            egui::vec2(width, TRACK_H + shown as f32 * TAKE_H),
+            Sense::hover(),
+        );
+        let row = Rect::from_min_size(whole.min, egui::vec2(width, TRACK_H));
         let strip = Rect::from_min_size(row.min, egui::vec2(STRIP_W, TRACK_H));
         let lane = Rect::from_min_max(Pos2::new(row.left() + STRIP_W, row.top()), row.max);
         // The strip and lane take clicks and drags; the strip's controls, added after, sit
@@ -1081,7 +1288,6 @@ impl SessionView {
                     take: k,
                     from: t.takes[k].position,
                     press_x: p.x,
-                    before: self.session.tracks.clone(),
                 });
             }
         }
@@ -1106,14 +1312,10 @@ impl SessionView {
         if lane_resp.drag_stopped()
             && let Some(d) = self.drag.take()
         {
-            let moved = self.session.tracks[d.track]
+            changed |= self.session.tracks[d.track]
                 .takes
                 .get(d.take)
                 .is_some_and(|k| k.position != d.from);
-            if moved {
-                self.undo.push((d.before, self.session.armed));
-                changed = true;
-            }
         }
         let mut delete_take = None;
         lane_resp.context_menu(|ui| {
@@ -1335,7 +1537,7 @@ impl SessionView {
                     changed = true;
                 }
                 ui.label(
-                    RichText::new(format!("take {}/{n}", a + 1))
+                    RichText::new(format!("{}/{n}", a + 1))
                         .small()
                         .color(theme::MUTED),
                 );
@@ -1347,6 +1549,14 @@ impl SessionView {
                     t.active = Some(a + 1);
                     changed = true;
                 }
+                if ui
+                    .add(egui::Button::new(if t.show_takes { "▾" } else { "▸" }).small())
+                    .on_hover_text("Show every take of this track (click one to play it)")
+                    .clicked()
+                {
+                    t.show_takes = !t.show_takes;
+                    changed = true;
+                }
             }
         });
         if let Some(k) = self.session.tracks[i].active_take() {
@@ -1355,6 +1565,66 @@ impl SessionView {
                     .small()
                     .color(theme::FAINT),
             );
+        }
+        // Every take, stacked under the track: the one playing marked, a click plays another.
+        if shown > 0 {
+            for j in 0..self.session.tracks[i].takes.len() {
+                let y = row.bottom() + j as f32 * TAKE_H;
+                let srow = Rect::from_min_size(Pos2::new(row.left(), y), egui::vec2(width, TAKE_H));
+                let sstrip = Rect::from_min_size(srow.min, egui::vec2(STRIP_W, TAKE_H));
+                let slane = Rect::from_min_max(Pos2::new(srow.left() + STRIP_W, y), srow.max);
+                let resp = ui
+                    .interact(srow, ui.id().with(("take_lane", i, j)), Sense::click())
+                    .on_hover_text("Click: play this take on the track");
+                let t = &self.session.tracks[i];
+                let k = &t.takes[j];
+                let active = t.active == Some(j);
+                let p = ui.painter_at(srow);
+                p.rect_filled(sstrip, 0.0, theme::CHROME);
+                p.rect_filled(slane, 0.0, theme::BG);
+                p.line_segment(
+                    [
+                        Pos2::new(srow.left(), srow.bottom()),
+                        Pos2::new(srow.right(), srow.bottom()),
+                    ],
+                    Stroke::new(1.0, theme::DOT),
+                );
+                p.text(
+                    Pos2::new(sstrip.left() + 22.0, sstrip.center().y),
+                    egui::Align2::LEFT_CENTER,
+                    format!(
+                        "{}take {} · {} · {:.1} s",
+                        if active { "▶ " } else { "" },
+                        j + 1,
+                        k.id,
+                        k.audio.len() as f64 / self.session.rate as f64
+                    ),
+                    egui::FontId::proportional(11.0),
+                    if active { theme::ACCENT } else { theme::MUTED },
+                );
+                let lp = ui.painter_at(slane);
+                draw_grid(&lp, slane, view, grid);
+                draw_clip(
+                    &lp,
+                    slane,
+                    view,
+                    k.position,
+                    k.audio.len(),
+                    &k.overview,
+                    if active { colour } else { theme::FAINT },
+                    "",
+                );
+                if resp.clicked() && !active {
+                    self.session.tracks[i].active = Some(j);
+                    changed = true;
+                }
+                resp.context_menu(|ui| {
+                    if ui.button(format!("Delete take {}", j + 1)).clicked() {
+                        delete_take = Some(j);
+                        ui.close();
+                    }
+                });
+            }
         }
         if let Some(k) = delete_take {
             self.delete_take(i, k);
@@ -1808,9 +2078,13 @@ fn draw_clip(
         egui::FontId::proportional(10.0),
         colour,
     );
-    // The waveform: one line per pixel column, the lowest to the highest sample in it.
-    let mid = r.center().y + 5.0;
-    let half = (r.height() - 16.0) * 0.5;
+    // The waveform: one line per pixel column, the lowest to the highest sample in it
+    // (under the label, if there is one).
+    let (mid, half) = if label.is_empty() {
+        (r.center().y, r.height() * 0.42)
+    } else {
+        (r.center().y + 5.0, (r.height() - 16.0) * 0.5)
+    };
     let spp = view.rate / view.px_per_s; // samples per pixel
     let (a, b) = (
         x0.max(lane.left()).floor() as i32,
