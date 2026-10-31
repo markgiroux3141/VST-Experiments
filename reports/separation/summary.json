@@ -1,0 +1,389 @@
+{
+ "sample_rate": 96000,
+ "bpm": 100.0,
+ "panel": {
+  "cutoff": 0.6,
+  "resonance": 0.3,
+  "attack": 0.05,
+  "release": 0.25,
+  "wave": 0.7
+ },
+ "input_peak_dbfs": -12.0,
+ "devices": {
+  "670": {
+   "circuit": "fairchild_670",
+   "set": {}
+  },
+  "eqp1a": {
+   "circuit": "pultec_eqp1a",
+   "set": {
+    "lf_freq_hz": 100,
+    "lf_boost": 0.5,
+    "lf_atten": 0.3,
+    "hf_boost_freq_khz": 5,
+    "hf_boost": 0.4,
+    "bandwidth": 0.6,
+    "hf_atten": 0.5,
+    "hf_atten_freq_khz": 10
+   }
+  },
+  "5e3": {
+   "circuit": "fender_5e3",
+   "set": {
+    "volume_bright": 0.5,
+    "tone": 0.6
+   }
+  }
+ },
+ "rooms": {
+  "home": {
+   "dims_m": [
+    5.0,
+    4.0,
+    2.6
+   ],
+   "rt60_s": {
+    "125": 0.358,
+    "250": 0.565,
+    "500": 0.622,
+    "1000": 0.545,
+    "2000": 0.442,
+    "4000": 0.406,
+    "8000": 0.345
+   },
+   "source": "provisional: model knowledge (a furnished home recording room, 5 x 4 x 2.6 m)"
+  },
+  "booth": {
+   "dims_m": [
+    3.0,
+    2.5,
+    2.4
+   ],
+   "rt60_s": {
+    "125": 0.324,
+    "250": 0.14,
+    "500": 0.085,
+    "1000": 0.056,
+    "2000": 0.058,
+    "4000": 0.068,
+    "8000": 0.066
+   },
+   "source": "provisional: model knowledge (a small, heavily damped vocal room)"
+  },
+  "hall": {
+   "dims_m": [
+    14.0,
+    10.0,
+    6.0
+   ],
+   "rt60_s": {
+    "125": 1.3,
+    "250": 1.658,
+    "500": 1.652,
+    "1000": 1.396,
+    "2000": 1.145,
+    "4000": 0.988,
+    "8000": 0.692
+   },
+   "source": "provisional: model knowledge (a large, live tracking room: a hard ceiling, walls partly treated; RT60 ~1.4-1.7 s mid)"
+  }
+ },
+ "positions_m": {
+  "near": [
+   [
+    2.0,
+    2.0,
+    1.2
+   ],
+   [
+    2.0,
+    2.3,
+    1.2
+   ]
+  ],
+  "far": [
+   [
+    2.0,
+    2.0,
+    1.2
+   ],
+   [
+    4.3,
+    1.2,
+    1.5
+   ]
+  ]
+ },
+ "flutter": {
+  "total_rms": 0.0011,
+  "source": "web: Ampex 351 specification, wow and flutter 0.11% rms at 15 ips (docs/TAPE_PLAN.md's sources)"
+ },
+ "measure": "glimpse proportion at the target -6 dB under the masker (each at -23 LUFS); energetic separation: dB the target can drop and keep the dry pair's proportion at -6 dB. 'all': every cell the processed target fills; 'notes': only the cells where the dry target was (new harmonics, reverb tails between notes don't count)",
+ "conditions": {
+  "dry": {
+   "axis": "baseline",
+   "target": [],
+   "masker": [],
+   "glimpse_all_at_-6db": 0.298,
+   "energetic_all_db": 0.02,
+   "glimpse_notes_at_-6db": 0.298,
+   "energetic_notes_db": 0.02
+  },
+  "both_670": {
+   "axis": "devices",
+   "target": [
+    "dev:670"
+   ],
+   "masker": [
+    "dev:670"
+   ],
+   "glimpse_all_at_-6db": 0.2997,
+   "energetic_all_db": 0.14,
+   "glimpse_notes_at_-6db": 0.2975,
+   "energetic_notes_db": -0.03
+  },
+  "both_eqp1a": {
+   "axis": "devices",
+   "target": [
+    "dev:eqp1a"
+   ],
+   "masker": [
+    "dev:eqp1a"
+   ],
+   "glimpse_all_at_-6db": 0.3156,
+   "energetic_all_db": 1.17,
+   "glimpse_notes_at_-6db": 0.3004,
+   "energetic_notes_db": 0.17
+  },
+  "both_5e3": {
+   "axis": "devices",
+   "target": [
+    "dev:5e3"
+   ],
+   "masker": [
+    "dev:5e3"
+   ],
+   "glimpse_all_at_-6db": 0.249,
+   "energetic_all_db": -4.51,
+   "glimpse_notes_at_-6db": 0.292,
+   "energetic_notes_db": -0.53
+  },
+  "T670_Meqp1a": {
+   "axis": "devices",
+   "target": [
+    "dev:670"
+   ],
+   "masker": [
+    "dev:eqp1a"
+   ],
+   "glimpse_all_at_-6db": 0.3562,
+   "energetic_all_db": 2.88,
+   "glimpse_notes_at_-6db": 0.357,
+   "energetic_notes_db": 2.81
+  },
+  "T670_M5e3": {
+   "axis": "devices",
+   "target": [
+    "dev:670"
+   ],
+   "masker": [
+    "dev:5e3"
+   ],
+   "glimpse_all_at_-6db": 0.2629,
+   "energetic_all_db": -2.26,
+   "glimpse_notes_at_-6db": 0.2607,
+   "energetic_notes_db": -2.46
+  },
+  "Teqp1a_M670": {
+   "axis": "devices",
+   "target": [
+    "dev:eqp1a"
+   ],
+   "masker": [
+    "dev:670"
+   ],
+   "glimpse_all_at_-6db": 0.2885,
+   "energetic_all_db": -1.06,
+   "glimpse_notes_at_-6db": 0.2745,
+   "energetic_notes_db": -2.15
+  },
+  "Teqp1a_M5e3": {
+   "axis": "devices",
+   "target": [
+    "dev:eqp1a"
+   ],
+   "masker": [
+    "dev:5e3"
+   ],
+   "glimpse_all_at_-6db": 0.2663,
+   "energetic_all_db": -2.24,
+   "glimpse_notes_at_-6db": 0.2499,
+   "energetic_notes_db": -3.28
+  },
+  "T5e3_M670": {
+   "axis": "devices",
+   "target": [
+    "dev:5e3"
+   ],
+   "masker": [
+    "dev:670"
+   ],
+   "glimpse_all_at_-6db": 0.6227,
+   "energetic_all_db": 13.33,
+   "glimpse_notes_at_-6db": 0.4733,
+   "energetic_notes_db": 9.95
+  },
+  "T5e3_Meqp1a": {
+   "axis": "devices",
+   "target": [
+    "dev:5e3"
+   ],
+   "masker": [
+    "dev:eqp1a"
+   ],
+   "glimpse_all_at_-6db": 0.651,
+   "energetic_all_db": 18.85,
+   "glimpse_notes_at_-6db": 0.5122,
+   "energetic_notes_db": 13.54
+  },
+  "flutter_shared": {
+   "axis": "flutter",
+   "target": [
+    "flutter:1"
+   ],
+   "masker": [
+    "flutter:1"
+   ],
+   "glimpse_all_at_-6db": 0.2975,
+   "energetic_all_db": -0.05,
+   "glimpse_notes_at_-6db": 0.2978,
+   "energetic_notes_db": -0.02
+  },
+  "flutter_independent": {
+   "axis": "flutter",
+   "target": [
+    "flutter:1"
+   ],
+   "masker": [
+    "flutter:2"
+   ],
+   "glimpse_all_at_-6db": 0.2975,
+   "energetic_all_db": -0.02,
+   "glimpse_notes_at_-6db": 0.2978,
+   "energetic_notes_db": -0.01
+  },
+  "flutter_target_only": {
+   "axis": "flutter",
+   "target": [
+    "flutter:1"
+   ],
+   "masker": [],
+   "glimpse_all_at_-6db": 0.2971,
+   "energetic_all_db": -0.11,
+   "glimpse_notes_at_-6db": 0.2974,
+   "energetic_notes_db": -0.04
+  },
+  "flutter_masker_only": {
+   "axis": "flutter",
+   "target": [],
+   "masker": [
+    "flutter:2"
+   ],
+   "glimpse_all_at_-6db": 0.2988,
+   "energetic_all_db": 0.06,
+   "glimpse_notes_at_-6db": 0.2988,
+   "energetic_notes_db": 0.06
+  },
+  "flutter_independent_x4": {
+   "axis": "flutter",
+   "target": [
+    "flutter:1:4"
+   ],
+   "masker": [
+    "flutter:2:4"
+   ],
+   "glimpse_all_at_-6db": 0.2978,
+   "energetic_all_db": -0.04,
+   "glimpse_notes_at_-6db": 0.2979,
+   "energetic_notes_db": -0.03
+  },
+  "room_both_near": {
+   "axis": "room",
+   "target": [
+    "room:home:near"
+   ],
+   "masker": [
+    "room:home:near"
+   ],
+   "glimpse_all_at_-6db": 0.2447,
+   "energetic_all_db": -2.41,
+   "glimpse_notes_at_-6db": 0.22,
+   "energetic_notes_db": -3.62
+  },
+  "room_both_far": {
+   "axis": "room",
+   "target": [
+    "room:home:far"
+   ],
+   "masker": [
+    "room:home:far"
+   ],
+   "glimpse_all_at_-6db": 0.2314,
+   "energetic_all_db": -3.12,
+   "glimpse_notes_at_-6db": 0.1868,
+   "energetic_notes_db": -5.42
+  },
+  "room_Tnear_Mfar": {
+   "axis": "room",
+   "target": [
+    "room:home:near"
+   ],
+   "masker": [
+    "room:home:far"
+   ],
+   "glimpse_all_at_-6db": 0.2651,
+   "energetic_all_db": -1.21,
+   "glimpse_notes_at_-6db": 0.2505,
+   "energetic_notes_db": -1.78
+  },
+  "room_Tfar_Mnear": {
+   "axis": "room",
+   "target": [
+    "room:home:far"
+   ],
+   "masker": [
+    "room:home:near"
+   ],
+   "glimpse_all_at_-6db": 0.2307,
+   "energetic_all_db": -3.09,
+   "glimpse_notes_at_-6db": 0.1785,
+   "energetic_notes_db": -5.94
+  },
+  "room_Tbooth_Mhall": {
+   "axis": "room",
+   "target": [
+    "room:booth:near"
+   ],
+   "masker": [
+    "room:hall:far"
+   ],
+   "glimpse_all_at_-6db": 0.1976,
+   "energetic_all_db": -3.55,
+   "glimpse_notes_at_-6db": 0.1917,
+   "energetic_notes_db": -3.68
+  },
+  "room_Thall_Mbooth": {
+   "axis": "room",
+   "target": [
+    "room:hall:far"
+   ],
+   "masker": [
+    "room:booth:near"
+   ],
+   "glimpse_all_at_-6db": 0.38,
+   "energetic_all_db": 5.45,
+   "glimpse_notes_at_-6db": 0.2952,
+   "energetic_notes_db": -0.18
+  }
+ }
+}
