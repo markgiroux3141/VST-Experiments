@@ -3,13 +3,16 @@
 //!
 //! R0 (scaffold): the window, the studio look and the two views. R2: the Play view
 //! (`play_view`). R3: the Editor view (`editor_view`), its drawing heard through the
-//! Play view's player. The rest is the library (`varimu_app`).
+//! Play view's player. Recording (docs/RECORDING_PLAN.md) T1: the Session view
+//! (`session_view`), the transport and click on the Play view's player. The rest is the
+//! library (`varimu_app`).
 
 // No console window in release builds (debug builds keep it for logs).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod editor_view;
 mod play_view;
+mod session_view;
 mod theme;
 
 use std::path::{Path, PathBuf};
@@ -71,12 +74,14 @@ fn config_dir() -> PathBuf {
 enum View {
     Editor,
     Play,
+    Session,
 }
 
 struct App {
     view: View,
     play: play_view::PlayView,
     editor: editor_view::EditorView,
+    session: session_view::SessionView,
 }
 
 impl App {
@@ -94,6 +99,7 @@ impl App {
             view,
             editor: editor_view::EditorView::new(&config_dir, &name),
             play: play_view::PlayView::new(config_dir, args),
+            session: session_view::SessionView::new(),
         }
     }
 }
@@ -112,6 +118,7 @@ impl eframe::App for App {
                     ui.add_space(16.0);
                     ui.selectable_value(&mut self.view, View::Editor, "Editor");
                     ui.selectable_value(&mut self.view, View::Play, "Play");
+                    ui.selectable_value(&mut self.view, View::Session, "Session");
                 });
             });
         egui::CentralPanel::default()
@@ -121,6 +128,10 @@ impl eframe::App for App {
                 View::Play => {
                     self.editor.sync_player(&mut self.play);
                     self.play.ui(ui);
+                }
+                View::Session => {
+                    self.editor.sync_player(&mut self.play);
+                    self.session.ui(ui, &mut self.play);
                 }
             });
     }

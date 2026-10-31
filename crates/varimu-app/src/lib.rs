@@ -9,10 +9,15 @@
 //!
 //! R3 (the editor): `editor`, the schematic editor's logic (the web editor's page
 //! logic, ported); the window paints it.
+//!
+//! Recording (docs/RECORDING_PLAN.md), T1: `transport` (the session's clock and click),
+//! `loopback` (an output cabled back to an input: where the clicks come back, and the
+//! round trip).
 
 pub mod audio;
 pub mod editor;
 pub mod live;
+pub mod loopback;
 pub mod midi;
 pub mod monitor;
 pub mod panel;
@@ -21,3 +26,4 @@ pub mod prefs;
 pub mod render;
 pub mod resample;
 pub mod settings;
+pub mod transport;
