@@ -148,3 +148,41 @@ def test_a_held_note_droops_by_tens_of_cents_not_semitones():
     late = vco.frequency(tank[int(1.7 * FS) :], FS)
     print(early, late)
     assert abs(vco.cents(late, early)) < 50
+
+
+def glide_step(glide):
+    """A key held while the pitch steps -20 -> -15 V at 0.3 s: the tank's per-cycle pitch."""
+    s = spec.load_circuit(CIRCUIT)
+    ir = builder.build_ir(s, spec.resolve(s, {"glide": glide}), cores="ja")
+    ir = dataclasses.replace(ir, probes=(VoltageProbe("o_t"),))
+    st = dataclasses.replace(
+        io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
+        full_scale_volts_peak=1.0,
+        partition=PARTITION,
+    )
+    n = int(1.6 * FS)
+    pitch = np.where(np.arange(n) / FS >= 0.3, -15.0, -20.0)
+    tank = fast.run_transient(
+        ir, np.zeros(n), settings=st, controls={"gate": np.full(n, KEY_DOWN_V), "pitch": pitch}
+    ).vectors["v(o_t)"]
+    ts, fc = vco.cycle_frequencies(tank, FS)
+    return ts, vco.smoothed(ts, fc, 0.05)
+
+
+def test_glide_slides_the_pitch_and_lands_on_the_note():
+    """GLIDE (SYNTH_IDEAS.md #1): at 0 a step lands within 10 cents in ~30 ms, as without
+    it; at 0.75 (~0.16 s time constant) it is still under halfway (in cents) 40 ms in, and
+    lands on the same note (scripts/glide_study.py: 0.68 s to within 10 cents)."""
+    ts0, f0 = glide_step(0.0)
+    ts1, f1 = glide_step(0.75)
+    lo, hi = np.median(f0[(ts0 > 0.1) & (ts0 < 0.28)]), np.median(f0[ts0 > 1.3])
+    print(lo, hi)
+    assert np.all(np.abs(vco.cents(f0[ts0 > 0.36], hi)) < 10)
+
+    def gone(ts, f, t):
+        return vco.cents(np.interp(t, ts, f), lo) / vco.cents(hi, lo)
+
+    print(gone(ts0, f0, 0.34), gone(ts1, f1, 0.34), np.median(f1[ts1 > 1.3]))
+    assert gone(ts0, f0, 0.34) > 0.9
+    assert gone(ts1, f1, 0.34) < 0.5
+    assert abs(vco.cents(np.median(f1[ts1 > 1.3]), hi)) < 10

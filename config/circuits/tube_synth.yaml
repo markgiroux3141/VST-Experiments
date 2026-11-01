@@ -20,6 +20,11 @@
 #   keyboard: the pitch input's stopper into the 6V6GT's grid, which holds 0.1 uF (1 ms, as
 #        the voice's cutoff driver has); the stopper stays with the voice in the draft's
 #        partition (control inputs live in its first part)
+#   GLIDE (SYNTH_IDEAS.md #1): an 82k audio-taper rheostat from the pitch input onto 4.7 uF
+#        ahead of the stopper (portamento: the pitch voltage slides, ~0.39 s time constant
+#        at full rotation, none at 0). The grid circuit stays under RCA's 0.1 MOhm for a
+#        fixed-bias 6V6GT (82k + 10k), and the grid leak is a 1 GOhm numerical one: a
+#        10M leak lost 0.1% of the pitch across the stopper, 0.9% with the glide (~90 cents)
 # The rest is tube_voice.yaml's: its header follows.
 #
 # The tube synth's voice (docs/TUBE_SYNTH_PLAN.md, S3): tube_filter.yaml's filter, supply
@@ -95,6 +100,7 @@ controls:
   attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
   release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
   env_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-30: the ENV AMOUNT pot, V7's screen from ground (0: off) to b1 (1); linear)"}
+  glide: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-31: the GLIDE rheostat, 82k audio taper onto 4.7 uF: ~14 ms at 0.25, ~45 ms at 0.5, ~0.39 s at 1 (time constants); 0 none)"}
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1); linear)"}
   range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
@@ -210,7 +216,7 @@ values:
   c_mix_osc_f: {value: 0.1e-6, source: "provisional: model knowledge (design: the buffer's output coupling into the mixer)"}
   r_mix_osc_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: from the oscillator's buffer into the mixer: half of it at the first grid)"}
   osc_r_buffer_cathode_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: the buffer's cathode to the -50 V rail, ~1.1 mA)"}
-  osc_r_grid4_leak_ohm: {value: 10.0e+6, source: "provisional: model knowledge (design: the 6V6GT's grid leak: a DC path on the oscillator's side of the draft's partition; 0.1% of the pitch input lost across the stopper)"}
+  osc_r_grid4_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the 6V6GT's grid on the oscillator's side of the draft's partition (the pitch input drives the grid; a 10M leak lost 0.1% of the pitch across the stopper, 0.9% across the glide)"}
   osc_r_vr_feed_ohm: {value: 27.0e+3, source: "provisional: model knowledge (design: b1 to the 5651 pair: ~4.3 mA at idle, ~3.3 mA in the tubes beside the screen's ~1 mA; ~2.9 mA with b1 sagged to ~278 V; RCA's range 1.5-3.5 mA)"}
   osc_v5651_operating_v: {value: 87.0, source: "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage av. 87 V (min 82, max 92) over 1.5-3.5 mA"}
   osc_v5651_ref_current_a: {value: 2.5e-3, source: "RCA 5651 (1948; data/datasheets/published_points.yaml): operating voltage over 1.5-3.5 mA, at its middle (the slope fit's reference, as fairchild_670.yaml's V304)"}
@@ -238,6 +244,9 @@ values:
   osc_r_wave_pot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the WAVE pot, ten times its ends' impedance)"}
   # --- pitch
   osc_r_pitch_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (V4's grid stopper from the pitch input)"}
+  osc_r_glide_ohm: {value: 82.0e+3, source: "provisional: model knowledge (design: the GLIDE rheostat; with the stopper the grid circuit is 92k, under RCA's 6V6GT maximum for fixed bias, 0.1 MOhm)"}
+  osc_c_glide_f: {value: 4.7e-6, source: "provisional: model knowledge (design: the GLIDE capacitor, a 4.7 uF film / paper part at the pitch input's few tens of volts: 0.39 s with the rheostat at full)"}
+  osc_glide_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper, 10% at half rotation: short glides get most of the rotation)"}
   osc_r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design: 6V6GT screen stopper from the 5651 pair (vco_lc.yaml feeds it from b3: off the reservoir b1 its ripple frequency-modulated the pitch +-20 cents at 120 Hz))"}
   osc_r_cathode4_ohm: {value: 470.0, source: "provisional: model knowledge (design: 6V6GT cathode, current feedback: with its screen on the 5651 pair (~177 V, against vco_lc's ~340 V b3) 1k reached only 1.2 kHz, 680 ohm 1.4 kHz)"}
   # --- the reactor (saturable_reactor.yaml's cores, twice the signal turns)
@@ -471,7 +480,9 @@ sections:
       ROK3: {R: [o_buf, neg], r: osc_r_buffer_cathode_ohm}
   - title: keyboard
     parts:
-      ROPS: {R: [pv, o_g4], r: osc_r_pitch_stop_ohm}
+      RGLIDE: {rheostat: [pv, o_pg], r: osc_r_glide_ohm, at: glide, taper_mid: osc_glide_taper_mid}
+      CGLIDE: {C: [o_pg, "0"], c: osc_c_glide_f}
+      ROPS: {R: [o_pg, o_g4], r: osc_r_pitch_stop_ohm}
   - title: pitch
     parts:
       COG4: {C: [o_g4, "0"], c: osc_c_grid4_f}

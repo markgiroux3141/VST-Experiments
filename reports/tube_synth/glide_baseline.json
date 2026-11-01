@@ -1,0 +1,49 @@
+{
+ "has_glide": false,
+ "steps_v": {
+  "up": [
+   -20.0,
+   -15.0
+  ],
+  "down": [
+   -15.0,
+   -20.0
+  ],
+  "big_up": [
+   -23.0,
+   -5.0
+  ],
+  "big_down": [
+   -5.0,
+   -23.0
+  ]
+ },
+ "glide": {
+  "0.0": {
+   "up": {
+    "from_hz": 172.57,
+    "to_hz": 475.96,
+    "half_s": 0.003,
+    "within_10_cents_s": 0.026
+   },
+   "down": {
+    "from_hz": 475.58,
+    "to_hz": 172.95,
+    "half_s": 0.017,
+    "within_10_cents_s": 0.029
+   },
+   "big_up": {
+    "from_hz": 57.6,
+    "to_hz": 1302.55,
+    "half_s": 0.001,
+    "within_10_cents_s": 0.027
+   },
+   "big_down": {
+    "from_hz": 1302.59,
+    "to_hz": 58.64,
+    "half_s": 0.039,
+    "within_10_cents_s": 1.923
+   }
+  }
+ }
+}

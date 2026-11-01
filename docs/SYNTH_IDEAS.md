@@ -1,0 +1,319 @@
+# Tube synth: ideas for a more diverse instrument
+
+Brainstormed 2026-10-31 with the user, who liked all of them. They're listed here in
+priority order. **They're being built one at a time in this order (from 2026-10-31, the
+user's call); a section says when its idea is built.** The order is mine:
+cheap ideas that change how the synth plays come first, then the voice's missing blocks
+(several are S5's own scope), then ideas that need new device models or a lot of CPU. The
+user picks what to build and when. Each one starts the usual way: a prototype with numbers,
+then the user's go.
+
+The synth meant here is `config/circuits/tube_synth.yaml`, the app's `tube_synth` device
+(TUBE_SYNTH_PLAN.md, S4-S5). What it has today: the reactor-tuned LC oscillator with RANGE
+and WAVE (tank to square); the reactor low-pass with the 12AX7 Q multiplier; the
+diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heated cathodes
+(B6); the plate as a chain end. Its LFO doesn't oscillate yet.
+
+## Ground rules (TUBE_SYNTH_PLAN.md's, restated where they bite)
+
+- **Every value is sourced.** Design choices are tagged `provisional: model knowledge
+  (design: ...)` like the synth's existing ones. Every part works within its ratings.
+- **New device models come as options first.** A lamp, a gas tube, a pentagrid or a
+  copper-oxide fit is a new model with two implementations and an agreement test. Each
+  comes to the user with numbers before it's built (memory: "options before model changes").
+- **Physics, not DSP.** Every idea below is a circuit in the one coupled netlist. The
+  app's keyboard (velocity, aftertouch) only drives control inputs, as the gate and the
+  pitch do now.
+- **Measure CPU before and after.** With a key held (`examples/play.rs --hold 69`, 50 ms
+  buffer, five threads) the synth runs at 67-70% load at ENV AMOUNT 0 (worst block
+  85-101%) and 77-80% at 1 (103-108%). There's little headroom. DK's cost grows with the
+  square of the states, and JA cores and sharp edges cost Newton iterations. Each prototype
+  states its load from `examples/load_profile.rs` and, if it adds edges, its aliasing at
+  draft-2x.
+- **Panel controls update in place.** A new switch is built from contacts that are always
+  in the circuit, as RANGE is, so turning it doesn't restart the stream.
+
+## The list
+
+| # | Idea | What it adds to the sound | New work | Cost (estimate) |
+|---|---|---|---|---|
+| 1 | Glide (**built**) | Notes slide | A rheostat | ~0 (measured) |
+| 2 | KEY TRACK | Filter brightness follows the note | A pot and a divider | ~0; partition placement |
+| 3 | Velocity, aftertouch | Expression | App feeds; a control input | ~0 |
+| 4 | HEATER | "Tired tubes": softer, more drift | The heater ratio as a panel value | ~0 |
+| 5 | PULSE (peaking transformer) | Bright, buzzy pulse, magnetic PWM | One small JA core | One core; aliasing |
+| 6 | SUPPLY: rectifier and reservoir | How much the voice sags and blooms | Switch contacts; copper oxide needs a fit | Small |
+| 7 | Lamp-stabilized Wien LFO | A working LFO that blooms | Lamp device model | ~+1% |
+| 8 | LFO routing, delayed vibrato | Vibrato, tremolo, filter wobble | Pots, an RC | Small |
+| 9 | Second oscillator, DETUNE, COUPLING | Beating, pulling, locking | A second VCO | One VCO; a thread |
+| 10 | Sub-octave divider | Square sub-octaves, weight | Triode flip-flops | Edges: Newton, aliasing |
+| 11 | NOISE in the mixer | Breath, wind, percussion | Amplified B5 noise | Noise on: measure |
+| 12 | Filter MODE (LP / BP / HP) | Thin, vocal, nasal shapes | Switch contacts | ~0 |
+| 13 | Filter DRIVE | Grit; loud notes darken | A gain stage | Small |
+| 14 | Ring modulator | Metallic, bell-like | Diode ring, transformers | Two transformers |
+| 15 | ADSR / second envelope | Shaped notes, independent sweeps | Diode steering, a pot | ~+3% |
+| 16 | Sample-and-hold | Random stepped modulation | 6AL5 gate, a capacitor | Small |
+| 17 | Units (part tolerances) | Each instrument its own | Port the tolerance draws | ~0 at run time |
+| 18 | Through an amp | The 5E3 and its speaker | Chain end or insert | 5E3: 1.61x real time |
+| 19 | Duophonic (two keys) | Two-note lines, as the Odyssey | Key assignment, second pitch | Needs #9 |
+| 20 | Pentagrid modulator (6BE6) | Asymmetric, bleeding ring-mod | Pentagrid model | One tube |
+| 21 | Formant banks | Fixed vowel / instrument colours | LC band-passes | States grow |
+| 22 | Paraphony on one supply | Chords that sag together | More oscillators | One VCO per voice |
+| 23 | Gas-tube sawtooth oscillator | The Trautonium's sound | Thyratron / neon model | Model work |
+| 24 | Subharmonic mixtures | Mixtur-Trautonium chords | Dividers by 2-4 on #23 | Needs #23 or #10 |
+| 25 | Step sequencer in tubes | Patterns clocked by the LFO | Dekatron or flip-flop ring | Many tubes |
+
+## 1. Glide
+
+A GLIDE rheostat (0 to ~2.2M, reverse audio taper) in series with the pitch input's
+stopper. The 6V6GT's grid already holds 0.1 uF, so glide is that RC: up to ~0.2 s at full
+rotation. A value change updates the stream in place. vco_lc had a fixed 0.57 s glide (its
+33k tail and b3-fed screen); this makes it a control.
+**Watch:** pitch already settles in 17-45 ms going up and up to 0.24 s on big drops (S1's
+minor loops). Glide at 0 has to stay as fast as now, and long glides may sound uneven up
+against down. Measure both directions as S5 did. The tuning tables are steady-state, so
+they're unaffected.
+
+**Built (2026-10-31).** Not the 2.2M above: RCA rates a fixed-bias 6V6GT's grid circuit at
+0.1 MOhm, so GLIDE (`glide`) is an 82k audio-taper rheostat from the pitch input onto
+4.7 uF, ahead of the 10k stopper (the `keyboard` section, the partition's first part):
+time constants ~14 ms at 0.25, ~45 ms at 0.5, ~0.16 s at 0.75, ~0.39 s at 1. The 6V6GT's
+10M grid leak would have divided the pitch against it (0.9%, ~90 cents at -20 V), so it is
+now a 1 GOhm `numerical:` leak (only the partition's DC path). That moved the pitch ~-10
+cents at -20 V, so both tuning tables were re-measured (panel.rs). `scripts/glide_study.py`
+-> `reports/tube_synth/glide.json` (before GLIDE: `glide_baseline.json`): a step -20 ->
+-15 V (172 -> 475 Hz) and back with a key held, at draft with the app's partition:
+
+| GLIDE | halfway in cents, up / down | within 10 cents, up / down |
+|---|---|---|
+| 0 | 1 / 20 ms | 27 / 26 ms (before GLIDE: 26 / 29) |
+| 0.25 | 2 / 23 ms | 65 / 63 ms |
+| 0.5 | 23 / 42 ms | 0.21 / 0.20 s |
+| 0.75 | 74 / 116 ms | 0.68 / 0.65 s |
+| 1 | 0.22 / 0.33 s | > 1.6 s (still landing at the run's end) |
+
+Down is slower to halfway than up: the glide is exponential in volts and the pitch law is
+steeper in cents per volt at the bottom (as portamento without an expo converter). A big
+drop (1.3 kHz -> 58 Hz) still creeps for ~1.9 s at any setting (S1's minor loops, as
+before). Load with a key held (`play.rs --hold 69`, GLIDE 0.5): 68-73%, worst block
+97-103% (unchanged). Test: `tests/test_tube_synth.py`, the glide test.
+
+## 2. KEY TRACK
+
+A KEY TRACK pot takes a fraction of the pitch input into V4's grid (the cutoff driver), so
+the cutoff follows the note. V4 and the oscillator's pitch driver are both 6V6GTs driving
+reactor control windings, so the same law may track the oscillator's pitch with no shaping
+network. Measure it (cutoff against pitch, per range) before adding any.
+**Watch:** the pitch input lives in the partition's first part and V4 on the filter's
+thread. Feed V4 through a resistor onto a capacitor-held node, as RBUS / CBA do for ENV
+AMOUNT.
+
+## 3. Velocity and aftertouch
+
+- **Velocity:** the gate's key-down volts (`gate_on_v`) scaled per note by velocity
+  (`panel::key_feeds`' `Feed::Gate`). The envelope's peak, the VCA's opening and ENV
+  AMOUNT's sweep then follow how hard the key is played. The circuit is unchanged.
+- **Aftertouch:** a new control input (`pressure`) into V4's grid like KEY TRACK, or into
+  the pitch grid for vibrato by pressure. The `midi` module reads channel pressure.
+- Both are the player's keyboard, outside the instrument, so nothing here bends "physics,
+  not DSP". A velocity curve is a panel setting.
+
+## 4. HEATER
+
+A HEATER control: the heater voltage as a ratio of the rated, set on the panel (period
+practice: a heater transformer's taps, or a series rheostat). Today the ratio follows the
+mains setting (B6, `heater_ratio`). It needs the ratio as its own value that
+`Transient::update` can change. The cathode temperature follows through B6's 7 s thermal
+lag, so turning it is slow, like the real thing.
+- **Low:** emission reaches its ceiling sooner, so peaks soften and compress. The
+  space-charge shift moves operating points and the oscillator drifts.
+- **High:** quicker warm-up, no change at the rated temperature.
+- **Buildable:** tube heaters are rated +-10%. The panel range stays inside it, or the
+  out-of-rating zone is marked on the panel (to decide with the user). Pairs with "Power on
+  (cold)".
+
+## 5. PULSE: a peaking transformer
+
+A third waveform beside WAVE's tank and square. From thyratron firing circuits: a small
+ungapped mumetall core driven through a resistor from the oscillator saturates on each
+half-cycle. Its secondary gives a sharp pulse at each flux reversal, a buzzy spectrum with
+many harmonics. A DC bias winding (a pot) shifts when each half-cycle saturates, so the
+pulses' spacing becomes PWM done with magnetics. The kick's prototypes found mumetall lossy
+when driven through saturation: here that only rounds the pulses.
+**New:** one more JA core. **Watch:** aliasing at draft-2x (narrow pulses), and Newton at
+the reversals. Measure load and the alias level against the harmonics, as the 5E3's
+quality choice was made.
+
+## 6. SUPPLY: rectifier and reservoir
+
+A RECTIFIER switch (6X4, selenium; copper oxide needs a new device fit) and a reservoir
+switch (contacts always in the circuit). Together they set how far b1-b3 sag under a note.
+**Watch:** the pitch and the cutoff were taken off the sag on purpose (the 5651s on the
+oscillator's and V4's screens), so sag now mostly moves the VCA's level, V7's sweep and
+what's left of the pitch. It sounds like bloom and compression rather than pitch dips.
+Measure it before promising more. Rectifier peak inverse voltage and surge ratings apply
+per position.
+
+## 7. The LFO: a lamp-stabilized Wien bridge
+
+This replaces the stalled phase-shift LFO (TUBE_SYNTH_PLAN.md, S5's status: its loop gain
+stayed under 29 for a reason not found). A Wien bridge needs a gain of only 3. An
+incandescent lamp in its negative feedback holds the amplitude, as in Hewlett's HP200A
+(1939). The lamp's thermal lag makes the amplitude bloom after a RATE change.
+**New:** a lamp device model: filament resistance against temperature, heat capacity,
+radiated loss, with a SPICE and a Python implementation and an agreement test. It could
+also steady the VCO's amplitude later.
+**Watch:** the lamp's time constant against a 0.1-20 Hz LFO. Too slow and the amplitude
+hunts (period designs bounce too; how much is the sound).
+
+## 8. LFO routing and delayed vibrato
+
+DEPTH into the pitch grid (S5's design), plus pots into V4's grid (filter wobble) and the
+VCA's bias (tremolo). Delayed vibrato: an RC charged from the gate scales the vibrato
+depth, so it fades in after the note starts. The alternative to the pitch grid is a
+reactance tube across the tank (the period's FM). The kick's two attempts swept the wrong
+way, so the grid is the first choice.
+
+## 9. Second oscillator: DETUNE and COUPLING
+
+S5's second oscillator, with one control nobody else has: COUPLING, a small variable
+capacitance between the two tanks.
+- At 0 the two beat freely (DETUNE sets how fast).
+- Turning it up, they pull toward each other and lock when close (injection locking).
+  That's the LC equivalent of hard sync, and the change from beating to locking is
+  audible physics.
+- Both already share the supply, so loud notes couple them anyway.
+
+**Cost:** one VCO's Newton work, on a sixth thread. The load is the open question (the
+first VCO is the voice's most expensive part). **Watch:** DETUNE adds to the drift that's
+already there, so it may need a fine control.
+
+## 10. Sub-octave divider
+
+Eccles-Jordan triode flip-flops (1918, the first flip-flop) clocked by the square,
+dividing by 2 and by 4, mixed in with SUB pots. It speaks to SYNTH_LOW_END.md's "light on
+bass", and the divided squares keep perfect octaves whatever the oscillator drifts. It's
+also the Novachord's principle (its 12 top-octave oscillators, divided down).
+**Watch:** each flip-flop is two triodes that switch hard: Newton iterations at the edges
+and aliasing at draft-2x. Slowing the edges with stray capacitance is the period's own
+fix. Measure both.
+
+## 11. NOISE in the mixer
+
+S5's noise source: B5's shot or Johnson noise of a resistor or a tube, amplified by a
+12AX7 chain into the mixer with a NOISE pot. Its spectrum then comes from the physics
+(flicker below ~1 kHz, white above). Through the filter it gives wind, breath and snares.
+**Watch:** the app's "Noise" switch costs CPU when on, and this needs it on. Measure the
+load. A gas-tube or noise-diode source can come with #23.
+
+## 12. Filter MODE
+
+Low-pass (today), band-pass and high-pass from the same reactor and capacitor rearranged,
+on a switch built from contacts that are always in the circuit. Measure each mode's sweep
+and Q. The Q multiplier's feedback may need a different tap for each.
+
+## 13. Filter DRIVE
+
+A gain stage before the reactor with a DRIVE pot. S1 found that the signal moves the
+cutoff: at strong bias a 5 mT ripple sees up to 1.7x the permeability of a 0.5 mT one, so
+loud notes pull the cutoff down. DRIVE turns that core physics into a playable effect, plus
+the stage's own clipping. **Watch:** control feedthrough grows with signal (S1: the control
+circuit carries the second harmonic).
+
+## 14. Ring modulator
+
+S5's "if wanted": a diode ring between two transformers, oscillator 1 times oscillator 2
+(after #9), with a RING level pot in the mixer and a balance trimmer for carrier bleed.
+Diodes: SELENIUM@1 exists. The original ring modulator (Cowan, 1934) used copper-oxide
+rectifiers, whose soft knee and leakage sound dirtier. That's a new device fit, shared with
+#6. **Cost:** two transformers (JA cores, or gapped, where linear is enough).
+
+## 15. ADSR and a second envelope
+
+S5 measured option B, a second envelope (its own 6X4 and 0.47 uF from the keyboard bus,
+ATTACK2 / RELEASE2) on V7's grid: +3% CPU. ADSR adds a DECAY to a SUSTAIN level on the
+VCA's envelope (diode steering onto a divider set by the SUSTAIN pot). The Odyssey has an
+ADSR and an AR. This would make the synth match.
+
+## 16. Sample-and-hold
+
+A 6AL5 bridge gate samples NOISE (#11) or oscillator 2 onto a low-leakage capacitor,
+clocked by the LFO's edge (#7), read out through a cathode follower and routed like the LFO
+(#8). It gives random stepped pitch or cutoff. **Watch:** the capacitor's droop between
+clocks (the 6AL5's leakage, the follower's grid current) is the sound's character: measure
+it, don't hide it.
+
+## 17. Units: each instrument its own
+
+The circuits have seeded part tolerances (`passive_seed`, `passive_spread`), but the native
+app builds nominal units only (`varimu-circuit` refuses a nonzero spread, R1). Port the
+tolerance draws bit for bit (agreement test), then a UNIT number on the Play panel, so
+"unit 7" and "unit 12" of the same design sound apart. It costs nothing at run time.
+**Watch:** the tuning tables are measured per circuit, so a unit with different parts needs
+its own (`vco_study.py --tuning` per unit, or measured on the unit's first build).
+
+## 18. Through an amp
+
+The synth through the 5E3 and its P12R speaker. As a live chain end (`panel::CHAIN_ENDS`,
+today only the plate) it needs the 5E3's speed (1.61x real time at draft-2x with the
+speaker; COMPONENT_EDITOR_PLAN.md C3: the user's pending decision). As a session insert
+(SESSION_FX_PLAN.md: printed offline), speed only matters while auditioning. So the insert
+route works first.
+
+## 19. Duophonic
+
+Two keys at once, the lowest on oscillator 1 and the highest on oscillator 2, as the
+user's Odyssey 2800 does. It needs #9, a second pitch control input and a key-assignment
+rule in the app (`panel::key_feeds`; the Odyssey's rule is the reference). One filter and
+one VCA, so it's a two-note line, not polyphony.
+
+## 20. Pentagrid modulator (6BE6)
+
+A superhet converter tube used as a multiplier: one signal on each control grid. Compared
+with the ring (#14) it's asymmetric and leaks each input, a different flavour of the same
+idea. **New:** a pentagrid model (two control grids: a new tube form, both implementations,
+fitted to the RCA manual's curves) and a component `6BE6@1`.
+
+## 21. Formant banks
+
+The Novachord's and Hammond's fixed resonant colours: a bank of LC band-passes (gapped
+inductors) on a selector, as preset timbres after the filter. **Watch:** every LC adds
+states, and DK's cost grows with their square (the 5E3's speaker readout took Play from
+0.48x to 1.61x real time). Measure one formant before planning a bank.
+
+## 22. Paraphony on one supply
+
+Several oscillators sharing the filter and the VCA, all on one supply, so a chord's notes
+pull each other's pitch and level through the sag (TUBE_SYNTH_PLAN.md's "later"). It costs
+one VCO per voice. It waits on #9's measured cost, and possibly on speed work (the
+partition's threads, M5's deferred speed).
+
+## 23. Gas-tube sawtooth oscillator
+
+S4's candidate (c): a thyratron or neon relaxation oscillator. A capacitor charges until
+the tube strikes and discharges until it goes out. It gives a sawtooth, the sound the
+synth lacks most after #5, and the Trautonium's own.
+**New:** a gas-tube model (striking and extinction voltages, deionization time, the glow's
+drop), both implementations, fitted to an RCA thyratron sheet (2D21 or 884) or a neon
+lamp's. **Watch:** the discharge is a hard edge (aliasing, Newton).
+
+## 24. Subharmonic mixtures
+
+Oskar Sala's Mixtur-Trautonium: dividers on the main oscillator give subharmonics (1/2,
+1/3, 1/4...), mixed into chords that are always in tune with each other. #10's flip-flops
+give the binary ones (1/2, 1/4). Dividing by 3 is easiest with a relaxation oscillator
+locked to the main one (#23), as the Trautonium did.
+
+## 25. A step sequencer in tubes
+
+Patterns clocked by the LFO. Two ways: a Dekatron (a cold-cathode counting tube, 10
+steps; needs a glow-transfer model, after #23), or a ring of Eccles-Jordan flip-flops (#10's
+cell, as 1940s computers counted; many tubes, so CPU). Each step's CV comes from a pot,
+into the pitch or the cutoff. The app's recording (RECORDING_PLAN.md) would capture it as
+the circuit's own output, with no events to replay.
+
+## What comes after
+
+#9 and #11, with the LFO (#7), envelopes (#15) and ring (#14), are S5's own blocks. Built,
+they close most of S5's done-when (TUBE_SYNTH_PLAN.md). #19-#25 belong to a later
+milestone (S6), planned when S5 is done.

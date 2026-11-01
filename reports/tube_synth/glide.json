@@ -1,0 +1,153 @@
+{
+ "has_glide": true,
+ "steps_v": {
+  "up": [
+   -20.0,
+   -15.0
+  ],
+  "down": [
+   -15.0,
+   -20.0
+  ],
+  "big_up": [
+   -23.0,
+   -5.0
+  ],
+  "big_down": [
+   -5.0,
+   -23.0
+  ]
+ },
+ "glide": {
+  "0.0": {
+   "up": {
+    "from_hz": 171.61,
+    "to_hz": 474.72,
+    "half_s": 0.001,
+    "within_10_cents_s": 0.027
+   },
+   "down": {
+    "from_hz": 474.53,
+    "to_hz": 172.0,
+    "half_s": 0.02,
+    "within_10_cents_s": 0.026
+   },
+   "big_up": {
+    "from_hz": 57.07,
+    "to_hz": 1302.03,
+    "half_s": 0.0,
+    "within_10_cents_s": 0.027
+   },
+   "big_down": {
+    "from_hz": 1302.13,
+    "to_hz": 58.14,
+    "half_s": 0.032,
+    "within_10_cents_s": 1.884
+   }
+  },
+  "0.25": {
+   "up": {
+    "from_hz": 171.61,
+    "to_hz": 474.87,
+    "half_s": 0.002,
+    "within_10_cents_s": 0.065
+   },
+   "down": {
+    "from_hz": 474.59,
+    "to_hz": 171.96,
+    "half_s": 0.023,
+    "within_10_cents_s": 0.063
+   },
+   "big_up": {
+    "from_hz": 57.07,
+    "to_hz": 1302.01,
+    "half_s": 0.002,
+    "within_10_cents_s": 0.062
+   },
+   "big_down": {
+    "from_hz": 1302.15,
+    "to_hz": 57.99,
+    "half_s": 0.043,
+    "within_10_cents_s": 1.998
+   }
+  },
+  "0.5": {
+   "up": {
+    "from_hz": 171.6,
+    "to_hz": 474.82,
+    "half_s": 0.023,
+    "within_10_cents_s": 0.213
+   },
+   "down": {
+    "from_hz": 474.61,
+    "to_hz": 172.02,
+    "half_s": 0.042,
+    "within_10_cents_s": 0.197
+   },
+   "big_up": {
+    "from_hz": 57.06,
+    "to_hz": 1302.06,
+    "half_s": 0.002,
+    "within_10_cents_s": 0.215
+   },
+   "big_down": {
+    "from_hz": 1302.19,
+    "to_hz": 57.9,
+    "half_s": 0.062,
+    "within_10_cents_s": 1.964
+   }
+  },
+  "0.75": {
+   "up": {
+    "from_hz": 171.59,
+    "to_hz": 474.83,
+    "half_s": 0.074,
+    "within_10_cents_s": 0.677
+   },
+   "down": {
+    "from_hz": 474.54,
+    "to_hz": 171.98,
+    "half_s": 0.116,
+    "within_10_cents_s": 0.646
+   },
+   "big_up": {
+    "from_hz": 57.01,
+    "to_hz": 1302.07,
+    "half_s": 0.041,
+    "within_10_cents_s": 0.701
+   },
+   "big_down": {
+    "from_hz": 1302.19,
+    "to_hz": 58.15,
+    "half_s": 0.171,
+    "within_10_cents_s": 1.84
+   }
+  },
+  "1.0": {
+   "up": {
+    "from_hz": 171.65,
+    "to_hz": 470.83,
+    "half_s": 0.221,
+    "within_10_cents_s": 1.572
+   },
+   "down": {
+    "from_hz": 474.64,
+    "to_hz": 174.61,
+    "half_s": 0.331,
+    "within_10_cents_s": 1.998
+   },
+   "big_up": {
+    "from_hz": 57.0,
+    "to_hz": 1285.42,
+    "half_s": 0.128,
+    "within_10_cents_s": 1.647
+   },
+   "big_down": {
+    "from_hz": 1302.2,
+    "to_hz": 62.67,
+    "half_s": 0.5,
+    "within_10_cents_s": 1.991
+   }
+  }
+ }
+}

@@ -833,7 +833,9 @@ thread. Draft:
 between voices), gas-tube devices if S4 doesn't choose one, the reactor designed by
 construction with C2's transformer designer, a divided-down keyboard if drift proves
 unplayable (decision 2), the Odyssey itself as an emulation (it needs BJT and op-amp
-models).
+models). **Ideas for a more diverse instrument** (2026-10-31, the user liked all of them;
+25 ideas in priority order, from glide and KEY TRACK to gas tubes and a tube sequencer, built one
+at a time from 2026-10-31; #1 GLIDE done): [SYNTH_IDEAS.md](SYNTH_IDEAS.md).
 
 ## Order and why
 
