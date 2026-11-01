@@ -41,7 +41,7 @@ diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heate
 | 2 | KEY TRACK (**built**) | Filter brightness follows the note | A pot, a key string | ~0 (measured) |
 | 3 | Velocity, aftertouch (**built**) | Expression | App feeds; a control input | ~0 (measured) |
 | 4 | HEATER (**built**) | "Tired tubes": softer, more drift | The heater ratio as a panel value | ~0 |
-| 5 | PULSE (peaking transformer) | Bright, buzzy pulse, magnetic PWM | One small JA core | One core; aliasing |
+| 5 | PULSE (peaking transformer) (**parked**: prototyped, CPU) | Bright, buzzy pulse, magnetic PWM | One small JA core | ~1.9x the oscillator thread |
 | 6 | SUPPLY: rectifier and reservoir | How much the voice sags and blooms | Switch contacts; copper oxide needs a fit | Small |
 | 7 | Lamp-stabilized Wien LFO | A working LFO that blooms | Lamp device model | ~+1% |
 | 8 | LFO routing, delayed vibrato | Vibrato, tremolo, filter wobble | Pots, an RC | Small |
@@ -231,6 +231,35 @@ when driven through saturation: here that only rounds the pulses.
 **New:** one more JA core. **Watch:** aliasing at draft-2x (narrow pulses), and Newton at
 the reversals. Measure load and the alias level against the harmonics, as the 5E3's
 quality choice was made.
+
+**Prototyped (2026-11-01), parked (the user listened: "sounds ok", not worth ~1.9x the oscillator's thread).** `scripts/pulse_prototype.py`
+(a variant of tube_synth.yaml -> `reports/tube_synth/pulse/`): a 12AU7 cathode follower off
+the tank drives the core through 2.2k (the classic sine-current drive, ~+-4.5 mA); a 1:1
+secondary through a PULSE pot (1M) into the WAVE wiper; a bias winding (5x the turns, 100k)
+from a PULSE WIDTH pot centred on 0 V (150k from b3 to its top, its foot on -50 V; centred on
+b3 / -50 V's midpoint, +60 V, it held the core saturated and nothing pulsed).
+- **It pulses, and PWM works:** 2-4 V at the secondary at each flux reversal, and PULSE WIDTH
+  moves the two polarities apart (at 178 Hz, widths 391 / 917 us at one end, 736 / 610 at
+  the other; peaks 4.1 / -2.0 V).
+- **But the pulses are wide:** ~0.5 ms with a 10 mm^2, 30 mm, 150-turn mumetall core (a
+  quarter of a cycle at 480 Hz; harmonics roll off ~-12 dB by the 4th: a spiky rounded wave
+  more than a buzzy pulse train). The drive (~22 A/m peak) sits in mumetall's soft knee.
+- **Sharper cores don't run at draft:** 3 mm^2 / 20 mm / 250 turns and a 1 mm^2 bobbin core
+  (15 mm, 300 turns) stop Newton at the core's reversal (draft: fixed step, 8 halvings) with
+  or without a thread of their own. At production the 3 mm^2 core runs (16x slower than real
+  time) but its pulses are still 0.3-0.4 ms: narrow pulses need a much harder drive (tens of
+  mA: a power tube switching the primary) as well as a draft that converges there.
+- **CPU:** the working (wide) version on the oscillator's thread: 4.25 s against the synth's
+  2.24 s for 1 s of audio (+1 s settle) in Python's draft run, ~1.9x that thread. It can't
+  have a thread of its own: split from the oscillator at the follower's cathode, or summed
+  into the mixer on another thread, the core (or the mixer's thread) stops Newton within the
+  first ms. So it shares the oscillator's thread, and Play's load is the question.
+- Listening takes (draft, the user's): `reports/tube_synth/pulse/audio/` (the synth's tank
+  and square without PULSE, PULSE at widths 0.2 / 0.5 / 0.8, and with the filter open).
+- **Options:** park it (the findings stay here); take the wide version as a "spiky" third
+  timbre on the oscillator's thread (listen first; Play's load); or make narrow pulses work: a beam-tube current
+  switch on the primary plus engine work so draft converges at a JA core's hard reversal
+  (step limiting in the core's Newton). The last is the biggest.
 
 ## 6. SUPPLY: rectifier and reservoir
 
