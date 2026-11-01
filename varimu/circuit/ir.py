@@ -204,6 +204,70 @@ class Plate:
 
 
 @dataclass(frozen=True)
+class TapeMedium:
+    """Tape's parameters (circuitsim's `tape_stream::TapeParams`;
+    `varimu.devices.tape_machine.stream_params` writes them): the tape component's
+    particles, the machine's transport, heads and bias, the numerics."""
+
+    hc_median_a_m: float
+    sigma_ln_hc: float
+    sigma_hi_a_m: float
+    h_max_a_m: float
+    n_table: int
+    ms_a_m: float
+    coating_m: float
+    kappa: float
+    orientations: int
+    speed_m_s: float
+    f_bias_hz: float
+    hg_bias_a_m: float
+    bias_phase_rad: float
+    rec_gap_m: float
+    rep_gap_m: float
+    pole_m: float
+    relax_m: float
+    spacing_m: float
+    track_m: float
+    head_distance_m: float
+    rep_h_per_a: float
+    layers: int
+    ds_m: float
+    table_step: float
+    zone_floor_a_m: float
+    local_zones: bool
+    demag_iterations: int
+    demag_tol: float
+    head_image: bool
+    lam_min_m: float
+    block_m: float
+    margin_m: float
+    flutter: tuple[tuple[float, float, float], ...]
+    flutter_noise: tuple[tuple[float, float, float], ...]
+    particle_volume_m3: float
+    packing: float
+    packing_sigma: float
+    packing_corr_m: float
+
+
+@dataclass(frozen=True)
+class Tape:
+    """Magnetic tape between a record and a repro head (docs/TAPE_PLAN.md, TM4;
+    varimu.devices.tape_machine.TapeStream is the reference, circuitsim's tape_stream.rs
+    the port): the record gap's signal field h_per_v (v(sense_pos) - v(sense_neg))
+    (deep-gap A/m: the record coil's current sensed across its resistance, times the
+    head's field per ampere over that resistance; the sense draws no current), recorded
+    with the medium's own AC bias, and the repro coil's EMF driving `out` to ground one
+    sample later. SPICE has no tape: ngspice sees `out` held at 0 V."""
+
+    name: str
+    sense_pos: str
+    sense_neg: str
+    h_per_v: float
+    out: str
+    medium: TapeMedium
+
+
+@dataclass(frozen=True)
 class NoiseCurrent:
     """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
     source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
@@ -299,6 +363,7 @@ Element = (
     | HeatedCathode
     | Device
     | Plate
+    | Tape
 )
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
 
@@ -323,6 +388,7 @@ _PREFIX = {
     TubeNoise: "B",
     HeatedCathode: "B",
     Plate: "V",
+    Tape: "V",
 }
 
 
@@ -344,7 +410,7 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.a, el.b)
     if isinstance(el, Device):
         return el.nodes
-    if isinstance(el, Plate):
+    if isinstance(el, Plate | Tape):
         return (el.sense_pos, el.sense_neg, el.out)
     return ()
 
@@ -492,6 +558,8 @@ class CircuitIR:
                 _positive(f"{el.name}.is0_a", el.is0_a)
             elif isinstance(el, Plate):
                 _validate_plate(el, self.input_node)
+            elif isinstance(el, Tape):
+                _validate_tape(el, self.input_node)
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
@@ -732,6 +800,7 @@ _ELEMENT_KINDS = {
     "heated_cathode": HeatedCathode,
     "device": Device,
     "plate": Plate,
+    "tape": Tape,
 }
 _MODEL_KINDS = {
     "triode": Triode,
@@ -803,6 +872,8 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         raise IRError(f"unknown kind {d.get('kind')!r} (expected one of {sorted(kinds)})")
     if cls is Plate:
         return _fields(cls, d, tagged=True, decay=lambda v: tuple(tuple(x) for x in v))
+    if cls is Tape:
+        return _fields(cls, d, tagged=True, medium=_decode_tape_medium)
     return _fields(cls, d, tagged=True)
 
 
@@ -829,6 +900,60 @@ def _validate_plate(el: Plate, input_node: str) -> None:
         raise IRError(f"{el.name}: its force senses {el.sense_pos} against itself")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its pickup drives {el.out} (ground or the input)")
+
+
+#: Recording runs this much tape past a block's ends (`tape_machine.ZONE_PAD_M`).
+_TAPE_ZONE_PAD_M = 2e-3
+
+
+def _decode_tape_medium(d: dict) -> TapeMedium:
+    def rows(v):
+        return tuple(tuple(x) for x in v)
+
+    m = _fields(TapeMedium, d, tagged=False, flutter=rows, flutter_noise=rows)
+    ints = {f.name for f in dataclasses.fields(TapeMedium) if f.type == "int"}
+    return dataclasses.replace(m, **{k: int(getattr(m, k)) for k in ints})
+
+
+def _validate_tape(el: Tape, input_node: str) -> None:
+    """The same checks as the Rust IR's for tape (`TapeParams::check` without a step
+    rate)."""
+    m = el.medium
+    _finite(f"{el.name}.h_per_v", el.h_per_v)
+    for k in (
+        "hc_median_a_m", "sigma_ln_hc", "sigma_hi_a_m", "h_max_a_m", "ms_a_m", "coating_m",
+        "speed_m_s", "f_bias_hz", "rec_gap_m", "rep_gap_m", "pole_m", "track_m", "ds_m",
+        "zone_floor_a_m", "lam_min_m", "block_m",
+    ):  # fmt: skip
+        _positive(f"{el.name}.medium.{k}", getattr(m, k))
+    for k in ("relax_m", "spacing_m", "margin_m", "kappa", "hg_bias_a_m"):
+        _nonneg(f"{el.name}.medium.{k}", getattr(m, k))
+    grain_ok = (
+        m.particle_volume_m3 >= 0
+        and 0 <= m.packing < 1
+        and m.packing_sigma >= 0
+        and (m.packing_sigma == 0 or m.packing_corr_m > 0)
+    )
+    if not grain_ok:
+        raise IRError(f"{el.name}.medium: its grain (particles, packing) is out of range")
+    flutter_ok = all(a >= 0 and f > 0 and math.isfinite(ph) for a, f, ph in m.flutter) and all(
+        rms >= 0 and f > 0 and q > 0 for rms, f, q in m.flutter_noise
+    )
+    if not flutter_ok:
+        raise IRError(f"{el.name}.medium: its flutter's components are out of range")
+    if m.n_table < 4 or m.orientations < 1 or m.layers < 1:
+        raise IRError(f"{el.name}.medium: n_table >= 4, orientations and layers >= 1")
+    nb = round(m.block_m / m.ds_m)
+    nm = round(m.margin_m / m.ds_m)
+    nr = math.ceil(2.0 * (m.rep_gap_m / 2.0 + m.pole_m + m.relax_m) / m.ds_m)
+    if nr > nb:
+        raise IRError(f"{el.name}: the repro head's reach is longer than a block")
+    if m.head_distance_m <= (2 * nb + nm) * m.ds_m + _TAPE_ZONE_PAD_M:
+        raise IRError(f"{el.name}: the heads are too close for the blocks")
+    if el.sense_pos == el.sense_neg:
+        raise IRError(f"{el.name}: its record head senses {el.sense_pos} against itself")
+    if el.out in (GROUND, input_node):
+        raise IRError(f"{el.name}: its repro head drives {el.out} (ground or the input)")
 
 
 def _decode_model(d: dict) -> DeviceModel:

@@ -760,11 +760,22 @@ def build_emt140() -> dict[str, Any]:
 # Scotch 111's easy-axis concentration (TAPE_PLAN.md TM2, step 7: No. 21 with the head image).
 SCOTCH111_KAPPA = 1.5
 
+# Scotch 111's grain (TAPE_PLAN.md TM3; scripts/fit_tape_noise.py -> reports/tape/
+# noise_fit.json, on 0.01-decade grids): particle volume to Sound Talk No. 34's erased noise,
+# the packing field to its DC noise.
+SCOTCH111_NOISE = {
+    "particle_volume_m3": 1.62e-21,
+    "packing": 0.35,
+    "packing_sigma": 0.0162,
+    "packing_corr_m": 0.03,
+}
+
 
 def build_scotch111() -> dict[str, Any]:
     """Scotch 111, the tape of the Ampex 350 / 351's era (docs/TAPE_PLAN.md, TM1): its
     particles as a Preisach ensemble fitted to 3M's remanence curve (Sound Talk No. 20)
-    and Eilers' coercivity; coating and base from Eilers' table (varimu.devices.tape_fit)."""
+    and Eilers' coercivity; coating and base from Eilers' table (varimu.devices.tape_fit);
+    its grain fitted to Sound Talk No. 34 (TM3: SCOTCH111_NOISE)."""
     from varimu.devices import tape_fit
     from varimu.devices.tape import Orientation
 
@@ -813,6 +824,19 @@ def build_scotch111() -> dict[str, Any]:
             "vector Preisach model, its demagnetization and the head's image, among kappa "
             "0.5-20 (docs/TAPE_PLAN.md, TM2's status, step 7); bulletin 20 alone fits "
             "kappa >= 1. n: numerical (directions; 16 moves No. 21's curves < 0.2 dB)",
+        },
+        "noise": {
+            **SCOTCH111_NOISE,
+            "source": "fit: data/datasheets/3m_sound_talk_34.provenance.yaml (Sound Talk No. "
+            "34, #111 at 7.5 ips, NARTB playback; digitized: scotch_111_noise.csv) by "
+            "scripts/fit_tape_noise.py (reports/tape/noise_fit.json) on the first print's "
+            "machine: particle_volume_m3 to the bulk-erased octave spectrum, 300-2400 Hz "
+            "(rms 1.6 dB; ~0.4 x 0.07 um acicular); packing_sigma to the DC (3% level) "
+            "spectrum, 20-2400 Hz (rms 1.5 dB), which fixes only packing_sigma^2 / "
+            "packing_corr_m (8.7e-3 per m: the field's k^-2 regime, longer than ~2 mm); "
+            "packing_corr_m 30 mm keeps every audio band in that regime. packing: provisional: "
+            "model knowledge (1950s acicular gamma-Fe2O3 coatings, 30-40% by volume; only "
+            "volume / packing is seen)",
         },
         "fit_report": {
             "remanence_rms_reading_errors": fit.rms_sigma,

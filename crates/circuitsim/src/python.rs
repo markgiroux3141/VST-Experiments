@@ -336,7 +336,8 @@ impl PyStream {
 
 /// The tape medium's recording kernel (`crate::tape::record`; the reference is
 /// `varimu.devices.tape.record`). `preisach`: (hc_median, sigma_ln_hc, sigma_hi, h_max,
-/// n_table); `head`: (gap, pole, relax) in metres; `heights` and `zones`: per layer;
+/// n_table); `head`: (gap, pole, relax) in metres; `heights`: per layer; `zones`: per
+/// layer, or per layer and cell (layers x cells, flattened);
 /// `s_rec`, `hg`: per bias sample; `axes`: (cos, sin, weight) per easy-axis direction,
 /// flattened; `h_static_x` / `_y` (during the pass), `h_end_x` / `_y` (after it): layers x
 /// cells, flattened, or None; `table_step`: the head field's table step over the layer's
@@ -365,7 +366,8 @@ fn tape_record<'py>(
     let (s_rec, hg) = (s_rec.as_array().to_vec(), hg.as_array().to_vec());
     let s_cells = s_cells.as_array().to_vec();
     let flat = axes.as_array().to_vec();
-    if !flat.len().is_multiple_of(3) || heights.len() != zones.len() || s_rec.len() != hg.len() {
+    let zones_ok = zones.len() == heights.len() || zones.len() == heights.len() * s_cells.len();
+    if !flat.len().is_multiple_of(3) || !zones_ok || s_rec.len() != hg.len() {
         return Err(invalid("tape_record: mismatched array lengths"));
     }
     let axes: Vec<[f64; 3]> = flat.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
@@ -421,6 +423,42 @@ fn tape_record<'py>(
     ))
 }
 
+/// The tape between the heads (`crate::tape_stream::TapeStream`; the reference is
+/// `varimu.devices.tape_machine.TapeStream`): `params` its JSON (`stream_params`), fs the
+/// step rate, `h` the record gap's signal field per step, pushed `chunk` at a time;
+/// `noise_seed`: the coating's grain on, keyed by (seed, "tape"); `transport_seed`: the
+/// transport's random parts' (seed, "transport"). Returns the repro EMF
+/// after each push (at t_{n+1}). Releases the GIL.
+#[pyfunction]
+#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0))]
+fn tape_stream_run<'py>(
+    py: Python<'py>,
+    params: &str,
+    fs: f64,
+    h: PyReadonlyArray1<'py, f64>,
+    chunk: usize,
+    noise_seed: Option<u64>,
+    transport_seed: u64,
+) -> PyResult<Bound<'py, PyAny>> {
+    let p: crate::tape_stream::TapeParams =
+        serde_json::from_str(params).map_err(|e| invalid(format!("tape_stream_run: {e}")))?;
+    let h = h.as_array().to_vec();
+    let out = py.detach(|| -> Result<Vec<f64>, String> {
+        let mut st = crate::tape_stream::TapeStream::build(
+            &p,
+            fs,
+            noise_seed.map(|seed| (seed, "tape")),
+            transport_seed,
+        )?;
+        let mut out = Vec::with_capacity(h.len());
+        for c in h.chunks(chunk.max(1)) {
+            st.push_many(c, &mut out)?;
+        }
+        Ok(out)
+    });
+    Ok(out.map_err(|e| invalid(&e))?.into_pyarray(py).into_any())
+}
+
 /// The tape particles' state after field histories (`crate::tape::Preisach::state_after`;
 /// the reference is `varimu.devices.preisach.Preisach.state_after`): `h` cells x samples,
 /// flattened row-major with `samples` per cell.
@@ -452,6 +490,7 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(simulate, m)?)?;
     m.add_function(wrap_pyfunction!(tape_record, m)?)?;
     m.add_function(wrap_pyfunction!(tape_state_after, m)?)?;
+    m.add_function(wrap_pyfunction!(tape_stream_run, m)?)?;
     m.add_class::<PyStream>()?;
     Ok(())
 }

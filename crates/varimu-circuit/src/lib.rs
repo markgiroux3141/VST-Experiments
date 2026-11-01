@@ -31,6 +31,7 @@ pub mod preflight;
 pub mod speaker;
 pub mod spec;
 pub mod symbols;
+pub mod tape;
 pub mod values;
 pub mod versions;
 pub mod yaml;

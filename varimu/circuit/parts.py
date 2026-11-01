@@ -44,6 +44,8 @@ from varimu.circuit.ir import (
     Plate,
     Resistor,
     SineSource,
+    Tape,
+    TapeMedium,
     Vccs,
     VoltageSource,
     Winding,
@@ -53,6 +55,7 @@ from varimu.devices import speaker as spk
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.pentode import Pentode
+from varimu.devices.tape import TapeFormulation
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
 
 MIN_R_OHM = 1e-3  # stands in for the zero end of a pot (and a 0 dB pad's through path)
@@ -637,4 +640,101 @@ def plate(
             tail_db=c.tail_db,
         ),
         Capacitor(f"C{upper}_pu", f"{n}_p", out, c.pickup_c_f),
+    ]
+
+
+#: The tape part's numerics (TAPE_PLAN.md, "Speed" and TM4: each a measured setting;
+#: the same as varimu-circuit's `tape::NUMERICS`).
+TAPE_LAYERS = 6
+#: Cells per bias wavelength (`TapeMachineSpec.ds_m`: 0.5 um at 15 ips and 100 kHz).
+TAPE_CELLS_PER_BIAS_WAVELENGTH = 7.62
+TAPE_TABLE_STEP = 1 / 40
+TAPE_ZONE_FLOOR_A_M = 120.0 * (1000.0 / (4.0 * math.pi))  # 120 Oe
+TAPE_DEMAG_ITERATIONS = 8
+TAPE_DEMAG_TOL = 2e-3
+TAPE_BLOCK_M = 16e-3
+TAPE_MARGIN_M = 0.5e-3
+
+#: The tape part's physical values, in the order the macro takes them.
+TAPE_VALUES = (
+    "speed_m_s",
+    "f_bias_hz",
+    "bias_a_m",
+    "rec_gap_m",
+    "rep_gap_m",
+    "pole_m",
+    "relax_m",
+    "spacing_m",
+    "track_m",
+    "head_distance_m",
+    "rec_l_h",
+    "rec_r_ohm",
+    "rec_h_per_a",
+    "rep_l_h",
+    "rep_r_ohm",
+    "rep_h_per_a",
+)
+
+
+def tape(
+    name: str, rec_plus: str, rec_minus: str, out: str, t: TapeFormulation, v: Mapping[str, float]
+) -> list[Element]:
+    """Magnetic tape t between a record head and a repro head (docs/TAPE_PLAN.md, TM4;
+    varimu.devices.tape_machine.TapeStream): the record coil between rec_plus and
+    rec_minus (L<name>_rec, then R<name>_rec, its winding resistance, into rec_minus), the
+    tape V<name> sensing the coil's current across R<name>_rec (rec_h_per_a over it: the
+    deep-gap field per volt), recorded with its own AC bias (bias_a_m, the deep-gap field,
+    at f_bias_hz), and the repro coil's EMF on <name>_e behind the coil's inductance and
+    resistance (L<name>_rep, R<name>_rep) to out. v: the physical values of TAPE_VALUES
+    (heads' geometry, transport, coils); the numerics are the module's TAPE_* settings. No
+    wow or flutter yet (the 351's transport comes with its circuit, TM5)."""
+    n, upper = name.lower(), name.upper()
+    o = t.orientation
+    p = t.preisach
+    medium = TapeMedium(
+        hc_median_a_m=p.hc_median_a_m,
+        sigma_ln_hc=p.sigma_ln_hc,
+        sigma_hi_a_m=p.sigma_hi_a_m,
+        h_max_a_m=p.h_max_a_m,
+        n_table=p.n_table,
+        ms_a_m=t.ms_a_m,
+        coating_m=t.coating_m,
+        kappa=o.kappa,
+        orientations=o.n,
+        speed_m_s=v["speed_m_s"],
+        f_bias_hz=v["f_bias_hz"],
+        hg_bias_a_m=v["bias_a_m"],
+        bias_phase_rad=0.0,
+        rec_gap_m=v["rec_gap_m"],
+        rep_gap_m=v["rep_gap_m"],
+        pole_m=v["pole_m"],
+        relax_m=v["relax_m"],
+        spacing_m=v["spacing_m"],
+        track_m=v["track_m"],
+        head_distance_m=v["head_distance_m"],
+        rep_h_per_a=v["rep_h_per_a"],
+        layers=TAPE_LAYERS,
+        ds_m=v["speed_m_s"] / (v["f_bias_hz"] * TAPE_CELLS_PER_BIAS_WAVELENGTH),
+        table_step=TAPE_TABLE_STEP,
+        zone_floor_a_m=TAPE_ZONE_FLOOR_A_M,
+        local_zones=True,
+        demag_iterations=TAPE_DEMAG_ITERATIONS,
+        demag_tol=TAPE_DEMAG_TOL,
+        head_image=True,
+        lam_min_m=3.0 * v["speed_m_s"] / v["f_bias_hz"],
+        block_m=TAPE_BLOCK_M,
+        margin_m=TAPE_MARGIN_M,
+        flutter=(),
+        flutter_noise=(),
+        particle_volume_m3=t.noise.particle_volume_m3 if t.noise else 0.0,
+        packing=t.noise.packing if t.noise else 0.0,
+        packing_sigma=t.noise.packing_sigma if t.noise else 0.0,
+        packing_corr_m=t.noise.packing_corr_m if t.noise else 0.0,
+    )
+    return [
+        Inductor(f"L{upper}_rec", rec_plus, f"{n}_a", v["rec_l_h"]),
+        Resistor(f"R{upper}_rec", f"{n}_a", rec_minus, v["rec_r_ohm"]),
+        Tape(f"V{upper}", f"{n}_a", rec_minus, v["rec_h_per_a"] / v["rec_r_ohm"], f"{n}_e", medium),
+        Inductor(f"L{upper}_rep", f"{n}_e", f"{n}_b", v["rep_l_h"]),
+        Resistor(f"R{upper}_rep", f"{n}_b", out, v["rep_r_ohm"]),
     ]

@@ -568,6 +568,26 @@ fn table() -> Vec<SymbolDef> {
             false,
             (0.0, 6.35, 5.588, "left"),
         ),
+        macro_sym(
+            "Tape",
+            "tape",
+            "TP",
+            "Magnetic tape between a record and a repro head (varimu.devices.tape_machine): pins 1 + and 2 - the record coil, 3 the repro coil (to ground); Value is the tape's component version",
+            vec![
+                pin("1", "1", -7.62, 2.54, 0, 2.54),
+                pin("2", "2", -7.62, -2.54, 0, 2.54),
+                pin("3", "3", 7.62, 0.0, 180, 2.54),
+            ],
+            vec![
+                rect(-5.08, -3.81, 5.08, 3.81),
+                circle(-2.54, 0.0, 1.778, false),
+                circle(2.54, 0.0, 1.778, false),
+            ],
+            Some("component"),
+            &crate::tape::VALUES,
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
     ];
     let dev_text = (5.842, 1.27, -1.27, "left");
     v.push(device(

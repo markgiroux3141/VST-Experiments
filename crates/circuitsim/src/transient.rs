@@ -753,7 +753,7 @@ impl Dk {
 pub struct Transient {
     mna: Mna,
     /// The media running beside the circuit ([`Mna::media`] order).
-    media: Vec<crate::plate::Medium>,
+    media: Vec<crate::media::Medium>,
     opts: Options,
     tab: Tableau,
     h: f64,
@@ -935,8 +935,9 @@ impl Transient {
         let media = mna
             .media
             .iter()
-            .map(|m| crate::plate::Medium::new(&m.plate, 1.0 / h))
-            .collect();
+            .map(|m| crate::media::Medium::new(&m.element, 1.0 / h, m.noise_seed))
+            .collect::<Result<Vec<_>, String>>()
+            .map_err(Error::new)?;
         let mut tr = Transient {
             media,
             opts,
@@ -2079,7 +2080,7 @@ impl Transient {
             return Err(changed());
         }
         for (m, new) in self.media.iter_mut().zip(&mna.media) {
-            m.update(&new.plate);
+            m.update(&new.element).map_err(|_| changed())?;
         }
         let same_devices = mna.devices.len() == self.mna.devices.len()
             && mna.devices.iter().zip(&self.mna.devices).all(|(a, b)| {
@@ -2254,8 +2255,8 @@ impl Transient {
         self.opts.all_unknowns = on;
     }
 
-    /// The media's pickups after a sample: each plate takes the force sensed now and
-    /// gives its pickup's value at the next sample's end (its start is this one's).
+    /// The media's pickups after a sample: each medium takes the voltage sensed now and
+    /// gives its output's value at the next sample's end (its start is this one's).
     fn step_media(&mut self) {
         let k = self.mna.n_controls;
         for (i, (m, ports)) in self.media.iter_mut().zip(&self.mna.media).enumerate() {

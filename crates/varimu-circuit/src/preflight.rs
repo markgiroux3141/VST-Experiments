@@ -153,6 +153,7 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
         // A plate's pickup drives its node to ground, as a control input does.
         .chain(ir.elements().filter_map(|e| match e {
             Element::Plate(p) => Some((p.out.clone(), format!("<plate {}>", p.name))),
+            Element::Tape(t) => Some((t.out.clone(), format!("<tape {}>", t.name))),
             _ => None,
         }))
         .collect();

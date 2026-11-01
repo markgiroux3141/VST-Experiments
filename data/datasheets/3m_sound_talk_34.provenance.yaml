@@ -1,0 +1,39 @@
+device: "Scotch 111 (plastic base; oriented and unoriented coatings)"
+document: "Sound Talk, Bulletin No. 34: Various Aspects of \"Tape Noise\" (R. A. Von Behren)"
+publisher: "Minnesota Mining and Manufacturing Co. (3M), Magnetic Products Division"
+date: "undated (after 1950: it cites particle orientation 'since about 1950')"
+local_copy: tape/3m_Sound_Talk_34.pdf
+local_copy_sha256: 9190a7bc09c65decae34b690d63539f7f37c86ee0c518abf3091fa8647b6d3f6
+scan_source: "web: http://bitsavers.org/pdf/3M/bulletins/sound_talk/Sound_Talk_34.pdf"
+digitized_with: >-
+  PyMuPDF render of p.3 at 400 dpi around each figure; the curves read by eye at the
+  octave bands' tick marks against the printed 10 dB divisions (~135 px per 10 dB)
+digitized_by: Claude Code
+digitized_on: 2026-10-31
+files:
+  scotch_111_noise.csv:
+    figures: >-
+      p.3 Fig. 2, "Noise spectra for various tapes, DC (3% level) in head": the curve
+      "Plastic-Oriented - #111" (dc_3pct_db); p.3 Fig. 3, "Noise spectra for various tapes,
+      bulk erased": the two "Plastic Base #111 {oriented, unoriented}" curves, averaged
+      (erased_db; they part above 600 Hz, one flat at -85, the other falling to -87.7 dB at
+      4.8-10 kHz), and "Machine noise" (tape motion stopped; machine_db)
+    columns: >-
+      band_lo_hz, band_hi_hz (the octave band as printed: 20-75, 75-150, ... 4.8-10 k),
+      erased_db, dc_3pct_db, machine_db (each band's level in dB below the 3% distortion
+      level, negative)
+    method: >-
+      "a standard audio recorder at 7.5 ips speed using normal recording bias. A DC current
+      corresponding in amplitude to the RMS value of a 3% distorted signal was also
+      introduced in the head winding ... The resulting playback signal was passed through an
+      amplifier equalized to the NARTB curve and measured on an octave band filter" (p.3);
+      the bulk-erased tapes played on the same machine (p.3-4). The 3% reference level's
+      frequency isn't printed.
+estimated_error: "about +-1.5 dB (curves read between ticks; the two #111 erased curves differ by up to 2.7 dB)"
+notes: >-
+  Fig. 2's own octave labels are cropped in the scan's layout; its curves span the same
+  seven band steps as Fig. 3's (the same plot scale), so the bands were read at the same
+  spacing. Erased noise is the particles' (oriented and unoriented coatings alike, p.4);
+  DC noise adds the coating's structure ("agglomeration", p.2), ~5 dB lower for oriented
+  tape. A normal machine's erase and bias raise the erased noise ~10 dB (Fig. 4: 60 Hz and
+  bias recorded), not digitized.

@@ -252,10 +252,10 @@ def test_the_rust_particles_agree(ensemble):
     np.testing.assert_allclose(got, ensemble.state_after(h), atol=1e-12)
 
 
-@pytest.mark.parametrize("vector", [False, True])
-def test_the_rust_recording_agrees(ensemble, vector):
+@pytest.mark.parametrize("vector, local", [(False, False), (True, False), (True, True)])
+def test_the_rust_recording_agrees(ensemble, vector, local):
     """circuitsim's recording kernel against the reference: scalar and vector, with a
-    steady field on the cells."""
+    steady field on the cells; local: per-cell zones above an explicit floor."""
     from varimu.devices.tape import Orientation
 
     _rust_or_skip()
@@ -266,13 +266,16 @@ def test_the_rust_recording_agrees(ensemble, vector):
     hs = rng.normal(0.0, 5 * OE, (slab.layers, len(s)))
     hs = (hs, 0.5 * hs) if vector else hs
     kw = dict(
-        hg_signal_max=40 * OE, h_static=hs, orientation=Orientation(3.0, 4) if vector else None
+        hg_signal_max=400 * OE, h_static=hs, orientation=Orientation(3.0, 4) if vector else None
     )
+    if local:
+        kw.update(floor_a_m=60 * OE, local_zones=True)
     args = (
         ensemble,
         head,
         slab,
-        lambda t: 40 * OE * np.sin(2 * math.pi * 3000.0 * t),
+        # A swell: quiet, then 10x louder (local zones differ along the tape).
+        lambda t: 400 * OE * np.sin(2 * math.pi * 3000.0 * t) * np.clip(t / 2e-3, 0.1, 1.0),
         500 * OE,
         70e3,
         lambda t: v * t,
@@ -284,6 +287,59 @@ def test_the_rust_recording_agrees(ensemble, vector):
     b = record(*args, engine="rust", **kw)
     for x, y in zip(a if vector else [a], b if vector else [b], strict=True):
         np.testing.assert_allclose(y, x, atol=1e-9)
+
+
+def test_range_max_is_the_slices_max():
+    from varimu.devices.tape import _range_max
+
+    rng = np.random.default_rng(3)
+    v = np.abs(rng.normal(size=1000))  # as |hg|
+    k0 = rng.integers(-5, 1005, 400)
+    k1 = k0 + rng.integers(-3, 300, 400)
+    want = [
+        v[max(a, 0) : max(min(b, 1000), 0)].max(initial=0.0) if b > a else 0.0
+        for a, b in zip(k0, k1, strict=True)
+    ]
+    np.testing.assert_array_equal(_range_max(v, k0, k1), want)
+
+
+def test_local_zones_bound_the_field_above_the_floor():
+    """Per-cell zones: every sample a cell leaves out has |H| below the floor there."""
+    from varimu.devices.tape import _cell_zones, _zone_checked, head_field
+
+    head = HeadGeometry(12.7e-6, 3e-3, 3e-3)
+    heights = np.array([1e-6, 6e-6, 12e-6])
+    v, f_b, floor = 0.381, 100e3, 120 * OE
+    t = (np.arange(4000) + 0.5) / (2 * f_b)
+    hg = (800 * OE * np.sin(2 * math.pi * 1000 * t) * (t > 0.01)) + 700 * OE * np.cos(
+        2 * math.pi * f_b * t
+    ) * np.where(np.arange(4000) % 2, -1, 1)
+    srec = v * t
+    s = np.linspace(srec[200], srec[-200], 300)
+    peak = float(np.abs(hg).max())
+    outer = np.array([_zone_checked(head, y, peak, floor, floor, True) for y in heights])
+    zones = _cell_zones(head, heights, outer, hg, srec, s, peak, floor, True)
+    assert zones.shape == (3, 300) and (zones <= outer[:, None]).all()
+    assert zones[:, s < srec[1900]].mean() < 0.8 * zones[:, s > srec[2100]].mean()
+    for li, y in enumerate(heights):
+        x = s[:, None] - srec[None, :]
+        fx, fy = head_field(head, x, np.full_like(x, y))
+        h = np.abs(hg)[None, :] * np.hypot(fx, fy)
+        out = np.abs(x) > zones[li][:, None]
+        assert (h[out] < floor).all()
+
+
+def test_shared_demag_transforms_equal_separate_ones():
+    from varimu.devices.tape import demag_field_vector, demag_fields_vector
+
+    slab = Slab(12.7e-6, 4, 1e-6, 0.5e-6)
+    rng = np.random.default_rng(5)
+    mx, my = rng.normal(size=(2, 4, 3000)) * 0.1
+    both = demag_fields_vector(mx, my, slab, 6e4, 11e-6, image_spacings_m=(None, 0.5e-6))
+    for (hx, hy), img in zip(both, (None, 0.5e-6), strict=True):
+        ex, ey = demag_field_vector(mx, my, slab, 6e4, 11e-6, image_spacing_m=img)
+        np.testing.assert_array_equal(hx, ex)
+        np.testing.assert_array_equal(hy, ey)
 
 
 def test_the_head_image_cancels_long_wavelength_demag():

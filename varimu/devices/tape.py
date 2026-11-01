@@ -54,9 +54,25 @@ class TapeFormulation:
     ms_a_m: float
     preisach: PreisachParams
     orientation: Orientation | None = None
+    noise: TapeNoise | None = None
 
     def ensemble(self) -> Preisach:
         return Preisach(self.preisach)
+
+
+@dataclass(frozen=True)
+class TapeNoise:
+    """The coating's graininess (docs/TAPE_PLAN.md, TM3): particles of particle_volume_m3
+    at a volume fraction `packing`, placed at random (a Poisson count per cell, each
+    particle up or down: hiss whatever the level), and the packing's own fluctuation along
+    the tape, a field of relative std packing_sigma, exponentially correlated over
+    packing_corr_m and the same through the coating's depth (the coating's nonuniformity:
+    modulation noise, growing with the recorded level)."""
+
+    particle_volume_m3: float
+    packing: float
+    packing_sigma: float
+    packing_corr_m: float
 
 
 def tape_from_data(d: dict, name: str) -> TapeFormulation:
@@ -75,6 +91,14 @@ def tape_from_data(d: dict, name: str) -> TapeFormulation:
             n_table=int(m["n_table"]),
         ),
         orientation=Orientation(float(o["kappa"]), int(o["n"])) if o else None,
+        noise=TapeNoise(
+            float(nz["particle_volume_m3"]),
+            float(nz["packing"]),
+            float(nz["packing_sigma"]),
+            float(nz["packing_corr_m"]),
+        )
+        if (nz := d.get("noise"))
+        else None,
     )
 
 
@@ -238,7 +262,11 @@ def zone_halfwidth_m(
 
 def switching_floor(pre, tol: float = 1e-7) -> float:
     """The field below which hysterons of total weight < tol can switch from any state
-    (|alpha| or |beta| below it): fields weaker than this leave a cell as it was."""
+    (|alpha| or |beta| below it), on the ensemble's discrete grid (`pre.grid`). The
+    continuous density has no such gap (hysterons near alpha = 0 or beta = 0 have weight
+    ~ linear in the field: 1e-3 below ~4.5 Oe for Scotch 111), so on a coarse grid this is
+    half a grid step for any small tol (31 Oe on the 64-point grid). A machine sets its
+    zone floor explicitly instead (`record`'s floor_a_m, measured: TAPE_PLAN.md)."""
     a = pre.grid
     w = pre.weights
     reach = np.minimum(np.abs(a)[:, None], np.abs(a)[None, :])
@@ -269,6 +297,8 @@ def record(
     h_end: np.ndarray | tuple | None = None,
     table_step: float = 0.0,
     floor_tol: float = 1e-7,
+    floor_a_m: float | None = None,
+    local_zones: bool = False,
 ):
     """The remanent M / Ms of cells at tape positions s_cells_m (one row per layer of
     `slab`), recorded from t0_s to t1_s, the tape erased before.
@@ -293,7 +323,12 @@ def record(
     same inputs, cells in parallel; agreement in tests/test_tape.py). table_step (rust
     only): the head field tabulated per layer at this fraction of the layer's height, cubic
     between points (0: exact at every sample). floor_tol: the zone ends where the field can
-    switch only hysterons of less total weight (`switching_floor`)."""
+    switch only hysterons of less total weight (`switching_floor`, on the ensemble's
+    discrete grid); floor_a_m, if given, is the zone's floor instead (A/m: the field
+    magnitude below which a cell's samples are left out). local_zones: each cell's zone
+    from the largest |deep-gap field| over its own pass (rounded up, `_cell_zones`)
+    instead of hg_signal_max for all: the same floor, fewer samples where the signal is
+    quieter than its peak."""
     shift = bias_phase_rad / (2.0 * math.pi * f_bias_hz)
     t = bias_peak_times(t0_s + shift, t1_s + shift, f_bias_hz, sub) - shift
     t = t[(t >= t0_s) & (t <= t1_s)]
@@ -302,13 +337,22 @@ def record(
     )
     srec = np.asarray(s_rec(t), float)
     peak = (hg_signal_max if hg_signal_max is not None else float(np.abs(hg).max())) + hg_bias
-    floor = switching_floor(pre, floor_tol)
-    # The far pole edges' weak fields may touch hysterons of weight < 1e-4 (-80 dB): the
-    # zone leaves them out.
-    edge_floor = switching_floor(pre, 1e-4)
+    if floor_a_m is None:
+        floor = switching_floor(pre, floor_tol)
+        # The far pole edges' weak fields may touch hysterons of weight < 1e-4 (-80 dB):
+        # the zone leaves them out.
+        edge_floor = switching_floor(pre, 1e-4)
+    else:
+        floor = edge_floor = float(floor_a_m)
     s_cells_m = np.asarray(s_cells_m, float)
     vector = orientation is not None
     cs, sn, wt = orientation.axes() if vector else (np.ones(1), np.zeros(1), np.ones(1))
+    heights = slab.spacing_m + slab.depths_m
+    zones = np.array(
+        [_zone_checked(head, y, peak, floor, edge_floor, vector) for y in heights], float
+    )
+    if local_zones:
+        zones = _cell_zones(head, heights, zones, hg, srec, s_cells_m, peak, floor, vector)
     if engine == "rust":
         return _record_rust(
             pre,
@@ -317,9 +361,7 @@ def record(
             srec,
             hg,
             s_cells_m,
-            peak,
-            floor,
-            edge_floor,
+            zones,
             h_static,
             vector,
             np.stack([cs, sn, wt], axis=1),
@@ -332,15 +374,7 @@ def record(
     out_y = np.zeros((slab.layers, len(s_cells_m)))
     for li, depth in enumerate(slab.depths_m):
         y = slab.spacing_m + depth
-        xz = zone_halfwidth_m(head, y, peak, floor, vector)
-        # The far pole edges must stay below the floor (else the zone is wrong).
-        e = head.gap_m / 2.0 + head.pole_m + head.relax_m
-        ex, ey = head_field(head, np.array([e]), np.array([y]))
-        edge = float(np.hypot(ex[0], ey[0]) if vector else abs(ex[0])) * peak
-        if edge >= edge_floor:
-            raise ValueError(
-                f"the pole edges switch hysterons ({edge:.3g} >= {edge_floor:.3g} A/m)"
-            )
+        xz = zones[li]
         k0 = np.searchsorted(srec, s_cells_m - xz, side="left")
         k1 = np.searchsorted(srec, s_cells_m + xz, side="right")
         n_max = int((k1 - k0).max()) if len(s_cells_m) else 0
@@ -374,11 +408,16 @@ def record(
             for c, sv, w in zip(cs, sn, wt, strict=True):
                 h = c * fx if fy is None else c * fx + sv * fy
                 end = np.zeros((c1 - c0, 1))
+                stat = np.zeros((c1 - c0, 1))
                 if hsx is not None:
-                    h = h + (c * hsx if hsy is None else c * hsx + sv * hsy)
+                    stat = stat + (c * hsx if hsy is None else c * hsx + sv * hsy)
+                    h = h + stat
                 if hex_ is not None:
                     end = end + (c * hex_ if hey is None else c * hex_ + sv * hey)
-                m = pre.state_after(np.concatenate([h, end], axis=1))
+                # The history: the pass, the steady field alone as the cell leaves the
+                # head (also where the zone ends early: the padding past k1 holds it
+                # too), then the field it is left in.
+                m = pre.state_after(np.concatenate([h, stat, end], axis=1))
                 out[li, c0:c1] += w * c * m
                 out_y[li, c0:c1] += w * sv * m
     return (out, out_y) if vector else out
@@ -386,12 +425,75 @@ def record(
 
 def _zone_checked(head, y, peak, floor, edge_floor, vector) -> float:
     xz = zone_halfwidth_m(head, y, peak, floor, vector)
+    # The far pole edges must stay below the floor (else the zone is wrong).
     e = head.gap_m / 2.0 + head.pole_m + head.relax_m
     ex, ey = head_field(head, np.array([e]), np.array([y]))
     edge = float(np.hypot(ex[0], ey[0]) if vector else abs(ex[0])) * peak
     if edge >= edge_floor:
         raise ValueError(f"the pole edges switch hysterons ({edge:.3g} >= {edge_floor:.3g} A/m)")
     return xz
+
+
+def _range_max(v: np.ndarray, k0: np.ndarray, k1: np.ndarray) -> np.ndarray:
+    """max(v[k0:k1]) per pair (0 where empty), by a sparse table."""
+    n = len(v)
+    out = np.zeros(len(k0))
+    if n == 0:
+        return out
+    levels = [np.asarray(v, float)]
+    while (1 << len(levels)) <= n:
+        prev, w = levels[-1], 1 << (len(levels) - 1)
+        levels.append(np.maximum(prev[:-w], prev[w:]))
+    k0 = np.clip(k0, 0, n)
+    k1 = np.clip(k1, 0, n)
+    length = k1 - k0
+    live = length > 0
+    lv = np.zeros(len(k0), np.int64)
+    lv[live] = np.floor(np.log2(length[live])).astype(np.int64)
+    for j in np.unique(lv[live]):
+        sel = live & (lv == j)
+        t = levels[j]
+        out[sel] = np.maximum(t[k0[sel]], t[k1[sel] - (1 << j)])
+    return out
+
+
+#: Peaks per octave of `_cell_zones`' grid, and its octaves above the floor.
+_ZONE_STEPS, _ZONE_OCTAVES = 8, 16
+_ZONE_TABLES: dict[tuple, np.ndarray] = {}
+
+
+def _zone_table(head, y, floor, vector) -> np.ndarray:
+    """zone_halfwidth_m at the peaks floor 2^(i / _ZONE_STEPS), kept (they don't depend
+    on the recording)."""
+    key = (head, float(y), float(floor), vector)
+    if key not in _ZONE_TABLES:
+        grid = floor * 2.0 ** (np.arange(_ZONE_STEPS * _ZONE_OCTAVES + 1) / _ZONE_STEPS)
+        if len(_ZONE_TABLES) > 64:
+            _ZONE_TABLES.pop(next(iter(_ZONE_TABLES)))
+        _ZONE_TABLES[key] = np.array([zone_halfwidth_m(head, y, p, floor, vector) for p in grid])
+    return _ZONE_TABLES[key]
+
+
+def _cell_zones(head, heights, outer, hg, srec, s_cells, peak, floor, vector):
+    """Each cell's zone half-width per layer (layers x cells): the zone of the largest
+    |hg| among the samples within the widest outer zone (`outer`: per layer, for the
+    whole recording's peak), rounded up to a geometric grid of peaks above the floor
+    (`_zone_table`), at most the outer zone. A bound like the outer zone's, so the floor
+    means the same."""
+    w = float(np.max(outer))
+    k0 = np.searchsorted(srec, s_cells - w, side="left")
+    k1 = np.searchsorted(srec, s_cells + w, side="right")
+    local = _range_max(np.abs(hg), k0, k1)
+    # The smallest grid peak at or above each cell's (past the grid: the outer zone).
+    u = np.log2(np.maximum(local, floor) / floor) * _ZONE_STEPS
+    gi = np.ceil(u).astype(np.int64)
+    n = _ZONE_STEPS * _ZONE_OCTAVES
+    zones = np.empty((len(heights), len(s_cells)))
+    for li, y in enumerate(heights):
+        table = _zone_table(head, y, floor, vector)
+        z = np.where(gi > n, np.inf, table[np.minimum(gi, n)])
+        zones[li] = np.minimum(z, outer[li])
+    return zones
 
 
 def _record_rust(
@@ -401,22 +503,18 @@ def _record_rust(
     srec,
     hg,
     s_cells,
-    peak,
-    floor,
-    edge_floor,
+    zones,
     h_static,
     vector,
     axes,
     h_end=None,
     table_step=0.0,
 ):
-    """`record`'s kernel in circuitsim (`tape_record`)."""
+    """`record`'s kernel in circuitsim (`tape_record`): zones per layer, or per layer and
+    cell (`_cell_zones`)."""
     import circuitsim
 
     heights = slab.spacing_m + slab.depths_m
-    zones = np.array(
-        [_zone_checked(head, y, peak, floor, edge_floor, vector) for y in heights], float
-    )
     p = pre.p
 
     def flat(h):
@@ -432,7 +530,7 @@ def _record_rust(
         (p.hc_median_a_m, p.sigma_ln_hc, p.sigma_hi_a_m, p.h_max_a_m, p.n_table),
         (head.gap_m, head.pole_m, head.relax_m),
         np.ascontiguousarray(heights, float),
-        zones,
+        np.ascontiguousarray(zones, float).ravel(),
         np.ascontiguousarray(srec, float),
         np.ascontiguousarray(hg, float),
         np.ascontiguousarray(s_cells, float),
@@ -666,19 +764,40 @@ def demag_field_vector(
     coating's surface): each charge has an image of opposite sign mirrored in the head's
     surface (tangential H vanishes there), which adds e^{-|k|(y + y' + 2d)} terms. At long
     wavelengths it cancels most of the demagnetization; at short ones it is too far away."""
+    return demag_fields_vector(mx, my, slab, ms_a_m, lam_min_m, q, (image_spacing_m,))[0]
+
+
+def demag_fields_vector(
+    mx: np.ndarray,
+    my: np.ndarray,
+    slab: Slab,
+    ms_a_m: float,
+    lam_min_m: float | None = None,
+    q: int = 16,
+    image_spacings_m: tuple = (None,),
+) -> list[tuple[np.ndarray, np.ndarray]]:
+    """`demag_field_vector` for each of image_spacings_m (None: free tape), the pattern
+    transformed once."""
+    from scipy import fft as sfft
+
     layers, cells = mx.shape
-    n = 1 << int(math.ceil(math.log2(2 * cells)))
-    keep, kern = _demag_kernels(n, slab, lam_min_m, q, image_spacing_m)
-    mxk = np.fft.rfft(mx, n, axis=1)[:, keep].T  # k x l'
-    myk = np.fft.rfft(my, n, axis=1)[:, keep].T
-    kxx, kxy, kyx, kyy = kern
-    hxk = np.zeros((layers, n // 2 + 1), complex)
-    hyk = np.zeros((layers, n // 2 + 1), complex)
-    hxk[:, keep] = (np.einsum("kab,kb->ka", kxx, mxk) + np.einsum("kab,kb->ka", kxy, myk)).T
-    hyk[:, keep] = (np.einsum("kab,kb->ka", kyx, mxk) + np.einsum("kab,kb->ka", kyy, myk)).T
-    hx = np.fft.irfft(hxk, n, axis=1)[:, :cells]
-    hy = np.fft.irfft(hyk, n, axis=1)[:, :cells]
-    return ms_a_m * hx, ms_a_m * hy
+    n = sfft.next_fast_len(2 * cells, real=True)
+    mxk = myk = None
+    out = []
+    for image in image_spacings_m:
+        keep, kern = _demag_kernels(n, slab, lam_min_m, q, image)
+        if mxk is None:
+            mxk = sfft.rfft(mx, n, axis=1, workers=-1)[:, keep].T  # k x l'
+            myk = sfft.rfft(my, n, axis=1, workers=-1)[:, keep].T
+        kxx, kxy, kyx, kyy = kern
+        hxk = np.zeros((layers, n // 2 + 1), complex)
+        hyk = np.zeros((layers, n // 2 + 1), complex)
+        hxk[:, keep] = (np.einsum("kab,kb->ka", kxx, mxk) + np.einsum("kab,kb->ka", kxy, myk)).T
+        hyk[:, keep] = (np.einsum("kab,kb->ka", kyx, mxk) + np.einsum("kab,kb->ka", kyy, myk)).T
+        hx = sfft.irfft(hxk, n, axis=1, workers=-1)[:, :cells]
+        hy = sfft.irfft(hyk, n, axis=1, workers=-1)[:, :cells]
+        out.append((ms_a_m * hx, ms_a_m * hy))
+    return out
 
 
 _DEMAG_KERNELS: dict[tuple, tuple] = {}
@@ -736,6 +855,35 @@ def _demag_kernels(n: int, slab: Slab, lam_min_m, q: int, image_spacing_m):
     return _DEMAG_KERNELS[key]
 
 
+def lstsq_mgs(cols: list[np.ndarray], b: np.ndarray) -> list[float]:
+    """The least-squares coefficients c minimizing |sum_j c_j cols[j] - b| by modified
+    Gram-Schmidt in column order (circuitsim's `tape_stream` does the same, step for
+    step). A column whose remainder falls below 1e-10 of its norm is dropped (c_j = 0)."""
+    p = len(cols)
+    qs: list[tuple[int, np.ndarray]] = []
+    r = np.zeros((p, p))
+    for j in range(p):
+        v = cols[j].copy()
+        n0 = math.sqrt(float(np.dot(v, v)))
+        for i, q in qs:
+            r[i, j] = float(np.dot(q, v))
+            v -= r[i, j] * q
+        n = math.sqrt(float(np.dot(v, v)))
+        if n0 == 0.0 or n <= 1e-10 * n0:
+            continue
+        r[j, j] = n
+        qs.append((j, v / n))
+    qb = {i: float(np.dot(q, b)) for i, q in qs}
+    c = [0.0] * p
+    kept = [i for i, _ in qs]
+    for a, i in reversed(list(enumerate(kept))):
+        s = qb[i]
+        for k in kept[a + 1 :]:
+            s -= r[i, k] * c[k]
+        c[i] = s / r[i, i]
+    return c
+
+
 def record_demagnetized_vector(
     pre,
     ms_a_m: float,
@@ -754,18 +902,22 @@ def record_demagnetized_vector(
     during its pass a cell sees the field with the head's image (`demag_field_vector`'s
     image_spacing_m, the slab's spacing), after it free tape's. Returns (M_x, M_y,
     iterations used, the last step's largest change)."""
+
+    def fields(mx, my) -> dict:
+        if head_image:
+            hd, hz = demag_fields_vector(
+                mx, my, slab, ms_a_m, lam_min_m, image_spacings_m=(None, slab.spacing_m)
+            )
+            return {"h_static": hz, "h_end": hd}
+        return {"h_static": demag_field_vector(mx, my, slab, ms_a_m, lam_min_m)}
+
     mx, my = record(pre, head, slab, *args, **kwargs)
     shape = mx.shape
     x = np.concatenate([mx.ravel(), my.ravel()])
     xs, gs = [], []
     change = float("inf")
     for it in range(1, iterations + 1):
-        hd = demag_field_vector(mx, my, slab, ms_a_m, lam_min_m)
-        if head_image:
-            hz = demag_field_vector(mx, my, slab, ms_a_m, lam_min_m, image_spacing_m=slab.spacing_m)
-            nx, ny = record(pre, head, slab, *args, h_static=hz, h_end=hd, **kwargs)
-        else:
-            nx, ny = record(pre, head, slab, *args, h_static=hd, **kwargs)
+        nx, ny = record(pre, head, slab, *args, **kwargs, **fields(mx, my))
         g = np.concatenate([nx.ravel(), ny.ravel()]) - x
         change = float(np.abs(g).max())
         if change < tol:
@@ -774,10 +926,13 @@ def record_demagnetized_vector(
         gs.append(g.copy())
         xs, gs = xs[-history:], gs[-history:]
         if len(gs) > 1:
-            dg = np.diff(np.array(gs), axis=0)
-            dx = np.diff(np.array(xs), axis=0)
-            coef, *_ = np.linalg.lstsq(dg.T, g, rcond=None)
-            x = x + g - (dx + dg).T @ coef
+            dg = [gs[i + 1] - gs[i] for i in range(len(gs) - 1)]
+            dx = [xs[i + 1] - xs[i] for i in range(len(xs) - 1)]
+            coef = lstsq_mgs(dg, g)
+            for c, a, b in zip(coef, dx, dg, strict=True):
+                if c != 0.0:
+                    x = x - c * (a + b)
+            x = x + g
         else:
             x = x + 0.1 * g
         x = np.clip(x, -1.0, 1.0)

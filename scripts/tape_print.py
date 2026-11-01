@@ -2,7 +2,7 @@
 an Ampex 351's tape path with idealized NAB electronics (varimu.devices.tape_machine).
 
     uv run --extra fast --extra listen python scripts/tape_print.py --clip drums_setmefree.wav \
-        --seconds 10 --drive-db 0 6 12 [--speed 15] [--tape SCOTCH111@2]
+        --seconds 10 --drive-db 0 6 12 [--speed 15] [--tape SCOTCH111@3] [--no-noise]
 
 Writes reports/tape/audio/<clip>_<speed>ips_drive<+N>dB.wav and the dry excerpt matched
 to each print's loudness (<clip>_dry_for_drive<+N>dB.wav: loudness lies), plus the
@@ -43,17 +43,22 @@ def main() -> int:
     ap.add_argument("--seconds", type=float, default=10.0)
     ap.add_argument("--drive-db", type=float, nargs="+", default=[0.0])
     ap.add_argument("--speed", type=float, default=15.0, help="ips: 15 or 7.5")
-    ap.add_argument("--tape", default="SCOTCH111@2")
+    ap.add_argument("--tape", default="SCOTCH111@3")
+    ap.add_argument(
+        "--noise-seed", type=int, default=1, help="the coating's grain (if the tape has one)"
+    )
+    ap.add_argument("--no-noise", action="store_true", help="no grain")
     ap.add_argument("--tone", action="store_true")
     ap.add_argument(
         "--demag-iterations",
         type=int,
-        default=4,
-        help="4: within -41 dB of converged (12), ~3x faster",
+        default=8,
+        help="8: within -58 dB of converged (12); 4: -42 dB, ~1.5x faster",
     )
     a = ap.parse_args()
 
     tape = library.load_tape(a.tape)
+    seed = None if a.no_noise or tape.noise is None else a.noise_seed
     spec = TapeMachineSpec().at_speed(a.speed * 0.0254)
     import dataclasses
 
@@ -106,6 +111,7 @@ def main() -> int:
             tape,
             al,
             drive_db=drive,
+            noise_seed=seed,
             progress=lambda f, d=drive: print(
                 f"\r  drive {d:+.0f} dB: {100 * f:5.1f} %", end="", flush=True
             ),

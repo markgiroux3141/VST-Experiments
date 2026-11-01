@@ -47,6 +47,13 @@ Macro parts (connection; params, * = required):
                 parameter naming one), decay_500hz_s* (the damper, as the decay at 500 Hz):
                 the exciter between plus and minus, the pickup (its capacitance in series)
                 from out to ground (varimu.devices.plate, varimu.circuit.parts.plate)
+    tape        [rec_plus, rec_minus, out]; component* (a tape component version, NAME@N, or
+                a parameter naming one), and the machine's physical values (all *):
+                speed_m_s, f_bias_hz, bias_a_m (the bias's deep-gap field), rec_gap_m,
+                rep_gap_m, pole_m, relax_m, spacing_m, track_m, head_distance_m, rec_l_h,
+                rec_r_ohm, rec_h_per_a, rep_l_h, rep_r_ohm, rep_h_per_a: the record coil
+                between rec_plus and rec_minus, the repro coil from out to ground
+                (varimu.devices.tape_machine.TapeStream, varimu.circuit.parts.tape)
 
 R, C, pot, rheostat, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
 the file's tolerance classes); a switch's sub-parts take their own.
@@ -114,7 +121,7 @@ from varimu.devices import noise as noise_mod
 from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
-from varimu.devices.library import load_device, load_plate, load_speaker
+from varimu.devices.library import load_device, load_plate, load_speaker, load_tape
 from varimu.devices.pentode import Pentode
 from varimu.devices.speaker import Cabinet
 from varimu.devices.table import GRIDS
@@ -487,6 +494,15 @@ def _plate(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     return parts.plate(name, *conn, model, a["decay_500hz_s"])
 
 
+def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    where = f"{name}.component"
+    try:
+        model = load_tape(str(versions.require_pinned(ctx.text(where, a["component"]))))
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES})
+
+
 def _r(ctx, name, c, a):
     r = a["r"] if a["parallel"] == 1 else a["r"] / a["parallel"]
     return [parts.resistor(name, *c, r)]
@@ -578,6 +594,11 @@ for _name, _macro in {
         _plate,
         3,
         {"component": Param("raw"), "decay_500hz_s": _P},
+    ),
+    "tape": Macro(
+        _tape,
+        3,
+        {"component": Param("raw"), **{k: _P for k in parts.TAPE_VALUES}},
     ),
     "speaker": Macro(
         _speaker,

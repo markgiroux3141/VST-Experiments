@@ -18,6 +18,7 @@ pub mod dk;
 pub mod fastmath;
 pub mod ir;
 pub mod linalg;
+pub mod media;
 pub mod mna;
 pub mod newton;
 pub mod noise;
@@ -25,6 +26,7 @@ pub mod partition;
 pub mod plate;
 pub mod stream;
 pub mod tape;
+pub mod tape_stream;
 pub mod timing;
 pub mod transient;
 

@@ -1,0 +1,56 @@
+# Tape between two heads, driven and loaded by resistors: the tape part's test circuit
+# (docs/TAPE_PLAN.md, TM4), not modelled hardware. The record head is fed through a large
+# resistance (a constant-current drive, as the Ampex 351's 6201 drives its head); the
+# repro head works into a grid leak. The tape and the head geometry are the first print's
+# (varimu.devices.tape_machine.TapeMachineSpec); the heads' coils are provisional until
+# TM5 draws the 351's.
+
+title: "Tape between two heads (test)"
+input: in
+probes: [out, rec]
+
+values:
+  tape_model: {value: SCOTCH111@3, source: "config/components/scotch111/3.yaml (Scotch 111's particles, oriented, and its grain)"}
+  speed_m_s: {value: 0.381, source: "data/schematics/ampex_351/README.md (1962 manual p10: 15 ips)"}
+  f_bias_hz: {value: 100.0e+3, source: "data/schematics/ampex_351/README.md (1962 manual p78: approximately 100 kc)"}
+  bias_a_m: {value: 59894.50528647803, source: "the print's alignment at 15 ips on SCOTCH111@3 (varimu.devices.tape_machine.aligned: bias at the 500 Hz peak at 7.5 ips, the 351 manual's procedure)"}
+  rec_gap_m: {value: 12.7e-6, source: "provisional: web: ATR Master Tape sheet's test record gap 0.5 mil (the 351's isn't printed)"}
+  rep_gap_m: {value: 6.35e-6, source: "data/schematics/ampex_351/README.md (1962 manual p70: repro gap 0.00025 in)"}
+  pole_m: {value: 3.0e-3, source: "provisional: model knowledge (a 1950s ring head's pole faces, ~3 mm)"}
+  relax_m: {value: 3.0e-3, source: "provisional: model knowledge (the head contour receding from the tape over a few mm)"}
+  spacing_m: {value: 0.5e-6, source: "provisional: model knowledge (contact recording, 0.1-1 um)"}
+  track_m: {value: 5.94e-3, source: "data/schematics/ampex_351/README.md (1962 manual p41: full track 0.234 in)"}
+  head_distance_m: {value: 50.8e-3, source: "provisional: secondary sources (the 350/351 headblock's record-to-repro gap spacing ~2 in)"}
+  rec_l_h: {value: 0.1, source: "provisional: model knowledge (a high-impedance record head, ~0.1 H)"}
+  rec_r_ohm: {value: 100.0, source: "provisional: model knowledge (its winding, ~100 ohm)"}
+  rec_h_per_a: {value: 2.0e+7, source: "provisional: model knowledge (~300 turns at 85% efficiency over the 12.7 um gap: a few mA of bias)"}
+  rep_l_h: {value: 0.5, source: "provisional: model knowledge (a high-impedance repro head for a tube preamp, ~0.5 H)"}
+  rep_r_ohm: {value: 500.0, source: "provisional: model knowledge (its winding, ~500 ohm)"}
+  rep_h_per_a: {value: 2.5e+8, source: "provisional: model knowledge (~2000 turns at 80% efficiency over the 6.35 um gap)"}
+  r_drive_ohm: {value: 22.0e+3, source: "provisional: model knowledge (sets 0 dBFS near the operating level's ~0.6 mA)"}
+  r_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a repro preamp's grid leak)"}
+
+sections:
+  - title: tape
+    parts:
+      RD: {R: [in, rec], r: r_drive_ohm}
+      TP:
+        tape: [rec, "0", out]
+        component: tape_model
+        speed_m_s: speed_m_s
+        f_bias_hz: f_bias_hz
+        bias_a_m: bias_a_m
+        rec_gap_m: rec_gap_m
+        rep_gap_m: rep_gap_m
+        pole_m: pole_m
+        relax_m: relax_m
+        spacing_m: spacing_m
+        track_m: track_m
+        head_distance_m: head_distance_m
+        rec_l_h: rec_l_h
+        rec_r_ohm: rec_r_ohm
+        rec_h_per_a: rec_h_per_a
+        rep_l_h: rep_l_h
+        rep_r_ohm: rep_r_ohm
+        rep_h_per_a: rep_h_per_a
+      RL: {R: [out, "0"], r: r_load_ohm}

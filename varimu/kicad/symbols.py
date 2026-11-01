@@ -24,6 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from varimu.circuit.parts import TAPE_VALUES
 from varimu.kicad.sexpr import N, S, Sym, Y, dumps
 
 LIBRARY = "varimu"
@@ -350,6 +351,24 @@ _SYMBOLS: list[SymbolDef] = [
         [rect(-5.08, -3.81, 5.08, 3.81), rect(-3.81, -0.508, 3.81, 0.508)],
         "component",
         ("decay_500hz_s",),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
+    _macro(
+        "Tape",
+        "tape",
+        "TP",
+        "Magnetic tape between a record and a repro head (varimu.devices.tape_machine): "
+        "pins 1 + and 2 - the record coil, 3 the repro coil (to ground); Value is the tape's "
+        "component version",
+        (
+            Pin("1", "1", -7.62, 2.54, 0, 2.54),
+            Pin("2", "2", -7.62, -2.54, 0, 2.54),
+            Pin("3", "3", 7.62, 0, 180, 2.54),
+        ),  # fmt: skip
+        [rect(-5.08, -3.81, 5.08, 3.81), circle(-2.54, 0, 1.778), circle(2.54, 0, 1.778)],
+        "component",
+        TAPE_VALUES,
         toleranced=False,
         text=(0, 6.35, 5.588, "left"),
     ),

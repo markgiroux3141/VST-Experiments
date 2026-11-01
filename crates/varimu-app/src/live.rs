@@ -164,6 +164,7 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::HeatedCathode(h) => ("HeatedCathode", &h.name, vec![]),
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
             Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
+            Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
         };
         elements.insert((kind, name.to_string()));
         nodes.extend(ns.into_iter().cloned());

@@ -206,12 +206,26 @@ recording a 2D slab of cells at the bias peaks, reciprocity playback, slab demag
 the audio band with the head's image under the head, vector Preisach orientations) against
 No. 21's bias curves (Ampex 300): matched up to and past the peak; the model's curves are
 narrower in bias than the data (the user chose to move on; the plan's status, step 7, lists
-the candidates). **TM4 started:** circuitsim's `tape.rs` (the recording kernel, ~50x numpy;
-`record(..., engine="rust")`, agreement in `tests/test_tape.py`); the IR element isn't built.
+the candidates). **TM4 done:** circuitsim's `tape.rs` (the recording kernel) and
+`tape_stream.rs` (the port of `tape_machine.TapeStream`: the record gap's field in per
+sample, the repro EMF of the next out; 16 mm blocks recorded with the demag fixed point once
+the head has passed, read a head distance, 50.8 mm, later), the IR element `Tape` (like
+`Plate`: `media.rs`; SPICE holds its out at 0 V), the `tape` part in both builders
+(`tape: [rec_plus, rec_minus, out]`, the tape component and 16 physical values; numerics
+fixed, `parts.TAPE_*`), `config/circuits/tape_test.yaml`; Rust against the Python reference
+within 4e-13 (`tests/test_tape_stream.py`); 16.5x real time in a circuit. The print is the
+stream (`print_audio`, all in Rust). **TM3 done:** the coating's grain (Poisson particles
+plus an exponentially correlated packing field, `SCOTCH111@3`'s `noise` block fitted to Sound
+Talk No. 34 by `scripts/fit_tape_noise.py`; tape-only S/N 72.9 dB at 15 ips,
+`scripts/tape_snr.py`; prints seed 1, `--no-noise`) and the transport (`TapeMachineSpec.
+transport`: capstan, idler, reel, motor hunting, scrape flutter; a tone recorded and played
+back deviates the 351's 0.11%, `scripts/tape_flutter.py`); cells are 7.62 per bias
+wavelength (0.5 um at 15 ips: 1 um aliased the bias residue into the audio band), prints
+~2x slower for it. Next: TM5, the 351's circuit (its transport goes on its tape part).
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->
-`reports/tape/audio/` (-18 dBFS rms = 0 VU; ~60-115x real time). Sources:
+`reports/tape/audio/` (-18 dBFS rms = 0 VU; ~24x real time since the zone floor and per-cell zones, TAPE_PLAN.md "Speed"). Sources:
 `data/schematics/ampex_351/`, `data/datasheets/tape/` (READMEs).
 
 Reverbs as physical media coupled to the netlist at transducer ports are drafted in

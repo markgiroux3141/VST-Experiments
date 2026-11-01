@@ -99,12 +99,14 @@ pub struct DeviceInstance {
     pub pin_names: &'static [&'static str],
 }
 
-/// A medium in the circuit (a plate, `crate::plate`): its element and the unknowns of
-/// its force's sense nodes.
+/// A medium in the circuit (a plate, `crate::plate`; tape, `crate::tape_stream`): its
+/// element and the unknowns of its sense nodes.
 #[derive(Debug, Clone)]
 pub struct MediumPorts {
-    pub plate: crate::ir::Plate,
+    pub element: crate::media::MediumElement,
     pub sense: (Option<usize>, Option<usize>),
+    /// The circuit's noise seed, if its noise is on (a tape's grain).
+    pub noise_seed: Option<u64>,
 }
 
 /// The circuit as matrices, ready for DC and transient analysis.
@@ -310,17 +312,18 @@ impl Mna {
             .collect();
 
         // Media's pickups after them: each drives its `out` node like a control input.
-        let plates: Vec<&crate::ir::Plate> = ir
+        let media_els: Vec<crate::media::MediumElement> = ir
             .elements()
             .filter_map(|e| match e {
-                Element::Plate(p) => Some(p),
+                Element::Plate(p) => Some(crate::media::MediumElement::Plate(p.clone())),
+                Element::Tape(t) => Some(crate::media::MediumElement::Tape(t.clone())),
                 _ => None,
             })
             .collect();
-        let media_rows: Vec<usize> = plates
+        let media_rows: Vec<usize> = media_els
             .iter()
-            .map(|p| {
-                unknowns.push(Unknown::Control(p.name.clone()));
+            .map(|m| {
+                unknowns.push(Unknown::Control(m.name().to_string()));
                 unknowns.len() - 1
             })
             .collect();
@@ -447,7 +450,8 @@ impl Mna {
                 | Element::NoiseCurrent(_)
                 | Element::TubeNoise(_)
                 | Element::HeatedCathode(_)
-                | Element::Plate(_) => {}
+                | Element::Plate(_)
+                | Element::Tape(_) => {}
             }
         }
         for el in ir.elements() {
@@ -462,14 +466,19 @@ impl Mna {
         for (c, &row) in ir.controls.iter().zip(&control_rows) {
             incidence(&mut g, row, node(&c.node), None);
         }
-        for (p, &row) in plates.iter().zip(&media_rows) {
-            incidence(&mut g, row, node(&p.out), None);
+        for (m, &row) in media_els.iter().zip(&media_rows) {
+            incidence(&mut g, row, node(m.out()), None);
         }
-        let media: Vec<MediumPorts> = plates
-            .iter()
-            .map(|p| MediumPorts {
-                plate: (*p).clone(),
-                sense: (node(&p.sense_pos), node(&p.sense_neg)),
+        let media: Vec<MediumPorts> = media_els
+            .into_iter()
+            .map(|m| {
+                let (pos, neg) = m.sense();
+                let sense = (node(pos), node(neg));
+                MediumPorts {
+                    element: m,
+                    sense,
+                    noise_seed: ir.noise.as_ref().map(|n| n.seed),
+                }
             })
             .collect();
         // Heated cathodes: their tubes' devices wrapped before banks merge.

@@ -42,14 +42,14 @@ from varimu.devices.tape import (
     HeadGeometry,
     Slab,
     TapeFormulation,
-    cubic_at,
+    flux_slope,
     head_hx_spectrum,
     head_hy_spectrum,
-    playback_emf,
     record_demagnetized_vector,
 )
 
 MINUS_18_DBFS_PEAK = 10 ** (-18 / 20) * math.sqrt(2.0)  # a -18 dBFS rms sine's peak
+OE_A_M = 1000.0 / (4.0 * math.pi)  # one oersted in A/m
 
 
 @dataclass(frozen=True)
@@ -75,15 +75,77 @@ class TapeMachineSpec:
     # NAB at 15 and 7.5 ips (351 manual pp.13-14).
     t1_s: float = 3180e-6
     t2_s: float = 50e-6
-    # Numerical: layers, cell length, field table, zone floor, demag (TAPE_PLAN.md: each
-    # moves No. 21's curves by <= 0.2 dB against finer settings).
+    # Numerical: layers, cell length, field table, demag (TAPE_PLAN.md: each moves No. 21's
+    # curves by <= 0.2 dB against finer settings). The zone's floor (Oe; None: the grid's
+    # `switching_floor`, 31 Oe) and per-cell zones (`record`'s local_zones): a print moves
+    # by -75 dB against 31 Oe and global zones, 2.6x faster (TAPE_PLAN.md, "Speed").
+    # The cell length: 7.62 per bias wavelength (0.5 um at 15 ips; `at_speed` keeps the
+    # ratio). Cells are point samples of the pattern, and the bias leaves a residue at its
+    # wavelength and harmonics: at 1 um its harmonics aliased into the audio band (a 9.5 kHz
+    # line at -59 dB re the 3% level at 7.5 ips, 19 kHz at -75 dB at 15 ips); at this ratio
+    # none lands in band, and it isn't whole (whole ratios alias them to DC: TAPE_PLAN.md,
+    # TM3).
     layers: int = 6
-    ds_m: float = 1e-6
+    ds_m: float = 0.5e-6
     table_step: float = 1 / 40
-    floor_tol: float = 1e-5
+    zone_floor_oe: float | None = 120.0
+    local_zones: bool = True
     demag_iterations: int = 12
     demag_tol: float = 2e-3
     head_image: bool = True
+    # The stream (`TapeStream`): tape is recorded in blocks this long, each with this
+    # margin of neighbours either side (block length moves a print by -63 dB from 0.5 s
+    # blocks: TAPE_PLAN.md, TM4); the repro gap sits this far behind the record gap
+    # (provisional, secondary sources: ~2" on the 350/351 headblock, ~133 ms at 15 ips).
+    block_m: float = 16e-3
+    margin_m: float = 0.5e-3
+    head_distance_m: float = 50.8e-3
+    # The transport (wow and flutter, TAPE_PLAN.md TM3): v(t) = v (1 + eps(t)), eps from
+    # mechanisms at their own rates. Scaled so that a 3150 Hz tone recorded and played back
+    # deviates 0.11% rms over 0.5-250 Hz, the 351's spec at 15 ips (1962 manual p10, ASA
+    # Z57.1-1954: a playback measurement; scripts/tape_flutter.py), the speed itself 0.08%;
+    # the split among them is provisional (model knowledge: nothing printed separates them).
+    flutter: bool = True
+    # The capstan is the hysteresis synchronous motor's shaft (manual p51-52): 15 ips at
+    # 1800 rpm (60 Hz, four poles) makes it 4.04 mm; provisional (the diameter isn't
+    # printed). Its runout turns once per revolution.
+    capstan_d_m: float = 4.04e-3
+    capstan_rms: float = 3.7e-4
+    # The rubber capstan idler: provisional, model knowledge (~1.25 in).
+    roller_d_m: float = 31.8e-3
+    roller_rms: float = 2.9e-4
+    # The supply reel at mid pack: provisional, model knowledge (a 10.5 in NAB reel, ~80 mm).
+    reel_r_m: float = 80e-3
+    reel_rms: float = 4.4e-4
+    # The motor's rotor hunting around synchronism, a lightly damped resonance driven by
+    # load changes: provisional, model knowledge.
+    hunting_hz: float = 2.5
+    hunting_q: float = 3.0
+    hunting_rms: float = 4.8e-4
+    # Scrape flutter (Sound Talk No. 34, Fig. 1): the free span's first longitudinal mode,
+    # c / 2L, excited by friction over the heads; c = sqrt(E / rho) of acetate (~3.4 GPa,
+    # 1290 kg/m^3), a ~0.2 m span: provisional, model knowledge. Above the spec's band.
+    scrape_span_m: float = 0.2
+    scrape_c_m_s: float = 1623.0
+    scrape_q: float = 10.0
+    scrape_rms: float = 3e-4
+
+    def transport(self) -> tuple[tuple, tuple]:
+        """The speed's components: (periodic (relative peak, Hz, phase), random resonances
+        (relative rms, Hz, Q)); none without flutter."""
+        if not self.flutter:
+            return (), ()
+        v = self.speed_m_s
+        periodic = (
+            (self.capstan_rms * math.sqrt(2.0), v / (math.pi * self.capstan_d_m), 0.0),
+            (self.roller_rms * math.sqrt(2.0), v / (math.pi * self.roller_d_m), 1.0),
+            (self.reel_rms * math.sqrt(2.0), v / (2.0 * math.pi * self.reel_r_m), 2.0),
+        )
+        random = (
+            (self.hunting_rms, self.hunting_hz, self.hunting_q),
+            (self.scrape_rms, self.scrape_c_m_s / (2.0 * self.scrape_span_m), self.scrape_q),
+        )
+        return periodic, random
 
     def rec_head(self) -> HeadGeometry:
         return HeadGeometry(self.rec_gap_m, self.pole_m, self.relax_m)
@@ -92,7 +154,10 @@ class TapeMachineSpec:
         return HeadGeometry(self.rep_gap_m, self.pole_m, self.relax_m)
 
     def at_speed(self, v: float) -> TapeMachineSpec:
+        """The spec at speed v, its cells scaled with it (the same cells per bias
+        wavelength)."""
         d = asdict(self)
+        d["ds_m"] = self.ds_m * v / self.speed_m_s
         d["speed_m_s"] = v
         return TapeMachineSpec(**d)
 
@@ -122,8 +187,25 @@ def _slab(spec: TapeMachineSpec, tape: TapeFormulation) -> Slab:
     return Slab(tape.coating_m, spec.layers, spec.ds_m, spec.spacing_m)
 
 
-def _record(spec, tape, hg_signal, hg_bias, t0, t1, s_cells, hg_signal_max, bias_phase=0.0):
+def _record(
+    spec,
+    tape,
+    hg_signal,
+    hg_bias,
+    t0,
+    t1,
+    s_cells,
+    hg_signal_max,
+    bias_phase=0.0,
+    engine="rust",
+    s_rec=None,
+):
     slab = _slab(spec, tape)
+    if s_rec is None:
+
+        def s_rec(t):
+            return spec.speed_m_s * t
+
     mx, my, _, _ = record_demagnetized_vector(
         tape.ensemble(),
         tape.ms_a_m,
@@ -132,7 +214,7 @@ def _record(spec, tape, hg_signal, hg_bias, t0, t1, s_cells, hg_signal_max, bias
         hg_signal,
         hg_bias,
         spec.f_bias_hz,
-        lambda t: spec.speed_m_s * t,
+        s_rec,
         t0,
         t1,
         s_cells,
@@ -142,9 +224,10 @@ def _record(spec, tape, hg_signal, hg_bias, t0, t1, s_cells, hg_signal_max, bias
         iterations=spec.demag_iterations,
         tol=spec.demag_tol,
         head_image=spec.head_image,
-        engine="rust",
+        engine=engine,
         table_step=spec.table_step,
-        floor_tol=spec.floor_tol,
+        floor_a_m=None if spec.zone_floor_oe is None else spec.zone_floor_oe * OE_A_M,
+        local_zones=spec.local_zones,
         bias_phase_rad=bias_phase,
     )
     return mx, my
@@ -338,6 +421,377 @@ def aligned(spec: TapeMachineSpec, tape: TapeFormulation, cache_dir: Path) -> Al
     return al
 
 
+# --- The stream ------------------------------------------------------------------------
+
+#: Recording runs this much tape past a block's ends: well past the record zone.
+ZONE_PAD_M = 2e-3
+
+
+def cubic_held(h: np.ndarray, u, first: int = 0) -> np.ndarray:
+    """`cubic_at` on samples h (sample i at index first + i) at fractional indices u, the
+    taps clamped to the samples there are (the first held before them)."""
+    u = np.asarray(u, float)
+    i = np.floor(u).astype(np.int64)
+    f = u - i
+    n = len(h)
+
+    def tap(k):
+        return h[np.clip(k - first, 0, n - 1)]
+
+    return (
+        -f * (f - 1) * (f - 2) / 6.0 * tap(i - 1)
+        + (f + 1) * (f - 1) * (f - 2) / 2.0 * tap(i)
+        - (f + 1) * f * (f - 2) / 2.0 * tap(i + 1)
+        + (f + 1) * f * (f - 1) / 6.0 * tap(i + 2)
+    )
+
+
+def stream_params(
+    spec: TapeMachineSpec,
+    tape: TapeFormulation,
+    hg_bias: float,
+    rep_h_per_a: float = 1.0,
+    bias_phase: float = 0.0,
+    head_distance_m: float | None = None,
+) -> dict:
+    """`TapeStream`'s parameters as circuitsim's `TapeParams` takes them (the stream's
+    port and the IR element `Tape`). The spec's zone floor must be set."""
+    if spec.zone_floor_oe is None:
+        raise ValueError("a stream needs an explicit zone floor (spec.zone_floor_oe)")
+    p, o, nz = tape.preisach, tape.orientation, tape.noise
+    return {
+        "hc_median_a_m": p.hc_median_a_m,
+        "sigma_ln_hc": p.sigma_ln_hc,
+        "sigma_hi_a_m": p.sigma_hi_a_m,
+        "h_max_a_m": p.h_max_a_m,
+        "n_table": p.n_table,
+        "ms_a_m": tape.ms_a_m,
+        "coating_m": tape.coating_m,
+        "kappa": o.kappa,
+        "orientations": o.n,
+        "speed_m_s": spec.speed_m_s,
+        "f_bias_hz": spec.f_bias_hz,
+        "hg_bias_a_m": float(hg_bias),
+        "bias_phase_rad": float(bias_phase),
+        "rec_gap_m": spec.rec_gap_m,
+        "rep_gap_m": spec.rep_gap_m,
+        "pole_m": spec.pole_m,
+        "relax_m": spec.relax_m,
+        "spacing_m": spec.spacing_m,
+        "track_m": spec.track_m,
+        "head_distance_m": spec.head_distance_m if head_distance_m is None else head_distance_m,
+        "rep_h_per_a": float(rep_h_per_a),
+        "layers": spec.layers,
+        "ds_m": spec.ds_m,
+        "table_step": spec.table_step,
+        "zone_floor_a_m": spec.zone_floor_oe * OE_A_M,
+        "local_zones": spec.local_zones,
+        "demag_iterations": spec.demag_iterations,
+        "demag_tol": spec.demag_tol,
+        "head_image": spec.head_image,
+        "lam_min_m": spec.lam_min_m(),
+        "block_m": spec.block_m,
+        "margin_m": spec.margin_m,
+        "flutter": [list(c) for c in spec.transport()[0]],
+        "flutter_noise": [list(c) for c in spec.transport()[1]],
+        "particle_volume_m3": nz.particle_volume_m3 if nz else 0.0,
+        "packing": nz.packing if nz else 0.0,
+        "packing_sigma": nz.packing_sigma if nz else 0.0,
+        "packing_corr_m": nz.packing_corr_m if nz else 0.0,
+    }
+
+
+class TapeStream:
+    """The tape between the heads, sample by sample (TM4; circuitsim's `tape_stream` is
+    the port and the IR element `Tape` runs it). `push(h)` takes the record gap's signal
+    field at t_n = n / fs (deep-gap A/m; the bias, hg_bias at the spec's f_bias_hz, is
+    added inside) and returns the repro coil's EMF at t_{n+1} (V): the tape played back
+    was recorded long before, so the medium never waits on the circuit.
+
+    Tape position s = v t is at the record gap at time t; the repro gap reads s minus the
+    head distance (the spec's head_distance_m). Cells are recorded in blocks of block_m
+    (`record_demagnetized_vector` over the block and margin_m either side, erased beyond)
+    once the record head is ZONE_PAD_M past the block's margin, and a block's flux slope
+    (`flux_slope` over the block and the repro head's reach either side, erased where
+    nothing is recorded) once the next block is recorded. Between samples the signal is
+    cubic (`cubic_held`); each block's zone bound is the largest |sample| its recording
+    reads. The EMF is read cubic between cells, band limited at 0.45 fs. rep_h_per_a: the
+    repro head's deep-gap field per coil ampere (turns and efficiency over the gap)."""
+
+    def __init__(
+        self,
+        spec: TapeMachineSpec,
+        tape: TapeFormulation,
+        hg_bias: float,
+        fs: float,
+        rep_h_per_a: float = 1.0,
+        bias_phase: float = 0.0,
+        engine: str = "rust",
+        head_distance_m: float | None = None,
+        noise_seed: int | None = None,
+        noise_name: str = "tape",
+        transport_seed: int = 0,
+    ):
+        if noise_seed is not None and tape.noise is None:
+            raise ValueError(f"{tape.name} has no noise block (its particles aren't fitted)")
+        if noise_seed is not None and not 0 <= noise_seed < 2**53:
+            raise ValueError(f"noise seed {noise_seed}: 0 .. 2^53")
+        self.noise_seed, self.noise_name = noise_seed, noise_name
+        if spec.zone_floor_oe is None:
+            raise ValueError("a stream needs an explicit zone floor (spec.zone_floor_oe)")
+        self.spec, self.tape, self.hg_bias, self.fs = spec, tape, float(hg_bias), float(fs)
+        self.bias_phase, self.engine = bias_phase, engine
+        self.slab = _slab(spec, tape)
+        v, ds = spec.speed_m_s, self.slab.ds_m
+        self.v = v
+        self.d = spec.head_distance_m if head_distance_m is None else head_distance_m
+        self.nb = int(round(spec.block_m / ds))
+        self.nm = int(round(spec.margin_m / ds))
+        reach = 2.0 * (spec.rep_gap_m / 2.0 + spec.pole_m + spec.relax_m)
+        self.nr = int(math.ceil(reach / ds))
+        if self.nr > self.nb:
+            raise ValueError(f"the repro head's reach ({reach:.3g} m) is longer than a block")
+        lag = (2 * self.nb + self.nm) * ds + ZONE_PAD_M + 4.0 * v / self.fs
+        if self.d <= lag:
+            raise ValueError(
+                f"the heads are too close for the blocks ({self.d:.3g} <= {lag:.3g} m)"
+            )
+        self.k_max = 2.0 * math.pi * 0.45 * self.fs / v
+        dy = tape.coating_m / spec.layers
+        self.scale = MU0 * spec.track_m * tape.ms_a_m * rep_h_per_a * dy
+        self.h = np.zeros(0)  # samples first, first + 1, ...
+        self.first = 0
+        self.n = 0  # samples pushed
+        self.rec: dict[int, tuple[np.ndarray, np.ndarray]] = {}
+        self.slopes: dict[int, np.ndarray] = {}
+        self.next_rec = 0
+        # The transport: with flutter, the tape's position at the record gap per sample
+        # (s[k] at sample s_first + k, one sample ahead of the pushes), integrated
+        # (trapezoids) from v (1 + eps); before t = 0 the tape ran at v.
+        self.periodic, self.resonances = spec.transport()
+        self.moving = bool(self.periodic or self.resonances)
+        self.transport_seed = transport_seed
+        if self.moving:
+            self.zi = [np.zeros(2) for _ in self.resonances]
+            self.s = np.zeros(1)
+            self.s_first = 0
+            self.v_last = self._speeds(0, 1)[0]
+
+    def _span(self, b: int) -> tuple[int, int, float, float | None]:
+        """Block b's recorded cells [j0, j1) and its recording's time span (its end None
+        while the tape hasn't got there): the times the record gap is ZONE_PAD_M before
+        the first cell and after the last."""
+        ds, v = self.slab.ds_m, self.v
+        j0 = max(b * self.nb - self.nm, 0)
+        j1 = (b + 1) * self.nb + self.nm
+        if not self.moving:
+            return j0, j1, j0 * ds / v - ZONE_PAD_M / v, (j1 - 1) * ds / v + ZONE_PAD_M / v
+        return (
+            j0,
+            j1,
+            self._time_at(j0 * ds - ZONE_PAD_M, True),
+            self._time_at((j1 - 1) * ds + ZONE_PAD_M, False),
+        )
+
+    def _speeds(self, k0: int, k1: int) -> np.ndarray:
+        """v (1 + eps) at samples k0 .. k1 (in turn: the resonances' filters run on)."""
+        from scipy.signal import lfilter
+
+        from varimu.devices import noise
+
+        t = np.arange(k0, k1) / self.fs
+        eps = np.zeros(k1 - k0)
+        for a, f, ph in self.periodic:
+            eps = eps + a * np.cos(2.0 * math.pi * f * t + ph)
+        for i, (rms, f, q) in enumerate(self.resonances):
+            # A resonance at f, Q q driven by white noise, scaled to rms.
+            r = math.exp(-math.pi * f / (q * self.fs))
+            a1, a2 = -2.0 * r * math.cos(2.0 * math.pi * f / self.fs), r * r
+            var = (1.0 + a2) / ((1.0 - a2) * ((1.0 + a2) ** 2 - a1 * a1))
+            x = noise.normals(noise.key(self.transport_seed, "transport", i), k0, k1 - k0)
+            y, self.zi[i] = lfilter(
+                [rms / math.sqrt(var), 0.0, 0.0], [1.0, a1, a2], x, zi=self.zi[i]
+            )
+            eps = eps + y
+        return self.v * (1.0 + eps)
+
+    def _advance(self, k: int) -> None:
+        """The tape's position through sample k."""
+        last = self.s_first + len(self.s) - 1
+        if k <= last:
+            return
+        v = self._speeds(last + 1, k + 1)
+        inc = (np.concatenate([[self.v_last], v[:-1]]) + v) * (0.5 / self.fs)
+        self.s = np.concatenate([self.s, np.concatenate([[self.s[-1]], inc]).cumsum()[1:]])
+        self.v_last = float(v[-1])
+
+    def _s_at(self, t) -> np.ndarray:
+        """The tape's position at the record gap at times t (cubic between samples)."""
+        if not self.moving:
+            return self.v * np.asarray(t)
+        u = np.asarray(t, float) * self.fs
+        i = np.floor(u).astype(np.int64)
+        f = u - i
+        last = self.s_first + len(self.s) - 1
+
+        def tap(k):
+            known = self.s[np.clip(k - self.s_first, 0, len(self.s) - 1)]
+            return np.where(k < 0, self.v * k / self.fs, np.where(k > last, known, known))
+
+        return (
+            -f * (f - 1) * (f - 2) / 6.0 * tap(i - 1)
+            + (f + 1) * (f - 1) * (f - 2) / 2.0 * tap(i)
+            - (f + 1) * f * (f - 2) / 2.0 * tap(i + 1)
+            + (f + 1) * f * (f - 1) / 6.0 * tap(i + 2)
+        )
+
+    def _time_at(self, sv: float, start: bool) -> float | None:
+        """A sample time at or before (start) / at or after the tape's position sv (None:
+        not yet there)."""
+        if sv < 0:
+            return sv / self.v
+        k = int(np.searchsorted(self.s, sv, side="left"))
+        if k >= len(self.s):
+            return None
+        k += self.s_first
+        return (k - 1) / self.fs if start else k / self.fs
+
+    def _record_block(self, b: int) -> None:
+        j0, j1, t0, t1 = self._span(b)
+        fs = self.fs
+        lo = max(math.floor(t0 * fs) - 1, 0)
+        hi = math.floor(t1 * fs) + 3
+        h, first = self.h, self.first
+        peak = float(np.abs(h[lo - first : hi - first]).max())
+        s = np.arange(j0, j1) * self.slab.ds_m
+        mx, my = _record(
+            self.spec,
+            self.tape,
+            lambda t: cubic_held(h, np.asarray(t) * fs, first),
+            self.hg_bias,
+            t0,
+            t1,
+            s,
+            peak,
+            self.bias_phase,
+            self.engine,
+            self._s_at,
+        )
+        i0 = b * self.nb
+        mx = mx[:, i0 - j0 : i0 - j0 + self.nb].copy()
+        my = my[:, i0 - j0 : i0 - j0 + self.nb].copy()
+        if self.noise_seed is not None:
+            self._grain(mx, my, i0)
+        self.rec[b] = (mx, my)
+
+    def _grain(self, mx: np.ndarray, my: np.ndarray, i0: int) -> None:
+        """The coating's grain on the block's cells from i0 (`TapeNoise`), in place: each
+        cell's magnetization times 1 + the packing field, plus the Poisson particle noise
+        (variance sum_j w_j (cos^2, sin^2) phi_j / N for N particles per cell). The packing
+        field is one for the coating's depth, exponentially correlated along the tape (an
+        AR(1) from cell to cell, std packing_sigma, its state carried from block to
+        block). Philox streams (`noise.key(seed, noise_name, stream)`), indexed by cell:
+        stream 0 the packing field's (cell i at i + 1, its start at 0), 1 + layer the
+        particles' (two per cell)."""
+        from scipy.signal import lfilter
+
+        from varimu.devices import noise
+
+        nz, nb = self.tape.noise, self.nb
+        ds, dy = self.slab.ds_m, self.tape.coating_m / self.spec.layers
+        n_cell = nz.packing * ds * dy * self.spec.track_m / nz.particle_volume_m3
+        cs, sn, wt = self.tape.orientation.axes()
+        sx = math.sqrt(float(np.sum(wt * cs * cs)) / n_cell)
+        sy = math.sqrt(float(np.sum(wt * sn * sn)) / n_cell)
+        d = np.zeros(nb)
+        if nz.packing_sigma > 0:
+            rho = math.exp(-ds / nz.packing_corr_m)
+            k = noise.key(self.noise_seed, self.noise_name, 0)
+            if i0 == 0:
+                self._packing_prev = float(noise.normals(k, 0, 1)[0])
+            xi = noise.normals(k, i0 + 1, nb)
+            d, _ = lfilter(
+                [math.sqrt(1.0 - rho * rho)], [1.0, -rho], xi, zi=[rho * self._packing_prev]
+            )
+            self._packing_prev = float(d[-1])
+            d = nz.packing_sigma * d
+        for li in range(self.spec.layers):
+            z = noise.normals(noise.key(self.noise_seed, self.noise_name, 1 + li), 2 * i0, 2 * nb)
+            mx[li] = mx[li] * (1.0 + d) + sx * z[0::2]
+            my[li] = my[li] * (1.0 + d) + sy * z[1::2]
+
+    def _slope_block(self, b: int) -> None:
+        nb, nr = self.nb, self.nr
+        w = nb + 2 * nr
+        wx = np.zeros((self.spec.layers, w))
+        wy = np.zeros((self.spec.layers, w))
+        c0 = b * nb - nr  # the window's first cell
+        for c in (b - 1, b, b + 1):
+            if c not in self.rec:
+                continue
+            a0, a1 = max(c * nb, c0), min((c + 1) * nb, c0 + w)
+            if a1 > a0:
+                mx, my = self.rec[c]
+                wx[:, a0 - c0 : a1 - c0] = mx[:, a0 - c * nb : a1 - c * nb]
+                wy[:, a0 - c0 : a1 - c0] = my[:, a0 - c * nb : a1 - c * nb]
+        g = flux_slope(wx, self.slab, self.spec.rep_head(), self.k_max, wy)
+        self.slopes[b] = g[nr - 2 : nr + nb + 2]
+
+    def ready(self, b: int) -> bool:
+        """Block b's samples are in."""
+        t1 = self._span(b)[3]
+        return t1 is not None and math.floor(t1 * self.fs) + 3 <= self.n
+
+    def push_many(self, hs: np.ndarray) -> np.ndarray:
+        """`push` for each of hs in turn (the same results, any chunking)."""
+        hs = np.asarray(hs, float)
+        n0 = self.n
+        self.h = np.concatenate([self.h, hs])
+        self.n += len(hs)
+        fs = self.fs
+        if self.moving:
+            self._advance(self.n)
+        # Every block whose samples are in, then its predecessor's slope.
+        while self.ready(self.next_rec):
+            b = self.next_rec
+            self._record_block(b)
+            self.next_rec += 1
+            if b >= 1:
+                self._slope_block(b - 1)
+                self.rec.pop(b - 2, None)
+        # Samples no block will read again.
+        t0n = self._span(self.next_rec)[2]
+        keep = self.first if t0n is None else max(math.floor(t0n * fs) - 1, 0)
+        if keep > self.first:
+            self.h = self.h[keep - self.first :]
+            self.first = keep
+        # Positions: from the earliest a future recording reads and this push's outputs.
+        cut = min(keep - 2, n0 + 1)
+        if self.moving and cut > self.s_first:
+            self.s = self.s[cut - self.s_first :]
+            self.s_first = cut
+        out = np.zeros(len(hs))
+        if self.moving:
+            k = np.arange(n0, self.n) + 1 - self.s_first
+            u = (self.s[k] - self.d) / self.slab.ds_m
+        else:
+            u = (self.v * (np.arange(n0, self.n) + 1) / fs - self.d) / self.slab.ds_m
+        live = u >= 0
+        blocks = np.floor(u).astype(np.int64) // self.nb
+        for b in np.unique(blocks[live]):
+            sel = live & (blocks == b)
+            out[sel] = (
+                -self.v * self.scale * cubic_held(self.slopes[int(b)], u[sel] - (b * self.nb - 2))
+            )
+        if live.any():
+            for b in [k for k in self.slopes if k < int(blocks[live].max()) - 1]:
+                del self.slopes[b]
+        return out
+
+    def push(self, h: float) -> float:
+        return float(self.push_many(np.array([h]))[0])
+
+
 # --- The print --------------------------------------------------------------------------
 
 
@@ -348,94 +802,59 @@ def print_audio(
     tape: TapeFormulation,
     al: Alignment,
     drive_db: float = 0.0,
-    block_s: float = 0.5,
     progress=None,
+    engine: str = "circuitsim",
+    noise_seed: int | None = None,
+    transport_seed: int = 0,
 ) -> np.ndarray:
     """Audio (full scale 1.0, mono) recorded on the tape and played back (see the module
-    docs). Blockwise along the tape: each block recorded with margins (demagnetization's
-    neighbours), played once its neighbours are recorded (the repro head's reach)."""
+    docs): the record network, then `TapeStream` fed the whole clip and the silence after
+    it (the heads' distance rounded to whole samples, the delay taken out), then the repro
+    network. engine: "circuitsim" (the stream's port, all of it in Rust), or the reference
+    `TapeStream` recording with "rust" (circuitsim's kernel) or "python"."""
     v = spec.speed_m_s
-    slab = _slab(spec, tape)
     tp = al.trim_tp_s
     gain = al.hg_0vu / MINUS_18_DBFS_PEAK * 10 ** (drive_db / 20)
     rb_, ra_ = rec_network(spec, al.rec_trim_tz_s, tp)
     y = gain * _filter(rb_, ra_, np.asarray(x, float), fs)
-    pad = 8
-    yp = np.concatenate([np.zeros(pad), y, np.zeros(pad)])
+    delay = int(round(spec.head_distance_m / v * fs))
+    feed = np.concatenate([y, np.zeros(delay)])
+    emf = np.zeros(len(feed) + 1)  # emf[n] at t_n: push n returns t_{n+1}
+    if engine == "circuitsim":
+        import circuitsim
 
-    def hg_signal(t):
-        return cubic_at(yp, np.asarray(t) * fs + pad)
-
-    hg_max = float(np.abs(y).max()) + 1e-9
-    n_out = len(x)
-    t_end = n_out / fs
-    s_end = v * t_end
-    reach = 2.0 * (spec.rep_gap_m / 2 + spec.pole_m + spec.relax_m)
-    margin = 0.5e-3
-    block = max(int(block_s * v / slab.ds_m), 1000)
-    cells_total = int(math.ceil(s_end / slab.ds_m)) + 1
-    s_all = lambda i0, i1: np.arange(i0, i1) * slab.ds_m  # noqa: E731
-    k_max = 2 * math.pi * 0.45 * fs / v  # no wavelength shorter than 0.45 fs plays
-    out = np.zeros(n_out)
-    t_out = np.arange(n_out) / fs
-    recorded: dict[int, tuple[np.ndarray, np.ndarray]] = {}
-    n_blocks = int(math.ceil(cells_total / block))
-    zone_t = 2e-3 / v  # well past the record zone, in time
-
-    def record_block(b: int):
-        i0, i1 = b * block, min((b + 1) * block, cells_total)
-        m = int(margin / slab.ds_m)
-        j0, j1 = max(i0 - m, 0), min(i1 + m, cells_total)
-        s = s_all(j0, j1)
-        # Every cell passes the whole head, also those at the clip's ends: the tape runs
-        # (recording silence) before the clip and after it. Stopping with cells inside
-        # the zone leaves them as the bias's last peak left them: a spike on playback.
-        t0 = s[0] / v - zone_t
-        t1 = s[-1] / v + zone_t
-        mx, my = _record(spec, tape, hg_signal, al.hg_bias, t0, t1, s, hg_max)
-        recorded[b] = (
-            mx[:, i0 - j0 : i1 - j0].astype(np.float32),
-            my[:, i0 - j0 : i1 - j0].astype(np.float32),
+        params = stream_params(spec, tape, al.hg_bias, head_distance_m=delay * v / fs)
+        emf[1:] = circuitsim.tape_stream_run(
+            json.dumps(params), fs, feed, noise_seed=noise_seed, transport_seed=transport_seed
         )
-
-    def play_block(b: int):
-        i0, i1 = b * block, min((b + 1) * block, cells_total)
-        r = int(reach / slab.ds_m)
-        parts = [recorded[c] for c in (b - 1, b, b + 1) if c in recorded]
-        first = (b - 1) * block if (b - 1) in recorded else i0
-        mx = np.concatenate([p[0] for p in parts], axis=1).astype(float)
-        my = np.concatenate([p[1] for p in parts], axis=1).astype(float)
-        # Output samples whose read position falls in this block.
-        sel = (t_out * v >= i0 * slab.ds_m) & (t_out * v < i1 * slab.ds_m)
-        if not sel.any():
-            return
-        lo = max(i0 - r, first) - first
-        hi = min(i1 + r, first + mx.shape[1]) - first
-        s0 = (first + lo) * slab.ds_m
-        emf = playback_emf(
-            mx[:, lo:hi],
-            s0,
-            slab,
-            spec.rep_head(),
-            1.0,
-            spec.track_m,
-            tape.ms_a_m,
-            t_out[sel] * v,
-            np.full(int(sel.sum()), v),
-            k_max,
-            my[:, lo:hi],
-        )
-        out[sel] = emf
-
-    for b in range(n_blocks):
-        record_block(b)
-        if b >= 1:
-            play_block(b - 1)
-            recorded.pop(b - 2, None)
         if progress:
-            progress((b + 1) / n_blocks)
-    play_block(n_blocks - 1)
-    rb, ra = rep_network(spec, al.rep_trim_tz_s, tp)
-    # playback_emf's volts are tone_harmonics' units times mu0 W Ms dy (h_per_a = 1).
+            progress(1.0)
+    else:
+        st = TapeStream(
+            spec,
+            tape,
+            al.hg_bias,
+            fs,
+            engine=engine,
+            head_distance_m=delay * v / fs,
+            noise_seed=noise_seed,
+            transport_seed=transport_seed,
+        )
+        chunk = int(fs * 0.05)
+        for c0 in range(0, len(feed), chunk):
+            part = feed[c0 : c0 + chunk]
+            emf[c0 + 1 : c0 + 1 + len(part)] = st.push_many(part)
+            if progress:
+                progress(min(c0 + chunk, len(feed)) / len(feed))
+    return repro_output(emf[delay : delay + len(x)], fs, spec, tape, al)
+
+
+def repro_output(
+    emf: np.ndarray, fs: float, spec: TapeMachineSpec, tape: TapeFormulation, al: Alignment
+) -> np.ndarray:
+    """The repro head's EMF (a stream's, rep_h_per_a = 1) through the repro network, at
+    the print's level (full scale 1.0)."""
+    rb, ra = rep_network(spec, al.rep_trim_tz_s, al.trim_tp_s)
+    # The stream's volts are tone_harmonics' units times mu0 W Ms dy (rep_h_per_a = 1).
     volts_per_unit = MU0 * spec.track_m * tape.ms_a_m * (tape.coating_m / spec.layers)
-    return al.out_gain / volts_per_unit * _filter(rb, ra, out, fs)
+    return al.out_gain / volts_per_unit * _filter(rb, ra, np.asarray(emf, float), fs)

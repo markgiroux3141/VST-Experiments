@@ -1,0 +1,224 @@
+//! Magnetic tape: the port of `varimu/devices/tape.py`'s component (`tape_from_data`) and of
+//! the tape part in `varimu/circuit/parts.py` (`tape`), so the IR agrees bit for bit
+//! (docs/TAPE_PLAN.md, TM4).
+
+use circuitsim::ir::{Element, Inductor, Resistor, Tape};
+use circuitsim::tape_stream::TapeParams;
+
+use crate::Error;
+use crate::yaml::{Map, Value};
+
+/// A tape component version (kind tape): its coating and particles.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TapeComponent {
+    pub name: String,
+    pub coating_m: f64,
+    pub ms_a_m: f64,
+    pub hc_median_a_m: f64,
+    pub sigma_ln_hc: f64,
+    pub sigma_hi_a_m: f64,
+    pub h_max_a_m: f64,
+    pub n_table: usize,
+    pub kappa: f64,
+    pub orientations: usize,
+    /// The noise block's (particle_volume_m3, packing, packing_sigma, packing_corr_m),
+    /// zeros without one.
+    pub grain: [f64; 4],
+}
+
+/// The tape part's numerics (`parts.TAPE_*`).
+pub const LAYERS: usize = 6;
+/// Cells per bias wavelength (`parts.TAPE_CELLS_PER_BIAS_WAVELENGTH`).
+pub const CELLS_PER_BIAS_WAVELENGTH: f64 = 7.62;
+pub const TABLE_STEP: f64 = 1.0 / 40.0;
+pub const DEMAG_ITERATIONS: usize = 8;
+pub const DEMAG_TOL: f64 = 2e-3;
+pub const BLOCK_M: f64 = 16e-3;
+pub const MARGIN_M: f64 = 0.5e-3;
+
+/// 120 Oe, as `parts.TAPE_ZONE_FLOOR_A_M`.
+pub fn zone_floor_a_m() -> f64 {
+    120.0 * (1000.0 / (4.0 * std::f64::consts::PI))
+}
+
+/// The part's physical values, in the macro's order (`parts.TAPE_VALUES`).
+pub const VALUES: [&str; 16] = [
+    "speed_m_s",
+    "f_bias_hz",
+    "bias_a_m",
+    "rec_gap_m",
+    "rep_gap_m",
+    "pole_m",
+    "relax_m",
+    "spacing_m",
+    "track_m",
+    "head_distance_m",
+    "rec_l_h",
+    "rec_r_ohm",
+    "rec_h_per_a",
+    "rep_l_h",
+    "rep_r_ohm",
+    "rep_h_per_a",
+];
+
+fn num(m: &Map, key: &str, what: &str) -> Result<f64, Error> {
+    m.get(key)
+        .and_then(Value::as_f64)
+        .ok_or_else(|| Error(format!("{what}: `{key}` must be a number")))
+}
+
+fn count(m: &Map, key: &str, what: &str) -> Result<usize, Error> {
+    let x = num(m, key, what)?;
+    if x >= 0.0 && x.fract() == 0.0 {
+        Ok(x as usize)
+    } else {
+        Err(Error(format!("{what}: `{key}` must be a count")))
+    }
+}
+
+fn sub<'a>(m: &'a Map, key: &str, what: &str) -> Result<&'a Map, Error> {
+    m.get(key)
+        .and_then(Value::as_map)
+        .ok_or_else(|| Error(format!("{what}: needs `{key}`")))
+}
+
+/// A tape version's data (kind tape), as `tape_from_data`; it must have an orientation
+/// block (the vector model the stream runs).
+pub fn from_data(data: &Value, what: &str) -> Result<TapeComponent, Error> {
+    let d = data
+        .as_map()
+        .ok_or_else(|| Error(format!("{what}: not a mapping")))?;
+    if d.get("kind").and_then(Value::as_str) != Some("tape") {
+        return Err(Error(format!("{what}: not a tape")));
+    }
+    let c = sub(d, "coating", what)?;
+    let m = sub(d, "particles", what)?;
+    let o = sub(d, "orientation", what)?;
+    Ok(TapeComponent {
+        name: what.to_string(),
+        coating_m: num(c, "thickness_m", what)?,
+        ms_a_m: num(m, "ms_a_m", what)?,
+        hc_median_a_m: num(m, "hc_median_a_m", what)?,
+        sigma_ln_hc: num(m, "sigma_ln_hc", what)?,
+        sigma_hi_a_m: num(m, "sigma_hi_a_m", what)?,
+        h_max_a_m: num(m, "h_max_a_m", what)?,
+        n_table: count(m, "n_table", what)?,
+        kappa: num(o, "kappa", what)?,
+        orientations: count(o, "n", what)?,
+        grain: match d.get("noise").and_then(Value::as_map) {
+            Some(nz) => [
+                num(nz, "particle_volume_m3", what)?,
+                num(nz, "packing", what)?,
+                num(nz, "packing_sigma", what)?,
+                num(nz, "packing_corr_m", what)?,
+            ],
+            None => [0.0; 4],
+        },
+    })
+}
+
+/// The tape part (`parts.tape`): the record coil, the tape and the repro coil. `v`: the
+/// values of [`VALUES`], in order.
+pub fn tape(
+    name: &str,
+    rec_plus: &str,
+    rec_minus: &str,
+    out: &str,
+    t: &TapeComponent,
+    v: &[f64; 16],
+) -> Vec<Element> {
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let [
+        speed,
+        f_bias,
+        bias,
+        rec_gap,
+        rep_gap,
+        pole,
+        relax,
+        spacing,
+        track,
+        distance,
+        rec_l,
+        rec_r,
+        rec_h,
+        rep_l,
+        rep_r,
+        rep_h,
+    ] = *v;
+    let medium = TapeParams {
+        hc_median_a_m: t.hc_median_a_m,
+        sigma_ln_hc: t.sigma_ln_hc,
+        sigma_hi_a_m: t.sigma_hi_a_m,
+        h_max_a_m: t.h_max_a_m,
+        n_table: t.n_table,
+        ms_a_m: t.ms_a_m,
+        coating_m: t.coating_m,
+        kappa: t.kappa,
+        orientations: t.orientations,
+        speed_m_s: speed,
+        f_bias_hz: f_bias,
+        hg_bias_a_m: bias,
+        bias_phase_rad: 0.0,
+        rec_gap_m: rec_gap,
+        rep_gap_m: rep_gap,
+        pole_m: pole,
+        relax_m: relax,
+        spacing_m: spacing,
+        track_m: track,
+        head_distance_m: distance,
+        rep_h_per_a: rep_h,
+        layers: LAYERS,
+        ds_m: speed / (f_bias * CELLS_PER_BIAS_WAVELENGTH),
+        table_step: TABLE_STEP,
+        zone_floor_a_m: zone_floor_a_m(),
+        local_zones: true,
+        demag_iterations: DEMAG_ITERATIONS,
+        demag_tol: DEMAG_TOL,
+        head_image: true,
+        lam_min_m: 3.0 * speed / f_bias,
+        block_m: BLOCK_M,
+        margin_m: MARGIN_M,
+        // No wow or flutter yet (`parts.tape`: the 351's transport comes with TM5).
+        flutter: Vec::new(),
+        flutter_noise: Vec::new(),
+        particle_volume_m3: t.grain[0],
+        packing: t.grain[1],
+        packing_sigma: t.grain[2],
+        packing_corr_m: t.grain[3],
+    };
+    vec![
+        Element::Inductor(Inductor {
+            name: format!("L{upper}_rec"),
+            a: rec_plus.to_string(),
+            b: format!("{n}_a"),
+            l_h: rec_l,
+        }),
+        Element::Resistor(Resistor {
+            name: format!("R{upper}_rec"),
+            a: format!("{n}_a"),
+            b: rec_minus.to_string(),
+            r_ohm: rec_r,
+        }),
+        Element::Tape(Tape {
+            name: format!("V{upper}"),
+            sense_pos: format!("{n}_a"),
+            sense_neg: rec_minus.to_string(),
+            h_per_v: rec_h / rec_r,
+            out: format!("{n}_e"),
+            medium,
+        }),
+        Element::Inductor(Inductor {
+            name: format!("L{upper}_rep"),
+            a: format!("{n}_e"),
+            b: format!("{n}_b"),
+            l_h: rep_l,
+        }),
+        Element::Resistor(Resistor {
+            name: format!("R{upper}_rep"),
+            a: format!("{n}_b"),
+            b: out.to_string(),
+            r_ohm: rep_r,
+        }),
+    ]
+}

@@ -129,9 +129,23 @@ impl Preisach {
 
     /// Q(a, b): the weight of hysterons with alpha <= a, beta < b (bicubic).
     pub fn q(&self, a: f64, b: f64) -> f64 {
-        let (ia, fa) = self.node(a);
         let (ib, fb) = self.node(b);
-        let (wa, wb) = (catmull_rom(fa), catmull_rom(fb));
+        self.q_at(a, ib, &catmull_rom(fb))
+    }
+
+    /// Q(a1, b) - Q(a0, b), b's node and weights found once.
+    #[inline]
+    fn q_diff(&self, a1: f64, a0: f64, b: f64) -> f64 {
+        let (ib, fb) = self.node(b);
+        let wb = catmull_rom(fb);
+        self.q_at(a1, ib, &wb) - self.q_at(a0, ib, &wb)
+    }
+
+    /// Q(a, b) with b's node and weights given.
+    #[inline]
+    fn q_at(&self, a: f64, ib: usize, wb: &[f64; 4]) -> f64 {
+        let (ia, fa) = self.node(a);
+        let wa = catmull_rom(fa);
         let m = self.n + 1;
         let mut out = 0.0;
         for (da, wa) in wa.iter().enumerate() {
@@ -192,7 +206,7 @@ impl Corner {
         if x > self.nmax {
             let b = self.nmin.min(self.big);
             let a_next = self.nmax.max(-self.big);
-            self.up += p.q(x, b) - p.q(a_next, b);
+            self.up += p.q_diff(x, a_next, b);
         }
         self.nmax = self.nmax.max(x);
         self.nmin = self.nmin.min(x);
@@ -297,7 +311,8 @@ pub struct Recording<'a> {
     pub head: Head,
     /// Each layer's height above the head (spacing + depth).
     pub heights: &'a [f64],
-    /// Each layer's zone half-width: the cell sees the head while within it.
+    /// The zone half-width per layer, or per layer and cell (layer major): the cell sees
+    /// the head while within it.
     pub zones: &'a [f64],
     /// The tape position at the record gap at each sample (rising).
     pub s_rec: &'a [f64],
@@ -381,7 +396,14 @@ pub fn record(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
         .map(|l| {
             (r.table_step > 0.0).then(|| {
                 let y = r.heights[l];
-                FieldTable::new(&r.head, y, r.zones[l], r.table_step * y)
+                let widest = if r.zones.len() == layers {
+                    r.zones[l]
+                } else {
+                    r.zones[l * cells..(l + 1) * cells]
+                        .iter()
+                        .fold(0.0, |a: f64, &z| a.max(z))
+                };
+                FieldTable::new(&r.head, y, widest, r.table_step * y)
             })
         })
         .collect();
@@ -430,7 +452,11 @@ fn cell(
     let cells = r.s_cells.len();
     let s = r.s_cells[ci];
     let y = r.heights[l];
-    let xz = r.zones[l];
+    let xz = if r.zones.len() == r.heights.len() {
+        r.zones[l]
+    } else {
+        r.zones[l * cells + ci]
+    };
     let k0 = r.s_rec.partition_point(|&v| v < s - xz);
     let k1 = r.s_rec.partition_point(|&v| v <= s + xz);
     let at = |h: Option<(&[f64], &[f64])>| match h {
@@ -446,8 +472,10 @@ fn cell(
     let p = r.preisach;
     for (cr, a) in corners.iter_mut().zip(r.axes) {
         *cr = Corner::new(p.h_max);
-        // The field it is left in, after its pass (the history's last sample).
+        // The field it is left in, after its pass (the history's last sample), and before
+        // it the steady field alone as the cell leaves the head.
         cr.push(p, a[0] * hex + a[1] * hey);
+        cr.push(p, a[0] * hsx + a[1] * hsy);
     }
     for j in (k0..k1.max(k0)).rev() {
         let x = s - r.s_rec[j];

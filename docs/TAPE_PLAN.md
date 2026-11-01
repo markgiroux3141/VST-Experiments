@@ -336,8 +336,8 @@ trim each in record and repro. TM5 replaces them with the 351's circuit.
      reading the middle brings it to 0.05%.
 - Speed: demag kernels are cached (they don't depend on M).
   - 12 demag iterations: 185x real time (converged).
-  - 4 iterations: 65x real time, within -41 dB of converged; the default for prints
-    now.
+  - 4 iterations: 65x real time, within -41 dB of converged; the prints' default until
+    "Speed" below (now 8).
   - 2 iterations: -25 dB.
 - The clip's ends: the tape now runs (recording silence) before and after the clip.
   Stopping with cells inside the record zone left them as the bias's last peak left
@@ -355,13 +355,179 @@ trim each in record and repro. TM5 replaces them with the 351's circuit.
 - Not in the first print: wow and flutter, particle noise (TM3), the 351's electronics
   (TM5).
 
-**TM4 started (2026-10-31):** circuitsim's `tape.rs`.
-- Contents: the Preisach tables and corner formula, the vector head field, and the
+**TM4 done (2026-10-31):** circuitsim's `tape.rs`, the stream, the IR element and the part.
+- `tape.rs`: the Preisach tables and corner formula, the vector head field, and the
   recording kernel (cells in parallel, orientations, a steady field during the pass and
-  another after it).
-- Python bindings `circuitsim.tape_record` and `tape_state_after`;
-  `varimu.devices.tape.record(..., engine="rust")`.
-- Agreement in `tests/test_tape.py`: particles within 1e-12; recording within 1e-9, scalar
-  and vector.
-- A bias sweep at kappa 3 takes 37 s against 1751 s in numpy.
-- Not yet: the IR element `Tape`, the builders' part, the playback inside a run.
+  another after it). Bindings `circuitsim.tape_record`, `tape_state_after`;
+  `varimu.devices.tape.record(..., engine="rust")`. A bias sweep at kappa 3 takes 37 s
+  against 1751 s in numpy.
+- **The stream** (`varimu.devices.tape_machine.TapeStream`, the reference; circuitsim's
+  `tape_stream.rs`, the port; `circuitsim.tape_stream_run`): the record gap's signal
+  field in per sample, the repro EMF of the next sample out. Tape is recorded in blocks
+  of 16 mm (the print's algorithm: zones, the demag fixed point with the head's image)
+  once the record head is 2 mm past a block's 0.5 mm margin, a block's flux slope at the
+  repro head once its successor is recorded; the repro gap reads the head distance
+  behind (50.8 mm, ~133 ms at 15 ips), so the medium never waits on the circuit. The
+  heads must leave room: 2 blocks + margin + pad (checked). Block length moves a print by
+  -63 dB against 0.5 s blocks.
+- **The print is the stream**, fed offline with the delay taken out (`print_audio`,
+  engine "circuitsim": all of it in Rust, 1.2x faster than the reference driving the
+  Rust kernel; the recording kernel dominates).
+- **Anderson's least squares** is modified Gram-Schmidt in column order in both languages
+  (`lstsq_mgs`), so the fixed point agrees step for step.
+- **One fix on the way:** the Python kernel padded each cell's history to the chunk's
+  longest zone with the steady field, so whether a cell's history ended "imaged field,
+  then free field" depended on its neighbours; Rust never had that step. Both now end
+  every pass with the steady field alone, then the field the cell is left in (the
+  physical history as the tape leaves the head; ~1e-6 of Ms). The kernels then agree to
+  4e-13 with steady fields (was 1e-6).
+- **Agreement** (`tests/test_tape_stream.py`, a small machine so the reference's own
+  kernel runs): the Rust stream against the all-Python reference within 4e-13 at any
+  iteration count, against the reference on the Rust kernel within 2e-15; any chunking
+  gives identical output in both.
+- **The IR element `Tape`** (Python `varimu.circuit.ir.Tape` with `TapeMedium`, Rust
+  `ir::Tape` with `tape_stream::TapeParams`): senses the record coil's current across its
+  resistance (`h_per_v`), drives `out` with the repro EMF one sample later, as the plate
+  does (`media.rs`: plates and tapes as one kind of medium in MNA and the transient; a
+  changed medium mid-run starts on erased tape). SPICE holds `out` at 0 V. In a circuit,
+  the output equals the reference stream fed the sensed voltage, one sample later,
+  within 1e-9.
+- **The `tape` part** in both builders (`parts.tape`, varimu-circuit's `tape.rs`):
+  `tape: [rec_plus, rec_minus, out]`, the tape component and the machine's 16 physical
+  values (transport, bias, heads' geometry, each coil's L, R and field per ampere); the
+  numerics are fixed (`parts.TAPE_*`: the print's, 8 demag iterations). The record coil,
+  the tape, the repro coil to `out`. Its test circuit `config/circuits/tape_test.yaml`
+  (provisional coils); the builders agree bit for bit (app fixtures), its symbol is in
+  both symbol tables.
+- **Speed:** `tape_test` on 2 s of the drums at about operating level, production
+  settings (esdirk4 at 2x), runs at 16.5x real time with the 1 s settle counted (the
+  recording kernel dominates, as in the print); the repro head gives 12 mV peak, 0.85 mV
+  rms into its 1 MOhm load.
+
+**Speed (2026-10-31, the user's call: speed before TM4's element).** Measured on 0.4 s of
+the user's drums at +6 dB drive (the loudest material, one block), each setting against
+the one it replaces, in dB of difference re the print's rms; times on a free desktop.
+- **Where the time went:** every 1 um cell (381,000 per second of tape, times 6 layers) ran
+  8 orientations over every bias peak in its zone, 100-280 peaks: the zone was sized by
+  the clip's loudest peak and a floor of 31 Oe, and the demag iteration records 5 times.
+- **The zone's floor was never what `floor_tol` said.** `switching_floor` reads the
+  ensemble's 64-point grid, so it returned half a grid step (31 Oe) for any tolerance; the
+  continuous density has no gap near zero field (weight ~ linear in it: 1e-3 below
+  4.5 Oe), so a 1e-5 tolerance would need 0.05 Oe, a zone wider than the head. The floor is
+  now a field (`record(floor_a_m=...)`, `TapeMachineSpec.zone_floor_oe`), set by measuring
+  the print:
+
+  | floor | vs 31 Oe | time (CPU shared) |
+  |---|---|---|
+  | 15 Oe | -85.7 dB | 99 s |
+  | 31 Oe (was) | | 61 s |
+  | 62 / 120 / 200 / 300 Oe | -82 / -76 / -71 / -66 dB | 42 / 31 / 28 / 25 s |
+
+  31 Oe was converged; 120 Oe is the default (8 Oe can't be run: the pole edges reach
+  9.6 Oe).
+- **Per-cell zones** (`local_zones`): each cell's zone from the largest |field| over its own
+  pass (rounded up on a grid of 8 steps per octave, cached per layer), not the clip's peak.
+  The same bound, so the floor means the same; tested (`tests/test_tape.py`: no left-out
+  sample reaches the floor; Rust and Python agree within 1e-9 with per-cell zones).
+- **Orientations stay 8:** 16 is -61 dB from 8, 6 is -50 dB and only 1.2x faster, 4 is
+  -39 dB.
+- **Cheaper iterations don't pay:** recording the demag iteration with a 300 Oe floor or
+  fewer orientations and the result once more in full is -37 dB from converged (the plain
+  last step is worse than Anderson's extrapolation); not kept.
+- **Exact:** the free and imaged demag fields share their transforms (scipy, threaded, a
+  fast length); the kernel's two Q lookups per record share the beta weights.
+- **Demag iterations:** the default print (4) is -42.3 dB from converged (12). With the new
+  zones (0.4 s excerpt):
+
+  | iterations | vs converged | time |
+  |---|---|---|
+  | 2 | -27.0 dB | 8.0 s |
+  | 4 | -42.3 dB | 11.0 s |
+  | 6 | -51.1 dB | 14.4 s |
+  | 8 | -58.5 dB | 17.1 s |
+  | 4, the old zones | -42.3 dB | 28.6 s |
+
+  Prints now run 8 (`tape_print.py --demag-iterations`): 1.7x faster than before and 16 dB
+  closer to converged.
+- **The whole clip:** 10 s of the drums at +6 dB print in 240 s (24x real time; 78x
+  before), -40.6 dB from the old print (that print's own distance from converged: 4
+  iterations). On 2 s: the Rust kernel 60% of the time, the demag iteration's Python
+  (Anderson's least squares and history, the transforms, kernel builds) most of the rest.
+- **Next for speed:** the demag iteration in Rust. Not now: TM4's element needs a causal
+  demag (a cell sees the tape recorded so far, not the whole clip's fixed point), which
+  restructures the iteration.
+- **Since TM4:** the iteration runs in Rust after all (the stream, `print_audio`'s engine
+  "circuitsim"), with a demag that stays the print's: blocks recorded with the fixed point
+  once the record head has passed them, read a head distance later (TM4 below).
+
+**TM3 done (2026-10-31): the coating's grain and the transport.**
+- **The model** (`TapeNoise` in a tape component's `noise` block; the stream's grain, both
+  languages, `noise_seed` / the circuit's noise seed, Philox streams indexed by cell):
+  - particles of one volume at a packing fraction, placed at random: a Poisson count per
+    cell, each particle up or down, so the cell's variance is sum_j w_j cos^2 phi_j / N
+    whatever the level (hiss);
+  - the packing's own fluctuation along the tape, one field through the coating's depth,
+    each cell's magnetization times 1 + it (modulation noise, growing with level).
+  - Binomial states with a fixed count would make the noise fall with level, and a Poisson
+    count alone keeps it constant: Bulletin 34's DC noise, ~15 dB over the erased noise,
+    needs the packing field.
+- **The data:** Sound Talk No. 34 (#111, 7.5 ips, NARTB playback), digitized by eye
+  (`scotch_111_noise.csv`, `3m_sound_talk_34.provenance.yaml`): bulk-erased octave spectra
+  (Fig. 3), DC at the 3% level in the head (Fig. 2), the machine's own noise (Fig. 3).
+- **The fit** (`scripts/fit_tape_noise.py` -> `reports/tape/noise_fit.*`): the first print's
+  machine at 7.5 ips (3% THD at 400 Hz at +4.2 dB over 0 VU), levels below that tone's
+  output, the bulletin's machine noise added in power.
+  - Erased: particle volume 1.66e-21 m^3 at packing 0.35 (provisional), rms 1.7 dB over
+    300-2400 Hz: an acicular particle of ~0.4 x 0.07 um, plausible for the era. Above
+    2.4 kHz the model, flat-aligned, sits 6-12 dB over the data: the bulletin's machine's
+    HF response isn't printed (its noise there rose when plastic base improved head contact,
+    p.3); those bands aren't fitted.
+  - DC: a Gaussian-correlated field (agglomerates, 1 um-1 mm) can't fit: its spectrum is a
+    hump, the data fall a steady ~3 dB per octave band from 20 Hz to 10 kHz (a k^-2
+    spectrum through this chain). An exponentially correlated field (an AR(1) from cell to
+    cell) longer than ~2 mm gives k^-2: mm-scale nonuniformity of the coating. Fitted:
+    rms 1.5 dB over 20-2400 Hz (the bands above within 2.5 dB too); only
+    packing_sigma^2 / packing_corr_m is measured (8.7e-3 per m), set as 0.0162 over 30 mm.
+  - The component: `SCOTCH111@3` (the `noise` block; `library.SCOTCH111_NOISE`).
+- **Against the 351** (`scripts/tape_snr.py`): tape recorded silent with bias, 15 ips, 3%
+  THD at 400 Hz (+3.1 dB over 0 VU) to unweighted noise 50-15,000 Hz: **72.9 dB**. The
+  351's 60 dB includes its bias, erase and amplifier noise; Bulletin 34 Fig. 4 has a
+  normal machine's erase and bias ~10 dB over bulk-erased tape (60 Hz and bias recorded),
+  and R-e/p 1974 gives #111 66 dB. That share comes with TM5's oscillator and amplifiers.
+- `tape_print.py` prints with the grain (seed 1; `--no-noise`); the tape element has it
+  when the circuit's noise is on (keyed by its name).
+- **The transport** (`TapeMachineSpec.transport`; the stream's position integrated from
+  v (1 + eps) sample by sample, cubic between samples, both languages; blocks recorded and
+  read by position, so drift costs nothing; without flutter the arithmetic is unchanged):
+  - periodic: the capstan's runout at v / (pi d), 30 Hz (the 351's capstan is its hysteresis
+    synchronous motor's shaft, 4.04 mm for 15 ips at 1800 rpm: derived, the diameter isn't
+    printed); the rubber idler at 3.8 Hz; the supply reel at 0.76 Hz (mid pack);
+  - random resonances (Philox-driven, scipy's lfilter order in both languages): the motor's
+    hunting (2.5 Hz, Q 3) and scrape flutter, the free span's first longitudinal mode c / 2L
+    (~4.06 kHz, Q 10; Sound Talk No. 34's "FM noise");
+  - their sizes provisional (nothing printed separates them), scaled so a 3150 Hz tone
+    recorded and played back deviates 0.11% rms over 0.5-250 Hz, the 351's spec (a playback
+    measurement, ASA Z57.1-1954; `scripts/tape_flutter.py` -> `reports/tape/flutter_15ips.*`):
+    measured 0.110%, the speed itself 0.087%, scrape flutter 0.03% above the band. Playback reads v at record time against v 133 ms later, so
+    independent wander adds up to sqrt 2, and the capstan's 30 Hz cancels (133 ms is four
+    of its turns).
+  - The `tape` part has no transport yet (the 351's comes with its circuit, TM5); in a
+    circuit its random parts take the circuit's noise seed.
+- **An artifact the fit found: the bias residue aliased.** Cells are point samples, and the
+  bias leaves a residue at its wavelength and harmonics. At 1 um cells the harmonics folded
+  into the audio band: DC recorded at the 3% level played back a 9.5 kHz line at -59 dB re
+  the 3% tone at 7.5 ips (19 kHz, -75 dB at 15 ips; masked in the drums print). Not block
+  seams (0.5 to 8 mm margins change nothing). Fixed by cells at 7.62 per bias wavelength
+  (0.5 um at 15 ips, scaled with speed; both builders' part too): no line in band at 15 ips,
+  19 kHz at -75 dB at 7.5 ips. A whole number of cells per bias wavelength would alias the
+  residue to DC (the locked phase). The cost: twice the cells (prints ~2x slower).
+
+**Decided 2026-10-31 (the user): condition dials, "turn it to 11".** Continue in plan order
+(TM5 the 351's circuit, then TM6's insert). The insert's panel gets condition dials that go
+from a clean, well-kept machine to a trashed one, far past a real 351. Each is a physical
+condition, not an effect amount: drive; speed 15 / 7.5 ips; flutter overall, wow, scrape
+(the transport's mechanisms scaled); hiss (particle size, or off); bias off its aligned
+value; head wear (spacing after alignment: the circuit's EQ trims are fixed parts, so a worn
+head plays as on a real machine, not re-aligned away). Also wanted for "trash": dropouts
+(lost head contact), print-through, azimuth error, magnetized heads. Render only (no live
+audition; prints ~50x real time).

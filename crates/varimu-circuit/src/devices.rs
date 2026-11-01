@@ -18,6 +18,7 @@ use circuitsim::ir::{
 
 use crate::plate::{self, PlateComponent};
 use crate::speaker::{self, Speaker};
+use crate::tape::{self, TapeComponent};
 use crate::yaml::{self, Map, Value};
 use crate::{Error, versions};
 
@@ -39,6 +40,7 @@ pub struct Library {
     devices: Mutex<HashMap<String, DeviceModel>>,
     speakers: Mutex<HashMap<String, Speaker>>,
     plates: Mutex<HashMap<String, PlateComponent>>,
+    tapes: Mutex<HashMap<String, TapeComponent>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
 }
 
@@ -49,6 +51,7 @@ impl Library {
             devices: Mutex::new(HashMap::new()),
             speakers: Mutex::new(HashMap::new()),
             plates: Mutex::new(HashMap::new()),
+            tapes: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
         }
     }
@@ -105,6 +108,21 @@ impl Library {
         let p = plate::from_data(&yaml::parse(&text, name)?, name)?;
         self.plates.lock().unwrap().insert(key, p.clone());
         Ok(p)
+    }
+
+    /// Tape component `name` (`NAME@N`, or `NAME` for its latest version), checked against
+    /// versions.lock (`load_tape` in library.py).
+    pub fn tape(&self, name: &str) -> Result<TapeComponent, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(t) = self.tapes.lock().unwrap().get(&key) {
+            return Ok(t.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let t = tape::from_data(&yaml::parse(&text, name)?, name)?;
+        self.tapes.lock().unwrap().insert(key, t.clone());
+        Ok(t)
     }
 
     pub fn material(&self, name: &str) -> Result<Material, Error> {

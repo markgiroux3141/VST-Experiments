@@ -151,6 +151,7 @@ pub enum Element {
     HeatedCathode(HeatedCathode),
     Device(Device),
     Plate(Plate),
+    Tape(Tape),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -298,6 +299,24 @@ pub struct Plate {
     pub f_max_hz: f64,
     pub decay: Vec<[f64; 2]>,
     pub tail_db: f64,
+}
+
+/// Magnetic tape between a record and a repro head (docs/TAPE_PLAN.md, TM4;
+/// `crate::tape_stream`): the record gap's signal field `h_per_v (v(sense_pos) -
+/// v(sense_neg))` (deep-gap A/m: the record coil's current, sensed across its resistance,
+/// times the head's field per ampere over that resistance; the sense draws no current)
+/// recorded with the medium's own AC bias, and the repro coil's EMF driving `out` to
+/// ground one sample later (the tape read was recorded a head distance earlier). SPICE has
+/// no tape: ngspice sees `out` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Tape {
+    pub name: String,
+    pub sense_pos: String,
+    pub sense_neg: String,
+    pub h_per_v: f64,
+    pub out: String,
+    pub medium: crate::tape_stream::TapeParams,
 }
 
 /// White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from `a` through
@@ -516,6 +535,7 @@ impl Element {
             Element::HeatedCathode(e) => &e.name,
             Element::Device(e) => &e.name,
             Element::Plate(e) => &e.name,
+            Element::Tape(e) => &e.name,
         }
     }
 
@@ -534,6 +554,7 @@ impl Element {
             Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
             Element::Plate(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
+            Element::Tape(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
         }
     }
 }
@@ -745,6 +766,25 @@ impl CircuitIr {
                     if e.out == GROUND || e.out == self.input_node {
                         return err(format!(
                             "{name}: its pickup drives {} (ground or the input)",
+                            e.out
+                        ));
+                    }
+                    'V'
+                }
+                Element::Tape(e) => {
+                    finite(&format!("{name}.h_per_v"), e.h_per_v)?;
+                    if let Err(m) = e.medium.check(None) {
+                        return err(format!("{name}: {m}"));
+                    }
+                    if e.sense_pos == e.sense_neg {
+                        return err(format!(
+                            "{name}: its record head senses {} against itself",
+                            e.sense_pos
+                        ));
+                    }
+                    if e.out == GROUND || e.out == self.input_node {
+                        return err(format!(
+                            "{name}: its repro head drives {} (ground or the input)",
                             e.out
                         ));
                     }
