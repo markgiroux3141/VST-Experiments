@@ -46,6 +46,7 @@ from typing import Any
 
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.lamp import Lamp
 from varimu.devices.pentode import KorenPentode, Pentode
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
 
@@ -365,7 +366,7 @@ Element = (
     | Plate
     | Tape
 )
-DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore
+DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp
 
 PINS: dict[type, tuple[str, ...]] = {
     Triode: ("p", "g", "k"),
@@ -373,6 +374,7 @@ PINS: dict[type, tuple[str, ...]] = {
     JunctionDiode: ("a", "k"),
     VacuumDiode: ("a", "k"),
     MagneticCore: ("b", "ref"),
+    Lamp: ("a", "t", "b"),
 }
 
 _PREFIX = {
@@ -771,6 +773,17 @@ def _validate_model(m: DeviceModel) -> None:
         nonneg("rs_ohm", m.rs_ohm)
     elif isinstance(m, VacuumDiode):
         values += [("perveance", m.perveance), ("smooth_v", m.smooth_v)]
+    elif isinstance(m, Lamp):
+        values += [
+            ("wire_d_m", m.wire_d_m),
+            ("wire_l_m", m.wire_l_m),
+            ("rad_fraction", m.rad_fraction),
+            ("t_amb_k", m.t_amb_k),
+        ]
+        if len(m.emissivity) != 4:
+            raise IRError(f"{m.name}.emissivity: 4 coefficients (c0..c3)")
+        for c in m.emissivity:
+            _finite(f"{m.name}.emissivity[]", c)
     elif isinstance(m, MagneticCore):
         problems = m.validate()
         if problems:
@@ -808,6 +821,7 @@ _MODEL_KINDS = {
     "junction_diode": JunctionDiode,
     "vacuum_diode": VacuumDiode,
     "magnetic_core": MagneticCore,
+    "lamp": Lamp,
 }
 _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 # Optional fields written only when set, so IRs without them read and write as before.

@@ -2925,6 +2925,12 @@ fn knob_ui(
                         }
                     });
             }
+            Kind::Toggle => {
+                let mut on = cur.as_f64().is_some_and(|x| x != 0.0);
+                if ui.checkbox(&mut on, "").changed() {
+                    set = Some(YValue::Int(i64::from(on)));
+                }
+            }
         }
     });
     match set {

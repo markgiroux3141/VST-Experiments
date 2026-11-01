@@ -302,11 +302,17 @@ impl Settings {
     }
 
     /// The sections of `ir` that `partition` puts on other threads: the titles the
-    /// circuit has, groups separated by the group break (`partition::GROUP_BREAK`;
-    /// empty groups dropped), none if that would leave nothing else
-    /// (`fast.partition_sections`).
+    /// circuit has with elements in them, groups separated by the group break
+    /// (`partition::GROUP_BREAK`; empty groups dropped), none if that would leave
+    /// nothing else (`fast.partition_sections`). A section a switch has emptied (the
+    /// tube synth's LFO turned off) gets no thread.
     pub fn partition_sections(&self, ir: &CircuitIr) -> Vec<String> {
-        let titles: Vec<&str> = ir.sections.iter().map(|s| s.title.as_str()).collect();
+        let titles: Vec<&str> = ir
+            .sections
+            .iter()
+            .filter(|s| !s.elements.is_empty())
+            .map(|s| s.title.as_str())
+            .collect();
         let groups: Vec<Vec<String>> = partition::groups(&self.partition)
             .into_iter()
             .map(|g| {

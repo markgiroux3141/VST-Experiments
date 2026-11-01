@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use circuitsim::ir::{
-    DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Pentode, PlateModel,
+    DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Lamp, Pentode, PlateModel,
     Triode, VacuumDiode, VariMuTriode,
 };
 
@@ -259,6 +259,31 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 0.1
             },
         }),
+        "lamp" => {
+            let w = sub(d, "filament", what)?;
+            let e = sub(d, "emissivity", what)?;
+            let c: Vec<f64> = e
+                .get("coeffs")
+                .and_then(Value::as_list)
+                .ok_or_else(|| Error(format!("{what}: needs emissivity coeffs")))?
+                .iter()
+                .map(|c| {
+                    c.as_f64()
+                        .ok_or_else(|| Error(format!("{what}: coeffs must be numbers")))
+                })
+                .collect::<Result<_, _>>()?;
+            let emissivity: [f64; 4] = c
+                .try_into()
+                .map_err(|_| Error(format!("{what}: 4 emissivity coeffs (c0..c3)")))?;
+            DeviceModel::Lamp(Lamp {
+                name,
+                wire_d_m: num(w, "wire_d_m", what)?,
+                wire_l_m: num(w, "wire_l_m", what)?,
+                rad_fraction: num(w, "rad_fraction", what)?,
+                emissivity,
+                t_amb_k: num(d, "t_amb_k", what)?,
+            })
+        }
         other => return Err(Error(format!("{what}: unknown device kind '{other}'"))),
     })
 }

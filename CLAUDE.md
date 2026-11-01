@@ -163,7 +163,18 @@ Play's Velocity range; `scripts/velocity_study.py`) and aftertouch (control inpu
 block's `tap: KEY` scales the heater ratio, both builders; `scripts/heater_knob_study.py`).
 #5 PULSE prototyped and parked (CPU; `scripts/pulse_prototype.py`). #6 RESERVOIR built
 (`reservoir`: 1-40 uF in steps, 20 default; the ripple's hum-growl, below 6 uF the pitch
-warbles and goes flat; `scripts/supply_study.py`; the rectifier switch dropped).
+warbles and goes flat; `scripts/supply_study.py`; the rectifier switch dropped). #7 the LFO built: a Wien bridge held by
+a #327 pilot lamp (`lfo` section; RATE `lfo_rate`, ~0.08-19 Hz) on a new device, the
+incandescent **lamp** (`varimu/devices/lamp.py`, `LAMP327@1`, kind `lamp`: tungsten's
+published fits, pins (a, t, b), its temperature the node t, 1 V = 1 K, on a 1 F capacitor;
+Python, SPICE, circuitsim `devices/lamp.rs`, both builders; `tests/test_lamp.py`), with #8's
+VIBRATO (`vibrato`: summed into the pitch ahead of GLIDE, tuning tables re-measured) and
+WOBBLE (`wobble`: into the CUTOFF pot's low end, its law unchanged); the app's split now six
+threads (the LFO its own); `scripts/lfo_study.py`. LFO ON / OFF (`lfo_on`: OFF empties the
+`lfo` section, which then gets no thread, and stand-in resistors hold the rails). Open: the
+6X4 over its peak rating with the LFO (options in SYNTH_IDEAS.md #7). **The full test suite
+and `--verify` are owed** (per feature only targeted tests run, the user's call; the list:
+SYNTH_IDEAS.md "Owed").
 
 Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
 user's idea; nothing built): synthesis stays pure, except where the physics is far faster

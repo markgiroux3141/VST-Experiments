@@ -432,6 +432,16 @@ pub fn device_instance(
             d.rs_ohm /= k;
             Ok(DeviceModel::JunctionDiode(d))
         }
+        DeviceModel::Lamp(l) => {
+            if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
+                return Err(Error(format!(
+                    "{name}: a lamp takes no parallel, emission or area"
+                )));
+            }
+            let mut l = l.clone();
+            l.name = s(name);
+            Ok(DeviceModel::Lamp(l))
+        }
         DeviceModel::MagneticCore(_) => Err(Error(format!("{name}: no instances of MagneticCore"))),
     }
 }

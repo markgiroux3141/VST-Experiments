@@ -24,8 +24,9 @@ Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
 any control, value or device parameter. A control has `min` and `max`, or
 `choices` (a switch's positions, e.g. its frequencies); one with `unit: position`
-is an integer switch position. Values linked to the genome (`genome:`) have their
-bounds in config/genome_bounds.yaml. A device parameter may be null: the
+is an integer switch position, one with `unit: switch` an on / off switch (choices [0, 1],
+an integer; the native app draws it as a checkbox). Values linked to the genome
+(`genome:`) have their bounds in config/genome_bounds.yaml. A device parameter may be null: the
 device file's value. Derived values are functions of the resolved parameters,
 named in the file with their source and computed by the module's function of
 the same name (for arithmetic the parts can't express, e.g. lumping parallel
@@ -319,7 +320,7 @@ def resolve(spec: CircuitSpec, overrides: Mapping[str, Any] | None = None) -> di
         elif not e["min"] <= p[k] <= e["max"]:
             raise ValueError(f"control {k}={p[k]} outside [{e['min']}, {e['max']}]")
     for k, e in spec.controls.items():
-        if e.get("unit") == "position":
+        if e.get("unit") in ("position", "switch"):
             p[k] = int(p[k])
     return p
 

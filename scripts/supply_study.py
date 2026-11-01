@@ -46,6 +46,8 @@ PARTITION = (
     "oscillator",
     "pitch",
     "|",
+    "lfo",
+    "|",
     "power supply",
     "bias supply",
 )  # the native app's (panel.rs)

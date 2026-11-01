@@ -37,6 +37,7 @@ from varimu.devices.fit import (
     load_6386,
     load_csv,
 )
+from varimu.devices.lamp import Lamp, lamp_from_data
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
 from varimu.devices.plate import PlateComponent, plate_from_data
 from varimu.devices.speaker import Speaker, speaker_from_data
@@ -45,7 +46,7 @@ from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_s
 
 DEVICE_DIR = versions.COMPONENT_DIR
 REPORT_DIR = REPO_ROOT / "reports" / "devices"
-Device = Triode | Pentode | JunctionDiode | VacuumDiode
+Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp
 
 # Oxide-cathode grid conduction. There's no datasheet figure for any of these
 # tubes, so this is the same placeholder everywhere until it becomes a genome parameter.
@@ -117,6 +118,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return JunctionDiode(d["name"], d["is_a"], d["n"], d["rs_ohm"])
     if kind == "vacuum_diode":
         return VacuumDiode(d["name"], d["perveance"], d.get("smooth_v", 0.1))
+    if kind == "lamp":
+        return lamp_from_data(d, name)
     if kind == "speaker":
         raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
     if kind == "plate":
@@ -847,6 +850,55 @@ def build_scotch111() -> dict[str, Any]:
     }
 
 
+def build_lamp327() -> dict[str, Any]:
+    """The #327 pilot lamp (28 V, 40 mA), the tube synth's LFO stabilizer (SYNTH_IDEAS.md #7):
+    its filament's wire from the rating at an assumed rated temperature, its emissivity a
+    cubic in T least-squares through Holladay's table (varimu.devices.lamp)."""
+    pub = _published()
+    d, e = pub["LAMP327"], pub["TUNGSTEN_EMISSIVITY"]
+    t, eps = np.array(e["t_k"]), np.array(e["total"])
+    coeffs = np.polyfit(t, eps, 3)[::-1]  # c0..c3
+    resid = np.polyval(coeffs[::-1], t) - eps
+    t_rated_k, rad_fraction, t_amb_k = 2300.0, 0.65, 300.0
+    lamp = Lamp.from_rating(
+        "LAMP327", d["v_rated"], d["i_rated_a"], t_rated_k, rad_fraction, tuple(coeffs), t_amb_k
+    )
+    return {
+        "name": "LAMP327",
+        "kind": "lamp",
+        "source": "derived: varimu.devices.lamp.Lamp.from_rating on the #327's rating "
+        f"({d['source']})",
+        "rating": {"v": d["v_rated"], "a": d["i_rated_a"]},
+        "t_rated_k": t_rated_k,
+        "t_rated_source": "provisional: model knowledge (the filament at its rated 28 V: MSCP 0.34 "
+        "at 1.12 W is ~3.8 lm/W, the efficacy of tungsten near 2300 K, as a 4,000 h miniature "
+        "lamp runs)",
+        "t_amb_k": t_amb_k,
+        "t_amb_source": "provisional: model knowledge (room temperature inside a chassis; "
+        "config/cathodes.yaml's t_amb_k)",
+        "filament": {
+            "wire_d_m": lamp.wire_d_m,
+            "wire_l_m": lamp.wire_l_m,
+            "rad_fraction": rad_fraction,
+            "source": "derived from the rating at t_rated_k (wire_d_m, wire_l_m: the uncoiled "
+            "wire). rad_fraction provisional: model knowledge (a C-2F coiled filament shades "
+            "part of its wire's surface; 0.5-0.8)",
+        },
+        "emissivity": {
+            "coeffs": [float(c) for c in coeffs],
+            "max_error": float(np.max(np.abs(resid))),
+            "source": f"least-squares cubic in T through {e['source']}",
+        },
+        "derived": {
+            "r_cold_ohm": float(lamp.r_ohm(t_amb_k)),
+            "r_hot_ohm": float(lamp.r_ohm(t_rated_k)),
+            "mass_kg": lamp.mass_kg,
+            "source": "the model's values (not inputs): resistance at t_amb_k and t_rated_k, "
+            "the filament's mass",
+        },
+    }
+
+
 BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
@@ -867,6 +919,7 @@ BUILDERS = {
     "P12R": build_p12r,
     "EMT140": build_emt140,
     "SCOTCH111": build_scotch111,
+    "LAMP327": build_lamp327,
 }
 
 REPORT_FOR = {

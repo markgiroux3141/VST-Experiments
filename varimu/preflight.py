@@ -46,6 +46,7 @@ from varimu.circuit.ir import (
 from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.lamp import Lamp
 
 MAX_CONFIGS = 4096
 
@@ -186,7 +187,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
         t = _terminals(el)
         if isinstance(el, Resistor | Inductor | VoltageSource | SineSource | Winding):
             dc.join(*t)
-        if isinstance(el, Device) and isinstance(models.get(el.model), MagneticCore):
+        if isinstance(el, Device) and isinstance(models.get(el.model), MagneticCore | Lamp):
             for n in el.nodes[1:]:
                 dc.join(el.nodes[0], n)
         if isinstance(el, Inductor | VoltageSource | SineSource | Winding):

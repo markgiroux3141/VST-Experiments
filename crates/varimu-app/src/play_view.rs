@@ -2052,6 +2052,14 @@ fn knob_ui(ui: &mut egui::Ui, k: &mut Knob) -> bool {
             }
             i != before
         }
+        Kind::Toggle => {
+            let mut on = k.number() != 0.0;
+            let r = ui.checkbox(&mut on, "");
+            if r.changed() {
+                k.value = Value::Int(i64::from(on));
+            }
+            r.changed()
+        }
     };
     ui.add_space(4.0);
     changed

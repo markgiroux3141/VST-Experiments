@@ -10,6 +10,7 @@ pin (the cathode), and the currents flow into pins 0..P-1:
 - triode (p, g, k): ports (Vpk, Vgk), currents (Ip, Ig);
 - pentode (p, g2, g1, k): ports (Vpk, Vg2k, Vg1k), currents (Ip, Ig2, Ig1);
 - diodes (a, k): port Vak, current I;
+- lamp (a, t, b): ports (Vab, T - T_amb), currents (I, dT/dt);
 - magnetic core (b, ref): port B / TESLA_PER_V, current path * H. A core has
   memory, so each of its points also records the state it is evaluated
   from ([b, h, delta]: the last accepted point), taken along a magnetization
@@ -28,6 +29,7 @@ from varimu.circuit import netlist as nl
 from varimu.circuit.ir import model_to_dict
 from varimu.devices.core import DEMAGNETIZED, TESLA_PER_V, MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.lamp import Lamp
 from varimu.devices.library import load_device
 from varimu.devices.pentode import Pentode
 from varimu.devices.triode import Triode
@@ -51,6 +53,10 @@ _PENTODE_VP = (-10, 0, 1, 10, 50, 250, 400)
 # Reverse bias through the knee to series-resistance-dominated conduction.
 _JUNCTION_V = (-100, -10, -1, -0.2, *np.round(np.arange(-0.1, 1.5001, 0.02), 10), 2, 3, 5, 10, 20)
 _VACUUM_V = (-50, -5, -1, -0.3, -0.1, 0, 0.05, 0.1, 0.5, 1, 5, 20, 50, 100, 300)
+# A lamp from cold to past its rating, both polarities; temperatures below and above the
+# fits' range (clamped), never on its edges.
+_LAMP_V = (-40, -5, -0.3, 0, 0.02, 0.5, 2, 10, 28, 60)
+_LAMP_DT = (-150, -40, 0, 1, 50, 300, 700, 1500, 2000, 2600, 3300)
 # Core: B history (T) whose accepted points are the states, and offsets from each state's B.
 _CORE_HISTORY = (0.0, 0.6, 0.3, 1.2, -0.4, 1.9)
 # (not multiples of DB_MAX: there the substep count changes, a ~1e-8 relative jump that
@@ -78,6 +84,7 @@ def _models() -> list:
         dataclasses.replace(ax7, name="12AX7_no_grid", grid=None),
         dataclasses.replace(diode, name=diode.name + "_rs0", rs_ohm=0.0),
         load_device("GZ34"),
+        load_device("LAMP327@1"),
         core_model("CORE_GO", "grain_oriented_si_steel", 0.1),
         core_model("CORE_NI", "permalloy_fluxgate", 0.08),
         core_model("CORE_MU", "mumetall", 0.07),
@@ -115,6 +122,10 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
         currents = np.stack([m.ip(vg1, vg2, vp), m.ig2(vg1, vg2), m.ig1(vg1)], axis=1)
     elif isinstance(m, MagneticCore):
         ports, currents, _ = _core_points(m)
+    elif isinstance(m, Lamp):
+        ports = [(float(v), float(u)) for v, u in itertools.product(_LAMP_V, _LAMP_DT)]
+        v, u = np.array(ports, float).T
+        currents = np.stack(m.currents(v, u), axis=1)
     elif isinstance(m, JunctionDiode | VacuumDiode):
         volts = _JUNCTION_V if isinstance(m, JunctionDiode) else _VACUUM_V
         if isinstance(m, JunctionDiode) and m.rs_ohm == 0:

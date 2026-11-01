@@ -154,9 +154,10 @@ def _kernel32():
 
 def partition_sections(ir: CircuitIR, s: TransientSettings) -> list[str]:
     """The sections of `ir` that `s.partition` puts on other threads (the titles the
-    circuit has, groups separated by GROUP_BREAK, empty groups dropped; none if that
-    would leave nothing besides them)."""
-    titles = [sec.title for sec in ir.sections]
+    circuit has with elements in them, groups separated by GROUP_BREAK, empty groups
+    dropped; none if that would leave nothing besides them). A section a switch has
+    emptied (the tube synth's LFO turned off) gets no thread."""
+    titles = [sec.title for sec in ir.sections if sec.elements]
     groups: list[list[str]] = [[]]
     for t in s.partition:
         if t == GROUP_BREAK:

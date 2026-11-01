@@ -377,6 +377,7 @@ pub enum DeviceModel {
     JunctionDiode(JunctionDiode),
     VacuumDiode(VacuumDiode),
     MagneticCore(MagneticCore),
+    Lamp(Lamp),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -489,6 +490,21 @@ pub struct MagneticCore {
     pub path_m: f64,
 }
 
+/// `varimu.devices.lamp.Lamp`: an incandescent lamp, pins (a, t, b): the filament from a
+/// to b, its temperature above ambient on t (1 V = 1 K; a 1 F capacitor from t to b holds
+/// it). Port currents: the filament's current and dT/dt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Lamp {
+    pub name: String,
+    pub wire_d_m: f64,
+    pub wire_l_m: f64,
+    pub rad_fraction: f64,
+    /// Total emissivity c0 + c1 T + c2 T^2 + c3 T^3.
+    pub emissivity: [f64; 4],
+    pub t_amb_k: f64,
+}
+
 impl DeviceModel {
     pub fn name(&self) -> &str {
         match self {
@@ -497,6 +513,7 @@ impl DeviceModel {
             DeviceModel::JunctionDiode(m) => &m.name,
             DeviceModel::VacuumDiode(m) => &m.name,
             DeviceModel::MagneticCore(m) => &m.name,
+            DeviceModel::Lamp(m) => &m.name,
         }
     }
 
@@ -507,6 +524,7 @@ impl DeviceModel {
             DeviceModel::Pentode(_) => &["p", "g2", "g1", "k"],
             DeviceModel::JunctionDiode(_) | DeviceModel::VacuumDiode(_) => &["a", "k"],
             DeviceModel::MagneticCore(_) => &["b", "ref"],
+            DeviceModel::Lamp(_) => &["a", "t", "b"],
         }
     }
 
@@ -1034,6 +1052,17 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
         }
         DeviceModel::VacuumDiode(d) => {
             values.extend([("perveance", d.perveance), ("smooth_v", d.smooth_v)]);
+        }
+        DeviceModel::Lamp(l) => {
+            values.extend([
+                ("wire_d_m", l.wire_d_m),
+                ("wire_l_m", l.wire_l_m),
+                ("rad_fraction", l.rad_fraction),
+                ("t_amb_k", l.t_amb_k),
+            ]);
+            for c in l.emissivity {
+                finite(&format!("{name}.emissivity[]"), c)?;
+            }
         }
         DeviceModel::MagneticCore(m) => {
             values.extend([

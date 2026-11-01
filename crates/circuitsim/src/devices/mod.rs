@@ -16,12 +16,14 @@ use crate::ir::DeviceModel;
 
 pub mod core;
 pub mod diode;
+pub mod lamp;
 pub mod pentode;
 pub mod triode;
 pub mod triode_table;
 
 pub use self::core::MagneticCore;
 pub use diode::{JunctionDiode, VacuumDiode};
+pub use lamp::Lamp;
 pub use pentode::Pentode;
 pub use triode::Triode;
 pub use triode_table::TriodeTable;
@@ -166,6 +168,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::JunctionDiode(m) => Box::new(JunctionDiode::new(m)),
         DeviceModel::VacuumDiode(m) => Box::new(VacuumDiode::new(m)),
         DeviceModel::MagneticCore(m) => Box::new(MagneticCore::new(m)),
+        DeviceModel::Lamp(m) => Box::new(Lamp::new(m)),
     }
 }
 

@@ -91,6 +91,30 @@ def test_diodes_agree(name, vmax):
     np.testing.assert_allclose(i, d.i(v), rtol=1e-7, atol=5e-11)
 
 
+def test_lamp_agrees():
+    """The lamp's filament current and dT/dt (its thermal port's current), cold to past its
+    rating, both polarities, and clamped below and above the fits' range."""
+    d = load_device("LAMP327@1")
+    volts = (-30.0, -2.0, 0.0, 0.4, 5.0, 28.0)
+    pts = [(v, u) for v in volts for u in (-150, 0, 120, 900, 2000, 3300)]
+    lines = [d.subckt()]
+    for k, (v, u) in enumerate(pts):
+        lines += [
+            f"va{k} a{k} 0 dc {v}",
+            f"vt{k} t{k} 0 dc {u}",
+            f"x{k} a{k} t{k} 0 {d.subckt_name}",
+        ]
+    r = _op(lines, [f"i(va{k})" for k in range(len(pts))] + [f"i(vt{k})" for k in range(len(pts))])
+    v, u = np.array(pts, float).T
+    ia, it = d.currents(v, u)
+    got_a = -np.array([r[f"i(va{k})"] for k in range(len(pts))])
+    got_t = -np.array([r[f"i(vt{k})"] for k in range(len(pts))])
+    np.testing.assert_allclose(got_a, ia, rtol=RTOL, atol=ATOL, err_msg="filament current")
+    # At the rated point heat in and out cancel (~3e4 K/s each): the floor is wrdata's 10
+    # digits of those terms.
+    np.testing.assert_allclose(got_t, it, rtol=RTOL, atol=1e-4, err_msg="dT/dt")
+
+
 def test_6386_capacitances_in_ac():
     """Grid-driven AC current with the plate at AC ground: jw(Cgk + Cgp), well into cutoff."""
     t = load_device("6386")

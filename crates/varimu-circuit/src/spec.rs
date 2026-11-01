@@ -499,7 +499,7 @@ pub fn resolve(spec: &CircuitSpec, overrides: &[(String, Value)]) -> Result<Para
         if e.as_map()
             .and_then(|m| m.get("unit"))
             .and_then(Value::as_str)
-            == Some("position")
+            .is_some_and(|u| u == "position" || u == "switch")
         {
             let x = p[k]
                 .as_f64()

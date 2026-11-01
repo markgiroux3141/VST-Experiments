@@ -198,6 +198,9 @@ fn junction_diode_limits_and_tubes_do_not() {
         match e.model {
             // A 5 V jump onto a junction is pulled back to ~vt ln(5 / vt).
             DeviceModel::JunctionDiode(_) => assert!(limited && v[0] < 0.5, "{v:?}"),
+            // A lamp's filament moves at most 1 V per iteration from 0 V; its
+            // temperature 5 K is within its 50 K step.
+            DeviceModel::Lamp(_) => assert!(limited && v == [1.0, 5.0], "{v:?}"),
             _ => assert!(!limited && v.iter().all(|&x| x == 5.0)),
         }
     }

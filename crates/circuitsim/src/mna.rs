@@ -422,7 +422,9 @@ impl Mna {
                             stamp(&mut g, pins[0], pins[1], gmin);
                             vec![]
                         }
-                        DeviceModel::VacuumDiode(_) | DeviceModel::MagneticCore(_) => vec![],
+                        DeviceModel::VacuumDiode(_)
+                        | DeviceModel::MagneticCore(_)
+                        | DeviceModel::Lamp(_) => vec![],
                     };
                     for (a, b, cf) in caps {
                         if cf > 0.0 {

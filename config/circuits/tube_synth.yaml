@@ -37,6 +37,36 @@
 #        whose wiper is the KEY TRACK pot's ground end: pressing raises the CUTOFF pot's
 #        foot, as a key above C4 does. Velocity needs no circuit: it is the keyboard bus's
 #        key-down volts (the app's velocity table: a soft key a lower envelope)
+#   The LFO (SYNTH_IDEAS.md #7): a Wien bridge held by a #327 pilot lamp (LAMP327@1,
+#        varimu.devices.lamp: its filament's heat balance, ~0.3-10 s thermal lag where it
+#        works, ~600 K), as Hewlett's HP200A held his. DC-coupled throughout (at 0.1 Hz no
+#        coupling capacitor works and the lamp may carry no DC): a 12AX7 long-tailed pair
+#        (LV1A the Wien's grid, LV1B the feedback's), a divider to the -100 V rail, a 12AU7
+#        section with its cathode grounded, a second divider, the 12AU7's other section as
+#        the follower (`lfo`, ~0 V DC, ~7.7 V peak). Its negative feedback is RLF onto LV1B's
+#        grid, RLS and the lamp to ground: the lamp warms until the loop's gain is 3. RATE
+#        is a dual reverse-audio rheostat in both Wien arms with 1 uF (~0.08-19 Hz); the
+#        lamp's lag makes the amplitude bloom for seconds after a RATE change (slower at the
+#        slow end). CW2 starts at 0.1 V (the kick: a balanced bridge never starts). The pair
+#        and the second stage on an RC of their own off b1 (~3 mA, ~250 V: the stages' DC
+#        levels set the pair's balance, and so the output's DC), the follower's plate on b1.
+#        Its ~11 mA from the supply and ~8.5 mA from the -100 V rail: the power and bias
+#        windings were raised (257 / 89.5 V) to hold every rail where it was. LFO ON / OFF
+#        (`lfo_on`, the user's call: CPU): OFF takes the oscillator out (a switch part; a
+#        flip restarts a live stream) and puts power resistors in its place (RDLN2, RDLG,
+#        RDLN) drawing its currents, so the rails and the tuning don't move
+#   VIBRATO (SYNTH_IDEAS.md #8): a pot on the LFO, summed into the pitch ahead of GLIDE
+#        (the key string through RPSUM 1k, the pot's wiper through RVIB 47k: ~2% of the LFO,
+#        up to ~+-1 semitone; the pitch scales by 0.979, the tuning tables are measured
+#        with it). Into the 6V6GT's grid directly, the 10k stopper's low source would have
+#        made the pitch follow GLIDE's setting, and a coupling capacitor would have slid
+#        every key change for a second
+#   WOBBLE (#8): a pot on the LFO into the CUTOFF pot's low end through RWOB (127k), RCUTL
+#        now 143k from the -100 V rail: the low end's Thevenin source is as before (~-49.7 V
+#        through ~67k, was 68k from the -45 V rail), so CUTOFF's law is unchanged; the
+#        wobble reaches V4's grid as the low end's share does (all of it at CUTOFF 0, none
+#        at 1). Into V4's grid itself, the same depth loaded the pot's wiper and bent
+#        CUTOFF's law (~half an octave brighter at 0.3)
 # The rest is tube_voice.yaml's: its header follows.
 #
 # The tube synth's voice (docs/TUBE_SYNTH_PLAN.md, S3): tube_filter.yaml's filter, supply
@@ -72,7 +102,8 @@
 #        Its screen is on two 5651s of its own (VRCA/VRCB, ~177 V): on b1 a key's VCA sag
 #        pulled the cutoff down 70-810 cents (most at low CUTOFF; 2026-10-30), now 20-140.
 #        At 177 V the 6V6GT cuts off near -27 V, so the pot's low end is fed from the
-#        -45 V rail through RCUTL (68k: -27 V)
+#        -45 V rail through RCUTL (68k: -27 V; since WOBBLE, 143k from the -100 V rail with
+#        RWOB beside it, the same source)
 #   V7   ENV AMOUNT: a second 6V6GT beside V4 on the control windings (its plate on p4),
 #        its grid on the envelope node (never positive: no load on it, where a pot summed
 #        into V4's grid would hold the VCA shut at slow attacks), so the envelope adds
@@ -112,7 +143,7 @@ noise:
 heaters: {tap: heater}
 
 controls:
-  cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from ~-27 V (0; the -45 V rail through RCUTL) to ground (1))"}
+  cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from ~-27 V (0; the bias rails through RCUTL and RWOB) to ground (1))"}
   resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RESONANCE pot, the share of V5B's output fed back to the filter node; linear)"}
   attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
   release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
@@ -123,13 +154,17 @@ controls:
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1); linear)"}
   range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
   reservoir: {value: 20.0e-6, choices: [1.0e-6, 2.0e-6, 4.0e-6, 6.0e-6, 8.0e-6, 12.0e-6, 20.0e-6, 40.0e-6], unit: F, source: "provisional: model knowledge (design, 2026-11-01: the RESERVOIR switch, a rotary switch choosing the reservoir electrolytic (450 V parts), 20 uF as before; SYNTH_IDEAS.md #6: smaller is more 120 Hz ripple, a hum-growl, and below ~6 uF the pitch warbles and goes flat, the user's broken end down to 1 uF; the 6X4 stays under its 245 mA steady-state peak at every step, scripts/supply_study.py)"}
+  lfo_on: {value: 1, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-01: the LFO's ON / OFF switch, the user's call: OFF takes its tubes and lamp out of the circuit (no CPU for them) and puts power resistors in their place, drawing what they drew, so the rails and the tuning stay put; VIBRATO and WOBBLE then hear 0 V)"}
+  lfo_rate: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the LFO's RATE, a dual 2M reverse-audio rheostat in the Wien bridge's arms (8.2k each in series) with 1 uF: ~0.08 Hz at 0, ~0.35 at 0.25, ~1.5 at 0.5, ~4.5 at 0.7, ~19 at 1)"}
+  vibrato: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the VIBRATO pot, the share of the LFO summed into the pitch ahead of GLIDE; linear)"}
+  wobble: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the WOBBLE pot, the share of the LFO into V4's grid (the cutoff); linear)"}
   heater: {value: 1.0, min: 0.6, max: 1.1, unit: ratio, source: "provisional: model knowledge (design, 2026-11-01: the HEATER control, the heaters' volts over their rating (a heater winding's taps, as period gear set them); tubes are rated +-10%, so below 0.9 is out of rating (the panel says so): the user's choice, extended to 0.6 for the starved sound)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
 
 values:
   # --- supply
-  pt_hv_half_rms_v: {value: 250.0, source: "provisional: model knowledge (design: a small power transformer's HV half, sized for ~250 V at b3)"}
+  pt_hv_half_rms_v: {value: 257.0, source: "provisional: model knowledge (design: a small power transformer's HV half, sized for ~250 V at b3; 250 V before the LFO (2026-11-01), whose ~11 mA sagged b1 ~8 V)"}
   pt_r_half_ohm: {value: 150.0, source: "provisional: model knowledge (a ~25 W transformer's HV half with the primary referred, ~150 ohm)"}
   pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (leakage per HV half of a small mains transformer)"}
   pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
@@ -139,7 +174,7 @@ values:
   r_b24_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: the VCA's own RC branch off b2: at b3, the input stages' signal currents leaked through its plate resistor with it cut off, -34 dB)"}
   c_decouple_f: {value: 47.0e-6, source: "provisional: model knowledge (b2 and b3 electrolytics: the VCA hums at b2's ripple otherwise)"}
   r_bleeder_ohm: {value: 220.0e+3, source: "provisional: model knowledge (a bleeder across the reservoir)"}
-  bias_winding_rms_v: {value: 85.0, source: "provisional: model knowledge (design: a bias winding for ~-100 V)"}
+  bias_winding_rms_v: {value: 89.5, source: "provisional: model knowledge (design: a bias winding for ~-100 V; 85 V before the LFO (2026-11-01), whose follower's ~8.5 mA sagged the rail ~5 V)"}
   bias_winding_r_ohm: {value: 200.0, source: "provisional: model knowledge (a small bias winding's resistance)"}
   bias_rectifier: {value: SELENIUM@1, source: "provisional: model knowledge (design: a selenium bridge for the bias, as the 670 has; config/components/selenium/1.yaml; full-wave: a half-wave bias hummed at -26 dBFS through the VCA's grid)"}
   c_bias_arm_f: {value: 1.0e-9, source: "provisional: model knowledge (each selenium arm's capacitance; a capacitance on the rectifier nodes)"}
@@ -231,7 +266,7 @@ values:
   r_key_track_pot_ohm: {value: 2.0e+3, source: "provisional: model knowledge (design: the KEY TRACK pot; the CUTOFF network's ~0.27 mA returns through its wiper, <= ~0.55k: ~0.15 V, ~35 cents at the default CUTOFF)"}
   c_cutoff_f: {value: 0.1e-6, source: "provisional: model knowledge (on V4's grid: smooths the cutoff, 10 ms with the pot)"}
   r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen stopper from its 5651 pair)"}
-  r_cutoff_low_ohm: {value: 68.0e+3, source: "provisional: model knowledge (design, 2026-10-30: from the -45 V rail to the CUTOFF pot's low end, ~-27 V, where the 6V6GT on its regulated screen draws ~0.1 mA: the cutoff held 315 Hz (0) to 5 kHz (1), 1.23 kHz at 0.3 (on b1 with the pot from -45 V: 290 Hz, 4.9 kHz, 1.14 kHz); 56k reached 186 Hz with its lowest tenth nearly dead, 82k only 440 Hz)"}
+  r_cutoff_low_ohm: {value: 143.0e+3, source: "provisional: model knowledge (design, 2026-11-01: from the -100 V rail to the CUTOFF pot's low end, a 1% part; with RWOB (127k to the WOBBLE wiper, ~0 V) the end's source is ~-49.7 V through ~67k, as 68k from the -45 V rail (~-49.7 V settled) was (2026-10-30: ~-27 V at the end, where the 6V6GT on its regulated screen draws ~0.1 mA: the cutoff held 315 Hz (0) to 5 kHz (1), 1.23 kHz at 0.3; 56k reached 186 Hz with its lowest tenth nearly dead, 82k only 440 Hz))"}
   r_cut_vr_feed_ohm: {value: 39.0e+3, source: "provisional: model knowledge (design: b1 to V4's 5651 pair: ~3.1 mA idle at b1 ~297 V, ~1.8 mA in the tubes with b1 sagged to ~268 V and the screen drawing its most, 0.6 mA; RCA's range 1.5-3.5 mA (33k ran 3.7 mA idle, 22k 5.3 mA))"}
   r_cathode4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT cathode: current feedback, ~0-15 mA over the pot)"}
   # --- the reactor
@@ -279,7 +314,38 @@ values:
   osc_c_glide_f: {value: 4.7e-6, source: "provisional: model knowledge (design: the GLIDE capacitor, a 4.7 uF film / paper part at the pitch input's few tens of volts: 0.39 s with the rheostat at full)"}
   osc_glide_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper, 10% at half rotation: short glides get most of the rotation)"}
   osc_r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design: 6V6GT screen stopper from the 5651 pair (vco_lc.yaml feeds it from b3: off the reservoir b1 its ripple frequency-modulated the pitch +-20 cents at 120 Hz))"}
+  r_pitch_sum_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design, 2026-11-01: the key string into the pitch's summing node, VIBRATO's partner: with GLIDE's 4.7 uF a 4.7 ms time constant at GLIDE 0)"}
+  r_vibrato_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design, 2026-11-01: the VIBRATO pot's wiper into the pitch's summing node: 1/48 of the LFO, ~+-160 mV at full; the pot's wiper resistance (<= 2.5k) moves the pitch's scale <= 0.1%)"}
   osc_r_cathode4_ohm: {value: 470.0, source: "provisional: model knowledge (design: 6V6GT cathode, current feedback: with its screen on the 5651 pair (~177 V, against vco_lc's ~340 V b3) 1k reached only 1.2 kHz, 680 ohm 1.4 kHz)"}
+  # --- the LFO (SYNTH_IDEAS.md #7)
+  lfo_lamp: {value: LAMP327@1, source: "provisional: model knowledge (design, 2026-11-01: a #327 pilot lamp (28 V, 40 mA) in the Wien bridge's negative feedback, config/components/lamp327/1.yaml; ~56 ohm cold, ~95 at the ~600 K it holds)"}
+  lfo_c_thermal_f: {value: 1.0, source: "numerical: the lamp's thermal node, 1 V = 1 K, integrates the device's dT/dt (varimu.devices.lamp)"}
+  lfo_r_supply_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: the pair's and the second stage's own RC off b1, ~3 mA: ~250 V, where their DC levels balance the pair)"}
+  lfo_c_supply_f: {value: 47.0e-6, source: "provisional: model knowledge (its electrolytic)"}
+  lfo_r_rate_min_ohm: {value: 8.2e+3, source: "provisional: model knowledge (design: each Wien arm's end stop, ~19 Hz with RATE at full)"}
+  lfo_r_rate_ohm: {value: 2.0e+6, source: "provisional: model knowledge (design: the RATE pot's two gangs, 2 MOhm each: ~0.08 Hz at 0)"}
+  lfo_rate_taper_mid: {value: 0.05, source: "provisional: model knowledge (design: a reverse-audio taper, 5% of the track at half rotation: equal octaves of rate over the rotation, roughly)"}
+  lfo_c_wien_f: {value: 1.0e-6, source: "provisional: model knowledge (design: the Wien bridge's two capacitors, 1 uF film / paper)"}
+  lfo_kick_v: {value: 0.1, source: "provisional: model knowledge (design: CW2's start voltage, the kick a balanced bridge needs to start; a real one starts from its noise)"}
+  lfo_r_tail_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the pair's tail to the -45 V rail, ~0.47 mA: ~0.23 mA each, -1.3 V of bias)"}
+  lfo_r_plate_a_ohm: {value: 330.0e+3, source: "provisional: model knowledge (design: LV1A's plate load, ~141 V with the divider's current)"}
+  lfo_r_plate_b_ohm: {value: 470.0e+3, source: "provisional: model knowledge (design: LV1B's plate load, ~144 V: the plates level, so the pair's offset (their difference over mu) doesn't put DC on the lamp; 330k left ~+5 V at the output, ~3 mA of DC in the lamp)"}
+  lfo_c_comp_f: {value: 1.0e-9, source: "provisional: model knowledge (design: the loop's dominant pole on LV1A's plate, ~600 Hz: three stages and two dividers with a loop gain of ~20 need one)"}
+  lfo_r_div1_top_ohm: {value: 1.6e+6, source: "provisional: model knowledge (design: LV1A's plate to the second stage's grid, ~-7 V)"}
+  lfo_r_div1_bot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: the first divider's foot to the -100 V rail)"}
+  lfo_r_plate2_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: the second stage's plate load, ~2 mA, ~150 V)"}
+  lfo_r_div2_top_ohm: {value: 1.8e+6, source: "provisional: model knowledge (design: the second stage's plate to the follower's grid, ~-8 V)"}
+  lfo_r_div2_bot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: the second divider's foot to the -100 V rail)"}
+  lfo_r_follower_ohm: {value: 12.0e+3, source: "provisional: model knowledge (design: the follower's cathode to the -100 V rail, ~8.3 mA: the lamp's leg and the pots take up to ~6 mA at the negative peak, 15k nearly cut it off there; ~2.1 W in the section, the 12AU7's rating 2.75 W)"}
+  lfo_r_feedback_ohm: {value: 1.0e+3, source: "provisional: model knowledge (design: RLF, the output to LV1B's grid; with RLS and the lamp the gain is 3 where the lamp holds ~95 ohm)"}
+  lfo_r_lamp_series_ohm: {value: 330.0, source: "provisional: model knowledge (design: RLS in series with the lamp: a cold lamp's excess gain small enough to start cleanly, the lamp warm enough (~600 K) to settle in seconds)"}
+  lfo_r_dummy_neg2_ohm: {value: 41.0e+3, source: "provisional: model knowledge (design: with the LFO off, b1 to the -100 V rail, the follower's ~9 mA (a 5 W part))"}
+  lfo_r_dummy_gnd_ohm: {value: 130.0e+3, source: "provisional: model knowledge (design: with the LFO off, b1 to ground, the stages' ~2 mA)"}
+  lfo_r_dummy_neg_ohm: {value: 680.0e+3, source: "provisional: model knowledge (design: with the LFO off, b1 to the -45 V rail, the pair's tail's ~0.5 mA)"}
+  lfo_r_wiper_ground_ohm: {value: 1.0, source: "provisional: model knowledge (design: with the LFO off the switch grounds RVIB's and RWOB's far ends, where the pots' wipers were (at VIBRATO / WOBBLE 0 a wiper is the pot's grounded end))"}
+  lfo_r_pot_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the VIBRATO and WOBBLE pots across the LFO's output, ~1.5 mA between them at the peak; their wipers' resistance (<= 2.5k) beside RVIB and RWOB moves the pitch and the cutoff little as they turn)"}
+  lfo_c_wiper_f: {value: 0.1e-6, source: "provisional: model knowledge (design: on each pot's wiper: in the draft's partition the LFO is on a thread of its own and couples to the pitch and the cutoff at these nodes)"}
+  r_wobble_ohm: {value: 127.0e+3, source: "provisional: model knowledge (design, 2026-11-01: the WOBBLE pot's wiper into the CUTOFF pot's low end, beside RCUTL (a 1% part): ~0.53 of the LFO there before the pot's load)"}
   # --- the reactor (saturable_reactor.yaml's cores, twice the signal turns)
   osc_signal_turns: {value: 2000.0, source: "provisional: model knowledge (design: 2000 turns per core on a 1 cm^2, 10 cm mumetall toroid: at 1000 the tank's impedance at strong bias fell under the tubes' loading and the oscillation stopped above ~100 Hz)"}
   osc_control_ratio: {value: 1.0, source: "provisional: model knowledge (design: 1000 control turns per core, as tube_filter.yaml's)"}
@@ -316,6 +382,11 @@ devices:
   OV3: {device: 12AX7@1}
   OV4: {device: 6V6GT@1}
   VRO: {device: "5651@1", instance: false}
+  LV1A: {device: 12AX7@1}
+  LV1B: {device: 12AX7@1}
+  LV2A: {device: 12AU7@1}
+  LV2B: {device: 12AU7@1}
+  LP: {device: lfo_lamp}
 
 sections:
   - title: power supply
@@ -338,6 +409,13 @@ sections:
       CB3: {C: [b3, "0"], c: c_decouple_f}
       RB24: {R: [b2, b4], r: r_b24_ohm}
       CB4: {C: [b4, "0"], c: c_decouple_f}
+      # LFO OFF (`lfo_on` 0): power resistors draw what the LFO drew from the rails
+      SWLFOD:
+        switch: lfo_on
+        parts:
+          RDLN2: {R: [b1, neg2], r: lfo_r_dummy_neg2_ohm, in: [0]}
+          RDLG: {R: [b1, "0"], r: lfo_r_dummy_gnd_ohm, in: [0]}
+          RDLN: {R: [b1, neg], r: lfo_r_dummy_neg_ohm, in: [0]}
   - title: bias supply
     parts:
       # A floating bias winding (at its peak at the start) into a selenium bridge, its
@@ -456,7 +534,12 @@ sections:
       RAMT: {pot: ["0", s7w, b1], r: r_amount_pot_ohm, at: env_amount}
       CS7: {C: [s7w, "0"], c: c_screen7_f}
       RS7: {R: [s7w, s7], r: r_screen7_ohm}
-      RCUTL: {R: [neg, c_lo], r: r_cutoff_low_ohm}
+      RCUTL: {R: [neg2, c_lo], r: r_cutoff_low_ohm}
+      RWOB: {R: [lw_w, c_lo], r: r_wobble_ohm}
+      SWWOBG:
+        switch: lfo_on
+        parts:
+          RWOBG: {R: [lw_w, "0"], r: lfo_r_wiper_ground_ohm, in: [0]}
       RCUT: {pot: [c_lo, g4, kt], r: r_cutoff_pot_ohm, at: cutoff}
       CKEY: {C: [kb, "0"], c: c_key_f}
       RKT: {pot: [pt, kt, kb], r: r_key_track_pot_ohm, at: key_track}
@@ -515,7 +598,13 @@ sections:
       ROK3: {R: [o_buf, neg], r: osc_r_buffer_cathode_ohm}
   - title: keyboard
     parts:
-      RGLIDE: {rheostat: [pv, o_pg], r: osc_r_glide_ohm, at: glide, taper_mid: osc_glide_taper_mid}
+      RPSUM: {R: [pv, o_sum], r: r_pitch_sum_ohm}
+      RVIB: {R: [lv_w, o_sum], r: r_vibrato_ohm}
+      SWVIBG:
+        switch: lfo_on
+        parts:
+          RVIBG: {R: [lv_w, "0"], r: lfo_r_wiper_ground_ohm, in: [0]}
+      RGLIDE: {rheostat: [o_sum, o_pg], r: osc_r_glide_ohm, at: glide, taper_mid: osc_glide_taper_mid}
       CGLIDE: {C: [o_pg, "0"], c: osc_c_glide_f}
       ROPS: {R: [o_pg, o_g4], r: osc_r_pitch_stop_ohm}
       RKEY: {R: [kv, kb], r: r_key_feed_ohm}
@@ -531,3 +620,45 @@ sections:
       ROVRL: {R: [o_vrm, "0"], r: osc_r_vr_leak_ohm}
       ROS4: {R: [o_vr, o_s4], r: osc_r_screen4_ohm}
       ROK4: {R: [o_k4, "0"], r: osc_r_cathode4_ohm}
+  - title: lfo
+    parts:
+      # LFO ON / OFF (`lfo_on`): the oscillator and its pots in position 1; in 0 this
+      # section is empty (the draft's partition gives it no thread) and power resistors draw
+      # its currents (the power supply's section), VIBRATO's and WOBBLE's ends grounded
+      SWLFO:
+        switch: lfo_on
+        parts:
+          RLB: {R: [b1, lf_b], r: lfo_r_supply_ohm, in: [1]}
+          CLB: {C: [lf_b, "0"], c: lfo_c_supply_f, in: [1]}
+          # The Wien bridge: the series arm from the output to LV1A's grid, the parallel arm
+          # from the grid to ground; RATE's two gangs
+          RW1S: {R: [lfo, lf_w1], r: lfo_r_rate_min_ohm, in: [1]}
+          RW1: {rheostat: [lf_w1, lf_s], r: lfo_r_rate_ohm, at: lfo_rate, taper_mid: lfo_rate_taper_mid, reverse: 1, in: [1]}
+          CW1: {C: [lf_s, lf_g], c: lfo_c_wien_f, in: [1]}
+          RW2S: {R: [lf_g, lf_w2], r: lfo_r_rate_min_ohm, in: [1]}
+          RW2: {rheostat: [lf_w2, "0"], r: lfo_r_rate_ohm, at: lfo_rate, taper_mid: lfo_rate_taper_mid, reverse: 1, in: [1]}
+          CW2: {C: [lf_g, "0"], c: lfo_c_wien_f, v0: lfo_kick_v, in: [1]}
+          XLV1A: {device: [lf_pa, lf_g, lf_k], model: LV1A, in: [1]}
+          XLV1B: {device: [lf_pb, lf_fb, lf_k], model: LV1B, in: [1]}
+          RLT: {R: [lf_k, neg], r: lfo_r_tail_ohm, in: [1]}
+          RLPA: {R: [lf_b, lf_pa], r: lfo_r_plate_a_ohm, in: [1]}
+          RLPB: {R: [lf_b, lf_pb], r: lfo_r_plate_b_ohm, in: [1]}
+          CLC: {C: [lf_pa, "0"], c: lfo_c_comp_f, in: [1]}
+          RLD1: {R: [lf_pa, lf_f1], r: lfo_r_div1_top_ohm, in: [1]}
+          RLE1: {R: [lf_f1, neg2], r: lfo_r_div1_bot_ohm, in: [1]}
+          XLV2A: {device: [lf_p2, lf_f1, "0"], model: LV2A, in: [1]}
+          RLP2: {R: [lf_b, lf_p2], r: lfo_r_plate2_ohm, in: [1]}
+          RLD2: {R: [lf_p2, lf_f2], r: lfo_r_div2_top_ohm, in: [1]}
+          RLE2: {R: [lf_f2, neg2], r: lfo_r_div2_bot_ohm, in: [1]}
+          XLV2B: {device: [b1, lf_f2, lfo], model: LV2B, in: [1]}
+          RLK: {R: [lfo, neg2], r: lfo_r_follower_ohm, in: [1]}
+          # The negative feedback: the lamp warms until the loop's gain is 3
+          RLF: {R: [lfo, lf_fb], r: lfo_r_feedback_ohm, in: [1]}
+          RLS: {R: [lf_fb, lf_lp], r: lfo_r_lamp_series_ohm, in: [1]}
+          XLP: {device: [lf_lp, lf_t, "0"], model: LP, in: [1]}
+          CLT: {C: [lf_t, "0"], c: lfo_c_thermal_f, in: [1]}
+          # VIBRATO and WOBBLE
+          RVIBP: {pot: ["0", lv_w, lfo], r: lfo_r_pot_ohm, at: vibrato, in: [1]}
+          CVIBW: {C: [lv_w, "0"], c: lfo_c_wiper_f, in: [1]}
+          RWOBP: {pot: ["0", lw_w, lfo], r: lfo_r_pot_ohm, at: wobble, in: [1]}
+          CWOBW: {C: [lw_w, "0"], c: lfo_c_wiper_f, in: [1]}

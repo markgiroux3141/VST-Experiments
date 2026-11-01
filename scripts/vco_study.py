@@ -107,6 +107,8 @@ CANDIDATES = {
             "oscillator",
             "pitch",
             "|",
+            "lfo",
+            "|",
             "power supply",
             "bias supply",
         ),

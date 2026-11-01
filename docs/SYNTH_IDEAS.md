@@ -14,6 +14,22 @@ and WAVE (tank to square); the reactor low-pass with the 12AX7 Q multiplier; the
 diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heated cathodes
 (B6); the plate as a chain end. Its LFO doesn't oscillate yet.
 
+## Owed: the full test suite (at the user's discretion)
+
+Per feature only a targeted set runs (the synth's tests, the new code's, the quick shared
+checks; the user's call, 2026-11-01). The full suite re-renders the 670 at production for
+hours whenever `varimu/{sim,circuit,devices}` or `config.py` change, so it waits for the end
+of the list or a night the user picks. **Owed since #7 (2026-11-01):**
+- `uv run --extra fast pytest` (everything): #7 changed shared code (the IR's device union,
+  the parts library, the device library and fixtures, the preflight checks, the SPICE
+  emission, `fast.partition_sections`). In the targeted run `test_circuit_format`'s
+  ngspice comparison timed out (300 s) while the tuning sweep held every core: rerun it.
+- `uv run --extra listen --extra fast python scripts/slice_report.py --verify` (the
+  periodic agreement with ngspice, ~70 min cold): circuitsim gained a device and its
+  limiting; the 670 doesn't use it, so expect no change.
+- Known failing until the user decides: `tests/test_tube_synth.py`'s RESERVOIR test (the
+  6X4 over its peak rating with the LFO; #7's open item).
+
 ## Ground rules (TUBE_SYNTH_PLAN.md's, restated where they bite)
 
 - **Every value is sourced.** Design choices are tagged `provisional: model knowledge
@@ -333,6 +349,85 @@ radiated loss, with a SPICE and a Python implementation and an agreement test. I
 also steady the VCO's amplitude later.
 **Watch:** the lamp's time constant against a 0.1-20 Hz LFO. Too slow and the amplitude
 hunts (period designs bounce too; how much is the sound).
+
+**Built (2026-11-01; the user chose the full thermal lamp model over a thermistor or grid
+clipping).**
+- **The lamp** (`varimu/devices/lamp.py`, component `LAMP327@1`, `varimu fit-devices --only
+  LAMP327`): a #327 pilot lamp (28 V, 40 mA) as a tungsten filament lumped at one
+  temperature: resistivity, specific heat and conductivity from the published fits (Tolias
+  2017: White-Minges, Hust-Lankford), total emissivity a cubic through Holladay's table
+  (JOSA 1928), radiation from a coil's share of the wire (0.65, provisional) and conduction
+  to the leads (the rod's 12 k A / L, Kirchhoff-integrated). The wire (11.4 um, 106 mm
+  uncoiled) is solved from the rating at an assumed 2300 K (provisional): 56 ohm cold, 700
+  hot. A device with pins (a, t, b): its temperature is the node t (1 V = 1 K above
+  ambient) on a 1 F capacitor, the device's second port current dT/dt, so the model is
+  stateless, DK integrates it implicitly and a DC point is the hot steady state. Python
+  reference, SPICE subcircuit (`tests/test_spice_agreement.py`), circuitsim
+  (`devices/lamp.rs`, bit-equal to the fixtures), both builders (`tests/test_lamp.py`: the
+  rating, the Jacobian, a 20 V step against an ODE of the reference). Numerics only: a
+  cold filament's thermal resistance is ~4e5 K/W, so Newton's steps are limited on both
+  ports (the DC point ran away to 1e16 V without it), and past the fits' 3400 K a restoring
+  slope keeps the thermal port alive. Its time constant: ~10 s cold, ~1 s at 600 K, 13 ms
+  at the rating.
+- **The LFO** (tube_synth.yaml's `lfo` section; its header has the circuit): DC-coupled, since
+  at 0.1 Hz no coupling capacitor works and the lamp may carry no DC: a 12AX7 long-tailed
+  pair, a divider to -100 V, a grounded-cathode 12AU7 section, a divider, the 12AU7's other
+  section as the follower; RLF, RLS and the lamp in the negative feedback; RATE a dual 2M
+  reverse-audio rheostat with 1 uF. A prototype first (scratch, ideal rails): one stage's
+  open-loop gain (~12) didn't start it; the pair's plates must sit level or its offset puts
+  DC on the lamp. In the synth the follower's plate is on b1 and the stages on their own RC
+  (the stages' levels set the pair's balance), and the power and bias windings were raised
+  (257 / 89.5 V rms) to hold every rail where it was. `scripts/lfo_study.py` ->
+  `reports/tube_synth/lfo.json` (a key held at -15 V, from the run's start):
+
+  | RATE | rate | settled | THD | to within 5% | lamp | its swing in a cycle |
+  |---|---|---|---|---|---|---|
+  | 0.25 | 0.343 Hz | 7.35 V pk | 0.9% | 11.7 s | 584 K | 39 K |
+  | 0.5 | 1.47 Hz | 7.38 | 0.34% | 8.8 s | 577 | 7 |
+  | 0.7 (default) | 4.54 Hz | 7.40 | 0.36% | 5.9 s | 582 | 3 |
+  | 1 | 19.3 Hz | 7.29 | 0.40% | 3.1 s | 587 | 0.7 |
+
+  The bloom: from a start the amplitude overshoots to ~11-12 V peak (the follower clips it)
+  and the lamp brings it down over 3-12 s, slower at the slow end; there the filament
+  follows the cycle (39 K) and the sine flattens a little (0.9%). Never hunting. From a
+  run's start the lamp's warming changes the LFO's draw on b1, which moves the pitch ~10
+  cents over the first seconds. CPU: the LFO runs on a thread of its own (it owns its pots'
+  wipers; on the first thread, with the cutoff's thread owning WOBBLE's wiper, Newton failed
+  at the lamp within 5 samples), so the load figure (the slowest thread) barely moves: a key
+  held, back to back, 72-75% with it, ~71% before it (worst blocks ~100%), no dropouts. What
+  it costs is a core: the process used ~5.45 cores against ~4.4 with it off.
+  `--turn lfo_rate=0.3,0.9` heard in ~93 ms, no restarts.
+- **LFO ON / OFF** (`lfo_on`, the user's call: CPU). OFF takes the oscillator and its pots
+  out (a switch part), so the `lfo` section is empty and gets no thread
+  (`fast.partition_sections` / varimu-app's `partition_sections` skip empty sections): one
+  thread fewer, ~1 core freed. Power resistors stand in for its draw (RDLN2, RDLG, RDLN in
+  the power supply's section) and RVIB / RWOB's far ends are grounded, so the rails (b1
+  within 0.5 V) and the pitch (0.35 cents at -15 V) stay put: one tuning table serves both.
+  OFF also removes the leak into the pitch (cycle to cycle 31 against 46 cents). A flip
+  restarts a live stream (~1.9 s to the ear, no dropouts).
+- **Open: the 6X4 is out of rating with the LFO** (the user's decision; RESERVOIR's test
+  fails until then). Its peak plate current at 20 uF was 211 mA before the LFO; now 259.8
+  mA with it on (GE's limit 245), 244.5 with it off (the stand-ins at the limit), 253.7 with
+  the HV winding back at 250 V. The LFO's extra ~11 mA, and its follower's current swinging
+  at the LFO's rate, is more than the small rectifier carries. Options: (a) the LFO on a
+  small supply of its own (a selenium or silicon rectifier off the HV winding, its own
+  reservoir): the 6X4 back to ~211 mA, no leak into the pitch through b1, the stand-ins and
+  the raised windings no longer needed, a few diodes of CPU; (b) a bigger rectifier for the
+  whole synth (the 5Y3GT@1 the 5E3 uses): headroom, but it re-voices the supply's sag
+  (RESERVOIR's and HEATER's character, and their tables); (c) a cooler lamp and a lighter
+  follower (less current, a slower bloom), likely not enough on its own.
+- **VIBRATO and WOBBLE** (#8's start): 10k pots on the LFO. VIBRATO is summed into the pitch
+  ahead of GLIDE (the key string through 1k, the wiper through 47k): into the 6V6GT's grid
+  directly the 10k stopper's low source would have made the pitch follow GLIDE's setting, a
+  coupling capacitor would have slid every key change for a second. Full: +-29-31 cents at
+  every rate. The pitch now scales by 0.979 and GLIDE 0 is a 4.7 ms time constant; the
+  tuning tables were re-measured (panel.rs). WOBBLE feeds the CUTOFF pot's low end (127k,
+  RCUTL now 143k from -100 V: the same Thevenin source as before, so CUTOFF's law and the
+  tests' grid volts are unchanged; into V4's grid itself the same depth bent the law ~half
+  an octave): V4's grid +-1.5-1.75 V at CUTOFF 0.3 (all of the low end's share at 0, none at
+  1). With both at 0 the LFO still reaches the pitch by +-4-7 cents, through b1 (the
+  follower's current at the LFO's rate; no RC filters 1-20 Hz), under the oscillator's own
+  ~40 cents of cycle-to-cycle jitter. Test: `tests/test_tube_synth.py`, the LFO test.
 
 ## 8. LFO routing and delayed vibrato
 

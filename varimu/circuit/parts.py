@@ -54,6 +54,7 @@ from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
+from varimu.devices.lamp import Lamp
 from varimu.devices.pentode import Pentode
 from varimu.devices.tape import TapeFormulation
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
@@ -539,6 +540,10 @@ def device_instance(
             raise ValueError(f"{name}: a junction diode has no emission spread")
         k = n_parallel * area
         return dataclasses.replace(base, name=name, is_a=base.is_a * k, rs_ohm=base.rs_ohm / k)
+    if isinstance(base, Lamp):
+        if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
+            raise ValueError(f"{name}: a lamp takes no parallel, emission or area")
+        return dataclasses.replace(base, name=name)
     raise TypeError(f"{name}: no instances of {type(base).__name__}")
 
 

@@ -3,10 +3,11 @@ tube_voice.yaml's voice with S4's candidate (b), the reactor-tuned LC oscillator
 voice's one supply. The keys give both control inputs: `gate` (the keyboard bus) and
 `pitch` (the 6V6GT's grid through the keyboard tuning, varimu-app's `panel::Pitch`).
 
-At draft with the native app's partition (four threads: the VCA, the filter, the
-oscillator, the supplies), measured 2026-10-30: the pitch ~59 Hz at -23 V, ~479 Hz at
--15 V, ~1739 Hz at 0 V (reports/tube_synth/vco/synth_tuning.json); below -23 V the tank's
-swing saturates the cores. The 6V6GT's screen is on two 5651s: on b3 the VCA's opening
+At draft with the native app's partition (the VCA, the filter, the oscillator, the LFO,
+the supplies), measured 2026-10-30: the pitch ~59 Hz at -23 V, ~479 Hz at -15 V, ~1739 Hz
+at 0 V (reports/tube_synth/vco/synth_tuning.json); below -23 V the tank's swing saturates
+the cores. Since #7 (2026-11-01) VIBRATO's summing scales the key string by 0.979: ~497 Hz
+at -15 V (synth_tuning_high.json). The 6V6GT's screen is on two 5651s: on b3 the VCA's opening
 sagged it and a held note fell ~780 cents over ~2 s; regulated, ~19 cents. A held key at
 -15 V: ~-11 dBFS out at the panel's defaults; key up, the VCA's bleed ~-80 dBFS or less.
 """
@@ -40,6 +41,8 @@ PARTITION = (
     "|",
     "oscillator",
     "pitch",
+    "|",
+    "lfo",
     "|",
     "power supply",
     "bias supply",
@@ -88,7 +91,7 @@ def test_a_key_sounds_the_oscillator_at_its_pitch():
     held, before = out[int(0.5 * FS) :], out[int(0.02 * FS) : int(0.18 * FS)]
     f = vco.frequency(tank[int(0.5 * FS) :], FS)
     print(f, rms_dbfs(held), rms_dbfs(before))
-    assert abs(vco.cents(f, 478.5)) < 30
+    assert abs(vco.cents(f, 497.5)) < 30
     assert -20 < rms_dbfs(held) < -3
     assert rms_dbfs(before) < rms_dbfs(held) - 50
 
@@ -176,9 +179,11 @@ def test_a_held_note_droops_by_tens_of_cents_not_semitones():
 
 
 def glide_step(glide):
-    """A key held while the pitch steps -20 -> -15 V at 0.3 s: the tank's per-cycle pitch."""
+    """A key held while the pitch steps -20 -> -15 V at 0.3 s: the tank's per-cycle pitch.
+    The LFO off: from a run's start its lamp warms for seconds and its changing draw on b1
+    moves the pitch ~10 cents meanwhile (SYNTH_IDEAS.md #7), which isn't the glide."""
     s = spec.load_circuit(CIRCUIT)
-    ir = builder.build_ir(s, spec.resolve(s, {"glide": glide}), cores="ja")
+    ir = builder.build_ir(s, spec.resolve(s, {"glide": glide, "lfo_on": 0}), cores="ja")
     ir = dataclasses.replace(ir, probes=(VoltageProbe("o_t"),))
     st = dataclasses.replace(
         io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
@@ -250,7 +255,8 @@ def test_key_track_moves_the_cutoff_driver_with_the_key_string(track):
     ).vectors["v(g4)"]
     c4, c5 = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
     print(track, c4, c5)
-    assert abs(c4 - (-20.5)) < 0.15  # KEY TRACK barely moves C4's cutoff
+    # -20.5 V before the LFO (2026-11-01): its draw left the rails ~0.2 V lower
+    assert abs(c4 - (-20.7)) < 0.15  # KEY TRACK barely moves C4's cutoff
     if track == 0.0:
         assert abs(c5 - c4) < 0.05  # the grid itself still settles ~0.03 V then
     else:
@@ -280,7 +286,7 @@ def test_pressure_raises_the_cutoff_driver():
     g4 = fast.run_transient(ir, np.zeros(n), settings=st, controls=controls).vectors["v(g4)"]
     rest, pressed = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
     print(rest, pressed)
-    assert abs(rest - (-20.5)) < 0.15
+    assert abs(rest - (-20.7)) < 0.15
     assert 6.8 < pressed - rest < 7.8
 
 
@@ -315,3 +321,49 @@ def test_a_small_reservoir_hums_and_the_6x4_stays_in_rating():
     assert side[2.0] - side[20.0] > 12
     assert small["pitch_spread_cents"] > 3 * normal["pitch_spread_cents"]
     assert max(normal["plate_peak_ma"], small["plate_peak_ma"]) < 245
+
+
+def test_the_lfo_runs_at_its_rate_and_reaches_the_pitch_and_the_cutoff():
+    """The lamp-stabilized Wien bridge (SYNTH_IDEAS.md #7) at RATE 1 (~19 Hz) from the start
+    of a run, VIBRATO and WOBBLE at 1: it oscillates at its rate, the lamp warms toward
+    ~600 K holding ~7 V peak (scripts/lfo_study.py: settled in ~3 s), the pitch swings at its
+    rate (+-~29 cents) and V4's grid with it (~3 V peak to peak)."""
+    study = importlib.util.spec_from_file_location(
+        "lfo_study", Path(__file__).parents[1] / "scripts" / "lfo_study.py"
+    )
+    mod = importlib.util.module_from_spec(study)
+    study.loader.exec_module(mod)
+    v = mod.run({"lfo_rate": 1.0, "vibrato": 1.0, "wobble": 1.0}, 3.0)
+    m = mod.lfo_measures(v, FS)
+    vib = mod.vibrato_cents(v, FS, m["f_hz"])
+    g4 = np.ptp(v["g4"][-len(v["g4"]) // 4 :])
+    print(m, vib, g4)
+    assert abs(m["f_hz"] / 19.33 - 1) < 0.03
+    assert 6.0 < m["amp_peak_v"] < 12.0 and abs(m["dc_v"]) < 1.5
+    assert 450.0 < m["lamp_k"] < 700.0
+    assert vib > 15.0
+    assert g4 > 2.0
+
+
+def test_lfo_off_takes_the_oscillator_out_and_holds_the_pitch():
+    """LFO OFF (`lfo_on` 0, the user's call: CPU): no tubes or lamp of the LFO in the circuit,
+    power resistors drawing their currents in their place, so the rails and the pitch stay put
+    (measured 2026-11-01: 497.60 Hz off, 497.70 on at -15 V; b1 within 0.5 V)."""
+    s = spec.load_circuit(CIRCUIT)
+    off = builder.build_ir(s, spec.resolve(s, {"lfo_on": 0}), cores="ja")
+    on = builder.build_ir(s, spec.resolve(s, {"lfo_on": 1}), cores="ja")
+    names = lambda ir: {e.name for e in ir.elements()}  # noqa: E731
+    lfo_parts = {"XLV1A", "XLV1B", "XLV2A", "XLV2B", "XLP"}
+    assert lfo_parts <= names(on) and not lfo_parts & names(off)
+    _, tank_on = run(-15.0)
+    study = importlib.util.spec_from_file_location(
+        "lfo_study", Path(__file__).parents[1] / "scripts" / "lfo_study.py"
+    )
+    mod = importlib.util.module_from_spec(study)
+    study.loader.exec_module(mod)
+    v = mod.run({"lfo_on": 0}, 1.0)
+    assert "lfo" not in v  # the LFO and its pots are out of the circuit
+    f_off = vco.frequency(v["o_t"][int(0.5 * FS) :], FS)
+    f_on = vco.frequency(tank_on[int(0.5 * FS) :], FS)
+    print(f_off, f_on)
+    assert abs(vco.cents(f_off, f_on)) < 5
