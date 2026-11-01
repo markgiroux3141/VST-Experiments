@@ -1,0 +1,139 @@
+{
+ "args": {
+  "cmd": "core",
+  "carrier": [
+   0.3,
+   1.0,
+   3.0,
+   10.0
+  ],
+  "signal_v": 1.0,
+  "signal_hz": 440.0,
+  "carrier_hz": 620.0,
+  "turns": 1000.0,
+  "sec_ratio": 1.0,
+  "seconds": 1.0
+ },
+ "rows": [
+  {
+   "diode": "selenium",
+   "carrier_v": 0.3,
+   "product_db_re_signal": -17.4,
+   "sum_diff_db": [
+    -0.1,
+    0.0
+   ],
+   "carrier_bleed_db": -58.0,
+   "signal_bleed_db": -64.2,
+   "3fc_db": -20.4,
+   "others_db": -7.5,
+   "out_pk_v": 0.205,
+   "wall_per_s": 0.363
+  },
+  {
+   "diode": "selenium",
+   "carrier_v": 1.0,
+   "product_db_re_signal": -14.1,
+   "sum_diff_db": [
+    -0.1,
+    0.0
+   ],
+   "carrier_bleed_db": -46.8,
+   "signal_bleed_db": -68.3,
+   "3fc_db": -12.5,
+   "others_db": -5.4,
+   "out_pk_v": 0.275,
+   "wall_per_s": 0.302
+  },
+  {
+   "diode": "selenium",
+   "carrier_v": 3.0,
+   "product_db_re_signal": -12.6,
+   "sum_diff_db": [
+    0.0,
+    -0.2
+   ],
+   "carrier_bleed_db": -53.0,
+   "signal_bleed_db": -53.9,
+   "3fc_db": -11.0,
+   "others_db": -4.3,
+   "out_pk_v": 0.319,
+   "wall_per_s": 0.306
+  },
+  {
+   "diode": "selenium",
+   "carrier_v": 10.0,
+   "product_db_re_signal": -11.4,
+   "sum_diff_db": [
+    0.0,
+    -0.0
+   ],
+   "carrier_bleed_db": -58.6,
+   "signal_bleed_db": -65.8,
+   "3fc_db": -10.9,
+   "others_db": -3.7,
+   "out_pk_v": 0.366,
+   "wall_per_s": 0.348
+  },
+  {
+   "diode": "silicon",
+   "carrier_v": 0.3,
+   "product_db_re_signal": -15.0,
+   "sum_diff_db": [
+    -0.8,
+    0.0
+   ],
+   "carrier_bleed_db": -50.2,
+   "signal_bleed_db": -63.2,
+   "3fc_db": -44.2,
+   "others_db": -8.3,
+   "out_pk_v": 0.278,
+   "wall_per_s": 0.288
+  },
+  {
+   "diode": "silicon",
+   "carrier_v": 1.0,
+   "product_db_re_signal": -8.9,
+   "sum_diff_db": [
+    -0.4,
+    0.0
+   ],
+   "carrier_bleed_db": -66.3,
+   "signal_bleed_db": -70.9,
+   "3fc_db": -13.3,
+   "others_db": -7.5,
+   "out_pk_v": 0.498,
+   "wall_per_s": 0.295
+  },
+  {
+   "diode": "silicon",
+   "carrier_v": 3.0,
+   "product_db_re_signal": -8.0,
+   "sum_diff_db": [
+    0.0,
+    -0.2
+   ],
+   "carrier_bleed_db": -56.3,
+   "signal_bleed_db": -63.9,
+   "3fc_db": -10.3,
+   "others_db": -4.4,
+   "out_pk_v": 0.535,
+   "wall_per_s": 0.299
+  },
+  {
+   "diode": "silicon",
+   "carrier_v": 10.0,
+   "product_db_re_signal": -7.6,
+   "sum_diff_db": [
+    0.0,
+    -0.2
+   ],
+   "carrier_bleed_db": -56.5,
+   "signal_bleed_db": -63.3,
+   "3fc_db": -9.9,
+   "others_db": -3.5,
+   "out_pk_v": 0.566,
+   "wall_per_s": 0.309
+  }
+ ]
+}

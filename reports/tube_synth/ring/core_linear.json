@@ -1,0 +1,79 @@
+{
+ "args": {
+  "cmd": "core",
+  "carrier": [
+   1.0,
+   3.0
+  ],
+  "signal_v": 1.0,
+  "signal_hz": 440.0,
+  "carrier_hz": 620.0,
+  "turns": 1000.0,
+  "sec_ratio": 1.0,
+  "seconds": 1.0,
+  "cores": "linear",
+  "tag": "_linear"
+ },
+ "rows": [
+  {
+   "diode": "selenium",
+   "carrier_v": 1.0,
+   "product_db_re_signal": -14.0,
+   "sum_diff_db": [
+    -0.2,
+    0.0
+   ],
+   "carrier_bleed_db": -63.1,
+   "signal_bleed_db": -67.7,
+   "3fc_db": -12.3,
+   "others_db": -5.4,
+   "out_pk_v": 0.275,
+   "wall_per_s": 0.186
+  },
+  {
+   "diode": "selenium",
+   "carrier_v": 3.0,
+   "product_db_re_signal": -12.7,
+   "sum_diff_db": [
+    0.0,
+    -0.0
+   ],
+   "carrier_bleed_db": -55.3,
+   "signal_bleed_db": -62.8,
+   "3fc_db": -11.4,
+   "others_db": -4.2,
+   "out_pk_v": 0.318,
+   "wall_per_s": 0.151
+  },
+  {
+   "diode": "silicon",
+   "carrier_v": 1.0,
+   "product_db_re_signal": -8.9,
+   "sum_diff_db": [
+    -0.4,
+    0.0
+   ],
+   "carrier_bleed_db": -58.4,
+   "signal_bleed_db": -104.9,
+   "3fc_db": -13.1,
+   "others_db": -7.4,
+   "out_pk_v": 0.497,
+   "wall_per_s": 0.149
+  },
+  {
+   "diode": "silicon",
+   "carrier_v": 3.0,
+   "product_db_re_signal": -8.0,
+   "sum_diff_db": [
+    0.0,
+    -0.3
+   ],
+   "carrier_bleed_db": -52.7,
+   "signal_bleed_db": -58.5,
+   "3fc_db": -10.2,
+   "others_db": -4.4,
+   "out_pk_v": 0.535,
+   "wall_per_s": 0.149
+  }
+ ]
+}

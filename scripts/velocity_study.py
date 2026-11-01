@@ -38,6 +38,8 @@ PARTITION = (
     "cutoff",
     "envelope",
     "|",
+    "ring",
+    "|",
     "oscillator",
     "pitch",
     "|",

@@ -1,0 +1,228 @@
+{
+ "lfo": [
+  {
+   "lfo_audio": 0,
+   "lfo_rate": 0.7,
+   "lfo_hz": 4.58,
+   "lfo_pk_v": 7.19,
+   "lfo_dc_v": -0.14,
+   "lfo_thd_pct": 73.31
+  },
+  {
+   "lfo_audio": 1,
+   "lfo_rate": 0.0,
+   "lfo_hz": 7.99,
+   "lfo_pk_v": 6.21,
+   "lfo_dc_v": 0.3,
+   "lfo_thd_pct": 0.2
+  },
+  {
+   "lfo_audio": 1,
+   "lfo_rate": 0.25,
+   "lfo_hz": 34.64,
+   "lfo_pk_v": 8.13,
+   "lfo_dc_v": 0.31,
+   "lfo_thd_pct": 0.34
+  },
+  {
+   "lfo_audio": 1,
+   "lfo_rate": 0.5,
+   "lfo_hz": 147.41,
+   "lfo_pk_v": 8.0,
+   "lfo_dc_v": 0.3,
+   "lfo_thd_pct": 0.32
+  },
+  {
+   "lfo_audio": 1,
+   "lfo_rate": 0.75,
+   "lfo_hz": 590.35,
+   "lfo_pk_v": 8.03,
+   "lfo_dc_v": 0.3,
+   "lfo_thd_pct": 0.34
+  },
+  {
+   "lfo_audio": 1,
+   "lfo_rate": 1.0,
+   "lfo_hz": 1884.38,
+   "lfo_pk_v": 8.37,
+   "lfo_dc_v": 0.32,
+   "lfo_thd_pct": 0.55
+  }
+ ],
+ "ring": [
+  {
+   "pitch_v": -20.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.5,
+   "f1": 193.3,
+   "f2": 147.41,
+   "ring_pk_db_re_osc": 2.9,
+   "osc_bleed_db": -29.6,
+   "carrier_bleed_db": -26.1
+  },
+  {
+   "pitch_v": -20.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.75,
+   "f1": 193.3,
+   "f2": 590.43,
+   "ring_pk_db_re_osc": -0.0,
+   "osc_bleed_db": -29.5,
+   "carrier_bleed_db": -25.7
+  },
+  {
+   "pitch_v": -20.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.9,
+   "f1": 193.3,
+   "f2": 1238.71,
+   "ring_pk_db_re_osc": -1.7,
+   "osc_bleed_db": -25.0,
+   "carrier_bleed_db": -28.8
+  },
+  {
+   "pitch_v": -20.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 0,
+   "lfo_rate": 0.85,
+   "f1": 193.3,
+   "f2": 9.96,
+   "ring_pk_db_re_osc": 0.8,
+   "osc_bleed_db": -34.9,
+   "carrier_bleed_db": -27.1
+  },
+  {
+   "pitch_v": -15.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.5,
+   "f1": 499.3,
+   "f2": 147.41,
+   "ring_pk_db_re_osc": 1.5,
+   "osc_bleed_db": -32.5,
+   "carrier_bleed_db": -30.2
+  },
+  {
+   "pitch_v": -15.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.75,
+   "f1": 499.3,
+   "f2": 590.43,
+   "ring_pk_db_re_osc": 0.6,
+   "osc_bleed_db": -34.1,
+   "carrier_bleed_db": -36.0
+  },
+  {
+   "pitch_v": -15.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.9,
+   "f1": 499.3,
+   "f2": 1238.71,
+   "ring_pk_db_re_osc": -0.1,
+   "osc_bleed_db": -30.8,
+   "carrier_bleed_db": -35.9
+  },
+  {
+   "pitch_v": -15.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 0,
+   "lfo_rate": 0.85,
+   "f1": 499.3,
+   "f2": 9.96,
+   "ring_pk_db_re_osc": 0.7,
+   "osc_bleed_db": -33.0,
+   "carrier_bleed_db": -25.8
+  },
+  {
+   "pitch_v": -10.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.5,
+   "f1": 887.7,
+   "f2": 147.41,
+   "ring_pk_db_re_osc": 2.8,
+   "osc_bleed_db": -34.9,
+   "carrier_bleed_db": -27.4
+  },
+  {
+   "pitch_v": -10.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.75,
+   "f1": 887.7,
+   "f2": 590.43,
+   "ring_pk_db_re_osc": 4.9,
+   "osc_bleed_db": -40.7,
+   "carrier_bleed_db": -34.1
+  },
+  {
+   "pitch_v": -10.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 1,
+   "lfo_rate": 0.9,
+   "f1": 887.7,
+   "f2": 1238.71,
+   "ring_pk_db_re_osc": 4.4,
+   "osc_bleed_db": -42.1,
+   "carrier_bleed_db": -48.1
+  },
+  {
+   "pitch_v": -10.0,
+   "ring_on": 1,
+   "osc_level": 0.0,
+   "lfo_audio": 0,
+   "lfo_rate": 0.85,
+   "f1": 887.7,
+   "f2": 9.96,
+   "ring_pk_db_re_osc": 0.8,
+   "osc_bleed_db": -29.9,
+   "carrier_bleed_db": -24.0
+  }
+ ],
+ "switch": [
+  {
+   "ring_on": 0,
+   "pitch_hz": 499.347,
+   "lfo_hz": 4.57,
+   "lfo_pk_v": 7.29,
+   "lfo_dc_v": 0.3,
+   "lfo_thd_pct": 0.23,
+   "lf_n_mean_v": -172.39,
+   "lf_nr_mean_v": -329.07,
+   "lf_br_mean_v": 336.72,
+   "lf_bp_mean_v": 280.36,
+   "b1_mean_v": 274.23,
+   "lf_n_ripple_pp_v": 2.19
+  },
+  {
+   "ring_on": 1,
+   "pitch_hz": 499.346,
+   "lfo_hz": 4.57,
+   "lfo_pk_v": 7.54,
+   "lfo_dc_v": 0.54,
+   "lfo_thd_pct": 0.17,
+   "lf_n_mean_v": -171.71,
+   "lf_nr_mean_v": -323.21,
+   "lf_br_mean_v": 330.7,
+   "lf_bp_mean_v": 276.12,
+   "b1_mean_v": 274.24,
+   "lf_n_ripple_pp_v": 2.6
+  }
+ ]
+}

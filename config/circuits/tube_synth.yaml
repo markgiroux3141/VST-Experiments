@@ -75,6 +75,20 @@
 #        wobble reaches V4's grid as the low end's share does (all of it at CUTOFF 0, none
 #        at 1). Into V4's grid itself, the same depth loaded the pot's wiper and bent
 #        CUTOFF's law (~half an octave brighter at 0.3)
+#   LFO AUDIO (SYNTH_IDEAS.md #14): a switch whose contacts (always in the circuit, so a flip
+#        updates a live stream in place) take 0.99 uF from beside each 10 nF Wien capacitor
+#        and 900 pF from the compensation: RATE then sweeps ~8 Hz-1.9 kHz, the ring's carrier
+#   The ring modulator (#14; scripts/ring_study.py): oscillator x LFO, as Cowan's (1934) diode
+#        ring between two transformers (1 : 1+1 mumetall), four selenium cells. Each input has
+#        a 12AU7 follower of its own: the oscillator's buffer through 0.1 uF (no load across
+#        the draft's partition: the ring's load current there, one sample late, stopped Newton
+#        at the cells), the LFO DC-coupled through a divider to the ring's minus rail (the
+#        carrier runs down to 0.08 Hz; at LFO rates the ring is a tremolo through zero). The
+#        carrier goes into T1's centre tap, T2's output is terminated (2.4k) into the RING pot
+#        and a 12AU7 make-up stage (~10x), into the mixer through 1M beside the oscillator's
+#        new OSC level pot. Its supply is its own RC off the LFO's reservoirs, so it is in only
+#        with the LFO (its carrier) on and RING ON (`ring_on`, the user's call: CPU; off, its
+#        section is empty and gets no thread), and the synth's rails don't see it
 # The rest is tube_voice.yaml's: its header follows.
 #
 # The tube synth's voice (docs/TUBE_SYNTH_PLAN.md, S3): tube_filter.yaml's filter, supply
@@ -163,9 +177,13 @@ controls:
   range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
   reservoir: {value: 20.0e-6, choices: [1.0e-6, 2.0e-6, 4.0e-6, 6.0e-6, 8.0e-6, 12.0e-6, 20.0e-6, 40.0e-6], unit: F, source: "provisional: model knowledge (design, 2026-11-01: the RESERVOIR switch, a rotary switch choosing the reservoir electrolytic (450 V parts), 20 uF as before; SYNTH_IDEAS.md #6: smaller is more 120 Hz ripple, a hum-growl, and below ~6 uF the pitch warbles and goes flat, the user's broken end down to 1 uF; the 6X4 stays under its 245 mA steady-state peak at every step, scripts/supply_study.py)"}
   lfo_on: {value: 1, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-01: the LFO's ON / OFF switch, the user's call: OFF takes its tubes, lamp and own supply out of the circuit (no CPU for them, no thread), so the rails and the tuning stay put; VIBRATO and WOBBLE then hear 0 V)"}
-  lfo_rate: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the LFO's RATE, a dual 2M reverse-audio rheostat in the Wien bridge's arms (8.2k each in series) with 1 uF: ~0.08 Hz at 0, ~0.35 at 0.25, ~1.5 at 0.5, ~4.5 at 0.7, ~19 at 1)"}
+  lfo_audio: {value: 0, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-01: the LFO's AUDIO range switch (SYNTH_IDEAS.md #14): its contacts take the Wien bridge's 990 nF capacitors (and 900 pF of the loop's compensation) out, leaving 10 nF (100 pF): RATE then runs ~8 Hz to ~1.9 kHz, the ring modulator's carrier. Contacts always in the circuit, so a flip updates a live stream in place)"}
+  lfo_rate: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the LFO's RATE, a dual 2M reverse-audio rheostat in the Wien bridge's arms (8.2k each in series) with 1 uF: ~0.08 Hz at 0, ~0.35 at 0.25, ~1.5 at 0.5, ~4.5 at 0.7, ~19 at 1; at AUDIO, 10 nF: ~8 Hz to ~1.9 kHz)"}
   vibrato: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the VIBRATO pot, the share of the LFO summed into the pitch ahead of GLIDE; linear)"}
   wobble: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the WOBBLE pot, the share of the LFO into V4's grid (the cutoff); linear)"}
+  ring_on: {value: 0, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-01: the ring modulator's ON / OFF switch (SYNTH_IDEAS.md #14; the user's call: CPU): its power switch on the LFO's supply, so the ring runs only with the LFO on (its carrier); off, the ring's section is empty and gets no thread)"}
+  ring: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the RING level pot into the mixer, audio taper)"}
+  osc_level: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the oscillator's level pot into the mixer, audio taper; full is the mix as before (the ring alone at 0))"}
   heater: {value: 1.0, min: 0.6, max: 1.1, unit: ratio, source: "provisional: model knowledge (design, 2026-11-01: the HEATER control, the heaters' volts over their rating (a heater winding's taps, as period gear set them); tubes are rated +-10%, so below 0.9 is out of rating (the panel says so): the user's choice, extended to 0.6 for the starved sound)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
@@ -333,12 +351,15 @@ values:
   lfo_r_rate_min_ohm: {value: 8.2e+3, source: "provisional: model knowledge (design: each Wien arm's end stop, ~19 Hz with RATE at full)"}
   lfo_r_rate_ohm: {value: 2.0e+6, source: "provisional: model knowledge (design: the RATE pot's two gangs, 2 MOhm each: ~0.08 Hz at 0)"}
   lfo_rate_taper_mid: {value: 0.05, source: "provisional: model knowledge (design: a reverse-audio taper, 5% of the track at half rotation: equal octaves of rate over the rotation, roughly)"}
-  lfo_c_wien_f: {value: 1.0e-6, source: "provisional: model knowledge (design: the Wien bridge's two capacitors, 1 uF film / paper)"}
+  lfo_c_wien_f: {value: 10.0e-9, source: "provisional: model knowledge (design, 2026-11-01: the Wien bridge's two capacitors at AUDIO, 10 nF film: ~8 Hz-1.9 kHz over RATE, scripts/ring_study.py)"}
+  lfo_c_wien_low_f: {value: 990.0e-9, source: "provisional: model knowledge (design, 2026-11-01: the AUDIO switch's capacitors beside each Wien capacitor (LOW: 1 uF in all, as the LFO was built), 0.99 uF film)"}
+  lfo_r_contact_open_ohm: {value: 1.0e+10, source: "provisional: model knowledge (an open switch contact's insulation, 1e10-1e12 ohm; closed it is a pot's end, MIN_R_OHM; as RANGE's)"}
   lfo_kick_v: {value: 0.1, source: "provisional: model knowledge (design: CW2's start voltage, the kick a balanced bridge needs to start; a real one starts from its noise)"}
   lfo_r_tail_ohm: {value: 330.0e+3, source: "provisional: model knowledge (design: the pair's tail to the LFO's -174 V rail, ~0.53 mA: ~0.26 mA each)"}
   lfo_r_plate_a_ohm: {value: 330.0e+3, source: "provisional: model knowledge (design: LV1A's plate load, ~141 V with the divider's current)"}
   lfo_r_plate_b_ohm: {value: 470.0e+3, source: "provisional: model knowledge (design: LV1B's plate load, ~144 V: the plates level, so the pair's offset (their difference over mu) doesn't put DC on the lamp; 330k left ~+5 V at the output, ~3 mA of DC in the lamp)"}
-  lfo_c_comp_f: {value: 1.0e-9, source: "provisional: model knowledge (design: the loop's dominant pole on LV1A's plate, ~600 Hz: three stages and two dividers with a loop gain of ~20 need one)"}
+  lfo_c_comp_f: {value: 100.0e-12, source: "provisional: model knowledge (design: the loop's dominant pole on LV1A's plate at AUDIO, ~5 kHz (2026-11-01: 1 nF's ~500 Hz would pull the audio range's top))"}
+  lfo_c_comp_low_f: {value: 900.0e-12, source: "provisional: model knowledge (design: the AUDIO switch's compensation beside it: LOW is 1 nF, ~500 Hz, as the LFO was built: three stages and two dividers with a loop gain of ~20 need one)"}
   lfo_r_div1_top_ohm: {value: 845.0e+3, source: "provisional: model knowledge (design: LV1A's plate to the second stage's grid, ~-7 V, a 1% part: with the 1M foot on the -174 V rail the output's DC is ~0 (found by bisection on the DC point, 2026-11-01))"}
   lfo_r_div1_bot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: the first divider's foot to the LFO's -174 V rail: ~0.58 of the plate's swing passes, where from -87 V it was ~0.32 and the loop's gain too low to warm the lamp)"}
   lfo_r_plate2_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: the second stage's plate load, ~2 mA, ~150 V)"}
@@ -361,6 +382,43 @@ values:
   lfo_r_wiper_ground_ohm: {value: 1.0, source: "provisional: model knowledge (design: with the LFO off the switch grounds RVIB's and RWOB's far ends, where the pots' wipers were (at VIBRATO / WOBBLE 0 a wiper is the pot's grounded end))"}
   lfo_r_pot_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the VIBRATO and WOBBLE pots across the LFO's output, ~1.5 mA between them at the peak; their wipers' resistance (<= 2.5k) beside RVIB and RWOB moves the pitch and the cutoff little as they turn)"}
   lfo_c_wiper_f: {value: 0.1e-6, source: "provisional: model knowledge (design: on each pot's wiper: in the draft's partition the LFO is on a thread of its own and couples to the pitch and the cutoff at these nodes)"}
+  # --- the ring modulator (SYNTH_IDEAS.md #14; scripts/ring_study.py)
+  r_osc_level_pot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design, 2026-11-01: the OSC level pot after the buffer's coupling capacitor, ten times the follower's load it replaces nothing of: at full the mix is as before)"}
+  mix_taper_mid: {value: 0.1, source: "provisional: model knowledge (audio-taper level pots, 10% at half rotation)"}
+  r_mix_ring_ohm: {value: 2.2e+6, source: "provisional: model knowledge (design, 2026-11-01: from the ring's output into the mixer: at 1M (the oscillator's) the ring at full came in 3-9 dB over the oscillator at full, scripts/ring_study.py measure)"}
+  ring_diode: {value: SELENIUM@1, source: "provisional: model knowledge (design, 2026-11-01: four selenium cells in the ring, period parts (the user's choice; silicon measured within ~2 dB, scripts/ring_study.py core); config/components/selenium/1.yaml)"}
+  ring_diode_area: {value: 0.25, source: "provisional: model knowledge (design: small selenium cells, 1/4 sq. in. each: a few mA, the ring's currents)"}
+  ring_r_supply_plus_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the ring's own RC off the LFO's reservoir (lf_br), ~7 mA: ~240 V)"}
+  ring_r_supply_minus_ohm: {value: 33.0e+3, source: "provisional: model knowledge (design: the ring's own RC off the LFO's half-wave minus reservoir (lf_nr), ~5 mA: ~-150 V for the followers' returns)"}
+  ring_c_supply_f: {value: 47.0e-6, source: "provisional: model knowledge (design: the ring's supply electrolytics, 450 V)"}
+  ring_r_grid_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the signal follower's grid leak)"}
+  ring_c_grid_f: {value: 0.1e-6, source: "provisional: model knowledge (design: the oscillator's buffer into the signal follower's grid (no load on the buffer: in the draft's partition the ring is on a thread of its own, and its load current through the buffer one sample late stopped Newton at the diodes))"}
+  ring_r_follower_ohm: {value: 68.0e+3, source: "provisional: model knowledge (design: each follower's cathode to the ring's minus rail, ~2.3 mA)"}
+  ring_r_carrier_top_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the LFO into the carrier follower's grid, DC-coupled (the carrier runs down to 0.08 Hz): with ring_r_carrier_bot_ohm to the minus rail the grid sits ~-13.5 V, the 12AU7's bias at ~2.3 mA, so its cathode sits near 0 V and no DC goes through the ring (secant: 56k left +4.2 V there, 91k +1.1 V; scripts/ring_study.py))"}
+  ring_r_carrier_bot_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: the carrier divider's foot on the ring's minus rail; 0.91 of the LFO reaches the grid)"}
+  ring_c_couple_f: {value: 1.0e-6, source: "provisional: model knowledge (design: the signal follower into T1's primary)"}
+  ring_r_source_ohm: {value: 2.2e+3, source: "provisional: model knowledge (design: the signal's source resistance into T1, about the ring's termination)"}
+  ring_r_carrier_ohm: {value: 3.3e+3, source: "provisional: model knowledge (design: the carrier follower into T1's centre tap: the LFO's ~7 V peak switches the cells at ~2 mA)"}
+  ring_r_ct_return_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design: T1's centre tap to ground, a DC path for its secondary (floating, Newton wandered its common mode))"}
+  ring_turns: {value: 1000.0, source: "provisional: model knowledge (design: each transformer's primary, ~30 H on a 0.5 cm^2 mumetall core at its origin permeability)"}
+  ring_sec_ratio: {value: 1.0, source: "provisional: model knowledge (design: 1 : 1+1, each secondary half as the primary)"}
+  ring_out_ratio: {value: 2.0, source: "provisional: model knowledge (design: T2's output winding, twice the turns: the ring's output stepped up into its termination)"}
+  ring_r_winding_ohm: {value: 50.0, source: "provisional: model knowledge (1000 turns of fine copper on a small core)"}
+  ring_c_winding_f: {value: 100.0e-12, source: "provisional: model knowledge (each primary's self-capacitance)"}
+  ring_leakage_h: {value: 1.0e-3, source: "provisional: model knowledge (leakage referred to the primary, bifilar secondaries)"}
+  ring_core_area_m2: {value: 0.5e-4, source: "provisional: model knowledge (a small mumetall core, 0.5 cm^2)"}
+  ring_core_path_m: {value: 0.06, source: "provisional: model knowledge (6 cm magnetic path)"}
+  ring_core_gap_m: {value: 0.0, source: "provisional: model knowledge (interleaved laminations, no DC: no gap)"}
+  ring_c_node_f: {value: 100.0e-12, source: "provisional: model knowledge (the cells' and wiring's capacitance at each corner of the ring; a capacitance on every rectifier node fed by a winding)"}
+  ring_r_termination_ohm: {value: 2.4e+3, source: "provisional: model knowledge (design: T2's output terminated (a ring is designed for terminated ports, 600 ohm per side through 1 : 2): unterminated, the cells' switching rang in the winding)"}
+  ring_r_level_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the RING level pot across T2's output)"}
+  ring_r_stopper_ohm: {value: 10.0e+3, source: "provisional: model knowledge (grid stopper)"}
+  ring_r_plate_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: the make-up stage's plate load, 12AU7)"}
+  ring_r_cathode_ohm: {value: 1.5e+3, source: "provisional: model knowledge (design: its self bias, unbypassed: gain ~10, the ring's ~0.5 V up to the oscillator's level)"}
+  ring_c_out_f: {value: 0.1e-6, source: "provisional: model knowledge (the make-up stage's output coupling)"}
+  ring_r_out_leak_ohm: {value: 1.0e+6, source: "provisional: model knowledge (its DC return)"}
+  ring_r_out_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: into the node the draft's partition couples the ring's thread to the mixer at: a resistor feed and ring_c_out_node_f)"}
+  ring_c_out_node_f: {value: 2.2e-9, source: "provisional: model knowledge (design: on the coupling node, 10 us with ring_r_out_ohm (15 kHz))"}
   r_wobble_ohm: {value: 127.0e+3, source: "provisional: model knowledge (design, 2026-11-01: the WOBBLE pot's wiper into the CUTOFF pot's low end, beside RCUTL (a 1% part): ~0.53 of the LFO there before the pot's load)"}
   # --- the reactor (saturable_reactor.yaml's cores, twice the signal turns)
   osc_signal_turns: {value: 2000.0, source: "provisional: model knowledge (design: 2000 turns per core on a 1 cm^2, 10 cm mumetall toroid: at 1000 the tank's impedance at strong bias fell under the tubes' loading and the oscillation stopped above ~100 Hz)"}
@@ -404,6 +462,10 @@ devices:
   LV2B: {device: 12AU7@1}
   LP: {device: lfo_lamp}
   DLR: {device: lfo_rectifier}
+  RGVA: {device: 12AU7@1}
+  RGVB: {device: 12AU7@1}
+  RGVC: {device: 12AU7@1}
+  DRG: {device: ring_diode, area: ring_diode_area}
 
 sections:
   - title: power supply
@@ -474,8 +536,21 @@ sections:
   - title: input
     parts:
       CMXO: {C: [o_buf, o_bc], c: c_mix_osc_f}
-      RMXO: {R: [o_bc, mix], r: r_mix_osc_ohm}
+      ROSCL: {pot: ["0", o_bw, o_bc], r: r_osc_level_pot_ohm, at: osc_level, taper_mid: mix_taper_mid}
+      RMXO: {R: [o_bw, mix], r: r_mix_osc_ohm}
       CMIX: {C: [mix, "0"], c: c_mix_stray_f}
+      # The ring modulator's level (its section's output, rg_x) into the mixer; with the
+      # ring off (or the LFO, its carrier and supply) the resistor's far end is grounded
+      RMXR: {R: [rg_x, mix], r: r_mix_ring_ohm}
+      SWRXG:
+        switch: ring_on
+        parts:
+          RRXGA: {R: [rg_x, "0"], r: lfo_r_wiper_ground_ohm, in: [0]}
+          SWRXGL:
+            switch: lfo_on
+            in: [1]
+            parts:
+              RRXGB: {R: [rg_x, "0"], r: lfo_r_wiper_ground_ohm, in: [0]}
       RST1: {R: [mix, g1], r: r_stopper_ohm}
       XV1A: {device: [p1, g1, k1], model: V1A}
       RP1: {R: [b3, p1], r: r_plate1_ohm}
@@ -673,6 +748,14 @@ sections:
           RW2S: {R: [lf_g, lf_w2], r: lfo_r_rate_min_ohm, in: [1]}
           RW2: {rheostat: [lf_w2, "0"], r: lfo_r_rate_ohm, at: lfo_rate, taper_mid: lfo_rate_taper_mid, reverse: 1, in: [1]}
           CW2: {C: [lf_g, "0"], c: lfo_c_wien_f, v0: lfo_kick_v, in: [1]}
+          # The AUDIO switch: its contacts (closed at LOW) put 0.99 uF beside each Wien
+          # capacitor and 900 pF beside the compensation
+          CW1L: {C: [lf_s, lf_s1], c: lfo_c_wien_low_f, in: [1]}
+          RW1A: {rheostat: [lf_s1, lf_g], r: lfo_r_contact_open_ohm, at: lfo_audio, in: [1]}
+          CW2L: {C: [lf_g, lf_g1], c: lfo_c_wien_low_f, v0: lfo_kick_v, in: [1]}
+          RW2A: {rheostat: [lf_g1, "0"], r: lfo_r_contact_open_ohm, at: lfo_audio, in: [1]}
+          CLCL: {C: [lf_pa, lf_pc], c: lfo_c_comp_low_f, in: [1]}
+          RLCA: {rheostat: [lf_pc, "0"], r: lfo_r_contact_open_ohm, at: lfo_audio, in: [1]}
           XLV1A: {device: [lf_pa, lf_g, lf_k], model: LV1A, in: [1]}
           XLV1B: {device: [lf_pb, lf_fb, lf_k], model: LV1B, in: [1]}
           RLT: {R: [lf_k, lf_n], r: lfo_r_tail_ohm, in: [1]}
@@ -699,3 +782,71 @@ sections:
           CVIBW: {C: [lv_w, "0"], c: lfo_c_wiper_f, in: [1]}
           RWOBP: {pot: ["0", lw_w, lfo], r: lfo_r_pot_ohm, at: wobble, in: [1]}
           CWOBW: {C: [lw_w, "0"], c: lfo_c_wiper_f, in: [1]}
+  - title: ring
+    parts:
+      # The ring modulator (SYNTH_IDEAS.md #14): on the LFO's supply and with the LFO as
+      # its carrier, so it is in only with the LFO on and RING ON
+      SWRING:
+        switch: lfo_on
+        parts:
+          SWRINGO:
+            switch: ring_on
+            in: [1]
+            parts:
+              # Its own RC branches off the LFO's reservoirs
+              RRGBP: {R: [lf_br, rg_b], r: ring_r_supply_plus_ohm, in: [1]}
+              CRGBP: {C: [rg_b, "0"], c: ring_c_supply_f, in: [1]}
+              RRGBN: {R: [lf_nr, rg_n], r: ring_r_supply_minus_ohm, in: [1]}
+              CRGBN: {C: [rg_n, "0"], c: ring_c_supply_f, in: [1]}
+              # The signal follower: the oscillator's buffer through 0.1 uF
+              CRGIA: {C: [o_buf, rg_ga], c: ring_c_grid_f, in: [1]}
+              RRGGA: {R: [rg_ga, "0"], r: ring_r_grid_ohm, in: [1]}
+              XRGVA: {device: [rg_b, rg_ga, rg_ka], model: RGVA, in: [1]}
+              RRGKA: {R: [rg_ka, rg_n], r: ring_r_follower_ohm, in: [1]}
+              CRGS: {C: [rg_ka, rg_sc], c: ring_c_couple_f, in: [1]}
+              RRGS: {R: [rg_sc, rg_sp], r: ring_r_source_ohm, in: [1]}
+              # The carrier follower: the LFO, DC-coupled through a divider to the minus rail
+              RRGIB: {R: [lfo, rg_gb], r: ring_r_carrier_top_ohm, in: [1]}
+              RRGGB: {R: [rg_gb, rg_n], r: ring_r_carrier_bot_ohm, in: [1]}
+              XRGVB: {device: [rg_b, rg_gb, rg_kb], model: RGVB, in: [1]}
+              RRGKB: {R: [rg_kb, rg_n], r: ring_r_follower_ohm, in: [1]}
+              RRGC: {R: [rg_kb, rg_ct1], r: ring_r_carrier_ohm, in: [1]}
+              RRGCL: {R: [rg_ct1, "0"], r: ring_r_ct_return_ohm, in: [1]}
+              # The ring: T1 (signal in, centre-tapped), four selenium cells, T2
+              RGT1:
+                in: [1]
+                transformer:
+                  pri: {nodes: [rg_sp, "0"], r: ring_r_winding_ohm, c: ring_c_winding_f}
+                  sa: {nodes: [rg_r1, rg_ct1], ratio: ring_sec_ratio, r: ring_r_winding_ohm}
+                  sb: {nodes: [rg_ct1, rg_r2], ratio: ring_sec_ratio, r: ring_r_winding_ohm}
+                core: {material: mumetall, area_m2: ring_core_area_m2, path_m: ring_core_path_m, gap_m: ring_core_gap_m}
+                turns: ring_turns
+                leakage_h: ring_leakage_h
+              CRGR1: {C: [rg_r1, "0"], c: ring_c_node_f, in: [1]}
+              CRGR2: {C: [rg_r2, "0"], c: ring_c_node_f, in: [1]}
+              CRGQ1: {C: [rg_q1, "0"], c: ring_c_node_f, in: [1]}
+              CRGQ2: {C: [rg_q2, "0"], c: ring_c_node_f, in: [1]}
+              DRG1: {device: [rg_r1, rg_q1], model: DRG, in: [1]}
+              DRG2: {device: [rg_q1, rg_r2], model: DRG, in: [1]}
+              DRG3: {device: [rg_r2, rg_q2], model: DRG, in: [1]}
+              DRG4: {device: [rg_q2, rg_r1], model: DRG, in: [1]}
+              RGT2:
+                in: [1]
+                transformer:
+                  pri: {nodes: [rg_out, "0"], ratio: ring_out_ratio, r: ring_r_winding_ohm, c: ring_c_winding_f}
+                  sa: {nodes: [rg_q1, "0"], ratio: ring_sec_ratio, r: ring_r_winding_ohm}
+                  sb: {nodes: ["0", rg_q2], ratio: ring_sec_ratio, r: ring_r_winding_ohm}
+                core: {material: mumetall, area_m2: ring_core_area_m2, path_m: ring_core_path_m, gap_m: ring_core_gap_m}
+                turns: ring_turns
+                leakage_h: ring_leakage_h
+              RRGLD: {R: [rg_out, "0"], r: ring_r_termination_ohm, in: [1]}
+              # RING, and the make-up stage
+              RRGP: {pot: ["0", rg_w, rg_out], r: ring_r_level_pot_ohm, at: ring, taper_mid: mix_taper_mid, in: [1]}
+              RRGST: {R: [rg_w, rg_gc], r: ring_r_stopper_ohm, in: [1]}
+              XRGVC: {device: [rg_pc, rg_gc, rg_kc], model: RGVC, in: [1]}
+              RRGKC: {R: [rg_kc, "0"], r: ring_r_cathode_ohm, in: [1]}
+              RRGPC: {R: [rg_b, rg_pc], r: ring_r_plate_ohm, in: [1]}
+              CRGO: {C: [rg_pc, rg_c], c: ring_c_out_f, in: [1]}
+              RRGCX: {R: [rg_c, "0"], r: ring_r_out_leak_ohm, in: [1]}
+              RRGX: {R: [rg_c, rg_x], r: ring_r_out_ohm, in: [1]}
+              CRGX: {C: [rg_x, "0"], c: ring_c_out_node_f, in: [1]}

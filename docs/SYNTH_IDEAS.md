@@ -24,6 +24,8 @@ of the list or a night the user picks. **Owed since #7 (2026-11-01):**
   the parts library, the device library and fixtures, the preflight checks, the SPICE
   emission, `fast.partition_sections`, the controls' `unit: switch` in both spec loaders). In the targeted run `test_circuit_format`'s
   ngspice comparison timed out (300 s) while the tuning sweep held every core: rerun it.
+- #14 (2026-11-01) added nothing shared (circuit file, scripts, panel.rs); the full run above
+  covers it.
 - `uv run --extra listen --extra fast python scripts/slice_report.py --verify` (the
   periodic agreement with ngspice, ~70 min cold): circuitsim gained a device and its
   limiting; the 670 doesn't use it, so expect no change.
@@ -64,7 +66,7 @@ of the list or a night the user picks. **Owed since #7 (2026-11-01):**
 | 11 | NOISE in the mixer | Breath, wind, percussion | Amplified B5 noise | Noise on: measure |
 | 12 | Filter MODE (LP / BP / HP) | Thin, vocal, nasal shapes | Switch contacts | ~0 |
 | 13 | Filter DRIVE | Grit; loud notes darken | A gain stage | Small |
-| 14 | Ring modulator | Metallic, bell-like | Diode ring, transformers | Two transformers |
+| 14 | Ring modulator (**built**: oscillator x LFO; a second VCO waits for #9) | Metallic, bell-like | Diode ring, transformers | A thread (a core) when on |
 | 15 | ADSR / second envelope | Shaped notes, independent sweeps | Diode steering, a pot | ~+3% |
 | 16 | Sample-and-hold | Random stepped modulation | 6AL5 gate, a capacitor | Small |
 | 17 | Units (part tolerances) | Each instrument its own | Port the tolerance draws | ~0 at run time |
@@ -485,6 +487,59 @@ S5's "if wanted": a diode ring between two transformers, oscillator 1 times osci
 Diodes: SELENIUM@1 exists. The original ring modulator (Cowan, 1934) used copper-oxide
 rectifiers, whose soft knee and leakage sound dirtier. That's a new device fit, shared with
 #6. **Cost:** two transformers (JA cores, or gapped, where linear is enough).
+
+**Prototyped (2026-11-01), then built out of order (the user's call) with the LFO as the
+carrier.** `scripts/ring_study.py` -> `reports/tube_synth/ring/` (`core.json`, `synth_*.json`,
+`cpu.json` from `scripts/ring_cpu.py`; takes under `audio/`).
+- **The ring alone** (`core`: ideal sources, 1 : 1+1 mumetall transformers, a 10k load): with
+  nominal parts the carrier and the signal bleed -47 to -70 dB under the product; from ~1 V of
+  carrier it switches (3 f_c +- f_s ~10 dB under the product, a square carrier's). Selenium
+  (1/4 sq. in. cells) and silicon measure within ~2 dB of each other (selenium quieter): the
+  dirt copper oxide or selenium would add is leakage and mismatched cells, neither of which is
+  modelled (the selenium fit leaves out its Fig. 6 leakage). ~0.3 s per second of audio alone
+  at draft, half of it the JA cores.
+- **In the synth it needs a thread of its own and drivers of its own.** On the filter's thread
+  it cost +46% (Python's draft, back to back); alone, nothing in wall time but a core. Fed from
+  the oscillator's buffer directly, its load current crossed the partition one sample late and
+  Newton stopped at the cells: a 12AU7 follower per input fixes it (the period's practice too).
+  Unterminated, its output rang.
+- **What it multiplies, the options brought** (a key held, the oscillator out of the mix):
+  (a) a second reactor VCO: the classic tracking bell, but +26-34% wall time on its own thread
+  (the app's ~75% load toward ~100%), and a fixed tank ratio doesn't hold the interval
+  (sqrt 2's capacitors: 1.42 / 1.40 at 1.3 kHz / 500 Hz, 1.23 at 197 Hz, 1.16 at 109 Hz: it
+  needs a pitch input and tuning of its own, #9 / #19's); (b) the external input: the ring's
+  thread only, but the app can't take keys and live input at once; (c) the LFO with 10 nF
+  Wien capacitors: 8 Hz-1.9 kHz, no new oscillator. **The user chose (c)**; (a) stays #9's.
+
+**Built (2026-11-01).**
+- **LFO AUDIO** (`lfo_audio`, a checkbox): contacts (always in the circuit, so a flip updates a
+  live stream in place) take 0.99 uF from beside each 10 nF Wien capacitor and 900 pF from the
+  loop's compensation. `measure` (`built.json`): RATE 0 / 0.25 / 0.5 / 0.75 / 1: 8.0 / 34.6 /
+  147 / 590 / 1884 Hz, 6.2-8.4 V peak, THD 0.2-0.55%. Off (LOW) it is the LFO as before (4.58
+  Hz at RATE 0.7).
+- **The ring** (`ring` section; RING ON `ring_on`, a checkbox, off at first; RING level; OSC
+  level, new in the mixer): Cowan's diode ring of four selenium cells between two 1 : 1+1
+  mumetall transformers; the oscillator's buffer into T1 through a 12AU7 follower (0.1 uF
+  in), the LFO DC-coupled (it runs down to 0.08 Hz) through a divider into the other
+  follower and T1's centre tap; T2 terminated (2.4k) into the RING pot and a 12AU7 make-up
+  stage (~10x), into the mixer through 2.2M. Its supply is its own RC off the LFO's
+  reservoirs, and it is in only with the LFO on and RING ON (nested switches): off, its
+  section is empty and gets no thread, and the synth's rails never see it.
+- **Measured** (`built.json`, a key held at -20 / -15 / -10 V, OSC 0): the oscillator bleeds
+  -25 to -42 dB and the carrier -24 to -48 dB under the product (AUDIO RATE 0.5-0.9, and LOW
+  at ~10 Hz, the through-zero tremolo). The ring at full peaks -1.7 to +4.9 dB from the
+  oscillator alone at full (through 1M it was 3-9 dB over: 2.2M). RING ON moves the pitch
+  0.004 cents (499.347 / 499.346 Hz) and the LFO's rate not at all; its ~12 mA sags the
+  LFO's reservoirs ~6 V (the LFO's DC +0.24 V, ~1 cent through VIBRATO at full; the 5651s'
+  feed falls ~0.5 mA, inside RCA's 1.5-3.5 mA).
+- **Load** (`play.rs --hold 69`, 50 ms buffer, back to back, twice): RING OFF 75-91% (worst
+  block 102-119%), RING ON (AUDIO, RATE 0.75, OSC 0.5) 86-91% (108-114%); no dropouts. The
+  ring's thread costs a core. `--turn lfo_audio=0,1`: no restarts (contacts); `--turn
+  ring_on=0,1` restarts the stream (switch parts, as LFO ON), no dropouts.
+- Tests: `tests/test_tube_synth.py` (the ring's switches, the AUDIO range's rates, the
+  product and bleeds with the pitch unchanged); panel.rs's knob order. The app's partition
+  has a `ring` group ahead of the oscillator (it owns its output into the mixer; the
+  oscillator and the LFO own its inputs).
 
 ## 15. ADSR and a second envelope
 

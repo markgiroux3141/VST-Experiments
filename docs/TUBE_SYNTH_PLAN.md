@@ -835,7 +835,7 @@ construction with C2's transformer designer, a divided-down keyboard if drift pr
 unplayable (decision 2), the Odyssey itself as an emulation (it needs BJT and op-amp
 models). **Ideas for a more diverse instrument** (2026-10-31, the user liked all of them;
 25 ideas in priority order, from glide and KEY TRACK to gas tubes and a tube sequencer, built one
-at a time from 2026-10-31; #1 GLIDE, #2 KEY TRACK, #3 velocity and aftertouch, #4 HEATER, #6 RESERVOIR, #7 the lamp-stabilized LFO (with #8's VIBRATO and WOBBLE) done, #5 PULSE parked): [SYNTH_IDEAS.md](SYNTH_IDEAS.md).
+at a time from 2026-10-31; #1 GLIDE, #2 KEY TRACK, #3 velocity and aftertouch, #4 HEATER, #6 RESERVOIR, #7 the lamp-stabilized LFO (with #8's VIBRATO and WOBBLE), #14 the ring modulator (out of order; oscillator x LFO, the LFO's AUDIO range) done, #5 PULSE parked): [SYNTH_IDEAS.md](SYNTH_IDEAS.md).
 
 ## Order and why
 

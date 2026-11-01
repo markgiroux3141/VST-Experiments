@@ -1,0 +1,10 @@
+{
+ "seconds": 3.0,
+ "wall_per_s": {
+  "base": 1.082,
+  "lfo ring (own thread)": 1.088,
+  "lfo ring (input thread)": 1.576,
+  "vco2 alone": 1.454,
+  "vco2 + ring (own thread)": 1.469
+ }
+}

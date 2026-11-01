@@ -173,7 +173,15 @@ WOBBLE (`wobble`: into the CUTOFF pot's low end, its law unchanged); the app's s
 threads (the LFO its own); `scripts/lfo_study.py`. The LFO has a supply of its own (a winding,
 silicon rectifiers, a 5651 pair's -174 V): on the synth's rails it ran the 6X4 past its
 rating. LFO ON / OFF (`lfo_on`, `unit: switch`: a control the app draws as a checkbox): OFF
-empties the `lfo` section, which then gets no thread. **The full test suite and `--verify`
+empties the `lfo` section, which then gets no thread. #14 the ring modulator built out of order
+(the user's call; `scripts/ring_study.py` -> `reports/tube_synth/ring/`): oscillator x LFO, a
+selenium diode ring between two mumetall transformers with a 12AU7 follower per input and a
+make-up stage, on the LFO's supply; the LFO's AUDIO range (`lfo_audio`, a checkbox: switched
+contacts, ~8 Hz-1.9 kHz) makes it a carrier, at LFO rates a tremolo through zero. RING ON
+(`ring_on`, a checkbox, off at first: nested in the LFO's switch, so with either off the `ring`
+section is empty and gets no thread), RING and OSC level pots in the mixer; the app's split
+puts `ring` on a thread ahead of the oscillator. A second VCO as the carrier waits for #9.
+**The full test suite and `--verify`
 are owed** (per feature only targeted tests run, the user's call; the list: SYNTH_IDEAS.md
 "Owed").
 
@@ -198,6 +206,33 @@ from parts that existed by ~1881, wired with today's knowledge (Leclanché cells
 Gray's contact-breaker reeds, gas-tube and spark-gap sawtooths, carbon-granule key VCAs and
 carbon relays as the amplifier, the saturable reactor on period iron, telephone receivers).
 Milestones V0-V6; it shares the gas tube with HYBRID_PHYSICS_PLAN.md's H1.
+
+Real instruments ([docs/INSTRUMENT_PLAN.md](docs/INSTRUMENT_PLAN.md), 2026-11-01, parked
+until the user picks it up; nothing built): exciter -> resonator -> radiator -> room, the
+resonators as modal media from geometry (offline FEM, per-mode BEM radiation; GPU with a
+CPU reference), contacts folded into the medium's port (not one sample late like the
+plate), full-physics references (time-domain FEM, lattice Boltzmann) checking reduced
+models. Proposed order: a church bell (the pipeline), the Rhodes Mk I Stage (passive, no
+BJT), the Wurlitzer, the piano (hysteretic felt, nonlinear coupled strings, soundboard),
+the pipe organ last (jet-drive flue pipes, reed pipes, the wind system as one coupled
+circuit). Milestones I1-I8.
+
+Sidechain ([docs/SIDECHAIN_PLAN.md](docs/SIDECHAIN_PLAN.md), 2026-11-01, a brainstorm
+parked until the user picks it up; nothing built): a keyed 670 (an INT / EXT switch on
+T103's 600 ohm primary, the key as a control input; keyed, the 670 is feed-forward), a
+FLAT / LP / HP sidechain filter at the pick-off (an iron-cored inductor on a JA core), and
+a split-band ducker (channel 2's 6386 stage at a fixed bias for the highs). Milestones
+K1-K4; the user's open decisions are listed there.
+
+Grooves ([docs/PHONO_PLAN.md](docs/PHONO_PLAN.md), 2026-11-01, parked until the user picks
+it up; nothing built): vinyl, the acoustic gramophone, wax cylinders and tin foil as one
+machine, a groove written along arc length (a print between the recording and the player)
+and read by a tip (morphological dilation, a Hertz contact in the stylus' port, mistracking
+as a hybrid event), on the tape's medium structure. The acoustic players are one
+mechano-acoustic network (needle, soundbox, arm, horn: the impedance analogy, the speaker's
+precedent; Maxfield and Harrison 1926 the anchor), acoustic recording a horn into wax fed by
+MIC_ROOM_PLAN.md's room; old sound as physical condition (needle wear, wear per play,
+governor hunting). Milestones G1-G8, the acoustic machines proposed before vinyl.
 
 Mics, preamps and rooms ([docs/MIC_ROOM_PLAN.md](docs/MIC_ROOM_PLAN.md), 2026-11-01; nothing
 built; the user picks it up deliberately): source -> room -> capsule -> mic electronics ->

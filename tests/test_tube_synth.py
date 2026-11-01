@@ -39,6 +39,8 @@ PARTITION = (
     "cutoff",
     "envelope",
     "|",
+    "ring",
+    "|",
     "oscillator",
     "pitch",
     "|",
@@ -367,3 +369,69 @@ def test_lfo_off_takes_the_oscillator_out_and_holds_the_pitch():
     f_on = vco.frequency(tank_on[int(0.5 * FS) :], FS)
     print(f_off, f_on)
     assert abs(vco.cents(f_off, f_on)) < 5
+
+
+def ring_study():
+    study = importlib.util.spec_from_file_location(
+        "ring_study", Path(__file__).parents[1] / "scripts" / "ring_study.py"
+    )
+    mod = importlib.util.module_from_spec(study)
+    study.loader.exec_module(mod)
+    assert tuple(mod.PARTITION) == PARTITION
+    return mod
+
+
+def test_the_ring_is_in_only_with_the_lfo_and_ring_on():
+    """The ring modulator (SYNTH_IDEAS.md #14) runs on the LFO's supply with the LFO as its
+    carrier: its parts are in only with LFO ON and RING ON (`ring_on`, off by default: no
+    thread for it), and otherwise its mixer resistor's far end is grounded."""
+    s = spec.load_circuit(CIRCUIT)
+    names = lambda sets: {e.name for e in builder.build_ir(s, spec.resolve(s, sets)).elements()}  # noqa: E731
+    ring = {"XRGVA", "XRGVB", "XRGVC", "DRG1", "DRG2", "DRG3", "DRG4"}
+    for lfo_on, ring_on in ((0, 0), (0, 1), (1, 0), (1, 1)):
+        n = names({"lfo_on": lfo_on, "ring_on": ring_on})
+        on = lfo_on and ring_on
+        assert (ring <= n) if on else not (ring & n), (lfo_on, ring_on)
+        assert ("RRXGA" in n or "RRXGB" in n) != bool(on), (lfo_on, ring_on)
+    assert s.controls["ring_on"]["value"] == 0 and s.controls["lfo_audio"]["value"] == 0
+
+
+def test_the_lfo_audio_range_reaches_audio_rates():
+    """LFO AUDIO (`lfo_audio`): the Wien bridge's switched-out capacitors leave 10 nF, RATE
+    then ~8 Hz-1.9 kHz (scripts/ring_study.py measure: 147 Hz at 0.5, 1884 Hz at 1, ~8 V peak,
+    THD 0.3-0.6% once the lamp has settled: from a start it blooms, ~11.6 V peak and 4% THD
+    at 1.5 s); the switch is contacts, so the IR's structure doesn't change."""
+    mod = ring_study()
+    s = spec.load_circuit(CIRCUIT)
+    lo = builder.build_ir(s, spec.resolve(s, {"lfo_audio": 0}))
+    hi = builder.build_ir(s, spec.resolve(s, {"lfo_audio": 1}))
+    assert [e.name for e in lo.elements()] == [e.name for e in hi.elements()]
+    for rate, want_hz in ((0.5, 147.4), (1.0, 1884.0)):
+        r, _, fs = mod.run_synth(
+            CIRCUIT, {"lfo_audio": 1, "lfo_rate": rate}, -15.0, 4.0, PARTITION, ["lfo"], keep_s=1.0
+        )
+        row = mod._lfo_row(r, fs, {})
+        print(rate, row)
+        assert abs(row["lfo_hz"] / want_hz - 1) < 0.03
+        assert 4.0 < row["lfo_pk_v"] < 12.0 and row["lfo_thd_pct"] < 2.0
+
+
+def test_the_ring_multiplies_the_oscillator_by_the_lfo_and_leaves_the_pitch():
+    """RING ON, the oscillator out of the mix (OSC 0), the LFO at AUDIO ~590 Hz, a key at
+    -15 V (~499 Hz): the output is the sum and difference tones, the oscillator and the
+    carrier each >= 25 dB under them (measured -34 / -36 dB); the pitch is the ring off's
+    (its supply is the LFO's: 499.347 / 499.346 Hz off / on). After 3 s, the LFO settled (at
+    2 s its bloom left the carrier -22.5 dB)."""
+    mod = ring_study()
+    pr = ["out", "o_t", "lfo"]
+    sets = {"ring_on": 1, "osc_level": 0.0, "lfo_audio": 1, "lfo_rate": 0.75}
+    r, _, fs = mod.run_synth(CIRCUIT, sets, -15.0, 3.0, PARTITION, pr, keep_s=1.0)
+    y = r["out"]
+    f1, f2 = vco.frequency(r["o_t"], fs), vco.frequency(r["lfo"], fs)
+    prod = max(mod.tone_db(y, fs, abs(f1 - f2)), mod.tone_db(y, fs, f1 + f2))
+    osc, car = mod.tone_db(y, fs, f1) - prod, mod.tone_db(y, fs, f2) - prod
+    r0, _, _ = mod.run_synth(CIRCUIT, {}, -15.0, 2.0, PARTITION, ["o_t"], keep_s=1.0)
+    f_off = vco.frequency(r0["o_t"], fs)
+    print(f1, f2, osc, car, f_off)
+    assert osc < -25 and car < -25
+    assert abs(vco.cents(f1, f_off)) < 3

@@ -512,7 +512,11 @@ pub const DEVICES: [Device; 10] = [
         // On two (the oscillator and the supplies on the second) it ran ~96% load;
         // bench, 3 s at -15 V: 1.38x real time on two, 0.89x on four, within 0.1 cent
         // and 0.01 dB of the one solve. The LFO (SYNTH_IDEAS.md #7) on a thread of its
-        // own: it owns its pots' wipers, where the pitch and the cutoff hear it.
+        // own: it owns its pots' wipers, where the pitch and the cutoff hear it. The ring
+        // modulator (#14) on one of its own, ahead of the oscillator and the LFO (they own
+        // its inputs, the buffer and the LFO's output; it owns its output into the mixer):
+        // on the filter's thread it cost +46%, alone nothing but a core. Empty (RING OFF,
+        // or the LFO off), it gets no thread.
         own_oscillator: false,
         partition: Some(&[
             "resonance",
@@ -521,6 +525,8 @@ pub const DEVICES: [Device; 10] = [
             "filter",
             "cutoff",
             "envelope",
+            "|",
+            "ring",
             "|",
             "oscillator",
             "pitch",
@@ -849,7 +855,7 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 37] = [
+const LABELS: [(&str, &str); 41] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -881,9 +887,13 @@ const LABELS: [(&str, &str); 37] = [
     ("heater", "Heater (x rated; under 0.9 out of rating)"),
     ("reservoir", "Reservoir (hum; under 6 \u{b5}F detunes)"),
     ("lfo_on", "LFO on (off saves a core)"),
+    ("lfo_audio", "LFO audio range (8 Hz-1.9 kHz)"),
     ("lfo_rate", "LFO rate"),
     ("vibrato", "Vibrato (LFO to pitch)"),
     ("wobble", "Wobble (LFO to cutoff)"),
+    ("ring_on", "Ring mod on (needs the LFO; off saves a core)"),
+    ("ring", "Ring level (oscillator x LFO)"),
+    ("osc_level", "Oscillator level"),
     ("drive", "Drive (send level)"),
     ("decay_500hz_s", "Decay at 500 Hz (s)"),
     ("return_level", "Return"),
@@ -1096,16 +1106,26 @@ mod tests {
                 "range",
                 "reservoir",
                 "lfo_on",
+                "lfo_audio",
                 "lfo_rate",
                 "vibrato",
                 "wobble",
+                "ring_on",
+                "ring",
+                "osc_level",
                 "heater"
             ]
         );
-        // The LFO's ON / OFF switch (`unit: switch`) is a checkbox.
+        // The LFO's ON / OFF switch (`unit: switch`) is a checkbox, as are its AUDIO range
+        // and the ring's ON / OFF (off at first: the panel's sound as before).
         let lfo = k.iter().find(|k| k.key == "lfo_on").unwrap();
         assert_eq!(lfo.kind, Kind::Toggle);
         assert_eq!(lfo.number(), 1.0);
+        for key in ["lfo_audio", "ring_on"] {
+            let s = k.iter().find(|k| k.key == key).unwrap();
+            assert_eq!(s.kind, Kind::Toggle);
+            assert_eq!(s.number(), 0.0);
+        }
         // The kick: the keys only gate it, its own oscillator sounds.
         let kick = spec_of("tube_kick");
         let kick_keys: Vec<String> = knobs(&DEVICES[8], &kick)

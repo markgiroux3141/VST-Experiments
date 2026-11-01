@@ -104,6 +104,8 @@ CANDIDATES = {
             "cutoff",
             "envelope",
             "|",
+            "ring",
+            "|",
             "oscillator",
             "pitch",
             "|",
