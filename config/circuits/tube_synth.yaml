@@ -105,8 +105,10 @@ noise:
 
 # Heated cathodes (device builder B6, varimu.devices.cathode; config/cathodes.yaml): every
 # tube follows one cathode temperature, its heater at the MAINS setting's ratio to the rated
-# 120 V and the mains wander; runs start warm (a cold start on demand: power on).
-heaters: {}
+# 120 V times HEATER (`heater`, the heater winding's tap: SYNTH_IDEAS.md #4) and the mains
+# wander; runs start warm (a cold start on demand: power on). Turning HEATER heats or cools
+# the cathodes through their 7 s lag.
+heaters: {tap: heater}
 
 controls:
   cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from ~-27 V (0; the -45 V rail through RCUTL) to ground (1))"}
@@ -119,6 +121,7 @@ controls:
   glide: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-31: the GLIDE rheostat, 82k audio taper onto 4.7 uF: ~14 ms at 0.25, ~45 ms at 0.5, ~0.39 s at 1 (time constants); 0 none)"}
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1); linear)"}
   range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
+  heater: {value: 1.0, min: 0.6, max: 1.1, unit: ratio, source: "provisional: model knowledge (design, 2026-11-01: the HEATER control, the heaters' volts over their rating (a heater winding's taps, as period gear set them); tubes are rated +-10%, so below 0.9 is out of rating (the panel says so): the user's choice, extended to 0.6 for the starved sound)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
 

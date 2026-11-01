@@ -159,6 +159,8 @@ string, the control input `key`, 0.75 V a key, 0 V at C4 (`key_*` values; the ap
 #3 velocity (the bus's key-down volts from a measured table, `panel::Device::velocity`,
 Play's Velocity range; `scripts/velocity_study.py`) and aftertouch (control input
 `pressure`, 0-15 V, `Feed::Pressure`, the PRESSURE pot under KEY TRACK) built.
+#4 HEATER built (`heater`, 0.6-1.1 of rated, below 0.9 marked out of rating: a `heaters`
+block's `tap: KEY` scales the heater ratio, both builders; `scripts/heater_knob_study.py`).
 
 Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
 user's idea; nothing built): synthesis stays pure, except where the physics is far faster
@@ -198,7 +200,7 @@ circuitsim's `noise.rs` the port (DK solver only: current columns), SPICE via fi
 `tests/test_noise_spectra.py`. The app's Play view has a "Noise" switch (off saves the CPU).
 
 **Heated cathodes (device builder B6, the heater, 2026-10-30; DEVICE_BUILDER_PLAN.md B6's
-status):** a circuit file's `heaters: {start?: warm | cold}` block gives every triode, pentode
+status):** a circuit file's `heaters: {start?: warm | cold, tap?: KEY}` block gives every triode, pentode
 and vacuum diode one cathode temperature (IR `heaters` block + `HeatedCathode` per tube),
 heated at the mains setting's ratio to the rated mains times B5's mains wander, through a
 7 s thermal lag; it acts through the space-charge shift (+1.7 mV/K as on the grid, zero at

@@ -12,6 +12,7 @@ sagged it and a held note fell ~780 cents over ~2 s; regulated, ~19 cents. A hel
 """
 
 import dataclasses
+import importlib.util
 from pathlib import Path
 
 import numpy as np
@@ -281,3 +282,18 @@ def test_pressure_raises_the_cutoff_driver():
     print(rest, pressed)
     assert abs(rest - (-20.5)) < 0.15
     assert 6.8 < pressed - rest < 7.8
+
+
+def test_a_starved_heater_flattens_and_sags_the_voice():
+    """HEATER (SYNTH_IDEAS.md #4) at 0.7 of rated, warm: the cathodes' space-charge shift
+    and the 6X4's emission ceiling (B+ at b3 ~207 -> ~193 V) drop the held note ~110 cents
+    (scripts/heater_knob_study.py: within the rated +-10%, ~+-20 cents)."""
+    knob = importlib.util.spec_from_file_location(
+        "heater_knob_study", Path(__file__).parents[1] / "scripts" / "heater_knob_study.py"
+    )
+    mod = importlib.util.module_from_spec(knob)
+    knob.loader.exec_module(mod)
+    rated, starved = mod.run(1.0), mod.run(0.7)
+    print(rated, starved)
+    assert -160 < vco.cents(starved["hz"], rated["hz"]) < -70
+    assert 8 < rated["b3_v"] - starved["b3_v"] < 25

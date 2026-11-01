@@ -358,14 +358,14 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
     let heaters = data.get("heaters").filter(|v| !v.is_null());
     if let Some(h) = heaters {
         match h.as_map() {
-            Some(m) if m.keys().all(|k| k == "start") => {
+            Some(m) if m.keys().all(|k| k == "start" || k == "tap") => {
                 if let Some(s) = m.get("start")
                     && !matches!(s.as_str(), Some("warm" | "cold"))
                 {
                     errors.push(format!("heaters.start: {s} (warm | cold)"));
                 }
             }
-            _ => errors.push("heaters: a mapping {start?: warm | cold}".into()),
+            _ => errors.push("heaters: a mapping {start?: warm | cold, tap?: KEY}".into()),
         }
     }
     let heaters = heaters.and_then(Value::as_map).cloned();

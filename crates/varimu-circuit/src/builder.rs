@@ -242,6 +242,11 @@ fn heater_spec(ctx: &Context, start: &str) -> Result<HeaterSpec, Error> {
         let rated = ctx.physical("mains.rated_v_rms", &get("rated_v_rms"))?;
         ratio = ctx.float("mains", &mains_v)? / ctx.float("mains.rated_v_rms", &rated)?;
     }
+    // A heater tap on the panel (the block's `tap` parameter) scales it.
+    if let Some(tap) = ctx.spec.heaters.as_ref().and_then(|h| h.get("tap")) {
+        let v = ctx.reference("heaters.tap", &tap.py_str())?;
+        ratio *= ctx.float("heaters.tap", &v)?;
+    }
     Ok(HeaterSpec {
         t0_k: oxide_value(&ox, "t0_k")?,
         t_amb_k: oxide_value(&ox, "t_amb_k")?,

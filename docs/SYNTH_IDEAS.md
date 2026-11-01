@@ -40,7 +40,7 @@ diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heate
 | 1 | Glide (**built**) | Notes slide | A rheostat | ~0 (measured) |
 | 2 | KEY TRACK (**built**) | Filter brightness follows the note | A pot, a key string | ~0 (measured) |
 | 3 | Velocity, aftertouch (**built**) | Expression | App feeds; a control input | ~0 (measured) |
-| 4 | HEATER | "Tired tubes": softer, more drift | The heater ratio as a panel value | ~0 |
+| 4 | HEATER (**built**) | "Tired tubes": softer, more drift | The heater ratio as a panel value | ~0 |
 | 5 | PULSE (peaking transformer) | Bright, buzzy pulse, magnetic PWM | One small JA core | One core; aliasing |
 | 6 | SUPPLY: rectifier and reservoir | How much the voice sags and blooms | Switch contacts; copper oxide needs a fit | Small |
 | 7 | Lamp-stabilized Wien LFO | A working LFO that blooms | Lamp device model | ~+1% |
@@ -189,6 +189,36 @@ lag, so turning it is slow, like the real thing.
 - **Buildable:** tube heaters are rated +-10%. The panel range stays inside it, or the
   out-of-rating zone is marked on the panel (to decide with the user). Pairs with "Power on
   (cold)".
+
+**Built (2026-11-01).** The user chose the extended range, marked: HEATER (`heater`) runs
+0.6-1.1 of rated, the panel's label saying below 0.9 is out of rating. A circuit file's
+`heaters` block takes a `tap: KEY` (both builders; the IR's `heater_ratio` = the mains
+setting over its rating, times the tap). A turn is a value change: `Transient::update`
+carries the cathodes' temperature, so the sound follows through the 7 s thermal lag. Warm,
+a key held at -15 V (`scripts/heater_knob_study.py` -> `reports/tube_synth/heater_knob.json`):
+
+| HEATER | pitch | level | THD | B+ (b3) |
+|---|---|---|---|---|
+| 1.1 | +18 cents | +0.1 dB | 6.55% | 207 V |
+| 1.0 | 0 | 0 | 6.60% | 207 V |
+| 0.9 | -21 | -0.15 | 6.66% | 206 V |
+| 0.8 | -51 | -0.4 | 6.73% | 204 V |
+| 0.7 | -113 | -0.9 | 6.81% | 193 V |
+| 0.6 | -259 | -2.2 | 7.63% | 162 V |
+
+Inside the rating it's a drift control. Below ~0.75 the 6X4's own cathode hits its emission
+ceiling and B+ falls (45 V by 0.6), so the whole voice sags, goes flat and grittier: the
+emission ceiling of the signal tubes matters less than the rectifier's. No CPU cost (the
+heaters were already on). Test: `tests/test_tube_synth.py`, the starved-heater test.
+
+The user heard mostly pitch, which the numbers agree with: the oxide cathodes' 50x emission
+reserve keeps the signal tubes off their ceiling even at 0.6 (only the rectifier's charging
+peaks reach it), while the pitch driver turns tenths of a volt of bias into hundreds of
+cents. Kept anyway (free in CPU; the user's call). **Proposed, not scheduled: WEAR**, worn
+cathodes (each tube's emission reserve shrunk from 50x toward ~2x, at full heater), which is
+what "tired tubes" usually means: peaks compress, attacks soften, loud notes lose gain.
+Measure first whether it compresses without only detuning (the pitch driver may pull too);
+it would interact with HEATER (a worn tube is far more heater-sensitive).
 
 ## 5. PULSE: a peaking transformer
 

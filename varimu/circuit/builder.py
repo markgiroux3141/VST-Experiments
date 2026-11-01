@@ -755,13 +755,16 @@ def _heaters(spec: CircuitSpec, heaters: bool | str | None) -> str | None:
 
 def _heater_spec(ctx: Context) -> HeaterSpec:
     """The IR's heaters block: the oxide constants and the heater's ratio (the mains setting
-    over the rated mains)."""
+    over the rated mains, times the block's `tap` parameter if it has one)."""
     ox, _ = cathode_mod.load_cathodes()
     ratio = 1.0
     m = ctx.spec.mains
     if m:
         rated = ctx.physical("mains.rated_v_rms", m["rated_v_rms"])
         ratio = float(ctx.ref("mains", m["v_rms"])) / float(rated)
+    tap = (ctx.spec.heaters or {}).get("tap")
+    if tap is not None:
+        ratio = ratio * float(ctx.ref("heaters.tap", tap))
     return HeaterSpec(
         ox.t0_k, ox.t_amb_k, ox.alpha, ox.tau_s, ox.phi_ev, ox.n, ox.reserve, ratio, ctx.heaters
     )

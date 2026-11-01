@@ -842,7 +842,7 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 31] = [
+const LABELS: [(&str, &str); 32] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -871,6 +871,7 @@ const LABELS: [(&str, &str); 31] = [
     ("glide", "Glide"),
     ("key_track", "Key track"),
     ("pressure", "Pressure (aftertouch)"),
+    ("heater", "Heater (x rated; under 0.9 out of rating)"),
     ("drive", "Drive (send level)"),
     ("decay_500hz_s", "Decay at 500 Hz (s)"),
     ("return_level", "Return"),
@@ -1064,7 +1065,8 @@ mod tests {
                 "pressure",
                 "glide",
                 "wave",
-                "range"
+                "range",
+                "heater"
             ]
         );
         // The kick: the keys only gate it, its own oscillator sounds.

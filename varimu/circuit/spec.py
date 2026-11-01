@@ -16,7 +16,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     mains: {v_rms: <control>, hz: <control>, rated_v_rms: <param or {value, source}>}
     tolerance: {source, seed, spread, tube: {emission_pct, mu_pct}, bands, classes, combined}
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
-    heaters: {start?: warm | cold}  # heated cathodes (device builder B6)
+    heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
     sections: [{title, tolerance?, parts: {NAME: {<macro>: <nodes>, ...}}}]
 
@@ -53,7 +53,9 @@ parts (default MAINS_RMS, 0 for none). Renders can override it (`build(..., nois
 vacuum diode instance follows one cathode temperature (varimu.devices.cathode; constants and
 heater ratings in config/cathodes.yaml), its heater at the mains setting's ratio to the
 rated mains (and B5's mains wander when the noise has it); `start` warm (default) or cold
-(power on). Renders can override it (`build(..., heaters=)`).
+(power on); `tap` a parameter key whose value multiplies that ratio (a heater winding's tap
+or series rheostat on the panel: tube_synth's HEATER). Renders can override it
+(`build(..., heaters=)`).
 
 Parts and devices are read by varimu.circuit.builder (its docstring has the
 macro parts and their parameters).
@@ -226,8 +228,8 @@ def load_circuit(path: Path) -> CircuitSpec:
     full_scale, unit = _full_scale(data.get("full_scale"), errors)
     heaters = data.get("heaters")
     if heaters is not None:
-        if not isinstance(heaters, Mapping) or set(heaters) - {"start"}:
-            errors.append("heaters: a mapping {start?: warm | cold}")
+        if not isinstance(heaters, Mapping) or set(heaters) - {"start", "tap"}:
+            errors.append("heaters: a mapping {start?: warm | cold, tap?: KEY}")
         elif heaters.get("start", "warm") not in ("warm", "cold"):
             errors.append(f"heaters.start: {heaters['start']!r} (warm | cold)")
     noise = data.get("noise")
