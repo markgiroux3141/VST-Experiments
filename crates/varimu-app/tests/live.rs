@@ -298,6 +298,7 @@ fn the_synth_follows_its_keys_after_a_restart() {
                     }
                 }
                 Feed::Pitch(p) => p.volts(440.0 * 2f64.powf((last as f64 - 69.0) / 12.0)),
+                Feed::Key(k) => k.volts(last),
             })
             .collect()
     };
@@ -364,6 +365,7 @@ fn the_synth_range_switch_updates_in_place() {
         .map(|f| match f {
             Feed::Gate(_, down) => *down,
             Feed::Pitch(_) => -15.0,
+            Feed::Key(k) => k.volts(70), // -15 V's pitch: ~474 Hz
         })
         .collect();
     let mut live = Live::with_controls(&[], v.clone(), c, s.clone(), 1.0, &held).unwrap();
@@ -418,6 +420,7 @@ fn the_synth_powers_on_from_cold() {
             .map(|f| match f {
                 Feed::Gate(_, down) => *down,
                 Feed::Pitch(p) => p.volts(440.0 * 2f64.powf((note as f64 - 69.0) / 12.0)),
+                Feed::Key(k) => k.volts(note),
             })
             .collect()
     };

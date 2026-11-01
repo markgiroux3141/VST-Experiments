@@ -118,7 +118,9 @@ def render(quality: str, sets: dict, x: np.ndarray, gate: np.ndarray, pitch: np.
         io.TransientSettings.from_sim_settings(engine="circuitsim", quality=quality),
         full_scale_volts_peak=1.0,
     )
-    v = fast.run_transient(ir, x, settings=st, controls={"gate": gate, "pitch": pitch}).vectors
+    v = fast.run_transient(
+        ir, x, settings=st, controls={"gate": gate, "pitch": pitch, "key": np.zeros(len(gate))}
+    ).vectors
     return v["v(out)"], v["v(mix)"]
 
 

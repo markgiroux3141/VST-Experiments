@@ -67,7 +67,10 @@ def run(sets: dict, step: tuple[float, float]) -> dict:
     pitch = np.full(n, step[0])
     pitch[int(STEP_AT_S * fs) :] = step[1]
     v = fast.run_transient(
-        ir, np.zeros(n), settings=st, controls={"gate": np.full(n, KEY_DOWN_V), "pitch": pitch}
+        ir,
+        np.zeros(n),
+        settings=st,
+        controls={"gate": np.full(n, KEY_DOWN_V), "pitch": pitch, "key": np.zeros(n)},
     ).vectors["v(o_t)"]
     ts, fc = vco.cycle_frequencies(v, fs)
     sm = vco.smoothed(ts, fc, SMOOTH_S)

@@ -59,7 +59,10 @@ def run(pitch_v, dur_s=1.0, on_s=0.2):
     t = np.arange(n) / FS
     gate = np.where(t >= on_s, KEY_DOWN_V, KEY_UP_V)
     v = fast.run_transient(
-        ir, np.zeros(n), settings=st, controls={"gate": gate, "pitch": np.full(n, pitch_v)}
+        ir,
+        np.zeros(n),
+        settings=st,
+        controls={"gate": gate, "pitch": np.full(n, pitch_v), "key": np.zeros(n)},
     ).vectors
     return v["v(out)"], v["v(o_t)"]
 
@@ -70,7 +73,7 @@ def rms_dbfs(y):
 
 def test_passes_the_preflight_checks_with_its_gate_and_pitch():
     s = spec.load_circuit(CIRCUIT)
-    assert s.cv_inputs == (("gate", "bus"), ("pitch", "pv"))
+    assert s.cv_inputs == (("gate", "bus"), ("pitch", "pv"), ("key", "kv"))
     assert check_circuit(s) == []
 
 
@@ -100,7 +103,10 @@ def test_a_key_barely_moves_the_cutoff_driver():
     t = np.arange(n) / FS
     gate = np.where(t >= 0.5, KEY_DOWN_V, KEY_UP_V)
     k4 = fast.run_transient(
-        ir, np.zeros(n), settings=st, controls={"gate": gate, "pitch": np.full(n, -15.0)}
+        ir,
+        np.zeros(n),
+        settings=st,
+        controls={"gate": gate, "pitch": np.full(n, -15.0), "key": np.zeros(n)},
     ).vectors["v(k4)"]
     up, held = np.mean(k4[int(0.3 * FS) : int(0.5 * FS)]), np.mean(k4[int(1.3 * FS) :])
     print(up, held)  # V4's cathode current in mA (1k)
@@ -127,7 +133,10 @@ def test_env_amount_adds_control_current_only_while_the_envelope_is_open(amount)
     gate = np.where((t >= 0.2) & (t < 0.6), KEY_DOWN_V, KEY_UP_V)
     i7 = (
         fast.run_transient(
-            ir, np.zeros(n), settings=st, controls={"gate": gate, "pitch": np.full(n, -15.0)}
+            ir,
+            np.zeros(n),
+            settings=st,
+            controls={"gate": gate, "pitch": np.full(n, -15.0), "key": np.zeros(n)},
         ).vectors["v(k7)"]
         / 2.2
     )  # mA, V7's cathode (2.2k)
@@ -163,7 +172,10 @@ def glide_step(glide):
     n = int(1.6 * FS)
     pitch = np.where(np.arange(n) / FS >= 0.3, -15.0, -20.0)
     tank = fast.run_transient(
-        ir, np.zeros(n), settings=st, controls={"gate": np.full(n, KEY_DOWN_V), "pitch": pitch}
+        ir,
+        np.zeros(n),
+        settings=st,
+        controls={"gate": np.full(n, KEY_DOWN_V), "pitch": pitch, "key": np.zeros(n)},
     ).vectors["v(o_t)"]
     ts, fc = vco.cycle_frequencies(tank, FS)
     return ts, vco.smoothed(ts, fc, 0.05)
@@ -186,3 +198,34 @@ def test_glide_slides_the_pitch_and_lands_on_the_note():
     assert gone(ts0, f0, 0.34) > 0.9
     assert gone(ts1, f1, 0.34) < 0.5
     assert abs(vco.cents(np.median(f1[ts1 > 1.3]), hi)) < 10
+
+
+@pytest.mark.parametrize("track", [0.0, 1.0])
+def test_key_track_moves_the_cutoff_driver_with_the_key_string(track):
+    """KEY TRACK (SYNTH_IDEAS.md #2): the key string (0.75 V a key, 0 V at C4) under the
+    CUTOFF pot. At CUTOFF 0.3 and KEY TRACK 1, C4 -> C5 lifts V4's grid ~4.8 V
+    (scripts/keytrack_study.py: the cutoff 1.27 -> 2.22 kHz); at KEY TRACK 0 the key
+    string changes nothing."""
+    s = spec.load_circuit(CIRCUIT)
+    ir = builder.build_ir(s, spec.resolve(s, {"cutoff": 0.3, "key_track": track}), cores="ja")
+    ir = dataclasses.replace(ir, probes=(VoltageProbe("g4"),))
+    st = dataclasses.replace(
+        io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
+        full_scale_volts_peak=1.0,
+        partition=PARTITION,
+    )
+    n = int(1.6 * FS)
+    key = np.where(np.arange(n) / FS >= 1.0, 9.0, 0.0)  # C4, then C5
+    g4 = fast.run_transient(
+        ir,
+        np.zeros(n),
+        settings=st,
+        controls={"gate": np.full(n, KEY_DOWN_V), "pitch": np.full(n, -15.0), "key": key},
+    ).vectors["v(g4)"]
+    c4, c5 = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
+    print(track, c4, c5)
+    assert abs(c4 - (-20.5)) < 0.15  # KEY TRACK barely moves C4's cutoff
+    if track == 0.0:
+        assert abs(c5 - c4) < 0.05  # the grid itself still settles ~0.03 V then
+    else:
+        assert 4.5 < c5 - c4 < 5.1

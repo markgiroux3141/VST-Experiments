@@ -165,6 +165,42 @@ impl Pitch {
     }
 }
 
+/// A keyboard's linear contact string (tube_synth's KEY TRACK, SYNTH_IDEAS.md #2): the
+/// same volts a key wherever it is, 0 V at `ref_note`, held at the string's ends. Unlike a
+/// pitch input's, it isn't tuned to anything: the circuit file's `<name>_v_per_semitone`,
+/// `<name>_ref_note`, `<name>_min_v` and `<name>_max_v`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KeyString {
+    pub v_per_semitone: f64,
+    pub ref_note: f64,
+    pub min_v: f64,
+    pub max_v: f64,
+}
+
+impl KeyString {
+    /// The string's volts at MIDI `note`.
+    pub fn volts(&self, note: u8) -> f64 {
+        ((note as f64 - self.ref_note) * self.v_per_semitone).clamp(self.min_v, self.max_v)
+    }
+
+    /// The control input `name`'s string, if the circuit file has one.
+    pub fn of(spec: &CircuitSpec, name: &str) -> Option<KeyString> {
+        let get = |k: &str| {
+            spec.values
+                .get(&format!("{name}_{k}"))
+                .and_then(Value::as_map)
+                .and_then(|m| m.get("value"))
+                .and_then(Value::as_f64)
+        };
+        Some(KeyString {
+            v_per_semitone: get("v_per_semitone")?,
+            ref_note: get("ref_note")?,
+            min_v: get("min_v")?,
+            max_v: get("max_v")?,
+        })
+    }
+}
+
 /// What feeds one of a circuit's control inputs while a keyboard plays it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Feed {
@@ -172,10 +208,13 @@ pub enum Feed {
     Gate(f64, f64),
     /// The last key's pitch.
     Pitch(Pitch),
+    /// The last key on a linear contact string.
+    Key(KeyString),
 }
 
 /// The feeds of `spec`'s control inputs in its order, for `device` played from keys
-/// (every control input needs one: the device's gate or pitch).
+/// (every control input needs one: the device's gate or pitch, or a key string the
+/// circuit file describes).
 pub fn key_feeds(device: &Device, spec: &CircuitSpec) -> Result<Vec<Feed>, String> {
     spec.cv_inputs
         .iter()
@@ -185,6 +224,8 @@ pub fn key_feeds(device: &Device, spec: &CircuitSpec) -> Result<Vec<Feed>, Strin
                 Ok(Feed::Gate(up, down))
             } else if let Some(p) = device.pitch.filter(|p| p.control == name) {
                 Ok(Feed::Pitch(p))
+            } else if let Some(k) = KeyString::of(spec, name) {
+                Ok(Feed::Key(k))
             } else {
                 Err(format!(
                     "nothing plays the control input {name} from the keys"
@@ -706,7 +747,7 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 29] = [
+const LABELS: [(&str, &str); 30] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -733,6 +774,7 @@ const LABELS: [(&str, &str); 29] = [
     ("release", "Release"),
     ("wave", "Wave (tank to square)"),
     ("glide", "Glide"),
+    ("key_track", "Key track"),
     ("drive", "Drive (send level)"),
     ("decay_500hz_s", "Decay at 500 Hz (s)"),
     ("return_level", "Return"),
@@ -922,6 +964,7 @@ mod tests {
                 "attack",
                 "release",
                 "env_amount",
+                "key_track",
                 "glide",
                 "wave",
                 "range"
@@ -966,9 +1009,23 @@ mod tests {
             key_feeds(&DEVICES[7], &synth),
             Ok(vec![
                 Feed::Gate(-110.0, -1.0),
-                Feed::Pitch(DEVICES[7].pitch.unwrap())
+                Feed::Pitch(DEVICES[7].pitch.unwrap()),
+                Feed::Key(KeyString {
+                    v_per_semitone: 0.75,
+                    ref_note: 60.0,
+                    min_v: -27.0,
+                    max_v: 27.0
+                })
             ])
         );
+        let Ok(feeds) = key_feeds(&DEVICES[7], &synth) else {
+            unreachable!()
+        };
+        let Feed::Key(k) = feeds[2] else {
+            unreachable!()
+        };
+        assert_eq!((k.volts(60), k.volts(72), k.volts(59)), (0.0, 9.0, -0.75));
+        assert_eq!((k.volts(0), k.volts(127)), (-27.0, 27.0));
         // A device without a feed for a control input can't be played from keys.
         assert!(key_feeds(&DEVICES[4], &voice).is_err());
     }

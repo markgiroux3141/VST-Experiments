@@ -153,7 +153,24 @@ for the DC operating point only; absent = unchanged IR). Ideas for a more divers
 (2026-10-31: 25 in priority order, the user liked all of them; built one at a time in that
 order): [docs/SYNTH_IDEAS.md](docs/SYNTH_IDEAS.md). #1 GLIDE built (`glide`: 82k onto 4.7 uF
 ahead of the pitch stopper; the 6V6GT's grid leak now a 1 GOhm numerical one, so the
-tuning tables were re-measured; `scripts/glide_study.py`).
+tuning tables were re-measured; `scripts/glide_study.py`). #2 KEY TRACK built (`key_track`: a second keyboard
+string, the control input `key`, 0.75 V a key, 0 V at C4 (`key_*` values; the app's
+`panel::KeyString`, `Feed::Key`), under the CUTOFF pot; `scripts/keytrack_study.py`).
+
+Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
+user's idea; nothing built): synthesis stays pure, except where the physics is far faster
+than a sample (a gas tube's reset, a multivibrator's flip, a carrier above Nyquist) or is
+spread in space. There, that part alone becomes an **exception**, generated from a
+full-physics reference simulation of the same part and coupled at its ports (event kernels,
+multi-rate islands, ...), with the reference selectable in its place. First: the gas-tube
+sawtooth (SYNTH_IDEAS #23; milestones H1-H5). A proposed Hard rules addition waits for H3.
+
+Drums ([docs/DRUM_PLAN.md](docs/DRUM_PLAN.md), 2026-11-01, a brainstorm parked until the
+user is ready; nothing built): real drums as a modal medium coupled at ports (the plate's
+machinery: membranes, tension-modulation pitch drop, beater contact, snare wires and
+cymbals as hybrid exceptions), old drum machines as circuits (the Wurlitzer Sideman first;
+808 / CR-78 after a BJT model), tube drum voices from `tube_kick`. Order and open
+decisions are the user's.
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and

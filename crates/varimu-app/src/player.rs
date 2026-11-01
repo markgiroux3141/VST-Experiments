@@ -719,6 +719,7 @@ fn feed_volts(f: &Feed, sounding: Option<(u8, u8)>, last_note: u8, low: bool) ->
             }
         }
         Feed::Pitch(p) => p.volts_in(TestOsc::note_hz(last_note), low),
+        Feed::Key(k) => k.volts(last_note),
     }
 }
 
@@ -1288,7 +1289,7 @@ fn work(
             // keys'), the position asked for, and (in `live.values`) the one applied.
             let range = feeds.iter().find_map(|f| match f {
                 Feed::Pitch(p) => p.range,
-                Feed::Gate(..) => None,
+                Feed::Gate(..) | Feed::Key(_) => None,
             });
             let mut panel_values = live.values.clone();
             let mut asked_low = range.is_some_and(|r| r.is_low(&live.values));

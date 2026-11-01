@@ -47,7 +47,7 @@ def render(noise: bool, gate: np.ndarray, pitch: np.ndarray) -> np.ndarray:
         io.TransientSettings.from_sim_settings(engine="circuitsim", quality="production"),
         full_scale_volts_peak=1.0,
     )
-    controls = {"gate": gate, "pitch": pitch}
+    controls = {"gate": gate, "pitch": pitch, "key": np.zeros(len(gate))}
     return fast.run_transient(ir, np.zeros(len(gate)), settings=st, controls=controls).vectors[
         "v(out)"
     ]

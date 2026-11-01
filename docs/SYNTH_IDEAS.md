@@ -38,7 +38,7 @@ diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heate
 | # | Idea | What it adds to the sound | New work | Cost (estimate) |
 |---|---|---|---|---|
 | 1 | Glide (**built**) | Notes slide | A rheostat | ~0 (measured) |
-| 2 | KEY TRACK | Filter brightness follows the note | A pot and a divider | ~0; partition placement |
+| 2 | KEY TRACK (**built**) | Filter brightness follows the note | A pot, a key string | ~0 (measured) |
 | 3 | Velocity, aftertouch | Expression | App feeds; a control input | ~0 |
 | 4 | HEATER | "Tired tubes": softer, more drift | The heater ratio as a panel value | ~0 |
 | 5 | PULSE (peaking transformer) | Bright, buzzy pulse, magnetic PWM | One small JA core | One core; aliasing |
@@ -107,6 +107,38 @@ network. Measure it (cutoff against pitch, per range) before adding any.
 **Watch:** the pitch input lives in the partition's first part and V4 on the filter's
 thread. Feed V4 through a resistor onto a capacitor-held node, as RBUS / CBA do for ENV
 AMOUNT.
+
+**Built (2026-11-01), not from the pitch input.** Measured first (`scripts/keytrack_study.py`:
+a multitone at the external input, the oscillator cut from the mixer, RESONANCE 0, the -10
+dB point at `f`; `reports/tube_synth/keytrack/law_before.json`): CUTOFF moves V4's grid
+linearly, -29.3 V (304 Hz) to 0 V (4.87 kHz); the filter's law is ~300 cents/V at the bottom
+falling to ~45 at the top, the oscillator's 1.4-2x steeper per grid volt. And the pitch
+input is tuned per RANGE: on AUTO it jumps ~4.5 V at the 330 Hz split, which would jump the
+cutoff. So the keys get a second contact string, `key` (a control input: linear, 0.75 V a
+key, 0 V at C4, ends at C1 / C7, +-27 V; the circuit file's `key_*` values, varimu-app's
+`panel::KeyString` / `Feed::Key`, following the last key as the pitch does). It feeds the
+KEY TRACK pot (2k) through 220 ohm onto 4.7 uF (the partition's coupling node: the string
+on the first thread, the pot with the cutoff driver), and the pot's wiper is the CUTOFF
+pot's ground end. The share of the wiper's volts on V4's grid grows with CUTOFF (0.4 at 0,
+1 at full: RCUTL and the CUTOFF pot divide it). At C4, or KEY TRACK 0, the cutoff is as
+before (a 10k pot moved C4's cutoff up to ~170 cents as KEY TRACK turned: the CUTOFF
+network's 0.27 mA through its wiper; at 2k <= 24 cents).
+
+Cutoff (Hz) at CUTOFF 0.3 (`track_1.json`, `track_0.5.json`):
+
+| key | C1 | C2 | C3 | C4 | C5 | C6 | C7 |
+|---|---|---|---|---|---|---|---|
+| KEY TRACK 0 | 1278 | 1278 | 1278 | 1278 | 1278 | 1278 | 1278 |
+| KEY TRACK 0.5 | | 603 | 881 | 1260 | 1686 | 2209 | 2674 |
+| KEY TRACK 1 | | 215 | 609 | 1272 | 2219 | 3218 | 4019 |
+
+(C1 is the filter's floor.) At KEY TRACK 1 that's ~1280 cents an octave C3-C4, ~965 C4-C5,
+~640 C5-C6: full tracking mid-keyboard, compressing toward the top with the reactor's law;
+at 0.5 an even ~50%. At high CUTOFF and high keys V4's grid goes positive of ground (up to
++24 V at CUTOFF 1, C7) but not of its cathode (1k: a follower there, ~29 mA, ~5.6 W of the
+6V6GT's 12 W, b1 9 V down), and past the top the cutoff droops ~250 cents (the cores past
+saturation). Load with a key held (A4, back to back): 71-73% at KEY TRACK 0 and 1. Test:
+`tests/test_tube_synth.py`, the key-track test.
 
 ## 3. Velocity and aftertouch
 
@@ -295,7 +327,8 @@ the tube strikes and discharges until it goes out. It gives a sawtooth, the soun
 synth lacks most after #5, and the Trautonium's own.
 **New:** a gas-tube model (striking and extinction voltages, deionization time, the glow's
 drop), both implementations, fitted to an RCA thyratron sheet (2D21 or 884) or a neon
-lamp's. **Watch:** the discharge is a hard edge (aliasing, Newton).
+lamp's. **Watch:** the discharge is a hard edge (aliasing, Newton). The plan for that
+edge: [HYBRID_PHYSICS_PLAN.md](HYBRID_PHYSICS_PLAN.md) (the first physics exception, H1-H4).
 
 ## 24. Subharmonic mixtures
 

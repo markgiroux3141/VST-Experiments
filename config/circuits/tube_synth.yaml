@@ -25,6 +25,13 @@
 #        at full rotation, none at 0). The grid circuit stays under RCA's 0.1 MOhm for a
 #        fixed-bias 6V6GT (82k + 10k), and the grid leak is a 1 GOhm numerical one: a
 #        10M leak lost 0.1% of the pitch across the stopper, 0.9% with the glide (~90 cents)
+#   KEY TRACK (SYNTH_IDEAS.md #2): the keyboard's second contact string (`key`: linear,
+#        0.75 V per semitone, 0 V at C4; the pitch string is tuned to the oscillator per
+#        RANGE, so it jumps ~4.5 V at AUTO's split) through 220 ohm onto 4.7 uF, across the
+#        KEY TRACK pot (2k: the CUTOFF network's ~0.27 mA through a 10k pot moved C4's cutoff
+#        up to ~170 cents as KEY TRACK turned; through 2k, <= ~35). Its wiper is the CUTOFF pot's ground end, so the cutoff follows
+#        the key: at C4, or KEY TRACK 0, as before. The share of the wiper's volts on V4's
+#        grid grows with CUTOFF (0.4 at 0, 1 at full: the CUTOFF pot and RCUTL divide it)
 # The rest is tube_voice.yaml's: its header follows.
 #
 # The tube synth's voice (docs/TUBE_SYNTH_PLAN.md, S3): tube_filter.yaml's filter, supply
@@ -77,6 +84,7 @@ input: in
 cv_inputs:
   gate: bus
   pitch: pv
+  key: kv
 probes: [out, f, env, bus, mix, o_t, o_out, o_buf, p3a, p3b, b1, b3, neg, neg2, ta_core, tb_core, ota_core, otb_core]
 
 full_scale:
@@ -100,6 +108,7 @@ controls:
   attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
   release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
   env_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-30: the ENV AMOUNT pot, V7's screen from ground (0: off) to b1 (1); linear)"}
+  key_track: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the KEY TRACK pot, the share of the key string under the CUTOFF pot; linear)"}
   glide: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-31: the GLIDE rheostat, 82k audio taper onto 4.7 uF: ~14 ms at 0.25, ~45 ms at 0.5, ~0.39 s at 1 (time constants); 0 none)"}
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1); linear)"}
   range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
@@ -181,6 +190,10 @@ values:
   r_out_load_ohm: {value: 10.0e+3, source: "provisional: model knowledge (the secondary's load: the next stage's input)"}
   # --- the envelope
   gate_off_v: {value: -110.0, source: "provisional: model knowledge (design: the keyboard bus with no key down, the VCA shut past its remote cutoff's tail)"}
+  key_v_per_semitone: {value: 0.75, source: "provisional: model knowledge (design: the keyboard's second contact string, equal resistors: 0.75 V a key, ~90% tracking at KEY TRACK 1 around the default CUTOFF; read by the app, varimu-app panel::KeyString)"}
+  key_ref_note: {value: 60, source: "provisional: model knowledge (design: the key string's 0 V at C4 (MIDI 60): KEY TRACK leaves C4's cutoff alone)"}
+  key_min_v: {value: -27.0, source: "provisional: model knowledge (design: the string's low end, C1 (36 keys below C4))"}
+  key_max_v: {value: 27.0, source: "provisional: model knowledge (design: the string's high end, C7 (36 keys above C4))"}
   gate_on_v: {value: -1.0, source: "provisional: model knowledge (design: the keyboard bus with a key down, a volt past the VCA's open bias)"}
   r_bus_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the keyboard bus's source resistance and the attack's minimum: ~0.5 ms into 0.47 uF)"}
   r_attack_ohm: {value: 2.2e+6, source: "provisional: model knowledge (the ATTACK rheostat's track: up to ~1 s)"}
@@ -198,6 +211,9 @@ values:
   r_ba_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for `ba` on the envelope's thread of the draft's partition (the bus's resistor is on the first thread): with cold cathodes the steering diodes don't conduct and the DC point was singular (a power-on)"}
   c_ba_f: {value: 0.1e-6, source: "provisional: model knowledge (design: on the keyboard bus's end of the envelope (RBUS's far side): 0.1 ms with RBUS; in the draft's partition the bus and the envelope are on different threads, coupled at this node)"}
   r_cutoff_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the CUTOFF pot)"}
+  r_key_feed_ohm: {value: 220.0, source: "provisional: model knowledge (design: from the key string to the KEY TRACK pot (in the draft's partition the string is on the first thread, the pot with the cutoff driver: coupled at the 4.7 uF node); the string drives ~12 mA at its ends)"}
+  c_key_f: {value: 4.7e-6, source: "provisional: model knowledge (design: across the KEY TRACK pot: 1 ms with the feed, holds the node the partition couples)"}
+  r_key_track_pot_ohm: {value: 2.0e+3, source: "provisional: model knowledge (design: the KEY TRACK pot; the CUTOFF network's ~0.27 mA returns through its wiper, <= ~0.55k: ~0.15 V, ~35 cents at the default CUTOFF)"}
   c_cutoff_f: {value: 0.1e-6, source: "provisional: model knowledge (on V4's grid: smooths the cutoff, 10 ms with the pot)"}
   r_screen4_ohm: {value: 1.0e+3, source: "provisional: model knowledge (6V6GT screen stopper from its 5651 pair)"}
   r_cutoff_low_ohm: {value: 68.0e+3, source: "provisional: model knowledge (design, 2026-10-30: from the -45 V rail to the CUTOFF pot's low end, ~-27 V, where the 6V6GT on its regulated screen draws ~0.1 mA: the cutoff held 315 Hz (0) to 5 kHz (1), 1.23 kHz at 0.3 (on b1 with the pot from -45 V: 290 Hz, 4.9 kHz, 1.14 kHz); 56k reached 186 Hz with its lowest tenth nearly dead, 82k only 440 Hz)"}
@@ -426,7 +442,9 @@ sections:
       CS7: {C: [s7w, "0"], c: c_screen7_f}
       RS7: {R: [s7w, s7], r: r_screen7_ohm}
       RCUTL: {R: [neg, c_lo], r: r_cutoff_low_ohm}
-      RCUT: {pot: [c_lo, g4, "0"], r: r_cutoff_pot_ohm, at: cutoff}
+      RCUT: {pot: [c_lo, g4, kt], r: r_cutoff_pot_ohm, at: cutoff}
+      CKEY: {C: [kb, "0"], c: c_key_f}
+      RKT: {pot: ["0", kt, kb], r: r_key_track_pot_ohm, at: key_track}
       CCUT: {C: [g4, "0"], c: c_cutoff_f}
       XV4: {device: [p4, s4, g4, k4], model: V4}
       RCVR: {R: [b1, c_vr], r: r_cut_vr_feed_ohm}
@@ -483,6 +501,7 @@ sections:
       RGLIDE: {rheostat: [pv, o_pg], r: osc_r_glide_ohm, at: glide, taper_mid: osc_glide_taper_mid}
       CGLIDE: {C: [o_pg, "0"], c: osc_c_glide_f}
       ROPS: {R: [o_pg, o_g4], r: osc_r_pitch_stop_ohm}
+      RKEY: {R: [kv, kb], r: r_key_feed_ohm}
   - title: pitch
     parts:
       COG4: {C: [o_g4, "0"], c: osc_c_grid4_f}
