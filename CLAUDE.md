@@ -161,6 +161,9 @@ Play's Velocity range; `scripts/velocity_study.py`) and aftertouch (control inpu
 `pressure`, 0-15 V, `Feed::Pressure`, the PRESSURE pot under KEY TRACK) built.
 #4 HEATER built (`heater`, 0.6-1.1 of rated, below 0.9 marked out of rating: a `heaters`
 block's `tap: KEY` scales the heater ratio, both builders; `scripts/heater_knob_study.py`).
+#5 PULSE prototyped and parked (CPU; `scripts/pulse_prototype.py`). #6 RESERVOIR built
+(`reservoir`: 1-40 uF in steps, 20 default; the ripple's hum-growl, below 6 uF the pitch
+warbles and goes flat; `scripts/supply_study.py`; the rectifier switch dropped).
 
 Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
 user's idea; nothing built): synthesis stays pure, except where the physics is far faster

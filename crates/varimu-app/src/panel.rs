@@ -842,7 +842,7 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 32] = [
+const LABELS: [(&str, &str); 33] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -872,6 +872,7 @@ const LABELS: [(&str, &str); 32] = [
     ("key_track", "Key track"),
     ("pressure", "Pressure (aftertouch)"),
     ("heater", "Heater (x rated; under 0.9 out of rating)"),
+    ("reservoir", "Reservoir (hum; under 6 \u{b5}F detunes)"),
     ("drive", "Drive (send level)"),
     ("decay_500hz_s", "Decay at 500 Hz (s)"),
     ("return_level", "Return"),
@@ -897,9 +898,19 @@ pub struct Knob {
     pub kind: Kind,
     pub default: Value,
     pub value: Value,
+    /// The control's unit in the circuit file (`unit`), if it has one.
+    pub unit: Option<String>,
 }
 
 impl Knob {
+    /// How a choice reads on the panel: a capacitance (unit F) in uF, else as written.
+    pub fn choice_text(&self, v: &Value) -> String {
+        match (self.unit.as_deref(), v.as_f64()) {
+            (Some("F"), Some(f)) => format!("{} \u{b5}F", (f * 1e7).round() / 10.0),
+            _ => v.py_str(),
+        }
+    }
+
     /// The value as a number (a choice's index for selectors).
     pub fn number(&self) -> f64 {
         match &self.kind {
@@ -958,6 +969,7 @@ pub fn knobs(device: &Device, spec: &CircuitSpec) -> Vec<Knob> {
             kind,
             value: default.clone(),
             default,
+            unit: e.get("unit").and_then(Value::as_str).map(str::to_string),
         });
     }
     // The 670's panel in the order the device lists it.
@@ -1066,6 +1078,7 @@ mod tests {
                 "glide",
                 "wave",
                 "range",
+                "reservoir",
                 "heater"
             ]
         );

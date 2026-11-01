@@ -297,3 +297,21 @@ def test_a_starved_heater_flattens_and_sags_the_voice():
     print(rated, starved)
     assert -160 < vco.cents(starved["hz"], rated["hz"]) < -70
     assert 8 < rated["b3_v"] - starved["b3_v"] < 25
+
+
+def test_a_small_reservoir_hums_and_the_6x4_stays_in_rating():
+    """RESERVOIR (SYNTH_IDEAS.md #6): 2 uF against 20 uF puts ~17 dB more of the supply's
+    120 Hz ripple on the note (sidebands -16 / -33 dB re the harmonics) and makes the pitch
+    warble (scripts/supply_study.py); the 6X4's steady-state peak plate current stays under
+    GE's 245 mA."""
+    study = importlib.util.spec_from_file_location(
+        "supply_study", Path(__file__).parents[1] / "scripts" / "supply_study.py"
+    )
+    mod = importlib.util.module_from_spec(study)
+    study.loader.exec_module(mod)
+    normal, small = (mod.run("6x4", c, CIRCUIT) for c in (20e-6, 2e-6))
+    print(normal, small)
+    side = {r["c_reservoir_uf"]: r["ripple_sidebands_db"]["120"] for r in (normal, small)}
+    assert side[2.0] - side[20.0] > 12
+    assert small["pitch_spread_cents"] > 3 * normal["pitch_spread_cents"]
+    assert max(normal["plate_peak_ma"], small["plate_peak_ma"]) < 245

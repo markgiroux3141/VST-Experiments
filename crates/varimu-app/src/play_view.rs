@@ -2041,10 +2041,10 @@ fn knob_ui(ui: &mut egui::Ui, k: &mut Knob) -> bool {
             let before = i;
             egui::ComboBox::from_id_salt(&k.key)
                 .width(w)
-                .selected_text(choices[i].py_str())
+                .selected_text(k.choice_text(&choices[i]))
                 .show_ui(ui, |ui| {
                     for (j, c) in choices.iter().enumerate() {
-                        ui.selectable_value(&mut i, j, c.py_str());
+                        ui.selectable_value(&mut i, j, k.choice_text(c));
                     }
                 });
             if i != before {

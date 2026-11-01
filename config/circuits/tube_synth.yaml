@@ -80,7 +80,8 @@
 #        a pot from b1 (0: the screen grounded, V7 off), bypassed by CS7 (it also takes
 #        b1's ripple off the screen). 2.2k in its cathode: ~10 mA at full AMOUNT
 # The supply is tube_filter.yaml's: a 6X4 full-wave rectifier, CRC filtering (b1 the
-# 6V6GT, b4 the VCA's center tap, b3 the small stages), a selenium bridge for the bias
+# 6V6GT, b4 the VCA's center tap, b3 the small stages; the reservoir on the RESERVOIR
+# switch, SYNTH_IDEAS.md #6), a selenium bridge for the bias
 # (-105 V, -46 V, and an RC stage of its own for the envelope's rail).
 # Invented circuit, not modelled hardware: round numbers, every value a design choice.
 
@@ -121,6 +122,7 @@ controls:
   glide: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-31: the GLIDE rheostat, 82k audio taper onto 4.7 uF: ~14 ms at 0.25, ~45 ms at 0.5, ~0.39 s at 1 (time constants); 0 none)"}
   wave: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the oscillator's WAVE pot, tank (0) to square (1); linear)"}
   range: {value: 1, choices: [0, 1], unit: position, source: "provisional: model knowledge (design, 2026-10-30: the oscillator's RANGE switch: 0 LOW, the tank's 56 nF with 168 nF beside it (224 nF: ~27-790 Hz), 1 HIGH, 56 nF alone (~58-1740 Hz); docs/SYNTH_LOW_END.md's tank sweep)"}
+  reservoir: {value: 20.0e-6, choices: [1.0e-6, 2.0e-6, 4.0e-6, 6.0e-6, 8.0e-6, 12.0e-6, 20.0e-6, 40.0e-6], unit: F, source: "provisional: model knowledge (design, 2026-11-01: the RESERVOIR switch, a rotary switch choosing the reservoir electrolytic (450 V parts), 20 uF as before; SYNTH_IDEAS.md #6: smaller is more 120 Hz ripple, a hum-growl, and below ~6 uF the pitch warbles and goes flat, the user's broken end down to 1 uF; the 6X4 stays under its 245 mA steady-state peak at every step, scripts/supply_study.py)"}
   heater: {value: 1.0, min: 0.6, max: 1.1, unit: ratio, source: "provisional: model knowledge (design, 2026-11-01: the HEATER control, the heaters' volts over their rating (a heater winding's taps, as period gear set them); tubes are rated +-10%, so below 0.9 is out of rating (the panel says so): the user's choice, extended to 0.6 for the starved sound)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
@@ -132,7 +134,6 @@ values:
   pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (leakage per HV half of a small mains transformer)"}
   pt_c_half_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per HV half; a capacitance on every rectifier node, CLAUDE.md)"}
   rectifier_tube: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4 full-wave rectifier, as small studio gear of the era used; config/components/6x4/1.yaml, per section)"}
-  c_reservoir_f: {value: 20.0e-6, source: "provisional: model knowledge (reservoir and filter electrolytics, 20 uF 450 V)"}
   r_b12_ohm: {value: 1.0e+3, source: "provisional: model knowledge (filter resistor b1 to b2)"}
   r_b23_ohm: {value: 2.2e+3, source: "provisional: model knowledge (filter resistor b2 to b3, the small stages' and the VCA's decoupling)"}
   r_b24_ohm: {value: 4.7e+3, source: "provisional: model knowledge (design: the VCA's own RC branch off b2: at b3, the input stages' signal currents leaked through its plate resistor with it cut off, -34 dB)"}
@@ -329,7 +330,7 @@ sections:
       CPTB: {C: [hvb, "0"], c: pt_c_half_f}
       XVRA: {device: [hva, b1], model: VR}
       XVRB: {device: [hvb, b1], model: VR}
-      CB1: {C: [b1, "0"], c: c_reservoir_f}
+      CB1: {C: [b1, "0"], c: reservoir}
       RBLEED: {R: [b1, "0"], r: r_bleeder_ohm}
       RB12: {R: [b1, b2], r: r_b12_ohm}
       CB2: {C: [b2, "0"], c: c_decouple_f}

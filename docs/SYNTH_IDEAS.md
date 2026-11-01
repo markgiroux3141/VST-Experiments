@@ -42,7 +42,7 @@ diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heate
 | 3 | Velocity, aftertouch (**built**) | Expression | App feeds; a control input | ~0 (measured) |
 | 4 | HEATER (**built**) | "Tired tubes": softer, more drift | The heater ratio as a panel value | ~0 |
 | 5 | PULSE (peaking transformer) (**parked**: prototyped, CPU) | Bright, buzzy pulse, magnetic PWM | One small JA core | ~1.9x the oscillator thread |
-| 6 | SUPPLY: rectifier and reservoir | How much the voice sags and blooms | Switch contacts; copper oxide needs a fit | Small |
+| 6 | SUPPLY: RESERVOIR (**built**; the rectifier switch dropped: it only retunes) | How much the voice sags and blooms | Switch contacts; copper oxide needs a fit | Small |
 | 7 | Lamp-stabilized Wien LFO | A working LFO that blooms | Lamp device model | ~+1% |
 | 8 | LFO routing, delayed vibrato | Vibrato, tremolo, filter wobble | Pots, an RC | Small |
 | 9 | Second oscillator, DETUNE, COUPLING | Beating, pulling, locking | A second VCO | One VCO; a thread |
@@ -271,6 +271,57 @@ what's left of the pitch. It sounds like bloom and compression rather than pitch
 Measure it before promising more. Rectifier peak inverse voltage and surge ratings apply
 per position.
 
+**Measured (2026-11-01); RESERVOIR built, the rectifier switch dropped.** `scripts/supply_study.py`
+-> `reports/tube_synth/supply/supply.json`: a key held 1.2 s at -15 V with a fast attack, per
+rectifier (the 6X4; silicon standing in for the stiff end, a selenium stack between) and
+reservoir (8 / 20 / 40 uF):
+
+| rectifier, reservoir | bloom (first 100 ms to held) | b1 sag | b3 sag | ripple sidebands (+-120 Hz) | pitch |
+|---|---|---|---|---|---|
+| 6X4, 8 uF | -0.65 dB | 22 V | 41 V | -25 dB | as now |
+| 6X4, 20 uF (now) | -0.65 | 21 | 40 | -33 | |
+| 6X4, 40 uF | -0.64 | 21 | 40 | -39 | |
+| silicon, 8 uF | Newton stops at the oscillator's 5651 (1.5 s) | | | | |
+| silicon, 20 uF | -0.47 | 8 | 33 | -24 | +70 cents |
+| silicon, 40 uF | -0.55 | 14 | 37 | -37 | +60 cents |
+
+- **The bloom is the same everywhere** (~-0.6 dB, 0.2 dB apart): b3's sag is the decoupling
+  resistors' drop under the VCA's current, not the rectifier's. Not a control.
+- **The rectifier mostly retunes:** silicon lifts B+ ~25 V and the pitch ~60-70 cents (the
+  tuning tables would need a set per rectifier), and at 8 uF a run stopped.
+- **The reservoir is the one audible lever:** the ripple's sidebands go -39 / -33 / -25 dB
+  (40 / 20 / 8 uF): a hum-growl on every note, more at low cutoff. Takes:
+  `reports/tube_synth/supply/audio/` (each normalized to -6 dBFS peak).
+- **Options:** skip #6; or only a RESERVOIR switch (the capacitors on contacts always in
+  the circuit, as RANGE: a "hum" control, ~5 cents of pitch across it, no CPU).
+- **How low** (6X4, `reports/tube_synth/supply/reservoir.json`): the ripple sidebands and the
+  oscillator's cycle-to-cycle spread (the ripple's FM on the pitch, 2.5-97.5 percentiles),
+  the held pitch re 20 uF, the 6X4's steady-state peak plate current (GE ET-T865A: 245 mA max;
+  its 10 uF is the sheet's typical operation, not a limit):
+
+  | reservoir | sidebands | pitch spread | pitch | plate peak |
+  |---|---|---|---|---|
+  | 1 uF | -14 dB | 215 cents | -59 cents | 131 mA |
+  | 2 uF | -16 dB | 172 cents | -39 cents | 159 mA |
+  | 3 uF | -18 | 137 | -26 | 180 |
+  | 4 uF | -20 | 111 | -17 | 191 |
+  | 6 uF | -23 | 79 | -10 | 202 |
+  | 8 uF | -25 | 61 | -5 | 206 |
+  | 12 uF | -28.5 | 42 | -2 | 210 |
+  | 20 uF | -33 | 25 | 0 | 211 |
+  | 40 uF | -39 | 13 | +1 | 212 |
+
+  Below ~6 uF the pitch itself warbles at 120 Hz by more than half a semitone and goes flat
+  (the tuning tables are 20 uF's): a broken-amp growl. Takes at 2 and 4 uF too.
+
+**Built (2026-11-01): RESERVOIR** (`reservoir`, the user's call: "super janky and broken but
+a neat effect" at the bottom): a rotary switch choosing the reservoir electrolytic, 1 / 2 / 4
+/ 6 / 8 / 12 / 20 / 40 uF, 20 as before, the panel's label saying under 6 uF detunes. The
+control holds farads (CB1's `c`); a step is a value change, so a live stream updates in place
+(`play.rs --turn reservoir=1.0e-6,2.0e-5` with a key held: heard in ~95 ms, no restarts, no
+dropouts, load unchanged). varimu-app's `Knob::unit` / `Knob::choice_text` print a choice with
+unit F in uF. No CPU cost. Test: `tests/test_tube_synth.py`, the reservoir test.
+
 ## 7. The LFO: a lamp-stabilized Wien bridge
 
 This replaces the stalled phase-shift LFO (TUBE_SYNTH_PLAN.md, S5's status: its loop gain
@@ -429,6 +480,29 @@ steps; needs a glow-transfer model, after #23), or a ring of Eccles-Jordan flip-
 cell, as 1940s computers counted; many tubes, so CPU). Each step's CV comes from a pot,
 into the pitch or the cutoff. The app's recording (RECORDING_PLAN.md) would capture it as
 the circuit's own output, with no events to replay.
+
+## Breaking it on purpose (the user's direction, 2026-11-01)
+
+After RESERVOIR's 1 uF end (a supply that can't hold up, the pitch warbling two semitones at
+120 Hz) the user said: keep building true to real hardware values, and once the instrument is
+dialed in, start breaking things on purpose. Component values pushed out of their sensible
+range in interesting places, for effects and jank, as circuit benders do with real gear.
+
+- **Order:** realistic first (every idea above is built with sourced, sensible values and
+  measured), then the bends, each one a panel control whose normal position is the real
+  value, as RESERVOIR's 20 uF is.
+- **An experiment to do (not scheduled):** sweep candidate parts of the dialed-in synth far
+  off their values and listen for what's interesting. Candidates to start from: the
+  decoupling capacitors and filter resistors (b2 / b3, where the VCA's current sags the
+  rails), the tank and RANGE capacitors, the Q multiplier's feedback, the envelope's
+  timing capacitor, the coupling capacitors (bass, blocking distortion), cathode bypasses,
+  the 5651 regulators' feeds (regulation dropping out), the grid leaks (blocking), the
+  reactor's turns and core size. Per candidate: a short sweep with numbers (as
+  `scripts/supply_study.py` did) and takes for the user to judge.
+- **Still physical:** a bend is a part value a real unit could be built with (a switch of
+  capacitors, a pot), never DSP. The panel marks the bent zone, as RESERVOIR's label does.
+  Ratings: say on the panel when a position takes a part past its rating; the simulation
+  doesn't wear out, but the label should be honest.
 
 ## What comes after
 
