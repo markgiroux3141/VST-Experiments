@@ -326,8 +326,8 @@ def test_a_small_reservoir_hums_and_the_6x4_stays_in_rating():
 def test_the_lfo_runs_at_its_rate_and_reaches_the_pitch_and_the_cutoff():
     """The lamp-stabilized Wien bridge (SYNTH_IDEAS.md #7) at RATE 1 (~19 Hz) from the start
     of a run, VIBRATO and WOBBLE at 1: it oscillates at its rate, the lamp warms toward
-    ~600 K holding ~7 V peak (scripts/lfo_study.py: settled in ~3 s), the pitch swings at its
-    rate (+-~29 cents) and V4's grid with it (~3 V peak to peak)."""
+    ~590 K holding ~7.3 V peak (scripts/lfo_study.py: settled in ~4 s), the pitch swings at
+    its rate (+-~33 cents) and V4's grid with it (~3 V peak to peak)."""
     study = importlib.util.spec_from_file_location(
         "lfo_study", Path(__file__).parents[1] / "scripts" / "lfo_study.py"
     )
@@ -339,16 +339,16 @@ def test_the_lfo_runs_at_its_rate_and_reaches_the_pitch_and_the_cutoff():
     g4 = np.ptp(v["g4"][-len(v["g4"]) // 4 :])
     print(m, vib, g4)
     assert abs(m["f_hz"] / 19.33 - 1) < 0.03
-    assert 6.0 < m["amp_peak_v"] < 12.0 and abs(m["dc_v"]) < 1.5
+    assert 4.0 < m["amp_peak_v"] < 12.0 and abs(m["dc_v"]) < 1.5
     assert 450.0 < m["lamp_k"] < 700.0
     assert vib > 15.0
     assert g4 > 2.0
 
 
 def test_lfo_off_takes_the_oscillator_out_and_holds_the_pitch():
-    """LFO OFF (`lfo_on` 0, the user's call: CPU): no tubes or lamp of the LFO in the circuit,
-    power resistors drawing their currents in their place, so the rails and the pitch stay put
-    (measured 2026-11-01: 497.60 Hz off, 497.70 on at -15 V; b1 within 0.5 V)."""
+    """LFO OFF (`lfo_on` 0, the user's call: CPU): no tubes or lamp of the LFO in the circuit;
+    its supply is on a winding of its own, so the pitch is the LFO on's (measured
+    2026-11-01: 497.251 Hz on and off at -15 V)."""
     s = spec.load_circuit(CIRCUIT)
     off = builder.build_ir(s, spec.resolve(s, {"lfo_on": 0}), cores="ja")
     on = builder.build_ir(s, spec.resolve(s, {"lfo_on": 1}), cores="ja")

@@ -31,6 +31,7 @@ import numpy as np
 from varimu.circuit import builder, spec
 from varimu.circuit.ir import VoltageProbe
 from varimu.config import CONFIG_DIR
+from varimu.devices.library import load_device
 from varimu.sim import fast, io
 from varimu.synth import vco
 
@@ -75,7 +76,7 @@ def run(rect: str, c_res: float, path: Path) -> dict:
     s = spec.load_circuit(path)
     sets = {**PANEL, "rectifier_tube": RECTIFIERS[rect], "reservoir": c_res}
     ir = builder.build_ir(s, spec.resolve(s, sets), cores="ja", noise=False)
-    probes = ("out", "o_t", "b1", "b3", "hv_a", "hv_ar")
+    probes = ("out", "o_t", "b1", "b3", "hva")
     ir = dataclasses.replace(ir, probes=tuple(VoltageProbe(p) for p in probes))
     st = dataclasses.replace(
         io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
@@ -116,8 +117,10 @@ def run(rect: str, c_res: float, path: Path) -> dict:
     fl = np.median(fc[tt > DUR_S - 0.3])
     late_fc = fc[tt > DUR_S - 0.4]
     spread = float(vco.cents(np.percentile(late_fc, 97.5), np.percentile(late_fc, 2.5)))
-    r_half = float(s.values["pt_r_half_ohm"]["value"])
-    i_plate = (v["v(hv_a)"] - v["v(hv_ar)"]) / r_half
+    # The rectifier's own current, from its model at its section's voltage (hva to b1; the
+    # heaters at their rating, so the heated model is the fitted one). The winding's
+    # current also feeds the LFO's own rectifiers (SYNTH_IDEAS.md #7).
+    i_plate = load_device(RECTIFIERS[rect]).i(v["v(hva)"] - v["v(b1)"])
     return {
         "rectifier": rect,
         "c_reservoir_uf": round(c_res * 1e6, 1),

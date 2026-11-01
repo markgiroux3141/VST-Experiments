@@ -170,11 +170,12 @@ published fits, pins (a, t, b), its temperature the node t, 1 V = 1 K, on a 1 F 
 Python, SPICE, circuitsim `devices/lamp.rs`, both builders; `tests/test_lamp.py`), with #8's
 VIBRATO (`vibrato`: summed into the pitch ahead of GLIDE, tuning tables re-measured) and
 WOBBLE (`wobble`: into the CUTOFF pot's low end, its law unchanged); the app's split now six
-threads (the LFO its own); `scripts/lfo_study.py`. LFO ON / OFF (`lfo_on`: OFF empties the
-`lfo` section, which then gets no thread, and stand-in resistors hold the rails). Open: the
-6X4 over its peak rating with the LFO (options in SYNTH_IDEAS.md #7). **The full test suite
-and `--verify` are owed** (per feature only targeted tests run, the user's call; the list:
-SYNTH_IDEAS.md "Owed").
+threads (the LFO its own); `scripts/lfo_study.py`. The LFO has a supply of its own (a winding,
+silicon rectifiers, a 5651 pair's -174 V): on the synth's rails it ran the 6X4 past its
+rating. LFO ON / OFF (`lfo_on`, `unit: switch`: a control the app draws as a checkbox): OFF
+empties the `lfo` section, which then gets no thread. **The full test suite and `--verify`
+are owed** (per feature only targeted tests run, the user's call; the list: SYNTH_IDEAS.md
+"Owed").
 
 Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
 user's idea; nothing built): synthesis stays pure, except where the physics is far faster

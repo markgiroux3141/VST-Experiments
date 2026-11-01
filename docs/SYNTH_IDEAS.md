@@ -22,13 +22,11 @@ hours whenever `varimu/{sim,circuit,devices}` or `config.py` change, so it waits
 of the list or a night the user picks. **Owed since #7 (2026-11-01):**
 - `uv run --extra fast pytest` (everything): #7 changed shared code (the IR's device union,
   the parts library, the device library and fixtures, the preflight checks, the SPICE
-  emission, `fast.partition_sections`). In the targeted run `test_circuit_format`'s
+  emission, `fast.partition_sections`, the controls' `unit: switch` in both spec loaders). In the targeted run `test_circuit_format`'s
   ngspice comparison timed out (300 s) while the tuning sweep held every core: rerun it.
 - `uv run --extra listen --extra fast python scripts/slice_report.py --verify` (the
   periodic agreement with ngspice, ~70 min cold): circuitsim gained a device and its
   limiting; the 670 doesn't use it, so expect no change.
-- Known failing until the user decides: `tests/test_tube_synth.py`'s RESERVOIR test (the
-  6X4 over its peak rating with the LFO; #7's open item).
 
 ## Ground rules (TUBE_SYNTH_PLAN.md's, restated where they bite)
 
@@ -371,63 +369,60 @@ clipping).**
   at the rating.
 - **The LFO** (tube_synth.yaml's `lfo` section; its header has the circuit): DC-coupled, since
   at 0.1 Hz no coupling capacitor works and the lamp may carry no DC: a 12AX7 long-tailed
-  pair, a divider to -100 V, a grounded-cathode 12AU7 section, a divider, the 12AU7's other
-  section as the follower; RLF, RLS and the lamp in the negative feedback; RATE a dual 2M
-  reverse-audio rheostat with 1 uF. A prototype first (scratch, ideal rails): one stage's
-  open-loop gain (~12) didn't start it; the pair's plates must sit level or its offset puts
-  DC on the lamp. In the synth the follower's plate is on b1 and the stages on their own RC
-  (the stages' levels set the pair's balance), and the power and bias windings were raised
-  (257 / 89.5 V rms) to hold every rail where it was. `scripts/lfo_study.py` ->
-  `reports/tube_synth/lfo.json` (a key held at -15 V, from the run's start):
+  pair, a divider, a grounded-cathode 12AU7 section, a divider, the 12AU7's other section as
+  the follower; RLF, RLS and the lamp in the negative feedback; RATE a dual 2M reverse-audio
+  rheostat with 1 uF. A prototype first (scratch, ideal rails): one stage's open-loop gain
+  (~12) didn't start it; the pair's plates must sit level or its offset puts DC on the lamp.
+- **Its own supply** (the user's choice of three options, 2026-11-01). On the synth's rails
+  the LFO ran the 6X4 past its peak rating (259.8 mA at 20 uF, GE's limit 245; 211 before the
+  LFO) and its follower's current at the LFO's rate reached the pitch through b1 (+-4-7
+  cents). Now a center-tapped winding of its own (as the HV halves), silicon rectifiers
+  (SI_RECTIFIER@1): a full-wave reservoir (~310 V) for the follower's plate (through 4.7k,
+  bypassed) and, filtered, the stages' ~270 V; a half-wave minus rail held at -174 V by two
+  5651s for the follower's return, the dividers and the tail. On the way: through a filter
+  resistor alone the minus rail moved volts with the follower's current and the slow end ran
+  at the wrong rate; from one 5651 (-87 V) the dividers passed too little for the lamp to
+  warm; the follower on the stages' filtered supply fed back through it; with its plate
+  resistor unbypassed it oscillated at ~1-3 kHz; on the HV winding's own ends the
+  rectifiers sagged b1 4 V (the pitch 6.5 cents apart with the LFO on and off). Now the 6X4
+  peaks at 211.7 mA with the LFO on or off (as before it), the pitch is the same on and off
+  (497.251 Hz at -15 V) and the tuning tables measured before stand. `scripts/supply_study.py`
+  now reads the 6X4's own current from its model (the winding's current also fed the LFO's
+  rectifiers). `scripts/lfo_study.py` -> `reports/tube_synth/lfo.json` (a key held at -15 V,
+  from the run's start):
 
-  | RATE | rate | settled | THD | to within 5% | lamp | its swing in a cycle |
-  |---|---|---|---|---|---|---|
-  | 0.25 | 0.343 Hz | 7.35 V pk | 0.9% | 11.7 s | 584 K | 39 K |
-  | 0.5 | 1.47 Hz | 7.38 | 0.34% | 8.8 s | 577 | 7 |
-  | 0.7 (default) | 4.54 Hz | 7.40 | 0.36% | 5.9 s | 582 | 3 |
-  | 1 | 19.3 Hz | 7.29 | 0.40% | 3.1 s | 587 | 0.7 |
+  | RATE | rate | settled | DC | THD | to within 5% | lamp | its swing in a cycle | VIBRATO 1 |
+  |---|---|---|---|---|---|---|---|---|
+  | 0.25 | 0.354 Hz | 6.3 V pk | -0.3 V | 0.39% | 20 s | 530 K | 21 K | +-33 cents |
+  | 0.5 | 1.49 Hz | 6.9 | 0.4 | 0.68% | 15 s | 566 | 5 | +-34 |
+  | 0.7 (default) | 4.57 Hz | 6.8 | 0.5 | 0.28% | 8 s | 580 | 2 | +-35 |
+  | 1 | 19.5 Hz | 7.3 | 0.4 | 0.29% | 4 s | 587 | 0.6 | +-33 |
 
-  The bloom: from a start the amplitude overshoots to ~11-12 V peak (the follower clips it)
-  and the lamp brings it down over 3-12 s, slower at the slow end; there the filament
-  follows the cycle (39 K) and the sine flattens a little (0.9%). Never hunting. From a
-  run's start the lamp's warming changes the LFO's draw on b1, which moves the pitch ~10
-  cents over the first seconds. CPU: the LFO runs on a thread of its own (it owns its pots'
-  wipers; on the first thread, with the cutoff's thread owning WOBBLE's wiper, Newton failed
-  at the lamp within 5 samples), so the load figure (the slowest thread) barely moves: a key
-  held, back to back, 72-75% with it, ~71% before it (worst blocks ~100%), no dropouts. What
-  it costs is a core: the process used ~5.45 cores against ~4.4 with it off.
+  The bloom: from a start the amplitude overshoots to ~10-13 V peak (the follower clips it)
+  and the lamp brings it down over 4-20 s, slower at the slow end, where the filament follows
+  the cycle (21 K). Never hunting. With VIBRATO at 0 the LFO reaches the pitch by under 0.75
+  cents. CPU: the LFO runs on a thread of its own (it owns its pots' wipers; on the first
+  thread, with the cutoff's thread owning WOBBLE's wiper, Newton failed at the lamp within 5
+  samples), so the load figure (the slowest thread) barely moves: a key held, back to back,
+  72-82% with it, 74-78% with it off, no dropouts (this desktop drifts +-10%). What it costs
+  is a core: the process used ~5.6 cores against ~4.4 with it off.
   `--turn lfo_rate=0.3,0.9` heard in ~93 ms, no restarts.
-- **LFO ON / OFF** (`lfo_on`, the user's call: CPU). OFF takes the oscillator and its pots
-  out (a switch part), so the `lfo` section is empty and gets no thread
-  (`fast.partition_sections` / varimu-app's `partition_sections` skip empty sections): one
-  thread fewer, ~1 core freed. Power resistors stand in for its draw (RDLN2, RDLG, RDLN in
-  the power supply's section) and RVIB / RWOB's far ends are grounded, so the rails (b1
-  within 0.5 V) and the pitch (0.35 cents at -15 V) stay put: one tuning table serves both.
-  OFF also removes the leak into the pitch (cycle to cycle 31 against 46 cents). A flip
-  restarts a live stream (~1.9 s to the ear, no dropouts).
-- **Open: the 6X4 is out of rating with the LFO** (the user's decision; RESERVOIR's test
-  fails until then). Its peak plate current at 20 uF was 211 mA before the LFO; now 259.8
-  mA with it on (GE's limit 245), 244.5 with it off (the stand-ins at the limit), 253.7 with
-  the HV winding back at 250 V. The LFO's extra ~11 mA, and its follower's current swinging
-  at the LFO's rate, is more than the small rectifier carries. Options: (a) the LFO on a
-  small supply of its own (a selenium or silicon rectifier off the HV winding, its own
-  reservoir): the 6X4 back to ~211 mA, no leak into the pitch through b1, the stand-ins and
-  the raised windings no longer needed, a few diodes of CPU; (b) a bigger rectifier for the
-  whole synth (the 5Y3GT@1 the 5E3 uses): headroom, but it re-voices the supply's sag
-  (RESERVOIR's and HEATER's character, and their tables); (c) a cooler lamp and a lighter
-  follower (less current, a slower bloom), likely not enough on its own.
+- **LFO ON / OFF** (`lfo_on`, the user's call: CPU; `unit: switch`, a checkbox in the app).
+  OFF takes the oscillator, its pots and its supply out (switch parts), so the `lfo` section
+  is empty and gets no thread (`fast.partition_sections` / varimu-app's `partition_sections`
+  skip empty sections): one thread fewer, ~1.15 cores freed. RVIB's and RWOB's far ends are
+  grounded. The synth's rails don't move. A flip restarts a live stream (~1.9 s to the ear,
+  no dropouts).
 - **VIBRATO and WOBBLE** (#8's start): 10k pots on the LFO. VIBRATO is summed into the pitch
   ahead of GLIDE (the key string through 1k, the wiper through 47k): into the 6V6GT's grid
   directly the 10k stopper's low source would have made the pitch follow GLIDE's setting, a
-  coupling capacitor would have slid every key change for a second. Full: +-29-31 cents at
-  every rate. The pitch now scales by 0.979 and GLIDE 0 is a 4.7 ms time constant; the
-  tuning tables were re-measured (panel.rs). WOBBLE feeds the CUTOFF pot's low end (127k,
-  RCUTL now 143k from -100 V: the same Thevenin source as before, so CUTOFF's law and the
-  tests' grid volts are unchanged; into V4's grid itself the same depth bent the law ~half
-  an octave): V4's grid +-1.5-1.75 V at CUTOFF 0.3 (all of the low end's share at 0, none at
-  1). With both at 0 the LFO still reaches the pitch by +-4-7 cents, through b1 (the
-  follower's current at the LFO's rate; no RC filters 1-20 Hz), under the oscillator's own
-  ~40 cents of cycle-to-cycle jitter. Test: `tests/test_tube_synth.py`, the LFO test.
+  coupling capacitor would have slid every key change for a second. Full: +-33-35 cents at
+  every rate. The pitch scales by 0.979 and GLIDE 0 is a 4.7 ms time constant; the tuning
+  tables were re-measured (panel.rs). WOBBLE feeds the CUTOFF pot's low end (127k, RCUTL now
+  143k from -100 V: the same Thevenin source as before, so CUTOFF's law is unchanged; into
+  V4's grid itself the same depth bent the law ~half an octave): V4's grid ~3 V peak to peak
+  at CUTOFF 0.3 (all of the low end's share at 0, none at 1). Tests: `tests/test_tube_synth.py`,
+  the LFO tests.
 
 ## 8. LFO routing and delayed vibrato
 
