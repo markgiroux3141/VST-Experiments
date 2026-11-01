@@ -192,6 +192,25 @@ cymbals as hybrid exceptions), old drum machines as circuits (the Wurlitzer Side
 808 / CR-78 after a BJT model), tube drum voices from `tube_kick`. Order and open
 decisions are the user's.
 
+The Victorian synth ([docs/VICTORIAN_SYNTH_PLAN.md](docs/VICTORIAN_SYNTH_PLAN.md),
+2026-11-01, the user's idea, parked until they pick it up; nothing built): a janky synth
+from parts that existed by ~1881, wired with today's knowledge (Leclanché cells that sag,
+Gray's contact-breaker reeds, gas-tube and spark-gap sawtooths, carbon-granule key VCAs and
+carbon relays as the amplifier, the saturable reactor on period iron, telephone receivers).
+Milestones V0-V6; it shares the gas tube with HYBRID_PHYSICS_PLAN.md's H1.
+
+Mics, preamps and rooms ([docs/MIC_ROOM_PLAN.md](docs/MIC_ROOM_PLAN.md), 2026-11-01; nothing
+built; the user picks it up deliberately): source -> room -> capsule -> mic electronics ->
+cable -> preamp, rendered, not real time. Mic + cable + preamp one netlist, the capsule's
+front / back pressures as control inputs (the polar pattern from its physics); the room a
+cached linear medium (IRs per source and mic), any floor plan with vaulted ceilings and
+objects, GPU FDTD below a ~4-8 kHz crossover and GPU geometric acoustics above (the user:
+use the RTX 3080 wherever it fits). First listen: U47 -> V76 (B10). The list: small
+pressure omni (the capsule's verification case), U47, RCA 44-BX, SM57, C12; V76, the 351's
+electronics, Neve 1073, API 312, clean transformerless, UA 610; four opposite chains ranked
+by the separation metrics. The BJT model is a shared prerequisite (with the drums).
+Milestones A1-A9.
+
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
 distance; mics later). The cheap first experiment is built (`varimu/separation/`,
