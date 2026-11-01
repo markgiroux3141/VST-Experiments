@@ -589,6 +589,16 @@ range in interesting places, for effects and jank, as circuit benders do with re
   the 5651 regulators' feeds (regulation dropping out), the grid leaks (blocking), the
   reactor's turns and core size. Per candidate: a short sweep with numbers (as
   `scripts/supply_study.py` did) and takes for the user to judge.
+- **Asked for, parked (2026-11-01): deeper VIBRATO and WOBBLE** (the user: "it would be cool
+  to hear more extreme settings"; revisit later). The pots are at their ends at 1; the depth
+  is set by RVIB (47k against the key string's 1k: ~2% of the LFO's +-7 V, +-34 cents) and
+  RWOB (127k, matched to RCUTL so CUTOFF's law holds). Options brought: (a, recommended) a
+  DEEP checkbox feeding both pots from a one-tube LFO booster (a 12AX7 section, ~5x: VIBRATO
+  ~+-1.7 semitones, WOBBLE ~+-1 octave; tuning and CUTOFF untouched; a few cents of pitch
+  from the booster's DC offset while on); (b) smaller injection resistors (to ~10x) with the
+  app rescaling the key string's volts by the divider's ratio (exact: the pitch's DC is
+  linear in it) and RWOB / RCUTL changed as a pair; (c) a hotter lamp (a smaller RLS) for a
+  bigger LFO swing: ~1.6x before the follower clips.
 - **Still physical:** a bend is a part value a real unit could be built with (a switch of
   capacitors, a pot), never DSP. The panel marks the bent zone, as RESERVOIR's label does.
   Ratings: say on the panel when a position takes a part past its rating; the simulation
