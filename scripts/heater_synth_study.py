@@ -53,7 +53,12 @@ def render(seconds: float, *, mains_v=120.0, heaters="warm", noise=False):
         partition=PARTITION,
     )
     n = int(seconds * st.sample_rate)
-    ctl = {"gate": np.full(n, KEY_DOWN_V), "pitch": np.full(n, PITCH_V), "key": np.zeros(n)}
+    ctl = {
+        "gate": np.full(n, KEY_DOWN_V),
+        "pitch": np.full(n, PITCH_V),
+        "key": np.zeros(n),
+        "pressure": np.zeros(n),
+    }
     v = fast.run_transient(ir, np.zeros(n), settings=st, controls=ctl).vectors
     return v["v(out)"], v["v(o_t)"]
 

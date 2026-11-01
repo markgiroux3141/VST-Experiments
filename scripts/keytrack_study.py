@@ -11,7 +11,7 @@ and the cutoff at each key (`--notes`, MIDI: the key string's volts from the cir
 being cut). Before KEY TRACK the circuit had no key string: its law alone.
 
     uv run --extra fast python scripts/keytrack_study.py [--cutoff 0 0.5 1]
-        [--set key_track=1] [--notes 36 48 60 72 84] [--out FILE]
+        [--set key_track=1] [--notes 36 48 60 72 84] [--pressure-v 15] [--out FILE]
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def key_v(s: spec.CircuitSpec, note: int) -> float:
     return min(max(v, val["min_v"]), val["max_v"])
 
 
-def run(sets: dict, note: int) -> dict:
+def run(sets: dict, note: int, pressure_v: float = 0.0) -> dict:
     fs = io.load_sim_settings().sample_rate
     s = spec.load_circuit(CIRCUIT)
     ir = builder.build_ir(
@@ -88,6 +88,7 @@ def run(sets: dict, note: int) -> dict:
             "gate": np.full(n, KEY_DOWN_V),
             "pitch": np.full(n, -15.0),
             **({"key": np.full(n, key_v(s, note))} if "key" in dict(s.cv_inputs) else {}),
+            **({"pressure": np.full(n, pressure_v)} if "pressure" in dict(s.cv_inputs) else {}),
         },
     ).vectors
     k = slice(n - int(READ_S * fs), n)
@@ -116,6 +117,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--cutoff", nargs="*", type=float, default=list(np.linspace(0, 1, 11)))
     ap.add_argument("--notes", nargs="*", type=int, default=[60])
+    ap.add_argument("--pressure-v", type=float, default=0.0, help="the aftertouch strip's volts")
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     ap.add_argument("--out", type=Path, default=Path("reports/tube_synth/keytrack/law.json"))
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 2))
@@ -123,7 +125,7 @@ def main() -> None:
     sets = {k: float(v) for k, v in (kv.split("=", 1) for kv in a.set)}
     jobs = [(round(c, 4), m) for c in a.cutoff for m in a.notes]
     with ThreadPoolExecutor(a.workers) as ex:
-        got = list(ex.map(lambda j: run({**sets, "cutoff": j[0]}, j[1]), jobs))
+        got = list(ex.map(lambda j: run({**sets, "cutoff": j[0]}, j[1], a.pressure_v), jobs))
     rows = []
     for (c, p), r in zip(jobs, got, strict=True):
         rows.append({"cutoff": c, "note": p, **r})

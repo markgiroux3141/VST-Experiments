@@ -70,7 +70,12 @@ def run(sets: dict, step: tuple[float, float]) -> dict:
         ir,
         np.zeros(n),
         settings=st,
-        controls={"gate": np.full(n, KEY_DOWN_V), "pitch": pitch, "key": np.zeros(n)},
+        controls={
+            "gate": np.full(n, KEY_DOWN_V),
+            "pitch": pitch,
+            "key": np.zeros(n),
+            "pressure": np.zeros(n),
+        },
     ).vectors["v(o_t)"]
     ts, fc = vco.cycle_frequencies(v, fs)
     sm = vco.smoothed(ts, fc, SMOOTH_S)

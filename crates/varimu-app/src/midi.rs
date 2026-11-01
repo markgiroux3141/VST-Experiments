@@ -34,6 +34,8 @@ pub struct Keys {
 struct KeysInner {
     held: Vec<(u8, u8)>,
     cc: [(u8, u64); 128],
+    /// The last aftertouch (channel pressure, or a held key's pressure).
+    pressure: u8,
 }
 
 impl Default for KeysInner {
@@ -41,6 +43,7 @@ impl Default for KeysInner {
         KeysInner {
             held: Vec::new(),
             cc: [(0, 0); 128],
+            pressure: 0,
         }
     }
 }
@@ -55,9 +58,22 @@ impl Keys {
                 k.held.retain(|&(n, _)| n != note);
                 k.held.push((note, vel));
             }
-            (0x80 | 0x90, Some(note), _) => k.held.retain(|&(n, _)| n != note),
+            (0x80 | 0x90, Some(note), _) => {
+                k.held.retain(|&(n, _)| n != note);
+                if k.held.is_empty() {
+                    k.pressure = 0;
+                }
+            }
+            (0xd0, Some(p), _) => k.pressure = p & 127,
+            // Key pressure: the sounding key's.
+            (0xa0, Some(note), Some(p)) if k.held.last().is_some_and(|&(n, _)| n == note) => {
+                k.pressure = p & 127
+            }
             // All sound off / all notes off.
-            (0xb0, Some(120 | 123), _) => k.held.clear(),
+            (0xb0, Some(120 | 123), _) => {
+                k.held.clear();
+                k.pressure = 0;
+            }
             (0xb0, Some(cc), Some(v)) if cc < 128 => {
                 let (_, n) = k.cc[cc as usize];
                 k.cc[cc as usize] = (v, n + 1);
@@ -69,6 +85,11 @@ impl Keys {
     /// The key sounding (the last one held) and its velocity.
     pub fn sounding(&self) -> Option<(u8, u8)> {
         self.inner.lock().expect("keys").held.last().copied()
+    }
+
+    /// The last aftertouch, 0-127 (0 with no key held).
+    pub fn pressure(&self) -> u8 {
+        self.inner.lock().expect("keys").pressure
     }
 
     /// A controller's last value and how many times it was sent (0: never).
@@ -231,6 +252,12 @@ mod tests {
         k.message(&[0xb0, MOD_WHEEL, 43]);
         assert_eq!(k.cc(MOD_WHEEL), (43, 2));
         k.message(&[0x90, 60, 1]);
+        k.message(&[0xd0, 90]);
+        assert_eq!(k.pressure(), 90);
+        k.message(&[0xa0, 61, 20]); // another key's pressure
+        assert_eq!(k.pressure(), 90);
+        k.message(&[0xa0, 60, 30]);
+        assert_eq!(k.pressure(), 30);
         k.message(&[0xb0, 123, 0]);
         assert_eq!(k.sounding(), None);
     }

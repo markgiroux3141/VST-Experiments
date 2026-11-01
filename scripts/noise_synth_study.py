@@ -71,6 +71,7 @@ def render(variant: str, pitch_v: float, seconds: float, key: bool) -> dict[str,
         "gate": np.full(n, KEY_DOWN_V if key else KEY_UP_V),
         "pitch": np.full(n, pitch_v),
         "key": np.zeros(n),
+        "pressure": np.zeros(n),
     }
     v = fast.run_transient(circuit_ir(variant), np.zeros(n), settings=st, controls=controls)
     return {k.removeprefix("v(").removesuffix(")"): x for k, x in v.vectors.items()}

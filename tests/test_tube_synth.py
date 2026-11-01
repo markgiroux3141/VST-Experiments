@@ -62,7 +62,12 @@ def run(pitch_v, dur_s=1.0, on_s=0.2):
         ir,
         np.zeros(n),
         settings=st,
-        controls={"gate": gate, "pitch": np.full(n, pitch_v), "key": np.zeros(n)},
+        controls={
+            "gate": gate,
+            "pitch": np.full(n, pitch_v),
+            "key": np.zeros(n),
+            "pressure": np.zeros(n),
+        },
     ).vectors
     return v["v(out)"], v["v(o_t)"]
 
@@ -73,7 +78,7 @@ def rms_dbfs(y):
 
 def test_passes_the_preflight_checks_with_its_gate_and_pitch():
     s = spec.load_circuit(CIRCUIT)
-    assert s.cv_inputs == (("gate", "bus"), ("pitch", "pv"), ("key", "kv"))
+    assert s.cv_inputs == (("gate", "bus"), ("pitch", "pv"), ("key", "kv"), ("pressure", "av"))
     assert check_circuit(s) == []
 
 
@@ -106,7 +111,12 @@ def test_a_key_barely_moves_the_cutoff_driver():
         ir,
         np.zeros(n),
         settings=st,
-        controls={"gate": gate, "pitch": np.full(n, -15.0), "key": np.zeros(n)},
+        controls={
+            "gate": gate,
+            "pitch": np.full(n, -15.0),
+            "key": np.zeros(n),
+            "pressure": np.zeros(n),
+        },
     ).vectors["v(k4)"]
     up, held = np.mean(k4[int(0.3 * FS) : int(0.5 * FS)]), np.mean(k4[int(1.3 * FS) :])
     print(up, held)  # V4's cathode current in mA (1k)
@@ -136,7 +146,12 @@ def test_env_amount_adds_control_current_only_while_the_envelope_is_open(amount)
             ir,
             np.zeros(n),
             settings=st,
-            controls={"gate": gate, "pitch": np.full(n, -15.0), "key": np.zeros(n)},
+            controls={
+                "gate": gate,
+                "pitch": np.full(n, -15.0),
+                "key": np.zeros(n),
+                "pressure": np.zeros(n),
+            },
         ).vectors["v(k7)"]
         / 2.2
     )  # mA, V7's cathode (2.2k)
@@ -175,7 +190,12 @@ def glide_step(glide):
         ir,
         np.zeros(n),
         settings=st,
-        controls={"gate": np.full(n, KEY_DOWN_V), "pitch": pitch, "key": np.zeros(n)},
+        controls={
+            "gate": np.full(n, KEY_DOWN_V),
+            "pitch": pitch,
+            "key": np.zeros(n),
+            "pressure": np.zeros(n),
+        },
     ).vectors["v(o_t)"]
     ts, fc = vco.cycle_frequencies(tank, FS)
     return ts, vco.smoothed(ts, fc, 0.05)
@@ -220,7 +240,12 @@ def test_key_track_moves_the_cutoff_driver_with_the_key_string(track):
         ir,
         np.zeros(n),
         settings=st,
-        controls={"gate": np.full(n, KEY_DOWN_V), "pitch": np.full(n, -15.0), "key": key},
+        controls={
+            "gate": np.full(n, KEY_DOWN_V),
+            "pitch": np.full(n, -15.0),
+            "key": key,
+            "pressure": np.zeros(n),
+        },
     ).vectors["v(g4)"]
     c4, c5 = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
     print(track, c4, c5)
@@ -229,3 +254,30 @@ def test_key_track_moves_the_cutoff_driver_with_the_key_string(track):
         assert abs(c5 - c4) < 0.05  # the grid itself still settles ~0.03 V then
     else:
         assert 4.5 < c5 - c4 < 5.1
+
+
+def test_pressure_raises_the_cutoff_driver():
+    """PRESSURE (SYNTH_IDEAS.md #3): the aftertouch strip (0 V at rest, 15 V pressed fully)
+    under the KEY TRACK pot. At CUTOFF 0.3 and PRESSURE 1, pressing fully lifts V4's grid
+    ~7.3 V (scripts/keytrack_study.py --pressure-v: the cutoff 1.27 -> 2.71 kHz)."""
+    s = spec.load_circuit(CIRCUIT)
+    ir = builder.build_ir(s, spec.resolve(s, {"cutoff": 0.3, "pressure": 1.0}), cores="ja")
+    ir = dataclasses.replace(ir, probes=(VoltageProbe("g4"),))
+    st = dataclasses.replace(
+        io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
+        full_scale_volts_peak=1.0,
+        partition=PARTITION,
+    )
+    n = int(1.6 * FS)
+    pressure = np.where(np.arange(n) / FS >= 1.0, 15.0, 0.0)
+    controls = {
+        "gate": np.full(n, KEY_DOWN_V),
+        "pitch": np.full(n, -15.0),
+        "key": np.zeros(n),
+        "pressure": pressure,
+    }
+    g4 = fast.run_transient(ir, np.zeros(n), settings=st, controls=controls).vectors["v(g4)"]
+    rest, pressed = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
+    print(rest, pressed)
+    assert abs(rest - (-20.5)) < 0.15
+    assert 6.8 < pressed - rest < 7.8

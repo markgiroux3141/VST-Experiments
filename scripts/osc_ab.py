@@ -119,7 +119,15 @@ def render(quality: str, sets: dict, x: np.ndarray, gate: np.ndarray, pitch: np.
         full_scale_volts_peak=1.0,
     )
     v = fast.run_transient(
-        ir, x, settings=st, controls={"gate": gate, "pitch": pitch, "key": np.zeros(len(gate))}
+        ir,
+        x,
+        settings=st,
+        controls={
+            "gate": gate,
+            "pitch": pitch,
+            "key": np.zeros(len(gate)),
+            "pressure": np.zeros(len(gate)),
+        },
     ).vectors
     return v["v(out)"], v["v(mix)"]
 

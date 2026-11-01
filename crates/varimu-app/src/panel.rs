@@ -32,6 +32,12 @@ pub struct Device {
     /// The circuit's control input a keyboard's keys gate (its key-up and key-down volts
     /// are the circuit file's `<name>_off_v` and `<name>_on_v` values; None: none).
     pub gate: Option<&'static str>,
+    /// How the gate's key-down volts follow a key's velocity: (dB, volts) points rising
+    /// in dB, the device's output level at each key-down voltage against its level at the
+    /// circuit file's `<gate>_on_v` (0 dB), measured (`scripts/velocity_study.py`). A key
+    /// at velocity v aims at -range x (127 - v) / 126 dB, the range the Play view's (None:
+    /// every key at `<gate>_on_v`).
+    pub velocity: Option<&'static [(f64, f64)]>,
     /// The circuit's control input a keyboard's keys set the pitch on, for a device with
     /// an oscillator of its own (its audio input then stays silent; None: none).
     pub pitch: Option<Pitch>,
@@ -206,11 +212,79 @@ impl KeyString {
 pub enum Feed {
     /// The keys' gate: (key up, key down) volts.
     Gate(f64, f64),
+    /// The keys' gate with the key-down volts by velocity: key up, the device's
+    /// velocity table ([`Device::velocity`]).
+    VelocityGate(f64, &'static [(f64, f64)]),
     /// The last key's pitch.
     Pitch(Pitch),
     /// The last key on a linear contact string.
     Key(KeyString),
+    /// The keyboard's aftertouch (channel or key pressure): 0 V at rest, the circuit
+    /// file's `<name>_full_v` pressed fully.
+    Pressure(f64),
 }
+
+impl Feed {
+    /// Whether it is the keys' gate.
+    pub fn is_gate(&self) -> bool {
+        matches!(self, Feed::Gate(..) | Feed::VelocityGate(..))
+    }
+}
+
+/// The volts for velocity `vel` (1-127) over `range_db` on a velocity table.
+pub fn velocity_volts(table: &[(f64, f64)], vel: u8, range_db: f64) -> f64 {
+    let db = -range_db.max(0.0) * (127.0 - vel.clamp(1, 127) as f64) / 126.0;
+    let (first, last) = (table[0], table[table.len() - 1]);
+    if db <= first.0 {
+        return first.1;
+    }
+    if db >= last.0 {
+        return last.1;
+    }
+    let i = table.partition_point(|&(d, _)| d <= db);
+    let ((d0, v0), (d1, v1)) = (table[i - 1], table[i]);
+    v0 + (v1 - v0) * (db - d0) / (d1 - d0)
+}
+
+/// The Play view's velocity range at first (dB between velocity 127 and 1).
+pub const VELOCITY_RANGE_DB: f64 = 18.0;
+/// Its largest: the velocity table's measured span.
+pub const VELOCITY_RANGE_MAX_DB: f64 = 30.0;
+
+/// tube_synth's velocity table: `scripts/velocity_study.py` (reports/tube_synth/velocity.json,
+/// 2026-11-01; a key held at -15 V, the panel's defaults, draft): the output's level
+/// against the keyboard bus's key-down volts, re -1 V's (`gate_on_v`). The 6386's remote
+/// cutoff makes it gentle down to ~-60 V (-19 dB), then the VCA closes fast (-35.5 dB at
+/// -90 V); the harmonics stay ~7% throughout (the waveform's own, not the VCA's).
+const TUBE_SYNTH_VELOCITY: &[(f64, f64)] = &[
+    (-35.51, -90.0),
+    (-27.17, -80.0),
+    (-24.43, -75.0),
+    (-22.15, -70.0),
+    (-20.47, -65.0),
+    (-19.06, -60.0),
+    (-17.92, -55.0),
+    (-16.96, -50.0),
+    (-16.05, -45.0),
+    (-15.25, -40.0),
+    (-14.41, -35.0),
+    (-13.54, -30.0),
+    (-12.77, -26.0),
+    (-12.08, -23.0),
+    (-11.28, -20.0),
+    (-10.73, -18.0),
+    (-10.07, -16.0),
+    (-9.21, -14.0),
+    (-8.45, -12.0),
+    (-7.36, -10.0),
+    (-5.98, -8.0),
+    (-4.53, -6.0),
+    (-3.6, -5.0),
+    (-2.76, -4.0),
+    (-1.2, -3.0),
+    (-0.45, -2.0),
+    (0.0, -1.0),
+];
 
 /// The feeds of `spec`'s control inputs in its order, for `device` played from keys
 /// (every control input needs one: the device's gate or pitch, or a key string the
@@ -221,11 +295,22 @@ pub fn key_feeds(device: &Device, spec: &CircuitSpec) -> Result<Vec<Feed>, Strin
         .map(|(name, _)| {
             if device.gate == Some(name.as_str()) {
                 let (up, down) = gate_levels(spec, name)?;
-                Ok(Feed::Gate(up, down))
+                Ok(match device.velocity {
+                    Some(t) => Feed::VelocityGate(up, t),
+                    None => Feed::Gate(up, down),
+                })
             } else if let Some(p) = device.pitch.filter(|p| p.control == name) {
                 Ok(Feed::Pitch(p))
             } else if let Some(k) = KeyString::of(spec, name) {
                 Ok(Feed::Key(k))
+            } else if let Some(full) = spec
+                .values
+                .get(&format!("{name}_full_v"))
+                .and_then(Value::as_map)
+                .and_then(|m| m.get("value"))
+                .and_then(Value::as_f64)
+            {
+                Ok(Feed::Pressure(full))
             } else {
                 Err(format!(
                     "nothing plays the control input {name} from the keys"
@@ -288,6 +373,7 @@ pub const DEVICES: [Device; 10] = [
         cores: None,
         mod_wheel: None,
         gate: None,
+        velocity: None,
         pitch: None,
         own_oscillator: false,
         partition: None,
@@ -302,6 +388,7 @@ pub const DEVICES: [Device; 10] = [
         cores: None,
         mod_wheel: None,
         gate: None,
+        velocity: None,
         pitch: None,
         own_oscillator: false,
         partition: None,
@@ -322,6 +409,7 @@ pub const DEVICES: [Device; 10] = [
         cores: None,
         mod_wheel: None,
         gate: None,
+        velocity: None,
         pitch: None,
         own_oscillator: false,
         partition: None,
@@ -338,6 +426,7 @@ pub const DEVICES: [Device; 10] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff_v"),
         gate: None,
+        velocity: None,
         pitch: None,
         own_oscillator: false,
         partition: None,
@@ -354,6 +443,7 @@ pub const DEVICES: [Device; 10] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff"),
         gate: None,
+        velocity: None,
         pitch: None,
         own_oscillator: false,
         partition: None,
@@ -370,6 +460,7 @@ pub const DEVICES: [Device; 10] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff"),
         gate: Some("gate"),
+        velocity: None,
         pitch: None,
         own_oscillator: false,
         partition: None,
@@ -386,6 +477,7 @@ pub const DEVICES: [Device; 10] = [
         cores: Some("ja"),
         mod_wheel: Some("wave"),
         gate: None,
+        velocity: None,
         pitch: Some(Pitch {
             control: "pitch",
             tuning: VCO_LC_TUNING,
@@ -404,6 +496,7 @@ pub const DEVICES: [Device; 10] = [
         cores: Some("ja"),
         mod_wheel: Some("cutoff"),
         gate: Some("gate"),
+        velocity: Some(TUBE_SYNTH_VELOCITY),
         pitch: Some(Pitch {
             control: "pitch",
             tuning: TUBE_SYNTH_TUNING,
@@ -445,6 +538,7 @@ pub const DEVICES: [Device; 10] = [
         cores: Some("ja"),
         mod_wheel: Some("depth"),
         gate: Some("gate"),
+        velocity: None,
         pitch: None,
         own_oscillator: true,
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
@@ -461,6 +555,7 @@ pub const DEVICES: [Device; 10] = [
         cores: None,
         mod_wheel: None,
         gate: None,
+        velocity: None,
         pitch: None,
         own_oscillator: false,
         partition: None,
@@ -747,7 +842,7 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 30] = [
+const LABELS: [(&str, &str); 31] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -775,6 +870,7 @@ const LABELS: [(&str, &str); 30] = [
     ("wave", "Wave (tank to square)"),
     ("glide", "Glide"),
     ("key_track", "Key track"),
+    ("pressure", "Pressure (aftertouch)"),
     ("drive", "Drive (send level)"),
     ("decay_500hz_s", "Decay at 500 Hz (s)"),
     ("return_level", "Return"),
@@ -965,6 +1061,7 @@ mod tests {
                 "release",
                 "env_amount",
                 "key_track",
+                "pressure",
                 "glide",
                 "wave",
                 "range"
@@ -1008,16 +1105,24 @@ mod tests {
         assert_eq!(
             key_feeds(&DEVICES[7], &synth),
             Ok(vec![
-                Feed::Gate(-110.0, -1.0),
+                Feed::VelocityGate(-110.0, TUBE_SYNTH_VELOCITY),
                 Feed::Pitch(DEVICES[7].pitch.unwrap()),
                 Feed::Key(KeyString {
                     v_per_semitone: 0.75,
                     ref_note: 60.0,
                     min_v: -27.0,
                     max_v: 27.0
-                })
+                }),
+                Feed::Pressure(15.0)
             ])
         );
+        // Velocity: 127 at the circuit's gate_on_v, softer keys down the table.
+        let t = TUBE_SYNTH_VELOCITY;
+        assert_eq!(t[t.len() - 1], (0.0, -1.0));
+        assert_eq!(velocity_volts(t, 127, 18.0), -1.0);
+        assert_eq!(velocity_volts(t, 1, 0.0), -1.0);
+        assert!((velocity_volts(t, 1, 18.0) - -55.0).abs() < 2.0);
+        assert!(t.windows(2).all(|w| w[0].0 < w[1].0 && w[0].1 < w[1].1));
         let Ok(feeds) = key_feeds(&DEVICES[7], &synth) else {
             unreachable!()
         };

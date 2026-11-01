@@ -103,6 +103,7 @@ const DRAWING: Device = Device {
     cores: None,
     mod_wheel: None,
     gate: None,
+    velocity: None,
     pitch: None,
     own_oscillator: false,
     partition: None,
@@ -151,6 +152,10 @@ pub struct PlayView {
     input: usize,
     channel: usize,
     input_buffer_ms: f64,
+    /// The keys' velocity range (dB; a device with a velocity table), and whether
+    /// velocity plays at all (off: every key at full level, the range kept).
+    velocity_db: f64,
+    velocity_on: bool,
     /// A MIDI keyboard instead (live, `live_input` set too): its ports, the one chosen,
     /// the test oscillator's waveform, the keyboard while playing, and how many mod
     /// wheel messages have been applied.
@@ -265,6 +270,8 @@ impl PlayView {
             input: 0,
             channel: 0,
             input_buffer_ms: INPUT_BUFFER_S * 1000.0,
+            velocity_db: panel::VELOCITY_RANGE_DB,
+            velocity_on: true,
             midi: false,
             midi_ports: Vec::new(),
             midi_port: 0,
@@ -805,6 +812,7 @@ impl PlayView {
             if let Some(m) = panel::range_mode(&self.knobs) {
                 p.set_range_mode(m);
             }
+            p.set_velocity_range(self.velocity_range_db());
             self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
             Ok((kb, p))
         });
@@ -909,6 +917,15 @@ impl PlayView {
             && let Some(p) = &self.player
         {
             p.set_end_values(panel::values(&self.end_knobs));
+        }
+    }
+
+    /// The velocity range the keys play with (0 with velocity off).
+    fn velocity_range_db(&self) -> f64 {
+        if self.velocity_on {
+            self.velocity_db
+        } else {
+            0.0
         }
     }
 
@@ -1528,11 +1545,41 @@ impl PlayView {
                     }
                 });
         });
+        if DEVICES
+            .get(self.device)
+            .is_some_and(|d| d.velocity.is_some())
+        {
+            ui.horizontal(|ui| {
+                let mut changed = ui
+                    .checkbox(&mut self.velocity_on, "Velocity")
+                    .on_hover_text("Off: every key plays at full level however hard it's pressed")
+                    .changed();
+                changed |= ui
+                    .add_enabled(
+                        self.velocity_on,
+                        egui::Slider::new(
+                            &mut self.velocity_db,
+                            0.0..=panel::VELOCITY_RANGE_MAX_DB,
+                        )
+                        .step_by(1.0)
+                        .suffix(" dB"),
+                    )
+                    .on_hover_text(
+                        "How much softer the softest key plays than the hardest: the \
+                         keyboard bus's key-down volts by velocity",
+                    )
+                    .changed();
+                if changed && let Some(p) = &self.player {
+                    p.set_velocity_range(self.velocity_range_db());
+                }
+            });
+        }
         let held = self.keyboard.as_ref().map(|kb| match kb.keys.sounding() {
             Some((n, v)) => format!(
-                "key {} ({:.0} Hz), velocity {v}",
+                "key {} ({:.0} Hz), velocity {v}, pressure {}",
                 note_name(n),
-                midi::TestOsc::note_hz(n)
+                midi::TestOsc::note_hz(n),
+                kb.keys.pressure()
             ),
             None => "no key held".into(),
         });

@@ -39,7 +39,7 @@ diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heate
 |---|---|---|---|---|
 | 1 | Glide (**built**) | Notes slide | A rheostat | ~0 (measured) |
 | 2 | KEY TRACK (**built**) | Filter brightness follows the note | A pot, a key string | ~0 (measured) |
-| 3 | Velocity, aftertouch | Expression | App feeds; a control input | ~0 |
+| 3 | Velocity, aftertouch (**built**) | Expression | App feeds; a control input | ~0 (measured) |
 | 4 | HEATER | "Tired tubes": softer, more drift | The heater ratio as a panel value | ~0 |
 | 5 | PULSE (peaking transformer) | Bright, buzzy pulse, magnetic PWM | One small JA core | One core; aliasing |
 | 6 | SUPPLY: rectifier and reservoir | How much the voice sags and blooms | Switch contacts; copper oxide needs a fit | Small |
@@ -149,6 +149,32 @@ saturation). Load with a key held (A4, back to back): 71-73% at KEY TRACK 0 and 
   the pitch grid for vibrato by pressure. The `midi` module reads channel pressure.
 - Both are the player's keyboard, outside the instrument, so nothing here bends "physics,
   not DSP". A velocity curve is a panel setting.
+
+**Built (2026-11-01).**
+- **Velocity** (no circuit change): `scripts/velocity_study.py` measured the output against
+  the keyboard bus's key-down volts with a key held (`reports/tube_synth/velocity.json`):
+  -1 V 0 dB, -10 V -7.4, -20 V -11.3, -40 V -15.3, -60 V -19.1, -80 V -27.2, -90 V -35.5
+  (the 6386's remote cutoff: gentle, then the VCA closes fast). The harmonics stay ~7%
+  throughout (the waveform's, not the VCA's): a soft key is quieter, not cleaner. ENV
+  AMOUNT's sweep follows the envelope, so a soft key also opens the filter less. That table
+  is varimu-app's `panel::Device::velocity` (`TUBE_SYNTH_VELOCITY`); a key at velocity v
+  aims at -range x (127 - v) / 126 dB (`panel::velocity_volts`, `Feed::VelocityGate`), the
+  range the Play view's "Velocity" slider (0-30 dB, 18 at first; `Player::set_velocity_range`),
+  with a checkbox beside it that turns velocity off (every key at full level, the range kept;
+  the user's ask).
+  A legato key changes the bus's level under the held note: the envelope follows through
+  ATTACK going up, RELEASE going down.
+- **Aftertouch:** a fourth control input, `pressure` (0 V at rest, `pressure_full_v` 15 V
+  pressed fully; the app's `Feed::Pressure`; `midi::Keys::pressure`: channel pressure, or the
+  sounding key's poly pressure, 0 with no key held), through 220 ohm onto 4.7 uF across the
+  PRESSURE pot (2k), whose wiper is the KEY TRACK pot's foot (KEY TRACK's wiper is the CUTOFF
+  pot's). Fully pressed at PRESSURE 1 (`keytrack_study.py --pressure-v`,
+  `reports/tube_synth/keytrack/pressure_*.json`): CUTOFF 0 301 -> 727 Hz, 0.3 1272 -> 2706 Hz,
+  0.6 3054 -> 4548 Hz. Both pots at mid move C4's cutoff -30 cents (the CUTOFF network's
+  current through both wipers). Pressure into the pitch (vibrato) isn't built.
+- Load with a key held: the defaults 72-75% back to back with the runs before (71-73%); the
+  same settings spread 69-93% run to run on this desktop, so nothing attributable. Tests:
+  `tests/test_tube_synth.py` (the pressure test), panel.rs and midi.rs unit tests.
 
 ## 4. HEATER
 

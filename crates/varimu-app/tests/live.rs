@@ -299,6 +299,9 @@ fn the_synth_follows_its_keys_after_a_restart() {
                 }
                 Feed::Pitch(p) => p.volts(440.0 * 2f64.powf((last as f64 - 69.0) / 12.0)),
                 Feed::Key(k) => k.volts(last),
+                Feed::VelocityGate(up, _) if note.is_none() => *up,
+                Feed::VelocityGate(_, t) => varimu_app::panel::velocity_volts(t, 127, 0.0),
+                Feed::Pressure(_) => 0.0,
             })
             .collect()
     };
@@ -366,6 +369,8 @@ fn the_synth_range_switch_updates_in_place() {
             Feed::Gate(_, down) => *down,
             Feed::Pitch(_) => -15.0,
             Feed::Key(k) => k.volts(70), // -15 V's pitch: ~474 Hz
+            Feed::VelocityGate(_, t) => varimu_app::panel::velocity_volts(t, 127, 0.0),
+            Feed::Pressure(_) => 0.0,
         })
         .collect();
     let mut live = Live::with_controls(&[], v.clone(), c, s.clone(), 1.0, &held).unwrap();
@@ -421,6 +426,8 @@ fn the_synth_powers_on_from_cold() {
                 Feed::Gate(_, down) => *down,
                 Feed::Pitch(p) => p.volts(440.0 * 2f64.powf((note as f64 - 69.0) / 12.0)),
                 Feed::Key(k) => k.volts(note),
+                Feed::VelocityGate(_, t) => varimu_app::panel::velocity_volts(t, 127, 0.0),
+                Feed::Pressure(_) => 0.0,
             })
             .collect()
     };

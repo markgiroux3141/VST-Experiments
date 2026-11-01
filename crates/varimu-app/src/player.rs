@@ -306,6 +306,8 @@ struct Shared {
     wet: AtomicU64,
     /// Where an oscillator's range switch is set (`RangeMode::index`; keys only).
     range_mode: AtomicU8,
+    /// The keys' velocity range (dB, f64 bits; a device with a velocity table).
+    velocity_db: AtomicU64,
     transport: Mutex<TransportCtl>,
     /// The last output callback: the first output sample it was asked for (counted from
     /// the stream's first) and when it ran.
@@ -400,6 +402,7 @@ impl Player {
             output_db: AtomicU64::new(0f64.to_bits()),
             wet: AtomicU64::new(1f64.to_bits()),
             range_mode: AtomicU8::new(RangeMode::Auto.index()),
+            velocity_db: AtomicU64::new(crate::panel::VELOCITY_RANGE_DB.to_bits()),
             transport: Mutex::new(TransportCtl::default()),
             out_clock: Mutex::new(None),
             mix: Mutex::new(Arc::new(Mix::default())),
@@ -426,7 +429,7 @@ impl Player {
                 (Some(stream), WorkerSource::Input(ring, info.rate))
             }
             Source::Keys(keys, wave, feeds) => {
-                let gate = feeds.iter().any(|f| matches!(f, Feed::Gate(..)));
+                let gate = feeds.iter().any(Feed::is_gate);
                 let pitch = feeds.iter().any(|f| matches!(f, Feed::Pitch(..)));
                 shared.status.lock().expect("status").input = Some(
                     match (pitch, gate) {
@@ -500,6 +503,14 @@ impl Player {
         self.shared
             .range_mode
             .store(mode.index(), Ordering::Relaxed);
+    }
+
+    /// The keys' velocity range: the dB between velocity 127 and 1 on a device with a
+    /// velocity table (`panel::Device::velocity`; 0: every key alike).
+    pub fn set_velocity_range(&self, db: f64) {
+        self.shared
+            .velocity_db
+            .store(db.to_bits(), Ordering::Relaxed);
     }
 
     /// A new circuit with its values (the editor's drawing, edited): the same structure
@@ -707,19 +718,24 @@ fn timeline_block(audio: &[f32], start: i64, segments: &[(i64, usize, usize)], o
 /// The note a pitch feed holds until the first key (A3).
 const START_NOTE: u8 = 57;
 
-/// A feed's volts with `sounding` held (a key, or none), `last_note` the last key and
-/// the oscillator's range switch at LOW (`low`) or HIGH.
-fn feed_volts(f: &Feed, sounding: Option<(u8, u8)>, last_note: u8, low: bool) -> f64 {
-    match f {
-        Feed::Gate(up, down) => {
-            if sounding.is_some() {
-                *down
-            } else {
-                *up
-            }
-        }
-        Feed::Pitch(p) => p.volts_in(TestOsc::note_hz(last_note), low),
-        Feed::Key(k) => k.volts(last_note),
+/// A feed's volts with `sounding` held (a key and its velocity, or none), `last_note`
+/// the last key, the oscillator's range switch at LOW (`low`) or HIGH, the keyboard's
+/// aftertouch `pressure` (0-127) and the velocity range `vel_db`.
+fn feed_volts(
+    f: &Feed,
+    sounding: Option<(u8, u8)>,
+    last_note: u8,
+    low: bool,
+    pressure: u8,
+    vel_db: f64,
+) -> f64 {
+    match (f, sounding) {
+        (Feed::Gate(_, down), Some(_)) => *down,
+        (Feed::Gate(up, _) | Feed::VelocityGate(up, _), None) => *up,
+        (Feed::VelocityGate(_, t), Some((_, vel))) => crate::panel::velocity_volts(t, vel, vel_db),
+        (Feed::Pitch(p), _) => p.volts_in(TestOsc::note_hz(last_note), low),
+        (Feed::Key(k), _) => k.volts(last_note),
+        (Feed::Pressure(full), _) => full * (pressure.min(127) as f64) / 127.0,
     }
 }
 
@@ -1093,7 +1109,7 @@ fn work(
     let c0: Vec<f64> = match &source {
         WorkerSource::Keys(_, _, feeds) => feeds
             .iter()
-            .map(|f| feed_volts(f, None, START_NOTE, false))
+            .map(|f| feed_volts(f, None, START_NOTE, false, 0, 0.0))
             .collect(),
         _ => Vec::new(),
     };
@@ -1281,7 +1297,7 @@ fn work(
             // a key is heard within the queue, a block and the output's latency.
             let mut osc = TestOsc::new(rate as f64);
             osc.wave = wave;
-            osc.steady = feeds.iter().any(|f| matches!(f, Feed::Gate(..)));
+            osc.steady = feeds.iter().any(Feed::is_gate);
             let mut block = vec![0.0; BLOCK];
             let mut ctl = vec![vec![0.0; BLOCK]; feeds.len()];
             let mut last_note = START_NOTE;
@@ -1289,7 +1305,7 @@ fn work(
             // keys'), the position asked for, and (in `live.values`) the one applied.
             let range = feeds.iter().find_map(|f| match f {
                 Feed::Pitch(p) => p.range,
-                Feed::Gate(..) | Feed::Key(_) => None,
+                _ => None,
             });
             let mut panel_values = live.values.clone();
             let mut asked_low = range.is_some_and(|r| r.is_low(&live.values));
@@ -1340,8 +1356,10 @@ fn work(
                 } else {
                     osc.fill(sounding, &mut block);
                 }
+                let pressure = keys.pressure();
+                let vel_db = f64::from_bits(shared.velocity_db.load(Ordering::Relaxed));
                 for (c, f) in ctl.iter_mut().zip(&feeds) {
-                    c.fill(feed_volts(f, sounding, last_note, low));
+                    c.fill(feed_volts(f, sounding, last_note, low, pressure, vel_db));
                 }
                 let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
                 let (y, meter) = live

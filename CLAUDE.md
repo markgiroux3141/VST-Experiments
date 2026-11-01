@@ -156,6 +156,9 @@ ahead of the pitch stopper; the 6V6GT's grid leak now a 1 GOhm numerical one, so
 tuning tables were re-measured; `scripts/glide_study.py`). #2 KEY TRACK built (`key_track`: a second keyboard
 string, the control input `key`, 0.75 V a key, 0 V at C4 (`key_*` values; the app's
 `panel::KeyString`, `Feed::Key`), under the CUTOFF pot; `scripts/keytrack_study.py`).
+#3 velocity (the bus's key-down volts from a measured table, `panel::Device::velocity`,
+Play's Velocity range; `scripts/velocity_study.py`) and aftertouch (control input
+`pressure`, 0-15 V, `Feed::Pressure`, the PRESSURE pot under KEY TRACK) built.
 
 Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
 user's idea; nothing built): synthesis stays pure, except where the physics is far faster
