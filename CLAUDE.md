@@ -237,15 +237,30 @@ FLAT / LP / HP sidechain filter at the pick-off (an iron-cored inductor on a JA 
 a split-band ducker (channel 2's 6386 stage at a fixed bias for the highs). Milestones
 K1-K4; the user's open decisions are listed there.
 
-Grooves ([docs/PHONO_PLAN.md](docs/PHONO_PLAN.md), 2026-11-01, parked until the user picks
-it up; nothing built): vinyl, the acoustic gramophone, wax cylinders and tin foil as one
+Grooves ([docs/PHONO_PLAN.md](docs/PHONO_PLAN.md), 2026-11-01): vinyl, the acoustic gramophone, wax cylinders and tin foil as one
 machine, a groove written along arc length (a print between the recording and the player)
 and read by a tip (morphological dilation, a Hertz contact in the stylus' port, mistracking
 as a hybrid event), on the tape's medium structure. The acoustic players are one
 mechano-acoustic network (needle, soundbox, arm, horn: the impedance analogy, the speaker's
 precedent; Maxfield and Harrison 1926 the anchor), acoustic recording a horn into wax fed by
 MIC_ROOM_PLAN.md's room; old sound as physical condition (needle wear, wear per play,
-governor hunting). Milestones G1-G8, the acoustic machines proposed before vinyl.
+governor hunting). Milestones G1-G8, the acoustic machines proposed before vinyl. **The wax
+cylinder first, built 2026-11-02** (PHONO_PLAN.md's "Status (2026-11-02)"; offline Python,
+`varimu/phono/`, outside the render cache key; `config/phono/edison_standard.yaml`;
+`tests/test_phono.py`; `scripts/cylinder_study.py [--file SONG --start S] [--variants smooth
+played worn close]` -> `reports/phono/cylinder/`): an Edison two-minute cylinder recorded
+acoustically (the 16 in studio horn, a studio 2 in glass diaphragm, the cutter into wax, the
+loud passages cut to the ~10 um limit) and played on a Model C (the groove dilated by the
+tip, a Hertz contact, the floating weight, a mica diaphragm, a 30 in horn, the pressure 1 m
+out). Mechano-acoustic networks in the mobility / impedance analogies (`network.py`, MNA,
+IR element types only), Webster ladders (`horn.py`), each machine's spring motor, flyball
+governor, belt and the cylinder's runout as the wow (`transport.py`), dust, mould and cracks
+as seeded geometry (`damage.py`), earlier plays by Archard's law (`wear.py`). The user's
+verdict after comparing with real transfers: the `played` take is the reference; their In
+the Pines rendered whole with it (~9x slower than real time). Next, not decided: the
+circuitsim port (G1's Rust half), the gramophone (G2), the surface across the tip's patch
+(G6). Pin BLAS to one thread (`OPENBLAS_NUM_THREADS=1`) when another job saturates the
+cores: its small solves ran ~100x slower.
 
 Mics, preamps and rooms ([docs/MIC_ROOM_PLAN.md](docs/MIC_ROOM_PLAN.md), 2026-11-01; nothing
 built; the user picks it up deliberately): source -> room -> capsule -> mic electronics ->
