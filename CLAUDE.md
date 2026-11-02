@@ -409,7 +409,10 @@ the pickup at 0 V; `Mna::n_media`, `Transient::step_media`), the component `EMT1
 `plate` part in both builders, and the device `config/circuits/plate_reverb.yaml` (our own
 tube drive and pickup amplifiers: the V54's schematic isn't public; DRIVE, DECAY at 500 Hz,
 RETURN; output wet only), the app's `plate_reverb`. `scripts/plate_report.py` ->
-`reports/reverb/`. Then the stereo pair, sends (F4), the spring and the 6G15. **A chain's end** (2026-10-31):
+`reports/reverb/`. Then the stereo pair, sends (F4), the spring and the 6G15. More reverbs
+(2026-11-02, a brainstorm, nothing built): REVERB_PLAN.md's "Candidates" (ranked: the EMT
+240 gold foil, the spring, a nonlinear plate / tam-tam, a magnetostrictive line,
+sympathetic strings; then the BX20, wires, water, rooms). **A chain's end** (2026-10-31):
 a device after the one played, on threads of its own a block behind (`player::EndDevice`,
 `panel::CHAIN_ENDS`: the plate; Play's CHAIN END; `examples/play.rs --end plate_reverb`):
 the synth through the plate plays without dropouts (REVERB_PLAN.md, "Live chaining").

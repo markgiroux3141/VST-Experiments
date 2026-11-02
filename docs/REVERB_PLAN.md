@@ -86,9 +86,9 @@ n = S / (4 pi) sqrt(rho h / D) per rad/s; for 2 m^2 of 0.5 mm steel that is ~1.3
 per Hz, ~26,000 below 20 kHz. A SIMD bank of that many resonators may reach real time on
 a few cores; otherwise production renders offline and the draft keeps fewer modes.
 
-**Later or quirkier media** (not milestones yet): tape echo (FUTURE_DIRECTIONS.md's tape
-medium), the Binson Echorec (tubes and a magnetic drum), oil-can delays (charge on a disc
-turning in oil), the echo chamber (the speaker plus a microphone in a room: a 3D medium,
+**Later or quirkier media** (not milestones yet): tape echo, the Binson Echorec (tubes and
+a magnetic drum) and oil-can delays (charge on a disc turning in oil) are now in
+DELAY_PLAN.md; the echo chamber (the speaker plus a microphone in a room: a 3D medium,
 the most expensive, last; MIC_ROOM_PLAN.md's rooms, a speaker source and a mic make one).
 
 ## The engine: a medium coupled at ports
@@ -254,6 +254,69 @@ The user's ask: a reverb to put on recorded tracks in the Session view. Built in
 - Fender 6G15: 12AT7, 6K6GT driver into a 125A12A (about 7.5 kOhm : 8 Ohm), 7025 recovery
   and cathode-follower mixer, solid-state rectifier; voltages on the schematic
   (https://www.thetubestore.com/lib/thetubestore/schematics/Fender/Fender-Reverb-6G15-Schematic.pdf).
+
+## Candidates beyond the spring and the plate (brainstorm 2026-11-02)
+
+Brainstormed with the user; none of these is a milestone yet, and nothing is built. Each is
+a physical medium coupled at transducer ports, like the plate. Figures below are model
+knowledge to verify against a source before any value is used. Already covered elsewhere,
+so not listed here: the echo chamber (MIC_ROOM_PLAN.md's rooms), tape echo, the Echorec,
+the oil can and the acoustic pipe (DELAY_PLAN.md).
+
+**Ranked (Claude's recommendation, the user to confirm the order when the track resumes):**
+
+1. **EMT 240 "Gold Foil".** A foil of ~18 um gold, ~30 cm square (to verify), against the
+   140's 0.5 mm steel over 2 m^2. So thin that **tension dominates over bending
+   stiffness**: nearly non-dispersive, membrane-like waves, so no 140-style splash, and a
+   smoother, darker, denser tail from a small box. Same modal machinery as `plate.rs`,
+   with the tensioned plate's full dispersion relation (tension plus bending) instead of
+   bending alone. The cheapest new reverb on the list. Its electronics are solid state
+   (1970s): drive it with our own tube electronics, as `plate_reverb` does.
+2. **The 6G15 spring (E1-E4, already planned).** It comes second here because candidates
+   4, 5 and 7 build on E1's helical-spring scheme.
+3. **A nonlinear plate / tam-tam.** Driven hard, a thin plate's von Kármán nonlinearity
+   moves energy up the spectrum: the tail **blooms and shimmers after the hit**, the
+   physical version of a "shimmer" reverb. Shared with DRUM_PLAN.md's cymbals, which need
+   the same physics. Costly: the modes couple, so it isn't a bank of independent
+   resonators (Bilbao's von Kármán schemes; Ducceschi's modal form).
+4. **A magnetostrictive wire delay line.** A nickel wire carrying torsional waves between
+   coil transducers (1960s computer memory). Both transducers are **hysteretic
+   magnetics**, what the JA and Preisach models already do; several taps fed back through
+   a tube network make it a gritty, odd reverb. Invented as an audio device, real in
+   every part.
+5. **A sympathetic-string reverb.** A bank of undamped strings on a bridge (a piano with
+   its sustain pedal down, a sitar's resonating strings): a **pitched** reverb ringing at
+   the strings' tuning, which could follow the synth's keys. Shares strings, bridge and
+   soundboard with INSTRUMENT_PLAN.md's piano.
+
+**Further candidates (unranked):**
+
+6. **AKG BX20.** The studio spring: long springs folded in a tall cabinet, with deliberate
+   irregularities along them that break up a cheap tank's flutter echo. On E1's scheme,
+   geometry plus localized mass changes. Its spring data and electronics to source.
+7. **Hammond's original organ tank, long multi-spring tanks.** Geometry variants on E1:
+   a spread of decay classes, cheap once the spring exists.
+8. **A Slinky / giant spring.** The memory "realistic first, then bend": the same
+   equations at an absurd geometry pull the transition frequency into the low hundreds of
+   Hz, so every echo becomes a slow descending chirp. Free once E1 exists.
+9. **A guy wire / long tensioned wire.** A radio tower's guy wire struck (the Star Wars
+   blaster): tens of meters of steel under high tension, strongly dispersive bending
+   waves, long sparse chirping echoes. Between a spring and a delay.
+10. **A water tank with hydrophones.** A driver into a tank of water, a hydrophone pickup:
+    sound ~4x faster than in air and very reflective walls give dense, quick reflections
+    and their own coloration. A small 3D medium, so it can share the room solver's GPU
+    path (MIC_ROOM_PLAN.md; the memory "use the GPU").
+11. **A soundboard reverb.** An orthotropic wooden plate (spruce, ribbed) as the medium:
+    warmer and more irregular than steel. Shares the piano's soundboard.
+
+**Rooms as presets** (no new engine; floor plans and materials with sources, for
+MIC_ROOM_PLAN.md's room solver, and its test cases): Capitol's trapezoidal chambers, Abbey
+Road's chamber, Gold Star's chambers, a tiled stairwell, a grain silo, the Hamilton
+Mausoleum (one of the longest natural decays known).
+
+**Left out on purpose:** algorithmic digital reverbs (EMT 250, Lexicon): no physical medium
+to simulate. Bucket-brigade lines are physical but need a MOSFET model first, and they make
+a chorus or a delay rather than a reverb.
 
 ## Milestones
 
