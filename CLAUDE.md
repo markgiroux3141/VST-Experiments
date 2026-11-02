@@ -237,6 +237,17 @@ FLAT / LP / HP sidechain filter at the pick-off (an iron-cored inductor on a JA 
 a split-band ducker (channel 2's 6386 stage at a fixed bias for the highs). Milestones
 K1-K4; the user's open decisions are listed there.
 
+Delay ([docs/DELAY_PLAN.md](docs/DELAY_PLAN.md), 2026-11-01, a brainstorm; nothing built):
+a slappy echo from physical machines, delay time never a parameter (a head distance over a
+tape speed). It follows the tape work: D1, the Sun slap on the Ampex 351 (SLAP, a REPEAT
+pot from repro to record in the one netlist, varispeed from the capstan's supply), is
+TAPE_PLAN.md's TM6 and needs TM5. Then the Echoplex EP-2 (a loop, a sliding record head,
+incomplete erasure), the EchoSonic (a 5E3-family amp with a loop); later the Echorec, the
+oil can, an acoustic pipe. Live play is essential (the user): its "Real time" section plans
+it (the delay's 133 ms as the recording's latency budget, the circuit partitioned at the
+medium, a reduced medium generated from the full one played live, the literal 351 printed;
+nothing measured yet). The user's open decisions are listed there.
+
 Grooves ([docs/PHONO_PLAN.md](docs/PHONO_PLAN.md), 2026-11-01): vinyl, the acoustic gramophone, wax cylinders and tin foil as one
 machine, a groove written along arc length (a print between the recording and the player)
 and read by a tip (morphological dilation, a Hertz contact in the stylus' port, mistracking

@@ -167,12 +167,18 @@ transport moves the tape at v(t) between the heads.
 
 **TM6: in the app.**
 - The device in varimu-app, printed as an insert (a production render).
-- Slapback (repro to record, the Sun wiring).
+- Slapback (repro to record, the Sun wiring): DELAY_PLAN.md's D1 (SLAP, REPEAT, varispeed
+  from the capstan's supply), the first of the echo machines planned there.
 - A mix bus: stereo as a two-track on one transport, both channels sharing v(t) (the
   351-2 / 354 family).
 
 **TM7 (optional): real time.**
 - A reduced tier measured against production, if it can be made close enough.
+- Brainstormed for the delay (DELAY_PLAN.md "Real time", 2026-11-01; live is essential
+  there): the delay's 133 ms as the recording's latency budget, the circuit partitioned at
+  the medium, a reduced medium generated from the full one (per-layer tables of the
+  ensemble, the zone's aperture, playback as a FIR), Option B's bias live; the literal
+  351 stays the print.
 
 **Later:** print-through (Nos. 10 and 38: thermal activation of the neighbouring layer's
 particles), the erase head's real field (incomplete erasure), magnetized heads (the head
