@@ -1,0 +1,88 @@
+{
+ "rails": {
+  "b1": 297.0,
+  "b3": 205.0,
+  "neg2": -105.0,
+  "nn": -344.0
+ },
+ "rows": {
+  "pluck": {
+   "peak_v": 0.72,
+   "peak_ms": 8.0,
+   "held_v": -100.4,
+   "sw_v": -104.89,
+   "cmp_p_held": 82.1,
+   "end_v": -109.51
+  },
+  "brass": {
+   "peak_v": -2.31,
+   "peak_ms": 109.4,
+   "held_v": -39.81,
+   "sw_v": -42.97,
+   "cmp_p_held": 81.0,
+   "end_v": -109.01
+  },
+  "organ": {
+   "peak_v": 0.75,
+   "peak_ms": 8.0,
+   "held_v": -1.75,
+   "sw_v": -2.06,
+   "cmp_p_held": 80.5,
+   "end_v": -109.5
+  },
+  "soft": {
+   "peak_v": -17.26,
+   "peak_ms": 5.4,
+   "held_v": -100.95,
+   "sw_v": -104.9,
+   "cmp_p_held": 62.4,
+   "end_v": -109.51
+  },
+  "slow": {
+   "peak_v": -3.22,
+   "peak_ms": 766.4,
+   "held_v": -51.05,
+   "sw_v": -53.26,
+   "cmp_p_held": 81.2,
+   "end_v": -106.33
+  },
+  "fast_decay": {
+   "peak_v": 0.69,
+   "peak_ms": 8.0,
+   "held_v": -101.8,
+   "sw_v": -104.89,
+   "cmp_p_held": 82.1,
+   "end_v": -109.71
+  },
+  "retrigger": {
+   "first_peak_v": 0.74,
+   "env_at_repress_v": -22.38,
+   "second_peak_v": 0.7,
+   "second_peak_ms": 4.6
+  },
+  "legato_pluck": {
+   "gap_ms": 1.0,
+   "env_before_v": -93.07,
+   "dip_v": -93.48,
+   "second_peak_v": 0.68,
+   "second_peak_ms": 8.7,
+   "held_v": -98.0
+  },
+  "legato_brass": {
+   "gap_ms": 1.0,
+   "env_before_v": -20.96,
+   "dip_v": -21.65,
+   "second_peak_v": -2.31,
+   "second_peak_ms": 36.5,
+   "held_v": -29.89
+  },
+  "legato_fast_release": {
+   "gap_ms": 1.0,
+   "env_before_v": -35.82,
+   "dip_v": -55.08,
+   "second_peak_v": 0.71,
+   "second_peak_ms": 7.4,
+   "held_v": -38.58
+  }
+ }
+}

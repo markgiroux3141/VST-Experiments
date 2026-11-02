@@ -229,6 +229,14 @@ impl Feed {
     pub fn is_gate(&self) -> bool {
         matches!(self, Feed::Gate(..) | Feed::VelocityGate(..))
     }
+
+    /// A gate's key-up volts (None for other feeds).
+    pub fn gate_up(&self) -> Option<f64> {
+        match self {
+            Feed::Gate(up, _) | Feed::VelocityGate(up, _) => Some(*up),
+            _ => None,
+        }
+    }
 }
 
 /// The volts for velocity `vel` (1-127) over `range_db` on a velocity table.
@@ -524,6 +532,7 @@ pub const DEVICES: [Device; 10] = [
             "input",
             "filter",
             "cutoff",
+            "|",
             "envelope",
             "|",
             "ring",
@@ -855,7 +864,7 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 41] = [
+const LABELS: [(&str, &str); 43] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -879,6 +888,8 @@ const LABELS: [(&str, &str); 41] = [
     ("resonance", "Resonance"),
     ("level", "Level (VCA)"),
     ("attack", "Attack"),
+    ("decay", "Decay"),
+    ("sustain", "Sustain"),
     ("release", "Release"),
     ("wave", "Wave (tank to square)"),
     ("glide", "Glide"),
@@ -1097,6 +1108,8 @@ mod tests {
                 "cutoff",
                 "resonance",
                 "attack",
+                "decay",
+                "sustain",
                 "release",
                 "env_amount",
                 "key_track",

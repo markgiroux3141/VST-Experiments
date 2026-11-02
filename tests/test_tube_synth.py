@@ -37,6 +37,7 @@ PARTITION = (
     "input",
     "filter",
     "cutoff",
+    "|",
     "envelope",
     "|",
     "ring",
@@ -50,6 +51,9 @@ PARTITION = (
     "bias supply",
 )  # the native app's (panel.rs)
 KEY_UP_V, KEY_DOWN_V = -110.0, -1.0
+# V4's grid at CUTOFF 0.3, C4, a key held: -20.70 V until #15, whose SUSTAIN pot (~1 mA)
+# lifted the -105 V rail the CUTOFF network hangs off by ~0.65 V (2026-11-01)
+C4_G4_V = -20.52
 
 
 def run(pitch_v, dur_s=1.0, on_s=0.2):
@@ -258,7 +262,7 @@ def test_key_track_moves_the_cutoff_driver_with_the_key_string(track):
     c4, c5 = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
     print(track, c4, c5)
     # -20.5 V before the LFO (2026-11-01): its draw left the rails ~0.2 V lower
-    assert abs(c4 - (-20.7)) < 0.15  # KEY TRACK barely moves C4's cutoff
+    assert abs(c4 - C4_G4_V) < 0.15  # KEY TRACK barely moves C4's cutoff
     if track == 0.0:
         assert abs(c5 - c4) < 0.05  # the grid itself still settles ~0.03 V then
     else:
@@ -288,7 +292,7 @@ def test_pressure_raises_the_cutoff_driver():
     g4 = fast.run_transient(ir, np.zeros(n), settings=st, controls=controls).vectors["v(g4)"]
     rest, pressed = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
     print(rest, pressed)
-    assert abs(rest - (-20.7)) < 0.15
+    assert abs(rest - C4_G4_V) < 0.15
     assert 6.8 < pressed - rest < 7.8
 
 
@@ -435,3 +439,27 @@ def test_the_ring_multiplies_the_oscillator_by_the_lfo_and_leaves_the_pitch():
     print(f1, f2, osc, car, f_off)
     assert osc < -25 and car < -25
     assert abs(vco.cents(f1, f_off)) < 3
+
+
+def test_the_adsr_plucks_and_holds():
+    """The ADSR (SYNTH_IDEAS.md #15): a pluck (ATTACK 0, DECAY 0.3, SUSTAIN 0) peaks near the
+    bus within ~10 ms, the comparator latches, and the envelope decays to the SUSTAIN floor
+    while the key is still held (scripts/adsr_study.py: +0.1 V at 7 ms, -101 V at key up, the
+    output 40 dB down by ~0.22 s); SUSTAIN 1 holds the top as the AR envelope did."""
+    study = importlib.util.spec_from_file_location(
+        "adsr_study", Path(__file__).parents[1] / "scripts" / "adsr_study.py"
+    )
+    mod = importlib.util.module_from_spec(study)
+    study.loader.exec_module(mod)
+    assert tuple(mod.PARTITION) == PARTITION
+    for sets, held_lo, held_hi in (
+        ({"attack": 0.0, "decay": 0.3, "sustain": 0.0, "release": 0.2}, -106.0, -95.0),
+        ({"attack": 0.0, "decay": 0.3, "sustain": 1.0, "release": 0.2}, -3.0, 0.0),
+    ):
+        r, fs = mod.run(CIRCUIT, sets, mod.key(0.1, 0.6), 1.0)
+        st = mod.envelope_stats(r, fs, 0.1, 0.6)
+        print(sets, st)
+        assert st["peak_v"] > -3.0 and st["peak_ms"] < 15.0
+        assert held_lo < st["env_at_key_up_v"] < held_hi
+        assert st["cmp_p_v"][1] < 120.0  # latched
+        assert st["env_end_v"] < -105.0

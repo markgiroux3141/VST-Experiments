@@ -24,6 +24,8 @@ of the list or a night the user picks. **Owed since #7 (2026-11-01):**
   the parts library, the device library and fixtures, the preflight checks, the SPICE
   emission, `fast.partition_sections`, the controls' `unit: switch` in both spec loaders). In the targeted run `test_circuit_format`'s
   ngspice comparison timed out (300 s) while the tuning sweep held every core: rerun it.
+- #15 (2026-11-01) added the 6AL5's heater to `config/cathodes.yaml` (shared config); the
+  full run above covers it.
 - #14 (2026-11-01) added nothing shared (circuit file, scripts, panel.rs); the full run above
   covers it.
 - `uv run --extra listen --extra fast python scripts/slice_report.py --verify` (the
@@ -67,7 +69,7 @@ of the list or a night the user picks. **Owed since #7 (2026-11-01):**
 | 12 | Filter MODE (LP / BP / HP) | Thin, vocal, nasal shapes | Switch contacts | ~0 |
 | 13 | Filter DRIVE | Grit; loud notes darken | A gain stage | Small |
 | 14 | Ring modulator (**built**: oscillator x LFO; a second VCO waits for #9) | Metallic, bell-like | Diode ring, transformers | A thread (a core) when on |
-| 15 | ADSR / second envelope | Shaped notes, independent sweeps | Diode steering, a pot | ~+3% |
+| 15 | ADSR (**built**; the second envelope not) / second envelope | Shaped notes, independent sweeps | A comparator and latch, switches, a -340 V rail | A thread (a core) |
 | 16 | Sample-and-hold | Random stepped modulation | 6AL5 gate, a capacitor | Small |
 | 17 | Units (part tolerances) | Each instrument its own | Port the tolerance draws | ~0 at run time |
 | 18 | Through an amp | The 5E3 and its speaker | Chain end or insert | 5E3: 1.61x real time |
@@ -547,6 +549,62 @@ S5 measured option B, a second envelope (its own 6X4 and 0.47 uF from the keyboa
 ATTACK2 / RELEASE2) on V7's grid: +3% CPU. ADSR adds a DECAY to a SUSTAIN level on the
 VCA's envelope (diode steering onto a divider set by the SUSTAIN pot). The Odyssey has an
 ADSR and an AR. This would make the synth match.
+
+**ADSR built (2026-11-01; the user's ask: staccato, plucky sounds). The second envelope isn't
+built.** Diode steering alone can't do it: a decay while the key is held needs the attack
+to *end*, and the keyboard bus holds its level as long as the key is down. So the attack
+ends at a comparator with a latch (the envelope's header in tube_synth.yaml has the parts):
+a 12AU7 attack follower (plate ~+43 V through ATTACK, grid clamped to the bus by a 6AL5)
+charges the envelope toward the bus, so the peak follows velocity; a 12AX7 comparator
+(envelope against the bus) fires near the top; two 12AU7 inverters latch it (fed back
+through a 6AL5) and switch the follower off and a 12AU7 decay switch on (the envelope
+through DECAY into the SUSTAIN wiper) until the next key down, when the comparator's
+cathode jumps with the bus and lets go. RELEASE is as before. A -340 V rail (a silicon
+diode off the HV winding) sits under the dividers so the switches turn fully off. New:
+DECAY (`decay`), SUSTAIN (`sustain`, 1 = the AR envelope as before); ATTACK's track
+2.2M -> 1.5M (~0.7 s at the slow end). `config/cathodes.yaml` gained the 6AL5's heater
+(RCA, 1954).
+- **How it was found** (`scripts/adsr_study.py`: the prototype as a variant, a bench of the
+  envelope alone on ideal rails, then the built circuit): each stage of the design stalled in
+  a new linear equilibrium first (the follower out of plate volts below the threshold, the
+  decay switch turning on before the latch closed, the latch's feedback loaded down by the
+  decay switch's grid current, the attack cut by the comparator's half-conduction before the
+  latch engaged). The fixes: the follower's own plate supply, high-impedance dividers off
+  the inverters, a second inverter for the attack, and an RC on the latch node for the reset.
+- **Measured in the synth** (`--built`, `proto.json`, takes `reports/tube_synth/adsr/audio/`):
+
+  | Case | Peak | Held at key up | Output -20 / -40 dB |
+  |---|---|---|---|
+  | pluck (A 0, D 0.3, S 0) | +0.1 V at 7 ms | -101 V | 96 / 224 ms |
+  | brass (A 0.5, D 0.5, S 0.6) | -2.1 V at 97 ms | -40 V (SUSTAIN's -43) | |
+  | organ (S 1) | +0.1 V | -1.8 V | |
+  | soft key (bus -20 V) | -17 V at 5 ms | -102 V | 158 / 331 ms |
+
+  A key re-pressed during the decay re-attacks (bench: 4.6 ms to the peak).
+- **Retrigger (the user's ask, 2026-11-01).** A key pressed while another is held is legato:
+  the bus stays down, so the latch doesn't reset (single trigger, as a Minimoog's). The Play
+  view's **Retrigger** checkbox (on at first; `Player::set_retrigger`) makes the keyboard
+  multi-trigger, as ARP's: a new key-down while one sounds lifts the bus for 1 ms
+  (`player::RETRIGGER_GAP_S`, `midi::Keys::presses`), and the latch resets as for a fresh
+  key. `--bench --legato-gap-ms` (`bench_nominal.json`): no gap, no restart; 0.5 ms already
+  restarts a pluck (8 ms to the peak), a brass swell (36 ms) and a high sustain; at the
+  fastest RELEASE the 1 ms dips the envelope ~20 V before the new attack (a retrigger's
+  click). In the synth (built, legato pluck): -94 V -> +0.1 V with the lift, nothing without.
+  A key going back to an older held one (a release) doesn't retrigger. The peak sits
+  ~1 V above the bus (+0.1 V at full velocity, the AR's was -0.9 V): the VCA's grids a
+  touch past zero bias for the attack's few ms.
+- **Fragile corners (the user's call: leave them, they may sound interesting).** The bench
+  (`bench_*.json`) with b1 sagged to 268 V and the -340 V rail +-20 V: at the slowest attack
+  the comparator can sit half on and the attack stalls short of its peak (no decay: an AR
+  note); at the fastest decay the latch can drop and the note re-attacks; one brass corner
+  failed too. Nominal rails pass every case. A key's VCA sag moves b1 ~25 V, so the slowest
+  ATTACK on a loud patch is where to listen.
+- **Side effects:** the pitch moved +0.7 to +2.9 cents (b1 and the bias rail ~0.6 V higher;
+  tuning tables kept); the SUSTAIN pot's ~1 mA lifted the -105 V rail, so V4's grid at C4
+  moved +0.18 V (the cutoff tests re-baselined). The velocity table wasn't re-measured.
+- **Load** (`play.rs --hold 69`, 50 ms buffer): on the filter's thread it ran 97-118% with
+  dropouts; the envelope now has a thread of its own (the app's split: ... cutoff | envelope
+  | ring | ...): 80-82%, no dropouts, one more core.
 
 ## 16. Sample-and-hold
 

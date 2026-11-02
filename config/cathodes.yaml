@@ -22,4 +22,5 @@ tubes:
   "12AU7": {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "provisional: model knowledge (RCA 12AU7: 6.3 V 0.3 A, or 12.6 V 0.15 A in series)"}
   "6386": {heater_v: 6.3, heater_a: 0.35, cathodes: 2, source: "GE ET-T1113 p.1 (data/datasheets/published_points.yaml '6386' heater)"}
   "6V6GT": {heater_v: 6.3, heater_a: 0.45, cathodes: 1, source: "GE ET-T914 (data/datasheets/published_points.yaml '6V6GT' heater)"}
+  "6AL5": {heater_v: 6.3, heater_a: 0.3, cathodes: 2, source: "RCA 6AL5 (May 3, 1954) p.1: heater 6.3 V 0.3 A for unipotential cathodes, one per diode (data/datasheets/sources/rca_6al5_1954.pdf)"}
   "6X4": {heater_v: 6.3, heater_a: 0.6, cathodes: 2, source: "GE ET-T865A (data/datasheets/published_points.yaml '6X4' heater; one cathode for both plates: each diode instance half)"}

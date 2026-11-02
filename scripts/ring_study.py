@@ -205,7 +205,7 @@ BASE_PARTITION = [
 ]  # fmt: skip
 # The app's (varimu-app panel.rs), with the ring built.
 PARTITION = [
-    "resonance", "|", "input", "filter", "cutoff", "envelope", "|", "ring", "|", "oscillator",
+    "resonance", "|", "input", "filter", "cutoff", "|", "envelope", "|", "ring", "|", "oscillator",
     "pitch", "|", "lfo", "|", "power supply", "bias supply",
 ]  # fmt: skip
 

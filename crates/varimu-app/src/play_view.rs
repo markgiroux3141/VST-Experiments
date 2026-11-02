@@ -156,6 +156,8 @@ pub struct PlayView {
     /// velocity plays at all (off: every key at full level, the range kept).
     velocity_db: f64,
     velocity_on: bool,
+    /// Multi-trigger: a new key while another is held restarts the envelope.
+    retrigger: bool,
     /// A MIDI keyboard instead (live, `live_input` set too): its ports, the one chosen,
     /// the test oscillator's waveform, the keyboard while playing, and how many mod
     /// wheel messages have been applied.
@@ -272,6 +274,7 @@ impl PlayView {
             input_buffer_ms: INPUT_BUFFER_S * 1000.0,
             velocity_db: panel::VELOCITY_RANGE_DB,
             velocity_on: true,
+            retrigger: true,
             midi: false,
             midi_ports: Vec::new(),
             midi_port: 0,
@@ -813,6 +816,7 @@ impl PlayView {
                 p.set_range_mode(m);
             }
             p.set_velocity_range(self.velocity_range_db());
+            p.set_retrigger(self.retrigger);
             self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
             Ok((kb, p))
         });
@@ -1573,6 +1577,18 @@ impl PlayView {
                     p.set_velocity_range(self.velocity_range_db());
                 }
             });
+        }
+        if DEVICES.get(self.device).is_some_and(|d| d.gate.is_some())
+            && ui
+                .checkbox(&mut self.retrigger, "Retrigger")
+                .on_hover_text(
+                    "On: a new key while another is held restarts the envelope (the keyboard \
+                     lifts its bus for 1 ms). Off: legato, the envelope carries on",
+                )
+                .changed()
+            && let Some(p) = &self.player
+        {
+            p.set_retrigger(self.retrigger);
         }
         let held = self.keyboard.as_ref().map(|kb| match kb.keys.sounding() {
             Some((n, v)) => format!(

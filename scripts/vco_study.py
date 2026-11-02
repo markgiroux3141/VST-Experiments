@@ -102,6 +102,7 @@ CANDIDATES = {
             "input",
             "filter",
             "cutoff",
+            "|",
             "envelope",
             "|",
             "ring",

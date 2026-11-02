@@ -308,6 +308,9 @@ struct Shared {
     range_mode: AtomicU8,
     /// The keys' velocity range (dB, f64 bits; a device with a velocity table).
     velocity_db: AtomicU64,
+    /// Multi-trigger: a new key while another is held lifts the gate for
+    /// [`RETRIGGER_GAP_S`], so an envelope that restarts on the gate's edge restarts.
+    retrigger: AtomicBool,
     transport: Mutex<TransportCtl>,
     /// The last output callback: the first output sample it was asked for (counted from
     /// the stream's first) and when it ran.
@@ -403,6 +406,7 @@ impl Player {
             wet: AtomicU64::new(1f64.to_bits()),
             range_mode: AtomicU8::new(RangeMode::Auto.index()),
             velocity_db: AtomicU64::new(crate::panel::VELOCITY_RANGE_DB.to_bits()),
+            retrigger: AtomicBool::new(true),
             transport: Mutex::new(TransportCtl::default()),
             out_clock: Mutex::new(None),
             mix: Mutex::new(Arc::new(Mix::default())),
@@ -511,6 +515,12 @@ impl Player {
         self.shared
             .velocity_db
             .store(db.to_bits(), Ordering::Relaxed);
+    }
+
+    /// Multi-trigger (on) or single trigger (off: a legato key changes the pitch and the
+    /// gate's level only).
+    pub fn set_retrigger(&self, on: bool) {
+        self.shared.retrigger.store(on, Ordering::Relaxed);
     }
 
     /// A new circuit with its values (the editor's drawing, edited): the same structure
@@ -717,6 +727,17 @@ fn timeline_block(audio: &[f32], start: i64, segments: &[(i64, usize, usize)], o
 
 /// The note a pitch feed holds until the first key (A3).
 const START_NOTE: u8 = 57;
+
+/// How long a legato key lifts the gate with multi-trigger on: tube_synth's ADSR resets
+/// with 0.5 ms; 1 ms for margin, where at the fastest RELEASE the envelope dips ~20 V
+/// before the new attack (scripts/adsr_study.py --bench --legato-gap-ms).
+pub const RETRIGGER_GAP_S: f64 = 1.0e-3;
+
+/// A gate feed's block `c`, its first `gap` samples lifted to the key-up volts `up`.
+fn lift_gate(c: &mut [f64], up: f64, gap: usize) {
+    let n = gap.min(c.len());
+    c[..n].fill(up);
+}
 
 /// A feed's volts with `sounding` held (a key and its velocity, or none), `last_note`
 /// the last key, the oscillator's range switch at LOW (`low`) or HIGH, the keyboard's
@@ -1309,6 +1330,12 @@ fn work(
             });
             let mut panel_values = live.values.clone();
             let mut asked_low = range.is_some_and(|r| r.is_low(&live.values));
+            // Multi-trigger: the presses seen, whether a key sounded in the last block,
+            // and the gate's samples still to lift.
+            let mut presses = keys.presses();
+            let mut was_sounding = false;
+            let mut gap_left = 0usize;
+            let gap = (RETRIGGER_GAP_S * rate as f64).round() as usize;
             while !shared.stop.load(Ordering::Relaxed) {
                 match range {
                     // The panel's values go on with the switch where the keys put it.
@@ -1351,6 +1378,17 @@ fn work(
                 if let Some((note, _)) = sounding {
                     last_note = note;
                 }
+                let p = keys.presses();
+                if p != presses {
+                    if was_sounding
+                        && sounding.is_some()
+                        && shared.retrigger.load(Ordering::Relaxed)
+                    {
+                        gap_left = gap;
+                    }
+                    presses = p;
+                }
+                was_sounding = sounding.is_some();
                 if own_oscillator {
                     block.fill(0.0);
                 } else {
@@ -1360,7 +1398,11 @@ fn work(
                 let vel_db = f64::from_bits(shared.velocity_db.load(Ordering::Relaxed));
                 for (c, f) in ctl.iter_mut().zip(&feeds) {
                     c.fill(feed_volts(f, sounding, last_note, low, pressure, vel_db));
+                    if let Some(up) = f.gate_up() {
+                        lift_gate(c, up, gap_left);
+                    }
                 }
+                gap_left = gap_left.saturating_sub(BLOCK);
                 let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
                 let (y, meter) = live
                     .process_with(&block, &refs)
@@ -1626,6 +1668,16 @@ impl Playback {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_legato_key_lifts_the_gate_for_the_gap() {
+        let mut c = vec![-1.0; 64];
+        super::lift_gate(&mut c, -110.0, 48);
+        assert!(c[..48].iter().all(|&v| v == -110.0) && c[48..].iter().all(|&v| v == -1.0));
+        super::lift_gate(&mut c, -110.0, 100); // a gap longer than the block fills it
+        assert!(c.iter().all(|&v| v == -110.0));
+        assert_eq!((super::RETRIGGER_GAP_S * 48_000.0).round() as usize, 48);
+    }
+
     #[test]
     fn a_timeline_block_reads_the_audio_where_the_transport_is() {
         let audio: Vec<f32> = (0..10).map(|i| i as f32).collect();

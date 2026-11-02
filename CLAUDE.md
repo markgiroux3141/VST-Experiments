@@ -181,6 +181,12 @@ contacts, ~8 Hz-1.9 kHz) makes it a carrier, at LFO rates a tremolo through zero
 (`ring_on`, a checkbox, off at first: nested in the LFO's switch, so with either off the `ring`
 section is empty and gets no thread), RING and OSC level pots in the mixer; the app's split
 puts `ring` on a thread ahead of the oscillator. A second VCO as the carrier waits for #9.
+#15 ADSR built out of order (`scripts/adsr_study.py` -> `reports/tube_synth/adsr/`): the attack
+ends at a 12AX7 comparator (envelope vs the keyboard bus) latched by two 12AU7 inverters,
+which switch a 12AU7 attack follower off and a 12AU7 decay switch on toward SUSTAIN; 6AL5
+clamps; a -340 V rail off the HV winding. DECAY, SUSTAIN (1 = the old AR); the envelope runs
+on a thread of its own. The slowest attack / fastest decay are fragile when the rails sag
+(left so, the user's call).
 **The full test suite and `--verify`
 are owed** (per feature only targeted tests run, the user's call; the list: SYNTH_IDEAS.md
 "Owed").

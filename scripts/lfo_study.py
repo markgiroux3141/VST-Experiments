@@ -41,6 +41,7 @@ PARTITION = (
     "input",
     "filter",
     "cutoff",
+    "|",
     "envelope",
     "|",
     "ring",

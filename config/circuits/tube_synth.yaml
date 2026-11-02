@@ -89,6 +89,15 @@
 #        new OSC level pot. Its supply is its own RC off the LFO's reservoirs, so it is in only
 #        with the LFO (its carrier) on and RING ON (`ring_on`, the user's call: CPU; off, its
 #        section is empty and gets no thread), and the synth's rails don't see it
+#   ADSR (SYNTH_IDEAS.md #15; scripts/adsr_study.py): the envelope below with an attack
+#        that ends at its peak: a 12AU7 follower charges it toward the keyboard bus, a 12AX7
+#        comparator (envelope against the bus) fires near the top and a pair of 12AU7
+#        inverters latch it, switching the follower off and a 12AU7 decay switch on
+#        (through DECAY toward the SUSTAIN pot's level) until the next key down; RELEASE
+#        as before. Two 6AL5s clamp to the bus and feed the latch back; a -340 V rail (a
+#        silicon diode off the HV winding) sits under the switches so they turn fully off.
+#        SUSTAIN at 1 is the AR envelope as before. The slowest attack and the fastest decay
+#        are the fragile corners (the rails sagging moves the logic's thresholds)
 # The rest is tube_voice.yaml's: its header follows.
 #
 # The tube synth's voice (docs/TUBE_SYNTH_PLAN.md, S3): tube_filter.yaml's filter, supply
@@ -167,7 +176,9 @@ heaters: {tap: heater}
 controls:
   cutoff: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the CUTOFF pot, V4's grid from ~-27 V (0; the bias rails through RCUTL and RWOB) to ground (1))"}
   resonance: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RESONANCE pot, the share of V5B's output fed back to the filter node; linear)"}
-  attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s)"}
+  attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1.5M log in the attack follower's plate into 0.47 uF: ~5 ms to ~0.7 s (time constant); 2026-11-01, the ADSR: 2.2M stalled the slowest attack below the comparator when the rails sag, scripts/adsr_study.py)"}
+  decay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the DECAY rheostat, 39k + 4.7M log into the decay switch: ~18 ms to ~2 s toward SUSTAIN once the attack has peaked)"}
+  sustain: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the SUSTAIN pot, the level the decay settles at while the key is held, from the -105 V rail (0: shut, ~-50 dB) to ~-2 V (1: as open as the attack's peak, the AR envelope as before); linear)"}
   release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s)"}
   env_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-10-30: the ENV AMOUNT pot, V7's screen from ground (0: off) to b1 (1); linear)"}
   key_track: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the KEY TRACK pot, the share of the key string under the CUTOFF pot; linear)"}
@@ -269,12 +280,41 @@ values:
   pressure_full_v: {value: 15.0, source: "provisional: model knowledge (design: the aftertouch strip's volts pressed fully (0 at rest): at CUTOFF 0.3 and PRESSURE 1, ~+9 V on V4's grid, about as a key an octave above C4 at KEY TRACK 1; read by the app, varimu-app Feed::Pressure)"}
   gate_on_v: {value: -1.0, source: "provisional: model knowledge (design: the keyboard bus with a key down, a volt past the VCA's open bias)"}
   r_bus_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the keyboard bus's source resistance and the attack's minimum: ~0.5 ms into 0.47 uF)"}
-  r_attack_ohm: {value: 2.2e+6, source: "provisional: model knowledge (the ATTACK rheostat's track: up to ~1 s)"}
+  r_attack_ohm: {value: 1.5e+6, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the ATTACK rheostat's track, up to ~0.7 s; at 2.2M the slowest attack crept up to the comparator's threshold and stalled there when b1 sagged)"}
   r_release_min_ohm: {value: 4.7e+3, source: "provisional: model knowledge (the release's minimum)"}
   r_release_ohm: {value: 4.7e+6, source: "provisional: model knowledge (the RELEASE rheostat's track: up to ~2 s)"}
   env_taper_mid: {value: 0.1, source: "provisional: model knowledge (audio-taper rheostats, 10% at half rotation: times spread evenly over the rotation)"}
   c_env_f: {value: 0.47e-6, source: "provisional: model knowledge (the envelope's capacitor, film)"}
   envelope_diode: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4's two sections as the envelope's steering diodes; config/components/6x4/1.yaml, per section)"}
+  env_r_sv_top_ohm: {value: 2.200000e+05, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the attack follower's plate supply off b3, a divider: ~+43 V. Low, so the follower cuts off within a volt or two of its grid (the bus) and the peak follows velocity; on ~+10 V it ran out of plate volts below the comparator's threshold)"}
+  env_r_sv_bottom_ohm: {value: 5.600000e+04, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: its foot)"}
+  env_c_sv_f: {value: 4.700000e-05, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: its electrolytic: the attack's charge (~50 uC) dips it ~1 V)"}
+  env_r_sa_grid_ohm: {value: 1.000000e+06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the attack follower's grid feed from its divider)"}
+  env_r_sa_top_ohm: {value: 1.000000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the second inverter's plate to the attack follower's grid divider (ratio 0.59: ~+6 V before the clamp during the attack, ~-130 V once latched, so the follower can't hold the envelope up as it decays))"}
+  env_r_sa_bottom_ohm: {value: 1.430000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the divider's foot on the -340 V rail (a 1% part))"}
+  env_r_cmp_grid_ohm: {value: 2.200000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the envelope into the comparator's grid: high, so the latch's feedback wins over it (at 10M the falling envelope pulled the comparator off and it re-attacked))"}
+  env_r_cmp_plate_ohm: {value: 1.000000e+06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the comparator's plate load off b1: ~250 V off, ~80 V latched)"}
+  env_r_inv_top_ohm: {value: 1.200000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the comparator's plate to the first inverter's grid (ratio 0.6))"}
+  env_r_inv_bottom_ohm: {value: 1.800000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: its foot on the -340 V rail)"}
+  env_r_inv_plate_ohm: {value: 3.300000e+05, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: each inverter's plate load off b1)"}
+  env_r_inv2_top_ohm: {value: 1.200000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the first inverter's plate to the second's grid (ratio 0.625: it must turn on only after the latch has engaged, or a slow attack stalls in the comparator's linear region; 0.647 stalled the slowest attack, 0.61 can't turn it fully on))"}
+  env_r_inv2_bottom_ohm: {value: 2.000000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: its foot on the -340 V rail)"}
+  env_r_latch_top_ohm: {value: 5.000000e+06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the first inverter's plate to the latch node (ratio 0.65): fed back to the comparator's grid through a 6AL5 it holds the comparator on until the next key)"}
+  env_r_latch_bottom_ohm: {value: 9.310000e+06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: its foot on the -340 V rail (a 1% part))"}
+  env_c_latch_f: {value: 2.200000e-10, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: on the latch node, clamped to the bus by a 6AL5: at key down it holds the node low ~1 ms, long enough for the comparator (its cathode jumping with the bus) to let go: the reset. 1 nF was too slow to latch at the fastest decay)"}
+  env_r_ds_bottom_ohm: {value: 7.870000e+06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the decay switch's grid divider's foot (ratio 0.61 off the first inverter's plate, its own 6AL5 clamp to the bus: ~-120 V during the attack, so the switch stays off down to the lowest SUSTAIN))"}
+  env_r_ds_delay_ohm: {value: 1.000000e+07, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: into the decay switch's grid: high, as its grid current into the sustain node otherwise loaded the latch node down)"}
+  env_c_ds_delay_f: {value: 2.200000e-10, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: on the decay switch's grid: ~2 ms)"}
+  env_r_decay_min_ohm: {value: 3.900000e+04, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the decay's fastest (~18 ms): at 4.7k the decay outran the latch when the rails sagged)"}
+  env_r_decay_ohm: {value: 4.700000e+06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the DECAY rheostat's track, up to ~2 s)"}
+  env_r_sustain_low_ohm: {value: 1.000000e+02, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the -105 V rail into the SUSTAIN pot's low end)"}
+  env_r_sustain_pot_ohm: {value: 1.000000e+05, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the SUSTAIN pot)"}
+  env_r_sustain_high_ohm: {value: 2.000000e+03, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the SUSTAIN pot's high end to ground: ~-2 V there, the open envelope)"}
+  env_c_sustain_f: {value: 1.000000e-06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: on the SUSTAIN wiper: holds it while the decay's charge arrives)"}
+  nn_r_filter_ohm: {value: 4.700000e+04, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the -340 V rail's filter resistor (a few hundred uA of divider current))"}
+  nn_c_f: {value: 4.700000e-06, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: the -340 V rail's capacitors, 450 V)"}
+  adsr_diode: {value: 6AL5@1, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: 6AL5 twin diodes for the clamps and the latch's feedback; config/components/6al5/1.yaml, per section)"}
+  nn_rectifier: {value: SI_RECTIFIER@1, source: "provisional: model knowledge (design, 2026-11-01: the ADSR, SYNTH_IDEAS.md #15; scripts/adsr_study.py: a silicon diode off the HV winding for the -340 V rail, as the LFO's supply; config/components/si_rectifier/1.yaml)"}
   # --- cutoff
   r_grid7_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (V7's grid stopper from the envelope node)"}
   r_cathode7_ohm: {value: 2.2e+3, source: "provisional: model knowledge (design: V7's cathode, current feedback: ~10 mA at full AMOUNT with the envelope open, enough to reach the cutoff's top from CUTOFF 0.15; at 1k ~20 mA, sagging b1 ~30 V)"}
@@ -444,8 +484,17 @@ devices:
   V3A: {device: 6386@1}
   V3B: {device: 6386@1}
   V6: {device: 12AU7@1}
-  VDA: {device: envelope_diode}
   VDR: {device: envelope_diode}
+  ESA: {device: 12AU7@1}
+  EDS: {device: 12AU7@1}
+  ECMP: {device: 12AX7@1}
+  EINV: {device: 12AU7@1}
+  EINV2: {device: 12AU7@1}
+  EDA: {device: adsr_diode}
+  EDB: {device: adsr_diode}
+  EDD: {device: adsr_diode}
+  EDE: {device: adsr_diode}
+  DNN: {device: nn_rectifier}
   V4: {device: 6V6GT@1}
   V7: {device: 6V6GT@1}
   VR: {device: rectifier_tube}
@@ -488,6 +537,11 @@ sections:
       CB3: {C: [b3, "0"], c: c_decouple_f}
       RB24: {R: [b2, b4], r: r_b24_ohm}
       CB4: {C: [b4, "0"], c: c_decouple_f}
+      # The ADSR's -340 V rail: a silicon diode off the HV winding's first half, an RC
+      DNNA: {device: [nn_r, hva], model: DNN}
+      CNNR: {C: [nn_r, "0"], c: nn_c_f}
+      RNN: {R: [nn_r, nn], r: nn_r_filter_ohm}
+      CNN: {C: [nn, "0"], c: nn_c_f}
       # The LFO's own supply on a winding of its own (in its ON / OFF switch: OFF is the
       # LFO's power switch): silicon, a full-wave plus rail and a half-wave minus rail held
       # by two 5651s
@@ -624,8 +678,49 @@ sections:
     parts:
       CBA: {C: [ba, "0"], c: c_ba_f}
       RBAL: {R: [ba, "0"], r: r_ba_leak_ohm}
-      RATT: {rheostat: [ba, bd], r: r_attack_ohm, at: attack, taper_mid: env_taper_mid}
-      XVDA: {device: [bd, env], model: VDA}
+      # The ADSR (SYNTH_IDEAS.md #15): the attack follower ESA (its plate ~+43 V through
+      # ATTACK, its grid clamped to the bus by EDA) charges the envelope toward the bus;
+      # the comparator ECMP (grid the envelope, cathode the bus) fires near the top; the
+      # inverters EINV / EINV2 latch it (the latch node back into its grid through EDD,
+      # reset at the next key down) and turn the attack follower off and the decay switch
+      # EDS on: the envelope through DECAY into the SUSTAIN wiper. RELEASE as before
+      RSVT: {R: [b3, sv], r: env_r_sv_top_ohm}
+      RSVB: {R: [sv, "0"], r: env_r_sv_bottom_ohm}
+      CSV: {C: [sv, "0"], c: env_c_sv_f}
+      RATT: {rheostat: [sv, sa_p], r: r_attack_ohm, at: attack, taper_mid: env_taper_mid}
+      XESA: {device: [sa_p, sa_g, env], model: ESA}
+      RESAG: {R: [ep, sa_g], r: env_r_sa_grid_ohm}
+      XEDA: {device: [sa_g, ba], model: EDA}
+      RECG: {R: [env, cmp_g], r: env_r_cmp_grid_ohm}
+      XECMP: {device: [cmp_p, cmp_g, ba], model: ECMP}
+      RECPL: {R: [b1, cmp_p], r: env_r_cmp_plate_ohm}
+      RINVT: {R: [cmp_p, inv_g], r: env_r_inv_top_ohm}
+      RINVB: {R: [inv_g, nn], r: env_r_inv_bottom_ohm}
+      XEINV: {device: [inv_p, inv_g, "0"], model: EINV}
+      RINVP: {R: [b1, inv_p], r: env_r_inv_plate_ohm}
+      RINV2T: {R: [inv_p, inv2_g], r: env_r_inv2_top_ohm}
+      RINV2B: {R: [inv2_g, nn], r: env_r_inv2_bottom_ohm}
+      XEINV2: {device: [inv2_p, inv2_g, "0"], model: EINV2}
+      RINV2P: {R: [b1, inv2_p], r: env_r_inv_plate_ohm}
+      RECP: {R: [inv2_p, ep], r: env_r_sa_top_ohm}
+      RECN: {R: [ep, nn], r: env_r_sa_bottom_ohm}
+      RDST: {R: [inv_p, ds_d], r: env_r_latch_top_ohm}
+      RDSB: {R: [ds_d, nn], r: env_r_latch_bottom_ohm}
+      CDSD: {C: [ds_d, "0"], c: env_c_latch_f}
+      XEDB: {device: [ds_d, ba], model: EDB}
+      XEDD: {device: [ds_d, cmp_g], model: EDD}
+      RDGT: {R: [inv_p, ds_e], r: env_r_latch_top_ohm}
+      RDGB: {R: [ds_e, nn], r: env_r_ds_bottom_ohm}
+      XEDE: {device: [ds_e, ba], model: EDE}
+      RDSF: {R: [ds_e, ds_g], r: env_r_ds_delay_ohm}
+      CDSF: {C: [ds_g, "0"], c: env_c_ds_delay_f}
+      RDECMIN: {R: [env, ds_q], r: env_r_decay_min_ohm}
+      RDEC: {rheostat: [ds_q, ds_p], r: env_r_decay_ohm, at: decay, taper_mid: env_taper_mid}
+      XEDS: {device: [ds_p, ds_g, sw], model: EDS}
+      RSUSL: {R: [neg2, s_lo], r: env_r_sustain_low_ohm}
+      RSUS: {pot: [s_lo, sw, s_hi], r: env_r_sustain_pot_ohm, at: sustain}
+      RSUSH: {R: [s_hi, "0"], r: env_r_sustain_high_ohm}
+      CSW: {C: [sw, "0"], c: env_c_sustain_f}
       CENV: {C: [env, "0"], c: c_env_f}
       RENVL: {R: [env, "0"], r: r_env_leak_ohm}
       XVDR: {device: [env, er], model: VDR}

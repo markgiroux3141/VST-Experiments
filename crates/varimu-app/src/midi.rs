@@ -36,6 +36,8 @@ struct KeysInner {
     cc: [(u8, u64); 128],
     /// The last aftertouch (channel pressure, or a held key's pressure).
     pressure: u8,
+    /// Key presses so far (note-ons): a new one while another key is held is a legato key.
+    presses: u64,
 }
 
 impl Default for KeysInner {
@@ -44,6 +46,7 @@ impl Default for KeysInner {
             held: Vec::new(),
             cc: [(0, 0); 128],
             pressure: 0,
+            presses: 0,
         }
     }
 }
@@ -57,6 +60,7 @@ impl Keys {
             (0x90, Some(note), Some(vel)) if vel > 0 => {
                 k.held.retain(|&(n, _)| n != note);
                 k.held.push((note, vel));
+                k.presses += 1;
             }
             (0x80 | 0x90, Some(note), _) => {
                 k.held.retain(|&(n, _)| n != note);
@@ -85,6 +89,11 @@ impl Keys {
     /// The key sounding (the last one held) and its velocity.
     pub fn sounding(&self) -> Option<(u8, u8)> {
         self.inner.lock().expect("keys").held.last().copied()
+    }
+
+    /// How many keys have been pressed (note-ons), to tell a new key from a held one.
+    pub fn presses(&self) -> u64 {
+        self.inner.lock().expect("keys").presses
     }
 
     /// The last aftertouch, 0-127 (0 with no key held).
@@ -260,6 +269,17 @@ mod tests {
         assert_eq!(k.pressure(), 30);
         k.message(&[0xb0, 123, 0]);
         assert_eq!(k.sounding(), None);
+    }
+
+    #[test]
+    fn presses_count_note_ons_only() {
+        let k = Keys::default();
+        k.message(&[0x90, 60, 100]);
+        k.message(&[0x90, 62, 100]); // legato: a second key while the first is held
+        k.message(&[0x80, 62, 0]);
+        k.message(&[0x90, 60, 0]); // a note off
+        k.message(&[0xd0, 50]);
+        assert_eq!(k.presses(), 2);
     }
 
     #[test]

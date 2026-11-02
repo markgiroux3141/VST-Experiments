@@ -1,0 +1,156 @@
+{
+ "args": {
+  "case": [
+   "pluck",
+   "brass",
+   "organ",
+   "soft"
+  ],
+  "div_top": 3300000.0,
+  "div_bot": 5600000.0,
+  "r_cmp_p": 1000000.0,
+  "inv_top": 3300000.0,
+  "inv_bot": 7500000.0,
+  "ds_top": 3300000.0,
+  "ds_bot": 5600000.0,
+  "c_delay": 2.2e-09,
+  "inv_plate": 330000.0,
+  "sv_bot": 56000.0,
+  "c_latch": 1e-09,
+  "r_cmp_g": 22000000.0,
+  "wav": true,
+  "bench": false,
+  "built": true,
+  "rails": [],
+  "slow_attack": null,
+  "r_attack": 2200000.0,
+  "decay_min": 4700.0,
+  "fast_decay": null,
+  "inv2_top": 12000000.0,
+  "sus_low": 5100.0,
+  "dsg_bot": 1580000.0,
+  "inv2_bot": 28000000.0
+ },
+ "rows": {
+  "pluck": {
+   "attack": 0.0,
+   "decay": 0.3,
+   "sustain": 0.0,
+   "release": 0.2,
+   "down_v": -1.0,
+   "peak_v": 0.08,
+   "peak_ms": 7.1,
+   "env_at_key_up_v": -101.16,
+   "env_end_v": -109.56,
+   "level_minus20db_ms": 96.0,
+   "level_minus40db_ms": 223.7,
+   "ds_g_held_v": -106.3,
+   "inv_g_v": [
+    -0.7,
+    -88.9
+   ],
+   "inv_p_v": [
+    23.3,
+    252.6
+   ],
+   "sw_v": -105.62,
+   "sa_g_held_v": -128.29,
+   "cmp_p_v": [
+    275.4,
+    82.2
+   ],
+   "sa_g_attack_v": -55.01,
+   "nn_v": -347.0
+  },
+  "brass": {
+   "attack": 0.5,
+   "decay": 0.5,
+   "sustain": 0.6,
+   "release": 0.4,
+   "down_v": -1.0,
+   "peak_v": -2.12,
+   "peak_ms": 96.5,
+   "env_at_key_up_v": -40.16,
+   "env_end_v": -109.07,
+   "level_minus20db_ms": null,
+   "level_minus40db_ms": null,
+   "ds_g_held_v": -44.0,
+   "inv_g_v": [
+    -0.7,
+    -89.6
+   ],
+   "inv_p_v": [
+    23.3,
+    250.7
+   ],
+   "sw_v": -43.29,
+   "sa_g_held_v": -128.38,
+   "cmp_p_v": [
+    275.4,
+    81.0
+   ],
+   "sa_g_attack_v": -105.93,
+   "nn_v": -347.3
+  },
+  "organ": {
+   "attack": 0.0,
+   "decay": 0.3,
+   "sustain": 1.0,
+   "release": 0.2,
+   "down_v": -1.0,
+   "peak_v": 0.11,
+   "peak_ms": 7.0,
+   "env_at_key_up_v": -1.81,
+   "env_end_v": -109.56,
+   "level_minus20db_ms": null,
+   "level_minus40db_ms": null,
+   "ds_g_held_v": -2.91,
+   "inv_g_v": [
+    -0.7,
+    -90.1
+   ],
+   "inv_p_v": [
+    23.3,
+    239.7
+   ],
+   "sw_v": -2.07,
+   "sa_g_held_v": -128.51,
+   "cmp_p_v": [
+    275.4,
+    80.1
+   ],
+   "sa_g_attack_v": -54.39,
+   "nn_v": -347.0
+  },
+  "soft": {
+   "attack": 0.0,
+   "decay": 0.3,
+   "sustain": 0.0,
+   "release": 0.2,
+   "down_v": -20.0,
+   "peak_v": -17.02,
+   "peak_ms": 5.0,
+   "env_at_key_up_v": -101.69,
+   "env_end_v": -109.56,
+   "level_minus20db_ms": 158.3,
+   "level_minus40db_ms": 330.6,
+   "ds_g_held_v": -106.31,
+   "inv_g_v": [
+    -0.7,
+    -100.8
+   ],
+   "inv_p_v": [
+    23.3,
+    251.6
+   ],
+   "sw_v": -105.62,
+   "sa_g_held_v": -128.33,
+   "cmp_p_v": [
+    275.4,
+    62.5
+   ],
+   "sa_g_attack_v": -55.63,
+   "nn_v": -347.0
+  }
+ }
+}
