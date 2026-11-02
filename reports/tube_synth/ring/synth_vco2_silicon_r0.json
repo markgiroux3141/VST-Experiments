@@ -1,0 +1,43 @@
+{
+ "args": {
+  "cmd": "synth",
+  "option": "vco2",
+  "diode": "silicon",
+  "pitch": [
+   -15.0
+  ],
+  "seconds": 1.5,
+  "ring": 0.0,
+  "wave2": 0.0,
+  "c_tank2": 2.8e-08,
+  "r_carrier": 2200.0,
+  "r_ct_return": 22000.0,
+  "c_wien": 1e-08,
+  "c_comp": 1e-10,
+  "lfo_rate": 0.5,
+  "in_v": 1.0,
+  "in_hz": 620.0,
+  "osc_off": true,
+  "ring_alone": "osc",
+  "one_solve": false,
+  "wav": false,
+  "tag": "_r0"
+ },
+ "rows": [
+  {
+   "option": "vco2",
+   "diode": "silicon",
+   "pitch_v": -15.0,
+   "f1": 498.36,
+   "f2": 699.07,
+   "ratio": 1.4028,
+   "out_pk": 0.002,
+   "ring_out_pk": 0.878,
+   "out_f1_db_re_product": 47.1,
+   "out_f2_db_re_product": 48.8,
+   "b1_mean": 268.06,
+   "wall_s": 5.64,
+   "dur_s": 1.5
+  }
+ ]
+}
