@@ -1,0 +1,29 @@
+device: "Ampex 351 electronics, catalog 02-30960 (board 30960-01-03, 7.5 / 15 ips)"
+document: "Ampex 351 / 351-2 instruction manual, TM-2002A, 89-0144 Issue A"
+publisher: "Ampex Corporation"
+date: "May 1962"
+local_copy: ../schematics/ampex_351/Ampex351.pdf
+local_copy_sha256_prefix: 9f4dd38b80ee32c1
+scan_source: "web: https://bh.hallikainen.org/uploads/harold/Ampex351.pdf"
+digitized_with: >-
+  pdftoppm render of PDF page 95-index p94 (printed 8-21 / 8-22) at 300 dpi, the 15 ips NAB
+  panels cropped; the curves read by eye against the printed grid (record: 0 dB at the
+  +10 / +5 / 0 labels, ~13.7 px per dB; reproduce: +20..-30 dB, ~13.4 px per dB; ~400 px
+  per decade, the 20 / 100 / 1000 / 10000 Hz lines)
+digitized_by: Claude Code
+digitized_on: 2026-11-01
+estimated_error: "+-0.4 dB, +-3% in frequency"
+files:
+  ampex_351_response_15ips.csv:
+    figures: >-
+      p94 (8-21 / 8-22), "Applicable response curves", 15 ips NAB: RECORD (one curve below
+      2 kHz, then MAXIMUM / TYPICAL / MINIMUM to 15 kHz) and REPRODUCE
+    columns: >-
+      curve (record: all three below 2 kHz; record_maximum / _typical / _minimum: above it,
+      where they part; reproduce), f_hz, db (as printed: the record curves are 0 dB over
+      ~200 Hz-2 kHz, the reproduce curve's 0 dB falls near 500 Hz)
+    notes: >-
+      Note 1 on the page: "Record curves shown are approximate and will vary with tape to
+      maintain flat overall response" (the HF trimmer 1C7's range). These are the
+      electronics' responses (record: input to head current; reproduce: head to output),
+      measured on Ampex's machines, not the tape's.

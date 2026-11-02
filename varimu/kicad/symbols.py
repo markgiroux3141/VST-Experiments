@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from varimu.circuit.parts import TAPE_VALUES
+from varimu.circuit.parts import TAPE_TRANSPORT, TAPE_VALUES
 from varimu.kicad.sexpr import N, S, Sym, Y, dumps
 
 LIBRARY = "varimu"
@@ -368,7 +368,7 @@ _SYMBOLS: list[SymbolDef] = [
         ),  # fmt: skip
         [rect(-5.08, -3.81, 5.08, 3.81), circle(-2.54, 0, 1.778), circle(2.54, 0, 1.778)],
         "component",
-        TAPE_VALUES,
+        TAPE_VALUES + TAPE_TRANSPORT,
         toleranced=False,
         text=(0, 6.35, 5.588, "left"),
     ),

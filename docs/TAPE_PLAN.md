@@ -678,13 +678,127 @@ the one it replaces, in dB of difference re the print's rms; times on a free des
 - **Speed:** 2 s of the drums at production (JA cores, the 1 s settle counted) take 106x
   real time, against 46.7x for the 351 with the medium's own bias; a tone with linear cores,
   96.6x. The record side's five triodes at 3.84 MHz are the new cost.
+
+**The alignment, the transport, the first 351 prints (2026-11-01).**
+- **The alignment as a procedure** (`varimu/measure/tape_align.py`, outside the render cache
+  key; `scripts/align_351.py` -> `reports/tape/ampex_351_alignment.{json,png}`; cached by the
+  circuit file, the code and the settings in `cache/tape/align_351_<key>.json`). The manual's
+  steps (p79-85), each measured on the whole machine at production's simulation (192 kHz,
+  `oversample` 1 so the BIAS meter sees the 99 kHz), 6 runs at once (~2x one run's
+  throughput: each keeps two threads spinning), ~32 min:
+  1. **Playback EQ, 2R31**, from a virtual test tape: the NAB flux (3180 / 50 us) read by the
+     real head (its loss against an ideal reproducer, from the medium) through the reproduce
+     side alone (`repro_ir`: driven at the head's EMF, 4x real time), flattest 1-15 kHz re
+     700 Hz. Set 0.784 (the standard 50 us is 0.67): moves the curve <= 1.2 dB (the manual
+     allows 2), the test tape flat within 0.53 dB rms (+0.7 at 5 kHz, -0.9 at 15 kHz: one
+     pole against the gap and spacing losses).
+  2. **Bias, BIAS ADJUST**: 1 kHz at 15 ips ("a specific wavelength": 500 Hz at 7.5 ips),
+     -10 dB; the 1/2 dB points either side of the peak read on the BIAS meter (the current's
+     rms through 5R24), set at their median (the meter reads VU: the geometric mean). Peak
+     at 20.2 pF; 1.54 / 2.62 mA rms; set 2.01 mA rms (2.8 mA peak), 20.4 pF. The low point
+     sits just inside the trimmer's 15 pF end.
+  3. **Record EQ, 1C7**: the flattest low-level response 1-15 kHz re 500 Hz, -10 dB (the
+     machine is linear there, so any 1C7's response is the full machine's at one setting
+     times the record side's change, `record_ir`). Set 122 pF of 100-550 (as drawn 330:
+     +3.2 dB at 10 kHz); left 0.90 dB rms (+1.4 dB at 5 kHz, -1.0 at 15 kHz).
+  4. **Record level**: 400 Hz at 0 VU in to 1% THD at the line out: 0.981 rotation (the
+     manual's -10 dBm bridging is a minimum input). THD rises slowly with level (0.58% at
+     0.7, 1.05% at 1.0): about h2 0.64 / h3 0.71% at 0 VU, the h2 mostly the record
+     amplifier's (0.67% in the head current at 0.4 mA rms, before the tape).
+  5. **Playback level**: 700 Hz recorded at 0 VU plays at +8 dBm: 0.343 rotation (the
+     manual sets it from the test tape before the record level; with a virtual tape the
+     operating level is known only after step 4).
+  - The check on the aligned machine: 400 Hz at 0 VU, THD 1.00% (h2 0.64, h3 0.71, h5
+    0.26%); 700 Hz out -18.02 dBFS; the repro head at 500 Hz -59.8 dB re 0.78 V (the
+    drawing's -68 dB plus 8.2); 0.395 mA rms of audio and 2.08 mA rms of bias in the head.
+    These are the second run's (with the transport and the recalibrated repro head); the
+    first, without them, set the same bias and EQ, record level 0.978, playback 0.291.
+  - Not set: ERASE ADJUST, NOISE BALANCE (centred), the meters' calibrations (not modelled).
+  - Levels and THD come from band powers (a VTVM behind a band-pass), not coherent fits:
+    with the transport, a 15 kHz tone's phase wanders ~3 rad with the motor's hunting.
+- **A bug in the first print's alignment, fixed:** the ideal reproducer was a 1e-9 m gap
+  between 1 m poles without relaxation, read per unit gap: its far pole edges' term is as
+  large as the gap's, so it read 0..2x by frequency (+29.6 dB at 7.5 kHz, +16 dB at 15 kHz
+  against the real head). It is now the gap's term alone (e^{-ky} per unit gap): the real
+  head reads -0.02 dB at 1 kHz to -1.98 dB at 15 kHz against it, the gap's -0.91 plus 0.5 um
+  spacing's -1.07 (test: within 0.15 dB of sinc times exp). The first print's alignment
+  cache is versioned (`ALIGN_VERSION`); its existing prints were trimmed from the bad reading.
+- **The repro head calibrated to the drawing.** The drawing's boxed levels are 8.2 dB under
+  operating level (its mic input -80 dB re 0.78 V against the manual's 200 uV, -71.8 dB, for
+  operating level at full RECORD LEVEL); counting that, its record head current (-12 dB "to
+  A" across the 1k dummy) is ~2 dB over ours, but the repro head (-68 dB) read 19 dB
+  hotter with model knowledge's 2.5e8 A/m per A (~2000 turns at ~230 nWb/m), and 2V3 then
+  added ~0.3% h2 at 0 VU (p3a 2.2 V rms against the drawing's ~70 mV). `rep_h_per_a` is
+  2.46e7 now (2.9e7 read -58.4 dB at operating level, 1.4 dB over). rep_l_h stays 0.5 H,
+  which these turns don't give (harmless: its corner into 330K is ~100 kHz).
+- **The transport on the tape part** (both builders): 13 optional physical values, all or
+  none (`parts.TAPE_TRANSPORT`, `tape_transport`; varimu-circuit's `tape::TRANSPORT`), the
+  first print's mechanisms (capstan runout 30 Hz, idler 3.8 Hz, reel 0.76 Hz, hunting
+  2.5 Hz, scrape flutter 4.06 kHz) scaled to the 351's 0.11%; the 351 has them.
+- **The first 351 prints** (`scripts/print_351.py` -> `reports/tape/audio/
+  drums_setmefree_351_15ips_drive{+0,+6,+12}dB.wav`, each with a loudness-matched dry file;
+  the head distance's 133 ms taken out). Without the transport (kept in
+  `reports/tape/audio/351_no_transport/`): peaks -6.9 / -3.1 / -1.5 dBFS; against the dry
+  file, loudness matched, 60-200 Hz -1.9 / -2.4 / -3.0 dB and 4-10 kHz +2.7 / +3.8 / +5.1
+  (bass saturates first), crest 18.6 / 18.3 / 16.8 dB (dry 20.4; the idealized print 18.2 /
+  16.5 / 14.4). Three at once in 32 min: 172x real time each, the 1 s settle counted.
+  Reprinted with the transport and the recalibrated repro head (re-aligned): the same
+  balance within 0.1 dB, peaks -7.0 / -3.2 / -1.5 dBFS, crest 18.5 / 18.2 / 16.9 dB; -8 /
+  -7.5 / -6 dB rms from the prints without it (the wander moves the timing); 189x real
+  time each.
+- No noise yet: the circuit has no `noise` block (no grain, hiss or hum), so no S/N.
 - **Next:**
-  - the alignment as a procedure: BIAS ADJUST for the bias peak, RECORD LEVEL for 1% THD at
-    0 VU, the repro trim and PLAYBACK LEVEL;
-  - the `tape_suite` profile and the specs: +-2 dB 30 Hz-15 kHz, the S/N, which now includes
-    the oscillator's and the amplifiers' noise;
-  - the 351's transport on its tape part;
-  - the 12AX7 plates still +22-36% off.
+  - the `tape_suite` profile and the specs: +-2 dB 30 Hz-15 kHz, the S/N with the circuit's
+    noise (the oscillator's, the tubes', the grain);
+  - the 12AX7 plates still +22-36% off;
+  - see "Gaps" below for the order from here;
+  - the record head and the bias side stay provisional: the drawing puts the operating
+    level's head current at ~0.50 mA rms (if "to A" is across the 1k dummy), ours 0.39: a
+    head ~2 dB less sensitive would match, its bias then ~2 dB more (inside BIAS ADJUST).
+
+**Gaps, and the order to close them (the user's list, 2026-11-01).** Checks before fits,
+and a baseline of each check before the physics changes, so a change shows what it does
+out of sample.
+1. **TM5's done-when** (in progress): the `tape_suite` profile. +-2 dB 30 Hz-15 kHz at 15 ips;
+   the S/N with the circuit's noise (the oscillator's, the tubes', the grain); idle voltages,
+   with the three 12AX7 plates (p3a, p3b, p4b, +22-36%) traced to their cause (12AX7@1's fit
+   at low currents on 220-330K, the grid current's contact potential on 2V3a's 10 MOhm leak).
+   **Plus a real machine's data:** the manual's p94 has Ampex's record and reproduce response
+   curves at 15 ips NAB (record: typical / maximum / minimum over the HF trimmer, +5 dB at
+   30 Hz; reproduce: about +14 dB at 30 Hz to -16 dB at 15 kHz re 1 kHz). Digitized
+   (`data/datasheets/ampex_351_response_15ips.csv`, `ampex_351_manual.provenance.yaml`),
+   they check `record_ir` / `repro_ir` (the electronics, measured, not fitted; test
+   `test_the_electronics_follow_ampexs_measured_curves`). Done: re 1 kHz the record side
+   at 1C7's ends follows MINIMUM and MAXIMUM within 1.1 dB (30 Hz -0.95: a little less bass
+   lift than Ampex's), the reproduce side within 0.6 dB from 200 Hz up but +1.0 / +1.7 /
+   +2.2 dB at 100 / 50 / 30 Hz (more bass than Ampex's: 2R29's shelf or a coupling
+   capacitor; a lead for the +-2 dB spec at 30 Hz). The alignment's 1C7 (122 pF: +1.1 dB at
+   15 kHz) sits between the curves' minimum (+0.95) and typical (+2.6): our tape and heads
+   give ~1.5 dB more treble than Ampex's average tape.
+2. **Baseline checks on the current tape model** (no fitting): No. 14 (permissible level
+   against frequency, 7.5 ips) and No. 31 (output against coating thickness).
+3. **Frequency-dependent switching** (the leading untested candidate for No. 21's narrow bias
+   curves, TM2 step 7): Sharrock's law, Hc(t) = H0 [1 - (kT / KV ln(f0 t / ln 2))^n]. Bulletin
+   20's Hc is from 60 Hz loops (~8 ms per switch), recording happens within a bias period
+   (~5 us), so ln(f0 t) falls from ~16 to ~8.5 (f0 ~ 1e9 Hz): harder switching at bias rates,
+   and a wider spread from the particles' volume distribution. Nearly parameter-free here:
+   TM3 fitted the particle volume (1.66e-21 m^3) from the noise. A new tape version, the bias
+   curves (No. 21) and the checks of 2 rerun; options with numbers to the user first (it
+   moves the alignment and every print).
+4. **The heads:** no 351 / 350 head data printed (the Minneapolis Magnetics notes are a scan
+   without electrical data); keep looking (replacement head sheets: Nortronics, Woelke). The
+   record head's field per ampere at the bias frequency against audio (laminated cores lose
+   efficiency near 100 kHz: frequency-dependent, linear) and against current (pole tips
+   saturating: sublinear) is No. 21's other candidate. The tape part has one `rec_h_per_a`
+   for both bands now.
+5. **SM911** (TM2's second part): the same physics with only the tape's parameters changed,
+   against EMTEC's IEC curves and stated gaps: the first true out-of-sample test.
+6. **A real machine:** any recording of a real 351 (or 350) with Scotch 111-era tape, a test
+   tone or program with its source, would show what no bulletin can (the user's call).
+7. **Known approximations**, to consult when a mismatch shows: no print-through, no erase
+   field (complete erasure), no magnetized heads, no azimuth; demagnetization of the audio
+   band only, a fixed point per block; cells a 2D slab, not 3D; Preisach interaction a fixed
+   Gaussian, not a mean-field (moving) model.
 
 **Speed: the GPU (the user's suggestion, 2026-11-01).** The dev machine has an RTX 3080.
 - **The candidate is the recording kernel** (`tape.rs`): every cell times 8 orientations

@@ -111,7 +111,31 @@ values:
   rec_h_per_a: {value: 2.0e+7, source: "provisional: model knowledge (~300 turns at 85% efficiency over the 12.7 um gap: a few mA of bias)"}
   rep_l_h: {value: 0.5, source: "provisional: model knowledge (a high-impedance repro head into a grid, ~0.5 H; not printed)"}
   rep_r_ohm: {value: 500.0, source: "provisional: model knowledge (its winding, ~500 ohm)"}
-  rep_h_per_a: {value: 2.5e+8, source: "provisional: model knowledge (~2000 turns at 80% efficiency over the 6.35 um gap)"}
+  # Calibrated, not printed: the drawing's signal voltages were taken 8.2 dB under the
+  # operating level (its mic input -80 dB re 0.78 V against the 200 uV, -71.8 dB, the
+  # manual's operating-level sensitivity at full RECORD LEVEL, man p11), and print -68 dB
+  # at the playback head. Model knowledge's ~2000 turns (2.5e8) read the operating level
+  # (~230 nWb/m) 19 dB hotter, overdriving 2V3 (+0.3% h2 at 0 VU; TAPE_PLAN.md TM5).
+  rep_h_per_a: {value: 2.46e+7, source: "derived: the drawing's -68 dB (re 0.78 V) at the playback head, 500 Hz, 8.2 dB under the operating level (sch p95, man p11), on the aligned machine (varimu.measure.tape_align: 2.9e7 read -58.4 dB at operating level, 1.4 dB over)"}
+
+  # --- The transport: wow and flutter (TAPE_PLAN.md TM3) ----------------------------------
+  # Each mechanism's size is provisional (nothing printed separates them); together they
+  # make a 3150 Hz tone recorded and played back deviate 0.11% rms over 0.5-250 Hz, the
+  # spec at 15 ips (man p10, ASA Z57.1-1954; scripts/tape_flutter.py), the speed itself
+  # 0.087%. As varimu.devices.tape_machine.TapeMachineSpec's.
+  capstan_d_m: {value: 4.04e-3, source: "derived: the hysteresis synchronous capstan motor's shaft is the capstan (man p51-52), 15 ips at 1800 rpm (60 Hz, four poles); the diameter isn't printed"}
+  capstan_rms: {value: 3.7e-4, source: "provisional: model knowledge (its runout, once per turn; scaled to the 0.11% spec, TAPE_PLAN.md TM3)"}
+  roller_d_m: {value: 31.8e-3, source: "provisional: model knowledge (the rubber capstan idler, ~1.25 in)"}
+  roller_rms: {value: 2.9e-4, source: "provisional: model knowledge (scaled to the 0.11% spec)"}
+  reel_r_m: {value: 80.0e-3, source: "provisional: model knowledge (a 10.5 in NAB reel at mid pack)"}
+  reel_rms: {value: 4.4e-4, source: "provisional: model knowledge (scaled to the 0.11% spec)"}
+  hunting_hz: {value: 2.5, source: "provisional: model knowledge (the synchronous motor's rotor hunting around synchronism)"}
+  hunting_q: {value: 3.0, source: "provisional: model knowledge"}
+  hunting_rms: {value: 4.8e-4, source: "provisional: model knowledge (scaled to the 0.11% spec)"}
+  scrape_span_m: {value: 0.2, source: "provisional: model knowledge (the free span over the heads, ~0.2 m)"}
+  scrape_c_m_s: {value: 1623.0, source: "derived: sqrt(E / rho) of acetate base (~3.4 GPa, 1290 kg/m^3; provisional: model knowledge)"}
+  scrape_q: {value: 10.0, source: "provisional: model knowledge (Sound Talk No. 34's FM noise, scrape flutter)"}
+  scrape_rms: {value: 3.0e-4, source: "provisional: model knowledge (above the spec's band)"}
 
   # --- 2V3b, 12AX7: playback EQ (sch) ------------------------------------------------------
   r_g3b_ohm: {value: 330.0e+3, source: "sch: 2R25 330K 1%, the head's load"}
@@ -415,6 +439,19 @@ sections:
         rep_l_h: rep_l_h
         rep_r_ohm: rep_r_ohm
         rep_h_per_a: rep_h_per_a
+        capstan_d_m: capstan_d_m
+        capstan_rms: capstan_rms
+        roller_d_m: roller_d_m
+        roller_rms: roller_rms
+        reel_r_m: reel_r_m
+        reel_rms: reel_rms
+        hunting_hz: hunting_hz
+        hunting_q: hunting_q
+        hunting_rms: hunting_rms
+        scrape_span_m: scrape_span_m
+        scrape_c_m_s: scrape_c_m_s
+        scrape_q: scrape_q
+        scrape_rms: scrape_rms
 
   - title: reproduce amplifier
     parts:

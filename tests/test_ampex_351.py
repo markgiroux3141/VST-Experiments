@@ -107,3 +107,94 @@ def test_the_oscillator_biases_the_record_head(machine):
     ers, head = v["v(ers)"][late], v["v(rbc)"][late] / 1000.0  # through 5R24, 1000 ohm
     assert 150 < ers.max() < 300 and -300 < ers.min() < -150
     assert 2e-3 < head.max() < 5e-3 and -5e-3 < head.min() < -2e-3
+
+
+def test_the_tape_runs_the_351s_transport(machine, tmp_path):
+    """The tape part's transport (TAPE_PLAN.md TM3's mechanisms, scaled to the 351's
+    0.11%): the same components as the first print's machine; all values or none."""
+    from varimu.circuit import ir
+    from varimu.devices.tape_machine import TapeMachineSpec
+
+    c = builder.build(machine, cores="linear")
+    (t,) = [e for e in c.ir.elements() if isinstance(e, ir.Tape)]
+    periodic, random = TapeMachineSpec().transport()
+    np.testing.assert_allclose(t.medium.flutter, periodic, rtol=1e-12)
+    np.testing.assert_allclose(t.medium.flutter_noise, random, rtol=1e-12)
+    text = MACHINE.read_text().replace("        scrape_rms: scrape_rms\n", "")
+    broken = tmp_path / "ampex_351.yaml"
+    broken.write_text(text)
+    with pytest.raises(Exception, match="all or none"):
+        builder.build(spec.load_circuit(broken), cores="linear")
+
+
+def test_the_alignments_reproduce_side_is_nab():
+    """The alignment's reproduce side alone (varimu.measure.tape_align.repro_ir), driven at
+    the head's EMF: with 2R31 at 50 us (0.67) it falls as NAB's 3180 / 50 us integrator
+    from 700 Hz to 10 kHz (-12.9 dB), within 0.3 dB (the head's coil, 2V3's own response)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    from varimu.measure import tape_align as ta
+
+    b = ta.Bench.load()
+    g = ta.response(b, ta.repro_ir(b, {"rep_eq_hi": 0.67}), "out", (700.0, 10e3), 1e-4)
+    nab = ta._nab((700.0, 10e3))  # what an ideal head reads from a standard tape
+    want = ta._db(nab[0] / nab[1])  # the amplifier is its inverse
+    assert ta._db(g[1] / g[0]) == pytest.approx(want, abs=0.3)
+    assert want == pytest.approx(-12.9, abs=0.1)
+
+
+def test_the_alignments_meters_read_a_fluttering_tone():
+    """The alignment reads levels and THD from band powers (a VTVM behind a band-pass), so
+    a tone whose phase wanders with the transport (here 3 rad at 2.5 Hz, the motor's
+    hunting at 15 kHz) reads its level, which a coherent fit would lose."""
+    from varimu.measure import tape_align as ta
+
+    fs = 192_000
+    t = np.arange(int(0.19 * fs)) / fs
+    for f in (400.0, 15000.0):
+        ph = 2 * np.pi * f * t + 3.0 * np.sin(2 * np.pi * 2.5 * t)
+        y = 0.7 * np.sin(ph) + 0.01 * np.sin(2 * ph) + 0.3
+        assert ta.level(y, fs, f) == pytest.approx(0.7, rel=1e-4)
+        assert ta.thd(y, fs, f)[0] == pytest.approx(0.01 / 0.7, rel=1e-3)
+
+
+def test_the_electronics_follow_ampexs_measured_curves():
+    """The record and reproduce amplifiers against the 351 manual's measured response
+    curves at 15 ips NAB (p94, data/datasheets/ampex_351_response_15ips.csv), re 1 kHz: the
+    record side (input to head current) at 1C7's ends against the MINIMUM and MAXIMUM
+    curves within 1.2 dB; the reproduce side (head EMF to line out, 2R31 at 50 us) within
+    0.7 dB from 200 Hz up and 2.5 dB below (measured: +2.2 dB at 30 Hz, more bass than
+    Ampex's; TAPE_PLAN.md TM5)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    import csv
+    import math
+
+    from varimu.config import REPO_ROOT
+    from varimu.measure import tape_align as ta
+    from varimu.sim import fast
+
+    rows = list(csv.DictReader((REPO_ROOT / "data/datasheets/ampex_351_response_15ips.csv").open()))
+    pub = {}
+    for r in rows:
+        pub.setdefault(r["curve"], {})[float(r["f_hz"])] = float(r["db"])
+    b = ta.Bench.load()
+
+    def resp(ir, probe, freqs, amp):
+        t = np.arange(int(1.2 * b.fs)) / b.fs
+        ph = np.random.default_rng(1).uniform(0, 2 * math.pi, len(freqs))
+        x = amp * sum(np.sin(2 * math.pi * f * t + p) for f, p in zip(freqs, ph, strict=True))
+        v = fast.run_transient(ir, x, settings=b.settings).vectors[f"v({probe})"]
+        w = slice(int(0.6 * b.fs), None)
+        d = ta._db(ta.fit(v[w], b.fs, freqs) / ta.fit(x[w], b.fs, freqs))
+        return dict(zip(freqs, d - d[list(freqs).index(1000.0)], strict=True))
+
+    amp = b.vu_peak_v(-10) / 4
+    for c, curve in ((100e-12, "record_minimum"), (550e-12, "record_maximum")):
+        want = {**pub["record"], **pub[curve]}
+        ir = ta.record_ir(b, {"rec_eq_hi_f": c, "record_level": 0.98})
+        got = resp(ir, "rbc", tuple(want), amp)
+        for f, d in want.items():
+            assert got[f] == pytest.approx(d, abs=1.2), (curve, f)
+    want = pub["reproduce"]
+    got = resp(ta.repro_ir(b, {"rep_eq_hi": 0.67}), "out", tuple(want), 1e-4)
+    for f, d in want.items():
+        assert got[f] == pytest.approx(d - want[1000.0], abs=0.7 if f >= 200 else 2.5), f

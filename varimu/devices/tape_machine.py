@@ -235,10 +235,6 @@ def _record(
     return mx, my
 
 
-# The ideal reproducer: no gap, poles a metre long, read at no spacing.
-IDEAL_HEAD = HeadGeometry(1e-9, 1.0, 0.0)
-
-
 def tone_harmonics(
     spec: TapeMachineSpec,
     tape: TapeFormulation,
@@ -275,7 +271,7 @@ def tone_harmonics(
     mid = (every >= every[0] + 2 * lam) & (every < every[0] + (2 + waves) * lam)
     s, mx, my = every[mid], mx[:, mid], my[:, mid]
 
-    def read(head: HeadGeometry, spacing: float) -> np.ndarray:
+    def read(head: HeadGeometry | None, spacing: float) -> np.ndarray:
         out = []
         for h in range(1, harmonics + 1):
             k = 2 * math.pi * h / lam
@@ -283,17 +279,24 @@ def tone_harmonics(
             ph = np.exp(-1j * k * s)
             ax = (mx * ph).mean(axis=1) * 2
             ay = (my * ph).mean(axis=1) * 2
-            wx = np.array([head_hx_spectrum(head, ks, spacing + y)[0] for y in slab.depths_m])
-            wy = np.array([head_hy_spectrum(head, ks, spacing + y)[0] for y in slab.depths_m])
-            # The field's spectrum carries the gap length: per unit gap, so the ideal
-            # head (g -> 0) reads on the same scale. EMF ~ i k v flux, before the EQ.
-            out.append(1j * k * v * ((ax * wx).sum() - (ay * wy).sum()) / head.gap_m)
+            if head is None:
+                # The ideal reproducer: the gap's term alone, per unit gap (no gap loss, no
+                # pole edges), at no spacing.
+                wx = np.exp(-k * (spacing + slab.depths_m))
+                wy = 1j * wx
+            else:
+                wx = np.array([head_hx_spectrum(head, ks, spacing + y)[0] for y in slab.depths_m])
+                wy = np.array([head_hy_spectrum(head, ks, spacing + y)[0] for y in slab.depths_m])
+                # The field's spectrum carries the gap length: per unit gap, as the ideal
+                # head's. EMF ~ i k v flux, before the EQ.
+                wx, wy = wx / head.gap_m, wy / head.gap_m
+            out.append(1j * k * v * ((ax * wx).sum() - (ay * wy).sum()))
         return np.array(out) * spec.rep_gap_m
 
     real = read(spec.rep_head(), slab.spacing_m)
     if not ideal:
         return real
-    return real, read(IDEAL_HEAD, 0.0)
+    return real, read(None, 0.0)
 
 
 # --- The networks -----------------------------------------------------------------------
@@ -408,10 +411,16 @@ def align(spec: TapeMachineSpec, tape: TapeFormulation) -> Alignment:
     return Alignment(hg_bias, hg_0vu, rec_tz, rep_tz, out_gain, report=report)
 
 
+#: Bumped when `align`'s procedure changes (2: the ideal reproducer as the gap's term
+#: alone; before, a vanishing gap between finite poles read its pole edges, so the repro
+#: trim was set from a reading off by up to +30 dB: TAPE_PLAN.md TM5).
+ALIGN_VERSION = 2
+
+
 def aligned(spec: TapeMachineSpec, tape: TapeFormulation, cache_dir: Path) -> Alignment:
-    """`align`, cached by the spec and the tape's data."""
+    """`align`, cached by the spec, the tape's data and ALIGN_VERSION."""
     key = hashlib.sha256(
-        json.dumps([asdict(spec), repr(tape)], sort_keys=True, default=str).encode()
+        json.dumps([asdict(spec), repr(tape), ALIGN_VERSION], sort_keys=True, default=str).encode()
     ).hexdigest()[:16]
     path = cache_dir / f"align_{key}.json"
     if path.exists():

@@ -615,6 +615,7 @@ fn macro_of(kind: &str) -> Macro {
                     }
                 }))
                 .chain(std::iter::once(opt("bias_substeps", Count)))
+                .chain(crate::tape::TRANSPORT.iter().map(|k| opt(k, Physical)))
                 .collect(),
             false,
         ),
@@ -984,8 +985,31 @@ fn tape_part(
         }
         *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
     }
+    let given = crate::tape::TRANSPORT
+        .iter()
+        .filter(|k| !a[**k].is_null())
+        .count();
+    let mut tr = [0.0; 13];
+    if given > 0 {
+        for (x, k) in tr.iter_mut().zip(crate::tape::TRANSPORT) {
+            if a[k].is_null() {
+                return Err(ctx.fail(
+                    &format!("{name}.{k}"),
+                    "the transport's values go all or none",
+                ));
+            }
+            *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
+        }
+    }
     Ok(crate::tape::tape(
-        name, &nodes[0], &nodes[1], &nodes[2], &model, &v, m,
+        name,
+        &nodes[0],
+        &nodes[1],
+        &nodes[2],
+        &model,
+        &v,
+        m,
+        (given > 0).then_some(&tr),
     ))
 }
 

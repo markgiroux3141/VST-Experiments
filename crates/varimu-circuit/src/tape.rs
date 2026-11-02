@@ -86,6 +86,55 @@ fn sub<'a>(m: &'a Map, key: &str, what: &str) -> Result<&'a Map, Error> {
 /// leaves them out).
 pub const OWN_BIAS: [&str; 2] = ["bias_a_m", "rec_l_h"];
 
+/// The transport's values (`parts.TAPE_TRANSPORT`): optional, all or none.
+pub const TRANSPORT: [&str; 13] = [
+    "capstan_d_m",
+    "capstan_rms",
+    "roller_d_m",
+    "roller_rms",
+    "reel_r_m",
+    "reel_rms",
+    "hunting_hz",
+    "hunting_q",
+    "hunting_rms",
+    "scrape_span_m",
+    "scrape_c_m_s",
+    "scrape_q",
+    "scrape_rms",
+];
+
+/// The speed's components from [`TRANSPORT`]'s values, as `parts.tape_transport`:
+/// periodic (relative peak, Hz, phase) and random resonances (relative rms, Hz, Q).
+pub fn transport(speed_m_s: f64, tr: &[f64; 13]) -> (Vec<[f64; 3]>, Vec<[f64; 3]>) {
+    let [
+        capstan_d,
+        capstan_rms,
+        roller_d,
+        roller_rms,
+        reel_r,
+        reel_rms,
+        hunting_hz,
+        hunting_q,
+        hunting_rms,
+        scrape_span,
+        scrape_c,
+        scrape_q,
+        scrape_rms,
+    ] = *tr;
+    let pi = std::f64::consts::PI;
+    let v = speed_m_s;
+    let periodic = vec![
+        [capstan_rms * 2f64.sqrt(), v / (pi * capstan_d), 0.0],
+        [roller_rms * 2f64.sqrt(), v / (pi * roller_d), 1.0],
+        [reel_rms * 2f64.sqrt(), v / (2.0 * pi * reel_r), 2.0],
+    ];
+    let random = vec![
+        [hunting_rms, hunting_hz, hunting_q],
+        [scrape_rms, scrape_c / (2.0 * scrape_span), scrape_q],
+    ];
+    (periodic, random)
+}
+
 /// A tape version's data (kind tape), as `tape_from_data`; it must have an orientation
 /// block (the vector model the stream runs).
 pub fn from_data(data: &Value, what: &str) -> Result<TapeComponent, Error> {
@@ -124,7 +173,9 @@ pub fn from_data(data: &Value, what: &str) -> Result<TapeComponent, Error> {
 /// The tape part (`parts.tape`): the record coil, the tape and the repro coil. `v`: the
 /// values of [`VALUES`], in order. `bias_substeps`: the literal bias (rec_plus and
 /// rec_minus the record coil's resistance's ends in a multi-rate section; no record coil
-/// of its own; bias_a_m and rec_l_h not read).
+/// of its own; bias_a_m and rec_l_h not read). `transport`: [`TRANSPORT`]'s values, or
+/// None (a constant speed).
+#[allow(clippy::too_many_arguments)]
 pub fn tape(
     name: &str,
     rec_plus: &str,
@@ -133,6 +184,7 @@ pub fn tape(
     t: &TapeComponent,
     v: &[f64; 16],
     bias_substeps: Option<usize>,
+    transport: Option<&[f64; 13]>,
 ) -> Vec<Element> {
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let [
@@ -153,6 +205,10 @@ pub fn tape(
         rep_r,
         rep_h,
     ] = *v;
+    let (flutter, flutter_noise) = match transport {
+        Some(tr) => self::transport(speed, tr),
+        None => (Vec::new(), Vec::new()),
+    };
     let medium = TapeParams {
         hc_median_a_m: t.hc_median_a_m,
         sigma_ln_hc: t.sigma_ln_hc,
@@ -186,9 +242,8 @@ pub fn tape(
         lam_min_m: 3.0 * speed / f_bias,
         block_m: BLOCK_M,
         margin_m: MARGIN_M,
-        // No wow or flutter yet (`parts.tape`: the 351's transport comes with TM5).
-        flutter: Vec::new(),
-        flutter_noise: Vec::new(),
+        flutter,
+        flutter_noise,
         particle_volume_m3: t.grain[0],
         packing: t.grain[1],
         packing_sigma: t.grain[2],

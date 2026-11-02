@@ -344,6 +344,14 @@ section). The 351's record side runs at 20 substeps (3.84 MHz); it meets the res
 input and the reservoirs (a cut through a coupling capacitor diverges). Production's probes
 are decimated to 96 kHz and hide the 99 kHz: measure the bias at `oversample` 1. 106x real
 time on the drums (was 46.7x). A GPU for the recording kernel is planned (TAPE_PLAN.md: f64 is slow on a 3080).
+**The 351 aligned and printed (2026-11-01):** the manual's alignment as a procedure on the whole
+machine (`varimu/measure/tape_align.py`: playback EQ from a virtual test tape, bias at the
+median of the 1/2 dB points, record EQ, RECORD LEVEL for 1% THD at 400 Hz, PLAYBACK LEVEL for
++8 dBm; `scripts/align_351.py` -> `reports/tape/ampex_351_alignment.*`, cached by circuit, code
+and settings, ~32 min), the transport on the tape part (`parts.TAPE_TRANSPORT`, 13 optional
+values, all or none, both builders), `rep_h_per_a` calibrated to the drawing's -68 dB, and
+prints through it: `uv run --extra fast --extra listen python scripts/print_351.py --drive-db 0 6
+12` (~58x real time for the three at once).
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->

@@ -53,7 +53,9 @@ Macro parts (connection; params, * = required):
                 rep_gap_m, pole_m, relax_m, spacing_m, track_m, head_distance_m, rec_l_h,
                 rec_r_ohm, rec_h_per_a, rep_l_h, rep_r_ohm, rep_h_per_a: the record coil
                 between rec_plus and rec_minus, the repro coil from out to ground
-                (varimu.devices.tape_machine.TapeStream, varimu.circuit.parts.tape)
+                (varimu.devices.tape_machine.TapeStream, varimu.circuit.parts.tape);
+                optional, all or none, the transport's wow and flutter
+                (parts.TAPE_TRANSPORT: capstan_d_m, capstan_rms, roller_d_m, ...)
 
 R, C, pot, rheostat, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
 the file's tolerance classes); a switch's sub-parts take their own.
@@ -506,7 +508,12 @@ def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
             raise ctx.fail(f"{name}.{k}", "required (or bias_substeps: the literal bias)")
         if m is not None and a[k] is not None:
             raise ctx.fail(f"{name}.{k}", "not read with bias_substeps (the literal bias)")
-    return parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES}, m)
+    given = [k for k in parts.TAPE_TRANSPORT if a[k] is not None]
+    if given and len(given) < len(parts.TAPE_TRANSPORT):
+        missing = sorted(set(parts.TAPE_TRANSPORT) - set(given))
+        raise ctx.fail(f"{name}.{missing[0]}", "the transport's values go all or none")
+    tr = {k: a[k] for k in parts.TAPE_TRANSPORT} if given else None
+    return parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES}, m, tr)
 
 
 def _r(ctx, name, c, a):
@@ -611,6 +618,7 @@ for _name, _macro in {
                 for k in parts.TAPE_VALUES
             },
             "bias_substeps": Param("count", None),
+            **{k: Param("physical", None) for k in parts.TAPE_TRANSPORT},
         },
     ),
     "speaker": Macro(

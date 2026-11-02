@@ -684,6 +684,43 @@ TAPE_VALUES = (
 #: The values only the medium's own bias reads (the literal bias leaves them out).
 TAPE_OWN_BIAS = ("bias_a_m", "rec_l_h")
 
+#: The transport (TAPE_PLAN.md TM3; varimu.devices.tape_machine.TapeMachineSpec's fields of
+#: the same names): optional, all or none (none: the tape runs at a constant speed).
+TAPE_TRANSPORT = (
+    "capstan_d_m",
+    "capstan_rms",
+    "roller_d_m",
+    "roller_rms",
+    "reel_r_m",
+    "reel_rms",
+    "hunting_hz",
+    "hunting_q",
+    "hunting_rms",
+    "scrape_span_m",
+    "scrape_c_m_s",
+    "scrape_q",
+    "scrape_rms",
+)
+
+
+def tape_transport(speed_m_s: float, tr: Mapping[str, float]) -> tuple[tuple, tuple]:
+    """The speed's components from TAPE_TRANSPORT's values, as
+    `TapeMachineSpec.transport` makes them: periodic (relative peak, Hz, phase) for the
+    capstan's runout, the rubber idler and the supply reel; random resonances (relative
+    rms, Hz, Q) for the motor's hunting and scrape flutter (the free span's first
+    longitudinal mode, c / 2L)."""
+    v = speed_m_s
+    periodic = (
+        (tr["capstan_rms"] * math.sqrt(2.0), v / (math.pi * tr["capstan_d_m"]), 0.0),
+        (tr["roller_rms"] * math.sqrt(2.0), v / (math.pi * tr["roller_d_m"]), 1.0),
+        (tr["reel_rms"] * math.sqrt(2.0), v / (2.0 * math.pi * tr["reel_r_m"]), 2.0),
+    )
+    random = (
+        (tr["hunting_rms"], tr["hunting_hz"], tr["hunting_q"]),
+        (tr["scrape_rms"], tr["scrape_c_m_s"] / (2.0 * tr["scrape_span_m"]), tr["scrape_q"]),
+    )
+    return periodic, random
+
 
 def tape(
     name: str,
@@ -693,6 +730,7 @@ def tape(
     t: TapeFormulation,
     v: Mapping[str, float],
     bias_substeps: int | None = None,
+    transport: Mapping[str, float] | None = None,
 ) -> list[Element]:
     """Magnetic tape t between a record head and a repro head (docs/TAPE_PLAN.md, TM4;
     varimu.devices.tape_machine.TapeStream): the record coil between rec_plus and
@@ -701,8 +739,9 @@ def tape(
     deep-gap field per volt), recorded with its own AC bias (bias_a_m, the deep-gap field,
     at f_bias_hz), and the repro coil's EMF on <name>_e behind the coil's inductance and
     resistance (L<name>_rep, R<name>_rep) to out. v: the physical values of TAPE_VALUES
-    (heads' geometry, transport, coils); the numerics are the module's TAPE_* settings. No
-    wow or flutter yet (the 351's transport comes with its circuit, TM5).
+    (heads' geometry, transport, coils); the numerics are the module's TAPE_* settings.
+    transport: TAPE_TRANSPORT's values (wow and flutter, `tape_transport`), or None (a
+    constant speed).
 
     bias_substeps (M): the literal bias (TAPE_PLAN.md TM5, option A). rec_plus and
     rec_minus are then the record coil's resistance's ends, drawn in a multi-rate section
@@ -713,6 +752,7 @@ def tape(
     n, upper = name.lower(), name.upper()
     o = t.orientation
     p = t.preisach
+    periodic, random = tape_transport(v["speed_m_s"], transport) if transport else ((), ())
     medium = TapeMedium(
         hc_median_a_m=p.hc_median_a_m,
         sigma_ln_hc=p.sigma_ln_hc,
@@ -746,8 +786,8 @@ def tape(
         lam_min_m=3.0 * v["speed_m_s"] / v["f_bias_hz"],
         block_m=TAPE_BLOCK_M,
         margin_m=TAPE_MARGIN_M,
-        flutter=(),
-        flutter_noise=(),
+        flutter=periodic,
+        flutter_noise=random,
         particle_volume_m3=t.noise.particle_volume_m3 if t.noise else 0.0,
         packing=t.noise.packing if t.noise else 0.0,
         packing_sigma=t.noise.packing_sigma if t.noise else 0.0,

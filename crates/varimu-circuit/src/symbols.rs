@@ -584,7 +584,11 @@ fn table() -> Vec<SymbolDef> {
                 circle(2.54, 0.0, 1.778, false),
             ],
             Some("component"),
-            &crate::tape::VALUES,
+            &crate::tape::VALUES
+                .iter()
+                .chain(crate::tape::TRANSPORT.iter())
+                .copied()
+                .collect::<Vec<_>>(),
             false,
             (0.0, 6.35, 5.588, "left"),
         ),
