@@ -82,6 +82,10 @@ fn sub<'a>(m: &'a Map, key: &str, what: &str) -> Result<&'a Map, Error> {
         .ok_or_else(|| Error(format!("{what}: needs `{key}`")))
 }
 
+/// The values only the medium's own bias reads (`parts.TAPE_OWN_BIAS`: the literal bias
+/// leaves them out).
+pub const OWN_BIAS: [&str; 2] = ["bias_a_m", "rec_l_h"];
+
 /// A tape version's data (kind tape), as `tape_from_data`; it must have an orientation
 /// block (the vector model the stream runs).
 pub fn from_data(data: &Value, what: &str) -> Result<TapeComponent, Error> {
@@ -118,7 +122,9 @@ pub fn from_data(data: &Value, what: &str) -> Result<TapeComponent, Error> {
 }
 
 /// The tape part (`parts.tape`): the record coil, the tape and the repro coil. `v`: the
-/// values of [`VALUES`], in order.
+/// values of [`VALUES`], in order. `bias_substeps`: the literal bias (rec_plus and
+/// rec_minus the record coil's resistance's ends in a multi-rate section; no record coil
+/// of its own; bias_a_m and rec_l_h not read).
 pub fn tape(
     name: &str,
     rec_plus: &str,
@@ -126,6 +132,7 @@ pub fn tape(
     out: &str,
     t: &TapeComponent,
     v: &[f64; 16],
+    bias_substeps: Option<usize>,
 ) -> Vec<Element> {
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let [
@@ -158,7 +165,7 @@ pub fn tape(
         orientations: t.orientations,
         speed_m_s: speed,
         f_bias_hz: f_bias,
-        hg_bias_a_m: bias,
+        hg_bias_a_m: if bias_substeps.is_some() { 0.0 } else { bias },
         bias_phase_rad: 0.0,
         rec_gap_m: rec_gap,
         rep_gap_m: rep_gap,
@@ -186,28 +193,37 @@ pub fn tape(
         packing: t.grain[1],
         packing_sigma: t.grain[2],
         packing_corr_m: t.grain[3],
+        bias_substeps,
     };
-    vec![
-        Element::Inductor(Inductor {
+    let literal = bias_substeps.is_some();
+    let mut els = Vec::new();
+    if !literal {
+        els.push(Element::Inductor(Inductor {
             name: format!("L{upper}_rec"),
             a: rec_plus.to_string(),
             b: format!("{n}_a"),
             l_h: rec_l,
-        }),
-        Element::Resistor(Resistor {
+        }));
+        els.push(Element::Resistor(Resistor {
             name: format!("R{upper}_rec"),
             a: format!("{n}_a"),
             b: rec_minus.to_string(),
             r_ohm: rec_r,
-        }),
-        Element::Tape(Tape {
-            name: format!("V{upper}"),
-            sense_pos: format!("{n}_a"),
-            sense_neg: rec_minus.to_string(),
-            h_per_v: rec_h / rec_r,
-            out: format!("{n}_e"),
-            medium,
-        }),
+        }));
+    }
+    els.push(Element::Tape(Tape {
+        name: format!("V{upper}"),
+        sense_pos: if literal {
+            rec_plus.to_string()
+        } else {
+            format!("{n}_a")
+        },
+        sense_neg: rec_minus.to_string(),
+        h_per_v: rec_h / rec_r,
+        out: format!("{n}_e"),
+        medium: Box::new(medium),
+    }));
+    els.extend([
         Element::Inductor(Inductor {
             name: format!("L{upper}_rep"),
             a: format!("{n}_e"),
@@ -220,5 +236,6 @@ pub fn tape(
             b: out.to_string(),
             r_ohm: rep_r,
         }),
-    ]
+    ]);
+    els
 }

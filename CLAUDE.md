@@ -335,6 +335,15 @@ feedback winding, the 6X4 supply; the oscillator only as its load), the new `620
 sheet), idle vs the drawing in `tests/test_ampex_351.py`, 46.7x real time at production; the
 bias coupling measured on `ampex_351_bias.yaml` at 3.84 MHz (`scripts/tape_bias_study.py` ->
 `reports/tape/bias_coupling.*`; TAPE_PLAN.md TM5's status): the user chose A, the literal oscillator in a partition of its own (2026-11-01).
+**A is built:** circuitsim's multi-rate parts (a section's `substeps:`, IR `Section.substeps`:
+its own thread at m steps per sample, currents averaged per sample, owns no shared node; it
+may hold the audio input; `partition.rs`), the medium's literal mode (`TapeStream(literal=M)`,
+IR `TapeMedium.bias_substeps`: M samples of the head's whole field per push, recorded at their
+extrema), the tape part's `bias_substeps` (senses a record coil drawn in the multi-rate
+section). The 351's record side runs at 20 substeps (3.84 MHz); it meets the rest only at the
+input and the reservoirs (a cut through a coupling capacitor diverges). Production's probes
+are decimated to 96 kHz and hide the 99 kHz: measure the bias at `oversample` 1. 106x real
+time on the drums (was 46.7x). A GPU for the recording kernel is planned (TAPE_PLAN.md: f64 is slow on a 3080).
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->

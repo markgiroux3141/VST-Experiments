@@ -77,10 +77,12 @@ fn circuit(controls: bool) -> CircuitIr {
         sections: vec![
             Section {
                 title: "audio".into(),
+                substeps: None,
                 elements: audio,
             },
             Section {
                 title: "other".into(),
+                substeps: None,
                 elements: vec![resistor("R3", "x", "0", 1e5)],
             },
         ],

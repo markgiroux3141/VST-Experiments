@@ -86,6 +86,16 @@ pub struct TapeParams {
     pub packing: f64,
     pub packing_sigma: f64,
     pub packing_corr_m: f64,
+    /// The literal bias (TAPE_PLAN.md TM5, option A): each push is M samples of the head's
+    /// whole field, bias included (`hg_bias_a_m` 0), from a multi-rate part, over
+    /// (t_{n-2}, t_{n-1}] for push n (fast sample k at (k + 1 - 2M) / (M fs)); the blocks
+    /// record at its extrema. None: the medium's own bias.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "opt_count"
+    )]
+    pub bias_substeps: Option<usize>,
 }
 
 impl TapeParams {
@@ -120,6 +130,9 @@ impl TapeParams {
             || self.margin_m < 0.0
             || self.kappa < 0.0
             || self.hg_bias_a_m < 0.0
+            || self
+                .bias_substeps
+                .is_some_and(|m| m < 2 || self.hg_bias_a_m != 0.0)
             || self
                 .flutter
                 .iter()
@@ -171,6 +184,11 @@ fn count<'de, D: serde::Deserializer<'de>>(d: D) -> Result<usize, D::Error> {
     } else {
         Err(serde::de::Error::custom(format!("{x} isn't a count")))
     }
+}
+
+/// An optional count written as a number.
+fn opt_count<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<usize>, D::Error> {
+    count(d).map(Some)
 }
 
 /// numpy's sinc: sin(pi u) / (pi u).
@@ -441,8 +459,10 @@ pub struct TapeStream {
     nr: usize,
     k_max: f64,
     scale: f64,
-    /// The pushed samples first, first + 1, ...
+    /// The pushed samples first, first + 1, ... (literal bias: the fast samples).
     h: Vec<f64>,
+    /// The literal bias's samples per push (1: the medium's own bias).
+    m: usize,
     first: usize,
     n: usize,
     /// Recorded blocks: (block, M_x, M_y), layers x block cells.
@@ -565,6 +585,7 @@ impl TapeStream {
             k_max: 2.0 * PI * 0.45 * fs / p.speed_m_s,
             scale: MU0 * p.track_m * p.ms_a_m * p.rep_h_per_a * dy,
             h: Vec::new(),
+            m: p.bias_substeps.unwrap_or(1),
             first: 0,
             n: 0,
             rec: Vec::new(),
@@ -852,6 +873,33 @@ impl TapeStream {
         Ok(zones)
     }
 
+    /// `literal_peaks`: the literal field's extrema with t0 <= t <= t1 (each sample above
+    /// its left neighbour and not below its right, or the reverse), refined by the parabola
+    /// through the three: (times, values).
+    pub fn literal_peaks(&self, t0: f64, t1: f64) -> (Vec<f64>, Vec<f64>) {
+        let (m, first) = (self.m as f64, self.first as i64);
+        let mf = m * self.fs;
+        let kl = ((t0 * mf + 2.0 * m - 1.0).floor() as i64 - 1).max(first + 1);
+        let kh =
+            ((t1 * mf + 2.0 * m - 1.0).floor() as i64 + 2).min(first + self.h.len() as i64 - 2);
+        let (mut ts, mut vs) = (Vec::new(), Vec::new());
+        for k in kl..=kh {
+            let i = (k - first) as usize;
+            let (a, b, c) = (self.h[i - 1], self.h[i], self.h[i + 1]);
+            if !((b > a && b >= c) || (b < a && b <= c)) {
+                continue;
+            }
+            let den = a - 2.0 * b + c;
+            let d = if den == 0.0 { 0.0 } else { 0.5 * (a - c) / den };
+            let tk = (k as f64 + d + 1.0 - 2.0 * m) / mf;
+            if t0 <= tk && tk <= t1 {
+                ts.push(tk);
+                vs.push(b - 0.25 * (a - c) * d);
+            }
+        }
+        (ts, vs)
+    }
+
     fn record_block(&mut self, b: usize) -> Result<(), String> {
         let (j0, j1, t0, t1) = self.span(b);
         let (t0, t1) = (
@@ -859,31 +907,42 @@ impl TapeStream {
             t1.ok_or("tape: a block recorded before the tape got there")?,
         );
         let fs = self.fs;
-        let first = self.first as i64;
-        let lo = ((t0 * fs).floor() as i64 - 1).max(0);
-        let hi = (t1 * fs).floor() as i64 + 3;
-        let peak_sig = self.h[(lo - first) as usize..(hi - first) as usize]
-            .iter()
-            .fold(0.0, |a: f64, &x| a.max(x.abs()));
         let s: Vec<f64> = (j0..j1).map(|j| j as f64 * self.p.ds_m).collect();
-        // `bias_peak_times`, shifted by the oscillator's phase.
-        let f_b = self.p.f_bias_hz;
-        let shift = self.p.bias_phase_rad / (2.0 * PI * f_b);
-        let half = 0.5 / f_b;
-        let k0 = ((t0 + shift) / half).floor() as i64;
-        let k1 = ((t1 + shift) / half).ceil() as i64;
-        let mut hg = Vec::new();
-        let mut srec = Vec::new();
-        for k in k0..k1 {
-            let t = ((k as f64 + 0.5) + 0.0) * half - shift;
-            if t < t0 || t > t1 {
-                continue;
+        let (hg, srec, peak) = if self.m > 1 {
+            // The literal bias: the field's extrema.
+            let (tp, hg) = self.literal_peaks(t0, t1);
+            let srec: Vec<f64> = tp.iter().map(|&t| self.s_at(t)).collect();
+            let peak = hg.iter().fold(0.0, |a: f64, &x| a.max(x.abs()));
+            (hg, srec, peak)
+        } else {
+            let first = self.first as i64;
+            let lo = ((t0 * fs).floor() as i64 - 1).max(0);
+            let hi = (t1 * fs).floor() as i64 + 3;
+            let peak_sig = self.h[(lo - first) as usize..(hi - first) as usize]
+                .iter()
+                .fold(0.0, |a: f64, &x| a.max(x.abs()));
+            // `bias_peak_times`, shifted by the oscillator's phase.
+            let f_b = self.p.f_bias_hz;
+            let shift = self.p.bias_phase_rad / (2.0 * PI * f_b);
+            let half = 0.5 / f_b;
+            let k0 = ((t0 + shift) / half).floor() as i64;
+            let k1 = ((t1 + shift) / half).ceil() as i64;
+            let mut hg = Vec::new();
+            let mut srec = Vec::new();
+            for k in k0..k1 {
+                let t = ((k as f64 + 0.5) + 0.0) * half - shift;
+                if t < t0 || t > t1 {
+                    continue;
+                }
+                let sig = cubic_held(&self.h, t * fs, first);
+                hg.push(
+                    sig + self.p.hg_bias_a_m * (2.0 * PI * f_b * t + self.p.bias_phase_rad).sin(),
+                );
+                srec.push(self.s_at(t));
             }
-            let sig = cubic_held(&self.h, t * fs, first);
-            hg.push(sig + self.p.hg_bias_a_m * (2.0 * PI * f_b * t + self.p.bias_phase_rad).sin());
-            srec.push(self.s_at(t));
-        }
-        let zones = self.zones(&hg, &srec, &s, peak_sig + self.p.hg_bias_a_m)?;
+            (hg, srec, peak_sig + self.p.hg_bias_a_m)
+        };
+        let zones = self.zones(&hg, &srec, &s, peak)?;
         let cells = s.len();
         // `record_demagnetized_vector`.
         let (mut mx, mut my) = self.record_once(&hg, &srec, &s, &zones, None, None);
@@ -1088,9 +1147,13 @@ impl TapeStream {
     /// [`push`](Self::push) for each of hs in turn (the same results, any chunking), the
     /// EMFs into out.
     pub fn push_many(&mut self, hs: &[f64], out: &mut Vec<f64>) -> Result<(), String> {
+        let m = self.m;
+        if !hs.len().is_multiple_of(m) {
+            return Err(format!("tape: literal bias pushes {m} samples each"));
+        }
         let n0 = self.n;
         self.h.extend_from_slice(hs);
-        self.n += hs.len();
+        self.n += hs.len() / m;
         if self.moving {
             self.advance(self.n);
         }
@@ -1105,11 +1168,11 @@ impl TapeStream {
         }
         let keep = match self.span(self.next_rec).2 {
             Some(t0) => ((t0 * self.fs).floor() as i64 - 1).max(0) as usize,
-            None => self.first,
+            None => self.first / m,
         };
-        if keep > self.first {
-            self.h.drain(..keep - self.first);
-            self.first = keep;
+        if keep * m > self.first {
+            self.h.drain(..keep * m - self.first);
+            self.first = keep * m;
         }
         // Positions: from the earliest a future recording reads and this push's outputs.
         let cut = (keep.saturating_sub(2)).min(n0 + 1);
@@ -1149,6 +1212,11 @@ impl TapeStream {
             self.slopes.retain(|(c, _)| *c + 1 >= b);
         }
         Ok(())
+    }
+
+    /// The literal bias's samples per push (1: the medium's own bias).
+    pub fn substeps(&self) -> usize {
+        self.m
     }
 
     /// The EMF at t_{n+1} after the signal field h at t_n.

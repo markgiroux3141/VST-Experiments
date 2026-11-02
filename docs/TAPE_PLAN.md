@@ -614,6 +614,93 @@ the one it replaces, in dB of difference re the print's rms; times on a free des
       the 6201's plate swings with bias and audio together.
   - **Decided 2026-11-01 (the user): A, the literal oscillator.**
 
+**Option A built (2026-11-01): the literal bias in the 351.**
+- **Engine: multi-rate parts** (circuitsim's `partition.rs`, `stream.rs`; the IR's
+  `Section::substeps`, a section's `substeps:` in a circuit file, both builders).
+  - A section with `substeps` m > 1 runs as a part of its own on its own thread, at m steps
+    per sample. Sections with the same m form one part. Within a sample it sees the others'
+    values interpolated over its steps.
+  - It publishes the currents it draws averaged over the sample (the charge moved). It owns
+    no shared node.
+  - The audio input may be a multi-rate part's: that part reads the stream's input itself,
+    the same Lagrange window as the first partition, each step a sub-range of it
+    (`StepInput::sub`; identity for every existing run, so they're bit-identical).
+  - A tape with the literal bias senses the record head remotely: the multi-rate part
+    publishes the sense after each of its steps, and the tape's part pushes them a sample
+    later.
+  - An IR with multi-rate sections always runs partitioned (`circuitsim.simulate`, `Stream`).
+    The single-solve `simulate` refuses it.
+  - Test (`tests/partition.rs`): a 99.3 kHz source in a 16-substep part against the whole
+    circuit solved as one at the fine step. The audio side agrees within 0.4 mV in the audio
+    band (16-sample means), against its 9 mV of 100 kHz ripple; the fast node agrees within
+    1e-3 sample by sample.
+- **The medium's literal mode** (`TapeStream(literal=M)`, the reference; `tape_stream.rs`'s
+  port; the IR's `TapeMedium.bias_substeps`).
+  - Each push is M samples of the head's whole field, bias included. Push n carries
+    (t_{n-2}, t_{n-1}]: the partition's lag is built in, and the first two pushes are the DC
+    point's.
+  - A block records at the field's extrema: each local extremum of the samples, refined by
+    the parabola through three samples, in the same arithmetic in both languages.
+  - The rest of the kernel is unchanged: it already ran on (time, field) lists.
+  - Tests (`tests/test_tape_stream.py`):
+    - Rust against the Python reference within 1e-11;
+    - convergence in M: 32 against 64 within 2e-4;
+    - an ideal carrier against the medium's own bias: 0.34% apart, which is physics, not
+      error. The extrema of bias plus signal move with the signal's slope, and the own bias
+      ignores that;
+    - the whole path through a multi-rate partition (an ideal bias plus a tone at 16 substeps)
+      equals the reference stream fed the same samples.
+- **The tape part:** `bias_substeps: M` makes it sense across a record coil drawn in the
+  multi-rate section (`[sense+, sense-, out]`). It then has no record coil of its own, and
+  takes no `bias_a_m` or `rec_l_h`. `f_bias_hz` stays, as the oscillator's nominal frequency
+  that sets the cells' length.
+- **The 351** (`config/circuits/ampex_351.yaml`): the record side from the input on at 20
+  substeps (3.84 MHz in production):
+  - the record amplifier, the 6201, 1R59 / 1C2c and the record line, the oscillator, 1T5, the
+    erase head, the bias feed and the record head (values as in the bias study; 5C39 left out,
+    as the drawing's note allows);
+  - the audio part keeps the supply, the idle 1V1b, the tape, the repro side and the output;
+  - they meet only at the input and the 330 / 250 / 220 V reservoirs.
+- **What it took (measured):**
+  1. **A signal-path cut isn't stable.** Cutting at 1V2b's plate (1C9 into the multi-rate
+     part) diverged within 52 samples: a step there becomes a capacitor current into a high
+     impedance node a sample later. Only capacitor-held nodes (the reservoirs) and the input
+     can be cut, so the whole record side is in the fast part.
+  2. **Production's probes can't show the oscillator.** Probes are decimated from 192 to 96
+     kHz, and the decimation filter removes 99 kHz. Measure it at 192 kHz without
+     decimation (`oversample` 1). The grids' grid-leak bias, -30 V, is visible either way.
+  3. **A start state.** A noiseless symmetric oscillator can sit at its balance point: 1C36
+     starts at 0.1 V (`osc_kick_v`, a capacitor's `v0`). With the circuit's noise on, the
+     tubes' noise would do it.
+- **Running** (`tests/test_ampex_351.py`): the oscillator runs at ~99 kHz, +-229 V on the
+  erase head and +-3.8 mA in the record head (bias plus a 0 VU tone). The tone comes back
+  off the tape at the output 133 ms later.
+- **Speed:** 2 s of the drums at production (JA cores, the 1 s settle counted) take 106x
+  real time, against 46.7x for the 351 with the medium's own bias; a tone with linear cores,
+  96.6x. The record side's five triodes at 3.84 MHz are the new cost.
+- **Next:**
+  - the alignment as a procedure: BIAS ADJUST for the bias peak, RECORD LEVEL for 1% THD at
+    0 VU, the repro trim and PLAYBACK LEVEL;
+  - the `tape_suite` profile and the specs: +-2 dB 30 Hz-15 kHz, the S/N, which now includes
+    the oscillator's and the amplifiers' noise;
+  - the 351's transport on its tape part;
+  - the 12AX7 plates still +22-36% off.
+
+**Speed: the GPU (the user's suggestion, 2026-11-01).** The dev machine has an RTX 3080.
+- **The candidate is the recording kernel** (`tape.rs`): every cell times 8 orientations
+  over every bias peak in its zone. It is embarrassingly parallel over cells (each cell's
+  history is sequential) and dominated the prints before A.
+- Also: the demag iteration's FFTs, and alignment sweeps (many bias settings recorded at
+  once).
+- **Not the circuit:** Newton on small dense systems, sequential in time.
+- **The catch: double precision.** The kernel is f64 so that the port agrees with the Python
+  reference to ~4e-13, and a 3080 runs f64 at 1/64 of its f32 rate (~0.5 TFLOPS, about this
+  CPU's). A big win needs an f32 kernel: a tier of its own, measured against the f64
+  reference (a draft print, or the alignment's sweeps), not a replacement.
+- **First, measure where the literal 351's time goes.** The tape kernel runs on the audio
+  part's thread, the record side on its own, so the slower of the two sets the wall time.
+- Planned after TM5's alignment, with TM7 (real time).
+
 **Decided 2026-10-31 (the user): condition dials, "turn it to 11".** Continue in plan order
 (TM5 the 351's circuit, then TM6's insert). The insert's panel gets condition dials that go
 from a clean, well-kept machine to a trashed one, far past a real 351. Each is a physical

@@ -681,8 +681,18 @@ TAPE_VALUES = (
 )
 
 
+#: The values only the medium's own bias reads (the literal bias leaves them out).
+TAPE_OWN_BIAS = ("bias_a_m", "rec_l_h")
+
+
 def tape(
-    name: str, rec_plus: str, rec_minus: str, out: str, t: TapeFormulation, v: Mapping[str, float]
+    name: str,
+    rec_plus: str,
+    rec_minus: str,
+    out: str,
+    t: TapeFormulation,
+    v: Mapping[str, float],
+    bias_substeps: int | None = None,
 ) -> list[Element]:
     """Magnetic tape t between a record head and a repro head (docs/TAPE_PLAN.md, TM4;
     varimu.devices.tape_machine.TapeStream): the record coil between rec_plus and
@@ -692,7 +702,14 @@ def tape(
     at f_bias_hz), and the repro coil's EMF on <name>_e behind the coil's inductance and
     resistance (L<name>_rep, R<name>_rep) to out. v: the physical values of TAPE_VALUES
     (heads' geometry, transport, coils); the numerics are the module's TAPE_* settings. No
-    wow or flutter yet (the 351's transport comes with its circuit, TM5)."""
+    wow or flutter yet (the 351's transport comes with its circuit, TM5).
+
+    bias_substeps (M): the literal bias (TAPE_PLAN.md TM5, option A). rec_plus and
+    rec_minus are then the record coil's resistance's ends, drawn in a multi-rate section
+    of M steps with the circuit's own oscillator (the coil isn't the part's: no
+    L<name>_rec / R<name>_rec; bias_a_m and rec_l_h aren't read); the tape senses the
+    head's whole current there, bias included (`TapeStream`'s literal mode). f_bias_hz is
+    then the oscillator's nominal frequency, for the cells' length."""
     n, upper = name.lower(), name.upper()
     o = t.orientation
     p = t.preisach
@@ -708,7 +725,7 @@ def tape(
         orientations=o.n,
         speed_m_s=v["speed_m_s"],
         f_bias_hz=v["f_bias_hz"],
-        hg_bias_a_m=v["bias_a_m"],
+        hg_bias_a_m=0.0 if bias_substeps else v["bias_a_m"],
         bias_phase_rad=0.0,
         rec_gap_m=v["rec_gap_m"],
         rep_gap_m=v["rep_gap_m"],
@@ -735,11 +752,18 @@ def tape(
         packing=t.noise.packing if t.noise else 0.0,
         packing_sigma=t.noise.packing_sigma if t.noise else 0.0,
         packing_corr_m=t.noise.packing_corr_m if t.noise else 0.0,
+        bias_substeps=bias_substeps,
     )
+    h_per_v = v["rec_h_per_a"] / v["rec_r_ohm"]
+    repro = [
+        Inductor(f"L{upper}_rep", f"{n}_e", f"{n}_b", v["rep_l_h"]),
+        Resistor(f"R{upper}_rep", f"{n}_b", out, v["rep_r_ohm"]),
+    ]
+    if bias_substeps:
+        return [Tape(f"V{upper}", rec_plus, rec_minus, h_per_v, f"{n}_e", medium), *repro]
     return [
         Inductor(f"L{upper}_rec", rec_plus, f"{n}_a", v["rec_l_h"]),
         Resistor(f"R{upper}_rec", f"{n}_a", rec_minus, v["rec_r_ohm"]),
-        Tape(f"V{upper}", f"{n}_a", rec_minus, v["rec_h_per_a"] / v["rec_r_ohm"], f"{n}_e", medium),
-        Inductor(f"L{upper}_rep", f"{n}_e", f"{n}_b", v["rep_l_h"]),
-        Resistor(f"R{upper}_rep", f"{n}_b", out, v["rep_r_ohm"]),
+        Tape(f"V{upper}", f"{n}_a", rec_minus, h_per_v, f"{n}_e", medium),
+        *repro,
     ]

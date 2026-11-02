@@ -199,6 +199,7 @@ def _record(
     bias_phase=0.0,
     engine="rust",
     s_rec=None,
+    peaks=None,
 ):
     slab = _slab(spec, tape)
     if s_rec is None:
@@ -229,6 +230,7 @@ def _record(
         floor_a_m=None if spec.zone_floor_oe is None else spec.zone_floor_oe * OE_A_M,
         local_zones=spec.local_zones,
         bias_phase_rad=bias_phase,
+        peaks=peaks,
     )
     return mx, my
 
@@ -516,7 +518,15 @@ class TapeStream:
     nothing is recorded) once the next block is recorded. Between samples the signal is
     cubic (`cubic_held`); each block's zone bound is the largest |sample| its recording
     reads. The EMF is read cubic between cells, band limited at 0.45 fs. rep_h_per_a: the
-    repro head's deep-gap field per coil ampere (turns and efficiency over the gap)."""
+    repro head's deep-gap field per coil ampere (turns and efficiency over the gap).
+
+    literal (M): the bias is the circuit's (TAPE_PLAN.md, TM5's option A): each push is M
+    samples of the head's whole deep-gap field, bias included, and hg_bias isn't added
+    (pass 0). Push n carries the field over (t_{n-2}, t_{n-1}] (fast sample k at
+    t = (k + 1 - 2M) / (M fs)): a multi-rate part's samples reach the medium a sample
+    after they're computed (circuitsim's partition.rs; the first two pushes are the DC
+    point's). It returns the EMF at t_{n+1} as before. A block records at the field's
+    extrema (`literal_peaks`)."""
 
     def __init__(
         self,
@@ -531,7 +541,11 @@ class TapeStream:
         noise_seed: int | None = None,
         noise_name: str = "tape",
         transport_seed: int = 0,
+        literal: int | None = None,
     ):
+        if literal is not None and (literal < 2 or hg_bias != 0.0):
+            raise ValueError("literal bias: M >= 2 samples per push, and hg_bias 0")
+        self.literal = literal
         if noise_seed is not None and tape.noise is None:
             raise ValueError(f"{tape.name} has no noise block (its particles aren't fitted)")
         if noise_seed is not None and not 0 <= noise_seed < 2**53:
@@ -559,7 +573,7 @@ class TapeStream:
         self.k_max = 2.0 * math.pi * 0.45 * self.fs / v
         dy = tape.coating_m / spec.layers
         self.scale = MU0 * spec.track_m * tape.ms_a_m * rep_h_per_a * dy
-        self.h = np.zeros(0)  # samples first, first + 1, ...
+        self.h = np.zeros(0)  # samples first, first + 1, ... (literal: the fast samples)
         self.first = 0
         self.n = 0  # samples pushed
         self.rec: dict[int, tuple[np.ndarray, np.ndarray]] = {}
@@ -656,27 +670,67 @@ class TapeStream:
         k += self.s_first
         return (k - 1) / self.fs if start else k / self.fs
 
+    def literal_peaks(self, t0: float, t1: float) -> tuple[np.ndarray, np.ndarray]:
+        """The literal field's extrema with t0 <= t <= t1: each sample above its left
+        neighbour and not below its right (a maximum) or the reverse, refined by the
+        parabola through the three (the same arithmetic as circuitsim's port)."""
+        m, fs = self.literal, self.fs
+        h, first = self.h, self.first
+        mf = m * fs
+        kl = max(math.floor(t0 * mf + 2 * m - 1) - 1, first + 1)
+        kh = min(math.floor(t1 * mf + 2 * m - 1) + 2, first + len(h) - 2)
+        ts, vs = [], []
+        for k in range(kl, kh + 1):
+            a, b, c = h[k - 1 - first], h[k - first], h[k + 1 - first]
+            if not ((b > a and b >= c) or (b < a and b <= c)):
+                continue
+            den = a - 2.0 * b + c
+            d = 0.0 if den == 0.0 else 0.5 * (a - c) / den
+            tk = (k + d + 1 - 2 * m) / mf
+            if t0 <= tk <= t1:
+                ts.append(tk)
+                vs.append(b - 0.25 * (a - c) * d)
+        return np.array(ts), np.array(vs)
+
     def _record_block(self, b: int) -> None:
         j0, j1, t0, t1 = self._span(b)
         fs = self.fs
-        lo = max(math.floor(t0 * fs) - 1, 0)
-        hi = math.floor(t1 * fs) + 3
-        h, first = self.h, self.first
-        peak = float(np.abs(h[lo - first : hi - first]).max())
         s = np.arange(j0, j1) * self.slab.ds_m
-        mx, my = _record(
-            self.spec,
-            self.tape,
-            lambda t: cubic_held(h, np.asarray(t) * fs, first),
-            self.hg_bias,
-            t0,
-            t1,
-            s,
-            peak,
-            self.bias_phase,
-            self.engine,
-            self._s_at,
-        )
+        if self.literal is not None:
+            tp, hp = self.literal_peaks(t0, t1)
+            peak = float(np.abs(hp).max()) if len(hp) else 0.0
+            mx, my = _record(
+                self.spec,
+                self.tape,
+                None,
+                0.0,
+                t0,
+                t1,
+                s,
+                peak,
+                0.0,
+                self.engine,
+                self._s_at,
+                peaks=(tp, hp),
+            )
+        else:
+            lo = max(math.floor(t0 * fs) - 1, 0)
+            hi = math.floor(t1 * fs) + 3
+            h, first = self.h, self.first
+            peak = float(np.abs(h[lo - first : hi - first]).max())
+            mx, my = _record(
+                self.spec,
+                self.tape,
+                lambda t: cubic_held(h, np.asarray(t) * fs, first),
+                self.hg_bias,
+                t0,
+                t1,
+                s,
+                peak,
+                self.bias_phase,
+                self.engine,
+                self._s_at,
+            )
         i0 = b * self.nb
         mx = mx[:, i0 - j0 : i0 - j0 + self.nb].copy()
         my = my[:, i0 - j0 : i0 - j0 + self.nb].copy()
@@ -746,8 +800,11 @@ class TapeStream:
         """`push` for each of hs in turn (the same results, any chunking)."""
         hs = np.asarray(hs, float)
         n0 = self.n
+        m = self.literal or 1
+        if len(hs) % m:
+            raise ValueError(f"literal bias: pushes of {m} samples each")
         self.h = np.concatenate([self.h, hs])
-        self.n += len(hs)
+        self.n += len(hs) // m
         fs = self.fs
         if self.moving:
             self._advance(self.n)
@@ -761,16 +818,16 @@ class TapeStream:
                 self.rec.pop(b - 2, None)
         # Samples no block will read again.
         t0n = self._span(self.next_rec)[2]
-        keep = self.first if t0n is None else max(math.floor(t0n * fs) - 1, 0)
-        if keep > self.first:
-            self.h = self.h[keep - self.first :]
-            self.first = keep
+        keep = self.first // m if t0n is None else max(math.floor(t0n * fs) - 1, 0)
+        if keep * m > self.first:
+            self.h = self.h[keep * m - self.first :]
+            self.first = keep * m
         # Positions: from the earliest a future recording reads and this push's outputs.
         cut = min(keep - 2, n0 + 1)
         if self.moving and cut > self.s_first:
             self.s = self.s[cut - self.s_first :]
             self.s_first = cut
-        out = np.zeros(len(hs))
+        out = np.zeros(len(hs) // m)
         if self.moving:
             k = np.arange(n0, self.n) + 1 - self.s_first
             u = (self.s[k] - self.d) / self.slab.ds_m

@@ -133,6 +133,27 @@ pub enum Probe {
 pub struct Section {
     pub title: String,
     pub elements: Vec<Element>,
+    /// Steps per sample, run on a thread of its own: a multi-rate part (`partition.rs`;
+    /// the Ampex 351's bias oscillator above the audio rate's Nyquist frequency). Absent:
+    /// the section steps with the rest.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "opt_count"
+    )]
+    pub substeps: Option<usize>,
+}
+
+/// An optional count written as a number (the IR writes every number as a float).
+fn opt_count<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<usize>, D::Error> {
+    let x = f64::deserialize(d)?;
+    if x >= 1.0 && x.fract() == 0.0 && x < 1e9 {
+        Ok(Some(x as usize))
+    } else {
+        Err(serde::de::Error::custom(format!(
+            "{x} isn't a count of steps (1 or more)"
+        )))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -316,7 +337,7 @@ pub struct Tape {
     pub sense_neg: String,
     pub h_per_v: f64,
     pub out: String,
-    pub medium: crate::tape_stream::TapeParams,
+    pub medium: Box<crate::tape_stream::TapeParams>,
 }
 
 /// White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from `a` through
@@ -639,6 +660,13 @@ impl CircuitIr {
     }
 
     /// The same checks as `CircuitIR.validate()` in Python.
+    /// Whether a section runs at substeps of its own (a multi-rate part: `partition.rs`).
+    pub fn multirate(&self) -> bool {
+        self.sections
+            .iter()
+            .any(|s| s.substeps.is_some_and(|m| m > 1))
+    }
+
     pub fn validate(&self) -> Result<(), IrError> {
         if self.version != IR_VERSION {
             return err(format!(
@@ -653,6 +681,12 @@ impl CircuitIr {
                 return err(format!("duplicate model {}", m.name()));
             }
             validate_model(m)?;
+        }
+        if let Some(s) = self.sections.iter().find(|s| s.substeps == Some(0)) {
+            return err(format!(
+                "section {:?}: substeps 0 (a count, 1 or more)",
+                s.title
+            ));
         }
 
         let mut names = HashSet::new();
@@ -794,7 +828,10 @@ impl CircuitIr {
                     if let Err(m) = e.medium.check(None) {
                         return err(format!("{name}: {m}"));
                     }
-                    if e.sense_pos == e.sense_neg {
+                    // A literal bias's tape in its own part senses ground (a multi-rate
+                    // part feeds it: partition.rs).
+                    let remote = e.medium.bias_substeps.is_some() && e.sense_pos == GROUND;
+                    if e.sense_pos == e.sense_neg && !remote {
                         return err(format!(
                             "{name}: its record head senses {} against itself",
                             e.sense_pos

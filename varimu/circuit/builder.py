@@ -500,7 +500,13 @@ def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
         model = load_tape(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
-    return parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES})
+    m = a["bias_substeps"]
+    for k in parts.TAPE_OWN_BIAS:
+        if m is None and a[k] is None:
+            raise ctx.fail(f"{name}.{k}", "required (or bias_substeps: the literal bias)")
+        if m is not None and a[k] is not None:
+            raise ctx.fail(f"{name}.{k}", "not read with bias_substeps (the literal bias)")
+    return parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES}, m)
 
 
 def _r(ctx, name, c, a):
@@ -598,7 +604,14 @@ for _name, _macro in {
     "tape": Macro(
         _tape,
         3,
-        {"component": Param("raw"), **{k: _P for k in parts.TAPE_VALUES}},
+        {
+            "component": Param("raw"),
+            **{
+                k: Param("physical", None) if k in parts.TAPE_OWN_BIAS else _P
+                for k in parts.TAPE_VALUES
+            },
+            "bias_substeps": Param("count", None),
+        },
     ),
     "speaker": Macro(
         _speaker,
@@ -825,7 +838,7 @@ def _build(
         els: list[Element] = []
         for name, entry in s["parts"].items():
             els += expand_part(ctx, str(name), entry)
-        sections.append(Section(s["title"], tuple(els)))
+        sections.append(Section(s["title"], tuple(els), s.get("substeps")))
     if ctx.missing_class:
         raise ConfigError(f"parts without a tolerance class: {sorted(ctx.missing_class)}")
     if ctx.tolerance is not None:

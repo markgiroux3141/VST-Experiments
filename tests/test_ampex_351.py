@@ -2,8 +2,9 @@
 
 Its record driver's tube (6201@1) meets RCA's sheet; the circuit builds, passes the
 pre-flight checks, and idles near the voltages printed on the 1962 schematic (measured
-with the oscillator tube removed: `oscillator` 0). The bias section's own circuit
-(ampex_351_bias.yaml, TM5's measurement) builds and checks too.
+with the oscillator tube removed: `oscillator` 0). With the oscillator in, the record side
+runs at the bias's rate (the literal bias, TM5's option A) and biases the record head. The
+bias section's own circuit (ampex_351_bias.yaml, TM5's measurement) builds and checks too.
 """
 
 import numpy as np
@@ -85,3 +86,24 @@ def test_idles_near_the_printed_voltages(machine):
     # The supply from the 6X4 to the output stage within 6%.
     for node in ("b330", "b300", "b275", "b250", "p5a"):
         assert np.mean(v[f"v({node})"][-n:]) == pytest.approx(PRINTED[node], rel=0.06), node
+
+
+def test_the_oscillator_biases_the_record_head(machine):
+    """The literal bias (TM5, option A): the record side at 20 steps per sample, the
+    oscillator started from its kick, ~80 mA in the erase head and a few mA of bias in the
+    record head (the probes at 192 kHz, not decimated: they alias the 99 kHz but keep its
+    size)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    import dataclasses
+
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    st = TransientSettings.from_sim_settings(engine="circuitsim")
+    st = dataclasses.replace(st, sample_rate=192_000, oversample=1, settle_s=0.0)
+    x = np.zeros(int(0.02 * st.sample_rate))
+    v = fast.run_transient(builder.build(machine, cores="linear").ir, x, settings=st).vectors
+    late = slice(len(x) // 2, None)
+    ers, head = v["v(ers)"][late], v["v(rbc)"][late] / 1000.0  # through 5R24, 1000 ohm
+    assert 150 < ers.max() < 300 and -300 < ers.min() < -150
+    assert 2e-3 < head.max() < 5e-3 and -5e-3 < head.min() < -2e-3

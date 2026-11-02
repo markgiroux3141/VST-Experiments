@@ -49,6 +49,7 @@ fn circuit() -> CircuitIr {
         sections: vec![
             Section {
                 title: "audio".into(),
+                substeps: None,
                 elements: vec![
                     resistor("R1", "in", "a", 1e3),
                     capacitor("C1", "a", "0", 1e-6),
@@ -60,6 +61,7 @@ fn circuit() -> CircuitIr {
             },
             Section {
                 title: "other".into(),
+                substeps: None,
                 elements: vec![
                     capacitor("C3", "out2", "0", 10e-6),
                     resistor("R3", "out2", "0", 1e5),

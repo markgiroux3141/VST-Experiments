@@ -248,6 +248,10 @@ class TapeMedium:
     packing: float
     packing_sigma: float
     packing_corr_m: float
+    # The literal bias (TAPE_PLAN.md TM5, option A): the sense is the head's whole field,
+    # bias included, M samples per step from a multi-rate part (`TapeStream`'s literal
+    # mode). None: the medium's own bias (hg_bias_a_m), and no such key in the JSON.
+    bias_substeps: int | None = None
 
 
 @dataclass(frozen=True)
@@ -440,10 +444,15 @@ class Control:
 
 @dataclass(frozen=True)
 class Section:
-    """A titled group of elements (one stage). Only for readability."""
+    """A titled group of elements (one stage). Only for readability, except `substeps`:
+    a section with them steps that many times per sample on a thread of its own (a
+    multi-rate part, circuitsim's partition.rs: the Ampex 351's bias oscillator, above
+    the audio rate's Nyquist frequency). None: it steps with the rest (and the JSON
+    has no `substeps`, as before)."""
 
     title: str
     elements: tuple[Element, ...]
+    substeps: int | None = None
 
 
 # --- The circuit ------------------------------------------------------------------------
@@ -514,6 +523,11 @@ class CircuitIR:
             models[m.name] = m
             _validate_model(m)
 
+        for s in self.sections:
+            if s.substeps is not None and (
+                not isinstance(s.substeps, int) or isinstance(s.substeps, bool) or s.substeps < 1
+            ):
+                raise IRError(f"section {s.title!r}: substeps {s.substeps!r} (a count, 1 or more)")
         names: set[str] = set()
         inductors: set[str] = set()
         nodes: set[str] = set()
@@ -701,6 +715,7 @@ class CircuitIR:
                     s,
                     tagged=False,
                     elements=lambda els: tuple(_decode(e, _ELEMENT_KINDS) for e in els),
+                    substeps=_count,
                 )
                 for s in d["sections"]
             ),
@@ -825,7 +840,11 @@ _MODEL_KINDS = {
 }
 _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 # Optional fields written only when set, so IRs without them read and write as before.
-_OMITTED_WHEN_NONE = {(Capacitor, "v0_v")}
+_OMITTED_WHEN_NONE = {
+    (Capacitor, "v0_v"),
+    (Section, "substeps"),
+    (TapeMedium, "bias_substeps"),
+}
 _PROBE_KINDS = {"voltage": VoltageProbe}
 _KIND_OF = {
     cls: kind
@@ -880,6 +899,13 @@ def _fields(cls, d: dict, tagged: bool, **nested) -> Any:
     return cls(**kw)
 
 
+def _count(v: Any) -> int:
+    """A count the JSON writes as a float."""
+    if float(v) != int(v):
+        raise IRError(f"{v} isn't a count")
+    return int(v)
+
+
 def _decode(d: dict, kinds: dict[str, type]) -> Any:
     cls = kinds.get(d.get("kind"))
     if cls is None:
@@ -924,7 +950,14 @@ def _decode_tape_medium(d: dict) -> TapeMedium:
     def rows(v):
         return tuple(tuple(x) for x in v)
 
-    m = _fields(TapeMedium, d, tagged=False, flutter=rows, flutter_noise=rows)
+    m = _fields(
+        TapeMedium,
+        d,
+        tagged=False,
+        flutter=rows,
+        flutter_noise=rows,
+        bias_substeps=_count,
+    )
     ints = {f.name for f in dataclasses.fields(TapeMedium) if f.type == "int"}
     return dataclasses.replace(m, **{k: int(getattr(m, k)) for k in ints})
 

@@ -18,7 +18,9 @@ varimu.circuit.builder, which expands its parts with the parts library
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
-    sections: [{title, tolerance?, parts: {NAME: {<macro>: <nodes>, ...}}}]
+    sections: [{title, tolerance?, substeps?, parts: {NAME: {<macro>: <nodes>, ...}}}]
+                                    # substeps: steps per sample on a thread of its own (a
+                                    # multi-rate part: circuitsim's partition.rs)
 
 Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
@@ -221,8 +223,14 @@ def load_circuit(path: Path) -> CircuitSpec:
     for i, s in enumerate(sections):
         if not isinstance(s, Mapping) or "title" not in s or "parts" not in s:
             errors.append(f"sections[{i}]: needs `title` and `parts`")
-        elif extra := set(s) - {"title", "parts", "tolerance"}:
+        elif extra := set(s) - {"title", "parts", "tolerance", "substeps"}:
             errors.append(f"sections[{i}]: unknown keys {sorted(extra)}")
+        elif "substeps" in s and (
+            isinstance(s["substeps"], bool)
+            or not isinstance(s["substeps"], int)
+            or s["substeps"] < 1
+        ):
+            errors.append(f"sections[{i}]: substeps {s['substeps']} (a count, 1 or more)")
     for k, e in (data.get("devices") or {}).items():
         if not isinstance(e, Mapping) or "device" not in e:
             errors.append(f"devices.{k}: needs a `device`")

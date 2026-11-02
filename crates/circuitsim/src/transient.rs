@@ -395,6 +395,10 @@ pub struct StepInput {
     /// Offset (in samples, relative to the step's start) of `vals[0]`.
     first: i32,
     len: usize,
+    /// The step's span within the samples' polynomial: fraction `theta` of the step is
+    /// `a + b theta` of the sample (0, 1; a multi-rate part's steps: a part of it).
+    a: f64,
+    b: f64,
 }
 
 impl StepInput {
@@ -404,6 +408,8 @@ impl StepInput {
             vals: [u0, u1, 0.0, 0.0, 0.0, 0.0],
             first: 0,
             len: 2,
+            a: 0.0,
+            b: 1.0,
         }
     }
 
@@ -417,11 +423,24 @@ impl StepInput {
             vals: v,
             first,
             len: vals.len(),
+            a: 0.0,
+            b: 1.0,
+        }
+    }
+
+    /// Step `j` of `m` across this one (a multi-rate part's: `partition.rs`): the same
+    /// polynomial over that part of the sample.
+    pub fn sub(&self, j: usize, m: usize) -> StepInput {
+        StepInput {
+            a: self.a + self.b * (j as f64 / m as f64),
+            b: self.b / m as f64,
+            ..*self
         }
     }
 
     /// The input at step fraction `theta`. Exact at the sample offsets.
     pub fn at(&self, theta: f64) -> f64 {
+        let theta = self.a + self.b * theta;
         let mut sum = 0.0;
         for j in 0..self.len {
             let oj = (self.first + j as i32) as f64;
@@ -754,6 +773,9 @@ pub struct Transient {
     mna: Mna,
     /// The media running beside the circuit ([`Mna::media`] order).
     media: Vec<crate::media::Medium>,
+    /// A medium's senses over the next step, given from outside (a multi-rate part's,
+    /// `partition.rs`): taken by the step's media push instead of its own sense.
+    media_batches: Vec<Option<Vec<f64>>>,
     opts: Options,
     tab: Tableau,
     h: f64,
@@ -939,6 +961,7 @@ impl Transient {
             .collect::<Result<Vec<_>, String>>()
             .map_err(Error::new)?;
         let mut tr = Transient {
+            media_batches: vec![None; media.len()],
             media,
             opts,
             h,
@@ -2261,11 +2284,25 @@ impl Transient {
         let k = self.mna.n_controls;
         for (i, (m, ports)) in self.media.iter_mut().zip(&self.mna.media).enumerate() {
             let at = |u: Option<usize>| u.map_or(0.0, |j| self.x[j]);
-            let v = at(ports.sense.0) - at(ports.sense.1);
-            let y = m.push(v);
+            let y = match self.media_batches[i].take() {
+                Some(b) => m.push_batch(&b),
+                None => m.push(at(ports.sense.0) - at(ports.sense.1)),
+            };
             self.ext0[k + i] = self.ext1[k + i];
             self.ext1[k + i] = y;
         }
+    }
+
+    /// Medium `i`'s senses over the next step ([`crate::media::Medium::substeps`] of them),
+    /// from outside: a multi-rate part's (`partition.rs`). The step's media push takes them
+    /// instead of the medium's own sense.
+    pub fn set_media_batch(&mut self, i: usize, v: &[f64]) {
+        self.media_batches[i] = Some(v.to_vec());
+    }
+
+    /// Samples medium `i` senses per step.
+    pub fn media_substeps(&self, i: usize) -> usize {
+        self.media[i].substeps()
     }
 
     /// The externals' values ([`Mna::externals`]) over the next sample: `start`
@@ -2392,6 +2429,11 @@ pub fn simulate_controls(
     mut progress: impl FnMut(usize) -> Result<(), Error>,
 ) -> Result<Output, Error> {
     let every = every.max(1);
+    if ir.multirate() {
+        return Err(Error::new(
+            "the IR has multi-rate sections (substeps): run it partitioned (partition.rs)",
+        ));
+    }
     check_controls(ir, controls, input.len())?;
     if let Some(i) = input.iter().position(|u| !u.is_finite()) {
         return Err(Error::new(format!("input sample {i} is not finite")));

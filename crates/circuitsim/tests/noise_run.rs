@@ -66,6 +66,7 @@ fn circuit(seed: u64) -> CircuitIr {
         sections: vec![
             Section {
                 title: "first".into(),
+                substeps: None,
                 elements: vec![
                     r("RIN", "in", "0", 1e3),
                     r("R1", "out", "0", 1e4),
@@ -77,6 +78,7 @@ fn circuit(seed: u64) -> CircuitIr {
             },
             Section {
                 title: "other".into(),
+                substeps: None,
                 elements: vec![
                     r("R2", "x", "0", 1e4),
                     noise("R2", "x", "0", 1e4),
@@ -243,6 +245,7 @@ fn the_mains_wander_multiplies_the_mains_amplitude() {
         models: vec![],
         sections: vec![Section {
             title: "t".into(),
+            substeps: None,
             elements: vec![
                 r("RIN", "in", "0", 1e3),
                 Element::SineSource(SineSource {
@@ -297,6 +300,7 @@ fn a_partitioned_run_keeps_the_mains_wander_where_the_mains_are() {
         sections: vec![
             Section {
                 title: "first".into(),
+                substeps: None,
                 elements: vec![
                     r("RIN", "in", "0", 1e3),
                     r("R1", "m", "out", 1e4),
@@ -306,6 +310,7 @@ fn a_partitioned_run_keeps_the_mains_wander_where_the_mains_are() {
             },
             Section {
                 title: "mains".into(),
+                substeps: None,
                 elements: vec![
                     Element::SineSource(SineSource {
                         name: "VM".into(),

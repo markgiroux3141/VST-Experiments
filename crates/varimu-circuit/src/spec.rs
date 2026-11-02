@@ -37,6 +37,8 @@ pub struct SectionSpec {
     pub title: String,
     pub tolerance: Option<Value>,
     pub parts: Map,
+    /// Steps per sample on a thread of its own (a multi-rate part), if given.
+    pub substeps: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -312,17 +314,29 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         };
         let mut extra: Vec<&str> = m
             .keys()
-            .filter(|k| !["title", "parts", "tolerance"].contains(k))
+            .filter(|k| !["title", "parts", "tolerance", "substeps"].contains(k))
             .collect();
         extra.sort_unstable();
         if !extra.is_empty() {
             errors.push(format!("sections[{i}]: unknown keys {extra:?}"));
             continue;
         }
+        let substeps = match m.get("substeps") {
+            None => None,
+            Some(Value::Int(n)) if *n >= 1 => Some(*n as usize),
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: substeps {} (a count, 1 or more)",
+                    v.py_str()
+                ));
+                continue;
+            }
+        };
         sections.push(SectionSpec {
             title: m.get("title").unwrap().py_str(),
             tolerance: m.get("tolerance").cloned(),
             parts: map_or_empty(m.get("parts")),
+            substeps,
         });
     }
     let devices = map_or_empty(data.get("devices"));

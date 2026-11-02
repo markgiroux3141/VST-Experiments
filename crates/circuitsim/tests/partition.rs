@@ -60,6 +60,7 @@ fn rc(external: bool) -> CircuitIr {
         models: vec![],
         sections: vec![Section {
             title: "t".into(),
+            substeps: None,
             elements,
         }],
     }
@@ -216,4 +217,126 @@ fn partitions_are_checked() {
     assert!(run(&["input"]).contains("input node"));
     assert!(run(&["bias supply", GROUP_BREAK, "bias supply"]).contains("in two groups"));
     assert!(Coupling::parse("lagged").is_err());
+}
+
+/// A stiff node in the audio part (`s`: 10 uF behind 100 ohm from the input) feeding a
+/// multi-rate section (16 steps per sample) with a 100 kHz source in it, above the
+/// sample rate's Nyquist frequency: the multi-rate run against the whole circuit solved
+/// as one at the fine step, the input interpolated linearly in both.
+fn multirate_ir(substeps: Option<usize>) -> CircuitIr {
+    let cap = |name: &str, a: &str, c_f: f64| {
+        Element::Capacitor(Capacitor {
+            name: name.into(),
+            a: a.into(),
+            b: "0".into(),
+            c_f,
+            v0_v: None,
+        })
+    };
+    CircuitIr {
+        version: IR_VERSION,
+        title: "multirate".into(),
+        input_node: "in".into(),
+        controls: vec![],
+        noise: None,
+        heaters: None,
+        probes: vec![
+            Probe::Voltage { node: "s".into() },
+            Probe::Voltage { node: "f".into() },
+        ],
+        models: vec![],
+        sections: vec![
+            Section {
+                title: "audio".into(),
+                substeps: None,
+                elements: vec![resistor("R1", "in", "s", 100.0), cap("C1", "s", 10e-6)],
+            },
+            Section {
+                title: "fast".into(),
+                substeps,
+                elements: vec![
+                    resistor("R2", "s", "f", 1e3),
+                    cap("C2", "f", 1e-9),
+                    Element::SineSource(circuitsim::ir::SineSource {
+                        name: "VG".into(),
+                        pos: "g".into(),
+                        neg: "0".into(),
+                        offset_v: 0.0,
+                        amplitude_v: 50.0,
+                        freq_hz: 99.3e3,
+                        phase_deg: 0.0,
+                    }),
+                    resistor("R3", "g", "f", 1e3),
+                ],
+            },
+        ],
+    }
+}
+
+#[test]
+fn a_multirate_part_follows_the_fine_one_solve() {
+    let (m, h) = (16usize, 1.0 / 192_000.0);
+    let n = 2000;
+    let x: Vec<f64> = (0..n)
+        .map(|i| 10.0 + 5.0 * (2.0 * std::f64::consts::PI * 1e3 * i as f64 * h).sin())
+        .collect();
+    let opts = Options {
+        input_order: 1,
+        ..Options::with_method(Method::Esdirk4)
+    };
+    let run = || {
+        simulate_partitioned(
+            &multirate_ir(Some(m)),
+            &[],
+            Coupling::Extrapolate,
+            &x,
+            h,
+            &opts,
+            usize::MAX,
+            |_| Ok(()),
+        )
+        .unwrap()
+    };
+    let (p, again) = (run(), run());
+    for (a, b) in p.values.iter().zip(&again.values) {
+        assert!(a.iter().zip(b).all(|(x, y)| x.to_bits() == y.to_bits()));
+    }
+    // The reference: one solve at h / m, the input linear between samples.
+    let fine: Vec<f64> = (0..(n - 1) * m + 1)
+        .map(|j| {
+            let (i, f) = (j / m, (j % m) as f64 / m as f64);
+            if i + 1 < n {
+                x[i] + (x[i + 1] - x[i]) * f
+            } else {
+                x[i]
+            }
+        })
+        .collect();
+    let one = circuitsim::simulate(&multirate_ir(None), &fine, h / m as f64, &opts).unwrap();
+    // The audio part sees the multi-rate part's current averaged over each sample (the
+    // charge it moved). That isn't a sharp filter: the source's 99.3 kHz aliases to 92.7 kHz
+    // at 192 kHz, above the audio band, which a render's decimation removes. So s is
+    // compared in the audio band (means over 16-sample blocks, 12 kHz) against the fine
+    // solve's at the same samples (measured: 0.4 mV, the ripple 9 mV); f, inside the
+    // multi-rate part, sample by sample.
+    let (s_fine, f_fine) = (series(&one, "v(s)"), series(&one, "v(f)"));
+    let (s_p, f_p) = (series(&p, "v(s)"), series(&p, "v(f)"));
+    assert_eq!(s_p.len(), n);
+    let blocks = (n - 1) / 16;
+    let ds = (8..blocks)
+        .map(|b| {
+            let span = 1 + 16 * b..1 + 16 * (b + 1);
+            let mp = s_p[span.clone()].iter().sum::<f64>() / 16.0;
+            mp - span.map(|i| s_fine[i * m]).sum::<f64>() / 16.0
+        })
+        .fold(0.0, |w: f64, d| w.max(d.abs()));
+    let df = (100..n)
+        .map(|i| f_fine[i * m] - f_p[i])
+        .fold(0.0, |w: f64, d| w.max(d.abs()));
+    let f_swing = f_p.iter().fold(0.0, |w: f64, v| w.max(v.abs()));
+    assert!(ds < 1e-3, "v(s) differs by {ds} V in the audio band");
+    assert!(df < 1e-3 * f_swing, "v(f) differs by {df} V of {f_swing}");
+    // Without substeps the part can't run the source (one solve at h refuses nothing,
+    // but the multi-rate IR does refuse the single solve).
+    assert!(circuitsim::simulate(&multirate_ir(Some(m)), &x, h, &opts).is_err());
 }

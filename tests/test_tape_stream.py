@@ -277,3 +277,115 @@ def test_the_transports_flutter_is_the_351s():
     assert 0.02e-2 < rms(250, 10e3) < 0.04e-2
     still = TapeStream(dataclasses.replace(spec, flutter=False), tape, bias, FS)
     assert not still.moving
+
+
+def _literal(m: int, phase: float = 0.3):
+    """The small machine's signal plus its bias as one field at m samples per step (the
+    literal bias, TM5's option A): fast sample k at (k + 1 - 2 m) / (m FS)."""
+    spec, tape, h, bias = _small()
+    n = len(h)
+    k = np.arange(n * m)
+    t = (k + 1 - 2 * m) / (m * FS)
+    # The signal at the fast times: the same expression as _small's (its envelope too).
+    sig = (300 * np.sin(2 * math.pi * 1000 * t) + 80 * np.sin(2 * math.pi * 7000 * t)) * OE
+    sig *= np.clip(t / 0.008, 0.05, 1.0)
+    hf = sig + bias * np.sin(2 * math.pi * spec.f_bias_hz * t + phase)
+    return spec, tape, hf, bias, h, phase
+
+
+def test_the_literal_rust_stream_agrees_with_the_reference():
+    """The literal bias: Python's stream against circuitsim's on the head's whole field."""
+    cs = _rust()
+    m = 16
+    spec, tape, hf, _, _, _ = _literal(m)
+    ref = TapeStream(spec, tape, 0.0, FS, engine="python", literal=m).push_many(hf)
+    kern = TapeStream(spec, tape, 0.0, FS, engine="rust", literal=m).push_many(hf)
+    p = stream_params(spec, tape, 0.0)
+    p["bias_substeps"] = m
+    port = np.asarray(cs.tape_stream_run(json.dumps(p), FS, hf, chunk=16 * m))
+    assert len(ref) == len(hf) // m and np.abs(ref).max() > 0
+    assert _rel(kern, ref) < 1e-11
+    assert _rel(port, ref) < 1e-11
+    with pytest.raises(ValueError, match="literal"):
+        cs.tape_stream_run(json.dumps(p), FS, hf[:-1])
+
+
+def test_the_literal_bias_finds_the_carriers_peaks():
+    """Fed an ideal carrier, the literal stream records about what the medium's own bias
+    does: the parabola's peaks converge with the samples per step (32 against 64), and the
+    rest is the physics the own bias leaves out (the extrema of bias plus signal move with
+    the signal's slope; it takes the carrier's peaks and the signal there): 0.34% here."""
+    _rust()
+
+    def lit(m):
+        spec, tape, hf, _, _, _ = _literal(m)
+        return TapeStream(spec, tape, 0.0, FS, engine="rust", literal=m).push_many(hf)
+
+    spec, tape, hf, bias, h, phase = _literal(32)
+    own = TapeStream(spec, tape, bias, FS, engine="rust", bias_phase=phase).push_many(h)
+    l32, l64 = lit(32), lit(64)
+    assert _rel(l32, l64) < 2e-4
+    assert 1e-3 < _rel(l64, own) < 5e-3
+    st = TapeStream(spec, tape, 0.0, FS, engine="rust", literal=32)
+    st.push_many(hf[: len(hf) // 2 // 32 * 32])
+    tp, _ = st.literal_peaks(0.004, 0.005)
+    # The extrema of bias plus signal move with the signal's slope (here up to ~0.4%).
+    assert np.allclose(np.diff(tp), 0.5 / spec.f_bias_hz, rtol=1e-2)
+
+
+def test_a_multirate_part_feeds_the_literal_bias():
+    """The literal bias through circuitsim's multi-rate partition: a section of M steps
+    per sample drives the "record head" node with an ideal bias plus a tone; the tape in
+    the audio part senses it remotely. Its output equals the reference stream fed the same
+    fast samples (the DC point's twice, then each sample's M steps), one sample later."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    from varimu.circuit.ir import CircuitIR, Resistor, Section, SineSource, Tape, VoltageProbe
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    m = 16
+    spec, tape, _, bias = _small()
+    medium = dataclasses.replace(_medium(spec, tape, 0.0), bias_substeps=m)
+    sig = 300 * OE
+    ir = CircuitIR(
+        title="literal bias",
+        input_node="in",
+        probes=(VoltageProbe("out"),),
+        models=(),
+        sections=(
+            Section(
+                "audio",
+                (
+                    Resistor("RIN", "in", "0", 1e3),
+                    Resistor("RL", "out", "0", 1e6),
+                    Resistor("RLINKA", "link", "0", 1e6),
+                    Tape("VTP", "hp", "0", 1.0, "out", medium),
+                ),
+            ),
+            Section(
+                "head",
+                (
+                    SineSource("VB", "hpa", "0", 0.0, bias, spec.f_bias_hz, 0.0),
+                    SineSource("VS", "hp", "hpa", 0.0, sig, 1000.0, 0.0),
+                    Resistor("RH", "hp", "0", 1e3),
+                    Resistor("RLINKB", "link", "0", 1e6),
+                ),
+                m,
+            ),
+        ),
+    )
+    n = int(0.016 * FS)
+    s = TransientSettings.from_sim_settings(engine="circuitsim")
+    s = dataclasses.replace(s, sample_rate=int(FS), oversample=1, settle_s=0.0)
+    out = fast.run_transient(ir, np.zeros(n), settings=s).vectors["v(out)"]
+    # The reference: two DC batches (the sources' values at t = 0: 0 V), then each
+    # sample's steps, at (k + 1) / (m FS) for k = 0, 1, ...
+    t = (np.arange((n - 1) * m) + 1) / (m * FS)
+    hf = np.concatenate(
+        [np.zeros(2 * m), bias * np.sin(2 * math.pi * spec.f_bias_hz * t)
+         + sig * np.sin(2 * math.pi * 1000.0 * t)]
+    )  # fmt: skip
+    ref = TapeStream(spec, tape, 0.0, FS, engine="rust", literal=m).push_many(hf)
+    # Push k's EMF drives sample k + 1 (push 0 at the DC point).
+    assert np.abs(ref).max() > 0
+    assert _rel(out[1:], ref[: n - 1]) < 1e-6

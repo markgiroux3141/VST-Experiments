@@ -142,11 +142,14 @@ fn simulate<'py>(
             })
         };
         let ctl: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
-        match &partition {
-            Some(second) if !second.is_empty() => crate::partition::simulate_partitioned_controls(
-                &ir, second, coupling, &x, &ctl, dt, &opts, every, report,
-            ),
-            _ => crate::transient::simulate_controls(&ir, &x, &ctl, dt, &opts, every, report),
+        // Multi-rate sections (the IR's substeps) always run partitioned.
+        let second = partition.clone().unwrap_or_default();
+        if !second.is_empty() || ir.multirate() {
+            crate::partition::simulate_partitioned_controls(
+                &ir, &second, coupling, &x, &ctl, dt, &opts, every, report,
+            )
+        } else {
+            crate::transient::simulate_controls(&ir, &x, &ctl, dt, &opts, every, report)
         }
     });
     if let Some(e) = raised {
@@ -428,7 +431,8 @@ fn tape_record<'py>(
 /// step rate, `h` the record gap's signal field per step, pushed `chunk` at a time;
 /// `noise_seed`: the coating's grain on, keyed by (seed, "tape"); `transport_seed`: the
 /// transport's random parts' (seed, "transport"). Returns the repro EMF
-/// after each push (at t_{n+1}). Releases the GIL.
+/// after each push (at t_{n+1}). With the literal bias (`bias_substeps` M), `h` is the
+/// head's whole field, M samples per step (`chunk` a multiple of M). Releases the GIL.
 #[pyfunction]
 #[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0))]
 fn tape_stream_run<'py>(

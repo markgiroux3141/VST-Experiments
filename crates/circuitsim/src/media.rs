@@ -42,6 +42,9 @@ pub struct TapeMedium {
     stream: crate::tape_stream::TapeStream,
     fs: f64,
     noise_seed: Option<u64>,
+    /// Scratch: a push's fields and its EMF.
+    fields: Vec<f64>,
+    emf: Vec<f64>,
 }
 
 impl TapeMedium {
@@ -56,6 +59,19 @@ impl TapeMedium {
         let fitted = t.medium.particle_volume_m3 > 0.0 && t.medium.packing > 0.0;
         let grain = seed.filter(|_| fitted).map(|s| (s, t.name.as_str()));
         crate::tape_stream::TapeStream::build(&t.medium, fs, grain, seed.unwrap_or(0))
+    }
+
+    /// Push sensed voltages (one, or the literal bias's samples per push) as fields; the
+    /// EMF at the next sample.
+    fn push(&mut self, vs: impl Iterator<Item = f64>) -> f64 {
+        let k = self.tape.h_per_v;
+        self.fields.clear();
+        self.fields.extend(vs.map(|v| k * v));
+        self.emf.clear();
+        self.stream
+            .push_many(&self.fields, &mut self.emf)
+            .expect("the tape's blocks are recorded before the repro head reads them");
+        self.emf[0]
     }
 }
 
@@ -76,18 +92,38 @@ impl Medium {
                 stream: TapeMedium::stream(t, fs, noise_seed)?,
                 fs,
                 noise_seed,
+                fields: Vec::new(),
+                emf: Vec::new(),
             })),
         })
     }
 
-    /// The sensed voltage at this sample; the output at the next.
+    /// The sensed voltage at this sample; the output at the next. A tape with the literal
+    /// bias takes it as its every sample over the step (the DC point's).
     pub fn push(&mut self, v: f64) -> f64 {
         match self {
             Medium::Plate(m) => m.push(v),
-            Medium::Tape(m) => m
-                .stream
-                .push(m.tape.h_per_v * v)
-                .expect("the tape's blocks are recorded before the repro head reads them"),
+            Medium::Tape(m) => {
+                let k = m.stream.substeps();
+                m.push(std::iter::repeat_n(v, k))
+            }
+        }
+    }
+
+    /// Samples sensed per step (a tape with the literal bias: its `bias_substeps`; else 1).
+    pub fn substeps(&self) -> usize {
+        match self {
+            Medium::Plate(_) => 1,
+            Medium::Tape(m) => m.stream.substeps(),
+        }
+    }
+
+    /// The sensed voltages over a step, [`Medium::substeps`] of them (a multi-rate part's,
+    /// `partition.rs`); the output at the next sample.
+    pub fn push_batch(&mut self, vs: &[f64]) -> f64 {
+        match self {
+            Medium::Plate(m) => m.push(*vs.last().expect("a sample")),
+            Medium::Tape(m) => m.push(vs.iter().copied()),
         }
     }
 

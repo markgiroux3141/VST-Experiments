@@ -607,7 +607,14 @@ fn macro_of(kind: &str) -> Macro {
         "tape" => (
             Some(3),
             std::iter::once(p("component", Raw))
-                .chain(crate::tape::VALUES.iter().map(|k| p(k, Physical)))
+                .chain(crate::tape::VALUES.iter().map(|k| {
+                    if crate::tape::OWN_BIAS.contains(k) {
+                        opt(k, Physical)
+                    } else {
+                        p(k, Physical)
+                    }
+                }))
+                .chain(std::iter::once(opt("bias_substeps", Count)))
                 .collect(),
             false,
         ),
@@ -951,12 +958,34 @@ fn tape_part(
     let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
         .and_then(|r| ctx.lib.tape(&r.to_string()))
         .map_err(|e| ctx.fail(&where_, e.0))?;
+    let m = match &a["bias_substeps"] {
+        Value::Null => None,
+        x => Some(ctx.count(&format!("{name}.bias_substeps"), x)? as usize),
+    };
     let mut v = [0.0; 16];
     for (x, k) in v.iter_mut().zip(crate::tape::VALUES) {
+        let null = a[k].is_null();
+        if crate::tape::OWN_BIAS.contains(&k) {
+            if m.is_none() && null {
+                return Err(ctx.fail(
+                    &format!("{name}.{k}"),
+                    "required (or bias_substeps: the literal bias)",
+                ));
+            }
+            if m.is_some() {
+                if !null {
+                    return Err(ctx.fail(
+                        &format!("{name}.{k}"),
+                        "not read with bias_substeps (the literal bias)",
+                    ));
+                }
+                continue;
+            }
+        }
         *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
     }
     Ok(crate::tape::tape(
-        name, &nodes[0], &nodes[1], &nodes[2], &model, &v,
+        name, &nodes[0], &nodes[1], &nodes[2], &model, &v, m,
     ))
 }
 
@@ -1351,6 +1380,7 @@ pub fn build_ir_with(
         }
         sections.push(Section {
             title: s.title.clone(),
+            substeps: s.substeps,
             elements,
         });
     }

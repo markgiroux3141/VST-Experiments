@@ -48,6 +48,15 @@ enum Feed {
     Sum(Vec<(usize, usize)>),
 }
 
+/// The stream's input, for a multi-rate part with the input node (`partition.rs`): every
+/// sample from `hist0` on, and the input's length once it has ended.
+#[derive(Default)]
+struct InputHist {
+    hist: Vec<f64>,
+    hist0: usize,
+    len: Option<usize>,
+}
+
 /// What the threads share.
 struct Shared {
     /// Each partition's coupling values per sample (index 0: the caller's).
@@ -58,6 +67,8 @@ struct Shared {
     /// Per partition (index 0 unused): its probes, per sample, not yet collected.
     probes: Vec<Mutex<Vec<Vec<f64>>>>,
     error: Mutex<Option<Error>>,
+    /// The input, when a multi-rate part has the input node.
+    input: Mutex<InputHist>,
 }
 
 impl Shared {
@@ -120,10 +131,95 @@ impl Shared {
         true
     }
 
+    /// Medium feed `f`'s senses over sample n -> n + 1: the source part's, published
+    /// with sample n (the sample before: the literal bias's lag). Call after `feeds`.
+    fn batch(&self, f: &MediaFeed, n: usize, buf: &mut Vec<f64>) {
+        buf.clear();
+        buf.extend((0..f.m).map(|j| self.rings[f.part].value(n, f.slot + j)));
+    }
+
+    /// The input over step n -> n + 1 (interpolation `order`), as the first partition
+    /// takes it (`Stream::step_one`), once the samples it needs are in; None if stopped or
+    /// the input has ended before it.
+    fn input_window(&self, n: usize, order: usize) -> Option<StepInput> {
+        let half = (order - 1) / 2;
+        let mut spins = 0u32;
+        let mut since: Option<Instant> = None;
+        loop {
+            if self.stop.load(Ordering::Relaxed) {
+                return None;
+            }
+            {
+                let mut g = self.input.lock().expect("input");
+                if g.len.is_some_and(|len| n + 1 >= len) {
+                    return None;
+                }
+                let known = g.hist0 + g.hist.len();
+                let hi = match g.len {
+                    Some(len) => (n + 1 + half).min(len - 1),
+                    None => n + 1 + half,
+                };
+                if hi < known {
+                    let at = |k: usize| g.hist[k - g.hist0];
+                    let inp = if order == 1 {
+                        StepInput::linear(at(n), at(n + 1))
+                    } else {
+                        let lo = n.saturating_sub(half);
+                        let w = &g.hist[lo - g.hist0..=hi - g.hist0];
+                        StepInput::lagrange(w, lo as i32 - n as i32)
+                    };
+                    // Samples no later step reads.
+                    let keep = n.saturating_sub(half + 1);
+                    if keep > g.hist0 + 4096 {
+                        let d = keep - g.hist0;
+                        g.hist.drain(..d);
+                        g.hist0 = keep;
+                    }
+                    return Some(inp);
+                }
+            }
+            spins += 1;
+            if spins < 1 << 10 {
+                std::hint::spin_loop();
+            } else if since.get_or_insert_with(Instant::now).elapsed() < Duration::from_millis(2) {
+                std::thread::yield_now();
+            } else {
+                std::thread::sleep(Duration::from_micros(100));
+            }
+        }
+    }
+
     fn fail(&self, e: Error) {
         self.error.lock().expect("error slot").get_or_insert(e);
         self.stop.store(true, Ordering::Relaxed);
     }
+}
+
+/// A medium of this part fed another part's senses (a tape's literal bias): its index
+/// in `Mna::media`, the part publishing them and its first slot, m per sample.
+#[derive(Debug, Clone)]
+struct MediaFeed {
+    medium: usize,
+    part: usize,
+    slot: usize,
+    m: usize,
+}
+
+/// What a part publishes and reads besides its couplings' externals.
+#[derive(Debug, Clone, Default)]
+struct PartIo {
+    /// Steps per sample.
+    substeps: usize,
+    /// Its owned nodes, then its sources: the couplings it publishes.
+    n_owned: usize,
+    n_coupling: usize,
+    /// A multi-rate part: the senses it publishes after each step (unknowns; None:
+    /// ground), each `substeps` slots after the couplings.
+    senses: Vec<(Option<usize>, Option<usize>)>,
+    /// Its media fed other parts' senses.
+    feeds: Vec<MediaFeed>,
+    /// A multi-rate part with the audio input: the input's interpolation order.
+    input_order: Option<usize>,
 }
 
 /// The partitions past the first: their threads, and what all share.
@@ -136,6 +232,10 @@ struct Parts {
     nodes: Vec<(String, usize)>,
     /// The first partition's feeds.
     feeds: Vec<Feed>,
+    /// The first partition's media fed other parts' senses.
+    media_feeds: Vec<MediaFeed>,
+    /// A multi-rate part has the input: it reads the stream's input (`InputHist`).
+    shares_input: bool,
 }
 
 /// A partition's thread: step after the others' sample, applying commands
@@ -147,10 +247,14 @@ fn run_part(
     p: usize,
     feeds: Vec<Feed>,
     titles: Vec<String>,
+    io: PartIo,
 ) {
+    let (substeps, n_owned, n_coupling) = (io.substeps, io.n_owned, io.n_coupling);
     let k = feeds.len();
     let (mut e0, mut e1) = (vec![0.0; k], vec![0.0; k]);
-    let mut out = vec![0.0; tr.mna().outputs.len()];
+    let (mut ea, mut eb) = (vec![0.0; k], vec![0.0; k]);
+    let mut out = vec![0.0; n_coupling + substeps * io.senses.len()];
+    let mut buf = Vec::new();
     let mut n = 0usize;
     loop {
         // Every partition's sample n first: the first partition queues the commands
@@ -182,10 +286,51 @@ fn run_part(
                 return;
             }
         }
-        tr.set_externals(&e0, &e1);
-        if let Err(e) = tr.step_input(&StepInput::linear(0.0, 0.0)) {
-            shared.fail(Error::new(format!("partition {titles:?}: {e}")));
-            return;
+        for f in &io.feeds {
+            shared.batch(f, n, &mut buf);
+            tr.set_media_batch(f.medium, &buf);
+        }
+        let inp = match io.input_order {
+            Some(order) => match shared.input_window(n, order) {
+                Some(inp) => inp,
+                // Stopped, or the input has ended: nothing more to step.
+                None => return,
+            },
+            None => StepInput::linear(0.0, 0.0),
+        };
+        if substeps == 1 {
+            tr.set_externals(&e0, &e1);
+            if let Err(e) = tr.step_input(&inp) {
+                shared.fail(Error::new(format!("partition {titles:?}: {e}")));
+                return;
+            }
+        } else {
+            // A multi-rate part: its steps across the sample, the others' values
+            // interpolated over each; its sources' currents averaged over them.
+            let m = substeps as f64;
+            let mut sum = vec![0.0; n_coupling];
+            for j in 0..substeps {
+                let (fa, fb) = (j as f64 / m, (j + 1) as f64 / m);
+                for i in 0..k {
+                    ea[i] = e0[i] + (e1[i] - e0[i]) * fa;
+                    eb[i] = e0[i] + (e1[i] - e0[i]) * fb;
+                }
+                tr.set_externals(&ea, &eb);
+                if let Err(e) = tr.step_input(&inp.sub(j, substeps)) {
+                    shared.fail(Error::new(format!("partition {titles:?}: {e}")));
+                    return;
+                }
+                for (s, &i) in sum.iter_mut().zip(&tr.mna().outputs) {
+                    *s += tr.x()[i];
+                }
+                let at = |u: Option<usize>| u.map_or(0.0, |i| tr.x()[i]);
+                for (r, &(a, b)) in io.senses.iter().enumerate() {
+                    out[n_coupling + r * substeps + j] = at(a) - at(b);
+                }
+            }
+            for (o, s) in out.iter_mut().zip(&sum).skip(n_owned) {
+                *o = s / m;
+            }
         }
         {
             let mut probes = shared.probes[p].lock().expect("probes");
@@ -193,7 +338,10 @@ fn run_part(
                 v.push(y);
             }
         }
-        for (o, &i) in out.iter_mut().zip(&tr.mna().outputs) {
+        // Owned nodes at the sample's end (a multi-rate part owns none); a single-rate
+        // part's sources' currents too.
+        let ends = if substeps == 1 { n_coupling } else { n_owned };
+        for (o, &i) in out.iter_mut().zip(&tr.mna().outputs).take(ends) {
             *o = tr.x()[i];
         }
         n += 1;
@@ -276,6 +424,7 @@ pub struct Stream {
     e0: Vec<f64>,
     e1: Vec<f64>,
     out: Vec<f64>,
+    batch: Vec<f64>,
 }
 
 impl Stream {
@@ -352,8 +501,9 @@ impl Stream {
             e0: vec![0.0; k],
             e1: vec![0.0; k],
             out: Vec::new(),
+            batch: Vec::new(),
         };
-        if groups(second).is_empty() {
+        if groups(second).is_empty() && !ir.multirate() {
             let tr = start(Mna::from_ir(ir, opts.gmin)?, &[], u0)?;
             let sources = (0..names.len()).map(|j| (0, j)).collect();
             return Ok(base(tr, None, sources, 0));
@@ -369,15 +519,40 @@ impl Stream {
             .map(|s| whole.mna().node(&s.name).map_or(0.0, |i| whole.x()[i]))
             .collect();
         drop(whole);
-        // Each partition at the DC point, in order: its sources at the shared
-        // nodes' voltages, its owned nodes fed the currents its users' sources
-        // deliver (the users are lower-numbered, so already solved).
-        let mut trs: Vec<Transient> = Vec::with_capacity(n_parts);
-        let mut feeds: Vec<Vec<Feed>> = Vec::with_capacity(n_parts);
-        let mut dc_out: Vec<Vec<f64>> = Vec::with_capacity(n_parts);
-        for p in 0..n_parts {
+        // Each partition at the DC point: its sources at the shared nodes'
+        // voltages, its owned nodes fed the currents its users' sources deliver.
+        // Users are solved before their owners: the multi-rate parts first (they own
+        // nothing), then the others in order (a single-rate part's users are
+        // lower-numbered).
+        let mut slots: Vec<Option<(Transient, Vec<Feed>)>> = (0..n_parts).map(|_| None).collect();
+        let mut dc_out: Vec<Vec<f64>> = vec![Vec::new(); n_parts];
+        let mut ios: Vec<PartIo> = vec![PartIo::default(); n_parts];
+        let order: Vec<usize> = (0..n_parts)
+            .filter(|&p| sp.substeps[p] > 1)
+            .chain((0..n_parts).filter(|&p| sp.substeps[p] == 1))
+            .collect();
+        for &p in &order {
             let mut mna = Mna::from_ir(&sp.parts[p], opts.gmin)?;
             let f = couple(&sp, p, &mut mna);
+            // A multi-rate part's senses for tapes elsewhere: computed every step.
+            let n_coupling = mna.outputs.len();
+            let senses: Vec<(Option<usize>, Option<usize>)> = sp
+                .remote
+                .iter()
+                .filter(|r| r.source == p)
+                .map(|r| (mna.node(&r.pos), mna.node(&r.neg)))
+                .collect();
+            for &(a, b) in &senses {
+                mna.outputs.extend(a.into_iter().chain(b));
+            }
+            ios[p] = PartIo {
+                substeps: sp.substeps[p],
+                n_owned: sp.owned(p).len(),
+                n_coupling,
+                senses,
+                feeds: Vec::new(),
+                input_order: (p == sp.input_part && p > 0).then_some(opts.input_order.max(1)),
+            };
             let ext: Vec<f64> = f
                 .iter()
                 .map(|f| match f {
@@ -392,11 +567,48 @@ impl Stream {
             let tr = if p == 0 {
                 start(mna, &ext, u0)?
             } else {
-                Transient::with_externals(mna, h, *opts, 0.0, &ext)?
+                let u = if p == sp.input_part { u0 } else { 0.0 };
+                Transient::with_externals(mna, h / sp.substeps[p] as f64, *opts, u, &ext)?
             };
-            dc_out.push(tr.mna().outputs.iter().map(|&i| tr.x()[i]).collect());
+            let mut o: Vec<f64> = tr.mna().outputs[..n_coupling]
+                .iter()
+                .map(|&i| tr.x()[i])
+                .collect();
+            let at = |u: Option<usize>| u.map_or(0.0, |i| tr.x()[i]);
+            for &(a, b) in &ios[p].senses {
+                o.extend(std::iter::repeat_n(at(a) - at(b), sp.substeps[p]));
+            }
+            dc_out[p] = o;
+            slots[p] = Some((tr, f));
+        }
+        let (mut trs, mut feeds): (Vec<Transient>, Vec<Vec<Feed>>) = (Vec::new(), Vec::new());
+        for s in slots {
+            let (tr, f) = s.expect("every part solved");
             trs.push(tr);
             feeds.push(f);
+        }
+        // Each tape's literal bias: the source's slots for it.
+        for r in &sp.remote {
+            let medium = trs[r.reader]
+                .mna()
+                .media
+                .iter()
+                .position(|m| m.element.name() == r.medium)
+                .expect("the tape is in its part");
+            let k = sp
+                .remote
+                .iter()
+                .filter(|q| q.source == r.source)
+                .position(|q| q == r)
+                .expect("its source serves it");
+            let src = &ios[r.source];
+            let feed = MediaFeed {
+                medium,
+                part: r.source,
+                slot: src.n_coupling + k * src.substeps,
+                m: r.m,
+            };
+            ios[r.reader].feeds.push(feed);
         }
 
         // The IR's probes from the partition that has them (a shared node's, its
@@ -422,6 +634,11 @@ impl Stream {
                 .map(|t| Mutex::new(vec![Vec::new(); t.mna().probes.len()]))
                 .collect(),
             error: Mutex::new(None),
+            input: Mutex::new(InputHist {
+                hist: vec![u0],
+                hist0: 0,
+                len: None,
+            }),
         });
         // Sample 0 (DC), published by all.
         for (ring, o) in shared.rings.iter().zip(&dc_out) {
@@ -431,20 +648,16 @@ impl Stream {
             .iter()
             .map(|t| t.mna().probe_values(t.x()).collect())
             .collect();
-        let group_titles = groups(second);
         let mut handles = vec![None];
         let mut trs = trs.into_iter();
         let a = trs.next().expect("the first partition");
         for (p, tr) in trs.enumerate().map(|(i, t)| (i + 1, t)) {
-            let (shared, f, titles) = (
-                Arc::clone(&shared),
-                feeds[p].clone(),
-                group_titles[p - 1].clone(),
-            );
+            let (shared, f, titles) = (Arc::clone(&shared), feeds[p].clone(), sp.titles[p].clone());
+            let io = ios[p].clone();
             handles.push(Some(
                 std::thread::Builder::new()
                     .name(format!("circuitsim partition {p}"))
-                    .spawn(move || run_part(tr, shared, coupling, p, f, titles))
+                    .spawn(move || run_part(tr, shared, coupling, p, f, titles, io))
                     .map_err(|e| Error::new(format!("partition thread: {e}")))?,
             ));
         }
@@ -459,8 +672,10 @@ impl Stream {
                 .map(|s| (s.name.clone(), s.owner))
                 .collect(),
             feeds: feeds[0].clone(),
+            media_feeds: ios[0].feeds.clone(),
+            shares_input: sp.input_part > 0,
         };
-        let out_len = a.mna().outputs.len();
+        let out_len = ios[0].n_coupling;
         let mut stream = base(a, Some(parts), sources, k);
         stream.initial = initial;
         stream.out = vec![0.0; out_len];
@@ -563,6 +778,14 @@ impl Stream {
             )));
         }
         self.hist.extend_from_slice(input);
+        if let Some(s) = self.parts.as_ref().filter(|s| s.shares_input) {
+            s.shared
+                .input
+                .lock()
+                .expect("input")
+                .hist
+                .extend_from_slice(input);
+        }
         for (k, h) in self.chist.iter_mut().enumerate() {
             match controls.get(k) {
                 Some(c) => h.extend_from_slice(c),
@@ -583,6 +806,9 @@ impl Stream {
     pub fn finish(&mut self) -> Result<Vec<Vec<f64>>, Error> {
         let known = self.hist0 + self.hist.len();
         self.len = Some(known);
+        if let Some(s) = self.parts.as_ref().filter(|s| s.shares_input) {
+            s.shared.input.lock().expect("input").len = Some(known);
+        }
         self.run_until(known.saturating_sub(1))
     }
 
@@ -652,6 +878,10 @@ impl Stream {
                 return Err(Error::new("stopped"));
             }
             self.a.set_externals(&self.e0, &self.e1);
+            for f in &s.media_feeds {
+                s.shared.batch(f, n, &mut self.batch);
+                self.a.set_media_batch(f.medium, &self.batch);
+            }
         }
         // The control inputs over the step, as simulate's loop takes them.
         if !self.chist.is_empty() {

@@ -299,6 +299,7 @@ def record(
     floor_tol: float = 1e-7,
     floor_a_m: float | None = None,
     local_zones: bool = False,
+    peaks: tuple[np.ndarray, np.ndarray] | None = None,
 ):
     """The remanent M / Ms of cells at tape positions s_cells_m (one row per layer of
     `slab`), recorded from t0_s to t1_s, the tape erased before.
@@ -328,13 +329,21 @@ def record(
     magnitude below which a cell's samples are left out). local_zones: each cell's zone
     from the largest |deep-gap field| over its own pass (rounded up, `_cell_zones`)
     instead of hg_signal_max for all: the same floor, fewer samples where the signal is
-    quieter than its peak."""
-    shift = bias_phase_rad / (2.0 * math.pi * f_bias_hz)
-    t = bias_peak_times(t0_s + shift, t1_s + shift, f_bias_hz, sub) - shift
-    t = t[(t >= t0_s) & (t <= t1_s)]
-    hg = np.asarray(hg_signal(t), float) + hg_bias * np.sin(
-        2.0 * math.pi * f_bias_hz * t + bias_phase_rad
-    )
+    quieter than its peak.
+
+    peaks (t, hg): the deep-gap field's extrema, given (the literal bias: the head's whole
+    current from the circuit, `TapeStream`'s literal mode) instead of the signal plus a
+    regenerated carrier: hg_signal, hg_bias, f_bias_hz, sub and bias_phase_rad aren't read.
+    """
+    if peaks is not None:
+        t, hg = (np.asarray(a, float) for a in peaks)
+    else:
+        shift = bias_phase_rad / (2.0 * math.pi * f_bias_hz)
+        t = bias_peak_times(t0_s + shift, t1_s + shift, f_bias_hz, sub) - shift
+        t = t[(t >= t0_s) & (t <= t1_s)]
+        hg = np.asarray(hg_signal(t), float) + hg_bias * np.sin(
+            2.0 * math.pi * f_bias_hz * t + bias_phase_rad
+        )
     srec = np.asarray(s_rec(t), float)
     peak = (hg_signal_max if hg_signal_max is not None else float(np.abs(hg).max())) + hg_bias
     if floor_a_m is None:
