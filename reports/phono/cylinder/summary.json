@@ -1,0 +1,28 @@
+{
+  "responses": {
+    "chain_peak_hz": 722.7311296142036,
+    "chain_within_10db_hz": [
+      680.6189171595703,
+      2909.8088103873797
+    ],
+    "recorder_diaphragm_f0_hz": 407.3555823393478,
+    "reproducer_diaphragm_f0_hz": 1572.982393998478
+  },
+  "takes": {
+    "in_the_pines_full_played": {
+      "incident_spl_db_rms": 91.7905672217487,
+      "spl_1m_db_rms": 65.13802565556755,
+      "spl_1m_db_peak": 90.40294300299146,
+      "mistracking_fraction": 0.0009291184213883756,
+      "uncut_fraction": 0.00022945749672544563,
+      "wow_cents_rms": 13.840339738838583,
+      "wow_cents_peak_to_peak": 57.01514039332277,
+      "damage": {
+        "dust": 567,
+        "mould_pits": 0,
+        "cracks": 0
+      },
+      "wall_s_per_audio_s": 8.949052430912213
+    }
+  }
+}
