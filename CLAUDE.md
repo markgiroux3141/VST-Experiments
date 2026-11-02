@@ -109,7 +109,12 @@ the current phase's "done when" criterion is met and covered by tests.
 Ideas for after Phase 8 (aging, general circuits and KiCad import, stray coupling,
 temperature, tape, vinyl, the plugin UI) are brainstormed and prioritized in
 [docs/FUTURE_DIRECTIONS.md](docs/FUTURE_DIRECTIONS.md) (2026-10-24; the plan's
-"Future Directions"). Nothing in it is built, and none of it interrupts Phases 5-8.
+"Future Directions"). Nothing in it is built, and none of it interrupts Phases 5-8. Its
+section 8 (2026-11-02, a second brainstorm, unprioritized): a live probe bench, an
+audibility map of the parts (which provisional values to source first), fitting units to
+real-hardware captures, coupling between devices (loading, shared mains, ground loops),
+the combo amp's acoustic loop, AM broadcast and the tube radio, a theremin, circuits from
+scans, manuals for invented devices.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

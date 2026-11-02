@@ -11,6 +11,10 @@ plan, [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md), including how deep p
 simulation is worth going. It takes the "Missing: winding geometry" row of the transformer
 in section 1's table; nothing in it is built.
 
+**Added 2026-11-02:** section 8, nine more ideas from a second brainstorm (things only a
+physical simulator can do, the coupling between devices, the ends of the chain nobody models,
+and tools that save time). None of them is prioritized or built.
+
 Ground rules carry over unchanged (CLAUDE.md "Hard rules"):
 - Every value needs a `source`.
 - The genome is physical only.
@@ -355,3 +359,124 @@ See Decisions, item 3.
   ([UI_PIPELINE.md](UI_PIPELINE.md), [IMAGE_GEN_GUIDE.md](IMAGE_GEN_GUIDE.md)).
 - Before Phase 10, there's nothing real-time to put a plugin UI on: circuitsim
   renders ~12-24x slower than real time (CLAUDE.md speed notes).
+
+## 8. More ideas (2026-11-02, a second brainstorm)
+
+Proposed after asking "what haven't we thought of?", once the plan docs (DEVICE_CANDIDATES,
+the instrument, mic / room, tape, phono, delay, hybrid physics, synth ideas) had been
+checked for overlap. **None of it is prioritized or built.** The proposer's top three are
+8.1, 8.2 and 8.4; the order is the user's call.
+
+### 8.1 Probe anything, live (a virtual bench)
+
+The stream computes every node, but only `out` is ever heard or seen. An Editor bench in
+varimu-app would put a scope, a spectrum analyzer or a voltmeter on any net while the
+device plays (click a wire), and show the internal physics no plugin has:
+- a transformer core's B-H loop tracing in real time (the core node is B, 1 V = 1 mT; H
+  follows from the winding currents);
+- a tube's operating point moving across its plate curves (cutoff, grid current);
+- the tape's magnetization along the tape, the plate's mode energies;
+- dissipation per part against its rating (COMPONENT_EDITOR_PLAN's "Ratings"), drawn as a
+  plate glowing red when it red-plates.
+
+**Has:** every node's voltage in `Live` / `Transient`, the probes of a circuit file.
+**Missing:** a probe set chosen at run time and handed out of the audio thread without
+blocking (a lock-free ring per probe, decimated for display). It is also the debugging
+tool the synth's fragile cases need (the ADSR when the rails sag).
+
+### 8.2 Where the sound comes from: an audibility map
+
+Perturb each part (its tolerance, or a fixed few percent), render a short program excerpt,
+and score the difference by how audible it is (loudness-matched; a perceptual weighting,
+not raw rms). Colour the schematic by the score. It answers "which parts make the 670 a
+670?", and it turns the first hard rule from a backlog into a queue: **source the
+provisional values with the highest scores first.**
+- Cheap first pass: DK's linearized step already holds the output's sensitivity to each
+  linear element at the operating point (small-signal only).
+- Full pass: one render per part (~100-200 for the 670), parallel and cached.
+- Shows in the Editor as a heat overlay on the drawing.
+
+### 8.3 Fit a unit to recordings of real hardware (system identification)
+
+The genome is fitted by preference today (Phases 6-8). Fit it instead to input / output
+pairs of a real unit: a DI and the same DI re-amped through a real 5E3, a 670 or a Pultec.
+The pairs anchor the model to hardware, and the plausibility checks keep the fit physical.
+- **Sources:** public capture datasets of real amps and compressors (input / output
+  pairs published for neural amp modelling), each with its `source` and license checked.
+  The user's own recordings would break the "no bench measurements for now" decision
+  (memory), so public data first.
+- The search is Phase 8's optimizer with a different objective (a spectral and envelope
+  distance on matched levels), and Phase 7's surrogate would speed it up the same way.
+
+### 8.4 The coupling between devices (the rack as a netlist)
+
+Inside a device everything is one coupled netlist; between devices it isn't. Inserts,
+prints and chain ends (`player::EndDevice`, SESSION_FX_PLAN) hand plain audio from one
+device to the next. Real gear couples:
+- **Loading:** the 670's output transformer into the Pultec's input transformer; a cable's
+  capacitance against a high source impedance. (The guitar source in DEVICE_CANDIDATES
+  covers one instance: the pickup into the 5E3.)
+- **Shared mains:** one power strip; a loud amp's draw sags everyone's mains a little.
+- **Ground loops:** hum that depends on how the rack is patched (section 4's ground network
+  is inside one device; this is between devices, through shields and safety earths).
+
+Steps: (1) a two-port at each boundary (the driving device's output impedance into the next
+one's input impedance; most of the loading for little cost); (2) prints of a whole chain as
+one netlist, the partition putting each device on its own threads (the multi-way
+partitions exist); (3) the mains and ground between devices as a small network of their
+own. Step 2 is the "one coupled simulation" rule extended from devices to the rack.
+
+### 8.5 The combo amp hearing itself
+
+The 5E3's speaker outputs pressure (C3: pascals at 1 m) and, in a combo, sits in the same
+cabinet as its 12AX7. Section 4's table rates microphonics small in rack gear; a combo
+amp is the case where it isn't. Two loops:
+- **Microphonics:** cabinet vibration into the first stage's grid (an acceleration ->
+  grid-voltage transfer per tube; a ringing tube is the classic failure).
+- **Guitar feedback:** with a string from INSTRUMENT_PLAN, the amp's sound drives the
+  string, which drives the pickup, which drives the amp. Controlled feedback sustain comes
+  from the physics, with the player's distance from the amp as a control.
+
+### 8.6 The listener's end: AM broadcast and the tube radio
+
+The chain is modelled from the performer to tape and groove; in the 1950s most people heard
+it on AM radio. The 670 was built as a broadcast limiter. After it:
+- the transmitter's plate modulation and its own limiting / overmodulation;
+- propagation: selective fading as the ionosphere moves (a seeded, slowly varying
+  multipath);
+- a tube superhet radio: the converter, IF transformers (their bandwidth is the radio's
+  sound), the detector, the AVC (itself a variable-mu circuit), the output tube, and a
+  small speaker in a bakelite box (C3's speaker component).
+
+The carrier (~1 MHz) and the IF (455 kHz) are far above Nyquist: a case for
+HYBRID_PHYSICS_PLAN's exceptions, or for envelope (baseband-equivalent) simulation of the
+RF stages with the audio stages literal. With MIC_ROOM, TAPE and PHONO it completes "from
+the performer to a listener in 1957". Jukeboxes and car radios are variants of the end.
+
+### 8.7 A theremin
+
+The original tube instrument, and missing from the synth plans. Two RF oscillators
+(~170-250 kHz) beat against each other; the hand's capacitance to the pitch antenna
+detunes one. The volume antenna detunes a third oscillator against a tuned circuit.
+- The hand is a control input (S3's `cv_inputs`), played by the mouse or by hand distance
+  seen through a webcam.
+- The pitch antenna's nonlinear distance law and the oscillators' waveforms are the
+  character.
+- RF beating is a hybrid-physics case (HYBRID_PHYSICS_PLAN), like the AM radio.
+- Source: RCA's AR-1264 (1929) schematic is published.
+
+### 8.8 Circuits and curves from scans
+
+How fast devices from DEVICE_CANDIDATES get built depends on drawing time. A vision model
+could read a service-manual scan into a draft `drawing.json`; `sketch.py`'s `problems()`,
+the compile and `varimu.preflight` catch its mistakes, and a person reviews it against the
+scan before it is saved. The same idea would replace the per-sheet digitizer scripts
+(`scripts/digitize_*.py`) with one tool for datasheet curves (each output still gets its
+provenance sidecar).
+
+### 8.9 Manuals for invented devices
+
+The measurement suites (`amp_suite`, `eq_suite`, the tape alignment) could write a
+period-style spec sheet and service manual for devices that never existed: the tube synth,
+the tube kick. Curves, test-point voltages from the operating point, an alignment
+procedure. Cheap, and a regression record of the instrument as built.
