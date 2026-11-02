@@ -26,10 +26,11 @@ PRINTED = {
     "p2b": 75, "k2b": 26, "p2a": 150, "k3b": 1.0, "p4a": 110, "k4a": 1.0, "k4b": 0.6,
     "p5a": 295, "p5b": 295, "k5": 13,
 }  # fmt: skip
-# Off by more than the plan's +-20% (TAPE_PLAN.md, TM5's status), bounded here so they
-# don't drift further: 12AX7 plates on 220-330K loads, where a small current error is a
-# large voltage error (2V3a, on a 10 MOhm grid leak, also hangs on the provisional grid
-# current's contact potential).
+# Off by more than the plan's +-20%, bounded here so they don't drift further: the
+# drawing's unit had these three 12AX7s hotter than the average tube (GE's sheet agrees
+# with 12AX7@1; their grids as if +0.14..+0.21 V less negative, ordinary tube-to-tube
+# spread), and the nominal unit keeps average tubes (TAPE_PLAN.md, "Gaps" 1, decided
+# 2026-11-02).
 LOOSE = {"p3b": 100, "p3a": 90, "p4b": 90}
 
 
@@ -144,14 +145,15 @@ def test_the_alignments_reproduce_side_is_nab():
 
 def test_the_alignments_meters_read_a_fluttering_tone():
     """The alignment reads levels and THD from band powers (a VTVM behind a band-pass), so
-    a tone whose phase wanders with the transport (here 3 rad at 2.5 Hz, the motor's
-    hunting at 15 kHz) reads its level, which a coherent fit would lose."""
+    a tone whose phase wanders with the transport (here 3 rad at 2.5 Hz at 15 kHz, the
+    motor's hunting, in proportion at 400 Hz) reads its level, which a coherent fit would
+    lose."""
     from varimu.measure import tape_align as ta
 
     fs = 192_000
     t = np.arange(int(0.19 * fs)) / fs
     for f in (400.0, 15000.0):
-        ph = 2 * np.pi * f * t + 3.0 * np.sin(2 * np.pi * 2.5 * t)
+        ph = 2 * np.pi * f * t + 3.0 * f / 15000.0 * np.sin(2 * np.pi * 2.5 * t)
         y = 0.7 * np.sin(ph) + 0.01 * np.sin(2 * ph) + 0.3
         assert ta.level(y, fs, f) == pytest.approx(0.7, rel=1e-4)
         assert ta.thd(y, fs, f)[0] == pytest.approx(0.01 / 0.7, rel=1e-3)

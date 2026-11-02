@@ -146,10 +146,11 @@ def fit(y: np.ndarray, fs: float, freqs_hz: Sequence[float]) -> np.ndarray:
 
 
 def band_width_hz(f_hz: float) -> float:
-    """The half-width of a tone's band: the Hann window's main lobe (+-10.5 Hz over the
-    window) and the transport's frequency modulation (0.11% rms wow and flutter: a few
-    tenths of a percent at its peaks)."""
-    return 40.0 + 0.004 * f_hz
+    """The half-width of a tone's band: the Hann window's main lobe (+-10.5 Hz over a
+    0.19 s window) and the transport's frequency modulation (0.11% rms wow and flutter: its
+    sidebands reach ~0.4% of the tone at 15 kHz); narrow enough to keep a 30 Hz tone off
+    DC."""
+    return 12.0 + 0.006 * f_hz
 
 
 def level(y: np.ndarray, fs: float, f_hz: float) -> float:
@@ -477,17 +478,19 @@ def check(b: Bench, overrides: Mapping[str, Any], note=print) -> dict[str, Any]:
 class Alignment:
     """The settings the alignment found (`overrides`) and what each step measured."""
 
-    overrides: dict[str, float]
+    overrides: dict[str, Any]  # the genome's values plus the alignment's settings
     steps: dict[str, Any] = field(default_factory=dict)
     key: str = ""
 
 
-def _key(b: Bench) -> str:
-    """The alignment's cache key: the circuit file, the device and tape files it reads,
-    the code (this module, varimu/sim, circuit, devices: as a render's), the settings."""
+def _key(b: Bench, genome: Mapping[str, Any] | None = None) -> str:
+    """The alignment's cache key: the circuit file (its device and tape versions are
+    immutable), the genome, the code (this module, varimu/sim, circuit, devices: as a
+    render's), the settings."""
     from varimu.sim import runner
 
     h = hashlib.sha256()
+    h.update(json.dumps(dict(genome or {}), sort_keys=True, default=str).encode())
     h.update(spec.circuit_path(CIRCUIT).read_bytes())
     h.update(Path(__file__).read_bytes())
     h.update(json.dumps(dataclasses.asdict(b.settings), sort_keys=True, default=str).encode())
@@ -517,20 +520,23 @@ def align(b: Bench | None = None, note=print, start: Mapping[str, Any] | None = 
     o["playback_level"] = steps["playback_level"]["playback_level"]
     steps["check"] = check(b, o, note)
     steps["wall_s"] = time.perf_counter() - t0
-    return Alignment({k: float(v) for k, v in o.items()}, steps, _key(b))
+    return Alignment(dict(o), steps, _key(b, start))
 
 
 ALIGN_DIR = REPO_ROOT / "cache" / "tape"
 
 
-def aligned(note=print, refresh: bool = False) -> Alignment:
-    """`align`, cached by `_key` (cache/tape/align_351_<key>.json)."""
+def aligned(
+    genome: Mapping[str, Any] | None = None, note=print, refresh: bool = False
+) -> Alignment:
+    """`align` on the circuit file with `genome`'s values, cached by `_key`
+    (cache/tape/align_351_<key>.json)."""
     b = Bench.load()
-    key = _key(b)
+    key = _key(b, genome)
     path = ALIGN_DIR / f"align_351_{key}.json"
     if path.exists() and not refresh:
         return Alignment(**json.loads(path.read_text()))
-    al = align(b, note)
+    al = align(b, note, start=genome)
     ALIGN_DIR.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(dataclasses.asdict(al), indent=1, default=float))
     return al

@@ -351,7 +351,10 @@ median of the 1/2 dB points, record EQ, RECORD LEVEL for 1% THD at 400 Hz, PLAYB
 and settings, ~32 min), the transport on the tape part (`parts.TAPE_TRANSPORT`, 13 optional
 values, all or none, both builders), `rep_h_per_a` calibrated to the drawing's -68 dB, and
 prints through it: `uv run --extra fast --extra listen python scripts/print_351.py --drive-db 0 6
-12` (~58x real time for the three at once).
+12` (~58x real time for the three at once). The 351's profile: `varimu unit --circuit ampex_351
+--name NAME` (`varimu/measure/tape_suite.py`: S/N 61.6 dB, the response fails +-2 dB at 70 Hz:
+the provisional heads' contour bump; TAPE_PLAN.md "Gaps"). The tape stream records its blocks
+on a worker thread (bit-identical; the 351 100x -> ~74x real time; TAPE_PLAN.md "Speed").
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->

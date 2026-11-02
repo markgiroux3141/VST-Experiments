@@ -72,7 +72,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--refresh", action="store_true")
     a = ap.parse_args()
-    al = ta.aligned(note, refresh=a.refresh)
+    al = ta.aligned(note=note, refresh=a.refresh)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "ampex_351_alignment.json").write_text(
         json.dumps(dataclasses.asdict(al), indent=1, default=float)

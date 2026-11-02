@@ -13,6 +13,9 @@ checks of varimu.measure.generic and the circuit's own).
 - fender_5e3 (guitar amplifier, B9): varimu.measure.amp_suite: gain per volume,
   response per tone, THD and power vs level (the clipping onset), supply sag on bursts,
   aliasing per quality; the generic screen with the kit's voltages at +-20%.
+- ampex_351 (tape machine, TM5): varimu.measure.tape_suite: aligned by the manual's
+  procedure (varimu.measure.tape_align), then the specs: idle voltages, response at
+  -10 dB, THD against level (the 1% and 3% levels), S/N with the circuit's noise.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ from typing import Any
 @dataclass(frozen=True)
 class Profile:
     circuit: str
-    kind: str  # "compressor" | "equalizer" | "guitar_amp"
+    kind: str  # "compressor" | "equalizer" | "guitar_amp" | "tape_machine"
     run: Callable[..., dict[str, Any]]
 
 
@@ -47,10 +50,17 @@ def _run_amp(*args, **kwargs):
     return amp_suite.run(*args, **kwargs)
 
 
+def _run_tape(*args, **kwargs):
+    from varimu.measure import tape_suite
+
+    return tape_suite.run(*args, **kwargs)
+
+
 PROFILES = {
     "fairchild_670": Profile("fairchild_670", "compressor", _run_670),
     "pultec_eqp1a": Profile("pultec_eqp1a", "equalizer", _run_eq),
     "fender_5e3": Profile("fender_5e3", "guitar_amp", _run_amp),
+    "ampex_351": Profile("ampex_351", "tape_machine", _run_tape),
 }
 
 

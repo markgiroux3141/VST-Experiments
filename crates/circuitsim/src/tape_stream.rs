@@ -13,6 +13,8 @@
 
 use std::f64::consts::PI;
 use std::sync::Arc;
+use std::sync::{Mutex, mpsc};
+use std::thread::JoinHandle;
 
 use rustfft::FftPlanner;
 use rustfft::num_complex::Complex64;
@@ -445,15 +447,343 @@ fn lstsq_mgs(cols: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
     c
 }
 
+/// What recording a block reads (the stream's, shared with its worker).
+#[derive(Clone)]
+struct Ctx {
+    p: TapeParams,
+    pre: Arc<Preisach>,
+    rec_head: Head,
+    heights: Vec<f64>,
+    axes: Vec<[f64; 3]>,
+    zone_tables: Vec<Vec<f64>>,
+    /// The recording kernel's threads (`Recording::threads`).
+    threads: usize,
+}
+
+/// A block to record: its cells (with margins) and the field at the record gap.
+struct Job {
+    b: usize,
+    j0: usize,
+    s: Vec<f64>,
+    hg: Vec<f64>,
+    srec: Vec<f64>,
+    peak: f64,
+}
+
+/// A recorded block: the pattern over its cells and margins (layers x cells).
+struct Done {
+    b: usize,
+    j0: usize,
+    cells: usize,
+    mx: Vec<f64>,
+    my: Vec<f64>,
+}
+
+/// The recording on the worker thread: its FFT plans and demagnetization kernels.
+struct Recorder {
+    ctx: Arc<Ctx>,
+    planner: FftPlanner<f64>,
+    kernels: Vec<Arc<Kernels>>,
+}
+
+impl Recorder {
+    fn kernels(&mut self, n: usize, image: bool) -> Arc<Kernels> {
+        if let Some(k) = self.kernels.iter().find(|k| k.n == n && k.image == image) {
+            return k.clone();
+        }
+        let k = Arc::new(demag_kernels(
+            &self.ctx.p,
+            n,
+            image.then_some(self.ctx.p.spacing_m),
+        ));
+        if self.kernels.len() > 8 {
+            self.kernels.remove(0);
+        }
+        self.kernels.push(k.clone());
+        k
+    }
+
+    /// `demag_fields_vector`: (H_x, H_y), layers x cells, of the pattern for each image.
+    fn demag_fields(
+        &mut self,
+        mx: &[f64],
+        my: &[f64],
+        cells: usize,
+        images: &[bool],
+    ) -> Vec<(Vec<f64>, Vec<f64>)> {
+        let layers = self.ctx.p.layers;
+        let n = next_fast_len(2 * cells);
+        let mxk: Vec<Vec<Complex64>> = (0..layers)
+            .map(|l| rfft(&mut self.planner, &mx[l * cells..(l + 1) * cells], n))
+            .collect();
+        let myk: Vec<Vec<Complex64>> = (0..layers)
+            .map(|l| rfft(&mut self.planner, &my[l * cells..(l + 1) * cells], n))
+            .collect();
+        let ms = self.ctx.p.ms_a_m;
+        let mut out = Vec::new();
+        for &image in images {
+            let kern = self.kernels(n, image);
+            let ll = layers * layers;
+            let mut hx = Vec::with_capacity(layers * cells);
+            let mut hy = Vec::with_capacity(layers * cells);
+            let mut hxk = vec![vec![Complex64::new(0.0, 0.0); n / 2 + 1]; layers];
+            let mut hyk = vec![vec![Complex64::new(0.0, 0.0); n / 2 + 1]; layers];
+            for (bi, &j) in kern.bins.iter().enumerate() {
+                for a in 0..layers {
+                    let row = bi * ll + a * layers;
+                    let mut sx_x = Complex64::new(0.0, 0.0);
+                    let mut sx_y = Complex64::new(0.0, 0.0);
+                    let mut sy_x = Complex64::new(0.0, 0.0);
+                    let mut sy_y = Complex64::new(0.0, 0.0);
+                    for b in 0..layers {
+                        sx_x += kern.k[0][row + b] * mxk[b][j];
+                        sx_y += kern.k[1][row + b] * myk[b][j];
+                        sy_x += kern.k[2][row + b] * mxk[b][j];
+                        sy_y += kern.k[3][row + b] * myk[b][j];
+                    }
+                    hxk[a][j] = sx_x + sx_y;
+                    hyk[a][j] = sy_x + sy_y;
+                }
+            }
+            for a in 0..layers {
+                hx.extend(
+                    irfft(&mut self.planner, &hxk[a], n, cells)
+                        .iter()
+                        .map(|v| ms * v),
+                );
+                hy.extend(
+                    irfft(&mut self.planner, &hyk[a], n, cells)
+                        .iter()
+                        .map(|v| ms * v),
+                );
+            }
+            out.push((hx, hy));
+        }
+        out
+    }
+
+    /// `record` (the vector model, explicit floor) of cells s from t0 to t1, in steady
+    /// fields if given.
+    #[allow(clippy::too_many_arguments)]
+    fn record_once(
+        &self,
+        hg: &[f64],
+        srec: &[f64],
+        s: &[f64],
+        zones: &[f64],
+        h_static: Option<(&[f64], &[f64])>,
+        h_end: Option<(&[f64], &[f64])>,
+    ) -> (Vec<f64>, Vec<f64>) {
+        record(&Recording {
+            preisach: &self.ctx.pre,
+            head: self.ctx.rec_head,
+            heights: &self.ctx.heights,
+            zones,
+            s_rec: srec,
+            hg,
+            s_cells: s,
+            axes: &self.ctx.axes,
+            h_static,
+            h_end,
+            table_step: self.ctx.p.table_step,
+            threads: self.ctx.threads,
+        })
+    }
+
+    /// The zones of `record`: per layer, or per layer and cell (`_cell_zones`).
+    fn zones(&self, hg: &[f64], srec: &[f64], s: &[f64], peak: f64) -> Result<Vec<f64>, String> {
+        let floor = self.ctx.p.zone_floor_a_m;
+        let outer = self
+            .ctx
+            .heights
+            .iter()
+            .map(|&y| zone_checked(&self.ctx.rec_head, y, peak, floor))
+            .collect::<Result<Vec<f64>, String>>()?;
+        if !self.ctx.p.local_zones {
+            return Ok(outer);
+        }
+        let w = outer.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+        let top = ZONE_STEPS * ZONE_OCTAVES;
+        let mut gi = Vec::with_capacity(s.len());
+        for &sc in s {
+            let k0 = srec.partition_point(|&v| v < sc - w);
+            let k1 = srec.partition_point(|&v| v <= sc + w);
+            let local = hg[k0..k1.max(k0)]
+                .iter()
+                .fold(0.0, |a: f64, &x| a.max(x.abs()));
+            let u = (local.max(floor) / floor).log2() * ZONE_STEPS as f64;
+            gi.push(u.ceil() as usize);
+        }
+        let mut zones = Vec::with_capacity(self.ctx.heights.len() * s.len());
+        for (l, table) in self.ctx.zone_tables.iter().enumerate() {
+            for &g in &gi {
+                let z = if g > top { f64::INFINITY } else { table[g] };
+                zones.push(z.min(outer[l]));
+            }
+        }
+        Ok(zones)
+    }
+
+    /// `record_demagnetized_vector` of a block's job: the pattern over its cells and
+    /// margins (layers x cells), the demagnetization's fixed point.
+    fn record(&mut self, job: Job) -> Result<Done, String> {
+        let Job {
+            b,
+            j0,
+            s,
+            hg,
+            srec,
+            peak,
+        } = job;
+        let zones = self.zones(&hg, &srec, &s, peak)?;
+        let cells = s.len();
+        let (mut mx, mut my) = self.record_once(&hg, &srec, &s, &zones, None, None);
+        let mut x: Vec<f64> = mx.iter().chain(&my).copied().collect();
+        let (mut xs, mut gs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = (Vec::new(), Vec::new());
+        let half_len = mx.len();
+        for _ in 0..self.ctx.p.demag_iterations {
+            let images: &[bool] = if self.ctx.p.head_image {
+                &[false, true]
+            } else {
+                &[false]
+            };
+            let f = self.demag_fields(&mx, &my, cells, images);
+            let (nx, ny) = if self.ctx.p.head_image {
+                let (hd, hz) = (&f[0], &f[1]);
+                self.record_once(
+                    &hg,
+                    &srec,
+                    &s,
+                    &zones,
+                    Some((&hz.0, &hz.1)),
+                    Some((&hd.0, &hd.1)),
+                )
+            } else {
+                self.record_once(&hg, &srec, &s, &zones, Some((&f[0].0, &f[0].1)), None)
+            };
+            let g: Vec<f64> = nx.iter().chain(&ny).zip(&x).map(|(a, b)| a - b).collect();
+            let change = g.iter().fold(0.0, |a: f64, &v| a.max(v.abs()));
+            if change < self.ctx.p.demag_tol {
+                mx = nx;
+                my = ny;
+                break;
+            }
+            xs.push(x.clone());
+            gs.push(g.clone());
+            if xs.len() > HISTORY {
+                xs.remove(0);
+                gs.remove(0);
+            }
+            if gs.len() > 1 {
+                let dg: Vec<Vec<f64>> = gs
+                    .windows(2)
+                    .map(|w| w[1].iter().zip(&w[0]).map(|(a, b)| a - b).collect())
+                    .collect();
+                let dx: Vec<Vec<f64>> = xs
+                    .windows(2)
+                    .map(|w| w[1].iter().zip(&w[0]).map(|(a, b)| a - b).collect())
+                    .collect();
+                let coef = lstsq_mgs(&dg, &g);
+                for ((c, a), b) in coef.iter().zip(&dx).zip(&dg) {
+                    if *c != 0.0 {
+                        for ((xk, ak), bk) in x.iter_mut().zip(a).zip(b) {
+                            *xk -= c * (ak + bk);
+                        }
+                    }
+                }
+                for (xk, gk) in x.iter_mut().zip(&g) {
+                    *xk += gk;
+                }
+            } else {
+                for (xk, gk) in x.iter_mut().zip(&g) {
+                    *xk += 0.1 * gk;
+                }
+            }
+            for xk in x.iter_mut() {
+                *xk = xk.clamp(-1.0, 1.0);
+            }
+            mx = x[..half_len].to_vec();
+            my = x[half_len..].to_vec();
+        }
+        Ok(Done {
+            b,
+            j0,
+            cells,
+            mx,
+            my,
+        })
+    }
+}
+
+/// A thread recording the stream's blocks in the order they come (each block's recording
+/// is independent of the others': its margins are recorded with it), so the circuit runs
+/// on while a block records (TAPE_PLAN.md, "Speed"). The results are the same numbers.
+struct Worker {
+    jobs: Option<mpsc::Sender<Job>>,
+    // In a mutex only so the stream is Sync (Python's stream class); one thread uses it.
+    done: Mutex<mpsc::Receiver<Result<Done, String>>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Worker {
+    fn spawn(ctx: Arc<Ctx>) -> Self {
+        let (jobs, rx) = mpsc::channel::<Job>();
+        let (tx, done) = mpsc::channel();
+        let thread = std::thread::Builder::new()
+            .name("tape recording".into())
+            .spawn(move || {
+                let mut r = Recorder {
+                    ctx,
+                    planner: FftPlanner::new(),
+                    kernels: Vec::new(),
+                };
+                while let Ok(job) = rx.recv() {
+                    if tx.send(r.record(job)).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("tape: the recording thread");
+        Worker {
+            jobs: Some(jobs),
+            done: Mutex::new(done),
+            thread: Some(thread),
+        }
+    }
+
+    fn submit(&self, job: Job) -> Result<(), String> {
+        self.jobs
+            .as_ref()
+            .and_then(|j| j.send(job).ok())
+            .ok_or_else(|| "tape: the recording thread stopped".to_string())
+    }
+
+    /// The next recorded block (in the order submitted), waiting for it.
+    fn next(&self) -> Result<Done, String> {
+        self.done
+            .lock()
+            .map_err(|_| "tape: the recording thread stopped".to_string())?
+            .recv()
+            .map_err(|_| "tape: the recording thread stopped".to_string())?
+    }
+}
+
+impl Drop for Worker {
+    fn drop(&mut self) {
+        self.jobs.take();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
 /// The tape between the heads (see the module docs).
 pub struct TapeStream {
     p: TapeParams,
     fs: f64,
-    pre: Arc<Preisach>,
-    rec_head: Head,
+    /// What recording reads, shared with the worker.
+    ctx: Arc<Ctx>,
     rep_head: Head,
-    axes: Vec<[f64; 3]>,
-    heights: Vec<f64>,
     nb: usize,
     nm: usize,
     nr: usize,
@@ -469,10 +799,12 @@ pub struct TapeStream {
     rec: Vec<(usize, Vec<f64>, Vec<f64>)>,
     /// Flux slopes: (block, G over the block's cells and 2 either side).
     slopes: Vec<(usize, Vec<f64>)>,
+    /// The next block to finish (its grain, its predecessor's slope) and the next to hand
+    /// the worker: the blocks in between are being recorded.
     next_rec: usize,
-    zone_tables: Vec<Vec<f64>>,
+    next_submit: usize,
     planner: FftPlanner<f64>,
-    kernels: Vec<Arc<Kernels>>,
+    worker: Worker,
     /// The grain's (seed, name) of its Philox streams (`noise::key`), if on.
     grain: Option<(u64, String)>,
     /// The packing field at the last cell recorded.
@@ -572,13 +904,20 @@ impl TapeStream {
                     .collect()
             })
             .collect();
-        let mut st = TapeStream {
-            fs,
+        let ctx = Arc::new(Ctx {
+            p: p.clone(),
             pre,
             rec_head,
-            rep_head,
-            axes,
             heights,
+            axes,
+            zone_tables,
+            threads: 0,
+        });
+        let mut st = TapeStream {
+            fs,
+            worker: Worker::spawn(ctx.clone()),
+            ctx,
+            rep_head,
             nb,
             nm,
             nr,
@@ -591,9 +930,8 @@ impl TapeStream {
             rec: Vec::new(),
             slopes: Vec::new(),
             next_rec: 0,
-            zone_tables,
+            next_submit: 0,
             planner: FftPlanner::new(),
-            kernels: Vec::new(),
             grain: grain.map(|(seed, name)| (seed, name.to_string())),
             packing_prev: 0.0,
             moving: !(p.flutter.is_empty() && p.flutter_noise.is_empty()),
@@ -608,6 +946,20 @@ impl TapeStream {
             st.v_last = st.speeds(0, 1)[0];
         }
         Ok(st)
+    }
+
+    /// Record on `threads` threads (0: every logical core; the default). The output is the
+    /// same; inside a circuit, leaving cores to the circuit's own threads is faster
+    /// (TAPE_PLAN.md, "Speed"). Before the first push.
+    pub fn set_threads(&mut self, threads: usize) -> Result<(), String> {
+        if self.next_submit > 0 {
+            return Err("tape: set_threads after recording started".into());
+        }
+        let mut ctx = Ctx::clone(&self.ctx);
+        ctx.threads = threads;
+        self.ctx = Arc::new(ctx);
+        self.worker = Worker::spawn(self.ctx.clone());
+        Ok(())
     }
 
     pub fn params(&self) -> &TapeParams {
@@ -742,137 +1094,6 @@ impl TapeStream {
         })
     }
 
-    fn kernels(&mut self, n: usize, image: bool) -> Arc<Kernels> {
-        if let Some(k) = self.kernels.iter().find(|k| k.n == n && k.image == image) {
-            return k.clone();
-        }
-        let k = Arc::new(demag_kernels(&self.p, n, image.then_some(self.p.spacing_m)));
-        if self.kernels.len() > 8 {
-            self.kernels.remove(0);
-        }
-        self.kernels.push(k.clone());
-        k
-    }
-
-    /// `demag_fields_vector`: (H_x, H_y), layers x cells, of the pattern for each image.
-    fn demag_fields(
-        &mut self,
-        mx: &[f64],
-        my: &[f64],
-        cells: usize,
-        images: &[bool],
-    ) -> Vec<(Vec<f64>, Vec<f64>)> {
-        let layers = self.p.layers;
-        let n = next_fast_len(2 * cells);
-        let mxk: Vec<Vec<Complex64>> = (0..layers)
-            .map(|l| rfft(&mut self.planner, &mx[l * cells..(l + 1) * cells], n))
-            .collect();
-        let myk: Vec<Vec<Complex64>> = (0..layers)
-            .map(|l| rfft(&mut self.planner, &my[l * cells..(l + 1) * cells], n))
-            .collect();
-        let ms = self.p.ms_a_m;
-        let mut out = Vec::new();
-        for &image in images {
-            let kern = self.kernels(n, image);
-            let ll = layers * layers;
-            let mut hx = Vec::with_capacity(layers * cells);
-            let mut hy = Vec::with_capacity(layers * cells);
-            let mut hxk = vec![vec![Complex64::new(0.0, 0.0); n / 2 + 1]; layers];
-            let mut hyk = vec![vec![Complex64::new(0.0, 0.0); n / 2 + 1]; layers];
-            for (bi, &j) in kern.bins.iter().enumerate() {
-                for a in 0..layers {
-                    let row = bi * ll + a * layers;
-                    let mut sx_x = Complex64::new(0.0, 0.0);
-                    let mut sx_y = Complex64::new(0.0, 0.0);
-                    let mut sy_x = Complex64::new(0.0, 0.0);
-                    let mut sy_y = Complex64::new(0.0, 0.0);
-                    for b in 0..layers {
-                        sx_x += kern.k[0][row + b] * mxk[b][j];
-                        sx_y += kern.k[1][row + b] * myk[b][j];
-                        sy_x += kern.k[2][row + b] * mxk[b][j];
-                        sy_y += kern.k[3][row + b] * myk[b][j];
-                    }
-                    hxk[a][j] = sx_x + sx_y;
-                    hyk[a][j] = sy_x + sy_y;
-                }
-            }
-            for a in 0..layers {
-                hx.extend(
-                    irfft(&mut self.planner, &hxk[a], n, cells)
-                        .iter()
-                        .map(|v| ms * v),
-                );
-                hy.extend(
-                    irfft(&mut self.planner, &hyk[a], n, cells)
-                        .iter()
-                        .map(|v| ms * v),
-                );
-            }
-            out.push((hx, hy));
-        }
-        out
-    }
-
-    /// `record` (the vector model, explicit floor) of cells s from t0 to t1, in steady
-    /// fields if given.
-    #[allow(clippy::too_many_arguments)]
-    fn record_once(
-        &self,
-        hg: &[f64],
-        srec: &[f64],
-        s: &[f64],
-        zones: &[f64],
-        h_static: Option<(&[f64], &[f64])>,
-        h_end: Option<(&[f64], &[f64])>,
-    ) -> (Vec<f64>, Vec<f64>) {
-        record(&Recording {
-            preisach: &self.pre,
-            head: self.rec_head,
-            heights: &self.heights,
-            zones,
-            s_rec: srec,
-            hg,
-            s_cells: s,
-            axes: &self.axes,
-            h_static,
-            h_end,
-            table_step: self.p.table_step,
-        })
-    }
-
-    /// The zones of `record`: per layer, or per layer and cell (`_cell_zones`).
-    fn zones(&self, hg: &[f64], srec: &[f64], s: &[f64], peak: f64) -> Result<Vec<f64>, String> {
-        let floor = self.p.zone_floor_a_m;
-        let outer = self
-            .heights
-            .iter()
-            .map(|&y| zone_checked(&self.rec_head, y, peak, floor))
-            .collect::<Result<Vec<f64>, String>>()?;
-        if !self.p.local_zones {
-            return Ok(outer);
-        }
-        let w = outer.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-        let top = ZONE_STEPS * ZONE_OCTAVES;
-        let mut gi = Vec::with_capacity(s.len());
-        for &sc in s {
-            let k0 = srec.partition_point(|&v| v < sc - w);
-            let k1 = srec.partition_point(|&v| v <= sc + w);
-            let local = hg[k0..k1.max(k0)]
-                .iter()
-                .fold(0.0, |a: f64, &x| a.max(x.abs()));
-            let u = (local.max(floor) / floor).log2() * ZONE_STEPS as f64;
-            gi.push(u.ceil() as usize);
-        }
-        let mut zones = Vec::with_capacity(self.heights.len() * s.len());
-        for (l, table) in self.zone_tables.iter().enumerate() {
-            for &g in &gi {
-                let z = if g > top { f64::INFINITY } else { table[g] };
-                zones.push(z.min(outer[l]));
-            }
-        }
-        Ok(zones)
-    }
-
     /// `literal_peaks`: the literal field's extrema with t0 <= t <= t1 (each sample above
     /// its left neighbour and not below its right, or the reverse), refined by the parabola
     /// through the three: (times, values).
@@ -900,7 +1121,9 @@ impl TapeStream {
         (ts, vs)
     }
 
-    fn record_block(&mut self, b: usize) -> Result<(), String> {
+    /// Block b's job: its cells and the field at the record gap over its span (the
+    /// literal bias's extrema, or the signal at the medium's own bias's peaks).
+    fn prep(&self, b: usize) -> Result<Job, String> {
         let (j0, j1, t0, t1) = self.span(b);
         let (t0, t1) = (
             t0.ok_or("tape: a block's start before the tape got there")?,
@@ -942,89 +1165,38 @@ impl TapeStream {
             }
             (hg, srec, peak_sig + self.p.hg_bias_a_m)
         };
-        let zones = self.zones(&hg, &srec, &s, peak)?;
-        let cells = s.len();
-        // `record_demagnetized_vector`.
-        let (mut mx, mut my) = self.record_once(&hg, &srec, &s, &zones, None, None);
-        let mut x: Vec<f64> = mx.iter().chain(&my).copied().collect();
-        let (mut xs, mut gs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = (Vec::new(), Vec::new());
-        let half_len = mx.len();
-        for _ in 0..self.p.demag_iterations {
-            let images: &[bool] = if self.p.head_image {
-                &[false, true]
-            } else {
-                &[false]
-            };
-            let f = self.demag_fields(&mx, &my, cells, images);
-            let (nx, ny) = if self.p.head_image {
-                let (hd, hz) = (&f[0], &f[1]);
-                self.record_once(
-                    &hg,
-                    &srec,
-                    &s,
-                    &zones,
-                    Some((&hz.0, &hz.1)),
-                    Some((&hd.0, &hd.1)),
-                )
-            } else {
-                self.record_once(&hg, &srec, &s, &zones, Some((&f[0].0, &f[0].1)), None)
-            };
-            let g: Vec<f64> = nx.iter().chain(&ny).zip(&x).map(|(a, b)| a - b).collect();
-            let change = g.iter().fold(0.0, |a: f64, &v| a.max(v.abs()));
-            if change < self.p.demag_tol {
-                mx = nx;
-                my = ny;
-                break;
-            }
-            xs.push(x.clone());
-            gs.push(g.clone());
-            if xs.len() > HISTORY {
-                xs.remove(0);
-                gs.remove(0);
-            }
-            if gs.len() > 1 {
-                let dg: Vec<Vec<f64>> = gs
-                    .windows(2)
-                    .map(|w| w[1].iter().zip(&w[0]).map(|(a, b)| a - b).collect())
-                    .collect();
-                let dx: Vec<Vec<f64>> = xs
-                    .windows(2)
-                    .map(|w| w[1].iter().zip(&w[0]).map(|(a, b)| a - b).collect())
-                    .collect();
-                let coef = lstsq_mgs(&dg, &g);
-                for ((c, a), b) in coef.iter().zip(&dx).zip(&dg) {
-                    if *c != 0.0 {
-                        for ((xk, ak), bk) in x.iter_mut().zip(a).zip(b) {
-                            *xk -= c * (ak + bk);
-                        }
-                    }
-                }
-                for (xk, gk) in x.iter_mut().zip(&g) {
-                    *xk += gk;
-                }
-            } else {
-                for (xk, gk) in x.iter_mut().zip(&g) {
-                    *xk += 0.1 * gk;
-                }
-            }
-            for xk in x.iter_mut() {
-                *xk = xk.clamp(-1.0, 1.0);
-            }
-            mx = x[..half_len].to_vec();
-            my = x[half_len..].to_vec();
-        }
-        let i0 = b * self.nb - j0;
-        let mut bx = Vec::with_capacity(self.p.layers * self.nb);
-        let mut by = Vec::with_capacity(self.p.layers * self.nb);
+        Ok(Job {
+            b,
+            j0,
+            s,
+            hg,
+            srec,
+            peak,
+        })
+    }
+
+    /// A recorded block: its cells (without the margins), the grain, and its predecessor's
+    /// flux slope (which reads it), in block order.
+    fn finish(&mut self, d: Done) {
+        let b = d.b;
+        debug_assert_eq!(b, self.next_rec);
+        let (cells, nb) = (d.cells, self.nb);
+        let i0 = b * nb - d.j0;
+        let mut bx = Vec::with_capacity(self.p.layers * nb);
+        let mut by = Vec::with_capacity(self.p.layers * nb);
         for l in 0..self.p.layers {
-            bx.extend_from_slice(&mx[l * cells + i0..l * cells + i0 + self.nb]);
-            by.extend_from_slice(&my[l * cells + i0..l * cells + i0 + self.nb]);
+            bx.extend_from_slice(&d.mx[l * cells + i0..l * cells + i0 + nb]);
+            by.extend_from_slice(&d.my[l * cells + i0..l * cells + i0 + nb]);
         }
         if let Some((seed, name)) = self.grain.clone() {
-            self.grain_block(&mut bx, &mut by, b * self.nb, seed, &name);
+            self.grain_block(&mut bx, &mut by, b * nb, seed, &name);
         }
         self.rec.push((b, bx, by));
-        Ok(())
+        self.next_rec += 1;
+        if b >= 1 {
+            self.slope_block(b - 1);
+            self.rec.retain(|(c, _, _)| *c + 2 > b);
+        }
     }
 
     /// The reference's `_grain`: the block's cells from i0 times 1 + the packing field (an
@@ -1036,7 +1208,7 @@ impl TapeStream {
         let dy = self.p.coating_m / layers as f64;
         let n_cell = self.p.packing * ds * dy * self.p.track_m / self.p.particle_volume_m3;
         let (mut cx, mut cy) = (0.0, 0.0);
-        for a in &self.axes {
+        for a in &self.ctx.axes {
             cx += a[2] * a[0] * a[0];
             cy += a[2] * a[1] * a[1];
         }
@@ -1157,16 +1329,14 @@ impl TapeStream {
         if self.moving {
             self.advance(self.n);
         }
-        while self.ready(self.next_rec) {
-            let b = self.next_rec;
-            self.record_block(b)?;
-            self.next_rec += 1;
-            if b >= 1 {
-                self.slope_block(b - 1);
-                self.rec.retain(|(c, _, _)| *c + 2 > b);
-            }
+        // Every block whose samples are in goes to the worker; the circuit runs on while it
+        // records (the repro head reads a block about a head distance later).
+        while self.ready(self.next_submit) {
+            let job = self.prep(self.next_submit)?;
+            self.worker.submit(job)?;
+            self.next_submit += 1;
         }
-        let keep = match self.span(self.next_rec).2 {
+        let keep = match self.span(self.next_submit).2 {
             Some(t0) => ((t0 * self.fs).floor() as i64 - 1).max(0) as usize,
             None => self.first / m,
         };
@@ -1186,6 +1356,25 @@ impl TapeStream {
             self.p.ds_m,
             self.fs,
         );
+        // The blocks this push reads, finished (a block's slope needs its successor).
+        if self.n > n0 {
+            let k = self.n - 1;
+            let u = if self.moving {
+                (self.s[k + 1 - self.s_first] - d) / ds
+            } else {
+                (v * (k + 1) as f64 / fs - d) / ds
+            };
+            if u >= 0.0 {
+                let need = u.floor() as usize / self.nb + 1;
+                while self.next_rec <= need {
+                    if self.next_rec >= self.next_submit {
+                        return Err("tape: a block was read before it was recorded".into());
+                    }
+                    let done = self.worker.next()?;
+                    self.finish(done);
+                }
+            }
+        }
         let mut last = None;
         for m in n0..self.n {
             let u = if self.moving {

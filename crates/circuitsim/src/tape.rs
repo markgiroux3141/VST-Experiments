@@ -329,6 +329,9 @@ pub struct Recording<'a> {
     /// The head field's table step per layer as a fraction of the layer's height (0: the
     /// exact field at every sample; else [`FieldTable`], cubic between its points).
     pub table_step: f64,
+    /// Threads to record on (0: every logical core). The cells are split into fixed
+    /// chunks, so the result doesn't depend on it.
+    pub threads: usize,
 }
 
 /// One layer's head field (Hx, Hy) / Hg tabulated over its zone, read by Catmull-Rom
@@ -389,9 +392,11 @@ pub fn record(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
     let tasks = layers * chunks;
     let next = AtomicUsize::new(0);
     let out: Mutex<Vec<Chunk>> = Mutex::new(Vec::new());
-    let threads = std::thread::available_parallelism()
-        .map_or(1, |n| n.get())
-        .clamp(1, 16);
+    let threads = match r.threads {
+        0 => std::thread::available_parallelism().map_or(1, |n| n.get()),
+        n => n,
+    }
+    .clamp(1, 16);
     let tables: Vec<Option<FieldTable>> = (0..layers)
         .map(|l| {
             (r.table_step > 0.0).then(|| {

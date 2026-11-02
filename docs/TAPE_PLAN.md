@@ -775,8 +775,71 @@ out of sample.
    capacitor; a lead for the +-2 dB spec at 30 Hz). The alignment's 1C7 (122 pF: +1.1 dB at
    15 kHz) sits between the curves' minimum (+0.95) and typical (+2.6): our tape and heads
    give ~1.5 dB more treble than Ampex's average tape.
+   **The 12AX7 plates, traced (2026-11-02):** the drawing's voltages give each stage's
+   current (the plate load's drop; 2V3b's cathode, 1.0 V on 1500 ohm less 2R26's bleed,
+   agrees). At the drawing's own grid and plate voltages, 12AX7@1 (Koren) gives 2V3b
+   0.093 mA against 0.273, 2V4a 0.177 against 0.318, 1V1a 0.263 against 0.500, but 2V4b
+   0.388 against 0.409 and 1V1b 0.483 against 0.500; the circuit then settles where the
+   model makes the current, at higher plates. GE's 12AX7 sheet (ET-T509B, 6-53, average
+   plate characteristics: the -1.0 V curve starts near 100 V) agrees with Koren there. So
+   the drawing's unit had three tubes hotter than average: their grids as if +0.14..+0.21 V
+   less negative (contact potential and cathode activity vary that much between tubes),
+   two average ones. Not a modelling error. Options (the user's): leave the average tubes
+   (plates +22-36%, the done-when's idle check excepted for them); per-instance emission
+   on those three (x1.8-2.9: beyond the tube tolerance's +-10%, the wrong mechanism); or a
+   per-instance grid offset in the triode model (both engines; a provisional +-0.2 V
+   spread, the physical one), the drawing's three then +0.14..+0.21 V. **Decided
+   (2026-11-02, delegated by the user; not emission): the nominal unit keeps average
+   tubes.** The three plates stay outside the done-when's +-20% idle check, for this traced
+   reason (`tests/test_ampex_351.py` bounds them at +-40%, `tape_suite`'s idle report lists
+   them). A per-instance grid offset is the mechanism if unit-to-unit tube spread (or a
+   "tired tubes" condition dial) is wanted later.
+   **The profile, first run (2026-11-02; `varimu unit --circuit ampex_351 --name
+   ampex351_nominal` -> `reports/units/ampex351_nominal/`; the noise on, the transport on;
+   23 renders 6 at once, 27 min after the cached alignment):**
+   - **S/N 61.6 dB** (spec 60): the 3% level -14.6 dBFS rms out, the noise 50-15,000 Hz
+     -76.2 dBFS rms (tubes, resistors, mains wander, grain, bias and erase all in).
+   - **Idle** within +-20% except the three average-tube plates (decided above).
+   - **Response at -10 dB fails at the low end:** re 1 kHz, 30 Hz -0.7, 40 +1.9, 50 +1.7,
+     **70 -4.45**, 100 -2.0, 200 -1.6, 500 -0.1; 2-15 kHz +0.3 / +1.2 / +1.0 / +0.5 / -0.4 /
+     -1.4. The dip is the repro head's contour effect: the poles' far edges cancel the gap's
+     reading where cos(k e_c) peaks, e_c = g/2 + pole + relax/2 = 4.5 mm with the
+     provisional 3 mm poles and 3 mm relaxation (~85 Hz at 15 ips). Real heads have these
+     bumps; the 351's spec says its were within +-2 dB. The pole and contour dimensions are
+     unprinted (item 4); the reproduce side's own +2 dB at 30-50 Hz (p94) adds to the
+     40-50 Hz bump.
+   - **Distortion at 400 Hz** (in re 0 VU: THD / h2 / h3 %): -10 dB 0.44 / 0.24 / 0.36;
+     -5 0.52 / 0.40 / 0.30; 0 1.00 / 0.62 / 0.74; +3 2.46 / 0.71 / 2.33; +6 5.32 / 0.79 /
+     5.25; +9 9.9; +12 16.1 (out -9.6 dBFS rms). The 3% level is **+3.8 dB** over
+     operating level, against the manual's "6 db higher" (p84): h3 rises ~3.3 dB per dB
+     from 0 to +3, steeper than cubic. Saturation sets in too abruptly, in the same
+     direction as No. 21's too-narrow bias curves: both say the particles switch too
+     uniformly, the case for item 3.
+   - The alignment with the noise on: record level 0.990, playback 0.336, bias 20.6 pF,
+     THD 1.00% at 0 VU.
 2. **Baseline checks on the current tape model** (no fitting): No. 14 (permissible level
    against frequency, 7.5 ips) and No. 31 (output against coating thickness).
+   - No. 14 prints no figure: by third-order cross-modulation (2F1 - F2), Scotch 111's
+     permissible recording current at 7.5 ips is "constant up to about 1200 cps", then rises
+     "until at 7000 cycles, 4 db greater"; "a wavelength rather than a frequency effect".
+     `scripts/tape_bulletin14.py` (the medium alone, the first print's machine and bias,
+     F2 = 1.1 F1, two criteria since none is printed, 15 ips at the same wavelengths).
+     **Baseline (2026-11-02, `reports/tape/bulletin14.*`, 6 min):** the permissible field
+     re 400 Hz at F1 400 / 800 / 1200 / 2000 / 3000 / 5000 / 7000 Hz, 7.5 ips: 0 / -0.4 /
+     -0.4 / -0.9 / -1.3 / -2.1 / -1.8 dB (2F1 - F2 at -40 dB), 0 / -0.4 / -0.2 / -0.6 /
+     -0.9 / -1.1 / -1.0 dB (at -30 dB); 15 ips at the same wavelengths within 0.5 dB (the
+     bulletin's wavelength claim holds). **The direction is wrong:** the model takes
+     slightly less current at short wavelengths where #111 took 4 dB more at 7 kHz: a
+     ~5-6 dB miss. 3M ties it to the coercivity ("a direct correlation between coercive
+     forces and the permissable high frequency pre-equalization"): the switching again,
+     with No. 21's narrow bias curves and the profile's abrupt saturation. Rerun after
+     item 3.
+   - No. 31: three "high output" coatings, 0.25 / 0.5 / 1.0 mil, at 7.5 ips: Fig. 2 at the
+     thickest's optimum bias (long-wavelength output ~3-4 dB per doubling of thickness),
+     Fig. 3 at the thinnest's (the three nearly one curve), Fig. 4 each at its own (the
+     thick one more bass, fewer highs). The check: our tape's coating thickness varied,
+     everything else kept, against those trends (the coatings aren't #111's: trends, not
+     levels).
 3. **Frequency-dependent switching** (the leading untested candidate for No. 21's narrow bias
    curves, TM2 step 7): Sharrock's law, Hc(t) = H0 [1 - (kT / KV ln(f0 t / ln 2))^n]. Bulletin
    20's Hc is from 60 Hz loops (~8 ms per switch), recording happens within a bias period
@@ -814,6 +877,45 @@ out of sample.
 - **First, measure where the literal 351's time goes.** The tape kernel runs on the audio
   part's thread, the record side on its own, so the slower of the two sets the wall time.
 - Planned after TM5's alignment, with TM7 (real time).
+- **Where the literal 351's time goes (measured 2026-11-01**, 0.5 s of drums at +6 dB,
+  production, the 1 s settle counted, one job alone): the whole machine 100x real time; the
+  record side alone (20 substeps, its five triodes and the oscillator on one thread) 62.7x;
+  the tape kernel (the audio part with the tape on its own bias, the same recording) 36.3x;
+  the reproduce side without the tape 2.5x. 100 is about 63 + 36: the parts don't overlap.
+  The stream records a 16 mm block inside the audio part's step (the kernel on all
+  threads), and the record side, a sample apart, waits on it. Three prints at once:
+  189x each (63x aggregate).
+- **The levers, in order** (estimates until measured):
+  1. Record blocks asynchronously: the repro head reads a block ~3 blocks after it's
+     recorded, so a worker can record while the circuit runs on. Exact (bit-identical);
+     the time becomes about the larger part's: ~1.5x (100x -> ~65x). **Done
+     (2026-11-02):** `tape_stream.rs`'s `Worker` (a thread per stream recording blocks in
+     order: a block's recording reads no other block's, its margins are its own) and
+     `Recorder` (zones, the kernel, the demag fixed point, with its own FFT plans and
+     kernels); the stream prepares each block's field when its samples are in, finishes
+     blocks (grain, slopes) in order, and waits only for the blocks a push reads. Output
+     bit-identical to before (the 351's medium, literal with flutter and grain, and its own
+     bias, 0.5 s in odd chunks). The kernel's threads are now a setting
+     (`Recording::threads`, `TapeStream::set_threads`; the output doesn't depend on it): in
+     a circuit the media leave four logical cores to the circuit (16 / 12 / 8 / 6 / 4
+     threads: 80 / 72.9 / 72.8 / 75.8 / 85.6x on the 351), alone the stream takes all (8%
+     faster than 12). **The 351: 100x -> 74.6x real time (1.34x)** on the same excerpt
+     (72.9x in another run); the record side alone (62.7x) is now the floor, so lever 2 is
+     next for speed.
+  2. The record side: fewer substeps (the bias study: 10 instead of 20 moved the bias
+     peaks 0.3%; ~2x on that part), tube tables there (the draft's, 9e-8 of the model),
+     and the record amplifier's first two stages at the audio rate if a stable cut exists
+     (only the oscillator, the 6201 driver and the head need 3.84 MHz). Together ~3-4x on
+     that part; each a measured setting against production.
+  3. The tape kernel on the GPU as an f32 tier, validated against the f64 kernel: the
+     kernel is already parallel over 16 threads, so the gain is the 3080's f32 throughput
+     over this CPU's f64, perhaps 5-10x on that part. Only worth it after 1-2, when the
+     tape is the bound.
+  4. Option B (the bias's amplitude at the audio rate, TM5's measurement) drops the
+     3.84 MHz part: the 351 was 46.7x with the medium's own bias, the tape kernel most of
+     it. A draft tier for auditioning (it misses the bias in the 6201: -34 dB at +12 dB).
+  - All four: perhaps ~10-20x for the literal print, a few x with option B and the GPU.
+    Real time needs TM7's reduced medium (DELAY_PLAN.md "Real time").
 
 **Decided 2026-10-31 (the user): condition dials, "turn it to 11".** Continue in plan order
 (TM5 the 351's circuit, then TM6's insert). The insert's panel gets condition dials that go

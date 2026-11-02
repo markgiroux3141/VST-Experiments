@@ -11,8 +11,8 @@ bridging) and out (+8 dBm); `--drive-db` feeds the machine that much hotter at t
 RECORD LEVEL. The head distance's delay (133 ms at 15 ips) is taken out. Writes
 reports/tape/audio/<clip>_351_15ips_drive<+N>dB.wav and the dry excerpt matched to each
 print's loudness (<clip>_dry_for_351_drive<+N>dB.wav: loudness lies). The drives run at
-once (each keeps two threads busy). No noise yet (the circuit has no `noise` block: no
-grain, hiss or hum; TM5's S/N comes with it).
+once (each keeps two threads busy). With the circuit's noise (its tubes' and resistors'
+hiss, the mains wander, the tape's grain; `--no-noise`: none).
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ def main() -> int:
     ap.add_argument("--start", type=float, default=0.0)
     ap.add_argument("--seconds", type=float, default=10.0)
     ap.add_argument("--drive-db", type=float, nargs="+", default=[0.0])
+    ap.add_argument("--no-noise", action="store_true", help="no hiss, hum or grain")
     a = ap.parse_args()
 
     al = ta.aligned()
@@ -61,7 +62,7 @@ def main() -> int:
     v_in, v_out = c.full_scale
     p = spec.resolve(c, al.overrides)
     delay = int(round(p["head_distance_m"] / p["speed_m_s"] * fs))
-    ir = builder.build(c, al.overrides, cores="ja").ir
+    ir = builder.build(c, al.overrides, cores="ja", noise=False if a.no_noise else None).ir
 
     x = load_audio(REPO_ROOT / "data" / "clips" / a.clip, fs)
     x = x[int(a.start * fs) : int((a.start + a.seconds) * fs)]

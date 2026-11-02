@@ -58,7 +58,14 @@ impl TapeMedium {
     ) -> Result<crate::tape_stream::TapeStream, String> {
         let fitted = t.medium.particle_volume_m3 > 0.0 && t.medium.packing > 0.0;
         let grain = seed.filter(|_| fitted).map(|s| (s, t.name.as_str()));
-        crate::tape_stream::TapeStream::build(&t.medium, fs, grain, seed.unwrap_or(0))
+        let mut st =
+            crate::tape_stream::TapeStream::build(&t.medium, fs, grain, seed.unwrap_or(0))?;
+        // Leave four logical cores to the circuit's own threads (its parts, a multi-rate
+        // part, the stream's worker): the Ampex 351 runs 72.9x real time with 12 of 16,
+        // 80x with all 16 (TAPE_PLAN.md, "Speed").
+        let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
+        st.set_threads(cores.saturating_sub(4).max(1))?;
+        Ok(st)
     }
 
     /// Push sensed voltages (one, or the literal bias's samples per push) as fields; the

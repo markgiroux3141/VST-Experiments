@@ -417,6 +417,7 @@ fn tape_record<'py>(
                 _ => None,
             },
             table_step,
+            threads: 0,
         };
         crate::tape::record(&rec)
     });

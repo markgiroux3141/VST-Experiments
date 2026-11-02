@@ -237,6 +237,13 @@ values:
   tube_emission_pct: {value: 10.0, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
   tube_mu_pct: {value: 3.0, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
 
+# Noise on (device builder B5): the resistors' Johnson noise, the tubes' shot and flicker
+# noise (the oscillator's and the amplifiers'), the mains wander and the tape's grain (its
+# component's noise block, keyed by the circuit's seed): the 351's S/N includes "bias,
+# erase and amplifier noise" (man p10). Renders can turn it off (`build(..., noise=False)`).
+noise:
+  seed: 1
+
 mains:
   v_rms: mains_v_rms
   hz: mains_hz
