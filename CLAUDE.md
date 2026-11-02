@@ -329,7 +329,12 @@ Talk No. 34 by `scripts/fit_tape_noise.py`; tape-only S/N 72.9 dB at 15 ips,
 transport`: capstan, idler, reel, motor hunting, scrape flutter; a tone recorded and played
 back deviates the 351's 0.11%, `scripts/tape_flutter.py`); cells are 7.62 per bias
 wavelength (0.5 um at 15 ips: 1 um aliased the bias residue into the audio band), prints
-~2x slower for it. Next: TM5, the 351's circuit (its transport goes on its tape part).
+~2x slower for it. **TM5 in progress (2026-11-01):** `config/circuits/ampex_351.yaml` from the 1962
+schematic (record 12AX7 / 6201 / 6201, repro 12AX7 x2 into a 12AU7 push-pull and 6T3 with its
+feedback winding, the 6X4 supply; the oscillator only as its load), the new `6201@1` (RCA's
+sheet), idle vs the drawing in `tests/test_ampex_351.py`, 46.7x real time at production; the
+bias coupling measured on `ampex_351_bias.yaml` at 3.84 MHz (`scripts/tape_bias_study.py` ->
+`reports/tape/bias_coupling.*`; TAPE_PLAN.md TM5's status): the user chose A, the literal oscillator in a partition of its own (2026-11-01).
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->

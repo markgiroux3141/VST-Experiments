@@ -24,6 +24,16 @@
     ik_a: 18.0e-3
   heater: {v: 6.3, a: 0.35}
 
+"6201":
+  # The Ampex 351's record driver 1V2 (TAPE_PLAN.md TM5): "a 'premium' version of the 12AT7".
+  source: "RCA 6201 TENTATIVE DATA 1 (10-56) p.1; local copy sources/rca_6201_1956.pdf (web: https://frank.pocnet.net/sheets/049/6/6201.pdf)"
+  class_a1:   # each unit; plate-supply voltage with a cathode resistor (Vg = -Rk Ip)
+    - {supply_v: 250, rk_ohm: 200, mu: 60, rp_ohm: 10900, gm_s: 5.5e-3, ip_a: 10.0e-3}
+    - {supply_v: 100, rk_ohm: 270, mu: 57, rp_ohm: 14300, gm_s: 4.0e-3, ip_a: 3.3e-3}
+  cutoff: {supply_v: 250, vg_v: -12, ip_a: 10.0e-6}   # "grid voltage (approx.) for plate current of 10 uamp"
+  capacitances_f: {gp: 1.6e-12, input: 2.5e-12, output: 0.45e-12}   # grid-drive, no shield; output: unit No. 1
+  heater: {v: 12.6, a: 0.15}
+
 "12BH7":
   source: "Ei-RC 12BH7 data sheet p.3; local copy sources/eirc_12bh7.pdf (web: tubedatabase.co)"
   class_a1:

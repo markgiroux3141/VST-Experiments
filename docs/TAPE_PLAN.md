@@ -522,6 +522,98 @@ the one it replaces, in dB of difference re the print's rms; times on a free des
   19 kHz at -75 dB at 7.5 ips. A whole number of cells per bias wavelength would alias the
   residue to DC (the locked phase). The cost: twice the cells (prints ~2x slower).
 
+**TM5 in progress (2026-11-01): the 351's circuit, and the bias coupling measured.**
+- **The circuit** `config/circuits/ampex_351.yaml`, transcribed from the 1962 schematic
+  (p95, read at 300 dpi; designators as printed). Record and play at once (relay 3K1
+  energized), 15 ips (4S2 at HI), NAB, the UNBALANCED BRIDGE input (4R5 / 4R4 / 4R3, so
+  6T1 and 1V1b are out of the path; 1V1b stays in for its DC load), the line out into
+  600 ohm. The chain:
+  - record: RECORD LEVEL 4R9, then 1V1a (12AX7); 1V2b (6201), whose pre-emphasis is 1C7
+    across 1R17 plus 1R18 / 1C8 at its plate; 1V2a (6201), the head driver (unbypassed
+    cathode, 22K plate load), through 1C10 into the record head, then 5R24 to ground;
+  - repro: the head into 2R25; 2V3b with the NAB feedback from 2V3a's plate to 2V3b's
+    cathode (2R31 to 2R29 || 2C15; 2R26 lifts the cathode); 2V3a, grid-leak biased;
+    PLAYBACK LEVEL 4R36; 2V4a, then 2V4b as a self-balancing paraphase (2R40 the common
+    plate resistor, 2C18 to 2V4b's grid); the 12AU7 push-pull 1V5 into 6T3, with a
+    feedback winding through 2R49 to 2V4a's cathode;
+  - supply: 6X4, then the RC chain 330 / 300 / 250 / 220 / 215 / 190 V and the record
+    line (3R56, 3R57, 1R59) to 1C2c, which feeds the oscillator and the 6201.
+  - Not modelled: the mic input, the meter and its switch, monitor and phones, the
+    heaters, the CCIR network, the 7-1/2 ips trimmer.
+- **New component `6201@1`** (the 6201 is RCA's premium 12AT7): Koren, all five parameters
+  fitted to RCA's two class-A1 points and the cutoff (TENTATIVE DATA 1, 10-56; local copy
+  `sources/rca_6201_1956.pdf`). It is within 1.4% of Ip, gm and rp at both points. Koren's
+  tables have no 12AT7.
+- **Calibrated, not printed:**
+  - 6T4's HV per half, 262 V rms, for the drawing's 330 V at the 6X4 (provisional R and
+    leakage);
+  - 6T3's secondary, 0.315 per primary half, from the drawing's signal voltages (+18 dB on
+    each plate, +8 dB out);
+  - its feedback winding, 0.216 per half, for the drawing's 29 dB from 2V4a's grid to the
+    line at 500 Hz (11.7 dB of feedback);
+  - the oscillator's DC load while it runs (`oscillator` 1: 11.96 kOhm on 1C2c, measured
+    literally below).
+  - The heads stay provisional. The record head is now 5 mH: the ~300 turns its field per
+    ampere implies, at A_L ~ 50 nH. 0.1 H was inconsistent with that, and with a bias
+    feed through 15-130 pF.
+- **Idle against the drawing** (`oscillator` 0, as it was measured; `tests/test_ampex_351.py`):
+  - the supply from the 6X4 to the output stage is within 2.6% (330 / 300 / 275 / 250 V,
+    the output plates, k5);
+  - the rest is within 10%, except 4 nodes.
+  - 1V2a's cathode: 12.6 V against the printed 6 V. The drawing contradicts itself: its
+    150 V plate on 22K from 275 V is 5.7 mA, and 5.7 mA through 2420 ohm is 13.8 V.
+  - p3b, p4b and p3a are +22%, +25% and +36%: 12AX7 plates on 220-330K loads. There a
+    7% current error and the supply's +8% add up. 2V3a, grid-leak biased on 10 MOhm,
+    also depends on the provisional grid current's contact potential. The printed 90 V
+    needs its grid near -0.5 V.
+  - The done-when's +-20% isn't met for these three: tested at +-40% for now.
+- **Signal levels at 500 Hz:**
+  - record gains match the drawing: 1V1a to 1V2b +23.1 dB (drawing +23), 1V2b to 1V2a
+    +5.7 (+3.5); the record head at about the drawing's level, scaled to our input;
+  - the repro head gives ~20 dB more than the drawing's -68 dB. Its sensitivity
+    (rep_h_per_a) is provisional, and PLAYBACK LEVEL takes it up in the alignment (not
+    built yet).
+- **Speed:** 2 s of the drums at production (JA cores, the tape's grain off) take 46.7x
+  real time, the 1 s settle counted. tape_test alone was 16.5x.
+- **The bias coupling, measured** (`scripts/tape_bias_study.py` -> `reports/tape/bias_coupling.*`).
+  - The bias section is `config/circuits/ampex_351_bias.yaml`: the 12AU7 push-pull
+    oscillator, 1T5 and the erase head as coupled inductors (provisional), ERASE ADJUST
+    in series with the erase head, the bias from the erase head's hot end through 4R70
+    and BIAS ADJUST into the record head, and the 6201 on the head through 1C10.
+  - The drawing's note allows leaving out 5C39 ("may be eliminated"), so it is out: with
+    it, even BIAS ADJUST's minimum overbiases the provisional head.
+  - It runs at 99.3 kc with ~79 mA of erase current. At 24 pF it gives 2.86 mA peak of
+    bias, about the 3.0 mA the tape's alignment needs.
+  - The record line idles at 299 V with the oscillator's load, 324 V without, and has
+    9.7 V p-p of 120 Hz ripple there (0.76 V p-p on 1C2c).
+  - The findings:
+
+  | | measured |
+  |---|---|
+  | literal cost (bias section alone) | 33x / 43x / 64x real time at 1.92 / 3.84 / 7.68 MHz; bias peaks -0.30% / ref / +0.13%, frequency within 0.005% |
+  | bias against its B+ (1C2c) | proportional: d ln(bias) / d ln(B+) = 1.08 (2.56-3.17 mA over 236-288 V) |
+  | how fast it follows | quasi-static to 500 Hz (1.00 of static), 0.91 at 2 kHz, 0.58 at 10 kHz. 1R59 / 1C2c (10.6 Hz) filters the line, so only slow changes reach it |
+  | NOISE BALANCE (+/- asymmetry) | -1.05 / -0.13 / 0.00 / +0.13 / +1.05 dB at 0 / 1/4 / 1/2 / 3/4 / 1 rotation |
+  | the bias in the 6201 (missed at audio rate) | at about operating level (0.39 mA of audio in the head): harmonics -68 dB, the rest -63 dB re the fundamental, the bias's AM by the audio 0.02%. At +6 dB: -55 / -49 dB. At +12 dB (1.5 mA): -48 / -34 dB, h3 +1.1 dB, and a level-dependent shift of the driver's operating point (44 uA in the head, settling over ~10 ms) |
+
+  - Option A, the literal oscillator, keeps all of it. It needs:
+    - a multi-rate partition in circuitsim: one part at ~40x the audio rate, coupled
+      through the record line and the head node;
+    - the medium reading the head's whole current, with its peaks found in it, in the
+      Python reference and the Rust port.
+    - Cost: about +33-43x real time if it runs in turn with the rest (the 351 then about
+      80-90x); about +0 if its partition runs on a thread of its own, as the supplies do.
+  - Option B, the amplitude at audio rate, needs:
+    - the oscillator's + and - peaks as a table against 1C2c's voltage (made by running
+      the bias section at setup), with a ~7 kHz lag;
+    - NOISE BALANCE's asymmetry;
+    - the load above;
+    - the medium taking a per-sample bias amplitude.
+    - It costs about nothing. It misses the bias inside the head driver: negligible up
+      to +6 dB, about -34 dB at +12 dB drive. That is the "turn it to 11" region, where
+      the 6201's plate swings with bias and audio together.
+  - **Decided 2026-11-01 (the user): A, the literal oscillator.**
+
 **Decided 2026-10-31 (the user): condition dials, "turn it to 11".** Continue in plan order
 (TM5 the 351's circuit, then TM6's insert). The insert's panel gets condition dials that go
 from a clean, well-kept machine to a trashed one, far past a real 351. Each is a physical

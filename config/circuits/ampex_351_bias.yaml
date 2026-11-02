@@ -1,0 +1,116 @@
+# The Ampex 351's bias and erase section on its own, run at a rate of its own (MHz) for
+# TM5's decision (docs/TAPE_PLAN.md: the literal oscillator against its amplitude
+# carried at audio rate). Not a device: a measurement circuit. The record B+ line
+# from a DC source (`b_rec_v`, the full circuit's idle value) plus an optional ripple,
+# the 6201 head driver with the audio on its grid (`in`, through 1C9), the 12AU7
+# push-pull oscillator 1V6, the bias transformer 1T5, the erase head tuned by ERASE
+# ADJUST, and the bias through BIAS ADJUST into the record head, which also hangs on
+# the 6201's plate through 1C10 (sch, data/schematics/ampex_351/README.md; designators
+# as printed). 1T5 and the heads aren't printed: coupled inductors, provisional.
+
+title: "Ampex 351 bias section (test)"
+input: in
+probes: [brec, brs, rec, rbc, ers, erl, ret, sec, bosc, p6a, p6b, g6a, g6b, p2a, k2a, b275]
+
+controls:
+  bias_adjust_f: {value: 24.0e-12, min: 15.0e-12, max: 130.0e-12, unit: F, source: "sch: 5C13 BIAS ADJUST 15-130 pF"}
+  erase_adjust_f: {value: 300.0e-12, min: 100.0e-12, max: 550.0e-12, unit: F, source: "sch: 5C33 ERASE ADJUST 100-550 pF"}
+  noise_balance: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sch: 1R63 NOISE BALANCE 10K"}
+  ripple_v: {value: 0.0, min: 0.0, max: 20.0, unit: V, source: "the test's: a ripple on the record B+ line (peak)"}
+  ripple_hz: {value: 120.0, min: 1.0, max: 20000.0, unit: Hz, source: "the test's: its frequency (120 Hz: full-wave at 60 Hz mains)"}
+  b_rec_v: {value: 299.3, min: 200.0, max: 400.0, unit: V, source: "the test's: the record line's DC (config/circuits/ampex_351.yaml at idle with oscillator 1, its load; 117 V line)"}
+
+values:
+  r_bosc_ohm: {value: 1500, source: "sch: 1R59 1500 2W"}
+  c_bosc_f: {value: 10.0e-6, source: "sch: 1C2c 10 450V"}
+  c_cross_f: {value: 350.0e-12, source: "sch: 1C32, 1C35 350 pF 1%"}
+  c_grids_f: {value: 1.0e-9, source: "sch: 1C36 .001 5%, grid to grid"}
+  r_grid_ohm: {value: 4700, source: "sch: 1R61, 1R62 4700"}
+  noise_balance_ohm: {value: 10.0e+3, source: "sch: 1R63 NOISE BALANCE 10K, its wiper to ground"}
+  t5_l_half_h: {value: 5.5e-3, source: "provisional: model knowledge (with the erase circuit, oscillates at 99 kc, the manual's ~100 kc; 1T5 is a part number only)"}
+  t5_l_sec_h: {value: 150.0e-6, source: "provisional: model knowledge (a step-down erase winding, ~1 : 8 per primary half)"}
+  t5_k: {value: 0.99, source: "provisional: model knowledge (a small bias transformer's coupling)"}
+  t5_r_half_ohm: {value: 20.0, source: "provisional: model knowledge (primary DCR plus loss per half at 100 kc)"}
+  t5_r_sec_ohm: {value: 1.0, source: "provisional: model knowledge (secondary DCR plus loss)"}
+  r_erase_meter_ohm: {value: 8.2, source: "sch: 1R64 8.2 5% 1W, the secondary's return (the ERASE meter reads across it)"}
+  c_erase_fixed_f: {value: 0.91e-9, source: "sch: 5C34 .00091 500V 5%, across ERASE ADJUST"}
+  erase_l_h: {value: 2.8e-3, source: "provisional: model knowledge (a full-track erase head; ERASE ADJUST's range, 1.01-1.46 nF, tunes 2.8 mH alone through 79-95 kc; coupled with 1T5 the section runs at 99 kc and ~80 mA)"}
+  erase_r_ohm: {value: 60.0, source: "provisional: model knowledge (its loss at 100 kc, Q ~ 20)"}
+  r_bias_feed_ohm: {value: 330, source: "sch: 4R70 330 in the bias line"}
+  rec_l_h: {value: 5.0e-3, source: "provisional: model knowledge (~300 turns on a ring head, A_L ~ 50 nH; consistent with ampex_351.yaml's 2e7 A/m per A over a 12.7 um gap)"}
+  rec_r_ohm: {value: 100.0, source: "provisional: model knowledge (its winding, ~100 ohm)"}
+  r_bias_cal_ohm: {value: 1000, source: "sch: 5R24 BIAS CALIBRATION 1000"}
+  c_head_f: {value: 0.47e-6, source: "sch: 1C10 .47"}
+  c_c2b_f: {value: 0.02e-6, source: "sch: 1C9 .02"}
+  r_g2a_ohm: {value: 1.0e+6, source: "sch: 1R20 1MEG"}
+  r_k2a_ohm: {value: 220, source: "sch: 1R21 220 5%"}
+  r_k2a_foot_ohm: {value: 2200, source: "sch: 1R22 2200 5%"}
+  r_p2a_ohm: {value: 22.0e+3, source: "sch: 1R19 22K 1W"}
+  r_b275_ohm: {value: 8200, source: "sch: 1R23 8200"}
+  c_b275_f: {value: 20.0e-6, source: "sch: 1C2b 20 450V"}
+  r_src_ohm: {value: 1.0, source: "numerical: the test's source resistance"}
+
+devices:
+  V6A: {device: 12AU7@1}
+  V6B: {device: 12AU7@1}
+  V2A: {device: 6201@1}
+
+sections:
+  - title: supply
+    parts:
+      VB: {V: [bs, "0"], v: b_rec_v}
+      VR: {sine: [brec, bs], amplitude_v: ripple_v, freq_hz: ripple_hz}
+      RS: {R: [brec, brs], r: r_src_ohm, tolerance: none}
+      RBOSC: {R: [brs, bosc], r: r_bosc_ohm, tolerance: none}
+      CBOSC: {C: [bosc, "0"], c: c_bosc_f, tolerance: none}
+      RB275: {R: [bosc, b275], r: r_b275_ohm, tolerance: none}
+      CB275: {C: [b275, "0"], c: c_b275_f, tolerance: none}
+
+  - title: oscillator
+    parts:
+      # 1V6: cathodes grounded, each plate on an end of 1T5's primary (centre tap on the
+      # record line), cross-coupled to the other grid through 350 pF, .001 grid to
+      # grid, the grid leaks to NOISE BALANCE's ends, its wiper grounded (sch).
+      XV6A: {device: [p6a, g6a, "0"], model: V6A}
+      XV6B: {device: [p6b, g6b, "0"], model: V6B}
+      C35: {C: [p6b, g6a], c: c_cross_f, tolerance: none}
+      C32: {C: [p6a, g6b], c: c_cross_f, tolerance: none}
+      C36: {C: [g6a, g6b], c: c_grids_f, tolerance: none}
+      R61: {R: [g6a, nba], r: r_grid_ohm, tolerance: none}
+      R62: {R: [g6b, nbb], r: r_grid_ohm, tolerance: none}
+      R63: {pot: [nba, "0", nbb], r: noise_balance_ohm, at: noise_balance, tolerance: none}
+      RT5A: {R: [p6a, t5a], r: t5_r_half_ohm, tolerance: none}
+      LT5A: {L: [t5a, bosc], l: t5_l_half_h}
+      RT5B: {R: [p6b, t5b], r: t5_r_half_ohm, tolerance: none}
+      LT5B: {L: [bosc, t5b], l: t5_l_half_h}
+      LT5S: {L: [sec, sr], l: t5_l_sec_h}
+      RT5S: {R: [sr, ret], r: t5_r_sec_ohm, tolerance: none}
+      KAB: {K: [LT5A, LT5B], k: t5_k}
+      KAS: {K: [LT5A, LT5S], k: t5_k}
+      KBS: {K: [LT5B, LT5S], k: t5_k}
+      R64: {R: [ret, "0"], r: r_erase_meter_ohm, tolerance: none}
+      # Erase: ERASE ADJUST || 5C34 in series with the erase head, from the secondary's
+      # top; the bias line from the erase head's hot end (sch).
+      C33: {C: [sec, ers], c: erase_adjust_f, tolerance: none}
+      C34: {C: [sec, ers], c: c_erase_fixed_f, tolerance: none}
+      LER: {L: [ers, erl], l: erase_l_h}
+      RER: {R: [erl, "0"], r: erase_r_ohm, tolerance: none}
+
+  - title: record head
+    parts:
+      # 5C39 (33 pF across BIAS ADJUST) left out, as the drawing's note allows ("C39 may
+      # be eliminated if necessary"): the provisional head needs less bias than its
+      # minimum gives.
+      R70: {R: [ers, bf], r: r_bias_feed_ohm, tolerance: none}
+      C13: {C: [bf, rec], c: bias_adjust_f, tolerance: none}
+      LREC: {L: [rec, rr], l: rec_l_h}
+      RREC: {R: [rr, rbc], r: rec_r_ohm, tolerance: none}
+      R24: {R: [rbc, "0"], r: r_bias_cal_ohm, tolerance: none}
+      # The 6201 head driver (ampex_351.yaml's record amplifier, from 1C9 on).
+      C9: {C: [in, g2a], c: c_c2b_f, tolerance: none}
+      XV2A: {device: [p2a, g2a, k2a], model: V2A}
+      RG2A: {R: [g2a, k2aj], r: r_g2a_ohm, tolerance: none}
+      RK2A: {R: [k2a, k2aj], r: r_k2a_ohm, tolerance: none}
+      RK2A_F: {R: [k2aj, "0"], r: r_k2a_foot_ohm, tolerance: none}
+      RP2A: {R: [b275, p2a], r: r_p2a_ohm, tolerance: none}
+      C10: {C: [p2a, rec], c: c_head_f, tolerance: none}

@@ -229,6 +229,53 @@ def build_12au7() -> dict[str, Any]:
     }
 
 
+def build_6201() -> dict[str, Any]:
+    """The Ampex 351's record driver: a Koren triode fit to RCA's two class-A1 points (Ip,
+    gm, rp at each) and the cutoff point, all five parameters free (log least squares)."""
+    from scipy.optimize import least_squares
+
+    pub = _published()["6201"]
+    pts, cut = pub["class_a1"], pub["cutoff"]
+
+    def resid(x):
+        t = Triode("fit", KorenTriode(*np.exp(x)))
+        r = []
+        for p in pts:
+            vk = p["rk_ohm"] * p["ip_a"]
+            vg, vp = -vk, p["supply_v"] - vk
+            r += [
+                np.log(t.ip(vg, vp) / p["ip_a"]),
+                np.log(t.gm(vg, vp) / p["gm_s"]),
+                np.log(t.rp(vg, vp) / p["rp_ohm"]),
+            ]
+        # "Approx.": the cutoff point weighs a tenth of the others.
+        r.append(0.1 * np.log(t.ip(cut["vg_v"], cut["supply_v"]) / cut["ip_a"]))
+        return r
+
+    sol = least_squares(resid, np.log([60.0, 1.35, 460.0, 300.0, 300.0]), xtol=1e-14, ftol=1e-14)
+    mu, ex, kg1, kp, kvb = (float(v) for v in np.exp(sol.x))
+    res = np.asarray(sol.fun)
+    caps = pub["capacitances_f"]
+    return {
+        "name": "6201",
+        "kind": "triode",
+        "source": f"fit: Koren triode to the class-A1 points at 250 and 100 V (Ip, gm, rp) and "
+        f"the cutoff point, log least squares ({pub['source']})",
+        "plate": {"model": "koren", "mu": mu, "ex": ex, "kg1": kg1, "kp": kp, "kvb": kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": caps["input"],
+            "gp": caps["gp"],
+            "pk": caps["output"],
+            "source": f"{pub['source']} (input -> gk, output -> pk; no shield)",
+        },
+        "fit_report": {
+            "class_a1_max_pct": float(100 * np.max(np.abs(np.expm1(res[:-1])))),
+            "cutoff_ratio": float(np.exp(res[-1] / 0.1)),
+        },
+    }
+
+
 def build_12bh7() -> dict[str, Any]:
     pub = _published()["12BH7"]
     a = pub["class_a1"]
@@ -904,6 +951,7 @@ BUILDERS = {
     "12AX7": build_12ax7,
     "12BH7": build_12bh7,
     "12AU7": build_12au7,
+    "6201": build_6201,
     "6973": build_6973,
     "GZ34": build_gz34,
     "SI_RECTIFIER": build_si_rectifier,
