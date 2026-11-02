@@ -305,6 +305,9 @@ Operating conditions:
 
 ## 6. Vinyl: carved groove, simulated stylus, dust (priority 5; own plan doc)
 
+**Plan (2026-11-01):** [PHONO_PLAN.md](PHONO_PLAN.md) grows this sketch into a plan and adds
+the acoustic gramophone, wax cylinders and tin foil on the same groove medium (parked).
+
 1. **Cutting.**
    - The cutting amplifier (with RIAA pre-emphasis) drives the cutter head
      (mass-spring with a feedback coil); the stylus motion carves the groove

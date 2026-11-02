@@ -896,7 +896,10 @@ the user decides with the numbers.
 
 **New device types** (BJT, JFET, MOSFET, op-amp macro model, zener, LDR / opto
 cell, thermistor, lamp) arrive when a chosen circuit needs them, each with its
-three-way test pattern.
+three-way test pattern. **The BJT model is a shared prerequisite** (the user's OK,
+2026-11-01): the Neve 1073, the API 312 and a clean transformerless preamp
+([MIC_ROOM_PLAN.md](MIC_ROOM_PLAN.md) A8), the TR-808 / CR-78 ([DRUM_PLAN.md](DRUM_PLAN.md)
+D3) and DEVICE_CANDIDATES.md's tier 2 all wait for it.
 
 **B9. The Fender 5E3 Deluxe** ([DEVICE_CANDIDATES.md](DEVICE_CANDIDATES.md), the
 user's first pick; planned 2026-10-29). A guitar amp built from the format like the

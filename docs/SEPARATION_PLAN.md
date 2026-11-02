@@ -38,7 +38,9 @@ Two observations:
 ## Physical models it suggests
 
 Each is a component or medium in the project's usual way: sourced values, the one coupled
-simulation, two implementations with an agreement test.
+simulation, two implementations with an agreement test. Items 1-3 are now planned in
+[MIC_ROOM_PLAN.md](MIC_ROOM_PLAN.md) (2026-11-01: the mic and preamp list, opposite
+chains, rooms of any shape on the GPU).
 
 1. **Microphones as components** (COMPONENT_EDITOR_PLAN.md already lists a microphone and
    a room as later components).

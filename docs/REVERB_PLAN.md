@@ -89,7 +89,7 @@ a few cores; otherwise production renders offline and the draft keeps fewer mode
 **Later or quirkier media** (not milestones yet): tape echo (FUTURE_DIRECTIONS.md's tape
 medium), the Binson Echorec (tubes and a magnetic drum), oil-can delays (charge on a disc
 turning in oil), the echo chamber (the speaker plus a microphone in a room: a 3D medium,
-the most expensive, last).
+the most expensive, last; MIC_ROOM_PLAN.md's rooms, a speaker source and a mic make one).
 
 ## The engine: a medium coupled at ports
 
