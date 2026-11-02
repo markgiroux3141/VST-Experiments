@@ -340,7 +340,8 @@ its own thread at m steps per sample, currents averaged per sample, owns no shar
 may hold the audio input; `partition.rs`), the medium's literal mode (`TapeStream(literal=M)`,
 IR `TapeMedium.bias_substeps`: M samples of the head's whole field per push, recorded at their
 extrema), the tape part's `bias_substeps` (senses a record coil drawn in the multi-rate
-section). The 351's record side runs at 20 substeps (3.84 MHz); it meets the rest only at the
+section). The 351's record side runs at 10 substeps (1.92 MHz since 2026-11-02; 20 was no closer
+to 40 in band levels); it meets the rest only at the
 input and the reservoirs (a cut through a coupling capacitor diverges). Production's probes
 are decimated to 96 kHz and hide the 99 kHz: measure the bias at `oversample` 1. 106x real
 time on the drums (was 46.7x). A GPU for the recording kernel is planned (TAPE_PLAN.md: f64 is slow on a 3080).
@@ -352,9 +353,18 @@ and settings, ~32 min), the transport on the tape part (`parts.TAPE_TRANSPORT`, 
 values, all or none, both builders), `rep_h_per_a` calibrated to the drawing's -68 dB, and
 prints through it: `uv run --extra fast --extra listen python scripts/print_351.py --drive-db 0 6
 12` (~58x real time for the three at once). The 351's profile: `varimu unit --circuit ampex_351
---name NAME` (`varimu/measure/tape_suite.py`: S/N 61.6 dB, the response fails +-2 dB at 70 Hz:
-the provisional heads' contour bump; TAPE_PLAN.md "Gaps"). The tape stream records its blocks
+--name NAME` (`varimu/measure/tape_suite.py`; before the heads' change below: S/N 61.6 dB, the
+response failing +-2 dB at 70 Hz, the provisional heads' contour; TAPE_PLAN.md "Gaps"). The tape stream records its blocks
 on a worker thread (bit-identical; the 351 100x -> ~74x real time; TAPE_PLAN.md "Speed").
+**Studies before model changes (2026-11-02):** frequency-dependent switching (Sharrock) is not
+the cause of the tape's misses (`scripts/tape_switching_study.py`: <= 0.4 dB on No. 21, the 3%
+level, No. 14; closed, SCOTCH111@3 stays); the heads are (`scripts/tape_heads_study.py`). Applied
+(the user's choices): record gap 51 um (the Ampex 300's), repro contour pole 1.5 / relax 5.5 mm
+(calibrated to the +-2 dB spec, near Nortronics' WP head), record coil 8.0e6 A/m per A, 3 mH:
+the response passes (-1.84 / +0.94 dB), the 3% level +4.8 dB (on #111's Sound Talk No. 1),
+S/N 58.3 dB fails (the long gap's record EQ lifts the record amp's hiss; open). Profile
+`ampex351_heads51`; `scripts/speed_351.py` times the record side's settings (TAPE_PLAN.md
+"Gaps" 3-4, "Speed").
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->

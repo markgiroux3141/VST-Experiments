@@ -10,7 +10,8 @@ Levels as the first prints' (scripts/tape_print.py): -18 dBFS rms is 0 VU in (-1
 bridging) and out (+8 dBm); `--drive-db` feeds the machine that much hotter at the aligned
 RECORD LEVEL. The head distance's delay (133 ms at 15 ips) is taken out. Writes
 reports/tape/audio/<clip>_351_15ips_drive<+N>dB.wav and the dry excerpt matched to each
-print's loudness (<clip>_dry_for_351_drive<+N>dB.wav: loudness lies). The drives run at
+print's loudness (<clip>_dry_for_351_drive<+N>dB.wav: loudness lies); `--tag` is appended
+to both names. The drives run at
 once (each keeps two threads busy). With the circuit's noise (its tubes' and resistors'
 hiss, the mains wander, the tape's grain; `--no-noise`: none).
 """
@@ -52,6 +53,7 @@ def main() -> int:
     ap.add_argument("--seconds", type=float, default=10.0)
     ap.add_argument("--drive-db", type=float, nargs="+", default=[0.0])
     ap.add_argument("--no-noise", action="store_true", help="no hiss, hum or grain")
+    ap.add_argument("--tag", default="", help="appended to the file names (e.g. _nonoise)")
     a = ap.parse_args()
 
     al = ta.aligned()
@@ -94,10 +96,10 @@ def main() -> int:
 
     meter = pyloudnorm.Meter(fs)
     for drive, y in zip(a.drive_db, ys, strict=True):
-        name = f"{stem}_351_15ips_drive{drive:+.0f}dB"
+        name = f"{stem}_351_15ips_drive{drive:+.0f}dB{a.tag}"
         _write(OUT / "audio" / f"{name}.wav", y, fs)
         dry = x * 10 ** ((meter.integrated_loudness(y) - meter.integrated_loudness(x)) / 20)
-        _write(OUT / "audio" / f"{stem}_dry_for_351_drive{drive:+.0f}dB.wav", dry, fs)
+        _write(OUT / "audio" / f"{stem}_dry_for_351_drive{drive:+.0f}dB{a.tag}.wav", dry, fs)
         print(
             f"  {name}: peak {20 * math.log10(np.abs(y).max() + 1e-30):.1f} dBFS, "
             f"{meter.integrated_loudness(y):.1f} LUFS"

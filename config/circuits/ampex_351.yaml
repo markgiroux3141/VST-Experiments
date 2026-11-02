@@ -99,16 +99,16 @@ values:
   tape_model: {value: SCOTCH111@3, source: "config/components/scotch111/3.yaml (Scotch 111's particles, oriented, and its grain)"}
   speed_m_s: {value: 0.381, source: "man p10: 15 ips"}
   f_bias_hz: {value: 100.0e+3, source: "man p78: approximately 100 kc", notes: "the oscillator's nominal frequency: sets the tape's cells (7.62 per bias wavelength); the bias itself is the circuit's"}
-  rec_gap_m: {value: 12.7e-6, source: "provisional: web: ATR Master Tape sheet's test record gap 0.5 mil (the 351's isn't printed)"}
+  rec_gap_m: {value: 51.0e-6, source: "provisional: data/datasheets/tape/3m_Sound_Talk_21_195302.pdf (Sound Talk No. 21, 1953: the Ampex 300's record gap .002 inch); data/schematics/ampex_351/350heads.pdf (Minneapolis Magnetics fits one replacement head to the 300 / 350 / 400); the 351's isn't printed. 12.7 um gave a harder knee (TAPE_PLAN.md Gaps 4, scripts/tape_heads_study.py)"}
   rep_gap_m: {value: 6.35e-6, source: "man p70: typical playback gap .00025 inch"}
-  pole_m: {value: 3.0e-3, source: "provisional: model knowledge (a 1950s ring head's pole faces, ~3 mm)"}
-  relax_m: {value: 3.0e-3, source: "provisional: model knowledge (the head contour receding from the tape over a few mm)"}
+  pole_m: {value: 1.5e-3, source: "calibrated: the repro contour (with relax_m) that puts the aligned machine within +-1.5 dB 30 Hz-1 kHz with its electronics, the 351's +-2 dB at 15 ips (man p10; scripts/tape_heads_study.py, TAPE_PLAN.md Gaps 4); near a measured long-pole head, web: https://www.discolathe.com/.pdfs/Nortronics_Silvr_pp1-9.pdf (Nortronics WP series, Fig. 3: 1.25 mm / 4.0 mm fitted). Both heads' (the record head's contour is far below the zone's floor)"}
+  relax_m: {value: 5.5e-3, source: "calibrated: with pole_m (see there); 3 mm / 3 mm dipped -4.3 dB at 70 Hz"}
   spacing_m: {value: 0.5e-6, source: "provisional: model knowledge (contact recording, 0.1-1 um)"}
   track_m: {value: 5.94e-3, source: "man p41: full track 234 mils"}
   head_distance_m: {value: 50.8e-3, source: "provisional: secondary sources (the 350 / 351 headblock's record-to-repro gap spacing ~2 in; data/schematics/ampex_351/README.md)"}
-  rec_l_h: {value: 5.0e-3, source: "provisional: model knowledge (~300 turns, as rec_h_per_a implies, on a ring head of A_L ~ 50 nH; not printed)"}
-  rec_r_ohm: {value: 100.0, source: "provisional: model knowledge (its winding, ~100 ohm)"}
-  rec_h_per_a: {value: 2.0e+7, source: "provisional: model knowledge (~300 turns at 85% efficiency over the 12.7 um gap: a few mA of bias)"}
+  rec_l_h: {value: 3.0e-3, source: "provisional: model knowledge (~480 turns, as rec_h_per_a implies at 85% over the 51 um gap, on a ring head of A_L ~ 12.5 nH (50 nH at 12.7 um: L ~ N^2 / g); not printed; web: Nortronics' notes give record heads 2-50 mH, see pole_m)"}
+  rec_r_ohm: {value: 160.0, source: "provisional: model knowledge (its winding: ~480 turns, the length of a ~100 ohm 300-turn coil scaled)"}
+  rec_h_per_a: {value: 8.0e+6, source: "calibrated: operating level at ~0.39 mA rms of audio in the head (the drawing's ~0.5 within 2 dB, sch p95; RECORD LEVEL near its top, as aligned with the 12.7 um gap: a 51 um gap records at 0.40x the deep-gap field, scripts/tape_heads_study.py); consistent with No. 21's fitted 6.7e6 A/m per A for the Ampex 300's 51 um head (TAPE_PLAN.md TM2 step 7, scripts/tape_switching_study.py; whether its mA are rms or peak is unprinted)"}
   rep_l_h: {value: 0.5, source: "provisional: model knowledge (a high-impedance repro head into a grid, ~0.5 H; not printed)"}
   rep_r_ohm: {value: 500.0, source: "provisional: model knowledge (its winding, ~500 ohm)"}
   # Calibrated, not printed: the drawing's signal voltages were taken 8.2 dB under the
@@ -329,8 +329,9 @@ sections:
       RK1B: {R: [k1b, "0"], r: r_k1b_ohm}
 
   - title: record amplifier
-    # The record side, from the input on: 20 steps per sample, with the bias section below.
-    substeps: 20
+    # The record side, from the input on: 10 steps per sample (1.92 MHz in production), with
+    # the bias section below; 20 is no closer to 40 in band levels (TAPE_PLAN.md "Speed").
+    substeps: 10
     parts:
       # The unbalanced bridge (sch): 4R5 82K from the input into 4R4 20K + 4R3 100, their
       # junction to RECORD LEVEL's top, its wiper to 1V1a's grid.
@@ -357,8 +358,8 @@ sections:
       CLF: {C: [lf, "0"], c: c_lf_f}
 
   - title: bias and head driver
-    # Above the audio rate's Nyquist frequency: 20 steps per sample on a thread of its own.
-    substeps: 20
+    # Above the audio rate's Nyquist frequency: 10 steps per sample on a thread of its own.
+    substeps: 10
     parts:
       # The record line from the 330 V reservoir through 3K1c (3R56, 3R57) and 1R59 to
       # 1C2c, feeding the oscillator's centre tap and the head driver's 1R23 (sch).
@@ -426,12 +427,12 @@ sections:
   - title: heads and tape
     parts:
       # The tape senses the record head (in the section above: its whole current, the
-      # bias included, 20 samples per sample) and plays into 2R25 through the repro head
+      # bias included, 10 samples per sample) and plays into 2R25 through the repro head
       # (sch); the repro coil is the part's.
       TP:
         tape: [hra, rbc, rh]
         component: tape_model
-        bias_substeps: 20
+        bias_substeps: 10
         speed_m_s: speed_m_s
         f_bias_hz: f_bias_hz
         rec_gap_m: rec_gap_m

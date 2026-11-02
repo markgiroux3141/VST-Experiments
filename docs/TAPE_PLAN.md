@@ -918,6 +918,54 @@ out of sample.
    gaps: play 200 uin (5 um) for 15 ips, **record 500 uin (12.7 um) for 1/4" tape**; metal
    erase cores have "good efficiency up to 60 kHz" (laminations' loss near the bias
    frequency).
+   **The study** (`scripts/tape_heads_study.py` -> `reports/tape/heads_study.{json,png}`):
+   - **Nortronics' 15 ips curves** (Fig. 3, read at 400 dpi), dB re flat at 20 / 30 / 40 / 50 /
+     70 / 100 / 150 / 200 / 300 Hz: WP -5.0 / 0 / +2.0 / +3.0 / +2.2 / +0.7 / -1.2 / -0.5 /
+     +0.3; PR / Studio 0 / +1.8 / +1.5 / +0.3 / -1.0 / -0.1 / -0.2 / 0 / 0. The model's head
+     (linear relaxation) fits them within 0.58 dB (WP: poles 1.25 mm, relaxation 4.0 mm) and
+     0.40 dB (PR: 3.5 / 20.25 mm). The old 3 / 3 mm: +3.8 / +5.3 / +4.3 dB at 30 / 40 / 50 Hz,
+     -2.7 at 70.
+   - **The aligned machine's low end by block** (re 1 kHz, 30 / 50 / 100 / 200 Hz): record
+     electronics +4.05 / +2.45 / +0.85 / +0.23; the medium's flux flat (+0.4); the EMF's
+     6 dB/oct plus the reproduce electronics -8.8 / -5.3 / -2.3 / -1.0 (ideal NAB playback of
+     NAB flux: the record side should lift ~+5.8 dB at 30 Hz, the reproduce side is 2.6 dB
+     under ideal NAB there). Ampex's own measured electronics (p94) have still less bass: a
+     flat 351 needed a head that **lifted** the bass, +5.6 / +3.7 / +1.7 / +1.0 dB. No single
+     relaxation (linear or raised cosine) makes that without ripple (best 2.7-2.9 dB off): the
+     real head shapes its low end with more than one scale (Nortronics' third factor, the
+     lamination behind the face). With our electronics, poles 1.5 mm / relaxation 5.5 mm put
+     the whole machine within 1.53 dB 30 Hz-1 kHz (WP-like).
+   - **The record gap** (medium alone, the first print's machine, each aligned; 3% level over
+     1% / No. 14 at 7 kHz (-40 / -30 dB criteria) / 15 kHz re 1 kHz before EQ): 12.7 um +3.33 /
+     -1.8 / -1.0 / +7.4; 25 um +3.69 / +0.3 / -0.2 / +4.9; 51 um +4.00 / -3.1 / 0.0 / +1.8 (the
+     -40 dB crossing erratic). A 51 um gap records at 0.40x the deep-gap field (bias 1.69 Hc
+     against 3.0).
+   **Applied (2026-11-02, the user's choices: 51 um, the contour; with speed lever 2's 10
+   substeps):** `config/circuits/ampex_351.yaml` rec_gap_m 51 um (Bulletin 21's Ampex 300;
+   Minneapolis Magnetics fits one head to the 300 / 350 / 400), pole_m 1.5 / relax_m 5.5 mm
+   (calibrated, near the WP head), rec_h_per_a 8.0e6 A/m per A (operating level at ~0.39 mA
+   rms of audio, RECORD LEVEL near its top as before; No. 21's fit measured 6.7e6 for the 300's
+   51 um head), so ~480 turns: rec_l_h 3 mH, rec_r_ohm 160. (Keeping 2.0e7 with 4x the turns
+   overbiased the head at BIAS ADJUST's minimum: the alignment refused it.)
+   - **Aligned:** 2R31 0.788, bias 31.1 pF (2.95 mA rms; the 1/2 dB points 2.48 / 3.51), 1C7
+     437 pF (between Ampex's typical and maximum curves: the long gap's treble loss), RECORD
+     LEVEL 0.946, PLAYBACK LEVEL 0.390; check: THD 1.00% (h2 0.68, h3 0.71, h5 0.19), audio in
+     the head 0.38 mA rms, the repro head at 500 Hz -61.3 dB re 0.78 V (the drawing's -68 + 8.2
+     = -59.8: 1.5 dB under; rep_h_per_a left as calibrated, as the 1.4 dB before).
+   - **Profile** (`varimu unit --circuit ampex_351 --name ampex351_heads51`, 35 min; the old
+     one kept as `ampex351_nominal`):
+     - **Response passes:** re 1 kHz 30 Hz -1.84, 40 +0.19, 50 -0.23, 70 -1.74, 100 +0.27, 200
+       -0.40, 500 -0.31, 2k +0.60, 5k +0.94, 7.5k +0.01, 10k -0.12, 12.5k -0.35, 15k -1.42
+       (was -4.45 at 70 Hz).
+     - **The knee:** THD at +3 / +6 / +9 / +12 dB 1.95 / 4.00 / 7.57 / 12.8% (was 2.46 / 5.32 /
+       9.94 / 16.1): the 3% level **+4.8 dB** over 0 VU (was +3.8), on #111's own data (Sound
+       Talk No. 1, ~4.1-4.5 dB of output, ~4.4-4.8 of input).
+     - **S/N fails: 58.3 dB** (was 61.6; spec 60, its method unprinted). The noise rose 1.2-1.7
+       dB below 1 kHz (the playback gain) and +6.7 / +12.1 / +5.1 dB at 1-3 / 3-8 / 8-15 kHz:
+       the record EQ (1C7 437 pF against 122) lifts the record amplifier's hiss before the
+       tape. A real Ampex 300 met 60 dB with a 0.002" gap, so the model's long-gap treble loss
+       or the record side's hiss is a little high: open, the user's next question after
+       listening.
 5. **SM911** (TM2's second part): the same physics with only the tape's parameters changed,
    against EMTEC's IEC curves and stated gaps: the first true out-of-sample test.
 6. **A real machine:** any recording of a real 351 (or 350) with Scotch 111-era tape, a test
@@ -989,8 +1037,7 @@ out of sample.
        step from a slightly different start) differ by -46 to -57 dB in waveform while their
        third-octave levels (50 Hz-15 kHz) agree within 0.034 dB. In band levels 10 substeps is
        as close to 40 as 20 is.
-     - **10 substeps: adopt** with the next change that moves the alignment anyway (the heads,
-       item 4 of "Gaps"), so the machine is re-aligned once.
+     - **10 substeps: adopted** with the heads' change (item 4 of "Gaps"), one re-alignment.
      - **Tube tables: not adopted.** Exact here, but 10% for a global production setting that
        would move every other circuit's renders (the cache key).
      - **The audio-rate cut through the record amplifier: not pursued.** At 10 substeps the
