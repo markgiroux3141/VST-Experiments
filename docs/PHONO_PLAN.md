@@ -4,8 +4,9 @@ Drafted 2026-11-01 from a conversation with the user ("do we have a plan for sim
 vinyl record player from physics? ... extend this to include a gramophone and even wax
 cylinders for some really old school sounds"). It grows FUTURE_DIRECTIONS.md §6 (vinyl,
 a sketch) into a plan and adds the acoustic machines before it. Nothing in it is built.
-It is parked until the user picks it up. The order below is a recommendation; the open
-decisions are the user's.
+Picked up 2026-11-02 (the user: start with the easiest case, an acoustic machine so the
+result is obvious by ear): **the wax cylinder first**, built in a worktree beside the tape
+session. Status below ("Status (2026-11-02)"). The open decisions are the user's.
 
 ## The frame
 
@@ -53,6 +54,115 @@ The project's rules apply as everywhere:
 | Radiation from a horn | The pressure readout (`Vccs`), INSTRUMENT_PLAN.md's BEM | The horn mouth's radiation impedance |
 | The room in front of a recording horn | MIC_ROOM_PLAN.md (source -> room -> capsule) | The horn mouth as the "capsule" |
 | Tube phono stages, step-up transformers | Tubes, JA cores, the device builder | A tube RIAA stage as a circuit file |
+
+## Status (2026-11-02): a wax cylinder end to end, offline in Python
+
+Why the cylinder: its groove is one height per arc length (hill-and-dale), it turns at a
+constant groove speed (0.466 m/s at 160 rpm, no inner-groove loss), and its reproducer and
+horn need no electronics, so G1's groove and G3 / G4's acoustic chains meet in the smallest
+machine there is. Built like the drums' D1: Python only, `varimu/phono/` (outside the render
+cache key), `config/phono/edison_standard.yaml`, `tests/test_phono.py`,
+`scripts/cylinder_study.py` -> `reports/phono/cylinder/`.
+
+- **Networks** (`network.py`): mechanical parts in the mobility analogy (velocity as volts,
+  force as amperes: a mass a capacitor to ground, a spring an inductor, a lever an ideal
+  transformer), acoustic parts in the impedance analogy, a diaphragm a gyrator of its
+  effective area. MNA into E x' + G x = B u; the exact response per frequency, or the
+  trapezoidal rule (algebraic rows at the step's end) with one nonlinear port solved per
+  step. This answers the open decision "mechanical networks in the IR" in the circuit-analog
+  direction: every element here is an existing IR element type (C, L, G, transformer, VCCS).
+- **Ducts and horns** (`horn.py`): Webster ladders of conical sections; the mouth an
+  unflanged pipe's end correction in parallel with rho c / S (+1.8 dB of radiation
+  resistance below ka ~ 1, documented). Tested against the transmission line (a pipe's
+  resonances within 0.3%) and a 4000-step exact reference (a 30 in horn within 1 dB).
+- **The groove** (`groove.py`): written along arc length (the cutter leaving the wax leaves
+  the surface uncut), read by grayscale dilation with the tip's radius along the groove,
+  a Hertz contact with Hunt-Crossley damping; seeded roughness. Tests: Lewis and Hunt's
+  second harmonic (pi^2 R A / lambda^2) within 3%, the dilation equal to the exact offset
+  curve where the tip fits, 2.4 um spacing within 1% of 0.24 um, mistracking starting
+  within the force balance's +-25%.
+- **The machine** (`cylinder.py`): recording is linear (Edison's 16 in conical studio horn,
+  a glass diaphragm with its clamped fundamental, the cutter, the wax's cutting resistance;
+  the performer's placement cuts the format's ~10 um maximum at the loudest point). Playing
+  is nonlinear: the Model C's two-minute stylus (0.0075 in along the groove) on a stylus
+  bar pivoted on the floating weight, a mica diaphragm, the neck and a 30 in horn; the
+  output the pressure 1 m out. ~5-9x slower than real time (a per-sample Python loop over
+  ~220 states).
+- **What came out** (`reports/phono/cylinder/summary.json`): the whole chain's small-signal
+  band (within 10 dB of its peak) is ~680 Hz-2.9 kHz, peaking at 1.74 kHz near both
+  diaphragms' fundamentals (1.70 and 1.57 kHz); the cut needs ~118-124 dB SPL at the horn's
+  mouth (performers did sing into it), and plays back at ~66-93 dB at 1 m. Published
+  ranges for acoustic cylinders are ~200 / 300 Hz-3 kHz: the low end is likely too weak,
+  from provisional values (the diaphragms' stiffness, the recording horn's 6 in mouth).
+- **Surface noise:** read along one line, a 0.3 um rms roughness (inside Fadeyev's '< 1 um')
+  hissed at 68 dB at 1 m against the vocal's 70 (mostly above 2 kHz, where the reproducer
+  is +12 dB/octave in displacement). The real tip touches a ~100 um patch across the groove
+  and averages fine roughness away, so the line overstates it: the config now carries an
+  effective 0.03 um aimed at ~20 dB S/N, provisional until G6 models the patch.
+- **Wow** (`transport.py`, the user's ask after the first listen: real cylinders warble):
+  each machine's drive as seven ODEs at 8 kHz (RK4): a mainspring (running down, seeded
+  irregularity), a flyball governor (collar on springs, a felt brake whose friction varies
+  around its disc; the operator's speed screw solved for the target speed), a leather belt
+  on eccentric pulleys, the mandrel; the cylinder's runout (an eccentric seat and an oval
+  warp) both lifts the surface (the floating weight absorbs it) and modulates the arc rate
+  under the stylus (w times the contact's radius, derived in `surface_speed`). Recording:
+  the cut's drag (~ depth^1.5) loads the lathe, so loud passages slow it; the groove is
+  written along the arc that actually passed. Playing: read along the player's own arc.
+  Measured: the recorder 0.40% peak, the player 0.64% (its runout 100 um: Fadeyev's ~250
+  um off true), 2.67 Hz (mandrel) and 5.3 Hz (motor pulley) strongest; a played take ~5.8
+  cents rms, ~19 cents peak to peak; a 50% load step settles in ~3 s, 0.075% slow. Tests:
+  a perfect drive holds its speed to 1e-9, runout swings the arc rate +-e/R at 2.67 Hz, a
+  tone through the whole player warbles +-e/R, loud passages slow the lathe.
+- **Crackle** (`damage.py`, G6's first cut, the user's ask: the hiss alone sounded like pink
+  noise): dust grains (Poisson along the groove, power-law sizes, half pressed into the
+  wax), mould colonies pitting the surface, cracks meeting the groove once a turn (a gap
+  and a step: a tick at 2.67 Hz), all seeded geometry, so the clicks are the player's
+  mechanics (a grain throws the tip; the diaphragm and horn ring). Defaults: light dust
+  (~5 grains a second); the study's `worn` take adds heavy dust, mould and a crack. Wear per
+  play (the groove changing with each play) isn't built.
+- **The thin low end, analysed (2026-11-02):** the chain is flat only between the two
+  diaphragms' resonances: the recorder cuts constant displacement per pascal below its
+  resonance and falls above it; the reproducer's pressure rises ~12 dB/octave with groove
+  displacement up to its own (1.57 kHz). The recorder's at 1.70 kHz squeezes the band.
+  Damping doesn't move it (Q 5 -> 1.5: +3 dB at 300 Hz); the recording diaphragm's
+  resonance does: a 50 mm glass disc (f0 ~400 Hz) lifts 200-500 Hz by ~25 dB at ~8 dB more
+  singing level. But a seller's listing gives Edison's Automatic Recorder a 1-5/16 in
+  (33 mm) glass diaphragm, the size used (web: https://www.ebay.com/itm/365629322052), and
+  thinner glass (0.1 mm, f0 1.13 kHz) gains only ~8 dB at 300 Hz. Fadeyev 2005 (App. A2)
+  calls the Edison recorder's resonance broad. Open: which recorder is meant (a home
+  Automatic Recorder vs. a studio recorder, whose diaphragm and stylus linkage may differ;
+  to source), the user's call.
+- **After the user's comparison with real transfers (2026-11-02: more warble, more
+  distortion, thin low end; fixes deferred to me):**
+  - wow: the played cylinder's runout raised to Fadeyev's ~250 um (eccentric seat), the
+    moulded copy inheriting 50 um from the lathe, worn governors (zeta 0.15), stickier
+    springs (6%): 13.8 cents rms, 52 peak to peak (was 5.5 / 22). Below zeta ~0.13 the
+    governor's speed loop falls into a limit cycle (75-180 cents peak to peak): a condition
+    dial for a seasick machine;
+  - low end: a studio recorder's ~2 in glass diaphragm, 0.1 mm (f0 ~400 Hz; provisional,
+    the home Automatic Recorder's 33 mm is the documented alternative): the chain re its
+    peak is now -30 dB at 300 Hz (was -55), -29 at 200, -48 at 150;
+  - wear per play (`wear.py`): Archard's law (k p / H per distance slid, the Hertz patch's
+    pressure, the quasi-static force F0 + m v^2 y''), k set so a play takes ~0.2 um off a
+    flat groove (brown wax lasting "several dozen plays"). Two plastic-dent rules tried
+    first ran away (a dent sharpens the curvature that made it; the worn track's width
+    across the groove wasn't modelled); Archard's is linear per pass and stays bounded.
+    Its audible effect at that rate is modest (tones' H2 / H3 move a few dB after 30-60
+    plays); the `worn` take carries 30 plays.
+  - noise vs music (the user: the `played` take's music quieter than its crackle): dust up
+    to 40 um left bumps twice the loudest music's 10 um, and the cut was set by the program's
+    single loudest instant (In the Pines averaged 86 dB SPL at the horn, music ~= noise).
+    Now grains <= 15 um pressed 70% in, and the cut is set by the loud passages
+    (`cut_level_percentile` 99: the engineer's placement, rarer peaks overloading to ~2.6x):
+    on In the Pines the music sits ~15 dB rms over hiss and crackle, clicks peak about level
+    with the music's peaks, the stylus leaves the groove 0.17% of the time on peaks (the
+    distortion of hot acoustic records), the singer ~94 dB SPL at the horn.
+- **Gaps / next:** most values provisional (sources are collectors' pages and Fadeyev et al.
+  2005); the user's listen; the low end against published responses; wear per play and
+  the steel needle (G2); the governor's wow; the circuitsim port (G1's Rust half: the
+  network is IR elements plus a groove medium element like `Tape` / `Plate`); BLAS threads
+  pinned to one when another job saturates the cores (`OPENBLAS_NUM_THREADS=1`: 150-state
+  solves ran 100x slower under contention).
 
 ## The model
 

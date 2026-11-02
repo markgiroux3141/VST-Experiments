@@ -1,0 +1,158 @@
+# An Edison two-minute brown-wax cylinder, recorded acoustically and played on an Edison
+# Standard with a Model C reproducer and its horn (docs/PHONO_PLAN.md, G1 + G3 + G4's first
+# cut; varimu/phono/cylinder.py). Everything acoustic and mechanical: no electricity.
+#
+# Sources found so far are thin (collectors' pages, one archival paper); most values are
+# provisional, each with its reasoning, to be bounded or replaced. "Fadeyev 2005":
+# V. Fadeyev, C. Haber et al., "Reconstruction of Mechanically Recorded Sound from an
+# Edison Cylinder using Three Dimensional Non-Contact Optical Surface Metrology" (LBNL,
+# 2004 preprint, J. Audio Eng. Soc. 53(6), 2005), web: https://www-cdf.lbl.gov/~av/cylinder-paper-PVF.pdf
+
+air:
+  density_kg_m3: {value: 1.204, source: "provisional: model knowledge (dry air at 20 C, 1 atm)"}
+  sound_speed_m_s: {value: 343.0, source: "provisional: model knowledge (dry air at 20 C)"}
+
+cylinder:
+  diameter_m: {value: 0.0555625, source: "web: Fadeyev 2005, Tables 3-4, 2.1875 in"}
+  rpm_recorded: {value: 160.0, source: "web: Fadeyev 2005, Table 4 (160 rpm, the standard after ~1902; 120-144 earlier)"}
+  max_amplitude_m: {value: 1.0e-5, source: "web: Fadeyev 2005, Table A1-1, cylinders' maximum groove amplitude ~10 um (deeper cuts overcut the next turn)"}
+  cut_level_percentile: {value: 99.0, source: "provisional: the recording engineer placed performers so the loud passages cut to the groove's limit, accepting that the rarest peaks overload (blasting, mistracking): this percentile of the cutter's excursion is set to max_amplitude_m (2026-11-02: the absolute peak left program 15-20 dB under the limit and under the surface noise)"}
+  cut_depth_m: {value: 2.0e-5, source: "provisional: a ~150 um wide groove cut by a 130 um radius cutter (Fadeyev 2005, sec. 4: its fitted cutter radius): w^2 / 8R ~ 22 um"}
+  wax_youngs_pa: {value: 3.0e8, source: "provisional: model knowledge (metallic-soap 'brown wax', between paraffin ~0.1 GPa and hard waxes ~1 GPa; to source)"}
+  wax_poisson: {value: 0.4, source: "provisional: model knowledge (waxes ~0.4)"}
+  wax_hardness_pa: {value: 2.0e7, source: "provisional: model knowledge (a metallic-soap wax's indentation hardness, between paraffin's few MPa and hard waxes' tens; sets wear per play: varimu/phono/wear.py)"}
+  wear_coefficient: {value: 1.1e-3, source: "provisional: Archard's k, set so one play takes ~0.2 um off a flat groove (wear.flat_wear_per_play): brown wax 'good for as few as several dozen plays' (web: https://conservation-wiki.com/wiki/Cylinders) read as the ~10 um modulation gone in ~50; mild-wear k for soft materials is ~1e-4-1e-3"}
+
+surface:
+  sigma_m: {value: 3.0e-8, source: "provisional: chosen for a surface-noise S/N ~20 dB on program (model knowledge of brown-wax transfers); one profile line along the groove overstates roughness (the real tip touches a ~100 um patch and averages it: G6), so this is an effective value. Fadeyev 2005, Table A1-1, bounds the cylinders' noise amplitude '< 1 um'; 0.3 um gave S/N ~2 dB (2026-11-02)"}
+  corr_m: {value: 2.0e-5, source: "provisional: model knowledge (the metallic soap's grain and the cutter's chatter, tens of um)"}
+
+# After the cut (varimu/phono/damage.py): a lightly used cylinder by default (some dust,
+# no mould, no cracks); mould and cracks are conditions to dial in. No counts or size
+# distributions found for cylinders yet: all provisional.
+damage:
+  dust_per_m: {value: 10.0, source: "provisional: model knowledge (grains in the groove; ~5 a second at 0.47 m/s)"}
+  dust_min_m: {value: 2.0e-6, source: "provisional: model knowledge (fine household dust)"}
+  dust_max_m: {value: 1.5e-5, source: "provisional: model knowledge (grains much larger than the groove's ~20 um depth are swept aside or crushed by a 25 gf stylus; 40 um made clicks louder than the music, 2026-11-02)"}
+  dust_exponent: {value: 2.5, source: "provisional: model knowledge (a power law of size, many small grains)"}
+  dust_embed: {value: 0.7, source: "provisional: model knowledge (a grain pressed most of its diameter into soft wax by the stylus' 25 gf)"}
+  mould_colonies_per_m: {value: 0.0, source: "provisional: a condition (none on a well-kept cylinder)"}
+  mould_length_m: {value: 3.0e-3, source: "provisional: model knowledge (a colony's spot crossed by the groove)"}
+  mould_pits_per_m: {value: 3.0e4, source: "provisional: model knowledge (pits ~30 per mm inside a colony)"}
+  mould_depth_min_m: {value: 1.0e-6, source: "provisional: model knowledge"}
+  mould_depth_max_m: {value: 6.0e-6, source: "provisional: model knowledge"}
+  mould_width_min_m: {value: 1.0e-5, source: "provisional: model knowledge"}
+  mould_width_max_m: {value: 6.0e-5, source: "provisional: model knowledge"}
+  cracks: {value: 0.0, source: "provisional: a condition (cracks across the cylinder)"}
+  crack_gap_m: {value: 1.0e-4, source: "provisional: model knowledge (a hairline crack's width at the surface)"}
+  crack_gap_depth_m: {value: 3.0e-5, source: "provisional: model knowledge"}
+  crack_step_m: {value: 1.0e-5, source: "provisional: model knowledge (the cylinder sprung open at the crack)"}
+
+recorder:
+  horn_length_m: {value: 0.4064, source: "web: pspatialaudio.com/cylinders.htm, Edison's studio recording horn: 16 in long, conical, no flare"}
+  horn_mouth_radius_m: {value: 0.0762, source: "web: pspatialaudio.com/cylinders.htm, a 6 in mouth"}
+  horn_throat_radius_m: {value: 0.0079375, source: "web: pspatialaudio.com/cylinders.htm, a 5/8 in end with a rubber coupling to the recorder"}
+  coupling_length_m: {value: 0.03, source: "provisional: model knowledge (the rubber coupling and the recorder's throat)"}
+  cavity_height_m: {value: 5.0e-4, source: "provisional: model knowledge (the air gap in front of the diaphragm)"}
+  diaphragm_radius_m: {value: 0.025, source: "provisional: a studio recorder's ~2 in diaphragm (its fundamental ~400 Hz: the chain then reaches down to ~200-300 Hz, as acoustic cylinders do); Edison's home Automatic Recorder used 1-5/16 in (33 mm, free radius ~15 mm; web: https://www.ebay.com/itm/365629322052): set 0.015 for it"}
+  diaphragm_thickness_m: {value: 1.0e-4, source: "provisional: model knowledge (thin glass; a rebuilt recorder used 0.1 mm cover glass, web: https://boginjr.com/electronics/rad/edison/)"}
+  diaphragm_youngs_pa: {value: 7.0e10, source: "provisional: model knowledge (soda-lime glass)"}
+  diaphragm_density_kg_m3: {value: 2500.0, source: "provisional: model knowledge (soda-lime glass)"}
+  diaphragm_poisson: {value: 0.22, source: "provisional: model knowledge (soda-lime glass)"}
+  diaphragm_q: {value: 5.0, source: "provisional: model knowledge (a diaphragm clamped in rubber gaskets)"}
+  cutter_mass_kg: {value: 2.0e-5, source: "provisional: model knowledge (a sapphire cutter and its mount on the diaphragm)"}
+  wax_cutting_resistance_ns_m: {value: 0.1, source: "provisional: a cutter deepening its cut works against the wax's specific cutting energy (~5 MPa) over the groove's width (150 um) and the cutter's contact length (~70 um) at 0.47 m/s: u w l / v ~ 0.1 N s/m"}
+  cutting_drag_n: {value: 0.01, source: "provisional: the wax's specific cutting energy (~5 MPa) times the chip's section at the mean depth (a 130 um round cutter at 20 um: (4/3) sqrt(2 R) d^1.5 ~ 2e-9 m^2)"}
+  blocked_pressure_factor: {value: 1.0, source: "provisional: the incident free-field pressure as the horn mouth's Thevenin source (1 at low ka, toward 2 for a large mouth at high ka)"}
+
+reproducer:
+  tip_radius_along_m: {value: 1.905e-4, source: "web: edisonia.com/stylus (Edison stylus blueprints, the two-minute 'door knob' stylus, index 9-2: .0075 in parallel to the groove; read via a search summary, the page didn't load)"}
+  tip_radius_across_m: {value: 4.445e-4, source: "web: edisonia.com/stylus (as above: .0175 in across the groove)"}
+  tip_youngs_pa: {value: 3.45e11, source: "provisional: model knowledge (sapphire)"}
+  tip_poisson: {value: 0.29, source: "provisional: model knowledge (sapphire)"}
+  contact_damping_s_m: {value: 5.0, source: "provisional: Hunt-Crossley alpha for wax (a loss factor ~0.3 of the contact at 1 kHz under the static load)"}
+  tip_mass_kg: {value: 1.0e-5, source: "provisional: model knowledge (the sapphire and the stylus bar's short end)"}
+  lever_ratio: {value: 3.0, source: "provisional: model knowledge (the stylus bar's arms, link over stylus; bounded 2-5)"}
+  link_mass_kg: {value: 1.5e-5, source: "provisional: model knowledge (the bar's long end and its link, at the diaphragm)"}
+  weight_mass_kg: {value: 0.025, source: "provisional: model knowledge (the floating weight's mass at the stylus)"}
+  downforce_n: {value: 0.25, source: "provisional: model knowledge (the floating weight on the groove, ~25 gf)"}
+  hinge_resistance_ns_m: {value: 2.0, source: "provisional: model knowledge (the weight's hinge friction)"}
+  diaphragm_radius_m: {value: 0.0155, source: "provisional: the free radius of the 1 1/4 in (33 mm) Model C diaphragm (web: worthpoint.com listing of Model C / H / B diaphragm sets) in its gaskets"}
+  diaphragm_thickness_m: {value: 1.0e-4, source: "provisional: model knowledge (Model C mica; to source)"}
+  diaphragm_youngs_pa: {value: 1.72e11, source: "provisional: model knowledge (muscovite mica, in-plane)"}
+  diaphragm_density_kg_m3: {value: 2830.0, source: "provisional: model knowledge (muscovite mica)"}
+  diaphragm_poisson: {value: 0.25, source: "provisional: model knowledge (muscovite mica)"}
+  diaphragm_q: {value: 8.0, source: "provisional: model knowledge (mica in rubber gaskets)"}
+  cavity_height_m: {value: 1.0e-3, source: "provisional: model knowledge (the air gap in front of the diaphragm)"}
+  neck_length_m: {value: 0.08, source: "provisional: model knowledge (the reproducer's neck and the horn's elbow)"}
+  neck_radius_m: {value: 0.0095, source: "provisional: model knowledge (a 3/4 in neck)"}
+  horn_length_m: {value: 0.762, source: "web: Grinnell College Musical Instrument Collection, Edison Standard D, a 30 in horn of 10 petals, https://omeka-s.grinnell.edu/s/MusicalInstruments/item/8520"}
+  horn_mouth_radius_m: {value: 0.2, source: "provisional: model knowledge (a ~16 in bell; the horn taken as conical)"}
+  stylus_friction: {value: 0.3, source: "provisional: model knowledge (sapphire sliding on wax)"}
+  rpm: {value: 160.0, source: "provisional: the governor set to the recording's speed (a control)"}
+
+# The recording machine's drive (varimu/phono/transport.py): spring motor, flyball governor, leather belt,
+# mandrel. No drawings found yet: every value is provisional, chosen for a governor that
+# regulates (a 10% change in spring torque moves the speed ~0.2%) and settles (its loop's
+# corner ~4 Hz, well below its collar's 25 Hz), with the imperfections of a used machine.
+recorder_motor:
+  fs_hz: {value: 8000.0, source: "numerical: the transport's RK4 rate (the felt's 8th harmonic ~0.5 kHz)"}
+  mandrel_inertia_kg_m2: {value: 3.0e-4, source: "provisional: model knowledge (a ~0.4 kg steel mandrel and shaft at ~25 mm, the cylinder ~0.1 kg at 28 mm, the pulley)"}
+  mandrel_friction_nm_s: {value: 1.0e-4, source: "provisional: model knowledge (oiled plain bearings)"}
+  feed_friction_n_m: {value: 1.0e-3, source: "provisional: model knowledge (the feed screw and the carriage, at the mandrel)"}
+  motor_inertia_kg_m2: {value: 1.0e-3, source: "provisional: model knowledge (barrel, gears and the governor's balls geared up, at the motor pulley)"}
+  motor_friction_nm_s: {value: 1.0e-4, source: "provisional: model knowledge (gear train losses)"}
+  spring_torque_n_m: {value: 0.02, source: "provisional: model knowledge (the mainspring at the motor pulley, ~3x the running load)"}
+  spring_droop_per_s: {value: 1.0e-3, source: "provisional: model knowledge (the spring's torque falling ~10% over a 2-minute side)"}
+  spring_irregularity: {value: 0.06, source: "provisional: model knowledge (coils sticking and releasing in old grease: relative rms)"}
+  spring_irregularity_s: {value: 0.1, source: "provisional: model knowledge (its correlation time)"}
+  motor_pulley_radius_m: {value: 0.025, source: "provisional: model knowledge"}
+  mandrel_pulley_radius_m: {value: 0.05, source: "provisional: model knowledge (the mandrel turning at half the motor pulley's speed)"}
+  motor_pulley_eccentricity_m: {value: 5.0e-5, source: "provisional: model knowledge (a worn pulley's runout)"}
+  mandrel_pulley_eccentricity_m: {value: 5.0e-5, source: "provisional: model knowledge (a worn pulley's runout)"}
+  belt_stiffness_n_m: {value: 3000.0, source: "provisional: a leather belt, E ~0.2 GPa, 3 x 1.5 mm, ~0.3 m span: EA / L"}
+  belt_damping_ns_m: {value: 1.0, source: "provisional: model knowledge (leather's losses)"}
+  governor_ratio: {value: 12.0, source: "provisional: model knowledge (the governor shaft geared up from the motor pulley)"}
+  governor_f_hz: {value: 25.0, source: "provisional: model knowledge (the balls on their flat springs)"}
+  governor_zeta: {value: 0.15, source: "provisional: model knowledge (a dry, worn governor just on the stable side: below ~0.13 the speed loop falls into a limit cycle, hunting 75-180 cents peak to peak (measured 2026-11-02): a condition dial)"}
+  brake_gain_n_m: {value: 0.5, source: "provisional: the pad's torque per unit of the collar's travel (y = 1 at the nominal speed), at the motor pulley: sets the regulation above"}
+  felt_irregularity: {value: 0.05, source: "provisional: model knowledge (a glazed felt pad: relative rms of its friction around the disc)"}
+  runout_eccentric_m: {value: 5.0e-5, source: "provisional: model knowledge (the master's blank shaved on the recorder's own mandrel, then the copy moulded from it: what the groove inherits from the lathe's own runout)"}
+  runout_oval_m: {value: 5.0e-6, source: "provisional: model knowledge (a small residual)"}
+
+# The playing machine's drive (varimu/phono/transport.py): spring motor, flyball governor, leather belt,
+# mandrel. No drawings found yet: every value is provisional, chosen for a governor that
+# regulates (a 10% change in spring torque moves the speed ~0.2%) and settles (its loop's
+# corner ~4 Hz, well below its collar's 25 Hz), with the imperfections of a used machine.
+player_motor:
+  fs_hz: {value: 8000.0, source: "numerical: the transport's RK4 rate (the felt's 8th harmonic ~0.5 kHz)"}
+  mandrel_inertia_kg_m2: {value: 3.0e-4, source: "provisional: model knowledge (a ~0.4 kg steel mandrel and shaft at ~25 mm, the cylinder ~0.1 kg at 28 mm, the pulley)"}
+  mandrel_friction_nm_s: {value: 1.0e-4, source: "provisional: model knowledge (oiled plain bearings)"}
+  feed_friction_n_m: {value: 1.0e-3, source: "provisional: model knowledge (the feed screw and the carriage, at the mandrel)"}
+  motor_inertia_kg_m2: {value: 1.0e-3, source: "provisional: model knowledge (barrel, gears and the governor's balls geared up, at the motor pulley)"}
+  motor_friction_nm_s: {value: 1.0e-4, source: "provisional: model knowledge (gear train losses)"}
+  spring_torque_n_m: {value: 0.02, source: "provisional: model knowledge (the mainspring at the motor pulley, ~3x the running load)"}
+  spring_droop_per_s: {value: 1.0e-3, source: "provisional: model knowledge (the spring's torque falling ~10% over a 2-minute side)"}
+  spring_irregularity: {value: 0.06, source: "provisional: model knowledge (coils sticking and releasing in old grease: relative rms)"}
+  spring_irregularity_s: {value: 0.1, source: "provisional: model knowledge (its correlation time)"}
+  motor_pulley_radius_m: {value: 0.025, source: "provisional: model knowledge"}
+  mandrel_pulley_radius_m: {value: 0.05, source: "provisional: model knowledge (the mandrel turning at half the motor pulley's speed)"}
+  motor_pulley_eccentricity_m: {value: 5.0e-5, source: "provisional: model knowledge (a worn pulley's runout)"}
+  mandrel_pulley_eccentricity_m: {value: 5.0e-5, source: "provisional: model knowledge (a worn pulley's runout)"}
+  belt_stiffness_n_m: {value: 3000.0, source: "provisional: a leather belt, E ~0.2 GPa, 3 x 1.5 mm, ~0.3 m span: EA / L"}
+  belt_damping_ns_m: {value: 1.0, source: "provisional: model knowledge (leather's losses)"}
+  governor_ratio: {value: 12.0, source: "provisional: model knowledge (the governor shaft geared up from the motor pulley)"}
+  governor_f_hz: {value: 25.0, source: "provisional: model knowledge (the balls on their flat springs)"}
+  governor_zeta: {value: 0.15, source: "provisional: model knowledge (a dry, worn governor just on the stable side: below ~0.13 the speed loop falls into a limit cycle, hunting 75-180 cents peak to peak (measured 2026-11-02): a condition dial)"}
+  brake_gain_n_m: {value: 0.5, source: "provisional: the pad's torque per unit of the collar's travel (y = 1 at the nominal speed), at the motor pulley: sets the regulation above"}
+  felt_irregularity: {value: 0.05, source: "provisional: model knowledge (a glazed felt pad: relative rms of its friction around the disc)"}
+  runout_eccentric_m: {value: 2.5e-4, source: "provisional: web: Fadeyev 2005, sec. 4: a scanned cylinder's surface ~250 um off true (shrinkage, the tapered bore's seat, a moulded copy's groove off its reamed bore), taken whole as an eccentric seat; raised from 100 um after the user's comparison with real transfers (2026-11-02)"}
+  runout_oval_m: {value: 6.0e-5, source: "provisional: model knowledge (an oval warp from shrinkage)"}
+
+listening:
+  distance_m: {value: 1.0, source: "provisional: a listening position 1 m from the horn's mouth, on axis (a control)"}
+
+numerics:
+  fs_hz: {value: 192000.0, source: "numerical: the simulation rate (2x the project's 96 kHz; the contact resonates near 8 kHz)"}
+  dx_max_m: {value: 0.008, source: "numerical: the ducts' longest section (the ladder's cut-off c / (pi dx) ~ 13.6 kHz)"}
+  lead_in_s: {value: 0.3, source: "numerical: unmodulated groove before the program while the reproducer settles (trimmed)"}
