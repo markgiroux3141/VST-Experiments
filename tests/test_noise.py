@@ -199,7 +199,9 @@ def test_the_mains_wander_rides_on_the_mains_parts():
     c = spec.load_circuit(spec.circuit_path("tube_synth"))
     x = builder.build_ir(c, spec.resolve(c), noise=4)
     sines = [e.name for e in x.elements() if isinstance(e, ir.SineSource)]
-    assert x.noise.mains_sources == tuple(sines) and len(sines) == 3
+    # The power transformer's HV halves, the LFO's winding (two halves, LFO on) and the
+    # bias winding (SYNTH_IDEAS.md #7, #15).
+    assert x.noise.mains_sources == tuple(sines) and len(sines) == 5
     assert x.noise.mains_rms == nz.MAINS_RMS
     assert ir.CircuitIR.from_json(x.to_json()) == x
     # Without mains parts, no wander (and the JSON keeps its old shape).

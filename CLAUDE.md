@@ -187,9 +187,9 @@ which switch a 12AU7 attack follower off and a 12AU7 decay switch on toward SUST
 clamps; a -340 V rail off the HV winding. DECAY, SUSTAIN (1 = the old AR); the envelope runs
 on a thread of its own. The slowest attack / fastest decay are fragile when the rails sag
 (left so, the user's call).
-**The full test suite and `--verify`
-are owed** (per feature only targeted tests run, the user's call; the list: SYNTH_IDEAS.md
-"Owed").
+Per feature only targeted tests run (the user's call); the full suite and `--verify` are
+batched (SYNTH_IDEAS.md "Owed"): **run 2026-11-02, nothing owed** (647 passed after one
+stale count fixed; `--verify` PASS).
 
 Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
 user's idea; nothing built): synthesis stays pure, except where the physics is far faster

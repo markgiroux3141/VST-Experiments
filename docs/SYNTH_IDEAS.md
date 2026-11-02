@@ -19,7 +19,14 @@ diode-steered envelope; the push-pull 6386 VCA; ENV AMOUNT; noise (B5) and heate
 Per feature only a targeted set runs (the synth's tests, the new code's, the quick shared
 checks; the user's call, 2026-11-01). The full suite re-renders the 670 at production for
 hours whenever `varimu/{sim,circuit,devices}` or `config.py` change, so it waits for the end
-of the list or a night the user picks. **Owed since #7 (2026-11-01):**
+of the list or a night the user picks. **Run 2026-11-02 (overnight, nothing else running,
+the tree at 8e3132c):** the full suite 647 passed, 1 failed in 61 min: `test_noise`'s
+`test_the_mains_wander_rides_on_the_mains_parts` counted the synth's mains parts as 3, and
+#7 / #15 had added the LFO's winding (two halves) and the bias winding (5; the assertion
+that the wander rides on every one held): the count fixed, `test_noise.py` 12 passed.
+`test_circuit_format`'s ngspice comparison passed. `slice_report.py --verify` PASS (GR
+within 0.01 dB of ngspice, waveforms -71.8 to -83.3 dB, every row inside its bound). Nothing
+owed now. **Was owed since #7 (2026-11-01):**
 - `uv run --extra fast pytest` (everything): #7 changed shared code (the IR's device union,
   the parts library, the device library and fixtures, the preflight checks, the SPICE
   emission, `fast.partition_sections`, the controls' `unit: switch` in both spec loaders). In the targeted run `test_circuit_format`'s

@@ -3,15 +3,15 @@
  "cores": "linear",
  "compression_curve": {
   "renders": [
-   "8a595a6e5d1a",
-   "37197ab16fdf",
-   "6dd0d8ba2add",
-   "222b7554d3d0",
-   "001fef8ebfe7",
-   "8d77a8c38e40",
-   "6de6dcb9cd46",
-   "b2a5eec5b003",
-   "b774b14be60f"
+   "24604dc7e633",
+   "391ba0880efc",
+   "ddf688c9b9d3",
+   "d9ab398e2698",
+   "59a1155c3849",
+   "040c1af31887",
+   "e75aa46f8b47",
+   "7bc6060a7dfc",
+   "033271e43cf5"
   ],
   "chunk_steps": 6,
   "warmup_steps": 1,
@@ -234,7 +234,7 @@
   "plot": "reports\\slice\\bursts.png",
   "by_time_constant": {
    "1": {
-    "render": "d2e92d14424c",
+    "render": "9fa17e502d46",
     "cv_before_v": -5.66,
     "cv_burst_v": -68.9,
     "gain_reduction_db": 10.71,
@@ -245,7 +245,7 @@
     "published_release_s": 0.3
    },
    "2": {
-    "render": "6d2075ae80ed",
+    "render": "b1c0c1c7d86f",
     "cv_before_v": -5.66,
     "cv_burst_v": -69.12,
     "gain_reduction_db": 10.78,
@@ -256,7 +256,7 @@
     "published_release_s": 0.8
    },
    "3": {
-    "render": "ec292187f569",
+    "render": "18a65e1150ac",
     "cv_before_v": -5.66,
     "cv_burst_v": -69.15,
     "gain_reduction_db": 10.79,
@@ -267,7 +267,7 @@
     "published_release_s": 2.0
    },
    "4": {
-    "render": "da5daf93aeee",
+    "render": "db595e28b2a8",
     "cv_before_v": -5.66,
     "cv_burst_v": -69.14,
     "gain_reduction_db": 10.79,
@@ -280,7 +280,7 @@
   }
  },
  "program_clip": {
-  "render": "5ee8084b1352",
+  "render": "89f76ba9f47f",
   "clip": "clip:Arpeggio04b_120_m_D#_16b.WAV",
   "overrides": {
    "input_atten_db": 0.0,
