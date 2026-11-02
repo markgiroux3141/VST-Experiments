@@ -118,7 +118,25 @@ plate_reverb circuit).
   of orders. The set-up (eigen-solves, the air's integrals) reruns when a physical value
   changes: a live tuning knob needs it cached or fast.
 
-**Next for D1 (after the user listens to `drum/audio/sweep_plate.wav`):**
+**The user's verdict on the drum body (2026-11-01):** still weak, "like hearing someone
+drop a mug from another room".
+- The likely causes are the setup, not the physics alone: the mic 1 m away and 30 deg
+  off the axis (real kicks are close-miked at the port), no muffling (a 4 s boom),
+  no chain (the punch on records is compression and tape), and a soft beater click.
+- The work is kept as is. The user is weighing a pivot to a deep, punchy electronic
+  kick in the vintage theme (their call). The options offered:
+  - a "tube 808": an 808-style bridged-T resonator around a tube, pinged by a pulse
+    whose amplitude bends the pitch (its edge the click), into an overdriven tube
+    stage and output transformer; recommended;
+  - pushing `tube_kick` further: a faster and deeper sweep, a click, its output into
+    iron;
+  - the Sideman's bass drum (D2): authentic, but a soft thud on its own;
+  - the physical kick recorded properly: a close mic, muffling, the 670 and tape, and
+    a speaker used as a mic (the "subkick" trick, with the speaker model).
+- Whichever voice is chosen, its punch comes from finishing it through the chain
+  (transformer saturation, the 670, a tape print).
+
+**Next for D1 (if the physical drums are picked up again):**
 - damping as physical controls: a felt strip, a pillow, a port in the kick's front head;
   real kicks are rarely undamped;
 - the shell's own modes;

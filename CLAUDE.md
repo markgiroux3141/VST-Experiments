@@ -199,12 +199,19 @@ full-physics reference simulation of the same part and coupled at its ports (eve
 multi-rate islands, ...), with the reference selectable in its place. First: the gas-tube
 sawtooth (SYNTH_IDEAS #23; milestones H1-H5). A proposed Hard rules addition waits for H3.
 
-Drums ([docs/DRUM_PLAN.md](docs/DRUM_PLAN.md), 2026-11-01, a brainstorm parked until the
-user is ready; nothing built): real drums as a modal medium coupled at ports (the plate's
-machinery: membranes, tension-modulation pitch drop, beater contact, snare wires and
-cymbals as hybrid exceptions), old drum machines as circuits (the Wurlitzer Sideman first;
-808 / CR-78 after a BJT model), tube drum voices from `tube_kick`. Order and open
-decisions are the user's.
+Drums ([docs/DRUM_PLAN.md](docs/DRUM_PLAN.md), 2026-11-01): real drums as a modal medium
+coupled at ports (membranes, tension-modulation pitch drop, beater contact, snare wires and
+cymbals as hybrid exceptions), old drum machines as circuits (the Wurlitzer Sideman: its
+service manual and patents found, DRUM_PLAN.md D2; 808 / CR-78 after a BJT model), tube drum
+voices from `tube_kick`. **D1 prototyped offline in Python** (`varimu/drums/`, outside the
+render cache key; `config/drums/{tom_13,kick_22}.yaml`; `scripts/drum_study.py` ->
+`reports/drums/<drum>/{bare,drum}/`; `tests/test_membrane.py`, `tests/test_drum.py`):
+`membrane.py` a bare head in vacuo, `drum.py` both heads on a shell coupled through the air
+(normal modes per azimuthal order, exact sparse tension modulation, a coupled range below
+`f_coupled_hz`), 9-14x slower than real time in Python. The user's verdict: still weak ("a
+mug dropped in another room": a distant mic, no muffling, no chain); kept as is, a deep,
+punchy electronic kick in the vintage theme (a "tube 808", pushing `tube_kick`, the
+Sideman's bass drum) is the likely next direction, the user's call (DRUM_PLAN.md's status).
 
 The Victorian synth ([docs/VICTORIAN_SYNTH_PLAN.md](docs/VICTORIAN_SYNTH_PLAN.md),
 2026-11-01, the user's idea, parked until they pick it up; nothing built): a janky synth
