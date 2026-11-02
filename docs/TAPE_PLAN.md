@@ -848,12 +848,76 @@ out of sample.
    TM3 fitted the particle volume (1.66e-21 m^3) from the noise. A new tape version, the bias
    curves (No. 21) and the checks of 2 rerun; options with numbers to the user first (it
    moves the alignment and every print).
+   **Measured 2026-11-02: not the cause; closed without a model change (the user agreed: the
+   misses stay open, other mechanisms next).** `scripts/tape_switching_study.py` ->
+   `reports/tape/switching_study.{json,png}`, `switching_level_diag.json` (~45 min, the Rust
+   kernel; nothing in varimu/ changed). Each variant maps Bulletin 20's 60 Hz ensemble to the
+   bias's rate by Sharrock's law (Monte Carlo over particles, refitted as a lognormal; L60
+   16.3, Lb 5.8 at 70 kHz, provisional: 0.1 rad of the drive's cycle, f0 1e9 Hz, the meter's
+   loop traced ~30 times) and records with it; the interaction field (static) unchanged.
+   - **The barrier.** The noise fit's particle with coherent rotation (Ms_p ~360 kA/m, H0 ~1.1
+     Hc) has K V / kT ~1950: the bias-rate Hc only 4% up, the spread unchanged. Incoherent
+     reversal switches a smaller volume; no gamma-Fe2O3 tape value was found to cite, so
+     400, 150 and 60 (n 0.735) bracket it.
+   - **The sign of the spread depends on what is independent of the barrier:** with the 60 Hz
+     Hc independent, the spread widens (0.283 -> 0.303 at K V / kT 150); with the athermal H0
+     independent (shape anisotropy from the aspect ratio, the barrier from the volume), part
+     of the 60 Hz spread is thermal and the bias-rate spread narrows (0.228). The hypothesis
+     that a volume spread widens it holds only in the first case.
+   - **The checks** (No. 21: rms 1k / 15k after one bias scale; the 1 kHz rise at 3 mA, -11.0
+     measured; the over-bias fall at 8 mA, 1k -3.3 / 15k -7.1; the 3% level at 400 Hz, 15 ips;
+     Bulletin 14 at 7 kHz, +4 by 3M):
+
+     | variant (bias-rate Hc ratio, sigma) | No. 21 rms | 1k at 3 mA | 1k / 15k at 8 mA | 3% level | No. 14 (-40 / -30 dB) |
+     |---|---|---|---|---|---|
+     | base SCOTCH111@3 (1.00, 0.283) | 2.25 / 1.74 | -5.5 | -3.2 / -5.1 | +3.33 | -1.8 / -1.0 |
+     | coherent, K V / kT 1950 (1.04, 0.284) | 2.24 / 1.82 | -5.5 | -3.2 / -5.0 | +3.35 | -1.9 / -0.9 |
+     | 400 (1.11, 0.286) | 2.20 / 1.77 | -5.6 | -3.1 / -5.1 | +3.40 | -1.9 / -0.7 |
+     | 150, Hc60 independent (1.22, 0.303) | 2.06 / 1.65 | -5.6 | -2.9 / -4.8 | +3.48 | -1.8 / -0.6 |
+     | 150, H0 independent (1.21, 0.228) | 3.11 / 2.47 | -4.3 | -4.4 / -7.6 | +3.37 | -1.1 / -0.4 |
+     | 60, n 0.735 (1.39, 0.46, skewed) | 1.39 / 1.49 | -7.2 | -0.4 / -2.3 | +3.74 | -2.2 / -1.0 |
+     | not physical: sigma 0.45 | 1.42 / 1.51 | -6.8 | -0.6 / -2.1 | +3.53 | -2.8 / -1.7 |
+     | not physical: sigma 0.60 | 1.65 / 2.06 | -7.1 | 0.0 / -1.0 | +3.66 | -3.3 / -2.1 |
+
+     The plausible range moves every check by <= 0.4 dB. Even a forced spread only trades
+     No. 21's rise (and its peaks, 6.1 / 5.4 mA against 6 / 5) for its over-bias fall, and
+     pushes No. 14 further the wrong way.
+   - **The 3% level isn't the switching spread's at all.** In this Preisach model the
+     anhysteretic is exactly erf(h / (sqrt 2 sigma_Hi)) for every hysteron the bias reaches,
+     whatever f(Hc): 3% THD at **+4.9 dB** over 1%, scalar or oriented. The medium is steeper
+     (+3.3). Off one at a time, demag (+3.33), the head's image (+3.24) and orientation
+     (kappa 20: +3.21) change nothing; more bias cycles per freezing do: the bias 4x faster
+     (cells scaled) +3.76, **the Ampex 300's 51 um record gap +4.00** (ours is the provisional
+     12.7 um). The trailing edge's field falls ~15% per bias cycle at 15 ips (steps of ~45 Oe
+     against sigma_Hi 64 Oe): a cell sees too few cycles for the ideal anhysteretic.
+   - **#111's own figure for the knee:** Sound Talk No. 1 (1948, p.2, h3 against output at
+     400 Hz, 7.5 ips, a Brush head, 40 kHz bias; read by eye at 300 dpi, ~+-0.3 dB): 1% -> 3%
+     h3 in ~4.1 dB of output at 2.4 ampere-turns of bias, ~4.5 at 3.2; steeper overbiased
+     (8.0: ~3.4), much softer underbiased (1.6: ~7.5). The manual's "6 db" is a round figure;
+     the miss against the tape's data is ~1-1.5 dB (our +3.3 is in recorded field, ~+3.0 in
+     output). Not digitized as a CSV yet.
+   - **Where the misses go:** the knee to the record zone (the record gap's length and field
+     gradient, item 4) and the transfer curve's shape (the interaction field's Gaussian);
+     No. 14 to the record head's field at bias against audio (item 4) or short-wavelength
+     demagnetization; No. 21's rise to the head's field against current (item 4).
 4. **The heads:** no 351 / 350 head data printed (the Minneapolis Magnetics notes are a scan
    without electrical data); keep looking (replacement head sheets: Nortronics, Woelke). The
    record head's field per ampere at the bias frequency against audio (laminated cores lose
    efficiency near 100 kHz: frequency-dependent, linear) and against current (pole tips
    saturating: sublinear) is No. 21's other candidate. The tape part has one `rec_h_per_a`
    for both bands now.
+   **Since item 3 (2026-11-02) the heads lead for two misses:** the knee (the record gap 12.7
+   -> 51 um moved the 3% level +3.3 -> +4.0 dB; #111's data ~4.1-4.5) and the 70 Hz dip,
+   and are the first place to look for No. 14. A head maker's numbers (web:
+   https://www.discolathe.com/.pdfs/Nortronics_Silvr_pp1-9.pdf, Nortronics' "Design
+   Digest" application notes, catalog pp.2-9, ~1975; not 351 data): the longest wavelength a
+   play head reads is the mean of its window and pole lengths; standard heads cut off at
+   50 Hz at 7.5 ips, the long-pole WP series at 50 Hz at 15 ips, the Studio / PR series'
+   "extra long pole pieces" at **25 Hz at 15 ips** (a ~15 mm wavelength; Fig. 3 plots their
+   15 ips curves). Our provisional e_c of 4.5 mm dips at ~85 Hz, a standard head's. Typical
+   gaps: play 200 uin (5 um) for 15 ips, **record 500 uin (12.7 um) for 1/4" tape**; metal
+   erase cores have "good efficiency up to 60 kHz" (laminations' loss near the bias
+   frequency).
 5. **SM911** (TM2's second part): the same physics with only the tape's parameters changed,
    against EMTEC's IEC curves and stated gaps: the first true out-of-sample test.
 6. **A real machine:** any recording of a real 351 (or 350) with Scotch 111-era tape, a test
@@ -907,6 +971,31 @@ out of sample.
      and the record amplifier's first two stages at the audio rate if a stable cut exists
      (only the oscillator, the 6201 driver and the head need 3.84 MHz). Together ~3-4x on
      that part; each a measured setting against production.
+     **Measured (2026-11-02, `scripts/speed_351.py` -> `cache/tape/speed/results.json`; the
+     harness above with the circuit's noise off, so runs compare sample by sample; the first
+     runs shared the CPU with another session and were timed again):**
+
+     | setting | x real time | waveform vs 20 substeps | band levels vs 20 / vs 40 substeps |
+     |---|---|---|---|
+     | production (20 substeps) | 78.7 | | 0.020 dB vs 40 |
+     | tube tables everywhere | 71.8 (1.10x) | -121 dB | 0.000 |
+     | 10 substeps (1.92 MHz) | 65.0 (1.21x) | -46.4 dB | 0.034 / 0.014 dB |
+     | 10 substeps + tables | 61.5 (1.28x) | -46.4 dB | 0.034 / 0.014 dB |
+     | 40 substeps + tables | 96.5 | -48.1 dB | |
+     | 20, the oscillator started 10% off (1C36 0.11 V) | 74.8 | -56.7 dB | 0.002 dB |
+
+     - **A waveform comparison can't judge the record side's step:** the free oscillator's
+       phase against the signal moves the bias pattern, so any two step sizes (and the same
+       step from a slightly different start) differ by -46 to -57 dB in waveform while their
+       third-octave levels (50 Hz-15 kHz) agree within 0.034 dB. In band levels 10 substeps is
+       as close to 40 as 20 is.
+     - **10 substeps: adopt** with the next change that moves the alignment anyway (the heads,
+       item 4 of "Gaps"), so the machine is re-aligned once.
+     - **Tube tables: not adopted.** Exact here, but 10% for a global production setting that
+       would move every other circuit's renders (the cache key).
+     - **The audio-rate cut through the record amplifier: not pursued.** At 10 substeps the
+       record side is no longer the floor (the tape part alone was 36.3x): what's left is how
+       the parts overlap and the tape kernel (lever 3).
   3. The tape kernel on the GPU as an f32 tier, validated against the f64 kernel: the
      kernel is already parallel over 16 threads, so the gain is the 3080's f32 throughput
      over this CPU's f64, perhaps 5-10x on that part. Only worth it after 1-2, when the
