@@ -42,6 +42,10 @@ tools/
 reports/**/renders/
 reports/**/audio/
 reports/**/*.log
+# the study scripts' intermediates: variant circuits they write and raw waveform dumps
+# (adsr_study.py, pulse_prototype.py, ring_study.py, supply_study.py; regenerable)
+reports/**/*.yaml
+reports/**/*.npz
 
 # Rust build output
 target/
