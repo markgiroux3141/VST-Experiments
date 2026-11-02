@@ -1,0 +1,49 @@
+# A 22 in bass drum's batter head alone, struck by a felt beater (docs/DRUM_PLAN.md, D1's
+# first test; varimu/drums/membrane.py). The head in vacuo: no shell, no resonant head, no
+# air load (the next step), so f01 is the bare head's and sets its tension.
+
+head:
+  radius_m: {value: 0.2794, source: "provisional: model knowledge (a 22 in bass drum, the nominal 11 in)"}
+  thickness_m: {value: 0.000254, source: "provisional: model knowledge (a single-ply 10 mil batter, e.g. Remo Powerstroke 3's film without its ring)"}
+  density_kg_m3: {value: 1390.0, source: "web: DuPont Teijin Films, Mylar bulletin H-37232-3, Table 1, 1.390 g/cm3 (ASTM D1505), https://people.physics.carleton.ca/~msd/tpc_archival_reports/results_2004/docs/mylar.pdf"}
+  youngs_pa: {value: 3.7e9, source: "web: DuPont Teijin Films, Mylar A 50-125 um product information, 125 um: 3600 MPa MD, 3800 MPa TD (ASTM D882), their mean, https://media.easycomposites.co.uk/datasheets/Mylar_A_50_to_125mic.pdf"}
+  poisson: {value: 0.38, source: "web: DuPont Teijin Films, Mylar bulletin H-37232-3, 'typically 0.38 before yield', https://people.physics.carleton.ca/~msd/tpc_archival_reports/results_2004/docs/mylar.pdf"}
+  loss_factor: {value: 0.015, source: "provisional: model knowledge (PET film's tan delta at room temperature and audio frequencies, ~0.01-0.02)"}
+  f01_hz: {value: 55.0, source: "provisional: model knowledge (a low, loose kick tuning; a control)"}
+
+beater:
+  mass_kg: {value: 0.05, source: "provisional: model knowledge (a felt beater's head and shaft, effective at the face)"}
+  face_radius_m: {value: 0.03, source: "provisional: model knowledge (a round felt beater, ~2.4 in across)"}
+  stiffness: {value: 4.0e8, source: "provisional: model knowledge (piano bass hammer felt, Chaigne & Askenfelt 1994, JASA 95(2), as recalled: K ~4e8 N/m^2.3)"}
+  exponent: {value: 2.3, source: "provisional: model knowledge (piano bass hammer felt, Chaigne & Askenfelt 1994, as recalled)"}
+  hysteresis_s_m: {value: 0.2, source: "provisional: model knowledge (Hunt-Crossley damping of felt)"}
+
+strike:
+  strike_radius_m: {value: 0.06, source: "provisional: model knowledge (a pedal's beater lands a few cm off centre; a control)"}
+
+mic:
+  mic_distance_m: {value: 1.0, source: "provisional: a listening position (a control)"}
+  mic_angle_deg: {value: 30.0, source: "provisional: a listening position off the axis, where the m > 0 modes radiate (a control)"}
+
+air:
+  air_density_kg_m3: {value: 1.204, source: "provisional: model knowledge (dry air at 20 C, 1 atm)"}
+  sound_speed_m_s: {value: 343.0, source: "provisional: model knowledge (dry air at 20 C)"}
+
+# The drum around the head (varimu/drums/drum.py): a resonant head (no port), the shell's
+# depth, the mic's angle from the drum's axis out of the resonant head (the audience side).
+resonant:
+  thickness_m: {value: 0.000254, source: "provisional: model knowledge (a single-ply 10 mil front head, e.g. an Ebony Ambassador; no port hole)"}
+  density_kg_m3: {value: 1390.0, source: "web: DuPont Teijin Films, Mylar bulletin H-37232-3, Table 1, 1.390 g/cm3 (ASTM D1505), https://people.physics.carleton.ca/~msd/tpc_archival_reports/results_2004/docs/mylar.pdf"}
+  youngs_pa: {value: 3.7e9, source: "web: DuPont Teijin Films, Mylar A 50-125 um product information, 125 um: 3600 MPa MD, 3800 MPa TD (ASTM D882), their mean, https://media.easycomposites.co.uk/datasheets/Mylar_A_50_to_125mic.pdf"}
+  poisson: {value: 0.38, source: "web: DuPont Teijin Films, Mylar bulletin H-37232-3, 'typically 0.38 before yield', https://people.physics.carleton.ca/~msd/tpc_archival_reports/results_2004/docs/mylar.pdf"}
+  loss_factor: {value: 0.015, source: "provisional: model knowledge (PET film's tan delta at room temperature and audio frequencies, ~0.01-0.02)"}
+  f01_hz: {value: 55.0, source: "provisional: model knowledge (the front head tuned like the batter, in vacuo; a control)"}
+
+body:
+  depth_m: {value: 0.4064, source: "provisional: model knowledge (a 22 x 16 in bass drum)"}
+  mic_angle_deg: {value: 30.0, source: "provisional: a listening position 1 m out in front of the resonant head, 30 deg off the axis (a control)"}
+  f_coupled_hz: {value: 1600.0, source: "numerical: below it both heads and the air are one coupled system, above it each head's modes on their own with the air's mass (drum.py _blocks; the cut's effect is in reports/drums/)"}
+
+numerics:
+  f_max_hz: {value: 4000.0, source: "numerical: the highest mode simulated (the felt face averages the modes above out)"}
+  full_scale_pa: {value: 100.0, source: "numerical: the WAVs' 0 dBFS, 100 Pa peak (134 dB SPL)"}
