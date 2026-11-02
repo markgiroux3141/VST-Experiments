@@ -90,7 +90,7 @@ def test_idles_near_the_printed_voltages(machine):
 
 
 def test_the_oscillator_biases_the_record_head(machine):
-    """The literal bias (TM5, option A): the record side at 10 steps per sample, the
+    """The literal bias (TM5, option A): the record side at 20 steps per sample, the
     oscillator started from its kick, ~80 mA in the erase head and a few mA of bias in the
     record head (the probes at 192 kHz, not decimated: they alias the 99 kHz but keep its
     size)."""

@@ -310,9 +310,30 @@ def test_the_literal_rust_stream_agrees_with_the_reference():
         cs.tape_stream_run(json.dumps(p), FS, hf[:-1])
 
 
+def test_the_extremum_refinement_is_quartic():
+    """The literal bias's peak values (TAPE_PLAN.md "Gaps" 4): on a carrier at 20.7 samples
+    per period (the 351's 92.9 kHz at 10 substeps) plus a slow offset, over every sampling
+    phase, the quartic through five samples finds the peak within 4e-6 of the carrier (its
+    interpolation error, ~h^6: 6e-8 at 41.3 samples); the parabola through three was off by
+    up to 2e-4 (its error, beating against the oscillator, was a -78.6 dBFS line in the
+    351's noise)."""
+    from varimu.devices.tape_machine import parabola_extremum, refine_extremum
+
+    w = 2 * math.pi / 20.7
+    quartic, parabola = [], []
+    for phase in np.linspace(-0.5, 0.5, 41):
+        y = [0.2 + math.cos(w * (k - phase)) for k in (-2, -1, 0, 1, 2)]
+        d, v = refine_extremum(*y)
+        assert d == pytest.approx(phase, abs=5e-5)
+        quartic.append(abs(v - 1.2))
+        parabola.append(abs(parabola_extremum(*y[1:4])[1] - 1.2))
+    assert max(quartic) < 5e-6
+    assert 1e-4 < max(parabola) < 1e-3
+
+
 def test_the_literal_bias_finds_the_carriers_peaks():
     """Fed an ideal carrier, the literal stream records about what the medium's own bias
-    does: the parabola's peaks converge with the samples per step (32 against 64), and the
+    does: the refined peaks converge with the samples per step (32 against 64), and the
     rest is the physics the own bias leaves out (the extrema of bias plus signal move with
     the signal's slope; it takes the carrier's peaks and the signal there): 0.34% here."""
     _rust()

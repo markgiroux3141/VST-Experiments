@@ -212,6 +212,39 @@ fn hx_spectrum(head: &Head, k: f64, y: f64) -> f64 {
     g * (-k.abs() * y).exp() * (gap - (k * ec).cos() * relax)
 }
 
+/// Newton steps of `refine_extremum` (fixed, so both languages take the same ones).
+const EXTREMUM_NEWTON_STEPS: usize = 3;
+
+/// The extremum of the parabola through (-1, a), (0, b), (1, c): (offset, value).
+fn parabola_extremum(a: f64, b: f64, c: f64) -> (f64, f64) {
+    let den = a - 2.0 * b + c;
+    let d = if den == 0.0 { 0.0 } else { 0.5 * (a - c) / den };
+    (d, b - 0.25 * (a - c) * d)
+}
+
+/// The extremum of the quartic through five equally spaced samples (at -2 .. 2, the middle
+/// one a local extremum): (offset, value). Newton on its derivative from the parabola's
+/// offset, EXTREMUM_NEWTON_STEPS steps, the offset kept within +-1. The parabola's value
+/// error grows as (w h)^4 and beats against the oscillator (a line in the 351's noise at
+/// 10 substeps); the quartic's is its interpolation error, ~(w h)^6. The reference is
+/// `varimu.devices.tape_machine.refine_extremum`.
+fn refine_extremum(y0: f64, y1: f64, y2: f64, y3: f64, y4: f64) -> (f64, f64) {
+    let c1 = (y0 - 8.0 * y1 + 8.0 * y3 - y4) / 12.0;
+    let c2 = (-y0 + 16.0 * y1 - 30.0 * y2 + 16.0 * y3 - y4) / 24.0;
+    let c3 = (-y0 + 2.0 * y1 - 2.0 * y3 + y4) / 12.0;
+    let c4 = (y0 - 4.0 * y1 + 6.0 * y2 - 4.0 * y3 + y4) / 24.0;
+    let (mut u, _) = parabola_extremum(y1, y2, y3);
+    for _ in 0..EXTREMUM_NEWTON_STEPS {
+        let g = c1 + u * (2.0 * c2 + u * (3.0 * c3 + u * 4.0 * c4));
+        let gp = 2.0 * c2 + u * (6.0 * c3 + u * 12.0 * c4);
+        if gp == 0.0 {
+            break;
+        }
+        u = (u - g / gp).clamp(-1.0, 1.0);
+    }
+    (u, y2 + u * (c1 + u * (c2 + u * (c3 + u * c4))))
+}
+
 /// `cubic_held`: samples h (sample i at index first + i) at fractional index u, the taps
 /// clamped to the samples there are.
 fn cubic_held(h: &[f64], u: f64, first: i64) -> f64 {
@@ -1095,8 +1128,9 @@ impl TapeStream {
     }
 
     /// `literal_peaks`: the literal field's extrema with t0 <= t <= t1 (each sample above
-    /// its left neighbour and not below its right, or the reverse), refined by the parabola
-    /// through the three: (times, values).
+    /// its left neighbour and not below its right, or the reverse), refined by
+    /// `refine_extremum` over the five samples around it (the parabola through three where
+    /// the buffer's newest edge has no second neighbour): (times, values).
     pub fn literal_peaks(&self, t0: f64, t1: f64) -> (Vec<f64>, Vec<f64>) {
         let (m, first) = (self.m as f64, self.first as i64);
         let mf = m * self.fs;
@@ -1110,12 +1144,15 @@ impl TapeStream {
             if !((b > a && b >= c) || (b < a && b <= c)) {
                 continue;
             }
-            let den = a - 2.0 * b + c;
-            let d = if den == 0.0 { 0.0 } else { 0.5 * (a - c) / den };
+            let (d, v) = if i >= 2 && i + 2 < self.h.len() {
+                refine_extremum(self.h[i - 2], a, b, c, self.h[i + 2])
+            } else {
+                parabola_extremum(a, b, c)
+            };
             let tk = (k as f64 + d + 1.0 - 2.0 * m) / mf;
             if t0 <= tk && tk <= t1 {
                 ts.push(tk);
-                vs.push(b - 0.25 * (a - c) * d);
+                vs.push(v);
             }
         }
         (ts, vs)

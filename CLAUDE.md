@@ -371,8 +371,8 @@ its own thread at m steps per sample, currents averaged per sample, owns no shar
 may hold the audio input; `partition.rs`), the medium's literal mode (`TapeStream(literal=M)`,
 IR `TapeMedium.bias_substeps`: M samples of the head's whole field per push, recorded at their
 extrema), the tape part's `bias_substeps` (senses a record coil drawn in the multi-rate
-section). The 351's record side runs at 10 substeps (1.92 MHz since 2026-11-02; 20 was no closer
-to 40 in band levels); it meets the rest only at the
+section). The 351's record side runs at 20 substeps (3.84 MHz; 10 left a line in the noise,
+TAPE_PLAN.md "Gaps" 4); it meets the rest only at the
 input and the reservoirs (a cut through a coupling capacitor diverges). Production's probes
 are decimated to 96 kHz and hide the 99 kHz: measure the bias at `oversample` 1. 106x real
 time on the drums (was 46.7x). A GPU for the recording kernel is planned (TAPE_PLAN.md: f64 is slow on a 3080).
@@ -393,7 +393,8 @@ level, No. 14; closed, SCOTCH111@3 stays); the heads are (`scripts/tape_heads_st
 (the user's choices): record gap 51 um (the Ampex 300's), repro contour pole 1.5 / relax 5.5 mm
 (calibrated to the +-2 dB spec, near Nortronics' WP head), record coil 8.0e6 A/m per A, 3 mH:
 the response passes (-1.84 / +0.94 dB), the 3% level +4.8 dB (on #111's Sound Talk No. 1),
-S/N 58.3 dB fails (the long gap's record EQ lifts the record amp's hiss; open). Profile
+its S/N miss was a numerical line from 10 substeps (the bias peaks' parabola; now a quartic,
+`refine_extremum`, both languages; back to 20 substeps; `scripts/tape_snr_study.py`). Profile
 `ampex351_heads51`; `scripts/speed_351.py` times the record side's settings (TAPE_PLAN.md
 "Gaps" 3-4, "Speed").
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;

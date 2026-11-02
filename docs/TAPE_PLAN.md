@@ -947,7 +947,7 @@ out of sample.
      -40 dB crossing erratic). A 51 um gap records at 0.40x the deep-gap field (bias 1.69 Hc
      against 3.0).
    **Applied (2026-11-02, the user's choices: 51 um, the contour; with speed lever 2's 10
-   substeps):** `config/circuits/ampex_351.yaml` rec_gap_m 51 um (Bulletin 21's Ampex 300;
+   substeps, later reverted to 20, below):** `config/circuits/ampex_351.yaml` rec_gap_m 51 um (Bulletin 21's Ampex 300;
    Minneapolis Magnetics fits one head to the 300 / 350 / 400), pole_m 1.5 / relax_m 5.5 mm
    (calibrated, near the WP head), rec_h_per_a 8.0e6 A/m per A (operating level at ~0.39 mA
    rms of audio, RECORD LEVEL near its top as before; No. 21's fit measured 6.7e6 for the 300's
@@ -972,6 +972,39 @@ out of sample.
        tape. A real Ampex 300 met 60 dB with a 0.002" gap, so the model's long-gap treble loss
        or the record side's hiss is a little high: open, the user's next question after
        listening.
+   **The S/N miss traced (2026-11-02; `scripts/tape_snr_study.py` -> `reports/tape/
+   snr_study.*`, `snr_cells.json`, `snr_substeps.json`): a numerical line, not the record
+   amplifier.** The profile's noise measurement with the circuit's noise sources kept in some
+   sections only (streams keyed by name, so the others' samples are unchanged), the grain off
+   by an effectively infinite particle count:
+   - with **no noise at all** the machine put -75.2 dBFS into 50 Hz-15 kHz, nearly all a line
+     at ~3.3 kHz (-78.6 dBFS): S/N capped at 61.2 dB by it alone. The real noise, the floor
+     taken out in power, was -75.4 dBFS (S/N 61.5): the reproduce side's (2V3's hiss and
+     flicker under the NAB bass boost, -83 dBFS at 100 Hz) dominates; the grain, the record
+     amplifier, the bias section and the supply are each 15+ dB under it.
+   - The line didn't move with the cells (as built, 7.62 per wavelength of the measured
+     oscillator, half length: within 0.1 dB, all at 3374 Hz): not the medium's sampling. It
+     followed the record side's step: -78.6 / -93.0 / -101.6 dBFS at 10 / 20 / 40 substeps.
+     The 10 substeps of speed lever 2 had made it (its check compared band levels on drums,
+     where a -78 dBFS line can't show). The oscillator now runs at **92.9 kHz** (the 3 mH head
+     and BIAS ADJUST's 31 pF), the line near 96 kHz - f_osc.
+   - **The peak finder:** the literal bias's extrema were refined by the parabola through
+     three samples, whose value error, ~(w h)^4 (2e-4 of the carrier at 20.7 samples per
+     period), depends on where the samples fall and so beats against the oscillator. Now
+     `refine_extremum`: the quartic through five samples, Newton from the parabola's offset
+     (3 fixed steps; one converges), both languages (Rust against Python within 1e-11
+     unchanged; `tests/test_tape_stream.py::test_the_extremum_refinement_is_quartic`: 4e-6 at
+     20.7 samples, ~h^6). Measured: 10 substeps -86.4 dBFS (floor -81.8), 20 substeps -95.7
+     (floor -91.6). Another error, ~9 dB per halving, is left at 10 substeps (the circuit's
+     own step at ~20 samples per period, probably): a speed lead.
+   - **Back to 20 substeps** (the criterion the user chose: the floor 14 dB under the real
+     noise, -89.4 dBFS; 10 substeps' -81.8 fails, 20's -91.6 passes), keeping the quartic.
+     Speed lever 2's 1.21x is given up.
+   - **Re-aligned and profiled at 20 substeps** (`ampex351_heads51`, 34 min after the
+     alignment): the settings as at 10 (bias 31.1 pF, 1C7 437 pF, RECORD LEVEL 0.945, PLAYBACK
+     LEVEL 0.391); the response and the knee unchanged (3% at +4.8 dB); **S/N 61.0 dB, passes**
+     (noise -75.0 dBFS). **TM5's done-when is met:** +-2 dB 30 Hz-15 kHz, S/N, idle (the three
+     average-tube plates excepted, decided above).
 5. **SM911** (TM2's second part): the same physics with only the tape's parameters changed,
    against EMTEC's IEC curves and stated gaps: the first true out-of-sample test.
 6. **A real machine:** any recording of a real 351 (or 350) with Scotch 111-era tape, a test
@@ -1043,7 +1076,10 @@ out of sample.
        step from a slightly different start) differ by -46 to -57 dB in waveform while their
        third-octave levels (50 Hz-15 kHz) agree within 0.034 dB. In band levels 10 substeps is
        as close to 40 as 20 is.
-     - **10 substeps: adopted** with the heads' change (item 4 of "Gaps"), one re-alignment.
+     - **10 substeps: adopted with the heads' change, then reverted:** it left a line near
+       96 kHz - f_osc in the noise that band levels on drums can't show (-78.6 dBFS; S/N 58.3
+       dB). Judge the record side's step on the noiseless machine's floor, not only on music
+       ("Gaps" 4, the S/N miss traced).
      - **Tube tables: not adopted.** Exact here, but 10% for a global production setting that
        would move every other circuit's renders (the cache key).
      - **The audio-rate cut through the record amplifier: not pursued.** At 10 substeps the

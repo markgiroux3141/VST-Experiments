@@ -329,9 +329,10 @@ sections:
       RK1B: {R: [k1b, "0"], r: r_k1b_ohm}
 
   - title: record amplifier
-    # The record side, from the input on: 10 steps per sample (1.92 MHz in production), with
-    # the bias section below; 20 is no closer to 40 in band levels (TAPE_PLAN.md "Speed").
-    substeps: 10
+    # The record side, from the input on: 20 steps per sample (3.84 MHz in production), with
+    # the bias section below. 10 leaves a line near 96 kHz - f_osc in the noise (-86 dBFS with
+    # the quartic peak finder; 20: -96): TAPE_PLAN.md "Gaps" 4.
+    substeps: 20
     parts:
       # The unbalanced bridge (sch): 4R5 82K from the input into 4R4 20K + 4R3 100, their
       # junction to RECORD LEVEL's top, its wiper to 1V1a's grid.
@@ -358,8 +359,8 @@ sections:
       CLF: {C: [lf, "0"], c: c_lf_f}
 
   - title: bias and head driver
-    # Above the audio rate's Nyquist frequency: 10 steps per sample on a thread of its own.
-    substeps: 10
+    # Above the audio rate's Nyquist frequency: 20 steps per sample on a thread of its own.
+    substeps: 20
     parts:
       # The record line from the 330 V reservoir through 3K1c (3R56, 3R57) and 1R59 to
       # 1C2c, feeding the oscillator's centre tap and the head driver's 1R23 (sch).
@@ -427,12 +428,12 @@ sections:
   - title: heads and tape
     parts:
       # The tape senses the record head (in the section above: its whole current, the
-      # bias included, 10 samples per sample) and plays into 2R25 through the repro head
+      # bias included, 20 samples per sample) and plays into 2R25 through the repro head
       # (sch); the repro coil is the part's.
       TP:
         tape: [hra, rbc, rh]
         component: tape_model
-        bias_substeps: 10
+        bias_substeps: 20
         speed_m_s: speed_m_s
         f_bias_hz: f_bias_hz
         rec_gap_m: rec_gap_m

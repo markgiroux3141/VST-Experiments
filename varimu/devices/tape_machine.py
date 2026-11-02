@@ -437,6 +437,42 @@ def aligned(spec: TapeMachineSpec, tape: TapeFormulation, cache_dir: Path) -> Al
 #: Recording runs this much tape past a block's ends: well past the record zone.
 ZONE_PAD_M = 2e-3
 
+#: Newton steps of `refine_extremum` (fixed, so both languages take the same ones).
+EXTREMUM_NEWTON_STEPS = 3
+
+
+def parabola_extremum(a: float, b: float, c: float) -> tuple[float, float]:
+    """The extremum of the parabola through (-1, a), (0, b), (1, c): (offset, value)."""
+    den = a - 2.0 * b + c
+    d = 0.0 if den == 0.0 else 0.5 * (a - c) / den
+    return d, b - 0.25 * (a - c) * d
+
+
+def refine_extremum(y0: float, y1: float, y2: float, y3: float, y4: float) -> tuple[float, float]:
+    """The extremum of the quartic through five equally spaced samples (at -2 .. 2, the
+    middle one a local extremum): (offset, value). Newton on its derivative from the
+    parabola's offset, EXTREMUM_NEWTON_STEPS steps, the offset kept within +-1.
+
+    The literal bias's peaks set every recorded cell's bias. The parabola's value error
+    grows as (w h)^4 for a sinusoid sampled h apart, and it depends on where the samples
+    fall on the peak, so it beats against the oscillator: at 10 substeps (~20.7 samples per
+    92.9 kHz period) a line at -78.6 dBFS in the 351's noise, the whole of its S/N miss
+    (TAPE_PLAN.md "Gaps" 4, scripts/tape_snr_study.py). The quartic's is its interpolation
+    error, ~(w h)^6: 4e-6 of the carrier at 20.7 samples per period against the parabola's
+    2e-4 (tests/test_tape_stream.py). Newton converges in one step."""
+    c1 = (y0 - 8.0 * y1 + 8.0 * y3 - y4) / 12.0
+    c2 = (-y0 + 16.0 * y1 - 30.0 * y2 + 16.0 * y3 - y4) / 24.0
+    c3 = (-y0 + 2.0 * y1 - 2.0 * y3 + y4) / 12.0
+    c4 = (y0 - 4.0 * y1 + 6.0 * y2 - 4.0 * y3 + y4) / 24.0
+    u, _ = parabola_extremum(y1, y2, y3)
+    for _ in range(EXTREMUM_NEWTON_STEPS):
+        g = c1 + u * (2.0 * c2 + u * (3.0 * c3 + u * 4.0 * c4))
+        gp = 2.0 * c2 + u * (6.0 * c3 + u * 12.0 * c4)
+        if gp == 0.0:
+            break
+        u = min(max(u - g / gp, -1.0), 1.0)
+    return u, y2 + u * (c1 + u * (c2 + u * (c3 + u * c4)))
+
 
 def cubic_held(h: np.ndarray, u, first: int = 0) -> np.ndarray:
     """`cubic_at` on samples h (sample i at index first + i) at fractional indices u, the
@@ -681,8 +717,10 @@ class TapeStream:
 
     def literal_peaks(self, t0: float, t1: float) -> tuple[np.ndarray, np.ndarray]:
         """The literal field's extrema with t0 <= t <= t1: each sample above its left
-        neighbour and not below its right (a maximum) or the reverse, refined by the
-        parabola through the three (the same arithmetic as circuitsim's port)."""
+        neighbour and not below its right (a maximum) or the reverse, refined by
+        `refine_extremum` over the five samples around it (the parabola through three
+        where the buffer's newest edge has no second neighbour); the same arithmetic as
+        circuitsim's port."""
         m, fs = self.literal, self.fs
         h, first = self.h, self.first
         mf = m * fs
@@ -690,15 +728,18 @@ class TapeStream:
         kh = min(math.floor(t1 * mf + 2 * m - 1) + 2, first + len(h) - 2)
         ts, vs = [], []
         for k in range(kl, kh + 1):
-            a, b, c = h[k - 1 - first], h[k - first], h[k + 1 - first]
+            i = k - first
+            a, b, c = h[i - 1], h[i], h[i + 1]
             if not ((b > a and b >= c) or (b < a and b <= c)):
                 continue
-            den = a - 2.0 * b + c
-            d = 0.0 if den == 0.0 else 0.5 * (a - c) / den
+            if i >= 2 and i + 2 < len(h):
+                d, v = refine_extremum(h[i - 2], a, b, c, h[i + 2])
+            else:
+                d, v = parabola_extremum(a, b, c)
             tk = (k + d + 1 - 2 * m) / mf
             if t0 <= tk <= t1:
                 ts.append(tk)
-                vs.append(b - 0.25 * (a - c) * d)
+                vs.append(v)
         return np.array(ts), np.array(vs)
 
     def _record_block(self, b: int) -> None:

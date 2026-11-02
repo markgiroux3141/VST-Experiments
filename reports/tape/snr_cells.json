@@ -1,0 +1,29 @@
+{
+ "f_osc_hz": 92892.81014685617,
+ "rows": {
+  "as built": {
+   "ds_m": 5e-07,
+   "cell_rate_hz": 762000.0,
+   "line_hz": 3374.0,
+   "line_dbfs": -78.64776745489009,
+   "noise_dbfs_rms": -75.16046496485602,
+   "seconds": 370.5459740161896
+  },
+  "7.62 per measured wavelength": {
+   "ds_m": 5.382547898050879e-07,
+   "cell_rate_hz": 707843.213319044,
+   "line_hz": 3374.0,
+   "line_dbfs": -78.72488126455265,
+   "noise_dbfs_rms": -75.42759004351994,
+   "seconds": 380.4079999923706
+  },
+  "half length": {
+   "ds_m": 2.5e-07,
+   "cell_rate_hz": 1524000.0,
+   "line_hz": 3374.0,
+   "line_dbfs": -78.76475605467812,
+   "noise_dbfs_rms": -75.2798863728153,
+   "seconds": 351.5614740848541
+  }
+ }
+}

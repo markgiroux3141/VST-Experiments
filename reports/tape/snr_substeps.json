@@ -1,0 +1,19 @@
+{
+ "f_osc_hz": 92878.03315382733,
+ "rows": {
+  "10 substeps": {
+   "setting": 10,
+   "line_hz": 3330.0,
+   "line_dbfs": -86.44428307477837,
+   "noise_dbfs_rms": -81.7771767781511,
+   "seconds": 218.16597533226013
+  },
+  "20 substeps": {
+   "setting": 20,
+   "line_hz": 3034.0,
+   "line_dbfs": -95.6518147601784,
+   "noise_dbfs_rms": -91.58431832807979,
+   "seconds": 254.34200525283813
+  }
+ }
+}
