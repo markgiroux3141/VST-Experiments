@@ -1,6 +1,8 @@
 //! The saved transformer versions against their published figures (docs/
 //! COMPONENT_EDITOR_PLAN.md C2 step 5), and every design still compiling to its latest
-//! saved version (a design edited without saving shows up here).
+//! saved version (a design edited without saving shows up here), and every version this
+//! compiler saved recompiling from its own construction to its own text (what the
+//! Components view relies on when it opens a version to edit).
 //!
 //! - BV191@3 (BV191@2 with its capacitor network), the V72's input transformer by its
 //!   construction (NWDR Bauvorschrift 191, Blatt 4): the primary halves in series 25 H
@@ -14,10 +16,15 @@
 use std::f64::consts::PI;
 use std::path::{Path, PathBuf};
 
+use varimu_circuit::Library;
 use varimu_circuit::versions::{self, Ref};
 use varimu_circuit::yaml::{self, Map, Value};
-use varimu_components::compile::compile_file;
+use varimu_components::COMPILER;
+use varimu_components::compile::{compile, compile_file};
+use varimu_components::design::Design;
+use varimu_components::edit::design_of_version;
 use varimu_components::store;
+use varimu_components::tables::Tables;
 
 fn config() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config")
@@ -133,7 +140,9 @@ fn ot_5e3_meets_p_tgo_002() {
     assert!((leak_b / 19.31e-3 - 1.0).abs() < 0.03, "{leak_b}");
 }
 
-/// Every design compiles to its latest saved version's body.
+/// Every design file compiles to one of its saved versions' body (a design edited without
+/// saving shows up here). Not necessarily the latest: versions made in the Components view
+/// keep their construction in the version itself, not in config/designs.
 #[test]
 fn designs_match_their_saved_versions() {
     let root = config().join("components");
@@ -144,12 +153,58 @@ fn designs_match_their_saved_versions() {
         }
         let (data, tables, c) = compile_file(&path, &config()).unwrap();
         let text = c.version_text(&data, &tables, &config(), "any").unwrap();
-        let saved = store::unchanged(&root, &c.design.name, &text).unwrap();
+        let body = |t: &str| store::body(t).replace("\r\n", "\n");
+        let saved = versions::versions(&root, &c.design.name)
+            .into_iter()
+            .any(|v| {
+                let r = Ref {
+                    name: c.design.name.clone(),
+                    version: Some(v),
+                };
+                body(&versions::read_text(&root, &r).unwrap().1) == body(&text)
+            });
         assert!(
-            saved.is_some(),
-            "{} differs from its latest saved version: save it (cargo run -p varimu-components -- save {})",
+            saved,
+            "{} differs from every saved version: save it (cargo run -p varimu-components -- save {})",
             path.display(),
             path.display()
         );
     }
+}
+
+/// Every transformer version this compiler saved recompiles from its construction to its
+/// own text: a version opened in the Components view and saved unchanged is that version.
+#[test]
+fn versions_recompile_from_their_construction() {
+    let cfg = config();
+    let root = cfg.join("components");
+    let lib = Library::new(&cfg);
+    let tables = Tables::load(&cfg).unwrap();
+    let mut checked = 0;
+    for name in versions::names(&root) {
+        for v in versions::versions(&root, &name) {
+            let r = Ref {
+                name: name.clone(),
+                version: Some(v),
+            };
+            let (_, text) = versions::read_text(&root, &r).unwrap();
+            let data = yaml::parse(&text, &name).unwrap();
+            let m = data.as_map().unwrap();
+            if m.get("kind").and_then(Value::as_str) != Some("transformer")
+                || m.get("compiler").and_then(Value::as_str) != Some(COMPILER)
+            {
+                continue;
+            }
+            let design = design_of_version(&data).unwrap();
+            let c = compile(&Design::parse(&design).unwrap(), &tables, &lib).unwrap();
+            let again = c.version_text(&design, &tables, &cfg, "any").unwrap();
+            assert_eq!(
+                store::body(&again),
+                store::body(&text).replace("\r\n", "\n"),
+                "{name}@{v}"
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked >= 2, "{checked}");
 }

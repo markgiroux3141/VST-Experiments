@@ -89,6 +89,11 @@ pub struct Compiled {
     pub network: Network,
     /// The reference winding's magnetizing inductance in the core's linear limit.
     pub magnetizing_h: f64,
+    /// The core node as the circuit builds it (`varimu_circuit::parts::transformer`, B in
+    /// mT as volts): its linear-limit conductance with the gap's, and the laminations'
+    /// eddy-current capacitance (0 when the material gives no lamination or resistivity).
+    pub core_g: f64,
+    pub eddy_c: f64,
     pub b_peak_t: Option<f64>,
     pub b_saturation_t: f64,
     /// Copper area / window area.
@@ -176,9 +181,23 @@ pub fn compile(d: &Design, tables: &Tables, lib: &Library) -> Result<Compiled, E
         LeakageMethod::Field => {
             let z0 = d.bobbin.cheek_m.value + d.bobbin.margin_m.value;
             let mut p = vec![vec![0.0; n]; n];
-            let pairs_jk = (0..n).flat_map(|j| ((j + 1)..n).map(move |k| (j, k)));
-            for (j, k) in pairs_jk {
-                let l = fem::series_short_circuit(&lay, z0, n, &[j], &[k], fem::Mesh::default());
+            let pairs_jk: Vec<(usize, usize)> = (0..n)
+                .flat_map(|j| ((j + 1)..n).map(move |k| (j, k)))
+                .collect();
+            // Each pair is its own solve: one thread each (the same numbers as in turn).
+            let solved: Vec<f64> = std::thread::scope(|s| {
+                let lay = &lay;
+                let hs: Vec<_> = pairs_jk
+                    .iter()
+                    .map(|&(j, k)| {
+                        s.spawn(move || {
+                            fem::series_short_circuit(lay, z0, n, &[j], &[k], fem::Mesh::default())
+                        })
+                    })
+                    .collect();
+                hs.into_iter().map(|h| h.join().unwrap()).collect()
+            });
+            for (&(j, k), l) in pairs_jk.iter().zip(solved) {
                 p[j][k] = l / (turns[j] * turns[j]);
                 p[k][j] = p[j][k];
             }
@@ -276,6 +295,10 @@ pub fn compile(d: &Design, tables: &Tables, lib: &Library) -> Result<Compiled, E
     }
     let n_ref = turns[0];
     let magnetizing = n_ref * n_ref * area * TESLA_PER_V / g;
+    let eddy_c = match (mat.lamination_m, mat.resistivity_ohm_m) {
+        (Some(lam), Some(rho)) => path * lam.powf(2.0) / (12.0 * rho) * TESLA_PER_V,
+        _ => 0.0,
+    };
 
     // Flux density at the rating.
     let b_sat = MU0 * mat.ms_a_per_m;
@@ -333,6 +356,8 @@ pub fn compile(d: &Design, tables: &Tables, lib: &Library) -> Result<Compiled, E
         capacitance: caps,
         network: net,
         magnetizing_h: magnetizing,
+        core_g: g,
+        eddy_c,
         b_peak_t: b_peak,
         b_saturation_t: b_sat,
         copper_fill,

@@ -9,3 +9,4 @@ publish.workspace = true
 [dependencies]
 varimu-circuit = { path = "../varimu-circuit" }
 circuitsim = { path = "../circuitsim" }
+num-complex = "0.4.6"

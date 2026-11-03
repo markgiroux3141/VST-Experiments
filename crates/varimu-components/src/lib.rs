@@ -15,14 +15,19 @@
 //! - [`leakage`]: leakage inductance from the window's MMF profile (the energy method);
 //! - [`capacitance`]: layer and interwinding capacitance;
 //! - [`compile`]: all of it to the macro's values, a report and warnings;
+//! - [`response`]: the compiled transformer's frequency response between a source and a
+//!   load (what the Components view plots);
+//! - [`edit`]: editing a design as data (the Components view's edits);
 //! - [`store`]: saving a version and its lock line.
 
 pub mod capacitance;
 pub mod compile;
 pub mod design;
+pub mod edit;
 pub mod fem;
 pub mod geometry;
 pub mod leakage;
+pub mod response;
 pub mod sourced;
 pub mod store;
 pub mod tables;

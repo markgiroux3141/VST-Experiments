@@ -19,8 +19,12 @@
 //!
 //! Devices in the session (docs/SESSION_FX_PLAN.md), F1: `print` (a track's audio through
 //! a device offline, kept as audio and cached by what it was made from).
+//!
+//! Components (docs/COMPONENT_EDITOR_PLAN.md C2 step 7): `components` (a transformer's
+//! design edited, compiled, heard in a circuit that pins it, saved as a version).
 
 pub mod audio;
+pub mod components;
 pub mod editor;
 pub mod live;
 pub mod loopback;

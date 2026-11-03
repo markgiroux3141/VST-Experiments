@@ -395,7 +395,76 @@ and heard against the first in the 5E3.
    signal. The designed transformer is a little darker at the top (its asymmetric leakage
    and the capacitances) and otherwise the same. Production rendered at 11x real time
    against version 1's 7.6x, but with the test suites running beside it: not a measurement.
-7. The Components view in varimu-app; a second OT version made there and heard.
+7. **Built 2026-11-04 (open: the user makes the second OT version in the view and hears
+   it):** The Components view in varimu-app; a second OT version made there and heard.
+   *Status:* the window's **Components** tab (`varimu-app --component OT_5E3[@N]`):
+   `crates/varimu-app/src/components.rs` (the logic, tested headless) and
+   `components_view.rs` (the painting, the studio look). Left, the construction: core
+   (lamination, material, stack, stacking factor, butt / interleaved, joint gap, a butt
+   spacer), bobbin, arrangement, leakage method, and the winding plan's sections as cards
+   (winding, turns, layers, wire, enamel, interlayer paper; insulation; shields), each
+   movable, splittable (to interleave), duplicable, removable; Ctrl+Z / Ctrl+Shift+Z.
+   Middle, the window to scale (each layer coloured by its winding, the paper and shields;
+   a layer's turns on hover), the compiled figures beside the opened version's (per winding
+   turns, ratio, DCR, Lm, leakage, C; every pair's short-circuit leakage; the capacitors;
+   flux at the rating; fill; warnings), the response. Bottom, listening.
+   - *Editing* (`varimu_components::edit`): the design stays the YAML tree it was read as
+     (`edit::design_of_version`: a version's name, kind, source and construction), so an
+     unedited design compiles to its version byte for byte (`targets.rs`
+     `versions_recompile_from_their_construction`: every version this compiler saved). An
+     edited value's source becomes `design choice: set in the Components view (DATE)`
+     (marked • in the form), never data. Drags of one value are one undo step.
+   - *Compiling* on a worker thread, the newest design only; a field design is shown by
+     the formula first (instant), then by the field (its winding pairs now solved in
+     parallel threads, the same numbers: ~10 s for the OT instead of ~25).
+   - *The response* (`varimu_components::response`): the macro's small-signal network
+     solved per frequency (each winding's resistance and leakage, the coupled leakage matrix,
+     the core node's linear-limit and gap conductance and eddy capacitance, the compiled
+     capacitors between terminals), the core in its linear limit. Source and load stated
+     in the view: the rating's windings driven (balanced when two: half the EMF at each end,
+     the junction grounded, a push-pull pair's plates), the load across the remaining winding
+     with the fewest turns (8 ohm when it steps down 10x or more, else 100 kOhm), the source
+     the load reflected (a matched source, as OT responses are commonly measured); every
+     choice editable. The opened version's curve under the design's, -3 dB points,
+     insertion loss at 1 kHz, |Zin|. Checked: the T equivalent by hand (1e-7), and against
+     circuitsim's transient on the IR both builders make from BV191@3 and OT_5E3@2 (30 Hz-40
+     kHz, within 4e-5: the trapezoid's warping; `tests/response_check.rs`).
+   - *Hearing it:* the circuit files that pin the component (`components::uses`,
+     hand-written first; for OT_5E3 `fender_5e3` and `fender_5e3_drawn`) play with the
+     design in its place: its compiled form served as the next version number by the
+     library without a file (`Library::add_unsaved`: never in place of a saved version, in
+     that library only), the circuit's parameter retargeted in memory. It plays as the Play
+     view's drawing device (draft-1x, the edits heard as they compile; a value updates the
+     stream, a structural change restarts it), with the look-ahead Play's device for that
+     circuit keeps (the 5E3's 0.25 s; `DrawingDevice::ahead_s`). The 5E3 with `OT_5E3@2` at
+     draft-1x: 0.80x real time on the guitar take at volume 0.6, 193 of 5844 blocks over
+     (draft-2x 1.55x, every block over: the same as before C2, open item 2 below closed).
+   - *A / B* (keys A / B): the circuit as pinned against the design, loudness-matched per
+     the hard rules: both rendered at draft-1x over up to 8 s of the loop region with the
+     panel as set, integrated loudness (BS.1770-4, `monitor::integrated_lufs`), the design's
+     side trimmed by the difference; while a match holds Play's running compensation is off
+     (it would undo the trim; `PlayView::set_ab_trim`). An edit needs a new match.
+   - *Saving* writes the next version and its lock line through `store::save` (nothing when
+     the design equals a saved version: the bench says "Saved as NAME@N"). *Moving a
+     circuit* (an explicit button and a confirmation) rewrites the one `values` line that
+     pins it (`components::move_pin`; the rest of the file untouched); a drawn circuit is
+     refused (its drawing and script pin it: the Editor's Core symbol), as is one naming
+     the component inline. Its IR changes as meant: rerun `export_app_fixtures.py`.
+   - *Tested* (`crates/varimu-app/tests/components.rs`, on a scratch copy of config/): the
+     store lists its transformers and who pins them; an unedited version is itself; undo,
+     drags, a broken design; **the done-when's path**: OT_5E3@2 opened, a second winding
+     plan made (the secondary moved between the primary halves: pa | s | pb), compiled by
+     the field (the inner half's leakage to the secondary 40.35 -> 18.05 mH, the outer's
+     19.34 -> 19.53: the halves alike, 2.1x apart before), both played in the 5E3 at
+     draft-1x (they differ by -45.7 dB re the signal on a plucked chord; loudness within
+     0.02 dB), saved as OT_5E3@3, and the 5E3 moved to it (one line changed). The repo's
+     store has no @3: the second version is the user's to make in the view.
+   - *Decided here (the user delegating):* `config/designs/*.yaml` must equal *a* saved
+     version, not the latest (`targets.rs`): versions made in the view keep their
+     construction in the version itself.
+   - *Not built:* the speaker's page (C3's component in this view: P12R is a Python fit,
+     no Rust compiler yet); adding or removing windings (the circuit names them);
+     moving a drawn circuit's pin from here.
 8. T85 version 2 for the V76.
 
 **C3. Speakers, physical: the 5E3's Jensen.** The user's choice for what the 5E3 is

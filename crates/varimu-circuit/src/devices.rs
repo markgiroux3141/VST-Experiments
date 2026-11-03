@@ -45,6 +45,9 @@ pub struct Library {
     plates: Mutex<HashMap<String, PlateComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
+    /// Versions not saved yet ({folder@N: data}): the Components view's design while it is
+    /// edited, heard in a circuit before it is a version (docs/COMPONENT_EDITOR_PLAN.md C2).
+    unsaved: Mutex<HashMap<String, Value>>,
 }
 
 impl Library {
@@ -58,7 +61,29 @@ impl Library {
             plates: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
+            unsaved: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// Serve `data` as version `reference` (`NAME@N`) of a component, in this library only
+    /// and without a file: a version that isn't saved yet (N past the saved ones; a saved
+    /// version can't be shadowed). [`Library::component_data`] reads it, so a transformer
+    /// part's `component:` builds from it. Nothing is written.
+    pub fn add_unsaved(&self, reference: &str, data: Value) -> Result<(), Error> {
+        let r = versions::parse(reference)?;
+        let Some(v) = r.version else {
+            return Err(Error(format!(
+                "an unsaved version names its number ({reference})"
+            )));
+        };
+        if versions::versions(&self.components_dir(), &r.name).contains(&v) {
+            return Err(Error(format!(
+                "{r} is saved: an unsaved version can't replace it"
+            )));
+        }
+        let key = format!("{}@{v}", r.folder());
+        self.unsaved.lock().unwrap().insert(key, data);
+        Ok(())
     }
 
     pub fn config_dir(&self) -> &Path {
@@ -131,9 +156,17 @@ impl Library {
 
     /// Component `name`'s file as data (`NAME@N`, or `NAME` for its latest version),
     /// checked against versions.lock (`component_data` in library.py).
+    /// An unsaved version ([`Library::add_unsaved`]) when `name` pins one.
     pub fn component_data(&self, name: &str) -> Result<Value, Error> {
         let root = self.components_dir();
-        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let p = versions::parse(name)?;
+        if let Some(v) = p.version {
+            let key = format!("{}@{v}", p.folder());
+            if let Some(d) = self.unsaved.lock().unwrap().get(&key) {
+                return Ok(d.clone());
+            }
+        }
+        let r = versions::resolve(&root, &p)?;
         let (_, text) = versions::read_text(&root, &r)?;
         yaml::parse(&text, name)
     }

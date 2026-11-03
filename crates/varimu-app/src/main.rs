@@ -4,12 +4,15 @@
 //! R0 (scaffold): the window, the studio look and the two views. R2: the Play view
 //! (`play_view`). R3: the Editor view (`editor_view`), its drawing heard through the
 //! Play view's player. Recording (docs/RECORDING_PLAN.md) T1: the Session view
-//! (`session_view`), the transport and click on the Play view's player. The rest is the
-//! library (`varimu_app`).
+//! (`session_view`), the transport and click on the Play view's player. Components
+//! (docs/COMPONENT_EDITOR_PLAN.md C2 step 7): the Components view (`components_view`), a
+//! transformer's design heard through the Play view's player. The rest is the library
+//! (`varimu_app`).
 
 // No console window in release builds (debug builds keep it for logs).
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod components_view;
 mod editor_view;
 mod play_view;
 mod sampler_view;
@@ -25,7 +28,7 @@ fn main() -> eframe::Result {
         Ok(a) => a,
         Err(e) => {
             eprintln!(
-                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a|fender_5e3|telefunken_v76|reactor_filter|tube_filter|sampler] [--input NAME [--channel N] | --midi NAME] [--edit DRAWN_CIRCUIT]"
+                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a|fender_5e3|telefunken_v76|reactor_filter|tube_filter|sampler] [--input NAME [--channel N] | --midi NAME] [--edit DRAWN_CIRCUIT] [--component NAME[@N]]"
             );
             std::process::exit(2);
         }
@@ -74,6 +77,7 @@ fn config_dir() -> PathBuf {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum View {
     Editor,
+    Components,
     Play,
     Session,
 }
@@ -83,15 +87,22 @@ struct App {
     play: play_view::PlayView,
     editor: editor_view::EditorView,
     session: session_view::SessionView,
+    /// Made when first shown (it compiles its component on open).
+    components: Option<components_view::ComponentsView>,
+    config_dir: PathBuf,
+    open_component: Option<String>,
 }
 
 impl App {
     fn new(config_dir: PathBuf, args: play_view::Args) -> App {
-        let view = if args.edit.is_some() {
+        let view = if args.component.is_some() {
+            View::Components
+        } else if args.edit.is_some() {
             View::Editor
         } else {
             View::Play
         };
+        let open_component = args.component.clone();
         let name = args
             .edit
             .clone()
@@ -103,8 +114,11 @@ impl App {
         App {
             view,
             editor: editor_view::EditorView::new(&config_dir, &name),
-            play: play_view::PlayView::new(config_dir, args),
+            play: play_view::PlayView::new(config_dir.clone(), args),
             session: session_view::SessionView::new(&root),
+            components: None,
+            config_dir,
+            open_component,
         }
     }
 }
@@ -122,6 +136,7 @@ impl eframe::App for App {
                     ui.label(egui::RichText::new("VARI-MU").strong().color(theme::ACCENT));
                     ui.add_space(16.0);
                     ui.selectable_value(&mut self.view, View::Editor, "Editor");
+                    ui.selectable_value(&mut self.view, View::Components, "Components");
                     ui.selectable_value(&mut self.view, View::Play, "Play");
                     ui.selectable_value(&mut self.view, View::Session, "Session");
                 });
@@ -130,6 +145,12 @@ impl eframe::App for App {
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
             .show(ui, |ui| match self.view {
                 View::Editor => self.editor.ui(ui, &mut self.play),
+                View::Components => {
+                    let (cfg, open) = (&self.config_dir, self.open_component.as_deref());
+                    self.components
+                        .get_or_insert_with(|| components_view::ComponentsView::new(cfg, open))
+                        .ui(ui, &mut self.play);
+                }
                 View::Play => {
                     self.editor.sync_player(&mut self.play);
                     self.play.ui(ui);

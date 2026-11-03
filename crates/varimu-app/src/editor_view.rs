@@ -259,6 +259,7 @@ impl EditorView {
                 title: spec.title.clone(),
                 spec,
                 lib: self.ed.lib.clone(),
+                ahead_s: varimu_app::player::AHEAD_S,
             });
         }
     }

@@ -331,6 +331,31 @@ impl Tables {
         0.005 * INCH_M * 92f64.powf((36.0 - f64::from(n)) / 39.0)
     }
 
+    /// Every wire code the tables hold, AWG from thick to thin, then metric from thick to
+    /// thin (what the Components view offers).
+    pub fn wire_codes(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for (n, row) in &self.awg {
+            for b in row.keys() {
+                out.push(format!("AWG {n} {b}"));
+            }
+        }
+        let mut metric: Vec<(&String, &Builds)> = self.metric.iter().collect();
+        metric.sort_by(|a, b| {
+            let d = |k: &str| k.parse::<f64>().unwrap_or(0.0);
+            d(b.0).total_cmp(&d(a.0))
+        });
+        for (d, row) in metric {
+            for g in row.keys() {
+                if let Some(g) = g.strip_prefix("grade") {
+                    out.push(format!("{d} mm grade {g}"));
+                }
+            }
+        }
+        out.retain(|c| self.wire(c).is_ok());
+        out
+    }
+
     /// A wire by its code: `AWG <n> <build>` (`AWG 32 heavy`) or `<d> mm grade <g>`
     /// (`0.13 mm grade 1`), its overall diameter the table's nominal.
     pub fn wire(&self, code: &str) -> Result<Wire, Error> {

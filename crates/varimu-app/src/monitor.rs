@@ -77,6 +77,37 @@ impl KWeighting {
     }
 }
 
+/// Integrated loudness (LUFS) of a mono signal, ITU-R BS.1770-4: K-weighted mean square in
+/// 400 ms blocks overlapping by 75%, the blocks below -70 LUFS dropped, then those more
+/// than 10 LU below the rest's level. -inf when nothing passes the gates.
+pub fn integrated_lufs(x: &[f64], rate: u32) -> f64 {
+    let mut k = KWeighting::new(rate);
+    let y: Vec<f64> = x.iter().map(|&v| k.run(v)).collect();
+    let block = (0.4 * rate as f64).round() as usize;
+    let hop = block / 4;
+    if block == 0 || y.len() < block {
+        return f64::NEG_INFINITY;
+    }
+    let ms: Vec<f64> = (0..=(y.len() - block) / hop)
+        .map(|i| {
+            y[i * hop..i * hop + block]
+                .iter()
+                .map(|v| v * v)
+                .sum::<f64>()
+                / block as f64
+        })
+        .collect();
+    let lufs = |m: f64| -0.691 + 10.0 * m.log10();
+    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len().max(1) as f64;
+    let abs: Vec<f64> = ms.iter().copied().filter(|&m| lufs(m) > -70.0).collect();
+    if abs.is_empty() {
+        return f64::NEG_INFINITY;
+    }
+    let gate = lufs(mean(&abs)) - 10.0;
+    let rel: Vec<f64> = abs.into_iter().filter(|&m| lufs(m) > gate).collect();
+    lufs(mean(&rel))
+}
+
 /// Loudness window (s): BS.1770's short-term.
 const LOUDNESS_S: f64 = 3.0;
 /// How fast the applied compensation follows its target (s).
@@ -282,5 +313,25 @@ mod tests {
             assert_eq!(v, dry[1000 + i - 3] as f32);
         }
         assert!(y[100] < (dry[1097] as f32) && y[100] > 0.0); // mid-fade
+    }
+
+    #[test]
+    fn integrated_loudness_of_a_sine() {
+        // BS.1770-4's check: a 0 dBFS 1 kHz sine reads -3.01 LUFS (one channel).
+        let rate = 48_000;
+        let x: Vec<f64> = (0..rate * 5)
+            .map(|i| (2.0 * std::f64::consts::PI * 1000.0 * i as f64 / rate as f64).sin())
+            .collect();
+        let l = integrated_lufs(&x, rate);
+        assert!((l + 3.01).abs() < 0.02, "{l}");
+        // Half the level is -6.02 LU; silence after it is gated out but for the three
+        // blocks straddling the tone's end (3/4, 1/2 and 1/4 full: all pass the gates), which
+        // pull the mean of 47 full blocks down to 48.5 / 50 of it (-0.13 dB).
+        let mut y: Vec<f64> = x.iter().map(|v| v * 0.5).collect();
+        y.extend(std::iter::repeat_n(0.0, rate as usize * 5));
+        let want = l - 6.0206 + 10.0 * (48.5f64 / 50.0).log10();
+        let got = integrated_lufs(&y, rate);
+        assert!((got - want).abs() < 0.01, "{got} {want}");
+        assert_eq!(integrated_lufs(&[0.0; 48_000], rate), f64::NEG_INFINITY);
     }
 }

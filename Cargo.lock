@@ -4039,6 +4039,7 @@ dependencies = [
  "sha2",
  "symphonia",
  "varimu-circuit",
+ "varimu-components",
  "windows-sys 0.61.2",
 ]
 
@@ -4059,6 +4060,7 @@ name = "varimu-components"
 version = "0.2.0"
 dependencies = [
  "circuitsim",
+ "num-complex",
  "varimu-circuit",
 ]
 

@@ -94,6 +94,9 @@ pub struct DrawingDevice {
     pub title: String,
     pub spec: CircuitSpec,
     pub lib: Arc<Library>,
+    /// Audio kept ahead of playback (s): `AHEAD_S`, or a Play device's for its circuit
+    /// (the Components view: the 5E3's heavy blocks).
+    pub ahead_s: f64,
 }
 
 /// The drawing's panel: every control but the mains settings.
@@ -200,6 +203,10 @@ pub struct PlayView {
     /// its kit and browser.
     sampler_on: bool,
     kit: SamplerPanel,
+    /// The Components view's A / B: a fixed trim (dB) on the device's output, measured
+    /// offline, with the running compensation off while it is set (it would undo the
+    /// difference the trim matches).
+    ab_trim_db: Option<f64>,
     error: Option<String>,
 }
 
@@ -218,6 +225,8 @@ pub struct Args {
     pub midi: Option<String>,
     /// Open the editor on this drawn circuit.
     pub edit: Option<String>,
+    /// Open the Components view on this component (`NAME` or `NAME@N`).
+    pub component: Option<String>,
 }
 
 impl Args {
@@ -229,6 +238,9 @@ impl Args {
                 "--play" => a.play = true,
                 "--device" => a.device = Some(it.next().ok_or("--device needs an id")?),
                 "--edit" => a.edit = Some(it.next().ok_or("--edit needs a circuit name")?),
+                "--component" => {
+                    a.component = Some(it.next().ok_or("--component needs a component name")?);
+                }
                 "--input" => a.input = Some(it.next().ok_or("--input needs a device name")?),
                 "--midi" => a.midi = Some(it.next().ok_or("--midi needs a port name")?),
                 "--channel" => {
@@ -308,6 +320,7 @@ impl PlayView {
             end_mix: END_MIX,
             sampler_on: false,
             kit: SamplerPanel::new(&repo),
+            ab_trim_db: None,
             error: None,
         };
         if let Some(id) = &args.device {
@@ -656,12 +669,43 @@ impl PlayView {
         if let Some(p) = &self.player {
             p.set_gain(self.gain());
             p.set_bypass(self.bypass);
-            p.set_compensation(self.compensate);
-            p.set_output_db(self.output_db);
+            p.set_compensation(self.compensate && self.ab_trim_db.is_none());
+            p.set_output_db(self.output_db + self.ab_trim_db.unwrap_or(0.0));
             if !self.adopted {
                 p.set_end_mix(self.end_mix);
             }
         }
+    }
+
+    /// The Components view's A / B trim (dB; None: off, the compensation as chosen).
+    pub fn set_ab_trim(&mut self, db: Option<f64>) {
+        self.ab_trim_db = db;
+        self.apply_monitor();
+    }
+
+    /// The loop region's input as the device gets it (the input gain applied), at most
+    /// `max_s` of it: what a loudness match renders.
+    pub fn match_input(&self, max_s: f64) -> Option<Vec<f64>> {
+        let mut x = self.region_samples()?;
+        let rate = self.clip.as_ref()?.rate as f64;
+        x.truncate((max_s * rate) as usize);
+        let g = self.gain();
+        x.iter_mut().for_each(|v| *v *= g);
+        (!x.is_empty()).then_some(x)
+    }
+
+    /// The drawing's knobs as overrides (its panel as set in Play).
+    pub fn drawing_values(&self) -> varimu_app::live::Values {
+        if self.drawing_device().is_some() {
+            panel::values(&self.knobs)
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// The settings the drawing plays at (draft-1x).
+    pub fn drawing_settings(&self) -> Result<Settings, String> {
+        self.settings_for(&DRAWING)
     }
 
     /// Keep the view's background work going (the editor view calls this when Play
@@ -760,7 +804,10 @@ impl PlayView {
             .clone();
         let result = s.cores().and_then(|c| self.circuit(c)).and_then(|c| {
             let v = panel::values(&self.knobs);
-            let ahead_s = DEVICES.get(self.device).unwrap_or(&DRAWING).ahead_s;
+            let ahead_s = match self.drawing_device() {
+                Some(d) => d.ahead_s,
+                None => DEVICES[self.device].ahead_s,
+            };
             Player::start(Source::Loop(x), v, c, s.clone(), self.gain(), ahead_s)
         });
         match result {

@@ -99,3 +99,32 @@ fn a_circuit_naming_no_version_is_refused() {
         "{err}"
     );
 }
+
+/// An unsaved version (the Components view's design) is served by its library only, never
+/// in place of a saved one, and a circuit pinned to it builds from it.
+#[test]
+fn unsaved_versions_are_served_but_never_shadow_saved_ones() {
+    let lib = Library::new(config());
+    let saved = lib.component_data("OT_5E3@2").unwrap();
+    let next = versions::versions(&config().join("components"), "OT_5E3")
+        .last()
+        .unwrap()
+        + 1;
+    let r = format!("OT_5E3@{next}");
+    assert!(lib.component_data(&r).is_err());
+    assert!(lib.add_unsaved("OT_5E3@2", saved.clone()).is_err());
+    assert!(lib.add_unsaved("OT_5E3", saved.clone()).is_err());
+    lib.add_unsaved(&r, saved.clone()).unwrap();
+    assert_eq!(lib.component_data(&r).unwrap(), saved);
+    assert_eq!(lib.component_data(&r.to_lowercase()).unwrap(), saved);
+    assert!(Library::new(config()).component_data(&r).is_err());
+    // The 5E3 pinned to it builds the IR it builds from @2 (the same data).
+    let s = spec::load_circuit(&config().join("circuits/fender_5e3.yaml")).unwrap();
+    let a = build_ir(&lib, &s, &spec::resolve(&s, &[]).unwrap(), Cores::Linear).unwrap();
+    let over = [("ot_model".to_string(), Value::Str(r.clone()))];
+    let b = build_ir(&lib, &s, &spec::resolve(&s, &over).unwrap(), Cores::Linear).unwrap();
+    assert_eq!(
+        serde_json::to_string(&a).unwrap(),
+        serde_json::to_string(&b).unwrap()
+    );
+}
