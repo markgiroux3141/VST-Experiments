@@ -143,6 +143,11 @@ def load_speaker(name: str, root: Path = DEVICE_DIR) -> Speaker:
     return speaker_from_data(_read(name, root), name)
 
 
+def component_data(name: str, root: Path = DEVICE_DIR) -> dict[str, Any]:
+    """Component `name`'s file as data (`NAME@N`, or `NAME` for its latest version)."""
+    return _read(name, root)
+
+
 def load_capsule(name: str, root: Path = DEVICE_DIR) -> Capsule:
     """Capsule component `name` (`NAME@N`, or `NAME` for its latest version)."""
     return capsule_from_data(_read(name, root), name)
@@ -445,6 +450,49 @@ def build_el34t() -> dict[str, Any]:
     }
 
 
+VF14_FIT_IA_MAX, VF14_FIT_VA_MAX = 10e-3, 200.0
+
+
+def build_vf14t() -> dict[str, Any]:
+    """The VF14M triode-connected (g2 and g3 on the anode), the Neumann U47's tube: a Koren
+    triode fit to Telefunken's triode-connected plate and transfer curves (Funkschau
+    1/1948, Kennlinienfeld 8 and 7). The curves plot the anode lead's current (Ia + Ig2 +
+    Ig3), which is the triode connection's plate current."""
+    pub = _published()["VF14"]
+    pl = load_csv("telefunken_vf14_triode_plate.csv")  # vg1, va, ia
+    tr = load_csv("telefunken_vf14_triode_transfer.csv")  # va, vg1, ia
+    vg = np.r_[pl[:, 0], tr[:, 1]]
+    va = np.r_[pl[:, 1], tr[:, 0]]
+    ia = np.r_[pl[:, 2], tr[:, 2]]
+    # The U47's region: a Koren triode can't follow this triode-connected pentode from
+    # 0.3 to 37 mA (43% rms, mu 35); up to 10 mA and 200 V it does (mu 27).
+    k = (ia <= VF14_FIT_IA_MAX) & (va <= VF14_FIT_VA_MAX)
+    vg, va, ia = vg[k], va[k], ia[k]
+    m, rep = fit_koren_triode(vg, va, ia, np.hypot(0.03 * ia, 0.03e-3), ex_min=1.0)
+    caps = pub["ef14_capacitances_f"]["g3_at_anode"]
+    return {
+        "name": "VF14T",
+        "kind": "triode",
+        "source": "fit: Koren triode, least squares on the Telefunken VF 14 triode-connected "
+        "plate and transfer curves (Funkschau 1/1948 Kennlinienfeld 8, 7), digitized: "
+        "data/datasheets/telefunken_vf14.provenance.yaml, the points up to 10 mA and 200 V (the "
+        "U47's region; from 0.3 mA: the low end runs into the axis). At the rated heater: the "
+        "U47 underheats it (B6's heater block)",
+        "plate": {"model": "koren", "mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": 6.5e-12,
+            "gp": caps["input"] - 6.5e-12,
+            "pk": caps["output"],
+            "source": "provisional: none printed for the triode connection; the EF 14's "
+            "with g3 on the anode (input 9.5 pF, output 10 pF: published_points.yaml VF14 "
+            "ef14_capacitances_f) with ~3 pF of the input taken as g1 to g2, which the "
+            "triode connection puts on the anode (model knowledge)",
+        },
+        "fit_report": {"plate": rep.as_dict(), "sigma": "hypot(3% of Ia, 30 uA)"},
+    }
+
+
 def build_6084() -> dict[str, Any]:
     """The 6084 (E80F), the regulator's error amplifier (V303): a Koren pentode fit to the
     Philips E80F transfer, plate and screen curves."""
@@ -624,6 +672,36 @@ def build_bk4134() -> dict[str, Any]:
         "lumped": capsule.lumped(geom),
         "lumped_source": "derived: varimu/devices/capsule.py's formulas (its docstring) on "
         "the geometry; air at 20 C",
+    }
+
+
+def _plain(x: Any) -> Any:
+    """A geometry block with {value: ...} leaves as plain numbers."""
+    if isinstance(x, dict):
+        if set(x) == {"value"}:
+            return x["value"]
+        return {k: _plain(v) for k, v in x.items()}
+    return x
+
+
+def build_k47() -> dict[str, Any]:
+    """Neumann's K47 dual-diaphragm capsule (the U47's KK47; MIC_ROOM_PLAN.md A3): its
+    geometry (published_points.yaml "K47": what is known sourced, the rest bounded and
+    fitted to Neumann's curves by scripts/fit_k47.py), the lumped network derived from it
+    (varimu.devices.capsule.dual_lumped)."""
+    from varimu.devices import capsule
+
+    pub = _published()["K47"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "K47",
+        "kind": "capsule",
+        "form": "dual",
+        "source": f"derived: varimu.devices.capsule.dual_lumped on the geometry ({pub['source']})",
+        "geometry": geom,
+        "lumped": capsule.dual_lumped(geom),
+        "lumped_source": "derived: varimu/devices/capsule.py's formulas (dual_lumped's "
+        "docstring) on the geometry; air at 20 C",
     }
 
 
@@ -1155,6 +1233,8 @@ BUILDERS = {
     "EF804S": build_ef804s,
     "E83F": build_e83f,
     "BK4134": build_bk4134,
+    "K47": build_k47,
+    "VF14T": build_vf14t,
     "6X4": build_6x4,
     "6AL5": build_6al5,
     "12AY7": build_12ay7,

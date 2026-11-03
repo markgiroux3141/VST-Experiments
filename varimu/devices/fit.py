@@ -304,10 +304,11 @@ def effective_sigma(x, y, groups, half_width, sigma_x, rel, abs_):
 KOREN_TRIODE_STARTS = ([10.0, 1.35, 1000.0, 50.0, 30.0], [10.0, 1.4, 500.0, 300.0, 300.0])
 
 
-def fit_koren_triode(vg, vp, ip, sigma, starts=KOREN_TRIODE_STARTS):
+def fit_koren_triode(vg, vp, ip, sigma, starts=KOREN_TRIODE_STARTS, ex_min=None):
     """Koren triode (mu, ex, kg1, kp, kvb) by least squares on plate-curve points
-    (each weighted by its sigma), the best of the starting points `starts`. Returns
-    (KorenTriode, CurveFit)."""
+    (each weighted by its sigma), the best of the starting points `starts`; `ex_min` bounds
+    the exponent from below (below 1 the plate current's slope is infinite at cutoff, where
+    Newton fails: SPICE and circuitsim alike). Returns (KorenTriode, CurveFit)."""
     from varimu.devices.triode import KorenTriode
 
     vg, vp, ip, sigma = (np.asarray(a, float) for a in (vg, vp, ip, sigma))
@@ -318,9 +319,14 @@ def fit_koren_triode(vg, vp, ip, sigma, starts=KOREN_TRIODE_STARTS):
     def resid(x):
         return (make(x).ip(vg, vp) - ip) / sigma
 
+    kw = {}
+    if ex_min is not None:
+        lo = np.full(5, -np.inf)
+        lo[1] = np.log(ex_min)
+        kw["bounds"] = (lo, np.full(5, np.inf))
     best = None
     for x0 in starts:
-        sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000)
+        sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000, **kw)
         if best is None or sol.cost < best.cost:
             best = sol
     m = make(best.x)

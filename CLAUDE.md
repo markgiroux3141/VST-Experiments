@@ -296,8 +296,17 @@ new opt-in pentode **screen law "e1"** (`KorenPentode.screen`: Ig2 = E1^Ex / Kg2
 Koren's, every existing IR unchanged), `tests/test_telefunken_v76.py` (idle vs the printed
 voltages); its profile `varimu/measure/preamp_suite.py` (`varimu unit --circuit
 telefunken_v76`, the Braunbuch's acceptance specs: the nominal unit meets 47 of 50; misses and
-the calibrated T85 values in DEVICE_BUILDER_PLAN.md B10's status). Next: the drawing, play. The U47's sources:
-`data/schematics/neumann_u47/README.md` (the capsule's geometry has no primary source).
+the calibrated T85 values in DEVICE_BUILDER_PLAN.md B10's status). The app plays it (`telefunken_v76`, 0.26x
+real time at draft-1x). **A2 done:** capsules as components (kind `capsule`,
+`varimu/devices/capsule.py`; parts `capsule`, `capsule_dual` in both builders; pressures as
+volts; self-noise from Johnson noise on the acoustic resistances), `varimu/measure/ac.py` (AC
+analysis of linear IRs, the reference), `BK4134@1` checked (18.6 dB(A) vs B&K's 18,
+`tests/test_capsule.py`). **A3:** `VF14T@1`, `config/circuits/neumann_u47.yaml` (idles at the
+drawing's point only with its underheated cathode: a -0.32 V space-charge shift from B6's model),
+the chain `u47_v76.yaml` (`scripts/compose_chain.py`), `scripts/mic_print.py`; the K47 is a
+placeholder (`K47@1`): the lumped dual network can't reach Neumann's curves (no LF cardioid,
+no diffraction), options in MIC_ROOM_PLAN.md A3's status. The U47's sources:
+`data/schematics/neumann_u47/README.md`.
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and

@@ -272,12 +272,15 @@ def dual_lumped(g: Mapping[str, Any]) -> dict[str, float]:
     c_gap = math.pi * b * b * h / P0
     c_blind = nb * math.pi * rb * rb * db / P0
     kappa = 2.0 - b * b / (a * a)
+    r_film = 12.0 * MU_AIR / (n_all * math.pi * h**3) * skvor
+    if "film_resistance_pa_s_m3" in g:  # a better value than Skvor's (see `lumped`)
+        r_film = g["film_resistance_pa_s_m3"]
     return {
         "m_diaphragm": 4.0 * rho_s / (3.0 * math.pi * a * a)
         + 8.0 * RHO_AIR / (3.0 * math.pi * math.pi * a),
         "c_diaphragm": math.pi * a**4 / (8.0 * t_n_m),
         "c_gap": c_gap,
-        "r_film": 12.0 * MU_AIR / (n_all * math.pi * h**3) * skvor,
+        "r_film": r_film,
         "r_blind": 8.0 * MU_AIR * (db / 3.0) / (nb * math.pi * rb**4),
         "c_blind": c_blind,
         "r_through": 8.0 * MU_AIR * t / (nt * math.pi * rt**4),

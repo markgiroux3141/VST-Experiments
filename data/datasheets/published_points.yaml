@@ -412,3 +412,104 @@
     # the level at 250 Hz
     response_db: {"20": 0.0, "8000": 0.0, "15000": 1.0, "22000": 0.0, "30000": -4.0, "40000": -8.0}
 
+"K47":
+  source: "data/schematics/neumann_u47/README.md, 'The capsule (M 7, K 47)': no primary source for the geometry; the sourced values are marked, the rest are bounded provisional values (value: ..., source in its comment). PLACEHOLDER (K47@1, 2026-11-03): the starting values, not fitted: scripts/fit_k47.py can't reach Neumann's curves with this network (no low-frequency cardioid; without diffraction the omni notches near 15 kHz: MIC_ROOM_PLAN.md A3's status)"
+  polarization_v: 63.0     # sch: +63 V on the backplate (README)
+  geometry:
+    diaphragm:
+      radius_m: {value: 12.5e-3}      # provisional: model knowledge (the active diameter of a 34 mm large-diaphragm capsule, ~25 mm; Peus: ~34 mm overall)
+      thickness_m: {value: 6.0e-6}    # provisional: model knowledge (forum lore: ~6 um PET for the polyester capsule; Neumann: PVC in the M 7, polyester later)
+      density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
+      tension_n_m: {value: 1500.0}    # provisional: fitted (bounds 300-5000)
+    gap_m: {value: 50.0e-6}           # derived: the 2 x 78-83 pF (sch) with the backplate's radius, less ~3 pF stray: eps0 pi b^2 / 77 pF
+    backplate:
+      radius_m: {value: 11.8e-3}      # provisional: model knowledge (the electrode a little inside the diaphragm's clamping)
+      thickness_m: {value: 3.0e-3}    # provisional: model knowledge (a thick center electrode with cavities on both sides: Neumann, 'perforated center electrode')
+      through:
+        holes: {value: 40}            # provisional: model knowledge (part of the ~153 holes (a Science Museum label, README) go through)
+        radius_m: {value: 0.5e-3}     # provisional: fitted (bounds 0.15-1.2 mm)
+      blind:
+        holes: {value: 56}            # provisional: model knowledge (the rest, per side)
+        radius_m: {value: 0.5e-3}     # provisional: fitted (bounds 0.2-1.0 mm)
+        depth_m: {value: 1.2e-3}      # provisional: fitted (bounds 0.2-4 mm)
+    leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
+    stray_capacitance_f: {value: 3.0e-12}   # provisional: model knowledge (the electrode's leads and insulator)
+    path_m: {value: 12.0e-3}          # provisional: fitted (the effective front-to-rear path, bounds 4-30 mm)
+    film_resistance_pa_s_m3: {value: 3.0e+7}   # provisional: fitted (the squeeze film's resistance per side, film resistance, bounds 1e6-3e9: Skvor's formula on this guessed geometry gives ~8e5; on the 4134 it was 2.3x off an FEM value)
+  published:
+    capacitance_f_per_side: [78.0e-12, 83.0e-12]   # sch: KK47 '2 x 78...83 pF'
+
+# --- Neumann U47 (A3) ---
+# the VF 14 (VF 14 M), transcribed 2026-11-03; curves: telefunken_vf14.provenance.yaml
+
+"VF14":
+  source: "Funkschau 1948 Heft 1, pp. 6-8, 'VF 14, Daten und Kennlinien' (Telefunken's data, 'Betriebswerte (auch für statische Messungen)'); local copy sources/funkschau_1948_01_vf14_b.pdf (web: https://www.worldradiohistory.com/INTERNATIONAL/Funkschau/1948/Funkschau-1948-01.pdf, PDF pp. 8-10). Keys starting ef14_: Telefunken EF 14 'Vorläufige Daten', sheets 011144 / 021144 (p.1-4), the same system with a 6.3 V / 470 mA heater; local copy sources/telefunken_ef14.pdf (web: https://frank.pocnet.net/sheets/076/e/EF14.pdf)"
+  heater: {v: 60, a: 0.050}   # fs48 p.6 'Heizung': indirectly heated cathode for AC / DC ('Allstrom'), Uf 60 V, If 50 mA
+  heater_note: "fs48 p.6 prints 60 V; Neumann's 1958 operating instructions say 'the 55 volt heater voltage' (data/schematics/neumann_u47/README.md, man58 C.11); radiomuseum lists 60 V / 0.05 A. The U 47 underruns it at about 35 V / 38.8 mA either way (sch:, README)."
+  # fs48 p.6 a)-d), pentode / tetrode operating points; dg2 = screen-grid Durchgriff (as a fraction);
+  # derived_vk_v = Rk x (Ia + Ig2) is arithmetic on the printed values, not printed
+  pentode_rf:         # a) 'Hf-Pentode für Breitbandverstärkung; Bremsgitter an Katode'
+    vp_v: 200
+    vg3_v: 0
+    vg2_v: 200
+    vg1_v: -4.5
+    rk_ohm: 300
+    ip_a: 12.0e-3
+    ig2_a: 1.7e-3
+    gm_s: 7.0e-3
+    dg2: 0.035
+    rp_ohm: 200.0e+3
+    req_ohm: 1000     # 'Rauschwiderstand'
+    s_over_c: "0,3 (printed with the unit ohm)"
+    derived_vk_v: 4.11   # 300 ohm x 13.7 mA, against the printed Ug1 -4.5 V
+  tetrode_rf:         # b) 'Hf-Tetrode für Antennenverstärker zur Kennlinienlinearisierung; Bremsgitter an Anode'
+    {vp_v: 200, vg2_v: 200, vg1_v: -4.5, rk_ohm: 220, ip_plus_ig3_a: 18.0e-3, ig2_a: 1.6e-3, gm_s: 9.5e-3, dg2: 0.036, rp_ohm: 50.0e+3, req_ohm: 600, thd_pct_max_at_5_vrms: 0.01}
+  tetrode_g3_at_g2:   # c) 'Hf-Tetrode für Breitbandverstärkung; Bremsgitter an Schirmgitter'
+    {vp_v: 200, vg2_v: 100, vg1_v: -2, rk_ohm: 150, ip_a: 12.0e-3, ig2_plus_ig3_a: 2.0e-3, gm_s: 10.0e-3, dg2: 0.04, rp_ohm: 0.5e+6, req_ohm: 600}
+  pentode_g3_positive:   # d) 'Hf-Pentode, Bremsgitter mit positiver Vorspannung (größte Aussteuerfähigkeit)'
+    {vp_v: 200, vg3_v: 20, vg2_v: 200, vg1_v: -4.5, rk_ohm: 350, ip_a: 11.5e-3, ig3_a: "+-0.2e-3", ig2_a: 1.5e-3, gm_s: 6.5e-3, dg2: 0.034, rp_ohm: 300.0e+3, req_ohm: 1200}
+  # fs48 p.6 f) 'Nf-Pentode mit RC-Kopplung; Bremsgitter an Katode', Ub 200 V; vp_v, vg2_v printed in
+  # parentheses (approximate); vout_vrms_max at thd_pct
+  pentode_rc_amplifier:
+    - {vb_v: 200, ra_ohm: 10.0e+3, vp_v: 125, rg2_ohm: 40.0e+3, vg2_v: 160, vg1_v: -3.4, rk_ohm: 400, ip_a: 7.5e-3, ig2_a: 1.0e-3, vout_vrms_max: 37, thd_pct: 5, gain: 38}
+    - {vb_v: 200, ra_ohm: 20.0e+3, vp_v: 100, rg2_ohm: 50.0e+3, vg2_v: 160, vg1_v: -3.4, rk_ohm: 600, ip_a: 4.8e-3, ig2_a: 0.8e-3, vout_vrms_max: 45, thd_pct: 5, gain: 55}
+    - {vb_v: 200, ra_ohm: 50.0e+3, vp_v: 100, rg2_ohm: 400.0e+3, vg2_v: 100, vg1_v: -3.0, rk_ohm: 1250, ip_a: 2.1e-3, ig2_a: 0.25e-3, vout_vrms_max: 30, thd_pct: 5, gain: 100}
+  # Triode connection (g2 and g3 tied to the anode, as in the U 47). ik_a is the printed 'Ia (+Ig3+Ig2)'.
+  triode_rc_amplifier:   # fs48 p.7 i) 'Nf-Triode mit RC-Kopplung; Schirmgitter und Bremsgitter mit Anode verbunden'
+    vb_v: 200
+    ra_ohm: 40.0e+3
+    ra_decoupling_ohm: 10.0e+3   # 'Anodensiebwiderstand'
+    vp_v_approx: 130             # printed '(Anodenspannung ca. 130 Volt)'
+    vg1_v: -5
+    rk_ohm: 5000
+    ik_a: 1.0e-3
+    durchgriff: 0.047            # 'Durchgriff D 4,7 %'
+    gain: 21                     # 'Spannungsverstärkung bei Ua~eff = 60 Volt: ca. 21fach'
+    vout_vrms: 60
+    derived_mu: 21.3             # 1 / D, arithmetic
+    derived_vak_v: 145           # 200 V - 1 mA x 50 kOhm - 5 V, arithmetic; the printed anode voltage is 'ca. 130 V' (the curves put 1 mA at -5 V at Ua 127 V)
+  triode_mixer:          # fs48 p.7 n) 'additive Mischverstärkung in Triodenschaltung, fremderregt; Oszillatorspannung an g1'
+    {vp_v: 150, vosc_v: -7, ik_a: 8.8e-3, gc_s: 2.8e-3, rp_ohm: 50.0e+3, req_ohm: 1000}   # Uosz = Ug1 = Ig1 x Rg1 (grid-leak bias by the oscillator); gc = conversion transconductance; rp_ohm is the printed Ri in triode connection
+  triode_output:         # fs48 p.8 s) 'Endtriode; Schirmgitter und Bremsgitter mit Anode verbunden'
+    {vp_v: 200, vg1_v: -4.5, rk_ohm: 225, ik_a: 20.0e-3, load_ohm: 5000, po_w: 1.0, thd_pct: 5, derived_vk_v: 4.5}   # derived: 225 ohm x 20 mA
+  grid_current_onset: {vg1_v: -1.3, ig1_max_a: 0.3e-6}   # fs48 p.8 'Gitterstrom bei Ug1 -1,3 Volt: Ige <= 0,3 uA' (EF 14 p.4 the same: 'Gitterstromeinsatzpunkt (Ig1 <= 0,3 uA) Uge -1,3 V')
+  bias: "fs48 p.8: 'Die VF 14 darf nur mit automatischer Gittervorspannung betrieben werden' (automatic, i.e. cathode, bias only)"
+  max_ratings: {va_v: 300, va0_v: 550, vg3_v: 300, vg30_v: 550, vg2_v: 200, vg20_v: 550, pa_w: 5, pg2_w: 0.7, ik_a: 30.0e-3, rg1_ohm_pa_ge_2w: 0.5e+6, rg1_ohm_pa_below_2w: 1.0e+6, rg3_ohm: 0.1e+6, vhk_v: 100, rhk_ohm: 20.0e+3}   # fs48 p.8 'Grenzwerte'
+  not_transcribed: "fs48 e) (AF tetrode, transformer coupled), g) and h) (AF pentode with g3 at +20 V, AF tetrode RC), k) (variable-mu control), l) and m) (pentode mixers), o) and p) (audion): pp. 6-7"
+  # EF 14 sheet (6.3 V heater; operating points at Ua 250 V)
+  ef14_heater: {v: 6.3, a: 0.470, a_tolerance: 0.10}   # EF 14 p.1, p.3 '470 mA +-10 %'
+  ef14_pentode:          # EF 14 p.1 a) 'Bremsgitter an Kathode (Breitbandverstärker)'
+    {vp_v: 250, vg3_v: 0, vg2_v: 200, vg1_v: -4.5, ip_a: 12.0e-3, ig2_a: 1.7e-3, gm_s: 7.0e-3, rp_ohm: 200.0e+3, req_ohm: 1000, rk_ohm: 300}
+  ef14_tetrode:          # EF 14 p.1 b) 'Bremsgitter an Anode (Antennenverstärker)'; Ub = supply
+    {vb_v: 250, vg2_v: 200, vg1_v: -4.5, ip_plus_ig3_a: 18.0e-3, ig2_a: 1.6e-3, gm_s: 9.5e-3, rp_ohm: 30.0e+3, req_ohm: 600, rk_ohm: 220}
+  ef14_tail_current: {vf_v: 6.3, vp_v: 250, vg2_v: 200, vg3_v: 0, vg1_v: -10, ip_max_a: 1.5e-3}   # EF 14 p.3 '2. Anodenschwanzstrom'
+  ef14_spread:           # EF 14 p.3 '3. Streuwerte'
+    at_vg1_minus_3: {vf_v: 6.3, vp_v: 200, vg2_v: 200, vg3_v: 0, vg1_v: -3, ip_mean_a: 33.0e-3, ip_min_a: 20.0e-3, ip_max_a: 45.0e-3}
+    heater_5_8_v: {vf_v: 5.8, ip_drop_mean_a: 5.0e-3}   # 'Bei Uf = 5,8 V ist der Anodenstrom im Durchschnitt 5 mA kleiner' (same conditions, -3 V)
+    at_ip_12ma: {vf_v: 6.3, vp_v: 200, vg2_v: 200, vg3_v: 0, ip_a: 12.0e-3, gm_s: [5.5e-3, 9.5e-3], vg1_v: [-3.5, -6.5], ig2_a: [1.15e-3, 4.0e-3]}
+  ef14_max_ratings: {va0_v: 550, va_v: 300, vg30_v: 550, vg3_v: 300, vg20_v: 550, vg2_v: 200, pa_w: 5, pg2_w: 0.7, ik_a: 30.0e-3, rg1_ohm: 0.5e+6, vhk_v: 100, rhk_ohm: 20.0e+3}   # EF 14 p.3-4
+  ef14_capacitances_f:   # EF 14 p.4; none printed for the triode connection
+    pentode: {input: 9.5e-12, input_range: [9.0e-12, 10.0e-12], output: 8.2e-12, output_range: [7.6e-12, 8.8e-12], ag1_max: 0.01e-12}
+    g3_at_anode: {input: 9.5e-12, input_range: [9.0e-12, 10.0e-12], output: 10.0e-12, output_range: [9.4e-12, 10.6e-12], ag1_max: 0.15e-12}
+  pins: "EF 14 p.4 'Sockelschaltbild' (steel tube, Y8A base): g1, k, m, g2, f, f, g3, a clockwise in the drawing starting at g1 (m = the metal envelope); pin numbers not printed. The VF 14's base drawing wasn't found; fs48 doesn't print one."
+  envelope: "steel bulb ('Stahlröhre', fs48 p.6), 36 mm diameter (EF 14 p.4 'Kolbenabmessungen'; Funkschau 12/1947)"

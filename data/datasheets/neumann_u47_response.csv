@@ -1,0 +1,333 @@
+pattern,angle_deg,freq_hz,db,document,reference,quality
+omni,0,31.25,-1.09,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,35.08,-0.39,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,39.37,-0.09,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,44.19,-0.01,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,49.61,0.05,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,55.68,0.03,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,62.50,0.01,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,70.15,0.04,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,78.75,0.01,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,88.39,0.04,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,99.21,0.02,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,111.4,0.06,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,125.0,0.09,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,140.3,0.12,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,157.5,0.15,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,176.8,0.18,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,198.4,0.22,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,222.7,0.25,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,250.0,0.23,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,280.6,0.26,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,315.0,0.24,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,353.6,0.27,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,396.9,0.25,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,445.4,0.23,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,500.0,0.21,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,561.2,0.18,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,630.0,0.16,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,707.1,0.13,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,793.7,0.11,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,890.9,0.14,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,1000,0.12,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,1122,0.10,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,1260,0.08,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,1414,0.05,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,1587,0.30,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,1782,1.26,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,2000,2.34,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,2245,2.85,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,2520,3.25,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,2828,3.26,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,3175,2.89,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,3564,1.96,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,4000,0.34,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,4490,-0.80,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,5040,-0.87,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,5657,-0.31,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,6350,0.95,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,7127,2.73,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,8000,4.31,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,8980,5.13,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,10079,5.31,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,11314,4.93,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,12699,3.47,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,14254,1.15,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+omni,0,15000,0.39,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,31.25,-3.21,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,35.08,-2.25,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,39.37,-1.65,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,44.19,-1.36,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,49.61,-1.33,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,55.68,-1.30,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,62.50,-1.23,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,70.15,-1.19,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,78.75,-1.12,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,88.39,-1.09,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,99.21,-1.06,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,111.4,-1.03,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,125.0,-0.90,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,140.3,-0.87,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,157.5,-0.79,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,176.8,-0.70,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,198.4,-0.62,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,222.7,-0.59,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,250.0,-0.56,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,280.6,-0.49,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,315.0,-0.30,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,353.6,-0.22,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,396.9,-0.19,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,445.4,-0.22,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,500.0,-0.19,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,561.2,-0.21,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,630.0,-0.18,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,707.1,-0.21,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,793.7,-0.23,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,890.9,-0.20,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,1000,-0.18,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,1122,-0.15,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,1260,-0.01,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,1414,0.11,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,1587,0.32,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,1782,0.77,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,2000,1.31,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,2245,1.83,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,2520,2.46,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,2828,3.02,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,3175,3.42,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,3564,3.65,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,4000,3.62,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,4490,3.46,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,5040,2.98,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,5657,2.61,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,6350,2.49,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,7127,2.77,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,8000,3.27,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,8980,3.82,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,10079,3.90,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,11314,3.60,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,12699,2.60,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,14254,0.44,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,15000,-0.34,ds58,ds58 chart 0 dB line (curves pass 0 dB near 1 kHz),read
+cardioid,0,31.25,-52.86,br,dB re 1 V/ubar,read
+cardioid,0,35.08,-52.60,br,dB re 1 V/ubar,read
+cardioid,0,39.37,-52.40,br,dB re 1 V/ubar,read
+cardioid,0,44.19,-52.24,br,dB re 1 V/ubar,read
+cardioid,0,49.61,-52.15,br,dB re 1 V/ubar,read
+cardioid,0,55.68,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,62.50,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,70.15,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,78.75,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,88.39,-52.06,br,dB re 1 V/ubar,read
+cardioid,0,99.21,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,111.4,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,125.0,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,140.3,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,157.5,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,176.8,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,198.4,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,222.7,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,250.0,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,280.6,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,315.0,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,353.6,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,396.9,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,445.4,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,500.0,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,561.2,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,630.0,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,707.1,-52.08,br,dB re 1 V/ubar,read
+cardioid,0,793.7,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,890.9,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,1000,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,1122,-52.07,br,dB re 1 V/ubar,read
+cardioid,0,1260,-52.04,br,dB re 1 V/ubar,read
+cardioid,0,1414,-52.02,br,dB re 1 V/ubar,read
+cardioid,0,1587,-51.98,br,dB re 1 V/ubar,read
+cardioid,0,1782,-51.95,br,dB re 1 V/ubar,read
+cardioid,0,2000,-51.86,br,dB re 1 V/ubar,read
+cardioid,0,2245,-51.78,br,dB re 1 V/ubar,read
+cardioid,0,2520,-51.66,br,dB re 1 V/ubar,read
+cardioid,0,2828,-51.52,br,dB re 1 V/ubar,read
+cardioid,0,3175,-51.35,br,dB re 1 V/ubar,read
+cardioid,0,3564,-51.21,br,dB re 1 V/ubar,read
+cardioid,0,4000,-51.06,br,dB re 1 V/ubar,read
+cardioid,0,4490,-50.95,br,dB re 1 V/ubar,read
+cardioid,0,5040,-50.82,br,dB re 1 V/ubar,read
+cardioid,0,5657,-50.72,br,dB re 1 V/ubar,read
+cardioid,0,6350,-50.65,br,dB re 1 V/ubar,read
+cardioid,0,7127,-50.62,br,dB re 1 V/ubar,read
+cardioid,0,8000,-50.64,br,dB re 1 V/ubar,read
+cardioid,0,8980,-50.76,br,dB re 1 V/ubar,read
+cardioid,0,10079,-50.99,br,dB re 1 V/ubar,read
+cardioid,0,11314,-51.33,br,dB re 1 V/ubar,read
+cardioid,0,12699,-51.81,br,dB re 1 V/ubar,read
+cardioid,0,14254,-52.56,br,dB re 1 V/ubar,read
+cardioid,0,16000,-53.62,br,dB re 1 V/ubar,read
+cardioid,0,18000,-54.87,br,dB re 1 V/ubar,coarse
+omni,0,31.25,-56.83,br,dB re 1 V/ubar,read
+omni,0,35.08,-56.57,br,dB re 1 V/ubar,read
+omni,0,39.37,-56.37,br,dB re 1 V/ubar,read
+omni,0,44.19,-56.23,br,dB re 1 V/ubar,read
+omni,0,49.61,-56.14,br,dB re 1 V/ubar,read
+omni,0,55.68,-56.06,br,dB re 1 V/ubar,read
+omni,0,62.50,-56.07,br,dB re 1 V/ubar,read
+omni,0,70.15,-56.06,br,dB re 1 V/ubar,read
+omni,0,78.75,-56.06,br,dB re 1 V/ubar,read
+omni,0,88.39,-56.06,br,dB re 1 V/ubar,read
+omni,0,99.21,-56.07,br,dB re 1 V/ubar,read
+omni,0,111.4,-56.06,br,dB re 1 V/ubar,read
+omni,0,125.0,-56.06,br,dB re 1 V/ubar,read
+omni,0,140.3,-56.06,br,dB re 1 V/ubar,read
+omni,0,157.5,-56.05,br,dB re 1 V/ubar,read
+omni,0,176.8,-56.06,br,dB re 1 V/ubar,read
+omni,0,198.4,-56.06,br,dB re 1 V/ubar,read
+omni,0,222.7,-56.07,br,dB re 1 V/ubar,read
+omni,0,250.0,-56.07,br,dB re 1 V/ubar,read
+omni,0,280.6,-56.06,br,dB re 1 V/ubar,read
+omni,0,315.0,-56.06,br,dB re 1 V/ubar,read
+omni,0,353.6,-56.06,br,dB re 1 V/ubar,read
+omni,0,396.9,-56.05,br,dB re 1 V/ubar,read
+omni,0,445.4,-56.06,br,dB re 1 V/ubar,read
+omni,0,500.0,-56.05,br,dB re 1 V/ubar,read
+omni,0,561.2,-56.06,br,dB re 1 V/ubar,read
+omni,0,630.0,-56.06,br,dB re 1 V/ubar,read
+omni,0,707.1,-56.05,br,dB re 1 V/ubar,read
+omni,0,793.7,-56.06,br,dB re 1 V/ubar,read
+omni,0,890.9,-56.05,br,dB re 1 V/ubar,read
+omni,0,1000,-56.04,br,dB re 1 V/ubar,read
+omni,0,1122,-56.05,br,dB re 1 V/ubar,read
+omni,0,1260,-56.07,br,dB re 1 V/ubar,read
+omni,0,1414,-56.18,br,dB re 1 V/ubar,read
+omni,0,1587,-56.32,br,dB re 1 V/ubar,read
+omni,0,1782,-56.52,br,dB re 1 V/ubar,read
+omni,0,2000,-56.71,br,dB re 1 V/ubar,read
+omni,0,2245,-56.84,br,dB re 1 V/ubar,read
+omni,0,2520,-56.94,br,dB re 1 V/ubar,read
+omni,0,2828,-56.97,br,dB re 1 V/ubar,read
+omni,0,3175,-56.95,br,dB re 1 V/ubar,read
+omni,0,3564,-56.86,br,dB re 1 V/ubar,read
+omni,0,4000,-56.70,br,dB re 1 V/ubar,read
+omni,0,4490,-56.53,br,dB re 1 V/ubar,read
+omni,0,5040,-56.26,br,dB re 1 V/ubar,read
+omni,0,5657,-55.96,br,dB re 1 V/ubar,read
+omni,0,6350,-55.56,br,dB re 1 V/ubar,read
+omni,0,7127,-55.04,br,dB re 1 V/ubar,read
+omni,0,8000,-54.48,br,dB re 1 V/ubar,read
+omni,0,8980,-54.26,br,dB re 1 V/ubar,read
+omni,0,10079,-54.30,br,dB re 1 V/ubar,read
+omni,0,11314,-54.62,br,dB re 1 V/ubar,read
+omni,0,12699,-55.21,br,dB re 1 V/ubar,read
+omni,0,14254,-55.99,br,dB re 1 V/ubar,read
+omni,0,16000,-57.05,br,dB re 1 V/ubar,read
+omni,0,18000,-58.58,br,dB re 1 V/ubar,coarse
+cardioid,0,31.25,-0.97,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,35.08,-0.64,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,39.37,-0.42,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,44.19,-0.14,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,49.61,-0.11,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,55.68,-0.04,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,62.50,0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,70.15,-0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,78.75,-0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,88.39,-0.03,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,99.21,-0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,111.4,0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,125.0,0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,140.3,0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,157.5,0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,176.8,0.00,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,198.4,0.00,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,222.7,-0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,250.0,-0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,280.6,-0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,315.0,0.04,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,353.6,0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,396.9,0.03,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,445.4,0.03,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,500.0,0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,561.2,0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,630.0,0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,707.1,0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,793.7,0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,890.9,0.00,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,1000,0.00,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,1122,0.00,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,1260,0.00,tf52,dB re the curve's own 1 kHz value,interp
+cardioid,0,1414,0.00,tf52,dB re the curve's own 1 kHz value,interp
+cardioid,0,1587,0.00,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,1782,-0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,2000,-0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,2245,-0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,2520,-0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,2828,-0.02,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,3175,-0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,3564,-0.01,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,4000,0.09,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,4490,0.18,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,5040,0.47,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,5657,0.65,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,6350,0.92,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,7127,1.26,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,8000,1.76,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,8980,2.34,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,10079,2.22,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,11314,1.31,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,12699,0.94,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,14254,1.17,tf52,dB re the curve's own 1 kHz value,read
+cardioid,0,15000,1.16,tf52,dB re the curve's own 1 kHz value,read
+omni,0,31.25,-0.80,tf52,dB re the curve's own 1 kHz value,read
+omni,0,35.08,-0.50,tf52,dB re the curve's own 1 kHz value,read
+omni,0,39.37,-0.34,tf52,dB re the curve's own 1 kHz value,read
+omni,0,44.19,-0.13,tf52,dB re the curve's own 1 kHz value,read
+omni,0,49.61,-0.09,tf52,dB re the curve's own 1 kHz value,read
+omni,0,55.68,-0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,62.50,-0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,70.15,-0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,78.75,-0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,88.39,-0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,99.21,0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,111.4,0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,125.0,0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,140.3,0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,157.5,0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,176.8,0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,198.4,0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,222.7,0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,250.0,0.00,tf52,dB re the curve's own 1 kHz value,read
+omni,0,280.6,0.00,tf52,dB re the curve's own 1 kHz value,read
+omni,0,315.0,0.00,tf52,dB re the curve's own 1 kHz value,read
+omni,0,353.6,0.00,tf52,dB re the curve's own 1 kHz value,read
+omni,0,396.9,-0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,445.4,-0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,500.0,-0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,561.2,-0.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,630.0,-0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,707.1,-0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,793.7,-0.02,tf52,dB re the curve's own 1 kHz value,read
+omni,0,890.9,0.00,tf52,dB re the curve's own 1 kHz value,read
+omni,0,1000,0.00,tf52,dB re the curve's own 1 kHz value,read
+omni,0,1122,-0.03,tf52,dB re the curve's own 1 kHz value,read
+omni,0,1260,-0.05,tf52,dB re the curve's own 1 kHz value,interp
+omni,0,1414,-0.07,tf52,dB re the curve's own 1 kHz value,interp
+omni,0,1587,-0.09,tf52,dB re the curve's own 1 kHz value,interp
+omni,0,1782,-0.11,tf52,dB re the curve's own 1 kHz value,read
+omni,0,2000,-0.19,tf52,dB re the curve's own 1 kHz value,read
+omni,0,2245,-0.41,tf52,dB re the curve's own 1 kHz value,read
+omni,0,2520,-0.55,tf52,dB re the curve's own 1 kHz value,read
+omni,0,2828,-0.83,tf52,dB re the curve's own 1 kHz value,read
+omni,0,3175,-0.95,tf52,dB re the curve's own 1 kHz value,read
+omni,0,3564,-1.10,tf52,dB re the curve's own 1 kHz value,read
+omni,0,4000,-1.10,tf52,dB re the curve's own 1 kHz value,read
+omni,0,4490,-1.01,tf52,dB re the curve's own 1 kHz value,read
+omni,0,5040,-0.62,tf52,dB re the curve's own 1 kHz value,read
+omni,0,5657,-0.29,tf52,dB re the curve's own 1 kHz value,read
+omni,0,6350,0.14,tf52,dB re the curve's own 1 kHz value,read
+omni,0,7127,0.91,tf52,dB re the curve's own 1 kHz value,read
+omni,0,8000,1.62,tf52,dB re the curve's own 1 kHz value,read
+omni,0,8980,2.31,tf52,dB re the curve's own 1 kHz value,read
+omni,0,10079,2.15,tf52,dB re the curve's own 1 kHz value,read
+omni,0,11314,1.88,tf52,dB re the curve's own 1 kHz value,read
+omni,0,12699,2.00,tf52,dB re the curve's own 1 kHz value,read
+omni,0,14254,2.19,tf52,dB re the curve's own 1 kHz value,read
+omni,0,15000,2.16,tf52,dB re the curve's own 1 kHz value,read

@@ -1,0 +1,28 @@
+device: "EF14"
+document: "Telefunken EF 14, Steile rauscharme Pentode, Netzröhre für W-Heizung, indirekt geheizt, 'Vorläufige Daten'"
+publisher: Telefunken
+date: "sheet codes 011144 / 021144 (data, 1944) and 170839 / 180839 (curves, 1939)"
+local_copy: sources/telefunken_ef14.pdf
+local_copy_sha256: 842cd8108d874f3f0604a82c769a0399fbbc59eb024bf3988e79e2de9939cfa5
+scan_source: "web: https://frank.pocnet.net/sheets/076/e/EF14.pdf (identical to web: https://r-type.org/pdfs/ef14.pdf); 8 sheet pages plus the site's index page, 1-bit 300 dpi"
+other_copies: >-
+  RFT (VEB Funkwerk Erfurt) EF 14, 1953, web: https://frank.pocnet.net/sheets/082/e/EF14.pdf (sha256
+  28492d3e9dd355ddb0b2d66295fbea1e92d3a230608c026833dedb2286a45777): data only, no curves; not used.
+digitized_with: >-
+  not digitized: the EF 14 is the VF 14's system with a 6.3 V / 470 mA heater (Funkschau 12/1947), and the
+  sheet has no triode-connected curves and no plate or transfer curves with g3 at the cathode (its curves:
+  p.5 Ig2 = f(Ug2) at Ua 200 V with g3 at the cathode and at the anode; p.6 Ia = f(Ua) and Ia, Ig2 = f(Ug1)
+  with g3 at the anode; p.7 the same with Ug3 = +20 V; p.8 Ig2 = f(Ug2) with Ug3 = +20 V). Used for tabulated
+  values (published_points.yaml 'VF14', marked 'EF 14') and, read by eye at 300 dpi, as the source of
+  Ua = 200 V for the Funkschau screen-current figure (telefunken_vf14.provenance.yaml)
+digitized_by: Claude Code
+digitized_on: 2026-11-03
+files:
+  published_points.yaml:
+    figure: "p.1-4 (sheets 011144, 021144): operating points at Ua 250 V, tail current, spread values with the heater-voltage sensitivity, limits, grid-current onset, capacitances, base"
+    entry: "VF14 (the keys marked EF 14)"
+axis_calibration: "n/a (tabulated)"
+estimated_error: "n/a (transcribed); p.5's curves read by eye to ~0.1 mA for the comparison only"
+notes: >-
+  The data refer to 250 V (Funkschau's VF 14 data to 200 V). The spread values (p.3) are the only sourced
+  numbers on how this system's current varies from tube to tube and with heater voltage.

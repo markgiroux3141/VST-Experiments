@@ -260,6 +260,41 @@ Started by the user (U47 -> V76 first, alongside the gas-tube work in its worktr
   above it, a known gap of that parameter set), the response peaks +3.3 dB at 15.6 kHz
   (B&K ~+1: 1.3 dB outside its +-2 dB; the gap's air mass and the film's frequency
   dependence aren't modelled).
+- **A3 in progress (2026-11-03):**
+  - **VF14:** `VF14T@1`, a Koren triode on Telefunken's triode-connected curves (Funkschau
+    1/1948, digitized; fitted up to 10 mA / 200 V, the U47's region: mu 27, 21% rms; the
+    exponent held at >= 1, below it Newton fails at cutoff).
+  - **The U47's electronics:** `config/circuits/neumann_u47.yaml` from the 1959 drawing: the
+    capsule (`capsule_dual`, pattern switch: omni polarizes the rear diaphragm, cardioid
+    holds it at the backplate), the VF14M with its heater as a resistor at its printed
+    point, the BV 8 (a reproduction's ratio, resistances and 91 H), the NG as a Thevenin
+    source (300 V open, 105 V at 40 mA). **Its idle needs the underheated cathode:** at the
+    rated heater the anode sits at 27 V; B6's cathode model at the heater's printed 35 V of
+    60 V gives 855 K and a -0.32 V space-charge shift (a DC source in series with the grid:
+    a circuit's `heaters` block is global, so a chain couldn't carry it), and the U47 idles
+    at 35.8 V / 0.542 mA against the printed 34 V / ~0.55 mA (`tests/test_u47.py`).
+    Amplifier gain grid to output (1 kOhm) +9.7 dB.
+  - **The chain:** `scripts/compose_chain.py` writes `config/circuits/u47_v76.yaml` (each
+    circuit's keys, parts and nodes suffixed, the mic's measuring load and the preamp's
+    generator dropped, a 1 nF cable); builds bit for bit in both builders, pre-flight clean;
+    ~5x slower than real time at production. `scripts/mic_print.py` prints a clip through a
+    chain as a plane wave from an angle (`varimu/mics/free_field.py`).
+  - **The K47 is a placeholder (K47@1, the starting values, not fitted):** Neumann's curves
+    digitized (`data/datasheets/neumann_u47_{response,polar}.csv`: Telefunken 1952's measured
+    responses re 1 kHz, the 1958 sheet's polars), `scripts/fit_k47.py` fits the bounded
+    geometry with the AC network, and it can't get there. Low end: with a stiffness-controlled
+    diaphragm the internal air's compliance adds an omni term (2 C1 / C_d) that fills the null
+    (0 dB front to back at 100 Hz; Neumann's 11.7), with a resistance-controlled one the
+    sensitivity falls ~10x short. High end: without the body's diffraction both entries see
+    the free field, and the omni sum notches where the path is half a wavelength (~15 kHz).
+    So the U47 -> V76 chain isn't worth a listen yet (the capsule's artifacts, a +9.5 dB peak
+    near 8.5 kHz on axis). **Options (the user's call):** (a) the Braunmuhl-Weber theory
+    properly: a literature K47 / K67 equivalent network (the backplate's distributed
+    resistance and the diaphragm's control regime) plus diffraction by the capsule and its
+    basket (a rigid disk or sphere first, BEM on the GPU later: the plan's later fidelity
+    item, now a prerequisite); (b) the same with the K47's geometry measured from a capsule
+    or a maker's drawing (the README's "where to look next"). Not an option: a fitted EQ curve
+    on a pressure capsule (the genome is physical only).
 - **A3's gate, the U47's sources:** catalogued in `data/schematics/neumann_u47/README.md`
   (Neumann's own archive: the 1958 data sheet with polars and responses, the 1958 / 1959
   manuals, the 1959 factory drawing U 47-00-00-00 with every value; Funkschau 1/1948's
