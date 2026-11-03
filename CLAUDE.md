@@ -397,7 +397,12 @@ the response passes (-1.84 / +0.94 dB), the 3% level +4.8 dB (on #111's Sound Ta
 its S/N miss was a numerical line from 10 substeps (the bias peaks' parabola; now a quartic,
 `refine_extremum`, both languages; back to 20 substeps; `scripts/tape_snr_study.py`). Profile
 `ampex351_heads51`; `scripts/speed_351.py` times the record side's settings (TAPE_PLAN.md
-"Gaps" 3-4, "Speed").
+"Gaps" 3-4, "Speed"). **Tape speed and a fast tier** are planned in
+[docs/TAPE_SPEED_PLAN.md](docs/TAPE_SPEED_PLAN.md) (2026-11-02, parked; nothing built): the
+literal print faster (P1-P6: the parts' split measured, decoupled by a block of lag, parallel
+in time, a cheaper fast-part method, the tape kernel on the GPU, the draft tier) and a fast
+tier trained on it (F1-F5: flutter and noise split off, a grey-box reduced medium first, a
+neural core if needed; the literal machine stays the print).
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->

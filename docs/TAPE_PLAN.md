@@ -1121,6 +1121,9 @@ out of sample.
      it. A draft tier for auditioning (it misses the bias in the 6201: -34 dB at +12 dB).
   - All four: perhaps ~10-20x for the literal print, a few x with option B and the GPU.
     Real time needs TM7's reduced medium (DELAY_PLAN.md "Real time").
+  - **Continued in [TAPE_SPEED_PLAN.md](TAPE_SPEED_PLAN.md)** (2026-11-02): the levers
+    re-ranked after this section's measurements (P1-P6) and a fast tier trained on the
+    literal machine (F1-F5).
 
 **Decided 2026-10-31 (the user): condition dials, "turn it to 11".** Continue in plan order
 (TM5 the 351's circuit, then TM6's insert). The insert's panel gets condition dials that go
