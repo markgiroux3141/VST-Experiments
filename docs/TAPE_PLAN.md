@@ -1080,6 +1080,33 @@ out of sample.
        96 kHz - f_osc in the noise that band levels on drums can't show (-78.6 dBFS; S/N 58.3
        dB). Judge the record side's step on the noiseless machine's floor, not only on music
        ("Gaps" 4, the S/N miss traced).
+     - **After the quartic peak finder (2026-11-02; `scripts/tape_snr_study.py --cells --grid`,
+       the noiseless machine's floor; `scripts/speed_351.py`, the new heads, one job alone):**
+
+       | record side | line near 96 kHz - f_osc | noiseless floor | x real time (drums) | bands vs 40 substeps |
+       |---|---|---|---|---|
+       | 20 substeps, error control on (was production) | -95.7 dBFS | -91.6 | 87.8 | 0.058 dB |
+       | **20, no error control** | **-113.7** | **-95.2** | **83.7** | 0.064 dB |
+       | 10, error control on | -86.6 | -82.1 | | |
+       | 10, Newton 100x tighter | -86.2 | -81.4 | | |
+       | 10, error control 10x tighter | -82.9 | -80.1 | | |
+       | 10, no error control | -82.7 | -80.4 | 71.4 | 0.053 dB |
+       | 40, error control on | | | 114.2 | |
+
+       10 substeps is under-resolved for the 92.9 kHz oscillator whatever the integrator does
+       (the floor 14 dB under the real noise needs <= -89.4). Local error control in the fast
+       part only adds artifacts: its subdivisions follow where the oscillator's peaks fall in a
+       step and beat against it (tighter is worse). **Now circuitsim's multi-rate parts step
+       without local error control** (`stream.rs`; partition.rs's docs; the audio part keeps
+       it for the 6X4), the 351 re-aligned and profiled with it. The part's speed is now its
+       fixed step's: the levers left are the triodes' cost per step (tables, ~10%), the GPU for
+       the tape (lever 3), and a draft tier (lever 4).
+     - **The caches don't see circuitsim's source.** The render cache key and the alignment's
+       hash the Python code (`runner.code_version`: varimu/{sim,circuit,devices}, config.py),
+       not `circuitsim.SOURCE_HASH`, so a Rust-only engine change reuses old renders and
+       alignments (this change: the 351's 69 cached renders deleted by hand, `align_351.py
+       --refresh`). Adding SOURCE_HASH to the code version would make every circuitsim edit
+       re-render everything (the 670's suite: hours): the user's call.
      - **Tube tables: not adopted.** Exact here, but 10% for a global production setting that
        would move every other circuit's renders (the cache key).
      - **The audio-rate cut through the record amplifier: not pursued.** At 10 substeps the

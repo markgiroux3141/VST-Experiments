@@ -1,0 +1,40 @@
+{
+ "f_osc_hz": 92878.53904913978,
+ "rows": {
+  "10: substeps": {
+   "setting": 10,
+   "line_hz": 3352.0,
+   "line_dbfs": -86.59951767170693,
+   "noise_dbfs_rms": -82.12177462631527,
+   "seconds": 393.78847002983093
+  },
+  "10:error_abstol=0.001,error_reltol=0.0001 substeps": {
+   "setting": 10,
+   "line_hz": 3038.0,
+   "line_dbfs": -82.90083013654325,
+   "noise_dbfs_rms": -80.10100700261455,
+   "seconds": 592.6640119552612
+  },
+  "10:error_abstol=0.0 substeps": {
+   "setting": 10,
+   "line_hz": 2121.0,
+   "line_dbfs": -82.73922161531021,
+   "noise_dbfs_rms": -80.39291397379898,
+   "seconds": 286.9354979991913
+  },
+  "10:newton_reltol=1e-06,newton_vntol=1e-05 substeps": {
+   "setting": 10,
+   "line_hz": 3352.0,
+   "line_dbfs": -86.18378926288598,
+   "noise_dbfs_rms": -81.35576465374639,
+   "seconds": 507.9060015678406
+  },
+  "20:error_abstol=0.0 substeps": {
+   "setting": 20,
+   "line_hz": 3020.0,
+   "line_dbfs": -113.66711271849297,
+   "noise_dbfs_rms": -95.16527528136386,
+   "seconds": 391.192498922348
+  }
+ }
+}

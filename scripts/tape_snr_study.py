@@ -115,13 +115,30 @@ def cells() -> int:
 
         subs = [int(a) for a in sys.argv[sys.argv.index("--substeps") + 1 :] if a.isdigit()]
         rows = {f"{m} substeps": m for m in subs}
+    sets: dict[str, dict] = {}
+    if "--grid" in sys.argv:
+        # Rows "M:key=value,key=value": M substeps with the engine's settings changed (both
+        # parts), to find what else the record side's step leaves in the floor.
+        sys.path.insert(0, str(REPO_ROOT / "scripts"))
+        import speed_351
+
+        rows = {}
+        for arg in sys.argv[sys.argv.index("--grid") + 1 :]:
+            m, _, kv = arg.partition(":")
+            kw = {}
+            for pair in filter(None, kv.split(",")):
+                k, _, val = pair.partition("=")
+                kw[k] = type(getattr(st, k))(val)
+            rows[f"{arg} substeps"] = int(m)
+            sets[f"{arg} substeps"] = kw
     x = np.zeros(int((ts.MEASURE_FROM_S + ts.NOISE_S) * fs))
 
     def one(item):
         name, ds = item
         t1 = time.time()
         ir = speed_351.with_substeps(ir0, ds) if "substeps" in name else with_cells(ir0, ds)
-        y = fast.run_transient(ir, x, settings=st).vectors["v(out)"]
+        sti = dataclasses.replace(st, **sets.get(name, {}))
+        y = fast.run_transient(ir, x, settings=sti).vectors["v(out)"]
         y = y[int(ts.MEASURE_FROM_S * fs) :] / v_out
         y = y - np.mean(y)
         f, p = sps.periodogram(y * np.hanning(len(y)), fs)
@@ -134,10 +151,12 @@ def cells() -> int:
         print(f"{name}: {json.dumps(out)}", flush=True)
         return name, out
 
-    with ThreadPoolExecutor(3) as ex:
+    with ThreadPoolExecutor(min(len(rows), 5)) as ex:
         res = dict(ex.map(one, rows.items()))
     res = {"f_osc_hz": f_osc, "rows": res}
     name = "snr_substeps.json" if "--substeps" in sys.argv else "snr_cells.json"
+    if "--grid" in sys.argv:
+        name = "snr_grid.json"
     (OUT / name).write_text(json.dumps(res, indent=1))
     return 0
 

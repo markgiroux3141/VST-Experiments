@@ -29,9 +29,11 @@ within 0.01 dB of ngspice, waveforms -71.8 to -83.3 dB, every row inside its bou
 **Owed since 2026-11-02 (the tape, TAPE_PLAN.md "Gaps" 4):** `varimu/devices/tape_machine.py`
 and circuitsim's `tape_stream.rs` gained the literal bias's quartic peak finder
 (`refine_extremum`): only tape circuits read it, but every render's cache key moved. Targeted:
-`tests/test_tape_stream.py`, `test_ampex_351.py`, `test_app_fixtures.py`, clippy. Owed: the
-full `uv run --extra fast pytest` and `slice_report.py --verify` (expect no change: the 670
-has no tape). **Was owed since #7 (2026-11-01):**
+`tests/test_tape_stream.py`, `test_ampex_351.py`, `test_app_fixtures.py`, clippy. Then
+circuitsim's multi-rate parts lost local error control (`stream.rs`; only circuits with
+`substeps` sections: the 351, `ampex_351_bias.yaml`, `tests/partition.rs`, all run). Owed:
+the full `uv run --extra fast pytest` and `slice_report.py --verify` (expect no change: the
+670 has no tape and no multi-rate part). **Was owed since #7 (2026-11-01):**
 - `uv run --extra fast pytest` (everything): #7 changed shared code (the IR's device union,
   the parts library, the device library and fixtures, the preflight checks, the SPICE
   emission, `fast.partition_sections`, the controls' `unit: switch` in both spec loaders). In the targeted run `test_circuit_format`'s

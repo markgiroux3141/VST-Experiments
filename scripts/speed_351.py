@@ -10,7 +10,9 @@ The harness: 0.5 s of the drums at +6 dB drive through the aligned machine at pr
 - `tables`: the triodes from tables of the same model (the draft's `tube_tables`, ~1e-7 of
   the exact sections), everywhere;
 - both together;
-- `kick`: the oscillator started from a slightly different state (the phase test).
+- `kick`: the oscillator started from a slightly different state (the phase test);
+- `noctl`: no local error control (`error_abstol` 0, every part): its subdivisions, set by
+  where the oscillator's peaks fall in a step, beat against it (TAPE_PLAN.md "Speed").
 Each run's output is kept (cache/tape/speed/), and the difference from `ref` reported in
 dB re the reference's rms, with its time per second of audio.
 
@@ -97,6 +99,8 @@ def main() -> int:
             ir = with_substeps(ir, int(m.group(1)))
         if "tables" in v:
             st = dataclasses.replace(st, tube_tables=True)
+        if "noctl" in v:
+            st = dataclasses.replace(st, error_abstol=0.0)
         t0 = time.time()
         r = fast.run_transient(ir, u, settings=st)
         el = time.time() - t0

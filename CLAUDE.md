@@ -372,7 +372,8 @@ may hold the audio input; `partition.rs`), the medium's literal mode (`TapeStrea
 IR `TapeMedium.bias_substeps`: M samples of the head's whole field per push, recorded at their
 extrema), the tape part's `bias_substeps` (senses a record coil drawn in the multi-rate
 section). The 351's record side runs at 20 substeps (3.84 MHz; 10 left a line in the noise,
-TAPE_PLAN.md "Gaps" 4); it meets the rest only at the
+TAPE_PLAN.md "Gaps" 4); multi-rate parts step without local error control (it beat with the
+oscillator: TAPE_PLAN.md "Speed"); it meets the rest only at the
 input and the reservoirs (a cut through a coupling capacitor diverges). Production's probes
 are decimated to 96 kHz and hide the 99 kHz: measure the bias at `oversample` 1. 106x real
 time on the drums (was 46.7x). A GPU for the recording kernel is planned (TAPE_PLAN.md: f64 is slow on a 3080).
@@ -1026,6 +1027,12 @@ tests skip when ngspice is missing.
   states) took Play's draft-2x from 0.48x to 1.61x real time with the same Newton work
   (COMPONENT_EDITOR_PLAN.md, C3's status). Measure `examples/load_profile.rs` before and
   after adding networks to a played circuit.
+- **Rust-only engine changes don't move the caches (found 2026-11-02).** The render cache
+  key and the tape alignment's (`runner.code_version`) hash varimu's Python, not
+  `circuitsim.SOURCE_HASH`: after a circuitsim edit, delete the affected entries in
+  `cache/renders/` (by their meta.json) and run `align_351.py --refresh`, or results come
+  from the old engine. Whether to key on SOURCE_HASH is the user's open call (TAPE_PLAN.md
+  "Speed").
 - **Patching files from Bash heredocs:** this shell collapses a doubled
   backslash to a single one inside heredocs, so an escaped `\n` meant for a
   Python string arrives as a real newline. Write patch scripts with the Write

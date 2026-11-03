@@ -38,6 +38,9 @@
 //! charge the sample moved, so what it draws at its own frequencies doesn't alias into the
 //! slow parts' samples). It owns no shared node: a node it has is owned by the
 //! highest-numbered single-rate part with it (which must have one, with a DC path there).
+//! It steps without local error control (its fixed fine step is the resolution; error
+//! control's subdivisions there follow the fast signal's phase in a step and beat against
+//! it: the 351's noise floor, docs/TAPE_PLAN.md "Speed").
 //!
 //! **The audio input in a multi-rate part.** The input node may be a multi-rate part's
 //! instead of the first's (a signal path cut through a capacitor into a high impedance

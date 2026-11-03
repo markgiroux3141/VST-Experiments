@@ -568,7 +568,16 @@ impl Stream {
                 start(mna, &ext, u0)?
             } else {
                 let u = if p == sp.input_part { u0 } else { 0.0 };
-                Transient::with_externals(mna, h / sp.substeps[p] as f64, *opts, u, &ext)?
+                // A multi-rate part steps at a fixed fine step chosen for its fast
+                // dynamics, without local error control: there its subdivisions follow
+                // where the fast signal's peaks fall in a step and beat against it (the
+                // Ampex 351's bias: a line near 96 kHz - f_osc in the noise, 18 dB lower
+                // without; docs/TAPE_PLAN.md "Speed").
+                let mut o = *opts;
+                if sp.substeps[p] > 1 {
+                    o.error_abstol = 0.0;
+                }
+                Transient::with_externals(mna, h / sp.substeps[p] as f64, o, u, &ext)?
             };
             let mut o: Vec<f64> = tr.mna().outputs[..n_coupling]
                 .iter()
