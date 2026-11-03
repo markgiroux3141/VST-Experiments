@@ -205,6 +205,54 @@ V72's published figures;
 a second version of the OT (a different winding plan) is made in the Components view
 and heard against the first in the 5E3.
 
+*Decisions (2026-11-04, the user's):*
+1. **The leakage check is our own 2D FEM**, not FEMM (not installed; the user prefers own
+   tools): a small magnetostatic solver of the winding window in Rust (leakage is a linear
+   field problem: A_z on triangles, the windings as current-density regions, the core as a
+   high-permeability boundary), plus closed-form cases and the 5E3 OT's measured leakage.
+   It replaces "a FEMM 2D leakage solution" in the done-when; C8 can grow from it.
+2. **The 5E3 OT first, then the V76's T85.** The 5E3 OT is the one with measured targets for
+   everything the designer computes (Amplified Parts P-TGO-002: DCR 147.2 / 195.3 ohm per
+   half, 0.493 ohm secondary, 3.67 H per half, leakage 40.47 / 19.31 mH per half;
+   `data/schematics/fender_5e3/README.md`); the V72's BV 191 is compiled as a check (its
+   construction is published: `data/schematics/telefunken_v76/README.md`). Then T85 version 2
+   for B10's two misses (the 90 Hz bump, 40 Hz distortion; no BV 511 construction exists, so it
+   stays provisional), then T89, the chokes, the U47's BV 8.
+3. **Leakage per winding:** the `transformer` macro gets an optional per-winding leakage
+   (both builders; a circuit without it builds the identical IR, goldens unchanged). Today's
+   one total split half per side can't hold the 5E3 OT's 40.5 / 19.3 mH halves.
+4. **The compiler first, then the view:** `varimu-components` (the format, the lamination
+   table, the formulas, compiling and saving a version) with a CLI and tests, then the
+   Components view (edit, computed values, the response, heard in a test circuit), both in C2.
+
+*Steps:*
+1. **Done 2026-11-04:** the macro's optional per-winding leakage, a winding's `leak` (its own
+   series leakage inductance, H; Python `parts.WindingSpec.leak_h` / `builder.py`, Rust
+   `parts.rs` / `builder.rs`); `leakage_h` (the total) may be left out when every winding
+   has one, and a winding with neither is refused (`tests/test_circuit_format.py`).
+   Goldens, `export_app_fixtures.py` without a diff; `varimu-circuit`'s tests pass. Not
+   carried by the KiCad / editor symbols yet (`Winding`'s fields are ratio, r, c): designed
+   transformers come in by `component:` (step 3), not drawn values. Both builders' agreement
+   on `leak` comes with the first circuit that uses it (step 6).
+2. `crates/varimu-components`: the transformer source format (lamination from a sourced
+   table: EI / UI sizes with window and path; stack, stacking factor, butt gap or
+   interleaved; material from `config/magnetics.yaml`; bobbin; winding plan: sections in
+   order, turns, wire (bare and insulated diameter), layers, insulation thickness and
+   permittivity, taps, shields), compiled by sourced formulas: mean turn length and DCR
+   (copper at 20 C), area and path, the gap, per-winding leakage (the window's MMF profile,
+   energy method, interleaving), layer and interwinding capacitance; warnings for flux density
+   at a stated lowest frequency and level and for window fill. Saving a version (and its lock
+   line) from Rust; Python reads only. The compiled form is what the macro takes (core,
+   turns, per winding ratio / r / c / leak, interwinding).
+3. A circuit's transformer part from a component: `transformer: {component: NAME@N, ...}`
+   with the circuit's nodes per winding and per-instance overrides (genome links survive);
+   both builders read the compiled values; a version's hash checked as for tubes.
+4. The 2D FEM leakage check on at least three geometries, within a stated tolerance.
+5. The 5E3 OT by construction against P-TGO-002; BV 191 against the V72's figures.
+6. The 5E3 pinned to its OT version, both builders (agreement test), heard against version 1.
+7. The Components view in varimu-app; a second OT version made there and heard.
+8. T85 version 2 for the V76.
+
 **C3. Speakers, physical: the 5E3's Jensen.** The user's choice for what the 5E3 is
 heard through (2026-10-29): a physical speaker, not a cabinet impulse response.
 *Reordered 2026-10-29 (the user's call):* C3's model comes before C2 (it doesn't need

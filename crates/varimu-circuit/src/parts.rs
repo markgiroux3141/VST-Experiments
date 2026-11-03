@@ -115,7 +115,8 @@ pub fn t_pad(name: &str, a: &str, b: &str, common: &str, z: f64, atten_db: f64) 
 // --- Transformers ---------------------------------------------------------------------
 
 /// One winding: dotted end to the other, turns relative to the reference winding, DC
-/// resistance, self-capacitance (0 = none).
+/// resistance, self-capacitance (0 = none), its own series leakage inductance (None: its
+/// share of the transformer's total).
 #[derive(Debug, Clone)]
 pub struct WindingSpec {
     pub label: String,
@@ -124,6 +125,7 @@ pub struct WindingSpec {
     pub ratio: f64,
     pub r_ohm: f64,
     pub c_f: f64,
+    pub leak_h: Option<f64>,
 }
 
 #[derive(Debug, Clone)]
@@ -147,7 +149,9 @@ pub fn transformer_core(name: &str, core: &CoreSpec, mat: &Material) -> Magnetic
     }
 }
 
-/// Transformer `name`: windings on one core; the elements and its core model.
+/// Transformer `name`: windings on one core; the elements and its core model. A
+/// winding's leakage is its own `leak_h`, else half of `leakage_h` (referred to the
+/// reference winding) times its ratio squared (as Python's `parts.transformer`).
 #[allow(clippy::too_many_arguments)]
 pub fn transformer(
     name: &str,
@@ -155,7 +159,7 @@ pub fn transformer(
     core: &CoreSpec,
     mat: &Material,
     turns: f64,
-    leakage_h: f64,
+    leakage_h: Option<f64>,
     interwinding: Option<((String, String), String)>,
     c_interwinding_f: f64,
     linear: bool,
@@ -171,7 +175,16 @@ pub fn transformer(
             els.push(resistor(&format!("R{n}"), &top, &r_node, w.r_ohm));
             top = r_node;
         }
-        let leak = 0.5 * leakage_h * w.ratio * w.ratio;
+        let leak = match (w.leak_h, leakage_h) {
+            (Some(l), _) => l,
+            (None, Some(total)) => 0.5 * total * w.ratio * w.ratio,
+            (None, None) => {
+                return Err(Error(format!(
+                    "{name}: winding {} has no leakage (leak, or the leakage_h total)",
+                    w.label
+                )));
+            }
+        };
         if leak > 0.0 {
             let l_node = format!("{n}_l");
             els.push(Element::Inductor(Inductor {

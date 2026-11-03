@@ -164,7 +164,8 @@ def t_pad(name: str, a: str, b: str, common: str, z: float, atten_db: float) -> 
 @dataclass(frozen=True)
 class WindingSpec:
     """One winding: from its dotted end to the other, turns relative to the reference
-    winding, DC resistance, self-capacitance across its terminals (0 = none)."""
+    winding, DC resistance, self-capacitance across its terminals (0 = none), and its own
+    series leakage inductance (None: its share of the transformer's total)."""
 
     label: str
     dot: str
@@ -172,6 +173,7 @@ class WindingSpec:
     ratio: float = 1.0
     r_ohm: float = 0.0
     c_f: float = 0.0
+    leak_h: float | None = None
 
 
 @dataclass(frozen=True)
@@ -204,7 +206,7 @@ def transformer(
     core: CoreSpec,
     *,
     turns: float,
-    leakage_h: float,
+    leakage_h: float | None,
     interwinding: tuple[tuple[str, str], str] | None = None,
     c_interwinding_f: float = 0.0,
     cores: str = "ja",
@@ -212,9 +214,11 @@ def transformer(
     """Transformer `name`: windings on one core (varimu.devices.core); the elements and
     its core model (in the IR's models only when `cores` is "ja").
 
-    Per winding: its DC resistance, its leakage inductance (half the transformer's
-    leakage `leakage_h`, which is referred to the reference winding of `turns` turns,
-    times ratio^2), the Winding on the core node <name>_core, and its
+    Per winding: its DC resistance, its leakage inductance (its own `leak_h` when it has
+    one, else half the transformer's leakage `leakage_h`, which is referred to the
+    reference winding of `turns` turns, times ratio^2: a designed transformer's windings
+    each carry their own, an asymmetric pair included), the Winding on the core node
+    <name>_core, and its
     self-capacitance across the terminals. A positive voltage from dot to other on
     one winding gives the same on the others. On the core node: the core (a
     MagneticCore, or its linear limit as a resistor when `cores` is "linear"), the
@@ -236,7 +240,14 @@ def transformer(
         if w.r_ohm > 0:
             els.append(resistor(f"R{n}", top, f"{n}_r", w.r_ohm))
             top = f"{n}_r"
-        leak = 0.5 * leakage_h * w.ratio * w.ratio
+        if w.leak_h is not None:
+            leak = w.leak_h
+        elif leakage_h is not None:
+            leak = 0.5 * leakage_h * w.ratio * w.ratio
+        else:
+            raise ValueError(
+                f"{name}: winding {w.label} has no leakage (leak, or the leakage_h total)"
+            )
         if leak > 0:
             els.append(Inductor(f"L{n}_lk", top, f"{n}_l", leak))
             top = f"{n}_l"

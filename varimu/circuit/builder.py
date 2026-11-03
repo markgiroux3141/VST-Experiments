@@ -454,9 +454,9 @@ def transformer_spec(
     windings = []
     for label, w in conn.items():
         where = f"{name}.{label}"
-        unknown = set(w) - {"nodes", "ratio", "r", "c"}
+        unknown = set(w) - {"nodes", "ratio", "r", "c", "leak"}
         if unknown or len(w.get("nodes", ())) != 2:
-            raise ctx.fail(where, "a winding is {nodes: [dot, other], ratio, r, c}")
+            raise ctx.fail(where, "a winding is {nodes: [dot, other], ratio, r, c, leak}")
         windings.append(
             parts.WindingSpec(
                 str(label),
@@ -465,8 +465,11 @@ def transformer_spec(
                 ctx.number(f"{where}.ratio", w.get("ratio", 1.0)),
                 ctx.physical(f"{where}.r", w["r"]) if "r" in w else 0.0,
                 ctx.physical(f"{where}.c", w["c"]) if "c" in w else 0.0,
+                ctx.physical(f"{where}.leak", w["leak"]) if "leak" in w else None,
             )
         )
+    if a.get("leakage_h", 0.0) is None and any(w.leak_h is None for w in windings):
+        raise ctx.fail(name, "leakage: every winding's `leak`, or the total `leakage_h`")
     c = a["core"]
     if not isinstance(c, Mapping) or set(c) != {"material", "area_m2", "path_m", "gap_m"}:
         raise ctx.fail(name, "core: {material, area_m2, path_m, gap_m}")
@@ -622,7 +625,7 @@ for _name, _macro in {
         {
             "core": Param("raw"),
             "turns": _P,
-            "leakage_h": _P,
+            "leakage_h": Param("physical", None),
             "interwinding": Param("raw", None),
         },
     ),

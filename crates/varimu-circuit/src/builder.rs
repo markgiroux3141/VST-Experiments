@@ -585,7 +585,7 @@ fn macro_of(kind: &str) -> Macro {
             vec![
                 p("core", Raw),
                 p("turns", Physical),
-                p("leakage_h", Physical),
+                opt("leakage_h", Physical),
                 opt("interwinding", Raw),
             ],
             false,
@@ -1147,10 +1147,17 @@ fn transformer(
     let mut windings = Vec::new();
     for (label, w) in windings_map.iter() {
         let where_ = format!("{name}.{label}");
-        let bad = || ctx.fail(&where_, "a winding is {nodes: [dot, other], ratio, r, c}");
+        let bad = || {
+            ctx.fail(
+                &where_,
+                "a winding is {nodes: [dot, other], ratio, r, c, leak}",
+            )
+        };
         let w = w.as_map().ok_or_else(bad)?;
         let nodes = w.get("nodes").and_then(Value::as_list);
-        let unknown = w.keys().any(|k| !["nodes", "ratio", "r", "c"].contains(&k));
+        let unknown = w
+            .keys()
+            .any(|k| !["nodes", "ratio", "r", "c", "leak"].contains(&k));
         let Some(nodes) = nodes.filter(|n| n.len() == 2 && !unknown) else {
             return Err(bad());
         };
@@ -1175,7 +1182,21 @@ fn transformer(
             ratio: ctx.float(&where_, &ratio)?,
             r_ohm: phys("r")?,
             c_f: phys("c")?,
+            leak_h: match w.get("leak") {
+                Some(_) => Some(phys("leak")?),
+                None => None,
+            },
         });
+    }
+    let total = match &a["leakage_h"] {
+        Value::Null => None,
+        v => Some(ctx.float(&format!("{name}.leakage_h"), v)?),
+    };
+    if total.is_none() && windings.iter().any(|w| w.leak_h.is_none()) {
+        return Err(ctx.fail(
+            name,
+            "leakage: every winding's `leak`, or the total `leakage_h`",
+        ));
     }
     let core = core_spec(ctx, name, &a["core"])?;
     let (mut iw, mut c_iw) = (None, 0.0);
@@ -1199,7 +1220,7 @@ fn transformer(
         &core,
         &mat,
         ctx.float(&format!("{name}.turns"), &a["turns"])?,
-        ctx.float(&format!("{name}.leakage_h"), &a["leakage_h"])?,
+        total,
         iw,
         c_iw,
         ctx.cores == Cores::Linear,
