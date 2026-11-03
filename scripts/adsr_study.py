@@ -358,6 +358,7 @@ def run(path, sets, gate, dur_s, probes=PROBES, pitch_v=-15.0):
         "pitch": np.full(n, pitch_v),
         "key": np.zeros(n),
         "pressure": np.zeros(n),
+        "pitch2": np.zeros(n),
     }
     v = fast.run_transient(ir, np.zeros(n), settings=st, controls=ctl).vectors
     return {p: v[f"v({p})"] for p in probes}, fs

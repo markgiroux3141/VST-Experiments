@@ -95,7 +95,7 @@ CANDIDATES = {
         step_v=(-20.0, -10.0),
         note_v=-15.0,
         plot_v=(-30.0, -15.0, 0.0),
-        controls=(("gate", -1.0), ("key", 0.0), ("pressure", 0.0)),
+        controls=(("gate", -1.0), ("key", 0.0), ("pressure", 0.0), ("pitch2", 0.0)),
         partition=(
             "resonance",
             "|",

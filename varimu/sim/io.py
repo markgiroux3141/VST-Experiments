@@ -133,6 +133,10 @@ class TransientSettings:
     # the sections titled in `partition` (those the circuit has) on a second thread,
     # coupled through the nodes they share with one sample of latency.
     tube_tables: bool = False
+    # Gas thyratrons as their event kernels (technique K) where a circuit has tables: the
+    # live qualities' (the native app builds with it; Python's builds take
+    # builder.build(..., events=) themselves).
+    events: bool = False
     partition: tuple[str, ...] = ()
     partition_coupling: str = "extrapolate"  # hold | extrapolate
     # circuitsim only: the rate the simulation's host runs at, Hz (0: sample_rate). A
@@ -199,7 +203,8 @@ class TransientSettings:
         kinds = {"oversample": int, "method": str, "input_order": int, "solver": str,
                  "error_abstol": float, "error_reltol": float, "newton_reltol": float,
                  "newton_vntol": float, "newton_reuse": bool, "cores": str,
-                 "tube_tables": bool, "partition_coupling": str, "host_rate": int}  # fmt: skip
+                 "tube_tables": bool, "partition_coupling": str, "host_rate": int,
+                 "events": bool}  # fmt: skip
         for block in QUALITY_BLOCKS[quality]:
             d = s.data[block]
             unknown = set(d) - set(kinds) - {"partition"}

@@ -220,6 +220,23 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
                 dc.join(&d.nodes[0], n);
             }
         }
+        // a thyratron's state node: the device is its DC path
+        if let Element::Device(d) = el
+            && matches!(
+                models.get(d.model.as_str()),
+                Some(DeviceModel::Thyratron(_))
+            )
+        {
+            let n = d.nodes.len();
+            dc.join(&d.nodes[n - 2], &d.nodes[n - 1]);
+        }
+        // event kernels: the state node held to the cathode, the grid's leakage
+        if let Element::ThyratronEvents(e) = el {
+            dc.join(&e.w, &e.k);
+            if e.g_leak_s > 0.0 {
+                dc.join(&e.g, &e.a);
+            }
+        }
         if matches!(
             el,
             Element::Inductor(_)

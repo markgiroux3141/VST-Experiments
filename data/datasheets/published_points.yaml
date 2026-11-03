@@ -298,3 +298,61 @@
   source: "L. L. Holladay, 'Proportion of Energy Radiated by Incandescent Solids in Various Spectral Regions', JOSA 17(5), 329-342 (1928), Table 3, true temperature and total emissivity of tungsten (web: https://opg.optica.org/abstract.cfm?URI=josa-17-5-329); the 300 K point is Hottel's aged tungsten filament (0.032 at 80 F), as tabulated in heat-transfer handbooks (web: https://neutrium.net/heat-transfer/total-normal-emissivities-of-selected-materials/)"
   t_k:     [300.0, 1500.0, 1800.0, 2000.0, 2200.0, 2400.0, 2600.0, 2800.0, 3000.0, 3200.0, 3300.0, 3400.0, 3500.0, 3655.0]
   total:   [0.032, 0.192, 0.236, 0.260, 0.279, 0.296, 0.311, 0.323, 0.334, 0.341, 0.344, 0.348, 0.351, 0.354]
+
+"2D21":
+  # The gas-tube sawtooth's thyratron (HYBRID_PHYSICS_PLAN.md H1): a xenon-filled tetrode.
+  source: "RCA 2D21 Thyratron, gas tetrode, miniature type, DATA (6-15-48) p.1-2; local copy sources/rca_2d21_1948.pdf (web: https://frank.yueksel.org/sheets/049/2/2D21.pdf). The same values on Sylvania's sheet (11-54) p.1, sources/sylvania_2d21_1954.pdf, except where noted"
+  ionization_time:    # "Ionization Time (Approx.)"
+    va_v: 100          # dc anode volts
+    vg1_pulse_v: 50    # grid-No.1 square-pulse volts
+    ia_peak_a: 0.5     # peak anode amp during conduction
+    t_s: 0.5e-6
+  deionization_time:  # "Deionization Time (Approx.)": dc anode volts 125, grid-No.1 resistor 1000 ohms, dc anode amp 0.1
+    - {va_v: 125, vg1_v: -100, rg1_ohm: 1000, ia_a: 0.1, t_s: 35.0e-6}
+    - {va_v: 125, vg1_v: -10, rg1_ohm: 1000, ia_a: 0.1, t_s: 75.0e-6}   # Sylvania: -11 V
+  anode_drop_v: 8      # "Anode Voltage Drop (Approx.)"
+  critical_grid_current_max_a: 0.5e-6   # with ac anode-supply volts (rms) 460, average anode amp 0.1
+  control_ratio:       # "approx.", grid resistors 0
+    grid1: 250         # shield grid 0 V
+    grid2: 1000        # control grid 0 V
+  capacitances_f: {g1a: 0.026e-12, input: 2.4e-12, output: 1.6e-12}   # without external shield
+  heater: {v: 6.3, a: 0.6}
+  max_ratings:
+    va_forward_peak_v: 650
+    va_inverse_peak_v: 1300
+    ik_peak_a: 0.5
+    ik_average_a: 0.1
+    ik_surge_a: 10.0   # for 0.1 s max
+    rg1_max_ohm: 10.0e6
+
+"884":
+  # The gas-tube sawtooth's thyratron (HYBRID_PHYSICS_PLAN.md H1, the user's choice): RCA's
+  # argon-filled triode for sweep oscillators. The sheet gives no ionization or deionization
+  # times; its sweep circuit's frequency table is the dynamics' check.
+  source: "RCA 884, 885 Thyratrons, triode types, DATA 1-2 (12-15-44) and the average control characteristic (1-4-45, 92CM-4883R1); local copy sources/rca_884_1944.pdf (web: https://frank.pocnet.net/sheets/049/8/884.pdf)"
+  tube_drop_v: 16          # "Tube Voltage Drop ... 16 approx. volts"
+  capacitances_f: {ga: 6.0e-12, gk: 2.0e-12, ak: 0.6e-12}   # "Direct Interelectrode Capacitances"
+  heater: {v: 6.3, a: 0.6}
+  max_ratings:             # relaxation oscillator, sweep-circuit service
+    va_peak_v: 300
+    ik_peak_a: 0.300
+    ig_peak_a: 0.001
+    v_between_electrodes_peak_v: 350
+  grid_resistor: "not less than 1000 ohms per maximum instantaneous volt on the grid; above 500000 ohms may cause circuit instability"
+  sweep_circuit:           # DATA 2, "Linear sweep-circuit oscillator and amplifier" (92CM-4875R1), the 884's part
+    b_plus_v: 450
+    cathode_v: 5.0         # "+5.0 V": the R11 / R12 tap of the R11-R14 divider from +450 V to ground, bypassed by C11; the grid returns to ground through R3 and R2
+    r4_anode_ohm: [350, 500]
+    r5_charge_ohm: [0.3e6, 0.5e6]
+    r6_charge_pot_ohm: 1.0e6        # a rheostat in series with R5, from +450 V
+    r3_grid_ohm: [2000, 3000]
+    r2_grid_ohm_max: 50000
+    r1_sync_pot_ohm: 5000
+    c1_sync_f: 0.25e-6
+    divider_ohm: {r11: 1500, r12: 25000, r13: 60000, r14: 60000}
+    c11_f: 25.0e-6
+    c12_f: 8.0e-6
+    timing_c_f: {c2: 0.25e-6, c3: 0.1e-6, c4: 0.04e-6, c5: 0.015e-6, c6: 0.005e-6, c7: 0.002e-6, c8: 0.0008e-6}
+    # "Approximate frequency range (cycles/sec.)", R6 at max / min, per timing capacitor
+    f_r6_max_hz: {c2: 20, c3: 40, c4: 110, c5: 280, c6: 670, c7: 1500, c8: 3600}
+    f_r6_min_hz: {c2: 60, c3: 130, c4: 340, c5: 880, c6: 2200, c7: 4900, c8: 11400}

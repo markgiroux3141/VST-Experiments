@@ -84,6 +84,9 @@ pub struct Settings {
     pub partition_coupling: String,
     /// The simulation host's rate (0: `sample_rate`).
     pub host_rate: u32,
+    /// Gas thyratrons as their event kernels where a circuit has tables (technique K: the
+    /// live qualities'; production renders the tube itself, M1).
+    pub events: bool,
 }
 
 fn get<'a>(m: &'a Map, key: &str, block: &str) -> Result<&'a Value, String> {
@@ -192,6 +195,7 @@ impl Settings {
             partition: Vec::new(),
             partition_coupling: "extrapolate".into(),
             host_rate: 0,
+            events: false,
         };
         for name in quality.blocks() {
             let d = block(name)?;
@@ -210,6 +214,7 @@ impl Settings {
                     "tube_tables" => s.tube_tables = boolean(v, k)?,
                     "partition_coupling" => s.partition_coupling = string(v, k)?,
                     "host_rate" => s.host_rate = int(v, k)? as u32,
+                    "events" => s.events = boolean(v, k)?,
                     "partition" => {
                         // A title, or a list of titles: a group on a thread of its own
                         // (flattened with the group break between groups).

@@ -133,6 +133,7 @@ def run(path, sets, pitch_v, quality, dur_s=0.8, part=None):
         "pitch": np.full(n, pitch_v),
         "key": np.zeros(n),
         "pressure": np.zeros(n),
+        "pitch2": np.zeros(n),
     }
     t0 = time.perf_counter()
     v = fast.run_transient(ir, np.zeros(n), settings=st, controls=ctl).vectors

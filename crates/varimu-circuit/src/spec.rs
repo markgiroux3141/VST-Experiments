@@ -39,6 +39,10 @@ pub struct SectionSpec {
     pub parts: Map,
     /// Steps per sample on a thread of its own (a multi-rate part), if given.
     pub substeps: Option<usize>,
+    /// A multi-rate part's decimation (`decimate: fir`), if given.
+    pub decimate: Option<circuitsim::ir::Decimate>,
+    /// Shared nodes a multi-rate part owns (`owns: [node, ...]`), if given.
+    pub owns: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -314,7 +318,17 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         };
         let mut extra: Vec<&str> = m
             .keys()
-            .filter(|k| !["title", "parts", "tolerance", "substeps"].contains(k))
+            .filter(|k| {
+                ![
+                    "title",
+                    "parts",
+                    "tolerance",
+                    "substeps",
+                    "decimate",
+                    "owns",
+                ]
+                .contains(k)
+            })
             .collect();
         extra.sort_unstable();
         if !extra.is_empty() {
@@ -332,11 +346,45 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                 continue;
             }
         };
+        if (m.contains("decimate") || m.contains("owns")) && substeps.unwrap_or(1) < 2 {
+            errors.push(format!(
+                "sections[{i}]: decimate and owns are for a multi-rate section"
+            ));
+            continue;
+        }
+        let decimate = match m.get("decimate") {
+            None => None,
+            Some(Value::Str(d)) if d == "fir" => Some(circuitsim::ir::Decimate::Fir),
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: decimate '{}' (one of ('fir',))",
+                    v.py_str()
+                ));
+                continue;
+            }
+        };
+        let owns = match m.get("owns") {
+            None => None,
+            Some(Value::List(l))
+                if !l.is_empty() && l.iter().all(|v| matches!(v, Value::Str(_))) =>
+            {
+                Some(l.iter().map(Value::py_str).collect())
+            }
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: owns {} (a list of nodes)",
+                    v.py_str()
+                ));
+                continue;
+            }
+        };
         sections.push(SectionSpec {
             title: m.get("title").unwrap().py_str(),
             tolerance: m.get("tolerance").cloned(),
             parts: map_or_empty(m.get("parts")),
             substeps,
+            decimate,
+            owns,
         });
     }
     let devices = map_or_empty(data.get("devices"));

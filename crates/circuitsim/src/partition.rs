@@ -36,11 +36,28 @@
 //! bias oscillator). Within a sample it sees the others' values interpolated linearly over
 //! its steps; it publishes the currents its sources take averaged over its steps (the
 //! charge the sample moved, so what it draws at its own frequencies doesn't alias into the
-//! slow parts' samples). It owns no shared node: a node it has is owned by the
+//! slow parts' samples; a box filter, so it does alias: see the decimation below). It
+//! owns no shared node unless it claims one (below): a node it has is owned by the
 //! highest-numbered single-rate part with it (which must have one, with a DC path there).
 //! It steps without local error control (its fixed fine step is the resolution; error
 //! control's subdivisions there follow the fast signal's phase in a step and beat against
 //! it: the 351's noise floor, docs/TAPE_PLAN.md "Speed").
+//!
+//! **Decimation and ownership (HYBRID_PHYSICS_PLAN.md H3a, M1).** A multi-rate section
+//! with `decimate: fir` hands on everything through [`Decimator`] (an anti-alias low-pass
+//! over its steps) instead: the currents, the voltages of nodes it owns and its probes,
+//! ~6.4 samples late. Sections with the same substeps and decimation are one part. A
+//! multi-rate section may claim shared nodes (`owns`): it publishes their voltages and is
+//! fed their users' currents, interpolated over its steps like any other value it sees (an
+//! island's low-impedance output into a high-impedance load: held from the other side, a
+//! sample's lag diverged at a coupling capacitor into a grid). Ownership can then form a
+//! loop (the island uses the supply, the supply's part uses the island's output), so the
+//! DC start takes every part's currents from a solve with all its shared nodes held at the
+//! whole circuit's DC voltages ([`crate::stream`]). Cut where little comes back: what a
+//! part sees of the others is a sample (plus the decimator's delay) late, so a load that
+//! draws a few percent of a fast loop's current from the other side detunes it (RCA's 884
+//! sweep cut at its timing capacitor with the 6J7's 1 Mohm input outside: +7 cents at
+//! 18.8 kHz). A grid the island owns returns nothing; so do stiff rails.
 //!
 //! **The audio input in a multi-rate part.** The input node may be a multi-rate part's
 //! instead of the first's (a signal path cut through a capacitor into a high impedance
@@ -61,7 +78,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use crate::Error;
-use crate::ir::{CircuitIr, Element, GROUND, Probe, Resistor, Section, VoltageSource};
+use crate::ir::{CircuitIr, Decimate, Element, GROUND, Probe, Resistor, Section, VoltageSource};
 use crate::stream::Stream;
 use crate::transient::{Options, Output};
 
@@ -146,6 +163,8 @@ pub(crate) struct Split {
     pub shared: Vec<SharedNode>,
     /// Each part's steps per sample (1, or a multi-rate part's `substeps`).
     pub substeps: Vec<usize>,
+    /// Each part's decimation (a multi-rate part's `decimate`; None: the average).
+    pub decimate: Vec<Option<Decimate>>,
     /// Each part's section titles (part 0: none, it's the rest).
     pub titles: Vec<Vec<String>>,
     /// Tapes sensing a multi-rate part (the literal bias), in IR order.
@@ -188,9 +207,10 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             part_of[i] = Some(g + 1);
         }
     }
-    // Multi-rate sections: a part per distinct count of steps, after the named groups.
+    // Multi-rate sections: a part per distinct count of steps and decimation, after the
+    // named groups.
     let named = groups.len();
-    let mut rates: Vec<usize> = Vec::new();
+    let mut rates: Vec<(usize, Option<Decimate>)> = Vec::new();
     for (i, s) in ir.sections.iter().enumerate() {
         let Some(m) = s.substeps.filter(|&m| m > 1) else {
             continue;
@@ -201,8 +221,9 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 s.title
             )));
         }
-        let g = rates.iter().position(|&r| r == m).unwrap_or_else(|| {
-            rates.push(m);
+        let rate = (m, s.decimate);
+        let g = rates.iter().position(|&r| r == rate).unwrap_or_else(|| {
+            rates.push(rate);
             groups.push(Vec::new());
             rates.len() - 1
         });
@@ -211,7 +232,16 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
     }
     let n_parts = groups.len() + 1;
     let substeps: Vec<usize> = (0..n_parts)
-        .map(|p| if p > named { rates[p - named - 1] } else { 1 })
+        .map(|p| if p > named { rates[p - named - 1].0 } else { 1 })
+        .collect();
+    let decimate: Vec<Option<Decimate>> = (0..n_parts)
+        .map(|p| {
+            if p > named {
+                rates[p - named - 1].1
+            } else {
+                None
+            }
+        })
         .collect();
     let part = |i: usize| part_of[i].unwrap_or(0);
     let secs: Vec<Vec<&Section>> = (0..n_parts)
@@ -293,6 +323,25 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             });
         }
     }
+    // Nodes a multi-rate part claims (`Section::owns`).
+    let mut claims: Vec<(String, usize)> = Vec::new();
+    for (i, s) in ir.sections.iter().enumerate() {
+        let p = part(i);
+        for n in s.owns.iter().flatten() {
+            if !node_sets[p].contains(n) {
+                return Err(Error::new(format!(
+                    "partition: {:?} owns {n}, a node it doesn't have",
+                    s.title
+                )));
+            }
+            if claims.iter().any(|(m, q)| m == n && *q != p) {
+                return Err(Error::new(format!(
+                    "partition: node {n} is owned by two multi-rate parts"
+                )));
+            }
+            claims.push((n.clone(), p));
+        }
+    }
     // Shared nodes in order of first appearance in the IR.
     let mut shared: Vec<SharedNode> = Vec::new();
     for e in ir.elements() {
@@ -302,8 +351,12 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             }
             let with: Vec<usize> = (0..n_parts).filter(|&p| node_sets[p].contains(n)).collect();
             if with.len() >= 2 {
-                // The highest-numbered single-rate part with it (a multi-rate part owns none).
-                let Some(&owner) = with.iter().rev().find(|&&p| substeps[p] == 1) else {
+                // The multi-rate part claiming it, or the highest-numbered single-rate part
+                // with it (a multi-rate part owns only what it claims).
+                let claimed = claims.iter().find(|(m, _)| m == n).map(|&(_, q)| q);
+                let Some(owner) =
+                    claimed.or_else(|| with.iter().rev().copied().find(|&p| substeps[p] == 1))
+                else {
                     return Err(Error::new(format!(
                         "partition: node {n} is shared by multi-rate parts only"
                     )));
@@ -315,6 +368,14 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 });
             }
         }
+    }
+    if let Some((n, _)) = claims
+        .iter()
+        .find(|(n, _)| !shared.iter().any(|s| &s.name == n))
+    {
+        return Err(Error::new(format!(
+            "partition: node {n} is owned (`owns`) but no other part has it"
+        )));
     }
     for p in 1..n_parts {
         if !shared.iter().any(|s| s.owner == p || s.users.contains(&p)) {
@@ -348,6 +409,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             .iter()
             .map(|s| Section {
                 substeps: None,
+                decimate: None,
+                owns: None,
                 elements: s
                     .elements
                     .iter()
@@ -370,6 +433,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             sections.push(Section {
                 title: "partition: the shared nodes' voltages".into(),
                 substeps: None,
+                decimate: None,
+                owns: None,
                 elements: sourced
                     .iter()
                     .map(|s| {
@@ -387,6 +452,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             sections.push(Section {
                 title: "partition: input stub".into(),
                 substeps: None,
+                decimate: None,
+                owns: None,
                 elements: vec![Element::Resistor(Resistor {
                     name: "RPART_INPUT".into(),
                     a: STUB_INPUT.into(),
@@ -453,10 +520,108 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
         parts,
         shared,
         substeps,
+        decimate,
         titles,
         remote,
         input_part,
     })
+}
+
+/// A multi-rate part's decimation (`Decimate::Fir`): a linear-phase low-pass over its
+/// steps, evaluated once per sample, for every value it hands on (its couplings, its
+/// probes). Kaiser-windowed sinc at the part's rate (m steps per sample): the passband to
+/// a quarter of the sample rate, the stopband from three quarters (what folds into the
+/// passband at the sample rate), [`Decimator::ATTENUATION_DB`] down; the taps sum to 1
+/// (DC passes exactly: the charge a current moves is kept). Its delay is (taps - 1) / 2
+/// steps, ~6.4 samples at any m.
+#[derive(Debug, Clone)]
+pub struct Decimator {
+    /// Taps, `h[0]` on the newest step.
+    h: Vec<f64>,
+    /// Per channel, the last `h.len()` steps (a ring at `pos`).
+    hist: Vec<Vec<f64>>,
+    pos: usize,
+}
+
+impl Decimator {
+    pub const ATTENUATION_DB: f64 = 100.0;
+
+    /// The taps for m steps per sample.
+    pub fn taps(m: usize) -> Vec<f64> {
+        // Kaiser's formulas land up to ~1 dB short at the stopband's edge: 3 dB of margin.
+        let a = Self::ATTENUATION_DB + 3.0;
+        // Transition from 0.25 to 0.75 of the sample rate, in cycles per step.
+        let width = 0.5 / m as f64;
+        let mut n = ((a - 8.0) / (2.285 * 2.0 * std::f64::consts::PI * width)).ceil() as usize + 1;
+        n |= 1; // odd: a whole-step delay
+        let beta = 0.1102 * (a - 8.7);
+        let fc = 0.5 / m as f64; // half the sample rate, in cycles per step
+        let mid = (n - 1) as f64 / 2.0;
+        let i0 = |x: f64| {
+            // Bessel I0 by its series (converges fast for the beta here)
+            let (mut sum, mut term, mut k) = (1.0f64, 1.0f64, 1.0f64);
+            loop {
+                term *= (x / (2.0 * k)).powi(2);
+                sum += term;
+                if term < 1e-17 * sum {
+                    return sum;
+                }
+                k += 1.0;
+            }
+        };
+        let w0 = i0(beta);
+        let mut h: Vec<f64> = (0..n)
+            .map(|i| {
+                let t = i as f64 - mid;
+                let sinc = if t == 0.0 {
+                    2.0 * fc
+                } else {
+                    (2.0 * std::f64::consts::PI * fc * t).sin() / (std::f64::consts::PI * t)
+                };
+                let r = t / mid;
+                sinc * i0(beta * (1.0 - r * r).max(0.0).sqrt()) / w0
+            })
+            .collect();
+        let sum: f64 = h.iter().sum();
+        for x in &mut h {
+            *x /= sum;
+        }
+        h
+    }
+
+    /// Its delay in steps (whole: the taps are odd in number).
+    pub fn delay_steps(m: usize) -> usize {
+        (Self::taps(m).len() - 1) / 2
+    }
+
+    /// For m steps per sample, its channels starting at `init` (the DC point: the filter
+    /// as if it had run there forever).
+    pub(crate) fn new(m: usize, init: &[f64]) -> Decimator {
+        let h = Self::taps(m);
+        let hist = init.iter().map(|&v| vec![v; h.len()]).collect();
+        Decimator { h, hist, pos: 0 }
+    }
+
+    /// One step's values, a value per channel.
+    pub(crate) fn push(&mut self, values: impl IntoIterator<Item = f64>) {
+        for (c, v) in self.hist.iter_mut().zip(values) {
+            c[self.pos] = v;
+        }
+        self.pos = (self.pos + 1) % self.h.len();
+    }
+
+    /// Channel `ch`'s output at the latest step.
+    pub(crate) fn output(&self, ch: usize) -> f64 {
+        let (c, n) = (&self.hist[ch], self.h.len());
+        // newest at pos - 1
+        let mut acc = 0.0;
+        let mut j = (self.pos + n - 1) % n;
+        for &t in &self.h {
+            acc += t * c[j];
+            j = if j == 0 { n - 1 } else { j - 1 };
+        }
+        acc
+    }
 }
 
 /// Values one partition publishes per sample, read by the other: a ring of
@@ -573,4 +738,62 @@ pub fn simulate_partitioned_controls(
         values,
         stats: stream.stats().clone(),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Decimator;
+
+    /// |H(f)| of taps `h` at `f` cycles per step.
+    fn gain(h: &[f64], f: f64) -> f64 {
+        let (mut re, mut im) = (0.0, 0.0);
+        for (i, &t) in h.iter().enumerate() {
+            let w = 2.0 * std::f64::consts::PI * f * i as f64;
+            re += t * w.cos();
+            im -= t * w.sin();
+        }
+        (re * re + im * im).sqrt()
+    }
+
+    #[test]
+    fn the_decimator_passes_the_band_and_stops_what_folds_into_it() {
+        for m in [4usize, 8, 16, 32] {
+            let h = Decimator::taps(m);
+            assert_eq!(h.len() % 2, 1);
+            assert!((h.iter().sum::<f64>() - 1.0).abs() < 1e-14, "m {m}: DC");
+            assert!(
+                h.iter()
+                    .zip(h.iter().rev())
+                    .all(|(a, b)| (a - b).abs() < 1e-18),
+                "symmetric"
+            );
+            // f in fractions of the sample rate: cycles per step = f / m
+            for k in 0..=100 {
+                let f = 0.25 * k as f64 / 100.0;
+                let g = gain(&h, f / m as f64);
+                assert!((g - 1.0).abs() < 2e-5, "m {m}: passband {f} fs: {g}");
+            }
+            for k in 0..=2000 {
+                let f = 0.75 + (m as f64 / 2.0 - 0.75) * k as f64 / 2000.0;
+                let db = 20.0 * gain(&h, f / m as f64).log10();
+                assert!(
+                    db < -Decimator::ATTENUATION_DB + 1.0,
+                    "m {m}: stopband {f} fs: {db} dB"
+                );
+            }
+            // ~6.4 samples late at any m
+            let d = Decimator::delay_steps(m) as f64 / m as f64;
+            assert!((6.0..7.0).contains(&d), "m {m}: delay {d} samples");
+        }
+    }
+
+    #[test]
+    fn the_decimator_starts_at_its_initial_values() {
+        let mut d = Decimator::new(8, &[3.0, -1.0]);
+        assert!((d.output(0) - 3.0).abs() < 1e-14 && (d.output(1) + 1.0).abs() < 1e-14);
+        for _ in 0..1000 {
+            d.push([5.0, 2.0]);
+        }
+        assert!((d.output(0) - 5.0).abs() < 1e-13 && (d.output(1) - 2.0).abs() < 1e-13);
+    }
 }

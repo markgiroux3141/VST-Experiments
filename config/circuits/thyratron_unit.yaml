@@ -1,0 +1,46 @@
+# The 884's event-kernel unit as a circuit (HYBRID_PHYSICS_PLAN.md H3c): what technique K's
+# tables are generated from (varimu.devices.thyratron_events.unit_ir, Unit), as a file both
+# builders read. RCA's C6 (5 nF) between the anode node `out` and the grounded cathode,
+# charged from 10 kV through R_CH (a near-constant current: the ramp's slope S = 10 kV /
+# (R_CH C)), discharged through R4 (450 ohm) by the tube, its grid at the bias through R3
+# (2.5k: what the arc sees of RCA's grid network, C1 a short; R2 sets only the bias).
+# Built with events (builder.build(..., events=True)) the tube is its event kernels from
+# config/events/884_unit_c6.json (scripts/thyratron_kernels.py --write 884_unit_c6).
+
+title: "884 event-kernel unit (C6)"
+input: in
+probes: [out, a, g]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the unit has no audio input (a stub)"}
+  output_volts_peak: {value: 60.0, source: "provisional: model knowledge (the sweep's peak at the anode node: the strike, 30-85 V over the tables' grid)"}
+
+controls:
+  bias_v: {value: -6.0, min: -8.0, max: -4.0, unit: V, source: "the unit's: the grid bias (the tables' grid, -8 .. -4 V)"}
+  r_charge_ohm: {value: 66.67e+6, min: 6.667e+6, max: 666.7e+6, unit: ohm, source: "the unit's: the charging resistor from 10 kV, S = 0.3 .. 0.003 V/us (the tables' grid); 66.67 Mohm: 0.03 V/us"}
+
+values:
+  v_charge_v: {value: 10.0e+3, source: "the unit's: thyratron_events.V_CHARGE (a near-constant charging current, within ~1% over a 100 V ramp)"}
+  c_f: {value: 5.0e-9, source: "sch: C6 = 0.005 uF (RCA 884 DATA 2, 92CM-4875R1)"}
+  r_s_ohm: {value: 450.0, source: "sch: R4 = 350-500 ohms (the middle of the range)"}
+  r_g_ohm: {value: 2500.0, source: "sch: R3 = 2000-3000 ohms (rca_884_sweep.yaml): the grid's return as the arc and the ramp see it, C1 (0.25 uF) a short at those speeds; R2's 47k only sets the bias"}
+  r_in_ohm: {value: 1.0e+3, source: "numerical: the stub input's load"}
+  c_state_f: {value: 1.0, source: "numerical: the thyratron's state node integrator (1 V = one e-fold of ion density)"}
+  w_start_v: {value: -25.0, source: "numerical: the plasma state held off for the DC operating point (as rca_884_sweep.yaml)"}
+  c_start_v: {value: 0.0, source: "numerical: the capacitor discharged for the DC operating point (a relaxation oscillator has no stable DC state)"}
+
+devices:
+  V1: {device: 884@1, events: 884_unit_c6}
+
+sections:
+  - title: unit
+    parts:
+      VH: {V: [hv, "0"], v: v_charge_v}
+      RCH: {R: [hv, out], r: r_charge_ohm}
+      C6: {C: [out, "0"], c: c_f, v0: c_start_v}
+      R4: {R: [out, a], r: r_s_ohm}
+      XV1: {device: [a, g, w, "0"], model: V1}
+      CW: {C: [w, "0"], c: c_state_f, v0: w_start_v}
+      VG: {V: [gb, "0"], v: bias_v}
+      RG: {R: [gb, g], r: r_g_ohm}
+      RIN: {R: [in, "0"], r: r_in_ohm}

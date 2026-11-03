@@ -42,6 +42,8 @@ fn circuit() -> CircuitIr {
         sections: vec![Section {
             title: "t".into(),
             substeps: None,
+            decimate: None,
+            owns: None,
             elements: vec![
                 r("R1", "in", "a", 100.0),
                 Element::Inductor(Inductor {

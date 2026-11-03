@@ -66,6 +66,8 @@ fn circuit(models: Vec<DeviceModel>, elements: Vec<Element>, probes: &[&str]) ->
         sections: vec![Section {
             title: "test".into(),
             substeps: None,
+            decimate: None,
+            owns: None,
             elements,
         }],
     };

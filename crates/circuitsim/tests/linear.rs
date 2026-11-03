@@ -67,6 +67,8 @@ fn circuit(elements: Vec<Element>, probes: &[&str]) -> CircuitIr {
         sections: vec![Section {
             title: "test".into(),
             substeps: None,
+            decimate: None,
+            owns: None,
             elements,
         }],
     }

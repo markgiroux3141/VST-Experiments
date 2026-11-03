@@ -61,6 +61,8 @@ fn rc(external: bool) -> CircuitIr {
         sections: vec![Section {
             title: "t".into(),
             substeps: None,
+            decimate: None,
+            owns: None,
             elements,
         }],
     }
@@ -249,11 +251,15 @@ fn multirate_ir(substeps: Option<usize>) -> CircuitIr {
             Section {
                 title: "audio".into(),
                 substeps: None,
+                decimate: None,
+                owns: None,
                 elements: vec![resistor("R1", "in", "s", 100.0), cap("C1", "s", 10e-6)],
             },
             Section {
                 title: "fast".into(),
                 substeps,
+                decimate: None,
+                owns: None,
                 elements: vec![
                     resistor("R2", "s", "f", 1e3),
                     cap("C2", "f", 1e-9),
@@ -339,4 +345,255 @@ fn a_multirate_part_follows_the_fine_one_solve() {
     // Without substeps the part can't run the source (one solve at h refuses nothing,
     // but the multi-rate IR does refuse the single solve).
     assert!(circuitsim::simulate(&multirate_ir(Some(m)), &x, h, &opts).is_err());
+}
+
+/// The amplitude of `f_hz` in `x` (sampled at `rate`), by projection.
+fn amplitude(x: &[f64], f_hz: f64, rate: f64) -> f64 {
+    let (mut c, mut s) = (0.0, 0.0);
+    for (i, &v) in x.iter().enumerate() {
+        let w = 2.0 * std::f64::consts::PI * f_hz * i as f64 / rate;
+        c += v * w.cos();
+        s += v * w.sin();
+    }
+    2.0 * (c * c + s * s).sqrt() / x.len() as f64
+}
+
+fn with_decimate(mut ir: CircuitIr, owns: Option<Vec<String>>) -> CircuitIr {
+    for s in &mut ir.sections {
+        if s.substeps.is_some_and(|m| m > 1) {
+            s.decimate = Some(circuitsim::ir::Decimate::Fir);
+            s.owns = owns.clone();
+        }
+    }
+    ir
+}
+
+/// A multi-rate part's 99.3 kHz source seen by the 96 kHz part: averaged per sample it
+/// folds to 3.3 kHz (the box filter's sidelobe), through the decimator it is gone
+/// (measured: 4.0 mV -> 0.2 uV at `s`); the multi-rate part's own probe likewise. The
+/// price is the decimator's delay (~6.4 samples) in a two-way coupling: the multi-rate
+/// part loads `s` by ~5% through 1k, and the 1 kHz there is 0.34% (0.03 dB) off the fine
+/// one solve, where the average is within 0.02%. Across stiff rails or into a light
+/// load (an island's output it owns) the delay costs far less.
+#[test]
+fn a_decimating_part_hands_on_no_alias() {
+    let (m, h) = (16usize, 1.0 / 96_000.0);
+    let n = 9600;
+    let x: Vec<f64> = (0..n)
+        .map(|i| 10.0 + 5.0 * (2.0 * std::f64::consts::PI * 1e3 * i as f64 * h).sin())
+        .collect();
+    let opts = Options {
+        input_order: 1,
+        ..Options::with_method(Method::TrBdf2)
+    };
+    let run = |ir: &CircuitIr| {
+        simulate_partitioned(
+            ir,
+            &[],
+            Coupling::Extrapolate,
+            &x,
+            h,
+            &opts,
+            usize::MAX,
+            |_| Ok(()),
+        )
+        .unwrap()
+    };
+    let avg = run(&multirate_ir(Some(m)));
+    let fir = run(&with_decimate(multirate_ir(Some(m)), None));
+    // The fine one solve at h / m, the input linear between samples.
+    let fine: Vec<f64> = (0..(n - 1) * m + 1)
+        .map(|j| {
+            let (i, f) = (j / m, (j % m) as f64 / m as f64);
+            if i + 1 < n {
+                x[i] + (x[i + 1] - x[i]) * f
+            } else {
+                x[i]
+            }
+        })
+        .collect();
+    let one = circuitsim::simulate(&multirate_ir(None), &fine, h / m as f64, &opts).unwrap();
+    let tail = |o: &Output, p: &str| series(o, p)[n / 2..].to_vec();
+    let alias = 99.3e3 - 96e3;
+    for p in ["v(s)", "v(f)"] {
+        let (a, f) = (tail(&avg, p), tail(&fir, p));
+        let r: Vec<f64> = series(&one, p)[(n / 2) * m..]
+            .iter()
+            .step_by(m)
+            .copied()
+            .collect();
+        let (aa, fa) = (amplitude(&a, alias, 96e3), amplitude(&f, alias, 96e3));
+        let (a1, f1, r1) = (
+            amplitude(&a, 1e3, 96e3),
+            amplitude(&f, 1e3, 96e3),
+            amplitude(&r, 1e3, 96e3),
+        );
+        assert!(fa < 1e-4 * aa, "{p}: the alias {fa} V (averaged {aa} V)");
+        // Inside the multi-rate part (`f`) both runs carry the coupling's lag on `s`
+        // (0.4-0.5% at 1 kHz); at `s` the averaged run is within 0.02%, the decimated
+        // 0.34% (the decimator's delay, above).
+        let (tol_avg, tol_fir) = if p == "v(s)" {
+            (1e-3, 5e-3)
+        } else {
+            (1e-2, 1e-2)
+        };
+        assert!(
+            (a1 / r1 - 1.0).abs() < tol_avg,
+            "{p}: 1 kHz averaged {a1} V, fine {r1} V"
+        );
+        assert!(
+            (f1 / r1 - 1.0).abs() < tol_fir,
+            "{p}: 1 kHz decimated {f1} V, fine {r1} V"
+        );
+    }
+}
+
+/// An island owning its output into a high-impedance load, with a loop of ownership:
+/// the island (8 steps per sample, decimating) drives `o` through an RC from the input
+/// and draws from the supply `b` and the source's node `vb`; the slow part owns both (a
+/// source, through 10k onto 10 uF) and loads `o` with 10 nF into 1 Mohm (a grid). The DC start equals the one
+/// solve's; the grid follows the fine one solve delayed by the decimator's delay.
+#[test]
+fn an_island_owns_its_output() {
+    let (m, h) = (8usize, 1.0 / 96_000.0);
+    let cap = |name: &str, a: &str, b: &str, c_f: f64| {
+        Element::Capacitor(Capacitor {
+            name: name.into(),
+            a: a.into(),
+            b: b.into(),
+            c_f,
+            v0_v: None,
+        })
+    };
+    let ir = |substeps: Option<usize>| CircuitIr {
+        version: IR_VERSION,
+        title: "island".into(),
+        input_node: "in".into(),
+        controls: vec![],
+        noise: None,
+        heaters: None,
+        probes: vec![
+            Probe::Voltage { node: "o".into() },
+            Probe::Voltage { node: "g".into() },
+            Probe::Voltage { node: "b".into() },
+        ],
+        models: vec![],
+        sections: vec![
+            Section {
+                title: "supply and load".into(),
+                substeps: None,
+                decimate: None,
+                owns: None,
+                elements: vec![
+                    Element::VoltageSource(VoltageSource {
+                        name: "VB".into(),
+                        pos: "vb".into(),
+                        neg: "0".into(),
+                        dc_v: 100.0,
+                    }),
+                    resistor("RB", "vb", "b", 10e3),
+                    cap("CB", "b", "0", 10e-6),
+                    cap("CG", "o", "g", 10e-9),
+                    resistor("RG", "g", "0", 1e6),
+                ],
+            },
+            Section {
+                title: "island".into(),
+                substeps,
+                decimate: substeps.map(|_| circuitsim::ir::Decimate::Fir),
+                owns: substeps.map(|_| vec!["o".to_string()]),
+                elements: vec![
+                    resistor("R1", "in", "o", 1e3),
+                    cap("C1", "o", "0", 100e-9),
+                    resistor("R2", "b", "o", 100e3),
+                    // and from the source's own node (held at DC by VB itself)
+                    resistor("R3", "vb", "o", 1e6),
+                ],
+            },
+        ],
+    };
+    let n = 4800;
+    let x: Vec<f64> = (0..n)
+        .map(|i| 2.0 * (2.0 * std::f64::consts::PI * 500.0 * i as f64 * h).sin())
+        .collect();
+    let opts = Options {
+        input_order: 1,
+        ..Options::with_method(Method::TrBdf2)
+    };
+    let p = simulate_partitioned(
+        &ir(Some(m)),
+        &[],
+        Coupling::Extrapolate,
+        &x,
+        h,
+        &opts,
+        usize::MAX,
+        |_| Ok(()),
+    )
+    .unwrap();
+    let fine: Vec<f64> = (0..(n - 1) * m + 1)
+        .map(|j| {
+            let (i, f) = (j / m, (j % m) as f64 / m as f64);
+            if i + 1 < n {
+                x[i] + (x[i + 1] - x[i]) * f
+            } else {
+                x[i]
+            }
+        })
+        .collect();
+    let one = circuitsim::simulate(&ir(None), &fine, h / m as f64, &opts).unwrap();
+    // The DC start, the same in both.
+    for name in ["v(o)", "v(g)", "v(b)"] {
+        let (a, b) = (series(&p, name)[0], series(&one, name)[0]);
+        assert!(
+            (a - b).abs() < 1e-9 * b.abs().max(1.0),
+            "{name} at DC: {a} against {b}"
+        );
+    }
+    // The grid follows, the decimator's delay later: within 1% of its swing (the load's
+    // current reaches the island a sample and the delay late).
+    let d = circuitsim::partition::Decimator::delay_steps(m);
+    let (g_p, g_one) = (series(&p, "v(g)"), series(&one, "v(g)"));
+    let swing = g_one.iter().fold(0.0, |w: f64, v| w.max(v.abs()));
+    let err = (n / 4..n)
+        .map(|i| g_p[i] - g_one[i * m - d])
+        .fold(0.0, |w: f64, e| w.max(e.abs()));
+    assert!(err < 1e-2 * swing, "v(g) differs by {err} V of {swing}");
+}
+
+#[test]
+fn ownership_is_checked() {
+    let mut ir = with_decimate(multirate_ir(Some(8)), Some(vec!["nowhere".into()]));
+    let x = vec![0.0; 10];
+    let opts = Options::with_method(Method::TrBdf2);
+    let e = simulate_partitioned(
+        &ir,
+        &[],
+        Coupling::Hold,
+        &x,
+        1e-5,
+        &opts,
+        usize::MAX,
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    assert!(e.0.contains("doesn't have"), "{e}");
+    // `f` is the island's alone: owned but not shared
+    ir = with_decimate(multirate_ir(Some(8)), Some(vec!["f".into()]));
+    let e = simulate_partitioned(
+        &ir,
+        &[],
+        Coupling::Hold,
+        &x,
+        1e-5,
+        &opts,
+        usize::MAX,
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    assert!(e.0.contains("no other part"), "{e}");
+    // in a single-rate section: the IR refuses it
+    let mut ir = multirate_ir(None);
+    ir.sections[0].owns = Some(vec!["s".into()]);
+    assert!(ir.validate().is_err());
 }

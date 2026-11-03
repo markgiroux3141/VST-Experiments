@@ -52,6 +52,7 @@ def render(noise: bool, gate: np.ndarray, pitch: np.ndarray) -> np.ndarray:
         "pitch": pitch,
         "key": np.zeros(len(gate)),
         "pressure": np.zeros(len(gate)),
+        "pitch2": np.zeros(len(gate)),
     }
     return fast.run_transient(ir, np.zeros(len(gate)), settings=st, controls=controls).vectors[
         "v(out)"

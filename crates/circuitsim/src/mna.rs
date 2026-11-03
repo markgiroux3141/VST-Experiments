@@ -32,6 +32,9 @@
 //!   Stateless devices of one kind on the same pins (a bank of triodes in
 //!   parallel) become one instance, a [`devices::Parallel`], named after all
 //!   of them ("XV101A+XV102A+..."): the same equations, one set of ports.
+//! - Thyratron event kernels (`crate::events`): the off tube's capacitances into `C`,
+//!   its grid leakage and 1 S from its state pin to the cathode into `G`; its strikes are
+//!   a current column a -> k ([`Mna::events`]), held over each step. DK solver only.
 
 use std::collections::HashMap;
 
@@ -109,6 +112,18 @@ pub struct MediumPorts {
     pub noise_seed: Option<u64>,
 }
 
+/// A thyratron's event kernels in the circuit: its element and the unknowns of its anode,
+/// grid and cathode (`None`: ground). Its current columns are (a, k), (g, k) and (ground,
+/// a): from the anode, and from the grid, through the tube to the cathode, and the charging
+/// network's deficit from ground into the anode.
+#[derive(Debug, Clone)]
+pub struct EventPorts {
+    pub element: crate::ir::ThyratronEvents,
+    pub a: Option<usize>,
+    pub g: Option<usize>,
+    pub k: Option<usize>,
+}
+
 /// The circuit as matrices, ready for DC and transient analysis.
 #[derive(Debug)]
 pub struct Mna {
@@ -155,6 +170,9 @@ pub struct Mna {
     /// Heated cathodes (device builder B6; `None`: the IR has none): the circuit's cathode
     /// temperature and the instances it heats (their devices are [`Heated`]). DK only.
     pub heat: Option<HeatRun>,
+    /// Thyratron event kernels (HYBRID_PHYSICS_PLAN.md H3): current columns after the
+    /// noise's ([`Mna::current_columns`]), each held over a step. DK solver only.
+    pub events: Vec<EventPorts>,
 }
 
 /// Merge stateless instances of one kind on the same pins into one
@@ -365,6 +383,7 @@ impl Mna {
         let mut dc_starts = Vec::new();
         let mut inductance: HashMap<&str, f64> = HashMap::new();
         let mut instances = Vec::new();
+        let mut events = Vec::new();
         for el in ir.elements() {
             match el {
                 Element::Resistor(r) => stamp(&mut g, node(&r.a), node(&r.b), 1.0 / r.r_ohm),
@@ -422,6 +441,11 @@ impl Mna {
                             stamp(&mut g, pins[0], pins[1], gmin);
                             vec![]
                         }
+                        // pins (a, g2, g1, w, k) or (a, g, w, k)
+                        DeviceModel::Thyratron(t) => {
+                            let (g, k) = if t.mu_g2.is_some() { (2, 4) } else { (1, 3) };
+                            vec![(g, k, t.c_gk), (g, 0, t.c_ga), (0, k, t.c_ak)]
+                        }
                         DeviceModel::VacuumDiode(_)
                         | DeviceModel::MagneticCore(_)
                         | DeviceModel::Lamp(_) => vec![],
@@ -447,6 +471,26 @@ impl Mna {
                             }
                         }
                     }
+                }
+                Element::ThyratronEvents(e) => {
+                    let (a, gr, w, k) = (node(&e.a), node(&e.g), node(&e.w), node(&e.k));
+                    // the off tube: its capacitances, the grid's leakage; K has no plasma
+                    // state, so its node is held to the cathode
+                    for (p, q, cf) in [(gr, k, e.c_gk_f), (gr, a, e.c_ga_f), (a, k, e.c_ak_f)] {
+                        if cf > 0.0 {
+                            stamp(&mut c, p, q, cf);
+                        }
+                    }
+                    if e.g_leak_s > 0.0 {
+                        stamp(&mut g, gr, a, e.g_leak_s);
+                    }
+                    stamp(&mut g, w, k, 1.0);
+                    events.push(EventPorts {
+                        element: e.clone(),
+                        a,
+                        g: gr,
+                        k,
+                    });
                 }
                 Element::Coupling(_)
                 | Element::NoiseCurrent(_)
@@ -563,7 +607,33 @@ impl Mna {
             dc_starts,
             noise,
             heat,
+            events,
         })
+    }
+
+    /// The DK current columns: the noise sources' ([`NoiseRun::columns`]), then each
+    /// event kernel's (a, k), (g, k) and (ground, a).
+    pub fn current_columns(&self) -> Vec<(Option<usize>, Option<usize>)> {
+        self.noise
+            .as_ref()
+            .map_or(&[][..], |n| &n.columns)
+            .iter()
+            .copied()
+            .chain(
+                self.events
+                    .iter()
+                    .flat_map(|e| [(e.a, e.k), (e.g, e.k), (None, e.a)]),
+            )
+            .collect()
+    }
+
+    /// The unknowns a run must compute at each step for the event kernels' senses.
+    pub fn event_senses(&self) -> Vec<usize> {
+        self.events
+            .iter()
+            .flat_map(|e| [e.a, e.g, e.k])
+            .flatten()
+            .collect()
     }
 
     /// Rows of the sources whose values change during a run: every sine

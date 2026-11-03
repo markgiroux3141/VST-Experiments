@@ -158,3 +158,77 @@ def test_a_capacitor_start_voltage_round_trips_and_is_absent_when_unset():
     assert '"v0_v": 5.0' in started.to_json()
     assert CircuitIR.from_json(plain.to_json()) == plain
     assert CircuitIR.from_json(started.to_json()) == started
+
+
+def test_a_multirate_sections_decimation_and_ownership_round_trip():
+    """`Section.decimate` and `Section.owns` (HYBRID_PHYSICS_PLAN.md H3a, M1) are written
+    only when set, round-trip through Rust, and are refused outside a multi-rate section."""
+    from varimu.circuit.ir import Capacitor, VoltageProbe
+
+    def ir(substeps, decimate, owns):
+        return CircuitIR(
+            title="t",
+            input_node="in",
+            probes=(VoltageProbe("a"),),
+            models=(),
+            sections=(
+                Section("slow", (Resistor("R2", "a", "0", 1e6),)),
+                Section(
+                    "island",
+                    (Resistor("R1", "in", "a", 1e3), Capacitor("C1", "a", "0", 1e-6)),
+                    substeps,
+                    decimate,
+                    owns,
+                ),
+            ),
+        )
+
+    plain, m1 = ir(8, None, None), ir(8, "fir", ("a",))
+    assert '"decimate"' not in plain.to_json() and '"owns"' not in plain.to_json()
+    assert CircuitIR.from_json(m1.to_json()) == m1
+    circuitsim = pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    assert CircuitIR.from_json(circuitsim.ir_roundtrip(m1.to_json())) == m1
+    for args, match in (
+        ((None, "fir", None), "decimate"),
+        ((8, "box", None), "decimate"),
+        ((None, None, ("a",)), "owns"),
+        ((8, None, ()), "owns"),
+    ):
+        with pytest.raises(IRError, match=match):  # the IR validates as it is made
+            ir(*args).validate()
+    # Rust: the same refusals, on JSON edited past Python's checks
+    for edit, match in (
+        ({"substeps": None}, "decimate"),
+        ({"decimate": "box"}, "unknown variant"),
+        ({"decimate": None, "substeps": None}, "owns"),
+        ({"owns": []}, "owns"),
+    ):
+        d = m1.to_dict()
+        d["sections"][1].update(edit)
+        d["sections"][1] = {k: v for k, v in d["sections"][1].items() if v is not None}
+        with pytest.raises(ValueError, match=match):
+            circuitsim.ir_roundtrip(json.dumps(d))
+
+
+def test_circuit_files_take_decimation_and_ownership(tmp_path):
+    """A circuit file's section `decimate` / `owns`: built into the IR, and checked."""
+    from varimu.circuit import builder, spec
+    from varimu.config import CONFIG_DIR, ConfigError
+
+    text = (CONFIG_DIR / "circuits" / "rca_884_sweep.yaml").read_text("utf-8")
+    good = text.replace("  - title: oscillator\n", "  - title: oscillator\n    substeps: 8\n"
+                        "    decimate: fir\n    owns: [out]\n")  # fmt: skip
+    assert good != text
+    path = tmp_path / "m1.yaml"
+    path.write_text(good, "utf-8")
+    s = spec.load_circuit(path)
+    sec = builder.build_ir(s, spec.resolve(s)).sections[0]
+    assert (sec.substeps, sec.decimate, sec.owns) == (8, "fir", ("out",))
+    for bad in (
+        text.replace("  - title: oscillator\n", "  - title: oscillator\n    decimate: fir\n"),
+        good.replace("decimate: fir", "decimate: box"),
+        good.replace("owns: [out]", "owns: []"),
+    ):
+        path.write_text(bad, "utf-8")
+        with pytest.raises(ConfigError, match="decimate|owns"):
+            spec.load_circuit(path)

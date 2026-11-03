@@ -1004,7 +1004,9 @@ impl SessionView {
         let config = self.root.join("config");
         let d = find_device(&slot.device).ok_or(format!("no device {}", slot.device))?;
         let s = d.play_settings(&Settings::load(&config, d.quality)?);
-        let circuit = Circuit::load(&config, d.circuit, s.cores()?)?.with_noise(slot.noise);
+        let circuit = Circuit::load(&config, d.circuit, s.cores()?)?
+            .with_events(s.events)
+            .with_noise(slot.noise);
         let p = Player::start(
             Source::Timeline { audio, start },
             slot.values.clone(),

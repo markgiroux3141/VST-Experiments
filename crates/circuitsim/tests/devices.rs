@@ -201,6 +201,10 @@ fn junction_diode_limits_and_tubes_do_not() {
             // A lamp's filament moves at most 1 V per iteration from 0 V; its
             // temperature 5 K is within its 50 K step.
             DeviceModel::Lamp(_) => assert!(limited && v == [1.0, 5.0], "{v:?}"),
+            // A thyratron's state moves at most 3 e-folds per iteration.
+            DeviceModel::Thyratron(_) => {
+                assert!(limited && v[n - 1] == 3.0 && v[..n - 1].iter().all(|&x| x == 5.0))
+            }
             _ => assert!(!limited && v.iter().all(|&x| x == 5.0)),
         }
     }

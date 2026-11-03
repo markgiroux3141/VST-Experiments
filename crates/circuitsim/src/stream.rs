@@ -28,9 +28,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::Error;
-use crate::ir::{CircuitIr, Probe};
+use crate::ir::{CircuitIr, Element, GROUND, Probe, Resistor, Section, VoltageSource};
 use crate::mna::Mna;
-use crate::partition::{Coupling, Ring, SOURCE_PREFIX, Split, groups, split};
+use crate::partition::{Coupling, Decimator, Ring, SOURCE_PREFIX, Split, groups, split};
 use crate::transient::{Options, StepInput, Transient};
 
 /// Commands to a partition's thread, applied before it steps from a given sample.
@@ -220,6 +220,8 @@ struct PartIo {
     feeds: Vec<MediaFeed>,
     /// A multi-rate part with the audio input: the input's interpolation order.
     input_order: Option<usize>,
+    /// A multi-rate part handing on its values through a [`Decimator`].
+    decimate: bool,
 }
 
 /// The partitions past the first: their threads, and what all share.
@@ -255,6 +257,16 @@ fn run_part(
     let (mut ea, mut eb) = (vec![0.0; k], vec![0.0; k]);
     let mut out = vec![0.0; n_coupling + substeps * io.senses.len()];
     let mut buf = Vec::new();
+    // Its couplings, then its probes, through the decimator (started at the DC point).
+    let mut dec = io.decimate.then(|| {
+        let x = tr.x();
+        let init: Vec<f64> = tr.mna().outputs[..n_coupling]
+            .iter()
+            .map(|&i| x[i])
+            .chain(tr.mna().probe_values(x))
+            .collect();
+        Decimator::new(substeps, &init)
+    });
     let mut n = 0usize;
     loop {
         // Every partition's sample n first: the first partition queues the commands
@@ -323,24 +335,51 @@ fn run_part(
                 for (s, &i) in sum.iter_mut().zip(&tr.mna().outputs) {
                     *s += tr.x()[i];
                 }
+                if let Some(d) = dec.as_mut() {
+                    let x = tr.x();
+                    let outs = tr.mna().outputs[..n_coupling].iter().map(|&i| x[i]);
+                    d.push(outs.chain(tr.mna().probe_values(x)));
+                }
                 let at = |u: Option<usize>| u.map_or(0.0, |i| tr.x()[i]);
                 for (r, &(a, b)) in io.senses.iter().enumerate() {
                     out[n_coupling + r * substeps + j] = at(a) - at(b);
                 }
             }
-            for (o, s) in out.iter_mut().zip(&sum).skip(n_owned) {
-                *o = s / m;
+            match &dec {
+                Some(d) => {
+                    for (k, o) in out.iter_mut().enumerate().take(n_coupling) {
+                        *o = d.output(k);
+                    }
+                }
+                None => {
+                    for (o, s) in out.iter_mut().zip(&sum).skip(n_owned) {
+                        *o = s / m;
+                    }
+                }
             }
         }
         {
             let mut probes = shared.probes[p].lock().expect("probes");
-            for (v, y) in probes.iter_mut().zip(tr.mna().probe_values(tr.x())) {
-                v.push(y);
+            match &dec {
+                Some(d) => {
+                    for (k, v) in probes.iter_mut().enumerate() {
+                        v.push(d.output(n_coupling + k));
+                    }
+                }
+                None => {
+                    for (v, y) in probes.iter_mut().zip(tr.mna().probe_values(tr.x())) {
+                        v.push(y);
+                    }
+                }
             }
         }
-        // Owned nodes at the sample's end (a multi-rate part owns none); a single-rate
-        // part's sources' currents too.
-        let ends = if substeps == 1 { n_coupling } else { n_owned };
+        // Owned nodes at the sample's end; a single-rate part's sources' currents too (a
+        // decimating part's are all the decimator's, above).
+        let ends = match (substeps, &dec) {
+            (1, _) => n_coupling,
+            (_, Some(_)) => 0,
+            _ => n_owned,
+        };
         for (o, &i) in out.iter_mut().zip(&tr.mna().outputs).take(ends) {
             *o = tr.x()[i];
         }
@@ -524,6 +563,68 @@ impl Stream {
         // Users are solved before their owners: the multi-rate parts first (they own
         // nothing), then the others in order (a single-rate part's users are
         // lower-numbered).
+        // A multi-rate part owning nodes can close a loop of ownership (it uses the
+        // supply, the supply's part uses its output: users can't all be solved before
+        // their owners). Then every part's currents come from a solve with all its shared
+        // nodes held at the whole circuit's DC voltages, laid out as its outputs. An owned
+        // node is held through 1 mOhm (a source of its own may already hold it: two in
+        // parallel are singular); the currents it gives are the same to that resistance.
+        let loops = (0..n_parts).any(|p| sp.substeps[p] > 1 && !sp.owned(p).is_empty());
+        let mut held_dc: Vec<Vec<f64>> = Vec::new();
+        if loops {
+            for p in 0..n_parts {
+                let (owned, sourced) = (sp.owned(p), sp.sourced(p));
+                let mut ir_p = sp.parts[p].clone();
+                ir_p.sections.push(Section {
+                    title: "partition: the DC start's held nodes".into(),
+                    substeps: None,
+                    decimate: None,
+                    owns: None,
+                    elements: owned
+                        .iter()
+                        .flat_map(|&i| {
+                            let n = &sp.shared[i].name;
+                            let held = format!("partition_held:{n}");
+                            [
+                                Element::VoltageSource(VoltageSource {
+                                    name: format!("{SOURCE_PREFIX}{n}"),
+                                    pos: held.clone(),
+                                    neg: GROUND.into(),
+                                    dc_v: 0.0,
+                                }),
+                                Element::Resistor(Resistor {
+                                    name: format!("RPART_HELD_{n}"),
+                                    a: held,
+                                    b: n.clone(),
+                                    r_ohm: 1e-3,
+                                }),
+                            ]
+                        })
+                        .collect(),
+                });
+                let mut mna = Mna::from_ir(&ir_p, opts.gmin)?;
+                let held: Vec<usize> = owned.iter().chain(&sourced).copied().collect();
+                let br: Vec<usize> = held
+                    .iter()
+                    .map(|&i| {
+                        mna.branch(&format!("{SOURCE_PREFIX}{}", sp.shared[i].name))
+                            .expect("added")
+                    })
+                    .collect();
+                mna.externals.truncate(mna.n_controls + mna.n_media);
+                mna.externals.extend_from_slice(&br);
+                let ext: Vec<f64> = held.iter().map(|&i| v_dc[i]).collect();
+                let tr = if p == 0 {
+                    start(mna, &ext, u0)?
+                } else {
+                    let u = if p == sp.input_part { u0 } else { 0.0 };
+                    Transient::with_externals(mna, h, *opts, u, &ext)?
+                };
+                let mut o: Vec<f64> = owned.iter().map(|&i| v_dc[i]).collect();
+                o.extend(br[owned.len()..].iter().map(|&b| tr.x()[b]));
+                held_dc.push(o);
+            }
+        }
         let mut slots: Vec<Option<(Transient, Vec<Feed>)>> = (0..n_parts).map(|_| None).collect();
         let mut dc_out: Vec<Vec<f64>> = vec![Vec::new(); n_parts];
         let mut ios: Vec<PartIo> = vec![PartIo::default(); n_parts];
@@ -552,6 +653,7 @@ impl Stream {
                 senses,
                 feeds: Vec::new(),
                 input_order: (p == sp.input_part && p > 0).then_some(opts.input_order.max(1)),
+                decimate: sp.decimate[p].is_some(),
             };
             let ext: Vec<f64> = f
                 .iter()
@@ -561,7 +663,16 @@ impl Stream {
                         let i = sp.owned(*q)[*slot];
                         v_dc[i]
                     }
-                    Feed::Sum(v) => v.iter().map(|&(u, slot)| dc_out[u][slot]).sum(),
+                    Feed::Sum(v) => v
+                        .iter()
+                        .map(|&(u, slot)| {
+                            if loops {
+                                held_dc[u][slot]
+                            } else {
+                                dc_out[u][slot]
+                            }
+                        })
+                        .sum(),
                 })
                 .collect();
             let tr = if p == 0 {

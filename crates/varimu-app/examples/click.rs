@@ -122,7 +122,7 @@ fn main() -> Result<(), String> {
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
     let s = dev.play_settings(&Settings::load(config, dev.quality)?);
-    let circuit = Circuit::load(config, dev.circuit, s.cores()?)?;
+    let circuit = Circuit::load(config, dev.circuit, s.cores()?)?.with_events(s.events);
     let v = values(&knobs(dev, circuit.spec()));
     let keys = Arc::new(Keys::default());
     let (source, buffer) = match &file {

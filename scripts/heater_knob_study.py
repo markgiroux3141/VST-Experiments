@@ -71,6 +71,7 @@ def run(heater: float) -> dict:
         "pitch": np.full(n, -15.0),
         "key": np.zeros(n),
         "pressure": np.zeros(n),
+        "pitch2": np.zeros(n),
     }
     v = fast.run_transient(ir, np.zeros(n), settings=st, controls=controls).vectors
     k = slice(int(0.7 * fs), n)

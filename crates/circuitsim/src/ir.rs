@@ -36,6 +36,9 @@
 //!
 //! Heated cathodes (device builder B6, `varimu/devices/cathode.py`, [`crate::cathode`]):
 //! the circuit's [`HeaterSpec`] and a [`HeatedCathode`] per tube instance; optional as noise.
+//!
+//! A [`ThyratronEvents`] is a gas thyratron as technique K's event kernels
+//! (HYBRID_PHYSICS_PLAN.md H3; [`crate::events`]): a new element kind, as `Vccs`.
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -142,6 +145,22 @@ pub struct Section {
         deserialize_with = "opt_count"
     )]
     pub substeps: Option<usize>,
+    /// A multi-rate section's decimation of what it hands on (`partition.rs`;
+    /// HYBRID_PHYSICS_PLAN.md H3a, M1). Absent: the average over the sample.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decimate: Option<Decimate>,
+    /// Shared nodes a multi-rate section owns (it publishes their voltages and is fed
+    /// their users' currents). Absent: it owns none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owns: Option<Vec<String>>,
+}
+
+/// How a multi-rate part turns its steps into the values it publishes per sample.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Decimate {
+    /// A linear-phase anti-alias low-pass over its steps (`partition::Decimator`).
+    Fir,
 }
 
 /// An optional count written as a number (the IR writes every number as a float).
@@ -173,6 +192,7 @@ pub enum Element {
     Device(Device),
     Plate(Plate),
     Tape(Tape),
+    ThyratronEvents(ThyratronEvents),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -340,6 +360,44 @@ pub struct Tape {
     pub medium: Box<crate::tape_stream::TapeParams>,
 }
 
+/// A triode gas thyratron as technique K's event kernels (HYBRID_PHYSICS_PLAN.md H3, "K's
+/// design"; `varimu.devices.thyratron_events` is the reference, [`crate::events`] the port),
+/// on the device's pins (a, g, w, k). Between events the tube is its capacitances and the
+/// grid-to-anode leakage; w is held to k by a numerical 1 S (K has no state there). After
+/// each sample it senses the unit's capacitor (v_ak plus `r_s_ohm` times its own current)
+/// and the grid (v_gk less `r_g_ohm c_ga_f` times the ramp's slope), predicts a strike
+/// within the next step and injects its charges a -> k, held over each step (a DK current
+/// column). The tables over (`v_g_v`, `log_slope`), ascending, indexed [v_g][slope]: the
+/// strike voltage, the dead time, the latched points (no pulse, dead 0), the anode
+/// current's pulse from the strike at `ref_rate_hz` and the grid's over the same samples
+/// (into the grid pin, injected g -> k), band-limited by the engine for its own step. SPICE
+/// has only the off tube.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ThyratronEvents {
+    pub name: String,
+    pub a: String,
+    pub g: String,
+    pub w: String,
+    pub k: String,
+    pub c_gk_f: f64,
+    pub c_ga_f: f64,
+    pub c_ak_f: f64,
+    pub g_leak_s: f64,
+    pub c_f: f64,
+    pub r_s_ohm: f64,
+    pub r_g_ohm: f64,
+    pub ref_rate_hz: f64,
+    pub v_g_v: Vec<f64>,
+    pub log_slope: Vec<f64>,
+    pub v_s_v: Vec<Vec<f64>>,
+    pub dead_s: Vec<Vec<f64>>,
+    pub latched: Vec<Vec<bool>>,
+    pub pulses_a: Vec<Vec<Vec<f64>>>,
+    pub grid_pulses_a: Vec<Vec<Vec<f64>>>,
+    pub source: String,
+}
+
 /// White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from `a` through
 /// the source to `b`: a resistor's Johnson noise as its Norton source (B5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -399,6 +457,7 @@ pub enum DeviceModel {
     VacuumDiode(VacuumDiode),
     MagneticCore(MagneticCore),
     Lamp(Lamp),
+    Thyratron(Thyratron),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -526,6 +585,41 @@ pub struct Lamp {
     pub t_amb_k: f64,
 }
 
+/// `varimu.devices.thyratron.Thyratron`: a hot-cathode gas thyratron as a lumped plasma.
+/// A tetrode (`mu_g2` set) has pins (a, g2, g1, w, k): the anode, the shield and control
+/// grids, the plasma's state (ln of its ion density; a 1 F capacitor from w to k holds it)
+/// and the cathode; a triode (`mu_g2` None) pins (a, g, w, k). Port currents: the anode's,
+/// the shield grid's (none), the control grid's and -dw/dt.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Thyratron {
+    pub name: String,
+    pub mu_a: f64,
+    pub mu_g2: Option<f64>,
+    pub v0_v: f64,
+    pub e_v: f64,
+    pub perveance: f64,
+    pub x_n: f64,
+    pub v_x_v: f64,
+    pub k_ion: f64,
+    pub v_ion_v: f64,
+    pub w_ion_v: f64,
+    pub c_meta: f64,
+    pub v_meta_v: f64,
+    pub w_meta_v: f64,
+    pub tau_diff_s: f64,
+    pub k_grid: f64,
+    pub p_grid: f64,
+    pub v_float_v: f64,
+    pub t_e_v: f64,
+    pub q_s_c: f64,
+    pub g_leak_s: f64,
+    pub s0_per_s: f64,
+    pub c_gk: f64,
+    pub c_ga: f64,
+    pub c_ak: f64,
+}
+
 impl DeviceModel {
     pub fn name(&self) -> &str {
         match self {
@@ -535,6 +629,7 @@ impl DeviceModel {
             DeviceModel::VacuumDiode(m) => &m.name,
             DeviceModel::MagneticCore(m) => &m.name,
             DeviceModel::Lamp(m) => &m.name,
+            DeviceModel::Thyratron(m) => &m.name,
         }
     }
 
@@ -546,6 +641,8 @@ impl DeviceModel {
             DeviceModel::JunctionDiode(_) | DeviceModel::VacuumDiode(_) => &["a", "k"],
             DeviceModel::MagneticCore(_) => &["b", "ref"],
             DeviceModel::Lamp(_) => &["a", "t", "b"],
+            DeviceModel::Thyratron(t) if t.mu_g2.is_some() => &["a", "g2", "g1", "w", "k"],
+            DeviceModel::Thyratron(_) => &["a", "g", "w", "k"],
         }
     }
 
@@ -575,6 +672,7 @@ impl Element {
             Element::Device(e) => &e.name,
             Element::Plate(e) => &e.name,
             Element::Tape(e) => &e.name,
+            Element::ThyratronEvents(e) => &e.name,
         }
     }
 
@@ -594,6 +692,7 @@ impl Element {
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
             Element::Plate(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
             Element::Tape(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
+            Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
         }
     }
 }
@@ -610,6 +709,97 @@ impl fmt::Display for IrError {
 }
 
 impl std::error::Error for IrError {}
+
+/// The checks of a thyratron's event kernels (Python's `_validate_thyratron_events`).
+fn validate_thyratron_events(e: &ThyratronEvents) -> Result<(), IrError> {
+    let name = &e.name;
+    for (k, v) in [
+        ("c_f", e.c_f),
+        ("r_s_ohm", e.r_s_ohm),
+        ("r_g_ohm", e.r_g_ohm),
+        ("ref_rate_hz", e.ref_rate_hz),
+    ] {
+        positive(&format!("{name}.{k}"), v)?;
+    }
+    for (k, v) in [
+        ("c_gk_f", e.c_gk_f),
+        ("c_ga_f", e.c_ga_f),
+        ("c_ak_f", e.c_ak_f),
+        ("g_leak_s", e.g_leak_s),
+    ] {
+        nonneg(&format!("{name}.{k}"), v)?;
+    }
+    for (k, ax) in [("v_g_v", &e.v_g_v), ("log_slope", &e.log_slope)] {
+        if ax.len() < 2 || !ax.iter().all(|x| x.is_finite()) {
+            return err(format!("{name}.{k}: two or more finite values"));
+        }
+        if ax.windows(2).any(|w| w[1] <= w[0]) {
+            return err(format!("{name}.{k}: ascending"));
+        }
+    }
+    let (nv, ns) = (e.v_g_v.len(), e.log_slope.len());
+    let shaped = |lens: Vec<usize>| lens.len() == nv && lens.iter().all(|&l| l == ns);
+    for (k, ok) in [
+        ("v_s_v", shaped(e.v_s_v.iter().map(Vec::len).collect())),
+        ("dead_s", shaped(e.dead_s.iter().map(Vec::len).collect())),
+        ("latched", shaped(e.latched.iter().map(Vec::len).collect())),
+        (
+            "pulses_a",
+            shaped(e.pulses_a.iter().map(Vec::len).collect()),
+        ),
+        (
+            "grid_pulses_a",
+            shaped(e.grid_pulses_a.iter().map(Vec::len).collect()),
+        ),
+    ] {
+        if !ok {
+            return err(format!(
+                "{name}.{k}: {nv} rows of {ns} (v_g_v by log_slope)"
+            ));
+        }
+    }
+    let mut live = 0;
+    for i in 0..nv {
+        for j in 0..ns {
+            let (v, dead, latched, p) = (
+                e.v_s_v[i][j],
+                e.dead_s[i][j],
+                e.latched[i][j],
+                &e.pulses_a[i][j],
+            );
+            finite(&format!("{name}.v_s_v"), v)?;
+            nonneg(&format!("{name}.dead_s"), dead)?;
+            if latched && (!p.is_empty() || dead != 0.0) {
+                return err(format!(
+                    "{name}: a latched point has no pulse and no dead time"
+                ));
+            }
+            if !latched && (p.is_empty() || !p.iter().all(|x| x.is_finite())) {
+                return err(format!(
+                    "{name}: a pulse of finite samples at every point not latched"
+                ));
+            }
+            let gp = &e.grid_pulses_a[i][j];
+            if gp.len() != p.len() || !gp.iter().all(|x| x.is_finite()) {
+                return err(format!(
+                    "{name}: a grid pulse of finite samples as long as the anode's"
+                ));
+            }
+            live += usize::from(!latched);
+        }
+    }
+    if live == 0 {
+        return err(format!("{name}: every point latched"));
+    }
+    let pins: HashSet<&str> = [&e.a, &e.g, &e.w, &e.k]
+        .iter()
+        .map(|s| s.as_str())
+        .collect();
+    if pins.len() != 4 {
+        return err(format!("{name}: its pins (a, g, w, k) on four nodes"));
+    }
+    Ok(())
+}
 
 fn err<T>(msg: impl Into<String>) -> Result<T, IrError> {
     Err(IrError(msg.into()))
@@ -687,6 +877,21 @@ impl CircuitIr {
                 "section {:?}: substeps 0 (a count, 1 or more)",
                 s.title
             ));
+        }
+        for s in &self.sections {
+            let multirate = s.substeps.is_some_and(|m| m > 1);
+            if s.decimate.is_some() && !multirate {
+                return err(format!(
+                    "section {:?}: decimate in a section without substeps",
+                    s.title
+                ));
+            }
+            if s.owns.as_ref().is_some_and(|o| o.is_empty() || !multirate) {
+                return err(format!(
+                    "section {:?}: owns needs nodes, in a multi-rate section",
+                    s.title
+                ));
+            }
         }
 
         let mut names = HashSet::new();
@@ -844,6 +1049,10 @@ impl CircuitIr {
                         ));
                     }
                     'V'
+                }
+                Element::ThyratronEvents(e) => {
+                    validate_thyratron_events(e)?;
+                    'X'
                 }
                 Element::Device(e) => {
                     let Some(m) = models.get(e.model.as_str()) else {
@@ -1099,6 +1308,46 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             ]);
             for c in l.emissivity {
                 finite(&format!("{name}.emissivity[]"), c)?;
+            }
+        }
+        DeviceModel::Thyratron(t) => {
+            values.extend([
+                ("mu_a", t.mu_a),
+                ("e_v", t.e_v),
+                ("perveance", t.perveance),
+                ("x_n", t.x_n),
+                ("v_x_v", t.v_x_v),
+                ("k_ion", t.k_ion),
+                ("w_ion_v", t.w_ion_v),
+                ("c_meta", t.c_meta),
+                ("w_meta_v", t.w_meta_v),
+                ("tau_diff_s", t.tau_diff_s),
+                ("k_grid", t.k_grid),
+                ("p_grid", t.p_grid),
+                ("t_e_v", t.t_e_v),
+                ("q_s_c", t.q_s_c),
+                ("s0_per_s", t.s0_per_s),
+            ]);
+            if let Some(mu) = t.mu_g2 {
+                values.push(("mu_g2", mu));
+            }
+            for (what, x) in [
+                ("v0_v", t.v0_v),
+                ("v_ion_v", t.v_ion_v),
+                ("v_meta_v", t.v_meta_v),
+                ("v_float_v", t.v_float_v),
+            ] {
+                finite(&format!("{name}.{what}"), x)?;
+            }
+            for (what, c) in [
+                ("g_leak_s", t.g_leak_s),
+                ("c_gk", t.c_gk),
+                ("c_ga", t.c_ga),
+                ("c_ak", t.c_ak),
+            ] {
+                if !(c.is_finite() && c >= 0.0) {
+                    return err(format!("{name}.{what} = {c} must be >= 0"));
+                }
             }
         }
         DeviceModel::MagneticCore(m) => {

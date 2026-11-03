@@ -442,6 +442,16 @@ pub fn device_instance(
             l.name = s(name);
             Ok(DeviceModel::Lamp(l))
         }
+        DeviceModel::Thyratron(t) => {
+            if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
+                return Err(Error(format!(
+                    "{name}: a thyratron takes no parallel, emission or area"
+                )));
+            }
+            let mut t = t.clone();
+            t.name = s(name);
+            Ok(DeviceModel::Thyratron(t))
+        }
         DeviceModel::MagneticCore(_) => Err(Error(format!("{name}: no instances of MagneticCore"))),
     }
 }

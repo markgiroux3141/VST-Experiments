@@ -18,6 +18,7 @@ pub mod core;
 pub mod diode;
 pub mod lamp;
 pub mod pentode;
+pub mod thyratron;
 pub mod triode;
 pub mod triode_table;
 
@@ -25,6 +26,7 @@ pub use self::core::MagneticCore;
 pub use diode::{JunctionDiode, VacuumDiode};
 pub use lamp::Lamp;
 pub use pentode::Pentode;
+pub use thyratron::Thyratron;
 pub use triode::Triode;
 pub use triode_table::TriodeTable;
 
@@ -169,6 +171,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::VacuumDiode(m) => Box::new(VacuumDiode::new(m)),
         DeviceModel::MagneticCore(m) => Box::new(MagneticCore::new(m)),
         DeviceModel::Lamp(m) => Box::new(Lamp::new(m)),
+        DeviceModel::Thyratron(m) => Box::new(Thyratron::new(m)),
     }
 }
 

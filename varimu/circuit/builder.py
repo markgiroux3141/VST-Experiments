@@ -63,8 +63,10 @@ the file's tolerance classes); a switch's sub-parts take their own.
 A `devices` entry: {device* (a device file, or a parameter naming one),
 name (default <device>_<key>), instance (false: the device file's model as
 is), tolerance (tube: emission / mu draws by the key as designator), parallel,
-emission, mu, grid_contact_v, area}. Models are in `devices` order, then the
-transformer cores in order of appearance.
+emission, mu, grid_contact_v, area, events}. `events` (a triode thyratron's): the name of
+its technique-K tables, config/events/<name>.json (HYBRID_PHYSICS_PLAN.md H3; generated
+from the unit's reference by scripts/thyratron_kernels.py --write), for the K build.
+Models are in `devices` order, then the transformer cores in order of appearance.
 
 Circuit-specific macros: `register()` adds one (a module that a circuit file
 names under `derived` can register its macros on import).
@@ -78,6 +80,13 @@ electrical); other macros' internals (mains, bridge, vr_tube, speaker) get none.
 triode or pentode instance of a `device` part gets a TubeNoise `BN_<name>` (shot_k from
 varimu.devices.noise, a pentode's partition factor, flicker_v2 over its `parallel` count:
 independent cathodes average).
+
+Event kernels (HYBRID_PHYSICS_PLAN.md H3; `build(..., events=True)`, off by default): every
+`device` part of a thyratron becomes its ThyratronEvents (its `devices` entry's `events`
+tables, which must be for the same component version), and the thyratron's model leaves the
+IR. A thyratron without tables is an error in that build. A section with event kernels in
+it runs at the sample rate (its `substeps`, `decimate` and `owns` dropped): K replaces the
+multi-rate island (technique M1) the file renders the tube in.
 
 Heated cathodes (device builder B6; the file's `heaters` block, or `build(..., heaters=)`):
 every triode, pentode and vacuum diode instance of a `device` part gets a HeatedCathode
@@ -95,7 +104,6 @@ from typing import Any
 
 from varimu.circuit import parts, spice
 from varimu.circuit.ir import (
-    PINS,
     Capacitor,
     CircuitIR,
     Control,
@@ -111,10 +119,12 @@ from varimu.circuit.ir import (
     Resistor,
     Section,
     SineSource,
+    ThyratronEvents,
     TubeNoise,
     VoltageProbe,
     VoltageSource,
     Winding,
+    pins_of,
 )
 from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.config import ConfigError, load_sim_settings
@@ -127,6 +137,7 @@ from varimu.devices.library import load_device, load_plate, load_speaker, load_t
 from varimu.devices.pentode import Pentode
 from varimu.devices.speaker import Cabinet
 from varimu.devices.table import GRIDS
+from varimu.devices.thyratron import Thyratron
 from varimu.devices.triode import Triode
 
 CORE_MODES = ("ja", "linear")
@@ -157,6 +168,8 @@ class Context:
     parallel: dict[str, int] = field(default_factory=dict)  # model name -> `parallel`
     types: dict[str, str] = field(default_factory=dict)  # model name -> its device's name
     heaters: str | None = None  # heated cathodes (B6): "warm" | "cold" start, None: off
+    events: bool = False  # thyratrons as their event kernels (H3)
+    replaced_models: set[str] = field(default_factory=set)  # model names K replaced
 
     def fail(self, where: str, msg: str) -> ConfigError:
         return ConfigError(f"{self.spec.path}: {where}: {msg}")
@@ -340,11 +353,42 @@ def expand_part(ctx: Context, name: str, entry: Mapping, *, extra=()) -> list[El
             els = ctx.tolerance.apply(els, name)
         except KeyError as e:
             ctx.missing_class.update(e.args[0])
+    if ctx.events and kind == "device":
+        els = [_events_element(ctx, e) if isinstance(e, Device) else e for e in els]
     if ctx.noise is not None:
         els = els + _noise_elements(ctx, kind, entry, els)
     if ctx.heaters is not None and kind == "device":
         els = els + _heated(ctx, els)
     return els
+
+
+EVENTS_DIR = Path(__file__).resolve().parents[2] / "config" / "events"
+
+
+def _events_element(ctx: Context, el: Device) -> Element:
+    """A thyratron's device element as its event kernels (the module docstring)."""
+    from varimu.devices import thyratron_events as te
+
+    key = next(k for k, m in ctx.models.items() if m.name == el.model)
+    model = ctx.models[key]
+    if not isinstance(model, Thyratron):
+        return el
+    where = f"devices.{key}"
+    entry = ctx.spec.devices[key]
+    if "events" not in entry:
+        raise ctx.fail(where, "a thyratron in an events build needs its `events` tables")
+    if model.mu_g2 is not None:
+        raise ctx.fail(where, "event kernels are for triode thyratrons")
+    name = ctx.text(where, entry["events"])
+    path = EVENTS_DIR / f"{name}.json"
+    if not path.exists():
+        raise ctx.fail(where, f"no tables {path} (scripts/thyratron_kernels.py --write)")
+    t = te.Tables.load(path)
+    device = str(versions.require_pinned(ctx.text(where, entry["device"])))
+    if t.unit.device != device:
+        raise ctx.fail(where, f"tables {name} are for {t.unit.device}, not {device}")
+    ctx.replaced_models.add(model.name)
+    return te.element(t, el.name, *el.nodes, model=model, source=te.source_label(name, t))
 
 
 def _heated(ctx: Context, els: list[Element]) -> list[Element]:
@@ -366,7 +410,7 @@ def _heated(ctx: Context, els: list[Element]) -> list[Element]:
 
 def _nodes_device(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
     model = a["model"]
-    pins = PINS[type(model)]
+    pins = pins_of(model)
     if not isinstance(conn, list) or len(conn) != len(pins):
         raise ctx.fail(name, f"device {model.name} has pins {pins}, got {conn!r}")
     return [Device(name, model.name, tuple(str(n) for n in conn))]
@@ -642,7 +686,7 @@ for _name, _macro in {
 
 _DEVICE_KEYS = {
     "device", "name", "instance", "tolerance", "parallel", "emission", "mu", "grid_contact_v",
-    "area", "source", "notes",
+    "area", "events", "source", "notes",
 }  # fmt: skip
 
 
@@ -659,8 +703,10 @@ def make_models(ctx: Context) -> dict[str, str]:
             base = load_device(str(versions.require_pinned(ctx.text(where, e["device"]))))
         except versions.VersionError as err:
             raise ctx.fail(where, str(err)) from err
+        if "events" in e and not isinstance(base, Thyratron):
+            raise ctx.fail(where, "events: a thyratron's tables")
         if e.get("instance", True) is False:
-            if set(e) - {"device", "instance", "source", "notes"}:
+            if set(e) - {"device", "instance", "events", "source", "notes"}:
                 raise ctx.fail(where, "instance: false takes the device file's model as is")
             model = base
         else:
@@ -746,9 +792,10 @@ def context(
     cores: str = "ja",
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
+    events: bool = False,
 ) -> Context:
-    """A build's context for resolved parameters `p` (see spec.resolve); `noise` and
-    `heaters` as build_ir's."""
+    """A build's context for resolved parameters `p` (see spec.resolve); `noise`,
+    `heaters` and `events` as build_ir's."""
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
     q = dict(p)
@@ -756,6 +803,7 @@ def context(
     ctx = Context(spec, q, cores, tolerance(spec, q))
     ctx.noise = _noise(ctx, noise)
     ctx.heaters = _heaters(spec, heaters)
+    ctx.events = bool(events)
     return ctx
 
 
@@ -823,12 +871,14 @@ def build_ir(
     cores: str = "ja",
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
+    events: bool = False,
 ) -> CircuitIR:
     """The circuit IR for resolved parameters `p`; `cores`: "ja" or "linear" (each core
     in its linear limit); `noise`: None, the file's `noise` block; False, none; True, on
     (the block's seed or 0); an integer, on with that seed; `heaters`: None, the file's
-    `heaters` block; False, none; True, on; "warm" / "cold", on with that start."""
-    return _build(spec, p, cores, noise, heaters)[0]
+    `heaters` block; False, none; True, on; "warm" / "cold", on with that start; `events`:
+    thyratrons as their event kernels (the module docstring)."""
+    return _build(spec, p, cores, noise, heaters, events)[0]
 
 
 def _build(
@@ -837,8 +887,9 @@ def _build(
     cores: str,
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
+    events: bool = False,
 ) -> tuple[CircuitIR, dict]:
-    ctx = context(spec, p, cores, noise, heaters)
+    ctx = context(spec, p, cores, noise, heaters, events)
     types = make_models(ctx)
     sections = []
     for s in spec.sections:
@@ -846,7 +897,13 @@ def _build(
         els: list[Element] = []
         for name, entry in s["parts"].items():
             els += expand_part(ctx, str(name), entry)
-        sections.append(Section(s["title"], tuple(els), s.get("substeps")))
+        owns = tuple(s["owns"]) if "owns" in s else None
+        substeps, decimate = s.get("substeps"), s.get("decimate")
+        if not els or any(isinstance(e, ThyratronEvents) for e in els):
+            # K replaces the island it plays in (technique M1 renders it, K plays it live); a
+            # section its switches leave empty is no island (it owns nothing it doesn't have)
+            substeps = decimate = owns = None
+        sections.append(Section(s["title"], tuple(els), substeps, decimate, owns))
     if ctx.missing_class:
         raise ConfigError(f"parts without a tolerance class: {sorted(ctx.missing_class)}")
     if ctx.tolerance is not None:
@@ -864,7 +921,10 @@ def _build(
         title=spec.title,
         input_node=spec.input_node,
         probes=tuple(VoltageProbe(n) for n in spec.probes),
-        models=(*ctx.models.values(), *ctx.core_models),
+        models=(
+            *(m for m in ctx.models.values() if m.name not in ctx.replaced_models),
+            *ctx.core_models,
+        ),
         sections=tuple(sections),
         controls=tuple(Control(n, node) for n, node in spec.cv_inputs),
         noise=None if ctx.noise is None else _noise_spec(ctx, sections),
@@ -891,11 +951,13 @@ def build(
     cores: str | None = None,
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
+    events: bool = False,
 ) -> Circuit:
     """The circuit for `spec` with `overrides`. `triode_formulation` is "table" or
     "exact" (default from sim_settings.yaml, devices.triode_formulation); `cores` is
     "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text, nor
-    does one with control inputs (ngspice runs none). `noise`, `heaters` as build_ir's."""
+    does one with control inputs (ngspice runs none). `noise`, `heaters`, `events` as
+    build_ir's."""
     p = resolve(spec, overrides)
     devices = load_sim_settings().data["devices"]
     form = triode_formulation or devices["triode_formulation"]
@@ -904,7 +966,7 @@ def build(
     cores = cores or devices.get("cores", "ja")
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
-    ir, types = _build(spec, p, cores, noise, heaters)
+    ir, types = _build(spec, p, cores, noise, heaters, events)
     # Each triode instance's table grid is its tube type's.
     grids = {m.name: GRIDS[types[m.name]] for m in ir.models if isinstance(m, Triode)}
     text, files = None, {}

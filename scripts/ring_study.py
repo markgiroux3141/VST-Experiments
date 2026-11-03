@@ -419,6 +419,7 @@ def run_synth(path, sets, pitch_v, dur_s, partition, probes, carrier_in=None, ke
         "pitch": np.full(n, pitch_v),
         "key": np.zeros(n),
         "pressure": np.zeros(n),
+        "pitch2": np.zeros(n),
     }
     x = np.zeros(n) if carrier_in is None else carrier_in(np.arange(n) / fs)
     t0 = time.perf_counter()

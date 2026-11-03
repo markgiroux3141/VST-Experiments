@@ -93,6 +93,7 @@ def run(rect: str, c_res: float, path: Path) -> dict:
         "pitch": np.full(n, -15.0),
         "key": np.zeros(n),
         "pressure": np.zeros(n),
+        "pitch2": np.zeros(n),
     }
     v = fast.run_transient(ir, np.zeros(n), settings=st, controls=controls).vectors
     out = v["v(out)"] - np.mean(v["v(out)"][int(1.2 * fs) :])

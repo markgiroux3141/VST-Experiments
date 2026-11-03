@@ -111,6 +111,10 @@ circuitsim_draft:
   # supply rails with one sample of latency: -103 dB from the one solve on the 670.
   partition: [power supply, bias supply, "channel 2 (idle, lumped)"]
   partition_coupling: extrapolate   # hold | extrapolate
+  # Gas thyratrons as their event kernels (technique K, HYBRID_PHYSICS_PLAN.md H3): the live
+  # qualities play a circuit's `events` tables, production renders the tube itself (its
+  # multi-rate island, M1). Circuits without tables are built as they are.
+  events: true
 
 circuitsim_draft_1x:
   # `--quality draft-1x` (2026-10-27, the user's request): the draft at a 48 kHz host

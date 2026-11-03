@@ -15,6 +15,7 @@ pub mod cathode;
 pub mod convolve;
 pub mod devices;
 pub mod dk;
+pub mod events;
 pub mod fastmath;
 pub mod ir;
 pub mod linalg;

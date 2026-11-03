@@ -80,6 +80,7 @@ def run(sets: dict, step: tuple[float, float]) -> dict:
             "pitch": pitch,
             "key": np.zeros(n),
             "pressure": np.zeros(n),
+            "pitch2": np.zeros(n),
         },
     ).vectors["v(o_t)"]
     ts, fc = vco.cycle_frequencies(v, fs)

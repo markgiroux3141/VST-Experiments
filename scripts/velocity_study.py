@@ -76,6 +76,7 @@ def run(sets: dict, down_v: float) -> dict:
             "pitch": np.full(n, -15.0),
             "key": np.zeros(n),
             "pressure": np.zeros(n),
+            "pitch2": np.zeros(n),
         },
     ).vectors
     k = slice(int(0.7 * fs), n)

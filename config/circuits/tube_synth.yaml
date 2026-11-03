@@ -98,6 +98,32 @@
 #        silicon diode off the HV winding) sits under the switches so they turn fully off.
 #        SUSTAIN at 1 is the AR envelope as before. The slowest attack and the fastest decay
 #        are the fragile corners (the rails sagging moves the logic's thresholds)
+#   OSC ON / OFF (`osc_on`, on at first; the user's ask, 2026-11-03: CPU): off empties the
+#        LC oscillator's and its pitch driver's sections (no thread), and 1 ohm holds what
+#        other stages took from it (its buffer: the mixer's and the ring's inputs) and what
+#        the file probes
+#   The gas-tube saw (HYBRID_PHYSICS_PLAN.md H4; SYNTH_IDEAS.md #9, #23): saw_884.yaml's
+#        oscillator as the second oscillator (parts S-, tubes SV-, nodes s_-, values saw_-),
+#        SAW ON / OFF (`saw_on`, off at first: the synth as before; off, its sections are
+#        empty and get no thread) and its SAW level pot into the mixer beside OSC. An RCA
+#        884 across CT (5 nF, the event kernels' unit: config/events/884_saw.json), a 6V6GT
+#        sinking a constant current from its lower plate, a 12AU7 follower. Its own supply,
+#        as the LFO's (the 6X4 is at its rating): a winding of its own, silicon into a
+#        reservoir for the follower's plate (~450 V), an RC to its B+ (~260-290 V), the
+#        charger's screen on two 5651s (+174 V) and its cathode return on two more (-174 V,
+#        an RC ahead of them: at the bottom of the range ~2 V sits across the cathode
+#        resistor, so the rail's ripple is the low notes' FM, and an RC after them made every
+#        key change scoop as the rail followed the charger's current). Its pitch is a keyboard string of its own (`pitch2`: its law, ~linear in
+#        the charger's grid, isn't the LC's), with GLIDE's second gang (1.8M onto 0.22 uF:
+#        the LC's time constants; the string sits at up to ~-320 V, so the summing network is
+#        high impedance) and VIBRATO's second gang through a 12AU7 follower (at the saw's
+#        ~18% share the pot's wiper resistance would detune it ~1 semitone as it turned;
+#        the follower is on the saw's supply, so the tuning holds with the LFO off). A fixed
+#        vibrato voltage on a linear law is deeper at low notes in cents: ~+-1 semitone near
+#        C4, ~+-8 c at the top, ~+-2 semitones at 47 Hz. Renders run its oscillator as an
+#        island (M1, as saw_884.yaml); the live qualities play the 884 as its event kernels
+#        (K). The draft gives it a thread of its own (its edge crosses into the mixer at the
+#        follower's cathode `s_kf`)
 # The rest is tube_voice.yaml's: its header follows.
 #
 # The tube synth's voice (docs/TUBE_SYNTH_PLAN.md, S3): tube_filter.yaml's filter, supply
@@ -154,6 +180,7 @@ cv_inputs:
   pitch: pv
   key: kv
   pressure: av
+  pitch2: pv2
 probes: [out, f, env, bus, mix, o_t, o_out, o_buf, p3a, p3b, b1, b3, neg, neg2, ta_core, tb_core, ota_core, otb_core]
 
 full_scale:
@@ -194,7 +221,10 @@ controls:
   wobble: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the WOBBLE pot, the share of the LFO into V4's grid (the cutoff); linear)"}
   ring_on: {value: 0, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-01: the ring modulator's ON / OFF switch (SYNTH_IDEAS.md #14; the user's call: CPU): its power switch on the LFO's supply, so the ring runs only with the LFO on (its carrier); off, the ring's section is empty and gets no thread)"}
   ring: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the RING level pot into the mixer, audio taper)"}
+  osc_on: {value: 1, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-03: the LC oscillator's ON / OFF switch, the user's ask (CPU): its power switch; off, its sections are empty and get no thread, its buffer's users (the mixer, the ring) and its probes held at 0 V)"}
   osc_level: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-01: the oscillator's level pot into the mixer, audio taper; full is the mix as before (the ring alone at 0))"}
+  saw_on: {value: 0, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-03: the gas-tube saw's ON / OFF switch, the user's ask (CPU): its own supply's power switch; off, its sections are empty and get no thread)"}
+  saw_level: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design, 2026-11-03: the SAW level pot into the mixer, audio taper; at full ~the oscillator's level at its WAVE pot's middle)"}
   heater: {value: 1.0, min: 0.6, max: 1.1, unit: ratio, source: "provisional: model knowledge (design, 2026-11-01: the HEATER control, the heaters' volts over their rating (a heater winding's taps, as period gear set them); tubes are rated +-10%, so below 0.9 is out of rating (the panel says so): the user's choice, extended to 0.6 for the starved sound)"}
   mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage)"}
   mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
@@ -470,6 +500,48 @@ values:
   osc_core_path_m: {value: 0.1, source: "provisional: model knowledge (10 cm mean path)"}
   osc_core_gap_m: {value: 0.0, source: "provisional: model knowledge (a tape-wound toroid has no joint gap)"}
 
+  # --- the gas-tube saw (the second oscillator; saw_884.yaml's oscillator)
+  # its supply
+  saw_winding_rms_v: {value: 330.0, source: "provisional: model knowledge (design, 2026-11-03: a center-tapped secondary of its own for the saw, each half as the HV halves' resistance and capacitance: ~455 V at its reservoir for the follower's plate, ~100 V above the oscillator's B+)"}
+  saw_rectifier: {value: SI_RECTIFIER@1, source: "provisional: model knowledge (design: silicon rectifiers, as the LFO's supply; config/components/si_rectifier/1.yaml)"}
+  saw_c_reservoir_f: {value: 20.0e-6, source: "provisional: model knowledge (design: each rail's reservoir, 450 V / 500 V electrolytics)"}
+  saw_r_bplus_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design: the reservoir to the oscillator's B+: with its bleeder ~370 V at the bottom of the range, ~330 V at the top (the charger's current); the 884 sees CT's voltage, not B+, so the swing only moves the charger's plate)"}
+  saw_c_bplus_f: {value: 20.0e-6, source: "provisional: model knowledge (design: B+'s filter electrolytic: the reservoir's 120 Hz ripple -49 dB)"}
+  saw_r_bplus_bleed_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: B+'s bleeder, ~3.7 mA: holds B+ under the follower's plate as the charger's current falls)"}
+  saw_r_minus_prefilter_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design, 2026-11-03: an RC on the half-wave's reservoir ahead of the 5651s (their ~1.8k slope passes ~2.5% of what reaches them, where ~2 V sits across the charger's cathode resistor at the lowest notes): ~0.3% of the reservoir's 60 Hz ripple. An RC after them made the rail follow the charger's current with a 0.22 s lag, a pitch scoop after every key change)"}
+  saw_c_minus_prefilter_f: {value: 47.0e-6, source: "provisional: model knowledge (design: its electrolytic)"}
+  saw_r_minus_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design: the prefiltered ~-355 V to the 5651 pair's -174 V, ~3.9 mA: 1.4-3.9 mA in the 5651s as the charger draws 2.5-0 mA (RCA's 1.5-3.5 mA: a little outside at both ends))"}
+  saw_minus_raw_v0: {value: -455.0, source: "provisional: model knowledge (design: the half-wave's reservoir starts charged, as lfo_minus_raw_v0)"}
+  saw_minus_filtered_v0: {value: -355.0, source: "provisional: model knowledge (design: the prefilter's capacitor starts charged too (its 1 s time constant))"}
+  saw_r_screen_feed_ohm: {value: 62.0e+3, source: "provisional: model knowledge (design, 2026-11-03: the reservoir to the charger's screen regulator, two 5651s (+174 V), ~4.5 mA: the screen's ~0.3 mA and the vibrato follower's 0.45-1.6 mA leave 2.6-3.7 mA in the 5651s. on B+ (which moves ~15 V with the charging current over 0.36 s) the screen moved the charger's cathode ~1/9 as much, the low notes' current. Regulating an oscillator's screen is the period's practice (the LC's 6V6GT has its own). The screen sits up to ~350 V above the cathode at the lowest notes, past the 6V6GT's 285 V rating)"}
+  # its pitch (a keyboard string of its own, GLIDE's and VIBRATO's second gangs)
+  saw_r_pitch_sum_ohm: {value: 47.0e+3, source: "provisional: model knowledge (design, 2026-11-03: the saw's key string into its summing node: with saw_r_vibrato_ohm 0.82 of the string, ~1.1 mA from the string's ~-320 V end)"}
+  saw_r_vibrato_ohm: {value: 220.0e+3, source: "provisional: model knowledge (design: the vibrato follower into the summing node, 0.18 of it: the LFO's ~+-7.7 V at full VIBRATO is ~+-1.4 V on the charger's grid, ~+-1 semitone near C4)"}
+  saw_r_glide_ohm: {value: 1.8e+6, source: "provisional: model knowledge (design: GLIDE's second gang (a dual pot with unequal gangs), onto saw_c_glide_f: ~0.4 s at full, as the LC's 82k onto 4.7 uF; the grid circuit is then over RCA's 0.5 MOhm for a self-biased 6V6GT: gas current would shift its bias, which the model doesn't have)"}
+  saw_c_glide_f: {value: 0.22e-6, source: "provisional: model knowledge (design: the saw's glide capacitor, film: ~8.5 ms at GLIDE 0 with the summing network's 39k, ~0.4 s at full)"}
+  saw_r_vibrato_k_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: the vibrato follower's cathode to the saw's raw minus (~-455 V), ~0.45 mA standing: the summing network takes up to ~1.1 mA more from it (toward the key string's negative end), which a follower sources; its plate is on the screen's regulated +174 V (on B+, which follows the charging current over 0.36 s, its output moved ~1/mu as much: a low note after a high one started ~24 c flat and recovered over ~2 s))"}
+  saw_r_wiper_ground_ohm: {value: 1.0, source: "provisional: model knowledge (design: with the LFO off its switch grounds the vibrato follower's grid, where VIBRATO's second wiper was)"}
+  # the oscillator (saw_884.yaml's values)
+  saw_r_pitch_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (the charger's grid stopper)"}
+  saw_r_screen_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the charger's screen stopper from its regulator)"}
+  saw_r_cathode2_ohm: {value: 82.0e+3, source: "provisional: model knowledge (design: the charger's cathode to the -174 V rail, current feedback: ~2.5 mA with its grid at 0 V (saw_884.yaml's 68k to -150 V, scaled to keep its top ~4.5 kHz))"}
+  saw_c_t_f: {value: 5.0e-9, source: "provisional: model knowledge (design: the timing capacitor; the event kernels' unit's C (config/events/884_saw.json))"}
+  saw_r_s_ohm: {value: 450.0, source: "provisional: model knowledge (design: the discharge resistor, the event kernels' unit's R_s)"}
+  saw_r_grid_ohm: {value: 2.2e+3, source: "provisional: model knowledge (design: the 884's grid return, the event kernels' unit's R_g)"}
+  saw_bias_cell_v: {value: -12.0, source: "provisional: model knowledge (design: the 884's grid bias, a cell in the grid return (its cathode moves): a strike near ~113-126 V)"}
+  saw_c_state_f: {value: 1.0, source: "numerical: the thyratron's state node integrator (1 V = one e-fold of ion density)"}
+  saw_w_start_v: {value: -25.0, source: "numerical: the plasma state held off for the DC operating point (as saw_884.yaml)"}
+  saw_c_start_v: {value: 0.0, source: "numerical: the timing capacitor discharged for the DC operating point (a relaxation oscillator has no stable DC state)"}
+  saw_r_ct_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for CT's lower plate (as saw_884.yaml's r_n_leak_ohm)"}
+  saw_r_follow_grid_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the follower's grid stopper off CT's lower plate)"}
+  saw_r_follow_k_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the follower's cathode load to ground, ~2.5-3.5 mA)"}
+  # into the mixer
+  saw_c_mix_f: {value: 0.1e-6, source: "provisional: model knowledge (design: the follower's output coupling into the SAW pot's divider)"}
+  saw_r_mix_atten_ohm: {value: 390.0e+3, source: "provisional: model knowledge (design: with the SAW pot, ~1/5 of the follower's ~+-60 V sweep across the pot, ~+-12 V: into the mix through 2.2M the saw at full is about the LC at full (at 1/23 through 1M it came in 6.4 dB under, 2026-11-03))"}
+  saw_r_level_pot_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the SAW level pot, audio taper)"}
+  r_mix_saw_ohm: {value: 2.2e+6, source: "provisional: model knowledge (design: the SAW pot's wiper into the mixer, as the ring's: a passive mix, so each input loads the others; through 1M (the LC's) SAW ON pulled the LC's share down ~3 dB, through 2.2M ~1.5)"}
+  osc_r_off_ohm: {value: 1.0, source: "provisional: model knowledge (design: with OSC OFF its switch grounds the nodes others took from the oscillator (its buffer) and the probed ones)"}
+
 mains:
   v_rms: mains_v_rms
   hz: mains_hz
@@ -515,6 +587,11 @@ devices:
   RGVB: {device: 12AU7@1}
   RGVC: {device: 12AU7@1}
   DRG: {device: ring_diode, area: ring_diode_area}
+  SV1: {device: 884@1, events: 884_saw}
+  SV2: {device: 6V6GT@1}
+  SV3: {device: 12AU7@1}
+  SV4: {device: 12AU7@1}
+  SDR: {device: saw_rectifier}
 
 sections:
   - title: power supply
@@ -590,6 +667,18 @@ sections:
   - title: input
     parts:
       CMXO: {C: [o_buf, o_bc], c: c_mix_osc_f}
+      SWOSCI:
+        switch: osc_on
+        parts:
+          ROFBUF: {R: [o_buf, "0"], r: osc_r_off_ohm, in: [0]}
+      # SAW: the follower through 0.1 uF and 2.2M across the SAW pot, its wiper into the mix
+      SWSAWM:
+        switch: saw_on
+        parts:
+          CMXS: {C: [s_kf, s_mc], c: saw_c_mix_f, in: [1]}
+          RMXSA: {R: [s_mc, s_lv], r: saw_r_mix_atten_ohm, in: [1]}
+          RSAWL: {pot: ["0", s_lw, s_lv], r: saw_r_level_pot_ohm, at: saw_level, taper_mid: mix_taper_mid, in: [1]}
+          RMXS: {R: [s_lw, mix], r: r_mix_saw_ohm, in: [1]}
       ROSCL: {pot: ["0", o_bw, o_bc], r: r_osc_level_pot_ohm, at: osc_level, taper_mid: mix_taper_mid}
       RMXO: {R: [o_bw, mix], r: r_mix_osc_ohm}
       CMIX: {C: [mix, "0"], c: c_mix_stray_f}
@@ -760,47 +849,52 @@ sections:
       RK4: {R: [k4, "0"], r: r_cathode4_ohm}
   - title: oscillator
     parts:
-      OTA:
-        transformer:
-          sig: {nodes: [o_t, o_m], r: osc_r_signal_winding_ohm}
-          ctl: {nodes: [b1, o_c2], ratio: osc_control_ratio, r: osc_r_control_winding_ohm}
-        core: {material: mumetall, area_m2: osc_core_area_m2, path_m: osc_core_path_m, gap_m: osc_core_gap_m}
-        turns: osc_signal_turns
-        leakage_h: osc_leakage_h
-      OTB:
-        transformer:
-          sig: {nodes: [o_m, "0"], r: osc_r_signal_winding_ohm}
-          ctl: {nodes: [o_p4, o_c2], ratio: osc_control_ratio, r: osc_r_control_winding_ohm}
-        core: {material: mumetall, area_m2: osc_core_area_m2, path_m: osc_core_path_m, gap_m: osc_core_gap_m}
-        turns: osc_signal_turns
-        leakage_h: osc_leakage_h
-      COT: {C: [o_t, "0"], c: osc_c_tank_f}
-      # The RANGE switch: its contact grounds the LOW capacitor (range 0) or leaves it
-      # floating on the tank (1). Always in the circuit, so switching is a value change
-      # (a live stream updates in place; a switch part's position would restart it).
-      COTL: {C: [o_t, o_tl], c: osc_c_tank_low_f}
-      RRANGE: {rheostat: [o_tl, "0"], r: osc_r_range_open_ohm, at: range}
-      ROGS: {R: [o_t, o_g2], r: osc_r_grid_stop_ohm}
-      XOV2: {device: [o_p2, o_g2, o_k2], model: OV2}
-      ROP2: {R: [b3, o_p2], r: osc_r_plate2_ohm}
-      ROK2: {R: [o_k2, "0"], r: osc_r_cathode2_ohm}
-      COC2: {C: [o_p2, o_g1b], c: osc_c_couple2_f}
-      ROG1B: {R: [o_g1b, "0"], r: osc_r_grid1b_ohm}
-      XOV1B: {device: [o_p1b, o_g1b, o_k1], model: OV1B}
-      XOV1A: {device: [o_p1a, "0", o_k1], model: OV1A}
-      ROT: {R: [o_k1, neg], r: osc_r_tail_ohm}
-      ROPA: {R: [b3, o_p1a], r: osc_r_plate_a_ohm}
-      ROPB: {R: [b3, o_p1b], r: osc_r_plate_b_ohm}
-      COD: {C: [o_p1b, o_t], c: osc_c_drive_f}
-      COOT: {C: [o_t, o_wt], c: osc_c_out_f}
-      ROWT: {R: [o_wt, o_wa], r: osc_r_wave_tank_ohm}
-      COOS: {C: [o_p1a, o_ws], c: osc_c_out_f}
-      ROWS: {R: [o_ws, o_wb], r: osc_r_wave_square_ohm}
-      ROWTG: {R: [o_wa, "0"], r: osc_r_wave_end_ohm}
-      ROWSG: {R: [o_wb, "0"], r: osc_r_wave_end_ohm}
-      ROWAVE: {pot: [o_wa, o_out, o_wb], r: osc_r_wave_pot_ohm, at: wave}
-      XOV3: {device: [b3, o_out, o_buf], model: OV3}
-      ROK3: {R: [o_buf, neg], r: osc_r_buffer_cathode_ohm}
+      SWOSC:
+        switch: osc_on
+        parts:
+          OTA:
+            in: [1]
+            transformer:
+              sig: {nodes: [o_t, o_m], r: osc_r_signal_winding_ohm}
+              ctl: {nodes: [b1, o_c2], ratio: osc_control_ratio, r: osc_r_control_winding_ohm}
+            core: {material: mumetall, area_m2: osc_core_area_m2, path_m: osc_core_path_m, gap_m: osc_core_gap_m}
+            turns: osc_signal_turns
+            leakage_h: osc_leakage_h
+          OTB:
+            in: [1]
+            transformer:
+              sig: {nodes: [o_m, "0"], r: osc_r_signal_winding_ohm}
+              ctl: {nodes: [o_p4, o_c2], ratio: osc_control_ratio, r: osc_r_control_winding_ohm}
+            core: {material: mumetall, area_m2: osc_core_area_m2, path_m: osc_core_path_m, gap_m: osc_core_gap_m}
+            turns: osc_signal_turns
+            leakage_h: osc_leakage_h
+          COT: {C: [o_t, "0"], c: osc_c_tank_f, in: [1]}
+          # The RANGE switch: its contact grounds the LOW capacitor (range 0) or leaves it
+          # floating on the tank (1). Always in the circuit, so switching is a value change
+          # (a live stream updates in place; a switch part's position would restart it).
+          COTL: {C: [o_t, o_tl], c: osc_c_tank_low_f, in: [1]}
+          RRANGE: {rheostat: [o_tl, "0"], r: osc_r_range_open_ohm, at: range, in: [1]}
+          ROGS: {R: [o_t, o_g2], r: osc_r_grid_stop_ohm, in: [1]}
+          XOV2: {device: [o_p2, o_g2, o_k2], model: OV2, in: [1]}
+          ROP2: {R: [b3, o_p2], r: osc_r_plate2_ohm, in: [1]}
+          ROK2: {R: [o_k2, "0"], r: osc_r_cathode2_ohm, in: [1]}
+          COC2: {C: [o_p2, o_g1b], c: osc_c_couple2_f, in: [1]}
+          ROG1B: {R: [o_g1b, "0"], r: osc_r_grid1b_ohm, in: [1]}
+          XOV1B: {device: [o_p1b, o_g1b, o_k1], model: OV1B, in: [1]}
+          XOV1A: {device: [o_p1a, "0", o_k1], model: OV1A, in: [1]}
+          ROT: {R: [o_k1, neg], r: osc_r_tail_ohm, in: [1]}
+          ROPA: {R: [b3, o_p1a], r: osc_r_plate_a_ohm, in: [1]}
+          ROPB: {R: [b3, o_p1b], r: osc_r_plate_b_ohm, in: [1]}
+          COD: {C: [o_p1b, o_t], c: osc_c_drive_f, in: [1]}
+          COOT: {C: [o_t, o_wt], c: osc_c_out_f, in: [1]}
+          ROWT: {R: [o_wt, o_wa], r: osc_r_wave_tank_ohm, in: [1]}
+          COOS: {C: [o_p1a, o_ws], c: osc_c_out_f, in: [1]}
+          ROWS: {R: [o_ws, o_wb], r: osc_r_wave_square_ohm, in: [1]}
+          ROWTG: {R: [o_wa, "0"], r: osc_r_wave_end_ohm, in: [1]}
+          ROWSG: {R: [o_wb, "0"], r: osc_r_wave_end_ohm, in: [1]}
+          ROWAVE: {pot: [o_wa, o_out, o_wb], r: osc_r_wave_pot_ohm, at: wave, in: [1]}
+          XOV3: {device: [b3, o_out, o_buf], model: OV3, in: [1]}
+          ROK3: {R: [o_buf, neg], r: osc_r_buffer_cathode_ohm, in: [1]}
   - title: keyboard
     parts:
       RPSUM: {R: [pv, o_sum], r: r_pitch_sum_ohm}
@@ -811,20 +905,44 @@ sections:
           RVIBG: {R: [lv_w, "0"], r: lfo_r_wiper_ground_ohm, in: [0]}
       RGLIDE: {rheostat: [o_sum, o_pg], r: osc_r_glide_ohm, at: glide, taper_mid: osc_glide_taper_mid}
       CGLIDE: {C: [o_pg, "0"], c: osc_c_glide_f}
-      ROPS: {R: [o_pg, o_g4], r: osc_r_pitch_stop_ohm}
+      SWOSCK:
+        switch: osc_on
+        parts:
+          ROPS: {R: [o_pg, o_g4], r: osc_r_pitch_stop_ohm, in: [1]}
+          # OSC OFF: the probed nodes held at 0 V
+          ROFT: {R: [o_t, "0"], r: osc_r_off_ohm, in: [0]}
+          ROFO: {R: [o_out, "0"], r: osc_r_off_ohm, in: [0]}
+          ROFA: {R: [ota_core, "0"], r: osc_r_off_ohm, in: [0]}
+          ROFB: {R: [otb_core, "0"], r: osc_r_off_ohm, in: [0]}
+      # The saw's pitch (SAW ON): its key string and the vibrato follower summed, GLIDE's
+      # second gang onto its capacitor, the stopper into the charger's grid (the draft's
+      # partition cuts there: 10k into 0.1 uF on the saw's side, as the LC's)
+      SWSAWK:
+        switch: saw_on
+        parts:
+          RSPSUM: {R: [pv2, s_sum], r: saw_r_pitch_sum_ohm, in: [1]}
+          RSVIB: {R: [s_vb, s_sum], r: saw_r_vibrato_ohm, in: [1]}
+          RSGLIDE: {rheostat: [s_sum, s_pg], r: saw_r_glide_ohm, at: glide, taper_mid: osc_glide_taper_mid, in: [1]}
+          CSGLIDE: {C: [s_pg, "0"], c: saw_c_glide_f, in: [1]}
+          RSPS: {R: [s_pg, s_g], r: saw_r_pitch_stop_ohm, in: [1]}
+          # the key string's load with the saw off (a control input needs its node)
+          RSVL: {R: [pv2, "0"], r: r_grid_in_ohm, in: [0]}
       RKEY: {R: [kv, kb], r: r_key_feed_ohm}
       RPRS: {R: [av, pb], r: r_pressure_feed_ohm}
   - title: pitch
     parts:
-      COG4: {C: [o_g4, "0"], c: osc_c_grid4_f}
-      ROG4: {R: [o_g4, "0"], r: osc_r_grid4_leak_ohm}
-      XOV4: {device: [o_p4, o_s4, o_g4, o_k4], model: OV4}
-      ROVR: {R: [b1, o_vr], r: osc_r_vr_feed_ohm}
-      VROA: {vr_tube: [o_vr, o_vra, o_vrm], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a}
-      VROB: {vr_tube: [o_vrm, o_vrb, "0"], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a}
-      ROVRL: {R: [o_vrm, "0"], r: osc_r_vr_leak_ohm}
-      ROS4: {R: [o_vr, o_s4], r: osc_r_screen4_ohm}
-      ROK4: {R: [o_k4, "0"], r: osc_r_cathode4_ohm}
+      SWOSCP:
+        switch: osc_on
+        parts:
+          COG4: {C: [o_g4, "0"], c: osc_c_grid4_f, in: [1]}
+          ROG4: {R: [o_g4, "0"], r: osc_r_grid4_leak_ohm, in: [1]}
+          XOV4: {device: [o_p4, o_s4, o_g4, o_k4], model: OV4, in: [1]}
+          ROVR: {R: [b1, o_vr], r: osc_r_vr_feed_ohm, in: [1]}
+          VROA: {vr_tube: [o_vr, o_vra, o_vrm], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a, in: [1]}
+          VROB: {vr_tube: [o_vrm, o_vrb, "0"], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a, in: [1]}
+          ROVRL: {R: [o_vrm, "0"], r: osc_r_vr_leak_ohm, in: [1]}
+          ROS4: {R: [o_vr, o_s4], r: osc_r_screen4_ohm, in: [1]}
+          ROK4: {R: [o_k4, "0"], r: osc_r_cathode4_ohm, in: [1]}
   - title: lfo
     parts:
       # LFO ON / OFF (`lfo_on`): the oscillator and its pots in position 1; in 0 this
@@ -875,6 +993,12 @@ sections:
           # VIBRATO and WOBBLE
           RVIBP: {pot: ["0", lv_w, lfo], r: lfo_r_pot_ohm, at: vibrato, in: [1]}
           CVIBW: {C: [lv_w, "0"], c: lfo_c_wiper_f, in: [1]}
+          SWVIB2:
+            switch: saw_on
+            in: [1]
+            parts:
+              RVIBP2: {pot: ["0", ls_w, lfo], r: lfo_r_pot_ohm, at: vibrato, in: [1]}
+              CVIBW2: {C: [ls_w, "0"], c: lfo_c_wiper_f, in: [1]}
           RWOBP: {pot: ["0", lw_w, lfo], r: lfo_r_pot_ohm, at: wobble, in: [1]}
           CWOBW: {C: [lw_w, "0"], c: lfo_c_wiper_f, in: [1]}
   - title: ring
@@ -895,6 +1019,11 @@ sections:
               CRGBN: {C: [rg_n, "0"], c: ring_c_supply_f, in: [1]}
               # The signal follower: the oscillator's buffer through 0.1 uF
               CRGIA: {C: [o_buf, rg_ga], c: ring_c_grid_f, in: [1]}
+              SWRGO:
+                switch: osc_on
+                in: [1]
+                parts:
+                  RRGOF: {R: [o_buf, "0"], r: osc_r_off_ohm, in: [0]}
               RRGGA: {R: [rg_ga, "0"], r: ring_r_grid_ohm, in: [1]}
               XRGVA: {device: [rg_b, rg_ga, rg_ka], model: RGVA, in: [1]}
               RRGKA: {R: [rg_ka, rg_n], r: ring_r_follower_ohm, in: [1]}
@@ -945,3 +1074,77 @@ sections:
               RRGCX: {R: [rg_c, "0"], r: ring_r_out_leak_ohm, in: [1]}
               RRGX: {R: [rg_c, rg_x], r: ring_r_out_ohm, in: [1]}
               CRGX: {C: [rg_x, "0"], c: ring_c_out_node_f, in: [1]}
+  - title: saw supply
+    parts:
+      # The saw's own supply (SAW ON is its power switch)
+      SWSAWS:
+        switch: saw_on
+        parts:
+          VSWA: {mains: [sw_wa, "0"], v_rms: saw_winding_rms_v, phase_deg: 90.0, in: [1]}
+          VSWB: {mains: [sw_wb, "0"], v_rms: saw_winding_rms_v, phase_deg: 270.0, in: [1]}
+          RSWA: {R: [sw_wa, sw_ha], r: pt_r_half_ohm, in: [1]}
+          RSWB: {R: [sw_wb, sw_hb], r: pt_r_half_ohm, in: [1]}
+          CSWA: {C: [sw_ha, "0"], c: pt_c_half_f, in: [1]}
+          CSWB: {C: [sw_hb, "0"], c: pt_c_half_f, in: [1]}
+          DSA: {device: [sw_ha, s_br], model: SDR, in: [1]}
+          DSB: {device: [sw_hb, s_br], model: SDR, in: [1]}
+          CSBR: {C: [s_br, "0"], c: saw_c_reservoir_f, in: [1]}
+          RSBX: {R: [s_br, s_bp], r: saw_r_bplus_ohm, in: [1]}
+          CSBP: {C: [s_bp, "0"], c: saw_c_bplus_f, in: [1]}
+          RSBPL: {R: [s_bp, "0"], r: saw_r_bplus_bleed_ohm, in: [1]}
+          DSN: {device: [s_nr, sw_ha], model: SDR, in: [1]}
+          CSNR: {C: [s_nr, "0"], c: saw_c_reservoir_f, v0: saw_minus_raw_v0, in: [1]}
+          RSNP: {R: [s_nr, s_nf], r: saw_r_minus_prefilter_ohm, in: [1]}
+          CSNP: {C: [s_nf, "0"], c: saw_c_minus_prefilter_f, v0: saw_minus_filtered_v0, in: [1]}
+          RSNX: {R: [s_nf, s_n], r: saw_r_minus_ohm, in: [1]}
+          VRSNA: {vr_tube: ["0", s_nva, s_nm], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a, in: [1]}
+          VRSNB: {vr_tube: [s_nm, s_nvb, s_n], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a, in: [1]}
+          RSNM: {R: [s_nm, "0"], r: osc_r_vr_leak_ohm, in: [1]}
+          CSNV: {C: [s_n, "0"], c: lfo_c_minus_f, in: [1]}
+          # the charger's screen on two 5651s of its own (+174 V)
+          RSVR: {R: [s_br, s_vr], r: saw_r_screen_feed_ohm, in: [1]}
+          VRSPA: {vr_tube: [s_vr, s_vra, s_vrm], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a, in: [1]}
+          VRSPB: {vr_tube: [s_vrm, s_vrb, "0"], model: VRO, operating_v: osc_v5651_operating_v, ref_current_a: osc_v5651_ref_current_a, in: [1]}
+          RSVRM: {R: [s_vrm, "0"], r: osc_r_vr_leak_ohm, in: [1]}
+          CSVR: {C: [s_vr, "0"], c: lfo_c_minus_f, in: [1]}
+  - title: saw pitch
+    parts:
+      SWSAWP:
+        switch: saw_on
+        parts:
+          # the charger's grid (the draft's cut from the keyboard: 10k into 0.1 uF)
+          CSG: {C: [s_g, "0"], c: osc_c_grid4_f, in: [1]}
+          RSGL: {R: [s_g, "0"], r: osc_r_grid4_leak_ohm, in: [1]}
+          # the vibrato follower: VIBRATO's second gang, buffered (its grid grounded with the
+          # LFO off)
+          XSV4: {device: [s_vr, ls_w, s_vb], model: SV4, in: [1]}
+          RSV4K: {R: [s_vb, s_nr], r: saw_r_vibrato_k_ohm, in: [1]}
+          SWSAWV:
+            switch: lfo_on
+            in: [1]
+            parts:
+              RLSWG: {R: [ls_w, "0"], r: saw_r_wiper_ground_ohm, in: [0]}
+  - title: saw
+    substeps: 16
+    decimate: fir
+    owns: [s_kf]
+    parts:
+      SWSAW:
+        switch: saw_on
+        parts:
+          # the charger (its grid's capacitor with the keyboard's stopper, outside the island)
+          RSSC: {R: [s_vr, s_sc], r: saw_r_screen_ohm, in: [1]}
+          XSV2: {device: [s_ct, s_sc, s_g, s_k2], model: SV2, in: [1]}
+          RSK2: {R: [s_k2, s_n], r: saw_r_cathode2_ohm, in: [1]}
+          # the timing capacitor and the 884
+          CST: {C: [s_bp, s_ct], c: saw_c_t_f, v0: saw_c_start_v, in: [1]}
+          RSLK: {R: [s_ct, s_bp], r: saw_r_ct_leak_ohm, in: [1]}
+          RSS: {R: [s_bp, s_a], r: saw_r_s_ohm, in: [1]}
+          XSV1: {device: [s_a, s_gr, s_w, s_ct], model: SV1, in: [1]}
+          CSST: {C: [s_w, s_ct], c: saw_c_state_f, v0: saw_w_start_v, in: [1]}
+          RSG: {R: [s_gr, s_gb], r: saw_r_grid_ohm, in: [1]}
+          VSC: {V: [s_gb, s_ct], v: saw_bias_cell_v, in: [1]}
+          # the follower, its plate on the reservoir (headroom when CT's plate leaps to B+)
+          RSGF: {R: [s_ct, s_gf], r: saw_r_follow_grid_ohm, in: [1]}
+          XSV3: {device: [s_br, s_gf, s_kf], model: SV3, in: [1]}
+          RSKF: {R: [s_kf, "0"], r: saw_r_follow_k_ohm, in: [1]}

@@ -31,6 +31,8 @@ fn rc(r_ohm: f64) -> CircuitIr {
         sections: vec![Section {
             title: "t".into(),
             substeps: None,
+            decimate: None,
+            owns: None,
             elements: vec![
                 Element::Resistor(Resistor {
                     name: "R1".into(),
@@ -119,6 +121,8 @@ fn pot_end(r_end_ohm: f64) -> CircuitIr {
         sections: vec![Section {
             title: "t".into(),
             substeps: None,
+            decimate: None,
+            owns: None,
             elements: vec![
                 r("R1", "in", "p", 10e3),
                 Element::Capacitor(Capacitor {

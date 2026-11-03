@@ -11,6 +11,8 @@ pin (the cathode), and the currents flow into pins 0..P-1:
 - pentode (p, g2, g1, k): ports (Vpk, Vg2k, Vg1k), currents (Ip, Ig2, Ig1);
 - diodes (a, k): port Vak, current I;
 - lamp (a, t, b): ports (Vab, T - T_amb), currents (I, dT/dt);
+- thyratron, tetrode (a, g2, g1, w, k): ports (Va, Vg2, Vg1, w), currents (Ia, Ig2, Ig1, -dw/dt);
+  triode (a, g, w, k): ports (Va, Vg, w), currents (Ia, Ig, -dw/dt);
 - magnetic core (b, ref): port B / TESLA_PER_V, current path * H. A core has
   memory, so each of its points also records the state it is evaluated
   from ([b, h, delta]: the last accepted point), taken along a magnetization
@@ -32,6 +34,7 @@ from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
 from varimu.devices.library import load_device
 from varimu.devices.pentode import Pentode
+from varimu.devices.thyratron import W_MAX, W_MIN, Thyratron
 from varimu.devices.triode import Triode
 
 # Tube mismatch, as in the netlist golden cases (export_circuit_fixtures.py).
@@ -57,6 +60,13 @@ _VACUUM_V = (-50, -5, -1, -0.3, -0.1, 0, 0.05, 0.1, 0.5, 1, 5, 20, 50, 100, 300)
 # fits' range (clamped), never on its edges.
 _LAMP_V = (-40, -5, -0.3, 0, 0.02, 0.5, 2, 10, 28, 60)
 _LAMP_DT = (-150, -40, 0, 1, 50, 300, 700, 1500, 2000, 2600, 3300)
+# A thyratron from reverse anode volts through the arc's drop to its strike, the grid from
+# deep cutoff past its floating potential, the state from below its range (held) through
+# the pre-breakdown densities and the arc to above its range (never on the range's edges).
+_THY_VA = (-20, 0, 5, 9, 12, 16, 30, 100, 300)
+_THY_VG = (-100, -20, -5, -2, -0.6, 0, 3)
+_THY_VG2 = (-1, 0, 4)
+_THY_W = (W_MIN - 10, -30, -8, -1, 2, 6, 10, W_MAX + 5)
 # Core: B history (T) whose accepted points are the states, and offsets from each state's B.
 _CORE_HISTORY = (0.0, 0.6, 0.3, 1.2, -0.4, 1.9)
 # (not multiples of DB_MAX: there the substep count changes, a ~1e-8 relative jump that
@@ -85,6 +95,8 @@ def _models() -> list:
         dataclasses.replace(diode, name=diode.name + "_rs0", rs_ohm=0.0),
         load_device("GZ34"),
         load_device("LAMP327@1"),
+        load_device("2D21@1"),
+        load_device("884@1"),
         core_model("CORE_GO", "grain_oriented_si_steel", 0.1),
         core_model("CORE_NI", "permalloy_fluxgate", 0.08),
         core_model("CORE_MU", "mumetall", 0.07),
@@ -126,6 +138,13 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
         ports = [(float(v), float(u)) for v, u in itertools.product(_LAMP_V, _LAMP_DT)]
         v, u = np.array(ports, float).T
         currents = np.stack(m.currents(v, u), axis=1)
+    elif isinstance(m, Thyratron):
+        if m.mu_g2 is None:
+            grid = itertools.product(_THY_VA, _THY_VG, _THY_W)
+        else:
+            grid = itertools.product(_THY_VA, _THY_VG2, _THY_VG, _THY_W)
+        ports = [tuple(float(x) for x in p) for p in grid]
+        currents = np.stack(m.currents(*np.array(ports, float).T), axis=1)
     elif isinstance(m, JunctionDiode | VacuumDiode):
         volts = _JUNCTION_V if isinstance(m, JunctionDiode) else _VACUUM_V
         if isinstance(m, JunctionDiode) and m.rs_ohm == 0:

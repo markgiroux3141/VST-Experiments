@@ -57,6 +57,7 @@ from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
 from varimu.devices.pentode import Pentode
 from varimu.devices.tape import TapeFormulation
+from varimu.devices.thyratron import Thyratron
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
 
 MIN_R_OHM = 1e-3  # stands in for the zero end of a pot (and a 0 dB pad's through path)
@@ -543,6 +544,10 @@ def device_instance(
     if isinstance(base, Lamp):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
             raise ValueError(f"{name}: a lamp takes no parallel, emission or area")
+        return dataclasses.replace(base, name=name)
+    if isinstance(base, Thyratron):
+        if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
+            raise ValueError(f"{name}: a thyratron takes no parallel, emission or area")
         return dataclasses.replace(base, name=name)
     raise TypeError(f"{name}: no instances of {type(base).__name__}")
 

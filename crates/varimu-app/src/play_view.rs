@@ -107,6 +107,8 @@ const DRAWING: Device = Device {
     pitch: None,
     own_oscillator: false,
     partition: None,
+    coupling: None,
+    pitch2: None,
 };
 
 /// A finished render: where it was saved and what it was.
@@ -449,7 +451,8 @@ impl PlayView {
             .filter(|_| self.device == DEVICES.len())
     }
 
-    /// The device's circuit, built with `cores`, its noise as the switch says.
+    /// The device's circuit, built with `cores`, its noise as the switch says, its gas
+    /// thyratrons' event kernels as its quality's settings say.
     fn circuit(&self, cores: varimu_circuit::Cores) -> Result<Circuit, String> {
         let c = match self.drawing_device() {
             Some(d) => Circuit::from_spec(d.lib.clone(), d.spec.clone(), cores),
@@ -460,7 +463,12 @@ impl PlayView {
         } else {
             varimu_circuit::Heaters::File
         };
-        Ok(c.with_noise(self.noise).with_heaters(heaters))
+        // Its event kernels as its quality says (technique K: the live qualities').
+        let dev = DEVICES.get(self.device).unwrap_or(&DRAWING);
+        let events = self.settings_for(dev).is_ok_and(|s| s.events);
+        Ok(c.with_noise(self.noise)
+            .with_heaters(heaters)
+            .with_events(events))
     }
 
     /// The device's name and id (for files).
@@ -835,7 +843,9 @@ impl PlayView {
     fn end_device(&self) -> Option<Result<EndDevice, String>> {
         let dev = &DEVICES[self.end?];
         Some(self.settings_for(dev).and_then(|s| {
-            let c = Circuit::load(&self.config_dir, dev.circuit, s.cores()?)?.with_noise(false);
+            let c = Circuit::load(&self.config_dir, dev.circuit, s.cores()?)?
+                .with_events(s.events)
+                .with_noise(false);
             Ok(EndDevice {
                 label: dev.label.to_string(),
                 circuit: c,
@@ -1048,8 +1058,8 @@ impl PlayView {
             let r = (|| {
                 let s = Settings::load(&config, Quality::Production)?;
                 let circuit = match drawing {
-                    Some(d) => Circuit::from_spec(d.lib, d.spec, s.cores()?),
-                    None => Circuit::load(&config, dev.circuit, s.cores()?)?,
+                    Some(d) => Circuit::from_spec(d.lib, d.spec, s.cores()?).with_events(s.events),
+                    None => Circuit::load(&config, dev.circuit, s.cores()?)?.with_events(s.events),
                 }
                 .with_noise(noise);
                 render(

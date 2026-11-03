@@ -65,6 +65,7 @@ from varimu.circuit.ir import (
     Resistor,
     SineSource,
     Tape,
+    ThyratronEvents,
     TubeNoise,
     Vccs,
     VoltageSource,
@@ -350,6 +351,18 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
     if isinstance(el, Plate | Tape):
         # The medium cut out at its ports: the pickup held at 0 V, the sense unread.
         return f"{el.name} {el.out} 0 dc 0"
+    if isinstance(el, ThyratronEvents):
+        # The off tube (SPICE has no events): its capacitances, the grid's leakage, the
+        # state node held to the cathode.
+        n = el.name
+        parts = [f"R{n}_w {el.w} {el.k} 1"]
+        if el.g_leak_s > 0:
+            parts.append(f"R{n}_leak {el.g} {el.a} {num(1.0 / el.g_leak_s)}")
+        for tag, p, q, c in (("gk", el.g, el.k, el.c_gk_f), ("ga", el.g, el.a, el.c_ga_f),
+                             ("ak", el.a, el.k, el.c_ak_f)):  # fmt: skip
+            if c > 0:
+                parts.append(f"C{n}_{tag} {p} {q} {num(c)}")
+        return "\n".join(parts)
     raise TypeError(type(el))
 
 

@@ -1,0 +1,43 @@
+device: 2D21
+document: "Sylvania engineering data service, 2D21 thyratron (5 pages)"
+publisher: Sylvania Electric Products Inc., Radio Tube Division, Emporium, Pa.
+date: 1954-11
+local_copy: sources/sylvania_2d21_1954.pdf
+local_copy_sha256: fa997c9ccde312bf71a2c134ea66da4906c446987dadb46e1700669f56abd417
+scan_source: "web: https://frank.yueksel.org/sheets/137/2/2D21.pdf (Frank's Electron Tube Data Sheets, via tdsl.duncanamps.com)"
+digitized_with: "scripts/digitize_2d21.py (300 dpi page scans; grid lines opened away with a 5 x 5 square, curves seeded per family and traced; axes fitted to the detected grid lines)"
+digitized_by: Claude Code
+digitized_on: 2026-11-02
+files:
+  sylvania_2d21_control.csv:
+    figure: "p.2, Average Control Characteristics (Ef 6.3 V, grid resistor 0.1 Mohm)"
+    columns: "vg2_v, va_v, vg1_v (the control-grid volts at which the discharge starts)"
+    curves: "shield-grid volts -3, -2, -1.5, -1, 0, +2, +8"
+    coverage: "va 0-650 V; below ~10 V the curves bend into the +12 V asymptote and aren't traced"
+  sylvania_2d21_grid_before.csv:
+    figure: "p.5, Average Grid Characteristics Before Anode Conduction (Ef 6.3 V, shield grid 0 V)"
+    columns: "va_v, vg1_v, ig1_a (current into the grid; negative = ions to the grid)"
+    curves: "dc plate volts 25, 200, 400, 600"
+    coverage: "vg1 -15.3 V up to each curve's 'conduction starts' circle (the 25 V curve: to its lowest point)"
+  sylvania_2d21_grid_during.csv:
+    figure: "p.3, Average Grid Characteristics During Anode Conduction (Ef 6.3 V, shield grid 0 V)"
+    columns: "ia_a, vg1_v, ig1_a (current into the grid)"
+    curves: "dc anode mA 25, 50, 100, 150, 200 (vg1 -7 to -0.9 V), 300 (only its foot, -1.05 to -0.9 V)"
+    coverage: "right of -0.9 V every curve passes through one point (~-0.6 V, -0.8 mA) and they can't be told apart"
+axis_calibration: "per plot, a straight line through the detected grid lines matched to the printed ticks (constants in the script)"
+estimated_error: >-
+  Trace centreline within ~2 px at 300 dpi: ~40 mV of grid volts and ~4 V of anode volts on
+  the control plot; ~10 mV and ~1 nA (before conduction), ~10 mV and ~0.01 mA (during).
+  These are "average" characteristics; the sheet's own spread plot (p.4, Operational Range of
+  Critical Grid Voltage) shows tubes differ by ~1-2 V of critical grid voltage.
+notes: >-
+  The bottom curve of the control family is printed "+3" on this sheet and "+8" on RCA's
+  original of the same plot (rca_2d21_1948.pdf p.3, 92CM-6531R1); +8 is taken (the only
+  reading with a regular spacing of the family). RCA's original labels its control plot
+  "control-grid resistor = 0 ohms", Sylvania "grid res .1 megohm": at the pre-conduction grid
+  currents (<0.05 uA) the difference is <5 mV. The two sheets' curves otherwise agree in shape
+  and position (by eye, at RCA's ~300 dpi scan). Overlays: `uv run --with pymupdf python
+  scripts/digitize_2d21.py --overlays DIR`. RCA's sheet (rca_2d21_1948.pdf, sha256
+  31d5cfc7f4ca32455b94c0e4c9b998baa600e4190a47cbf58ba7261ecb118411, web:
+  https://frank.yueksel.org/sheets/049/2/2D21.pdf) is the source of the tabulated timing
+  values (published_points.yaml "2D21").

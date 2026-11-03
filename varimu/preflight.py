@@ -39,6 +39,7 @@ from varimu.circuit.ir import (
     Resistor,
     SineSource,
     Tape,
+    ThyratronEvents,
     VoltageSource,
     Winding,
     element_nodes,
@@ -47,6 +48,7 @@ from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
+from varimu.devices.thyratron import Thyratron
 
 MAX_CONFIGS = 4096
 
@@ -190,6 +192,12 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
         if isinstance(el, Device) and isinstance(models.get(el.model), MagneticCore | Lamp):
             for n in el.nodes[1:]:
                 dc.join(el.nodes[0], n)
+        if isinstance(el, Device) and isinstance(models.get(el.model), Thyratron):
+            dc.join(el.nodes[-2], el.nodes[-1])  # the state node: the device is its DC path
+        if isinstance(el, ThyratronEvents):
+            dc.join(el.w, el.k)  # the state node, held to the cathode
+            if el.g_leak_s > 0:
+                dc.join(el.g, el.a)  # the grid's leakage
         if isinstance(el, Inductor | VoltageSource | SineSource | Winding):
             if not loops.join(*t):
                 path = _path(tree, t[0], t[1])

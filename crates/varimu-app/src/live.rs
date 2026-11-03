@@ -36,7 +36,7 @@ use circuitsim::ir::{CircuitIr, Element};
 use circuitsim::stream::Stream;
 use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_with};
+use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_events};
 
 use crate::resample::{StreamResampler, resample};
 use crate::settings::Settings;
@@ -57,6 +57,8 @@ pub struct Circuit {
     noise: bool,
     /// Heated cathodes: the file's `heaters` block, or a start (cold: power on).
     heaters: Heaters,
+    /// Gas thyratrons as their event kernels, where the file names tables (technique K).
+    events: bool,
 }
 
 impl Circuit {
@@ -73,6 +75,7 @@ impl Circuit {
             cores,
             noise: true,
             heaters: Heaters::File,
+            events: false,
         })
     }
 
@@ -85,7 +88,15 @@ impl Circuit {
             cores,
             noise: true,
             heaters: Heaters::File,
+            events: false,
         }
+    }
+
+    /// With its gas thyratrons as their event kernels (technique K: the settings' `events`,
+    /// the live qualities'), where the file names tables for them.
+    pub fn with_events(mut self, on: bool) -> Circuit {
+        self.events = on;
+        self
     }
 
     /// With its noise sources (device builder B5: the file's `noise` block) on or off.
@@ -129,8 +140,23 @@ impl Circuit {
     pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
         let p = spec::resolve(&self.spec, values).map_err(|e| e.to_string())?;
         let noise = if self.noise { Noise::File } else { Noise::Off };
-        build_ir_with(&self.lib, &self.spec, &p, self.cores, noise, self.heaters)
-            .map_err(|e| e.to_string())
+        // Only a file with tables plays them: a thyratron without isn't refused here.
+        let events = self.events
+            && self
+                .spec
+                .devices
+                .iter()
+                .any(|(_, e)| e.as_map().is_some_and(|m| m.get("events").is_some()));
+        build_ir_events(
+            &self.lib,
+            &self.spec,
+            &p,
+            self.cores,
+            noise,
+            self.heaters,
+            events,
+        )
+        .map_err(|e| e.to_string())
     }
 }
 
@@ -165,6 +191,9 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
             Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
+            Element::ThyratronEvents(t) => {
+                ("ThyratronEvents", &t.name, vec![&t.a, &t.g, &t.w, &t.k])
+            }
         };
         elements.insert((kind, name.to_string()));
         nodes.extend(ns.into_iter().cloned());

@@ -22,6 +22,10 @@ on grids, for the Rust device tests (varimu.devices.fixtures).
 Noise fixtures (crates/circuitsim/tests/fixtures/noise/noise.json): the noise
 streams' raw Philox words, normals and the flicker filter, from the Python
 reference (varimu.devices.noise), for crates/circuitsim/tests/noise.rs.
+
+Event-kernel fixtures (crates/circuitsim/tests/fixtures/events/events.json): technique K's
+kernels, step charges, crossings, table lookups and per-sample runs on a synthetic unit,
+from the Python reference (varimu.devices.thyratron_events), for tests/events.rs.
 """
 
 from __future__ import annotations
@@ -35,12 +39,14 @@ from varimu.config import REPO_ROOT
 from varimu.devices.cathode import cathode_fixtures_json
 from varimu.devices.fixtures import MISMATCH, device_fixtures_json
 from varimu.devices.noise import noise_fixtures_json
+from varimu.devices.thyratron_events import events_fixtures_json
 
 GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "netlist_golden"
 RUST_FIXTURE_DIR = REPO_ROOT / "crates" / "circuitsim" / "tests" / "fixtures"
 DEVICE_FIXTURE = RUST_FIXTURE_DIR / "devices" / "devices.json"
 NOISE_FIXTURE = RUST_FIXTURE_DIR / "noise" / "noise.json"
 CATHODE_FIXTURE = RUST_FIXTURE_DIR / "cathode" / "cathode.json"
+EVENTS_FIXTURE = RUST_FIXTURE_DIR / "events" / "events.json"
 
 _MISMATCH = MISMATCH
 
@@ -135,6 +141,12 @@ def write_cathode(path: Path = CATHODE_FIXTURE) -> None:
     print(f"{path.name}: {path.stat().st_size} bytes")
 
 
+def write_events(path: Path = EVENTS_FIXTURE) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(events_fixtures_json().encode("utf-8"))
+    print(f"{path.name}: {path.stat().st_size} bytes")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--golden", action="store_true", help="re-capture the SPICE goldens too")
@@ -145,6 +157,7 @@ def main() -> None:
     write_devices()
     write_noise()
     write_cathode()
+    write_events()
 
 
 if __name__ == "__main__":

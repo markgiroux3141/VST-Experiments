@@ -122,3 +122,38 @@ def test_6386_capacitances_in_ac():
     r = ngspice.run(net, "ac dec 3 1e5 1e7", ["i(vg)"])
     c = -r["i(vg)"].imag / (2 * np.pi * r["scale"])
     np.testing.assert_allclose(c, t.c_gk + t.c_gp, rtol=1e-6)
+
+
+@pytest.mark.parametrize("name", ["884@1", "2D21@1"])
+def test_thyratron_agrees(name):
+    """A thyratron's anode, grid and state-port currents (HYBRID_PHYSICS_PLAN.md H1): cutoff,
+    the strike's densities and the arc, the grid either side of its floating potential, the
+    state from its physical floor (w ~ -25: the background ionization) past its top. Below the
+    floor the state port's -s0 / x reaches 1e20 / s and ngspice resolves it to ~1e-6 (w = -60);
+    the clamp past W_MIN is checked against Rust (crates/circuitsim/tests/devices.rs)."""
+    d = load_device(name)
+    tri = d.mu_g2 is None
+    pts = [
+        (va, vg2, vg, w)
+        for va in (-10.0, 9.0, 16.0, 40.0, 150.0, 300.0)
+        for vg2 in ((0.0,) if tri else (0.0, 3.0))
+        for vg in (-50.0, -4.0, -0.7, 1.0)  # not -0.6: there electrons and ions cancel exactly
+        for w in (-30.0, -20.0, -3.0, 1.0, 6.0, 45.0)
+    ]
+    lines = [d.subckt()]
+    for k, (va, vg2, vg, w) in enumerate(pts):
+        lines += [f"va{k} a{k} 0 dc {va}", f"vg{k} g{k} 0 dc {vg}", f"vw{k} w{k} 0 dc {w}"]
+        if tri:
+            lines.append(f"x{k} a{k} g{k} w{k} 0 {d.subckt_name}")
+        else:
+            lines += [f"vs{k} s{k} 0 dc {vg2}", f"x{k} a{k} s{k} g{k} w{k} 0 {d.subckt_name}"]
+    vecs = [f"i(v{p}{k})" for p in "agw" for k in range(len(pts))]
+    r = _op(lines, vecs)
+    va, vg2, vg, w = np.array(pts, float).T
+    want = d.currents(va, vg, w) if tri else d.currents(va, vg2, vg, w)
+    ia, ig, iw = (want[0], want[1], want[2]) if tri else (want[0], want[2], want[3])
+    for p, ref in (("a", ia), ("g", ig), ("w", iw)):
+        got = -np.array([r[f"i(v{p}{k})"] for k in range(len(pts))])
+        # The state port's rates reach ~1e10 / s: wrdata's 10 digits set its floor.
+        atol = 1e-3 if p == "w" else ATOL
+        np.testing.assert_allclose(got, ref, rtol=1e-8, atol=atol, err_msg=f"{name} i{p}")

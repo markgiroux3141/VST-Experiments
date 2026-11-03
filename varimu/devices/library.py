@@ -42,11 +42,12 @@ from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spe
 from varimu.devices.plate import PlateComponent, plate_from_data
 from varimu.devices.speaker import Speaker, speaker_from_data
 from varimu.devices.tape import TapeFormulation, tape_from_data
+from varimu.devices.thyratron import Thyratron, thyratron_from_data
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_spec
 
 DEVICE_DIR = versions.COMPONENT_DIR
 REPORT_DIR = REPO_ROOT / "reports" / "devices"
-Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp
+Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron
 
 # Oxide-cathode grid conduction. There's no datasheet figure for any of these
 # tubes, so this is the same placeholder everywhere until it becomes a genome parameter.
@@ -120,6 +121,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return VacuumDiode(d["name"], d["perveance"], d.get("smooth_v", 0.1))
     if kind == "lamp":
         return lamp_from_data(d, name)
+    if kind == "thyratron":
+        return thyratron_from_data(d, name)
     if kind == "speaker":
         raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
     if kind == "plate":
@@ -946,6 +949,92 @@ def build_lamp327() -> dict[str, Any]:
     }
 
 
+def _thyratron_data(t: Thyratron, source: str, model_sources: dict, report: dict) -> dict:
+    fields = [f for f in t.__dataclass_fields__ if f not in ("name", "c_gk", "c_ga", "c_ak")]
+    return {
+        "name": t.name,
+        "kind": "thyratron",
+        "source": source,
+        "model": {f: getattr(t, f) for f in fields},
+        "model_sources": model_sources,
+        "capacitances_f": {"gk": t.c_gk, "ga": t.c_ga, "ak": t.c_ak},
+        "fit_report": report,
+    }
+
+
+def _clean(x):
+    """Plain floats and strings for YAML (the fit reports carry numpy scalars)."""
+    if isinstance(x, dict):
+        return {str(k): _clean(v) for k, v in x.items()}
+    if isinstance(x, list | tuple):
+        return [_clean(v) for v in x]
+    if isinstance(x, np.floating | np.integer):
+        return float(x)
+    return x
+
+
+def build_2d21() -> dict[str, Any]:
+    """The 2D21 thyratron (HYBRID_PHYSICS_PLAN.md H1): the lumped plasma fitted in full to
+    RCA's and Sylvania's sheets (varimu.devices.thyratron_fit)."""
+    from varimu.devices import thyratron_fit as tf
+
+    t, report = tf.fit_2d21(max_nfev=3)
+    return _thyratron_data(
+        t,
+        "fit: varimu.devices.thyratron_fit.fit_2d21 on data/datasheets/"
+        "sylvania_2d21.provenance.yaml (control family, grid current before and during "
+        "conduction) and published_points.yaml '2D21' (RCA 6-15-48: drop, ionization and "
+        "deionization times)",
+        {
+            "fitted": "mu_a, mu_g2, v0_v, e_v, perveance, x_n, v_x_v, k_ion, c_meta, tau_diff_s, "
+            "k_grid, p_grid, q_s_c (least squares, all targets at once); g_leak_s alone, to the "
+            "before-conduction curves' flat parts",
+            "v_ion_v, v_meta_v": "web: https://physics.nist.gov/PhysRefData/ASD/ (xenon's first "
+            "ionization potential, its 6s[3/2]_2 metastable level)",
+            "w_ion_v, w_meta_v, t_e_v, v_float_v": "provisional: model knowledge (the thresholds' "
+            "softness and the arc's electron temperature ~0.3 eV; the grid floats near -0.6 V, "
+            "where Sylvania's during-conduction curves cross)",
+            "s0_per_s": "numerics (background ionization: a floor far below the strike's density)",
+            "capacitances_f": "published_points.yaml '2D21' (grid No. 1 to anode; input; output)",
+        },
+        _clean(report),
+    )
+
+
+def build_884() -> dict[str, Any]:
+    """The 884 thyratron (HYBRID_PHYSICS_PLAN.md H1, the sawtooth's tube): the 2D21's fitted
+    structure with argon, its own control characteristic and drop, the plasma's transport
+    scaled by ion mobility (varimu.devices.thyratron_fit.fit_884)."""
+    from varimu.devices import thyratron_fit as tf
+
+    ref, _ = versions.read_text("2D21")
+    base = load_device(str(ref))
+    t, report = tf.fit_884(base)
+    return _thyratron_data(
+        t,
+        f"fit: varimu.devices.thyratron_fit.fit_884 from {ref} on data/datasheets/"
+        "rca_884.provenance.yaml (the average control characteristic) and published_points.yaml "
+        "'884' (RCA 12-15-44: drop, capacitances)",
+        {
+            "fitted": "mu_a, v0_v (to the control characteristic, 40-290 V), c_meta (to the 16 V "
+            "drop at 0.1 A)",
+            "v_ion_v, v_meta_v": "web: https://physics.nist.gov/PhysRefData/ASD/ (argon's first "
+            "ionization potential, its 4s[3/2]_2 metastable level)",
+            "tau_diff_s, k_grid": f"provisional: model knowledge ({ref}'s scaled by argon's ion "
+            f"mobility over xenon's, {tf.MOBILITY_AR_XE:.3f}: Ar+ in Ar ~1.53, Xe+ in Xe ~0.58 "
+            "cm^2/(V s) at low field; equal pressure and geometry assumed. The sheet gives no "
+            "times; RCA's sweep circuit and its frequency table are the check)",
+            "e_v, perveance, x_n, v_x_v, k_ion, w_ion_v, w_meta_v, p_grid, v_float_v, t_e_v, "
+            "q_s_c, g_leak_s, s0_per_s": f"provisional: model knowledge ({ref}'s: an oxide "
+            "cathode, a grid and a plasma of the same kind; the 884's sheet doesn't constrain "
+            "them)",
+            "capacitances_f": "published_points.yaml '884' (grid to cathode, grid to anode, anode "
+            "to cathode)",
+        },
+        _clean(report),
+    )
+
+
 BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
@@ -968,6 +1057,8 @@ BUILDERS = {
     "EMT140": build_emt140,
     "SCOTCH111": build_scotch111,
     "LAMP327": build_lamp327,
+    "2D21": build_2d21,
+    "884": build_884,
 }
 
 REPORT_FOR = {

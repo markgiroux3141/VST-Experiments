@@ -150,7 +150,9 @@ fn main() -> Result<(), String> {
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
     let s = dev.play_settings(&Settings::load(config, dev.quality)?);
-    let circuit = Circuit::load(config, dev.circuit, s.cores()?)?.with_noise(noise);
+    let circuit = Circuit::load(config, dev.circuit, s.cores()?)?
+        .with_events(s.events)
+        .with_noise(noise);
     let panel = knobs(dev, circuit.spec());
     let mut v = values(&panel);
     for (k, x) in sets {
@@ -226,7 +228,7 @@ fn main() -> Result<(), String> {
             .find(|d| d.id == id.as_str())
             .ok_or(format!("unknown device {id}"))?;
         let es = d.play_settings(&Settings::load(config, d.quality)?);
-        let c = Circuit::load(config, d.circuit, es.cores()?)?;
+        let c = Circuit::load(config, d.circuit, es.cores()?)?.with_events(es.events);
         let mut ev = values(&knobs(d, c.spec()));
         for (k, x) in end_sets {
             set(&mut ev, &k, x);

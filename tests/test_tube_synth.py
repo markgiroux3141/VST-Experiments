@@ -77,6 +77,7 @@ def run(pitch_v, dur_s=1.0, on_s=0.2):
             "pitch": np.full(n, pitch_v),
             "key": np.zeros(n),
             "pressure": np.zeros(n),
+            "pitch2": np.zeros(n),
         },
     ).vectors
     return v["v(out)"], v["v(o_t)"]
@@ -88,7 +89,13 @@ def rms_dbfs(y):
 
 def test_passes_the_preflight_checks_with_its_gate_and_pitch():
     s = spec.load_circuit(CIRCUIT)
-    assert s.cv_inputs == (("gate", "bus"), ("pitch", "pv"), ("key", "kv"), ("pressure", "av"))
+    assert s.cv_inputs == (
+        ("gate", "bus"),
+        ("pitch", "pv"),
+        ("key", "kv"),
+        ("pressure", "av"),
+        ("pitch2", "pv2"),
+    )
     assert check_circuit(s) == []
 
 
@@ -126,6 +133,7 @@ def test_a_key_barely_moves_the_cutoff_driver():
             "pitch": np.full(n, -15.0),
             "key": np.zeros(n),
             "pressure": np.zeros(n),
+            "pitch2": np.zeros(n),
         },
     ).vectors["v(k4)"]
     up, held = np.mean(k4[int(0.3 * FS) : int(0.5 * FS)]), np.mean(k4[int(1.3 * FS) :])
@@ -161,6 +169,7 @@ def test_env_amount_adds_control_current_only_while_the_envelope_is_open(amount)
                 "pitch": np.full(n, -15.0),
                 "key": np.zeros(n),
                 "pressure": np.zeros(n),
+                "pitch2": np.zeros(n),
             },
         ).vectors["v(k7)"]
         / 2.2
@@ -207,6 +216,7 @@ def glide_step(glide):
             "pitch": pitch,
             "key": np.zeros(n),
             "pressure": np.zeros(n),
+            "pitch2": np.zeros(n),
         },
     ).vectors["v(o_t)"]
     ts, fc = vco.cycle_frequencies(tank, FS)
@@ -257,6 +267,7 @@ def test_key_track_moves_the_cutoff_driver_with_the_key_string(track):
             "pitch": np.full(n, -15.0),
             "key": key,
             "pressure": np.zeros(n),
+            "pitch2": np.zeros(n),
         },
     ).vectors["v(g4)"]
     c4, c5 = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
@@ -288,6 +299,7 @@ def test_pressure_raises_the_cutoff_driver():
         "pitch": np.full(n, -15.0),
         "key": np.zeros(n),
         "pressure": pressure,
+        "pitch2": np.zeros(n),
     }
     g4 = fast.run_transient(ir, np.zeros(n), settings=st, controls=controls).vectors["v(g4)"]
     rest, pressed = np.mean(g4[int(0.8 * FS) : int(1.0 * FS)]), np.mean(g4[int(1.4 * FS) :])
@@ -463,3 +475,71 @@ def test_the_adsr_plucks_and_holds():
         assert held_lo < st["env_at_key_up_v"] < held_hi
         assert st["cmp_p_v"][1] < 120.0  # latched
         assert st["env_end_v"] < -105.0
+
+
+SAW_PARTITION = (
+    *PARTITION[:12],
+    "|",
+    "saw pitch",
+    "saw",
+    *PARTITION[12:],
+    "saw supply",
+)  # the native app's with the gas-tube saw (panel.rs)
+
+
+def test_saw_on_and_osc_on_switch_their_sections():
+    """SAW ON / OSC ON (HYBRID_PHYSICS_PLAN.md H4): off, an oscillator's sections are empty
+    (no thread); the saw renders as an island (M1) and plays as event kernels (K)."""
+    from varimu.circuit.ir import ThyratronEvents
+
+    s = spec.load_circuit(CIRCUIT)
+
+    def secs(sets, events=False):
+        ir = builder.build_ir(s, spec.resolve(s, sets), cores="linear", events=events)
+        return {x.title: x for x in ir.sections}
+
+    saw = ("saw", "saw pitch", "saw supply")
+    lc = ("oscillator", "pitch")
+    d = secs({})
+    assert all(not d[t].elements for t in saw) and all(d[t].elements for t in lc)
+    on = secs({"saw_on": 1, "osc_on": 0})
+    assert all(on[t].elements for t in saw) and all(not on[t].elements for t in lc)
+    assert (on["saw"].substeps, on["saw"].decimate, on["saw"].owns) == (16, "fir", ("s_kf",))
+    k = secs({"saw_on": 1, "osc_on": 0}, events=True)["saw"]
+    assert k.substeps is None and any(isinstance(e, ThyratronEvents) for e in k.elements)
+
+
+def test_the_saw_sounds_at_its_tuning_with_the_lc_off():
+    """The saw alone (SAW ON, OSC OFF) at the draft with K: its pitch on `s_ct` is the app's
+    table's (SYNTH_SAW_TUNING: 1914.4 Hz at -150 V, reports/hybrid/synth_saw_tuning.json),
+    and the synth's VCA opens onto it with a key."""
+    s = spec.load_circuit(CIRCUIT)
+    sets = {"saw_on": 1, "osc_on": 0, "lfo_on": 0}
+    ir = builder.build_ir(s, spec.resolve(s, sets), cores="ja", events=True, noise=False)
+    ir = dataclasses.replace(ir, probes=(VoltageProbe("out"), VoltageProbe("s_ct")))
+    st = dataclasses.replace(
+        io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"),
+        full_scale_volts_peak=1.0,
+        partition=SAW_PARTITION,
+    )
+    n = int(3.5 * FS)
+    t = np.arange(n) / FS
+    v = fast.run_transient(
+        ir,
+        np.zeros(n),
+        settings=st,
+        controls={
+            "gate": np.where(t >= 2.5, KEY_DOWN_V, KEY_UP_V),
+            "pitch": np.full(n, -15.0),
+            "key": np.zeros(n),
+            "pressure": np.zeros(n),
+            "pitch2": np.full(n, -150.0),
+        },
+    ).vectors
+    keep = t >= 2.0  # its supply settles over ~2 s
+    f = vco.frequency(v["v(s_ct)"][keep], FS)
+    up = rms_dbfs(v["v(out)"][(t >= 2.0) & (t < 2.5)])
+    down = rms_dbfs(v["v(out)"][t >= 3.0])
+    print(f, up, down)
+    assert abs(vco.cents(f, 1914.4)) < 3.0
+    assert down > -36.0 and up < down - 50.0

@@ -1,0 +1,31 @@
+device: "884"
+document: "RCA 884, 885 Thyratrons, triode types (DATA 1-2, 12-15-44; average control characteristic 1-4-45, 92CM-4883R1)"
+publisher: RCA Victor Division, Radio Corporation of America, Harrison, N.J.
+date: 1945-01-04
+local_copy: sources/rca_884_1944.pdf
+local_copy_sha256: ed1595ef96dc5c128d6e7a267f99b16587721c2ef444475a7ccffe5db7723a49
+scan_source: "web: https://frank.pocnet.net/sheets/049/8/884.pdf (Frank's Electron Tube Data Sheets)"
+digitized_with: "scripts/digitize_884.py (the page's ~300 dpi scan; grid lines opened away, the curve traced; axes fitted to the detected grid lines)"
+digitized_by: Claude Code
+digitized_on: 2026-11-02
+files:
+  rca_884_control.csv:
+    figure: "p.4, Average Control Characteristic (Ef 6.3 V): plate volts for starting discharge against grid volts"
+    columns: "vg_v, va_v"
+    curves: "the one average curve"
+    coverage: "vg -30 V (300 V) to -3.9 V (28 V), the curve's printed ends"
+  published_points.yaml:
+    figure: "DATA 1 (general data, ratings); DATA 2 (the linear sweep-circuit oscillator and amplifier, 92CM-4875R1, and its approximate frequency range table)"
+    entry: "884"
+axis_calibration: "grid volts 0 at the grid's right edge, 1 V a division; plate volts 0 at the grid's bottom line, 5 V a division (both from the detected lines; the printed ticks at -40..0 V and 50..300 V agree)"
+estimated_error: "trace centreline within ~2 px: ~0.1 V of grid volts, ~0.5 V of plate volts; an 'average' characteristic (no spread is printed)"
+notes: >-
+  The sheet gives no ionization or deionization time. The sweep circuit (DATA 2) is read as:
+  the cathode on the R11 / R12 tap (+5.0 V; 1500 / 146.5k of 450 V is 4.6 V) bypassed by C11,
+  the grid returned to ground through R3 and R2 (a -4.6..-5 V bias), the timing capacitor from
+  the anode node (through R4) to the cathode, charged from +450 V through R5 and the rheostat R6.
+  Its frequency table's f x C is ~13.5e-6 (R6 at min) and ~4.3e-6 (R6 at max) for C2-C5, a ratio
+  of ~3.1 (R5 ~0.48 Mohm), falling ~30% at C8 (11.4 kHz): the top of the range loses time per
+  cycle to the discharge and the plasma's recovery. f x C = I / dV implies a ~69 V sweep, where
+  the control characteristic at -4.6 V gives a ~36 V strike: the table is "approximate" and
+  is used as a check of the dynamics' shape (the high end's loss), not fitted.

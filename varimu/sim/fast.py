@@ -211,6 +211,7 @@ def run_transient(
     method: str | None = None,
     progress: Callable[[float], None] | None = None,
     controls: Mapping[str, np.ndarray] | None = None,
+    stats: dict | None = None,
 ) -> TransientResult:
     """Drive `ir.input_node` (to ground) with `input_v` volts; every IR probe comes back
     on the input's sample grid, keyed like ngspice vectors ("v(out)"). `method`
@@ -218,7 +219,8 @@ def run_transient(
     the run; Ctrl-C stops it (KeyboardInterrupt). `controls` drives the IR's control
     inputs ({name: volts}, each as long as `input_v`): held at their first sample while
     the circuit settles, and linear between samples at every rate (a gate's step stays a
-    step, where band-limited resampling would ring)."""
+    step, where band-limited resampling would ring). `stats`: a dict to fill with the
+    engine's statistics of the run (circuitsim.simulate's)."""
     check_build()
     import circuitsim
 
@@ -254,10 +256,14 @@ def run_transient(
             partition_coupling=s.partition_coupling,
             progress=progress,
             controls=ctl or None,
+            stats=stats is not None,
         )
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e
     wall = time.perf_counter() - t0
+    if stats is not None:
+        raw, st = raw
+        stats.update(st)
 
     def back(v: np.ndarray) -> np.ndarray:
         return resample(decimate(v, k, len(xh)), s.host, s.sample_rate)[:n][n0:]

@@ -49,7 +49,7 @@ impl Cores {
 }
 
 const PART_KEYS: [&str; 3] = ["tolerance", "source", "notes"];
-const DEVICE_KEYS: [&str; 11] = [
+const DEVICE_KEYS: [&str; 12] = [
     "device",
     "name",
     "instance",
@@ -59,6 +59,7 @@ const DEVICE_KEYS: [&str; 11] = [
     "mu",
     "grid_contact_v",
     "area",
+    "events",
     "source",
     "notes",
 ];
@@ -137,6 +138,10 @@ struct Context<'a> {
     types: HashMap<String, String>,
     /// Heated cathodes (B6): "warm" | "cold" start, None: off.
     heaters: Option<String>,
+    /// Thyratrons as their event kernels (HYBRID_PHYSICS_PLAN.md H3), and the models
+    /// they replaced (out of the IR).
+    events: bool,
+    replaced_models: HashSet<String>,
 }
 
 /// A build's heated cathodes, as Python's `build_ir(..., heaters=)`.
@@ -831,14 +836,23 @@ fn expand(
             )]
         }
         "device" => {
-            let model = ctx.model_of(a["model"].as_str().unwrap());
+            let key = a["model"].as_str().unwrap();
+            let model = ctx.model_of(key).clone();
             let pins = model.pins();
             match conn.as_list() {
-                Some(l) if l.len() == pins.len() => vec![Element::Device(Device {
-                    name: s(name),
-                    model: model.name().to_string(),
-                    nodes: l.iter().map(Value::py_str).collect(),
-                })],
+                Some(l) if l.len() == pins.len() => {
+                    let nodes: Vec<String> = l.iter().map(Value::py_str).collect();
+                    match &model {
+                        DeviceModel::Thyratron(t) if ctx.events => {
+                            vec![events_element(ctx, key, t, name, &nodes)?]
+                        }
+                        _ => vec![Element::Device(Device {
+                            name: s(name),
+                            model: model.name().to_string(),
+                            nodes,
+                        })],
+                    }
+                }
                 _ => {
                     return Err(ctx.fail(
                         name,
@@ -1165,6 +1179,101 @@ fn core_spec(ctx: &Context, name: &str, c: &Value) -> Result<CoreSpec, Error> {
     })
 }
 
+// --- Event kernels (HYBRID_PHYSICS_PLAN.md H3) ----------------------------------------
+
+/// A tables file's field (`thyratron_events.Tables.to_dict`), as `T`.
+fn field<T: serde::de::DeserializeOwned>(v: &serde_json::Value, key: &str) -> Result<T, String> {
+    let x = v.get(key).ok_or_else(|| format!("no field {key}"))?;
+    serde_json::from_value(x.clone()).map_err(|e| format!("{key}: {e}"))
+}
+
+/// A thyratron's device part as its event kernels: its `devices` entry's `events` tables,
+/// for the same component version (Python's `builder._events_element`).
+fn events_element(
+    ctx: &mut Context,
+    key: &str,
+    t: &circuitsim::ir::Thyratron,
+    name: &str,
+    nodes: &[String],
+) -> Result<Element, Error> {
+    let where_ = format!("devices.{key}");
+    let entry = ctx
+        .spec
+        .devices
+        .get(key)
+        .and_then(Value::as_map)
+        .expect("checked in load_circuit");
+    let Some(events) = entry.get("events") else {
+        return Err(ctx.fail(
+            &where_,
+            "a thyratron in an events build needs its `events` tables",
+        ));
+    };
+    if t.mu_g2.is_some() {
+        return Err(ctx.fail(&where_, "event kernels are for triode thyratrons"));
+    }
+    let table = ctx.text(&where_, events)?;
+    let path = ctx
+        .lib
+        .config_dir()
+        .join("events")
+        .join(format!("{table}.json"));
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        ctx.fail(
+            &where_,
+            format!(
+                "no tables {} ({e}; scripts/thyratron_kernels.py --write)",
+                path.display()
+            ),
+        )
+    })?;
+    let bad = |e: String| ctx.fail(&where_, format!("tables {table}: {e}"));
+    let f: serde_json::Value = serde_json::from_str(&text).map_err(|e| bad(e.to_string()))?;
+    let unit = f.get("unit").cloned().unwrap_or_default();
+    let unit_device: String = field(&unit, "device").map_err(bad)?;
+    let file = ctx.text(&where_, entry.get("device").unwrap())?;
+    let device = versions::require_pinned(&ctx.lib.components_dir(), &file)
+        .map_err(|err| ctx.fail(&where_, err.0))?
+        .to_string();
+    if unit_device != device {
+        return Err(ctx.fail(
+            &where_,
+            format!("tables {table} are for {unit_device}, not {device}"),
+        ));
+    }
+    let reference = f
+        .get("source")
+        .and_then(|s| s.get("key"))
+        .and_then(|k| k.as_str())
+        .unwrap_or("?")
+        .to_string();
+    let el = circuitsim::ir::ThyratronEvents {
+        name: name.to_string(),
+        a: nodes[0].clone(),
+        g: nodes[1].clone(),
+        w: nodes[2].clone(),
+        k: nodes[3].clone(),
+        c_gk_f: t.c_gk,
+        c_ga_f: t.c_ga,
+        c_ak_f: t.c_ak,
+        g_leak_s: t.g_leak_s,
+        c_f: field(&unit, "c_f").map_err(bad)?,
+        r_s_ohm: field(&unit, "r_s_ohm").map_err(bad)?,
+        r_g_ohm: field(&unit, "r_g_ohm").map_err(bad)?,
+        ref_rate_hz: field(&f, "ref_rate_hz").map_err(bad)?,
+        v_g_v: field(&f, "v_g_v").map_err(bad)?,
+        log_slope: field(&f, "log_slope").map_err(bad)?,
+        v_s_v: field(&f, "v_s_v").map_err(bad)?,
+        dead_s: field(&f, "dead_s").map_err(bad)?,
+        latched: field(&f, "latched").map_err(bad)?,
+        pulses_a: field(&f, "pulses_a").map_err(bad)?,
+        grid_pulses_a: field(&f, "grid_pulses_a").map_err(bad)?,
+        source: format!("config/events/{table}.json, reference {reference}"),
+    };
+    ctx.replaced_models.insert(t.name.clone());
+    Ok(Element::ThyratronEvents(el))
+}
+
 // --- Devices ---------------------------------------------------------------------------
 
 fn make_models(ctx: &mut Context) -> Result<(), Error> {
@@ -1183,9 +1292,12 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
             .and_then(|r| ctx.lib.device(&r.to_string()))
             .map_err(|err| ctx.fail(&where_, err.0))?;
         let base_name = base.name().to_string();
+        if e.get("events").is_some() && !matches!(base, DeviceModel::Thyratron(_)) {
+            return Err(ctx.fail(&where_, "events: a thyratron's tables"));
+        }
         let model = if e.get("instance") == Some(&Value::Bool(false)) {
             if e.keys()
-                .any(|k| !["device", "instance", "source", "notes"].contains(&k))
+                .any(|k| !["device", "instance", "events", "source", "notes"].contains(&k))
             {
                 return Err(ctx.fail(
                     &where_,
@@ -1368,6 +1480,20 @@ pub fn build_ir_with(
     noise: Noise,
     heaters: Heaters,
 ) -> Result<CircuitIr, Error> {
+    build_ir_events(lib, spec, p, cores, noise, heaters, false)
+}
+
+/// [`build_ir_with`], with thyratrons as their event kernels when `events` (technique K,
+/// HYBRID_PHYSICS_PLAN.md H3): Python's `build_ir(..., events=)`.
+pub fn build_ir_events(
+    lib: &Library,
+    spec: &CircuitSpec,
+    p: &Params,
+    cores: Cores,
+    noise: Noise,
+    heaters: Heaters,
+    events: bool,
+) -> Result<CircuitIr, Error> {
     let mut q = p.clone();
     if let Some(module) = &spec.derived_module {
         for k in &spec.derived {
@@ -1391,6 +1517,8 @@ pub fn build_ir_with(
         parallel: HashMap::new(),
         types: HashMap::new(),
         heaters: heaters_setting(spec, heaters),
+        events,
+        replaced_models: HashSet::new(),
     };
     ctx.noise = noise_setting(&ctx, noise)?;
     ctx.tolerance = tolerance(&ctx)?;
@@ -1402,9 +1530,17 @@ pub fn build_ir_with(
         for (name, entry) in s.parts.iter() {
             elements.extend(expand_part(&mut ctx, name, entry, &[])?);
         }
+        // K replaces the island it plays in (technique M1 renders it, K plays it live); a
+        // section its switches leave empty is no island (it owns nothing it doesn't have).
+        let k = elements.is_empty()
+            || elements
+                .iter()
+                .any(|e| matches!(e, Element::ThyratronEvents(_)));
         sections.push(Section {
             title: s.title.clone(),
-            substeps: s.substeps,
+            substeps: if k { None } else { s.substeps },
+            decimate: if k { None } else { s.decimate },
+            owns: if k { None } else { s.owns.clone() },
             elements,
         });
     }
@@ -1475,7 +1611,12 @@ pub fn build_ir_with(
         Some(start) => Some(heater_spec(&ctx, start)?),
         None => None,
     };
-    let mut models: Vec<DeviceModel> = ctx.models.into_iter().map(|(_, m)| m).collect();
+    let mut models: Vec<DeviceModel> = ctx
+        .models
+        .into_iter()
+        .map(|(_, m)| m)
+        .filter(|m| !ctx.replaced_models.contains(m.name()))
+        .collect();
     models.extend(ctx.core_models.into_iter().map(DeviceModel::MagneticCore));
     let ir = CircuitIr {
         version: IR_VERSION,

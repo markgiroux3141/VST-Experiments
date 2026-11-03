@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as Json;
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_with, spec};
+use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_events, spec};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -147,8 +147,9 @@ fn rust_builds_the_ir_python_builds() {
                 Some("cold") => Heaters::Cold,
                 Some(_) => Heaters::Warm,
             };
+            let events = case.get("events") == Some(&Json::Bool(true));
             let built = spec::resolve(&c, &overrides)
-                .and_then(|p| build_ir_with(&lib, &c, &p, cores, noise, heaters));
+                .and_then(|p| build_ir_events(&lib, &c, &p, cores, noise, heaters, events));
             let ir = match built {
                 Ok(ir) => ir,
                 Err(e) => {

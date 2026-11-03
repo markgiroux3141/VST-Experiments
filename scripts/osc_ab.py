@@ -127,6 +127,7 @@ def render(quality: str, sets: dict, x: np.ndarray, gate: np.ndarray, pitch: np.
             "pitch": pitch,
             "key": np.zeros(len(gate)),
             "pressure": np.zeros(len(gate)),
+            "pitch2": np.zeros(len(gate)),
         },
     ).vectors
     return v["v(out)"], v["v(mix)"]

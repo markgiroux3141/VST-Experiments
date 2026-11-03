@@ -94,6 +94,7 @@ def run(sets: dict, note: int, pressure_v: float = 0.0) -> dict:
             "pitch": np.full(n, -15.0),
             **({"key": np.full(n, key_v(s, note))} if "key" in dict(s.cv_inputs) else {}),
             **({"pressure": np.full(n, pressure_v)} if "pressure" in dict(s.cv_inputs) else {}),
+            **({"pitch2": np.zeros(n)} if "pitch2" in dict(s.cv_inputs) else {}),
         },
     ).vectors
     k = slice(n - int(READ_S * fs), n)

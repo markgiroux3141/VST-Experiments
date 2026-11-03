@@ -61,7 +61,8 @@ fn main() -> Result<(), String> {
     }
     let config = Path::new("config");
     let s = Settings::load(config, quality)?;
-    let circuit = Circuit::load(config, &circuit.ok_or("--circuit is required")?, s.cores()?)?;
+    let circuit = Circuit::load(config, &circuit.ok_or("--circuit is required")?, s.cores()?)?
+        .with_events(s.events);
     let input = input.ok_or("--input is required")?;
     let x = if input.extension().is_some_and(|e| e == "f64") {
         std::fs::read(&input)

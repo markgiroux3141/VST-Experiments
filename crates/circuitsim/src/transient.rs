@@ -625,6 +625,11 @@ pub struct Stats {
     /// DK with Jacobian reuse: stage solves that failed with the lagged
     /// Jacobian and were redone with exact Newton (before any halving).
     pub exact_retries: u64,
+    /// Event kernels ([`crate::events`]): strikes fired, those the prediction missed
+    /// (started at the next step), and latched conditions met (no event played).
+    pub events: u64,
+    pub late_events: u64,
+    pub latched_events: u64,
 }
 
 /// The step machinery of a fully implicit method: s coupled copies.
@@ -736,12 +741,7 @@ impl Dk {
             d: vec![0.0; r],
             neg: vec![0.0; m.max(r)],
             wm: vec![0.0; m],
-            wv: vec![
-                0.0;
-                mna.waves.len()
-                    + mna.externals.len()
-                    + mna.noise.as_ref().map_or(0, |n| n.columns.len())
-            ],
+            wv: vec![0.0; mna.waves.len() + mna.externals.len() + mna.current_columns().len()],
             v_guess: vec![0.0; m],
             v_lin_guess: vec![0.0; m],
             probes: mna
@@ -750,6 +750,7 @@ impl Dk {
                 .filter_map(|(_, i)| *i)
                 .chain(mna.outputs.iter().copied())
                 .chain(mna.media_senses())
+                .chain(mna.event_senses())
                 .collect(),
             xu: vec![0.0; mna.len()],
             e_ps: vec![0.0; m + r],
@@ -776,6 +777,8 @@ pub struct Transient {
     /// A medium's senses over the next step, given from outside (a multi-rate part's,
     /// `partition.rs`): taken by the step's media push instead of its own sense.
     media_batches: Vec<Option<Vec<f64>>>,
+    /// The thyratrons' event kernels ([`Mna::events`] order).
+    events: Vec<crate::events::Run>,
     opts: Options,
     tab: Tableau,
     h: f64,
@@ -912,12 +915,16 @@ impl Transient {
                 mna.externals.len()
             )));
         }
-        if (!mna.externals.is_empty() || mna.noise.is_some() || mna.heat.is_some())
+        if (!mna.externals.is_empty()
+            || mna.noise.is_some()
+            || mna.heat.is_some()
+            || !mna.events.is_empty())
             && (opts.solver != Solver::Dk || !opts.method.tableau().diagonal)
         {
             return Err(Error::new(
-                "externals (control inputs, a partition's couplings), noise and heated \
-                 cathodes need the DK solver and a diagonally implicit method",
+                "externals (control inputs, a partition's couplings), noise, heated \
+                 cathodes and event kernels need the DK solver and a diagonally implicit \
+                 method",
             ));
         }
         if let Some(noise) = &mut mna.noise {
@@ -960,9 +967,16 @@ impl Transient {
             .map(|m| crate::media::Medium::new(&m.element, 1.0 / h, m.noise_seed))
             .collect::<Result<Vec<_>, String>>()
             .map_err(Error::new)?;
+        let events = mna
+            .events
+            .iter()
+            .map(|e| crate::events::Run::new(&e.element, h))
+            .collect::<Result<Vec<_>, String>>()
+            .map_err(Error::new)?;
         let mut tr = Transient {
             media_batches: vec![None; media.len()],
             media,
+            events,
             opts,
             h,
             newton,
@@ -1019,6 +1033,8 @@ impl Transient {
         // The media take the operating point's force: the first step carries their
         // pickups from silence (sample 0) to their sample 1.
         tr.step_media();
+        // The event kernels sense the operating point (sample 0).
+        tr.step_events();
         Ok(tr)
     }
 
@@ -1284,6 +1300,7 @@ impl Transient {
         self.n += 1;
         if res.is_ok() {
             self.step_media();
+            self.step_events();
         }
         res.map_err(|(level, f)| {
             let what = format!(
@@ -1715,7 +1732,7 @@ impl Transient {
                 &self.mna.b,
                 self.mna.input_row,
                 &self.mna.source_rows(),
-                self.mna.noise.as_ref().map_or(&[], |n| &n.columns),
+                &self.mna.current_columns(),
                 &dk.ports,
                 &dk.support,
                 &dk.probes,
@@ -1773,6 +1790,15 @@ impl Transient {
             }
             if let Some(noise) = &self.mna.noise {
                 noise.fill(th, &mut dk.wv[nw + self.ext0.len()..]);
+            }
+            // The event kernels' currents (anode, grid, the network's deficit), held over
+            // the whole sample.
+            let ne = 3 * self.events.len();
+            let len = dk.wv.len();
+            for (v, r) in dk.wv[len - ne..].chunks_exact_mut(3).zip(&self.events) {
+                v[0] = r.current();
+                v[1] = r.grid_current();
+                v[2] = r.comp_current();
             }
             sys.stage(&dk.base, u, &dk.wv, &dk.w, &mut dk.out);
             // The initial guess, as try_step_dirk's on the device nodes (the
@@ -2105,6 +2131,22 @@ impl Transient {
         for (m, new) in self.media.iter_mut().zip(&mna.media) {
             m.update(&new.element).map_err(|_| changed())?;
         }
+        // Event kernels carry on (their state, their pending charges); new tables
+        // start a kernel afresh.
+        if mna.events.len() != self.events.len()
+            || mna
+                .events
+                .iter()
+                .zip(&self.events)
+                .any(|(new, old)| new.element.name != old.element.name)
+        {
+            return Err(changed());
+        }
+        for (r, new) in self.events.iter_mut().zip(&mna.events) {
+            if r.element != new.element {
+                *r = crate::events::Run::new(&new.element, self.h).map_err(Error::new)?;
+            }
+        }
         let same_devices = mna.devices.len() == self.mna.devices.len()
             && mna.devices.iter().zip(&self.mna.devices).all(|(a, b)| {
                 a.name == b.name
@@ -2186,6 +2228,20 @@ impl Transient {
             let mut vals = vec![0.0; noise.columns.len()];
             noise.fill(0.0, &mut vals);
             noise.add_to(&vals, &mut f);
+        }
+        // The event kernels' currents over the next sample (set after the last).
+        for (e, r) in self.mna.events.iter().zip(&self.events) {
+            for (pin, i) in [(e.a, r.current()), (e.g, r.grid_current())] {
+                if let Some(p) = pin {
+                    f[p] -= i;
+                }
+                if let Some(k) = e.k {
+                    f[k] += i;
+                }
+            }
+            if let Some(a) = e.a {
+                f[a] += r.comp_current();
+            }
         }
         for (w, v) in self.mna.waves.iter().zip(&waves) {
             f[w.row] += v;
@@ -2290,6 +2346,40 @@ impl Transient {
             };
             self.ext0[k + i] = self.ext1[k + i];
             self.ext1[k + i] = y;
+        }
+    }
+
+    /// The event kernels' senses after a sample: each gives its current over the next step.
+    ///
+    /// The currents jump at the sample (x doesn't): the derivative a step starts from
+    /// (`F = C x'`, carried in from the last stage, which a method with an explicit first
+    /// stage uses) moves by the jumps on the a, g and k rows, or the first stage would
+    /// average the old and new currents and the step's charge wouldn't be the table's.
+    fn step_events(&mut self) {
+        let at = |u: Option<usize>| u.map_or(0.0, |j| self.x[j]);
+        for (r, e) in self.events.iter_mut().zip(&self.mna.events) {
+            let (va, vg, vk) = (at(e.a), at(e.g), at(e.k));
+            let before = (r.counts, r.current(), r.grid_current(), r.comp_current());
+            r.sense(va - vk, vg - vk);
+            let counts = r.counts;
+            let (jump_a, jump_g) = (r.current() - before.1, r.grid_current() - before.2);
+            let jump_c = r.comp_current() - before.3;
+            self.stats.events += counts.events - before.0.events;
+            self.stats.late_events += counts.late - before.0.late;
+            self.stats.latched_events += counts.latched - before.0.latched;
+            if (jump_a != 0.0 || jump_g != 0.0 || jump_c != 0.0)
+                && let Some(dk) = &mut self.dk
+            {
+                for (row, d) in [
+                    (e.a, jump_c - jump_a),
+                    (e.g, -jump_g),
+                    (e.k, jump_a + jump_g),
+                ] {
+                    if let Some(p) = row.and_then(|u| dk.support.iter().position(|&s| s == u)) {
+                        dk.f[p] += d;
+                    }
+                }
+            }
         }
     }
 

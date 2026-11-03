@@ -41,12 +41,20 @@ pub struct Device {
     /// The circuit's control input a keyboard's keys set the pitch on, for a device with
     /// an oscillator of its own (its audio input then stays silent; None: none).
     pub pitch: Option<Pitch>,
+    /// A second oscillator's pitch input, on a keyboard string of its own: its own measured
+    /// tuning, no range switch (tube_synth's gas-tube saw, whose law isn't the first's; None:
+    /// none).
+    pub pitch2: Option<Pitch>,
     /// Its circuit makes its own sound without a pitch input (a drum's oscillator): the
     /// keys only gate it, its audio input stays silent (as with a `pitch` input).
     pub own_oscillator: bool,
     /// The sections its draft puts on the second thread, over its quality's
     /// `partition` (None: the quality's).
     pub partition: Option<&'static [&'static str]>,
+    /// How its partitions see each other's nodes, over its quality's `partition_coupling`
+    /// (None: the quality's): "hold" where a waveform's edge crosses a cut (extrapolated, a
+    /// one-sample edge doubled for a sample).
+    pub coupling: Option<&'static str>,
 }
 
 /// A keyboard's pitch into a circuit's control input: the control and the keyboard's
@@ -307,7 +315,11 @@ pub fn key_feeds(device: &Device, spec: &CircuitSpec) -> Result<Vec<Feed>, Strin
                     Some(t) => Feed::VelocityGate(up, t),
                     None => Feed::Gate(up, down),
                 })
-            } else if let Some(p) = device.pitch.filter(|p| p.control == name) {
+            } else if let Some(p) = [device.pitch, device.pitch2]
+                .into_iter()
+                .flatten()
+                .find(|p| p.control == name)
+            {
                 Ok(Feed::Pitch(p))
             } else if let Some(k) = KeyString::of(spec, name) {
                 Ok(Feed::Key(k))
@@ -358,11 +370,14 @@ impl Device {
         if let Some(p) = self.partition {
             s.partition = p.iter().map(|t| t.to_string()).collect();
         }
+        if let Some(c) = self.coupling {
+            s.partition_coupling = c.to_string();
+        }
         s
     }
 }
 
-pub const DEVICES: [Device; 10] = [
+pub const DEVICES: [Device; 11] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -384,6 +399,8 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
     Device {
@@ -399,6 +416,8 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
     Device {
@@ -420,6 +439,8 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
     Device {
@@ -437,6 +458,8 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
     Device {
@@ -454,6 +477,8 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
     Device {
@@ -471,6 +496,8 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
     Device {
@@ -492,6 +519,8 @@ pub const DEVICES: [Device; 10] = [
             range: None,
         }),
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
     Device {
@@ -524,8 +553,16 @@ pub const DEVICES: [Device; 10] = [
         // modulator (#14) on one of its own, ahead of the oscillator and the LFO (they own
         // its inputs, the buffer and the LFO's output; it owns its output into the mixer):
         // on the filter's thread it cost +46%, alone nothing but a core. Empty (RING OFF,
-        // or the LFO off), it gets no thread.
+        // or the LFO off), it gets no thread. The gas-tube saw (SAW ON) on one of its own with
+        // its supply and its grid's side of the pitch (it owns the follower's cathode, where
+        // the mixer hears it); OSC OFF empties the LC oscillator's.
         own_oscillator: false,
+        pitch2: Some(Pitch {
+            control: "pitch2",
+            tuning: SYNTH_SAW_TUNING,
+            range: None,
+        }),
+        coupling: None,
         partition: Some(&[
             "resonance",
             "|",
@@ -540,10 +577,14 @@ pub const DEVICES: [Device; 10] = [
             "oscillator",
             "pitch",
             "|",
+            "saw pitch",
+            "saw",
+            "|",
             "lfo",
             "|",
             "power supply",
             "bias supply",
+            "saw supply",
         ]),
     },
     Device {
@@ -559,9 +600,39 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: true,
+        pitch2: None,
+        coupling: None,
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
         // oscillator and its pitch driver | the supplies.
         partition: Some(&["oscillator", "pitch", "|", "power supply", "bias supply"]),
+    },
+    Device {
+        id: "saw_884",
+        label: "Gas-tube sawtooth (884 thyratron)",
+        circuit: "saw_884",
+        panel: None,
+        ahead_s: AHEAD_S,
+        // The 884 as its event kernels (technique K: the draft's `events`), whose tables
+        // step at 3.072 MHz: a whole 32 per step at the draft's 96 kHz (HYBRID_PHYSICS_PLAN.md
+        // H4).
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: Some("gate"),
+        velocity: None,
+        pitch: Some(Pitch {
+            control: "pitch",
+            tuning: SAW_884_TUNING,
+            range: None,
+        }),
+        own_oscillator: false,
+        pitch2: None,
+        coupling: Some("hold"),
+        // Two threads: the VCA | the rest (the oscillator, the keys and the envelope: control
+        // inputs stay in the first part). The cuts are the VCA's grids (`ga`, `gt`), and the
+        // saw's edge crosses at `ga`: extrapolated it was doubled for a sample (peaks 49 V
+        // against 34), held it is the one solve's.
+        partition: Some(&["vca"]),
     },
     Device {
         id: "plate_reverb",
@@ -576,6 +647,8 @@ pub const DEVICES: [Device; 10] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        pitch2: None,
+        coupling: None,
         partition: None,
     },
 ];
@@ -860,11 +933,245 @@ const VCO_LC_TUNING: &[(f64, f64)] = &[
     (1799.85, 0.0),
 ];
 
+/// saw_884's keyboard tuning: `scripts/saw_884_tuning.py` (reports/hybrid/saw_884_tuning.json,
+/// 2026-11-03): the 884 as its event kernels at the draft, the pitch read on CT's lower plate
+/// `n`, 5 V apart and bisected wherever the interpolation missed the law by more than 1 cent:
+/// 13.2 Hz to 4.52 kHz. Below ~17 Hz (the two lowest points) the ramp is slower than K's
+/// tables reach (0.002 V/us), so K holds their end there. A render (M1) can sit flat of it
+/// in the bass (HYBRID_PHYSICS_PLAN.md H4: up to ~7 cents at 180 Hz, ~23 at 47 Hz, open).
+const SAW_884_TUNING: &[(f64, f64)] = &[
+    (13.15, -250.0),
+    (15.58, -248.75),
+    (18.42, -247.5),
+    (21.71, -246.25),
+    (25.5, -245.0),
+    (29.84, -243.75),
+    (34.77, -242.5),
+    (40.34, -241.25),
+    (46.6, -240.0),
+    (49.99, -239.375),
+    (53.56, -238.75),
+    (57.32, -238.125),
+    (61.27, -237.5),
+    (65.4, -236.875),
+    (69.73, -236.25),
+    (74.25, -235.625),
+    (78.97, -235.0),
+    (83.88, -234.375),
+    (88.97, -233.75),
+    (94.26, -233.125),
+    (99.73, -232.5),
+    (105.4, -231.875),
+    (111.25, -231.25),
+    (117.29, -230.625),
+    (123.51, -230.0),
+    (136.49, -228.75),
+    (150.13, -227.5),
+    (164.43, -226.25),
+    (179.36, -225.0),
+    (194.9, -223.75),
+    (211.01, -222.5),
+    (227.65, -221.25),
+    (244.75, -220.0),
+    (262.34, -218.75),
+    (280.38, -217.5),
+    (298.84, -216.25),
+    (317.7, -215.0),
+    (336.94, -213.75),
+    (356.54, -212.5),
+    (376.43, -211.25),
+    (396.58, -210.0),
+    (417.02, -208.75),
+    (437.73, -207.5),
+    (458.7, -206.25),
+    (479.91, -205.0),
+    (501.36, -203.75),
+    (523.02, -202.5),
+    (544.89, -201.25),
+    (566.96, -200.0),
+    (589.22, -198.75),
+    (611.61, -197.5),
+    (656.76, -195.0),
+    (702.49, -192.5),
+    (748.76, -190.0),
+    (795.52, -187.5),
+    (842.72, -185.0),
+    (890.33, -182.5),
+    (938.31, -180.0),
+    (986.63, -177.5),
+    (1034.79, -175.0),
+    (1083.22, -172.5),
+    (1131.9, -170.0),
+    (1180.81, -167.5),
+    (1229.93, -165.0),
+    (1279.25, -162.5),
+    (1328.76, -160.0),
+    (1378.45, -157.5),
+    (1428.29, -155.0),
+    (1528.43, -150.0),
+    (1578.71, -147.5),
+    (1628.75, -145.0),
+    (1728.47, -140.0),
+    (1828.54, -135.0),
+    (1928.92, -130.0),
+    (2029.58, -125.0),
+    (2130.48, -120.0),
+    (2231.61, -115.0),
+    (2332.94, -110.0),
+    (2434.46, -105.0),
+    (2536.14, -100.0),
+    (2636.9, -95.0),
+    (2736.62, -90.0),
+    (2836.4, -85.0),
+    (2936.22, -80.0),
+    (3036.08, -75.0),
+    (3135.98, -70.0),
+    (3235.91, -65.0),
+    (3335.87, -60.0),
+    (3435.86, -55.0),
+    (3535.86, -50.0),
+    (3635.87, -45.0),
+    (3735.9, -40.0),
+    (3835.95, -35.0),
+    (3936.0, -30.0),
+    (4036.06, -25.0),
+    (4136.13, -20.0),
+    (4232.87, -15.0),
+    (4329.43, -10.0),
+    (4425.93, -5.0),
+    (4522.37, 0.0),
+];
+
+/// tube_synth's gas-tube saw's keyboard tuning (`pitch2`): `scripts/saw_884_tuning.py
+/// --target synth` (reports/hybrid/synth_saw_tuning.json, 2026-11-03): K at the draft, the
+/// saw alone on (its own supply, the LFO off: the vibrato follower's grid at 0 V either
+/// way), the pitch read on its CT plate `s_ct`, 5 V apart and bisected wherever the
+/// interpolation missed the law by more than 1 cent: 10.8 Hz to 3.99 kHz. Below ~15 Hz (the
+/// lowest 3 points) the ramp is slower than K's tables reach (0.002 V/us), so K holds their
+/// end there. A render (M1) sits flat of it in the bass (+33 cents K over M1 at 39 Hz, under
+/// 1 cent from 1.9 kHz up: HYBRID_PHYSICS_PLAN.md H4, open).
+const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
+    (10.81, -310.0),
+    (12.89, -308.75),
+    (15.31, -307.5),
+    (18.1, -306.25),
+    (21.32, -305.0),
+    (23.09, -304.375),
+    (24.98, -303.75),
+    (26.99, -303.125),
+    (29.13, -302.5),
+    (31.39, -301.875),
+    (33.78, -301.25),
+    (36.3, -300.625),
+    (38.95, -300.0),
+    (41.74, -299.375),
+    (44.67, -298.75),
+    (47.73, -298.125),
+    (50.94, -297.5),
+    (54.27, -296.875),
+    (57.75, -296.25),
+    (61.36, -295.625),
+    (65.1, -295.0),
+    (68.98, -294.375),
+    (72.99, -293.75),
+    (77.14, -293.125),
+    (81.41, -292.5),
+    (85.8, -291.875),
+    (90.32, -291.25),
+    (94.95, -290.625),
+    (99.7, -290.0),
+    (109.55, -288.75),
+    (119.85, -287.5),
+    (130.55, -286.25),
+    (141.65, -285.0),
+    (153.09, -283.75),
+    (164.89, -282.5),
+    (177.01, -281.25),
+    (189.44, -280.0),
+    (202.16, -278.75),
+    (215.15, -277.5),
+    (228.38, -276.25),
+    (241.82, -275.0),
+    (255.48, -273.75),
+    (269.35, -272.5),
+    (283.42, -271.25),
+    (297.68, -270.0),
+    (312.1, -268.75),
+    (326.69, -267.5),
+    (341.44, -266.25),
+    (356.33, -265.0),
+    (371.35, -263.75),
+    (386.44, -262.5),
+    (401.65, -261.25),
+    (416.97, -260.0),
+    (447.94, -257.5),
+    (479.29, -255.0),
+    (511.01, -252.5),
+    (543.05, -250.0),
+    (575.38, -247.5),
+    (607.97, -245.0),
+    (640.67, -242.5),
+    (673.59, -240.0),
+    (706.71, -237.5),
+    (740.02, -235.0),
+    (773.5, -232.5),
+    (807.15, -230.0),
+    (840.95, -227.5),
+    (874.88, -225.0),
+    (908.95, -222.5),
+    (943.14, -220.0),
+    (977.45, -217.5),
+    (1011.61, -215.0),
+    (1080.06, -210.0),
+    (1148.78, -205.0),
+    (1217.82, -200.0),
+    (1287.12, -195.0),
+    (1356.65, -190.0),
+    (1426.39, -185.0),
+    (1496.32, -180.0),
+    (1566.42, -175.0),
+    (1636.21, -170.0),
+    (1705.63, -165.0),
+    (1775.14, -160.0),
+    (1844.75, -155.0),
+    (1914.44, -150.0),
+    (1984.2, -145.0),
+    (2054.04, -140.0),
+    (2123.94, -135.0),
+    (2193.91, -130.0),
+    (2263.93, -125.0),
+    (2334.0, -120.0),
+    (2404.13, -115.0),
+    (2474.3, -110.0),
+    (2544.52, -105.0),
+    (2614.19, -100.0),
+    (2682.96, -95.0),
+    (2751.73, -90.0),
+    (2820.51, -85.0),
+    (2889.29, -80.0),
+    (2958.07, -75.0),
+    (3026.85, -70.0),
+    (3095.64, -65.0),
+    (3164.42, -60.0),
+    (3233.21, -55.0),
+    (3302.01, -50.0),
+    (3370.8, -45.0),
+    (3439.59, -40.0),
+    (3508.4, -35.0),
+    (3577.2, -30.0),
+    (3646.01, -25.0),
+    (3714.81, -20.0),
+    (3783.63, -15.0),
+    (3852.45, -10.0),
+    (3921.28, -5.0),
+    (3990.1, 0.0),
+];
+
 /// Controls never on a panel (operating conditions).
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 43] = [
+const LABELS: [(&str, &str); 46] = [
     ("range", "Range (AUTO: by key)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
@@ -905,6 +1212,9 @@ const LABELS: [(&str, &str); 43] = [
     ("ring_on", "Ring mod on (needs the LFO; off saves a core)"),
     ("ring", "Ring level (oscillator x LFO)"),
     ("osc_level", "Oscillator level"),
+    ("osc_on", "Oscillator on (LC; off saves a core)"),
+    ("saw_on", "Saw on (gas-tube 884; off saves a core)"),
+    ("saw_level", "Saw level"),
     ("drive", "Drive (send level)"),
     ("decay_500hz_s", "Decay at 500 Hz (s)"),
     ("return_level", "Return"),
@@ -1125,7 +1435,10 @@ mod tests {
                 "wobble",
                 "ring_on",
                 "ring",
+                "osc_on",
                 "osc_level",
+                "saw_on",
+                "saw_level",
                 "heater"
             ]
         );
@@ -1154,6 +1467,19 @@ mod tests {
             key_feeds(&DEVICES[8], &kick),
             Ok(vec![Feed::Gate(-110.0, -1.0)])
         );
+        // The gas-tube sawtooth: the keys set its pitch and gate its VCA.
+        let saw = spec_of("saw_884");
+        let saw_keys: Vec<String> = knobs(&DEVICES[9], &saw)
+            .into_iter()
+            .map(|k| k.key)
+            .collect();
+        assert_eq!(saw_keys, ["attack", "release"]);
+        let pitch = DEVICES[9].pitch.unwrap();
+        assert_eq!(
+            key_feeds(&DEVICES[9], &saw),
+            Ok(vec![Feed::Pitch(pitch), Feed::Gate(-110.0, -1.0)])
+        );
+        assert!(DEVICES[9].plays_own_oscillator());
         assert!(DEVICES[8].plays_own_oscillator() && DEVICES[7].plays_own_oscillator());
         assert!(!DEVICES[5].plays_own_oscillator());
         // The range switch: LOW / HIGH / AUTO on the panel, 0 or 1 to the circuit.
@@ -1185,7 +1511,8 @@ mod tests {
                     min_v: -27.0,
                     max_v: 27.0
                 }),
-                Feed::Pressure(15.0)
+                Feed::Pressure(15.0),
+                Feed::Pitch(DEVICES[7].pitch2.unwrap())
             ])
         );
         // Velocity: 127 at the circuit's gate_on_v, softer keys down the table.
@@ -1223,6 +1550,10 @@ mod tests {
         assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
         let t = DEVICES[7].pitch.unwrap().range.unwrap().low;
         assert!(t.windows(2).all(|w| w[1].0 > w[0].0));
+        let t = DEVICES[7].pitch2.unwrap().tuning;
+        assert!(t.windows(2).all(|w| w[1].0 > w[0].0 && w[1].1 > w[0].1));
+        let t = DEVICES[9].pitch.unwrap().tuning;
+        assert!(t.windows(2).all(|w| w[1].0 > w[0].0 && w[1].1 > w[0].1));
     }
 
     /// The range switch: AUTO plays keys below the split on LOW and the rest on HIGH

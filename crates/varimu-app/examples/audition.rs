@@ -84,7 +84,7 @@ fn main() -> Result<(), String> {
         }));
         p
     } else {
-        let circuit = Circuit::load(&config, d.circuit, s.cores()?)?;
+        let circuit = Circuit::load(&config, d.circuit, s.cores()?)?.with_events(s.events);
         let v0 = turn.as_ref().map_or(Vec::new(), |(_, a, _)| values(a));
         let p = Player::start(
             Source::Timeline {

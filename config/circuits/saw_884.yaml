@@ -1,0 +1,221 @@
+# The gas-tube sawtooth voice (HYBRID_PHYSICS_PLAN.md H4): an RCA 884 relaxation oscillator
+# charged by a pentode's constant current, its pitch the pentode's grid, keyed through a
+# VCA. Invented circuit, not modelled hardware: round numbers, every value a design choice.
+#   CT   the timing capacitor, from B+ to `n` (5 nF: the event-kernel unit's C)
+#   V2   6V6GT, the charger: it sinks a constant current from `n` (its plate there, 175-300 V:
+#        well above its knee), so CT's voltage B+ - n ramps linearly; the `pitch` control input
+#        on its grid through a stopper, its cathode returned through RK2 to the -150 V rail
+#        (current feedback: ~0.02-2 mA over the input's range, ~13 Hz-4.5 kHz)
+#   V1   the 884 across CT: its anode at B+ through RS (450 ohm: the 884's peak current ~0.25
+#        A from ~125 V), its cathode at `n`. It strikes near ~125 V (its grid ~-12 V: the
+#        "bigger ramp" against RCA's ~46 V) and pulls `n` back up. Its cathode moves, so the
+#        grid's bias is a cell in the grid return (a C battery, as vintage gear had), through
+#        RG: no capacitor, so the grid's charge per strike can't build a lift that feeds back
+#        over the cycles (RCA's C1 did)
+#   V3   12AU7 cathode follower off `n` through a grid stopper, AC-coupled to `saw` (the
+#        sawtooth inverted, falling ramps and sharp rises). Its plate on a rail of its own
+#        above B+: at each strike `n` leaps to within ~10 V of B+, and a follower with its
+#        plate there ran out of headroom, its grid conducted and put charge back into CT
+#        (~11% sharp: the oscillator's own pitch, and across the island's cut a sample late,
+#        M1 +270-590 cents)
+#   The envelope (tube_voice.yaml's, after the Novachord): a key switches the keyboard bus
+#        (the `gate` control input) between -110 V (no key) and -1 V (a key down). A 6X4's
+#        two sections (V4A / V4B) steer it: with a key down the bus charges `env` through the
+#        ATTACK rheostat and V4A; with the key up V4A blocks and `env` discharges into the bus
+#        through the RELEASE rheostat and V4B. CENV holds it: -110 V shut, ~-2 V open
+#   The VCA (tube_kick.yaml's): a 12AU7 cathode-coupled pair (V5A / V5B), the saw attenuated
+#        into V5A's grid (~+-2 V: the pair nearly linear, the ramp kept); its tail a third
+#        section (V6A) whose grid is 0.8 of the envelope, closed with the key up. The tail
+#        current's swing is common mode at the plates; a 12AX7 differential stage (V7A / V7B)
+#        on a 12AU7 current sink (V6B, its grid on a -87 V reference) takes their difference,
+#        so the envelope's own step cancels. V7B's plate, AC-coupled, is `out`
+#   The oscillator runs all the time, as a real one would: the pitch is settled when a key
+#        lands, and the VCA only opens onto it.
+# Renders run the oscillator as an island (technique M1: 16 steps per sample behind the
+# anti-alias decimator), cut at the follower's cathode `kf` (it owns it: a low impedance,
+# loaded only by the output's coupling into 1 Mohm). Everything whose current the ramp feels
+# is inside: the charger (its current is the ramp) and the follower (its grid's current at
+# each strike's edge); returned across the cut a sample late either detuned it. Built with
+# events (technique K, builder.build(..., events=True): the live quality) the 884 is its
+# event kernels from config/events/884_saw.json and the island is an ordinary section.
+# The supplies are ideal for now (as RCA's reference circuit's B+).
+
+title: "Gas-tube sawtooth voice (884)"
+input: in
+cv_inputs:
+  pitch: pv
+  gate: bus
+probes: [out, saw, n, env, kc, a, g, gp, k2]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "provisional: model knowledge (the audio input is unused: the oscillator is the source)"}
+  output_volts_peak: {value: 50.0, source: "provisional: model knowledge (the VCA's output with a key down: ~18 V rms, peaks 28-34 V over the range at the draft, higher at the bottom (A0 ~43 V: the saw tilts through the couplings); set from renders, 2026-11-03)"}
+
+controls:
+  attack: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the ATTACK rheostat, 1k + 2.2M log into 0.47 uF: ~2 ms to ~1 s; tube_voice.yaml's)"}
+  release: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (design: the RELEASE rheostat, 4.7k + 4.7M log from 0.47 uF: ~10 ms to ~2 s; tube_voice.yaml's)"}
+
+values:
+  # --- supply (ideal)
+  b_plus_v: {value: 300.0, source: "provisional: model knowledge (design: B+ for the oscillator, the charger's screen and the follower)"}
+  b_neg_v: {value: -150.0, source: "provisional: model knowledge (design: the negative rail for the charger's cathode)"}
+  b_follow_v: {value: 450.0, source: "provisional: model knowledge (design: the follower's plate rail, above B+: headroom when `n` leaps to near B+)"}
+  b_vca_v: {value: 250.0, source: "provisional: model knowledge (design: the VCA's and the differential stage's plate rail, as tube_kick.yaml's b3)"}
+  b_neg45_v: {value: -45.0, source: "provisional: model knowledge (design: the VCA tail's cathode return, as tube_kick.yaml's -45 V rail)"}
+  b_neg100_v: {value: -100.0, source: "provisional: model knowledge (design: the current sink's return, as tube_kick.yaml's -100 V rail)"}
+  v_ref_v: {value: -87.0, source: "provisional: model knowledge (design: the current sink's grid reference, a 5651's ~87 V below ground as tube_kick.yaml's TUNE regulator)"}
+  # --- the input (unused)
+  r_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a load on the unused audio input)"}
+  # --- charger
+  r_pitch_stop_ohm: {value: 10.0e+3, source: "provisional: model knowledge (V2's grid stopper from the pitch input)"}
+  r_pitch_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the pitch input's load, a CV input's impedance; it keeps the input's node in the first part, where control inputs live)"}
+  r_screen2_ohm: {value: 1.0e+3, source: "provisional: model knowledge (V2's screen stopper from B+)"}
+  r_k2_ohm: {value: 68.0e+3, source: "provisional: model knowledge (design: V2's cathode to -150 V, current feedback: ~2 mA with the pitch input at 0 V)"}
+  # --- oscillator
+  c_t_f: {value: 5.0e-9, source: "provisional: model knowledge (design: the timing capacitor; the event-kernel unit's C, RCA's C6)"}
+  r_s_ohm: {value: 450.0, source: "provisional: model knowledge (design: the discharge resistor, RCA's R4 (350-500 ohm): the 884's peak current ~0.25 A from ~125 V)"}
+  r_grid_ohm: {value: 2.2e+3, source: "provisional: model knowledge (design: the 884's grid return, a stopper to the bias cell)"}
+  bias_cell_v: {value: -12.0, source: "provisional: model knowledge (design: the 884's grid bias, a cell in the grid return: a strike near ~125 V on its control characteristic)"}
+  c_state_f: {value: 1.0, source: "numerical: the thyratron's state node integrator (1 V = one e-fold of ion density)"}
+  w_start_v: {value: -25.0, source: "numerical: the plasma state held off for the DC operating point (as rca_884_sweep.yaml)"}
+  c_start_v: {value: 0.0, source: "numerical: the timing capacitor discharged for the DC operating point (a relaxation oscillator has no stable DC state)"}
+  r_n_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for `n` (a pentode's plate and a capacitor give it none; CT's leakage). A real bleeder would rival the charger's ~20 uA at the bottom of the range"}
+  # --- the follower
+  r_follow_grid_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the follower's grid stopper off `n`)"}
+  r_follow_k_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the follower's cathode load to ground, ~2-3 mA)"}
+  c_out_f: {value: 0.1e-6, source: "provisional: model knowledge (output coupling: 1.6 Hz with the load)"}
+  r_out_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the saw's load)"}
+  # --- the envelope (tube_voice.yaml's)
+  gate_off_v: {value: -110.0, source: "provisional: model knowledge (design: the keyboard bus with no key down, the VCA shut past its tail's cutoff)"}
+  gate_on_v: {value: -1.0, source: "provisional: model knowledge (design: the keyboard bus with a key down, a volt past the envelope's open level)"}
+  r_bus_ohm: {value: 1.0e+3, source: "provisional: model knowledge (the keyboard bus's source resistance and the attack's minimum: ~0.5 ms into 0.47 uF)"}
+  r_attack_ohm: {value: 2.2e+6, source: "provisional: model knowledge (the ATTACK rheostat's track: up to ~1 s)"}
+  r_release_min_ohm: {value: 4.7e+3, source: "provisional: model knowledge (the release's minimum)"}
+  r_release_ohm: {value: 4.7e+6, source: "provisional: model knowledge (the RELEASE rheostat's track: up to ~2 s)"}
+  env_taper_mid: {value: 0.1, source: "provisional: model knowledge (audio-taper rheostats, 10% at half rotation: times spread evenly over the rotation)"}
+  c_env_f: {value: 0.47e-6, source: "provisional: model knowledge (the envelope's capacitor, film)"}
+  envelope_diode: {value: 6X4@1, source: "provisional: model knowledge (design: a 6X4's two sections as the envelope's steering diodes; config/components/6x4/1.yaml, per section)"}
+  r_env_leak_ohm: {value: 1.0e+8, source: "provisional: model knowledge (the envelope capacitor's and steering diodes' leakage; the pre-flight checks need a DC path)"}
+  # --- the VCA (tube_kick.yaml's)
+  c_vca_in_f: {value: 0.1e-6, source: "provisional: model knowledge (design: the saw into the VCA)"}
+  r_vca_atten_ohm: {value: 2.7e+6, source: "provisional: model knowledge (design: with the grid leak, 1/28 of the saw (~+-60 V) at the pair's grid, ~+-2 V: the pair nearly linear, the ramp kept)"}
+  r_vca_grid_ohm: {value: 100.0e+3, source: "provisional: model knowledge (design: the pair's grid leak and the attenuator's foot)"}
+  r_vca_plate_ohm: {value: 22.0e+3, source: "provisional: model knowledge (design: each of the pair's plate loads, tube_kick.yaml's)"}
+  c_neutral_f: {value: 2.2e-12, source: "provisional: model knowledge (design: cross-neutralization, a trimmer from V5A's grid to V5B's plate equal to the 12AU7's grid-to-plate capacitance (config/components/12au7/1.yaml): the saw's feedthrough past the shut pair reaches both plates alike, common mode for the differential stage)"}
+  r_tail_grid_top_ohm: {value: 5.6e+6, source: "provisional: model knowledge (design: the envelope into the tail tube's grid, 0.8 of it with r_tail_grid_bottom_ohm, tube_kick.yaml's: shut at the envelope's -110 V rest, open at its ~-2 V)"}
+  c_tail_grid_f: {value: 100.0e-12, source: "provisional: model knowledge (design: on the tail's grid, holding it against the pair's plates through its grid-to-plate capacitance; with the divider ~0.45 ms, under the envelope's fastest attack)"}
+  r_tail_grid_bottom_ohm: {value: 22.0e+6, source: "provisional: model knowledge (design: the tail grid divider's foot)"}
+  r_tail_cathode_ohm: {value: 10.0e+3, source: "provisional: model knowledge (design: the tail tube's cathode to the -45 V rail: ~4 mA open)"}
+  c_kc_stray_f: {value: 100.0e-12, source: "provisional: model knowledge (the pair's cathodes, the tail's plate and their wiring: holds the node when the tail cuts off, tube_kick.yaml's)"}
+  r_pair_leak_ohm: {value: 1.0e+8, source: "numerical: a DC path for the pair's cathodes with the tail cut off (insulation), from the pair's supply, tube_kick.yaml's"}
+  c_diff_in_f: {value: 0.22e-6, source: "provisional: model knowledge (design: each VCA plate into the differential stage)"}
+  r_diff_series_ohm: {value: 1.0e+6, source: "provisional: model knowledge (design: with the grid leak, 1/11 of each VCA plate into the differential stage, tube_kick.yaml's)"}
+  r_diff_grid_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the differential stage's grid leaks, the dividers' feet)"}
+  r_diff_plate_ohm: {value: 100.0e+3, source: "provisional: model knowledge (12AX7 plate load)"}
+  r_diff_tail_ohm: {value: 12.0e+3, source: "provisional: model knowledge (design: the differential stage's current sink to the -100 V rail, its grid on the -87 V reference: ~1.2 mA, tube_kick.yaml's)"}
+  r_kd_leak_ohm: {value: 1.0e+7, source: "numerical: a DC path for the differential stage's cathodes (tube_kick.yaml's)"}
+  c_vca_out_f: {value: 0.1e-6, source: "provisional: model knowledge (the differential stage's plate into the output)"}
+  r_vca_out_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the output's load)"}
+
+devices:
+  V1: {device: 884@1, events: 884_saw}
+  V2: {device: 6V6GT@1}
+  V3: {device: 12AU7@1}
+  V4A: {device: envelope_diode}
+  V4B: {device: envelope_diode}
+  V5A: {device: 12AU7@1}
+  V5B: {device: 12AU7@1}
+  V6A: {device: 12AU7@1}
+  V6B: {device: 12AU7@1}
+  V7A: {device: 12AX7@1}
+  V7B: {device: 12AX7@1}
+
+sections:
+  - title: supply and inputs
+    parts:
+      VB: {V: [bp, "0"], v: b_plus_v}
+      VN: {V: [bn, "0"], v: b_neg_v}
+      VF: {V: [bf, "0"], v: b_follow_v}
+      RIN: {R: [in, "0"], r: r_in_ohm}
+      RPV: {R: [pv, "0"], r: r_pitch_in_ohm}
+  - title: oscillator
+    substeps: 16
+    decimate: fir
+    owns: [kf]
+    parts:
+      # the charger, its grid stopper in the island (a cut at its grid, the stopper outside:
+      # each strike's edge through its grid-to-plate capacitance came back ~a sample late as a
+      # kick on the grid, +42 cents at 4.5 kHz)
+      RPS: {R: [pv, gp], r: r_pitch_stop_ohm}
+      RSC: {R: [bp, sc], r: r_screen2_ohm}
+      XV2: {device: [n, sc, gp, k2], model: V2}
+      RK2: {R: [k2, bn], r: r_k2_ohm}
+      # the timing capacitor and the 884
+      CT: {C: [bp, n], c: c_t_f, v0: c_start_v}
+      RLK: {R: [n, bp], r: r_n_leak_ohm}
+      RS: {R: [bp, a], r: r_s_ohm}
+      XV1: {device: [a, g, w, n], model: V1}
+      CW: {C: [w, n], c: c_state_f, v0: w_start_v}
+      RG: {R: [g, gb], r: r_grid_ohm}
+      VC: {V: [gb, n], v: bias_cell_v}
+      # the follower (in the island: its grid's current at each strike's edge, across the
+      # cut, came back a sample and the decimator's delay late: +42 cents at 4.5 kHz)
+      RGF: {R: [n, gf], r: r_follow_grid_ohm}
+      XV3: {device: [bf, gf, kf], model: V3}
+      RKF: {R: [kf, "0"], r: r_follow_k_ohm}
+  - title: output
+    parts:
+      CO: {C: [kf, saw], c: c_out_f}
+      RO: {R: [saw, "0"], r: r_out_ohm}
+      # the saw into the VCA: the attenuator's top here, its foot (the pair's grid leak) with
+      # the VCA. The draft's threads cut there, at `ga` (2.7M into 100k: a sample's lag is
+      # negligible; a cut at `saw`, through CO, would diverge)
+      CVI: {C: [saw, vi], c: c_vca_in_f}
+      RVA: {R: [vi, ga], r: r_vca_atten_ohm}
+  - title: envelope
+    parts:
+      RBUS: {R: [bus, ba], r: r_bus_ohm}
+      RATT: {rheostat: [ba, bd], r: r_attack_ohm, at: attack, taper_mid: env_taper_mid}
+      XV4A: {device: [bd, env], model: V4A}
+      CENV: {C: [env, "0"], c: c_env_f}
+      RENVL: {R: [env, "0"], r: r_env_leak_ohm}
+      XV4B: {device: [env, er], model: V4B}
+      RRELMIN: {R: [er, er2], r: r_release_min_ohm}
+      RREL: {rheostat: [er2, ba], r: r_release_ohm, at: release, taper_mid: env_taper_mid}
+      # the envelope into the tail's grid divider: its top here, its foot with the VCA. The
+      # draft's threads cut at `gt` (5.6M into 22M and CGT: the coupling's lag ~50 samples
+      # under its time constant); the envelope stays with the keyboard bus, a control input
+      RTG: {R: [env, gt], r: r_tail_grid_top_ohm}
+  - title: vca
+    parts:
+      # the VCA's rails (ideal), in its own section: the draft runs it on a thread of its own
+      VV: {V: [bv, "0"], v: b_vca_v}
+      VN45: {V: [neg, "0"], v: b_neg45_v}
+      VN100: {V: [neg2, "0"], v: b_neg100_v}
+      VREF: {V: [vref, "0"], v: v_ref_v}
+      RVG: {R: [ga, "0"], r: r_vca_grid_ohm}
+      XV5A: {device: [pa, ga, kc], model: V5A}
+      XV5B: {device: [pb, "0", kc], model: V5B}
+      RPA: {R: [bv, pa], r: r_vca_plate_ohm}
+      RPB: {R: [bv, pb], r: r_vca_plate_ohm}
+      CNT: {C: [ga, pb], c: c_neutral_f}
+      RTG2: {R: [gt, "0"], r: r_tail_grid_bottom_ohm}
+      CGT: {C: [gt, "0"], c: c_tail_grid_f}
+      XV6A: {device: [kc, gt, kt], model: V6A}
+      RTK: {R: [kt, neg], r: r_tail_cathode_ohm}
+      RKCL: {R: [bv, kc], r: r_pair_leak_ohm}
+      CKC: {C: [kc, "0"], c: c_kc_stray_f}
+      CDA: {C: [pa, dai], c: c_diff_in_f}
+      RDAS: {R: [dai, da], r: r_diff_series_ohm}
+      RDA: {R: [da, "0"], r: r_diff_grid_ohm}
+      CDB: {C: [pb, dbi], c: c_diff_in_f}
+      RDBS: {R: [dbi, db], r: r_diff_series_ohm}
+      RDB: {R: [db, "0"], r: r_diff_grid_ohm}
+      XV7A: {device: [bv, da, kd], model: V7A}
+      XV7B: {device: [pd, db, kd], model: V7B}
+      XV6B: {device: [kd, vref, kcs], model: V6B}
+      RCS: {R: [kcs, neg2], r: r_diff_tail_ohm}
+      RKDL: {R: [kd, "0"], r: r_kd_leak_ohm}
+      RPD: {R: [bv, pd], r: r_diff_plate_ohm}
+      COUT: {C: [pd, out], c: c_vca_out_f}
+      RLO: {R: [out, "0"], r: r_vca_out_ohm}

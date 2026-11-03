@@ -58,6 +58,7 @@ def render(seconds: float, *, mains_v=120.0, heaters="warm", noise=False):
         "pitch": np.full(n, PITCH_V),
         "key": np.zeros(n),
         "pressure": np.zeros(n),
+        "pitch2": np.zeros(n),
     }
     v = fast.run_transient(ir, np.zeros(n), settings=st, controls=ctl).vectors
     return v["v(out)"], v["v(o_t)"]

@@ -13,7 +13,7 @@ use std::sync::Mutex;
 
 use circuitsim::ir::{
     DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Lamp, Pentode, PlateModel,
-    Triode, VacuumDiode, VariMuTriode,
+    Thyratron, Triode, VacuumDiode, VariMuTriode,
 };
 
 use crate::plate::{self, PlateComponent};
@@ -282,6 +282,41 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 rad_fraction: num(w, "rad_fraction", what)?,
                 emissivity,
                 t_amb_k: num(d, "t_amb_k", what)?,
+            })
+        }
+        "thyratron" => {
+            let m = sub(d, "model", what)?;
+            let c = sub(d, "capacitances_f", what)?;
+            let mu_g2 = match m.get("mu_g2") {
+                None | Some(Value::Null) => None,
+                Some(_) => Some(num(m, "mu_g2", what)?),
+            };
+            DeviceModel::Thyratron(Thyratron {
+                name,
+                mu_a: num(m, "mu_a", what)?,
+                mu_g2,
+                v0_v: num(m, "v0_v", what)?,
+                e_v: num(m, "e_v", what)?,
+                perveance: num(m, "perveance", what)?,
+                x_n: num(m, "x_n", what)?,
+                v_x_v: num(m, "v_x_v", what)?,
+                k_ion: num(m, "k_ion", what)?,
+                v_ion_v: num(m, "v_ion_v", what)?,
+                w_ion_v: num(m, "w_ion_v", what)?,
+                c_meta: num(m, "c_meta", what)?,
+                v_meta_v: num(m, "v_meta_v", what)?,
+                w_meta_v: num(m, "w_meta_v", what)?,
+                tau_diff_s: num(m, "tau_diff_s", what)?,
+                k_grid: num(m, "k_grid", what)?,
+                p_grid: num(m, "p_grid", what)?,
+                v_float_v: num(m, "v_float_v", what)?,
+                t_e_v: num(m, "t_e_v", what)?,
+                q_s_c: num(m, "q_s_c", what)?,
+                g_leak_s: num(m, "g_leak_s", what)?,
+                s0_per_s: num(m, "s0_per_s", what)?,
+                c_gk: num(c, "gk", what)?,
+                c_ga: num(c, "ga", what)?,
+                c_ak: num(c, "ak", what)?,
             })
         }
         other => return Err(Error(format!("{what}: unknown device kind '{other}'"))),

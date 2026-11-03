@@ -85,6 +85,7 @@ def run(sets: dict, dur_s: float) -> dict[str, np.ndarray]:
             "pitch": np.full(n, PITCH_V),
             "key": np.zeros(n),
             "pressure": np.zeros(n),
+            "pitch2": np.zeros(n),
         },
     ).vectors
     return {k[2:-1]: x for k, x in v.items()}

@@ -18,9 +18,13 @@ varimu.circuit.builder, which expands its parts with the parts library
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
-    sections: [{title, tolerance?, substeps?, parts: {NAME: {<macro>: <nodes>, ...}}}]
+    sections: [{title, tolerance?, substeps?, decimate?, owns?,
+                parts: {NAME: {<macro>: <nodes>, ...}}}]
                                     # substeps: steps per sample on a thread of its own (a
-                                    # multi-rate part: circuitsim's partition.rs)
+                                    # multi-rate part: circuitsim's partition.rs);
+                                    # decimate: fir (what it hands on through an
+                                    # anti-alias low-pass); owns: [node, ...] (shared nodes
+                                    # it owns: an island's output)
 
 Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
@@ -78,6 +82,7 @@ from typing import Any
 
 import yaml
 
+from varimu.circuit.ir import DECIMATIONS
 from varimu.config import ConfigError, load_genome_bounds
 
 # PyYAML reads 1.0e6 (no sign in the exponent) as a string: such a value is an error.
@@ -223,7 +228,7 @@ def load_circuit(path: Path) -> CircuitSpec:
     for i, s in enumerate(sections):
         if not isinstance(s, Mapping) or "title" not in s or "parts" not in s:
             errors.append(f"sections[{i}]: needs `title` and `parts`")
-        elif extra := set(s) - {"title", "parts", "tolerance", "substeps"}:
+        elif extra := set(s) - {"title", "parts", "tolerance", "substeps", "decimate", "owns"}:
             errors.append(f"sections[{i}]: unknown keys {sorted(extra)}")
         elif "substeps" in s and (
             isinstance(s["substeps"], bool)
@@ -231,6 +236,16 @@ def load_circuit(path: Path) -> CircuitSpec:
             or s["substeps"] < 1
         ):
             errors.append(f"sections[{i}]: substeps {s['substeps']} (a count, 1 or more)")
+        elif ("decimate" in s or "owns" in s) and s.get("substeps", 1) < 2:
+            errors.append(f"sections[{i}]: decimate and owns are for a multi-rate section")
+        elif "decimate" in s and s["decimate"] not in DECIMATIONS:
+            errors.append(f"sections[{i}]: decimate {s['decimate']!r} (one of {DECIMATIONS})")
+        elif "owns" in s and (
+            not isinstance(s["owns"], list)
+            or not s["owns"]
+            or not all(isinstance(n, str) for n in s["owns"])
+        ):
+            errors.append(f"sections[{i}]: owns {s['owns']!r} (a list of nodes)")
     for k, e in (data.get("devices") or {}).items():
         if not isinstance(e, Mapping) or "device" not in e:
             errors.append(f"devices.{k}: needs a `device`")

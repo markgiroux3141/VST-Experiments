@@ -181,6 +181,9 @@ fn simulate<'py>(
     st.set_item("device_evaluations", s.device_evaluations)?;
     st.set_item("factorizations", s.factorizations)?;
     st.set_item("exact_retries", s.exact_retries)?;
+    st.set_item("events", s.events)?;
+    st.set_item("late_events", s.late_events)?;
+    st.set_item("latched_events", s.latched_events)?;
     st.set_item("accepted_by_level", s.accepted_by_level.to_vec())?;
     st.set_item("rejected_by_level", s.rejected_by_level.to_vec())?;
     Ok((probes, st).into_pyobject(py)?.into_any())

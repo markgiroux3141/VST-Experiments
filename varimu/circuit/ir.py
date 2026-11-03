@@ -32,7 +32,11 @@ Conventions:
   noise reads and writes as before;
 - heated cathodes (device builder B6, varimu.devices.cathode): the circuit's `heaters` block
   (the oxide constants, the heater's voltage ratio, warm or cold start) and a HeatedCathode
-  per tube instance; optional as noise is.
+  per tube instance; optional as noise is;
+- a ThyratronEvents is a gas thyratron as technique K's event kernels
+  (HYBRID_PHYSICS_PLAN.md H3; varimu.devices.thyratron_events is the reference,
+  circuitsim's events.rs the port): the off tube's capacitances and leakage, its strikes
+  injected a -> k as charges held over each step. A new element kind, as Vccs.
 """
 
 from __future__ import annotations
@@ -48,6 +52,7 @@ from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
 from varimu.devices.pentode import KorenPentode, Pentode
+from varimu.devices.thyratron import Thyratron
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
 
 IR_VERSION = 3  # 2: Winding, MagneticCore (Phase 2); 3: SineSource (Phase 3, mains)
@@ -346,6 +351,52 @@ class NoiseSpec:
 
 
 @dataclass(frozen=True)
+class ThyratronEvents:
+    """A triode gas thyratron as technique K's event kernels (HYBRID_PHYSICS_PLAN.md H3,
+    "K's design"; varimu.devices.thyratron_events is the reference, circuitsim's events.rs
+    the port), on the device's pins (a, g, w, k). Between events the tube is its
+    capacitances (c_gk_f, c_ga_f, c_ak_f) and the grid-to-anode leakage g_leak_s; the plasma
+    state's node w is held to k by a numerical 1 S (K has no state there). After each sample
+    the element senses the unit's capacitor (v_ak plus r_s_ohm times its own current) and
+    the grid (v_gk less r_g_ohm c_ga_f times the ramp's slope: the coupling the off tube's
+    grid-to-anode capacitance gives the unit's grid return, which the tables already hold),
+    predicts a strike within the next step and injects its charges a -> k, held over each
+    step. The unit (c_f, r_s_ohm, r_g_ohm) is the exception's: its tables come from
+    reference runs of it.
+
+    The tables over (v_g_v, log_slope: ln V/s), both ascending, indexed [v_g][slope]: the
+    strike voltage v_s_v (the unit's capacitor at the strike), the dead time dead_s, the
+    latched points (the arc never goes out: no pulse, dead 0), and the anode current's
+    pulse from the strike at ref_rate_hz (pulses_a; the pre-conduction in its first
+    sample) and the grid's over the same samples (grid_pulses_a: into the grid pin, injected
+    g -> k). The engine band-limits them for its own step (`thyratron_events.
+    step_charges` at oversample ref_rate_hz * h). `source` names the reference run. SPICE
+    has only the off tube."""
+
+    name: str
+    a: str
+    g: str
+    w: str
+    k: str
+    c_gk_f: float
+    c_ga_f: float
+    c_ak_f: float
+    g_leak_s: float
+    c_f: float
+    r_s_ohm: float
+    r_g_ohm: float
+    ref_rate_hz: float
+    v_g_v: tuple[float, ...]
+    log_slope: tuple[float, ...]
+    v_s_v: tuple[tuple[float, ...], ...]
+    dead_s: tuple[tuple[float, ...], ...]
+    latched: tuple[tuple[bool, ...], ...]
+    pulses_a: tuple[tuple[tuple[float, ...], ...], ...]
+    grid_pulses_a: tuple[tuple[tuple[float, ...], ...], ...]
+    source: str
+
+
+@dataclass(frozen=True)
 class Device:
     """An instance of a device model; nodes follow the model's PINS order."""
 
@@ -369,8 +420,9 @@ Element = (
     | Device
     | Plate
     | Tape
+    | ThyratronEvents
 )
-DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp
+DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp | Thyratron
 
 PINS: dict[type, tuple[str, ...]] = {
     Triode: ("p", "g", "k"),
@@ -380,6 +432,12 @@ PINS: dict[type, tuple[str, ...]] = {
     MagneticCore: ("b", "ref"),
     Lamp: ("a", "t", "b"),
 }
+
+
+def pins_of(model: DeviceModel) -> tuple[str, ...]:
+    """A model's pins: by type, except a thyratron's (a triode's or a tetrode's)."""
+    return model.pins if isinstance(model, Thyratron) else PINS[type(model)]
+
 
 _PREFIX = {
     Resistor: "R",
@@ -395,6 +453,7 @@ _PREFIX = {
     HeatedCathode: "B",
     Plate: "V",
     Tape: "V",
+    ThyratronEvents: "X",
 }
 
 
@@ -418,6 +477,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return el.nodes
     if isinstance(el, Plate | Tape):
         return (el.sense_pos, el.sense_neg, el.out)
+    if isinstance(el, ThyratronEvents):
+        return (el.a, el.g, el.w, el.k)
     return ()
 
 
@@ -442,17 +503,32 @@ class Control:
     node: str
 
 
+# A multi-rate section's decimation of what it hands on (Section.decimate).
+DECIMATIONS = ("fir",)
+
+
 @dataclass(frozen=True)
 class Section:
     """A titled group of elements (one stage). Only for readability, except `substeps`:
     a section with them steps that many times per sample on a thread of its own (a
     multi-rate part, circuitsim's partition.rs: the Ampex 351's bias oscillator, above
     the audio rate's Nyquist frequency). None: it steps with the rest (and the JSON
-    has no `substeps`, as before)."""
+    has no `substeps`, as before).
+
+    A multi-rate section's two options (HYBRID_PHYSICS_PLAN.md H3a, M1; None: absent from
+    the JSON, the part as before):
+    - `decimate`: "fir", what the part hands on (currents into nodes it doesn't own, the
+      voltages of nodes it owns, its probes) through a linear-phase anti-alias low-pass
+      over its steps, instead of their average over the sample;
+    - `owns`: shared nodes the part owns (it publishes their voltages and is fed their
+      users' currents), where by default a multi-rate part owns none: an island's
+      low-impedance output into a high-impedance load."""
 
     title: str
     elements: tuple[Element, ...]
     substeps: int | None = None
+    decimate: str | None = None
+    owns: tuple[str, ...] | None = None
 
 
 # --- The circuit ------------------------------------------------------------------------
@@ -528,6 +604,14 @@ class CircuitIR:
                 not isinstance(s.substeps, int) or isinstance(s.substeps, bool) or s.substeps < 1
             ):
                 raise IRError(f"section {s.title!r}: substeps {s.substeps!r} (a count, 1 or more)")
+            multirate = s.substeps is not None and s.substeps > 1
+            if s.decimate is not None and (s.decimate not in DECIMATIONS or not multirate):
+                raise IRError(
+                    f"section {s.title!r}: decimate {s.decimate!r} (one of {DECIMATIONS},"
+                    " in a multi-rate section)"
+                )
+            if s.owns is not None and (not multirate or not s.owns):
+                raise IRError(f"section {s.title!r}: owns needs nodes, in a multi-rate section")
         names: set[str] = set()
         inductors: set[str] = set()
         nodes: set[str] = set()
@@ -576,10 +660,12 @@ class CircuitIR:
                 _validate_plate(el, self.input_node)
             elif isinstance(el, Tape):
                 _validate_tape(el, self.input_node)
+            elif isinstance(el, ThyratronEvents):
+                _validate_thyratron_events(el)
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
-                pins = PINS[type(models[el.model])]
+                pins = pins_of(models[el.model])
                 if len(el.nodes) != len(pins):
                     raise IRError(
                         f"{el.name}: {len(el.nodes)} nodes, model {el.model} has pins {pins}"
@@ -716,6 +802,7 @@ class CircuitIR:
                     tagged=False,
                     elements=lambda els: tuple(_decode(e, _ELEMENT_KINDS) for e in els),
                     substeps=_count,
+                    owns=tuple,
                 )
                 for s in d["sections"]
             ),
@@ -799,6 +886,33 @@ def _validate_model(m: DeviceModel) -> None:
             raise IRError(f"{m.name}.emissivity: 4 coefficients (c0..c3)")
         for c in m.emissivity:
             _finite(f"{m.name}.emissivity[]", c)
+    elif isinstance(m, Thyratron):
+        values += [
+            (w, getattr(m, w))
+            for w in (
+                "mu_a",
+                "e_v",
+                "perveance",
+                "x_n",
+                "v_x_v",
+                "k_ion",
+                "w_ion_v",
+                "c_meta",
+                "w_meta_v",
+                "tau_diff_s",
+                "k_grid",
+                "p_grid",
+                "t_e_v",
+                "q_s_c",
+                "s0_per_s",
+            )
+        ]
+        if m.mu_g2 is not None:
+            values.append(("mu_g2", m.mu_g2))
+        for w in ("v0_v", "v_ion_v", "v_meta_v", "v_float_v"):
+            _finite(f"{m.name}.{w}", getattr(m, w))
+        for w in ("g_leak_s", "c_gk", "c_ga", "c_ak"):
+            nonneg(w, getattr(m, w))
     elif isinstance(m, MagneticCore):
         problems = m.validate()
         if problems:
@@ -829,6 +943,7 @@ _ELEMENT_KINDS = {
     "device": Device,
     "plate": Plate,
     "tape": Tape,
+    "thyratron_events": ThyratronEvents,
 }
 _MODEL_KINDS = {
     "triode": Triode,
@@ -837,12 +952,15 @@ _MODEL_KINDS = {
     "vacuum_diode": VacuumDiode,
     "magnetic_core": MagneticCore,
     "lamp": Lamp,
+    "thyratron": Thyratron,
 }
 _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 # Optional fields written only when set, so IRs without them read and write as before.
 _OMITTED_WHEN_NONE = {
     (Capacitor, "v0_v"),
     (Section, "substeps"),
+    (Section, "decimate"),
+    (Section, "owns"),
     (TapeMedium, "bias_substeps"),
 }
 _PROBE_KINDS = {"voltage": VoltageProbe}
@@ -914,6 +1032,21 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         return _fields(cls, d, tagged=True, decay=lambda v: tuple(tuple(x) for x in v))
     if cls is Tape:
         return _fields(cls, d, tagged=True, medium=_decode_tape_medium)
+    if cls is ThyratronEvents:
+
+        def grid(v):
+            return tuple(tuple(x) for x in v)
+
+        return _fields(
+            cls,
+            d,
+            tagged=True,
+            v_s_v=grid,
+            dead_s=grid,
+            latched=grid,
+            pulses_a=lambda v: tuple(tuple(tuple(p) for p in row) for row in v),
+            grid_pulses_a=lambda v: tuple(tuple(tuple(p) for p in row) for row in v),
+        )
     return _fields(cls, d, tagged=True)
 
 
@@ -940,6 +1073,46 @@ def _validate_plate(el: Plate, input_node: str) -> None:
         raise IRError(f"{el.name}: its force senses {el.sense_pos} against itself")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its pickup drives {el.out} (ground or the input)")
+
+
+def _validate_thyratron_events(el: ThyratronEvents) -> None:
+    """The same checks as the Rust IR's for a thyratron's event kernels."""
+    for k in ("c_f", "r_s_ohm", "r_g_ohm", "ref_rate_hz"):
+        _positive(f"{el.name}.{k}", getattr(el, k))
+    for k in ("c_gk_f", "c_ga_f", "c_ak_f", "g_leak_s"):
+        _nonneg(f"{el.name}.{k}", getattr(el, k))
+    for k in ("v_g_v", "log_slope"):
+        ax = getattr(el, k)
+        if len(ax) < 2 or not all(math.isfinite(x) for x in ax):
+            raise IRError(f"{el.name}.{k}: two or more finite values")
+        if not all(b > a for a, b in zip(ax, ax[1:], strict=False)):
+            raise IRError(f"{el.name}.{k}: ascending")
+    shape = (len(el.v_g_v), len(el.log_slope))
+    for k in ("v_s_v", "dead_s", "latched", "pulses_a", "grid_pulses_a"):
+        t = getattr(el, k)
+        if len(t) != shape[0] or any(len(row) != shape[1] for row in t):
+            raise IRError(f"{el.name}.{k}: {shape[0]} rows of {shape[1]} (v_g_v by log_slope)")
+    live = 0
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            v, dead, latched, p = (el.v_s_v[i][j], el.dead_s[i][j], el.latched[i][j],
+                                   el.pulses_a[i][j])  # fmt: skip
+            _finite(f"{el.name}.v_s_v", v)
+            _nonneg(f"{el.name}.dead_s", dead)
+            if not isinstance(latched, bool):
+                raise IRError(f"{el.name}.latched: true or false")
+            if latched and (p or dead != 0):
+                raise IRError(f"{el.name}: a latched point has no pulse and no dead time")
+            if not latched and not (p and all(math.isfinite(x) for x in p)):
+                raise IRError(f"{el.name}: a pulse of finite samples at every point not latched")
+            gp = el.grid_pulses_a[i][j]
+            if len(gp) != len(p) or not all(math.isfinite(x) for x in gp):
+                raise IRError(f"{el.name}: a grid pulse of finite samples as long as the anode's")
+            live += not latched
+    if not live:
+        raise IRError(f"{el.name}: every point latched")
+    if len({el.a, el.g, el.w, el.k}) != 4:
+        raise IRError(f"{el.name}: its pins (a, g, w, k) on four nodes")
 
 
 #: Recording runs this much tape past a block's ends (`tape_machine.ZONE_PAD_M`).

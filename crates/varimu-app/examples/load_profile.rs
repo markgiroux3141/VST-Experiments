@@ -94,7 +94,7 @@ fn main() -> Result<(), String> {
         .ok_or(format!("unknown device {device}"))?;
     let s = dev.play_settings(&Settings::load(&config, quality.unwrap_or(dev.quality))?);
     let k = s.oversample as usize;
-    let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?;
+    let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?.with_events(s.events);
     let mut v = values(&knobs(dev, circuit.spec()));
     for (k, x) in sets {
         match v.iter_mut().find(|(key, _)| *key == k) {

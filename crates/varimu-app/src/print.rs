@@ -192,7 +192,9 @@ impl Prepared {
             Some(d) => (d.circuit, base),
             None => (device, base),
         };
-        let circuit = Circuit::load(config_dir, circuit, settings.cores()?)?.with_noise(noise);
+        let circuit = Circuit::load(config_dir, circuit, settings.cores()?)?
+            .with_events(settings.events)
+            .with_noise(noise);
         Ok(Prepared { circuit, settings })
     }
 }

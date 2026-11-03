@@ -65,8 +65,10 @@ def ir_dict(
     cores: str,
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
+    events: bool = False,
 ) -> dict[str, Any]:
-    return builder.build_ir(c, spec.resolve(c, overrides), cores, noise, heaters).to_dict()
+    p = spec.resolve(c, overrides)
+    return builder.build_ir(c, p, cores, noise, heaters, events).to_dict()
 
 
 def heated(c: spec.CircuitSpec) -> bool:
@@ -86,23 +88,25 @@ def heated(c: spec.CircuitSpec) -> bool:
 def fixture(name: str) -> dict[str, Any]:
     c = spec.load_circuit(CONFIG_DIR / "circuits" / f"{name}.yaml")
     default = ir_dict(c, {}, "ja")
-    cases: list[tuple[str, dict, str, bool | int | None, Any]] = [
-        ("linear", {}, "linear", None, None)
+    cases: list[tuple[str, dict, str, bool | int | None, Any, bool]] = [
+        ("linear", {}, "linear", None, None, False)
     ]
-    cases += [(n, o, "ja", None, None) for n, o in control_cases(c)]
-    cases += [(n, o, "ja", None, None) for n, o in EXTRA.get(name, {}).items()]
-    cases.append(("noise", {}, "ja", NOISE_SEED, None))
+    cases += [(n, o, "ja", None, None, False) for n, o in control_cases(c)]
+    cases += [(n, o, "ja", None, None, False) for n, o in EXTRA.get(name, {}).items()]
+    cases.append(("noise", {}, "ja", NOISE_SEED, None, False))
     if c.noise is not None:
-        cases.append(("noise=off", {}, "ja", False, None))
+        cases.append(("noise=off", {}, "ja", False, None, False))
     if heated(c):
-        cases.append(("heaters=cold", {}, "ja", None, "cold"))
+        cases.append(("heaters=cold", {}, "ja", None, "cold", False))
         mains = c.mains["v_rms"] if c.mains else None
         if mains:  # the heater's ratio follows the mains setting
             lo = c.controls[mains]["min"]
-            cases.append((f"heaters, {mains}={lo}", {mains: lo}, "ja", None, "warm"))
+            cases.append((f"heaters, {mains}={lo}", {mains: lo}, "ja", None, "warm", False))
+    if any("events" in e for e in c.devices.values()):  # thyratrons as event kernels (H3)
+        cases.append(("events", {}, "ja", None, None, True))
     out = []
-    for case, overrides, cores, noise, heat in cases:
-        ir = ir_dict(c, overrides, cores, noise, heat)
+    for case, overrides, cores, noise, heat, events in cases:
+        ir = ir_dict(c, overrides, cores, noise, heat, events)
         for k in ("version", "title", "input_node", "probes"):
             assert ir[k] == default[k], (name, case, k)
         assert len(ir["sections"]) == len(default["sections"]), (name, case)
@@ -111,6 +115,8 @@ def fixture(name: str) -> dict[str, Any]:
             entry["noise"] = noise  # the build's setting: a seed, or false
         if heat is not None:
             entry["heaters"] = heat  # the build's setting: warm or cold
+        if events:
+            entry["events"] = True
         if ir.get("heaters") != default.get("heaters"):
             entry["heaters_block"] = ir.get("heaters")
         if ir.get("noise") != default.get("noise"):
