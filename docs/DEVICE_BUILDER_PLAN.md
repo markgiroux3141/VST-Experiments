@@ -1110,7 +1110,11 @@ the U47 -> V76 chain). Steps 1-3 built:*
   differs; 40 Hz at +22 dB out: k2 0.33% (0.3) at 76 dB, k3 2.4% (1.5) at 34 dB (T85's
   core at -12 dB in). Both are the version-1 transformers': C2's designer, or a source for
   BV 511, is where they get fixed.
-- **Next:** the drawing; play on live input. The transformers' version 2 waits for C2.
+- **Play (2026-11-03):** the app's `telefunken_v76` device (`panel::DEVICES`; panel GAIN,
+  BASS CUT, TREBLE CUT; draft-1x, the supply on its own thread): 0.26x real time on a vocal
+  take at 34 dB (`examples/load_profile.rs`, worst block 1.18x, none over budget in 42 s).
+  Not yet heard by the user.
+- **Next:** the drawing. The transformers' version 2 waits for C2.
 
 ## Devices and components together (2026-10-29, the user's call)
 

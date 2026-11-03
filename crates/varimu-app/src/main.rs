@@ -25,7 +25,7 @@ fn main() -> eframe::Result {
         Ok(a) => a,
         Err(e) => {
             eprintln!(
-                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a|fender_5e3|reactor_filter|tube_filter|sampler] [--input NAME [--channel N] | --midi NAME] [--edit DRAWN_CIRCUIT]"
+                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a|fender_5e3|telefunken_v76|reactor_filter|tube_filter|sampler] [--input NAME [--channel N] | --midi NAME] [--edit DRAWN_CIRCUIT]"
             );
             std::process::exit(2);
         }

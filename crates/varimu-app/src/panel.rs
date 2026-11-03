@@ -362,7 +362,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 10] = [
+pub const DEVICES: [Device; 11] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -577,6 +577,23 @@ pub const DEVICES: [Device; 10] = [
         pitch: None,
         own_oscillator: false,
         partition: None,
+    },
+    Device {
+        id: "telefunken_v76",
+        label: "Telefunken V76 (mic preamp)",
+        circuit: "telefunken_v76",
+        panel: Some(&["gain_db", "bass_cut", "treble_cut"]),
+        ahead_s: AHEAD_S,
+        // Four pentodes, three JA cores and a selenium supply (B10).
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        // The supply on a thread of its own, coupled through its rails (as the 670's).
+        partition: Some(&["power supply"]),
     },
 ];
 
@@ -1046,6 +1063,14 @@ mod tests {
     fn spec_of(name: &str) -> CircuitSpec {
         let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
         spec::load_circuit(&spec::circuit_path(&config, name).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn v76_panel_is_its_switches() {
+        let d = DEVICES.iter().find(|d| d.id == "telefunken_v76").unwrap();
+        let k = knobs(d, &spec_of("telefunken_v76"));
+        let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
+        assert_eq!(keys, d.panel.unwrap());
     }
 
     #[test]
