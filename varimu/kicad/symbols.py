@@ -510,10 +510,21 @@ _SYMBOLS += [
         "T",
         "Transformer core (no pins): its Reference names the transformer, whose Winding "
         "symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, "
-        "interwinding ({ends: [<label>.dot, <label>.other], to: <label>.dot, c})",
+        "interwinding ({ends: [<label>.dot, <label>.other], to: <label>.dot, c}); or "
+        "component (a transformer component version, NAME@N: its compiled values, the "
+        "fields above overriding)",
         ((),),
         (poly((-0.508, 5.08), (-0.508, -5.08)), poly((0.508, 5.08), (0.508, -5.08))),
-        fields=("material", "area_m2", "path_m", "gap_m", "turns", "leakage_h", "interwinding"),
+        fields=(
+            "material",
+            "area_m2",
+            "path_m",
+            "gap_m",
+            "turns",
+            "leakage_h",
+            "interwinding",
+            "component",
+        ),  # fmt: skip
         value="core",
     ),
     SymbolDef(

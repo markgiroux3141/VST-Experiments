@@ -5,8 +5,8 @@
 use circuitsim::devices::core::{MU0, MagneticCore as CoreDevice};
 use circuitsim::devices::diode::VT_TNOM;
 use circuitsim::ir::{
-    Capacitor, Device, DeviceModel, Element, GROUND, Inductor, JunctionDiode, MagneticCore,
-    PlateModel, Resistor, SineSource, TESLA_PER_V, VoltageSource, Winding,
+    Capacitor, Coupling, Device, DeviceModel, Element, GROUND, Inductor, JunctionDiode,
+    MagneticCore, PlateModel, Resistor, SineSource, TESLA_PER_V, VoltageSource, Winding,
 };
 
 use crate::Error;
@@ -151,7 +151,8 @@ pub fn transformer_core(name: &str, core: &CoreSpec, mat: &Material) -> Magnetic
 
 /// Transformer `name`: windings on one core; the elements and its core model. A
 /// winding's leakage is its own `leak_h`, else half of `leakage_h` (referred to the
-/// reference winding) times its ratio squared (as Python's `parts.transformer`).
+/// reference winding) times its ratio squared; `couplings` (label_a, label_b, k) couple
+/// two windings' leakage inductors (as Python's `parts.transformer`).
 #[allow(clippy::too_many_arguments)]
 pub fn transformer(
     name: &str,
@@ -162,6 +163,7 @@ pub fn transformer(
     leakage_h: Option<f64>,
     interwinding: Option<((String, String), String)>,
     c_interwinding_f: f64,
+    couplings: &[(String, String, f64)],
     linear: bool,
 ) -> Result<(Vec<Element>, MagneticCore), Error> {
     let upper = name.to_uppercase();
@@ -206,6 +208,25 @@ pub fn transformer(
         if w.c_f > 0.0 {
             els.push(capacitor(&format!("C{n}"), &w.dot, &w.other, w.c_f));
         }
+    }
+    for (a, b, k) in couplings {
+        let (la, lb) = (format!("L{upper}_{a}_lk"), format!("L{upper}_{b}_lk"));
+        for (lbl, ind) in [(a, &la), (b, &lb)] {
+            let has = els
+                .iter()
+                .any(|e| matches!(e, Element::Inductor(i) if i.name == *ind));
+            if !has {
+                return Err(Error(format!(
+                    "{name}: leak_couplings: winding {lbl} has no leakage inductor"
+                )));
+            }
+        }
+        els.push(Element::Coupling(Coupling {
+            name: format!("K{upper}_{a}_{b}"),
+            l_a: la,
+            l_b: lb,
+            k: *k,
+        }));
     }
     if let Some(((end_a, end_b), other)) = interwinding
         && c_interwinding_f > 0.0

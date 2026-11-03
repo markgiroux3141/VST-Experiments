@@ -721,7 +721,8 @@ fn table() -> Vec<SymbolDef> {
         description: "Transformer core (no pins): its Reference names the transformer, whose \
                       Winding symbols name it; material, area_m2, path_m, gap_m, turns, \
                       leakage_h, interwinding ({ends: [<label>.dot, <label>.other], to: \
-                      <label>.dot, c})"
+                      <label>.dot, c}); or component (a transformer component version, \
+                      NAME@N: its compiled values, the fields above overriding)"
             .into(),
         units: vec![vec![]],
         graphics: vec![
@@ -738,6 +739,7 @@ fn table() -> Vec<SymbolDef> {
             "turns",
             "leakage_h",
             "interwinding",
+            "component",
         ],
         value: "core".into(),
         order: Vec::new(),

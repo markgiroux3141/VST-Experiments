@@ -37,6 +37,7 @@ import numpy as np
 from varimu.circuit.ir import (
     GROUND,
     Capacitor,
+    Coupling,
     Device,
     DeviceModel,
     Element,
@@ -209,6 +210,7 @@ def transformer(
     leakage_h: float | None,
     interwinding: tuple[tuple[str, str], str] | None = None,
     c_interwinding_f: float = 0.0,
+    couplings: Sequence[tuple[str, str, float]] = (),
     cores: str = "ja",
 ) -> tuple[list[Element], MagneticCore]:
     """Transformer `name`: windings on one core (varimu.devices.core); the elements and
@@ -224,6 +226,10 @@ def transformer(
     MagneticCore, or its linear limit as a resistor when `cores` is "linear"), the
     joint gap (B g / mu0 of magnetomotive force) and classical eddy-current loss in
     the laminations (l_e sigma d^2 / 12 dB/dt).
+    `couplings` (label_a, label_b, k): a Coupling K<NAME>_<a>_<b> between two windings'
+    leakage inductors (a designed transformer's leakage as coupled series inductances,
+    exact for any number of windings where a star of leak values would need a negative
+    branch: varimu-components' `leakage.rs`); both windings need a leakage.
     `interwinding` ((end_a, end_b), other): `c_interwinding_f` split in half from both
     ends of a balanced winding to a terminal of the other side, as the 670
     replacements' balanced two-chamber construction has it (common mode only; one
@@ -254,6 +260,13 @@ def transformer(
         els.append(Winding(f"L{n}", top, w.other, u, w.ratio * turns, core.area_m2))
         if w.c_f > 0:
             els.append(Capacitor(f"C{n}", w.dot, w.other, w.c_f))
+    leaks = {e.name for e in els if isinstance(e, Inductor)}
+    for a, b, k in couplings:
+        la, lb = f"L{upper}_{a}_lk", f"L{upper}_{b}_lk"
+        for lbl, ind in ((a, la), (b, lb)):
+            if ind not in leaks:
+                raise ValueError(f"{name}: leak_couplings: winding {lbl} has no leakage inductor")
+        els.append(Coupling(f"K{upper}_{a}_{b}", la, lb, k))
     if interwinding and c_interwinding_f > 0:
         (end_a, end_b), other = interwinding
         half = 0.5 * c_interwinding_f

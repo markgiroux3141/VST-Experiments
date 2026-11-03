@@ -16,7 +16,9 @@ sum(N i) = G u + C du/dt with every winding at N A TESLA_PER_V du/dt, is
 exactly coupled inductors: with permeance P = A TESLA_PER_V / G and each
 winding's leakage inductor in series folded in (an Inductor alone on the
 winding's inner node), the inductance matrix is L_jj = L_leak,j + P N_j^2,
-L_jk = P N_j N_k, so k_jk = P N_j N_k / sqrt(L_jj L_kk). The eddy loss is
+L_jk = P N_j N_k, so k_jk = P N_j N_k / sqrt(L_jj L_kk); a Coupling between two
+folded-in leakage inductors (a designed transformer's coupled leakage) adds its mutual
+inductance k sqrt(L_leak,j L_leak,k) to L_jk. The eddy loss is
 what eddy currents are, a shorted turn: one more winding of the first
 winding's turns, without leakage, closed by a resistor N^2 A TESLA_PER_V / C
 (its mmf is then exactly the core node's C du/dt). The core node and the
@@ -362,7 +364,8 @@ def linear_cores(ir: CircuitIR) -> dict[str, dict]:
     for el in ir.elements():
         if isinstance(el, Winding):
             cores.setdefault(
-                el.core, {"windings": [], "g": 0.0, "c": 0.0, "parts": set(), "leak": {}}
+                el.core,
+                {"windings": [], "g": 0.0, "c": 0.0, "parts": set(), "leak": {}, "mutual": {}},
             )
             cores[el.core]["windings"].append(el)
     touching: dict[str, list] = {}
@@ -377,6 +380,28 @@ def linear_cores(ir: CircuitIR) -> dict[str, dict]:
                 outer = lk.b if lk.a == w.a else lk.a
                 core["leak"][w.name] = (lk, outer)
                 core["parts"].add(lk.name)
+    # Couplings between folded-in leakage inductors fold into the windings' mutuals.
+    folded_leak = {
+        lk.name: (core, w_name, lk)
+        for core in cores.values()
+        for w_name, (lk, _) in core["leak"].items()
+    }
+    for el in ir.elements():
+        if not isinstance(el, Coupling):
+            continue
+        a, b = folded_leak.get(el.l_a), folded_leak.get(el.l_b)
+        if a is None and b is None:
+            continue
+        if a is None or b is None or a[0] is not b[0]:
+            raise IRError(
+                f"{el.name}: couples a folded-in leakage inductor to an inductor outside its "
+                "core's windings (SPICE takes only couplings between one core's leakages)"
+            )
+        core = a[0]
+        m = el.k * math.sqrt(a[2].l_h * b[2].l_h)
+        key = frozenset((a[1], b[1]))
+        core["mutual"][key] = core["mutual"].get(key, 0.0) + m
+        core["parts"].add(el.name)
     for el in ir.elements():
         if isinstance(el, Winding):
             continue
@@ -432,7 +457,8 @@ def core_lines(node: str, core: dict) -> list[str]:
     for i in range(len(coils)):
         for j in range(i + 1, len(coils)):
             (a, na, la), (b, nb, lb) = coils[i], coils[j]
-            k = min(1.0, perm * na * nb / (la * lb) ** 0.5)
+            m = perm * na * nb + core["mutual"].get(frozenset((a, b)), 0.0)
+            k = min(1.0, m / (la * lb) ** 0.5)
             out.append(f"K{node}_{i}_{j} {a} {b} {num(k)}")
     return out
 

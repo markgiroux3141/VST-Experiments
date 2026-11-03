@@ -741,7 +741,7 @@
         <field name="Datasheet"/>
         <field name="Description"/>
       </fields>
-      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})"/>
+      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c}); or component (a transformer component version, NAME@N: its compiled values, the fields above overriding)"/>
       <property name="material" value="hs56_core_material"/>
       <property name="area_m2" value="hs56_core_area_m2"/>
       <property name="path_m" value="hs56_core_path_m"/>
@@ -2235,7 +2235,7 @@
         <field name="Datasheet"/>
         <field name="Description"/>
       </fields>
-      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})"/>
+      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c}); or component (a transformer component version, NAME@N: its compiled values, the fields above overriding)"/>
       <property name="material" value="hs29_core_material"/>
       <property name="area_m2" value="hs29_core_area_m2"/>
       <property name="path_m" value="hs29_core_path_m"/>
@@ -2726,7 +2726,7 @@
         <field name="Datasheet"/>
         <field name="Description"/>
       </fields>
-      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})"/>
+      <libsource lib="varimu" part="Core" description="Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c}); or component (a transformer component version, NAME@N: its compiled values, the fields above overriding)"/>
       <property name="material" value="s217_core_material"/>
       <property name="area_m2" value="s217_core_area_m2"/>
       <property name="path_m" value="s217_core_path_m"/>
@@ -2957,13 +2957,13 @@
       </pins>
     </libpart>
     <libpart lib="varimu" part="Core">
-      <description>Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})</description>
+      <description>Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c}); or component (a transformer component version, NAME@N: its compiled values, the fields above overriding)</description>
       <fields>
         <field name="Reference">T</field>
         <field name="Value">core</field>
         <field name="Footprint"/>
         <field name="Datasheet"/>
-        <field name="Description">Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c})</field>
+        <field name="Description">Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [&lt;label&gt;.dot, &lt;label&gt;.other], to: &lt;label&gt;.dot, c}); or component (a transformer component version, NAME@N: its compiled values, the fields above overriding)</field>
         <field name="material"/>
         <field name="area_m2"/>
         <field name="path_m"/>
@@ -2971,6 +2971,7 @@
         <field name="turns"/>
         <field name="leakage_h"/>
         <field name="interwinding"/>
+        <field name="component"/>
       </fields>
     </libpart>
     <libpart lib="varimu" part="Diode_Dual">

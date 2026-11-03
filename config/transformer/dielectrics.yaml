@@ -1,0 +1,64 @@
+# Relative permittivities for the transformer designer's capacitances
+# (crates/varimu-components, capacitance.rs). Each row carries its source; "provisional:"
+# rows have no primary source found (2026-11-04) and give their plausible range in notes.
+
+dielectrics:
+  air:
+    eps_r: 1.0005893
+    source: "web: https://www.hellschreiber.com/pdf-hell/article-PhysRvw-28-08.pdf (Bryan & Sanders, Phys. Rev. 32, 302 (1928): dry CO2-free air at STP)"
+  mylar:
+    eps_r: 3.25
+    source: "web: https://converting-tasm.pl/wp-content/uploads/2024/01/info-mylar-a-electrical-properties_ekotech_2023.pdf (DuPont Teijin Films, Mylar Electrical Properties, Table 1: 1 kHz, 25 C; 3.3 at 50 Hz)"
+  kapton:
+    eps_r: 3.4
+    source: "web: https://www.epectec.com/downloads/DuPont-Kapton-HN-Polyimide-Film.pdf (DuPont Kapton HN, Table 3: 1 kHz, 23 C, 50% RH, 25-50 um; 3.5 at 75-125 um)"
+  nomex410_0.05mm:
+    eps_r: 1.6
+    source: "web: https://arclin.com/wp-content/uploads/2026/04/Arclin™-Nomex®-410-Technical-Datasheet-04-2026.pdf (Nomex 410 Table I: 60 Hz, 23 C, 50% RH, 0.05 mm nominal)"
+  nomex410_0.13mm:
+    eps_r: 2.4
+    source: "web: same sheet (0.13 mm nominal)"
+  nomex410_0.25mm:
+    eps_r: 2.7
+    source: "web: same sheet (0.25 mm nominal; 2.5 oven dry, 3.2 at 96% RH, Table II)"
+  mica_muscovite:
+    eps_r: 7.2
+    source: "web: https://nvlpubs.nist.gov/nistpubs/jres/7/jresv7n2p403_A2b.pdf (Lewis, Hall & Caldwell, NBS RP347 (1931): clear ruby muscovite, 7.2 +- 0.3, 100-1000 kc/s)"
+  paraffin_paper:
+    eps_r: 3.5
+    source: "web: https://www.qsl.net/wa7zcz/area2/page12.html (Allied's Electronics Data Handbook p.12, 'approximate K', paraffin coated paper; no conditions stated)"
+  varnished_cambric:
+    eps_r: 4.0
+    source: "web: https://www.qsl.net/wa7zcz/area2/page12.html (Allied's Electronics Data Handbook p.12, approximate)"
+  vulcanized_fibre:
+    eps_r: 5.0
+    source: "web: https://www.qsl.net/wa7zcz/area2/page12.html (Allied's Electronics Data Handbook p.12, 'fibre (red)', approximate; fish paper is vulcanized fibre)"
+  paraffin_wax:
+    eps_r: 2.5
+    source: "web: https://www.qsl.net/wa7zcz/area2/page12.html (Allied's Electronics Data Handbook p.12, approximate)"
+  beeswax:
+    eps_r: 3.0
+    source: "web: https://www.qsl.net/wa7zcz/area2/page12.html (Allied's Electronics Data Handbook p.12, approximate)"
+  nylon_enamel:
+    eps_r: 3.7
+    source: "web: https://journal.iisc.ac.in/index.php/iisc/article/download/4045/4113 (Pfestorf, Electrical measurements on new types of enamelled wires, J. Indian Inst. Sci., Fig. 1: the nylon-varnished 'S' wire at 20 C, 1 kHz; read off the graph)"
+  enamel:
+    eps_r: 3.8
+    source: "provisional: model knowledge (magnet wire enamels: polyurethane, polyvinyl formal, polyester-imide, oleoresinous; no datasheet gives it; a patent snippet (US 10199138, unverified) puts conventional enamels at 3.8-4.2 at 25 C)"
+    notes: "bounds 3.0-4.5; nylon_enamel's 3.7 is the one measured value found"
+  kraft_dry:
+    eps_r: 2.2
+    source: "provisional: model knowledge (porous unimpregnated kraft, ~0.75-1.0 g/cm^3; Nomex 410 papers of like density read 1.6-2.7 at 60 Hz, same sheet as nomex410_*)"
+    notes: "bounds 1.6-3.0"
+  kraft_oil:
+    eps_r: 3.4
+    source: "provisional: model knowledge (mineral-oil-impregnated kraft; a snippet of https://hrcak.srce.hr/file/292740, unopened, gives 3.24 at 0.87 g/cm^3 to 3.55 at 1.10 g/cm^3)"
+    notes: "bounds 3.2-3.6"
+  polystyrene:
+    eps_r: 2.55
+    source: "provisional: model knowledge (polystyrene, e.g. Trolitul, ~2.5-2.6 at audio frequencies; no datasheet found yet)"
+    notes: "bounds 2.4-2.7"
+  pressboard_dry:
+    eps_r: 3.0
+    source: "provisional: model knowledge (dry pressboard / Pressspan, ~2.5-4 by density and moisture)"
+    notes: "bounds 2.5-4.0"

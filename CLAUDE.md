@@ -59,7 +59,7 @@ fender_5e3`: gain per volume, response per tone, THD and power, sag, aliasing pe
 quality), its drawing `fender_5e3_drawn` (`scripts/draw_fender_5e3.py`, after F-EE) and a
 Play device in varimu-app, played at `draft-2x` (the user's choice: hard clipped, draft-1x
 aliases at -8 dB re the harmonics, draft -31; a 48 kHz host with the stream at 2x,
-varimu-app only, `panel::Device::quality`; the plan's B9 step 5). **Next (2026-10-29, the user's call):
+varimu-app only, `panel::Device::quality`; the plan's B9 step 5). **C2, the transformer designer (2026-11-04; COMPONENT_EDITOR_PLAN.md C2's steps):** step 1 (a winding's `leak`), step 2 (`crates/varimu-components`: designs in `config/designs/`, tables in `config/transformer/`, compiled and saved as versions from Rust) and step 3 (a transformer part's `component: NAME@N`, both builders; leakage as coupled series inductances, `leak_couplings`, the user's choice; first version `BV191@1`, test circuit `transformer_component_test`) and step 4 (the 2D FEM of the winding window, `varimu-components fem`: the 1D formula within +-5% for layer windings, +-20% for disc windings, so a design may compile its leakage by the field, `leakage_method: field`) and step 5 (`OT_5E3@1` fitted to P-TGO-002 by `scripts/fit_ot_5e3.py`: all figures but the outer half's DCR, -8%; `BV191@2` against the V72's figures) are done; step 6 built: the compiled facing capacitances as capacitors between terminals (compiler 0.2.0, by energy), the 5E3 and its drawing pinned to `OT_5E3@2` (the Core symbol's `component` field), A/B files in `reports/transformers/ot_5e3_ab/` (a little darker above 8 kHz, otherwise the same): open, the user listens; next step 7 (the Components view). **Next (2026-10-29, the user's call):
 C3's model before C2**: the 5E3 heard as sound pressure through its physical speaker
 (COMPONENT_EDITOR_PLAN.md C3; its sound isn't judged until then), then `6V6GT@2`, then C2.
 **C3's model built (2026-10-29):** the speaker component `P12R@1` (kind `speaker`:
@@ -733,6 +733,10 @@ cargo run -p varimu-app --example devices             # the audio devices cpal s
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)
 cargo run --release -p varimu-app --example click -- [--device D] [--notes] [--for S] [--ab S] [--output NAME] [--loopback output | --loopback input NAME --channel N] [--save DIR]   # recording T1: the click's timing on a loopback, load with / without it
 cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--quality draft|draft-1x|draft-2x] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
+cargo run -p varimu-components -- compile config/designs/NAME.yaml [--yaml]   # C2: a transformer design -> its compiled values and report (--yaml: the version file)
+cargo run -p varimu-components -- save config/designs/NAME.yaml   # C2: saves config/components/<name>/<N>.yaml + its lock line (nothing when unchanged)
+cargo run --release -p varimu-components -- fem config/designs/NAME.yaml [--short p1+p2:s]   # C2: every winding pair's leakage, 1D formula vs the 2D field solution
+uv run python scripts/fit_ot_5e3.py [--show]   # C2: the 5E3 OT's construction fitted to P-TGO-002 -> config/designs/ot_5e3.yaml (needs the release build of varimu-components)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check

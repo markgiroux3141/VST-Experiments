@@ -52,7 +52,7 @@
 					(hide yes)
 				)
 			)
-			(property "Description" "Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [<label>.dot, <label>.other], to: <label>.dot, c})"
+			(property "Description" "Transformer core (no pins): its Reference names the transformer, whose Winding symbols name it; material, area_m2, path_m, gap_m, turns, leakage_h, interwinding ({ends: [<label>.dot, <label>.other], to: <label>.dot, c}); or component (a transformer component version, NAME@N: its compiled values, the fields above overriding)"
 				(at 0 0 0)
 				(effects
 					(font
@@ -116,6 +116,15 @@
 				)
 			)
 			(property "interwinding" ""
+				(at 0 0 0)
+				(effects
+					(font
+						(size 1.27 1.27)
+					)
+					(hide yes)
+				)
+			)
+			(property "component" ""
 				(at 0 0 0)
 				(effects
 					(font

@@ -129,6 +129,15 @@ impl Library {
         Ok(s)
     }
 
+    /// Component `name`'s file as data (`NAME@N`, or `NAME` for its latest version),
+    /// checked against versions.lock (`component_data` in library.py).
+    pub fn component_data(&self, name: &str) -> Result<Value, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let (_, text) = versions::read_text(&root, &r)?;
+        yaml::parse(&text, name)
+    }
+
     /// Plate component `name` (`NAME@N`, or `NAME` for its latest version), checked
     /// against versions.lock (`load_plate` in library.py).
     pub fn plate(&self, name: &str) -> Result<PlateComponent, Error> {

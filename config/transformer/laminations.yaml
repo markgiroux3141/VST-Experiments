@@ -1,0 +1,73 @@
+# Lamination sizes for the transformer designer (crates/varimu-components, tables.rs).
+# Dimensions as the sources print them: leg = the wound (centre) leg's width; window_width
+# from it to the next leg; window_height between the yokes; path = the magnetic path length
+# where the source gives one, else derived from the overall width and height (the mean
+# path through the legs' and yokes' middles; it reproduces every sourced path below).
+
+groups:
+  - source: "web: https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf (Tempel Transformer Index & Catalog: one data sheet per size, tongue, window and 'Length of Magnetic Path'; catalog pages 3-23); overall E width and assembled length (E + I) from Edcor's drawings 20000-EIxxx (web: https://cdn.shopify.com/s/files/1/0586/3830/3419/files/20000-EI075.pdf and the like). EI-75 and up are scrapless (window T/2 x 1.5T, path 6T); McLyman, Transformer and Inductor Design Handbook 3rd ed., Tables 3-2/3-3 agree"
+    unit: inch
+    shape: EI
+    sizes:
+      EI-375: {leg: 0.375, window_width: 0.313, window_height: 0.750, width: 1.375, height: 1.125, path: 2.875}
+      EI-50: {leg: 0.500, window_width: 0.313, window_height: 0.813, width: 1.625, height: 1.313, path: 3.250}
+      EI-625: {leg: 0.625, window_width: 0.313, window_height: 0.938, width: 1.875, height: 1.562, path: 3.750}
+      EI-75: {leg: 0.750, window_width: 0.375, window_height: 1.125, width: 2.250, height: 1.875, path: 4.500}
+      EI-87: {leg: 0.875, window_width: 0.438, window_height: 1.313, width: 2.625, height: 2.187, path: 5.250}
+      EI-100: {leg: 1.000, window_width: 0.500, window_height: 1.500, width: 3.000, height: 2.500, path: 6.000}
+      EI-112: {leg: 1.125, window_width: 0.563, window_height: 1.688, width: 3.375, height: 2.812, path: 6.750}
+      EI-125: {leg: 1.250, window_width: 0.625, window_height: 1.875, width: 3.750, height: 3.125, path: 7.500}
+      EI-138: {leg: 1.375, window_width: 0.688, window_height: 2.063, width: 4.125, height: 3.437, path: 8.250}
+      EI-150: {leg: 1.500, window_width: 0.750, window_height: 2.250, width: 4.500, height: 3.750, path: 9.000}
+      EI-175: {leg: 1.750, window_width: 0.875, window_height: 2.625, width: 5.250, height: 4.375, path: 10.500}
+      EI-200: {leg: 2.000, window_width: 1.000, window_height: 3.000, path: 12.000}
+  - source: "web: https://ermeg.cz/wp-content/uploads/2022/07/Katalog_Waasner_12_2014.pdf (Waasner catalog 12/2014 p.8: scrapless EI per DIN 41302 / IEC 60740-1, YEI 1-xx; window width (e - d) / 2, height b + f); paths l_Fe from SEKELS / VAC 'Kernbleche aus Mumetall, Vacoperm, Permenorm' Tabelle 2 (web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf)"
+    unit: mm
+    shape: EI
+    sizes:
+      EI 30: {leg: 10.0, window_width: 5.0, window_height: 15.0, width: 30.0, height: 25.0, path: 60.0}
+      EI 38: {leg: 12.8, window_width: 6.4, window_height: 19.2, width: 38.4, height: 32.0, path: 77.0}
+      EI 42: {leg: 14.0, window_width: 7.0, window_height: 21.0, width: 42.0, height: 35.0, path: 84.0}
+      EI 48: {leg: 16.0, window_width: 8.0, window_height: 24.0, width: 48.0, height: 40.0, path: 96.0}
+      EI 54: {leg: 18.0, window_width: 9.0, window_height: 27.0, width: 54.0, height: 45.0, path: 108.0}
+  - source: "web: https://ermeg.cz/wp-content/uploads/2022/07/Katalog_Waasner_12_2014.pdf (Waasner p.8, as above); paths from the Tempel catalog's metric section 8, pp.96-99 (web: https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf)"
+    unit: mm
+    shape: EI
+    sizes:
+      EI 60: {leg: 20.0, window_width: 10.0, window_height: 30.0, width: 60.0, height: 50.0, path: 120.02}
+      EI 66: {leg: 22.0, window_width: 11.0, window_height: 33.0, width: 66.0, height: 55.0, path: 131.98}
+      EI 120: {leg: 40.0, window_width: 20.0, window_height: 60.0, width: 120.0, height: 100.0, path: 239.97}
+  - source: "web: https://ermeg.cz/wp-content/uploads/2022/07/Katalog_Waasner_12_2014.pdf (Waasner p.8: scrapless; no sourced path found, derived from the dimensions)"
+    unit: mm
+    shape: EI
+    sizes:
+      EI 75: {leg: 25.0, window_width: 12.5, window_height: 37.5, width: 75.0, height: 62.5}
+      EI 84: {leg: 28.0, window_width: 14.0, window_height: 42.0, width: 84.0, height: 70.0}
+      EI 96: {leg: 32.0, window_width: 16.0, window_height: 48.0, width: 96.0, height: 80.0}
+      EI 150 N: {leg: 50.0, window_width: 25.0, window_height: 75.0, width: 150.0, height: 125.0}
+  - source: "web: https://ermeg.cz/wp-content/uploads/2022/07/Katalog_Waasner_12_2014.pdf (Waasner p.9: the low-waste series; path derived, which matches the l_Fe of a secondary table after DIN 41300/41302: 21.8 / 27.0 / 31.0 cm, web: https://www.mikrocontroller.net/attachment/321056/Mech_Elekt_Daten_-_EI-Bleche_abfallos_nach_DIN_EN_60740-1.pdf)"
+    unit: mm
+    shape: EI
+    sizes:
+      EI 106: {leg: 29.0, window_width: 24.0, window_height: 56.0, width: 106.0, height: 85.0}
+      EI 130: {leg: 35.0, window_width: 30.0, window_height: 70.0, width: 130.0, height: 105.0}
+      EI 150: {leg: 40.0, window_width: 35.0, window_height: 80.0, width: 150.0, height: 120.0}
+  - source: "web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf (SEKELS / VAC Tabelle 2 and 5: UI a, b, c, e; window width a - 2c; l_Fe)"
+    unit: mm
+    shape: UI
+    sizes:
+      UI 30: {leg: 10.0, window_width: 10.0, window_height: 30.0, path: 120.0}
+      UI 39: {leg: 13.0, window_width: 13.0, window_height: 39.0, path: 156.0}
+      UI 48: {leg: 16.0, window_width: 16.0, window_height: 48.0, path: 192.0}
+      UI 60: {leg: 20.0, window_width: 20.0, window_height: 60.0, path: 240.0}
+  - source: "web: https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf (Tempel catalog pp.62-69: UI window and magnetic path; the leg from the solid cross-section)"
+    unit: inch
+    shape: UI
+    sizes:
+      UI-375: {leg: 0.375, window_width: 0.375, window_height: 1.125, path: 4.500}
+      UI-50: {leg: 0.500, window_width: 0.500, window_height: 1.500, path: 6.000}
+      UI-62: {leg: 0.625, window_width: 0.625, window_height: 1.875, path: 7.500}
+      UI-75: {leg: 0.750, window_width: 0.750, window_height: 2.250, path: 9.000}
+      UI-100: {leg: 1.000, window_width: 1.000, window_height: 3.000, path: 12.000}
+      UI-125: {leg: 1.250, window_width: 1.250, window_height: 3.750, path: 15.000}
+      UI-150: {leg: 1.500, window_width: 1.500, window_height: 4.500, path: 18.000}

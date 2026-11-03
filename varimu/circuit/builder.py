@@ -31,10 +31,18 @@ Macro parts (connection; params, * = required):
     tapped_pot  [end_a, tap, wiper, end_b]; r*, at*, tap* (fractions from end_a)
     t_pad       [a, b, common]; z*, atten_db*
     switch      <control key>; parts* (sub-parts, each with `in: [positions]` or always)
-    transformer {label: {nodes: [dot, other], ratio, r, c}} (each winding has ratio x
-                turns; ratio 1 = the reference winding); core* {material, area_m2,
-                path_m, gap_m}, turns*, leakage_h* (referred to the reference winding),
-                interwinding {ends: [a, b], to, c}
+    transformer {label: {nodes: [dot, other], ratio, r, c, leak}} (each winding has ratio
+                x turns; ratio 1 = the reference winding; leak its own series leakage);
+                core* {material, area_m2, path_m, gap_m}, turns*, leakage_h (the total,
+                referred to the reference winding, when windings have no leak),
+                leak_couplings [{between: [a, b], k}] (couplings between two windings'
+                leakages), interwinding {ends: [a, b], to, c}; or component (a transformer
+                component version, NAME@N, or a parameter naming one: its compiled core,
+                turns, per winding ratio / r / c / leak and leak_couplings, the circuit
+                naming every one of its windings; anything the circuit gives overrides,
+                e.g. a winding's r or the core's gap_m; the component's facing capacitances
+                (its `capacitors`) are placed between the windings' ends, and shields at
+                the nodes `shields: {name: node}` gives)
     bridge      [ac_a, ac_b, plus, minus]; model*, arm_c_f_per_area, area
     vr_tube     [anode, mid, cathode]; model*, operating_v*, ref_current_a*
     capsule     [front, backplate, out]; component* (a capsule component version, NAME@N, or a
@@ -131,6 +139,7 @@ from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.library import (
+    component_data,
     load_capsule,
     load_device,
     load_dual_capsule,
@@ -425,61 +434,185 @@ def _switch(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
 
 
 def _transformer(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
-    windings, core = transformer_spec(ctx, name, conn, a)
+    spec = transformer_spec(ctx, name, conn, a)
     iw, c_iw = None, 0.0
     if a["interwinding"] is not None:
         d = a["interwinding"]
         iw = ((str(d["ends"][0]), str(d["ends"][1])), str(d["to"]))
         c_iw = ctx.physical(f"{name}.interwinding.c", d["c"])
-    els, model = parts.transformer(
-        name,
-        windings,
-        core,
-        turns=a["turns"],
-        leakage_h=a["leakage_h"],
-        interwinding=iw,
-        c_interwinding_f=c_iw,
-        cores=ctx.cores,
-    )
+    try:
+        els, model = parts.transformer(
+            name,
+            spec.windings,
+            spec.core,
+            turns=spec.turns,
+            leakage_h=spec.leakage_h,
+            interwinding=iw,
+            c_interwinding_f=c_iw,
+            couplings=spec.couplings,
+            cores=ctx.cores,
+        )
+    except ValueError as err:
+        raise ctx.fail(name, str(err)) from err
     if ctx.cores != "linear":
         ctx.core_models.append(model)
+    return els + _component_capacitors(ctx, name, spec, a["shields"])
+
+
+def _component_capacitors(
+    ctx: Context, name: str, spec: TransformerSpec, shields: Any
+) -> list[Element]:
+    """The component's facing capacitances (its `capacitors`: between winding terminals,
+    `<label>.dot` / `<label>.other`, and shields, `shield.<name>`, whose nodes the part
+    names in `shields: {<name>: node}`); one with both ends on one node is left out."""
+    nodes = {}
+    for w in spec.windings:
+        nodes[f"{w.label}.dot"] = w.dot
+        nodes[f"{w.label}.other"] = w.other
+    wanted = {t.split(".", 1)[1] for c in spec.capacitors for t in c[:2] if t.startswith("shield.")}
+    if shields is not None:
+        if not isinstance(shields, Mapping):
+            raise ctx.fail(f"{name}.shields", "a mapping {shield: node}")
+        for s, node in shields.items():
+            if str(s) not in wanted:
+                raise ctx.fail(f"{name}.shields", f"the component has no shield {s}")
+            nodes[f"shield.{s}"] = str(node)
+    upper = name.upper()
+    els: list[Element] = []
+    for t1, t2, c in spec.capacitors:
+        for term in (t1, t2):
+            if term not in nodes:
+                what = term.split(".", 1)[1]
+                raise ctx.fail(
+                    name, f"the component's capacitor to {term}: shields: {{{what}: node}}"
+                )
+        if nodes[t1] == nodes[t2] or c <= 0:
+            continue
+        n1, n2 = t1.replace(".", "_"), t2.replace(".", "_")
+        els.append(Capacitor(f"C{upper}_{n1}_{n2}", nodes[t1], nodes[t2], c))
     return els
 
 
-def transformer_spec(
-    ctx: Context, name: str, conn: Any, a: dict
-) -> tuple[list[parts.WindingSpec], parts.CoreSpec]:
+@dataclass(frozen=True)
+class TransformerSpec:
+    windings: list[parts.WindingSpec]
+    core: parts.CoreSpec
+    turns: float
+    leakage_h: float | None
+    couplings: list[tuple[str, str, float]]
+    capacitors: list[tuple[str, str, float]]  # the component's: terminal, terminal, F
+
+
+def _transformer_component(ctx: Context, name: str, a: dict) -> dict[str, Any] | None:
+    """The compiled block of the part's transformer component, if it names one."""
+    if a["component"] is None:
+        return None
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        data = component_data(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    if data.get("kind") != "transformer" or not isinstance(data.get("compiled"), Mapping):
+        raise ctx.fail(where, f"{ref} is not a compiled transformer component")
+    return data["compiled"]
+
+
+def transformer_spec(ctx: Context, name: str, conn: Any, a: dict) -> TransformerSpec:
     if not isinstance(conn, Mapping) or not conn:
         raise ctx.fail(name, "transformer: a mapping of windings {label: {nodes, ...}}")
+    comp = _transformer_component(ctx, name, a)
+    cw = comp["windings"] if comp is not None else {}
+    if comp is not None:
+        if set(conn) != set(cw):
+            raise ctx.fail(
+                name,
+                f"the component's windings are {sorted(cw)}; the part names {sorted(conn)}",
+            )
+        if a["leakage_h"] is not None:
+            raise ctx.fail(name, "leakage_h: a component gives every winding its leak")
     windings = []
     for label, w in conn.items():
         where = f"{name}.{label}"
         unknown = set(w) - {"nodes", "ratio", "r", "c", "leak"}
         if unknown or len(w.get("nodes", ())) != 2:
             raise ctx.fail(where, "a winding is {nodes: [dot, other], ratio, r, c, leak}")
+        own = cw.get(label, {})
+
+        def value(k: str, default: Any, w=w, own=own, where=where) -> Any:
+            if k in w:
+                if k == "ratio":
+                    return ctx.number(f"{where}.ratio", w[k])
+                return ctx.physical(f"{where}.{k}", w[k])
+            return float(own[k]) if k in own else default
+
         windings.append(
             parts.WindingSpec(
                 str(label),
                 str(w["nodes"][0]),
                 str(w["nodes"][1]),
-                ctx.number(f"{where}.ratio", w.get("ratio", 1.0)),
-                ctx.physical(f"{where}.r", w["r"]) if "r" in w else 0.0,
-                ctx.physical(f"{where}.c", w["c"]) if "c" in w else 0.0,
-                ctx.physical(f"{where}.leak", w["leak"]) if "leak" in w else None,
+                value("ratio", 1.0),
+                value("r", 0.0),
+                value("c", 0.0),
+                value("leak", None),
             )
         )
     if a.get("leakage_h", 0.0) is None and any(w.leak_h is None for w in windings):
         raise ctx.fail(name, "leakage: every winding's `leak`, or the total `leakage_h`")
     c = a["core"]
-    if not isinstance(c, Mapping) or set(c) != {"material", "area_m2", "path_m", "gap_m"}:
-        raise ctx.fail(name, "core: {material, area_m2, path_m, gap_m}")
-    core = parts.CoreSpec(
-        material=ctx.text(f"{name}.core.material", c["material"]),
-        area_m2=ctx.physical(f"{name}.core.area_m2", c["area_m2"]),
-        path_m=ctx.physical(f"{name}.core.path_m", c["path_m"]),
-        gap_m=ctx.physical(f"{name}.core.gap_m", c["gap_m"]),
-    )
-    return windings, core
+    if c is None:
+        if comp is None:
+            raise ctx.fail(name, "needs `core` (or a `component`)")
+        cc = comp["core"]
+        core = parts.CoreSpec(
+            material=str(cc["material"]),
+            area_m2=float(cc["area_m2"]),
+            path_m=float(cc["path_m"]),
+            gap_m=float(cc["gap_m"]),
+        )
+    else:
+        if not isinstance(c, Mapping) or set(c) != {"material", "area_m2", "path_m", "gap_m"}:
+            raise ctx.fail(name, "core: {material, area_m2, path_m, gap_m}")
+        core = parts.CoreSpec(
+            material=ctx.text(f"{name}.core.material", c["material"]),
+            area_m2=ctx.physical(f"{name}.core.area_m2", c["area_m2"]),
+            path_m=ctx.physical(f"{name}.core.path_m", c["path_m"]),
+            gap_m=ctx.physical(f"{name}.core.gap_m", c["gap_m"]),
+        )
+    if a["turns"] is not None:
+        turns = a["turns"]
+    elif comp is not None:
+        turns = float(comp["turns"])
+    else:
+        raise ctx.fail(name, "needs `turns` (or a `component`)")
+    labels = [w.label for w in windings]
+    couplings = []
+    if a["leak_couplings"] is not None:
+        given, own_k = a["leak_couplings"], True
+    else:
+        given, own_k = (comp or {}).get("leak_couplings") or [], False
+    if not isinstance(given, list):
+        raise ctx.fail(f"{name}.leak_couplings", "a list of {between: [a, b], k}")
+    seen = set()
+    for i, d in enumerate(given):
+        where = f"{name}.leak_couplings[{i}]"
+        if not isinstance(d, Mapping) or set(d) != {"between", "k"} or len(d["between"]) != 2:
+            raise ctx.fail(where, "{between: [a, b], k}")
+        x, y = (str(v) for v in d["between"])
+        if x not in labels or y not in labels or x == y:
+            raise ctx.fail(where, f"between two of the windings {labels}")
+        if frozenset((x, y)) in seen:
+            raise ctx.fail(where, f"{x}-{y} twice")
+        seen.add(frozenset((x, y)))
+        k = ctx.physical(f"{where}.k", d["k"]) if own_k else float(d["k"])
+        if not -1.0 < k < 1.0:
+            raise ctx.fail(where, f"k = {k}: a coupling is between -1 and 1")
+        couplings.append((x, y, k))
+    capacitors = [
+        (str(d["between"][0]), str(d["between"][1]), float(d["c"]))
+        for d in ((comp or {}).get("capacitors") or [])
+    ]
+    return TransformerSpec(windings, core, turns, a["leakage_h"], couplings, capacitors)
 
 
 def _bridge(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -623,10 +756,13 @@ for _name, _macro in {
         _transformer,
         None,
         {
-            "core": Param("raw"),
-            "turns": _P,
+            "core": Param("raw", None),
+            "turns": Param("physical", None),
             "leakage_h": Param("physical", None),
+            "leak_couplings": Param("raw", None),
             "interwinding": Param("raw", None),
+            "component": Param("raw", None),
+            "shields": Param("raw", None),
         },
     ),
     "bridge": Macro(
@@ -987,5 +1123,4 @@ def transformer_core(spec: CircuitSpec, name: str, p: Mapping[str, Any]) -> Magn
     ctx = context(spec, p)
     entry = find_part(spec, name)
     a = _resolve_params(ctx, name, MACROS["transformer"], entry)
-    _, core = transformer_spec(ctx, name, entry["transformer"], a)
-    return parts.transformer_core(name, core)
+    return parts.transformer_core(name, transformer_spec(ctx, name, entry["transformer"], a).core)

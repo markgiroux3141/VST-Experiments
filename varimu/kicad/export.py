@@ -199,10 +199,11 @@ class _Exporter:
 
     def transformer(self, name: str, e: Mapping) -> list[Placed]:
         core = Placed(SYMBOLS["Core"], name, 0, 0, value="core")
-        for k, v in e["core"].items():
+        for k, v in (e.get("core") or {}).items():
             core.fields[k] = field_text(v)
-        for k in ("turns", "leakage_h"):
-            core.fields[k] = field_text(e[k])
+        for k in ("turns", "leakage_h", "component"):
+            if k in e:
+                core.fields[k] = field_text(e[k])
         terminal = {}
         out = [core]
         for label, w in e["transformer"].items():

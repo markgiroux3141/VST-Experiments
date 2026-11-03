@@ -234,7 +234,7 @@ and heard against the first in the 5E3.
    carried by the KiCad / editor symbols yet (`Winding`'s fields are ratio, r, c): designed
    transformers come in by `component:` (step 3), not drawn values. Both builders' agreement
    on `leak` comes with the first circuit that uses it (step 6).
-2. `crates/varimu-components`: the transformer source format (lamination from a sourced
+2. **Built 2026-11-04** (status below): `crates/varimu-components`: the transformer source format (lamination from a sourced
    table: EI / UI sizes with window and path; stack, stacking factor, butt gap or
    interleaved; material from `config/magnetics.yaml`; bobbin; winding plan: sections in
    order, turns, wire (bare and insulated diameter), layers, insulation thickness and
@@ -244,12 +244,157 @@ and heard against the first in the 5E3.
    at a stated lowest frequency and level and for window fill. Saving a version (and its lock
    line) from Rust; Python reads only. The compiled form is what the macro takes (core,
    turns, per winding ratio / r / c / leak, interwinding).
-3. A circuit's transformer part from a component: `transformer: {component: NAME@N, ...}`
+   *Status (2026-11-04):* `crates/varimu-components` (depends on `varimu-circuit` for YAML,
+   versions and materials; nothing depends on it). The design format is `design.rs`'s
+   docstring (designs live in `config/designs/`; drawn disc dimensions `width_m` /
+   `build_m`, BV 191's "the discs' geometry is binding"; `shield` sections, a foil with a
+   terminal of its own); the tables are `config/transformer/{laminations,wire,dielectrics}.yaml`
+   (laminations: Tempel's catalog for US EI / UI, Waasner and SEKELS / VAC for DIN 41302 EI and
+   UI, every sourced path reproduced by the dimensions within 0.5%, `tests/tables.rs`;
+   wire: NBS Handbook 100 for AWG and IACS copper, MWS after NEMA MW 1000, Elektrisola
+   after IEC 60317-0-1; dielectrics: DuPont, Arclin, NBS; enamel, kraft, polystyrene and
+   pressboard provisional with bounds in notes: no primary source found). Formulas, each
+   cited in its module: the turn length McLyman [4-23]; DCR from the layers' turns; the
+   gap two joints, a spacer's fringing McLyman [10-11]; leakage the exact 1D energy integral
+   of the MMF profile (Shen et al. TPEL 2021 eq. (14), Mogorovic & Dujic ECCE 2017 eq. (9)),
+   copper as the equal-area square (Shen eq. (2)), Rogowski's K_R on the field length
+   (layer windings: the layers' length; disc windings: the build, McLyman [17-5]; both
+   clamped to the window); layer capacitance Shen et al. TPEL 2019 eqs. (3)-(4), the section
+   4 (m - 1) / (3 m^2) by energy (eq. (10), (A.1)), foils by the layer's image (ours). The
+   compiled block is the macro's values (core, turns, per winding ratio / r / c / leak,
+   interwinding, shields); `report` holds the derivations (short-circuit pairs, Lm in the
+   linear limit, flux at the rating, fill) and warnings. Leakage: a star (per-winding
+   `leak`) when it is exact and positive, else coupled series leakages (`leak_couplings`):
+   the IR refuses negative inductances and a star of three windings over each other has
+   one (open decision below). Saving: `store.rs` writes the version and the lock exactly as
+   Python's `write_lock`; nothing is saved when the body equals the latest version's. CLI:
+   `cargo run -p varimu-components -- compile|save DESIGN [--yaml] [--short p1+p2:s]`.
+   Tests: hand computations (`tests/compile.rs`: core, DCR, leakage, flux, refusals, shields,
+   saving through `versions::read_text`, PyYAML reads the file), the textbook cases
+   (c1/3 + g + c2/3, interleaving's 1/p^2, three windings), Ouyang et al. PEDS 2009's
+   measured planar leakage (`tests/measured.rs`: +2.9%, +0.3%; their fully interleaved case
+   -21%, which the paper puts on its terminations). A first look at BV 191
+   (`config/designs/v72_bv191.yaml`, not saved; mumetall stands in for Hyperm 702): the
+   primary halves in series give 132 ohm shorted at 1 kHz (published <= 140; in parallel
+   ~32), 23.4 H (published 25 +- 10%; the stacking factor and joint gap from SEKELS / VAC's
+   EI 48 tables, the material a stand-in), and 3.62 mH of leakage
+   against ~5.1 mH from the published ~500 ohm at 15 kHz (-29%; with the disc field length
+   at the bare build, McLyman [17-5] without Rogowski or the window clamp, ~5.3 mH): step 4's
+   FEM decides the disc field length.
+   *Decided (2026-11-04, the user's):* leakage a star needs a negative branch for goes in as
+   coupled series leakages (`leak_couplings`, IR `Coupling` elements; step 3).
+   *Decided (2026-11-04, on Claude's recommendation, the user delegating):* (b) a component's
+   interwinding capacitance connects by energy over the facing layers' end voltages (Shen et
+   al. 2019 eq. (A.1); the windings' layer structure gives the ends' share of each winding's
+   voltage) and a shield is a node the circuit names: built with step 6, when the 5E3 needs
+   it (its OT has no shield); (c) Hyperm 702 is a provisional material calibrated to BV 191's
+   printed initial permeability (12,000, likely the stacked core's, as SEKELS / VAC's EI 48
+   1x1 figure for Mumetall): step 5.
+3. **Done 2026-11-04** (status below): A circuit's transformer part from a component: `transformer: {component: NAME@N, ...}`
    with the circuit's nodes per winding and per-instance overrides (genome links survive);
    both builders read the compiled values; a version's hash checked as for tubes.
-4. The 2D FEM leakage check on at least three geometries, within a stated tolerance.
-5. The 5E3 OT by construction against P-TGO-002; BV 191 against the V72's figures.
-6. The 5E3 pinned to its OT version, both builders (agreement test), heard against version 1.
+   *Status:* both builders (`varimu/circuit/builder.py` `transformer_spec`, `crates/varimu-circuit`
+   `builder.rs`): a transformer part's `component` (a version, or a parameter naming one;
+   `kind: transformer` with a `compiled` block, read through the lock like every component)
+   gives the core, turns, per winding ratio / r / c / leak and `leak_couplings`; the part names
+   every one of the component's windings with its nodes; anything the circuit gives overrides
+   (a winding's r, the core, turns, its own `leak_couplings`), so genome links survive;
+   `leakage_h` beside a component is refused. The macro's new `leak_couplings: [{between: [a,
+   b], k}]` (with or without a component) adds a `Coupling` K<NAME>_<a>_<b> between two
+   windings' leakage inductors; the SPICE emitter folds such couplings into the windings'
+   mutual inductances (k sqrt(L_lk,a L_lk,b) added to P N_a N_b; `spice.py`). The component's
+   interwinding and shield capacitances aren't connected yet (open (b)); a circuit adds its own
+   `interwinding`. Every existing circuit builds the identical IR and SPICE
+   (`export_circuit_fixtures.py --golden`, `export_app_fixtures.py` without a diff). The first
+   saved transformer version is `BV191@1` (saved from Rust; the lock gained one line);
+   `config/circuits/transformer_component_test.yaml` drives it (in the app fixtures: both
+   builders agree, `tests/agreement.rs`). `tests/test_transformer_component.py`: the compiled
+   values land in the IR, overrides win, refusals (unpinned, not a transformer, a missing
+   winding, leakage_h, |k| >= 1, an unknown winding, a coupling without a leakage inductor),
+   the SPICE matrix's short circuits equal the compiler's report (2e-3; without the couplings
+   off by > 20%), circuitsim's transient against ngspice's AC on the folded matrix within
+   5e-3 at 1 and 15 kHz with the secondary loaded hard.
+4. **Done 2026-11-04:** The 2D FEM leakage check on at least three geometries, within a stated tolerance.
+   *Status:* `crates/varimu-components/src/fem.rs`: the window's cross-section, the iron
+   infinitely permeable (natural boundaries for A_z on all four sides, one node held), P1
+   triangles on a tensor grid with a line at every copper edge, Jacobi-preconditioned
+   conjugate gradients, the energy weighted by the turn length at each radius (as the 1D
+   model); layer windings' copper as the equal-area layers, discs as full blocks. Checked:
+   windings filling the window's height (the field exactly 1D) within 1e-4 (the elements'
+   discretization), convergence under refinement. Against the 1D formula
+   (`tests/fem_check.rs`, every winding pair): **layer windings within +-8%** (an EI-75
+   output transformer P|S +1.8%, interleaved S|P|S -3.3%, the fitted 5E3 OT with ~2 mm of
+   paper between its windings -3 to -7%); **disc windings within +-20%**
+   (BV 191: pairs -8 to -10%, the series primary against the secondary -17%). Against BV
+   191's measurement the field solution gives 4.37 mH (the ~500 ohm at 15 kHz implies ~5.1;
+   -14%, the Trolitul masks' thicknesses provisional), the formula 3.62 (-29%). So a design
+   may say `leakage_method: field`: the compiler solves every winding pair (a few seconds
+   each) and builds the star or the coupled matrix from those pairs (the coupled gauge the 1D
+   model's, or winding 0's when that isn't positive definite); the report keeps the
+   formula's short circuits beside them; `Compiled::group_short_circuit_h` reads series
+   groups from the compiled leakages (equal to the field solution's for three windings).
+   The default stays `formula` (decision 4: the field solution where the formulas fall
+   short; disc and section windings are that case). CLI: `varimu-components fem DESIGN
+   [--short p1+p2:s]` prints both for every pair.
+5. **Done 2026-11-04:** The 5E3 OT by construction against P-TGO-002; BV 191 against the V72's figures.
+   *Status:* **`OT_5E3@1`** (`config/designs/ot_5e3.yaml`, written by `scripts/fit_ot_5e3.py`,
+   which drives the Rust compiler). P-TGO-002's sheet pairs its figures with lead colours:
+   Green-Red 147.2 ohm and 40.47 mH of leakage, Red-Yellow 195.3 ohm and 19.31 mH. So the
+   low-resistance half is wound first and the other over it (longer turns), and the
+   secondary outside both (the inner half, farther from it, leaks more; with the secondary
+   between the halves both would be alike). The construction isn't published: EI-87 (the
+   reproductions' 2-3/4 x 2-1/4 in frames), a 1 in stack, the material the 5E3 used before
+   (grain_oriented_si_steel; M-19 is an option), layer windings; turns, wire, the paper
+   between layers and windings fitted, the joint gap to 3.67 H. The wire search (AWG 33-37,
+   IEC 0.112-0.18 mm, each half its own size) picks one size for both: 1041 turns per half
+   of 0.13 mm (grade 1), 66 secondary turns of AWG 22 (8000 CT : 8 to the turn), 0.13 mm
+   kraft between layers, 2.0 / 1.7 mm between the halves and before the secondary (the first
+   two at their bounds); the search runs on the formula, the winner is refined on the field
+   solution and compiles by it. Against the sheet: DCR 147.25 (+0.04%), **179.5 (-8%)**,
+   0.537 ohm (+9%, the secondary's gauge step); 3.67 H; leakage 40.35 / 19.34 mH (-0.3 /
+   +0.1%); 1.05 T at 15 W, 70 Hz. The outer half's -8%: one half over the other can't reach
+   the 1.33 resistance ratio in this window with these leakages (~6 mm per half would be
+   needed); a thinner outer wire overshoots by ~10%. **`BV191@2`**: the field method, mumetall
+   kept for Hyperm 702 (no datasheet; BV 191's printed ~12,000 matches SEKELS / VAC's
+   1x1-stacked EI 48 of Mumetall, so it is read as the stacked core's, the joint gap from that
+   table; a 50% NiFe of 12,000 with any joint gap would miss the 25 H). Against Blatt 4: the
+   halves in series 23.4 H (25 +- 10%), shorted 133 ohm at 1 kHz (<= 140), 432 ohm at 15 kHz
+   (~500: -14%; the Trolitul masks' thicknesses are provisional, and at 15 kHz the 38-layer
+   primary's proximity loss adds ~25% to its resistance, which isn't modelled: Dowell's
+   factor). `crates/varimu-components/tests/targets.rs` holds both to these figures and every
+   design to its saved version.
+6. **Built 2026-11-04 (open: the user listens):** The 5E3 pinned to its OT version, both builders (agreement test), heard against version 1.
+   *Status:* **The capacitance connection** (decision (b)): the compiler (0.2.0) turns every
+   facing pair into capacitors between terminals (`capacitance::network`): each facing
+   side's potential runs linearly between its ends, as shares of its winding's voltage from
+   the dotted end (a winding starts at its dot, sections in order, each section's first
+   layer from z0 and back and forth; a disc's side face from its first turn to its last), so
+   the energy C (U0^2 + U0 U1 + U1^2) / 6 is a quadratic form in the terminal voltages, held
+   exactly by a capacitor between every pair of terminals; those across one winding add to
+   its own capacitance, the rest (never negative) are the compiled `capacitors`
+   (`between: [pb.other, s.dot]`, `shield.S` for a shield). Where a winding's own
+   capacitance plus its negative across share is below zero (a single-layer winding facing
+   another; BV 191's foil-shielded discs) no positive network holds the energy (Kron
+   reduction keeps capacitors positive): it is clamped to 0 with a warning (negative
+   capacitors in the IR would be exact: an option, not taken). Both builders place the
+   component's capacitors between the part's nodes (`shields: {S: node}` for a shield; one
+   with both ends on one node, like the centre tap's, left out), no arithmetic of their own.
+   **The pin:** `OT_5E3@2` and `BV191@3` (the same designs, compiled with their networks);
+   `config/circuits/fender_5e3.yaml`'s T1 is `component: OT_5E3@2` with its three windings'
+   nodes (version 1's `ot_*` values removed: git history before 2026-11-04);
+   `fender_5e3_drawn` redrawn by its script with the same pin, the Core symbol's new
+   `component` field (both importers, the exporter, the KiCad library and generated
+   projects regenerated). App fixtures changed only for the 5E3 and its drawing; both
+   builders agree; the 670's goldens unchanged. `tests/test_transformer_component.py` adds
+   the network's placement, shields, and the 5E3's pin. The 5E3's live aliasing test now
+   reads -29.8 dB at draft-1x (was -28.1) and -34.5 at draft-2x: its margin is 4 dB (was 5).
+   **Heard against version 1** (production, the whole guitar take, the app's render; audio
+   git-ignored in `reports/transformers/ot_5e3_ab/audio/`, numbers in its `summary.json`):
+   loudness within 0.1 LU; LUFS-matched, 63 Hz-4 kHz within 0.1 dB, 8 kHz -0.5 / -0.3 dB,
+   16 kHz -2.0 / -0.7 dB (volume 0.5 / full); the difference -40.5 / -32.3 dB re the
+   signal. The designed transformer is a little darker at the top (its asymmetric leakage
+   and the capacitances) and otherwise the same. Production rendered at 11x real time
+   against version 1's 7.6x, but with the test suites running beside it: not a measurement.
 7. The Components view in varimu-app; a second OT version made there and heard.
 8. T85 version 2 for the V76.
 

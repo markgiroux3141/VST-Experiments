@@ -79,20 +79,12 @@ values:
   r_cathode6_ohm: {value: 250, source: "sch: 250-5W from the 6V6 cathodes to ground"}
   c_cathode6_f: {value: 25.0e-6, source: "sch: 25-25 across the 250"}
 
-  # --- Output transformer, version 1 (Triad 50246 original; no original data) ---------
-  # Amplified Parts' reproduction P-TGO-002's measured figures where there are some,
-  # construction provisional (C2's designer makes version 2 by construction).
-  ot_r_half_a_ohm: {value: 147.2, source: "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf (primary DCR per half 147.2 / 195.3 ohm)"}
-  ot_r_half_b_ohm: {value: 195.3, source: "web: same sheet (the other half)"}
-  ot_r_sec_ohm: {value: 0.493, source: "web: same sheet (secondary DCR)"}
-  ot_sec_per_half: {value: 0.06325, genome: fender_5e3.ot.sec_ratio, source: "derived: 8 k CT : 8 ohm (same sheet; the original's nominal), secondary turns per primary half 2 / sqrt(8000 / 8)", notes: "the sheet's inductances (3.67 H per half, 16.7 mH secondary, both at 1 V) give 0.0675: the secondary's 1 V is a much higher flux"}
-  ot_core_material: {value: grain_oriented_si_steel, genome: fender_5e3.ot.core_material, source: "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml)"}
-  ot_core_area_m2: {value: 5.0e-4, genome: fender_5e3.ot.core_area_m2, source: "provisional: model knowledge (a ~7/8 in tongue in the 2-3/4 x 2-1/4 in frame of reproductions, 1 in stack (Tube Amp Doctor), 95% stacking; data/schematics/fender_5e3/README.md)"}
-  ot_core_path_m: {value: 0.12, genome: fender_5e3.ot.core_path_m, source: "provisional: model knowledge (~5.6 x the tongue width for scrapless EI)"}
-  ot_turns_half: {value: 929, genome: fender_5e3.ot.turns_half, source: "provisional: model knowledge (a design rule: 1.2 T at 15 W into 8 k at 70 Hz with the core's area; the reproduction is rated 15 W, same sheet)", notes: "each primary half (the reference winding)"}
-  ot_gap_m: {value: 145.0e-6, genome: fender_5e3.ot.air_gap_m, source: "derived: gives 3.67 H per primary half in the core's linear limit with ot_turns_half (the reproduction's measured inductance at 1 kHz, 1 V, same sheet). An effective joint gap: it also stands in for the lower initial permeability of the era's non-oriented steel"}
-  ot_leakage_h: {value: 29.9e-3, genome: fender_5e3.ot.leakage_h, source: "derived: the mean of the reproduction's leakage per primary half, 40.47 / 19.31 mH (same sheet)", notes: "the format splits leakage evenly between the windings; the measured asymmetry isn't modeled"}
-  ot_c_half_f: {value: 300.0e-12, genome: fender_5e3.ot.winding_capacitance_f, source: "provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF)"}
+  # --- Output transformer (Triad 50246 original; no original data) -------------------
+  # A designed component since C2 (docs/COMPONENT_EDITOR_PLAN.md): its construction fitted
+  # to Amplified Parts' reproduction P-TGO-002 (config/designs/ot_5e3.yaml,
+  # scripts/fit_ot_5e3.py). The hand-specified version 1 (P-TGO-002's figures with an even
+  # leakage split) is in git history before 2026-11-04 and in fender_5e3_drawn.
+  ot_model: {value: OT_5E3@2, source: "config/components/ot_5e3/2.yaml (the 5E3 OT by construction, fitted to P-TGO-002: web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf)"}
 
   # --- Speaker, cabinet and listening point (component editor C3) ----------------------
   # The P12R reissue as a component (its sources and fit: config/components/p12r/1.yaml);
@@ -265,14 +257,14 @@ sections:
       XV6B: {device: [p6b, b2, g6b, k6], model: V6B}
       RK6: {R: [k6, "0"], r: r_cathode6_ohm}
       CK6: {C: [k6, "0"], c: c_cathode6_f}
+      # The halves from the plates to the centre tap (pa wound first, its start at V6A's
+      # plate; pb from the tap out to V6B's), the secondary over them (OT_5E3's design).
       T1:
         transformer:
-          pa: {nodes: [p6a, b1], r: ot_r_half_a_ohm, c: ot_c_half_f}
-          pb: {nodes: [b1, p6b], r: ot_r_half_b_ohm, c: ot_c_half_f}
-          s: {nodes: [spk, "0"], ratio: ot_sec_per_half, r: ot_r_sec_ohm}
-        core: {material: ot_core_material, area_m2: ot_core_area_m2, path_m: ot_core_path_m, gap_m: ot_gap_m}
-        turns: ot_turns_half
-        leakage_h: ot_leakage_h
+          pa: {nodes: [p6a, b1]}
+          pb: {nodes: [b1, p6b]}
+          s: {nodes: [spk, "0"]}
+        component: ot_model
       # The speaker on the secondary; `out` is its sound pressure at the listening point
       # (pascals as volts: varimu.devices.speaker).
       SPK:
