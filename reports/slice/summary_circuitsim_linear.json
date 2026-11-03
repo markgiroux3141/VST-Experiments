@@ -3,15 +3,15 @@
  "cores": "linear",
  "compression_curve": {
   "renders": [
-   "c10edfc12967",
-   "a227a02ed03c",
-   "27592f4a08c3",
-   "237a7a9a680c",
-   "f7bfe3c8bc51",
-   "630583ea290f",
-   "eea01e19fb76",
-   "f01e601db28f",
-   "bffa5350327d"
+   "e7f17e3f2d85",
+   "b9296605cd34",
+   "19785491d270",
+   "b3bb7e6c0b32",
+   "d16da6cfef77",
+   "1df2e7ce4f8a",
+   "fef1329c8010",
+   "0baa9b8a23ae",
+   "029b9ca78853"
   ],
   "chunk_steps": 6,
   "warmup_steps": 1,
@@ -234,7 +234,7 @@
   "plot": "reports\\slice\\bursts_circuitsim_linear.png",
   "by_time_constant": {
    "1": {
-    "render": "4b121bcbe668",
+    "render": "755ab7977995",
     "cv_before_v": -5.66,
     "cv_burst_v": -68.9,
     "gain_reduction_db": 10.72,
@@ -245,7 +245,7 @@
     "published_release_s": 0.3
    },
    "2": {
-    "render": "7c35a4f670c0",
+    "render": "661ccd66f7ee",
     "cv_before_v": -5.66,
     "cv_burst_v": -69.12,
     "gain_reduction_db": 10.78,
@@ -256,7 +256,7 @@
     "published_release_s": 0.8
    },
    "3": {
-    "render": "16be856c8347",
+    "render": "825d48ea9c35",
     "cv_before_v": -5.66,
     "cv_burst_v": -69.15,
     "gain_reduction_db": 10.79,
@@ -267,7 +267,7 @@
     "published_release_s": 2.0
    },
    "4": {
-    "render": "bb2b287f8f16",
+    "render": "4a129d429ea5",
     "cv_before_v": -5.66,
     "cv_burst_v": -69.14,
     "gain_reduction_db": 10.79,
@@ -280,7 +280,7 @@
   }
  },
  "program_clip": {
-  "render": "2be5de18f279",
+  "render": "768e5a5bd615",
   "clip": "clip:Arpeggio04b_120_m_D#_16b.WAV",
   "overrides": {
    "input_atten_db": 0.0,
