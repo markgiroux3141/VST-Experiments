@@ -273,13 +273,15 @@ pub enum Noise {
 }
 
 /// Parts whose resistors are resistors (their noise), and the param holding their value.
-const NOISY: [(&str, Option<&str>); 6] = [
+const NOISY: [(&str, Option<&str>); 8] = [
     ("R", Some("r")),
     ("pot", Some("r")),
     ("rheostat", Some("r")),
     ("tapped_pot", Some("r")),
     ("t_pad", Some("z")),
     ("transformer", None),
+    ("capsule", None),
+    ("capsule_dual", None),
 ];
 
 /// Whether a part's value (a key or {value, source}) is sourced `numerical:`.
@@ -323,6 +325,11 @@ fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Ve
             .collect();
         for e in els {
             if let Element::Resistor(r) = e
+                && !(kind.starts_with("capsule")
+                    && r.name
+                        .rsplit('_')
+                        .next()
+                        .is_some_and(|t| t.starts_with('x')))
                 && !cores.contains(r.a.as_str())
                 && !cores.contains(r.b.as_str())
             {
@@ -489,7 +496,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 19] = [
+const MACROS: [&str; 21] = [
     "R",
     "C",
     "L",
@@ -506,6 +513,8 @@ const MACROS: [&str; 19] = [
     "transformer",
     "bridge",
     "vr_tube",
+    "capsule",
+    "capsule_dual",
     "speaker",
     "plate",
     "tape",
@@ -617,6 +626,20 @@ fn macro_of(kind: &str) -> Macro {
                 .chain(std::iter::once(opt("bias_substeps", Count)))
                 .chain(crate::tape::TRANSPORT.iter().map(|k| opt(k, Physical)))
                 .collect(),
+            false,
+        ),
+        "capsule" => (
+            Some(3),
+            vec![p("component", Raw), p("polarization_v", Physical)],
+            false,
+        ),
+        "capsule_dual" => (
+            Some(5),
+            vec![
+                p("component", Raw),
+                p("polarization_front_v", Physical),
+                Param("polarization_rear_v", Physical, Some(Value::Float(0.0))),
+            ],
             false,
         ),
         "speaker" => (
@@ -916,11 +939,54 @@ fn expand(
                 f("ref_current_a")?,
             )
         }
+        "capsule" => return capsule_part(ctx, name, nodes, a),
+        "capsule_dual" => return capsule_dual_part(ctx, name, nodes, a),
         "speaker" => return speaker_part(ctx, name, nodes, a),
         "plate" => return plate_part(ctx, name, nodes, a),
         "tape" => return tape_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
+}
+
+fn capsule_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.capsule(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let e0 = ctx.float(&format!("{name}.polarization_v"), &a["polarization_v"])?;
+    Ok(crate::capsule::capsule(
+        name, &nodes[0], &nodes[1], &nodes[2], &model, e0,
+    ))
+}
+
+fn capsule_dual_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.dual_capsule(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let ef = ctx.float(
+        &format!("{name}.polarization_front_v"),
+        &a["polarization_front_v"],
+    )?;
+    let er = ctx.float(
+        &format!("{name}.polarization_rear_v"),
+        &a["polarization_rear_v"],
+    )?;
+    Ok(crate::capsule::capsule_dual(
+        name, &nodes[0], &nodes[1], &nodes[2], &nodes[3], &nodes[4], &model, ef, er,
+    ))
 }
 
 fn speaker_part(

@@ -37,6 +37,12 @@ Macro parts (connection; params, * = required):
                 interwinding {ends: [a, b], to, c}
     bridge      [ac_a, ac_b, plus, minus]; model*, arm_c_f_per_area, area
     vr_tube     [anode, mid, cathode]; model*, operating_v*, ref_current_a*
+    capsule     [front, backplate, out]; component* (a capsule component version, NAME@N, or a
+                parameter naming one), polarization_v*: the front pressure on `front`
+                (pascals as volts), the electrodes backplate and out (varimu.devices.capsule)
+    capsule_dual [front, rear, backplate, out_front, out_rear]; component* (a dual-diaphragm
+                capsule version), polarization_front_v*, polarization_rear_v (0: the rear
+                diaphragm unpolarized): the outside pressures on front and rear
     speaker     [plus, minus, out]; component* (a speaker component version, NAME@N, or
                 a parameter naming one), distance_m* (the listening point, on axis), the
                 cabinet: width_m*, height_m*, depth_m* (0: a flat baffle), offset_x_m,
@@ -74,7 +80,8 @@ noise elements follow its own. Every Resistor of an R, pot, rheostat, tapped_pot
 part and a transformer's winding resistances get a NoiseCurrent `IN_<name>` (4kT/R at the
 block's temperature_k), except parts whose value's source is `numerical:` (a leak for the
 solver, not a part) and resistors on a core node (a gap or core loss: magnetic, not
-electrical); other macros' internals (mains, bridge, vr_tube, speaker) get none. Every
+electrical); a capsule's acoustic resistances get theirs (its readout resistor none); other
+macros' internals (mains, bridge, vr_tube, speaker) get none. Every
 triode or pentode instance of a `device` part gets a TubeNoise `BN_<name>` (shot_k from
 varimu.devices.noise, a pentode's partition factor, flicker_v2 over its `parallel` count:
 independent cathodes average).
@@ -123,7 +130,14 @@ from varimu.devices import noise as noise_mod
 from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
-from varimu.devices.library import load_device, load_plate, load_speaker, load_tape
+from varimu.devices.library import (
+    load_capsule,
+    load_device,
+    load_dual_capsule,
+    load_plate,
+    load_speaker,
+    load_tape,
+)
 from varimu.devices.pentode import Pentode
 from varimu.devices.speaker import Cabinet
 from varimu.devices.table import GRIDS
@@ -217,6 +231,7 @@ class Noise:
 # Parts whose resistors are resistors (their noise), and the param holding their value.
 _NOISY = {
     "R": "r", "pot": "r", "rheostat": "r", "tapped_pot": "r", "t_pad": "z", "transformer": None,
+    "capsule": None, "capsule_dual": None,
 }  # fmt: skip
 
 
@@ -242,6 +257,8 @@ def _noise_elements(ctx: Context, kind: str, entry: Mapping, els: list[Element])
             return out
         cores = {e.core for e in els if isinstance(e, Winding)}
         for e in els:
+            if kind.startswith("capsule") and e.name.rsplit("_", 1)[-1].startswith("x"):
+                continue  # the capsule's readout resistor: a numerical element
             if isinstance(e, Resistor) and e.a not in cores and e.b not in cores:
                 psd = 4.0 * noise_mod.K_B * nz.temperature_k / e.r_ohm
                 out.append(NoiseCurrent(f"IN_{e.name}", e.a, e.b, psd))
@@ -487,6 +504,26 @@ def _speaker(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]
     return parts.speaker(name, *conn, model, cab, a["distance_m"])
 
 
+def _capsule(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    where = f"{name}.component"
+    try:
+        model = load_capsule(str(versions.require_pinned(ctx.text(where, a["component"]))))
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.capsule(name, *conn, model, a["polarization_v"])
+
+
+def _capsule_dual(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        model = load_dual_capsule(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    e0 = (a["polarization_front_v"], a["polarization_rear_v"])
+    return parts.capsule_dual(name, *conn, model, *e0)
+
+
 def _plate(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     where = f"{name}.component"
     try:
@@ -619,6 +656,16 @@ for _name, _macro in {
             },
             "bias_substeps": Param("count", None),
             **{k: Param("physical", None) for k in parts.TAPE_TRANSPORT},
+        },
+    ),
+    "capsule": Macro(_capsule, 3, {"component": Param("raw"), "polarization_v": _P}),
+    "capsule_dual": Macro(
+        _capsule_dual,
+        5,
+        {
+            "component": Param("raw"),
+            "polarization_front_v": _P,
+            "polarization_rear_v": Param("physical", 0.0),
         },
     ),
     "speaker": Macro(

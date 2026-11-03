@@ -24,6 +24,12 @@ import yaml
 import varimu
 from varimu.config import REPO_ROOT
 from varimu.devices import versions
+from varimu.devices.capsule import (
+    Capsule,
+    DualCapsule,
+    capsule_from_data,
+    dual_capsule_from_data,
+)
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.fit import (
     DATASHEETS,
@@ -123,6 +129,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return lamp_from_data(d, name)
     if kind == "speaker":
         raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
+    if kind == "capsule":
+        raise ValueError(f"{name} is a capsule, not a device model: place it with a `capsule` part")
     if kind == "plate":
         raise ValueError(f"{name} is a plate, not a device model: place it with a `plate` part")
     if kind == "tape":
@@ -133,6 +141,16 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
 def load_speaker(name: str, root: Path = DEVICE_DIR) -> Speaker:
     """Speaker component `name` (`NAME@N`, or `NAME` for its latest version)."""
     return speaker_from_data(_read(name, root), name)
+
+
+def load_capsule(name: str, root: Path = DEVICE_DIR) -> Capsule:
+    """Capsule component `name` (`NAME@N`, or `NAME` for its latest version)."""
+    return capsule_from_data(_read(name, root), name)
+
+
+def load_dual_capsule(name: str, root: Path = DEVICE_DIR) -> DualCapsule:
+    """Dual-diaphragm capsule component `name` (`NAME@N`, or `NAME` for its latest)."""
+    return dual_capsule_from_data(_read(name, root), name)
 
 
 def load_plate(name: str, root: Path = DEVICE_DIR) -> PlateComponent:
@@ -586,6 +604,26 @@ def build_e83f() -> dict[str, Any]:
             "screen": rs.as_dict(),
             "sigma": "plate hypot(2%, 0.1 mA), screen hypot(3%, 50 uA)",
         },
+    }
+
+
+def build_bk4134() -> dict[str, Any]:
+    """The B&K Type 4134 1/2-inch pressure microphone's capsule (MIC_ROOM_PLAN.md A2: the
+    capsule machinery's verification case): its geometry and materials as published
+    (data/datasheets/published_points.yaml "BK4134"; data/schematics/bk_4134/README.md),
+    the lumped elements derived from them (varimu.devices.capsule.lumped)."""
+    from varimu.devices import capsule
+
+    pub = _published()["BK4134"]
+    geom = pub["geometry"]
+    return {
+        "name": "BK4134",
+        "kind": "capsule",
+        "source": f"derived: varimu.devices.capsule.lumped on the geometry ({pub['source']})",
+        "geometry": geom,
+        "lumped": capsule.lumped(geom),
+        "lumped_source": "derived: varimu/devices/capsule.py's formulas (its docstring) on "
+        "the geometry; air at 20 C",
     }
 
 
@@ -1116,6 +1154,7 @@ BUILDERS = {
     "B450C80": build_b450c80,
     "EF804S": build_ef804s,
     "E83F": build_e83f,
+    "BK4134": build_bk4134,
     "6X4": build_6x4,
     "6AL5": build_6al5,
     "12AY7": build_12ay7,

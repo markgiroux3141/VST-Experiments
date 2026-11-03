@@ -243,6 +243,23 @@ at a frequency (from the FDTD run) is a cheap aid for placing mics.
 Started by the user (U47 -> V76 first, alongside the gas-tube work in its worktree).
 - **A1 (the V76) in progress:** tubes, circuit and idle check built; the profile is next
   (DEVICE_BUILDER_PLAN.md B10's status).
+- **A2 (the capsule machinery) built and checked on the B&K 4134:** capsules are components
+  (kind `capsule`, `varimu/devices/capsule.py`: the geometry sourced, the lumped network
+  derived at fit time so both builders read numbers), the `capsule` part ([front, backplate,
+  out]: pressures as volts, volume velocities as currents; the diaphragm's displacement
+  drives a Thevenin source behind C0; the electrostatic negative stiffness in the diaphragm's
+  compliance) and `capsule_dual` (two diaphragms, through and blind holes: the K47 family;
+  an unpolarized side has no source) in both builders, Johnson noise on the acoustic
+  resistances (the self-noise), an AC solver for linear IRs as the reference
+  (`varimu/measure/ac.py`), `scripts/capsule_study.py` -> `reports/mics/capsule_bk4134/`,
+  `tests/test_capsule.py`. `BK4134@1` from Zuckerwar's geometry
+  (`data/schematics/bk_4134/README.md`) with H&M's FEM film resistance (Skvor's uniform-array
+  formula gave 2.3x: over-damped, 21.8 dB(A)): render vs AC 0.018 dB below 20 kHz, rendered
+  noise vs AC prediction 0.5 dB, **self-noise 18.6 dB(A)** (B&K 18; theory 17.9-19.7),
+  sensitivity 9.53 mV/Pa (the published geometry's own bound 9.6; B&K's 12.5 is ~2.3 dB
+  above it, a known gap of that parameter set), the response peaks +3.3 dB at 15.6 kHz
+  (B&K ~+1: 1.3 dB outside its +-2 dB; the gap's air mass and the film's frequency
+  dependence aren't modelled).
 - **A3's gate, the U47's sources:** catalogued in `data/schematics/neumann_u47/README.md`
   (Neumann's own archive: the 1958 data sheet with polars and responses, the 1958 / 1959
   manuals, the 1959 factory drawing U 47-00-00-00 with every value; Funkschau 1/1948's

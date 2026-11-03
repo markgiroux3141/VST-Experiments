@@ -16,6 +16,7 @@ use circuitsim::ir::{
     ScreenLaw, Triode, VacuumDiode, VariMuTriode,
 };
 
+use crate::capsule::{self, Capsule, DualCapsule};
 use crate::plate::{self, PlateComponent};
 use crate::speaker::{self, Speaker};
 use crate::tape::{self, TapeComponent};
@@ -39,6 +40,8 @@ pub struct Library {
     config_dir: PathBuf,
     devices: Mutex<HashMap<String, DeviceModel>>,
     speakers: Mutex<HashMap<String, Speaker>>,
+    capsules: Mutex<HashMap<String, Capsule>>,
+    dual_capsules: Mutex<HashMap<String, DualCapsule>>,
     plates: Mutex<HashMap<String, PlateComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
@@ -50,6 +53,8 @@ impl Library {
             config_dir: config_dir.into(),
             devices: Mutex::new(HashMap::new()),
             speakers: Mutex::new(HashMap::new()),
+            capsules: Mutex::new(HashMap::new()),
+            dual_capsules: Mutex::new(HashMap::new()),
             plates: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
@@ -78,6 +83,35 @@ impl Library {
         let model = load_device(&yaml::parse(&text, name)?, name)?;
         self.devices.lock().unwrap().insert(key, model.clone());
         Ok(model)
+    }
+
+    /// Capsule component `name` (`NAME@N`, or `NAME` for its latest version), checked
+    /// against versions.lock (`load_capsule` in library.py).
+    pub fn capsule(&self, name: &str) -> Result<Capsule, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(c) = self.capsules.lock().unwrap().get(&key) {
+            return Ok(c.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let c = capsule::from_data(&yaml::parse(&text, name)?, name)?;
+        self.capsules.lock().unwrap().insert(key, c.clone());
+        Ok(c)
+    }
+
+    /// Dual-diaphragm capsule component `name` (`load_dual_capsule` in library.py).
+    pub fn dual_capsule(&self, name: &str) -> Result<DualCapsule, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(c) = self.dual_capsules.lock().unwrap().get(&key) {
+            return Ok(c.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let c = capsule::dual_from_data(&yaml::parse(&text, name)?, name)?;
+        self.dual_capsules.lock().unwrap().insert(key, c.clone());
+        Ok(c)
     }
 
     /// Speaker component `name` (`NAME@N`, or `NAME` for its latest version), checked

@@ -375,3 +375,40 @@
   max_ratings: {va0_v: 550, va_v: 210, pa_w: 2.1, vg20_v: 550, vg2_v: 210, pg2_w: 0.35, vg1_neg_v: 100, vg1_neg_peak_v: 200, pg1_w: 0.050, rg1_ohm: 1.0e+6, ik_a: 16.0e-3, ik_peak_a: 80.0e-3, vhk_v: 100, bulb_c: 170}   # p.4, design centre; peaks at duty 0.1, 200 us
   heater: {v: 6.3, a: 0.300}   # p.2: 285-315 mA
   pins: "1 g2, 2 g1, 3 k, 4 f, 5 f, 6 a, 7 i.c., 8 i.c., 9 g3 + internal shield (noval, p.1); S 1176's base drawing has the same order"
+
+# --- Microphone capsules (MIC_ROOM_PLAN.md A2 / A3) ---
+
+"BK4134":
+  source: "data/schematics/bk_4134/README.md: Zuckerwar's 4134 parameters (JASA 64, 1978) as reproduced by Homentcovschi & Miles 2011 (hm; web: https://pmc.ncbi.nlm.nih.gov/articles/PMC3257755/), B&K's product data for types 4133-4166 (bk, ~1980; web: https://peel.dk/Bruel&Kjaer/Equipment/Condenser%20Microphone%20Cartridges%20(Product%20datasheets).pdf)"
+  geometry:
+    diaphragm:
+      radius_m: 4.45e-3          # hm (Zuckerwar's table)
+      thickness_m: 5.0e-6        # hm
+      density_kg_m3: 8900.0      # hm: nickel, surface density 0.0445 kg/m^2
+      tension_n_m: 3162.0        # hm
+    gap_m: 20.77e-6              # hm
+    backplate:
+      radius_m: 3.61e-3          # hm
+      thickness_m: 0.84e-3       # hm: the holes' depth
+      holes: 6                   # hm, centres 2.03 mm from the axis
+      hole_radius_m: 0.51e-3     # hm
+    cavity_m3: 1.264e-7          # hm: the back chamber
+    vent: {lf_3db_hz: 2.9}       # bk Fig. 15 (the response's -3 dB point, read by eye)
+    stray_capacitance_f: 0.55e-12   # derived: bk's 18 pF at 250 Hz less the active 17.45 pF (eps0 pi b^2 / h)
+    # hm: R_A ~1.2e8 N s/m^5, the 4134's air damping extracted from their FEM solution (its
+    # noise: 17.9 dB(A)); Skvor's uniform-array formula gives 2.75e8 here (6 large holes and
+    # the unmodelled peripheral slit drain the film faster: 15.6 kHz at -3 dB, 21.8 dB(A))
+    film_resistance_pa_s_m3: 1.2e+8
+    source: "hm (Zuckerwar's table), bk; the peripheral slit ('length 0.3 mm', its other dimensions unknown) is not modelled; air at 20 C (varimu/devices/capsule.py), not Zuckerwar's"
+  published:
+    polarization_v: 200.0               # bk
+    capacitance_f: 18.0e-12             # bk, at 250 Hz
+    sensitivity_mv_pa: 12.5             # bk, -38 dB re 1 V/Pa
+    resonance_hz: 23000.0               # bk: 90 degree phase
+    flat_2db_hz: [3.9, 20000.0]         # bk
+    noise_dba: 18.0                     # bk; theory 17.9 (hm) .. 19.7 (Zuckerwar)
+    noise_dba_theory: [17.9, 19.7]
+    # bk Fig. 15 (actuator response, read by eye from the scan; not digitized): dB re
+    # the level at 250 Hz
+    response_db: {"20": 0.0, "8000": 0.0, "15000": 1.0, "22000": 0.0, "30000": -4.0, "40000": -8.0}
+
