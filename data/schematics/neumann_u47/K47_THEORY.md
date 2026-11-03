@@ -632,6 +632,14 @@ dual-diaphragm capsule depend on r.
 
 ### 5.3 `varimu/mics/free_field.py`: a diffraction model
 
+*Status (2026-11-04):* stage 1 is K47@2. Stages 2 and 3 are built together as one solver,
+`varimu/mics/bor.py` (K47@3): a body-of-revolution BEM of the capsule alone, the azimuthal
+order 0 only (the diaphragm's axisymmetric weight picks out that order at any incidence), so
+it gives the low-frequency path as its k -> 0 limit. It is checked on the sphere (plane wave
+and point source) and on Lamb's disk. The head basket and the mic body aren't axisymmetric
+about the capsule's axis (the U 47 is side-address) and aren't in it. MIC_ROOM_PLAN.md A3's
+status has the numbers.
+
 Replace "both entries see the free field" with blocked pressures in three stages:
 
 1. **Now: the rigid-sphere entries (closed form, cheap, exact for its shape).**

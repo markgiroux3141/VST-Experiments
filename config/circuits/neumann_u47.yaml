@@ -45,7 +45,7 @@ controls:
 
 values:
   # --- Capsule (sch) --------------------------------------------------------------------
-  capsule_model: {value: K47@2, source: "sch: KK47 '2 x 78...83 pF'; config/components/k47/2.yaml (its geometry bounded and fitted to Neumann's curves by scripts/fit_k47.py: reports/mics/k47_fit.png; K47@1 was a placeholder)"}
+  capsule_model: {value: K47@3, source: "sch: KK47 '2 x 78...83 pF'; config/components/k47/3.yaml (its geometry bounded and fitted to Neumann's curves by scripts/fit_k47.py on the capsule's body, varimu/mics/bor.py: reports/mics/k47_fit.png; K47@2 had a sphere for the body, K47@1 was a placeholder)"}
   polarization_v: {value: 63.0, source: "derived: sch +63 V printed on the backplate (105 V x R8 / (R7 + R8) = 63 V; no DC through R1)"}
   r1_ohm: {value: 100.0e+6, source: "sch: R1 100 MOhm, the polarization feed"}
   c1_f: {value: 0.01e-6, source: "sch: C1 0.01 uF 500 V, the backplate to ground"}

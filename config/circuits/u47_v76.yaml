@@ -125,9 +125,10 @@ controls:
     source: 'provisional: model knowledge (West German mains)'
 values:
   capsule_model_u47:
-    value: K47@2
-    source: 'sch: KK47 ''2 x 78...83 pF''; config/components/k47/2.yaml (its geometry bounded and fitted
-      to Neumann''s curves by scripts/fit_k47.py: reports/mics/k47_fit.png; K47@1 was a placeholder)'
+    value: K47@3
+    source: 'sch: KK47 ''2 x 78...83 pF''; config/components/k47/3.yaml (its geometry bounded and fitted
+      to Neumann''s curves by scripts/fit_k47.py on the capsule''s body, varimu/mics/bor.py: reports/mics/k47_fit.png;
+      K47@2 had a sphere for the body, K47@1 was a placeholder)'
   polarization_v_u47:
     value: 63.0
     source: 'derived: sch +63 V printed on the backplate (105 V x R8 / (R7 + R8) = 63 V; no DC through

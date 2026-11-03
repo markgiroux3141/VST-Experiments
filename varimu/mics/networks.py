@@ -71,13 +71,18 @@ def dual_response(
     polarization_v: float,
     pattern: str,
     sphere: tuple[float, float] | None = None,
+    entries: tuple[np.ndarray, np.ndarray] | None = None,
     **load,
 ) -> np.ndarray:
     """Complex volts at the electrode per pascal of a plane wave from theta_rad: the
     entries `path_m` apart in free field, or on a rigid sphere (`sphere` = (radius_m,
-    cap_radius_m): varimu.mics.free_field.sphere_entry_factors; path_m unused)."""
+    cap_radius_m): varimu.mics.free_field.sphere_entry_factors; path_m unused), or given
+    (`entries` = (front, rear) at f_hz: e.g. the capsule's body, free_field.
+    body_entry_factors)."""
     f_hz = np.asarray(f_hz, float)
-    if sphere is not None:
+    if entries is not None:
+        front, rear = (np.asarray(e, complex) for e in entries)
+    elif sphere is not None:
         front, rear = sphere_entry_factors(f_hz, theta_rad, *sphere)
     else:
         front, rear = entry_factors(f_hz, theta_rad, path_m)

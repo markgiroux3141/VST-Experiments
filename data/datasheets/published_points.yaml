@@ -420,7 +420,7 @@
       radius_m: {value: 12.5e-3}      # web (K47_THEORY.md: an M7's gold area 25.4 mm, makers / forums)
       thickness_m: {value: 6.0e-6}    # provisional: model knowledge (forum lore: ~6 um PET for the polyester capsule; Neumann: PVC in the M 7, polyester later)
       density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
-      tension_n_m: {value: 23.64}      # provisional: fitted (bounds 12-200 N/m; K47_THEORY.md: ~8-60 N/m, the M7 tuned to ~800-950 Hz)
+      tension_n_m: {value: 32.4}      # provisional: fitted (bounds 12-200 N/m; K47_THEORY.md: ~8-60 N/m, the M7 tuned to ~800-950 Hz)
     gap_m: {value: 50.0e-6}           # derived: the 2 x 78-83 pF (sch) with the backplate's radius, less ~3 pF stray: eps0 pi b^2 / 77 pF
     backplate:
       radius_m: {value: 11.8e-3}      # provisional: model knowledge (the electrode a little inside the diaphragm's clamping)
@@ -429,14 +429,21 @@
         holes: {value: 40}            # provisional: model knowledge (part of the ~153 holes (a Science Museum label, README) go through; the split is unknown)
         radius_m: {value: 0.4e-3}     # web (K47_THEORY.md: 0.8 mm through holes, makers / forums)
       blind:
-        holes: {value: 109.7}            # provisional: fitted (bounds 15-140 per side)
+        holes: {value: 94.3}            # provisional: fitted (bounds 15-140 per side)
         radius_m: {value: 0.54e-3}    # web (K47_THEORY.md: ~1.07-1.09 mm blind holes, makers / forums)
         depth_m: {value: 0.0045}      # provisional: fitted (bounds 0.5-4.5 mm; K47_THEORY.md: ~4 mm, a replica's)
-    film_resistance_pa_s_m3: {value: 2.355e+06}       # provisional: fitted (the film into the blind holes, bounds 1e4-3e7)
-    through_resistance_pa_s_m3: {value: 2.671e+07}    # provisional: fitted (the gradient resistance, Torio & Segota's R_a, bounds 1e6-3e9)
+    film_resistance_pa_s_m3: {value: 4.5e+06}       # provisional: fitted (the film into the blind holes, bounds 1e4-3e7)
+    through_resistance_pa_s_m3: {value: 2.136e+07}    # provisional: fitted (the gradient resistance, Torio & Segota's R_a, bounds 1e6-3e9)
     leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
     stray_capacitance_f: {value: 3.0e-12}   # provisional: model knowledge (the electrode's leads and insulator)
-    sphere_radius_m: {value: 0.01098}   # provisional: fitted (the capsule as a rigid sphere for its entries' diffraction, varimu/mics/free_field.py; 3a is the low-frequency path, bounds 9.5-25 mm)
+    # The capsule as a rigid body of revolution for its entries' diffraction (varimu/mics/bor.py;
+    # K47@2 had a fitted sphere in its place, 10.98 mm)
+    body:
+      radius_m: {value: 14.9e-3}          # web (K47_THEORY.md 1.6: an M 7 measured 29.85 mm without the middle rim, GroupDIY)
+      rim_radius_m: {value: 16.5e-3}      # web (README.md: the K 47 33 mm outer diameter, GroupDIY)
+      rim_thickness_m: {value: 1.5e-3}    # provisional: model knowledge (the middle rim's width; no source)
+      spacing_m: {value: 0.00575}         # provisional: grid: (scripts/fit_k47.py --spacing-mm; the backplate's 5.65 mm plus the two gaps, the diaphragms on its faces; an M 7 measured 5.73 mm thick)
+      ring_proud_m: {value: 0.0005}          # provisional: grid: (scripts/fit_k47.py --proud-mm; the clamping rings' faces ahead of the diaphragms, unknown)
   published:
     capacitance_f_per_side: [78.0e-12, 83.0e-12]   # sch: KK47 '2 x 78...83 pF'
 

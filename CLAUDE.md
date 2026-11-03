@@ -308,7 +308,13 @@ the chain `u47_v76.yaml` (`scripts/compose_chain.py`), `scripts/mic_print.py`; t
 gradient resistance between the sides; `data/schematics/neumann_u47/K47_THEORY.md`) with
 rigid-sphere diffraction for its entries (`varimu/mics/free_field.py`): the whole U47 at 25.4
 mV/Pa cardioid (ds58: 25-28), 13-15 dB front to back (MIC_ROOM_PLAN.md A3's status). The U47's sources:
-`data/schematics/neumann_u47/README.md`.
+`data/schematics/neumann_u47/README.md`. The first listen was heard (2026-11-04: "it all sounds
+good", subtle). **`K47@3`** (2026-11-04; the U47 and the chain pin it since, the user's call): the capsule's real body for its entries, `varimu/mics/bor.py` (a body-of-revolution BEM,
+azimuthal order 0 only: exact for the diaphragm's axisymmetric average; checked on the sphere's
+series and Lamb's disk, `tests/test_bor.py`; the K47 geometry's `body` block), the network
+refitted on it: the omni's 6.5 kHz dip gone, the presence peak at ~11 kHz, omni 16.8 mV/Pa
+(in ds58). `free_field.capsule_entry_pressures` picks body / sphere / path from a capsule's
+geometry; `mic_print.py --distance-m` prints a point source (proximity).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and

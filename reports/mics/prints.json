@@ -1,5 +1,5 @@
 {
- "chain": "config/circuits/u47_v76.yaml: the U47 (K47@2, cardioid) into the V76, free field, plane wave; production",
+ "chain": "config/circuits/u47_v76.yaml: the U47 (K47@3 since 2026-11-04; *_k47v2 files: K47@2, cardioid) into the V76, free field, plane wave; production",
  "levels": "the V76's out: 0 dBFS = +24 dBu peak (it clips near +25.5)",
  "listen": "reports/mics/audio/matched/: every file at -18 LUFS (the dry sources too); the raw files keep the chain's level (the 180 deg print 15 dB under the 0 deg one: the cardioid's rejection)",
  "prints": {
@@ -44,22 +44,24 @@
    "out_peak_dbfs": -6.67,
    "x_real_time": 5.43
   },
-  "u47_v76_vocal_longwayhome_94db_0deg_gain_db_v7640.wav": {
+  "vocal_longwayhome_dry.wav": {
+   "lufs_raw": -20.1
+  },
+  "u47_v76_vocal_longwayhome_94db_0deg_gain_db_v7640_k47v2.wav": {
    "lufs_raw": -14.0,
    "spl_db": 94.0,
    "angle_deg": 0.0,
    "out_peak_dbfs": -0.54,
-   "x_real_time": 5.57
+   "x_real_time": 5.57,
+   "capsule": "K47@2 (sphere)"
   },
-  "u47_v76_vocal_longwayhome_94db_180deg_gain_db_v7640.wav": {
+  "u47_v76_vocal_longwayhome_94db_180deg_gain_db_v7640_k47v2.wav": {
    "lufs_raw": -29.0,
    "spl_db": 94.0,
    "angle_deg": 180.0,
    "out_peak_dbfs": -15.59,
-   "x_real_time": 5.34
-  },
-  "vocal_longwayhome_dry.wav": {
-   "lufs_raw": -20.1
+   "x_real_time": 5.34,
+   "capsule": "K47@2 (sphere)"
   }
  }
 }
