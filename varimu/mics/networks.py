@@ -27,7 +27,7 @@ from varimu.circuit.ir import (
 )
 from varimu.devices.capsule import DualCapsule
 from varimu.measure import ac
-from varimu.mics.free_field import entry_factors
+from varimu.mics.free_field import entry_factors, sphere_entry_factors
 
 PATTERNS = ("cardioid", "omni")
 
@@ -70,10 +70,16 @@ def dual_response(
     path_m: float,
     polarization_v: float,
     pattern: str,
+    sphere: tuple[float, float] | None = None,
     **load,
 ) -> np.ndarray:
-    """Complex volts at the electrode per pascal of a plane wave from theta_rad."""
+    """Complex volts at the electrode per pascal of a plane wave from theta_rad: the
+    entries `path_m` apart in free field, or on a rigid sphere (`sphere` = (radius_m,
+    cap_radius_m): varimu.mics.free_field.sphere_entry_factors; path_m unused)."""
     f_hz = np.asarray(f_hz, float)
-    front, rear = entry_factors(f_hz, theta_rad, path_m)
+    if sphere is not None:
+        front, rear = sphere_entry_factors(f_hz, theta_rad, *sphere)
+    else:
+        front, rear = entry_factors(f_hz, theta_rad, path_m)
     ir = dual_ir(c, polarization_v, pattern, **load)
     return front * ac.transfer(ir, f_hz, "out", drives={"p_rear": rear / front})

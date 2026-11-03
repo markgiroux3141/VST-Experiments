@@ -279,22 +279,31 @@ Started by the user (U47 -> V76 first, alongside the gas-tube work in its worktr
     generator dropped, a 1 nF cable); builds bit for bit in both builders, pre-flight clean;
     ~5x slower than real time at production. `scripts/mic_print.py` prints a clip through a
     chain as a plane wave from an angle (`varimu/mics/free_field.py`).
-  - **The K47 is a placeholder (K47@1, the starting values, not fitted):** Neumann's curves
-    digitized (`data/datasheets/neumann_u47_{response,polar}.csv`: Telefunken 1952's measured
-    responses re 1 kHz, the 1958 sheet's polars), `scripts/fit_k47.py` fits the bounded
-    geometry with the AC network, and it can't get there. Low end: with a stiffness-controlled
-    diaphragm the internal air's compliance adds an omni term (2 C1 / C_d) that fills the null
-    (0 dB front to back at 100 Hz; Neumann's 11.7), with a resistance-controlled one the
-    sensitivity falls ~10x short. High end: without the body's diffraction both entries see
-    the free field, and the omni sum notches where the path is half a wavelength (~15 kHz).
-    So the U47 -> V76 chain isn't worth a listen yet (the capsule's artifacts, a +9.5 dB peak
-    near 8.5 kHz on axis). **Options (the user's call):** (a) the Braunmuhl-Weber theory
-    properly: a literature K47 / K67 equivalent network (the backplate's distributed
-    resistance and the diaphragm's control regime) plus diffraction by the capsule and its
-    basket (a rigid disk or sphere first, BEM on the GPU later: the plan's later fidelity
-    item, now a prerequisite); (b) the same with the K47's geometry measured from a capsule
-    or a maker's drawing (the README's "where to look next"). Not an option: a fitted EQ curve
-    on a pressure capsule (the genome is physical only).
+  - **The K47 (K47@2, fitted; K47@1 was a placeholder):** Neumann's curves digitized
+    (`data/datasheets/neumann_u47_{response,polar}.csv`: Telefunken 1952's measured responses
+    re 1 kHz, the 1958 sheet's polars). A first fit bounded the diaphragm like a measurement
+    capsule's (300-5000 N/m) and found no cardioid (its internal air's compliance against a
+    stiff diaphragm adds an omni term that fills the null) and an omni notch near 15 kHz (no
+    diffraction). The theory (`data/schematics/neumann_u47/K47_THEORY.md`: Torio & Segota, AES
+    2000; von Braunmuhl & Weber's patent; Neumann's own) put it in another regime: a nearly
+    slack diaphragm (tens of N/m), the gradient resistance between the two sides
+    (`through_resistance_pa_s_m3`, Torio & Segota's R_a), adiabatic blind holes; and the
+    entries' diffraction: the capsule as a rigid sphere (the exact series, cap-averaged:
+    `varimu/mics/free_field.py`), whose 3a is the low-frequency path. `scripts/fit_k47.py`
+    fits tension, the two resistances, the blind holes' depth and count and the sphere's
+    radius into the grid's real load (R2 and the VF14's Miller capacitance, 71 pF: an 8 pF
+    guess left the circuit 4.4 dB under the fit); the makers' measured backplate (5.65 mm,
+    0.8 / 1.08 mm holes) fixed. Result (`reports/mics/k47_fit.png`, `k47_fit.json`): tension
+    23.6 N/m (25% electrostatic softening), R_a 4.7e7, 66 blind holes per side 4.5 mm deep,
+    sphere 11.2 mm (path 34 mm; Torio's 32). **The whole U47 against ds58** (`tests/test_u47.py`):
+    cardioid 25.4 mV/Pa at 1 kHz into 1 kOhm (25-28), omni 19.1 (14-17: ~1 dB over), front
+    to back 13.2 dB at 100 Hz and 15.1 at 1 kHz (the 1958 polars: 11.7, 16.2); on axis the
+    cardioid within 1.2 dB rms of Telefunken's curve (its presence peak at ~14 kHz, the
+    data's at ~9: 3 dB at worst). **Misses:** the omni's on-axis dip near 6.5 kHz (-9 dB where
+    the data has -1: a sphere for a disk-shaped capsule; the theory's next stage, the real
+    body's low-frequency path and a BEM of capsule and basket, is where it goes), the
+    presence peak's frequency. Free field, plane wave: the polars' measuring distance (and
+    proximity) not yet.
 - **A3's gate, the U47's sources:** catalogued in `data/schematics/neumann_u47/README.md`
   (Neumann's own archive: the 1958 data sheet with polars and responses, the 1958 / 1959
   manuals, the 1959 factory drawing U 47-00-00-00 with every value; Funkschau 1/1948's

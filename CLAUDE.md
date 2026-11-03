@@ -303,9 +303,11 @@ volts; self-noise from Johnson noise on the acoustic resistances), `varimu/measu
 analysis of linear IRs, the reference), `BK4134@1` checked (18.6 dB(A) vs B&K's 18,
 `tests/test_capsule.py`). **A3:** `VF14T@1`, `config/circuits/neumann_u47.yaml` (idles at the
 drawing's point only with its underheated cathode: a -0.32 V space-charge shift from B6's model),
-the chain `u47_v76.yaml` (`scripts/compose_chain.py`), `scripts/mic_print.py`; the K47 is a
-placeholder (`K47@1`): the lumped dual network can't reach Neumann's curves (no LF cardioid,
-no diffraction), options in MIC_ROOM_PLAN.md A3's status. The U47's sources:
+the chain `u47_v76.yaml` (`scripts/compose_chain.py`), `scripts/mic_print.py`; the K47
+(`K47@2`, `scripts/fit_k47.py`) in Torio & Segota's regime (a nearly slack diaphragm, the
+gradient resistance between the sides; `data/schematics/neumann_u47/K47_THEORY.md`) with
+rigid-sphere diffraction for its entries (`varimu/mics/free_field.py`): the whole U47 at 25.4
+mV/Pa cardioid (ds58: 25-28), 13-15 dB front to back (MIC_ROOM_PLAN.md A3's status). The U47's sources:
 `data/schematics/neumann_u47/README.md`.
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks

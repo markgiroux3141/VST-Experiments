@@ -70,3 +70,35 @@ def test_chain_is_current_and_builds():
         n for e in ir.elements() for n in getattr(e, "__dict__", {}).values() if isinstance(n, str)
     }
     assert "ia_v76" in nodes and "out" in nodes and "in" in nodes
+
+
+def test_sensitivity_and_directivity_against_neumanns(u47):
+    """The whole mic (K47@2 on its sphere, the VF14 stage, the BV 8 into 1 kOhm at the
+    200 ohm setting) against ds58: cardioid 25-28 mV/Pa (measured 25.4 at 1 kHz), omni
+    14-17 (19.1: ~1 dB over); the cardioid's front / back 13.2 dB at 100 Hz and 15.1 at
+    1 kHz against the 1958 polars' 11.7 and 16.2 (measured 2026-11-03)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    from varimu.devices.library import component_data
+    from varimu.measure import metrics
+    from varimu.mics.free_field import sphere_entry_pressures
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    s = TransientSettings.from_sim_settings(engine="circuitsim")
+    fs = s.sample_rate
+    g = component_data(spec.resolve(u47)["capsule_model"])["geometry"]
+    sph = (g["sphere_radius_m"], g["diaphragm"]["radius_m"])
+    t = np.arange(int(0.5 * fs)) / fs
+
+    def level(pattern, f0, angle_deg):
+        p = np.sqrt(2) * np.sin(2 * np.pi * f0 * t) * np.minimum(1, t / 0.05)
+        front, rear = sphere_entry_pressures(p, np.radians(angle_deg), *sph, fs)
+        ir = builder.build(u47, {"pattern": pattern}).ir
+        v = fast.run_transient(ir, front, settings=s, controls={"p_rear": rear}).vectors
+        return metrics.harmonics(v["v(out)"][-fs // 5 :], f0, fs).amps[0] / np.sqrt(2)
+
+    card = level(0, 1000.0, 0)
+    assert 23e-3 < card < 29e-3
+    assert 13e-3 < level(1, 1000.0, 0) < 21e-3
+    for f0, lo in ((100.0, 10.0), (1000.0, 12.0)):
+        assert 20 * np.log10(level(0, f0, 0) / level(0, f0, 180)) > lo

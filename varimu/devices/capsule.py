@@ -252,12 +252,18 @@ def dual_lumped(g: Mapping[str, Any]) -> dict[str, float]:
     """The lumped elements of a dual-diaphragm capsule from its geometry `g` (SI; both
     halves equal): diaphragm {radius_m, thickness_m, density_kg_m3, tension_n_m}, gap_m,
     backplate {radius_m, thickness_m, through: {holes, radius_m}, blind: {holes (per
-    side), radius_m, depth_m}}, leak_time_s, stray_capacitance_f.
+    side), radius_m, depth_m}}, leak_time_s, stray_capacitance_f; optionally
+    film_resistance_pa_s_m3 and through_resistance_pa_s_m3 (the gradient resistance
+    between the two sides: the film's flow to the through holes and the holes, Torio &
+    Segota's R_a; data/schematics/neumann_u47/K47_THEORY.md), which replace the
+    geometric estimates (Skvor's film, Poiseuille holes) where a fit or a better source
+    gives them.
 
-    The blind holes: their air isothermal (narrow holes), filled through a third of
-    their depth's Poiseuille resistance (a closed tube's flow falls off toward its end;
-    provisional: model knowledge). The squeeze film drains into all holes of its side.
-    The leak: a resistance giving leak_time_s with the inside's compliances."""
+    The blind holes: their air adiabatic (~1 mm holes, wide against the thermal boundary
+    layer in the audio band: K47_THEORY.md), filled through a third of their depth's
+    Poiseuille resistance (a closed tube's flow falls off toward its end; provisional:
+    model knowledge). The squeeze film drains into all holes of its side. The leak: a
+    resistance giving leak_time_s with the inside's compliances."""
     d, bp = g["diaphragm"], g["backplate"]
     a, h, b = d["radius_m"], g["gap_m"], bp["radius_m"]
     t_n_m = d["tension_n_m"]
@@ -270,7 +276,7 @@ def dual_lumped(g: Mapping[str, Any]) -> dict[str, float]:
     skvor = area_fraction / 2.0 - area_fraction * area_fraction / 8.0
     skvor = skvor - math.log(area_fraction) / 4.0 - 3.0 / 8.0
     c_gap = math.pi * b * b * h / P0
-    c_blind = nb * math.pi * rb * rb * db / P0
+    c_blind = nb * math.pi * rb * rb * db / (GAMMA * P0)
     kappa = 2.0 - b * b / (a * a)
     r_film = 12.0 * MU_AIR / (n_all * math.pi * h**3) * skvor
     if "film_resistance_pa_s_m3" in g:  # a better value than Skvor's (see `lumped`)
@@ -283,7 +289,8 @@ def dual_lumped(g: Mapping[str, Any]) -> dict[str, float]:
         "r_film": r_film,
         "r_blind": 8.0 * MU_AIR * (db / 3.0) / (nb * math.pi * rb**4),
         "c_blind": c_blind,
-        "r_through": 8.0 * MU_AIR * t / (nt * math.pi * rt**4),
+        "r_through": g.get("through_resistance_pa_s_m3")
+        or 8.0 * MU_AIR * t / (nt * math.pi * rt**4),
         "m_through": 4.0
         * RHO_AIR
         * (t + 2.0 * END_CORRECTION * rt)

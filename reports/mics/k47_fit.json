@@ -1,0 +1,21 @@
+{
+ "diaphragm/tension_n_m": 23.644235359406576,
+ "through_resistance_pa_s_m3": 26705461.681047343,
+ "film_resistance_pa_s_m3": 2354676.2918755407,
+ "backplate/blind/depth_m": 0.004499999999970651,
+ "backplate/blind/holes": 109.66368439258454,
+ "sphere_radius_m": 0.010983695087276708,
+ "cardioid_mv_pa_at_grid": 8.34,
+ "cardioid_target_mv_pa": 8.67,
+ "omni_mv_pa_at_grid": 6.26,
+ "omni_target_mv_pa": 5.07,
+ "cardioid_front_back_100_db": 13.3,
+ "cardioid_front_back_1000_db": 15.2,
+ "cardioid_front_back_5000_db": 8.7,
+ "cardioid_on_axis_rms_db": 1.16,
+ "cardioid_on_axis_max_db": 3.09,
+ "omni_on_axis_rms_db": 2.4,
+ "omni_on_axis_max_db": 8.87,
+ "electrostatic_softening": 0.25,
+ "rms_weighted_db": 2.04
+}
