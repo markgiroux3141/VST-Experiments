@@ -1,0 +1,62 @@
+device: "E83F"
+document: "Philips Data handbook, E83F (6689) S.Q. tube"
+publisher: Philips
+date: 1968-12
+local_copy: sources/philips_e83f_1968.pdf
+local_copy_sha256: ae2bb7646e17c8232938f62cf1c1351c3f7141deca4d00d08ddf29e47beddcc4
+scan_source: "web: https://frank.pocnet.net/sheets/009/e/E83F.pdf"
+other_copies: >-
+  Philips Electronic Tube Handbook E83F, sheets 1958-06 / 1962-08, curves 1957-09
+  (web: https://frank.pocnet.net/sheets/030/e/E83F.pdf, sha256
+  dd640274201cc0fb23351af4f4c7c0402751c66cfe922d54d06cea858eaa1424): the same figures (7Z04011-14)
+  at a lower scan quality; not digitized.
+digitized_with: >-
+  the PDF's native 1-bit 300 dpi page images (PyMuPDF), p.5 rotated upright; each grid line fitted
+  along its length on clean grid-width runs, values interpolated between the neighbouring fitted lines;
+  strokes traced column by column (rows for the steep Ia(Vg1) curves) as run centres with grid-line
+  bands masked; read at round values by local linear fits; every overlay checked by eye (Claude Code
+  subagent, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-03
+files:
+  philips_e83f_plate.csv:
+    figure: "PDF p.6: Ia vs Va; upper graph (7Z04013) Vg2 = 120 V, lower graph (7Z04014) Vg2 = 150 V, Vg3 = 0 V"
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    curves: "Vg2 = 120 V: Vg1 = 0, -0.5, ..., -4 V; Vg2 = 150 V: Vg1 = 0, -0.5, ..., -5 V"
+    coverage: >-
+      Va 10 (120 V: 25) to 495 V; points beyond the Wa = 2.1 W line (dashed there) left out, so the
+      upper curves are short (0 V: 40-60 V at 120 V screen, 50 V only at 150 V). The curves' left
+      ends: at 150 V the upper curves start on one shared steep line, read only where each has left it
+      (e.g. -0.5 V from 40 V, -2 V from 20 V); at 120 V the 0 / -0.5 / -1 V strokes merge below 35 V.
+      The V76's V4 (Va-k ~168 V, Vg2-k ~138 V, ~11.7 mA, 1.97 W) lies just inside the 2.1 W line:
+      at 150 V screen between the -2.5 V curve (solid to ~150 V, 13.05 mA there) and the -3 V curve
+      (8.74 mA at 168 V); at 120 V screen near -2 V (9.93 mA at 168 V).
+  philips_e83f_transfer.csv:
+    figure: "PDF p.5: Ia vs Vg1 at Va = 210 V, Vg3 = 0 V; left graph (7Z04012) Vg2 = 150 V, right graph (7Z04011) Vg2 = 120 V"
+    columns: "va_v, vg2_v, vg1_v, ia_a"
+    curves: "Vg2 = 150, 120 V"
+    coverage: >-
+      Ia 1-40 mA (150 V) and 1-33 mA (120 V); grid 0.2 V x 1 mA. Below 1 mA the Ia stroke runs into
+      the Ig2 stroke and the zero axis: not read. The 120 V curve above 27 mA was traced separately
+      (it crosses the S curve there).
+  philips_e83f_screen.csv:
+    figure: "PDF p.5, the Ig2 curves of the same two graphs (Va = 210 V)"
+    columns: "va_v, vg1_v, vg2_v, ig2_a"
+    curves: "Vg2 = 120, 150 V"
+    coverage: >-
+      Vg1 -0.25 V down to -3.5 V (120 V) / -4.5 V (150 V) in 0.25 V steps, Ig2 >= 0.4 mA (below that
+      the stroke rests on the zero axis line). The S (mutual conductance) curves weren't digitized.
+axis_calibration: "labelled grid lines: plate 0-600 V every 10 V x 0-40 mA every 1 mA (120 V) and 0-500 V every 10 V x 0-68 mA every 2 mA (150 V); p.5 -7..0 V every 0.2 V x 0-50 mA every 1 mA"
+estimated_error: >-
+  About +-0.1 mA on the plate curves (+-0.3 mA in the knee), +-0.03 V on the transfer curves above
+  2 mA (+-0.06 V at 1 mA), +-0.05 mA on Ig2. Checks: the drawn Wa = 2.1 W lines read 2.08-2.12 W
+  (one 2.18 W at 70 V); at the published characteristics point (p.2: Va 210 V, Vg2 120 V, Rk 165 ohm:
+  Ia 10 mA, Ig2 2.1 mA, so the cathode at 12.1 mA x 165 ohm = 2.0 V) the transfer curve gives 9.90 mA
+  and the screen curve 2.29 mA at Vg1 = -2.0 V, the plate curve (-2 V, 120 V screen) 10.02 mA at
+  210 V; the transfer slope there is 8.5 mA/V (printed S 9 mA/V). At Vg2 150 V, -3 V and 210 V the
+  plate curve gives 8.79 mA, the transfer curve 8.50 mA.
+notes: >-
+  The cut-off line on p.2 (-Vg1 = 5 V, max 5.25 V, at Va 210 V, Vg2 120 V, Ia 0.5 mA) doesn't match
+  the curves: p.5 reaches 1 mA at -3.92 V and its foot meets the zero axis near -4.8 V (by eye), and
+  the p.6 plate curve for -4 V (120 V screen) reads 0.83 mA at 200-250 V, so 0.5 mA lies near -4.3 V.
+  Both are printed; worth knowing when weighting the cut-off.

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import copy
 import datetime as _dt
+import math
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -108,7 +109,7 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         g = d.get("grid_current")
         return Pentode(
             d["name"],
-            KorenPentode(p["mu"], p["ex"], p["kg1"], p["kg2"], p["kp"], p["kvb"]),
+            KorenPentode(p["mu"], p["ex"], p["kg1"], p["kg2"], p["kp"], p["kvb"], p.get("screen")),
             GridCurrent(g["perveance"], g["contact_v"], g["smooth_v"]) if g else None,
             c_g1k=c["g1k"],
             c_g1p=c["g1p"],
@@ -467,6 +468,127 @@ def build_6084() -> dict[str, Any]:
     }
 
 
+def _pentode_plate_points(stem: str) -> np.ndarray:
+    """A sheet's transfer and plate curves (data/datasheets/<stem>_{transfer,plate}.csv)
+    as fit_koren_pentode's plate points (vg1, vg2, vp, ip)."""
+    tr = load_csv(f"{stem}_transfer.csv")  # va, vg2, vg1, ia
+    pl = load_csv(f"{stem}_plate.csv")  # vg2, vg1, va, ia
+    return np.r_[
+        np.c_[tr[:, 2], tr[:, 1], tr[:, 0], tr[:, 3]],
+        np.c_[pl[:, 1], pl[:, 0], pl[:, 2], pl[:, 3]],
+    ]
+
+
+def build_ef804s() -> dict[str, Any]:
+    """The EF804S, the V76's V1-V3: a Koren pentode fit to Telefunken's transfer and
+    plate curves. The sheet has no screen-current curves: the screen law is fitted to its
+    tabulated screen currents (the measuring point and the RC amplifier's columns), each
+    at the grid voltage the plate curves give for its printed plate current (the table's
+    own cathode voltages disagree with the curves by ~0.6 V of grid)."""
+    from scipy.optimize import brentq
+
+    pub = _published()["EF804S"]
+    plate = _pentode_plate_points("telefunken_ef804s")
+    plate_sigma = np.hypot(0.02 * plate[:, 3], 0.03e-3)
+    a = pub["class_a1"]
+    vk = (a["ip_a"] + a["ig2_a"]) * a["rk_ohm"]
+    meas = (-vk, a["vg2_v"] - vk, a["vp_v"] - vk, a["ip_a"], a["ig2_a"])
+    rows = [r for r in pub["rc_amplifier"] if "derived_vgk_v" in r]
+
+    def fit(screen):
+        s = np.asarray(screen, float)
+        return fit_koren_pentode(
+            plate, s, plate_sigma, np.hypot(0.10 * s[:, 2], 5e-6), screen_law="e1"
+        )
+
+    m, _, _ = fit([meas[0:2] + meas[4:5]])
+    screen, shifts = [(meas[0], meas[1], meas[4])], []
+    for r in rows:
+        vak, vg2k, ip = r["derived_vak_v"], r["derived_vg2k_v"], r["ip_a"]
+        vg1 = brentq(lambda g, vak=vak, vg2k=vg2k, ip=ip: m.ip(g, vg2k, vak) - ip, -8.0, 0.0)
+        screen.append((vg1, vg2k, r["ig2_a"]))
+        shifts.append(vg1 - r["derived_vgk_v"])
+    m, rp, rs = fit(screen)
+    caps = pub["capacitances_f"]
+    return {
+        "name": "EF804S",
+        "kind": "pentode",
+        "source": "fit: Koren pentode, least squares on the Telefunken EF 804 S transfer and "
+        "plate curves, digitized: data/datasheets/telefunken_ef804s.provenance.yaml. Screen "
+        f"law: the sheet's {len(screen)} tabulated screen currents (p.331 measuring point, "
+        "p.332 RC amplifier), each at the grid voltage the plate curves give for its plate "
+        f"current (the table's own grid voltages are {min(shifts):+.2f}..{max(shifts):+.2f} V "
+        "from those); no screen curves are published. Screen law 'e1' (the plate's E1: "
+        "Koren's hard cutoff gave no screen current at the V76's V1, varimu/devices/pentode.py)",
+        "model": {
+            "mu": m.mu,
+            "ex": m.ex,
+            "kg1": m.kg1,
+            "kg2": m.kg2,
+            "kp": m.kp,
+            "kvb": m.kvb,
+            "screen": "e1",
+        },
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["ag1_max"],
+            "pk": caps["output"],
+            "source": f"{pub['source']}; g1p the printed maximum",
+        },
+        "fit_report": {
+            "plate": rp.as_dict(),
+            "screen": rs.as_dict(),
+            "sigma": "plate hypot(2%, 30 uA), screen hypot(10%, 5 uA)",
+        },
+    }
+
+
+def build_e83f() -> dict[str, Any]:
+    """The E83F, the V76's output tube V4: a Koren pentode fit to Philips' transfer, plate
+    and screen curves."""
+    pub = _published()["E83F"]
+    plate = _pentode_plate_points("philips_e83f")
+    sc = load_csv("philips_e83f_screen.csv")  # va, vg1, vg2, ig2
+    screen = np.c_[sc[:, 1], sc[:, 2], sc[:, 3]]
+    m, rp, rs = fit_koren_pentode(
+        plate,
+        screen,
+        np.hypot(0.02 * plate[:, 3], 0.1e-3),
+        np.hypot(0.03 * screen[:, 2], 0.05e-3),
+        screen_law="e1",
+    )
+    caps = pub["capacitances_f"]
+    return {
+        "name": "E83F",
+        "kind": "pentode",
+        "source": "fit: Koren pentode, least squares on the Philips E83F transfer, plate and "
+        "screen curves, digitized: data/datasheets/philips_e83f.provenance.yaml. Screen law "
+        "'e1' (the plate's E1; Koren's law fitted the screen curves to 36% rms, e1 to ~7%)",
+        "model": {
+            "mu": m.mu,
+            "ex": m.ex,
+            "kg1": m.kg1,
+            "kg2": m.kg2,
+            "kp": m.kp,
+            "kvb": m.kvb,
+            "screen": "e1",
+        },
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["ag1_max"],
+            "pk": caps["output"],
+            "source": f"{pub['source']}; g1p the printed maximum",
+        },
+        "fit_report": {
+            "plate": rp.as_dict(),
+            "screen": rs.as_dict(),
+            "sigma": "plate hypot(2%, 0.1 mA), screen hypot(3%, 50 uA)",
+        },
+    }
+
+
 # The 5651's current at which its operating voltage (circuit value v5651_operating_v) is
 # taken: the middle of its 1.5-3.5 mA range.
 V5651_REF_A = 2.5e-3
@@ -510,6 +632,38 @@ def build_selenium() -> dict[str, Any]:
         "(digitized: data/datasheets/tarzian_selenium.provenance.yaml). Reverse leakage "
         "(~1 mA/in^2 at an unstated voltage, Fig. 6) is not modeled",
         "fit_report": {"forward": rep.as_dict(), "sigma": "hypot(5%, 5 mA/in^2)"},
+    }
+
+
+def build_b450c80() -> dict[str, Any]:
+    """One arm of a B 450 C 80 selenium bridge (the V76's rectifier, GR94 on IRT drawing
+    S 1176): a stack of SELENIUM cells in series. n cells of area A in series are one
+    junction diode with n times the emission coefficient and series resistance, is and
+    rs scaled by the area."""
+    cell = build_selenium()
+    pub = _published()["SELENIUM"]
+    rms_v, rms_per_cell = 450.0, pub["rms_v_per_cell_max"]
+    n_cells = math.ceil(rms_v / rms_per_cell)
+    load_a, a_per_in2 = 0.080, 0.8 * pub["bridge_dc_a"]["2"]
+    area = load_a / a_per_in2
+    return {
+        "name": "B450C80",
+        "kind": "junction_diode",
+        "is_a": cell["is_a"] * area,
+        "n": cell["n"] * n_cells,
+        "rs_ohm": cell["rs_ohm"] * n_cells / area,
+        "source": f"derived: {n_cells} SELENIUM cells of {area:.3f} sq. in. in series per arm. "
+        "The DIN code B 450 C 80 reads 'bridge, 450 V rms AC connection, 80 mA into a "
+        "capacitor' (provisional: model knowledge); cells per arm: 450 V over Tarzian's "
+        f"{rms_per_cell} V rms per cell, rounded up; area: 80 mA over Tarzian's capacitor-"
+        "input rating of a 1 sq. in. cell, 80% of 0.225 A (Sarkes Tarzian handbook 1950, "
+        "data/datasheets/published_points.yaml). The German maker's cells (not documented) "
+        f"stand in for Tarzian's. The cell: {cell['source']}",
+        "stack": {
+            "cells_per_arm": n_cells,
+            "area_in2": area,
+            "source": "the derivation above; the arm's capacitance is the circuit's",
+        },
     }
 
 
@@ -959,6 +1113,9 @@ BUILDERS = {
     "6084": build_6084,
     "5651": build_5651,
     "SELENIUM": build_selenium,
+    "B450C80": build_b450c80,
+    "EF804S": build_ef804s,
+    "E83F": build_e83f,
     "6X4": build_6x4,
     "6AL5": build_6al5,
     "12AY7": build_12ay7,

@@ -1068,6 +1068,35 @@ clipping; equivalent input noise waits for B5's noise sources); the drawing; pla
 live input.
 *Done when:* as B9's, against the V76's published figures.
 
+*Status (2026-11-03; started ahead of C2, the user's call, as MIC_ROOM_PLAN.md's A1 for
+the U47 -> V76 chain). Steps 1-3 built:*
+- **Tubes:** `EF804S@1` (Telefunken's transfer and plate curves; its screen law fitted to
+  the sheet's tabulated screen currents, no screen curves being published) and `E83F@1`
+  (Philips' transfer, plate and screen curves); `varimu/devices/library.py`, digitized
+  sets in `data/datasheets/` (an EF806S set as a cross-check). Both use a new opt-in
+  **screen law "e1"** (`KorenPentode.screen`: Ig2 = E1^Ex / Kg2, the plate's soft E1):
+  Koren's (Vg1 + Vg2/mu)^1.5 cuts off hard and gave V1 no screen current at its printed
+  point (EF804S screen fit 77% rms -> 4.9%, E83F 36% -> 7.2%; plate fits unchanged; the
+  user's choice). Python, SPICE (B-source), circuitsim and varimu-circuit; absent = Koren's,
+  so every existing IR and render is unchanged (fixtures regenerate byte for byte).
+- **Rectifier:** `B450C80@1`, the selenium bridge as a component: 18 SELENIUM cells per
+  arm, 0.444 sq. in. (from the DIN code and Tarzian's ratings; provisional).
+- **Circuit:** `config/circuits/telefunken_v76.yaml`, every part by its S 1176 position:
+  the gain switch (pad and feedback ladder, 12 positions), the 3 kHz and bass-cut switches
+  (both versions, 80 / 120 Hz), the 15 kHz low-pass, T85 / T89 and the 400 / 250 H chokes
+  on JA cores (version 1: provisional constructions; T85 after the V72's BV 191; the
+  chokes' DC resistance derived from the printed voltages, consistent with their wire),
+  the selenium supply. 0 dBFS in = 0 dBu peak, out = +24 dBu peak into 300 ohm.
+  `tests/test_telefunken_v76.py`: pre-flight clean at all 384 switch combinations, the gain
+  switch's wiring, idle: supply within 3% of the printed rails, electrodes within 15% (V1's
+  and V3's high-impedance plates and screens as currents; as voltages V1's plate is -33%,
+  V3's -23%: both currents +8..10%, inside the sheet's +-19% spread). Not modeled: the RF
+  trap (undrawn), heaters and hum pot. The filters' two signal chokes are linear in
+  version 1.
+- **Next:** the preamp profile against the Braunbuch's figures (gain per step, response
+  per filter, THD vs level, clipping), R54 / R75 trimmed as the alignment says; the drawing;
+  play. The transformers' version 2 waits for C2.
+
 ## Devices and components together (2026-10-29, the user's call)
 
 B9-B10 and [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md) run interleaved, each

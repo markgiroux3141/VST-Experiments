@@ -49,15 +49,18 @@ def test_triode_plate_and_grid_current_agree(name):
     np.testing.assert_allclose(ig, t.ig(vg), rtol=RTOL, atol=ATOL, err_msg=f"{name} Ig")
 
 
-@pytest.mark.parametrize("name", ["6973", "6V6GT"])
-def test_pentode_agrees(name):
+POWER = ((-60, -40, -25, -15, -5), (150, 250))
+SMALL = ((-6, -4, -2.5, -1.5, -0.5, 0), (40, 90, 160))  # signal pentodes, low screens
+
+
+@pytest.mark.parametrize(
+    "name,grid",
+    [("6973", POWER), ("6V6GT", POWER), ("EF804S@1", SMALL), ("E83F@1", SMALL)],
+)
+def test_pentode_agrees(name, grid):
+    """Koren's screen law (6973, 6V6GT) and the "e1" law (EF804S, E83F)."""
     p = load_device(name)
-    pts = [
-        (vg, vs, vp)
-        for vg in (-60, -40, -25, -15, -5)
-        for vs in (150, 250)
-        for vp in range(0, 401, 25)
-    ]
+    pts = [(vg, vs, vp) for vg in grid[0] for vs in grid[1] for vp in range(0, 401, 25)]
     lines = [p.subckt()]
     for k, (vg, vs, vp) in enumerate(pts):
         lines += [
@@ -74,10 +77,21 @@ def test_pentode_agrees(name):
     np.testing.assert_allclose(is2, p.ig2(vg, vs), rtol=RTOL, atol=ATOL)
 
 
-@pytest.mark.parametrize("name,vmax", [("GZ34", 60.0), ("5Y3GT", 150.0), ("SI_RECTIFIER", 1.2)])
-def test_diodes_agree(name, vmax):
+@pytest.mark.parametrize(
+    "name,vmin,vmax",
+    [
+        ("GZ34", -5.0, 60.0),
+        ("5Y3GT", -5.0, 150.0),
+        ("SI_RECTIFIER", -5.0, 1.2),
+        # 18 cells in series (n ~45): SPICE's cubic region starts at -3 n Vt ~ -3.5 V,
+        # where the stack's large is puts the difference at ~4e-8 A (reverse leakage isn't
+        # modeled anyway), so from -3.4 V.
+        ("B450C80@1", -3.4, 40.0),
+    ],
+)
+def test_diodes_agree(name, vmin, vmax):
     d = load_device(name)
-    v = np.linspace(-5, vmax, 41)
+    v = np.linspace(vmin, vmax, 41)
     behavioral = hasattr(d, "subckt")
     lines = [d.subckt() if behavioral else d.model_card()]
     for k, vk in enumerate(v):

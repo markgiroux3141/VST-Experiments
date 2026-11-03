@@ -298,3 +298,80 @@
   source: "L. L. Holladay, 'Proportion of Energy Radiated by Incandescent Solids in Various Spectral Regions', JOSA 17(5), 329-342 (1928), Table 3, true temperature and total emissivity of tungsten (web: https://opg.optica.org/abstract.cfm?URI=josa-17-5-329); the 300 K point is Hottel's aged tungsten filament (0.032 at 80 F), as tabulated in heat-transfer handbooks (web: https://neutrium.net/heat-transfer/total-normal-emissivities-of-selected-materials/)"
   t_k:     [300.0, 1500.0, 1800.0, 2000.0, 2200.0, 2400.0, 2600.0, 2800.0, 3000.0, 3200.0, 3300.0, 3400.0, 3500.0, 3655.0]
   total:   [0.032, 0.192, 0.236, 0.260, 0.279, 0.296, 0.311, 0.323, 0.334, 0.341, 0.344, 0.348, 0.351, 0.354]
+
+# --- Telefunken V76 (device builder B10, transcribed 2026-11-03) ---
+
+"EF804S":
+  source: "Telefunken EF 804 S data sheet, handbook p.331-334 (page codes 010163 / 020163); local copy sources/telefunken_ef804s.pdf (web: https://frank.pocnet.net/sheets/128/e/EF804S.pdf). AEG's EF 804 S sheet (März 1960, web: https://frank.pocnet.net/sheets/173/e/EF804S.pdf) prints the same values"
+  class_a1:           # p.331 'Meßwerte': supply Uba 250 V, Ug3 0, supply Ubg2 140 V, Rk 500 ohm (cathode ~1.9 V)
+    vp_v: 250
+    vg3_v: 0
+    vg2_v: 140
+    rk_ohm: 500
+    ip_a: 3.2e-3      # +-0.6 mA
+    ig2_a: 0.6e-3     # +-0.15 mA
+    gm_s: 2.0e-3      # +-0.4 mA/V
+    rp_ohm: 2.0e+6
+    mu_g2g1: 38
+    ig1_neg_max_a: 0.1e-6
+    vg1_grid_current_onset_v: -1.3   # Ug1e, at Ig1 <= +0.3 uA
+  end_of_life: {ip_a: 2.0e-3, gm_s: 1.4e-3, ig1_neg_a: 1.0e-6}   # p.331: Ia fallen to 2 mA, S to 1.4 mA/V, -Ig risen to > 1 uA
+  # p.332 'Betriebswerte', resistance-coupled amplifier (Rg2 from Ub, Rk bypassed 50 uF, g2 0.5 uF);
+  # thd_pct at 4 / 8 / 12 V rms out. The derived_* electrode voltages are arithmetic on the printed
+  # values (Va = Ub - Ia Ra, Vg2 = Ub - Ig2 Rg2, Vk = (Ia + Ig2) Rk, grid at 0 V), not printed.
+  rc_amplifier:
+    - {vb_v: 250, ra_ohm: 0.3e+6, rg2_ohm: 1.5e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 2000, ip_a: 0.61e-3, ig2_a: 0.11e-3, gain: 210, thd_pct: [0.6, 0.9, 1.2], derived_vak_v: 65.6, derived_vg2k_v: 83.6, derived_vgk_v: -1.44}
+    - {vb_v: 250, ra_ohm: 0.2e+6, rg2_ohm: 1.0e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 1500, ip_a: 0.87e-3, ig2_a: 0.16e-3, gain: 175, thd_pct: [0.5, 0.7, 1.0], derived_vak_v: 74.5, derived_vg2k_v: 88.5, derived_vgk_v: -1.55}
+    - {vb_v: 250, ra_ohm: 0.2e+6, rg2_ohm: 1.2e+6, rg1_ohm: 10.0e+6, rg1_next_ohm: 0.7e+6, rk_ohm: 0, ip_a: 0.9e-3, ig2_a: 0.17e-3, gain: 190, thd_pct: ["<1", "<1", "<1"], derived_vak_v: 70.0, derived_vg2k_v: 46.0}     # grid-leak bias
+    - {vb_v: 100, ra_ohm: 0.3e+6, rg2_ohm: 1.2e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 5000, ip_a: 0.21e-3, ig2_a: 0.045e-3, gain: 125, thd_pct: [1.1, 1.7, 2.6], derived_vak_v: 35.7, derived_vg2k_v: 44.7, derived_vgk_v: -1.28}
+    - {vb_v: 100, ra_ohm: 0.2e+6, rg2_ohm: 1.0e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 3000, ip_a: 0.29e-3, ig2_a: 0.055e-3, gain: 120, thd_pct: [1.1, 1.6, 2.5], derived_vak_v: 41.0, derived_vg2k_v: 44.0, derived_vgk_v: -1.03}
+    - {vb_v: 100, ra_ohm: 0.2e+6, rg2_ohm: 1.2e+6, rg1_ohm: 10.0e+6, rg1_next_ohm: 0.7e+6, rk_ohm: 0, ip_a: 0.3e-3, ig2_a: 0.06e-3, gain: 120, thd_pct: [1.2, 1.8, 3.0], derived_vak_v: 40.0, derived_vg2k_v: 28.0}     # grid-leak bias
+  # p.332, the same amplifier connected as a triode (g2 to a); ik_a is the printed Ia + Ig2
+  triode_rc_amplifier:
+    - {vb_v: 250, ra_ohm: 0.2e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 1500, ik_a: 0.85e-3, gain: 31, thd_pct: [0.6, 0.8, 1.1], derived_vak_v: 78.7, derived_vgk_v: -1.27}
+    - {vb_v: 250, ra_ohm: 0.1e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 1200, ik_a: 1.5e-3, gain: 29, thd_pct: [0.6, 0.7, 1.0], derived_vak_v: 98.2, derived_vgk_v: -1.80}
+    - {vb_v: 100, ra_ohm: 0.2e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 4500, ik_a: 0.28e-3, gain: 27, thd_pct: [1.0, 1.5, 1.8], derived_vak_v: 42.7, derived_vgk_v: -1.26}
+    - {vb_v: 100, ra_ohm: 0.1e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 2500, ik_a: 0.48e-3, gain: 26, thd_pct: [1.0, 1.7, 2.2], derived_vak_v: 50.8, derived_vgk_v: -1.20}
+  noise: "p.333: equivalent noise voltage at g1 ca. 2 uV, 25-10,000 Hz, Ub 250 V, Ra 100 kOhm, peak noise voltmeter with ear filter to CCIF 1949"
+  hum: "p.333: < 5 uV at Zg1 < 0.5 MOhm (at 50 Hz) and Ck >= 100 uF"
+  capacitances_f:     # p.333
+    input: 4.3e-12    # +-0.5 pF
+    output: 5.5e-12   # +-0.5 pF
+    ag1_max: 0.06e-12
+    g1f_max: 0.002e-12
+  max_ratings: {va0_v: 550, va_v: 300, pa_w: 1.0, vg20_v: 550, vg2_v: 200, pg2_w: 0.2, ik_a: 6.0e-3, rg1_ohm: 3.0e+6, rg1_ohm_pa_below_0_2w: 10.0e+6, rg1_ohm_bias_by_rg1_only: 22.0e+6, vhk_v: 100, rhk_ohm: 20.0e+3, bulb_c: 170}   # p.333
+  heater: {v: 6.3, a: 0.170}   # p.331; +-5% for the guaranteed 10,000 h life
+  pins: "1 g3, 2 s (internal shield), 3 k, 4 f, 5 f, 6 s, 7 a, 8 g2, 9 g1 (noval, p.334); S 1176's base drawing has the same order"
+
+"E83F":
+  source: "Philips E83F (6689) S.Q. tube, Data handbook Dec 1968, p.1-4; local copy sources/philips_e83f_1968.pdf (web: https://frank.pocnet.net/sheets/009/e/E83F.pdf)"
+  class_a1:           # p.2 'Characteristics', column I (nominal): Va 210, Vg3 0, Vg2 120, Rk 165 (cathode ~2.0 V)
+    vp_v: 210
+    vg3_v: 0
+    vg2_v: 120
+    rk_ohm: 165
+    ip_a: 10.0e-3     # initial spread 8.7-11.3 mA, end of life 7 mA
+    ig2_a: 2.1e-3     # initial spread 1.7-2.5 mA, end of life 1.25 mA
+    gm_s: 9.0e-3      # initial spread 7.8-10.2 mA/V, end of life 6.4 mA/V
+    rp_ohm: 0.5e+6    # min 0.3 MOhm
+    mu_g2g1: 38
+    req_rf_ohm: 750   # max 1000
+    req_af_max_ohm: 36.0e+3
+    ig1_neg_max_a: 0.5e-6   # end of life 1.0 uA
+    hum_vg1_max_vrms: 0.5e-3   # Rg1 0.5 MOhm, Rk bypassed
+  cutoff: {vp_v: 210, vg3_v: 0, vg2_v: 120, vg1_v: -5.0, vg1_max_v: -5.25, ip_a: 0.5e-3}   # p.2; the curves put 0.5 mA nearer -4.3 V (philips_e83f.provenance.yaml)
+  # p.4 'Operating characteristics', output tube class A; derived_* = arithmetic (Vg2 = 120 V - Ig2 Rg2, Vk = (Ia + Ig2) Rk), not printed
+  class_a_output:
+    - {va_v: 120, vg3_v: 0, vg2_supply_v: 120, rg2_ohm: 5600, rk_ohm: 180, ip_a: 8.3e-3, ig2_a: 1.7e-3, gm_s: 8.2e-3, rp_ohm: 0.42e+6, load_ohm: 10.0e+3, vin_vrms: [0.35, 1.1], po_w: [0.050, 0.340], thd_pct_at_1_1_vrms: 10, po_w_grid_current: 0.400, derived_vg2_v: 110.5, derived_vk_v: 1.80}
+    - {va_v: 210, vg3_v: 0, vg2_supply_v: 120, rg2_ohm: 5600, rk_ohm: 180, ip_a: 8.3e-3, ig2_a: 1.7e-3, gm_s: 8.2e-3, rp_ohm: 0.44e+6, load_ohm: 20.0e+3, vin_vrms: [0.25, 1.1], po_w: [0.050, 0.660], thd_pct_at_1_1_vrms: 10, po_w_grid_current: 0.870, derived_vg2_v: 110.5, derived_vk_v: 1.80}
+    # po_w_grid_current: at +Ig1 = 0.3 uA, Rg1 0.33 MOhm
+  capacitances_f:     # p.3, to a surrounding cylinder 52 mm x 98 mm
+    input: 8.0e-12           # g1 to g2, g3, k, f, shield; max 8.7 pF
+    input_hot: 10.8e-12      # same, cathode current 12.1 mA
+    output: 3.5e-12          # a to g2, g3, k, f, shield; max 4.1 pF
+    ag1_max: 0.015e-12
+    g1f_max: 0.15e-12
+    kf: 4.0e-12
+  max_ratings: {va0_v: 550, va_v: 210, pa_w: 2.1, vg20_v: 550, vg2_v: 210, pg2_w: 0.35, vg1_neg_v: 100, vg1_neg_peak_v: 200, pg1_w: 0.050, rg1_ohm: 1.0e+6, ik_a: 16.0e-3, ik_peak_a: 80.0e-3, vhk_v: 100, bulb_c: 170}   # p.4, design centre; peaks at duty 0.1, 200 us
+  heater: {v: 6.3, a: 0.300}   # p.2: 285-315 mA
+  pins: "1 g2, 2 g1, 3 k, 4 f, 5 f, 6 a, 7 i.c., 8 i.c., 9 g3 + internal shield (noval, p.1); S 1176's base drawing has the same order"

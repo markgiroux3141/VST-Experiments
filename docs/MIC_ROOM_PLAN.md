@@ -238,6 +238,22 @@ at a frequency (from the FDTD run) is a cheap aid for placing mics.
 9. **A9. Ranking chains:** the four poles, pairs ranked by the glimpse metric and the
    staircase.
 
+### Status (2026-11-03)
+
+Started by the user (U47 -> V76 first, alongside the gas-tube work in its worktree).
+- **A1 (the V76) in progress:** tubes, circuit and idle check built; the profile is next
+  (DEVICE_BUILDER_PLAN.md B10's status).
+- **A3's gate, the U47's sources:** catalogued in `data/schematics/neumann_u47/README.md`
+  (Neumann's own archive: the 1958 data sheet with polars and responses, the 1958 / 1959
+  manuals, the 1959 factory drawing U 47-00-00-00 with every value; Funkschau 1/1948's
+  VF14 data; the BV8 from a Haufe reproduction sheet, 6.5 : 1). Missing: the capsule's
+  geometry (no primary source: diaphragm thickness and tension, gap, backplate holes and
+  cavities), the NG supply's full drawing (thumbnail only), the cable's per-metre values,
+  the BV8's leakage and capacitances. The capsule's geometry will likely be bounded
+  provisional genome parameters fitted to Neumann's curves, capacitance (2 x 78-83 pF) and
+  sensitivity (the README lists the options). The early units' grid leak and coupling
+  capacitor differ from 1959's: the circuit file picks a revision.
+
 **Later fidelity:** the capsule's electrostatic nonlinearity (a new device: Python, SPICE,
 circuitsim); diffraction by the mic's body (a boundary-element solve on the GPU, on
 demand, as the component editor's field solvers); a source loaded by a nearby wall

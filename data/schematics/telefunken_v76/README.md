@@ -33,22 +33,38 @@ numbers on the feedback ladder: use the IRT scan.
 
 ### What S 1176 shows
 
-- **Tubes:** V1, V2, V3 EF804S (V2 triode-connected), V4 E83F. Pinouts on the sheet.
+Rechecked against the drawing at full resolution on 2026-11-03, when it went into
+`config/circuits/telefunken_v76.yaml` (whose comments give the wiring part by part).
+Corrections to the first pass: V2 is a pentode, not triode-connected; the 24 dB
+position is the 18 dB pad with the 40 dB tap; the supply has four 32 uF capacitors.
+
+- **Tubes:** V1, V2, V3 EF804S, V4 E83F, all as pentodes with the suppressor on the
+  cathode (V2's screen at 165 V through R63 100 k, 0.7 mA). Pinouts on the sheet.
 - **Input:** an RF trap ("HF-Sperre", a dashed box: **not drawn**; sheet 4: tuned to
   about 173 kHz), then the gain switch's pad (3.4 k / 1.6 k / 450 ohm per leg, 200 ohm
   shunt), then T85 **BV Nr. 511, 1:30**, split primary, with the 40 Hz high-pass between
   the primary halves (C5-C8 4 x 2 uF, C9 2 uF with R54 300 ohm trimmed).
 - **Gain:** 34-76 dB in 6 dB steps by feedback from V2's plate to V1's cathode (C15
   2 uF, R53 40 k, ladder R45-R52: 98, 108, 224, 470 ohm, 1 k, 2.4 k, 6.7 k, 19 k);
-  3 / 9 / 18 / 24 dB by the pad.
-- **V2's anode load:** choke BV Nr. 514, 400 H. **V4's:** choke BV Nr. 515, 250 H.
-- **Filters:** 3 kHz cut (C20 1 nF + R68 25 k); bass cut 80 (or 120) / 300 Hz / both
-  (C21-C24 and choke BV 516 100 H or BV 516a 62 H, by version, the drawing's table);
-  15 kHz low-pass (C25 100 pF, L84 BV Nr. 517a 0.85 H, C26 100 pF).
+  the switch's twelve positions 3, 9, 18, 24, 34, ..., 76 dB. The pad (series 3.4 k /
+  1.6 k / 450 / 450 ohm per leg, R44 200 ohm across) is in at 3, 9, 18 and 24 dB; the
+  ladder's top tap serves 3-18 and 34 dB, the next tap 24 and 40 dB (so 24 dB is the
+  18 dB pad's attenuation with 6 dB more feedback gain), then one tap per 6 dB to 76.
+- **V2's anode load:** choke BV Nr. 514, 400 H. **V4's:** choke BV Nr. 515, 250 H. The
+  printed voltages put their DC resistance near 18.7 k and 9.3 k (derived in the
+  circuit file).
+- **Filters:** 3 kHz cut (switch 92: C20 1 nF + R68 25 k from the R66 / R67 junction to
+  ground); bass cut (switch 93): C21 - C22 - C24 in series from R67 to the filter's
+  output always, C23 35 nF across them in 'Gerade', BV 516 (100 H) or 516a (62 H) from
+  the C21 / C22 junction to ground in the 120 (80) Hz positions, C24 shorted in
+  '120 (80) Hz' alone (parts per version in the drawing's table); 15 kHz low-pass (C25
+  100 pF, L84 BV Nr. 517a 0.85 H, C26 100 pF). V2's plate reaches the filters through
+  R66 / R67 with no coupling capacitor: the filter's capacitors block the DC.
 - **Overall feedback:** R75 80 k (trimmed) + C31 2 uF from V4's anode to V3's cathode.
 - **Output:** C35 4 uF into T89 **BV Nr. 512, 9:1** (parafeed).
-- **Supply:** T90 BV Nr. 513; selenium bridge B450 C80, 300 V at 21 mA; filter 32 uF /
-  1 k / 32 uF / 6 k / 32 uF (all 350 V); heaters 6.3 V, V1 on its own winding with a
+- **Supply:** T90 BV Nr. 513; selenium bridge B450 C80, 300 V at 21 mA on C36; R81
+  1 k / 2 W to C32 + C33 (2 x 32 uF), the 14.6 mA rail (V4); R76 6 k to C29, the
+  6.1 mA rail (V1-V3); all 32 uF 350 V. Heaters 6.3 V, V1 on its own winding with a
   250 ohm hum pot.
 - **Printed operating points** (e.g. V1 plate 67 V 0.6 mA, screen 97 V, cathode 11 V;
   V2 anode 175 V 3.6 mA; V4 anode 170 V 11.7 mA): the DC check's targets.

@@ -3,7 +3,14 @@
 Koren, "Improved vacuum tube models for SPICE simulations", 1996:
     E1  = (Vg2 / Kp) * ln(1 + exp(Kp * (1/mu + Vg1 / Vg2)))
     Ip  = (E1^Ex / Kg1) * (1 + sgn(E1)) * atan(Vp / Kvb)
-    Ig2 = (Vg1 + Vg2/mu)^1.5 / Kg2
+    Ig2 = (Vg1 + Vg2/mu)^1.5 / Kg2           (screen None: Koren's law)
+    Ig2 = E1^Ex / Kg2                        (screen "e1")
+
+Koren's screen law cuts off hard at Vg1 = -Vg2 / mu, where the plate's E1 still
+conducts: a pentode run at low screen voltage (the V76's EF804S stages) gets no
+screen current there. The "e1" law gives the screen the plate's own E1 (the cathode's
+space current, its knee soft), so the screen takes a fixed share of it, Kg1 / (2 Kg2)
+of the plate's above the knee; it is opt-in per component (device builder B10).
 
 The control grid conducts with the triode's grid-current law (GridCurrent), if
 the model has one.
@@ -18,6 +25,7 @@ import numpy as np
 from varimu.devices.triode import GridCurrent, num, softplus, spice_softplus
 
 _VG2_MIN = 1e-3  # avoids division by zero when the screen is at 0 V
+SCREEN_LAWS = (None, "e1")
 
 
 @dataclass(frozen=True)
@@ -28,24 +36,41 @@ class KorenPentode:
     kg2: float
     kp: float
     kvb: float
+    screen: str | None = None  # the screen law: None Koren's, "e1" the plate's E1
+
+    def __post_init__(self):
+        if self.screen not in SCREEN_LAWS:
+            raise ValueError(f"screen law {self.screen!r} (one of {SCREEN_LAWS})")
+
+    def e1(self, vg1, vg2):
+        vg1, vg2 = np.asarray(vg1, float), np.asarray(vg2, float)
+        g2 = np.maximum(vg2, _VG2_MIN)
+        return g2 / self.kp * softplus(self.kp * (1 / self.mu + vg1 / g2))
 
     def ip(self, vg1, vg2, vp):
-        vg1, vg2, vp = (np.asarray(v, float) for v in (vg1, vg2, vp))
-        g2 = np.maximum(vg2, _VG2_MIN)
-        e1 = g2 / self.kp * softplus(self.kp * (1 / self.mu + vg1 / g2))
+        e1 = self.e1(vg1, vg2)
+        vp = np.asarray(vp, float)
         return 2.0 / self.kg1 * np.maximum(e1, 0.0) ** self.ex * np.arctan(vp / self.kvb)
 
     def ig2(self, vg1, vg2):
+        if self.screen == "e1":
+            return np.maximum(self.e1(vg1, vg2), 0.0) ** self.ex / self.kg2
         x = np.asarray(vg1, float) + np.asarray(vg2, float) / self.mu
         return np.maximum(x, 0.0) ** 1.5 / self.kg2
 
-    def spice_ip(self, vg1: str, vg2: str, vp: str) -> str:
+    def _spice_e1(self, vg1: str, vg2: str) -> str:
         g2 = f"max({vg2},{num(_VG2_MIN)})"
         arg = f"{num(self.kp)}*({num(1 / self.mu)}+{vg1}/{g2})"
-        e1 = f"{g2}/{num(self.kp)}*{spice_softplus(arg)}"
+        return f"{g2}/{num(self.kp)}*{spice_softplus(arg)}"
+
+    def spice_ip(self, vg1: str, vg2: str, vp: str) -> str:
+        e1 = self._spice_e1(vg1, vg2)
         return f"{num(2.0 / self.kg1)}*pow(max({e1},0),{num(self.ex)})*atan({vp}/{num(self.kvb)})"
 
     def spice_ig2(self, vg1: str, vg2: str) -> str:
+        if self.screen == "e1":
+            e1 = self._spice_e1(vg1, vg2)
+            return f"pow(max({e1},0),{num(self.ex)})/{num(self.kg2)}"
         return f"pow(max({vg1}+{vg2}/{num(self.mu)},0),1.5)/{num(self.kg2)}"
 
 

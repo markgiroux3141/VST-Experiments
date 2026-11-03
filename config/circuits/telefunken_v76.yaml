@@ -1,0 +1,426 @@
+# Telefunken V76 microphone amplifier, as a circuit file (device builder B10).
+# Built by varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/telefunken_v76/README.md has their provenance):
+#   "sch: ..."         printed on IRT drawing S 1176 (s1176_circuit.png), by position number
+#   "bb: ..."          the Braunbuch V 76 (1959): its text or acceptance specs, by sheet
+#   "v72: ..."         NWDR Bauvorschrift Nr. 191, the V72's input transformer (a construction
+#                      of the same family, used where the V76's own wound parts have no data)
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# Parts are named by their position numbers on S 1176. The signal path (sch): the input
+# pad (the gain switch's first decks) into T85 (BV 511, 1:30, split primary with the 40 Hz
+# high-pass between its halves); V1 (EF804S) and V2 (EF804S, pentode: screen at 165 V)
+# with feedback from V2's plate to V1's cathode through a ladder the gain switch taps; the
+# 3 kHz switch, the bass-cut filter (four positions) and the 15 kHz low-pass; V3 (EF804S)
+# and V4 (E83F) with overall feedback from V4's plate to V3's cathode (R75, trimmed); V4
+# parallel-feeds T89 (BV 512, 9:1). The supply: T90 into a B 450 C 80 selenium bridge,
+# 300 V at 21 mA, then 1k and 6k filters. Not modeled: the RF trap ahead of the input
+# (sheet 4: tuned to ~173 kHz; not drawn), the heaters and their hum pot R82, the pilot
+# lamp, the fuse.
+#
+# The wound parts are broadcaster build specs (BV 511-517a) without published winding
+# data: version 1 of each is a provisional construction sized from its printed inductance
+# or ratio, the V72's BV 191 (input) and the printed operating voltages (the chokes' DC
+# resistance). The component editor's C2 designs later versions.
+
+title: "Telefunken V76"
+input: in
+probes: [out, op, xa, xb, g1, k1, pl1, sg1, fbw, pl2, sg2, k2, f1, fx, fo, g3, k3, pl3, sg3, g4, k4, pl4, sg4, b300, ba, bb]
+# 0 dBFS in = 0 dBu peak at the input terminals (the Braunbuch's 0 dB = 0.775 V); 0 dBFS
+# out = +24 dBu peak across the 300 ohm load, above the specified +22 dB maximum.
+full_scale:
+  input_volts_peak: {value: 1.0960, source: "derived: 0.775 V rms x sqrt(2) (bb sheet 5: 0 dB = 0.775 V)"}
+  output_volts_peak: {value: 17.36, source: "derived: +24 dB re 0.775 V rms, x sqrt(2): headroom over the +22 dB the specs test at (bb sheet 7)"}
+
+controls:
+  # The front panel (sch: the gain switch 91, the 3 kHz switch 92, the bass-cut switch 93).
+  gain_db: {value: 34, choices: [3, 9, 18, 24, 34, 40, 46, 52, 58, 64, 70, 76], unit: dB, source: "sch: 'Verstärkung (dB)', switch 91's twelve positions"}
+  treble_cut: {value: 0, choices: [0, 1], unit: position, source: "sch: switch 92", notes: "0 'Gerade' (flat), 1 '3 kHz'"}
+  bass_cut: {value: 0, choices: [0, 1, 2, 3], unit: position, source: "sch: switch 93", notes: "0 'Gerade' (flat), 1 '120 (80) Hz', 2 '300 Hz', 3 '120 (80) + 300 Hz'"}
+  # The unit's build: the drawing's table x) gives the bass cut's parts for an 80 Hz and a
+  # 120 Hz version (bb sheet 10: response curves for both).
+  version_hz: {value: 80, choices: [80, 120], unit: Hz, source: "sch: table x) (positions 87, 21, 22, 24 per version)"}
+  # Operating conditions.
+  mains_v_rms: {value: 220.0, min: 198.0, max: 242.0, unit: V, source: "provisional: model knowledge (West German mains of 1959; the drawing prints none)"}
+  mains_hz: {value: 50.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (West German mains)"}
+
+values:
+  # --- Input and pad (sch, gain switch 91) ---------------------------------------------
+  source_impedance_ohm: {value: 200.0, source: "bb sheet 5: the specs are measured from a 200 ohm source"}
+  r43_r38_ohm: {value: 3.4e+3, source: "sch: 43, 38 3,4 kOhm (one per leg; the 3 dB position)"}
+  r42_r39_ohm: {value: 1.6e+3, source: "sch: 42, 39 1,6 kOhm (the 9 dB position)"}
+  r41_r40_ohm: {value: 450.0, source: "sch: 41, 40 450 Ohm (the 18 and 24 dB positions)"}
+  r44_ohm: {value: 200.0, source: "sch: 44 200 Ohm, across the legs in the 3-24 dB positions"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a rotary switch's contact, ~10 mOhm)"}
+
+  # --- T85, BV Nr. 511, 1:30 (sch), version 1 ------------------------------------------
+  # A split primary (the 40 Hz high-pass between its halves) and one secondary. No winding
+  # data: the V72's BV 191 construction (EI 48, Hyperm 702, 2 x 400 primary turns) with the
+  # V76's ratio.
+  t85_core_material: {value: mumetall, source: "provisional: v72 (Hyperm 702, a nickel alloy, initial permeability ~12,000; mumetall is the nickel alloy in config/magnetics.yaml)"}
+  t85_core_area_m2: {value: 2.432e-4, source: "derived: v72 (EI 48: a 16 mm tongue, 16 mm stack) at 95% stacking"}
+  t85_core_path_m: {value: 0.0896, source: "provisional: model knowledge (~5.6 x the tongue width for scrapless EI)"}
+  t85_gap_m: {value: 4.4e-6, source: "derived: an effective joint gap bringing mumetall's linear limit (origin permeability ~29,300) to Hyperm 702's ~12,000 (v72; overlapped stacking, no air gap)"}
+  t85_turns_half: {value: 400, source: "v72: primary 2 x 400 turns (the V72's BV 191)", notes: "each primary half (the reference winding); 26 H for the whole primary in the linear limit"}
+  t85_sec_per_half: {value: 60.0, source: "derived: sch 1:30 over the whole primary (2 halves)"}
+  t85_r_half_ohm: {value: 52.0, source: "provisional: v72 (400 turns of 0.13 mm Cu at ~0.1 m per turn)"}
+  t85_r_sec_ohm: {value: 36.0e+3, source: "provisional: model knowledge (24,000 turns of ~0.04 mm Cu at ~0.11 m per turn)"}
+  t85_leakage_h: {value: 0.05e-3, source: "provisional: model knowledge (disc-wound, v72's sectioned layout)", notes: "referred to a primary half"}
+  t85_c_half_f: {value: 50.0e-12, source: "provisional: model knowledge (a 200 ohm primary half)"}
+  t85_c_sec_f: {value: 20.0e-12, source: "provisional: model knowledge (a sectioned high-impedance secondary)"}
+
+  # --- 40 Hz high-pass between T85's primary halves (sch) ------------------------------
+  c5_8_f: {value: 2.0e-6, source: "sch: 5, 6, 7, 8 2 uF (in parallel)"}
+  c9_f: {value: 2.0e-6, source: "sch: 9 2 uF"}
+  r54_ohm: {value: 300.0, source: "sch: 54 300 Ohm 'abgegl.' (trimmed; the drawing's value)"}
+
+  # --- V1, EF804S (sch) ------------------------------------------------------------------
+  r55_ohm: {value: 100.0e+3, source: "sch: 55 100 kOhm, T85's secondary return to the cathode tap"}
+  c12_f: {value: 10.0e-6, source: "sch: 12 10 uF 12/15 V"}
+  r57_ohm: {value: 3.0e+3, source: "sch: 57 3 kOhm"}
+  r56_ohm: {value: 12.0e+3, source: "sch: 56 12 kOhm"}
+  c13_f: {value: 50.0e-6, source: "sch: 13 50 uF 12/15 V, the cathode to the gain switch's wiper"}
+  r59_ohm: {value: 200.0e+3, source: "sch: 59 200 kOhm plate load"}
+  r60_ohm: {value: 100.0e+3, source: "sch: 60 100 kOhm plate decoupling"}
+  c18_f: {value: 4.0e-6, source: "sch: 18 4 uF 350 V"}
+  r58_ohm: {value: 1.0e+6, source: "sch: 58 1 MOhm screen"}
+  c14_f: {value: 50.0e-9, source: "sch: 14 50 nF screen bypass"}
+  c17_f: {value: 25.0e-9, source: "sch: 17 25 nF to V2's grid"}
+  r61_ohm: {value: 1.0e+6, source: "sch: 61 1 MOhm grid leak"}
+
+  # --- V2, EF804S (sch) ------------------------------------------------------------------
+  r62_ohm: {value: 500.0, source: "sch: 62 500 Ohm cathode"}
+  r63_ohm: {value: 100.0e+3, source: "sch: 63 100 kOhm screen"}
+  c19_f: {value: 2.0e-6, source: "sch: 19 2 uF 350 V screen bypass"}
+
+  # --- Feedback from V2's plate to V1's cathode (sch, gain switch 91) -----------------------
+  c15_f: {value: 2.0e-6, source: "sch: 15 2 uF 350 V"}
+  r53_ohm: {value: 40.0e+3, source: "sch: 53 40 kOhm"}
+  r52_ohm: {value: 19.0e+3, source: "sch: 52 19 kOhm (ladder top)"}
+  r51_ohm: {value: 6.7e+3, source: "sch: 51 6,7 kOhm"}
+  r50_ohm: {value: 2.4e+3, source: "sch: 50 2,4 kOhm"}
+  r49_ohm: {value: 1.0e+3, source: "sch: 49 1 kOhm"}
+  r48_ohm: {value: 470.0, source: "sch: 48 470 Ohm"}
+  r47_ohm: {value: 224.0, source: "sch: 47 224 Ohm"}
+  r46_ohm: {value: 108.0, source: "sch: 46 108 Ohm"}
+  r45_ohm: {value: 98.0, source: "sch: 45 98 Ohm (ladder bottom, to ground)"}
+
+  # --- L86, BV Nr. 514, 400 H (sch): V2's plate choke, version 1 ----------------------------
+  l86_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml)"}
+  l86_core_area_m2: {value: 2.432e-4, source: "provisional: model knowledge (an EI 48 like T85's)"}
+  l86_core_path_m: {value: 0.0896, source: "provisional: model knowledge (~5.6 x the tongue width)"}
+  l86_gap_m: {value: 200.0e-6, source: "provisional: model knowledge (an air gap for V2's 3.6 mA: 0.36 T of DC flux)"}
+  l86_turns: {value: 16259, source: "derived: 400 H (sch) in the core's linear limit with the gap (parts.turns_for_inductance)"}
+  l86_r_ohm: {value: 18.7e+3, source: "derived: the printed voltages (sch): 242.4 V on the 6.1 mA rail (300 V - 21 mA x 1k - 6.1 mA x 6k) less V2's 175 V, over its 3.6 mA", notes: "consistent with ~1300 m of 0.04 mm Cu for 16,259 turns"}
+  l86_c_f: {value: 100.0e-12, source: "provisional: model knowledge (self-capacitance of a 400 H choke)"}
+
+  # --- 3 kHz switch 92 and the filters (sch) --------------------------------------------
+  r66_ohm: {value: 40.0e+3, source: "sch: 66 40 kOhm"}
+  r67_ohm: {value: 40.0e+3, source: "sch: 67 40 kOhm"}
+  c20_f: {value: 1.0e-9, source: "sch: 20 1 nF"}
+  r68_ohm: {value: 25.0e+3, source: "sch: 68 25 kOhm"}
+  c23_f: {value: 35.0e-9, source: "sch: 23 35 nF (the 'Gerade' position's coupling)"}
+  c21_80_f: {value: 25.0e-9, source: "sch: table x), 80 Hz: 21 25 nF"}
+  c22_80_f: {value: 25.0e-9, source: "sch: table x), 80 Hz: 22 25 nF"}
+  c24_80_f: {value: 4.0e-9, source: "sch: table x), 80 Hz: 24 4 nF"}
+  l87_80_h: {value: 100.0, source: "sch: table x), 80 Hz: 87 BV Nr. 516, 100 H"}
+  c21_120_f: {value: 15.0e-9, source: "sch: table x), 120 Hz: 21 15 nF"}
+  c22_120_f: {value: 15.0e-9, source: "sch: table x), 120 Hz: 22 15 nF"}
+  c24_120_f: {value: 5.0e-9, source: "sch: table x), 120 Hz: 24 5 nF"}
+  l87_120_h: {value: 62.0, source: "sch: table x), 120 Hz: 87 BV Nr. 516a, 62 H"}
+  l87_r_ohm: {value: 3.0e+3, source: "provisional: model knowledge (a 62-100 H signal choke's winding)", notes: "both versions; linear in version 1 (it carries no DC)"}
+  l84_h: {value: 0.85, source: "sch: 84 BV Nr. 517a, L = 0,85 H"}
+  l84_r_ohm: {value: 100.0, source: "provisional: model knowledge (a 0.85 H signal choke's winding)", notes: "linear in version 1 (no DC, signal level)"}
+  c25_f: {value: 100.0e-12, source: "sch: 25 100 pF"}
+  c26_f: {value: 100.0e-12, source: "sch: 26 100 pF"}
+
+  # --- V3, EF804S (sch) ------------------------------------------------------------------
+  r69_ohm: {value: 80.0e+3, source: "sch: 69 80 kOhm grid"}
+  c27_f: {value: 10.0e-6, source: "sch: 27 10 uF 12/15 V"}
+  r70_ohm: {value: 200.0e+3, source: "sch: 70 200 kOhm, the grid return to the cathode tap"}
+  r71_ohm: {value: 1.0e+3, source: "sch: 71 1 kOhm"}
+  r72_ohm: {value: 15.0e+3, source: "sch: 72 15 kOhm"}
+  c28_f: {value: 50.0e-9, source: "sch: 28 50 nF, screen to cathode"}
+  r73_ohm: {value: 1.0e+6, source: "sch: 73 1 MOhm screen"}
+  r74_ohm: {value: 200.0e+3, source: "sch: 74 200 kOhm plate load"}
+  c30_f: {value: 25.0e-9, source: "sch: 30 25 nF to V4's grid"}
+  r77_ohm: {value: 1.0e+6, source: "sch: 77 1 MOhm grid leak"}
+
+  # --- Overall feedback, V4's plate to V3's cathode (sch) -------------------------------
+  r75_ohm: {value: 80.0e+3, source: "sch: 75 80 kOhm 'abgegl.' (trimmed; the drawing's value)"}
+  c31_f: {value: 2.0e-6, source: "sch: 31 2 uF 350 V"}
+
+  # --- V4, E83F (sch) ----------------------------------------------------------------------
+  r78_ohm: {value: 150.0, source: "sch: 78 150 Ohm cathode"}
+  r79_ohm: {value: 300.0e+3, source: "sch: 79 300 kOhm, screen to cathode"}
+  r80_ohm: {value: 50.0e+3, source: "sch: 80 50 kOhm screen"}
+  c34_f: {value: 2.0e-6, source: "sch: 34 2 uF 350 V screen bypass"}
+  c35_f: {value: 4.0e-6, source: "sch: 35 4 uF 350 V, V4's plate to T89"}
+
+  # --- L88, BV Nr. 515, 250 H (sch): V4's plate choke, version 1 -----------------------------
+  l88_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel EI laminations)"}
+  l88_core_area_m2: {value: 3.04e-4, source: "provisional: model knowledge (an EI 48 tongue, 20 mm stack, 95%)"}
+  l88_core_path_m: {value: 0.0896, source: "provisional: model knowledge (~5.6 x the tongue width)"}
+  l88_gap_m: {value: 200.0e-6, source: "provisional: model knowledge (an air gap for V4's 11.7 mA: 0.84 T of DC flux, ~1 T with a +22 dB swing at 40 Hz)"}
+  l88_turns: {value: 11497, source: "derived: 250 H (sch) in the core's linear limit with the gap (parts.turns_for_inductance)"}
+  l88_r_ohm: {value: 9.3e+3, source: "derived: the printed voltages (sch): 279 V on the 14.6 mA rail (300 V - 21 mA x 1k) less V4's 170 V, over its 11.7 mA", notes: "consistent with ~1000 m of 0.05 mm Cu for 11,497 turns"}
+  l88_c_f: {value: 100.0e-12, source: "provisional: model knowledge (self-capacitance of a 250 H choke)"}
+
+  # --- T89, BV Nr. 512, 9:1 (sch), version 1 -------------------------------------------------
+  # Parallel-fed (no DC). Sized so +22 dB out (bb sheet 7) is ~1 T at 40 Hz.
+  t89_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon steel: the specs allow 1-1.5% distortion at 40 Hz, +22 dB out; bb sheet 7)"}
+  t89_core_area_m2: {value: 3.04e-4, source: "provisional: model knowledge (an EI 48 tongue, 20 mm stack, 95%)"}
+  t89_core_path_m: {value: 0.0896, source: "provisional: model knowledge (~5.6 x the tongue width)"}
+  t89_gap_m: {value: 15.0e-6, source: "provisional: model knowledge (an effective joint gap of interleaved EI laminations, 10-25 um)"}
+  t89_turns: {value: 1625, source: "derived: 1.0 T peak at 40 Hz with the primary at +22 dB x 9 (87.8 V rms; bb sheet 7, sch 9:1)", notes: "the primary (the reference winding); ~59 H in the linear limit"}
+  t89_sec_ratio: {value: 0.11111, source: "derived: sch 9:1"}
+  t89_r_pri_ohm: {value: 360.0, source: "provisional: model knowledge (1625 turns of ~0.1 mm Cu)"}
+  t89_r_sec_ohm: {value: 5.0, source: "provisional: model knowledge (181 turns of ~0.3 mm Cu)"}
+  t89_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (an interleaved output transformer, referred to the primary)"}
+  t89_c_pri_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance of the primary)"}
+  load_ohm: {value: 300.0, source: "bb sheet 5: the specs are measured into 300 ohm"}
+
+  # --- Power supply (sch) ----------------------------------------------------------------
+  # T90 (BV Nr. 513) into GR94 (B 450 C 80), 300 V at 21 mA on C36, then R81 1k (the
+  # V4 rail, 14.6 mA) and R76 6k (V1-V3, 6.1 mA).
+  t90_hv_rms_v: {value: 250.0, source: "provisional: calibrated to the printed 300 V at 21 mA on C36 (sch)", notes: "open-circuit rms behind t90_r_ohm at mains_v_rms = 220 V"}
+  t90_r_ohm: {value: 250.0, source: "provisional: model knowledge (HV winding plus the primary referred, a ~16 W mains transformer)"}
+  t90_leakage_h: {value: 0.1, source: "provisional: model knowledge (leakage of a small mains transformer's HV winding)"}
+  t90_c_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per end of the HV winding; a capacitance on every rectifier node, CLAUDE.md)"}
+  rectifier: {value: B450C80@1, source: "sch: 94 B 450 C 80; config/components/b450c80/1.yaml (per arm)"}
+  selenium_arm_c_f: {value: 3.1e-9, source: "derived: Tarzian's 0.125 uF per sq. in. (published_points.yaml) x 0.444 sq. in. per cell / 18 cells in series (config/components/b450c80/1.yaml)"}
+  c_filter_f: {value: 32.0e-6, source: "sch: 29, 32, 33, 36 32 uF 350 V"}
+  r81_ohm: {value: 1.0e+3, source: "sch: 81 1 kOhm / 2 W"}
+  r76_ohm: {value: 6.0e+3, source: "sch: 76 6 kOhm"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for floating nodes (the HV winding, the bass cut's capacitor junctions and its choke on an open contact; not physical)"}
+
+  # --- Per-instance tolerance (the drawing prints none) -----------------------------------
+  passive_seed: {value: 0, genome: passives.seed, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, genome: passives.spread, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (broadcast-grade carbon film resistors, 5%)"}
+  tol_film_pct: {value: 10.0, source: "provisional: model knowledge (paper / plastic film capacitors of the 1950s, +-10%)"}
+  tol_electrolytic_minus_pct: {value: 20.0, genome: passives.electrolytic_minus_pct, source: "provisional: model knowledge (1950s electrolytics, -10..-20%)"}
+  tol_electrolytic_plus_pct: {value: 50.0, genome: passives.electrolytic_plus_pct, source: "provisional: model knowledge (1950s electrolytics, +50..+100%)"}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 220.0, source: "provisional: model knowledge (T90's primary; the drawing prints none)"}
+
+tolerance:
+  source: "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r5: tol_resistor_pct
+    film: tol_film_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    r5: [R38, R39, R40, R41, R42, R43, R44, R45, R46, R47, R48, R49, R50, R51, R52, R53, R55, R56, R57, R58, R59, R60, R61, R62, R63, R66, R67, R68, R69, R70, R71, R72, R73, R74, R76, R77, R78, R79, R80, R81]
+    film: [C5, C6, C7, C8, C9, C14, C17, C20, C21_80, C22_80, C24_80, C21_120, C22_120, C24_120, C23, C25, C26, C28, C30]
+    electrolytic: [C12, C13, C15, C18, C19, C27, C29, C31, C32, C33, C34, C35, C36]
+
+devices:
+  V1: {device: EF804S@1, tolerance: tube}
+  V2: {device: EF804S@1, tolerance: tube}
+  V3: {device: EF804S@1, tolerance: tube}
+  V4: {device: E83F@1, tolerance: tube}
+  GR94: {device: rectifier, instance: false}
+
+sections:
+  - title: power supply
+    parts:
+      # T90's HV winding (floating; a numerical leak gives it DC), at its peak at the start,
+      # into the bridge, "-" to ground (sch).
+      VT90: {mains: [hv1, hvb], v_rms: t90_hv_rms_v, phase_deg: 90.0}
+      RT90: {R: [hv1, hv1_r], r: t90_r_ohm, tolerance: none}
+      LT90: {L: [hv1_r, hva], l: t90_leakage_h}
+      CT90A: {C: [hva, "0"], c: t90_c_f, tolerance: none}
+      CT90B: {C: [hvb, "0"], c: t90_c_f, tolerance: none}
+      RHVLEAK: {R: [hvb, "0"], r: numerical_leak_ohm, tolerance: none}
+      GR94: {bridge: [hva, hvb, b300, "0"], model: GR94}
+      CGR94A: {C: [hva, b300], c: selenium_arm_c_f, tolerance: none}
+      CGR94B: {C: [hvb, b300], c: selenium_arm_c_f, tolerance: none}
+      CGR94C: {C: ["0", hva], c: selenium_arm_c_f, tolerance: none}
+      CGR94D: {C: ["0", hvb], c: selenium_arm_c_f, tolerance: none}
+      C36: {C: [b300, "0"], c: c_filter_f}
+      R81: {R: [b300, ba], r: r81_ohm}
+      C33: {C: [ba, "0"], c: c_filter_f}
+      C32: {C: [ba, "0"], c: c_filter_f}
+      R76: {R: [ba, bb], r: r76_ohm}
+      C29: {C: [bb, "0"], c: c_filter_f}
+
+  - title: input
+    parts:
+      # A 200 ohm source between the legs; leg b at ground (the spec's measuring setup).
+      RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+      # Switch 91's pad decks: a series resistor per leg in the 3-24 dB positions, R44
+      # across the legs after them (sch).
+      SPAD:
+        switch: gain_db
+        parts:
+          R43: {R: [ia, xa], r: r43_r38_ohm, in: [3]}
+          R38: {R: ["0", xb], r: r43_r38_ohm, in: [3]}
+          R42: {R: [ia, xa], r: r42_r39_ohm, in: [9]}
+          R39: {R: ["0", xb], r: r42_r39_ohm, in: [9]}
+          R41: {R: [ia, xa], r: r41_r40_ohm, in: [18, 24]}
+          R40: {R: ["0", xb], r: r41_r40_ohm, in: [18, 24]}
+          RSPADA: {R: [ia, xa], r: contact_ohm, tolerance: none, in: [34, 40, 46, 52, 58, 64, 70, 76]}
+          RSPADB: {R: ["0", xb], r: contact_ohm, tolerance: none, in: [34, 40, 46, 52, 58, 64, 70, 76]}
+          R44: {R: [xa, xb], r: r44_ohm, in: [3, 9, 18, 24]}
+      # T85: the primary's halves xa-p1 and p2-xb; between them C5-C8 in parallel, then
+      # C9 with R54 across it (sch). The secondary from V1's grid to its return gr1.
+      T85:
+        transformer:
+          pa: {nodes: [xa, p1], r: t85_r_half_ohm, c: t85_c_half_f}
+          pb: {nodes: [p2, xb], r: t85_r_half_ohm, c: t85_c_half_f}
+          s: {nodes: [g1, gr1], ratio: t85_sec_per_half, r: t85_r_sec_ohm, c: t85_c_sec_f}
+        core: {material: t85_core_material, area_m2: t85_core_area_m2, path_m: t85_core_path_m, gap_m: t85_gap_m}
+        turns: t85_turns_half
+        leakage_h: t85_leakage_h
+      C5: {C: [p1, hm], c: c5_8_f}
+      C6: {C: [p1, hm], c: c5_8_f}
+      C7: {C: [p1, hm], c: c5_8_f}
+      C8: {C: [p1, hm], c: c5_8_f}
+      C9: {C: [hm, p2], c: c9_f}
+      R54: {R: [hm, p2], r: r54_ohm, tolerance: none}  # trimmed at alignment
+
+  - title: V1 and V2
+    parts:
+      # V1: the grid returns through T85's secondary and R55 to the cathode tap kt1 (C12
+      # to ground); cathode R57 + R56; plate R59 + R60 (C18); screen R58 (C14) (sch).
+      XV1: {device: [pl1, sg1, g1, k1], model: V1}
+      R55: {R: [gr1, kt1], r: r55_ohm}
+      C12: {C: [gr1, "0"], c: c12_f}
+      R57: {R: [k1, kt1], r: r57_ohm}
+      R56: {R: [kt1, "0"], r: r56_ohm}
+      C13: {C: [k1, fbw], c: c13_f}
+      R59: {R: [pl1, pd1], r: r59_ohm}
+      R60: {R: [pd1, bb], r: r60_ohm}
+      C18: {C: [pd1, "0"], c: c18_f}
+      R58: {R: [sg1, bb], r: r58_ohm}
+      C14: {C: [sg1, "0"], c: c14_f}
+      C17: {C: [pl1, g2], c: c17_f}
+      R61: {R: [g2, "0"], r: r61_ohm}
+      # V2, a pentode (screen at 165 V through R63, C19); plate on L86 (sch).
+      XV2: {device: [pl2, sg2, g2, k2], model: V2}
+      R62: {R: [k2, "0"], r: r62_ohm}
+      R63: {R: [sg2, bb], r: r63_ohm}
+      C19: {C: [sg2, "0"], c: c19_f}
+      L86:
+        transformer:
+          w: {nodes: [bb, pl2], r: l86_r_ohm, c: l86_c_f}
+        core: {material: l86_core_material, area_m2: l86_core_area_m2, path_m: l86_core_path_m, gap_m: l86_gap_m}
+        turns: l86_turns
+        leakage_h: {value: 0.0, source: "a choke: one winding, no leakage"}
+      # Feedback: V2's plate through C15 and R53 onto the ladder R52..R45; switch 91's
+      # wiper takes a tap to V1's cathode through C13 (sch). 3-18 and 34 dB at the top
+      # tap t0, 24 and 40 dB at t1 (24 = the 18 dB pad + 6 dB), then one tap per 6 dB.
+      C15: {C: [pl2, fc], c: c15_f}
+      R53: {R: [fc, t0], r: r53_ohm}
+      R52: {R: [t0, t1], r: r52_ohm}
+      R51: {R: [t1, t2], r: r51_ohm}
+      R50: {R: [t2, t3], r: r50_ohm}
+      R49: {R: [t3, t4], r: r49_ohm}
+      R48: {R: [t4, t5], r: r48_ohm}
+      R47: {R: [t5, t6], r: r47_ohm}
+      R46: {R: [t6, t7], r: r46_ohm}
+      R45: {R: [t7, "0"], r: r45_ohm}
+      SFB:
+        switch: gain_db
+        parts:
+          RSFB0: {R: [fbw, t0], r: contact_ohm, tolerance: none, in: [3, 9, 18, 34]}
+          RSFB1: {R: [fbw, t1], r: contact_ohm, tolerance: none, in: [24, 40]}
+          RSFB2: {R: [fbw, t2], r: contact_ohm, tolerance: none, in: [46]}
+          RSFB3: {R: [fbw, t3], r: contact_ohm, tolerance: none, in: [52]}
+          RSFB4: {R: [fbw, t4], r: contact_ohm, tolerance: none, in: [58]}
+          RSFB5: {R: [fbw, t5], r: contact_ohm, tolerance: none, in: [64]}
+          RSFB6: {R: [fbw, t6], r: contact_ohm, tolerance: none, in: [70]}
+          RSFB7: {R: [fbw, t7], r: contact_ohm, tolerance: none, in: [76]}
+
+  - title: filters
+    parts:
+      # R66, R67 from V2's plate (DC-coupled; the filter's capacitors block it). Switch 92
+      # puts C20 + R68 from their junction to ground ('3 kHz') (sch).
+      R66: {R: [pl2, f1], r: r66_ohm}
+      R67: {R: [f1, fx], r: r67_ohm}
+      S92:
+        switch: treble_cut
+        parts:
+          C20: {C: [f1, f20], c: c20_f, in: [1]}
+          R68: {R: [f20, "0"], r: r68_ohm, in: [1]}
+      # The bass cut (switch 93): C21 - j1 - C22 - j2 - C24 from fx to the output fo
+      # always; C23 from fx to fo in 'Gerade'; L87 from j1 to ground in the 120 (80) Hz
+      # positions; j2 straight to fo in '120 (80) Hz' (C24 shorted) (sch).
+      SVER:
+        switch: version_hz
+        parts:
+          C21_80: {C: [fx, j1], c: c21_80_f, in: [80]}
+          C22_80: {C: [j1, j2], c: c22_80_f, in: [80]}
+          C24_80: {C: [j2, fo], c: c24_80_f, in: [80]}
+          L87_80: {L: [l87, l87r], l: l87_80_h, in: [80]}
+          C21_120: {C: [fx, j1], c: c21_120_f, in: [120]}
+          C22_120: {C: [j1, j2], c: c22_120_f, in: [120]}
+          C24_120: {C: [j2, fo], c: c24_120_f, in: [120]}
+          L87_120: {L: [l87, l87r], l: l87_120_h, in: [120]}
+      RL87: {R: [l87r, "0"], r: l87_r_ohm, tolerance: none}
+      RJ1LEAK: {R: [j1, "0"], r: numerical_leak_ohm, tolerance: none}
+      RJ2LEAK: {R: [j2, "0"], r: numerical_leak_ohm, tolerance: none}
+      RL87LEAK: {R: [l87, "0"], r: numerical_leak_ohm, tolerance: none}  # L87 hangs on an open contact in the flat and 300 Hz positions
+      S93:
+        switch: bass_cut
+        parts:
+          C23: {C: [fx, fo], c: c23_f, in: [0]}
+          RS93A: {R: [j1, l87], r: contact_ohm, tolerance: none, in: [1, 3]}
+          RS93B: {R: [j2, fo], r: contact_ohm, tolerance: none, in: [1]}
+      # The 15 kHz low-pass: C25, L84, C26 (sch).
+      C25: {C: [fo, "0"], c: c25_f}
+      L84: {L: [fo, l84r], l: l84_h}
+      RL84: {R: [l84r, g3], r: l84_r_ohm, tolerance: none}
+      C26: {C: [g3, "0"], c: c26_f}
+
+  - title: V3 and V4
+    parts:
+      # V3: the grid through R69 to C27 and R70 to the cathode tap kt3; cathode R71 + R72;
+      # the screen bypassed to the cathode (C28); R75 / C31 bring V4's plate back to the
+      # cathode (sch).
+      XV3: {device: [pl3, sg3, g3, k3], model: V3}
+      R69: {R: [g3, gb3], r: r69_ohm}
+      C27: {C: [gb3, "0"], c: c27_f}
+      R70: {R: [gb3, kt3], r: r70_ohm}
+      R71: {R: [k3, kt3], r: r71_ohm}
+      R72: {R: [kt3, "0"], r: r72_ohm}
+      C28: {C: [k3, sg3], c: c28_f}
+      R73: {R: [sg3, bb], r: r73_ohm}
+      R74: {R: [pl3, bb], r: r74_ohm}
+      C30: {C: [pl3, g4], c: c30_f}
+      R77: {R: [g4, "0"], r: r77_ohm}
+      R75: {R: [pl4, f75], r: r75_ohm, tolerance: none}  # trimmed at alignment
+      C31: {C: [f75, k3], c: c31_f}
+      # V4, E83F: cathode R78; screen from the 14.6 mA rail through R80 (C34), R79 from
+      # the screen to the cathode; plate on L88, parallel-feeding T89 through C35 (sch).
+      XV4: {device: [pl4, sg4, g4, k4], model: V4}
+      R78: {R: [k4, "0"], r: r78_ohm}
+      R79: {R: [sg4, k4], r: r79_ohm}
+      R80: {R: [ba, sg4], r: r80_ohm}
+      C34: {C: [sg4, "0"], c: c34_f}
+      L88:
+        transformer:
+          w: {nodes: [ba, pl4], r: l88_r_ohm, c: l88_c_f}
+        core: {material: l88_core_material, area_m2: l88_core_area_m2, path_m: l88_core_path_m, gap_m: l88_gap_m}
+        turns: l88_turns
+        leakage_h: {value: 0.0, source: "a choke: one winding, no leakage"}
+      C35: {C: [pl4, op], c: c35_f}
+      T89:
+        transformer:
+          p: {nodes: [op, "0"], r: t89_r_pri_ohm, c: t89_c_pri_f}
+          s: {nodes: [out, "0"], ratio: t89_sec_ratio, r: t89_r_sec_ohm}
+        core: {material: t89_core_material, area_m2: t89_core_area_m2, path_m: t89_core_path_m, gap_m: t89_gap_m}
+        turns: t89_turns
+        leakage_h: t89_leakage_h
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

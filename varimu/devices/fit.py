@@ -327,11 +327,13 @@ def fit_koren_triode(vg, vp, ip, sigma, starts=KOREN_TRIODE_STARTS):
     return m, curve_report(m.ip(vg, vp), ip, sigma)
 
 
-def fit_koren_pentode(plate, screen, plate_sigma, screen_sigma, ex: float | None = None):
+def fit_koren_pentode(
+    plate, screen, plate_sigma, screen_sigma, ex: float | None = None, screen_law=None
+):
     """Koren pentode (mu, ex, kg1, kg2, kp, kvb) by least squares on plate-current points
     `plate` (columns vg1, vg2, vp, ip) and screen-current points `screen` (vg1, vg2,
-    ig2), jointly: mu sets both. `ex` fixed if given. Returns (KorenPentode, plate
-    CurveFit, screen CurveFit)."""
+    ig2), jointly: mu sets both. `ex` fixed if given; `screen_law` the model's screen
+    law (KorenPentode.screen). Returns (KorenPentode, plate CurveFit, screen CurveFit)."""
     from varimu.devices.pentode import KorenPentode
 
     plate, screen = np.asarray(plate, float), np.asarray(screen, float)
@@ -339,8 +341,8 @@ def fit_koren_pentode(plate, screen, plate_sigma, screen_sigma, ex: float | None
     def make(x):
         e = np.exp(x)
         if ex is None:
-            return KorenPentode(e[0], e[1], e[2], e[3], e[4], e[5])
-        return KorenPentode(e[0], ex, e[1], e[2], e[3], e[4])
+            return KorenPentode(e[0], e[1], e[2], e[3], e[4], e[5], screen_law)
+        return KorenPentode(e[0], ex, e[1], e[2], e[3], e[4], screen_law)
 
     def resid(x):
         m = make(x)

@@ -13,7 +13,7 @@ use std::sync::Mutex;
 
 use circuitsim::ir::{
     DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Lamp, Pentode, PlateModel,
-    Triode, VacuumDiode, VariMuTriode,
+    ScreenLaw, Triode, VacuumDiode, VariMuTriode,
 };
 
 use crate::plate::{self, PlateComponent};
@@ -151,6 +151,16 @@ fn sub<'a>(m: &'a Map, key: &str, what: &str) -> Result<&'a Map, Error> {
         .ok_or_else(|| Error(format!("{what}: needs `{key}`")))
 }
 
+/// A pentode model's screen law (`varimu/devices/pentode.py`'s `screen`): absent or null,
+/// Koren's.
+fn screen_law(m: &Map, what: &str) -> Result<Option<ScreenLaw>, Error> {
+    match m.get("screen") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) if v.as_str() == Some("e1") => Ok(Some(ScreenLaw::E1)),
+        Some(v) => Err(Error(format!("{what}: unknown screen law {v}"))),
+    }
+}
+
 fn grid(d: &Map, what: &str) -> Result<Option<GridCurrent>, Error> {
     match d.get("grid_current") {
         None | Some(Value::Null) => Ok(None),
@@ -237,6 +247,7 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                     kg2: num(p, "kg2", what)?,
                     kp: num(p, "kp", what)?,
                     kvb: num(p, "kvb", what)?,
+                    screen: screen_law(p, what)?,
                 },
                 grid: grid(d, what)?,
                 c_g1k: num(c, "g1k", what)?,

@@ -1,0 +1,43 @@
+device: "EF806S"
+document: "Telefunken EF 806 S / 6267, NF-Pentode (Netzröhre für GW-Heizung)"
+publisher: Telefunken
+date: "not printed; page codes 010164 / 020164 / 030164 / 040164, handbook pages 343-350"
+local_copy: sources/telefunken_ef806s.pdf
+local_copy_sha256: 63102f1303f8094147fdda586462185344edafb2833e9fc81ea3c94e4d596ac5
+scan_source: "web: https://frank.pocnet.net/sheets/128/e/EF806S.pdf"
+digitized_with: >-
+  the PDF's native 1-bit 300 dpi page images (PyMuPDF); each grid line fitted along its length on
+  clean grid-width runs, values interpolated between the neighbouring fitted lines; strokes traced
+  column by column (rows for the transfer curves) as run centres with grid-line bands masked; read at
+  round values by local linear fits; every overlay checked by eye (Claude Code subagent, scratch
+  scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-03
+why: >-
+  A cross-check for the EF 804 S (telefunken_ef804s.provenance.yaml): the EF 806 S is said to be the
+  same system with another pinout, and its sheet prints the same measuring values (p.1: Uba 250 V,
+  Ubg2 140 V, Rk 500 ohm: Ia 3.2 +-0.6 mA, Ig2 0.6 +-0.15 mA, S 2 +-0.4 mA/V, mu g2g1 38; Ri 2.5 MOhm
+  where the EF 804 S prints 2 MOhm; heater ca. 200 mA). Its curves are drawn independently, on larger
+  grids.
+files:
+  telefunken_ef806s_plate.csv:
+    figure: "PDF p.6 (handbook p.348): Ia = f(Ua) at Ug2 = 140 V, Ug3 = 0 V, Ug1 = parameter (Rö/V - B 0513 R)"
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    curves: "Vg1 = 0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5 V"
+    coverage: >-
+      Va 10-495 V (grid: 20 V x 0.4 mA, 0-600 V x 0-8 mA); points beyond the Na = 1 W line (dashed
+      there) left out (same limits as the EF 804 S); -0.5 V from 25 V (below that its stroke merges
+      with the 0 V curve's tail).
+  telefunken_ef806s_transfer.csv:
+    figure: "PDF p.5 (handbook p.347): Ia = f(Ug1) at Ua = 250 V, Ug3 = 0 V, Ug2 = parameter (Rö/V - B 0512 R)"
+    columns: "va_v, vg2_v, vg1_v, ia_a"
+    curves: "Vg2 = 180, 140, 100, 60 V"
+    coverage: "Ia 0.2-10 mA, each curve up to its end at Vg1 = 0; grid 0.4 V x 0.4 mA"
+axis_calibration: "labelled grid lines: plate 0-600 V every 20 V (labels every 100 V) x 0-8 mA every 0.4 mA (labels every 2 mA); transfer -8..0 V every 0.4 V (labels every 2 V) x 0-12 mA every 0.4 mA"
+estimated_error: >-
+  About +-0.02 mA on the plate curves, +-0.03 V on the transfer curves above 1 mA (+-0.06 V near
+  cut-off). Checks: the drawn Na = 1 W line reads 0.99-1.01 W at 140-450 V; the transfer curve at
+  Vg2 140 V gives 3.21 mA at Vg1 = -1.9 V (the measuring point's ~1.9 V cathode; printed 3.2 mA) and
+  a slope of 2.2 mA/V there (printed 2 +-0.4); the plate curves at 250 V give 3.00 mA (-2 V) and
+  2.08 mA (-2.5 V) against the EF 804 S sheet's 2.98 / 2.05 mA.
+notes: "Use as a cross-check of, or together with, the EF 804 S curves; the V76 uses EF 804 S."

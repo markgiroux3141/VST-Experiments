@@ -288,7 +288,14 @@ use the RTX 3080 wherever it fits). First listen: U47 -> V76 (B10). The list: sm
 pressure omni (the capsule's verification case), U47, RCA 44-BX, SM57, C12; V76, the 351's
 electronics, Neve 1073, API 312, clean transformerless, UA 610; four opposite chains ranked
 by the separation metrics. The BJT model is a shared prerequisite (with the drums).
-Milestones A1-A9.
+Milestones A1-A9. **Started 2026-11-03 (the user's): U47 -> V76.** A1 = the device
+builder's **B10, the Telefunken V76**: `config/circuits/telefunken_v76.yaml` from IRT drawing
+S 1176 (gain / filter switches, T85 / T89 and its chokes on JA cores, version-1
+constructions provisional; selenium supply `B450C80@1`), tubes `EF804S@1` / `E83F@1` with a
+new opt-in pentode **screen law "e1"** (`KorenPentode.screen`: Ig2 = E1^Ex / Kg2; absent =
+Koren's, every existing IR unchanged), `tests/test_telefunken_v76.py` (idle vs the printed
+voltages); the profile is next (DEVICE_BUILDER_PLAN.md B10's status). The U47's sources:
+`data/schematics/neumann_u47/README.md` (the capsule's geometry has no primary source).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
