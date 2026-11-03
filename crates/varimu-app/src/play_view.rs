@@ -6,6 +6,9 @@
 //! reaches the player as a new circuit (a value updates the stream in place, a change
 //! of topology restarts it).
 //!
+//! The sampler (`crate::sampler_view`) is an instrument here too: chosen as the device, the
+//! left column holds its kit and the main area a browser of `samples/`.
+//!
 //! A device can go at the chain's end (`panel::CHAIN_ENDS`, the plate reverb): after the
 //! device, on threads of its own (`player::EndDevice`), its knobs under CHAIN END.
 
@@ -31,6 +34,7 @@ use varimu_circuit::Library;
 use varimu_circuit::spec::CircuitSpec;
 use varimu_circuit::yaml::Value;
 
+use crate::sampler_view::{SamplerPanel, Wants};
 use crate::theme;
 
 /// Waveform overview columns.
@@ -190,6 +194,10 @@ pub struct PlayView {
     end: Option<usize>,
     end_knobs: Vec<Knob>,
     end_mix: f64,
+    /// The sampler is the instrument (the device chosen stays as it was underneath), and
+    /// its kit and browser.
+    sampler_on: bool,
+    kit: SamplerPanel,
     error: Option<String>,
 }
 
@@ -240,6 +248,9 @@ impl PlayView {
             |r| r.join("data").join("clips"),
         );
         let settings = Settings::load(&config_dir, Quality::Draft1x);
+        let repo = config_dir
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf);
         let mut by_quality: Vec<(Quality, Result<Settings, String>)> = Vec::new();
         for q in DEVICES.iter().chain([&DRAWING]).map(|d| d.quality) {
             if !by_quality.iter().any(|(x, _)| *x == q) {
@@ -293,11 +304,14 @@ impl PlayView {
             end: None,
             end_knobs: Vec::new(),
             end_mix: END_MIX,
+            sampler_on: false,
+            kit: SamplerPanel::new(&repo),
             error: None,
         };
         if let Some(id) = &args.device {
             match DEVICES.iter().position(|d| d.id == id.as_str()) {
                 Some(i) => v.device = i,
+                None if id == "sampler" => v.sampler_on = true,
                 None => v.error = Some(format!("unknown device {id}")),
             }
         }
@@ -465,6 +479,9 @@ impl PlayView {
 
     /// The device's name and id (for files).
     fn device_names(&self) -> (String, String) {
+        if self.sampler_on {
+            return ("Sampler".into(), "sampler".into());
+        }
         match self.drawing_device() {
             Some(d) => (format!("Drawing: {}", d.title), d.name.clone()),
             None => {
@@ -718,6 +735,9 @@ impl PlayView {
         self.adopted = false;
         self.playing = None;
         self.playback = None;
+        if self.sampler_on {
+            return self.start_sampler();
+        }
         if self.live_input {
             return self.start_input();
         }
@@ -831,6 +851,161 @@ impl PlayView {
         }
     }
 
+    /// Play the sampler's kit from the chosen MIDI keyboard (none: from the pads only).
+    fn start_sampler(&mut self) {
+        self.keyboard = None;
+        let s = match &self.settings {
+            Ok(s) => s.clone(),
+            Err(e) => {
+                self.error = Some(e.clone());
+                return;
+            }
+        };
+        if self.midi_ports.is_empty() {
+            self.midi_ports = midi::ports().unwrap_or_default();
+        }
+        let mut error = None;
+        let kb =
+            self.midi_ports
+                .get(self.midi_port)
+                .and_then(|port| match Keyboard::open(Some(port)) {
+                    Ok(kb) => Some(kb),
+                    Err(e) => {
+                        error = Some(format!("{e}: the pads still play the kit"));
+                        None
+                    }
+                });
+        let keys = kb.as_ref().map(|k| k.keys.clone());
+        let buffer = self.input_buffer_ms / 1000.0;
+        match Player::start_sampler(self.kit.sampler.clone(), keys, s, buffer) {
+            Ok(p) => {
+                self.player = Some(p);
+                self.keyboard = kb;
+                self.error = error;
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// The sampler's player running (a preview or a pad asked for a sound).
+    fn ensure_sampler(&mut self) {
+        if self.sampler_on && (self.player.is_none() || self.adopted) {
+            self.start();
+        }
+    }
+
+    /// The left column with the sampler chosen: its keyboard and its kit.
+    fn sampler_side(&mut self, ui: &mut egui::Ui) {
+        Self::heading(ui, "MIDI KEYBOARD");
+        let (port, buffer) = (self.midi_port, self.input_buffer_ms);
+        ui.horizontal(|ui| {
+            let name = self
+                .midi_ports
+                .get(self.midi_port)
+                .map_or("(no MIDI inputs: the pads play)", String::as_str);
+            egui::ComboBox::from_id_salt("sampler_midi_port")
+                .width(ui.available_width() - 34.0)
+                .selected_text(name)
+                .show_ui(ui, |ui| {
+                    for (i, p) in self.midi_ports.iter().enumerate() {
+                        ui.selectable_value(&mut self.midi_port, i, p);
+                    }
+                });
+            if ui
+                .button("↻")
+                .on_hover_text("List the MIDI inputs again")
+                .clicked()
+            {
+                self.midi_ports = midi::ports().unwrap_or_default();
+                self.midi_port = self.midi_port.min(self.midi_ports.len().saturating_sub(1));
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Buffer").color(theme::MUTED));
+            egui::ComboBox::from_id_salt("sampler_buffer")
+                .width(70.0)
+                .selected_text(format!("{:.0} ms", self.input_buffer_ms))
+                .show_ui(ui, |ui| {
+                    for ms in [5.0, 10.0, 20.0, 30.0, 50.0] {
+                        ui.selectable_value(&mut self.input_buffer_ms, ms, format!("{ms:.0} ms"));
+                    }
+                })
+                .response
+                .on_hover_text("Audio computed ahead: most of a key's delay (less can drop out)");
+        });
+        if (port, buffer) != (self.midi_port, self.input_buffer_ms)
+            && self.player.is_some()
+            && !self.adopted
+        {
+            self.start();
+        }
+        Self::heading(ui, "KIT");
+        let mut wants = Wants::default();
+        self.kit.slots_ui(ui, &mut wants);
+        if wants.player {
+            self.ensure_sampler();
+        }
+    }
+
+    /// The main area with the sampler chosen: start / stop, its levels, the browser.
+    fn sampler_main(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            if self.player.is_none() || self.adopted {
+                let go =
+                    egui::Button::new(RichText::new("▶  Play").strong().color(theme::ACCENT_INK))
+                        .fill(theme::ACCENT)
+                        .min_size(egui::vec2(96.0, 30.0));
+                if ui
+                    .add(go)
+                    .on_hover_text("Play the kit from the keys (a preview starts it too)")
+                    .clicked()
+                {
+                    self.start();
+                }
+            } else if ui
+                .add(egui::Button::new("■  Stop").min_size(egui::vec2(96.0, 30.0)))
+                .clicked()
+            {
+                self.stop();
+            }
+            ui.add_space(12.0);
+            let line = match self.player.as_ref().filter(|_| !self.adopted) {
+                Some(p) => {
+                    let st = p.status();
+                    let kb = self
+                        .keyboard
+                        .as_ref()
+                        .map_or("no keyboard".to_string(), |k| k.name.clone());
+                    format!(
+                        "{kb} · out {:.0} dBFS peak · key to ear {:.0} ms · dropouts {}",
+                        st.meter.out_dbfs,
+                        st.latency_s.unwrap_or(0.0) * 1000.0,
+                        p.dropouts()
+                    )
+                }
+                None => "stopped".into(),
+            };
+            ui.label(RichText::new(line).color(theme::MUTED));
+        });
+        ui.label(
+            RichText::new(
+                "Pick sounds here, then record in the Session view: select a track, press R \
+                 (the preview is never recorded)",
+            )
+            .small()
+            .color(theme::FAINT),
+        );
+        if let Some(e) = &self.error {
+            ui.colored_label(theme::FAULT, e);
+        }
+        ui.add_space(8.0);
+        let mut wants = Wants::default();
+        self.kit.browser_ui(ui, &mut wants);
+        if wants.player {
+            self.ensure_sampler();
+        }
+    }
+
     /// The chain's end as chosen, built (None: none chosen).
     fn end_device(&self) -> Option<Result<EndDevice, String>> {
         let dev = &DEVICES[self.end?];
@@ -938,7 +1113,11 @@ impl PlayView {
         let (Some(kb), Some(p)) = (&self.keyboard, &self.player) else {
             return;
         };
-        let Some(key) = DEVICES.get(self.device).and_then(|d| d.mod_wheel) else {
+        let Some(key) = DEVICES
+            .get(self.device)
+            .and_then(|d| d.mod_wheel)
+            .filter(|_| !self.sampler_on)
+        else {
             return;
         };
         let (cc, n) = kb.keys.cc(MOD_WHEEL);
@@ -955,10 +1134,14 @@ impl PlayView {
     }
 
     fn stop(&mut self) {
+        let recording = self.player.as_ref().is_some_and(Player::recording);
         if let Some(p) = &self.player {
             p.record(false);
         }
-        self.collect_take();
+        // The sampler records only in the Session view: no take to wait for.
+        if recording || !self.sampler_on {
+            self.collect_take();
+        }
         self.player = None;
         self.playing = None;
         self.keyboard = None;
@@ -1330,7 +1513,7 @@ impl PlayView {
     /// The left column: device, file, front panel.
     fn side(&mut self, ui: &mut egui::Ui) {
         Self::heading(ui, "DEVICE");
-        let before = self.device;
+        let before = (self.device, self.sampler_on);
         let (shown, _) = self.device_names();
         let drawing_title = self
             .drawing
@@ -1341,20 +1524,47 @@ impl PlayView {
             .selected_text(shown)
             .show_ui(ui, |ui| {
                 for (i, d) in DEVICES.iter().enumerate() {
-                    ui.selectable_value(&mut self.device, i, d.label);
+                    if ui
+                        .selectable_label(!self.sampler_on && self.device == i, d.label)
+                        .clicked()
+                    {
+                        (self.device, self.sampler_on) = (i, false);
+                    }
                 }
-                if let Some(t) = drawing_title {
-                    ui.selectable_value(&mut self.device, DEVICES.len(), t)
+                if let Some(t) = drawing_title
+                    && ui
+                        .selectable_label(!self.sampler_on && self.device == DEVICES.len(), t)
                         .on_hover_text(
                             "The editor's drawing, as it is now: edits are heard as they are made",
-                        );
+                        )
+                        .clicked()
+                {
+                    (self.device, self.sampler_on) = (DEVICES.len(), false);
+                }
+                if ui
+                    .selectable_label(self.sampler_on, "Sampler")
+                    .on_hover_text(
+                        "A kit of sounds, one per key of an octave, and a browser of samples/",
+                    )
+                    .clicked()
+                {
+                    self.sampler_on = true;
                 }
             });
-        if self.device != before {
-            self.load_knobs();
-            if self.player.is_some() {
+        if (self.device, self.sampler_on) != before {
+            if self.sampler_on {
                 self.start();
+            } else {
+                self.load_knobs();
+                if before.1 {
+                    self.stop();
+                } else if self.player.is_some() {
+                    self.start();
+                }
             }
+        }
+        if self.sampler_on {
+            return self.sampler_side(ui);
         }
 
         Self::heading(ui, "SOURCE");
@@ -1677,6 +1887,9 @@ impl PlayView {
 
     /// Transport, the waveform with its loop region, meters.
     fn main(&mut self, ui: &mut egui::Ui) {
+        if self.sampler_on {
+            return self.sampler_main(ui);
+        }
         if self.live_input {
             self.input_transport(ui);
         } else {
@@ -2105,7 +2318,7 @@ const AUDIO_EXT: [&str; 6] = ["wav", "aif", "aiff", "flac", "ogg", "mp3"];
 /// `dir` and its subfolders: a group per folder holding audio files, labelled by its
 /// path under `root` (a folder nested in one of the same name, as multitrack
 /// downloads unpack, shows once).
-fn scan_folder(root: &Path, dir: &Path, groups: &mut Vec<(String, Vec<PathBuf>)>) {
+pub(crate) fn scan_folder(root: &Path, dir: &Path, groups: &mut Vec<(String, Vec<PathBuf>)>) {
     let files = list_audio(dir);
     if !files.is_empty() {
         let mut parts: Vec<String> = Vec::new();

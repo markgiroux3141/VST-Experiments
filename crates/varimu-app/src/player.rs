@@ -59,6 +59,7 @@ use crate::midi::{Keys, TestOsc, Wave};
 use crate::monitor::Monitor;
 use crate::panel::{Feed, RangeMode};
 use crate::resample::StreamResampler;
+use crate::sampler::{Engine, Sampler};
 use crate::session::{Frame, Mix, Recorded, Recorder};
 use crate::settings::Settings;
 use crate::transport::{Clock, Grid, Phase, TransportSettings};
@@ -111,6 +112,9 @@ pub enum Source {
     Timeline { audio: Arc<Vec<f32>>, start: i64 },
     /// No device: the session's tracks and the click only ([`Player::start_mix`]).
     Mix,
+    /// The sampler's kit, played from a keyboard's keys (None: the pads on screen only) and
+    /// its preview ([`Player::start_sampler`]).
+    Sampler(Arc<Sampler>, Option<Arc<Keys>>),
 }
 
 /// An input device and its default (shared-mode mix) format.
@@ -370,6 +374,18 @@ impl Player {
         Player::launch(output, Source::Mix, Vec::new(), None, s, 1.0, buffer_s)
     }
 
+    /// The sampler (`crate::sampler`): its kit from `keys` and the pads, `buffer_s` queued
+    /// (most of a key's latency). No circuit: it starts playing at once.
+    pub fn start_sampler(
+        sampler: Arc<Sampler>,
+        keys: Option<Arc<Keys>>,
+        s: Settings,
+        buffer_s: f64,
+    ) -> Result<Player, String> {
+        let source = Source::Sampler(sampler, keys);
+        Player::launch(None, source, Vec::new(), None, s, 1.0, buffer_s)
+    }
+
     fn launch(
         output: Option<&str>,
         source: Source,
@@ -453,6 +469,17 @@ impl Player {
                     Some("no device: the session's tracks".into());
                 (None, WorkerSource::Mix)
             }
+            Source::Sampler(sampler, keys) => {
+                shared.status.lock().expect("status").input = Some(
+                    if keys.is_some() {
+                        "the sampler, from the MIDI keyboard and the pads"
+                    } else {
+                        "the sampler, from the pads (no MIDI keyboard)"
+                    }
+                    .into(),
+                );
+                (None, WorkerSource::Sampler(sampler, keys))
+            }
             Source::Timeline { audio, start } => {
                 shared.status.lock().expect("status").input =
                     Some("the session's track, where the transport is".into());
@@ -474,6 +501,10 @@ impl Player {
                     let r = match (worker_source, circuit) {
                         (WorkerSource::Mix, _) => {
                             work_mix(rate, buffer, producer, &shared);
+                            Ok(())
+                        }
+                        (WorkerSource::Sampler(sm, keys), _) => {
+                            work_sampler(rate, buffer, producer, &shared, &sm, keys.as_deref());
                             Ok(())
                         }
                         (src, Some(c)) => work(src, values, c, s, buffer, producer, &shared),
@@ -694,6 +725,7 @@ enum WorkerSource {
     Keys(Arc<Keys>, Wave, Vec<Feed>),
     Timeline(Arc<Vec<f32>>, i64),
     Mix,
+    Sampler(Arc<Sampler>, Option<Arc<Keys>>),
 }
 
 /// The transport's pending settings and play / stop, applied to the worker's clock.
@@ -1108,6 +1140,67 @@ fn work_mix(rate: u32, buffer: usize, mut ring: rtrb::Producer<Frame>, shared: &
     }
 }
 
+/// The sampler's block (64 samples, 1.3 ms at 48 kHz): a key lands within one, so hits
+/// keep their timing far better than a circuit's 10 ms blocks would.
+pub const SAMPLER_BLOCK: usize = 64;
+
+/// The worker for the sampler (`Source::Sampler`): blocks of [`SAMPLER_BLOCK`] made as the
+/// queue drains, each starting the keys pressed since the last. The kit's voices are the
+/// take (`raw`); the preview is heard only.
+fn work_sampler(
+    rate: u32,
+    buffer: usize,
+    mut ring: rtrb::Producer<Frame>,
+    shared: &Shared,
+    sampler: &Sampler,
+    keys: Option<&Keys>,
+) {
+    let capacity = ring.buffer().capacity();
+    let mut em = Emitter::new(rate);
+    let mut engine = Engine::new(rate);
+    let (mut kit, mut preview) = (vec![0.0f32; SAMPLER_BLOCK], vec![0.0f32; SAMPLER_BLOCK]);
+    // The output's level over the last ~50 ms (peak, dBFS).
+    let (mut peak, mut blocks) = (0.0f32, 0usize);
+    let per_meter = (0.05 * rate as f64) as usize / SAMPLER_BLOCK;
+    // Playing once the output plays (its queue full, its latency known): a take started
+    // before would measure its latency on an empty queue and land late.
+    let mut playing = false;
+    while !shared.stop.load(Ordering::Relaxed) {
+        if !playing && shared.played.load(Ordering::Relaxed) > 0 {
+            playing = true;
+            shared.status.lock().expect("status").state = State::Playing;
+        }
+        let queued = capacity - ring.slots();
+        shared.queued.store(queued, Ordering::Relaxed);
+        if queued >= buffer || ring.slots() < SAMPLER_BLOCK {
+            std::thread::sleep(Duration::from_micros(300));
+            continue;
+        }
+        if let Some(k) = keys {
+            for (note, vel) in k.take_note_ons() {
+                engine.note_on(sampler, note, vel);
+            }
+        }
+        engine.render(sampler, &mut kit, &mut preview);
+        let y: Vec<f32> = kit.iter().zip(&preview).map(|(a, b)| a + b).collect();
+        peak = y.iter().fold(peak, |m, v| m.max(v.abs()));
+        let before = capacity - ring.slots();
+        em.emit(shared, &mut ring, &kit, y);
+        blocks += 1;
+        if blocks >= per_meter.max(1) {
+            let mut st = shared.status.lock().expect("status");
+            st.meter.out_dbfs = 20.0 * (peak as f64).max(1e-6).log10();
+            let block_s = SAMPLER_BLOCK as f64 / rate as f64;
+            st.latency_s = Some(
+                block_s
+                    + before as f64 / rate as f64
+                    + shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6,
+            );
+            (peak, blocks) = (0.0, 0);
+        }
+    }
+}
+
 /// The worker: build the session, then feed the output ring from the source.
 fn work(
     source: WorkerSource,
@@ -1123,7 +1216,8 @@ fn work(
         WorkerSource::Input(..)
         | WorkerSource::Keys(..)
         | WorkerSource::Timeline(..)
-        | WorkerSource::Mix => &[],
+        | WorkerSource::Mix
+        | WorkerSource::Sampler(..) => &[],
     };
     let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
     // A gate starts up (no key), a pitch at START_NOTE.
@@ -1284,7 +1378,7 @@ fn work(
                 pending.drain(..used);
             }
         }
-        WorkerSource::Mix => {}
+        WorkerSource::Mix | WorkerSource::Sampler(..) => {}
         WorkerSource::Timeline(audio, start) => {
             let mut block = vec![0.0; BLOCK];
             while !shared.stop.load(Ordering::Relaxed) {

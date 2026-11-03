@@ -450,6 +450,17 @@ production into a new take and removes its inserts (`Session::add_rendered_take`
 `Take::rendered_from`; Undo restores); the session plays tracks-only when no instrument
 plays (▶ always there; ● starts the instrument and records once it plays).
 
+**The sampler** (2026-11-02, the user's ask): the user's sample library sorted into the repo's
+git-ignored `samples/` by `scripts/import_samples.py` (drums first: `samples/drums/<category>/`,
+`index.json`; `samples/README.md`), played in varimu-app as an instrument: Play's device
+"Sampler" (`--device sampler`), twelve slots one per key of an octave (every octave plays
+them), a browser of `samples/` whose files preview as they are clicked or stepped with
+↑ / ↓ (never recorded), Enter loads into the marked slot; the kit kept in `sampler.json`
+beside `app.json`. `varimu_app::sampler` (voices, cubic interpolation at the file's rate),
+`player::Source::Sampler` (no circuit, 64-sample blocks, the Emitter as every source), so the
+Session view records it like the synth. `examples/sampler.rs` plays a beat on the pads into
+an armed take and checks its onsets.
+
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)
 (2026-10-30; milestones T1-T6). A take

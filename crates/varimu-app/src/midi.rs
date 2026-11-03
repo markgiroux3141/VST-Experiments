@@ -38,7 +38,12 @@ struct KeysInner {
     pressure: u8,
     /// Key presses so far (note-ons): a new one while another key is held is a legato key.
     presses: u64,
+    /// The note-ons not yet taken (note, velocity), for the sampler: each key its own hit.
+    ons: std::collections::VecDeque<(u8, u8)>,
 }
+
+/// Note-ons kept until taken (older ones dropped: a player that doesn't take them).
+const MAX_ONS: usize = 256;
 
 impl Default for KeysInner {
     fn default() -> Self {
@@ -47,6 +52,7 @@ impl Default for KeysInner {
             cc: [(0, 0); 128],
             pressure: 0,
             presses: 0,
+            ons: std::collections::VecDeque::new(),
         }
     }
 }
@@ -61,6 +67,10 @@ impl Keys {
                 k.held.retain(|&(n, _)| n != note);
                 k.held.push((note, vel));
                 k.presses += 1;
+                k.ons.push_back((note, vel));
+                while k.ons.len() > MAX_ONS {
+                    k.ons.pop_front();
+                }
             }
             (0x80 | 0x90, Some(note), _) => {
                 k.held.retain(|&(n, _)| n != note);
@@ -89,6 +99,11 @@ impl Keys {
     /// The key sounding (the last one held) and its velocity.
     pub fn sounding(&self) -> Option<(u8, u8)> {
         self.inner.lock().expect("keys").held.last().copied()
+    }
+
+    /// The note-ons since the last call (note, velocity), oldest first.
+    pub fn take_note_ons(&self) -> Vec<(u8, u8)> {
+        self.inner.lock().expect("keys").ons.drain(..).collect()
     }
 
     /// How many keys have been pressed (note-ons), to tell a new key from a held one.

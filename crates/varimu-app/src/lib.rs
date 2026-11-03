@@ -14,6 +14,9 @@
 //! `loopback` (an output cabled back to an input: where the clicks come back, and the
 //! round trip).
 //!
+//! The sampler: `sampler` (a kit of sounds, one per key of an octave, and its voices),
+//! played through `player` like an instrument.
+//!
 //! Devices in the session (docs/SESSION_FX_PLAN.md), F1: `print` (a track's audio through
 //! a device offline, kept as audio and cached by what it was made from).
 
@@ -29,6 +32,7 @@ pub mod prefs;
 pub mod print;
 pub mod render;
 pub mod resample;
+pub mod sampler;
 pub mod session;
 pub mod settings;
 pub mod transport;
