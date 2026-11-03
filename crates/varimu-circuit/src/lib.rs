@@ -18,6 +18,7 @@
 //! ```
 
 pub mod builder;
+pub mod capsule;
 pub mod compile;
 pub mod connect;
 pub mod derived;

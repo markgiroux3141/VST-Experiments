@@ -97,6 +97,8 @@ def _models() -> list:
         load_device("LAMP327@1"),
         load_device("2D21@1"),
         load_device("884@1"),
+        load_device("EF804S@1"),  # the e1 screen law (pentode.py)
+        load_device("E83F@1"),
         core_model("CORE_GO", "grain_oriented_si_steel", 0.1),
         core_model("CORE_NI", "permalloy_fluxgate", 0.08),
         core_model("CORE_MU", "mumetall", 0.07),

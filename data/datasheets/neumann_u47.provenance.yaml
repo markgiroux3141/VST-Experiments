@@ -1,0 +1,139 @@
+device: "U47"
+curve: free-field frequency responses and polar diagrams, cardioid (Niere) and omni (Kugel)
+publisher: Georg Neumann Laboratorium für Elektroakustik GmbH (ds58, br); Telefunken (tf52)
+documents:
+  ds58:
+    title: "Kondensatormikrophon U 47 u. U 48 mit Zubehör"
+    date: "März 1958 (printed)"
+    scan_source: "web: https://assets.sennheiser.com/download/assets/cata0080_u47-u48-03-1958-deutsch.PDF/6f1c26c0dc0011f0b5fb16ac7ce906bd"
+    sha256: ef7326588ceda3df87815cd6830907764d0a4952ed3317db6a3979cce743e3ec
+    bytes: 190032
+    page: "PDF p.1 (one 1-bit 3476 x 2432 image, 300 dpi; the plots are printed rotated 90 deg)"
+  br:
+    title: "Mikrophon U 47 (brochure, fold-out)"
+    date: "not printed (early 1950s by the NG's choke; data/schematics/neumann_u47/README.md)"
+    scan_source: "web: https://assets.sennheiser.com/download/assets/cata0217_U47_D.PDF/28e91dc4dc0111f0887916ac7ce906bd"
+    sha256: ba05e3f29046fae6cc3f4680686a67edcb61e4a4e78dec6a03398451a7c2e1bf
+    bytes: 317684
+    page: "PDF p.1 (one 1-bit 4960 x 3507 image, 300 dpi, the page shows its top 71%; plots rotated 90 deg)"
+  tf52:
+    title: "Telefunken Kondensatormikrofon U 47 M"
+    date: "printed 1.52 (code at the page foot)"
+    scan_source: "web: https://assets.sennheiser.com/download/assets/cata0081_u47m-1952-deutsch.PDF/6f03528adc0011f0bd88aa72af6619c2"
+    sha256: 60218a5a2df089669c258d8abe3065ccd4c82de91b50ee5de06d1915dff5f086
+    bytes: 86856
+    page: "PDF p.1 (one 1-bit 3488 x 2432 image, 300 dpi), the small response plot at the lower right"
+local_copy: "none (the PDFs aren't committed, as for the rest of data/schematics/neumann_u47/; hashes above)"
+digitized_with: >-
+  the PDFs' native 1-bit page images (PyMuPDF extract, rotated upright with PIL), no resampling.
+  Responses: every ruled line located on the image (column / row profiles), horizontal grid lines fitted
+  per line as y = a + b x (the printed grids are sheared ~0.5 deg), frequency piecewise log-linear between
+  the neighbouring ruled lines (the grids aren't uniform: ds58 719-732 px/decade); curves traced column by
+  column as dark-run centres (grid lines and vertical rules masked) and read at 1/6-octave frequencies
+  (1000 x 2^(k/6) Hz) as the median of the trace within +-3 px. Polars: centre refined to the sharpest
+  rings, ring radii and spokes measured, dB piecewise linear between rings; each curve traced along rays
+  every 0.25 deg (rings and spokes masked) near a hand-placed anchor path, read every 15 deg as the median
+  within +-1.5 deg. Line styles identified on a stroke map (connected components of the grid-masked image,
+  dots vs dashes). Every overlay (trace and readout points on the page, and on a polar-unwrapped copy)
+  checked by eye. Claude Code subagent; scratch scripts not kept.
+digitized_by: Claude Code
+digitized_on: 2026-11-03
+files:
+  neumann_u47_response.csv:
+    columns: >-
+      pattern (cardioid | omni), angle_deg (0: none of the charts states an angle; on axis is the
+      convention for such charts, not printed), freq_hz, db, document (ds58 | br | tf52), reference,
+      quality (read | interp | coarse)
+    ds58:
+      figure: >-
+        p.1, the three response strips 'Stellung' O (omni) and the cardioid symbol (both bracketed 'U47');
+        the third strip (figure-8) is the U 48's and isn't included
+      coverage: "31.25 Hz - 15 kHz (the curves are drawn 30 Hz - 15 kHz), 55 points per pattern"
+      reference: >-
+        each strip's own 0 dB line; no reference frequency is printed, the curves cross 0 dB near 1 kHz
+        (read: omni +0.12, cardioid -0.18 dB at 1 kHz). Sensitivities on the same page: cardioid about
+        2.5 mV/ubar, omni about 1.4 mV/ubar, at 1 kHz into 1000 ohm
+      axis_calibration: >-
+        strips ruled +10 / +5 / 0 / -5 dB (labels +10, 0; -10 printed at the axis below the last strip),
+        9.5-9.8 px per dB; frequency rules at 30 (plot edge), 40, 50, 60, 70, 80, 90, 200, 300 ... 1000,
+        2000 ... 10000, 15000 Hz, labels 40, 100, 1000, 10000, 15000 Hz
+      tolerance_band: none drawn
+    br:
+      figure: "p.1, the response plot (cardioid upper, omni lower), 30 Hz - 18 kHz"
+      coverage: "31.25 Hz - 16 kHz at 1/6 octave plus 18 kHz (the plot's right edge), 56 points per pattern"
+      reference: >-
+        dB re 1 V/ubar, the axis' own scale (-50 ... -60 'db'); the plot's legend
+        'e0 bei 1000 Hz: Niere = 2,5 mV/ub - Kugel = 1,6 mV/ub' (load not stated). The curves look
+        idealized (smooth)
+      axis_calibration: >-
+        rows every 1 dB from -50 to -60 (labels every 2 dB), 57-59 px per dB; frequency rules at 30 (edge),
+        40 ... 100, 200 ... 1000, 2000 ... 10000 Hz and 18000 Hz at the right edge (labels 30, 100, 1000,
+        10000, 18000 Hz); this grid is uniform (737-747 px/decade)
+      tolerance_band: none drawn
+    tf52:
+      figure: "p.1, the small response plot (cardioid symbol on the upper curve, O on the lower)"
+      coverage: "31.25 Hz - 15 kHz, 55 points per pattern; above 15 kHz not digitized (see notes)"
+      reference: >-
+        dB re each curve's own value at 1000 Hz ('Frequenzgang (bezogen auf 1000 Hz)' in the data block);
+        the grid has no dB labels, only the '1 db' bar (arrows on two adjacent grid lines). The curves'
+        flat parts lie on grid lines
+      axis_calibration: >-
+        rows every 1 dB (the '1 db' bar), ~19 px per dB; frequency rules 20 Hz (edge, unlabelled), 30,
+        40 ... 100, 200 ... 1000, 2000 ... 10000, 11000 ... 20000 Hz, 30 kHz edge (labels 30, 10^2, 10^3,
+        10^4, 20000 Hz), 238 px/decade
+      tolerance_band: "none drawn; the data block states 'bis 30 Hz +-1 db, bis 15000 Hz +-3 db'"
+  neumann_u47_polar.csv:
+    columns: >-
+      pattern, freq_hz, angle_deg (clockwise from 0 = on axis as drawn, 90 at the right), db (level re the
+      curve at 0 deg: the printed attenuation, negated), document (ds58), quality
+    figure: >-
+      ds58 p.1, the U 47 omni (O) and cardioid polar diagrams (the cardioid plot is bracketed to both U 47
+      and U 48); legend: 100 Hz thin solid (4 px), 1000 Hz thick solid (6-7 px), 5000 Hz dash-dot,
+      10000 Hz dashed, 15000 Hz dash-dot-dot
+    curves: >-
+      omni: 1000, 5000, 10000, 15000 Hz all around (24 angles each; no separate 100 Hz curve is visible,
+      presumably under the 1000 Hz one); cardioid: 100 and 1000 Hz all around (24 each), 5000 Hz 0-105 and
+      270-345 deg, 10000 Hz 0-120 and 240-345 deg, 15000 Hz 0-75 and 285-345 deg
+    axis_calibration: >-
+      rings labelled 0 dB (outer), 10, 20 and 30 (at the centre point); unlabelled rings between them every
+      5 dB, so rings at 0, 5, 10, 15, 20, 25 dB and the centre 30 dB; measured radii omni 301.0, 250.8,
+      199.3, 151.5, 96.3, 47.8 px, cardioid 297.0, 249.9, 199.1, 150.7, 95.8, 47.5 px (about 10 px per dB,
+      ring irregularity up to 4 px); spokes every 22.5 deg
+    quality: >-
+      read: a stroke of that curve within +-1.5 deg; interp: across a gap (dash gap, spoke) up to 8 deg;
+      coarse: the curve merges with others (near 0 / 180 deg on the omni, inside the solid curves at
+      15-45 deg on the cardioid), lies in the converging null region (cardioid 1000 Hz at 135, 150, 210,
+      225 deg), the cardioid's two solid curves run together (100 and 1000 Hz at 15-45 and 315-345 deg), or its identity is less certain (cardioid 10000 Hz at 105-120 / 240-255 deg)
+estimated_error: >-
+  Responses: ds58 about +-0.2 dB (stroke 7-9 px, grid-line fit residuals up to 1.9 px = 0.2 dB), +-0.4 dB on
+  the steep slopes above 12 kHz; br +-0.05 dB (59 px per dB, grid residuals <= 1.6 px = 0.03 dB); tf52
+  +-0.1 dB (19 px per dB, stroke 3-5 px). Frequency: a fraction of a ruled interval, except ds58 below
+  200 Hz (notes). Polars: +-0.3 dB where read (10 px per dB, stroke 3-5 px), +-0.5-1 dB where coarse.
+  Self-checks: br at 1 kHz reads -52.07 (cardioid) and -56.04 dB (omni) against the printed 2.5 and
+  1.6 mV/ubar = -52.04 and -55.92 dB re 1 V/ubar; tf52's cardioid at 31 Hz reads -0.97 dB against the
+  printed '+-1 db to 30 Hz'; ds58's curves at 1 kHz read +0.12 / -0.18 dB on the 0 dB lines; the omni
+  polar's left/right pairs (theta vs 360 - theta) differ by 0.35 dB rms (max 0.73, n 44) and its
+  front/back pairs (theta vs 180 - theta) by 0.36 dB rms (max 0.89, n 40); the cardioid's left/right
+  pairs by 0.65 dB rms (max 1.77, n 41: the drawing itself isn't symmetric, e.g. 1000 Hz 11.3 dB down
+  at 105 deg against 12.8 at 255 deg, 15 px apart on the page).
+notes: >-
+  (1) ds58's frequency axis: the tick and label '100' sit on the seventh rule, which the spacing of the
+  rules (40-80 Hz at 717-724 px/decade from the 30 Hz edge, and 1000 Hz) identifies as 90 Hz; no rule is
+  drawn at 100 Hz. Calibrated as 90 Hz; read as 100 Hz instead, frequencies between 90 and 200 Hz shift
+  by up to 5%, where all three ds58 curves are flat within 0.1 dB. (2) The omni polar's 1000 Hz curve is
+  drawn over the 0 dB ring; parts outside the ring read 0 (the scale stops there). (3) Cardioid polar
+  rear half: the 5, 10 and 15 kHz curves converge into the 20-30 dB centre region and form rear lobes
+  (visible near 180 deg at about -12 to -18 dB, close to the 100 Hz curve) whose line styles can't be
+  told apart at 300 dpi; not digitized. (4) tf52 above 15 kHz: both curves fall steeply, side by side, to
+  the bottom of the grid (about -7 dB cardioid, -3 dB omni re 1 kHz) by about 18 kHz; not digitized.
+  tf52 at 1260-1587 Hz (omni) is interpolated under the 'O' symbol (quality interp); at 1260 / 1414 Hz
+  the cardioid curve touches its symbol (read 0.0 by interpolation there too). (5) br's 18 kHz points
+  are at the plot's edge where both curves plunge (omni to the -60 dB edge): quality coarse. (6) Not
+  digitized: br's polars (no dB labels on the five equally spaced rings), the U 48's figure-8 strip and
+  polar, and radiomuseum's 1952 response / polar sheet (only a 500 px thumbnail,
+  u47_response_1952_thumbnail.png; its curves look like tf52's). (7) The three documents disagree in
+  detail (ds58's cardioid rises ~3.5-3.9 dB at 3.5-10 kHz, br's ~1.4 dB at 7 kHz, tf52's ~2.3 dB at
+  9 kHz with a second peak near 15 kHz); they are kept apart by the document column. (8) Published
+  figures are in data/schematics/neumann_u47/README.md. One addition (my arithmetic, not printed): tf52's
+  '2,8 mV/ub (-49 db)' and '1,7-2 mV/ub (-53 db)' fit dB re 0.775 V per ubar (20 log(2.8 mV / 0.775 V)
+  = -48.8; 1.85 mV: -52.4), not re 1 V/ubar (-51.1), whereas br's chart is re 1 V/ubar.

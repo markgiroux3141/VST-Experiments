@@ -1,0 +1,162 @@
+# Compiled by varimu-components 0.1.0 on 2026-11-03.
+# Don't edit by hand: edit the design and save it as a new version.
+name: BV191
+kind: transformer
+source: 'NWDR Bauvorschrift Nr. 191 (CTV 72/1, the V72''s Eingangsuebertrager), web: https://web.archive.org/web/20120424210901/http://www.irt.de:80/IRT/publikationen/braunbuch/V72_EUE.pdf; Blatt 1-5'
+compiler: varimu-components 0.1.0
+construction:
+  core:
+    lamination: {value: EI 48, source: 'BV 191 Blatt 1, item 2 (Blechschnitt EI 48)'}
+    material: {value: mumetall, source: 'provisional: a stand-in for Hyperm 702 (BV 191 Blatt 1, item 1: initial permeability ~12,000), which config/magnetics.yaml doesn''t have yet; mumetall''s linear limit is ~29,300 (C2 step 5 adds the material)'}
+    stack_m: {value: 0.016, source: 'BV 191 Blatt 1, item 5 (Blechpaketstaerke 16 mm)'}
+    stacking_factor: {value: 0.92, source: 'web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf (SEKELS / VAC Kernbleche, Tabelle 6: Mumetall-type laminations 0.35 mm, 92%; BV 191 Blatt 1 item 4: 0.35 mm sheets)'}
+    stacking: {value: interleaved, source: 'BV 191 Blatt 1, item 3 (Luftspalt 0 mm, ueberlappt geschichtet)'}
+    joint_gap_m: {value: 2.4e-06, source: 'derived: SEKELS / VAC Tabelle 3 (same sheet): EI 48 stacked 1x1, Mumetall 0.35 mm, mu4 min 12,000 against the material''s ca. 30,000 (Tabelle 1): l_e (1/12,000 - 1/30,000) = 4.8 um over the path''s two joints; approximate (a minimum against a ca. value). BV 191''s printed initial permeability ~12,000 may be the stacked core''s, like this one'}
+  bobbin:
+    wall_m: {value: 0.0005, source: 'BV 191 Blatt 2, item 8 (Pressspan ca. 0.5 mm tube)'}
+    cheek_m: {value: 0.001, source: 'BV 191 Blatt 2, item 8 (Pressspan ca. 1 mm cheeks; the bobbin 23.5 mm long in the 24 mm window)'}
+    margin_m: {value: 0.00025, source: 'derived: (24 mm window - 23.5 mm bobbin) / 2 (Blatt 2, item 8)'}
+    pitch_factor: {value: 1.0, source: 'unused: the discs'' dimensions are drawn (Blatt 2, item 10a: the discs'' geometry is binding, not the wire)'}
+  arrangement: {value: disc, source: 'BV 191 Blatt 1, item 7 (Scheibenwicklung) and the mechanical drawing'}
+  windings: [p1, p2, s]
+  sections:
+  - winding: s
+    turns: {value: 2000, source: 'BV 191 Blatt 2, item 10 (4 Spulenscheiben je 2000 Wdg.)'}
+    layers: {value: 80, source: 'derived: a wild-wound disc''s equivalent layers, 5.5 mm build / ~0.069 mm overall diameter'}
+    wire: {value: 0.06 mm grade 1, source: 'BV 191 Blatt 2, item 10 (0.06 CuL; the enamel grade isn''t given: provisional grade 1)'}
+    enamel: {value: enamel, source: 'BV 191 Blatt 2, item 10 (CuL: enamelled; drawn through hot wax, Blatt 3 item 11)'}
+    width_m: {value: 0.0023, source: 'BV 191 Blatt 2, item 10 (2.3 mm breit)'}
+    build_m: {value: 0.0055, source: 'BV 191 Blatt 2, item 10 (5.5 mm hoch)'}
+  - insulation:
+      thickness_m: {value: 0.0005, source: 'provisional: BV 191 Blatt 1 (Trolitul masks, 0.5 or 0.1 mm)'}
+      dielectric: {value: polystyrene, source: 'BV 191 Blatt 1 (Trolitul: polystyrene)'}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - shield:
+      name: S
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 2, item 9 (Folie 0.03 mm) and Blatt 3, item 11'}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - winding: p1
+    turns: {value: 400, source: 'BV 191 Blatt 2, item 10 (2 Spulenscheiben je 400 Wdg.)'}
+    layers: {value: 38, source: 'derived: a wild-wound disc''s equivalent layers, 5.5 mm build / ~0.145 mm overall diameter'}
+    wire: {value: 0.13 mm grade 1, source: 'BV 191 Blatt 2, item 10 (0.13 CuL; grade not given: provisional grade 1)'}
+    enamel: {value: enamel, source: 'BV 191 Blatt 2, item 10 (CuL)'}
+    width_m: {value: 0.002, source: 'BV 191 Blatt 2, item 10 (2 mm breit)'}
+    build_m: {value: 0.0055, source: 'BV 191 Blatt 2, item 10 (5.5 mm hoch)'}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - shield:
+      name: S
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 2, item 9 (Folie 0.03 mm)'}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - insulation:
+      thickness_m: {value: 0.0005, source: 'provisional: BV 191 Blatt 1 (Trolitul masks, 0.5 or 0.1 mm)'}
+      dielectric: {value: polystyrene, source: BV 191 Blatt 1 (Trolitul)}
+  - winding: s
+    turns: {value: 2000, source: 'BV 191 Blatt 2, item 10'}
+    layers: {value: 80, source: 'derived: as the first secondary disc'}
+    wire: {value: 0.06 mm grade 1, source: 'BV 191 Blatt 2, item 10'}
+    enamel: {value: enamel, source: 'BV 191 Blatt 2, item 10 (CuL)'}
+    width_m: {value: 0.0023, source: 'BV 191 Blatt 2, item 10'}
+    build_m: {value: 0.0055, source: 'BV 191 Blatt 2, item 10'}
+  - insulation:
+      thickness_m: {value: 0.0005, source: 'provisional: BV 191 Blatt 1 (Trolitul masks, 0.5 or 0.1 mm)'}
+      dielectric: {value: polystyrene, source: BV 191 Blatt 1 (Trolitul)}
+  - winding: s
+    turns: {value: 2000, source: 'BV 191 Blatt 2, item 10'}
+    layers: {value: 80, source: 'derived: as the first secondary disc'}
+    wire: {value: 0.06 mm grade 1, source: 'BV 191 Blatt 2, item 10'}
+    enamel: {value: enamel, source: 'BV 191 Blatt 2, item 10 (CuL)'}
+    width_m: {value: 0.0023, source: 'BV 191 Blatt 2, item 10'}
+    build_m: {value: 0.0055, source: 'BV 191 Blatt 2, item 10'}
+  - insulation:
+      thickness_m: {value: 0.0005, source: 'provisional: BV 191 Blatt 1 (Trolitul masks, 0.5 or 0.1 mm)'}
+      dielectric: {value: polystyrene, source: BV 191 Blatt 1 (Trolitul)}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - shield:
+      name: S
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 2, item 9 (Folie 0.03 mm)'}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - winding: p2
+    turns: {value: 400, source: 'BV 191 Blatt 2, item 10'}
+    layers: {value: 38, source: 'derived: as p1'}
+    wire: {value: 0.13 mm grade 1, source: 'BV 191 Blatt 2, item 10'}
+    enamel: {value: enamel, source: 'BV 191 Blatt 2, item 10 (CuL)'}
+    width_m: {value: 0.002, source: 'BV 191 Blatt 2, item 10'}
+    build_m: {value: 0.0055, source: 'BV 191 Blatt 2, item 10'}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - shield:
+      name: S
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 2, item 9 (Folie 0.03 mm)'}
+  - insulation:
+      thickness_m: {value: 3.0e-05, source: 'BV 191 Blatt 3, item 11 (Oelpapier 0.03)'}
+      dielectric: {value: kraft_oil, source: BV 191 Blatt 3 (Oelpapier)}
+  - insulation:
+      thickness_m: {value: 0.0005, source: 'provisional: BV 191 Blatt 1 (Trolitul masks, 0.5 or 0.1 mm)'}
+      dielectric: {value: polystyrene, source: BV 191 Blatt 1 (Trolitul)}
+  - winding: s
+    turns: {value: 2000, source: 'BV 191 Blatt 2, item 10'}
+    layers: {value: 80, source: 'derived: as the first secondary disc'}
+    wire: {value: 0.06 mm grade 1, source: 'BV 191 Blatt 2, item 10'}
+    enamel: {value: enamel, source: 'BV 191 Blatt 2, item 10 (CuL)'}
+    width_m: {value: 0.0023, source: 'BV 191 Blatt 2, item 10'}
+    build_m: {value: 0.0055, source: 'BV 191 Blatt 2, item 10'}
+  rating:
+    windings: [p1, p2]
+    v_rms: {value: 0.01, source: 'BV 191 Blatt 4, item 4 (the inductance measurement''s 10 mV, 50 Hz)'}
+    f_hz: {value: 50.0, source: 'BV 191 Blatt 4, item 4'}
+resolved:
+  lamination: {name: EI 48, shape: EI, leg_m: 0.016, window_width_m: 0.008, window_height_m: 0.024, path_m: 0.096, path_derived: false, source: 'web: https://ermeg.cz/wp-content/uploads/2022/07/Katalog_Waasner_12_2014.pdf (Waasner catalog 12/2014 p.8: scrapless EI per DIN 41302 / IEC 60740-1, YEI 1-xx; window width (e - d) / 2, height b + f); paths l_Fe from SEKELS / VAC ''Kernbleche aus Mumetall, Vacoperm, Permenorm'' Tabelle 2 (web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf)'}
+  material: {name: mumetall, source: 'fit (2026-10-24; mu4 +0.5%, mu_max -0.3%, Hc +2.3%, hysteresis loss at 0.5 T -2.2%, Rayleigh-region mu at 0.04 A/m -0.5%; origin permeability ~29,300): scripts/fit_core_material.py to the MUMETALL datasheet figures and its Rayleigh region (the datasheet block). Replaces the 2026-10-21 fit to the four scalars alone (c 0.00077: almost all irreversible, H ~ sqrt(B) at program levels, origin permeability 246; Phase 2''s ''Low-level core physics'', Option 1). Datasheet (web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf, Lamineries Matthey / Vacuumschmelze: ~76% Ni, 5% Mo, 5% Cu); Ms from its saturation polarization 0.8 T'}
+  copper: {resistivity_ohm_m: 1.7241e-08, temperature_c: 20.0, source: 'web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (NBS Handbook 100, Copper Wire Tables, 1966: the International Annealed Copper Standard, conductivity 58 m/(ohm mm^2) at 20 C, ''volume resistivity of annealed copper at 20 C = 100/58 = 1.7241 microhm-cm'', PDF p.16-17; temperature coefficient 0.00393 at 20 C, PDF p.10; IEC Publication 28, now IEC 60028)'}
+  wires:
+    0.06 mm grade 1: {bare_m: 6.0e-05, overall_m: 6.9e-05, source: 'bare: nominal 0.06 mm; overall (grade 1, nominal): web: https://www.elektrisola.com/Attachments/TechnicalDataBySize/ELEKTRISOLA_EnCuWire_IECJIS_Datasheet_eng.pdf (Elektrisola, Technical data for enamelled copper wire based on IEC 60317, MW.IECJIS.eng/2015.2: overall diameter min-max per grade); agrees with IEC 60317-0-1:2008 Table 1 where they overlap (web: https://cdn.standards.iteh.ai/samples/15166/1f0b81c68a25491f89e03d966be8f9d7/IEC-60317-0-1-2008.pdf, PDF p.12)'}
+    0.13 mm grade 1: {bare_m: 0.00013000000000000002, overall_m: 0.00014549999999999999, source: 'bare: nominal 0.13 mm; overall (grade 1, nominal): web: https://www.elektrisola.com/Attachments/TechnicalDataBySize/ELEKTRISOLA_EnCuWire_IECJIS_Datasheet_eng.pdf (Elektrisola, Technical data for enamelled copper wire based on IEC 60317, MW.IECJIS.eng/2015.2: overall diameter min-max per grade); agrees with IEC 60317-0-1:2008 Table 1 where they overlap (web: https://cdn.standards.iteh.ai/samples/15166/1f0b81c68a25491f89e03d966be8f9d7/IEC-60317-0-1-2008.pdf, PDF p.12)'}
+  dielectrics:
+    enamel: {eps_r: 3.8, source: 'provisional: model knowledge (magnet wire enamels: polyurethane, polyvinyl formal, polyester-imide, oleoresinous; no datasheet gives it; a patent snippet (US 10199138, unverified) puts conventional enamels at 3.8-4.2 at 25 C)'}
+    polystyrene: {eps_r: 2.55, source: 'provisional: model knowledge (polystyrene, e.g. Trolitul, ~2.5-2.6 at audio frequencies; no datasheet found yet)'}
+    kraft_oil: {eps_r: 3.4, source: 'provisional: model knowledge (mineral-oil-impregnated kraft; a snippet of https://hrcak.srce.hr/file/292740, unopened, gives 3.24 at 0.87 g/cm^3 to 3.55 at 1.10 g/cm^3)'}
+compiled:
+  source: 'derived: varimu-components 0.1.0 from this version''s construction (the formulas: crates/varimu-components)'
+  core: {material: mumetall, area_m2: 0.00023552, path_m: 0.096, gap_m: 4.8e-06}
+  turns: 400.0
+  windings:
+    p1: {ratio: 1.0, r: 44.30846777214125, c: 5.7952805708827164e-12, leak: 0.007890875662323143}
+    p2: {ratio: 1.0, r: 44.30846777214125, c: 5.7952805708827164e-12, leak: 0.007890875662323143}
+    s: {ratio: 20.0, r: 4160.072807495484, c: 1.5135767962014793e-12, leak: 0.9980582435731489}
+  leak_couplings:
+  - between: [p1, p2]
+    k: -0.03395201448619261
+  - between: [p1, s]
+    k: 0.6086123100577406
+  - between: [p2, s]
+    k: 0.6086123100577402
+  interwinding: []
+  shields:
+    S: {s: 7.993676190847123e-11, p1: 6.152301662173022e-10, p2: 6.152301662173022e-10}
+report:
+  windings:
+    p1: {turns: 400.0, copper_m: 34.11150383789753, dcr_ohm: 44.30846777214125, magnetizing_h: 5.860412212883976, star_leak_h: 0.00815878678711908, self_c_f: 5.7952805708827164e-12}
+    p2: {turns: 400.0, copper_m: 34.11150383789753, dcr_ohm: 44.30846777214125, magnetizing_h: 5.860412212883976, star_leak_h: 0.008158786787119083, self_c_f: 5.7952805708827164e-12}
+    s: {turns: 8000.0, copper_m: 682.230076757951, dcr_ohm: 4160.072807495484, magnetizing_h: 2344.1648851535906, star_leak_h: -1.2695415166997022, self_c_f: 1.5135767962014793e-12}
+  short_circuit_h: {p1 (p2 shorted): 0.016317573574238162, p1 (s shorted): 0.004984932995369824, p2 (p1 shorted): 0.016317573574238162, p2 (s shorted): 0.004984932995369828, s (p1 shorted): 1.9939731981479294, s (p2 shorted): 1.9939731981479312}
+  core: {area_m2: 0.00023552, path_m: 0.096, gap_m: 4.8e-06, saturation_t: 0.7999751537455919}
+  window: {traverse_m: 0.021500000000000002, extent_m: 0.016060000000000005, window_width_m: 0.008, field_length_m: 0.008, copper_fill: 0.173114845182187}
+  flux:
+    windings: [p1, p2]
+    v_rms: 0.01
+    f_hz: 50.0
+    b_peak_t: 0.00023891716100466685
+  warnings: ['leakage: the star needs a negative branch (branches p1 8.1588 mH, p2 8.1588 mH, s -1269.5415 mH): compiled as coupled series leakages']

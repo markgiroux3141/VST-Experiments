@@ -37,6 +37,7 @@ import numpy as np
 from varimu.circuit.ir import (
     GROUND,
     Capacitor,
+    Coupling,
     Device,
     DeviceModel,
     Element,
@@ -50,6 +51,7 @@ from varimu.circuit.ir import (
     VoltageSource,
     Winding,
 )
+from varimu.devices import capsule as cap
 from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
@@ -164,7 +166,8 @@ def t_pad(name: str, a: str, b: str, common: str, z: float, atten_db: float) -> 
 @dataclass(frozen=True)
 class WindingSpec:
     """One winding: from its dotted end to the other, turns relative to the reference
-    winding, DC resistance, self-capacitance across its terminals (0 = none)."""
+    winding, DC resistance, self-capacitance across its terminals (0 = none), and its own
+    series leakage inductance (None: its share of the transformer's total)."""
 
     label: str
     dot: str
@@ -172,6 +175,7 @@ class WindingSpec:
     ratio: float = 1.0
     r_ohm: float = 0.0
     c_f: float = 0.0
+    leak_h: float | None = None
 
 
 @dataclass(frozen=True)
@@ -204,22 +208,29 @@ def transformer(
     core: CoreSpec,
     *,
     turns: float,
-    leakage_h: float,
+    leakage_h: float | None,
     interwinding: tuple[tuple[str, str], str] | None = None,
     c_interwinding_f: float = 0.0,
+    couplings: Sequence[tuple[str, str, float]] = (),
     cores: str = "ja",
 ) -> tuple[list[Element], MagneticCore]:
     """Transformer `name`: windings on one core (varimu.devices.core); the elements and
     its core model (in the IR's models only when `cores` is "ja").
 
-    Per winding: its DC resistance, its leakage inductance (half the transformer's
-    leakage `leakage_h`, which is referred to the reference winding of `turns` turns,
-    times ratio^2), the Winding on the core node <name>_core, and its
+    Per winding: its DC resistance, its leakage inductance (its own `leak_h` when it has
+    one, else half the transformer's leakage `leakage_h`, which is referred to the
+    reference winding of `turns` turns, times ratio^2: a designed transformer's windings
+    each carry their own, an asymmetric pair included), the Winding on the core node
+    <name>_core, and its
     self-capacitance across the terminals. A positive voltage from dot to other on
     one winding gives the same on the others. On the core node: the core (a
     MagneticCore, or its linear limit as a resistor when `cores` is "linear"), the
     joint gap (B g / mu0 of magnetomotive force) and classical eddy-current loss in
     the laminations (l_e sigma d^2 / 12 dB/dt).
+    `couplings` (label_a, label_b, k): a Coupling K<NAME>_<a>_<b> between two windings'
+    leakage inductors (a designed transformer's leakage as coupled series inductances,
+    exact for any number of windings where a star of leak values would need a negative
+    branch: varimu-components' `leakage.rs`); both windings need a leakage.
     `interwinding` ((end_a, end_b), other): `c_interwinding_f` split in half from both
     ends of a balanced winding to a terminal of the other side, as the 670
     replacements' balanced two-chamber construction has it (common mode only; one
@@ -236,13 +247,27 @@ def transformer(
         if w.r_ohm > 0:
             els.append(resistor(f"R{n}", top, f"{n}_r", w.r_ohm))
             top = f"{n}_r"
-        leak = 0.5 * leakage_h * w.ratio * w.ratio
+        if w.leak_h is not None:
+            leak = w.leak_h
+        elif leakage_h is not None:
+            leak = 0.5 * leakage_h * w.ratio * w.ratio
+        else:
+            raise ValueError(
+                f"{name}: winding {w.label} has no leakage (leak, or the leakage_h total)"
+            )
         if leak > 0:
             els.append(Inductor(f"L{n}_lk", top, f"{n}_l", leak))
             top = f"{n}_l"
         els.append(Winding(f"L{n}", top, w.other, u, w.ratio * turns, core.area_m2))
         if w.c_f > 0:
             els.append(Capacitor(f"C{n}", w.dot, w.other, w.c_f))
+    leaks = {e.name for e in els if isinstance(e, Inductor)}
+    for a, b, k in couplings:
+        la, lb = f"L{upper}_{a}_lk", f"L{upper}_{b}_lk"
+        for lbl, ind in ((a, la), (b, lb)):
+            if ind not in leaks:
+                raise ValueError(f"{name}: leak_couplings: winding {lbl} has no leakage inductor")
+        els.append(Coupling(f"K{upper}_{a}_{b}", la, lb, k))
     if interwinding and c_interwinding_f > 0:
         (end_a, end_b), other = interwinding
         half = 0.5 * c_interwinding_f
@@ -433,6 +458,94 @@ def speaker(
     """Speaker `name` between plus and minus, its sound pressure on `out`."""
     els, radiating = speaker_driver(name, plus, minus, s)
     return els + speaker_readout(name, minus, out, s, radiating, cabinet, distance_m)
+
+
+def capsule(
+    name: str, front: str, backplate: str, out: str, c: cap.Capsule, polarization_v: float
+) -> list[Element]:
+    """Condenser capsule `name` (varimu.devices.capsule): its front pressure on `front`
+    (pascals as volts, to ground: the ambient), the backplate electrode `backplate`, the
+    other electrode `out`. Elements: L<NAME>_m (the diaphragm's and radiation mass) from
+    front to <name>_1, C<NAME>_d (its compliance at the polarization) to the gap
+    <name>_g, C<NAME>_g, R<NAME>_h and L<NAME>_h (squeeze film and holes) to the cavity
+    <name>_c, C<NAME>_c, R<NAME>_v (the vent) back to front; the electrical port:
+    G<NAME>_x into R<NAME>_x (the open-circuit voltage on <name>_e re the backplate),
+    C<NAME>_0 from there to out, C<NAME>_s (stray) from out to the backplate."""
+    n, upper = name.lower(), name.upper()
+    cd = c.c_diaphragm_at(polarization_v)
+    k = c.volts_per_volume(polarization_v) * cd  # volts per volt across C_d
+    one, gap, holes, cav, e = f"{n}_1", f"{n}_g", f"{n}_h", f"{n}_c", f"{n}_e"
+    els: list[Element] = [
+        Inductor(f"L{upper}_m", front, one, c.m_front),
+        Capacitor(f"C{upper}_d", one, gap, cd),
+        Capacitor(f"C{upper}_g", gap, GROUND, c.c_gap),
+        Resistor(f"R{upper}_h", gap, holes, c.r_holes),
+        Inductor(f"L{upper}_h", holes, cav, c.m_holes),
+        Capacitor(f"C{upper}_c", cav, GROUND, c.c_cavity),
+        Resistor(f"R{upper}_v", cav, front, c.r_vent),
+        Vccs(f"G{upper}_x", backplate, e, one, gap, k / cap.READOUT_OHM),
+        Resistor(f"R{upper}_x", e, backplate, cap.READOUT_OHM),
+        Capacitor(f"C{upper}_0", e, out, c.c0_f),
+    ]
+    if c.c_stray_f > 0:
+        els.append(Capacitor(f"C{upper}_s", out, backplate, c.c_stray_f))
+    return els
+
+
+def capsule_dual(
+    name: str,
+    front: str,
+    rear: str,
+    backplate: str,
+    out_front: str,
+    out_rear: str,
+    c: cap.DualCapsule,
+    polarization_front_v: float,
+    polarization_rear_v: float,
+) -> list[Element]:
+    """Dual-diaphragm capsule `name` (varimu.devices.capsule, DualCapsule): the outside
+    pressures on `front` and `rear` (pascals as volts), the backplate electrode, each
+    diaphragm's electrode out_front / out_rear. Per side s (f, r): L<NAME>_m<s> from its
+    pressure to <name>_<s>1, C<NAME>_d<s> (at its polarization) to the gap <name>_<s>g,
+    C<NAME>_g<s>, R<NAME>_f<s> (squeeze film) to <name>_<s>h, R<NAME>_b<s> into the blind
+    holes <name>_<s>b with C<NAME>_b<s>; the through-holes R<NAME>_t, L<NAME>_t from fh via
+    <name>_t to rh, R<NAME>_l (the leak) from <name>_t to ground; each side's readout as
+    the pressure capsule's (G<NAME>_x<s>, R<NAME>_x<s>, C<NAME>_0<s>, C<NAME>_s<s>); an
+    unpolarized side (0 V) has no source: C<NAME>_0<s> from the backplate to its electrode."""
+    n, upper = name.lower(), name.upper()
+    els: list[Element] = []
+    for s, outside, out, e0 in (
+        ("f", front, out_front, polarization_front_v),
+        ("r", rear, out_rear, polarization_rear_v),
+    ):
+        cd = c.c_diaphragm_at(e0)
+        k = c.volts_per_volume(e0) * cd
+        one, gap, holes, blind, e = (f"{n}_{s}{x}" for x in ("1", "g", "h", "b", "e"))
+        els += [
+            Inductor(f"L{upper}_m{s}", outside, one, c.m_diaphragm),
+            Capacitor(f"C{upper}_d{s}", one, gap, cd),
+            Capacitor(f"C{upper}_g{s}", gap, GROUND, c.c_gap),
+            Resistor(f"R{upper}_f{s}", gap, holes, c.r_film),
+            Resistor(f"R{upper}_b{s}", holes, blind, c.r_blind),
+            Capacitor(f"C{upper}_b{s}", blind, GROUND, c.c_blind),
+        ]
+        if e0 == 0.0:  # unpolarized: no source, C0 straight from the backplate
+            els.append(Capacitor(f"C{upper}_0{s}", backplate, out, c.c0_f))
+        else:
+            els += [
+                Vccs(f"G{upper}_x{s}", backplate, e, one, gap, k / cap.READOUT_OHM),
+                Resistor(f"R{upper}_x{s}", e, backplate, cap.READOUT_OHM),
+                Capacitor(f"C{upper}_0{s}", e, out, c.c0_f),
+            ]
+        if c.c_stray_f > 0:
+            els.append(Capacitor(f"C{upper}_s{s}", out, backplate, c.c_stray_f))
+    through = f"{n}_t"
+    els += [
+        Resistor(f"R{upper}_t", f"{n}_fh", through, c.r_through),
+        Inductor(f"L{upper}_t", through, f"{n}_rh", c.m_through),
+        Resistor(f"R{upper}_l", through, GROUND, c.r_leak),
+    ]
+    return els
 
 
 # --- Device instances -----------------------------------------------------------------------

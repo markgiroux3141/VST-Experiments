@@ -13,9 +13,10 @@ use std::sync::Mutex;
 
 use circuitsim::ir::{
     DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Lamp, Pentode, PlateModel,
-    Thyratron, Triode, VacuumDiode, VariMuTriode,
+    ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
 };
 
+use crate::capsule::{self, Capsule, DualCapsule};
 use crate::plate::{self, PlateComponent};
 use crate::speaker::{self, Speaker};
 use crate::tape::{self, TapeComponent};
@@ -39,6 +40,8 @@ pub struct Library {
     config_dir: PathBuf,
     devices: Mutex<HashMap<String, DeviceModel>>,
     speakers: Mutex<HashMap<String, Speaker>>,
+    capsules: Mutex<HashMap<String, Capsule>>,
+    dual_capsules: Mutex<HashMap<String, DualCapsule>>,
     plates: Mutex<HashMap<String, PlateComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
@@ -50,6 +53,8 @@ impl Library {
             config_dir: config_dir.into(),
             devices: Mutex::new(HashMap::new()),
             speakers: Mutex::new(HashMap::new()),
+            capsules: Mutex::new(HashMap::new()),
+            dual_capsules: Mutex::new(HashMap::new()),
             plates: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
@@ -80,6 +85,35 @@ impl Library {
         Ok(model)
     }
 
+    /// Capsule component `name` (`NAME@N`, or `NAME` for its latest version), checked
+    /// against versions.lock (`load_capsule` in library.py).
+    pub fn capsule(&self, name: &str) -> Result<Capsule, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(c) = self.capsules.lock().unwrap().get(&key) {
+            return Ok(c.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let c = capsule::from_data(&yaml::parse(&text, name)?, name)?;
+        self.capsules.lock().unwrap().insert(key, c.clone());
+        Ok(c)
+    }
+
+    /// Dual-diaphragm capsule component `name` (`load_dual_capsule` in library.py).
+    pub fn dual_capsule(&self, name: &str) -> Result<DualCapsule, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(c) = self.dual_capsules.lock().unwrap().get(&key) {
+            return Ok(c.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let c = capsule::dual_from_data(&yaml::parse(&text, name)?, name)?;
+        self.dual_capsules.lock().unwrap().insert(key, c.clone());
+        Ok(c)
+    }
+
     /// Speaker component `name` (`NAME@N`, or `NAME` for its latest version), checked
     /// against versions.lock (`load_speaker` in library.py).
     pub fn speaker(&self, name: &str) -> Result<Speaker, Error> {
@@ -93,6 +127,15 @@ impl Library {
         let s = speaker::from_data(&yaml::parse(&text, name)?, name)?;
         self.speakers.lock().unwrap().insert(key, s.clone());
         Ok(s)
+    }
+
+    /// Component `name`'s file as data (`NAME@N`, or `NAME` for its latest version),
+    /// checked against versions.lock (`component_data` in library.py).
+    pub fn component_data(&self, name: &str) -> Result<Value, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let (_, text) = versions::read_text(&root, &r)?;
+        yaml::parse(&text, name)
     }
 
     /// Plate component `name` (`NAME@N`, or `NAME` for its latest version), checked
@@ -149,6 +192,16 @@ fn sub<'a>(m: &'a Map, key: &str, what: &str) -> Result<&'a Map, Error> {
     m.get(key)
         .and_then(Value::as_map)
         .ok_or_else(|| Error(format!("{what}: needs `{key}`")))
+}
+
+/// A pentode model's screen law (`varimu/devices/pentode.py`'s `screen`): absent or null,
+/// Koren's.
+fn screen_law(m: &Map, what: &str) -> Result<Option<ScreenLaw>, Error> {
+    match m.get("screen") {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) if v.as_str() == Some("e1") => Ok(Some(ScreenLaw::E1)),
+        Some(v) => Err(Error(format!("{what}: unknown screen law {v}"))),
+    }
 }
 
 fn grid(d: &Map, what: &str) -> Result<Option<GridCurrent>, Error> {
@@ -237,6 +290,7 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                     kg2: num(p, "kg2", what)?,
                     kp: num(p, "kp", what)?,
                     kvb: num(p, "kvb", what)?,
+                    screen: screen_law(p, what)?,
                 },
                 grid: grid(d, what)?,
                 c_g1k: num(c, "g1k", what)?,

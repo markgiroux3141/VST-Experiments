@@ -349,6 +349,51 @@ def test_transformer_part_matches_the_library(tmp_path):
     assert builder.transformer_core(spec, "T1", resolve(spec)) == core
 
 
+def test_transformer_leakage_per_winding(tmp_path):
+    """A winding's own `leak` (COMPONENT_EDITOR_PLAN.md C2: a designed transformer's
+    windings each carry theirs, the 5E3 OT's halves 40.5 / 19.3 mH) replaces its share of
+    the total; with every winding's, the total may be left out; with neither, refused."""
+    body = """
+      n: {value: 100.0, source: "test"}
+      area: {value: 1.0e-4, source: "test"}
+      path: {value: 0.07, source: "test"}
+      gap: {value: 1.0e-5, source: "test"}
+      la: {value: 40.0e-3, source: "test"}
+      lb: {value: 19.0e-3, source: "test"}
+      mat: {value: mumetall, source: "test"}
+    sections:
+      - title: t
+        parts:
+          R1: {R: [in, p], r: r_ohm}
+          T1:
+            transformer:
+              a: {nodes: [p, ct], leak: la}
+              b: {nodes: [ct, q], leak: lb}
+              s: {nodes: [o, "0"], ratio: 0.1, leak: lb}
+            core: {material: mat, area_m2: area, path_m: path, gap_m: gap}
+            turns: n
+    """
+    spec = _spec(tmp_path, body)
+    leaks = {
+        e.name: e.l_h
+        for e in builder.build_ir(spec, resolve(spec)).elements()
+        if e.name.endswith("_lk")
+    }
+    assert leaks == {"LT1_a_lk": 40e-3, "LT1_b_lk": 19e-3, "LT1_s_lk": 19e-3}
+    mixed = body.replace(
+        's: {nodes: [o, "0"], ratio: 0.1, leak: lb}', 's: {nodes: [o, "0"], ratio: 0.1}'
+    )
+    with pytest.raises(ConfigError, match="every winding's `leak`, or the total"):
+        _build(tmp_path, mixed)
+    spec = _spec(tmp_path, mixed.replace("turns: n", "turns: n\n            leakage_h: la"))
+    leaks = {
+        e.name: e.l_h
+        for e in builder.build_ir(spec, resolve(spec)).elements()
+        if e.name.endswith("_lk")
+    }
+    assert leaks["LT1_a_lk"] == 40e-3 and leaks["LT1_s_lk"] == pytest.approx(0.5 * 40e-3 * 0.01)
+
+
 def test_tapers_rheostats_and_turns():
     assert parts.taper(0.3) == 0.3  # linear
     assert parts.taper(0.5, 0.1) == pytest.approx(0.1)  # audio: 10% at half rotation

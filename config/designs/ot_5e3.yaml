@@ -1,0 +1,47 @@
+# The Fender 5E3's output transformer by its construction, fitted to the measured
+# figures of Amplified Parts' reproduction P-TGO-002 (data/schematics/fender_5e3/).
+# Written by scripts/fit_ot_5e3.py (its docstring lists what the figures imply about
+# the construction); compiled and saved by `cargo run -p varimu-components -- save
+# config/designs/ot_5e3.yaml`.
+name: OT_5E3
+kind: transformer
+source: "Fender 5E3 output transformer (original Triad 50246; 8 k CT : 8 ohm): the construction isn't published (frames only), so it is fitted to the reproduction's DC resistances, inductance and leakage, web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf"
+core:
+  lamination: {value: EI-87, source: "derived: the 2-3/4 x 2-1/4 in frames of reproductions (data/schematics/fender_5e3/README.md; P-TGO-002 draws 2.285 in across the frame) hold the EI-87 lamination (2.625 x 2.187 in); bounds EI-75 to EI-100"}
+  material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml, as the 5E3 circuit used it before; the era's non-oriented M-19 is an option)"}
+  stack_m: {value: 0.0254, source: "web: Tube Amp Doctor quotes a 1 in stack (data/schematics/fender_5e3/README.md)"}
+  stacking_factor: {value: 0.9, source: "web: McLyman, Transformer and Inductor Design Handbook 3rd ed. Table 3-1 (14 mil laminations interleaved 1x1: 0.90), https://coefs.charlotte.edu/mnoras/files/2013/03/Transformer-and-Inductor-Design-Handbook_Chapter_3.pdf"}
+  stacking: {value: interleaved, source: "provisional: model knowledge (push-pull output transformers, ungapped: E and I interleaved)"}
+  joint_gap_m: {value: 9.3076e-05, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): 3.67 H per half (1 kHz, 1 V) in the material model; also stands in for the low-field permeability of the era's steel"}
+bobbin:
+  wall_m: {value: 0.001, source: "provisional: model knowledge (a paper or fibre tube, ~1 mm)"}
+  cheek_m: {value: 0.0008, source: "provisional: model knowledge (fibre flanges, ~0.8 mm)"}
+  margin_m: {value: 0.0015, source: "provisional: model knowledge (creepage margin each end, ~1.5 mm)"}
+  pitch_factor: {value: 1.1765, source: "web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)"}
+arrangement: {value: layer, source: "provisional: model knowledge (layer-wound primary halves and secondary, no interleaving: what the measured asymmetries imply, scripts/fit_ot_5e3.py)"}
+windings: [pa, pb, s]
+sections:
+  - winding: pa
+    turns: {value: 1041, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the inner half's resistance"}
+    layers: {value: 7, source: "derived: turns / turns per layer (the traverse over the wire at the pitch factor)"}
+    wire: {value: 0.13 mm grade 1, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the wire table searched (one size in both halves fits best)"}
+    enamel: {value: enamel, source: "provisional: model knowledge (heavy-build enamelled magnet wire)"}
+    interlayer: {thickness_m: {value: 1.3000e-04, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the outer half's resistance and the leakages (bounds 0.025-0.13 mm, 0.001-0.005 in kraft)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft interlayer paper)"}}
+  - insulation: {thickness_m: {value: 2.0000e-03, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): between the primary halves (bounds 0.05-2.0 mm)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft wraps between windings)"}}
+  - winding: pb
+    turns: {value: 1041, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the inner half's resistance"}
+    layers: {value: 7, source: "derived: turns / turns per layer (the traverse over the wire at the pitch factor)"}
+    wire: {value: 0.13 mm grade 1, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the wire table searched (one size in both halves fits best)"}
+    enamel: {value: enamel, source: "provisional: model knowledge (heavy-build enamelled magnet wire)"}
+    interlayer: {thickness_m: {value: 1.3000e-04, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the outer half's resistance and the leakages (bounds 0.025-0.13 mm, 0.001-0.005 in kraft)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft interlayer paper)"}}
+  - insulation: {thickness_m: {value: 1.7373e-03, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): between the primary and the secondary (bounds 0.05-2.0 mm)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft wraps between windings)"}}
+  - winding: s
+    turns: {value: 66, source: "derived: 8000 ohm CT : 8 ohm, secondary turns 2 / sqrt(8000 / 8) of a half"}
+    layers: {value: 2, source: "derived: turns / turns per layer (the traverse over the wire at the pitch factor)"}
+    wire: {value: AWG 22 heavy, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the secondary resistance, nearest size"}
+    enamel: {value: enamel, source: "provisional: model knowledge (heavy-build enamelled magnet wire)"}
+leakage_method: field
+rating:
+  windings: [pa, pb]
+  v_rms: {value: 346.41, source: "derived: 15 W into 8000 ohm (P-TGO-002), sqrt(P Z)"}
+  f_hz: {value: 70.0, source: "provisional: model knowledge (a guitar amp OT rated near its lowest note, ~70-80 Hz)"}

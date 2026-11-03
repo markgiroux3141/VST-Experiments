@@ -864,7 +864,11 @@ def _validate_model(m: DeviceModel) -> None:
         for what in ("c_gk", "c_gp", "c_pk"):
             nonneg(what, getattr(m, what))
     elif isinstance(m, Pentode):
-        values += [(f.name, getattr(m.model, f.name)) for f in dataclasses.fields(m.model)]
+        values += [
+            (f.name, getattr(m.model, f.name))
+            for f in dataclasses.fields(m.model)
+            if f.name != "screen"
+        ]
         if m.grid is not None:
             values += [("grid.perveance", m.grid.perveance), ("grid.smooth_v", m.grid.smooth_v)]
             _finite(f"{m.name}.grid.contact_v", m.grid.contact_v)
@@ -962,6 +966,7 @@ _OMITTED_WHEN_NONE = {
     (Section, "decimate"),
     (Section, "owns"),
     (TapeMedium, "bias_substeps"),
+    (KorenPentode, "screen"),
 }
 _PROBE_KINDS = {"voltage": VoltageProbe}
 _KIND_OF = {

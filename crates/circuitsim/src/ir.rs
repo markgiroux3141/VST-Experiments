@@ -535,6 +535,17 @@ pub struct KorenPentode {
     pub kg2: f64,
     pub kp: f64,
     pub kvb: f64,
+    /// The screen law: absent, Koren's; `"e1"`, the plate's E1 (`varimu/devices/pentode.py`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen: Option<ScreenLaw>,
+}
+
+/// A pentode's screen-current law other than Koren's `(Vg1 + Vg2 / mu)^1.5 / Kg2`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ScreenLaw {
+    /// `E1^Ex / Kg2`, E1 the plate law's.
+    #[serde(rename = "e1")]
+    E1,
 }
 
 /// Shockley diode with series resistance (SPICE `D`): pins (anode, cathode).

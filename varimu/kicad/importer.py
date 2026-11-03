@@ -353,9 +353,10 @@ class _Importer:
                 continue
             f = dict(f)
             entry: dict[str, Any] = {"transformer": None}
-            entry["core"] = {k: f.pop(k) for k in ("material", "area_m2", "path_m", "gap_m")
-                             if k in f}  # fmt: skip
-            for k in ("turns", "leakage_h"):
+            core = {k: f.pop(k) for k in ("material", "area_m2", "path_m", "gap_m") if k in f}
+            if core or "component" not in f:
+                entry["core"] = core
+            for k in ("turns", "leakage_h", "component"):
                 if k in f:
                     entry[k] = f.pop(k)
             terminals = {}

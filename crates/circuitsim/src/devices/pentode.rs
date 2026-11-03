@@ -3,7 +3,8 @@
 //! ```text
 //! E1  = (Vg2 / Kp) * softplus(Kp * (1/mu + Vg1 / Vg2)),   Vg2 floored at 1 mV
 //! Ip  = (2 / Kg1) * max(E1, 0)^Ex * atan(Vp / Kvb)
-//! Ig2 = max(Vg1 + Vg2 / mu, 0)^1.5 / Kg2
+//! Ig2 = max(Vg1 + Vg2 / mu, 0)^1.5 / Kg2      (Koren's screen law)
+//! Ig2 = max(E1, 0)^Ex / Kg2                  (`ScreenLaw::E1`)
 //! ```
 //!
 //! The control grid conducts with the triode's grid-current law
@@ -27,6 +28,7 @@ pub struct Pentode {
     kg2: f64,
     kp: f64,
     kvb: f64,
+    screen: Option<ir::ScreenLaw>,
     grid: Option<ir::GridCurrent>,
 }
 
@@ -41,6 +43,7 @@ impl Pentode {
             kg2: k.kg2,
             kp: k.kp,
             kvb: k.kvb,
+            screen: k.screen,
             grid: m.grid.clone(),
         }
     }
@@ -65,27 +68,45 @@ impl Device for Pentode {
         let sp = softplus(a);
         let e1 = g2 / self.kp * sp;
         let atan = (vp / self.kvb).atan();
+        // dE1 / dVg2 and dE1 / dVg1.
+        let sg = sigmoid(a);
+        let (de1_dg2, de1_dg1) = (dg2 * (sp / self.kp - sg * vg1 / g2), sg);
+        let e1x = if e1 > 0.0 { e1.powf(self.ex) } else { 0.0 };
         if e1 > 0.0 {
-            let p = self.scale * e1.powf(self.ex);
+            let p = self.scale * e1x;
             let dp_de1 = self.ex * p / e1;
-            let sg = sigmoid(a);
             i[0] = p * atan;
             g[0] = p / self.kvb / (1.0 + (vp / self.kvb).powi(2));
-            g[1] = dp_de1 * atan * dg2 * (sp / self.kp - sg * vg1 / g2);
-            g[2] = dp_de1 * atan * sg;
+            g[1] = dp_de1 * atan * de1_dg2;
+            g[2] = dp_de1 * atan * de1_dg1;
         } else {
             i[0] = 0.0;
         }
 
         // Screen.
-        let x = vg1 + vg2 / self.mu;
-        if x > 0.0 {
-            i[1] = x.powf(1.5) / self.kg2;
-            let d = 1.5 * x.sqrt() / self.kg2;
-            g[3 + 1] = d / self.mu;
-            g[3 + 2] = d;
-        } else {
-            i[1] = 0.0;
+        match self.screen {
+            None => {
+                let x = vg1 + vg2 / self.mu;
+                if x > 0.0 {
+                    i[1] = x.powf(1.5) / self.kg2;
+                    let d = 1.5 * x.sqrt() / self.kg2;
+                    g[3 + 1] = d / self.mu;
+                    g[3 + 2] = d;
+                } else {
+                    i[1] = 0.0;
+                }
+            }
+            Some(ir::ScreenLaw::E1) => {
+                if e1 > 0.0 {
+                    let s = e1x / self.kg2;
+                    let ds_de1 = self.ex * s / e1;
+                    i[1] = s;
+                    g[3 + 1] = ds_de1 * de1_dg2;
+                    g[3 + 2] = ds_de1 * de1_dg1;
+                } else {
+                    i[1] = 0.0;
+                }
+            }
         }
 
         // Control grid.

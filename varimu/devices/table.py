@@ -68,6 +68,9 @@ GRIDS = {
     "12AY7": TableGrid(_ranges((-60.0, -10.0, 0.5), (-10.0, 5.0, 0.02)), _VP_SMALL),
     # The Ampex 351's record driver (idles near Vg -1.3 V, Vp 140 V; cutoff near -12 V).
     "6201": TableGrid(_ranges((-60.0, -15.0, 0.5), (-15.0, 5.0, 0.02)), _VP_SMALL),
+    # The Neumann U47's VF14M, triode-connected (idles near Vg -1.1 V, Vp 34 V; cutoff near
+    # -4 V at 100 V).
+    "VF14T": TableGrid(_ranges((-40.0, -8.0, 0.5), (-8.0, 5.0, 0.02)), _VP_SMALL),
     # The regulator's pass tube (idles near Vg -5 V, Vp 195 V; Vp to 700 V for start-up).
     "EL34T": TableGrid(
         _ranges((-100.0, -20.0, 1.0), (-20.0, 5.0, 0.05)),

@@ -16,6 +16,9 @@ checks of varimu.measure.generic and the circuit's own).
 - ampex_351 (tape machine, TM5): varimu.measure.tape_suite: aligned by the manual's
   procedure (varimu.measure.tape_align), then the specs: idle voltages, response at
   -10 dB, THD against level (the 1% and 3% levels), S/N with the circuit's noise.
+- telefunken_v76 (microphone preamp, B10): varimu.measure.preamp_suite: the Braunbuch's
+  acceptance specs: gain at every position, response per filter, k2 / k3, THD against
+  level, output impedance.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from typing import Any
 @dataclass(frozen=True)
 class Profile:
     circuit: str
-    kind: str  # "compressor" | "equalizer" | "guitar_amp" | "tape_machine"
+    kind: str  # "compressor" | "equalizer" | "guitar_amp" | "tape_machine" | "mic_preamp"
     run: Callable[..., dict[str, Any]]
 
 
@@ -50,6 +53,12 @@ def _run_amp(*args, **kwargs):
     return amp_suite.run(*args, **kwargs)
 
 
+def _run_preamp(*args, **kwargs):
+    from varimu.measure import preamp_suite
+
+    return preamp_suite.run(*args, **kwargs)
+
+
 def _run_tape(*args, **kwargs):
     from varimu.measure import tape_suite
 
@@ -61,6 +70,7 @@ PROFILES = {
     "pultec_eqp1a": Profile("pultec_eqp1a", "equalizer", _run_eq),
     "fender_5e3": Profile("fender_5e3", "guitar_amp", _run_amp),
     "ampex_351": Profile("ampex_351", "tape_machine", _run_tape),
+    "telefunken_v76": Profile("telefunken_v76", "mic_preamp", _run_preamp),
 }
 
 

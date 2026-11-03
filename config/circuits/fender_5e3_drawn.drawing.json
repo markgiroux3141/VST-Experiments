@@ -103,60 +103,9 @@
     "source": "provisional: model knowledge (the drawing prints no tapers; Fender's volume and tone pots of the era are commonly given as audio taper, ~10% of the track at half rotation)",
     "notes": "all three pots"
    },
-   "ot_r_half_a_ohm": {
-    "value": 147.2,
-    "source": "web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf (primary DCR per half 147.2 / 195.3 ohm)"
-   },
-   "ot_r_half_b_ohm": {
-    "value": 195.3,
-    "source": "web: same sheet (the other half)"
-   },
-   "ot_r_sec_ohm": {
-    "value": 0.493,
-    "source": "web: same sheet (secondary DCR)"
-   },
-   "ot_sec_per_half": {
-    "value": 0.06325,
-    "genome": "fender_5e3.ot.sec_ratio",
-    "source": "derived: 8 k CT : 8 ohm (same sheet; the original's nominal), secondary turns per primary half 2 / sqrt(8000 / 8)",
-    "notes": "the sheet's inductances (3.67 H per half, 16.7 mH secondary, both at 1 V) give 0.0675: the secondary's 1 V is a much higher flux"
-   },
-   "ot_core_material": {
-    "value": "grain_oriented_si_steel",
-    "genome": "fender_5e3.ot.core_material",
-    "source": "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml)"
-   },
-   "ot_core_area_m2": {
-    "value": 0.0005,
-    "genome": "fender_5e3.ot.core_area_m2",
-    "source": "provisional: model knowledge (a ~7/8 in tongue in the 2-3/4 x 2-1/4 in frame of reproductions, 1 in stack (Tube Amp Doctor), 95% stacking; data/schematics/fender_5e3/README.md)"
-   },
-   "ot_core_path_m": {
-    "value": 0.12,
-    "genome": "fender_5e3.ot.core_path_m",
-    "source": "provisional: model knowledge (~5.6 x the tongue width for scrapless EI)"
-   },
-   "ot_turns_half": {
-    "value": 929,
-    "genome": "fender_5e3.ot.turns_half",
-    "source": "provisional: model knowledge (a design rule: 1.2 T at 15 W into 8 k at 70 Hz with the core's area; the reproduction is rated 15 W, same sheet)",
-    "notes": "each primary half (the reference winding)"
-   },
-   "ot_gap_m": {
-    "value": 0.000145,
-    "genome": "fender_5e3.ot.air_gap_m",
-    "source": "derived: gives 3.67 H per primary half in the core's linear limit with ot_turns_half (the reproduction's measured inductance at 1 kHz, 1 V, same sheet). An effective joint gap: it also stands in for the lower initial permeability of the era's non-oriented steel"
-   },
-   "ot_leakage_h": {
-    "value": 0.0299,
-    "genome": "fender_5e3.ot.leakage_h",
-    "source": "derived: the mean of the reproduction's leakage per primary half, 40.47 / 19.31 mH (same sheet)",
-    "notes": "the format splits leakage evenly between the windings; the measured asymmetry isn't modeled"
-   },
-   "ot_c_half_f": {
-    "value": 3e-10,
-    "genome": "fender_5e3.ot.winding_capacitance_f",
-    "source": "provisional: model knowledge (self-capacitance of a push-pull primary half, 100-500 pF)"
+   "ot_model": {
+    "value": "OT_5E3@2",
+    "source": "config/components/ot_5e3/2.yaml (the 5E3 OT by construction, fitted to P-TGO-002: web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf)"
    },
    "speaker_model": {
     "value": "P12R@1",
@@ -1330,9 +1279,7 @@
    "symbol": "Winding",
    "value": "pa",
    "fields": {
-    "Transformer": "T1",
-    "r": "ot_r_half_a_ohm",
-    "c": "ot_c_half_f"
+    "Transformer": "T1"
    },
    "units": {
     "1": {
@@ -1345,9 +1292,7 @@
    "symbol": "Winding",
    "value": "pb",
    "fields": {
-    "Transformer": "T1",
-    "r": "ot_r_half_b_ohm",
-    "c": "ot_c_half_f"
+    "Transformer": "T1"
    },
    "units": {
     "1": {
@@ -1390,12 +1335,7 @@
    "symbol": "Core",
    "value": "core",
    "fields": {
-    "material": "ot_core_material",
-    "area_m2": "ot_core_area_m2",
-    "path_m": "ot_core_path_m",
-    "gap_m": "ot_gap_m",
-    "turns": "ot_turns_half",
-    "leakage_h": "ot_leakage_h"
+    "component": "ot_model"
    },
    "units": {
     "1": {
@@ -1408,9 +1348,7 @@
    "symbol": "Winding",
    "value": "s",
    "fields": {
-    "Transformer": "T1",
-    "ratio": "ot_sec_per_half",
-    "r": "ot_r_sec_ohm"
+    "Transformer": "T1"
    },
    "units": {
     "1": {

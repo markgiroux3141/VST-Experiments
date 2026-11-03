@@ -1,0 +1,11 @@
+[package]
+name = "varimu-components"
+version = "0.2.0"
+description = "The component compiler: transformers designed from their construction, compiled to the circuit macro's values and saved as component versions (docs/COMPONENT_EDITOR_PLAN.md, C2)"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+varimu-circuit = { path = "../varimu-circuit" }
+circuitsim = { path = "../circuitsim" }

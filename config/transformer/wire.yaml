@@ -1,0 +1,77 @@
+# Wire for the transformer designer (crates/varimu-components, tables.rs). Dimensions as
+# the sources print them; the compiler takes a wire's overall diameter as the table's
+# nominal (the middle of [min, max] where none is printed).
+
+copper:
+  resistivity_ohm_m: 1.7241e-8
+  temperature_c: 20.0
+  source: "web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (NBS Handbook 100, Copper Wire Tables, 1966: the International Annealed Copper Standard, conductivity 58 m/(ohm mm^2) at 20 C, 'volume resistivity of annealed copper at 20 C = 100/58 = 1.7241 microhm-cm', PDF p.16-17; temperature coefficient 0.00393 at 20 C, PDF p.10; IEC Publication 28, now IEC 60028)"
+
+awg:
+  bare_source: "web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (the American Wire Gage's law, PDF p.12: No. 0000 0.4600 in, No. 36 0.0050 in, ratio 92^(1/39); published as ASTM B 258)"
+  source: "web: https://mwswire.com/wp-content/uploads/2024/01/MWS-copper-magnet-wire-data.pdf (MWS Wire, Copper Magnet Wire Data, p.2: overall diameters 'derived from NEMA MW1000-2020', min / nom / max)"
+  unit: inch
+  overall:
+    18: {single: [.0412, .0418, .0424], heavy: [.0425, .0431, .0437]}
+    19: {single: [.0367, .0373, .0379], heavy: [.0380, .0386, .0391]}
+    20: {single: [.0329, .0335, .0340], heavy: [.0341, .0346, .0351]}
+    21: {single: [.0293, .0298, .0303], heavy: [.0304, .0310, .0315]}
+    22: {single: [.0261, .0266, .0270], heavy: [.0271, .0276, .0281]}
+    23: {single: [.0234, .0239, .0243], heavy: [.0244, .0249, .0253]}
+    24: {single: [.0209, .0213, .0217], heavy: [.0218, .0223, .0227]}
+    25: {single: [.0186, .0190, .0194], heavy: [.0195, .0199, .0203]}
+    26: {single: [.0166, .0170, .0173], heavy: [.0174, .0178, .0182]}
+    27: {single: [.0149, .0153, .0156], heavy: [.0157, .0161, .0165]}
+    28: {single: [.0133, .0137, .0140], heavy: [.0141, .0144, .0147]}
+    29: {single: [.0119, .0123, .0126], heavy: [.0127, .0130, .0133]}
+    30: {single: [.0106, .0109, .0112], heavy: [.0112, .0117, .0121]}
+    31: {single: [.0094, .0097, .0100], heavy: [.0100, .0104, .0108]}
+    32: {single: [.0085, .0088, .0090], heavy: [.0090, .0094, .0097]}
+    33: {single: [.0075, .0078, .0081], heavy: [.0080, .0084, .0087]}
+    34: {single: [.0067, .0070, .0072], heavy: [.0071, .0075, .0078]}
+    35: {single: [.0059, .0062, .0065], heavy: [.0064, .0067, .0070]}
+    36: {single: [.0053, .0056, .0058], heavy: [.0057, .0060, .0063]}
+    37: {single: [.0048, .0050, .0052], heavy: [.0051, .0055, .0057]}
+    38: {single: [.0042, .0045, .0047], heavy: [.0046, .0049, .0051]}
+    39: {single: [.0037, .0040, .0042], heavy: [.0040, .0043, .0045]}
+    40: {single: [.0033, .0035, .0037], heavy: [.0035, .0038, .0041]}
+    41: {single: [.0030, .0032, .0033], heavy: [.0032, .0035, .0037]}
+    42: {single: [.0026, .0028, .0030], heavy: [.0029, .0031, .0033]}
+    43: {single: [.0023, .0025, .0027], heavy: [.0025, .0027, .0029]}
+    44: {single: [.0021, .0023, .0024], heavy: [.0023, .0025, .0026]}
+
+metric:
+  source: "web: https://www.elektrisola.com/Attachments/TechnicalDataBySize/ELEKTRISOLA_EnCuWire_IECJIS_Datasheet_eng.pdf (Elektrisola, Technical data for enamelled copper wire based on IEC 60317, MW.IECJIS.eng/2015.2: overall diameter min-max per grade); agrees with IEC 60317-0-1:2008 Table 1 where they overlap (web: https://cdn.standards.iteh.ai/samples/15166/1f0b81c68a25491f89e03d966be8f9d7/IEC-60317-0-1-2008.pdf, PDF p.12)"
+  unit: mm
+  overall:
+    0.020: {grade1: [0.022, 0.024], grade2: [0.025, 0.027], grade3: [0.028, 0.030]}
+    0.025: {grade1: [0.028, 0.031], grade2: [0.032, 0.034], grade3: [0.035, 0.038]}
+    0.030: {grade1: [0.033, 0.037], grade2: [0.038, 0.041], grade3: [0.042, 0.046]}
+    0.040: {grade1: [0.044, 0.049], grade2: [0.050, 0.054], grade3: [0.055, 0.059]}
+    0.050: {grade1: [0.055, 0.060], grade2: [0.061, 0.066], grade3: [0.067, 0.072]}
+    0.056: {grade1: [0.062, 0.067], grade2: [0.068, 0.074], grade3: [0.075, 0.080]}
+    0.060: {grade1: [0.066, 0.072], grade2: [0.073, 0.079], grade3: [0.080, 0.085]}
+    0.063: {grade1: [0.069, 0.076], grade2: [0.077, 0.083], grade3: [0.084, 0.089]}
+    0.070: {grade1: [0.077, 0.083], grade2: [0.084, 0.090], grade3: [0.091, 0.096]}
+    0.071: {grade1: [0.078, 0.084], grade2: [0.085, 0.091], grade3: [0.092, 0.097]}
+    0.080: {grade1: [0.087, 0.094], grade2: [0.095, 0.101], grade3: [0.102, 0.108]}
+    0.090: {grade1: [0.098, 0.105], grade2: [0.106, 0.113], grade3: [0.114, 0.120]}
+    0.100: {grade1: [0.108, 0.117], grade2: [0.118, 0.125], grade3: [0.126, 0.132]}
+    0.112: {grade1: [0.121, 0.130], grade2: [0.131, 0.139], grade3: [0.140, 0.147]}
+    0.120: {grade1: [0.130, 0.138], grade2: [0.139, 0.148], grade3: [0.149, 0.157]}
+    0.125: {grade1: [0.135, 0.144], grade2: [0.145, 0.154], grade3: [0.155, 0.163]}
+    0.130: {grade1: [0.141, 0.150], grade2: [0.151, 0.160], grade3: [0.161, 0.169]}
+    0.140: {grade1: [0.151, 0.160], grade2: [0.161, 0.171], grade3: [0.172, 0.181]}
+    0.150: {grade1: [0.162, 0.171], grade2: [0.172, 0.182], grade3: [0.183, 0.193]}
+    0.160: {grade1: [0.172, 0.182], grade2: [0.183, 0.194], grade3: [0.195, 0.205]}
+    0.180: {grade1: [0.193, 0.204], grade2: [0.205, 0.217], grade3: [0.218, 0.229]}
+    0.200: {grade1: [0.214, 0.226], grade2: [0.227, 0.239], grade3: [0.240, 0.252]}
+    0.224: {grade1: [0.239, 0.252], grade2: [0.253, 0.266], grade3: [0.267, 0.280]}
+    0.250: {grade1: [0.267, 0.281], grade2: [0.282, 0.297], grade3: [0.298, 0.312]}
+    0.280: {grade2: [0.313, 0.329], grade3: [0.330, 0.345]}  # the sheet prints grade 1's minimum as 0.270 (below the bare wire): left out
+    0.300: {grade1: [0.319, 0.334], grade2: [0.335, 0.352], grade3: [0.353, 0.369]}
+    0.315: {grade1: [0.334, 0.349], grade2: [0.350, 0.367], grade3: [0.368, 0.384]}
+    0.355: {grade1: [0.375, 0.392], grade2: [0.393, 0.411], grade3: [0.412, 0.428]}
+    0.400: {grade1: [0.421, 0.439], grade2: [0.440, 0.459], grade3: [0.460, 0.478]}
+    0.450: {grade1: [0.472, 0.491], grade2: [0.492, 0.513], grade3: [0.514, 0.533]}
+    0.500: {grade1: [0.524, 0.544], grade2: [0.545, 0.566], grade3: [0.567, 0.587]}

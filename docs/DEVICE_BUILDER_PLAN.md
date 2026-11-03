@@ -1068,6 +1068,54 @@ clipping; equivalent input noise waits for B5's noise sources); the drawing; pla
 live input.
 *Done when:* as B9's, against the V76's published figures.
 
+*Status (2026-11-03; started ahead of C2, the user's call, as MIC_ROOM_PLAN.md's A1 for
+the U47 -> V76 chain). Steps 1-3 built:*
+- **Tubes:** `EF804S@1` (Telefunken's transfer and plate curves; its screen law fitted to
+  the sheet's tabulated screen currents, no screen curves being published) and `E83F@1`
+  (Philips' transfer, plate and screen curves); `varimu/devices/library.py`, digitized
+  sets in `data/datasheets/` (an EF806S set as a cross-check). Both use a new opt-in
+  **screen law "e1"** (`KorenPentode.screen`: Ig2 = E1^Ex / Kg2, the plate's soft E1):
+  Koren's (Vg1 + Vg2/mu)^1.5 cuts off hard and gave V1 no screen current at its printed
+  point (EF804S screen fit 77% rms -> 4.9%, E83F 36% -> 7.2%; plate fits unchanged; the
+  user's choice). Python, SPICE (B-source), circuitsim and varimu-circuit; absent = Koren's,
+  so every existing IR and render is unchanged (fixtures regenerate byte for byte).
+- **Rectifier:** `B450C80@1`, the selenium bridge as a component: 18 SELENIUM cells per
+  arm, 0.444 sq. in. (from the DIN code and Tarzian's ratings; provisional).
+- **Circuit:** `config/circuits/telefunken_v76.yaml`, every part by its S 1176 position:
+  the gain switch (pad and feedback ladder, 12 positions), the 3 kHz and bass-cut switches
+  (both versions, 80 / 120 Hz), the 15 kHz low-pass, T85 / T89 and the 400 / 250 H chokes
+  on JA cores (version 1: provisional constructions; T85 after the V72's BV 191; the
+  chokes' DC resistance derived from the printed voltages, consistent with their wire),
+  the selenium supply. 0 dBFS in = 0 dBu peak, out = +24 dBu peak into 300 ohm.
+  `tests/test_telefunken_v76.py`: pre-flight clean at all 384 switch combinations, the gain
+  switch's wiring, idle: supply within 3% of the printed rails, electrodes within 15% (V1's
+  and V3's high-impedance plates and screens as currents; as voltages V1's plate is -33%,
+  V3's -23%: both currents +8..10%, inside the sheet's +-19% spread). Not modeled: the RF
+  trap (undrawn), heaters and hum pot. The filters' two signal chokes are linear in
+  version 1.
+- **Profile (step 4):** `varimu/measure/preamp_suite.py` (`varimu unit --circuit
+  telefunken_v76 --name NAME`, ~80 s at 6 jobs): the Braunbuch's acceptance specs (sheets
+  5-8): gain at every position, response per filter (both versions) at 76 / 58 dB, k2 / k3
+  at 40 Hz / 1 / 5 kHz at the three printed conditions, THD vs level at 34 dB, output
+  impedance. The nominal unit (`reports/units/v76_nominal/`) meets 47 of 50: all twelve
+  gains within 0.3 dB on the drawing's R75 (gain = output re the generator's EMF: voltage
+  matching; re the input terminals the pad positions read 0.5-1.5 dB high), every bass-cut
+  and 3 kHz limit, Z out 11 ohm at 1 kHz (<= 30), 1% THD at +24.7 dB out. Calibrated to get
+  there (sources say so): T85's primary (135 turns per half, ~3 H, 77 ohm per half: the
+  40 Hz network's L; the V72's 26 H peaked +6 dB at 15 Hz), its secondary capacitance
+  (10 pF: 20 pF drooped 15 kHz), R54's trim (450 ohm, drawn 300), L84's self-capacitance
+  (25 pF: sheet 10's steep fall to -30 dB at ~33 kHz). **Missed:** a +1 dB bump around
+  90 Hz (spec +-0.5 from 60 Hz): with this network it follows from a ~3 H primary (a high
+  inductance flattens it but then peaks at 15 Hz), so the real BV 511 or something undrawn
+  differs; 40 Hz at +22 dB out: k2 0.33% (0.3) at 76 dB, k3 2.4% (1.5) at 34 dB (T85's
+  core at -12 dB in). Both are the version-1 transformers': C2's designer, or a source for
+  BV 511, is where they get fixed.
+- **Play (2026-11-03):** the app's `telefunken_v76` device (`panel::DEVICES`; panel GAIN,
+  BASS CUT, TREBLE CUT; draft-1x, the supply on its own thread): 0.26x real time on a vocal
+  take at 34 dB (`examples/load_profile.rs`, worst block 1.18x, none over budget in 42 s).
+  Not yet heard by the user.
+- **Next:** the drawing. The transformers' version 2 waits for C2.
+
 ## Devices and components together (2026-10-29, the user's call)
 
 B9-B10 and [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md) run interleaved, each

@@ -238,6 +238,117 @@ at a frequency (from the FDTD run) is a cheap aid for placing mics.
 9. **A9. Ranking chains:** the four poles, pairs ranked by the glimpse metric and the
    staircase.
 
+### Status (2026-11-03)
+
+Started by the user (U47 -> V76 first, alongside the gas-tube work in its worktree).
+- **A1 (the V76) in progress:** tubes, circuit and idle check built; the profile is next
+  (DEVICE_BUILDER_PLAN.md B10's status).
+- **A2 (the capsule machinery) built and checked on the B&K 4134:** capsules are components
+  (kind `capsule`, `varimu/devices/capsule.py`: the geometry sourced, the lumped network
+  derived at fit time so both builders read numbers), the `capsule` part ([front, backplate,
+  out]: pressures as volts, volume velocities as currents; the diaphragm's displacement
+  drives a Thevenin source behind C0; the electrostatic negative stiffness in the diaphragm's
+  compliance) and `capsule_dual` (two diaphragms, through and blind holes: the K47 family;
+  an unpolarized side has no source) in both builders, Johnson noise on the acoustic
+  resistances (the self-noise), an AC solver for linear IRs as the reference
+  (`varimu/measure/ac.py`), `scripts/capsule_study.py` -> `reports/mics/capsule_bk4134/`,
+  `tests/test_capsule.py`. `BK4134@1` from Zuckerwar's geometry
+  (`data/schematics/bk_4134/README.md`) with H&M's FEM film resistance (Skvor's uniform-array
+  formula gave 2.3x: over-damped, 21.8 dB(A)): render vs AC 0.018 dB below 20 kHz, rendered
+  noise vs AC prediction 0.5 dB, **self-noise 18.6 dB(A)** (B&K 18; theory 17.9-19.7),
+  sensitivity 9.53 mV/Pa (the published geometry's own bound 9.6; B&K's 12.5 is ~2.3 dB
+  above it, a known gap of that parameter set), the response peaks +3.3 dB at 15.6 kHz
+  (B&K ~+1: 1.3 dB outside its +-2 dB; the gap's air mass and the film's frequency
+  dependence aren't modelled).
+- **A3 in progress (2026-11-03):**
+  - **VF14:** `VF14T@1`, a Koren triode on Telefunken's triode-connected curves (Funkschau
+    1/1948, digitized; fitted up to 10 mA / 200 V, the U47's region: mu 27, 21% rms; the
+    exponent held at >= 1, below it Newton fails at cutoff).
+  - **The U47's electronics:** `config/circuits/neumann_u47.yaml` from the 1959 drawing: the
+    capsule (`capsule_dual`, pattern switch: omni polarizes the rear diaphragm, cardioid
+    holds it at the backplate), the VF14M with its heater as a resistor at its printed
+    point, the BV 8 (a reproduction's ratio, resistances and 91 H), the NG as a Thevenin
+    source (300 V open, 105 V at 40 mA). **Its idle needs the underheated cathode:** at the
+    rated heater the anode sits at 27 V; B6's cathode model at the heater's printed 35 V of
+    60 V gives 855 K and a -0.32 V space-charge shift (a DC source in series with the grid:
+    a circuit's `heaters` block is global, so a chain couldn't carry it), and the U47 idles
+    at 35.8 V / 0.542 mA against the printed 34 V / ~0.55 mA (`tests/test_u47.py`).
+    Amplifier gain grid to output (1 kOhm) +9.7 dB.
+  - **The chain:** `scripts/compose_chain.py` writes `config/circuits/u47_v76.yaml` (each
+    circuit's keys, parts and nodes suffixed, the mic's measuring load and the preamp's
+    generator dropped, a 1 nF cable); builds bit for bit in both builders, pre-flight clean;
+    ~5x slower than real time at production. `scripts/mic_print.py` prints a clip through a
+    chain as a plane wave from an angle (`varimu/mics/free_field.py`).
+  - **The K47 (K47@2, fitted; K47@1 was a placeholder):** Neumann's curves digitized
+    (`data/datasheets/neumann_u47_{response,polar}.csv`: Telefunken 1952's measured responses
+    re 1 kHz, the 1958 sheet's polars). A first fit bounded the diaphragm like a measurement
+    capsule's (300-5000 N/m) and found no cardioid (its internal air's compliance against a
+    stiff diaphragm adds an omni term that fills the null) and an omni notch near 15 kHz (no
+    diffraction). The theory (`data/schematics/neumann_u47/K47_THEORY.md`: Torio & Segota, AES
+    2000; von Braunmuhl & Weber's patent; Neumann's own) put it in another regime: a nearly
+    slack diaphragm (tens of N/m), the gradient resistance between the two sides
+    (`through_resistance_pa_s_m3`, Torio & Segota's R_a), adiabatic blind holes; and the
+    entries' diffraction: the capsule as a rigid sphere (the exact series, cap-averaged:
+    `varimu/mics/free_field.py`), whose 3a is the low-frequency path. `scripts/fit_k47.py`
+    fits tension, the two resistances, the blind holes' depth and count and the sphere's
+    radius into the grid's real load (R2 and the VF14's Miller capacitance, 71 pF: an 8 pF
+    guess left the circuit 4.4 dB under the fit); the makers' measured backplate (5.65 mm,
+    0.8 / 1.08 mm holes) fixed. Result (`reports/mics/k47_fit.png`, `k47_fit.json`): tension
+    23.6 N/m (25% electrostatic softening), R_a 4.7e7, 66 blind holes per side 4.5 mm deep,
+    sphere 11.2 mm (path 34 mm; Torio's 32). **The whole U47 against ds58** (`tests/test_u47.py`):
+    cardioid 25.4 mV/Pa at 1 kHz into 1 kOhm (25-28), omni 19.1 (14-17: ~1 dB over), front
+    to back 13.2 dB at 100 Hz and 15.1 at 1 kHz (the 1958 polars: 11.7, 16.2); on axis the
+    cardioid within 1.2 dB rms of Telefunken's curve (its presence peak at ~14 kHz, the
+    data's at ~9: 3 dB at worst). **Misses:** the omni's on-axis dip near 6.5 kHz (-9 dB where
+    the data has -1: a sphere for a disk-shaped capsule; the theory's next stage, the real
+    body's low-frequency path and a BEM of capsule and basket, is where it goes), the
+    presence peak's frequency. Free field, plane wave: the polars' measuring distance (and
+    proximity) not yet.
+  - **The first listen, printed (2026-11-04; heard 2026-11-04: "it all sounds good", the
+    differences subtle, the rear print the most noticeable; the user moved on):** `scripts/mic_print.py`
+    through `u47_v76` at production (~5.5x slower than real time): the 5E3's guitar take (its
+    speaker's sound pressure) at 100 dB SPL, a dry vocal and the tube synth's brass at 94 dB,
+    on axis at two V76 gains each (the higher drives the V76 to its +25 dBu clip on peaks), the
+    vocal from behind (15 dB down: the cardioid); `reports/mics/prints.json` lists them,
+    `reports/mics/audio/matched/` has each at -18 LUFS with the dry sources (audio git-ignored).
+  - **The capsule's real body, K47@3 (2026-11-04; the U47 and `u47_v76` pin it since, the
+    user's call):** `varimu/mics/bor.py`, a BEM of the capsule as a rigid body of revolution.
+    Only the azimuthal order 0 is solved: the diaphragm's axisymmetric mode shape picks out that
+    order at any incidence, so one 1-D integral equation gives the entries exactly (static kernel
+    in elliptic integrals with Gauss-identity singularity subtraction, CHIEF rows against the
+    interior resonances). CPU, ~0.2 s per frequency (~90 panels): the GPU isn't needed here. It
+    is checked against the sphere's series within 0.002 dB (plane wave, and a point source at 5 /
+    30 cm: `free_field.sphere_point_factors`, Duda & Martens), against Lamb's thin disk within
+    ~1% (16a / 5 pi), front / back symmetric (`tests/test_bor.py`); the capsule's mesh converged
+    within 0.02 dB in band. The body (`published_points.yaml` "K47" `body`): 29.8 mm behind the
+    rings and a 33 mm middle rim (makers / forums), the rim's 1.5 mm, the spacing and the
+    rings' height a grid (`fit_k47.py --spacing-mm --proud-mm`: 5.75 / 7 mm x 0 / 0.5 mm all fit
+    within 1.10-1.15 dB weighted, so the curves don't pin them; 5.75 mm and 0.5 mm kept). On the
+    body the front face builds up +8 dB near 7 kHz (Bore & Peus: up to 10), the low-frequency
+    path is 26 mm (the sphere's 33). The network refitted on it (`reports/mics/k47_fit.*`):
+    omni on axis 0.64 dB rms / 2.4 max (K47@2: 2.40 / 8.9, the 6.5 kHz dip gone), cardioid
+    0.67 / 1.95 (1.16 / 3.1), the presence peak at ~11 kHz (the data's ~10; K47@2 ~14); tension
+    32 N/m, R_a 2.1e7, the blind holes again at their 4.5 mm bound. **The whole U47 with K47@3:**
+    cardioid 23.9 mV/Pa (ds58 25-28: 0.4 dB under), omni 16.8 (14-17: in; K47@2 19.1), front /
+    back 13.6 dB at 100 Hz, 20.2 at 1 kHz (the polars' 11.7 / 16.2: the null deeper than the real
+    mic's, whose body and head basket aren't modelled). **Distance:** prints take
+    `mic_print.py --distance-m` (a point source on the body); the cardioid at 31 Hz is -2.9 dB re
+    1 kHz in a plane wave, +0.5 dB from 1 m, Telefunken's curve -1: its measuring distance was
+    probably ~1-2 m (not stated), so the fit stays a plane wave. Entries for prints are cached in
+    `cache/diffraction/` (by the body, angle, distance and `bor.py`'s source). A / B prints: the vocal at
+    0 / 180 deg, V76 at 40 dB, through K47@3 and (`*_k47v2`) K47@2 (`reports/mics/prints.json`;
+    -18 LUFS copies in `audio/matched/`); the rear print now 20 dB under the front (K47@2: 15).
+- **A3's gate, the U47's sources:** catalogued in `data/schematics/neumann_u47/README.md`
+  (Neumann's own archive: the 1958 data sheet with polars and responses, the 1958 / 1959
+  manuals, the 1959 factory drawing U 47-00-00-00 with every value; Funkschau 1/1948's
+  VF14 data; the BV8 from a Haufe reproduction sheet, 6.5 : 1). Missing: the capsule's
+  geometry (no primary source: diaphragm thickness and tension, gap, backplate holes and
+  cavities), the NG supply's full drawing (thumbnail only), the cable's per-metre values,
+  the BV8's leakage and capacitances. The capsule's geometry will likely be bounded
+  provisional genome parameters fitted to Neumann's curves, capacitance (2 x 78-83 pF) and
+  sensitivity (the README lists the options). The early units' grid leak and coupling
+  capacitor differ from 1959's: the circuit file picks a revision.
+
 **Later fidelity:** the capsule's electrostatic nonlinearity (a new device: Python, SPICE,
 circuitsim); diffraction by the mic's body (a boundary-element solve on the GPU, on
 demand, as the component editor's field solvers); a source loaded by a nearby wall

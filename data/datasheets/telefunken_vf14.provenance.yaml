@@ -1,0 +1,148 @@
+device: "VF14"
+document: "VF 14, Daten und Kennlinien (Funkschau 1948, Heft 1, pp. 6-8): Telefunken's data and curves for the VF 14, compiled by Funkschau after F. Kunze's article in Heft 12/1947"
+publisher: "Funkschau (Funkschau-Verlag Oscar Angerer, Stuttgart); the data are Telefunken's"
+date: "Heft 1/1948"
+local_copy: sources/funkschau_1948_01_vf14_b.pdf
+local_copy_sha256: 4c1d904a96edfbc4e55a49612efa832bfb8ac4d89b0e528facf6ae77b8ceedb4
+local_copy_note: >-
+  PDF pages 8-10 (magazine pages 6-8) copied out of the second scan below with PyMuPDF (insert_pdf,
+  images untouched), 534,646 bytes. sources/funkschau_1948_01_vf14_a.pdf (sha256
+  cc86a0dda94cbf008c4e87ab5f6beb49b221061f9956da6b57e9aeaf2054c16d, 1,394,221 bytes) is the same
+  three pages out of the first scan. The rendered pages are data/schematics/neumann_u47/funkschau_1948_vf14_p6.png ... p8.png.
+scan_source: >-
+  web: https://www.worldradiohistory.com/INTERNATIONAL/Funkschau/1948/Funkschau-1948-01.pdf (3,856,370 bytes,
+  sha256 733ab2ea2d86bef3a44db0bfaef94f0043e7e4c22aaaeefff2271d0aff9c9997; every page one 8-bit gray image
+  at ~150 dpi) and web: https://www.worldradiohistory.com/INTERNATIONAL/Funkschau/1948/Funkschau%201948-01.pdf
+  (8,034,881 bytes, sha256 ce1b208ccb2d94ce7792bdccad562236bb716fd769d4830b2f996542e10c6d4c; a layered
+  rendition at 144 dpi, the graphs as separate 8-bit images). Both downloaded 2026-11-03. They agree to
+  0.03 mA / 0.01 V on every curve, so they are most likely the same scan processed twice: their agreement
+  checks the reading (grid calibration, tracing), not the print.
+other_copies: >-
+  Telefunken's own EF 14 sheets (the same system with a 6.3 V / 470 mA heater; telefunken_ef14.provenance.yaml)
+  have no triode-connected curves and no g3-at-cathode plate or transfer curves; their screen-current
+  curves (EF 14 p.5) are the counterpart of Kennlinienfeld 9 below. The Telefunken-Röhrentaschenbuch 1955
+  (VF 14 on pp. 64, 98f, 109 per radiomuseum) was not found online.
+digitized_with: >-
+  the PDFs' embedded page / graph images at native resolution (~144 / 150 dpi; rendering at 400-800 dpi
+  adds no detail to a 150 dpi raster) read with PyMuPDF + numpy / scipy: every grid line fitted along its
+  length (straight line through segment centroids, outliers at curve crossings dropped; rms 0.1-0.8 px),
+  values interpolated piecewise-linearly between the neighbouring fitted lines (the printed grid isn't
+  uniform: spacings vary 17-20 px); grid lines removed by subtracting their own cross-section (a running
+  median along the line, or a low percentile over the whole line where a curve runs along a grid line);
+  strokes followed by a seeded ridge tracer (ink centroid across the stroke, step 1 px, gaps bridged at
+  grid crossings); read at round values by local quadratic fits; each scan read separately and the two
+  readings averaged; every overlay (points drawn on both scans, full graphs and 8x zooms of the low-current
+  corners) checked by eye (Claude Code subagent, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-03
+files:
+  telefunken_vf14_triode_plate.csv:
+    figure: >-
+      p.8 (PDF p.10), Kennlinienfeld 8 'Triode': 'Triodenschaltung, Schirmgitter und Bremsgitter an Anode,
+      Ia = f(Ua); Ug1 = Parameter'
+    columns: "vg1_v, va_v, ia_a"
+    curves: "Vg1 = 0, -1, -2, -3, -4, -5, -6, -7, -8 V"
+    coverage: >-
+      Ia 0.3 mA up to the Qa = 5 W line (dashed beyond it: left out) or the graph's edge (40 mA, 260 V):
+      0 V 1.8-100 V (to 38 mA), -1 V 20-125 V (to 36 mA), -2 V 44-145 V, -3 V 71-165 V, -4 V 95-190 V,
+      -5 V 117-220 V, -6 V 137-255 V, -7 V 163-255 V (to 9 mA), -8 V 183-255 V (to 3.7 mA). Read at every
+      5 V of Ua, plus Ua read at Ia = 0.3, 0.5, 0.75, 1, 1.5, 2 mA on every curve (the low-current corner,
+      denser on purpose). The U 47's point (34 V, 0.55 mA, Vg1 about -1.1 V) lies between the 0 V and -1 V
+      curves' feet: at Ua 34 V the 0 V curve gives 8.96 mA and the -1 V curve 2.28 mA (interpolated); the
+      -1 V curve reaches 0.55 mA at Ua 22.3 V. So the sheet's curves pass through the U 47's current only
+      at lower anode voltage (or ~0.4 V more negative grid); the U 47's heater runs at about 35 V of 60 V
+      (data/schematics/neumann_u47/README.md), which the sheet doesn't cover. Below ~0.5 mA (5 px above the
+      0 mA axis) the stroke merges with the axis line.
+    stroke_feet: >-
+      where each stroke meets the 0 mA axis (Ia ~0.15 mA, the drawing, not a measurement): 0 V ~0.7 V,
+      -1 V ~18.8, -2 V ~42.3, -3 V ~69, -4 V ~92, -5 V ~114.5, -6 V ~135, -7 V ~160, -8 V ~181 V
+  telefunken_vf14_triode_transfer.csv:
+    figure: >-
+      p.8 (PDF p.10), Kennlinienfeld 7 'Triode': 'Triodenschaltung, Schirmgitter und Bremsgitter an Anode,
+      Ia = f(Ug1); Ua = Parameter'
+    columns: "va_v, vg1_v, ia_a"
+    curves: "Ua = 100, 150, 200 V"
+    coverage: >-
+      Vg1 read at Ia = 0.3, 0.5, 0.75, 1, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 10, 12.5 ... 37.5 mA (24 levels per
+      curve): Ua 100 V Vg1 -4.42 to -0.13 V, 150 V -6.56 to -1.90 V, 200 V -8.49 to -3.54 V. The figure has
+      no dissipation line; at 200 V the curve above 25 mA exceeds Qa = 5 W (drawn solid all the same; kept).
+      The labels 'Ua = 200 V', '150 V', '100 V' touch the strokes at 18-28 mA; read past them from a second
+      seed above.
+  telefunken_vf14_plate.csv:
+    figure: >-
+      p.6 (PDF p.8), Kennlinienfeld 2: 'Pentodenschaltung, Bremsgitter an Katode, Ia = f(Ua); Ug1 = Parameter;
+      Ug2 = 200 Volt'
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    curves: "Vg1 = -2, -3, -4, -5, -6, -7 V (Vg2 = 200 V, g3 at the cathode)"
+    coverage: >-
+      Read every 10 V where each curve is clear of the knee bundle and below the Qa = 5 W line (dashed beyond):
+      -2 V 110-150 V, -3 V 90-190 V, -4 V 60-290 V, -5 / -6 / -7 V 30-390 V. Left out: Vg1 = 0 and -1 V
+      (their solid parts lie inside the knee bundle, where the drawn 0 V and -1 V strokes cross each other and
+      the branching -2 ... -4 V curves, so they can't be told apart; their flat parts are dashed), and every
+      curve's start below the values above (the drawing starts all curves at Ua = 20 V, in a bundle).
+  telefunken_vf14_transfer.csv:
+    figure: >-
+      p.6 (PDF p.8), Kennlinienfeld 1 'g3 an K': curves labelled 'Ia' and 'Ig2', caption 'Ia + Ig2 = f(Ug1);
+      Ua = Ug2 = 200 Volt'
+    columns: "va_v, vg2_v, vg1_v, ia_a"
+    curves: "the 'Ia' curve (Ua = Ug2 = 200 V, g3 at the cathode)"
+    coverage: >-
+      Vg1 read at Ia = 0.3 ... 22.5 mA (18 levels), Vg1 -7.92 to -3.11 V; the stroke is dashed above ~23 mA
+      (beyond Qa = 5 W at 200 V), left out. The caption's 'Ia + Ig2' is read as 'Ia and Ig2' (two labelled
+      curves): the 'Ia' curve gives 11.8 mA at -4.5 V against operating point a)'s Ia 12 mA (Ia + Ig2 would
+      be 13.7 mA), and it matches Kennlinienfeld 2 at Ua 200 V (below).
+  telefunken_vf14_transfer_ig2.csv:
+    figure: "p.6 (PDF p.8), Kennlinienfeld 1, the curve labelled 'Ig2'"
+    columns: "va_v, vg2_v, vg1_v, ig2_a"
+    curves: "Ig2 at Ua = Ug2 = 200 V, g3 at the cathode"
+    coverage: "Vg1 -6.5 to -2.5 V every 0.5 V (Ig2 0.31-3.13 mA); dashed above ~-2 V (left out)"
+  telefunken_vf14_screen.csv:
+    figure: >-
+      p.6 (PDF p.8), Kennlinienfeld 9: 'Schirmgitterströme, Bremsgitter an Katode, Ig2 = f(Ug2); Ug1 = Parameter'
+    columns: "va_v, vg1_v, vg2_v, ig2_a"
+    curves: "Vg1 = 0, -1, -2, -3, -4, -5, -6, -7 V"
+    coverage: >-
+      Ug2 read at Ig2 = 0.2, 0.3, 0.4, 0.5, 0.6, 0.75, 0.9, 1.0, 1.25, 1.5, ... 5.0 mA (steps of 0.25) up to
+      the Qg2 = 0.7 W line or Ug2 = 200 V: 0 V 7-92 V (to 4.5 mA; above that the stroke runs into the label
+      'Ug1 = 0 V', left out), -1 V 25-129 V (to 5 mA), -2 V 45-151 V (4.25 mA), -3 V 62-175 V (3.5 mA), -4 V
+      79-197 V (3.25 mA), -5 V 98-195 V (2 mA), -6 V 115-190 V (1.25 mA), -7 V 133-195 V (0.9 mA); the last
+      few volts below 200 V of the -5 / -6 V curves fall between levels (at 200 V they reach ~2.15 / ~1.47 mA).
+      The 0.1 mA level (2.4 px above the axis) was read but left out. va_v = 200 is not printed on this figure: it is taken from the EF 14 sheet's
+      same figure (EF 14 p.5, 'Ua = 200 Volt, G3 an Kathode'), whose curves lie within ~0.1 mA (Vg1 0 to
+      -2 V) to ~0.35 mA (-5 V at 200 V) of these, lower; the EF 14's figure draws Ng2 = 0.3 W, this one
+      Qg2 = 0.7 W.
+axis_calibration: >-
+  labelled grid lines. Kennlinienfeld 8: Ua 0-260 V every 10 V (labels every 20 V) x Ia 0-40 mA every 2.5 mA
+  (labels every 5 mA), ~0.54 V and ~0.105 mA per pixel. Kennlinienfeld 7: Ug1 -10..0 V every 1 V (labels every
+  2 V), the same Ia axis, ~0.054 V per pixel. Kennlinienfeld 2: Ua 0-400 V every 20 V x Ia 0-60 mA every 5 mA
+  (~1.07 V, 0.21 mA per pixel). Kennlinienfeld 1: Ug1 -10..0 V every 1 V, the same Ia axis. Kennlinienfeld 9:
+  Ug2 0-200 V every 12.5 V (labels every 50 V) x Ig2 0-5 mA every 0.5 mA (~0.54 V, 0.021 mA per pixel).
+estimated_error: >-
+  Triode plate: about +-0.1 mA on Ia (one pixel) and +-0.5 V on Ua above 1 mA; +-0.15 mA / +-1 V between 0.3
+  and 0.5 mA, where the stroke runs into the axis line. The two scans' readings differ by 0.026 mA rms (max
+  0.08 mA) at round Ua and 0.43 V rms (max 1.2 V, the shallow -8 V foot) at the low-current levels. Triode
+  transfer: +-0.05 V on Vg1 above 2 mA, +-0.1 V near cut-off; the scans differ by 0.008 V rms. Pentode plate:
+  +-0.2 mA (scans 0.09 mA rms); pentode transfer +-0.05 V (scans 0.016 V rms); Ig2 (Kennlinienfeld 1) +-0.1 mA;
+  screen curves +-0.03 mA / +-1 V (scans 0.5 V rms, up to ~0.9 V in the shallow feet).
+  Checks: the drawn Qa = 5 W line on Kennlinienfeld 8 reads 4.99-5.03 W from 180 to 260 V (5.09 W at 171 V);
+  the Qg2 = 0.7 W line on Kennlinienfeld 9 reads 0.70-0.72 W.
+  Published points read off the curves: i) (p.7: Ua 'ca. 130 V', Ug1 -5 V, Ia (+Ig2+Ig3) 1 mA) - the -5 V
+  curve reaches 1.0 mA at Ua 127.3 V (1.24 mA at 130 V); its Durchgriff 4.7 % (mu 21.3) matches the curve
+  spacing there (23 V between -4 and -5 V, 20 V between -5 and -6 V at 1 mA: mu ~20-23). s) (p.8: Ua 200 V,
+  Ug1 -4.5 V, Ia (+Ig2+Ig3) 20 mA, Rk 225 ohm): Kennlinienfeld 7 gives 20 mA at -4.57 V. a) (p.6: Ua = Ug2 =
+  200 V, Ug1 -4.5 V, Ia 12 mA, Ig2 1.7 mA, S 7 mA/V): Kennlinienfeld 1 gives Ia 11.8 mA, slope 6.7 mA/V,
+  Ig2 1.32 mA.
+  Consistency between the figures: Kennlinienfeld 7 and 8 agree within 0.1 V of Vg1 above ~3 mA; towards
+  cut-off Kennlinienfeld 7 needs up to 0.28 V more negative grid for the same current (100 V, 0.63 mA:
+  -4.28 V against -4 V; 0.38 mA rms, mean +0.38 mA over twelve integer-Vg1 points) - a drafting difference
+  between the two figures, kept as drawn. Kennlinienfeld 1 and 2 agree within 0.3 mA at Ua 200 V (Vg1 -4 to
+  -7 V). Screen current disagrees by ~2x between Kennlinienfeld 1 (Ig2 at Ua = Ug2 = 200 V: 1.70 / 0.98 /
+  0.46 mA at -4 / -5 / -6 V) and Kennlinienfeld 9 at Ug2 = 200 V (~3.4 / 2.15 / 1.47 mA); the EF 14 sheet's
+  p.5 (~1.8 / 1.3 mA at -5 / -6 V) sides with Kennlinienfeld 9 and the printed a) (1.7 mA at -4.5 V) lies
+  between. Both are kept, in separate files.
+notes: >-
+  'Ia' on the triode figures: with g2 and g3 tied to the anode, the anode lead carries Ia + Ig2 + Ig3, which
+  the triode tables (i, n, s) write as 'Ia (+Ig3+Ig2)'; the figures are taken to show that sum. The sheet's
+  data are 'Betriebswerte (auch für statische Messungen)' at the rated 60 V / 50 mA heater. Not digitized:
+  Kennlinienfeld 3 and 4 (pentode with g3 at +20 V), 5 and 6 (tetrode, g3 at the anode), 10 and 11 (their
+  screen currents), all at Ua / Ug2 = 200 V. The tabulated values are in published_points.yaml 'VF14'.

@@ -1,0 +1,27 @@
+# A designed transformer from its component version: the transformer part's
+# `component:` test circuit (docs/COMPONENT_EDITOR_PLAN.md, C2 step 3), not modelled
+# hardware. The V72's input transformer by its construction (BV191@1: core, turns, per
+# winding ratio / r / c / leak, and its leakage as coupled series inductances) between a
+# line source and a grid leak, the primary halves in series as BV 191's measurements
+# have them.
+
+title: "A designed transformer from its component (test)"
+input: in
+probes: [out]
+
+values:
+  t_model: {value: BV191@1, source: "config/components/bv191/1.yaml (NWDR Bauvorschrift Nr. 191 compiled by varimu-components)"}
+  r_source_ohm: {value: 200.0, source: "provisional: model knowledge (a 200 ohm studio line source)"}
+  r_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a tube's grid leak)"}
+
+sections:
+  - title: transformer
+    parts:
+      RS: {R: [in, p], r: r_source_ohm}
+      T1:
+        transformer:
+          p1: {nodes: [p, ct]}
+          p2: {nodes: [ct, "0"]}
+          s: {nodes: [out, "0"]}
+        component: t_model
+      RL: {R: [out, "0"], r: r_load_ohm}

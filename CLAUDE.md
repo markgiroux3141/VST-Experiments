@@ -59,7 +59,7 @@ fender_5e3`: gain per volume, response per tone, THD and power, sag, aliasing pe
 quality), its drawing `fender_5e3_drawn` (`scripts/draw_fender_5e3.py`, after F-EE) and a
 Play device in varimu-app, played at `draft-2x` (the user's choice: hard clipped, draft-1x
 aliases at -8 dB re the harmonics, draft -31; a 48 kHz host with the stream at 2x,
-varimu-app only, `panel::Device::quality`; the plan's B9 step 5). **Next (2026-10-29, the user's call):
+varimu-app only, `panel::Device::quality`; the plan's B9 step 5). **C2, the transformer designer (2026-11-04; COMPONENT_EDITOR_PLAN.md C2's steps):** step 1 (a winding's `leak`), step 2 (`crates/varimu-components`: designs in `config/designs/`, tables in `config/transformer/`, compiled and saved as versions from Rust) and step 3 (a transformer part's `component: NAME@N`, both builders; leakage as coupled series inductances, `leak_couplings`, the user's choice; first version `BV191@1`, test circuit `transformer_component_test`) and step 4 (the 2D FEM of the winding window, `varimu-components fem`: the 1D formula within +-5% for layer windings, +-20% for disc windings, so a design may compile its leakage by the field, `leakage_method: field`) and step 5 (`OT_5E3@1` fitted to P-TGO-002 by `scripts/fit_ot_5e3.py`: all figures but the outer half's DCR, -8%; `BV191@2` against the V72's figures) are done; step 6 built: the compiled facing capacitances as capacitors between terminals (compiler 0.2.0, by energy), the 5E3 and its drawing pinned to `OT_5E3@2` (the Core symbol's `component` field), A/B files in `reports/transformers/ot_5e3_ab/` (a little darker above 8 kHz, otherwise the same): open, the user listens; next step 7 (the Components view). **Next (2026-10-29, the user's call):
 C3's model before C2**: the 5E3 heard as sound pressure through its physical speaker
 (COMPONENT_EDITOR_PLAN.md C3; its sound isn't judged until then), then `6V6GT@2`, then C2.
 **C3's model built (2026-10-29):** the speaker component `P12R@1` (kind `speaker`:
@@ -197,12 +197,40 @@ batched (SYNTH_IDEAS.md "Owed"): **run 2026-11-02, nothing owed** (647 passed af
 stale count fixed; `--verify` PASS).
 
 Hybrid physics ([docs/HYBRID_PHYSICS_PLAN.md](docs/HYBRID_PHYSICS_PLAN.md), 2026-11-01, the
-user's idea; nothing built): synthesis stays pure, except where the physics is far faster
-than a sample (a gas tube's reset, a multivibrator's flip, a carrier above Nyquist) or is
-spread in space. There, that part alone becomes an **exception**, generated from a
-full-physics reference simulation of the same part and coupled at its ports (event kernels,
-multi-rate islands, ...), with the reference selectable in its place. First: the gas-tube
-sawtooth (SYNTH_IDEAS #23; milestones H1-H5). A proposed Hard rules addition waits for H3.
+user's idea): synthesis stays pure, except where the physics is far faster than a sample (a
+gas tube's reset, a multivibrator's flip, a carrier above Nyquist) or is spread in space.
+There, that part alone becomes an **exception**, generated from a full-physics reference
+simulation of the same part and coupled at its ports, with the reference selectable in its
+place. A proposed Hard rules addition is still the user's open call. **The gas-tube sawtooth
+(SYNTH_IDEAS #23) is built, H1-H4 (2026-11-02..03, merged from the `gas-tube` worktree; the
+plan's H1-H4 status blocks):** a thyratron model (`varimu/devices/thyratron.py`: the ion
+density as a state node, w over k with a 1 F capacitor; Python, SPICE, circuitsim's
+`devices/thyratron.rs`), fitted to the 2D21's sheets with the 884's structure (`2D21@1`,
+`884@1`, the user's tube; RCA's sweep circuit `rca_884_sweep.yaml` the reference). Two
+techniques: **M1** (renders) a multi-rate island behind an anti-alias FIR decimator (a
+section's `substeps`, `decimate: fir`, `owns: [node]`; `partition::Decimator`), and **K** (the
+live qualities) event kernels (IR `ThyratronEvents`, tables over grid volts and log slope
+from the reference at 3.072 MHz, charge-exact pulses: `config/events/*.json` by
+`scripts/thyratron_kernels.py`; `varimu/devices/thyratron_events.py` the reference,
+circuitsim's `events.rs` the port). A `devices` entry's `events: NAME` names the tables;
+`build(..., events=True)` / Rust `build_ir_events` swaps them in and drops the island; the
+draft's `events: true`, the app's `Circuit::with_events` (production and prints build M1).
+K's tables need a whole number of 3.072 MHz samples per step (96 kHz: the draft, draft-2x).
+A section its switches leave empty is no island (both builders). RCA's sweep is a documented
+hard case (the user's option A). **The voice** `config/circuits/saw_884.yaml` (the app's
+`saw_884`: a 6V6GT current sink charging 5 nF, the 884 across it, a 12AU7 follower, gated by
+tube_voice's AR envelope into tube_kick's VCA, cross-neutralized; ideal rails; tuning
+`scripts/saw_884_tuning.py`) and **tube_synth's second oscillator** (SAW ON `saw_on`, off at
+first; OSC ON `osc_on` for the LC, on at first: off empties an oscillator's sections, no
+thread; its own supply with regulated screen and cathode rails; a second keyboard string
+`pitch2`, `panel::Device::pitch2`, `SYNTH_SAW_TUNING` from `saw_884_tuning.py --target
+synth`; GLIDE's and VIBRATO's second gangs, the latter buffered; SAW level into the mix).
+Every synth script and test passes `pitch2` (0 V with the saw off). `panel::Device::coupling`
+overrides the partition coupling per device ("hold" where a one-sample edge crosses a cut:
+saw_884's VCA grid; the synth keeps extrapolate). CPU: one oscillator at a time fits (the saw
+alone ~ the LC alone); both on is over budget on this desktop. Open: K reads sharp of M1 in
+the bass (+23-33 c at ~40-50 Hz, the one-solve reference itself not converged there: the
+plan's H4); the unit's 5 kHz floor.
 
 Drums ([docs/DRUM_PLAN.md](docs/DRUM_PLAN.md), 2026-11-01): real drums as a modal medium
 coupled at ports (membranes, tension-modulation pitch drop, beater contact, snare wires and
@@ -288,7 +316,33 @@ use the RTX 3080 wherever it fits). First listen: U47 -> V76 (B10). The list: sm
 pressure omni (the capsule's verification case), U47, RCA 44-BX, SM57, C12; V76, the 351's
 electronics, Neve 1073, API 312, clean transformerless, UA 610; four opposite chains ranked
 by the separation metrics. The BJT model is a shared prerequisite (with the drums).
-Milestones A1-A9.
+Milestones A1-A9. **Started 2026-11-03 (the user's): U47 -> V76.** A1 = the device
+builder's **B10, the Telefunken V76**: `config/circuits/telefunken_v76.yaml` from IRT drawing
+S 1176 (gain / filter switches, T85 / T89 and its chokes on JA cores, version-1
+constructions provisional; selenium supply `B450C80@1`), tubes `EF804S@1` / `E83F@1` with a
+new opt-in pentode **screen law "e1"** (`KorenPentode.screen`: Ig2 = E1^Ex / Kg2; absent =
+Koren's, every existing IR unchanged), `tests/test_telefunken_v76.py` (idle vs the printed
+voltages); its profile `varimu/measure/preamp_suite.py` (`varimu unit --circuit
+telefunken_v76`, the Braunbuch's acceptance specs: the nominal unit meets 47 of 50; misses and
+the calibrated T85 values in DEVICE_BUILDER_PLAN.md B10's status). The app plays it (`telefunken_v76`, 0.26x
+real time at draft-1x). **A2 done:** capsules as components (kind `capsule`,
+`varimu/devices/capsule.py`; parts `capsule`, `capsule_dual` in both builders; pressures as
+volts; self-noise from Johnson noise on the acoustic resistances), `varimu/measure/ac.py` (AC
+analysis of linear IRs, the reference), `BK4134@1` checked (18.6 dB(A) vs B&K's 18,
+`tests/test_capsule.py`). **A3:** `VF14T@1`, `config/circuits/neumann_u47.yaml` (idles at the
+drawing's point only with its underheated cathode: a -0.32 V space-charge shift from B6's model),
+the chain `u47_v76.yaml` (`scripts/compose_chain.py`), `scripts/mic_print.py`; the K47
+(`K47@2`, `scripts/fit_k47.py`) in Torio & Segota's regime (a nearly slack diaphragm, the
+gradient resistance between the sides; `data/schematics/neumann_u47/K47_THEORY.md`) with
+rigid-sphere diffraction for its entries (`varimu/mics/free_field.py`): the whole U47 at 25.4
+mV/Pa cardioid (ds58: 25-28), 13-15 dB front to back (MIC_ROOM_PLAN.md A3's status). The U47's sources:
+`data/schematics/neumann_u47/README.md`. The first listen was heard (2026-11-04: "it all sounds
+good", subtle). **`K47@3`** (2026-11-04; the U47 and the chain pin it since, the user's call): the capsule's real body for its entries, `varimu/mics/bor.py` (a body-of-revolution BEM,
+azimuthal order 0 only: exact for the diaphragm's axisymmetric average; checked on the sphere's
+series and Lamb's disk, `tests/test_bor.py`; the K47 geometry's `body` block), the network
+refitted on it: the omni's 6.5 kHz dip gone, the presence peak at ~11 kHz, omni 16.8 mV/Pa
+(in ds58). `free_field.capsule_entry_pressures` picks body / sphere / path from a capsule's
+geometry; `mic_print.py --distance-m` prints a point source (proximity).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
@@ -449,6 +503,17 @@ plate reverb goes in at 30% wet with an 8 s tail. **⤓ Render** bakes a track's
 production into a new take and removes its inserts (`Session::add_rendered_take`,
 `Take::rendered_from`; Undo restores); the session plays tracks-only when no instrument
 plays (▶ always there; ● starts the instrument and records once it plays).
+
+**The sampler** (2026-11-02, the user's ask): the user's sample library sorted into the repo's
+git-ignored `samples/` by `scripts/import_samples.py` (drums first: `samples/drums/<category>/`,
+`index.json`; `samples/README.md`), played in varimu-app as an instrument: Play's device
+"Sampler" (`--device sampler`), twelve slots one per key of an octave (every octave plays
+them), a browser of `samples/` whose files preview as they are clicked or stepped with
+↑ / ↓ (never recorded), Enter loads into the marked slot; the kit kept in `sampler.json`
+beside `app.json`. `varimu_app::sampler` (voices, cubic interpolation at the file's rate),
+`player::Source::Sampler` (no circuit, 64-sample blocks, the Emitter as every source), so the
+Session view records it like the synth. `examples/sampler.rs` plays a beat on the pads into
+an armed take and checks its onsets.
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)
@@ -696,6 +761,10 @@ cargo run -p varimu-app --example devices             # the audio devices cpal s
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)
 cargo run --release -p varimu-app --example click -- [--device D] [--notes] [--for S] [--ab S] [--output NAME] [--loopback output | --loopback input NAME --channel N] [--save DIR]   # recording T1: the click's timing on a loopback, load with / without it
 cargo run --release -p varimu-app --example load_profile -- --file F [--device D] [--set k=v] [--add-c NODE=F] [--quality draft|draft-1x|draft-2x] [--out load.csv]   # where the draft's load goes, block by block (no audio device)
+cargo run -p varimu-components -- compile config/designs/NAME.yaml [--yaml]   # C2: a transformer design -> its compiled values and report (--yaml: the version file)
+cargo run -p varimu-components -- save config/designs/NAME.yaml   # C2: saves config/components/<name>/<N>.yaml + its lock line (nothing when unchanged)
+cargo run --release -p varimu-components -- fem config/designs/NAME.yaml [--short p1+p2:s]   # C2: every winding pair's leakage, 1D formula vs the 2D field solution
+uv run python scripts/fit_ot_5e3.py [--show]   # C2: the 5E3 OT's construction fitted to P-TGO-002 -> config/designs/ot_5e3.yaml (needs the release build of varimu-components)
 cargo clippy --all-targets -- -D warnings
 cargo clippy --all-targets --all-features -- -D warnings   # also the PyO3 bindings
 cargo fmt --check

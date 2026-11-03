@@ -1,0 +1,160 @@
+# Neumann U47 condenser microphone, as a circuit file (MIC_ROOM_PLAN.md A3).
+# Built by varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/neumann_u47/README.md has their provenance):
+#   "sch: ..."         printed on Neumann's drawing U 47-00-00-00 (1959; u47_circuit_1959.png)
+#   "ds58: ..."        Neumann's data sheet, March 1958; "br: ..." the undated brochure
+#   "web: <url> ..."   a reproduction's or vendor's figure (the BV 8)
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# The 1959 revision (R2 60 MOhm, C2 0.5 uF; early units 100 MOhm and 1 uF). The capsule
+# KK47 is a dual-diaphragm K47 (config/components/k47/): the pressure at its front on
+# `in`, at its rear on the control input `p_rear` (pascals as volts; a plane wave from
+# angle theta puts the rear pressure a path delay behind the front's: varimu/mics/).
+# The backplate is polarized at +63 V through R1 (the R7 / R8 divider) and AC-grounded
+# by C1; the front diaphragm is the grid's electrode. The pattern switch ties the rear
+# diaphragm to the grid (omni: both polarized) or leaves it (cardioid: "das Potential
+# Null", br: no polarization; modelled as the rear electrode held at the backplate's
+# potential by a leak). The VF14M is triode-connected, its cathode biased by its own
+# heater current through R3. The output is the 200 ohm setting (S1: the secondaries in
+# series) into the measuring load; the U47 -> V76 chain replaces the load with the V76.
+# Not modelled: the NG supply's mains side (a Thevenin source in its place), hum, the
+# cable (UC 4: no per-metre data found).
+
+title: "Neumann U47"
+input: in
+# The VF14M's cathode is underheated (35 V of its rated 60 V, sch). Its heater is DC from
+# the NG (no warm-up or mains wander in a render) and its current far below the emission
+# ceiling, so the whole effect is B6's static space-charge shift (varimu/devices/cathode.py),
+# a DC source in series with the grid: the drawing's 0.55 mA where the rated-heater curves
+# give ~1.8 mA at the printed bias. (A circuit's `heaters` block heats every tube alike, so a
+# chain into a preamp couldn't carry it.)
+cv_inputs:
+  p_rear: p_rear
+probes: [out, g, a, k, bp, f2, bdec, b105, op]
+# 0 dBFS in = 20 Pa peak at the capsule (117 dB SPL for a sine: MIC_ROOM_PLAN.md's
+# proposed convention); out = volts across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; the user's open decision)"}
+  output_volts_peak: {value: 1.0, source: "provisional: model knowledge (~25 mV/Pa at the output (ds58) x 20 Pa = 0.5 V peak, doubled for headroom)"}
+
+controls:
+  pattern: {value: 0, choices: [0, 1], unit: position, source: "sch: the pattern switch in KK47", notes: "0 cardioid ('Niere'), 1 omni ('Kugel')"}
+  mains_v_rms: {value: 220.0, min: 198.0, max: 242.0, unit: V, source: "provisional: model knowledge (the NG's 220 V strapping; not simulated: the NG is a Thevenin source here)"}
+
+values:
+  # --- Capsule (sch) --------------------------------------------------------------------
+  capsule_model: {value: K47@3, source: "sch: KK47 '2 x 78...83 pF'; config/components/k47/3.yaml (its geometry bounded and fitted to Neumann's curves by scripts/fit_k47.py on the capsule's body, varimu/mics/bor.py: reports/mics/k47_fit.png; K47@2 had a sphere for the body, K47@1 was a placeholder)"}
+  polarization_v: {value: 63.0, source: "derived: sch +63 V printed on the backplate (105 V x R8 / (R7 + R8) = 63 V; no DC through R1)"}
+  r1_ohm: {value: 100.0e+6, source: "sch: R1 100 MOhm, the polarization feed"}
+  c1_f: {value: 0.01e-6, source: "sch: C1 0.01 uF 500 V, the backplate to ground"}
+  r2_ohm: {value: 60.0e+6, source: "sch: R2 60 MOhm, the grid leak (1959; early units 100 MOhm)"}
+  r7_ohm: {value: 2.0e+6, source: "sch: R7 2 MOhm"}
+  r8_ohm: {value: 3.0e+6, source: "sch: R8 3 MOhm"}
+  rear_leak_ohm: {value: 1.0e+12, source: "numerical: holds the cardioid position's unconnected rear electrode at the backplate's potential (no polarization, br)"}
+
+  # --- VF14M, triode-connected (sch) -----------------------------------------------------
+  r3_ohm: {value: 29.0, source: "sch: R3 29 Ohm, cathode (and heater f1) to ground"}
+  r4_ohm: {value: 1780.0, source: "sch: R4 1780 Ohm, the heater dropper from +105 V"}
+  space_charge_v: {value: -0.322, source: "derived: varimu/devices/cathode.py (config/cathodes.yaml's oxide and the VF14T's 60 V / 50 mA rating) at the heater's printed 35 V (sch: +36 V at f2, +1.1 V at the cathode): 855 K, a -0.322 V shift of the grid (at the printed 38.8 mA instead: 878 K, -0.284 V)"}
+  heater_ohm: {value: 902.0, source: "derived: the heater at its printed operating point, (36 - 1.1) V / 38.8 mA (sch: +36 V at f2, +1.1 V at the cathode; (105 - 36) V / 1780 Ohm = 38.8 mA)", notes: "a resistor at its operating point (its temperature coefficient not modelled)"}
+  r5_ohm: {value: 100.0e+3, source: "sch: R5 100 kOhm, the anode load"}
+  r6_ohm: {value: 30.0e+3, source: "sch: R6 30 kOhm, the anode decoupling"}
+  c3_f: {value: 1.0e-6, source: "sch: C3 1 uF 160 V"}
+  c2_f: {value: 0.5e-6, source: "sch: C2 0.5 uF 250 V, the anode to the BV 8 (1959; early units 1 uF)"}
+
+  # --- BV 8, version 1 (no original data; README "The output transformer BV 8") -------------
+  bv8_ratio: {value: 0.153846, source: "web: https://www.don-audio.com/bilder/HAUFE-BV-08_T-7853.jpg (Haufe T-7853, a reproduction: 3.25 + 3.25 : 0.5 + 0.5, 6.5 : 1 with the secondaries in series, the 200 ohm setting); TAB-Funkenwerk's 2600 : 400 turns (README)"}
+  bv8_turns: {value: 2600, source: "web: http://web.archive.org/web/20200220141842/http://tab-funkenwerk.com:80/id146.html (a vendor: 2600 to 400 turns)", notes: "the primary (the reference winding)"}
+  bv8_r_pri_ohm: {value: 628.0, source: "web: Haufe T-7853 (above): 628 ohm primary, +-10%"}
+  bv8_r_sec_ohm: {value: 17.0, source: "web: Haufe T-7853 (above): 17 ohm secondary (in series), +-10%"}
+  bv8_core_material: {value: mumetall, source: "web: the vendor page (above): a 'Mu-Metal similar type of alloy' (Krupp, Vacuumschmelze); mumetall is the nickel alloy in config/magnetics.yaml"}
+  bv8_core_area_m2: {value: 1.0e-4, source: "provisional: model knowledge (DIN UI 30 laminations (the vendor page): a 10 mm limb, ~10 mm stack)"}
+  bv8_core_path_m: {value: 0.09, source: "provisional: model knowledge (a UI 30 core's mean path, 30 x 35 mm outline)"}
+  bv8_gap_m: {value: 6.26e-6, source: "derived: 91 H for the primary in the core's linear limit with 2600 turns (the reproduction's 570 kOhm at 1 kHz, 1 V: Haufe T-7853), an effective joint gap of the block stacking (the vendor page)"}
+  bv8_leakage_h: {value: 0.1, source: "provisional: model knowledge (a sectioned 2600-turn primary over its secondary; ~0.1% of the primary inductance)"}
+  bv8_c_pri_f: {value: 150.0e-12, source: "provisional: model knowledge (self-capacitance of a 2600-turn four-chamber primary)"}
+  load_ohm: {value: 1000.0, source: "ds58: the sensitivity is specified into 1 kOhm at the 200 ohm setting (README)"}
+
+  # --- Supply (the NG, as a Thevenin source) -----------------------------------------------
+  ng_open_v: {value: 300.0, source: "br / ds58: about 300 V open-circuit (README, 'The supply NG')"}
+  ng_r_ohm: {value: 4875.0, source: "derived: (300 - 105) V / 40 mA (br / ds58: 105 V at 40 mA loaded)", notes: "the NG's filter resistors, rectifier and windings lumped; the cable's 0.4 V (README) inside"}
+  ng_c_f: {value: 40.0e-6, source: "web: https://www.radiomuseum.org/images/schematic-medium/neumann_georg/stromversorgung_netzgerat_ng_fur_3265452.png (the NG drawing's '5 x 40 uF'; the last section's)"}
+
+  # --- Per-instance tolerance (the drawing prints none) ------------------------------------
+  passive_seed: {value: 0, genome: passives.seed, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, genome: passives.spread, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (1950s precision carbon resistors)"}
+  tol_film_pct: {value: 10.0, source: "provisional: model knowledge (paper / film capacitors of the 1950s)"}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+tolerance:
+  source: "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r5: tol_resistor_pct
+    film: tol_film_pct
+  classes:
+    r5: [R1, R2, R3, R4, R5, R6, R7, R8]
+    film: [C1, C2, C3]
+
+devices:
+  V1: {device: VF14T@1, tolerance: tube}
+
+sections:
+  - title: supply
+    parts:
+      VNG: {V: [ng, "0"], v: ng_open_v}
+      RNG: {R: [ng, b105], r: ng_r_ohm, tolerance: none}
+      CNG: {C: [b105, "0"], c: ng_c_f, tolerance: none}
+
+  - title: capsule
+    parts:
+      # The backplate's polarization: R7 / R8 from +105 V, R1 to the backplate, C1 to
+      # ground (sch).
+      R7: {R: [b105, pt], r: r7_ohm}
+      R8: {R: [pt, "0"], r: r8_ohm}
+      R1: {R: [pt, bp], r: r1_ohm}
+      C1: {C: [bp, "0"], c: c1_f}
+      R2: {R: [g, "0"], r: r2_ohm}
+      SPAT:
+        switch: pattern
+        parts:
+          KK47C:
+            capsule_dual: [in, p_rear, bp, g, rear_e]
+            component: capsule_model
+            polarization_front_v: polarization_v
+            in: [0]
+          RREAR: {R: [rear_e, bp], r: rear_leak_ohm, tolerance: none, in: [0]}
+          KK47O:
+            capsule_dual: [in, p_rear, bp, g, g]
+            component: capsule_model
+            polarization_front_v: polarization_v
+            polarization_rear_v: polarization_v
+            in: [1]
+
+  - title: amplifier
+    parts:
+      # VF14M triode-connected (g2, g3 to the anode); the heater from +105 V through R4
+      # to f2, through the filament to f1 = the cathode, R3 to ground (sch).
+      VSC: {V: [gt, g], v: space_charge_v}  # the underheated cathode's shift (above)
+      XV1: {device: [a, gt, k], model: V1}
+      R4: {R: [b105, f2], r: r4_ohm}
+      RHEAT: {R: [f2, k], r: heater_ohm, tolerance: none}
+      R3: {R: [k, "0"], r: r3_ohm}
+      R6: {R: [b105, bdec], r: r6_ohm}
+      C3: {C: [bdec, "0"], c: c3_f}
+      R5: {R: [bdec, a], r: r5_ohm}
+      C2: {C: [a, op], c: c2_f}
+      BV8:
+        transformer:
+          p: {nodes: [op, "0"], r: bv8_r_pri_ohm, c: bv8_c_pri_f}
+          s: {nodes: [out, "0"], ratio: bv8_ratio, r: bv8_r_sec_ohm}
+        core: {material: bv8_core_material, area_m2: bv8_core_area_m2, path_m: bv8_core_path_m, gap_m: bv8_gap_m}
+        turns: bv8_turns
+        leakage_h: bv8_leakage_h
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

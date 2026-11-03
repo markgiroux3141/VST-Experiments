@@ -278,13 +278,15 @@ pub enum Noise {
 }
 
 /// Parts whose resistors are resistors (their noise), and the param holding their value.
-const NOISY: [(&str, Option<&str>); 6] = [
+const NOISY: [(&str, Option<&str>); 8] = [
     ("R", Some("r")),
     ("pot", Some("r")),
     ("rheostat", Some("r")),
     ("tapped_pot", Some("r")),
     ("t_pad", Some("z")),
     ("transformer", None),
+    ("capsule", None),
+    ("capsule_dual", None),
 ];
 
 /// Whether a part's value (a key or {value, source}) is sourced `numerical:`.
@@ -328,6 +330,11 @@ fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Ve
             .collect();
         for e in els {
             if let Element::Resistor(r) = e
+                && !(kind.starts_with("capsule")
+                    && r.name
+                        .rsplit('_')
+                        .next()
+                        .is_some_and(|t| t.starts_with('x')))
                 && !cores.contains(r.a.as_str())
                 && !cores.contains(r.b.as_str())
             {
@@ -494,7 +501,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 19] = [
+const MACROS: [&str; 21] = [
     "R",
     "C",
     "L",
@@ -511,6 +518,8 @@ const MACROS: [&str; 19] = [
     "transformer",
     "bridge",
     "vr_tube",
+    "capsule",
+    "capsule_dual",
     "speaker",
     "plate",
     "tape",
@@ -579,10 +588,13 @@ fn macro_of(kind: &str) -> Macro {
         "transformer" => (
             None,
             vec![
-                p("core", Raw),
-                p("turns", Physical),
-                p("leakage_h", Physical),
+                opt("core", Raw),
+                opt("turns", Physical),
+                opt("leakage_h", Physical),
+                opt("leak_couplings", Raw),
                 opt("interwinding", Raw),
+                opt("component", Raw),
+                opt("shields", Raw),
             ],
             false,
         ),
@@ -622,6 +634,20 @@ fn macro_of(kind: &str) -> Macro {
                 .chain(std::iter::once(opt("bias_substeps", Count)))
                 .chain(crate::tape::TRANSPORT.iter().map(|k| opt(k, Physical)))
                 .collect(),
+            false,
+        ),
+        "capsule" => (
+            Some(3),
+            vec![p("component", Raw), p("polarization_v", Physical)],
+            false,
+        ),
+        "capsule_dual" => (
+            Some(5),
+            vec![
+                p("component", Raw),
+                p("polarization_front_v", Physical),
+                Param("polarization_rear_v", Physical, Some(Value::Float(0.0))),
+            ],
             false,
         ),
         "speaker" => (
@@ -930,11 +956,54 @@ fn expand(
                 f("ref_current_a")?,
             )
         }
+        "capsule" => return capsule_part(ctx, name, nodes, a),
+        "capsule_dual" => return capsule_dual_part(ctx, name, nodes, a),
         "speaker" => return speaker_part(ctx, name, nodes, a),
         "plate" => return plate_part(ctx, name, nodes, a),
         "tape" => return tape_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
+}
+
+fn capsule_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.capsule(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let e0 = ctx.float(&format!("{name}.polarization_v"), &a["polarization_v"])?;
+    Ok(crate::capsule::capsule(
+        name, &nodes[0], &nodes[1], &nodes[2], &model, e0,
+    ))
+}
+
+fn capsule_dual_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.dual_capsule(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let ef = ctx.float(
+        &format!("{name}.polarization_front_v"),
+        &a["polarization_front_v"],
+    )?;
+    let er = ctx.float(
+        &format!("{name}.polarization_rear_v"),
+        &a["polarization_rear_v"],
+    )?;
+    Ok(crate::capsule::capsule_dual(
+        name, &nodes[0], &nodes[1], &nodes[2], &nodes[3], &nodes[4], &model, ef, er,
+    ))
 }
 
 fn speaker_part(
@@ -1080,6 +1149,38 @@ fn switch(
     Ok(els)
 }
 
+/// Python's repr of a sorted list of labels (an error message both builders write alike).
+fn py_labels<'a>(labels: impl Iterator<Item = &'a str>) -> String {
+    let mut v: Vec<&str> = labels.collect();
+    v.sort_unstable();
+    let quoted: Vec<String> = v.iter().map(|s| format!("'{s}'")).collect();
+    format!("[{}]", quoted.join(", "))
+}
+
+/// The compiled block of the part's transformer component, if it names one.
+fn transformer_component(ctx: &Context, name: &str, a: &Args) -> Result<Option<Map>, Error> {
+    if a["component"].is_null() {
+        return Ok(None);
+    }
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let r = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let data = ctx
+        .lib
+        .component_data(&r.to_string())
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let m = data.as_map();
+    let compiled = m.and_then(|m| m.get("compiled")).and_then(Value::as_map);
+    match (m.and_then(|m| m.get("kind")), compiled) {
+        (Some(Value::Str(k)), Some(c)) if k == "transformer" => Ok(Some(c.clone())),
+        _ => Err(ctx.fail(
+            &where_,
+            format!("{r} is not a compiled transformer component"),
+        )),
+    }
+}
+
 fn transformer(
     ctx: &mut Context,
     name: &str,
@@ -1092,40 +1193,184 @@ fn transformer(
             "transformer: a mapping of windings {label: {nodes, ...}}",
         ));
     };
+    let comp = transformer_component(ctx, name, a)?;
+    let empty = Map::default();
+    let cw = comp
+        .as_ref()
+        .and_then(|c| c.get("windings"))
+        .and_then(Value::as_map)
+        .unwrap_or(&empty);
+    if comp.is_some() {
+        let mut have: Vec<&str> = windings_map.keys().collect();
+        let mut want: Vec<&str> = cw.keys().collect();
+        have.sort_unstable();
+        want.sort_unstable();
+        if have != want {
+            return Err(ctx.fail(
+                name,
+                format!(
+                    "the component's windings are {}; the part names {}",
+                    py_labels(cw.keys()),
+                    py_labels(windings_map.keys())
+                ),
+            ));
+        }
+        if !a["leakage_h"].is_null() {
+            return Err(ctx.fail(name, "leakage_h: a component gives every winding its leak"));
+        }
+    }
     let mut windings = Vec::new();
     for (label, w) in windings_map.iter() {
         let where_ = format!("{name}.{label}");
-        let bad = || ctx.fail(&where_, "a winding is {nodes: [dot, other], ratio, r, c}");
+        let bad = || {
+            ctx.fail(
+                &where_,
+                "a winding is {nodes: [dot, other], ratio, r, c, leak}",
+            )
+        };
         let w = w.as_map().ok_or_else(bad)?;
         let nodes = w.get("nodes").and_then(Value::as_list);
-        let unknown = w.keys().any(|k| !["nodes", "ratio", "r", "c"].contains(&k));
+        let unknown = w
+            .keys()
+            .any(|k| !["nodes", "ratio", "r", "c", "leak"].contains(&k));
         let Some(nodes) = nodes.filter(|n| n.len() == 2 && !unknown) else {
             return Err(bad());
         };
-        let ratio = match w.get("ratio") {
-            Some(r) => ctx.number(&format!("{where_}.ratio"), r)?,
-            None => Value::Float(1.0),
-        };
-        let phys = |k: &str| -> Result<f64, Error> {
+        let own = cw.get(label).and_then(Value::as_map).unwrap_or(&empty);
+        // The circuit's value, else the component's, else the default.
+        let value = |k: &str| -> Result<Option<f64>, Error> {
+            let w2 = format!("{where_}.{k}");
             match w.get(k) {
                 Some(x) => {
-                    let w2 = format!("{where_}.{k}");
-                    let v = ctx.physical(&w2, x)?;
-                    ctx.float(&w2, &v)
+                    let v = if k == "ratio" {
+                        ctx.number(&w2, x)?
+                    } else {
+                        ctx.physical(&w2, x)?
+                    };
+                    Ok(Some(ctx.float(&w2, &v)?))
                 }
-                None => Ok(0.0),
+                None => match own.get(k) {
+                    Some(x) => Ok(Some(ctx.float(&w2, x)?)),
+                    None => Ok(None),
+                },
             }
         };
         windings.push(WindingSpec {
             label: label.to_string(),
             dot: nodes[0].py_str(),
             other: nodes[1].py_str(),
-            ratio: ctx.float(&where_, &ratio)?,
-            r_ohm: phys("r")?,
-            c_f: phys("c")?,
+            ratio: value("ratio")?.unwrap_or(1.0),
+            r_ohm: value("r")?.unwrap_or(0.0),
+            c_f: value("c")?.unwrap_or(0.0),
+            leak_h: value("leak")?,
         });
     }
-    let core = core_spec(ctx, name, &a["core"])?;
+    let total = match &a["leakage_h"] {
+        Value::Null => None,
+        v => Some(ctx.float(&format!("{name}.leakage_h"), v)?),
+    };
+    if total.is_none() && windings.iter().any(|w| w.leak_h.is_none()) {
+        return Err(ctx.fail(
+            name,
+            "leakage: every winding's `leak`, or the total `leakage_h`",
+        ));
+    }
+    let core = match (&a["core"], &comp) {
+        (Value::Null, None) => return Err(ctx.fail(name, "needs `core` (or a `component`)")),
+        (Value::Null, Some(c)) => {
+            let cc = c.get("core").and_then(Value::as_map).unwrap_or(&empty);
+            let f = |k: &str| -> Result<f64, Error> {
+                ctx.float(
+                    &format!("{name}.component.core.{k}"),
+                    cc.get(k).unwrap_or(&Value::Null),
+                )
+            };
+            CoreSpec {
+                material: cc.get("material").map(Value::py_str).unwrap_or_default(),
+                area_m2: f("area_m2")?,
+                path_m: f("path_m")?,
+                gap_m: f("gap_m")?,
+            }
+        }
+        (c, _) => core_spec(ctx, name, c)?,
+    };
+    let turns = match (&a["turns"], &comp) {
+        (Value::Null, None) => return Err(ctx.fail(name, "needs `turns` (or a `component`)")),
+        (Value::Null, Some(c)) => ctx.float(
+            &format!("{name}.component.turns"),
+            c.get("turns").unwrap_or(&Value::Null),
+        )?,
+        (v, _) => ctx.float(&format!("{name}.turns"), v)?,
+    };
+    let labels: Vec<&str> = windings.iter().map(|w| w.label.as_str()).collect();
+    let (given, own_k) = match &a["leak_couplings"] {
+        Value::Null => (
+            comp.as_ref()
+                .and_then(|c| c.get("leak_couplings"))
+                .cloned()
+                .filter(|v| !v.is_null())
+                .unwrap_or(Value::List(vec![])),
+            false,
+        ),
+        v => (v.clone(), true),
+    };
+    let Some(given) = given.as_list() else {
+        return Err(ctx.fail(
+            &format!("{name}.leak_couplings"),
+            "a list of {between: [a, b], k}",
+        ));
+    };
+    let mut couplings: Vec<(String, String, f64)> = Vec::new();
+    for (i, d) in given.iter().enumerate() {
+        let where_ = format!("{name}.leak_couplings[{i}]");
+        let between = d
+            .as_map()
+            .filter(|m| m.len() == 2 && m.contains("between") && m.contains("k"))
+            .and_then(|m| m.get("between"))
+            .and_then(Value::as_list)
+            .filter(|b| b.len() == 2);
+        let Some(between) = between else {
+            return Err(ctx.fail(&where_, "{between: [a, b], k}"));
+        };
+        let (x, y) = (between[0].py_str(), between[1].py_str());
+        if !labels.contains(&x.as_str()) || !labels.contains(&y.as_str()) || x == y {
+            return Err(ctx.fail(
+                &where_,
+                format!(
+                    "between two of the windings [{}]",
+                    labels
+                        .iter()
+                        .map(|l| format!("'{l}'"))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            ));
+        }
+        if couplings
+            .iter()
+            .any(|(a, b, _)| (*a == x && *b == y) || (*a == y && *b == x))
+        {
+            return Err(ctx.fail(&where_, format!("{x}-{y} twice")));
+        }
+        let kv = d.as_map().unwrap().get("k").unwrap();
+        let w2 = format!("{where_}.k");
+        let k = if own_k {
+            let v = ctx.physical(&w2, kv)?;
+            ctx.float(&w2, &v)?
+        } else {
+            ctx.float(&w2, kv)?
+        };
+        if !(-1.0 < k && k < 1.0) {
+            return Err(ctx.fail(
+                &where_,
+                format!(
+                    "k = {}: a coupling is between -1 and 1",
+                    crate::yaml::py_float_repr(k)
+                ),
+            ));
+        }
+        couplings.push((x, y, k));
+    }
     let (mut iw, mut c_iw) = (None, 0.0);
     if let Value::Map(d) = &a["interwinding"] {
         let ends = d.get("ends").and_then(Value::as_list).unwrap_or_default();
@@ -1146,14 +1391,107 @@ fn transformer(
         &windings,
         &core,
         &mat,
-        ctx.float(&format!("{name}.turns"), &a["turns"])?,
-        ctx.float(&format!("{name}.leakage_h"), &a["leakage_h"])?,
+        turns,
+        total,
         iw,
         c_iw,
+        &couplings,
         ctx.cores == Cores::Linear,
-    )?;
+    )
+    .map_err(|e| ctx.fail(name, e.0))?;
     if ctx.cores != Cores::Linear {
         ctx.core_models.push(model);
+    }
+    let mut els = els;
+    els.extend(component_capacitors(
+        ctx,
+        name,
+        &windings,
+        comp.as_ref(),
+        &a["shields"],
+    )?);
+    Ok(els)
+}
+
+/// The component's facing capacitances (Python's `_component_capacitors`).
+fn component_capacitors(
+    ctx: &Context,
+    name: &str,
+    windings: &[WindingSpec],
+    comp: Option<&Map>,
+    shields: &Value,
+) -> Result<Vec<Element>, Error> {
+    let caps: Vec<(String, String, f64)> = comp
+        .and_then(|c| c.get("capacitors"))
+        .and_then(Value::as_list)
+        .unwrap_or_default()
+        .iter()
+        .map(|d| {
+            let b = d
+                .as_map()
+                .and_then(|m| m.get("between"))
+                .and_then(Value::as_list)
+                .unwrap_or_default();
+            let c = d
+                .as_map()
+                .and_then(|m| m.get("c"))
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
+            (
+                b.first().map(Value::py_str).unwrap_or_default(),
+                b.get(1).map(Value::py_str).unwrap_or_default(),
+                c,
+            )
+        })
+        .collect();
+    let mut nodes: Vec<(String, String)> = Vec::new();
+    for w in windings {
+        nodes.push((format!("{}.dot", w.label), w.dot.clone()));
+        nodes.push((format!("{}.other", w.label), w.other.clone()));
+    }
+    let wanted: Vec<&str> = caps
+        .iter()
+        .flat_map(|(a, b, _)| [a.as_str(), b.as_str()])
+        .filter_map(|t| t.strip_prefix("shield."))
+        .collect();
+    match shields {
+        Value::Null => {}
+        Value::Map(m) => {
+            for (s, node) in m.iter() {
+                if !wanted.contains(&s) {
+                    return Err(ctx.fail(
+                        &format!("{name}.shields"),
+                        format!("the component has no shield {s}"),
+                    ));
+                }
+                nodes.push((format!("shield.{s}"), node.py_str()));
+            }
+        }
+        _ => {
+            return Err(ctx.fail(&format!("{name}.shields"), "a mapping {shield: node}"));
+        }
+    }
+    let node = |t: &str| nodes.iter().find(|(k, _)| k == t).map(|(_, n)| n.clone());
+    let upper = name.to_uppercase();
+    let mut els = Vec::new();
+    for (t1, t2, c) in &caps {
+        let (Some(a), Some(b)) = (node(t1), node(t2)) else {
+            let missing = if node(t1).is_none() { t1 } else { t2 };
+            let what = missing.split_once('.').map_or("", |x| x.1);
+            return Err(ctx.fail(
+                name,
+                format!("the component's capacitor to {missing}: shields: {{{what}: node}}"),
+            ));
+        };
+        if a == b || *c <= 0.0 {
+            continue;
+        }
+        els.push(parts::capacitor(
+            &format!("C{upper}_{}_{}", t1.replace('.', "_"), t2.replace('.', "_")),
+            &a,
+            &b,
+            *c,
+        ));
     }
     Ok(els)
 }

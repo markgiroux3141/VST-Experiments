@@ -356,3 +356,226 @@
     # "Approximate frequency range (cycles/sec.)", R6 at max / min, per timing capacitor
     f_r6_max_hz: {c2: 20, c3: 40, c4: 110, c5: 280, c6: 670, c7: 1500, c8: 3600}
     f_r6_min_hz: {c2: 60, c3: 130, c4: 340, c5: 880, c6: 2200, c7: 4900, c8: 11400}
+
+# --- Telefunken V76 (device builder B10, transcribed 2026-11-03) ---
+
+"EF804S":
+  source: "Telefunken EF 804 S data sheet, handbook p.331-334 (page codes 010163 / 020163); local copy sources/telefunken_ef804s.pdf (web: https://frank.pocnet.net/sheets/128/e/EF804S.pdf). AEG's EF 804 S sheet (März 1960, web: https://frank.pocnet.net/sheets/173/e/EF804S.pdf) prints the same values"
+  class_a1:           # p.331 'Meßwerte': supply Uba 250 V, Ug3 0, supply Ubg2 140 V, Rk 500 ohm (cathode ~1.9 V)
+    vp_v: 250
+    vg3_v: 0
+    vg2_v: 140
+    rk_ohm: 500
+    ip_a: 3.2e-3      # +-0.6 mA
+    ig2_a: 0.6e-3     # +-0.15 mA
+    gm_s: 2.0e-3      # +-0.4 mA/V
+    rp_ohm: 2.0e+6
+    mu_g2g1: 38
+    ig1_neg_max_a: 0.1e-6
+    vg1_grid_current_onset_v: -1.3   # Ug1e, at Ig1 <= +0.3 uA
+  end_of_life: {ip_a: 2.0e-3, gm_s: 1.4e-3, ig1_neg_a: 1.0e-6}   # p.331: Ia fallen to 2 mA, S to 1.4 mA/V, -Ig risen to > 1 uA
+  # p.332 'Betriebswerte', resistance-coupled amplifier (Rg2 from Ub, Rk bypassed 50 uF, g2 0.5 uF);
+  # thd_pct at 4 / 8 / 12 V rms out. The derived_* electrode voltages are arithmetic on the printed
+  # values (Va = Ub - Ia Ra, Vg2 = Ub - Ig2 Rg2, Vk = (Ia + Ig2) Rk, grid at 0 V), not printed.
+  rc_amplifier:
+    - {vb_v: 250, ra_ohm: 0.3e+6, rg2_ohm: 1.5e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 2000, ip_a: 0.61e-3, ig2_a: 0.11e-3, gain: 210, thd_pct: [0.6, 0.9, 1.2], derived_vak_v: 65.6, derived_vg2k_v: 83.6, derived_vgk_v: -1.44}
+    - {vb_v: 250, ra_ohm: 0.2e+6, rg2_ohm: 1.0e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 1500, ip_a: 0.87e-3, ig2_a: 0.16e-3, gain: 175, thd_pct: [0.5, 0.7, 1.0], derived_vak_v: 74.5, derived_vg2k_v: 88.5, derived_vgk_v: -1.55}
+    - {vb_v: 250, ra_ohm: 0.2e+6, rg2_ohm: 1.2e+6, rg1_ohm: 10.0e+6, rg1_next_ohm: 0.7e+6, rk_ohm: 0, ip_a: 0.9e-3, ig2_a: 0.17e-3, gain: 190, thd_pct: ["<1", "<1", "<1"], derived_vak_v: 70.0, derived_vg2k_v: 46.0}     # grid-leak bias
+    - {vb_v: 100, ra_ohm: 0.3e+6, rg2_ohm: 1.2e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 5000, ip_a: 0.21e-3, ig2_a: 0.045e-3, gain: 125, thd_pct: [1.1, 1.7, 2.6], derived_vak_v: 35.7, derived_vg2k_v: 44.7, derived_vgk_v: -1.28}
+    - {vb_v: 100, ra_ohm: 0.2e+6, rg2_ohm: 1.0e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 3000, ip_a: 0.29e-3, ig2_a: 0.055e-3, gain: 120, thd_pct: [1.1, 1.6, 2.5], derived_vak_v: 41.0, derived_vg2k_v: 44.0, derived_vgk_v: -1.03}
+    - {vb_v: 100, ra_ohm: 0.2e+6, rg2_ohm: 1.2e+6, rg1_ohm: 10.0e+6, rg1_next_ohm: 0.7e+6, rk_ohm: 0, ip_a: 0.3e-3, ig2_a: 0.06e-3, gain: 120, thd_pct: [1.2, 1.8, 3.0], derived_vak_v: 40.0, derived_vg2k_v: 28.0}     # grid-leak bias
+  # p.332, the same amplifier connected as a triode (g2 to a); ik_a is the printed Ia + Ig2
+  triode_rc_amplifier:
+    - {vb_v: 250, ra_ohm: 0.2e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 1500, ik_a: 0.85e-3, gain: 31, thd_pct: [0.6, 0.8, 1.1], derived_vak_v: 78.7, derived_vgk_v: -1.27}
+    - {vb_v: 250, ra_ohm: 0.1e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 1200, ik_a: 1.5e-3, gain: 29, thd_pct: [0.6, 0.7, 1.0], derived_vak_v: 98.2, derived_vgk_v: -1.80}
+    - {vb_v: 100, ra_ohm: 0.2e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 4500, ik_a: 0.28e-3, gain: 27, thd_pct: [1.0, 1.5, 1.8], derived_vak_v: 42.7, derived_vgk_v: -1.26}
+    - {vb_v: 100, ra_ohm: 0.1e+6, rg1_ohm: 1.0e+6, rg1_next_ohm: 1.0e+6, rk_ohm: 2500, ik_a: 0.48e-3, gain: 26, thd_pct: [1.0, 1.7, 2.2], derived_vak_v: 50.8, derived_vgk_v: -1.20}
+  noise: "p.333: equivalent noise voltage at g1 ca. 2 uV, 25-10,000 Hz, Ub 250 V, Ra 100 kOhm, peak noise voltmeter with ear filter to CCIF 1949"
+  hum: "p.333: < 5 uV at Zg1 < 0.5 MOhm (at 50 Hz) and Ck >= 100 uF"
+  capacitances_f:     # p.333
+    input: 4.3e-12    # +-0.5 pF
+    output: 5.5e-12   # +-0.5 pF
+    ag1_max: 0.06e-12
+    g1f_max: 0.002e-12
+  max_ratings: {va0_v: 550, va_v: 300, pa_w: 1.0, vg20_v: 550, vg2_v: 200, pg2_w: 0.2, ik_a: 6.0e-3, rg1_ohm: 3.0e+6, rg1_ohm_pa_below_0_2w: 10.0e+6, rg1_ohm_bias_by_rg1_only: 22.0e+6, vhk_v: 100, rhk_ohm: 20.0e+3, bulb_c: 170}   # p.333
+  heater: {v: 6.3, a: 0.170}   # p.331; +-5% for the guaranteed 10,000 h life
+  pins: "1 g3, 2 s (internal shield), 3 k, 4 f, 5 f, 6 s, 7 a, 8 g2, 9 g1 (noval, p.334); S 1176's base drawing has the same order"
+
+"E83F":
+  source: "Philips E83F (6689) S.Q. tube, Data handbook Dec 1968, p.1-4; local copy sources/philips_e83f_1968.pdf (web: https://frank.pocnet.net/sheets/009/e/E83F.pdf)"
+  class_a1:           # p.2 'Characteristics', column I (nominal): Va 210, Vg3 0, Vg2 120, Rk 165 (cathode ~2.0 V)
+    vp_v: 210
+    vg3_v: 0
+    vg2_v: 120
+    rk_ohm: 165
+    ip_a: 10.0e-3     # initial spread 8.7-11.3 mA, end of life 7 mA
+    ig2_a: 2.1e-3     # initial spread 1.7-2.5 mA, end of life 1.25 mA
+    gm_s: 9.0e-3      # initial spread 7.8-10.2 mA/V, end of life 6.4 mA/V
+    rp_ohm: 0.5e+6    # min 0.3 MOhm
+    mu_g2g1: 38
+    req_rf_ohm: 750   # max 1000
+    req_af_max_ohm: 36.0e+3
+    ig1_neg_max_a: 0.5e-6   # end of life 1.0 uA
+    hum_vg1_max_vrms: 0.5e-3   # Rg1 0.5 MOhm, Rk bypassed
+  cutoff: {vp_v: 210, vg3_v: 0, vg2_v: 120, vg1_v: -5.0, vg1_max_v: -5.25, ip_a: 0.5e-3}   # p.2; the curves put 0.5 mA nearer -4.3 V (philips_e83f.provenance.yaml)
+  # p.4 'Operating characteristics', output tube class A; derived_* = arithmetic (Vg2 = 120 V - Ig2 Rg2, Vk = (Ia + Ig2) Rk), not printed
+  class_a_output:
+    - {va_v: 120, vg3_v: 0, vg2_supply_v: 120, rg2_ohm: 5600, rk_ohm: 180, ip_a: 8.3e-3, ig2_a: 1.7e-3, gm_s: 8.2e-3, rp_ohm: 0.42e+6, load_ohm: 10.0e+3, vin_vrms: [0.35, 1.1], po_w: [0.050, 0.340], thd_pct_at_1_1_vrms: 10, po_w_grid_current: 0.400, derived_vg2_v: 110.5, derived_vk_v: 1.80}
+    - {va_v: 210, vg3_v: 0, vg2_supply_v: 120, rg2_ohm: 5600, rk_ohm: 180, ip_a: 8.3e-3, ig2_a: 1.7e-3, gm_s: 8.2e-3, rp_ohm: 0.44e+6, load_ohm: 20.0e+3, vin_vrms: [0.25, 1.1], po_w: [0.050, 0.660], thd_pct_at_1_1_vrms: 10, po_w_grid_current: 0.870, derived_vg2_v: 110.5, derived_vk_v: 1.80}
+    # po_w_grid_current: at +Ig1 = 0.3 uA, Rg1 0.33 MOhm
+  capacitances_f:     # p.3, to a surrounding cylinder 52 mm x 98 mm
+    input: 8.0e-12           # g1 to g2, g3, k, f, shield; max 8.7 pF
+    input_hot: 10.8e-12      # same, cathode current 12.1 mA
+    output: 3.5e-12          # a to g2, g3, k, f, shield; max 4.1 pF
+    ag1_max: 0.015e-12
+    g1f_max: 0.15e-12
+    kf: 4.0e-12
+  max_ratings: {va0_v: 550, va_v: 210, pa_w: 2.1, vg20_v: 550, vg2_v: 210, pg2_w: 0.35, vg1_neg_v: 100, vg1_neg_peak_v: 200, pg1_w: 0.050, rg1_ohm: 1.0e+6, ik_a: 16.0e-3, ik_peak_a: 80.0e-3, vhk_v: 100, bulb_c: 170}   # p.4, design centre; peaks at duty 0.1, 200 us
+  heater: {v: 6.3, a: 0.300}   # p.2: 285-315 mA
+  pins: "1 g2, 2 g1, 3 k, 4 f, 5 f, 6 a, 7 i.c., 8 i.c., 9 g3 + internal shield (noval, p.1); S 1176's base drawing has the same order"
+
+# --- Microphone capsules (MIC_ROOM_PLAN.md A2 / A3) ---
+
+"BK4134":
+  source: "data/schematics/bk_4134/README.md: Zuckerwar's 4134 parameters (JASA 64, 1978) as reproduced by Homentcovschi & Miles 2011 (hm; web: https://pmc.ncbi.nlm.nih.gov/articles/PMC3257755/), B&K's product data for types 4133-4166 (bk, ~1980; web: https://peel.dk/Bruel&Kjaer/Equipment/Condenser%20Microphone%20Cartridges%20(Product%20datasheets).pdf)"
+  geometry:
+    diaphragm:
+      radius_m: 4.45e-3          # hm (Zuckerwar's table)
+      thickness_m: 5.0e-6        # hm
+      density_kg_m3: 8900.0      # hm: nickel, surface density 0.0445 kg/m^2
+      tension_n_m: 3162.0        # hm
+    gap_m: 20.77e-6              # hm
+    backplate:
+      radius_m: 3.61e-3          # hm
+      thickness_m: 0.84e-3       # hm: the holes' depth
+      holes: 6                   # hm, centres 2.03 mm from the axis
+      hole_radius_m: 0.51e-3     # hm
+    cavity_m3: 1.264e-7          # hm: the back chamber
+    vent: {lf_3db_hz: 2.9}       # bk Fig. 15 (the response's -3 dB point, read by eye)
+    stray_capacitance_f: 0.55e-12   # derived: bk's 18 pF at 250 Hz less the active 17.45 pF (eps0 pi b^2 / h)
+    # hm: R_A ~1.2e8 N s/m^5, the 4134's air damping extracted from their FEM solution (its
+    # noise: 17.9 dB(A)); Skvor's uniform-array formula gives 2.75e8 here (6 large holes and
+    # the unmodelled peripheral slit drain the film faster: 15.6 kHz at -3 dB, 21.8 dB(A))
+    film_resistance_pa_s_m3: 1.2e+8
+    source: "hm (Zuckerwar's table), bk; the peripheral slit ('length 0.3 mm', its other dimensions unknown) is not modelled; air at 20 C (varimu/devices/capsule.py), not Zuckerwar's"
+  published:
+    polarization_v: 200.0               # bk
+    capacitance_f: 18.0e-12             # bk, at 250 Hz
+    sensitivity_mv_pa: 12.5             # bk, -38 dB re 1 V/Pa
+    resonance_hz: 23000.0               # bk: 90 degree phase
+    flat_2db_hz: [3.9, 20000.0]         # bk
+    noise_dba: 18.0                     # bk; theory 17.9 (hm) .. 19.7 (Zuckerwar)
+    noise_dba_theory: [17.9, 19.7]
+    # bk Fig. 15 (actuator response, read by eye from the scan; not digitized): dB re
+    # the level at 250 Hz
+    response_db: {"20": 0.0, "8000": 0.0, "15000": 1.0, "22000": 0.0, "30000": -4.0, "40000": -8.0}
+
+"K47":
+  source: "data/schematics/neumann_u47/README.md ('The capsule (M 7, K 47)') and K47_THEORY.md: no primary source for the geometry; what makers measured is marked, the rest bounded and fitted to Neumann's curves by scripts/fit_k47.py (value: ..., the bounds in its comment) in Torio & Segota's regime (AES 2000: a nearly slack diaphragm, the gradient resistance between the sides)"
+  polarization_v: 63.0     # sch: +63 V on the backplate (README)
+  geometry:
+    diaphragm:
+      radius_m: {value: 12.5e-3}      # web (K47_THEORY.md: an M7's gold area 25.4 mm, makers / forums)
+      thickness_m: {value: 6.0e-6}    # provisional: model knowledge (forum lore: ~6 um PET for the polyester capsule; Neumann: PVC in the M 7, polyester later)
+      density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
+      tension_n_m: {value: 32.4}      # provisional: fitted (bounds 12-200 N/m; K47_THEORY.md: ~8-60 N/m, the M7 tuned to ~800-950 Hz)
+    gap_m: {value: 50.0e-6}           # derived: the 2 x 78-83 pF (sch) with the backplate's radius, less ~3 pF stray: eps0 pi b^2 / 77 pF
+    backplate:
+      radius_m: {value: 11.8e-3}      # provisional: model knowledge (the electrode a little inside the diaphragm's clamping)
+      thickness_m: {value: 5.65e-3}   # web (K47_THEORY.md: an M7 measured 5.73 mm, its through holes 5.65 mm long)
+      through:
+        holes: {value: 40}            # provisional: model knowledge (part of the ~153 holes (a Science Museum label, README) go through; the split is unknown)
+        radius_m: {value: 0.4e-3}     # web (K47_THEORY.md: 0.8 mm through holes, makers / forums)
+      blind:
+        holes: {value: 94.3}            # provisional: fitted (bounds 15-140 per side)
+        radius_m: {value: 0.54e-3}    # web (K47_THEORY.md: ~1.07-1.09 mm blind holes, makers / forums)
+        depth_m: {value: 0.0045}      # provisional: fitted (bounds 0.5-4.5 mm; K47_THEORY.md: ~4 mm, a replica's)
+    film_resistance_pa_s_m3: {value: 4.5e+06}       # provisional: fitted (the film into the blind holes, bounds 1e4-3e7)
+    through_resistance_pa_s_m3: {value: 2.136e+07}    # provisional: fitted (the gradient resistance, Torio & Segota's R_a, bounds 1e6-3e9)
+    leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
+    stray_capacitance_f: {value: 3.0e-12}   # provisional: model knowledge (the electrode's leads and insulator)
+    # The capsule as a rigid body of revolution for its entries' diffraction (varimu/mics/bor.py;
+    # K47@2 had a fitted sphere in its place, 10.98 mm)
+    body:
+      radius_m: {value: 14.9e-3}          # web (K47_THEORY.md 1.6: an M 7 measured 29.85 mm without the middle rim, GroupDIY)
+      rim_radius_m: {value: 16.5e-3}      # web (README.md: the K 47 33 mm outer diameter, GroupDIY)
+      rim_thickness_m: {value: 1.5e-3}    # provisional: model knowledge (the middle rim's width; no source)
+      spacing_m: {value: 0.00575}         # provisional: grid: (scripts/fit_k47.py --spacing-mm; the backplate's 5.65 mm plus the two gaps, the diaphragms on its faces; an M 7 measured 5.73 mm thick)
+      ring_proud_m: {value: 0.0005}          # provisional: grid: (scripts/fit_k47.py --proud-mm; the clamping rings' faces ahead of the diaphragms, unknown)
+  published:
+    capacitance_f_per_side: [78.0e-12, 83.0e-12]   # sch: KK47 '2 x 78...83 pF'
+
+# --- Neumann U47 (A3) ---
+# the VF 14 (VF 14 M), transcribed 2026-11-03; curves: telefunken_vf14.provenance.yaml
+
+"VF14":
+  source: "Funkschau 1948 Heft 1, pp. 6-8, 'VF 14, Daten und Kennlinien' (Telefunken's data, 'Betriebswerte (auch für statische Messungen)'); local copy sources/funkschau_1948_01_vf14_b.pdf (web: https://www.worldradiohistory.com/INTERNATIONAL/Funkschau/1948/Funkschau-1948-01.pdf, PDF pp. 8-10). Keys starting ef14_: Telefunken EF 14 'Vorläufige Daten', sheets 011144 / 021144 (p.1-4), the same system with a 6.3 V / 470 mA heater; local copy sources/telefunken_ef14.pdf (web: https://frank.pocnet.net/sheets/076/e/EF14.pdf)"
+  heater: {v: 60, a: 0.050}   # fs48 p.6 'Heizung': indirectly heated cathode for AC / DC ('Allstrom'), Uf 60 V, If 50 mA
+  heater_note: "fs48 p.6 prints 60 V; Neumann's 1958 operating instructions say 'the 55 volt heater voltage' (data/schematics/neumann_u47/README.md, man58 C.11); radiomuseum lists 60 V / 0.05 A. The U 47 underruns it at about 35 V / 38.8 mA either way (sch:, README)."
+  # fs48 p.6 a)-d), pentode / tetrode operating points; dg2 = screen-grid Durchgriff (as a fraction);
+  # derived_vk_v = Rk x (Ia + Ig2) is arithmetic on the printed values, not printed
+  pentode_rf:         # a) 'Hf-Pentode für Breitbandverstärkung; Bremsgitter an Katode'
+    vp_v: 200
+    vg3_v: 0
+    vg2_v: 200
+    vg1_v: -4.5
+    rk_ohm: 300
+    ip_a: 12.0e-3
+    ig2_a: 1.7e-3
+    gm_s: 7.0e-3
+    dg2: 0.035
+    rp_ohm: 200.0e+3
+    req_ohm: 1000     # 'Rauschwiderstand'
+    s_over_c: "0,3 (printed with the unit ohm)"
+    derived_vk_v: 4.11   # 300 ohm x 13.7 mA, against the printed Ug1 -4.5 V
+  tetrode_rf:         # b) 'Hf-Tetrode für Antennenverstärker zur Kennlinienlinearisierung; Bremsgitter an Anode'
+    {vp_v: 200, vg2_v: 200, vg1_v: -4.5, rk_ohm: 220, ip_plus_ig3_a: 18.0e-3, ig2_a: 1.6e-3, gm_s: 9.5e-3, dg2: 0.036, rp_ohm: 50.0e+3, req_ohm: 600, thd_pct_max_at_5_vrms: 0.01}
+  tetrode_g3_at_g2:   # c) 'Hf-Tetrode für Breitbandverstärkung; Bremsgitter an Schirmgitter'
+    {vp_v: 200, vg2_v: 100, vg1_v: -2, rk_ohm: 150, ip_a: 12.0e-3, ig2_plus_ig3_a: 2.0e-3, gm_s: 10.0e-3, dg2: 0.04, rp_ohm: 0.5e+6, req_ohm: 600}
+  pentode_g3_positive:   # d) 'Hf-Pentode, Bremsgitter mit positiver Vorspannung (größte Aussteuerfähigkeit)'
+    {vp_v: 200, vg3_v: 20, vg2_v: 200, vg1_v: -4.5, rk_ohm: 350, ip_a: 11.5e-3, ig3_a: "+-0.2e-3", ig2_a: 1.5e-3, gm_s: 6.5e-3, dg2: 0.034, rp_ohm: 300.0e+3, req_ohm: 1200}
+  # fs48 p.6 f) 'Nf-Pentode mit RC-Kopplung; Bremsgitter an Katode', Ub 200 V; vp_v, vg2_v printed in
+  # parentheses (approximate); vout_vrms_max at thd_pct
+  pentode_rc_amplifier:
+    - {vb_v: 200, ra_ohm: 10.0e+3, vp_v: 125, rg2_ohm: 40.0e+3, vg2_v: 160, vg1_v: -3.4, rk_ohm: 400, ip_a: 7.5e-3, ig2_a: 1.0e-3, vout_vrms_max: 37, thd_pct: 5, gain: 38}
+    - {vb_v: 200, ra_ohm: 20.0e+3, vp_v: 100, rg2_ohm: 50.0e+3, vg2_v: 160, vg1_v: -3.4, rk_ohm: 600, ip_a: 4.8e-3, ig2_a: 0.8e-3, vout_vrms_max: 45, thd_pct: 5, gain: 55}
+    - {vb_v: 200, ra_ohm: 50.0e+3, vp_v: 100, rg2_ohm: 400.0e+3, vg2_v: 100, vg1_v: -3.0, rk_ohm: 1250, ip_a: 2.1e-3, ig2_a: 0.25e-3, vout_vrms_max: 30, thd_pct: 5, gain: 100}
+  # Triode connection (g2 and g3 tied to the anode, as in the U 47). ik_a is the printed 'Ia (+Ig3+Ig2)'.
+  triode_rc_amplifier:   # fs48 p.7 i) 'Nf-Triode mit RC-Kopplung; Schirmgitter und Bremsgitter mit Anode verbunden'
+    vb_v: 200
+    ra_ohm: 40.0e+3
+    ra_decoupling_ohm: 10.0e+3   # 'Anodensiebwiderstand'
+    vp_v_approx: 130             # printed '(Anodenspannung ca. 130 Volt)'
+    vg1_v: -5
+    rk_ohm: 5000
+    ik_a: 1.0e-3
+    durchgriff: 0.047            # 'Durchgriff D 4,7 %'
+    gain: 21                     # 'Spannungsverstärkung bei Ua~eff = 60 Volt: ca. 21fach'
+    vout_vrms: 60
+    derived_mu: 21.3             # 1 / D, arithmetic
+    derived_vak_v: 145           # 200 V - 1 mA x 50 kOhm - 5 V, arithmetic; the printed anode voltage is 'ca. 130 V' (the curves put 1 mA at -5 V at Ua 127 V)
+  triode_mixer:          # fs48 p.7 n) 'additive Mischverstärkung in Triodenschaltung, fremderregt; Oszillatorspannung an g1'
+    {vp_v: 150, vosc_v: -7, ik_a: 8.8e-3, gc_s: 2.8e-3, rp_ohm: 50.0e+3, req_ohm: 1000}   # Uosz = Ug1 = Ig1 x Rg1 (grid-leak bias by the oscillator); gc = conversion transconductance; rp_ohm is the printed Ri in triode connection
+  triode_output:         # fs48 p.8 s) 'Endtriode; Schirmgitter und Bremsgitter mit Anode verbunden'
+    {vp_v: 200, vg1_v: -4.5, rk_ohm: 225, ik_a: 20.0e-3, load_ohm: 5000, po_w: 1.0, thd_pct: 5, derived_vk_v: 4.5}   # derived: 225 ohm x 20 mA
+  grid_current_onset: {vg1_v: -1.3, ig1_max_a: 0.3e-6}   # fs48 p.8 'Gitterstrom bei Ug1 -1,3 Volt: Ige <= 0,3 uA' (EF 14 p.4 the same: 'Gitterstromeinsatzpunkt (Ig1 <= 0,3 uA) Uge -1,3 V')
+  bias: "fs48 p.8: 'Die VF 14 darf nur mit automatischer Gittervorspannung betrieben werden' (automatic, i.e. cathode, bias only)"
+  max_ratings: {va_v: 300, va0_v: 550, vg3_v: 300, vg30_v: 550, vg2_v: 200, vg20_v: 550, pa_w: 5, pg2_w: 0.7, ik_a: 30.0e-3, rg1_ohm_pa_ge_2w: 0.5e+6, rg1_ohm_pa_below_2w: 1.0e+6, rg3_ohm: 0.1e+6, vhk_v: 100, rhk_ohm: 20.0e+3}   # fs48 p.8 'Grenzwerte'
+  not_transcribed: "fs48 e) (AF tetrode, transformer coupled), g) and h) (AF pentode with g3 at +20 V, AF tetrode RC), k) (variable-mu control), l) and m) (pentode mixers), o) and p) (audion): pp. 6-7"
+  # EF 14 sheet (6.3 V heater; operating points at Ua 250 V)
+  ef14_heater: {v: 6.3, a: 0.470, a_tolerance: 0.10}   # EF 14 p.1, p.3 '470 mA +-10 %'
+  ef14_pentode:          # EF 14 p.1 a) 'Bremsgitter an Kathode (Breitbandverstärker)'
+    {vp_v: 250, vg3_v: 0, vg2_v: 200, vg1_v: -4.5, ip_a: 12.0e-3, ig2_a: 1.7e-3, gm_s: 7.0e-3, rp_ohm: 200.0e+3, req_ohm: 1000, rk_ohm: 300}
+  ef14_tetrode:          # EF 14 p.1 b) 'Bremsgitter an Anode (Antennenverstärker)'; Ub = supply
+    {vb_v: 250, vg2_v: 200, vg1_v: -4.5, ip_plus_ig3_a: 18.0e-3, ig2_a: 1.6e-3, gm_s: 9.5e-3, rp_ohm: 30.0e+3, req_ohm: 600, rk_ohm: 220}
+  ef14_tail_current: {vf_v: 6.3, vp_v: 250, vg2_v: 200, vg3_v: 0, vg1_v: -10, ip_max_a: 1.5e-3}   # EF 14 p.3 '2. Anodenschwanzstrom'
+  ef14_spread:           # EF 14 p.3 '3. Streuwerte'
+    at_vg1_minus_3: {vf_v: 6.3, vp_v: 200, vg2_v: 200, vg3_v: 0, vg1_v: -3, ip_mean_a: 33.0e-3, ip_min_a: 20.0e-3, ip_max_a: 45.0e-3}
+    heater_5_8_v: {vf_v: 5.8, ip_drop_mean_a: 5.0e-3}   # 'Bei Uf = 5,8 V ist der Anodenstrom im Durchschnitt 5 mA kleiner' (same conditions, -3 V)
+    at_ip_12ma: {vf_v: 6.3, vp_v: 200, vg2_v: 200, vg3_v: 0, ip_a: 12.0e-3, gm_s: [5.5e-3, 9.5e-3], vg1_v: [-3.5, -6.5], ig2_a: [1.15e-3, 4.0e-3]}
+  ef14_max_ratings: {va0_v: 550, va_v: 300, vg30_v: 550, vg3_v: 300, vg20_v: 550, vg2_v: 200, pa_w: 5, pg2_w: 0.7, ik_a: 30.0e-3, rg1_ohm: 0.5e+6, vhk_v: 100, rhk_ohm: 20.0e+3}   # EF 14 p.3-4
+  ef14_capacitances_f:   # EF 14 p.4; none printed for the triode connection
+    pentode: {input: 9.5e-12, input_range: [9.0e-12, 10.0e-12], output: 8.2e-12, output_range: [7.6e-12, 8.8e-12], ag1_max: 0.01e-12}
+    g3_at_anode: {input: 9.5e-12, input_range: [9.0e-12, 10.0e-12], output: 10.0e-12, output_range: [9.4e-12, 10.6e-12], ag1_max: 0.15e-12}
+  pins: "EF 14 p.4 'Sockelschaltbild' (steel tube, Y8A base): g1, k, m, g2, f, f, g3, a clockwise in the drawing starting at g1 (m = the metal envelope); pin numbers not printed. The VF 14's base drawing wasn't found; fs48 doesn't print one."
+  envelope: "steel bulb ('Stahlröhre', fs48 p.6), 36 mm diameter (EF 14 p.4 'Kolbenabmessungen'; Funkschau 12/1947)"

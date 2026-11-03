@@ -1,0 +1,119 @@
+# Compiled by varimu-components 0.2.0 on 2026-11-03.
+# Don't edit by hand: edit the design and save it as a new version.
+name: OT_5E3
+kind: transformer
+source: 'Fender 5E3 output transformer (original Triad 50246; 8 k CT : 8 ohm): the construction isn''t published (frames only), so it is fitted to the reproduction''s DC resistances, inductance and leakage, web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf'
+compiler: varimu-components 0.2.0
+construction:
+  core:
+    lamination: {value: EI-87, source: 'derived: the 2-3/4 x 2-1/4 in frames of reproductions (data/schematics/fender_5e3/README.md; P-TGO-002 draws 2.285 in across the frame) hold the EI-87 lamination (2.625 x 2.187 in); bounds EI-75 to EI-100'}
+    material: {value: grain_oriented_si_steel, source: 'provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml, as the 5E3 circuit used it before; the era''s non-oriented M-19 is an option)'}
+    stack_m: {value: 0.0254, source: 'web: Tube Amp Doctor quotes a 1 in stack (data/schematics/fender_5e3/README.md)'}
+    stacking_factor: {value: 0.9, source: 'web: McLyman, Transformer and Inductor Design Handbook 3rd ed. Table 3-1 (14 mil laminations interleaved 1x1: 0.90), https://coefs.charlotte.edu/mnoras/files/2013/03/Transformer-and-Inductor-Design-Handbook_Chapter_3.pdf'}
+    stacking: {value: interleaved, source: 'provisional: model knowledge (push-pull output transformers, ungapped: E and I interleaved)'}
+    joint_gap_m: {value: 9.3076e-05, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): 3.67 H per half (1 kHz, 1 V) in the material model; also stands in for the low-field permeability of the era''s steel'}
+  bobbin:
+    wall_m: {value: 0.001, source: 'provisional: model knowledge (a paper or fibre tube, ~1 mm)'}
+    cheek_m: {value: 0.0008, source: 'provisional: model knowledge (fibre flanges, ~0.8 mm)'}
+    margin_m: {value: 0.0015, source: 'provisional: model knowledge (creepage margin each end, ~1.5 mm)'}
+    pitch_factor: {value: 1.1765, source: 'web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)'}
+  arrangement: {value: layer, source: 'provisional: model knowledge (layer-wound primary halves and secondary, no interleaving: what the measured asymmetries imply, scripts/fit_ot_5e3.py)'}
+  windings: [pa, pb, s]
+  sections:
+  - winding: pa
+    turns: {value: 1041, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the inner half''s resistance'}
+    layers: {value: 7, source: 'derived: turns / turns per layer (the traverse over the wire at the pitch factor)'}
+    wire: {value: 0.13 mm grade 1, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the wire table searched (one size in both halves fits best)'}
+    enamel: {value: enamel, source: 'provisional: model knowledge (heavy-build enamelled magnet wire)'}
+    interlayer:
+      thickness_m: {value: 0.00013, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the outer half''s resistance and the leakages (bounds 0.025-0.13 mm, 0.001-0.005 in kraft)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge (kraft interlayer paper)'}
+  - insulation:
+      thickness_m: {value: 0.002, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): between the primary halves (bounds 0.05-2.0 mm)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge (kraft wraps between windings)'}
+  - winding: pb
+    turns: {value: 1041, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the inner half''s resistance'}
+    layers: {value: 7, source: 'derived: turns / turns per layer (the traverse over the wire at the pitch factor)'}
+    wire: {value: 0.13 mm grade 1, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the wire table searched (one size in both halves fits best)'}
+    enamel: {value: enamel, source: 'provisional: model knowledge (heavy-build enamelled magnet wire)'}
+    interlayer:
+      thickness_m: {value: 0.00013, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the outer half''s resistance and the leakages (bounds 0.025-0.13 mm, 0.001-0.005 in kraft)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge (kraft interlayer paper)'}
+  - insulation:
+      thickness_m: {value: 0.0017373, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): between the primary and the secondary (bounds 0.05-2.0 mm)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge (kraft wraps between windings)'}
+  - winding: s
+    turns: {value: 66, source: 'derived: 8000 ohm CT : 8 ohm, secondary turns 2 / sqrt(8000 / 8) of a half'}
+    layers: {value: 2, source: 'derived: turns / turns per layer (the traverse over the wire at the pitch factor)'}
+    wire: {value: AWG 22 heavy, source: 'derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the secondary resistance, nearest size'}
+    enamel: {value: enamel, source: 'provisional: model knowledge (heavy-build enamelled magnet wire)'}
+  leakage_method: field
+  rating:
+    windings: [pa, pb]
+    v_rms: {value: 346.41, source: 'derived: 15 W into 8000 ohm (P-TGO-002), sqrt(P Z)'}
+    f_hz: {value: 70.0, source: 'provisional: model knowledge (a guitar amp OT rated near its lowest note, ~70-80 Hz)'}
+resolved:
+  lamination: {name: EI-87, shape: EI, leg_m: 0.022224999999999998, window_width_m: 0.0111252, window_height_m: 0.033350199999999997, path_m: 0.13335, path_derived: false, source: 'web: https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf (Tempel Transformer Index & Catalog: one data sheet per size, tongue, window and ''Length of Magnetic Path''; catalog pages 3-23); overall E width and assembled length (E + I) from Edcor''s drawings 20000-EIxxx (web: https://cdn.shopify.com/s/files/1/0586/3830/3419/files/20000-EI075.pdf and the like). EI-75 and up are scrapless (window T/2 x 1.5T, path 6T); McLyman, Transformer and Inductor Design Handbook 3rd ed., Tables 3-2/3-3 agree'}
+  material: {name: grain_oriented_si_steel, source: 'web: https://arxiv.org/abs/2405.11011 Table II, material A (H75-23 grain-oriented steel of medium-voltage transformers; brute-force JA fit to its B-H curve, 2.3% error; Ms fixed from its known saturation). Stands in for AISI M6, the grain-oriented grade of the replacement T102/T104 (web: https://don-audio.com/Sowter-8344e-Fairchild-Signal-amp-output-transformer-T102-202); not a fit to M6 itself'}
+  copper: {resistivity_ohm_m: 1.7241e-08, temperature_c: 20.0, source: 'web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (NBS Handbook 100, Copper Wire Tables, 1966: the International Annealed Copper Standard, conductivity 58 m/(ohm mm^2) at 20 C, ''volume resistivity of annealed copper at 20 C = 100/58 = 1.7241 microhm-cm'', PDF p.16-17; temperature coefficient 0.00393 at 20 C, PDF p.10; IEC Publication 28, now IEC 60028)'}
+  wires:
+    0.13 mm grade 1: {bare_m: 0.00013000000000000002, overall_m: 0.00014549999999999999, source: 'bare: nominal 0.13 mm; overall (grade 1, nominal): web: https://www.elektrisola.com/Attachments/TechnicalDataBySize/ELEKTRISOLA_EnCuWire_IECJIS_Datasheet_eng.pdf (Elektrisola, Technical data for enamelled copper wire based on IEC 60317, MW.IECJIS.eng/2015.2: overall diameter min-max per grade); agrees with IEC 60317-0-1:2008 Table 1 where they overlap (web: https://cdn.standards.iteh.ai/samples/15166/1f0b81c68a25491f89e03d966be8f9d7/IEC-60317-0-1-2008.pdf, PDF p.12)'}
+    AWG 22 heavy: {bare_m: 0.0006438032984904794, overall_m: 0.00070104, source: 'bare: web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (the American Wire Gage''s law, PDF p.12: No. 0000 0.4600 in, No. 36 0.0050 in, ratio 92^(1/39); published as ASTM B 258); overall (heavy, nominal): web: https://mwswire.com/wp-content/uploads/2024/01/MWS-copper-magnet-wire-data.pdf (MWS Wire, Copper Magnet Wire Data, p.2: overall diameters ''derived from NEMA MW1000-2020'', min / nom / max)'}
+  dielectrics:
+    enamel: {eps_r: 3.8, source: 'provisional: model knowledge (magnet wire enamels: polyurethane, polyvinyl formal, polyester-imide, oleoresinous; no datasheet gives it; a patent snippet (US 10199138, unverified) puts conventional enamels at 3.8-4.2 at 25 C)'}
+    kraft_dry: {eps_r: 2.2, source: 'provisional: model knowledge (porous unimpregnated kraft, ~0.75-1.0 g/cm^3; Nomex 410 papers of like density read 1.6-2.7 at 60 Hz, same sheet as nomex410_*)'}
+compiled:
+  source: 'derived: varimu-components 0.2.0 from this version''s construction (the formulas: crates/varimu-components)'
+  core: {material: grain_oriented_si_steel, area_m2: 0.0005080635, path_m: 0.13335, gap_m: 0.000186152}
+  turns: 1041.0
+  windings:
+    pa: {ratio: 1.0, r: 147.2533185037065, c: 5.4537230821892664e-11, leak: 0.011147753515742683}
+    pb: {ratio: 1.0, r: 179.5255201503337, c: 6.435673206437737e-11, leak: 0.010806886085640838}
+    s: {ratio: 0.06340057636887608, r: 0.5373905326131698, c: 3.217366831558933e-10, leak: 4.4870075200047086e-05}
+  leak_couplings:
+  - between: [pa, pb]
+    k: 0.15602956102696694
+  - between: [pa, s]
+    k: -0.8084887463975646
+  - between: [pb, s]
+    k: 0.11981410485114964
+  capacitors:
+  - between: [pa.dot, pb.dot]
+    c: 2.014542846353331e-12
+  - between: [pa.dot, pb.other]
+    c: 1.007271423176664e-13
+  - between: [pa.other, pb.dot]
+    c: 2.548396700636971e-11
+  - between: [pa.other, pb.other]
+    c: 2.014542846353337e-12
+  - between: [pb.dot, s.dot]
+    c: 2.350869983082419e-12
+  - between: [pb.dot, s.other]
+    c: 4.701739966164829e-13
+  - between: [pb.other, s.dot]
+    c: 2.7270091803756135e-11
+  - between: [pb.other, s.other]
+    c: 9.4034799323297e-12
+report:
+  windings:
+    pa: {turns: 1041.0, copper_m: 113.36506071736797, dcr_ohm: 147.2533185037065, magnetizing_h: 3.6588364166163867, star_leak_h: 0.019770020843694506, self_c_f: 5.4537230821892664e-11}
+    pb: {turns: 1041.0, copper_m: 138.2102739616518, dcr_ohm: 179.5255201503337, magnetizing_h: 3.6588364166163867, star_leak_h: -0.0012405411190789019, self_c_f: 6.435673206437737e-11}
+    s: {turns: 66.0, copper_m: 10.146676994928697, dcr_ohm: 0.5373905326131698, magnetizing_h: 0.014707179908830165, star_leak_h: 8.271694147780309e-05, self_c_f: 3.217366831558933e-10}
+  leakage_method: field
+  short_circuit_h: {pa (pb shorted): 0.0185294797246156, pa (s shorted): 0.0403482526751011, pb (pa shorted): 0.0185294797246156, pb (s shorted): 0.019337690712327694, s (pa shorted): 0.00016218517133062256, s (pb shorted): 7.773042135360815e-05}
+  core: {area_m2: 0.0005080635, path_m: 0.13335, gap_m: 0.000186152, saturation_t: 1.9089950601783554}
+  window: {traverse_m: 0.028750199999999997, extent_m: 0.00967113790890878, window_width_m: 0.0111252, field_length_m: 0.03028298065266929, copper_fill: 0.13238933399309147}
+  short_circuit_formula_h: {pa (pb shorted): 0.01718859415191081, pa (s shorted): 0.03902299953724915, pb (pa shorted): 0.01718859415191081, pb (s shorted): 0.018042014437772647, s (pa shorted): 0.00015685813997316303, s (pb shorted): 7.252227813437502e-05}
+  flux:
+    windings: [pa, pb]
+    v_rms: 346.41
+    f_hz: 70.0
+    b_peak_t: 1.0530010133276924
+  facing_capacitance:
+  - between: [pa, pb]
+    sections: [0, 2]
+    c_f: 2.961377984139404e-11
+  - between: [pb, s]
+    sections: [2, 4]
+    c_f: 3.9494615715784735e-11
+  warnings: ['leakage: the star needs a negative branch (branches pa 19.7700 mH, pb -1.2405 mH, s 0.0827 mH): compiled as coupled series leakages']

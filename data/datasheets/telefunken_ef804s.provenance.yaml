@@ -1,0 +1,59 @@
+device: "EF804S"
+document: "Telefunken EF 804 S, Kling- und brummarme NF-Pentode (Netzröhre für GW-Heizung)"
+publisher: Telefunken
+date: "not printed; page codes 010163 / 020163 / 030163, handbook pages 331-335"
+local_copy: sources/telefunken_ef804s.pdf
+local_copy_sha256: 8af754e8f38a89c23c442340ed4697122314422f510f50b6cdc3687f88dc7046
+scan_source: "web: https://frank.pocnet.net/sheets/128/e/EF804S.pdf"
+other_copies: >-
+  AEG EF 804 S, März 1960 (Z 40/Sf-Sick 57168), web: https://frank.pocnet.net/sheets/173/e/EF804S.pdf
+  (sha256 422b3240db664d53b37be7d6db11d60434bc86e2283c2c7e7fc6a6019d0ac687): the same tables and,
+  by eye, the same curve page. Telefunken EF 804 (200 mA heater), web:
+  https://frank.pocnet.net/sheets/128/e/EF804.pdf: the same curve page. No sheet with screen-current
+  curves or triode-connected curves was found (frank.pocnet.net, tubedatabase.co, web search,
+  2026-11-03).
+digitized_with: >-
+  the PDF's native 1-bit 300 dpi page image (PyMuPDF), p.5 rotated upright; each grid line fitted
+  along its length on clean grid-width runs, values interpolated between the neighbouring fitted lines
+  (the printed grid isn't uniform: an affine fit left 0.8-1.0 px rms, up to 2.8 px); strokes traced
+  column by column (rows for the transfer curves) as run centres, grid-line bands masked (a stroke on a
+  grid line by its visible outer edge); read at round values by local linear fits; every overlay
+  checked by eye (Claude Code subagent, scratch scripts not kept)
+digitized_by: Claude Code
+digitized_on: 2026-11-03
+files:
+  telefunken_ef804s_plate.csv:
+    figure: "PDF p.5 (handbook p.335), right graph: Ia = f(Ua) at Ug2 = 140 V, Ug3 = 0 V, Ug1 = parameter"
+    columns: "vg2_v, vg1_v, va_v, ia_a"
+    curves: "Vg1 = 0, -0.5, -1, -1.5, -2, -2.5, -3, -3.5, -4, -4.5 V"
+    coverage: >-
+      Va 10-495 V (grid: 25 V x 0.5 mA, 0-550 V x 0-11 mA); points beyond the Na = 1 W line (dashed
+      there) left out, so 0 V to 125 V, -0.5 V to 150, -1 V to 175, -1.5 V to 200, -2 V to 300,
+      -2.5 V to 450; -4.5 V from 25 V (below 0.07 mA the stroke lies on the zero axis line).
+      Only one screen voltage (140 V): the V76's screens (55-165 V re cathode) are covered by the
+      transfer curves only.
+  telefunken_ef804s_transfer.csv:
+    figure: "PDF p.5 (handbook p.335), left graph: Ia = f(Ug1) at Ua = 250 V, Ug3 = 0 V, Ug2 = parameter"
+    columns: "va_v, vg2_v, vg1_v, ia_a"
+    curves: "Vg2 = 180, 140, 100, 60 V"
+    coverage: >-
+      Ia 0.2-10 mA (each curve up to its end at Vg1 = 0: 180 V to 10 mA, 140 V to 7, 100 V to 4,
+      60 V to 2.5 mA); grid 0.5 V x 0.5 mA. Vg1 read at Ia = 0.2, 0.3, ..., 1, 1.25, 1.5, 2, 2.5, ...
+axis_calibration: "labelled grid lines: plate 0-550 V every 25 V (labels every 50 V) x 0-11 mA every 0.5 mA (labels every 1 mA); transfer -8..0 V every 0.5 V (labels every 1 V), same Ia axis"
+estimated_error: >-
+  About +-0.03 mA on the plate curves (+-0.05 mA in the knee below 20 V), +-0.03 V on the transfer
+  curves above 1 mA, +-0.06 V near cut-off (0.2-0.5 mA). Checks: the drawn Na = 1 W line reads
+  0.97-1.00 W at 140-450 V; the plate curves give 2.98 mA (-2 V) and 2.05 mA (-2.5 V) at 250 V,
+  the transfer curve at Vg2 140 V gives 3.12 mA at -2 V; at the measuring point (p.1: Uba 250 V,
+  Ubg2 140 V, Rk 500 ohm: Ia 3.2 +-0.6 mA, Ig2 0.6 mA, so the cathode at ~1.9 V) the transfer curve
+  gives 3.29 mA at Vg1 = -1.9 V; its slope there is 1.8 mA/V (printed S 2 +-0.4). The same system
+  drawn independently on the EF 806 S sheet (telefunken_ef806s.provenance.yaml) agrees within 0.03 mA
+  rms (max 0.08 mA) on the plate curves (115 points, Va >= 50 V) and 0.01-0.1 V on the transfer
+  curves.
+notes: >-
+  No screen-current curves on any EF 804 / EF 804 S / EF 806 S sheet found; Ig2 only as tabulated
+  points (published_points.yaml "EF804S": the measuring point and the p.2 resistance-coupled amplifier
+  table, whose columns 1-2 sit in the V76's V1 region). Those table points need ~0.6 V less negative
+  grid than these curves for the same Ia (column 1: Vg2k 83.6 V, Vgk -1.44 V, 0.61 mA; the transfer
+  curves interpolated to 83.6 V screen give 0.61 mA at -2.14 V, at Va 250 V); the V76's printed V1
+  point (Ia 0.6 mA at about -2.2 V, Vg2k 86 V) agrees with the curves.

@@ -673,8 +673,10 @@ impl Importer<'_> {
                     set(&mut core, k, v);
                 }
             }
-            set(&mut entry, "core", Value::Map(core));
-            for k in ["turns", "leakage_h"] {
+            if !core.0.is_empty() || !f.iter().any(|(k, _)| k == "component") {
+                set(&mut entry, "core", Value::Map(core));
+            }
+            for k in ["turns", "leakage_h", "component"] {
                 if let Some(v) = remove(&mut f, k) {
                     set(&mut entry, k, v);
                 }

@@ -1,0 +1,36 @@
+# A B&K Type 4134 capsule on a measuring preamp's input (MIC_ROOM_PLAN.md A2: the capsule
+# machinery's verification case; scripts/capsule_study.py). Built by
+# varimu/circuit/builder.py.
+#
+# The capsule (config/components/bk4134/1.yaml: Zuckerwar's geometry, the lumped network
+# varimu/devices/capsule.py derives from it) with the pressure at its front on `in`
+# (pascals as volts), polarized at 200 V through a 10 GOhm feed, its diaphragm's
+# electrode `out` into the preamp's input. The noise block puts Johnson noise on every
+# resistor, the capsule's acoustic resistances included: the capsule's self-noise.
+
+title: "B&K 4134 capsule"
+input: in
+probes: [out, bp]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; the user's open decision)"}
+  output_volts_peak: {value: 0.5, source: "derived: 12.5 mV/Pa (bk) x 20 Pa = 0.25 V, doubled for headroom"}
+
+noise:
+  seed: 1
+
+values:
+  capsule_model: {value: BK4134@1, source: "config/components/bk4134/1.yaml (data/schematics/bk_4134/README.md)"}
+  polarization_v: {value: 200.0, source: "web: https://peel.dk/Bruel&Kjaer/Equipment/Condenser%20Microphone%20Cartridges%20(Product%20datasheets).pdf (the 4134's 200 V polarization)"}
+  r_feed_ohm: {value: 10.0e+9, source: "provisional: model knowledge (a measuring preamp's polarization feed, ~10 GOhm)"}
+  r_load_ohm: {value: 10.0e+9, source: "provisional: model knowledge (a measuring preamp's input resistance, ~10-20 GOhm)"}
+  c_load_f: {value: 0.2e-12, source: "provisional: model knowledge (a measuring preamp's input capacitance, ~0.2 pF)"}
+
+sections:
+  - title: capsule
+    parts:
+      VPOL: {V: [pol, "0"], v: polarization_v}
+      RFEED: {R: [pol, bp], r: r_feed_ohm}
+      CBP: {C: [bp, "0"], c: {value: 1.0e-6, source: "provisional: model knowledge (the polarization supply's AC ground)"}}
+      K1: {capsule: [in, bp, out], component: capsule_model, polarization_v: polarization_v}
+      RLOAD: {R: [out, "0"], r: r_load_ohm}
+      CLOAD: {C: [out, "0"], c: c_load_f}
