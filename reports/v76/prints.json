@@ -1,0 +1,21 @@
+{
+ "clip": "data/clips/vocal_longwayhome.wav, its loudest 12 s",
+ "renders": "production, the app's render (examples/render.rs); inputs peaking at -40 dBu (clean) and -32 dBu (hot, driven)",
+ "matched": "*_m18lufs.wav: each at -18 LUFS",
+ "v76_vocal_clean_gain40": {
+  "lufs": -37.4,
+  "peak_dbu": 0.7
+ },
+ "v76_vocal_driven_gain58": {
+  "lufs": -11.7,
+  "peak_dbu": 26.4
+ },
+ "v76_vocal_hot_gain52": {
+  "lufs": -17.6,
+  "peak_dbu": 20.5
+ },
+ "vocal_dry": {
+  "lufs": -19.9,
+  "peak_dbu": null
+ }
+}
