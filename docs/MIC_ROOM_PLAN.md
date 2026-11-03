@@ -304,6 +304,12 @@ Started by the user (U47 -> V76 first, alongside the gas-tube work in its worktr
     body's low-frequency path and a BEM of capsule and basket, is where it goes), the
     presence peak's frequency. Free field, plane wave: the polars' measuring distance (and
     proximity) not yet.
+  - **The first listen, printed (2026-11-04, not yet heard by the user):** `scripts/mic_print.py`
+    through `u47_v76` at production (~5.5x slower than real time): the 5E3's guitar take (its
+    speaker's sound pressure) at 100 dB SPL, a dry vocal and the tube synth's brass at 94 dB,
+    on axis at two V76 gains each (the higher drives the V76 to its +25 dBu clip on peaks), the
+    vocal from behind (15 dB down: the cardioid); `reports/mics/prints.json` lists them,
+    `reports/mics/audio/matched/` has each at -18 LUFS with the dry sources (audio git-ignored).
 - **A3's gate, the U47's sources:** catalogued in `data/schematics/neumann_u47/README.md`
   (Neumann's own archive: the 1958 data sheet with polars and responses, the 1958 / 1959
   manuals, the 1959 factory drawing U 47-00-00-00 with every value; Funkschau 1/1948's
