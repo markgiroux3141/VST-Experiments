@@ -27,7 +27,7 @@
 
 title: "Telefunken V76"
 input: in
-probes: [out, op, xa, xb, g1, k1, pl1, sg1, fbw, pl2, sg2, k2, f1, fx, fo, g3, k3, pl3, sg3, g4, k4, pl4, sg4, b300, ba, bb]
+probes: [out, op, ia, xa, xb, g1, k1, pl1, sg1, fbw, pl2, sg2, k2, f1, fx, fo, g3, k3, pl3, sg3, g4, k4, pl4, sg4, b300, ba, bb]
 # 0 dBFS in = 0 dBu peak at the input terminals (the Braunbuch's 0 dB = 0.775 V); 0 dBFS
 # out = +24 dBu peak across the 300 ohm load, above the specified +22 dB maximum.
 full_scale:
@@ -63,18 +63,18 @@ values:
   t85_core_area_m2: {value: 2.432e-4, source: "derived: v72 (EI 48: a 16 mm tongue, 16 mm stack) at 95% stacking"}
   t85_core_path_m: {value: 0.0896, source: "provisional: model knowledge (~5.6 x the tongue width for scrapless EI)"}
   t85_gap_m: {value: 4.4e-6, source: "derived: an effective joint gap bringing mumetall's linear limit (origin permeability ~29,300) to Hyperm 702's ~12,000 (v72; overlapped stacking, no air gap)"}
-  t85_turns_half: {value: 400, source: "v72: primary 2 x 400 turns (the V72's BV 191)", notes: "each primary half (the reference winding); 26 H for the whole primary in the linear limit"}
+  t85_turns_half: {value: 135, source: "provisional: calibrated to bb sheet 10 (the flat response -5 dB at 30 Hz) with the 40 Hz network: the primary inductance is that high-pass's L (~3.0 H for the whole primary in the linear limit; the V72's 2 x 400 turns gave 26 H and a +6 dB peak at 15 Hz)", notes: "each primary half (the reference winding)"}
   t85_sec_per_half: {value: 60.0, source: "derived: sch 1:30 over the whole primary (2 halves)"}
-  t85_r_half_ohm: {value: 52.0, source: "provisional: v72 (400 turns of 0.13 mm Cu at ~0.1 m per turn)"}
-  t85_r_sec_ohm: {value: 36.0e+3, source: "provisional: model knowledge (24,000 turns of ~0.04 mm Cu at ~0.11 m per turn)"}
+  t85_r_half_ohm: {value: 77.0, source: "provisional: calibrated with the turns to bb sheet 10 and sheet 6 (40 Hz within +0.5 / -1.5 dB, flat from 60 Hz): damping of the high-pass's resonance; also stands in for losses the core lacks at microphone levels"}
+  t85_r_sec_ohm: {value: 12.2e+3, source: "provisional: model knowledge (~16,200 turns of ~0.04 mm Cu)"}
   t85_leakage_h: {value: 0.05e-3, source: "provisional: model knowledge (disc-wound, v72's sectioned layout)", notes: "referred to a primary half"}
   t85_c_half_f: {value: 50.0e-12, source: "provisional: model knowledge (a 200 ohm primary half)"}
-  t85_c_sec_f: {value: 20.0e-12, source: "provisional: model knowledge (a sectioned high-impedance secondary)"}
+  t85_c_sec_f: {value: 10.0e-12, source: "provisional: calibrated to bb sheet 6 (+-0.5 dB to 15 kHz; 20 pF drooped 15 kHz by 0.7 dB) and sheet 10"}
 
   # --- 40 Hz high-pass between T85's primary halves (sch) ------------------------------
   c5_8_f: {value: 2.0e-6, source: "sch: 5, 6, 7, 8 2 uF (in parallel)"}
   c9_f: {value: 2.0e-6, source: "sch: 9 2 uF"}
-  r54_ohm: {value: 300.0, source: "sch: 54 300 Ohm 'abgegl.' (trimmed; the drawing's value)"}
+  r54_ohm: {value: 450.0, source: "sch: 54 300 Ohm 'abgegl.' (trimmed at alignment); 450 is the trim for bb sheet 10's flat response with T85's version 1 (300 left a +2 dB peak at 40-50 Hz)"}
 
   # --- V1, EF804S (sch) ------------------------------------------------------------------
   r55_ohm: {value: 100.0e+3, source: "sch: 55 100 kOhm, T85's secondary return to the cathode tap"}
@@ -133,6 +133,7 @@ values:
   l87_r_ohm: {value: 3.0e+3, source: "provisional: model knowledge (a 62-100 H signal choke's winding)", notes: "both versions; linear in version 1 (it carries no DC)"}
   l84_h: {value: 0.85, source: "sch: 84 BV Nr. 517a, L = 0,85 H"}
   l84_r_ohm: {value: 100.0, source: "provisional: model knowledge (a 0.85 H signal choke's winding)", notes: "linear in version 1 (no DC, signal level)"}
+  l84_c_f: {value: 25.0e-12, source: "provisional: calibrated to bb sheet 10 (the response falls to -30 dB by ~33 kHz: L84's self-capacitance makes the low-pass elliptic, a notch near 1 / (2 pi sqrt(L84 C)))"}
   c25_f: {value: 100.0e-12, source: "sch: 25 100 pF"}
   c26_f: {value: 100.0e-12, source: "sch: 26 100 pF"}
 
@@ -382,6 +383,7 @@ sections:
       C25: {C: [fo, "0"], c: c25_f}
       L84: {L: [fo, l84r], l: l84_h}
       RL84: {R: [l84r, g3], r: l84_r_ohm, tolerance: none}
+      CL84: {C: [fo, g3], c: l84_c_f, tolerance: none}  # L84's self-capacitance
       C26: {C: [g3, "0"], c: c26_f}
 
   - title: V3 and V4

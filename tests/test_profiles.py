@@ -1,5 +1,5 @@
-"""Per-circuit profiles (device builder B2, step 5; B9 step 4): varimu.measure.profiles,
-generic, eq_suite, amp_suite."""
+"""Per-circuit profiles (device builder B2, step 5; B9 step 4; B10): varimu.measure.profiles,
+generic, eq_suite, amp_suite, preamp_suite."""
 
 import numpy as np
 import pytest
@@ -29,6 +29,7 @@ def test_profiles():
     assert profiles.profile("fairchild_670").kind == "compressor"
     assert profiles.profile("pultec_eqp1a").kind == "equalizer"
     assert profiles.profile("fender_5e3").kind == "guitar_amp"
+    assert profiles.profile("telefunken_v76").kind == "mic_preamp"
     with pytest.raises(KeyError, match="no measurement profile"):
         profiles.profile("nope")
 
@@ -126,3 +127,30 @@ def test_amp_profile_measures_the_nominal_5e3(tmp_path, monkeypatch):
     alias = [r["aliasing"][q]["alias_db"] for q in ("production", "draft", "draft-1x")]
     assert alias == sorted(alias) and alias[0] < -35.0
     assert (tmp_path / "nominal" / "aliasing.png").exists()
+
+
+def test_preamp_profile_measures_the_nominal_v76(tmp_path, monkeypatch):
+    """The V76's report against the Braunbuch's acceptance specs (measured 2026-11-03): it
+    passes its screen (idle -93 dBFS re +24 dB); all twelve gains within 0.3 dB of the
+    scale (re the generator's EMF) on the drawing's R75; every bass-cut and 3 kHz limit;
+    output impedance 18 ohm max (40 Hz-15 kHz) against 40; k2 / k3 at 1 and 5 kHz within
+    the limits; THD 1% at ~+24.7 dB out at 34 dB. Missed (47 of 50 met): a +1 dB bump
+    around 90 Hz (the 40 Hz network with T85's version-1 primary inductance), 40 Hz k2
+    0.33% (0.3) at +22 dB / 76 dB and k3 2.4% (1.5) at +22 dB / 34 dB (T85's core)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    from varimu.measure import preamp_suite
+
+    monkeypatch.setattr(preamp_suite, "REPORT_DIR", tmp_path)
+    r = preamp_suite.run("nominal", {}, log=lambda _: None)
+    assert r["plausible"], r["checks"]
+    assert all(c["meets"] for c in r["gain"]["vs_published"].values())
+    resp = r["response"]["vs_published"]
+    assert all(c["meets"] for k, c in resp.items() if k.startswith(("bass_", "treble_")))
+    assert resp["flat_60_15k"]["value"] < 1.2 and resp["drop_15hz"]["meets"]
+    assert all(c["meets"] for c in r["output_impedance"]["vs_published"].values())
+    for k, d in r["distortion"]["spec_points"].items():
+        if "40 Hz" not in k:
+            assert d["k2"]["meets"] and d["k3"]["meets"], k
+    assert 23.5 < r["distortion"]["sweep_1k_34db"]["out_db_at_1pct"] < 26.0
+    met, total = map(int, r["meets_specs"].split("/"))
+    assert met >= total - 3

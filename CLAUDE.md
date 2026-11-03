@@ -294,7 +294,9 @@ S 1176 (gain / filter switches, T85 / T89 and its chokes on JA cores, version-1
 constructions provisional; selenium supply `B450C80@1`), tubes `EF804S@1` / `E83F@1` with a
 new opt-in pentode **screen law "e1"** (`KorenPentode.screen`: Ig2 = E1^Ex / Kg2; absent =
 Koren's, every existing IR unchanged), `tests/test_telefunken_v76.py` (idle vs the printed
-voltages); the profile is next (DEVICE_BUILDER_PLAN.md B10's status). The U47's sources:
+voltages); its profile `varimu/measure/preamp_suite.py` (`varimu unit --circuit
+telefunken_v76`, the Braunbuch's acceptance specs: the nominal unit meets 47 of 50; misses and
+the calibrated T85 values in DEVICE_BUILDER_PLAN.md B10's status). Next: the drawing, play. The U47's sources:
 `data/schematics/neumann_u47/README.md` (the capsule's geometry has no primary source).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
