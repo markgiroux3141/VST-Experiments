@@ -592,6 +592,49 @@ fn table() -> Vec<SymbolDef> {
             false,
             (0.0, 6.35, 5.588, "left"),
         ),
+        macro_sym(
+            "Capsule",
+            "capsule",
+            "MK",
+            "Condenser capsule (varimu.devices.capsule): pin 1 the pressure at its front (pascals as volts), 2 the backplate, 3 the diaphragm's electrode; Value is its component version",
+            vec![
+                pin("1", "1", -7.62, 0.0, 0, 2.54),
+                pin("2", "2", 0.0, -6.35, 90, 2.54),
+                pin("3", "3", 7.62, 0.0, 180, 2.54),
+            ],
+            vec![
+                circle(0.0, 0.0, 3.81, false),
+                poly(&[(-1.27, 2.54), (-1.27, -2.54)]),
+                poly(&[(1.27, 2.54), (1.27, -2.54)]),
+            ],
+            Some("component"),
+            &["polarization_v"],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
+        macro_sym(
+            "Capsule_Dual",
+            "capsule_dual",
+            "MK",
+            "Dual-diaphragm condenser capsule (varimu.devices.capsule, the K47 family): pins 1 and 2 the pressures at its front and rear, 3 the backplate, 4 and 5 the front and rear diaphragms' electrodes; Value is its component version",
+            vec![
+                pin("1", "1", -7.62, 2.54, 0, 2.54),
+                pin("2", "2", -7.62, -2.54, 0, 2.54),
+                pin("3", "3", 0.0, -6.35, 90, 2.54),
+                pin("4", "4", 7.62, 2.54, 180, 2.54),
+                pin("5", "5", 7.62, -2.54, 180, 2.54),
+            ],
+            vec![
+                circle(0.0, 0.0, 3.81, false),
+                poly(&[(-1.27, 2.54), (-1.27, -2.54)]),
+                poly(&[(0.0, 2.54), (0.0, -2.54)]),
+                poly(&[(1.27, 2.54), (1.27, -2.54)]),
+            ],
+            Some("component"),
+            &["polarization_front_v", "polarization_rear_v"],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
     ];
     let dev_text = (5.842, 1.27, -1.27, "left");
     v.push(device(
