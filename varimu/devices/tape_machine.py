@@ -129,6 +129,10 @@ class TapeMachineSpec:
     scrape_c_m_s: float = 1623.0
     scrape_q: float = 10.0
     scrape_rms: float = 3e-4
+    # Varispeed (DELAY_PLAN.md): the capstan's motor on a variable-frequency supply,
+    # synchronous at this frequency; each push then carries the supply's frequency, the
+    # rotor following it as the hunting resonance (hunting_hz, hunting_q). None: no varispeed.
+    varispeed_nominal_hz: float | None = None
 
     def transport(self) -> tuple[tuple, tuple]:
         """The speed's components: (periodic (relative peak, Hz, phase), random resonances
@@ -545,6 +549,17 @@ def stream_params(
         "packing": nz.packing if nz else 0.0,
         "packing_sigma": nz.packing_sigma if nz else 0.0,
         "packing_corr_m": nz.packing_corr_m if nz else 0.0,
+        **(
+            {}
+            if spec.varispeed_nominal_hz is None
+            else {
+                "varispeed": {
+                    "nominal_hz": spec.varispeed_nominal_hz,
+                    "hunting_hz": spec.hunting_hz,
+                    "hunting_q": spec.hunting_q,
+                }
+            }
+        ),
     }
 
 
@@ -571,7 +586,13 @@ class TapeStream:
     t = (k + 1 - 2M) / (M fs)): a multi-rate part's samples reach the medium a sample
     after they're computed (circuitsim's partition.rs; the first two pushes are the DC
     point's). It returns the EMF at t_{n+1} as before. A block records at the field's
-    extrema (`literal_peaks`)."""
+    extrema (`literal_peaks`).
+
+    Varispeed (the spec's varispeed_nominal_hz): each push carries the capstan's supply
+    frequency (`push_many(hs, supply_hz)`). The rotor follows it as an all-pole resonator at
+    hunting_hz, Q hunting_q (unity at DC; scipy's lfilter, DF2T), starting steady at the
+    first frequency (the tape ran at it before t = 0); its output after push n is the factor
+    on the speed at sample n + 1. The EMF goes with that factor (flutter's left out)."""
 
     def __init__(
         self,
@@ -628,13 +649,20 @@ class TapeStream:
         # (s[k] at sample s_first + k, one sample ahead of the pushes), integrated
         # (trapezoids) from v (1 + eps); before t = 0 the tape ran at v.
         self.periodic, self.resonances = spec.transport()
-        self.moving = bool(self.periodic or self.resonances)
+        self.varispeed = spec.varispeed_nominal_hz
+        self.moving = bool(self.periodic or self.resonances or self.varispeed is not None)
         self.transport_seed = transport_seed
+        # Varispeed's factor per sample (fac[i] at sample fac_first + i), the speed before
+        # t = 0.
+        self.fac = np.ones(1)
+        self.fac_first = 0
+        self.v0 = v
         if self.moving:
             self.zi = [np.zeros(2) for _ in self.resonances]
             self.s = np.zeros(1)
             self.s_first = 0
-            self.v_last = self._speeds(0, 1)[0]
+            if self.varispeed is None:
+                self.v_last = self._speeds(0, 1)[0]
 
     def _span(self, b: int) -> tuple[int, int, float, float | None]:
         """Block b's recorded cells [j0, j1) and its recording's time span (its end None
@@ -672,7 +700,14 @@ class TapeStream:
                 [rms / math.sqrt(var), 0.0, 0.0], [1.0, a1, a2], x, zi=self.zi[i]
             )
             eps = eps + y
+        if self.varispeed is not None:
+            return self.v * (1.0 + eps) * self._fac(np.arange(k0, k1))
         return self.v * (1.0 + eps)
+
+    def _fac(self, k) -> np.ndarray:
+        """Varispeed's factor at samples k (held at the known ends)."""
+        i = np.clip(np.asarray(k) - self.fac_first, 0, len(self.fac) - 1)
+        return self.fac[i]
 
     def _advance(self, k: int) -> None:
         """The tape's position through sample k."""
@@ -695,7 +730,7 @@ class TapeStream:
 
         def tap(k):
             known = self.s[np.clip(k - self.s_first, 0, len(self.s) - 1)]
-            return np.where(k < 0, self.v * k / self.fs, np.where(k > last, known, known))
+            return np.where(k < 0, self.v0 * k / self.fs, np.where(k > last, known, known))
 
         return (
             -f * (f - 1) * (f - 2) / 6.0 * tap(i - 1)
@@ -708,7 +743,7 @@ class TapeStream:
         """A sample time at or before (start) / at or after the tape's position sv (None:
         not yet there)."""
         if sv < 0:
-            return sv / self.v
+            return sv / self.v0
         k = int(np.searchsorted(self.s, sv, side="left"))
         if k >= len(self.s):
             return None
@@ -846,13 +881,42 @@ class TapeStream:
         t1 = self._span(b)[3]
         return t1 is not None and math.floor(t1 * self.fs) + 3 <= self.n
 
-    def push_many(self, hs: np.ndarray) -> np.ndarray:
-        """`push` for each of hs in turn (the same results, any chunking)."""
+    def push_many(self, hs: np.ndarray, supply_hz=None) -> np.ndarray:
+        """`push` for each of hs in turn (the same results, any chunking); supply_hz: the
+        capstan's supply frequency at each push (varispeed's, one per push)."""
         hs = np.asarray(hs, float)
         n0 = self.n
         m = self.literal or 1
         if len(hs) % m:
             raise ValueError(f"literal bias: pushes of {m} samples each")
+        if self.varispeed is not None:
+            sup = np.asarray(supply_hz, float)
+            if sup.shape != (len(hs) // m,):
+                raise ValueError("varispeed: one supply frequency per push")
+            nom = self.varispeed
+            if self.n == 0 and len(sup):
+                r0 = sup[0] / nom
+                f, q, fs = self.spec.hunting_hz, self.spec.hunting_q, self.fs
+                r = math.exp(-math.pi * f / (q * fs))
+                a1 = -2.0 * r * math.cos(2.0 * math.pi * f / fs)
+                a2 = r * r
+                b0 = 1.0 + a1 + a2
+                self.fac = np.array([r0])
+                self.fac_first = 0
+                self.v0 = self.v * r0
+                self.motor = [b0, a1, a2, r0 * (1.0 - b0), -a2 * r0]
+                if self.moving:
+                    self.v_last = self._speeds(0, 1)[0]
+            b0, a1, a2, z0, z1 = self.motor
+            out = np.empty(len(sup))
+            for i, f in enumerate(sup):
+                x = f / nom
+                y = z0 + b0 * x
+                z0 = z1 - y * a1
+                z1 = -y * a2
+                out[i] = y
+            self.motor = [b0, a1, a2, z0, z1]
+            self.fac = np.concatenate([self.fac, out])
         self.h = np.concatenate([self.h, hs])
         self.n += len(hs) // m
         fs = self.fs
@@ -877,6 +941,9 @@ class TapeStream:
         if self.moving and cut > self.s_first:
             self.s = self.s[cut - self.s_first :]
             self.s_first = cut
+        if self.varispeed is not None and cut > self.fac_first:
+            self.fac = self.fac[cut - self.fac_first :]
+            self.fac_first = cut
         out = np.zeros(len(hs) // m)
         if self.moving:
             k = np.arange(n0, self.n) + 1 - self.s_first
@@ -887,9 +954,12 @@ class TapeStream:
         blocks = np.floor(u).astype(np.int64) // self.nb
         for b in np.unique(blocks[live]):
             sel = live & (blocks == b)
-            out[sel] = (
-                -self.v * self.scale * cubic_held(self.slopes[int(b)], u[sel] - (b * self.nb - 2))
-            )
+            # The EMF goes with the tape's speed (varispeed's; flutter's left out).
+            vk = self.v
+            if self.varispeed is not None:
+                vk = self.v * self._fac(np.arange(n0, self.n)[sel] + 1)
+            g = cubic_held(self.slopes[int(b)], u[sel] - (b * self.nb - 2))
+            out[sel] = -vk * self.scale * g
         if live.any():
             for b in [k for k in self.slopes if k < int(blocks[live].max()) - 1]:
                 del self.slopes[b]

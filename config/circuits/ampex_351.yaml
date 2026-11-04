@@ -12,14 +12,16 @@
 #   "provisional: ..." model knowledge; a genome parameter or replaced later
 #
 # The machine as wired for recording and playing back at once (record relay 3K1
-# energized: 3K1b shorts 3R54, 3K1c feeds the record B+ line), 15 ips (EQUAL SWITCH 4S2 at
-# HI), NAB, the UNBALANCED BRIDGE input (4S1: 4R5 / 4R4 / 4R3 into RECORD LEVEL, the
+# energized: 3K1b shorts 3R54, 3K1c feeds the record B+ line), 15 or 7-1/2 ips (`speed`: the
+# transport's two-speed capstan motor; EQUAL SWITCH 4S2, `equalization`, picks the record HF
+# trimmer: 1C7 at HI, 1C46 at LOW; on this board the playback EQ is 2R31 at both, its LOW
+# rheostat 2R30 a jumper, sch Table 1), NAB, the UNBALANCED BRIDGE input (4S1: 4R5 / 4R4 / 4R3 into RECORD LEVEL, the
 # input transformer 6T1 and the first stage 1V1b out of the path), the line output into
 # 600 ohm. Not modeled: the microphone input (6T1, 1V1b), the meter and its switch (4S3,
 # 4M1, the VU network 6R51-6R53, 1C3 / 4R12's wiper), the monitor and phones jacks,
 # the record light, the heaters (1V1, 1V2, 2V3 on 12.6 V DC from a selenium bridge; 2V4,
 # 2V5, 1V6 on 12.6 V AC), the slave / master bias-coupling relay 4K3, the CCIR network
-# (1L1, 1C11) and the 7-1/2 ips trimmer 1C46.
+# (1L1, 1C11, 4S2b: on CCIR boards only).
 #
 # **The bias is literal** (TM5's decision, the user's, 2026-11-01: option A). The record
 # side runs at 20 steps per sample (3.84 MHz at production's 192 kHz, circuitsim's
@@ -49,6 +51,9 @@ controls:
   record_level: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "sch: 4R9 RECORD LEVEL 100K", notes: "the alignment sets it for 0 VU in at the operating level (1% THD at 400 Hz)"}
   playback_level: {value: 1.0, min: 0.0, max: 1.0, unit: rotation, source: "sch: 4R36 PLAYBACK LEVEL 250K", notes: "the alignment sets it for 0 VU (+8 dBm) out at the operating level"}
   rec_eq_hi_f: {value: 330.0e-12, min: 100.0e-12, max: 550.0e-12, unit: F, source: "sch: 1C7, the 15 ips record HF trimmer, 100-550 pF on board 30960-01-03 (Table 1 NAB)", notes: "across 1R17 (via 4S2a HI): less cathode feedback above ~1 / (2 pi 47K C); the alignment sets it"}
+  rec_eq_lo_f: {value: 1000.0e-12, min: 550.0e-12, max: 1600.0e-12, unit: F, source: "sch: 1C46, the 7-1/2 ips record HF trimmer, 550-1600 pF on board 30960-01-03 (Table 1 NAB)", notes: "across 1R17 (via 4S2a LOW); the alignment sets it for the flattest response at 7-1/2 ips, 20 dB under operating level (man p83-84)"}
+  speed: {value: 1, choices: [0, 1], unit: position, source: "man p10, p51-52: the 7-1/2 / 15 ips pair; the hysteresis synchronous capstan motor B501's two windings (its poles switched), the capstan its shaft", notes: "0 LOW 7-1/2 ips, 1 HI 15 ips; a switch changes the tape (the medium restarts erased)"}
+  equalization: {value: 1, choices: [0, 1], unit: position, source: "sch: EQUAL SWITCH 4S2 (4S2a: 1C46 LOW / 1C7 HI across 1R17)", notes: "0 LOW (7-1/2 ips), 1 HI (15 ips); set with the speed (the manual's), or against it"}
   rep_eq_hi: {value: 0.67, min: 0.0, max: 1.0, unit: rotation, source: "sch: 2R31, the 15 ips playback HF rheostat, 100K", notes: "0.67 is 50 us with 2C15 (derived: 50 us / 750 pF = 66.7K); the alignment sets it from a test tape (man p80)"}
   oscillator: {value: 1, choices: [0, 1], unit: position, source: "sch: note 6 (the drawing's DC voltages were measured with the oscillator tube 1V6 removed)", notes: "0 removed (the drawing's measuring condition: no bias, no erase), 1 in its socket"}
   bias_adjust_f: {value: 24.0e-12, min: 15.0e-12, max: 130.0e-12, unit: F, source: "sch: 5C13 BIAS ADJUST 15-130 pF", notes: "24 pF gives 2.86 mA peak in the provisional head, about what the tape's alignment needs (scripts/tape_bias_study.py); the alignment sets it"}
@@ -84,6 +89,7 @@ values:
   r_lf_ohm: {value: 150.0e+3, source: "sch: Table 1 NAB, 1R18 150K 1% (both boards)"}
   c_lf_f: {value: 0.02e-6, source: "sch: Table 1 NAB, 1C8 .02 5% (both boards)"}
   c_c2b_f: {value: 0.02e-6, source: "sch: 1C9 .02"}
+  r_contact_open_ohm: {value: 1.0e+10, source: "provisional: model knowledge (an open switch contact's insulation, 1e10-1e12 ohm; closed it is a pot's end, MIN_R_OHM)"}
 
   # --- 1V2a, 6201: the head driver (sch) ---------------------------------------------------
   r_g2a_ohm: {value: 1.0e+6, source: "sch: 1R20 1MEG, to the 1R21 / 1R22 junction"}
@@ -98,6 +104,7 @@ values:
   # --- Heads and tape --------------------------------------------------------------------
   tape_model: {value: SCOTCH111@3, source: "config/components/scotch111/3.yaml (Scotch 111's particles, oriented, and its grain)"}
   speed_m_s: {value: 0.381, source: "man p10: 15 ips"}
+  speed_lo_m_s: {value: 0.1905, source: "man p10: 7-1/2 ips (the motor's other winding: half the synchronous speed, the same capstan)"}
   f_bias_hz: {value: 100.0e+3, source: "man p78: approximately 100 kc", notes: "the oscillator's nominal frequency: sets the tape's cells (7.62 per bias wavelength); the bias itself is the circuit's"}
   rec_gap_m: {value: 51.0e-6, source: "provisional: data/datasheets/tape/3m_Sound_Talk_21_195302.pdf (Sound Talk No. 21, 1953: the Ampex 300's record gap .002 inch); data/schematics/ampex_351/350heads.pdf (Minneapolis Magnetics fits one replacement head to the 300 / 350 / 400); the 351's isn't printed. 12.7 um gave a harder knee (TAPE_PLAN.md Gaps 4, scripts/tape_heads_study.py)"}
   rep_gap_m: {value: 6.35e-6, source: "man p70: typical playback gap .00025 inch"}
@@ -347,13 +354,19 @@ sections:
       CMET2: {C: [p1a, met], c: c_meter_f}
       RMET: {R: [met, "0"], r: r_meter_ohm}
       CC1A: {C: [p1a, g2b], c: c_c1a_f}
-      # 1V2b: the grid leak to the 1R16 / 1R17 junction; 1C7 across 1R17 (HI) and
-      # 1R18 + 1C8 from the plate to ground: the record pre-emphasis (sch).
+      # 1V2b: the grid leak to the 1R16 / 1R17 junction; 1C7 (HI) or 1C46 (LOW) across
+      # 1R17 through EQUAL SWITCH 4S2a, and 1R18 + 1C8 from the plate to ground: the record
+      # pre-emphasis (sch).
       XV2B: {device: [p2b, g2b, k2b], model: V2B}
       RG2B: {R: [g2b, k2bj], r: r_g2b_ohm}
       RK2B: {R: [k2b, k2bj], r: r_k2b_ohm}
       RK2B_F: {R: [k2bj, "0"], r: r_k2b_foot_ohm}
-      CEQ_HI: {C: [k2bj, "0"], c: rec_eq_hi_f, tolerance: none}
+      # 4S2a's contacts ground one trimmer's foot and leave the other's floating. Always in
+      # the circuit, so a flip is a value change (a live stream updates in place).
+      CEQ_HI: {C: [k2bj, eqh], c: rec_eq_hi_f, tolerance: none}
+      RSEQ_HI: {rheostat: [eqh, "0"], r: r_contact_open_ohm, at: equalization, reverse: 1, tolerance: none}
+      CEQ_LO: {C: [k2bj, eql], c: rec_eq_lo_f, tolerance: none}
+      RSEQ_LO: {rheostat: [eql, "0"], r: r_contact_open_ohm, at: equalization, tolerance: none}
       RP2B: {R: [b250, p2b], r: r_p2b_ohm}
       RLF: {R: [p2b, lf], r: r_lf_ohm}
       CLF: {C: [lf, "0"], c: c_lf_f}
@@ -430,37 +443,75 @@ sections:
       # The tape senses the record head (in the section above: its whole current, the
       # bias included, 20 samples per sample) and plays into 2R25 through the repro head
       # (sch); the repro coil is the part's.
-      TP:
-        tape: [hra, rbc, rh]
-        component: tape_model
-        bias_substeps: 20
-        speed_m_s: speed_m_s
-        f_bias_hz: f_bias_hz
-        rec_gap_m: rec_gap_m
-        rep_gap_m: rep_gap_m
-        pole_m: pole_m
-        relax_m: relax_m
-        spacing_m: spacing_m
-        track_m: track_m
-        head_distance_m: head_distance_m
-        rec_r_ohm: rec_r_ohm
-        rec_h_per_a: rec_h_per_a
-        rep_l_h: rep_l_h
-        rep_r_ohm: rep_r_ohm
-        rep_h_per_a: rep_h_per_a
-        capstan_d_m: capstan_d_m
-        capstan_rms: capstan_rms
-        roller_d_m: roller_d_m
-        roller_rms: roller_rms
-        reel_r_m: reel_r_m
-        reel_rms: reel_rms
-        hunting_hz: hunting_hz
-        hunting_q: hunting_q
-        hunting_rms: hunting_rms
-        scrape_span_m: scrape_span_m
-        scrape_c_m_s: scrape_c_m_s
-        scrape_q: scrape_q
-        scrape_rms: scrape_rms
+      # The speed switch: the capstan motor's two windings. Each speed is its own tape
+      # (the medium's cells are per bias wavelength): switching restarts it erased.
+      STP:
+        switch: speed
+        parts:
+          TP:
+            tape: [hra, rbc, rh]
+            component: tape_model
+            bias_substeps: 20
+            speed_m_s: speed_m_s
+            f_bias_hz: f_bias_hz
+            rec_gap_m: rec_gap_m
+            rep_gap_m: rep_gap_m
+            pole_m: pole_m
+            relax_m: relax_m
+            spacing_m: spacing_m
+            track_m: track_m
+            head_distance_m: head_distance_m
+            rec_r_ohm: rec_r_ohm
+            rec_h_per_a: rec_h_per_a
+            rep_l_h: rep_l_h
+            rep_r_ohm: rep_r_ohm
+            rep_h_per_a: rep_h_per_a
+            capstan_d_m: capstan_d_m
+            capstan_rms: capstan_rms
+            roller_d_m: roller_d_m
+            roller_rms: roller_rms
+            reel_r_m: reel_r_m
+            reel_rms: reel_rms
+            hunting_hz: hunting_hz
+            hunting_q: hunting_q
+            hunting_rms: hunting_rms
+            scrape_span_m: scrape_span_m
+            scrape_c_m_s: scrape_c_m_s
+            scrape_q: scrape_q
+            scrape_rms: scrape_rms
+            in: [1]
+          TP_LO:
+            tape: [hra, rbc, rh]
+            component: tape_model
+            bias_substeps: 20
+            speed_m_s: speed_lo_m_s
+            f_bias_hz: f_bias_hz
+            rec_gap_m: rec_gap_m
+            rep_gap_m: rep_gap_m
+            pole_m: pole_m
+            relax_m: relax_m
+            spacing_m: spacing_m
+            track_m: track_m
+            head_distance_m: head_distance_m
+            rec_r_ohm: rec_r_ohm
+            rec_h_per_a: rec_h_per_a
+            rep_l_h: rep_l_h
+            rep_r_ohm: rep_r_ohm
+            rep_h_per_a: rep_h_per_a
+            capstan_d_m: capstan_d_m
+            capstan_rms: capstan_rms
+            roller_d_m: roller_d_m
+            roller_rms: roller_rms
+            reel_r_m: reel_r_m
+            reel_rms: reel_rms
+            hunting_hz: hunting_hz
+            hunting_q: hunting_q
+            hunting_rms: hunting_rms
+            scrape_span_m: scrape_span_m
+            scrape_c_m_s: scrape_c_m_s
+            scrape_q: scrape_q
+            scrape_rms: scrape_rms
+            in: [0]
 
   - title: reproduce amplifier
     parts:

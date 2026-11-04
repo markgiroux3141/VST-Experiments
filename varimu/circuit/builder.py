@@ -69,7 +69,13 @@ Macro parts (connection; params, * = required):
                 between rec_plus and rec_minus, the repro coil from out to ground
                 (varimu.devices.tape_machine.TapeStream, varimu.circuit.parts.tape);
                 optional, all or none, the transport's wow and flutter
-                (parts.TAPE_TRANSPORT: capstan_d_m, capstan_rms, roller_d_m, ...)
+                (parts.TAPE_TRANSPORT: capstan_d_m, capstan_rms, roller_d_m, ...);
+                bias_substeps (the literal bias), supply and supply_nominal_hz
+                (varispeed), reduction (config/tape_reductions/<name>.json: the medium
+                an events build plays) and reduction_bias (a control: the reduced tape's
+                bias is that control's setting through the reduction's measured bias map,
+                e.g. BIAS ADJUST's capacitance to the head's bias; without it the
+                reduction's own bias)
 
 R, C, pot, rheostat, tapped_pot and t_pad parts take their tolerance draw (by NAME, in
 the file's tolerance classes); a switch's sub-parts take their own.
@@ -112,6 +118,7 @@ ratio (the mains setting over the rated mains; 1 without a `mains` block).
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -134,6 +141,10 @@ from varimu.circuit.ir import (
     Resistor,
     Section,
     SineSource,
+    Tape,
+    TapeMedium,
+    TapeReduction,
+    TapeReductionPoint,
     ThyratronEvents,
     TubeNoise,
     VoltageProbe,
@@ -193,6 +204,9 @@ class Context:
     heaters: str | None = None  # heated cathodes (B6): "warm" | "cold" start, None: off
     events: bool = False  # thyratrons as their event kernels (H3)
     replaced_models: set[str] = field(default_factory=set)  # model names K replaced
+    # The literal bias's substeps of every tape an events build reduced: the sections at
+    # them run at the sample rate.
+    tape_islands: set[int] = field(default_factory=set)
 
     def fail(self, where: str, msg: str) -> ConfigError:
         return ConfigError(f"{self.spec.path}: {where}: {msg}")
@@ -730,7 +744,98 @@ def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
         missing = sorted(set(parts.TAPE_TRANSPORT) - set(given))
         raise ctx.fail(f"{name}.{missing[0]}", "the transport's values go all or none")
     tr = {k: a[k] for k in parts.TAPE_TRANSPORT} if given else None
-    return parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES}, m, tr)
+    supply = None
+    if a["supply"] is not None:
+        if tr is None:
+            raise ctx.fail(f"{name}.supply", "varispeed needs the transport's values")
+        if a["supply_nominal_hz"] is None:
+            raise ctx.fail(f"{name}.supply_nominal_hz", "required with a supply")
+        supply = (ctx.text(f"{name}.supply", a["supply"]), a["supply_nominal_hz"])
+    elif a["supply_nominal_hz"] is not None:
+        raise ctx.fail(f"{name}.supply_nominal_hz", "only with a supply node")
+    els = parts.tape(name, *conn, model, {k: a[k] for k in parts.TAPE_VALUES}, m, tr, supply)
+    if a["reduction_bias"] is not None and a["reduction"] is None:
+        raise ctx.fail(f"{name}.reduction_bias", "only with a reduction")
+    if not (ctx.events and a["reduction"] is not None):
+        return els
+    where = f"{name}.reduction"
+    component = ctx.text(f"{name}.component", a["component"])
+    bias_control = None
+    if a["reduction_bias"] is not None:
+        bias_control = a["reduction_bias"]  # a control's name, not its setting
+        if not isinstance(bias_control, str) or bias_control not in ctx.spec.controls:
+            raise ctx.fail(f"{name}.reduction_bias", f"{bias_control!r} is not a control")
+    red = _tape_reduction(ctx, where, ctx.text(where, a["reduction"]), component, els, bias_control)
+    if m is not None:
+        ctx.tape_islands.add(m)
+    return [dataclasses.replace(e, medium=red) if isinstance(e, Tape) else e for e in els]
+
+
+TAPE_REDUCTIONS_DIR = Path(__file__).resolve().parents[2] / "config" / "tape_reductions"
+
+
+def _interp(x: float, xp, fp) -> float:
+    """numpy's `interp` (xp rising, fp held beyond its ends), in the order of operations
+    varimu-circuit's port uses."""
+    if x <= xp[0]:
+        return float(fp[0])
+    if x >= xp[-1]:
+        return float(fp[-1])
+    j = next(i for i in range(len(xp) - 1) if xp[i + 1] > x)
+    slope = (fp[j + 1] - fp[j]) / (xp[j + 1] - xp[j])
+    return float(slope * (x - xp[j]) + fp[j])
+
+
+def _tape_reduction(
+    ctx: Context, where: str, name: str, component, els, bias_control: str | None = None
+) -> TapeMedium:
+    """The tape part's medium reduced by config/tape_reductions/<name>.json (written by
+    scripts/tape_reduction.py for this medium; refused for any other), at its own bias or,
+    with bias_control, at that control's setting through the file's measured bias map."""
+    import json
+
+    path = TAPE_REDUCTIONS_DIR / f"{name}.json"
+    if not path.exists():
+        raise ctx.fail(where, f"no {path.name} (scripts/tape_reduction.py writes it)")
+    d = json.loads(path.read_text(encoding="utf-8"))
+    full = next(e for e in els if isinstance(e, Tape)).medium
+    if d["tape"] != str(component):
+        raise ctx.fail(where, f"{path.name} is for {d['tape']}, not {component}")
+    stale = [k for k, v in d["medium"].items() if getattr(full, k) != v]
+    if stale:
+        raise ctx.fail(
+            where, f"{path.name} was made for another medium ({stale[0]}): rerun its script"
+        )
+    rows = lambda v: tuple(tuple(x) for x in v)  # noqa: E731
+    bias = d["bias_a_m"]
+    if bias_control is not None:
+        bm = d.get("bias_map")
+        if bm is None or bm["control"] != bias_control:
+            raise ctx.fail(where, f"{path.name} has no bias map for {bias_control}")
+        bias = _interp(float(ctx.ref(where, bias_control)), bm["x"], bm["bias_a_m"])
+    return dataclasses.replace(
+        full,
+        ds_m=d["ds_m"],
+        hg_bias_a_m=bias,
+        bias_substeps=None,
+        reduced=TapeReduction(
+            h_a_m=tuple(d["h_a_m"]),
+            tau0_s=d["tau0_s"],
+            dt_s=d["dt_s"],
+            points=tuple(
+                TapeReductionPoint(
+                    bias_a_m=q["bias_a_m"],
+                    mx=rows(q["mx"]),
+                    slope=tuple(q["slope"]),
+                    ax=rows(q["ax"]),
+                    ky=rows(q["ky"]),
+                    demag_d=tuple(q["demag_d"]),
+                )
+                for q in d["points"]
+            ),
+            demag_k=tuple(d["demag_k"]),
+        ),
+    )
 
 
 def _r(ctx, name, c, a):
@@ -839,6 +944,10 @@ for _name, _macro in {
             },
             "bias_substeps": Param("count", None),
             **{k: Param("physical", None) for k in parts.TAPE_TRANSPORT},
+            "reduction": Param("raw", None),
+            "reduction_bias": Param("raw", None),
+            "supply": Param("raw", None),
+            "supply_nominal_hz": Param("physical", None),
         },
     ),
     "capsule": Macro(_capsule, 3, {"component": Param("raw"), "polarization_v": _P}),
@@ -985,7 +1094,17 @@ def context(
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
     q = dict(p)
-    q.update(spec.derive(p))
+    if events:
+        # A control's `events` value is its setting in an events build (the 351's oscillator
+        # out of its socket while its tape plays a reduction).
+        q.update(
+            {
+                k: e["events"]
+                for k, e in spec.controls.items()
+                if isinstance(e, Mapping) and "events" in e
+            }
+        )
+    q.update(spec.derive(q))
     ctx = Context(spec, q, cores, tolerance(spec, q))
     ctx.noise = _noise(ctx, noise)
     ctx.heaters = _heaters(spec, heaters)
@@ -1090,6 +1209,12 @@ def _build(
             # section its switches leave empty is no island (it owns nothing it doesn't have)
             substeps = decimate = owns = None
         sections.append(Section(s["title"], tuple(els), substeps, decimate, owns))
+    if ctx.tape_islands:
+        # A reduced tape replaces the literal bias's island: those sections at the sample rate.
+        sections = [
+            Section(x.title, x.elements, None, None, None) if x.substeps in ctx.tape_islands else x
+            for x in sections
+        ]
     if ctx.missing_class:
         raise ConfigError(f"parts without a tolerance class: {sorted(ctx.missing_class)}")
     if ctx.tolerance is not None:

@@ -142,6 +142,9 @@ struct Context<'a> {
     /// they replaced (out of the IR).
     events: bool,
     replaced_models: HashSet<String>,
+    /// The literal bias's substeps of every tape an events build reduced: the sections at
+    /// them run at the sample rate.
+    tape_islands: HashSet<usize>,
 }
 
 /// A build's heated cathodes, as Python's `build_ir(..., heaters=)`.
@@ -633,6 +636,10 @@ fn macro_of(kind: &str) -> Macro {
                 }))
                 .chain(std::iter::once(opt("bias_substeps", Count)))
                 .chain(crate::tape::TRANSPORT.iter().map(|k| opt(k, Physical)))
+                .chain(std::iter::once(opt("reduction", Raw)))
+                .chain(std::iter::once(opt("reduction_bias", Raw)))
+                .chain(std::iter::once(opt("supply", Raw)))
+                .chain(std::iter::once(opt("supply_nominal_hz", Physical)))
                 .collect(),
             false,
         ),
@@ -1084,7 +1091,34 @@ fn tape_part(
             *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
         }
     }
-    Ok(crate::tape::tape(
+    let supply = match (&a["supply"], &a["supply_nominal_hz"]) {
+        (Value::Null, Value::Null) => None,
+        (Value::Null, _) => {
+            return Err(ctx.fail(
+                &format!("{name}.supply_nominal_hz"),
+                "only with a supply node",
+            ));
+        }
+        (_, Value::Null) => {
+            return Err(ctx.fail(
+                &format!("{name}.supply_nominal_hz"),
+                "required with a supply",
+            ));
+        }
+        (node, hz) => {
+            if given == 0 {
+                return Err(ctx.fail(
+                    &format!("{name}.supply"),
+                    "varispeed needs the transport's values",
+                ));
+            }
+            Some((
+                ctx.text(&format!("{name}.supply"), node)?,
+                ctx.float(&format!("{name}.supply_nominal_hz"), hz)?,
+            ))
+        }
+    };
+    let mut els = crate::tape::tape(
         name,
         &nodes[0],
         &nodes[1],
@@ -1093,7 +1127,154 @@ fn tape_part(
         &v,
         m,
         (given > 0).then_some(&tr),
-    ))
+        supply.as_ref().map(|(n, hz)| (n.as_str(), *hz)),
+    );
+    if !a["reduction_bias"].is_null() && a["reduction"].is_null() {
+        return Err(ctx.fail(&format!("{name}.reduction_bias"), "only with a reduction"));
+    }
+    if !ctx.events || a["reduction"].is_null() {
+        return Ok(els);
+    }
+    let where_ = format!("{name}.reduction");
+    let table = ctx.text(&where_, &a["reduction"])?;
+    let bias_control = if a["reduction_bias"].is_null() {
+        None
+    } else {
+        let w = format!("{name}.reduction_bias");
+        // A control's name, not its setting.
+        let c = match &a["reduction_bias"] {
+            Value::Str(s) => s.clone(),
+            v => return Err(ctx.fail(&w, format!("{v} is not a control"))),
+        };
+        if !ctx.spec.controls.contains(&c) {
+            return Err(ctx.fail(&w, format!("'{c}' is not a control")));
+        }
+        Some(c)
+    };
+    for e in els.iter_mut() {
+        if let Element::Tape(t) = e {
+            tape_reduction(
+                ctx,
+                &where_,
+                &table,
+                &reference,
+                bias_control.as_deref(),
+                &mut t.medium,
+            )?;
+        }
+    }
+    if let Some(m) = m {
+        ctx.tape_islands.insert(m);
+    }
+    Ok(els)
+}
+
+/// numpy's `interp` (xp rising, fp held beyond its ends): Python's `builder._interp`.
+fn interp(x: f64, xp: &[f64], fp: &[f64]) -> f64 {
+    let n = xp.len();
+    if x <= xp[0] {
+        return fp[0];
+    }
+    if x >= xp[n - 1] {
+        return fp[n - 1];
+    }
+    let j = (0..n - 1).find(|&i| xp[i + 1] > x).unwrap_or(n - 2);
+    let slope = (fp[j + 1] - fp[j]) / (xp[j + 1] - xp[j]);
+    slope * (x - xp[j]) + fp[j]
+}
+
+/// The tape part's medium reduced by config/tape_reductions/<name>.json (written by
+/// scripts/tape_reduction.py for this medium; refused for any other), at its own bias or,
+/// with bias_control, at that control's setting through the file's measured bias map:
+/// Python's `builder._tape_reduction`.
+fn tape_reduction(
+    ctx: &Context,
+    where_: &str,
+    table: &str,
+    component: &str,
+    bias_control: Option<&str>,
+    medium: &mut circuitsim::tape_stream::TapeParams,
+) -> Result<(), Error> {
+    let path = ctx
+        .lib
+        .config_dir()
+        .join("tape_reductions")
+        .join(format!("{table}.json"));
+    let text = std::fs::read_to_string(&path).map_err(|e| {
+        ctx.fail(
+            where_,
+            format!(
+                "no {} ({e}; scripts/tape_reduction.py writes it)",
+                path.display()
+            ),
+        )
+    })?;
+    let bad = |e: String| ctx.fail(where_, format!("{table}: {e}"));
+    let d: serde_json::Value = serde_json::from_str(&text).map_err(|e| bad(e.to_string()))?;
+    let tape: String = field(&d, "tape").map_err(bad)?;
+    if tape != component {
+        return Err(ctx.fail(
+            where_,
+            format!("{table}.json is for {tape}, not {component}"),
+        ));
+    }
+    let full = serde_json::to_value(&*medium).map_err(|e| bad(e.to_string()))?;
+    let made: serde_json::Map<String, serde_json::Value> = field(&d, "medium").map_err(bad)?;
+    for (k, v) in &made {
+        let same = match (full.get(k), v) {
+            (Some(serde_json::Value::Bool(a)), serde_json::Value::Bool(b)) => a == b,
+            (Some(a), b) => a.as_f64().is_some() && a.as_f64() == b.as_f64(),
+            (None, _) => false,
+        };
+        if !same {
+            return Err(ctx.fail(
+                where_,
+                format!("{table}.json was made for another medium ({k}): rerun its script"),
+            ));
+        }
+    }
+    let mut bias: f64 = field(&d, "bias_a_m").map_err(bad)?;
+    if let Some(control) = bias_control {
+        let map = d
+            .get("bias_map")
+            .filter(|m| m.get("control").and_then(|c| c.as_str()) == Some(control))
+            .ok_or_else(|| {
+                ctx.fail(
+                    where_,
+                    format!("{table}.json has no bias map for {control}"),
+                )
+            })?;
+        let xs: Vec<f64> = field(map, "x").map_err(bad)?;
+        let bs: Vec<f64> = field(map, "bias_a_m").map_err(bad)?;
+        let at = ctx.reference(where_, control)?;
+        bias = interp(ctx.float(where_, &at)?, &xs, &bs);
+    }
+    let points: Vec<serde_json::Value> = field(&d, "points").map_err(bad)?;
+    let points = points
+        .iter()
+        .map(|q| {
+            Ok(circuitsim::tape_stream::ReductionPoint {
+                bias_a_m: field(q, "bias_a_m")?,
+                mx: field(q, "mx")?,
+                slope: field(q, "slope")?,
+                ax: field(q, "ax")?,
+                ky: field(q, "ky")?,
+                demag_d: field(q, "demag_d")?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()
+        .map_err(bad)?;
+    medium.ds_m = field(&d, "ds_m").map_err(bad)?;
+    medium.hg_bias_a_m = bias;
+    medium.bias_substeps = None;
+    medium.reduced = Some(circuitsim::tape_stream::TapeReduction {
+        h_a_m: field(&d, "h_a_m").map_err(bad)?,
+        tau0_s: field(&d, "tau0_s").map_err(bad)?,
+        dt_s: field(&d, "dt_s").map_err(bad)?,
+        points,
+        demag_k: field(&d, "demag_k").map_err(bad)?,
+    });
+    Ok(())
 }
 
 fn plate_part(
@@ -1833,9 +2014,19 @@ pub fn build_ir_events(
     events: bool,
 ) -> Result<CircuitIr, Error> {
     let mut q = p.clone();
+    if events {
+        // A control's `events` value is its setting in an events build (the 351's
+        // oscillator out of its socket while its tape plays a reduction).
+        for (k, e) in spec.controls.iter() {
+            if let Some(v) = e.as_map().and_then(|m| m.get("events")) {
+                q.insert(k.to_string(), v.clone());
+            }
+        }
+    }
+    let base = q.clone();
     if let Some(module) = &spec.derived_module {
         for k in &spec.derived {
-            q.insert(k.clone(), derived::derive(module, k, p)?);
+            q.insert(k.clone(), derived::derive(module, k, &base)?);
         }
     }
     let mut ctx = Context {
@@ -1857,6 +2048,7 @@ pub fn build_ir_events(
         heaters: heaters_setting(spec, heaters),
         events,
         replaced_models: HashSet::new(),
+        tape_islands: HashSet::new(),
     };
     ctx.noise = noise_setting(&ctx, noise)?;
     ctx.tolerance = tolerance(&ctx)?;
@@ -1881,6 +2073,17 @@ pub fn build_ir_events(
             owns: if k { None } else { s.owns.clone() },
             elements,
         });
+    }
+    if !ctx.tape_islands.is_empty() {
+        // A reduced tape replaces the literal bias's island: those sections at the sample
+        // rate.
+        for s in &mut sections {
+            if s.substeps.is_some_and(|m| ctx.tape_islands.contains(&m)) {
+                s.substeps = None;
+                s.decimate = None;
+                s.owns = None;
+            }
+        }
     }
     if !ctx.missing_class.is_empty() {
         return Err(Error(format!(

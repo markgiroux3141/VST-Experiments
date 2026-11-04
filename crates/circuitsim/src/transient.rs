@@ -2340,9 +2340,10 @@ impl Transient {
         let k = self.mna.n_controls;
         for (i, (m, ports)) in self.media.iter_mut().zip(&self.mna.media).enumerate() {
             let at = |u: Option<usize>| u.map_or(0.0, |j| self.x[j]);
+            let supply = ports.supply.map(at);
             let y = match self.media_batches[i].take() {
-                Some(b) => m.push_batch(&b),
-                None => m.push(at(ports.sense.0) - at(ports.sense.1)),
+                Some(b) => m.push_batch(&b, supply),
+                None => m.push(at(ports.sense.0) - at(ports.sense.1), supply),
             };
             self.ext0[k + i] = self.ext1[k + i];
             self.ext1[k + i] = y;

@@ -377,7 +377,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 12] = [
+pub const DEVICES: [Device; 14] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -652,6 +652,87 @@ pub const DEVICES: [Device; 12] = [
         partition: None,
     },
     Device {
+        id: "ampex_351_echo",
+        label: "Ampex 351 slap echo (tape)",
+        circuit: "ampex_351_echo",
+        panel: Some(&[
+            "drive",
+            "send",
+            "repeat",
+            "capstan_hz",
+            "speed",
+            "equalization",
+            "bias_adjust_f",
+        ]),
+        ahead_s: AHEAD_S,
+        // Live, the tape plays its reduction (an events build: DELAY_PLAN.md, "The reduced
+        // medium"); production prints the literal machine.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        pitch2: None,
+        // Cut at the medium (the tape senses its record head a sample late), held across
+        // the cut: at full DRIVE the saturating record side's Newton work splits from the
+        // repro side's (0.55x real time, p95 1.25; one thread 0.85x, p95 1.95; at the
+        // default DRIVE 0.50x, p95 1.35 against 0.55x, 0.80: DELAY_PLAN.md, DRIVE).
+        coupling: Some("hold"),
+        partition: Some(&[
+            "heads and tape",
+            "reproduce amplifier",
+            "output",
+            "|",
+            "power supply",
+        ]),
+    },
+    Device {
+        id: "ampex_351_2_echo",
+        label: "Ampex 351-2 ping-pong echo (tape, stereo)",
+        circuit: "ampex_351_2_echo",
+        panel: Some(&[
+            "drive",
+            "send",
+            "repeat",
+            "capstan_hz",
+            "speed",
+            "equalization",
+            "bias_adjust_f",
+        ]),
+        ahead_s: AHEAD_S,
+        // Live, its tapes play their reduction (an events build), as the 351 echo's.
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        pitch2: None,
+        // Held across the cuts: extrapolated, the crossed slap through each part's input
+        // bus kept the record side's Newton from contracting (13.6 iterations a sample
+        // against 3.4; 1.8x real time against 0.55x; DELAY_PLAN.md, "PING-PONG").
+        coupling: Some("hold"),
+        // Cut at the media: both record sides with the input, each channel's tape, repro
+        // and output on a thread of its own (a tape senses its record head a sample late:
+        // partition.rs), the supplies and the capstan's last.
+        partition: Some(&[
+            "heads and tape",
+            "reproduce amplifier",
+            "output",
+            "|",
+            "heads and tape (right)",
+            "reproduce amplifier (right)",
+            "output (right)",
+            "|",
+            "power supply",
+            "power supply (right)",
+            "capstan",
+        ]),
+    },
+    Device {
         id: "telefunken_v76",
         label: "Telefunken V76 (mic preamp)",
         circuit: "telefunken_v76",
@@ -674,7 +755,7 @@ pub const DEVICES: [Device; 12] = [
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
 /// on a thread of its own). The 670 and the EQP-1A would fit too; the reverb first.
-pub const CHAIN_ENDS: [&str; 1] = ["plate_reverb"];
+pub const CHAIN_ENDS: [&str; 3] = ["plate_reverb", "ampex_351_echo", "ampex_351_2_echo"];
 
 /// Where AUTO changes range: keys below it play on LOW (`range` 0, the tank's 224 nF),
 /// the rest on HIGH. At 330 Hz (E4) the two sound most alike (measured at draft, the same
@@ -1190,8 +1271,15 @@ const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 46] = [
+const LABELS: [(&str, &str); 53] = [
     ("range", "Range (AUTO: by key)"),
+    ("drive", "Drive (console line amp)"),
+    ("send", "Send"),
+    ("repeat", "Repeat"),
+    ("capstan_hz", "Varispeed (capstan supply, Hz)"),
+    ("speed", "Tape speed 15 ips (off: 7-1/2)"),
+    ("equalization", "Record EQ HI, 15 ips (off: LOW, 7-1/2)"),
+    ("bias_adjust_f", "Bias (BIAS ADJUST; aligned 31 pF)"),
     ("input_atten_db", "Input attenuator (dB)"),
     ("ac_threshold", "Threshold (AC)"),
     ("time_constant", "Time constant"),
@@ -1275,6 +1363,25 @@ impl Knob {
         }
     }
 
+    /// A range's display scale: an SI prefix on its unit when its values are tiny (a
+    /// capacitance in farads shows in pF: a slider's decimals would round 31 pF to 0), as
+    /// (factor, suffix); (1, "") otherwise.
+    pub fn display_scale(&self) -> (f64, String) {
+        let Kind::Range { min, max } = self.kind else {
+            return (1.0, String::new());
+        };
+        let top = min.abs().max(max.abs());
+        let Some(unit) = self.unit.as_deref().filter(|_| top > 0.0 && top < 1e-2) else {
+            return (1.0, String::new());
+        };
+        for (f, p) in [(1e3, "m"), (1e6, "u"), (1e9, "n"), (1e12, "p"), (1e15, "f")] {
+            if top * f >= 1.0 {
+                return (f, format!(" {p}{unit}"));
+            }
+        }
+        (1e15, format!(" f{unit}"))
+    }
+
     /// The value as a number (a choice's index for selectors).
     pub fn number(&self) -> f64 {
         match &self.kind {
@@ -1310,7 +1417,12 @@ pub fn knobs(device: &Device, spec: &CircuitSpec) -> Vec<Knob> {
         } else if e.get("unit").and_then(Value::as_str) == Some("switch") {
             Kind::Toggle
         } else if let Some(c) = e.get("choices").and_then(Value::as_list) {
-            Kind::Choices(c.to_vec())
+            // A two-position switch (0 / 1) is a checkbox, as `unit: switch`.
+            if matches!(c, [Value::Int(0), Value::Int(1)]) {
+                Kind::Toggle
+            } else {
+                Kind::Choices(c.to_vec())
+            }
         } else {
             let (min, max) = (num("min").unwrap_or(0.0), num("max").unwrap_or(1.0));
             let position = e.get("unit").and_then(Value::as_str) == Some("position");
@@ -1383,6 +1495,27 @@ mod tests {
         let k = knobs(d, &spec_of("telefunken_v76"));
         let keys: Vec<&str> = k.iter().map(|k| k.key.as_str()).collect();
         assert_eq!(keys, d.panel.unwrap());
+        // A two-position switch (choices [0, 1]) is a checkbox.
+        let treble = k.iter().find(|k| k.key == "treble_cut").unwrap();
+        assert_eq!(treble.kind, Kind::Toggle);
+    }
+
+    #[test]
+    fn echo_panel_switches_and_bias() {
+        let d = DEVICES.iter().find(|d| d.id == "ampex_351_echo").unwrap();
+        let k = knobs(d, &spec_of("ampex_351_echo"));
+        for key in ["speed", "equalization"] {
+            let s = k.iter().find(|k| k.key == key).unwrap();
+            assert_eq!(s.kind, Kind::Toggle);
+            assert_eq!(s.number(), 1.0); // 15 ips, HI
+        }
+        // BIAS ADJUST in farads shows in pF (a slider's 3 decimals would round it to 0).
+        let bias = k.iter().find(|k| k.key == "bias_adjust_f").unwrap();
+        let (f, suffix) = bias.display_scale();
+        assert_eq!((f, suffix.as_str()), (1e12, " pF"));
+        assert!((bias.number() * f - 31.08).abs() < 0.01);
+        let drive = k.iter().find(|k| k.key == "drive").unwrap();
+        assert_eq!(drive.display_scale().0, 1.0);
     }
 
     #[test]

@@ -98,6 +98,231 @@ pub struct TapeParams {
         deserialize_with = "opt_count"
     )]
     pub bias_substeps: Option<usize>,
+    /// The reduced medium (docs/DELAY_PLAN.md, "The reduced medium"; the reference is
+    /// `varimu.delay.reduced.ReducedStream`): each block recorded by tables and apertures
+    /// instead of the ensemble over every bias peak, played back with the demagnetization
+    /// correction. None: the full medium, and no such key in the JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reduced: Option<TapeReduction>,
+    /// The capstan's motor on a variable-frequency supply (varispeed; DELAY_PLAN.md): each
+    /// push carries the supply's frequency ([`TapeStream::push_many_supply`]). None: the
+    /// tape runs at speed_m_s (and its flutter), and no such key in the JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub varispeed: Option<Varispeed>,
+}
+
+/// The capstan's hysteresis synchronous motor on a variable-frequency supply (the reference
+/// is `varimu.devices.tape_machine.TapeStream`'s varispeed): the tape's speed is speed_m_s
+/// times the rotor's speed over its synchronous speed at nominal_hz; the rotor follows the
+/// supply's frequency as a resonance at hunting_hz, Q hunting_q (its inertia against the
+/// field's pull: the transport's hunting), unity at DC, a sample late.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Varispeed {
+    pub nominal_hz: f64,
+    pub hunting_hz: f64,
+    pub hunting_q: f64,
+}
+
+impl Varispeed {
+    /// The motor's all-pole resonator at step rate fs: (b0, a1, a2), b0 = 1 + a1 + a2.
+    fn coefficients(&self, fs: f64) -> (f64, f64, f64) {
+        let r = (-PI * self.hunting_hz / (self.hunting_q * fs)).exp();
+        let a1 = -2.0 * r * (2.0 * PI * self.hunting_hz / fs).cos();
+        let a2 = r * r;
+        (1.0 + a1 + a2, a1, a2)
+    }
+}
+
+/// A medium reduced at one bias (`varimu.delay.reduced.Reduction`): per layer, M_x / Ms
+/// against a constant deep-gap field on a uniform grid (`mx`, `slope` its derivative at 0),
+/// the apertures after the gap's centre (`ax` summing to 1, `ky` per A/m; taps at
+/// tau0_s + j dt_s), and the demagnetization correction D(k) (rad/m rising, 1 at 0).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TapeReduction {
+    pub h_a_m: Vec<f64>,
+    pub tau0_s: f64,
+    pub dt_s: f64,
+    /// At biases rising (BIAS as a knob); one: a single bias's reduction.
+    pub points: Vec<ReductionPoint>,
+    /// The demagnetization correction's wavenumbers (each point's D on them).
+    pub demag_k: Vec<f64>,
+}
+
+/// One bias's tables and apertures in a [`TapeReduction`] (its grids'): the bias's deep-gap
+/// peak (A/m), per layer M_x / Ms against a constant field (mx; slope its derivative at
+/// 0), the apertures (ax summing to 1, ky per A/m) and the demagnetization correction D
+/// on the reduction's demag_k (a shallower recording loses less to its own field).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ReductionPoint {
+    pub bias_a_m: f64,
+    pub mx: Vec<Vec<f64>>,
+    pub slope: Vec<f64>,
+    pub ax: Vec<Vec<f64>>,
+    pub ky: Vec<Vec<f64>>,
+    pub demag_d: Vec<f64>,
+}
+
+impl TapeReduction {
+    fn check(&self, layers: usize) -> Result<(), String> {
+        let taps = self
+            .points
+            .first()
+            .and_then(|q| q.ax.first())
+            .map_or(0, Vec::len);
+        let n = self.h_a_m.len();
+        let ok = n >= 4
+            && self.h_a_m.windows(2).all(|w| w[1] > w[0])
+            && !self.points.is_empty()
+            && self.points[0].bias_a_m > 0.0
+            && self
+                .points
+                .windows(2)
+                .all(|w| w[1].bias_a_m > w[0].bias_a_m)
+            && self.points.iter().all(|q| {
+                [&q.mx, &q.ax, &q.ky].iter().all(|v| v.len() == layers)
+                    && q.mx.iter().all(|r| r.len() == n)
+                    && q.slope.len() == layers
+                    && q.ax.iter().chain(&q.ky).all(|r| r.len() == taps)
+                    && q.demag_d.len() == self.demag_k.len()
+            })
+            && taps > 0
+            && self.dt_s > 0.0
+            && self.tau0_s.is_finite()
+            && !self.demag_k.is_empty()
+            && self.demag_k.windows(2).all(|w| w[1] > w[0]);
+        if ok {
+            Ok(())
+        } else {
+            Err("tape: the reduction's tables don't fit the medium".into())
+        }
+    }
+
+    /// `BiasReductions.at`: the point at bias hg (A/m), linear in ln(bias) between the
+    /// neighbouring points, held past the ends (one point: itself).
+    fn at(&self, hg: f64) -> ReductionPoint {
+        let pts = &self.points;
+        let n = pts.len();
+        let held = |q: &ReductionPoint| ReductionPoint {
+            bias_a_m: hg,
+            ..q.clone()
+        };
+        if n == 1 {
+            return pts[0].clone();
+        }
+        let x = hg.ln();
+        let lb: Vec<f64> = pts.iter().map(|q| q.bias_a_m.ln()).collect();
+        if x <= lb[0] {
+            return held(&pts[0]);
+        }
+        if x >= lb[n - 1] {
+            return held(&pts[n - 1]);
+        }
+        let j = lb.partition_point(|&v| v <= x) - 1;
+        let w = (x - lb[j]) / (lb[j + 1] - lb[j]);
+        let (a, b) = (&pts[j], &pts[j + 1]);
+        let mix = |u: f64, v: f64| (1.0 - w) * u + w * v;
+        let rows = |u: &[Vec<f64>], v: &[Vec<f64>]| -> Vec<Vec<f64>> {
+            u.iter()
+                .zip(v)
+                .map(|(ru, rv)| ru.iter().zip(rv).map(|(&p, &q)| mix(p, q)).collect())
+                .collect()
+        };
+        ReductionPoint {
+            bias_a_m: hg,
+            mx: rows(&a.mx, &b.mx),
+            slope: a
+                .slope
+                .iter()
+                .zip(&b.slope)
+                .map(|(&p, &q)| mix(p, q))
+                .collect(),
+            ax: rows(&a.ax, &b.ax),
+            ky: rows(&a.ky, &b.ky),
+            demag_d: a
+                .demag_d
+                .iter()
+                .zip(&b.demag_d)
+                .map(|(&p, &q)| mix(p, q))
+                .collect(),
+        }
+    }
+
+    /// `varimu.delay.reduced.aperture_fir`: a point's apertures as FIRs on the samples at
+    /// rate fs (`cubic_held` between them), ax's span setting both: (k0, cx, cy), layers x
+    /// taps. ratio: the tape's speed over its nominal (the apertures are positions behind
+    /// the gap: their times scale as 1 / ratio).
+    fn firs(&self, q: &ReductionPoint, fs: f64, ratio: f64) -> Firs {
+        let taps = q.ax[0].len();
+        let parts: Vec<(i64, [f64; 4])> = (0..taps)
+            .map(|j| {
+                let u = (self.tau0_s + self.dt_s * j as f64) / ratio * fs;
+                let i = u.floor();
+                let f = u - i;
+                (
+                    i as i64,
+                    [
+                        -f * (f - 1.0) * (f - 2.0) / 6.0,
+                        (f + 1.0) * (f - 1.0) * (f - 2.0) / 2.0,
+                        -(f + 1.0) * f * (f - 2.0) / 2.0,
+                        (f + 1.0) * f * (f - 1.0) / 6.0,
+                    ],
+                )
+            })
+            .collect();
+        let k0 = parts.iter().map(|p| p.0).min().unwrap_or(0) - 1;
+        let len = (parts.iter().map(|p| p.0).max().unwrap_or(0) + 2 - k0 + 1) as usize;
+        let fir = |a: &[Vec<f64>]| -> Vec<Vec<f64>> {
+            a.iter()
+                .map(|row| {
+                    let mut c = vec![0.0; len];
+                    for (j, (i, w)) in parts.iter().enumerate() {
+                        for (q, wq) in w.iter().enumerate() {
+                            c[(i - 1 + q as i64 - k0) as usize] += row[j] * wq;
+                        }
+                    }
+                    c
+                })
+                .collect()
+        };
+        (k0, fir(&q.ax), fir(&q.ky))
+    }
+}
+
+/// T_l(g): a point's `cubic_at` on the uniform grid h, g clipped to it.
+fn table(h: &[f64], q: &ReductionPoint, l: usize, g: f64) -> f64 {
+    let n = h.len();
+    let u = (g.clamp(h[0], h[n - 1]) - h[0]) / (h[1] - h[0]);
+    cubic_at(&q.mx[l], u)
+}
+
+/// numpy's `interp`: xp rising, fp held beyond its ends.
+fn interp(x: f64, xp: &[f64], fp: &[f64]) -> f64 {
+    let n = xp.len();
+    if x <= xp[0] {
+        return fp[0];
+    }
+    if x >= xp[n - 1] {
+        return fp[n - 1];
+    }
+    let j = xp.partition_point(|&v| v <= x) - 1;
+    let slope = (fp[j + 1] - fp[j]) / (xp[j + 1] - xp[j]);
+    slope * (x - xp[j]) + fp[j]
+}
+
+/// `varimu.devices.tape.cubic_at`: uniform samples y at fractional index u, 4-point
+/// Lagrange, the stencil held inside the samples (extrapolating at the ends).
+fn cubic_at(y: &[f64], u: f64) -> f64 {
+    let n = y.len() as i64;
+    let i = (u.floor() as i64).clamp(1, n - 3);
+    let f = u - i as f64;
+    let i = i as usize;
+    let (ym1, y0, y1, y2) = (y[i - 1], y[i], y[i + 1], y[i + 2]);
+    -f * (f - 1.0) * (f - 2.0) / 6.0 * ym1 + (f + 1.0) * (f - 1.0) * (f - 2.0) / 2.0 * y0
+        - (f + 1.0) * f * (f - 2.0) / 2.0 * y1
+        + (f + 1.0) * f * (f - 1.0) / 6.0 * y2
 }
 
 impl TapeParams {
@@ -149,6 +374,21 @@ impl TapeParams {
                 && (self.packing_corr_m <= 0.0 || self.packing_corr_m.is_nan()))
         {
             return Err("tape: a parameter is out of range".into());
+        }
+        if let Some(v) = &self.varispeed {
+            let ok = v.nominal_hz > 0.0
+                && v.hunting_hz > 0.0
+                && v.hunting_q > 0.0
+                && fs.is_none_or(|fs| v.hunting_hz < fs / 2.0);
+            if !ok {
+                return Err("tape: the varispeed's motor is out of range".into());
+            }
+        }
+        if let Some(r) = &self.reduced {
+            if self.bias_substeps.is_some() {
+                return Err("tape: a reduced medium records with its own bias".into());
+            }
+            r.check(self.layers)?;
         }
         let ds = self.ds_m;
         let (nb, nm, nr) = self.cells();
@@ -510,6 +750,9 @@ struct Done {
     cells: usize,
     mx: Vec<f64>,
     my: Vec<f64>,
+    /// A reduced block's bias's point (its D(k) for the block's flux slope); None for the
+    /// full medium.
+    demag: Option<Arc<ReductionPoint>>,
 }
 
 /// The recording on the worker thread: its FFT plans and demagnetization kernels.
@@ -744,6 +987,7 @@ impl Recorder {
             cells,
             mx,
             my,
+            demag: None,
         })
     }
 }
@@ -810,17 +1054,333 @@ impl Drop for Worker {
     }
 }
 
+/// A recorded block's last steps, in block order: its grain, then its predecessor's flux
+/// slope at the repro head (which reads it). The full medium finishes on the stream's
+/// thread; a reduced one on its worker's (`ReducedWorker`), its slack the head distance.
+struct Finisher {
+    p: TapeParams,
+    axes: Vec<[f64; 3]>,
+    rep_head: Head,
+    nb: usize,
+    nr: usize,
+    k_max: f64,
+    planner: FftPlanner<f64>,
+    /// Recorded blocks: (block, M_x, M_y), layers x block cells.
+    rec: Vec<(usize, Vec<f64>, Vec<f64>)>,
+    /// A reduced medium's blocks' bias points (their D(k)), as `rec`.
+    demag: Vec<(usize, Arc<ReductionPoint>)>,
+    /// The grain's (seed, name) of its Philox streams (`noise::key`), if on.
+    grain: Option<(u64, String)>,
+    /// The packing field at the last cell recorded.
+    packing_prev: f64,
+    /// The next block to finish.
+    next: usize,
+}
+
+impl Finisher {
+    /// A recorded block: its cells (without the margins), the grain, and its predecessor's
+    /// flux slope (which reads it), in block order.
+    fn finish(&mut self, d: Done) -> Option<(usize, Vec<f64>)> {
+        let b = d.b;
+        debug_assert_eq!(b, self.next);
+        let (cells, nb) = (d.cells, self.nb);
+        let i0 = b * nb - d.j0;
+        let mut bx = Vec::with_capacity(self.p.layers * nb);
+        let mut by = Vec::with_capacity(self.p.layers * nb);
+        for l in 0..self.p.layers {
+            bx.extend_from_slice(&d.mx[l * cells + i0..l * cells + i0 + nb]);
+            by.extend_from_slice(&d.my[l * cells + i0..l * cells + i0 + nb]);
+        }
+        if let Some((seed, name)) = self.grain.clone() {
+            self.grain_block(&mut bx, &mut by, b * nb, seed, &name);
+        }
+        self.rec.push((b, bx, by));
+        if let Some(q) = d.demag {
+            self.demag.push((b, q));
+        }
+        self.next += 1;
+        if b >= 1 {
+            let g = self.slope_block(b - 1);
+            self.rec.retain(|(c, _, _)| *c + 2 > b);
+            self.demag.retain(|(c, _)| *c + 2 > b);
+            return Some((b - 1, g));
+        }
+        None
+    }
+
+    /// The reference's `_grain`: the block's cells from i0 times 1 + the packing field (an
+    /// AR(1) along the tape, one for the coating's depth, its state carried from block to
+    /// block), plus the Poisson particle noise.
+    fn grain_block(&mut self, mx: &mut [f64], my: &mut [f64], i0: usize, seed: u64, name: &str) {
+        let (nb, layers) = (self.nb, self.p.layers);
+        let ds = self.p.ds_m;
+        let dy = self.p.coating_m / layers as f64;
+        let n_cell = self.p.packing * ds * dy * self.p.track_m / self.p.particle_volume_m3;
+        let (mut cx, mut cy) = (0.0, 0.0);
+        for a in &self.axes {
+            cx += a[2] * a[0] * a[0];
+            cy += a[2] * a[1] * a[1];
+        }
+        let (sx, sy) = ((cx / n_cell).sqrt(), (cy / n_cell).sqrt());
+        let mut d = vec![0.0; nb];
+        if self.p.packing_sigma > 0.0 {
+            let rho = (-ds / self.p.packing_corr_m).exp();
+            let c = (1.0 - rho * rho).sqrt();
+            let k = crate::noise::key(seed, name, 0);
+            if i0 == 0 {
+                let mut first = [0.0];
+                crate::noise::normals(k, 0, &mut first);
+                self.packing_prev = first[0];
+            }
+            let mut xi = vec![0.0; nb];
+            crate::noise::normals(k, i0 as u64 + 1, &mut xi);
+            let mut prev = self.packing_prev;
+            for (di, x) in d.iter_mut().zip(&xi) {
+                prev = c * x + rho * prev;
+                *di = prev;
+            }
+            self.packing_prev = prev;
+            for di in &mut d {
+                *di *= self.p.packing_sigma;
+            }
+        }
+        let mut z = vec![0.0; 2 * nb];
+        for l in 0..layers {
+            crate::noise::normals(
+                crate::noise::key(seed, name, 1 + l as u32),
+                2 * i0 as u64,
+                &mut z,
+            );
+            for i in 0..nb {
+                let c = l * nb + i;
+                mx[c] = mx[c] * (1.0 + d[i]) + sx * z[2 * i];
+                my[c] = my[c] * (1.0 + d[i]) + sy * z[2 * i + 1];
+            }
+        }
+    }
+
+    /// `flux_slope` over a window (layers x w cells).
+    /// The flux slope over w cells; a reduced block's with its bias's D(k) (demag).
+    fn flux_slope(
+        &mut self,
+        mx: &[f64],
+        my: &[f64],
+        w: usize,
+        demag: Option<&ReductionPoint>,
+    ) -> Vec<f64> {
+        let p = &self.p;
+        let head = self.rep_head;
+        let ext = (4.0 * (head.gap / 2.0 + head.pole + head.relax) / p.ds_m).ceil() as usize;
+        let n = (w + 2 * ext).next_power_of_two();
+        let freq = 1.0 / (n as f64 * p.ds_m);
+        let ks: Vec<f64> = (0..n / 2 + 1)
+            .map(|j| 2.0 * PI * (j as f64 * freq))
+            .collect();
+        let dy = p.coating_m / p.layers as f64;
+        let (layers, spacing, k_max) = (p.layers, p.spacing_m, self.k_max);
+        let mut acc = vec![Complex64::new(0.0, 0.0); n / 2 + 1];
+        for l in 0..layers {
+            let y = spacing + (l as f64 + 0.5) * dy;
+            let fx = rfft(&mut self.planner, &mx[l * w..(l + 1) * w], n);
+            let fy = rfft(&mut self.planner, &my[l * w..(l + 1) * w], n);
+            for (j, a) in acc.iter_mut().enumerate() {
+                let sx = hx_spectrum(&head, ks[j], y);
+                *a += fx[j] * sx;
+                let sy = Complex64::new(0.0, ks[j].signum() * sx);
+                *a -= fy[j] * sy;
+            }
+        }
+        for (j, a) in acc.iter_mut().enumerate() {
+            let k = ks[j];
+            *a *= Complex64::new(0.0, k);
+            if let (Some(r), Some(q)) = (&p.reduced, demag) {
+                // The reduced medium's demagnetization correction (the block's bias's).
+                *a *= interp(k, &r.demag_k, &q.demag_d);
+            }
+            let u = ((k / k_max - 0.8) / 0.2).clamp(0.0, 1.0);
+            *a *= if k >= k_max {
+                0.0
+            } else {
+                0.5 * (1.0 + (PI * u).cos())
+            };
+        }
+        irfft(&mut self.planner, &acc, n, w)
+    }
+
+    fn slope_block(&mut self, b: usize) -> Vec<f64> {
+        let (nb, nr, layers) = (self.nb, self.nr, self.p.layers);
+        let w = nb + 2 * nr;
+        let mut wx = vec![0.0; layers * w];
+        let mut wy = vec![0.0; layers * w];
+        let c0 = (b * nb) as i64 - nr as i64;
+        for (c, bx, by) in &self.rec {
+            let c = *c;
+            if c + 1 < b || c > b + 1 {
+                continue;
+            }
+            let a0 = ((c * nb) as i64).max(c0);
+            let a1 = (((c + 1) * nb) as i64).min(c0 + w as i64);
+            if a1 <= a0 {
+                continue;
+            }
+            for l in 0..layers {
+                for a in a0..a1 {
+                    let src = l * nb + (a - (c * nb) as i64) as usize;
+                    let dst = l * w + (a - c0) as usize;
+                    wx[dst] = bx[src];
+                    wy[dst] = by[src];
+                }
+            }
+        }
+        let demag = self
+            .demag
+            .iter()
+            .find(|(c, _)| *c == b)
+            .map(|(_, q)| q.clone());
+        let g = self.flux_slope(&wx, &wy, w, demag.as_deref());
+        g[nr - 2..nr + nb + 2].to_vec()
+    }
+}
+
+/// A block's predecessor's flux slope, (block, G), if the block has a predecessor.
+type Slope = Option<(usize, Vec<f64>)>;
+
+/// A reduced medium's apertures as FIRs on the samples: (k0, M_x's, M_y's), layers x taps.
+type Firs = (i64, Vec<Vec<f64>>, Vec<Vec<f64>>);
+
+/// A reduced block to record (`record_reduced`): its cells' times at the gap in samples,
+/// and the samples its FIRs read (from n_lo + k0, the stream's ends held).
+struct ReducedJob {
+    b: usize,
+    j0: usize,
+    u: Vec<f64>,
+    n_lo: i64,
+    seg: Vec<f64>,
+    firs: Firs,
+    /// The bias's tables at the block's recording.
+    point: Arc<ReductionPoint>,
+}
+
+/// A reduced medium's thread: each block recorded (`record_reduced`) and finished
+/// (`Finisher`) in the order submitted; per block its predecessor's slope, if any. Its
+/// slack is the head distance (a block is read ~3 blocks after it's recorded), so a block's
+/// cost spreads over the audio instead of landing in one buffer.
+struct ReducedWorker {
+    jobs: Option<mpsc::Sender<ReducedJob>>,
+    // In a mutex only so the stream is Sync (Python's stream class); one thread uses it.
+    done: Mutex<mpsc::Receiver<Slope>>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl ReducedWorker {
+    fn spawn(h_a_m: Vec<f64>, mut fin: Finisher) -> Self {
+        let (jobs, rx) = mpsc::channel::<ReducedJob>();
+        let (tx, done) = mpsc::channel();
+        let thread = std::thread::Builder::new()
+            .name("tape recording (reduced)".into())
+            .spawn(move || {
+                let layers = fin.p.layers;
+                while let Ok(job) = rx.recv() {
+                    let d = record_reduced(&h_a_m, layers, job);
+                    if tx.send(fin.finish(d)).is_err() {
+                        break;
+                    }
+                }
+            })
+            .expect("tape: the reduced recording thread");
+        ReducedWorker {
+            jobs: Some(jobs),
+            done: Mutex::new(done),
+            thread: Some(thread),
+        }
+    }
+
+    fn submit(&self, job: ReducedJob) -> Result<(), String> {
+        self.jobs
+            .as_ref()
+            .and_then(|j| j.send(job).ok())
+            .ok_or_else(|| "tape: the recording thread stopped".to_string())
+    }
+
+    /// The next finished block's predecessor's slope (None for block 0), waiting for it.
+    fn next(&self) -> Result<Slope, String> {
+        self.done
+            .lock()
+            .map_err(|_| "tape: the recording thread stopped".to_string())?
+            .recv()
+            .map_err(|_| "tape: the recording thread stopped".to_string())
+    }
+}
+
+impl Drop for ReducedWorker {
+    fn drop(&mut self) {
+        self.jobs.take();
+        if let Some(t) = self.thread.take() {
+            let _ = t.join();
+        }
+    }
+}
+
+/// `ReducedStream._record_block` on a job: each layer's apertures as FIRs on the samples,
+/// read cubic at each cell's time at the gap, then the table (M_x) and the
+/// saturation-scaled M_y.
+fn record_reduced(h_a_m: &[f64], layers: usize, job: ReducedJob) -> Done {
+    let ReducedJob {
+        b,
+        j0,
+        u,
+        n_lo,
+        seg,
+        firs: (_, cx, cy),
+        point: q,
+    } = job;
+    let taps = cx[0].len();
+    let rows = seg.len() + 1 - taps;
+    let fir = |c: &[f64]| -> Vec<f64> {
+        (0..rows)
+            .map(|row| {
+                let mut acc = 0.0;
+                for (k, ck) in c.iter().enumerate() {
+                    acc += ck * seg[row + k];
+                }
+                acc
+            })
+            .collect()
+    };
+    let cells = u.len();
+    let hmax = h_a_m[h_a_m.len() - 1];
+    let mut mx = vec![0.0; layers * cells];
+    let mut my = vec![0.0; layers * cells];
+    for l in 0..layers {
+        let gx = fir(&cx[l]);
+        let gy = fir(&cy[l]);
+        for (i, &ui) in u.iter().enumerate() {
+            let g = cubic_held(&gx, ui, n_lo).clamp(-hmax, hmax);
+            let m = table(h_a_m, &q, l, g);
+            let lin = q.slope[l] * g;
+            let sat = if lin.abs() > 1e-12 { m / lin } else { 1.0 };
+            mx[l * cells + i] = m;
+            my[l * cells + i] = sat * cubic_held(&gy, ui, n_lo);
+        }
+    }
+    Done {
+        b,
+        j0,
+        cells,
+        mx,
+        my,
+        demag: Some(q),
+    }
+}
+
 /// The tape between the heads (see the module docs).
 pub struct TapeStream {
     p: TapeParams,
     fs: f64,
     /// What recording reads, shared with the worker.
     ctx: Arc<Ctx>,
-    rep_head: Head,
     nb: usize,
     nm: usize,
-    nr: usize,
-    k_max: f64,
     scale: f64,
     /// The pushed samples first, first + 1, ... (literal bias: the fast samples).
     h: Vec<f64>,
@@ -828,20 +1388,18 @@ pub struct TapeStream {
     m: usize,
     first: usize,
     n: usize,
-    /// Recorded blocks: (block, M_x, M_y), layers x block cells.
-    rec: Vec<(usize, Vec<f64>, Vec<f64>)>,
     /// Flux slopes: (block, G over the block's cells and 2 either side).
     slopes: Vec<(usize, Vec<f64>)>,
     /// The next block to finish (its grain, its predecessor's slope) and the next to hand
     /// the worker: the blocks in between are being recorded.
     next_rec: usize,
     next_submit: usize,
-    planner: FftPlanner<f64>,
     worker: Worker,
-    /// The grain's (seed, name) of its Philox streams (`noise::key`), if on.
-    grain: Option<(u64, String)>,
-    /// The packing field at the last cell recorded.
-    packing_prev: f64,
+    /// The full medium's finishing (on this thread).
+    fin: Finisher,
+    /// The reduced medium's thread, if reduced, and its tables at the bias now.
+    reduced: Option<ReducedWorker>,
+    point: Option<Arc<ReductionPoint>>,
     /// The transport: with flutter, the tape's position at the record gap per sample
     /// (s[k] at sample s_first + k, one ahead of the pushes), the speed at its last, the
     /// resonances' filter states.
@@ -851,6 +1409,13 @@ pub struct TapeStream {
     s: Vec<f64>,
     s_first: usize,
     v_last: f64,
+    /// Varispeed: the motor's factor on the speed per sample (fac[i] at sample fac_first +
+    /// i; 1 throughout without varispeed), its resonator (b0, a1, a2, z0, z1), and the
+    /// speed before t = 0 (the supply's first frequency's, held).
+    fac: Vec<f64>,
+    fac_first: usize,
+    motor: [f64; 5],
+    v0: f64,
 }
 
 impl std::fmt::Debug for TapeStream {
@@ -946,28 +1511,45 @@ impl TapeStream {
             zone_tables,
             threads: 0,
         });
+        let finisher = || Finisher {
+            p: p.clone(),
+            axes: ctx.axes.clone(),
+            rep_head,
+            nb,
+            nr,
+            k_max: 2.0 * PI * 0.45 * fs / p.speed_m_s,
+            planner: FftPlanner::new(),
+            rec: Vec::new(),
+            demag: Vec::new(),
+            grain: grain.map(|(seed, name)| (seed, name.to_string())),
+            packing_prev: 0.0,
+            next: 0,
+        };
         let mut st = TapeStream {
             fs,
             worker: Worker::spawn(ctx.clone()),
+            fin: finisher(),
+            reduced: p
+                .reduced
+                .as_ref()
+                .map(|r| ReducedWorker::spawn(r.h_a_m.clone(), finisher())),
+            point: p.reduced.as_ref().map(|r| Arc::new(r.at(p.hg_bias_a_m))),
+            fac: vec![1.0],
+            fac_first: 0,
+            motor: [1.0, 0.0, 0.0, 0.0, 0.0],
+            v0: p.speed_m_s,
             ctx,
-            rep_head,
             nb,
             nm,
-            nr,
-            k_max: 2.0 * PI * 0.45 * fs / p.speed_m_s,
             scale: MU0 * p.track_m * p.ms_a_m * p.rep_h_per_a * dy,
             h: Vec::new(),
             m: p.bias_substeps.unwrap_or(1),
             first: 0,
             n: 0,
-            rec: Vec::new(),
             slopes: Vec::new(),
             next_rec: 0,
             next_submit: 0,
-            planner: FftPlanner::new(),
-            grain: grain.map(|(seed, name)| (seed, name.to_string())),
-            packing_prev: 0.0,
-            moving: !(p.flutter.is_empty() && p.flutter_noise.is_empty()),
+            moving: !(p.flutter.is_empty() && p.flutter_noise.is_empty()) || p.varispeed.is_some(),
             transport_seed,
             zi: vec![[0.0; 2]; p.flutter_noise.len()],
             s: vec![0.0],
@@ -975,7 +1557,8 @@ impl TapeStream {
             v_last: 0.0,
             p: p.clone(),
         };
-        if st.moving {
+        // With varispeed the first speed waits for the supply's first frequency.
+        if st.moving && p.varispeed.is_none() {
             st.v_last = st.speeds(0, 1)[0];
         }
         Ok(st)
@@ -1065,7 +1648,19 @@ impl TapeStream {
             self.zi[i] = [z0, z1];
         }
         let v = self.p.speed_m_s;
+        if self.p.varispeed.is_some() {
+            return eps
+                .iter()
+                .enumerate()
+                .map(|(i, e)| v * (1.0 + e) * self.fac_at(k0 + i))
+                .collect();
+        }
         eps.iter().map(|e| v * (1.0 + e)).collect()
+    }
+
+    /// The motor's factor on the speed at sample k (held at the known ends).
+    fn fac_at(&self, k: usize) -> f64 {
+        self.fac[k.saturating_sub(self.fac_first).min(self.fac.len() - 1)]
     }
 
     /// `_advance`: the tape's position through sample k.
@@ -1088,9 +1683,9 @@ impl TapeStream {
 
     /// `_s_at`: the tape's position at the record gap at time t.
     fn s_at(&self, t: f64) -> f64 {
-        let (v, fs) = (self.p.speed_m_s, self.fs);
+        let fs = self.fs;
         if !self.moving {
-            return v * t;
+            return self.p.speed_m_s * t;
         }
         let u = t * fs;
         let i = u.floor();
@@ -1099,7 +1694,7 @@ impl TapeStream {
         let (first, n) = (self.s_first as i64, self.s.len() as i64);
         let tap = |k: i64| {
             if k < 0 {
-                v * k as f64 / fs
+                self.v0 * k as f64 / fs
             } else {
                 self.s[(k - first).clamp(0, n - 1) as usize]
             }
@@ -1113,7 +1708,7 @@ impl TapeStream {
     /// `_time_at`: a sample time at or before (start) / at or after the tape's position sv.
     fn time_at(&self, sv: f64, start: bool) -> Option<f64> {
         if sv < 0.0 {
-            return Some(sv / self.p.speed_m_s);
+            return Some(sv / self.v0);
         }
         let k = self.s.partition_point(|&x| x < sv);
         if k >= self.s.len() {
@@ -1212,153 +1807,143 @@ impl TapeStream {
         })
     }
 
-    /// A recorded block: its cells (without the margins), the grain, and its predecessor's
-    /// flux slope (which reads it), in block order.
+    /// A recorded block finished on this thread (the full medium's), its predecessor's
+    /// slope kept.
     fn finish(&mut self, d: Done) {
-        let b = d.b;
-        debug_assert_eq!(b, self.next_rec);
-        let (cells, nb) = (d.cells, self.nb);
-        let i0 = b * nb - d.j0;
-        let mut bx = Vec::with_capacity(self.p.layers * nb);
-        let mut by = Vec::with_capacity(self.p.layers * nb);
-        for l in 0..self.p.layers {
-            bx.extend_from_slice(&d.mx[l * cells + i0..l * cells + i0 + nb]);
-            by.extend_from_slice(&d.my[l * cells + i0..l * cells + i0 + nb]);
-        }
-        if let Some((seed, name)) = self.grain.clone() {
-            self.grain_block(&mut bx, &mut by, b * nb, seed, &name);
-        }
-        self.rec.push((b, bx, by));
         self.next_rec += 1;
-        if b >= 1 {
-            self.slope_block(b - 1);
-            self.rec.retain(|(c, _, _)| *c + 2 > b);
+        if let Some(g) = self.fin.finish(d) {
+            self.slopes.push(g);
         }
     }
 
-    /// The reference's `_grain`: the block's cells from i0 times 1 + the packing field (an
-    /// AR(1) along the tape, one for the coating's depth, its state carried from block to
-    /// block), plus the Poisson particle noise.
-    fn grain_block(&mut self, mx: &mut [f64], my: &mut [f64], i0: usize, seed: u64, name: &str) {
-        let (nb, layers) = (self.nb, self.p.layers);
-        let ds = self.p.ds_m;
-        let dy = self.p.coating_m / layers as f64;
-        let n_cell = self.p.packing * ds * dy * self.p.track_m / self.p.particle_volume_m3;
-        let (mut cx, mut cy) = (0.0, 0.0);
-        for a in &self.ctx.axes {
-            cx += a[2] * a[0] * a[0];
-            cy += a[2] * a[1] * a[1];
-        }
-        let (sx, sy) = ((cx / n_cell).sqrt(), (cy / n_cell).sqrt());
-        let mut d = vec![0.0; nb];
-        if self.p.packing_sigma > 0.0 {
-            let rho = (-ds / self.p.packing_corr_m).exp();
-            let c = (1.0 - rho * rho).sqrt();
-            let k = crate::noise::key(seed, name, 0);
-            if i0 == 0 {
-                let mut first = [0.0];
-                crate::noise::normals(k, 0, &mut first);
-                self.packing_prev = first[0];
-            }
-            let mut xi = vec![0.0; nb];
-            crate::noise::normals(k, i0 as u64 + 1, &mut xi);
-            let mut prev = self.packing_prev;
-            for (di, x) in d.iter_mut().zip(&xi) {
-                prev = c * x + rho * prev;
-                *di = prev;
-            }
-            self.packing_prev = prev;
-            for di in &mut d {
-                *di *= self.p.packing_sigma;
-            }
-        }
-        let mut z = vec![0.0; 2 * nb];
-        for l in 0..layers {
-            crate::noise::normals(
-                crate::noise::key(seed, name, 1 + l as u32),
-                2 * i0 as u64,
-                &mut z,
-            );
-            for i in 0..nb {
-                let c = l * nb + i;
-                mx[c] = mx[c] * (1.0 + d[i]) + sx * z[2 * i];
-                my[c] = my[c] * (1.0 + d[i]) + sy * z[2 * i + 1];
-            }
-        }
-    }
-
-    /// `flux_slope` over a window (layers x w cells).
-    fn flux_slope(&mut self, mx: &[f64], my: &[f64], w: usize) -> Vec<f64> {
-        let p = &self.p;
-        let head = self.rep_head;
-        let ext = (4.0 * (head.gap / 2.0 + head.pole + head.relax) / p.ds_m).ceil() as usize;
-        let n = (w + 2 * ext).next_power_of_two();
-        let freq = 1.0 / (n as f64 * p.ds_m);
-        let ks: Vec<f64> = (0..n / 2 + 1)
-            .map(|j| 2.0 * PI * (j as f64 * freq))
+    /// Block b's reduced job: its cells' times at the gap (in samples) and the samples its
+    /// FIRs read, held at the stream's ends (`ReducedStream._record_block`).
+    fn prep_reduced(&self, b: usize) -> ReducedJob {
+        let (j0, j1, _, _) = self.span(b);
+        let (ds, fs, v) = (self.p.ds_m, self.fs, self.p.speed_m_s);
+        let fp: Vec<f64> = if self.moving {
+            (0..self.s.len())
+                .map(|i| (self.s_first + i) as f64 / fs)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let u: Vec<f64> = (j0..j1)
+            .map(|j| {
+                let s = j as f64 * ds;
+                let tc = if self.moving {
+                    interp(s, &self.s, &fp)
+                } else {
+                    s / v
+                };
+                tc * fs
+            })
             .collect();
-        let dy = p.coating_m / p.layers as f64;
-        let (layers, spacing, k_max) = (p.layers, p.spacing_m, self.k_max);
-        let mut acc = vec![Complex64::new(0.0, 0.0); n / 2 + 1];
-        for l in 0..layers {
-            let y = spacing + (l as f64 + 0.5) * dy;
-            let fx = rfft(&mut self.planner, &mx[l * w..(l + 1) * w], n);
-            let fy = rfft(&mut self.planner, &my[l * w..(l + 1) * w], n);
-            for (j, a) in acc.iter_mut().enumerate() {
-                let sx = hx_spectrum(&head, ks[j], y);
-                *a += fx[j] * sx;
-                let sy = Complex64::new(0.0, ks[j].signum() * sx);
-                *a -= fy[j] * sy;
-            }
+        let umin = u.iter().fold(f64::INFINITY, |a, &x| a.min(x));
+        let umax = u.iter().fold(f64::NEG_INFINITY, |a, &x| a.max(x));
+        let n_lo = umin.floor() as i64 - 1;
+        let n_hi = umax.floor() as i64 + 2;
+        // The apertures at the block's speed (its middle cell's sample's).
+        let ratio = if self.p.varispeed.is_some() {
+            self.fac_at(u[u.len() / 2].floor().max(0.0) as usize)
+        } else {
+            1.0
+        };
+        let point = self.point.clone().expect("a reduced medium");
+        let firs = self
+            .p
+            .reduced
+            .as_ref()
+            .expect("a reduced medium")
+            .firs(&point, fs, ratio);
+        let (k0, taps) = (firs.0, firs.1[0].len());
+        let (first, len) = (self.first as i64, self.h.len() as i64);
+        let rows = (n_hi - n_lo + 1) as usize;
+        let seg = (0..rows + taps - 1)
+            .map(|i| self.h[(n_lo + k0 + i as i64 - first).clamp(0, len - 1) as usize])
+            .collect();
+        ReducedJob {
+            b,
+            j0,
+            u,
+            n_lo,
+            seg,
+            firs,
+            point,
         }
-        for (j, a) in acc.iter_mut().enumerate() {
-            let k = ks[j];
-            *a *= Complex64::new(0.0, k);
-            let u = ((k / k_max - 0.8) / 0.2).clamp(0.0, 1.0);
-            *a *= if k >= k_max {
-                0.0
-            } else {
-                0.5 * (1.0 + (PI * u).cos())
-            };
-        }
-        irfft(&mut self.planner, &acc, n, w)
     }
 
-    fn slope_block(&mut self, b: usize) {
-        let (nb, nr, layers) = (self.nb, self.nr, self.p.layers);
-        let w = nb + 2 * nr;
-        let mut wx = vec![0.0; layers * w];
-        let mut wy = vec![0.0; layers * w];
-        let c0 = (b * nb) as i64 - nr as i64;
-        for (c, bx, by) in &self.rec {
-            let c = *c;
-            if c + 1 < b || c > b + 1 {
-                continue;
-            }
-            let a0 = ((c * nb) as i64).max(c0);
-            let a1 = (((c + 1) * nb) as i64).min(c0 + w as i64);
-            if a1 <= a0 {
-                continue;
-            }
-            for l in 0..layers {
-                for a in a0..a1 {
-                    let src = l * nb + (a - (c * nb) as i64) as usize;
-                    let dst = l * w + (a - c0) as usize;
-                    wx[dst] = bx[src];
-                    wy[dst] = by[src];
-                }
-            }
+    /// The reduced medium's bias (its deep-gap peak, A/m) for the blocks recorded from now
+    /// on (BIAS as a knob: `ReducedStream.set_bias`); the recording so far stays.
+    pub fn set_bias(&mut self, hg_bias_a_m: f64) -> Result<(), String> {
+        let r = self
+            .p
+            .reduced
+            .as_ref()
+            .ok_or("tape: only a reduced medium's bias is set mid-run")?;
+        if !(hg_bias_a_m > 0.0 && hg_bias_a_m.is_finite()) {
+            return Err("tape: the bias is positive".into());
         }
-        let g = self.flux_slope(&wx, &wy, w);
-        self.slopes.push((b, g[nr - 2..nr + nb + 2].to_vec()));
+        self.point = Some(Arc::new(r.at(hg_bias_a_m)));
+        self.p.hg_bias_a_m = hg_bias_a_m;
+        Ok(())
     }
 
     /// [`push`](Self::push) for each of hs in turn (the same results, any chunking), the
     /// EMFs into out.
     pub fn push_many(&mut self, hs: &[f64], out: &mut Vec<f64>) -> Result<(), String> {
+        self.push_inner(hs, None, out)
+    }
+
+    /// [`push_many`](Self::push_many) with the capstan's supply frequency (Hz) at each
+    /// push (one per push; a medium with varispeed needs it): the motor's speed follows it
+    /// a sample late.
+    pub fn push_many_supply(
+        &mut self,
+        hs: &[f64],
+        supply_hz: &[f64],
+        out: &mut Vec<f64>,
+    ) -> Result<(), String> {
+        self.push_inner(hs, Some(supply_hz), out)
+    }
+
+    fn push_inner(
+        &mut self,
+        hs: &[f64],
+        supply: Option<&[f64]>,
+        out: &mut Vec<f64>,
+    ) -> Result<(), String> {
         let m = self.m;
         if !hs.len().is_multiple_of(m) {
             return Err(format!("tape: literal bias pushes {m} samples each"));
+        }
+        if let Some(vs) = self.p.varispeed.clone() {
+            let sup = supply.ok_or("tape: varispeed needs the supply's frequency")?;
+            if sup.len() != hs.len() / m {
+                return Err("tape: one supply frequency per push".into());
+            }
+            if self.n == 0 && !sup.is_empty() {
+                // The motor starts steady at the first frequency (the tape ran at it).
+                let r0 = sup[0] / vs.nominal_hz;
+                let (b0, a1, a2) = vs.coefficients(self.fs);
+                self.fac = vec![r0];
+                self.fac_first = 0;
+                self.v0 = self.p.speed_m_s * r0;
+                self.motor = [b0, a1, a2, r0 * (1.0 - b0), -a2 * r0];
+                if self.moving {
+                    self.v_last = self.speeds(0, 1)[0];
+                }
+            }
+            // The factor at the next sample after each push's frequency (lfilter, DF2T).
+            let [b0, a1, a2, mut z0, mut z1] = self.motor;
+            for &f in sup {
+                let x = f / vs.nominal_hz;
+                let y = z0 + b0 * x;
+                z0 = z1 - y * a1;
+                z1 = -y * a2;
+                self.fac.push(y);
+            }
+            self.motor = [b0, a1, a2, z0, z1];
         }
         let n0 = self.n;
         self.h.extend_from_slice(hs);
@@ -1369,9 +1954,14 @@ impl TapeStream {
         // Every block whose samples are in goes to the worker; the circuit runs on while it
         // records (the repro head reads a block about a head distance later).
         while self.ready(self.next_submit) {
-            let job = self.prep(self.next_submit)?;
-            self.worker.submit(job)?;
-            self.next_submit += 1;
+            if let Some(rw) = &self.reduced {
+                rw.submit(self.prep_reduced(self.next_submit))?;
+                self.next_submit += 1;
+            } else {
+                let job = self.prep(self.next_submit)?;
+                self.worker.submit(job)?;
+                self.next_submit += 1;
+            }
         }
         let keep = match self.span(self.next_submit).2 {
             Some(t0) => ((t0 * self.fs).floor() as i64 - 1).max(0) as usize,
@@ -1386,6 +1976,10 @@ impl TapeStream {
         if self.moving && cut > self.s_first {
             self.s.drain(..cut - self.s_first);
             self.s_first = cut;
+        }
+        if self.p.varispeed.is_some() && cut > self.fac_first {
+            self.fac.drain(..cut - self.fac_first);
+            self.fac_first = cut;
         }
         let (v, d, ds, fs) = (
             self.p.speed_m_s,
@@ -1407,8 +2001,16 @@ impl TapeStream {
                     if self.next_rec >= self.next_submit {
                         return Err("tape: a block was read before it was recorded".into());
                     }
-                    let done = self.worker.next()?;
-                    self.finish(done);
+                    if let Some(rw) = &self.reduced {
+                        let g = rw.next()?;
+                        self.next_rec += 1;
+                        if let Some(g) = g {
+                            self.slopes.push(g);
+                        }
+                    } else {
+                        let done = self.worker.next()?;
+                        self.finish(done);
+                    }
                 }
             }
         }
@@ -1431,7 +2033,13 @@ impl TapeStream {
                 .ok_or("tape: a block was read before it was recorded")?
                 .1;
             let origin = (b * self.nb) as i64 - 2;
-            out.push(-v * self.scale * cubic_held(g, u - origin as f64, 0));
+            // The EMF goes with the tape's speed (varispeed's; flutter's left out).
+            let vk = if self.p.varispeed.is_some() {
+                v * self.fac_at(m + 1)
+            } else {
+                v
+            };
+            out.push(-vk * self.scale * cubic_held(g, u - origin as f64, 0));
             last = Some(b);
         }
         if let Some(b) = last {

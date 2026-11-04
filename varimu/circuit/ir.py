@@ -210,6 +210,53 @@ class Plate:
 
 
 @dataclass(frozen=True)
+class TapeReductionPoint:
+    """One bias's part of a `TapeReduction` (circuitsim's `tape_stream::ReductionPoint`):
+    the bias's deep-gap peak (A/m), per layer M_x / Ms against a constant deep-gap field on
+    the reduction's grid (mx, slope its derivative at 0), the apertures after the gap's
+    centre (ax summing to 1, ky per A/m, on the reduction's taps) and the demagnetization
+    correction D on the reduction's demag_k (it depends on the bias: a shallower recording
+    loses less to its own field)."""
+
+    bias_a_m: float
+    mx: tuple[tuple[float, ...], ...]
+    slope: tuple[float, ...]
+    ax: tuple[tuple[float, ...], ...]
+    ky: tuple[tuple[float, ...], ...]
+    demag_d: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class TapeReduction:
+    """A tape medium reduced for the live qualities (docs/DELAY_PLAN.md, "The reduced
+    medium"; circuitsim's `tape_stream::TapeReduction`, the reference
+    `varimu.delay.reduced.ReducedStream`): the field grid h_a_m (uniform), the aperture
+    taps (tau0_s + j dt_s after the gap's centre), the demagnetization correction's
+    wavenumbers demag_k (rad/m rising; D is 1 at 0), and points at biases rising (BIAS as a
+    knob: the medium's hg_bias_a_m interpolated between them in ln(bias), held past the
+    ends; one point: a single bias's reduction)."""
+
+    h_a_m: tuple[float, ...]
+    tau0_s: float
+    dt_s: float
+    points: tuple[TapeReductionPoint, ...]
+    demag_k: tuple[float, ...]
+
+
+@dataclass(frozen=True)
+class Varispeed:
+    """The capstan's hysteresis synchronous motor on a variable-frequency supply
+    (circuitsim's `tape_stream::Varispeed`; the reference `TapeStream`'s varispeed): the
+    tape's speed is speed_m_s times the rotor's speed over its synchronous speed at
+    nominal_hz, the rotor following the supply's frequency as a resonance at hunting_hz, Q
+    hunting_q, unity at DC, a sample late."""
+
+    nominal_hz: float
+    hunting_hz: float
+    hunting_q: float
+
+
+@dataclass(frozen=True)
 class TapeMedium:
     """Tape's parameters (circuitsim's `tape_stream::TapeParams`;
     `varimu.devices.tape_machine.stream_params` writes them): the tape component's
@@ -257,6 +304,12 @@ class TapeMedium:
     # bias included, M samples per step from a multi-rate part (`TapeStream`'s literal
     # mode). None: the medium's own bias (hg_bias_a_m), and no such key in the JSON.
     bias_substeps: int | None = None
+    # The reduced medium (the live qualities' tape, `TapeReduction`); None: the full
+    # medium, and no such key in the JSON.
+    reduced: TapeReduction | None = None
+    # The capstan's motor on a variable-frequency supply (`Varispeed`); None: no varispeed,
+    # and no such key in the JSON.
+    varispeed: Varispeed | None = None
 
 
 @dataclass(frozen=True)
@@ -275,6 +328,9 @@ class Tape:
     h_per_v: float
     out: str
     medium: TapeMedium
+    # The capstan's supply (varispeed): the node whose voltage is its frequency (1 V =
+    # 1 Hz), sensed after each sample; the medium's `varispeed` reads it. None: no such key.
+    supply: str | None = None
 
 
 @dataclass(frozen=True)
@@ -475,6 +531,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.a, el.b)
     if isinstance(el, Device):
         return el.nodes
+    if isinstance(el, Tape) and el.supply is not None:
+        return (el.sense_pos, el.sense_neg, el.out, el.supply)
     if isinstance(el, Plate | Tape):
         return (el.sense_pos, el.sense_neg, el.out)
     if isinstance(el, ThyratronEvents):
@@ -966,6 +1024,9 @@ _OMITTED_WHEN_NONE = {
     (Section, "decimate"),
     (Section, "owns"),
     (TapeMedium, "bias_substeps"),
+    (TapeMedium, "reduced"),
+    (TapeMedium, "varispeed"),
+    (Tape, "supply"),
     (KorenPentode, "screen"),
 }
 _PROBE_KINDS = {"voltage": VoltageProbe}
@@ -1135,6 +1196,15 @@ def _decode_tape_medium(d: dict) -> TapeMedium:
         flutter=rows,
         flutter_noise=rows,
         bias_substeps=_count,
+        reduced=lambda r: _fields(
+            TapeReduction,
+            r,
+            tagged=False,
+            points=lambda ps: tuple(
+                _fields(TapeReductionPoint, q, tagged=False, mx=rows, ax=rows, ky=rows) for q in ps
+            ),
+        ),
+        varispeed=lambda v: _fields(Varispeed, v, tagged=False),
     )
     ints = {f.name for f in dataclasses.fields(TapeMedium) if f.type == "int"}
     return dataclasses.replace(m, **{k: int(getattr(m, k)) for k in ints})
@@ -1168,6 +1238,31 @@ def _validate_tape(el: Tape, input_node: str) -> None:
         raise IRError(f"{el.name}.medium: its flutter's components are out of range")
     if m.n_table < 4 or m.orientations < 1 or m.layers < 1:
         raise IRError(f"{el.name}.medium: n_table >= 4, orientations and layers >= 1")
+    if m.reduced is not None:
+        r = m.reduced
+        pts = r.points
+        taps = len(pts[0].ax[0]) if pts and pts[0].ax else 0
+        ok = (
+            m.bias_substeps is None
+            and len(r.h_a_m) >= 4
+            and all(b > a for a, b in zip(r.h_a_m, r.h_a_m[1:], strict=False))
+            and len(pts) > 0
+            and pts[0].bias_a_m > 0
+            and all(b.bias_a_m > a.bias_a_m for a, b in zip(pts, pts[1:], strict=False))
+            and all(
+                len(q.mx) == len(q.ax) == len(q.ky) == len(q.slope) == m.layers
+                and all(len(row) == len(r.h_a_m) for row in q.mx)
+                and all(len(row) == taps for row in (*q.ax, *q.ky))
+                and len(q.demag_d) == len(r.demag_k)
+                for q in pts
+            )
+            and taps > 0
+            and r.dt_s > 0
+            and len(r.demag_k) > 0
+            and all(b > a for a, b in zip(r.demag_k, r.demag_k[1:], strict=False))
+        )
+        if not ok:
+            raise IRError(f"{el.name}.medium: the reduction's tables don't fit the medium")
     nb = round(m.block_m / m.ds_m)
     nm = round(m.margin_m / m.ds_m)
     nr = math.ceil(2.0 * (m.rep_gap_m / 2.0 + m.pole_m + m.relax_m) / m.ds_m)
@@ -1177,6 +1272,12 @@ def _validate_tape(el: Tape, input_node: str) -> None:
         raise IRError(f"{el.name}: the heads are too close for the blocks")
     if el.sense_pos == el.sense_neg:
         raise IRError(f"{el.name}: its record head senses {el.sense_pos} against itself")
+    if (el.supply is None) != (m.varispeed is None):
+        raise IRError(f"{el.name}: a supply node and a varispeed motor go together")
+    if m.varispeed is not None:
+        v = m.varispeed
+        if not (v.nominal_hz > 0 and v.hunting_hz > 0 and v.hunting_q > 0):
+            raise IRError(f"{el.name}.medium: the varispeed's motor is out of range")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its repro head drives {el.out} (ground or the input)")
 

@@ -73,6 +73,13 @@
 //! steps, and the tape's part gives them to its medium at its next step
 //! ([`crate::transient::Transient::set_media_batch`]): a sample after they're computed,
 //! as the medium's literal mode expects (`tape_stream.rs`).
+//!
+//! **A tape cut from its record head** (DELAY_PLAN.md, "partitioned at the medium"): a
+//! `Tape` with the medium's own bias whose record head is in another single-rate part
+//! senses it the same way, one value per sample, a sample late (the record gap's field at
+//! t_n reaches the medium with step n + 1: ~10 us on a head distance of 133 ms). Its part
+//! then holds the medium, the repro head and what follows, and meets the record side only
+//! through the tape (and the shared nodes the rest of the circuit gives).
 
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -146,11 +153,15 @@ pub(crate) struct RemoteSense {
     pub m: usize,
 }
 
-/// The nodes an element joins for the split: a tape with the literal bias senses its
-/// record head remotely (its `out` only).
+/// The nodes an element joins for the split: a tape senses its record head without
+/// joining it (its `out` and capstan supply only), in its part or remotely.
 fn split_nodes(e: &Element) -> Vec<&str> {
     match e {
-        Element::Tape(t) if t.medium.bias_substeps.is_some() => vec![t.out.as_str()],
+        Element::Tape(t) => {
+            let mut v = vec![t.out.as_str()];
+            v.extend(t.supply.as_deref());
+            v
+        }
         _ => e.nodes(),
     }
 }
@@ -295,10 +306,36 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 _ => None,
             })
         {
+            let has = |q: usize, n: &str| n == GROUND || node_sets[q].contains(n);
             let Some(m) = t.medium.bias_substeps else {
+                // The medium's own bias: in its part, or a single-rate part's, a sample late.
+                if has(p, &t.sense_pos) && has(p, &t.sense_neg) {
+                    continue;
+                }
+                let Some(q) = (0..n_parts)
+                    .find(|&q| substeps[q] == 1 && has(q, &t.sense_pos) && has(q, &t.sense_neg))
+                else {
+                    return Err(Error::new(format!(
+                        "partition: tape {}'s record head is in no single-rate part",
+                        t.name
+                    )));
+                };
+                if substeps[p] != 1 {
+                    return Err(Error::new(format!(
+                        "partition: tape {} must be in a single-rate part",
+                        t.name
+                    )));
+                }
+                remote.push(RemoteSense {
+                    reader: p,
+                    medium: t.name.clone(),
+                    source: q,
+                    pos: t.sense_pos.clone(),
+                    neg: t.sense_neg.clone(),
+                    m: 1,
+                });
                 continue;
             };
-            let has = |q: usize, n: &str| n == GROUND || node_sets[q].contains(n);
             let Some(q) = (0..n_parts)
                 .find(|&q| substeps[q] == m && has(q, &t.sense_pos) && has(q, &t.sense_neg))
             else {
@@ -415,7 +452,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                     .elements
                     .iter()
                     .map(|e| match e {
-                        Element::Tape(t) if t.medium.bias_substeps.is_some() => {
+                        Element::Tape(t) if remote.iter().any(|r| r.medium == t.name) => {
                             Element::Tape(crate::ir::Tape {
                                 sense_pos: GROUND.into(),
                                 sense_neg: GROUND.into(),

@@ -47,6 +47,7 @@ from varimu.circuit.ir import (
     SineSource,
     Tape,
     TapeMedium,
+    Varispeed,
     Vccs,
     VoltageSource,
     Winding,
@@ -849,6 +850,7 @@ def tape(
     v: Mapping[str, float],
     bias_substeps: int | None = None,
     transport: Mapping[str, float] | None = None,
+    supply: tuple[str, float] | None = None,
 ) -> list[Element]:
     """Magnetic tape t between a record head and a repro head (docs/TAPE_PLAN.md, TM4;
     varimu.devices.tape_machine.TapeStream): the record coil between rec_plus and
@@ -866,7 +868,11 @@ def tape(
     of M steps with the circuit's own oscillator (the coil isn't the part's: no
     L<name>_rec / R<name>_rec; bias_a_m and rec_l_h aren't read); the tape senses the
     head's whole current there, bias included (`TapeStream`'s literal mode). f_bias_hz is
-    then the oscillator's nominal frequency, for the cells' length."""
+    then the oscillator's nominal frequency, for the cells' length.
+
+    supply (node, nominal_hz): varispeed (DELAY_PLAN.md): the capstan's motor on a supply
+    whose frequency is the node's voltage (1 V = 1 Hz), synchronous at nominal_hz; the
+    rotor hunts at the transport's hunting_hz and hunting_q (a transport is required)."""
     n, upper = name.lower(), name.upper()
     o = t.orientation
     p = t.preisach
@@ -911,17 +917,24 @@ def tape(
         packing_sigma=t.noise.packing_sigma if t.noise else 0.0,
         packing_corr_m=t.noise.packing_corr_m if t.noise else 0.0,
         bias_substeps=bias_substeps,
+        varispeed=None
+        if supply is None
+        else Varispeed(supply[1], transport["hunting_hz"], transport["hunting_q"]),
     )
+    node = None if supply is None else supply[0]
     h_per_v = v["rec_h_per_a"] / v["rec_r_ohm"]
     repro = [
         Inductor(f"L{upper}_rep", f"{n}_e", f"{n}_b", v["rep_l_h"]),
         Resistor(f"R{upper}_rep", f"{n}_b", out, v["rep_r_ohm"]),
     ]
     if bias_substeps:
-        return [Tape(f"V{upper}", rec_plus, rec_minus, h_per_v, f"{n}_e", medium), *repro]
+        return [
+            Tape(f"V{upper}", rec_plus, rec_minus, h_per_v, f"{n}_e", medium, node),
+            *repro,
+        ]
     return [
         Inductor(f"L{upper}_rec", rec_plus, f"{n}_a", v["rec_l_h"]),
         Resistor(f"R{upper}_rec", f"{n}_a", rec_minus, v["rec_r_ohm"]),
-        Tape(f"V{upper}", f"{n}_a", rec_minus, h_per_v, f"{n}_e", medium),
+        Tape(f"V{upper}", f"{n}_a", rec_minus, h_per_v, f"{n}_e", medium, node),
         *repro,
     ]

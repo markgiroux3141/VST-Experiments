@@ -2895,12 +2895,17 @@ fn knob_ui(
         ui.label(RichText::new(&knob.label).small().color(theme::MUTED));
         match &knob.kind {
             Kind::Range { min, max } => {
-                let mut x = cur.as_f64().unwrap_or(*min);
+                let (f, suffix) = knob.display_scale();
+                let mut x = cur.as_f64().unwrap_or(*min) * f;
                 if ui
-                    .add(egui::Slider::new(&mut x, *min..=*max).max_decimals(3))
+                    .add(
+                        egui::Slider::new(&mut x, *min * f..=*max * f)
+                            .max_decimals(3)
+                            .suffix(suffix),
+                    )
                     .changed()
                 {
-                    set = Some(YValue::Float(x));
+                    set = Some(YValue::Float(x / f));
                 }
             }
             Kind::Steps { min, max, int } => {

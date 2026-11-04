@@ -7,6 +7,8 @@ runs at the bias's rate (the literal bias, TM5's option A) and biases the record
 bias section's own circuit (ampex_351_bias.yaml, TM5's measurement) builds and checks too.
 """
 
+import re
+
 import numpy as np
 import pytest
 
@@ -121,7 +123,8 @@ def test_the_tape_runs_the_351s_transport(machine, tmp_path):
     periodic, random = TapeMachineSpec().transport()
     np.testing.assert_allclose(t.medium.flutter, periodic, rtol=1e-12)
     np.testing.assert_allclose(t.medium.flutter_noise, random, rtol=1e-12)
-    text = MACHINE.read_text().replace("        scrape_rms: scrape_rms\n", "")
+    # Every tape part's (one per speed), whatever its indentation.
+    text = re.sub(r"^ *scrape_rms: scrape_rms\n", "", MACHINE.read_text(), flags=re.M)
     broken = tmp_path / "ampex_351.yaml"
     broken.write_text(text)
     with pytest.raises(Exception, match="all or none"):

@@ -10,6 +10,10 @@ TAPE_PLAN.md's TM6 ("Slapback (repro to record, the Sun wiring)"), so finishing 
 (EP-2, EchoSonic) sit on the same tape medium. The non-tape media are independent but are
 all new physics.
 
+**Started 2026-11-03 (the user's call):** the Sun slap on the 351 with the REPEAT pot from
+the start, live play essential, plus more physical features (ping-pong named). The features
+and their order are "The 351 echo (2026-11-03)" below; its status is at the end of this file.
+
 ## Ground rules
 
 CLAUDE.md's hard rules hold. In particular, **delay time is never a parameter**: it is a
@@ -191,6 +195,75 @@ threads of its own), so its latency doesn't matter for playing.
    print's rms, as TAPE_PLAN.md's speed tables).
 3. For B: the kernel's cost per cell on the CPU, to project the GPU's throughput.
 
+## The 351 echo (2026-11-03)
+
+The user's decisions: REPEAT from the start; ping-pong; "anything else cool". Every feature
+is a physical part or condition (Ground rules), each heard live and printed literally.
+
+**The device: the 351 as a studio wired it.** The 351 records and plays back at once; the
+console around it is ours (Sun's own desk isn't sourced; a passive bus as a 1950s console's
+mixing network, values provisional):
+- **SEND** (the input to the record side), **REPEAT** (the repro output back into the record
+  input through a resistive mix: unity loop gain sits inside its travel, so past it the
+  repeats build until the tape and the 6201 saturate: runaway as on a real machine), **SLAP**
+  (the repro into the output bus) and **DRY** (the input into the bus).
+- The machine's own controls stay (RECORD LEVEL, PLAYBACK LEVEL); the alignment is the
+  factory's (`varimu.measure.tape_align`).
+
+**The features, in order (each its own step, measured, then heard):**
+1. **REPEAT and SLAP** on the full-physics 351 (the print, the reference for everything
+   live) and on the live tier (below). The repeats' darkening, grit and wobble come from each
+   pass through the heads, the tape, the EQs and the tubes.
+2. **The live tier**: the reduced medium (below), the electronics at draft, a chain's end in
+   the app (`panel::CHAIN_ENDS`).
+3. **VARISPEED**: the capstan's hysteresis synchronous motor on a variable-frequency supply
+   (the studio's oscillator and power amplifier), the speed following the frequency through
+   the rotor's inertia and its hunting (TM3's 2.5 Hz, Q 3): a quick turn glides the repeats'
+   pitch and the tape overshoots and settles. Delay and pitch move together; the playback
+   reads the tape where it is (the medium is in position, so the gap loss and the record
+   aperture follow the speed by themselves).
+4. **PING-PONG: the 351-2**, two tracks on one tape and one transport (shared wow and
+   flutter), two record and two repro heads in one headblock, two channels of electronics;
+   the console crosses the repeats (left repro into right record and back). Needs a stereo
+   device at a chain's end (the app's chain end is mono today: `player::EndDevice` returns
+   one channel) and two tracks in the medium (half-track heads: track width, the guard band's
+   crosstalk later).
+5. **BIAS as a performance knob**: under-biased grit to over-biased dark repeats. The live
+   tier's tables over the bias amplitude too (2D), the bias from the circuit (TAPE_PLAN.md
+   TM5's option B).
+6. **7.5 ips** (the 351's speed switch: 266 ms, its EQ positions; the 7-1/2 board's CCIR /
+   trimmer parts aren't modelled yet).
+7. **The condition dials** (TAPE_PLAN.md, "turn it to 11"): wow and flutter, head wear,
+   hiss, dropouts, as the tape insert will have them.
+
+**Later ideas** (not ordered): a passive tone network in the send (studios patched an EQ into
+the loop: a bass cut and a treble cut); the plate (or a spring) inside the loop (dub); two
+machines at different speeds (a double slap; Abbey Road's ADT with one machine on
+varispeed); the EP-2's loop with the erase head off (sound on sound).
+
+**The reduced medium (the live tier's tape, refining "Reason 2" above).** The stream
+(`TapeStream`, `tape_stream.rs`) records in 16 mm blocks, reads them a head distance later
+and plays back by an FFT per block: all of that stays, exact. Only a block's recording is
+replaced (the Preisach ensemble over every bias peak in every 0.5 um cell, then the demag
+fixed point: 12 more passes), by, per layer l:
+- **a table** T_l(H) of M_x and M_y against a constant deep-gap signal field, recorded by the
+  real kernel at the aligned bias (the ensemble's anhysteretic remanence, orientations
+  included; generated from `SCOTCH111@N`, never chosen);
+- **an aperture** a_l(x) behind the gap: where in the trailing zone the layer's particles
+  are last switched by the decaying bias, measured as the reference's small-signal step
+  response; it carries the HF self-erasure and the record gap's losses. In time it is x / v,
+  so it follows the speed;
+- M_l(s) = T_l(sum_x a_l(x) H(t when s is x past the gap)) on coarse cells (a few um: 15
+  kHz at 15 ips is 25 um), then the stream's playback as now;
+- **demagnetization** as a linear correction measured against the reference at low level
+  (its level dependence measured, not modelled, at first);
+- **grain** as the stream's: the Poisson count's variance scaled to the coarse cells'
+  volume, the packing field's AR(1) at the coarse step.
+
+Measured against the reference stream on the same deep-gap field (sweeps at low level for
+the linear part, the drums at 0 / +6 / +12 dB for the knee), then in the circuit against the
+literal 351.
+
 ## Proposed milestones
 
 - **D1: the Sun slap** (TAPE_PLAN.md TM6's first piece; needs TM5). SLAP level, REPEAT pot,
@@ -211,11 +284,293 @@ threads of its own), so its latency doesn't matter for playing.
 
 ## Open decisions (the user's)
 
-- **Single slap or repeats:** the Sun slap only, or the REPEAT pot from the start
-  (recommended: both, they are the same wiring)?
-- **Live is essential** (decided 2026-11-01). Open: route C with A live (recommended), or
-  try B (the GPU) first?
+- ~~Single slap or repeats~~: REPEAT from the start (decided 2026-11-03), plus ping-pong
+  and more ("The 351 echo").
+- **Live is essential** (decided 2026-11-01). Route C with A live is being built
+  (2026-11-03: the reduced medium, "Status"); B (the GPU) stays for later.
 - **The live tier's accuracy:** how far from the print is acceptable (measured, then the
   user's call, as with the 670's draft)?
 - **After D1:** the EP-2's dirt, the EchoSonic, or the Echorec next?
 - **Where it goes** relative to the other parked tracks (it follows TM5 either way).
+
+## Status (2026-11-03)
+
+**The echo circuit:** `config/circuits/ampex_351_echo.yaml`, GENERATED by
+`scripts/make_351_echo.py` from `ampex_351.yaml` and the alignment report: the factory
+alignment as its settings, the console's SEND and REPEAT (feed resistors provisional), the
+slap out wet only; `tests/test_351_echo.py`. Pre-flight clean. Re-aligned against today's
+code first (`scripts/align_351.py`, 65 min on a shared CPU): the same settings to the last
+digit.
+
+**The reduced medium is built and measured** (`varimu/delay/reduced.py`, the reference;
+circuitsim's `tape_stream.rs` `TapeReduction`, the port, within 1e-10 with flutter and grain:
+`tests/test_tape_reduced.py`). Against the full stream on the same deep-gap field (the 351's
+heads, Scotch 111, the aligned bias 2.94 mA rms; idealized NAB networks around it; 2 s of the
+drums; `scripts/delay_live_study.py medium --demag`):
+
+| drive | difference (re the reference's rms) | level | worst third-octave band, 31 Hz-16 kHz |
+|---|---|---|---|
+| 0 dB | -34.7 dB | -0.02 dB | -0.31 dB (16 kHz) |
+| +6 dB | -28.7 dB | -0.05 dB | -0.39 dB |
+| +12 dB | -25.2 dB | -0.05 dB | -0.43 dB (79 Hz) |
+
+- Without the demagnetization correction: -22.2 / -20.1 / -17.6 dB, the reduced tape up to
+  +5.7 dB bright at 16 kHz. The missing loss is linear (coherence 0.999+ across the band) and
+  the same within ~0.2 dB on noise at -12 dB and on the drums at 0 dB, so D(k) is measured
+  once, on noise, per reduction.
+- The apertures: M_x's an S-curve from ~-50 to ~+90 us around the gap's centre, half its
+  weight ~55 us (21 um at 15 ips) behind it, the deeper layers a little earlier; M_y's
+  bipolar (Hy is odd about the gap), modelled as its own linear kernel times M_x's
+  saturation.
+- The aperture as an FIR on the samples (`aperture_fir`; the per-cell form costs ~8x more)
+  adds ~0.2 dB of droop at 16 kHz (the cubic between samples).
+- Python's reduced stream: 2.8x real time; the reference 36x (both one job alone).
+
+**Generated, not chosen:** `scripts/tape_reduction.py` makes
+`config/tape_reductions/ampex_351.json` from the circuit's own tape part (the builder's
+medium, 8 demag iterations) at the alignment's bias: tables 7 s, D(k) 5.5 min. The file
+records the medium it was made for; both builders refuse it for another.
+
+**In the builders (both, IRs equal: `export_app_fixtures.py`, `agreement.rs`):** a tape
+part's `reduction: NAME`; in an events build (the live qualities) the tape plays it at its
+bias and cell length, the sections at its bias substeps run at the sample rate, and a
+control's `events:` value is its setting there (the 351's `oscillator: events: 0`).
+Production builds the literal machine as before; every other circuit's IR unchanged.
+
+**In the app:** `ampex_351_echo` is a device (SEND, REPEAT) and a chain's end
+(`panel::CHAIN_ENDS`); `live.rs` turns the events build on for a file whose tape names a
+reduction. Live, the oscillator's passive network (1T5, the erase head, the grid networks,
+the bias feed) goes with its tubes (the echo file puts it under the `oscillator` switch:
+with the tubes out it reaches the head only through ~31 pF); production keeps every part.
+The reduced tape records and finishes its blocks on a thread of its own
+(`tape_stream::ReducedWorker`, the full medium's per-block finishing factored into
+`Finisher`; the full medium bit-identical, `tests/test_tape_stream.py`).
+
+**Real-time load** (`examples/load_profile.rs --device ampex_351_echo --quality draft-1x`,
+the drums, 38.8 s, blocks of 512 at 48 kHz, one job alone):
+
+| step | mean | median | p95 | worst block |
+|---|---|---|---|---|
+| first try (the app played the literal tape: the events build was for thyratrons only) | >20x | | | |
+| the reduced tape, recorded inline | 1.46 | 0.96 | 3.06 | 4.52 |
+| the oscillator's network out live | 1.39 | 0.85 | 3.13 | 4.67 |
+| the reduced tape on its own thread | 0.86 | 0.82 | 1.17 | 1.78 |
+| the circuit's noise off (as a chain's end plays: `--no-noise`) | **0.52** | 0.44 | 0.97 | 2.14 |
+
+- 3.1 Newton iterations and 7 device evaluations per sample: the cost is the linear part.
+- The remaining spikes come in pairs ~4 blocks apart (the tape's 16 mm block, 42 ms): the
+  worker's 64k-point playback FFTs (the 7 mm pole contour's reach at 2 um cells) beside the
+  circuit's thread, and loud transients (5-6 iterations a sample). Levers if they're heard:
+  coarser cells or a shorter contour FFT in the reduced tape, the circuit split (the record
+  side must stay in the first partition with the input; the repro side on a second thread
+  measured worse, 3.3x).
+
+**Live against the print** (`scripts/print_351_echo.py` with and without `--live`: the drums,
+4 s plus 2.5 s of tail, SEND 1, the circuit's noise on; the print at production, 4 at once,
+~300x real time each; live at Python's draft, 2.2x; audio in `reports/delay/audio/`). The slap
+lands at 133.08 ms (head distance over speed: 133.33). Waveforms differ by -5 to -7 dB (the
+print's free oscillator and its own noise draw), so the measures are levels, bands and the
+repeats' decay:
+
+| REPEAT | level, live re print | worst third-octave band, 40 Hz-16 kHz | repeats (133 ms windows after the input, print / live) |
+|---|---|---|---|
+| 0 | +0.12 dB | +0.41 dB (79 Hz) | |
+| 0.35 | +0.13 dB | -0.61 dB (16 kHz) | -37, -44, -51, -57, -63 / -36, -43, -50, -56, -62 dBFS |
+| 0.6 | +0.19 dB | -1.21 dB (16 kHz) | -26, -28, -30, -32, -34 / -26, -28, -29, -31, -33 dBFS |
+| 0.8 (past unity) | +1.75 dB | +2.80 dB (5 kHz) | holds at -11 / -9 dBFS (saturated) |
+
+In the runaway the knee's small differences compound pass after pass: the live tier settles
+~2 dB hotter and brighter.
+
+**VARISPEED built (2026-11-03; the user heard the slap and asked to continue):**
+- A tape part's `supply: NODE` and `supply_nominal_hz` (both builders; IR `Tape.supply`,
+  `TapeMedium.varispeed`): the capstan's hysteresis synchronous motor on a supply whose
+  frequency is the node's voltage (1 V = 1 Hz), the rotor following it as an all-pole
+  resonator at the transport's hunting (2.5 Hz, Q 3), unity at DC, a sample late. Every
+  position integrates its factor (the delay; the repeats bend while it moves), the EMF goes
+  with it, and the reduced tape's apertures scale as 1 / ratio per block (positions behind
+  the gap). Without a supply every path is bit-identical (`tests/test_tape_stream.py`).
+- The Python reference (`tape_machine.TapeStream`, `push_many(hs, supply_hz)`; the spec's
+  `varispeed_nominal_hz`) and circuitsim's port agree within 1e-9 (full medium) and 1e-10
+  (reduced) with the supply stepping and gliding (`tests/test_tape_varispeed.py`, which also
+  checks delay x speed constant at 50 / 60 / 72 Hz). `tape_stream_run(..., supply_hz=)`.
+- The echo: `capstan_hz` (VARISPEED, 40-80 Hz, provisional: the studio oscillator's range)
+  drives `VCAP` onto `cap_hz`, the motor synchronous at `mains_hz`; on the app's panel.
+- Heard as the app plays it: `scripts/varispeed_demo.py` (the live tier streamed block by
+  block, the knob turned between blocks: glide 60 -> 45 -> 75 -> 60 Hz, a jump to 50 Hz, a
+  0.8 Hz wobble) -> `reports/delay/audio/Dry_Guitar_varispeed_*.wav`. Steady delays from a
+  click train: 133.8 / 178.3 / 160.4 / 107.1 ms at 60 / 45 / 50 / 75 Hz (133.3 x 60 / f:
+  133.3 / 177.8 / 160.0 / 106.7; the rest is the electronics' group delay).
+- Load unchanged: 0.49x real time at draft-1x (`--no-noise`).
+
+**PING-PONG built (2026-11-03): the 351-2** (`config/circuits/ampex_351_2_echo.yaml`, GENERATED
+by `make_351_echo.py` beside the mono echo): the echo's two channels (the right's parts and
+nodes `_r`; shared controls and values), two-track heads (1.905 mm, NAB two-track,
+provisional; the repro head scaled to keep the full-track output, so the alignment carries
+over; track width left out of a reduction's medium keys: the 351 and the 351-2 share
+`ampex_351.json`), one capstan supply in a section of its own, the console crossed (SEND
+into the left; each return into the other side's record input, REPEAT ganged; the right's
+send resistor returned to ground, or its bus picked the crossed feed up 9.6 dB hotter and the
+bounces grew). A click: left 134 / 400 / 667 ms, right 267 / 534 / 800 ms, -2.7 dB a bounce at
+REPEAT 0.5, holding at 0.7 (the mono echo's unity). `print_351_echo.py --pingpong [--live]`
+writes stereo files (`reports/delay/audio/Dry_Guitar_351pingpong_rep*_live*.wav`).
+- **A stereo chain's end** (varimu-app): a circuit with an `out_r` probe plays left and right
+  apart (`live.rs` `Live::right`, `player.rs` `Tail`, `Emitter::emit`), the dry in both; a
+  take keeps the mid. The app's `ampex_351_2_echo` device and chain end.
+- **The medium as a partition cut** (circuitsim `partition.rs`, `stream.rs`): a tape whose
+  record head is in another single-rate part senses it a sample late (the literal bias's
+  remote sense, generalized: single-rate parts, the first partition too, publish their
+  senses). The mono echo cut there matches its one solve at -67.9 dB after the one-sample
+  shift (REPEAT 0; each repeat crosses again, a sample more).
+- **Hold, not extrapolate, across these cuts.** Extrapolated, the crossed slap through each
+  part's input bus kept the record side's Newton from contracting: 13.6 iterations and 5.5
+  factorizations a sample (1.8x real time); held, 3.3 and 0.06. The 351-2's device:
+  `coupling: hold`, four parts (both record sides with the input | left tape, repro, output |
+  right | the supplies and the capstan): 0.54x real time, p95 1.35 (more spikes than the mono
+  echo's 0.50 / 0.88: four threads spinning). Two machines on one thread: 1.31x.
+
+**DRIVE built (2026-11-03; the user's choices, asked after hearing it: the 7.5 ips switch for
+delay range; DRIVE, BIAS and the condition dials for saturation, "normally tape should be
+subtle but this is an effect, so we can crank up the dirt").** A console line amplifier
+ahead of SEND in both echo files (the left channel's in the 351-2): a 250k audio-taper DRIVE
+pot, a 12AX7 half (100k plate, 1.5k cathode unbypassed), a 33k / 100k pad, a 12AU7 cathode
+follower biased to ~+100 V into the send pot, on an ideal 250 V supply (all provisional: a
+generic 1950s console). Its own audio-rate section; the record side shares only the send
+pot's wiper. Measured at 1 kHz: 0 dB at 0.44 (the default: the echo as it was), +2.6 at 0.5,
++6.8 at 0.6, +12.9 at 0.75, +22.6 at 1 (the tape then ~+19 dB over its operating level).
+- The guitar at REPEAT 0.5 (`print_351_echo.py --live --drive D`): +12.9 dB in gives the slap
+  +7.5 dB (5.4 dB of compression, crest 9.4 -> 8.2 dB); +22.6 dB in gives +9.1 dB (13.5 dB
+  of compression, crest 7.8 dB). `reports/delay/audio/Dry Guitar_351echo_rep0.5_drive*_live*.wav`.
+- The live tape driven hard (the reduction's tables widened to +-200 kA/m, 481 points;
+  `ampex_351.json` regenerated): against the full stream -21.9 / -17.2 dB at +18 / +24 dB over
+  the operating level, level +0.02 / +0.28 dB, worst band -0.48 / +1.1 dB.
+- Load: at full DRIVE one thread ran 0.85x (p95 1.95, a factorization a sample in the
+  saturating record side); the mono echo now plays cut at the medium with hold coupling:
+  0.55x (p95 1.25) at full DRIVE, 0.50x (p95 1.35) at the default.
+
+**7.5 ips built (2026-11-03; the user's pick for more delay range):**
+- **Sourced** (sch p95, Table 1 NAB; man p83-84): on the 7-1/2 / 15 ips board (30960-01-03)
+  EQUAL SWITCH 4S2a puts the record HF trimmer 1C46 (550-1600 pF) across 1R17 in place of 1C7;
+  the playback EQ is the same 50 us at both speeds (2R30, LOW's rheostat, is "*" on this board,
+  a jumper keeps 2R31 in: the manual's "7-1/2 ips NAB: the same as 15"); 4S2b switches only the
+  CCIR network. The bias is set once, "at a specific wavelength" (500 Hz at 7-1/2 = 1 kHz at 15),
+  so the 15 ips alignment's carries over; so do the levels.
+- **In `ampex_351.yaml`:** `speed` (the transport's switch: the capstan motor's other winding;
+  each speed its own tape part in a switch, TP / TP_LO, the medium's cells per bias wavelength:
+  0.25 um at 7-1/2) and `equalization` (4S2a as contacts always in the circuit, so a flip is a
+  value change; set with the speed, or against it). The 351's default IR moves only by the two
+  contacts.
+- **Aligned** (`varimu.measure.tape_align.record_eq_lo`, step 3b; `scripts/align_351.py --low`
+  merges it into the report): 1C46 at its end, 1600 pF, and the response still short: -0.6 /
+  -1.2 / -2.6 / -4.7 / -7.3 dB at 5 / 7.5 / 10 / 12.5 / 15 kHz re 500 Hz (the spec: +-2 dB to
+  10 kHz, +-4 to 15 kHz, man p10: 0.6 and 3.3 dB short). The provisional heads (the Ampex 300's
+  51 um record gap, the contour calibrated at 15 ips) lose more at half speed than the 351's;
+  changing them moves the 15 ips alignment: the user's call (TAPE_PLAN.md "Gaps").
+- **The live tier:** a reduction per speed (`ampex_351_lo.json`; a switch's sub-parts all
+  expand, so both files must exist). Against the full stream at 7-1/2 ips (drums, `--speed-ips
+  7.5`): -34.2 / -28.6 / -24.9 dB at 0 / +6 / +12 dB, every band within 0.5 dB. The 15 ips
+  reduction played at 7-1/2 (its apertures scaled by the speeds' ratio: in space they agree
+  within 0.6 um): -32.8 dB and +2 dB at 16 kHz, -0.5 to -1 dB at 8-12.7 kHz, from D(k)
+  (measured on noise to 20 kHz, 19 um at 15 ips, held below) and the tables (1.9%: the bias
+  wavelength). So per speed, not interpolated by speed; D(k)'s band widened instead (BIAS,
+  below), which also covers VARISPEED's slowest tape.
+- **Heard:** a click lands at 134.4 / 267.8 ms (head distance over speed: 133.3 / 266.7);
+  `print_351_echo.py --ips 7.5 [--live]` -> `reports/delay/audio/*_7.5ips*.wav`.
+- **Load** (`load_profile --device ampex_351_echo --quality draft-1x --no-noise`, the drums,
+  back to back): 7-1/2 ips 0.28x real time (median 0.23, p95 0.61, worst 1.55; 24 of 3637
+  blocks over 1.0) against 15 ips 0.47x (0.25, 1.28, 2.42; 806 over): a 16 mm block lasts
+  twice as long, so the worker's playback FFTs (the 15 ips spikes) come half as often.
+- **A bug fixed (circuitsim `Mna::media_senses`):** a run that computes only its probes (DK)
+  didn't compute the tape's capstan supply node, and the medium read its stale value: the mono
+  echo's tape ran at a third of its speed (the slap at 399 ms) since VARISPEED. The ping-pong
+  probes `cap_hz` and was right. Results redone: the load (the same: 0.47x), DRIVE (+12.9 dB in:
+  the slap +8.4 dB, 4.5 dB of compression; +22.6 dB: +10.2 dB, 12.4 dB), the audio. Guarded by
+  `tests/test_351_echo.py::test_live_slap_lands_a_head_distance_later`.
+
+- **Live against the print at 7-1/2 ips** (`print_351_echo.py --ips 7.5 [--live]`, the drums,
+  4 s plus 2.5 s; the print at production, ~600x real time on a shared CPU): level +0.21 /
+  +0.22 / +0.28 dB at REPEAT 0 / 0.35 / 0.6, the worst third-octave band 16 kHz (-1.6 to -1.8
+  dB), the repeats within 1 dB (print -26 -34 -41 -48 -54, live -26 -33 -40 -47 -54 dBFS at
+  0.35).
+
+**BIAS built (2026-11-03; under-biased grit to over-biased dark, both tiers on the same
+control):**
+- **One control, BIAS ADJUST** (`bias_adjust_f`, 5C13, 15-130 pF). The print's literal
+  oscillator follows it by itself; live, the tape part's `reduction_bias: bias_adjust_f` (both
+  builders) reads the control through the reduction's **bias map**: 5C13 against the record
+  head's bias current on the literal machine (the alignment's sweep, 15-78 pF, and three runs
+  to 130 pF by `tape_reduction.py`): 1.44 mA at 15 pF (1 kHz 12 dB down at -10 dB: under-biased)
+  to 10.7 mA at 130 pF; aligned 2.95 mA at 31 pF; ~0.096 mA per pF.
+- **The reduction over the bias** (`varimu.delay.reduced.BiasReductions`, circuitsim's
+  `TapeReduction::points` / `ReductionPoint`, IR `TapeReductionPoint`): tables, apertures
+  (trimmed to one span) and D(k) at 10 biases 2^(1/3) apart over the map, interpolated in
+  ln(bias), held past the ends. D(k) is per point: it depends on the bias (at 50 um -1.35 dB
+  at 1.44 mA, -3.44 dB aligned: a shallower recording loses less to its own field), and each
+  block's flux slope takes its own bias's. D(k) is now measured on noise to 40 kHz (was 20:
+  the top octave was held at 7-1/2 ips and under VARISPEED).
+- **A turn in place:** a reduced medium differing only in its bias updates the stream
+  (`TapeStream::set_bias`, media.rs `update`): blocks recorded from then on take the new
+  bias, the tape already recorded stays (no restart). The port against the reference with the
+  bias turned twice mid-run: within 1e-10 (`tests/test_tape_reduced.py`); in the echo's
+  stream, a turn between a click and its slap keeps the slap
+  (`test_351_echo.py::test_a_bias_turn_keeps_the_tape`).
+- **The panel** (varimu-app): BIAS shows in pF (`Knob::display_scale`: a range in a tiny SI
+  unit gets a prefix; in farads the slider's 3 decimals rounded it to 0 and it wouldn't move),
+  and every two-position switch (choices [0, 1]: SPEED, EQUALIZATION, the V76's treble cut,
+  the U47's pattern) is a checkbox.
+- **Validated before building** (`delay_live_study.py medium --demag --bias-ma-rms B`, each
+  bias's own reduction against the full stream, drums at 0 / +6 / +12 dB):
+
+  | bias | difference | level | bands |
+  |---|---|---|---|
+  | 1.44 mA (15 pF, under) | -22.2 / -18.3 / -15.2 dB | -0.25 dB | within 0.9 dB (1-2.5 kHz low, +0.7 at 6.3 kHz) |
+  | 2.94 mA (aligned) | -34.7 / -28.7 / -25.2 dB | -0.02 dB | within 0.43 dB |
+  | 7.0 mA (78 pF, over) | -19.6 / -20.8 / -22.1 dB | +0.2 dB | within 0.3 dB, flat: the residual is phase (the over-biased tape records farther behind the gap) |
+
+  Under-bias the recording depends more on each cell's history than one aperture and table
+  hold.
+- **Generated** (`scripts/tape_reduction.py`, `[--set speed=0 --name ampex_351_lo]`): the
+  bias map's three literal runs 11 min; per speed the 10 points' tables 3-7 min and their
+  D(k)s (each a full-stream reference, 5 at a time) ~50 min at 15 ips, ~115 min at 7-1/2: the
+  references slow down with the bias (its recording zone widens). The interpolation between
+  points against a reduction made there directly: the small-signal slope within +-0.4 dB per
+  layer (one layer +1.5 dB between the lowest two points, where the level moves fastest),
+  saturation within 0.02 dB, apertures within 1 us (one deep layer -4.7 us at 70 kA/m).
+- **Heard** (`print_351_echo.py --bias-pf C --live`, the guitar at REPEAT 0.5 ->
+  `reports/delay/audio/Dry Guitar_351echo_rep0.5_bias*_live.wav`), against the aligned 31 pF:
+  15 pF -7.2 dB (250 Hz / 1 / 4 / 8 / 12 kHz: -8.9 / -9.9 / -11.1 / -5.3 / -4.5: relatively
+  bright on top, as an under-biased tape is), 78 pF -6.3 dB (-8.2 / -9.1 / -10.6 / -9.1 /
+  -6.9), 130 pF -10.4 dB (-12.7 / -13.5 / -16.4 / -12.4 / -8.0); the repeats compound it. The
+  output peaks at the aligned bias (the alignment's definition), so either way the slap drops:
+  DRIVE or SEND makes it up.
+- Load unchanged: 0.49x real time (p95 1.33) at 31 pF and at 15 pF. The fixtures of the
+  echo's events builds embed the whole reduction (13-15 MB per file): trim before a commit.
+- **Live against the print at the bias's ends** (`print_351_echo.py --bias-pf C [--live]`,
+  the drums at REPEAT 0.35; the prints 70x / 136x real time alone): 15 pF level +0.12 dB, the
+  worst band +1.17 dB (157 Hz), the repeats within 1 dB (print -47 -65 -69, live -46 -64 -69
+  dBFS); 78 pF level +0.34 dB, the worst band -0.94 dB (16 kHz), the repeats within 1 dB (-43
+  -56 -66 / -42 -55 -66).
+
+**Proposed: the condition dials** (the user's list; each a physical condition, clean by
+default, "turn it to 11" at the end; none built):
+- **TRANSPORT WEAR** (wow and flutter): one knob scaling the transport's mechanisms from a
+  new machine (the spec's 0.11 / 0.14%) to a worn one, ~30x: the capstan's runout (a worn
+  shaft), the idler (a hardened, out-of-round pinch roller), the reel (warped, a weak tension
+  motor), the motor's hunting (worn bearings), scrape (glazed heads). Their amplitudes are
+  the medium's `flutter` / `flutter_noise`: a set in place, as the bias's.
+- **DIRTY HEADS** (spacing): oxide shed onto the repro head lifts the tape, 0.5 um to ~10 um
+  (54.6 dB per wavelength: at 10 um 15 kHz at 15 ips loses ~22 dB). The playback is the
+  stream's own (exact, in place); the record head's spacing would need reductions per
+  spacing (a later grid).
+- **TAPE GRADE** (hiss): a cheaper, coarser coating, the grain's particle volume up to ~100x
+  (+20 dB of hiss) and its packing variation (modulation noise). The chain end plays with the
+  circuit's noise off: the tape's grain needs its own switch.
+- **SHED OXIDE** (dropouts): seeded bare or lifted spots along the tape (a density per metre,
+  each a few mm), the recorded magnetization removed or the spacing lifted there.
+- Later: print-through, azimuth (HF loss, the 351-2's interchannel phase), magnetized heads
+  (a DC field in the record head: hiss and even harmonics).
+
+**Next (the user's order):** the condition dials (above: which, and their ranges). Then: the user listens: the literal prints (`scripts/print_351_echo.py`, REPEAT 0 / 0.35 /
+0.6 / 0.8, the last past unity) against the live tier's (`--live`), and plays it at a chain's
+end. Ping-pong's literal print isn't made (two literal machines: ~600x real time); its parts are
+the echo's, each checked.

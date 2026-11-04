@@ -434,11 +434,15 @@ fn tape_record<'py>(
 /// `varimu.devices.tape_machine.TapeStream`): `params` its JSON (`stream_params`), fs the
 /// step rate, `h` the record gap's signal field per step, pushed `chunk` at a time;
 /// `noise_seed`: the coating's grain on, keyed by (seed, "tape"); `transport_seed`: the
-/// transport's random parts' (seed, "transport"). Returns the repro EMF
-/// after each push (at t_{n+1}). With the literal bias (`bias_substeps` M), `h` is the
-/// head's whole field, M samples per step (`chunk` a multiple of M). Releases the GIL.
+/// transport's random parts' (seed, "transport"); `supply_hz`: varispeed's capstan supply
+/// frequency per push (a medium with `varispeed` needs it); `bias_a_m`: a reduced
+/// medium's bias changes, (push index, deep-gap peak A/m) rising, each set before that
+/// push (the pushes split there). Returns the repro EMF after each push (at t_{n+1}).
+/// With the literal bias (`bias_substeps` M), `h` is the head's whole field, M samples per
+/// step (`chunk` a multiple of M). Releases the GIL.
 #[pyfunction]
-#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0))]
+#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None))]
+#[allow(clippy::too_many_arguments)]
 fn tape_stream_run<'py>(
     py: Python<'py>,
     params: &str,
@@ -447,10 +451,14 @@ fn tape_stream_run<'py>(
     chunk: usize,
     noise_seed: Option<u64>,
     transport_seed: u64,
+    supply_hz: Option<PyReadonlyArray1<'py, f64>>,
+    bias_a_m: Option<Vec<(usize, f64)>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let p: crate::tape_stream::TapeParams =
         serde_json::from_str(params).map_err(|e| invalid(format!("tape_stream_run: {e}")))?;
     let h = h.as_array().to_vec();
+    let supply = supply_hz.map(|s| s.as_array().to_vec());
+    let changes = bias_a_m.unwrap_or_default();
     let out = py.detach(|| -> Result<Vec<f64>, String> {
         let mut st = crate::tape_stream::TapeStream::build(
             &p,
@@ -459,8 +467,32 @@ fn tape_stream_run<'py>(
             transport_seed,
         )?;
         let mut out = Vec::with_capacity(h.len());
-        for c in h.chunks(chunk.max(1)) {
-            st.push_many(c, &mut out)?;
+        let m = st.substeps();
+        let chunk = (chunk.max(1)).div_ceil(m) * m;
+        // Pushed `chunk` at a time, split at each bias change.
+        let cuts = changes
+            .iter()
+            .map(|c| (c.0 * m).min(h.len()))
+            .chain(std::iter::once(h.len()));
+        let mut pos = 0;
+        for (ci, end) in cuts.enumerate() {
+            while pos < end {
+                let e = (pos + chunk).min(end);
+                let c = &h[pos..e];
+                match &supply {
+                    // Varispeed: the supply's frequency at each push (one per push).
+                    Some(sup) => {
+                        let k0 = pos / m;
+                        let k1 = (k0 + c.len() / m).min(sup.len());
+                        st.push_many_supply(c, &sup[k0..k1], &mut out)?
+                    }
+                    None => st.push_many(c, &mut out)?,
+                }
+                pos = e;
+            }
+            if let Some(&(_, hg)) = changes.get(ci) {
+                st.set_bias(hg)?;
+            }
         }
         Ok(out)
     });

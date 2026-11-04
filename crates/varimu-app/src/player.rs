@@ -43,7 +43,9 @@
 //! a block behind, so the two compute side by side. It costs one block of latency
 //! ([`BLOCK`], 10 ms); it can be put on, changed and taken off while playing (the end
 //! settles on its thread, the device's output going on dry meanwhile). The audio only
-//! flows one way (a reverb's input is a grid), so nothing couples it back.
+//! flows one way (a reverb's input is a grid), so nothing couples it back. A stereo end
+//! (its circuit probes `out_r`: the 351-2's ping-pong) plays its left and right apart,
+//! the dry in both; a take keeps their mid (tracks are mono).
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -832,7 +834,8 @@ enum TailMsg {
 /// settling) without stalling the worker.
 struct Tail {
     tx: Sender<TailMsg>,
-    rx: Receiver<Vec<f32>>,
+    /// Its output blocks: left (or mono), and a stereo end's right.
+    rx: Receiver<(Vec<f32>, Option<Vec<f32>>)>,
     /// The thread has settled its stream and takes blocks.
     ready: Arc<AtomicBool>,
     status: Arc<Mutex<EndStatus>>,
@@ -884,8 +887,9 @@ impl Tail {
     }
 
     /// `y` (block n) to the end; block n - 1 out: `mix` of the end's output, the rest the
-    /// device's dry. The end computes block n while the worker computes block n + 1.
-    fn process(&mut self, y: &[f32], mix: f64) -> Vec<f32> {
+    /// device's dry (a stereo end: left and right, the dry in both). The end computes block
+    /// n while the worker computes block n + 1.
+    fn process(&mut self, y: &[f32], mix: f64) -> (Vec<f32>, Option<Vec<f32>>) {
         let mut dry = std::mem::replace(&mut self.pending, y.to_vec());
         dry.resize(y.len(), 0.0);
         let wet = if std::mem::take(&mut self.in_flight) {
@@ -902,15 +906,16 @@ impl Tail {
             self.in_flight = true;
         }
         let m = mix as f32;
+        let blend = |dry: &[f32], mut w: Vec<f32>| -> Vec<f32> {
+            w.resize(dry.len(), 0.0);
+            dry.iter()
+                .zip(&w)
+                .map(|(d, w)| d * (1.0 - m) + w * m)
+                .collect()
+        };
         match wet {
-            Some(mut w) => {
-                w.resize(dry.len(), 0.0);
-                dry.iter()
-                    .zip(&w)
-                    .map(|(d, w)| d * (1.0 - m) + w * m)
-                    .collect()
-            }
-            None => dry.iter().map(|d| d * (1.0 - m)).collect(),
+            Some((w, r)) => (blend(&dry, w), r.map(|r| blend(&dry, r))),
+            None => (dry.iter().map(|d| d * (1.0 - m)).collect(), None),
         }
     }
 }
@@ -920,7 +925,7 @@ fn tail_loop(
     d: EndDevice,
     rate: u32,
     blocks: Receiver<TailMsg>,
-    outputs: Sender<Vec<f32>>,
+    outputs: Sender<(Vec<f32>, Option<Vec<f32>>)>,
     ready: Arc<AtomicBool>,
     status: Arc<Mutex<EndStatus>>,
 ) {
@@ -952,7 +957,8 @@ fn tail_loop(
                         st.restarts = live.restarts;
                         st.build_error = live.error();
                     }
-                    if outputs.send(y).is_err() {
+                    let right = live.right().map(<[f32]>::to_vec);
+                    if outputs.send((y, right)).is_err() {
                         return;
                     }
                 }
@@ -1034,11 +1040,18 @@ impl Emitter {
         // Through the chain's end: what is heard is what a take keeps.
         self.update_end(shared);
         let chained: Vec<f32>;
+        let mut right: Option<Vec<f32>> = None;
         let (raw, y) = match &mut self.end {
             Some(t) => {
                 let mix = f64::from_bits(shared.end_mix.load(Ordering::Relaxed));
-                chained = t.process(&y, mix);
-                (chained.as_slice(), chained.clone())
+                let (left, r) = t.process(&y, mix);
+                // A take keeps a stereo end's mid.
+                chained = match &r {
+                    Some(r) => left.iter().zip(r).map(|(a, b)| 0.5 * (a + b)).collect(),
+                    None => left.clone(),
+                };
+                right = r;
+                (chained.as_slice(), left)
             }
             None => (raw, y),
         };
@@ -1069,10 +1082,17 @@ impl Emitter {
         self.click.clear();
         self.click.resize(y.len(), 0.0);
         clock.process(&mut self.click);
-        let mut out: Vec<Frame> = y
-            .iter()
-            .map(|&v| [mix.live.0 * v, mix.live.1 * v])
-            .collect();
+        let mut out: Vec<Frame> = match &right {
+            Some(r) => y
+                .iter()
+                .zip(r)
+                .map(|(&l, &r)| [mix.live.0 * l, mix.live.1 * r])
+                .collect(),
+            None => y
+                .iter()
+                .map(|&v| [mix.live.0 * v, mix.live.1 * v])
+                .collect(),
+        };
         for &(pos, off, len) in &segments {
             mix.add(pos, &mut out[off..off + len]);
         }

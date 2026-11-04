@@ -140,13 +140,20 @@ impl Circuit {
     pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
         let p = spec::resolve(&self.spec, values).map_err(|e| e.to_string())?;
         let noise = if self.noise { Noise::File } else { Noise::Off };
-        // Only a file with tables plays them: a thyratron without isn't refused here.
+        // Only a file with tables plays them: a thyratron without isn't refused here. A tape
+        // part naming its reduction plays that (DELAY_PLAN.md, "The reduced medium").
+        let reduced_tape = self
+            .spec
+            .sections
+            .iter()
+            .any(|s| s.parts.iter().any(|(_, e)| names_reduced_tape(e)));
         let events = self.events
-            && self
-                .spec
-                .devices
-                .iter()
-                .any(|(_, e)| e.as_map().is_some_and(|m| m.get("events").is_some()));
+            && (reduced_tape
+                || self
+                    .spec
+                    .devices
+                    .iter()
+                    .any(|(_, e)| e.as_map().is_some_and(|m| m.get("events").is_some())));
         build_ir_events(
             &self.lib,
             &self.spec,
@@ -158,6 +165,19 @@ impl Circuit {
         )
         .map_err(|e| e.to_string())
     }
+}
+
+/// Whether a part entry is a tape part naming its reduction, or a switch holding one (the
+/// 351's speed switch: a tape part per speed).
+fn names_reduced_tape(e: &Value) -> bool {
+    let Some(m) = e.as_map() else { return false };
+    if m.get("tape").is_some() && m.get("reduction").is_some() {
+        return true;
+    }
+    m.get("switch").is_some()
+        && m.get("parts")
+            .and_then(Value::as_map)
+            .is_some_and(|p| p.iter().any(|(_, sub)| names_reduced_tape(sub)))
 }
 
 /// What a stream can't change in place: its elements (kind, name) and nodes
@@ -252,6 +272,8 @@ struct Running {
     fs: FullScale,
     /// Its output from the simulation's rate to the host's (1x: unchanged).
     down: StreamResampler,
+    /// A stereo circuit's right channel (its `out_r` probe) and its resampler.
+    out_r: Option<(usize, StreamResampler)>,
 }
 
 impl Running {
@@ -281,12 +303,16 @@ impl Running {
         let out = find("v(out)").ok_or("the circuit has no `out` probe")?;
         let cv = find("v(cv)");
         let mut down = StreamResampler::new(1, k);
+        let mut out_r = find("v(out_r)").map(|i| (i, StreamResampler::new(1, k)));
         let n0 = (s.settle_s * s.host() as f64) as usize;
         if n0 > 0 {
             let o = stream
                 .process(&vec![u0 * v; n0 * k])
                 .map_err(|e| e.to_string())?;
             down.process(&o[out], &mut Vec::new());
+            if let Some((i, d)) = &mut out_r {
+                d.process(&o[*i], &mut Vec::new());
+            }
         }
         Ok(Running {
             stream,
@@ -295,6 +321,7 @@ impl Running {
             cv,
             fs,
             down,
+            out_r,
         })
     }
 }
@@ -366,6 +393,9 @@ pub struct Live {
     pub gain: f64,
     /// The last block's input as the circuit took it (after the gain).
     last_input: Vec<f64>,
+    /// A stereo circuit's right channel from the last block (its `out_r` probe; the
+    /// block's return value is the left).
+    right: Option<Vec<f32>>,
     /// The values playing now.
     pub values: Values,
     /// The input from the host's rate to the simulation's (1x: unchanged), shared by a
@@ -463,6 +493,7 @@ impl Live {
             restarts: 0,
             gain,
             last_input: Vec::new(),
+            right: None,
             values,
             up,
             lag,
@@ -525,6 +556,12 @@ impl Live {
             Ordering::Relaxed,
         );
         self.process(&x)
+    }
+
+    /// A stereo circuit's right channel from the last [`Live::process`] (its `out_r`
+    /// probe, as long as the left); None for a mono circuit.
+    pub fn right(&self) -> Option<&[f32]> {
+        self.right.as_deref()
     }
 
     /// `x` (full scale 1.0, at the host rate) through the circuit: as many output
@@ -611,6 +648,15 @@ impl Live {
             y.iter_mut().for_each(|o| *o /= run.fs.output_v);
             y
         };
+        // A stereo circuit's right channel, the same way.
+        let heard_r = |run: &mut Running, out: &[Vec<f64>]| {
+            run.out_r.as_mut().map(|(i, d)| {
+                let mut y = Vec::with_capacity(x.len());
+                d.process(&out[*i], &mut y);
+                y.iter_mut().for_each(|o| *o /= run.fs.output_v);
+                y
+            })
+        };
         let fs = self.run.fs;
         let out = self
             .run
@@ -618,6 +664,7 @@ impl Live {
             .process_with(&volts(fs), &ctl_refs)
             .map_err(|e| e.to_string())?;
         let mut y = heard(&mut self.run, &out);
+        let mut yr = heard_r(&mut self.run, &out);
         let mut cv = self.run.cv.map(|i| out[i].clone());
         if let Some(new) = self.fade.take() {
             let mut new = *new;
@@ -626,24 +673,38 @@ impl Live {
                 .process_with(&volts(new.fs), &ctl_refs)
                 .map_err(|e| e.to_string())?;
             let y2 = heard(&mut new, &o2);
-            let m = y.len().min(y2.len());
-            let (a, b) = (&y[y.len() - m..], &y2[y2.len() - m..]);
-            y = linspace01(m)
-                .into_iter()
-                .enumerate()
-                .map(|(i, w)| a[i] * (1.0 - w) + b[i] * w)
-                .collect();
+            let yr2 = heard_r(&mut new, &o2);
+            let fade = |a: &[f64], b: &[f64]| -> Vec<f64> {
+                let m = a.len().min(b.len());
+                let (a, b) = (&a[a.len() - m..], &b[b.len() - m..]);
+                linspace01(m)
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, w)| a[i] * (1.0 - w) + b[i] * w)
+                    .collect()
+            };
+            y = fade(&y, &y2);
+            yr = match (&yr, &yr2) {
+                (Some(a), Some(b)) => Some(fade(a, b)),
+                _ => yr2,
+            };
             cv = new.cv.map(|i| o2[i].clone());
             self.run = new;
             self.restarts += 1;
         }
         // A stream's output lags its input by a few samples (the input's
         // interpolation); pad its first block to keep the block size.
-        if y.len() < x.len() {
-            let mut p = vec![0.0; x.len() - y.len()];
-            p.extend_from_slice(&y);
-            y = p;
-        }
+        let pad = |y: Vec<f64>| -> Vec<f64> {
+            if y.len() < x.len() {
+                let mut p = vec![0.0; x.len() - y.len()];
+                p.extend_from_slice(&y);
+                p
+            } else {
+                y
+            }
+        };
+        let y = pad(y);
+        self.right = yr.map(|r| pad(r).iter().map(|&t| t as f32).collect());
         let rms = |a: &[f64]| (a.iter().map(|t| t * t).sum::<f64>() / a.len().max(1) as f64).sqrt();
         let (rms_in, rms_out) = (rms(x) + 1e-12, rms(&y) + 1e-12);
         // The circuit's gain, V/V or Pa/V (0 dB more when the scales in and out differ).

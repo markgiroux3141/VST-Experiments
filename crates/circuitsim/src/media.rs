@@ -26,6 +26,14 @@ impl MediumElement {
         }
     }
 
+    /// A tape's capstan supply node (varispeed), if any.
+    pub fn supply(&self) -> Option<&str> {
+        match self {
+            MediumElement::Plate(_) => None,
+            MediumElement::Tape(t) => t.supply.as_deref(),
+        }
+    }
+
     /// The sense's (positive, negative) nodes.
     pub fn sense(&self) -> (&str, &str) {
         match self {
@@ -70,14 +78,19 @@ impl TapeMedium {
 
     /// Push sensed voltages (one, or the literal bias's samples per push) as fields; the
     /// EMF at the next sample.
-    fn push(&mut self, vs: impl Iterator<Item = f64>) -> f64 {
+    /// With the capstan's supply frequency (varispeed), if it has one.
+    fn push(&mut self, vs: impl Iterator<Item = f64>, supply_hz: Option<f64>) -> f64 {
         let k = self.tape.h_per_v;
         self.fields.clear();
         self.fields.extend(vs.map(|v| k * v));
         self.emf.clear();
-        self.stream
-            .push_many(&self.fields, &mut self.emf)
-            .expect("the tape's blocks are recorded before the repro head reads them");
+        match supply_hz {
+            Some(f) => self
+                .stream
+                .push_many_supply(&self.fields, &[f], &mut self.emf),
+            None => self.stream.push_many(&self.fields, &mut self.emf),
+        }
+        .expect("the tape's blocks are recorded before the repro head reads them");
         self.emf[0]
     }
 }
@@ -105,14 +118,15 @@ impl Medium {
         })
     }
 
-    /// The sensed voltage at this sample; the output at the next. A tape with the literal
-    /// bias takes it as its every sample over the step (the DC point's).
-    pub fn push(&mut self, v: f64) -> f64 {
+    /// The sensed voltage at this sample (and a tape's capstan supply, if it has one);
+    /// the output at the next. A tape with the literal bias takes it as its every sample
+    /// over the step (the DC point's).
+    pub fn push(&mut self, v: f64, supply_hz: Option<f64>) -> f64 {
         match self {
             Medium::Plate(m) => m.push(v),
             Medium::Tape(m) => {
                 let k = m.stream.substeps();
-                m.push(std::iter::repeat_n(v, k))
+                m.push(std::iter::repeat_n(v, k), supply_hz)
             }
         }
     }
@@ -127,22 +141,32 @@ impl Medium {
 
     /// The sensed voltages over a step, [`Medium::substeps`] of them (a multi-rate part's,
     /// `partition.rs`); the output at the next sample.
-    pub fn push_batch(&mut self, vs: &[f64]) -> f64 {
+    pub fn push_batch(&mut self, vs: &[f64], supply_hz: Option<f64>) -> f64 {
         match self {
             Medium::Plate(m) => m.push(*vs.last().expect("a sample")),
-            Medium::Tape(m) => m.push(vs.iter().copied()),
+            Medium::Tape(m) => m.push(vs.iter().copied(), supply_hz),
         }
     }
 
     /// New values mid-run. A plate keeps ringing; tape with the same medium keeps its
-    /// recording (a new sense scale only), and a changed medium starts on erased tape.
+    /// recording (a new sense scale only; a reduced medium's new bias records from the
+    /// next block on: BIAS as a knob), and a changed medium starts on erased tape.
     /// A medium of another kind is a change of structure.
     pub fn update(&mut self, el: &MediumElement) -> Result<(), String> {
         match (self, el) {
             (Medium::Plate(m), MediumElement::Plate(p)) => m.update(p),
             (Medium::Tape(m), MediumElement::Tape(t)) => {
-                if t.medium != m.tape.medium || t.name != m.tape.name {
+                let old = &m.tape.medium;
+                let same_but_bias = t.medium.reduced.is_some()
+                    && t.medium.hg_bias_a_m != old.hg_bias_a_m
+                    && crate::tape_stream::TapeParams {
+                        hg_bias_a_m: old.hg_bias_a_m,
+                        ..(*t.medium).clone()
+                    } == **old;
+                if t.name != m.tape.name || (t.medium != *old && !same_but_bias) {
                     m.stream = TapeMedium::stream(t, m.fs, m.noise_seed)?;
+                } else if same_but_bias {
+                    m.stream.set_bias(t.medium.hg_bias_a_m)?;
                 }
                 m.tape = t.clone();
             }

@@ -108,6 +108,8 @@ pub struct DeviceInstance {
 pub struct MediumPorts {
     pub element: crate::media::MediumElement,
     pub sense: (Option<usize>, Option<usize>),
+    /// A tape's capstan supply node (varispeed), if it has one.
+    pub supply: Option<Option<usize>>,
     /// The circuit's noise seed, if its noise is on (a tape's grain).
     pub noise_seed: Option<u64>,
 }
@@ -520,9 +522,11 @@ impl Mna {
             .map(|m| {
                 let (pos, neg) = m.sense();
                 let sense = (node(pos), node(neg));
+                let supply = m.supply().map(node);
                 MediumPorts {
                     element: m,
                     sense,
+                    supply,
                     noise_seed: ir.noise.as_ref().map(|n| n.seed),
                 }
             })
@@ -646,11 +650,13 @@ impl Mna {
             .collect()
     }
 
-    /// The unknowns a run must compute at each step for the media's forces.
+    /// The unknowns a run must compute at each step for the media: their forces' senses
+    /// and a tape's capstan supply (varispeed; without it a run that computes only its
+    /// probes read the supply's stale value: the echo's tape ran at a third of its speed).
     pub fn media_senses(&self) -> Vec<usize> {
         self.media
             .iter()
-            .flat_map(|m| [m.sense.0, m.sense.1])
+            .flat_map(|m| [m.sense.0, m.sense.1, m.supply.flatten()])
             .flatten()
             .collect()
     }

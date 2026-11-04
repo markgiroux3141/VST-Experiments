@@ -2295,13 +2295,16 @@ fn knob_ui(ui: &mut egui::Ui, k: &mut Knob) -> bool {
     let w = ui.available_width();
     let changed = match &k.kind {
         Kind::Range { min, max } => {
-            let mut v = k.number();
+            let (f, suffix) = k.display_scale();
+            let mut v = k.number() * f;
             let r = ui.add_sized(
                 [w, 18.0],
-                egui::Slider::new(&mut v, *min..=*max).max_decimals(3),
+                egui::Slider::new(&mut v, *min * f..=*max * f)
+                    .max_decimals(3)
+                    .suffix(suffix),
             );
             if r.changed() {
-                k.value = Value::Float(v);
+                k.value = Value::Float(v / f);
             }
             r.changed()
         }

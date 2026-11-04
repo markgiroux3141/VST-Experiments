@@ -26,6 +26,12 @@ The steps, in this order:
    500 Hz, -10 dB under operating level (man p84: 15 ips at least 10 dB under). At that
    level the machine is linear, so the response at any 1C7 is the full machine's at one
    1C7 times the record amplifier's change (`record_ir`: the record side alone, cheap).
+3b. **Record EQ at 7-1/2 ips** (1C46, `rec_eq_lo_f`; `speed` and `equalization` LOW): the
+   same at 7-1/2 ips, 20 dB under operating level (man p83: "at 3-3/4 and 7-1/2 ips at least
+   20 db below"), flattest 1-10 kHz (its +-2 dB band, man p10; 12.5 and 15 kHz reported).
+   The bias, the playback EQ (2R31 at both speeds on this board: sch Table 1) and the levels
+   are the 15 ips alignment's: the manual sets the bias once, "at a specific wavelength"
+   (500 Hz at 7-1/2 ips is 1 kHz at 15), and the record and playback levels once.
 4. **Record level** (RECORD LEVEL 4R9, `record_level`): operating level is "a steady
    400 cycle tone the level of which produces 1% total rms distortion" (man p84). The
    program's 0 VU in (-10 dBm bridging, -18 dBFS rms) records at operating level: the
@@ -79,6 +85,13 @@ T1_S, T2_S = 3180e-6, 50e-6
 TT_REF_HZ = 700.0
 HF_HZ = (1000.0, 2500.0, 5000.0, 7500.0, 10000.0, 12500.0, 15000.0)
 REC_REF_HZ = 500.0
+#: 7-1/2 ips (step 3b): the level (man p83), the band flattened (man p10's +-2 dB band), and
+#: the tones' timing (the output arrives 267 ms later).
+LOW_SPEED = {"speed": 0, "equalization": 0}
+LOW_SPEED_LEVEL_DB = -20.0
+LOW_SPEED_FLAT_HZ = 10000.0
+LOW_SPEED_TONE_S = 0.52
+LOW_SPEED_MEASURE_FROM_S = 0.33
 #: Tones are recorded this long after the settle (the output arrives a head distance
 #: later, 133 ms at 15 ips); measured from MEASURE_FROM_S on.
 TONE_S = 0.38
@@ -195,8 +208,8 @@ def run_many(b: Bench, jobs: Sequence[tuple[Mapping[str, Any], np.ndarray]], not
     return out
 
 
-def window(b: Bench, v: np.ndarray) -> np.ndarray:
-    return v[int(MEASURE_FROM_S * b.fs) :]
+def window(b: Bench, v: np.ndarray, from_s: float = MEASURE_FROM_S) -> np.ndarray:
+    return v[int(from_s * b.fs) :]
 
 
 # --- Partial circuits -------------------------------------------------------------------
@@ -414,6 +427,48 @@ def record_eq(b: Bench, overrides: Mapping[str, Any], note=print) -> dict[str, A
     }
 
 
+def record_eq_lo(b: Bench, overrides: Mapping[str, Any], note=print) -> dict[str, Any]:
+    """Step 3b: rec_eq_lo_f (1C46) for the flattest low-level response at 7-1/2 ips, 1-10 kHz
+    re 500 Hz (as step 3, at LOW_SPEED_LEVEL_DB; 12.5 and 15 kHz reported, not flattened)."""
+    o = {**overrides, **LOW_SPEED}
+    freqs = (REC_REF_HZ, *HF_HZ)
+    flat = np.array([f <= LOW_SPEED_FLAT_HZ for f in freqs[1:]])
+    c0 = float(spec.resolve(b.circuit, o)["rec_eq_lo_f"])
+    x = [tone(b, [f], LOW_SPEED_LEVEL_DB, LOW_SPEED_TONE_S) for f in freqs]
+    runs = run_many(b, [(o, xi) for xi in x], note)
+    full0 = np.array(
+        [
+            level(window(b, v["v(out)"], LOW_SPEED_MEASURE_FROM_S), b.fs, f)
+            for v, f in zip(runs, freqs, strict=True)
+        ]
+    )
+    amp = b.vu_peak_v(LOW_SPEED_LEVEL_DB)
+
+    def rec(c: float) -> np.ndarray:
+        return response(b, record_ir(b, {**o, "rec_eq_lo_f": c}), "rbc", freqs, amp / 4)
+
+    r0 = rec(c0)
+
+    def dev(c: float) -> np.ndarray:
+        d = _db(full0 * rec(c) / r0)
+        return d[1:] - d[0]
+
+    def cost(c: float) -> float:
+        return float(np.sqrt(np.mean(dev(c)[flat] ** 2)))
+
+    lo, hi = (b.circuit.controls["rec_eq_lo_f"][k] for k in ("min", "max"))
+    c_set, rms = _grid_min(cost, lo, hi, 10, 3, 8)
+    note(f"record EQ at 7-1/2 ips: 1C46 at {c_set * 1e12:.0f} pF, rms {rms:.2f} dB 1-10 kHz")
+    return {
+        "rec_eq_lo_f": c_set,
+        "freqs_hz": list(freqs[1:]),
+        "before_db": [float(x) for x in dev(c0)],
+        "flatness_db": [float(x) for x in dev(c_set)],
+        "flatness_rms_db": rms,
+        "level_db": LOW_SPEED_LEVEL_DB,
+    }
+
+
 def record_level(
     b: Bench, overrides: Mapping[str, Any], note=print, levels=(0.7, 0.8, 0.9, 1.0)
 ) -> dict[str, Any]:
@@ -514,6 +569,8 @@ def align(b: Bench | None = None, note=print, start: Mapping[str, Any] | None = 
     o["bias_adjust_f"] = steps["bias"]["bias_adjust_f"]
     steps["record_eq"] = record_eq(b, o, note)
     o["rec_eq_hi_f"] = steps["record_eq"]["rec_eq_hi_f"]
+    steps["record_eq_lo"] = record_eq_lo(b, o, note)
+    o["rec_eq_lo_f"] = steps["record_eq_lo"]["rec_eq_lo_f"]
     steps["record_level"] = record_level(b, o, note)
     o["record_level"] = steps["record_level"]["record_level"]
     steps["playback_level"] = playback_level(b, o, note)

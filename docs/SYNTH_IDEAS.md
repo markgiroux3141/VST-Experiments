@@ -26,6 +26,16 @@ the tree at 8e3132c):** the full suite 647 passed, 1 failed in 61 min: `test_noi
 that the wander rides on every one held): the count fixed, `test_noise.py` 12 passed.
 `test_circuit_format`'s ngspice comparison passed. `slice_report.py --verify` PASS (GR
 within 0.01 dB of ngspice, waveforms -71.8 to -83.3 dB, every row inside its bound).
+**Run 2026-11-04 night (after the tape echo's 7.5 ips and BIAS, uncommitted on 2be1eff;
+nothing else running): the full suite 762 passed, 2 failed in 64 min.**
+`test_ampex_351.py::test_the_tape_runs_the_351s_transport` broke on the 351's tape parts
+moving into the speed switch (its text edit left an indentation fragment): fixed, passes.
+`test_profiles.py::test_amp_profile_measures_the_nominal_5e3`: the 5E3's aliasing at
+production -25.7 dB (the test wants < -35, the qualities in order): not today's (the 5E3 has
+no tape or media); most likely `OT_5E3@2`'s compiled capacitances (C2 step 6, commit
+3129096, after the last full run): **open**. `slice_report.py --verify` PASS (GR within
+0.010 dB of ngspice, waveforms -71.8 to -83.3 dB, every row inside its bound: as on 11-02).
+
 **Run 2026-11-02 evening (nothing else running, the tree at 8c0e301): the full suite 674
 passed in 70 min; `slice_report.py --verify` PASS (GR within 0.010 dB of ngspice, waveforms
 -71.8 to -83.3 dB, every row inside its bound). Nothing owed now.** Was owed since

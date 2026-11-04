@@ -3,7 +3,7 @@
 //! (docs/TAPE_PLAN.md, TM4).
 
 use circuitsim::ir::{Element, Inductor, Resistor, Tape};
-use circuitsim::tape_stream::TapeParams;
+use circuitsim::tape_stream::{TapeParams, Varispeed};
 
 use crate::Error;
 use crate::yaml::{Map, Value};
@@ -174,7 +174,9 @@ pub fn from_data(data: &Value, what: &str) -> Result<TapeComponent, Error> {
 /// values of [`VALUES`], in order. `bias_substeps`: the literal bias (rec_plus and
 /// rec_minus the record coil's resistance's ends in a multi-rate section; no record coil
 /// of its own; bias_a_m and rec_l_h not read). `transport`: [`TRANSPORT`]'s values, or
-/// None (a constant speed).
+/// None (a constant speed). `supply`: varispeed's (node, nominal Hz): the capstan's motor
+/// on a supply whose frequency is the node's voltage, hunting at the transport's
+/// hunting_hz and hunting_q (a transport is required).
 #[allow(clippy::too_many_arguments)]
 pub fn tape(
     name: &str,
@@ -185,6 +187,7 @@ pub fn tape(
     v: &[f64; 16],
     bias_substeps: Option<usize>,
     transport: Option<&[f64; 13]>,
+    supply: Option<(&str, f64)>,
 ) -> Vec<Element> {
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let [
@@ -249,6 +252,15 @@ pub fn tape(
         packing_sigma: t.grain[2],
         packing_corr_m: t.grain[3],
         bias_substeps,
+        reduced: None,
+        varispeed: match (supply, transport) {
+            (Some((_, nominal_hz)), Some(tr)) => Some(Varispeed {
+                nominal_hz,
+                hunting_hz: tr[6],
+                hunting_q: tr[7],
+            }),
+            _ => None,
+        },
     };
     let literal = bias_substeps.is_some();
     let mut els = Vec::new();
@@ -277,6 +289,7 @@ pub fn tape(
         h_per_v: rec_h / rec_r,
         out: format!("{n}_e"),
         medium: Box::new(medium),
+        supply: supply.map(|(node, _)| node.to_string()),
     }));
     els.extend([
         Element::Inductor(Inductor {

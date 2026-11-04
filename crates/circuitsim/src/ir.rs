@@ -358,6 +358,11 @@ pub struct Tape {
     pub h_per_v: f64,
     pub out: String,
     pub medium: Box<crate::tape_stream::TapeParams>,
+    /// The capstan's supply (varispeed): the node whose voltage is its frequency (1 V =
+    /// 1 Hz), sensed after each sample with the record head; the medium's `varispeed` motor
+    /// reads it. None: no varispeed, and no such key in the JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supply: Option<String>,
 }
 
 /// A triode gas thyratron as technique K's event kernels (HYBRID_PHYSICS_PLAN.md H3, "K's
@@ -702,7 +707,11 @@ impl Element {
             Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
             Element::Plate(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
-            Element::Tape(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
+            Element::Tape(e) => {
+                let mut v = vec![e.sense_pos.as_str(), &e.sense_neg, &e.out];
+                v.extend(e.supply.as_deref());
+                v
+            }
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
         }
     }
@@ -1044,9 +1053,13 @@ impl CircuitIr {
                     if let Err(m) = e.medium.check(None) {
                         return err(format!("{name}: {m}"));
                     }
-                    // A literal bias's tape in its own part senses ground (a multi-rate
-                    // part feeds it: partition.rs).
-                    let remote = e.medium.bias_substeps.is_some() && e.sense_pos == GROUND;
+                    if e.supply.is_some() != e.medium.varispeed.is_some() {
+                        return err(format!(
+                            "{name}: a supply node and a varispeed motor go together"
+                        ));
+                    }
+                    // A tape fed by another part senses ground in its own (partition.rs).
+                    let remote = e.sense_pos == GROUND && e.sense_neg == GROUND;
                     if e.sense_pos == e.sense_neg && !remote {
                         return err(format!(
                             "{name}: its record head senses {} against itself",

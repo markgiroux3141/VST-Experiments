@@ -9,6 +9,10 @@
 //!     cargo run --release -p varimu-app --example load_profile -- --file F
 //!         [--device fairchild_670] [--normalize -11.5] [--block 512] [--out load.csv]
 //!         [--set KEY=VALUE ...] [--add-c NODE=FARADS ...] [--quality draft-1x|draft-2x|draft]
+//!         [--no-noise] (the circuit's noise sources off, as a chain's end plays)
+//!         [--coupling hold|extrapolate] (the partitions' coupling overridden)
+//!         [--partition "TITLE,TITLE|TITLE"]   (the device's partition overridden: titles
+//!         separated by ",", groups by "|")
 //!
 //! The input is normalized as the Play view does: the file's loudest 8 s to
 //! `--normalize` dBFS (sine-equivalent rms).
@@ -57,6 +61,9 @@ fn main() -> Result<(), String> {
     let mut sets = Vec::new();
     let mut quality = None;
     let mut added: Vec<(String, f64)> = Vec::new();
+    let mut partition: Option<Vec<String>> = None;
+    let mut noise = true;
+    let mut coupling: Option<String> = None;
     while let Some(a) = args.next() {
         let mut next = || args.next().ok_or(format!("{a} needs a value"));
         match a.as_str() {
@@ -72,6 +79,28 @@ fn main() -> Result<(), String> {
                     "draft-2x" => Quality::Draft2x,
                     q => return Err(format!("--quality {q}: draft, draft-1x or draft-2x")),
                 })
+            }
+            "--no-noise" => noise = false,
+            "--coupling" => coupling = Some(next()?),
+            "--partition" => {
+                partition = Some(
+                    next()?
+                        .split(',')
+                        .flat_map(|t| {
+                            // "a|b" puts a group break between a and b.
+                            let parts: Vec<&str> = t.split('|').collect();
+                            let n = parts.len();
+                            parts.into_iter().enumerate().flat_map(move |(i, x)| {
+                                let mut v = vec![x.trim().to_string()];
+                                if i + 1 < n {
+                                    v.push("|".to_string());
+                                }
+                                v
+                            })
+                        })
+                        .filter(|t| !t.is_empty())
+                        .collect(),
+                )
             }
             "--add-c" => {
                 let kv = next()?;
@@ -92,9 +121,17 @@ fn main() -> Result<(), String> {
         .iter()
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
-    let s = dev.play_settings(&Settings::load(&config, quality.unwrap_or(dev.quality))?);
+    let mut s = dev.play_settings(&Settings::load(&config, quality.unwrap_or(dev.quality))?);
+    if let Some(p) = partition {
+        s.partition = p;
+    }
+    if let Some(c) = coupling {
+        s.partition_coupling = c;
+    }
     let k = s.oversample as usize;
-    let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?.with_events(s.events);
+    let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?
+        .with_events(s.events)
+        .with_noise(noise);
     let mut v = values(&knobs(dev, circuit.spec()));
     for (k, x) in sets {
         match v.iter_mut().find(|(key, _)| *key == k) {

@@ -4,6 +4,10 @@ reports/tape/ampex_351_alignment.{json,png}. Cached (cache/tape/align_351_<key>.
 reruns only when the circuit, the code or the settings change (--refresh: always).
 
     uv run --extra fast python scripts/align_351.py [--refresh]
+    uv run --extra fast python scripts/align_351.py --low   # step 3b only (1C46, 7-1/2 ips)
+
+`--low` runs the 7-1/2 ips record EQ (step 3b) on the report's settings and merges it into
+the report (its key unchanged): ~5 min instead of the whole alignment's hour.
 """
 
 from __future__ import annotations
@@ -48,6 +52,9 @@ def plot(al: ta.Alignment, path) -> None:
     a.semilogx(p["freqs_hz"], p["flatness_db"], "o-", label="test tape (2R31)")
     a.semilogx(r["freqs_hz"], r["before_db"], "x:", label="record, 1C7 as drawn")
     a.semilogx(r["freqs_hz"], r["flatness_db"], "o-", label="record, 1C7 set")
+    if "record_eq_lo" in s:
+        lo = s["record_eq_lo"]
+        a.semilogx(lo["freqs_hz"], lo["flatness_db"], "s-", label="record 7-1/2 ips, 1C46 set")
     a.axhline(0, color="k", lw=0.5)
     a.set(xlabel="Hz", ylabel="dB re 700 / 500 Hz", title="EQ trims")
     a.legend()
@@ -71,8 +78,15 @@ def plot(al: ta.Alignment, path) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--refresh", action="store_true")
+    ap.add_argument("--low", action="store_true", help="step 3b only, merged into the report")
     a = ap.parse_args()
-    al = ta.aligned(note=note, refresh=a.refresh)
+    if a.low:
+        al = ta.Alignment(**json.loads((OUT / "ampex_351_alignment.json").read_text()))
+        o = {k: v for k, v in al.overrides.items() if k != "rec_eq_lo_f"}
+        al.steps["record_eq_lo"] = ta.record_eq_lo(ta.Bench.load(), o, note)
+        al.overrides["rec_eq_lo_f"] = al.steps["record_eq_lo"]["rec_eq_lo_f"]
+    else:
+        al = ta.aligned(note=note, refresh=a.refresh)
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "ampex_351_alignment.json").write_text(
         json.dumps(dataclasses.asdict(al), indent=1, default=float)

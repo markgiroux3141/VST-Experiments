@@ -238,6 +238,9 @@ struct Parts {
     media_feeds: Vec<MediaFeed>,
     /// A multi-rate part has the input: it reads the stream's input (`InputHist`).
     shares_input: bool,
+    /// The first partition's senses for tapes elsewhere (unknowns; None: ground),
+    /// published after its couplings.
+    senses: Vec<(Option<usize>, Option<usize>)>,
 }
 
 /// A partition's thread: step after the others' sample, applying commands
@@ -315,6 +318,11 @@ fn run_part(
             if let Err(e) = tr.step_input(&inp) {
                 shared.fail(Error::new(format!("partition {titles:?}: {e}")));
                 return;
+            }
+            // Its senses for tapes elsewhere (a tape cut from its record head).
+            let at = |u: Option<usize>| u.map_or(0.0, |i| tr.x()[i]);
+            for (r, &(a, b)) in io.senses.iter().enumerate() {
+                out[n_coupling + r] = at(a) - at(b);
             }
         } else {
             // A multi-rate part: its steps across the sample, the others' values
@@ -794,8 +802,9 @@ impl Stream {
             feeds: feeds[0].clone(),
             media_feeds: ios[0].feeds.clone(),
             shares_input: sp.input_part > 0,
+            senses: ios[0].senses.clone(),
         };
-        let out_len = ios[0].n_coupling;
+        let out_len = ios[0].n_coupling + ios[0].senses.len();
         let mut stream = base(a, Some(parts), sources, k);
         stream.initial = initial;
         stream.out = vec![0.0; out_len];
@@ -1033,8 +1042,19 @@ impl Stream {
             self.handle_update()?;
         }
         if let Some(s) = &self.parts {
-            for (o, &i) in self.out.iter_mut().zip(&self.a.mna().outputs) {
+            let n_coupling = self.out.len() - s.senses.len();
+            for (o, &i) in self
+                .out
+                .iter_mut()
+                .zip(&self.a.mna().outputs)
+                .take(n_coupling)
+            {
                 *o = self.a.x()[i];
+            }
+            let x = self.a.x();
+            let at = |u: Option<usize>| u.map_or(0.0, |i| x[i]);
+            for (r, &(a, b)) in s.senses.iter().enumerate() {
+                self.out[n_coupling + r] = at(a) - at(b);
             }
             s.shared.rings[0].publish(self.n, &self.out);
         }
