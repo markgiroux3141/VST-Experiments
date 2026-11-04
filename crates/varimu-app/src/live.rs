@@ -194,6 +194,24 @@ impl Circuit {
         )
         .map_err(|e| e.to_string())
     }
+
+    /// The span (dB from velocity 127 to 1) of the velocity law of its medium played by keys,
+    /// built with `values` (the harp's hammer speed: its component's), None without one.
+    pub fn key_velocity_span_db(&self, values: &Values) -> Result<Option<f64>, String> {
+        Ok(key_velocity_span_db(&self.build(values)?))
+    }
+}
+
+/// The span (dB from velocity 127 to 1) of the velocity law of the medium played by keys in
+/// `ir` (a harp), None without one.
+pub fn key_velocity_span_db(ir: &CircuitIr) -> Option<f64> {
+    ir.sections
+        .iter()
+        .flat_map(|s| &s.elements)
+        .find_map(|e| match e {
+            Element::Harp(h) => Some(h.model.velocity.range_db),
+            _ => None,
+        })
 }
 
 /// Whether a part entry is a tape part naming its reduction, or a switch holding one (the

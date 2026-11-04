@@ -25,6 +25,69 @@ pub fn ports() -> Result<Vec<String>, String> {
         .collect())
 }
 
+/// A keyboard's touch: how the velocities it sends map onto the velocities a device plays
+/// (docs/RHODES_PLAN.md, "Touch"). The player's and the controller's, not the device's: a
+/// key's velocity is remapped as it arrives, so the device, a take's events and its renders
+/// all have the velocity heard (a later change of touch leaves a take alone).
+///
+/// The devices' velocity laws are linear in dB from velocity 127 down to 1 (the harp's hammer
+/// speed over `native_db`, tube_synth's key-down volts over the Play view's range). The touch
+/// bends that line into a smooth curve: with x the velocity sent from 1 (0) to 127 (1), a key
+/// plays `range_db` x (1 - x)^p under full, p from 1 (the law's own line) at `curve` 0 to
+/// [`TOUCH_POWER_MAX`] at 1. The middle velocities come up and the curve flattens into full
+/// without a corner (an ease-out), velocity 1 and 127 where they were. `range_db` applies on a
+/// device whose law spans `native_db` (the harp's 30 dB). Without a `native_db` (a device
+/// whose range is its own, or a level linear in velocity: the sampler, the test oscillator),
+/// only the curve acts, on the velocity: 1 + 126 (1 - (1 - x)^p).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Touch {
+    /// How far the line bends toward full (0: as the keyboard sends, 1: the most).
+    pub curve: f64,
+    /// How much softer velocity 1 plays than full (dB), on a device with a `native_db`
+    /// (at most that; None: the device's own span).
+    pub range_db: Option<f64>,
+    /// The span of the device's own velocity law from 127 to 1 (dB; None: see above).
+    pub native_db: Option<f64>,
+}
+
+/// The curve's power at `curve` 1: velocity 64 plays ~3% of the range under full, 40 ~16%
+/// (on the harp's 30 dB: -0.9 and -4.7 dB).
+pub const TOUCH_POWER_MAX: f64 = 5.0;
+
+impl Default for Touch {
+    fn default() -> Touch {
+        Touch {
+            curve: 0.0,
+            range_db: None,
+            native_db: None,
+        }
+    }
+}
+
+impl Touch {
+    /// The velocity a device plays for velocity `vel` (1-127) from the keyboard.
+    pub fn map(&self, vel: u8) -> u8 {
+        let x = (vel.clamp(1, 127) - 1) as f64 / 126.0;
+        let p = 1.0 + (TOUCH_POWER_MAX - 1.0) * self.curve.clamp(0.0, 1.0);
+        // The share of the range below full the key plays at.
+        let below = (1.0 - x).powf(p);
+        let out = match self.native_db {
+            Some(native) if native > 0.0 => {
+                let range = self.range_db.unwrap_or(native).clamp(0.0, native);
+                127.0 - 126.0 * (range / native) * below
+            }
+            _ => 127.0 - 126.0 * below,
+        };
+        out.round().clamp(1.0, 127.0) as u8
+    }
+
+    /// The level a key at velocity `vel` plays below full (dB, <= 0), on a device whose law
+    /// spans `span_db` from 127 to 1.
+    pub fn level_db(&self, vel: u8, span_db: f64) -> f64 {
+        -span_db * (127 - self.map(vel)) as f64 / 126.0
+    }
+}
+
 /// What the keyboard is doing: the keys held (in the order pressed) and each
 /// controller's last value with a count of how often it was sent.
 #[derive(Debug, Default)]
@@ -34,6 +97,10 @@ pub struct Keys {
 
 #[derive(Debug)]
 struct KeysInner {
+    /// The touch the velocities arriving are remapped by.
+    touch: Touch,
+    /// The last key-down's velocity as the keyboard sent it (before the touch).
+    last_sent: Option<u8>,
     held: Vec<(u8, u8)>,
     cc: [(u8, u64); 128],
     /// The last aftertouch (channel pressure, or a held key's pressure).
@@ -58,6 +125,8 @@ const MAX_EVENTS: usize = 1024;
 impl Default for KeysInner {
     fn default() -> Self {
         KeysInner {
+            touch: Touch::default(),
+            last_sent: None,
             held: Vec::new(),
             cc: [(0, 0); 128],
             pressure: 0,
@@ -71,7 +140,8 @@ impl Default for KeysInner {
 
 impl KeysInner {
     /// A message's key event, if it is one: a key down or up, aftertouch (channel, or the
-    /// sounding key's), the sustain pedal moving, or all notes off (every key held up).
+    /// sounding key's), the sustain pedal moving, or all notes off (every key held up). `m`
+    /// has its velocity through the touch already.
     fn note_event(&mut self, m: &[u8]) {
         let now = std::time::Instant::now();
         let sounding = self.held.last().map(|&(n, _)| n);
@@ -113,10 +183,35 @@ impl Keys {
         self.inner.lock().expect("keys").events.drain(..).collect()
     }
 
+    /// The touch the velocities from now on are remapped by.
+    pub fn set_touch(&self, t: Touch) {
+        self.inner.lock().expect("keys").touch = t;
+    }
+
+    pub fn touch(&self) -> Touch {
+        self.inner.lock().expect("keys").touch
+    }
+
+    /// The last key-down's velocity as the keyboard sent it, before the touch (None: no key
+    /// yet).
+    pub fn last_sent(&self) -> Option<u8> {
+        self.inner.lock().expect("keys").last_sent
+    }
+
     /// Apply one MIDI message (any channel).
     pub fn message(&self, m: &[u8]) {
         let Some(&status) = m.first() else { return };
         let mut k = self.inner.lock().expect("keys");
+        // A key down's velocity through the touch (a velocity of 0 is a key up, kept).
+        let touched;
+        let m = match (status & 0xf0, m.get(2).copied()) {
+            (0x90, Some(vel)) if vel & 127 > 0 => {
+                k.last_sent = Some(vel & 127);
+                touched = [m[0], m[1], k.touch.map(vel & 127)];
+                &touched[..]
+            }
+            _ => m,
+        };
         k.note_event(m);
         match (status & 0xf0, m.get(1).copied(), m.get(2).copied()) {
             (0x90, Some(note), Some(vel)) if vel > 0 => {
@@ -350,6 +445,85 @@ mod tests {
             ]
         );
         assert!(k.take_events().is_empty());
+    }
+
+    #[test]
+    fn touch_at_its_defaults_changes_nothing() {
+        let harp = Touch {
+            native_db: Some(30.0),
+            ..Touch::default()
+        };
+        for v in 1..=127 {
+            assert_eq!(Touch::default().map(v), v);
+            assert_eq!(harp.map(v), v);
+        }
+        assert_eq!(Touch::default().map(0), 1); // clamped like the devices' laws
+    }
+
+    #[test]
+    fn touch_bends_smoothly_into_full_and_narrows_the_range() {
+        let t = Touch {
+            curve: 1.0,
+            range_db: None,
+            native_db: Some(30.0),
+        };
+        // The ends stay; the middle comes up (the line had 64 at -15 dB, 40 at -20.7).
+        assert_eq!((t.map(1), t.map(127)), (1, 127));
+        assert!((t.level_db(64, 30.0) - -0.94).abs() < 0.25);
+        assert!((t.level_db(40, 30.0) - -4.70).abs() < 0.25);
+        // No corner: steps of at most the curve's power at the bottom, shrinking toward full
+        // (rounding aside).
+        let steps: Vec<i32> = (1..127)
+            .map(|v| t.map(v + 1) as i32 - t.map(v) as i32)
+            .collect();
+        assert!(steps.iter().all(|&s| (0..=5).contains(&s)), "{steps:?}");
+        assert!(steps.windows(16).all(|w| w[15] <= w[0] + 1), "{steps:?}");
+        // Halfway: between the line and the most.
+        let half = Touch { curve: 0.5, ..t };
+        assert!(half.map(64) > 64 && half.map(64) < t.map(64));
+        // A 15 dB range on a 30 dB law: velocity 1 plays as 64.
+        let narrow = Touch {
+            curve: 0.0,
+            range_db: Some(15.0),
+            ..t
+        };
+        assert_eq!(narrow.map(1), 64);
+        assert!((narrow.level_db(1, 30.0) - -15.0).abs() < 0.25);
+        // A range wider than the device's law is the law's.
+        let wide = Touch {
+            range_db: Some(60.0),
+            ..t
+        };
+        assert_eq!(wide.map(1), 1);
+        // Without a law of its own, only the curve acts, on the velocity.
+        let plain = Touch {
+            native_db: None,
+            range_db: Some(15.0),
+            ..half
+        };
+        assert_eq!((plain.map(1), plain.map(64), plain.map(127)), (1, 111, 127));
+        for t in [t, half, narrow, wide, plain] {
+            assert!((1..127).all(|v| t.map(v) <= t.map(v + 1)), "{t:?}");
+        }
+    }
+
+    #[test]
+    fn keys_remap_velocities_through_the_touch() {
+        let k = Keys::default();
+        k.set_touch(Touch {
+            curve: 1.0,
+            range_db: None,
+            native_db: None,
+        });
+        k.message(&[0x90, 60, 64]);
+        k.message(&[0x90, 62, 32]);
+        k.message(&[0x90, 62, 0]); // a key up still
+        assert_eq!(k.last_sent(), Some(32));
+        let on = |note, velocity| Ev::On { note, velocity };
+        let ev: Vec<Ev> = k.take_events().into_iter().map(|(_, e)| e).collect();
+        assert_eq!(ev, vec![on(60, 123), on(62, 96), Ev::Off { note: 62 }]);
+        assert_eq!(k.take_note_ons(), vec![(60, 123), (62, 96)]);
+        assert_eq!(k.sounding(), Some((60, 123)));
     }
 
     #[test]

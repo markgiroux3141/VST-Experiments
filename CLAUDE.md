@@ -316,8 +316,16 @@ device `rhodes_stage_5e3`; the 5E3's own Play unchanged, C3 open). The app: `mid
 take_events`, `player::note_offsets`, `Live::process_notes`. Every key ringing live: 80-84%
 load, 0 dropouts (`examples/play.rs --strike-all [VEL] --restrike S`); live full scale 20 V
 (the 5E3's largest swing; the user: raise the level only where it doesn't change the sound).
-Open: the user plays it; next RH4. Strike and release variation (repeated notes sound alike) is
-parked future work: [docs/RHODES_VARIATION.md](docs/RHODES_VARIATION.md).
+Open: the user plays it; next RH4. **Touch** (2026-11-04, RHODES_PLAN.md "Touch"): a
+keyboard's Sensitivity (`curve`: the dB line bent into an ease-out, (1 - x)^p, p 1-5) and
+Range as `midi::Touch`, applied to velocities as they
+arrive (`Keys::message`: devices, takes and renders get the velocity heard), on the harp's own
+30 dB law (`live::key_velocity_span_db`); the Play view's sliders, saved per keyboard in
+`app.json`. Strike and release variation (repeated notes sound alike) is
+parked future work: [docs/RHODES_VARIATION.md](docs/RHODES_VARIATION.md). The Suitcase's
+side-to-side pan (its stereo "vibrato") is future work too, nothing built: RHODES_PLAN.md
+"The side-to-side pan" (the Suitcase after the BJT model, a tube stereo panner chain end
+first, or a Leslie; the user's pick).
 
 Sidechain ([docs/SIDECHAIN_PLAN.md](docs/SIDECHAIN_PLAN.md), 2026-11-01; picked up
 2026-11-04 for one track keying another's 670, the kick ducking the bass; branch `sidechain`):

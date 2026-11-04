@@ -21,13 +21,13 @@ use std::time::{Duration, Instant};
 use eframe::egui::{self, Color32, RichText, Stroke};
 use varimu_app::audio;
 use varimu_app::live::Circuit;
-use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Wave};
+use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Touch, Wave};
 use varimu_app::panel::{self, DEVICES, Device, Kind, Knob};
 use varimu_app::player::{
     AHEAD_S, END_MIX, EndDevice, INPUT_BUFFER_S, InputDevice, Playback, Player, ProxyStart, Source,
     State, input_devices,
 };
-use varimu_app::prefs::{ALIGNMENT_DBFS, Prefs};
+use varimu_app::prefs::{ALIGNMENT_DBFS, KeyTouch, Prefs};
 use varimu_app::render::{Rendered, render};
 use varimu_app::settings::{Quality, Settings};
 use varimu_circuit::Library;
@@ -169,6 +169,12 @@ pub struct PlayView {
     velocity_on: bool,
     /// Multi-trigger: a new key while another is held restarts the envelope.
     retrigger: bool,
+    /// The device's keys strike a medium with a velocity law of its own (the Rhodes harp),
+    /// and that law's span (dB from velocity 127 to 1), read when it starts (None: not yet).
+    has_harp: bool,
+    key_span_db: Option<f64>,
+    /// The keyboard's touch changed and isn't saved yet (saved once the slider is let go).
+    touch_dirty: bool,
     /// A MIDI keyboard instead (live, `live_input` set too): its ports, the one chosen,
     /// the test oscillator's waveform, the keyboard while playing, and how many mod
     /// wheel messages have been applied.
@@ -308,6 +314,9 @@ impl PlayView {
             velocity_db: panel::VELOCITY_RANGE_DB,
             velocity_on: true,
             retrigger: true,
+            has_harp: false,
+            key_span_db: None,
+            touch_dirty: false,
             midi: false,
             midi_ports: Vec::new(),
             midi_port: 0,
@@ -475,6 +484,7 @@ impl PlayView {
         if let Some(d) = self.drawing_device() {
             let k = panel::knobs(&DRAWING, &d.spec);
             let flags = (d.spec.noise.is_some(), d.spec.heaters.is_some());
+            (self.has_harp, self.key_span_db) = (has_harp_part(&d.spec), None);
             self.knobs = k;
             (self.has_noise, self.has_heaters) = flags;
             return;
@@ -486,6 +496,7 @@ impl PlayView {
             Ok(spec) => {
                 self.knobs = panel::knobs(dev, &spec);
                 (self.has_noise, self.has_heaters) = (spec.noise.is_some(), spec.heaters.is_some());
+                (self.has_harp, self.key_span_db) = (has_harp_part(&spec), None);
             }
             Err(e) => self.error = Some(e.to_string()),
         }
@@ -943,12 +954,14 @@ impl PlayView {
             return;
         };
         let buffer = self.input_buffer_ms / 1000.0;
+        let touch = self.touch();
         self.playing_proxy = false;
         // The proxy in the device's place (its own small buffer: it costs nothing).
         if self.proxy_on
             && let (Some(t), Some(d)) = (self.proxy_tables.clone(), DEVICES.get(self.device))
         {
             let result = Keyboard::open(Some(&port)).and_then(|kb| {
+                kb.keys.set_touch(touch);
                 let start = ProxyStart {
                     tables: t,
                     device: d.id.to_string(),
@@ -977,6 +990,15 @@ impl PlayView {
         let result = Keyboard::open(Some(&port)).and_then(|kb| {
             let c = s.cores().and_then(|c| self.circuit(c))?;
             let v = panel::values(&self.knobs);
+            // The harp's own velocity law (its build is cached for the player's).
+            let span = match self.has_harp {
+                true => c.key_velocity_span_db(&v)?,
+                false => None,
+            };
+            kb.keys.set_touch(Touch {
+                native_db: span,
+                ..touch
+            });
             let feeds = match DEVICES.get(self.device) {
                 Some(d) => panel::key_feeds(d, c.spec())?,
                 None => Vec::new(),
@@ -993,10 +1015,11 @@ impl PlayView {
             p.set_velocity_range(self.velocity_range_db());
             p.set_retrigger(self.retrigger);
             self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
-            Ok((kb, p))
+            Ok((kb, p, span))
         });
         match result {
-            Ok((kb, p)) => {
+            Ok((kb, p, span)) => {
+                self.key_span_db = span;
                 self.attach_end(&p);
                 self.keyboard = Some(kb);
                 self.player = Some(p);
@@ -1030,6 +1053,9 @@ impl PlayView {
                         None
                     }
                 });
+        if let Some(kb) = &kb {
+            kb.keys.set_touch(self.touch());
+        }
         let keys = kb.as_ref().map(|k| k.keys.clone());
         let buffer = self.input_buffer_ms / 1000.0;
         match Player::start_sampler(self.kit.sampler.clone(), keys, s, buffer) {
@@ -1088,6 +1114,7 @@ impl PlayView {
                 .response
                 .on_hover_text("Audio computed ahead: most of a key's delay (less can drop out)");
         });
+        self.touch_ui(ui);
         if (port, buffer) != (self.midi_port, self.input_buffer_ms)
             && self.player.is_some()
             && !self.adopted
@@ -1937,35 +1964,7 @@ impl PlayView {
                     }
                 });
         });
-        if DEVICES
-            .get(self.device)
-            .is_some_and(|d| d.velocity.is_some())
-        {
-            ui.horizontal(|ui| {
-                let mut changed = ui
-                    .checkbox(&mut self.velocity_on, "Velocity")
-                    .on_hover_text("Off: every key plays at full level however hard it's pressed")
-                    .changed();
-                changed |= ui
-                    .add_enabled(
-                        self.velocity_on,
-                        egui::Slider::new(
-                            &mut self.velocity_db,
-                            0.0..=panel::VELOCITY_RANGE_MAX_DB,
-                        )
-                        .step_by(1.0)
-                        .suffix(" dB"),
-                    )
-                    .on_hover_text(
-                        "How much softer the softest key plays than the hardest: the \
-                         keyboard bus's key-down volts by velocity",
-                    )
-                    .changed();
-                if changed && let Some(p) = &self.player {
-                    p.set_velocity_range(self.velocity_range_db());
-                }
-            });
-        }
+        self.touch_ui(ui);
         if DEVICES.get(self.device).is_some_and(|d| d.gate.is_some())
             && ui
                 .checkbox(&mut self.retrigger, "Retrigger")
@@ -2002,6 +2001,135 @@ impl PlayView {
         let changed = (port, wave, buffer) != (self.midi_port, self.wave, self.input_buffer_ms);
         if changed && self.player.is_some() {
             self.start();
+        }
+    }
+
+    /// The chosen keyboard's saved touch (`app.json`, by its port's name).
+    fn key_touch(&self) -> KeyTouch {
+        self.midi_ports
+            .get(self.midi_port)
+            .and_then(|port| self.prefs.touch.get(port))
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// The keys strike the harp (not the sampler in its place).
+    fn harp_keys(&self) -> bool {
+        self.has_harp && !self.sampler_on
+    }
+
+    /// The touch the keys play with: the keyboard's, on the harp's own law when they strike
+    /// one (other devices' ranges are their own: tube_synth's Range is the Play view's).
+    fn touch(&self) -> Touch {
+        let t = self.key_touch();
+        Touch {
+            curve: t.curve,
+            range_db: t.range_db,
+            native_db: self.key_span_db.filter(|_| self.harp_keys()),
+        }
+    }
+
+    /// The keyboard's touch (`midi::Touch`): Sensitivity (how far the line bends toward
+    /// full) and Range (the harp's; tube_synth's velocity range), the curve with the last key on it.
+    fn touch_ui(&mut self, ui: &mut egui::Ui) {
+        let Some(port) = self.midi_ports.get(self.midi_port).cloned() else {
+            return;
+        };
+        let mut t = self.key_touch();
+        let before = t;
+        let harp = self.harp_keys();
+        let table = !self.sampler_on
+            && DEVICES
+                .get(self.device)
+                .is_some_and(|d| d.velocity.is_some());
+        let span = self.key_span_db.unwrap_or(panel::VELOCITY_RANGE_MAX_DB);
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("Sensitivity").color(theme::MUTED));
+            let slider = egui::Slider::new(&mut t.curve, 0.0..=1.0)
+                .custom_formatter(|v, _| format!("{:.0}%", v * 100.0));
+            ui.add(slider).on_hover_text(
+                "How far a lighter touch plays toward the full sound: the line bends into a \
+                 smooth curve (0%: as the keyboard sends; 100%: velocity 64 plays within ~1 dB \
+                 of full on the harp). The softest and hardest keys stay where they were. The \
+                 keyboard's, saved by its name; a take keeps the velocities it played",
+            );
+        });
+        if harp {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("Range").color(theme::MUTED));
+                let mut r = t.range_db.unwrap_or(span).min(span);
+                let hover = format!(
+                    "How much softer the softest key plays than full: the hammer's speed \
+                     (the harp's own law spans {span:.0} dB)"
+                );
+                let slider = egui::Slider::new(&mut r, 0.0..=span)
+                    .step_by(1.0)
+                    .suffix(" dB");
+                if ui.add(slider).on_hover_text(hover).changed() {
+                    t.range_db = Some(r);
+                }
+                if t.range_db.is_some()
+                    && ui
+                        .small_button("own")
+                        .on_hover_text("The harp's own range")
+                        .clicked()
+                {
+                    t.range_db = None;
+                }
+            });
+        } else if table {
+            ui.horizontal(|ui| {
+                let mut changed = ui
+                    .checkbox(&mut self.velocity_on, "Range")
+                    .on_hover_text("Off: every key plays at full level however hard it's pressed")
+                    .changed();
+                changed |= ui
+                    .add_enabled(
+                        self.velocity_on,
+                        egui::Slider::new(
+                            &mut self.velocity_db,
+                            0.0..=panel::VELOCITY_RANGE_MAX_DB,
+                        )
+                        .step_by(1.0)
+                        .suffix(" dB"),
+                    )
+                    .on_hover_text(
+                        "How much softer the softest key plays than the hardest: the \
+                         keyboard bus's key-down volts by velocity",
+                    )
+                    .changed();
+                if changed && let Some(p) = &self.player {
+                    p.set_velocity_range(self.velocity_range_db());
+                }
+            });
+        }
+        // The level each velocity plays at below full, on the device's law.
+        let law: Box<dyn Fn(u8) -> f64> = if harp {
+            Box::new(move |v| -span * (127 - v) as f64 / 126.0)
+        } else if table {
+            let db = self.velocity_range_db();
+            Box::new(move |v| -db * (127 - v) as f64 / 126.0)
+        } else {
+            // The sampler and the test oscillator: a level linear in velocity.
+            Box::new(|v| 20.0 * (v as f64 / 127.0).log10())
+        };
+        let shown = Touch {
+            curve: t.curve,
+            range_db: t.range_db,
+            native_db: harp.then_some(span),
+        };
+        let sent = self.keyboard.as_ref().and_then(|kb| kb.keys.last_sent());
+        touch_curve(ui, &shown, &*law, sent);
+        if t != before {
+            self.prefs.touch.insert(port, t);
+            self.touch_dirty = true;
+            if let Some(kb) = &self.keyboard {
+                kb.keys.set_touch(self.touch());
+            }
+        }
+        if self.touch_dirty && !ui.ctx().input(|i| i.pointer.any_down()) {
+            self.touch_dirty = false;
+            self.save_prefs();
         }
     }
 
@@ -2544,6 +2672,47 @@ fn list_audio(dir: &Path) -> Vec<PathBuf> {
         .collect();
     v.sort();
     v
+}
+
+/// Whether a circuit's keys strike a medium (a `harp` part: the Rhodes).
+fn has_harp_part(spec: &CircuitSpec) -> bool {
+    spec.sections.iter().any(|s| {
+        s.parts
+            .iter()
+            .any(|(_, e)| e.as_map().is_some_and(|m| m.get("harp").is_some()))
+    })
+}
+
+/// The touch's curve: the level each velocity sent plays at (`law`, dB below full) as the
+/// keyboard sends it (faint) and through the touch, the last key sent on it.
+fn touch_curve(ui: &mut egui::Ui, t: &Touch, law: &dyn Fn(u8) -> f64, sent: Option<u8>) {
+    let w = ui.available_width().min(260.0);
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(w, 54.0), egui::Sense::hover());
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 2.0, theme::CANVAS);
+    let floor = law(1).min(-1.0);
+    let at = |v: u8, db: f64| {
+        egui::pos2(
+            rect.left() + rect.width() * (v - 1) as f32 / 126.0,
+            rect.top() + 3.0 + (rect.height() - 6.0) * (db / floor).clamp(0.0, 1.0) as f32,
+        )
+    };
+    let own: Vec<egui::Pos2> = (1..=127).map(|v| at(v, law(v))).collect();
+    let touched: Vec<egui::Pos2> = (1..=127).map(|v| at(v, law(t.map(v)))).collect();
+    painter.add(egui::Shape::line(own, Stroke::new(1.0, theme::FAINT)));
+    painter.add(egui::Shape::line(touched, Stroke::new(1.5, theme::ACCENT)));
+    let text = match sent {
+        Some(v) => {
+            painter.circle_filled(at(v, law(t.map(v))), 3.5, theme::INK);
+            format!(
+                "last key sent {v}, plays {} ({:+.1} dB)",
+                t.map(v),
+                law(t.map(v))
+            )
+        }
+        None => format!("velocity 1 plays {:.1} dB below full", -law(t.map(1))),
+    };
+    ui.label(RichText::new(text).small().color(theme::MUTED));
 }
 
 /// A MIDI note's name (C4 = 60).

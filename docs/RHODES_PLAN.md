@@ -70,6 +70,41 @@ ringing.
 songs). Repeated notes sound alike (the user's first playing): why, and what varies on a real
 Rhodes, is parked in [RHODES_VARIATION.md](RHODES_VARIATION.md) (future work).
 
+## Touch (2026-11-04): a keyboard's sensitivity
+
+The user had to hammer the keys to get the full sound. The velocity law spans 30 dB of hammer
+speed from 127 down to 1, linear in dB (velocity 64 strikes at -15 dB, 0.12 m/s), and a
+normal touch on a controller sends roughly 40-90. The loud Rhodes sound is the bark (a big
+tine swing through the pickup's nonlinear field, the harder contact, the 5E3 driven), so it
+needs the hammer's speed: output gain can't give it. The user's choices: the touch at the
+MIDI input (A: the player's and the controller's, not a part of the instrument), a take
+keeping the velocities it played, two sliders.
+
+- **`midi::Touch`**: Sensitivity (`curve`, 0-1) and Range (`range_db`: how far below full
+  velocity 1 plays, on a device whose law spans `native_db`). With x the velocity sent from 0
+  to 1, a key plays `range_db` x (1 - x)^p under full, p from 1 (the law's own line) to 5: an
+  ease-out, the middle velocities up and the curve flattening into full without a corner
+  (the user's ask after a first version whose `full_at` knee was abrupt). At 100% on the
+  harp, velocity 64 plays -0.9 dB, 40 -4.7 dB (the line: -15, -20.7). At the defaults (0%,
+  the device's own range) every velocity is unchanged. Without a `native_db` only the curve
+  acts, on the velocity: the sampler, the test oscillator, and tube_synth, whose Range stays
+  the Play view's velocity range (applied at its gate, kept in a take's `Playing`).
+- **Where it acts:** `Keys::message` remaps a key down's velocity as it arrives, so the
+  harp, the Performer, a take's events, the piano roll, the sampler and the proxy all get the
+  velocity heard (a later change of touch leaves a take alone). `Keys::last_sent` keeps the
+  velocity as sent.
+- **The harp's own law** is read from its build (`live::key_velocity_span_db`: the
+  component's `velocity.range_db`, 30 dB) when the keys start; the Range slider spans it.
+- **The Play view** (MIDI keyboard and the sampler): Sensitivity, Range (the harp's, with
+  "own" back to its 30 dB; tube_synth's velocity range), a curve of the level per velocity
+  sent (the keyboard's own faint, the touch's in the accent) with the last key on it. Saved
+  per keyboard by its port's name in `app.json` (`prefs::KeyTouch`).
+- Tests: `midi`'s (identity at the defaults, the curve's values and smoothness, range,
+  monotonic, the keys' remap),
+  `prefs`' round trip, `tests/live.rs` (the Rhodes' span 30 dB, none for the EQP-1A).
+
+**Open:** the user tries it on the Rhodes.
+
 ## Status (2026-11-04): RH2 built, through the 5E3; the user listens
 
 The whole 73-key harp in Python, played from MIDI through the Stage's controls into the 5E3
@@ -324,6 +359,28 @@ measured margins, as the tape's reduction is checked against the full stream.
   model (CdS: slow, its attack and release asymmetric).
 - **Suitcase:** the Peterson preamp, the stereo vibrato and the power amp, after the BJT
   model. Its speakers and cabinet are another speaker component like `P12R@1`.
+
+### The side-to-side pan (future, 2026-11-04; nothing built)
+
+The user asked about the Rhodes' "rotary" left-right pan. The Stage (built) has none: it is
+passive. The pan is the **Suitcase's "Vibrato"**, despite its name a stereo tremolo (no pitch
+change): an oscillator turns the left side up as the right goes down and back, with speed
+and depth controls (provisional: model knowledge, to be checked against the Suitcase's
+schematics and the songs the user picks). A **rotary** is a Leslie, a different sound (a
+spinning horn and drum: Doppler pitch wobble and a tone that changes as the horn turns, as
+well as movement), mostly the Hammond's, sometimes a Rhodes'. Three ways, the user's to pick
+when this is picked up:
+
+1. **The Suitcase itself** (the faithful one): the Peterson preamp, vibrato and power amp,
+   two speakers. Waits on the BJT model (shared with DRUM_PLAN.md and MIC_ROOM_PLAN.md).
+2. **A tube stereo panner of our own** (recommended first, the Suitcase replacing it later):
+   a chain end after the 5E3 (`panel::CHAIN_ENDS`; stereo chain ends exist since the 351-2's
+   ping-pong, a circuit's `out_r` probe): an oscillator like tube_synth's lamp-held Wien
+   bridge (`LAMP327@1`) driving two tube VCAs in antiphase (tube_synth's 6386 VCA), SPEED
+   and DEPTH. An invented device, not the Rhodes' own.
+3. **A Leslie from physics**: the rotating horn and drum, Doppler and directivity, heard at a
+   mic or listening position (MIC_ROOM_PLAN.md's room); good for any instrument, the largest
+   (INSTRUMENT_PLAN.md, "Others worth noting").
 
 ## How it would fit the code (a proposal)
 

@@ -1,8 +1,10 @@
 //! The app's own settings, per user and outside the repo (`%APPDATA%\varimu\app.json`
 //! on Windows, `$XDG_CONFIG_HOME/varimu` or `~/.config/varimu` elsewhere): folders of
 //! audio files to list as sources. Those can hold material that must never be
-//! committed (multitracks for educational use), so they stay out of the repo.
+//! committed (multitracks for educational use), so they stay out of the repo. Also each
+//! MIDI keyboard's touch (`midi::Touch`: the controller's, kept by its port's name).
 
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use serde_json::{Value, json};
@@ -14,6 +16,25 @@ pub struct Prefs {
     /// Bring each file's loudest 8 s to this level (dBFS, sine-equivalent rms); None:
     /// play files as recorded.
     pub normalize_dbfs: Option<f64>,
+    /// Each MIDI keyboard's touch by its port's name: the curve (0-1) and the range (dB;
+    /// None: the device's own).
+    pub touch: BTreeMap<String, KeyTouch>,
+}
+
+/// A keyboard's saved touch (the device's own law is the device's: `midi::Touch::native_db`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KeyTouch {
+    pub curve: f64,
+    pub range_db: Option<f64>,
+}
+
+impl Default for KeyTouch {
+    fn default() -> KeyTouch {
+        KeyTouch {
+            curve: 0.0,
+            range_db: None,
+        }
+    }
 }
 
 /// The studio alignment the 670's factory adjustment assumes: -18 dBFS = +4 dBu
@@ -26,6 +47,7 @@ impl Default for Prefs {
         Prefs {
             source_folders: Vec::new(),
             normalize_dbfs: Some(ALIGNMENT_DBFS),
+            touch: BTreeMap::new(),
         }
     }
 }
@@ -45,7 +67,11 @@ impl Prefs {
         let Some(text) = path().and_then(|p| std::fs::read_to_string(p).ok()) else {
             return Prefs::default();
         };
-        let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
+        Prefs::from_json(&serde_json::from_str(&text).unwrap_or(Value::Null))
+    }
+
+    /// The settings in `v` (an `app.json`'s), defaults where it has none.
+    pub fn from_json(v: &Value) -> Prefs {
         let source_folders = v["source_folders"]
             .as_array()
             .map(|a| {
@@ -59,9 +85,23 @@ impl Prefs {
             None => Some(ALIGNMENT_DBFS),
             Some(x) => x.as_f64(),
         };
+        let touch = v["touch"]
+            .as_object()
+            .map(|m| {
+                m.iter()
+                    .map(|(port, t)| {
+                        // (A first version's `full_at` isn't read: back to the line.)
+                        let curve = t["curve"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0);
+                        let range_db = t["range_db"].as_f64();
+                        (port.clone(), KeyTouch { curve, range_db })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         Prefs {
             source_folders,
             normalize_dbfs,
+            touch,
         }
     }
 
@@ -70,16 +110,54 @@ impl Prefs {
         if let Some(dir) = p.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
+        let text = serde_json::to_string_pretty(&self.to_json()).map_err(|e| e.to_string())?;
+        std::fs::write(&p, text + "\n").map_err(|e| format!("{}: {e}", p.display()))
+    }
+
+    pub fn to_json(&self) -> Value {
         let folders: Vec<String> = self
             .source_folders
             .iter()
             .map(|f| f.display().to_string())
             .collect();
-        let text = serde_json::to_string_pretty(&json!({
+        let touch: serde_json::Map<String, Value> = self
+            .touch
+            .iter()
+            .map(|(port, t)| {
+                let v = json!({"curve": t.curve, "range_db": t.range_db});
+                (port.clone(), v)
+            })
+            .collect();
+        json!({
             "source_folders": folders,
             "normalize_dbfs": self.normalize_dbfs,
-        }))
-        .map_err(|e| e.to_string())?;
-        std::fs::write(&p, text + "\n").map_err(|e| format!("{}: {e}", p.display()))
+            "touch": touch,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_keyboard_s_touch_survives_the_settings_file() {
+        let mut p = Prefs::default();
+        p.touch.insert(
+            "MasterKey 49".into(),
+            KeyTouch {
+                curve: 0.35,
+                range_db: Some(18.0),
+            },
+        );
+        p.touch.insert("Other".into(), KeyTouch::default());
+        let text = serde_json::to_string(&p.to_json()).unwrap();
+        assert_eq!(Prefs::from_json(&serde_json::from_str(&text).unwrap()), p);
+        // A settings file from before the touch: none saved, the rest as it was.
+        let old = json!({"source_folders": ["D:/music"], "normalize_dbfs": null});
+        let back = Prefs::from_json(&old);
+        assert!(back.touch.is_empty());
+        assert_eq!(back.source_folders, vec![PathBuf::from("D:/music")]);
+        assert_eq!(back.normalize_dbfs, None);
     }
 }
