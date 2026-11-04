@@ -261,7 +261,13 @@ plate), full-physics references (time-domain FEM, lattice Boltzmann) checking re
 models. Proposed order: a church bell (the pipeline), the Rhodes Mk I Stage (passive, no
 BJT), the Wurlitzer, the piano (hysteretic felt, nonlinear coupled strings, soundboard),
 the pipe organ last (jet-drive flue pipes, reed pipes, the wind system as one coupled
-circuit). Milestones I1-I8.
+circuit). Milestones I1-I8. **The Rhodes** ([docs/RHODES_PLAN.md](docs/RHODES_PLAN.md),
+2026-11-04, parked; nothing built): the Mk I of Stevie Wonder's records; per key only
+mechanics (tine and tonebar modes, a brief hammer contact, a pickup table), so every key
+rings live and the shared amp is the cost; a live tier and a production tier (time-domain
+beams, a 3D pickup map with the magnet's force, sympathetic coupling) from the same physics,
+the production one checking the live one; Stage into the 5E3 or the Suitcase after the BJT
+model (the user's call). Milestones RH1-RH6.
 
 Sidechain ([docs/SIDECHAIN_PLAN.md](docs/SIDECHAIN_PLAN.md), 2026-11-01; picked up
 2026-11-04 for one track keying another's 670, the kick ducking the bass; branch `sidechain`):
@@ -562,6 +568,25 @@ beside `app.json`. `varimu_app::sampler` (voices, cubic interpolation at the fil
 `player::Source::Sampler` (no circuit, 64-sample blocks, the Emitter as every source), so the
 Session view records it like the synth. `examples/sampler.rs` plays a beat on the pads into
 an armed take and checks its onsets.
+
+MIDI takes ([docs/MIDI_TAKES_PLAN.md](docs/MIDI_TAKES_PLAN.md), 2026-11-04; nothing built;
+milestones N1-N7): a take is the notes plus the panel, monitored through a cheap digital
+**proxy** that follows the panel through tables measured on the real device (the user's
+choices: proxy or device picked by hand, never automatically), rendered offline behind the
+recording (draft, then production on demand), edited in a piano roll; polyphony through a
+generated `tube_synth_poly` whose voices share the supply, the LFO and the output (the
+most organic first, the user's call), four voices, allocator reuse-same-note then
+round-robin, GLIDE per voice. The rest the user delegated (the plan's decisions 8-14):
+partitioned per voice at production too, a 5U4GB supply, one shared output transformer,
+render behind after every take. N1 is RECORDING_PLAN.md T2's steps 2-3. The final render's
+compute ([docs/SYNTH_MASTER_PLAN.md](docs/SYNTH_MASTER_PLAN.md), 2026-11-04; nothing built;
+milestones Q1-Q8; the user's: every lever in, each measured): a `master` quality above
+production (the user's; production unchanged), one solve without the partition (poly as one
+solve at master only, the user's), the render-only features (both oscillators, PULSE), circuit
+`detail: master` parts (strays, ground network, distributed windings, core loss), Preisach
+reactor cores at master (S1's minor-loop decision, delegated: closed loops with return-point
+memory instead of JA's ratchet; live stays JA; an A/B in Q6), excess noise and heater hum,
+per-voice tolerance draws; tuning tables per quality. Capacitor DA is out (measured inaudible).
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)

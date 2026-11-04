@@ -87,7 +87,9 @@ geometry -> FEM -> modes -> BEM pipeline the piano and the drums reuse.
 **Why early:** the closest to the existing stack. A few modes per voice, a field-solved
 pickup, then circuits and amps the project already has.
 
-- **Rhodes (Mk I Stage first):**
+- **Rhodes (Mk I Stage first):** expanded in [RHODES_PLAN.md](RHODES_PLAN.md) (2026-11-04:
+  the target sound, why many keys at once are cheap, a live and a production tier from the
+  same physics, milestones RH1-RH6).
   - Neoprene hammer tip with a nonlinear contact.
   - Tine plus tonebar as an asymmetric tuning fork: a few beam modes each, the tuning
     spring a point mass.
@@ -202,7 +204,8 @@ the soundboard).
 2. **I2: the Rhodes Mk I Stage.** Tine and tonebar modes, a magnetostatic pickup map, the
    passive network into the 5E3. Done when: the tine's partials match measurements or the
    service manual's figures, the pickup offset moves the even / odd balance as published, and
-   it plays in real time through the amp and speaker.
+   it plays in real time through the amp and speaker. RHODES_PLAN.md splits it into
+   RH1-RH6.
 3. **I3: the Wurlitzer.** The electrostatic pickup as a circuit element; the 200A after the
    BJT model, or a tube model first.
 4. **I4: one piano note.** Hysteretic hammer, three coupled strings, a bridge and a

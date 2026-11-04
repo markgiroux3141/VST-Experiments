@@ -8,6 +8,10 @@ next to [DEVICE_BUILDER_PLAN.md](DEVICE_BUILDER_PLAN.md) and
 open (below). Work milestones in order, each ending with its "done when" met and covered
 by tests, like the other plans.
 
+**The final render (2026-11-04):** what an offline render spends its compute on (one
+solve, render-only features, strays, distributed windings, the minor-loop options, unit
+variation) is [SYNTH_MASTER_PLAN.md](SYNTH_MASTER_PLAN.md), the `master` quality.
+
 ## Decisions (2026-10-29, the user's)
 
 1. **An invented instrument, not a clone.** A synthesizer built from older parts in
@@ -178,6 +182,11 @@ known weakness of the model. Options (for the user, before S2):
 3. **A closed-loop hysteresis model for reactors** (Preisach: loops close by
    construction): the most faithful to real minor loops, and the most work (a new
    device kind, both implementations).
+
+**Decided for the final render (2026-11-04, delegated by the user: "whatever would sound
+cooler"):** option 3 at the `master` quality, on the tape's continuous Preisach ensemble
+(SYNTH_MASTER_PLAN.md decision 4, Q6). Live qualities keep JA (option 1), so the ratchet
+stays in what is played. Q6 A/Bs the two.
 
 **S2. The first sound: the filter and the VCA as an audio processor.** A circuit file:
 audio in, a triode driver, the reactor low-pass with triode resonance feedback, a

@@ -366,6 +366,9 @@ and the production render (the done-when above).
   the repo's `sessions/`, git-ignored (performances are never committed). Each track's
   ▸ shows every take stacked under it (a click plays one): a new take no longer hides
   the earlier ones.
+- **2026-11-04:** steps 2-3 continue as [MIDI_TAKES_PLAN.md](MIDI_TAKES_PLAN.md)'s N1,
+  which adds a proxy monitor, renders behind the recording, a piano roll (T6's note
+  editor pulled forward) and polyphony.
 - **Not yet:** events (step 2: a take re-renders from nothing yet), keys still land on
   10 ms block boundaries, trimming and splitting takes (T6), the session's rate is the
   player's (48 kHz: decision 2 still open).
