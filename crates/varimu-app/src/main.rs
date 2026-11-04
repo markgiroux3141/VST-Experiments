@@ -14,6 +14,7 @@
 
 mod components_view;
 mod editor_view;
+mod piano_roll;
 mod play_view;
 mod sampler_view;
 mod session_view;

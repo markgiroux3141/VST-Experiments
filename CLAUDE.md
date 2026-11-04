@@ -626,8 +626,8 @@ beside `app.json`. `varimu_app::sampler` (voices, cubic interpolation at the fil
 Session view records it like the synth. `examples/sampler.rs` plays a beat on the pads into
 an armed take and checks its onsets.
 
-MIDI takes ([docs/MIDI_TAKES_PLAN.md](docs/MIDI_TAKES_PLAN.md), 2026-11-04; nothing built;
-milestones N1-N7): a take is the notes plus the panel, monitored through a cheap digital
+MIDI takes ([docs/MIDI_TAKES_PLAN.md](docs/MIDI_TAKES_PLAN.md), 2026-11-04; N1-N4 first
+versions built the same day, the plan's "Status"; milestones N1-N7): a take is the notes plus the panel, monitored through a cheap digital
 **proxy** that follows the panel through tables measured on the real device (the user's
 choices: proxy or device picked by hand, never automatically), rendered offline behind the
 recording (draft, then production on demand), edited in a piano roll; polyphony through a
@@ -635,7 +635,25 @@ generated `tube_synth_poly` whose voices share the supply, the LFO and the outpu
 most organic first, the user's call), four voices, allocator reuse-same-note then
 round-robin, GLIDE per voice. The rest the user delegated (the plan's decisions 8-14):
 partitioned per voice at production too, a 5U4GB supply, one shared output transformer,
-render behind after every take. N1 is RECORDING_PLAN.md T2's steps 2-3. The final render's
+render behind after every take. N1 is RECORDING_PLAN.md T2's steps 2-3. **Built
+(2026-11-04):** `varimu_app::performance` (events at their samples in the block, the
+`Performer`: the keyboard logic live and offline, a note shorter than a block kept),
+`Live`'s log of where each knob build landed (a restart with the input and controls it
+settled at), Record from keys = `Player::begin_event_take` (a fresh device settled in the
+background, PREPARING, then the count-in), `varimu_app::take_render` (the replay: bit for bit
+at the quality played, `examples/take_replay.rs` on tube_synth through the real player;
+production via a stream with production's options, 25x slower than real time on
+tube_synth), event takes in `session` (revisions `events.<n>.json`, never written over; undo
+picks the revision; renders in `takes/<id>/renders/<key>/`; `Take::sound`: PROD > draft >
+heard > stale), the Session view (♪ badges, draft renders behind for edited and proxy takes,
+⤓ Production on demand, "play drafts" per track; per track "rec MIDI | AUDIO" and "hear
+DEVICE | PROXY"; a MIDI take's lane draws its notes), the piano roll (`crate::piano_roll`:
+Select / Draw / Erase tools, each gesture one revision), the proxy (`varimu_app::proxy`,
+`Source::Proxy`, `config/proxy/tube_synth.json` by `scripts/proxy_tables.py`; Play's
+"Monitor through the proxy"). Open: the proxy's unmeasured tables (envelope pots, RESONANCE,
+ENV AMOUNT, mixer, single cycles: a sweep owed), its cost (16 voices ~2% of a core, target 1%).
+After the user's first try (2026-11-04): the roll's tools, take ids never reused, per-track
+⤓ PROD and bounce to an audio take. The final render's
 compute ([docs/SYNTH_MASTER_PLAN.md](docs/SYNTH_MASTER_PLAN.md), 2026-11-04; nothing built;
 milestones Q1-Q8; the user's: every lever in, each measured): a `master` quality above
 production (the user's; production unchanged), one solve without the partition (poly as one

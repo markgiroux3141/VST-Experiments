@@ -59,9 +59,11 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SizedSample};
 
 use crate::live::{Circuit, Live, Meter, Values};
-use crate::midi::{Keys, TestOsc, Wave};
+use crate::midi::{Keys, Wave};
 use crate::monitor::Monitor;
 use crate::panel::{Feed, RangeMode};
+pub use crate::performance::RETRIGGER_GAP_S;
+use crate::performance::{Ev, Performance, Performer, Playing, START_NOTE};
 use crate::resample::StreamResampler;
 use crate::sampler::{Engine, Sampler};
 use crate::session::{Frame, Mix, Recorded, Recorder};
@@ -123,6 +125,20 @@ pub enum Source {
     /// The sampler's kit, played from a keyboard's keys (None: the pads on screen only) and
     /// its preview ([`Player::start_sampler`]).
     Sampler(Arc<Sampler>, Option<Arc<Keys>>),
+    /// A device's proxy (`crate::proxy`, docs/MIDI_TAKES_PLAN.md N2) played from a keyboard's
+    /// keys in the device's place ([`Player::start_proxy`]).
+    Proxy(Arc<Keys>, Box<ProxyStart>),
+}
+
+/// What a proxy plays: its tables, the device it stands in for (an event take renders on
+/// it, at `quality`), its voices, and whether the render has the device's noise.
+#[derive(Debug, Clone)]
+pub struct ProxyStart {
+    pub tables: Arc<crate::proxy::Tables>,
+    pub device: String,
+    pub quality: crate::settings::Quality,
+    pub voices: usize,
+    pub noise: bool,
 }
 
 /// A timeline's sidechain: another track's audio (at the host rate) from the timeline's
@@ -217,6 +233,8 @@ pub struct Status {
     pub transport: TransportStatus,
     /// The device at the chain's end, if one is on.
     pub end: Option<EndStatus>,
+    /// An event take's fresh device is settling (recording starts once it plays).
+    pub take_preparing: bool,
 }
 
 /// A device at the end of the chain: its circuit and values at its own settings (its
@@ -283,6 +301,7 @@ impl Status {
                 origin: None,
             },
             end: None,
+            take_preparing: false,
         }
     }
 }
@@ -335,6 +354,12 @@ struct Shared {
     /// [`RETRIGGER_GAP_S`], so an envelope that restarts on the gate's edge restarts.
     retrigger: AtomicBool,
     transport: Mutex<TransportCtl>,
+    /// An event take asked for (a device played from keys): the device's id. The worker
+    /// starts a fresh device in the background, then records from it with the transport's
+    /// start (docs/MIDI_TAKES_PLAN.md N1).
+    event_take: Mutex<Option<String>>,
+    /// The event take asked for is still wanted (a stop while its device settles drops it).
+    event_take_wanted: AtomicBool,
     /// The last output callback: the first output sample it was asked for (counted from
     /// the stream's first) and when it ran.
     out_clock: Mutex<Option<(u64, Instant)>>,
@@ -405,6 +430,19 @@ impl Player {
         Player::launch(None, source, Vec::new(), None, s, 1.0, buffer_s)
     }
 
+    /// A device's proxy from `keys` with the panel `values`, at `s`'s host rate, `buffer_s`
+    /// queued. No circuit: it plays at once.
+    pub fn start_proxy(
+        keys: Arc<Keys>,
+        proxy: ProxyStart,
+        values: Values,
+        s: Settings,
+        buffer_s: f64,
+    ) -> Result<Player, String> {
+        let source = Source::Proxy(keys, Box::new(proxy));
+        Player::launch(None, source, values, None, s, 1.0, buffer_s)
+    }
+
     fn launch(
         output: Option<&str>,
         source: Source,
@@ -443,6 +481,8 @@ impl Player {
             velocity_db: AtomicU64::new(crate::panel::VELOCITY_RANGE_DB.to_bits()),
             retrigger: AtomicBool::new(true),
             transport: Mutex::new(TransportCtl::default()),
+            event_take: Mutex::new(None),
+            event_take_wanted: AtomicBool::new(false),
             out_clock: Mutex::new(None),
             mix: Mutex::new(Arc::new(Mix::default())),
             recorder: Mutex::new(Recorder::new(rate)),
@@ -502,6 +542,13 @@ impl Player {
                 );
                 (None, WorkerSource::Sampler(sampler, keys))
             }
+            Source::Proxy(keys, proxy) => {
+                shared.status.lock().expect("status").input = Some(format!(
+                    "MIDI keyboard: the proxy of {} (the take renders on the device)",
+                    proxy.device
+                ));
+                (None, WorkerSource::Proxy(keys, proxy))
+            }
             Source::Timeline { audio, start, key } => {
                 shared.status.lock().expect("status").input = Some(
                     if key.is_some() {
@@ -533,6 +580,10 @@ impl Player {
                         }
                         (WorkerSource::Sampler(sm, keys), _) => {
                             work_sampler(rate, buffer, producer, &shared, &sm, keys.as_deref());
+                            Ok(())
+                        }
+                        (WorkerSource::Proxy(keys, proxy), _) => {
+                            work_proxy(rate, buffer, producer, &shared, &keys, *proxy, values);
                             Ok(())
                         }
                         (src, Some(c)) => work(src, values, c, s, buffer, producer, &shared),
@@ -713,8 +764,23 @@ impl Player {
         *self.shared.mix.lock().expect("mix") = mix;
     }
 
+    /// Record an event take from a device played by keys (`device`: its id): the worker
+    /// starts the device afresh in the background (a defined start, as a render's), then
+    /// starts the transport and records the performance and the device's output from the
+    /// start bar. [`Player::arm_take`] (false) or a stop ends it.
+    pub fn begin_event_take(&self, device: &str) {
+        self.shared.event_take_wanted.store(true, Ordering::Relaxed);
+        *self.shared.event_take.lock().expect("event_take") = Some(device.to_string());
+    }
+
     /// Record a take (from the start bar, while the transport runs) or stop recording it.
     pub fn arm_take(&self, on: bool) {
+        if !on {
+            *self.shared.event_take.lock().expect("event_take") = None;
+            self.shared
+                .event_take_wanted
+                .store(false, Ordering::Relaxed);
+        }
         self.shared.recorder.lock().expect("recorder").armed = on;
     }
 
@@ -726,6 +792,11 @@ impl Player {
     /// `from` on (for its waveform as it grows).
     pub fn take_tail(&self, from: usize) -> Option<(i64, i64, usize, Vec<f32>)> {
         self.shared.recorder.lock().expect("recorder").tail(from)
+    }
+
+    /// The notes of the take being recorded, when it records a performance (`Recorder::notes`).
+    pub fn take_notes(&self) -> Option<(u64, Vec<crate::performance::Note>)> {
+        self.shared.recorder.lock().expect("recorder").notes()
     }
 
     /// The last take finished (the transport stopped, or recording disarmed), once.
@@ -754,6 +825,7 @@ enum WorkerSource {
     Timeline(Arc<Vec<f32>>, i64, Option<TimelineKey>),
     Mix,
     Sampler(Arc<Sampler>, Option<Arc<Keys>>),
+    Proxy(Arc<Keys>, Box<ProxyStart>),
 }
 
 /// The transport's pending settings and play / stop, applied to the worker's clock.
@@ -782,41 +854,6 @@ fn timeline_block(audio: &[f32], start: i64, segments: &[(i64, usize, usize)], o
                 *o = v as f64;
             }
         }
-    }
-}
-
-/// The note a pitch feed holds until the first key (A3).
-const START_NOTE: u8 = 57;
-
-/// How long a legato key lifts the gate with multi-trigger on: tube_synth's ADSR resets
-/// with 0.5 ms; 1 ms for margin, where at the fastest RELEASE the envelope dips ~20 V
-/// before the new attack (scripts/adsr_study.py --bench --legato-gap-ms).
-pub const RETRIGGER_GAP_S: f64 = 1.0e-3;
-
-/// A gate feed's block `c`, its first `gap` samples lifted to the key-up volts `up`.
-fn lift_gate(c: &mut [f64], up: f64, gap: usize) {
-    let n = gap.min(c.len());
-    c[..n].fill(up);
-}
-
-/// A feed's volts with `sounding` held (a key and its velocity, or none), `last_note`
-/// the last key, the oscillator's range switch at LOW (`low`) or HIGH, the keyboard's
-/// aftertouch `pressure` (0-127) and the velocity range `vel_db`.
-fn feed_volts(
-    f: &Feed,
-    sounding: Option<(u8, u8)>,
-    last_note: u8,
-    low: bool,
-    pressure: u8,
-    vel_db: f64,
-) -> f64 {
-    match (f, sounding) {
-        (Feed::Gate(_, down), Some(_)) => *down,
-        (Feed::Gate(up, _) | Feed::VelocityGate(up, _), None) => *up,
-        (Feed::VelocityGate(_, t), Some((_, vel))) => crate::panel::velocity_volts(t, vel, vel_db),
-        (Feed::Pitch(p), _) => p.volts_in(TestOsc::note_hz(last_note), low),
-        (Feed::Key(k), _) => k.volts(last_note),
-        (Feed::Pressure(full), _) => full * (pressure.min(127) as f64) / 127.0,
     }
 }
 
@@ -1062,8 +1099,11 @@ impl Emitter {
         ring: &mut rtrb::Producer<Frame>,
         raw: &[f32],
         y: Vec<f32>,
+        stream_at: Option<u64>,
     ) {
-        // Through the chain's end: what is heard is what a take keeps.
+        // Through the chain's end: what is heard is what a take keeps (an event take keeps
+        // the device's own output: a render replays the device alone).
+        let device_raw = raw.to_vec();
         self.update_end(shared);
         let chained: Vec<f32>;
         let mut right: Option<Vec<f32>> = None;
@@ -1096,12 +1136,18 @@ impl Emitter {
         let latency = queued + (devices_s * rate as f64).round() as i64;
         {
             let mut r = shared.recorder.lock().expect("recorder");
+            let raw = if stream_at.is_some() {
+                &device_raw[..]
+            } else {
+                raw
+            };
             if running {
                 for &(pos, off, len) in &segments {
-                    r.capture(pos, &raw[off..off + len], clock.record_from(), latency);
+                    let at = stream_at.map(|s| s + off as u64);
+                    r.capture(pos, &raw[off..off + len], clock.record_from(), latency, at);
                 }
             } else {
-                r.stop();
+                r.finish();
             }
         }
         let mix = shared.mix.lock().expect("mix").clone();
@@ -1182,7 +1228,7 @@ fn work_mix(rate: u32, buffer: usize, mut ring: rtrb::Producer<Frame>, shared: &
             continue;
         }
         let silence = vec![0.0f32; BLOCK];
-        em.emit(shared, &mut ring, &silence, silence.clone());
+        em.emit(shared, &mut ring, &silence, silence.clone(), None);
     }
 }
 
@@ -1231,11 +1277,151 @@ fn work_sampler(
         let y: Vec<f32> = kit.iter().zip(&preview).map(|(a, b)| a + b).collect();
         peak = y.iter().fold(peak, |m, v| m.max(v.abs()));
         let before = capacity - ring.slots();
-        em.emit(shared, &mut ring, &kit, y);
+        em.emit(shared, &mut ring, &kit, y, None);
         blocks += 1;
         if blocks >= per_meter.max(1) {
             let mut st = shared.status.lock().expect("status");
             st.meter.out_dbfs = 20.0 * (peak as f64).max(1e-6).log10();
+            let block_s = SAMPLER_BLOCK as f64 / rate as f64;
+            st.latency_s = Some(
+                block_s
+                    + before as f64 / rate as f64
+                    + shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6,
+            );
+            (peak, blocks) = (0.0, 0);
+        }
+    }
+}
+
+/// The worker for a proxy (`Source::Proxy`): blocks of [`SAMPLER_BLOCK`] made as the queue
+/// drains, each key at its place in the block. An event take starts at once (the proxy has
+/// nothing to settle): its performance at the proxy's samples, the panel's changes logged
+/// where they were made (not what a device applied: a render applies them at once), the
+/// proxy's audio its stand-in.
+fn work_proxy(
+    rate: u32,
+    buffer: usize,
+    mut ring: rtrb::Producer<Frame>,
+    shared: &Shared,
+    keys: &Keys,
+    start: ProxyStart,
+    values: Values,
+) {
+    let capacity = ring.buffer().capacity();
+    let mut em = Emitter::new(rate);
+    let mut synth = crate::proxy::Proxy::new(start.tables.clone(), rate, start.voices);
+    let mut panel = values;
+    synth.set_values(&panel);
+    let range = crate::print::find_device(&start.device)
+        .and_then(|d| d.pitch)
+        .and_then(|p| p.range);
+    let mut y = vec![0.0f32; SAMPLER_BLOCK];
+    let mut last_block = Instant::now();
+    keys.take_events();
+    let mut log: Option<Arc<Mutex<Performance>>> = None;
+    let mut at: u64 = 0;
+    let (mut peak, mut blocks) = (0.0f32, 0usize);
+    let per_meter = (0.05 * rate as f64) as usize / SAMPLER_BLOCK;
+    let mut playing = false;
+    while !shared.stop.load(Ordering::Relaxed) {
+        if !playing && shared.played.load(Ordering::Relaxed) > 0 {
+            playing = true;
+            shared.status.lock().expect("status").state = State::Playing;
+        }
+        if let Some(v) = shared.wanted.lock().expect("wanted").take() {
+            panel = v;
+            synth.set_values(&panel);
+            if let Some(l) = &log {
+                l.lock()
+                    .expect("performance")
+                    .knobs
+                    .push(crate::performance::Knob {
+                        at,
+                        values: panel.clone(),
+                        restart: None,
+                    });
+            }
+        }
+        if log.is_none() {
+            synth.set_playing(playing_now(shared, Wave::Off));
+        }
+        let asked = shared.event_take.lock().expect("event_take").take();
+        let mut carried = Vec::new();
+        if let Some(device) = asked {
+            let perf = Performance {
+                device,
+                quality: start.quality,
+                rate,
+                values: panel.clone(),
+                playing: playing_now(shared, Wave::Off),
+                gain: 1.0,
+                noise: start.noise,
+                start_note: START_NOTE,
+                start_low: range.is_some_and(|r| r.is_low(&panel)),
+                events: Vec::new(),
+                knobs: Vec::new(),
+                knobs_applied: false,
+                end: 0,
+            };
+            carried = synth
+                .held()
+                .iter()
+                .map(|&(note, velocity)| (0usize, Ev::On { note, velocity }))
+                .collect();
+            let perf = Arc::new(Mutex::new(perf));
+            {
+                let mut r = shared.recorder.lock().expect("recorder");
+                r.finish();
+                r.performance = Some(perf.clone());
+                r.armed = true;
+            }
+            shared.transport.lock().expect("transport").run = Some(true);
+            log = Some(perf);
+            at = 0;
+        }
+        if log.is_some()
+            && shared
+                .recorder
+                .lock()
+                .expect("recorder")
+                .performance
+                .is_none()
+        {
+            log = None;
+        }
+        let queued = capacity - ring.slots();
+        shared.queued.store(queued, Ordering::Relaxed);
+        if queued >= buffer || ring.slots() < SAMPLER_BLOCK {
+            std::thread::sleep(Duration::from_micros(300));
+            continue;
+        }
+        let now = Instant::now();
+        let mut events: Vec<(usize, Ev)> = note_offsets(keys.take_events(), last_block, rate)
+            .into_iter()
+            .map(|(o, e)| (o.min(SAMPLER_BLOCK - 1), e))
+            .collect();
+        last_block = now;
+        if !carried.is_empty() {
+            events.splice(0..0, carried);
+        }
+        let t0 = Instant::now();
+        synth.process(&events, &mut y);
+        let load = t0.elapsed().as_secs_f64() / (SAMPLER_BLOCK as f64 / rate as f64);
+        if let Some(l) = &log {
+            let mut p = l.lock().expect("performance");
+            p.events
+                .extend(events.iter().map(|&(o, e)| (at + o as u64, e)));
+            p.end = at + SAMPLER_BLOCK as u64;
+        }
+        peak = y.iter().fold(peak, |m, v| m.max(v.abs()));
+        let before = capacity - ring.slots();
+        em.emit(shared, &mut ring, &y, y.clone(), log.as_ref().map(|_| at));
+        at += SAMPLER_BLOCK as u64;
+        blocks += 1;
+        if blocks >= per_meter.max(1) {
+            let mut st = shared.status.lock().expect("status");
+            st.meter.out_dbfs = 20.0 * (peak as f64).max(1e-6).log10();
+            st.load = load;
             let block_s = SAMPLER_BLOCK as f64 / rate as f64;
             st.latency_s = Some(
                 block_s
@@ -1263,17 +1449,31 @@ fn work(
         | WorkerSource::Keys(..)
         | WorkerSource::Timeline(..)
         | WorkerSource::Mix
+        | WorkerSource::Proxy(..)
         | WorkerSource::Sampler(..) => &[],
     };
     let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
-    // A gate starts up (no key), a pitch at START_NOTE.
-    let c0: Vec<f64> = match &source {
-        WorkerSource::Keys(_, _, feeds) => feeds
-            .iter()
-            .map(|f| feed_volts(f, None, START_NOTE, false, 0, 0.0))
-            .collect(),
-        _ => Vec::new(),
+    // The keys' performer: a gate starts up (no key), a pitch at START_NOTE.
+    let performer = match &source {
+        WorkerSource::Keys(_, wave, feeds) => {
+            let range = feeds.iter().find_map(|f| match f {
+                Feed::Pitch(p) => p.range,
+                _ => None,
+            });
+            let low = range.is_some_and(|r| r.is_low(&values));
+            Some(Performer::new(
+                feeds.clone(),
+                playing_now(shared, *wave),
+                s.host(),
+                START_NOTE,
+                low,
+            ))
+        }
+        _ => None,
     };
+    let c0 = performer.as_ref().map_or(Vec::new(), Performer::resting);
+    // A fresh start for an event take builds this circuit again.
+    let keys_circuit = performer.as_ref().map(|_| (circuit.clone(), s.clone()));
     let mut live = Live::with_controls(clip, values, circuit, s, gain, &c0)
         .map_err(|e| format!("can't start: {e}"))?;
     let rate = live.rate;
@@ -1354,7 +1554,7 @@ fn work(
                     .next_block(BLOCK)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                em.emit(shared, &mut ring, &y, monitored(&live, &y));
+                em.emit(shared, &mut ring, &y, monitored(&live, &y), None);
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let pos = (live.position() + len - (capacity - ring.slots()) % len) % len;
@@ -1405,7 +1605,7 @@ fn work(
                         .process(block)
                         .map_err(|e| format!("the circuit stopped: {e}"))?;
                     let before = capacity - ring.slots();
-                    em.emit(shared, &mut ring, &y, monitored(&live, &y));
+                    em.emit(shared, &mut ring, &y, monitored(&live, &y), None);
                     heard(&live, before);
                     let queued = capacity - ring.slots();
                     shared.queued.store(queued, Ordering::Relaxed);
@@ -1424,7 +1624,7 @@ fn work(
                 pending.drain(..used);
             }
         }
-        WorkerSource::Mix | WorkerSource::Sampler(..) => {}
+        WorkerSource::Mix | WorkerSource::Sampler(..) | WorkerSource::Proxy(..) => {}
         WorkerSource::Timeline(audio, start, key) => {
             let mut block = vec![0.0; BLOCK];
             let mut ctl = vec![vec![0.0; BLOCK]; key.as_ref().map_or(0, |k| k.controls)];
@@ -1455,55 +1655,143 @@ fn work(
                     .process_with(&block, &refs)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                em.emit(shared, &mut ring, &y, monitored(&live, &y));
+                em.emit(shared, &mut ring, &y, monitored(&live, &y), None);
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
             }
         }
         WorkerSource::Keys(keys, wave, feeds) => {
-            // Blocks are made as the queue drains, each from the keys held as it starts:
-            // a key is heard within the queue, a block and the output's latency.
-            let mut osc = TestOsc::new(rate as f64);
-            osc.wave = wave;
-            osc.steady = feeds.iter().any(Feed::is_gate);
-            let mut block = vec![0.0; BLOCK];
-            let mut ctl = vec![vec![0.0; BLOCK]; feeds.len()];
-            let mut last_note = START_NOTE;
-            // The oscillator's range switch: the panel's values (its position is the
-            // keys'), the position asked for, and (in `live.values`) the one applied.
-            let range = feeds.iter().find_map(|f| match f {
-                Feed::Pitch(p) => p.range,
-                _ => None,
-            });
+            // Blocks are made as the queue drains; each key acts at its place in the block
+            // (its time after the last block was made, at the audio rate: the spacing kept,
+            // a block late at most), through the performer (`crate::performance`).
+            let mut performer = performer.expect("a performer for keys");
+            let (mut circuit_now, s) = keys_circuit.expect("the keys' circuit");
+            let range = performer.range();
+            // The panel's values (a range switch's position is the keys').
             let mut panel_values = live.values.clone();
-            let mut asked_low = range.is_some_and(|r| r.is_low(&live.values));
-            // Multi-trigger: the presses seen, whether a key sounded in the last block,
-            // and the gate's samples still to lift.
-            let mut presses = keys.presses();
-            let mut was_sounding = false;
-            let mut gap_left = 0usize;
-            let gap = (RETRIGGER_GAP_S * rate as f64).round() as usize;
-            // A circuit played by keys (a harp): the keys' events into it, each at its
-            // place in the coming block (its time after the last block was made, at the
-            // audio rate: their spacing kept, a block late at most).
+            let with_range = |panel: &Values, low: bool| match range {
+                Some(r) => r.with_position(panel, low),
+                None => panel.clone(),
+            };
             let notes = live.has_keys();
             let mut last_block = Instant::now();
             keys.take_events();
+            // An event take: its fresh device settling, the keys held carried into it, the
+            // performance being recorded.
+            type Fresh = Result<(Live, Performer, Performance), String>;
+            let mut fresh: Option<Receiver<Fresh>> = None;
+            let mut carried: Vec<(usize, Ev)> = Vec::new();
+            let mut log: Option<Arc<Mutex<Performance>>> = None;
             while !shared.stop.load(Ordering::Relaxed) {
-                match range {
-                    // The panel's values go on with the switch where the keys put it.
-                    Some(r) => {
-                        if let Some(v) = shared.wanted.lock().expect("wanted").take() {
-                            panel_values = v;
-                            let v = r.with_position(&panel_values, asked_low);
-                            match shared.circuit.lock().expect("circuit").take() {
-                                Some(c) => live.set_circuit(c, v),
-                                None => live.set(v),
-                            }
+                if let Some(v) = shared.wanted.lock().expect("wanted").take() {
+                    panel_values = v;
+                    let v = with_range(&panel_values, performer.asked_low());
+                    match shared.circuit.lock().expect("circuit").take() {
+                        Some(c) => {
+                            circuit_now = c.clone();
+                            live.set_circuit(c, v);
                         }
-                        live.gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
+                        None => live.set(v),
                     }
-                    None => forward_values(&mut live),
+                }
+                // The input gain and the key settings hold still while a take records.
+                if log.is_none() {
+                    live.gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
+                    performer.set_playing(playing_now(shared, wave));
+                }
+                let asked = shared.event_take.lock().expect("event_take").take();
+                if let Some(device) = asked
+                    && fresh.is_none()
+                {
+                    let values = with_range(&panel_values, performer.asked_low());
+                    let p = Performer::new(
+                        feeds.clone(),
+                        playing_now(shared, wave),
+                        rate,
+                        performer.last_note(),
+                        performer.asked_low(),
+                    );
+                    let perf = Performance {
+                        device,
+                        quality: s.quality,
+                        rate,
+                        values: values.clone(),
+                        playing: p.playing(),
+                        gain: live.gain,
+                        noise: circuit_now.noise_on(),
+                        start_note: p.last_note(),
+                        start_low: p.asked_low(),
+                        events: Vec::new(),
+                        knobs: Vec::new(),
+                        knobs_applied: true,
+                        end: 0,
+                    };
+                    let (c, s, gain, c0) = (circuit_now.clone(), s.clone(), live.gain, p.resting());
+                    let (tx, rx) = mpsc::channel();
+                    let spawned =
+                        std::thread::Builder::new()
+                            .name("take start".into())
+                            .spawn(move || {
+                                let r = Live::with_controls(&[], values, c, s, gain, &c0)
+                                    .map(|l| (l, p, perf));
+                                let _ = tx.send(r);
+                            });
+                    if spawned.is_ok() {
+                        fresh = Some(rx);
+                        shared.status.lock().expect("status").take_preparing = true;
+                    }
+                }
+                if let Some(rx) = &fresh {
+                    match rx.try_recv() {
+                        Ok(Ok((l, p, perf))) => {
+                            // The keys held now go into the fresh device at its first sample.
+                            carried = performer
+                                .held()
+                                .iter()
+                                .map(|&(note, velocity)| (0, Ev::On { note, velocity }))
+                                .collect();
+                            live = l;
+                            performer = p;
+                            // Stopped while it settled: the fresh device plays, nothing records.
+                            if shared.event_take_wanted.load(Ordering::Relaxed) {
+                                live.set_logging(true);
+                                let perf = Arc::new(Mutex::new(perf));
+                                {
+                                    let mut r = shared.recorder.lock().expect("recorder");
+                                    r.finish();
+                                    r.performance = Some(perf.clone());
+                                    r.armed = true;
+                                }
+                                shared.transport.lock().expect("transport").run = Some(true);
+                                log = Some(perf);
+                            }
+                            fresh = None;
+                            shared.status.lock().expect("status").take_preparing = false;
+                        }
+                        Ok(Err(e)) => {
+                            fresh = None;
+                            let mut st = shared.status.lock().expect("status");
+                            st.take_preparing = false;
+                            st.build_error = Some(format!("the take couldn't start: {e}"));
+                        }
+                        Err(mpsc::TryRecvError::Empty) => {}
+                        Err(mpsc::TryRecvError::Disconnected) => {
+                            fresh = None;
+                            shared.status.lock().expect("status").take_preparing = false;
+                        }
+                    }
+                }
+                // Recording ended (stopped, or disarmed): the performance with it.
+                if log.is_some()
+                    && shared
+                        .recorder
+                        .lock()
+                        .expect("recorder")
+                        .performance
+                        .is_none()
+                {
+                    log = None;
+                    live.set_logging(false);
                 }
                 let queued = capacity - ring.slots();
                 shared.queued.store(queued, Ordering::Relaxed);
@@ -1511,64 +1799,39 @@ fn work(
                     std::thread::sleep(Duration::from_micros(300));
                     continue;
                 }
-                let mut sounding = keys.sounding();
-                let mut low = false;
-                if let Some(r) = range {
-                    let mode = RangeMode::from_index(shared.range_mode.load(Ordering::Relaxed));
-                    let hz = sounding.map(|(n, _)| TestOsc::note_hz(n));
-                    let want = r.low_for(mode, hz, asked_low);
-                    if want != asked_low {
-                        asked_low = want;
-                        live.set(r.with_position(&panel_values, want));
-                    }
-                    // A key waits (gate up, the last pitch held) until the switch has
-                    // moved: a block or two after a key that crosses the split.
-                    low = r.is_low(&live.values);
-                    if want != low {
-                        sounding = None;
-                    }
-                }
-                if let Some((note, _)) = sounding {
-                    last_note = note;
-                }
-                let p = keys.presses();
-                if p != presses {
-                    if was_sounding
-                        && sounding.is_some()
-                        && shared.retrigger.load(Ordering::Relaxed)
-                    {
-                        gap_left = gap;
-                    }
-                    presses = p;
-                }
-                was_sounding = sounding.is_some();
-                if own_oscillator {
-                    block.fill(0.0);
-                } else {
-                    osc.fill(sounding, &mut block);
-                }
-                let pressure = keys.pressure();
-                let vel_db = f64::from_bits(shared.velocity_db.load(Ordering::Relaxed));
-                for (c, f) in ctl.iter_mut().zip(&feeds) {
-                    c.fill(feed_volts(f, sounding, last_note, low, pressure, vel_db));
-                    if let Some(up) = f.gate_up() {
-                        lift_gate(c, up, gap_left);
-                    }
-                }
-                gap_left = gap_left.saturating_sub(BLOCK);
-                let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
                 let now = Instant::now();
-                let events = if notes {
-                    note_offsets(keys.take_events(), last_block, rate)
-                } else {
-                    Vec::new()
-                };
+                let mut events = note_offsets(keys.take_events(), last_block, rate);
                 last_block = now;
+                if !carried.is_empty() {
+                    events.splice(0..0, std::mem::take(&mut carried));
+                }
+                let low_applied = range.map(|r| r.is_low(&live.values));
+                let b = performer.block(BLOCK, &events, low_applied);
+                if let Some(want) = b.range {
+                    live.set(with_range(&panel_values, want));
+                }
+                let at = live.processed();
+                if let Some(l) = &log {
+                    let mut p = l.lock().expect("performance");
+                    p.events.extend(
+                        events
+                            .iter()
+                            .map(|&(o, e)| (at + o.min(BLOCK - 1) as u64, e)),
+                    );
+                }
+                let refs: Vec<&[f64]> = b.controls.iter().map(Vec::as_slice).collect();
+                let key_notes = if notes { b.notes } else { Vec::new() };
                 let (y, meter) = live
-                    .process_notes(&block, &refs, &events)
+                    .process_notes(&b.audio, &refs, &key_notes)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
+                if let Some(l) = &log {
+                    let mut p = l.lock().expect("performance");
+                    p.knobs.extend(live.take_log());
+                    p.end = live.processed();
+                }
                 let before = capacity - ring.slots();
-                em.emit(shared, &mut ring, &y, monitored(&live, &y));
+                let stream_at = log.as_ref().map(|_| at);
+                em.emit(shared, &mut ring, &y, monitored(&live, &y), stream_at);
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let block_s = BLOCK as f64 / rate as f64;
@@ -1584,11 +1847,7 @@ fn work(
 
 /// Key events as they arrived, placed in a block: each at its time after `since` (the
 /// last block made) at `rate`, at most at the block's last sample, in order.
-pub fn note_offsets(
-    events: Vec<(Instant, circuitsim::media::NoteEvent)>,
-    since: Instant,
-    rate: u32,
-) -> Vec<(usize, circuitsim::media::NoteEvent)> {
+pub fn note_offsets<E>(events: Vec<(Instant, E)>, since: Instant, rate: u32) -> Vec<(usize, E)> {
     let mut last = 0;
     events
         .into_iter()
@@ -1598,6 +1857,16 @@ pub fn note_offsets(
             (last, e)
         })
         .collect()
+}
+
+/// The player's key settings now, with the test oscillator's `wave`.
+fn playing_now(shared: &Shared, wave: Wave) -> Playing {
+    Playing {
+        wave,
+        range_mode: RangeMode::from_index(shared.range_mode.load(Ordering::Relaxed)),
+        velocity_db: f64::from_bits(shared.velocity_db.load(Ordering::Relaxed)),
+        retrigger: shared.retrigger.load(Ordering::Relaxed),
+    }
 }
 
 /// The default output device at `rate`, playing from `ring` (mono to every channel).
@@ -1865,16 +2134,6 @@ mod tests {
         ];
         let at: Vec<usize> = note_offsets(ev, t0, 48_000).iter().map(|e| e.0).collect();
         assert_eq!(at, vec![48, 144, super::BLOCK - 1, super::BLOCK - 1]);
-    }
-
-    #[test]
-    fn a_legato_key_lifts_the_gate_for_the_gap() {
-        let mut c = vec![-1.0; 64];
-        super::lift_gate(&mut c, -110.0, 48);
-        assert!(c[..48].iter().all(|&v| v == -110.0) && c[48..].iter().all(|&v| v == -1.0));
-        super::lift_gate(&mut c, -110.0, 100); // a gap longer than the block fills it
-        assert!(c.iter().all(|&v| v == -110.0));
-        assert_eq!((super::RETRIGGER_GAP_S * 48_000.0).round() as usize, 48);
     }
 
     #[test]

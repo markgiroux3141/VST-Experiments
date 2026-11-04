@@ -39,6 +39,7 @@ use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
 use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_live};
 
+use crate::performance::Knob;
 use crate::resample::{StreamResampler, resample};
 use crate::settings::Settings;
 
@@ -50,6 +51,7 @@ pub const LOOP_FADE_S: f64 = 0.01;
 pub type Values = Vec<(String, Value)>;
 
 /// A circuit file built into IRs: what [`Live`] and renders build from.
+#[derive(Clone)]
 pub struct Circuit {
     lib: Arc<Library>,
     spec: CircuitSpec,
@@ -116,6 +118,11 @@ impl Circuit {
     pub fn with_noise(mut self, on: bool) -> Circuit {
         self.noise = on;
         self
+    }
+
+    /// Whether its noise sources are on (the file's, when it has them).
+    pub fn noise_on(&self) -> bool {
+        self.noise && self.has_noise()
     }
 
     /// Whether the file has noise sources to turn on.
@@ -312,7 +319,7 @@ impl Running {
     ) -> Result<Running, String> {
         let v = fs.input_v;
         let k = s.oversample as usize;
-        let opts = s.stream_options()?;
+        let opts = s.live_options()?;
         let second = s.partition_sections(ir);
         let h = 1.0 / s.sim_rate() as f64;
         let c0 = if c0.len() == ir.controls.len() {
@@ -380,7 +387,8 @@ fn chain_lag(k: usize, l_sim: usize, n0: usize) -> usize {
 
 enum Ready {
     Update(Box<CircuitIr>, Values),
-    Restart(Box<Running>, Values),
+    /// A new stream, settled at its input sample and control values.
+    Restart(Box<Running>, Values, (f64, Vec<f64>)),
 }
 
 /// What the caller and the builder thread share.
@@ -429,6 +437,14 @@ pub struct Live {
     controls: Vec<f64>,
     /// Note events for the next block (offsets at the simulation's rate).
     notes: Vec<(usize, NoteEvent)>,
+    /// Host samples processed so far (where the next block starts).
+    processed: u64,
+    /// What was applied, and where (`performance::Knob`), while logging.
+    log: Option<Vec<Knob>>,
+    /// The circuit, for builds on the caller's thread ([`Live::apply_now`]), and changes
+    /// built so, waiting for the next block.
+    circuit: Circuit,
+    pending: Vec<Ready>,
 }
 
 impl Live {
@@ -500,6 +516,7 @@ impl Live {
         let (tx, ready) = mpsc::channel();
         let builder = {
             let (shared, s, current) = (shared.clone(), s.clone(), run.structure.clone());
+            let circuit = circuit.clone();
             std::thread::Builder::new()
                 .name("live builds".into())
                 .spawn(move || build_loop(circuit, s, shared, tx, current))
@@ -524,7 +541,60 @@ impl Live {
             lag,
             controls: c0,
             notes: Vec::new(),
+            processed: 0,
+            log: None,
+            circuit,
+            pending: Vec::new(),
         })
+    }
+
+    /// Host samples processed so far: where the next block starts.
+    pub fn processed(&self) -> u64 {
+        self.processed
+    }
+
+    /// Log every change applied from now on (with where it landed), or stop logging.
+    pub fn set_logging(&mut self, on: bool) {
+        self.log = on.then(Vec::new);
+    }
+
+    /// The changes applied since the last call, while logging.
+    pub fn take_log(&mut self) -> Vec<Knob> {
+        self.log.as_mut().map(std::mem::take).unwrap_or_default()
+    }
+
+    /// The control inputs' last values (IR order).
+    pub fn controls(&self) -> &[f64] {
+        &self.controls
+    }
+
+    /// `values` built now, on this thread, applied at the next block (an offline replay:
+    /// where a change lands is the caller's choice). A change of structure restarts the
+    /// stream settled at `restart` (input sample, control values) when given (a logged
+    /// restart, replayed), else at the next input sample `u0` and the controls' last values.
+    pub fn apply_now(
+        &mut self,
+        values: Values,
+        u0: f64,
+        restart: Option<(f64, Vec<f64>)>,
+    ) -> Result<(), String> {
+        let ir = self.circuit.build(&values)?;
+        let st = structure(&ir);
+        let fs = self.circuit.full_scale(&self.s);
+        let playing = match &self.pending.last() {
+            Some(Ready::Restart(r, ..)) => (&r.structure, r.fs),
+            _ => (&self.run.structure, self.run.fs),
+        };
+        if *playing.0 == st && playing.1 == fs && restart.is_none() {
+            circuitsim::plate::prepare(&ir, self.s.sim_rate() as f64);
+            self.pending.push(Ready::Update(Box::new(ir), values));
+        } else {
+            let (u0, c0) = restart.unwrap_or_else(|| (u0, self.controls.clone()));
+            let run = Running::new(&ir, u0, &c0, &self.s, fs)?;
+            self.pending
+                .push(Ready::Restart(Box::new(run), values, (u0, c0)));
+        }
+        Ok(())
     }
 
     /// The loop's length in samples at the host rate (0: live input).
@@ -649,7 +719,13 @@ impl Live {
             *self.shared.c0.lock().expect("c0") = self.controls.clone();
         }
         let ctl_refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
+        let at = self.processed;
+        self.processed += x.len() as u64;
+        let mut ready: Vec<Ready> = std::mem::take(&mut self.pending);
         while let Ok(r) = self.ready.try_recv() {
+            ready.push(r);
+        }
+        for r in ready {
             match r {
                 Ready::Update(ir, values) => {
                     // The builder compares with the last structure it built (live.py
@@ -660,10 +736,24 @@ impl Live {
                         None => &mut self.run.stream,
                     };
                     target.update(&ir).map_err(|e| e.to_string())?;
+                    if let Some(log) = &mut self.log {
+                        log.push(Knob {
+                            at,
+                            values: values.clone(),
+                            restart: None,
+                        });
+                    }
                     self.values = values;
                 }
-                Ready::Restart(run, values) => {
+                Ready::Restart(run, values, settled) => {
                     self.fade = Some(run);
+                    if let Some(log) = &mut self.log {
+                        log.push(Knob {
+                            at,
+                            values: values.clone(),
+                            restart: Some(settled),
+                        });
+                    }
                     self.values = values;
                 }
             }
@@ -830,7 +920,7 @@ fn build_loop(
                 let run = Running::new(&ir, u0, &c0, &s, fs)?;
                 current = st;
                 current_fs = fs;
-                Ok(Ready::Restart(Box::new(run), values))
+                Ok(Ready::Restart(Box::new(run), values, (u0, c0)))
             }
         });
         match result {

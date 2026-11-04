@@ -1,0 +1,589 @@
+{
+ "sets": {},
+ "rows": [
+  {
+   "note": 24,
+   "hz": 32.703,
+   "range": 0,
+   "pitch_v": -23.9888,
+   "f_measured_hz": 32.393,
+   "out_dbfs": -16.77
+  },
+  {
+   "note": 25,
+   "hz": 34.648,
+   "range": 0,
+   "pitch_v": -23.8299,
+   "f_measured_hz": 34.369,
+   "out_dbfs": -16.533
+  },
+  {
+   "note": 26,
+   "hz": 36.708,
+   "range": 0,
+   "pitch_v": -23.6663,
+   "f_measured_hz": 36.448,
+   "out_dbfs": -16.45
+  },
+  {
+   "note": 27,
+   "hz": 38.891,
+   "range": 0,
+   "pitch_v": -23.4975,
+   "f_measured_hz": 38.642,
+   "out_dbfs": -16.432
+  },
+  {
+   "note": 28,
+   "hz": 41.203,
+   "range": 0,
+   "pitch_v": -23.3167,
+   "f_measured_hz": 41.013,
+   "out_dbfs": -16.419
+  },
+  {
+   "note": 29,
+   "hz": 43.654,
+   "range": 0,
+   "pitch_v": -23.1326,
+   "f_measured_hz": 43.451,
+   "out_dbfs": -16.404
+  },
+  {
+   "note": 30,
+   "hz": 46.249,
+   "range": 0,
+   "pitch_v": -22.9442,
+   "f_measured_hz": 46.064,
+   "out_dbfs": -16.379
+  },
+  {
+   "note": 31,
+   "hz": 48.999,
+   "range": 0,
+   "pitch_v": -22.7493,
+   "f_measured_hz": 48.821,
+   "out_dbfs": -16.416
+  },
+  {
+   "note": 32,
+   "hz": 51.913,
+   "range": 0,
+   "pitch_v": -22.5468,
+   "f_measured_hz": 51.767,
+   "out_dbfs": -16.431
+  },
+  {
+   "note": 33,
+   "hz": 55.0,
+   "range": 0,
+   "pitch_v": -22.3395,
+   "f_measured_hz": 54.846,
+   "out_dbfs": -16.465
+  },
+  {
+   "note": 34,
+   "hz": 58.27,
+   "range": 0,
+   "pitch_v": -22.1196,
+   "f_measured_hz": 58.272,
+   "out_dbfs": -16.506
+  },
+  {
+   "note": 35,
+   "hz": 61.735,
+   "range": 0,
+   "pitch_v": -21.8963,
+   "f_measured_hz": 61.725,
+   "out_dbfs": -16.53
+  },
+  {
+   "note": 36,
+   "hz": 65.406,
+   "range": 0,
+   "pitch_v": -21.6755,
+   "f_measured_hz": 65.354,
+   "out_dbfs": -16.526
+  },
+  {
+   "note": 37,
+   "hz": 69.296,
+   "range": 0,
+   "pitch_v": -21.4464,
+   "f_measured_hz": 69.232,
+   "out_dbfs": -16.522
+  },
+  {
+   "note": 38,
+   "hz": 73.416,
+   "range": 0,
+   "pitch_v": -21.2102,
+   "f_measured_hz": 73.373,
+   "out_dbfs": -16.506
+  },
+  {
+   "note": 39,
+   "hz": 77.782,
+   "range": 0,
+   "pitch_v": -20.9686,
+   "f_measured_hz": 77.755,
+   "out_dbfs": -16.481
+  },
+  {
+   "note": 40,
+   "hz": 82.407,
+   "range": 0,
+   "pitch_v": -20.722,
+   "f_measured_hz": 82.382,
+   "out_dbfs": -16.491
+  },
+  {
+   "note": 41,
+   "hz": 87.307,
+   "range": 0,
+   "pitch_v": -20.4696,
+   "f_measured_hz": 87.305,
+   "out_dbfs": -16.443
+  },
+  {
+   "note": 42,
+   "hz": 92.499,
+   "range": 0,
+   "pitch_v": -20.2128,
+   "f_measured_hz": 92.501,
+   "out_dbfs": -16.428
+  },
+  {
+   "note": 43,
+   "hz": 97.999,
+   "range": 0,
+   "pitch_v": -19.9508,
+   "f_measured_hz": 98.013,
+   "out_dbfs": -16.419
+  },
+  {
+   "note": 44,
+   "hz": 103.826,
+   "range": 0,
+   "pitch_v": -19.6835,
+   "f_measured_hz": 103.864,
+   "out_dbfs": -16.39
+  },
+  {
+   "note": 45,
+   "hz": 110.0,
+   "range": 0,
+   "pitch_v": -19.4117,
+   "f_measured_hz": 110.045,
+   "out_dbfs": -16.369
+  },
+  {
+   "note": 46,
+   "hz": 116.541,
+   "range": 0,
+   "pitch_v": -19.1394,
+   "f_measured_hz": 116.521,
+   "out_dbfs": -16.332
+  },
+  {
+   "note": 47,
+   "hz": 123.471,
+   "range": 0,
+   "pitch_v": -18.8572,
+   "f_measured_hz": 123.468,
+   "out_dbfs": -16.312
+  },
+  {
+   "note": 48,
+   "hz": 130.813,
+   "range": 0,
+   "pitch_v": -18.565,
+   "f_measured_hz": 130.92,
+   "out_dbfs": -16.282
+  },
+  {
+   "note": 49,
+   "hz": 138.591,
+   "range": 0,
+   "pitch_v": -18.2719,
+   "f_measured_hz": 138.731,
+   "out_dbfs": -16.261
+  },
+  {
+   "note": 50,
+   "hz": 146.832,
+   "range": 0,
+   "pitch_v": -17.9737,
+   "f_measured_hz": 146.988,
+   "out_dbfs": -16.223
+  },
+  {
+   "note": 51,
+   "hz": 155.563,
+   "range": 0,
+   "pitch_v": -17.6686,
+   "f_measured_hz": 155.765,
+   "out_dbfs": -16.197
+  },
+  {
+   "note": 52,
+   "hz": 164.814,
+   "range": 0,
+   "pitch_v": -17.3574,
+   "f_measured_hz": 165.05,
+   "out_dbfs": -16.155
+  },
+  {
+   "note": 53,
+   "hz": 174.614,
+   "range": 0,
+   "pitch_v": -17.0399,
+   "f_measured_hz": 174.88,
+   "out_dbfs": -16.12
+  },
+  {
+   "note": 54,
+   "hz": 184.997,
+   "range": 0,
+   "pitch_v": -16.7145,
+   "f_measured_hz": 185.31,
+   "out_dbfs": -16.074
+  },
+  {
+   "note": 55,
+   "hz": 195.998,
+   "range": 0,
+   "pitch_v": -16.3806,
+   "f_measured_hz": 196.38,
+   "out_dbfs": -16.031
+  },
+  {
+   "note": 56,
+   "hz": 207.652,
+   "range": 0,
+   "pitch_v": -16.0384,
+   "f_measured_hz": 208.102,
+   "out_dbfs": -15.972
+  },
+  {
+   "note": 57,
+   "hz": 220.0,
+   "range": 0,
+   "pitch_v": -15.687,
+   "f_measured_hz": 220.502,
+   "out_dbfs": -15.911
+  },
+  {
+   "note": 58,
+   "hz": 233.082,
+   "range": 0,
+   "pitch_v": -15.3242,
+   "f_measured_hz": 233.665,
+   "out_dbfs": -15.842
+  },
+  {
+   "note": 59,
+   "hz": 246.942,
+   "range": 0,
+   "pitch_v": -14.9467,
+   "f_measured_hz": 247.599,
+   "out_dbfs": -15.78
+  },
+  {
+   "note": 60,
+   "hz": 261.626,
+   "range": 0,
+   "pitch_v": -14.548,
+   "f_measured_hz": 262.339,
+   "out_dbfs": -15.708
+  },
+  {
+   "note": 61,
+   "hz": 277.183,
+   "range": 0,
+   "pitch_v": -14.1294,
+   "f_measured_hz": 278.003,
+   "out_dbfs": -15.653
+  },
+  {
+   "note": 62,
+   "hz": 293.665,
+   "range": 0,
+   "pitch_v": -13.6913,
+   "f_measured_hz": 294.555,
+   "out_dbfs": -15.616
+  },
+  {
+   "note": 63,
+   "hz": 311.127,
+   "range": 0,
+   "pitch_v": -13.2321,
+   "f_measured_hz": 312.106,
+   "out_dbfs": -15.6
+  },
+  {
+   "note": 64,
+   "hz": 329.628,
+   "range": 0,
+   "pitch_v": -12.7498,
+   "f_measured_hz": 330.698,
+   "out_dbfs": -15.629
+  },
+  {
+   "note": 65,
+   "hz": 349.228,
+   "range": 1,
+   "pitch_v": -17.1749,
+   "f_measured_hz": 351.097,
+   "out_dbfs": -17.096
+  },
+  {
+   "note": 66,
+   "hz": 369.994,
+   "range": 1,
+   "pitch_v": -16.8482,
+   "f_measured_hz": 371.913,
+   "out_dbfs": -17.147
+  },
+  {
+   "note": 67,
+   "hz": 391.995,
+   "range": 1,
+   "pitch_v": -16.5116,
+   "f_measured_hz": 393.927,
+   "out_dbfs": -17.248
+  },
+  {
+   "note": 68,
+   "hz": 415.305,
+   "range": 1,
+   "pitch_v": -16.1631,
+   "f_measured_hz": 417.334,
+   "out_dbfs": -17.43
+  },
+  {
+   "note": 69,
+   "hz": 440.0,
+   "range": 1,
+   "pitch_v": -15.804,
+   "f_measured_hz": 442.061,
+   "out_dbfs": -17.643
+  },
+  {
+   "note": 70,
+   "hz": 466.164,
+   "range": 1,
+   "pitch_v": -15.4332,
+   "f_measured_hz": 468.275,
+   "out_dbfs": -17.894
+  },
+  {
+   "note": 71,
+   "hz": 493.883,
+   "range": 1,
+   "pitch_v": -15.0486,
+   "f_measured_hz": 496.057,
+   "out_dbfs": -18.18
+  },
+  {
+   "note": 72,
+   "hz": 523.251,
+   "range": 1,
+   "pitch_v": -14.6418,
+   "f_measured_hz": 525.452,
+   "out_dbfs": -18.502
+  },
+  {
+   "note": 73,
+   "hz": 554.365,
+   "range": 1,
+   "pitch_v": -14.2161,
+   "f_measured_hz": 556.564,
+   "out_dbfs": -18.87
+  },
+  {
+   "note": 74,
+   "hz": 587.33,
+   "range": 1,
+   "pitch_v": -13.7711,
+   "f_measured_hz": 589.567,
+   "out_dbfs": -19.268
+  },
+  {
+   "note": 75,
+   "hz": 622.254,
+   "range": 1,
+   "pitch_v": -13.3065,
+   "f_measured_hz": 624.559,
+   "out_dbfs": -19.713
+  },
+  {
+   "note": 76,
+   "hz": 659.255,
+   "range": 1,
+   "pitch_v": -12.8222,
+   "f_measured_hz": 661.633,
+   "out_dbfs": -20.187
+  },
+  {
+   "note": 77,
+   "hz": 698.456,
+   "range": 1,
+   "pitch_v": -12.3172,
+   "f_measured_hz": 700.902,
+   "out_dbfs": -20.701
+  },
+  {
+   "note": 78,
+   "hz": 739.989,
+   "range": 1,
+   "pitch_v": -11.7906,
+   "f_measured_hz": 742.492,
+   "out_dbfs": -21.249
+  },
+  {
+   "note": 79,
+   "hz": 783.991,
+   "range": 1,
+   "pitch_v": -11.2408,
+   "f_measured_hz": 786.557,
+   "out_dbfs": -21.831
+  },
+  {
+   "note": 80,
+   "hz": 830.609,
+   "range": 1,
+   "pitch_v": -10.6658,
+   "f_measured_hz": 833.293,
+   "out_dbfs": -22.443
+  },
+  {
+   "note": 81,
+   "hz": 880.0,
+   "range": 1,
+   "pitch_v": -10.0647,
+   "f_measured_hz": 882.789,
+   "out_dbfs": -23.083
+  },
+  {
+   "note": 82,
+   "hz": 932.328,
+   "range": 1,
+   "pitch_v": -9.4353,
+   "f_measured_hz": 935.206,
+   "out_dbfs": -23.756
+  },
+  {
+   "note": 83,
+   "hz": 987.767,
+   "range": 1,
+   "pitch_v": -8.7753,
+   "f_measured_hz": 990.713,
+   "out_dbfs": -24.454
+  },
+  {
+   "note": 84,
+   "hz": 1046.502,
+   "range": 1,
+   "pitch_v": -8.0816,
+   "f_measured_hz": 1049.589,
+   "out_dbfs": -25.179
+  },
+  {
+   "note": 85,
+   "hz": 1108.731,
+   "range": 1,
+   "pitch_v": -7.3521,
+   "f_measured_hz": 1111.918,
+   "out_dbfs": -25.925
+  },
+  {
+   "note": 86,
+   "hz": 1174.659,
+   "range": 1,
+   "pitch_v": -6.5831,
+   "f_measured_hz": 1177.946,
+   "out_dbfs": -26.691
+  },
+  {
+   "note": 87,
+   "hz": 1244.508,
+   "range": 1,
+   "pitch_v": -5.7712,
+   "f_measured_hz": 1247.884,
+   "out_dbfs": -27.477
+  },
+  {
+   "note": 88,
+   "hz": 1318.51,
+   "range": 1,
+   "pitch_v": -4.9112,
+   "f_measured_hz": 1322.02,
+   "out_dbfs": -28.282
+  },
+  {
+   "note": 89,
+   "hz": 1396.913,
+   "range": 1,
+   "pitch_v": -3.9994,
+   "f_measured_hz": 1400.495,
+   "out_dbfs": -29.105
+  },
+  {
+   "note": 90,
+   "hz": 1479.978,
+   "range": 1,
+   "pitch_v": -3.0285,
+   "f_measured_hz": 1483.696,
+   "out_dbfs": -29.942
+  },
+  {
+   "note": 91,
+   "hz": 1567.982,
+   "range": 1,
+   "pitch_v": -1.9927,
+   "f_measured_hz": 1571.767,
+   "out_dbfs": -30.797
+  },
+  {
+   "note": 92,
+   "hz": 1661.219,
+   "range": 1,
+   "pitch_v": -0.8827,
+   "f_measured_hz": 1665.208,
+   "out_dbfs": -31.668
+  },
+  {
+   "note": 93,
+   "hz": 1760.0,
+   "range": 1,
+   "pitch_v": 0.0,
+   "f_measured_hz": 1738.558,
+   "out_dbfs": -32.327
+  },
+  {
+   "note": 94,
+   "hz": 1864.655,
+   "range": 1,
+   "pitch_v": 0.0,
+   "f_measured_hz": 1738.568,
+   "out_dbfs": -32.325
+  },
+  {
+   "note": 95,
+   "hz": 1975.533,
+   "range": 1,
+   "pitch_v": 0.0,
+   "f_measured_hz": 1738.566,
+   "out_dbfs": -32.327
+  },
+  {
+   "note": 96,
+   "hz": 2093.005,
+   "range": 1,
+   "pitch_v": 0.0,
+   "f_measured_hz": 1738.563,
+   "out_dbfs": -32.325
+  }
+ ]
+}

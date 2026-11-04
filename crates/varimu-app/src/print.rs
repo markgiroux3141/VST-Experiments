@@ -167,7 +167,7 @@ impl Slot {
     }
 }
 
-fn value_json(v: &Value) -> Json {
+pub(crate) fn value_json(v: &Value) -> Json {
     match v {
         Value::Null => Json::Null,
         Value::Bool(b) => json!(b),
@@ -183,7 +183,7 @@ fn value_json(v: &Value) -> Json {
     }
 }
 
-fn json_value(v: &Json) -> Result<Value, String> {
+pub(crate) fn json_value(v: &Json) -> Result<Value, String> {
     Ok(match v {
         Json::Null => Value::Null,
         Json::Bool(b) => Value::Bool(*b),
@@ -483,7 +483,7 @@ pub fn print_chain(
 /// This thread below normal priority (Windows; elsewhere nothing): prints yield to the
 /// player's worker and the window (the process runs at the high class,
 /// `player::raise_priority`). A draft's partition thread starts at normal priority.
-fn lower_priority() {
+pub(crate) fn lower_priority() {
     #[cfg(windows)]
     {
         use windows_sys::Win32::System::Threading::{

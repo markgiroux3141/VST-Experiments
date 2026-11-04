@@ -44,6 +44,21 @@
 //! (the older print plays meanwhile), ! failed. The first insert's trim is set once from
 //! the take's loudest stretch to the alignment level (-18 dBFS); later ones start at 0 dB.
 //!
+//! **Event takes** (docs/MIDI_TAKES_PLAN.md N1, N3, N4): Record with a device played from
+//! the MIDI keyboard records its performance: the device restarts fresh (a defined start,
+//! PREPARING while it settles), then the count-in and the take. The lane plays the audio
+//! heard; a take's ♪ badge says what it plays (draft (live), proxy, draft, PROD, stale) and
+//! what renders. Double-click an event take (or its context menu) for the piano roll
+//! (`crate::piano_roll`): each edit is a new revision of the take, one undo step, rendered
+//! behind at the take's quality once editing pauses for a second (the older render plays
+//! meanwhile, stale). Render at production is on demand (the take's context menu, or
+//! ⤓ Production for every event take); a production render, once there, is what plays
+//! unless the track plays drafts (context menu). Each track's strip has ⤓ PROD for its own
+//! take (◔ while it renders, PROD ✓ once it plays), and a take's context menu bounces it
+//! to audio: its production render (made first if it isn't there) as a new audio take on the
+//! track, the MIDI take kept in the lane. Renders run below normal priority, one at a time
+//! while a device plays live, none while recording.
+//!
 //! **Audition** (F3): while an insert's panel is open, that device plays live in the
 //! session's player (the Play view's device stops: one live device), fed by the track's
 //! audio where the transport is (the prints of the inserts before it, else the take), so
@@ -58,7 +73,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 use serde_json::{Value, json};
@@ -70,13 +85,16 @@ use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey,
 use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, Slot, find_device};
 use varimu_app::session::{
-    OVERVIEW_BIN, Overview, Printed, Session, Take, Track, transport_from, transport_json,
+    Monitor, OVERVIEW_BIN, Overview, Printed, Session, Take, Track, take_dir, transport_from,
+    transport_json,
 };
 use varimu_app::settings::{Quality, Settings};
+use varimu_app::take_render::{self, NOT_RENDERED};
 use varimu_app::transport::{ClickMode, Grid, Phase, TransportSettings};
 use varimu_circuit::spec;
 use varimu_circuit::yaml::Value as YValue;
 
+use crate::piano_roll::{self, Roll};
 use crate::play_view::PlayView;
 
 // **Render** (⤓, the user's ask 2026-10-31): a track's chain rendered at production into a
@@ -94,7 +112,7 @@ use crate::theme;
 const CALIBRATE_S: f64 = 8.0;
 /// The channel strips' width and a track's height (px).
 const STRIP_W: f32 = 250.0;
-const TRACK_H: f32 = 102.0;
+const TRACK_H: f32 = 124.0;
 const RULER_H: f32 = 26.0;
 /// A take's row when a track shows every take (px).
 const TAKE_H: f32 = 34.0;
@@ -135,6 +153,8 @@ struct Recording {
     latency: i64,
     len: usize,
     overview: Overview,
+    /// A MIDI take's notes so far (the performance's sample of its first sample, the notes).
+    notes: Option<(u64, Vec<varimu_app::performance::Note>)>,
 }
 
 /// A take being dragged: its track and index, where it was, where the drag started (px).
@@ -171,6 +191,16 @@ struct Bake {
     take: String,
     slots: Vec<Slot>,
     job: Job,
+}
+
+/// An event take's render running, or a cache lookup (`wanted` false): which take,
+/// revision and quality.
+struct TakeJob {
+    id: String,
+    rev: u32,
+    quality: Quality,
+    wanted: bool,
+    job: take_render::Job,
 }
 
 /// A drag on the ruler: a locator's handle, or a new loop from a beat.
@@ -233,6 +263,17 @@ pub struct SessionView {
     /// place only then), and the instrument to start again when the audition ends.
     audition_request: bool,
     resume_instrument: bool,
+    /// Event takes' renders and lookups running, the ones started (take, revision,
+    /// quality, rendering or only looking), the ones that failed, the last piano-roll edit.
+    take_jobs: Vec<TakeJob>,
+    tried: HashSet<(String, u32, Quality, bool)>,
+    take_errors: HashMap<(String, u32, Quality), String>,
+    last_edit: Option<Instant>,
+    roll: Option<Roll>,
+    /// The Play view's device has a proxy (set every frame: the strips offer it).
+    proxy_available: bool,
+    /// Event takes to bounce to audio once their production render lands (take, revision).
+    bounces: HashSet<(String, u32)>,
 }
 
 fn prefs_path() -> Option<PathBuf> {
@@ -339,6 +380,13 @@ impl SessionView {
             record_pending: false,
             audition_request: false,
             resume_instrument: false,
+            take_jobs: Vec::new(),
+            tried: HashSet::new(),
+            take_errors: HashMap::new(),
+            last_edit: None,
+            roll: None,
+            proxy_available: false,
+            bounces: HashSet::new(),
         }
     }
 
@@ -423,9 +471,20 @@ impl SessionView {
                 p.set_mix(Arc::new(mix));
             }
         }
+        // The armed track's monitor: the device or its proxy (a keyboard playing restarts on
+        // the other, never while recording).
+        if self.recording.is_none()
+            && !play.player().is_some_and(|p| p.take_armed())
+            && let Some(t) = self.session.armed.and_then(|i| self.session.tracks.get(i))
+        {
+            play.set_monitor_proxy(t.monitor == Monitor::Proxy && t.midi && play.has_proxy());
+        }
+        self.proxy_available = play.has_proxy();
         self.poll_recording(play);
         let armed = play.player().is_some_and(|p| p.take_armed());
         self.poll_prints(ui.ctx(), armed);
+        let live = play.player().is_some() && !play.adopted();
+        self.poll_take_renders(ui.ctx(), armed, live);
         self.keys(ui, play);
         egui::Panel::top("session_transport")
             .frame(
@@ -476,6 +535,17 @@ impl SessionView {
                         .inner_margin(egui::Margin::symmetric(14, 10)),
                 )
                 .show(ui, |ui| self.insert_panel(ui));
+        }
+        if self.roll.is_some() {
+            egui::Panel::bottom("session_roll")
+                .resizable(true)
+                .default_size(320.0)
+                .frame(
+                    egui::Frame::NONE
+                        .fill(theme::CHROME2)
+                        .inner_margin(egui::Margin::symmetric(10, 6)),
+                )
+                .show(ui, |ui| self.roll_ui(ui, play));
         }
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
@@ -531,7 +601,10 @@ impl SessionView {
         if zoom_in {
             self.zoom(2.0, Some(self.lanes_w * 0.5));
         }
-        if delete && let Some((t, k)) = self.selected {
+        if delete
+            && self.roll.is_none()
+            && let Some((t, k)) = self.selected
+        {
             self.delete_take(t, k);
         }
         if undo {
@@ -598,8 +671,19 @@ impl SessionView {
                 self.session.armed = Some(0);
             }
         }
-        p.arm_take(record);
-        p.transport_run(true);
+        let midi = self
+            .session
+            .armed
+            .and_then(|i| self.session.tracks.get(i))
+            .is_none_or(|t| t.midi);
+        if record && midi && play.plays_keys() {
+            // The device restarts fresh, then the transport and the take (PREPARING).
+            let (_, id) = play.device_label_id();
+            p.begin_event_take(&id);
+        } else {
+            p.arm_take(record);
+            p.transport_run(true);
+        }
         self.error = None;
     }
 
@@ -790,9 +874,11 @@ impl SessionView {
                     latency,
                     len: 0,
                     overview: Overview::new(OVERVIEW_BIN),
+                    notes: None,
                 });
                 r.overview.extend(&tail);
                 r.len = len;
+                r.notes = p.take_notes();
             }
             None => self.recording = None,
         }
@@ -810,9 +896,14 @@ impl SessionView {
             }
             let track = self.session.armed.unwrap_or(0);
             let (_, device) = play.device_label_id();
+            let monitor = if play.monitor_proxy() {
+                Monitor::Proxy
+            } else {
+                Monitor::Device
+            };
             self.saved = true;
-            match self.session.add_take(track, rec, &device) {
-                Ok(()) => self.save_prefs(),
+            match self.session.add_take_heard(track, rec, &device, monitor) {
+                Ok(_) => self.save_prefs(),
                 Err(e) => self.error = Some(e),
             }
         }
@@ -831,7 +922,7 @@ impl SessionView {
             .filter(|p| p.take == take.id && stage > 0 && p.stages.len() >= stage);
         let audio = match printed {
             Some(p) => p.stages[stage - 1].clone(),
-            None => take.audio.clone(),
+            None => take.sound(track.drafts).0.clone(),
         };
         let key = format!(
             "{}|{}|{}|{}|{:p}|{}",
@@ -1121,7 +1212,7 @@ impl SessionView {
                         config.clone(),
                         slots,
                         self.session.sidechains(ti),
-                        k.audio.clone(),
+                        k.sound(t.drafts).0.clone(),
                         rate,
                         Some(cache.clone()),
                     ),
@@ -1231,7 +1322,7 @@ impl SessionView {
         if track.inserts.iter().all(|s| s.bypass)
             && let Some(k) = track.active_take()
         {
-            let x: Vec<f64> = k.audio.iter().map(|&v| v as f64).collect();
+            let x: Vec<f64> = k.sound(track.drafts).0.iter().map(|&v| v as f64).collect();
             let level = audio::level_dbfs(&x, rate, 8.0);
             slot.trim_db = ((ALIGNMENT_DBFS - level).clamp(-40.0, 40.0) * 10.0).round() / 10.0;
         }
@@ -1267,7 +1358,7 @@ impl SessionView {
             let tr = &self.session.tracks[t];
             match (tr.active_take(), &tr.printed) {
                 (Some(take), Some(p)) if self.session.print_current(t) => {
-                    let a: Vec<f64> = take.audio.iter().map(|&v| v as f64).collect();
+                    let a: Vec<f64> = take.sound(tr.drafts).0.iter().map(|&v| v as f64).collect();
                     let b: Vec<f64> = p.audio.iter().map(|&v| v as f64).collect();
                     Some((
                         audio::level_dbfs(&a, rate, 8.0),
@@ -1696,7 +1787,7 @@ impl SessionView {
             self.root.join("config"),
             slots.clone(),
             self.session.sidechains(t),
-            take.audio.clone(),
+            take.sound(track.drafts).0.clone(),
             self.session.rate,
             Some(self.session.dir.join("prints")),
         );
@@ -1851,6 +1942,7 @@ impl SessionView {
             );
             ui.add_space(8.0);
             let (badge, colour) = match (t.phase, recording) {
+                _ if st.take_preparing => ("PREPARING", theme::WARN),
                 (Some(Phase::CountIn), _) => ("COUNT-IN", theme::WARN),
                 (Some(Phase::PreRoll), _) => ("PRE-ROLL", theme::WARN),
                 (Some(Phase::Rolling), true) => ("RECORDING", REC),
@@ -1862,7 +1954,11 @@ impl SessionView {
             ui.label(
                 RichText::new(format!(
                     "{} · load {:.0}% · {} dropouts",
-                    play.device_label_id().0,
+                    if play.monitor_proxy() {
+                        format!("{} through its proxy", play.device_label_id().0)
+                    } else {
+                        play.device_label_id().0
+                    },
                     st.load * 100.0,
                     p.dropouts()
                 ))
@@ -2073,6 +2169,17 @@ impl SessionView {
                     self.error = None;
                 }
                 Err(e) => self.error = Some(e),
+            }
+        }
+        let missing = self.production_missing();
+        if !missing.is_empty()
+            && ui
+                .small_button(format!("⤓ Production ({})", missing.len()))
+                .on_hover_text("Render every event take that has no production render yet (one at a time, in the background)")
+                .clicked()
+        {
+            for (t, k) in missing {
+                self.render_production(t, k);
             }
         }
         if self.saved && ui.small_button("Show folder").clicked() {
@@ -2427,10 +2534,43 @@ impl SessionView {
                 .is_some_and(|k| k.position != d.from);
         }
         let mut delete_take = None;
+        let mut take_action: Option<(usize, u8)> = None;
         lane_resp.context_menu(|ui| {
             let t = &self.session.tracks[i];
             match t.active {
                 Some(k) => {
+                    if t.takes[k].events.is_some() {
+                        if ui.button("Piano roll").clicked() {
+                            take_action = Some((k, 0));
+                            ui.close();
+                        }
+                        let has = t.takes[k].has_render(Quality::Production);
+                        if ui
+                            .add_enabled(!has, egui::Button::new("Render at production"))
+                            .clicked()
+                        {
+                            take_action = Some((k, 1));
+                            ui.close();
+                        }
+                        if ui
+                            .button("Bounce to an audio take (production)")
+                            .on_hover_text("Its production render (rendered first if it isn't there yet) as a new audio take on this track; the MIDI take stays in the lane")
+                            .clicked()
+                        {
+                            take_action = Some((k, 3));
+                            ui.close();
+                        }
+                        let mut drafts = t.drafts;
+                        if ui
+                            .checkbox(&mut drafts, "Play drafts on this track")
+                            .on_hover_text("Its event takes play their draft renders over production ones (to compare)")
+                            .clicked()
+                        {
+                            take_action = Some((k, 2));
+                            ui.close();
+                        }
+                        ui.separator();
+                    }
                     if ui
                         .button(format!("Delete take {}", t.takes[k].id))
                         .clicked()
@@ -2517,24 +2657,39 @@ impl SessionView {
                 .is_some_and(|p| p.2)
                 .then_some(track.printed.as_ref())
                 .flatten();
+            let (sound, sound_ov, _) = k.sound(track.drafts);
             let (len, overview) = match printed {
                 Some(p) => (p.audio.len(), &p.overview),
-                None => (k.audio.len(), &k.overview),
+                None => (sound.len(), sound_ov),
             };
-            draw_clip(
-                &lp,
-                lane,
-                view,
-                k.position,
-                len,
-                overview,
-                colour,
-                &if printed.is_some() {
-                    format!("{} · with inserts", k.id)
-                } else {
-                    k.id.clone()
-                },
-            );
+            let label = match (printed.is_some(), &k.events) {
+                (true, _) => format!("{} · with inserts", k.id),
+                (false, Some(_)) => format!(
+                    "{} · ♪ {}",
+                    k.id,
+                    self.take_status(i, track.active.unwrap_or(0))
+                ),
+                (false, None) => k.id.clone(),
+            };
+            // A MIDI take shows its notes, not the audio it plays.
+            let no_wave = Overview::new(OVERVIEW_BIN);
+            let overview = if k.events.is_some() && printed.is_none() {
+                &no_wave
+            } else {
+                overview
+            };
+            draw_clip(&lp, lane, view, k.position, len, overview, colour, &label);
+            if let Some(e) = &k.events {
+                draw_notes(
+                    &lp,
+                    clip_rect(k),
+                    view,
+                    k.position,
+                    e.from,
+                    &e.perf.notes(),
+                    colour,
+                );
+            }
             if self.selected == track.active.map(|a| (i, a)) {
                 lp.rect_stroke(
                     clip_rect(k),
@@ -2545,16 +2700,24 @@ impl SessionView {
             }
         }
         if armed && let Some(r) = &self.recording {
-            draw_clip(
-                &lp,
-                lane,
-                view,
-                r.start - r.latency,
-                r.len,
-                &r.overview,
-                REC,
-                "recording",
-            );
+            // A MIDI take draws its notes as they're played, an audio take its waveform.
+            let no_wave = Overview::new(OVERVIEW_BIN);
+            let (ov, label) = match &r.notes {
+                Some(_) => (&no_wave, "recording MIDI"),
+                None => (&r.overview, "recording audio"),
+            };
+            let at = r.start - r.latency;
+            draw_clip(&lp, lane, view, at, r.len, ov, REC, label);
+            if let Some((from, notes)) = &r.notes {
+                let rect = Rect::from_min_max(
+                    Pos2::new(view.x(at), lane.top() + 4.0),
+                    Pos2::new(
+                        view.x(at + r.len as i64).max(view.x(at) + 1.0),
+                        lane.bottom() - 4.0,
+                    ),
+                );
+                draw_notes(&lp, rect, view, at, *from, notes, REC);
+            }
         }
         if let Some(h) = playhead {
             let x = view.x(h);
@@ -2568,6 +2731,12 @@ impl SessionView {
         if lane_resp.hovered() && on_clip(ui.ctx().pointer_hover_pos(), track) {
             ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
         }
+        if lane_resp.double_clicked()
+            && on_clip(lane_resp.interact_pointer_pos(), track)
+            && let Some(k) = track.active
+        {
+            self.open_roll(i, k);
+        }
         // The strip's controls.
         let inner = strip.shrink2(egui::vec2(12.0, 8.0));
         let mut child = ui.new_child(
@@ -2576,13 +2745,42 @@ impl SessionView {
                 .max_rect(inner),
         );
         let mut arm_clicked = false;
+        // Its MIDI take at production: rendering, there, or to start.
+        let prod = self.session.tracks[i].active.and_then(|k| {
+            let take = self.session.tracks[i].takes.get(k)?;
+            let e = take.events.as_ref()?;
+            let job = self.take_jobs.iter().find(|j| {
+                j.wanted && j.id == take.id && j.rev == e.rev && j.quality == Quality::Production
+            });
+            Some(match job {
+                Some(j) => (
+                    format!("◔ {:.0}%", j.job.progress() * 100.0),
+                    theme::ACCENT,
+                    "Rendering this track's take at production in the background",
+                    false,
+                ),
+                None if take.has_render(Quality::Production) => (
+                    "PROD ✓".to_string(),
+                    theme::OK,
+                    "Rendered at production: the track plays it (unless it plays drafts). Bounce it to an audio take from the take's menu",
+                    false,
+                ),
+                None => (
+                    "⤓ PROD".to_string(),
+                    theme::MUTED,
+                    "Render this track's take at production in the background (the full-quality circuit; tube_synth runs ~25x slower than real time)",
+                    true,
+                ),
+            })
+        });
+        let mut prod_clicked = false;
         let t = &mut self.session.tracks[i];
         child.horizontal(|ui| {
             changed |= ui
                 .add(
                     egui::TextEdit::singleline(&mut t.name)
                         .id_salt(("track_name", i))
-                        .desired_width(118.0),
+                        .desired_width(if prod.is_some() { 64.0 } else { 118.0 }),
                 )
                 .lost_focus();
             let arm = egui::Button::new(RichText::new("●").color(if armed {
@@ -2617,7 +2815,23 @@ impl SessionView {
             };
             changed |= toggle(ui, &mut t.mute, "M", theme::WARN, "Mute");
             changed |= toggle(ui, &mut t.solo, "S", theme::OK, "Solo");
+            if let Some((text, colour, tip, can)) = &prod {
+                let b = egui::Button::new(RichText::new(text).small().color(*colour))
+                    .fill(theme::CHROME2)
+                    .min_size(egui::vec2(50.0, 20.0));
+                if ui
+                    .add_enabled(*can, b)
+                    .on_hover_text(*tip)
+                    .on_disabled_hover_text(*tip)
+                    .clicked()
+                {
+                    prod_clicked = true;
+                }
+            }
         });
+        if prod_clicked && let Some(k) = self.session.tracks[i].active {
+            self.render_production(i, k);
+        }
         if arm_clicked && self.recording.is_none() {
             self.session.armed = Some(i);
             changed = true;
@@ -2681,6 +2895,44 @@ impl SessionView {
                 }
             }
         });
+        // What a take from the keyboard records, and what it's heard through while armed.
+        let proxy_available = self.proxy_available;
+        let t = &mut self.session.tracks[i];
+        child.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 2.0;
+            let seg = |ui: &mut egui::Ui, on: bool, text: &str, tip: &str| {
+                ui.selectable_label(on, RichText::new(text).small())
+                    .on_hover_text(tip)
+                    .clicked()
+            };
+            ui.label(RichText::new("rec").small().color(theme::FAINT));
+            if seg(ui, t.midi, "MIDI", "A take from the keyboard records its notes (edit them in the piano roll; it renders on the device at draft and, on demand, production). The audio heard is kept as its first draft.") && !t.midi {
+                t.midi = true;
+                changed = true;
+            }
+            if seg(ui, !t.midi, "AUDIO", "A take records only the audio (the device's output as heard), no notes") && t.midi {
+                t.midi = false;
+                changed = true;
+            }
+            ui.add_space(8.0);
+            ui.label(RichText::new("hear").small().color(theme::FAINT));
+            ui.add_enabled_ui(t.midi && proxy_available, |ui| {
+                if seg(ui, t.monitor == Monitor::Device, "DEVICE", "While armed, play the device itself, live (its full cost)") {
+                    t.monitor = Monitor::Device;
+                    changed = true;
+                }
+                if seg(ui, t.monitor == Monitor::Proxy, "PROXY", "While armed, play the device's proxy: a cheap digital stand-in that follows the panel through tables measured on the device. The take renders on the device behind the recording") {
+                    t.monitor = Monitor::Proxy;
+                    changed = true;
+                }
+            })
+            .response
+            .on_disabled_hover_text(if t.midi {
+                "The device chosen in Play has no proxy (tube_synth has one)"
+            } else {
+                "A proxy only stands in for MIDI takes: an audio take records what the device plays"
+            });
+        });
         if let Some(k) = self.session.tracks[i].active_take() {
             child.label(
                 RichText::new(take_line(k, self.session.rate))
@@ -2720,20 +2972,21 @@ impl SessionView {
                         if active { "▶ " } else { "" },
                         j + 1,
                         k.id,
-                        k.audio.len() as f64 / self.session.rate as f64
+                        k.len() as f64 / self.session.rate as f64
                     ),
                     egui::FontId::proportional(11.0),
                     if active { theme::ACCENT } else { theme::MUTED },
                 );
                 let lp = ui.painter_at(slane);
                 draw_grid(&lp, slane, view, grid);
+                let (sound, ov, _) = k.sound(t.drafts);
                 draw_clip(
                     &lp,
                     slane,
                     view,
                     k.position,
-                    k.audio.len(),
-                    &k.overview,
+                    sound.len(),
+                    ov,
                     if active { colour } else { theme::FAINT },
                     "",
                 );
@@ -2749,6 +3002,17 @@ impl SessionView {
                 });
             }
         }
+        match take_action {
+            Some((k, 0)) => self.open_roll(i, k),
+            Some((k, 1)) => self.render_production(i, k),
+            Some((k, 3)) => self.bounce(i, k),
+            Some((_, 2)) => {
+                let t = &mut self.session.tracks[i];
+                t.drafts = !t.drafts;
+                changed = true;
+            }
+            _ => {}
+        }
         if let Some(k) = delete_take {
             self.delete_take(i, k);
         }
@@ -2756,6 +3020,329 @@ impl SessionView {
             self.delete_track(i);
         }
         changed
+    }
+
+    /// What event take `k` of track `t` plays and what renders for it, for its lane.
+    fn take_status(&self, t: usize, k: usize) -> String {
+        let Some(track) = self.session.tracks.get(t) else {
+            return String::new();
+        };
+        let Some(take) = track.takes.get(k) else {
+            return String::new();
+        };
+        let Some(e) = &take.events else {
+            return String::new();
+        };
+        let mut line = take.sound(track.drafts).2.badge().to_string();
+        if e.rev > 0 {
+            line.push_str(&format!(" · rev {}", e.rev));
+        }
+        for j in self
+            .take_jobs
+            .iter()
+            .filter(|j| j.wanted && j.id == take.id && j.rev == e.rev)
+        {
+            let q = if j.quality == Quality::Production {
+                "PROD"
+            } else {
+                "draft"
+            };
+            line.push_str(&format!(" · ◔ {q} {:.0}%", j.job.progress() * 100.0));
+        }
+        for q in [Quality::Production, e.perf.quality] {
+            if let Some(err) = self.take_errors.get(&(take.id.clone(), e.rev, q)) {
+                line.push_str(&format!(" · ! {}: {err}", q.name()));
+            }
+        }
+        line
+    }
+
+    /// Event takes (track, take) whose revision has no production render, active ones.
+    fn production_missing(&self) -> Vec<(usize, usize)> {
+        self.session
+            .tracks
+            .iter()
+            .enumerate()
+            .filter_map(|(t, track)| {
+                let k = track.active?;
+                let take = track.takes.get(k)?;
+                let e = take.events.as_ref()?;
+                let running = self.take_jobs.iter().any(|j| {
+                    j.wanted
+                        && j.id == take.id
+                        && j.rev == e.rev
+                        && j.quality == Quality::Production
+                });
+                (!take.has_render(Quality::Production) && !running).then_some((t, k))
+            })
+            .collect()
+    }
+
+    /// Render event take `k` of track `t` at production, in the background.
+    fn render_production(&mut self, t: usize, k: usize) {
+        let Some(take) = self.session.tracks.get(t).and_then(|x| x.takes.get(k)) else {
+            return;
+        };
+        let Some(e) = &take.events else { return };
+        let (id, rev, perf) = (take.id.clone(), e.rev, e.perf.clone());
+        if self
+            .take_jobs
+            .iter()
+            .any(|j| j.wanted && j.id == id && j.rev == rev && j.quality == Quality::Production)
+        {
+            return;
+        }
+        self.take_errors
+            .remove(&(id.clone(), rev, Quality::Production));
+        self.tried
+            .insert((id.clone(), rev, Quality::Production, true));
+        let job = take_render::Job::spawn(
+            self.root.join("config"),
+            perf,
+            Quality::Production,
+            take_dir(&self.session.dir, &id).join("renders"),
+            true,
+        );
+        self.take_jobs.push(TakeJob {
+            id,
+            rev,
+            quality: Quality::Production,
+            wanted: true,
+            job,
+        });
+    }
+
+    /// Event take `k` of track `t` bounced to audio: now if its production render is there,
+    /// else once it lands (started now).
+    fn bounce(&mut self, t: usize, k: usize) {
+        let Some(take) = self.session.tracks.get(t).and_then(|x| x.takes.get(k)) else {
+            return;
+        };
+        let Some(e) = &take.events else { return };
+        let (id, rev) = (take.id.clone(), e.rev);
+        if take.has_render(Quality::Production) {
+            self.bounce_now(&id, rev);
+        } else {
+            self.bounces.insert((id, rev));
+            self.render_production(t, k);
+        }
+    }
+
+    /// Take `id`'s production render of revision `rev` as a new audio take on its track,
+    /// where the take sits (the MIDI take stays in the lane).
+    fn bounce_now(&mut self, id: &str, rev: u32) {
+        let found = self
+            .session
+            .tracks
+            .iter()
+            .enumerate()
+            .find_map(|(t, track)| {
+                let k = track.takes.iter().find(|k| k.id == id)?;
+                let r = k
+                    .renders
+                    .iter()
+                    .find(|r| r.rev == rev && r.quality == Quality::Production)?;
+                Some((t, k.position, r.audio.clone()))
+            });
+        let Some((t, position, audio)) = found else {
+            self.error = Some(format!("{id}: its production render isn't there to bounce"));
+            return;
+        };
+        let from = json!({
+            "take": id,
+            "revision": rev,
+            "quality": Quality::Production.name(),
+            "bounced": "the MIDI take's production render",
+            "code": circuitsim::SOURCE_HASH,
+        });
+        self.saved = true;
+        match self
+            .session
+            .add_rendered_take(t, (*audio).clone(), position, from)
+        {
+            Ok(_) => self.save(),
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// Event takes' renders: finished ones attached to their takes, ones for revisions no
+    /// take plays cancelled, new ones started (a lookup of every revision's renders in the
+    /// cache; a draft render of an active take whose revision isn't what was heard), none
+    /// while recording or a roll edit is in progress or under a second old.
+    fn poll_take_renders(&mut self, ctx: &egui::Context, recording: bool, live: bool) {
+        let mut i = 0;
+        while i < self.take_jobs.len() {
+            if !self.take_jobs[i].job.is_finished() {
+                i += 1;
+                continue;
+            }
+            let j = self.take_jobs.remove(i);
+            match j.job.join() {
+                Some(Ok(done)) => {
+                    self.session
+                        .attach_render(&j.id, j.rev, j.quality, &done.audio);
+                    if j.quality == Quality::Production
+                        && self.bounces.remove(&(j.id.clone(), j.rev))
+                    {
+                        self.bounce_now(&j.id, j.rev);
+                    }
+                }
+                Some(Err(e)) if e != NOT_RENDERED && e != "cancelled" => {
+                    self.take_errors.insert((j.id, j.rev, j.quality), e);
+                }
+                _ => {}
+            }
+        }
+        let current: HashSet<(String, u32)> = self
+            .session
+            .tracks
+            .iter()
+            .flat_map(|t| &t.takes)
+            .filter_map(|k| k.events.as_ref().map(|e| (k.id.clone(), e.rev)))
+            .collect();
+        for j in &self.take_jobs {
+            if j.wanted && !current.contains(&(j.id.clone(), j.rev)) {
+                j.job.cancel();
+            }
+        }
+        if !self.take_jobs.is_empty() {
+            ctx.request_repaint_after(Duration::from_millis(200));
+        }
+        let editing = self.roll.as_ref().is_some_and(Roll::busy)
+            || self
+                .last_edit
+                .is_some_and(|t| t.elapsed() < Duration::from_secs(1));
+        if recording || self.recording.is_some() || editing {
+            if editing {
+                ctx.request_repaint_after(Duration::from_millis(250));
+            }
+            return;
+        }
+        let limit = if live { 1 } else { MAX_PRINT_JOBS };
+        let mut rendering = self.take_jobs.iter().filter(|j| j.wanted).count();
+        let mut start = Vec::new();
+        for t in &self.session.tracks {
+            for (ki, k) in t.takes.iter().enumerate() {
+                let Some(e) = &k.events else { continue };
+                for q in [Quality::Production, e.perf.quality] {
+                    if k.has_render(q) || self.take_errors.contains_key(&(k.id.clone(), e.rev, q)) {
+                        continue;
+                    }
+                    // A draft render where what plays isn't this revision heard.
+                    let render = q != Quality::Production
+                        && t.active == Some(ki)
+                        && (e.rev > 0 || e.monitor == Monitor::Proxy);
+                    let key = (k.id.clone(), e.rev, q, render);
+                    if self.tried.contains(&key) || (render && rendering >= limit) {
+                        continue;
+                    }
+                    rendering += render as usize;
+                    start.push((key, e.perf.clone()));
+                }
+            }
+        }
+        let config = self.root.join("config");
+        for ((id, rev, q, render), perf) in start {
+            self.tried.insert((id.clone(), rev, q, render));
+            let job = take_render::Job::spawn(
+                config.clone(),
+                perf,
+                q,
+                take_dir(&self.session.dir, &id).join("renders"),
+                render,
+            );
+            self.take_jobs.push(TakeJob {
+                id,
+                rev,
+                quality: q,
+                wanted: render,
+                job,
+            });
+        }
+    }
+
+    /// The piano roll's view of event take `k` of track `t`.
+    fn roll_place(&self, t: usize, k: usize, playhead: Option<i64>) -> Option<piano_roll::Place> {
+        let take = self.session.tracks.get(t)?.takes.get(k)?;
+        let e = take.events.as_ref()?;
+        Some(piano_roll::Place {
+            notes: e.perf.notes(),
+            rev: e.rev,
+            id: take.id.clone(),
+            position: take.position,
+            from: e.from,
+            len: take.len() as u64,
+            grid: Grid::new(self.session.rate, &self.session.transport),
+            rate: self.session.rate,
+            playhead,
+            colour: COLOURS[t % COLOURS.len()],
+            status: self.take_status(t, k),
+        })
+    }
+
+    /// Open the piano roll on event take `k` of track `t`.
+    fn open_roll(&mut self, t: usize, k: usize) {
+        if let Some(place) = self.roll_place(t, k, None) {
+            self.roll = Some(Roll::new(t, &place));
+        }
+    }
+
+    /// The piano roll's pane: its edits saved as the take's revisions, its previews played.
+    fn roll_ui(&mut self, ui: &mut egui::Ui, play: &PlayView) {
+        let Some((t, id)) = self.roll.as_ref().map(|r| (r.track, r.take.clone())) else {
+            return;
+        };
+        let Some(k) = self
+            .session
+            .tracks
+            .get(t)
+            .and_then(|tr| tr.takes.iter().position(|x| x.id == id))
+        else {
+            self.roll = None;
+            return;
+        };
+        let playhead = play
+            .player()
+            .map(|p| p.status().transport)
+            .filter(|s| s.running)
+            .map(|s| s.heard);
+        let Some(place) = self.roll_place(t, k, playhead) else {
+            self.roll = None;
+            return;
+        };
+        let Some(perf) = self.session.tracks[t].takes[k]
+            .events
+            .as_ref()
+            .map(|e| e.perf.clone())
+        else {
+            return;
+        };
+        let outs = match &mut self.roll {
+            Some(r) => r.ui(ui, &place),
+            None => return,
+        };
+        for o in outs {
+            match o {
+                piano_roll::Out::Edited(notes) => {
+                    let range = find_device(&perf.device)
+                        .and_then(|d| d.pitch)
+                        .and_then(|p| p.range)
+                        .map(|r| r.control);
+                    match self.session.revise(t, k, perf.edited(&notes, range)) {
+                        Ok(rev) => {
+                            if let Some(r) = &mut self.roll {
+                                r.saved_as(rev);
+                            }
+                            self.saved = true;
+                            self.last_edit = Some(Instant::now());
+                        }
+                        Err(e) => self.error = Some(e),
+                    }
+                }
+                piano_roll::Out::Preview(note, vel, on) => play.preview_key(note, vel, on),
+                piano_roll::Out::Close => self.roll = None,
+            }
+        }
     }
 
     fn latency_ui(&mut self, ui: &mut egui::Ui, play: &PlayView) {
@@ -3017,7 +3604,7 @@ fn take_line(k: &Take, rate: u32) -> String {
         "{} · {} · {:.1} s · placed {:.0} ms early",
         k.id,
         if k.device.is_empty() { "?" } else { &k.device },
-        k.audio.len() as f64 / rate as f64,
+        k.len() as f64 / rate as f64,
         k.latency as f64 / rate as f64 * 1e3
     )
 }
@@ -3305,5 +3892,41 @@ fn draw_clip(
                 Stroke::new(1.0, wave),
             );
         }
+    }
+}
+
+/// An event take's notes drawn small inside its clip `r` (pitch upward), so a lane shows
+/// what was played.
+fn draw_notes(
+    painter: &egui::Painter,
+    r: Rect,
+    view: &View,
+    position: i64,
+    from: u64,
+    notes: &[varimu_app::performance::Note],
+    colour: Color32,
+) {
+    let (Some(lo), Some(hi)) = (
+        notes.iter().map(|n| n.note).min(),
+        notes.iter().map(|n| n.note).max(),
+    ) else {
+        return;
+    };
+    let span = ((hi - lo) as f32 + 1.0).max(12.0);
+    let (top, h) = (r.top() + 15.0, (r.height() - 19.0).max(4.0));
+    let row = (h / span).clamp(2.0, 6.0);
+    let fill = colour.gamma_multiply(0.9);
+    for n in notes {
+        let at = |t: u64| view.x(position + t as i64 - from as i64);
+        let (x0, x1) = (at(n.start).max(r.left()), at(n.end).min(r.right()));
+        if x1 <= x0 {
+            continue;
+        }
+        let y = top + h * (1.0 - (n.note - lo + 1) as f32 / span);
+        painter.rect_filled(
+            Rect::from_min_max(Pos2::new(x0, y), Pos2::new(x1.max(x0 + 2.0), y + row - 0.5)),
+            1.0,
+            fill,
+        );
     }
 }

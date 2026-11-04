@@ -1,8 +1,10 @@
 # MIDI takes: record notes, hear a proxy, render offline, polyphony
 
-Drafted 2026-11-04 from a brainstorm with the user. Nothing built. What the final render
-spends its compute on is [SYNTH_MASTER_PLAN.md](SYNTH_MASTER_PLAN.md) (the `master`
-quality).
+Drafted 2026-11-04 from a brainstorm with the user. **N1-N4 first versions built
+2026-11-04** (the user: "start building the MIDI recorder in the session view along with the
+piano roll, proxy synth, and the ability to render high quality"; production, not the
+`master` quality, which comes later): see "Status" below. What the final render spends its
+compute on is [SYNTH_MASTER_PLAN.md](SYNTH_MASTER_PLAN.md) (the `master` quality).
 
 ## Why
 
@@ -275,6 +277,99 @@ recommendations, adopted. They continue the numbering of "Decisions" above. The 
    voices differ by their noise streams meanwhile.
 14. **Independent voice copies are not built** unless the shared circuit proves too slow
    for long takes after N7.
+
+## Status (2026-11-04): N1-N4 first versions built
+
+Built in one pass at the user's ask (the recorder, the piano roll, the proxy, production
+renders; `master` later). Per milestone, what's met and what's open:
+
+**N1. Event takes: met on tube_synth.**
+- `varimu_app::performance`: the events (`Ev`: keys with velocity, aftertouch, pedal) at
+  their samples, the knob log (`Knob`), the take's `Performance` (`events.json`), notes for
+  the roll, and the `Performer`: the player's keyboard logic moved out of the worker (key
+  priority, multi-trigger's gap, the range switch, velocity), now sample-accurate: each key
+  at its offset in the block (a note shorter than a block is kept; `midi::Keys` queues
+  aftertouch too).
+- `Live` logs where each build landed (`set_logging`, `take_log`: a restart with the input
+  and controls its stream settled at) and builds on the caller's thread for a replay
+  (`apply_now`); `Settings::live_options` gives a production stream production's options.
+- Record with a device played from keys: `Player::begin_event_take` builds a fresh device in
+  the background while the old one plays (the defined start, ~2 s for tube_synth: the badge
+  says PREPARING), swaps it in, then starts the count-in and the take; a stop while it
+  settles records nothing.
+- `varimu_app::take_render`: the replay through the same `Performer` and a fresh `Live`;
+  production on production's settings at 96 kHz; cached in `takes/<id>/renders/<key>/`.
+- **The done-when, measured** (`examples/take_replay.rs`, through the real player and audio
+  device; a sub-block note, legato, both sides of the range split, aftertouch, CUTOFF turned
+  and the LFO switched off: one restarted stream): the replay at draft-2x equals the audio
+  heard bit for bit (twice: 240,960 and 242,400 samples, 0 differ), and the take renders at
+  production (25.3x slower than real time on tube_synth, the settle included; its level
+  within 0.2% of the draft's). Unit test: `take_render::tests` (tube_voice, two knob turns
+  landing where the background builds put them).
+- Fixed after the user's first try: a new take's id came from the takes the tracks held, so
+  after a take was deleted the next one reused its id and was written into the deleted
+  take's folder (its events then refused: "revisions are never written over"). Ids now skip
+  every take the session has known and every folder on disk, and a take's folder must be new
+  (`session::tests::a_deleted_takes_id_is_never_reused`). While a MIDI take records, its lane
+  draws the notes as they're played.
+- Open: input takes (the 5E3) as events; the chain's end isn't in an event take (the take is
+  the device's own output: a render replays the device alone).
+
+**N2. The proxy: built for tube_synth, mono; the done-when partly met.**
+- `varimu_app::proxy` (`Source::Proxy`, `Player::start_proxy`; Play's "Monitor through the
+  proxy"; the Session view's "hear DEVICE | PROXY" per track): built like the circuit (the envelope in the bus's
+  volts, the VCA through the measured law, V4's grid summed from the panel into the measured
+  filter law, wavetables from the measured harmonics, one LFO), `RENDER_ONLY` the heaters,
+  the reservoir and the mains.
+- Tables: `scripts/proxy_tables.py` -> `config/proxy/tube_synth.json` (a source per table;
+  the circuit's sha256: Play says "tables stale" when it changes). New measurements for it:
+  `reports/tube_synth/proxy/velocity_adsr.json` (`velocity_study.py` on the ADSR circuit:
+  the old `velocity.json` predates it) and `key_level.json` (`scripts/proxy_sweep.py`: a held
+  key's level and frequency every other key).
+- **Against the device** (`examples/proxy_compare.rs`, held keys at the defaults, the device
+  rendered at draft-2x; `proxy_sweep.py` measures every key 24-96): level within 0.4 dB
+  (11 cases, velocities 60-127, C2-A6), pitch within 1 cent at velocity 127 (the proxy plays
+  where the device's tuning puts each key, not equal temperament). At lower velocities the
+  device plays flat by 2-7 cents (G4 at 90: -7.2): its pitch follows the key's velocity (the
+  supply's sag under the VCA, presumably), which the proxy doesn't model yet (the sweep is at
+  velocity 127 only). A take through it renders on the device (`take_replay.rs --proxy`).
+- **Not yet compared, and their tables provisional** (a sweep is owed: `proxy_sweep.py` is
+  where it goes): the envelope's times per pot and SUSTAIN (design values), RESONANCE (the
+  standalone filter's numbers), ENV AMOUNT (S5's measurement before the ADSR), the mixer's
+  pots, the saw's shape, single cycles per WAVE (harmonic magnitudes only, sine phases), the
+  ring's band limits; glide, the LFO, KEY TRACK and PRESSURE are measured but not yet
+  compared with the device.
+- Cost: 16 voices ~1.9-3% of a core in the test profile (the target is 1%); open.
+- **Found on the way:** with the ADSR, a key-down voltage below about -55 V leaves the
+  envelope at rest (velocity_adsr.json: -60 V and lower hold the envelope at ~-103 V), so the
+  app's velocity table (measured before the ADSR) silences the softest keys once the velocity
+  range is over ~18 dB. The table is the device's, not the proxy's: the user's call.
+
+**N3. Render behind: built.** The Session view renders a take's revision at its draft
+quality in the background when what plays isn't that revision heard (an edited take, a proxy
+take), once editing has paused a second, below normal priority, one at a time while a device
+plays live, none while recording; renders of every revision are looked up in the cache on
+load. A take's ♪ badge: draft (live), proxy, draft, PROD, stale, rendering n%. ⤓ Production
+(every event take) or the take's context menu renders at production on demand; a production
+render plays once there, unless the track plays drafts (context menu). Per track: the strip's
+⤓ PROD (◔ n% while it renders, PROD ✓ once there); the take's menu bounces it to an audio
+take (its production render, rendered first if missing; the MIDI take stays in the lane). The 1-minute
+both-oscillators done-when isn't run yet.
+
+**N4. The piano roll: built.** `crate::piano_roll` (double-click an event take, or its context
+menu): select, move (grid / Alt free / by semitones), resize, draw (double-click), delete,
+transpose (↑ ↓, Shift an octave), quantize with strength (Q), a velocity lane, a click
+previews the note on the keyboard playing (device or proxy). Each gesture is one revision
+(`Session::revise`, `events.<n>.json`) and one undo step. After the user's first try: tools
+(Select / Draw / Erase, keys 1-3), a press grabs what was under the button when it went down
+(a drag used to grab what was under the pointer a few pixels later: box-select or resize by
+mistake), the resize zone a note's last 5 px on notes at least 14 px wide; each track says
+what it records (rec MIDI | AUDIO) and hears (DEVICE | PROXY: the old P button wasn't
+findable), and a MIDI take's lane draws its notes, not its audio. Not yet: knob automation lanes,
+`.mid` import, voice colours (N5); a quantize lands notes on their grid sample (unit test).
+
+**The user's first try is open for all of it** (the GUI paths are compiled and their logic
+tested, not clicked through).
 
 ## Risks
 

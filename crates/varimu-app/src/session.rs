@@ -27,6 +27,16 @@
 //! the undo history is a list of them, kept in `history.json` beside `session.json`.
 //! [`Session::copy_to`] copies the whole folder (every take, the history) to a new one.
 //!
+//! **Event takes** (docs/MIDI_TAKES_PLAN.md N1): a take played from keys keeps its
+//! performance ([`Events`]: `events.json` in its folder) beside the audio heard. An edit
+//! is a new revision (`events.<n>.json`), never written over an old one, and the session's
+//! state names the revision each take plays, so undo brings any edit back. Renders of a
+//! revision at a quality (`crate::take_render`, kept in the take's `renders/`) are
+//! attached to the take ([`TakeRender`]); what the take plays ([`Take::sound`]) is its
+//! revision's production render (unless the track plays drafts), else its draft render,
+//! else the audio heard (revision 0: the device as played live, or the proxy's stand-in),
+//! else an older revision's render, stale until the new one lands.
+//!
 //! **Inserts** (docs/SESSION_FX_PLAN.md, F2): a track's devices in a chain
 //! ([`crate::print::Slot`]), saved with the track. The view prints the chain on the active
 //! take in the background (`prints/` in the session's folder, [`crate::print`]) and hands
@@ -50,7 +60,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 
+use crate::performance::Performance;
 use crate::print::{Slot, key_control};
+use crate::settings::Quality;
 use crate::transport::{ClickMode, TransportSettings};
 
 /// A stereo frame (left, right).
@@ -111,12 +123,14 @@ impl Mix {
 }
 
 /// A finished recording from the worker: the stream position of its first sample, the
-/// latency to take off, the samples.
+/// latency to take off, the samples, and (a device played from keys) the performance it
+/// came from with the performance's sample its first sample is.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Recorded {
     pub start: i64,
     pub latency: i64,
     pub samples: Vec<f32>,
+    pub performance: Option<(Arc<Performance>, u64)>,
 }
 
 /// The worker's recorder: while armed and the transport is past the start bar, the
@@ -129,6 +143,9 @@ pub struct Recorder {
     chunk: usize,
     active: Option<Active>,
     finished: std::collections::VecDeque<Recorded>,
+    /// The performance being recorded (the worker adds to it): each take ending while it
+    /// runs keeps a snapshot. Dropped when recording ends.
+    pub performance: Option<Arc<std::sync::Mutex<Performance>>>,
 }
 
 #[derive(Debug)]
@@ -137,6 +154,8 @@ struct Active {
     latency: i64,
     chunks: Vec<Vec<f32>>,
     len: usize,
+    /// The performance's sample of its first sample.
+    stream_from: Option<u64>,
 }
 
 impl Recorder {
@@ -146,14 +165,23 @@ impl Recorder {
             chunk: rate.max(1) as usize,
             active: None,
             finished: std::collections::VecDeque::new(),
+            performance: None,
         }
     }
 
     /// The device's output `raw` for positions `at..`: kept from `record_from` on while
-    /// armed (`latency`: the queue and output device now, in samples).
-    pub fn capture(&mut self, at: i64, raw: &[f32], record_from: i64, latency: i64) {
+    /// armed (`latency`: the queue and output device now, in samples; `stream_at`: the
+    /// performance's sample of `raw[0]`, while one is recorded).
+    pub fn capture(
+        &mut self,
+        at: i64,
+        raw: &[f32],
+        record_from: i64,
+        latency: i64,
+        stream_at: Option<u64>,
+    ) {
         if !self.armed {
-            self.stop();
+            self.finish();
             return;
         }
         if self
@@ -174,6 +202,7 @@ impl Recorder {
             latency,
             chunks: Vec::new(),
             len: 0,
+            stream_from: stream_at.map(|s| s + from as u64),
         });
         let mut x = &raw[from..];
         while !x.is_empty() {
@@ -195,17 +224,38 @@ impl Recorder {
             for c in a.chunks {
                 samples.extend_from_slice(&c);
             }
+            let performance = match (&self.performance, a.stream_from) {
+                (Some(p), Some(from)) => {
+                    Some((Arc::new(p.lock().expect("performance").clone()), from))
+                }
+                _ => None,
+            };
             self.finished.push_back(Recorded {
                 start: a.start,
                 latency: a.latency,
                 samples,
+                performance,
             });
         }
+    }
+
+    /// End the take being recorded and the performance (recording stopped).
+    pub fn finish(&mut self) {
+        self.stop();
+        self.performance = None;
     }
 
     /// The oldest finished take not collected yet.
     pub fn take_finished(&mut self) -> Option<Recorded> {
         self.finished.pop_front()
+    }
+
+    /// The take being recorded, when it records a performance: the performance's sample of
+    /// its first sample and the notes played so far (the ones still held end now).
+    pub fn notes(&self) -> Option<(u64, Vec<crate::performance::Note>)> {
+        let from = self.active.as_ref()?.stream_from?;
+        let p = self.performance.as_ref()?.lock().expect("performance");
+        Some((from, p.notes()))
     }
 
     /// The take being recorded: its start, latency, length and its samples from `from` on.
@@ -287,6 +337,81 @@ fn min_max(x: &[f32]) -> (f32, f32) {
 /// The samples per overview bin (5 ms at 48 kHz).
 pub const OVERVIEW_BIN: usize = 240;
 
+/// What an event take was heard through while it was recorded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Monitor {
+    /// The device itself, live: the take's audio is the device's, a draft.
+    Device,
+    /// The proxy (docs/MIDI_TAKES_PLAN.md N2): the take's audio is a stand-in until it is
+    /// rendered.
+    Proxy,
+}
+
+impl Monitor {
+    pub fn name(self) -> &'static str {
+        match self {
+            Monitor::Device => "device",
+            Monitor::Proxy => "proxy",
+        }
+    }
+
+    pub fn from_name(s: &str) -> Option<Monitor> {
+        match s {
+            "device" => Some(Monitor::Device),
+            "proxy" => Some(Monitor::Proxy),
+            _ => None,
+        }
+    }
+}
+
+/// An event take's performance: the revision playing (0: as recorded), the performance's
+/// sample of the take's first sample, what it was heard through.
+#[derive(Debug, Clone)]
+pub struct Events {
+    pub perf: Arc<Performance>,
+    pub rev: u32,
+    pub from: u64,
+    pub monitor: Monitor,
+}
+
+/// A render of an event take's revision at a quality, from the take's first sample.
+#[derive(Debug, Clone)]
+pub struct TakeRender {
+    pub rev: u32,
+    pub quality: Quality,
+    pub audio: Arc<Vec<f32>>,
+    pub overview: Arc<Overview>,
+}
+
+/// What a take plays ([`Take::sound`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Plays {
+    /// A recorded take's audio (not an event take).
+    Audio,
+    /// An event take as heard live through its device (a draft).
+    Heard,
+    /// The proxy's stand-in, until a render lands.
+    Proxy,
+    /// Its revision rendered at a quality.
+    Render(Quality),
+    /// An older revision's render (or audio), until the new one lands.
+    Stale,
+}
+
+impl Plays {
+    /// A short badge for a lane.
+    pub fn badge(self) -> &'static str {
+        match self {
+            Plays::Audio => "",
+            Plays::Heard => "draft (live)",
+            Plays::Proxy => "proxy",
+            Plays::Render(Quality::Production) => "PROD",
+            Plays::Render(_) => "draft",
+            Plays::Stale => "stale",
+        }
+    }
+}
+
 /// One recorded take.
 #[derive(Debug, Clone)]
 pub struct Take {
@@ -303,11 +428,72 @@ pub struct Take {
     /// A take rendered from another through a chain of inserts (Render): the take, the
     /// inserts, the quality and the code version (None: recorded).
     pub rendered_from: Option<Value>,
+    /// An event take's performance (None: audio only).
+    pub events: Option<Events>,
+    /// Its renders found or made so far (every revision's).
+    pub renders: Vec<TakeRender>,
 }
 
 impl Take {
+    /// Its length in samples: an event take's revision's, else its audio's.
+    pub fn len(&self) -> usize {
+        match &self.events {
+            Some(e) => e.perf.end.saturating_sub(e.from) as usize,
+            None => self.audio.len(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn end(&self) -> i64 {
-        self.position + self.audio.len() as i64
+        self.position + self.len() as i64
+    }
+
+    /// What it plays and its outline (see the module docs); `drafts`: a draft render over a
+    /// production one (to compare them).
+    pub fn sound(&self, drafts: bool) -> (&Arc<Vec<f32>>, &Arc<Overview>, Plays) {
+        let Some(e) = &self.events else {
+            return (&self.audio, &self.overview, Plays::Audio);
+        };
+        let of = |rev: u32, prod: bool| {
+            self.renders
+                .iter()
+                .rev()
+                .find(|r| r.rev == rev && (r.quality == Quality::Production) == prod)
+        };
+        let order = if drafts { [false, true] } else { [true, false] };
+        for prod in order {
+            if let Some(r) = of(e.rev, prod) {
+                return (&r.audio, &r.overview, Plays::Render(r.quality));
+            }
+        }
+        if e.rev == 0 {
+            let p = match e.monitor {
+                Monitor::Device => Plays::Heard,
+                Monitor::Proxy => Plays::Proxy,
+            };
+            return (&self.audio, &self.overview, p);
+        }
+        match self
+            .renders
+            .iter()
+            .filter(|r| r.rev < e.rev)
+            .max_by_key(|r| r.rev)
+        {
+            Some(r) => (&r.audio, &r.overview, Plays::Stale),
+            None => (&self.audio, &self.overview, Plays::Stale),
+        }
+    }
+
+    /// Whether its revision has a render at `quality`.
+    pub fn has_render(&self, quality: Quality) -> bool {
+        self.events.as_ref().is_some_and(|e| {
+            self.renders
+                .iter()
+                .any(|r| r.rev == e.rev && r.quality == quality)
+        })
     }
 }
 
@@ -354,6 +540,14 @@ pub struct Track {
     pub inserts: Vec<Slot>,
     /// The chain's latest print (not saved: found again in the cache).
     pub printed: Option<Printed>,
+    /// Its event takes play their draft renders over production ones (to compare them).
+    pub drafts: bool,
+    /// What it monitors a device played from keys through while armed: the device, or its
+    /// proxy (docs/MIDI_TAKES_PLAN.md decision 1: chosen by hand, never automatically).
+    pub monitor: Monitor,
+    /// What a take from the keyboard records: its notes (an event take, with the audio heard
+    /// as its first draft) or only its audio.
+    pub midi: bool,
 }
 
 impl Track {
@@ -370,6 +564,9 @@ impl Track {
             show_takes: false,
             inserts: Vec::new(),
             printed: None,
+            drafts: false,
+            monitor: Monitor::Device,
+            midi: true,
         }
     }
 
@@ -391,7 +588,12 @@ impl Track {
             .filter(|s| !s.bypass)
             .map(Slot::to_json)
             .collect();
-        (!on.is_empty()).then(|| format!("{}|{rate}|{}", k.id, Value::Array(on)))
+        let (audio, _, plays) = k.sound(self.drafts);
+        let what = match &k.events {
+            Some(e) => format!("{}@{}:{plays:?}:{}", k.id, e.rev, audio.len()),
+            None => k.id.clone(),
+        };
+        (!on.is_empty()).then(|| format!("{what}|{rate}|{}", Value::Array(on)))
     }
 
     /// The audio the mix plays and where it starts: the print of the active take (stale
@@ -403,7 +605,7 @@ impl Track {
         {
             return Some((k.position, &p.audio, true));
         }
-        Some((k.position, &k.audio, false))
+        Some((k.position, k.sound(self.drafts).0, false))
     }
 
     /// Whether the print playing is the chain as it is now.
@@ -427,6 +629,8 @@ pub struct Session {
     /// Every take loaded or recorded in this session, by id, deleted ones too: a state
     /// restored by undo takes them from here before reading their folders.
     known: HashMap<String, Take>,
+    /// Event takes' revisions read so far (take id, revision).
+    revisions: HashMap<(String, u32), Arc<Performance>>,
 }
 
 impl Session {
@@ -438,6 +642,7 @@ impl Session {
             tracks: vec![Track::new("Track 1")],
             armed: Some(0),
             known: HashMap::new(),
+            revisions: HashMap::new(),
         }
     }
 
@@ -569,7 +774,7 @@ impl Session {
         if i == t {
             return None;
         }
-        let n = take.audio.len() + (slot.tail_s.max(0.0) * self.rate as f64).round() as usize;
+        let n = take.len() + (slot.tail_s.max(0.0) * self.rate as f64).round() as usize;
         let mut out = vec![0f32; n];
         if let Some((start, audio, _)) = self.tracks[i].playing(self.rate) {
             for (j, o) in out.iter_mut().enumerate() {
@@ -645,12 +850,25 @@ impl Session {
             .unwrap_or(0)
     }
 
+    /// A take id never used in this session: past every take a track holds, every take it
+    /// has known (deleted ones too: undo brings them back) and every take folder on disk.
     fn next_id(&self) -> String {
+        let num = |id: &str| id.strip_prefix('t').and_then(|s| s.parse::<u32>().ok());
+        let on_disk: Vec<String> = std::fs::read_dir(self.dir.join("takes"))
+            .map(|d| {
+                d.flatten()
+                    .map(|e| e.file_name().to_string_lossy().into_owned())
+                    .collect()
+            })
+            .unwrap_or_default();
         let n = self
             .tracks
             .iter()
             .flat_map(|t| &t.takes)
-            .filter_map(|k| k.id.strip_prefix('t').and_then(|s| s.parse::<u32>().ok()))
+            .map(|k| k.id.as_str())
+            .chain(self.known.keys().map(String::as_str))
+            .chain(on_disk.iter().map(String::as_str))
+            .filter_map(num)
             .max()
             .unwrap_or(0);
         format!("t{:04}", n + 1)
@@ -658,9 +876,33 @@ impl Session {
 
     /// A recording made into a take of `track` (now its active one), its files written.
     pub fn add_take(&mut self, track: usize, rec: Recorded, device: &str) -> Result<(), String> {
+        self.add_take_heard(track, rec, device, Monitor::Device)
+            .map(|_| ())
+    }
+
+    /// [`Session::add_take`] for a recording heard through `monitor` (an event take's
+    /// audio is the device's, or the proxy's stand-in). Returns its id.
+    pub fn add_take_heard(
+        &mut self,
+        track: usize,
+        rec: Recorded,
+        device: &str,
+        monitor: Monitor,
+    ) -> Result<String, String> {
         let id = self.next_id();
+        let events = rec.performance.map(|(perf, from)| {
+            // The performance up to the take's last sample.
+            let mut p = (*perf).clone();
+            p.end = p.end.min(from + rec.samples.len() as u64);
+            Events {
+                perf: Arc::new(p),
+                rev: 0,
+                from,
+                monitor,
+            }
+        });
         let take = Take {
-            id,
+            id: id.clone(),
             position: rec.start - rec.latency,
             latency: rec.latency,
             device: device.to_string(),
@@ -671,13 +913,94 @@ impl Session {
             overview: Arc::new(Overview::of(&rec.samples, OVERVIEW_BIN)),
             audio: Arc::new(rec.samples),
             rendered_from: None,
+            events,
+            renders: Vec::new(),
         };
         write_take(&self.dir, &take, self.rate)?;
+        if let Some(e) = &take.events {
+            write_revision(&self.dir, &take.id, 0, &e.perf)?;
+            self.revisions.insert((take.id.clone(), 0), e.perf.clone());
+        }
         self.known.insert(take.id.clone(), take.clone());
         let t = self.tracks.get_mut(track).ok_or("no such track")?;
         t.takes.push(take);
         t.active = Some(t.takes.len() - 1);
-        self.save()
+        self.save()?;
+        Ok(id)
+    }
+
+    /// Take `k` of `track` edited: `perf` saved as its next revision (the old ones stay),
+    /// now the one it plays. Returns the revision.
+    pub fn revise(&mut self, track: usize, k: usize, perf: Performance) -> Result<u32, String> {
+        let take = self
+            .tracks
+            .get(track)
+            .and_then(|t| t.takes.get(k))
+            .ok_or("no such take")?;
+        let id = take.id.clone();
+        let e = take.events.as_ref().ok_or("not an event take")?;
+        let rev = next_revision(&self.dir, &id).max(e.rev + 1);
+        let perf = Arc::new(perf);
+        write_revision(&self.dir, &id, rev, &perf)?;
+        self.revisions.insert((id.clone(), rev), perf.clone());
+        for t in self.tracks.iter_mut().flat_map(|t| t.takes.iter_mut()) {
+            if t.id == id
+                && let Some(e) = &mut t.events
+            {
+                e.perf = perf.clone();
+                e.rev = rev;
+            }
+        }
+        if let Some(t) = self.known.get_mut(&id)
+            && let Some(e) = &mut t.events
+        {
+            e.perf = perf.clone();
+            e.rev = rev;
+        }
+        self.save()?;
+        Ok(rev)
+    }
+
+    /// A render of take `id`'s revision `rev` at `quality` (`audio`: the whole
+    /// performance's), attached wherever the take is (undo keeps it).
+    pub fn attach_render(&mut self, id: &str, rev: u32, quality: Quality, audio: &[f32]) {
+        let Some(from) = self
+            .known
+            .get(id)
+            .and_then(|k| k.events.as_ref())
+            .map(|e| e.from as usize)
+        else {
+            return;
+        };
+        let a: Vec<f32> = audio.get(from..).unwrap_or(&[]).to_vec();
+        let r = TakeRender {
+            rev,
+            quality,
+            overview: Arc::new(Overview::of(&a, OVERVIEW_BIN)),
+            audio: Arc::new(a),
+        };
+        let takes = self
+            .tracks
+            .iter_mut()
+            .flat_map(|t| t.takes.iter_mut())
+            .chain(self.known.get_mut(id));
+        for t in takes {
+            if t.id == id {
+                t.renders
+                    .retain(|x| !(x.rev == rev && x.quality == quality));
+                t.renders.push(r.clone());
+            }
+        }
+    }
+
+    /// A revision of take `id` (read once).
+    fn revision(&mut self, id: &str, rev: u32) -> Result<Arc<Performance>, String> {
+        if let Some(p) = self.revisions.get(&(id.to_string(), rev)) {
+            return Ok(p.clone());
+        }
+        let p = Arc::new(read_revision(&self.dir, id, rev)?);
+        self.revisions.insert((id.to_string(), rev), p.clone());
+        Ok(p)
     }
 
     /// A track's chain rendered into a new take of `track` (now its active one) at
@@ -703,6 +1026,8 @@ impl Session {
             overview: Arc::new(Overview::of(&samples, OVERVIEW_BIN)),
             audio: Arc::new(samples),
             rendered_from: Some(from),
+            events: None,
+            renders: Vec::new(),
         };
         write_take(&self.dir, &take, self.rate)?;
         self.known.insert(id.clone(), take.clone());
@@ -736,6 +1061,14 @@ impl Session {
                         .map(|k| (k.id.clone(), json!(k.position)))
                         .collect::<serde_json::Map<_, _>>(),
                     "active": t.active_take().map(|k| k.id.clone()),
+                    "revisions": t
+                        .takes
+                        .iter()
+                        .filter_map(|k| k.events.as_ref().map(|e| (k.id.clone(), json!(e.rev))))
+                        .collect::<serde_json::Map<_, _>>(),
+                    "drafts": t.drafts,
+                    "monitor": t.monitor.name(),
+                    "record": if t.midi { "midi" } else { "audio" },
                 })
             })
             .collect();
@@ -770,6 +1103,12 @@ impl Session {
             track.mute = t["mute"].as_bool().unwrap_or(false);
             track.solo = t["solo"].as_bool().unwrap_or(false);
             track.show_takes = t["show_takes"].as_bool().unwrap_or(false);
+            track.drafts = t["drafts"].as_bool().unwrap_or(false);
+            track.monitor = t["monitor"]
+                .as_str()
+                .and_then(Monitor::from_name)
+                .unwrap_or(Monitor::Device);
+            track.midi = t["record"].as_str() != Some("audio");
             for s in t["inserts"].as_array().cloned().unwrap_or_default() {
                 track.inserts.push(Slot::from_json(&s)?);
             }
@@ -785,6 +1124,14 @@ impl Session {
                 };
                 if let Some(p) = t["positions"][id].as_i64() {
                     take.position = p;
+                }
+                let rev = t["revisions"][id].as_u64().unwrap_or(0) as u32;
+                if take.events.as_ref().is_some_and(|e| e.rev != rev) {
+                    let perf = self.revision(id, rev)?;
+                    if let Some(e) = &mut take.events {
+                        e.perf = perf;
+                        e.rev = rev;
+                    }
                 }
                 track.takes.push(take);
             }
@@ -844,6 +1191,7 @@ impl Session {
             tracks: Vec::new(),
             armed: None,
             known: HashMap::new(),
+            revisions: HashMap::new(),
         };
         s.restore(&v)?;
         Ok(s)
@@ -944,11 +1292,67 @@ pub fn transport_from(t: &Value) -> TransportSettings {
     .clamped()
 }
 
+/// A take's folder in the session's.
+pub fn take_dir(dir: &Path, id: &str) -> PathBuf {
+    dir.join("takes").join(id)
+}
+
+fn revision_path(dir: &Path, id: &str, rev: u32) -> PathBuf {
+    let d = take_dir(dir, id);
+    if rev == 0 {
+        d.join("events.json")
+    } else {
+        d.join(format!("events.{rev}.json"))
+    }
+}
+
+/// The next free revision number in take `id`'s folder.
+fn next_revision(dir: &Path, id: &str) -> u32 {
+    (1..)
+        .find(|&r| !revision_path(dir, id, r).exists())
+        .expect("a free revision")
+}
+
+fn write_revision(dir: &Path, id: &str, rev: u32, perf: &Performance) -> Result<(), String> {
+    let p = revision_path(dir, id, rev);
+    if p.exists() {
+        return Err(format!(
+            "{} exists: revisions are never written over",
+            p.display()
+        ));
+    }
+    std::fs::create_dir_all(take_dir(dir, id)).map_err(|e| e.to_string())?;
+    std::fs::write(
+        &p,
+        serde_json::to_string(&perf.to_json()).unwrap_or_default() + "\n",
+    )
+    .map_err(|e| format!("{}: {e}", p.display()))
+}
+
+fn read_revision(dir: &Path, id: &str, rev: u32) -> Result<Performance, String> {
+    let p = revision_path(dir, id, rev);
+    let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?;
+    Performance::from_json(&v).map_err(|e| format!("{}: {e}", p.display()))
+}
+
+/// The audio file a take keeps what was heard in: the device's (`draft.wav`), or the
+/// proxy's stand-in (`proxy.wav`: never a take's audio once it is rendered).
+fn heard_file(k: &Take) -> &'static str {
+    match &k.events {
+        Some(e) if e.monitor == Monitor::Proxy => "proxy.wav",
+        _ => "draft.wav",
+    }
+}
+
 fn write_take(dir: &Path, k: &Take, rate: u32) -> Result<(), String> {
-    let d = dir.join("takes").join(&k.id);
-    std::fs::create_dir_all(&d).map_err(|e| format!("{}: {e}", d.display()))?;
+    let d = take_dir(dir, &k.id);
+    // A new take's folder is new: nothing recorded is ever written over.
+    std::fs::create_dir_all(dir.join("takes")).map_err(|e| format!("{}: {e}", dir.display()))?;
+    std::fs::create_dir(&d)
+        .map_err(|e| format!("{}: {e} (takes are never written over)", d.display()))?;
     let x: Vec<f64> = k.audio.iter().map(|&v| v as f64).collect();
-    crate::audio::write_wav(&d.join("draft.wav"), &x, rate)?;
+    crate::audio::write_wav(&d.join(heard_file(k)), &x, rate)?;
     let v = json!({
         "id": k.id,
         "position": k.position,
@@ -963,6 +1367,9 @@ fn write_take(dir: &Path, k: &Take, rate: u32) -> Result<(), String> {
     if let Some(from) = &k.rendered_from {
         v["rendered_from"] = from.clone();
     }
+    if let Some(e) = &k.events {
+        v["events"] = json!({"from": e.from, "monitor": e.monitor.name()});
+    }
     let p = d.join("take.json");
     std::fs::write(
         &p,
@@ -976,7 +1383,12 @@ fn read_take(dir: &Path, id: &str, rate: u32) -> Result<Take, String> {
     let p = d.join("take.json");
     let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
     let v: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?;
-    let w = crate::audio::decode(&d.join("draft.wav"))?;
+    let wav = ["draft.wav", "proxy.wav"]
+        .iter()
+        .map(|f| d.join(f))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| d.join("draft.wav"));
+    let w = crate::audio::decode(&wav)?;
     if w.rate != rate {
         return Err(format!(
             "{}: {} Hz in a {rate} Hz session",
@@ -985,6 +1397,18 @@ fn read_take(dir: &Path, id: &str, rate: u32) -> Result<Take, String> {
         ));
     }
     let audio: Vec<f32> = w.mono().iter().map(|&v| v as f32).collect();
+    let events = match &v["events"] {
+        Value::Null => None,
+        e => Some(Events {
+            perf: Arc::new(read_revision(dir, id, 0)?),
+            rev: 0,
+            from: e["from"].as_u64().unwrap_or(0),
+            monitor: e["monitor"]
+                .as_str()
+                .and_then(Monitor::from_name)
+                .unwrap_or(Monitor::Device),
+        }),
+    };
     Ok(Take {
         id: id.to_string(),
         position: v["position"].as_i64().unwrap_or(0),
@@ -995,6 +1419,8 @@ fn read_take(dir: &Path, id: &str, rate: u32) -> Result<Take, String> {
         overview: Arc::new(Overview::of(&audio, OVERVIEW_BIN)),
         audio: Arc::new(audio),
         rendered_from: v.get("rendered_from").filter(|f| !f.is_null()).cloned(),
+        events,
+        renders: Vec::new(),
     })
 }
 
@@ -1016,14 +1442,14 @@ mod tests {
                     expected.push(v);
                 }
             }
-            r.capture(at, &raw, 0, 77);
+            r.capture(at, &raw, 0, 77, None);
             at += 300;
         }
         let (start, latency, len, tail) = r.tail(1000).expect("recording");
         assert_eq!((start, latency, len), (0, 77, expected.len()));
         assert_eq!(tail, expected[1000..]);
         r.armed = false;
-        r.capture(at, &[0.0; 300], 0, 77);
+        r.capture(at, &[0.0; 300], 0, 77, None);
         let rec = r.take_finished().expect("a take");
         assert_eq!(rec.start, 0);
         assert_eq!(rec.samples, expected);
@@ -1040,7 +1466,7 @@ mod tests {
             let mut left = 150;
             while left > 0 {
                 let len = left.min((400 - pos) as usize);
-                r.capture(pos, &vec![pos as f32; len], 100, 5);
+                r.capture(pos, &vec![pos as f32; len], 100, 5, None);
                 pos += len as i64;
                 left -= len;
                 if pos == 400 {
@@ -1073,6 +1499,8 @@ mod tests {
             audio: Arc::new(vec![v; 10]),
             overview: Arc::new(Overview::default()),
             rendered_from: None,
+            events: None,
+            renders: Vec::new(),
         };
         s.tracks[0].takes.push(take(5, 1.0));
         s.tracks[0].active = Some(0);
@@ -1109,15 +1537,23 @@ mod tests {
             start: 1000,
             latency: 240,
             samples: (0..4800).map(|i| (i as f32 * 0.01).sin() * 0.5).collect(),
+            performance: None,
         };
         s.add_take(0, rec.clone(), "tube_synth").expect("saved");
         s.tracks.push(Track::new("Bass"));
         s.tracks[1].pan = -0.5;
+        s.tracks[1].midi = false;
+        s.tracks[0].monitor = Monitor::Proxy;
         s.add_take(1, rec, "fender_5e3").expect("saved");
         let t = Session::load(&dir).expect("loads");
         assert_eq!(t.transport.bpm, 93.5);
         assert_eq!(t.tracks.len(), 2);
         assert_eq!(t.tracks[1].pan, -0.5);
+        assert!(!t.tracks[1].midi && t.tracks[0].midi);
+        assert_eq!(
+            (t.tracks[0].monitor, t.tracks[1].monitor),
+            (Monitor::Proxy, Monitor::Device)
+        );
         let (a, b) = (&s.tracks[0].takes[0], &t.tracks[0].takes[0]);
         assert_eq!(b.position, 760);
         assert_eq!(a.audio, b.audio); // float32 on disk: bit for bit
@@ -1143,6 +1579,7 @@ mod tests {
             start: 0,
             latency: 0,
             samples: vec![v; 100],
+            performance: None,
         };
         s.add_take(0, rec(0.1), "x").expect("saved");
         let one = s.state();
@@ -1183,6 +1620,7 @@ mod tests {
             start: 10,
             latency: 0,
             samples: vec![v; 100],
+            performance: None,
         };
         s.add_take(0, rec(0.1), "x").expect("saved");
         assert_eq!(s.tracks[0].chain_signature(1000), None);
@@ -1259,6 +1697,7 @@ mod tests {
             start,
             latency: 0,
             samples: x,
+            performance: None,
         };
         s.add_take(0, rec(100, vec![0.1; 50]), "x").expect("saved");
         s.add_take(1, rec(120, (0..20).map(|i| i as f32).collect()), "x")
@@ -1328,6 +1767,117 @@ mod tests {
             (s.tracks[0].id.as_str(), s.tracks[1].id.as_str()),
             ("track1", "track2")
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn event_takes_keep_every_revision_and_play_their_best_render() {
+        use crate::performance::{Ev, Playing};
+        let dir = std::env::temp_dir().join(format!("varimu_events_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        let perf = Performance {
+            device: "tube_voice".into(),
+            quality: Quality::Draft1x,
+            rate: 1000,
+            values: Vec::new(),
+            playing: Playing::default(),
+            gain: 1.0,
+            noise: false,
+            start_note: 57,
+            start_low: false,
+            events: vec![
+                (
+                    120,
+                    Ev::On {
+                        note: 60,
+                        velocity: 90,
+                    },
+                ),
+                (300, Ev::Off { note: 60 }),
+            ],
+            knobs: Vec::new(),
+            knobs_applied: true,
+            end: 900,
+        };
+        let rec = Recorded {
+            start: 500,
+            latency: 20,
+            samples: vec![0.25; 400],
+            performance: Some((Arc::new(perf.clone()), 100)),
+        };
+        let id = s
+            .add_take_heard(0, rec, "tube_voice", Monitor::Device)
+            .expect("saved");
+        let k = s.tracks[0].active_take().unwrap();
+        // The performance ends with the take; the take plays its audio as heard.
+        assert_eq!((k.len(), k.events.as_ref().unwrap().perf.end), (400, 500));
+        assert_eq!(k.sound(false).2, Plays::Heard);
+        let before = s.state();
+        // An edit: a new revision, stale until it is rendered.
+        let mut notes = k.events.as_ref().unwrap().perf.notes();
+        notes[0].note = 62;
+        let edited = k.events.as_ref().unwrap().perf.edited(&notes, None);
+        assert_eq!(s.revise(0, 0, edited).expect("revised"), 1);
+        assert!(dir.join("takes").join(&id).join("events.1.json").is_file());
+        assert_eq!(
+            s.tracks[0].active_take().unwrap().sound(false).2,
+            Plays::Stale
+        );
+        s.attach_render(&id, 1, Quality::Draft1x, &vec![0.5; 500]);
+        let k = s.tracks[0].active_take().unwrap();
+        assert_eq!(k.sound(false).2, Plays::Render(Quality::Draft1x));
+        assert_eq!(k.sound(false).0.len(), 400); // from the take's first sample
+        s.attach_render(&id, 1, Quality::Production, &vec![0.75; 500]);
+        let k = s.tracks[0].active_take().unwrap();
+        assert_eq!(k.sound(false).2, Plays::Render(Quality::Production));
+        assert_eq!(k.sound(true).2, Plays::Render(Quality::Draft1x));
+        // Undo: revision 0 again, its renders kept for a redo.
+        let after = s.state();
+        s.restore(&before).expect("restored");
+        let k = s.tracks[0].active_take().unwrap();
+        assert_eq!(
+            (k.events.as_ref().unwrap().rev, k.sound(false).2),
+            (0, Plays::Heard)
+        );
+        assert_eq!(k.events.as_ref().unwrap().perf.notes()[0].note, 60);
+        s.restore(&after).expect("redone");
+        let k = s.tracks[0].active_take().unwrap();
+        assert_eq!(k.sound(false).2, Plays::Render(Quality::Production));
+        // Saved and loaded: the revision playing (renders are found again by the view).
+        let u = Session::load(&dir).expect("loads");
+        let k = u.tracks[0].active_take().unwrap();
+        let e = k.events.as_ref().unwrap();
+        assert_eq!((e.rev, e.from, e.monitor), (1, 100, Monitor::Device));
+        assert_eq!(e.perf.notes()[0].note, 62);
+        assert_eq!(k.audio.len(), 400);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_deleted_takes_id_is_never_reused() {
+        let dir = std::env::temp_dir().join(format!("varimu_ids_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let rec = |v: f32| Recorded {
+            start: 0,
+            latency: 0,
+            samples: vec![v; 50],
+            performance: None,
+        };
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        s.add_take(0, rec(0.1), "x").expect("saved");
+        s.tracks[0].takes.clear();
+        s.tracks[0].active = None;
+        s.add_take(0, rec(0.2), "x").expect("saved");
+        assert_eq!(s.tracks[0].takes[0].id, "t0002");
+        // A session opened afresh (nothing known) still skips the folders on disk.
+        s.save().expect("saved");
+        let mut u = Session::load(&dir).expect("loads");
+        u.tracks[0].takes.clear();
+        u.add_take(0, rec(0.3), "x").expect("saved");
+        assert_eq!(u.tracks[0].takes[0].id, "t0003");
+        let first = crate::audio::decode(&dir.join("takes/t0001/draft.wav")).expect("kept");
+        assert_eq!(first.mono()[0] as f32, 0.1);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

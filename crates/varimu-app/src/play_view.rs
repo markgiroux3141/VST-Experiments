@@ -24,8 +24,8 @@ use varimu_app::live::Circuit;
 use varimu_app::midi::{self, Keyboard, MOD_WHEEL, Wave};
 use varimu_app::panel::{self, DEVICES, Device, Kind, Knob};
 use varimu_app::player::{
-    AHEAD_S, END_MIX, EndDevice, INPUT_BUFFER_S, InputDevice, Playback, Player, Source, State,
-    input_devices,
+    AHEAD_S, END_MIX, EndDevice, INPUT_BUFFER_S, InputDevice, Playback, Player, ProxyStart, Source,
+    State, input_devices,
 };
 use varimu_app::prefs::{ALIGNMENT_DBFS, Prefs};
 use varimu_app::render::{Rendered, render};
@@ -209,6 +209,12 @@ pub struct PlayView {
     /// offline, with the running compensation off while it is set (it would undo the
     /// difference the trim matches).
     ab_trim_db: Option<f64>,
+    /// The keys play the device's proxy (docs/MIDI_TAKES_PLAN.md N2) in its place: the
+    /// choice, the device's tables (None: it has no proxy), and whether the player playing
+    /// is the proxy.
+    proxy_on: bool,
+    proxy_tables: Option<Arc<varimu_app::proxy::Tables>>,
+    playing_proxy: bool,
     error: Option<String>,
 }
 
@@ -323,6 +329,9 @@ impl PlayView {
             sampler_on: false,
             kit: SamplerPanel::new(&repo),
             ab_trim_db: None,
+            proxy_on: false,
+            proxy_tables: None,
+            playing_proxy: false,
             error: None,
         };
         if let Some(id) = &args.device {
@@ -454,6 +463,15 @@ impl PlayView {
     }
 
     fn load_knobs(&mut self) {
+        self.proxy_tables = DEVICES
+            .get(self.device)
+            .filter(|_| self.drawing_device().is_none())
+            .and_then(|d| {
+                varimu_app::proxy::Tables::load(&self.config_dir, d.id)
+                    .ok()
+                    .flatten()
+            })
+            .map(Arc::new);
         if let Some(d) = self.drawing_device() {
             let k = panel::knobs(&DRAWING, &d.spec);
             let flags = (d.spec.noise.is_some(), d.spec.heaters.is_some());
@@ -659,6 +677,53 @@ impl PlayView {
     /// The chosen device: its label and id (a take records the id).
     pub fn device_label_id(&self) -> (String, String) {
         self.device_names()
+    }
+
+    /// Whether this view's player plays a device from the MIDI keyboard (a take recorded
+    /// from it is an event take: docs/MIDI_TAKES_PLAN.md N1).
+    pub fn plays_keys(&self) -> bool {
+        self.player.is_some()
+            && !self.adopted
+            && self.live_input
+            && self.midi
+            && !self.sampler_on
+            && self.keyboard.is_some()
+            && self.device < DEVICES.len()
+    }
+
+    /// Whether the chosen device has a proxy (its measured tables).
+    pub fn has_proxy(&self) -> bool {
+        self.proxy_tables.is_some()
+    }
+
+    /// Whether the player playing is the device's proxy.
+    pub fn monitor_proxy(&self) -> bool {
+        self.player.is_some() && !self.adopted && self.playing_proxy
+    }
+
+    /// Monitor through the proxy (on) or the device; a keyboard playing restarts on the
+    /// other.
+    pub fn set_monitor_proxy(&mut self, on: bool) {
+        if on == self.proxy_on {
+            return;
+        }
+        self.proxy_on = on;
+        if self.plays_keys() {
+            self.start();
+        }
+    }
+
+    /// A key pressed (`on`) or let go on the keyboard playing, as if played (a piano roll's
+    /// preview of a note). Nothing while no keyboard plays.
+    pub fn preview_key(&self, note: u8, velocity: u8, on: bool) {
+        if let Some(kb) = &self.keyboard {
+            let m = if on {
+                [0x90, note & 127, velocity.clamp(1, 127)]
+            } else {
+                [0x80, note & 127, 0]
+            };
+            kb.keys.message(&m);
+        }
     }
 
     /// What Play does every frame for a device played live, while another view is shown:
@@ -878,6 +943,37 @@ impl PlayView {
             return;
         };
         let buffer = self.input_buffer_ms / 1000.0;
+        self.playing_proxy = false;
+        // The proxy in the device's place (its own small buffer: it costs nothing).
+        if self.proxy_on
+            && let (Some(t), Some(d)) = (self.proxy_tables.clone(), DEVICES.get(self.device))
+        {
+            let result = Keyboard::open(Some(&port)).and_then(|kb| {
+                let start = ProxyStart {
+                    tables: t,
+                    device: d.id.to_string(),
+                    quality: d.quality,
+                    voices: 1,
+                    noise: self.noise,
+                };
+                let v = panel::values(&self.knobs);
+                let p = Player::start_proxy(kb.keys.clone(), start, v, s.clone(), buffer)?;
+                p.set_velocity_range(self.velocity_range_db());
+                p.set_retrigger(self.retrigger);
+                self.wheel_seen = kb.keys.cc(MOD_WHEEL).1;
+                Ok((kb, p))
+            });
+            match result {
+                Ok((kb, p)) => {
+                    self.keyboard = Some(kb);
+                    self.player = Some(p);
+                    self.playing_proxy = true;
+                    self.error = None;
+                }
+                Err(e) => self.error = Some(e),
+            }
+            return;
+        }
         let result = Keyboard::open(Some(&port)).and_then(|kb| {
             let c = s.cores().and_then(|c| self.circuit(c))?;
             let v = panel::values(&self.knobs);
@@ -1794,6 +1890,27 @@ impl PlayView {
                 self.midi_port = self.midi_port.min(self.midi_ports.len().saturating_sub(1));
             }
         });
+        if let Some(t) = self.proxy_tables.clone() {
+            let mut on = self.proxy_on;
+            let stale = t.stale(&self.config_dir);
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut on, "Monitor through the proxy")
+                    .on_hover_text(format!(
+                        "A cheap digital stand-in that follows the panel through tables measured on \
+                         the device (config/proxy/{}.json). Takes recorded through it render on \
+                         the device behind the recording. The heaters, the reservoir and the mains \
+                         are heard in the render only.",
+                        t.device
+                    ));
+                if stale {
+                    ui.label(RichText::new("tables stale").small().color(theme::WARN))
+                        .on_hover_text("The circuit file changed since the proxy's tables were measured: rerun scripts/proxy_tables.py");
+                }
+            });
+            if on != self.proxy_on {
+                self.set_monitor_proxy(on);
+            }
+        }
         // A device with an oscillator of its own (a pitch control input) plays it from the
         // keys; the test oscillator stays silent, so its waveform does nothing there.
         let own_oscillator = DEVICES

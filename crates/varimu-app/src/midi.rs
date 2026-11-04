@@ -8,7 +8,8 @@
 
 use std::sync::{Arc, Mutex};
 
-use circuitsim::media::NoteEvent;
+use crate::performance::Ev;
+
 use midir::{Ignore, MidiInput, MidiInputConnection};
 
 /// The mod wheel's controller number.
@@ -41,9 +42,10 @@ struct KeysInner {
     presses: u64,
     /// The note-ons not yet taken (note, velocity), for the sampler: each key its own hit.
     ons: std::collections::VecDeque<(u8, u8)>,
-    /// Every key down and up and the sustain pedal not yet taken, as they arrived: a medium
-    /// played by keys (the Rhodes harp, docs/RHODES_PLAN.md RH3).
-    events: std::collections::VecDeque<(std::time::Instant, NoteEvent)>,
+    /// Every key down and up, aftertouch and the sustain pedal not yet taken, as they
+    /// arrived: the player places each in its block (a medium played by keys, the Rhodes
+    /// harp, docs/RHODES_PLAN.md RH3; a take's performance, docs/MIDI_TAKES_PLAN.md N1).
+    events: std::collections::VecDeque<(std::time::Instant, Ev)>,
     /// The sustain pedal down (CC 64 at 64 and over).
     pedal: bool,
 }
@@ -68,32 +70,35 @@ impl Default for KeysInner {
 }
 
 impl KeysInner {
-    /// A message's note event, if it is one: a key down or up, the sustain pedal moving, or
-    /// all notes off (every key held up).
+    /// A message's key event, if it is one: a key down or up, aftertouch (channel, or the
+    /// sounding key's), the sustain pedal moving, or all notes off (every key held up).
     fn note_event(&mut self, m: &[u8]) {
         let now = std::time::Instant::now();
-        let mut push = |e: NoteEvent| {
+        let sounding = self.held.last().map(|&(n, _)| n);
+        let mut push = |e: Ev| {
             self.events.push_back((now, e));
             while self.events.len() > MAX_EVENTS {
                 self.events.pop_front();
             }
         };
         match (m[0] & 0xf0, m.get(1).copied(), m.get(2).copied()) {
-            (0x90, Some(note), Some(vel)) if vel > 0 => push(NoteEvent::On {
+            (0x90, Some(note), Some(vel)) if vel > 0 => push(Ev::On {
                 note: note & 127,
                 velocity: vel & 127,
             }),
-            (0x80 | 0x90, Some(note), _) => push(NoteEvent::Off { note: note & 127 }),
+            (0x80 | 0x90, Some(note), _) => push(Ev::Off { note: note & 127 }),
+            (0xd0, Some(p), _) => push(Ev::Pressure(p & 127)),
+            (0xa0, Some(note), Some(p)) if sounding == Some(note) => push(Ev::Pressure(p & 127)),
             (0xb0, Some(64), Some(v)) => {
                 let down = v >= 64;
                 if down != self.pedal {
                     self.pedal = down;
-                    push(NoteEvent::Pedal { down });
+                    push(Ev::Pedal(down));
                 }
             }
             (0xb0, Some(120 | 123), _) => {
                 for &(note, _) in &self.held.clone() {
-                    push(NoteEvent::Off { note });
+                    push(Ev::Off { note });
                 }
             }
             _ => {}
@@ -102,8 +107,9 @@ impl KeysInner {
 }
 
 impl Keys {
-    /// The key and pedal events since the last call, oldest first, with when each arrived.
-    pub fn take_events(&self) -> Vec<(std::time::Instant, NoteEvent)> {
+    /// The key, aftertouch and pedal events since the last call, oldest first, with when
+    /// each arrived.
+    pub fn take_events(&self) -> Vec<(std::time::Instant, Ev)> {
         self.inner.lock().expect("keys").events.drain(..).collect()
     }
 
@@ -322,23 +328,25 @@ mod tests {
         k.message(&[0x80, 60, 40]);
         k.message(&[0x90, 62, 90]);
         k.message(&[0xb0, 123, 0]); // all notes off: the held key up
-        let ev: Vec<NoteEvent> = k.take_events().into_iter().map(|(_, e)| e).collect();
+        k.message(&[0xd0, 33]);
+        let ev: Vec<Ev> = k.take_events().into_iter().map(|(_, e)| e).collect();
         assert_eq!(
             ev,
             vec![
-                NoteEvent::On {
+                Ev::On {
                     note: 60,
                     velocity: 100
                 },
-                NoteEvent::Off { note: 64 },
-                NoteEvent::Pedal { down: true },
-                NoteEvent::Pedal { down: false },
-                NoteEvent::Off { note: 60 },
-                NoteEvent::On {
+                Ev::Off { note: 64 },
+                Ev::Pedal(true),
+                Ev::Pedal(false),
+                Ev::Off { note: 60 },
+                Ev::On {
                     note: 62,
                     velocity: 90
                 },
-                NoteEvent::Off { note: 62 },
+                Ev::Off { note: 62 },
+                Ev::Pressure(33),
             ]
         );
         assert!(k.take_events().is_empty());

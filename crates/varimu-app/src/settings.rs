@@ -16,7 +16,7 @@ use varimu_circuit::Cores;
 use varimu_circuit::yaml::{self, Map, Value};
 
 /// A quality: which blocks go on top of `circuitsim`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Quality {
     Production,
     Draft,
@@ -304,6 +304,16 @@ impl Settings {
             all_unknowns: false,
             ..d
         })
+    }
+
+    /// The options a [`crate::live::Live`] stream runs with: the stream's at the live
+    /// qualities, a render's (its local error control) at production (an event take
+    /// rendered offline at production, docs/MIDI_TAKES_PLAN.md).
+    pub fn live_options(&self) -> Result<Options, String> {
+        match self.quality {
+            Quality::Production => self.run_options(),
+            _ => self.stream_options(),
+        }
     }
 
     /// The sections of `ir` that `partition` puts on other threads: the titles the

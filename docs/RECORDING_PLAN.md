@@ -369,9 +369,18 @@ and the production render (the done-when above).
 - **2026-11-04:** steps 2-3 continue as [MIDI_TAKES_PLAN.md](MIDI_TAKES_PLAN.md)'s N1,
   which adds a proxy monitor, renders behind the recording, a piano roll (T6's note
   editor pulled forward) and polyphony.
-- **Not yet:** events (step 2: a take re-renders from nothing yet), keys still land on
-  10 ms block boundaries, trimming and splitting takes (T6), the session's rate is the
-  player's (48 kHz: decision 2 still open).
+- **Steps 2-3 built 2026-11-04 (MIDI_TAKES_PLAN.md N1, its "Status"):** a take from the
+  keyboard is an event take (`varimu_app::performance`: keys at their samples within the
+  block, knob changes logged where they landed, a defined start: Record restarts the device
+  fresh in the background, then the count-in); `varimu_app::take_render` replays it. On
+  tube_synth through the real player (`examples/take_replay.rs`: a sub-block note, legato,
+  both sides of the range split, aftertouch, CUTOFF turned, the LFO switched off: a
+  restarted stream) the replay at draft-2x equals the audio heard bit for bit, twice; it
+  renders at production (25x slower than real time). The 5E3 input take and the
+  user's by-ear check are still open (below).
+- **Not yet:** input takes as events (the 5E3: a take from an audio input is still its
+  audio only), trimming and splitting takes (T6), the session's rate is the player's
+  (48 kHz: decision 2 still open). (Events and keys at their samples: built, above.)
 
 **T3. Tracks and overdub.** The session format, lanes, the playback mix, overdub, loop
 recording, mute / solo / volume / pan, save and load, undo.
