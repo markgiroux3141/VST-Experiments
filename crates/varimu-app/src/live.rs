@@ -33,10 +33,11 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use circuitsim::ir::{CircuitIr, Element};
+use circuitsim::media::NoteEvent;
 use circuitsim::stream::Stream;
 use varimu_circuit::spec::{self, CircuitSpec, FullScale};
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_events};
+use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_live};
 
 use crate::resample::{StreamResampler, resample};
 use crate::settings::Settings;
@@ -59,6 +60,9 @@ pub struct Circuit {
     heaters: Heaters,
     /// Gas thyratrons as their event kernels, where the file names tables (technique K).
     events: bool,
+    /// Its speakers without their readouts, `out` their terminal voltage at this many volts
+    /// full scale (a live build: docs/RHODES_PLAN.md RH3; None: as the file has them).
+    live_speaker_v: Option<f64>,
 }
 
 impl Circuit {
@@ -76,6 +80,7 @@ impl Circuit {
             noise: true,
             heaters: Heaters::File,
             events: false,
+            live_speaker_v: None,
         })
     }
 
@@ -89,6 +94,7 @@ impl Circuit {
             noise: true,
             heaters: Heaters::File,
             events: false,
+            live_speaker_v: None,
         }
     }
 
@@ -96,6 +102,13 @@ impl Circuit {
     /// the live qualities'), where the file names tables for them.
     pub fn with_events(mut self, on: bool) -> Circuit {
         self.events = on;
+        self
+    }
+
+    /// Its speakers without their readouts when `v` is Some (`out` their terminal voltage,
+    /// `v` volts at full scale: a device played live, `panel::Device::live_speaker_v`).
+    pub fn with_live_speaker(mut self, v: Option<f64>) -> Circuit {
+        self.live_speaker_v = v;
         self
     }
 
@@ -130,11 +143,19 @@ impl Circuit {
     /// Its volts at full scale in and out: the file's `full_scale`, or the settings'
     /// `full_scale_volts_peak` for both (`varimu.sim.io.full_scale`).
     pub fn full_scale(&self, s: &Settings) -> FullScale {
-        self.spec.full_scale.unwrap_or(FullScale {
+        let fs = self.spec.full_scale.unwrap_or(FullScale {
             input_v: s.full_scale_volts_peak,
             output_v: s.full_scale_volts_peak,
             output_pascals: false,
-        })
+        });
+        match self.live_speaker_v {
+            Some(v) => FullScale {
+                output_v: v,
+                output_pascals: false,
+                ..fs
+            },
+            None => fs,
+        }
     }
 
     pub fn build(&self, values: &Values) -> Result<CircuitIr, String> {
@@ -154,7 +175,7 @@ impl Circuit {
                     .devices
                     .iter()
                     .any(|(_, e)| e.as_map().is_some_and(|m| m.get("events").is_some())));
-        build_ir_events(
+        build_ir_live(
             &self.lib,
             &self.spec,
             &p,
@@ -162,6 +183,7 @@ impl Circuit {
             noise,
             self.heaters,
             events,
+            self.live_speaker_v.is_none(),
         )
         .map_err(|e| e.to_string())
     }
@@ -211,6 +233,7 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
             Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
+            Element::Harp(h) => ("Harp", &h.name, vec![&h.out]),
             Element::ThyratronEvents(t) => {
                 ("ThyratronEvents", &t.name, vec![&t.a, &t.g, &t.w, &t.k])
             }
@@ -404,6 +427,8 @@ pub struct Live {
     lag: usize,
     /// The control inputs' last values (IR order): where their next block starts.
     controls: Vec<f64>,
+    /// Note events for the next block (offsets at the simulation's rate).
+    notes: Vec<(usize, NoteEvent)>,
 }
 
 impl Live {
@@ -498,6 +523,7 @@ impl Live {
             up,
             lag,
             controls: c0,
+            notes: Vec::new(),
         })
     }
 
@@ -569,6 +595,24 @@ impl Live {
     /// stream's lag).
     pub fn process(&mut self, x: &[f64]) -> Result<(Vec<f32>, Meter), String> {
         self.process_with(x, &[])
+    }
+
+    /// Whether the circuit has a medium played by keys (a harp: [`Live::process_notes`]).
+    pub fn has_keys(&self) -> bool {
+        self.run.stream.has_keys()
+    }
+
+    /// [`Live::process_with`] with a keyboard's events for the circuit's media played by
+    /// keys (a harp), each at its sample in the block (host rate, in order).
+    pub fn process_notes(
+        &mut self,
+        x: &[f64],
+        controls: &[&[f64]],
+        notes: &[(usize, NoteEvent)],
+    ) -> Result<(Vec<f32>, Meter), String> {
+        let k = self.s.oversample as usize;
+        self.notes = notes.iter().map(|&(i, e)| (i * k, e)).collect();
+        self.process_with(x, controls)
     }
 
     /// [`Live::process`] with the control inputs' samples over the block (IR order,
@@ -658,6 +702,16 @@ impl Live {
             })
         };
         let fs = self.run.fs;
+        let notes = std::mem::take(&mut self.notes);
+        if !notes.is_empty() {
+            self.run
+                .stream
+                .queue_notes(&notes)
+                .map_err(|e| e.to_string())?;
+            if let Some(new) = &mut self.fade {
+                new.stream.queue_notes(&notes).map_err(|e| e.to_string())?;
+            }
+        }
         let out = self
             .run
             .stream

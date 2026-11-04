@@ -9,6 +9,67 @@ accurate"). Picked up 2026-11-04 (the user: "let's build the rhodes"): RH1 is bu
 "Status". It expands INSTRUMENT_PLAN.md's section B (Rhodes) and its milestone I2; the
 order below is a recommendation, and the open decisions are the user's.
 
+## Status (2026-11-04): RH3 built, the harp in circuitsim, played live
+
+The harp is a medium in the netlist, played by note events, compiled from RH1-RH2's Python
+into a component, and it plays from a MIDI keyboard into the 5E3 in real time with every key
+ringing.
+
+- **The component** `MK1_HARP@1` (kind `ep_harp`; `varimu/rhodes/compile.py`,
+  `scripts/compile_rhodes_harp.py [--check]`, 3 s): `config/components/mk1_harp/1.yaml` pins
+  its data `1.harp.json` (3.7 MB) by sha256, both loaders checking it. Per key, the live
+  tier (`key._System`) free and under the felt: the complex modes halved (the upper of each
+  conjugate pair, outputs doubled), the strike point's and the tip's rows, the damper's
+  transfer between the two systems, and the arc's quadratic form reduced to rank 3-4 (an SVD
+  of the slopes weighted by a strike's displacement per mode: a struck key's EMF within
+  -114 dB of the full forms; rank 2 was -76 dB). Once for all keys: the flux map's bicubic
+  B-spline, the velocity law, the contact window, the sleep threshold, and the coils (1425
+  ohm, 0.327 H, their sources moved here from the circuit). Compiling all 73 keys took 452 s
+  until each worker had one BLAS thread.
+- **The medium** (circuitsim's `harp.rs`; IR `Harp`, `media::NoteEvent`): it senses nothing,
+  so it renders ahead in chunks of 256 steps, up to the last step whose events are known
+  (`Transient::queue_note`, `Stream::queue_notes`, `simulate_notes`, Python `simulate(notes=)`
+  and `fast.run_transient(notes=)`). The voices run at the step rate (in band within -72 to
+  -110 dB of 8x it), the contact at 384 kHz (768 kHz changes nothing measurable). The
+  hammer's window ends early once it is falling below the strike point's reach (exact). The
+  flux map is evaluated as a bicubic polynomial per span (Horner, its span cached). Modes
+  under 1e-100 are zeroed at sleep checks: decaying into subnormals, 73 keys ran 30x slower
+  than real time after a second. With more than four voices awake, a chunk's voices are
+  shared between the calling thread and up to three workers, each voice rendering into its
+  own buffer and summed in order (the same bit for bit on any number of threads).
+- **Agreement:** Rust against the Python reference (`harp.render`'s internal EMF, the
+  voices at 2x, the contact at 4x) at -128 dB rms over strikes, a re-strike, the pedal and
+  releases (`tests/test_rhodes_compiled.py`, bound -110 dB); the halved modes exactly, the
+  reduced arc within 0.5% once the tine rings. `crates/circuitsim/tests/harp.rs`: the same on
+  any number of threads, events landing at their step (a late one at the next), the felt,
+  the pedal, a stream fed notes block by block equal to the whole run.
+- **The part** `harp: [out]` (component, rate_hz, contact_rate_hz) in both builders, bit for
+  bit (`tests/agreement.rs`: 43 cases, 7.3 M numbers; a case's harp names its model
+  "default", the fixture keeping it once); a `Harp` symbol for the editors.
+  `config/circuits/rhodes_stage_5e3.yaml` (regenerated) has the harp driving the Stage; its
+  audio input is unused.
+- **Live without the readout** (the user's choice below): `build_ir(..., speaker_readout=
+  False)` / `build_ir_live` put a speaker's terminal voltage on its `out` (both builders, a
+  fixture case for every speaker circuit); the app's `panel::Device::live_speaker_v` (20 V
+  full scale: the 5E3's largest swing clipping hard, 18.5-19.3 V; 60 V, its full scale
+  before C3, played it 10 dB down) plays the Rhodes so; the 5E3 device itself is unchanged
+  (C3's question stays open).
+- **The app:** `midi::Keys::take_events` (keys down and up, the sustain pedal, all notes
+  off), placed in the next block at their spacing (`player::note_offsets`: a block late at
+  most), `Live::process_notes`; the device `rhodes_stage_5e3` (draft-2x).
+- **Load** (`examples/play.rs --device rhodes_stage_5e3 --strike-all [VEL] [--restrike S]`,
+  2026-11-04, this desktop, 30 ms buffer): all 73 keys struck with the pedal down: 76-83%,
+  0 dropouts in 20 s; all re-struck at velocity 127 every 4 s: 80-84%, worst block 139%, 0
+  dropouts in 24 s; ~70 ms keys to ear. The harp alone (`examples/harp_bench.rs`): all 73
+  ringing 0.22x real time, 0.51x on one thread.
+- **Renders:** `scripts/rhodes_render.py` plays the MIDI through the medium (the demo's harp
+  0.5 s for 18.3 s, was 67 s in Python; `--reference` writes the harp's WAV from the Python
+  reference); the demo at production 7.6x real time.
+
+**Open (RH3):** the user plays it from a MIDI keyboard; RH4 (the amp: hearing it against the
+songs). Repeated notes sound alike (the user's first playing): why, and what varies on a real
+Rhodes, is parked in [RHODES_VARIATION.md](RHODES_VARIATION.md) (future work).
+
 ## Status (2026-11-04): RH2 built, through the 5E3; the user listens
 
 The whole 73-key harp in Python, played from MIDI through the Stage's controls into the 5E3
@@ -334,6 +395,9 @@ Each one is a physical condition, realistic by default:
 - **73 keys** (keys 8-80 of the 88's numbering, E1-E7).
 - **Out of the 5E3 from the start:** a Stage into the 5E3 (`fender_5e3`) from RH2's renders
   on; straight out of the pickup stays a check, not the product.
+- **The amp's speaker live (RH3):** live without the speaker's readout (Play hears the
+  terminal voltage; the speaker stays as the load, its pressure at production), as RH4
+  proposed. The one-way partition can still come later for the 5E3 itself (C3).
 
 ## Open decisions (the user's)
 
@@ -342,5 +406,3 @@ Each one is a physical condition, realistic by default:
   drums, the mics and rooms (INSTRUMENT_PLAN.md proposes the bell before it).
 - **How deep the production tier goes** (finite differences or FEM for the beams; whether
   it moves to the GPU).
-- **The amp's speaker live:** whether Play's speed question for the 5E3 (C3) is settled
-  first, or the speaker stays production-only here.

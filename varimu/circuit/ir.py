@@ -334,6 +334,23 @@ class Tape:
 
 
 @dataclass(frozen=True)
+class Harp:
+    """A Rhodes harp (docs/RHODES_PLAN.md, RH3; varimu.rhodes.harp is the reference,
+    circuitsim's harp.rs the port): its keys struck by note events, the pickups' EMFs summed
+    by their wiring driving `out` to ground one sample after the step that rendered them
+    (the harp senses nothing). The voices run at the least whole multiple of the step rate
+    at or above `rate_hz`, the hammer's contact at `contact_rate_hz`. `model` is the
+    compiled harp (a component version of kind ep_harp: varimu.rhodes.compile's data).
+    SPICE has no harp: ngspice sees `out` held at 0 V."""
+
+    name: str
+    out: str
+    rate_hz: float
+    contact_rate_hz: float
+    model: dict = dataclasses.field(hash=False, repr=False)
+
+
+@dataclass(frozen=True)
 class NoiseCurrent:
     """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
     source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
@@ -476,6 +493,7 @@ Element = (
     | Device
     | Plate
     | Tape
+    | Harp
     | ThyratronEvents
 )
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp | Thyratron
@@ -509,6 +527,7 @@ _PREFIX = {
     HeatedCathode: "B",
     Plate: "V",
     Tape: "V",
+    Harp: "V",
     ThyratronEvents: "X",
 }
 
@@ -535,6 +554,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.sense_pos, el.sense_neg, el.out, el.supply)
     if isinstance(el, Plate | Tape):
         return (el.sense_pos, el.sense_neg, el.out)
+    if isinstance(el, Harp):
+        return (el.out,)
     if isinstance(el, ThyratronEvents):
         return (el.a, el.g, el.w, el.k)
     return ()
@@ -718,6 +739,8 @@ class CircuitIR:
                 _validate_plate(el, self.input_node)
             elif isinstance(el, Tape):
                 _validate_tape(el, self.input_node)
+            elif isinstance(el, Harp):
+                _validate_harp(el, self.input_node)
             elif isinstance(el, ThyratronEvents):
                 _validate_thyratron_events(el)
             elif isinstance(el, Device):
@@ -1005,6 +1028,7 @@ _ELEMENT_KINDS = {
     "device": Device,
     "plate": Plate,
     "tape": Tape,
+    "harp": Harp,
     "thyratron_events": ThyratronEvents,
 }
 _MODEL_KINDS = {
@@ -1054,6 +1078,8 @@ def _encode(x: Any) -> Any:
         return x
     if isinstance(x, int | float):
         return float(x)
+    if isinstance(x, dict):  # a harp's compiled model
+        return {str(k): _encode(v) for k, v in x.items()}
     raise IRError(f"can't encode {type(x).__name__} in the IR")
 
 
@@ -1139,6 +1165,16 @@ def _validate_plate(el: Plate, input_node: str) -> None:
         raise IRError(f"{el.name}: its force senses {el.sense_pos} against itself")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its pickup drives {el.out} (ground or the input)")
+
+
+def _validate_harp(el: Harp, input_node: str) -> None:
+    """The Rust IR's checks for a harp's element (its model's arrays are checked there)."""
+    _positive(f"{el.name}.rate_hz", el.rate_hz)
+    _positive(f"{el.name}.contact_rate_hz", el.contact_rate_hz)
+    if not isinstance(el.model, dict) or el.model.get("format") != 1 or not el.model.get("keys"):
+        raise IRError(f"{el.name}.model: a compiled harp (format 1) with keys")
+    if el.out in (GROUND, input_node):
+        raise IRError(f"{el.name}: its pickups drive {el.out} (ground or the input)")
 
 
 def _validate_thyratron_events(el: ThyratronEvents) -> None:

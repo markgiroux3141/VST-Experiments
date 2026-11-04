@@ -61,6 +61,11 @@ Macro parts (connection; params, * = required):
                 parameter naming one), decay_500hz_s* (the damper, as the decay at 500 Hz):
                 the exciter between plus and minus, the pickup (its capacitance in series)
                 from out to ground (varimu.devices.plate, varimu.circuit.parts.plate)
+    harp        [out]; component* (a harp component version, NAME@N, or a parameter naming
+                one: kind ep_harp, varimu.rhodes.compile), rate_hz* and contact_rate_hz*
+                (numerics: the voices' and the hammer's contact's rate floors): the harp's
+                EMF behind its coils' resistance and inductance into out, its keys played
+                by note events (docs/RHODES_PLAN.md RH3; varimu.circuit.parts.harp)
     tape        [rec_plus, rec_minus, out]; component* (a tape component version, NAME@N, or
                 a parameter naming one), and the machine's physical values (all *):
                 speed_m_s, f_bias_hz, bias_a_m (the bias's deep-gap field), rec_gap_m,
@@ -203,6 +208,7 @@ class Context:
     types: dict[str, str] = field(default_factory=dict)  # model name -> its device's name
     heaters: str | None = None  # heated cathodes (B6): "warm" | "cold" start, None: off
     events: bool = False  # thyratrons as their event kernels (H3)
+    speaker_readout: bool = True  # False: a speaker's terminal voltage on its `out` (live)
     replaced_models: set[str] = field(default_factory=set)  # model names K replaced
     # The literal bias's substeps of every tape an events build reduced: the sections at
     # them run at the sample rate.
@@ -267,7 +273,7 @@ class Noise:
 # Parts whose resistors are resistors (their noise), and the param holding their value.
 _NOISY = {
     "R": "r", "pot": "r", "rheostat": "r", "tapped_pot": "r", "t_pad": "z", "transformer": None,
-    "capsule": None, "capsule_dual": None,
+    "capsule": None, "capsule_dual": None, "harp": None,
 }  # fmt: skip
 
 
@@ -694,6 +700,8 @@ def _speaker(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]
         model = load_speaker(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
+    if not ctx.speaker_readout:
+        return parts.speaker_terminal(name, *conn, model)
     cab = Cabinet(a["width_m"], a["height_m"], a["depth_m"], a["offset_x_m"], a["offset_y_m"])
     return parts.speaker(name, *conn, model, cab, a["distance_m"])
 
@@ -725,6 +733,17 @@ def _plate(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
     return parts.plate(name, *conn, model, a["decay_500hz_s"])
+
+
+def _harp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    from varimu.rhodes import compile as harp_compile
+
+    where = f"{name}.component"
+    try:
+        data = harp_compile.load_data(str(versions.require_pinned(ctx.text(where, a["component"]))))
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.harp(name, *conn, data, a["rate_hz"], a["contact_rate_hz"])
 
 
 def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -933,6 +952,7 @@ for _name, _macro in {
         3,
         {"component": Param("raw"), "decay_500hz_s": _P},
     ),
+    "harp": Macro(_harp, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}),
     "tape": Macro(
         _tape,
         3,
@@ -1088,9 +1108,10 @@ def context(
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
     events: bool = False,
+    speaker_readout: bool = True,
 ) -> Context:
     """A build's context for resolved parameters `p` (see spec.resolve); `noise`,
-    `heaters` and `events` as build_ir's."""
+    `heaters`, `events` and `speaker_readout` as build_ir's."""
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
     q = dict(p)
@@ -1109,6 +1130,7 @@ def context(
     ctx.noise = _noise(ctx, noise)
     ctx.heaters = _heaters(spec, heaters)
     ctx.events = bool(events)
+    ctx.speaker_readout = bool(speaker_readout)
     return ctx
 
 
@@ -1177,13 +1199,17 @@ def build_ir(
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
     events: bool = False,
+    speaker_readout: bool = True,
 ) -> CircuitIR:
     """The circuit IR for resolved parameters `p`; `cores`: "ja" or "linear" (each core
     in its linear limit); `noise`: None, the file's `noise` block; False, none; True, on
     (the block's seed or 0); an integer, on with that seed; `heaters`: None, the file's
     `heaters` block; False, none; True, on; "warm" / "cold", on with that start; `events`:
-    thyratrons as their event kernels (the module docstring)."""
-    return _build(spec, p, cores, noise, heaters, events)[0]
+    thyratrons as their event kernels (the module docstring); `speaker_readout` False: each
+    speaker part without its sound pressure readout, its terminal voltage on its `out` (a
+    live build: the readout's states cost Play more than the amp, COMPONENT_EDITOR_PLAN.md
+    C3; docs/RHODES_PLAN.md RH3)."""
+    return _build(spec, p, cores, noise, heaters, events, speaker_readout)[0]
 
 
 def _build(
@@ -1193,8 +1219,9 @@ def _build(
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
     events: bool = False,
+    speaker_readout: bool = True,
 ) -> tuple[CircuitIR, dict]:
-    ctx = context(spec, p, cores, noise, heaters, events)
+    ctx = context(spec, p, cores, noise, heaters, events, speaker_readout)
     types = make_models(ctx)
     sections = []
     for s in spec.sections:

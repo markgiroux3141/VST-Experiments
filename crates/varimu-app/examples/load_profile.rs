@@ -129,7 +129,8 @@ fn main() -> Result<(), String> {
         s.partition_coupling = c;
     }
     let k = s.oversample as usize;
-    let circuit = Circuit::load(&config, dev.circuit, s.cores()?)?
+    let circuit = dev
+        .live(Circuit::load(&config, dev.circuit, s.cores()?)?)
         .with_events(s.events)
         .with_noise(noise);
     let mut v = values(&knobs(dev, circuit.spec()));

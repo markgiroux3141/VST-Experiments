@@ -81,7 +81,10 @@ fn the_store_lists_its_transformers_and_their_users() {
     assert!(circuits.contains(&"fender_5e3_drawn"));
     assert_eq!(u[0].params, ["ot_model"]);
     assert_eq!(u[0].version, 2);
-    assert!(!u[0].drawn && u[1].drawn);
+    // Hand-written circuits (the 5E3, the Rhodes Stage into it), then the drawings.
+    let first_drawn = u.iter().position(|x| x.drawn).expect("a drawing uses it");
+    assert!(first_drawn > 0 && u[first_drawn..].iter().all(|x| x.drawn));
+    assert!(circuits.contains(&"rhodes_stage_5e3"));
 }
 
 #[test]

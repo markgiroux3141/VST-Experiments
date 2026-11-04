@@ -477,6 +477,9 @@ impl Player {
                         (false, true) => {
                             "MIDI keyboard: test oscillator, the gate into the circuit"
                         }
+                        (false, false) if wave == Wave::Off => {
+                            "MIDI keyboard: the keys into the circuit"
+                        }
                         (false, false) => "MIDI keyboard: test oscillator",
                     }
                     .into(),
@@ -1480,6 +1483,12 @@ fn work(
             let mut was_sounding = false;
             let mut gap_left = 0usize;
             let gap = (RETRIGGER_GAP_S * rate as f64).round() as usize;
+            // A circuit played by keys (a harp): the keys' events into it, each at its
+            // place in the coming block (its time after the last block was made, at the
+            // audio rate: their spacing kept, a block late at most).
+            let notes = live.has_keys();
+            let mut last_block = Instant::now();
+            keys.take_events();
             while !shared.stop.load(Ordering::Relaxed) {
                 match range {
                     // The panel's values go on with the switch where the keys put it.
@@ -1548,8 +1557,15 @@ fn work(
                 }
                 gap_left = gap_left.saturating_sub(BLOCK);
                 let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
+                let now = Instant::now();
+                let events = if notes {
+                    note_offsets(keys.take_events(), last_block, rate)
+                } else {
+                    Vec::new()
+                };
+                last_block = now;
                 let (y, meter) = live
-                    .process_with(&block, &refs)
+                    .process_notes(&block, &refs, &events)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
                 em.emit(shared, &mut ring, &y, monitored(&live, &y));
@@ -1564,6 +1580,24 @@ fn work(
         }
     }
     Ok(())
+}
+
+/// Key events as they arrived, placed in a block: each at its time after `since` (the
+/// last block made) at `rate`, at most at the block's last sample, in order.
+pub fn note_offsets(
+    events: Vec<(Instant, circuitsim::media::NoteEvent)>,
+    since: Instant,
+    rate: u32,
+) -> Vec<(usize, circuitsim::media::NoteEvent)> {
+    let mut last = 0;
+    events
+        .into_iter()
+        .map(|(t, e)| {
+            let at = (t.saturating_duration_since(since).as_secs_f64() * rate as f64) as usize;
+            last = at.min(BLOCK - 1).max(last);
+            (last, e)
+        })
+        .collect()
 }
 
 /// The default output device at `rate`, playing from `ring` (mono to every channel).
@@ -1812,6 +1846,27 @@ impl Playback {
 
 #[cfg(test)]
 mod tests {
+    use super::note_offsets;
+    use circuitsim::media::NoteEvent;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn note_events_keep_their_spacing_in_a_block() {
+        let t0 = Instant::now();
+        let on = |n| NoteEvent::On {
+            note: n,
+            velocity: 90,
+        };
+        let ev = vec![
+            (t0 + Duration::from_millis(1), on(60)),
+            (t0 + Duration::from_millis(3), on(64)),
+            (t0 + Duration::from_millis(40), on(67)), // past the block: at its end
+            (t0, on(72)),                             // out of order: not before the last
+        ];
+        let at: Vec<usize> = note_offsets(ev, t0, 48_000).iter().map(|e| e.0).collect();
+        assert_eq!(at, vec![48, 144, super::BLOCK - 1, super::BLOCK - 1]);
+    }
+
     #[test]
     fn a_legato_key_lifts_the_gate_for_the_gap() {
         let mut c = vec![-1.0; 64];

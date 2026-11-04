@@ -2396,6 +2396,27 @@ impl Transient {
         self.media[i].substeps()
     }
 
+    /// A keyboard's event for the media played by keys (a harp), landing at step `at`:
+    /// the push after the step to sample `at` (one for a step already rendered lands at
+    /// the first one that isn't).
+    pub fn queue_note(&mut self, at: usize, ev: crate::media::NoteEvent) {
+        for m in &mut self.media {
+            m.queue_note(at, ev);
+        }
+    }
+
+    /// Every keyboard event up to step `at` is queued: a harp renders ahead that far.
+    pub fn notes_known_until(&mut self, at: usize) {
+        for m in &mut self.media {
+            m.notes_known_until(at);
+        }
+    }
+
+    /// Whether a medium here is played by keys (a harp).
+    pub fn has_keys(&self) -> bool {
+        self.media.iter().any(crate::media::Medium::has_keys)
+    }
+
     /// The externals' values ([`Mna::externals`]) over the next sample: `start`
     /// at its start, `end` at its end, linear in between (stage times).
     /// (The externals past the control inputs and the media: a partition's couplings.)
@@ -2462,6 +2483,16 @@ pub fn simulate(ir: &CircuitIr, input: &[f64], h: f64, opts: &Options) -> Result
     simulate_with_progress(ir, input, h, opts, usize::MAX, |_| Ok(()))
 }
 
+/// Notes in order of their samples.
+pub(crate) fn check_notes(notes: &[(usize, crate::media::NoteEvent)]) -> Result<(), Error> {
+    if notes.windows(2).any(|w| w[1].0 < w[0].0) {
+        return Err(Error::new(
+            "note events must come in order of their samples",
+        ));
+    }
+    Ok(())
+}
+
 /// The control inputs' samples at `n` (IR order).
 fn controls_at(controls: &[&[f64]], n: usize) -> Vec<f64> {
     controls.iter().map(|c| c[n]).collect()
@@ -2517,9 +2548,27 @@ pub fn simulate_controls(
     h: f64,
     opts: &Options,
     every: usize,
+    progress: impl FnMut(usize) -> Result<(), Error>,
+) -> Result<Output, Error> {
+    simulate_notes(ir, input, controls, &[], h, opts, every, progress)
+}
+
+/// [`simulate_controls`] with a keyboard's events for the media played by keys (a harp):
+/// (input sample, event), in order; an event lands at the step to its sample (at sample 0,
+/// at sample 1).
+#[allow(clippy::too_many_arguments)]
+pub fn simulate_notes(
+    ir: &CircuitIr,
+    input: &[f64],
+    controls: &[&[f64]],
+    notes: &[(usize, crate::media::NoteEvent)],
+    h: f64,
+    opts: &Options,
+    every: usize,
     mut progress: impl FnMut(usize) -> Result<(), Error>,
 ) -> Result<Output, Error> {
     let every = every.max(1);
+    check_notes(notes)?;
     if ir.multirate() {
         return Err(Error::new(
             "the IR has multi-rate sections (substeps): run it partitioned (partition.rs)",
@@ -2544,6 +2593,10 @@ pub fn simulate_controls(
     } else {
         Transient::with_externals(mna, h, *opts, u0, &controls_at(controls, 0))?
     };
+    for &(at, ev) in notes {
+        tr.queue_note(at, ev);
+    }
+    tr.notes_known_until(usize::MAX);
     let mut record = |tr: &Transient| {
         for (v, y) in values.iter_mut().zip(tr.mna().probe_values(tr.x())) {
             v.push(y);

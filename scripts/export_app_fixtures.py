@@ -69,9 +69,10 @@ def ir_dict(
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
     events: bool = False,
+    speaker_readout: bool = True,
 ) -> dict[str, Any]:
     p = spec.resolve(c, overrides)
-    return builder.build_ir(c, p, cores, noise, heaters, events).to_dict()
+    return builder.build_ir(c, p, cores, noise, heaters, events, speaker_readout).to_dict()
 
 
 def heated(c: spec.CircuitSpec) -> bool:
@@ -86,6 +87,24 @@ def heated(c: spec.CircuitSpec) -> bool:
             return False
         raise
     return True
+
+
+def _harps_as_default(section: dict[str, Any], default: dict[str, Any]) -> dict[str, Any]:
+    """A case's section with each harp's compiled model (~4 MB) named "default": it is
+    always the default IR's (checked here; tests/agreement.rs puts it back)."""
+    models = {
+        e["name"]: e["model"]
+        for s in default["sections"]
+        for e in s["elements"]
+        if e.get("kind") == "harp"
+    }
+    els = []
+    for e in section["elements"]:
+        if e.get("kind") == "harp":
+            assert e["model"] == models[e["name"]], e["name"]
+            e = {**e, "model": "default"}
+        els.append(e)
+    return {**section, "elements": els}
 
 
 def fixture(name: str) -> dict[str, Any]:
@@ -127,6 +146,7 @@ def fixture(name: str) -> dict[str, Any]:
             cases.append(
                 (f"events, bias_adjust_f={f:g}", {"bias_adjust_f": f}, "ja", None, None, True)
             )
+    speaker = any("speaker" in e for s in c.sections for e in s["parts"].values())
     out = []
     for case, overrides, cores, noise, heat, events in cases:
         ir = ir_dict(c, overrides, cores, noise, heat, events)
@@ -145,11 +165,28 @@ def fixture(name: str) -> dict[str, Any]:
         if ir.get("noise") != default.get("noise"):
             entry["noise_block"] = ir.get("noise")  # null: none
         entry["sections"] = {
-            str(i): s for i, s in enumerate(ir["sections"]) if s != default["sections"][i]
+            str(i): _harps_as_default(s, default)
+            for i, s in enumerate(ir["sections"])
+            if s != default["sections"][i]
         }
         if ir["models"] != default["models"]:
             entry["models"] = ir["models"]
         out.append(entry)
+    if speaker:  # a live build: the speakers without their readouts
+        ir = ir_dict(c, {}, "ja", speaker_readout=False)
+        out.append(
+            {
+                "name": "speaker_readout=off",
+                "overrides": {},
+                "cores": "ja",
+                "speaker_readout": False,
+                "sections": {
+                    str(i): _harps_as_default(s, default)
+                    for i, s in enumerate(ir["sections"])
+                    if s != default["sections"][i]
+                },
+            }
+        )
     return {"circuit": name, "default": default, "cases": out}
 
 

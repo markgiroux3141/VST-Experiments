@@ -44,6 +44,7 @@ pub struct Library {
     dual_capsules: Mutex<HashMap<String, DualCapsule>>,
     plates: Mutex<HashMap<String, PlateComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
+    harps: Mutex<HashMap<String, std::sync::Arc<circuitsim::harp::HarpModel>>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
     /// Versions not saved yet ({folder@N: data}): the Components view's design while it is
     /// edited, heard in a circuit before it is a version (docs/COMPONENT_EDITOR_PLAN.md C2).
@@ -60,6 +61,7 @@ impl Library {
             dual_capsules: Mutex::new(HashMap::new()),
             plates: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
+            harps: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
             unsaved: Mutex::new(HashMap::new()),
         }
@@ -173,6 +175,47 @@ impl Library {
 
     /// Plate component `name` (`NAME@N`, or `NAME` for its latest version), checked
     /// against versions.lock (`load_plate` in library.py).
+    /// Harp component `name`'s compiled data (kind `ep_harp`; `varimu.rhodes.compile`): the
+    /// file its version names, checked against the sha256 the version gives.
+    pub fn harp(&self, name: &str) -> Result<std::sync::Arc<circuitsim::harp::HarpModel>, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(h) = self.harps.lock().unwrap().get(&key) {
+            return Ok(h.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let d = yaml::parse(&text, name)?;
+        let d = d
+            .as_map()
+            .ok_or_else(|| Error(format!("{r}: not a mapping")))?;
+        let kind = d.get("kind").and_then(Value::as_str);
+        if kind != Some("ep_harp") {
+            return Err(Error(format!("{r} is not a harp (kind {kind:?})")));
+        }
+        let data = d.get("data").and_then(Value::as_map);
+        let field = |k: &str| {
+            data.and_then(|m| m.get(k))
+                .and_then(Value::as_str)
+                .ok_or_else(|| Error(format!("{r}: data.{k} is missing")))
+        };
+        let path = root.join(r.folder()).join(field("file")?);
+        let raw = std::fs::read_to_string(&path)
+            .map_err(|e| Error(format!("{r}: {}: {e}", path.display())))?;
+        if versions::text_hash(&raw) != field("sha256")? {
+            return Err(Error(format!(
+                "{r}'s data {} doesn't match the sha256 its version names",
+                path.display()
+            )));
+        }
+        let model: circuitsim::harp::HarpModel = serde_json::from_str(&raw)
+            .map_err(|e| Error(format!("{r}: {}: {e}", path.display())))?;
+        model.check().map_err(|e| Error(format!("{r}: {e}")))?;
+        let model = std::sync::Arc::new(model);
+        self.harps.lock().unwrap().insert(key, model.clone());
+        Ok(model)
+    }
+
     pub fn plate(&self, name: &str) -> Result<PlateComponent, Error> {
         let root = self.components_dir();
         let r = versions::resolve(&root, &versions::parse(name)?)?;

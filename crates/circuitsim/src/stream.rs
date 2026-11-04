@@ -557,6 +557,17 @@ impl Stream {
         }
 
         let sp = split(ir, second)?;
+        // A harp's events go to the first part's transient (`Stream::queue_notes`).
+        if let Some(e) = sp.parts[1..]
+            .iter()
+            .flat_map(CircuitIr::elements)
+            .find(|e| matches!(e, Element::Harp(_)))
+        {
+            return Err(Error::new(format!(
+                "partition: the harp {} must stay in the first part (its keys are played there)",
+                e.name()
+            )));
+        }
         let n_parts = sp.parts.len();
         // The shared nodes at the whole circuit's DC operating point.
         let whole = start(Mna::from_ir(ir, opts.gmin)?, &[], u0)?;
@@ -907,6 +918,7 @@ impl Stream {
             )));
         }
         self.hist.extend_from_slice(input);
+        self.a.notes_known_until(self.hist0 + self.hist.len() - 1);
         if let Some(s) = self.parts.as_ref().filter(|s| s.shares_input) {
             s.shared
                 .input
@@ -928,6 +940,23 @@ impl Stream {
         let known = self.hist0 + self.hist.len(); // samples 0..known have arrived
         let until = known.saturating_sub(ahead);
         self.run_until(until)
+    }
+
+    /// A keyboard's events for the media played by keys (a harp), each at an offset into
+    /// the next [`Stream::process_with`]'s input (in order): it lands at that sample.
+    /// Without any, the media play on (a harp renders ahead to the input's last sample).
+    pub fn queue_notes(&mut self, notes: &[(usize, crate::media::NoteEvent)]) -> Result<(), Error> {
+        crate::transient::check_notes(notes)?;
+        let next = self.hist0 + self.hist.len();
+        for &(offset, ev) in notes {
+            self.a.queue_note(next + offset, ev);
+        }
+        Ok(())
+    }
+
+    /// Whether a medium is played by keys (a harp: [`Stream::queue_notes`]).
+    pub fn has_keys(&self) -> bool {
+        self.a.has_keys()
     }
 
     /// The input has ended: step the samples the lookahead held back (their

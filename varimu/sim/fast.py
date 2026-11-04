@@ -33,7 +33,7 @@ import ctypes
 import dataclasses
 import sys
 import time
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from functools import cache
 
@@ -203,6 +203,20 @@ def control_streams(
     return out
 
 
+def note_steps(
+    notes: Sequence[tuple[float, str, int, int]] | None, n0: int, s: TransientSettings
+) -> list[tuple[int, str, int, int]]:
+    """Note events (seconds from the input's start) as circuitsim takes them: sample
+    indices on the simulation's grid, behind `n0` samples of settle at the sample rate."""
+    out = []
+    for t_s, kind, note, value in notes or ():
+        at = round((n0 / s.sample_rate + t_s) * s.sim_rate)
+        out.append((int(at), str(kind), int(note), int(value)))
+    if any(b[0] < a[0] for a, b in zip(out, out[1:], strict=False)):
+        raise ValueError("note events must come in order of their times")
+    return out
+
+
 def run_transient(
     ir: CircuitIR,
     input_v: np.ndarray,
@@ -212,6 +226,7 @@ def run_transient(
     progress: Callable[[float], None] | None = None,
     controls: Mapping[str, np.ndarray] | None = None,
     stats: dict | None = None,
+    notes: Sequence[tuple[float, str, int, int]] | None = None,
 ) -> TransientResult:
     """Drive `ir.input_node` (to ground) with `input_v` volts; every IR probe comes back
     on the input's sample grid, keyed like ngspice vectors ("v(out)"). `method`
@@ -220,7 +235,10 @@ def run_transient(
     inputs ({name: volts}, each as long as `input_v`): held at their first sample while
     the circuit settles, and linear between samples at every rate (a gate's step stays a
     step, where band-limited resampling would ring). `stats`: a dict to fill with the
-    engine's statistics of the run (circuitsim.simulate's)."""
+    engine's statistics of the run (circuitsim.simulate's). `notes` play the IR's media
+    played by keys (a harp, docs/RHODES_PLAN.md RH3): (seconds from the input's start,
+    "on" | "off" | "pedal", MIDI note, velocity or pedal 0 / 1), in order; each lands on
+    the simulation's grid behind the settle (silent while the circuit settles)."""
     check_build()
     import circuitsim
 
@@ -257,6 +275,7 @@ def run_transient(
             progress=progress,
             controls=ctl or None,
             stats=stats is not None,
+            notes=note_steps(notes, n0, s) or None,
         )
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e

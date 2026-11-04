@@ -41,6 +41,7 @@ from varimu.circuit.ir import (
     Device,
     DeviceModel,
     Element,
+    Harp,
     Inductor,
     Plate,
     Resistor,
@@ -461,6 +462,18 @@ def speaker(
     return els + speaker_readout(name, minus, out, s, radiating, cabinet, distance_m)
 
 
+def speaker_terminal(name: str, plus: str, minus: str, out: str, s: spk.Speaker) -> list[Element]:
+    """Speaker `name` without its readout (a live build's, docs/RHODES_PLAN.md RH3): the
+    driver between plus and minus as the amp's load, and its terminal voltage on `out`
+    (G<NAME>_t into R<NAME>_t, 1 ohm to ground: it draws no current)."""
+    els, _ = speaker_driver(name, plus, minus, s)
+    upper = name.upper()
+    return els + [
+        Vccs(f"G{upper}_t", GROUND, out, plus, minus, 1.0),
+        Resistor(f"R{upper}_t", out, GROUND, 1.0),
+    ]
+
+
 def capsule(
     name: str, front: str, backplate: str, out: str, c: cap.Capsule, polarization_v: float
 ) -> list[Element]:
@@ -764,6 +777,19 @@ def plate(
             tail_db=c.tail_db,
         ),
         Capacitor(f"C{upper}_pu", f"{n}_p", out, c.pickup_c_f),
+    ]
+
+
+def harp(name: str, out: str, data: dict, rate_hz: float, contact_rate_hz: float) -> list[Element]:
+    """A Rhodes harp (docs/RHODES_PLAN.md, RH3) into `out`: its EMF V<NAME> on <name>_e
+    (circuitsim's harp medium), behind the coils' resistance R<NAME>_coils and inductance
+    L<NAME>_coils (the compiled harp's `coils`: the pickups in their wiring)."""
+    n, upper = name.lower(), name.upper()
+    coils = data["coils"]
+    return [
+        Harp(f"V{upper}", f"{n}_e", rate_hz, contact_rate_hz, data),
+        Resistor(f"R{upper}_coils", f"{n}_e", f"{n}_r", float(coils["r_ohm"])),
+        Inductor(f"L{upper}_coils", f"{n}_r", out, float(coils["l_h"])),
     ]
 
 

@@ -355,6 +355,25 @@ _SYMBOLS: list[SymbolDef] = [
         text=(0, 6.35, 5.588, "left"),
     ),
     _macro(
+        "Harp",
+        "harp",
+        "HP",
+        "A Rhodes harp (docs/RHODES_PLAN.md RH3, varimu.rhodes): pin 1 its output, the "
+        "pickups' EMF behind their coils (to ground), its keys played by note events; Value "
+        "is its component version",
+        (Pin("1", "1", 7.62, 0, 180, 2.54),),
+        [
+            rect(-5.08, -3.81, 5.08, 3.81),
+            poly((-3.81, -2.54), (-3.81, 2.54)),
+            poly((-1.27, -2.54), (-1.27, 2.54)),
+            poly((1.27, -2.54), (1.27, 2.54)),
+        ],
+        "component",
+        ("rate_hz", "contact_rate_hz"),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
+    _macro(
         "Tape",
         "tape",
         "TP",

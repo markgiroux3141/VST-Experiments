@@ -59,6 +59,10 @@ pub struct Device {
     /// (None: the quality's): "hold" where a waveform's edge crosses a cut (extrapolated, a
     /// one-sample edge doubled for a sample).
     pub coupling: Option<&'static str>,
+    /// Played live without its speakers' sound pressure readouts: `out` their terminal
+    /// voltage, this many volts at full scale (the readout's states cost Play more than the
+    /// amp: COMPONENT_EDITOR_PLAN.md C3; the pressure at production). None: as the file is.
+    pub live_speaker_v: Option<f64>,
 }
 
 /// A keyboard's pitch into a circuit's control input: the control and the keyboard's
@@ -365,6 +369,11 @@ impl Device {
         self.own_oscillator || self.pitch.is_some()
     }
 
+    /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`).
+    pub fn live(&self, c: crate::live::Circuit) -> crate::live::Circuit {
+        c.with_live_speaker(self.live_speaker_v)
+    }
+
     /// The settings it plays at: `s` (its quality's) with its cores.
     pub fn play_settings(&self, s: &Settings) -> Settings {
         let mut s = s.clone();
@@ -381,7 +390,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 16] = [
+pub const DEVICES: [Device; 17] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -406,6 +415,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -424,6 +434,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -448,6 +459,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -468,6 +480,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -488,6 +501,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -508,6 +522,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -532,6 +547,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -575,6 +591,7 @@ pub const DEVICES: [Device; 16] = [
             range: None,
         }),
         coupling: None,
+        live_speaker_v: None,
         partition: Some(&[
             "resonance",
             "|",
@@ -615,6 +632,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
         // oscillator and its pitch driver | the supplies.
         partition: Some(&["oscillator", "pitch", "|", "power supply", "bias supply"]),
@@ -642,6 +660,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: Some("hold"),
+        live_speaker_v: None,
         // Two threads: the VCA | the rest (the oscillator, the keys and the envelope: control
         // inputs stay in the first part). The cuts are the VCA's grids (`ga`, `gt`), and the
         // saw's edge crosses at `ga`: extrapolated it was doubled for a sample (peaks 49 V
@@ -664,6 +683,7 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -696,6 +716,7 @@ pub const DEVICES: [Device; 16] = [
         // repro side's (0.55x real time, p95 1.25; one thread 0.85x, p95 1.95; at the
         // default DRIVE 0.50x, p95 1.35 against 0.55x, 0.80: DELAY_PLAN.md, DRIVE).
         coupling: Some("hold"),
+        live_speaker_v: None,
         partition: Some(&[
             "heads and tape",
             "reproduce amplifier",
@@ -732,6 +753,7 @@ pub const DEVICES: [Device; 16] = [
         // bus kept the record side's Newton from contracting (13.6 iterations a sample
         // against 3.4; 1.8x real time against 0.55x; DELAY_PLAN.md, "PING-PONG").
         coupling: Some("hold"),
+        live_speaker_v: None,
         // Cut at the media: both record sides with the input, each channel's tape, repro
         // and output on a thread of its own (a tape senses its record head a sample late:
         // partition.rs), the supplies and the capstan's last.
@@ -767,6 +789,7 @@ pub const DEVICES: [Device; 16] = [
         // The supply on a thread of its own, coupled through its rails (as the 670's).
         partition: Some(&["power supply"]),
         coupling: None,
+        live_speaker_v: None,
         pitch2: None,
     },
     Device {
@@ -793,6 +816,7 @@ pub const DEVICES: [Device; 16] = [
         key: Some("key"),
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
     },
     Device {
@@ -814,7 +838,33 @@ pub const DEVICES: [Device; 16] = [
         key: None,
         pitch2: None,
         coupling: None,
+        live_speaker_v: None,
         partition: None,
+    },
+    Device {
+        id: "rhodes_stage_5e3",
+        label: "Rhodes Mark I Stage into a 5E3 (electric piano)",
+        circuit: "rhodes_stage_5e3",
+        panel: None,
+        ahead_s: 0.25,
+        // The 5E3's (hard clipped, it aliases at draft-1x).
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys strike the harp (note events, `Live::process_notes`): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        // The user's choice (2026-11-04, RHODES_PLAN.md RH3): live without the P12R's
+        // readout. Full scale: the 5E3's largest swing at the speaker, 18.5-19.3 V peak
+        // clipping hard (all 73 keys at velocity 127, volume 1, draft), rounded up (60 V,
+        // its full scale before C3, left it 10 dB down at its loudest).
+        live_speaker_v: Some(20.0),
     },
 ];
 

@@ -34,6 +34,7 @@ from varimu.circuit.ir import (
     Capacitor,
     CircuitIR,
     Device,
+    Harp,
     Inductor,
     Plate,
     Resistor,
@@ -166,6 +167,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     # input does.
     driven += [(el.out, f"<plate {el.name}>") for el in ir.elements() if isinstance(el, Plate)]
     driven += [(el.out, f"<tape {el.name}>") for el in ir.elements() if isinstance(el, Tape)]
+    driven += [(el.out, f"<harp {el.name}>") for el in ir.elements() if isinstance(el, Harp)]
     for n in [*(d[0] for d in driven), *(p.node for p in ir.probes)]:
         if n not in nodes:
             problem("probe", f"{n!r} is not a node of the circuit", nodes=[n])

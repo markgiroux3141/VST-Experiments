@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value as Json;
 use varimu_circuit::yaml::Value;
-use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_events, spec};
+use varimu_circuit::{Cores, Heaters, Library, Noise, build_ir_live, spec};
 
 fn repo() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -25,6 +25,18 @@ fn to_value(j: &Json) -> Value {
         Json::String(s) => Value::Str(s.clone()),
         _ => panic!("override {j} isn't a scalar"),
     }
+}
+
+/// The default IR's harp `name`'s compiled model.
+fn harp_model(default: &Json, name: &str) -> Json {
+    default["sections"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|s| s["elements"].as_array().unwrap())
+        .find(|e| e["kind"] == "harp" && e["name"] == name)
+        .map(|e| e["model"].clone())
+        .unwrap_or_else(|| panic!("no harp {name} in the default IR"))
 }
 
 #[derive(Default)]
@@ -148,8 +160,9 @@ fn rust_builds_the_ir_python_builds() {
                 Some(_) => Heaters::Warm,
             };
             let events = case.get("events") == Some(&Json::Bool(true));
+            let readout = case.get("speaker_readout") != Some(&Json::Bool(false));
             let built = spec::resolve(&c, &overrides)
-                .and_then(|p| build_ir_events(&lib, &c, &p, cores, noise, heaters, events));
+                .and_then(|p| build_ir_live(&lib, &c, &p, cores, noise, heaters, events, readout));
             let ir = match built {
                 Ok(ir) => ir,
                 Err(e) => {
@@ -160,6 +173,15 @@ fn rust_builds_the_ir_python_builds() {
             let mut want = fx["default"].clone();
             for (i, s) in case["sections"].as_object().unwrap() {
                 want["sections"][i.parse::<usize>().unwrap()] = s.clone();
+            }
+            // A case's harp names its model "default" (the fixture keeps it once).
+            for s in want["sections"].as_array_mut().unwrap() {
+                for e in s["elements"].as_array_mut().unwrap() {
+                    if e["kind"] == "harp" && e["model"] == "default" {
+                        let model = harp_model(&fx["default"], e["name"].as_str().unwrap());
+                        e["model"] = model;
+                    }
+                }
             }
             if let Some(m) = case.get("models") {
                 want["models"] = m.clone();

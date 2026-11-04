@@ -57,7 +57,8 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
     max_iter = None, max_halvings = None, gmin = None, extrapolate = None, input_order = None,
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
     newton_reuse = None, step_selection = None, error_norm = None, tube_tables = None,
-    partition = None, partition_coupling = None, stats = false, progress = None, controls = None
+    partition = None, partition_coupling = None, stats = false, progress = None, controls = None,
+    notes = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -87,8 +88,10 @@ fn simulate<'py>(
     stats: bool,
     progress: Option<Py<PyAny>>,
     controls: Option<Vec<PyReadonlyArray1<'py, f64>>>,
+    notes: Option<Vec<(usize, String, u8, u8)>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
+    let notes = note_events(notes.unwrap_or_default())?;
     // The control inputs' samples (IR order), as long as the input.
     let ctl: Vec<Vec<f64>> = controls
         .unwrap_or_default()
@@ -145,11 +148,11 @@ fn simulate<'py>(
         // Multi-rate sections (the IR's substeps) always run partitioned.
         let second = partition.clone().unwrap_or_default();
         if !second.is_empty() || ir.multirate() {
-            crate::partition::simulate_partitioned_controls(
-                &ir, &second, coupling, &x, &ctl, dt, &opts, every, report,
+            crate::partition::simulate_partitioned_notes(
+                &ir, &second, coupling, &x, &ctl, &notes, dt, &opts, every, report,
             )
         } else {
-            crate::transient::simulate_controls(&ir, &x, &ctl, dt, &opts, every, report)
+            crate::transient::simulate_notes(&ir, &x, &ctl, &notes, dt, &opts, every, report)
         }
     });
     if let Some(e) = raised {
@@ -187,6 +190,57 @@ fn simulate<'py>(
     st.set_item("accepted_by_level", s.accepted_by_level.to_vec())?;
     st.set_item("rejected_by_level", s.rejected_by_level.to_vec())?;
     Ok((probes, st).into_pyobject(py)?.into_any())
+}
+
+/// Note events from Python: (sample, kind, note, value), kind "on" (value the velocity),
+/// "off" or "pedal" (value 0 up, 1 down).
+fn note_events(
+    notes: Vec<(usize, String, u8, u8)>,
+) -> PyResult<Vec<(usize, crate::media::NoteEvent)>> {
+    use crate::media::NoteEvent;
+    notes
+        .into_iter()
+        .map(|(at, kind, note, value)| {
+            let ev = match kind.as_str() {
+                "on" => NoteEvent::On {
+                    note,
+                    velocity: value,
+                },
+                "off" => NoteEvent::Off { note },
+                "pedal" => NoteEvent::Pedal { down: value > 0 },
+                k => return Err(invalid(format!("note event kind {k:?}: on, off or pedal"))),
+            };
+            Ok((at, ev))
+        })
+        .collect()
+}
+
+/// The harp alone (`harp.rs`'s `render`; docs/RHODES_PLAN.md RH3): `element` an IR `harp`
+/// element (JSON), `n` steps at `fs` from rest with `notes` as `simulate` takes them.
+/// Returns (the EMF at every step, every internal sample, (k, s)): sample 0 is the rest's.
+/// Releases the GIL.
+#[pyfunction]
+#[pyo3(signature = (element, fs, n, notes))]
+fn harp_render<'py>(
+    py: Python<'py>,
+    element: &str,
+    fs: f64,
+    n: usize,
+    notes: Vec<(usize, String, u8, u8)>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let el: crate::ir::Harp =
+        serde_json::from_str(element).map_err(|e| invalid(format!("harp_render: {e}")))?;
+    el.model.check().map_err(invalid)?;
+    let notes = note_events(notes)?;
+    let (y, raw, ks) = py.detach(|| {
+        let m = crate::harp::Medium::new(&el, fs);
+        let ks = (m.k, m.s);
+        let (y, raw) = crate::harp::render(&el, fs, n.max(1), &notes);
+        (y, raw, ks)
+    });
+    Ok((y.into_pyarray(py), raw.into_pyarray(py), ks)
+        .into_pyobject(py)?
+        .into_any())
 }
 
 /// A run fed block by block, for real time (`stream.rs`): the same output as
@@ -528,6 +582,7 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("SimulationError", m.py().get_type::<SimulationError>())?;
     m.add_function(wrap_pyfunction!(ir_roundtrip, m)?)?;
     m.add_function(wrap_pyfunction!(simulate, m)?)?;
+    m.add_function(wrap_pyfunction!(harp_render, m)?)?;
     m.add_function(wrap_pyfunction!(tape_record, m)?)?;
     m.add_function(wrap_pyfunction!(tape_state_after, m)?)?;
     m.add_function(wrap_pyfunction!(tape_stream_run, m)?)?;

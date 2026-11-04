@@ -4,7 +4,8 @@
 //!
 //!     cargo run --release -p varimu-app --example play -- --device fairchild_670
 //!         (--file FILE [--start S] [--seconds S] | --input [NAME] [--channel N]
-//!          | --midi [NAME] [--wave saw|square] | --hold NOTE)
+//!          | --midi [NAME] [--wave saw|square] | --hold NOTE
+//!          | --strike-all [VELOCITY] [--restrike S])
 //!         [--for SECONDS] [--buffer S] [--gain-db G] [--set KEY=VALUE ...] [--turn KEY=A,B]
 //!
 //! `--gain-db G` is the input gain (the Play view's normalization and trim).
@@ -19,6 +20,10 @@
 //! `mod_wheel` control over its range (the reactor filter's cutoff).
 //! `--hold NOTE` plays as `--midi` does with one key held for the whole run (a MIDI note
 //! number, 60 = C4; no keyboard needed): a voice's load with its envelope open.
+//! `--strike-all` plays a device whose circuit is played by keys (the Rhodes harp,
+//! docs/RHODES_PLAN.md RH3) with the sustain pedal down and every MIDI note struck at
+//! VELOCITY (100), one a millisecond, 2 s in; `--restrike S` strikes them all again every S
+//! seconds (every key ringing at full strength: the worst case's load).
 //! `--noise` plays a device whose file has noise sources (device builder B5) with them (off
 //! by default, as in the app).
 //! `--end ID` puts a device at the chain's end (`panel::CHAIN_ENDS`: the plate reverb) on
@@ -75,6 +80,8 @@ fn main() -> Result<(), String> {
     let mut record: Option<String> = None;
     let (mut midi_name, mut wave): (Option<Option<String>>, Wave) = (None, Wave::Saw);
     let mut hold: Option<u8> = None;
+    let mut strike_all: Option<u8> = None;
+    let mut restrike: Option<f64> = None;
     let (mut end, mut end_sets, mut end_mix): (Option<String>, Vec<(String, Value)>, f64) =
         (None, Vec::new(), END_MIX);
     while let Some(a) = args.next() {
@@ -110,6 +117,13 @@ fn main() -> Result<(), String> {
                 end_sets.push((k.to_string(), value(v)));
             }
             "--hold" => hold = Some(num(args.next(), &a)? as u8),
+            "--strike-all" => {
+                strike_all = Some(match args.peek() {
+                    Some(n) if !n.starts_with("--") => num(args.next(), &a)? as u8,
+                    _ => 100,
+                })
+            }
+            "--restrike" => restrike = Some(num(args.next(), &a)?),
             "--list-midi" => {
                 for p in midi::ports()? {
                     println!("{p}");
@@ -150,7 +164,8 @@ fn main() -> Result<(), String> {
         .find(|d| d.id == device)
         .ok_or(format!("unknown device {device}"))?;
     let s = dev.play_settings(&Settings::load(config, dev.quality)?);
-    let circuit = Circuit::load(config, dev.circuit, s.cores()?)?
+    let circuit = dev
+        .live(Circuit::load(config, dev.circuit, s.cores()?)?)
         .with_events(s.events)
         .with_noise(noise);
     let panel = knobs(dev, circuit.spec());
@@ -181,6 +196,28 @@ fn main() -> Result<(), String> {
         keys.message(&[0x90, note, 100]);
         keys
     });
+    // Every note struck with the pedal down, again every `restrike` seconds (on a thread
+    // of its own, as a keyboard's messages arrive).
+    let held = held.or(strike_all.map(|vel| {
+        let keys = Arc::new(Keys::default());
+        let k = keys.clone();
+        std::thread::spawn(move || {
+            // After the player has started (it drops what the keys did before).
+            std::thread::sleep(Duration::from_secs(2));
+            k.message(&[0xb0, 64, 127]);
+            loop {
+                for note in 0..128u8 {
+                    k.message(&[0x90, note, vel]);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                match restrike {
+                    Some(s) => std::thread::sleep(Duration::from_secs_f64(s)),
+                    None => return,
+                }
+            }
+        });
+        keys
+    }));
     let (source, buffer) = match (&file, input) {
         _ if held.is_some() => (
             Source::Keys(held.clone().expect("a held key"), wave, feeds),

@@ -192,6 +192,7 @@ pub enum Element {
     Device(Device),
     Plate(Plate),
     Tape(Tape),
+    Harp(Harp),
     ThyratronEvents(ThyratronEvents),
 }
 
@@ -363,6 +364,23 @@ pub struct Tape {
     /// reads it. None: no varispeed, and no such key in the JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub supply: Option<String>,
+}
+
+/// A Rhodes harp (docs/RHODES_PLAN.md, RH3; `crate::harp`; `varimu.rhodes.harp` is the
+/// reference): its keys struck by note events, the pickups' EMFs summed by their wiring
+/// driving `out` to ground one sample after the step that rendered them (the harp senses
+/// nothing: its coils' current doesn't act on the tines). The voices run at the least whole
+/// multiple of the step rate at or above `rate_hz`, the hammer's contact at
+/// `contact_rate_hz`. `model` is the compiled harp (a component version of kind `ep_harp`).
+/// SPICE has no harp: ngspice sees `out` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Harp {
+    pub name: String,
+    pub out: String,
+    pub rate_hz: f64,
+    pub contact_rate_hz: f64,
+    pub model: Box<crate::harp::HarpModel>,
 }
 
 /// A triode gas thyratron as technique K's event kernels (HYBRID_PHYSICS_PLAN.md H3, "K's
@@ -688,6 +706,7 @@ impl Element {
             Element::Device(e) => &e.name,
             Element::Plate(e) => &e.name,
             Element::Tape(e) => &e.name,
+            Element::Harp(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
         }
     }
@@ -712,6 +731,7 @@ impl Element {
                 v.extend(e.supply.as_deref());
                 v
             }
+            Element::Harp(e) => vec![&e.out],
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
         }
     }
@@ -1069,6 +1089,20 @@ impl CircuitIr {
                     if e.out == GROUND || e.out == self.input_node {
                         return err(format!(
                             "{name}: its repro head drives {} (ground or the input)",
+                            e.out
+                        ));
+                    }
+                    'V'
+                }
+                Element::Harp(e) => {
+                    positive(&format!("{name}.rate_hz"), e.rate_hz)?;
+                    positive(&format!("{name}.contact_rate_hz"), e.contact_rate_hz)?;
+                    if let Err(m) = e.model.check() {
+                        return err(format!("{name}: {m}"));
+                    }
+                    if e.out == GROUND || e.out == self.input_node {
+                        return err(format!(
+                            "{name}: its pickups drive {} (ground or the input)",
                             e.out
                         ));
                     }

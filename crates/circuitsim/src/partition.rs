@@ -730,9 +730,40 @@ pub fn simulate_partitioned_controls(
     h: f64,
     opts: &Options,
     every: usize,
+    progress: impl FnMut(usize) -> Result<(), Error>,
+) -> Result<Output, Error> {
+    simulate_partitioned_notes(
+        ir,
+        second,
+        coupling,
+        input,
+        controls,
+        &[],
+        h,
+        opts,
+        every,
+        progress,
+    )
+}
+
+/// [`simulate_partitioned_controls`] with a keyboard's events for the media played by keys
+/// (a harp, in the first part): (input sample, event) in order, as
+/// [`crate::transient::simulate_notes`] takes them.
+#[allow(clippy::too_many_arguments)]
+pub fn simulate_partitioned_notes(
+    ir: &CircuitIr,
+    second: &[String],
+    coupling: Coupling,
+    input: &[f64],
+    controls: &[&[f64]],
+    notes: &[(usize, crate::media::NoteEvent)],
+    h: f64,
+    opts: &Options,
+    every: usize,
     mut progress: impl FnMut(usize) -> Result<(), Error>,
 ) -> Result<Output, Error> {
     let every = every.max(1);
+    crate::transient::check_notes(notes)?;
     crate::transient::check_controls(ir, controls, input.len())?;
     if let Some(i) = input.iter().position(|u| !u.is_finite()) {
         return Err(Error::new(format!("input sample {i} is not finite")));
@@ -747,6 +778,8 @@ pub fn simulate_partitioned_controls(
     }
     let c0: Vec<f64> = controls.iter().map(|c| c[0]).collect();
     let mut stream = Stream::with_controls(ir, second, coupling, h, opts, u0, &c0)?;
+    // Each chunk's notes at their offsets into it (the chunk starts at sample a).
+    let mut notes = notes.iter().peekable();
     let mut values: Vec<Vec<f64>> = stream
         .initial()
         .into_iter()
@@ -764,6 +797,15 @@ pub fn simulate_partitioned_controls(
     for (j, chunk) in rest.chunks(every).enumerate() {
         let (a, b) = (1 + j * every, 1 + j * every + chunk.len());
         let ctl: Vec<&[f64]> = controls.iter().map(|c| &c[a..b]).collect();
+        let mut here = Vec::new();
+        while let Some(&&(at, ev)) = notes.peek() {
+            if at >= b {
+                break;
+            }
+            here.push((at.saturating_sub(a), ev));
+            notes.next();
+        }
+        stream.queue_notes(&here)?;
         add(stream.process_with(chunk, &ctl)?);
         if every < input.len() {
             progress(((j + 1) * every + 1).min(input.len()))?;

@@ -292,3 +292,26 @@ pub fn speaker(
     els.extend(readout(name, minus, out, s, &radiating, cab, distance_m));
     els
 }
+
+/// Speaker `name` without its readout (a live build's; `parts.speaker_terminal`): the driver
+/// between plus and minus, its terminal voltage on `out` (G<NAME>_t into R<NAME>_t, 1 ohm
+/// to ground).
+pub fn terminal(name: &str, plus: &str, minus: &str, out: &str, s: &Speaker) -> Vec<Element> {
+    let (mut els, _) = driver(name, plus, minus, s);
+    let upper = name.to_uppercase();
+    els.push(Element::Vccs(circuitsim::ir::Vccs {
+        name: format!("G{upper}_t"),
+        pos: GROUND.into(),
+        neg: out.into(),
+        ctrl_pos: plus.into(),
+        ctrl_neg: minus.into(),
+        gm_s: 1.0,
+    }));
+    els.push(Element::Resistor(circuitsim::ir::Resistor {
+        name: format!("R{upper}_t"),
+        a: out.into(),
+        b: GROUND.into(),
+        r_ohm: 1.0,
+    }));
+    els
+}

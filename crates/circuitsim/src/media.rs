@@ -1,14 +1,34 @@
-//! Media beside the circuit (a plate, `crate::plate`; tape, `crate::tape_stream`): each
-//! senses a voltage in the circuit after every sample and drives its `out` node at the
-//! next one, like a control input ([`crate::mna::Mna::media`]).
+//! Media beside the circuit (a plate, `crate::plate`; tape, `crate::tape_stream`; a Rhodes
+//! harp, `crate::harp`): each senses a voltage in the circuit after every sample (a harp
+//! senses nothing: its keys are note events) and drives its `out` node at the next one,
+//! like a control input ([`crate::mna::Mna::media`]).
 
-use crate::ir::{Plate, Tape};
+use crate::ir::{Harp, Plate, Tape};
 
 /// A medium's element in the IR.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MediumElement {
     Plate(Plate),
     Tape(Tape),
+    Harp(Harp),
+}
+
+/// A keyboard's event for a medium played by keys (a harp): queued for the step it lands at
+/// ([`crate::transient::Transient::queue_note`], [`crate::stream::Stream::queue_notes`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteEvent {
+    /// A key down (MIDI note, velocity 1-127; 0 is a key up).
+    On {
+        note: u8,
+        velocity: u8,
+    },
+    Off {
+        note: u8,
+    },
+    /// The sustain pedal (MIDI CC 64, down at 64 and over).
+    Pedal {
+        down: bool,
+    },
 }
 
 impl MediumElement {
@@ -16,6 +36,7 @@ impl MediumElement {
         match self {
             MediumElement::Plate(p) => &p.name,
             MediumElement::Tape(t) => &t.name,
+            MediumElement::Harp(h) => &h.name,
         }
     }
 
@@ -23,22 +44,24 @@ impl MediumElement {
         match self {
             MediumElement::Plate(p) => &p.out,
             MediumElement::Tape(t) => &t.out,
+            MediumElement::Harp(h) => &h.out,
         }
     }
 
     /// A tape's capstan supply node (varispeed), if any.
     pub fn supply(&self) -> Option<&str> {
         match self {
-            MediumElement::Plate(_) => None,
+            MediumElement::Plate(_) | MediumElement::Harp(_) => None,
             MediumElement::Tape(t) => t.supply.as_deref(),
         }
     }
 
-    /// The sense's (positive, negative) nodes.
+    /// The sense's (positive, negative) nodes (a harp's: ground).
     pub fn sense(&self) -> (&str, &str) {
         match self {
             MediumElement::Plate(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Tape(t) => (&t.sense_pos, &t.sense_neg),
+            MediumElement::Harp(_) => (crate::ir::GROUND, crate::ir::GROUND),
         }
     }
 }
@@ -100,6 +123,7 @@ impl TapeMedium {
 pub enum Medium {
     Plate(Box<crate::plate::Medium>),
     Tape(Box<TapeMedium>),
+    Harp(Box<crate::harp::Medium>),
 }
 
 impl Medium {
@@ -115,6 +139,7 @@ impl Medium {
                 fields: Vec::new(),
                 emf: Vec::new(),
             })),
+            MediumElement::Harp(h) => Medium::Harp(Box::new(crate::harp::Medium::new(h, fs))),
         })
     }
 
@@ -128,13 +153,14 @@ impl Medium {
                 let k = m.stream.substeps();
                 m.push(std::iter::repeat_n(v, k), supply_hz)
             }
+            Medium::Harp(m) => m.push(),
         }
     }
 
     /// Samples sensed per step (a tape with the literal bias: its `bias_substeps`; else 1).
     pub fn substeps(&self) -> usize {
         match self {
-            Medium::Plate(_) => 1,
+            Medium::Plate(_) | Medium::Harp(_) => 1,
             Medium::Tape(m) => m.stream.substeps(),
         }
     }
@@ -145,7 +171,27 @@ impl Medium {
         match self {
             Medium::Plate(m) => m.push(*vs.last().expect("a sample")),
             Medium::Tape(m) => m.push(vs.iter().copied(), supply_hz),
+            Medium::Harp(m) => m.push(),
         }
+    }
+
+    /// A keyboard's event at step `at` (a harp's; other media have no keys).
+    pub fn queue_note(&mut self, at: usize, ev: NoteEvent) {
+        if let Medium::Harp(m) = self {
+            m.queue(at, ev);
+        }
+    }
+
+    /// Every keyboard event up to step `at` is queued (a harp renders that far ahead).
+    pub fn notes_known_until(&mut self, at: usize) {
+        if let Medium::Harp(m) = self {
+            m.known_until(at);
+        }
+    }
+
+    /// Whether it is played by keys (a harp).
+    pub fn has_keys(&self) -> bool {
+        matches!(self, Medium::Harp(_))
     }
 
     /// New values mid-run. A plate keeps ringing; tape with the same medium keeps its
@@ -169,6 +215,12 @@ impl Medium {
                     m.stream.set_bias(t.medium.hg_bias_a_m)?;
                 }
                 m.tape = t.clone();
+            }
+            // A harp has no knobs: the same one plays on, another is a change of structure.
+            (Medium::Harp(m), MediumElement::Harp(h)) => {
+                if !m.same(h) {
+                    return Err("a harp changed".into());
+                }
             }
             _ => return Err("a medium changed kind".into()),
         }

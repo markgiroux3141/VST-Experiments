@@ -1,24 +1,27 @@
 """The Rhodes played from MIDI through the Stage's controls into the 5E3 (docs/RHODES_PLAN.md,
-RH2): the harp's open-circuit EMF (varimu/rhodes/harp.py) drives
-config/circuits/rhodes_stage_5e3.yaml (scripts/derive_rhodes_5e3.py), whose output is the
-sound pressure 1 m in front of the 5E3's speaker.
+RH2-RH3): config/circuits/rhodes_stage_5e3.yaml (scripts/derive_rhodes_5e3.py), its harp a
+medium in the netlist played by the MIDI's notes and pedal (circuitsim's harp.rs, the
+component MK1_HARP), its output the sound pressure 1 m in front of the 5E3's speaker.
 
     uv run --extra fast python scripts/rhodes_render.py (--midi FILE | --demo)
         [--seconds S] [--tail 3] [--quality production|draft|draft-1x]
-        [--set stage_volume=1 stage_bass=1 volume_bright=0.5 ...] [--out NAME]
+        [--set stage_volume=1 stage_bass=1 volume_bright=0.5 ...] [--out NAME] [--reference]
 
 Writes reports/rhodes/renders/<name>.wav (the amp, 0 dBFS = the circuit's 50 Pa) and
-<name>_harp.wav (the harp's EMF straight, 0 dBFS = 0.5 V), and prints the harp's and the
-amp's times. `--demo` plays a phrase of its own (soft and hard chords, a bass line, the
+<name>_harp.wav (the harp's EMF straight, 0 dBFS = 0.5 V: circuitsim's medium alone, or with
+`--reference` the Python reference, varimu/rhodes/harp.py, ~4x slower than real time), and
+prints the times. `--demo` plays a phrase of its own (soft and hard chords, a bass line, the
 pedal; the MIDI written beside the WAVs).
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
+import circuitsim
 import numpy as np
 
 from varimu.circuit import builder, spec
@@ -74,6 +77,9 @@ def main() -> None:
     ap.add_argument("--quality", default="production", choices=["production", "draft", "draft-1x"])
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     ap.add_argument("--out", help="the WAVs' name")
+    ap.add_argument(
+        "--reference", action="store_true", help="the harp's WAV from the Python reference"
+    )
     args = ap.parse_args()
 
     OUT.mkdir(parents=True, exist_ok=True)
@@ -88,18 +94,6 @@ def main() -> None:
         events = [e for e in events if e.t_s < args.seconds]
     duration = max(e.t_s for e in events) + args.tail
 
-    t0 = time.perf_counter()
-    r = harp.render(events, duration, progress=True)
-    t_harp = time.perf_counter() - t0
-    fs_v = rspec.load()["numerics"]["full_scale_v"]
-    write_audio(OUT / f"{name}_harp.wav", (r.emf_v / fs_v).astype(np.float32), int(r.fs_hz))
-    print(
-        f"harp: {len(r.voices)} keys, {r.skipped} notes off the 73 keys, peak "
-        f"{np.max(np.abs(r.emf_v)):.3f} V, {t_harp:.0f} s for {duration:.1f} s "
-        f"({t_harp / duration:.1f}x real time)",
-        flush=True,
-    )
-
     c = spec.load_circuit(spec.circuit_path(CIRCUIT))
     over = {}
     for kv in args.set:
@@ -108,11 +102,43 @@ def main() -> None:
     s = TransientSettings.from_sim_settings(
         engine="circuitsim", quality=None if args.quality == "production" else args.quality
     )
-    if s.sample_rate != r.fs_hz:
-        raise SystemExit(f"the harp renders at {r.fs_hz} Hz, the circuit at {s.sample_rate}")
     ir = builder.build(c, over).ir
+    events = sorted(events, key=lambda e: (e.t_s, e.kind != "off"))  # the reference's order
+    notes = [(e.t_s, e.kind, e.note, e.value) for e in events]
+
+    # The harp alone (its EMF straight), as the circuit's medium plays it, or the reference.
+    fs = float(s.sample_rate)
     t0 = time.perf_counter()
-    v = fast.run_transient(ir, r.emf_v, settings=s).vectors["v(out)"]
+    if args.reference:
+        emf = harp.render(events, duration, fs_hz=fs, progress=True).emf_v
+        what = "the Python reference"
+    else:
+        (el,) = [e for e in ir.elements() if e.name == "VHARP"]
+        element = {
+            "name": el.name,
+            "out": el.out,
+            "rate_hz": el.rate_hz,
+            "contact_rate_hz": el.contact_rate_hz,
+            "model": el.model,
+        }
+        n = int(round(duration * fs)) + 1
+        steps = [(round(t * fs), k, nt, v) for t, k, nt, v in notes]
+        emf, _, _ = circuitsim.harp_render(json.dumps(element), fs, n, steps)
+        what = "circuitsim's medium"
+    t_harp = time.perf_counter() - t0
+    fs_v = rspec.load()["numerics"]["full_scale_v"]
+    write_audio(OUT / f"{name}_harp.wav", (emf / fs_v).astype(np.float32), int(fs))
+    keys = {e.note for e in events if e.kind == "on" and 8 <= e.note - harp.MIDI_KEY_OFFSET <= 80}
+    print(
+        f"harp ({what}): {len(keys)} keys, peak {np.max(np.abs(emf)):.3f} V, {t_harp:.1f} s for"
+        f" {duration:.1f} s ({t_harp / duration:.2f}x real time)",
+        flush=True,
+    )
+
+    # The Stage into the 5E3, the harp a medium in the netlist.
+    t0 = time.perf_counter()
+    x = np.zeros(int(round(duration * s.sample_rate)))
+    v = fast.run_transient(ir, x, settings=s, notes=notes).vectors["v(out)"]
     t_amp = time.perf_counter() - t0
     y = v / full_scale(s, c)[1]
     write_audio(OUT / f"{name}.wav", y.astype(np.float32), int(s.sample_rate))

@@ -17,6 +17,7 @@ pub mod devices;
 pub mod dk;
 pub mod events;
 pub mod fastmath;
+pub mod harp;
 pub mod ir;
 pub mod linalg;
 pub mod media;

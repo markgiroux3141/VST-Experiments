@@ -117,6 +117,7 @@ const DRAWING: Device = Device {
     partition: None,
     coupling: None,
     pitch2: None,
+    live_speaker_v: None,
 };
 
 /// A finished render: where it was saved and what it was.
@@ -494,7 +495,9 @@ impl PlayView {
         // Its event kernels as its quality says (technique K: the live qualities').
         let dev = DEVICES.get(self.device).unwrap_or(&DRAWING);
         let events = self.settings_for(dev).is_ok_and(|s| s.events);
-        Ok(c.with_noise(self.noise)
+        Ok(dev
+            .live(c)
+            .with_noise(self.noise)
             .with_heaters(heaters)
             .with_events(events))
     }

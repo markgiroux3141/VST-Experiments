@@ -145,6 +145,8 @@ struct Context<'a> {
     /// The literal bias's substeps of every tape an events build reduced: the sections at
     /// them run at the sample rate.
     tape_islands: HashSet<usize>,
+    /// False: a speaker part's terminal voltage on its `out`, no readout (a live build).
+    speaker_readout: bool,
 }
 
 /// A build's heated cathodes, as Python's `build_ir(..., heaters=)`.
@@ -281,7 +283,7 @@ pub enum Noise {
 }
 
 /// Parts whose resistors are resistors (their noise), and the param holding their value.
-const NOISY: [(&str, Option<&str>); 8] = [
+const NOISY: [(&str, Option<&str>); 9] = [
     ("R", Some("r")),
     ("pot", Some("r")),
     ("rheostat", Some("r")),
@@ -290,6 +292,7 @@ const NOISY: [(&str, Option<&str>); 8] = [
     ("transformer", None),
     ("capsule", None),
     ("capsule_dual", None),
+    ("harp", None),
 ];
 
 /// Whether a part's value (a key or {value, source}) is sourced `numerical:`.
@@ -504,7 +507,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 21] = [
+const MACROS: [&str; 22] = [
     "R",
     "C",
     "L",
@@ -526,6 +529,7 @@ const MACROS: [&str; 21] = [
     "speaker",
     "plate",
     "tape",
+    "harp",
 ];
 
 fn macro_of(kind: &str) -> Macro {
@@ -622,6 +626,15 @@ fn macro_of(kind: &str) -> Macro {
         "plate" => (
             Some(3),
             vec![p("component", Raw), p("decay_500hz_s", Physical)],
+            false,
+        ),
+        "harp" => (
+            Some(1),
+            vec![
+                p("component", Raw),
+                p("rate_hz", Physical),
+                p("contact_rate_hz", Physical),
+            ],
             false,
         ),
         "tape" => (
@@ -968,6 +981,7 @@ fn expand(
         "speaker" => return speaker_part(ctx, name, nodes, a),
         "plate" => return plate_part(ctx, name, nodes, a),
         "tape" => return tape_part(ctx, name, nodes, a),
+        "harp" => return harp_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
 }
@@ -1033,6 +1047,11 @@ fn speaker_part(
         offset_y_m: f("offset_y_m")?,
     };
     let distance = f("distance_m")?;
+    if !ctx.speaker_readout {
+        return Ok(speaker::terminal(
+            name, &nodes[0], &nodes[1], &nodes[2], &model,
+        ));
+    }
     Ok(speaker::speaker(
         name, &nodes[0], &nodes[1], &nodes[2], &model, &cab, distance,
     ))
@@ -1275,6 +1294,47 @@ fn tape_reduction(
         demag_k: field(&d, "demag_k").map_err(bad)?,
     });
     Ok(())
+}
+
+/// A Rhodes harp (docs/RHODES_PLAN.md, RH3; `varimu.circuit.parts.harp`): its EMF V<NAME>
+/// on <name>_e behind its coils' resistance R<NAME>_coils and inductance L<NAME>_coils
+/// into `out`.
+fn harp_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.harp(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
+    let contact_rate_hz = ctx.float(&format!("{name}.contact_rate_hz"), &a["contact_rate_hz"])?;
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let (r_ohm, l_h) = (model.coils.r_ohm, model.coils.l_h);
+    Ok(vec![
+        Element::Harp(circuitsim::ir::Harp {
+            name: format!("V{upper}"),
+            out: format!("{n}_e"),
+            rate_hz,
+            contact_rate_hz,
+            model: Box::new((*model).clone()),
+        }),
+        Element::Resistor(circuitsim::ir::Resistor {
+            name: format!("R{upper}_coils"),
+            a: format!("{n}_e"),
+            b: format!("{n}_r"),
+            r_ohm,
+        }),
+        Element::Inductor(circuitsim::ir::Inductor {
+            name: format!("L{upper}_coils"),
+            a: format!("{n}_r"),
+            b: nodes[0].clone(),
+            l_h,
+        }),
+    ])
 }
 
 fn plate_part(
@@ -2013,6 +2073,23 @@ pub fn build_ir_events(
     heaters: Heaters,
     events: bool,
 ) -> Result<CircuitIr, Error> {
+    build_ir_live(lib, spec, p, cores, noise, heaters, events, true)
+}
+
+/// [`build_ir_events`], each speaker part without its readout when `speaker_readout` is
+/// false (its terminal voltage on its `out`: a live build): Python's
+/// `build_ir(..., speaker_readout=)`.
+#[allow(clippy::too_many_arguments)]
+pub fn build_ir_live(
+    lib: &Library,
+    spec: &CircuitSpec,
+    p: &Params,
+    cores: Cores,
+    noise: Noise,
+    heaters: Heaters,
+    events: bool,
+    speaker_readout: bool,
+) -> Result<CircuitIr, Error> {
     let mut q = p.clone();
     if events {
         // A control's `events` value is its setting in an events build (the 351's
@@ -2049,6 +2126,7 @@ pub fn build_ir_events(
         events,
         replaced_models: HashSet::new(),
         tape_islands: HashSet::new(),
+        speaker_readout,
     };
     ctx.noise = noise_setting(&ctx, noise)?;
     ctx.tolerance = tolerance(&ctx)?;

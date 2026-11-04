@@ -8,6 +8,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use circuitsim::media::NoteEvent;
 use midir::{Ignore, MidiInput, MidiInputConnection};
 
 /// The mod wheel's controller number.
@@ -40,10 +41,17 @@ struct KeysInner {
     presses: u64,
     /// The note-ons not yet taken (note, velocity), for the sampler: each key its own hit.
     ons: std::collections::VecDeque<(u8, u8)>,
+    /// Every key down and up and the sustain pedal not yet taken, as they arrived: a medium
+    /// played by keys (the Rhodes harp, docs/RHODES_PLAN.md RH3).
+    events: std::collections::VecDeque<(std::time::Instant, NoteEvent)>,
+    /// The sustain pedal down (CC 64 at 64 and over).
+    pedal: bool,
 }
 
 /// Note-ons kept until taken (older ones dropped: a player that doesn't take them).
 const MAX_ONS: usize = 256;
+/// Note events kept until taken (older ones dropped, as note-ons are).
+const MAX_EVENTS: usize = 1024;
 
 impl Default for KeysInner {
     fn default() -> Self {
@@ -53,15 +61,57 @@ impl Default for KeysInner {
             pressure: 0,
             presses: 0,
             ons: std::collections::VecDeque::new(),
+            events: std::collections::VecDeque::new(),
+            pedal: false,
+        }
+    }
+}
+
+impl KeysInner {
+    /// A message's note event, if it is one: a key down or up, the sustain pedal moving, or
+    /// all notes off (every key held up).
+    fn note_event(&mut self, m: &[u8]) {
+        let now = std::time::Instant::now();
+        let mut push = |e: NoteEvent| {
+            self.events.push_back((now, e));
+            while self.events.len() > MAX_EVENTS {
+                self.events.pop_front();
+            }
+        };
+        match (m[0] & 0xf0, m.get(1).copied(), m.get(2).copied()) {
+            (0x90, Some(note), Some(vel)) if vel > 0 => push(NoteEvent::On {
+                note: note & 127,
+                velocity: vel & 127,
+            }),
+            (0x80 | 0x90, Some(note), _) => push(NoteEvent::Off { note: note & 127 }),
+            (0xb0, Some(64), Some(v)) => {
+                let down = v >= 64;
+                if down != self.pedal {
+                    self.pedal = down;
+                    push(NoteEvent::Pedal { down });
+                }
+            }
+            (0xb0, Some(120 | 123), _) => {
+                for &(note, _) in &self.held.clone() {
+                    push(NoteEvent::Off { note });
+                }
+            }
+            _ => {}
         }
     }
 }
 
 impl Keys {
+    /// The key and pedal events since the last call, oldest first, with when each arrived.
+    pub fn take_events(&self) -> Vec<(std::time::Instant, NoteEvent)> {
+        self.inner.lock().expect("keys").events.drain(..).collect()
+    }
+
     /// Apply one MIDI message (any channel).
     pub fn message(&self, m: &[u8]) {
         let Some(&status) = m.first() else { return };
         let mut k = self.inner.lock().expect("keys");
+        k.note_event(m);
         match (status & 0xf0, m.get(1).copied(), m.get(2).copied()) {
             (0x90, Some(note), Some(vel)) if vel > 0 => {
                 k.held.retain(|&(n, _)| n != note);
@@ -260,6 +310,39 @@ impl TestOsc {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keys_record_their_events_for_a_harp() {
+        let k = Keys::default();
+        k.message(&[0x90, 60, 100]);
+        k.message(&[0x91, 64, 0]); // a note-on at velocity 0 is a key up
+        k.message(&[0xb0, 64, 127]);
+        k.message(&[0xb0, 64, 100]); // still down: no event
+        k.message(&[0xb0, 64, 10]);
+        k.message(&[0x80, 60, 40]);
+        k.message(&[0x90, 62, 90]);
+        k.message(&[0xb0, 123, 0]); // all notes off: the held key up
+        let ev: Vec<NoteEvent> = k.take_events().into_iter().map(|(_, e)| e).collect();
+        assert_eq!(
+            ev,
+            vec![
+                NoteEvent::On {
+                    note: 60,
+                    velocity: 100
+                },
+                NoteEvent::Off { note: 64 },
+                NoteEvent::Pedal { down: true },
+                NoteEvent::Pedal { down: false },
+                NoteEvent::Off { note: 60 },
+                NoteEvent::On {
+                    note: 62,
+                    velocity: 90
+                },
+                NoteEvent::Off { note: 62 },
+            ]
+        );
+        assert!(k.take_events().is_empty());
+    }
 
     #[test]
     fn keys_follow_the_last_held() {

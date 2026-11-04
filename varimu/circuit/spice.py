@@ -57,6 +57,7 @@ from varimu.circuit.ir import (
     Device,
     DeviceModel,
     Element,
+    Harp,
     HeatedCathode,
     HeaterSpec,
     Inductor,
@@ -350,7 +351,7 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
         return f"{el.name} {el.pos} {el.neg} {el.ctrl_pos} {el.ctrl_neg} {num(el.gm_s)}"
     if isinstance(el, Device):
         return f"{el.name} {' '.join(el.nodes)} {instance_target(models[el.model])}"
-    if isinstance(el, Plate | Tape):
+    if isinstance(el, Plate | Tape | Harp):
         # The medium cut out at its ports: the pickup held at 0 V, the sense unread.
         return f"{el.name} {el.out} 0 dc 0"
     if isinstance(el, ThyratronEvents):

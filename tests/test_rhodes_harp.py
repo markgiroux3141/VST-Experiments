@@ -99,5 +99,5 @@ def test_stage_into_5e3_builds():
     c = spec.load_circuit(spec.circuit_path("rhodes_stage_5e3"))
     ir = builder.build(c, {}).ir
     names = {e.name for e in ir.elements()}
-    assert {"RHARP", "LHARP", "CBASS", "RBASS", "CCABLE"} <= names
+    assert {"VHARP", "RHARP_coils", "LHARP_coils", "CBASS", "RBASS", "CCABLE"} <= names
     assert any(n.startswith("RSVOL") for n in names)  # the volume pot's two halves

@@ -228,6 +228,7 @@ class Render:
     fs_hz: float
     skipped: int  # notes outside the 73 keys
     voices: dict  # key -> Voice
+    raw_v: np.ndarray  # the EMF at fs x oversample, before decimation (index 0: rest)
 
 
 def render(
@@ -237,8 +238,11 @@ def render(
     oversample: int = 4,
     name: str = "mk1",
     progress: bool = False,
+    step_oversample: int = 4,
 ) -> Render:
-    """The harp's open-circuit EMF for the events (MIDI notes 28-100: the 73 keys)."""
+    """The harp's open-circuit EMF for the events (MIDI notes 28-100: the 73 keys). The
+    voices run at `oversample` x fs_hz, the hammer's contact at `step_oversample` x fs_hz
+    (a multiple of `oversample`)."""
     flux = pk.flux_map(spec.key(49, name).pickup, workers=6)
     ff = ff_speed_m_s(name, flux)
     n_total = int(round(duration_s * fs_hz * oversample)) + 1
@@ -264,7 +268,13 @@ def render(
             continue
         if kn not in voices:
             voices[kn] = Voice(
-                spec.key(kn, name), flux, out, fs_hz, oversample, weight=1.0 / group_size(kn)
+                spec.key(kn, name),
+                flux,
+                out,
+                fs_hz,
+                oversample,
+                step_oversample,
+                weight=1.0 / group_size(kn),
             )
             if progress:
                 print(f"harp: key {kn} ({len(voices)} voices)", flush=True)
@@ -283,4 +293,4 @@ def render(
     for v in voices.values():
         v.advance_to(n_total)
     emf = signal.resample_poly(out, 1, oversample) if oversample > 1 else out
-    return Render(emf, fs_hz, skipped, voices)
+    return Render(emf, fs_hz, skipped, voices, out)
