@@ -1,0 +1,31 @@
+device: Rhodes piano tine (tone generator assembly)
+document: "Tine Cutting Measurement Chart (Figure 6-2), with the replacement kit's staking and cutting instructions"
+publisher: Rhodes Keyboard Instruments U.S.A. (CBS Musical Instruments)
+date: "1979 (the service manual it belongs to: P/N 34.0119.000, copyright 1979)"
+local_copy: sources/rhodes_tine_cutting_chart.pdf
+local_copy_sha256: e55ab332fade93c36ed4965fd125642a18b50af293224b571729ddc4d357a4bc
+scan_source: "web: https://fenderrhodes.com/pdf/tine-cutting-chart.pdf (downloaded 2026-11-04; the manual's page 6-3: https://www.fenderrhodes.com/org/manual/ch6.html)"
+digitized_with: >-
+  scripts/digitize_rhodes_tines.py (PyMuPDF, numpy): page 1's raster (1275 x 1754 px, 150 px
+  per inch across the 8.5 in page) thresholded; each block's frame found as the column with
+  the longest dark run; one bar per dark run along a column just inside the frame (47 in the
+  left block, 35 in the right); each bar's length from the frame's outer edge (where the
+  chart's "measurement area" arrow starts) to its end, the first white gap of 3 px
+digitized_by: Claude Code
+digitized_on: 2026-11-04
+files:
+  rhodes_tine_lengths.csv:
+    figure: "p.1, Figure 6-2: one bar per tone generator, labelled '<73-key number>-<88-key number>' ('0-(1-7)' for the 88's seven lowest keys, which share one length)"
+    columns: "key (1-88, A0 = 1), bar_73 (the 73-key numbering, 0 for keys 1-7), free_length_m"
+    coverage: "keys 1-88: 156.8 mm (keys 1-8) to 18.5 mm (key 88)"
+estimated_error: >-
+  about +-0.3 mm per bar (a scan pixel is 0.17 mm, the bar's end and the frame's edge each
+  within a pixel or so), plus the scan's scale: the page is taken as printed full size (the
+  chart is a cutting guide); its extremes, 156.8 and 18.5 mm, agree with Shear 2011's 157 and
+  18 mm. Whether the frame's outer or inner edge is the reference (its width ~1 mm) is not
+  printed: the outer edge is taken. The right block's longest bar (key 54, 46.9 mm) is 1.2 mm
+  longer than the left block's shortest (key 53, 45.7 mm), as printed.
+notes: >-
+  The kit instructions (p.2): the tone generator's inside flush against the guide's left
+  side, the tine cut where its bar ends; three tone generator assemblies cover keys 1-23,
+  24-49 and 50-88. So these are free lengths from the tone generator's inside face.

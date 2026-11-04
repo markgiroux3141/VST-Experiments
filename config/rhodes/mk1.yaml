@@ -1,0 +1,120 @@
+# A Fender Rhodes Mark I's tone generators, action and pickups (docs/RHODES_PLAN.md, RH1;
+# varimu/rhodes/spec.py builds a key from these). Sources: data/schematics/rhodes/README.md.
+# "manual" = Rhodes Piano Service Manual, CBS Musical Instruments 1979 (P/N 34.0119.000),
+# web: https://www.fenderrhodes.com/org/manual/ (chapter.section as cited).
+# Values marked "fit:" are provisional unknowns set by the fit named (spec.py), each to a
+# different published measurement; they are genome candidates once a unit's spread exists.
+
+tuning:
+  a4_hz: {value: 440.0, source: "manual ch.5: A above middle C at 440 vibrations per second; equal tempered at the factory"}
+
+tine:
+  # free lengths per key: data/datasheets/rhodes_tine_lengths.csv (the manual's Fig. 6-2)
+  chart_outliers: {value: [54], source: "derived: the chart prints key 54's bar (47-54, the right block's last) 2.2 mm longer than key 55's, where every other step is ~1 mm shorter; at that length no spring tunes it (it is below its note bare): read as a drafting irregularity, its length interpolated in log length from keys 53 and 55"}
+  youngs_pa: {value: 2.0e11, source: "provisional: model knowledge (spring steel, 200-210 GPa)"}
+  density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (carbon steel)"}
+  tip_diameter_m: {value: 1.5e-3, source: "web: G. Shear, The Electromagnetically Sustained Rhodes Piano, MS thesis, UC Santa Barbara 2011, p.4 ('cylindrical with a diameter of 1.5 mm, except for slight widening at the base'), https://www.mat.ucsb.edu/Masters/GregShearMasters2011_12_5.pdf"}
+  root_diameter_m: {value: 3.0e-3, source: "provisional: fit (the tapered root, manual ch.7 Fig. 7-5 and Shear p.4, undimensioned): with the taper below, every key of the 73 (8-80) is 4-19% above its note bare (the least: key 57), so the spring (which only lowers) tunes it with room for the chart's reading error (~+-0.3 mm, ~1.4% at 43 mm); a uniform 1.5 mm tine is 26% flat at key 88"}
+  taper_length_m: {value: 7.0e-3, source: "provisional: fit, with root_diameter_m"}
+
+spring:
+  # The crimped coil spring is a counterweight (manual ch.1, ch.5); its mass per key isn't
+  # published (the spring sets are colour coded by key range: web: https://rhodesmusic.com/product/tuning-spring-set).
+  # fit: its mass is solved so the key is in tune with its centre at `position_fraction`
+  # of the tine; moving it then retunes (the manual: 1.5 semitones either way).
+  position_fraction: {value: 0.7, source: "provisional: model knowledge (springs sit in the tine's outer half, manual Fig. 5-1)"}
+  length_m: {value: 4.0e-3, source: "provisional: model knowledge (a few turns of wire; capped at 15% of the tine)"}
+  max_length_fraction: {value: 0.15, source: "provisional: model knowledge"}
+
+tonebar:
+  # The 1979 design's 'twisted steel bar' (manual ch.7, patent 3,644,656); Muenster &
+  # Pfeifle describe brass. Undimensioned in the sources: uniform here (the twist is RH5's).
+  youngs_pa: {value: 2.0e11, source: "manual ch.7: steel ('twisted steel bar'); provisional: model knowledge for its modulus"}
+  density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (steel)"}
+  thickness_m: {value: 3.2e-3, source: "provisional: model knowledge (1/8 in, in the plane of vibration)"}
+  width_m: {value: 9.5e-3, source: "provisional: model knowledge (3/8 in)"}
+  # fit: its length makes the bar alone (clamped) ring at the key's note: "they are alike
+  # only in pitch" (manual ch.1).
+  root_dx_m: {value: -0.010, source: "provisional: model knowledge (the bar's root behind the tine's, under the mounting screws)"}
+  bare_mount_k_n_m: {value: 1.0e+7, source: "provisional: model knowledge (keys without a bar: the block screwed firmly to the rail; on the bars' soft grommets the long tine's torque rocks the 5 g block and it is no cantilever)"}
+  first_key: {value: 8, source: "web: Shear 2011, p.32 ('on the 88 key piano, the lowest seven tines have no tonebars at all'); keys 1-7 are the 88's extension below the 73's E (manual ch.6)"}
+
+block:
+  mass_kg: {value: 0.005, source: "provisional: model knowledge (the aluminium tone generator, ~13 x 13 x 6 mm, with its screw)"}
+  inertia_kg_m2: {value: 1.5e-7, source: "provisional: model knowledge (that block about its centre)"}
+  x_m: {value: -0.003, source: "provisional: model knowledge (its centre just behind the tine's root)"}
+
+grommets:
+  x_m: {value: [-0.015, 0.008], source: "provisional: model knowledge (the two mounting screws through the grommets, either side of the root)"}
+  # fit: the stiffness puts the assembly's lowest mode, the bar and block on the grommets,
+  # at Muenster & Pfeifle's measured tone bar resonance (anchors below, a log-linear fit).
+  rubber_loss: {value: 0.2, source: "provisional: model knowledge (a rubber grommet's loss factor, ~0.1-0.3)"}
+  # fit: the tine's own loss (its pressed-in root, the air) decays its fundamental at
+  # Shear's measured Q (anchors below).
+  steel_loss: {value: 1.0e-4, source: "provisional: model knowledge (hard-drawn steel's loss factor at audio frequencies, ~1e-4)"}
+
+damper:
+  # The felt on its leaf-spring arm, pressed on the tine when the key is up (manual ch.2,
+  # ch.4: damper clearance 3/8-1/2 in when it lifts); the sustain pedal lifts the rail.
+  # fit: the felt as a dashpot at `position_fraction` of the tine, set so a released note's
+  # fundamental dies in `t60_s`.
+  position_fraction: {value: 0.5, source: "provisional: model knowledge (the felt under the tine's middle)"}
+  t60_s: {value: 0.15, source: "provisional: model knowledge (a Rhodes note stops within a fraction of a second when the key comes up; a condition dial: worn felts, RHODES_PLAN.md)"}
+
+velocity:
+  # MIDI velocity to the hammer's speed (varimu/rhodes/harp.py): v_ff 10^(-range_db / 20
+  # (127 - vel) / 126), v_ff set so `calibration_key` at 127 swings its tip `ff_swing_m`.
+  calibration_key: {value: 8, source: "the 73-key piano's lowest (E1)"}
+  ff_swing_m: {value: 9.5e-3, source: "provisional: model knowledge (the bass tines' full swing nearly reaches their bars: Shear 2011 p.32, the original bars reshaped for clearance; ~3/8 in)"}
+  range_db: {value: 30.0, source: "provisional: model knowledge (a keyboard's velocity 1 to 127 spans ~30 dB of hammer speed)"}
+
+hammer:
+  mass_kg: {value: 0.010, source: "provisional: model knowledge (a Rhodes hammer's effective mass at the tip; checked against the measured contact time, anchors)"}
+  tip_radius_m: {value: 3.0e-3, source: "provisional: model knowledge (the neoprene tip's crown, crossed with the tine)"}
+  tip_width_m: {value: 6.35e-3, source: "provisional: model knowledge (1/4 in along the tine)"}
+  # Hardness by tip number = key (manual ch.4, Escapement): 1-30 durometer 30, 31-40 50,
+  # 41-50 70, 51-64 90, 65-88 wrapped (extra hard). Young's modulus from Shore A by Gent's
+  # relation (A. N. Gent, Trans. Inst. Rubber Ind. 34, 1958); the wrapped tips' is provisional.
+  durometer_bounds: {value: [30, 40, 50, 64], source: "manual ch.4 (Escapement): the last tip number of each hardness"}
+  durometers: {value: [30, 50, 70, 90], source: "manual ch.4 (Escapement)"}
+  wrapped_youngs_pa: {value: 4.0e7, source: "provisional: model knowledge (a 90 durometer tip under a hard wrap, ~2x the bare tip)"}
+  poisson: {value: 0.49, source: "provisional: model knowledge (rubber, nearly incompressible)"}
+  exponent: {value: 1.5, source: "provisional: Hertz contact"}
+  hysteresis_s_m: {value: 0.4, source: "provisional: model knowledge (Hunt-Crossley damping, a restitution ~0.7 at 1 m/s)"}
+  # Striking line: the hammer tip's leading edge to the tone generator's (manual ch.4 (Striking Line)):
+  # ~2-1/4 in at the extreme bass tone bar, ~1/8 in at the extreme treble; between them
+  # linear in the tine's length (the rail's curve isn't dimensioned).
+  strike_line_bass_m: {value: 0.05715, source: "manual ch.4 (Striking Line)"}
+  strike_line_treble_m: {value: 0.003175, source: "manual ch.4 (Striking Line)"}
+
+pickup:
+  gap_m: {value: 1.588e-3, source: "manual ch.4 (Pickup, volume): 1/16 to 1/8 in between tine and pickup (the smaller is louder, more dynamic)"}
+  voicing_m: {value: 0.4e-3, source: "provisional: model knowledge (manual ch.4 (Voicing, timbre): the tine's tip 'slightly above dead center' of the pickup; a control)"}
+  coil_ohm: {value: 180.0, source: "web: https://www.fenderrhodes.com/service/pickups.html (healthy pickups 170-190 ohm, by vintage)"}
+  turns: {value: 2800, source: "provisional: model knowledge (180 ohm of AWG 38, 2.1 ohm/m, at ~30 mm a turn)"}
+  magnet_width_m: {value: 4.76e-3, source: "provisional: model knowledge (a 3/16 in round magnet)"}
+  magnet_length_m: {value: 12.7e-3, source: "provisional: model knowledge"}
+  wedge_length_m: {value: 2.4e-3, source: "provisional: model knowledge (the pole's chisel end, ~90 degrees; its wedge shape: Muenster & Pfeifle, ISMA 2014, 2.2)"}
+  magnet_br_t: {value: 0.38, source: "provisional: model knowledge (ferrite, Muenster & Pfeifle 2.2: 'a round ferrite magnet')"}
+  magnet_mu_r: {value: 1.05, source: "provisional: model knowledge (ferrite's recoil permeability)"}
+  tine_mu_r: {value: 100.0, source: "provisional: model knowledge (hard-drawn steel's incremental permeability at low field)"}
+  coil_inner_m: {value: 2.6e-3, source: "provisional: model knowledge (the bobbin's bore, radius)"}
+  coil_outer_m: {value: 6.5e-3, source: "provisional: model knowledge (radius)"}
+  coil_length_m: {value: 9.5e-3, source: "provisional: model knowledge"}
+
+# Published measurements the fits use or the study compares with.
+anchors:
+  q_shear:  # Shear 2011 Tables 2.1 and 5.1 (a 1974 Mark I, 88 keys): [Hz, Q]
+    value: [[77.8, 949], [155.6, 731], [246.9, 1101], [261.6, 1238], [277.1, 1040], [293.7, 1156], [311.1, 1520], [622.3, 2175], [1244.5, 1761]]
+    source: "web: Shear 2011, Table 2.1 p.5 and Table 5.1 p.28 (the original systems), https://www.mat.ucsb.edu/Masters/GregShearMasters2011_12_5.pdf"
+  tonebar_muenster:  # [73-key bar number, note Hz at the output, tone bar's own f0 Hz]
+    value: [[12, 79, 51], [19, 118, 69], [26, 176, 79], [33, 263, 105], [40, 393, 138], [47, 588, 183], [54, 880, 140], [61, 1316, 145], [68, 1969, 222]]
+    source: "web: M. Muenster and F. Pfeifle, Non-linear behaviour in sound production of the Rhodes piano, ISMA 2014, Table 1 (a Mark I; the tone bar struck with an impulse hammer), http://www.conforg.fr/isma2014/cdrom/data/articles/000062.pdf"
+  contact_time_s:
+    value: 6.42e-3
+    source: "web: Muenster & Pfeifle, ISMA 2014, 3.1.1 (the average contact of the neoprene tip on the tine, high-speed camera; key not stated)"
+
+numerics:
+  f_max_hz: {value: 20000.0, source: "numerical: the highest mode kept by the live tier"}
+  element_m: {value: 2.0e-3, source: "numerical: the longest beam element"}
+  full_scale_v: {value: 0.5, source: "numerical: the WAVs' 0 dBFS, 0.5 V peak of the pickup's EMF"}
