@@ -66,9 +66,9 @@ use varimu_app::audio;
 use varimu_app::live::{Circuit, Values};
 use varimu_app::loopback::{self, Analysis, Calibration, Run};
 use varimu_app::panel::{self as vpanel, DEVICES, Kind, Knob};
-use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, input_devices};
+use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey, input_devices};
 use varimu_app::prefs::ALIGNMENT_DBFS;
-use varimu_app::print::{Job, Slot, find_device};
+use varimu_app::print::{Job, KeyRoute, Slot, find_device};
 use varimu_app::session::{
     OVERVIEW_BIN, Overview, Printed, Session, Take, Track, transport_from, transport_json,
 };
@@ -834,12 +834,13 @@ impl SessionView {
             None => take.audio.clone(),
         };
         let key = format!(
-            "{}|{}|{}|{}|{:p}",
+            "{}|{}|{}|{}|{:p}|{}",
             take.id,
             stage,
             take.position,
             audio.len(),
-            Arc::as_ptr(&audio)
+            Arc::as_ptr(&audio),
+            self.session.key_signature(t, &track.inserts[k])
         );
         Some((audio, take.position, key))
     }
@@ -890,7 +891,8 @@ impl SessionView {
                 self.resume_instrument = true;
             }
             let running = play.player().is_some_and(|p| p.status().transport.running);
-            match self.start_audition(&slot, audio, start) {
+            let side = self.session.sidechain(t, &slot);
+            match self.start_audition(&slot, audio, start, side) {
                 Ok(p) => {
                     if p.rate != self.session.rate && self.session.end() > 0 {
                         self.error = Some(format!(
@@ -994,12 +996,13 @@ impl SessionView {
     }
 
     /// A player for `slot`'s device at its play quality, fed by `audio` from timeline
-    /// position `start`.
+    /// position `start` (and its key input by `side` from there, if it is keyed).
     fn start_audition(
         &self,
         slot: &Slot,
         audio: Arc<Vec<f32>>,
         start: i64,
+        side: Option<Arc<Vec<f32>>>,
     ) -> Result<Player, String> {
         let config = self.root.join("config");
         let d = find_device(&slot.device).ok_or(format!("no device {}", slot.device))?;
@@ -1007,8 +1010,23 @@ impl SessionView {
         let circuit = Circuit::load(&config, d.circuit, s.cores()?)?
             .with_events(s.events)
             .with_noise(slot.noise);
+        let key = match (side, d.key, &slot.key) {
+            (Some(audio), Some(name), Some(route)) => {
+                let inputs = &circuit.spec().cv_inputs;
+                Some(TimelineKey {
+                    audio,
+                    control: inputs
+                        .iter()
+                        .position(|(n, _)| n == name)
+                        .ok_or(format!("no control input {name}"))?,
+                    controls: inputs.len(),
+                    volts: 10f64.powf(route.trim_db / 20.0) * circuit.full_scale(&s).input_v,
+                })
+            }
+            _ => None,
+        };
         let p = Player::start(
-            Source::Timeline { audio, start },
+            Source::Timeline { audio, start, key },
             slot.values.clone(),
             circuit,
             s,
@@ -1046,9 +1064,10 @@ impl SessionView {
                         audio,
                         stages: prints.iter().map(|p| p.audio.clone()).collect(),
                     };
-                    for t in &mut self.session.tracks {
-                        if t.chain_signature(rate).as_deref() == Some(j.signature.as_str()) {
-                            t.printed = Some(printed.clone());
+                    for i in 0..self.session.tracks.len() {
+                        if self.session.chain_signature(i).as_deref() == Some(j.signature.as_str())
+                        {
+                            self.session.tracks[i].printed = Some(printed.clone());
                         }
                     }
                 }
@@ -1058,11 +1077,8 @@ impl SessionView {
                 _ => {}
             }
         }
-        let wanted: HashSet<String> = self
-            .session
-            .tracks
-            .iter()
-            .filter_map(|t| t.chain_signature(rate))
+        let wanted: HashSet<String> = (0..self.session.tracks.len())
+            .filter_map(|i| self.session.chain_signature(i))
             .collect();
         for j in &mut self.jobs {
             if !j.cancelled && !wanted.contains(&j.signature) {
@@ -1086,10 +1102,13 @@ impl SessionView {
                 if running >= MAX_PRINT_JOBS {
                     break;
                 }
-                let (Some(sig), Some(k)) = (t.chain_signature(rate), t.active_take()) else {
+                let (Some(sig), Some(k)) = (self.session.chain_signature(ti), t.active_take())
+                else {
                     continue;
                 };
-                if t.print_current(rate)
+                // A keyed track waits for its key tracks' prints (one print per change).
+                if self.session.print_current(ti)
+                    || !self.session.keys_ready(ti)
                     || self.print_errors.contains_key(&sig)
                     || self.jobs.iter().any(|j| !j.cancelled && j.signature == sig)
                 {
@@ -1100,6 +1119,7 @@ impl SessionView {
                     job: Job::spawn(
                         config.clone(),
                         slots,
+                        self.session.sidechains(ti),
                         k.audio.clone(),
                         rate,
                         Some(cache.clone()),
@@ -1118,12 +1138,11 @@ impl SessionView {
     /// Insert `k` of track `t`'s state: its glyph, colour and what it says on hover.
     fn insert_state(&self, t: usize, k: usize) -> (String, Color32, String) {
         let track = &self.session.tracks[t];
-        let rate = self.session.rate;
         let slot = &track.inserts[k];
         if slot.bypass {
             return ("⏻".into(), theme::FAINT, "bypassed".into());
         }
-        let Some(sig) = track.chain_signature(rate) else {
+        let Some(sig) = self.session.chain_signature(t) else {
             return ("".into(), theme::MUTED, "no take to print".into());
         };
         if let Some(e) = self.print_errors.get(&sig) {
@@ -1154,11 +1173,17 @@ impl SessionView {
                 ),
             };
         }
-        if track.print_current(rate) {
+        if self.session.print_current(t) {
             (
                 "✓".into(),
                 theme::OK,
                 "rendered for playback (still editable; ⤓ Render bakes it into a new take)".into(),
+            )
+        } else if !self.session.keys_ready(t) {
+            (
+                "…".into(),
+                theme::WARN,
+                "waiting for its key track to render (the older render plays meanwhile)".into(),
             )
         } else {
             (
@@ -1240,7 +1265,7 @@ impl SessionView {
         let levels = {
             let tr = &self.session.tracks[t];
             match (tr.active_take(), &tr.printed) {
-                (Some(take), Some(p)) if tr.print_current(rate) => {
+                (Some(take), Some(p)) if self.session.print_current(t) => {
                     let a: Vec<f64> = take.audio.iter().map(|&v| v as f64).collect();
                     let b: Vec<f64> = p.audio.iter().map(|&v| v as f64).collect();
                     Some((
@@ -1310,6 +1335,9 @@ impl SessionView {
             });
         });
         ui.add_space(4.0);
+        if find_device(&device).is_some_and(|d| d.key.is_some()) {
+            changed |= self.key_row(ui, t, k);
+        }
         let slot = &mut self.session.tracks[t].inserts[k];
         let play_quality = find_device(&slot.device).map_or(Quality::Draft1x, |d| d.quality);
         ui.horizontal(|ui| {
@@ -1415,6 +1443,102 @@ impl SessionView {
         }
     }
 
+    /// A keyed insert's KEY row: the track its key input listens to (none: the stock
+    /// sidechain, KEY INT), the key's trim. Choosing a track sets KEY EXT and the trim (the
+    /// key track's loudest stretch to the alignment level, set once); none sets INT.
+    fn key_row(&mut self, ui: &mut egui::Ui, t: usize, k: usize) -> bool {
+        let rate = self.session.rate;
+        let route = self.session.tracks[t].inserts[k].key.clone();
+        let current = route
+            .as_ref()
+            .and_then(|r| self.session.track_index(&r.track));
+        let choices: Vec<(usize, String, bool)> = (0..self.session.tracks.len())
+            .filter(|&i| i != t)
+            .map(|i| {
+                let ok = !self.session.would_cycle(t, i);
+                (i, self.session.tracks[i].name.clone(), ok)
+            })
+            .collect();
+        let shown = match (&route, current) {
+            (None, _) => "none (INT: its own output)".to_string(),
+            (Some(_), Some(i)) => self.session.tracks[i].name.clone(),
+            (Some(_), None) => "a deleted track (silent)".to_string(),
+        };
+        let mut chosen: Option<Option<usize>> = None;
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("KEY").strong().color(theme::ACCENT));
+            egui::ComboBox::from_id_salt(("insert_key", t, k))
+                .selected_text(shown)
+                .show_ui(ui, |ui| {
+                    if ui.selectable_label(route.is_none(), "none (INT)").clicked() {
+                        chosen = Some(None);
+                    }
+                    for (i, name, ok) in &choices {
+                        let r = ui
+                            .add_enabled(*ok, egui::Button::selectable(current == Some(*i), name))
+                            .on_disabled_hover_text("it is keyed from this track: a loop");
+                        if r.clicked() {
+                            chosen = Some(Some(*i));
+                        }
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "Which track drives the sidechain (the KEY jack, KEY EXT): what it plays \
+                     after its inserts, before its fader, muted or not. None: the 670's own \
+                     output (KEY INT)",
+                );
+            if let Some(r) = &mut self.session.tracks[t].inserts[k].key {
+                ui.label("Key trim");
+                changed |= ui
+                    .add(
+                        egui::DragValue::new(&mut r.trim_db)
+                            .range(-40.0..=40.0)
+                            .speed(0.1)
+                            .max_decimals(1)
+                            .suffix(" dB"),
+                    )
+                    .on_hover_text(
+                        "The fader in front of the key input. Keyed, the 670 has no ratio: \
+                         a few dB more key goes from a light duck to the bass cut off \
+                         (AC THRESHOLD sets where); DEPTH limits how deep it ducks (fully \
+                         clockwise: no limit)",
+                    )
+                    .changed();
+            }
+        });
+        if let Some(c) = chosen {
+            let slot_key = match c {
+                None => None,
+                Some(i) => {
+                    let level = self.session.tracks[i]
+                        .playing(rate)
+                        .map(|(_, a, _)| {
+                            let x: Vec<f64> = a.iter().map(|&v| v as f64).collect();
+                            audio::level_dbfs(&x, rate, 8.0)
+                        })
+                        .filter(|l| *l > -200.0);
+                    Some(KeyRoute {
+                        track: self.session.tracks[i].id.clone(),
+                        trim_db: level.map_or(0.0, |l| {
+                            ((ALIGNMENT_DBFS - l).clamp(-40.0, 40.0) * 10.0).round() / 10.0
+                        }),
+                    })
+                }
+            };
+            let slot = &mut self.session.tracks[t].inserts[k];
+            let mode = YValue::Int(i64::from(slot_key.is_some()));
+            match slot.values.iter_mut().find(|(n, _)| n == "key_mode") {
+                Some((_, v)) => *v = mode,
+                None => slot.values.push(("key_mode".into(), mode)),
+            }
+            slot.key = slot_key;
+            changed = true;
+        }
+        changed
+    }
+
     /// The row of insert chips under a track's strip (+ adds one).
     fn inserts_row(&mut self, ui: &mut egui::Ui, i: usize) -> bool {
         let mut changed = false;
@@ -1428,7 +1552,14 @@ impl SessionView {
                 let name = find_device(&slot.device).map_or(slot.device.clone(), |d| {
                     d.label.split(" (").next().unwrap_or(d.label).to_string()
                 });
-                let short = name.split_whitespace().last().unwrap_or(&name).to_string();
+                let mut short = name.split_whitespace().last().unwrap_or(&name).to_string();
+                if let Some(r) = slot.key.as_ref().filter(|_| print_key_input(slot)) {
+                    let key = self
+                        .session
+                        .track_index(&r.track)
+                        .map_or("?", |j| self.session.tracks[j].name.as_str());
+                    short = format!("{short} ⚷ {key}");
+                }
                 let (glyph, colour, state) = self.insert_state(i, k);
                 let selected = self.insert_selected() == Some((i, k));
                 let bypass = self.session.tracks[i].inserts[k].bypass;
@@ -1563,6 +1694,7 @@ impl SessionView {
         let job = Job::spawn(
             self.root.join("config"),
             slots.clone(),
+            self.session.sidechains(t),
             take.audio.clone(),
             self.session.rate,
             Some(self.session.dir.join("prints")),
@@ -1606,8 +1738,20 @@ impl SessionView {
             self.error = Some("the rendered take's track or source take is gone".into());
             return;
         };
+        // A keyed insert's key: the track and the take it played then.
+        let keys: Vec<Value> = b
+            .slots
+            .iter()
+            .filter_map(|s| s.key.as_ref())
+            .filter_map(|r| {
+                let i = self.session.track_index(&r.track)?;
+                let k = self.session.tracks[i].active_take()?;
+                Some(json!({"track": r.track, "take": k.id, "position": k.position}))
+            })
+            .collect();
         let from = json!({
             "take": b.take,
+            "keys": keys,
             "inserts": b.slots.iter().map(Slot::to_json).collect::<Vec<_>>(),
             "quality": Quality::Production.name(),
             "code": circuitsim::SOURCE_HASH,
@@ -2880,6 +3024,11 @@ fn take_line(k: &Take, rate: u32) -> String {
 /// The timeline's mapping between positions (samples) and x (px).
 /// A knob of an insert's panel as an egui widget, its value in `values` (the circuit's
 /// default while it isn't there). Returns whether it changed.
+/// Whether a slot's device has a key input (its route is heard).
+fn print_key_input(slot: &Slot) -> bool {
+    find_device(&slot.device).is_some_and(|d| d.key.is_some())
+}
+
 fn knob_ui(
     ui: &mut egui::Ui,
     knob: &Knob,

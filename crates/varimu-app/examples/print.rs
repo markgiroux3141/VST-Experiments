@@ -99,6 +99,7 @@ fn main() -> Result<(), String> {
             &p,
             s,
             &cur,
+            None,
             rate,
             cache.as_deref(),
             |f| {

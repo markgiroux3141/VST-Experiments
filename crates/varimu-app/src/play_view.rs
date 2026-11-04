@@ -113,6 +113,7 @@ const DRAWING: Device = Device {
     velocity: None,
     pitch: None,
     own_oscillator: false,
+    key: None,
     partition: None,
     coupling: None,
     pitch2: None,

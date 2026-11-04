@@ -806,4 +806,68 @@ mod tests {
         let lag = chain_lag(2, 1, 48_000);
         assert!((15..=30).contains(&lag), "{lag}");
     }
+
+    /// A keyed 670 (KEY EXT) live: a bass tone, then kicks on its key input from 0.4 s, as
+    /// a keyed insert's audition feeds it (`player::TimelineKey`; SIDECHAIN_PLAN.md K2).
+    #[test]
+    fn a_key_on_its_control_input_ducks_a_live_stream() {
+        use super::{Circuit, Live};
+        use crate::settings::{Quality, Settings};
+        use varimu_circuit::yaml::Value;
+
+        let config = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
+        let d = crate::print::find_device("fairchild_670_keyed").unwrap();
+        let s = d.play_settings(&Settings::load(&config, Quality::Draft1x).unwrap());
+        let c = Circuit::load(&config, d.circuit, s.cores().unwrap()).unwrap();
+        let key = c
+            .spec()
+            .cv_inputs
+            .iter()
+            .position(|(n, _)| Some(n.as_str()) == d.key)
+            .unwrap();
+        let volts = c.full_scale(&s).input_v;
+        let values = vec![
+            ("key_mode".to_string(), Value::Int(1)),
+            ("time_constant".to_string(), Value::Int(1)),
+            ("key_depth".to_string(), Value::Float(1.0)),
+        ];
+        let mut live = Live::with_controls(&[], values, c, s.clone(), 1.0, &[]).unwrap();
+        let rate = s.host() as f64;
+        let (block, blocks) = (480, 120); // 10 ms blocks, 1.2 s
+        let mut level = Vec::new();
+        let mut phase = 0.0f64;
+        for b in 0..blocks {
+            let t: Vec<f64> = (0..block).map(|i| (b * block + i) as f64 / rate).collect();
+            let x: Vec<f64> = t
+                .iter()
+                .map(|&t| {
+                    0.126 * (2.0 * std::f64::consts::PI * 110.0 * t).sin() * (t * 20.0).min(1.0)
+                })
+                .collect();
+            let k: Vec<f64> = t
+                .iter()
+                .map(|&t| {
+                    if t < 0.4 {
+                        return 0.0;
+                    }
+                    let u = (t - 0.4) % 0.25;
+                    phase += 2.0 * std::f64::consts::PI * (50.0 + 100.0 * (-u / 0.03).exp()) / rate;
+                    0.5 * phase.sin() * (-u / 0.12).exp() * volts
+                })
+                .collect();
+            let mut ctl = vec![vec![0.0; block]; live.controls.len()];
+            ctl[key] = k;
+            let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
+            let (y, _) = live.process_with(&x, &refs).unwrap();
+            level
+                .push((y.iter().map(|&v| (v as f64).powi(2)).sum::<f64>() / y.len() as f64).sqrt());
+        }
+        let before = level[30..40].iter().sum::<f64>() / 10.0;
+        let ducked = level[41..46].iter().cloned().fold(f64::INFINITY, f64::min);
+        assert!(before > 0.01, "the bass plays ({before})");
+        assert!(
+            ducked < 0.3 * before,
+            "a kick ducks it ({ducked} vs {before})"
+        );
+    }
 }

@@ -48,6 +48,10 @@ pub struct Device {
     /// Its circuit makes its own sound without a pitch input (a drum's oscillator): the
     /// keys only gate it, its audio input stays silent (as with a `pitch` input).
     pub own_oscillator: bool,
+    /// The circuit's control input a key (sidechain) signal drives: another track's audio
+    /// in the session, in circuit volts on the input's full scale (None: no key input;
+    /// SIDECHAIN_PLAN.md).
+    pub key: Option<&'static str>,
     /// The sections its draft puts on the second thread, over its quality's
     /// `partition` (None: the quality's).
     pub partition: Option<&'static [&'static str]>,
@@ -377,7 +381,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 14] = [
+pub const DEVICES: [Device; 15] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -399,6 +403,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -416,6 +421,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -439,6 +445,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -458,6 +465,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -477,6 +485,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -496,6 +505,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -519,6 +529,7 @@ pub const DEVICES: [Device; 14] = [
             range: None,
         }),
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -557,6 +568,7 @@ pub const DEVICES: [Device; 14] = [
         // its supply and its grid's side of the pitch (it owns the follower's cathode, where
         // the mixer hears it); OSC OFF empties the LC oscillator's.
         own_oscillator: false,
+        key: None,
         pitch2: Some(Pitch {
             control: "pitch2",
             tuning: SYNTH_SAW_TUNING,
@@ -600,6 +612,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: true,
+        key: None,
         pitch2: None,
         coupling: None,
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
@@ -626,6 +639,7 @@ pub const DEVICES: [Device; 14] = [
             range: None,
         }),
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: Some("hold"),
         // Two threads: the VCA | the rest (the oscillator, the keys and the envelope: control
@@ -647,6 +661,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -674,6 +689,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         // Cut at the medium (the tape senses its record head a sample late), held across
         // the cut: at full DRIVE the saturating record side's Newton work splits from the
@@ -710,6 +726,7 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         pitch2: None,
         // Held across the cuts: extrapolated, the crossed slap through each part's input
         // bus kept the record side's Newton from contracting (13.6 iterations a sample
@@ -746,10 +763,37 @@ pub const DEVICES: [Device; 14] = [
         velocity: None,
         pitch: None,
         own_oscillator: false,
+        key: None,
         // The supply on a thread of its own, coupled through its rails (as the 670's).
         partition: Some(&["power supply"]),
         coupling: None,
         pitch2: None,
+    },
+    Device {
+        id: "fairchild_670_keyed",
+        label: "Fairchild 670 + key (compressor, sidechain)",
+        circuit: "fairchild_670_keyed",
+        panel: Some(&[
+            "key_mode",
+            "key_depth",
+            "input_atten_db",
+            "ac_threshold",
+            "time_constant",
+            "dc_threshold",
+        ]),
+        // The 670's (above).
+        ahead_s: 0.25,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: Some("key"),
+        pitch2: None,
+        coupling: None,
+        partition: None,
     },
 ];
 

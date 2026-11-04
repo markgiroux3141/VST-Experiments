@@ -9,10 +9,17 @@
 //! render), back to the session's rate, the make-up gain, float32. A bypassed slot passes
 //! its input through.
 //!
+//! **A sidechain**: a slot whose device has a key input (`panel::Device::key`, the keyed
+//! 670) and a [`KeyRoute`] prints with another track's audio on that control input, beside
+//! its input from the same start (`sidechain`, at the session's rate): the route's trim, in
+//! circuit volts on the input's full scale, through the same render. The session makes the
+//! sidechain (SIDECHAIN_PLAN.md K3); a print only takes it.
+//!
 //! **The key** is a sha256 over everything that changes a print: the input samples and
 //! rate, the device's IR as built for the slot's values (so the circuit, its pinned
 //! component versions and every value are in it), the quality's settings, the full scale,
-//! the gains and tail, and circuitsim's `SOURCE_HASH`. In a chain, insert k's input is
+//! the gains and tail, circuitsim's `SOURCE_HASH`, and a sidechain's samples and trim when
+//! there is one (so a print without one keeps its key). In a chain, insert k's input is
 //! insert k-1's print, so a change re-prints that insert and the ones after it only.
 //!
 //! **On disk**: `<session>/prints/<key>/print.wav` (mono float32 at the session's rate)
@@ -31,7 +38,7 @@ use varimu_circuit::yaml::Value;
 
 use crate::live::{Circuit, Values};
 use crate::panel::{DEVICES, Device};
-use crate::render::render;
+use crate::render::render_controls;
 use crate::resample::resample;
 use crate::settings::{Quality, Settings};
 
@@ -61,6 +68,19 @@ pub struct Slot {
     /// The device's share of the output, the rest the input before the trim (a console's
     /// wet / dry: 1 is the device only; a reverb starts at [`REVERB_WET`]).
     pub wet: f64,
+    /// Where its key input listens (a device with one: `panel::Device::key`; None: no
+    /// sidechain, the key input at 0 V).
+    pub key: Option<KeyRoute>,
+}
+
+/// A slot's sidechain route: another track's audio (after its inserts, before its fader,
+/// muted or not) on the device's key input (SIDECHAIN_PLAN.md decisions 2-3).
+#[derive(Debug, Clone, PartialEq)]
+pub struct KeyRoute {
+    /// The key track's id (`session::Track::id`).
+    pub track: String,
+    /// The fader in front of the key input (dB): set once from the key's loudest stretch.
+    pub trim_db: f64,
 }
 
 /// A reverb's wet share when it's added as an insert (the dry signal passes too).
@@ -90,6 +110,7 @@ impl Slot {
             } else {
                 1.0
             },
+            key: None,
         }
     }
 
@@ -109,6 +130,7 @@ impl Slot {
             "tail_s": self.tail_s,
             "noise": self.noise,
             "wet": self.wet,
+            "key": self.key.as_ref().map(|k| json!({"track": k.track, "trim_db": k.trim_db})),
         })
     }
 
@@ -131,6 +153,16 @@ impl Slot {
         s.tail_s = v["tail_s"].as_f64().unwrap_or(DEFAULT_TAIL_S);
         s.noise = v["noise"].as_bool().unwrap_or(true);
         s.wet = v["wet"].as_f64().unwrap_or(1.0);
+        s.key = match &v["key"] {
+            Json::Null => None,
+            k => Some(KeyRoute {
+                track: k["track"]
+                    .as_str()
+                    .ok_or("a key route without a track")?
+                    .to_string(),
+                trim_db: k["trim_db"].as_f64().unwrap_or(0.0),
+            }),
+        };
         Ok(s)
     }
 }
@@ -214,8 +246,20 @@ fn db(x: f64) -> f64 {
     10f64.powf(x / 20.0)
 }
 
-/// The key of `slot`'s print of `input` (see the module docs).
-pub fn key(prep: &Prepared, slot: &Slot, input: &[f32], rate: u32) -> Result<String, String> {
+/// The key input a slot's print drives (the device's, when the slot has a route).
+pub fn key_control(slot: &Slot) -> Option<&'static str> {
+    slot.key.as_ref()?;
+    find_device(&slot.device)?.key
+}
+
+/// The key of `slot`'s print of `input` with `sidechain` (see the module docs).
+pub fn key(
+    prep: &Prepared,
+    slot: &Slot,
+    input: &[f32],
+    sidechain: Option<&[f32]>,
+    rate: u32,
+) -> Result<String, String> {
     let ir = prep.circuit.build(&slot.values)?;
     let mut h = Sha256::new();
     h.update(b"varimu print 1\n");
@@ -231,17 +275,27 @@ pub fn key(prep: &Prepared, slot: &Slot, input: &[f32], rate: u32) -> Result<Str
     for x in [slot.trim_db, slot.makeup_db, slot.tail_s, slot.wet] {
         h.update(x.to_bits().to_le_bytes());
     }
+    if let (Some(c), Some(side), Some(route)) = (key_control(slot), sidechain, &slot.key) {
+        h.update(b"sidechain\n");
+        h.update(c.as_bytes());
+        h.update(route.trim_db.to_bits().to_le_bytes());
+        h.update((side.len() as u64).to_le_bytes());
+        for v in side {
+            h.update(v.to_le_bytes());
+        }
+    }
     Ok(h.finalize()[..16]
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect())
 }
 
-/// `input` through the slot's device (see the module docs), uncached.
+/// `input` through the slot's device with `sidechain` (see the module docs), uncached.
 pub fn print_uncached(
     prep: &Prepared,
     slot: &Slot,
     input: &[f32],
+    sidechain: Option<&[f32]>,
     rate: u32,
     progress: impl FnMut(f64),
     cancel: &AtomicBool,
@@ -252,10 +306,21 @@ pub fn print_uncached(
     let mut x: Vec<f64> = input.iter().map(|&v| v as f64 * trim).collect();
     x.resize(input.len() + tail, 0.0);
     let n = x.len();
-    let r = render(
+    let side_v: Option<(&str, Vec<f64>)> = match (key_control(slot), sidechain, &slot.key) {
+        (Some(c), Some(side), Some(route)) => {
+            let v = db(route.trim_db) * prep.circuit.full_scale(s).input_v;
+            let mut k: Vec<f64> = side.iter().take(n).map(|&u| u as f64 * v).collect();
+            k.resize(n, 0.0);
+            Some((c, resample(&k, rate, s.sample_rate)))
+        }
+        _ => None,
+    };
+    let controls: Vec<(&str, &[f64])> = side_v.iter().map(|(c, k)| (*c, k.as_slice())).collect();
+    let r = render_controls(
         &prep.circuit,
         &slot.values,
         &resample(&x, rate, s.sample_rate),
+        &controls,
         s,
         progress,
         cancel,
@@ -276,13 +341,15 @@ pub fn print_uncached(
     ))
 }
 
-/// `input` through the slot: from `cache` (a session folder's `prints/`) if it holds the
-/// key, else rendered and kept there (`cache` None: rendered, not kept). A bypassed slot
-/// returns its input.
+/// `input` (with `sidechain`) through the slot: from `cache` (a session folder's
+/// `prints/`) if it holds the key, else rendered and kept there (`cache` None: rendered,
+/// not kept). A bypassed slot returns its input.
+#[allow(clippy::too_many_arguments)]
 pub fn print(
     prep: &Prepared,
     slot: &Slot,
     input: &Arc<Vec<f32>>,
+    sidechain: Option<&[f32]>,
     rate: u32,
     cache: Option<&Path>,
     progress: impl FnMut(f64),
@@ -296,7 +363,7 @@ pub fn print(
             realtime_factor: 0.0,
         });
     }
-    let key = key(prep, slot, input, rate)?;
+    let key = key(prep, slot, input, sidechain, rate)?;
     if let Some(dir) = cache
         && let Some(audio) = read_print(&dir.join(&key), rate)?
     {
@@ -307,7 +374,7 @@ pub fn print(
             realtime_factor: 0.0,
         });
     }
-    let (audio, rtf) = print_uncached(prep, slot, input, rate, progress, cancel)?;
+    let (audio, rtf) = print_uncached(prep, slot, input, sidechain, rate, progress, cancel)?;
     if let Some(dir) = cache {
         write_print(dir, &key, slot, &audio, rate, rtf)?;
     }
@@ -375,12 +442,14 @@ fn write_print(
     Ok(())
 }
 
-/// A chain's prints, insert by insert: each insert's input is the one before's print.
-/// `progress(k, fraction)` reports insert k.
+/// A chain's prints, insert by insert: each insert's input is the one before's print, its
+/// sidechain `sidechains[k]` (none past the list's end). `progress(k, fraction)` reports
+/// insert k.
 #[allow(clippy::too_many_arguments)]
 pub fn print_chain(
     preps: &[Prepared],
     slots: &[Slot],
+    sidechains: &[Option<Arc<Vec<f32>>>],
     input: &Arc<Vec<f32>>,
     rate: u32,
     cache: Option<&Path>,
@@ -393,7 +462,20 @@ pub fn print_chain(
     let mut out: Vec<Print> = Vec::with_capacity(slots.len());
     for (k, (p, s)) in preps.iter().zip(slots).enumerate() {
         let x = out.last().map_or(input, |q| &q.audio).clone();
-        out.push(print(p, s, &x, rate, cache, |f| progress(k, f), cancel)?);
+        let side = sidechains
+            .get(k)
+            .and_then(|c| c.as_deref())
+            .map(Vec::as_slice);
+        out.push(print(
+            p,
+            s,
+            &x,
+            side,
+            rate,
+            cache,
+            |f| progress(k, f),
+            cancel,
+        )?);
     }
     Ok(out)
 }
@@ -426,10 +508,12 @@ pub struct Job {
 }
 
 impl Job {
-    /// `slots` loaded from `config_dir` and printed on `input` in the background.
+    /// `slots` loaded from `config_dir` and printed on `input` (each with its sidechain,
+    /// `print_chain`'s) in the background.
     pub fn spawn(
         config_dir: PathBuf,
         slots: Vec<Slot>,
+        sidechains: Vec<Option<Arc<Vec<f32>>>>,
         input: Arc<Vec<f32>>,
         rate: u32,
         cache: Option<PathBuf>,
@@ -446,6 +530,7 @@ impl Job {
             print_chain(
                 &preps,
                 &slots,
+                &sidechains,
                 &input,
                 rate,
                 cache.as_deref(),
@@ -495,6 +580,7 @@ impl Job {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::render::render;
 
     fn config() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config")
@@ -552,14 +638,14 @@ mod tests {
             .collect();
         want.resize(v.len(), 0.0);
         let dir = temp("readback");
-        let a = print(&p, &slot, &x, rate, Some(&dir), |_| {}, &no).unwrap();
+        let a = print(&p, &slot, &x, None, rate, Some(&dir), |_| {}, &no).unwrap();
         assert!(!a.cached);
         assert_eq!(*a.audio, want);
         assert!(
             want.iter().any(|&y| y.abs() > 1e-3),
             "the stage passes the tone"
         );
-        let b = print(&p, &slot, &x, rate, Some(&dir), |_| {}, &no).unwrap();
+        let b = print(&p, &slot, &x, None, rate, Some(&dir), |_| {}, &no).unwrap();
         assert!(b.cached);
         assert_eq!(a.key, b.key);
         assert_eq!(*b.audio, want);
@@ -572,31 +658,35 @@ mod tests {
         let (rate, x) = (48_000, tone(48_000, 0.05, 0.3));
         let base = stage(0.0);
         let p = Prepared::load(&config(), &base.device, base.quality, true).unwrap();
-        let k0 = key(&p, &base, &x, rate).unwrap();
-        assert_eq!(k0, key(&p, &base, &x, rate).unwrap());
+        let k0 = key(&p, &base, &x, None, rate).unwrap();
+        assert_eq!(k0, key(&p, &base, &x, None, rate).unwrap());
         let mut y = (*x).clone();
         y[100] += 1e-6;
-        assert_ne!(k0, key(&p, &base, &y, rate).unwrap(), "the audio");
-        assert_ne!(k0, key(&p, &base, &x, 44_100).unwrap(), "the rate");
+        assert_ne!(k0, key(&p, &base, &y, None, rate).unwrap(), "the audio");
+        assert_ne!(k0, key(&p, &base, &x, None, 44_100).unwrap(), "the rate");
         let mut s = base.clone();
         s.makeup_db = 1.0;
-        assert_ne!(k0, key(&p, &s, &x, rate).unwrap(), "a gain");
+        assert_ne!(k0, key(&p, &s, &x, None, rate).unwrap(), "a gain");
         // A panel value (the drawn stage has none: the 670's, only keyed, not rendered).
         let fc = Slot::new("fairchild_670");
         let pf = Prepared::load(&config(), &fc.device, fc.quality, true).unwrap();
         let mut s = fc.clone();
         s.values = vec![("ac_threshold".into(), Value::Float(0.31))];
         assert_ne!(
-            key(&pf, &fc, &x, rate).unwrap(),
-            key(&pf, &s, &x, rate).unwrap(),
+            key(&pf, &fc, &x, None, rate).unwrap(),
+            key(&pf, &s, &x, None, rate).unwrap(),
             "a value"
         );
         let prod = Prepared::load(&config(), &base.device, Quality::Production, true).unwrap();
-        assert_ne!(k0, key(&prod, &base, &x, rate).unwrap(), "the quality");
+        assert_ne!(
+            k0,
+            key(&prod, &base, &x, None, rate).unwrap(),
+            "the quality"
+        );
         // Bypass and the quality field itself are not in the key: what was loaded is.
         let mut s = base.clone();
         s.bypass = true;
-        assert_eq!(k0, key(&p, &s, &x, rate).unwrap());
+        assert_eq!(k0, key(&p, &s, &x, None, rate).unwrap());
     }
 
     #[test]
@@ -610,13 +700,24 @@ mod tests {
         };
         let dir = temp("chain");
         let no = AtomicBool::new(false);
-        let a = print_chain(&load(&slots), &slots, &x, rate, Some(&dir), |_, _| {}, &no).unwrap();
+        let a = print_chain(
+            &load(&slots),
+            &slots,
+            &[],
+            &x,
+            rate,
+            Some(&dir),
+            |_, _| {},
+            &no,
+        )
+        .unwrap();
         assert!(a.iter().all(|p| !p.cached));
         let mut edited = slots.clone();
         edited[1].makeup_db = -1.0;
         let b = print_chain(
             &load(&edited),
             &edited,
+            &[],
             &x,
             rate,
             Some(&dir),
@@ -634,6 +735,7 @@ mod tests {
         let c = print_chain(
             &load(&edited),
             &edited,
+            &[],
             &x,
             rate,
             Some(&dir),
@@ -649,7 +751,14 @@ mod tests {
     fn a_cancelled_print_leaves_nothing() {
         let (rate, x) = (48_000, tone(48_000, 0.3, 0.3));
         let dir = temp("cancel");
-        let job = Job::spawn(config(), vec![stage(0.0)], x, rate, Some(dir.clone()));
+        let job = Job::spawn(
+            config(),
+            vec![stage(0.0)],
+            vec![],
+            x,
+            rate,
+            Some(dir.clone()),
+        );
         job.cancel();
         let r = job.join().expect("a result");
         assert!(r.is_err());
@@ -669,5 +778,111 @@ mod tests {
         s.quality = Quality::Production;
         assert_eq!(Slot::from_json(&s.to_json()).unwrap(), s);
         assert_eq!(Slot::new("fairchild_670").quality, Quality::Draft1x);
+        let mut k = Slot::new("fairchild_670_keyed");
+        k.key = Some(KeyRoute {
+            track: "t2".into(),
+            trim_db: -3.5,
+        });
+        assert_eq!(Slot::from_json(&k.to_json()).unwrap(), k);
+    }
+
+    /// A kick every 0.25 s from `t0_s` (a decaying sine falling from 150 to 50 Hz).
+    fn kicks(rate: u32, s: f64, t0_s: f64, amp: f64) -> Arc<Vec<f32>> {
+        let n = (s * rate as f64) as usize;
+        let mut phase = 0.0;
+        Arc::new(
+            (0..n)
+                .map(|i| {
+                    let t = i as f64 / rate as f64;
+                    if t < t0_s {
+                        return 0.0;
+                    }
+                    let u = (t - t0_s) % 0.25;
+                    phase += 2.0 * std::f64::consts::PI * (50.0 + 100.0 * (-u / 0.03).exp())
+                        / rate as f64;
+                    (amp * phase.sin() * (-u / 0.12).exp()) as f32
+                })
+                .collect(),
+        )
+    }
+
+    fn keyed(trim_db: f64) -> Slot {
+        let mut s = Slot::new("fairchild_670_keyed");
+        s.values = vec![
+            ("key_mode".into(), Value::Int(1)),
+            ("time_constant".into(), Value::Int(1)),
+            ("key_depth".into(), Value::Float(1.0)), // no limit: the keyed 670 as it is
+        ];
+        s.tail_s = 0.0;
+        s.key = Some(KeyRoute {
+            track: "kick".into(),
+            trim_db,
+        });
+        s
+    }
+
+    #[test]
+    fn the_key_follows_the_sidechain() {
+        let (rate, x) = (48_000, tone(48_000, 0.05, 0.1));
+        let side = kicks(rate, 0.05, 0.0, 0.3);
+        let s = keyed(0.0);
+        let p = Prepared::load(&config(), &s.device, s.quality, true).unwrap();
+        let none = key(&p, &s, &x, None, rate).unwrap();
+        let k0 = key(&p, &s, &x, Some(&side), rate).unwrap();
+        assert_ne!(none, k0, "a sidechain");
+        let mut louder = (*side).clone();
+        louder[10] += 1e-6;
+        assert_ne!(
+            k0,
+            key(&p, &s, &x, Some(&louder), rate).unwrap(),
+            "its audio"
+        );
+        assert_ne!(
+            k0,
+            key(&p, &keyed(-1.0), &x, Some(&side), rate).unwrap(),
+            "its trim"
+        );
+        // Without a route the sidechain isn't heard, so it isn't keyed either.
+        let mut off = s.clone();
+        off.key = None;
+        assert_eq!(
+            key(&p, &off, &x, None, rate).unwrap(),
+            key(&p, &off, &x, Some(&side), rate).unwrap()
+        );
+    }
+
+    #[test]
+    fn a_keyed_print_ducks_under_its_sidechain() {
+        // A bass tone (110 Hz at -18 dBFS) through the keyed 670 at EXT, kicks from 0.3 s.
+        let rate = 48_000;
+        let n = (0.8 * rate as f64) as usize;
+        let x: Arc<Vec<f32>> = Arc::new(
+            (0..n)
+                .map(|i| {
+                    let t = i as f64 / rate as f64;
+                    (0.126 * (2.0 * std::f64::consts::PI * 110.0 * t).sin() * (t * 20.0).min(1.0))
+                        as f32
+                })
+                .collect(),
+        );
+        let side = kicks(rate, 0.8, 0.3, 0.5);
+        let s = keyed(0.0);
+        let p = Prepared::load(&config(), &s.device, s.quality, true).unwrap();
+        let no = AtomicBool::new(false);
+        let rms = |y: &[f32], a: f64, b: f64| {
+            let w = &y[(a * rate as f64) as usize..(b * rate as f64) as usize];
+            (w.iter().map(|&v| (v as f64).powi(2)).sum::<f64>() / w.len() as f64).sqrt()
+        };
+        let plain = print(&p, &s, &x, None, rate, None, |_| {}, &no).unwrap();
+        let ducked = print(&p, &s, &x, Some(&side), rate, None, |_| {}, &no).unwrap();
+        let before = rms(&ducked.audio, 0.2, 0.3);
+        assert!((rms(&plain.audio, 0.2, 0.3) - before).abs() < 1e-6 * before);
+        let during = rms(&ducked.audio, 0.31, 0.36);
+        let unkeyed = rms(&plain.audio, 0.31, 0.36);
+        assert!(
+            during < 0.3 * before,
+            "a kick ducks the bass ({during} vs {before})"
+        );
+        assert!(unkeyed > 0.9 * before, "without the key it doesn't");
     }
 }

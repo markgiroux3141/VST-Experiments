@@ -33,14 +33,24 @@
 //! the result to [`Track::printed`]; the mix plays a track's print in place of its take
 //! (a print of the same take with older settings while a new one renders: stale, shown),
 //! the dry take while it has none.
+//!
+//! **Sidechains** (SIDECHAIN_PLAN.md, K3): an insert with a key input (the keyed 670) can
+//! listen to another track ([`crate::print::KeyRoute`], by the track's stable `id`): what
+//! that track plays (its print, else its active take; before its fader, muted or not) from
+//! the keyed take's position ([`Session::sidechain`]). A keyed track's chain signature
+//! includes what its key track plays ([`Session::chain_signature`]), so a change there
+//! prints it again, and it prints only once its key tracks' prints are current
+//! ([`Session::keys_ready`]). A route that would make a loop is refused
+//! ([`Session::would_cycle`]).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde_json::{Value, json};
 
-use crate::print::Slot;
+use crate::print::{Slot, key_control};
 use crate::transport::{ClickMode, TransportSettings};
 
 /// A stereo frame (left, right).
@@ -315,9 +325,22 @@ pub struct Printed {
     pub stages: Vec<Arc<Vec<f32>>>,
 }
 
+/// Tracks made in this process (with the clock, a new track's id).
+static TRACKS_MADE: AtomicU64 = AtomicU64::new(0);
+
+/// A new track's id: unique (the clock and a count), never reused.
+fn new_track_id() -> String {
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    format!("k{ms:x}-{}", TRACKS_MADE.fetch_add(1, Ordering::Relaxed))
+}
+
 /// A track: its takes (the lane), the one playing, its channel strip.
 #[derive(Debug, Clone)]
 pub struct Track {
+    /// Its id (saved; what a key route names: it survives renaming and reordering).
+    pub id: String,
     pub name: String,
     pub takes: Vec<Take>,
     pub active: Option<usize>,
@@ -336,6 +359,7 @@ pub struct Track {
 impl Track {
     pub fn new(name: &str) -> Track {
         Track {
+            id: new_track_id(),
             name: name.to_string(),
             takes: Vec::new(),
             active: None,
@@ -465,6 +489,153 @@ impl Session {
         m
     }
 
+    /// The track whose id is `id`.
+    pub fn track_index(&self, id: &str) -> Option<usize> {
+        self.tracks.iter().position(|t| t.id == id)
+    }
+
+    /// What track `t`'s chain is printed from: its own ([`Track::chain_signature`]) and,
+    /// for each keyed insert (not bypassed), what its key track plays and where the take
+    /// sits against it. None when there's nothing to print.
+    pub fn chain_signature(&self, t: usize) -> Option<String> {
+        self.signature_of(t, &mut Vec::new())
+    }
+
+    fn signature_of(&self, t: usize, seen: &mut Vec<usize>) -> Option<String> {
+        let track = self.tracks.get(t)?;
+        let mut sig = track.chain_signature(self.rate)?;
+        let pos = track.active_take()?.position;
+        seen.push(t);
+        for s in track.inserts.iter().filter(|s| !s.bypass) {
+            let (Some(_), Some(route)) = (key_control(s), &s.key) else {
+                continue;
+            };
+            let what = match self.track_index(&route.track) {
+                None => "missing".to_string(),
+                Some(i) if seen.contains(&i) => "loop".to_string(),
+                Some(i) => self.plays_signature(i, seen),
+            };
+            sig.push_str(&format!("|key {}@{pos}={what}", route.track));
+        }
+        seen.pop();
+        Some(sig)
+    }
+
+    /// What track `i` plays, as a key hears it: its active take, where it sits, its chain.
+    fn plays_signature(&self, i: usize, seen: &mut Vec<usize>) -> String {
+        match self.tracks[i].active_take() {
+            None => "silence".to_string(),
+            Some(k) => format!(
+                "{}@{}[{}]",
+                k.id,
+                k.position,
+                self.signature_of(i, seen).unwrap_or_default()
+            ),
+        }
+    }
+
+    /// Whether track `t`'s print is its chain as it is now (session-wide: its keys too).
+    pub fn print_current(&self, t: usize) -> bool {
+        match self.chain_signature(t) {
+            None => true,
+            Some(s) => self.tracks[t]
+                .printed
+                .as_ref()
+                .is_some_and(|p| p.signature == s),
+        }
+    }
+
+    /// Whether every track keying track `t`'s chain plays what it will (its print
+    /// current): only then does `t` print, so it prints once per change of a key.
+    pub fn keys_ready(&self, t: usize) -> bool {
+        let Some(track) = self.tracks.get(t) else {
+            return true;
+        };
+        track
+            .inserts
+            .iter()
+            .filter(|s| !s.bypass && key_control(s).is_some())
+            .filter_map(|s| s.key.as_ref().and_then(|r| self.track_index(&r.track)))
+            .all(|i| i == t || self.print_current(i))
+    }
+
+    /// Insert `slot`'s sidechain on track `t`: its key track's playing audio from the
+    /// active take's position over the take and the slot's tail, silence where it has
+    /// none; None without a route (or a device without a key input, or a route to itself).
+    pub fn sidechain(&self, t: usize, slot: &Slot) -> Option<Arc<Vec<f32>>> {
+        key_control(slot)?;
+        let take = self.tracks.get(t)?.active_take()?;
+        let i = self.track_index(&slot.key.as_ref()?.track)?;
+        if i == t {
+            return None;
+        }
+        let n = take.audio.len() + (slot.tail_s.max(0.0) * self.rate as f64).round() as usize;
+        let mut out = vec![0f32; n];
+        if let Some((start, audio, _)) = self.tracks[i].playing(self.rate) {
+            for (j, o) in out.iter_mut().enumerate() {
+                let p = take.position + j as i64 - start;
+                if p >= 0
+                    && let Some(&v) = audio.get(p as usize)
+                {
+                    *o = v;
+                }
+            }
+        }
+        Some(Arc::new(out))
+    }
+
+    /// The sidechains of track `t`'s chain, insert by insert (those not bypassed, as
+    /// prints take them: [`crate::print::print_chain`]).
+    pub fn sidechains(&self, t: usize) -> Vec<Option<Arc<Vec<f32>>>> {
+        self.tracks.get(t).map_or(Vec::new(), |track| {
+            track
+                .inserts
+                .iter()
+                .filter(|s| !s.bypass)
+                .map(|s| self.sidechain(t, s))
+                .collect()
+        })
+    }
+
+    /// What insert `slot`'s sidechain on track `t` is made from (a live audition restarts
+    /// when it changes): its route, its trim and what the key track plays.
+    pub fn key_signature(&self, t: usize, slot: &Slot) -> String {
+        let (Some(_), Some(route)) = (key_control(slot), &slot.key) else {
+            return String::new();
+        };
+        let what = match self.track_index(&route.track) {
+            Some(i) if i != t => self.plays_signature(i, &mut vec![t]),
+            _ => "none".to_string(),
+        };
+        let pos = self
+            .tracks
+            .get(t)
+            .and_then(Track::active_take)
+            .map(|k| k.position);
+        format!("{}|{}|{pos:?}|{what}", route.track, route.trim_db)
+    }
+
+    /// Whether track `t` keyed from track `key` would make a loop: `key` is `t`, or is
+    /// keyed (through any chain of key routes, bypassed inserts too) from `t`.
+    pub fn would_cycle(&self, t: usize, key: usize) -> bool {
+        let mut stack = vec![key];
+        let mut seen = HashSet::new();
+        while let Some(i) = stack.pop() {
+            if i == t {
+                return true;
+            }
+            if !seen.insert(i) {
+                continue;
+            }
+            for s in self.tracks.get(i).map_or(&[][..], |x| &x.inserts) {
+                if let Some(j) = s.key.as_ref().and_then(|r| self.track_index(&r.track)) {
+                    stack.push(j);
+                }
+            }
+        }
+        false
+    }
+
     /// Where the last take ends (0: none).
     pub fn end(&self) -> i64 {
         self.tracks
@@ -550,6 +721,7 @@ impl Session {
             .iter()
             .map(|t| {
                 json!({
+                    "id": t.id,
                     "name": t.name,
                     "volume_db": t.volume_db,
                     "pan": t.pan,
@@ -581,8 +753,18 @@ impl Session {
     pub fn restore(&mut self, v: &Value) -> Result<(), String> {
         let rate = v["rate"].as_u64().ok_or("session state: no rate")? as u32;
         let mut tracks = Vec::new();
-        for t in v["tracks"].as_array().cloned().unwrap_or_default() {
+        for (i, t) in v["tracks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default()
+            .iter()
+            .enumerate()
+        {
             let mut track = Track::new(t["name"].as_str().unwrap_or("Track"));
+            // A session saved before tracks had ids: one by place, kept from the next save.
+            track.id = t["id"]
+                .as_str()
+                .map_or_else(|| format!("track{}", i + 1), str::to_string);
             track.volume_db = t["volume_db"].as_f64().unwrap_or(0.0);
             track.pan = t["pan"].as_f64().unwrap_or(0.0);
             track.mute = t["mute"].as_bool().unwrap_or(false);
@@ -626,8 +808,11 @@ impl Session {
             .iter()
             .filter_map(|t| t.printed.clone())
             .collect();
-        for t in &mut tracks {
-            let (Some(k), sig) = (t.active_take(), t.chain_signature(rate)) else {
+        self.tracks = tracks;
+        for i in 0..self.tracks.len() {
+            let sig = self.chain_signature(i);
+            let t = &mut self.tracks[i];
+            let Some(k) = t.active_take() else {
                 continue;
             };
             let same = prints.iter().find(|p| Some(&p.signature) == sig.as_ref());
@@ -635,7 +820,6 @@ impl Session {
                 .or_else(|| prints.iter().find(|p| p.take == k.id))
                 .cloned();
         }
-        self.tracks = tracks;
         Ok(())
     }
 
@@ -1059,6 +1243,91 @@ mod tests {
         assert_eq!((k.id.clone(), k.position), (id, pos));
         assert_eq!(k.rendered_from, Some(from));
         assert_eq!(k.audio.len(), 120);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_key_route_feeds_the_kick_into_the_bass_and_follows_it() {
+        use crate::print::KeyRoute;
+
+        let dir = std::env::temp_dir().join(format!("varimu_key_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        s.tracks[0].name = "Bass".into();
+        s.tracks.push(Track::new("Kick"));
+        let rec = |start: i64, x: Vec<f32>| Recorded {
+            start,
+            latency: 0,
+            samples: x,
+        };
+        s.add_take(0, rec(100, vec![0.1; 50]), "x").expect("saved");
+        s.add_take(1, rec(120, (0..20).map(|i| i as f32).collect()), "x")
+            .expect("saved");
+        assert_ne!(s.tracks[0].id, s.tracks[1].id);
+        let mut slot = Slot::new("fairchild_670_keyed");
+        slot.tail_s = 0.01; // 10 samples at 1 kHz
+        slot.key = Some(KeyRoute {
+            track: s.tracks[1].id.clone(),
+            trim_db: -2.0,
+        });
+        s.tracks[0].inserts.push(slot.clone());
+        // The kick from the bass take's start (100), over the take and the tail: silence,
+        // the kick's 20 samples from 120, silence.
+        let side = s.sidechain(0, &slot).expect("a sidechain");
+        assert_eq!(side.len(), 60);
+        assert_eq!(side[19], 0.0);
+        assert_eq!((side[20], side[39]), (0.0, 19.0));
+        assert_eq!(side[40], 0.0);
+        assert_eq!(s.sidechains(0).len(), 1);
+        // Muted, the kick still keys.
+        s.tracks[1].mute = true;
+        assert_eq!(s.sidechain(0, &slot), Some(side.clone()));
+        // The bass's signature follows what the kick plays.
+        let sig = s.chain_signature(0).expect("a chain");
+        assert!(sig.starts_with(&s.tracks[0].chain_signature(1000).unwrap()));
+        s.tracks[1].takes[0].position = 130;
+        let moved = s.chain_signature(0).unwrap();
+        assert_ne!(sig, moved, "the kick moved");
+        s.tracks[1].inserts.push(Slot::new("pultec_eqp1a"));
+        let chained = s.chain_signature(0).unwrap();
+        assert_ne!(moved, chained, "the kick has an insert");
+        // ... and waits for the kick's print before printing.
+        assert!(!s.keys_ready(0));
+        s.tracks[1].printed = Some(Printed {
+            signature: s.chain_signature(1).unwrap(),
+            take: s.tracks[1].takes[0].id.clone(),
+            audio: Arc::new(vec![0.5; 25]),
+            overview: Arc::new(Overview::default()),
+            stages: Vec::new(),
+        });
+        assert!(s.keys_ready(0) && s.print_current(1));
+        // The kick's print is what keys now (from 130).
+        let side = s.sidechain(0, &slot).unwrap();
+        assert_eq!(
+            (side[29], side[30], side[54], side[55]),
+            (0.0, 0.5, 0.5, 0.0)
+        );
+        // Loops are refused: the kick keyed from the bass, a track keyed from itself.
+        assert!(s.would_cycle(1, 0));
+        assert!(s.would_cycle(0, 0));
+        assert!(!s.would_cycle(0, 1));
+        // Saved and loaded: the ids and the route.
+        let ids = (s.tracks[0].id.clone(), s.tracks[1].id.clone());
+        s.save().expect("saved");
+        let u = Session::load(&dir).expect("loads");
+        assert_eq!((u.tracks[0].id.clone(), u.tracks[1].id.clone()), ids);
+        assert_eq!(u.tracks[0].inserts[0].key, slot.key);
+        assert_eq!(u.chain_signature(0), s.chain_signature(0));
+        // A session saved before tracks had ids: ids by place.
+        let mut old = s.state();
+        for t in old["tracks"].as_array_mut().unwrap() {
+            t.as_object_mut().unwrap().remove("id");
+        }
+        s.restore(&old).expect("restored");
+        assert_eq!(
+            (s.tracks[0].id.as_str(), s.tracks[1].id.as_str()),
+            ("track1", "track2")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

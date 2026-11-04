@@ -2,19 +2,21 @@
 //!
 //!     cargo run --release -p varimu-app --example render -- --circuit NAME
 //!         --input FILE [--set KEY=VALUE ...] [--quality production|draft|draft-1x]
-//!         [--out out.wav] [--probes DIR]
+//!         [--out out.wav] [--probes DIR] [--control NAME=FILE.f64 ...]
 //!
 //! FILE is an audio file (loaded as `load_audio` does) or raw little-endian float64
 //! samples at the project's rate (`.f64`). `--probes` writes every probe in volts as
 //! `<node>.f64`: scripts/app_render_agreement.py compares them with Python's render.
-//! VALUEs are integers (no dot), numbers, true / false, or strings.
+//! VALUEs are integers (no dot), numbers, true / false, or strings. `--control` drives a
+//! control input (a keyed 670's `key`) with raw float64 volts at the project's rate, as
+//! long as the input.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use varimu_app::audio;
 use varimu_app::live::Circuit;
-use varimu_app::render::render;
+use varimu_app::render::render_controls;
 use varimu_app::settings::{Quality, Settings};
 use varimu_circuit::yaml::Value;
 
@@ -35,6 +37,7 @@ fn main() -> Result<(), String> {
     let (mut circuit, mut input, mut out, mut probes) = (None, None, None, None);
     let mut quality = Quality::Production;
     let mut values = Vec::new();
+    let mut controls: Vec<(String, PathBuf)> = Vec::new();
     while let Some(a) = args.next() {
         let mut next = || args.next().ok_or(format!("{a} needs a value"));
         match a.as_str() {
@@ -51,6 +54,13 @@ fn main() -> Result<(), String> {
                     q => return Err(format!("unknown quality {q}")),
                 }
             }
+            "--control" => {
+                let kv = next()?;
+                let (k, v) = kv
+                    .split_once('=')
+                    .ok_or(format!("--control {kv}: NAME=FILE"))?;
+                controls.push((k.to_string(), PathBuf::from(v)));
+            }
             "--set" => {
                 let kv = next()?;
                 let (k, v) = kv.split_once('=').ok_or(format!("--set {kv}: KEY=VALUE"))?;
@@ -64,16 +74,35 @@ fn main() -> Result<(), String> {
     let circuit = Circuit::load(config, &circuit.ok_or("--circuit is required")?, s.cores()?)?
         .with_events(s.events);
     let input = input.ok_or("--input is required")?;
-    let x = if input.extension().is_some_and(|e| e == "f64") {
-        std::fs::read(&input)
+    let raw = |p: &Path| -> Result<Vec<f64>, String> {
+        Ok(std::fs::read(p)
             .map_err(|e| e.to_string())?
             .chunks_exact(8)
             .map(|b| f64::from_le_bytes(b.try_into().unwrap()))
-            .collect()
+            .collect())
+    };
+    let x = if input.extension().is_some_and(|e| e == "f64") {
+        raw(&input)?
     } else {
         audio::load(&input, s.sample_rate)?
     };
-    let r = render(&circuit, &values, &x, &s, |_| {}, &AtomicBool::new(false))?;
+    let ctl: Vec<(String, Vec<f64>)> = controls
+        .iter()
+        .map(|(k, p)| Ok((k.clone(), raw(p)?)))
+        .collect::<Result<_, String>>()?;
+    let ctl: Vec<(&str, &[f64])> = ctl
+        .iter()
+        .map(|(k, v)| (k.as_str(), v.as_slice()))
+        .collect();
+    let r = render_controls(
+        &circuit,
+        &values,
+        &x,
+        &ctl,
+        &s,
+        |_| {},
+        &AtomicBool::new(false),
+    )?;
     println!(
         "{:.2} s of audio in {:.1} s ({:.1}x real time)",
         r.out.len() as f64 / r.sample_rate as f64,

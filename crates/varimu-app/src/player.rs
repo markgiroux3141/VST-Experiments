@@ -36,7 +36,9 @@
 //! the device's input is a track's audio placed on the session's timeline, read at the
 //! positions the transport gives each block (silence while it is stopped, outside the
 //! audio, and in the count-in), so the device plays in time with the session's other
-//! tracks while its knobs turn. Blocks are made as the queue drains, as for a loop.
+//! tracks while its knobs turn. Blocks are made as the queue drains, as for a loop. A
+//! keyed insert's sidechain ([`TimelineKey`], SIDECHAIN_PLAN.md) is read the same way from
+//! the same start, onto the device's key input.
 //!
 //! **A chain's end** ([`Player::set_end`]: a reverb after the synth): a second device on
 //! a thread of its own (its own partitions on theirs), fed the device's monitored output
@@ -110,13 +112,28 @@ pub enum Source {
     /// last key's pitch goes on its control and the audio input stays silent.
     Keys(Arc<Keys>, Wave, Vec<Feed>),
     /// A track's audio (at the host rate) whose first sample sits at timeline position
-    /// `start`, read where the transport is.
-    Timeline { audio: Arc<Vec<f32>>, start: i64 },
+    /// `start`, read where the transport is, with its sidechain if it is keyed.
+    Timeline {
+        audio: Arc<Vec<f32>>,
+        start: i64,
+        key: Option<TimelineKey>,
+    },
     /// No device: the session's tracks and the click only ([`Player::start_mix`]).
     Mix,
     /// The sampler's kit, played from a keyboard's keys (None: the pads on screen only) and
     /// its preview ([`Player::start_sampler`]).
     Sampler(Arc<Sampler>, Option<Arc<Keys>>),
+}
+
+/// A timeline's sidechain: another track's audio (at the host rate) from the timeline's
+/// `start`, on the circuit's control input `control` of `controls` (IR order; the others
+/// held at 0 V), `volts` per unit (the route's trim times the input's full scale).
+#[derive(Debug, Clone)]
+pub struct TimelineKey {
+    pub audio: Arc<Vec<f32>>,
+    pub control: usize,
+    pub controls: usize,
+    pub volts: f64,
 }
 
 /// An input device and its default (shared-mode mix) format.
@@ -482,10 +499,16 @@ impl Player {
                 );
                 (None, WorkerSource::Sampler(sampler, keys))
             }
-            Source::Timeline { audio, start } => {
-                shared.status.lock().expect("status").input =
-                    Some("the session's track, where the transport is".into());
-                (None, WorkerSource::Timeline(audio, start))
+            Source::Timeline { audio, start, key } => {
+                shared.status.lock().expect("status").input = Some(
+                    if key.is_some() {
+                        "the session's track and its key, where the transport is"
+                    } else {
+                        "the session's track, where the transport is"
+                    }
+                    .into(),
+                );
+                (None, WorkerSource::Timeline(audio, start, key))
             }
         };
         {
@@ -725,7 +748,7 @@ enum WorkerSource {
     Loop(Vec<f64>),
     Input(rtrb::Consumer<f32>, u32),
     Keys(Arc<Keys>, Wave, Vec<Feed>),
-    Timeline(Arc<Vec<f32>>, i64),
+    Timeline(Arc<Vec<f32>>, i64, Option<TimelineKey>),
     Mix,
     Sampler(Arc<Sampler>, Option<Arc<Keys>>),
 }
@@ -1399,8 +1422,9 @@ fn work(
             }
         }
         WorkerSource::Mix | WorkerSource::Sampler(..) => {}
-        WorkerSource::Timeline(audio, start) => {
+        WorkerSource::Timeline(audio, start, key) => {
             let mut block = vec![0.0; BLOCK];
+            let mut ctl = vec![vec![0.0; BLOCK]; key.as_ref().map_or(0, |k| k.controls)];
             while !shared.stop.load(Ordering::Relaxed) {
                 forward_values(&mut live);
                 let queued = capacity - ring.slots();
@@ -1418,8 +1442,14 @@ fn work(
                     Vec::new()
                 };
                 timeline_block(&audio, start, &segments, &mut block);
+                if let Some(k) = &key {
+                    let c = &mut ctl[k.control];
+                    timeline_block(&k.audio, start, &segments, c);
+                    c.iter_mut().for_each(|v| *v *= k.volts);
+                }
+                let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
                 let (y, meter) = live
-                    .process(&block)
+                    .process_with(&block, &refs)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
                 em.emit(shared, &mut ring, &y, monitored(&live, &y));

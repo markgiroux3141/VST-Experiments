@@ -263,12 +263,26 @@ BJT), the Wurlitzer, the piano (hysteretic felt, nonlinear coupled strings, soun
 the pipe organ last (jet-drive flue pipes, reed pipes, the wind system as one coupled
 circuit). Milestones I1-I8.
 
-Sidechain ([docs/SIDECHAIN_PLAN.md](docs/SIDECHAIN_PLAN.md), 2026-11-01, a brainstorm
-parked until the user picks it up; nothing built): a keyed 670 (an INT / EXT switch on
-T103's 600 ohm primary, the key as a control input; keyed, the 670 is feed-forward), a
-FLAT / LP / HP sidechain filter at the pick-off (an iron-cored inductor on a JA core), and
-a split-band ducker (channel 2's 6386 stage at a fixed bias for the highs). Milestones
-K1-K4; the user's open decisions are listed there.
+Sidechain ([docs/SIDECHAIN_PLAN.md](docs/SIDECHAIN_PLAN.md), 2026-11-01; picked up
+2026-11-04 for one track keying another's 670, the kick ducking the bass; branch `sidechain`):
+**K1 done**, the keyed 670 `config/circuits/fairchild_670_keyed.yaml`, generated from the
+stock file by `scripts/derive_keyed_670.py` (`--check`; never edit the generated file): a
+KEY INT / EXT switch (`key_mode`) ahead of T103's primary, the KEY jack the control input
+`key` behind 600 ohm (terminated at INT); INT renders as the stock 670 exactly; its profile
+`varimu/measure/keyed_suite.py` (`varimu unit --circuit fairchild_670_keyed`; renders via
+`fast.run_transient(controls=)`, uncached: `RenderJob` has no control inputs yet). **K2
+done**: `render::render_controls` (bit for bit with Python, `app_render_agreement.py`),
+`panel::Device::key`, the device `fairchild_670_keyed`, prints with a sidechain
+(`print::Slot::key`, a `KeyRoute`), `player::TimelineKey` for live auditions. **K3 built,
+the user to try it**: stable track ids (`session::Track::id`), the session-wide chain
+signature (a keyed track's includes what its key track plays; it prints once its keys'
+prints are current; loops refused), the insert panel's KEY row. Keyed, the 670 has no
+ratio but a cliff (-2 to +2 dB of key: a 4 dB duck to the 6386s cut off), so **DEPTH**
+(`key_depth`, the user's option B, 2026-11-04): at EXT an EL34 follower from B+ on the DEPTH
+wiper clamps the CV line through a silicon diode (its own -174 V supply off T302: a silicon
+half-wave, two 5651s); about -3 to -10 dB nearly regardless of the key up to 0.45, fully
+clockwise no limit (the plan's "DEPTH", with why simpler clamps failed). Then K4 (FLAT / LP
+/ HP at the pick-off), K5 split-band parked.
 
 Delay ([docs/DELAY_PLAN.md](docs/DELAY_PLAN.md), 2026-11-01): a slappy echo from physical
 machines, delay time never a parameter (a head distance over a tape speed). Then the Echoplex
