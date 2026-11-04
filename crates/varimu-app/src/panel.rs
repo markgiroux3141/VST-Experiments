@@ -381,7 +381,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 15] = [
+pub const DEVICES: [Device; 16] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -791,6 +791,27 @@ pub const DEVICES: [Device; 15] = [
         pitch: None,
         own_oscillator: false,
         key: Some("key"),
+        pitch2: None,
+        coupling: None,
+        partition: None,
+    },
+    Device {
+        id: "sideman_bd",
+        label: "Side Man bass drum (Wurlitzer, 1960)",
+        circuit: "sideman_bd",
+        panel: None,
+        ahead_s: AHEAD_S,
+        // One 12AX7 section ringing and the 6AV6 preamp: production runs about real time.
+        quality: Quality::Draft2x,
+        cores: None,
+        // The mod wheel turns R106, the ring (DRUM_PLAN.md D2a).
+        mod_wheel: Some("ring"),
+        gate: Some("gate"),
+        velocity: None,
+        pitch: None,
+        // The keys ground its key line (K1), as the commutator does: it makes its own sound.
+        own_oscillator: true,
+        key: None,
         pitch2: None,
         coupling: None,
         partition: None,
@@ -1686,6 +1707,19 @@ mod tests {
         assert!(DEVICES[9].plays_own_oscillator());
         assert!(DEVICES[8].plays_own_oscillator() && DEVICES[7].plays_own_oscillator());
         assert!(!DEVICES[5].plays_own_oscillator());
+        // The Side Man's bass drum: the keys ground its key line, the wheel turns its ring.
+        let bd = spec_of("sideman_bd");
+        let bd_keys: Vec<String> = knobs(&DEVICES[15], &bd)
+            .into_iter()
+            .map(|k| k.key)
+            .collect();
+        assert_eq!(bd_keys, ["ring", "volume"]);
+        assert_eq!(DEVICES[15].mod_wheel, Some("ring"));
+        assert_eq!(
+            key_feeds(&DEVICES[15], &bd),
+            Ok(vec![Feed::Gate(-40.0, 0.0)])
+        );
+        assert!(DEVICES[15].plays_own_oscillator());
         // The range switch: LOW / HIGH / AUTO on the panel, 0 or 1 to the circuit.
         let mut k = k;
         let r = k.iter().position(|k| k.key == "range").unwrap();

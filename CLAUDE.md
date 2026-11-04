@@ -242,9 +242,17 @@ render cache key; `config/drums/{tom_13,kick_22}.yaml`; `scripts/drum_study.py` 
 `membrane.py` a bare head in vacuo, `drum.py` both heads on a shell coupled through the air
 (normal modes per azimuthal order, exact sparse tension modulation, a coupled range below
 `f_coupled_hz`), 9-14x slower than real time in Python. The user's verdict: still weak ("a
-mug dropped in another room": a distant mic, no muffling, no chain); kept as is, a deep,
-punchy electronic kick in the vintage theme (a "tube 808", pushing `tube_kick`, the
-Sideman's bass drum) is the likely next direction, the user's call (DRUM_PLAN.md's status).
+mug dropped in another room": a distant mic, no muffling, no chain); kept as is. **Since
+2026-11-04 the track is electric drums first** (the user's call; DRUM_PLAN.md "The direction
+since 2026-11-04": D2a-D2c, then bending). **D2a built:** the Wurlitzer Side Man's bass drum
+`config/circuits/sideman_bd.yaml` from schematic 501648 (a 12AX7 phase-lead oscillator
+degenerated below oscillation by R106, the panel's RING, struck by its ground-out key line
+through a silicon-diode contact on the control input `gate`; the 6AV6 preamp as a 12AX7
+section; ideal +305 / -22 V rails until the machine's supply; sources
+`data/schematics/wurlitzer_sideman/README.md`): idles at the drawing's +1.5 V / +174 V, rings
+~70 Hz (-20 dB in 117 ms at RING's default, 51 ms to 1.4 s over RING, a drone below ~0.45),
+the app's `sideman_bd` device (0.13x real time at draft-2x); `scripts/sideman_study.py`,
+`tests/test_sideman_bd.py`. Open: the user listens.
 
 The Victorian synth ([docs/VICTORIAN_SYNTH_PLAN.md](docs/VICTORIAN_SYNTH_PLAN.md),
 2026-11-01, the user's idea, parked until they pick it up; nothing built): a janky synth

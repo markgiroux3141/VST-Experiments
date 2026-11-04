@@ -1,0 +1,123 @@
+# The Wurlitzer Side Man's bass drum (Model 5000, 1959-60; docs/DRUM_PLAN.md, D2a): the
+# generator's V100-A from schematic 501648 (issue 1, 5/1/60) and the amplifier's rails from
+# 501649, cross-checked against the patent, US 3,358,069 (its "generator 10"). Sources:
+# data/schematics/wurlitzer_sideman/README.md. The other voices, the commutator, the
+# amplifier and the machine's own supply come later (the kit, D2b-D2c).
+#   V100-A  a 12AX7 half as a phase-lead oscillator: R107 270k plate load; a three-section
+#        high-pass ladder (C104 / C102 / C103, 1600 pF each, R103 470k, R104 470k, the grid
+#        leak 680k) from the plate back to the grid. The cathode's R106 (5k, its wiper
+#        grounded) degenerates the stage below oscillation: struck, it rings and dies away
+#        (the patent: "from a large field drum to a rather small drum")
+#   key  K1, a ground-out key line: the commutator grounds R101 10k at junction J, which R100
+#        680k holds at -22 V between hits (C100 .047 to ground). J's step through C101 .068
+#        onto the ladder's R102 100k strikes the oscillator; key up, J recharges through R100.
+#        The contact is a silicon diode from the control input `gate` (its key-up level below
+#        -22 V keeps it open)
+#   out  the plate through R108 680k onto C105 .01 (the patent's output tap), C106 .047 and
+#        R109 470k onto the collector line, which R213 10k terminates at the 6AV6 preamp
+#        (V107, unbypassed 1.5k cathode, 100k plate, R216 / C168 decoupling), C171 .18 to the
+#        VOLUME pot R400 100k on the control panel, its wiper into the amplifier's 1M (R1).
+#        `out` is the amplifier's input
+# The supplies are ideal here (+305 V, -22 V: 501649's typical values) until the machine's
+# supply comes with the kit.
+
+title: "Wurlitzer Side Man bass drum (V100-A, schematic 501648)"
+input: in
+cv_inputs:
+  gate: key
+probes: [out, p, g, k, j, col]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "provisional: model knowledge (the audio input is unused: the voice is struck by its key)"}
+  output_volts_peak: {value: 2.5, source: "provisional: model knowledge (set from renders 2026-11-04: a hit at the amplifier's input peaks ~1-2 V over RING, VOLUME at the default)"}
+
+controls:
+  ring: {value: 0.62, min: 0.0, max: 1.0, unit: rotation, source: "dwg 501648: R106 5K, the bass drum's cathode pot (its wiper grounded: the cathode sees the track between them); the default is calibrated to the drawing's typical +1.5 V at the cathode (with +174 V at the plate)", notes: "0 = no degeneration (oscillates), 1 = 5k (a short ring)"}
+  volume: {value: 0.8, min: 0.0, max: 1.0, unit: rotation, source: "dwg 501648: R400 100K, the VOLUME dial on the control panel (Note 2); default a design choice"}
+
+values:
+  # --- supplies (ideal)
+  b_plus_v: {value: 305.0, source: "dwg 501649: +305 V, the B+ line to the generator (typical value)"}
+  bias_v: {value: -22.0, source: "dwg 501649: the -22 V line (D3, R15 15K, R16 82K, C8 100/25 off the 32 V winding); the patent: 'normally maintained at -22 volts'"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+  # --- the oscillator
+  tube: {value: 12AX7@1, source: "dwg 501648: V100 12AX7 (the bass drum is section A)"}
+  r_plate_ohm: {value: 270.0e+3, source: "dwg 501648: R107 270K"}
+  c_ladder_f: {value: 1.6e-9, source: "dwg 501648: C104, C102, C103 .0016 (the patent's 34, 36, 38: .0016 microfarad)"}
+  r_ladder_ohm: {value: 470.0e+3, source: "dwg 501648: R103, R104 470K (the patent's 40, 38)"}
+  r_grid_ohm: {value: 680.0e+3, source: "dwg 501648: the grid leak 680K (printed 'R104' a second time; the patent's 32, 680,000)"}
+  r_cathode_pot_ohm: {value: 5.0e+3, source: "dwg 501648: R106 5K (linear taper: provisional, model knowledge)"}
+  # --- the key
+  r_strike_ohm: {value: 100.0e+3, source: "dwg 501648: R102 100K (the patent's 42)"}
+  c_strike_f: {value: 0.068e-6, source: "dwg 501648: C101 .068 (the patent's 44)"}
+  r_charge_ohm: {value: 680.0e+3, source: "dwg 501648: R100 680K to the -22 V line (the patent's 48)"}
+  c_key_f: {value: 0.047e-6, source: "dwg 501648: C100 .047 (the patent's 52)"}
+  r_key_ohm: {value: 10.0e+3, source: "dwg 501648: R101 10K to K1 (the patent's 54)"}
+  key_contact: {value: SI_RECTIFIER@1, source: "numerical: the commutator's contact as a silicon diode from the gate (open while the gate sits below J, closed with the gate at ground; ~0.6 V short of a true ground at ~2 mA)"}
+  gate_off_v: {value: -40.0, source: "numerical: the gate with the key up, below the -22 V line so the contact stays open"}
+  gate_on_v: {value: 0.0, source: "dwg 501648: ground-out keying (the K lines grounded through the commutator or a push button, 'ground from generator chassis')"}
+  # --- the output and the preamp
+  r_out_tap_ohm: {value: 680.0e+3, source: "dwg 501648: R108 680K (the patent's 24)"}
+  c_out_tap_f: {value: 0.01e-6, source: "dwg 501648: C105 .01 (the patent's 26)"}
+  c_out_f: {value: 0.047e-6, source: "dwg 501648: C106 .047 (the patent's 60)"}
+  r_out_ohm: {value: 470.0e+3, source: "dwg 501648: R109 470K to the collector line (the patent's 62)"}
+  r_collector_ohm: {value: 10.0e+3, source: "dwg 501648: R213 10K, the collector line's termination at the preamp"}
+  c_pre_in_f: {value: 0.068e-6, source: "dwg 501648: C170 .068"}
+  pre_tube: {value: 12AX7@1, source: "provisional: model knowledge (dwg 501648: V107 6AV6, whose triode RCA rates as a 12AX7 section: mu 100, rp 62.5k, gm 1.6 mA/V at 250 V, -2 V)"}
+  r_pre_grid_ohm: {value: 270.0e+3, source: "dwg 501648: R214 270K"}
+  r_pre_cathode_ohm: {value: 1.5e+3, source: "dwg 501648: R215 1.5K (unbypassed)"}
+  r_pre_plate_ohm: {value: 100.0e+3, source: "dwg 501648: R217 100K"}
+  r_pre_decouple_ohm: {value: 10.0e+3, source: "dwg 501648: R216 10K"}
+  c_pre_decouple_f: {value: 20.0e-6, source: "dwg 501648: C168 20/300"}
+  c_pre_out_f: {value: 0.18e-6, source: "dwg 501648: C171 .18"}
+  r_volume_ohm: {value: 100.0e+3, source: "dwg 501648: R400 100K (Note 2: on the control panel)"}
+  volume_taper_mid: {value: 0.1, source: "provisional: model knowledge (a volume control's audio taper, 10% at half rotation)"}
+  r_amp_in_ohm: {value: 1.0e+6, source: "dwg 501649: R1 1M, the amplifier's input grid leak (V1-A 12AX7)"}
+
+devices:
+  V100A: {device: tube}
+  V107: {device: pre_tube}
+  K1: {device: key_contact}
+
+sections:
+  - title: supply and inputs
+    parts:
+      VB: {V: [bp, "0"], v: b_plus_v}
+      VN: {V: [n22, "0"], v: bias_v}
+      RIN: {R: [in, "0"], r: r_in_ohm}
+  - title: key
+    parts:
+      DK1: {device: [key, kk], model: K1}
+      R101: {R: [kk, j], r: r_key_ohm}
+      R100: {R: [j, n22], r: r_charge_ohm}
+      C100: {C: [j, "0"], c: c_key_f}
+      C101: {C: [j, c], c: c_strike_f}
+      R102: {R: [c, "0"], r: r_strike_ohm}
+  - title: bass drum
+    parts:
+      R107: {R: [bp, p], r: r_plate_ohm}
+      C104: {C: [p, a], c: c_ladder_f}
+      R103: {R: [a, c], r: r_ladder_ohm}
+      C102: {C: [a, b], c: c_ladder_f}
+      R104: {R: [b, "0"], r: r_ladder_ohm}
+      C103: {C: [b, g], c: c_ladder_f}
+      R105: {R: [g, "0"], r: r_grid_ohm}
+      XV100A: {device: [p, g, k], model: V100A}
+      R106: {rheostat: [k, "0"], r: r_cathode_pot_ohm, at: ring}
+      R108: {R: [p, o], r: r_out_tap_ohm}
+      C105: {C: [o, "0"], c: c_out_tap_f}
+      C106: {C: [o, oc], c: c_out_f}
+      R109: {R: [oc, col], r: r_out_ohm}
+  - title: preamp
+    parts:
+      R213: {R: [col, "0"], r: r_collector_ohm}
+      C170: {C: [col, pg], c: c_pre_in_f}
+      R214: {R: [pg, "0"], r: r_pre_grid_ohm}
+      XV107: {device: [pp, pg, pk], model: V107}
+      R215: {R: [pk, "0"], r: r_pre_cathode_ohm}
+      R216: {R: [bp, pd], r: r_pre_decouple_ohm}
+      C168: {C: [pd, "0"], c: c_pre_decouple_f}
+      R217: {R: [pd, pp], r: r_pre_plate_ohm}
+      C171: {C: [pp, vt], c: c_pre_out_f}
+      R400: {pot: ["0", out, vt], r: r_volume_ohm, at: volume, taper_mid: volume_taper_mid}
+      R1: {R: [out, "0"], r: r_amp_in_ohm}

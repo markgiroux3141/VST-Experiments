@@ -6,6 +6,68 @@ day (the `drums` worktree, beside the synth's ADSR session): D1's first test is 
 (Status below). The order below is a recommendation; which family goes first is the
 user's call (Open decisions).
 
+## The direction since 2026-11-04: electric drums first
+
+The user's call (2026-11-04): the physical drums (D1) stay as they are; the track turns to
+synthetic and electric drum voices, where the project has had its successes (the synth, the
+tube kick). The order:
+
+1. **D2a, the Side Man's bass drum** (built, below): one voice from schematic 501648, a
+   resonator struck by its key line (the 808's principle, in 1959 tubes), no iron, so none
+   of the core loss that made the reactor tank a thud (TUBE_SYNTH_PLAN.md's kick).
+2. **D2b, the Side Man's other tuned voices**: the same circuit with other values (toms
+   120 / 180 Hz, temple blocks, wood block, clave), then the noise voices (the 6C4
+   super-regenerative noise, maracas, brush, the 6BA6 cymbal, the shimmer).
+3. **D2c, the machine**: every voice on its own supply (501649: a kick sags what the others
+   hear) and amplifier, the commutator's patterns; the sampler or the session's grid plays
+   the voices until then.
+4. **Bending** (the user's "realistic first, then bend"): a longer boom past the trim's
+   range, an 808-style pitch drop from the strike, a driven output stage, a tube snare from
+   B5's noise, gas-tube hats through the ring modulator (section C below).
+
+The BJT model (D3: the 808, the CR-78) stays later.
+
+**D2a status (2026-11-04): `config/circuits/sideman_bd.yaml`** (sources:
+`data/schematics/wurlitzer_sideman/README.md`; `scripts/sideman_study.py` ->
+`reports/drums/sideman_bd/`: summary.json, study.png, audio/ with a hit per RING, quarters to
+sixteenths and a figure at 120 BPM; `tests/test_sideman_bd.py`; the app's `sideman_bd`
+device, keys strike it, the mod wheel turns RING).
+- **What it is:** V100-A, a 12AX7 phase-lead oscillator (270k plate load, a three-section
+  1600 pF / 470k / 680k high-pass ladder plate to grid) degenerated below oscillation by
+  R106 (5k, its wiper grounded: the panel's RING, a factory trim on the real unit). The key
+  line K1 grounds R101 10k at a junction that R100 680k holds at -22 V; its step through
+  C101 .068 onto R102 100k strikes the ladder. The output is the drawing's: R108 / C105 tap,
+  C106 / R109 onto the collector line, R213 10k, the 6AV6 preamp (modelled as a 12AX7
+  section, whose triode it is), VOLUME (R400) into the amplifier's 1M. `out` is the
+  amplifier's input. The rails are ideal (+305 V, -22 V, 501649's) until the machine's
+  supply (D2c). The commutator's contact is a silicon diode from the control input `gate`
+  (-40 V up, 0 V down): ~0.6 V short of a true ground.
+- **Against the drawing:** RING's default 0.62 puts the cathode at its +1.48 V (drawing
+  +1.5); the plate then idles at 176.4 V (drawing +174) with B+ at 501649's +305 V, an
+  independent check of the 12AX7 model. The preamp idles at 200 V / 1.43 V (drawing
+  205 / 2.2: the 6AV6's own curves differ, or the "typical values").
+- **A hit** (production; the key held 20 ms):
+
+  | RING | Idle plate | Pitch 5 / 50 / 200 ms | -20 / -40 dB | Peak at `out` |
+  |---|---|---|---|---|
+  | 0.3 | 136 V | 79 / 73 / 71 Hz | oscillates (a drone) | 2.1 V |
+  | 0.4 | 151 V | 76 / 68 / 64 Hz | 1.4 s / never: at the edge | 1.9 V |
+  | 0.5 | 164 V | 70 / 67 / 66 Hz | 224 / 428 ms | 1.6 V |
+  | 0.62 (drawing) | 176 V | 69 / 70 / 70 Hz | 117 / 215 ms | 1.4 V |
+  | 0.8 | 191 V | 73 / 74 / - Hz | 71 / 128 ms | 1.2 V |
+  | 1.0 | 204 V | 76 / 78 / - Hz | 51 / 88 ms | 1.0 V |
+
+  The patent gives "about 65 c.p.s." Near the edge (RING 0.4-0.5) the pitch falls as the
+  ring decays (76 -> 64 Hz over 400 ms): the tube's own amplitude dependence, an 808-like
+  drop with nothing added. Below ~0.45 the stage oscillates on its own, as a real trim
+  turned too far would.
+- **Repeated hits:** J recovers through R100 (~0.1 s), so eighths at 120 BPM hit 0.5 dB
+  softer than the first and sixteenths 2.7 dB: the machine's own accent.
+- **Speed:** 0.13x real time at the app's draft-2x, 0.64x at production (10 s of sixteenths).
+- **Not known yet:** how long the commutator grounds a key line (20 ms provisional; the
+  tempo wheel's contacts set it), and the 6AV6's own fit.
+- **Open:** the user listens (dry, then through the 670 or tape in the session's inserts).
+
 ## Status (2026-11-01)
 
 **D1's first test: a struck head, offline, Python only** (`varimu/drums/membrane.py`,
