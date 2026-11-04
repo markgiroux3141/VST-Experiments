@@ -911,7 +911,8 @@ per cycle, aliasing floor), and its draft and production costs are measured.
   0.96x, 0.90x at SAW level 0. In the app (30 ms buffer): before 71-74% load (worst block
   92%); LC + saw 81-110% with dropouts at high keys (C7: ~100 per 12 s); the saw alone
   77-100%, worst blocks 104-142%, a few dropouts per 15 s (this desktop's drift is +-35%).
-  One oscillator at a time is the budget; both is over it on this machine.
+  One oscillator at a time is the budget; both is over it on this machine. The saw alone's
+  dropouts: docs/SYNTH_REALTIME_PLAN.md (2026-11-04).
 - Later for the voice itself: its own supply instead of ideal rails; the bass agreement
   above; the unit's 5 kHz floor (H3d's open item).
 

@@ -228,7 +228,10 @@ synth`; GLIDE's and VIBRATO's second gangs, the latter buffered; SAW level into 
 Every synth script and test passes `pitch2` (0 V with the saw off). `panel::Device::coupling`
 overrides the partition coupling per device ("hold" where a one-sample edge crosses a cut:
 saw_884's VCA grid; the synth keeps extrapolate). CPU: one oscillator at a time fits (the saw
-alone ~ the LC alone); both on is over budget on this desktop. Open: K reads sharp of M1 in
+alone ~ the LC alone); both on is over budget on this desktop. The saw alone still drops out
+live (worst blocks 104-142%): [docs/SYNTH_REALTIME_PLAN.md](docs/SYNTH_REALTIME_PLAN.md)
+(2026-11-04, nothing built; run on an idle machine) measures scheduling against compute,
+then fixes without changing the sound. Open: K reads sharp of M1 in
 the bass (+23-33 c at ~40-50 Hz, the one-solve reference itself not converged there: the
 plan's H4); the unit's 5 kHz floor.
 
@@ -381,6 +384,13 @@ bias; IR `TapeReductionPoint`, circuitsim `ReductionPoint`, the reference
 (`TapeStream::set_bias`). Regenerating both files takes ~3 h (`tape_reduction.py`: each
 point's D(k) is a full-stream reference). Next (the user's): the condition dials
 (DELAY_PLAN.md's proposal).
+
+Distortion ([docs/DISTORTION_PLAN.md](docs/DISTORTION_PLAN.md), 2026-11-04, parked until the
+user picks it up; nothing built): warm, gritty tube overdrive from physics with many dials,
+each a part value (VARIAC, RECTIFIER, BIAS / CLASS, COUPLING x GRID LEAK, the iron,
+condition dials). It runs on rendered audio, printed as a session insert at production (the
+user's; live only to audition). Milestones O1-O8: the Fender 5F1 Champ first, then a grit
+box grown from it. The 5E3 can already be printed as an insert.
 
 Grooves ([docs/PHONO_PLAN.md](docs/PHONO_PLAN.md), 2026-11-01): vinyl, the acoustic gramophone, wax cylinders and tin foil as one
 machine, a groove written along arc length (a print between the recording and the player)
