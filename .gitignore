@@ -71,3 +71,6 @@ reports/**/*.wav
 
 # Session exports saved outside sessions/ (the user's mixes)
 mixdowns/
+
+# Multitrack stems the user works from (their own or licensed audio), never committed
+stems/
