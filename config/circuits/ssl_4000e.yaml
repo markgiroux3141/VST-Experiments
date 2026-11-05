@@ -1,0 +1,188 @@
+# The SSL 4000 E channel's mic amplifier (docs/CHAINS_PLAN.md WP4), from SSL's channel
+# amplifier card 82E01 (drawing T82001·71, rev. 16, 11-84; sources and the readings:
+# data/schematics/ssl_4000e/README.md). Values cite:
+#   "sch: ..."     the 82E01 drawing, by part reference
+#   "jensen: ..."  Jensen's JT-115K-E60 sheet ("electrically identical to our standard
+#                  JT-115K-E"), the input transformer (the drawing's lead colours and its
+#                  150K load are Jensen's)
+#   "web: ..."     the NE5534's sheet (data/datasheets/opamps/README.md)
+#
+# in -> RSRC (the test generator, dropped in a chain) -> ia, the mic's hot pin (+8); the
+# cold pin (-7) is ground: a chain's mic drives one side. The phantom feed R1 / R2 is
+# drawn from hot to cold; its C1 (3u3 at their junction) carries only common-mode current
+# from a floating mic and is left out (with the cold at ground it would short R2). PAD
+# (SW1): straight through, or R4 / R5 in series and R6 across with R3 at the input. The
+# JT-115K-E (TJ, 1:10) into R7 150K; T1 (5534) non-inverting, its feedback the MIC GAIN
+# pot's wiper-to-19 part over R9 || R10 (C4 holds R10's far end at AC ground), the wiper
+# AC-coupled to T1's output (C54 || R72, C55); T9 (5534) inverting, its input the
+# wiper-to-33 part plus R69 into R71 10K7. Gain (1 + 10k x / 583) 10.7k / (10k (1 - x) +
+# 619): 0 to +49.9 dB, +19.75 dB of transformer ahead. R46 into the J112 RC1 (on: the mic
+# selected) and the PHASE switch, which puts the signal on T4's - (inverting, x -1) or its
+# + (R60 / R54 then x2: x +1) and grounds the other; T4's output through C8 / R48 onto out
+# across R16 47K (pin 28, the channel). The op-amps are the single-pole macro model with
+# the 5534's figures, clamped at the swing the +-18 V rails allow (the rails themselves
+# aren't drawn, except +18 V for R73's polarization).
+
+title: "SSL 4000 E mic amplifier (82E01)"
+input: in
+probes: [out, ia, sy, t1o, t9o, t4o]
+full_scale:
+  input_volts_peak: {value: 1.0960, source: "derived: 0.775 V rms x sqrt(2), 0 dBu (as telefunken_v76.yaml)"}
+  output_volts_peak: {value: 17.36, source: "derived: +24 dBu peak, the same scale as telefunken_v76.yaml's and clean_pre.yaml's outputs so the chains print comparably (T4 clips at ~+-16 V)"}
+
+controls:
+  mic_gain: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "sch: MIC GAIN 10K LIN (wiper 10; 0 at end 19, the least gain)", notes: "0 = +19.8 dB, 1 = +69.6 dB with the transformer (the law above); 0.3 = ~+35 dB"}
+  pad: {value: 0, choices: [0, 1], unit: switch, source: "sch: SW1A / SW1B", notes: "0 straight (SW1 at 5 / 6), 1 the pad (at 4 / 9)"}
+  phase: {value: 0, choices: [0, 1], unit: switch, source: "sch: PHASE (sheet 2)", notes: "0 into T4's - (the whole mic amp in phase: T9 and T4 both invert), 1 into its + (reversed); the drawn position isn't legible"}
+
+values:
+  source_impedance_ohm: {value: 150.0, source: "provisional: model knowledge (a test generator at a mic's 150 Ohm)"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch contact, ~10 mOhm)"}
+  # --- Mic input and pad (sch) ---------------------------------------------------------
+  r1_ohm: {value: 6810.0, source: "sch: R1 6K81 5% (+8 to the 48 V line)"}
+  r2_ohm: {value: 6810.0, source: "sch: R2 6K81 5% (-7 to the 48 V line)"}
+  r3_ohm: {value: 13700.0, source: "sch: R3 13K7 5% (the pad's input leg)"}
+  r4_ohm: {value: 649.0, source: "sch: R4 649 5%"}
+  r5_ohm: {value: 645.0, source: "sch: R5 645 5%"}
+  r6_ohm: {value: 165.0, source: "sch: R6 165 5%"}
+  r7_ohm: {value: 150.0e+3, source: "sch: R7 150K (jensen: test circuit 1's R1 150k)"}
+  # --- JT-115K-E (jensen:), version 1; jt115k_test.yaml holds the same values ----------
+  jt_ratio: {value: 10.0, source: "jensen: turns ratio 1:10.00 typ"}
+  jt_r_pri_ohm: {value: 19.7, source: "jensen: DC resistance, primary (RED to BRN) 19.7 ohm"}
+  jt_r_sec_ohm: {value: 2465.0, source: "jensen: DC resistance, secondary (YEL to ORG) 2465 ohm"}
+  jt_core_material: {value: mumetall, source: "provisional: model knowledge (Jensen's mic input transformers: 80% nickel cores)"}
+  jt_core_area_m2: {value: 7.654e-6, source: "fit: scripts/fit_jt115k.py to jensen: maximum 20 Hz input level -2.5 dBu typ at 1% THD (a ~2.8 mm square tongue)"}
+  jt_core_path_m: {value: 0.025, source: "provisional: model knowledge (~8 x the ~3 mm tongue of the fitted area)"}
+  jt_turns: {value: 1300, source: "provisional: model knowledge (the primary; with jensen's 19.7 ohm a ~26 m winding of ~0.17 mm wire on the ~3 mm tongue, and 13,000 secondary turns for 2465 ohm of ~0.063 mm wire)"}
+  jt_gap_m: {value: 1.309e-6, source: "fit: scripts/fit_jt115k.py to jensen: '-3 dB at 2.5 Hz' (from the 150 ohm source's EMF, test circuit 1; an interleaved core's joint gap, as ua_610.yaml's T1)"}
+  jt_leakage_h: {value: 1.657e-4, source: "fit: scripts/fit_jt115k.py (with jt_c_sec_f) to jensen: 20 kHz -0.13 dB typ and '-3 dB at ... 90 kHz' (test circuit 1, the linear-core build's AC analysis), referred to the primary"}
+  jt_c_sec_f: {value: 1.345e-10, source: "fit: scripts/fit_jt115k.py (with jt_leakage_h; jensen's secondary to shield and case 205 pF is the same order)"}
+  # --- T1 / MIC GAIN / T9 (sch) ----------------------------------------------------------
+  r9_ohm: {value: 619.0, source: "sch: R9 619R 5%"}
+  c3_f: {value: 100.0e-6, source: "sch: C3 100uF 10V"}
+  r10_ohm: {value: 10.0e+3, source: "sch: R10 10K"}
+  r11_ohm: {value: 10.0e+3, source: "sch: R11 10K"}
+  c4_f: {value: 100.0e-6, source: "sch: C4 100uF 10V"}
+  r72_ohm: {value: 100.0e+3, source: "sch: R72 100K"}
+  c54_f: {value: 220.0e-6, source: "sch: C54 220uF 25V"}
+  r73_ohm: {value: 1.0e+6, source: "sch: R73 1M (to +ve)"}
+  c55_f: {value: 220.0e-6, source: "sch: C55 220uF 25V"}
+  gain_pot_ohm: {value: 10.0e+3, source: "sch: MIC GAIN 10K LIN"}
+  r69_ohm: {value: 619.0, source: "sch: R69 619R 5%"}
+  r70_ohm: {value: 5110.0, source: "sch: R70 5K11 5%"}
+  r71_ohm: {value: 10700.0, source: "sch: R71 10K7 5%"}
+  c56_f: {value: 100.0e-12, source: "sch: C56 100pF"}
+  r46_ohm: {value: 100.0, source: "sch: R46 100"}
+  rc1_on_ohm: {value: 50.0, source: "provisional: model knowledge (a J112 switched on, its sheet's rDS(on) 50 ohm maximum; sch: 'all FETs are J112')"}
+  # --- PHASE and T4, the channel input select (sch, sheet 2) -----------------------------
+  r57_ohm: {value: 1.0e+6, source: "sch: R57 1M0"}
+  c36_f: {value: 10.0e-6, source: "sch: C36 10u"}
+  r55_ohm: {value: 10.0e+3, source: "sch: R55 10K0 5%"}
+  r56_ohm: {value: 10.0e+3, source: "sch: R56 10K0 5%"}
+  c38_f: {value: 100.0e-12, source: "sch: C38 100pF"}
+  c35_f: {value: 10.0e-6, source: "sch: C35 10uF"}
+  r60_ohm: {value: 10.0e+3, source: "sch: R60 10K0 5%"}
+  r54_ohm: {value: 10.0e+3, source: "sch: R54 10K0 5%"}
+  c40_f: {value: 100.0e-12, source: "sch: C40 100pF"}
+  c8_f: {value: 100.0e-6, source: "sch: C8 100uF"}
+  r48_ohm: {value: 10.0, source: "sch: R48 10R"}
+  r16_ohm: {value: 47.0e+3, source: "sch: R16 47K (pin 28)"}
+  v_pos: {value: 18.0, source: "sch: +18V (pin 15)"}
+  # --- The 5534 (web: data/datasheets/opamps/README.md) ---------------------------------
+  u_a0: {value: 1.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (AVD 100 V/mV typ; data/datasheets/opamps/README.md)"}
+  u_gbw_hz: {value: 10.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (B1 10 MHz typ at CC = 22 pF: sch's C58 / C57 / 22pF CT)"}
+  u_r_in_ohm: {value: 100.0e+3, source: "web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (ri 100 kOhm typ)"}
+  u_r_out_ohm: {value: 30.0, source: "provisional: model knowledge (a 5534's open-loop output resistance, tens of ohms; as clean_pre.yaml)"}
+  u_swing_v: {value: 15.4, source: "derived: the sheet's 26 V peak to peak on +-15 V (2 V short of each rail) on the 82E01's +-18 V rails, 16 V, less the clamp diode's ~0.6 V"}
+  u_noise_ohm: {value: 989.0, source: "derived: the NE5534's (not A) 4 nV/rtHz at 1 kHz (web: https://www.ti.com/lit/ds/symlink/ne5534.pdf) as a resistor's Johnson noise at 20 C, (4e-9)^2 / 4kT (heard only under a noise block)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 5.0, source: "sch: '* = 5% tol' (the starred parts; the unstarred ones too, provisional)"}
+  tol_cap_pct: {value: 20.0, source: "provisional: model knowledge (electrolytics and ceramics, +-20%)"}
+  tol_pot_pct: {value: 20.0, source: "provisional: model knowledge (a pot's track, +-20%)"}
+
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r5: tol_resistor_pct
+    cap: tol_cap_pct
+    pot: tol_pot_pct
+  classes:
+    r5: [R1, R2, R3, R4, R5, R6, R7, R9, R10, R11, R72, R73, R69, R70, R71, R46, R57, R55, R56, R60, R54, R48, R16]
+    cap: [C3, C4, C54, C55, C56, C36, C38, C35, C40, C8]
+    pot: [RGAIN]
+
+devices:
+  DCLAMP: {device: SI_RECTIFIER@1}
+
+sections:
+  - title: input
+    parts:
+      RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+      R1: {R: [ia, pj], r: r1_ohm}
+      R2: {R: [pj, "0"], r: r2_ohm}
+      R4: {R: [ia, tp], r: r4_ohm}
+      R5: {R: [tb, "0"], r: r5_ohm}
+      SW1:
+        switch: pad
+        parts:
+          RSW1A5: {R: [ia, tp], r: contact_ohm, tolerance: none, in: [0]}
+          RSW1B6: {R: [tb, "0"], r: contact_ohm, tolerance: none, in: [0]}
+          R3: {R: [ia, "0"], r: r3_ohm, in: [1]}
+          R6: {R: [tp, "0"], r: r6_ohm, in: [1]}
+      TJ:
+        transformer:
+          p: {nodes: [tp, tb], r: jt_r_pri_ohm}
+          s: {nodes: [sy, "0"], ratio: jt_ratio, r: jt_r_sec_ohm, c: jt_c_sec_f}
+        core: {material: jt_core_material, area_m2: jt_core_area_m2, path_m: jt_core_path_m, gap_m: jt_gap_m}
+        turns: jt_turns
+        leakage_h: jt_leakage_h
+      R7: {R: [sy, "0"], r: r7_ohm}
+
+  - title: mic amp
+    parts:
+      RN: {R: [sy, t1p], r: u_noise_ohm, tolerance: none}
+      U1: {opamp: [t1p, n19, t1o], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      R9: {R: [n19, n3], r: r9_ohm}
+      C3: {C: [n3, "0"], c: c3_f}
+      R10: {R: [n19, n4], r: r10_ohm}
+      C4: {C: [n4, "0"], c: c4_f}
+      R11: {R: [n4, t1o], r: r11_ohm}
+      R72: {R: [t1o, nx], r: r72_ohm}
+      C54: {C: [t1o, nx], c: c54_f}
+      VP: {V: [vp, "0"], v: v_pos}
+      R73: {R: [nx, vp], r: r73_ohm}
+      C55: {C: [nx, n10], c: c55_f}
+      RGAIN: {pot: [n19, n10, n33], r: gain_pot_ohm, at: mic_gain}
+      R69: {R: [n33, t9m], r: r69_ohm}
+      R70: {R: [t9p, "0"], r: r70_ohm}
+      U9: {opamp: [t9p, t9m, t9o], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      R71: {R: [t9o, t9m], r: r71_ohm}
+      C56: {C: [t9o, t9m], c: c56_f}
+      R46: {R: [t9o, rc], r: r46_ohm}
+      RC1: {R: [rc, bus], r: rc1_on_ohm, tolerance: none}
+
+  - title: channel input select
+    parts:
+      R57: {R: [n16, n17], r: r57_ohm}
+      SPHASE:
+        switch: phase
+        parts:
+          RPH0S: {R: [bus, n16], r: contact_ohm, tolerance: none, in: [0]}
+          RPH0G: {R: [n17, "0"], r: contact_ohm, tolerance: none, in: [0]}
+          RPH1S: {R: [bus, n17], r: contact_ohm, tolerance: none, in: [1]}
+          RPH1G: {R: [n16, "0"], r: contact_ohm, tolerance: none, in: [1]}
+      C36: {C: [n16, n55], c: c36_f}
+      R55: {R: [n55, t4m], r: r55_ohm}
+      C35: {C: [n17, n35], c: c35_f}
+      R60: {R: [n35, t4p], r: r60_ohm}
+      R54: {R: [t4p, "0"], r: r54_ohm}
+      C40: {C: [t4p, "0"], c: c40_f}
+      U4: {opamp: [t4p, t4m, t4o], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      R56: {R: [t4o, t4m], r: r56_ohm}
+      C38: {C: [t4o, t4m], c: c38_f}
+      C8: {C: [t4o, n8], c: c8_f}
+      R48: {R: [n8, out], r: r48_ohm}
+      R16: {R: [out, "0"], r: r16_ohm}

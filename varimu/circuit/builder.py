@@ -922,9 +922,14 @@ for _name, _macro in {
     "mains": Macro(_mains, 2, {"v_rms": _P, "phase_deg": Param("number", 0.0)}),
     "device": Macro(_nodes_device, None, {"model": Param("device")}),
     "pot": Macro(
-        lambda ctx, n, c, a: parts.pot(n, *c, a["r"], a["at"], a["taper_mid"]),
+        lambda ctx, n, c, a: parts.pot(n, *c, a["r"], a["at"], a["taper_mid"], bool(a["reverse"])),
         3,
-        {"r": _P, "at": _N, "taper_mid": Param("physical", None)},
+        {
+            "r": _P,
+            "at": _N,
+            "taper_mid": Param("physical", None),
+            "reverse": Param("number", 0.0),
+        },
         toleranced=True,
     ),
     "rheostat": Macro(

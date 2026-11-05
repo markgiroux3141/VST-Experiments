@@ -8,9 +8,11 @@ Nodal analysis with the input node driven by an ideal source (1 V); a control in
 node is driven by an ideal source too (0 V unless `drives` gives it a complex amplitude
 per frequency); DC sources (V, sine and mains sources) are AC shorts. Elements: Resistor,
 Capacitor, Inductor (its current an unknown, so a 0 H inductor is a short), Vccs,
-NoiseCurrent (noise only). A device,
-winding or medium element is an error: this is for the linear networks (capsules, the
-speaker's readout) whose renders it checks, independently of circuitsim's transient.
+NoiseCurrent (noise only), Winding (its current an unknown: V(a) - V(b) = s N A
+TESLA_PER_V V(core), N i into the core node; a transformer in a build with
+`cores="linear"`, its core a resistor). A device or medium element is an error: this is
+for the linear networks (capsules, the speaker's readout, a transformer's linear limit)
+whose renders it checks, independently of circuitsim's transient.
 """
 
 from __future__ import annotations
@@ -29,7 +31,9 @@ from varimu.circuit.ir import (
     SineSource,
     Vccs,
     VoltageSource,
+    Winding,
 )
+from varimu.devices.core import TESLA_PER_V
 
 
 class Unsupported(ValueError):
@@ -66,6 +70,9 @@ def _system(ir: CircuitIR):
             )
         elif isinstance(e, NoiseCurrent):
             node(e.a), node(e.b)
+        elif isinstance(e, Winding):
+            k = e.turns * e.area_m2 * TESLA_PER_V
+            branches.append(("w", node(e.a), node(e.b), (node(e.core), k, e.turns)))
         else:
             raise Unsupported(f"{type(e).__name__} {getattr(e, 'name', '')}: not linear")
     for ctl in ir.controls:
@@ -100,6 +107,10 @@ def _solve(ir: CircuitIR, f_hz: Sequence[float], rhs_fn) -> tuple[list[str], np.
             add(r, p, 1.0), add(r, q, -1.0)
             if kind == "l":
                 a[r, r] -= s * v  # V(p) - V(q) - s L i = 0
+            elif kind == "w":
+                core, k_v, turns = v
+                add(r, core, -s * k_v)  # V(p) - V(q) - s N A k V(core) = 0
+                add(core, r, -turns)  # N i flows into the core node
         out.append(np.linalg.solve(a, rhs_fn(n, m, index, els, branches, f)))
     return nodes, np.array(out)
 

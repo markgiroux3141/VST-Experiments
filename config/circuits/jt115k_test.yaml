@@ -1,0 +1,37 @@
+# The Jensen JT-115K-E in Jensen's test circuit 1 (data/schematics/ssl_4000e/README.md,
+# jensen:): a 150 ohm source on the primary (RED / BRN), the secondary (YEL / ORG) into
+# 150k (the 82E01's R7). Not modelled hardware: the fixture its values are fitted on
+# (scripts/fit_jt115k.py) and tested against (tests/test_ssl_4000e.py). The transformer's
+# values are ssl_4000e.yaml's; keep the two in step (the test checks they are equal).
+
+title: "Jensen JT-115K-E (test circuit 1)"
+input: in
+probes: [out, p]
+
+values:
+  r_source_ohm: {value: 150.0, source: "jensen: test circuit 1, a 150 ohm source"}
+  r_load_ohm: {value: 150.0e+3, source: "jensen: test circuit 1, R1 150k"}
+  # --- JT-115K-E (jensen:), as ssl_4000e.yaml ---------------------------------------
+  jt_ratio: {value: 10.0, source: "jensen: turns ratio 1:10.00 typ"}
+  jt_r_pri_ohm: {value: 19.7, source: "jensen: DC resistance, primary (RED to BRN) 19.7 ohm"}
+  jt_r_sec_ohm: {value: 2465.0, source: "jensen: DC resistance, secondary (YEL to ORG) 2465 ohm"}
+  jt_core_material: {value: mumetall, source: "provisional: model knowledge (Jensen's mic input transformers: 80% nickel cores)"}
+  jt_core_area_m2: {value: 7.654e-6, source: "fit: scripts/fit_jt115k.py to jensen: maximum 20 Hz input level -2.5 dBu typ at 1% THD (a ~2.8 mm square tongue)"}
+  jt_core_path_m: {value: 0.025, source: "provisional: model knowledge (~8 x the ~3 mm tongue of the fitted area)"}
+  jt_turns: {value: 1300, source: "provisional: model knowledge (the primary; with jensen's 19.7 ohm a ~26 m winding of ~0.17 mm wire on the ~3 mm tongue, and 13,000 secondary turns for 2465 ohm of ~0.063 mm wire)"}
+  jt_gap_m: {value: 1.309e-6, source: "fit: scripts/fit_jt115k.py to jensen: '-3 dB at 2.5 Hz' (from the 150 ohm source's EMF, test circuit 1; an interleaved core's joint gap, as ua_610.yaml's T1)"}
+  jt_leakage_h: {value: 1.657e-4, source: "fit: scripts/fit_jt115k.py (with jt_c_sec_f) to jensen: 20 kHz -0.13 dB typ and '-3 dB at ... 90 kHz' (test circuit 1, the linear-core build's AC analysis), referred to the primary"}
+  jt_c_sec_f: {value: 1.345e-10, source: "fit: scripts/fit_jt115k.py (with jt_leakage_h; jensen's secondary to shield and case 205 pF is the same order)"}
+
+sections:
+  - title: transformer
+    parts:
+      RS: {R: [in, p], r: r_source_ohm}
+      TJ:
+        transformer:
+          p: {nodes: [p, "0"], r: jt_r_pri_ohm}
+          s: {nodes: [out, "0"], ratio: jt_ratio, r: jt_r_sec_ohm, c: jt_c_sec_f}
+        core: {material: jt_core_material, area_m2: jt_core_area_m2, path_m: jt_core_path_m, gap_m: jt_gap_m}
+        turns: jt_turns
+        leakage_h: jt_leakage_h
+      RL: {R: [out, "0"], r: r_load_ohm}

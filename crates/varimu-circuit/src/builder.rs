@@ -577,6 +577,7 @@ fn macro_of(kind: &str) -> Macro {
                 p("r", Physical),
                 p("at", Number),
                 opt("taper_mid", Physical),
+                num("reverse", 0.0),
             ],
             true,
         ),
@@ -934,6 +935,7 @@ fn expand(
             f("r")?,
             f("at")?,
             opt("taper_mid")?,
+            f("reverse")? != 0.0,
         )
         .map_err(|e| ctx.fail(name, e.0))?,
         "rheostat" => vec![

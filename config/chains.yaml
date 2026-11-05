@@ -171,8 +171,36 @@ circuits:
         label: 610 LF
         choices: [[-6, -6], [0, "0"], [6, "+6"]]
         default: 0
-  ssl_4000e: {kind: pre, tag: ssl, label: SSL 4000 E, wp: 4}
-  tascam_portastudio: {kind: pre, tag: porta, label: Portastudio, wp: 4}
+  ssl_4000e:                        # the 82E01's mic amp; MIC GAIN labelled by its gain
+    kind: pre                       # from a 150 ohm generator (reports/units/ssl_nominal/)
+    tag: ssl
+    label: SSL 4000 E
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: mic_gain
+        label: SSL mic gain
+        choices: [[0.0, 19 dB], [0.1, 28 dB], [0.2, 34 dB], [0.3, 37 dB], [0.4, 41 dB],
+                  [0.5, 44 dB], [0.6, 47 dB], [0.7, 50 dB], [0.8, 54 dB], [0.9, 59 dB],
+                  [1.0, 69 dB]]
+        default: 0.3
+      - key: pad
+        label: SSL pad
+        choices: [[0, "off"], [1, "-18 dB"]]
+        default: 0
+  tascam_portastudio:               # the 424's mic input; TRIM labelled by its gain
+    kind: pre                       # (reports/units/porta424_nominal/)
+    tag: porta
+    label: Portastudio
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: trim
+        label: Portastudio trim
+        choices: [[0.0, 0 dB], [0.1, 4 dB], [0.2, 7 dB], [0.3, 11 dB], [0.4, 15 dB],
+                  [0.5, 19 dB], [0.6, 23 dB], [0.7, 27 dB], [0.8, 31 dB], [0.9, 35 dB],
+                  [1.0, 40 dB]]
+        default: 0.5
   ampex_351_record: {kind: pre, tag: a351, label: Ampex 351, wp: 7}
   neve_1073: {kind: pre, tag: n1073, label: Neve 1073, wp: 11}
   api_312: {kind: pre, tag: api312, label: API 312, wp: 12}
@@ -305,19 +333,22 @@ chains:
     pre: tascam_portastudio
     use: "Home demos: guitar into a cassette 4-track"
     needs: [data]
-    needs_note: op-amps
+    needs_note: op-amps (the 424 mk1; the 144 / 244 need the JFET)
+    defaults: {trim_porta: 1.0}
   - id: sm58_ssl
     mic: shure_sm58
     pre: ssl_4000e
     use: "1980s-90s rock and pop vocals"
     needs: [data]
-    needs_note: op-amps; the BJT if its input stage is discrete
+    needs_note: op-amps (the 82E01's mic amp has no discrete stage)
+    defaults: {mic_gain_ssl: 0.9}
   - id: sm58_porta
     mic: shure_sm58
     pre: tascam_portastudio
     use: "Bedroom demo vocals"
     needs: [data]
-    needs_note: op-amps
+    needs_note: op-amps (the 424 mk1; the 144 / 244 need the JFET)
+    defaults: {trim_porta: 1.0}
   - id: re20_api312
     mic: ev_re20
     pre: api_312

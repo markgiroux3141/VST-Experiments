@@ -32,3 +32,22 @@ for TL07xC, TL07xAC, TL07xBC, TL07xI, TL07xM", VS = +-15 V, 25 C, typical:
 | eN at 1 kHz (PS / NS packages, TL07xM) | 18 nV/rtHz (37 all other devices) |
 | SR | 20 V/us |
 | IB | 65 pA |
+
+## uPC4570 (the Tascam 424's mic input, docs/CHAINS_PLAN.md WP4)
+
+web: https://www.renesas.com/en/document/dst/upc4570-datasheet (R03DS0135EJ0200 Rev.2.00,
+Feb.27.25; 655,374 bytes, sha256
+`5478508c87f9b97a939fc4ea7829ffe648dccf603a09ec1320db458eb7f2cb56`), "Electrical
+Characteristics", V+- = +-15 V, 25 C, typical (minimum):
+
+| Figure | Value |
+|---|---|
+| AV, large signal voltage gain (RL >= 2 kohm, VO = +-10 V) | 300000 (30000) |
+| GBW, gain bandwidth product (fO = 100 kHz) | 15 MHz (10) |
+| funity, unity gain frequency, open loop | 7 MHz |
+| Vom, output voltage swing (RL >= 10 kohm) | +-13.4 V (+-12) |
+| Vom (RL >= 2 kohm) | +-12.8 V (+-10) |
+| SR, slew rate | 7 V/us (5) |
+| en at 1 kHz, RS = 100 ohm | 4.5 nV/rtHz |
+| in at 1 kHz | 0.7 pA/rtHz |
+| IB | 100 nA (PNP input: out of the IC) |

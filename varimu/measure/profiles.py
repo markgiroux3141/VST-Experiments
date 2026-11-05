@@ -80,6 +80,18 @@ def _run_ua610(*args, **kwargs):
     return ua610_suite.run(*args, **kwargs)
 
 
+def _run_ssl(*args, **kwargs):
+    from varimu.measure import opamp_pre_suite
+
+    return opamp_pre_suite.run(*args, circuit="ssl_4000e", **kwargs)
+
+
+def _run_porta(*args, **kwargs):
+    from varimu.measure import opamp_pre_suite
+
+    return opamp_pre_suite.run(*args, circuit="tascam_portastudio", **kwargs)
+
+
 def _run_keyed(*args, **kwargs):
     from varimu.measure import keyed_suite
 
@@ -100,6 +112,8 @@ PROFILES = {
     "telefunken_v76": Profile("telefunken_v76", "mic_preamp", _run_preamp),
     "telefunken_v72": Profile("telefunken_v72", "mic_preamp", _run_v72),
     "ua_610": Profile("ua_610", "mic_preamp", _run_ua610),
+    "ssl_4000e": Profile("ssl_4000e", "mic_preamp", _run_ssl),
+    "tascam_portastudio": Profile("tascam_portastudio", "mic_preamp", _run_porta),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
 }
 

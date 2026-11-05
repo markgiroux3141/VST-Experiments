@@ -13,24 +13,29 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 12 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
-  U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610;
-  `uv run python scripts/chain_status.py`).
+- **Chains available:** 15 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+  U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
+  Portastudio; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
   within 0.06 dB / 7% and traced; WP1's Notes). WP2 (2026-11-05): the UA 610-A
   (`config/circuits/ua_610.yaml` from Hinson's redraw of UA C-10068; WP2's Notes). WP3
   (2026-11-05): the AKG C12 (`config/circuits/akg_c12.yaml` from AKG's 1957 drawing, the
-  capsule `CK12@1` fitted to AKG's curves, nine patterns; WP3's Notes).
+  capsule `CK12@1` fitted to AKG's curves, nine patterns; WP3's Notes). WP4 (2026-11-05):
+  the SSL 4000 E's 82E01 mic amp with the Jensen JT-115K-E fitted to Jensen's sheet
+  (`config/circuits/ssl_4000e.yaml`) and the Tascam 424's mic input
+  (`config/circuits/tascam_portastudio.yaml`), op-amps only; WP4's Notes.
 - **In progress:** none.
-- **Next:** WP4 (the op-amp preamps: the SSL 4000 E channel, the Tascam Portastudio),
-  Start step 4: write its steps here, sources first; the sources decide whether they are
-  op-amps only (the `opamp` macro exists) or wait for the BJT (WP10). The user fetches
-  login-walled files on request: give each URL alone in a code block (WP2's Notes).
-- **Waiting on the user:** listening to U47 -> UA 610 and the C12's chains in the Room
-  view (optional; the 610's T1 bass / top end is the user's option B; the C12's T14/1
-  inductance and its capsule's fitted values are genome / provisional, WP3's Notes).
+- **Next:** WP5 (the ribbon kind `ribbon_motor`), Start step 4: write its steps here,
+  sources first (the RCA 44-BX's and 77-DX's ribbon and magnet figures, Olson's papers;
+  `varimu/devices/moving_coil.py` is the pattern: an acoustic network compiled to R / L / C
+  and a gyrator, and its part in both builders). The user fetches login-walled files on
+  request: give each URL alone in a code block (WP2's Notes).
+- **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL and
+  the Portastudio chains in the Room view (optional). One call of theirs: the JT-115K-E's
+  20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the fitted mumetall's low-field
+  hysteresis; WP4's Notes): leave it, or refit / add a nickel material (moves every render).
 
 ## How a session runs
 
@@ -104,8 +109,8 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 1 | Telefunken V72 (two EF804S; BV 191 is its input transformer, already compiled) | U47 -> V72 | M | done 2026-11-05 |
 | 2 | Universal Audio 610 | U47 -> 610 | M | done 2026-11-05 |
 | 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | done 2026-11-05 |
-| 4 | The op-amp preamps: SSL 4000 E channel, Tascam Portastudio (sources decide: op-amps only, or wait for the BJT) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | next |
-| 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | |
+| 4 | The op-amp preamps: SSL 4000 E channel (82E01, JT-115K-E), Tascam Portastudio (the 424 mk1) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | done 2026-11-05 |
+| 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | next |
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | |
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's record amp as a preamp | 77-DX -> 351, 77-DX -> 610 | L | |
 | 8 | Coles 4038 | 4038 -> V72 | M | |
@@ -443,7 +448,140 @@ Decisions:
 - T14/1's inductance fitted to the omni curve's low end (a genome parameter); the
   figure-8's side rejection left as a known miss.
 
-### WP4-WP31
+### WP4. The op-amp preamps: the SSL 4000 E channel and the Tascam Portastudio
+
+Both are op-amps only in the versions chosen (Decisions): no BJT, no JFET. The `opamp`
+macro (single pole from A0 / GBW, clamp diodes at the swing) carries them.
+
+**The SSL 4000 E** is the channel amplifier card 82E01 (SSL drawing T82001·71, rev. 16,
+11-84): the mic XLR across the phantom feed R1 / R2 6K81, a pad (SW1: R3 13K7, R4 649,
+R5 645, R6 165), the Jensen JT-115K-E (1:10; the drawing's lead colours Y / OR / BR / R and
+its 150K load R7 are Jensen's), T1 (5534, non-inverting) and T9 (5534, inverting) with the
+MIC GAIN pot 10K LIN between them (T1's feedback is the wiper-to-19 part over R9 619R, T9's
+input the wiper-to-33 part plus R69 619R into R71 10K7: 0 to +50 dB, +20 more from the
+transformer), then R46 100R, a J112 (RC1) as the input select, PHASE, and T4 (5534, the
+channel input select, unity) into the channel. +-18 V rails.
+
+**The Portastudio** is the Tascam 424 (mk1, 1991): the MIC/LINE jack (unbalanced 1/4",
+-50 to -10 dBV) through R101 1k / R102 100k / C101 1500p on the IN PCB, then the mix PCB's
+channel: C101 10u, R101 100k to the half-rail, U101A (uPC4570HA) non-inverting with R102
+470k / C102 100p and the TRIM pot R103 10K (RD) with R104 100R; S101 (MIC/LINE / TAPE),
+the EQ (U102B, HIGH 10 kHz / LOW 100 Hz shelves), the INPUT FADER R113 10K (A) into U102A.
+One +10 V rail (M5237L), the op-amps referenced to its +5 V half (U703): about +-4 V of
+swing, so it clips early.
+
+Steps:
+1. Sources: `data/schematics/ssl_4000e/README.md` (the 82E01 drawing, its two sheets, from
+   ka-electronics; Jensen's JT-115K-E60 sheet, "electrically identical to our standard
+   JT-115K-E", via the Wayback Machine; SSL's Revival 4000 "JT-115K-E, identical to the
+   original 4000 E"; the 5534 from data/datasheets/opamps/), `data/schematics/tascam_424/
+   README.md` (the 424 mk1 service manual from r-massive; the 144's and 244's drawings
+   kept as the later discrete versions' sources; the uPC4570's figures added to
+   data/datasheets/opamps/README.md).
+2. The JT-115K-E as a macro transformer fitted to Jensen's figures (in test circuit 1,
+   150 ohm source, 150k load): 19.75 dB of gain, 1.40 kOhm input, -0.26 dB at 20 Hz, -0.13
+   at 20 kHz, -3 dB at 2.5 Hz and 90 kHz, 1% THD at 20 Hz at -2.5 dBu, 0.065% at -20 dBu,
+   DCR 19.7 / 2465 ohm, Zo 17 kOhm (one figure per unknown: turns / gap, leakage,
+   capacitance; `scripts/fit_jt115k.py`, the fit in the circuit file's sources).
+3. `config/circuits/ssl_4000e.yaml` from 82E01: the controls `mic_gain` (rotation),
+   `pad` (SW1), `phase`; `tests/test_ssl_4000e.py` (builds, preflight, the gain law against
+   the arithmetic above, the pad's attenuation, the transformer standalone against
+   Jensen's figures, PHASE's polarity).
+4. Its profile (`varimu unit --circuit ssl_4000e`; preamp_suite.py if it fits, else
+   `varimu/measure/ssl_suite.py`): gain range, response, THD against level, clip, input
+   impedance.
+5. `config/circuits/tascam_portastudio.yaml` from the 424 mk1 (the IN PCB, the channel to
+   U102A's output, EQ and fader controls, TRIM; the +5 V half-rail as the op-amps'
+   reference), `tests/test_tascam_portastudio.py`, its profile.
+6. The list: both entries in `config/chains.yaml` (input, drop, settings),
+   `compose_chain.py --all` (sm58_ssl, sm57_porta, sm58_porta), `test_chain_matrix.py`,
+   app fixtures, one draft render through a scene; `chain_status.py` 15 of 51.
+
+Notes (2026-11-05, done):
+- Sources: `data/schematics/ssl_4000e/README.md` (the 82E01 drawing's parts by reference,
+  Jensen's figures, the Revival 4000's; no file committed: SSL's notice on the drawing,
+  URLs and sha256 there). ka-electronics also has `ssl_82E02.pdf` (the 02 EQ) and
+  `ssl_82E10.pdf`; its directory listing is forbidden, so other cards are guesses by name.
+  Jensen's own JT-115K-E pdf is gone from their site (404); the E60's is on the Wayback
+  Machine (`web/2020id_/` gives the raw file).
+- The JT-115K-E: `config/circuits/jt115k_test.yaml` (Jensen's test circuit 1) carries the
+  same `jt_*` values as `ssl_4000e.yaml` (a test checks they are equal; change both).
+  `scripts/fit_jt115k.py` (~5 min; `--hf` the high end alone) fits on
+  `varimu/measure/transformer_sheet.py`: turns 1300 provisional (from the DCRs: 0.17 /
+  0.063 mm wire), area 7.654e-6 m^2 (1% at 20 Hz at -2.5 dBu), gap 1.309 um (-3 dB at 2.5
+  Hz from the 150 ohm EMF), leakage 165.7 uH and c_sec 134.5 pF (-0.13 dB at 20 kHz, -3 dB
+  at 90 kHz). 90 kHz is past the 96 kHz grid's Nyquist: the high end is fitted on
+  `varimu/measure/ac.py`, which now takes `Winding`s (a linear-core build; it agrees with
+  the transient within 0.011 dB at 20 kHz; the transient reads 0.29 dB low at 40 kHz).
+  Not targeted: gain 19.75 dB (= jensen), 20 Hz -0.19 dB (-0.26), Zin 1534 ohm (1400:
+  the reflected 150k; the 1.4k may include the test fixture's loading), **20 Hz THD at
+  -20 dBu 0.44% (jensen 0.065%): a known miss**: the fitted mumetall's low-field
+  hysteresis makes the 20 Hz THD nearly level-independent (0.3-0.45% from -20 to -6 dBu);
+  no turns / area / gap inside the DCRs and the 2.5 Hz corner gets near 0.065%. A refit of
+  the material would move every render (the user's call, not made). 1 kHz THD 0.002%
+  (0.001).
+- `config/circuits/ssl_4000e.yaml`: the cold pin at ground (a chain's mic drives one
+  side), so the phantom feed's C1 is left out (it would short R2; with a floating mic it
+  carries only common mode); R1 + R2 (13.6k) load the mic. PAD per the drawing (R3 across
+  the input, R4 / R5 in series, R6 across the primary): -18.2 dB. PHASE 0 = into T4's -
+  (the whole in phase: T9 and T4 invert; the drawn position isn't legible). RC1 (J112) a
+  50 ohm resistor. The 5534s: clean_pre's macro values, swing 15.4 V (+-18 V rails).
+- The profile `varimu/measure/opamp_pre_suite.py` (one suite, a `PREAMPS` entry per
+  circuit; `varimu unit --circuit ssl_4000e`, ~15 s warm; reports/units/ssl_nominal/):
+  gain from a 150 ohm EMF 18.8-68.7 dB (the law + 18.72 dB of input stage within 0.01 dB
+  at all 11 points), pad -18.2, response 20 Hz -0.35 / 20 kHz -0.28 dB at 37 dB, input
+  impedance 1379 ohm at 1 kHz (1110 at 40 Hz, 903 at 10 kHz), output 9.7 ohm, THD 0.0002%
+  at +4 dBu, 1% at +23.4 dBu (hard clip), 20 Hz at the least gain 0.44% / 0.60% at -20 /
+  -2.5 dBu in. vs the Revival's (a reference): 3 of 5 (the pad's 20 dB and +-0.175 dB
+  flatness missed).
+- The chain: `ssl_4000e`'s entry (input `ia`, drop RSRC; MIC GAIN as rotations labelled by
+  gain, default 0.3; PAD), sm58_ssl composed with `mic_gain_ssl: 0.9` (59 dB): 94 dB SPL
+  1 kHz -18.45 dBFS peak (`mic_print.py --draft`); the 12 others byte-identical; a draft
+  render through a scratch scene ran. Fixtures for `ssl_4000e`, `sm58_ssl`, `jt115k_test`
+  exported (nothing else moved).
+- The Portastudio: `data/schematics/tascam_424/README.md` (the 424 mk1 service manual's
+  IN / MIX PCB and supply by part reference; the 144's and 244's drawings described for
+  WP21; nothing committed), the uPC4570 in data/datasheets/opamps/README.md (Renesas'
+  current sheet). `config/circuits/tascam_portastudio.yaml`: the jack's tip (`ia`) through
+  the IN PCB's 1k / 100k || 1500p, U101A with TRIM, S101 at MIC/LINE onto R114 10k and the
+  EQ's R106 22k (its far end as AC ground, provisional): the channel's output is the EQ's
+  input; the EQ, the fader and U102A aren't modelled (flat at centre; the mic input is the
+  Portastudio's character: its single +9.3 V rail). Every node about the half rail (an AC
+  ground); the uPC4570 swing 2.44 V (+-4.64 V less the sheet's 1.6 V and the clamp diode):
+  1% THD at +8.2 dBu, hard. Its own full scale: 0 dBFS = 3.081 V peak (+9 dBu), so a print
+  reaches the machine's ceiling (on the V76's +24 dBu it would sit 15 dB down).
+- TRIM (R103 10k "RD") is a reverse audio taper (provisional, taper_mid 0.1): the pot
+  macro gained `reverse` (both builders, `parts.pot` / `parts::pot`; the taper read from
+  end_b; absent = every existing pot bit for bit: fixtures and goldens unmoved). Gain from
+  a 150 ohm EMF -0.2 to +39.7 dB, the law within 0.01 dB at 11 points (+18.9 at half);
+  input impedance 49 kOhm at 1 kHz (10.6 k at 10 kHz: C101 1500p); response at -10 dBV out
+  -0.25 dB at 20 kHz (nominal), -0.47 at +40 dB. Profile `varimu unit --circuit
+  tascam_portastudio` (opamp_pre_suite's second entry: response at -8 dBu; ~7 s warm;
+  reports/units/porta424_nominal/); vs the jack's -50 to -10 dBV: 2 of 2.
+- The chains: `tascam_portastudio`'s entry (TRIM as rotations labelled by gain, default
+  0.5); sm57_porta and sm58_porta with `trim_porta: 1.0` (40 dB): 94 dB SPL 1 kHz at -23.0
+  / -22.2 dBFS peak. A chain's `defaults` are applied by scenes and the Room view, not
+  written into the composed file (its controls keep the circuit's default): `mic_print.py`
+  needs `--set`. A draft scene render of both ran. Fixtures for `tascam_portastudio`,
+  `sm57_porta`, `sm58_porta` exported (nothing else moved).
+- Tests: `tests/test_ssl_4000e.py` (9), `tests/test_tascam_portastudio.py` (5, the reverse
+  pot included), `test_chain_matrix.py` (18), `test_app_fixtures.py` (60), varimu-circuit's
+  tests (agreement included), varimu-app `room::` (12), clippy and fmt.
+
+Decisions:
+- The SSL's cold pin at ground with the phantom's C1 left out (above); PHASE 0 the
+  in-phase position; RC1 a 50 ohm resistor; its 5534s on clean_pre's macro values.
+- The JT-115K-E's 20 Hz low-level THD left as a known miss (mumetall's fit is the user's
+  call; the options: a refit with a weaker Rayleigh region, or a second nickel material).
+- The Portastudio's model ends at the EQ's input; its print scale is its own (+9 dBu).
+- The Portastudio is the 424 mk1, not the 144 (1979: a 2SK68A JFET and two 2SA970 PNPs
+  ahead of a 4558) or the 244 (1982: a JFET differential pair into a 4558): those need
+  WP21's JFET (and the 144 WP10's BJT); the 424's mic input is one op-amp. A 144 / 244 can
+  come after WP21 as a second Portastudio (the sources are kept).
+- The SSL is the E-series 82E01 (transformer input), not the G-series' transformerless
+  mic amp (its drawing isn't public here).
+
+### WP5-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -451,11 +589,13 @@ in `data/schematics/neumann_u47/README.md` and `data/schematics/shure_sm57/READM
 
 ## Owed
 
-Batched checks (the targeted-tests rule): the full `pytest` (WP1-WP3 added seven
+Batched checks (the targeted-tests rule): the full `pytest` (WP1-WP4 added thirteen
 circuits and their app fixtures; WP3 added the device builder `build_ck12` to
-`varimu/devices/library.py`, which moves every render's cache key: the full suite
-re-renders; no device model, engine or existing circuit changed, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
-before this session (not the chains' work).
+`varimu/devices/library.py`, WP4 the pot's `reverse` to `varimu/circuit/{parts,builder}.py`
+and windings to `varimu/measure/ac.py`: the first two move every render's cache key, so
+the full suite re-renders; no device model, engine or existing circuit changed, every
+fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
+before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
 
 ## Decisions (the user's)
 
@@ -482,3 +622,9 @@ before this session (not the chains' work).
   bounded by Austrian Audio's CK12 figures), T14/1 from Haufe's sheet, the nine patterns
   as capsule instances; the Room view's patterns now first-order figures; C12 -> clean
   and C12 -> UA 610 composed: 12 of 51 available.
+- 2026-11-05: WP4 done: the SSL 4000 E's 82E01 channel amplifier card (ka-electronics)
+  with the Jensen JT-115K-E fitted to Jensen's E60 sheet (`fit_jt115k.py`; the high end on
+  `ac.py`, which now takes windings; the 20 Hz low-level THD a known miss), and the Tascam
+  424 mk1's mic input (its service manual; the 144 / 244 need the JFET); one profile suite
+  for both (`opamp_pre_suite.py`), the pot's `reverse` taper in both builders; SM58 -> SSL
+  and SM57 / SM58 -> Portastudio composed: 15 of 51 available.

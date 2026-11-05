@@ -42,6 +42,7 @@ pub fn taper(pos: f64, mid: Option<f64>) -> Result<f64, Error> {
     Ok((a.powf(pos) - 1.0) / (a - 1.0))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn pot(
     name: &str,
     end_a: &str,
@@ -50,8 +51,14 @@ pub fn pot(
     total: f64,
     pos: f64,
     taper_mid: Option<f64>,
+    reverse: bool,
 ) -> Result<Vec<Element>, Error> {
-    let f = taper(pos, taper_mid)?;
+    // reverse: a reverse-taper (C) pot, the taper read from end_b (parts.py's pot).
+    let f = if reverse {
+        1.0 - taper(1.0 - pos, taper_mid)?
+    } else {
+        taper(pos, taper_mid)?
+    };
     Ok(vec![
         resistor(&format!("{name}a"), end_a, wiper, f * total),
         resistor(&format!("{name}b"), wiper, end_b, (1.0 - f) * total),

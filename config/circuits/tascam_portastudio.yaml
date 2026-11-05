@@ -1,0 +1,99 @@
+# The Tascam Portastudio's mic input (docs/CHAINS_PLAN.md WP4): the 424 (mk1, 1991), channel
+# 1, from its service manual (data/schematics/tascam_424/README.md). Values cite:
+#   "sm: ..."   the 424 service manual's schematics (IN PCB, MIX PCB channel 1, BOTTOM PCB
+#               2/2's supply), by part reference
+#   "web: ..."  the uPC4570's sheet (data/datasheets/opamps/README.md)
+#
+# in -> RSRC (the test generator, dropped in a chain) -> ia, the MIC/LINE jack's tip
+# (unbalanced 1/4", -50 to -10 dBV: sm); the IN PCB's R101 1k into R102 100k || C101 1500p;
+# on the MIX PCB C101 10u into U101A's + (R101 100k to the half rail), U101A (uPC4570)
+# non-inverting with R102 470k || C102 100p from its output to -, C103 10u from - to TRIM's
+# wiper (R103 10k "RD"), whose track runs from C104's far end (U101A's output, AC-coupled)
+# to R104 100R: gain (470k + Rw) / (Rw + 470k k), k the wiper's share of the track above
+# R104, Rw the wiper's source resistance: 0 dB with the wiper at C104's end, +39.9 dB at
+# R104's. S101 at MIC/LINE (C) onto the EQ's input: R114 10k and the EQ (R106 22k) as its
+# load, the channel's output here (`out`). One +9.3 V rail (M5237L) with the op-amps on its
+# half (U703): every node here is drawn about that half rail (an AC ground), the op-amp
+# clamped at the swing it allows.
+
+title: "Tascam Portastudio 424 mic input"
+input: in
+probes: [out, ia, uo]
+full_scale:
+  input_volts_peak: {value: 1.0960, source: "derived: 0.775 V rms x sqrt(2), 0 dBu (as telefunken_v76.yaml)"}
+  output_volts_peak: {value: 3.081, source: "derived: a sine of +9 dBu (2.18 V rms), just past U101A's clip (~+-3.0 V about the 424's half rail): a print's 0 dBFS is the machine's ceiling, its -10 dBV nominal reads -16.8 dBFS (the chains of the V76 / clean scale, +24 dBu, would leave it 15 dB down)"}
+
+controls:
+  trim: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "sm: R103 10k (RD), TRIM", notes: "0 = 0 dB (the wiper at C104's end), 1 = +39.9 dB (at R104's); 0.5 = ~+19 dB with the provisional taper"}
+
+values:
+  source_impedance_ohm: {value: 150.0, source: "provisional: model knowledge (a test generator at a mic's 150 Ohm)"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch contact, ~10 mOhm)"}
+  # --- IN PCB (sm) -----------------------------------------------------------------------
+  ri101_ohm: {value: 1000.0, source: "sm: IN PCB R101 1k"}
+  ri102_ohm: {value: 100.0e+3, source: "sm: IN PCB R102 100k"}
+  ci101_f: {value: 1500.0e-12, source: "sm: IN PCB C101 1500p (CE)"}
+  # --- MIX PCB channel 1 (sm) ------------------------------------------------------------
+  c101_f: {value: 10.0e-6, source: "sm: C101 10/25V"}
+  r101_ohm: {value: 100.0e+3, source: "sm: R101 100k (to the half rail)"}
+  r102_ohm: {value: 470.0e+3, source: "sm: R102 470k"}
+  c102_f: {value: 100.0e-12, source: "sm: C102 100p (CE)"}
+  c103_f: {value: 10.0e-6, source: "sm: C103 10/25V"}
+  trim_ohm: {value: 10.0e+3, source: "sm: R103 10k (RD), TRIM"}
+  trim_taper_mid: {value: 0.1, source: "provisional: model knowledge (sm marks the track 'RD', read here as a reverse audio taper: 10% of the track from R104's end at half rotation, so the gain in dB rises about evenly, ~+19 dB at half)"}
+  r104_ohm: {value: 100.0, source: "sm: R104 100"}
+  c104_f: {value: 10.0e-6, source: "sm: C104 10/25V"}
+  r114_ohm: {value: 10.0e+3, source: "sm: R114 10k"}
+  r106_ohm: {value: 22.0e+3, source: "sm: R106 22k (the EQ's input; its far end, the EQ stage, as an AC ground: provisional)"}
+  # --- uPC4570HA (web: data/datasheets/opamps/README.md) ----------------------------------
+  u_a0: {value: 3.0e+5, source: "web: https://www.renesas.com/en/document/dst/upc4570-datasheet (AV 300000 typ, RL >= 2 kOhm)"}
+  u_gbw_hz: {value: 15.0e+6, source: "web: https://www.renesas.com/en/document/dst/upc4570-datasheet (GBW 15 MHz typ at 100 kHz)"}
+  u_r_in_ohm: {value: 100.0e+3, source: "provisional: model knowledge (a bipolar-input op-amp's differential input resistance; as the 5534's)"}
+  u_r_out_ohm: {value: 50.0, source: "provisional: model knowledge (a 4558-class op-amp's open-loop output resistance, tens of ohms)"}
+  u_swing_v: {value: 2.44, source: "derived: the 424's rail, sm: M5237L with R704 36k / R705 5.6k, 1.25 V x (1 + 36 / 5.6) = 9.29 V, halved by R706 / R707 (U703): +-4.64 V about the half rail, less the sheet's 1.6 V of headroom (Vom +-13.4 V on +-15 V, RL >= 10 kOhm), less the clamp diode's ~0.6 V"}
+  u_noise_ohm: {value: 1251.0, source: "derived: the uPC4570's 4.5 nV/rtHz at 1 kHz (web: its sheet) as a resistor's Johnson noise at 20 C, (4.5e-9)^2 / 4kT (heard only under a noise block)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (carbon film resistors in a 1991 consumer machine)"}
+  tol_cap_pct: {value: 20.0, source: "provisional: model knowledge (electrolytics and ceramics, +-20%)"}
+  tol_pot_pct: {value: 20.0, source: "provisional: model knowledge (a pot's track, +-20%)"}
+
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r5: tol_resistor_pct
+    cap: tol_cap_pct
+    pot: tol_pot_pct
+  classes:
+    r5: [RI101, RI102, R101, R102, R104, R114, R106]
+    cap: [CI101, C101, C102, C103, C104]
+    pot: [R103]
+
+devices:
+  DCLAMP: {device: SI_RECTIFIER@1}
+
+sections:
+  - title: input
+    parts:
+      RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+      RI101: {R: [ia, j], r: ri101_ohm}
+      RI102: {R: [j, "0"], r: ri102_ohm}
+      CI101: {C: [j, "0"], c: ci101_f}
+      C101: {C: [j, up], c: c101_f}
+      R101: {R: [up, "0"], r: r101_ohm}
+
+  - title: trim
+    parts:
+      RN: {R: [up, unp], r: u_noise_ohm, tolerance: none}
+      U101: {opamp: [unp, um, uo], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      R102: {R: [uo, um], r: r102_ohm}
+      C102: {C: [uo, um], c: c102_f}
+      C103: {C: [um, w], c: c103_f}
+      C104: {C: [uo, t], c: c104_f}
+      R103: {pot: [t, w, b], r: trim_ohm, at: trim, taper_mid: trim_taper_mid, reverse: 1}
+      R104: {R: [b, "0"], r: r104_ohm}
+      RS101: {R: [t, out], r: contact_ohm, tolerance: none}
+      R114: {R: [out, "0"], r: r114_ohm}
+      R106: {R: [out, "0"], r: r106_ohm}

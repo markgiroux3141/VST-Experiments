@@ -99,10 +99,17 @@ def pot(
     total: float,
     pos: float,
     taper_mid: float | None = None,
+    reverse: bool = False,
 ) -> list[Resistor]:
     """Potentiometer `name` (elements <name>a, <name>b); pos = 0 puts the wiper at end_a,
-    1 at end_b; the track follows `taper` from end_a (linear by default)."""
-    f = pos if taper_mid is None else taper(pos, taper_mid)
+    1 at end_b; the track follows `taper` from end_a (linear by default). `reverse`: a
+    reverse-taper (C) pot, the taper read from end_b (the fraction from end_a is
+    1 - taper(1 - pos): with an audio `taper_mid`, the wiper moves fast near end_a and
+    slowly near end_b)."""
+    if reverse:
+        f = 1.0 - (1.0 - pos if taper_mid is None else taper(1.0 - pos, taper_mid))
+    else:
+        f = pos if taper_mid is None else taper(pos, taper_mid)
     return [
         resistor(f"{name}a", end_a, wiper, f * total),
         resistor(f"{name}b", wiper, end_b, (1 - f) * total),
