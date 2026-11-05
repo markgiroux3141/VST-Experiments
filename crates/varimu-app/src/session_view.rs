@@ -2560,10 +2560,33 @@ impl SessionView {
         }
         let mut delete_take = None;
         let mut take_action: Option<(usize, u8)> = None;
+        let mut place_take: Option<(usize, bool)> = None;
         lane_resp.context_menu(|ui| {
             let t = &self.session.tracks[i];
             match t.active {
                 Some(k) => {
+                    let take = &t.takes[k];
+                    if take.latency != 0 {
+                        let ms = take.latency as f64 / self.session.rate as f64 * 1e3;
+                        let (label, hover, heard) = if take.heard {
+                            (
+                                format!("Place on the click ({ms:.0} ms earlier)"),
+                                "Where you meant it if you played to the click, not to what you heard: the monitor's latency taken off",
+                                false,
+                            )
+                        } else {
+                            (
+                                format!("Place as heard ({ms:.0} ms later)"),
+                                "Where it was recorded: it plays against the click and the other tracks exactly as the monitor played it",
+                                true,
+                            )
+                        };
+                        if ui.button(label).on_hover_text(hover).clicked() {
+                            place_take = Some((k, heard));
+                            ui.close();
+                        }
+                        ui.separator();
+                    }
                     if t.takes[k].events.is_some() {
                         if ui.button("Piano roll").clicked() {
                             take_action = Some((k, 0));
@@ -2731,7 +2754,11 @@ impl SessionView {
                 Some(_) => (&no_wave, "recording MIDI"),
                 None => (&r.overview, "recording audio"),
             };
-            let at = r.start - r.latency;
+            let at = if self.session.place_heard {
+                r.start
+            } else {
+                r.start - r.latency
+            };
             draw_clip(&lp, lane, view, at, r.len, ov, REC, label);
             if let Some((from, notes)) = &r.notes {
                 let rect = Rect::from_min_max(
@@ -3037,6 +3064,11 @@ impl SessionView {
                 changed = true;
             }
             _ => {}
+        }
+        if let Some((k, heard)) = place_take
+            && let Some(take) = self.session.tracks[i].takes.get_mut(k)
+        {
+            changed |= take.place(heard);
         }
         if let Some(k) = delete_take {
             self.delete_take(i, k);
@@ -3370,7 +3402,42 @@ impl SessionView {
         }
     }
 
+    /// Where takes land: new ones, and every one recorded so far (an edit, undoable).
+    fn placement_ui(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("New takes:");
+            let mut heard = self.session.place_heard;
+            ui.radio_value(&mut heard, true, "as heard").on_hover_text(
+                "Where they were recorded: they play back against the click and the other tracks exactly as the monitor played them",
+            );
+            ui.radio_value(&mut heard, false, "on the click").on_hover_text(
+                "The monitor's latency taken off: where you meant them if you played to the click, not to what you heard",
+            );
+            if heard != self.session.place_heard {
+                self.session.place_heard = heard;
+                self.save();
+            }
+            ui.separator();
+            let busy = self.recording.is_some();
+            if ui
+                .add_enabled(!busy, egui::Button::new("Every take as heard"))
+                .clicked()
+                && self.session.place_all(true)
+            {
+                self.save();
+            }
+            if ui
+                .add_enabled(!busy, egui::Button::new("Every take on the click"))
+                .clicked()
+                && self.session.place_all(false)
+            {
+                self.save();
+            }
+        });
+    }
+
     fn latency_ui(&mut self, ui: &mut egui::Ui, play: &PlayView) {
+        self.placement_ui(ui);
         let Some(p) = play.player() else {
             ui.label(
                 RichText::new("latency: (while a device plays)")
@@ -3385,7 +3452,7 @@ impl SessionView {
         let block = BLOCK as f64 / p.rate as f64;
         let heard = out + queue;
         ui.label(format!(
-            "output device {:.1} ms (cpal) · queue {:.1} ms · block {:.1} ms: the tracks and the click are heard {:.0} ms after they are computed, a key about {:.0} ms after it is played (takes are placed by it)",
+            "output device {:.1} ms (cpal) · queue {:.1} ms · block {:.1} ms: the tracks and the click are heard {:.0} ms after they are computed, a key about {:.0} ms after it is played (a take on the click is placed that much earlier)",
             out * 1e3,
             queue * 1e3,
             block * 1e3,
@@ -3623,14 +3690,23 @@ fn show_folder(dir: &Path) {
     let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
 }
 
-/// A take's line under its strip: its id, device, length and latency.
+/// A take's line under its strip: its id, device, length and placement.
 fn take_line(k: &Take, rate: u32) -> String {
+    let placed = if k.latency == 0 {
+        String::new()
+    } else if k.heard {
+        " · as heard".to_string()
+    } else {
+        format!(
+            " · on the click ({:.0} ms early)",
+            k.latency as f64 / rate as f64 * 1e3
+        )
+    };
     format!(
-        "{} · {} · {:.1} s · placed {:.0} ms early",
+        "{} · {} · {:.1} s{placed}",
         k.id,
         if k.device.is_empty() { "?" } else { &k.device },
         k.len() as f64 / rate as f64,
-        k.latency as f64 / rate as f64 * 1e3
     )
 }
 

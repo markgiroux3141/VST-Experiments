@@ -8,8 +8,13 @@
 //! gain: those are the monitor's, not the take's), placed where the player heard the
 //! click: the worker computes `latency` samples ahead of the ear (the queue and the output
 //! device), so what is played in time with what's heard lands `latency` later in the
-//! stream, and the take's `position` is where it was recorded less that. Takes are never
-//! replaced: a new one is added to the track's lane and made the active one.
+//! stream. A take is placed one of two ways ([`Take::heard`]): **as heard**, where it was
+//! recorded, so it plays back against the click and the other tracks exactly as the monitor
+//! played it (the click and the tracks were mixed into the same blocks); or **on the
+//! click**, `latency` earlier, where a player who played to the click (not to the monitor)
+//! meant it. New takes land as the session says ([`Session::place_heard`], as heard by
+//! default); either can be switched afterwards, since a take keeps its latency. Takes are
+//! never replaced: a new one is added to the track's lane and made the active one.
 //!
 //! **The mix** is a console's: each track's active take times its fader and balance
 //! (center unity, a side down toward silence), mute and solo, summed; the device playing
@@ -416,9 +421,13 @@ impl Plays {
 #[derive(Debug, Clone)]
 pub struct Take {
     pub id: String,
-    /// The timeline sample of its first sample (latency compensated).
+    /// The timeline sample of its first sample.
     pub position: i64,
+    /// How far ahead of the ear it was recorded (samples): the shift between its two
+    /// placements.
     pub latency: i64,
+    /// Placed as heard (where it was recorded), or on the click (`latency` earlier).
+    pub heard: bool,
     /// The device it was played on (`panel::Device::id`, or a label).
     pub device: String,
     pub recorded_unix_s: u64,
@@ -435,6 +444,17 @@ pub struct Take {
 }
 
 impl Take {
+    /// Place it as heard (`true`) or on the click: moved by its latency from wherever it
+    /// sits now. Whether it moved.
+    pub fn place(&mut self, heard: bool) -> bool {
+        if self.heard == heard || self.latency == 0 {
+            return false;
+        }
+        self.position += if heard { self.latency } else { -self.latency };
+        self.heard = heard;
+        true
+    }
+
     /// Its length in samples: an event take's revision's, else its audio's.
     pub fn len(&self) -> usize {
         match &self.events {
@@ -626,6 +646,8 @@ pub struct Session {
     pub tracks: Vec<Track>,
     /// The track that records (and whose strip the live device plays through).
     pub armed: Option<usize>,
+    /// New takes placed as heard (else on the click): [`Take::heard`].
+    pub place_heard: bool,
     /// Every take loaded or recorded in this session, by id, deleted ones too: a state
     /// restored by undo takes them from here before reading their folders.
     known: HashMap<String, Take>,
@@ -641,6 +663,7 @@ impl Session {
             transport,
             tracks: vec![Track::new("Track 1")],
             armed: Some(0),
+            place_heard: true,
             known: HashMap::new(),
             revisions: HashMap::new(),
         }
@@ -901,10 +924,16 @@ impl Session {
                 monitor,
             }
         });
+        let heard = self.place_heard || rec.latency == 0;
         let take = Take {
             id: id.clone(),
-            position: rec.start - rec.latency,
+            position: if heard {
+                rec.start
+            } else {
+                rec.start - rec.latency
+            },
             latency: rec.latency,
+            heard,
             device: device.to_string(),
             recorded_unix_s: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1018,6 +1047,7 @@ impl Session {
             id: id.clone(),
             position,
             latency: 0,
+            heard: true,
             device: format!("render of {}", from["take"].as_str().unwrap_or("?")),
             recorded_unix_s: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -1036,6 +1066,17 @@ impl Session {
         t.active = Some(t.takes.len() - 1);
         self.save()?;
         Ok(id)
+    }
+
+    /// Every take with a latency placed as heard (`true`) or on the click. Whether any moved.
+    pub fn place_all(&mut self, heard: bool) -> bool {
+        let mut moved = false;
+        for t in &mut self.tracks {
+            for k in &mut t.takes {
+                moved |= k.place(heard);
+            }
+        }
+        moved
     }
 
     /// The session as `session.json` holds it: rate, transport, tracks (their takes by id,
@@ -1060,6 +1101,12 @@ impl Session {
                         .iter()
                         .map(|k| (k.id.clone(), json!(k.position)))
                         .collect::<serde_json::Map<_, _>>(),
+                    "placed": t
+                        .takes
+                        .iter()
+                        .filter(|k| k.latency != 0)
+                        .map(|k| (k.id.clone(), json!(if k.heard { "heard" } else { "click" })))
+                        .collect::<serde_json::Map<_, _>>(),
                     "active": t.active_take().map(|k| k.id.clone()),
                     "revisions": t
                         .takes
@@ -1078,6 +1125,7 @@ impl Session {
             "transport": transport_json(&self.transport),
             "tracks": tracks,
             "armed": self.armed,
+            "place_new": if self.place_heard { "heard" } else { "click" },
         })
     }
 
@@ -1125,6 +1173,9 @@ impl Session {
                 if let Some(p) = t["positions"][id].as_i64() {
                     take.position = p;
                 }
+                if let Some(h) = t["placed"][id].as_str() {
+                    take.heard = h == "heard";
+                }
                 let rev = t["revisions"][id].as_u64().unwrap_or(0) as u32;
                 if take.events.as_ref().is_some_and(|e| e.rev != rev) {
                     let perf = self.revision(id, rev)?;
@@ -1147,6 +1198,7 @@ impl Session {
             .map(|i| i as usize)
             .filter(|&i| i < tracks.len());
         self.rate = rate;
+        self.place_heard = v["place_new"].as_str() != Some("click");
         self.transport = transport_from(&v["transport"]);
         // Prints carry over to the restored tracks: the one made from the same chain on the
         // same take, else any print of that take (stale until it is printed again).
@@ -1190,6 +1242,7 @@ impl Session {
             transport: TransportSettings::default(),
             tracks: Vec::new(),
             armed: None,
+            place_heard: true,
             known: HashMap::new(),
             revisions: HashMap::new(),
         };
@@ -1357,6 +1410,7 @@ fn write_take(dir: &Path, k: &Take, rate: u32) -> Result<(), String> {
         "id": k.id,
         "position": k.position,
         "latency": k.latency,
+        "placed": if k.heard { "heard" } else { "click" },
         "rate": rate,
         "samples": k.audio.len(),
         "device": k.device,
@@ -1413,6 +1467,8 @@ fn read_take(dir: &Path, id: &str, rate: u32) -> Result<Take, String> {
         id: id.to_string(),
         position: v["position"].as_i64().unwrap_or(0),
         latency: v["latency"].as_i64().unwrap_or(0),
+        // Takes recorded before placements were placed on the click.
+        heard: v["placed"].as_str() == Some("heard") || v["latency"].as_i64().unwrap_or(0) == 0,
         device: v["device"].as_str().unwrap_or("").to_string(),
         recorded_unix_s: v["recorded_unix_s"].as_u64().unwrap_or(0),
         code: v["code"].as_str().unwrap_or("").to_string(),
@@ -1493,6 +1549,7 @@ mod tests {
             id: "t".into(),
             position: pos,
             latency: 0,
+            heard: true,
             device: String::new(),
             recorded_unix_s: 0,
             code: String::new(),
@@ -1544,6 +1601,7 @@ mod tests {
         s.tracks[1].pan = -0.5;
         s.tracks[1].midi = false;
         s.tracks[0].monitor = Monitor::Proxy;
+        let rec_click = rec.clone();
         s.add_take(1, rec, "fender_5e3").expect("saved");
         let t = Session::load(&dir).expect("loads");
         assert_eq!(t.transport.bpm, 93.5);
@@ -1555,14 +1613,44 @@ mod tests {
             (Monitor::Proxy, Monitor::Device)
         );
         let (a, b) = (&s.tracks[0].takes[0], &t.tracks[0].takes[0]);
-        assert_eq!(b.position, 760);
+        // Placed as heard: where it was recorded.
+        assert_eq!((b.position, b.heard), (1000, true));
         assert_eq!(a.audio, b.audio); // float32 on disk: bit for bit
+        // On the click: its latency earlier; back as heard; kept by a save.
+        let mut t = t;
+        assert!(t.tracks[0].takes[0].place(false));
+        assert!(!t.tracks[0].takes[0].place(false));
+        assert_eq!(t.tracks[0].takes[0].position, 760);
+        t.save().expect("saved");
+        let v = Session::load(&dir).expect("loads");
+        assert_eq!(
+            (v.tracks[0].takes[0].position, v.tracks[0].takes[0].heard),
+            (760, false)
+        );
+        assert!(t.place_all(true));
+        assert_eq!(t.tracks[0].takes[0].position, 1000);
+        assert!(!t.place_all(true));
+        // New takes on the click when the session says so.
+        t.place_heard = false;
+        t.save().expect("saved");
+        let mut v = Session::load(&dir).expect("loads");
+        assert!(!v.place_heard);
+        v.add_take(1, rec_click.clone(), "fender_5e3")
+            .expect("saved");
+        let k = v.tracks[1].active_take().unwrap();
+        assert_eq!((k.position, k.heard), (760, false));
+        // A take recorded before placements: on the click.
+        let id = k.id.clone();
+        let tj = dir.join("takes").join(&id).join("take.json");
+        let mut j: Value = serde_json::from_str(&std::fs::read_to_string(&tj).unwrap()).unwrap();
+        j.as_object_mut().unwrap().remove("placed");
+        std::fs::write(&tj, j.to_string()).unwrap();
+        assert!(!read_take(&dir, &id, 48_000).unwrap().heard);
         assert_eq!(
             t.tracks[1].active_take().map(|k| k.id.as_str()),
             Some("t0002")
         );
         // A take moved on the timeline stays where it was moved.
-        let mut t = t;
         t.tracks[0].takes[0].position = 48_000;
         t.save().expect("saved");
         let u = Session::load(&dir).expect("loads");

@@ -348,6 +348,21 @@ and the production render (the done-when above).
   selects it, a drag moves it (by whole beats; Alt: freely; where it sits now is in
   `session.json`, `take.json` keeps where it was recorded), Delete or right-click deletes a
   take, right-click on a strip a track (their files stay in the folder), Ctrl+Z undoes.
+- **Placement: as heard or on the click** (2026-11-04, after the user found playback "off"
+  from the monitor, MIDI and audio alike). Takes had all been placed on the click, i.e.
+  the monitor's latency taken off (52-60 ms in the user's sessions: the 50 ms queue plus
+  the output device). With 60-80 ms between a key and its sound, a player plays to what
+  they hear, so every take played back that much early. The click and the other tracks are
+  mixed into the same blocks as the device, so a take left where it was recorded plays back
+  against them exactly as the monitor did. A take now keeps its placement (`Take::heard`,
+  `take.json` / `session.json` "placed"; earlier takes read as on the click) and switches
+  either way by its latency (the lane's right-click menu; Latency & calibration's "Every
+  take as heard / on the click", undoable); new takes land as the session says
+  (`Session::place_heard`, "place_new", as heard by default). Known errors of "on the
+  click", left as they are: about one block (10 ms) plus the compute late (a key waits
+  for the next block; an input sample for its block to fill), cpal's device latencies
+  short by the driver's buffers (9.6 ms on the Twin, the loopback calibration not used),
+  and the queue read once at the take's start.
 - **The timeline** (the user's next asks): a scrollbar under the lanes, −, + and Fit (G,
   H; Ctrl+wheel), left and right locators (beats: Ctrl+click and Alt+click on the ruler, a
   drag draws them, their handles drag, L / R fields as bar.beat) and a loop between them
