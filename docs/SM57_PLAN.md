@@ -76,9 +76,22 @@ model gives +18 dB at 100 Hz at 6 mm from the cartridge's face, +16 at 25 mm, +8
 tip or the face behind it), and first-order theory with the 125 Hz pattern gives more still;
 open, for the user. `tests/test_sm57.py` checks R57@2 on its body.
 
-**Open, handed on:** above the presence peak (SM3): the dip at 7.7 kHz and the second peak at
-9.6 kHz aren't drawn (on the body: rms 4.5 dB above 6.5 kHz; the provisional cap puts a spike
-at 11.3 kHz and a notch at 12.5 kHz). The sphere-era notes follow.
+**SM3's ducts (the cap), R57@3** (the circuit pins it): on the body, the cap's holes and its
+air layer gridded against s68 at 6.5-14 kHz (`film` height 0.072 mm effective, holes 0.75 mm;
+the layer's loss is set by its thinnest part, where the dome rises toward the cap), then the
+network refitted: sensitivity 1.487 mV/Pa; on axis 0.60 dB rms (max 1.7) to 6.5 kHz and 2.42
+dB rms above; the polars within 2.4 dB at every c81 frequency (125 Hz -3.9 / -10.4, 1 kHz
+-5.7 / -19.9, 2 kHz -6.2 / -19.4, 4 kHz -6.8 / -15.8, 8 kHz rear -9.5; published as above).
+**The moving system's resonance came out at 97 Hz**, Born's "in the 100Hz area", which wasn't
+a target (the low end was). B l 2.45 T m, B 1.2 T (at its bound, the sensitivity met), moving
+mass 69 mg, the air behind the washer 2.5 cm^3. R57@2's geometry records the handle's volume
+as the string '2e-05' (PyYAML reads an exponent without a decimal point as a string; its
+lumped value is right, and the builders read only that); fit_sm57.py's writer is fixed.
+
+**Open, handed on (SM3's modes):** the dip at 7.7 kHz and the second peak at 9.6 kHz aren't
+drawn (the model falls smoothly: 2.4 dB under at 10 kHz, ~4 dB under at 12.7-13.9 kHz). SM3's
+tolerance holds to ~8.5 kHz. The dome's modes (pat713's two cones and the coil ring, its bridges
+breaking axial symmetry) are next. The sphere-era notes follow.
 
 The presence peak and above were not in SM2: the model has no presence
 peak (~11 dB short at 5.8 kHz), a small bump at 11 kHz and a notch at 12.5 kHz. Why: on a

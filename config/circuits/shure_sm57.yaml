@@ -34,7 +34,7 @@ controls:
   impedance: {value: 0, choices: [0, 1], unit: position, source: "s68: 'Impedance: Dual. 30-50 ohms and 150-250 ohms. (Connected for 150-250 ohms when shipped)'", notes: "0 'H' 150-250 ohm (RED to pin 3), 1 'L' 30-50 ohm (ORANGE to pin 3)"}
 
 values:
-  cartridge_model: {value: R57@2, source: "s68 / g25: the Unidyne III cartridge (Shure's replacement R57); config/components/r57/2.yaml (its geometry provisional and fitted by scripts/fit_sm57.py on the mic's body, varimu/mics/bor.py: data/schematics/shure_sm57/README.md; R57@1 was fitted on a sphere)"}
+  cartridge_model: {value: R57@3, source: "s68 / g25: the Unidyne III cartridge (Shure's replacement R57); config/components/r57/3.yaml (its geometry provisional and fitted by scripts/fit_sm57.py on the mic's body, varimu/mics/bor.py: data/schematics/shure_sm57/README.md; @1 was fitted on a sphere, @2 before the cap's fit)"}
   coil_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating coil and primary"}
 
   # --- The output transformer (version 1: no original construction; README 'The electrical side')

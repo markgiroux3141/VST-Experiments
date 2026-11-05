@@ -285,6 +285,16 @@ def summary(g, all_resp, polar, sens_v_pa) -> dict:
     }
 
 
+def _num(v, digits: int) -> str:
+    """A float as YAML 1.1 reads it back as one: an exponent needs a decimal point
+    (PyYAML reads `2e-05` as a string)."""
+    text = f"{float(v):.{digits}g}"
+    if "e" in text and "." not in text.split("e")[0]:
+        head, tail = text.split("e")
+        text = f"{head}.0e{tail}"
+    return text
+
+
 def write(g) -> None:
     """The fitted values into published_points.yaml's R57 block, in place."""
     lines = PUBLISHED.read_text(encoding="utf-8").split("\n")
@@ -301,7 +311,7 @@ def write(g) -> None:
         if len(hits) != 1:
             raise SystemExit(f"published_points.yaml: {len(hits)} lines for {path}")
         i = hits[0]
-        text = f"[{v[0]:.4g}, {v[1]:.4g}]" if isinstance(v, list) else f"{float(v):.5g}"
+        text = f"[{_num(v[0], 4)}, {_num(v[1], 4)}]" if isinstance(v, list) else _num(v, 5)
         pat = rf"({key}: \{{value: )(\[[^]]*\]|[^}}]+)\}}"
         lines[i], n = re.subn(pat, rf"\g<1>{text}}}", lines[i])
         if n != 1:

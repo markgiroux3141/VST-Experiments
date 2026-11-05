@@ -21,7 +21,7 @@ TURNS = 4.53  # cj06
 ANGLES = [0.0, 90.0, 180.0]
 
 
-VERSION = "R57@2"  # the circuit's (on the mic's body; R57@1 was fitted on a sphere)
+VERSION = "R57@3"  # the circuit's (on the mic's body; @1 on a sphere, @2 before the cap's fit)
 _ENT: dict = {}
 
 
@@ -107,3 +107,16 @@ def test_noise_skips_the_leak():
     noisy = {e.name[3:] for e in ir.elements() if isinstance(e, NoiseCurrent)}
     assert {"RMC_re", "RMC_ps_r1", "RMC_washer"} <= noisy
     assert "RMC_dia_leak" not in noisy
+
+
+def test_above_the_presence_peak():
+    """s68 at 6.5-10.5 kHz within 3 dB (the cap and its layer fitted there; SM3's
+    tolerance, +-2 dB to 10 kHz, waits for the dome's modes: the dip at 7.7 kHz and the second
+    peak at 9.6 kHz)."""
+    rows = [r for r in _rows("shure_sm57_response.csv", "s68") if r["quality"] != "coarse"]
+    f = np.array([float(r["freq_hz"]) for r in rows])
+    db = np.array([float(r["db"]) for r in rows])
+    keep = (f > 6500) & (f <= 10500)
+    h = _response(np.concatenate([[1000.0], f[keep]]), 0.0)
+    on = 20 * np.log10(abs(h[1:]) / abs(h[0]))
+    assert np.max(abs(on - db[keep])) < 3.0

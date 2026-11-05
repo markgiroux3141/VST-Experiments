@@ -347,3 +347,12 @@ a band 3-9 mm behind the face (a grid: 3-9 / 5-11 / 7-13 / 11-17 / 15-21 mm; cos
 cm^3 (at the body's bound). Moving mass 9.6 mg. The on-axis response 50 Hz-6.5 kHz 1.08 dB rms
 against s68, the presence peak included (the body's diffraction); the polars at every c81
 frequency within 3 dB (docs/SM57_PLAN.md "Status"). R57@1 (the sphere) stays for the record.
+
+## R57@3 (the cap fitted on the body)
+
+The cap's holes (0.75 mm radius) and its air layer's effective height (0.072 mm) gridded
+against s68's 6.5-14 kHz on the body, then the network refitted (`fit_sm57.py --ports-mm 6`):
+B l 2.45 T m, B 1.2 T (bound), resonance 97 Hz (Born: ~100 Hz; not a target), R1 2.11e6,
+q 13.8, d 17.7 mm, washer 1.59e7 Pa s/m^3, 2.5 cm^3 behind it; moving mass 69 mg.
+Sensitivity 1.487 mV/Pa; on axis 0.60 dB rms to 6.5 kHz, 2.42 dB rms above; polars within
+2.4 dB at every c81 frequency.
