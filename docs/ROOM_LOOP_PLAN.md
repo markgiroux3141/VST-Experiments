@@ -489,10 +489,14 @@ Offered as materials beside the measured ones: `mineral_wool_50mm`, `mineral_woo
 view lists them. An ordinary stud wall stays the measured `gypsum_on_studs` (as a lightly
 damped panel it under-absorbs). The demo `wave_demo/small_trapped`.
 
+**Diffraction made reciprocal.** The first version had paths reflecting before an edge (the
+source's images) but not after it; the mic's first-order images went in too, so a source and a
+mic swapped hear the same: in an L-shaped room with a gobo and a turned box (95 paths) the
+early responses agree within -126 dB (`test_the_early_response_is_reciprocal`). The night's
+demos were rendered before this (their gobo numbers would move a little).
+
 **Not done / limits.** Second-order diffraction (over a box's two edges: deep shadows behind
-thick objects come out too dark; thin panels are plates, so gobos are fine). Paths reflecting
-after an edge (edge then wall) aren't in the geometric part (below the crossover the wave
-solver has them). The rays' per-mic tail shaping uses the mid bands (shadowing by objects is
+thick objects come out too dark; thin panels are plates, so gobos are fine). The rays' per-mic tail shaping uses the mid bands (shadowing by objects is
 the same for every band in the late part). The Room view's new controls (wall surfaces, facets,
 objects, directional sources, the wave solver) are tested through the scene model and were seen
 drawn on screen once (the app run on a scratch `APPDATA` and session, so the user's last session

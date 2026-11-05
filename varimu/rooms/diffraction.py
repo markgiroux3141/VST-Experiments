@@ -30,9 +30,10 @@ the integrand peaks there) and each piece added to the impulse response at its d
 **Which edges.** Objects' edges (varimu.rooms.polyroom: a box's 12, each a right-angled wedge,
 nu = 2 / 3; a thin panel's 4 round its outline, each a plate's edge, nu = 1 / 2: its two
 right angles closer than the wavelengths that matter) and a floor plan's reflex corners
-(their vertical edges, theta_w the corner's angle in the room). Paths from the source and
-its first-order images (a reflection then the edge), checked for visibility along the edge
-(each leg clear of every face but the wedge's own; an image's leg through its face).
+(their vertical edges, theta_w the corner's angle in the room). Paths with at most one
+reflection, before the edge or after it (the source's and the mic's first-order images: so a
+source and a mic swapped hear the same), checked for visibility along the edge (each leg clear
+of every face but the wedge's own; an image's leg through its face).
 Second-order diffraction (over a box's two edges) is left out: deep shadows behind thick
 objects come out too dark.
 """
@@ -168,16 +169,44 @@ def btm(edge: Edge, s: np.ndarray, r: np.ndarray, fs: float, mask=None, c=SPEED_
 class DiffractionPath:
     n0: int  # the first sample
     h: np.ndarray  # the edge's response from there
-    apex_m: np.ndarray  # where the shortest path touches the edge (the arrival's direction)
+    apex_m: np.ndarray  # where the shortest path touches the edge
     log_beta: np.ndarray  # (bands,) the image's walls, log of their product
     path_m: float  # the shortest path's length (air absorption)
     start_m: np.ndarray = None  # the source or its image the path starts from
-    start_face: int = -1  # the image's face (-1: the source itself)
+    start_face: int = -1  # the source image's face (-1: the source itself)
+    arrive_m: np.ndarray = None  # where the sound reaches the mic from (apex, or a reflection)
+
+
+def _leg(room, real, img, fi, pv, skip_m):
+    """Which edge points pv a leg from `real` reaches: straight (fi < 0, img = real) or by a
+    reflection off face fi (img the mirror image): the crossing on the face, both parts clear.
+    Returns (ok, the reflection points or None)."""
+    n = len(pv)
+    if fi < 0:
+        return room.segment_clear(np.repeat(real[None, :], n, 0), pv, skip_m), None
+    f = room.faces[fi]
+    d = pv - img
+    nd = d @ f.normal
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = (f.d - img @ f.normal) / nd
+        q = np.nan_to_num(img[None, :] + t[:, None] * d)
+    on = (np.abs(nd) > 1e-12) & (t > 1e-9) & (t < 1 - 1e-9)
+    on &= room.on_face(f, q)
+    if not np.any(on):
+        return on, q
+    sk_f = np.tile(np.array((fi,) + (-1,) * 6)[None, :], (n, 1))
+    leg1 = room.segment_clear(np.repeat(real[None, :], n, 0), q, sk_f)
+    sk2 = skip_m.copy()
+    sk2[:, -1] = fi
+    leg2 = room.segment_clear(q, pv, sk2)
+    return on & leg1 & leg2, q
 
 
 def paths(room, source: np.ndarray, mic: np.ndarray, fs: float, beta: np.ndarray):
-    """Every first-order diffraction path from a source (and its first-order images) to a mic
-    in a PolyRoom; `beta` the faces' reflection amplitudes per band (faces, bands)."""
+    """Every first-order diffraction path from a source to a mic in a PolyRoom, with at most one
+    reflection before or after the edge (the source's or the mic's first-order images: the
+    paths are reciprocal, a source and a mic swapped hear the same); `beta` the faces'
+    reflection amplitudes per band (faces, bands)."""
     from varimu.rooms import polyroom
 
     src = np.asarray(source, float)
@@ -185,61 +214,57 @@ def paths(room, source: np.ndarray, mic: np.ndarray, fs: float, beta: np.ndarray
     eds = edges(room)
     if not eds:
         return []
-    starts = [(src, -1)]
-    for fi, f in enumerate(room.faces):
-        if (src @ f.normal - f.d) > 1e-9:
-            starts.append((polyroom._mirror(src, f), fi))
+
+    def images_of(p):
+        out = [(p, -1)]
+        for fi, f in enumerate(room.faces):
+            if (p @ f.normal - f.d) > 1e-9:
+                out.append((polyroom._mirror(p, f), fi))
+        return out
+
+    starts, ends = images_of(src), images_of(mic)
     out = []
     nb = beta.shape[1]
     for ed in eds:
         zv = np.linspace(0.0, ed.length, VIS_POINTS)
         pv = ed.point(zv)
-        # the leg to the mic, along the edge
         skip_m = np.tile(np.array(ed.skip + (-1,) * (7 - len(ed.skip)))[None, :], (len(pv), 1))
-        to_mic = room.segment_clear(pv, np.repeat(mic[None, :], len(pv), 0), skip_m)
-        if not np.any(to_mic):
-            continue
-        for s_pos, fi in starts:
-            if fi < 0:
-                leg = room.segment_clear(np.repeat(s_pos[None, :], len(pv), 0), pv, skip_m)
-                ok = leg & to_mic
-                lb = np.zeros(nb)
-            else:
-                f = room.faces[fi]
-                d = pv - s_pos
-                nd = d @ f.normal
-                with np.errstate(divide="ignore", invalid="ignore"):
-                    t = (f.d - s_pos @ f.normal) / nd
-                q = s_pos[None, :] + t[:, None] * d
-                on = (np.abs(nd) > 1e-12) & (t > 1e-9) & (t < 1 - 1e-9)
-                on &= room.on_face(f, np.nan_to_num(q))
-                if not np.any(on):
+        legs_s = {fi: _leg(room, src, s_pos, fi, pv, skip_m) for s_pos, fi in starts}
+        legs_r = {fi: _leg(room, mic, r_pos, fi, pv, skip_m) for r_pos, fi in ends}
+        for s_pos, fs_ in starts:
+            ok_s = legs_s[fs_][0]
+            if not np.any(ok_s):
+                continue
+            for r_pos, fr_ in ends:
+                if fs_ >= 0 and fr_ >= 0:
+                    continue  # first order: one reflection at most
+                ok = ok_s & legs_r[fr_][0]
+                if not np.any(ok):
                     continue
-                sk_f = np.tile(np.array((fi,) + (-1,) * 5)[None, :], (len(pv), 1))
-                leg1 = room.segment_clear(np.repeat(src[None, :], len(pv), 0),
-                                          np.nan_to_num(q), sk_f)  # fmt: skip
-                sk2 = skip_m.copy()
-                sk2[:, -1] = fi
-                leg2 = room.segment_clear(np.nan_to_num(q), pv, sk2)
-                ok = on & leg1 & leg2 & to_mic
-                lb = np.log(np.maximum(beta[fi], 1e-300))
-            if not np.any(ok):
-                continue
 
-            def mask(z, ok=ok, zv=zv):
-                j = np.clip(np.round(z / max(zv[1] - zv[0], 1e-12)).astype(int), 0, len(ok) - 1)
-                return ok[j]
+                def mask(z, ok=ok, zv=zv):
+                    j = np.round(z / max(zv[1] - zv[0], 1e-12)).astype(int)
+                    return ok[np.clip(j, 0, len(ok) - 1)]
 
-            res = btm(ed, s_pos, mic, fs, mask=mask)
-            if res is None:
-                continue
-            n0, h = res
-            if not np.any(h):
-                continue
-            rs, ths, zs = ed.coords(s_pos)
-            rr, thr, zr = ed.coords(mic)
-            apex_z = float(np.clip(zs + (zr - zs) * rs / (rs + rr), 0.0, ed.length))
-            apex = ed.point([apex_z])[0]
-            plen = float(np.linalg.norm(apex - s_pos) + np.linalg.norm(mic - apex))
-            out.append(DiffractionPath(n0, h, apex, lb, plen, s_pos, fi))
+                res = btm(ed, s_pos, r_pos, fs, mask=mask)
+                if res is None:
+                    continue
+                n0, h = res
+                if not np.any(h):
+                    continue
+                rs, ths, zs = ed.coords(s_pos)
+                rr, thr, zr = ed.coords(r_pos)
+                apex_z = float(np.clip(zs + (zr - zs) * rs / (rs + rr), 0.0, ed.length))
+                apex = ed.point([apex_z])[0]
+                plen = float(np.linalg.norm(apex - s_pos) + np.linalg.norm(r_pos - apex))
+                face = fs_ if fs_ >= 0 else fr_
+                lb = np.log(np.maximum(beta[face], 1e-300)) if face >= 0 else np.zeros(nb)
+                arrive = apex
+                if fr_ >= 0:  # the sound reaches the mic from its reflection off face fr_
+                    f = room.faces[fr_]
+                    d = apex - r_pos
+                    nd = d @ f.normal
+                    if abs(nd) > 1e-12:
+                        arrive = r_pos + ((f.d - r_pos @ f.normal) / nd) * d
+                out.append(DiffractionPath(n0, h, apex, lb, plen, s_pos, fs_, arrive))
     return out

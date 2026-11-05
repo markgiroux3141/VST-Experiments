@@ -367,7 +367,7 @@ def responses(
             dpaths = diffraction.paths(room, src, m.position_m, fs, beta) if poly else []
             d_coarse, d_delay, d_spec, d_scale = [], [], [], []
             for k, dp in enumerate(dpaths):
-                dv = dp.apex_m - m.position_m
+                dv = (dp.arrive_m if dp.arrive_m is not None else dp.apex_m) - m.position_m
                 rr = float(np.linalg.norm(dv))
                 th = np.arccos(np.clip((dv @ m.aim) / rr, -1, 1))
                 ef, er = m.table.at(np.array([th]), np.array([rr]))

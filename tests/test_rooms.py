@@ -761,3 +761,26 @@ def test_the_room_views_surfaces_are_the_rooms_materials():
     block = src[start : src.index("];", start)]
     names = re.findall(r'"([a-z0-9_]+)"', block)
     assert len(names) >= 10 and set(names) <= set(ROOM_MATERIALS)
+
+
+def test_the_early_response_is_reciprocal():
+    """A source and an (omni) mic swapped hear the same early response: image sources,
+    occlusion and every diffraction path (with a reflection before or after the edge) in an
+    L-shaped room with a gobo and a turned box."""
+    from varimu.rooms.polyroom import PolyRoom
+
+    b = _wave_or_skip()
+    box = {"center_m": [5.2, 1.2, 0.5], "size_m": [0.8, 0.6, 1.0], "yaw_deg": 20,
+           "material": "gypsum_on_studs"}  # fmt: skip
+    room = PolyRoom([[0, 0], [7, 0], [7, 5.5], [3, 5.5], [3, 4], [0, 4]], "flat", 3.2,
+                    objects=[{**GOBO, "size_m": [1.4, 0.08, 1.8]}, box])  # fmt: skip
+    a, c = np.array([2.0, 2.8, 1.2]), np.array([5.4, 3.0, 1.0])
+
+    def h(src, mic):
+        mics = [Mic(mic, aim_vector(0), _omni())]
+        return responses(room, [src], mics, FS, length_s=0.06, tail=False, backend=b)[0, 0, 0]
+
+    h1, h2 = h(a, c), h(c, a)
+    n = int(0.045 * FS)
+    err = np.sqrt(np.sum((h1[:n] - h2[:n]) ** 2) / np.sum(h1[:n] ** 2))
+    assert 20 * np.log10(err) < -100
