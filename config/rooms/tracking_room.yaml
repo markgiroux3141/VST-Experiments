@@ -1,0 +1,19 @@
+# A room preset (varimu/rooms/presets.py).
+title: Live end / dead end tracking room
+description: >-
+  An angled 8 x 6 m room under a shed ceiling (3 to 4.2 m): plywood walls, a bare brick
+  live end (wall 1), drapes on the dead end (wall 3), an acoustic-tile ceiling, a wood
+  floor. Two gobos and a riser: move players between the ends for more or less room.
+room:
+  floor_m: [[0.0, 0.0], [8.0, 0.3], [8.4, 6.0], [0.4, 6.4]]
+  ceiling: {type: shed, height_m: 3.0, peak_m: 4.2, axis_deg: 0.0}
+  materials:
+    walls: wood_panel
+    floor: wood_floor
+    ceiling: acoustic_tile
+    faces: {"wall 1": brick, "wall 3": heavy_drapes}
+  objects:
+    - {name: Gobo 1, center_m: [3.0, 3.2, 0.9], size_m: [1.4, 0.08, 1.8], yaw_deg: 90.0, material: heavy_drapes}
+    - {name: Gobo 2, center_m: [5.5, 2.0, 0.9], size_m: [1.4, 0.08, 1.8], yaw_deg: 30.0, material: heavy_drapes}
+    - {name: Riser, center_m: [6.6, 4.6, 0.15], size_m: [1.8, 1.2, 0.3], material: wood_floor}
+  source: "provisional: model knowledge (a live-end / dead-end tracking room)"

@@ -154,3 +154,27 @@ TREATMENT_SCATTERING = {
 
 def treatment_materials() -> dict[str, tuple[float, ...]]:
     return {name: band_absorption(m) for name, m in TREATMENTS.items()}
+
+
+# Hard surfaces looked up, not computed (the room presets' brick, concrete, glass, tile
+# and panelling, config/rooms/): alpha per octave band (BANDS_HZ, 125 Hz-8 kHz), 8 kHz = 4 kHz's.
+TABULATED_SOURCE = (
+    "provisional: model knowledge (typical random-incidence absorption coefficients, as "
+    "tabulated in Everest and Pohlmann, Master Handbook of Acoustics; 8 kHz = 4 kHz's)"
+)
+TABULATED = {
+    "brick": (0.03, 0.03, 0.03, 0.04, 0.05, 0.07, 0.07),  # unglazed
+    "concrete_block_painted": (0.10, 0.05, 0.06, 0.07, 0.09, 0.08, 0.08),
+    "concrete_floor": (0.01, 0.01, 0.015, 0.02, 0.02, 0.02, 0.02),
+    "glass_window": (0.35, 0.25, 0.18, 0.12, 0.07, 0.04, 0.04),  # ordinary window glass
+    "glazed_tile": (0.01, 0.01, 0.01, 0.01, 0.02, 0.02, 0.02),  # marble or glazed tile
+    "wood_panel": (0.28, 0.22, 0.17, 0.09, 0.10, 0.11, 0.11),  # 3/8 in plywood over air
+}
+TABULATED_SCATTERING = {  # polyroom.SCATTERING_SOURCE's ranges
+    "brick": 0.1,
+    "concrete_block_painted": 0.1,
+    "concrete_floor": 0.05,
+    "glass_window": 0.05,
+    "glazed_tile": 0.05,
+    "wood_panel": 0.1,
+}

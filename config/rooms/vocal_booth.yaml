@@ -1,0 +1,16 @@
+# A room preset (varimu/rooms/presets.py; a scene's `room: {preset: vocal_booth}`, the Room
+# view's Preset menu).
+title: Vocal booth
+description: >-
+  2 x 1.7 m, 2.4 m high: wool over an air gap on the walls, mineral wool overhead, carpet, a
+  0.8 m glass window (wall 3) into the control room. Dead above a few hundred hertz; below
+  that the booth's own modes (turn the wave solver on): the boxy small-room sound.
+room:
+  floor_m: [[0.0, 0.0], [2.0, 0.0], [2.0, 1.7], [1.4, 1.7], [0.6, 1.7], [0.0, 1.7]]
+  ceiling: {type: flat, height_m: 2.4}
+  materials:
+    walls: wool_100mm_gap_100mm
+    floor: carpet_on_pad
+    ceiling: mineral_wool_100mm
+    faces: {"wall 3": glass_window}
+  source: "provisional: model knowledge (a typical vocal booth's size and treatment)"

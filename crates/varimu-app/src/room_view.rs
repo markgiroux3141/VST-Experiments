@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::room::{
     self, CEILINGS, CHAINS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, Pattern, QUALITIES,
-    RenderJob, RoomMic, RoomObject, RoomSource, Scene, WAVE_CROSSOVERS,
+    RenderJob, RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
 };
 
 use crate::session_view::SessionView;
@@ -64,6 +64,9 @@ pub struct RoomView {
     add_chain: usize,
     /// The preset's width and depth (m).
     size: [f64; 2],
+    /// The room presets (config/rooms/), and the files that didn't read.
+    presets: Vec<RoomPreset>,
+    preset_errors: Vec<String>,
 }
 
 const SOURCE_COLOR: Color32 = theme::ACCENT;
@@ -71,6 +74,7 @@ const MIC_COLOR: Color32 = theme::NET;
 
 impl RoomView {
     pub fn new(root: &std::path::Path) -> RoomView {
+        let (presets, preset_errors) = room::load_presets(&root.join("config"));
         RoomView {
             root: root.to_path_buf(),
             scene: Scene::default(),
@@ -85,6 +89,8 @@ impl RoomView {
             add_track: 0,
             add_chain: 0,
             size: [7.0, 5.5],
+            presets,
+            preset_errors,
         }
     }
 
@@ -154,6 +160,41 @@ impl RoomView {
             ui.label("Name");
             ui.text_edit_singleline(&mut self.scene.name);
         });
+        ui.horizontal(|ui| {
+            ui.label("Preset");
+            let mut pick = None;
+            egui::ComboBox::from_id_salt("room_preset")
+                .selected_text("load a room…")
+                .show_ui(ui, |ui| {
+                    for (k, p) in self.presets.iter().enumerate() {
+                        if ui
+                            .selectable_label(false, &p.title)
+                            .on_hover_text(&p.description)
+                            .clicked()
+                        {
+                            pick = Some(k);
+                        }
+                    }
+                });
+            if let Some(k) = pick {
+                let p = self.presets[k].clone();
+                self.scene.apply_room_preset(&p);
+                let ext = |i: usize| {
+                    let it = || self.scene.plan.iter().map(|q| q[i]);
+                    it().fold(f64::MIN, f64::max) - it().fold(f64::MAX, f64::min)
+                };
+                self.size = [ext(0), ext(1)];
+                self.sel = None;
+                self.status = format!("room: {} (sources and mics kept)", p.title);
+            }
+        })
+        .response
+        .on_hover_text(
+            "a room from config/rooms/: its plan, ceiling, surfaces and objects replace this one's",
+        );
+        for e in &self.preset_errors {
+            ui.label(RichText::new(e).small().color(theme::FAINT));
+        }
         ui.horizontal(|ui| {
             ui.label("Shape");
             let mut pick = None;
@@ -414,7 +455,7 @@ impl RoomView {
                 self.sel = Some(Sel::Object(i));
             }
         }
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             for (label, prefix, size, z, mat, tilt) in OBJECT_KINDS {
                 if ui
                     .button(format!("+ {label}"))

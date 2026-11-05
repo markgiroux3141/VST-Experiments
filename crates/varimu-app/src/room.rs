@@ -57,7 +57,12 @@ const CLEAN_GAINS: &[(f64, &str)] = &[
     (60.0, "60 dB"),
 ];
 
-/// The chains a mic can be (config/circuits/u47_v76.yaml, omni_clean.yaml).
+/// A dynamic mic's output transformer tap (shure_sm57.yaml, shure_sm58.yaml `impedance`).
+const SM_IMPEDANCE: &[(f64, &str)] = &[(0.0, "H (150-250 Ω)"), (1.0, "L (30-50 Ω)")];
+
+/// The chains a mic can be: every mic into every preamp (config/circuits/<mic>_<pre>.yaml,
+/// scripts/compose_chain.py --all). The default gains put 94 dB SPL on axis at -18.1 to
+/// -23.1 dBFS (a 1 kHz sine's peak, measured at draft); a loud close source wants less.
 pub const CHAINS: &[Chain] = &[
     Chain {
         id: "u47_v76",
@@ -76,6 +81,106 @@ pub const CHAINS: &[Chain] = &[
                 default: 34.0,
             },
         ],
+    },
+    Chain {
+        id: "u47_clean",
+        label: "U47 → clean",
+        settings: &[
+            Setting {
+                key: "pattern_u47",
+                label: "Pattern",
+                choices: &[(0.0, "cardioid"), (1.0, "omni")],
+                default: 0.0,
+            },
+            Setting {
+                key: "gain_db_clean",
+                label: "Gain",
+                choices: CLEAN_GAINS,
+                default: 30.0,
+            },
+        ],
+    },
+    Chain {
+        id: "sm57_v76",
+        label: "SM57 → V76",
+        settings: &[
+            Setting {
+                key: "impedance_sm57",
+                label: "Impedance",
+                choices: SM_IMPEDANCE,
+                default: 0.0,
+            },
+            Setting {
+                key: "gain_db_v76",
+                label: "V76 gain",
+                choices: V76_GAINS,
+                default: 58.0,
+            },
+        ],
+    },
+    Chain {
+        id: "sm57_clean",
+        label: "SM57 → clean",
+        settings: &[
+            Setting {
+                key: "impedance_sm57",
+                label: "Impedance",
+                choices: SM_IMPEDANCE,
+                default: 0.0,
+            },
+            Setting {
+                key: "gain_db_clean",
+                label: "Gain",
+                choices: CLEAN_GAINS,
+                default: 60.0,
+            },
+        ],
+    },
+    Chain {
+        id: "sm58_v76",
+        label: "SM58 → V76",
+        settings: &[
+            Setting {
+                key: "impedance_sm58",
+                label: "Impedance",
+                choices: SM_IMPEDANCE,
+                default: 0.0,
+            },
+            Setting {
+                key: "gain_db_v76",
+                label: "V76 gain",
+                choices: V76_GAINS,
+                default: 58.0,
+            },
+        ],
+    },
+    Chain {
+        id: "sm58_clean",
+        label: "SM58 → clean",
+        settings: &[
+            Setting {
+                key: "impedance_sm58",
+                label: "Impedance",
+                choices: SM_IMPEDANCE,
+                default: 0.0,
+            },
+            Setting {
+                key: "gain_db_clean",
+                label: "Gain",
+                choices: CLEAN_GAINS,
+                default: 60.0,
+            },
+        ],
+    },
+    Chain {
+        id: "omni_v76",
+        label: "Omni (4134) → V76",
+        settings: &[Setting {
+            key: "gain_db_v76",
+            label: "V76 gain",
+            choices: V76_GAINS,
+            default: 40.0,
+        }],
     },
     Chain {
         id: "omni_clean",
@@ -108,6 +213,13 @@ pub const MATERIALS: &[&str] = &[
     "wool_100mm_gap_100mm",
     "foam_25mm",
     "panel_trap_plywood",
+    // hard surfaces from the tables (varimu/rooms/materials.py TABULATED)
+    "brick",
+    "concrete_block_painted",
+    "concrete_floor",
+    "glass_window",
+    "glazed_tile",
+    "wood_panel",
     "anechoic",
 ];
 
@@ -191,6 +303,63 @@ pub fn preset_plan(name: &str, w: f64, d: f64) -> Vec<[f64; 2]> {
         ]),
         _ => p(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]),
     }
+}
+
+/// A room preset (`config/rooms/<name>.yaml`, varimu/rooms/presets.py): a room ready to
+/// record in, its plan, ceiling, materials, faces and objects.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoomPreset {
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    /// The room block (varimu/rooms/scene.py's format).
+    pub room: Value,
+}
+
+/// A YAML value as JSON (the presets are YAML; the scene is JSON).
+fn yaml_json(v: &varimu_circuit::yaml::Value) -> Value {
+    use varimu_circuit::yaml::Value as Y;
+    match v {
+        Y::Null => Value::Null,
+        Y::Bool(b) => json!(b),
+        Y::Int(i) => json!(i),
+        Y::Float(x) => json!(x),
+        Y::Str(t) => json!(t),
+        Y::List(a) => Value::Array(a.iter().map(yaml_json).collect()),
+        Y::Map(m) => Value::Object(m.0.iter().map(|(k, x)| (k.clone(), yaml_json(x))).collect()),
+    }
+}
+
+/// The presets in `<config>/rooms/`, sorted by title; a file that doesn't read is left
+/// out with its error.
+pub fn load_presets(config: &Path) -> (Vec<RoomPreset>, Vec<String>) {
+    let (mut out, mut errors) = (Vec::new(), Vec::new());
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(config.join("rooms"))
+        .map(|d| d.filter_map(|e| Some(e.ok()?.path())).collect())
+        .unwrap_or_default();
+    paths.retain(|p| p.extension().is_some_and(|x| x == "yaml"));
+    for p in paths {
+        let v = match varimu_circuit::yaml::load(&p) {
+            Ok(v) => yaml_json(&v),
+            Err(e) => {
+                errors.push(e.to_string());
+                continue;
+            }
+        };
+        if !v["room"]["floor_m"].is_array() {
+            errors.push(format!("{}: no room.floor_m", p.display()));
+            continue;
+        }
+        let name = p.file_stem().unwrap().to_string_lossy().to_string();
+        out.push(RoomPreset {
+            title: st(&v, "title", &name),
+            description: st(&v, "description", ""),
+            room: v["room"].clone(),
+            name,
+        });
+    }
+    out.sort_by(|a, b| a.title.cmp(&b.title));
+    (out, errors)
 }
 
 /// Whether (x, y) is inside the polygon (even-odd; the boundary counts as inside).
@@ -354,6 +523,26 @@ pub const OBJECT_KINDS: &[ObjectKind] = &[
         "wood_floor",
         35.0,
     ),
+    // a 6 ft grand's body, its rim ~1 m high (the lid above it)
+    ("Piano", "Piano", [1.5, 1.9, 0.36], 0.83, "wood_floor", 0.0),
+    // a ceiling cloud over a mix or tracking position
+    (
+        "Cloud",
+        "Cloud",
+        [2.0, 1.6, 0.1],
+        2.5,
+        "mineral_wool_100mm",
+        0.0,
+    ),
+    // a floor-to-ceiling panel trap, for a corner
+    (
+        "Bass trap",
+        "Trap",
+        [0.6, 0.6, 2.4],
+        1.2,
+        "panel_trap_plywood",
+        0.0,
+    ),
 ];
 
 impl RoomObject {
@@ -479,10 +668,12 @@ impl RoomMic {
     }
 
     pub fn pattern(&self) -> Pattern {
-        match self.chain.as_str() {
-            "u47_v76" if self.set.get("pattern_u47").copied().unwrap_or(0.0) == 0.0 => {
+        let mic = self.chain.split('_').next().unwrap_or("");
+        match mic {
+            "u47" if self.set.get("pattern_u47").copied().unwrap_or(0.0) == 0.0 => {
                 Pattern::Cardioid
             }
+            "sm57" | "sm58" => Pattern::Cardioid,
             _ => Pattern::Omni,
         }
     }
@@ -561,6 +752,81 @@ impl Scene {
         self.shape = name.to_string();
         self.plan = preset_plan(name, w, d);
         self.faces.retain(|k, _| !k.starts_with("wall "));
+    }
+
+    /// Replace the room by a preset's: plan, ceiling, materials, faces and objects. The
+    /// sources and mics move together, keeping their distances, so their middle sits over
+    /// the new floor's; `problems` names any that end up outside.
+    pub fn apply_room_preset(&mut self, p: &RoomPreset) {
+        let r = &p.room;
+        let old_mid = self.items_middle();
+        self.plan = r["floor_m"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|q| Some([q[0].as_f64()?, q[1].as_f64()?]))
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.shape = "custom".to_string();
+        let c = &r["ceiling"];
+        self.roof = Ceiling {
+            kind: st(c, "type", "flat"),
+            height: f(c, "height_m", 3.0),
+            peak: c["peak_m"]
+                .as_f64()
+                .unwrap_or_else(|| f(c, "height_m", 3.0)),
+            axis_deg: f(c, "axis_deg", 0.0),
+            facets: c["facets"].as_u64().unwrap_or(8) as u32,
+        };
+        let m = &r["materials"];
+        self.walls = st(m, "walls", "furnished_wall");
+        self.floor = st(m, "floor", "wood_floor");
+        self.ceiling = st(m, "ceiling", "gypsum_on_studs");
+        self.faces = m["faces"]
+            .as_object()
+            .map(|o| {
+                o.iter()
+                    .filter_map(|(k, x)| Some((k.clone(), x.as_str()?.to_string())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.objects = r["objects"]
+            .as_array()
+            .map(|a| a.iter().map(RoomObject::from_json).collect())
+            .unwrap_or_default();
+        if let Some(old) = old_mid {
+            let n = self.plan.len().max(1) as f64;
+            let mid = [
+                self.plan.iter().map(|q| q[0]).sum::<f64>() / n,
+                self.plan.iter().map(|q| q[1]).sum::<f64>() / n,
+            ];
+            let d = [mid[0] - old[0], mid[1] - old[1]];
+            for p in self.sources.iter_mut().map(|s| &mut s.pos) {
+                p[0] += d[0];
+                p[1] += d[1];
+            }
+            for p in self.mics.iter_mut().map(|m| &mut m.pos) {
+                p[0] += d[0];
+                p[1] += d[1];
+            }
+        }
+    }
+
+    /// The middle of the sources' and mics' floor positions (their bounding box's).
+    fn items_middle(&self) -> Option<[f64; 2]> {
+        let pts: Vec<[f64; 3]> = (self.sources.iter().map(|s| s.pos))
+            .chain(self.mics.iter().map(|m| m.pos))
+            .collect();
+        if pts.is_empty() {
+            return None;
+        }
+        let ext = |i: usize| {
+            let lo = pts.iter().map(|p| p[i]).fold(f64::MAX, f64::min);
+            let hi = pts.iter().map(|p| p[i]).fold(f64::MIN, f64::max);
+            0.5 * (lo + hi)
+        };
+        Some([ext(0), ext(1)])
     }
 
     /// The ceiling's facets (planes): one for flat and shed, two for a gable, a vault's.
@@ -1293,5 +1559,43 @@ mod tests {
         );
         s.set_preset("shoebox", 7.0, 5.5);
         assert_eq!(s.faces.len(), 1);
+    }
+
+    #[test]
+    fn room_presets_load_and_render_as_written() {
+        let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
+        let (presets, errors) = load_presets(&config);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert!(presets.len() >= 10);
+        assert!(presets.iter().any(|p| p.name == "treated_studio"));
+        for p in &presets {
+            let mut s = scene(); // its source and mic move with the room
+            s.apply_room_preset(p);
+            assert_eq!(s.shape, "custom");
+            let problems: Vec<_> = s
+                .problems()
+                .into_iter()
+                .filter(|e| !e.contains("has no track") && !e.contains("outside the room"))
+                .collect();
+            assert!(problems.is_empty(), "{}: {problems:?}", p.name);
+            for m in [&s.walls, &s.floor, &s.ceiling]
+                .into_iter()
+                .chain(s.faces.values())
+                .chain(s.objects.iter().map(|o| &o.material))
+            {
+                assert!(MATERIALS.contains(&m.as_str()), "{}: {m}", p.name);
+            }
+            let v = s.render_json(&BTreeMap::new());
+            assert_eq!(v["room"]["floor_m"], p.room["floor_m"], "{}", p.name);
+            let faces = &p.room["materials"]["faces"];
+            if faces.is_object() {
+                assert_eq!(&v["room"]["materials"]["faces"], faces, "{}", p.name);
+            }
+            assert_eq!(
+                v["room"]["objects"].as_array().map_or(0, Vec::len),
+                p.room["objects"].as_array().map_or(0, Vec::len)
+            );
+            assert_eq!(Scene::from_state(&s.state()), s);
+        }
     }
 }

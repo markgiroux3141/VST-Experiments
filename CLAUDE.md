@@ -482,7 +482,7 @@ lamination table). Circuits `shure_sm57.yaml`, `shure_sm58.yaml`, chains `sm57_v
 `sm58_v76.yaml`; `scripts/sm57_loading.py`; tests `tests/test_{moving_coil,sm57,sm58,
 permeable}.py`. Open (the user's): the output impedance (352 ohm vs ~250-310 published),
 proximity (+18 dB at 100 Hz at 6 mm vs Shure's text 6-10 dB), the SM58's top octave (3-5 dB
-high above 12 kHz), the Room view (not yet offered there), the first listen (SM6), then SM7.
+high above 12 kHz), the first listen (SM6), then SM7 (the Room view offers both since 2026-11-05).
 
 **The room loop** ([docs/ROOM_LOOP_PLAN.md](docs/ROOM_LOOP_PLAN.md), started 2026-11-04, the
 user delegating its decisions; MIC_ROOM_PLAN.md's A4 and A9): sources placed in a shoebox room,
@@ -537,7 +537,7 @@ materials `mineral_wool_50mm`, `mineral_wool_100mm`, `wool_100mm_gap_100mm`, `fo
 `panel_trap_plywood`). Demos: `scripts/room_wave_demo.py`
 -> reports/rooms/wave_demo/, `scripts/room_gobo_demo.py` -> reports/rooms/gobo_demo/,
 `scripts/room_source_demo.py` -> reports/rooms/source_demo/, `room_demo.py --wave 500 --out
-reports/rooms/demo_wave` (READMEs there). Open: the user listens (reports/rooms/LISTEN.md); the Room view's new controls were seen drawn
+reports/rooms/demo_wave` (READMEs there). **Room presets** (2026-11-05): `config/rooms/*.yaml` (`varimu/rooms/presets.py`; a scene's `room: {preset: NAME}`, the Room view's Preset menu): the five demo rooms (room_demo.py reads them) and nine more with per-face surfaces and objects (booth, RFZ control room, wood live room with a grand's lid, brick drum room, basement, bathroom, stairwell, chapel, live-end / dead-end room); new tabulated surfaces `brick`, `concrete_block_painted`, `concrete_floor`, `glass_window`, `glazed_tile`, `wood_panel` (`materials.TABULATED`); ROOM_LOOP_PLAN.md "Room presets". **Every mic into every preamp** (2026-11-05): `compose_chain.py --all` (U47, SM57, SM58, omni x V76, clean: eight chains), all in the Room view; SM chains in rooms (a `cartridge_model*` key; the SM58's ball grille gets point-source tables, `bor_permeable.entry_table`); `tests/test_chain_matrix.py`. Open: the user listens (reports/rooms/LISTEN.md); the Room view's new controls were seen drawn
 (a scratch `APPDATA` and session: the app opens the user's last session otherwise), not driven.
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks

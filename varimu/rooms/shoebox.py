@@ -35,7 +35,7 @@ import numpy as np
 import scipy.fft as sfft
 
 from varimu.rooms.entries import EntryTable
-from varimu.rooms.materials import treatment_materials
+from varimu.rooms.materials import TABULATED, treatment_materials
 from varimu.separation.room import (
     BANDS_HZ,
     MATERIALS,
@@ -48,6 +48,7 @@ SURFACES = ("x0", "x1", "y0", "y1", "floor", "ceiling")
 # tail; the anechoic check against scripts/mic_print.py).
 ROOM_MATERIALS = {
     **MATERIALS,
+    **TABULATED,  # brick, concrete, glass, panelling (varimu.rooms.materials)
     **treatment_materials(),  # treatments from their physics (varimu.rooms.materials)
     "anechoic": (1.0,) * len(BANDS_HZ),
     "rigid": (0.0,) * len(BANDS_HZ),  # the checks' room (image sources exact, no decay)

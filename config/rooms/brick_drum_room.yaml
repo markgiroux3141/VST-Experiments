@@ -1,0 +1,17 @@
+# A room preset (varimu/rooms/presets.py).
+title: Brick drum room
+description: >-
+  5.5 x 4.5 m, a flat 3 m ceiling: bare brick walls, a concrete floor, a plywood ceiling,
+  the control-room window in wall 0, a carpeted drum riser. Parallel hard walls: bright,
+  splashy, a flutter between them (the stone-room sound).
+room:
+  floor_m: [[0.0, 0.0], [5.5, 0.0], [5.5, 4.5], [0.0, 4.5]]
+  ceiling: {type: flat, height_m: 3.0}
+  materials:
+    walls: brick
+    floor: concrete_floor
+    ceiling: wood_panel
+    faces: {"wall 0": glass_window}
+  objects:
+    - {name: Riser, center_m: [2.75, 2.6, 0.15], size_m: [2.2, 1.8, 0.3], material: carpet_on_pad}
+  source: "provisional: model knowledge (a brick-walled drum room)"

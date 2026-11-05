@@ -11,7 +11,9 @@ that is clamped to 0.1 m (`MIN_DISTANCE_M`).
 
 By the capsule component's geometry, as `free_field.capsule_entry_pressures` picks:
 - a `body`: the BEM (`bor.entry_table`: one system per frequency for every incidence),
-  cached in cache/diffraction/ by the geometry, the grid and bor.py's source;
+  cached in cache/diffraction/ by the geometry, the grid and bor.py's source; a ball
+  grille's (form `ball`, the SM58) with the grille a permeable sheet
+  (`bor_permeable.entry_table`);
 - else a `path_m`: two entries `path_m` apart on the axis in free field (a point source's
   spherical wave to each, the plane wave's path delay in the limit);
 - else a pressure capsule: one entry, the free field (rear = front).
@@ -110,9 +112,12 @@ def entry_table(geometry: dict, fs: float) -> EntryTable:
     inv_r = np.where(np.isinf(d), 0.0, 1.0 / d)
     a = geometry.get("diaphragm", {}).get("radius_m")
     if "body" in geometry:
-        from varimu.mics import bor
+        from varimu.mics import bor, bor_permeable
 
+        ball = geometry["body"].get("form") == "ball"
         src = (Path(bor.__file__)).read_bytes() + Path(__file__).read_bytes()
+        if ball:
+            src += Path(bor_permeable.__file__).read_bytes()
         key = json.dumps([geometry["body"], a, f.tolist(), th.tolist(), inv_r.tolist()])
         h = hashlib.sha256(src + key.encode()).hexdigest()[:24]
         path = CACHE / f"table_{h}.npz"
@@ -120,8 +125,13 @@ def entry_table(geometry: dict, fs: float) -> EntryTable:
             z = np.load(path)
             front, rear = z["front"], z["rear"]
         else:
-            op = bor.operator(bor.body_mesh(geometry["body"], a))
-            front, rear = bor.entry_table(op, f, th, d)
+            if ball:
+                body = geometry["body"]
+                op = bor_permeable.operator(bor_permeable.ball_mesh(body, a))
+                front, rear = bor_permeable.entry_table(op, f, body["z_s_pa_s_m"], th, d)
+            else:
+                op = bor.operator(bor.body_mesh(geometry["body"], a))
+                front, rear = bor.entry_table(op, f, th, d)
             path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(path, front=front, rear=rear)
         kind = f"body {geometry['body']}"

@@ -1,0 +1,26 @@
+# A room preset (varimu/rooms/presets.py).
+title: Control room (RFZ)
+description: >-
+  5 x 6 m, a flat 2.9 m ceiling, after the reflection-free-zone layout: the front corners
+  splayed and absorbent (walls 1 and 5), the window into the live room in the front wall
+  (wall 0), a deep absorber on the rear wall (wall 3), a mineral-wool cloud over the mix
+  position, panel bass traps in the rear corners, the desk as a reflector. Gypsum side
+  walls, a wood floor.
+room:
+  floor_m: [[1.0, 0.0], [4.0, 0.0], [5.0, 1.6], [5.0, 6.0], [0.0, 6.0], [0.0, 1.6]]
+  ceiling: {type: flat, height_m: 2.9}
+  materials:
+    walls: gypsum_on_studs
+    floor: wood_floor
+    ceiling: gypsum_on_studs
+    faces:
+      "wall 0": glass_window
+      "wall 1": mineral_wool_100mm
+      "wall 3": wool_100mm_gap_100mm
+      "wall 5": mineral_wool_100mm
+  objects:
+    - {name: Cloud, center_m: [2.5, 1.9, 2.6], size_m: [2.0, 1.6, 0.1], material: mineral_wool_100mm}
+    - {name: Desk, center_m: [2.5, 1.5, 0.75], size_m: [1.8, 0.8, 0.06], material: wood_panel}
+    - {name: Trap L, center_m: [0.45, 5.55, 1.2], size_m: [0.6, 0.6, 2.4], yaw_deg: 45.0, material: panel_trap_plywood}
+    - {name: Trap R, center_m: [4.55, 5.55, 1.2], size_m: [0.6, 0.6, 2.4], yaw_deg: 45.0, material: panel_trap_plywood}
+  source: "provisional: model knowledge (a reflection-free-zone control room, after D'Antonio and Konnert's RFZ)"

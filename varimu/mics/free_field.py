@@ -202,9 +202,13 @@ def body_entry_factors(
     if body.get("form") == "ball":  # a permeable grille (the SM58): bor_permeable
         from varimu.mics import bor_permeable as bp
 
-        if not np.isinf(distance_m):
-            raise ValueError("a ball grille's entries are plane waves only (bor_permeable)")
         op = bp.operator(bp.ball_mesh(body, diaphragm_radius_m))
+        if not np.isinf(distance_m):
+            front, rear = bp.entry_table(
+                op, np.atleast_1d(f_hz), body["z_s_pa_s_m"], np.atleast_1d(theta_rad),
+                np.array([float(distance_m)]),
+            )  # fmt: skip
+            return front[:, 0], rear[:, 0]
         return bp.entry_factors(
             op, np.atleast_1d(f_hz), body["z_s_pa_s_m"], np.atleast_1d(theta_rad)
         )

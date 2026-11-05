@@ -1,0 +1,15 @@
+# A room preset (varimu/rooms/presets.py).
+title: Tiled bathroom
+description: >-
+  2.6 x 2 m, 2.4 m high, glazed tile on the walls and floor, a painted ceiling, a bathtub,
+  a vanity and a towel: the old trick of a bathroom as an echo chamber. Short, ringing, coloured by
+  its low modes (turn the wave solver on).
+room:
+  floor_m: [[0.0, 0.0], [2.6, 0.0], [2.6, 2.0], [0.0, 2.0]]
+  ceiling: {type: flat, height_m: 2.4}
+  materials: {walls: glazed_tile, floor: glazed_tile, ceiling: gypsum_on_studs}
+  objects:
+    - {name: Bathtub, center_m: [0.9, 0.425, 0.275], size_m: [1.7, 0.75, 0.55], material: glazed_tile}
+    - {name: Vanity, center_m: [2.15, 1.7, 0.425], size_m: [0.8, 0.5, 0.85], material: wood_panel}
+    - {name: Towel, center_m: [2.57, 0.6, 1.3], size_m: [0.6, 0.04, 0.9], yaw_deg: 90.0, material: heavy_drapes}
+  source: "provisional: model knowledge (a small tiled bathroom)"

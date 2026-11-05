@@ -911,3 +911,45 @@ def test_a_cabinet_casts_a_shadow_the_bass_wraps_round():
 
     il = lv(PolyRoom(*args)) - lv(PolyRoom(*args, objects=[cab]))
     assert il[0] < 3 and il[1] > 12 and il[2] > 12, il
+
+
+def test_room_presets_build_with_their_objects_inside():
+    """Every preset (config/rooms/) loads through a scene, uses known surfaces, and keeps
+    its objects inside the room, under the ceiling and apart from each other."""
+    import itertools
+
+    from varimu.rooms import presets
+    from varimu.rooms.scene import load_scene
+
+    names = presets.names()
+    assert {"treated_studio", "shoebox", "vaulted_hall", "wood_live_room"} <= set(names)
+    rng = np.random.default_rng(0)
+    signs = np.array(list(itertools.product((-0.5, 0.5), repeat=3)))
+    for name in names:
+        d = presets.load(name)
+        assert d["title"] and d["description"] and d["room"]["source"]
+        room = load_scene({"name": name, "room": {"preset": name}, "sources": [], "mics": []}).room
+        room.materials()  # every face's surface is known
+        for b in room.boxes:
+            c = b.center_m + (signs * b.size_m) @ b.axes.T
+            assert room.inside_floor(c[:, :2]).all(), (name, b.name)
+            assert (c[:, 2] >= 0).all() and (c[:, 2] <= room.height_at(c[:, :2])).all(), (
+                name,
+                b.name,
+            )
+        for a, b in itertools.combinations(room.boxes, 2):
+            pts = a.center_m + ((rng.random((4000, 3)) - 0.5) * a.size_m) @ a.axes.T
+            assert not b.contains(pts).any(), (name, a.name, b.name)
+
+
+def test_a_scene_names_a_preset_and_overrides_it():
+    from varimu.rooms.scene import load_scene
+
+    base = {"name": "x", "sources": [], "mics": []}
+    room = load_scene({**base, "room": {"preset": "brick_drum_room"}}).room
+    assert room.height_m == 3.0 and room.walls == "brick" and len(room.boxes) == 1
+    taller = {"preset": "brick_drum_room", "ceiling": {"type": "flat", "height_m": 3.6}}
+    room = load_scene({**base, "room": taller}).room
+    assert room.height_m == 3.6 and room.walls == "brick"
+    with pytest.raises(ValueError, match="unknown room preset"):
+        load_scene({**base, "room": {"preset": "nope"}})

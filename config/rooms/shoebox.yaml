@@ -1,0 +1,11 @@
+# A room preset (varimu/rooms/presets.py; a scene's `room: {preset: shoebox}`, the Room
+# view's Preset menu). The room of scripts/room_demo.py and the separation experiment.
+title: Furnished shoebox
+description: >-
+  7 x 5.5 m, a flat 3.2 m ceiling: furnished walls, a wood floor, a gypsum ceiling. Parallel
+  walls, so the early reflections come in a regular pattern (a faint flutter at ~15 ms).
+room:
+  floor_m: [[0.0, 0.0], [7.0, 0.0], [7.0, 5.5], [0.0, 5.5]]
+  ceiling: {type: flat, height_m: 3.2}
+  materials: {walls: furnished_wall, floor: wood_floor, ceiling: gypsum_on_studs}
+  source: "provisional: model knowledge (demo rooms, docs/ROOM_LOOP_PLAN.md R6)"

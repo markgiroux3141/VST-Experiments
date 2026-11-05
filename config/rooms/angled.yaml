@@ -1,0 +1,10 @@
+# A room preset (varimu/rooms/presets.py). One of scripts/room_demo.py's rooms.
+title: Angled room
+description: >-
+  The shoebox's volume (123 m^3), floor area and materials with its walls splayed and a shed
+  ceiling (2.6 to 3.8 m): the shoebox's A/B, only the shape differs.
+room:
+  floor_m: [[0.0, 0.0], [6.88, 0.46], [7.34, 5.21], [3.35, 5.95], [-0.46, 4.65]]
+  ceiling: {type: shed, height_m: 2.6, peak_m: 3.8, axis_deg: 30.0}
+  materials: {walls: furnished_wall, floor: wood_floor, ceiling: gypsum_on_studs}
+  source: "provisional: model knowledge (demo rooms, docs/ROOM_LOOP_PLAN.md R6)"

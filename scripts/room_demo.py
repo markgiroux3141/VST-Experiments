@@ -14,8 +14,8 @@ piano 90). The mics, the same in every room: the vocal on the U47 -> V76 (cardio
 the guitar on the clean small omni (0.3 m), no spot on the piano (it reaches the mics through
 the room), and a spaced pair of clean omnis 1 m apart out in the room.
 
-The rooms (every one through varimu.rooms.polyroom, the shoebox too, so the tails are
-computed alike):
+The rooms (presets from config/rooms/; every one through varimu.rooms.polyroom, the shoebox
+too, so the tails are computed alike):
 - `shoebox`: 7 x 5.5 m, a flat 3.2 m ceiling, furnished walls, wood floor, gypsum ceiling (the
   separation experiment's room): parallel walls.
 - `splayed_gable`: the same materials and about the same floor area, no two walls parallel,
@@ -42,6 +42,7 @@ from pathlib import Path
 import numpy as np
 
 from varimu.config import REPO_ROOT
+from varimu.rooms import presets
 from varimu.rooms.polyroom import PolyRoom
 from varimu.rooms.scene import balance, load_scene, render
 
@@ -49,37 +50,12 @@ STEMS = Path("D:/Audio files for mixing/DavidTyo_LongWayHome/DavidTyo_LongWayHom
 OUT = REPO_ROOT / "reports" / "rooms" / "demo"
 LUFS = -18.0
 
-FURNISHED = {"walls": "furnished_wall", "floor": "wood_floor", "ceiling": "gypsum_on_studs"}
-HALL = {"walls": "furnished_wall", "floor": "wood_floor", "ceiling": "plaster"}
-TREATED = {"walls": "heavy_drapes", "floor": "carpet_on_pad", "ceiling": "acoustic_tile"}
+# The rooms are presets (config/rooms/, varimu.rooms.presets): the same files the Room view
+# offers.
 ROOMS = {
-    "shoebox": {
-        "floor_m": [[0, 0], [7, 0], [7, 5.5], [0, 5.5]],
-        "ceiling": {"type": "flat", "height_m": 3.2},
-        "materials": FURNISHED,
-    },
-    "splayed_gable": {
-        "floor_m": [[0, 0], [7.4, 0.5], [7.9, 5.6], [3.6, 6.4], [-0.5, 5.0]],
-        "ceiling": {"type": "gable", "height_m": 2.8, "peak_m": 4.6, "axis_deg": 5},
-        "materials": FURNISHED,
-    },
-    "angled": {
-        "floor_m": [[0.0, 0.0], [6.88, 0.46], [7.34, 5.21], [3.35, 5.95], [-0.46, 4.65]],
-        "ceiling": {"type": "shed", "height_m": 2.6, "peak_m": 3.8, "axis_deg": 30},
-        "materials": FURNISHED,
-    },
-    "vaulted_hall": {
-        "floor_m": [[1.5, 0], [12.5, 0], [14, 1.5], [14, 7.5], [12.5, 9], [1.5, 9], [0, 7.5],
-                    [0, 1.5]],
-        "ceiling": {"type": "vault", "height_m": 5.5, "peak_m": 9.0, "axis_deg": 90, "facets": 8},
-        "materials": HALL,
-    },
-    "treated_studio": {
-        "floor_m": [[0, 0], [6.2, 0.4], [6.6, 4.8], [4.2, 5.6], [0.3, 5.0]],
-        "ceiling": {"type": "shed", "height_m": 2.7, "peak_m": 3.6, "axis_deg": 90},
-        "materials": TREATED,
-    },
-}  # fmt: skip
+    name: {k: v for k, v in presets.room(name).items() if k != "source"}
+    for name in ("shoebox", "splayed_gable", "angled", "vaulted_hall", "treated_studio")
+}
 ROOM_SOURCE = "provisional: model knowledge (demo rooms, docs/ROOM_LOOP_PLAN.md R6)"
 
 # Gains with headroom: the vocal spot sees ~102 dB SPL (34 dB on the V76 peaked +2.7 dBFS,

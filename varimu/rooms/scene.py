@@ -7,6 +7,8 @@ JSON):
 
     name: two_sources
     room:
+      # preset: treated_studio         # a room from config/rooms/ (varimu.rooms.presets);
+                                       # the keys below, if given, replace the preset's
       dims_m: [7.0, 5.5, 3.2]          # a shoebox (varimu.rooms.shoebox), or:
       # floor_m: [[0, 0], [7, 0], [6, 5.5], [0, 5]]   # any floor plan (polyroom), with
       # ceiling: {type: gable, height_m: 2.8, peak_m: 4.5, axis_deg: 0, facets: 8}
@@ -32,7 +34,8 @@ JSON):
         aim: {azimuth_deg: 0, elevation_deg: 0}   # where it faces (a directional source)
     mics:
       - name: spot A
-        chain: u47_v76               # a circuit file with a capsule (`capsule_model*`)
+        chain: u47_v76               # a circuit file with a capsule or cartridge: any
+                                     # mic x preamp of scripts/compose_chain.py --all
         position_m: [2.0, 2.2, 1.2]
         aim: {azimuth_deg: 90, elevation_deg: 0}   # counterclockwise from +x
         set: {pattern_u47: 0, gain_db_v76: 40}     # the chain's controls and values
@@ -136,7 +139,9 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
         d = path_or_data
     else:
         d = yaml.safe_load(Path(path_or_data).read_text(encoding="utf-8"))
-    r = d["room"]
+    from varimu.rooms.presets import resolve
+
+    r = resolve(d["room"])
     if "floor_m" in r:
         m = r["materials"]
         ce = r.get("ceiling") or {}
@@ -221,9 +226,11 @@ def _capsule_geometry(chain: str, over: dict) -> dict:
     from varimu.devices.library import component_data
 
     q = spec.resolve(spec.load_circuit(spec.circuit_path(chain)), over)
-    keys = [k for k in q if str(k).startswith("capsule_model")]
+    keys = [k for k in q if str(k).startswith(("capsule_model", "cartridge_model"))]
     if not keys:
-        raise ValueError(f"chain {chain} has no capsule (a `capsule_model*` value)")
+        raise ValueError(
+            f"chain {chain} has no capsule (a `capsule_model*` or `cartridge_model*` value)"
+        )
     return component_data(str(q[keys[0]])).get("geometry", {})
 
 

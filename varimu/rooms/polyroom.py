@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from varimu.rooms.materials import TREATMENT_SCATTERING
+from varimu.rooms.materials import TABULATED_SCATTERING, TREATMENT_SCATTERING
 from varimu.separation.room import BANDS_HZ, SPEED_OF_SOUND_M_S, air_absorption_db_per_m
 
 SCATTERING_SOURCE = (
@@ -64,6 +64,7 @@ SCATTERING = {
     "acoustic_tile": 0.3,
     "anechoic": 0.0,
     "rigid": 0.0,
+    **TABULATED_SCATTERING,
     **TREATMENT_SCATTERING,
 }
 CEILINGS = ("flat", "shed", "gable", "vault")

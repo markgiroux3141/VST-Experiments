@@ -172,6 +172,29 @@ def entry_factors(op: Operator, f_hz: np.ndarray, z_s: complex, theta_rad: np.nd
     return np.array(out_f), np.array(out_r)
 
 
+def entry_table(
+    op: Operator, f_hz: np.ndarray, z_s: complex, theta_rad: np.ndarray, distances_m: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """`entry_factors` over a grid, (freqs, distances, angles) each, as bor.entry_table: a
+    distance np.inf is a plane wave, else a point source (bor.point_source) whose free-field
+    pressure at the origin is 1 (the room's entry tables, varimu.rooms.entries)."""
+    wf, wr = op.mesh.face_weights(bor.FRONT), op.mesh.face_weights(bor.REAR)
+    th = np.atleast_1d(theta_rad)
+    nd, na = len(distances_m), len(th)
+    out_f = np.zeros((len(np.atleast_1d(f_hz)), nd, na), complex)
+    out_r = np.zeros_like(out_f)
+    for i, f in enumerate(np.atleast_1d(f_hz)):
+        k = 2 * np.pi * float(f) / C_AIR
+        p_inc = np.hstack(
+            [bor.plane_wave(op.xs, k, th) if np.isinf(d)
+             else bor.point_source(op.xs, k, th, float(d)) for d in distances_m]
+        )  # fmt: skip
+        p, _ = solve(op, float(f), z_s, p_inc)
+        out_f[i] = (wf @ p).reshape(nd, na)
+        out_r[i] = (wr @ p).reshape(nd, na)
+    return out_f, out_r
+
+
 def _quad(m: PermeableMesh, j: int, sub: int, graded_about: float | None = None):
     """Gauss points on panel j (positions (q, 2), weights per unit length times r'): `sub`
     equal pieces, or (graded_about = the collocation's parameter t on the panel) pieces graded

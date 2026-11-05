@@ -1,0 +1,11 @@
+# A room preset (varimu/rooms/presets.py). One of scripts/room_demo.py's rooms.
+title: Splayed room, gable ceiling
+description: >-
+  No two walls parallel, about the shoebox's floor area (168 m^3), a gable ceiling 2.8 m at the
+  eaves to 4.6 m at the ridge; furnished walls, wood floor, gypsum ceiling. A little longer
+  tail than the shoebox, smoother, the ceiling's reflections no longer arriving together.
+room:
+  floor_m: [[0.0, 0.0], [7.4, 0.5], [7.9, 5.6], [3.6, 6.4], [-0.5, 5.0]]
+  ceiling: {type: gable, height_m: 2.8, peak_m: 4.6, axis_deg: 5.0}
+  materials: {walls: furnished_wall, floor: wood_floor, ceiling: gypsum_on_studs}
+  source: "provisional: model knowledge (demo rooms, docs/ROOM_LOOP_PLAN.md R6)"

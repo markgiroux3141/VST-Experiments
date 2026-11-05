@@ -1,0 +1,18 @@
+# A room preset (varimu/rooms/presets.py).
+title: Basement rehearsal room
+description: >-
+  An L-shaped basement (the furnace room cut out of a corner), a low 2.3 m gypsum ceiling:
+  painted concrete-block walls, a concrete floor, a cheap 25 mm foam wall (wall 1), an old
+  sofa and a rug. Boomy, bright and cramped.
+room:
+  floor_m: [[0.0, 0.0], [6.0, 0.0], [6.0, 4.2], [1.6, 4.2], [1.6, 3.0], [0.0, 3.0]]
+  ceiling: {type: flat, height_m: 2.3}
+  materials:
+    walls: concrete_block_painted
+    floor: concrete_floor
+    ceiling: gypsum_on_studs
+    faces: {"wall 1": foam_25mm}
+  objects:
+    - {name: Sofa, center_m: [1.2, 0.55, 0.4], size_m: [2.0, 0.9, 0.8], material: heavy_drapes}
+    - {name: Rug, center_m: [3.8, 2.0, 0.011], size_m: [2.5, 2.0, 0.02], material: carpet_on_pad}
+  source: "provisional: model knowledge (a basement rehearsal space)"

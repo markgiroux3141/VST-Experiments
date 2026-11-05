@@ -2,6 +2,7 @@
 preamp are one netlist").
 
     uv run python scripts/compose_chain.py --mic neumann_u47 --pre telefunken_v76 [--check]
+    uv run python scripts/compose_chain.py --all [--check]   # every mic into every preamp
 
 Writes config/circuits/<mic>_<pre>.yaml from the two circuit files: every parameter key,
 device key, part and node of each gets its circuit's suffix (_<tag>: `u47`, `v76`, ...),
@@ -13,7 +14,8 @@ the mic, out from the preamp; the preamp's mains, tolerance draws (seed, spread,
 spreads) and noise block, the mic's tolerance classes in bands of their own.
 
 The generated file says it is generated; edit its sources and rerun (`--check` exits 1
-when the file on disk differs: tests/test_chain.py).
+when the file on disk differs: tests/test_chain_matrix.py). `--all` writes every pair of
+MICS x PREAMPS (the Room view offers each, varimu-app room::CHAINS).
 """
 
 from __future__ import annotations
@@ -47,6 +49,8 @@ CABLE = {
     },
 }
 GROUND = "0"
+MICS = [k for k, v in PORTS.items() if "output" in v]
+PREAMPS = [k for k, v in PORTS.items() if "input" in v]
 
 
 def _keys(c: dict) -> set[str]:
@@ -217,21 +221,37 @@ def render(mic: str, pre: str) -> str:
     return HEADER.format(mic=mic, pre=pre) + body
 
 
+def chain_name(mic: str, pre: str) -> str:
+    return f"{PORTS[mic]['tag']}_{PORTS[pre]['tag']}"
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--mic", required=True)
-    ap.add_argument("--pre", required=True)
+    ap.add_argument("--mic")
+    ap.add_argument("--pre")
+    ap.add_argument("--all", action="store_true", help="every mic into every preamp")
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
-    text = render(args.mic, args.pre)
-    path = CONFIG_DIR / "circuits" / f"{PORTS[args.mic]['tag']}_{PORTS[args.pre]['tag']}.yaml"
+    if args.all:
+        pairs = [(m, p) for m in MICS for p in PREAMPS]
+    elif args.mic and args.pre:
+        pairs = [(args.mic, args.pre)]
+    else:
+        ap.error("--mic and --pre, or --all")
+    stale = []
+    for mic, pre in pairs:
+        text = render(mic, pre)
+        path = CONFIG_DIR / "circuits" / f"{chain_name(mic, pre)}.yaml"
+        if args.check:
+            if not (path.exists() and path.read_text(encoding="utf-8") == text):
+                stale.append(path)
+            continue
+        path.write_text(text, encoding="utf-8")
+        spec.load_circuit(path)  # it loads
+        print(f"wrote {path}")
     if args.check:
-        same = path.exists() and path.read_text(encoding="utf-8") == text
-        print("current" if same else f"stale: {path}")
-        sys.exit(0 if same else 1)
-    path.write_text(text, encoding="utf-8")
-    spec.load_circuit(path)  # it loads
-    print(f"wrote {path}")
+        print("\n".join(f"stale: {p}" for p in stale) or "current")
+        sys.exit(1 if stale else 0)
 
 
 if __name__ == "__main__":

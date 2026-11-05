@@ -544,8 +544,50 @@ to scale, the sources' facing, the forms; dragging and clicking weren't driven.
    built the same night from the "Later" list; in the wave solver the body itself, not a
    multipole fit.
 
+## Room presets (2026-11-05, the user's ask)
+
+Rooms ready to record in, one file each in `config/rooms/<name>.yaml` (`title`, `description`,
+`room`: a scene's room block): `varimu/rooms/presets.py`, a scene's `room: {preset: NAME}` (its
+other keys replace the preset's), the Room view's **Preset** menu (`room::load_presets`,
+`Scene::apply_room_preset`: plan, ceiling, surfaces, faces and objects replaced; the sources and
+mics moved together so their middle sits over the new floor, distances kept). The five demo
+rooms (`room_demo.py` now reads them from there: the same numbers) and nine more, each showing
+a feature: `vocal_booth` (a glass window as one wall segment), `control_room` (RFZ splays, a
+cloud, corner bass traps, the desk), `wood_live_room` (a grand piano's body and propped lid, a
+riser, a parked gobo, drapes on one wall), `brick_drum_room`, `basement_rehearsal` (an L, a
+foam wall, a sofa, a rug), `tiled_bathroom`, `concrete_stairwell` (two flights and landings as
+tilted slabs, 9 m tall), `stone_chapel` (an apse with stained glass, pews), `tracking_room`
+(live end brick, dead end drapes, gobos). RT60 at 1 kHz (ray traced): booth 0.03 s, treated
+studio 0.12, tracking room 0.35, control room 0.53, wood live room 0.65, shoebox 0.78, brick
+drum room 1.18, stairwell 1.85, vaulted hall 1.71, bathroom ~2.5, chapel 4.3.
+New surfaces for them, tabulated (Everest and Pohlmann; `materials.TABULATED`): `brick`,
+`concrete_block_painted`, `concrete_floor`, `glass_window`, `glazed_tile`, `wood_panel`. New
+object kinds in the Room view: Piano (the body), Cloud, Bass trap. Tests: `tests/test_rooms.py`
+(objects inside, apart; a preset with an override), `room.rs`
+`room_presets_load_and_render_as_written`; each new room's responses computed once with the
+wave solver at 250 Hz (finite).
+
+## Every mic into every preamp (2026-11-05, the user's ask)
+
+`scripts/compose_chain.py --all` writes every mic (U47, SM57, SM58, the 4134 omni) into every
+preamp (V76, clean): eight chains, the four new ones `u47_clean`, `sm57_clean`, `sm58_clean`,
+`omni_v76` (the existing four regenerate byte for byte). The Room view offers all eight
+(`room::CHAINS`: the mic's switch, pattern or impedance tap, and the preamp's gain; a dynamic
+drawn cardioid). For the SM57 and SM58 in a room: the scene finds a `cartridge_model*` as well
+as a `capsule_model*`, and the SM58's ball grille has a room table at last
+(`bor_permeable.entry_table`: point sources as well as plane waves, the same solve;
+identical to `entry_factors` for plane waves, converging to it with distance; ~4 s per
+frequency, ~15 min once per geometry, cached), which also lifts free_field's plane-waves-only
+limit for it (proximity in `mic_print.py --distance-m`). `mic_print.py` finds the omni's
+capsule now (it fell back to a bare pressure entry without its body). Tests:
+`tests/test_chain_matrix.py`, the Rust agreement fixtures for the four new chains.
+
 ## Open (the user's)
 
+- Phantom power and balanced lines (asked 2026-11-05; nothing built): every mic's power is in
+  its own file today (the U47's supply, the omni's polarization, the dynamics need none), and the
+  chains join single-ended; phantom needs both legs and the common mode modelled, and a mic's
+  declared power checked against the preamp's ("Every mic into every preamp" above).
 - Listen: `reports/rooms/wave_demo/` and `reports/rooms/gobo_demo/` (READMEs), then the Room view
   on a session of your own (a wall's surface, a gobo, the wave solver).
 - Listen: the room tracks (`reports/rooms/separation/*/target/*.wav`, the mixes in

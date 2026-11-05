@@ -1,0 +1,16 @@
+# A room preset (varimu/rooms/presets.py).
+title: Concrete stairwell
+description: >-
+  A 3 x 5.5 m stairwell three floors (9 m) tall: painted block walls, a concrete floor, two
+  flights of stairs and their landings as tilted slabs. Long, metallic, a little hollow: the
+  stairwell used as an echo chamber.
+room:
+  floor_m: [[0.0, 0.0], [3.0, 0.0], [3.0, 5.5], [0.0, 5.5]]
+  ceiling: {type: flat, height_m: 9.0}
+  materials: {walls: concrete_block_painted, floor: concrete_floor, ceiling: gypsum_on_studs}
+  objects:
+    - {name: Flight 1, center_m: [0.75, 2.6, 1.22], size_m: [1.2, 4.05, 0.2], tilt_deg: 32.91, material: concrete_floor}
+    - {name: Landing 1, center_m: [1.5, 4.85, 2.3], size_m: [2.7, 0.9, 0.2], material: concrete_floor}
+    - {name: Flight 2, center_m: [2.25, 2.725, 3.62], size_m: [1.2, 3.842, 0.2], tilt_deg: -34.93, material: concrete_floor}
+    - {name: Landing 2, center_m: [1.5, 0.6, 4.7], size_m: [2.7, 0.9, 0.2], material: concrete_floor}
+  source: "provisional: model knowledge (a three-storey concrete stairwell)"

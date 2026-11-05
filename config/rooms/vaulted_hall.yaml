@@ -1,0 +1,10 @@
+# A room preset (varimu/rooms/presets.py). One of scripts/room_demo.py's rooms.
+title: Vaulted hall
+description: >-
+  A 14 x 9 m hall with cut corners (~990 m^3) under a plaster barrel vault, 5.5 to 9 m;
+  furnished walls, wood floor. A long, enveloping tail.
+room:
+  floor_m: [[1.5, 0.0], [12.5, 0.0], [14.0, 1.5], [14.0, 7.5], [12.5, 9.0], [1.5, 9.0], [0.0, 7.5], [0.0, 1.5]]
+  ceiling: {type: vault, height_m: 5.5, peak_m: 9.0, axis_deg: 90.0, facets: 8}
+  materials: {walls: furnished_wall, floor: wood_floor, ceiling: plaster}
+  source: "provisional: model knowledge (demo rooms, docs/ROOM_LOOP_PLAN.md R6)"

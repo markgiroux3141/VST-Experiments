@@ -1,0 +1,21 @@
+# A room preset (varimu/rooms/presets.py).
+title: Wood live room, grand piano
+description: >-
+  A 9 m tracking room widening to 9.8 m at the back, its shed ceiling rising 3.5 to 5 m:
+  plywood panelling, a wood floor, drapes drawn over the rear wall (wall 2). A grand piano
+  in the middle with its lid propped at 35 degrees (the lid opens toward +x: put a source
+  under it and a mic out past its open side), a drum riser, a gobo parked by the wall.
+room:
+  floor_m: [[0.0, 0.0], [9.0, 0.0], [9.4, 7.0], [-0.4, 7.0]]
+  ceiling: {type: shed, height_m: 3.5, peak_m: 5.0, axis_deg: 90.0}
+  materials:
+    walls: wood_panel
+    floor: wood_floor
+    ceiling: gypsum_on_studs
+    faces: {"wall 2": heavy_drapes}
+  objects:
+    - {name: Piano, center_m: [4.5, 3.5, 0.83], size_m: [1.5, 1.9, 0.36], material: wood_floor}
+    - {name: Lid, center_m: [4.344, 3.5, 1.446], size_m: [1.8, 1.45, 0.025], yaw_deg: -90.0, tilt_deg: 35.0, material: wood_floor}
+    - {name: Riser, center_m: [7.0, 5.5, 0.15], size_m: [1.8, 1.2, 0.3], material: wood_floor}
+    - {name: Gobo, center_m: [1.2, 5.6, 0.9], size_m: [1.2, 0.08, 1.8], yaw_deg: 30.0, material: heavy_drapes}
+  source: "provisional: model knowledge (a wood-panelled tracking room; a 6 ft grand's body ~1.5 x 1.9 m, its rim ~1 m high)"

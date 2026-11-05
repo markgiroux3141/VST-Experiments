@@ -1,0 +1,22 @@
+# A room preset (varimu/rooms/presets.py).
+title: Stone chapel
+description: >-
+  A 16 x 8 m nave with a five-sided apse, its gable roof 6 m at the eaves to 10 m at the
+  ridge: plaster walls, a stone floor, a timber ceiling, stained glass in the apse (walls 2
+  and 3), six pews. A long, bright tail; the pews break up the floor's reflection.
+room:
+  floor_m: [[0.0, 0.0], [16.0, 0.0], [17.5, 1.5], [18.0, 4.0], [17.5, 6.5], [16.0, 8.0], [0.0, 8.0]]
+  ceiling: {type: gable, height_m: 6.0, peak_m: 10.0, axis_deg: 90.0}
+  materials:
+    walls: plaster
+    floor: concrete_floor
+    ceiling: wood_panel
+    faces: {"wall 2": glass_window, "wall 3": glass_window}
+  objects:
+    - {name: Pew 1, center_m: [4.0, 2.0, 0.45], size_m: [0.5, 3.0, 0.9], material: wood_floor}
+    - {name: Pew 2, center_m: [4.0, 6.0, 0.45], size_m: [0.5, 3.0, 0.9], material: wood_floor}
+    - {name: Pew 3, center_m: [5.6, 2.0, 0.45], size_m: [0.5, 3.0, 0.9], material: wood_floor}
+    - {name: Pew 4, center_m: [5.6, 6.0, 0.45], size_m: [0.5, 3.0, 0.9], material: wood_floor}
+    - {name: Pew 5, center_m: [7.2, 2.0, 0.45], size_m: [0.5, 3.0, 0.9], material: wood_floor}
+    - {name: Pew 6, center_m: [7.2, 6.0, 0.45], size_m: [0.5, 3.0, 0.9], material: wood_floor}
+  source: "provisional: model knowledge (a small stone chapel)"
