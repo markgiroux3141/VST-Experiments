@@ -551,9 +551,9 @@ to scale, the sources' facing, the forms; dragging and clicking weren't driven.
 - Listen: the room tracks (`reports/rooms/separation/*/target/*.wav`, the mixes in
   `*/mixes/`), the staircase (`uv run --extra listen --with sounddevice python
   scripts/separation_listen.py --room`), the Room view on a session of your own.
-- Whether the room goes to Rust (the app then renders without Python) before A5: roomsim now
-  holds its heaviest parts (rays, image spectra, the wave solver); the geometry, image-source
-  validation, diffraction, the tail's synthesis and the entry tables are still Python.
+- Whether the room goes to Rust (the app then renders without Python): a backlog item with
+  measured costs and the work in [ROOM_RUST_PORT.md](ROOM_RUST_PORT.md) (a scene ~10-25%
+  faster, the room stage ~1.6x; ~7-9 days; or ~1 day for only the tail and the convolution).
 - Next candidates (none agreed): the U47's head basket (Known bias); a frequency-dependent wall admittance in one run (fewer runs at high crossovers);
   measured instrument directivities (a piano's lid, a trumpet's bell) beyond the cap on a
   sphere.
