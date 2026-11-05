@@ -12,8 +12,8 @@ use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::room::{
-    self, CEILINGS, CHAINS, MATERIALS, PRESETS, Pattern, QUALITIES, RenderJob, RoomMic, RoomSource,
-    Scene, WAVE_CROSSOVERS,
+    self, CEILINGS, CHAINS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, Pattern, QUALITIES,
+    RenderJob, RoomMic, RoomObject, RoomSource, Scene, WAVE_CROSSOVERS,
 };
 
 use crate::session_view::SessionView;
@@ -25,13 +25,19 @@ enum Sel {
     Mic(usize),
     /// A wall of the plan (from corner i to i + 1): its material (ROOM_LOOP_PLAN.md R7).
     Wall(usize),
+    /// An object (R11): a gobo, a riser, a cabinet.
+    Object(usize),
 }
 
 #[derive(Clone, Copy, Debug)]
 enum Drag {
     Move(Sel),
     Aim(usize),
+    /// A directional source aimed.
+    AimSource(usize),
     Corner(usize),
+    /// An object turned about the vertical.
+    Turn(usize),
 }
 
 /// A render underway: the job, where its tracks go on the timeline, at what rate.
@@ -342,12 +348,10 @@ impl RoomView {
                 if !self.scene.inside(&pos) {
                     pos = centroid(&self.scene);
                 }
-                self.scene.sources.push(RoomSource {
-                    name: unique(&self.scene, &name),
-                    track: id,
-                    spl_db: 90.0,
-                    pos,
-                });
+                let name = unique(&self.scene, &name);
+                self.scene
+                    .sources
+                    .push(RoomSource::new(&name, &id, 90.0, pos));
                 self.sel = Some(Sel::Source(self.scene.sources.len() - 1));
             }
         });
@@ -391,8 +395,51 @@ impl RoomView {
         });
         ui.separator();
 
+        // Objects
+        ui.label(RichText::new("OBJECTS").strong().color(theme::MUTED));
+        for (i, o) in self.scene.objects.iter().enumerate() {
+            let on = self.sel == Some(Sel::Object(i));
+            let text = format!(
+                "▭ {}  ·  {:.2} × {:.2} × {:.2} m  ·  {}",
+                o.name,
+                o.size[0],
+                o.size[1],
+                o.size[2],
+                o.material.replace('_', " ")
+            );
+            if ui
+                .selectable_label(on, RichText::new(text).color(material_color(&o.material)))
+                .clicked()
+            {
+                self.sel = Some(Sel::Object(i));
+            }
+        }
+        ui.horizontal(|ui| {
+            for (label, prefix, size, z, mat) in OBJECT_KINDS {
+                if ui
+                    .button(format!("+ {label}"))
+                    .on_hover_text("an object in the room: its edges diffract, it shadows, reflects and absorbs")
+                    .clicked()
+                {
+                    let c = centroid(&self.scene);
+                    let name = self.scene.free_name(prefix);
+                    self.scene.objects.push(RoomObject {
+                        name,
+                        center: [c[0], c[1], *z],
+                        size: *size,
+                        yaw_deg: 90.0,
+                        tilt_deg: 0.0,
+                        material: mat.to_string(),
+                    });
+                    self.sel = Some(Sel::Object(self.scene.objects.len() - 1));
+                }
+            }
+        });
+        ui.separator();
+
         // The selected item
         match self.sel {
+            Some(Sel::Object(i)) if i < self.scene.objects.len() => self.object_form(ui, i),
             Some(Sel::Source(i)) if i < self.scene.sources.len() => {
                 self.source_form(ui, i, &tracks)
             }
@@ -425,7 +472,7 @@ impl RoomView {
             _ => {
                 ui.label(
                     RichText::new(
-                        "Drag sources and mics on the plan. Right-drag (or Shift-drag) a mic to aim it. Delete removes the selected one.",
+                        "Drag sources, mics and objects on the plan. Right-drag (or Shift-drag) a mic or a directional source to aim it, an object to turn it. Delete removes the selected one.",
                     )
                     .small()
                     .color(theme::FAINT),
@@ -471,8 +518,47 @@ impl RoomView {
                         .range(40.0..=130.0)
                         .speed(0.5)
                         .suffix(" dB SPL"),
-                );
+                )
+                .on_hover_text("on its axis, for a directional source");
             });
+            ui.horizontal(|ui| {
+                ui.label("Radiates");
+                let cur = DIRECTIVITIES
+                    .iter()
+                    .find(|(id, _)| *id == s.directivity)
+                    .map_or(s.directivity.clone(), |(_, l)| l.to_string());
+                egui::ComboBox::from_id_salt("room_src_dir")
+                    .selected_text(cur)
+                    .show_ui(ui, |ui| {
+                        for (id, l) in DIRECTIVITIES {
+                            ui.selectable_value(&mut s.directivity, id.to_string(), *l);
+                        }
+                    })
+                    .response
+                    .on_hover_text(
+                        "a cap on a sphere: a voice is a head with a mouth, an amp its cabinet \
+                         with the cone; small against the wavelength every source is omni",
+                    );
+            });
+            if s.directional() {
+                ui.horizontal(|ui| {
+                    ui.label("faces");
+                    ui.add(
+                        egui::DragValue::new(&mut s.azimuth_deg)
+                            .range(-180.0..=180.0)
+                            .speed(1.0)
+                            .suffix("°"),
+                    )
+                    .on_hover_text("right- or Shift-drag the source on the plan");
+                    ui.label("up");
+                    ui.add(
+                        egui::DragValue::new(&mut s.elevation_deg)
+                            .range(-90.0..=90.0)
+                            .speed(1.0)
+                            .suffix("°"),
+                    );
+                });
+            }
             position_fields(ui, &mut s.pos, dims);
             if ui.button("Delete source").clicked() {
                 delete = true;
@@ -493,6 +579,72 @@ impl RoomView {
         }
         if delete {
             self.scene.sources.remove(i);
+            self.sel = None;
+        }
+    }
+
+    fn object_form(&mut self, ui: &mut egui::Ui, i: usize) {
+        let dims = bounds(&self.scene);
+        let mut delete = false;
+        let o = &mut self.scene.objects[i];
+        ui.label(
+            RichText::new(format!("OBJECT {}", o.name))
+                .strong()
+                .color(material_color(&o.material)),
+        );
+        ui.horizontal(|ui| {
+            ui.label("Name");
+            ui.text_edit_singleline(&mut o.name);
+        });
+        ui.horizontal(|ui| {
+            for (j, l) in ["width", "depth", "height"].iter().enumerate() {
+                ui.label(*l);
+                ui.add(
+                    egui::DragValue::new(&mut o.size[j])
+                        .range(0.02..=20.0)
+                        .speed(0.01)
+                        .suffix(" m")
+                        .max_decimals(2),
+                );
+            }
+        });
+        ui.horizontal(|ui| {
+            ui.label("centre");
+            position_fields(ui, &mut o.center, dims);
+        });
+        ui.horizontal(|ui| {
+            ui.label("turn");
+            ui.add(
+                egui::DragValue::new(&mut o.yaw_deg)
+                    .range(-180.0..=180.0)
+                    .speed(1.0)
+                    .suffix("°"),
+            )
+            .on_hover_text("about the vertical (right- or Shift-drag it on the plan)");
+            ui.label("tilt");
+            ui.add(
+                egui::DragValue::new(&mut o.tilt_deg)
+                    .range(-90.0..=90.0)
+                    .speed(1.0)
+                    .suffix("°"),
+            )
+            .on_hover_text("about its width: a piano lid, a reflector leaning back");
+        });
+        ui.horizontal(|ui| {
+            ui.label("Surface");
+            egui::ComboBox::from_id_salt("room_obj_mat")
+                .selected_text(o.material.replace('_', " "))
+                .show_ui(ui, |ui| {
+                    for m in MATERIALS {
+                        ui.selectable_value(&mut o.material, m.to_string(), m.replace('_', " "));
+                    }
+                });
+        });
+        if ui.button("Delete").clicked() {
+            delete = true;
+        }
+        if delete {
+            self.scene.objects.remove(i);
             self.sel = None;
         }
     }
@@ -911,6 +1063,21 @@ impl RoomView {
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .map(|(s, _)| s)
         };
+        let footprints: Vec<Vec<[f64; 2]>> = self
+            .scene
+            .objects
+            .iter()
+            .map(RoomObject::footprint)
+            .collect();
+        let object_at = |p: Pos2| -> Option<usize> {
+            let (x, y) = to_w(p);
+            footprints
+                .iter()
+                .enumerate()
+                .rev()
+                .find(|(_, fp)| room::in_polygon(fp, x, y))
+                .map(|(i, _)| i)
+        };
         let corner = |p: Pos2| -> Option<usize> {
             plan.iter()
                 .enumerate()
@@ -925,10 +1092,30 @@ impl RoomView {
         {
             let h = hit(p);
             let secondary = ui.input(|i| i.pointer.secondary_down());
+            let obj = if h.is_none() { object_at(p) } else { None };
             self.drag = match (h, corner(p)) {
                 (Some(Sel::Mic(i)), _) if secondary || shift => Some(Drag::Aim(i)),
+                (Some(Sel::Source(i)), _)
+                    if (secondary || shift)
+                        && self
+                            .scene
+                            .sources
+                            .get(i)
+                            .is_some_and(RoomSource::directional) =>
+                {
+                    Some(Drag::AimSource(i))
+                }
                 (Some(s), _) => Some(Drag::Move(s)),
                 (None, Some(c)) if !secondary => Some(Drag::Corner(c)),
+                (None, None) if obj.is_some() => {
+                    let i = obj.unwrap();
+                    self.sel = Some(Sel::Object(i));
+                    if secondary || shift {
+                        Some(Drag::Turn(i))
+                    } else {
+                        Some(Drag::Move(Sel::Object(i)))
+                    }
+                }
                 (None, _) => match self.sel {
                     Some(Sel::Mic(i)) if secondary || shift => Some(Drag::Aim(i)),
                     _ => None,
@@ -970,7 +1157,30 @@ impl RoomView {
                         m.azimuth_deg = m.azimuth_deg.round();
                     }
                 }
+                Drag::AimSource(i) => {
+                    if let Some(s) = scene.sources.get_mut(i) {
+                        s.aim_at(x, y);
+                        s.azimuth_deg = s.azimuth_deg.round();
+                    }
+                }
                 Drag::Move(Sel::Wall(_)) => {}
+                Drag::Move(Sel::Object(i)) => {
+                    if in_room_plan(scene, (x, y))
+                        && let Some(o) = scene.objects.get_mut(i)
+                    {
+                        o.center[0] = x;
+                        o.center[1] = y;
+                    }
+                }
+                Drag::Turn(i) => {
+                    if let Some(o) = scene.objects.get_mut(i) {
+                        let (dx, dy) = (x - o.center[0], y - o.center[1]);
+                        if dx.hypot(dy) > 0.05 {
+                            // the gobo's face looks at the pointer: its width across
+                            o.yaw_deg = (dy.atan2(dx).to_degrees() - 90.0).round();
+                        }
+                    }
+                }
                 Drag::Corner(c) => {
                     if c < scene.plan.len() {
                         // snap to 5 cm
@@ -1003,7 +1213,9 @@ impl RoomView {
                 if corner(p).is_some() {
                     None
                 } else {
-                    wall_at(p).map(Sel::Wall)
+                    object_at(p)
+                        .map(Sel::Object)
+                        .or_else(|| wall_at(p).map(Sel::Wall))
                 }
             });
         }
@@ -1050,6 +1262,9 @@ impl RoomView {
                 }
                 Some(Sel::Mic(i)) if i < self.scene.mics.len() => {
                     self.scene.mics.remove(i);
+                }
+                Some(Sel::Object(i)) if i < self.scene.objects.len() => {
+                    self.scene.objects.remove(i);
                 }
                 _ => {}
             }
@@ -1112,11 +1327,51 @@ impl RoomView {
             );
         }
 
+        // objects: their outlines from above, in their surface's colour
+        for (i, o) in self.scene.objects.iter().enumerate() {
+            let on = self.sel == Some(Sel::Object(i));
+            let col = material_color(&o.material);
+            let fp: Vec<Pos2> = o.footprint().iter().map(|q| to_s(q[0], q[1])).collect();
+            if fp.len() >= 3 {
+                painter.add(egui::Shape::convex_polygon(
+                    fp.clone(),
+                    col.gamma_multiply(if on { 0.55 } else { 0.35 }),
+                    Stroke::new(
+                        if on { 2.0 } else { 1.2 },
+                        if on { theme::INK } else { col },
+                    ),
+                ));
+            }
+            painter.text(
+                to_s(o.center[0], o.center[1]) + Vec2::new(0.0, -14.0),
+                egui::Align2::CENTER_CENTER,
+                format!("{} {:.1} m", o.name, o.size[2]),
+                small.clone(),
+                col,
+            );
+        }
+
         // sources, then mics with their patterns
         let font = egui::FontId::proportional(12.0);
         for (i, s) in self.scene.sources.iter().enumerate() {
             let c = to_s(s.pos[0], s.pos[1]);
             let on = self.sel == Some(Sel::Source(i));
+            if s.directional() {
+                // which way it faces: an arrow and a wedge toward its axis
+                let az = (s.azimuth_deg as f32).to_radians();
+                let dir = Vec2::new(az.cos(), -az.sin());
+                let side = Vec2::new(-dir.y, dir.x);
+                painter.add(egui::Shape::convex_polygon(
+                    vec![
+                        c,
+                        c + dir * 34.0 + side * 14.0,
+                        c + dir * 34.0 - side * 14.0,
+                    ],
+                    SOURCE_COLOR.gamma_multiply(0.18),
+                    Stroke::new(1.0, SOURCE_COLOR.gamma_multiply(0.6)),
+                ));
+                painter.line_segment([c, c + dir * 20.0], Stroke::new(2.5, SOURCE_COLOR));
+            }
             painter.circle_filled(c, 9.0, SOURCE_COLOR);
             if on {
                 painter.circle_stroke(c, 13.0, Stroke::new(2.0, theme::INK));

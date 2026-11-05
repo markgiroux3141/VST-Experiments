@@ -24,8 +24,12 @@ JSON):
       - name: A
         clip: data/clips/x.wav       # relative to the repo, or absolute
         start_s: 0                   # optional, and seconds: N
-        spl_db: 90                   # its rms in dB SPL at 1 m in free field
+        spl_db: 90                   # its rms in dB SPL at 1 m in free field (on its axis)
         position_m: [2.0, 2.5, 1.2]
+        directivity: amp_1x12        # optional: omni (the default), voice, amp_1x12, amp_2x12,
+                                     # bass_1x15, or {sphere_radius_m, cap_radius_m}
+                                     # (varimu/rooms/directivity.py: a cap on a sphere)
+        aim: {azimuth_deg: 0, elevation_deg: 0}   # where it faces (a directional source)
     mics:
       - name: spot A
         chain: u47_v76               # a circuit file with a capsule (`capsule_model*`)
@@ -85,6 +89,9 @@ class SourceSpec:
     position_m: np.ndarray
     start_s: float = 0.0
     seconds: float | None = None
+    directivity: object = None
+    azimuth_deg: float = 0.0
+    elevation_deg: float = 0.0
 
 
 @dataclass
@@ -167,9 +174,16 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
             np.array(s["position_m"], float),
             float(s.get("start_s", 0.0)),
             None if s.get("seconds") is None else float(s["seconds"]),
+            s.get("directivity"),
+            float((s.get("aim") or {}).get("azimuth_deg", 0.0)),
+            float((s.get("aim") or {}).get("elevation_deg", 0.0)),
         )
         for s in d["sources"]
     ]
+    from varimu.rooms.directivity import from_spec
+
+    for s in sources:
+        from_spec(s.directivity)  # unknown presets fail at load
     mics = []
     for m in d["mics"]:
         aim = m.get("aim", {})
@@ -266,6 +280,13 @@ def mic_pressures(
         kinds.append(tables[key].kind)
         mics.append(Mic(m.position_m, aim_vector(m.azimuth_deg, m.elevation_deg), tables[key]))
     seeds = [scene.seed * 1000 + i for i in range(len(scene.sources))]
+    from varimu.rooms.directivity import from_spec
+
+    dirs = [from_spec(s.directivity) for s in scene.sources]
+    directivity = [
+        None if dv is None else (dv, aim_vector(s.azimuth_deg, s.elevation_deg))
+        for dv, s in zip(dirs, scene.sources, strict=True)
+    ]
     h = responses(
         scene.room,
         [s.position_m for s in scene.sources],
@@ -280,6 +301,7 @@ def mic_pressures(
             if scene.wave_crossover_hz and not _anechoic(scene.room)
             else None
         ),
+        directivity=directivity if any(directivity) else None,
     )
     n = max(len(x) for x in signals) + h.shape[-1]
     p = np.zeros((len(scene.sources), len(scene.mics), 2, n))

@@ -3,7 +3,7 @@ each spot-miked through a chain, a spaced omni pair as room mics panned hard lef
 right; how well do the two separate, per pair of spot chains?
 
     uv run --extra fast --extra listen python scripts/room_separation.py [--render-only]
-        [--analyse-only] [--quality production] [--room shoebox|poly]
+        [--analyse-only] [--quality production] [--room shoebox|poly] [--wave HZ]
 
 Sources: the separation study's dry synth lines (cache/separation/conditions/dry/: the
 target melody, the same with one note changed, the arpeggio masker; run
@@ -36,7 +36,7 @@ condition's folder.
 `--room poly` (ROOM_LOOP_PLAN.md R8) renders the same room as a floor plan through
 varimu.rooms.polyroom (image sources to 4 reflections, the ray-traced tail) into
 reports/rooms/separation/polyroom/, with `compare.json` there: each table cell's change from
-the shoebox's.
+the shoebox's. `--wave HZ` adds the wave solver below HZ (R10) -> .../polyroom_wave/.
 """
 
 from __future__ import annotations
@@ -93,8 +93,11 @@ MIXES = {
 TMR_DB = -6.0
 
 
-def scene(cond: str, variant: str, quality: str, room: str = "shoebox") -> dict:
+def scene(cond: str, variant: str, quality: str, room: str = "shoebox", wave=None) -> dict:
     a, b = CONDITIONS[cond]
+    settings = {"quality": quality, "seed": 0}
+    if wave:
+        settings["wave_crossover_hz"] = wave
     return {
         "name": f"separation_{cond}_{variant}",
         "room": POLY_ROOM if room == "poly" else ROOM,
@@ -108,15 +111,15 @@ def scene(cond: str, variant: str, quality: str, room: str = "shoebox") -> dict:
             {"name": "room L", **ROOM_L, **ROOM_CHAIN, "pan": -1.0},
             {"name": "room R", **ROOM_R, **ROOM_CHAIN, "pan": 1.0},
         ],
-        "settings": {"quality": quality, "seed": 0},
+        "settings": settings,
     }
 
 
-def render_all(quality: str, room: str, out) -> None:
+def render_all(quality: str, room: str, out, wave=None) -> None:
     for cond in CONDITIONS:
         for variant in VARIANTS:
             d = out / cond / variant
-            sc = scene(cond, variant, quality, room)
+            sc = scene(cond, variant, quality, room, wave)
             done = d / "scene.json"
             if (
                 (d / "render.json").exists()
@@ -136,10 +139,11 @@ def main() -> None:
     ap.add_argument("--analyse-only", action="store_true")
     ap.add_argument("--quality", default="production")
     ap.add_argument("--room", choices=["shoebox", "poly"], default="shoebox")
+    ap.add_argument("--wave", type=float)
     args = ap.parse_args()
-    out = OUT / "polyroom" if args.room == "poly" else OUT
+    out = OUT / ("polyroom_wave" if args.wave else "polyroom") if args.room == "poly" else OUT
     if not args.analyse_only:
-        render_all(args.quality, args.room, out)
+        render_all(args.quality, args.room, out, args.wave)
     if args.render_only:
         return
     from varimu.rooms.binaural import analyse

@@ -216,7 +216,7 @@ pub fn run_gpu(gpu: &Gpu, grid: &Grid, run: &Run) -> Result<Vec<f64>, String> {
         p1[i as usize] += v as f32;
     }
     let bytes = (n * 4) as u64;
-    if bytes > gpu.limits.max_storage_buffer_binding_size as u64 {
+    if bytes > gpu.limits.max_storage_buffer_binding_size {
         return Err(format!(
             "{n} cells: more than the GPU binds in one buffer ({} B)",
             gpu.limits.max_storage_buffer_binding_size

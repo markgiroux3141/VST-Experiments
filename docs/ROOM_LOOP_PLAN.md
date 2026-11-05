@@ -166,9 +166,9 @@ MIC_ROOM_PLAN.md A5's hybrid, on the CPU; the wave solver (FDTD, GPU) stays A5's
   an acoustic guitar and the piano of "Long Way Home" (Cambridge-MT) in five rooms through the
   same mics, mixes and room-pair-only files at -18 LUFS.
 
-Open: R7-R11 below.
+R7-R11 below (built 2026-11-05).
 
-## Next: R7-R11 (2026-11-04, agreed with the user; they pick it up when ready)
+## R7-R11 (2026-11-04, agreed with the user; built 2026-11-05: "Status (2026-11-05)" below)
 
 The user heard the demo ("sounds amazing") and asked what the rest costs. The estimates below
 (work, how much it changes the sound, render time) are the agreed basis; the order is the
@@ -363,11 +363,152 @@ real time), a Rust port of the room (the app without Python).
 4. **The Room view now, not after A5:** a tab in the native app (the user's offer), rendering
    through the Python reference as a background process until the room is ported to Rust.
 
+## Status (2026-11-05)
+
+R7-R11 built in one night, the user away ("let's build what's in ROOM_LOOP_PLAN.md ... be self
+reliant and make decisions"; the decisions: "Decisions (2026-11-05)" below). Commits ceeb216
+(R7-R9) and e0497e6 (R10-R11) plus the night's last.
+
+- **R7, a material per face** (`PolyRoom.face_materials`, a scene's `materials.faces`: `"wall N"`
+  from the plan's corner N to N + 1 as the plan was given (a clockwise plan's walls renumbered
+  inside), `"ceiling N"` a facet, `floor`). Drapes on one long wall of the 7 x 5.5 m room: the
+  ray-traced RT falls 8-23% above 250 Hz, within 15% of Eyring's area-weighted absorption (Eyring
+  under-reads concentrated absorption, as known), the drop itself within 10%. The Room view: a
+  click on a wall selects it (its surface at the side, walls with their own surface drawn in its
+  colour and named), a "Ceiling facets" list, corner edits keep each wall's surface (a split
+  wall's halves both keep it, a merged one keeps the earlier one's). Old scenes render unchanged
+  (naming a face with its room's material changes nothing, bit for bit).
+- **R8, R5 on polyroom** (`room_separation.py --room poly` -> `reports/rooms/separation/
+  polyroom/`, `compare.json`): the table's cells move by at most 1.3 dB, most under 0.5; the spots'
+  isolation (own minus other) rises 1.0-2.1 dB (the shoebox's tail ran 2-3 dB hot, R6). Every
+  conclusion of R5 stands. With the wave solver too (`--wave 500` -> `polyroom_wave/`): the
+  cells move by at most 1.3 dB again (the same-omni conditions with the room pair drop ~1 dB: a
+  modal low end gives the pair less binaural unmasking); the conclusions stand.
+- **R9, the GPU** (`crates/roomsim`: wgpu 29, already in the lockfile through eframe; Vulkan on
+  the RTX 3080; Python module `roomsim` in the `fast` extra; `varimu.rooms.gpu` picks "gpu",
+  "cpu" (roomsim's f64 reference) or "numpy" (the original), `$VARIMU_ROOM_BACKEND`; a stale
+  build refused like circuitsim's). Ray tracing (`rays.rs` / `rays.wgsl`): the rooms as
+  triangles (`PolyRoom.triangles`), the same counter-based random numbers on GPU and CPU, the
+  sums in 64-bit fixed point with integer atomics (a GPU run repeats bit for bit), "still
+  travelling" sampled at instants (no 1 - cumsum cancellation). The image sources' spectra
+  (`spectra.rs` / `spectra.wgsl`): the phase k d / N reduced exactly in u32 so f32 holds (the
+  integer and 12-bit parts exact, the rest small). Against numpy: RTs within 0.5%, GPU against
+  roomsim's CPU to the printed digit; spectra -125 to -131 dB. Speed: rays 6-11 s -> 0.3-0.5 s
+  per source, spectra 8-12 s -> 0.15-0.3 s; the Rust CPU reference alone is 40x numpy. The
+  done-when's "the demo renders the same": the R6 demo's shoebox and angled rooms, every source
+  to every mic, GPU against numpy: octave levels within 0.03 dB on average (0.26 dB at worst),
+  the tails within 0.1 dB (the rays' random numbers differ, so statistically).
+- **R10, the wave solver** (`varimu/rooms/wave.py`; roomsim's `fdtd`, `fdtd_update.wgsl` /
+  `fdtd_read.wgsl`). The scheme: the standard rectilinear one read as a finite volume scheme
+  (Bilbao, IEEE TASLP 21(7), 2013), so walls of any shape, staircased, are energy-stable
+  locally reacting admittances (each wall link its face's admittance divided by |n|_1, the
+  staircase's extra area). The grid: 20 points per wavelength at the crossover (3.4 cm at 500
+  Hz), the step a whole number of the project's samples. Walls per band: one run per octave band
+  whose weight reaches under the crossover, with that band's admittance (Paris' random-incidence
+  inversion of the material's alpha); the room is LTI, so the response at f depends only on the
+  walls at f, and the runs are weighted by the geometric model's band weights. Mics: pressure and
+  gradient; the capsule's entries to first order from its entry table (A + B cos theta: within
+  1% to 700 Hz for a 2 cm path), proximity from the near field's gradient. The blend: zero-phase,
+  the first 40 ms crossed in amplitude (the same arrivals in both), the rest in power (two
+  unrelated tails: amplitude weights dipped the crossover's octave ~1.6 dB). The zero-frequency
+  mode (a pressure impulse leaves a sealed room a pressure offset) high-passed at 15 Hz.
+  Checks: a rigid box's modes within 0.05% of the closed form; a rigid shoebox within -38 dB of
+  exact image sources at 100-340 Hz (its walls on whole cells; -20 dB with walls up to half a
+  cell off, the voxelization's 1.7 cm); band decays at the ray-traced RT (0.98x at 250 Hz, 1.02x
+  at 500; the normal-incidence mapping gave 0.56x); GPU against CPU on first differences -93 to
+  -107 dB; and against a 0.6 s image model with the same walls in the 4.2 x 3.4 m room within
+  +-0.5 dB from 79 Hz to 1 kHz. There the production geometric model (images to 50 ms, a
+  ray-traced noise tail) is -6 to +3 dB off at the low end, one random realization of the right
+  average: what the wave solver replaces. Speed: ~32 G cell updates/s; 6.5 s per source at 500
+  Hz in 123 m^3 (4 bands), 125 s at 1 kHz.
+- **R11, objects and edge diffraction.** Objects: oriented boxes (`room.objects: [{center_m,
+  size_m (width, depth, height), yaw_deg, tilt_deg, material, name}]`), their six faces after
+  the room's (a room's faces keep their indices); image sources through objects to order 2 (the
+  room's own to 4), occlusion of every path, rays (GPU and numpy), the wave solver's grid (a thin
+  one grown to a cell). Diffraction (`varimu/rooms/diffraction.py`): first-order BTM (Svensson,
+  Fred & Vanderkooy, JASA 106(5), 1999), the edge sampled at half a sample of path and
+  log-densely near the apex; edges: a box's 12 (nu = 2/3), a thin panel's 4 as a plate's (nu =
+  1/2), a plan's reflex corners; from the source and its first-order images, visibility checked
+  along the edge. On the GPU each path's response becomes micro-images sharing one smooth
+  spectrum (the spectra kernel's `spec_index` and `scale`). Checks: the diffracted wave jumps by
+  the direct sound's 1 / d at the shadow boundary (within 0.5%: the total field continuous); a
+  long screen's insertion loss on Maekawa's law (its slope exact, the level within 0.3 dB once
+  its two equal edges are counted); an L-room's hidden source arrives at the corner path's delay;
+  behind a gobo the wave solver and the geometric model with diffraction agree below the
+  crossover (third octaves 200-315 Hz within 4 dB, their sum within 2 dB); GPU against numpy
+  -128 dB. The Room view: OBJECTS (+ Gobo, + Riser, + Cabinet), dragged, turned (right- or
+  Shift-drag), sized, tilted, surfaced; drawn from above in their surface's colour.
+- **Directional sources** (the "Later" list; `varimu/rooms/directivity.py`): a cap on a rigid
+  sphere (Morse & Ingard's series; Flanagan 1960 for the mouth), normalized on its axis (a
+  scene's `spl_db` is the on-axis level, so a directional source puts less power into the room).
+  Presets: `voice` (9 cm head, 2 cm mouth), `amp_1x12`, `amp_2x12`, `bass_1x15`, or the sizes; a
+  source's `directivity` and `aim` in a scene. Paths are traced from the cap (the source's
+  position) with the far-field pattern moved there (the rear's sound 2a / c late); every image
+  in the direction it leaves the source (mirrored back through its reflections), diffraction
+  paths too; rays start with |D|^2 (roomsim's ray weights). The wave solver puts the source's
+  body in its grid (the sphere rigid, the cap's cells driven, the response taken to the
+  on-axis normalization analytically): a monopole and dipole fit was tried first and was 1-4
+  dB off for a cabinet at ka ~ 2. Checks: a voice ~8 dB down behind at 4 kHz, an amp beaming
+  (-15 dB at 45 deg by 2 kHz); turned away in an anechoic room, down by D(180) within 0.3 dB;
+  the body in the grid against the exact near-field series 2.25 m out within 0.1-0.65 dB at
+  80-250 Hz (0.75 m out within 1.1 dB: there the rear is 8 dB down even at 80 Hz, a near field
+  the far-field pattern doesn't have). The Room view: a source's "Radiates" and "faces",
+  right- or Shift-drag to aim, the facing drawn.
+- **The demos** (READMEs in each folder): `reports/rooms/wave_demo/` (kick, bass and piano
+  through a spaced omni pair in a small room and the live room, the wave solver off / on, and
+  the live room with a dead front wall and a plaster back wall (R7)); `reports/rooms/gobo_demo/`
+  (vocal and guitar on close omnis, without / with a gobo, in the live room and treated: the
+  bleed falls 3-4 dB above 500 Hz in the live room, 7-8 dB treated, nothing at 63 Hz);
+  `reports/rooms/demo_wave/` (the R6 demo's five rooms again with the wave solver, beside
+  `demo/`); `reports/rooms/source_demo/` (an electric guitar through a 1x12 combo facing the
+  room pair, facing the wall, and as an omni).
+
+**What the demos found.** The wave solver lifts a small room's low end at a mic by 5-14 dB at
+25-125 Hz over the geometric model's average (the modes at 41, 50, 65 Hz), 4-12 dB below 100 Hz
+in the live room. A gobo in a live room is worth a few dB: the reverberant bleed comes round it.
+Uneven treatment changes the balance: plaster where furnished walls were lengthened the bass
+(125 Hz RT 0.52 -> 0.74 s) while the mids shortened.
+
+**Not done / limits.** Second-order diffraction (over a box's two edges: deep shadows behind
+thick objects come out too dark; thin panels are plates, so gobos are fine). Paths reflecting
+after an edge (edge then wall) aren't in the geometric part (below the crossover the wave
+solver has them). The rays' per-mic tail shaping uses the mid bands (shadowing by objects is
+the same for every band in the late part). The Room view's new controls (wall surfaces, facets,
+objects, the wave solver) are tested through the scene model but were not seen on screen: the
+app opens the user's last session, which an unattended run shouldn't touch.
+
+## Decisions (2026-11-05, delegated: "be self reliant and make decisions")
+
+1. **wgpu, in a crate of its own** (`crates/roomsim`), not CUDA and not inside circuitsim: any
+   vendor, the native app can use it, the room's Rust port grows from it.
+2. **Deterministic GPU sums** for the rays (fixed point), so a render repeats exactly
+   (Reproducibility); the GPU is the default backend, numpy kept as the reference.
+3. **The wave solver's scheme: the standard rectilinear one as finite volumes** (Bilbao 2013)
+   rather than Kowalczyk & van Walstijn's interpolated scheme: provably stable on staircased
+   walls of any plan; dispersion paid for with 20 points per wavelength at the crossover.
+4. **Frequency-dependent walls as one run per octave band** rather than a filtered admittance:
+   exact for an LTI room where one band weighs, reuses the materials' tables as they are.
+5. **Paris' random-incidence admittance** (measured: decays match the rays; normal incidence
+   decayed 1.8x too fast).
+6. **The crossover: 500 Hz for new scenes in the Room view** (6.5 s per source on the 3080);
+   250 / 1000 offered; old scenes load with it off and render as before.
+7. **Objects as oriented boxes**, a gobo a thin one; image sources through objects to order 2.
+8. **First-order BTM**, thin panels as plates; no second order (the plan's cost note).
+9. **Source directivity as a cap on a sphere** (one physical model for voices and cabinets),
+   built the same night from the "Later" list; in the wave solver the body itself, not a
+   multipole fit.
+
 ## Open (the user's)
 
+- Listen: `reports/rooms/wave_demo/` and `reports/rooms/gobo_demo/` (READMEs), then the Room view
+  on a session of your own (a wall's surface, a gobo, the wave solver).
 - Listen: the room tracks (`reports/rooms/separation/*/target/*.wav`, the mixes in
   `*/mixes/`), the staircase (`uv run --extra listen --with sounddevice python
   scripts/separation_listen.py --room`), the Room view on a session of your own.
-- Whether the room goes to Rust (the app then renders without Python) before A5.
-- When to start R7-R11 (agreed order: per-wall materials, R5 on polyroom, the GPU groundwork,
-  the wave solver, objects with diffraction).
+- Whether the room goes to Rust (the app then renders without Python) before A5: roomsim now
+  holds its heaviest parts (rays, image spectra, the wave solver); the geometry, image-source
+  validation, diffraction, the tail's synthesis and the entry tables are still Python.
+- Next candidates (none agreed): second-order diffraction; the U47's head basket (Known
+  bias); a frequency-dependent wall admittance in one run (fewer runs at high crossovers);
+  measured instrument directivities (a piano's lid, a trumpet's bell) beyond the cap on a
+  sphere.

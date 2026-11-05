@@ -37,6 +37,7 @@ struct Face {
 @group(0) @binding(4) var<storage, read> rx: array<vec4<f32>>;
 @group(0) @binding(5) var<storage, read_write> acc: array<atomic<u32>>;
 @group(0) @binding(6) var<storage, read_write> dens: array<atomic<u32>>;
+@group(0) @binding(7) var<storage, read> weights: array<vec4<f32>>; // per ray: 2 (7 bands, 0)
 
 const NB: u32 = 7u;
 const EPS_BARY: f32 = 1e-5;
@@ -96,9 +97,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     var p = P.src.xyz;
     var d = dirs[ray].xyz;
     var e: array<f32, 7>;
-    for (var b = 0u; b < NB; b++) {
-        e[b] = 1.0;
-    }
+    let w0 = weights[2u * ray];
+    let w1 = weights[2u * ray + 1u];
+    e[0] = w0.x;
+    e[1] = w0.y;
+    e[2] = w0.z;
+    e[3] = w0.w;
+    e[4] = w1.x;
+    e[5] = w1.y;
+    e[6] = w1.z;
     var t = 0.0;
     let nt = P.nt;
     let fs = P.fs_env;

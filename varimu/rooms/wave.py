@@ -29,6 +29,14 @@ to the field as E = A p + B (aim . grad p) / (j k): the near field's gradient gi
 pressure-gradient capsule its proximity effect. The central difference's sin(kX) / (kX) is
 undone.
 
+**A directional source** (varimu.rooms.directivity: a cap on a sphere) is its body: the sphere,
+rigid, cut out of that source's grid, the impulse spread over the room's cells at its cap (the
+cap's angular extent, at least the cell in front of its centre), the sum a unit monopole's;
+the response then taken to the table's on-axis normalization (`onaxis_correction`). Its own
+diffraction round the cabinet or the head and its near field come out of the grid. (A
+monopole and dipole fit of the pattern was tried first: a cabinet at ka ~ 2 needs more than
+first order, 1-4 dB off.)
+
 **The zero-frequency mode.** A pressure impulse is a step of volume velocity: a sealed room
 keeps the volume it was given, a pressure offset the walls' admittance doesn't drain (the
 scheme's second-order form). Real rooms leak; the response is high-passed at `HP_HZ`
@@ -110,8 +118,9 @@ class Voxels:
         return (np.asarray(p_m, float) - self.origin_m) / self.dx_m
 
 
-def voxelize(room, dx_m: float) -> Voxels:
-    """The room on a grid of spacing dx_m (the module docstring)."""
+def voxelize(room, dx_m: float, spheres: list | None = None) -> Voxels:
+    """The room on a grid of spacing dx_m (the module docstring); `spheres` [(centre, radius)]
+    cut out as rigid bodies (a directional source's)."""
     from varimu.rooms.shoebox import ROOM_MATERIALS
 
     room = poly_of(room)
@@ -138,6 +147,12 @@ def voxelize(room, dx_m: float) -> Voxels:
             pts = np.concatenate([xy, np.full(xy.shape[:2] + (1,), z)], axis=-1)
             q = (pts - b.center_m) @ b.axes
             inside[kz] &= ~np.all(np.abs(q) < 0.5 * (b.size_m + grown), axis=-1)
+    in_body = np.zeros_like(inside)
+    for c0, rad in spheres or []:
+        for kz, z in enumerate(zs):
+            q2 = (gx - c0[0]) ** 2 + (gy - c0[1]) ** 2 + (z - c0[2]) ** 2
+            in_body[kz] |= q2 < rad**2
+    inside &= ~in_body
     # neighbours in the room
     k = np.zeros(inside.shape, np.int8)
     shifts = []
@@ -197,7 +212,17 @@ def voxelize(room, dx_m: float) -> Voxels:
         if np.any(lost):  # no face crossed exactly (a corner): the nearest plane
             dist = np.abs(a[lost] @ normals.T - ds[None, :])
             best_f[lost] = np.argmin(dist, axis=1)
-        beta_links[np.flatnonzero(missing)] += beta_faces[best_f]
+        add = beta_faces[best_f]
+        if spheres:  # a link into a source's body: rigid
+            zz_m, yy_m, xx_m = zz[missing], yy[missing], xx[missing]
+            sh = {2: (0, 0, sgn), 1: (0, sgn, 0), 0: (sgn, 0, 0)}[ax]
+            nb_in_body = in_body[
+                np.clip(zz_m + sh[0], 0, nz - 1),
+                np.clip(yy_m + sh[1], 0, ny - 1),
+                np.clip(xx_m + sh[2], 0, nx - 1),
+            ]
+            add = np.where(nb_in_body[:, None], 0.0, add)
+        beta_links[np.flatnonzero(missing)] += add
     del nf
     return Voxels(
         dx_m,
@@ -261,6 +286,7 @@ def responses(
     length_s: float,
     backend: str | None = None,
     log=None,
+    directivity: list | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
     """The wave solver's spectra of every (source, mic, entry) on the n_fft-point grid at fs,
     up to the crossover's top, times its share (`crossover_weights` and the high-pass), and
@@ -323,8 +349,10 @@ def responses(
     mics_g = np.array([vox.grid_coords(mm.position_m) for mm in mics])
     out = np.zeros((len(sources_m), len(mics), 2, kmax), complex)
     nx, ny, _ = vox.dims
-    for si, src in enumerate(sources_m):
-        sg = vox.grid_coords(src)
+
+    def spread(p_m, scale):
+        """A point's injection over the 8 cells round it (trilinear)."""
+        sg = vox.grid_coords(p_m)
         base = np.floor(sg).astype(int)
         fr = sg - base
         idx, val = [], []
@@ -338,10 +366,29 @@ def responses(
                     )
                     cell = (base[0] + dxx) + nx * ((base[1] + dy) + ny * (base[2] + dz))
                     if vox.codes[cell] == 0:
-                        raise ValueError(f"a source at {list(src)} is too close to a wall")
+                        raise ValueError(f"a source at {list(p_m)} is too close to a wall")
                     idx.append(cell)
-                    val.append(4 * np.pi * lam**2 / (dx * t_step) * w)
-        far = max(np.linalg.norm(mm.position_m - np.asarray(src)) for mm in mics)
+                    val.append(scale * 4 * np.pi * lam**2 / (dx * t_step) * w)
+        return idx, val
+
+    room_vox = vox
+    for si, src in enumerate(sources_m):
+        src = np.asarray(src, float)
+        k_src = None
+        vox = room_vox
+        if directivity and directivity[si] is not None:
+            # the source's body in the grid, its cap driven (the module docstring)
+            dv, aim = directivity[si]
+            centre = src - dv.centre_offset_m * aim
+            vox = voxelize(room, dx, spheres=[(centre, dv.centre_offset_m)])
+            idx, val = cap_cells(vox, centre, dv.centre_offset_m, dv.cap_radius_m, aim, dx)
+            val = list(4 * np.pi * lam**2 / (dx * t_step) * np.asarray(val))
+            k_src = dv.onaxis_correction(np.maximum(f, 1e-3))
+            mics_g = np.array([vox.grid_coords(mm.position_m) for mm in mics])
+        else:
+            idx, val = spread(src, 1.0)
+            mics_g = np.array([room_vox.grid_coords(mm.position_m) for mm in mics])
+        far = max(np.linalg.norm(mm.position_m - src) for mm in mics) + 1.0
         for g in groups:
             rt = float(np.max(rt_s[g]))
             n_steps = int(min(1.2 * rt + far / c, length_s) / t_step)
@@ -357,17 +404,65 @@ def responses(
             env = 10 ** (-air * c * t_step * np.arange(n_steps) / 20)
             rec = rec * env[:, None, None]
             wsum = bw[g].sum(0)
-            for mi, mic in enumerate(mics):
-                p = rec[:, mi, 0]
-                gr = rec[:, mi, 1:] @ mic.aim / dx
+
+            def spectra(rc, mi, mic):
+                p = rc[:, mi, 0]
+                gr = rc[:, mi, 1:] @ mic.aim / dx
                 pf = t_step * np.fft.rfft(p, n_fft)[: kmax * m : m][:kmax]
                 gf = t_step * np.fft.rfft(gr, n_fft)[: kmax * m : m][:kmax] * grad_fix
+                return pf, gf
+
+            for mi, mic in enumerate(mics):
+                pf, gf = spectra(rec, mi, mic)
+                if k_src is not None:
+                    pf, gf = k_src * pf, k_src * gf
                 a, bb = fits[id(mic.table)]
                 for e in range(2):
                     out[si, mi, e] += wsum * (a[e] * pf + bb[e] * gf * inv_jk)
     if log:
         log(f"wave solver: {time.perf_counter() - t0:.1f} s")
     return out * share[None, None, None, :], xw
+
+
+def cap_cells(vox: Voxels, centre, radius_m: float, cap_m: float, aim, dx: float):
+    """A source body's cap: the room's cells next to the sphere (within 1.5 cells of its
+    surface) whose direction from the centre is within the cap's half-angle of the aim, equal
+    weights summing to 1; a cap smaller than that, the cell just in front of its centre
+    (trilinear)."""
+    half = np.arcsin(min(cap_m / radius_m, 1.0))
+    lo = vox.grid_coords(np.asarray(centre) - radius_m - 2 * dx).astype(int)
+    hi = vox.grid_coords(np.asarray(centre) + radius_m + 2 * dx).astype(int) + 1
+    nx, ny, nz = vox.dims
+    lo = np.maximum(lo, 0)
+    hi = np.minimum(hi, [nx - 1, ny - 1, nz - 1])
+    ii, jj, kk = np.meshgrid(*(np.arange(a, b + 1) for a, b in zip(lo, hi, strict=True)),
+                             indexing="ij")  # fmt: skip
+    pts = vox.origin_m + dx * np.stack([ii, jj, kk], -1).reshape(-1, 3)
+    cells = (ii + nx * (jj + ny * kk)).ravel()
+    v = pts - centre
+    r = np.linalg.norm(v, axis=1)
+    ang = np.arccos(np.clip((v @ aim) / np.maximum(r, 1e-12), -1, 1))
+    sel = (vox.codes[cells] > 0) & (r >= radius_m) & (r < radius_m + 1.5 * dx) & (ang <= half)
+    if sel.sum() >= 1 and half * radius_m >= dx:
+        c = cells[sel]
+        return list(c), list(np.full(len(c), 1.0 / len(c)))
+    # a small cap (a mouth): the point just in front of it, trilinear
+    p = np.asarray(centre) + (radius_m + 0.75 * dx) * np.asarray(aim)
+    sg = vox.grid_coords(p)
+    base = np.floor(sg).astype(int)
+    fr = sg - base
+    idx, val = [], []
+    for dz in (0, 1):
+        for dy in (0, 1):
+            for dxx in (0, 1):
+                w = ((fr[0] if dxx else 1 - fr[0]) * (fr[1] if dy else 1 - fr[1])
+                     * (fr[2] if dz else 1 - fr[2]))  # fmt: skip
+                cell = (base[0] + dxx) + nx * ((base[1] + dy) + ny * (base[2] + dz))
+                if vox.codes[cell] > 0:
+                    idx.append(cell)
+                    val.append(w)
+    tot = sum(val)
+    return idx, [v / tot for v in val]
 
 
 def run_band(vox: Voxels, lam: float, beta_links_b: np.ndarray, inject, mics_g, n_steps, b):

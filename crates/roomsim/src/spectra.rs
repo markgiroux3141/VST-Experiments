@@ -66,7 +66,11 @@ impl ImageSpectra {
         if log2 > MAX_LOG2_N {
             return Err(format!("n_fft 2^{log2}: at most 2^{MAX_LOG2_N}"));
         }
-        if self.coarse.len() % (self.n_ent * self.n_grid).max(1) != 0 {
+        if !self
+            .coarse
+            .len()
+            .is_multiple_of((self.n_ent * self.n_grid).max(1))
+        {
             return Err("coarse: spectra x entries x grid".into());
         }
         if self.spec_index.is_empty() {
@@ -308,7 +312,7 @@ mod tests {
         let mut own = case(2, 12);
         let sz = own.n_ent * own.n_grid;
         let first: Vec<[f64; 2]> = own.coarse[..sz].to_vec();
-        own.coarse = first.iter().chain(first.iter()).map(|c| *c).collect();
+        own.coarse = first.iter().chain(first.iter()).copied().collect();
         for c in own.coarse[sz..].iter_mut() {
             c[0] *= -0.5;
             c[1] *= -0.5;

@@ -590,6 +590,7 @@ def ray_decay(
     receivers: list[np.ndarray] | None = None,
     radius_m: float = RECEIVER_RADIUS_M,
     backend: str | None = None,
+    weights: np.ndarray | None = None,
 ):
     """The fraction of emitted energy still travelling, per band, on a grid of 1 / fs_env:
     (t (T,), e (bands, T)), from ray tracing (the module docstring). With `receivers`, also
@@ -600,7 +601,8 @@ def ray_decay(
 
     `backend` (varimu.rooms.gpu; default its `backend()`): "numpy" is this function's own
     loop below, "gpu" / "cpu" crates/roomsim's port (the same physics, its own random
-    numbers: the results agree in their statistics, ROOM_LOOP_PLAN.md R9)."""
+    numbers: the results agree in their statistics, ROOM_LOOP_PLAN.md R9). `weights` (rays,
+    bands): each ray's starting energy (a directional source; default 1)."""
     from varimu.rooms import gpu
     from varimu.rooms.shoebox import ROOM_MATERIALS, fibonacci_sphere
 
@@ -609,7 +611,9 @@ def ray_decay(
     b = gpu.resolve(backend)
     if b != "numpy":
         rx = np.zeros((0, 3)) if receivers is None else receivers
-        trav, dens = gpu.ray_trace(room, source, dirs, rx, t_max_s, fs_env, radius_m, c, seed, b)
+        trav, dens = gpu.ray_trace(
+            room, source, dirs, rx, t_max_s, fs_env, radius_m, c, seed, b, weights
+        )
         nt = trav.shape[1]
         t = np.arange(nt) / fs_env
         air = air_absorption_db_per_m(BANDS_HZ, room.temp_c, room.rh_percent)
@@ -624,7 +628,7 @@ def ray_decay(
     alpha = np.array([ROOM_MATERIALS[room.material(f)] for f in room.faces])  # (F, B)
     scat = np.array([SCATTERING.get(room.material(f), 0.1) for f in room.faces])
     nb = len(BANDS_HZ)
-    energy = np.ones((n_rays, nb))
+    energy = np.ones((n_rays, nb)) if weights is None else np.array(weights, float)
     t_now = np.zeros(n_rays)
     nt = int(t_max_s * fs_env) + 1
     acc = np.zeros((nb, nt + 1))  # energy leaving at each time (a step down)

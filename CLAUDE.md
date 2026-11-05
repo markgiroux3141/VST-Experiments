@@ -493,9 +493,31 @@ session track per mic, panned (`SessionView::add_room_tracks`); scene per sessio
 2026-11-04): `varimu/rooms/polyroom.py` (a floor polygon, a flat / shed / gable / vault
 ceiling; image sources to 4 reflections validated per mic, the tail's level and decay
 ray-traced, 4 pi c e(t) / V, shaped per mic by the rays counted at it); scenes with `floor_m` use it (the Room view's Shape and Ceiling,
-corners dragged), `dims_m` keeps the shoebox; `scripts/room_demo.py` -> reports/rooms/demo/. **Next** (agreed, not started): ROOM_LOOP_PLAN.md
-R7-R11 (a material per wall, R5 on polyroom, the GPU for rays and reflections, the wave
-solver below a crossover, objects with edge diffraction).
+corners dragged), `dims_m` keeps the shoebox; `scripts/room_demo.py` -> reports/rooms/demo/.
+**R7-R11 built (2026-11-05, overnight, the user delegating; ROOM_LOOP_PLAN.md "Status
+(2026-11-05)"):** R7 a material per face (`materials.faces: {"wall N", "ceiling N", floor}`,
+"wall N" from the plan's corner N as given; the Room view picks a wall on the plan); R8 R5 on
+polyroom (`room_separation.py --room poly [--wave HZ]`: cells move <= 1.3 dB, conclusions
+stand); R9 **crates/roomsim**, the project's first GPU code (wgpu, Vulkan on the 3080, an f64
+CPU reference per kernel; Python `roomsim` in the `fast` extra, `varimu.rooms.gpu` picks gpu /
+cpu / numpy, `$VARIMU_ROOM_BACKEND`, a stale build refused like circuitsim's): ray tracing
+(64-bit fixed-point sums: bit-identical runs) and the image sources' spectra, 20-50x faster;
+R10 the **wave solver** (`varimu/rooms/wave.py`, roomsim's `fdtd`: Bilbao's finite-volume
+rectilinear scheme on the voxelized room, one run per octave band under the crossover with
+that band's admittance, capsule entries to first order from their tables, blended amplitude-
+then power-complementary; a scene's `settings.wave_crossover_hz`, `room_print.py --wave`, the
+Room view's "Wave solver", 500 Hz for new scenes; ~6.5 s per source at 500 Hz in 123 m^3, x16
+per doubling); R11 **objects** (oriented boxes in `room.objects`, a gobo a thin one: image
+sources to order 2, occlusion, rays, the grid) with **first-order BTM edge diffraction**
+(`varimu/rooms/diffraction.py`: objects' edges, a plan's reflex corners; on the GPU as
+micro-images sharing a spectrum); the Room view's OBJECTS. **Directional sources** (from the
+plan's "Later", the same night): `varimu/rooms/directivity.py`, a cap on a sphere (presets
+voice, amp_1x12, amp_2x12, bass_1x15; a scene source's `directivity` and `aim`; on-axis
+normalized), images and diffraction weighted in their emission directions, rays started with
+|D|^2, the wave solver with the source's body in its grid. Demos: `scripts/room_wave_demo.py`
+-> reports/rooms/wave_demo/, `scripts/room_gobo_demo.py` -> reports/rooms/gobo_demo/,
+`scripts/room_source_demo.py` -> reports/rooms/source_demo/, `room_demo.py --wave 500 --out
+reports/rooms/demo_wave` (READMEs there). Open: the user listens; the Room view's new controls are tested but not seen on screen.
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
@@ -979,7 +1001,10 @@ cargo run --release -p varimu-app -- --component OT_5E3   # C2 step 7: the Compo
 cargo run --release -p varimu-app -- --room   # the Room view: sources and mics placed in a room, rendered into session tracks (docs/ROOM_LOOP_PLAN.md)
 uv run --extra fast python scripts/room_print.py config/scenes/NAME.yaml [--solo] [--quality draft]   # a scene recorded through its mics -> reports/rooms/<scene>/
 uv run --extra fast --extra listen python scripts/room_demo.py [--only ROOM ...]   # R6: one performance in five rooms -> reports/rooms/demo/
-uv run --extra fast --extra listen python scripts/room_separation.py [--render-only | --analyse-only]   # R5: the room separation experiment -> reports/rooms/separation/
+uv run --extra fast --extra listen python scripts/room_separation.py [--render-only | --analyse-only] [--room poly [--wave HZ]]   # R5 (R8: on polyroom) -> reports/rooms/separation/
+uv run --extra fast --extra listen python scripts/room_wave_demo.py [--only VARIANT ...] [--crossover 500]   # R7 / R10: the wave solver off / on, a dead front wall -> reports/rooms/wave_demo/
+uv run --extra fast --extra listen python scripts/room_gobo_demo.py   # R11: two players without / with a gobo, live and treated -> reports/rooms/gobo_demo/
+cargo test -p roomsim --release   # R9-R11: the GPU kernels against their f64 CPU references (skip without a GPU)
 uv run --extra listen --with sounddevice python scripts/separation_listen.py --room   # its staircase on headphones
 uv run python scripts/compose_chain.py --mic omni_4134 --pre clean_pre [--check]   # the opposite chain -> config/circuits/omni_clean.yaml
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
@@ -1331,6 +1356,12 @@ tests skip when ngspice is missing.
   states) took Play's draft-2x from 0.48x to 1.61x real time with the same Newton work
   (COMPONENT_EDITOR_PLAN.md, C3's status). Measure `examples/load_profile.rs` before and
   after adding networks to a played circuit.
+- **roomsim builds like circuitsim (2026-11-05).** `uv run --extra fast ...` rebuilds it after a
+  change to `crates/roomsim/src/**/*.rs` or `*.wgsl` (its `cache-keys`); plain `uv run` keeps the
+  installed build and `varimu.rooms.gpu` raises StaleBuild. The GPU's ray sums are exact (fixed
+  point); its spectra and fields are f32 (agreement with the f64 references in its tests). A
+  sealed room keeps a pressure offset after an impulse (the wave solver's zero-frequency mode):
+  compare its fields on first differences, renders high-pass it at 15 Hz.
 - **Rust-only engine changes don't move the caches (found 2026-11-02).** The render cache
   key and the tape alignment's (`runner.code_version`) hash varimu's Python, not
   `circuitsim.SOURCE_HASH`: after a circuitsim edit, delete the affected entries in

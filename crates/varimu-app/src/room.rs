@@ -239,9 +239,164 @@ pub struct RoomSource {
     pub name: String,
     /// The session track whose active take plays here.
     pub track: String,
-    /// Its rms in dB SPL 1 m away in free field.
+    /// Its rms in dB SPL 1 m away in free field (on its axis).
     pub spl_db: f64,
     pub pos: [f64; 3],
+    /// How it radiates (`DIRECTIVITIES`: varimu/rooms/directivity.py's presets).
+    pub directivity: String,
+    /// Where it faces: counterclockwise from +x, and up.
+    pub azimuth_deg: f64,
+    pub elevation_deg: f64,
+}
+
+/// A source's patterns (id, label): a cap on a sphere (varimu/rooms/directivity.py PRESETS).
+pub const DIRECTIVITIES: &[(&str, &str)] = &[
+    ("omni", "omni"),
+    ("voice", "voice (a head)"),
+    ("amp_1x12", "amp 1x12"),
+    ("amp_2x12", "amp 2x12"),
+    ("bass_1x15", "bass cab 1x15"),
+];
+
+impl RoomSource {
+    pub fn new(name: &str, track: &str, spl_db: f64, pos: [f64; 3]) -> RoomSource {
+        RoomSource {
+            name: name.to_string(),
+            track: track.to_string(),
+            spl_db,
+            pos,
+            directivity: "omni".to_string(),
+            azimuth_deg: 0.0,
+            elevation_deg: 0.0,
+        }
+    }
+
+    pub fn directional(&self) -> bool {
+        self.directivity != "omni"
+    }
+
+    /// Face a floor-plan position.
+    pub fn aim_at(&mut self, x: f64, y: f64) {
+        let (dx, dy) = (x - self.pos[0], y - self.pos[1]);
+        if dx.hypot(dy) > 1e-9 {
+            self.azimuth_deg = dy.atan2(dx).to_degrees();
+        }
+    }
+}
+
+/// An object in the room (ROOM_LOOP_PLAN.md R11; varimu/rooms/polyroom.py's boxes): a box
+/// `size` (width, depth, height) about `center`, turned `yaw_deg` about the vertical and
+/// tilted `tilt_deg` about its width axis, of one surface. A gobo is a thin one.
+#[derive(Clone, PartialEq, Debug)]
+pub struct RoomObject {
+    pub name: String,
+    pub center: [f64; 3],
+    pub size: [f64; 3],
+    pub yaw_deg: f64,
+    pub tilt_deg: f64,
+    pub material: String,
+}
+
+/// The objects offered: (label, name prefix, size, centre height, surface).
+pub const OBJECT_KINDS: &[(&str, &str, [f64; 3], f64, &str)] = &[
+    ("Gobo", "Gobo", [1.2, 0.08, 1.8], 0.9, "heavy_drapes"),
+    ("Riser", "Riser", [1.8, 1.2, 0.3], 0.15, "wood_floor"),
+    (
+        "Cabinet",
+        "Cabinet",
+        [0.6, 0.45, 1.0],
+        0.5,
+        "gypsum_on_studs",
+    ),
+];
+
+impl RoomObject {
+    /// The box's axes (width, depth, height) after yaw and tilt.
+    pub fn axes(&self) -> [[f64; 3]; 3] {
+        let (y, t) = (self.yaw_deg.to_radians(), self.tilt_deg.to_radians());
+        let (cy, sy, ct, st) = (y.cos(), y.sin(), t.cos(), t.sin());
+        // Rz(yaw) Rx(tilt), columns
+        [
+            [cy, sy, 0.0],
+            [-sy * ct, cy * ct, st],
+            [sy * st, -cy * st, ct],
+        ]
+    }
+
+    /// The 8 corners.
+    pub fn corners(&self) -> Vec<[f64; 3]> {
+        let ax = self.axes();
+        let mut out = Vec::new();
+        for a in [-0.5, 0.5] {
+            for b in [-0.5, 0.5] {
+                for c in [-0.5, 0.5] {
+                    let k = [a * self.size[0], b * self.size[1], c * self.size[2]];
+                    out.push(std::array::from_fn(|i| {
+                        self.center[i] + k[0] * ax[0][i] + k[1] * ax[1][i] + k[2] * ax[2][i]
+                    }));
+                }
+            }
+        }
+        out
+    }
+
+    /// Its outline seen from above (the convex hull of its corners).
+    pub fn footprint(&self) -> Vec<[f64; 2]> {
+        let mut pts: Vec<[f64; 2]> = self.corners().iter().map(|c| [c[0], c[1]]).collect();
+        pts.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
+        pts.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-12 && (a[1] - b[1]).abs() < 1e-12);
+        if pts.len() < 3 {
+            return pts;
+        }
+        let cross = |o: [f64; 2], a: [f64; 2], b: [f64; 2]| {
+            (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+        };
+        let mut hull: Vec<[f64; 2]> = Vec::new();
+        for pass in 0..2 {
+            let start = hull.len();
+            let it: Box<dyn Iterator<Item = &[f64; 2]>> = if pass == 0 {
+                Box::new(pts.iter())
+            } else {
+                Box::new(pts.iter().rev())
+            };
+            for &p in it {
+                while hull.len() >= start + 2
+                    && cross(hull[hull.len() - 2], hull[hull.len() - 1], p) <= 0.0
+                {
+                    hull.pop();
+                }
+                hull.push(p);
+            }
+            hull.pop();
+        }
+        hull
+    }
+
+    /// Whether a point is inside the box.
+    pub fn contains(&self, p: &[f64; 3]) -> bool {
+        let ax = self.axes();
+        let q: [f64; 3] = std::array::from_fn(|i| p[i] - self.center[i]);
+        (0..3).all(|k| {
+            let d = q[0] * ax[k][0] + q[1] * ax[k][1] + q[2] * ax[k][2];
+            d.abs() < 0.5 * self.size[k]
+        })
+    }
+
+    fn json(&self) -> Value {
+        json!({"name": self.name, "center_m": self.center, "size_m": self.size,
+               "yaw_deg": self.yaw_deg, "tilt_deg": self.tilt_deg, "material": self.material})
+    }
+
+    fn from_json(v: &Value) -> RoomObject {
+        RoomObject {
+            name: st(v, "name", "object"),
+            center: s3(&v["center_m"]),
+            size: s3(&v["size_m"]),
+            yaw_deg: f(v, "yaw_deg", 0.0),
+            tilt_deg: f(v, "tilt_deg", 0.0),
+            material: st(v, "material", "furnished_wall"),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -312,6 +467,8 @@ pub struct Scene {
     pub faces: BTreeMap<String, String>,
     pub sources: Vec<RoomSource>,
     pub mics: Vec<RoomMic>,
+    /// Objects in the room (R11): gobos, risers, cabinets.
+    pub objects: Vec<RoomObject>,
     pub quality: String,
     /// The wave solver below this (Hz), 0 = off. New scenes 500; scenes saved before it
     /// existed load as off (they render as they did).
@@ -331,6 +488,7 @@ impl Default for Scene {
             faces: BTreeMap::new(),
             sources: Vec::new(),
             mics: Vec::new(),
+            objects: Vec::new(),
             quality: "production".to_string(),
             wave_hz: 500.0,
         }
@@ -524,9 +682,12 @@ impl Scene {
         self.profile().iter().map(|k| k.1).fold(0.0, f64::max)
     }
 
-    /// Whether a point is inside the room.
+    /// Whether a point is inside the room (and in none of its objects).
     pub fn inside(&self, p: &[f64; 3]) -> bool {
-        in_polygon(&self.plan, p[0], p[1]) && p[2] > 0.0 && p[2] < self.height_at(p[0], p[1])
+        in_polygon(&self.plan, p[0], p[1])
+            && p[2] > 0.0
+            && p[2] < self.height_at(p[0], p[1])
+            && !self.objects.iter().any(|o| o.contains(p))
     }
 
     /// The editor's state (what `<session>/rooms/<name>.json` holds: sources by track id).
@@ -542,8 +703,11 @@ impl Scene {
             "faces": self.faces,
             "quality": self.quality,
             "wave_hz": self.wave_hz,
+            "objects": self.objects.iter().map(RoomObject::json).collect::<Vec<_>>(),
             "sources": self.sources.iter().map(|s| json!({
                 "name": s.name, "track": s.track, "spl_db": s.spl_db, "position_m": s.pos,
+                "directivity": s.directivity, "azimuth_deg": s.azimuth_deg,
+                "elevation_deg": s.elevation_deg,
             })).collect::<Vec<_>>(),
             "mics": self.mics.iter().map(|m| json!({
                 "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
@@ -603,6 +767,10 @@ impl Scene {
                 .unwrap_or_default(),
             quality: st(v, "quality", &d.quality),
             wave_hz: f(v, "wave_hz", 0.0),
+            objects: v["objects"]
+                .as_array()
+                .map(|a| a.iter().map(RoomObject::from_json).collect())
+                .unwrap_or_default(),
             sources: v["sources"]
                 .as_array()
                 .map(|a| {
@@ -612,6 +780,9 @@ impl Scene {
                             track: st(s, "track", ""),
                             spl_db: f(s, "spl_db", 90.0),
                             pos: s3(&s["position_m"]),
+                            directivity: st(s, "directivity", "omni"),
+                            azimuth_deg: f(s, "azimuth_deg", 0.0),
+                            elevation_deg: f(s, "elevation_deg", 0.0),
                         })
                         .collect()
                 })
@@ -650,21 +821,32 @@ impl Scene {
         if !faces.is_empty() {
             materials["faces"] = json!(faces);
         }
+        let mut room = json!({
+            "floor_m": self.plan,
+            "ceiling": {"type": self.roof.kind, "height_m": self.roof.height,
+                        "peak_m": self.roof.peak, "axis_deg": self.roof.axis_deg,
+                        "facets": self.roof.facets},
+            "materials": materials,
+            "source": "the Room view (docs/ROOM_LOOP_PLAN.md)",
+        });
+        if !self.objects.is_empty() {
+            room["objects"] = json!(
+                self.objects
+                    .iter()
+                    .map(RoomObject::json)
+                    .collect::<Vec<_>>()
+            );
+        }
         json!({
             "name": self.name,
-            "room": {
-                "floor_m": self.plan,
-                "ceiling": {"type": self.roof.kind, "height_m": self.roof.height,
-                            "peak_m": self.roof.peak, "axis_deg": self.roof.axis_deg,
-                            "facets": self.roof.facets},
-                "materials": materials,
-                "source": "the Room view (docs/ROOM_LOOP_PLAN.md)",
-            },
+            "room": room,
             "sources": self.sources.iter().map(|s| json!({
                 "name": s.name,
                 "clip": clips.get(&s.name).map(|p| p.to_string_lossy().to_string()),
                 "spl_db": s.spl_db,
                 "position_m": s.pos,
+                "directivity": s.directivity,
+                "aim": {"azimuth_deg": s.azimuth_deg, "elevation_deg": s.elevation_deg},
             })).collect::<Vec<_>>(),
             "mics": self.mics.iter().map(|m| json!({
                 "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
@@ -711,6 +893,22 @@ impl Scene {
         }
         let inside = |p: &[f64; 3]| self.inside(p);
         let mut names = std::collections::HashSet::new();
+        for o in &self.objects {
+            if o.size.iter().any(|x| *x <= 0.0) {
+                out.push(format!("{} needs a size", o.name));
+            }
+            let in_room = o.corners().iter().all(|c| {
+                in_polygon(&self.plan, c[0], c[1])
+                    && c[2] >= -1e-9
+                    && c[2] <= self.height_at(c[0], c[1]) + 1e-9
+            });
+            if !in_room {
+                out.push(format!("{} sticks out of the room", o.name));
+            }
+            if !names.insert(o.name.clone()) {
+                out.push(format!("two items are called {}", o.name));
+            }
+        }
         for s in &self.sources {
             if !inside(&s.pos) {
                 out.push(format!("{} is outside the room", s.name));
@@ -895,12 +1093,8 @@ mod tests {
 
     fn scene() -> Scene {
         let mut s = Scene::default();
-        s.sources.push(RoomSource {
-            name: "A".into(),
-            track: "k1".into(),
-            spl_db: 90.0,
-            pos: [2.0, 2.5, 1.3],
-        });
+        s.sources
+            .push(RoomSource::new("A", "k1", 90.0, [2.0, 2.5, 1.3]));
         let mut m = RoomMic::new("Mic 1", "u47_v76", [2.3, 2.5, 1.3], 0.0);
         m.aim_at(2.0, 2.5);
         s.mics.push(m);
@@ -969,11 +1163,51 @@ mod tests {
         assert_eq!(v["room"]["ceiling"]["type"], "flat");
         assert_eq!(v["mics"][0]["aim"]["azimuth_deg"], 180.0);
         assert_eq!(v["mics"][0]["set"]["pattern_u47"], 0.0);
+        assert_eq!(v["sources"][0]["directivity"], "omni");
+        let mut d = s.clone();
+        d.sources[0].directivity = "amp_1x12".into();
+        d.sources[0].aim_at(2.0, 4.5);
+        assert!((d.sources[0].azimuth_deg - 90.0).abs() < 1e-9);
+        assert_eq!(Scene::from_state(&d.state()), d);
+        assert_eq!(
+            d.render_json(&clips)["sources"][0]["aim"]["azimuth_deg"],
+            90.0
+        );
         assert!(v["room"]["materials"].get("faces").is_none());
         assert_eq!(v["settings"]["wave_crossover_hz"], 500.0);
         let old = Scene::from_state(&json!({"name": "x", "dims_m": [5.0, 4.0, 2.6]}));
         assert_eq!(old.wave_hz, 0.0);
         assert!(old.render_json(&clips)["settings"]["wave_crossover_hz"].is_null());
+    }
+
+    #[test]
+    fn objects_round_trip_and_keep_things_out() {
+        let mut s = scene();
+        let (_, prefix, size, z, mat) = OBJECT_KINDS[0];
+        s.objects.push(RoomObject {
+            name: format!("{prefix} 1"),
+            center: [3.5, 2.5, z],
+            size,
+            yaw_deg: 90.0,
+            tilt_deg: 0.0,
+            material: mat.to_string(),
+        });
+        assert_eq!(Scene::from_state(&s.state()), s);
+        assert!(!s.inside(&[3.5, 2.5, 1.0]) && s.inside(&[3.5, 3.5, 1.0]));
+        let fp = s.objects[0].footprint();
+        assert_eq!(fp.len(), 4);
+        let xs: Vec<f64> = fp.iter().map(|p| p[0]).collect();
+        let w = xs.iter().cloned().fold(f64::MIN, f64::max)
+            - xs.iter().cloned().fold(f64::MAX, f64::min);
+        assert!(
+            (w - 0.08).abs() < 1e-9,
+            "turned 90 degrees, its thickness lies along x"
+        );
+        let v = s.render_json(&BTreeMap::new());
+        assert_eq!(v["room"]["objects"][0]["size_m"][1], 0.08);
+        assert!(s.problems().is_empty(), "{:?}", s.problems());
+        s.objects[0].center[2] = 3.0;
+        assert!(s.problems().iter().any(|p| p.contains("sticks out")));
     }
 
     #[test]

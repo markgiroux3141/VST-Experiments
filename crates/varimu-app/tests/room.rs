@@ -35,12 +35,9 @@ fn a_scene_renders_into_mic_prints() {
         quality: "draft".into(),
         ..Scene::default()
     };
-    scene.sources.push(RoomSource {
-        name: "A".into(),
-        track: "k".into(),
-        spl_db: 94.0,
-        pos: [1.5, 1.5, 1.2],
-    });
+    scene
+        .sources
+        .push(RoomSource::new("A", "k", 94.0, [1.5, 1.5, 1.2]));
     for (name, chain, x) in [("near", "u47_v76", 1.8), ("far", "omni_clean", 3.2)] {
         let mut m = RoomMic::new(name, chain, [x, 1.5, 1.2], 0.0);
         m.aim_at(1.5, 1.5);

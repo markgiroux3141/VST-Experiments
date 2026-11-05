@@ -2,7 +2,10 @@
 in four rooms through the same mics -> reports/rooms/demo/.
 
     uv run --extra fast --extra listen python scripts/room_demo.py [--seconds 20]
-        [--only ROOM ...] [--stems DIR]
+        [--only ROOM ...] [--stems DIR] [--wave HZ --out DIR]
+
+`--wave HZ` puts the wave solver under HZ (ROOM_LOOP_PLAN.md R10; e.g. --wave 500 --out
+reports/rooms/demo_wave: the same rooms with their modes, beside reports/rooms/demo/).
 
 The performance: David Tyo's "Long Way Home" (Cambridge-MT multitrack, the user's copy;
 educational use, never committed): the lead vocal, an acoustic guitar and the piano, from
@@ -219,7 +222,12 @@ def main() -> None:
     ap.add_argument("--only", nargs="*")
     ap.add_argument("--stems", type=Path, default=STEMS)
     ap.add_argument("--readme", action="store_true", help="only rewrite README.md")
+    ap.add_argument("--wave", type=float, help="the wave solver below this (Hz)")
+    ap.add_argument("--out", type=Path, help="the output folder (default reports/rooms/demo)")
     args = ap.parse_args()
+    global OUT
+    if args.out:
+        OUT = args.out if args.out.is_absolute() else REPO_ROOT / args.out
     if args.readme:
         write_readme(json.loads((OUT / "demo.json").read_text()))
         return
@@ -259,8 +267,9 @@ def main() -> None:
                 for s in sources
             ],  # fmt: skip
             "mics": mics,
-            "settings": {"quality": "production", "seed": 0},
-        }
+            "settings": {"quality": "production", "seed": 0,
+                         "wave_crossover_hz": args.wave},
+        }  # fmt: skip
         d = OUT / name
         print("render", name, flush=True)
         res = render(load_scene(scene), d, log=lambda s: None)

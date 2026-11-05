@@ -578,3 +578,121 @@ def test_diffraction_on_the_gpu_is_numpys():
     g = responses(room, src, mics, FS, length_s=0.05, tail=False, backend="gpu")
     err = np.sqrt(np.sum((a - g) ** 2) / np.sum(a**2))
     assert 20 * np.log10(err) < -100
+
+
+def test_wave_solver_and_diffraction_agree_behind_a_gobo():
+    """Behind a gobo the geometric model (images, rays and the gobo's diffracting edges) and
+    the wave solver agree below the crossover: the first 25 ms (direct and diffracted sound,
+    first reflections), third octaves 200-315 Hz, within 4 dB (first-order diffraction round
+    a finite panel), and their sum over those bands within 2 dB."""
+    from varimu.rooms import wave
+    from varimu.rooms.polyroom import PolyRoom
+
+    b = _wave_or_skip()
+    gobo = {"center_m": [3.5, 2.75, 1.0], "size_m": [1.6, 0.08, 2.0], "yaw_deg": 90,
+            "material": "heavy_drapes"}  # fmt: skip
+    room = PolyRoom(RECT, "flat", 3.2, objects=[gobo])
+    src, mic = np.array([2.2, 2.75, 1.2]), np.array([4.8, 2.9, 1.2])
+    mics = [Mic(mic, aim_vector(180), _omni())]
+    n_fft = 1 << 17
+    geo = responses(room, [src], mics, FS, length_s=0.3, tail=False, backend=b)[0, 0, 0]
+    low, xw = wave.responses(room, [src], mics, FS, n_fft, crossover_hz=500,
+                             rt_s=np.full(7, 0.2), length_s=0.3, backend=b)  # fmt: skip
+    f = np.fft.rfftfreq(n_fft, 1 / FS)
+    ne = int(0.025 * FS)
+    g = np.abs(np.fft.rfft(geo[:ne], n_fft)) ** 2
+    w_t = np.fft.irfft(np.r_[low[0, 0, 0], np.zeros(n_fft // 2 + 1 - len(xw))], n_fft)
+    w = np.abs(np.fft.rfft(w_t[:ne], n_fft)) ** 2
+    lv = []
+    for fc in (200.0, 250.0, 315.0):
+        sel = (f >= fc / 2 ** (1 / 6)) & (f < fc * 2 ** (1 / 6))
+        lv.append((10 * np.log10(g[sel].sum()), 10 * np.log10(w[sel].sum())))
+    lv = np.array(lv)
+    assert np.all(np.abs(lv[:, 0] - lv[:, 1]) < 4), lv
+    tot = 10 * np.log10((10 ** (lv / 10)).sum(0))
+    assert abs(tot[0] - tot[1]) < 2, tot
+
+
+# --- directional sources (docs/ROOM_LOOP_PLAN.md "Later": a source's directivity) ---
+
+
+def test_cap_on_sphere_is_omni_when_small_and_beams_when_large():
+    from varimu.rooms.directivity import PRESETS, cap_on_sphere, directivity, from_spec
+
+    d = cap_on_sphere([20.0], [1.0, 0.0, -1.0], 0.05, 0.02)
+    assert np.allclose(np.abs(d), 1, atol=1e-3)
+    voice = directivity(*PRESETS["voice"])
+    rear = 20 * np.log10(np.abs(voice.at([4000.0], [-1.0])[0, 0]))
+    assert -12 < rear < -5  # a voice ~8 dB down behind the head at 4 kHz
+    amp = directivity(*PRESETS["amp_1x12"])
+    assert 20 * np.log10(np.abs(amp.at([2000.0], [np.cos(np.pi / 4)])[0, 0])) < -10  # beaming
+    assert np.all(amp.power_factor([125.0, 1000.0, 4000.0]) < 1)
+    assert from_spec("omni") is None and from_spec(None) is None
+    with pytest.raises(ValueError):
+        from_spec("trumpet")
+
+
+def test_a_directional_source_turned_away_is_quieter_by_its_pattern():
+    """In an anechoic room an amp turned away from the mic is down by its D(180) (paths traced
+    from the cone with the far-field pattern)."""
+    from varimu.rooms.directivity import PRESETS, directivity
+    from varimu.rooms.polyroom import PolyRoom
+
+    b = _wave_or_skip()
+    d = directivity(*PRESETS["amp_1x12"])
+    room = PolyRoom([[0, 0], [10, 0], [10, 10], [0, 10]], "flat", 6.0, None, 0.0, 8,
+                    "anechoic", "anechoic", "anechoic")  # fmt: skip
+    mic = Mic(np.array([7.0, 5.0, 1.5]), aim_vector(180), _omni())
+    lv = []
+    for az in (0.0, 180.0):
+        h = responses(room, [np.array([5.0, 5.0, 1.5])], [mic], FS, length_s=0.03, tail=False,
+                      backend=b, directivity=[(d, aim_vector(az))])[0, 0, 0]  # fmt: skip
+        spec = np.abs(np.fft.rfft(h, 1 << 17))
+        f = np.fft.rfftfreq(1 << 17, 1 / FS)
+        lv.append([20 * np.log10(np.interp(fc, f, spec)) for fc in (200.0, 500.0, 1000.0, 2000.0)])
+    want = 20 * np.log10(np.abs(d.at([200.0, 500.0, 1000.0, 2000.0], [-1.0])[0]))
+    assert np.allclose(np.array(lv[1]) - np.array(lv[0]), want, atol=0.3)
+
+
+def test_the_wave_solvers_source_body_has_the_exact_near_field():
+    """The wave solver puts a directional source's body in its grid: front and rear of an amp
+    at 2.25 m from its centre, the ratio within 1 dB of the exact series of a cap on a sphere
+    (near field included) at 80-250 Hz."""
+    from scipy.special import eval_legendre, spherical_jn, spherical_yn
+
+    from varimu.rooms import wave
+    from varimu.rooms.directivity import PRESETS, directivity
+    from varimu.rooms.polyroom import PolyRoom
+
+    b = _wave_or_skip()
+    a, cap = PRESETS["amp_1x12"]
+    d = directivity(a, cap)
+    x0 = np.cos(np.arcsin(cap / a))
+
+    def exact(f, r, cos_t):
+        z, kr = 2 * np.pi * f * a / 343.2, 2 * np.pi * f * r / 343.2
+        n = np.arange(int(z + 20))
+        u = np.r_[(1 - x0) / 2, 0.5 * (eval_legendre(n[1:] - 1, x0) - eval_legendre(n[1:] + 1, x0))]
+        hp = spherical_jn(n, z, derivative=True) - 1j * spherical_yn(n, z, derivative=True)
+        h = spherical_jn(n, kr) - 1j * spherical_yn(n, kr)
+        return np.sum(u * h / hp * eval_legendre(n, cos_t))
+
+    room = PolyRoom([[0, 0], [16, 0], [16, 16], [0, 16]], "flat", 12.0, None, 0.0, 8,
+                    "heavy_drapes", "heavy_drapes", "heavy_drapes")  # fmt: skip
+    cap_pos = np.array([8.0, 8.0, 6.0])
+    centre = cap_pos - a * np.array([1.0, 0, 0])
+    r = 2.25
+    mics = [Mic(centre + np.array([r, 0, 0]), aim_vector(180), _omni()),
+            Mic(centre - np.array([r, 0, 0]), aim_vector(0), _omni())]  # fmt: skip
+    n_fft = 1 << 17
+    low, xw = wave.responses(room, [cap_pos], mics, FS, n_fft, crossover_hz=250,
+                             rt_s=np.full(7, 0.1), length_s=0.06, backend=b,
+                             directivity=[(d, np.array([1.0, 0, 0]))])  # fmt: skip
+    pad = np.zeros(n_fft // 2 + 1 - len(xw))
+    ts = [np.fft.irfft(np.r_[low[0, i, 0], pad], n_fft)[: int(0.03 * FS)] for i in range(2)]
+    f = np.fft.rfftfreq(n_fft, 1 / FS)
+    for fc in (80.0, 125.0, 200.0, 250.0):
+        sel = (f >= fc / 2 ** (1 / 6)) & (f < fc * 2 ** (1 / 6))
+        e = [10 * np.log10((np.abs(np.fft.rfft(t, n_fft)[sel]) ** 2).sum()) for t in ts]
+        ex = 20 * np.log10(abs(exact(fc, r, -1.0)) / abs(exact(fc, r, 1.0)))
+        assert abs((e[1] - e[0]) - ex) < 1.0, (fc, e[1] - e[0], ex)

@@ -97,8 +97,9 @@ def resolve(b: str | None) -> str:
     return b
 
 
-def ray_trace(room, source, dirs, receivers, t_max_s, fs_env, radius_m, c, seed, b):
-    """roomsim.ray_trace on a PolyRoom: (travelling (bands, nt), density (rx, bands, nt))."""
+def ray_trace(room, source, dirs, receivers, t_max_s, fs_env, radius_m, c, seed, b, weights=None):
+    """roomsim.ray_trace on a PolyRoom: (travelling (bands, nt), density (rx, bands, nt));
+    `weights` (rays, bands) each ray's starting energy (a directional source)."""
     from varimu.rooms.shoebox import ROOM_MATERIALS
 
     tris, tri_face = room.triangles()
@@ -124,6 +125,7 @@ def ray_trace(room, source, dirs, receivers, t_max_s, fs_env, radius_m, c, seed,
         float(c),
         int(seed) & 0xFFFFFFFF,
         backend=b,
+        weights=None if weights is None else np.ascontiguousarray(weights, float).ravel(),
     )
     nb = alpha.shape[1]
     return np.asarray(trav).reshape(nb, nt), np.asarray(dens).reshape(len(rx), nb, nt)

@@ -33,7 +33,8 @@ fn gpu_info(py: Python<'_>) -> PyResult<String> {
 /// density (R x 7 x nt), nt), flat.
 #[pyfunction]
 #[pyo3(signature = (tris, tri_face, normals, alpha, scattering, receivers, source, dirs,
-                    t_max_s, fs_env, radius_m, c, seed, max_bounces=10_000, backend="gpu"))]
+                    t_max_s, fs_env, radius_m, c, seed, max_bounces=10_000, backend="gpu",
+                    weights=None))]
 #[allow(clippy::too_many_arguments)]
 fn ray_trace<'py>(
     py: Python<'py>,
@@ -52,6 +53,7 @@ fn ray_trace<'py>(
     seed: u32,
     max_bounces: u32,
     backend: &str,
+    weights: Option<PyReadonlyArray1<f64>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let t = tris.as_slice()?;
     if t.len() % 9 != 0 {
@@ -71,6 +73,14 @@ fn ray_trace<'py>(
             .collect(),
         scattering: scattering.as_slice()?.to_vec(),
         receivers: triples(receivers.as_slice()?),
+        weights: match &weights {
+            Some(w) => w
+                .as_slice()?
+                .chunks_exact(BANDS)
+                .map(|c| c.try_into().unwrap())
+                .collect(),
+            None => Vec::new(),
+        },
         radius_m,
         c,
         t_max_s,

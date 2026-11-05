@@ -178,7 +178,36 @@ def _poly_early(room, src, mic_pos, beta):
         f = seqs[:, j]
         has = f >= 0
         lb[has] += np.log(beta[f[has]])
-    return pos, lb
+    return pos, lb, seqs
+
+
+def emission_dirs(d: np.ndarray, room, seqs=None, hits=None) -> np.ndarray:
+    """The directions in which image paths leave the real source (unit, (images, 3)): the
+    image's direction to the mic `d` mirrored back through its reflections (a PolyRoom's face
+    sequences, the last first; a shoebox's walls per axis, an odd count flipping the axis)."""
+    v = d / np.linalg.norm(d, axis=1)[:, None]
+    if hits is not None:
+        flips = 1 - 2 * ((hits[:, 0::2] + hits[:, 1::2]) % 2)  # (x0+x1, y0+y1, floor+ceiling)
+        return v * flips
+    out = v.copy()
+    for j in range(seqs.shape[1] - 1, -1, -1):
+        fi = seqs[:, j]
+        has = fi >= 0
+        if not np.any(has):
+            continue
+        n = np.array([room.faces[k].normal for k in fi[has]])
+        out[has] -= 2 * (out[has] * n).sum(1)[:, None] * n
+    return out
+
+
+def _ray_weights(directivity, si: int, n_rays: int):
+    """A directional source's rays' starting energies (rays, bands): |D|^2 at the bands'
+    centres in each ray's direction (the rays' directions: polyroom.ray_decay's)."""
+    if not directivity or directivity[si] is None:
+        return None
+    d, aim = directivity[si]
+    cos_r = fibonacci_sphere(n_rays) @ aim
+    return np.abs(d.at(BANDS_HZ, cos_r)) ** 2
 
 
 def _receiver_gains(decay, n: int, fs: float, volume: float) -> np.ndarray:
@@ -213,6 +242,7 @@ def responses(
     tail: bool = True,
     backend: str | None = None,
     wave: dict | None = None,
+    directivity: list | None = None,
 ) -> np.ndarray:
     """The rooms' impulse responses, (sources, mics, 2 entries (front, rear), samples):
     the entries' pressure per unit source (1 / r in free field). `seeds` per source
@@ -223,7 +253,10 @@ def responses(
     (varimu.rooms.gpu) runs the images' spectra and the rays on the GPU, roomsim's CPU
     reference or numpy (the default: varimu.rooms.gpu.backend()). `wave` ({crossover_hz,
     log?}) puts the wave solver under the crossover (varimu.rooms.wave, ROOM_LOOP_PLAN.md
-    R10): below it the room's modes, above it this model."""
+    R10): below it the room's modes, above it this model. `directivity` per source: None
+    (omni) or (varimu.rooms.directivity.Directivity, its aim as a unit vector): every image
+    and diffraction path weighted by D in the direction it leaves the source, the rays started
+    with |D|^2, the wave solver's source a monopole and a dipole."""
     from varimu.rooms import diffraction, gpu
     from varimu.rooms.polyroom import RECEIVER_RAYS, PolyRoom, ray_decay, rt60_from_decay
 
@@ -245,6 +278,7 @@ def responses(
                 seed=seeds[si] if seeds else si,
                 receivers=[m.position_m for m in mics],
                 backend=backend,
+                weights=_ray_weights(directivity, si, RECEIVER_RAYS),
             )
         rt = np.nanmax([rt60_from_decay(*d[:2]) for d in decays.values()], axis=0)
         rt = np.where(np.isfinite(rt), rt, 1.0)
@@ -286,30 +320,44 @@ def responses(
 
     for si, src in enumerate(sources_m):
         src = np.asarray(src, float)
+        src_dir = directivity[si] if directivity else None
         if not poly:
             _inside(room, src, "a source")
-            pos, hits = images(room, src, c * ism_s)
-            log_beta = hits @ np.log(beta)  # (images, bands): log of the walls' product
+            pos, hits_all = images(room, src, c * ism_s)
+            log_beta = hits_all @ np.log(beta)  # (images, bands): log of the walls' product
         early = np.zeros((len(mics), len(BANDS_HZ)))
         for mi, m in enumerate(mics):
             idx, w, bw, air = grids[id(m.table)]
             if poly:
-                pos, log_beta = _poly_early(room, src, m.position_m, beta)
+                pos, log_beta, seqs = _poly_early(room, src, m.position_m, beta)
             d = pos - m.position_m
             r = np.linalg.norm(d, axis=1)
             tau_s = r / c
             sel = tau_s <= ism_s
             d, r, tau_s, lb = d[sel], r[sel], tau_s[sel], log_beta[sel]
+            d_src = None  # each image's D (images, grid), a directional source's
+            if src_dir is not None:
+                emit = (
+                    emission_dirs(-d, room, seqs=seqs[sel])
+                    if poly
+                    else emission_dirs(-d, room, hits=hits_all[sel])
+                )
+                cos_e = emit @ src_dir[1]
+                d_src = src_dir[0].cap(m.table.f_grid, cos_e)
+                d_band = np.abs(src_dir[0].at(BANDS_HZ, cos_e))
             # the images' fade out over the window before ism_s (the tail fades in)
             fade = np.clip((tau_s * fs - (n_ism - win)) / win, 0, 1)
             band_amp = np.exp(lb) / r[:, None]  # (images, bands)
             # the tail's start: the omni images' energy per sample in the window, per band
             in_win = (tau_s * fs >= n_ism - win) & (tau_s * fs < n_ism)
-            early[mi] = (band_amp[in_win] ** 2).sum(0) / win
+            e_amp = band_amp if d_src is None else band_amp * d_band
+            early[mi] = (e_amp[in_win] ** 2).sum(0) / win
             band_amp = band_amp * (1 - fade)[:, None]
             cos_t = np.clip((d @ m.aim) / r, -1, 1)
             e_front, e_rear = m.table.at(np.arccos(cos_t), r)
             smooth = (band_amp @ bw) * 10 ** (-air[None, :] * r[:, None] / 20)
+            if d_src is not None:
+                smooth = smooth * d_src
             # the edges' diffraction (a PolyRoom's objects and reflex corners: R11), each
             # path one smooth spectrum (its walls, the air, the entries seen from its apex)
             dpaths = diffraction.paths(room, src, m.position_m, fs, beta) if poly else []
@@ -321,6 +369,13 @@ def responses(
                 ef, er = m.table.at(np.array([th]), np.array([rr]))
                 fade_d = 1 - np.clip((dp.n0 - (n_ism - win)) / win, 0, 1)
                 sm = (np.exp(dp.log_beta) @ bw) * 10 ** (-air * dp.path_m / 20) * fade_d
+                if src_dir is not None:
+                    ev = dp.apex_m - dp.start_m
+                    if dp.start_face >= 0:  # an image's path: back through its face
+                        nf = room.faces[dp.start_face].normal
+                        ev = ev - 2 * (ev @ nf) * nf
+                    ev = ev / np.linalg.norm(ev)
+                    sm = sm * src_dir[0].cap(m.table.f_grid, np.array([ev @ src_dir[1]]))[0]
                 d_coarse.append(np.stack([sm * ef[0], sm * er[0]]))
                 nz = np.flatnonzero(np.abs(dp.h) > 1e-9 * np.abs(dp.h).max())
                 d_delay.append(dp.n0 + nz.astype(float))
@@ -406,6 +461,7 @@ def responses(
             length_s=n / fs,
             backend=backend,
             log=wave.get("log"),
+            directivity=directivity,
         )
         # the early part (direct sound, first reflections: the same arrivals in both models)
         # crosses over in amplitude, the late part (two unrelated fields) in power, so the

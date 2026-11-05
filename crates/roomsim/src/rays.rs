@@ -14,6 +14,9 @@
 //! - **density**: per receiver (a sphere of `radius`), per band, the energy times the time
 //!   each ray segment spends inside it, binned at the time of the segment's middle there.
 //!
+//! A ray may start with less energy in some bands than others (`RayRoom::weights`, per ray
+//! and band: a directional source, `varimu.rooms.directivity`'s |D|^2 in the ray's direction).
+//!
 //! Random numbers are a hash of (seed, ray, bounce, draw) (`rnd`), the same on the GPU and
 //! the CPU, so the two differ only by their arithmetic (f32 trajectories part from f64 ones
 //! after a few dozen bounces: they agree in their statistics). The GPU sums in 64-bit fixed
@@ -40,6 +43,8 @@ pub struct RayRoom {
     pub alpha: Vec<[f64; BANDS]>,
     pub scattering: Vec<f64>,
     pub receivers: Vec<[f64; 3]>,
+    /// Per ray, its starting energy per band (empty: 1).
+    pub weights: Vec<[f64; BANDS]>,
     pub radius_m: f64,
     pub c: f64,
     pub t_max_s: f64,
@@ -76,7 +81,19 @@ impl RayRoom {
         if self.tris.is_empty() {
             return Err("no triangles".into());
         }
+        if self
+            .weights
+            .iter()
+            .flatten()
+            .any(|w| w.is_nan() || *w < 0.0)
+        {
+            return Err("ray weights: >= 0".into());
+        }
         Ok(())
+    }
+
+    fn weight(&self, ray: usize) -> [f64; BANDS] {
+        self.weights.get(ray).copied().unwrap_or([1.0; BANDS])
     }
 }
 
@@ -168,7 +185,7 @@ fn trace_one(
     let (fs, c) = (room.fs_env, room.c);
     let mut p = src;
     let mut d = dir;
-    let mut e = [1.0f64; BANDS];
+    let mut e = room.weight(ray as usize);
     let mut t = 0.0f64;
     for bounce in 0..room.max_bounces {
         let Some((best, f)) = nearest(room, edges, p, d) else {
@@ -246,6 +263,9 @@ fn edges(room: &RayRoom) -> Vec<([f64; 3], [f64; 3])> {
 /// The CPU reference (f64), the rays split over the cores.
 pub fn trace_cpu(room: &RayRoom, src: [f64; 3], dirs: &[[f64; 3]]) -> Result<RayResult, String> {
     room.check()?;
+    if !room.weights.is_empty() && room.weights.len() != dirs.len() {
+        return Err("weights: one per ray".into());
+    }
     let nt = room.nt();
     let nr = room.receivers.len();
     let ed = edges(room);
@@ -319,6 +339,9 @@ pub fn trace_gpu(
     dirs: &[[f64; 3]],
 ) -> Result<RayResult, String> {
     room.check()?;
+    if !room.weights.is_empty() && room.weights.len() != dirs.len() {
+        return Err("weights: one per ray".into());
+    }
     let nt = room.nt();
     let nr = room.receivers.len();
     let f = |x: f64| x as f32;
@@ -376,6 +399,22 @@ pub fn trace_gpu(
     let b_faces = gpu.storage("faces", bytemuck::cast_slice(&faces));
     let b_dirs = gpu.storage("dirs", bytemuck::cast_slice(&dv));
     let b_rx = gpu.storage("rx", bytemuck::cast_slice(&rv));
+    let wv: Vec<[f32; 8]> = (0..dirs.len())
+        .map(|i| {
+            let w = room.weight(i);
+            [
+                f(w[0]),
+                f(w[1]),
+                f(w[2]),
+                f(w[3]),
+                f(w[4]),
+                f(w[5]),
+                f(w[6]),
+                0.0,
+            ]
+        })
+        .collect();
+    let b_w = gpu.storage("weights", bytemuck::cast_slice(&wv));
     let acc_bytes = (BANDS * nt * 8) as u64;
     let dens_bytes = (nr * BANDS * nt * 8) as u64;
     let b_acc = gpu.zeros("travelling", acc_bytes);
@@ -402,7 +441,9 @@ pub fn trace_gpu(
         let b_p = gpu.uniform("params", bytemuck::bytes_of(&params));
         let group = gpu.bind(
             &pipe,
-            &[&b_p, &b_tris, &b_faces, &b_dirs, &b_rx, &b_acc, &b_dens],
+            &[
+                &b_p, &b_tris, &b_faces, &b_dirs, &b_rx, &b_acc, &b_dens, &b_w,
+            ],
         );
         gpu.run(&pipe, &group, ((n as u32).div_ceil(64), 1, 1))?;
         start += n;
@@ -460,6 +501,7 @@ mod tests {
             alpha: vec![wall; 6],
             scattering: vec![0.3; 6],
             receivers: vec![[4.5, 2.25, 1.6]],
+            weights: Vec::new(),
             radius_m: 0.35,
             c: 343.2,
             t_max_s: 1.5,
@@ -506,6 +548,28 @@ mod tests {
                 (r.travelling[k] - 500.0).abs() < 1e-9,
                 "{k}: {}",
                 r.travelling[k]
+            );
+        }
+    }
+
+    #[test]
+    fn weights_scale_each_rays_energy() {
+        let mut room = shoebox();
+        room.t_max_s = 0.3;
+        let dirs = sphere_dirs(400);
+        let src = [2.0, 2.55, 1.3];
+        let a = trace_cpu(&room, src, &dirs).unwrap();
+        room.weights = vec![[0.5; BANDS]; dirs.len()];
+        let b = trace_cpu(&room, src, &dirs).unwrap();
+        for (x, y) in a.travelling.iter().zip(&b.travelling) {
+            assert!((0.5 * x - y).abs() < 1e-9 * x.abs().max(1.0));
+        }
+        if let Ok(gpu) = crate::gpu::gpu() {
+            let g = trace_gpu(gpu, &room, src, &dirs).unwrap();
+            assert!(
+                (g.travelling[0] - 200.0).abs() < 1e-6,
+                "{}",
+                g.travelling[0]
             );
         }
     }

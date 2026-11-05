@@ -171,6 +171,8 @@ class DiffractionPath:
     apex_m: np.ndarray  # where the shortest path touches the edge (the arrival's direction)
     log_beta: np.ndarray  # (bands,) the image's walls, log of their product
     path_m: float  # the shortest path's length (air absorption)
+    start_m: np.ndarray = None  # the source or its image the path starts from
+    start_face: int = -1  # the image's face (-1: the source itself)
 
 
 def paths(room, source: np.ndarray, mic: np.ndarray, fs: float, beta: np.ndarray):
@@ -239,5 +241,5 @@ def paths(room, source: np.ndarray, mic: np.ndarray, fs: float, beta: np.ndarray
             apex_z = float(np.clip(zs + (zr - zs) * rs / (rs + rr), 0.0, ed.length))
             apex = ed.point([apex_z])[0]
             plen = float(np.linalg.norm(apex - s_pos) + np.linalg.norm(mic - apex))
-            out.append(DiffractionPath(n0, h, apex, lb, plen))
+            out.append(DiffractionPath(n0, h, apex, lb, plen, s_pos, fi))
     return out

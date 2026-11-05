@@ -1,0 +1,207 @@
+{
+ "scene": "separation_swapped_changed",
+ "fs": 96000,
+ "quality": "production",
+ "rt60_s": {
+  "125": 0.517,
+  "250": 0.791,
+  "500": 0.869,
+  "1000": 0.786,
+  "2000": 0.645,
+  "4000": 0.57,
+  "8000": 0.454
+ },
+ "room": "polygon",
+ "room_backend": "gpu",
+ "gpu": "NVIDIA GeForce RTX 3080 (Vulkan)",
+ "wave_crossover_hz": 500.0,
+ "mics": [
+  {
+   "name": "spot A",
+   "file": "spot_A.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 40.0
+   },
+   "pan": -0.5,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -17.86,
+   "peak_dbfs": -5.21,
+   "bleed": {
+    "A": {
+     "rms_dbfs": -18.68,
+     "octaves_db": [
+      -65.28,
+      -55.06,
+      -20.44,
+      -26.92,
+      -26.66,
+      -34.89,
+      -54.21,
+      -66.55,
+      -67.13
+     ]
+    },
+    "B": {
+     "rms_dbfs": -26.54,
+     "octaves_db": [
+      -65.49,
+      -40.99,
+      -27.51,
+      -38.44,
+      -36.93,
+      -47.53,
+      -63.91,
+      -80.11,
+      -83.55
+     ]
+    }
+   },
+   "intermod_db": -149.64
+  },
+  {
+   "name": "spot B",
+   "file": "spot_B.wav",
+   "chain": "u47_v76",
+   "set": {
+    "pattern_u47": 0.0,
+    "gain_db_v76": 34.0
+   },
+   "pan": 0.5,
+   "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
+   "rms_dbfs": -14.44,
+   "peak_dbfs": -2.76,
+   "bleed": {
+    "A": {
+     "rms_dbfs": -26.88,
+     "octaves_db": [
+      -69.72,
+      -64.73,
+      -27.46,
+      -39.08,
+      -39.36,
+      -47.76,
+      -68.22,
+      -84.72,
+      -93.4
+     ]
+    },
+    "B": {
+     "rms_dbfs": -14.73,
+     "octaves_db": [
+      -51.09,
+      -26.84,
+      -16.0,
+      -27.08,
+      -23.99,
+      -32.55,
+      -52.25,
+      -65.5,
+      -71.11
+     ]
+    }
+   },
+   "intermod_db": -55.64
+  },
+  {
+   "name": "room L",
+   "file": "room_L.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 40.0
+   },
+   "pan": -1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -23.2,
+   "peak_dbfs": -9.94,
+   "bleed": {
+    "A": {
+     "rms_dbfs": -27.62,
+     "octaves_db": [
+      -70.39,
+      -64.95,
+      -28.58,
+      -36.7,
+      -39.61,
+      -47.84,
+      -66.43,
+      -79.89,
+      -82.56
+     ]
+    },
+    "B": {
+     "rms_dbfs": -25.45,
+     "octaves_db": [
+      -65.03,
+      -39.84,
+      -26.33,
+      -37.33,
+      -36.59,
+      -48.92,
+      -67.08,
+      -80.35,
+      -82.66
+     ]
+    }
+   },
+   "intermod_db": -137.98
+  },
+  {
+   "name": "room R",
+   "file": "room_R.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 40.0
+   },
+   "pan": 1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -24.38,
+   "peak_dbfs": -10.78,
+   "bleed": {
+    "A": {
+     "rms_dbfs": -27.62,
+     "octaves_db": [
+      -70.98,
+      -65.35,
+      -28.87,
+      -35.14,
+      -40.02,
+      -46.27,
+      -66.84,
+      -80.76,
+      -83.45
+     ]
+    },
+    "B": {
+     "rms_dbfs": -27.81,
+     "octaves_db": [
+      -65.44,
+      -48.52,
+      -28.75,
+      -39.22,
+      -37.8,
+      -46.71,
+      -66.86,
+      -80.33,
+      -82.09
+     ]
+    }
+   },
+   "intermod_db": -144.16
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 31.3,
+ "seconds": 9.006
+}
