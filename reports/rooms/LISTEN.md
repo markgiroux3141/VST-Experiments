@@ -31,7 +31,7 @@ Headphones or good monitors; the low-end differences need a full-range system.
   the guitar's omni, without and with a gobo between the players (live room: a few dB, the
   room's reverb comes round it).
 - `treated_open/guitar_spot__vocal.wav` against `treated_gobo/guitar_spot__vocal.wav`: the same
-  in the treated room: 7-8 dB less bleed above 500 Hz, the bass bending round.
+  in the treated room: ~6-7 dB less bleed above 500 Hz (less at 1 kHz), the bass bending round.
 
 **5. Sources that face somewhere.** `source_demo/`
 - `toward/room_pair.wav`, `away/room_pair.wav`, `omni/room_pair.wav`: an electric guitar through

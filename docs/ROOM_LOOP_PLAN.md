@@ -458,7 +458,7 @@ reliant and make decisions"; the decisions: "Decisions (2026-11-05)" below). Com
   through a spaced omni pair in a small room and the live room, the wave solver off / on, and
   the live room with a dead front wall and a plaster back wall (R7)); `reports/rooms/gobo_demo/`
   (vocal and guitar on close omnis, without / with a gobo, in the live room and treated: the
-  bleed falls 3-4 dB above 500 Hz in the live room, 7-8 dB treated, nothing at 63 Hz);
+  bleed falls ~2-4 dB above 500 Hz in the live room, ~6-7 dB treated, nothing at 63 Hz);
   `reports/rooms/demo_wave/` (the R6 demo's five rooms again with the wave solver, beside
   `demo/`); `reports/rooms/source_demo/` (an electric guitar through a 1x12 combo facing the
   room pair, facing the wall, and as an omni).

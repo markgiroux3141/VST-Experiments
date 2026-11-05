@@ -121,62 +121,89 @@ fn record(p: &[f64], g: &Grid, m: [f64; 3]) -> [f64; 4] {
 }
 
 /// The f64 reference: records (n_steps x mics x 4), flat.
+/// The two time levels, shared by the CPU's threads: each writes only its own slab of the
+/// level it updates and reads the other, the steps separated by a barrier.
+#[derive(Clone, Copy)]
+struct Level(*mut f64);
+// SAFETY: the threads touch disjoint slabs of the level being written and only read the
+// other one between barriers (run_cpu).
+unsafe impl Send for Level {}
+unsafe impl Sync for Level {}
+
+/// The f64 reference: records (n_steps x mics x 4), flat. Its threads persist over the run
+/// (one barrier per step): spawning them every step cost more than the update on small rooms.
 pub fn run_cpu(grid: &Grid, run: &Run) -> Result<Vec<f64>, String> {
     grid.check(run)?;
     let n = grid.n();
     let (nx, nxy) = (grid.nx, grid.nx * grid.ny);
     let l2 = grid.lambda * grid.lambda;
-    let mut prev = vec![0.0f64; n]; // p^{n-1}, overwritten with p^{n+1}
-    let mut cur = vec![0.0f64; n];
+    let mut a = vec![0.0f64; n]; // p^0, then the even levels
+    let mut b = vec![0.0f64; n]; // p^1, then the odd levels
     for &(i, v) in &run.inject {
-        cur[i as usize] += v;
+        b[i as usize] += v;
     }
     let nm = run.mics.len();
     let mut out = vec![0.0; run.n_steps * nm * 4];
     for (mi, m) in run.mics.iter().enumerate() {
         if run.n_steps > 1 {
-            out[(nm + mi) * 4..(nm + mi) * 4 + 4].copy_from_slice(&record(&cur, grid, *m));
+            out[(nm + mi) * 4..(nm + mi) * 4 + 4].copy_from_slice(&record(&b, grid, *m));
         }
     }
-    let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
-    let slab = n.div_ceil(threads).max(1);
-    for step in 2..run.n_steps {
-        {
-            let cur = &cur;
-            std::thread::scope(|s| {
-                for (ci, chunk) in prev.chunks_mut(slab).enumerate() {
-                    s.spawn(move || {
-                        let base = ci * slab;
-                        for (o, pv) in chunk.iter_mut().enumerate() {
-                            let i = base + o;
-                            let code = grid.codes[i];
-                            if code == 0 {
-                                continue;
-                            }
-                            let nsum = cur[i - 1]
-                                + cur[i + 1]
-                                + cur[i - nx]
-                                + cur[i + nx]
-                                + cur[i - nxy]
-                                + cur[i + nxy];
+    let threads = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(n.div_ceil(4096))
+        .max(1);
+    let slab = n.div_ceil(threads);
+    let (la, lb) = (Level(a.as_mut_ptr()), Level(b.as_mut_ptr()));
+    let barrier = std::sync::Barrier::new(threads);
+    let out_ref = std::sync::Mutex::new(&mut out);
+    std::thread::scope(|s| {
+        for t in 0..threads {
+            let (barrier, out_ref) = (&barrier, &out_ref);
+            s.spawn(move || {
+                let (lo, hi) = (t * slab, ((t + 1) * slab).min(n));
+                for step in 2..run.n_steps {
+                    // p^step from cur = p^{step-1} into dst, which holds p^{step-2}
+                    let (cur, dst) = if step % 2 == 0 { (lb, la) } else { (la, lb) };
+                    for i in lo..hi {
+                        let code = grid.codes[i];
+                        if code == 0 {
+                            continue;
+                        }
+                        // SAFETY: i in this thread's slab of dst; cur is read only this step
+                        unsafe {
+                            let c = |j: usize| *cur.0.add(j);
+                            let nsum = c(i - 1)
+                                + c(i + 1)
+                                + c(i - nx)
+                                + c(i + nx)
+                                + c(i - nxy)
+                                + c(i + nxy);
+                            let pv = dst.0.add(i);
                             *pv = if code == 1 {
-                                (2.0 - 6.0 * l2) * cur[i] + l2 * nsum - *pv
+                                (2.0 - 6.0 * l2) * c(i) + l2 * nsum - *pv
                             } else {
-                                let b = (code - 2) as usize;
-                                let (k, g) = (grid.bnd_k[b], grid.bnd_g[b]);
-                                ((2.0 - l2 * k) * cur[i] + l2 * nsum - (1.0 - g) * *pv) / (1.0 + g)
+                                let bi = (code - 2) as usize;
+                                let (k, g) = (grid.bnd_k[bi], grid.bnd_g[bi]);
+                                ((2.0 - l2 * k) * c(i) + l2 * nsum - (1.0 - g) * *pv) / (1.0 + g)
                             };
                         }
-                    });
+                    }
+                    barrier.wait();
+                    if t == 0 && nm > 0 {
+                        // every slab of dst is written; the next step only reads it
+                        // SAFETY: no thread writes dst until after the next barrier
+                        let level = unsafe { std::slice::from_raw_parts(dst.0, n) };
+                        let mut o = out_ref.lock().unwrap();
+                        for (mi, m) in run.mics.iter().enumerate() {
+                            let k = (step * nm + mi) * 4;
+                            o[k..k + 4].copy_from_slice(&record(level, grid, *m));
+                        }
+                    }
                 }
             });
         }
-        std::mem::swap(&mut prev, &mut cur);
-        for (mi, m) in run.mics.iter().enumerate() {
-            let o = (step * nm + mi) * 4;
-            out[o..o + 4].copy_from_slice(&record(&cur, grid, *m));
-        }
-    }
+    });
     Ok(out)
 }
 

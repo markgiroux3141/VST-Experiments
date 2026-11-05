@@ -24,11 +24,11 @@ same pair in `treated_*`. The bleed's change with the gobo, per octave (`bleed.j
 
 | Octave (Hz) | 63 | 125 | 250 | 500 | 1k | 2k | 4k | 8k |
 |---|---|---|---|---|---|---|---|---|
-| live room, vocal into the guitar's mic | 0.0 | -3.2 | -1.2 | -4.0 | -1.9 | -3.0 | -4.4 | -3.9 |
-| treated room, the same | +0.4 | -3.8 | -1.4 | -7.4 | -3.3 | -6.3 | -7.2 | -7.1 |
+| live room, vocal into the guitar's mic | 0.0 | -3.1 | -1.2 | -2.9 | -1.8 | -3.0 | -4.0 | -3.7 |
+| treated room, the same | +0.4 | -3.9 | -1.2 | -6.8 | -2.8 | -6.4 | -7.2 | -7.0 |
 
 The gobo shadows the direct path by 10-20 dB in the highs, but in a live room the bleed is
 mostly the room's reverberation, which comes round and over it: a few dB. In the treated room
-the direct path is most of the bleed and the gobo takes 7-8 dB off the mids and highs. The bass
+the direct path is most of the bleed and the gobo takes ~7 dB off the mids and highs. The bass
 bends round in both (nothing at 63 Hz). That is why studios treat the room *and* put up gobos.
 The players' own spots hardly change (the gobo's reflection adds a little).
