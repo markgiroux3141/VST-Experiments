@@ -136,6 +136,134 @@ glimpse metric (`varimu/separation/`) and the listening staircase
 the "too subtle to choose" finding of Phase 5 shouldn't apply; if it does, the memory rule
 holds (call it verified, move on).
 
+## The chain list (2026-11-05)
+
+The user's call: chains are precomputed (generated ahead, not composed when picked), but
+not every mic into every preamp; a curated list, each with what it is most likely used to
+record. That note is meant for the app too (the Room view's chain picker, as a tooltip or
+a line under the choice). `compose_chain.py --all` still writes MICS x PREAMPS; once a
+fourth mic or third preamp lands it should read this list instead (proposed: the list as
+data, `config/chains.yaml`, with the note per chain, read by `compose_chain.py`,
+`test_chain_matrix.py` and the app's `room::CHAINS`).
+
+**What precomputing costs (measured 2026-11-05).** A chain file is 9-43 KB of YAML (the V76
+chains ~36-43 KB, the clean ones ~9-16 KB): the list below is ~1.5 MB. The expensive part
+is per **mic**, not per pair: a capsule's entry table (`cache/diffraction/table_*.npz`,
+240 frequencies x 11 distances x 73 angles, front and rear, complex128) is 6.2 MB and took
+193 s for K47@3, shared by every preamp the mic goes into. Prints (`cache/rooms/prints/`,
+~16 MB per 20 s of one mic, 3.3 GB today) scale with what is rendered in a scene, not with
+the list. So curating the list saves little disk; it keeps the picker readable and the
+matrix test short, and every chain added is one more to keep current.
+
+**Needs:** *built*; *data* (new mic or preamp files on kinds and tubes that exist);
+*ribbon* (the `ribbon_motor` kind); *EF86*, *AC701* (tube fits); *JFET*, *BJT* (device
+models; the BJT is already a shared prerequisite); *crystal*, *carbon* (new transducer
+kinds). Era notes are where a pair is documented practice; otherwise the use is the common
+one, not a claim about a record.
+
+### Built (the current matrix)
+
+| Chain | Most likely used to record | Needs |
+|---|---|---|
+| U47 -> V76 | Vocals, strings, acoustic guitar: the German broadcast tube sound | built |
+| U47 -> clean | Vocals; the U47 heard without a preamp's colour (the control) | built |
+| SM57 -> V76 | Guitar cab, snare, thickened by a tube pre with transformers | built |
+| SM57 -> clean | Snare, guitar cab; the SM57 as designed (the control) | built |
+| SM58 -> V76 | Vocals, a warmer take on the stage mic | built |
+| SM58 -> clean | Live and stage vocals | built |
+| omni -> clean | Classical, ambience pairs, measurement: the neutral reference | built |
+| omni -> V76 | Room mics with tube weight | built |
+
+### Ribbons
+
+| Chain | Most likely used to record | Needs |
+|---|---|---|
+| RCA 44-BX -> V76 | Crooner vocals, horns, strings: the darkest chain (pole 1) | ribbon |
+| RCA 44-BX -> UA 610 | 1950s-60s American vocals, big-band horns, upright bass | ribbon, data |
+| RCA 44-BX -> Neve 1073 | Vocals, horns, guitar cab; its 300 / 1200 ohm switch shows ribbon loading | ribbon, BJT |
+| RCA 44-BX -> Cloudlifter -> clean | Today's home-studio ribbon: the ribbon into a high impedance | ribbon, JFET |
+| RCA 77-DX -> Ampex 351 | 1950s rockabilly vocals; the slapback machine's own electronics | ribbon |
+| RCA 77-DX -> UA 610 | Broadcast, voice-over, vocals; its pattern shutter (figure-8 / cardioid / omni) | ribbon, data |
+| Coles 4038 -> Telefunken V72 | Early-1960s British drum overheads, brass (the REDD.37 desk's V72s) | ribbon, data |
+| Coles 4038 -> EMI TG12345 | 1970s drum overheads, strings, brass | ribbon, BJT |
+| Royer R-121 -> API 312 | Rock guitar cabs, often blended with an SM57 | ribbon, BJT |
+| Beyer M160 -> Neve 1073 | Snare top, toms, guitar cab: a hypercardioid ribbon | ribbon, BJT |
+
+### Dynamics
+
+| Chain | Most likely used to record | Needs |
+|---|---|---|
+| SM57 -> API 312 | Snare, guitar cab: mid-forward and punchy (pole 3) | BJT |
+| SM57 -> Neve 1073 | Guitar cab, snare, horns: the default rock cab chain | BJT |
+| SM57 -> Helios | 1970s British rock guitar and drums | BJT |
+| SM57 -> Portastudio | Home demos: guitar into a cassette 4-track | data (op-amps) |
+| SM58 -> SSL 4000 E | 1980s-90s rock and pop vocals | data (op-amps; BJT if its input stage is discrete) |
+| SM58 -> Portastudio | Bedroom demo vocals | data (op-amps) |
+| EV RE20 -> API 312 | Kick (in the port), bass cab | data, BJT |
+| EV RE20 -> Neve 1073 | Radio and voice-over; close vocals without proximity boom (Variable-D) | data, BJT |
+| Sennheiser MD421 -> API 312 | Toms, guitar cab, horns: the 1970s-80s rock tom sound | data, BJT |
+| Shure SM7 -> Neve 1073 | Rock and rap vocals, loud singers close up | data, BJT |
+| Shure SM7 -> Cloudlifter -> clean | Podcasts and home vocals: a low-output dynamic and a booster | data, JFET |
+| AKG D112 -> SSL 4000 E | 1990s rock and pop kick | data (op-amps) |
+
+### Tube condensers
+
+| Chain | Most likely used to record | Needs |
+|---|---|---|
+| U47 -> Telefunken V72 | Early-1960s British pop vocals (U47s into the REDD.37's V72s) | data |
+| U47 -> Neve 1073 | Big, glossy vocals; bass cab (pole 4) | BJT |
+| U47 -> UA 610 | American tube-console pop and jazz vocals | data |
+| AKG C12 -> clean | Bright and clean (pole 2): strings, acoustic guitar, overheads, airy vocals | data |
+| AKG C12 -> UA 610 | Bright tube vocals, jazz vocals, horns | data |
+| ELA M 251 -> Neve 1073 | Classic pop and rock vocals: the CK12's top into a Neve | data, BJT |
+| Neumann M49 -> V76 | Strings, choir, orchestra: the German radio studio | AC701 |
+| Neumann U67 -> REDD.47 | Mid-1960s Abbey Road vocals, strings, piano | EF86 |
+| Neumann U67 -> Neve 1073 | 1970s rock vocals, guitar cab, piano | EF86, BJT |
+
+### FET condensers and boundary
+
+| Chain | Most likely used to record | Needs |
+|---|---|---|
+| Neumann U87 -> Neve 1073 | The default studio vocal chain of the 1970s-90s; strings, piano, voice-over | JFET, BJT |
+| Neumann U87 -> SSL 4000 E | 1980s-90s pop vocals, voice-over | JFET |
+| Neumann U87 -> EMI TG12345 | 1970s vocals and strings | JFET, BJT |
+| U47 fet -> API 312 | Kick outside the head, bass cab | JFET, BJT |
+| Neumann KM84 -> Neve 1073 | Acoustic guitar, hi-hat, overheads | JFET, BJT |
+| Neumann KM84 -> EMI TG12345 | 1970s overheads, acoustic guitar | JFET, BJT |
+| AKG C414 -> SSL 4000 E | Overheads, piano, acoustic, choir: the 1980s-90s all-rounder | JFET |
+| AKG C414 -> clean | Classical spots, piano, neutral | JFET |
+| Crown PZM -> clean | Inside a piano lid, on a wall or floor as a room mic | JFET |
+| Crown PZM -> SSL 4000 E | 1980s drum rooms, a boundary mic on the floor or wall | JFET |
+
+The PZM's capsule sits on a surface: in the Room view it is placed on a face (pressure
+doubling at the boundary), which the scene format doesn't have yet.
+
+### Lo-fi wildcards
+
+| Chain | Most likely used to record | Needs |
+|---|---|---|
+| Shure Green Bullet -> Fender 5E3 | Chicago blues harmonica: the mic into an amp, the amp then miked in the room | crystal |
+| Carbon transmitter -> clean | The telephone voice; 1920s-30s radio | carbon |
+
+The Green Bullet into the 5E3 is an **instrument**, not a recording chain: its output is
+the speaker's pressure (C3), a source in the room that another chain picks up.
+
+### What each prerequisite unlocks
+
+The list is 51 chains (8 built), against ~300 for the full grid of its 24 mics and 13
+preamps.
+
+| Prerequisite | Chains it opens on its own (with what is built) |
+|---|---|
+| data only (V72, UA 610, C12 / 251, the op-amp preamps, new dynamics) | 8: U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM57 / SM58 -> Portastudio, SM58 -> SSL, D112 -> SSL |
+| ribbon | 2 on its own (44-BX -> V76, 77-DX -> 351), 5 with the data tier (+ 44-BX / 77-DX -> UA 610, 4038 -> V72) |
+| BJT | 13 more with ribbon and data (the 1073, API, Helios and TG rows without a JFET or EF86) |
+| JFET | 5 on its own with data (U87 / C414 / PZM -> SSL, C414 / PZM -> clean), the Cloudlifter rows with ribbon and data, the rest with the BJT |
+| EF86, AC701, crystal, carbon | 1-2 each |
+
+Order by what each opens, cheapest first: the data tier and the ribbon, then the BJT (it
+also opens the drum machines and the Suitcase), then the JFET.
+
 ## Rooms
 
 ### Geometry (the user's call: complex is fine if the sound earns it)
