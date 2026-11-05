@@ -143,16 +143,21 @@ def btm(edge: Edge, s: np.ndarray, r: np.ndarray, fs: float, mask=None, c=SPEED_
         zm, w = zm[keep], w[keep]
         if len(zm) == 0:
             return None
-    m = np.sqrt(rs**2 + (zm - zs) ** 2)
-    ll = np.sqrt(rr**2 + (zm - zr) ** 2)
-    arg = np.maximum((m * ll + (zm - zs) * (zm - zr)) / (rs * rr), 1.0)
-    eta = np.arccosh(arg)
+    ds_, dr_ = zm - zs, zm - zr
+    m = np.sqrt(rs**2 + ds_**2)
+    ll = np.sqrt(rr**2 + dr_**2)
+    # eta = acosh(1 + x) with x computed without cancellation near the apex:
+    # (m l)^2 - (rs rr - ds dr)^2 = (rs dr + rr ds)^2
+    x = (rs * dr_ + rr * ds_) ** 2 / (rs * rr * (m * ll + rs * rr - ds_ * dr_))
+    eta = 2 * np.arcsinh(np.sqrt(0.5 * x))
     nu = edge.nu
     acc = np.zeros_like(zm)
-    ch = np.cosh(nu * eta)
+    sh2 = np.sinh(0.5 * nu * eta) ** 2
     for phi in (np.pi + ths + thr, np.pi + ths - thr, np.pi - ths + thr, np.pi - ths - thr):
-        den = ch - np.cos(nu * phi)
-        acc += np.sin(nu * phi) / np.where(np.abs(den) < 1e-300, 1e-300, den)
+        # cosh(nu eta) - cos(nu phi) as 2 (sinh^2(nu eta / 2) + sin^2(nu phi / 2)): >= 0, no
+        # cancellation (on a shadow or reflection boundary at the apex both terms vanish)
+        den = 2 * (sh2 + np.sin(0.5 * nu * phi) ** 2)
+        acc += np.sin(nu * phi) / np.maximum(den, 1e-30)
     g = -(nu / (4 * np.pi)) * acc / (m * ll) * w
     t = (m + ll) / c * fs
     n0 = int(np.floor(t.min()))

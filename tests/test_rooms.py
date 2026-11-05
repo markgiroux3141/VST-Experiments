@@ -784,3 +784,16 @@ def test_the_early_response_is_reciprocal():
     n = int(0.045 * FS)
     err = np.sqrt(np.sum((h1[:n] - h2[:n]) ** 2) / np.sum(h1[:n] ** 2))
     assert 20 * np.log10(err) < -100
+
+
+def test_btm_stays_finite_exactly_on_a_boundary():
+    """A source and a mic in one plane through a thin panel's edge (the same angle round it:
+    nu phi = 2 pi exactly for two of the four terms, 0 / 0 at the apex): the integrand's
+    denominator, written without cancellation, keeps the response finite and small (it came
+    out ~1e275 in a smoke-test scene, inf on the GPU)."""
+    from varimu.rooms.diffraction import Edge, btm
+
+    ed = Edge(np.array([3.0, 1.5, 0.0]), np.array([0, 0, 1.0]), 1.8, np.array([0, 1.0, 0]),
+              np.array([-1.0, 0, 0]), 2 * np.pi, ())  # fmt: skip
+    _, h = btm(ed, np.array([6.5, 1.5, 0.4]), np.array([6.15, 1.5, 0.45]), FS)
+    assert np.all(np.isfinite(h)) and np.max(np.abs(h)) < 0.01
