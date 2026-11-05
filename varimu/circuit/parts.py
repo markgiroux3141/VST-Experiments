@@ -474,6 +474,58 @@ def speaker_terminal(name: str, plus: str, minus: str, out: str, s: spk.Speaker)
     ]
 
 
+OPAMP_GM_S = 1e-3  # the macro model's input stage transconductance (sets only its impedances)
+
+
+def opamp(
+    name: str,
+    plus: str,
+    minus: str,
+    out: str,
+    a0: float,
+    gbw_hz: float,
+    r_out_ohm: float,
+    r_in_ohm: float,
+    clamp: str | None = None,
+    swing_v: float | None = None,
+) -> list[Element]:
+    """Op-amp `name` as a single-pole macro model (ROOM_LOOP_PLAN.md R4: the clean
+    preamp, the small omni's impedance converter): the datasheet's open-loop gain `a0` and
+    gain-bandwidth `gbw_hz`, a differential input resistance and an output resistance.
+    Elements: R<NAME>_i (plus to minus), G<NAME>_1 (OPAMP_GM_S times the input into the
+    integrator node <name>_1), R<NAME>_1 (a0 / gm: the DC gain) and C<NAME>_1 (gm / 2 pi
+    gbw: the dominant pole) there, G<NAME>_o and R<NAME>_o (a unity buffer behind
+    r_out_ohm onto `out`). With a `clamp` diode model and `swing_v`, the integrator node is
+    held between -swing_v and +swing_v by D<NAME>_p / D<NAME>_n on sources V<NAME>_p /
+    V<NAME>_n (the output's swing a diode drop past them): the output clips and recovers
+    at once, as an op-amp whose internal stages saturate. No slew limit and no crossover
+    distortion: its harmonics are the clamp's. Noise is the circuit's (an equivalent
+    resistor at its input under the noise block)."""
+    n, upper = name.lower(), name.upper()
+    n1 = f"{n}_1"
+    els: list[Element] = [
+        Resistor(f"R{upper}_i", plus, minus, r_in_ohm),
+        Vccs(f"G{upper}_1", GROUND, n1, plus, minus, OPAMP_GM_S),
+        Resistor(f"R{upper}_1", n1, GROUND, a0 / OPAMP_GM_S),
+        Capacitor(f"C{upper}_1", n1, GROUND, OPAMP_GM_S / (2 * math.pi * gbw_hz)),
+    ]
+    if clamp is not None:
+        if swing_v is None:
+            raise ValueError(f"op-amp {name}: a clamp needs swing_v")
+        rp, rn = f"{n}_p", f"{n}_n"
+        els += [
+            VoltageSource(f"V{upper}_p", rp, GROUND, swing_v),
+            Device(f"D{upper}_p", clamp, (n1, rp)),
+            VoltageSource(f"V{upper}_n", rn, GROUND, -swing_v),
+            Device(f"D{upper}_n", clamp, (rn, n1)),
+        ]
+    els += [
+        Vccs(f"G{upper}_o", GROUND, out, n1, GROUND, 1 / r_out_ohm),
+        Resistor(f"R{upper}_o", out, GROUND, r_out_ohm),
+    ]
+    return els
+
+
 def capsule(
     name: str, front: str, backplate: str, out: str, c: cap.Capsule, polarization_v: float
 ) -> list[Element]:

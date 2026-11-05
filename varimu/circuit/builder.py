@@ -970,6 +970,27 @@ for _name, _macro in {
             "supply_nominal_hz": Param("physical", None),
         },
     ),
+    "opamp": Macro(
+        lambda ctx, n, c, a: parts.opamp(
+            n,
+            *c,
+            a["a0"],
+            a["gbw_hz"],
+            a["r_out_ohm"],
+            a["r_in_ohm"],
+            None if a["clamp"] is None else a["clamp"].name,
+            a["swing_v"],
+        ),
+        3,
+        {
+            "a0": _P,
+            "gbw_hz": _P,
+            "r_out_ohm": _P,
+            "r_in_ohm": _P,
+            "clamp": Param("device", None),
+            "swing_v": Param("physical", None),
+        },
+    ),  # fmt: skip
     "capsule": Macro(_capsule, 3, {"component": Param("raw"), "polarization_v": _P}),
     "capsule_dual": Macro(
         _capsule_dual,

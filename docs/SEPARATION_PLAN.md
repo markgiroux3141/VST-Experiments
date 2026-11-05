@@ -199,6 +199,12 @@ What it says:
 
 Listening results: pending (the user's).
 
+**The room experiment** (2026-11-04, ROOM_LOOP_PLAN.md R5): two sources in a room, spot mics
+through opposite chains (the U47 -> V76, a clean small omni), a spaced room pair, in stereo with
+better-ear glimpses and binaural unmasking. Opposite chains moved separation toward the track
+on the brighter chain rather than adding it; panning was the big lever (+5.6 dB); the
+staircase in stereo (`separation_listen.py --room`) is pending.
+
 ## Open decisions (the user's)
 
 - A track of its own, or folded into SESSION_FX_PLAN.md?

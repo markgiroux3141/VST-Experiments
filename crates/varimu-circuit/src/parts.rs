@@ -6,7 +6,7 @@ use circuitsim::devices::core::{MU0, MagneticCore as CoreDevice};
 use circuitsim::devices::diode::VT_TNOM;
 use circuitsim::ir::{
     Capacitor, Coupling, Device, DeviceModel, Element, GROUND, Inductor, JunctionDiode,
-    MagneticCore, PlateModel, Resistor, SineSource, TESLA_PER_V, VoltageSource, Winding,
+    MagneticCore, PlateModel, Resistor, SineSource, TESLA_PER_V, Vccs, VoltageSource, Winding,
 };
 
 use crate::Error;
@@ -268,6 +268,83 @@ pub fn transformer(
     let eddy = core.path_m * lam.powf(2.0) / (12.0 * rho) * TESLA_PER_V;
     els.push(capacitor(&format!("C{upper}_eddy"), &u, GROUND, eddy));
     Ok((els, model))
+}
+
+/// The op-amp macro model's input stage transconductance (sets only its impedances).
+pub const OPAMP_GM_S: f64 = 1e-3;
+
+/// Op-amp `name` as a single-pole macro model (Python's `parts.opamp`, whose docstring
+/// is the reference): `clamp` is the clamp diodes' model name with its `swing_v`.
+#[allow(clippy::too_many_arguments)]
+pub fn opamp(
+    name: &str,
+    plus: &str,
+    minus: &str,
+    out: &str,
+    a0: f64,
+    gbw_hz: f64,
+    r_out_ohm: f64,
+    r_in_ohm: f64,
+    clamp: Option<(&str, f64)>,
+) -> Vec<Element> {
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let n1 = format!("{n}_1");
+    let vccs = |nm: String, pos: &str, neg: &str, cp: &str, cn: &str, gm_s: f64| {
+        Element::Vccs(Vccs {
+            name: nm,
+            pos: s(pos),
+            neg: s(neg),
+            ctrl_pos: s(cp),
+            ctrl_neg: s(cn),
+            gm_s,
+        })
+    };
+    let mut els = vec![
+        resistor(&format!("R{upper}_i"), plus, minus, r_in_ohm),
+        vccs(format!("G{upper}_1"), GROUND, &n1, plus, minus, OPAMP_GM_S),
+        resistor(&format!("R{upper}_1"), &n1, GROUND, a0 / OPAMP_GM_S),
+        capacitor(
+            &format!("C{upper}_1"),
+            &n1,
+            GROUND,
+            OPAMP_GM_S / (2.0 * std::f64::consts::PI * gbw_hz),
+        ),
+    ];
+    if let Some((model, swing_v)) = clamp {
+        let (rp, rn) = (format!("{n}_p"), format!("{n}_n"));
+        els.push(Element::VoltageSource(VoltageSource {
+            name: format!("V{upper}_p"),
+            pos: rp.clone(),
+            neg: s(GROUND),
+            dc_v: swing_v,
+        }));
+        els.push(Element::Device(Device {
+            name: format!("D{upper}_p"),
+            model: s(model),
+            nodes: vec![n1.clone(), rp],
+        }));
+        els.push(Element::VoltageSource(VoltageSource {
+            name: format!("V{upper}_n"),
+            pos: rn.clone(),
+            neg: s(GROUND),
+            dc_v: -swing_v,
+        }));
+        els.push(Element::Device(Device {
+            name: format!("D{upper}_n"),
+            model: s(model),
+            nodes: vec![rn, n1.clone()],
+        }));
+    }
+    els.push(vccs(
+        format!("G{upper}_o"),
+        GROUND,
+        out,
+        &n1,
+        GROUND,
+        1.0 / r_out_ohm,
+    ));
+    els.push(resistor(&format!("R{upper}_o"), out, GROUND, r_out_ohm));
+    els
 }
 
 pub fn capacitor(name: &str, a: &str, b: &str, c_f: f64) -> Element {

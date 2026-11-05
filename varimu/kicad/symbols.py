@@ -438,6 +438,23 @@ _SYMBOLS: list[SymbolDef] = [
         toleranced=False,
         text=(0, 6.35, 5.588, "left"),
     ),
+    _macro(
+        "OpAmp",
+        "opamp",
+        "U",
+        "Op-amp, a single-pole macro model (varimu.circuit.parts.opamp): pin 1 +, 2 -, 3 the "
+        "output; Value is its gain-bandwidth",
+        (
+            Pin("1", "+", -7.62, 2.54, 0, 2.54),
+            Pin("2", "-", -7.62, -2.54, 0, 2.54),
+            Pin("3", "3", 7.62, 0, 180, 2.54),
+        ),  # fmt: skip
+        [poly((-5.08, 5.08), (5.08, 0), (-5.08, -5.08), (-5.08, 5.08))],
+        "gbw_hz",
+        ("a0", "r_out_ohm", "r_in_ohm", "clamp", "swing_v"),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
 ]
 
 _DEVICE_FIELDS = ("Tol", "Model", "emission", "mu", "grid_contact_v", "parallel", "area",

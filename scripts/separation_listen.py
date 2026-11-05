@@ -2,7 +2,11 @@
 under the masker before you can no longer hear which of three plays a changed note.
 
     uv run --extra listen --with sounddevice python scripts/separation_listen.py [CONDITION ...]
-        [--device NAME] [--seed N] [--list]
+        [--device NAME] [--seed N] [--list] [--room]
+
+`--room`: the room experiment's stereo mixes instead (scripts/room_separation.py,
+docs/ROOM_LOOP_PLAN.md R5; on headphones), conditions named CONDITION/MIX
+(reports/rooms/separation/<condition>/mixes/<mix>/, each stem at -23 LUFS).
 
 Reads scripts/separation_study.py's tracks (cache/separation/conditions/<name>/, each at
 -23 LUFS). Each trial plays three mixes of an excerpt around the changed note; one has the
@@ -40,6 +44,16 @@ DEFAULT = [
     "room_both_near",
     "room_Tnear_Mfar",
 ]
+ROOM_DIR = ROOT / "reports" / "rooms" / "separation"
+ROOM_DEFAULT = [
+    "same_u47/panned_room_-6",
+    "opposite/panned_room_-6",
+    "swapped/panned_room_-6",
+    "pattern_control/panned_room_-6",
+    "same_u47/centre_room_-6",
+    "opposite/centre_room_-6",
+]
+ROOM_FILES = {"target": "target", "target_changed": "changed", "masker": "masker"}
 EXCERPT_S = (1.15, 4.0)  # around the changed note (beat 4 at 100 bpm: 2.4-2.67 s)
 FADE_S = 0.02
 GAP_S = 0.45
@@ -49,27 +63,33 @@ REVERSALS, AVERAGE_LAST = 8, 6
 MAX_TRIALS = 60
 
 
-def load(name: str) -> tuple[dict[str, np.ndarray], int]:
-    d = AUDIO_DIR / name
+def load(name: str, room: bool = False) -> tuple[dict[str, np.ndarray], int]:
+    if room:
+        cond, mix = name.split("/")
+        d = ROOM_DIR / cond / "mixes" / mix
+    else:
+        d = AUDIO_DIR / name
     out, fs = {}, 0
     for k in ("target", "target_changed", "masker"):
-        x, fs = sf.read(d / f"{k}.wav", dtype="float64")
+        x, fs = sf.read(d / f"{ROOM_FILES[k] if room else k}.wav", dtype="float64")
         a, b = (int(t * fs) for t in EXCERPT_S)
         x = x[a:b].copy()
         f = int(FADE_S * fs)
         ramp = 0.5 - 0.5 * np.cos(np.pi * np.arange(f) / f)
+        if x.ndim == 2:  # stereo: frames x channels
+            ramp = ramp[:, None]
         x[:f] *= ramp
         x[-f:] *= ramp[::-1]
         out[k] = x
     return out, fs
 
 
-def player(fs: int, device: str | None):
+def player(fs: int, device: str | None, channels: int = 1):
     import sounddevice as sd
 
     rate = fs
     try:
-        sd.check_output_settings(device=device, samplerate=fs, channels=1)
+        sd.check_output_settings(device=device, samplerate=fs, channels=channels)
     except Exception:
         rate = int(sd.query_devices(device, kind="output")["default_samplerate"])
 
@@ -77,7 +97,7 @@ def player(fs: int, device: str | None):
         if rate != fs:
             from scipy.signal import resample_poly
 
-            x = resample_poly(x, rate, fs)
+            x = resample_poly(x, rate, fs, axis=0)
         peak = np.abs(x).max()
         if peak > 0.99:
             x = x * 0.99 / peak
@@ -91,7 +111,7 @@ def staircase(
     name: str, tracks: dict[str, np.ndarray], fs: int, play, rng: np.random.Generator
 ) -> dict:
     gain = 10 ** (PLAY_GAIN_DB / 20)
-    gap = np.zeros(int(GAP_S * fs))
+    gap = np.zeros((int(GAP_S * fs), *tracks["target"].shape[1:]))
     level, step_i, run, last_dir = START_DB, 0, 0, 0
     steps = (6.0, 4.0, 2.0)
     reversals: list[float] = []
@@ -160,7 +180,8 @@ def staircase(
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("conditions", nargs="*", default=DEFAULT)
+    ap.add_argument("conditions", nargs="*")
+    ap.add_argument("--room", action="store_true", help="the room experiment's stereo mixes")
     ap.add_argument(
         "--device", default=None, help="output device (name or index; default: the system's)"
     )
@@ -168,8 +189,13 @@ def main() -> None:
     ap.add_argument("--list", action="store_true", help="list the conditions the study rendered")
     a = ap.parse_args()
     if a.list:
-        print("\n".join(sorted(p.name for p in AUDIO_DIR.iterdir() if p.is_dir())))
+        if a.room:
+            mixes = ROOM_DIR.glob("*/mixes/*")
+            print("\n".join(sorted(f"{m.parent.parent.name}/{m.name}" for m in mixes)))
+        else:
+            print("\n".join(sorted(p.name for p in AUDIO_DIR.iterdir() if p.is_dir())))
         return
+    a.conditions = a.conditions or (ROOM_DEFAULT if a.room else DEFAULT)
     seed = a.seed if a.seed is not None else int(time.time())
     order = list(a.conditions)
     np.random.default_rng([seed, 0]).shuffle(order)
@@ -178,8 +204,8 @@ def main() -> None:
     results = []
     play = None
     for name in order:
-        tracks, fs = load(name)
-        play = play or player(fs, a.device)
+        tracks, fs = load(name, a.room)
+        play = play or player(fs, a.device, 2 if a.room else 1)
         rng = np.random.default_rng([seed, zlib.crc32(name.encode())])
         r = staircase(name, tracks, fs, play, rng)
         results.append(r)
@@ -189,6 +215,7 @@ def main() -> None:
                     "seed": seed,
                     "excerpt_s": EXCERPT_S,
                     "play_gain_db": PLAY_GAIN_DB,
+                    "room": a.room,
                     "results": results,
                 },
                 indent=1,

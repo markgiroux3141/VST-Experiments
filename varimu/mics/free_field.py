@@ -169,7 +169,7 @@ def body_entry_factors(
     `body_entry_grid` for a cached grid."""
     from varimu.mics import bor
 
-    op = bor.operator(bor.capsule_mesh(body, diaphragm_radius_m))
+    op = bor.operator(bor.body_mesh(body, diaphragm_radius_m))
     return bor.entry_factors(op, np.atleast_1d(f_hz), np.atleast_1d(theta_rad), distance_m)
 
 

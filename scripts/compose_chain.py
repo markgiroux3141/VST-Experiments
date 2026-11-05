@@ -34,6 +34,8 @@ from varimu.config import CONFIG_DIR
 PORTS = {
     "neumann_u47": {"tag": "u47", "output": "out", "drop": ["RLOAD"]},
     "telefunken_v76": {"tag": "v76", "input": "ia", "drop": ["RSRC"]},
+    "omni_4134": {"tag": "omni", "output": "out", "drop": ["RMEAS"]},
+    "clean_pre": {"tag": "clean", "input": "ia", "drop": ["RSRC"]},
 }
 CABLE = {
     "cable_c_f": {
@@ -99,7 +101,7 @@ class Renamer:
                     out[k] = [self.node(n) for n in v]
             elif k == "parts":
                 out[k] = {self.part_name(n): self.part(p) for n, p in v.items()}
-            elif k == "model":
+            elif k in ("model", "clamp"):  # a device key (a tube's model, an op-amp's clamp)
                 out[k] = f"{v}_{self.tag}" if v in self.devices else v
             elif k == "core":
                 out[k] = {ck: self.param(cv) for ck, cv in v.items()}
@@ -155,13 +157,17 @@ def compose(mic_name: str, pre_name: str) -> dict:
         "source": tol["source"],
         "seed": rp.key(tol["seed"]),
         "spread": rp.key(tol["spread"]),
-        "tube": {k: rp.key(v) for k, v in tol["tube"].items()},
         "bands": {
             f"{b}_{tp}": ([rp.key(x) for x in v] if isinstance(v, list) else rp.key(v))
             for b, v in tol["bands"].items()
         },
         "classes": {f"{b}_{tp}": [rp.part_name(p) for p in v] for b, v in tol["classes"].items()},
     }
+    if tol_tube := (pre["tolerance"].get("tube") or mic["tolerance"].get("tube")):
+        r = rp if pre["tolerance"].get("tube") else rm
+        tol = {**{k: tol[k] for k in ("source", "seed", "spread")},
+               "tube": {k: r.key(v) for k, v in tol_tube.items()},
+               **{k: tol[k] for k in ("bands", "classes")}}  # fmt: skip
     mt = mic["tolerance"]
     for b, v in mt["bands"].items():
         tol["bands"][f"{b}_{tm}"] = [rm.key(x) for x in v] if isinstance(v, list) else rm.key(v)

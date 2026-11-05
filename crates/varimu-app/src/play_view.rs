@@ -241,6 +241,8 @@ pub struct Args {
     pub edit: Option<String>,
     /// Open the Components view on this component (`NAME` or `NAME@N`).
     pub component: Option<String>,
+    /// Open the Room view.
+    pub room: bool,
 }
 
 impl Args {
@@ -250,6 +252,7 @@ impl Args {
         while let Some(x) = it.next() {
             match x.as_str() {
                 "--play" => a.play = true,
+                "--room" => a.room = true,
                 "--device" => a.device = Some(it.next().ok_or("--device needs an id")?),
                 "--edit" => a.edit = Some(it.next().ok_or("--edit needs a circuit name")?),
                 "--component" => {

@@ -22,6 +22,9 @@
 //!
 //! Components (docs/COMPONENT_EDITOR_PLAN.md C2 step 7): `components` (a transformer's
 //! design edited, compiled, heard in a circuit that pins it, saved as a version).
+//!
+//! Rooms (docs/ROOM_LOOP_PLAN.md): `room` (a scene of sources and placed mics, rendered
+//! into session tracks).
 
 pub mod audio;
 pub mod components;
@@ -38,6 +41,7 @@ pub mod print;
 pub mod proxy;
 pub mod render;
 pub mod resample;
+pub mod room;
 pub mod sampler;
 pub mod session;
 pub mod settings;

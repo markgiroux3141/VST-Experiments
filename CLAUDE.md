@@ -463,6 +463,29 @@ refitted on it: the omni's 6.5 kHz dip gone, the presence peak at ~11 kHz, omni 
 (in ds58). `free_field.capsule_entry_pressures` picks body / sphere / path from a capsule's
 geometry; `mic_print.py --distance-m` prints a point source (proximity).
 
+**The room loop** ([docs/ROOM_LOOP_PLAN.md](docs/ROOM_LOOP_PLAN.md), started 2026-11-04, the
+user delegating its decisions; MIC_ROOM_PLAN.md's A4 and A9): sources placed in a shoebox room,
+mics placed and aimed, each through its chain. `varimu/rooms/` (outside the render cache key):
+`entries.py` (a capsule's front / rear entries tabulated over angle to its axis x 1 / r x
+frequency, the BEM's `bor.entry_table` solved once per frequency, cached in cache/diffraction/),
+`shoebox.py` (image sources keeping their directions, each through its table; the diffuse tail
+96 shared plane waves, so a cardioid's diffuse level and spaced mics' coherence come out of the
+physics), `scene.py` (scene files, `render`: per mic the chain printed, cached in
+cache/rooms/prints/; `solo=True` each source alone: the bleed matrix), `binaural.py` (stereo
+separation: better-ear glimpses, Lavandier & Culling's BMLD); `scripts/room_print.py SCENE`;
+`tests/test_rooms.py`. **The opposite chain** (R4): `omni_4134` (`BK4134@2`: @1 on its 1/2-inch
+housing as a `cylinder` body, `bor.pressure_mesh`; a TL071 follower) into `clean_pre` (an
+NE5534A gain stage) = `omni_clean.yaml` (compose_chain.py), on a new macro part **`opamp`**
+(both builders, a symbol `OpAmp`: single pole from a datasheet's A0 / GBW, optional clamp diodes
+at a swing; data/datasheets/opamps/README.md); `tests/test_clean_chain.py`. **R5:**
+`scripts/room_separation.py` (two sources, spots through the chains, a spaced omni room pair
+panned hard; -> reports/rooms/separation/summary.json, mixes for
+`separation_listen.py --room`). **The app's Room view** (`varimu-app --room`; `room_view.rs`,
+`varimu_app::room`): the plan drawn to scale, sources (session tracks) and mics dragged and
+aimed with their patterns, Render runs `room_print.py` as a background process (`uv`), a
+session track per mic, panned (`SessionView::add_room_tracks`); scene per session in
+`<session>/rooms/scene.json`; `crates/varimu-app/tests/room.rs` (ignored: needs uv).
+
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
 distance; mics later). The cheap first experiment is built (`varimu/separation/`,
@@ -913,6 +936,11 @@ cargo run --release [--features timing] --example bench -- circuit.json input.f6
 cargo run --release -p varimu-app [-- FILE --play --device pultec_eqp1a]   # the native app (docs/NATIVE_APP_PLAN.md; R2: the Play view)
 cargo run --release -p varimu-app -- --edit triode_stage_drawn   # R3: the Editor view on a drawn circuit (config/circuits/*.drawing.json)
 cargo run --release -p varimu-app -- --component OT_5E3   # C2 step 7: the Components view on a transformer component (NAME or NAME@N)
+cargo run --release -p varimu-app -- --room   # the Room view: sources and mics placed in a room, rendered into session tracks (docs/ROOM_LOOP_PLAN.md)
+uv run --extra fast python scripts/room_print.py config/scenes/NAME.yaml [--solo] [--quality draft]   # a scene recorded through its mics -> reports/rooms/<scene>/
+uv run --extra fast --extra listen python scripts/room_separation.py [--render-only | --analyse-only]   # R5: the room separation experiment -> reports/rooms/separation/
+uv run --extra listen --with sounddevice python scripts/separation_listen.py --room   # its staircase on headphones
+uv run python scripts/compose_chain.py --mic omni_4134 --pre clean_pre [--check]   # the opposite chain -> config/circuits/omni_clean.yaml
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]
 cargo run -p varimu-app --example devices             # the audio devices cpal sees
 cargo run --release -p varimu-app --example play -- --device fairchild_670 (--file F | --input NAME --channel N) [--for S] [--turn KEY=A,B] [--record take.wav]   # R2: real-time stats (load, dropouts, latency, knob to ear)

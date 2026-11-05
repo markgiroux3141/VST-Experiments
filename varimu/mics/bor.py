@@ -80,7 +80,8 @@ class Mesh:
         shape = np.clip(1 - (r / a) ** 2, 0.0, None) * r
         out = 0.5 * self.length * (shape @ w)
         out = np.where(self.tag == tag, out, 0.0)
-        return out / out.sum()
+        total = out.sum()
+        return out / total if total > 0 else out  # no such diaphragm: no entry
 
 
 def _segment(a, b, n: int, grade: float = 1.0) -> np.ndarray:
@@ -99,12 +100,17 @@ def polyline_mesh(
     diaphragm_radius_m: float,
     interior: np.ndarray | None = None,
     grade: float = 2.0,
+    segment_panel_m: list[float] | None = None,
 ) -> Mesh:
     """A mesh from the generating curve's corners (front pole first, rear pole last, both
-    at r = 0), each segment tagged, about `panel_m` per panel (graded toward corners)."""
+    at r = 0), each segment tagged, about `panel_m` per panel (graded toward corners;
+    `segment_panel_m` per segment in its place)."""
     p0, p1, tag = [], [], []
-    for (a, b), t in zip(zip(corners[:-1], corners[1:], strict=True), tags, strict=True):
-        n = max(2, int(np.ceil(np.hypot(b[0] - a[0], b[1] - a[1]) / panel_m)))
+    sizes = segment_panel_m or [panel_m] * len(tags)
+    for (a, b), t, size in zip(
+        zip(corners[:-1], corners[1:], strict=True), tags, sizes, strict=True
+    ):
+        n = max(2, int(np.ceil(np.hypot(b[0] - a[0], b[1] - a[1]) / size)))
         pts = _segment(a, b, n, grade)
         p0.append(pts[:-1])
         p1.append(pts[1:])
@@ -203,6 +209,35 @@ def capsule_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e-3)
     c += [(a, -zd), (0.0, -zd)]
     t += [0, REAR]
     return polyline_mesh(c, t, panel_m, a)
+
+
+PRESSURE_BODY_FIELDS = (
+    "radius_m",  # the housing (capsule and preamplifier) behind the diaphragm's face
+    "length_m",  # from the diaphragm's face to the housing's back end
+)
+
+
+def pressure_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e-3) -> Mesh:
+    """A pressure capsule on its housing (`body`: form `cylinder`, PRESSURE_BODY_FIELDS):
+    the diaphragm (radius `diaphragm_radius_m`) at the origin facing +z, flush with the
+    housing's face out to `radius_m`, the housing a cylinder `length_m` long. Panels grow
+    to 4 panel_m along the housing's side, away from the diaphragm."""
+    a, rb, length = diaphragm_radius_m, body["radius_m"], body["length_m"]
+    if not (a < rb and length > rb):
+        raise ValueError(f"pressure body: need diaphragm < radius < length ({body})")
+    c = [(0.0, 0.0), (a, 0.0), (rb, 0.0), (rb, -length), (0.0, -length)]
+    t = [FRONT, 0, 0, 0]
+    return polyline_mesh(
+        c, t, panel_m, a, segment_panel_m=[panel_m, panel_m, 4 * panel_m, 2 * panel_m]
+    )
+
+
+def body_mesh(body: dict, diaphragm_radius_m: float) -> Mesh:
+    """The mesh of a capsule's `body` by its `form`: `cylinder` (a pressure capsule on its
+    housing, `pressure_mesh`), else the dual-diaphragm capsule (`capsule_mesh`)."""
+    if body.get("form") == "cylinder":
+        return pressure_mesh(body, diaphragm_radius_m)
+    return capsule_mesh(body, diaphragm_radius_m)
 
 
 # --- the kernels ---
@@ -365,3 +400,26 @@ def entry_factors(
         out_f.append(wf @ p)
         out_r.append(wr @ p)
     return np.array(out_f), np.array(out_r)
+
+
+def entry_table(
+    op: Operator, f_hz: np.ndarray, theta_rad: np.ndarray, distances_m: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """`entry_factors` over a grid, (freqs, distances, angles) each: one system per
+    frequency, solved for every incidence at once (a distance np.inf is a plane wave)."""
+    wf, wr = op.mesh.face_weights(FRONT), op.mesh.face_weights(REAR)
+    xs = np.vstack([op.mesh.mid, op.mesh.interior])
+    th = np.atleast_1d(theta_rad)
+    nd, na = len(distances_m), len(th)
+    out_f = np.zeros((len(f_hz), nd, na), complex)
+    out_r = np.zeros_like(out_f)
+    for i, f in enumerate(np.atleast_1d(f_hz)):
+        k = 2 * np.pi * float(f) / C_AIR
+        rhs = np.hstack(
+            [plane_wave(xs, k, th) if np.isinf(d) else point_source(xs, k, th, float(d))
+             for d in distances_m]
+        )  # fmt: skip
+        p = np.linalg.lstsq(_system(op, k), rhs, rcond=None)[0]
+        out_f[i] = (wf @ p).reshape(nd, na)
+        out_r[i] = (wr @ p).reshape(nd, na)
+    return out_f, out_r

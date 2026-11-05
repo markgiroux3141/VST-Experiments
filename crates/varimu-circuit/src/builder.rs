@@ -507,7 +507,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 22] = [
+const MACROS: [&str; 23] = [
     "R",
     "C",
     "L",
@@ -530,6 +530,7 @@ const MACROS: [&str; 22] = [
     "plate",
     "tape",
     "harp",
+    "opamp",
 ];
 
 fn macro_of(kind: &str) -> Macro {
@@ -659,6 +660,18 @@ fn macro_of(kind: &str) -> Macro {
         "capsule" => (
             Some(3),
             vec![p("component", Raw), p("polarization_v", Physical)],
+            false,
+        ),
+        "opamp" => (
+            Some(3),
+            vec![
+                p("a0", Physical),
+                p("gbw_hz", Physical),
+                p("r_out_ohm", Physical),
+                p("r_in_ohm", Physical),
+                opt("clamp", Device),
+                opt("swing_v", Physical),
+            ],
             false,
         ),
         "capsule_dual" => (
@@ -974,6 +987,29 @@ fn expand(
                 model,
                 f("operating_v")?,
                 f("ref_current_a")?,
+            )
+        }
+        "opamp" => {
+            let (p, m, o) = (nodes[0].as_str(), nodes[1].as_str(), nodes[2].as_str());
+            let clamp = match a["clamp"].as_str() {
+                Some(key) => {
+                    let Some(swing) = opt("swing_v")? else {
+                        return Err(ctx.fail(name, "a clamp needs swing_v"));
+                    };
+                    Some((ctx.model_of(key).name().to_string(), swing))
+                }
+                None => None,
+            };
+            parts::opamp(
+                name,
+                p,
+                m,
+                o,
+                f("a0")?,
+                f("gbw_hz")?,
+                f("r_out_ohm")?,
+                f("r_in_ohm")?,
+                clamp.as_ref().map(|(k, v)| (k.as_str(), *v)),
             )
         }
         "capsule" => return capsule_part(ctx, name, nodes, a),

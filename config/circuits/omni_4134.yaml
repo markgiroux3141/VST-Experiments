@@ -1,0 +1,68 @@
+# A small pressure omni: the B&K 4134 capsule on a transformerless impedance converter
+# (docs/ROOM_LOOP_PLAN.md R4: the polar opposite of the U47 -> V76, the neutral pole of
+# MIC_ROOM_PLAN.md's "Opposite chains"). B&K's 4006 recording omni grew out of these
+# measurement capsules; its own electronics aren't published, so the converter is ours: a
+# JFET-input op-amp (TL071) as a unity follower, as a measuring preamplifier is. No
+# transformer, no tube: its harmonics are only the op-amp's clamp at +-13 V.
+#
+# The capsule polarized at 200 V through 10 GOhm (as capsule_bk4134.yaml), its electrode
+# into the follower's + input held at DC by 10 GOhm; the follower drives the cable through
+# 50 Ohm. RMEAS is only the measuring load (dropped in a chain, scripts/compose_chain.py).
+
+title: "Pressure omni (B&K 4134 capsule, TL071 follower)"
+input: in
+probes: [out, e, bp]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.5, source: "derived: ~9.5 mV/Pa (the capsule at 200 V, MIC_ROOM_PLAN.md A2) x 20 Pa = 0.19 V, x 2.6 for headroom (as capsule_bk4134.yaml)"}
+
+values:
+  capsule_model: {value: BK4134@2, source: "config/components/bk4134/2.yaml (@1 with its housing as a body for the room's diffraction: data/datasheets/published_points.yaml BK4134 body)"}
+  polarization_v: {value: 200.0, source: "web: https://peel.dk/Bruel&Kjaer/Equipment/Condenser%20Microphone%20Cartridges%20(Product%20datasheets).pdf (the 4134's 200 V polarization)"}
+  r_feed_ohm: {value: 10.0e+9, source: "provisional: model knowledge (a measuring preamp's polarization feed, ~10 GOhm; as capsule_bk4134.yaml)"}
+  c_pol_f: {value: 1.0e-6, source: "provisional: model knowledge (the polarization supply's AC ground)"}
+  r_bias_ohm: {value: 10.0e+9, source: "provisional: model knowledge (a measuring preamp's input resistance, ~10-20 GOhm)"}
+  c_in_f: {value: 0.2e-12, source: "provisional: model knowledge (a measuring preamp's input capacitance, ~0.2 pF)"}
+  u_a0: {value: 2.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/tl071.pdf (AOL 200 V/mV typ; data/datasheets/opamps/README.md)"}
+  u_gbw_hz: {value: 3.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/tl071.pdf (GBW 3 MHz typ, PS / NS packages and TL07xM; data/datasheets/opamps/README.md)"}
+  u_r_in_ohm: {value: 1.0e+12, source: "web: https://www.ti.com/lit/ds/symlink/tl071.pdf (input resistance 1 TOhm typ)"}
+  u_r_out_ohm: {value: 50.0, source: "provisional: model knowledge (a TL071's open-loop output resistance, tens of ohms; closed loop it is milliohms)"}
+  u_swing_v: {value: 12.9, source: "derived: the sheet's +-13.5 V swing (RL 10 kOhm, +-15 V; data/datasheets/opamps/README.md) less the clamp diode's ~0.6 V"}
+  u_noise_ohm: {value: 20.0e+3, source: "derived: the TL071's 18 nV/rtHz (data/datasheets/opamps/README.md) as a resistor's Johnson noise at 20 C, (18e-9)^2 / 4kT (heard only under a noise block)"}
+  r_out_ohm: {value: 50.0, source: "provisional: model knowledge (a transformerless mic's build-out resistor)"}
+  r_meas_ohm: {value: 10.0e+3, source: "provisional: model knowledge (a measuring load, a preamp's input)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 1.0, source: "provisional: model knowledge (metal film resistors)"}
+  tol_cap_pct: {value: 10.0, source: "provisional: model knowledge (film and electrolytic capacitors)"}
+
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r1: tol_resistor_pct
+    cap: tol_cap_pct
+  classes:
+    r1: [RFEED, RBIAS, RO]
+    cap: [CBP]
+
+devices:
+  DCLAMP: {device: SI_RECTIFIER@1}
+
+sections:
+  - title: capsule
+    parts:
+      VPOL: {V: [pol, "0"], v: polarization_v}
+      RFEED: {R: [pol, bp], r: r_feed_ohm}
+      CBP: {C: [bp, "0"], c: c_pol_f}
+      K1: {capsule: [in, bp, e], component: capsule_model, polarization_v: polarization_v}
+      RBIAS: {R: [e, "0"], r: r_bias_ohm}
+      CIN: {C: [e, "0"], c: c_in_f, tolerance: none}
+
+  - title: converter
+    parts:
+      RN: {R: [e, ep], r: u_noise_ohm, tolerance: none}
+      U1: {opamp: [ep, uo, uo], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      RO: {R: [uo, out], r: r_out_ohm}
+      RMEAS: {R: [out, "0"], r: r_meas_ohm, tolerance: none}

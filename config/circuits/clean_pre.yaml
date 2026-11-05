@@ -1,0 +1,83 @@
+# A clean transformerless microphone preamp (docs/ROOM_LOOP_PLAN.md R4: the neutral pole,
+# MIC_ROOM_PLAN.md's "Clean transformerless"): one NE5534A as a non-inverting gain stage,
+# the textbook topology, ours (no product's drawing). No transformer, no tube: what it adds
+# is its input impedance (10 kOhm, a mic loaded as designed), its bandwidth and its clip
+# at +-13 V. Until the BJT model, the op-amp is the single-pole macro model
+# (varimu/circuit/parts.py `opamp`) with the datasheet's figures.
+#
+# in -> RSRC (the test generator, dropped in a chain) -> ia -> CIN -> ib (RB to ground, the
+# input impedance) -> RN (the op-amp's voltage noise as a resistor) -> U1 +; RF from the
+# output to -, RG (the GAIN switch) and CG from - to ground (DC gain 1); RO onto out,
+# RLOAD the next stage's input.
+
+title: "Clean preamp (NE5534A)"
+input: in
+probes: [out, ib, uo]
+full_scale:
+  input_volts_peak: {value: 1.0960, source: "derived: 0.775 V rms x sqrt(2), 0 dBu (as telefunken_v76.yaml)"}
+  output_volts_peak: {value: 17.36, source: "derived: +24 dBu peak, the same scale as telefunken_v76.yaml's output so the two chains print comparably (this stage clips at ~+-13 V)"}
+
+controls:
+  gain_db: {value: 40, choices: [20, 30, 40, 50, 60], unit: dB, source: "provisional: model knowledge (a mic preamp's gain switch, 20-60 dB in 10 dB steps)"}
+
+values:
+  source_impedance_ohm: {value: 150.0, source: "provisional: model knowledge (a test generator at a mic's 150 Ohm)"}
+  c_in_f: {value: 47.0e-6, source: "provisional: model knowledge (the input coupling capacitor of a transformerless preamp)"}
+  r_bias_ohm: {value: 10.0e+3, source: "provisional: model knowledge (a transformerless preamp's input impedance, 1.5-10 kOhm; the high end: a mic loaded as designed)"}
+  u_a0: {value: 1.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (AVD 100 V/mV typ; data/datasheets/opamps/README.md)"}
+  u_gbw_hz: {value: 10.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (B1 10 MHz typ)"}
+  u_r_in_ohm: {value: 100.0e+3, source: "web: https://www.ti.com/lit/ds/symlink/ne5534.pdf (ri 100 kOhm typ)"}
+  u_r_out_ohm: {value: 30.0, source: "provisional: model knowledge (a 5534's open-loop output resistance, tens of ohms; closed loop the sheet's zo is 0.3 Ohm at 30 dB of gain)"}
+  u_swing_v: {value: 12.4, source: "derived: the sheet's 26 V peak to peak (RL >= 600 Ohm, +-15 V; data/datasheets/opamps/README.md) less the clamp diode's ~0.6 V"}
+  u_noise_ohm: {value: 757.0, source: "derived: the NE5534A's 3.5 nV/rtHz at 1 kHz (data/datasheets/opamps/README.md) as a resistor's Johnson noise at 20 C, (3.5e-9)^2 / 4kT (heard only under a noise block)"}
+  r_f_ohm: {value: 10.0e+3, source: "provisional: model knowledge (the feedback resistor)"}
+  r_g20_ohm: {value: 1111.1, source: "derived: r_f / (10^(20/20) - 1)"}
+  r_g30_ohm: {value: 326.6, source: "derived: r_f / (10^(30/20) - 1)"}
+  r_g40_ohm: {value: 101.01, source: "derived: r_f / (10^(40/20) - 1)"}
+  r_g50_ohm: {value: 31.72, source: "derived: r_f / (10^(50/20) - 1)"}
+  r_g60_ohm: {value: 10.01, source: "derived: r_f / (10^(60/20) - 1)"}
+  c_g_f: {value: 2.2e-3, source: "provisional: model knowledge (the gain leg's DC block; 7 Hz at 60 dB)"}
+  r_out_ohm: {value: 47.0, source: "provisional: model knowledge (an output build-out resistor)"}
+  load_ohm: {value: 10.0e+3, source: "provisional: model knowledge (a line input)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 1.0, source: "provisional: model knowledge (metal film resistors)"}
+  tol_cap_pct: {value: 10.0, source: "provisional: model knowledge (film and electrolytic capacitors)"}
+
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r1: tol_resistor_pct
+    cap: tol_cap_pct
+  classes:
+    r1: [RB, RF, RO, RG20, RG30, RG40, RG50, RG60]
+    cap: [CIN, CG]
+
+devices:
+  DCLAMP: {device: SI_RECTIFIER@1}
+
+sections:
+  - title: input
+    parts:
+      RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+      CIN: {C: [ia, ib], c: c_in_f}
+      RB: {R: [ib, "0"], r: r_bias_ohm}
+      RN: {R: [ib, ip], r: u_noise_ohm, tolerance: none}
+
+  - title: gain
+    parts:
+      U1: {opamp: [ip, fb, uo], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DCLAMP, swing_v: u_swing_v}
+      RF: {R: [uo, fb], r: r_f_ohm}
+      CG: {C: [g, "0"], c: c_g_f}
+      SGAIN:
+        switch: gain_db
+        parts:
+          RG20: {R: [fb, g], r: r_g20_ohm, in: [20]}
+          RG30: {R: [fb, g], r: r_g30_ohm, in: [30]}
+          RG40: {R: [fb, g], r: r_g40_ohm, in: [40]}
+          RG50: {R: [fb, g], r: r_g50_ohm, in: [50]}
+          RG60: {R: [fb, g], r: r_g60_ohm, in: [60]}
+      RO: {R: [uo, out], r: r_out_ohm}
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

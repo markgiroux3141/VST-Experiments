@@ -16,6 +16,7 @@ mod components_view;
 mod editor_view;
 mod piano_roll;
 mod play_view;
+mod room_view;
 mod sampler_view;
 mod session_view;
 mod theme;
@@ -29,7 +30,7 @@ fn main() -> eframe::Result {
         Ok(a) => a,
         Err(e) => {
             eprintln!(
-                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a|fender_5e3|telefunken_v76|reactor_filter|tube_filter|sampler] [--input NAME [--channel N] | --midi NAME] [--edit DRAWN_CIRCUIT] [--component NAME[@N]]"
+                "{e}\nusage: varimu-app [FILE] [--play] [--device fairchild_670|pultec_eqp1a|fender_5e3|telefunken_v76|reactor_filter|tube_filter|sampler] [--input NAME [--channel N] | --midi NAME] [--edit DRAWN_CIRCUIT] [--component NAME[@N]] [--room]"
             );
             std::process::exit(2);
         }
@@ -81,6 +82,7 @@ enum View {
     Components,
     Play,
     Session,
+    Room,
 }
 
 struct App {
@@ -88,6 +90,7 @@ struct App {
     play: play_view::PlayView,
     editor: editor_view::EditorView,
     session: session_view::SessionView,
+    room: room_view::RoomView,
     /// Made when first shown (it compiles its component on open).
     components: Option<components_view::ComponentsView>,
     config_dir: PathBuf,
@@ -96,7 +99,9 @@ struct App {
 
 impl App {
     fn new(config_dir: PathBuf, args: play_view::Args) -> App {
-        let view = if args.component.is_some() {
+        let view = if args.room {
+            View::Room
+        } else if args.component.is_some() {
             View::Components
         } else if args.edit.is_some() {
             View::Editor
@@ -117,6 +122,7 @@ impl App {
             editor: editor_view::EditorView::new(&config_dir, &name),
             play: play_view::PlayView::new(config_dir.clone(), args),
             session: session_view::SessionView::new(&root),
+            room: room_view::RoomView::new(&root),
             components: None,
             config_dir,
             open_component,
@@ -140,6 +146,7 @@ impl eframe::App for App {
                     ui.selectable_value(&mut self.view, View::Components, "Components");
                     ui.selectable_value(&mut self.view, View::Play, "Play");
                     ui.selectable_value(&mut self.view, View::Session, "Session");
+                    ui.selectable_value(&mut self.view, View::Room, "Room");
                 });
             });
         egui::CentralPanel::default()
@@ -160,6 +167,7 @@ impl eframe::App for App {
                     self.editor.sync_player(&mut self.play);
                     self.session.ui(ui, &mut self.play);
                 }
+                View::Room => self.room.ui(ui, &mut self.session),
             });
     }
 }

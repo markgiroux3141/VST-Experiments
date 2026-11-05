@@ -1,0 +1,149 @@
+"""The room loop (docs/ROOM_LOOP_PLAN.md R1-R3): entry tables, the shoebox with directions,
+scenes."""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from varimu.rooms import entries
+from varimu.rooms.shoebox import Mic, Shoebox, aim_vector, responses
+from varimu.separation.room import Room, air_absorption_db_per_m, impulse_response
+
+FS = 96000
+
+
+def test_body_table_matches_the_bem(tmp_path, monkeypatch):
+    """The table, interpolated between its angles and distances, is the BEM's answer."""
+    from varimu.mics.free_field import body_entry_factors
+
+    monkeypatch.setattr(entries, "N_FREQ", 8)
+    monkeypatch.setattr(entries, "CACHE", tmp_path)
+    body = {"form": "cylinder", "radius_m": 6.35e-3, "length_m": 0.03}
+    geom = {"diaphragm": {"radius_m": 4.45e-3}, "body": body}
+    tab = entries.entry_table(geom, FS)
+    assert tab.rear.shape == tab.front.shape and np.all(tab.rear == 0)  # no rear diaphragm
+    fg = tab.f_grid[1:]
+    for th_deg, d in [(30.0, 1.0), (31.25, 0.25), (151.25, np.inf)]:
+        got, _ = tab.at(np.radians([th_deg]), np.array([d]))
+        want, _ = body_entry_factors(fg, [np.radians(th_deg)], body, 4.45e-3, d)
+        err = np.abs(got[0, 1:] - want[:, 0]) / np.abs(want[:, 0])
+        sel = fg < 20e3
+        assert np.all(err[sel] < 0.02), (th_deg, d, err)
+    assert np.all(tab.at(np.array([0.3]), np.array([0.5]))[0][:, 0] == 1)  # DC
+
+
+def test_path_table_is_the_spherical_wave():
+    tab = entries.entry_table({"path_m": 0.02}, FS)
+    i = np.searchsorted(tab.f_grid, 1000.0)
+    k = 2 * np.pi * tab.f_grid[i] / entries.C_AIR
+    f, r = tab.at(np.array([0.0]), np.array([1.0]))
+    assert f[0, i] == pytest.approx(1 / 0.99 * np.exp(1j * k * 0.01), rel=1e-9)
+    assert r[0, i] == pytest.approx(1 / 1.01 * np.exp(-1j * k * 0.01), rel=1e-9)
+
+
+def _omni():
+    return entries.entry_table({}, FS)
+
+
+def test_anechoic_room_is_the_free_field():
+    """An anechoic shoebox: the direct sound alone, 1 / r late by r / c through the air."""
+    room = Shoebox((8.0, 8.0, 8.0), ("anechoic",) * 6)
+    src, pos = np.array([4.0, 4.0, 4.0]), np.array([4.0, 5.5, 4.0])
+    h = responses(room, [src], [Mic(pos, aim_vector(-90), _omni())], FS, length_s=0.1, tail=False)
+    x = h[0, 0, 0]
+    f = np.fft.rfftfreq(len(x), 1 / FS)
+    got = np.fft.rfft(x)
+    r = 1.5
+    air = 10 ** (-air_absorption_db_per_m(np.maximum(f, 1.0)) * r / 20)
+    want = air / r * np.exp(-2j * np.pi * f * r / 343.2)
+    sel = (f > 20) & (f < 20e3)
+    err = np.abs(got[sel] - want[sel]) / np.abs(want[sel])
+    assert np.max(err) < 0.01
+
+
+def test_omni_early_part_matches_the_mono_room():
+    """With an omni the early part is the separation study's room (its 1 / 4 pi r scale)."""
+    old = Room("t", (5.0, 4.0, 2.6), "furnished_wall", "wood_floor", "gypsum_on_studs", "t")
+    room = Shoebox((5.0, 4.0, 2.6), ("furnished_wall",) * 4 + ("wood_floor", "gypsum_on_studs"))
+    src, mic = np.array([1.2, 1.5, 1.3]), np.array([3.4, 2.1, 1.1])
+    ref = impulse_response(old, tuple(src), tuple(mic), FS) * 4 * np.pi
+    h = responses(room, [src], [Mic(mic, aim_vector(0), _omni())], FS, tail=False)[0, 0, 0]
+    n = int(0.055 * FS)  # before the fade toward the tail
+    # below 6 kHz: the old room's air is per octave up to 8 kHz, the new one per frequency
+    m = 1 << 16
+    f = np.fft.rfftfreq(m, 1 / FS)
+
+    def low(x):
+        return np.fft.irfft(np.fft.rfft(x[:n], m) * (f < 6000), m)
+
+    err = np.sqrt(np.sum((low(h) - low(ref)) ** 2) / np.sum(low(ref) ** 2))
+    assert 20 * np.log10(err) < -30
+
+
+def test_tail_continues_the_images_and_spaced_mics_cohere_like_a_diffuse_field():
+    room = Shoebox((7.0, 5.5, 3.2), ("furnished_wall",) * 4 + ("wood_floor", "gypsum_on_studs"))
+    om = _omni()
+    mics = [Mic(np.array([3.0, 3.0, 1.5]), aim_vector(0), om),
+            Mic(np.array([3.3, 3.0, 1.5]), aim_vector(0), om)]  # fmt: skip
+    h = responses(room, [np.array([1.5, 1.2, 1.2])], mics, FS)[0]
+    a, b = h[0, 0], h[1, 0]
+    # energy continuity across the hand-over at 80 ms (60-80 ms vs 80-100 ms), within 3 dB
+    e1 = np.sum(a[int(0.06 * FS) : int(0.08 * FS)] ** 2)
+    e2 = np.sum(a[int(0.08 * FS) : int(0.10 * FS)] ** 2)
+    assert abs(10 * np.log10(e2 / e1)) < 3
+    # tail coherence at 0.3 m: high at 150 Hz (sinc(kd) ~ 0.65), low at 2 kHz
+    from scipy.signal import coherence
+
+    t0, t1 = int(0.1 * FS), int(0.5 * FS)
+    flat = np.exp(3 * np.log(10) * np.arange(t1 - t0) / FS / room.rt60_s()[3])  # stationary
+    a, b = a[t0:t1] * flat, b[t0:t1] * flat
+    f, coh = coherence(a, b, FS, nperseg=4096)
+    lo = coh[(f > 100) & (f < 200)].mean()
+    f, coh = coherence(a, b, FS, nperseg=512)
+    hi = coh[(f > 1500) & (f < 6000)].mean()
+    assert lo > 0.3 and hi < 0.15, (lo, hi)
+
+
+def test_scene_loads_and_its_pressures_are_the_room(tmp_path):
+    from varimu.rooms.scene import load_scene, mic_pressures
+
+    clip = tmp_path / "x.wav"
+    import soundfile as sf
+
+    rng = np.random.default_rng(0)
+    sf.write(clip, rng.standard_normal(4800).astype("<f4"), FS, subtype="FLOAT")
+    scene = load_scene(
+        {
+            "name": "t",
+            "room": {"dims_m": [6, 6, 6], "materials": {"walls": "anechoic", "floor": "anechoic",
+                                                         "ceiling": "anechoic"}},
+            "sources": [{"name": "s", "clip": str(clip), "spl_db": 94, "position_m": [3, 3, 3]}],
+            "mics": [{"name": "m", "chain": "capsule_bk4134", "position_m": [3, 4, 3],
+                      "aim": {"azimuth_deg": -90}}],
+        }
+    )  # fmt: skip
+    p, kinds, n = mic_pressures(scene, FS, [np.ones(2000)])
+    assert kinds == ["pressure"]
+    lag = int(round(1 / 343.2 * FS))
+    edge = np.argmax(np.diff(p[0, 0, 0]))
+    assert abs(edge - lag) <= 2
+    assert p[0, 0, 0, lag + 1000] == pytest.approx(1.0, rel=1e-3)  # 1 Pa at 1 m, 1 m away
+
+
+def test_bmld_and_better_ear_on_the_textbook_cases():
+    """N0S0: no binaural advantage; N0Spi: ~15 dB at low frequencies (the EC model's k at
+    250 Hz); a target hard left against a masker hard right: the better ear is far ahead."""
+    from varimu.rooms.binaural import band_measures
+
+    rng = np.random.default_rng(1)
+    n = FS
+    s, m = rng.standard_normal(n), rng.standard_normal(n)
+    diotic = band_measures(np.stack([s, s]), np.stack([m, m]), FS)
+    assert np.allclose(diotic["bmld_db"], 0.0, atol=1e-9)
+    assert abs(np.mean(diotic["be_tmr_db"])) < 0.3 and np.max(np.abs(diotic["be_tmr_db"])) < 2
+    spi = band_measures(np.stack([s, -s]), np.stack([m, m]), FS)
+    low = spi["bmld_db"][(spi["fc_hz"] > 200) & (spi["fc_hz"] < 300)]
+    assert np.all((low > 13) & (low < 16)), low
+    panned = band_measures(np.stack([s, 0 * s]), np.stack([0 * m, m]), FS)
+    assert np.all(panned["be_tmr_db"] > 40)

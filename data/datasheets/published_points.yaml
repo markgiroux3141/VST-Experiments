@@ -457,6 +457,14 @@
     # noise: 17.9 dB(A)); Skvor's uniform-array formula gives 2.75e8 here (6 large holes and
     # the unmodelled peripheral slit drain the film faster: 15.6 kHz at -3 dB, 21.8 dB(A))
     film_resistance_pa_s_m3: 1.2e+8
+    # The capsule on its 1/2-inch preamplifier as a rigid body of revolution, for its entry's
+    # diffraction in a room (varimu/mics/bor.py pressure_mesh; docs/ROOM_LOOP_PLAN.md R4: the
+    # small pressure omni): the diaphragm flush with the housing's face (the protection grid
+    # not modelled)
+    body:
+      form: cylinder
+      radius_m: 6.35e-3          # bk: the 1/2-inch capsule's 12.7 mm (13.2 mm with its grid)
+      length_m: 0.09             # provisional: model knowledge (capsule plus a 1/2-inch preamplifier, ~80-100 mm)
     source: "hm (Zuckerwar's table), bk; the peripheral slit ('length 0.3 mm', its other dimensions unknown) is not modelled; air at 20 C (varimu/devices/capsule.py), not Zuckerwar's"
   published:
     polarization_v: 200.0               # bk

@@ -652,6 +652,27 @@ fn table() -> Vec<SymbolDef> {
             false,
             (0.0, 6.35, 5.588, "left"),
         ),
+        macro_sym(
+            "OpAmp",
+            "opamp",
+            "U",
+            "Op-amp, a single-pole macro model (varimu.circuit.parts.opamp): pin 1 +, 2 -, 3 the output; Value is its gain-bandwidth",
+            vec![
+                pin("1", "+", -7.62, 2.54, 0, 2.54),
+                pin("2", "-", -7.62, -2.54, 0, 2.54),
+                pin("3", "3", 7.62, 0.0, 180, 2.54),
+            ],
+            vec![poly(&[
+                (-5.08, 5.08),
+                (5.08, 0.0),
+                (-5.08, -5.08),
+                (-5.08, 5.08),
+            ])],
+            Some("gbw_hz"),
+            &["a0", "r_out_ohm", "r_in_ohm", "clamp", "swing_v"],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
     ];
     let dev_text = (5.842, 1.27, -1.27, "left");
     v.push(device(

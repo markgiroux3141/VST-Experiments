@@ -423,6 +423,31 @@ impl SessionView {
         }
     }
 
+    /// The session, for the Room view.
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    /// New audio tracks from a room's render (name, pan, samples at the session's rate,
+    /// timeline position, what it was rendered from), each its rendered take; the next
+    /// frame of this view makes them one undo step.
+    pub fn add_room_tracks(
+        &mut self,
+        tracks: Vec<(String, f64, Vec<f32>, i64, Value)>,
+    ) -> Result<(), String> {
+        self.saved = true;
+        for (name, pan, samples, position, from) in tracks {
+            let mut t = Track::new(&name);
+            t.pan = pan;
+            t.midi = false;
+            self.session.tracks.push(t);
+            let i = self.session.tracks.len() - 1;
+            self.session.add_rendered_take(i, samples, position, from)?;
+        }
+        self.save();
+        Ok(())
+    }
+
     /// Save the session (once it has a folder) and the prefs.
     fn save(&mut self) {
         if self.saved

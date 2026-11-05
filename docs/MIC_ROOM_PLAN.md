@@ -221,7 +221,9 @@ at a frequency (from the FDTD run) is a cheap aid for placing mics.
    the BV8, the supply, the cable; a plane wave at an angle. *Done when:* its response and
    polar plots match Neumann's within stated tolerances. Then **U47 -> cable -> V76 as one
    netlist**: the user's first listen, on synth renders.
-4. **A4. A shoebox room with directions:** the separation room grown up (image sources
+4. **A4. A shoebox room with directions** (refined and built in
+   [ROOM_LOOP_PLAN.md](ROOM_LOOP_PLAN.md), 2026-11-04, with A9's experiment in stereo and a
+   first Room view): the separation room grown up (image sources
    with arrival directions, so per-mic front / back IRs; a directional diffuse tail),
    sources and mics placed, bleed, GPU convolution. The whole chain heard early ("end to
    end early, fidelity later").
