@@ -336,3 +336,14 @@ Derived: Seeler's Ca 1.97e-12, Cb 1.97e-11 m^5/N, Rb 3.55e7 Pa s/m^3, Lb 1017 kg
 mass 106 mg (dome 1.8, wire 83.9, adhesive 16.8, air 3.3 mg; the wire 2.57 m at B 0.9 T). The
 on-axis response 50 Hz-4 kHz: 0.71 dB rms against s68. Above: SM3 / SM4 (docs/SM57_PLAN.md
 "Status").
+
+## Fitted on the body (R57@2, SM4; scripts/fit_sm57.py --ports-mm 6)
+
+The mic as a rigid body of revolution (`bor.dynamic_mesh`; s68 Figure C's outline, the
+cartridge's face 13 mm in radius and 22 mm deep, provisional; the grille open). Its rear ports
+a band 3-9 mm behind the face (a grid: 3-9 / 5-11 / 7-13 / 11-17 / 15-21 mm; cost 60 / 64 / 123
+/ 243 / 168). Fitted: B l 0.620 T m and B 1.137 T (the sensitivity: 1.491 mV/Pa), resonance
+148 Hz, R1 3.40e5 Pa s/m^3, q 22.4, d 17.5 mm, washer 1.26e6 Pa s/m^3, the air behind it 20
+cm^3 (at the body's bound). Moving mass 9.6 mg. The on-axis response 50 Hz-6.5 kHz 1.08 dB rms
+against s68, the presence peak included (the body's diffraction); the polars at every c81
+frequency within 3 dB (docs/SM57_PLAN.md "Status"). R57@1 (the sphere) stays for the record.

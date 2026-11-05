@@ -4,8 +4,8 @@ Drafted 2026-11-04 from a conversation with the user ("are there any microphones
 could make like an SM57 or SM58 to add to our list? what would this entail. No shortcuts
 and in keeping with our physics approach", then: "yes, let's write this plan"; the user's decisions 2026-11-05, see "Decisions"). It
 expands
-MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1 done, SM2 built
-(2026-11-05, overnight in the `sm57` worktree): see "Status".
+MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1 and SM2 done, SM4's
+body built ahead of SM3 (2026-11-05, overnight in the `sm57` worktree): see "Status".
 
 ## Status (2026-11-05)
 
@@ -50,7 +50,37 @@ transformer's construction.
   circuit. `tests/test_moving_coil.py` (the network, Seeler's series, a cardioid, the gyrator
   against a closed form, the formulas), `tests/test_sm57.py` (the figures above).
 
-**Open, handed on:** the presence peak and above are not in SM2: the model has no presence
+**SM2 done** (the Rust half too: `tests/agreement.rs` bit for bit on `shure_sm57`, fmt and
+clippy clean).
+
+**SM4's body, built ahead of SM3** (the order changed overnight: SM3's done-when, the
+on-axis response to 15 kHz, can't be judged on a sphere, and the sphere couldn't make the
+presence peak without breaking the rejection): `bor.dynamic_mesh` (body form `dynamic`: the
+cartridge's face, a band of rear ports on its side averaged over its area (`Mesh.uniform`),
+the closing ring, the grille head, the taper and the connector end from s68 Figure C; the
+grille open, its screen in the network); `scripts/fit_sm57.py` on the body (entries cached in
+`cache/sm57/`, the port band a grid: `--ports-mm`, best at 3-9 mm behind the face), the band
+50 Hz-6.5 kHz with a guard above. **R57@2** (the circuit pins it): sensitivity 1.491 mV/Pa;
+on axis 1.08 dB rms (max 2.1) to 6.5 kHz, **the presence peak from the body's diffraction**
+(the handle baffles the face: +6 dB at 6 kHz on the front entry), no resonator tuned to it;
+the polars at every published frequency within 3 dB (c81, side / rear, model vs published:
+125 Hz -4.2 / -11.0 vs -3.8 / -10.8; 1 kHz -5.6 / -19.6 vs -6.1 / -20.7; 2 kHz -6.3 / -19.4
+vs -6.05 / -20.0; 4 kHz -6.8 / -15.8 vs -9.2 / -13.5; 8 kHz rear -9.2 vs -11.2): SM4's polar
+done-when met. The gap's field is fitted with B l to the sensitivity (the coil's mass grows
+as (B l / B)^2 at its measured DCR, so the output has a ceiling the field sets): B l 0.62 T m,
+B 1.14 T, moving mass 9.6 mg (a light coil, 0.55 m of wire: no source either way). At bounds:
+the handle's volume at the body's 20 cm^3 (the air behind the washer: the fit wants all of
+it). **Proximity** (no Shure curve, only text: "6 to 10 dB at 100 Hz" at about 6 mm): the
+model gives +18 dB at 100 Hz at 6 mm from the cartridge's face, +16 at 25 mm, +8 at 100 mm,
++2.5 at 300 mm (re 1 kHz). Not tuned to it: a sentence with an ambiguous distance (the grille's
+tip or the face behind it), and first-order theory with the 125 Hz pattern gives more still;
+open, for the user. `tests/test_sm57.py` checks R57@2 on its body.
+
+**Open, handed on:** above the presence peak (SM3): the dip at 7.7 kHz and the second peak at
+9.6 kHz aren't drawn (on the body: rms 4.5 dB above 6.5 kHz; the provisional cap puts a spike
+at 11.3 kHz and a notch at 12.5 kHz). The sphere-era notes follow.
+
+The presence peak and above were not in SM2: the model has no presence
 peak (~11 dB short at 5.8 kHz), a small bump at 11 kHz and a notch at 12.5 kHz. Why: on a
 sphere the presence peak's position pins the network's delay against the 1-2 kHz rejection
 (fitted to 6.5 kHz, -16.9 dB at the rear against -20.7), and a lumped front resonator

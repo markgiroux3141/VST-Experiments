@@ -254,3 +254,30 @@ def test_wide_tube_loss():
     mu, rho, w = 1.813e-5, 1.204, 2 * math.pi * 1e4
     assert v["tb"] == pytest.approx(1e-3 * math.sqrt(2 * w * rho * mu) / (2 * math.pi * 1e-9))
     assert v["tb_m"] == pytest.approx(rho * 1e-3 / (2 * math.pi * 1e-6))
+
+
+def test_dynamic_body_entries():
+    """The handheld body (bor.dynamic_mesh): its rear band averaged over its area; at low
+    frequency both entries see the free field, the rear a path behind; at high frequency
+    the face builds up toward pressure doubling."""
+    from varimu.mics import bor
+
+    body = {
+        "form": "dynamic", "face_radius_m": 13e-3, "ports_m": [7e-3, 13e-3],
+        "cartridge_length_m": 22e-3, "head_radius_m": 15.875e-3, "head_length_m": 63.5e-3,
+        "taper_length_m": 75.39e-3, "end_radius_m": 11.9e-3, "end_length_m": 20.24e-3,
+    }  # fmt: skip
+    m = bor.dynamic_mesh(body, 8e-3)
+    w = m.face_weights(bor.REAR)
+    assert w.sum() == pytest.approx(1.0) and np.all(w[m.tag != bor.REAR] == 0)
+    assert np.all(w[m.tag == bor.REAR] > 0)  # outside the diaphragm's radius: still weighted
+    op = bor.operator(m)
+    fr, rr = bor.entry_factors(op, np.array([50.0, 8000.0]), np.radians([0.0]))
+    assert abs(fr[0, 0]) == pytest.approx(1.0, abs=0.01) and abs(rr[0, 0]) == pytest.approx(
+        1, abs=0.01
+    )
+    path_m = np.angle(fr[0, 0] / rr[0, 0]) / (2 * np.pi * 50.0) * C_AIR
+    assert 0.010 < path_m < 0.030
+    assert 20 * np.log10(abs(fr[1, 0])) > 5.0
+    with pytest.raises(ValueError, match="dynamic body"):
+        bor.dynamic_mesh({**body, "ports_m": [7e-3, 30e-3]}, 8e-3)

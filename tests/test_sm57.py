@@ -13,21 +13,33 @@ from varimu.circuit.ir import NoiseCurrent
 from varimu.config import CONFIG_DIR, DATA_DIR
 from varimu.devices import versions
 from varimu.devices.library import component_data, load_moving_coil
-from varimu.mics.free_field import sphere_ring_factors
+from varimu.mics.free_field import body_entry_factors
 from varimu.mics.networks import moving_coil_response
 
 L_PRIMARY_H = 0.386  # cj06 (scripts/fit_sm57.py)
 TURNS = 4.53  # cj06
+ANGLES = [0.0, 90.0, 180.0]
+
+
+VERSION = "R57@2"  # the circuit's (on the mic's body; R57@1 was fitted on a sphere)
+_ENT: dict = {}
 
 
 def _response(f, theta_deg):
-    d = component_data("R57@1")
-    g = d["geometry"]
-    c = load_moving_coil("R57@1")
-    ent = sphere_ring_factors(
-        f, np.radians(theta_deg), g["sphere_radius_m"], g["diaphragm"]["radius_m"],
-        np.radians(g["rear_ring_deg"]),
-    )  # fmt: skip
+    """Volts open circuit at the 'H' winding per pascal of a plane wave from theta, the
+    entries on the component's body (one BEM solve per frequency, all angles kept)."""
+    g = component_data(VERSION)["geometry"]
+    c = load_moving_coil(VERSION)
+    f = np.atleast_1d(np.asarray(f, float))
+    missing = [x for x in f if float(x) not in _ENT]
+    if missing:
+        fr, rr = body_entry_factors(
+            np.array(missing), np.radians(ANGLES), g["body"], g["diaphragm"]["radius_m"]
+        )
+        for i, x in enumerate(missing):
+            _ENT[float(x)] = (fr[i], rr[i])
+    j = ANGLES.index(theta_deg)
+    ent = (np.array([_ENT[float(x)][0][j] for x in f]), np.array([_ENT[float(x)][1][j] for x in f]))
     return TURNS * moving_coil_response(c, f, ent, l_load_h=L_PRIMARY_H)
 
 
@@ -38,7 +50,7 @@ def _rows(name, doc):
 
 def test_r57_is_pinned_and_locked():
     assert versions.versions("R57")
-    c = load_moving_coil("R57@1")
+    c = load_moving_coil(VERSION)
     assert c.re_ohm == 12.1  # hr23
     assert sum(e.kind == "G" for e in c.elements) == 1
 
@@ -50,22 +62,21 @@ def test_sensitivity():
 
 
 def test_on_axis_below_the_presence_peak():
-    """s68's response, 50 Hz - 4 kHz, re 1 kHz: within the plan's +-2 dB (SM2 fits this band;
-    above it the body (SM4) and the modes (SM3))."""
+    """s68's response, 50 Hz - 6.5 kHz (to the presence peak) re 1 kHz: within the plan's
+    +-2 dB (the region above is the diaphragm's modes and the cap, SM3)."""
     rows = [r for r in _rows("shure_sm57_response.csv", "s68") if r["quality"] != "coarse"]
     f = np.array([float(r["freq_hz"]) for r in rows])
     db = np.array([float(r["db"]) for r in rows])
-    keep = (f >= 50) & (f <= 4000)
+    keep = (f >= 50) & (f <= 6500)
     h = _response(np.concatenate([[1000.0], f[keep]]), 0.0)
     on = 20 * np.log10(abs(h[1:]) / abs(h[0]))
     assert np.max(abs(on - db[keep])) < 2.2
-    assert np.sqrt(np.mean((on - db[keep]) ** 2)) < 1.0
+    assert np.sqrt(np.mean((on - db[keep]) ** 2)) < 1.2
 
 
 def test_polars_front_to_back():
-    """c81's polars at 125 Hz - 2 kHz (SM2's fitted ones): front-to-back and the side within
-    3 dB (Decisions 3). 4 and 8 kHz are the body's (SM4): the sphere is 4.2 dB off at the side
-    at 4 kHz, 6.6 dB at the rear at 8 kHz (reports/mics/r57_fit.json)."""
+    """c81's polars at every published frequency (125 Hz - 8 kHz): front-to-back and the
+    side within 3 dB (Decisions 3; SM4's done-when on the mic's body)."""
     want = {}
     for r in _rows("shure_sm57_polar.csv", "c81"):
         ang = float(r["angle_deg"]) % 360
@@ -74,7 +85,7 @@ def test_polars_front_to_back():
                 float(r["db"])
             )
     for (fr, side), v in want.items():
-        if fr > 2000 or (fr, side) == (500.0, 180):  # above: the body's (SM4); 500 Hz: a null
+        if (fr, side) == (500.0, 180):  # 500 Hz at the rear: a null, read coarse
             continue
         f = np.array([fr])
         model = 20 * np.log10(abs(_response(f, side)[0]) / abs(_response(f, 0.0)[0]))

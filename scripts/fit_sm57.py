@@ -7,7 +7,10 @@ No dimension of the Unidyne III cartridge is published (data/schematics/shure_sm
 resistance, the diaphragm's Mylar, the resonance "in the 100Hz area", the transformer's
 turns), the rest is bounded and fitted here, each unknown to its own figure:
 
-    bl_tm                    the sensitivity: s68 'H' 0.149 mV/ubar at 1 kHz, open circuit
+    bl_tm, b_gap_t           the sensitivity: s68 'H' 0.149 mV/ubar at 1 kHz, open circuit (the
+                             coil's mass grows as (B l / B)^2 at its measured DCR, so the output
+                             has a ceiling over B l that the gap's field sets: B is pinned by the
+                             sensitivity within its bounds, 0.6-1.2 T)
     resonance_hz             the low end's corner (s68's response, -3 dB at ~81 Hz)
     ps.r1_pa_s_m3            the low end's damping (s68's response 100-400 Hz: the bump)
     ps.q, ps.d_m             the network's delay: the side ratio at 1-2 kHz (c81's polars) and
@@ -50,6 +53,7 @@ from __future__ import annotations
 import argparse
 import copy
 import csv
+import hashlib
 import json
 import math
 import re
@@ -61,35 +65,39 @@ from scipy.optimize import least_squares
 from varimu.config import DATA_DIR, REPO_ROOT
 from varimu.devices import moving_coil as mc
 from varimu.devices.library import _plain
+from varimu.mics import bor
 from varimu.mics.free_field import sphere_ring_factors
 from varimu.mics.networks import moving_coil_response
 
 PUBLISHED = DATA_DIR / "datasheets" / "published_points.yaml"
 RESPONSE_DOC, POLAR_DOC = "s68", "c81"
 L_PRIMARY_H = 0.386  # cj06: the transformer's primary inductance (open-circuited secondary)
-FIT_BAND_HZ = (50.0, 4000.0)  # the on-axis response fitted: below the presence peak, where the
-# head's shape matters little (above: the body's diffraction, SM4, and the modes, SM3)
+FIT_BAND_HZ = (50.0, 4000.0)  # on a sphere: below the presence peak, where the head's shape
+# matters little (above: the body's diffraction, SM4, and the modes, SM3)
+BODY_BAND_HZ = (50.0, 6500.0)  # on the real body (SM4): to the presence peak
 SENS_WEIGHT, POLAR_WEIGHT = 4.0, 2.0
 
 # (path into the geometry, low, high, log scale): network elements by name, else keys.
 FREE = [
     (("coil", "bl_tm"), 0.2, 3.0, True),
+    (("coil", "b_gap_t"), 0.6, 1.2, False),
     (("diaphragm", "resonance_hz"), 60.0, 160.0, False),
     (("network", "ps", "r1_pa_s_m3"), 1e5, 1e8, True),
-    (("network", "ps", "q"), 0.55, 20.0, True),
+    (("network", "ps", "q"), 0.55, 80.0, True),
     (("network", "ps", "d_m"), 0.008, 0.030, False),
     (("network", "washer", "r_pa_s_m3"), 1e6, 1e10, True),
-    (("network", "handle", "volume_m3"), 0.5e-6, 40e-6, True),
-    (("rear_ring_deg",), 50.0, 150.0, False),
+    (("network", "handle", "volume_m3"), 0.5e-6, 20e-6, True),  # at most the body's air
 ]
+RING = (("rear_ring_deg",), 50.0, 150.0, False)  # on a sphere only (the body's ports: a grid)
+ANGLES_DEG = np.arange(0.0, 360.0, 5.0)  # the body's entries are solved for all at once
 CAP_HZ = (7000.0, 14000.0)  # above the fitted band, on a dense grid (a sharp peak hides between
 CAP_DB = (3.0, -8.0)  # 1/6-octave points): the model within s68 + 3 / - 8 dB there (no spurious
 # peak or notch where SM3's modes go; one-sided outside the band)
 CAP_F = np.geomspace(*CAP_HZ, 80)
-CAP_ON = False  # off: with the band at 4 kHz the region above isn't the sphere's to fit
+CAP_ON = False  # on a sphere off (the region above 4 kHz isn't the sphere's); on the body on
 
 
-def load_targets():
+def load_targets(band):
     def rows(name):
         with open(DATA_DIR / "datasheets" / name, encoding="utf-8") as f:
             return list(csv.DictReader(f))
@@ -98,7 +106,7 @@ def load_targets():
     f = np.array([float(r["freq_hz"]) for r in resp])
     db = np.array([float(r["db"]) for r in resp])
     q = np.array([r["quality"] != "coarse" for r in resp])
-    keep = (f >= FIT_BAND_HZ[0]) & (f <= FIT_BAND_HZ[1]) & q
+    keep = (f >= band[0]) & (f <= band[1]) & q
     polar = {}
     for r in rows("shure_sm57_polar.csv"):
         if r["document"] != POLAR_DOC or r["band_lo_hz"]:
@@ -134,11 +142,49 @@ def cartridge(g) -> mc.MovingCoil:
     )
 
 
+_ENTRIES: dict[str, dict[float, tuple[np.ndarray, np.ndarray]]] = {}
+
+
+def body_entries(body: dict, a: float, f: np.ndarray, theta_deg: float):
+    """The body's front and rear entries at f for a plane wave from theta (one of
+    ANGLES_DEG): the BEM (varimu.mics.bor.dynamic_mesh) solved once per frequency for every
+    angle, kept in cache/sm57/ by the body, the diaphragm's radius and bor.py's source."""
+    src = (REPO_ROOT / "varimu" / "mics" / "bor.py").read_bytes()
+    key = hashlib.sha256(json.dumps([body, a], sort_keys=True).encode() + src).hexdigest()[:16]
+    path = REPO_ROOT / "cache" / "sm57" / f"body_{key}.npz"
+    table = _ENTRIES.setdefault(key, {})
+    if not table and path.exists():
+        z = np.load(path)
+        for i, x in enumerate(z["f"]):
+            table[float(x)] = (z["front"][i], z["rear"][i])
+    missing = sorted({float(x) for x in np.atleast_1d(f)} - set(table))
+    if missing:
+        op = bor.operator(bor.body_mesh(body, a))
+        fr, rr = bor.entry_factors(op, np.array(missing), np.radians(ANGLES_DEG))
+        for i, x in enumerate(missing):
+            table[x] = (fr[i], rr[i])
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fs = sorted(table)
+        np.savez(path, f=np.array(fs), front=np.array([table[x][0] for x in fs]),
+                 rear=np.array([table[x][1] for x in fs]))  # fmt: skip
+    j = int(np.argmin(abs(ANGLES_DEG - theta_deg % 360)))
+    if abs(ANGLES_DEG[j] - theta_deg % 360) > 1e-9:
+        raise ValueError(f"the body's entries are solved every 5 deg, not at {theta_deg}")
+    ff = np.atleast_1d(f)
+    return (np.array([table[float(x)][0][j] for x in ff]),
+            np.array([table[float(x)][1][j] for x in ff]))  # fmt: skip
+
+
 def response(g, f, theta_deg) -> np.ndarray:
-    """Volts open circuit at the 'H' winding per pascal of a plane wave from theta."""
+    """Volts open circuit at the 'H' winding per pascal of a plane wave from theta: on the
+    geometry's `body` (SM4) or its sphere with the rear ring (SM2)."""
     c = cartridge(g)
-    a, cap = g["sphere_radius_m"], g["diaphragm"]["radius_m"]
-    ent = sphere_ring_factors(f, math.radians(theta_deg), a, cap, math.radians(g["rear_ring_deg"]))
+    cap = g["diaphragm"]["radius_m"]
+    if "body" in g:
+        ent = body_entries(g["body"], cap, f, theta_deg)
+    else:
+        ring = math.radians(g["rear_ring_deg"])
+        ent = sphere_ring_factors(f, math.radians(theta_deg), g["sphere_radius_m"], cap, ring)
     return 4.53 * moving_coil_response(c, f, ent, l_load_h=L_PRIMARY_H)
 
 
@@ -190,12 +236,20 @@ def _label(path) -> str:
     return "/".join(path[1:] if path[0] == "network" else path)
 
 
+def free_of(g) -> list:
+    return FREE if "body" in g else [*FREE, RING]
+
+
+def band_of(g) -> tuple[float, float]:
+    return BODY_BAND_HZ if "body" in g else FIT_BAND_HZ
+
+
 def summary(g, all_resp, polar, sens_v_pa) -> dict:
     f, db = all_resp
     h0 = response(g, f, 0.0)
     ref = abs(response(g, np.array([1000.0]), 0.0)[0])
     on = 20 * np.log10(abs(h0) / ref)
-    band = (f >= FIT_BAND_HZ[0]) & (f <= FIT_BAND_HZ[1])
+    band = (f >= band_of(g)[0]) & (f <= band_of(g)[1])
     pol = {}
     for (fr, side), want in sorted(polar.items()):
         h = response(g, np.array([fr]), float(side))[0]
@@ -204,7 +258,8 @@ def summary(g, all_resp, polar, sens_v_pa) -> dict:
                                           "published_db": round(want, 2)}  # fmt: skip
     lp = mc.compile_network(g)
     return {
-        "fitted": {_label(p): _get(g, p) for p, *_ in FREE},
+        "fitted": {_label(p): _get(g, p) for p, *_ in free_of(g)},
+        **({"body": g["body"]} if "body" in g else {}),
         "sensitivity_mv_pa": round(ref * 1e3, 4),
         "sensitivity_target_mv_pa": sens_v_pa * 1e3,
         "rms_on_axis_db_fit_band": round(float(np.sqrt(np.mean((on[band] - db[band]) ** 2))), 3),
@@ -236,8 +291,9 @@ def write(g) -> None:
     start = next(i for i, ln in enumerate(lines) if ln.startswith('"R57":'))
     end = next((i for i in range(start + 1, len(lines)) if lines[i] and not lines[i][0].isspace()
                 and not lines[i].startswith("#")), len(lines))  # fmt: skip
-    for path, *_ in FREE:
-        key, v = path[-1], float(_get(g, path))
+    paths = [p for p, *_ in free_of(g)] + ([("body", "ports_m")] if "body" in g else [])
+    for path in paths:
+        key, v = path[-1], _get(g, path)
         if path[0] == "network":
             hits = [i for i in range(start, end) if f"name: {path[1]}," in lines[i]]
         else:
@@ -245,7 +301,9 @@ def write(g) -> None:
         if len(hits) != 1:
             raise SystemExit(f"published_points.yaml: {len(hits)} lines for {path}")
         i = hits[0]
-        lines[i], n = re.subn(rf"({key}: \{{value: )[^}}]+\}}", rf"\g<1>{v:.5g}}}", lines[i])
+        text = f"[{v[0]:.4g}, {v[1]:.4g}]" if isinstance(v, list) else f"{float(v):.5g}"
+        pat = rf"({key}: \{{value: )(\[[^]]*\]|[^}}]+)\}}"
+        lines[i], n = re.subn(pat, rf"\g<1>{text}}}", lines[i])
         if n != 1:
             raise SystemExit(f"published_points.yaml: {key} not on line {i + 1}")
     PUBLISHED.write_text("\n".join(lines), encoding="utf-8")
@@ -258,7 +316,7 @@ def plot(g, all_resp, polar, path) -> None:
     import matplotlib.pyplot as plt
 
     f, db = all_resp
-    ff = np.geomspace(30, 16000, 300)
+    ff = np.geomspace(30, 16000, 120)
     ref = abs(response(g, np.array([1000.0]), 0.0)[0])
     fig, ax = plt.subplots(1, 2, figsize=(13, 4.8))
     for th, style in ((0, "-"), (90, "--"), (180, ":")):
@@ -267,9 +325,10 @@ def plot(g, all_resp, polar, path) -> None:
     ax[0].semilogx(f, db, "o", ms=3, color="tab:red", label=f"{RESPONSE_DOC} on axis")
     for (fr, side), want in polar.items():
         ax[0].plot(fr, want, "s" if side == 90 else "^", color="tab:blue", ms=5)
-    ax[0].axvspan(*FIT_BAND_HZ, color="0.93", zorder=0)
+    ax[0].axvspan(*band_of(g), color="0.93", zorder=0)
+    on = "the body" if "body" in g else "a sphere"
     ax[0].set(xlabel="Hz", ylabel="dB re on axis at 1 kHz", ylim=(-30, 10),
-              title="R57 on a sphere, open circuit (H): on axis, 90 and 180 deg")  # fmt: skip
+              title=f"R57 on {on}, open circuit (H): on axis, 90 and 180 deg")  # fmt: skip
     ax[0].grid(True, which="both", alpha=0.3)
     ax[0].legend(fontsize=8)
     th = np.radians(np.arange(0, 361, 5))
@@ -290,25 +349,44 @@ def plot(g, all_resp, polar, path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--ports-mm", type=float, nargs="+",
+                    help="rear-port band centres to try, mm behind the face")  # fmt: skip
     args = ap.parse_args()
+    global CAP_ON
     entry = yaml.safe_load(PUBLISHED.read_text(encoding="utf-8"))["R57"]
     g0 = _plain(entry["geometry"])
     sens = entry["published"]["sensitivity_h_v_per_pa"]
-    fit_resp, all_resp, polar = load_targets()
-    g, at_bounds = g0, []
-    for free, band in ((FREE, FIT_BAND_HZ),):
+    CAP_ON = "body" in g0
+    fit_resp, all_resp, polar = load_targets(band_of(g0))
+    starts = [g0]
+    if "body" in g0 and args.ports_mm:
+        lo, hi = g0["body"]["ports_m"]
+        starts = []
+        for c_mm in args.ports_mm:
+            g1 = copy.deepcopy(g0)
+            g1["body"]["ports_m"] = [1e-3 * c_mm - 0.5 * (hi - lo), 1e-3 * c_mm + 0.5 * (hi - lo)]
+            starts.append(g1)
+    best, grid = None, []
+    for g in starts:
+        free = free_of(g)
         res = least_squares(residuals, _x0(g, free), bounds=_bounds(free), x_scale="jac",
-                            args=(g, free, band, fit_resp, polar, sens, all_resp),
+                            args=(g, free, band_of(g), fit_resp, polar, sens, all_resp),
                             diff_step=1e-4)  # fmt: skip
         g = _with(g, res.x, free)
-        at_bounds += [
+        out = summary(g, all_resp, polar, sens)
+        out["cost"] = float(res.cost)
+        out["at_bounds"] = [
             _label(p) for (p, lo, hi, log), v in zip(free, res.x, strict=True)
             if min(abs(v - (math.log(lo) if log else lo)), abs(v - (math.log(hi) if log else hi)))
             < 1e-3 * abs(v or 1)
         ]  # fmt: skip
-    out = summary(g, all_resp, polar, sens)
-    out["at_bounds"] = at_bounds
-    print(json.dumps(out, indent=1))
+        print(json.dumps(out, indent=1), flush=True)
+        grid.append(out)
+        if best is None or out["cost"] < best[1]["cost"]:
+            best = (g, out)
+    g, out = best
+    if len(grid) > 1:
+        out = {**out, "grid": [{"ports_m": x["body"]["ports_m"], "cost": x["cost"]} for x in grid]}
     rep = REPO_ROOT / "reports" / "mics"
     rep.mkdir(parents=True, exist_ok=True)
     (rep / "r57_fit.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
