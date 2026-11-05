@@ -235,6 +235,8 @@ at a frequency (from the FDTD run) is a cheap aid for placing mics.
    agree.
 6. **A6. The Room view** and its prints into session tracks.
 7. **A7. More mics:** the RCA 44-BX, the SM57, the C12; the small omni's electronics.
+   The SM57 (and SM58) has its own plan, [SM57_PLAN.md](SM57_PLAN.md) (2026-11-04;
+   milestones SM1-SM8, nothing built).
 8. **A8. The BJT model** (shared), then the Neve 1073, the API 312 and the clean
    transformerless preamp; the 351's electronics as a preamp once TM5 exists; the UA 610.
 9. **A9. Ranking chains:** the four poles, pairs ranked by the glimpse metric and the
