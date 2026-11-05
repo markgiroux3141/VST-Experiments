@@ -231,3 +231,26 @@ def test_seeler_element_equals_the_hand_network():
         h0 = networks.moving_coil_response(_cartridge(hand), f, e)
         h1 = networks.moving_coil_response(_cartridge(g), f, e)
         assert np.allclose(h0, h1, rtol=1e-9)
+
+
+def test_wide_tube_loss():
+    """A tube with wide_at_hz: Crandall's resistance and the plain mass."""
+    g = _seeler_geometry()
+    g["network"] = [
+        {"name": "dia", "kind": "diaphragm", "a": "front", "b": "u"},
+        {
+            "name": "tb",
+            "kind": "tube",
+            "a": "u",
+            "b": "rear",
+            "radius_m": 1e-3,
+            "length_m": 1e-3,
+            "count": 2,
+            "open_ends": 0,
+            "wide_at_hz": 10000.0,
+        },  # fmt: skip
+    ]
+    v = {e["name"]: e["value"] for e in mc.compile_network(g)["elements"]}
+    mu, rho, w = 1.813e-5, 1.204, 2 * math.pi * 1e4
+    assert v["tb"] == pytest.approx(1e-3 * math.sqrt(2 * w * rho * mu) / (2 * math.pi * 1e-9))
+    assert v["tb_m"] == pytest.approx(rho * 1e-3 / (2 * math.pi * 1e-6))

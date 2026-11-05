@@ -49,8 +49,14 @@ were rendered from them with PyMuPDF and reduced to 16 gray levels.
 | sp10 | SM57 spec sheet (vendor mirror, PDF created 2010-06-14) | web: https://media.sweetwater.com/store/media/us_pro_sm57_specsheet.pdf | `cc9949a04c52a0b5d43e985b8976931f4621cd257828d3703317475e79caf0bf`, 270798 |
 
 PNGs: `sm57_27A308_1968_p1.png`, `sm57_27A308_1968_p2.png` (s68), `sm58_27A378_1970_p1.png`,
-`sm58_27A378_1970_p2.png` (s70); figure crops by the digitizing pass (`data/datasheets/
-shure_sm57.provenance.yaml`, `shure_sm58.provenance.yaml`).
+`sm58_27A378_1970_p2.png` (s70); the digitized figures' crops `sm57_{1965,1968,1981,2025}_
+response.png`, `sm57_{1968,1981,2025}_polar.png`, `sm58_{1970,1981,2024}_{response,polar}.png`
+(their digitization: `data/datasheets/shure_sm57.provenance.yaml`, `shure_sm58.provenance.yaml`;
+the curves in `shure_sm5{7,8}_{response,polar}.csv`). Notes from the digitizing: s65's Figure B
+is s68's artwork (0.05 dB rms); the SM58 sheet's figures are on PDF p. 31; the 1968 / 1970
+polar rings are +5 / 0 / -5 / -10 / -15 dB; the vintage SM58 polars are the SM57's drawing
+(s70 = s68 scaled, c81's SM58 = c81's SM57), the responses each mic's own; the 2025 SM57
+drawing rolls off far more below 150 Hz than 1965-81 (-4.7 against ~-1.2 dB at 100 Hz).
 
 ### Patents and papers
 
@@ -289,14 +295,14 @@ given where the formulas need it (varimu/devices/moving_coil.py).
 | K = d / c, the entries' delay | d: the diaphragm's centre to the rear entry around the cartridge's front edge, ~15 mm (the radius ~11 mm plus ~8 mm back along the side, shortened by diffraction); bounded 10-22 mm | provisional: the 31.75 mm head (s68) and pat883's Fig. 2 layout |
 | R1, L1: the rear entry (annular slit, screen B) | fitted: R1 to the low end's damping (Grinnip: ~ the critical damping resistance), q = L1 / K R1 to the front-to-back ratio at 125-1000 Hz | fit (seeler61's parameters) |
 | Ca, Cb, Rb, Lb: under the dome, the coil gap + screen A, the magnet's felt cavity | from K, R1, L1 by seeler61's Eqs. 5-10 (no further unknowns) | derived: seeler61 |
-| C'b, L'b, R''b: the washer into the case and handle chambers | the handle's air (the SM57's ~23-32 mm body, ~100 mm long, the transformer and the cable connector inside: ~20 cm^3 of air, bounded 8-40) through the felt washer (a resistance well above Rb, so it acts below ~100 Hz) | provisional: s68's dimensions; pat883, pat905, born12 (its role) |
+| C'b, R''b: the washer into the case and handle chambers | both fitted to c81's pattern at 125 Hz (its first-order shape needs the network's delay ~1.8 times the entries' path there: the air behind the washer lengthens it below the washer's corner); the volume bounded 0.5-40 cm^3 (at most the body's ~20 cm^3) | fit; pat883, pat905, born12 (its role) |
 | The diaphragm's area S | effective radius 8 mm (a ~22 mm clamped diaphragm in a ~27 mm cartridge, the outer surround moving less); bounded 6.5-9.5 mm | provisional: s68's 31.75 mm head; pat713's form |
 | Moving mass m (L3 = m / S^2) | dome: Mylar 1/4 mil (seeler61) at 1390 kg/m^3 over the moving area, ~2.5 mg; coil: its copper length l = B l / B over the measured 12 ohm DCR (hr23), mass = density x resistivity x l^2 / R, ~18 mg at l = 1.2 m; former and adhesive ~3 mg; air load on both faces 8 rho a^3 / 3 each, ~3 mg | derived from sourced figures and the provisional B |
 | B in the gap | 0.9 T (a small ceramic / Alnico circuit), bounded 0.6-1.2 T | provisional: model knowledge |
 | Bl | fitted to the sensitivity: s68 H 0.149 mV/ubar at 1 kHz open circuit through the transformer | fit |
 | Compliance C3 | fitted to the resonance ~100 Hz (born12) with the moving mass | fit |
 | R3, the suspension's loss | small against R1 (seeler61: R3 << R1): Q of the diaphragm alone ~3 | provisional: model knowledge |
-| The resonator (cap in front) | the air between cap and dome (~1 mm over the dome's area) through 7-8 holes (hr23) in a ~1 mm plate: a Helmholtz resonance near the presence peak; fitted (the holes' radius) to the response's peak frequency | provisional geometry; hr23 (hole count), pat883, born12 |
+| The resonator (cap in front) | 8 holes (hr23: 7-8) of ~0.7 mm radius in a ~1 mm plate, their visco-thermal loss in Crandall's wide-tube limit at 9.6 kHz, into the thin air layer between cap and dome (radius 11 mm, fed at 6 mm, 0.15 mm, 60% fill) filled by radial viscous flow (the `film` element: its loss damps the cap without costing the rear rejection, as a screen in series would). Provisional in R57@1; the region above 4 kHz is SM3's / SM4's | provisional geometry; hr23 (hole count), pat883, born12 |
 | The grille screen | the SM57's stainless screen (g25) over the head's face: a woven screen's resistance, ~10 rayl over ~5 cm^2 (negligible but present) | provisional: model knowledge |
 | Coil Re | 12.1 ohm | hr23 (forum, three capsules) |
 | Coil Le | 200 uH; L2 || R2 none until an impedance curve is found | Les, Gearspace 2012 (forum, "IIRC") |
@@ -314,3 +320,19 @@ Proximity curves at stated distances (any era); an impedance curve; the response
 transformer ("51A303" only on vendor and forum pages); any dimension of the cartridge; a
 Shure or AES paper on the SM57 itself; the 1966 SM58 sheet's first printing; Beranek
 (1954) and Olson (1957) in a readable copy; Bauer 1941 (paywalled).
+
+## Fitted (R57@1, scripts/fit_sm57.py; reports/mics/r57_fit.json)
+
+| Unknown | Value | Its figure |
+|---|---|---|
+| B l | 2.31 T m | s68 'H' 0.149 mV/ubar open circuit: 1.488 mV/Pa |
+| resonance | 117 Hz (Born: "in the 100Hz area") | s68's low end (50-150 Hz) |
+| R1 | 3.11e6 Pa s/m^3 | s68's low-end damping (the bump at 180 Hz) |
+| q, d | 9.93, 23.2 mm | c81's side ratio at 1-2 kHz, s68's rise to 4 kHz |
+| washer, the air behind it | 2.03e7 Pa s/m^3, 4.6 cm^3 | c81 at 125 Hz: -4.9 / -10.8 dB (published -3.8 / -10.8) |
+| the rear ring on the sphere | 97.6 deg | c81's rear at 1-2 kHz: -19.6 / -22.2 dB (-20.7 / -20.0) |
+
+Derived: Seeler's Ca 1.97e-12, Cb 1.97e-11 m^5/N, Rb 3.55e7 Pa s/m^3, Lb 1017 kg/m^4; moving
+mass 106 mg (dome 1.8, wire 83.9, adhesive 16.8, air 3.3 mg; the wire 2.57 m at B 0.9 T). The
+on-axis response 50 Hz-4 kHz: 0.71 dB rms against s68. Above: SM3 / SM4 (docs/SM57_PLAN.md
+"Status").

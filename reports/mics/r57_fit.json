@@ -1,0 +1,73 @@
+{
+ "fitted": {
+  "coil/bl_tm": 2.309835772463232,
+  "diaphragm/resonance_hz": 117.10420746578366,
+  "ps/r1_pa_s_m3": 3112752.537181338,
+  "ps/q": 9.927163969862422,
+  "ps/d_m": 0.023164784058760032,
+  "washer/r_pa_s_m3": 20264266.466571335,
+  "handle/volume_m3": 4.573007916745989e-06,
+  "rear_ring_deg": 97.60181042509173
+ },
+ "sensitivity_mv_pa": 1.4879,
+ "sensitivity_target_mv_pa": 1.49,
+ "rms_on_axis_db_fit_band": 0.707,
+ "max_on_axis_db_fit_band": 2.071,
+ "rms_on_axis_db_above": 11.159,
+ "polar": {
+  "125 Hz 90 deg": {
+   "model_db": -4.91,
+   "published_db": -3.79
+  },
+  "125 Hz 180 deg": {
+   "model_db": -10.82,
+   "published_db": -10.83
+  },
+  "1000 Hz 90 deg": {
+   "model_db": -6.96,
+   "published_db": -6.07
+  },
+  "1000 Hz 180 deg": {
+   "model_db": -19.55,
+   "published_db": -20.69
+  },
+  "2000 Hz 90 deg": {
+   "model_db": -6.74,
+   "published_db": -6.05
+  },
+  "2000 Hz 180 deg": {
+   "model_db": -22.19,
+   "published_db": -20.0
+  },
+  "4000 Hz 90 deg": {
+   "model_db": -5.04,
+   "published_db": -9.17
+  },
+  "4000 Hz 180 deg": {
+   "model_db": -15.84,
+   "published_db": -13.54
+  },
+  "8000 Hz 180 deg": {
+   "model_db": -4.64,
+   "published_db": -11.24
+  }
+ },
+ "moving_mass_mg": 105.73,
+ "mass_parts_mg": {
+  "dome_kg": 1.775,
+  "wire_kg": 83.893,
+  "adhesive_kg": 16.779,
+  "air_kg": 3.288,
+  "total_kg": 105.735
+ },
+ "wire_length_m": 2.5665,
+ "seeler": {
+  "ca": 1.9703244695984587e-12,
+  "cb": 1.9713524869992328e-11,
+  "rb": 35503392.0984605,
+  "lb": 1017.360681223393,
+  "q": 9.927163969862422,
+  "s": 0.9091340085083047
+ },
+ "at_bounds": []
+}

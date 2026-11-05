@@ -21,6 +21,7 @@ from varimu.circuit.ir import (
     Capacitor,
     CircuitIR,
     Control,
+    Inductor,
     Resistor,
     Section,
     VoltageProbe,
@@ -94,11 +95,14 @@ def dual_response(
 # --- Moving-coil cartridges (docs/SM57_PLAN.md, SM2) -------------------------------------------
 
 
-def moving_coil_ir(c: MovingCoil, r_load_ohm: float = 1e9) -> CircuitIR:
+def moving_coil_ir(c: MovingCoil, r_load_ohm: float = 1e9, l_load_h: float = 0.0) -> CircuitIR:
     """The cartridge (front pressure `in`, rear pressure on the control input `p_rear`)
-    with its coil into a load r_load_ohm on `out` (the coil's minus grounded)."""
+    with its coil into a load r_load_ohm || l_load_h (an open-circuited transformer's
+    primary inductance; 0: none) on `out` (the coil's minus grounded)."""
     els = parts.moving_coil("MC", "in", "p_rear", "out", GROUND, c)
     els.append(Resistor("RLOAD", "out", GROUND, r_load_ohm))
+    if l_load_h > 0:
+        els.append(Inductor("LLOAD", "out", GROUND, l_load_h))
     if not any(x == "rear" for e in c.elements for x in (e.a, e.b)):
         els.append(Resistor("RREAR", "p_rear", GROUND, 1.0))  # a pressure cartridge: unused
     return CircuitIR(
@@ -116,10 +120,11 @@ def moving_coil_response(
     f_hz: np.ndarray,
     entries: tuple[np.ndarray, np.ndarray],
     r_load_ohm: float = 1e9,
+    l_load_h: float = 0.0,
 ) -> np.ndarray:
     """Complex volts at the coil per pascal of the wave whose entry pressures (front, rear)
     at f_hz are `entries` (free_field.entry_factors, a body's, ...)."""
     f_hz = np.asarray(f_hz, float)
     front, rear = (np.asarray(e, complex) for e in entries)
-    ir = moving_coil_ir(c, r_load_ohm)
+    ir = moving_coil_ir(c, r_load_ohm, l_load_h)
     return front * ac.transfer(ir, f_hz, "out", drives={"p_rear": rear / front})

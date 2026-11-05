@@ -613,10 +613,10 @@
       radius_m: {value: 8.0e-3}          # provisional: model knowledge (the effective radius of a ~22 mm clamped diaphragm in the 31.75 mm head (s68), its surround moving less; bounds 6.5-9.5 mm)
       thickness_m: {value: 6.35e-6}      # seeler61: molded Mylar 'as thin as 1/4 mil'
       density_kg_m3: {value: 1390.0}     # provisional: model knowledge (PET film)
-      resonance_hz: {value: 100.0}       # born12: 'in the 100Hz area' (the moving system's resonance; fitted to the low end, bounds 60-160 Hz)
+      resonance_hz: {value: 117.1}       # born12: 'in the 100Hz area' (the moving system's resonance; fitted to the low end, bounds 60-160 Hz)
       q: {value: 3.0}                    # provisional: model knowledge (the suspension's own loss: seeler61 R3 << R1)
     coil:
-      bl_tm: {value: 1.0}                # fit: the sensitivity, s68 H 0.149 mV/ubar at 1 kHz open circuit through the transformer
+      bl_tm: {value: 2.3098}                # fit: the sensitivity, s68 H 0.149 mV/ubar at 1 kHz open circuit through the transformer
       b_gap_t: {value: 0.9}              # provisional: model knowledge (a small ceramic / Alnico gap; bounds 0.6-1.2 T): sets the coil's length l = Bl / B, so its mass
       re_ohm: {value: 12.1}              # hr23: '12.1 Ohms' at the capsule's terminals (forum; three capsules '12 point something')
       le_h: {value: 200.0e-6}            # web: Gearspace 2012 (Les, forum: '1kHz inductance is about 200uH IIRC'); no impedance curve for L2 || R2
@@ -625,19 +625,19 @@
       adhesive_fraction: {value: 0.2}    # provisional: model knowledge (pat883: 'turns of fine wire cemented together to form a solid structure', no former)
     network:
       # The grille's stainless screen (g25) over the head's face: a woven screen, negligible but present
-      - {name: grille, kind: screen, a: front, b: g, rayl: {value: 10.0}, area_m2: {value: 5.0e-4}}   # provisional: model knowledge (~10 rayl woven mesh over ~25 mm of the face)
+      - {name: grille, kind: screen, a: front, b: g, rayl: {value: 10.0}, area_m2: {value: 5.0e-4}}   # provisional: model knowledge (g25's stainless screen, a woven mesh ~10 rayl, over ~25 mm of the head's face; a series resistance here costs the rear rejection: README)
       # The resonator plate 23 (pat883) with a ring of holes (hr23: 7-8), the air between it and the dome (born12: 'tuned to a particular resonant frequency ... a very high frequency')
-      - {name: res_holes, kind: tube, a: g, b: fc, count: {value: 8}, radius_m: {value: 0.8e-3}, length_m: {value: 1.0e-3}}   # count: hr23's photo (7-8 holes); radius: fitted to the presence peak (bounds 0.4-1.5 mm); length: provisional (a ~1 mm plate)
-      - {name: res_air, kind: cavity, a: fc, volume_m3: {value: 2.5e-7}}   # provisional: fitted (the air between plate and dome: ~1 mm over the 22 mm diaphragm ~ 0.38 cm^3 less the dome's rise; bounds 0.08-0.6 cm^3)
+      - {name: res_holes, kind: tube, a: g, b: fc, count: {value: 8}, radius_m: {value: 0.7e-3}, length_m: {value: 1.0e-3}, wide_at_hz: {value: 9600.0}}   # count: hr23's photo (7-8 holes); radius: provisional, model knowledge (~1.4 mm holes on the cap, hr23's photo; SM2 doesn't fit the region above 4 kHz: scripts/fit_sm57.py, SM3 / SM4); length: provisional (a ~1 mm plate); wide_at_hz: the holes' visco-thermal loss at their resonance, s68's second peak (~0.9 mm holes, a ~22 um boundary layer there)
+      - {name: res_air, kind: film, a: fc, radius_m: {value: 11.0e-3}, ring_radius_m: {value: 6.0e-3}, height_m: {value: 0.15e-3}, fill: {value: 0.6}}   # the air between plate and dome, a thin layer fed by the ring of holes: radius provisional (the ~22 mm diaphragm); ring provisional (hr23's photo: the holes about halfway out); height provisional, model knowledge (a thin layer over the dome: its radial-flow loss damps the cap's resonance, no spurious peak; SM3 makes it distributed); fill provisional (the dome's rise takes ~40%)
       - {name: dia, kind: diaphragm, a: fc, b: u}
       # seeler61's phase-shift network: the back entry (R1, L1) to the rear entry, Ca, the coil gap + screen A (Rb, Lb), the magnet's felt cavity Cb
-      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.015}, r1_pa_s_m3: {value: 1.0e+6}, q: {value: 2.0}}   # d: provisional, fitted (bounds 10-22 mm: the diaphragm's centre to the rear entry around the head); r1: fitted to the low end's damping; q: fitted to the front-to-back ratio
+      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.023165}, r1_pa_s_m3: {value: 3.1128e+06}, q: {value: 9.9272}}   # d: provisional, fitted (bounds 8-30 mm: the diaphragm's centre to the rear entry around the head); r1: fitted to the low end's damping; q: fitted to the front-to-back ratio
       # pat883's further branch: the felt / cloth washer 32 through the yoke into the case and handle chambers 44, 45 (born12: 'that volume of air is part of the tuning process')
-      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 5.6e+7}}   # provisional: model knowledge (a resistance whose time constant with the handle's air is ~20 Hz, below the band: the shock path pat905 describes, little acoustic effect)
-      - {name: handle, kind: cavity, a: h, volume_m3: {value: 2.0e-5}}   # provisional: model knowledge (the SM57 body's air, ~23-32 mm x ~100 mm with the transformer and connector inside: ~20 cm^3, bounds 8-40)
+      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 2.0264e+07}}   # provisional: fitted to c81's pattern at 125 Hz (bounds 1e6-1e10: the felt washer 32's resistance into the case and handle, pat883 / pat905's shock path)
+      - {name: handle, kind: cavity, a: h, volume_m3: {value: 4.573e-06}}   # provisional: fitted with the washer to c81's pattern at 125 Hz (the air the network sees behind the washer: the case and transformer chambers, at most the SM57 body's ~20 cm^3 (~23-32 mm x ~100 mm with the transformer and connector inside); bounds 0.5-40 cm^3)
     # SM2: the head as a rigid sphere (the plan's 'the body as a sphere first'), the rear entry a ring on it
     sphere_radius_m: {value: 15.9e-3}    # s68: 1-1/4 in (31.75 mm) diameter
-    rear_ring_deg: {value: 110.0}        # provisional: model knowledge (the rear ports around the side just behind the cartridge's face: pat883's openings 40 where the headpiece meets the shell; bounds 90-150)
+    rear_ring_deg: {value: 97.602}        # provisional: fitted to c81's rear rejection at 1-2 kHz (bounds 50-150: the rear ports around the side just behind the cartridge's face, pat883's openings 40 where the headpiece meets the shell; ~10 mm behind the face on a 15.9 mm sphere is ~68 deg)
   published:
     sensitivity_h_v_per_pa: 1.49e-3      # s68: 'H' -76.5 db (.149 mv) re 1 V/ubar, open circuit at 1 kHz
     sensitivity_l_v_per_pa: 0.67e-3      # s68: 'L' -83.5 db (.067 mv)

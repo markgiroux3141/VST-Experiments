@@ -16,13 +16,27 @@ entries), `0` (the ambient) and the cartridge's own nodes, each compiled by its 
                open area, R = rayl / area; its air mass rho t / (porosity area) when it
                has a thickness (a woven screen's is negligible: thickness_m 0)
     tube       n parallel round ducts (Poiseuille): R = 8 mu l / (n pi r^4), M = 4 rho l'
-               / (3 n pi r^2), l' with an end correction END_CORRECTION r per open end
+               / (3 n pi r^2), l' with an end correction END_CORRECTION r per open end;
+               with `wide_at_hz`, a duct wide against its viscous boundary layer there
+               (sqrt(2 mu / rho w) << r: Crandall's limit, e.g. Kinsler et al.,
+               "Fundamentals of Acoustics", sec. 10.8; Beranek, "Acoustics"): R = l'
+               sqrt(2 w rho mu) / (n pi r^3), M = rho l' / (n pi r^2), the resistance
+               taken at that frequency (a lumped element can't follow its sqrt(f))
     slit       a thin gap between parallel walls (the coil's annular gap): width w (the
                gap), breadth b (the circumference), length l along the flow: R = 12 mu l /
                (b w^3), M = 6 rho l / (5 b w) (plane Poiseuille flow)
     cavity     a closed volume of air to the ambient's reference: C = V / (gamma P0)
                (adiabatic: the cavities are wide against the thermal boundary layer), or
                its compliance_m5_n where a fit gives it
+    film       a thin layer of air (the cap's: between the resonator plate and the dome) of
+               radius radius_m and height height_m, filled through a ring of holes at
+               ring_radius_m: radial viscous flow between parallel walls, outward to the rim
+               and inward to a quarter of the ring's radius (the dome's apex, where the
+               layer has little volume), the two paths in parallel, each R = 6 mu ln(r2 /
+               r1) / (pi h^3), M = 6 rho ln(r2 / r1) / (10 pi h); into the layer's
+               compliance fill x pi radius^2 h / (gamma P0) (fill: the share the dome's
+               rise leaves). A lumped approximation of the distributed layer: <name>
+               (R, a -> <name>_m), <name>_m (L, to <name>_c), <name>_c (C, to the ambient)
     acoustic   a resistance r_pa_s_m3 and / or a mass m_kg_m4 in series, given directly
                (a fitted unknown whose geometry no source gives: its source says so)
     seeler     the Unidyne III's phase-shift network (`seeler_rear_network`) from the node
@@ -65,7 +79,7 @@ from typing import Any
 
 from varimu.devices.capsule import C_AIR, END_CORRECTION, GAMMA, MU_AIR, P0, RHO_AIR
 
-KINDS = ("screen", "tube", "slit", "cavity", "acoustic", "seeler", "diaphragm")
+KINDS = ("screen", "tube", "slit", "cavity", "film", "acoustic", "seeler", "diaphragm")
 PORTS = ("front", "rear", "0")
 # The leak across the diaphragm's compliance: a resistance this many times the
 # compliance's reactance at LEAK_HZ (a time constant of ~1 / (2 pi LEAK_HZ x 1e6)): numerical.
@@ -175,8 +189,13 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
             n, r, length = float(e.get("count", 1)), float(e["radius_m"]), float(e["length_m"])
             ends = float(e.get("open_ends", 2))
             l_eff = length + ends * END_CORRECTION * r
-            res = 8.0 * MU_AIR * length / (n * math.pi * r**4)
-            mass = 4.0 * RHO_AIR * l_eff / (3.0 * n * math.pi * r * r)
+            if "wide_at_hz" in e:
+                w = 2.0 * math.pi * float(e["wide_at_hz"])
+                res = l_eff * math.sqrt(2.0 * w * RHO_AIR * MU_AIR) / (n * math.pi * r**3)
+                mass = RHO_AIR * l_eff / (n * math.pi * r * r)
+            else:
+                res = 8.0 * MU_AIR * length / (n * math.pi * r**4)
+                mass = 4.0 * RHO_AIR * l_eff / (3.0 * n * math.pi * r * r)
             els += _series(name, a, b, res, mass)
         elif kind == "slit":
             w, br, length = float(e["width_m"]), float(e["breadth_m"]), float(e["length_m"])
@@ -204,6 +223,21 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
             else:
                 comp = float(e["volume_m3"]) / (GAMMA * P0)
             els.append(_el(name, "C", a, "0", comp))
+        elif kind == "film":
+            if b != "0":
+                raise ValueError(f"film {name}: a compliance to the ambient (b: '0')")
+            h, rr = float(e["height_m"]), float(e["ring_radius_m"])
+            ro = float(e["radius_m"])
+            out_r = 6.0 * MU_AIR * math.log(ro / rr) / (math.pi * h**3)
+            in_r = 6.0 * MU_AIR * math.log(4.0) / (math.pi * h**3)
+            out_m = 6.0 * RHO_AIR * math.log(ro / rr) / (10.0 * math.pi * h)
+            in_m = 6.0 * RHO_AIR * math.log(4.0) / (10.0 * math.pi * h)
+            comp = float(e.get("fill", 1.0)) * math.pi * ro * ro * h / (GAMMA * P0)
+            els += [
+                _el(name, "R", a, f"{name}_m", out_r * in_r / (out_r + in_r)),
+                _el(f"{name}_m", "L", f"{name}_m", f"{name}_c", out_m * in_m / (out_m + in_m)),
+                _el(f"{name}_c", "C", f"{name}_c", "0", comp),
+            ]
         elif kind == "acoustic":
             r_, m_ = float(e.get("r_pa_s_m3", 0.0)), float(e.get("m_kg_m4", 0.0))
             if r_ > 0 and m_ > 0:

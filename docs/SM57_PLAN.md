@@ -4,7 +4,62 @@ Drafted 2026-11-04 from a conversation with the user ("are there any microphones
 could make like an SM57 or SM58 to add to our list? what would this entail. No shortcuts
 and in keeping with our physics approach", then: "yes, let's write this plan"; the user's decisions 2026-11-05, see "Decisions"). It
 expands
-MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). Nothing is built.
+MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1 done, SM2 built
+(2026-11-05, overnight in the `sm57` worktree): see "Status".
+
+## Status (2026-11-05)
+
+**SM1 done:** the sources in `data/schematics/shure_sm57/README.md`: Shure's 1965 / 1968
+SM57 sheet 27A308 and the 1970 SM58 sheet with the dual-impedance transformer (wiring, the
+taps' voltages), the catalogs to 1993 (the tap went between the 1986 and 1988 catalogs, not
+"in the 1980s" generally), the user guides; Seeler's 1961 JAES paper (the Unidyne III's
+network and design equations) and the patents (US 3,240,883 the Unidyne III, US 3,132,713 the
+diaphragm, US 3,989,905 the shock path, Bauer's Uniphase); bench measurements of the
+transformer (cj06: 1 : 4.53, 1.50 / 24.18 ohm, 386 mH / 7.95 H, 150 uH / 4.26 mH leakage; an
+old dual unit's 10.8 / 25.7 ohm), the coil (12.1 ohm, ~200 uH), the resonance (~100 Hz,
+Shure's Born). No dimension of the cartridge is published anywhere found: the geometry is
+provisional and bounded, each element's reasoning in the README's table. Digitized: the
+response and polars of every era for both mics (`data/datasheets/shure_sm5{7,8}_*.csv`, their
+provenance sidecars). Not found: proximity curves, an impedance curve, loaded responses, the
+transformer's construction.
+
+**SM2 built (the Python half verified; the Rust half written, its agreement test building):**
+- `varimu/devices/moving_coil.py` (kind `moving_coil`): the acoustic network is data, a list
+  of physical elements (screen, tube with Poiseuille or Crandall's wide-tube loss, slit,
+  cavity, the cap's thin air `film`, `acoustic`, `seeler`, the `diaphragm`) compiled to R / L
+  / C and a gyrator (B l / S, two Vccs); the moving mass from its parts (the coil's copper
+  length B l / B at the measured DCR). `seeler_rear_network`: Seeler's Eqs. 5-10. **His
+  "larger root" gives Lb < 0 with the equations as printed; the smaller root gives a
+  physical network (both satisfy the series): the code takes the physical one.**
+- The part `moving_coil: [front, rear, plus, minus]` in both builders (Python `parts.py` /
+  `builder.py`; Rust `varimu-circuit/src/moving_coil.rs`), its symbol in both tables, noise
+  on every resistance but the diaphragm's numerical DC leak.
+- The head as a sphere, the rear entries a ring on it (`free_field.sphere_ring_factors`,
+  the addition theorem).
+- `R57@1` (`config/components/r57/1.yaml`), fitted by `scripts/fit_sm57.py` (one figure per
+  unknown): sensitivity 1.488 mV/Pa against s68's 1.49; the on-axis response 50 Hz-4 kHz
+  0.71 dB rms (max 2.1) against s68; the polars against c81 (side / rear): 125 Hz -4.9 /
+  -10.8 (published -3.8 / -10.8), 1 kHz -7.0 / -19.6 (-6.1 / -20.7), 2 kHz -6.7 / -22.2
+  (-6.05 / -20.0). Found on the way: the 125 Hz pattern is first order with the network's
+  delay ~1.8 times the entries' path, which the case and handle's air behind the washer
+  gives (pat883's branch C'b; Born: "part of the tuning process"): fitted, 4.6 cm^3 behind
+  2.0e7 Pa s/m^3; the rear entry sits at 98 degrees on the sphere. Moving mass 106 mg
+  (84 mg of it a 2.57 m, ~68 um copper coil at 12.1 ohm): no source either way.
+- `config/circuits/shure_sm57.yaml`: R57@1 into the transformer (cj06's figures, a
+  provisional mumetall core whose gap gives 386 mH; the H / L switch, s68 Figure A), open
+  circuit. `tests/test_moving_coil.py` (the network, Seeler's series, a cardioid, the gyrator
+  against a closed form, the formulas), `tests/test_sm57.py` (the figures above).
+
+**Open, handed on:** the presence peak and above are not in SM2: the model has no presence
+peak (~11 dB short at 5.8 kHz), a small bump at 11 kHz and a notch at 12.5 kHz. Why: on a
+sphere the presence peak's position pins the network's delay against the 1-2 kHz rejection
+(fitted to 6.5 kHz, -16.9 dB at the rear against -20.7), and a lumped front resonator
+can't draw the dip and second peak (a grid over the cap's holes and air: 5.3 dB rms at
+4.5-14 kHz at best; a series screen damps it but costs the rejection; the cap's thin air
+layer's radial flow damps it without that cost: the `film` element). So: the real head's
+diffraction (SM4: a cylinder with a grille face, not a sphere) and the dome's modes and a
+distributed cap (SM3), then R57@2. The 4 / 8 kHz polars (4.2 dB off at the side at 4 kHz,
+6.6 dB at the rear at 8 kHz) are SM4's.
 
 ## The target
 
