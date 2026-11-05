@@ -1,5 +1,9 @@
 # Track separation: diverging tracks through physical recording chains
 
+**2026-11-04:** the research behind the cues below, grouping measures beyond the glimpses,
+and corrections (independent flutter doesn't separate; space selects streams more than it
+forms them): [SCENE_ANALYSIS.md](SCENE_ANALYSIS.md).
+
 Brainstormed 2026-10-31 with the user. **Status (2026-10-31): the cheap first experiment is
 built** (below, "A cheap first experiment"). Nothing else is scheduled. The user's
 decision on undoing a recorded chain: not needed for now; they'll record as clean as

@@ -499,6 +499,18 @@ distance; mics later). The cheap first experiment is built (`varimu/separation/`
 `cache/separation/conditions/`): each track matched to -23 LUFS on its own, a glimpse
 pre-screen (energetic only, on the dry notes' cells), and the listening staircase
 `scripts/separation_listen.py` (`--with sounddevice`), whose results are pending (the user's).
+**How the ear separates sounds** ([docs/SCENE_ANALYSIS.md](docs/SCENE_ANALYSIS.md),
+2026-11-04, a research session the user asked for): the neuroscience distilled (harmonicity,
+common onset, temporal coherence; FM incoherence and ITD barely group), four grouping measures
+after published models (`varimu/separation/grouping.py`: temporal coherence, onset
+coincidence, harmonic cancellation, the mr-sEPSM's SNRenv; `tests/test_grouping.py`) and
+`scripts/grouping_study.py [--only conditions bus intervals]` -> `reports/separation/grouping.json`.
+Found: per-pass flutter separates nothing (SEPARATION_PLAN.md's "common fate" withdrawn); a
+30 ms timing offset moves the measures more than any chain; a saturating or compressing bus
+(dev(t + m) vs dev(t) + dev(m), the interaction residual) costs the lead its harmonicity and
+half its glimpses, and its intermodulation lands on a root only for octaves and fifths in
+equal temperament. Proposals there (glue without mud: share the supply, not the
+nonlinearity); nothing validated by ear yet.
 
 **Noise (device builder B5, 2026-10-30; DEVICE_BUILDER_PLAN.md B5's status):** a circuit
 file's `noise: {seed}` block turns on Johnson noise (IR `NoiseCurrent` per resistor of R /
