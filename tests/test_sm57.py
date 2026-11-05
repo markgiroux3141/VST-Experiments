@@ -21,7 +21,9 @@ TURNS = 4.53  # cj06
 ANGLES = [0.0, 90.0, 180.0]
 
 
-VERSION = "R57@3"  # the circuit's (on the mic's body; @1 on a sphere, @2 before the cap's fit)
+VERSION = (
+    "R57@4"  # the circuit's (on the body; @1 on a sphere, @2 before the cap, @3 before the mode)
+)
 _ENT: dict = {}
 
 
@@ -52,7 +54,7 @@ def test_r57_is_pinned_and_locked():
     assert versions.versions("R57")
     c = load_moving_coil(VERSION)
     assert c.re_ohm == 12.1  # hr23
-    assert sum(e.kind == "G" for e in c.elements) == 1
+    assert sum(e.kind == "G" and e.c == "@v" for e in c.elements) == 1  # the coil's (+ modes')
 
 
 def test_sensitivity():
@@ -109,17 +111,19 @@ def test_noise_skips_the_leak():
     assert "RMC_dia_leak" not in noisy
 
 
-def test_above_the_presence_peak():
-    """s68 at 6.5-10.5 kHz within 3 dB (the cap and its layer fitted there; SM3's
-    tolerance, +-2 dB to 10 kHz, waits for the dome's modes: the dip at 7.7 kHz and the second
-    peak at 9.6 kHz)."""
+def test_on_axis_to_15_khz():
+    """SM3's done-when (Decisions 3): s68's on-axis response within +-2 dB 50 Hz-10 kHz and
+    +-3 dB to 15 kHz (the curve ends at 13.9 kHz; its coarse ends left out), with the dome's
+    mode drawing the dip at 7.7 kHz and the second peak at 9.6 kHz."""
     rows = [r for r in _rows("shure_sm57_response.csv", "s68") if r["quality"] != "coarse"]
     f = np.array([float(r["freq_hz"]) for r in rows])
     db = np.array([float(r["db"]) for r in rows])
-    keep = (f > 6500) & (f <= 10500)
+    keep = f >= 50
     h = _response(np.concatenate([[1000.0], f[keep]]), 0.0)
-    on = 20 * np.log10(abs(h[1:]) / abs(h[0]))
-    assert np.max(abs(on - db[keep])) < 3.0
+    err = 20 * np.log10(abs(h[1:]) / abs(h[0])) - db[keep]
+    lo = f[keep] <= 10000
+    assert np.max(abs(err[lo])) < 2.0
+    assert np.max(abs(err[~lo])) < 3.0
 
 
 def test_chain_into_the_v76_is_current():

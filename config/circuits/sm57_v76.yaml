@@ -111,10 +111,11 @@ controls:
     source: 'provisional: model knowledge (West German mains)'
 values:
   cartridge_model_sm57:
-    value: R57@3
-    source: 's68 / g25: the Unidyne III cartridge (Shure''s replacement R57); config/components/r57/3.yaml
+    value: R57@4
+    source: 's68 / g25: the Unidyne III cartridge (Shure''s replacement R57); config/components/r57/4.yaml
       (its geometry provisional and fitted by scripts/fit_sm57.py on the mic''s body, varimu/mics/bor.py:
-      data/schematics/shure_sm57/README.md; @1 was fitted on a sphere, @2 before the cap''s fit)'
+      data/schematics/shure_sm57/README.md; @1 was fitted on a sphere, @2 before the cap''s fit, @3 before
+      the dome''s mode)'
   coil_leak_ohm_sm57:
     value: 1000000000.0
     source: 'numerical: a DC path for the floating coil and primary'

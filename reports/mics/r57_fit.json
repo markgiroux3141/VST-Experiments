@@ -1,13 +1,17 @@
 {
  "fitted": {
-  "coil/bl_tm": 2.449881587942949,
-  "coil/b_gap_t": 1.199986713628694,
-  "diaphragm/resonance_hz": 97.34575655639702,
-  "ps/r1_pa_s_m3": 2114397.219712903,
-  "ps/q": 13.760093214128696,
-  "ps/d_m": 0.0176536530377827,
-  "washer/r_pa_s_m3": 15878222.186446643,
-  "handle/volume_m3": 2.4930773626837226e-06
+  "coil/bl_tm": 2.2772993435894646,
+  "coil/b_gap_t": 1.1999999999999988,
+  "diaphragm/resonance_hz": 104.16363762602921,
+  "ps/r1_pa_s_m3": 1930785.3882406917,
+  "ps/q": 14.759336893279354,
+  "ps/d_m": 0.017655979673910548,
+  "washer/r_pa_s_m3": 13679367.27285497,
+  "handle/volume_m3": 2.8843580772555593e-06,
+  "diaphragm/modes/0/f_hz": 8147.837876926,
+  "diaphragm/modes/0/q": 5.0429543325058805,
+  "diaphragm/modes/0/mass_fraction": 0.1437796363699024,
+  "diaphragm/modes/0/area_fraction": 0.05116516636102552
  },
  "body": {
   "form": "dynamic",
@@ -23,18 +27,18 @@
   "end_radius_m": 0.0119,
   "end_length_m": 0.02024
  },
- "sensitivity_mv_pa": 1.4873,
+ "sensitivity_mv_pa": 1.4883,
  "sensitivity_target_mv_pa": 1.49,
- "rms_on_axis_db_fit_band": 0.602,
- "max_on_axis_db_fit_band": 1.714,
- "rms_on_axis_db_above": 2.421,
+ "rms_on_axis_db_fit_band": 0.694,
+ "max_on_axis_db_fit_band": 1.761,
+ "rms_on_axis_db_above": NaN,
  "polar": {
   "125 Hz 90 deg": {
-   "model_db": -3.94,
+   "model_db": -3.95,
    "published_db": -3.79
   },
   "125 Hz 180 deg": {
-   "model_db": -10.38,
+   "model_db": -10.36,
    "published_db": -10.83
   },
   "1000 Hz 90 deg": {
@@ -42,19 +46,19 @@
    "published_db": -6.07
   },
   "1000 Hz 180 deg": {
-   "model_db": -19.93,
+   "model_db": -19.89,
    "published_db": -20.69
   },
   "2000 Hz 90 deg": {
-   "model_db": -6.24,
+   "model_db": -6.23,
    "published_db": -6.05
   },
   "2000 Hz 180 deg": {
-   "model_db": -19.37,
+   "model_db": -19.34,
    "published_db": -20.0
   },
   "4000 Hz 90 deg": {
-   "model_db": -6.78,
+   "model_db": -6.79,
    "published_db": -9.17
   },
   "4000 Hz 180 deg": {
@@ -66,24 +70,24 @@
    "published_db": -11.24
   }
  },
- "moving_mass_mg": 68.77,
+ "moving_mass_mg": 60.11,
  "mass_parts_mg": {
   "dome_kg": 1.775,
-  "wire_kg": 53.087,
-  "adhesive_kg": 10.617,
+  "wire_kg": 45.87,
+  "adhesive_kg": 9.174,
   "air_kg": 3.288,
-  "total_kg": 68.767
+  "total_kg": 60.106
  },
- "wire_length_m": 2.0416,
+ "wire_length_m": 1.8977,
  "seeler": {
-  "ca": 1.5982358757503787e-12,
-  "cb": 2.2729446026993862e-11,
-  "rb": 32118622.50754688,
-  "lb": 693.6023277738143,
-  "q": 13.760093214128696,
-  "s": 0.9343038156228896
+  "ca": 1.6325282347201338e-12,
+  "cb": 2.5012153527086283e-11,
+  "rb": 31242964.605750516,
+  "lb": 673.474682508483,
+  "q": 14.759336893279352,
+  "s": 0.9387296778653867
  },
- "cost": 37.36680368482112,
+ "cost": 40.722987819953495,
  "at_bounds": [
   "coil/b_gap_t"
  ]

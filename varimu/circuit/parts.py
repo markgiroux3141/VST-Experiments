@@ -628,15 +628,16 @@ def moving_coil(
     its acoustic port) and G<NAME>_xe (-g v_a into the coil's), g = 1 / its ratio. The coil:
     R<NAME>_re from plus to <name>_l, L<NAME>_le to <name>_e, L<NAME>_l2 || R<NAME>_r2 to
     <name>_v (none when l2_h is 0: L<NAME>_le ends on <name>_v), the gyrator's electrical
-    port from <name>_v to minus."""
+    port from <name>_v to minus. A mode's gyrator has its own electrical node (its `c`);
+    `@v` and `@minus` name the coil's port node and minus (varimu.devices.moving_coil)."""
     n, upper = name.lower(), name.upper()
 
-    ports = {"front": front, "rear": rear, "0": GROUND}
+    v = f"{n}_v"
+    ports = {"front": front, "rear": rear, "0": GROUND, "@v": v, "@minus": minus}
 
     def node(x: str) -> str:
         return ports.get(x, f"{n}_{x}")
 
-    v = f"{n}_v"
     els: list[Element] = [Resistor(f"R{upper}_re", plus, f"{n}_l", c.re_ohm)]
     if c.l2_h > 0:
         els += [
@@ -655,10 +656,10 @@ def moving_coil(
         elif e.kind == "C":
             els.append(Capacitor(f"C{upper}_{e.name}", a, b, e.value))
         elif e.kind == "G":
-            g = 1.0 / e.value
+            g, c_ = 1.0 / e.value, node(e.c)
             els += [
-                Vccs(f"G{upper}_{e.name}a", a, b, v, minus, g),
-                Vccs(f"G{upper}_{e.name}e", v, minus, a, b, -g),
+                Vccs(f"G{upper}_{e.name}a", a, b, c_, minus, g),
+                Vccs(f"G{upper}_{e.name}e", c_, minus, a, b, -g),
             ]
         else:
             raise ValueError(f"moving coil {name}: element {e.name} has kind {e.kind!r}")

@@ -328,3 +328,21 @@ def test_renders_agree_with_the_ac_solution():
     band = (f >= 100) & (f <= 20000)
     p_ac = ac.noise_psd(noisy, f[band], "out")
     assert abs(np.median(10 * np.log10(p[band] / p_ac))) < 1.0
+
+
+def test_a_stiff_mode_is_no_mode():
+    """A dome mode far above the band moves with the coil: the cartridge is the one without
+    it (the same total mass and area); a mode in the band changes the response there."""
+    g = _seeler_geometry()
+    g["diaphragm"]["modes"] = [
+        {"name": "dome", "f_hz": 1e7, "q": 3.0, "mass_fraction": 0.2, "area_fraction": 0.3}
+    ]
+    f = np.geomspace(50, 15000, 25)
+    e = entry_factors(f, 0.0, K_S * C_AIR)
+    h_stiff = networks.moving_coil_response(_cartridge(g), f, e, r_load_ohm=1000.0)
+    h_none = networks.moving_coil_response(_cartridge(_seeler_geometry()), f, e, r_load_ohm=1000.0)
+    assert np.allclose(h_stiff, h_none, rtol=2e-4)
+    g["diaphragm"]["modes"][0]["f_hz"] = 6000.0
+    h_mode = networks.moving_coil_response(_cartridge(g), f, e, r_load_ohm=1000.0)
+    assert np.max(abs(20 * np.log10(abs(h_mode / h_none)))) > 1.0
+    assert np.allclose(h_mode[:5], h_none[:5], rtol=0.02)  # far below it: the same

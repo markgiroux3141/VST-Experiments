@@ -356,3 +356,10 @@ B l 2.45 T m, B 1.2 T (bound), resonance 97 Hz (Born: ~100 Hz; not a target), R1
 q 13.8, d 17.7 mm, washer 1.59e7 Pa s/m^3, 2.5 cm^3 behind it; moving mass 69 mg.
 Sensitivity 1.487 mV/Pa; on axis 0.60 dB rms to 6.5 kHz, 2.42 dB rms above; polars within
 2.4 dB at every c81 frequency.
+
+## R57@4 (the dome's mode; SM3)
+
+One mode hung from the coil (docs/SM57_PLAN.md "Status"): 8.15 kHz, q 5.0, 14% of the moving
+mass, 5.1% of the area, fitted with the network on s68's whole curve (0.69 dB rms, 1.76 dB
+worst, 50 Hz-14 kHz). B l 2.28 T m, B 1.2 T, resonance 104 Hz, R1 1.93e6, q 14.8, d 17.7 mm,
+washer 1.37e7 Pa s/m^3, 2.9 cm^3 behind it; moving mass 60 mg; 1.488 mV/Pa.

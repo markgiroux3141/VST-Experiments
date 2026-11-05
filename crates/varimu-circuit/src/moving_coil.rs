@@ -11,7 +11,9 @@ use crate::Error;
 use crate::yaml::{Map, Value};
 
 /// A compiled element: kind R, L, C between a and b, or G (the gyrator: its acoustic port
-/// a -> b, ratio `value` = B l / S in ohms).
+/// a -> b, ratio `value` = B l / S in ohms, its electrical port from `c` to the part's minus:
+/// `@v`, the coil's node, unless a dome mode's). `@v` and `@minus` name the coil's port node
+/// and the part's minus terminal.
 #[derive(Debug, Clone, PartialEq)]
 pub struct McElement {
     pub name: String,
@@ -19,6 +21,7 @@ pub struct McElement {
     pub a: String,
     pub b: String,
     pub value: f64,
+    pub c: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -82,10 +85,18 @@ pub fn from_data(data: &Value, what: &str) -> Result<MovingCoil, Error> {
                 .get("value")
                 .and_then(Value::as_f64)
                 .ok_or_else(|| Error(format!("{what}: an element needs `value`")))?,
+            c: m.get("c").map(Value::py_str).unwrap_or_else(|| "@v".into()),
         });
     }
-    if elements.iter().filter(|e| e.kind == "G").count() != 1 {
-        return Err(Error(format!("{what}: one gyrator (G) in lumped.elements")));
+    if elements
+        .iter()
+        .filter(|e| e.kind == "G" && e.c == "@v")
+        .count()
+        != 1
+    {
+        return Err(Error(format!(
+            "{what}: one gyrator (G) on the coil in lumped.elements"
+        )));
     }
     Ok(MovingCoil {
         name,
@@ -138,15 +149,17 @@ pub fn moving_coil(
     c: &MovingCoil,
 ) -> Result<Vec<Element>, Error> {
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let v = format!("{n}_v");
     let node = |x: &str| -> String {
         match x {
             "front" => front.to_string(),
             "rear" => rear.to_string(),
             "0" => GROUND.to_string(),
+            "@v" => v.clone(),
+            "@minus" => minus.to_string(),
             _ => format!("{n}_{x}"),
         }
     };
-    let v = format!("{n}_v");
     let lnode = format!("{n}_l");
     let mut els = vec![r(format!("R{upper}_re"), plus, &lnode, c.re_ohm)];
     if c.l2_h > 0.0 {
@@ -173,8 +186,16 @@ pub fn moving_coil(
             })),
             "G" => {
                 let g = 1.0 / e.value;
-                els.push(vccs(format!("G{upper}_{}a", e.name), &a, &b, &v, minus, g));
-                els.push(vccs(format!("G{upper}_{}e", e.name), &v, minus, &a, &b, -g));
+                let c_ = node(&e.c);
+                els.push(vccs(format!("G{upper}_{}a", e.name), &a, &b, &c_, minus, g));
+                els.push(vccs(
+                    format!("G{upper}_{}e", e.name),
+                    &c_,
+                    minus,
+                    &a,
+                    &b,
+                    -g,
+                ));
             }
             k => {
                 return Err(Error(format!(

@@ -75,6 +75,13 @@ L_PRIMARY_H = 0.386  # cj06: the transformer's primary inductance (open-circuite
 FIT_BAND_HZ = (50.0, 4000.0)  # on a sphere: below the presence peak, where the head's shape
 # matters little (above: the body's diffraction, SM4, and the modes, SM3)
 BODY_BAND_HZ = (50.0, 6500.0)  # on the real body (SM4): to the presence peak
+MODES_BAND_HZ = (50.0, 14000.0)  # with the dome's mode (SM3): the whole published curve
+MODE = [  # the dome's mode (SM3), when the geometry has one
+    (("diaphragm", "modes", 0, "f_hz"), 5000.0, 16000.0, True),
+    (("diaphragm", "modes", 0, "q"), 0.7, 10.0, True),
+    (("diaphragm", "modes", 0, "mass_fraction"), 0.02, 0.5, True),
+    (("diaphragm", "modes", 0, "area_fraction"), 0.05, 0.6, True),
+]
 SENS_WEIGHT, POLAR_WEIGHT = 4.0, 2.0
 
 # (path into the geometry, low, high, log scale): network elements by name, else keys.
@@ -233,15 +240,23 @@ def residuals(x, g0, free, band, fit_resp, polar, sens_v_pa, all_resp=None):
 
 
 def _label(path) -> str:
-    return "/".join(path[1:] if path[0] == "network" else path)
+    return "/".join(str(x) for x in (path[1:] if path[0] == "network" else path))
+
+
+def _has_modes(g) -> bool:
+    return bool(g["diaphragm"].get("modes"))
 
 
 def free_of(g) -> list:
-    return FREE if "body" in g else [*FREE, RING]
+    if "body" not in g:
+        return [*FREE, RING]
+    return [*FREE, *MODE] if _has_modes(g) else FREE
 
 
 def band_of(g) -> tuple[float, float]:
-    return BODY_BAND_HZ if "body" in g else FIT_BAND_HZ
+    if "body" not in g:
+        return FIT_BAND_HZ
+    return MODES_BAND_HZ if _has_modes(g) else BODY_BAND_HZ
 
 
 def summary(g, all_resp, polar, sens_v_pa) -> dict:
@@ -306,6 +321,9 @@ def write(g) -> None:
         key, v = path[-1], _get(g, path)
         if path[0] == "network":
             hits = [i for i in range(start, end) if f"name: {path[1]}," in lines[i]]
+        elif "modes" in path:
+            mode = g["diaphragm"]["modes"][path[2]]["name"]
+            hits = [i for i in range(start, end) if f"name: {mode}," in lines[i]]
         else:
             hits = [i for i in range(start, end) if re.match(rf"\s+{key}: \{{value:", lines[i])]
         if len(hits) != 1:
@@ -366,7 +384,7 @@ def main() -> None:
     entry = yaml.safe_load(PUBLISHED.read_text(encoding="utf-8"))["R57"]
     g0 = _plain(entry["geometry"])
     sens = entry["published"]["sensitivity_h_v_per_pa"]
-    CAP_ON = "body" in g0
+    CAP_ON = "body" in g0 and not _has_modes(g0)  # with the mode the band covers it
     fit_resp, all_resp, polar = load_targets(band_of(g0))
     starts = [g0]
     if "body" in g0 and args.ports_mm:

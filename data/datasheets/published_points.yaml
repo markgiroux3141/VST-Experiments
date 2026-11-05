@@ -613,10 +613,16 @@
       radius_m: {value: 8.0e-3}          # provisional: model knowledge (the effective radius of a ~22 mm clamped diaphragm in the 31.75 mm head (s68), its surround moving less; bounds 6.5-9.5 mm)
       thickness_m: {value: 6.35e-6}      # seeler61: molded Mylar 'as thin as 1/4 mil'
       density_kg_m3: {value: 1390.0}     # provisional: model knowledge (PET film)
-      resonance_hz: {value: 97.346}       # born12: 'in the 100Hz area' (the moving system's resonance; fitted to the low end, bounds 60-160 Hz)
+      resonance_hz: {value: 104.16}       # born12: 'in the 100Hz area' (the moving system's resonance; fitted to the low end, bounds 60-160 Hz)
       q: {value: 3.0}                    # provisional: model knowledge (the suspension's own loss: seeler61 R3 << R1)
+      # SM3: the dome decoupling from the coil (pat713: two molded cones, the coil on their joint; their
+      # bridges break axial symmetry, so a shell FE needs the dimensions no source gives): one mode hung from
+      # the coil, all four values provisional and fitted to s68 above the presence peak (the dip at 7.7 kHz,
+      # the second peak at 9.6 kHz), bounds f 5-16 kHz, q 0.7-10, mass 2-50%, area 5-60%
+      modes:
+        - {name: dome, f_hz: {value: 8147.8}, q: {value: 5.043}, mass_fraction: {value: 0.14378}, area_fraction: {value: 0.051165}}
     coil:
-      bl_tm: {value: 2.4499}                # fit: the sensitivity, s68 H 0.149 mV/ubar at 1 kHz open circuit through the transformer
+      bl_tm: {value: 2.2773}                # fit: the sensitivity, s68 H 0.149 mV/ubar at 1 kHz open circuit through the transformer
       b_gap_t: {value: 1.2}              # provisional: fitted with Bl to the sensitivity (bounds 0.6-1.2 T: a small ceramic / Alnico gap): sets the coil's length l = Bl / B, so its mass
       re_ohm: {value: 12.1}              # hr23: '12.1 Ohms' at the capsule's terminals (forum; three capsules '12 point something')
       le_h: {value: 200.0e-6}            # web: Gearspace 2012 (Les, forum: '1kHz inductance is about 200uH IIRC'); no impedance curve for L2 || R2
@@ -631,10 +637,10 @@
       - {name: res_air, kind: film, a: fc, radius_m: {value: 11.0e-3}, ring_radius_m: {value: 6.0e-3}, height_m: {value: 0.072e-3}, fill: {value: 0.6}}   # the air between plate and dome, a thin layer fed by the ring of holes: radius provisional (the ~22 mm diaphragm); ring provisional (hr23's photo: the holes about halfway out); height: an effective height, fitted with the holes to the region above the presence peak (s68 6.5-14 kHz on the body: 1.87 dB rms; a grid, bounds 0.04-1 mm): the lumped layer's loss is set by its thinnest part, where the dome rises toward the cap, not a measured spacing; fill provisional (the dome's rise takes ~40%)
       - {name: dia, kind: diaphragm, a: fc, b: u}
       # seeler61's phase-shift network: the back entry (R1, L1) to the rear entry, Ca, the coil gap + screen A (Rb, Lb), the magnet's felt cavity Cb
-      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.017654}, r1_pa_s_m3: {value: 2.1144e+06}, q: {value: 13.76}}   # d: provisional, fitted (bounds 8-30 mm: the diaphragm's centre to the rear entry around the head); r1: fitted to the low end's damping; q: fitted to the front-to-back ratio
+      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.017656}, r1_pa_s_m3: {value: 1.9308e+06}, q: {value: 14.759}}   # d: provisional, fitted (bounds 8-30 mm: the diaphragm's centre to the rear entry around the head); r1: fitted to the low end's damping; q: fitted to the front-to-back ratio
       # pat883's further branch: the felt / cloth washer 32 through the yoke into the case and handle chambers 44, 45 (born12: 'that volume of air is part of the tuning process')
-      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 1.5878e+07}}   # provisional: fitted to c81's pattern at 125 Hz (bounds 1e6-1e10: the felt washer 32's resistance into the case and handle, pat883 / pat905's shock path)
-      - {name: handle, kind: cavity, a: h, volume_m3: {value: 2.4931e-06}}   # provisional: fitted with the washer to c81's pattern at 125 Hz (the air the network sees behind the washer: the case and transformer chambers, at most the SM57 body's ~20 cm^3 (~23-32 mm x ~100 mm with the transformer and connector inside); bounds 0.5-20 cm^3)
+      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 1.3679e+07}}   # provisional: fitted to c81's pattern at 125 Hz (bounds 1e6-1e10: the felt washer 32's resistance into the case and handle, pat883 / pat905's shock path)
+      - {name: handle, kind: cavity, a: h, volume_m3: {value: 2.8844e-06}}   # provisional: fitted with the washer to c81's pattern at 125 Hz (the air the network sees behind the washer: the case and transformer chambers, at most the SM57 body's ~20 cm^3 (~23-32 mm x ~100 mm with the transformer and connector inside); bounds 0.5-20 cm^3)
     # SM4: the mic as a rigid body of revolution (varimu/mics/bor.py dynamic_mesh), the grille open (its
     # screen in the network); when present it replaces SM2's sphere below
     body:

@@ -48,7 +48,8 @@ entries), `0` (the ambient) and the cartridge's own nodes, each compiled by its 
     diaphragm  the moving system (exactly one), between the pressures on its front face
                (`a`) and on its back face (`b`): its mass (dome, coil, former and the air
                load on its faces) as m / S^2, its suspension's compliance as Cm S^2, its
-               mechanical loss as Rm / S^2, then the transducer
+               mechanical loss as Rm / S^2, then the transducer; with the diaphragm's
+               `modes` (below), the rigid part's mass and area are what the modes leave
 
 The transducer is a gyrator of ratio r = B l / S (ohms both ways in these units): the
 coil's EMF is B l v = r U and the coil current i pushes on the diaphragm with the pressure
@@ -58,6 +59,21 @@ plan's "one coupled simulation"). A gyrator from two voltage-controlled current 
 electrical one; lossless (v_a i_a + v_e i_e = 0). The electrical side: plus -- Re -- Le
 -- (L2 || R2: the coil's eddy currents in the pole pieces, as speaker.py's LR-2) -- the
 gyrator -- minus.
+
+The diaphragm's modes (SM3: pat713's dome is two cones with the coil on their joint,
+the dome decoupling from the coil at high frequencies): each mode k is a mass m_k (a
+`mass_fraction` of the moving mass) on a spring and damper hung from the coil, f_k and q_k
+with the coil held still (k_k = m_k (2 pi f_k)^2, r_k = 2 pi f_k m_k / q_k), with its own
+area S_k (an `area_fraction` of S), as speaker.py hangs a cone's breakup from its voice coil.
+It lives in the mobility analogy on the gyrator's electrical side, where the port's voltage
+is B l v of the coil: L = (B l)^2 / k_k || R = (B l)^2 / r_k from the coil's node `@v` to
+the mode's node, C = m_k / (B l)^2 from there to `@minus`; and a gyrator of ratio B l / S_k
+from the diaphragm's own acoustic port to the mode's node, so the pressure across the
+diaphragm pushes the mode (p S_k) and its velocity moves air (U_k = S_k v_k). The rigid
+part keeps (1 - sum of the fractions) of the mass and area. Elements <mode> (L), <mode>_r
+(R), <mode>_m (C), <mode>_g (G, its electrical port on `c`: the mode's node; a gyrator
+without `c` has the coil's node). `@v` and `@minus` are the coil's port and the part's minus
+terminal.
 
 The diaphragm's compliance blocks DC, so the moving system's nodes float at DC unless the
 coil is loaded: a numerical leak (LEAK_S_PER_ACOUSTIC_OHM times the compliance's
@@ -90,13 +106,15 @@ LEAK_RATIO = 1.0e6
 @dataclass(frozen=True)
 class Element:
     """A compiled element: kind R, L, C (between a and b) or G (the gyrator: its acoustic
-    port a -> b, ratio `value` = B l / S in ohms)."""
+    port a -> b, ratio `value` = B l / S in ohms, its electrical port from `c` to the part's
+    minus terminal: `@v`, the coil's node, unless a mode's)."""
 
     name: str
     kind: str
     a: str
     b: str
     value: float
+    c: str = "@v"
 
 
 @dataclass(frozen=True)
@@ -250,17 +268,35 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
                 raise ValueError(f"acoustic {name}: needs r_pa_s_m3 and / or m_kg_m4")
         else:  # diaphragm
             n_diaphragm += 1
-            m_a = d["moving_mass_kg"] / (s * s)
-            c_a = d["compliance_m_per_n"] * s * s
-            r_a = d["resistance_ns_per_m"] / (s * s)
+            modes = d.get("modes") or []
+            mf = 1.0 - sum(float(x["mass_fraction"]) for x in modes)
+            af = 1.0 - sum(float(x["area_fraction"]) for x in modes)
+            if not (mf > 0 and af > 0):
+                raise ValueError(f"diaphragm {name}: its modes take all of its mass or area")
+            s0, m0 = s * af, d["moving_mass_kg"] * mf
+            m_a = m0 / (s0 * s0)
+            c_a = d["compliance_m_per_n"] * s0 * s0
+            r_a = d["resistance_ns_per_m"] / (s0 * s0)
             m1, m2, m3 = f"{name}_1", f"{name}_2", f"{name}_3"
             els += [
                 _el(f"{name}_m", "L", a, m1, m_a),
                 _el(f"{name}_c", "C", m1, m2, c_a),
                 _el(f"{name}_leak", "R", m1, m2, _leak(c_a)),
                 _el(f"{name}_r", "R", m2, m3, r_a),
-                _el(f"{name}_g", "G", m3, b, coil["bl_tm"] / s),
+                _el(f"{name}_g", "G", m3, b, coil["bl_tm"] / s0),
             ]
+            bl2 = float(coil["bl_tm"]) ** 2
+            for k, x in enumerate(modes, 1):
+                mk = d["moving_mass_kg"] * float(x["mass_fraction"])
+                wk = 2.0 * math.pi * float(x["f_hz"])
+                node = f"{name}_k{k}"
+                els += [
+                    _el(f"{name}_k{k}", "L", "@v", node, bl2 / (mk * wk * wk)),
+                    _el(f"{name}_k{k}_r", "R", "@v", node, bl2 * float(x["q"]) / (wk * mk)),
+                    _el(f"{name}_k{k}_m", "C", node, "@minus", mk / bl2),
+                    {**_el(f"{name}_k{k}_g", "G", a, b,
+                           coil["bl_tm"] / (s * float(x["area_fraction"]))), "c": node},
+                ]  # fmt: skip
     if n_diaphragm != 1:
         raise ValueError(f"a cartridge has one diaphragm ({n_diaphragm} in its network)")
     return {
@@ -344,11 +380,14 @@ def moving_coil_from_data(d: Mapping[str, Any], name: str = "moving_coil") -> Mo
     if missing:
         raise ValueError(f"{name}: lumped needs {missing}")
     els = tuple(
-        Element(str(e["name"]), str(e["kind"]), str(e["a"]), str(e["b"]), float(e["value"]))
+        Element(
+            str(e["name"]), str(e["kind"]), str(e["a"]), str(e["b"]), float(e["value"]),
+            str(e.get("c", "@v")),
+        )
         for e in lp["elements"]
-    )
-    if sum(e.kind == "G" for e in els) != 1:
-        raise ValueError(f"{name}: one gyrator (G) in lumped.elements")
+    )  # fmt: skip
+    if sum(e.kind == "G" and e.c == "@v" for e in els) != 1:
+        raise ValueError(f"{name}: one gyrator (G) on the coil in lumped.elements")
     return MovingCoil(
         d["name"],
         float(lp["bl_tm"]),
@@ -366,6 +405,6 @@ def nodes(c: MovingCoil) -> Sequence[str]:
     out: list[str] = []
     for e in c.elements:
         for x in (e.a, e.b):
-            if x not in PORTS and x not in out:
+            if x not in PORTS and not x.startswith("@") and x not in out:
                 out.append(x)
     return out

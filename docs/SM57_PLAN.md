@@ -4,8 +4,9 @@ Drafted 2026-11-04 from a conversation with the user ("are there any microphones
 could make like an SM57 or SM58 to add to our list? what would this entail. No shortcuts
 and in keeping with our physics approach", then: "yes, let's write this plan"; the user's decisions 2026-11-05, see "Decisions"). It
 expands
-MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1 and SM2 done, SM4's
-body built ahead of SM3 (2026-11-05, overnight in the `sm57` worktree): see "Status".
+MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1, SM2 and SM3 done, SM4's
+polars done (its proximity open), SM6 started: a first print (2026-11-05, overnight in the
+`sm57` worktree): see "Status".
 
 ## Status (2026-11-05)
 
@@ -88,10 +89,32 @@ mass 69 mg, the air behind the washer 2.5 cm^3. R57@2's geometry records the han
 as the string '2e-05' (PyYAML reads an exponent without a decimal point as a string; its
 lumped value is right, and the builders read only that); fit_sm57.py's writer is fixed.
 
-**Open, handed on (SM3's modes):** the dip at 7.7 kHz and the second peak at 9.6 kHz aren't
-drawn (the model falls smoothly: 2.4 dB under at 10 kHz, ~4 dB under at 12.7-13.9 kHz). SM3's
-tolerance holds to ~8.5 kHz. The dome's modes (pat713's two cones and the coil ring, its bridges
-breaking axial symmetry) are next. The sphere-era notes follow.
+**SM3 done: the dome's mode, R57@4** (the circuit and the chain pin it). A mode hung from
+the coil (`moving_coil.py`'s diaphragm `modes`): a mass on a spring and damper in the
+mobility analogy on the gyrator's electrical side (the port's voltage is B l v of the coil,
+as speaker.py's cone modes), with its own gyrator to the diaphragm's acoustic port (its area
+S_k: the pressure pushes it, its velocity moves air); the rigid part keeps the rest of the
+mass and area. A stiff mode is the cartridge without it (tests/test_moving_coil.py). Not a
+shell FE: pat713's dome is two molded cones with bridges that break axial symmetry, and no
+source gives its dimensions, so the mode's four values are provisional and fitted (bounded:
+f 5-16 kHz, q 0.7-10, mass 2-50%, area 5-60%): 8.15 kHz, q 5.0, 14% of the mass, 5.1% of the
+area (near its bound). Fitted with the network on s68's whole curve: **0.69 dB rms, 1.76 dB
+worst, 50 Hz-14 kHz** (SM3's +-2 dB to 10 kHz and +-3 dB to 15 kHz met: `tests/test_sm57.py`
+test_on_axis_to_15_khz), the dip at 7.7 kHz and the second peak at 9.6 kHz drawn; the polars
+unchanged (within 2.4 dB); 1.488 mV/Pa; the resonance 104 Hz (Born's ~100); B l 2.28 T m, B
+1.2 T (bound), moving mass 60 mg. The Rust half (the gyrator's `c`, `@v` / `@minus`) agrees
+bit for bit. Webster ladders weren't needed (no duct here is long against a wavelength
+below 14 kHz: the longest, the rear slit's ~10 mm, is a fifth of one at 7 kHz).
+
+**SM6 started: the chain and a first print.** `sm57_v76.yaml` (compose_chain.py; a mic
+without a tolerance block allowed), `mic_print.py` finds a cartridge. The 5E3 take (the
+amp's sound pressure, the same source the U47 was printed from) at 100 dB SPL on axis into
+SM57 -> V76 at 58 dB (the SM57 is ~24 dB less sensitive than the U47, printed at 34):
+`reports/mics/audio/sm57_v76_5e3_take_vol0.5_speaker_pressure_100db_0deg_gain_db_v7658.wav`
+(R57@3; reprinted with @4 below), peak -1.6 dBFS, 5.5x real time. Against the dry source, re
+1 kHz: -5.9 dB at 63 Hz, -1.8 at 125, +2.4 at 4 kHz, +4.5 at 5.6 kHz, +5.3 at 8 kHz.
+
+The sphere-era notes follow.
 
 The presence peak and above were not in SM2: the model has no presence
 peak (~11 dB short at 5.8 kHz), a small bump at 11 kHz and a notch at 12.5 kHz. Why: on a
