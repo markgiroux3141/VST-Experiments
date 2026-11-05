@@ -105,6 +105,10 @@ pub const MATERIALS: &[&str] = &[
     "anechoic",
 ];
 
+fn dist3(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+    (0..3).map(|i| (a[i] - b[i]).powi(2)).sum::<f64>().sqrt()
+}
+
 /// The ceiling's forms (varimu/rooms/polyroom.py `CEILINGS`).
 pub const CEILINGS: &[&str] = &["flat", "shed", "gable", "vault"];
 
@@ -258,7 +262,29 @@ pub const DIRECTIVITIES: &[(&str, &str)] = &[
     ("bass_1x15", "bass cab 1x15"),
 ];
 
+/// A pattern's body: the sphere's radius (varimu/rooms/directivity.py PRESETS), 0 for omni.
+pub fn body_radius_m(directivity: &str) -> f64 {
+    match directivity {
+        "voice" => 0.09,
+        "amp_1x12" => 0.25,
+        "amp_2x12" => 0.35,
+        "bass_1x15" => 0.40,
+        _ => 0.0,
+    }
+}
+
 impl RoomSource {
+    /// Its body's centre (a radius behind the cap, against its aim) and radius.
+    pub fn body(&self) -> ([f64; 3], f64) {
+        let r = body_radius_m(&self.directivity);
+        let (az, el) = (
+            self.azimuth_deg.to_radians(),
+            self.elevation_deg.to_radians(),
+        );
+        let aim = [el.cos() * az.cos(), el.cos() * az.sin(), el.sin()];
+        (std::array::from_fn(|i| self.pos[i] - r * aim[i]), r)
+    }
+
     pub fn new(name: &str, track: &str, spl_db: f64, pos: [f64; 3]) -> RoomSource {
         RoomSource {
             name: name.to_string(),
@@ -938,6 +964,13 @@ impl Scene {
                 if d < MIN_DISTANCE_M {
                     out.push(format!("{} is closer than 10 cm to {}", m.name, s.name));
                 }
+                let (c, r) = s.body();
+                if r > 0.0 && dist3(&m.pos, &c) < r {
+                    out.push(format!(
+                        "{} is inside {}'s body (its cabinet / head)",
+                        m.name, s.name
+                    ));
+                }
             }
         }
         out
@@ -1173,6 +1206,9 @@ mod tests {
             d.render_json(&clips)["sources"][0]["aim"]["azimuth_deg"],
             90.0
         );
+        // a mic beside the cabinet, inside its body
+        d.mics[0].pos = [2.0, 2.35, 1.3];
+        assert!(d.problems().iter().any(|p| p.contains("inside A's body")));
         assert!(v["room"]["materials"].get("faces").is_none());
         assert_eq!(v["settings"]["wave_crossover_hz"], 500.0);
         let old = Scene::from_state(&json!({"name": "x", "dims_m": [5.0, 4.0, 2.6]}));

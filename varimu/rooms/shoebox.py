@@ -32,6 +32,7 @@ import zlib
 from dataclasses import dataclass
 
 import numpy as np
+import scipy.fft as sfft
 
 from varimu.rooms.entries import EntryTable
 from varimu.separation.room import (
@@ -304,6 +305,7 @@ def responses(
         centre = 0.5 * np.array(room.dims_m)
     seeds = seeds if seeds is not None else list(range(len(sources_m)))
     out = np.zeros((len(sources_m), len(mics), 2, n))
+    tails = []  # per source: its diffuse field's plane waves (directions, bins), its gains
     n_ism, win = int(ism_s * fs), int(FADE_S * fs)
 
     # Per mic table: the coarse grid and its map onto the FFT's bins.
@@ -415,7 +417,10 @@ def responses(
             out[si, mi] = np.fft.irfft(spec, n_fft)[:, :n]
         if not tail:
             continue
-        # The diffuse field: shared plane waves, each an independent decaying noise per band.
+        # The diffuse field: shared plane waves, each one white noise (2026-11-05: the same
+        # noise in every band, each band's envelope on it, so the band weights, which sum to 1
+        # in amplitude, cross over without the -3 dB dips that independent noises per band left
+        # between bands; and one draw instead of seven).
         e_rate = early.mean(0)  # (bands,)
         dirs = fibonacci_sphere(TAIL_DIRECTIONS)
         rng = np.random.default_rng([seeds[si], zlib.crc32(b"room tail")])
@@ -423,6 +428,7 @@ def responses(
         fade_in = np.clip((np.arange(n_fft) - (n_ism - win)) / win, 0, 1)
         bw_fine = band_weights_at(f_fine)
         noise_spec = np.zeros((TAIL_DIRECTIONS, len(f_fine)), complex)
+        white = rng.standard_normal((TAIL_DIRECTIONS, n_fft))
         for b in range(len(BANDS_HZ)):
             if poly:
                 # <h^2(t)> = 4 pi c e(t) / V per second (polyroom's docstring)
@@ -433,19 +439,29 @@ def responses(
                 env = np.sqrt(e_rate[b] / TAIL_DIRECTIONS) * np.exp(-3 * np.log(10) * t / rt[b])
             env *= fade_in
             env[n:] = 0.0
-            x = rng.standard_normal((TAIL_DIRECTIONS, n_fft)) * env[None, :]
-            noise_spec += bw_fine[b][None, :] * np.fft.rfft(x, axis=1)
+            noise_spec += bw_fine[b][None, :] * sfft.rfft(white * env[None, :], axis=1, workers=-1)
         gains = _receiver_gains(decays[si], n, fs, volume) if poly else None
-        for mi, m in enumerate(mics):
-            cos_t = np.clip(dirs @ m.aim, -1, 1)
-            e_front, e_rear = m.table.at(np.arccos(cos_t), np.full(len(dirs), np.inf))
-            idx, w, _, _ = grids[id(m.table)]
-            lead_s = (dirs @ (m.position_m - centre)) / c  # u . x / c early
-            ph = np.exp(2j * np.pi * f_fine[None, :] * lead_s[:, None])
-            for e, ent in enumerate((e_front, e_rear)):
-                s_f = ent[:, idx] * (1 - w) + ent[:, idx + 1] * w
-                spec = np.einsum("if,if->f", s_f * ph, noise_spec)
-                tail_t = np.fft.irfft(spec, n_fft)[:n]
+        tails.append((si, noise_spec, gains))
+    # each mic's view of the diffuse field (its entries and arrival phases per direction,
+    # the same for every source), then every source's field through it
+    if tails:
+        dirs = fibonacci_sphere(TAIL_DIRECTIONS)
+    for mi, m in enumerate(mics) if tails else ():
+        cos_t = np.clip(dirs @ m.aim, -1, 1)
+        e_front, e_rear = m.table.at(np.arccos(cos_t), np.full(len(dirs), np.inf))
+        idx, w, _, _ = grids[id(m.table)]
+        lead_s = (dirs @ (m.position_m - centre)) / c  # u . x / c early
+        # e^{2 pi j f lead} on the FFT's evenly spaced bins: powers of one step (a running
+        # product; ~1e-11 from exp after 2^18 bins), far cheaper than the exponentials
+        ph = np.empty((len(dirs), len(f_fine)), complex)
+        ph[:, 0] = 1.0
+        ph[:, 1:] = np.exp(2j * np.pi * f_fine[1] * lead_s)[:, None]
+        np.cumprod(ph, axis=1, out=ph)
+        for e, ent in enumerate((e_front, e_rear)):
+            view = (ent[:, idx] * (1 - w) + ent[:, idx + 1] * w) * ph
+            for si, noise_spec, gains in tails:
+                spec = np.einsum("if,if->f", view, noise_spec)
+                tail_t = sfft.irfft(spec, n_fft, workers=-1)[:n]
                 out[si, mi, e] += tail_t if gains is None else tail_t * gains[mi]
     if wave:
         from varimu.rooms import wave as wave_solver

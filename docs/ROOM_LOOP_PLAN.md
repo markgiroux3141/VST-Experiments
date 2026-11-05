@@ -469,6 +469,16 @@ in the live room. A gobo in a live room is worth a few dB: the reverberant bleed
 Uneven treatment changes the balance: plaster where furnished walls were lengthened the bass
 (125 Hz RT 0.52 -> 0.74 s) while the mids shortened.
 
+**The diffuse tail, fixed and faster (late that night).** Its plane waves now carry one white
+noise each, shared by the bands (each band's envelope on it): independent noises per band,
+crossed over by amplitude weights that sum to 1, left the tail up to 3 dB low between band
+centres (an octave-periodic ripple). The mic's view of the field (its entries and arrival
+phases per direction) is formed once per mic for every source, the phases as a running
+product: the room's computation 18.5 -> 8.6 s for 3 sources and 4 mics. Renders after this
+change differ from the night's demos in the tail's realization (and those dips).
+A source within a cell of a wall runs in the wave solver (its injection renormalized over the
+room's cells); a mic inside a directional source's body is refused (Python and the Room view).
+
 **Not done / limits.** Second-order diffraction (over a box's two edges: deep shadows behind
 thick objects come out too dark; thin panels are plates, so gobos are fine). Paths reflecting
 after an edge (edge then wall) aren't in the geometric part (below the crossover the wave

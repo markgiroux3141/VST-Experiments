@@ -351,7 +351,8 @@ def responses(
     nx, ny, _ = vox.dims
 
     def spread(p_m, scale):
-        """A point's injection over the 8 cells round it (trilinear)."""
+        """A point's injection over the 8 cells round it (trilinear); next to a wall, over
+        those in the room, renormalized (a source against a wall)."""
         sg = vox.grid_coords(p_m)
         base = np.floor(sg).astype(int)
         fr = sg - base
@@ -366,10 +367,13 @@ def responses(
                     )
                     cell = (base[0] + dxx) + nx * ((base[1] + dy) + ny * (base[2] + dz))
                     if vox.codes[cell] == 0:
-                        raise ValueError(f"a source at {list(p_m)} is too close to a wall")
+                        continue
                     idx.append(cell)
-                    val.append(scale * 4 * np.pi * lam**2 / (dx * t_step) * w)
-        return idx, val
+                    val.append(w)
+        tot = sum(val)
+        if not idx or tot < 1e-9:
+            raise ValueError(f"a source at {list(p_m)} is in a wall or an object")
+        return idx, [scale * 4 * np.pi * lam**2 / (dx * t_step) * v / tot for v in val]
 
     room_vox = vox
     for si, src in enumerate(sources_m):

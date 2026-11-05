@@ -269,10 +269,19 @@ def mic_pressures(
     length (the longest source plus the room's tail)."""
     tables, kinds = {}, []
     mics = []
+    from varimu.rooms.directivity import from_spec
+
     for m in scene.mics:
         for s in scene.sources:
             if np.linalg.norm(m.position_m - s.position_m) < MIN_DISTANCE_M:
                 raise ValueError(f"mic {m.name} is closer than {MIN_DISTANCE_M} m to {s.name}")
+            dv = from_spec(s.directivity)
+            if dv is not None:  # its body: a sphere a radius behind the cap
+                centre = s.position_m - dv.centre_offset_m * aim_vector(
+                    s.azimuth_deg, s.elevation_deg
+                )
+                if np.linalg.norm(m.position_m - centre) < dv.centre_offset_m:
+                    raise ValueError(f"mic {m.name} is inside {s.name}'s body (its cabinet / head)")
         geom = _capsule_geometry(m.chain, m.set)
         key = json.dumps(geom, sort_keys=True, default=str)
         if key not in tables:

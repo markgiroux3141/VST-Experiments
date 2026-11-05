@@ -696,3 +696,26 @@ def test_the_wave_solvers_source_body_has_the_exact_near_field():
         e = [10 * np.log10((np.abs(np.fft.rfft(t, n_fft)[sel]) ** 2).sum()) for t in ts]
         ex = 20 * np.log10(abs(exact(fc, r, -1.0)) / abs(exact(fc, r, 1.0)))
         assert abs((e[1] - e[0]) - ex) < 1.0, (fc, e[1] - e[0], ex)
+
+
+def test_a_source_against_a_wall_and_a_mic_in_an_amp():
+    """A source within a cell of a wall still runs in the wave solver (its injection over the
+    cells in the room); a mic inside a directional source's body is refused."""
+    from varimu.rooms import wave
+    from varimu.rooms.scene import load_scene, mic_pressures
+
+    b = _wave_or_skip()
+    room = _rect_room()
+    mics = [Mic(np.array([3.0, 2.5, 1.2]), aim_vector(0), _omni())]
+    low, _ = wave.responses(room, [np.array([0.01, 2.0, 1.2])], mics, FS, 1 << 16,
+                            crossover_hz=250, rt_s=np.full(7, 0.1), length_s=0.1, backend=b)  # fmt: skip
+    assert np.all(np.isfinite(low)) and np.any(low != 0)
+    scene = load_scene({
+        "name": "t", "room": {"floor_m": RECT, "materials": dict(zip(
+            ("walls", "floor", "ceiling"), FURNISHED, strict=True))},
+        "sources": [{"name": "amp", "clip": "x.wav", "spl_db": 94, "position_m": [2, 2, 1],
+                     "directivity": "amp_1x12", "aim": {"azimuth_deg": 0}}],
+        "mics": [{"name": "m", "chain": "capsule_bk4134", "position_m": [1.8, 2.15, 1.0]}],
+    })  # fmt: skip
+    with pytest.raises(ValueError, match="inside amp's body"):
+        mic_pressures(scene, FS, [np.ones(100)])
