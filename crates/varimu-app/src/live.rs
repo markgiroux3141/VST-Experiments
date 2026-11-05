@@ -257,6 +257,7 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::HeatedCathode(h) => ("HeatedCathode", &h.name, vec![]),
             Element::Device(d) => ("Device", &d.name, d.nodes.iter().collect()),
             Element::Plate(p) => ("Plate", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
+            Element::Spring(p) => ("Spring", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
             Element::Harp(h) => ("Harp", &h.name, vec![&h.out]),
             Element::ThyratronEvents(t) => {
@@ -605,6 +606,7 @@ impl Live {
         };
         if *playing.0 == st && playing.1 == fs && restart.is_none() {
             circuitsim::plate::prepare(&ir, self.s.sim_rate() as f64);
+            circuitsim::spring::prepare(&ir, self.s.sim_rate() as f64);
             self.pending.push(Ready::Update(Box::new(ir), values));
         } else {
             let (u0, c0) = restart.unwrap_or_else(|| (u0, self.controls.clone()));
@@ -931,6 +933,7 @@ fn build_loop(
                 // A plate's new response (a knob on its damper) computed here, off the
                 // audio thread: the stream's update finds it cached.
                 circuitsim::plate::prepare(&ir, s.sim_rate() as f64);
+                circuitsim::spring::prepare(&ir, s.sim_rate() as f64);
                 Ok(Ready::Update(Box::new(ir), values))
             } else {
                 let u0 = f64::from_bits(shared.u0.load(Ordering::Relaxed));

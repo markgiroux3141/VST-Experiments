@@ -1,6 +1,7 @@
 """The plate reverb's report (docs/REVERB_PLAN.md, E6 / E7) -> reports/reverb/.
 
     uv run --extra fast python scripts/plate_report.py [--quality draft-1x] [--decays 1 2 2.5 4.5]
+        [--circuit foil_reverb]   (the EMT 240's gold foil: files foil_*; DECAY 1-4 s)
 
 For each DECAY setting: the whole device's impulse response (config/circuits/
 plate_reverb.yaml: an impulse into the drive amplifier, the plate, the pickup amplifier),
@@ -30,7 +31,7 @@ from varimu.circuit import builder, spec  # noqa: E402
 from varimu.devices import plate as pl  # noqa: E402
 from varimu.devices.library import load_plate  # noqa: E402
 from varimu.sim import fast  # noqa: E402
-from varimu.sim.io import TransientSettings  # noqa: E402
+from varimu.sim.io import TransientSettings, write_audio  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 OUT = REPO / "reports" / "reverb"
@@ -56,10 +57,12 @@ def main() -> None:
     ap.add_argument("--quality", default="draft-1x")
     ap.add_argument("--decays", type=float, nargs="+", default=[1.0, 2.0, 2.5, 4.5])
     ap.add_argument("--seconds", type=float, default=7.0)
+    ap.add_argument("--circuit", default="plate_reverb", choices=["plate_reverb", "foil_reverb"])
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
-    comp = load_plate("EMT140@1")
-    sp = spec.load_circuit(REPO / "config/circuits/plate_reverb.yaml")
+    sp = spec.load_circuit(REPO / f"config/circuits/{args.circuit}.yaml")
+    comp = load_plate(str(spec.resolve(sp)["plate_model"]))
+    tag = "plate" if args.circuit == "plate_reverb" else "foil"
     st = TransientSettings.from_sim_settings(engine="circuitsim", quality=args.quality)
     st = dataclasses.replace(st, settle_s=1.0)
     fs = float(st.sample_rate)
@@ -107,20 +110,19 @@ def main() -> None:
         }
         col = colours[k % len(colours)]
         ax.semilogx(BANDS_HZ, t60, "o-", color=col, label=f"DECAY {d:g} s: measured (octave bands)")
-        ax.semilogx(
-            BANDS_HZ, want, "--", color=col, alpha=0.7, label=f"DECAY {d:g} s: the EMT curves"
-        )
+        ax.semilogx(BANDS_HZ, want, "--", color=col, alpha=0.7, label=f"DECAY {d:g} s: the curves")
         rows = zip(BANDS_HZ, t60, want, strict=True)
         print(f"DECAY {d:g} s: " + ", ".join(f"{f} Hz {m:.2f} ({w:.2f})" for f, m, w in rows))
-        if abs(d - 2.5) < 1e-9:
-            ir_25 = y
+        if abs(d - 2.5) < 1e-9 or ir_25 is None and k == len(args.decays) - 1:
+            ir_25, d_25 = y, d
     ax.set_xlabel("Hz")
     ax.set_ylabel("T60 (s)")
     ax.set_title("Plate reverb: decay per octave band, measured from the device's impulse response")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(OUT / "plate_decay.png", dpi=120)
+    ax.set_title(f"{comp.name}: decay per octave band, measured from the device's impulse response")
+    fig.savefig(OUT / f"{tag}_decay.png", dpi=120)
     plt.close(fig)
 
     # The brochure's curves against the loss formulas.
@@ -139,7 +141,8 @@ def main() -> None:
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(fontsize=7)
     fig.tight_layout()
-    fig.savefig(OUT / "plate_losses.png", dpi=120)
+    if tag == "plate":
+        fig.savefig(OUT / "plate_losses.png", dpi=120)
     plt.close(fig)
 
     def brochure_at(hz: float) -> float:
@@ -148,7 +151,7 @@ def main() -> None:
     def formulas_at(hz: float) -> float:
         return float(pl.SIX_LN10 / pl.physics_decay(comp, np.array([hz]))["total"][0])
 
-    summary["physics_vs_brochure_undamped"] = {
+    summary["physics_vs_curves_longest"] = {
         str(hz): {"brochure_s": round(brochure_at(hz), 2), "formulas_s": round(formulas_at(hz), 2)}
         for hz in (100.0, 500.0, 1000.0, 4000.0, 10000.0)
     }
@@ -159,11 +162,12 @@ def main() -> None:
         ax.set_ylim(0, 16000)
         ax.set_xlabel("s")
         ax.set_ylabel("Hz")
-        ax.set_title("Plate reverb at DECAY 2.5 s: the impulse response's spectrogram")
+        ax.set_title(f"{comp.name} at DECAY {d_25:g} s: the impulse response's spectrogram")
         fig.tight_layout()
-        fig.savefig(OUT / "plate_spectrogram.png", dpi=120)
+        fig.savefig(OUT / f"{tag}_spectrogram.png", dpi=120)
+        write_audio(OUT / f"{tag}_impulse.wav", ir_25 / np.abs(ir_25).max() * 0.5, int(fs))
         plt.close(fig)
-    (OUT / "plate_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+    (OUT / f"{tag}_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {OUT.relative_to(REPO)}")
 
 

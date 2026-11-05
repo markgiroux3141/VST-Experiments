@@ -67,6 +67,7 @@ from varimu.circuit.ir import (
     Plate,
     Resistor,
     SineSource,
+    Spring,
     Tape,
     ThyratronEvents,
     TubeNoise,
@@ -351,7 +352,7 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
         return f"{el.name} {el.pos} {el.neg} {el.ctrl_pos} {el.ctrl_neg} {num(el.gm_s)}"
     if isinstance(el, Device):
         return f"{el.name} {' '.join(el.nodes)} {instance_target(models[el.model])}"
-    if isinstance(el, Plate | Tape | Harp):
+    if isinstance(el, Plate | Spring | Tape | Harp):
         # The medium cut out at its ports: the pickup held at 0 V, the sense unread.
         return f"{el.name} {el.out} 0 dc 0"
     if isinstance(el, ThyratronEvents):

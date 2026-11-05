@@ -87,7 +87,7 @@ pub struct KeyRoute {
 pub const REVERB_WET: f64 = 0.3;
 
 /// Devices whose output is an effect only (a reverb's return): added with [`REVERB_WET`].
-pub const WET_ONLY: [&str; 1] = ["plate_reverb"];
+pub const WET_ONLY: [&str; 2] = ["plate_reverb", "foil_reverb"];
 
 impl Slot {
     /// `device` at its play quality with its circuit's default values, unity gains.

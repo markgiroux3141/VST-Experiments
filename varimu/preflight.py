@@ -39,6 +39,7 @@ from varimu.circuit.ir import (
     Plate,
     Resistor,
     SineSource,
+    Spring,
     Tape,
     ThyratronEvents,
     VoltageSource,
@@ -166,6 +167,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     # A plate's pickup and a tape's repro head drive their nodes to ground, as a control
     # input does.
     driven += [(el.out, f"<plate {el.name}>") for el in ir.elements() if isinstance(el, Plate)]
+    driven += [(el.out, f"<spring {el.name}>") for el in ir.elements() if isinstance(el, Spring)]
     driven += [(el.out, f"<tape {el.name}>") for el in ir.elements() if isinstance(el, Tape)]
     driven += [(el.out, f"<harp {el.name}>") for el in ir.elements() if isinstance(el, Harp)]
     for n in [*(d[0] for d in driven), *(p.node for p in ir.probes)]:

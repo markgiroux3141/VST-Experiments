@@ -390,7 +390,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 17] = [
+pub const DEVICES: [Device; 19] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 (compressor)",
@@ -866,11 +866,55 @@ pub const DEVICES: [Device; 17] = [
         // its full scale before C3, left it 10 dB down at its loudest).
         live_speaker_v: Some(20.0),
     },
+    Device {
+        id: "foil_reverb",
+        label: "Foil reverb (EMT 240 gold foil)",
+        circuit: "foil_reverb",
+        panel: Some(&["drive", "decay_500hz_s", "return_level"]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        partition: None,
+    },
+    Device {
+        id: "fender_6g15",
+        label: "Spring reverb (Fender 6G15, Accutronics tank)",
+        circuit: "fender_6g15",
+        panel: Some(&["dwell", "tone", "mixer"]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        partition: None,
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
 /// on a thread of its own). The 670 and the EQP-1A would fit too; the reverb first.
-pub const CHAIN_ENDS: [&str; 3] = ["plate_reverb", "ampex_351_echo", "ampex_351_2_echo"];
+pub const CHAIN_ENDS: [&str; 5] = [
+    "plate_reverb",
+    "foil_reverb",
+    "fender_6g15",
+    "ampex_351_echo",
+    "ampex_351_2_echo",
+];
 
 /// Where AUTO changes range: keys below it play on LOW (`range` 0, the tank's 224 nF),
 /// the rest on HIGH. At 330 Hz (E4) the two sound most alike (measured at draft, the same

@@ -19,6 +19,7 @@ use circuitsim::ir::{
 use crate::capsule::{self, Capsule, DualCapsule};
 use crate::plate::{self, PlateComponent};
 use crate::speaker::{self, Speaker};
+use crate::spring::{self, SpringTankComponent};
 use crate::tape::{self, TapeComponent};
 use crate::yaml::{self, Map, Value};
 use crate::{Error, versions};
@@ -43,6 +44,7 @@ pub struct Library {
     capsules: Mutex<HashMap<String, Capsule>>,
     dual_capsules: Mutex<HashMap<String, DualCapsule>>,
     plates: Mutex<HashMap<String, PlateComponent>>,
+    springs: Mutex<HashMap<String, SpringTankComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
     harps: Mutex<HashMap<String, std::sync::Arc<circuitsim::harp::HarpModel>>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
@@ -60,6 +62,7 @@ impl Library {
             capsules: Mutex::new(HashMap::new()),
             dual_capsules: Mutex::new(HashMap::new()),
             plates: Mutex::new(HashMap::new()),
+            springs: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
             harps: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
@@ -226,6 +229,21 @@ impl Library {
         let (_, text) = versions::read_text(&root, &r)?;
         let p = plate::from_data(&yaml::parse(&text, name)?, name)?;
         self.plates.lock().unwrap().insert(key, p.clone());
+        Ok(p)
+    }
+
+    /// Spring tank component `name` (`NAME@N`, or `NAME` for its latest version), checked
+    /// against versions.lock (`load_spring_tank` in library.py).
+    pub fn spring_tank(&self, name: &str) -> Result<SpringTankComponent, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(p) = self.springs.lock().unwrap().get(&key) {
+            return Ok(p.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let p = spring::from_data(&yaml::parse(&text, name)?, name)?;
+        self.springs.lock().unwrap().insert(key, p.clone());
         Ok(p)
     }
 

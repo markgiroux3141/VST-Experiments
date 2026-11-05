@@ -191,6 +191,7 @@ pub enum Element {
     HeatedCathode(HeatedCathode),
     Device(Device),
     Plate(Plate),
+    Spring(Spring),
     Tape(Tape),
     Harp(Harp),
     ThyratronEvents(ThyratronEvents),
@@ -341,6 +342,35 @@ pub struct Plate {
     pub f_max_hz: f64,
     pub decay: Vec<[f64; 2]>,
     pub tail_db: f64,
+}
+
+/// A spring reverb tank's springs (docs/REVERB_PLAN.md, E1-E3; `crate::spring`;
+/// `varimu/devices/spring.py` is the reference): a force `force_per_v (v(sense_pos) -
+/// v(sense_neg))` (the input coil's current sensed across its resistance, times the
+/// transducer's force per ampere over that resistance; the sense draws no current) at
+/// every spring's input bead, and the sum of the output beads' tangential velocities times
+/// `out_per_m_s` (the output coil's EMF) driving `out` to ground, one sample after the
+/// force (one-way coupling: the springs' load on the coil is the builder's resistor).
+/// `springs`: per spring (wire radius, helix radius, uncurled wire length) in metres;
+/// `decay` the energy decay rate (1/s) against frequency (Hz). `saturation_v`: the input
+/// transducer's pole pieces saturating, the force `force_per_v saturation_v tanh(v /
+/// saturation_v)` (0: linear). SPICE has no springs: ngspice sees `out` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Spring {
+    pub name: String,
+    pub sense_pos: String,
+    pub sense_neg: String,
+    pub force_per_v: f64,
+    pub out: String,
+    pub out_per_m_s: f64,
+    pub density_kg_m3: f64,
+    pub youngs_pa: f64,
+    pub springs: Vec<[f64; 3]>,
+    pub f_max_hz: f64,
+    pub decay: Vec<[f64; 2]>,
+    pub tail_db: f64,
+    pub saturation_v: f64,
 }
 
 /// Magnetic tape between a record and a repro head (docs/TAPE_PLAN.md, TM4;
@@ -705,6 +735,7 @@ impl Element {
             Element::HeatedCathode(e) => &e.name,
             Element::Device(e) => &e.name,
             Element::Plate(e) => &e.name,
+            Element::Spring(e) => &e.name,
             Element::Tape(e) => &e.name,
             Element::Harp(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
@@ -726,6 +757,7 @@ impl Element {
             Element::TubeNoise(_) | Element::HeatedCathode(_) => vec![],
             Element::Device(e) => e.nodes.iter().map(String::as_str).collect(),
             Element::Plate(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
+            Element::Spring(e) => vec![&e.sense_pos, &e.sense_neg, &e.out],
             Element::Tape(e) => {
                 let mut v = vec![e.sense_pos.as_str(), &e.sense_neg, &e.out];
                 v.extend(e.supply.as_deref());
@@ -1063,6 +1095,55 @@ impl CircuitIr {
                     if e.out == GROUND || e.out == self.input_node {
                         return err(format!(
                             "{name}: its pickup drives {} (ground or the input)",
+                            e.out
+                        ));
+                    }
+                    'V'
+                }
+                Element::Spring(e) => {
+                    for (k, v) in [
+                        ("density_kg_m3", e.density_kg_m3),
+                        ("youngs_pa", e.youngs_pa),
+                        ("f_max_hz", e.f_max_hz),
+                        ("tail_db", e.tail_db),
+                    ] {
+                        positive(&format!("{name}.{k}"), v)?;
+                    }
+                    for (k, v) in [
+                        ("force_per_v", e.force_per_v),
+                        ("out_per_m_s", e.out_per_m_s),
+                    ] {
+                        finite(&format!("{name}.{k}"), v)?;
+                    }
+                    nonneg(&format!("{name}.saturation_v"), e.saturation_v)?;
+                    if e.springs.is_empty()
+                        || e.springs
+                            .iter()
+                            .any(|s| !(s.iter().all(|v| *v > 0.0 && v.is_finite()) && s[0] < s[1]))
+                    {
+                        return err(format!(
+                            "{name}.springs: (wire radius, helix radius, length) per spring,                              positive, the wire thinner than the helix"
+                        ));
+                    }
+                    if e.decay.is_empty()
+                        || e.decay
+                            .iter()
+                            .any(|d| !(d[0] > 0.0 && d[1] >= 0.0 && d[1].is_finite()))
+                        || e.decay.windows(2).any(|w| w[1][0] <= w[0][0])
+                    {
+                        return err(format!(
+                            "{name}.decay: (Hz, 1/s) points rising in Hz, rates finite and >= 0"
+                        ));
+                    }
+                    if e.sense_pos == e.sense_neg {
+                        return err(format!(
+                            "{name}: its force senses {} against itself",
+                            e.sense_pos
+                        ));
+                    }
+                    if e.out == GROUND || e.out == self.input_node {
+                        return err(format!(
+                            "{name}: its output drives {} (ground or the input)",
                             e.out
                         ));
                     }

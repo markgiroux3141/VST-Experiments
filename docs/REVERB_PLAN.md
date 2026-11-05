@@ -240,7 +240,113 @@ The user's ask: a reverb to put on recorded tracks in the Session view. Built in
   listening, the exciter's and pickups' real figures (genome bounds), production renders'
   cost (the response at 192 kHz), sends (SESSION_FX_PLAN.md F4).
 
-### The spring, for later (same research)
+### Status (2026-11-04): the spring (E1-E4) and the EMT 240 foil built
+
+The user's ask (2026-11-04): more reverbs, from the discovery above, the decisions
+delegated ("simulating the physics and capturing the essence of analog gear"; real time
+where it fits, printing at a chain's end is fine). Built: the spring tank and the Fender
+6G15 (E1-E4, one-way), and the candidates' first, the EMT 240. Decisions taken on the way
+(Claude's, the user to review):
+
+- **The spring as modes, not finite differences.** E1 planned Bilbao & Parker's implicit
+  scheme. The model it solves, Parker & Bilbao's curved rod (DAFx-09 eq. 1: the helix angle
+  neglected, tangential u and radial v along the wire), has exact normal modes on a finite
+  spring with its ends pinned radially and free tangentially (the beads light and free to
+  turn, their Fig. 1): u = a cos(beta s), v = b sin(beta s), beta = n pi / L, each n a 2 x 2
+  eigenproblem in closed form (its audio branch det / lambda_hi, no cancellation). So a
+  spring is a modal medium like the plate: ~1,000-1,200 modes below 16 kHz per spring, the
+  response summed from them and convolved, zero latency. Exact for the model, so E1's
+  done-when about a scheme's numerical dispersion is moot; it is replaced by the response
+  against the theory (below). A finite-difference scheme stays the route for what modes
+  can't do: nonuniform springs (the BX20's irregularities), the crash (contact).
+- **The transducers.** A force on the input beads drives every spring's u at s = 0 (the
+  bead's torsion moves the wire tangentially, Parker & Bilbao section 2; the springs of a
+  tank share one coil), the output is the sum of the springs' tangential velocities at
+  s = L times the output coil's EMF per velocity. One transducer geometry: the output's
+  constant is the input's times sqrt(L_out / L_in). The input's constant is calibrated so
+  the rated 28 mA rms gives the typical 6.5 mV rms over the useful band (Elliott). The
+  input coil's pole pieces saturate (a tanh at Elliott's ~250 mA: the force only, the
+  springs linear after it): the 6G15's driver delivers ~0.45 A rms at full DWELL, 16x the
+  rating, so this is the drip.
+- **The 6G15's tubes.** The 12AT7 as the 6201 already fitted (RCA's premium 12AT7, the same
+  published figures); the 7025 as the 12AX7; the 6K6GT new: Koren fitted to RCA's three
+  class-A1 columns, the zero-signal figures and the large-signal ones (power, THD and the
+  max-signal currents at each column's load, by a load-line simulation: the small-signal
+  points alone left the curvature free and gave twice RCA's distortion).
+- **The EMT 240 is a plate, not a membrane.** The candidates' list (below) expected a
+  tension-dominated, non-dispersive foil. EMT's brochure says otherwise: the foil keeps the
+  140's principle, "a constant resonant density over the audible range", "> 3/Hz",
+  "minimum dispersion", so bending dominates; 18 um of gold over 270 x 290 mm is 3.4 modes
+  per Hz in bending (the 140: 1.3). It is the plate's model at another scale.
+
+**E1, the spring medium.** `varimu/devices/spring.py` (the reference: the branch, the modes,
+the response; T_D, F_C in closed form) and circuitsim's `spring.rs` (the same; the parallel
+modal sum and the convolving medium now `crate::modal`, shared with the plate, whose output
+is bit for bit unchanged). Agree within 1e-8 (`tests/test_spring.py`). Against the theory
+(`scripts/spring_report.py --only tank` -> `reports/reverb/spring/tank_spectrogram.png`):
+each spring's chirps lie on the arrival times L / |v_g| (x1, x3, x5) of the audio branch's
+three wavenumbers below F_C; T_D 41.8 / 53.0 ms from the response against the closed form's
+41.6 / 52.7, F_C 4905 / 4488 Hz from the dispersion against the first-order formula's
+4887 / 4471 Hz. A finding the formulas don't state: the first low-band arrival is at T_D /
+(2 sqrt 2), carried by the branch just above beta = k (slope sqrt(2) nu_0), not T_D / 2.
+
+**E2, the medium in the engine.** The IR element `Spring` (both IRs; SPICE holds its EMF at
+0 V), beside the transient like the plate (`media.rs`), its response cached and computed
+off the audio thread on a change (`spring::prepare`). The springs' load on the input coil
+is a resistor, force_per_a^2 over their tangential impedance: 1.3 mOhm against the coil's
+0.81 Ohm, so for a tank the back-reaction is negligible (E3's question): E5 matters for the
+speaker, not for tanks.
+
+**E3, the tank.** `ACC4AB3C1B@1` (kind `spring_tank`, `varimu fit-devices --only
+ACC4AB3C1B`): the 6G15's Accutronics 4AB3C1B, two springs (Parker & Bilbao's measured Leem
+KA-1210 springs 1 and 3, provisional: the Type 4's aren't published), Elliott's coils (A in:
+0.81 Ohm, 1.27 mH; B out: 200 Ohm, 270 mH), 19.3 mN/A in and 0.282 V per m/s out, the
+decay code 3's middle (3.4 s at 500 Hz) with steel's loss factor 2e-4 above
+(provisional). The part `spring_tank: [plus, minus, out]` in both builders, its symbol in
+both editors. Not done: the beads' rotational inertia (neglected; its corner is ~8.5 kHz per
+end, so about -6 dB at 8.5 kHz overall, -1 dB at 4 kHz), the input impedance against
+frequency beyond the coil's.
+
+**E4, the Fender 6G15.** `config/circuits/fender_6g15.yaml` from schematic H-FA: V1A tapped
+1:11 into DWELL, V1B unbypassed, the 6K6GT into TR2 (the 125A12A as a 7.5 k : 8 SE
+transformer, its core provisional), the tank, V3A recovery, TONE, the 250 pF into MIXER's
+wet end, V3B's dry follower into its dry end, the half-wave silicon supply (three series
+diodes as one). Idles within 11% of every printed voltage (the drawing allows 20%; the
+rails within 0.2% after calibrating the HV winding), `tests/test_fender_6g15.py`. Measured
+(`scripts/spring_report.py` -> `reports/reverb/spring/`, production): the wet output's
+octave-band decay within 4% of the tank's table (3.36 s at 500 Hz, inside the long class at
+every band to 1 kHz); idle hum -77 dBFS at the default panel (-79 dry, -73 wet); DWELL
+(1 kHz at -12 dBFS) 0.25 / 0.5 / 0.75 / 1: the tank's current 120 / 235 / 337 / 425 mA
+rms (rated 28), its THD 6 / 11 / 16 / 21%, the transducer's compression -0.9 / -2.8 / -4.7 /
+-6.2 dB, the wet level -17.4 / -11.0 / -9.2 / -8.5 dBFS rms (the saturation: 12 dB of drive,
+9 dB of return). DWELL's default 0.3 (a session track at -18 dBFS rms
+already exceeds the tank's rating there). The app's `fender_6g15` device and chain end
+(DWELL, TONE, MIXER; not wet-only: MIXER is the unit's own blend): 0.40x real-time load at
+draft-1x, worst block 0.72, no dropouts in 62 s of guitar. Not done: its drawing, the
+cut-off pedal, the circuit's noise block (the recovery stage's hiss), the user's listening.
+
+**The EMT 240.** `EMT240@1` (kind `plate`, `varimu fit-devices --only EMT240`): the brochure
+(EMT PE-111-4-U, c. 1972, local copy `data/datasheets/sources/emt_240_brochure_1972.pdf`)
+and Barry Rudolph's review (270 x 290 mm, 18 um); gold's handbook moduli (provisional);
+tension 1 N/m (provisional: small enough that bending dominates above ~40 Hz, the 140's
+model ~32 Hz); the decay derived from "1...4 seconds at 500 Hz" and "proportional damping of
+all frequencies": flat per setting but for gold's internal loss above (eta 5e-5,
+provisional); transducers provisional, sized for the foil (its driving-point impedance is
+~750x lower than the 140's) so the exciter's motional resistance is 1.5 Ohm and the diffuse
+field's pickup level per ampere equals EMT140@1's. The device `config/circuits/
+foil_reverb.yaml` is plate_reverb.yaml's electronics around it (the 240's own amplifier was
+solid state and isn't public); the app's `foil_reverb` (wet only, a chain end): 0.38x load
+at draft-1x, a DECAY turn recomputes its response in 0.9 s (the 140's 0.4 s).
+`scripts/plate_report.py --circuit foil_reverb` -> `reports/reverb/foil_*`: the octave
+bands within 5% of the curves at DECAY 1, 2 and 4 s; its return level the 140's (peak 3.9
+against 4.1 V). `tests/test_foil.py`.
+
+**Listening.** `scripts/reverb_listen.py` -> `reports/reverb/listen/`: one clip (the dry
+guitar by default) through the 140, the 240 and the 6G15's wet path, each wet alone and
+mixed at the same share (-12 LU under the dry), every file at -23 LUFS. Open: the user
+listens.
+
+### The spring's research (2026-10-30; used by the status above)
 
 - Accutronics / Belton Type 4 part code (Belton's "Part Numbering Specifications",
   https://www.tubetown.net/ttstore/media/products/Part%20Numbering%20Specifications%20Reverb%201%20and%204.pdf):
@@ -265,14 +371,15 @@ the oil can and the acoustic pipe (DELAY_PLAN.md).
 
 **Ranked (Claude's recommendation, the user to confirm the order when the track resumes):**
 
-1. **EMT 240 "Gold Foil".** A foil of ~18 um gold, ~30 cm square (to verify), against the
+1. **EMT 240 "Gold Foil".** (Built 2026-11-04: "Status (2026-11-04)". Its brochure
+   contradicts the guess below: bending dominates, a constant resonant density.) A foil of ~18 um gold, ~30 cm square (to verify), against the
    140's 0.5 mm steel over 2 m^2. So thin that **tension dominates over bending
    stiffness**: nearly non-dispersive, membrane-like waves, so no 140-style splash, and a
    smoother, darker, denser tail from a small box. Same modal machinery as `plate.rs`,
    with the tensioned plate's full dispersion relation (tension plus bending) instead of
    bending alone. The cheapest new reverb on the list. Its electronics are solid state
    (1970s): drive it with our own tube electronics, as `plate_reverb` does.
-2. **The 6G15 spring (E1-E4, already planned).** It comes second here because candidates
+2. **The 6G15 spring (E1-E4, already planned; built 2026-11-04).** It comes second here because candidates
    4, 5 and 7 build on E1's helical-spring scheme.
 3. **A nonlinear plate / tam-tam.** Driven hard, a thin plate's von Kármán nonlinearity
    moves energy up the spectrum: the tail **blooms and shimmers after the hit**, the

@@ -355,6 +355,40 @@ _SYMBOLS: list[SymbolDef] = [
         text=(0, 6.35, 5.588, "left"),
     ),
     _macro(
+        "SpringTank",
+        "spring_tank",
+        "SP",
+        "Spring reverb tank (varimu.devices.spring): pins 1 + and 2 - the input coil, 3 the "
+        "output coil's hot end (its cold end to ground); Value is its component version",
+        (
+            Pin("1", "1", -7.62, 2.54, 0, 2.54),
+            Pin("2", "2", -7.62, -2.54, 0, 2.54),
+            Pin("3", "3", 7.62, 0, 180, 2.54),
+        ),  # fmt: skip
+        [
+            rect(-5.08, -3.81, 5.08, 3.81),
+            poly(
+                (-3.81, 0.0),
+                (-3.175, 1.016),
+                (-2.54, -1.016),
+                (-1.905, 1.016),
+                (-1.27, -1.016),
+                (-0.635, 1.016),
+                (0.0, -1.016),
+                (0.635, 1.016),
+                (1.27, -1.016),
+                (1.905, 1.016),
+                (2.54, -1.016),
+                (3.175, 1.016),
+                (3.81, 0.0),
+            ),
+        ],
+        "component",
+        (),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
+    _macro(
         "Harp",
         "harp",
         "HP",

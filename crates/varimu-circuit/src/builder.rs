@@ -507,7 +507,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 23] = [
+const MACROS: [&str; 24] = [
     "R",
     "C",
     "L",
@@ -528,6 +528,7 @@ const MACROS: [&str; 23] = [
     "capsule_dual",
     "speaker",
     "plate",
+    "spring_tank",
     "tape",
     "harp",
     "opamp",
@@ -629,6 +630,7 @@ fn macro_of(kind: &str) -> Macro {
             vec![p("component", Raw), p("decay_500hz_s", Physical)],
             false,
         ),
+        "spring_tank" => (Some(3), vec![p("component", Raw)], false),
         "harp" => (
             Some(1),
             vec![
@@ -1016,6 +1018,7 @@ fn expand(
         "capsule_dual" => return capsule_dual_part(ctx, name, nodes, a),
         "speaker" => return speaker_part(ctx, name, nodes, a),
         "plate" => return plate_part(ctx, name, nodes, a),
+        "spring_tank" => return spring_tank_part(ctx, name, nodes, a),
         "tape" => return tape_part(ctx, name, nodes, a),
         "harp" => return harp_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
@@ -1387,6 +1390,22 @@ fn plate_part(
     let decay = ctx.float(&format!("{name}.decay_500hz_s"), &a["decay_500hz_s"])?;
     Ok(crate::plate::plate(
         name, &nodes[0], &nodes[1], &nodes[2], &model, decay,
+    ))
+}
+
+fn spring_tank_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.spring_tank(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    Ok(crate::spring::spring_tank(
+        name, &nodes[0], &nodes[1], &nodes[2], &model,
     ))
 }
 

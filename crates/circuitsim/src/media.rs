@@ -3,12 +3,13 @@
 //! senses nothing: its keys are note events) and drives its `out` node at the next one,
 //! like a control input ([`crate::mna::Mna::media`]).
 
-use crate::ir::{Harp, Plate, Tape};
+use crate::ir::{Harp, Plate, Spring, Tape};
 
 /// A medium's element in the IR.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MediumElement {
     Plate(Plate),
+    Spring(Spring),
     Tape(Tape),
     Harp(Harp),
 }
@@ -35,6 +36,7 @@ impl MediumElement {
     pub fn name(&self) -> &str {
         match self {
             MediumElement::Plate(p) => &p.name,
+            MediumElement::Spring(p) => &p.name,
             MediumElement::Tape(t) => &t.name,
             MediumElement::Harp(h) => &h.name,
         }
@@ -43,6 +45,7 @@ impl MediumElement {
     pub fn out(&self) -> &str {
         match self {
             MediumElement::Plate(p) => &p.out,
+            MediumElement::Spring(p) => &p.out,
             MediumElement::Tape(t) => &t.out,
             MediumElement::Harp(h) => &h.out,
         }
@@ -51,7 +54,7 @@ impl MediumElement {
     /// A tape's capstan supply node (varispeed), if any.
     pub fn supply(&self) -> Option<&str> {
         match self {
-            MediumElement::Plate(_) | MediumElement::Harp(_) => None,
+            MediumElement::Plate(_) | MediumElement::Spring(_) | MediumElement::Harp(_) => None,
             MediumElement::Tape(t) => t.supply.as_deref(),
         }
     }
@@ -60,6 +63,7 @@ impl MediumElement {
     pub fn sense(&self) -> (&str, &str) {
         match self {
             MediumElement::Plate(p) => (&p.sense_pos, &p.sense_neg),
+            MediumElement::Spring(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Tape(t) => (&t.sense_pos, &t.sense_neg),
             MediumElement::Harp(_) => (crate::ir::GROUND, crate::ir::GROUND),
         }
@@ -122,6 +126,7 @@ impl TapeMedium {
 #[derive(Debug)]
 pub enum Medium {
     Plate(Box<crate::plate::Medium>),
+    Spring(Box<crate::spring::Medium>),
     Tape(Box<TapeMedium>),
     Harp(Box<crate::harp::Medium>),
 }
@@ -131,6 +136,7 @@ impl Medium {
     pub fn new(el: &MediumElement, fs: f64, noise_seed: Option<u64>) -> Result<Medium, String> {
         Ok(match el {
             MediumElement::Plate(p) => Medium::Plate(Box::new(crate::plate::Medium::new(p, fs))),
+            MediumElement::Spring(p) => Medium::Spring(Box::new(crate::spring::Medium::new(p, fs))),
             MediumElement::Tape(t) => Medium::Tape(Box::new(TapeMedium {
                 tape: t.clone(),
                 stream: TapeMedium::stream(t, fs, noise_seed)?,
@@ -149,6 +155,7 @@ impl Medium {
     pub fn push(&mut self, v: f64, supply_hz: Option<f64>) -> f64 {
         match self {
             Medium::Plate(m) => m.push(v),
+            Medium::Spring(m) => m.push(v),
             Medium::Tape(m) => {
                 let k = m.stream.substeps();
                 m.push(std::iter::repeat_n(v, k), supply_hz)
@@ -160,7 +167,7 @@ impl Medium {
     /// Samples sensed per step (a tape with the literal bias: its `bias_substeps`; else 1).
     pub fn substeps(&self) -> usize {
         match self {
-            Medium::Plate(_) | Medium::Harp(_) => 1,
+            Medium::Plate(_) | Medium::Spring(_) | Medium::Harp(_) => 1,
             Medium::Tape(m) => m.stream.substeps(),
         }
     }
@@ -170,6 +177,7 @@ impl Medium {
     pub fn push_batch(&mut self, vs: &[f64], supply_hz: Option<f64>) -> f64 {
         match self {
             Medium::Plate(m) => m.push(*vs.last().expect("a sample")),
+            Medium::Spring(m) => m.push(*vs.last().expect("a sample")),
             Medium::Tape(m) => m.push(vs.iter().copied(), supply_hz),
             Medium::Harp(m) => m.push(),
         }
@@ -201,6 +209,7 @@ impl Medium {
     pub fn update(&mut self, el: &MediumElement) -> Result<(), String> {
         match (self, el) {
             (Medium::Plate(m), MediumElement::Plate(p)) => m.update(p),
+            (Medium::Spring(m), MediumElement::Spring(p)) => m.update(p),
             (Medium::Tape(m), MediumElement::Tape(t)) => {
                 let old = &m.tape.medium;
                 let same_but_bias = t.medium.reduced.is_some()

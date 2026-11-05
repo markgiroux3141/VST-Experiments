@@ -31,6 +31,7 @@ pub mod plate;
 pub mod preflight;
 pub mod speaker;
 pub mod spec;
+pub mod spring;
 pub mod symbols;
 pub mod tape;
 pub mod values;

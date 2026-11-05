@@ -46,6 +46,7 @@ from varimu.circuit.ir import (
     Plate,
     Resistor,
     SineSource,
+    Spring,
     Tape,
     TapeMedium,
     Varispeed,
@@ -56,6 +57,7 @@ from varimu.circuit.ir import (
 from varimu.devices import capsule as cap
 from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
+from varimu.devices import spring as spr
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
@@ -829,6 +831,44 @@ def plate(
             tail_db=c.tail_db,
         ),
         Capacitor(f"C{upper}_pu", f"{n}_p", out, c.pickup_c_f),
+    ]
+
+
+def spring_tank(
+    name: str, plus: str, minus: str, out: str, c: spr.SpringTankComponent
+) -> list[Element]:
+    """A spring reverb tank between its input coil's terminals (plus, minus) and its output
+    coil's hot end (out; the cold end grounded, as a C1B tank's output is): the input coil
+    (L<NAME>_in, then R<NAME>_mot, the springs' load force_per_a^2 / their impedance, then
+    R<NAME>_in into minus), the springs V<NAME> sensing the coil's current across
+    R<NAME>_in and driving <name>_e with the output coil's EMF, then the output coil
+    L<NAME>_out and R<NAME>_out to out (varimu.devices.spring)."""
+    n, upper = name.lower(), name.upper()
+    k = c.input_force_per_a
+    spec = spr.spec_of(c)
+    return [
+        Inductor(f"L{upper}_in", plus, f"{n}_a", c.input_le_h),
+        Resistor(
+            f"R{upper}_mot", f"{n}_a", f"{n}_c", k * k / spr.characteristic_impedance_ns_per_m(c)
+        ),
+        Resistor(f"R{upper}_in", f"{n}_c", minus, c.input_re_ohm),
+        Spring(
+            name=f"V{upper}",
+            sense_pos=f"{n}_c",
+            sense_neg=minus,
+            force_per_v=k / c.input_re_ohm,
+            out=f"{n}_e",
+            out_per_m_s=c.output_v_per_m_s,
+            density_kg_m3=c.density_kg_m3,
+            youngs_pa=c.youngs_pa,
+            springs=spec.springs,
+            f_max_hz=spec.f_max_hz,
+            decay=spec.decay,
+            tail_db=spec.tail_db,
+            saturation_v=c.input_saturation_a * c.input_re_ohm,
+        ),
+        Inductor(f"L{upper}_out", f"{n}_e", f"{n}_b", c.output_le_h),
+        Resistor(f"R{upper}_out", f"{n}_b", out, c.output_re_ohm),
     ]
 
 

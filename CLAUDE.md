@@ -484,7 +484,13 @@ panned hard; -> reports/rooms/separation/summary.json, mixes for
 `varimu_app::room`): the plan drawn to scale, sources (session tracks) and mics dragged and
 aimed with their patterns, Render runs `room_print.py` as a background process (`uv`), a
 session track per mic, panned (`SessionView::add_room_tracks`); scene per session in
-`<session>/rooms/scene.json`; `crates/varimu-app/tests/room.rs` (ignored: needs uv).
+`<session>/rooms/scene.json`; `crates/varimu-app/tests/room.rs` (ignored: needs uv). **Rooms of any shape** (R6,
+2026-11-04): `varimu/rooms/polyroom.py` (a floor polygon, a flat / shed / gable / vault
+ceiling; image sources to 4 reflections validated per mic, the tail's level and decay
+ray-traced, 4 pi c e(t) / V, shaped per mic by the rays counted at it); scenes with `floor_m` use it (the Room view's Shape and Ceiling,
+corners dragged), `dims_m` keeps the shoebox; `scripts/room_demo.py` -> reports/rooms/demo/. **Next** (agreed, not started): ROOM_LOOP_PLAN.md
+R7-R11 (a material per wall, R5 on polyroom, the GPU for rays and reflections, the wave
+solver below a crossover, objects with edge diffraction).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
@@ -938,6 +944,7 @@ cargo run --release -p varimu-app -- --edit triode_stage_drawn   # R3: the Edito
 cargo run --release -p varimu-app -- --component OT_5E3   # C2 step 7: the Components view on a transformer component (NAME or NAME@N)
 cargo run --release -p varimu-app -- --room   # the Room view: sources and mics placed in a room, rendered into session tracks (docs/ROOM_LOOP_PLAN.md)
 uv run --extra fast python scripts/room_print.py config/scenes/NAME.yaml [--solo] [--quality draft]   # a scene recorded through its mics -> reports/rooms/<scene>/
+uv run --extra fast --extra listen python scripts/room_demo.py [--only ROOM ...]   # R6: one performance in five rooms -> reports/rooms/demo/
 uv run --extra fast --extra listen python scripts/room_separation.py [--render-only | --analyse-only]   # R5: the room separation experiment -> reports/rooms/separation/
 uv run --extra listen --with sounddevice python scripts/separation_listen.py --room   # its staircase on headphones
 uv run python scripts/compose_chain.py --mic omni_4134 --pre clean_pre [--check]   # the opposite chain -> config/circuits/omni_clean.yaml

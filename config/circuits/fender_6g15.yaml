@@ -1,0 +1,199 @@
+# Fender 6G15 "Reverb" (1961), the standalone tube spring reverb, as a circuit file
+# (docs/REVERB_PLAN.md, E4). Built by varimu/circuit/builder.py.
+#
+# Sources:
+#   "sch: ..."         printed on Fender's schematic 6G15 H-FA (web:
+#                      https://www.thetubestore.com/lib/thetubestore/schematics/Fender/Fender-Reverb-6G15-Schematic.pdf,
+#                      the schematic and the layout)
+#   "web: <url> ..."   a published figure
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# The signal: the input jack's 1 MEG -> V1A (12AT7) whose 100K + 10K plate load is
+# tapped at 1:11 into DWELL -> V1B (12AT7, unbypassed) -> .002 -> the 6K6GT driver -> TR2
+# (125A12A, ~7.5 k : 8) -> the tank's input coil ... the springs ... the output coil ->
+# V3A (7025) recovery -> .1 -> TONE -> 250 pF -> MIXER's wet end. The dry signal: the
+# input -> .05 -> V3B (7025) cathode follower -> .1 -> MIXER's dry end. MIXER's wiper is
+# the output. The supply: TR1's HV winding, three silicon diodes in series (half-wave),
+# 40 uF, a choke, 40 uF (+295 V: the 6K6GT), 10K 1 W, 40 uF (+250 V: the rest).
+#
+# The tank is an Accutronics 4AB3C1B (the component ACC4AB3C1B@1: the 6G15's usual tank,
+# 8 ohm in, 2250 ohm out, long decay). The 12AT7 is modeled as the 6201 (RCA's premium
+# 12AT7, the same published characteristics; config/components/6201), the 7025 as the
+# 12AX7 (a low-noise 12AX7). Not modeled: the heaters, the pilot lamp, the AC switch and
+# the cut-off pedal's jack (no pedal: the reverb on). Pot tapers: Fender's "-L" read as
+# linear ("-A" being its audio taper).
+#
+# Probe voltages printed on the drawing (+-20%): V1A plate 105, cathode 1.8; V1B plate
+# 120, cathode 2; 6K6GT plate 285, cathode 24; V3A plate 160, cathode 1.2; V3B grid 120,
+# cathode 130; the rails 300, 295, 250 (tests/test_fender_6g15.py).
+
+title: "Fender 6G15 Reverb (spring tank)"
+input: in
+probes: [out, wet, dry, tap, p1a, k1a, dw, g1b, p1b, k1b, g6, p6, k6, ti, sp_c, to, p3a, k3a, tone, g3b, k3b, b1, b2, b3, hv]
+# A guitar plugs into it, an amplifier's input follows it.
+full_scale:
+  input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)"}
+  output_volts_peak: {value: 1.0, source: "derived: the dry path is a cathode follower (about unity), so 0 dBFS out is about the guitar's 0 dBFS in"}
+
+controls:
+  dwell: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "sch: DWELL 250K-L, the drive into the tank", notes: "the default 0.3 (\"3\"): a session track at -18 dBFS rms already drives the tank past its rated 28 mA there; past ~0.5 the input transducer saturates (the drip)"}
+  tone: {value: 0.6, min: 0.0, max: 1.0, unit: rotation, source: "sch: TONE 50K-L on the recovery's output", notes: "0 = dark (the wiper at the .01 to ground), 1 = bright (at the .1 from V3A)"}
+  mixer: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "sch: MIXER 250K-L between the dry follower and the wet", notes: "0 = dry only, 1 = wet only"}
+  mains_v_rms: {value: 120.0, min: 105.0, max: 127.0, unit: V, source: "provisional: model knowledge (US line voltage; the drawing prints none)"}
+  mains_hz: {value: 60.0, min: 50.0, max: 60.0, unit: Hz, source: "provisional: model knowledge (US mains)"}
+
+values:
+  # --- The tank -----------------------------------------------------------------------
+  tank_model: {value: ACC4AB3C1B@1, source: "config/components/acc4ab3c1b/1.yaml (an Accutronics 4AB3C1B: its coils, a measured tank's springs, the long decay)"}
+  c_cable_f: {value: 150.0e-12, source: "provisional: model knowledge (the RCA cable from the tank's output to the chassis, ~1 m of shielded cable at ~100 pF/m, plus the 7025's input)"}
+
+  # --- Input and V1A, 12AT7 (sch) -------------------------------------------------------
+  r_input_ohm: {value: 1.0e+6, source: "sch: 1M from the input jack to ground"}
+  r_cathode1a_ohm: {value: 1500, source: "sch: 1500 from V1A's cathode"}
+  c_cathode1a_f: {value: 25.0e-6, source: "sch: 25-25 across it"}
+  r_plate1a_ohm: {value: 100.0e+3, source: "sch: 100K from V1A's plate to the tap"}
+  r_tap1a_ohm: {value: 10.0e+3, source: "sch: 10K from the tap to +250 V (the .01 to DWELL leaves from the tap: a 1:11 divider on the plate's swing)"}
+  c_dwell_f: {value: 0.01e-6, source: "sch: .01 from the tap to DWELL"}
+  dwell_pot_ohm: {value: 250.0e+3, source: "sch: DWELL 250K-L"}
+
+  # --- V1B, 12AT7, and the 6K6GT driver (sch) -------------------------------------------
+  r_cathode1b_ohm: {value: 1500, source: "sch: 1500 from V1B's cathode, unbypassed"}
+  r_plate1b_ohm: {value: 100.0e+3, source: "sch: 100K from V1B's plate to +250 V"}
+  c_couple1b_f: {value: 0.002e-6, source: "sch: .002 from V1B's plate to the 6K6GT's grid"}
+  r_grid6_ohm: {value: 220.0e+3, source: "sch: 220K grid leak"}
+  r_cathode6_ohm: {value: 1000, source: "sch: 1000 2W from the 6K6GT's cathode"}
+  c_cathode6_f: {value: 25.0e-6, source: "sch: 25-25 across it"}
+
+  # --- TR2, the reverb transformer (125A12A) ----------------------------------------------
+  tr2_ratio: {value: 0.03266, source: "derived: sqrt(8 / 7500), web: https://nextgenguitars.ca/products/hammond-1750ax-output-transformer-7-5k-8-ohm-se-3-5w.html (the Hammond 1750AX, 7.5 k : 8 ohm, single-ended 3.5 W, sold as the 125A12A's equivalent)"}
+  tr2_r_pri_ohm: {value: 450.0, source: "derived: the drawing's 295 - 285 V across the primary at the 6K6GT's idle plate current (~22 mA at the fitted 6K6GT@1 with its 24 V of cathode bias)"}
+  tr2_r_sec_ohm: {value: 0.4, source: "provisional: model knowledge (a small single-ended output transformer's 8 ohm winding)"}
+  tr2_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel EI laminations)"}
+  tr2_core_area_m2: {value: 2.4e-4, source: "provisional: model knowledge (a 3.5 W output transformer's centre leg, ~1.6 x 1.5 cm)"}
+  tr2_core_path_m: {value: 0.085, source: "provisional: model knowledge (the mean magnetic path of an EI core that size)"}
+  tr2_turns_pri: {value: 1800, source: "provisional: model knowledge (with the gap: ~6 H of primary, the 6K6GT's DC through it)"}
+  tr2_gap_m: {value: 150.0e-6, source: "provisional: model knowledge (a single-ended transformer's gap: ~0.27 T of DC flux at the idle current)"}
+  tr2_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (a small single-ended output transformer's primary leakage)"}
+  tr2_c_pri_f: {value: 200.0e-12, source: "provisional: model knowledge (the primary's winding capacitance)"}
+
+  # --- V3A recovery and the wet path, 7025 (sch) -------------------------------------------
+  r_cathode3a_ohm: {value: 1500, source: "sch: 1500 from V3A's cathode"}
+  c_cathode3a_f: {value: 25.0e-6, source: "sch: the bypass across it (the scan is blurred there; read as Fender's 25 uF 25 V, as on the other stages)"}
+  r_plate3a_ohm: {value: 100.0e+3, source: "sch: 100K from V3A's plate to +250 V"}
+  c_couple3a_f: {value: 0.1e-6, source: "sch: .1 from V3A's plate to TONE"}
+  tone_pot_ohm: {value: 50.0e+3, source: "sch: TONE 50K-L"}
+  c_tone_f: {value: 0.01e-6, source: "sch: .01 from TONE's lower end to ground"}
+  c_wet_f: {value: 250.0e-12, source: "sch: .00025 from TONE's wiper to MIXER"}
+  mixer_pot_ohm: {value: 250.0e+3, source: "sch: MIXER 250K-L"}
+
+  # --- V3B dry cathode follower, 7025 (sch) ------------------------------------------------
+  c_dry_in_f: {value: 0.05e-6, source: "sch: .05 from the input to V3B's grid"}
+  r_bias_hi_ohm: {value: 2.2e+6, source: "sch: 2.2M from +250 V to V3B's grid"}
+  r_bias_lo_ohm: {value: 2.2e+6, source: "sch: 2.2M from V3B's grid to ground"}
+  r_cathode3b_ohm: {value: 100.0e+3, source: "sch: 100K from V3B's cathode to ground"}
+  c_dry_out_f: {value: 0.1e-6, source: "sch: .1 from V3B's cathode to MIXER"}
+  r_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the amplifier input it plugs into: a Fender's 1 MEG)"}
+
+  # --- Power supply (sch) --------------------------------------------------------------------
+  pt_hv_rms_v: {value: 229.0, source: "derived: puts the first filter capacitor at the drawing's +300 V at idle (2026-11-04, by iteration on this circuit); TR1 68319-A's rating isn't published"}
+  pt_r_ohm: {value: 60.0, source: "provisional: model knowledge (a small power transformer's HV winding and primary referred to it)"}
+  pt_leakage_h: {value: 10.0e-3, source: "provisional: model knowledge (HV winding leakage)"}
+  pt_c_f: {value: 300.0e-12, source: "provisional: model knowledge (HV winding capacitance)"}
+  rectifier_diode: {value: SI_RECTIFIER@1, source: "sch: three silicon diodes in series, half-wave; config/components/si_rectifier/1.yaml (provisional 1N4007-like)"}
+  c_filter_f: {value: 40.0e-6, source: "sch: 40-450 at each filter node"}
+  l_choke_h: {value: 4.0, source: "provisional: model knowledge (a small filter choke; the drawing prints none)"}
+  r_choke_ohm: {value: 175.0, source: "derived: the drawing's 300 - 295 V at ~28.5 mA (the 6K6GT's 24 mA and the 250 V rail's 4.5 mA, the 10K's 45 V)"}
+  r_b23_ohm: {value: 10.0e+3, source: "sch: 10K 1W from +295 to +250 V"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: DC path for the B+ nodes (not physical)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 120.0, source: "provisional: model knowledge (TR1's primary, US mains)"}
+
+devices:
+  V1A: {device: 6201@1}
+  V1B: {device: 6201@1}
+  V2: {device: 6K6GT@1}
+  V3A: {device: 12AX7@1}
+  V3B: {device: 12AX7@1}
+  D1: {device: rectifier_diode}
+
+sections:
+  - title: power supply
+    parts:
+      VHV: {mains: [hv_s, "0"], v_rms: pt_hv_rms_v, phase_deg: 90.0}
+      RPT: {R: [hv_s, hv_r], r: pt_r_ohm}
+      LPT: {L: [hv_r, hv], l: pt_leakage_h}
+      CPT: {C: [hv, "0"], c: pt_c_f}
+      # The drawing's three diodes in series (they share the reverse voltage) as one: the
+      # two extra forward drops (~1.4 V) are within the rail's +-20%, and the nodes
+      # between them would be held only by the diodes' leakage.
+      DR1: {device: [hv, b1], model: D1}
+      CB1: {C: [b1, "0"], c: c_filter_f}
+      LCH: {L: [b1, bch], l: l_choke_h}
+      RCH: {R: [bch, b2], r: r_choke_ohm}
+      CB2: {C: [b2, "0"], c: c_filter_f}
+      RB23: {R: [b2, b3], r: r_b23_ohm}
+      CB3: {C: [b3, "0"], c: c_filter_f}
+      RLEAK: {R: [b1, "0"], r: numerical_leak_ohm}
+
+  - title: drive
+    parts:
+      RIN: {R: [in, "0"], r: r_input_ohm}
+      # V1A's input stage, its plate load tapped 1:11 into DWELL.
+      XV1A: {device: [p1a, in, k1a], model: V1A}
+      RK1A: {R: [k1a, "0"], r: r_cathode1a_ohm}
+      CK1A: {C: [k1a, "0"], c: c_cathode1a_f}
+      RPL1A: {R: [p1a, tap], r: r_plate1a_ohm}
+      RTAP: {R: [tap, b3], r: r_tap1a_ohm}
+      CDW: {C: [tap, dw], c: c_dwell_f}
+      RDWELL: {pot: ["0", g1b, dw], r: dwell_pot_ohm, at: dwell}
+      # V1B, unbypassed, into the 6K6GT.
+      XV1B: {device: [p1b, g1b, k1b], model: V1B}
+      RK1B: {R: [k1b, "0"], r: r_cathode1b_ohm}
+      RPL1B: {R: [p1b, b3], r: r_plate1b_ohm}
+      CC1B: {C: [p1b, g6], c: c_couple1b_f}
+      RG6: {R: [g6, "0"], r: r_grid6_ohm}
+      XV2: {device: [p6, b2, g6, k6], model: V2}
+      RK6: {R: [k6, "0"], r: r_cathode6_ohm}
+      CK6: {C: [k6, "0"], c: c_cathode6_f}
+      TR2:
+        transformer:
+          p: {nodes: [p6, b2], r: tr2_r_pri_ohm, c: tr2_c_pri_f}
+          s: {nodes: [ti, "0"], ratio: tr2_ratio, r: tr2_r_sec_ohm}
+        core: {material: tr2_core_material, area_m2: tr2_core_area_m2, path_m: tr2_core_path_m, gap_m: tr2_gap_m}
+        turns: tr2_turns_pri
+        leakage_h: tr2_leakage_h
+
+  - title: tank
+    parts:
+      # The input coil on TR2's secondary ("input insulated": its other end to TR2's
+      # grounded end); the output coil's cold end grounded, its hot end down the cable.
+      SP: {spring_tank: [ti, "0", to], component: tank_model}
+      CCABLE: {C: [to, "0"], c: c_cable_f}
+
+  - title: recovery
+    parts:
+      XV3A: {device: [p3a, to, k3a], model: V3A}
+      RK3A: {R: [k3a, "0"], r: r_cathode3a_ohm}
+      CK3A: {C: [k3a, "0"], c: c_cathode3a_f}
+      RPL3A: {R: [p3a, b3], r: r_plate3a_ohm}
+      CC3A: {C: [p3a, tone], c: c_couple3a_f}
+      RTONE: {pot: [tl, tw, tone], r: tone_pot_ohm, at: tone}
+      CTONE: {C: [tl, "0"], c: c_tone_f}
+      CWET: {C: [tw, wet], c: c_wet_f}
+      # TONE sits between two capacitors (as drawn): a numerical DC path.
+      RTLEAK: {R: [tone, "0"], r: numerical_leak_ohm}
+
+  - title: dry and mixer
+    parts:
+      CDRY: {C: [in, g3b], c: c_dry_in_f}
+      RBH: {R: [b3, g3b], r: r_bias_hi_ohm}
+      RBL: {R: [g3b, "0"], r: r_bias_lo_ohm}
+      XV3B: {device: [b3, g3b, k3b], model: V3B}
+      RK3B: {R: [k3b, "0"], r: r_cathode3b_ohm}
+      CDRYO: {C: [k3b, dry], c: c_dry_out_f}
+      RMIX: {pot: [dry, out, wet], r: mixer_pot_ohm, at: mixer}
+      RLOAD: {R: [out, "0"], r: r_load_ohm}

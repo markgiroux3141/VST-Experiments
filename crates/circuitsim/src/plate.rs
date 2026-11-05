@@ -25,7 +25,6 @@
 //! the same bit for bit on any number of threads.
 
 use std::f64::consts::PI;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use crate::ir::Plate;
@@ -101,114 +100,37 @@ pub fn modes(p: &Plate, f_top_hz: f64) -> Vec<Mode> {
     out
 }
 
-/// Samples per segment of the parallel computation (fixed: the result doesn't depend
-/// on the threads).
-const SEGMENT: usize = 1 << 14;
-
 /// The impulse response from force (N) to acceleration (m/s^2) at `fs` (see the module
 /// docs), as long as the slowest mode needs.
 pub fn impulse_response(p: &Plate, fs: f64) -> Vec<f64> {
     let f_top = p.f_max_hz.min(0.45 * fs);
     let t = 1.0 / fs;
-    let ln_tail = p.tail_db.abs() / 20.0 * std::f64::consts::LN_10;
     // Each mode's length: until exp(-s t) is down by tail_db.
     let mut ms: Vec<(usize, Mode)> = modes(p, f_top)
         .into_iter()
         .filter(|m| m.weight != 0.0 && m.omega > m.decay)
-        .map(|m| {
-            let len = if m.decay > 0.0 {
-                ((ln_tail / m.decay) * fs).ceil() as usize + 1
-            } else {
-                usize::MAX
-            };
-            (len, m)
-        })
+        .map(|m| (crate::modal::mode_len(m.decay, p.tail_db, fs), m))
         .collect();
     // Longest first (stable: ties keep the (m1, m2) order).
     ms.sort_by(|a, b| b.0.cmp(&a.0));
     let len = ms.first().map_or(1, |m| m.0.min(60 * fs as usize)).max(2);
-    let lens: Vec<usize> = ms.iter().map(|m| m.0).collect();
-    let modes: Vec<Mode> = ms.into_iter().map(|m| m.1).collect();
-    let mut h = vec![0.0; len];
-    let n_seg = len.div_ceil(SEGMENT);
-    let next = AtomicUsize::new(0);
-    let threads = std::thread::available_parallelism()
-        .map_or(1, |n| n.get())
-        .clamp(1, 16);
-    let chunks: Vec<(usize, &mut [f64])> = h.chunks_mut(SEGMENT).enumerate().collect();
-    let chunks = Mutex::new(chunks.into_iter().map(Some).collect::<Vec<_>>());
-    std::thread::scope(|scope| {
-        for _ in 0..threads {
-            scope.spawn(|| {
-                loop {
-                    let i = next.fetch_add(1, Ordering::Relaxed);
-                    if i >= n_seg {
-                        break;
-                    }
-                    let (s, out) = chunks.lock().expect("chunks")[i].take().expect("a segment");
-                    segment(&modes, &lens, s * SEGMENT, t, out);
-                }
-            });
-        }
-    });
+    let terms: Vec<crate::modal::Term> = ms
+        .iter()
+        .map(|&(l, m)| {
+            let wd = (m.omega * m.omega - m.decay * m.decay).sqrt();
+            // a(t) = w exp(-s t) [-2 s cos(wd t) + ((s^2 - wd^2) / wd) sin(wd t)], times T.
+            crate::modal::Term {
+                decay: m.decay,
+                wd,
+                ca: t * m.weight * (-2.0 * m.decay),
+                cb: t * m.weight * (m.decay * m.decay - wd * wd) / wd,
+                len: l,
+            }
+        })
+        .collect();
+    let mut h = crate::modal::sum(&terms, len, t);
     h[0] = 0.0;
     h
-}
-
-/// Samples `k0 .. k0 + out.len()` of the response: every mode still sounding there.
-fn segment(modes: &[Mode], lens: &[usize], k0: usize, t: f64, out: &mut [f64]) {
-    // Modes are sorted longest first: the ones sounding at k0 are a prefix.
-    let active = lens.partition_point(|&l| l > k0);
-    const LANES: usize = 8;
-    let mut i = 0;
-    while i < active {
-        let n = (active - i).min(LANES);
-        let mut zr = [0.0; LANES];
-        let mut zi = [0.0; LANES];
-        let mut rr = [1.0; LANES];
-        let mut ri = [0.0; LANES];
-        let mut ca = [0.0; LANES];
-        let mut cb = [0.0; LANES];
-        // Where each lane stops (modes longest first: a lane's end is at most the one's
-        // before it).
-        let mut ends = [0usize; LANES];
-        for j in 0..n {
-            let m = modes[i + j];
-            let wd = (m.omega * m.omega - m.decay * m.decay).sqrt();
-            // z = exp((-s + i wd) k T): its value at k0 in closed form, the step's
-            // rotation r.
-            let mag = (-m.decay * k0 as f64 * t).exp();
-            let ph = wd * k0 as f64 * t;
-            zr[j] = mag * ph.cos();
-            zi[j] = mag * ph.sin();
-            let rm = (-m.decay * t).exp();
-            rr[j] = rm * (wd * t).cos();
-            ri[j] = rm * (wd * t).sin();
-            // a(t) = w exp(-s t) [-2 s cos(wd t) + ((s^2 - wd^2) / wd) sin(wd t)], times T.
-            ca[j] = t * m.weight * (-2.0 * m.decay);
-            cb[j] = t * m.weight * (m.decay * m.decay - wd * wd) / wd;
-            ends[j] = lens[i + j].saturating_sub(k0).min(out.len());
-        }
-        // Run up to each lane's end in turn, the shortest lane dropping out at its end.
-        let mut start = 0;
-        for cut in (0..n).rev() {
-            let stop = ends[cut];
-            for o in out.iter_mut().take(stop).skip(start) {
-                let mut acc = 0.0;
-                for j in 0..LANES {
-                    acc += ca[j] * zr[j] + cb[j] * zi[j];
-                    let (a, b) = (zr[j], zi[j]);
-                    zr[j] = a * rr[j] - b * ri[j];
-                    zi[j] = a * ri[j] + b * rr[j];
-                }
-                *o += acc;
-            }
-            start = start.max(stop);
-            ca[cut] = 0.0;
-            cb[cut] = 0.0;
-        }
-        i += n;
-    }
 }
 
 /// Impulse responses computed recently, by plate and rate: a knob change built on a
@@ -267,8 +189,7 @@ pub fn prepare(ir: &crate::ir::CircuitIr, fs: f64) {
 /// would.
 pub struct Medium {
     pub plate: Plate,
-    conv: crate::convolve::Convolver,
-    old: Option<(crate::convolve::Convolver, usize)>,
+    conv: crate::modal::Convolving,
     fs: f64,
 }
 
@@ -277,16 +198,14 @@ impl std::fmt::Debug for Medium {
         f.debug_struct("Medium")
             .field("plate", &self.plate.name)
             .field("fs", &self.fs)
-            .field("ringing_out", &self.old.is_some())
+            .field("conv", &self.conv)
             .finish()
     }
 }
 
 /// The convolution's block at `fs`: 256 samples at 48 kHz, doubling with the rate.
 pub fn block(fs: f64) -> usize {
-    ((256.0 * fs / 48_000.0).round() as usize)
-        .next_power_of_two()
-        .clamp(64, 4096)
+    crate::modal::block(fs)
 }
 
 impl Medium {
@@ -294,8 +213,7 @@ impl Medium {
         let h = response(p, fs);
         Medium {
             plate: p.clone(),
-            conv: crate::convolve::Convolver::new(&h, block(fs)),
-            old: None,
+            conv: crate::modal::Convolving::new(&h, fs),
             fs,
         }
     }
@@ -303,29 +221,15 @@ impl Medium {
     /// The pickup's next sample (volts) once the force's sense voltage `v` is in.
     pub fn push(&mut self, v: f64) -> f64 {
         let f = self.plate.force_per_v * v;
-        let mut a = self.conv.push(f);
-        if let Some((c, left)) = &mut self.old {
-            a += c.push(0.0);
-            *left -= 1;
-            if *left == 0 {
-                self.old = None;
-            }
-        }
-        self.plate.out_per_m_s2 * a
+        self.plate.out_per_m_s2 * self.conv.push(f)
     }
 
     /// New values for the plate: the same response keeps running; another one takes
     /// the force from now on while the old one rings out.
     pub fn update(&mut self, p: &Plate) {
-        if key(p, self.fs) == key(&self.plate, self.fs) {
-            self.plate = p.clone();
-            return;
+        if key(p, self.fs) != key(&self.plate, self.fs) {
+            self.conv.replace(&response(p, self.fs), self.fs);
         }
-        let h = response(p, self.fs);
-        let new = crate::convolve::Convolver::new(&h, block(self.fs));
-        let old = std::mem::replace(&mut self.conv, new);
-        let ring = response(&self.plate, self.fs).len();
-        self.old = Some((old, ring));
         self.plate = p.clone();
     }
 }

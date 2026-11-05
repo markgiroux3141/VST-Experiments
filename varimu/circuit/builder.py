@@ -61,6 +61,10 @@ Macro parts (connection; params, * = required):
                 parameter naming one), decay_500hz_s* (the damper, as the decay at 500 Hz):
                 the exciter between plus and minus, the pickup (its capacitance in series)
                 from out to ground (varimu.devices.plate, varimu.circuit.parts.plate)
+    spring_tank [plus, minus, out]; component* (a spring tank component version, NAME@N):
+                the input coil between plus and minus, the output coil from the springs'
+                EMF to out, its cold end grounded (varimu.devices.spring,
+                varimu.circuit.parts.spring_tank)
     harp        [out]; component* (a harp component version, NAME@N, or a parameter naming
                 one: kind ep_harp, varimu.rhodes.compile), rate_hz* and contact_rate_hz*
                 (numerics: the voices' and the hammer's contact's rate floors): the harp's
@@ -171,6 +175,7 @@ from varimu.devices.library import (
     load_dual_capsule,
     load_plate,
     load_speaker,
+    load_spring_tank,
     load_tape,
 )
 from varimu.devices.pentode import Pentode
@@ -735,6 +740,16 @@ def _plate(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     return parts.plate(name, *conn, model, a["decay_500hz_s"])
 
 
+def _spring_tank(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        model = load_spring_tank(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.spring_tank(name, *conn, model)
+
+
 def _harp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     from varimu.rhodes import compile as harp_compile
 
@@ -952,6 +967,7 @@ for _name, _macro in {
         3,
         {"component": Param("raw"), "decay_500hz_s": _P},
     ),
+    "spring_tank": Macro(_spring_tank, 3, {"component": Param("raw")}),
     "harp": Macro(_harp, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}),
     "tape": Macro(
         _tape,

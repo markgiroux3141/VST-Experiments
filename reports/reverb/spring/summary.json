@@ -1,0 +1,85 @@
+{
+ "tank": {
+  "springs": [
+   {
+    "wire_length_m": 4.191541883662635,
+    "td_formula_s": 0.041624663645775106,
+    "td_response_s": 0.0418125,
+    "fc_formula_hz": 4886.824929757755,
+    "fc_dispersion_hz": 4905.122023363771,
+    "modes": 1002
+   },
+   {
+    "wire_length_m": 5.075033791934965,
+    "td_formula_s": 0.05268912914061802,
+    "td_response_s": 0.052958333333333336,
+    "fc_formula_hz": 4471.121485827512,
+    "fc_dispersion_hz": 4487.957262682103,
+    "modes": 1192
+   }
+  ]
+ },
+ "device": {
+  "quality": "production",
+  "bands_hz": [
+   125,
+   250,
+   500,
+   1000,
+   2000,
+   4000
+  ],
+  "t60_measured_s": [
+   3.873,
+   3.548,
+   3.356,
+   2.911,
+   2.25,
+   1.613
+  ],
+  "t60_table_s": [
+   3.846,
+   3.685,
+   3.4,
+   2.945,
+   2.323,
+   1.633
+  ],
+  "impulse_render_wall_s_per_s": 2.75,
+  "hum_dbfs_rms": {
+   "dry": -79.4,
+   "wet": -73.2,
+   "default": -76.9
+  },
+  "drive_per_dwell": [
+   {
+    "dwell": 0.25,
+    "tank_current_ma_rms": 120.44077904825082,
+    "transducer_compression_db": -0.9222100615946471,
+    "drive_thd_pct": 6.04468495444889,
+    "wet_dbfs_rms": -17.36719578069592
+   },
+   {
+    "dwell": 0.5,
+    "tank_current_ma_rms": 234.72825343098162,
+    "transducer_compression_db": -2.841805911251722,
+    "drive_thd_pct": 10.84171170345708,
+    "wet_dbfs_rms": -11.030572537154804
+   },
+   {
+    "dwell": 0.75,
+    "tank_current_ma_rms": 337.42405118983703,
+    "transducer_compression_db": -4.693930721866869,
+    "drive_thd_pct": 15.796923661759848,
+    "wet_dbfs_rms": -9.233039715848276
+   },
+   {
+    "dwell": 1.0,
+    "tank_current_ma_rms": 425.294408054465,
+    "transducer_compression_db": -6.15630161601122,
+    "drive_thd_pct": 20.729031185093085,
+    "wet_dbfs_rms": -8.458567747499377
+   }
+  ]
+ }
+}

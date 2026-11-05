@@ -46,8 +46,10 @@ from varimu.devices.fit import (
 )
 from varimu.devices.lamp import Lamp, lamp_from_data
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
+from varimu.devices.plate import SIX_LN10 as SIX_LN10_PLATE
 from varimu.devices.plate import PlateComponent, plate_from_data
 from varimu.devices.speaker import Speaker, speaker_from_data
+from varimu.devices.spring import SpringTankComponent, spring_tank_from_data
 from varimu.devices.tape import TapeFormulation, tape_from_data
 from varimu.devices.thyratron import Thyratron, thyratron_from_data
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_spec
@@ -136,6 +138,10 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         raise ValueError(f"{name} is a capsule, not a device model: place it with a `capsule` part")
     if kind == "plate":
         raise ValueError(f"{name} is a plate, not a device model: place it with a `plate` part")
+    if kind == "spring_tank":
+        raise ValueError(
+            f"{name} is a spring tank, not a device model: place it with a `spring_tank` part"
+        )
     if kind == "tape":
         raise ValueError(f"{name} is a tape, not a device model: load it with load_tape")
     raise ValueError(f"{name}: unknown device kind {kind!r}")
@@ -167,6 +173,14 @@ def load_plate(name: str, root: Path = DEVICE_DIR) -> PlateComponent:
     if d.get("kind") != "plate":
         raise ValueError(f"{name} is not a plate (kind {d.get('kind')!r})")
     return plate_from_data(d, name)
+
+
+def load_spring_tank(name: str, root: Path = DEVICE_DIR) -> SpringTankComponent:
+    """Spring tank component `name` (`NAME@N`, or `NAME` for its latest version)."""
+    d = _read(name, root)
+    if d.get("kind") != "spring_tank":
+        raise ValueError(f"{name} is not a spring tank (kind {d.get('kind')!r})")
+    return spring_tank_from_data(d, name)
 
 
 def load_tape(name: str, root: Path = DEVICE_DIR) -> TapeFormulation:
@@ -1305,6 +1319,327 @@ def build_884() -> dict[str, Any]:
     )
 
 
+EMT240_BROCHURE = (
+    "EMT 240 Reverb Foil brochure (EMT, PE-111-4-U, c. 1972); local copy "
+    "sources/emt_240_brochure_1972.pdf (web: https://www.preservationsound.com/wp-content/"
+    "uploads/2013/09/EMT_240_reverb.pdf)"
+)
+RUDOLPH_240 = "web: https://www.barryrudolph.com/reviews/heritage_audio_ha240.html"
+# Gold's internal loss factor (provisional): the foil's decay falls above a few kHz.
+EMT240_LOSS_FACTOR = 5.0e-5
+EMT240_SETTINGS_S = (4.0, 2.0, 1.0)
+
+
+def build_emt240() -> dict[str, Any]:
+    """An EMT 240 "Reverb Foil" (docs/REVERB_PLAN.md, the candidates' first): a thin gold
+    foil as a plate (varimu.devices.plate's model: bending plus tension). The brochure
+    keeps the 140's principle ("a constant resonant density over the audible range",
+    "> 3/Hz", "minimum dispersion"), so bending dominates: 18 um of gold over 270 x 290 mm
+    is 3.4 modes per Hz. Its decay: the brochure's 1-4 s at 500 Hz by a damping plate
+    giving "proportional damping of all frequencies", so each setting's curve is flat but
+    for gold's internal loss at the top (provisional). The transducers are provisional,
+    sized for the foil (its driving-point impedance is ~750x the 140's lower) so the
+    exciter's motional resistance is 1.5 ohm and the diffuse field's pickup level per
+    ampere equals EMT140@1's (Cremer & Heckl's reverberant plate: <v^2> = F^2 / (Z M
+    sigma)), so our own electronics serve both."""
+    from varimu.devices import plate as plt_
+
+    lx, ly, h = 0.27, 0.29, 18e-6
+    rho, e, nu = 19300.0, 79.0e9, 0.42
+    tension = 1.0
+    d = e * (h * h * h) / (12.0 * (1.0 - nu * nu))
+    z_240 = 8.0 * math.sqrt(d * rho * h)
+    bl = math.sqrt(1.5 * z_240)
+    # EMT140@1's figures, for the same level per ampere: acceleration ~ F sqrt(1 / (Z M)).
+    ref = plate_from_data(yaml.safe_load(versions.read_text("EMT140@1", DEVICE_DIR)[1]), "EMT140@1")
+    z_140 = plt_.plate_impedance_ns_per_m(ref)
+    m_140 = ref.density_kg_m3 * ref.thickness_m * ref.lx_m * ref.ly_m
+    m_240 = rho * h * lx * ly
+    a_ratio = (bl / ref.exciter_bl_tm) * math.sqrt((z_140 * m_140) / (z_240 * m_240))
+    pickup = ref.pickup_v_per_m_s2 / a_ratio
+    kappa = math.sqrt(d / (rho * h))
+    per_hz = lx * ly / (2.0 * kappa)
+    curves = []
+    for t500 in EMT240_SETTINGS_S:
+        ends = SIX_LN10_PLATE / t500 - 2.0 * math.pi * 500.0 * EMT240_LOSS_FACTOR
+        t60 = [
+            SIX_LN10_PLATE / (ends + 2.0 * math.pi * f * EMT240_LOSS_FACTOR) for f in EMT140_GRID_HZ
+        ]
+        curves.append({"label_s": t500, "t60_s": [round(v, 4) for v in t60]})
+    return {
+        "name": "EMT240",
+        "kind": "plate",
+        "source": "the EMT 240's gold foil as a plate: its brochure's figures, gold's moduli, a "
+        "derived decay and provisional transducers; varimu.devices.plate",
+        "plate": {
+            "lx_m": lx,
+            "ly_m": ly,
+            "thickness_m": h,
+            "density_kg_m3": rho,
+            "youngs_pa": e,
+            "poisson": nu,
+            "tension_n_m": tension,
+            "source": f"{RUDOLPH_240} (the foil 270 x 290 mm, 18 microns; the brochure: 'a foil "
+            f"of special gold 12 inches square', {EMT240_BROCHURE}); gold: provisional: model "
+            "knowledge (handbook values for gold, E 79 GPa, nu 0.42, rho 19,300 kg/m^3; the "
+            "foil is electroplated 'coin gold'); tension: provisional: model knowledge (small "
+            "enough that bending dominates above ~40 Hz, as the brochure's 'constant resonant "
+            "density' needs; the EMT140@1 model's tension does so above ~30 Hz)",
+        },
+        "positions": {
+            "drive_xy": [0.52, 0.53],
+            "pickup_xy": [0.47, 0.62],
+            "source": "provisional: EMT140@1's model positions (fractions of the sides); the "
+            "240's aren't published",
+        },
+        "exciter": {
+            "re_ohm": 6.0,
+            "le_h": 0.3e-3,
+            "bl_tm": bl,
+            "source": "provisional: EMT140@1's coil, BL sized so its motional resistance on "
+            f"the foil's driving-point impedance (8 sqrt(D rho H) = {z_240:.4f} N s/m) is 1.5 "
+            "ohm (a small moving coil; the 240's isn't published)",
+        },
+        "pickup": {
+            "v_per_m_s2": pickup,
+            "c_f": 1.0e-9,
+            "source": "provisional: derived so the diffuse field's pickup voltage per ampere "
+            "of exciter current equals EMT140@1's (<a^2> ~ F^2 / (Z M sigma): the force, the "
+            "driving-point impedance, the mass), the same pickup amplifiers serving both; "
+            "EMT140@1's capacitance",
+        },
+        "model": {
+            "f_max_hz": 20000.0,
+            "tail_db": 90.0,
+            "source": "numerical: the modes up to 20 kHz (below 0.45 of the rate), each summed "
+            "until 90 dB down",
+        },
+        "decay": {
+            "f_hz": EMT140_GRID_HZ,
+            "curves": curves,
+            "source": f"derived: {EMT240_BROCHURE} ('reverberation time at 500 Hz 1...4 "
+            "seconds'; the damping plate 'produces proportional damping of all frequencies "
+            "and avoids formation of decay peaks'): per setting flat at its 500 Hz value, "
+            f"plus gold's internal loss omega eta, eta {EMT240_LOSS_FACTOR:g} (provisional: "
+            "model knowledge), the two meeting the setting at 500 Hz",
+        },
+        "fit_report": {"modes_per_hz": per_hz, "driving_point_ns_per_m": z_240},
+    }
+
+
+def load_line(m: KorenPentode, p: dict, phases: int = 128) -> dict[str, float]:
+    """A pentode's class-A1 single-ended stage into a transformer (an AC load rl_ohm, the
+    plate's mean at its supply), driven to a peak of |vg1|: (power, THD, mean plate and
+    screen currents) from one cycle, the plate voltage solved per phase (bisection: the
+    plate current rises with it) and the mean current iterated (rectification)."""
+    vg1, vg2, vb, rl = p["vg1_v"], p["vg2_v"], p["vp_v"], p["rl_ohm"]
+    th = 2 * np.pi * np.arange(phases) / phases
+    g = vg1 + abs(vg1) * np.sin(th)
+    mean = float(m.ip(vg1, vg2, vb))
+    for _ in range(6):
+        lo, hi = np.zeros(phases), np.full(phases, 3.0 * vb)
+        for _ in range(60):
+            mid = 0.5 * (lo + hi)
+            f = mid - vb + rl * (m.ip(g, vg2, mid) - mean)
+            lo, hi = np.where(f > 0, lo, mid), np.where(f > 0, mid, hi)
+        ip = m.ip(g, vg2, 0.5 * (lo + hi))
+        mean = float(np.mean(ip))
+    c = np.fft.rfft(ip) / phases * 2
+    h = np.abs(c[1:8])
+    return {
+        "power_w": float(h[0] ** 2 / 2 * rl),
+        "thd_pct": float(100 * np.sqrt(np.sum(h[1:] ** 2)) / h[0]),
+        "ip_a": mean,
+        "ig2_a": float(np.mean(m.ig2(g, vg2))),
+    }
+
+
+def build_6k6gt() -> dict[str, Any]:
+    """The Fender 6G15's reverb driver: a Koren pentode fit to RCA's three class-A1 columns,
+    all six parameters free, log least squares: the zero-signal Ip, Ig2, gm and rp (rp,
+    "approx.", weighs a third) and the large-signal figures at each column's rated load and
+    full drive (power output, THD weighing a half, the max-signal plate and screen currents:
+    `load_line`), so the curvature is the sheet's too. RCA publishes no curves for it."""
+    from scipy.optimize import least_squares
+
+    pub = _published()["6K6GT"]
+    pts, dv = pub["class_a1"], 1e-3
+
+    def figures(m: KorenPentode, p: dict) -> tuple[float, float, float, float]:
+        vg1, vg2, vp = p["vg1_v"], p["vg2_v"], p["vp_v"]
+        gm = (m.ip(vg1 + dv, vg2, vp) - m.ip(vg1 - dv, vg2, vp)) / (2 * dv)
+        rp = 2 * dv / (m.ip(vg1, vg2, vp + dv) - m.ip(vg1, vg2, vp - dv))
+        return float(m.ip(vg1, vg2, vp)), float(m.ig2(vg1, vg2)), float(gm), float(rp)
+
+    def resid(x):
+        m = KorenPentode(*np.exp(x))
+        r = []
+        for p in pts:
+            ip, ig2, gm, rp = figures(m, p)
+            big = load_line(m, p)
+            r += [
+                np.log(ip / p["ip_a"]),
+                np.log(ig2 / p["ig2_a"]),
+                np.log(gm / p["gm_s"]),
+                np.log(rp / p["rp_ohm"]) / 3.0,
+                np.log(big["power_w"] / p["power_w"]),
+                np.log(big["thd_pct"] / p["thd_pct"]) / 2.0,
+                np.log(big["ip_a"] / p["ip_max_signal_a"]),
+                np.log(big["ig2_a"] / p["ig2_max_signal_a"]) / 2.0,
+            ]
+        return r
+
+    x0 = np.log([8.0, 1.35, 1500.0, 6000.0, 50.0, 15.0])
+    sol = least_squares(resid, x0, xtol=1e-12, ftol=1e-12, max_nfev=4000)
+    m = KorenPentode(*(float(v) for v in np.exp(sol.x)))
+    caps = pub["capacitances_f"]
+    report = {}
+    for p in pts:
+        ip, ig2, gm, rp = figures(m, p)
+        big = load_line(m, p)
+        report[f"vp_{p['vp_v']}"] = {
+            "ip_pct": 100 * (ip / p["ip_a"] - 1),
+            "ig2_pct": 100 * (ig2 / p["ig2_a"] - 1),
+            "gm_pct": 100 * (gm / p["gm_s"] - 1),
+            "rp_pct": 100 * (rp / p["rp_ohm"] - 1),
+            "power_w": big["power_w"],
+            "thd_pct": big["thd_pct"],
+            "ip_max_signal_a": big["ip_a"],
+            "ig2_max_signal_a": big["ig2_a"],
+        }
+    return {
+        "name": "6K6GT",
+        "kind": "pentode",
+        "source": "fit: Koren pentode to the three class-A1 columns: zero-signal Ip, Ig2, gm, "
+        "rp (a third) and, at each column's rated load and full drive, the power output, THD "
+        "(a half) and max-signal plate and screen (a half) currents; log least squares "
+        f"({pub['source']})",
+        "model": {"mu": m.mu, "ex": m.ex, "kg1": m.kg1, "kg2": m.kg2, "kp": m.kp, "kvb": m.kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["g1p"],
+            "pk": caps["output"],
+            "source": f"{pub['source']} (without external shield)",
+        },
+        "fit_report": _clean(report),
+    }
+
+
+# The Type 4 tank's coils (codes A in, B out), Rod Elliott's measurements.
+ESP_REVERB = "web: https://sound-au.com/articles/reverb.htm"
+PARKER_BILBAO = (
+    "web: https://www.pure.ed.ac.uk/ws/portalfiles/portal/12456049/"
+    "Spring_Reverbation_A_Physical_Perspective.pdf"
+)
+ACCUTRONICS_SPECS = (
+    "web: https://www.amplifiedparts.com/tech-corner/accutronics-products-and-specifications"
+)
+# Rated drive and typical output of a Type 4 with coils A and B (ESP_REVERB, Tables 1, 3).
+TANK_RATED_A_RMS = 28e-3
+TANK_TYPICAL_OUT_V_RMS = 6.5e-3
+# The band the typical output is read over: the tank's useful bandwidth (ESP_REVERB).
+TANK_BAND_HZ = (200.0, 6000.0)
+
+
+def build_acc4ab3c1b() -> dict[str, Any]:
+    """An Accutronics 4AB3C1B (the Fender 6G15's tank; docs/REVERB_PLAN.md, E3): two
+    springs, an 8 ohm input coil, a 2250 ohm output coil, long decay. The coils are Rod
+    Elliott's measurements; the springs a measured tank's (Parker & Bilbao's Leem KA-1210,
+    springs 1 and 3: the Type 4's own aren't published); the decay the part code's class.
+    The transducers' force per ampere and EMF per velocity (one geometry, so they scale as
+    the square root of the coils' inductances) are calibrated so the rated input current
+    gives the typical output, rms over the tank's useful band, through the springs' own
+    response (varimu.devices.spring)."""
+    from varimu.devices import spring as sp
+
+    # (wire diameter, helix diameter, turns, helix length) in m: Table 2's springs 1 and 3.
+    keys = ("wire_diameter_m", "helix_diameter_m", "turns", "helix_length_m")
+    springs = [
+        dict(zip(keys, s, strict=True))
+        for s in ((0.35e-3, 4.4e-3, 303, 0.163), (0.35e-3, 4.6e-3, 351, 0.163))
+    ]
+    data: dict[str, Any] = {
+        "name": "ACC4AB3C1B",
+        "kind": "spring_tank",
+        "source": "an Accutronics 4AB3C1B: Elliott's coil measurements, a measured tank's "
+        "springs (Parker & Bilbao, DAFx-09), the part code's decay class; transducers "
+        "calibrated to the typical output; varimu.devices.spring",
+        "springs": {
+            "list": springs,
+            "source": f"provisional: {PARKER_BILBAO} (Table 2: the Leem Pro KA-1210's springs "
+            "1 and 3, micrometer and caliper; the Type 4's springs aren't published, a 4AB3C1B "
+            f"has two: {ACCUTRONICS_SPECS})",
+        },
+        "material": {
+            "density_kg_m3": 7800.0,
+            "youngs_pa": 2.0e11,
+            "source": f"{PARKER_BILBAO} (appendix A: steel wire, E 2e11 N/m^2, rho 7800 kg/m^3)",
+        },
+        "input": {
+            "re_ohm": 0.81,
+            "le_h": 1.27e-3,
+            "force_per_a": 0.0,
+            "saturation_a": 0.25,
+            "source": "",
+        },
+        "output": {
+            "re_ohm": 200.0,
+            "le_h": 0.270,
+            "v_per_m_s": 0.0,
+            "source": f"{ESP_REVERB} (Table 3, code B: 2250 ohm, 200 ohm DC, ~270 mH, "
+            "6.5 mV rms typical output); v_per_m_s: fit (see input)",
+        },
+        "losses": {
+            "t60_500hz_s": 3.4,
+            "loss_factor": 2.0e-4,
+            "source": f"t60_500hz_s: {ACCUTRONICS_SPECS} (decay code 3, long: 2.75-4.0 s; the "
+            "class's middle, read at 500 Hz); loss_factor: provisional: model knowledge "
+            "(spring steel's internal loss factor, ~1e-4..5e-4: the decay's fall above a "
+            "kHz); the rest (the rubber end dampers) flat in frequency",
+        },
+        "model": {
+            "f_max_hz": 16000.0,
+            "tail_db": 90.0,
+            "source": "numerical: the audio branch's modes up to 16 kHz (below 0.45 of the "
+            "rate), each summed until 90 dB down",
+        },
+    }
+    c = sp.spring_tank_from_data(data, "fit")
+    # The band rms of force -> velocity, from the springs' response.
+    fs = 48000.0
+    h = sp.impulse_response(sp.spec_of(c, 0.45 * fs), fs)
+    f = np.fft.rfftfreq(len(h), 1.0 / fs)
+    band = (f >= TANK_BAND_HZ[0]) & (f <= TANK_BAND_HZ[1])
+    h_rms = float(np.sqrt(np.mean(np.abs(np.fft.rfft(h)[band]) ** 2)))
+    ratio = math.sqrt(c.output_le_h / c.input_le_h)
+    k_in = math.sqrt(TANK_TYPICAL_OUT_V_RMS / (ratio * h_rms * TANK_RATED_A_RMS))
+    data["input"]["force_per_a"] = k_in
+    data["output"]["v_per_m_s"] = k_in * ratio
+    data["input"]["source"] = (
+        f"{ESP_REVERB} (Table 1, code A: 8 ohm, 0.81 ohm DC, 1.27 mH, 28 mA rms rated; "
+        "saturation_a: 'driven to about 250 mA at 1 kHz before saturation', roughly constant "
+        "above 300 Hz, its shape provisional: tanh); "
+        f"force_per_a: fit: {TANK_RATED_A_RMS * 1e3:g} mA rms gives "
+        f"{TANK_TYPICAL_OUT_V_RMS * 1e3:g} mV rms of EMF over {TANK_BAND_HZ[0]:g}-"
+        f"{TANK_BAND_HZ[1]:g} Hz (the useful band, {ESP_REVERB}) through the springs' "
+        "response; the output's EMF per velocity is this times sqrt(L_out / L_in) (one "
+        "transducer geometry, turns ~ sqrt(L))"
+    )
+    spec = sp.spec_of(c)
+    data["fit_report"] = {
+        "band_rms_m_s_per_n": h_rms,
+        "delay_s": [
+            sp.delay_s(r, rr, length, c.youngs_pa, c.density_kg_m3)
+            for r, rr, length in spec.springs
+        ],
+        "transition_hz": [
+            sp.transition_hz(r, rr, c.youngs_pa, c.density_kg_m3) for r, rr, _ in spec.springs
+        ],
+    }
+    return _clean(data)
+
+
 BUILDERS = {
     "6386": build_6386,
     "12AX7": build_12ax7,
@@ -1331,6 +1666,9 @@ BUILDERS = {
     "5Y3GT": build_5y3gt,
     "P12R": build_p12r,
     "EMT140": build_emt140,
+    "EMT240": build_emt240,
+    "6K6GT": build_6k6gt,
+    "ACC4AB3C1B": build_acc4ab3c1b,
     "SCOTCH111": build_scotch111,
     "LAMP327": build_lamp327,
     "2D21": build_2d21,

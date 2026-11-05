@@ -210,6 +210,36 @@ class Plate:
 
 
 @dataclass(frozen=True)
+class Spring:
+    """A spring reverb tank's springs (docs/REVERB_PLAN.md, E1-E3; varimu.devices.spring is
+    the reference, circuitsim's spring.rs the port): a force force_per_v (v(sense_pos) -
+    v(sense_neg)) (the input coil's current sensed across its resistance, times the
+    transducer's force per ampere over that resistance; the sense draws no current) at
+    every spring's input bead, and the sum of the output beads' tangential velocities times
+    out_per_m_s (the output coil's EMF) driving `out` to ground one sample after the force
+    (one-way: the springs' load on the coil is the builder's resistor). springs: per spring
+    (wire radius, helix radius, uncurled wire length) in metres; decay the energy decay
+    rate (1/s) against frequency (Hz), rising in Hz. saturation_v: the input transducer's
+    pole pieces saturating, the force force_per_v saturation_v tanh(v / saturation_v) (0:
+    linear). SPICE has no springs: ngspice sees `out` held at 0 V (the medium cut out at its
+    ports)."""
+
+    name: str
+    sense_pos: str
+    sense_neg: str
+    force_per_v: float
+    out: str
+    out_per_m_s: float
+    density_kg_m3: float
+    youngs_pa: float
+    springs: tuple[tuple[float, float, float], ...]
+    f_max_hz: float
+    decay: tuple[tuple[float, float], ...]
+    tail_db: float
+    saturation_v: float
+
+
+@dataclass(frozen=True)
 class TapeReductionPoint:
     """One bias's part of a `TapeReduction` (circuitsim's `tape_stream::ReductionPoint`):
     the bias's deep-gap peak (A/m), per layer M_x / Ms against a constant deep-gap field on
@@ -492,6 +522,7 @@ Element = (
     | HeatedCathode
     | Device
     | Plate
+    | Spring
     | Tape
     | Harp
     | ThyratronEvents
@@ -526,6 +557,7 @@ _PREFIX = {
     TubeNoise: "B",
     HeatedCathode: "B",
     Plate: "V",
+    Spring: "V",
     Tape: "V",
     Harp: "V",
     ThyratronEvents: "X",
@@ -552,7 +584,7 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return el.nodes
     if isinstance(el, Tape) and el.supply is not None:
         return (el.sense_pos, el.sense_neg, el.out, el.supply)
-    if isinstance(el, Plate | Tape):
+    if isinstance(el, Plate | Spring | Tape):
         return (el.sense_pos, el.sense_neg, el.out)
     if isinstance(el, Harp):
         return (el.out,)
@@ -737,6 +769,8 @@ class CircuitIR:
                 _positive(f"{el.name}.is0_a", el.is0_a)
             elif isinstance(el, Plate):
                 _validate_plate(el, self.input_node)
+            elif isinstance(el, Spring):
+                _validate_spring(el, self.input_node)
             elif isinstance(el, Tape):
                 _validate_tape(el, self.input_node)
             elif isinstance(el, Harp):
@@ -1027,6 +1061,7 @@ _ELEMENT_KINDS = {
     "heated_cathode": HeatedCathode,
     "device": Device,
     "plate": Plate,
+    "spring": Spring,
     "tape": Tape,
     "harp": Harp,
     "thyratron_events": ThyratronEvents,
@@ -1122,6 +1157,14 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         raise IRError(f"unknown kind {d.get('kind')!r} (expected one of {sorted(kinds)})")
     if cls is Plate:
         return _fields(cls, d, tagged=True, decay=lambda v: tuple(tuple(x) for x in v))
+    if cls is Spring:
+        return _fields(
+            cls,
+            d,
+            tagged=True,
+            decay=lambda v: tuple(tuple(x) for x in v),
+            springs=lambda v: tuple(tuple(x) for x in v),
+        )
     if cls is Tape:
         return _fields(cls, d, tagged=True, medium=_decode_tape_medium)
     if cls is ThyratronEvents:
@@ -1140,6 +1183,35 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
             grid_pulses_a=lambda v: tuple(tuple(tuple(p) for p in row) for row in v),
         )
     return _fields(cls, d, tagged=True)
+
+
+def _validate_spring(el: Spring, input_node: str) -> None:
+    """The same checks as the Rust IR's for a spring tank."""
+    for k in ("density_kg_m3", "youngs_pa", "f_max_hz", "tail_db"):
+        _positive(f"{el.name}.{k}", getattr(el, k))
+    for k in ("force_per_v", "out_per_m_s"):
+        _finite(f"{el.name}.{k}", getattr(el, k))
+    _nonneg(f"{el.name}.saturation_v", el.saturation_v)
+    ok = bool(el.springs) and all(
+        len(s) == 3 and all(v > 0 and math.isfinite(v) for v in s) and s[0] < s[1]
+        for s in el.springs
+    )
+    if not ok:
+        raise IRError(
+            f"{el.name}.springs: (wire radius, helix radius, length) per spring, positive, "
+            "the wire thinner than the helix"
+        )
+    ok = (
+        bool(el.decay)
+        and all(f > 0 and s >= 0 and math.isfinite(s) for f, s in el.decay)
+        and all(b[0] > a[0] for a, b in zip(el.decay, el.decay[1:], strict=False))
+    )
+    if not ok:
+        raise IRError(f"{el.name}.decay: (Hz, 1/s) points rising in Hz, rates finite and >= 0")
+    if el.sense_pos == el.sense_neg:
+        raise IRError(f"{el.name}: its force senses {el.sense_pos} against itself")
+    if el.out in (GROUND, input_node):
+        raise IRError(f"{el.name}: its output drives {el.out} (ground or the input)")
 
 
 def _validate_plate(el: Plate, input_node: str) -> None:

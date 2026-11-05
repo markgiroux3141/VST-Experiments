@@ -336,6 +336,7 @@ impl Mna {
             .elements()
             .filter_map(|e| match e {
                 Element::Plate(p) => Some(crate::media::MediumElement::Plate(p.clone())),
+                Element::Spring(p) => Some(crate::media::MediumElement::Spring(p.clone())),
                 Element::Tape(t) => Some(crate::media::MediumElement::Tape(t.clone())),
                 Element::Harp(h) => Some(crate::media::MediumElement::Harp(h.clone())),
                 _ => None,
@@ -500,6 +501,7 @@ impl Mna {
                 | Element::TubeNoise(_)
                 | Element::HeatedCathode(_)
                 | Element::Plate(_)
+                | Element::Spring(_)
                 | Element::Tape(_)
                 | Element::Harp(_) => {}
             }
