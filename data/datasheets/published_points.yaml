@@ -661,3 +661,51 @@
     sensitivity_l_v_per_pa: 0.67e-3      # s68: 'L' -83.5 db (.067 mv)
     resonance_hz: 100.0                  # born12
     turns_ratio: 4.53                    # cj06: 'Turns Ratio: 1:4.53' (a 1990 SM57's transformer, the full secondary)
+
+# --- Shure SM58 (docs/SM57_PLAN.md SM8) ---
+# The SM58's Unidyne III cartridge (s70's replacement 99B352; today's R59), behind the ball grille. Sources:
+# data/schematics/shure_sm57/README.md (s70: Figure D, the ball 2 in (50.8 mm), 6-3/8 in (161.9 mm) long, the neck
+# 1-21/64 in (33.7 mm), the taper 3-11/16 in (93.7 mm) to 29/32 in (23.0 mm)). The cartridge starts from R57@4's
+# (the same Unidyne III, its own tuning fitted: scripts/fit_sm57.py --mic sm58); no resonator cap (the SM57's; the
+# SM58's front air is the ball's, in the BEM: varimu/mics/bor_permeable.py).
+"R59":
+  source: "data/schematics/shure_sm57/README.md (s70, the SM58 sheet 27A378): the Unidyne III's network (seeler61, pat883) fitted to s70's response and c81's polars by scripts/fit_sm57.py --mic sm58 on the ball grille's BEM (a permeable sheet: bor_permeable.ball_mesh); no published dimension of the cartridge, the geometry provisional and bounded as R57's"
+  geometry:
+    diaphragm:
+      radius_m: {value: 0.008}          # provisional: as R57 (the same Unidyne III diaphragm)
+      thickness_m: {value: 6.35e-06}      # seeler61: molded Mylar 'as thin as 1/4 mil'
+      density_kg_m3: {value: 1390.0}     # provisional: model knowledge (PET film)
+      resonance_hz: {value: 73.602}       # born12: 'in the 100Hz area' (fitted to c81's low end, bounds 60-160 Hz: the SM58's suspension may differ)
+      q: {value: 3.0}                    # provisional: model knowledge (the suspension's own loss)
+      modes:
+        - {name: dome, f_hz: {value: 7665.6}, q: {value: 5.3319}, mass_fraction: {value: 0.14378}, area_fraction: {value: 0.051165}}   # the mass and area shares R57@4's (the same diaphragm); f and q fitted to c81 (another air load: the ball's), bounds as R57's
+    coil:
+      bl_tm: {value: 2.2773}                # R57@4's (the shared motor: the SM58's is the same Unidyne III coil and magnet; its sensitivity then a check, s70's 'H' 0.149 mV/ubar: 1.62 mV/Pa)
+      b_gap_t: {value: 1.2}              # R57@4's (the shared motor)
+      re_ohm: {value: 12.1}              # hr23: '12.1 Ohms' at the capsule's terminals (forum)
+      le_h: {value: 200.0e-6}            # web: Gearspace 2012 (Les, forum: 'about 200uH IIRC')
+      wire_density_kg_m3: {value: 8960.0}        # provisional: model knowledge (copper)
+      wire_resistivity_ohm_m: {value: 1.72e-8}   # provisional: copper at 20 C
+      adhesive_fraction: {value: 0.2}    # provisional: model knowledge (pat883)
+    network:
+      - {name: dia, kind: diaphragm, a: front, b: u}
+      # seeler61's phase-shift network, fitted as R57's
+      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.017286}, r1_pa_s_m3: {value: 1.9085e+06}, q: {value: 14.496}}   # d: provisional, fitted (bounds 8-30 mm); r1: fitted to the low end's damping; q: fitted to the front-to-back ratio
+      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 2.7579e+07}}   # provisional: fitted to c81's pattern at 125 Hz (bounds 1e6-1e10)
+      - {name: handle, kind: cavity, a: h, volume_m3: {value: 1.2554e-06}}   # provisional: fitted with the washer (bounds 0.5-20 cm^3)
+    body:
+      form: ball
+      ball_radius_m: {value: 25.4e-3}       # s70 Figure D: 2 in (50.8 mm) diameter
+      face_depth_m: {value: 18.0e-3}        # provisional: model knowledge (the cartridge's face ~7 mm ahead of the ball's centre, under the grille's dome)
+      face_radius_m: {value: 13.0e-3}       # provisional: as R57's cartridge
+      ports_m: {value: [0.003, 0.009]}      # provisional: as R57's (fitted there on the SM57's body)
+      cartridge_length_m: {value: 22.0e-3}  # provisional: as R57's
+      neck_radius_m: {value: 16.85e-3}      # s70 Figure D: 1-21/64 in (33.7 mm) where the ball meets the handle
+      taper_length_m: {value: 93.7e-3}      # s70 Figure D: 3-11/16 in (93.7 mm)
+      end_radius_m: {value: 11.5e-3}        # s70 Figure D: 29/32 in (23.0 mm) at the connector end
+      length_m: {value: 161.9e-3}           # s70 Figure D: 6-3/8 in (161.9 mm)
+      z_s_pa_s_m: {value: 10}            # provisional: grid (scripts/fit_sm57.py --mic sm58 --zs: the steel mesh and the foam pop filter (s70's 'Wind and Pop Filter Assembly 90A1260') as one sheet; a woven mesh ~10-50 rayl, a thin open-cell foam layer tens of rayl: Delany & Bazley's range)
+  published:
+    sensitivity_h_v_per_pa: 1.49e-3      # s70: 'H' -76.5 db (.149 mv) re 1 V/ubar, open circuit at 1 kHz
+    resonance_hz: 100.0                  # born12 (the SM57 or SM58)
+    turns_ratio: 4.53                    # cj06 (Walrus, forum: the 57's and 58's transformer the same)

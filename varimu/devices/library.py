@@ -753,6 +753,27 @@ def build_r57() -> dict[str, Any]:
     }
 
 
+def build_r59() -> dict[str, Any]:
+    """The SM58's Unidyne III cartridge, Shure's replacement R59 (s70: 99B352; docs/SM57_PLAN.md
+    SM8): its geometry (published_points.yaml "R59": the R57's network without its resonator
+    cap, on the ball grille's body; fitted by scripts/fit_sm57.py --mic sm58), compiled as
+    R57's (varimu.devices.moving_coil.compile_network)."""
+    from varimu.devices import moving_coil
+
+    pub = _published()["R59"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "R59",
+        "kind": "moving_coil",
+        "source": "derived: varimu.devices.moving_coil.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": moving_coil.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/moving_coil.py's formulas (its docstring) on "
+        "the geometry; air at 20 C",
+    }
+
+
 # The 5651's current at which its operating voltage (circuit value v5651_operating_v) is
 # taken: the middle of its 1.5-3.5 mA range.
 V5651_REF_A = 2.5e-3
@@ -1690,6 +1711,7 @@ BUILDERS = {
     "BK4134": build_bk4134,
     "K47": build_k47,
     "R57": build_r57,
+    "R59": build_r59,
     "VF14T": build_vf14t,
     "6X4": build_6x4,
     "6AL5": build_6al5,

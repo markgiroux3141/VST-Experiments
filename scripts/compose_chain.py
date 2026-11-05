@@ -34,6 +34,7 @@ from varimu.config import CONFIG_DIR
 PORTS = {
     "neumann_u47": {"tag": "u47", "output": "out", "drop": ["RLOAD"]},
     "shure_sm57": {"tag": "sm57", "output": "out", "drop": ["RLOAD"]},
+    "shure_sm58": {"tag": "sm58", "output": "out", "drop": ["RLOAD"]},
     "telefunken_v76": {"tag": "v76", "input": "ia", "drop": ["RSRC"]},
     "omni_4134": {"tag": "omni", "output": "out", "drop": ["RMEAS"]},
     "clean_pre": {"tag": "clean", "input": "ia", "drop": ["RSRC"]},

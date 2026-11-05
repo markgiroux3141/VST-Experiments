@@ -199,6 +199,15 @@ def body_entry_factors(
     `body_entry_grid` for a cached grid."""
     from varimu.mics import bor
 
+    if body.get("form") == "ball":  # a permeable grille (the SM58): bor_permeable
+        from varimu.mics import bor_permeable as bp
+
+        if not np.isinf(distance_m):
+            raise ValueError("a ball grille's entries are plane waves only (bor_permeable)")
+        op = bp.operator(bp.ball_mesh(body, diaphragm_radius_m))
+        return bp.entry_factors(
+            op, np.atleast_1d(f_hz), body["z_s_pa_s_m"], np.atleast_1d(theta_rad)
+        )
     op = bor.operator(bor.body_mesh(body, diaphragm_radius_m))
     return bor.entry_factors(op, np.atleast_1d(f_hz), np.atleast_1d(theta_rad), distance_m)
 

@@ -6,7 +6,8 @@ and in keeping with our physics approach", then: "yes, let's write this plan"; t
 expands
 MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1, SM2 and SM3 done, SM4's
 polars done (its proximity open), SM5 built (the impedance open), SM6 started: prints for the
-user to hear (2026-11-05, overnight in the `sm57` worktree): see "Status".
+user to hear; SM8 built ahead of the listen (the SM58 to 10 kHz; its top octave open)
+(2026-11-05, overnight in the `sm57` worktree): see "Status".
 
 ## Status (2026-11-05)
 
@@ -152,6 +153,38 @@ whether to fit the turns ratio to the impedance (it would move off cj06's measur
 the sensitivity's B l with it) or keep the bench figures.
 
 
+
+**SM8 built (ahead of SM6's listen; the plan's order put it after: the work is offline and
+doesn't change the SM57): the SM58, R59@1.**
+- The permeable sheet in the BEM: `varimu/mics/bor_permeable.py` (a new module; bor.py
+  untouched): two acoustic domains, the outside air and the air the sheet encloses, joined
+  through the sheet (the velocity continuous, p_in - p_out = Z_s v), direct BIEs on each
+  closed boundary with bor.py's double layer, a single layer (elliptic K, graded self
+  quadrature), CHIEF rows; no hypersingular operator. Checked on the textbook cases
+  (`varimu/mics/permeable.py`, the exact series of a spherical sheet, with a rigid core
+  inside): the sheet's outside and inside pressures to 1e-5..7e-4, a core to 6e-4, a rigid
+  body alone the rigid sphere's series (`tests/test_permeable.py`).
+- The SM58's body (`bor_permeable.ball_mesh`, form `ball`): s70 Figure D's outline (the 50.8
+  mm ball, the 33.7 mm neck, the 93.7 mm taper to 23.0 mm, 161.9 mm long), the cartridge in
+  the ball's air (its face 18 mm under the ball's pole, provisional), the handle outside.
+- R59@1 (`config/components/r59/1.yaml`; `scripts/fit_sm57.py --mic sm58`): the SM57's motor
+  shared (R57@4's coil, magnet and diaphragm: the same Unidyne III), its own tuning fitted
+  (the rear network, the case's air, the suspension's resonance, the dome mode's frequency
+  and damping under the ball's air: 7.67 kHz, q 5.3); no resonator cap (the SM57's: the
+  SM58's front air is the ball's, in the BEM). The grille (mesh and foam as one sheet) a
+  grid: 10 Pa s/m best of 10 / 30 / 60 (and of 30 / 100 / 300): nearly transparent. Target:
+  **c81's SM58 curve**, not s70's (the 1970 drawing falls far faster below 150 Hz than every
+  later one, c81 and g24 agreeing within 1 dB 50 Hz-10 kHz; c81 is still the dual-impedance
+  era). Result: 0.78 dB rms 50 Hz-14 kHz, **within +-2 dB to 10 kHz (1.42 worst)**; above it
+  +3.3 dB at 12.7 kHz and +4.6 at 14.25 kHz (the drawings fall to ~-6 dB by 14-15 kHz: a
+  frequency-independent grille can't; the foam's rising loss or a second dome mode: open).
+  Polars within 3 dB at every c81 frequency (c81's SM58 polars are the SM57's drawing). The
+  sensitivity, not fitted (the shared motor): 1.62 mV/Pa against the rated 1.49 (+0.7 dB,
+  the sheet's +-3). Resonance 74 Hz. `config/circuits/shure_sm58.yaml` (R59@1 on SM57_OT@1:
+  the same transformer, Walrus on GroupDIY, forum; s70 draws the same windings), the chain
+  `sm58_v76.yaml`; `tests/test_sm58.py`; Rust agreement bit for bit. Not yet: the Room view
+  (entries.py's tables take bor's bodies; the ball's needs bor_permeable there, after the
+  room session's work lands), proximity for the ball (plane waves only so far).
 
 The sphere-era notes follow.
 

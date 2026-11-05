@@ -42,10 +42,16 @@ resonator keeps a damped provisional geometry and the region is SM3's / SM4's (t
 modes, the cap and its layer as distributed elements; SM3's done-when is the response to
 15 kHz).
 
-`--write` puts the fitted values into data/datasheets/published_points.yaml's "R57" block (the
-line of each network element by its name, the diaphragm's and coil's by key); `varimu
-fit-devices --only R57` then makes the component version. Plot -> reports/mics/r57_fit.png,
-numbers -> reports/mics/r57_fit.json.
+`--mic sm58` fits the SM58's cartridge R59 the same way (SM8) on its ball grille: the body's
+form `ball` (varimu.mics.bor_permeable: the grille a permeable sheet, the cartridge in the
+ball's air), its targets s70's response and c81's polars (the SM58's polars are the SM57's
+drawing in every vintage sheet: data/datasheets/shure_sm58.provenance.yaml), the grille's
+transfer impedance a grid (`--zs`).
+
+`--write` puts the fitted values into data/datasheets/published_points.yaml's "R57" (or "R59")
+block (the line of each network element by its name, the diaphragm's and coil's by key);
+`varimu fit-devices --only R57` then makes the component version. Plot ->
+reports/mics/<r57|r59>_fit.png, numbers -> reports/mics/<r57|r59>_fit.json.
 """
 
 from __future__ import annotations
@@ -66,11 +72,18 @@ from varimu.config import DATA_DIR, REPO_ROOT
 from varimu.devices import moving_coil as mc
 from varimu.devices.library import _plain
 from varimu.mics import bor
+from varimu.mics import bor_permeable as bp
 from varimu.mics.free_field import sphere_ring_factors
 from varimu.mics.networks import moving_coil_response
 
 PUBLISHED = DATA_DIR / "datasheets" / "published_points.yaml"
-RESPONSE_DOC, POLAR_DOC = "s68", "c81"
+MICS = {  # the component's block, its targets (file, document)
+    "sm57": {"key": "R57", "response": ("shure_sm57_response.csv", "s68"),
+             "polar": ("shure_sm57_polar.csv", "c81")},
+    "sm58": {"key": "R59", "response": ("shure_sm58_response.csv", "c81"),
+             "polar": ("shure_sm58_polar.csv", "c81"), "motor": "R57"},
+}  # fmt: skip
+MIC = MICS["sm57"]  # main() sets it from --mic
 L_PRIMARY_H = 0.386  # cj06: the transformer's primary inductance (open-circuited secondary)
 FIT_BAND_HZ = (50.0, 4000.0)  # on a sphere: below the presence peak, where the head's shape
 # matters little (above: the body's diffraction, SM4, and the modes, SM3)
@@ -109,14 +122,14 @@ def load_targets(band):
         with open(DATA_DIR / "datasheets" / name, encoding="utf-8") as f:
             return list(csv.DictReader(f))
 
-    resp = [r for r in rows("shure_sm57_response.csv") if r["document"] == RESPONSE_DOC]
+    resp = [r for r in rows(MIC["response"][0]) if r["document"] == MIC["response"][1]]
     f = np.array([float(r["freq_hz"]) for r in resp])
     db = np.array([float(r["db"]) for r in resp])
     q = np.array([r["quality"] != "coarse" for r in resp])
     keep = (f >= band[0]) & (f <= band[1]) & q
     polar = {}
-    for r in rows("shure_sm57_polar.csv"):
-        if r["document"] != POLAR_DOC or r["band_lo_hz"]:
+    for r in rows(MIC["polar"][0]):
+        if r["document"] != MIC["polar"][1] or r["band_lo_hz"]:
             continue
         fr, ang = float(r["freq_hz"]), float(r["angle_deg"]) % 360
         side = {90.0: 90, 270.0: 90, 180.0: 180}.get(ang)
@@ -145,7 +158,7 @@ def _set(g, path, v):
 
 def cartridge(g) -> mc.MovingCoil:
     return mc.moving_coil_from_data(
-        {"name": "R57", "kind": "moving_coil", "lumped": mc.compile_network(g)}
+        {"name": MIC["key"], "kind": "moving_coil", "lumped": mc.compile_network(g)}
     )
 
 
@@ -157,6 +170,7 @@ def body_entries(body: dict, a: float, f: np.ndarray, theta_deg: float):
     ANGLES_DEG): the BEM (varimu.mics.bor.dynamic_mesh) solved once per frequency for every
     angle, kept in cache/sm57/ by the body, the diaphragm's radius and bor.py's source."""
     src = (REPO_ROOT / "varimu" / "mics" / "bor.py").read_bytes()
+    src += (REPO_ROOT / "varimu" / "mics" / "bor_permeable.py").read_bytes()
     key = hashlib.sha256(json.dumps([body, a], sort_keys=True).encode() + src).hexdigest()[:16]
     path = REPO_ROOT / "cache" / "sm57" / f"body_{key}.npz"
     table = _ENTRIES.setdefault(key, {})
@@ -166,8 +180,13 @@ def body_entries(body: dict, a: float, f: np.ndarray, theta_deg: float):
             table[float(x)] = (z["front"][i], z["rear"][i])
     missing = sorted({float(x) for x in np.atleast_1d(f)} - set(table))
     if missing:
-        op = bor.operator(bor.body_mesh(body, a))
-        fr, rr = bor.entry_factors(op, np.array(missing), np.radians(ANGLES_DEG))
+        if body.get("form") == "ball":  # the SM58: a permeable grille (bor_permeable)
+            op = bp.operator(bp.ball_mesh(body, a))
+            fr, rr = bp.entry_factors(op, np.array(missing), body["z_s_pa_s_m"],
+                                      np.radians(ANGLES_DEG))  # fmt: skip
+        else:
+            op = bor.operator(bor.body_mesh(body, a))
+            fr, rr = bor.entry_factors(op, np.array(missing), np.radians(ANGLES_DEG))
         for i, x in enumerate(missing):
             table[x] = (fr[i], rr[i])
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -248,6 +267,10 @@ def _has_modes(g) -> bool:
 
 
 def free_of(g) -> list:
+    if MIC.get("motor"):  # the SM58: its own tuning on the SM57's motor (main() sets it), the
+        # dome mode's frequency and damping its own (the same diaphragm, another air load)
+        own = [x for x in FREE if x[0] not in (("coil", "bl_tm"), ("coil", "b_gap_t"))]
+        return own + MODE[:2]
     if "body" not in g:
         return [*FREE, RING]
     return [*FREE, *MODE] if _has_modes(g) else FREE
@@ -311,12 +334,13 @@ def _num(v, digits: int) -> str:
 
 
 def write(g) -> None:
-    """The fitted values into published_points.yaml's R57 block, in place."""
+    """The fitted values into published_points.yaml's R57 (R59) block, in place."""
     lines = PUBLISHED.read_text(encoding="utf-8").split("\n")
-    start = next(i for i, ln in enumerate(lines) if ln.startswith('"R57":'))
+    start = next(i for i, ln in enumerate(lines) if ln.startswith(f'"{MIC["key"]}":'))
     end = next((i for i in range(start + 1, len(lines)) if lines[i] and not lines[i][0].isspace()
                 and not lines[i].startswith("#")), len(lines))  # fmt: skip
-    paths = [p for p, *_ in free_of(g)] + ([("body", "ports_m")] if "body" in g else [])
+    grid_key = "z_s_pa_s_m" if g.get("body", {}).get("form") == "ball" else "ports_m"
+    paths = [p for p, *_ in free_of(g)] + ([("body", grid_key)] if "body" in g else [])
     for path in paths:
         key, v = path[-1], _get(g, path)
         if path[0] == "network":
@@ -350,13 +374,13 @@ def plot(g, all_resp, polar, path) -> None:
     for th, style in ((0, "-"), (90, "--"), (180, ":")):
         ax[0].semilogx(ff, 20 * np.log10(abs(response(g, ff, th)) / ref), "k" + style,
                        lw=1.2, label=f"model {th} deg")  # fmt: skip
-    ax[0].semilogx(f, db, "o", ms=3, color="tab:red", label=f"{RESPONSE_DOC} on axis")
+    ax[0].semilogx(f, db, "o", ms=3, color="tab:red", label=f"{MIC['response'][1]} on axis")
     for (fr, side), want in polar.items():
         ax[0].plot(fr, want, "s" if side == 90 else "^", color="tab:blue", ms=5)
     ax[0].axvspan(*band_of(g), color="0.93", zorder=0)
     on = "the body" if "body" in g else "a sphere"
     ax[0].set(xlabel="Hz", ylabel="dB re on axis at 1 kHz", ylim=(-30, 10),
-              title=f"R57 on {on}, open circuit (H): on axis, 90 and 180 deg")  # fmt: skip
+              title=f"{MIC['key']} on {on}, open circuit (H): on axis, 90 and 180 deg")  # fmt: skip
     ax[0].grid(True, which="both", alpha=0.3)
     ax[0].legend(fontsize=8)
     th = np.radians(np.arange(0, 361, 5))
@@ -377,12 +401,22 @@ def plot(g, all_resp, polar, path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--mic", choices=sorted(MICS), default="sm57")
+    ap.add_argument("--zs", type=float, nargs="+", help="the ball grille's Z_s to try, Pa s/m")
     ap.add_argument("--ports-mm", type=float, nargs="+",
                     help="rear-port band centres to try, mm behind the face")  # fmt: skip
     args = ap.parse_args()
-    global CAP_ON
-    entry = yaml.safe_load(PUBLISHED.read_text(encoding="utf-8"))["R57"]
+    global CAP_ON, MIC
+    MIC = MICS[args.mic]
+    entry = yaml.safe_load(PUBLISHED.read_text(encoding="utf-8"))[MIC["key"]]
     g0 = _plain(entry["geometry"])
+    if MIC.get("motor"):  # the shared motor: the SM57's fitted coil and diaphragm (its modes)
+        from varimu.devices.library import component_data
+
+        latest = component_data(MIC["motor"])["geometry"]
+        g0["coil"]["bl_tm"] = latest["coil"]["bl_tm"]
+        g0["coil"]["b_gap_t"] = latest["coil"]["b_gap_t"]
+        g0["diaphragm"]["modes"] = latest["diaphragm"]["modes"]
     sens = entry["published"]["sensitivity_h_v_per_pa"]
     CAP_ON = "body" in g0 and not _has_modes(g0)  # with the mode the band covers it
     fit_resp, all_resp, polar = load_targets(band_of(g0))
@@ -393,6 +427,12 @@ def main() -> None:
         for c_mm in args.ports_mm:
             g1 = copy.deepcopy(g0)
             g1["body"]["ports_m"] = [1e-3 * c_mm - 0.5 * (hi - lo), 1e-3 * c_mm + 0.5 * (hi - lo)]
+            starts.append(g1)
+    if g0.get("body", {}).get("form") == "ball" and args.zs:
+        starts = []
+        for z in args.zs:
+            g1 = copy.deepcopy(g0)
+            g1["body"]["z_s_pa_s_m"] = float(z)
             starts.append(g1)
     best, grid = None, []
     for g in starts:
@@ -414,14 +454,16 @@ def main() -> None:
             best = (g, out)
     g, out = best
     if len(grid) > 1:
-        out = {**out, "grid": [{"ports_m": x["body"]["ports_m"], "cost": x["cost"]} for x in grid]}
+        gk = "z_s_pa_s_m" if g["body"].get("form") == "ball" else "ports_m"
+        out = {**out, "grid": [{gk: x["body"][gk], "cost": x["cost"]} for x in grid]}
     rep = REPO_ROOT / "reports" / "mics"
     rep.mkdir(parents=True, exist_ok=True)
-    (rep / "r57_fit.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
-    plot(g, all_resp, polar, rep / "r57_fit.png")
+    stem = MIC["key"].lower()
+    (rep / f"{stem}_fit.json").write_text(json.dumps(out, indent=1), encoding="utf-8")
+    plot(g, all_resp, polar, rep / f"{stem}_fit.png")
     if args.write:
         write(g)
-        print("written; run: uv run varimu fit-devices --only R57")
+        print(f"written; run: uv run varimu fit-devices --only {MIC['key']}")
 
 
 if __name__ == "__main__":

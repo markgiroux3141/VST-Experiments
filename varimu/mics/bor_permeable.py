@@ -44,6 +44,8 @@ class PermeableMesh:
     p1: np.ndarray
     kind: np.ndarray  # (N,): RIGID_OUT, RIGID_IN, SHEET
     chief_out: np.ndarray  # (M, 2): points enclosed by the outside domain's boundary
+    tag: np.ndarray | None = None  # (N,): bor.FRONT / bor.REAR entries, else 0
+    diaphragm_radius_m: float = 0.0  # the FRONT entry's mode shape (bor.Mesh's)
 
     @property
     def n(self) -> int:
@@ -61,6 +63,13 @@ class PermeableMesh:
     def normal(self) -> np.ndarray:
         d = (self.p1 - self.p0) / self.length[:, None]
         return np.stack([-d[:, 1], d[:, 0]], axis=1)
+
+    def face_weights(self, tag: int) -> np.ndarray:
+        """As bor.Mesh.face_weights: FRONT with the diaphragm's mode shape, REAR (a band
+        of ports) averaged over its area."""
+        m = bor.Mesh(self.p0, self.p1, self.tag if self.tag is not None else np.zeros(self.n),
+                     self.diaphragm_radius_m, self.chief_out, uniform=(bor.REAR,))  # fmt: skip
+        return m.face_weights(tag)
 
 
 def polyline(corners, kinds, panel_m: float, chief_out=None) -> PermeableMesh:
@@ -84,6 +93,83 @@ def sphere_shell(radius_m: float, panels: int = 120) -> PermeableMesh:
     pts = radius_m * np.c_[np.sin(beta), np.cos(beta)]
     chief = radius_m * np.array([[0.2, 0.3], [0.5, -0.1], [0.3, -0.55], [0.6, 0.4], [0.1, -0.2]])
     return PermeableMesh(pts[:-1], pts[1:], np.full(panels, SHEET), chief)
+
+
+BALL_BODY_FIELDS = (
+    "ball_radius_m",  # the grille's sphere
+    "face_depth_m",  # its front pole to the cartridge's face (the origin)
+    "face_radius_m",  # the cartridge's face, the front entry on it
+    "ports_m",  # [from, to]: the band of rear ports on the cartridge's side
+    "cartridge_length_m",  # the face to the cartridge's base
+    "neck_radius_m",  # the closing ring under the ball, where the grille meets the handle
+    "taper_length_m",  # the handle's taper from the neck
+    "end_radius_m",
+    "length_m",  # the front pole to the connector's end
+    "z_s_pa_s_m",  # the grille's (mesh and foam) transfer impedance
+)
+
+
+def ball_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.6e-3) -> PermeableMesh:
+    """A ball-grille mic (the SM58; `body`: form `ball`, BALL_BODY_FIELDS) as a rigid body of
+    revolution and a permeable sheet: the cartridge's face at the origin facing +z (FRONT,
+    the diaphragm's mode shape), its side with the band of rear ports (REAR), its base, the
+    closing ring out to the neck and down to where the sphere meets it (all RIGID_IN: in the
+    ball's air); the handle from there (RIGID_OUT), its taper and its end; the sheet the
+    sphere from its front pole to the neck. CHIEF points inside the handle."""
+    a = diaphragm_radius_m
+    rb, depth, rc = body["ball_radius_m"], body["face_depth_m"], body["face_radius_m"]
+    p_lo, p_hi = body["ports_m"]
+    lc, rn = body["cartridge_length_m"], body["neck_radius_m"]
+    lt, re_, length = body["taper_length_m"], body["end_radius_m"], body["length_m"]
+    zc = depth - rb  # the sphere's centre
+    if not (rn < rb and a < rc < rn):
+        raise ValueError(f"ball body: need diaphragm < face < neck < ball ({body})")
+    z_neck = zc - float(np.sqrt(rb * rb - rn * rn))
+    if not (0 < p_lo < p_hi < lc and -lc > z_neck and depth > 0):
+        raise ValueError(f"ball body: the cartridge must sit inside the ball ({body})")
+    z_taper = z_neck - lt
+    z_end = depth - length
+    if not z_end < z_taper:
+        raise ValueError(f"ball body: too short for its taper ({body})")
+    body_c = [(0.0, 0.0), (a, 0.0), (rc, 0.0), (rc, -p_lo), (rc, -p_hi), (rc, -lc), (rn, -lc),
+              (rn, z_neck), (re_, z_taper), (re_, z_end), (0.0, z_end)]  # fmt: skip
+    kinds = [RIGID_IN] * 7 + [RIGID_OUT] * 3
+    tags = [bor.FRONT, 0, 0, bor.REAR, 0, 0, 0, 0, 0, 0]
+    sizes = [panel_m] * 7 + [3 * panel_m, 5 * panel_m, 3 * panel_m]
+    p0, p1, kind, tag = [], [], [], []
+    for (u, w), kd, tg, size in zip(zip(body_c[:-1], body_c[1:], strict=True), kinds, tags,
+                                    sizes, strict=True):  # fmt: skip
+        n = max(2, int(np.ceil(np.hypot(w[0] - u[0], w[1] - u[1]) / size)))
+        pts = bor._segment(u, w, n, 2.0)
+        p0.append(pts[:-1])
+        p1.append(pts[1:])
+        kind += [kd] * n
+        tag += [tg] * n
+    # the sheet: the sphere from the front pole down to the neck (n outward)
+    b_end = float(np.arccos((z_neck - zc) / rb))
+    n_s = max(16, int(np.ceil(rb * b_end / (1.5 * panel_m))))
+    beta = np.linspace(0.0, b_end, n_s + 1)
+    sh = np.c_[rb * np.sin(beta), zc + rb * np.cos(beta)]
+    p0.append(sh[:-1])
+    p1.append(sh[1:])
+    kind += [SHEET] * n_s
+    tag += [0] * n_s
+    zmid = 0.5 * (z_neck + z_end)
+    chief = np.array([[0.3 * re_, zmid], [0.6 * re_, zmid - 0.2 * lt], [0.2 * re_, z_taper],
+                      [0.5 * re_, z_neck - 0.3 * lt]])  # fmt: skip
+    return PermeableMesh(np.vstack(p0), np.vstack(p1), np.array(kind), chief, np.array(tag), a)
+
+
+def entry_factors(op: Operator, f_hz: np.ndarray, z_s: complex, theta_rad: np.ndarray):
+    """The front and rear entries (freqs, angles) per unit plane wave at the origin (the
+    cartridge's face): the weighted pressures on the enclosed cartridge."""
+    wf, wr = op.mesh.face_weights(bor.FRONT), op.mesh.face_weights(bor.REAR)
+    out_f, out_r = [], []
+    for f in np.atleast_1d(f_hz):
+        p, _ = plane_wave_fields(op, float(f), z_s, theta_rad)
+        out_f.append(wf @ p)
+        out_r.append(wr @ p)
+    return np.array(out_f), np.array(out_r)
 
 
 def _quad(m: PermeableMesh, j: int, sub: int, graded_about: float | None = None):
