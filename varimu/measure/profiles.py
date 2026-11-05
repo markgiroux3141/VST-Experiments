@@ -22,6 +22,9 @@ checks of varimu.measure.generic and the circuit's own).
 - telefunken_v72 (microphone preamp, the chains build-out's WP1): varimu.measure.v72_suite:
   the Braunbuch's specs: gain, response at two levels, input and output impedance, THD at
   the specs' points and against level (the datasheet's maximum output).
+- ua_610 (microphone preamp, the chains build-out's WP2): varimu.measure.ua610_suite: gain
+  (the links, the LEVEL law), response per HF / LF position, input and output impedance,
+  THD against level; the 2-610 reissue's figures as a reference only.
 - fairchild_670_keyed (compressor with a KEY input, SIDECHAIN_PLAN.md K1):
   varimu.measure.keyed_suite: INT against the stock 670, the duck against the key's
   level, recovery per time constant, thump; keyed by a kick under a bass tone.
@@ -71,6 +74,12 @@ def _run_v72(*args, **kwargs):
     return v72_suite.run(*args, **kwargs)
 
 
+def _run_ua610(*args, **kwargs):
+    from varimu.measure import ua610_suite
+
+    return ua610_suite.run(*args, **kwargs)
+
+
 def _run_keyed(*args, **kwargs):
     from varimu.measure import keyed_suite
 
@@ -90,6 +99,7 @@ PROFILES = {
     "ampex_351": Profile("ampex_351", "tape_machine", _run_tape),
     "telefunken_v76": Profile("telefunken_v76", "mic_preamp", _run_preamp),
     "telefunken_v72": Profile("telefunken_v72", "mic_preamp", _run_v72),
+    "ua_610": Profile("ua_610", "mic_preamp", _run_ua610),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
 }
 

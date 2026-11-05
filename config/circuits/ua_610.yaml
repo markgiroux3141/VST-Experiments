@@ -1,0 +1,287 @@
+# Universal Audio 610-A modular channel amplifier (Bill Putnam's 610 console, 1960), its
+# microphone preamplifier with the module's EQ, as a circuit file (the chains build-out's
+# WP2). Built by varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/ua_610/README.md has their provenance):
+#   "sch: ..."         printed on John Hinson's redraw of UA drawing C-10068, "Modular
+#                      Amplifier Model 610-A" (610-A UA 610 Preamp Schematic.pdf), by
+#                      reference designator
+#   "utc: ..."         UTC's Ouncer catalog page (UTC O Series.pdf) and terminal
+#                      arrangements (UTC-Terminal-Arrangements-1952.pdf)
+#   "clone: ..."       a GroupDIY builder's measured voltages on a 610 clone built to the
+#                      drawing ("610 - Final Voltage.png")
+#   "web: ..."         forum figures, by thread
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# The signal path (sch): the mic through R5 into the UTC O-1's 50 ohm tap (pins 4-3; utc:
+# "50 ohms connect to 3 and 4"), its 50 k secondary to V1-A's grid (R26); V1 (12AX7) as
+# two common-cathode stages, feedback from C4's output through R11 + R9 into V1-A's
+# cathode R27; the internal Lo / Hi gain link takes C14's signal from the R11 / R9 tap or
+# from C4; C14 through the LF switch's lower deck (R25 || C13 in series at -6: the bass
+# cut) to the LEVEL pot R13; V2 (12AY7): V2-A into V2-B, whose plate drives the UTC
+# PA-5946 (30 k : 600) from B+; feedback from V2-B's plate through C6, R22 and R21 || C9
+# into V2-A's cathode R15 (the LF switch's upper deck shorts R21 || C9 except at +6: the
+# bass boost), the HF switch putting points of the ladder R23, C10, C12, C16, C11 || C17,
+# R24 on that cathode; C15 between V1-B's and V2-A's cathodes; the echo send loading
+# V2-B's plate (C7, R19, R20). The supply: the console's B+ (not on the drawing) through
+# the module's RC decoupling R17, R12, R7.
+#
+# Not modeled: the line input (R1-R4's pad, S1 at LINE), the console's supply and its
+# heater supply, the echo send's output (R33, unloaded), the transformers' unused taps
+# and T2's tertiary. The two transformers are factory parts with no published winding
+# data: their constructions are provisional, sized from the figures published for them.
+
+title: "UA 610"
+input: in
+probes: [out, ia, g1, k1, p1, g2, k2, p2, fo, lt, g3, k3, p3, g4, k4, p4, bp, r2, r3, r4]
+# 0 dBFS in = 0 dBu peak at the input terminals; 0 dBFS out = +24 dBu peak across the
+# 600 ohm load (the V72's and V76's).
+full_scale:
+  input_volts_peak: {value: 1.0960, source: "derived: 0.775 V rms x sqrt(2) (0 dBu)"}
+  output_volts_peak: {value: 17.36, source: "derived: +24 dBu peak, x sqrt(2): headroom over the 2-610's +20 dBm maximum (data/schematics/ua_610/ua_2610_manual_p6.png), the V72's and V76's"}
+
+controls:
+  level: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "sch: R13 250K, the LEVEL pot ahead of V2-A's grid", notes: "0 = off (wiper at ground); 0.2 = 35 dB at the Hi link (reports/units/ua610_nominal/), the chain list's default, as the V72's and V76's 34 dB"}
+  gain_link: {value: 1, choices: [0, 1], unit: position, source: "sch: 'Lo Gain' / 'Hi Gain', an internal link (web: https://groupdiy.com/threads/ua-2-610-troubleshooting.47543, Jean Clochet: 'an internal link, NOT a switch')", notes: "0 Lo (C14 from the R11 / R9 tap), 1 Hi (from C4: the drawn position)"}
+  hf_eq: {value: 0, choices: [-6, 0, 3, 6], unit: dB, source: "sch: S2 'HF Switch', positions -6, 0, +3, +6"}
+  lf_eq: {value: 0, choices: [-6, 0, 6], unit: dB, source: "sch: S3 'LF Switch', two decks, positions -6, 0, +6"}
+  b_plus_v: {value: 275.0, min: 250.0, max: 300.0, unit: V, source: "web: https://groupdiy.com/threads/ua-610-microphone-preamplifier-help-thread.72736/ (Hinson: 'B+ was around the 275V range on the original desk', 'the operating points don't really change much from 250 to 300V')", notes: "the console's rail at the module's B+ terminal; the clone ran 298 V"}
+
+values:
+  # --- Input: the source, R5, T1 (UTC O-1) ------------------------------------------------
+  source_impedance_ohm: {value: 200.0, source: "provisional: a 200 ohm source (the V72's and V76's measuring generator; the 2-610's manual: mics of 150-200 ohm)"}
+  r5_ohm: {value: 47.0, source: "sch: R5 47R, in series with Mic In + to T1 pin 4"}
+  t1_core_material: {value: mumetall, source: "provisional: model knowledge (UTC's Ouncers: nickel-alloy cores; mumetall stands in for UTC's Hipermalloy)"}
+  t1_core_area_m2: {value: 3.6e-5, source: "provisional: model knowledge (a 1/4 in tongue, 1/4 in stack, 90% fill: what fits utc's Ouncer case, 7/8 in dia x 1-3/16 in, 1 oz)"}
+  t1_core_path_m: {value: 0.036, source: "provisional: model knowledge (~5.6 x the 1/4 in tongue)"}
+  t1_gap_m: {value: 2.5e-6, genome: ua_610.t1.gap_m, source: "provisional: model knowledge (an interleaved nickel-alloy core's joint gap, between the core's own path over its permeability, ~1.2 um, and BV 191's 5 um: config/designs/v72_bv191.yaml; the user's choice of nominal, 2026-11-05)", notes: "sets T1's low end with a 200 ohm source on the 50 ohm tap: 50 Hz re 1 kHz -0.2 dB at 1.2 um, -1.0 at 2.5, -2.9 at 5 (docs/CHAINS_PLAN.md WP2)"}
+  t1_turns: {value: 292, source: "derived: utc: O-1 maximum level +8 dBm (6.3 mW) at its 30 Hz band edge, on the 50 ohm tap 0.56 V rms, at a provisional 0.4 T peak in the provisional core", notes: "the 50 ohm section 3-4 (the reference winding)"}
+  t1_sec_ratio: {value: 31.623, source: "derived: sqrt(50,000 / 50) (utc: O-1 primary 50 ohm tap, secondary 50,000 ohm)"}
+  t1_r_pri_ohm: {value: 16.4, source: "derived: utc: O-1 primary resistance 52 ohm (the whole primary, 1-5: 500 ohm), x 0.316, the 50 ohm section's share of the turns (sqrt(50 / 500); one wire size assumed)"}
+  t1_r_sec_ohm: {value: 3000.0, source: "provisional: model knowledge (~9,200 turns of ~0.05 mm wire, ~40 mm a turn)"}
+  t1_leakage_h: {value: 20.0e-6, source: "provisional: model knowledge (referred to the 50 ohm section; puts the resonance with the secondary's capacitance near 300 kHz, outside utc's 20 kHz band edge)"}
+  t1_c_sec_f: {value: 15.0e-12, genome: ua_610.t1.c_sec_f, source: "provisional: model knowledge (self-capacitance of a 50 k grid winding; the user's choice of nominal, 2026-11-05)", notes: "reflected x1000 onto the 50 ohm tap: 20 kHz re 1 kHz -1.1 dB at 15 pF, -2.8 at 30 pF"}
+  r26_ohm: {value: 1.2e+6, source: "sch: R26 1M2, across T1's secondary (V1-A's grid)"}
+
+  # --- V1, 12AX7 (sch) ---------------------------------------------------------------------
+  r27_ohm: {value: 4.7e+3, source: "sch: R27 4K7 1W, V1-A's cathode (unbypassed)"}
+  r6_ohm: {value: 270.0e+3, source: "sch: R6 270K 1W, V1-A's plate"}
+  c3_f: {value: 0.047e-6, source: "sch: C3 .047uF 600V"}
+  r28_ohm: {value: 1.2e+6, source: "sch: R28 1M2, V1-B's grid"}
+  r10_ohm: {value: 1.0e+3, source: "sch: R10 1K 1W, V1-B's cathode"}
+  c8_f: {value: 0.002e-6, source: "sch: C8 .002uF 100V, across R10"}
+  r8_ohm: {value: 100.0e+3, source: "sch: R8 100K 1W, V1-B's plate"}
+  c4_f: {value: 0.047e-6, source: "sch: C4 .047uF 600V"}
+  r11_ohm: {value: 68.0e+3, source: "sch: R11 68K, feedback from C4's output"}
+  r9_ohm: {value: 39.0e+3, source: "sch: R9 39K, on to V1-A's cathode"}
+  c14_f: {value: 0.2e-6, source: "sch: C14 .2uF 200V"}
+  c15_f: {value: 82.0e-12, source: "sch: C15 82 pF, V1-B's cathode to V2-A's", notes: "doubted on GroupDIY (thread 47543, Abbey Road d'Enfer); drawn on both copies"}
+  r13_ohm: {value: 250.0e+3, source: "sch: R13 250K, the LEVEL pot"}
+  r13_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio-taper pot, 10% at half rotation; web: https://groupdiy.com/threads/m610-microphone-pre-schematic.13038/page-3, Ego Tripper: 'probably logarithmic, based on the schematic')"}
+  r25_ohm: {value: 270.0e+3, source: "sch: R25 270K, S3's lower deck at -6"}
+  c13_f: {value: 0.0047e-6, source: "sch: C13 .0047uF 100V, across R25"}
+
+  # --- V2, 12AY7 (sch) ---------------------------------------------------------------------
+  r15_ohm: {value: 4.7e+3, source: "sch: R15 4K7, V2-A's cathode"}
+  r14_ohm: {value: 470.0e+3, source: "sch: R14 470K, V2-A's plate"}
+  c5_f: {value: 0.047e-6, source: "sch: C5 .047uF 600V"}
+  r16_ohm: {value: 1.2e+6, source: "sch: R16 1M2, V2-B's grid"}
+  r18_ohm: {value: 560.0, source: "sch: R18 560R, V2-B's cathode (unbypassed)"}
+  c7_f: {value: 0.047e-6, source: "sch: C7 .047uF 600V, the echo send"}
+  r19_ohm: {value: 82.0e+3, source: "sch: R19 82K"}
+  r20_ohm: {value: 10.0e+3, source: "sch: R20 10K, the echo send pot (its wiper unloaded: the track)"}
+
+  # --- The output stage's feedback and the EQ (sch) ------------------------------------------
+  c6_f: {value: 0.047e-6, source: "sch: C6 .047uF 600V, from V2-B's plate"}
+  r22_ohm: {value: 220.0e+3, source: "sch: R22 220K"}
+  r21_ohm: {value: 270.0e+3, source: "sch: R21 270K"}
+  c9_f: {value: 0.0047e-6, source: "sch: C9 .0047uF 100V, across R21"}
+  r23_ohm: {value: 100.0e+3, source: "sch: R23 100K"}
+  c10_f: {value: 100.0e-12, source: "sch: C10 100pF 100V (the drawing's second C10; the first is the supply's 10 uF)"}
+  c12_f: {value: 47.0e-12, source: "sch: C12 47pF 100V"}
+  c16_f: {value: 0.01e-6, source: "sch: C16 .01uF 100V"}
+  c11_f: {value: 0.01e-6, source: "sch: C11 .01uF 100V"}
+  c17_f: {value: 0.002e-6, source: "sch: C17 .002uF 100V, across C11"}
+  r24_ohm: {value: 2.2e+3, source: "sch: R24 2K2"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a rotary switch's contact, ~10 mOhm)"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the EQ ladder's capacitor-only nodes (not physical)"}
+
+  # --- T2, UTC PA-5946 (sch), version 1 -------------------------------------------------------
+  # Single-ended: V2-B's plate current flows in the primary, so the core is gapped
+  # (web: thread 72736, ruffrecords).
+  t2_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (a gapped steel core; web: https://groupdiy.com/threads/utc-5946-ua-175b-and-610a-transformer.37944, CJ: 'you can use a 50/50 alloy possibly')"}
+  t2_core_area_m2: {value: 1.532e-4, source: "provisional: model knowledge (a 1/2 in tongue, 1/2 in stack, 95%: a UTC 'A' size can)"}
+  t2_core_path_m: {value: 0.076, source: "provisional: model knowledge (~6 x the tongue width)"}
+  t2_turns: {value: 7000, source: "web: https://groupdiy.com/threads/utc-5946-ua-175b-and-610a-transformer.37944 (Spencerleehorton's reproduction: '2 x 3500 turns' primary, '7000 turns total')", notes: "the primary (the reference winding); 0.46 T peak at 20 Hz, +18 dBm out"}
+  t2_gap_m: {value: 1.70e-4, source: "derived: sch: 'L = 55HY Min.' with t2_turns in the core's linear limit (parts.turns_for_inductance); B_dc ~0.31 T at V2-B's ~6 mA"}
+  t2_sec_ratio: {value: 0.14142, source: "derived: sqrt(600 / 30,000) (sch: '30K ohm', '600 ohm'; web: thread 47543, Jean Clochet: '50:1 impedance / 7:1 turns')"}
+  t2_r_pri_ohm: {value: 826.0, source: "web: https://groupdiy.com/threads/utc-5946-ua-175b-and-610a-transformer.37944 (Spencerleehorton's reproduction: 'Pri = 826 ohms')"}
+  t2_r_sec_ohm: {value: 50.0, source: "provisional: model knowledge (a 600 ohm secondary; the reproduction's 118 ohm is a rewind's, Spencerleehorton thread 37944)"}
+  t2_leakage_h: {value: 30.0e-3, source: "provisional: model knowledge (an interleaved 30 k primary, referred to it)"}
+  t2_c_pri_f: {value: 150.0e-12, source: "provisional: model knowledge (self-capacitance of the primary)"}
+  load_ohm: {value: 600.0, source: "provisional: a 600 ohm load (the 2-610's recommended minimum load, data/schematics/ua_610/ua_2610_manual_p6.png; the console's bus)"}
+
+  # --- The module's supply decoupling (sch) ---------------------------------------------------
+  r_supply_ohm: {value: 100.0, source: "provisional: model knowledge (the console's B+ supply and wiring, as seen by one module)"}
+  c10s_f: {value: 10.0e-6, source: "sch: C10 10uF/400V, at the B+ terminal"}
+  r17_ohm: {value: 10.0e+3, source: "sch: R17 10K"}
+  c2b_f: {value: 10.0e-6, source: "sch: C2-B 10uF/400V"}
+  r12_ohm: {value: 10.0e+3, source: "sch: R12 10K"}
+  c1a_f: {value: 10.0e-6, source: "sch: C1-A 10uF 450V"}
+  r7_ohm: {value: 82.0e+3, source: "sch: R7 82K"}
+  c1b_f: {value: 10.0e-6, source: "sch: C1-B 10uF 450V"}
+
+  # --- Per-instance tolerance (the drawing prints none) -----------------------------------
+  passive_seed: {value: 0, genome: passives.seed, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, genome: passives.spread, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"}
+  tol_resistor_pct: {value: 10.0, source: "provisional: model knowledge (carbon-composition resistors of ~1960, 10%)"}
+  tol_film_pct: {value: 10.0, source: "provisional: model knowledge (film / paper capacitors of ~1960, +-10%)"}
+  tol_pot_pct: {value: 20.0, source: "provisional: model knowledge (a carbon pot's track, +-20%)"}
+  tol_electrolytic_minus_pct: {value: 20.0, genome: passives.electrolytic_minus_pct, source: "provisional: model knowledge (electrolytics of ~1960, -10..-20%)"}
+  tol_electrolytic_plus_pct: {value: 50.0, genome: passives.electrolytic_plus_pct, source: "provisional: model knowledge (electrolytics of ~1960, +50..+100%)"}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+tolerance:
+  source: "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r10: tol_resistor_pct
+    film: tol_film_pct
+    pot: tol_pot_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    r10: [R5, R26, R27, R6, R28, R10, R8, R11, R9, R25, R15, R14, R16, R18, R19, R20, R22, R21, R23, R24, R17, R12, R7]
+    film: [C3, C8, C4, C14, C15, C13, C5, C7, C6, C9, C10, C12, C16, C11, C17]
+    pot: [R13]
+    electrolytic: [C10S, C2B, C1A, C1B]
+
+devices:
+  V1A: {device: 12AX7@1, tolerance: tube}
+  V1B: {device: 12AX7@1, tolerance: tube}
+  V2A: {device: 12AY7@1, tolerance: tube}
+  V2B: {device: 12AY7@1, tolerance: tube}
+
+sections:
+  - title: supply
+    parts:
+      # The console's B+ into the module's terminal; C10, then R17 (C2-B), R12 (C1-A),
+      # R7 (C1-B) (sch).
+      VB: {V: [bs, "0"], v: b_plus_v}
+      RSUP: {R: [bs, bp], r: r_supply_ohm, tolerance: none}
+      C10S: {C: [bp, "0"], c: c10s_f}
+      R17: {R: [bp, r2], r: r17_ohm}
+      C2B: {C: [r2, "0"], c: c2b_f}
+      R12: {R: [r2, r3], r: r12_ohm}
+      C1A: {C: [r3, "0"], c: c1a_f}
+      R7: {R: [r3, r4], r: r7_ohm}
+      C1B: {C: [r4, "0"], c: c1b_f}
+
+  - title: input
+    parts:
+      # A 200 ohm source; Mic In - (T1 pin 3) at ground (the measuring setup). Mic In +
+      # through R5 to pin 4: the O-1's 50 ohm tap (utc). Secondary 7 to V1-A's grid, 6 to
+      # ground (sch; utc: 'grid to 7, grid return to 6').
+      RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+      R5: {R: [ia, t4], r: r5_ohm}
+      T1:
+        transformer:
+          p: {nodes: [t4, "0"], r: t1_r_pri_ohm}
+          s: {nodes: [g1, "0"], ratio: t1_sec_ratio, r: t1_r_sec_ohm, c: t1_c_sec_f}
+        core: {material: t1_core_material, area_m2: t1_core_area_m2, path_m: t1_core_path_m, gap_m: t1_gap_m}
+        turns: t1_turns
+        leakage_h: t1_leakage_h
+      R26: {R: [g1, "0"], r: r26_ohm}
+
+  - title: V1
+    parts:
+      # V1-A: cathode R27 (the feedback's foot); plate R6 from C1-B's rail (sch).
+      XV1A: {device: [p1, g1, k1], model: V1A}
+      R27: {R: [k1, "0"], r: r27_ohm}
+      R6: {R: [r4, p1], r: r6_ohm}
+      C3: {C: [p1, g2], c: c3_f}
+      R28: {R: [g2, "0"], r: r28_ohm}
+      # V1-B: cathode R10 with C8 across it; plate R8 from C1-A's rail (sch).
+      XV1B: {device: [p2, g2, k2], model: V1B}
+      R10: {R: [k2, "0"], r: r10_ohm}
+      C8: {C: [k2, "0"], c: c8_f}
+      R8: {R: [r3, p2], r: r8_ohm}
+      C4: {C: [p2, fo], c: c4_f}
+      # Feedback: R11 + R9 from C4's output to V1-A's cathode; the gain link takes C14's
+      # signal from fo (Hi) or the R11 / R9 tap ft (Lo) (sch).
+      R11: {R: [fo, ft], r: r11_ohm}
+      R9: {R: [ft, k1], r: r9_ohm}
+      SGAIN:
+        switch: gain_link
+        parts:
+          RLINKHI: {R: [fo, c14a], r: contact_ohm, tolerance: none, in: [1]}
+          RLINKLO: {R: [ft, c14a], r: contact_ohm, tolerance: none, in: [0]}
+      C14: {C: [c14a, c14b], c: c14_f}
+      C15: {C: [k2, k3], c: c15_f}
+
+  - title: level and LF cut
+    parts:
+      # S3's lower deck: C14 straight to the LEVEL pot's top at 0 and +6, through R25 ||
+      # C13 at -6 (sch).
+      S3B:
+        switch: lf_eq
+        parts:
+          RS3B: {R: [c14b, lt], r: contact_ohm, tolerance: none, in: [0, 6]}
+          R25: {R: [c14b, lt], r: r25_ohm, in: [-6]}
+          C13: {C: [c14b, lt], c: c13_f, in: [-6]}
+      R13: {pot: ["0", g3, lt], r: r13_ohm, at: level, taper_mid: r13_taper_mid}
+
+  - title: V2 and its feedback
+    parts:
+      # V2-A: cathode R15; plate R14 from C2-B's rail (sch).
+      XV2A: {device: [p3, g3, k3], model: V2A}
+      R15: {R: [k3, "0"], r: r15_ohm}
+      R14: {R: [r2, p3], r: r14_ohm}
+      C5: {C: [p3, g4], c: c5_f}
+      R16: {R: [g4, "0"], r: r16_ohm}
+      # V2-B: cathode R18; plate on T2's primary from B+ (sch).
+      XV2B: {device: [p4, g4, k4], model: V2B}
+      R18: {R: [k4, "0"], r: r18_ohm}
+      T2:
+        transformer:
+          p: {nodes: [bp, p4], r: t2_r_pri_ohm, c: t2_c_pri_f}
+          s: {nodes: [out, "0"], ratio: t2_sec_ratio, r: t2_r_sec_ohm}
+        core: {material: t2_core_material, area_m2: t2_core_area_m2, path_m: t2_core_path_m, gap_m: t2_gap_m}
+        turns: t2_turns
+        leakage_h: t2_leakage_h
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}
+      # The echo send: C7, R19, R20 to ground (its wiper and R33 unloaded) (sch).
+      C7: {C: [p4, e1], c: c7_f}
+      R19: {R: [e1, e2], r: r19_ohm}
+      R20: {R: [e2, "0"], r: r20_ohm}
+      # Feedback: C6, R22, then R21 || C9 to V2-A's cathode; S3's upper deck shorts R21 ||
+      # C9 at -6 and 0 (sch).
+      C6: {C: [p4, f], c: c6_f}
+      R22: {R: [f, m], r: r22_ohm}
+      R21: {R: [m, k3], r: r21_ohm}
+      C9: {C: [m, k3], c: c9_f}
+      S3A:
+        switch: lf_eq
+        parts:
+          RS3A: {R: [m, k3], r: contact_ohm, tolerance: none, in: [-6, 0]}
+      # The HF ladder from f: R23, C10 (q1), C12 (q2), C16 (q3), C11 || C17, R24 to
+      # ground; S2 puts q1 (-6), q2 (+3) or q3 (+6) on V2-A's cathode, nothing at 0 (sch).
+      R23: {R: [f, h1], r: r23_ohm}
+      C10: {C: [h1, q1], c: c10_f}
+      C12: {C: [q1, q2], c: c12_f}
+      C16: {C: [q2, q3], c: c16_f}
+      C11: {C: [q3, q4], c: c11_f}
+      C17: {C: [q3, q4], c: c17_f}
+      R24: {R: [q4, "0"], r: r24_ohm}
+      RQ1LEAK: {R: [q1, "0"], r: numerical_leak_ohm, tolerance: none}
+      RQ2LEAK: {R: [q2, "0"], r: numerical_leak_ohm, tolerance: none}
+      RQ3LEAK: {R: [q3, "0"], r: numerical_leak_ohm, tolerance: none}
+      S2:
+        switch: hf_eq
+        parts:
+          RS2M6: {R: [q1, k3], r: contact_ohm, tolerance: none, in: [-6]}
+          RS2P3: {R: [q2, k3], r: contact_ohm, tolerance: none, in: [3]}
+          RS2P6: {R: [q3, k3], r: contact_ohm, tolerance: none, in: [6]}

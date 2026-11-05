@@ -23,7 +23,7 @@
 #   a setting's default (chain keys, suffixed).
 # needs: the prerequisites, each with the work package that provides it.
 #
-# The default gains put 94 dB SPL on axis at -18.1 to -23.1 dBFS (a 1 kHz sine's peak,
+# The default gains put 94 dB SPL on axis at -17.6 to -23.1 dBFS (a 1 kHz sine's peak,
 # measured at draft); a loud close source wants less.
 
 needs:
@@ -136,7 +136,30 @@ circuits:
     label: V72
     input: ia
     drop: [RSRC]
-  ua_610: {kind: pre, tag: ua610, label: UA 610, wp: 2}
+  ua_610:                           # LEVEL labelled by its gain at the Hi link (the Lo
+    kind: pre                       # link is 8.1 dB less: reports/units/ua610_nominal/)
+    tag: ua610
+    label: UA 610
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: level
+        label: 610 LEVEL
+        choices: [[0.1, 26 dB], [0.2, 35 dB], [0.3, 40 dB], [0.4, 45 dB], [0.5, 50 dB],
+                  [0.6, 54 dB], [0.7, 58 dB], [0.8, 62 dB], [0.9, 66 dB], [1.0, 70 dB]]
+        default: 0.2
+      - key: gain_link
+        label: 610 gain link
+        choices: [[1, Hi], [0, Lo]]
+        default: 1
+      - key: hf_eq
+        label: 610 HF
+        choices: [[-6, -6], [0, "0"], [3, "+3"], [6, "+6"]]
+        default: 0
+      - key: lf_eq
+        label: 610 LF
+        choices: [[-6, -6], [0, "0"], [6, "+6"]]
+        default: 0
   ssl_4000e: {kind: pre, tag: ssl, label: SSL 4000 E, wp: 4}
   tascam_portastudio: {kind: pre, tag: porta, label: Portastudio, wp: 4}
   ampex_351_record: {kind: pre, tag: a351, label: Ampex 351, wp: 7}

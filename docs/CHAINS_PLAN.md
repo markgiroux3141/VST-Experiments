@@ -13,17 +13,20 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 9 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
-  U47 -> V72; `uv run python scripts/chain_status.py`).
+- **Chains available:** 10 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+  U47 -> V72, U47 -> UA 610; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
-  within 0.06 dB / 7% and traced; WP1's Notes).
+  within 0.06 dB / 7% and traced; WP1's Notes). WP2 (2026-11-05): the UA 610-A
+  (`config/circuits/ua_610.yaml` from Hinson's redraw of UA C-10068; WP2's Notes).
 - **In progress:** none.
-- **Next:** WP2 (the Universal Audio 610), Start step 4: write its steps here, sources
-  first (the 610's schematic: the console module and the later 610 / 6176 drawings; its
-  tubes, 12AX7 and 6072 = `12AY7@1` exist; its transformers).
-- **Waiting on the user:** nothing (the U47 -> V72 chain can be heard in the Room view).
+- **Next:** WP3 (the AKG C12), Start step 4: write its steps here, sources first (the C12's
+  schematic and the CK12 capsule's published figures; the 6072 = `12AY7@1` exists; its
+  transformer). The user fetches login-walled files on request: give each URL alone in a
+  code block (WP2's Notes).
+- **Waiting on the user:** listening to U47 -> UA 610 in the Room view (optional; the
+  610's T1 bass / top end is the user's option B, both values genome parameters).
 
 ## How a session runs
 
@@ -95,8 +98,8 @@ before it. Sizes are rough: S one session, M one or two, L several.
 |---|---|---|---|---|
 | 0 | The list as data: `config/chains.yaml`, `chain_status.py`, compose / test / app read it | 0 | S | done 2026-11-05 |
 | 1 | Telefunken V72 (two EF804S; BV 191 is its input transformer, already compiled) | U47 -> V72 | M | done 2026-11-05 |
-| 2 | Universal Audio 610 | U47 -> 610 | M | next |
-| 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | |
+| 2 | Universal Audio 610 | U47 -> 610 | M | done 2026-11-05 |
+| 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | next |
 | 4 | The op-amp preamps: SSL 4000 E channel, Tascam Portastudio (sources decide: op-amps only, or wait for the BJT) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | |
 | 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | |
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | |
@@ -231,7 +234,85 @@ Notes (2026-11-05, done):
   `telefunken_v72` and `u47_v72` exported, nothing else moved), varimu-circuit's
   `tests/agreement.rs`, varimu-app `room::`.
 
-### WP2-WP31
+### WP2. The Universal Audio 610
+
+The microphone preamplifier of Bill Putnam's 610 console (1960): the "Modular Amplifier
+Model 610-A", a 12AX7 pair with feedback, the LEVEL pot, a 12AY7 pair driving a gapped
+output transformer with the module's EQ in the output stage's feedback; the console's B+.
+Sources: `data/schematics/ua_610/README.md`.
+
+Steps:
+1. Sources: the drawing (Hinson's redraw of UA C-10068, from two original modules; a
+   GroupDIY attachment the user fetched), UTC's Ouncer catalog and 1952 terminal sheet
+   (the O-1's taps), a clone's measured voltages; the 2-610 reissue's specs as a
+   reference only.
+2. `config/circuits/ua_610.yaml`: traced from the PDF's vector paths; the mic input only,
+   the console's B+ as an ideal rail behind a provisional resistance; the O-1 and the
+   PA-5946 as provisional macro transformers sized from their published figures.
+3. `tests/test_ua_610.py`: builds, preflight, the switches' rewiring, idle against the
+   clone (at its 298 V), the gain structure (the link's step, the LEVEL law).
+4. Its profile `varimu/measure/ua610_suite.py` (`varimu unit --circuit ua_610`): gain
+   (links, LEVEL law), response per HF / LF position, input and output impedance, THD
+   against level; the 2-610's figures reported, never checked against.
+5. The list: `ua_610`'s entry (port, drop, settings), `compose_chain.py --all`
+   (u47_ua610), `test_chain_matrix.py`, app fixtures, `chain_status.py` 10 of 51.
+
+Notes (2026-11-05, done):
+- Sources: `data/schematics/ua_610/README.md` (the drawing in two copies, the input-stage
+  variation, UTC's catalog page and terminal sheet, the clone's voltages, the 2-610's
+  manual pages). The GroupDIY attachments need the forum's login and worldradiohistory
+  refuses scripts: the user fetched them (each URL given alone in a code block: the
+  user can't copy them from inline text). The auto-mode classifier refuses archive copies
+  of walled files and spoofed user agents: ask the user instead. The drawing prints no
+  voltages.
+- The drawing was traced from the PDF's vector paths (a scratch script: horizontal /
+  vertical segments joined at endpoints and T's, not at crossings; nets listed with the
+  nearest labels), then read by eye. The O-1's 50 ohm tap is pins 3-4 (UTC's terminal
+  sheet), where the 610 wires the mic: 1:31.6.
+- `config/circuits/ua_610.yaml`: controls `level` (R13 250K, audio taper_mid 0.1,
+  provisional; default 0.2 = 35 dB at Hi), `gain_link` (0 Lo / 1 Hi, the internal link),
+  `hf_eq` (-6 / 0 / +3 / +6), `lf_eq` (-6 / 0 / +6), `b_plus_v` (275 V, Hinson's
+  original desk). T1 (O-1): mumetall for UTC's Hipermalloy, a 1/4 x 1/4 in core fitting
+  the Ouncer case, 292 turns on the 50 ohm section (+8 dBm at 30 Hz at 0.4 T), ratio
+  31.623, primary DCR 16.4 ohm (52 x 0.316); its gap and secondary capacitance genome
+  parameters (`ua_610.t1.*` in genome_bounds.yaml). T2 (PA-5946): 7000 turns (a
+  reproduction's), gap 170 um for 55 H in the linear limit (B_dc 0.31 T at 6 mA), ratio
+  1 / 7.07, 826 / 50 ohm. The drawing's two C10s: `C10` (100 pF, the EQ) and `C10S`
+  (10 uF, the supply).
+- Idle (at the clone's 298 V): rails, V1-B, V2-A, V2-B within 10% of the clone's; V1-A
+  0.30 mA, self-consistent (the clone's V1-A readings disagree with each other: left
+  out). At 275 V: the B+ terminal 274.3 V, V2-B 5.5 mA.
+- The profile (reports/units/ua610_nominal/, ~30 s warm): 69.65 dB at full LEVEL, Hi;
+  61.52 at Lo (an 8.13 dB step; the forum's "about 9"); the LEVEL law = full gain + taper
+  within 0.01 dB. Response at 40 dB (level 0.3) re 1 kHz: 20 Hz -2.6, 50 Hz -1.0, 10 kHz
+  -0.3, 20 kHz -1.1 dB (T1's: with a 50 ohm source the 610 is flat within 0.2 dB). EQ re
+  flat: HF -6 -5.0 dB at 10 kHz, +3 +4.4, +6 +6.4 (and +0.8 at 1 kHz); LF -6 -5.9 at
+  50 Hz, +6 +5.5. Input impedance 1240 ohm at 1 kHz (the 50 ohm tap reflecting R26 1M2),
+  280 at 40 Hz, 700 at 10 kHz. Output impedance 105 ohm at 1 kHz. THD at 1 kHz: 0.22% at
+  +4 dBu out, 1% at +13.9 dBu, then hard clipping (V2-B's grid swing reaches its 3.3 V
+  bias; the 2-610's +20 dBm is another output stage). 40 Hz: 0.49% at +2.6, 0.99% at
+  +10.6 dBu. Against the 2-610 reissue's figures (a reference): 0 of 4 (maximum gain 61,
+  flat +-1 dB, 60 ohm, +20 dBm).
+- The chain: `config/chains.yaml`'s `ua_610` (input `ia`, drop RSRC; settings LEVEL as
+  rotations labelled by their Hi gains, the link, HF, LF); `u47_ua610.yaml` composed (the
+  9 others byte-identical). 94 dB SPL at 1 kHz: -17.6 dBFS peak, 1.52 V rms out at the
+  default 35 dB (`mic_print.py --draft`, ~1x real time; U47 -> V72: -18.8 dBFS).
+- Not modelled: the line input, the console's supply (an ideal rail), noise, the echo
+  send's output, the input-stage variation (Hinson's "Alternative 610 Input scheme").
+- Tests: `tests/test_ua_610.py` (5), `test_chain_matrix.py`, `test_app_fixtures.py`
+  (fixtures for `ua_610` and `u47_ua610` exported, nothing else moved), varimu-circuit's
+  `tests/agreement.rs`, varimu-app `room::`.
+
+Decisions:
+- T1's joint gap and secondary capacitance (the user's, 2026-11-05: option B, 2.5 um /
+  15 pF; A, 5 um / 30 pF, gave 50 Hz -2.9 and 20 kHz -2.8 dB; C, 1.2 um / 15 pF, 50 Hz
+  -0.2; UTC's catalog is met by all three): genome parameters, bounds 1-6 um, 10-40 pF.
+- The console's B+ is an ideal source behind 100 ohm (provisional): the module's own RC
+  decoupling is drawn, the console's supply isn't (the precedent: sideman_bd's rails).
+- LEVEL's default in the circuit file equals the chain list's (0.2), as the V76's: the
+  composed chain and `mic_print.py` use the file's.
+
+### WP3-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -239,9 +320,9 @@ in `data/schematics/neumann_u47/README.md` and `data/schematics/shure_sm57/READM
 
 ## Owed
 
-Batched checks (the targeted-tests rule): the full `pytest` (WP1 added two circuits and
-their app fixtures; it touched no device, engine or existing circuit, so `--verify` isn't
-due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
+Batched checks (the targeted-tests rule): the full `pytest` (WP1 and WP2 added four
+circuits and their app fixtures; they touched no device, engine or existing circuit, so
+`--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work).
 
 ## Decisions (the user's)
@@ -260,3 +341,7 @@ before this session (not the chains' work).
   191 pinned as `BV191@3`; choke and output transformer from Sowter's figures); the
   factory's trims and the supply by `scripts/v72_trim.py`; 8 of 14 specs met, the misses
   traced (WP1's Notes); U47 -> V72 composed: 9 of 51 available.
+- 2026-11-05: WP2 done: the UA 610-A from Hinson's redraw of UA C-10068 (fetched by the
+  user from GroupDIY), the UTC O-1 on its 50 ohm tap (UTC's catalog and terminal sheet),
+  the PA-5946 from forum figures; T1's gap / capacitance the user's option B; its profile
+  against the 2-610's figures as a reference; U47 -> UA 610 composed: 10 of 51 available.

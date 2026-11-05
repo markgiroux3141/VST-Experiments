@@ -228,3 +228,12 @@ fender_5e3:
     pt_r_half_ohm:          {min: 80.0, max: 160.0, unit: ohm, source: "provisional: model knowledge (around P-TGP-002's 116 ohm per half with the primary referred)"}
     pt_leakage_h:           {min: 2.0e-3, max: 30.0e-3, unit: H, source: "provisional: model knowledge"}
     pt_winding_capacitance_f: {min: 100.0e-12, max: 1.0e-9, unit: F, source: "provisional: model knowledge"}
+
+ua_610:
+  # UA 610-A (the chains build-out's WP2; config/circuits/ua_610.yaml has the sources of
+  # the nominal values). The input transformer UTC O-1's construction is provisional; with
+  # a 200 ohm mic on its 50 ohm tap these two set the 610's bass and top end (the user's
+  # choice of nominal, 2026-11-05: 2.5 um, 15 pF; docs/CHAINS_PLAN.md WP2's Decisions).
+  t1:
+    gap_m:                  {min: 1.0e-6, max: 6.0e-6, unit: m, source: "provisional: model knowledge (an interleaved nickel-alloy core's effective joint gap; at 1.2 um ~ the core's own path over its permeability, 5 um BV 191's)", notes: "50 Hz re 1 kHz: -0.2 dB at 1.2 um, -1.0 at 2.5, -2.9 at 5 (a 200 ohm source)"}
+    c_sec_f:                {min: 10.0e-12, max: 40.0e-12, unit: F, source: "provisional: model knowledge (self-capacitance of a 50 k grid winding)", notes: "20 kHz re 1 kHz: -1.1 dB at 15 pF, -2.8 at 30 pF"}
