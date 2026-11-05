@@ -39,8 +39,8 @@ same within 0.03 dB), and R8 is numbers (`separation/polyroom/compare.json`).
 
 How long things take now (the RTX 3080): a room's geometric part ~3 s per source with four
 mics (was ~25-30 s: rays and image spectra on the GPU, the diffuse tail's synthesis
-restructured); the wave solver below 500 Hz ~6.5 s per source in a 123 m^3 room (~1 min in the
-990 m^3 hall); the mic chains' prints are the floor (the U47 -> V76 ~5.5x slower than real
+restructured); the wave solver below 500 Hz ~6.5 s per source in a 123 m^3 room (~2.5 min in the
+990 m^3 hall, whose 2 s tail runs ~50,000 steps on ~25 million cells); the mic chains' prints are the floor (the U47 -> V76 ~5.5x slower than real
 time).
 
 The demos above were rendered before one late fix to the diffuse tail (one white noise per
