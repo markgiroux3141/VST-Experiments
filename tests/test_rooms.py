@@ -797,3 +797,68 @@ def test_btm_stays_finite_exactly_on_a_boundary():
               np.array([-1.0, 0, 0]), 2 * np.pi, ())  # fmt: skip
     _, h = btm(ed, np.array([6.5, 1.5, 0.4]), np.array([6.15, 1.5, 0.45]), FS)
     assert np.all(np.isfinite(h)) and np.max(np.abs(h)) < 0.01
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2, 3])
+def test_random_rooms_are_finite_and_reciprocal(seed):
+    """A fuzz of the whole room: a random plan (rectangle, L or polygon), ceiling, objects,
+    surfaces, two directional or omni sources and two mics, the wave solver at 250 Hz: every
+    response finite and bounded, the omni early part reciprocal."""
+    from varimu.rooms.directivity import PRESETS, from_spec
+    from varimu.rooms.polyroom import PolyRoom
+    from varimu.rooms.shoebox import ROOM_MATERIALS
+
+    b = _wave_or_skip()
+    rng = np.random.default_rng([seed, 4242])
+    mats = [m for m in ROOM_MATERIALS if m not in ("anechoic", "rigid")]
+    w, d = rng.uniform(4, 7), rng.uniform(3.5, 6)
+    kind = seed % 3
+    if kind == 0:
+        floor = [[0, 0], [w, 0], [w, d], [0, d]]
+    elif kind == 1:
+        floor = [[0, 0], [w, 0], [w, 0.55 * d], [0.55 * w, 0.55 * d], [0.55 * w, d], [0, d]]
+    else:
+        ang = np.sort(rng.uniform(0, 2 * np.pi, 6))
+        floor = (np.c_[np.cos(ang), np.sin(ang)] * rng.uniform(2.2, 3.2, 6)[:, None] + 4).tolist()
+    ce = ("flat", "shed", "gable", "vault")[seed % 4]
+    base = PolyRoom(floor, ce, 2.7, 3.6, float(rng.uniform(0, 180)), 6)
+
+    def point(z=(0.4, 2.0)):
+        lo, hi = base.floor.min(0), base.floor.max(0)
+        for _ in range(5000):
+            p = np.r_[rng.uniform(lo[0], hi[0]), rng.uniform(lo[1], hi[1]), rng.uniform(*z)]
+            if all(base.inside(p + 0.3 * v) and base.inside(p - 0.3 * v) for v in np.eye(3)):
+                return p
+        pytest.skip("no room for the points")
+
+    def mat():
+        return mats[rng.integers(len(mats))]
+
+    gobo = {"center_m": point((0.8, 1.0)).tolist(), "size_m": [1.2, 0.06, 1.4],
+            "yaw_deg": float(rng.uniform(0, 180)), "material": mat()}  # fmt: skip
+    room = PolyRoom(floor, ce, 2.7, 3.6, base.axis_deg, 6, face_materials={"wall 0": mat()},
+                    objects=[gobo])  # fmt: skip
+    srcs, mps = [], []
+    for _ in range(40):
+        p = point()
+        if room.inside(p) and all(np.linalg.norm(p - q) > 0.9 for q in srcs + mps):
+            (srcs if len(srcs) < 2 else mps).append(p)
+        if len(mps) == 2:
+            break
+    if len(mps) < 2:
+        pytest.skip("no room for the points")
+    names = list(PRESETS)
+    dirs = [None if from_spec(n) is None else (from_spec(n), aim_vector(rng.uniform(-180, 180)))
+            for n in (names[rng.integers(len(names))] for _ in srcs)]  # fmt: skip
+    mics = [Mic(p, aim_vector(rng.uniform(-180, 180)), _omni()) for p in mps]
+    h = responses(room, srcs, mics, FS, length_s=0.3, backend=b, directivity=dirs,
+                  wave={"crossover_hz": 250})  # fmt: skip
+    assert np.all(np.isfinite(h)) and np.abs(h).max() < 50
+
+    def early(s, m):
+        mic = [Mic(m, aim_vector(0), _omni())]
+        return responses(room, [s], mic, FS, length_s=0.06, tail=False, backend=b)[0, 0, 0]
+
+    x, y = early(srcs[0], mps[0]), early(mps[0], srcs[0])
+    n = int(0.045 * FS)
+    assert np.sum((x[:n] - y[:n]) ** 2) < 1e-8 * np.sum(x[:n] ** 2)
