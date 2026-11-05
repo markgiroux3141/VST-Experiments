@@ -495,6 +495,16 @@ mic swapped hear the same: in an L-shaped room with a gobo and a turned box (95 
 early responses agree within -126 dB (`test_the_early_response_is_reciprocal`). The night's
 demos were rendered before this (their gobo numbers would move a little).
 
+**Robustness.** A smoke-test scene using every feature at once (an L-shaped gable room, treated
+walls, a gobo and a riser, a voice and an amp aimed, the wave solver, solos) found one bug: a
+source and a mic in one plane through a thin panel's edge put BTM's denominator through 0 / 0
+at the apex (~1e275, inf on the GPU); written without cancellation now (diffraction.py, a test
+on that geometry). A fuzz of 40 random scenes (plans, ceilings, objects, surfaces, directional
+sources, the wave solver) then found nothing: every response finite, the omni early part
+reciprocal within -122 to -140 dB; four of them run as `test_random_rooms_are_finite_and_
+reciprocal`. The CPU wave solver (the fallback without a GPU) keeps its threads over a run:
+~35x slower than the 3080, usable.
+
 **Not done / limits.** Second-order diffraction (over a box's two edges: deep shadows behind
 thick objects come out too dark; thin panels are plates, so gobos are fine). The rays' per-mic tail shaping uses the mid bands (shadowing by objects is
 the same for every band in the late part). The Room view's new controls (wall surfaces, facets,
