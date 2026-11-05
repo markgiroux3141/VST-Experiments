@@ -19,6 +19,9 @@ checks of varimu.measure.generic and the circuit's own).
 - telefunken_v76 (microphone preamp, B10): varimu.measure.preamp_suite: the Braunbuch's
   acceptance specs: gain at every position, response per filter, k2 / k3, THD against
   level, output impedance.
+- telefunken_v72 (microphone preamp, the chains build-out's WP1): varimu.measure.v72_suite:
+  the Braunbuch's specs: gain, response at two levels, input and output impedance, THD at
+  the specs' points and against level (the datasheet's maximum output).
 - fairchild_670_keyed (compressor with a KEY input, SIDECHAIN_PLAN.md K1):
   varimu.measure.keyed_suite: INT against the stock 670, the duck against the key's
   level, recovery per time constant, thump; keyed by a kick under a bass tone.
@@ -62,6 +65,12 @@ def _run_preamp(*args, **kwargs):
     return preamp_suite.run(*args, **kwargs)
 
 
+def _run_v72(*args, **kwargs):
+    from varimu.measure import v72_suite
+
+    return v72_suite.run(*args, **kwargs)
+
+
 def _run_keyed(*args, **kwargs):
     from varimu.measure import keyed_suite
 
@@ -80,6 +89,7 @@ PROFILES = {
     "fender_5e3": Profile("fender_5e3", "guitar_amp", _run_amp),
     "ampex_351": Profile("ampex_351", "tape_machine", _run_tape),
     "telefunken_v76": Profile("telefunken_v76", "mic_preamp", _run_preamp),
+    "telefunken_v72": Profile("telefunken_v72", "mic_preamp", _run_v72),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
 }
 

@@ -1,0 +1,224 @@
+# Telefunken V72 studio amplifier, as a circuit file (the chains build-out's WP1).
+# Built by varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/telefunken_v72/README.md has their provenance):
+#   "sch: ..."         printed on IRT drawing S 843 sheet 2, valid from unit 1001
+#                      (s843_sheet2_from_1001.png), by position number
+#   "bb: ..."          the Braunbuch V 72 (1953): its text or acceptance specs, by sheet
+#   "ds: ..."          the Siemens datasheet (6 S Ela 2303)
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# Parts are named by their position numbers on S 843. The signal path (sch): the input
+# transformer CT V72/1 (NWDR BV 191, its construction compiled: BV191@3), its primary
+# halves in series through C30 (the 40 Hz roll-off, bb sheet 2), damped by R11 across
+# the secondary; V41 (EF804S) and V42 (EF804S), with feedback from V42's anode to V41's
+# cathode through R18 + R20 (DC-coupled: V42's anode biases V41) and R19 between the
+# cathodes (current positive feedback, bb sheet 2); V42 on the choke CK V72/1,
+# parallel-feeding the output transformer CT V72/2 through C33. The supply: CT V72/N into
+# a selenium bridge, an RC chain. Not modeled: the heaters, their hum pot 6 and the pilot
+# lamp 46, the fuse, the mumetal cans, the suppressors' and internal shields' connection
+# to 0 V (the tube model's suppressor is its cathode: V41's sits ~3 V below it here).
+#
+# The choke and the two other transformers are factory parts with no published winding
+# data: version 1 of each is a provisional construction sized from the figures published
+# for it (data/schematics/telefunken_v72/README.md).
+
+title: "Telefunken V72"
+input: in
+probes: [out, op, ia, ap1, g1, k1, pl1, sg1, bq, g2, pl2, sg2, k2, bp, b1, b2, b3]
+# 0 dBFS in = 0 dBu peak at the input terminals (the Braunbuch's 0 dB = 0.775 V); 0 dBFS
+# out = +24 dBu peak across the 300 ohm load, as the V76 (the V72's maximum is +17 dB).
+full_scale:
+  input_volts_peak: {value: 1.0960, source: "derived: 0.775 V rms x sqrt(2) (bb sheet 3: levels in dB re 0.775 V)"}
+  output_volts_peak: {value: 17.36, source: "derived: +24 dB re 0.775 V rms, x sqrt(2): headroom over the +17 dB maximum (bb sheet 4, ds: 5.5 V at 0.3%), the same as the V76's"}
+
+controls:
+  # The V72 has no panel controls (a fixed 34 dB; bb sheet 3). Operating conditions:
+  mains_v_rms: {value: 220.0, min: 187.0, max: 231.0, unit: V, source: "bb sheet 3: 220 V, 50 Hz (the specs held from -15% to +5%)"}
+  mains_hz: {value: 50.0, min: 50.0, max: 60.0, unit: Hz, source: "bb sheet 3: 50 Hz"}
+
+values:
+  # --- Input: CT V72/1 (sch pos. 1, BV 191), C30, R11 ----------------------------------
+  source_impedance_ohm: {value: 200.0, source: "bb sheet 3: the specs are measured from a 200 ohm generator"}
+  t1_model: {value: BV191@3, source: "config/components/bv191/3.yaml: NWDR Bauvorschrift Nr. 191 (CT V72/1) compiled by varimu-components (docs/COMPONENT_EDITOR_PLAN.md C2 steps 5-6)"}
+  c30_f: {value: 1.0e-6, source: "sch: 30 1 uF (paper, 3 V~; between the primary halves: bb sheet 2)"}
+  r11_ohm: {value: 400.0e+3, source: "sch: 11 400 kOhm, across the secondary"}
+
+  # --- V41, EF804S (sch) -------------------------------------------------------------------
+  r12_ohm: {value: 1.25e+3, source: "sch: 12 1,25 kOhm cathode"}
+  r15_ohm: {value: 800.0e+3, source: "sch: 15 800 kOhm screen, from the decoupled rail"}
+  r14_ohm: {value: 800.0e+3, source: "sch: 14 800 kOhm, screen to 0 V"}
+  c31_f: {value: 0.05e-6, source: "sch: 31 0,05 uF screen bypass"}
+  r16_ohm: {value: 200.0e+3, source: "sch: 16 200 kOhm anode load"}
+  r13_ohm: {value: 50.0e+3, source: "sch: 13 50 kOhm, V41's rail from the choke's"}
+  c34_f: {value: 8.0e-6, source: "sch: 34 8 uF 450 V"}
+  c32_f: {value: 0.025e-6, source: "sch: 32 0,025 uF to V42's grid"}
+  r21_ohm: {value: 3.0e+6, source: "sch: 21 3 MOhm grid leak"}
+
+  # --- Feedback (sch) -------------------------------------------------------------------------
+  r18_ohm: {value: 80.0e+3, source: "sch: 18 80 kOhm, from V42's anode"}
+  r20_ohm: {value: 2.19e+3, source: "sch: 20 5 kOhm 'abgegl.', trimmed at the factory for the gain (bb sheet 2): 2.19 k gives bb sheet 3's 34.0 dB in this model (scripts/v72_trim.py); the drawing's 5 k gives 34.3 dB (the wound parts are provisional)"}
+  c39_f: {value: 50.0e-12, source: "sch: 39 50 pF (ceramic), across R18 + R20"}
+  c40_f: {value: 28.7e-12, source: "sch: 40 'ca. 40 pF', a trimmer (Abziehtrimmer) set for the 15 kHz response (bb sheet 2): 28.7 pF puts 15 kHz -0.3 dB re 1 kHz, the middle of bb sheet 4's 0-0.6 dB (scripts/v72_trim.py)"}
+  r19_ohm: {value: 50.0e+3, source: "sch: 19 50 kOhm between the cathodes"}
+
+  # --- V42, EF804S (sch) -------------------------------------------------------------------
+  r22_ohm: {value: 500.0, source: "sch: 22 500 Ohm cathode"}
+  r24_ohm: {value: 30.0e+3, source: "sch: 24 30 kOhm screen, from the choke's rail"}
+  r23_ohm: {value: 200.0e+3, source: "sch: 23 200 kOhm, screen to cathode"}
+  c33_f: {value: 2.0e-6, source: "sch: 33 2 uF (MP, 250 V), the anode to CT V72/2"}
+
+  # --- CK V72/1, the anode choke (sch pos. 3), version 1 --------------------------------------
+  l3_core_material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel laminations, as the V76's L86)"}
+  l3_core_area_m2: {value: 2.432e-4, source: "provisional: model knowledge (an EI 48 like BV 191's, 16 mm stack, 95%; the V76's L86)"}
+  l3_core_path_m: {value: 0.0896, source: "provisional: model knowledge (~5.6 x the tongue width)"}
+  l3_gap_m: {value: 200.0e-6, source: "provisional: model knowledge (an air gap for V42's few mA; web: https://groupdiy.com/threads/telefunken-v72-choke-rewind.51676 estimates ~16 mils built into the lamination)"}
+  l3_turns: {value: 22264, source: "derived: 750 H with no DC (Sowter 9375 'similar to CKV72/1', web: https://www.sowter.co.uk/acatalog/VINTAGE-RECORDING-AMPLIFIER-TRANSFORMERS-J-to-Z.html) in the core's linear limit with the gap (parts.turns_for_inductance)", notes: "CJ counted 22,500 on an original (web: https://groupdiy.com/threads/telefunken-v72-choke-rewind.51676)"}
+  l3_r_ohm: {value: 18.4e+3, source: "web: https://www.sowter.co.uk/acatalog/VINTAGE-RECORDING-AMPLIFIER-TRANSFORMERS-J-to-Z.html (Sowter 9375, 18.4 kOhm)"}
+  l3_c_f: {value: 100.0e-12, source: "provisional: model knowledge (self-capacitance of a ~750 H choke, the V76's L86's)"}
+
+  # --- CT V72/2, the output transformer (sch pos. 2), version 1 ---------------------------------
+  # Parallel-fed (no DC), a layer winding ("Zylinderwicklung", bb sheet 2).
+  t2_core_material: {value: mumetall, source: "provisional: model knowledge (a nickel alloy, as BV 191's Hyperm 702 and Sowter's 1275 reproduction, '100% Mumetal')"}
+  t2_core_area_m2: {value: 2.3552e-4, source: "provisional: model knowledge (BV 191's EI 48 core, 16 mm stack: config/components/bv191/3.yaml)"}
+  t2_core_path_m: {value: 0.096, source: "provisional: model knowledge (BV 191's EI 48 path)"}
+  t2_gap_m: {value: 4.8e-6, source: "provisional: model knowledge (BV 191's joint gap, interleaved EI 48 mumetall: config/designs/v72_bv191.yaml)"}
+  t2_turns: {value: 3500, source: "provisional: the primary inductance (~450 H in the linear limit) keeps the parafeed resonance with C33 near 5 Hz, below bb sheet 4's 40 Hz point, which C30's network sets (bb sheet 2); 1490 turns (81 H, 0.7 T at +14 dB, 40 Hz) peaked +0.5 dB at 50 Hz", notes: "the primary (the reference winding); 0.30 T peak at 40 Hz, +14 dB out (Sowter 1275: +14 dBu at 40 Hz)"}
+  t2_sec_ratio: {value: 0.089286, source: "derived: 1 / 11.2 (web: Sowter 1275, 'original ratio' 11.2:1, 76 k / 600 ohm)"}
+  t2_r_pri_ohm: {value: 960.0, source: "web: https://groupdiy.com/threads/v72-transformer-restoration.76310/ (smilan, an original: 960 ohm; mjrippe ~1 k on another)"}
+  t2_r_sec_ohm: {value: 12.1, source: "web: https://groupdiy.com/threads/v72-transformer-restoration.76310/ (smilan: 12.1 ohm; mjrippe ~10)"}
+  t2_leakage_h: {value: 15.0e-3, source: "provisional: model knowledge (a layer-wound 1490-turn primary, referred to it)"}
+  t2_c_pri_f: {value: 200.0e-12, source: "provisional: model knowledge (self-capacitance of the primary)"}
+  load_ohm: {value: 300.0, source: "bb sheet 3: the specs are measured into 300 ohm"}
+
+  # --- Power supply (sch) ----------------------------------------------------------------
+  # CT V72/N's HV winding (4-5) into the selenium bridge 45; C36, R26, C37, R27, C38, then
+  # R25 to the choke's rail (C35) and R13 to V41's (C34).
+  t4_hv_rms_v: {value: 247.5, source: "provisional: calibrated to the maximum output, THD 0.3% at 1 kHz, +17 dB out (bb sheet 4 point 6e; ds: 5.5 V into 300 ohm): V42's class-A current, which the supply sets, sets where it clips (scripts/v72_trim.py). It puts B+ on the choke's rail at ~254 V (CJ: '245', web: https://groupdiy.com/threads/telefunken-v72-choke-rewind.51676)", notes: "open-circuit rms behind t4_r_ohm at mains_v_rms = 220 V"}
+  t4_r_ohm: {value: 400.0, source: "provisional: model knowledge (HV winding plus the primary referred, a ~8 VA mains transformer: bb sheet 3, 35 mA at 220 V)"}
+  t4_leakage_h: {value: 0.1, source: "provisional: model knowledge (leakage of a small mains transformer's HV winding)"}
+  t4_c_f: {value: 300.0e-12, source: "provisional: model knowledge (self-capacitance per end of the HV winding; a capacitance on every rectifier node, CLAUDE.md)"}
+  rectifier: {value: B450C80@1, source: "provisional: the V76's selenium bridge stands in for the V72's AEG one (bb sheet 2: 'AEG-Trockengleichrichter in Graetz-Schaltung', its rating not printed); the HV winding's calibration absorbs its drop"}
+  selenium_arm_c_f: {value: 3.1e-9, source: "derived: as the V76's (config/circuits/telefunken_v76.yaml), for the same stand-in"}
+  c_filter_f: {value: 8.0e-6, source: "sch: 34, 35, 36, 37, 38 8 uF 450 V"}
+  r26_ohm: {value: 2.5e+3, source: "sch: 26 2,5 kOhm"}
+  r27_ohm: {value: 2.5e+3, source: "sch: 27 2,5 kOhm"}
+  r25_ohm: {value: 2.0e+3, source: "sch: 25 2 kOhm"}
+  numerical_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for floating nodes (the HV winding; not physical)"}
+
+  # --- Per-instance tolerance (the drawing prints none) -----------------------------------
+  passive_seed: {value: 0, genome: passives.seed, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, genome: passives.spread, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (broadcast-grade resistors of the 1950s, 5%)"}
+  tol_film_pct: {value: 10.0, source: "provisional: model knowledge (paper capacitors of the 1950s, +-10%)"}
+  tol_electrolytic_minus_pct: {value: 20.0, genome: passives.electrolytic_minus_pct, source: "provisional: model knowledge (1950s electrolytics, -10..-20%)"}
+  tol_electrolytic_plus_pct: {value: 50.0, genome: passives.electrolytic_plus_pct, source: "provisional: model knowledge (1950s electrolytics, +50..+100%)"}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+mains:
+  v_rms: mains_v_rms
+  hz: mains_hz
+  rated_v_rms: {value: 220.0, source: "bb sheet 3: 220 V"}
+
+tolerance:
+  source: "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r5: tol_resistor_pct
+    film: tol_film_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    r5: [R11, R12, R13, R14, R15, R16, R18, R19, R21, R22, R23, R24, R25, R26, R27]
+    film: [C30, C31, C32, C33, C39]
+    electrolytic: [C34, C35, C36, C37, C38]
+
+devices:
+  V41: {device: EF804S@1, tolerance: tube}
+  V42: {device: EF804S@1, tolerance: tube}
+  GR45: {device: rectifier, instance: false}
+
+sections:
+  - title: power supply
+    parts:
+      # CT V72/N's HV winding (floating; a numerical leak gives it DC), at its peak at the
+      # start, into the bridge, "-" to 0 V (sch).
+      VT4: {mains: [hv1, hvb], v_rms: t4_hv_rms_v, phase_deg: 90.0}
+      RT4: {R: [hv1, hv1_r], r: t4_r_ohm, tolerance: none}
+      LT4: {L: [hv1_r, hva], l: t4_leakage_h}
+      CT4A: {C: [hva, "0"], c: t4_c_f, tolerance: none}
+      CT4B: {C: [hvb, "0"], c: t4_c_f, tolerance: none}
+      RHVLEAK: {R: [hvb, "0"], r: numerical_leak_ohm, tolerance: none}
+      GR45: {bridge: [hva, hvb, b1, "0"], model: GR45}
+      CGR45A: {C: [hva, b1], c: selenium_arm_c_f, tolerance: none}
+      CGR45B: {C: [hvb, b1], c: selenium_arm_c_f, tolerance: none}
+      CGR45C: {C: ["0", hva], c: selenium_arm_c_f, tolerance: none}
+      CGR45D: {C: ["0", hvb], c: selenium_arm_c_f, tolerance: none}
+      C36: {C: [b1, "0"], c: c_filter_f}
+      R26: {R: [b1, b2], r: r26_ohm}
+      C37: {C: [b2, "0"], c: c_filter_f}
+      R27: {R: [b2, b3], r: r27_ohm}
+      C38: {C: [b3, "0"], c: c_filter_f}
+      R25: {R: [b3, bp], r: r25_ohm}
+      C35: {C: [bp, "0"], c: c_filter_f}
+      R13: {R: [bp, bq], r: r13_ohm}
+      C34: {C: [bq, "0"], c: c34_f}
+
+  - title: input
+    parts:
+      # A 200 ohm source between the legs; EP2's leg at 0 V (the spec's measuring setup).
+      RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+      # CT V72/1: EP1-AP1, C30, AP2-EP2 in series; ES to V41's grid, AS and the shield
+      # to 0 V; R11 across the secondary (sch).
+      T1:
+        transformer:
+          p1: {nodes: [ia, ap1]}
+          p2: {nodes: [ap2, "0"]}
+          s: {nodes: [g1, "0"]}
+        component: t1_model
+        shields: {S: "0"}
+      C30: {C: [ap1, ap2], c: c30_f}
+      R11: {R: [g1, "0"], r: r11_ohm}
+
+  - title: V41 and V42
+    parts:
+      # V41: cathode R12; screen R15 from bq, R14 to 0 V, C31; anode R16 from bq (sch).
+      XV41: {device: [pl1, sg1, g1, k1], model: V41}
+      R12: {R: [k1, "0"], r: r12_ohm}
+      R15: {R: [bq, sg1], r: r15_ohm}
+      R14: {R: [sg1, "0"], r: r14_ohm}
+      C31: {C: [sg1, "0"], c: c31_f}
+      R16: {R: [bq, pl1], r: r16_ohm}
+      C32: {C: [pl1, g2], c: c32_f}
+      R21: {R: [g2, "0"], r: r21_ohm}
+      # V42: cathode R22; screen R24 from bp, R23 to the cathode; anode on CK V72/1 (sch).
+      XV42: {device: [pl2, sg2, g2, k2], model: V42}
+      R22: {R: [k2, "0"], r: r22_ohm}
+      R24: {R: [bp, sg2], r: r24_ohm}
+      R23: {R: [sg2, k2], r: r23_ohm}
+      L3:
+        transformer:
+          w: {nodes: [bp, pl2], r: l3_r_ohm, c: l3_c_f}
+        core: {material: l3_core_material, area_m2: l3_core_area_m2, path_m: l3_core_path_m, gap_m: l3_gap_m}
+        turns: l3_turns
+        leakage_h: {value: 0.0, source: "a choke: one winding, no leakage"}
+      # Feedback: R18 + R20 (C39, C40 across both) from V42's anode to V41's cathode; R19
+      # between the cathodes (sch).
+      R18: {R: [pl2, fm], r: r18_ohm}
+      R20: {R: [fm, k1], r: r20_ohm, tolerance: none}  # trimmed at the factory
+      C39: {C: [pl2, k1], c: c39_f}
+      C40: {C: [pl2, k1], c: c40_f, tolerance: none}  # a trimmer
+      R19: {R: [k1, k2], r: r19_ohm}
+      # CT V72/2, parallel-fed through C33 (sch).
+      C33: {C: [pl2, op], c: c33_f}
+      T2:
+        transformer:
+          p: {nodes: [op, "0"], r: t2_r_pri_ohm, c: t2_c_pri_f}
+          s: {nodes: [out, "0"], ratio: t2_sec_ratio, r: t2_r_sec_ohm}
+        core: {material: t2_core_material, area_m2: t2_core_area_m2, path_m: t2_core_path_m, gap_m: t2_gap_m}
+        turns: t2_turns
+        leakage_h: t2_leakage_h
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

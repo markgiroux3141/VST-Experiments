@@ -13,15 +13,17 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 8 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
-  `uv run python scripts/chain_status.py`).
+- **Chains available:** 9 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+  U47 -> V72; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
-  `chain_status.py` and the app.
+  `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
+  (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
+  within 0.06 dB / 7% and traced; WP1's Notes).
 - **In progress:** none.
-- **Next:** WP1 (the Telefunken V72), Start step 4: write its steps here, sources first
-  (the V72's schematic and the Braunbuch's figures; BV 191 is compiled: `BV191@2`, fitted
-  to the V72's figures in COMPONENT_EDITOR_PLAN.md C2 step 5).
-- **Waiting on the user:** nothing.
+- **Next:** WP2 (the Universal Audio 610), Start step 4: write its steps here, sources
+  first (the 610's schematic: the console module and the later 610 / 6176 drawings; its
+  tubes, 12AX7 and 6072 = `12AY7@1` exist; its transformers).
+- **Waiting on the user:** nothing (the U47 -> V72 chain can be heard in the Room view).
 
 ## How a session runs
 
@@ -92,8 +94,8 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | WP | What | Opens | Size | State |
 |---|---|---|---|---|
 | 0 | The list as data: `config/chains.yaml`, `chain_status.py`, compose / test / app read it | 0 | S | done 2026-11-05 |
-| 1 | Telefunken V72 (two EF804S; BV 191 is its input transformer, already compiled) | U47 -> V72 | M | next |
-| 2 | Universal Audio 610 | U47 -> 610 | M | |
+| 1 | Telefunken V72 (two EF804S; BV 191 is its input transformer, already compiled) | U47 -> V72 | M | done 2026-11-05 |
+| 2 | Universal Audio 610 | U47 -> 610 | M | next |
 | 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | |
 | 4 | The op-amp preamps: SSL 4000 E channel, Tascam Portastudio (sources decide: op-amps only, or wait for the BJT) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | |
 | 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | |
@@ -164,7 +166,72 @@ Notes (2026-11-05, done):
   `settings`, remove its `wp`, run `compose_chain.py --all`, then `chain_status.py`.
 - Tests: `tests/test_chain_matrix.py` (11), varimu-app `room::tests::chain_list_reads`.
 
-### WP1-WP31
+### WP1. The Telefunken V72
+
+The V76's predecessor (1952, NWDR design, made by Maihak and Siemens): two EF804S, a fixed
+34 dB, BV 191 (CT V72/1) in, a choke-loaded V2 parafeeding an output transformer, a
+selenium bridge into an RC chain. Sources: `data/schematics/telefunken_v72/README.md`.
+
+Steps:
+1. Sources: the IRT Braunbuch V 72 (1953: text, acceptance specs, drawing S 843 in its two
+   versions; the model is sheet 2, "from unit 1001"), the Siemens datasheet, the wound
+   parts' figures from what's published (Sowter's reproductions, GroupDIY measurements).
+   The drawing prints no voltages.
+2. `config/circuits/telefunken_v72.yaml`: BV 191 as `component: BV191@3` (primaries in
+   series through C30, the 40 Hz network; shield S at ground); the choke CK V72/1 and the
+   output transformer CT V72/2 as provisional macro transformers; the supply calibrated to
+   the published B+. R20 (5 k "abgegl.") trimmed to 34 dB, C40 (~40 pF trimmer) to the
+   15 kHz spec, as the factory did.
+3. `tests/test_telefunken_v72.py`: idle against what is published (B+ ~245 V, V1's bias
+   ~2.7 V) and the EF804S ratings; the nominal gain.
+4. Its profile `varimu/measure/v72_suite.py` (`varimu unit --circuit telefunken_v72`): the
+   Braunbuch's specs (gain 34 +-0.2 dB, response 60 Hz-10 kHz +-0.3 dB, 40 Hz -0.3..-1 dB,
+   15 kHz 0..-0.6 dB, k at +12 / +17 dB, output impedance <= 35 ohm, max output 5.5 V at
+   0.3% THD).
+5. The list: `telefunken_v72`'s entry (port, drop, settings), `compose_chain.py --all`
+   (u47_v72), `test_chain_matrix.py`, app fixtures, `chain_status.py` 9 of 51.
+
+Notes (2026-11-05, done):
+- Sources: `data/schematics/telefunken_v72/README.md` (the Braunbuch V 72's sheets 1-6
+  and both S 843 sheets as PNGs, the Siemens datasheet; the parts' web figures). The model
+  is S 843 sheet 2 (from unit 1001). The drawing prints **no voltages**, and no original
+  V72's were found: the idle test checks the two forum figures (B+ ~245 V, V41's bias
+  ~2.7 V: 254 / 2.65 in the model) and the currents' plausibility.
+- `config/circuits/telefunken_v72.yaml`: T1 is `component: BV191@3` (p1 [ia, ap1], p2
+  [ap2, 0], C30 between, s [g1, 0], `shields: {S: "0"}`); the choke L3 (750 H, 18.4 k:
+  Sowter's CK V72/1 equivalent; 22,264 turns on the V76's L86 core, CJ counted 22,500 on
+  an original) and T2 (11.2:1, 960 / 12.1 ohm: Sowter, GroupDIY) provisional; the selenium
+  bridge is the V76's `B450C80@1` standing in for AEG's. The tube model's suppressor is its
+  cathode; the V72's go to 0 V (V41's ~2.7 V below its cathode): not modelled.
+- `scripts/v72_trim.py [--check]` sets three values: R20 (the factory's gain trim, 5 k
+  "abgegl." drawn: 2.19 k for 34.0 dB; the drawn 5 k gives 34.3), C40 (the 15 kHz
+  trimmer, "ca. 40 pF": 28.7 pF for -0.3 dB at 15 kHz), and the HV winding (no data:
+  247.5 V rms, calibrated to the maximum output, 0.3% THD at +17 dB, the Braunbuch's and
+  the datasheet's; B+ then lands at 254 V against CJ's "245"). They interact; it runs
+  the three in turn twice (~10 min). A first calibration of the HV to B+ 245 V left V42
+  too close to cutoff for +17 dB (1.2% THD): its class-A current into 37.6 k sets the
+  clipping.
+- T2's turns: 3500 (~450 H): 1490 (81 H, sized for 0.7 T at 40 Hz) resonated with C33
+  near 12 Hz and peaked +0.5 dB at 50 Hz.
+- The profile `varimu/measure/v72_suite.py` (`varimu unit --circuit telefunken_v72`;
+  ~20 s warm; reports/units/v72_nominal/): meets 8 of 14. Met: gain 34.00, 15 kHz -0.28
+  at both levels, THD at +12 dB 0.10 / 0.07 / 0.08% (40 Hz, 1 k, 5 k), +17 dB 0.29%,
+  output impedance <= 30.1 ohm. Missed: flat 60 Hz-10 kHz 0.32 / 0.36 dB (+6 / -34 dB out;
+  limit 0.3) and 40 Hz -0.26 / -0.14 dB (limit -0.3..-1): both C30's resonance with BV
+  191's primary (BV191@3: 23.4 H against 25 published; the low level's lower mumetall
+  permeability peaks more); the input impedance 1862 ohm at 15 kHz (>= 2 k: BV 191's
+  compiled ~45 pF on the grid side, reflected x100; >= 2 k up to ~14 kHz); the maximum
+  output 16.99 dB (17.0: the trim's tolerance). Not modelled: noise, hum fields.
+- The chain: `config/chains.yaml`'s `telefunken_v72` (input `ia`, drop RSRC, no settings:
+  a fixed 34 dB), `u47_v72.yaml` composed (the 8 others unchanged). 94 dB SPL at 1 kHz:
+  1.41 V rms out, as U47 -> V76 at 34 dB (`mic_print.py --draft`: 1.16x real time against
+  the V76 chain's 1.85x).
+- Tests: `tests/test_telefunken_v72.py` (6: builds, preflight, BV 191's pin, the idle,
+  the currents, the trims), `test_chain_matrix.py`, `test_app_fixtures.py` (fixtures for
+  `telefunken_v72` and `u47_v72` exported, nothing else moved), varimu-circuit's
+  `tests/agreement.rs`, varimu-app `room::`.
+
+### WP2-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -172,8 +239,10 @@ in `data/schematics/neumann_u47/README.md` and `data/schematics/shure_sm57/READM
 
 ## Owed
 
-Batched checks (the targeted-tests rule): none (WP0 touched no circuit, device or
-fixture; its targeted tests and `cargo test -p varimu-app --lib room::` passed).
+Batched checks (the targeted-tests rule): the full `pytest` (WP1 added two circuits and
+their app fixtures; it touched no device, engine or existing circuit, so `--verify` isn't
+due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
+before this session (not the chains' work).
 
 ## Decisions (the user's)
 
@@ -187,3 +256,7 @@ fixture; its targeted tests and `cargo test -p varimu-app --lib room::` passed).
 - 2026-11-05: WP0 done: `config/chains.yaml` + `varimu/chains.py`, `chain_status.py`,
   compose / test_chain_matrix / the Room view read it (the `use` note under the picker);
   8 of 51 available, the 8 files byte-identical.
+- 2026-11-05: WP1 done: the Telefunken V72 from the Braunbuch V 72 and S 843 sheet 2 (BV
+  191 pinned as `BV191@3`; choke and output transformer from Sowter's figures); the
+  factory's trims and the supply by `scripts/v72_trim.py`; 8 of 14 specs met, the misses
+  traced (WP1's Notes); U47 -> V72 composed: 9 of 51 available.
