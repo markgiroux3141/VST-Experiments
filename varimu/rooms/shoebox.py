@@ -247,6 +247,7 @@ def responses(
     backend: str | None = None,
     wave: dict | None = None,
     directivity: list | None = None,
+    log=None,
 ) -> np.ndarray:
     """The rooms' impulse responses, (sources, mics, 2 entries (front, rear), samples):
     the entries' pressure per unit source (1 / r in free field). `seeds` per source
@@ -260,20 +261,27 @@ def responses(
     R10): below it the room's modes, above it this model. `directivity` per source: None
     (omni) or (varimu.rooms.directivity.Directivity, its aim as a unit vector): every image
     and diffraction path weighted by D in the direction it leaves the source, the rays started
-    with |D|^2, the wave solver's source a monopole and a dipole."""
+    with |D|^2, the wave solver's source a monopole and a dipole. `log` takes progress lines
+    with ETAs (varimu.rooms.progress)."""
     from varimu.rooms import diffraction, gpu
     from varimu.rooms.polyroom import RECEIVER_RAYS, PolyRoom, ray_decay, rt60_from_decay
+    from varimu.rooms.progress import Step
 
     backend = gpu.resolve(backend)
     c = SPEED_OF_SOUND_M_S
     poly = isinstance(room, PolyRoom)
+    ns, nm = len(sources_m), len(mics)
+    # a room's size class for the rates (varimu.rooms.progress): its surfaces and objects
+    size = f"{len(room.faces)}f{len(room.boxes)}o" if poly else "box"
     decays = {}
     if poly:
         ism_s = min(ism_s, POLY_ISM_S)
         room._images_cache = {}
+        rays = Step(log, "rays", f"rays:{backend}:{size}", [RECEIVER_RAYS * (1 + nm)] * ns)
         for si, src in enumerate(sources_m):
             if not room.inside(np.asarray(src, float)):
                 raise ValueError(f"a source at {list(src)} is not inside the room")
+            rays.start(si, f"source {si + 1}, {RECEIVER_RAYS:,} rays to {nm} mics ({backend})")
             decays[si] = ray_decay(
                 room,
                 np.asarray(src, float),
@@ -284,6 +292,7 @@ def responses(
                 backend=backend,
                 weights=_ray_weights(directivity, si, RECEIVER_RAYS),
             )
+        rays.end()
         rt = np.nanmax([rt60_from_decay(*d[:2]) for d in decays.values()], axis=0)
         rt = np.where(np.isfinite(rt), rt, 1.0)
     else:
@@ -323,6 +332,14 @@ def responses(
             air = air_absorption_db_per_m(fg, room.temp_c, room.rh_percent)
             grids[key] = (idx, w, bw, air)
 
+    n_log = n_fft * np.log2(n_fft)
+    early_step = Step(log, "early reflections", f"early:{backend}:{size}", [1.0] * (ns * nm))
+    what = (
+        f"images to {POLY_MAX_ORDER} reflections, diffraction ({len(room.boxes)} objects)"
+        if poly
+        else f"images to {ism_s * 1000:.0f} ms"
+    )
+    tail_step = Step(log, "diffuse tail", "tail", [n_log] * ns)
     for si, src in enumerate(sources_m):
         src = np.asarray(src, float)
         src_dir = directivity[si] if directivity else None
@@ -332,6 +349,7 @@ def responses(
             log_beta = hits_all @ np.log(beta)  # (images, bands): log of the walls' product
         early = np.zeros((len(mics), len(BANDS_HZ)))
         for mi, m in enumerate(mics):
+            early_step.start(si * nm + mi, f"source {si + 1} -> mic {mi + 1}, {what}")
             idx, w, bw, air = grids[id(m.table)]
             if poly:
                 pos, log_beta, seqs = _poly_early(room, src, m.position_m, beta)
@@ -420,8 +438,12 @@ def responses(
                     s_f = s_c[:, idx] * (1 - w) + s_c[:, idx + 1] * w
                     spec[e] += np.einsum("if,if->f", s_f, ph)
             out[si, mi] = np.fft.irfft(spec, n_fft)[:, :n]
+        early_step.done()
         if not tail:
             continue
+        tail_step.start(
+            si, f"source {si + 1}, {TAIL_DIRECTIONS} plane waves x {n_fft:,}-point spectra"
+        )
         # The diffuse field: shared plane waves, each one white noise (2026-11-05: the same
         # noise in every band, each band's envelope on it, so the band weights, which sum to 1
         # in amplitude, cross over without the -3 dB dips that independent noises per band left
@@ -447,11 +469,17 @@ def responses(
             noise_spec += bw_fine[b][None, :] * sfft.rfft(white * env[None, :], axis=1, workers=-1)
         gains = _receiver_gains(decays[si], n, fs, volume) if poly else None
         tails.append((si, noise_spec, gains))
+        tail_step.done()
+    early_step.end()
+    if tails:
+        tail_step.end()
     # each mic's view of the diffuse field (its entries and arrival phases per direction,
     # the same for every source), then every source's field through it
     if tails:
         dirs = fibonacci_sphere(TAIL_DIRECTIONS)
+    view_step = Step(log, "tail at the mics", "tail_view", [len(tails) * n_log] * nm)
     for mi, m in enumerate(mics) if tails else ():
+        view_step.start(mi, f"mic {mi + 1}, {len(tails)} sources' fields")
         cos_t = np.clip(dirs @ m.aim, -1, 1)
         e_front, e_rear = m.table.at(np.arccos(cos_t), np.full(len(dirs), np.inf))
         idx, w, _, _ = grids[id(m.table)]
@@ -468,6 +496,8 @@ def responses(
                 spec = np.einsum("if,if->f", view, noise_spec)
                 tail_t = sfft.irfft(spec, n_fft, workers=-1)[:n]
                 out[si, mi, e] += tail_t if gains is None else tail_t * gains[mi]
+    if tails:
+        view_step.end()
     if wave:
         from varimu.rooms import wave as wave_solver
 
@@ -481,7 +511,7 @@ def responses(
             rt_s=rt,
             length_s=n / fs,
             backend=backend,
-            log=wave.get("log"),
+            log=wave.get("log") or log,
             directivity=directivity,
         )
         # the early part (direct sound, first reflections: the same arrivals in both models)
@@ -494,8 +524,10 @@ def responses(
         w_late = np.sqrt(np.clip(xw**2 / np.maximum(xw**2 + (1 - xw) ** 2, 1e-12), 0, 1))
         with np.errstate(divide="ignore", invalid="ignore"):
             w_late = np.where(xw > 0, w_late / xw, 0.0)
+        blend = Step(log, "crossover", "crossover", [n_log] * (ns * nm))
         for si in range(len(sources_m)):
             for mi in range(len(mics)):
+                blend.start(si * nm + mi, f"source {si + 1} -> mic {mi + 1}, wave + geometric")
                 for e in range(2):
                     geo = np.fft.rfft(out[si, mi, e], n_fft)
                     lw = np.fft.irfft(np.r_[low[si, mi, e], np.zeros(len(geo) - k)], n_fft)
@@ -506,4 +538,5 @@ def responses(
                     h = geo.copy()
                     h[:k] = ge[:k] * (1 - xw) + le[:k] + gl[:k] * g_late + ll[:k] * w_late
                     out[si, mi, e] = np.fft.irfft(h, n_fft)[:n]
+        blend.end()
     return out

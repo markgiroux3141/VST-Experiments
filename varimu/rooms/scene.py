@@ -26,7 +26,8 @@ JSON):
       - name: A
         clip: data/clips/x.wav       # relative to the repo, or absolute
         start_s: 0                   # optional, and seconds: N
-        spl_db: 90                   # its rms in dB SPL at 1 m in free field (on its axis)
+        spl_db: 90                   # its rms while it sounds (gated) in dB SPL at 1 m in
+                                     # free field (on its axis)
         position_m: [2.0, 2.5, 1.2]
         directivity: amp_1x12        # optional: omni (the default), voice, amp_1x12, amp_2x12,
                                      # bass_1x15, or {sphere_radius_m, cap_radius_m}
@@ -45,9 +46,11 @@ JSON):
                                          # ROOM_LOOP_PLAN.md R10); absent or null: off
 
 The sources' clips are mono (any rate, resampled to the project's), each scaled to its
-SPL (its rms, as scripts/mic_print.py), so a source is the free-field sound pressure 1 m
-away (pascals). Mic positions are kept 0.1 m from sources (the entry tables' nearest
-distance, varimu.rooms.entries).
+SPL, so a source is the free-field sound pressure 1 m away (pascals). The SPL is its rms
+while it sounds (`sounding_rms`, BS.1770's gates on 50 ms blocks; since 2026-11-05: the
+plain rms counted a part's silences, so a sparse part came out louder than its number).
+Mic positions are kept 0.1 m from sources (the entry tables' nearest distance,
+varimu.rooms.entries).
 
 `render(scene)` writes, in its output folder: each mic's print `<mic>.wav` (mono float32 at
 the project's rate, the chain's out at its full scale), `mix.wav` (stereo, the mics
@@ -56,11 +59,15 @@ prints each source alone through every mic (`<mic>__<source>.wav`): the room is 
 those give the **bleed matrix** (each mic's level of each source, in total and per octave
 band), and the sum minus the solos says how much the chains' nonlinearity mixed the
 sources (`intermod_db`). Prints are cached in cache/rooms/prints/ by the built IR, the
-inputs, the settings and circuitsim's source.
+inputs, the settings and circuitsim's source. The room's responses (per unit source: no
+audio, no levels) are cached in cache/rooms/responses/ by the room, the places, the tables,
+the settings and the code (`_responses_key`), so a render that changes only levels or
+takes skips the room's physics.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import os
@@ -81,6 +88,10 @@ from varimu.rooms.shoebox import SURFACES, Mic, Shoebox, aim_vector, responses
 
 P_REF = 20e-6
 CACHE = REPO_ROOT / "cache" / "rooms" / "prints"
+RESPONSES = REPO_ROOT / "cache" / "rooms" / "responses"
+RESPONSES_KEEP = 12  # scenes' room responses kept (~50-150 MB each)
+# the modules the room responses come from (_responses_key)
+RESPONSE_CODE = ("shoebox", "polyroom", "wave", "diffraction", "directivity", "materials", "gpu")
 OCTAVES_HZ = (63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
 
 
@@ -242,8 +253,38 @@ def _settings(quality: str):
     )
 
 
+GATE_BLOCK_S = 0.05  # gating blocks, overlapping by half
+GATE_ABSOLUTE_DB = -70.0  # re the loudest block (a clip has no absolute level)
+GATE_RELATIVE_DB = -10.0  # re the mean of the blocks above the absolute gate
+
+
+def sounding_rms(x: np.ndarray, fs: float) -> float:
+    """x's rms while it sounds: BS.1770's two gates (absolute, here re the loudest block, and
+    -10 dB relative) without its K-weighting (a sound pressure level is unweighted), on 50 ms
+    blocks instead of its 400 ms (blocks straddling a note's ends pass the gate and pull the
+    level down: 400 ms read 250 ms notes 3.8 dB low, 50 ms 0.4 dB). Silence before, after and
+    between a part's notes doesn't count, so a sparse part at 80 dB is as loud while it plays
+    as a continuous one at 80 dB. Clips shorter than a block: their plain rms. The native
+    app's room::sounding_rms is the same."""
+    x = np.asarray(x, float)
+    block = int(round(GATE_BLOCK_S * fs))
+    hop = block // 2  # (not round(): Rust's rounds halves the other way)
+    if len(x) < block or block < 1:
+        return float(np.sqrt(np.mean(x**2))) if len(x) else 0.0
+    c = np.r_[0.0, np.cumsum(x**2)]
+    starts = np.arange(0, len(x) - block + 1, hop)
+    ms = (c[starts + block] - c[starts]) / block
+    top = ms.max()
+    if top <= 0:
+        return 0.0
+    ms = ms[ms > top * 10 ** (GATE_ABSOLUTE_DB / 10)]
+    ms = ms[ms > ms.mean() * 10 ** (GATE_RELATIVE_DB / 10)]
+    return float(np.sqrt(ms.mean()))
+
+
 def source_signals(scene: Scene, fs: int) -> list[np.ndarray]:
-    """Each source's free-field pressure 1 m away (pascals), at fs."""
+    """Each source's free-field pressure 1 m away (pascals), at fs: its clip scaled so its
+    rms while it sounds (`sounding_rms`) is its SPL."""
     from varimu.sim.io import load_audio
 
     out = []
@@ -253,7 +294,7 @@ def source_signals(scene: Scene, fs: int) -> list[np.ndarray]:
         if s.seconds is not None:
             x = x[: int(s.seconds * fs)]
         x = x - np.mean(x)
-        rms = np.sqrt(np.mean(x**2))
+        rms = sounding_rms(x, fs)
         if rms == 0:
             raise ValueError(f"source {s.name}: its clip is silent")
         out.append(x * (P_REF * 10 ** (s.spl_db / 20) / rms))
@@ -274,11 +315,36 @@ def mic_pressures(
     """Per source and mic the entries' pressures, (sources, mics, 2, samples): each
     source's signal convolved with its room response; and the tables' kinds, and the
     length (the longest source plus the room's tail)."""
+    from varimu.rooms.progress import Step
+
+    h, kinds = scene_responses(scene, fs, log)
+    n = max(len(x) for x in signals) + h.shape[-1]
+    p = np.zeros((len(scene.sources), len(scene.mics), 2, n))
+    nm = len(scene.mics)
+    sizes = [1 << int(np.ceil(np.log2(len(x) + h.shape[-1]))) for x in signals]
+    works = [2 * m * np.log2(m) for m in sizes for _ in range(nm)]
+    conv = Step(log, "convolution", "convolve", works)
+    for si, x in enumerate(signals):
+        for mi in range(nm):
+            conv.start(si * nm + mi, f"source {si + 1} -> mic {mi + 1}, {len(x) / fs:.1f} s "
+                                     f"of audio, {sizes[si]:,}-point FFTs")  # fmt: skip
+            for e in range(2):
+                p[si, mi, e] = _fftconv(x, h[si, mi, e], n)
+    conv.end()
+    return p, kinds, n
+
+
+def scene_responses(
+    scene: Scene, fs: int, log: Callable[[str], None] | None = None
+) -> tuple[np.ndarray, list[str]]:
+    """The room's responses from each source to each mic's two entries per unit source,
+    (sources, mics, 2, samples) (cached: `_cached_responses`), and the tables' kinds."""
+    from varimu.rooms.directivity import from_spec
+    from varimu.rooms.progress import fmt_s
+
     tables, kinds = {}, []
     mics = []
-    from varimu.rooms.directivity import from_spec
-
-    for m in scene.mics:
+    for mi, m in enumerate(scene.mics):
         for s in scene.sources:
             if np.linalg.norm(m.position_m - s.position_m) < MIN_DISTANCE_M:
                 raise ValueError(f"mic {m.name} is closer than {MIN_DISTANCE_M} m to {s.name}")
@@ -292,7 +358,15 @@ def mic_pressures(
         geom = _capsule_geometry(m.chain, m.set)
         key = json.dumps(geom, sort_keys=True, default=str)
         if key not in tables:
+            if log:
+                log(f"capsule table {len(tables) + 1}: mic {mi + 1}'s ({m.chain}): from the "
+                    "cache, or a BEM solve the first time (minutes)")  # fmt: skip
+            t1 = time.perf_counter()
             tables[key] = entry_table(geom, fs)
+            dt = time.perf_counter() - t1
+            if log:
+                how = "from the cache" if dt < 1 else f"solved in {fmt_s(dt)}, cached now"
+                log(f"capsule table {len(tables)}: {how}")
         kinds.append(tables[key].kind)
         mics.append(Mic(m.position_m, aim_vector(m.azimuth_deg, m.elevation_deg), tables[key]))
     seeds = [scene.seed * 1000 + i for i in range(len(scene.sources))]
@@ -303,29 +377,105 @@ def mic_pressures(
         None if dv is None else (dv, aim_vector(s.azimuth_deg, s.elevation_deg))
         for dv, s in zip(dirs, scene.sources, strict=True)
     ]
+    kw = {
+        "ism_s": scene.ism_s,
+        "length_s": scene.tail_s,
+        "seeds": seeds,
+        "tail": not _anechoic(scene.room),
+        "wave": (
+            {"crossover_hz": scene.wave_crossover_hz}
+            if scene.wave_crossover_hz and not _anechoic(scene.room)
+            else None
+        ),
+        "directivity": directivity if any(directivity) else None,
+    }
+    return _cached_responses(scene, mics, fs, kw, log), kinds
+
+
+def _plain(x: Any) -> Any:
+    """x as JSON-able data for a cache key (arrays as lists, dataclasses as their fields)."""
+    if dataclasses.is_dataclass(x) and not isinstance(x, type):
+        return {f.name: _plain(getattr(x, f.name)) for f in dataclasses.fields(x) if f.init}
+    if isinstance(x, np.ndarray):
+        return x.tolist()
+    if isinstance(x, dict):
+        return {str(k): _plain(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [_plain(v) for v in x]
+    if isinstance(x, (str, int, float, bool)) or x is None:
+        return x
+    return repr(x)
+
+
+def _responses_key(scene: Scene, mics: list[Mic], fs: int, kw: dict) -> str:
+    """The room responses' cache key: everything shoebox.responses reads (the room, the
+    sources' places, patterns and seeds, the mics' places, aims and entry tables, the
+    settings, the backend) and the code it runs (varimu/rooms, the separation room's bands
+    and materials, roomsim's build). Not the sources' audio or levels: the room is linear."""
+    from varimu.rooms import gpu
+
+    hsh = hashlib.sha256()
+    here = Path(__file__).parent
+    for f in RESPONSE_CODE:
+        hsh.update((here / f"{f}.py").read_bytes())
+    hsh.update((here.parent / "separation" / "room.py").read_bytes())
+    mod = gpu.module()
+    backend = gpu.backend()
+    data = {
+        "room": _plain(scene.room),
+        "sources": [s.position_m.tolist() for s in scene.sources],
+        "directivity": [
+            None if d is None else [_plain(d[0]), d[1].tolist()] for d in (kw["directivity"] or [])
+        ],
+        "mics": [[m.position_m.tolist(), m.aim.tolist()] for m in mics],
+        "fs": fs,
+        "kw": {k: v for k, v in kw.items() if k != "directivity"},
+        "backend": backend,
+        "roomsim": getattr(mod, "SOURCE_HASH", None) if backend != "numpy" else None,
+    }
+    hsh.update(json.dumps(data, sort_keys=True, default=str).encode())
+    for t in {id(m.table): m.table for m in mics}.values():
+        for a in (t.f_hz, t.theta_rad, t.inv_r, t.front, t.rear):
+            hsh.update(np.ascontiguousarray(a).tobytes())
+    return hsh.hexdigest()[:32]
+
+
+def _cached_responses(scene: Scene, mics: list[Mic], fs: int, kw: dict, log) -> np.ndarray:
+    """shoebox.responses for the scene, from cache/rooms/responses/ when the room, the
+    places and the settings are unchanged (a change of level or audio skips the room's
+    physics: the rays, reflections, diffraction and the wave solver). The newest
+    `RESPONSES_KEEP` entries are kept."""
+    key = _responses_key(scene, mics, fs, kw)
+    path = RESPONSES / f"{key}.npy"
+    if path.exists():
+        try:
+            h = np.load(path)
+            os.utime(path)  # the newest: kept longest
+            if log:
+                log("room responses: from the cache (the room and its places unchanged)")
+            return h
+        except (OSError, ValueError):
+            pass  # a torn file: compute it again
+    wave = kw["wave"] and {**kw["wave"], "log": log}
     h = responses(
         scene.room,
         [s.position_m for s in scene.sources],
         mics,
         fs,
-        ism_s=scene.ism_s,
-        length_s=scene.tail_s,
-        seeds=seeds,
-        tail=not _anechoic(scene.room),
-        wave=(
-            {"crossover_hz": scene.wave_crossover_hz, "log": log}
-            if scene.wave_crossover_hz and not _anechoic(scene.room)
-            else None
-        ),
-        directivity=directivity if any(directivity) else None,
+        **{**kw, "wave": wave},
+        log=log,
     )
-    n = max(len(x) for x in signals) + h.shape[-1]
-    p = np.zeros((len(scene.sources), len(scene.mics), 2, n))
-    for si, x in enumerate(signals):
-        for mi in range(len(scene.mics)):
-            for e in range(2):
-                p[si, mi, e] = _fftconv(x, h[si, mi, e], n)
-    return p, kinds, n
+    try:
+        RESPONSES.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(f".{os.getpid()}.tmp.npy")
+        np.save(tmp, h)
+        os.replace(tmp, path)
+        old = sorted(RESPONSES.glob("*.npy"), key=lambda p: p.stat().st_mtime, reverse=True)
+        for p in old[RESPONSES_KEEP:]:
+            p.unlink(missing_ok=True)
+    except OSError:
+        pass  # a cache is a convenience: never fail a render over it
+    return h
 
 
 def _anechoic(room) -> bool:
@@ -421,15 +571,20 @@ def render(
 ) -> dict:
     """The scene's prints into out_dir (the module docstring); returns render.json's data."""
     from varimu.rooms import gpu
+    from varimu.rooms.progress import Countdown, fmt_s
     from varimu.sim.io import write_audio
 
     t0 = time.perf_counter()
     s = _settings(scene.quality)
     fs = s.sample_rate
-    signals = source_signals(scene, fs)
     log(f"room: {len(scene.sources)} sources x {len(scene.mics)} mics")
+    log("sources: " + ", ".join(f"{i + 1} {x.name}" for i, x in enumerate(scene.sources)))
+    log("mics: " + ", ".join(f"{i + 1} {m.name} ({m.chain})" for i, m in enumerate(scene.mics)))
+    signals = source_signals(scene, fs)
+    longest = max(len(x) for x in signals) / fs
+    log(f"clips loaded in {fmt_s(time.perf_counter() - t0)}, the longest {fmt_s(longest)}")
     p, kinds, n = mic_pressures(scene, fs, signals, log)
-    log(f"room responses in {time.perf_counter() - t0:.1f} s")
+    log(f"room responses in {fmt_s(time.perf_counter() - t0)}")
 
     jobs = []  # (mic index, source index or None)
     for mi in range(len(scene.mics)):
@@ -437,6 +592,9 @@ def render(
         if solo and len(scene.sources) > 1:
             jobs += [(mi, si) for si in range(len(scene.sources))]
     done = np.zeros(len(jobs))
+    workers = workers or max(1, min(len(jobs), (os.cpu_count() or 4) - 2))
+    log(f"chains: {len(jobs)} prints of {fmt_s(n / fs)} at {scene.quality} on {workers} threads")
+    countdown = Countdown(log, "chains")
 
     def run(j: int) -> np.ndarray:
         mi, si = jobs[j]
@@ -447,14 +605,17 @@ def render(
         def prog(f: float) -> None:
             done[j] = f
             log(f"progress {done.mean():.4f}")
+            countdown.update(float(done.mean()))
 
         return print_chain(m.chain, m.set, front, rear, scene.quality, prog)
 
-    workers = workers or max(1, min(len(jobs), (os.cpu_count() or 4) - 2))
+    t1 = time.perf_counter()
     with ThreadPoolExecutor(workers) as ex:
         outs = list(ex.map(run, range(len(jobs))))
+    log(f"chains: done in {fmt_s(time.perf_counter() - t1)}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    log("writing: RT60s, the mics' files and the mix")
     result: dict[str, Any] = {
         "scene": scene.name,
         "fs": fs,

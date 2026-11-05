@@ -311,7 +311,10 @@ def responses(
     vox = voxelize(room, dx)
     if log:
         n_room = int(vox.inside.sum())
-        log(f"wave solver: X {dx * 100:.2f} cm, {n_room:,} cells in the room, {fs / m:.0f} Hz")
+        log(
+            f"wave solver: X {dx * 100:.2f} cm, {n_room:,} cells in the room, {fs / m:.0f} Hz, "
+            f"grid in {time.perf_counter() - t0:.1f} s"
+        )
     f_hi = crossover_hz * np.sqrt(2)
     f_all = np.fft.rfftfreq(n_fft, 1 / fs)
     kmax = int(np.searchsorted(f_all, f_hi)) + 1
@@ -375,6 +378,17 @@ def responses(
             raise ValueError(f"a source at {list(p_m)} is in a wall or an object")
         return idx, [scale * 4 * np.pi * lam**2 / (dx * t_step) * v / tot for v in val]
 
+    def steps_for(si: int, g: list[int]) -> int:
+        src = np.asarray(sources_m[si], float)
+        far = max(np.linalg.norm(mm.position_m - src) for mm in mics) + 1.0
+        rt = float(np.max(rt_s[g]))
+        return max(int(min(1.2 * rt + far / c, length_s) / t_step), MIN_STEPS)
+
+    from varimu.rooms.progress import Step
+
+    runs = [(si, g) for si in range(len(sources_m)) for g in groups]
+    n_cells = int(vox.inside.sum())
+    step = Step(log, "wave solver", f"wave:{b}", [n_cells * steps_for(*r) for r in runs])
     room_vox = vox
     for si, src in enumerate(sources_m):
         src = np.asarray(src, float)
@@ -392,18 +406,15 @@ def responses(
         else:
             idx, val = spread(src, 1.0)
             mics_g = np.array([room_vox.grid_coords(mm.position_m) for mm in mics])
-        far = max(np.linalg.norm(mm.position_m - src) for mm in mics) + 1.0
         for g in groups:
-            rt = float(np.max(rt_s[g]))
-            n_steps = int(min(1.2 * rt + far / c, length_s) / t_step)
-            n_steps = max(n_steps, MIN_STEPS)
-            t1 = time.perf_counter()
+            n_steps = steps_for(si, g)
+            bands = "/".join(str(int(BANDS_HZ[x])) for x in g)
+            step.start(
+                runs.index((si, g)),
+                f"source {si + 1}, bands {bands} Hz: {n_cells:,} cells x {n_steps:,} steps ({b})",
+            )
             rec = run_band(vox, lam, vox.beta_links[:, g[0]], (idx, val), mics_g, n_steps, b)
-            if log:
-                log(
-                    f"  source {si} bands {[int(BANDS_HZ[x]) for x in g]}: {n_steps} steps "
-                    f"in {time.perf_counter() - t1:.1f} s"
-                )
+            step.done()
             air = air_absorption_db_per_m(BANDS_HZ[g], room.temp_c, room.rh_percent).mean()
             env = 10 ** (-air * c * t_step * np.arange(n_steps) / 20)
             rec = rec * env[:, None, None]
@@ -423,8 +434,7 @@ def responses(
                 a, bb = fits[id(mic.table)]
                 for e in range(2):
                     out[si, mi, e] += wsum * (a[e] * pf + bb[e] * gf * inv_jk)
-    if log:
-        log(f"wave solver: {time.perf_counter() - t0:.1f} s")
+    step.end(f" ({time.perf_counter() - t0:.1f} s with the grid and the spectra)" if log else "")
     return out * share[None, None, None, :], xw
 
 
