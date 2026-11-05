@@ -1,0 +1,314 @@
+{
+ "shoebox": {
+  "rt60_s": {
+   "125": 0.518,
+   "250": 0.792,
+   "500": 0.87,
+   "1000": 0.786,
+   "2000": 0.644,
+   "4000": 0.569,
+   "8000": 0.454
+  },
+  "peaks_dbfs": {
+   "vocal spot": -5.92,
+   "guitar spot": -4.19,
+   "room L": -4.83,
+   "room R": -7.71
+  },
+  "room": {
+   "floor_m": [
+    [
+     0,
+     0
+    ],
+    [
+     7,
+     0
+    ],
+    [
+     7,
+     5.5
+    ],
+    [
+     0,
+     5.5
+    ]
+   ],
+   "ceiling": {
+    "type": "flat",
+    "height_m": 3.2
+   },
+   "materials": {
+    "walls": "furnished_wall",
+    "floor": "wood_floor",
+    "ceiling": "gypsum_on_studs"
+   }
+  },
+  "files": [
+   "mix.wav",
+   "room_pair.wav",
+   "vocal_spot.wav",
+   "guitar_spot.wav",
+   "room_L.wav",
+   "room_R.wav"
+  ],
+  "wall_s": 164.9
+ },
+ "splayed_gable": {
+  "rt60_s": {
+   "125": 0.583,
+   "250": 0.925,
+   "500": 1.023,
+   "1000": 0.92,
+   "2000": 0.755,
+   "4000": 0.665,
+   "8000": 0.516
+  },
+  "peaks_dbfs": {
+   "vocal spot": -5.7,
+   "guitar spot": -4.0,
+   "room L": -7.62,
+   "room R": -5.6
+  },
+  "room": {
+   "floor_m": [
+    [
+     0,
+     0
+    ],
+    [
+     7.4,
+     0.5
+    ],
+    [
+     7.9,
+     5.6
+    ],
+    [
+     3.6,
+     6.4
+    ],
+    [
+     -0.5,
+     5.0
+    ]
+   ],
+   "ceiling": {
+    "type": "gable",
+    "height_m": 2.8,
+    "peak_m": 4.6,
+    "axis_deg": 5
+   },
+   "materials": {
+    "walls": "furnished_wall",
+    "floor": "wood_floor",
+    "ceiling": "gypsum_on_studs"
+   }
+  },
+  "files": [
+   "mix.wav",
+   "room_pair.wav",
+   "vocal_spot.wav",
+   "guitar_spot.wav",
+   "room_L.wav",
+   "room_R.wav"
+  ],
+  "wall_s": 182.8
+ },
+ "angled": {
+  "rt60_s": {
+   "125": 0.516,
+   "250": 0.789,
+   "500": 0.863,
+   "1000": 0.761,
+   "2000": 0.617,
+   "4000": 0.553,
+   "8000": 0.446
+  },
+  "peaks_dbfs": {
+   "vocal spot": -6.05,
+   "guitar spot": -4.18,
+   "room L": -4.84,
+   "room R": -5.39
+  },
+  "room": {
+   "floor_m": [
+    [
+     0.0,
+     0.0
+    ],
+    [
+     6.88,
+     0.46
+    ],
+    [
+     7.34,
+     5.21
+    ],
+    [
+     3.35,
+     5.95
+    ],
+    [
+     -0.46,
+     4.65
+    ]
+   ],
+   "ceiling": {
+    "type": "shed",
+    "height_m": 2.6,
+    "peak_m": 3.8,
+    "axis_deg": 30
+   },
+   "materials": {
+    "walls": "furnished_wall",
+    "floor": "wood_floor",
+    "ceiling": "gypsum_on_studs"
+   }
+  },
+  "files": [
+   "mix.wav",
+   "room_pair.wav",
+   "vocal_spot.wav",
+   "guitar_spot.wav",
+   "room_L.wav",
+   "room_R.wav"
+  ],
+  "wall_s": 174.3
+ },
+ "vaulted_hall": {
+  "rt60_s": {
+   "125": 1.629,
+   "250": 2.06,
+   "500": 2.039,
+   "1000": 1.702,
+   "2000": 1.391,
+   "4000": 1.174,
+   "8000": 0.778
+  },
+  "peaks_dbfs": {
+   "vocal spot": -5.85,
+   "guitar spot": -4.12,
+   "room L": -11.2,
+   "room R": -11.39
+  },
+  "room": {
+   "floor_m": [
+    [
+     1.5,
+     0
+    ],
+    [
+     12.5,
+     0
+    ],
+    [
+     14,
+     1.5
+    ],
+    [
+     14,
+     7.5
+    ],
+    [
+     12.5,
+     9
+    ],
+    [
+     1.5,
+     9
+    ],
+    [
+     0,
+     7.5
+    ],
+    [
+     0,
+     1.5
+    ]
+   ],
+   "ceiling": {
+    "type": "vault",
+    "height_m": 5.5,
+    "peak_m": 9.0,
+    "axis_deg": 90,
+    "facets": 8
+   },
+   "materials": {
+    "walls": "furnished_wall",
+    "floor": "wood_floor",
+    "ceiling": "plaster"
+   }
+  },
+  "files": [
+   "mix.wav",
+   "room_pair.wav",
+   "vocal_spot.wav",
+   "guitar_spot.wav",
+   "room_L.wav",
+   "room_R.wav"
+  ],
+  "wall_s": 518.3
+ },
+ "treated_studio": {
+  "rt60_s": {
+   "125": 0.569,
+   "250": 0.27,
+   "500": 0.173,
+   "1000": 0.119,
+   "2000": 0.122,
+   "4000": 0.137,
+   "8000": 0.129
+  },
+  "peaks_dbfs": {
+   "vocal spot": -6.0,
+   "guitar spot": -4.27,
+   "room L": -10.8,
+   "room R": -11.33
+  },
+  "room": {
+   "floor_m": [
+    [
+     0,
+     0
+    ],
+    [
+     6.2,
+     0.4
+    ],
+    [
+     6.6,
+     4.8
+    ],
+    [
+     4.2,
+     5.6
+    ],
+    [
+     0.3,
+     5.0
+    ]
+   ],
+   "ceiling": {
+    "type": "shed",
+    "height_m": 2.7,
+    "peak_m": 3.6,
+    "axis_deg": 90
+   },
+   "materials": {
+    "walls": "heavy_drapes",
+    "floor": "carpet_on_pad",
+    "ceiling": "acoustic_tile"
+   }
+  },
+  "files": [
+   "mix.wav",
+   "room_pair.wav",
+   "vocal_spot.wav",
+   "guitar_spot.wav",
+   "room_L.wav",
+   "room_R.wav"
+  ],
+  "wall_s": 144.2
+ }
+}

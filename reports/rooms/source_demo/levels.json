@@ -1,0 +1,23 @@
+{
+ "toward": {
+  "lufs_raw": -30.23,
+  "mics_rms_dbfs": {
+   "room L": -33.68,
+   "room R": -33.59
+  }
+ },
+ "away": {
+  "lufs_raw": -31.25,
+  "mics_rms_dbfs": {
+   "room L": -34.5,
+   "room R": -34.39
+  }
+ },
+ "omni": {
+  "lufs_raw": -27.44,
+  "mics_rms_dbfs": {
+   "room L": -31.37,
+   "room R": -31.12
+  }
+ }
+}
