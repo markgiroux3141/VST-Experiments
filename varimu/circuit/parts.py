@@ -55,6 +55,7 @@ from varimu.circuit.ir import (
     Winding,
 )
 from varimu.devices import capsule as cap
+from varimu.devices import moving_coil as mc
 from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
 from varimu.devices import spring as spr
@@ -613,6 +614,54 @@ def capsule_dual(
         Inductor(f"L{upper}_t", through, f"{n}_rh", c.m_through),
         Resistor(f"R{upper}_l", through, GROUND, c.r_leak),
     ]
+    return els
+
+
+def moving_coil(
+    name: str, front: str, rear: str, plus: str, minus: str, c: mc.MovingCoil
+) -> list[Element]:
+    """Moving-coil cartridge `name` (varimu.devices.moving_coil): the pressures at its front
+    and rear entries on `front` and `rear` (pascals as volts, to ground: the ambient), the
+    coil's terminals plus and minus. Its compiled elements in order: an acoustic element
+    `x` of kind R / L / C is R<NAME>_x / L<NAME>_x / C<NAME>_x between its nodes (`front`,
+    `rear`, `0` the ambient, else <name>_<node>); the gyrator `x` is G<NAME>_xa (g v_e into
+    its acoustic port) and G<NAME>_xe (-g v_a into the coil's), g = 1 / its ratio. The coil:
+    R<NAME>_re from plus to <name>_l, L<NAME>_le to <name>_e, L<NAME>_l2 || R<NAME>_r2 to
+    <name>_v (none when l2_h is 0: L<NAME>_le ends on <name>_v), the gyrator's electrical
+    port from <name>_v to minus."""
+    n, upper = name.lower(), name.upper()
+
+    ports = {"front": front, "rear": rear, "0": GROUND}
+
+    def node(x: str) -> str:
+        return ports.get(x, f"{n}_{x}")
+
+    v = f"{n}_v"
+    els: list[Element] = [Resistor(f"R{upper}_re", plus, f"{n}_l", c.re_ohm)]
+    if c.l2_h > 0:
+        els += [
+            Inductor(f"L{upper}_le", f"{n}_l", f"{n}_e", c.le_h),
+            Inductor(f"L{upper}_l2", f"{n}_e", v, c.l2_h),
+            Resistor(f"R{upper}_r2", f"{n}_e", v, c.r2_ohm),
+        ]
+    else:
+        els.append(Inductor(f"L{upper}_le", f"{n}_l", v, c.le_h))
+    for e in c.elements:
+        a, b = node(e.a), node(e.b)
+        if e.kind == "R":
+            els.append(Resistor(f"R{upper}_{e.name}", a, b, e.value))
+        elif e.kind == "L":
+            els.append(Inductor(f"L{upper}_{e.name}", a, b, e.value))
+        elif e.kind == "C":
+            els.append(Capacitor(f"C{upper}_{e.name}", a, b, e.value))
+        elif e.kind == "G":
+            g = 1.0 / e.value
+            els += [
+                Vccs(f"G{upper}_{e.name}a", a, b, v, minus, g),
+                Vccs(f"G{upper}_{e.name}e", v, minus, a, b, -g),
+            ]
+        else:
+            raise ValueError(f"moving coil {name}: element {e.name} has kind {e.kind!r}")
     return els
 
 

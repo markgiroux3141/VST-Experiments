@@ -600,3 +600,46 @@
     g3_at_anode: {input: 9.5e-12, input_range: [9.0e-12, 10.0e-12], output: 10.0e-12, output_range: [9.4e-12, 10.6e-12], ag1_max: 0.15e-12}
   pins: "EF 14 p.4 'Sockelschaltbild' (steel tube, Y8A base): g1, k, m, g2, f, f, g3, a clockwise in the drawing starting at g1 (m = the metal envelope); pin numbers not printed. The VF 14's base drawing wasn't found; fs48 doesn't print one."
   envelope: "steel bulb ('Stahlröhre', fs48 p.6), 36 mm diameter (EF 14 p.4 'Kolbenabmessungen'; Funkschau 12/1947)"
+
+# --- Shure SM57 (docs/SM57_PLAN.md) ---
+# The Unidyne III cartridge of the SM57, Shure's replacement part R57 (g25). Sources: data/schematics/
+# shure_sm57/README.md (ids s68, seeler61, pat883, born12, hr23, cj06, ...). No dimension of the cartridge
+# is published: the geometry is provisional (reasoning in the comment), each fitted value bounded and fitted
+# by scripts/fit_sm57.py to its own figure (value: ..., the bounds in its comment).
+"R57":
+  source: "data/schematics/shure_sm57/README.md ('Every network element: source or estimate'): seeler61's network (Fig. 2) with pat883's case branch and resonator; no published dimension, the geometry provisional and bounded, the unknowns fitted by scripts/fit_sm57.py, one figure each"
+  geometry:
+    diaphragm:
+      radius_m: {value: 8.0e-3}          # provisional: model knowledge (the effective radius of a ~22 mm clamped diaphragm in the 31.75 mm head (s68), its surround moving less; bounds 6.5-9.5 mm)
+      thickness_m: {value: 6.35e-6}      # seeler61: molded Mylar 'as thin as 1/4 mil'
+      density_kg_m3: {value: 1390.0}     # provisional: model knowledge (PET film)
+      resonance_hz: {value: 100.0}       # born12: 'in the 100Hz area' (the moving system's resonance; fitted to the low end, bounds 60-160 Hz)
+      q: {value: 3.0}                    # provisional: model knowledge (the suspension's own loss: seeler61 R3 << R1)
+    coil:
+      bl_tm: {value: 1.0}                # fit: the sensitivity, s68 H 0.149 mV/ubar at 1 kHz open circuit through the transformer
+      b_gap_t: {value: 0.9}              # provisional: model knowledge (a small ceramic / Alnico gap; bounds 0.6-1.2 T): sets the coil's length l = Bl / B, so its mass
+      re_ohm: {value: 12.1}              # hr23: '12.1 Ohms' at the capsule's terminals (forum; three capsules '12 point something')
+      le_h: {value: 200.0e-6}            # web: Gearspace 2012 (Les, forum: '1kHz inductance is about 200uH IIRC'); no impedance curve for L2 || R2
+      wire_density_kg_m3: {value: 8960.0}        # provisional: model knowledge (copper; born12: 'copper, or aluminum, or copper-clad aluminum' in general)
+      wire_resistivity_ohm_m: {value: 1.72e-8}   # provisional: copper at 20 C
+      adhesive_fraction: {value: 0.2}    # provisional: model knowledge (pat883: 'turns of fine wire cemented together to form a solid structure', no former)
+    network:
+      # The grille's stainless screen (g25) over the head's face: a woven screen, negligible but present
+      - {name: grille, kind: screen, a: front, b: g, rayl: {value: 10.0}, area_m2: {value: 5.0e-4}}   # provisional: model knowledge (~10 rayl woven mesh over ~25 mm of the face)
+      # The resonator plate 23 (pat883) with a ring of holes (hr23: 7-8), the air between it and the dome (born12: 'tuned to a particular resonant frequency ... a very high frequency')
+      - {name: res_holes, kind: tube, a: g, b: fc, count: {value: 8}, radius_m: {value: 0.8e-3}, length_m: {value: 1.0e-3}}   # count: hr23's photo (7-8 holes); radius: fitted to the presence peak (bounds 0.4-1.5 mm); length: provisional (a ~1 mm plate)
+      - {name: res_air, kind: cavity, a: fc, volume_m3: {value: 2.5e-7}}   # provisional: fitted (the air between plate and dome: ~1 mm over the 22 mm diaphragm ~ 0.38 cm^3 less the dome's rise; bounds 0.08-0.6 cm^3)
+      - {name: dia, kind: diaphragm, a: fc, b: u}
+      # seeler61's phase-shift network: the back entry (R1, L1) to the rear entry, Ca, the coil gap + screen A (Rb, Lb), the magnet's felt cavity Cb
+      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.015}, r1_pa_s_m3: {value: 1.0e+6}, q: {value: 2.0}}   # d: provisional, fitted (bounds 10-22 mm: the diaphragm's centre to the rear entry around the head); r1: fitted to the low end's damping; q: fitted to the front-to-back ratio
+      # pat883's further branch: the felt / cloth washer 32 through the yoke into the case and handle chambers 44, 45 (born12: 'that volume of air is part of the tuning process')
+      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 5.6e+7}}   # provisional: model knowledge (a resistance whose time constant with the handle's air is ~20 Hz, below the band: the shock path pat905 describes, little acoustic effect)
+      - {name: handle, kind: cavity, a: h, volume_m3: {value: 2.0e-5}}   # provisional: model knowledge (the SM57 body's air, ~23-32 mm x ~100 mm with the transformer and connector inside: ~20 cm^3, bounds 8-40)
+    # SM2: the head as a rigid sphere (the plan's 'the body as a sphere first'), the rear entry a ring on it
+    sphere_radius_m: {value: 15.9e-3}    # s68: 1-1/4 in (31.75 mm) diameter
+    rear_ring_deg: {value: 110.0}        # provisional: model knowledge (the rear ports around the side just behind the cartridge's face: pat883's openings 40 where the headpiece meets the shell; bounds 90-150)
+  published:
+    sensitivity_h_v_per_pa: 1.49e-3      # s68: 'H' -76.5 db (.149 mv) re 1 V/ubar, open circuit at 1 kHz
+    sensitivity_l_v_per_pa: 0.67e-3      # s68: 'L' -83.5 db (.067 mv)
+    resonance_hz: 100.0                  # born12
+    turns_ratio: 4.53                    # cj06: 'Turns Ratio: 1:4.53' (a 1990 SM57's transformer, the full secondary)
