@@ -6,7 +6,8 @@
 //! `varimu/rooms/`: the entry tables' BEM, the image sources with directions, the shared
 //! diffuse field, the chains printed at production), run as a background process: the
 //! scene is written as JSON (the format of `varimu/rooms/scene.py`'s docstring), each source
-//! track's active take as a WAV beside it, and the process reports `progress F` lines.
+//! track as the mix plays it (its inserts' print, else its take) as a WAV beside it, and
+//! the process reports `progress F` lines.
 //! Porting the room to Rust (the chains already render in `render`) is the plan's later
 //! step.
 

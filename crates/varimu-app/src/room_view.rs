@@ -612,16 +612,25 @@ impl RoomView {
             .map_or(0, |d| d.as_secs());
         let dir = session.dir.join("rooms").join(format!("render_{stamp}"));
         std::fs::create_dir_all(dir.join("sources")).map_err(|e| e.to_string())?;
-        // Each source's take, all on one clock: the earliest take's start.
+        // Each source's track as the mix plays it (its inserts' print, an event take's
+        // render), all on one clock: the earliest take's start.
         let mut takes = Vec::new();
         for s in &self.scene.sources {
-            let t = session
-                .tracks
-                .iter()
-                .find(|t| t.id == s.track)
-                .and_then(|t| t.active_take())
+            let i = session
+                .track_index(&s.track)
+                .ok_or(format!("{}: its track is gone", s.name))?;
+            let track = &session.tracks[i];
+            if !session.print_current(i) {
+                return Err(format!(
+                    "{}: its track's inserts are still printing (wait for the print, or \
+                     ⤓ Draft it into a take)",
+                    s.name
+                ));
+            }
+            let (position, audio, _) = track
+                .playing(rate)
                 .ok_or(format!("{}: its track has no take", s.name))?;
-            takes.push((s.name.clone(), t.position, t.audio.clone()));
+            takes.push((s.name.clone(), position, audio.clone()));
         }
         let start = takes.iter().map(|t| t.1).min().unwrap_or(0);
         let mut clips = BTreeMap::new();

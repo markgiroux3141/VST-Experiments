@@ -224,8 +224,11 @@ def source_signals(scene: Scene, fs: int) -> list[np.ndarray]:
 
 
 def _fftconv(x: np.ndarray, h: np.ndarray, n_out: int) -> np.ndarray:
+    """x * h, n_out samples long: cut, or zero-padded past the full convolution (a
+    source shorter than the scene's longest)."""
     m = 1 << int(np.ceil(np.log2(len(x) + len(h))))
-    return np.fft.irfft(np.fft.rfft(x, m) * np.fft.rfft(h, m), m)[:n_out]
+    y = np.fft.irfft(np.fft.rfft(x, m) * np.fft.rfft(h, m), m)[:n_out]
+    return np.pad(y, (0, n_out - len(y)))
 
 
 def mic_pressures(
