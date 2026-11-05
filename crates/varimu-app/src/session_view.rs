@@ -104,7 +104,7 @@ use varimu_circuit::spec;
 use varimu_circuit::yaml::Value as YValue;
 
 use crate::piano_roll::{self, Roll};
-use crate::play_view::PlayView;
+use crate::play_view::{AUDIO_EXT, PlayView};
 
 // **Render** (⤓, the user's ask 2026-10-31): a track's chain rendered at production into a
 // new take on the track, its inserts then removed (the effect baked in). The source take
@@ -291,7 +291,83 @@ pub struct SessionView {
     export_stems: bool,
     /// The last export's outcome (the file, its peak).
     export_note: Option<String>,
+    /// Import…: audio files decoding into new tracks.
+    import: Option<Import>,
+    /// The last import's outcome.
+    import_note: Option<String>,
+    /// How Import… normalizes, and to what level (dBFS: the loudest 8 s' rms as a sine's
+    /// peak); prefs.
+    import_normalize: ImportNormalize,
+    import_target_dbfs: f64,
+    /// This frame's track lanes as seen (the part inside the scroll area), for files
+    /// dragged in from a folder: (track, rect).
+    lanes: Vec<(usize, Rect)>,
 }
+
+/// Audio files picked by Import… or dropped on the view, decoding on a thread (each its
+/// path and its samples, mono at the session's rate), and where they go.
+struct Import {
+    files: usize,
+    normalize: ImportNormalize,
+    dest: ImportDest,
+    handle: std::thread::JoinHandle<Vec<Decoded>>,
+}
+
+/// Where imported files go: new tracks at bar 1 (Import…, or files dropped off the lanes),
+/// or takes on the track they were dropped on (by id) at `position`, one file per track
+/// from there down, new tracks past the last.
+#[derive(Clone, Debug)]
+enum ImportDest {
+    NewTracks,
+    Onto { track: String, position: i64 },
+}
+
+/// An imported file and its samples with the gain (dB) normalizing gave them, or why it
+/// couldn't be read.
+type Decoded = (PathBuf, Result<(Vec<f32>, f64), String>);
+
+/// How Import… normalizes: not at all, each file's loudest stretch to the target, or one
+/// gain for all the files picked together, from their sum (stems keep their balance).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ImportNormalize {
+    Off,
+    Each,
+    Together,
+}
+
+impl ImportNormalize {
+    const ALL: [ImportNormalize; 3] = [
+        ImportNormalize::Off,
+        ImportNormalize::Each,
+        ImportNormalize::Together,
+    ];
+
+    fn name(self) -> &'static str {
+        match self {
+            ImportNormalize::Off => "off",
+            ImportNormalize::Each => "each",
+            ImportNormalize::Together => "together",
+        }
+    }
+
+    fn label(self) -> &'static str {
+        match self {
+            ImportNormalize::Off => "don't normalize",
+            ImportNormalize::Each => "normalize each file",
+            ImportNormalize::Together => "normalize together",
+        }
+    }
+
+    fn from_name(s: &str) -> ImportNormalize {
+        Self::ALL
+            .into_iter()
+            .find(|m| m.name() == s)
+            .unwrap_or(ImportNormalize::Off)
+    }
+}
+
+/// The stretch normalizing measures (s): a file's loudest, as the Play view does.
+const NORMALIZE_LOUDEST_S: f64 = 8.0;
 
 /// An export of the mix ([`Session::mixdown`]): waiting until every audible track plays
 /// what it will (`fin`: at production), then written on a thread.
@@ -355,7 +431,7 @@ fn step_key(v: &Value) -> Value {
 
 impl SessionView {
     pub fn new(repo: &Path) -> SessionView {
-        let (last, transport, calibrations) = load_prefs();
+        let (last, transport, calibrations, (import_normalize, import_target_dbfs)) = load_prefs();
         let (session, saved, error) = match last.as_deref().map(Session::load) {
             Some(Ok(s)) => (s, true, None),
             r => {
@@ -421,6 +497,11 @@ impl SessionView {
             export: None,
             export_stems: false,
             export_note: None,
+            import: None,
+            import_note: None,
+            lanes: Vec::new(),
+            import_normalize,
+            import_target_dbfs,
         }
     }
 
@@ -442,6 +523,8 @@ impl SessionView {
             "last_session": self.saved.then(|| self.session.dir.display().to_string()),
             "transport": transport_json(&self.session.transport),
             "calibrations": cals,
+            "import_normalize": self.import_normalize.name(),
+            "import_target_dbfs": self.import_target_dbfs,
         });
         let r = p
             .parent()
@@ -462,10 +545,10 @@ impl SessionView {
         &self.session
     }
 
-    /// New audio tracks from a room's render (name, pan, samples at the session's rate,
-    /// timeline position, what it was rendered from), each its rendered take; the next
-    /// frame of this view makes them one undo step.
-    pub fn add_room_tracks(
+    /// New audio tracks (name, pan, samples at the session's rate, timeline position, what
+    /// they came from: a room's render, an imported file), each its rendered take; the
+    /// next frame of this view makes them one undo step.
+    pub fn add_audio_tracks(
         &mut self,
         tracks: Vec<(String, f64, Vec<f32>, i64, Value)>,
     ) -> Result<(), String> {
@@ -518,6 +601,7 @@ impl SessionView {
         }
         self.poll_bake();
         self.poll_export(ui.ctx());
+        self.poll_import(ui.ctx());
         if idle {
             if self.audition.is_none() {
                 play.apply_monitor();
@@ -2470,7 +2554,8 @@ impl SessionView {
         const BAR_H: f32 = 16.0;
         let mut changed = false;
         let tracks_h = (ui.available_height() - BAR_H - 4.0).max(40.0);
-        egui::ScrollArea::vertical()
+        self.lanes.clear();
+        let tracks_area = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .max_height(tracks_h)
             .show(ui, |ui| {
@@ -2485,8 +2570,58 @@ impl SessionView {
                     if ui.button("+ Track").clicked() {
                         self.add_track();
                     }
+                    if let Some(imp) = &self.import {
+                        ui.add_enabled(false, egui::Button::new("Import…"));
+                        ui.label(
+                            RichText::new(format!("importing {} files…", imp.files))
+                                .small()
+                                .color(theme::MUTED),
+                        );
+                    } else {
+                        if ui
+                            .button("Import…")
+                            .on_hover_text(
+                                "Audio files (WAV, AIFF, FLAC, Ogg, MP3) as new tracks, one per \
+                                 file, at bar 1: several picked at once line up as stems. \
+                                 Converted to the session's rate; a stereo file is averaged \
+                                 to mono (tracks are mono, panned)",
+                            )
+                            .clicked()
+                        {
+                            self.start_import();
+                        }
+                        let before = (self.import_normalize, self.import_target_dbfs);
+                        egui::ComboBox::from_id_salt("import_normalize")
+                            .selected_text(self.import_normalize.label())
+                            .show_ui(ui, |ui| {
+                                for m in ImportNormalize::ALL {
+                                    ui.selectable_value(&mut self.import_normalize, m, m.label());
+                                }
+                            })
+                            .response
+                            .on_hover_text(
+                                "Normalize brings a file's loudest 8 s (its rms, as a sine's                                  peak) to the level, as the Play view does; -18 dBFS is what                                  the devices are aligned to. Each: every file on its own.                                  Together: one gain for all the files picked, from their sum,                                  so a multitrack's stems keep their balance",
+                            );
+                        if self.import_normalize != ImportNormalize::Off {
+                            ui.add(
+                                egui::DragValue::new(&mut self.import_target_dbfs)
+                                    .range(-60.0..=0.0)
+                                    .speed(0.1)
+                                    .fixed_decimals(1)
+                                    .suffix(" dBFS"),
+                            );
+                        }
+                        if (self.import_normalize, self.import_target_dbfs) != before {
+                            self.save_prefs();
+                        }
+                        if let Some(n) = &self.import_note {
+                            ui.label(RichText::new(n).small().color(theme::MUTED));
+                        }
+                    }
                 });
-            });
+            })
+            .inner_rect;
+        self.file_drop(ui, tracks_area, &view, &grid);
         if changed {
             self.save();
         }
@@ -2556,6 +2691,7 @@ impl SessionView {
         let row = Rect::from_min_size(whole.min, egui::vec2(width, TRACK_H));
         let strip = Rect::from_min_size(row.min, egui::vec2(STRIP_W, TRACK_H));
         let lane = Rect::from_min_max(Pos2::new(row.left() + STRIP_W, row.top()), row.max);
+        self.lanes.push((i, lane.intersect(ui.clip_rect())));
         // The strip and lane take clicks and drags; the strip's controls, added after, sit
         // on top of them.
         let strip_resp = ui.interact(strip, ui.id().with(("strip", i)), Sense::click());
@@ -3236,6 +3372,270 @@ impl SessionView {
 
     /// An export waiting: written once the tracks are ready (given up when a print or a
     /// render it waits for failed); one writing: its outcome.
+    /// Audio files dragged in from a folder: while they hover, the lane under the cursor
+    /// lights up with where they'll land; dropped on a lane, each becomes a take on that
+    /// track and the ones below (new tracks past the last) at the beat nearest the drop;
+    /// dropped anywhere else over the tracks, new tracks at bar 1 (as Import…). A dropped
+    /// folder brings its audio files. Decoded and normalized as Import… is.
+    fn file_drop(&mut self, ui: &egui::Ui, area: Rect, view: &View, grid: &Grid) {
+        let (hovering, dropped) = ui.input(|i| {
+            (
+                i.raw.hovered_files.len(),
+                i.raw
+                    .dropped_files
+                    .iter()
+                    .filter_map(|f| f.path.clone())
+                    .collect::<Vec<_>>(),
+            )
+        });
+        if hovering == 0 && dropped.is_empty() {
+            return;
+        }
+        let Some(p) = file_drag_pos(ui.ctx()) else {
+            return;
+        };
+        let on_lane = self.lanes.iter().find(|(_, r)| r.contains(p)).copied();
+        let beat = grid
+            .beat_at(view.position(p.x) + (grid.samples_per_beat() * 0.5) as i64)
+            .max(0);
+        if hovering > 0 {
+            ui.ctx().request_repaint();
+            let painter = ui.ctx().layer_painter(egui::LayerId::new(
+                egui::Order::Foreground,
+                egui::Id::new("file_drop"),
+            ));
+            let files = if hovering == 1 {
+                "1 file".to_string()
+            } else {
+                format!("{hovering} files")
+            };
+            let (rect, text) = match on_lane {
+                Some((i, r)) => {
+                    let x = view.x(grid.beat(beat)).clamp(r.left(), r.right());
+                    painter.line_segment(
+                        [Pos2::new(x, r.top()), Pos2::new(x, r.bottom())],
+                        Stroke::new(2.0, theme::ACCENT),
+                    );
+                    let bpb = grid.beats_per_bar.max(1) as i64;
+                    let below = if hovering > 1 {
+                        " and the tracks below"
+                    } else {
+                        ""
+                    };
+                    (
+                        r,
+                        format!(
+                            "{files} onto {}{below}, bar {} beat {}",
+                            self.session.tracks[i].name,
+                            beat / bpb + 1,
+                            beat % bpb + 1
+                        ),
+                    )
+                }
+                None => (area, format!("{files} as new tracks at bar 1")),
+            };
+            painter.rect_filled(rect, 4.0, theme::ACCENT.gamma_multiply(0.12));
+            painter.rect_stroke(
+                rect,
+                4.0,
+                Stroke::new(1.5, theme::ACCENT),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(
+                rect.left_top() + egui::vec2(10.0, 8.0),
+                egui::Align2::LEFT_TOP,
+                text,
+                egui::FontId::proportional(14.0),
+                theme::INK,
+            );
+        }
+        if dropped.is_empty() || !(area.contains(p) || on_lane.is_some()) {
+            return;
+        }
+        let audio_file = |f: &std::path::Path| {
+            f.extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| AUDIO_EXT.contains(&e.to_ascii_lowercase().as_str()))
+        };
+        let mut files = Vec::new();
+        for f in dropped {
+            if f.is_dir() {
+                let mut inside: Vec<PathBuf> = std::fs::read_dir(&f)
+                    .map(|d| d.filter_map(|e| Some(e.ok()?.path())).collect())
+                    .unwrap_or_default();
+                inside.sort();
+                files.extend(inside.into_iter().filter(|f| audio_file(f)));
+            } else if audio_file(&f) {
+                files.push(f);
+            }
+        }
+        if files.is_empty() {
+            self.error = Some(format!(
+                "nothing to import: drop audio files ({})",
+                AUDIO_EXT.join(", ")
+            ));
+            return;
+        }
+        let dest = match on_lane {
+            Some((i, _)) => ImportDest::Onto {
+                track: self.session.tracks[i].id.clone(),
+                position: grid.beat(beat),
+            },
+            None => ImportDest::NewTracks,
+        };
+        self.import_files(files, dest);
+    }
+
+    /// Import…: audio files picked (several at once), decoded on a thread, each mono at the
+    /// session's rate (`audio::load`: channels averaged, resampled as Python does), then
+    /// normalized as [`ImportNormalize`] says.
+    fn start_import(&mut self) {
+        let Some(files) = rfd::FileDialog::new()
+            .add_filter("Audio", &AUDIO_EXT)
+            .pick_files()
+        else {
+            return;
+        };
+        self.import_files(files, ImportDest::NewTracks);
+    }
+
+    /// Decode `files` on a thread (as Import… does) into `dest`.
+    fn import_files(&mut self, files: Vec<PathBuf>, dest: ImportDest) {
+        if files.is_empty() {
+            return;
+        }
+        if self.import.is_some() {
+            self.error = Some("an import is still running: drop the files again after it".into());
+            return;
+        }
+        let rate = self.session.rate;
+        let n = files.len();
+        let (normalize, target) = (self.import_normalize, self.import_target_dbfs);
+        let handle = std::thread::spawn(move || {
+            let loaded: Vec<(PathBuf, Result<Vec<f64>, String>)> = files
+                .into_iter()
+                .map(|p| {
+                    let x = audio::load(&p, rate).and_then(|x| {
+                        if x.is_empty() {
+                            Err(format!("{}: no audio in it", p.display()))
+                        } else {
+                            Ok(x)
+                        }
+                    });
+                    (p, x)
+                })
+                .collect();
+            let ok: Vec<Vec<f64>> = loaded
+                .iter()
+                .filter_map(|(_, x)| x.as_ref().ok().cloned())
+                .collect();
+            let mut gains = match normalize {
+                ImportNormalize::Off => vec![0.0; ok.len()],
+                ImportNormalize::Each | ImportNormalize::Together => audio::normalize_gains_db(
+                    &ok,
+                    rate,
+                    NORMALIZE_LOUDEST_S,
+                    target,
+                    normalize == ImportNormalize::Together,
+                ),
+            }
+            .into_iter();
+            loaded
+                .into_iter()
+                .map(|(p, x)| {
+                    let x = x.map(|x| {
+                        let g_db = gains.next().unwrap_or(0.0);
+                        let g = 10f64.powf(g_db / 20.0);
+                        (x.iter().map(|&v| (v * g) as f32).collect(), g_db)
+                    });
+                    (p, x)
+                })
+                .collect()
+        });
+        self.import_note = None;
+        self.import = Some(Import {
+            files: n,
+            normalize,
+            dest,
+            handle,
+        });
+    }
+
+    /// The import, once decoded: a track per file, named after it, its take at bar 1 (one
+    /// undo step); files that failed are listed in the error line.
+    fn poll_import(&mut self, ctx: &egui::Context) {
+        let Some(imp) = &self.import else { return };
+        if !imp.handle.is_finished() {
+            ctx.request_repaint_after(Duration::from_millis(200));
+            return;
+        }
+        let Some(imp) = self.import.take() else {
+            return;
+        };
+        let Ok(decoded) = imp.handle.join() else {
+            self.error = Some("the import failed (its thread panicked)".into());
+            return;
+        };
+        let bar1 = Grid::new(self.session.rate, &self.session.transport).bar(1);
+        // dropped on a track: from that track down, at the drop's position
+        let (mut next, position) = match &imp.dest {
+            ImportDest::NewTracks => (None, bar1),
+            ImportDest::Onto { track, position } => (self.session.track_index(track), *position),
+        };
+        let mut takes = Vec::new();
+        let mut tracks = Vec::new();
+        let mut failed = Vec::new();
+        for (path, x) in decoded {
+            match x {
+                Ok((samples, gain_db)) => {
+                    let file = path
+                        .file_name()
+                        .map_or("?".into(), |n| n.to_string_lossy().to_string());
+                    let name = path
+                        .file_stem()
+                        .map_or(file.clone(), |n| n.to_string_lossy().to_string());
+                    let from = json!({
+                        "device": format!("import of {file}"),
+                        "import": {
+                            "file": path.to_string_lossy(),
+                            "rate": self.session.rate,
+                            "normalize": imp.normalize.name(),
+                            "gain_db": gain_db,
+                        },
+                    });
+                    match next {
+                        Some(i) if i < self.session.tracks.len() => {
+                            takes.push((i, samples, from));
+                            next = Some(i + 1);
+                        }
+                        _ => tracks.push((name, 0.0, samples, position, from)),
+                    }
+                }
+                Err(e) => failed.push(e),
+            }
+        }
+        let n = takes.len() + tracks.len();
+        for (i, samples, from) in takes {
+            self.saved = true;
+            if let Err(e) = self.session.add_rendered_take(i, samples, position, from) {
+                self.error = Some(format!("the import failed: {e}"));
+                return;
+            }
+        }
+        if let Err(e) = self.add_audio_tracks(tracks) {
+            self.error = Some(format!("the import failed: {e}"));
+            return;
+        }
+        self.import_note = Some(format!(
+            "imported {n} of {} file{}",
+            imp.files,
+            if imp.files == 1 { "" } else { "s" }
+        ));
+        if !failed.is_empty() {
+            self.error = Some(format!("not imported: {}", failed.join("; ")));
+        }
+    }
+
     fn poll_export(&mut self, ctx: &egui::Context) {
         match &self.export {
             None => return,
@@ -3905,10 +4305,21 @@ impl SessionView {
     }
 }
 
-/// The last session, the default transport and the calibrations (`recording.json`).
-fn load_prefs() -> (Option<PathBuf>, TransportSettings, Vec<Calibration>) {
+/// The last session, the default transport, the calibrations and Import…'s normalizing
+/// (`recording.json`).
+fn load_prefs() -> (
+    Option<PathBuf>,
+    TransportSettings,
+    Vec<Calibration>,
+    (ImportNormalize, f64),
+) {
     let Some(text) = prefs_path().and_then(|p| std::fs::read_to_string(p).ok()) else {
-        return (None, TransportSettings::default(), Vec::new());
+        return (
+            None,
+            TransportSettings::default(),
+            Vec::new(),
+            (ImportNormalize::Off, ALIGNMENT_DBFS),
+        );
     };
     let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
     let last = v["last_session"].as_str().map(PathBuf::from);
@@ -3927,7 +4338,14 @@ fn load_prefs() -> (Option<PathBuf>, TransportSettings, Vec<Calibration>) {
                 .collect()
         })
         .unwrap_or_default();
-    (last, transport_from(&v["transport"]), cals)
+    let normalize = (
+        ImportNormalize::from_name(v["import_normalize"].as_str().unwrap_or("off")),
+        v["import_target_dbfs"]
+            .as_f64()
+            .unwrap_or(ALIGNMENT_DBFS)
+            .clamp(-60.0, 0.0),
+    );
+    (last, transport_from(&v["transport"]), cals, normalize)
 }
 
 fn show_folder(dir: &Path) {
@@ -4035,6 +4453,26 @@ fn knob_ui(
         }
         None => false,
     }
+}
+
+/// Where the cursor is while files are dragged in from another program, in this window's
+/// points: winit 0.30 reports no position during an OS drag (egui's pointer stays where it
+/// last was), so on Windows the OS cursor over the window's client area.
+fn file_drag_pos(ctx: &egui::Context) -> Option<Pos2> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Foundation::POINT;
+        use windows_sys::Win32::UI::WindowsAndMessaging::GetCursorPos;
+        let mut p = POINT { x: 0, y: 0 };
+        // SAFETY: GetCursorPos writes the point it is given, nothing else.
+        if unsafe { GetCursorPos(&mut p) } != 0
+            && let Some(inner) = ctx.input(|i| i.viewport().inner_rect)
+        {
+            let ppp = ctx.pixels_per_point();
+            return Some(Pos2::new(p.x as f32 / ppp, p.y as f32 / ppp) - inner.min.to_vec2());
+        }
+    }
+    ctx.input(|i| i.pointer.latest_pos())
 }
 
 struct View {

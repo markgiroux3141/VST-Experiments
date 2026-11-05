@@ -208,9 +208,60 @@ pub fn level_dbfs(x: &[f64], rate: u32, len_s: f64) -> f64 {
     20.0 * (rms * 2f64.sqrt()).max(1e-12).log10()
 }
 
+/// Gains (dB) that bring each of `files` to `target_dbfs` by [`level_dbfs`] over
+/// `len_s` (`together`: one gain for all, from their sum with every file starting
+/// together, so their balance stays), within +-40 dB as the Play view's; silence gets 0 dB.
+pub fn normalize_gains_db(
+    files: &[Vec<f64>],
+    rate: u32,
+    len_s: f64,
+    target_dbfs: f64,
+    together: bool,
+) -> Vec<f64> {
+    let gain = |x: &[f64]| {
+        let level = level_dbfs(x, rate, len_s);
+        if level <= -240.0 + 1e-9 || x.iter().all(|&v| v == 0.0) {
+            0.0
+        } else {
+            (target_dbfs - level).clamp(-40.0, 40.0)
+        }
+    };
+    if !together {
+        return files.iter().map(|x| gain(x)).collect();
+    }
+    let mut sum = vec![0.0; files.iter().map(Vec::len).max().unwrap_or(0)];
+    for x in files {
+        for (s, v) in sum.iter_mut().zip(x) {
+            *s += v;
+        }
+    }
+    vec![gain(&sum); files.len()]
+}
+
 #[cfg(test)]
 mod tests {
-    use super::loudest;
+    use super::{level_dbfs, loudest, normalize_gains_db};
+
+    #[test]
+    fn normalizing_each_or_together() {
+        let rate = 1000;
+        let sine = |a: f64, n: usize| -> Vec<f64> {
+            (0..n)
+                .map(|i| a * (2.0 * std::f64::consts::PI * 50.0 * i as f64 / rate as f64).sin())
+                .collect()
+        };
+        // A full-scale sine is 0 dBFS (its rms as a sine's peak).
+        assert!(level_dbfs(&sine(1.0, 2000), rate, 1.0).abs() < 1e-6);
+        let files = vec![sine(0.5, 3000), sine(0.1, 2000), vec![0.0; 500]];
+        let each = normalize_gains_db(&files, rate, 1.0, -18.0, false);
+        assert!((each[0] - (-18.0 + 6.0206)).abs() < 1e-3, "{each:?}");
+        assert!((each[1] - (-18.0 + 20.0)).abs() < 1e-3, "{each:?}");
+        assert_eq!(each[2], 0.0);
+        // Together: in phase, the sum is 0.6 for the first 2 s; one gain for all.
+        let tog = normalize_gains_db(&files, rate, 1.0, -18.0, true);
+        let want = -18.0 - 20.0 * 0.6f64.log10();
+        assert!(tog.iter().all(|g| (g - want).abs() < 1e-3), "{tog:?}");
+    }
 
     #[test]
     fn loudest_finds_the_loud_stretch() {

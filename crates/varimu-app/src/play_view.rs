@@ -2625,7 +2625,7 @@ fn bar(ui: &mut egui::Ui, label: &str, v: f64, lo: f64, hi: f64, text: String) {
 }
 
 /// The audio files the app reads (symphonia's formats).
-const AUDIO_EXT: [&str; 6] = ["wav", "aif", "aiff", "flac", "ogg", "mp3"];
+pub(crate) const AUDIO_EXT: [&str; 6] = ["wav", "aif", "aiff", "flac", "ogg", "mp3"];
 
 /// `dir` and its subfolders: a group per folder holding audio files, labelled by its
 /// path under `root` (a folder nested in one of the same name, as multitrack

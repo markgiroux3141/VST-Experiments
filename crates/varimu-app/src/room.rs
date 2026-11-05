@@ -448,6 +448,74 @@ pub fn body_radius_m(directivity: &str) -> f64 {
     }
 }
 
+/// `sounding_rms`'s gating (varimu/rooms/scene.py's GATE_*).
+const GATE_BLOCK_S: f64 = 0.05;
+const GATE_ABSOLUTE_DB: f64 = -70.0;
+const GATE_RELATIVE_DB: f64 = -10.0;
+
+/// A clip's rms while it sounds, the level a source's SPL means: varimu/rooms/scene.py's
+/// `sounding_rms` (BS.1770's two gates on 50 ms blocks overlapping by half, unweighted).
+pub fn sounding_rms(x: &[f32], rate: u32) -> f64 {
+    let block = (GATE_BLOCK_S * rate as f64).round() as usize;
+    let hop = block / 2;
+    if x.len() < block || block < 2 {
+        if x.is_empty() {
+            return 0.0;
+        }
+        let e: f64 = x.iter().map(|&v| (v as f64) * (v as f64)).sum();
+        return (e / x.len() as f64).sqrt();
+    }
+    let mut c = Vec::with_capacity(x.len() + 1);
+    let mut acc = 0.0f64;
+    c.push(0.0);
+    for &v in x {
+        acc += (v as f64) * (v as f64);
+        c.push(acc);
+    }
+    let ms: Vec<f64> = (0..=x.len() - block)
+        .step_by(hop)
+        .map(|s| (c[s + block] - c[s]) / block as f64)
+        .collect();
+    let top = ms.iter().copied().fold(0.0, f64::max);
+    if top <= 0.0 {
+        return 0.0;
+    }
+    let gate = |v: &[f64], g: f64| -> Vec<f64> { v.iter().copied().filter(|&m| m > g).collect() };
+    let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+    let a = gate(&ms, top * 10f64.powf(GATE_ABSOLUTE_DB / 10.0));
+    let r = gate(&a, mean(&a) * 10f64.powf(GATE_RELATIVE_DB / 10.0));
+    mean(&r).sqrt()
+}
+
+/// The sources' SPLs that carry the session's balance into the room: `mix_db` per source
+/// is its track's level in the mix (its `sounding_rms` in dB plus its fader), None to leave
+/// it alone (muted, silent, no take). The source loudest in the mix gets the highest SPL of
+/// those sources now (the room's overall loudness, which drives the chains, stays), the
+/// others sit below it by as much as they sit below it in the mix; rounded to 0.1 dB and
+/// kept in the Room view's 40-130 dB.
+pub fn levels_from_mix(mix_db: &[Option<f64>], spl_db: &[f64]) -> Vec<f64> {
+    let on = || {
+        mix_db
+            .iter()
+            .zip(spl_db)
+            .filter_map(|(m, s)| m.map(|m| (m, *s)))
+    };
+    let (Some(loud), Some(top)) = (
+        on().map(|(m, _)| m).reduce(f64::max),
+        on().map(|(_, s)| s).reduce(f64::max),
+    ) else {
+        return spl_db.to_vec();
+    };
+    mix_db
+        .iter()
+        .zip(spl_db)
+        .map(|(m, &s)| match m {
+            Some(m) => (((top + m - loud) * 10.0).round() / 10.0).clamp(40.0, 130.0),
+            None => s,
+        })
+        .collect()
+}
+
 impl RoomSource {
     /// Its body's centre (a radius behind the cap, against its aim) and radius.
     pub fn body(&self) -> ([f64; 3], f64) {
@@ -1308,6 +1376,96 @@ pub fn read_render(dir: &Path) -> Result<Rendered, String> {
     Ok(Rendered { mics, json: v })
 }
 
+/// A source's stem in a scene's live balance (varimu/rooms/balance.py).
+#[derive(Clone, Debug)]
+pub struct BalanceSource {
+    pub name: String,
+    /// Its SPL when the stems were made: a fader at `spl_db` plays the stem as it is.
+    pub spl_db: f64,
+    pub left: PathBuf,
+    pub right: PathBuf,
+}
+
+/// A scene's live balance (its balance.json): each source's stereo stem through the mics'
+/// chains' linear proxies, panned as the mics are, and each mic's print's predicted peaks.
+#[derive(Clone, Debug)]
+pub struct Balance {
+    pub sources: Vec<BalanceSource>,
+    pub mics: Vec<String>,
+    /// (sources, mics, blocks): a mic's print's peak per block from that source alone at its
+    /// prepared SPL, linear re full scale.
+    pub peaks: Vec<Vec<Vec<f32>>>,
+}
+
+pub fn read_balance(dir: &Path) -> Result<Balance, String> {
+    let path = dir.join("balance.json");
+    let text = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let sources = v["sources"]
+        .as_array()
+        .ok_or("balance.json has no sources")?
+        .iter()
+        .map(|s| BalanceSource {
+            name: st(s, "name", ""),
+            spl_db: f(s, "spl_db", 90.0),
+            left: dir.join(st(s, "left", "")),
+            right: dir.join(st(s, "right", "")),
+        })
+        .collect();
+    let mics = v["mics"]
+        .as_array()
+        .ok_or("balance.json has no mics")?
+        .iter()
+        .map(|m| st(m, "name", "mic"))
+        .collect();
+    let num = |x: &Value| x.as_f64().unwrap_or(0.0) as f32;
+    let peaks = v["peaks"]
+        .as_array()
+        .ok_or("balance.json has no peaks")?
+        .iter()
+        .map(|ps| {
+            ps.as_array()
+                .map(|pm| {
+                    pm.iter()
+                        .map(|b| {
+                            b.as_array()
+                                .map_or(Vec::new(), |b| b.iter().map(num).collect())
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        })
+        .collect();
+    Ok(Balance {
+        sources,
+        mics,
+        peaks,
+    })
+}
+
+/// Each mic's print's predicted peak (dBFS) at the sources' gains (linear, re their prepared
+/// SPLs): per block the sum of the sources' peaks there, a bound (their waveforms may not
+/// line up), the loudest block. It is the proxies' prediction: a chain saturates as it
+/// nears its full scale, which the proxies don't.
+pub fn balance_peak_dbfs(peaks: &[Vec<Vec<f32>>], gains: &[f64]) -> Vec<f64> {
+    let mics = peaks.first().map_or(0, Vec::len);
+    (0..mics)
+        .map(|m| {
+            let blocks = peaks.iter().map(|p| p[m].len()).max().unwrap_or(0);
+            let top = (0..blocks)
+                .map(|b| {
+                    peaks
+                        .iter()
+                        .zip(gains)
+                        .map(|(p, g)| g * p[m].get(b).copied().unwrap_or(0.0) as f64)
+                        .sum::<f64>()
+                })
+                .fold(0.0, f64::max);
+            20.0 * top.max(1e-12).log10()
+        })
+        .collect()
+}
+
 /// The render as a background process (the module docstring).
 pub struct RenderJob {
     child: Mutex<Child>,
@@ -1320,12 +1478,23 @@ pub struct RenderJob {
 impl RenderJob {
     /// `uv run --extra fast python scripts/room_print.py SCENE --out OUT` in `repo`.
     pub fn spawn(repo: &Path, scene: &Path, out_dir: &Path) -> Result<RenderJob, String> {
+        RenderJob::spawn_with(repo, scene, out_dir, &[])
+    }
+
+    /// The same with more arguments (`--balance`: the scene's live balance, `read_balance`).
+    pub fn spawn_with(
+        repo: &Path,
+        scene: &Path,
+        out_dir: &Path,
+        args: &[&str],
+    ) -> Result<RenderJob, String> {
         let mut cmd = Command::new("uv");
         cmd.current_dir(repo)
             .args(["run", "--extra", "fast", "python", "scripts/room_print.py"])
             .arg(scene)
             .arg("--out")
             .arg(out_dir)
+            .args(args)
             .env("PYTHONUNBUFFERED", "1")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -1390,6 +1559,11 @@ impl RenderJob {
 
     /// None while it runs; then its result.
     pub fn poll(&mut self) -> Option<Result<Rendered, String>> {
+        Some(self.finished()?.and_then(|()| read_render(&self.out_dir)))
+    }
+
+    /// None while it runs; then whether it succeeded (its output in `out_dir`).
+    pub fn finished(&mut self) -> Option<Result<(), String>> {
         let status = match self.child.lock().unwrap().try_wait() {
             Ok(Some(s)) => s,
             Ok(None) => return None,
@@ -1402,7 +1576,7 @@ impl RenderJob {
             let tail = self.tail(6).join("\n");
             return Some(Err(format!("the render stopped ({status}):\n{tail}")));
         }
-        Some(read_render(&self.out_dir))
+        Some(Ok(()))
     }
 }
 
@@ -1418,6 +1592,75 @@ mod tests {
         m.aim_at(2.0, 2.5);
         s.mics.push(m);
         s
+    }
+
+    #[test]
+    fn sounding_rms_matches_python() {
+        // tests/test_room_balance.py's test_sounding_rms_matches_the_apps
+        let fs = 48000u32;
+        let mut x: Vec<f32> = (0..3 * fs as usize)
+            .map(|i| {
+                let t = i as f64 / fs as f64;
+                if t < 1.0 {
+                    0.0
+                } else {
+                    (0.5 * (2.0 * std::f64::consts::PI * 220.0 * t).sin()) as f32
+                }
+            })
+            .collect();
+        for v in &mut x[(2.5 * fs as f64) as usize..] {
+            *v *= 0.01;
+        }
+        // Python's is on float64 samples, these are f32: ~1e-8 apart
+        assert!((sounding_rms(&x, fs) - 0.350_643_583).abs() < 1e-6);
+        assert_eq!(sounding_rms(&[], fs), 0.0);
+        assert_eq!(sounding_rms(&vec![0.0; 9600], fs), 0.0);
+        assert!((sounding_rms(&[0.5, -0.5], fs) - 0.5).abs() < 1e-12);
+    }
+
+    #[test]
+    fn balance_reads_and_meters() {
+        let dir = std::env::temp_dir().join(format!("varimu_balance_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // two sources, one mic, three blocks (varimu/rooms/balance.py's balance.json)
+        let v = json!({
+            "fs": 96000, "seconds": 0.15, "peaks_block_s": 0.05,
+            "sources": [
+                {"name": "a", "spl_db": 90.0, "left": "a.L.wav", "right": "a.R.wav"},
+                {"name": "b", "spl_db": 85.0, "left": "b.L.wav", "right": "b.R.wav"},
+            ],
+            "mics": [{"name": "m", "chain": "omni_clean", "pan": 0.0}],
+            "peaks": [[[0.1, 0.5, 0.0]], [[0.4, 0.1, 0.0]]],
+        });
+        std::fs::write(dir.join("balance.json"), v.to_string()).unwrap();
+        let b = read_balance(&dir).unwrap();
+        assert_eq!(b.sources[1].name, "b");
+        assert_eq!(b.sources[1].spl_db, 85.0);
+        assert_eq!(b.sources[0].left, dir.join("a.L.wav"));
+        assert_eq!(b.mics, vec!["m".to_string()]);
+        // as prepared: the louder block is 0.1 + 0.4 or 0.5 + 0.1 -> 0.6
+        let at = |g: &[f64]| balance_peak_dbfs(&b.peaks, g)[0];
+        assert!((at(&[1.0, 1.0]) - 20.0 * 0.6f64.log10()).abs() < 1e-6);
+        // b up 2x: 0.1 + 0.8
+        assert!((at(&[1.0, 2.0]) - 20.0 * 0.9f64.log10()).abs() < 1e-6);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn levels_from_the_mix() {
+        // vocal loudest in the mix (-12 + 0), guitar 4 dB under it, bass muted
+        let mix = [Some(-12.0), Some(-20.0 + 4.0), None];
+        let spl = [80.0, 90.0, 95.0];
+        // the loudest in the mix gets the highest SPL among the balanced: 90
+        assert_eq!(levels_from_mix(&mix, &spl), vec![90.0, 86.0, 95.0]);
+        assert_eq!(
+            levels_from_mix(&[None, None], &[80.0, 70.0]),
+            vec![80.0, 70.0]
+        );
+        assert_eq!(
+            levels_from_mix(&[Some(0.0), Some(-80.0)], &[120.0, 90.0]),
+            vec![120.0, 40.0]
+        );
     }
 
     #[test]

@@ -3,18 +3,25 @@
 //! the right button or Shift, or "Aim at") and drawn with its pattern, its chain and
 //! settings chosen at the side; Render records every source through every mic
 //! (`varimu_app::room`'s background process) and adds a session track per mic, panned.
-//! The scene is kept per session in `<session>/rooms/scene.json`.
+//! BALANCE plays the mix of the mics before the render, each source's level a fader
+//! (stems through the chains' linear stand-ins: varimu/rooms/balance.py), on a tracks-only
+//! player of its own. The scene is kept per session in `<session>/rooms/scene.json`.
 
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 use serde_json::{Value, json};
 use varimu_app::audio;
+use varimu_app::player::Player;
 use varimu_app::room::{
-    self, CEILINGS, CHAINS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, Pattern, QUALITIES,
-    RenderJob, RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
+    self, Balance, CEILINGS, CHAINS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, Pattern,
+    QUALITIES, RenderJob, RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
 };
+use varimu_app::session::{Mix, MixClip};
+use varimu_app::settings::{Quality, Settings};
+use varimu_app::transport::ClickMode;
 
 use crate::session_view::SessionView;
 use crate::theme;
@@ -48,6 +55,28 @@ struct Running {
     scene: Value,
 }
 
+/// A live balance being made (`room_print.py --balance`): the job, where its stems go on
+/// the timeline, at what rate, and the scene it is for (`RoomView::signature`).
+struct Balancing {
+    job: RenderJob,
+    position: i64,
+    rate: u32,
+    signature: Value,
+}
+
+/// A source's stem: its left and right channels.
+type Stem = (Arc<Vec<f32>>, Arc<Vec<f32>>);
+
+/// A live balance (varimu/rooms/balance.py): the stems loaded (left, right) at the session's
+/// rate, where they sit on the timeline, the scene it was made for. A source's fader is its
+/// level: the stem plays scaled by its level over the one it was made at.
+struct Balanced {
+    balance: Balance,
+    stems: Vec<Stem>,
+    position: i64,
+    signature: Value,
+}
+
 pub struct RoomView {
     root: PathBuf,
     scene: Scene,
@@ -57,6 +86,11 @@ pub struct RoomView {
     sel: Option<Sel>,
     drag: Option<Drag>,
     running: Option<Running>,
+    balancing: Option<Balancing>,
+    balanced: Option<Balanced>,
+    /// The balance playing (its own tracks-only player), and the gains it was last given.
+    preview: Option<Player>,
+    preview_gains: Vec<f64>,
     status: String,
     error: Option<String>,
     rt60: Option<String>,
@@ -83,6 +117,10 @@ impl RoomView {
             sel: None,
             drag: None,
             running: None,
+            balancing: None,
+            balanced: None,
+            preview: None,
+            preview_gains: Vec::new(),
             status: String::new(),
             error: None,
             rt60: None,
@@ -110,6 +148,8 @@ impl RoomView {
             self.saved = self.scene.state();
             self.sel = None;
             self.dir = Some(dir);
+            self.preview = None;
+            self.balanced = None;
             return;
         }
         let state = self.scene.state();
@@ -126,7 +166,9 @@ impl RoomView {
     pub fn ui(&mut self, ui: &mut egui::Ui, sv: &mut SessionView) {
         self.sync_session(sv);
         self.poll(sv);
-        if self.running.is_some() {
+        self.poll_balance();
+        self.follow_faders();
+        if self.running.is_some() || self.balancing.is_some() {
             ui.ctx()
                 .request_repaint_after(std::time::Duration::from_millis(200));
         }
@@ -396,6 +438,19 @@ impl RoomView {
                 self.sel = Some(Sel::Source(self.scene.sources.len() - 1));
             }
         });
+        if self.scene.sources.len() > 1
+            && ui
+                .button("Levels from the mix")
+                .on_hover_text(
+                    "set the sources' levels from the Session view's balance (each track \
+                     while it sounds, plus its fader): the loudest in the mix gets the \
+                     highest level here now, the others sit as far below it as they do in \
+                     the mix; muted tracks are left alone",
+                )
+                .clicked()
+        {
+            self.levels_from_mix(sv);
+        }
         ui.separator();
 
         // Mics
@@ -521,7 +576,210 @@ impl RoomView {
             }
         }
         ui.separator();
+        self.balance_form(ui, sv);
+        ui.separator();
         self.render_form(ui, sv);
+    }
+
+    /// BALANCE: the sources' levels set while the room plays, before the render
+    /// (varimu/rooms/balance.py: stems through the chains' linear proxies).
+    fn balance_form(&mut self, ui: &mut egui::Ui, sv: &mut SessionView) {
+        ui.label(RichText::new("BALANCE").strong().color(theme::MUTED));
+        if let Some(b) = &self.balancing {
+            ui.add(egui::ProgressBar::new(b.job.progress() as f32).show_percentage());
+            for line in b.job.tail(3) {
+                ui.label(RichText::new(line).small().color(theme::FAINT));
+            }
+            if ui.button("✕ Cancel").clicked() {
+                b.job.cancel();
+            }
+            return;
+        }
+        let fresh = self
+            .balanced
+            .as_ref()
+            .is_some_and(|b| b.signature == self.signature());
+        let problems = self.scene.problems();
+        let label = if self.balanced.is_some() {
+            "Prepare again"
+        } else {
+            "Prepare balance"
+        };
+        if ui
+            .add_enabled(
+                problems.is_empty() && self.running.is_none(),
+                egui::Button::new(label),
+            )
+            .on_hover_text(
+                "Hears every source in the room through every mic, as the render would but \
+                 through a linear stand-in for each chain (measured once on the chain): then \
+                 the sources' levels below play live. A minute or two; the room's part is \
+                 cached, so after a change of level it is quick",
+            )
+            .clicked()
+        {
+            self.preview = None;
+            if let Err(e) = self.start_balance(sv) {
+                self.error = Some(e);
+            }
+        }
+        let Some(b) = &self.balanced else {
+            ui.label(
+                RichText::new("set the sources' levels while hearing the mix of the mics")
+                    .small()
+                    .color(theme::FAINT),
+            );
+            return;
+        };
+        if !fresh {
+            ui.label(
+                RichText::new(
+                    "the room, the mics or the sources moved since: prepare again to hear it",
+                )
+                .small()
+                .color(theme::WARN),
+            );
+            self.preview = None;
+            return;
+        }
+        // the faders: each source's level (the same as its "Level at 1 m")
+        let names: Vec<String> = b.balance.sources.iter().map(|s| s.name.clone()).collect();
+        for name in &names {
+            if let Some(s) = self.scene.sources.iter_mut().find(|s| &s.name == name) {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(name).color(SOURCE_COLOR));
+                    ui.add(
+                        egui::Slider::new(&mut s.spl_db, 40.0..=130.0)
+                            .step_by(0.5)
+                            .suffix(" dB"),
+                    );
+                });
+            }
+        }
+        // each mic's print's predicted peak at these levels
+        let gains = self.balance_gains();
+        let b = self.balanced.as_ref().unwrap();
+        for (m, db) in b
+            .balance
+            .mics
+            .iter()
+            .zip(room::balance_peak_dbfs(&b.balance.peaks, &gains))
+        {
+            let (color, note) = if db > -1.0 {
+                (theme::FAULT, "  past full scale: its chain saturates")
+            } else if db > -6.0 {
+                (theme::WARN, "  near full scale")
+            } else {
+                (theme::FAINT, "")
+            };
+            ui.label(
+                RichText::new(format!("{m}: peak {db:.1} dBFS{note}"))
+                    .small()
+                    .color(color),
+            );
+        }
+        ui.horizontal(|ui| {
+            if self.preview.is_some() {
+                if ui.button("■ Stop").clicked() {
+                    self.preview = None;
+                }
+            } else if ui
+                .button("▶ Play the balance")
+                .on_hover_text(
+                    "the mix of the mics from the session's start bar (its loop too), the \
+                     click off; the faders above act as it plays",
+                )
+                .clicked()
+                && let Err(e) = self.start_preview(sv)
+            {
+                self.error = Some(e);
+            }
+        });
+        ui.label(
+            RichText::new(
+                "linear stand-ins: levels and bleed as the render, but not how hard a louder \
+                 source drives a chain (the peaks say where that starts)",
+            )
+            .small()
+            .color(theme::FAINT),
+        );
+    }
+
+    /// The scene as a balance depends on it: everything but the sources' levels.
+    fn signature(&self) -> Value {
+        let mut v = self.scene.state();
+        if let Some(ss) = v.get_mut("sources").and_then(Value::as_array_mut) {
+            for s in ss {
+                if let Some(o) = s.as_object_mut() {
+                    o.remove("spl_db");
+                }
+            }
+        }
+        v
+    }
+
+    /// Each stem's gain: its source's level now over the level it was made at.
+    fn balance_gains(&self) -> Vec<f64> {
+        let Some(b) = &self.balanced else {
+            return Vec::new();
+        };
+        b.balance
+            .sources
+            .iter()
+            .map(|bs| {
+                self.scene
+                    .sources
+                    .iter()
+                    .find(|s| s.name == bs.name)
+                    .map_or(0.0, |s| 10f64.powf((s.spl_db - bs.spl_db) / 20.0))
+            })
+            .collect()
+    }
+
+    fn balance_mix(&self) -> Mix {
+        let mut mix = Mix::default();
+        if let Some(b) = &self.balanced {
+            for ((l, r), g) in b.stems.iter().zip(self.balance_gains()) {
+                let g = g as f32;
+                for (audio, gain) in [(l, (g, 0.0)), (r, (0.0, g))] {
+                    mix.clips.push(MixClip {
+                        start: b.position,
+                        audio: audio.clone(),
+                        gain,
+                    });
+                }
+            }
+        }
+        mix
+    }
+
+    fn start_preview(&mut self, sv: &SessionView) -> Result<(), String> {
+        let s = Settings::load(&self.root.join("config"), Quality::Draft1x)?;
+        let p = Player::start_mix(None, s, 0.05)?;
+        let mut t = sv.session().transport.clone();
+        t.click = ClickMode::Off;
+        t.count_in_bars = 0;
+        t.pre_roll_bars = 0;
+        p.set_transport(&t);
+        p.set_mix(Arc::new(self.balance_mix()));
+        p.transport_run(true);
+        self.preview_gains = self.balance_gains();
+        self.preview = Some(p);
+        Ok(())
+    }
+
+    /// A fader moved while the balance plays: the mix again, at the new gains.
+    fn follow_faders(&mut self) {
+        if self.preview.is_none() {
+            return;
+        }
+        let gains = self.balance_gains();
+        if gains != self.preview_gains {
+            if let Some(p) = &self.preview {
+                p.set_mix(Arc::new(self.balance_mix()));
+            }
+            self.preview_gains = gains;
+        }
     }
 
     fn source_form(&mut self, ui: &mut egui::Ui, i: usize, tracks: &[(String, String)]) {
@@ -866,15 +1124,119 @@ impl RoomView {
 
     // --- Rendering ---------------------------------------------------------------------
 
+    /// The sources' SPLs from the session's balance (`room::levels_from_mix`).
+    fn levels_from_mix(&mut self, sv: &SessionView) {
+        let session = sv.session();
+        let mix: Vec<Option<f64>> = self
+            .scene
+            .sources
+            .iter()
+            .map(|s| {
+                let t = session.tracks.iter().find(|t| t.id == s.track)?;
+                if t.mute {
+                    return None;
+                }
+                let (_, audio, _) = t.playing(session.rate)?;
+                let r = room::sounding_rms(audio, session.rate);
+                (r > 0.0).then(|| 20.0 * r.log10() + t.volume_db)
+            })
+            .collect();
+        let old: Vec<f64> = self.scene.sources.iter().map(|s| s.spl_db).collect();
+        let new = room::levels_from_mix(&mix, &old);
+        let mut said = Vec::new();
+        for ((s, &v), m) in self.scene.sources.iter_mut().zip(&new).zip(&mix) {
+            s.spl_db = v;
+            said.push(match m {
+                Some(_) => format!("{} {v:.1}", s.name),
+                None => format!("{} left", s.name),
+            });
+        }
+        self.status = format!("levels from the mix (dB SPL): {}", said.join(", "));
+    }
+
     fn start(&mut self, sv: &mut SessionView) -> Result<(), String> {
         self.error = None;
         self.status.clear();
+        let (dir, scene_path, start, rate, scene_json) = self.write_inputs(sv, "render")?;
+        let job = RenderJob::spawn(&self.root, &scene_path, &dir.join("render"))?;
+        self.running = Some(Running {
+            job,
+            position: start,
+            rate,
+            scene: scene_json,
+        });
+        self.status = "rendering…".to_string();
+        Ok(())
+    }
+
+    /// BALANCE's stems made in the background (`room_print.py --balance`).
+    fn start_balance(&mut self, sv: &SessionView) -> Result<(), String> {
+        self.error = None;
+        self.status.clear();
+        let signature = self.signature();
+        let (dir, scene_path, start, rate, _) = self.write_inputs(sv, "balance")?;
+        let job =
+            RenderJob::spawn_with(&self.root, &scene_path, &dir.join("stems"), &["--balance"])?;
+        self.balancing = Some(Balancing {
+            job,
+            position: start,
+            rate,
+            signature,
+        });
+        Ok(())
+    }
+
+    /// The stems loaded once their job is done.
+    fn poll_balance(&mut self) {
+        let Some(b) = &mut self.balancing else { return };
+        let Some(result) = b.job.finished() else {
+            return;
+        };
+        let b = self.balancing.take().unwrap();
+        match result.and_then(|()| {
+            let balance = room::read_balance(&b.job.out_dir)?;
+            let mut stems = Vec::new();
+            for s in &balance.sources {
+                let load = |p: &std::path::Path| -> Result<Arc<Vec<f32>>, String> {
+                    Ok(Arc::new(
+                        audio::load(p, b.rate)?.iter().map(|&v| v as f32).collect(),
+                    ))
+                };
+                stems.push((load(&s.left)?, load(&s.right)?));
+            }
+            Ok(Balanced {
+                balance,
+                stems,
+                position: b.position,
+                signature: b.signature,
+            })
+        }) {
+            Ok(bal) => {
+                self.status = format!(
+                    "balance ready: {} sources through {} mics",
+                    bal.stems.len(),
+                    bal.balance.mics.len()
+                );
+                self.balanced = Some(bal);
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
+    /// Each source's track as the mix plays it written into a new folder
+    /// `<session>/rooms/<kind>_<stamp>/` with the scene as Python reads it: the folder, the
+    /// scene file, the timeline position of its first sample, the rate, the scene.
+    fn write_inputs(
+        &self,
+        sv: &SessionView,
+        kind: &str,
+    ) -> Result<(PathBuf, PathBuf, i64, u32, Value), String> {
         let session = sv.session();
         let rate = session.rate;
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs());
-        let dir = session.dir.join("rooms").join(format!("render_{stamp}"));
+        let dir = session.dir.join("rooms").join(format!("{kind}_{stamp}"));
         std::fs::create_dir_all(dir.join("sources")).map_err(|e| e.to_string())?;
         // Each source's track as the mix plays it (its inserts' print, an event take's
         // render), all on one clock: the earliest take's start.
@@ -913,15 +1275,7 @@ impl RoomView {
             serde_json::to_string_pretty(&scene_json).unwrap(),
         )
         .map_err(|e| e.to_string())?;
-        let job = RenderJob::spawn(&self.root, &scene_path, &dir.join("render"))?;
-        self.running = Some(Running {
-            job,
-            position: start,
-            rate,
-            scene: scene_json,
-        });
-        self.status = "rendering…".to_string();
-        Ok(())
+        Ok((dir, scene_path, start, rate, scene_json))
     }
 
     fn poll(&mut self, sv: &mut SessionView) {
@@ -952,7 +1306,7 @@ impl RoomView {
                 self.rt60 = Some(format!("RT60 (s) {}", s.join("  ")));
             }
             let n = tracks.len();
-            sv.add_room_tracks(tracks)?;
+            sv.add_audio_tracks(tracks)?;
             Ok(n)
         }) {
             Ok(n) => self.status = format!("added {n} tracks to the session"),

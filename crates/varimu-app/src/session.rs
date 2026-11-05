@@ -1224,7 +1224,7 @@ impl Session {
 
     /// A track's chain rendered into a new take of `track` (now its active one) at
     /// `position`, its files written; `from` says what it was rendered from (the take, the
-    /// inserts, the quality). Returns its id.
+    /// inserts, the quality; or its `device` label, as an imported file's). Returns its id.
     pub fn add_rendered_take(
         &mut self,
         track: usize,
@@ -1238,7 +1238,10 @@ impl Session {
             position,
             latency: 0,
             heard: true,
-            device: format!("render of {}", from["take"].as_str().unwrap_or("?")),
+            device: from["device"].as_str().map_or_else(
+                || format!("render of {}", from["take"].as_str().unwrap_or("?")),
+                str::to_string,
+            ),
             recorded_unix_s: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs()),
