@@ -242,3 +242,105 @@ def test_scene_with_a_floor_plan_renders_its_pressures(tmp_path):
     h = p[0, 0, 0]
     assert abs(np.argmax(np.abs(h)) - int(round(np.linalg.norm([1, 0.2, 0.2]) / 343.2 * FS))) <= 2
     assert np.sum(h[int(0.1 * FS) :] ** 2) > 0  # a tail
+
+
+# --- a material per face (docs/ROOM_LOOP_PLAN.md R7) ---
+
+
+def test_one_absorbent_wall_decays_as_eyring_and_the_rays_say():
+    """Drapes on one long wall: the ray-traced RT falls as Eyring's area-weighted absorption
+    says (each within 15% of the other, and the drop from the bare room within 10%)."""
+    from varimu.rooms.polyroom import PolyRoom, ray_decay, rt60_from_decay
+
+    src = np.array([2.0, 2.55, 1.3])
+    bare = _rect_room()
+    draped = PolyRoom(RECT, "flat", 3.2, None, 0.0, 8, *FURNISHED,
+                      face_materials={"wall 1": "heavy_drapes"})  # fmt: skip
+    assert draped.material(draped.faces[2]) == "heavy_drapes"  # the floor is face 0
+    rt_bare = rt60_from_decay(*ray_decay(bare, src, 2.0, n_rays=8000))
+    rt = rt60_from_decay(*ray_decay(draped, src, 2.0, n_rays=8000))
+    ey_bare, ey = bare.rt60_eyring_s(), draped.rt60_eyring_s()
+    assert np.all(np.abs(rt / ey - 1) < 0.15), (rt, ey)
+    assert np.all(np.abs((rt / rt_bare) / (ey / ey_bare) - 1) < 0.10)
+    assert np.all(rt[2:] < 0.9 * rt_bare[2:])  # mids and highs clearly shorter (8-23%)
+
+
+def test_face_materials_follow_the_plan_as_given_and_default_to_the_rooms():
+    from varimu.rooms.polyroom import PolyRoom, ray_decay
+
+    cw = PolyRoom(RECT[::-1], "flat", 3.2, None, 0.0, 8, *FURNISHED,
+                  face_materials={"wall 0": "plaster"})  # fmt: skip
+    # the plan as given runs clockwise: its wall 0 (y = 5.5) is the stored edge 2
+    walls = {f.index: cw.material(f) for f in cw.faces if f.kind == "wall"}
+    assert walls == {0: "furnished_wall", 1: "furnished_wall", 2: "plaster", 3: "furnished_wall"}
+    with pytest.raises(ValueError):
+        PolyRoom(RECT, face_materials={"wall 9": "plaster"})
+    with pytest.raises(ValueError):
+        PolyRoom(RECT, face_materials={"wall 1": "velvet"})
+    # naming a face with its default material changes nothing, bit for bit
+    same = PolyRoom(RECT, "flat", 3.2, None, 0.0, 8, *FURNISHED,
+                    face_materials={"wall 0": "furnished_wall", "floor": "wood_floor"})  # fmt: skip
+    a = ray_decay(_rect_room(), np.array([2.0, 2.5, 1.3]), 0.5, n_rays=500)
+    b = ray_decay(same, np.array([2.0, 2.5, 1.3]), 0.5, n_rays=500)
+    assert np.array_equal(a[1], b[1])
+
+
+# --- the GPU (docs/ROOM_LOOP_PLAN.md R9) ---
+
+
+def _gpu_or_skip():
+    from varimu.rooms import gpu
+
+    if gpu.module() is None:
+        pytest.skip("roomsim isn't installed (uv sync --extra fast)")
+    return gpu
+
+
+def test_triangles_cover_every_face():
+    from varimu.rooms.polyroom import PolyRoom
+
+    for room in (
+        _rect_room(),
+        PolyRoom([[0, 0], [8, 0], [8, 3], [3, 3], [3, 8], [0, 8]], "gable", 2.8, 4.5),
+        PolyRoom(RECT, "vault", 3.0, 5.0, 30.0, 6),
+    ):
+        tris, owner = room.triangles()
+        area = np.linalg.norm(np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0]), axis=1)
+        per = np.bincount(owner, area / 2, minlength=len(room.faces))
+        assert np.all(np.abs(per / np.array(room.areas_m2()) - 1) < 0.05)  # areas_m2 sampled
+        for fi, f in enumerate(room.faces):  # every triangle lies on its face's plane
+            v = tris[owner == fi].reshape(-1, 3)
+            assert np.allclose(v @ f.normal, f.d, atol=1e-9)
+
+
+@pytest.mark.parametrize("backend", ["cpu", "gpu"])
+def test_roomsim_rays_agree_with_numpy(backend):
+    """roomsim's ray tracer (its own random numbers) against polyroom's numpy loop: RTs
+    within 2%, the energy at a mic over 50-300 ms within 0.5 dB."""
+    gpu = _gpu_or_skip()
+    if backend == "gpu" and gpu.gpu_info() is None:
+        pytest.skip("no GPU")
+    from varimu.rooms.polyroom import PolyRoom, ray_decay, rt60_from_decay
+
+    room = PolyRoom([[0, 0], [8, 0], [8, 3], [3, 3], [3, 8], [0, 8]], "gable", 2.8, 4.5)
+    src, mic = np.array([6.5, 1.5, 1.5]), np.array([1.5, 6.5, 1.5])
+    ref = ray_decay(room, src, 2.0, n_rays=20000, receivers=[mic], backend="numpy")
+    got = ray_decay(room, src, 2.0, n_rays=20000, receivers=[mic], backend=backend)
+    assert np.all(np.abs(rt60_from_decay(*got[:2]) / rt60_from_decay(*ref[:2]) - 1) < 0.02)
+    e_ref, e_got = ref[2][0][:, 50:300].sum(1), got[2][0][:, 50:300].sum(1)
+    assert np.all(np.abs(10 * np.log10(e_got / e_ref)) < 0.5)
+
+
+def test_gpu_image_spectra_are_numpys():
+    gpu = _gpu_or_skip()
+    if gpu.gpu_info() is None:
+        pytest.skip("no GPU")
+    room = Shoebox((7.0, 5.5, 3.2), ("furnished_wall",) * 4 + ("wood_floor", "gypsum_on_studs"))
+    om = _omni()
+    mics = [Mic(np.array([4.5, 2.25, 1.6]), aim_vector(0), om)]
+    src = [np.array([2.0, 2.55, 1.3])]
+    a = responses(room, src, mics, FS, tail=False, backend="numpy", length_s=0.2)
+    g = responses(room, src, mics, FS, tail=False, backend="gpu", length_s=0.2)
+    n = int(0.06 * FS)
+    err = np.sqrt(np.sum((a[..., :n] - g[..., :n]) ** 2) / np.sum(a[..., :n] ** 2))
+    assert 20 * np.log10(err) < -100

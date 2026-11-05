@@ -12,7 +12,10 @@ JSON):
       # ceiling: {type: gable, height_m: 2.8, peak_m: 4.5, axis_deg: 0, facets: 8}
       #   (flat | shed | gable | vault; varimu/rooms/polyroom.py)
       materials: {walls: furnished_wall, floor: wood_floor, ceiling: gypsum_on_studs}
-        # a shoebox may give one per surface: {x0, x1, y0, y1, floor, ceiling}
+        # a shoebox may give one per surface: {x0, x1, y0, y1, floor, ceiling}; a floor
+        # plan its faces' own (ROOM_LOOP_PLAN.md R7), over the three:
+        #   faces: {"wall 2": heavy_drapes, "ceiling 0": acoustic_tile, floor: carpet_on_pad}
+        #   ("wall N" runs from the floor's corner N to N + 1, "ceiling N" is a facet)
       source: "provisional: ..."
     sources:
       - name: A
@@ -136,6 +139,7 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
             m["ceiling"],
             float(r.get("temp_c", 20.0)),
             float(r.get("rh_percent", 50.0)),
+            {str(k): str(v) for k, v in (m.get("faces") or {}).items()},
         )
     else:
         room = Shoebox(
@@ -271,9 +275,7 @@ def mic_pressures(
 
 def _anechoic(room) -> bool:
     if isinstance(room, PolyRoom):
-        return all(
-            m == "anechoic" for m in (room.walls, room.floor_material, room.ceiling_material)
-        )
+        return all(m == "anechoic" for m in room.materials())
     return any(m == "anechoic" for m in room.materials)
 
 

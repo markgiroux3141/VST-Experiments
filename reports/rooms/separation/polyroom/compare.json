@@ -1,0 +1,211 @@
+{
+ "what": "polyroom minus shoebox, per table cell (columns as table_columns)",
+ "table_columns": [
+  "effective_tmr_db",
+  "glimpse_better_ear"
+ ],
+ "difference": {
+  "same_u47": {
+   "centre_room_off": [
+    -0.15,
+    0.003
+   ],
+   "centre_room_-6": [
+    -0.19,
+    -0.005
+   ],
+   "centre_room_0": [
+    -0.3,
+    -0.008
+   ],
+   "panned_room_off": [
+    -0.07,
+    0.008
+   ],
+   "panned_room_-6": [
+    -0.41,
+    -0.006
+   ]
+  },
+  "same_omni": {
+   "centre_room_off": [
+    -0.21,
+    -0.006
+   ],
+   "centre_room_-6": [
+    -0.01,
+    -0.008
+   ],
+   "centre_room_0": [
+    -0.1,
+    -0.004
+   ],
+   "panned_room_off": [
+    -0.06,
+    0.006
+   ],
+   "panned_room_-6": [
+    0.66,
+    0.01
+   ]
+  },
+  "opposite": {
+   "centre_room_off": [
+    0.12,
+    0.011
+   ],
+   "centre_room_-6": [
+    0.17,
+    0.002
+   ],
+   "centre_room_0": [
+    -0.08,
+    0.0
+   ],
+   "panned_room_off": [
+    0.3,
+    0.008
+   ],
+   "panned_room_-6": [
+    0.34,
+    0.0
+   ]
+  },
+  "swapped": {
+   "centre_room_off": [
+    0.12,
+    0.015
+   ],
+   "centre_room_-6": [
+    -0.69,
+    -0.007
+   ],
+   "centre_room_0": [
+    -1.28,
+    -0.024
+   ],
+   "panned_room_off": [
+    0.16,
+    0.001
+   ],
+   "panned_room_-6": [
+    -0.54,
+    -0.015
+   ]
+  },
+  "pattern_control": {
+   "centre_room_off": [
+    -0.27,
+    -0.009
+   ],
+   "centre_room_-6": [
+    -0.53,
+    -0.015
+   ],
+   "centre_room_0": [
+    -0.57,
+    -0.01
+   ],
+   "panned_room_off": [
+    -0.13,
+    -0.004
+   ],
+   "panned_room_-6": [
+    -0.66,
+    -0.009
+   ]
+  }
+ },
+ "own_minus_other_db (poly, shoebox)": {
+  "same_u47": {
+   "spot A": [
+    13.84,
+    12.5
+   ],
+   "spot B": [
+    16.42,
+    14.32
+   ],
+   "room L": [
+    null,
+    null
+   ],
+   "room R": [
+    null,
+    null
+   ]
+  },
+  "same_omni": {
+   "spot A": [
+    9.61,
+    8.57
+   ],
+   "spot B": [
+    9.23,
+    7.95
+   ],
+   "room L": [
+    null,
+    null
+   ],
+   "room R": [
+    null,
+    null
+   ]
+  },
+  "opposite": {
+   "spot A": [
+    13.84,
+    12.5
+   ],
+   "spot B": [
+    9.23,
+    7.95
+   ],
+   "room L": [
+    null,
+    null
+   ],
+   "room R": [
+    null,
+    null
+   ]
+  },
+  "swapped": {
+   "spot A": [
+    9.61,
+    8.57
+   ],
+   "spot B": [
+    16.42,
+    14.32
+   ],
+   "room L": [
+    null,
+    null
+   ],
+   "room R": [
+    null,
+    null
+   ]
+  },
+  "pattern_control": {
+   "spot A": [
+    13.84,
+    12.5
+   ],
+   "spot B": [
+    9.16,
+    7.88
+   ],
+   "room L": [
+    null,
+    null
+   ],
+   "room R": [
+    null,
+    null
+   ]
+  }
+ }
+}

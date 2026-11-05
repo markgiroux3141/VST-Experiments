@@ -302,6 +302,9 @@ pub struct Scene {
     pub walls: String,
     pub floor: String,
     pub ceiling: String,
+    /// Faces with a material of their own (ROOM_LOOP_PLAN.md R7), as polyroom.py's
+    /// `face_materials`: "wall N" (from corner N to N + 1), "ceiling N" (a facet).
+    pub faces: BTreeMap<String, String>,
     pub sources: Vec<RoomSource>,
     pub mics: Vec<RoomMic>,
     pub quality: String,
@@ -317,6 +320,7 @@ impl Default for Scene {
             walls: "furnished_wall".to_string(),
             floor: "wood_floor".to_string(),
             ceiling: "gypsum_on_studs".to_string(),
+            faces: BTreeMap::new(),
             sources: Vec::new(),
             mics: Vec::new(),
             quality: "production".to_string(),
@@ -343,6 +347,102 @@ impl Scene {
     pub fn set_preset(&mut self, name: &str, w: f64, d: f64) {
         self.shape = name.to_string();
         self.plan = preset_plan(name, w, d);
+        self.faces.retain(|k, _| !k.starts_with("wall "));
+    }
+
+    /// The ceiling's facets (planes): one for flat and shed, two for a gable, a vault's.
+    pub fn n_facets(&self) -> usize {
+        self.profile().len() - 1
+    }
+
+    /// A face's material: its own, else the room's for its kind ("wall N", "ceiling N",
+    /// "floor").
+    pub fn face_material(&self, key: &str) -> &str {
+        if let Some(m) = self.faces.get(key) {
+            return m;
+        }
+        if key.starts_with("wall") {
+            &self.walls
+        } else if key.starts_with("ceiling") {
+            &self.ceiling
+        } else {
+            &self.floor
+        }
+    }
+
+    /// Give a face its own material, or `None` for the room's again.
+    pub fn set_face_material(&mut self, key: &str, m: Option<String>) {
+        match m {
+            Some(m) => self.faces.insert(key.to_string(), m),
+            None => self.faces.remove(key),
+        };
+    }
+
+    fn wall_faces(&self) -> BTreeMap<usize, String> {
+        self.faces
+            .iter()
+            .filter_map(|(k, v)| Some((k.strip_prefix("wall ")?.parse().ok()?, v.clone())))
+            .collect()
+    }
+
+    fn set_wall_faces(&mut self, walls: BTreeMap<usize, String>) {
+        self.faces.retain(|k, _| !k.starts_with("wall "));
+        for (i, m) in walls {
+            self.faces.insert(format!("wall {i}"), m);
+        }
+    }
+
+    /// A corner added after corner `i` (on wall i): both halves keep the wall's material.
+    pub fn insert_corner(&mut self, i: usize, p: [f64; 2]) {
+        let mut out = BTreeMap::new();
+        for (w, m) in self.wall_faces() {
+            match w.cmp(&i) {
+                std::cmp::Ordering::Less => {
+                    out.insert(w, m);
+                }
+                std::cmp::Ordering::Equal => {
+                    out.insert(w, m.clone());
+                    out.insert(w + 1, m);
+                }
+                std::cmp::Ordering::Greater => {
+                    out.insert(w + 1, m);
+                }
+            }
+        }
+        self.plan.insert(i + 1, p);
+        self.set_wall_faces(out);
+    }
+
+    /// Corner `c` removed: the two walls meeting there become one, the earlier one's.
+    pub fn remove_corner(&mut self, c: usize) {
+        let walls = self.wall_faces();
+        // a list of walls parallel to the corners, removed as the corner: wall c goes, the
+        // merged wall is the one before it (the last when c = 0)
+        let mut list: Vec<Option<String>> = (0..self.plan.len())
+            .map(|w| walls.get(&w).cloned())
+            .collect();
+        list.remove(c);
+        self.plan.remove(c);
+        self.set_wall_faces(
+            list.into_iter()
+                .enumerate()
+                .filter_map(|(i, m)| Some((i, m?)))
+                .collect(),
+        );
+    }
+
+    /// The faces' own materials that exist on this plan and ceiling.
+    fn faces_in_room(&self) -> BTreeMap<String, String> {
+        let (n, nf) = (self.plan.len(), self.n_facets());
+        self.faces
+            .iter()
+            .filter(|(k, _)| match k.split_once(' ') {
+                Some(("wall", i)) => i.parse::<usize>().is_ok_and(|i| i < n),
+                Some(("ceiling", i)) => i.parse::<usize>().is_ok_and(|i| i < nf),
+                _ => false,
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     /// The floor plan's bounding box: (min, max).
@@ -430,6 +530,7 @@ impl Scene {
                              "peak_m": self.roof.peak, "axis_deg": self.roof.axis_deg,
                              "facets": self.roof.facets},
             "walls": self.walls, "floor": self.floor, "ceiling": self.ceiling,
+            "faces": self.faces,
             "quality": self.quality,
             "sources": self.sources.iter().map(|s| json!({
                 "name": s.name, "track": s.track, "spl_db": s.spl_db, "position_m": s.pos,
@@ -482,6 +583,14 @@ impl Scene {
             walls: st(v, "walls", &d.walls),
             floor: st(v, "floor", &d.floor),
             ceiling: st(v, "ceiling", &d.ceiling),
+            faces: v["faces"]
+                .as_object()
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, x)| Some((k.clone(), x.as_str()?.to_string())))
+                        .collect()
+                })
+                .unwrap_or_default(),
             quality: st(v, "quality", &d.quality),
             sources: v["sources"]
                 .as_array()
@@ -524,6 +633,12 @@ impl Scene {
 
     /// The scene in varimu/rooms/scene.py's format, each source's clip from `clips`.
     pub fn render_json(&self, clips: &BTreeMap<String, PathBuf>) -> Value {
+        let mut materials =
+            json!({"walls": self.walls, "floor": self.floor, "ceiling": self.ceiling});
+        let faces = self.faces_in_room();
+        if !faces.is_empty() {
+            materials["faces"] = json!(faces);
+        }
         json!({
             "name": self.name,
             "room": {
@@ -531,7 +646,7 @@ impl Scene {
                 "ceiling": {"type": self.roof.kind, "height_m": self.roof.height,
                             "peak_m": self.roof.peak, "axis_deg": self.roof.axis_deg,
                             "facets": self.roof.facets},
-                "materials": {"walls": self.walls, "floor": self.floor, "ceiling": self.ceiling},
+                "materials": materials,
                 "source": "the Room view (docs/ROOM_LOOP_PLAN.md)",
             },
             "sources": self.sources.iter().map(|s| json!({
@@ -841,5 +956,35 @@ mod tests {
         assert_eq!(v["room"]["ceiling"]["type"], "flat");
         assert_eq!(v["mics"][0]["aim"]["azimuth_deg"], 180.0);
         assert_eq!(v["mics"][0]["set"]["pattern_u47"], 0.0);
+        assert!(v["room"]["materials"].get("faces").is_none());
+    }
+
+    #[test]
+    fn faces_follow_corner_edits() {
+        let mut s = scene();
+        s.set_face_material("wall 1", Some("heavy_drapes".into()));
+        s.set_face_material("wall 3", Some("plaster".into()));
+        s.set_face_material("ceiling 0", Some("acoustic_tile".into()));
+        assert_eq!(s.face_material("wall 1"), "heavy_drapes");
+        assert_eq!(s.face_material("wall 2"), "furnished_wall");
+        assert_eq!(Scene::from_state(&s.state()), s);
+        s.insert_corner(1, [7.0, 2.0]); // wall 1 split in two
+        assert_eq!(s.face_material("wall 1"), "heavy_drapes");
+        assert_eq!(s.face_material("wall 2"), "heavy_drapes");
+        assert_eq!(s.face_material("wall 4"), "plaster");
+        s.remove_corner(2); // the two halves merge again
+        assert_eq!(s.plan.len(), 4);
+        assert_eq!(s.face_material("wall 1"), "heavy_drapes");
+        assert_eq!(s.face_material("wall 3"), "plaster");
+        s.remove_corner(0); // walls 3 and 0 meet at corner 0: wall 3 (now 2) stays
+        assert_eq!(s.face_material("wall 2"), "plaster");
+        assert_eq!(s.face_material("wall 0"), "heavy_drapes");
+        let v = s.render_json(&BTreeMap::new());
+        assert_eq!(
+            v["room"]["materials"]["faces"]["ceiling 0"],
+            "acoustic_tile"
+        );
+        s.set_preset("shoebox", 7.0, 5.5);
+        assert_eq!(s.faces.len(), 1);
     }
 }

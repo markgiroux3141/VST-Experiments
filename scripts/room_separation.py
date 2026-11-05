@@ -3,7 +3,7 @@ each spot-miked through a chain, a spaced omni pair as room mics panned hard lef
 right; how well do the two separate, per pair of spot chains?
 
     uv run --extra fast --extra listen python scripts/room_separation.py [--render-only]
-        [--analyse-only] [--quality production]
+        [--analyse-only] [--quality production] [--room shoebox|poly]
 
 Sources: the separation study's dry synth lines (cache/separation/conditions/dry/: the
 target melody, the same with one note changed, the arpeggio masker; run
@@ -32,6 +32,11 @@ band (the equalization-cancellation model, Lavandier & Culling 2010) folded into
 effective target-to-masker ratio. -> reports/rooms/separation/summary.json; the stereo
 mixes for the listening staircase (scripts/room_separation_listen.py) in each
 condition's folder.
+
+`--room poly` (ROOM_LOOP_PLAN.md R8) renders the same room as a floor plan through
+varimu.rooms.polyroom (image sources to 4 reflections, the ray-traced tail) into
+reports/rooms/separation/polyroom/, with `compare.json` there: each table cell's change from
+the shoebox's.
 """
 
 from __future__ import annotations
@@ -51,6 +56,12 @@ ROOM = {
     "dims_m": [7.0, 5.5, 3.2],
     "materials": {"walls": "furnished_wall", "floor": "wood_floor", "ceiling": "gypsum_on_studs"},
     "source": "provisional: model knowledge (a live tracking room, 7 x 5.5 x 3.2 m, furnished)",
+}
+POLY_ROOM = {
+    "floor_m": [[0.0, 0.0], [7.0, 0.0], [7.0, 5.5], [0.0, 5.5]],
+    "ceiling": {"type": "flat", "height_m": 3.2},
+    "materials": ROOM["materials"],
+    "source": ROOM["source"],
 }
 A_POS, B_POS = [2.0, 2.55, 1.3], [4.5, 2.55, 1.3]
 # Spots 0.3 m from their source toward the other one, aimed back at it.
@@ -82,11 +93,11 @@ MIXES = {
 TMR_DB = -6.0
 
 
-def scene(cond: str, variant: str, quality: str) -> dict:
+def scene(cond: str, variant: str, quality: str, room: str = "shoebox") -> dict:
     a, b = CONDITIONS[cond]
     return {
         "name": f"separation_{cond}_{variant}",
-        "room": ROOM,
+        "room": POLY_ROOM if room == "poly" else ROOM,
         "sources": [
             {"name": "A", "clip": str(DRY / VARIANTS[variant]), "spl_db": 90, "position_m": A_POS},
             {"name": "B", "clip": str(DRY / "masker.wav"), "spl_db": 90, "position_m": B_POS},
@@ -101,11 +112,11 @@ def scene(cond: str, variant: str, quality: str) -> dict:
     }
 
 
-def render_all(quality: str) -> None:
+def render_all(quality: str, room: str, out) -> None:
     for cond in CONDITIONS:
         for variant in VARIANTS:
-            d = OUT / cond / variant
-            sc = scene(cond, variant, quality)
+            d = out / cond / variant
+            sc = scene(cond, variant, quality, room)
             done = d / "scene.json"
             if (
                 (d / "render.json").exists()
@@ -124,16 +135,45 @@ def main() -> None:
     ap.add_argument("--render-only", action="store_true")
     ap.add_argument("--analyse-only", action="store_true")
     ap.add_argument("--quality", default="production")
+    ap.add_argument("--room", choices=["shoebox", "poly"], default="shoebox")
     args = ap.parse_args()
+    out = OUT / "polyroom" if args.room == "poly" else OUT
     if not args.analyse_only:
-        render_all(args.quality)
+        render_all(args.quality, args.room, out)
     if args.render_only:
         return
     from varimu.rooms.binaural import analyse
 
-    summary = analyse(OUT, list(CONDITIONS), MIXES, TMR_DB)
-    (OUT / "summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    summary = analyse(out, list(CONDITIONS), MIXES, TMR_DB)
+    (out / "summary.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
     print(json.dumps(summary["table"], indent=1))
+    if args.room == "poly" and (OUT / "summary.json").exists():
+        old = json.loads((OUT / "summary.json").read_text(encoding="utf-8"))
+        diff = {
+            cond: {
+                mix: [round(a - b, 3) for a, b in zip(row, old["table"][cond][mix], strict=True)]
+                for mix, row in mixes.items()
+            }
+            for cond, mixes in summary["table"].items()
+        }
+        own = {
+            cond: {
+                m: [
+                    c["mics"][m].get("own_minus_other_db"),
+                    old["conditions"][cond]["mics"][m].get("own_minus_other_db"),
+                ]
+                for m in c["mics"]
+            }
+            for cond, c in summary["conditions"].items()
+        }
+        cmp = {
+            "what": "polyroom minus shoebox, per table cell (columns as table_columns)",
+            "table_columns": summary["table_columns"],
+            "difference": diff,
+            "own_minus_other_db (poly, shoebox)": own,
+        }
+        (out / "compare.json").write_text(json.dumps(cmp, indent=1), encoding="utf-8")
+        print(json.dumps(diff, indent=1))
 
 
 if __name__ == "__main__":

@@ -84,11 +84,14 @@ class PolyRoom:
     ceiling_material: str = "gypsum_on_studs"
     temp_c: float = 20.0
     rh_percent: float = 50.0
+    face_materials: dict[str, str] = field(default_factory=dict)
     faces: list[Face] = field(init=False)
 
     def __post_init__(self):
         self.floor = np.asarray(self.floor, float)
-        if _signed_area(self.floor) < 0:
+        n = len(self.floor)
+        self._reversed = _signed_area(self.floor) < 0
+        if self._reversed:
             self.floor = self.floor[::-1].copy()
         if self.ceiling not in CEILINGS:
             raise ValueError(f"ceiling {self.ceiling!r}: one of {CEILINGS}")
@@ -100,6 +103,34 @@ class PolyRoom:
         self.u_lo, self.u_hi = float(u.min()), float(u.max())
         self._knots_u, self._knots_h = self._profile()
         self.faces = self._faces()
+        self._overrides = self._face_overrides(n)
+
+    def _face_overrides(self, n: int) -> dict[tuple[str, int], str]:
+        """`face_materials` by (kind, index) of our faces: a wall's number is its edge in
+        the plan as given (reversed into counterclockwise order: edge i -> n - 2 - i)."""
+        from varimu.rooms.shoebox import ROOM_MATERIALS
+
+        out = {}
+        n_facets = len(self._knots_u) - 1
+        for key, mat in self.face_materials.items():
+            if mat not in ROOM_MATERIALS:
+                raise ValueError(f"face {key!r}: unknown material {mat!r}")
+            parts = str(key).split()
+            if parts == ["floor"]:
+                out[("floor", 0)] = mat
+                continue
+            if len(parts) != 2 or parts[0] not in ("wall", "ceiling") or not parts[1].isdigit():
+                raise ValueError(f"face {key!r}: 'floor', 'wall N' or 'ceiling N'")
+            i = int(parts[1])
+            if parts[0] == "wall":
+                if i >= n:
+                    raise ValueError(f"face {key!r}: the plan has {n} walls")
+                out[("wall", (n - 2 - i) % n if self._reversed else i)] = mat
+            else:
+                if i >= n_facets:
+                    raise ValueError(f"face {key!r}: the ceiling has {n_facets} facets")
+                out[("ceiling", i)] = mat
+        return out
 
     # --- the ceiling -------------------------------------------------------------------
 
@@ -181,9 +212,29 @@ class PolyRoom:
         return (t >= -tol) & (t <= 1 + tol) & (z >= -tol) & (z <= self.height_at(xy) + tol)
 
     def material(self, f: Face) -> str:
+        own = self._overrides.get((f.kind, f.index))
+        if own is not None:
+            return own
         return {"floor": self.floor_material, "wall": self.walls, "ceiling": self.ceiling_material}[
             f.kind
         ]
+
+    def materials(self) -> list[str]:
+        return [self.material(f) for f in self.faces]
+
+    def rt60_eyring_s(self) -> np.ndarray:
+        """Eyring's reverberation time per band from the faces' area-weighted absorption,
+        air included (a check on the ray tracing; the renders don't use it)."""
+        from varimu.rooms.shoebox import ROOM_MATERIALS
+
+        s = np.array(self.areas_m2())
+        alphas = np.stack([np.array(ROOM_MATERIALS[m]) for m in self.materials()])
+        a_mean = (s[:, None] * alphas).sum(0) / s.sum()
+        m = air_absorption_db_per_m(BANDS_HZ, self.temp_c, self.rh_percent) / (10 * np.log10(np.e))
+        v = self.volume_m3()
+        with np.errstate(divide="ignore"):
+            loss = -s.sum() * np.log(np.maximum(1 - a_mean, 0.0)) + 4 * m * v
+        return 24 * np.log(10) * v / (SPEED_OF_SOUND_M_S * loss)
 
     def areas_m2(self) -> list[float]:
         """Each face's area (sampled for the walls under a sloped ceiling)."""
@@ -208,6 +259,54 @@ class PolyRoom:
                 cos = abs(f.normal[2])
                 out.append(float(sel.sum() * cell / cos))
         return out
+
+    # --- triangles (the GPU's ray tracer, varimu.rooms.gpu) ------------------------------
+
+    def triangles(self) -> tuple[np.ndarray, np.ndarray]:
+        """Every face as triangles: vertices (T, 3, 3) and each one's face index (T,). The
+        floor by ear clipping; each wall as trapezoids between the ceiling's knots along it;
+        each ceiling facet as the floor's triangles clipped to its strip of u, lifted."""
+        tris, owner = [], []
+        floor_tris = _ear_clip(self.floor)
+        for fi, f in enumerate(self.faces):
+            if f.kind == "floor":
+                for t in floor_tris:
+                    tris.append(np.c_[t, np.zeros(3)])
+                    owner.append(fi)
+            elif f.kind == "wall":
+                n = len(self.floor)
+                p0, p1 = self.floor[f.index], self.floor[(f.index + 1) % n]
+                u0, u1 = p0 @ self.u_dir, p1 @ self.u_dir
+                ss = [0.0, 1.0]
+                if abs(u1 - u0) > 1e-12:
+                    for ku in self._knots_u[1:-1]:
+                        t = (ku - u0) / (u1 - u0)
+                        if 1e-9 < t < 1 - 1e-9:
+                            ss.append(float(t))
+                ss = sorted(ss)
+                for a, b in zip(ss[:-1], ss[1:], strict=True):
+                    pa, pb = p0 + a * (p1 - p0), p0 + b * (p1 - p0)
+                    ha, hb = float(self.height_at(pa)), float(self.height_at(pb))
+                    qa0, qb0 = np.r_[pa, 0.0], np.r_[pb, 0.0]
+                    qb1, qa1 = np.r_[pb, hb], np.r_[pa, ha]
+                    tris += [np.array([qa0, qb0, qb1]), np.array([qa0, qb1, qa1])]
+                    owner += [fi, fi]
+            else:
+                k = f.index
+                lo, hi = self._knots_u[k], self._knots_u[k + 1]
+                for t in floor_tris:
+                    poly = _clip_halfplane(t, self.u_dir, lo, +1)
+                    poly = _clip_halfplane(poly, self.u_dir, hi, -1)
+                    if len(poly) < 3:
+                        continue
+                    z = self.height_at(poly)
+                    pts = np.c_[poly, z]
+                    for j in range(1, len(pts) - 1):
+                        tri = np.array([pts[0], pts[j], pts[j + 1]])
+                        if np.linalg.norm(np.cross(tri[1] - tri[0], tri[2] - tri[0])) > 1e-12:
+                            tris.append(tri)
+                            owner.append(fi)
+        return np.array(tris, float), np.array(owner, np.int64)
 
     # --- paths -------------------------------------------------------------------------
 
@@ -256,6 +355,64 @@ def _in_polygon(poly: np.ndarray, pts: np.ndarray) -> np.ndarray:
         t = np.clip(((x - x0) * ex + (y - y0) * ey) / ll, 0, 1)
         on_edge |= np.hypot(x - (x0 + t * ex), y - (y0 + t * ey)) < 1e-9
     return inside | on_edge
+
+
+def _ear_clip(poly: np.ndarray) -> list[np.ndarray]:
+    """A simple counterclockwise polygon as triangles (ear clipping)."""
+    idx = list(range(len(poly)))
+    out = []
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    guard = 0
+    while len(idx) > 3 and guard < 10_000:
+        guard += 1
+        m = len(idx)
+        for j in range(m):
+            i0, i1, i2 = idx[(j - 1) % m], idx[j], idx[(j + 1) % m]
+            a, b, c = poly[i0], poly[i1], poly[i2]
+            if cross(a, b, c) <= 1e-12:
+                continue  # reflex or degenerate
+            inside = False
+            for q in idx:
+                if q in (i0, i1, i2):
+                    continue
+                p = poly[q]
+                if (
+                    cross(a, b, p) >= -1e-12
+                    and cross(b, c, p) >= -1e-12
+                    and (cross(c, a, p) >= -1e-12)
+                ):
+                    inside = True
+                    break
+            if inside:
+                continue
+            out.append(np.array([a, b, c]))
+            del idx[j]
+            break
+        else:
+            raise ValueError("the floor polygon can't be triangulated (is it simple?)")
+    out.append(poly[idx])
+    return out
+
+
+def _clip_halfplane(poly: np.ndarray, u: np.ndarray, c: float, sign: int) -> np.ndarray:
+    """A convex polygon (k, 2) clipped to sign (x . u - c) >= 0 (Sutherland-Hodgman)."""
+    if len(poly) == 0:
+        return poly
+    out = []
+    v = sign * (poly @ u - c)
+    n = len(poly)
+    for i in range(n):
+        a, b = poly[i], poly[(i + 1) % n]
+        va, vb = v[i], v[(i + 1) % n]
+        if va >= 0:
+            out.append(a)
+        if (va >= 0) != (vb >= 0):
+            t = va / (va - vb)
+            out.append(a + t * (b - a))
+    return np.array(out).reshape(-1, 2)
 
 
 def _mirror(p: np.ndarray, f: Face) -> np.ndarray:
@@ -348,18 +505,37 @@ def ray_decay(
     seed: int = 0,
     receivers: list[np.ndarray] | None = None,
     radius_m: float = RECEIVER_RADIUS_M,
+    backend: str | None = None,
 ):
     """The fraction of emitted energy still travelling, per band, on a grid of 1 / fs_env:
     (t (T,), e (bands, T)), from ray tracing (the module docstring). With `receivers`, also
     the energy density at each (a sphere of `radius_m`: every ray segment crossing it adds
     its energy times the time it spends inside), as a fraction of the emitted energy per m^3
     averaged over each bin, (receivers, bands, T): the room's sound at that point, flutter
-    and a hidden corner's shadow included (returned third)."""
+    and a hidden corner's shadow included (returned third).
+
+    `backend` (varimu.rooms.gpu; default its `backend()`): "numpy" is this function's own
+    loop below, "gpu" / "cpu" crates/roomsim's port (the same physics, its own random
+    numbers: the results agree in their statistics, ROOM_LOOP_PLAN.md R9)."""
+    from varimu.rooms import gpu
     from varimu.rooms.shoebox import ROOM_MATERIALS, fibonacci_sphere
 
-    rng = np.random.default_rng([seed, 17])
     c = SPEED_OF_SOUND_M_S
     dirs = fibonacci_sphere(n_rays)
+    b = gpu.resolve(backend)
+    if b != "numpy":
+        rx = np.zeros((0, 3)) if receivers is None else receivers
+        trav, dens = gpu.ray_trace(room, source, dirs, rx, t_max_s, fs_env, radius_m, c, seed, b)
+        nt = trav.shape[1]
+        t = np.arange(nt) / fs_env
+        air = air_absorption_db_per_m(BANDS_HZ, room.temp_c, room.rh_percent)
+        air_t = 10 ** (-air[:, None] * c * t[None, :] / 10)
+        remaining = trav / n_rays * air_t
+        if receivers is None:
+            return t, np.clip(remaining, 0, 1)
+        v_rec = 4.0 / 3.0 * np.pi * radius_m**3
+        return t, np.clip(remaining, 0, 1), dens * fs_env / (v_rec * n_rays) * air_t[None]
+    rng = np.random.default_rng([seed, 17])
     p = np.repeat(np.asarray(source, float)[None, :], n_rays, axis=0)
     alpha = np.array([ROOM_MATERIALS[room.material(f)] for f in room.faces])  # (F, B)
     scat = np.array([SCATTERING.get(room.material(f), 0.1) for f in room.faces])

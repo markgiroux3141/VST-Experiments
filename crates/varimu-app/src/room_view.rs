@@ -23,6 +23,8 @@ use crate::theme;
 enum Sel {
     Source(usize),
     Mic(usize),
+    /// A wall of the plan (from corner i to i + 1): its material (ROOM_LOOP_PLAN.md R7).
+    Wall(usize),
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -255,6 +257,27 @@ impl RoomView {
                     });
             });
         }
+        let nf = self.scene.n_facets();
+        if nf > 1 {
+            egui::CollapsingHeader::new(
+                RichText::new(format!("Ceiling facets ({nf})")).color(theme::MUTED),
+            )
+            .id_salt("room_facets")
+            .show(ui, |ui| {
+                for k in 0..nf {
+                    let key = format!("ceiling {k}");
+                    ui.horizontal(|ui| {
+                        ui.label(format!("facet {}", k + 1));
+                        face_material_combo(ui, &mut self.scene, &key);
+                    });
+                }
+            });
+        }
+        ui.label(
+            RichText::new("click a wall on the plan to give it its own surface")
+                .small()
+                .color(theme::FAINT),
+        );
         if let Some(rt) = &self.rt60 {
             ui.label(RichText::new(rt).small().color(theme::MUTED));
         }
@@ -374,6 +397,31 @@ impl RoomView {
                 self.source_form(ui, i, &tracks)
             }
             Some(Sel::Mic(i)) if i < self.scene.mics.len() => self.mic_form(ui, i),
+            Some(Sel::Wall(i)) if i < self.scene.plan.len() => {
+                let n = self.scene.plan.len();
+                let (a, b) = (self.scene.plan[i], self.scene.plan[(i + 1) % n]);
+                ui.label(
+                    RichText::new(format!("WALL {}", i + 1))
+                        .strong()
+                        .color(theme::MUTED),
+                );
+                ui.label(
+                    RichText::new(format!(
+                        "({:.2}, {:.2}) → ({:.2}, {:.2}) m · {:.2} m long",
+                        a[0],
+                        a[1],
+                        b[0],
+                        b[1],
+                        (b[0] - a[0]).hypot(b[1] - a[1])
+                    ))
+                    .small()
+                    .color(theme::FAINT),
+                );
+                ui.horizontal(|ui| {
+                    ui.label("Surface");
+                    face_material_combo(ui, &mut self.scene, &format!("wall {i}"));
+                });
+            }
             _ => {
                 ui.label(
                     RichText::new(
@@ -899,6 +947,7 @@ impl RoomView {
                         m.azimuth_deg = m.azimuth_deg.round();
                     }
                 }
+                Drag::Move(Sel::Wall(_)) => {}
                 Drag::Corner(c) => {
                     if c < scene.plan.len() {
                         // snap to 5 cm
@@ -911,10 +960,29 @@ impl RoomView {
         if resp.drag_stopped() {
             self.drag = None;
         }
+        let wall_at = |p: Pos2| -> Option<usize> {
+            let n = plan.len();
+            (0..n)
+                .map(|i| {
+                    let (a, b) = (plan[i], plan[(i + 1) % n]);
+                    let ab = b - a;
+                    let t = ((p - a).dot(ab) / ab.length_sq().max(1e-6)).clamp(0.0, 1.0);
+                    (i, (a + ab * t).distance(p))
+                })
+                .filter(|(_, dd)| *dd < 8.0)
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(i, _)| i)
+        };
         if resp.clicked()
             && let Some(p) = pointer
         {
-            self.sel = hit(p);
+            self.sel = hit(p).or_else(|| {
+                if corner(p).is_some() {
+                    None
+                } else {
+                    wall_at(p).map(Sel::Wall)
+                }
+            });
         }
         // a double-click on a wall adds a corner there; a right-click removes one
         if resp.double_clicked()
@@ -934,8 +1002,9 @@ impl RoomView {
                 && dd < 10.0
             {
                 let (x, y) = to_w(p);
-                self.scene.plan.insert(i + 1, [round_cm(x), round_cm(y)]);
+                self.scene.insert_corner(i, [round_cm(x), round_cm(y)]);
                 self.scene.shape = "custom".to_string();
+                self.sel = None;
             }
         }
         if resp.secondary_clicked()
@@ -944,8 +1013,9 @@ impl RoomView {
             && self.scene.plan.len() > 3
             && hit(p).is_none()
         {
-            self.scene.plan.remove(c);
+            self.scene.remove_corner(c);
             self.scene.shape = "custom".to_string();
+            self.sel = None;
         }
         if resp.hovered()
             && ui.input(|i| i.key_pressed(egui::Key::Delete))
@@ -960,6 +1030,33 @@ impl RoomView {
                 }
                 _ => {}
             }
+        }
+        // walls with a surface of their own, the selected one, labelled with their surface
+        let n = plan.len();
+        for i in 0..n {
+            let key = format!("wall {i}");
+            let own = self.scene.faces.contains_key(&key);
+            let on = self.sel == Some(Sel::Wall(i));
+            if !own && !on {
+                continue;
+            }
+            let (a, b) = (plan[i], plan[(i + 1) % n]);
+            let mat = self.scene.face_material(&key);
+            let col = material_color(mat);
+            painter.line_segment([a, b], Stroke::new(if on { 6.0 } else { 4.5 }, col));
+            if on {
+                painter.line_segment([a, b], Stroke::new(1.5, theme::INK));
+            }
+            let mid = a + (b - a) * 0.5;
+            let c = plan.iter().fold(Vec2::ZERO, |acc, q| acc + q.to_vec2()) / n as f32;
+            let inward = (c.to_pos2() - mid).normalized();
+            painter.text(
+                mid + inward * 14.0,
+                egui::Align2::CENTER_CENTER,
+                mat.replace('_', " "),
+                small.clone(),
+                col,
+            );
         }
         // corner handles
         let near = pointer.and_then(corner);
@@ -1059,6 +1156,60 @@ impl RoomView {
                 theme::FAINT,
             );
         }
+    }
+}
+
+/// A face's material picker: the room's for its kind, or one of its own.
+fn face_material_combo(ui: &mut egui::Ui, scene: &mut Scene, key: &str) {
+    let own = scene.faces.get(key).cloned();
+    let room_default = {
+        let mut d = scene.clone();
+        d.faces.clear();
+        d.face_material(key).to_string()
+    };
+    let shown = match &own {
+        Some(m) => m.replace('_', " "),
+        None => format!("room's ({})", room_default.replace('_', " ")),
+    };
+    let mut pick: Option<Option<String>> = None;
+    egui::ComboBox::from_id_salt(("room_face", key.to_string()))
+        .selected_text(shown)
+        .show_ui(ui, |ui| {
+            if ui
+                .selectable_label(
+                    own.is_none(),
+                    format!("room's ({})", room_default.replace('_', " ")),
+                )
+                .clicked()
+            {
+                pick = Some(None);
+            }
+            for m in MATERIALS {
+                if ui
+                    .selectable_label(own.as_deref() == Some(*m), m.replace('_', " "))
+                    .clicked()
+                {
+                    pick = Some(Some(m.to_string()));
+                }
+            }
+        });
+    if let Some(m) = pick {
+        scene.set_face_material(key, m);
+    }
+}
+
+/// A surface's colour on the plan: hard surfaces cool and pale, soft ones warm.
+fn material_color(m: &str) -> Color32 {
+    match m {
+        "plaster" => Color32::from_rgb(0xd8, 0xe2, 0xee),
+        "gypsum_on_studs" => Color32::from_rgb(0xa9, 0xbc, 0xd2),
+        "wood_floor" => Color32::from_rgb(0xc8, 0x9a, 0x62),
+        "furnished_wall" => Color32::from_rgb(0x9a, 0xa8, 0x8a),
+        "carpet_on_pad" => Color32::from_rgb(0xb0, 0x7a, 0xc8),
+        "heavy_drapes" => Color32::from_rgb(0xd0, 0x5c, 0x6c),
+        "acoustic_tile" => Color32::from_rgb(0x6c, 0xc0, 0x8c),
+        "anechoic" => Color32::from_rgb(0x50, 0x50, 0x58),
+        _ => theme::WIRE,
     }
 }
 

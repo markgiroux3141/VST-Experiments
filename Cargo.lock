@@ -3197,6 +3197,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "roomsim"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "numpy",
+ "pollster",
+ "pyo3",
+ "wgpu",
+]
+
+[[package]]
 name = "rtrb"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

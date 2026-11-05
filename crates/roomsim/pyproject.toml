@@ -1,0 +1,24 @@
+[build-system]
+requires = ["maturin>=1.15,<2"]
+build-backend = "maturin"
+
+[project]
+name = "roomsim"
+description = "Room acoustics on the GPU (Rust, wgpu, PyO3)"
+requires-python = ">=3.11"
+dynamic = ["version"]
+
+[tool.maturin]
+features = ["python"]
+module-name = "roomsim"
+
+[tool.uv]
+# uv only rebuilds a path dependency when one of these changes (default: pyproject.toml only).
+cache-keys = [
+    { file = "pyproject.toml" },
+    { file = "Cargo.toml" },
+    { file = "build.rs" },
+    { file = "../../Cargo.toml" },
+    { file = "src/**/*.rs" },
+    { file = "src/**/*.wgsl" },
+]

@@ -2033,6 +2033,10 @@ wheels = [
 ]
 
 [[package]]
+name = "roomsim"
+source = { directory = "crates/roomsim" }
+
+[[package]]
 name = "ruff"
 version = "0.17.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2553,6 +2557,7 @@ dependencies = [
 [package.optional-dependencies]
 fast = [
     { name = "circuitsim" },
+    { name = "roomsim" },
 ]
 listen = [
     { name = "fastapi" },
@@ -2588,6 +2593,7 @@ requires-dist = [
     { name = "pyloudnorm", marker = "extra == 'listen'" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "ribs", marker = "extra == 'optimize'" },
+    { name = "roomsim", marker = "extra == 'fast'", directory = "crates/roomsim" },
     { name = "scipy", specifier = ">=1.11" },
     { name = "soundfile", specifier = ">=0.12" },
     { name = "torch", marker = "(sys_platform == 'linux' and extra == 'ml') or (sys_platform == 'win32' and extra == 'ml')", index = "https://download.pytorch.org/whl/cu128" },

@@ -205,15 +205,20 @@ def responses(
     length_s: float | None = None,
     seeds: list[int] | None = None,
     tail: bool = True,
+    backend: str | None = None,
 ) -> np.ndarray:
     """The rooms' impulse responses, (sources, mics, 2 entries (front, rear), samples):
     the entries' pressure per unit source (1 / r in free field). `seeds` per source
     seed its tail (default its index). `room` is a Shoebox (images of every order up to
     ism_s, the tail started at their energy, Eyring's decay) or a
     varimu.rooms.polyroom.PolyRoom (images up to POLY_MAX_ORDER valid per mic, the hand-over
-    at POLY_ISM_S, the tail's level and decay ray-traced from the shape)."""
+    at POLY_ISM_S, the tail's level and decay ray-traced from the shape). `backend`
+    (varimu.rooms.gpu) runs the images' spectra and the rays on the GPU, roomsim's CPU
+    reference or numpy (the default: varimu.rooms.gpu.backend())."""
+    from varimu.rooms import gpu
     from varimu.rooms.polyroom import RECEIVER_RAYS, PolyRoom, ray_decay, rt60_from_decay
 
+    backend = gpu.resolve(backend)
     c = SPEED_OF_SOUND_M_S
     poly = isinstance(room, PolyRoom)
     decays = {}
@@ -230,6 +235,7 @@ def responses(
                 n_rays=RECEIVER_RAYS,
                 seed=seeds[si] if seeds else si,
                 receivers=[m.position_m for m in mics],
+                backend=backend,
             )
         rt = np.nanmax([rt60_from_decay(*d[:2]) for d in decays.values()], axis=0)
         rt = np.where(np.isfinite(rt), rt, 1.0)
@@ -295,6 +301,11 @@ def responses(
             cos_t = np.clip((d @ m.aim) / r, -1, 1)
             e_front, e_rear = m.table.at(np.arccos(cos_t), r)
             smooth = (band_amp @ bw) * 10 ** (-air[None, :] * r[:, None] / 20)
+            if backend != "numpy":
+                coarse = np.stack([smooth * e_front, smooth * e_rear], axis=1)
+                spec = gpu.image_spectra(coarse, tau_s * fs, idx, w, n_fft, backend)
+                out[si, mi] = np.fft.irfft(spec, n_fft)[:, :n]
+                continue
             spec = np.zeros((2, len(f_fine)), complex)
             for lo in range(0, len(r), 64):
                 hi = min(lo + 64, len(r))
