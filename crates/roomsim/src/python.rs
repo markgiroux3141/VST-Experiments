@@ -107,10 +107,12 @@ fn ray_trace<'py>(
         .into_any())
 }
 
-/// spectra.rs's sum. coarse: I x E x G x 2 (re, im), delay: I (samples), idx: K, w: K.
-/// Returns E x K x 2 (re, im), flat.
+/// spectra.rs's sum. coarse: S x E x G x 2 (re, im), delay: I (samples), idx: K, w: K;
+/// spec_index (I, uint32) and scale (I) optional (spectra.rs: shared spectra). Returns
+/// E x K x 2 (re, im), flat.
 #[pyfunction]
-#[pyo3(signature = (coarse, n_ent, n_grid, delay, idx, w, n_fft, backend="gpu"))]
+#[pyo3(signature = (coarse, n_ent, n_grid, delay, idx, w, n_fft, backend="gpu",
+                    spec_index=None, scale=None))]
 #[allow(clippy::too_many_arguments)]
 fn image_spectra<'py>(
     py: Python<'py>,
@@ -122,6 +124,8 @@ fn image_spectra<'py>(
     w: PyReadonlyArray1<f64>,
     n_fft: usize,
     backend: &str,
+    spec_index: Option<PyReadonlyArray1<u32>>,
+    scale: Option<PyReadonlyArray1<f64>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     if !(1..=2).contains(&n_ent) {
         return Err(invalid("n_ent: 1 or 2"));
@@ -135,6 +139,14 @@ fn image_spectra<'py>(
         n_ent,
         n_grid,
         delay: delay.as_slice()?.to_vec(),
+        spec_index: match &spec_index {
+            Some(a) => a.as_slice()?.to_vec(),
+            None => Vec::new(),
+        },
+        scale: match &scale {
+            Some(a) => a.as_slice()?.to_vec(),
+            None => Vec::new(),
+        },
         idx: idx.as_slice()?.to_vec(),
         w: w.as_slice()?.to_vec(),
         n_fft,

@@ -219,6 +219,11 @@ fn segments_cross(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> bool {
 /// The qualities a scene renders at.
 pub const QUALITIES: &[&str] = &["production", "draft"];
 
+/// The wave solver's crossovers offered (Hz; 0 = off): varimu/rooms/wave.py, ROOM_LOOP_PLAN.md
+/// R10. The cost grows with the crossover's fourth power (~6 s per source at 500 Hz in a
+/// 123 m^3 room on the GPU, ~1.5 min at 1 kHz).
+pub const WAVE_CROSSOVERS: &[f64] = &[0.0, 250.0, 500.0, 1000.0];
+
 /// A mic's polar pattern, for drawing (the physics is the capsule's).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Pattern {
@@ -308,6 +313,9 @@ pub struct Scene {
     pub sources: Vec<RoomSource>,
     pub mics: Vec<RoomMic>,
     pub quality: String,
+    /// The wave solver below this (Hz), 0 = off. New scenes 500; scenes saved before it
+    /// existed load as off (they render as they did).
+    pub wave_hz: f64,
 }
 
 impl Default for Scene {
@@ -324,6 +332,7 @@ impl Default for Scene {
             sources: Vec::new(),
             mics: Vec::new(),
             quality: "production".to_string(),
+            wave_hz: 500.0,
         }
     }
 }
@@ -532,6 +541,7 @@ impl Scene {
             "walls": self.walls, "floor": self.floor, "ceiling": self.ceiling,
             "faces": self.faces,
             "quality": self.quality,
+            "wave_hz": self.wave_hz,
             "sources": self.sources.iter().map(|s| json!({
                 "name": s.name, "track": s.track, "spl_db": s.spl_db, "position_m": s.pos,
             })).collect::<Vec<_>>(),
@@ -592,6 +602,7 @@ impl Scene {
                 })
                 .unwrap_or_default(),
             quality: st(v, "quality", &d.quality),
+            wave_hz: f(v, "wave_hz", 0.0),
             sources: v["sources"]
                 .as_array()
                 .map(|a| {
@@ -660,7 +671,9 @@ impl Scene {
                 "aim": {"azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg},
                 "pan": m.pan,
             })).collect::<Vec<_>>(),
-            "settings": {"quality": self.quality, "seed": 0},
+            "settings": {"quality": self.quality, "seed": 0,
+                         "wave_crossover_hz": if self.wave_hz > 0.0 { json!(self.wave_hz) }
+                                              else { Value::Null }},
         })
     }
 
@@ -957,6 +970,10 @@ mod tests {
         assert_eq!(v["mics"][0]["aim"]["azimuth_deg"], 180.0);
         assert_eq!(v["mics"][0]["set"]["pattern_u47"], 0.0);
         assert!(v["room"]["materials"].get("faces").is_none());
+        assert_eq!(v["settings"]["wave_crossover_hz"], 500.0);
+        let old = Scene::from_state(&json!({"name": "x", "dims_m": [5.0, 4.0, 2.6]}));
+        assert_eq!(old.wave_hz, 0.0);
+        assert!(old.render_json(&clips)["settings"]["wave_crossover_hz"].is_null());
     }
 
     #[test]

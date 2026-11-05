@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::room::{
     self, CEILINGS, CHAINS, MATERIALS, PRESETS, Pattern, QUALITIES, RenderJob, RoomMic, RoomSource,
-    Scene,
+    Scene, WAVE_CROSSOVERS,
 };
 
 use crate::session_view::SessionView;
@@ -616,6 +616,29 @@ impl RoomView {
                     }
                 });
         });
+        let wave_label = |hz: f64| {
+            if hz > 0.0 {
+                format!("below {hz:.0} Hz")
+            } else {
+                "off".to_string()
+            }
+        };
+        ui.horizontal(|ui| {
+            ui.label("Wave solver");
+            egui::ComboBox::from_id_salt("room_wave")
+                .selected_text(wave_label(self.scene.wave_hz))
+                .show_ui(ui, |ui| {
+                    for hz in WAVE_CROSSOVERS {
+                        ui.selectable_value(&mut self.scene.wave_hz, *hz, wave_label(*hz));
+                    }
+                });
+        })
+        .response
+        .on_hover_text(
+            "The room's modes from the wave equation (on the GPU) below this, the geometric \
+             model above: boomy notes and bass that changes with position. Higher costs more \
+             (~6 s per source at 500 Hz, ~1.5 min at 1 kHz in a mid-sized room)",
+        );
         let problems = self.scene.problems();
         for p in &problems {
             ui.label(RichText::new(format!("• {p}")).small().color(theme::WARN));

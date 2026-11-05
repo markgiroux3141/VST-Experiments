@@ -129,8 +129,19 @@ def ray_trace(room, source, dirs, receivers, t_max_s, fs_env, radius_m, c, seed,
     return np.asarray(trav).reshape(nb, nt), np.asarray(dens).reshape(len(rx), nb, nt)
 
 
-def image_spectra(coarse: np.ndarray, delay_samples: np.ndarray, idx, w, n_fft: int, b: str):
-    """roomsim.image_spectra: coarse (images, entries, grid) complex -> (entries, bins)."""
+def image_spectra(
+    coarse: np.ndarray,
+    delay_samples: np.ndarray,
+    idx,
+    w,
+    n_fft: int,
+    b: str,
+    spec_index: np.ndarray | None = None,
+    scale: np.ndarray | None = None,
+):
+    """roomsim.image_spectra: coarse (spectra, entries, grid) complex -> (entries, bins);
+    with `spec_index` and `scale` (per image) images share spectra (crates/roomsim
+    spectra.rs)."""
     n_img, n_ent, n_grid = coarse.shape
     c = np.empty((n_img, n_ent, n_grid, 2))
     c[..., 0], c[..., 1] = coarse.real, coarse.imag
@@ -143,6 +154,8 @@ def image_spectra(coarse: np.ndarray, delay_samples: np.ndarray, idx, w, n_fft: 
         np.ascontiguousarray(w, float),
         int(n_fft),
         backend=b,
+        spec_index=None if spec_index is None else np.ascontiguousarray(spec_index, np.uint32),
+        scale=None if scale is None else np.ascontiguousarray(scale, float),
     )
     out = np.asarray(out).reshape(n_ent, len(idx), 2)
     return out[..., 0] + 1j * out[..., 1]

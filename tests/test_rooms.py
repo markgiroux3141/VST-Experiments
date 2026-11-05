@@ -344,3 +344,237 @@ def test_gpu_image_spectra_are_numpys():
     n = int(0.06 * FS)
     err = np.sqrt(np.sum((a[..., :n] - g[..., :n]) ** 2) / np.sum(a[..., :n] ** 2))
     assert 20 * np.log10(err) < -100
+
+
+# --- the wave solver (docs/ROOM_LOOP_PLAN.md R10) ---
+
+
+def test_admittance_gives_the_materials_absorption():
+    from varimu.rooms import wave
+
+    a_tab, b_tab = wave._alpha_table()
+    for a in (0.02, 0.1, 0.3, 0.7):
+        b = wave.beta_for_alpha(np.array([a]))[0]
+        assert np.interp(b, b_tab, a_tab) == pytest.approx(a, abs=1e-4)
+    assert wave.beta_for_alpha(np.array([0.0]))[0] == 0.0
+    assert 0.94 < a_tab[-1] < 0.96  # the most a real locally reacting admittance absorbs
+
+
+def test_first_order_entries_fit_the_tables():
+    from varimu.rooms import wave
+
+    om = _omni()
+    a, b = wave.first_order_entries(om)
+    assert np.allclose(a[0], 1, atol=1e-9) and np.allclose(b[0], 0, atol=1e-9)
+    tab = entries.entry_table({"path_m": 0.02}, FS)  # front / rear 2 cm apart
+    a, b = wave.first_order_entries(tab)
+    sel = tab.f_grid < 710  # to the top of a 500 Hz crossover
+    front, _ = tab.at(np.array([0.0]), np.array([np.inf]))
+    assert np.allclose((a[0] + b[0])[sel], front[0, sel], rtol=1e-2)  # (kd)^2: ~1% at 1 kHz
+
+
+def _wave_or_skip():
+    gpu = _gpu_or_skip()
+    return "gpu" if gpu.gpu_info() is not None else "cpu"
+
+
+def test_wave_solver_rings_at_a_rigid_boxs_modes():
+    """The rigid box's lowest modes within 0.1% of the closed form (on the voxelized box)."""
+    from scipy.signal import find_peaks
+
+    from varimu.rooms import wave
+    from varimu.rooms.polyroom import PolyRoom
+
+    b = _wave_or_skip()
+    dx, m, lam = wave.grid_step(250.0, FS)
+    lx, ly, lz = 44 * dx, 32 * dx, 25 * dx
+    vox = wave.voxelize(PolyRoom([[0, 0], [lx, 0], [lx, ly], [0, ly]], "flat", lz), dx)
+    base = np.floor(vox.grid_coords([0.37, 0.41, 0.33])).astype(int)
+    nx, ny, _ = vox.dims
+    cell = base[0] + nx * (base[1] + ny * base[2])
+    mic = vox.grid_coords([lx - 0.39, ly - 0.37, lz - 0.41])
+    n_steps = int(3.0 * FS / m)
+    rec = wave.run_band(vox, lam, np.zeros(len(vox.wall_cells)), ([cell], [1.0]), [mic], n_steps, b)
+    p = np.diff(rec[:, 0, 0])  # the zero-frequency mode out (the module docstring)
+    n = 1 << 20
+    spec = np.abs(np.fft.rfft(p * np.hanning(len(p)), n))
+    f = np.fft.rfftfreq(n, m / FS)
+    pk, _ = find_peaks(spec, distance=int(1.0 / f[1]))
+    pk = pk[f[pk] < 130]
+    found = np.sort(f[pk[np.argsort(spec[pk])[::-1][:20]]])
+    c = 343.2
+    modes = sorted(
+        c / 2 * np.sqrt((i / lx) ** 2 + (j / ly) ** 2 + (k / lz) ** 2)
+        for i in range(4) for j in range(4) for k in range(3) if i + j + k > 0
+    )[:6]  # fmt: skip
+    for mo in modes:
+        assert np.min(np.abs(found / mo - 1)) < 1e-3, (mo, found)
+
+
+def test_wave_solver_agrees_with_image_sources_in_a_rigid_shoebox():
+    """Below the crossover (100-340 Hz, the first 60 ms) the wave solver's response is the
+    exact image sources' within -30 dB, its walls on whole cells (else they sit up to half a
+    cell off: -20 dB)."""
+    from varimu.rooms import wave
+
+    b = _wave_or_skip()
+    dx = 343.2 / (wave.PPW * 500)
+    sb = Shoebox((117 * dx, 90 * dx, 73 * dx), ("rigid",) * 6)
+    mics = [Mic(np.array([2.9, 2.1, 1.4]), aim_vector(200), _omni())]
+    src = [np.array([1.1, 1.3, 1.2])]
+    n_fft = 1 << 16
+    geo = responses(sb, src, mics, FS, length_s=0.12, tail=False, ism_s=0.11, backend=b)
+    low, xw = wave.responses(
+        sb, src, mics, FS, n_fft, crossover_hz=500, rt_s=np.full(7, 10.0), length_s=0.12,
+        backend=b,
+    )  # fmt: skip
+    f = np.fft.rfftfreq(n_fft, 1 / FS)[: len(xw)]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        bp = np.where((f > 100) & (f < 340), np.sin(np.pi * np.log(f / 100) / np.log(3.4)) ** 2, 0)
+    pad = np.zeros(n_fft // 2 + 1 - len(f))
+    g = np.fft.irfft(np.r_[np.fft.rfft(geo[0, 0, 0], n_fft)[: len(f)] * bp, pad], n_fft)
+    w = np.fft.irfft(np.r_[low[0, 0, 0] * bp, pad], n_fft)
+    nd = int(0.06 * FS)
+    err = np.sqrt(np.sum((g[:nd] - w[:nd]) ** 2) / np.sum(g[:nd] ** 2))
+    assert 20 * np.log10(err) < -30
+
+
+def test_wave_solver_decays_as_the_rays_say():
+    """The admittance from the materials' random-incidence absorption: the wave solver's
+    250 and 500 Hz octaves decay at the ray-traced RT within 10%."""
+    from scipy.signal import butter, sosfiltfilt
+
+    from varimu.rooms import wave
+    from varimu.rooms.polyroom import ray_decay, rt60_from_decay
+
+    b = _wave_or_skip()
+    room = _rect_room()
+    src = np.array([2.0, 2.55, 1.3])
+    rt_ray = rt60_from_decay(*ray_decay(room, src, 3.0, n_rays=20000, backend=b))
+    dx, m, lam = wave.grid_step(250.0, FS)
+    vox = wave.voxelize(room, dx)
+    rng = np.random.default_rng(3)
+    mics = [vox.grid_coords([rng.uniform(1, 6), rng.uniform(1, 4.5), rng.uniform(1, 2.2)])
+            for _ in range(6)]  # fmt: skip
+    base = np.floor(vox.grid_coords(src)).astype(int)
+    nx, ny, _ = vox.dims
+    cell = base[0] + nx * (base[1] + ny * base[2])
+    fs_sim = FS / m
+    for bi in (1, 2):
+        rec = wave.run_band(vox, lam, vox.beta_links[:, bi], ([cell], [1.0]), mics,
+                            int(1.6 * fs_sim), b)  # fmt: skip
+        fc = (125.0, 250.0, 500.0)[bi]
+        sos = butter(4, [fc / np.sqrt(2), fc * np.sqrt(2)], "band", fs=fs_sim, output="sos")
+        y = sosfiltfilt(sos, np.diff(rec[:, :, 0], axis=0), axis=0)
+        edc = np.cumsum((y**2)[::-1], axis=0)[::-1].mean(1)
+        db = 10 * np.log10(edc / edc[0])
+        t = np.arange(len(db)) / fs_sim
+        sel = (db <= -5) & (db >= -25)
+        rt = -60 / np.polyfit(t[sel], db[sel], 1)[0]
+        assert abs(rt / rt_ray[bi] - 1) < 0.1, (fc, rt, rt_ray[bi])
+
+
+# --- objects and edge diffraction (docs/ROOM_LOOP_PLAN.md R11) ---
+
+GOBO = {"name": "gobo", "center_m": [3.5, 2.75, 0.9], "size_m": [1.2, 0.08, 1.8], "yaw_deg": 90,
+        "material": "heavy_drapes"}  # fmt: skip
+
+
+def test_objects_occlude_reflect_and_leave_old_rooms_alone():
+    from varimu.rooms.polyroom import PolyRoom, image_sources, valid_paths
+
+    room = PolyRoom(RECT, "flat", 3.2, objects=[GOBO])
+    assert len(room.faces) == 12 and room.n_room_faces == 6
+    assert not room.inside(np.array([3.5, 2.75, 0.9])) and room.inside(np.array([3.5, 3.6, 0.9]))
+    assert room.volume_m3() == pytest.approx(7 * 5.5 * 3.2 - 1.2 * 0.08 * 1.8, rel=1e-3)
+    src = np.array([2.0, 2.75, 1.2])
+    pos, seq = image_sources(room, src, 4)
+    assert valid_paths(room, pos[:1], seq[:1], np.array([5.0, 2.75, 1.2]))[0] == False  # noqa: E712
+    assert valid_paths(room, pos[:1], seq[:1], np.array([5.0, 4.6, 1.2]))[0]
+    # a reflection off the gobo's near face reaches a mic beside the source
+    ok = valid_paths(room, pos, seq, np.array([2.0, 3.6, 1.2]))
+    assert np.any(ok & (seq[:, 0] >= 6) & (seq[:, 1] == -1))
+    # no objects: the faces are the room's as before
+    bare = _rect_room()
+    assert [(f.kind, f.index) for f in bare.faces] == [(f.kind, f.index) for f in room.faces[:6]]
+
+
+def test_btm_is_continuous_across_the_shadow_boundary():
+    """The diffracted wave jumps by the direct sound's 1 / d where the direct sound vanishes
+    (a long thin plate: the half-plane), so the total field is continuous."""
+    from varimu.rooms.diffraction import Edge, btm
+
+    ed = Edge(np.array([0, 0, -10.0]), np.array([0, 0, 1.0]), 20.0, np.array([1.0, 0, 0]),
+              np.array([0, 1.0, 0]), 2 * np.pi, ())  # fmt: skip
+    s = np.array([-1.0, 0.5, 0.0])
+    tb = np.arctan2(0.5, -1.0) % (2 * np.pi) + np.pi  # the shadow boundary behind the edge
+    sums = []
+    for th in (tb - np.radians(0.1), tb + np.radians(0.1)):
+        r = np.array([1.3 * np.cos(th), 1.3 * np.sin(th), 0.2])
+        _, h = btm(ed, s, r, FS)
+        sums.append(h[:8].sum())
+    d = np.linalg.norm(np.array([1.3 * np.cos(tb), 1.3 * np.sin(tb), 0.2]) - s)
+    assert sums[0] < 0 < sums[1]  # lit: it subtracts; shadow: it is the sound
+    assert sums[1] - sums[0] == pytest.approx(1 / d, rel=0.01)
+
+
+def test_a_long_screen_attenuates_as_maekawa_says():
+    """Behind a long thin screen in free field (its top and bottom edges equally far: 6 dB
+    above one edge), the insertion loss follows Maekawa's 10 log10(3 + 20 N) within 1.5 dB
+    from 400 Hz to 8 kHz."""
+    from varimu.rooms.polyroom import PolyRoom
+
+    gpu = _gpu_or_skip()
+    b = "gpu" if gpu.gpu_info() else "cpu"
+    wall = {"center_m": [20, 20, 1.5], "size_m": [30.0, 0.05, 3.0], "yaw_deg": 90,
+            "material": "heavy_drapes"}  # fmt: skip
+    args = ([[0, 0], [40, 0], [40, 40], [0, 40]], "flat", 30.0, None, 0.0, 8) + ("anechoic",) * 3
+    src, mic = np.array([18.0, 20, 1.5]), np.array([22.0, 20, 1.5])
+    mics = [Mic(mic, aim_vector(180), _omni())]
+
+    def run(room):
+        h = responses(room, [src], mics, FS, length_s=0.06, tail=False, backend=b)[0, 0, 0]
+        spec = np.abs(np.fft.rfft(h, 1 << 18)) ** 2
+        f = np.fft.rfftfreq(1 << 18, 1 / FS)
+        fc = 1000 * 2 ** (np.arange(-7, 10) / 3)
+        lv = [
+            10 * np.log10(spec[(f >= q / 2 ** (1 / 6)) & (f < q * 2 ** (1 / 6))].sum()) for q in fc
+        ]
+        return fc, np.array(lv)
+
+    fc, free = run(PolyRoom(*args))
+    _, screened = run(PolyRoom(*args, objects=[wall]))
+    n_fresnel = 2 * (2 * np.hypot(2, 1.5) - 4) * fc / 343.2
+    maekawa = 10 * np.log10(3 + 20 * n_fresnel) - 20 * np.log10(2)
+    assert np.all(np.abs((free - screened) - maekawa) < 1.5)
+
+
+def test_an_l_rooms_hidden_source_arrives_round_the_corner():
+    from varimu.rooms.polyroom import PolyRoom
+
+    b = _wave_or_skip()
+    room = PolyRoom([[0, 0], [8, 0], [8, 3], [3, 3], [3, 8], [0, 8]], "flat", 3.0)
+    src, mic = np.array([6.5, 1.5, 1.5]), np.array([1.5, 6.5, 1.5])
+    h = responses(room, [src], [Mic(mic, aim_vector(0), _omni())], FS, length_s=0.2,
+                  tail=False, backend=b)[0, 0, 0]  # fmt: skip
+    corner = np.array([3.0, 3.0, 1.5])
+    t_corner = (np.linalg.norm(src - corner) + np.linalg.norm(mic - corner)) / 343.2
+    first = np.argmax(np.abs(h) > 0.05 * np.abs(h).max()) / FS
+    assert first == pytest.approx(t_corner, abs=2 / FS)
+
+
+def test_diffraction_on_the_gpu_is_numpys():
+    from varimu.rooms.polyroom import PolyRoom
+
+    gpu = _gpu_or_skip()
+    if gpu.gpu_info() is None:
+        pytest.skip("no GPU")
+    gobo = {**GOBO, "center_m": [5.0, 5.0, 1.5], "size_m": [1.5, 0.06, 2.0]}
+    room = PolyRoom([[0, 0], [10, 0], [10, 10], [0, 10]], "flat", 6.0, None, 0.0, 8,
+                    "anechoic", "anechoic", "anechoic", objects=[gobo])  # fmt: skip
+    mics = [Mic(np.array([6.5, 5.6, 1.4]), aim_vector(180), _omni())]
+    src = [np.array([3.8, 5.0, 1.4])]
+    a = responses(room, src, mics, FS, length_s=0.05, tail=False, backend="numpy")
+    g = responses(room, src, mics, FS, length_s=0.05, tail=False, backend="gpu")
+    err = np.sqrt(np.sum((a - g) ** 2) / np.sum(a**2))
+    assert 20 * np.log10(err) < -100

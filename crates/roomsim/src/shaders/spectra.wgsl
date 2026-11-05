@@ -15,9 +15,10 @@ struct Params {
 
 @group(0) @binding(0) var<uniform> P: Params;
 @group(0) @binding(1) var<storage, read> coarse: array<vec2<f32>>;
-@group(0) @binding(2) var<storage, read> delay: array<vec4<u32>>; // di, A, bits(b), 0
+@group(0) @binding(2) var<storage, read> delay: array<vec4<u32>>; // di, A, bits(b), spectrum
 @group(0) @binding(3) var<storage, read> bins: array<vec2<u32>>; // g, bits(w)
 @group(0) @binding(4) var<storage, read_write> out: array<vec2<f32>>;
+@group(0) @binding(5) var<storage, read> scale: array<f32>;
 
 const TAU: f32 = 6.283185307179586;
 
@@ -47,8 +48,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
         rest = rest - whole;
         let ii = (int1 + int2 + u32(whole)) & mask;
         let ang = -TAU * (f32(ii) * inv_n) - TAU * (rest * inv_n);
-        let ph = vec2<f32>(cos(ang), sin(ang));
-        let base = (i * P.n_ent) * P.n_grid + g;
+        let ph = vec2<f32>(cos(ang), sin(ang)) * scale[i];
+        let base = (dl.w * P.n_ent) * P.n_grid + g;
         let s0 = coarse[base] * (1.0 - w) + coarse[base + 1u] * w;
         acc0 += vec2<f32>(s0.x * ph.x - s0.y * ph.y, s0.x * ph.y + s0.y * ph.x);
         if (P.n_ent > 1u) {

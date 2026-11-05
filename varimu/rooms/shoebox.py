@@ -44,7 +44,11 @@ from varimu.separation.room import (
 SURFACES = ("x0", "x1", "y0", "y1", "floor", "ceiling")
 # The separation room's materials, and a surface that reflects nothing (a free field: no
 # tail; the anechoic check against scripts/mic_print.py).
-ROOM_MATERIALS = {**MATERIALS, "anechoic": (1.0,) * len(BANDS_HZ)}
+ROOM_MATERIALS = {
+    **MATERIALS,
+    "anechoic": (1.0,) * len(BANDS_HZ),
+    "rigid": (0.0,) * len(BANDS_HZ),  # the checks' room (image sources exact, no decay)
+}
 TAIL_DIRECTIONS = 96
 FADE_S = 0.02
 
@@ -153,6 +157,8 @@ def _inside(room: Shoebox, p: np.ndarray, what: str) -> None:
         raise ValueError(f"{what} at {p.tolist()} is not inside the room {room.dims_m}")
 
 
+WAVE_EARLY_S = 0.04  # the wave solver's hand-over: amplitude crossover before, power after
+
 POLY_MAX_ORDER = 4  # image sources in a PolyRoom: every path of up to 4 reflections
 POLY_ISM_S = 0.05  # and the hand-over to the ray-traced tail (orders past 4 are thin by then)
 
@@ -206,6 +212,7 @@ def responses(
     seeds: list[int] | None = None,
     tail: bool = True,
     backend: str | None = None,
+    wave: dict | None = None,
 ) -> np.ndarray:
     """The rooms' impulse responses, (sources, mics, 2 entries (front, rear), samples):
     the entries' pressure per unit source (1 / r in free field). `seeds` per source
@@ -214,8 +221,10 @@ def responses(
     varimu.rooms.polyroom.PolyRoom (images up to POLY_MAX_ORDER valid per mic, the hand-over
     at POLY_ISM_S, the tail's level and decay ray-traced from the shape). `backend`
     (varimu.rooms.gpu) runs the images' spectra and the rays on the GPU, roomsim's CPU
-    reference or numpy (the default: varimu.rooms.gpu.backend())."""
-    from varimu.rooms import gpu
+    reference or numpy (the default: varimu.rooms.gpu.backend()). `wave` ({crossover_hz,
+    log?}) puts the wave solver under the crossover (varimu.rooms.wave, ROOM_LOOP_PLAN.md
+    R10): below it the room's modes, above it this model."""
+    from varimu.rooms import diffraction, gpu
     from varimu.rooms.polyroom import RECEIVER_RAYS, PolyRoom, ray_decay, rt60_from_decay
 
     backend = gpu.resolve(backend)
@@ -301,12 +310,46 @@ def responses(
             cos_t = np.clip((d @ m.aim) / r, -1, 1)
             e_front, e_rear = m.table.at(np.arccos(cos_t), r)
             smooth = (band_amp @ bw) * 10 ** (-air[None, :] * r[:, None] / 20)
+            # the edges' diffraction (a PolyRoom's objects and reflex corners: R11), each
+            # path one smooth spectrum (its walls, the air, the entries seen from its apex)
+            dpaths = diffraction.paths(room, src, m.position_m, fs, beta) if poly else []
+            d_coarse, d_delay, d_spec, d_scale = [], [], [], []
+            for k, dp in enumerate(dpaths):
+                dv = dp.apex_m - m.position_m
+                rr = float(np.linalg.norm(dv))
+                th = np.arccos(np.clip((dv @ m.aim) / rr, -1, 1))
+                ef, er = m.table.at(np.array([th]), np.array([rr]))
+                fade_d = 1 - np.clip((dp.n0 - (n_ism - win)) / win, 0, 1)
+                sm = (np.exp(dp.log_beta) @ bw) * 10 ** (-air * dp.path_m / 20) * fade_d
+                d_coarse.append(np.stack([sm * ef[0], sm * er[0]]))
+                nz = np.flatnonzero(np.abs(dp.h) > 1e-9 * np.abs(dp.h).max())
+                d_delay.append(dp.n0 + nz.astype(float))
+                d_spec.append(np.full(len(nz), len(r) + k))
+                d_scale.append(dp.h[nz])
             if backend != "numpy":
                 coarse = np.stack([smooth * e_front, smooth * e_rear], axis=1)
-                spec = gpu.image_spectra(coarse, tau_s * fs, idx, w, n_fft, backend)
+                if dpaths:
+                    coarse = np.concatenate([coarse, np.array(d_coarse)])
+                    spec = gpu.image_spectra(
+                        coarse,
+                        np.r_[tau_s * fs, *d_delay],
+                        idx,
+                        w,
+                        n_fft,
+                        backend,
+                        spec_index=np.r_[np.arange(len(r)), *d_spec],
+                        scale=np.r_[np.ones(len(r)), *d_scale],
+                    )
+                else:
+                    spec = gpu.image_spectra(coarse, tau_s * fs, idx, w, n_fft, backend)
                 out[si, mi] = np.fft.irfft(spec, n_fft)[:, :n]
                 continue
             spec = np.zeros((2, len(f_fine)), complex)
+            for k, dp in enumerate(dpaths):
+                hf = np.fft.rfft(np.r_[np.zeros(dp.n0), dp.h], n_fft)
+                for e in range(2):
+                    s_c = d_coarse[k][e]
+                    spec[e] += (s_c[idx] * (1 - w) + s_c[idx + 1] * w) * hf
             for lo in range(0, len(r), 64):
                 hi = min(lo + 64, len(r))
                 ph = np.exp(-2j * np.pi * f_fine[None, :] * tau_s[lo:hi, None])
@@ -349,4 +392,41 @@ def responses(
                 spec = np.einsum("if,if->f", s_f * ph, noise_spec)
                 tail_t = np.fft.irfft(spec, n_fft)[:n]
                 out[si, mi, e] += tail_t if gains is None else tail_t * gains[mi]
+    if wave:
+        from varimu.rooms import wave as wave_solver
+
+        low, xw = wave_solver.responses(
+            room,
+            sources_m,
+            mics,
+            fs,
+            n_fft,
+            crossover_hz=float(wave["crossover_hz"]),
+            rt_s=rt,
+            length_s=n / fs,
+            backend=backend,
+            log=wave.get("log"),
+        )
+        # the early part (direct sound, first reflections: the same arrivals in both models)
+        # crosses over in amplitude, the late part (two unrelated fields) in power, so the
+        # crossover neither dips the reverb nor bumps the direct sound
+        k = len(xw)
+        t = np.arange(n_fft) / fs
+        early = np.clip((WAVE_EARLY_S + FADE_S - t) / FADE_S, 0, 1)
+        g_late = np.sqrt(np.clip(1 - xw**2 / np.maximum(xw**2 + (1 - xw) ** 2, 1e-12), 0, 1))
+        w_late = np.sqrt(np.clip(xw**2 / np.maximum(xw**2 + (1 - xw) ** 2, 1e-12), 0, 1))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            w_late = np.where(xw > 0, w_late / xw, 0.0)
+        for si in range(len(sources_m)):
+            for mi in range(len(mics)):
+                for e in range(2):
+                    geo = np.fft.rfft(out[si, mi, e], n_fft)
+                    lw = np.fft.irfft(np.r_[low[si, mi, e], np.zeros(len(geo) - k)], n_fft)
+                    ge = np.fft.rfft(np.fft.irfft(geo, n_fft) * early, n_fft)
+                    gl = geo - ge
+                    le = np.fft.rfft(lw * early, n_fft)
+                    ll = np.fft.rfft(lw, n_fft) - le
+                    h = geo.copy()
+                    h[:k] = ge[:k] * (1 - xw) + le[:k] + gl[:k] * g_late + ll[:k] * w_late
+                    out[si, mi, e] = np.fft.irfft(h, n_fft)[:n]
     return out

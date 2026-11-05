@@ -16,6 +16,9 @@ JSON):
         # plan its faces' own (ROOM_LOOP_PLAN.md R7), over the three:
         #   faces: {"wall 2": heavy_drapes, "ceiling 0": acoustic_tile, floor: carpet_on_pad}
         #   ("wall N" runs from the floor's corner N to N + 1, "ceiling N" is a facet)
+      objects:                       # boxes in the room (R11; varimu/rooms/polyroom.py): a gobo
+        - {name: gobo, center_m: [3.5, 2.7, 0.9], size_m: [1.2, 0.08, 1.8], yaw_deg: 90,
+           tilt_deg: 0, material: heavy_drapes}   # width, depth, height; their edges diffract
       source: "provisional: ..."
     sources:
       - name: A
@@ -30,7 +33,9 @@ JSON):
         aim: {azimuth_deg: 90, elevation_deg: 0}   # counterclockwise from +x
         set: {pattern_u47: 0, gain_db_v76: 40}     # the chain's controls and values
         pan: -0.5                    # -1 left .. 1 right (the session's balance law)
-    settings: {quality: production, ism_s: 0.08, seed: 0, tail_s: null}
+    settings: {quality: production, ism_s: 0.08, seed: 0, tail_s: null,
+               wave_crossover_hz: 500}   # the wave solver below 500 Hz (varimu.rooms.wave,
+                                         # ROOM_LOOP_PLAN.md R10); absent or null: off
 
 The sources' clips are mono (any rate, resampled to the project's), each scaled to its
 SPL (its rms, as scripts/mic_print.py), so a source is the free-field sound pressure 1 m
@@ -104,6 +109,7 @@ class Scene:
     seed: int = 0
     tail_s: float | None = None
     room_source: str = ""
+    wave_crossover_hz: float | None = None
 
 
 def _materials(m: dict) -> tuple[str, ...]:
@@ -140,6 +146,7 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
             float(r.get("temp_c", 20.0)),
             float(r.get("rh_percent", 50.0)),
             {str(k): str(v) for k, v in (m.get("faces") or {}).items()},
+            list(r.get("objects") or []),
         )
     else:
         room = Shoebox(
@@ -148,6 +155,10 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
             float(r.get("temp_c", 20.0)),
             float(r.get("rh_percent", 50.0)),
         )
+        if r.get("objects"):  # objects need the polygon room: the shoebox as its rectangle
+            from varimu.rooms.wave import poly_of
+
+            room = poly_of(room, list(r["objects"]))
     sources = [
         SourceSpec(
             s["name"],
@@ -187,6 +198,7 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
         int(st.get("seed", 0)),
         st.get("tail_s"),
         str(r.get("source", "")),
+        None if not st.get("wave_crossover_hz") else float(st["wave_crossover_hz"]),
     )
 
 
@@ -236,7 +248,7 @@ def _fftconv(x: np.ndarray, h: np.ndarray, n_out: int) -> np.ndarray:
 
 
 def mic_pressures(
-    scene: Scene, fs: int, signals: list[np.ndarray]
+    scene: Scene, fs: int, signals: list[np.ndarray], log: Callable[[str], None] | None = None
 ) -> tuple[np.ndarray, list[str], int]:
     """Per source and mic the entries' pressures, (sources, mics, 2, samples): each
     source's signal convolved with its room response; and the tables' kinds, and the
@@ -263,6 +275,11 @@ def mic_pressures(
         length_s=scene.tail_s,
         seeds=seeds,
         tail=not _anechoic(scene.room),
+        wave=(
+            {"crossover_hz": scene.wave_crossover_hz, "log": log}
+            if scene.wave_crossover_hz and not _anechoic(scene.room)
+            else None
+        ),
     )
     n = max(len(x) for x in signals) + h.shape[-1]
     p = np.zeros((len(scene.sources), len(scene.mics), 2, n))
@@ -365,6 +382,7 @@ def render(
     log: Callable[[str], None] = print,
 ) -> dict:
     """The scene's prints into out_dir (the module docstring); returns render.json's data."""
+    from varimu.rooms import gpu
     from varimu.sim.io import write_audio
 
     t0 = time.perf_counter()
@@ -372,7 +390,7 @@ def render(
     fs = s.sample_rate
     signals = source_signals(scene, fs)
     log(f"room: {len(scene.sources)} sources x {len(scene.mics)} mics")
-    p, kinds, n = mic_pressures(scene, fs, signals)
+    p, kinds, n = mic_pressures(scene, fs, signals, log)
     log(f"room responses in {time.perf_counter() - t0:.1f} s")
 
     jobs = []  # (mic index, source index or None)
@@ -407,6 +425,9 @@ def render(
                            np.round(rt60_s(scene.room, scene.sources[0].position_m),
                                     3).tolist(), strict=True)),
         "room": "polygon" if isinstance(scene.room, PolyRoom) else "shoebox",
+        "room_backend": gpu.backend(),
+        "gpu": gpu.gpu_info(),
+        "wave_crossover_hz": scene.wave_crossover_hz,
         "mics": [],
     }  # fmt: skip
     mix = np.zeros((2, n))

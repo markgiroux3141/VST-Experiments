@@ -10,6 +10,11 @@
 //! b, the first two in u32 arithmetic, exact (N divides 2^32, so wrapping products keep
 //! their residues; N <= 2^20), the last small (k b < 2^8 at N = 2^20). The angle is then
 //! the sum of an exact multiple of 2 pi / N and a small rest: error ~1e-6 rad, -120 dB.
+//!
+//! **Shared spectra.** An image may name another's spectrum (`spec_index`) and scale it
+//! (`scale`): an edge's diffraction impulse response (`varimu.rooms.diffraction`) is one
+//! smooth spectrum (the walls, the air, the capsule's entries at the apex) times its samples,
+//! each a micro-image at its own delay. Empty: image i has spectrum i, scale 1.
 
 use bytemuck::{Pod, Zeroable};
 
@@ -25,6 +30,9 @@ pub struct ImageSpectra {
     pub n_grid: usize,
     /// d_i in samples (>= 0).
     pub delay: Vec<f64>,
+    /// Per image: the spectrum it uses (empty: its own) and its scale (empty: 1).
+    pub spec_index: Vec<u32>,
+    pub scale: Vec<f64>,
     /// Per bin k: the coarse grid's interval (g, g + 1) and the weight of g + 1.
     pub idx: Vec<u32>,
     pub w: Vec<f64>,
@@ -36,6 +44,19 @@ impl ImageSpectra {
         self.delay.len()
     }
 
+    /// The number of spectra in `coarse`.
+    pub fn n_spec(&self) -> usize {
+        self.coarse.len() / (self.n_ent * self.n_grid).max(1)
+    }
+
+    fn spec_of(&self, i: usize) -> usize {
+        self.spec_index.get(i).map_or(i, |&k| k as usize)
+    }
+
+    fn scale_of(&self, i: usize) -> f64 {
+        self.scale.get(i).copied().unwrap_or(1.0)
+    }
+
     pub fn check(&self) -> Result<u32, String> {
         let n = self.n_fft;
         if !n.is_power_of_two() || n < 2 {
@@ -45,8 +66,20 @@ impl ImageSpectra {
         if log2 > MAX_LOG2_N {
             return Err(format!("n_fft 2^{log2}: at most 2^{MAX_LOG2_N}"));
         }
-        if self.coarse.len() != self.n_img() * self.n_ent * self.n_grid {
-            return Err("coarse: images x entries x grid".into());
+        if self.coarse.len() % (self.n_ent * self.n_grid).max(1) != 0 {
+            return Err("coarse: spectra x entries x grid".into());
+        }
+        if self.spec_index.is_empty() {
+            if self.n_spec() != self.n_img() {
+                return Err("coarse: one spectrum per image (or spec_index)".into());
+            }
+        } else if self.spec_index.len() != self.n_img()
+            || self.spec_index.iter().any(|&k| k as usize >= self.n_spec())
+        {
+            return Err("spec_index: per image, inside the spectra".into());
+        }
+        if !self.scale.is_empty() && self.scale.len() != self.n_img() {
+            return Err("scale: per image".into());
         }
         if self.idx.len() != self.w.len() {
             return Err("idx and w per bin".into());
@@ -82,11 +115,12 @@ pub fn spectra_cpu(s: &ImageSpectra) -> Result<Vec<[f64; 2]>, String> {
                             // the cycles mod 1, with k d split as the GPU's
                             let cyc = ((k as f64) * d / n).fract();
                             let (sn, cs) = (-std::f64::consts::TAU * cyc).sin_cos();
+                            let (si, sc) = (s.spec_of(i), s.scale_of(i));
                             for e in 0..s.n_ent {
-                                let base = (i * s.n_ent + e) * s.n_grid + g;
+                                let base = (si * s.n_ent + e) * s.n_grid + g;
                                 let (a, b) = (s.coarse[base], s.coarse[base + 1]);
-                                let re = a[0] * (1.0 - w) + b[0] * w;
-                                let im = a[1] * (1.0 - w) + b[1] * w;
+                                let re = sc * (a[0] * (1.0 - w) + b[0] * w);
+                                let im = sc * (a[1] * (1.0 - w) + b[1] * w);
                                 let r = &mut o[e * (k1 - k0) + k - k0];
                                 r[0] += re * cs - im * sn;
                                 r[1] += re * sn + im * cs;
@@ -125,13 +159,13 @@ const SPECTRA_WGSL: &str = include_str!("shaders/spectra.wgsl");
 /// Images per dispatch (the gpu module's TDR note).
 const BATCH: usize = 2048;
 
-/// d as (di, A, b-bits): integer samples, 12 fractional bits, the rest as f32.
-fn split_delay(d: f64) -> [u32; 4] {
+/// d as (di, A, b-bits, spectrum): integer samples, 12 fractional bits, the rest as f32.
+fn split_delay(d: f64, spec: u32) -> [u32; 4] {
     let di = d.floor();
     let fr = d - di;
     let a = (fr * 4096.0).floor();
     let b = fr - a / 4096.0;
-    [di as u32, a as u32, (b as f32).to_bits(), 0]
+    [di as u32, a as u32, (b as f32).to_bits(), spec]
 }
 
 /// The same on the GPU, summed per bin in f32 over the images.
@@ -143,7 +177,13 @@ pub fn spectra_gpu(gpu: &Gpu, s: &ImageSpectra) -> Result<Vec<[f64; 2]>, String>
         .iter()
         .map(|c| [c[0] as f32, c[1] as f32])
         .collect();
-    let delays: Vec<[u32; 4]> = s.delay.iter().map(|&d| split_delay(d)).collect();
+    let delays: Vec<[u32; 4]> = s
+        .delay
+        .iter()
+        .enumerate()
+        .map(|(i, &d)| split_delay(d, s.spec_of(i) as u32))
+        .collect();
+    let scales: Vec<f32> = (0..s.n_img()).map(|i| s.scale_of(i) as f32).collect();
     let bins: Vec<[u32; 2]> = s
         .idx
         .iter()
@@ -152,6 +192,7 @@ pub fn spectra_gpu(gpu: &Gpu, s: &ImageSpectra) -> Result<Vec<[f64; 2]>, String>
         .collect();
     let b_coarse = gpu.storage("coarse", bytemuck::cast_slice(&coarse));
     let b_delay = gpu.storage("delay", bytemuck::cast_slice(&delays));
+    let b_scale = gpu.storage("scale", bytemuck::cast_slice(&scales));
     let b_bins = gpu.storage("bins", bytemuck::cast_slice(&bins));
     let out_bytes = (s.n_ent * nk * 8) as u64;
     let b_out = gpu.zeros("spectra", out_bytes);
@@ -177,7 +218,7 @@ pub fn spectra_gpu(gpu: &Gpu, s: &ImageSpectra) -> Result<Vec<[f64; 2]>, String>
         start += n.max(1);
     }
     for p in &params {
-        let group = gpu.bind(&pipe, &[p, &b_coarse, &b_delay, &b_bins, &b_out]);
+        let group = gpu.bind(&pipe, &[p, &b_coarse, &b_delay, &b_bins, &b_out, &b_scale]);
         gpu.run(&pipe, &group, (groups, 1, 1))?;
     }
     let raw = gpu.read(&b_out, out_bytes)?;
@@ -219,6 +260,8 @@ mod tests {
             n_ent: 2,
             n_grid,
             delay,
+            spec_index: Vec::new(),
+            scale: Vec::new(),
             idx,
             w,
             n_fft,
@@ -256,6 +299,34 @@ mod tests {
             }
             let db = 10.0 * (num / den).log10();
             assert!(db < -100.0, "{n_img} images, 2^{log2}: {db:.1} dB");
+        }
+    }
+
+    #[test]
+    fn shared_spectra_are_the_images_they_stand_for() {
+        // two images through one spectrum, scaled, equal two images with their own
+        let mut own = case(2, 12);
+        let sz = own.n_ent * own.n_grid;
+        let first: Vec<[f64; 2]> = own.coarse[..sz].to_vec();
+        own.coarse = first.iter().chain(first.iter()).map(|c| *c).collect();
+        for c in own.coarse[sz..].iter_mut() {
+            c[0] *= -0.5;
+            c[1] *= -0.5;
+        }
+        let mut shared = own.clone();
+        shared.coarse = first;
+        shared.spec_index = vec![0, 0];
+        shared.scale = vec![1.0, -0.5];
+        let a = spectra_cpu(&own).unwrap();
+        let b = spectra_cpu(&shared).unwrap();
+        for (x, y) in a.iter().zip(&b) {
+            assert!((x[0] - y[0]).abs() < 1e-12 && (x[1] - y[1]).abs() < 1e-12);
+        }
+        if let Ok(gpu) = crate::gpu::gpu() {
+            let g = spectra_gpu(gpu, &shared).unwrap();
+            for (x, y) in a.iter().zip(&g) {
+                assert!((x[0] - y[0]).abs() < 1e-5 && (x[1] - y[1]).abs() < 1e-5);
+            }
         }
     }
 }

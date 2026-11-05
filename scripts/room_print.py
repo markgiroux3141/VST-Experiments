@@ -2,10 +2,11 @@
 -> reports/rooms/<scene>/ (or --out).
 
     uv run --extra fast python scripts/room_print.py config/scenes/NAME.yaml [--solo]
-        [--out DIR] [--quality production|draft|draft-1x] [--workers N]
+        [--out DIR] [--quality production|draft|draft-1x] [--workers N] [--wave HZ]
 
 The scene format and what is written: varimu/rooms/scene.py's docstring. `--solo` also
-prints each source alone through every mic (the bleed matrix in render.json). Progress
+prints each source alone through every mic (the bleed matrix in render.json). `--wave HZ`
+puts the wave solver under HZ (0: off; else the scene's `wave_crossover_hz`). Progress
 goes to stdout as `progress F` lines (the native app's Room view reads them).
 """
 
@@ -27,10 +28,13 @@ def main() -> None:
     ap.add_argument("--solo", action="store_true")
     ap.add_argument("--quality")
     ap.add_argument("--workers", type=int)
+    ap.add_argument("--wave", type=float)
     args = ap.parse_args()
     scene = load_scene(args.scene)
     if args.quality:
         scene.quality = args.quality
+    if args.wave is not None:
+        scene.wave_crossover_hz = args.wave or None
     out = args.out or REPO_ROOT / "reports" / "rooms" / scene.name
 
     def log(line: str) -> None:

@@ -30,6 +30,14 @@ shoebox's shared plane-wave field (varimu.rooms.shoebox) with this envelope.
 
 Scattering coefficients per material are provisional (model knowledge: ISO 17497-1 style
 values for flat, furnished and treated surfaces).
+
+**Objects** (ROOM_LOOP_PLAN.md R11): boxes in the room, each turned about the vertical
+(`yaw_deg`) and tilted about its own width axis (`tilt_deg`): a gobo is a thin one, a riser a
+low one, a piano's lid a tilted panel. Their six faces (outward normals, into the room's air)
+follow the room's faces, so a room's own faces keep their indices. They reflect in the image
+sources up to `OBJECT_MAX_ORDER` (the candidates grow with the faces to the power of the
+order), occlude every path, take part in the rays and the wave solver's grid. Their edges
+diffract (varimu.rooms.diffraction); without that an object would block the bass too.
 """
 
 from __future__ import annotations
@@ -56,6 +64,8 @@ SCATTERING = {
     "anechoic": 0.0,
 }
 CEILINGS = ("flat", "shed", "gable", "vault")
+OBJECT_MAX_ORDER = 2  # reflections off objects: paths with an object face up to this order
+THIN_M = 0.12  # an object this thin (its least size) is a panel: its edges diffract as a plate
 RECEIVER_RADIUS_M = 0.35  # rays counted at a mic within this sphere (the late part's envelope)
 RECEIVER_RAYS = 50_000
 
@@ -63,12 +73,51 @@ RECEIVER_RAYS = 50_000
 @dataclass
 class Face:
     """A planar face: unit normal pointing into the room, offset (n . x = d on the plane),
-    its kind (floor / wall / ceiling) and index (a wall's edge, a ceiling's facet)."""
+    its kind (floor / wall / ceiling / object) and index (a wall's edge, a ceiling's facet,
+    an object's 6 i + k). An object's face is a rectangle: its centre, two in-plane unit axes
+    and their half extents (`rect`)."""
 
     normal: np.ndarray
     d: float
     kind: str
     index: int
+    rect: tuple | None = None
+
+
+@dataclass
+class Box:
+    """An object: a box of `size_m` (width, depth, height) about `center_m`, its axes the
+    columns of `axes` (width, depth, height after yaw and tilt), its material."""
+
+    center_m: np.ndarray
+    size_m: np.ndarray
+    axes: np.ndarray
+    material: str
+    name: str = ""
+
+    @property
+    def thin(self) -> bool:
+        return float(self.size_m.min()) <= THIN_M
+
+    def contains(self, p: np.ndarray, grow_m: float = 0.0) -> np.ndarray:
+        q = (np.asarray(p, float) - self.center_m) @ self.axes  # local coordinates
+        return np.all(np.abs(q) < 0.5 * self.size_m + grow_m, axis=-1)
+
+
+def box_from_spec(o: dict) -> Box:
+    """An object from the scene's `{center_m, size_m, yaw_deg?, tilt_deg?, material, name?}`."""
+    from varimu.rooms.shoebox import ROOM_MATERIALS
+
+    yaw, tilt = np.radians(float(o.get("yaw_deg", 0.0))), np.radians(float(o.get("tilt_deg", 0.0)))
+    rz = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
+    rx = np.array([[1, 0, 0], [0, np.cos(tilt), -np.sin(tilt)], [0, np.sin(tilt), np.cos(tilt)]])
+    size = np.array(o["size_m"], float)
+    if size.shape != (3,) or np.any(size <= 0):
+        raise ValueError(f"object {o.get('name', '')}: size_m is 3 positive lengths")
+    mat = o.get("material", "furnished_wall")
+    if mat not in ROOM_MATERIALS:
+        raise ValueError(f"object {o.get('name', '')}: unknown material {mat!r}")
+    return Box(np.array(o["center_m"], float), size, rz @ rx, mat, str(o.get("name", "")))
 
 
 @dataclass
@@ -85,6 +134,7 @@ class PolyRoom:
     temp_c: float = 20.0
     rh_percent: float = 50.0
     face_materials: dict[str, str] = field(default_factory=dict)
+    objects: list[dict] = field(default_factory=list)
     faces: list[Face] = field(init=False)
 
     def __post_init__(self):
@@ -102,7 +152,17 @@ class PolyRoom:
         u = self.floor @ self.u_dir
         self.u_lo, self.u_hi = float(u.min()), float(u.max())
         self._knots_u, self._knots_h = self._profile()
+        self.boxes = [box_from_spec(o) for o in self.objects]
         self.faces = self._faces()
+        self.n_room_faces = len(self.faces)
+        for bi, b in enumerate(self.boxes):
+            for k in range(6):
+                ax, sgn = k // 2, 1 - 2 * (k % 2)
+                nrm = sgn * b.axes[:, ax]
+                c = b.center_m + 0.5 * b.size_m[ax] * nrm
+                o1, o2 = [a for a in range(3) if a != ax]
+                rect = (c, b.axes[:, o1], b.axes[:, o2], 0.5 * b.size_m[o1], 0.5 * b.size_m[o2])
+                self.faces.append(Face(nrm, float(nrm @ c), "object", 6 * bi + k, rect))
         self._overrides = self._face_overrides(n)
 
     def _face_overrides(self, n: int) -> dict[tuple[str, int], str]:
@@ -157,7 +217,8 @@ class PolyRoom:
         ys = np.linspace(*self._bbox()[1], 200)
         g = np.stack(np.meshgrid(xs, ys), -1).reshape(-1, 2)
         inside = self.inside_floor(g)
-        return float(_signed_area(self.floor) * self.height_at(g[inside]).mean())
+        v = float(_signed_area(self.floor) * self.height_at(g[inside]).mean())
+        return v - sum(float(np.prod(b.size_m)) for b in self.boxes)
 
     def _bbox(self):
         return (self.floor[:, 0].min(), self.floor[:, 0].max()), (
@@ -192,10 +253,18 @@ class PolyRoom:
         """Points (..., 3) inside the room."""
         p = np.asarray(p, float)
         xy = p[..., :2]
-        return self.inside_floor(xy) & (p[..., 2] > tol) & (p[..., 2] < self.height_at(xy) - tol)
+        ok = self.inside_floor(xy) & (p[..., 2] > tol) & (p[..., 2] < self.height_at(xy) - tol)
+        for b in self.boxes:
+            ok &= ~b.contains(p)
+        return ok
 
     def on_face(self, f: Face, p: np.ndarray, tol: float = 1e-7) -> np.ndarray:
         """Whether points p (m, 3) on f's plane lie within the face."""
+        if f.kind == "object":
+            c, u, v, hu, hv = f.rect
+            q = np.nan_to_num(p - c, nan=np.inf)
+            with np.errstate(invalid="ignore"):
+                return (np.abs(q @ u) <= hu + tol) & (np.abs(q @ v) <= hv + tol)
         xy = p[:, :2]
         if f.kind == "floor":
             return self.inside_floor(xy)
@@ -212,6 +281,8 @@ class PolyRoom:
         return (t >= -tol) & (t <= 1 + tol) & (z >= -tol) & (z <= self.height_at(xy) + tol)
 
     def material(self, f: Face) -> str:
+        if f.kind == "object":
+            return self.boxes[f.index // 6].material
         own = self._overrides.get((f.kind, f.index))
         if own is not None:
             return own
@@ -241,7 +312,9 @@ class PolyRoom:
         out = []
         n = len(self.floor)
         for f in self.faces:
-            if f.kind == "floor":
+            if f.kind == "object":
+                out.append(4.0 * f.rect[3] * f.rect[4])
+            elif f.kind == "floor":
                 out.append(_signed_area(self.floor))
             elif f.kind == "wall":
                 p0, p1 = self.floor[f.index], self.floor[(f.index + 1) % n]
@@ -269,7 +342,12 @@ class PolyRoom:
         tris, owner = [], []
         floor_tris = _ear_clip(self.floor)
         for fi, f in enumerate(self.faces):
-            if f.kind == "floor":
+            if f.kind == "object":
+                c, u, v, hu, hv = f.rect
+                q = [c + a * hu * u + b * hv * v for a, b in ((-1, -1), (1, -1), (1, 1), (-1, 1))]
+                tris += [np.array([q[0], q[1], q[2]]), np.array([q[0], q[2], q[3]])]
+                owner += [fi, fi]
+            elif f.kind == "floor":
                 for t in floor_tris:
                     tris.append(np.c_[t, np.zeros(3)])
                     owner.append(fi)
@@ -425,12 +503,18 @@ def image_sources(room: PolyRoom, source: np.ndarray, max_order: int):
     pos = [np.asarray(source, float)[None, :]]
     seq = [np.full((1, max_order), -1)]
     cur_p, cur_s = pos[0], seq[0]
+    n_room = getattr(room, "n_room_faces", len(room.faces))
     for order in range(1, max_order + 1):
         nps, nss = [], []
+        has_obj = np.any(cur_s >= n_room, axis=1)
         for fi, f in enumerate(room.faces):
             last = cur_s[:, order - 2] if order > 1 else np.full(len(cur_s), -1)
             front = (cur_p @ f.normal - f.d) > 1e-9  # the parent is on the room side
             keep = front & (last != fi)
+            if order > OBJECT_MAX_ORDER:  # paths touching an object stop at its order
+                keep &= ~has_obj
+                if fi >= n_room:
+                    continue
             if not np.any(keep):
                 continue
             nps.append(_mirror(cur_p[keep], f))
@@ -470,7 +554,7 @@ def valid_paths(room: PolyRoom, images: np.ndarray, seqs: np.ndarray, mic: np.nd
             nd = dvec @ f.normal
             with np.errstate(divide="ignore", invalid="ignore"):
                 t = (f.d - a @ f.normal) / nd
-            p = a + t[:, None] * dvec
+                p = a + t[:, None] * dvec
             g = (np.abs(nd) > 1e-12) & (t > 1e-9) & (t < 1 - 1e-9)
             g &= room.on_face(f, p)
             hit_pts[sel] = p
