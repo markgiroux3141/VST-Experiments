@@ -24,7 +24,19 @@ from varimu.config import CONFIG_DIR
 
 CHAINS_PATH = CONFIG_DIR / "chains.yaml"
 KINDS = ("mic", "booster", "pre")
-PATTERNS = ("cardioid", "omni")  # what the Room view draws (varimu-app room::Pattern)
+# What the Room view draws (varimu-app room::PATTERN_NAMES, the same names): a first-order
+# figure a + (1 - a) cos(theta) per name, by its coefficient a.
+PATTERNS = {
+    "omni": 1.0,
+    "wide omni": 0.875,
+    "wide cardioid": 0.75,
+    "broad cardioid": 0.625,
+    "cardioid": 0.5,
+    "supercardioid": 0.375,
+    "hypercardioid": 0.25,
+    "narrow figure-8": 0.125,
+    "figure-8": 0.0,
+}
 PORT = {"mic": "output", "booster": "input", "pre": "input"}
 
 
@@ -147,7 +159,7 @@ def _check_pattern(c: Circuit) -> None:
         if st is None or any(lbl not in PATTERNS for _, lbl in st.choices):
             raise ValueError(f"{c.name}: pattern {c.pattern} isn't a setting of patterns")
     elif c.pattern not in PATTERNS:
-        raise ValueError(f"{c.name}: a built mic's pattern is one of {PATTERNS} or a setting")
+        raise ValueError(f"{c.name}: a built mic's pattern is one of {list(PATTERNS)} or a setting")
 
 
 def load(path: Path = CHAINS_PATH) -> ChainList:

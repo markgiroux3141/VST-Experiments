@@ -58,7 +58,7 @@ impl Chain {
             MicPattern::Fixed(p) => *p,
             MicPattern::Setting(key) => {
                 let Some(st) = self.settings.iter().find(|s| &s.key == key) else {
-                    return Pattern::Omni;
+                    return Pattern::OMNI;
                 };
                 let v = set.get(key).copied().unwrap_or(st.default);
                 let label = st
@@ -72,11 +72,25 @@ impl Chain {
     }
 }
 
+/// The patterns a mic's `pattern` (or its setting's choice labels) may name, by first-order
+/// coefficient in eighths (varimu/chains.py PATTERNS, the same names).
+pub const PATTERN_NAMES: &[(&str, u8)] = &[
+    ("omni", 8),
+    ("wide omni", 7),
+    ("wide cardioid", 6),
+    ("broad cardioid", 5),
+    ("cardioid", 4),
+    ("supercardioid", 3),
+    ("hypercardioid", 2),
+    ("narrow figure-8", 1),
+    ("figure-8", 0),
+];
+
 fn pattern_named(name: &str) -> Pattern {
-    match name {
-        "cardioid" => Pattern::Cardioid,
-        _ => Pattern::Omni,
-    }
+    PATTERN_NAMES
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map_or(Pattern::OMNI, |(_, e)| Pattern(*e))
 }
 
 /// The chains of `<config>/chains.yaml` that are available (their composed circuit file
@@ -147,7 +161,7 @@ pub fn load_chains(config: &Path) -> Result<Vec<Chain>, String> {
                 }
                 None => return Err(bad(format!("{id}: its mic's pattern names no setting"))),
             },
-            _ => MicPattern::Fixed(Pattern::Omni),
+            _ => MicPattern::Fixed(Pattern::OMNI),
         };
         out.push(Chain {
             id: id.to_string(),
@@ -396,11 +410,22 @@ pub const QUALITIES: &[&str] = &["production", "draft"];
 /// 123 m^3 room on the GPU, ~1.5 min at 1 kHz).
 pub const WAVE_CROSSOVERS: &[f64] = &[0.0, 250.0, 500.0, 1000.0];
 
-/// A mic's polar pattern, for drawing (the physics is the capsule's).
+/// A mic's polar pattern, for drawing (the physics is the capsule's): the first-order
+/// figure a + (1 - a) cos(theta), its coefficient a in eighths (8 omni, 4 cardioid, 0
+/// figure-8).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Pattern {
-    Cardioid,
-    Omni,
+pub struct Pattern(pub u8);
+
+impl Pattern {
+    pub const OMNI: Pattern = Pattern(8);
+    pub const CARDIOID: Pattern = Pattern(4);
+    pub const FIGURE8: Pattern = Pattern(0);
+
+    /// The figure's signed sensitivity at theta (radians from the axis): 1 on axis.
+    pub fn gain(self, theta: f32) -> f32 {
+        let a = f32::from(self.0) / 8.0;
+        a + (1.0 - a) * theta.cos()
+    }
 }
 
 /// Nearest a mic may be to a source (the entry tables' nearest distance).
@@ -729,7 +754,7 @@ impl RoomMic {
     }
 
     pub fn pattern(&self) -> Pattern {
-        chain(&self.chain).map_or(Pattern::Omni, |c| c.pattern(&self.set))
+        chain(&self.chain).map_or(Pattern::OMNI, |c| c.pattern(&self.set))
     }
 
     /// Point the mic at a floor-plan position.
@@ -1690,21 +1715,30 @@ mod tests {
             .map(|s| (s.key.as_str(), s.default))
             .collect();
         assert_eq!(keys, [("impedance_sm57", 0.0), ("gain_db_v76", 58.0)]);
-        assert_eq!(c.pattern(&BTreeMap::new()), Pattern::Cardioid);
+        assert_eq!(c.pattern(&BTreeMap::new()), Pattern::CARDIOID);
         let o = list.iter().find(|c| c.id == "omni_clean").unwrap();
-        assert_eq!(o.pattern(&BTreeMap::new()), Pattern::Omni);
+        assert_eq!(o.pattern(&BTreeMap::new()), Pattern::OMNI);
         assert_eq!(o.settings[0].choices[2], (40.0, "40 dB".to_string()));
+        // The C12's nine positions draw as first-order figures, omni to figure-8.
+        let c12 = list.iter().find(|c| c.id == "c12_ua610").unwrap();
+        assert_eq!(c12.pattern(&BTreeMap::new()), Pattern::CARDIOID);
+        for (k, eighths) in [(0.0, 8), (6.0, 2), (8.0, 0)] {
+            let set = BTreeMap::from([("pattern_c12".to_string(), k)]);
+            assert_eq!(c12.pattern(&set), Pattern(eighths));
+        }
+        assert!((Pattern::FIGURE8.gain(std::f32::consts::PI) + 1.0).abs() < 1e-6);
+        assert!(Pattern::CARDIOID.gain(std::f32::consts::PI).abs() < 1e-6);
     }
 
     #[test]
     fn aim_and_pattern() {
         let s = scene();
         assert!((s.mics[0].azimuth_deg - 180.0).abs() < 1e-9);
-        assert_eq!(s.mics[0].pattern(), Pattern::Cardioid);
+        assert_eq!(s.mics[0].pattern(), Pattern::CARDIOID);
         assert_eq!(s.mics[0].set["gain_db_v76"], 34.0);
         let mut m = s.mics[0].clone();
         m.set.insert("pattern_u47".into(), 1.0);
-        assert_eq!(m.pattern(), Pattern::Omni);
+        assert_eq!(m.pattern(), Pattern::OMNI);
     }
 
     #[test]

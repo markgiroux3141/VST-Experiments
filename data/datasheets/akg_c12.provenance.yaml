@@ -1,0 +1,41 @@
+device: "C12"
+curve: free-field frequency responses, omni at 0 deg, cardioid / figure-8 at 0 deg, cardioid at 180 deg, figure-8 at 90 deg
+publisher: Akustische u. Kino-Geräte GmbH (AKG), Wien
+documents:
+  brc12:
+    title: "Condenser Microphone Type C12, with remote control of directional characteristics (English leaflet)"
+    date: "not printed (the later of the two leaflets in the PDF: its N 12 is transistor-stabilized)"
+    scan_source: "web: https://cieri.net/Documenti/AKG/Cataloghi/AKG%20-%20C12%20(Depliant)%20(English).pdf"
+    sha256: 108378385e06690265d084220c91474583943160bb53661257d3b8f1e6ecb00b
+    bytes: 1652939
+    page: "PDF p.3 (one 876 x 1179 JPEG page image, extracted with PyMuPDF, not resampled; data/schematics/akg_c12/akg_c12_brochure_curves.png)"
+local_copy: "none (the PDF isn't committed, as for the rest of data/schematics/akg_c12/; hash above)"
+digitized_with: >-
+  the PDF's own page image. Ruled lines located on row / column darkness profiles: frequency
+  log-linear, 100 Hz at x 260.0, 218.5 px per decade (rules at 50 Hz 194.5, 1 kHz 478.5, 10 kHz 697, the
+  frames 30 Hz and 20 kHz); chart 1 (omni) 0 dB at y 165.0, 5.5625 px/dB (+8 at 120.5, -8 at 209.5);
+  chart 2 (cardioid / 8) 0 dB at y 327.0, 5.68 px/dB (+6 at 292.5, -28 at 486). Curves read as the
+  darkness-weighted centres of dark runs (below gray 115-120 of 255) in a 3-px column at each frequency;
+  the two rear curves of chart 2 told apart on a 3x zoom by their course (they cross near 400 Hz and
+  4 kHz) and by the labels' leaders (the figure-8 label's points to the lower curve at 250 Hz, the
+  cardioid's to the lower one at 2.4 kHz). Where a curve lies on the 0 dB rule the run is the rule and
+  the curve together (read as 0). Scratch scripts not kept.
+digitized_by: Claude Code
+digitized_on: 2026-11-05
+files:
+  akg_c12_response.csv:
+    columns: >-
+      pattern (omni | cardioid | figure8), angle_deg (0; 180 for the cardioid's rear curve, 90 for the
+      figure-8's, as labelled), freq_hz, db, document (brc12), reference, quality (read | coarse)
+    figures: >-
+      chart 1 'O' (omni, 0 deg, 40 Hz - 15 kHz); chart 2 'cardioid / 8' (one 0 deg curve for both
+      patterns, written twice, 40 Hz - 15 kHz), 'cardioid (180 deg)' and '8 (90 deg)' (40 Hz - ~12 kHz)
+    reference: >-
+      each chart's 0 dB rule; no reference frequency printed (the on-axis curves lie on 0 dB from
+      60-70 Hz to 1-5 kHz). Sensitivity (the brochure's data page): 1.0 mV/ubar at no load (200 ohm),
+      'equally high sensitivity at all directional patterns'
+    quality: >-
+      read: a single curve's run (below ~170 Hz the two rear curves are drawn as one line: its value is
+      both curves'); coarse: at their crossings (400 Hz, 4 kHz) the run is both curves and which is which
+      isn't readable
+    tolerance_band: "none drawn; the technical data: '+-2 dB related to published curve'"

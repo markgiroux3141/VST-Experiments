@@ -1,0 +1,211 @@
+# AKG C12 multi-pattern tube condenser microphone (1953-63), with its supply's HV and the
+# remote pattern unit, as a circuit file (the chains build-out's WP3). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/akg_c12/README.md has their provenance):
+#   "sch: ..."         printed on AKG's drawing "C 12 + Power Supply C12" (11.3.1957; the
+#                      microphone, the N12K supply, the pattern unit U2), by position
+#   "br: ..."          AKG's English C12 brochure (technical data, curves)
+#   "haufe: ..."       Haufe's T14/1 specification (18.7.07)
+#   "web: ..."         forum figures, by thread
+#   "derived: ..."     arithmetic on sourced figures
+#   "provisional: ..." model knowledge; a genome parameter or replaced later
+#
+# The capsule CK12 (config/components/ck12/) is a dual-diaphragm capsule: the pressure at
+# its front on `in`, at its rear on the control input `p_rear` (pascals as volts). Its
+# backplate is the signal electrode (sch): polarized at half of B+ through R12 / R13 and
+# R14, into the grid through C13; the front diaphragm at ground; the rear diaphragm's DC
+# voltage from the pattern unit's ladder (R21-R29: eight 50 k steps, nine positions)
+# through R20 / C20 and R16, AC-grounded by C11. A diaphragm's polarization is its
+# backplate's voltage less its own: the front's B+ / 2, the rear's B+ / 2 x (1 - k / 4) at
+# position k (0 omni: both alike; 4 cardioid: the rear unpolarized; 8 figure-8: opposite).
+# The capsule's model is linear in its polarizations, so each position is its own capsule
+# instance (`pol_rear_k*_v`, checked against the DC solution in tests/test_akg_c12.py); a
+# position change is a change of structure (the real unit fades over R20 / C20's 2 s).
+# The 6072 (= 12AY7, one section heated: br's 175 mA) with its cathode at ground, its grid
+# biased from the supply: the HV's whole current returns through R7 1 k (sch), R10 / C6,
+# pin 4, R11 / C10, R15. The output is T14/1 strapped for 200 ohm into "no load" (br's
+# sensitivity), a 100 k measuring load the chains replace with the preamp.
+# Not modelled: the N12K's mains side and rectifier (its HV a source at C4's last
+# capacitor), the heater supply (DC), the cable MK 12, the second triode section, noise.
+
+title: "AKG C12"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, g, a, bp, rd, nbias, bplus, wip, op]
+# 0 dBFS in = 20 Pa peak at the capsule (the U47's convention); out = volts across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; the user's open decision)"}
+  output_volts_peak: {value: 0.5, source: "provisional: model knowledge (br: 1.0 mV/ubar = 10 mV/Pa unloaded x 20 Pa = 0.2 V peak, x2.5 for headroom)"}
+
+controls:
+  pattern: {value: 4, choices: [0, 1, 2, 3, 4, 5, 6, 7, 8], unit: position, source: "sch: U2's switch on the ladder R21-R29 (figure-8 at the B+ end, cardioid in the middle, omni at ground); br: 'nine different directional characteristics'", notes: "0 omni, 4 cardioid, 8 figure-8; 1-3 between omni and cardioid, 5-7 hypercardioids toward figure-8"}
+
+values:
+  # --- Capsule (sch) ----------------------------------------------------------------------
+  capsule_model: {value: CK12@1, source: "config/components/ck12/1.yaml (its geometry bounded by what is published and fitted to AKG's curves by scripts/fit_ck12.py on the capsule's body, varimu/mics/bor.py: reports/mics/ck12_fit.png)"}
+  pol_front_v: {value: 60.0, source: "derived: br 'plate voltage 120 vdc' (B+) x R13 / (R12 + R13) = 60 V on the backplate (no DC in R14), the front diaphragm at ground (sch)"}
+  pol_rear_k0_v: {value: 60.0, source: "derived: B+ / 2 - 0 / 8 x B+ (sch: the ladder's ground end, omni)"}
+  pol_rear_k1_v: {value: 45.0, source: "derived: B+ / 2 - 1 / 8 x B+ (sch: the ladder's first tap)"}
+  pol_rear_k2_v: {value: 30.0, source: "derived: B+ / 2 - 2 / 8 x B+"}
+  pol_rear_k3_v: {value: 15.0, source: "derived: B+ / 2 - 3 / 8 x B+"}
+  pol_rear_k4_v: {value: 0.0, source: "derived: B+ / 2 - 4 / 8 x B+ (cardioid: the rear at the backplate's voltage)"}
+  pol_rear_k5_v: {value: -15.0, source: "derived: B+ / 2 - 5 / 8 x B+"}
+  pol_rear_k6_v: {value: -30.0, source: "derived: B+ / 2 - 6 / 8 x B+"}
+  pol_rear_k7_v: {value: -45.0, source: "derived: B+ / 2 - 7 / 8 x B+"}
+  pol_rear_k8_v: {value: -60.0, source: "derived: B+ / 2 - 8 / 8 x B+ (sch: the ladder's B+ end, figure-8)"}
+  r12_ohm: {value: 0.5e+6, source: "sch: R12 0.5 MOhm"}
+  r13_ohm: {value: 0.5e+6, source: "sch: R13 0.5 MOhm"}
+  r14_ohm: {value: 250.0e+6, source: "sch: R14 250 MOhm, the polarization feed to the backplate"}
+  c13_f: {value: 1000.0e-12, source: "sch: C13 1000 pF, the backplate to the grid"}
+  r15_ohm: {value: 250.0e+6, source: "sch: R15 250 MOhm, the grid leak"}
+  r11_ohm: {value: 30.0e+6, source: "sch: R11 30 MOhm, pin 4 to the grid leak's foot"}
+  c10_f: {value: 5000.0e-12, source: "sch: C10 5000 pF"}
+  r16_ohm: {value: 30.0e+6, source: "sch: R16 30 MOhm, pin 3 to the rear diaphragm"}
+  c11_f: {value: 5000.0e-12, source: "sch: C11 5000 pF, the rear diaphragm to ground"}
+
+  # --- 6072, one section (sch) -------------------------------------------------------------
+  r17_ohm: {value: 100.0e+3, source: "sch: R17 100 kOhm, the anode load"}
+  c12_f: {value: 0.5e-6, source: "sch: C12 0.5 MF, the anode to T14/1"}
+
+  # --- T14/1 (haufe; no AKG data), version 1 ------------------------------------------------
+  t14_ratio: {value: 0.0869565, source: "haufe: turns ratio 11,5 : 1 (the secondaries in series, the 200 ohm strapping; web: R/E/P topic 2525, Klaus Heyne quoted: '0.5 + 0.5 : 11.5')"}
+  t14_turns: {value: 8000, source: "provisional: model knowledge (haufe: the primary's 3.08 kOhm in a 20.5 x 12 x 13 mm can: ~230 m of ~0.035 mm wire at ~22 mm a turn)", notes: "the primary (the reference winding)"}
+  t14_r_pri_ohm: {value: 3080.0, source: "haufe: coil resistance bu-bu 3,08 kOhm (+-10%)"}
+  t14_r_sec_ohm: {value: 61.0, source: "haufe: rd-rd 61 ohm (+-10%; web: R/E/P topic 2525, Klaus Heyne quoted: 'the two secondaries are 30 Ohms each', 60 in series)"}
+  t14_core_material: {value: mumetall, source: "provisional: model knowledge (a nickel-alloy core in a 20 mm microphone transformer)"}
+  t14_core_area_m2: {value: 1.35e-5, source: "provisional: model knowledge (a 3 mm tongue, 5 mm stack, 90% fill inside haufe's 20.5 x 12 x 13 mm)"}
+  t14_core_path_m: {value: 0.017, source: "provisional: model knowledge (~5.6 x the 3 mm tongue, as the UA 610's T1)"}
+  t14_gap_m: {value: 9.0e-6, genome: akg_c12.t14.gap_m, source: "provisional: fitted to br's omni curve at 40-60 Hz (-2.77 / -1.73 / -0.75 / 0 dB; the omni capsule is flat there): 113 H for the primary in the core's linear limit with t14_turns, rms 0.7 dB (the published curve is steeper than one inductance gives; 64 H: 40 Hz -5.7 dB, 160 H: -0.8); between haufe's 400 kOhm at 1 kHz (64 H) and web: https://groupdiy.com/goto/post?id=1100278's 'about 160H' (vmanj; 'it appears it is the Haufe datasheet that is in error', MagnetoSound)"}
+  t14_leakage_h: {value: 0.3, source: "provisional: model knowledge (~0.5% of the primary's inductance, a small unsectioned winding)"}
+  t14_c_pri_f: {value: 60.0e-12, source: "provisional: model knowledge (self-capacitance of an 8000-turn primary; with the leakage a resonance near 37 kHz, past haufe's 40-20 kHz +-2 dB)"}
+  load_ohm: {value: 100.0e+3, source: "provisional: br's sensitivity is 'at no load (200 ohms)': 100 kOhm stands for no load at 200 ohm"}
+
+  # --- The supply N12K's HV (sch) and the pattern unit U2 ------------------------------------
+  hv_v: {value: 155.0, source: "derived: set so that B+ at the microphone is br's 'plate voltage 120 vdc' (tests/test_akg_c12.py)", notes: "the HV at C4's last capacitor; the N12K's winding, rectifier G2 and first sections not modelled"}
+  r6_ohm: {value: 5.0e+3, source: "sch: R6 5 kOhm 1/2 W"}
+  c5_f: {value: 50.0e-6, source: "sch: C5 2 x 50 uF 350 V (each)"}
+  r8_ohm: {value: 27.0e+3, source: "sch: R8 27 kOhm 1/2 W"}
+  r7_ohm: {value: 1.0e+3, source: "sch: R7 1 kOhm 1/4 W, the HV's return to ground"}
+  r10_ohm: {value: 1.0e+6, source: "sch: R10 1 MOhm 1/4 W"}
+  c6_f: {value: 2.0e-6, source: "sch: C6 2 uF 160 V"}
+  r_ladder_ohm: {value: 50.0e+3, source: "derived: sch 'R21-R29, 0.4 MOhm lin.' in eight steps between nine positions (web: https://groupdiy.com/threads/akg-c12-circuit.45176, baadc0de on the C24's: '50k resistors forming an arc')"}
+  r20_ohm: {value: 1.0e+6, source: "sch: R20 1 MOhm"}
+  c20_f: {value: 2.0e-6, source: "sch: C20 2 uF"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a rotary switch's contact, ~10 mOhm)"}
+
+  # --- Per-instance tolerance (the drawing prints none) ------------------------------------
+  passive_seed: {value: 0, genome: passives.seed, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, genome: passives.spread, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (1950s precision carbon resistors)"}
+  tol_film_pct: {value: 10.0, source: "provisional: model knowledge (paper / film capacitors of the 1950s)"}
+  tol_electrolytic_minus_pct: {value: 20.0, source: "provisional: model knowledge (electrolytics, -20 / +50 %)"}
+  tol_electrolytic_plus_pct: {value: 50.0, source: "provisional: model knowledge (electrolytics, -20 / +50 %)"}
+  tube_emission_pct: {value: 10.0, genome: tubes.instance.emission_pct, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, genome: tubes.instance.mu_pct, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+tolerance:
+  source: "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r5: tol_resistor_pct
+    film: tol_film_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    r5: [R12, R13, R14, R15, R11, R16, R17, R6, R8, R7, R10, R20, RL1, RL2, RL3, RL4, RL5, RL6, RL7, RL8]
+    film: [C13, C10, C11, C12]
+    electrolytic: [C5A, C5B, C6, C20]
+
+devices:
+  V1: {device: 12AY7@1, tolerance: tube}
+
+sections:
+  - title: supply
+    parts:
+      # The HV at C4's last capacitor (a source; its return the node below R7), R6, C5,
+      # R8, C5 to B+ (sch). C4's capacitors return to `nret` with the source: left out.
+      VHV: {V: [h2, nret], v: hv_v}
+      R6: {R: [h2, h3], r: r6_ohm}
+      C5A: {C: [h3, "0"], c: c5_f}
+      R8: {R: [h3, bplus], r: r8_ohm}
+      C5B: {C: [bplus, "0"], c: c5_f}
+      # The return: R7 to ground; R10, C6 to pin 4 (sch).
+      R7: {R: [nret, "0"], r: r7_ohm}
+      R10: {R: [nret, nb], r: r10_ohm}
+      C6: {C: [nb, "0"], c: c6_f}
+
+  - title: pattern unit
+    parts:
+      # U2: the ladder from B+ (the remote cable's pin 5) to ground (pin M), its nine
+      # taps t0 (ground: omni) ... t8 (B+, figure-8); the switch's wiper through R20, C20
+      # to pin 3 (sch).
+      RL1: {R: ["0", t1], r: r_ladder_ohm}
+      RL2: {R: [t1, t2], r: r_ladder_ohm}
+      RL3: {R: [t2, t3], r: r_ladder_ohm}
+      RL4: {R: [t3, t4], r: r_ladder_ohm}
+      RL5: {R: [t4, t5], r: r_ladder_ohm}
+      RL6: {R: [t5, t6], r: r_ladder_ohm}
+      RL7: {R: [t6, t7], r: r_ladder_ohm}
+      RL8: {R: [t7, bplus], r: r_ladder_ohm}
+      SPAT:
+        switch: pattern
+        parts:
+          RW0: {R: ["0", wip], r: contact_ohm, tolerance: none, in: [0]}
+          RW1: {R: [t1, wip], r: contact_ohm, tolerance: none, in: [1]}
+          RW2: {R: [t2, wip], r: contact_ohm, tolerance: none, in: [2]}
+          RW3: {R: [t3, wip], r: contact_ohm, tolerance: none, in: [3]}
+          RW4: {R: [t4, wip], r: contact_ohm, tolerance: none, in: [4]}
+          RW5: {R: [t5, wip], r: contact_ohm, tolerance: none, in: [5]}
+          RW6: {R: [t6, wip], r: contact_ohm, tolerance: none, in: [6]}
+          RW7: {R: [t7, wip], r: contact_ohm, tolerance: none, in: [7]}
+          RW8: {R: [bplus, wip], r: contact_ohm, tolerance: none, in: [8]}
+      R20: {R: [wip, pw], r: r20_ohm}
+      C20: {C: [pw, "0"], c: c20_f}
+
+  - title: capsule
+    parts:
+      # The backplate's polarization: R12 / R13 from B+, R14 to the backplate (sch).
+      R12: {R: [bplus, pd], r: r12_ohm}
+      R13: {R: [pd, "0"], r: r13_ohm}
+      R14: {R: [pd, bp], r: r14_ohm}
+      # The rear diaphragm: R16 from pin 3, C11 to ground (sch).
+      R16: {R: [pw, rd], r: r16_ohm}
+      C11: {C: [rd, "0"], c: c11_f}
+      # The capsule at the pattern's position: its front electrode at ground, its rear on
+      # rd, the backplate the output (sch).
+      SCAP:
+        switch: pattern
+        parts:
+          KC0: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k0_v, in: [0]}
+          KC1: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k1_v, in: [1]}
+          KC2: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k2_v, in: [2]}
+          KC3: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k3_v, in: [3]}
+          KC4: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k4_v, in: [4]}
+          KC5: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k5_v, in: [5]}
+          KC6: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k6_v, in: [6]}
+          KC7: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k7_v, in: [7]}
+          KC8: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_k8_v, in: [8]}
+
+  - title: amplifier
+    parts:
+      # The grid: C13 from the backplate, R15 to the bias node, C10 to ground, R11 from
+      # pin 4 (sch).
+      C13: {C: [bp, g], c: c13_f}
+      R15: {R: [g, nbias], r: r15_ohm}
+      C10: {C: [nbias, "0"], c: c10_f}
+      R11: {R: [nb, nbias], r: r11_ohm}
+      # The 6072's section, cathode at ground; R17 from B+; C12 into T14/1 (sch).
+      XV1: {device: [a, g, "0"], model: V1}
+      R17: {R: [bplus, a], r: r17_ohm}
+      C12: {C: [a, op], c: c12_f}
+      T14:
+        transformer:
+          p: {nodes: [op, "0"], r: t14_r_pri_ohm, c: t14_c_pri_f}
+          s: {nodes: [out, "0"], ratio: t14_ratio, r: t14_r_sec_ohm}
+        core: {material: t14_core_material, area_m2: t14_core_area_m2, path_m: t14_core_path_m, gap_m: t14_gap_m}
+        turns: t14_turns
+        leakage_h: t14_leakage_h
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

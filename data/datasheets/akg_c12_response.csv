@@ -1,0 +1,146 @@
+pattern,angle_deg,freq_hz,db,document,reference,quality
+omni,0,40,-2.77,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,45,-1.73,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,50,-0.76,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,60,-0.05,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,70,-0.05,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,80,-0.05,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,100,-0.04,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,125,0.00,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,150,-0.04,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,200,-0.02,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,250,-0.02,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,300,-0.05,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,400,-0.05,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,500,0.00,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,600,0.00,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,800,0.00,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,1000,0.00,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,1250,0.18,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,1500,0.25,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,2000,0.67,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,2500,0.84,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,3000,0.93,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,4000,0.95,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,5000,0.86,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,6000,0.77,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,7000,1.13,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,8000,2.37,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,9000,3.31,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,10000,3.78,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,11000,3.61,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,12000,3.42,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,13000,2.98,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,14000,2.36,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+omni,0,15000,1.94,brc12,chart 1 (omni) 0 dB line; the curve passes 0 dB from 60 Hz to 1 kHz,read
+cardioid,0,40,-3.80,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,45,-2.10,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,50,-1.09,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,60,-0.12,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,70,0.09,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,80,0.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,100,0.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,150,0.02,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,200,-0.02,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,400,0.00,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,1000,0.04,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,1500,0.02,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,2000,0.04,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,3000,0.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,4000,0.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,5000,0.16,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,6000,0.90,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,7000,1.71,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,8000,1.99,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,9000,2.18,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,10000,2.13,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,11000,1.87,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,12000,1.32,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,13000,0.51,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,14000,-0.12,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,0,15000,-0.65,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,40,-3.80,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,45,-2.10,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,50,-1.09,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,60,-0.12,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,70,0.09,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,80,0.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,100,0.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,150,0.02,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,200,-0.02,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,400,0.00,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,1000,0.04,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,1500,0.02,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,2000,0.04,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,3000,0.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,4000,0.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,5000,0.16,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,6000,0.90,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,7000,1.71,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,8000,1.99,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,9000,2.18,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,10000,2.13,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,11000,1.87,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,12000,1.32,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,13000,0.51,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,14000,-0.12,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,0,15000,-0.65,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,40,-20.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,50,-20.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,60,-19.81,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,70,-19.45,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,80,-19.12,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,100,-18.33,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,125,-17.75,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,150,-17.18,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,200,-16.34,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,250,-16.23,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,300,-17.08,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,400,-19.89,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,coarse
+cardioid,180,500,-22.48,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,600,-24.40,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,800,-25.83,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,1000,-25.92,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,1250,-25.53,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,1500,-25.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,2000,-24.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,2500,-23.13,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,3000,-22.18,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,4000,-20.60,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,coarse
+cardioid,180,5000,-19.03,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,6000,-16.78,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,7000,-15.67,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,8000,-15.04,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,9000,-14.79,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,10000,-14.65,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+cardioid,180,11000,-14.61,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,40,-20.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,50,-20.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,60,-19.81,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,70,-19.45,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,80,-19.12,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,100,-18.33,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,125,-17.75,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,150,-17.18,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,200,-17.39,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,250,-18.24,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,300,-19.05,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,400,-20.51,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,coarse
+figure8,90,500,-21.30,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,600,-21.64,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,800,-21.48,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,1000,-20.92,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,1250,-20.16,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,1500,-19.77,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,2000,-19.45,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,2500,-19.81,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,3000,-20.42,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,4000,-22.20,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,coarse
+figure8,90,5000,-23.10,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,6000,-22.73,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,7000,-22.02,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,8000,-21.14,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,9000,-20.18,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,10000,-19.72,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,11000,-19.07,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read
+figure8,90,12000,-18.84,brc12,chart 2 (cardioid / 8) 0 dB line; the on-axis curve passes 0 dB from 70 Hz to 5 kHz,read

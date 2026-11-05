@@ -92,6 +92,57 @@ def dual_response(
     return front * ac.transfer(ir, f_hz, "out", drives={"p_rear": rear / front})
 
 
+def backplate_ir(
+    c: DualCapsule,
+    polarization_front_v: float,
+    polarization_rear_v: float,
+    r_load_ohm: float = 125e6,
+    c_load_f: float = 0.0,
+    c_rear_f: float = 5000e-12,
+    r_rear_ohm: float = 30e6,
+) -> CircuitIR:
+    """The capsule wired as the AKG C12's (data/schematics/akg_c12/README.md): the
+    backplate the output `out` into its load (c_load_f || r_load_ohm to ground), the front
+    electrode at ground, the rear electrode AC-grounded through c_rear_f (|| r_rear_ohm);
+    the pattern is the rear's polarization (equal to the front's: omni; 0: cardioid;
+    opposite: figure-8)."""
+    els = parts.capsule_dual(
+        "KK", "in", "p_rear", "out", GROUND, "re", c, polarization_front_v, polarization_rear_v
+    )
+    els += [
+        Resistor("RLOAD", "out", GROUND, r_load_ohm),
+        Capacitor("CREAR", "re", GROUND, c_rear_f),
+        Resistor("RREAR", "re", GROUND, r_rear_ohm),
+    ]
+    if c_load_f > 0:
+        els.append(Capacitor("CLOAD", "out", GROUND, c_load_f))
+    return CircuitIR(
+        title="capsule",
+        input_node="in",
+        probes=(VoltageProbe("out"),),
+        models=(),
+        sections=(Section("capsule", tuple(els)),),
+        controls=(Control("p_rear", "p_rear"),),
+    )
+
+
+def backplate_response(
+    c: DualCapsule,
+    f_hz: np.ndarray,
+    entries: tuple[np.ndarray, np.ndarray],
+    polarization_front_v: float,
+    polarization_rear_v: float,
+    **load,
+) -> np.ndarray:
+    """Complex volts at the backplate per pascal of a plane wave whose entry pressures
+    (front, rear) at f_hz are `entries` (free_field.body_entry_factors and the like), the
+    capsule wired as `backplate_ir`'s."""
+    f_hz = np.asarray(f_hz, float)
+    front, rear = (np.asarray(e, complex) for e in entries)
+    ir = backplate_ir(c, polarization_front_v, polarization_rear_v, **load)
+    return front * ac.transfer(ir, f_hz, "out", drives={"p_rear": rear / front})
+
+
 # --- Moving-coil cartridges (docs/SM57_PLAN.md, SM2) -------------------------------------------
 
 

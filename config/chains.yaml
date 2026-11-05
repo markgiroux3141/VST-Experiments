@@ -14,16 +14,16 @@
 #   node, a preamp's (or booster's) `input` node (behind its generator), the parts that
 #   are only its measuring setup (`drop`); and the settings the Room view offers (keys of
 #   its circuit file, unsuffixed; choices [value, label]). A built mic's `pattern` is how
-#   the Room view draws it: cardioid | omni, or {setting: KEY}, the label of that
-#   setting's choice. A circuit not built yet names the work package that builds it
-#   (`wp`, CHAINS_PLAN.md).
+#   the Room view draws it: a pattern name (cardioid, omni, figure-8, ...: varimu/chains.py
+#   PATTERNS, first-order figures), or {setting: KEY}, the label of that setting's choice.
+#   A circuit not built yet names the work package that builds it (`wp`, CHAINS_PLAN.md).
 # chains: per chain its id, stages (mic, optional booster, pre), what it is most likely
 #   used to record (`use`), what it needed beyond what was built when the list was made
 #   (`needs`, the tokens below; `needs_note` qualifies them), and `defaults` overriding
 #   a setting's default (chain keys, suffixed).
 # needs: the prerequisites, each with the work package that provides it.
 #
-# The default gains put 94 dB SPL on axis at -17.6 to -23.1 dBFS (a 1 kHz sine's peak,
+# The default gains put 94 dB SPL on axis at -16.1 to -23.5 dBFS (a 1 kHz sine's peak,
 # measured at draft); a loud close source wants less.
 
 needs:
@@ -91,7 +91,18 @@ circuits:
   sennheiser_md421: {kind: mic, tag: md421, label: Sennheiser MD421, wp: 14}
   shure_sm7: {kind: mic, tag: sm7, label: Shure SM7, wp: 15}
   akg_d112: {kind: mic, tag: d112, label: AKG D112, wp: 9}
-  akg_c12: {kind: mic, tag: c12, label: AKG C12, wp: 3}
+  akg_c12:
+    kind: mic
+    tag: c12
+    label: AKG C12
+    output: out
+    drop: [RLOAD]
+    pattern: {setting: pattern}
+    settings:
+      - key: pattern          # the S12's nine positions (the rear diaphragm's polarization)
+        label: Pattern
+        choices: [[0, omni], [1, wide omni], [2, wide cardioid], [3, broad cardioid], [4, cardioid], [5, supercardioid], [6, hypercardioid], [7, narrow figure-8], [8, figure-8]]
+        default: 4
   telefunken_ela_m251: {kind: mic, tag: m251, label: ELA M 251, wp: 18}
   neumann_m49: {kind: mic, tag: m49, label: Neumann M49, wp: 29}
   neumann_u67: {kind: mic, tag: u67, label: Neumann U67, wp: 28}

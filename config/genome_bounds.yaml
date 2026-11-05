@@ -237,3 +237,11 @@ ua_610:
   t1:
     gap_m:                  {min: 1.0e-6, max: 6.0e-6, unit: m, source: "provisional: model knowledge (an interleaved nickel-alloy core's effective joint gap; at 1.2 um ~ the core's own path over its permeability, 5 um BV 191's)", notes: "50 Hz re 1 kHz: -0.2 dB at 1.2 um, -1.0 at 2.5, -2.9 at 5 (a 200 ohm source)"}
     c_sec_f:                {min: 10.0e-12, max: 40.0e-12, unit: F, source: "provisional: model knowledge (self-capacitance of a 50 k grid winding)", notes: "20 kHz re 1 kHz: -1.1 dB at 15 pF, -2.8 at 30 pF"}
+
+akg_c12:
+  # AKG C12 (the chains build-out's WP3; config/circuits/akg_c12.yaml has the sources of
+  # the nominal values). T14/1's primary inductance is disputed: Haufe's sheet's 400 kOhm
+  # at 1 kHz is 64 H, a reproduction's ~160 H; with 8000 turns on the provisional core
+  # its gap sets it (40 H at 26.6 um, 64 H at 16.4, 160 H at 6.2, 200 H at 4.8).
+  t14:
+    gap_m:                  {min: 4.8e-6, max: 26.6e-6, unit: m, source: "derived: T14/1's primary from 200 H to 40 H in the core's linear limit with 8000 turns (haufe's 64 H, web: GroupDIY post 1100278's ~160 H inside)"}

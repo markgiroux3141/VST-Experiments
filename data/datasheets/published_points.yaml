@@ -526,6 +526,43 @@
   published:
     capacitance_f_per_side: [78.0e-12, 83.0e-12]   # sch: KK47 '2 x 78...83 pF'
 
+# --- AKG C12 (docs/CHAINS_PLAN.md WP3) ---
+"CK12":
+  source: "data/schematics/akg_c12/README.md ('The capsule CK12'): no AKG drawing or measured geometry; Austrian Audio's description of the 1954 patent and original capsules (two halves, each a membrane on an electrode with drilled holes and a resistance disk, the disks' offset holes joined by a slit: the gradient resistance; the gap 30-50 um; the membrane resonance 800-1500 Hz) bounds the network, the rest fitted to AKG's curves by scripts/fit_ck12.py (value: ..., the bounds in its comment) in the dual-diaphragm form (varimu.devices.capsule.dual_lumped: the slit as the through resistance, the drilled holes as the blind holes)"
+  polarization_v: 60.0     # derived: sch, br: B+ 120 V x R13 / (R12 + R13) on the backplate, the front diaphragm at ground
+  geometry:
+    diaphragm:
+      radius_m: {value: 13.0e-3}      # web (README: 'about 1 inch', a clone maker's 27 mm; forums)
+      thickness_m: {value: 10.0e-6}   # web (README, Mix: the first CK12's 10 um 'Styroflex'; later 9 um then 6 um Mylar)
+      density_kg_m3: {value: 1050.0}  # provisional: model knowledge (polystyrene, Styroflex)
+      tension_n_m: {value: 20.76}      # provisional: fitted (bounds 7.47-26.3 N/m: README's membrane resonance 800-1500 Hz, Austrian Audio, as the membrane's own on this film)
+    gap_m: {value: 5.0e-05}           # provisional: fitted (bounds 30-50 um; README: the isolating distance ring 30-50 um, Austrian Audio)
+    backplate:
+      radius_m: {value: 12.2e-3}      # provisional: model knowledge (the electrode a little inside the diaphragm's clamping)
+      thickness_m: {value: 4.0e-3}    # web (README: a GroupDIY dissection of a 34 mm dual-backplate capsule, 'about 4 mm' backplates; provisional)
+      through:
+        holes: {value: 24}            # provisional: model knowledge (the resistance disks' offset holes; sets only the slit path's air mass)
+        radius_m: {value: 0.5e-3}     # provisional: model knowledge
+      blind:
+        holes: {value: 227.9}            # provisional: fitted (bounds 10-250 per side; the electrode's drilled holes)
+        radius_m: {value: 0.5e-3}     # provisional: model knowledge (~1 mm drilled holes)
+        depth_m: {value: 0.00189}      # provisional: fitted (bounds 0.3-1.9 mm: half the backplate, less the slit)
+    film_resistance_pa_s_m3: {value: 4.194e+06}       # provisional: fitted (the film into the drilled holes, bounds 1e4-3e7)
+    through_resistance_pa_s_m3: {value: 1.585e+07}    # provisional: fitted (the slit between the resistance disks, bounds 1e6-3e9)
+    leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
+    stray_capacitance_f: {value: 4.0e-11}   # provisional: fitted (bounds 2-40 pF; the backplate to the grounded membrane rings across the isolators, its leads)
+    # The capsule as a rigid body of revolution for its entries' diffraction (varimu/mics/bor.py)
+    body:
+      radius_m: {value: 15.5e-3}          # provisional: model knowledge (the membrane rings inside the capsule's rim)
+      rim_radius_m: {value: 17.0e-3}      # web (README: a 34 mm capsule, a clone maker's)
+      rim_thickness_m: {value: 1.5e-3}    # provisional: model knowledge (the isolators' rim; no source)
+      spacing_m: {value: 0.0041}          # provisional: grid: (scripts/fit_ck12.py --spacing-mm; the backplates' ~4 mm plus the two gaps)
+      ring_proud_m: {value: 0.0}          # provisional: grid: (scripts/fit_ck12.py --proud-mm; the membrane rings' faces ahead of the diaphragms, unknown)
+  published:
+    sensitivity_mv_pa: 10.0             # br: 1.0 mV/ubar at no load (200 ohm), at the microphone's output
+    membrane_resonance_hz: [800.0, 1500.0]   # web: Austrian Audio
+    gap_m: [30.0e-6, 50.0e-6]           # web: Austrian Audio
+
 # --- Neumann U47 (A3) ---
 # the VF 14 (VF 14 M), transcribed 2026-11-03; curves: telefunken_vf14.provenance.yaml
 

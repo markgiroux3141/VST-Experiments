@@ -16,8 +16,8 @@ use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::player::Player;
 use varimu_app::room::{
-    self, Balance, CEILINGS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, Pattern, QUALITIES,
-    RenderJob, RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
+    self, Balance, CEILINGS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, QUALITIES, RenderJob,
+    RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
 };
 use varimu_app::session::{Mix, MixClip};
 use varimu_app::settings::{Quality, Settings};
@@ -1802,28 +1802,52 @@ impl RoomView {
             let on = self.sel == Some(Sel::Mic(i));
             let az = (m.azimuth_deg as f32).to_radians();
             let r0 = 0.6 * k.clamp(40.0, 90.0);
-            let pts: Vec<Pos2> = (0..=72)
-                .map(|j| {
-                    let th = j as f32 / 72.0 * std::f32::consts::TAU;
-                    let g = match m.pattern() {
-                        Pattern::Cardioid => 0.5 * (1.0 + th.cos()),
-                        Pattern::Omni => 0.55,
-                    };
-                    let a = az + th;
-                    c + Vec2::new(a.cos(), -a.sin()) * (g * r0)
-                })
-                .collect();
+            // The figure's magnitude, scaled so an omni draws smaller than a cardioid (0.55
+            // of its reach); a lobe of each sign is its own outline (figure-8 family).
+            let pat = m.pattern();
+            let a8 = f32::from(pat.0) / 8.0;
+            let scale = if a8 > 0.5 {
+                1.0 - 0.9 * (a8 - 0.5)
+            } else {
+                1.0
+            };
+            let point = |th: f32| {
+                let g = pat.gain(th).abs() * scale;
+                let a = az + th;
+                c + Vec2::new(a.cos(), -a.sin()) * (g * r0)
+            };
+            // The front lobe around the axis (-pi..pi), the rear one around pi (0..2 pi).
+            let lobe = |from: f32, front: bool| -> Vec<Pos2> {
+                let mut pts: Vec<Pos2> = (0..=72)
+                    .map(|j| from + j as f32 / 72.0 * std::f32::consts::TAU)
+                    .filter(|&th| (pat.gain(th) >= 0.0) == front)
+                    .map(point)
+                    .collect();
+                if !pts.is_empty() && pts.len() < 73 {
+                    pts.push(c); // a lobe of the figure-8 family closes at the centre
+                }
+                pts
+            };
             let col = if on {
                 MIC_COLOR
             } else {
                 MIC_COLOR.gamma_multiply(0.55)
             };
-            painter.add(egui::Shape::convex_polygon(
-                pts.clone(),
-                MIC_COLOR.gamma_multiply(0.08),
-                Stroke::NONE,
-            ));
-            painter.add(egui::Shape::line(pts, Stroke::new(1.5, col)));
+            for pts in [lobe(-std::f32::consts::PI, true), lobe(0.0, false)] {
+                if pts.len() < 3 {
+                    continue;
+                }
+                painter.add(egui::Shape::convex_polygon(
+                    pts.clone(),
+                    MIC_COLOR.gamma_multiply(0.08),
+                    Stroke::NONE,
+                ));
+                let mut outline = pts;
+                if outline.len() < 73 {
+                    outline.push(outline[0]);
+                }
+                painter.add(egui::Shape::line(outline, Stroke::new(1.5, col)));
+            }
             let tip = c + Vec2::new(az.cos(), -az.sin()) * 16.0;
             painter.line_segment([c, tip], Stroke::new(2.5, col));
             painter.circle_filled(c, 6.0, col);

@@ -13,20 +13,24 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 10 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
-  U47 -> V72, U47 -> UA 610; `uv run python scripts/chain_status.py`).
+- **Chains available:** 12 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+  U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610;
+  `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
   within 0.06 dB / 7% and traced; WP1's Notes). WP2 (2026-11-05): the UA 610-A
-  (`config/circuits/ua_610.yaml` from Hinson's redraw of UA C-10068; WP2's Notes).
+  (`config/circuits/ua_610.yaml` from Hinson's redraw of UA C-10068; WP2's Notes). WP3
+  (2026-11-05): the AKG C12 (`config/circuits/akg_c12.yaml` from AKG's 1957 drawing, the
+  capsule `CK12@1` fitted to AKG's curves, nine patterns; WP3's Notes).
 - **In progress:** none.
-- **Next:** WP3 (the AKG C12), Start step 4: write its steps here, sources first (the C12's
-  schematic and the CK12 capsule's published figures; the 6072 = `12AY7@1` exists; its
-  transformer). The user fetches login-walled files on request: give each URL alone in a
-  code block (WP2's Notes).
-- **Waiting on the user:** listening to U47 -> UA 610 in the Room view (optional; the
-  610's T1 bass / top end is the user's option B, both values genome parameters).
+- **Next:** WP4 (the op-amp preamps: the SSL 4000 E channel, the Tascam Portastudio),
+  Start step 4: write its steps here, sources first; the sources decide whether they are
+  op-amps only (the `opamp` macro exists) or wait for the BJT (WP10). The user fetches
+  login-walled files on request: give each URL alone in a code block (WP2's Notes).
+- **Waiting on the user:** listening to U47 -> UA 610 and the C12's chains in the Room
+  view (optional; the 610's T1 bass / top end is the user's option B; the C12's T14/1
+  inductance and its capsule's fitted values are genome / provisional, WP3's Notes).
 
 ## How a session runs
 
@@ -99,8 +103,8 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 0 | The list as data: `config/chains.yaml`, `chain_status.py`, compose / test / app read it | 0 | S | done 2026-11-05 |
 | 1 | Telefunken V72 (two EF804S; BV 191 is its input transformer, already compiled) | U47 -> V72 | M | done 2026-11-05 |
 | 2 | Universal Audio 610 | U47 -> 610 | M | done 2026-11-05 |
-| 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | next |
-| 4 | The op-amp preamps: SSL 4000 E channel, Tascam Portastudio (sources decide: op-amps only, or wait for the BJT) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | |
+| 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | done 2026-11-05 |
+| 4 | The op-amp preamps: SSL 4000 E channel, Tascam Portastudio (sources decide: op-amps only, or wait for the BJT) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | next |
 | 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | |
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | |
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's record amp as a preamp | 77-DX -> 351, 77-DX -> 610 | L | |
@@ -312,7 +316,134 @@ Decisions:
 - LEVEL's default in the circuit file equals the chain list's (0.2), as the V76's: the
   composed chain and `mic_print.py` use the file's.
 
-### WP3-WP31
+### WP3. The AKG C12
+
+AKG's multi-pattern tube condenser (1953-63): the CK12 dual-diaphragm capsule, its
+backplate the signal electrode (C13 1000 pF to the grid), the front diaphragm grounded and
+the rear diaphragm's DC voltage set from the remote unit S12 (nine positions on a resistor
+ladder, 0 V omni to ~120 V figure-8, cardioid at the backplate's 60 V); a 6072 (= 12AY7)
+section with its grid biased from the supply's return (N12K: R7 1k), T14/1 to 50 / 200 ohm.
+Sources: `data/schematics/akg_c12/README.md`.
+
+Steps:
+1. Sources: the drawing "C12 + Power Supply C12" with the N12K and the S12 (U2), ~1959
+   (coutant.org, courtesy John Warshaw); AKG's English brochure (cieri.net: the 6072
+   version's data, response curves omni / cardioid-and-8 at 0 deg with cardioid 180 deg
+   and 8 at 90 deg, polars of the three basic patterns); the early bilingual description
+   (coutant.org: the 12AY7 version, 40 / 250 / 500 ohm); Haufe's T14/1 specification
+   (11.5:1, 3.08 k / 61 ohm, 20.5 x 12 x 13 mm; its 400 kOhm / 350 mH at 1 kHz disputed on
+   the forums); Austrian Audio's "The CK12 Capsule Demystified" (the 1954 patent's
+   structure, membrane resonance 800-1500 Hz, gap 30-50 um, a ~50 um slit between the two
+   resistance disks as the gradient resistance, a tuned capsule's ~-46 dBV/Pa). The
+   brochure's response curves digitized to `data/datasheets/akg_c12_response.csv` with a
+   provenance sidecar (its polars not: Notes).
+2. The capsule `CK12@1` (kind `capsule`, form `dual`: the slit is the through resistance,
+   the electrode's drilled holes the blind holes; its `body` for the entries): geometry in
+   `published_points.yaml`, the unknowns bounded and fitted by `scripts/fit_ck12.py` (on
+   `fit_k47.py`'s method) to AKG's curves and polars, the patterns by the rear's
+   polarization (a C12 wiring in `varimu/mics/networks.py`: the backplate the output, both
+   diaphragms AC-grounded, E_rear / E_front = 1 omni, 0 cardioid, -1 figure-8), into the
+   C12's grid load; the sensitivity 1.0 mV/ubar unloaded over the amplifier's gain;
+   `varimu fit-devices --only CK12`.
+3. `config/circuits/akg_c12.yaml` from the drawing: the mic (R11-R17, C10-C13), the 12AY7's
+   one section (the second's heater unpowered: 6.3 V at 175 mA, the brochure), T14/1 as a
+   macro transformer sized from Haufe's figures at the 200 ohm strapping; the N12K's HV as
+   a source behind its last RC section with its return through R7 1k (the grid bias, R10 /
+   C6), its heater supply not drawn (DC); the S12 ladder, R20 / C20, R16 / C11 drawn; the
+   pattern a nine-position switch of capsule instances, each with its rear polarization
+   from the ladder (`derived:` values, checked against the DC solution in the test).
+4. `tests/test_akg_c12.py`: builds, preflight, idle against the brochure (120 V at 0.7 mA,
+   the backplate 60 V, the ladder's rear voltages, the bias by arithmetic), the
+   sensitivity per pattern (1.0 mV/ubar +-1.5 dB, "equally high at all patterns"), the
+   cardioid's front to back (>= 15 dB, the brochure; "better than 20").
+5. The mic's checks (What "done" means): on-axis responses and polars against AKG's (the
+   SM57's bar, or why not), its entry table computes (`varimu/rooms/entries.py`).
+6. The list and the Room view: a mic's pattern as a first-order figure (a + (1 - a) cos;
+   `varimu/chains.py` PATTERNS and varimu-app's `room::Pattern` gain figure-8 and the
+   C12's intermediate positions); `akg_c12`'s entry (output, drop, the nine-position
+   pattern, default cardioid); `compose_chain.py --all` (c12_clean, c12_ua610),
+   `test_chain_matrix.py`, app fixtures, one draft render through a scene;
+   `chain_status.py` 12 of 51.
+
+Notes (2026-11-05, done):
+- Sources: `data/schematics/akg_c12/README.md` (the drawing, AKG's English brochure with
+  its curves and data, the early 12AY7 description, Haufe's T14/1 sheet, Austrian Audio's
+  CK12 article; PNGs of each, the PDFs not committed). The drawing is 990 px wide: every
+  value legible, the wiring read by eye on zooms; it prints **no voltages**. The 1953
+  patent on the brochure (AT 180313) has no text on Google Patents and DEPATISnet refuses
+  scripts: not read. The brochure's polar diagrams are not digitized (four line styles
+  overlapping on a 876 px page; the on-axis direction is their 20 ring): the rear curves
+  of the response chart (cardioid 180 deg, figure-8 90 deg) carry the directivity instead.
+- `data/datasheets/akg_c12_response.csv` (+ `akg_c12.provenance.yaml`): omni 0 deg,
+  cardioid / 8 0 deg (one curve, written for both), cardioid 180 deg, figure-8 90 deg,
+  40 Hz-15 kHz, read from the page image (the rear curves told apart by course and by the
+  labels' leaders; they cross near 400 Hz and 4 kHz).
+- `config/circuits/akg_c12.yaml`: the capsule a nine-position switch of `capsule_dual`
+  instances (`KC0`-`KC8`), each with its rear polarization `pol_rear_k*_v` = B+ / 2 x (1 -
+  k / 4) (the model is linear in polarization); the DC network drawn too (the ladder RL1-
+  RL8, 8 x 50 k, the wiper RW*, R20 / C20, R16 / C11), and the test checks the DC
+  solution puts those polarizations on the electrodes. The supply: `VHV` (155 V, set for
+  br's B+ 120 V) at C4's last capacitor, R6, C5, R8, C5 to B+; its return through R7 1 k
+  gives the grid -1.08 V via R10 / C6, R11 / C10, R15. Idle: B+ 120.0, anode 56.5 V,
+  0.65 mA (br: 0.7), the backplate 60.0 V. The 6072 is `12AY7@1` (one section; the second
+  unheated per br's 175 mA heater).
+- T14/1: haufe's 11.5 : 1, 3.08 k / 61 ohm; 8000 turns (provisional, from the DCR) on a
+  provisional mumetall core; its primary inductance is disputed (haufe's 400 kOhm at 1 kHz
+  = 64 H; a reproduction's ~160 H): the gap (`akg_c12.t14.gap_m`, genome, 4.8-26.6 um) is
+  fitted to the omni curve's last octave, 9 um = 113 H (64 H gave -5.7 dB at 40 Hz, 160 H
+  -0.8; AKG -2.8). The whole mic then reads -1.2 dB at 40 Hz: the published curve is
+  steeper than one inductance gives.
+- The capsule `CK12@1` (`scripts/fit_ck12.py` on fit_k47.py's helpers; reports/mics/
+  ck12_fit.{png,json}): the C12's wiring as `varimu.mics.networks.backplate_response`
+  (the backplate the output into C13 + the grid's Miller input, 42.7 pF || 125 MOhm).
+  Fitted: tension 20.8 N/m (bounds from Austrian Audio's membrane resonance 800-1500 Hz
+  on the 10 um Styroflex film: 1333 Hz), the gap 50 um (its bound, Austrian Audio's 30-50),
+  the slit 1.59e7, the film 4.19e6 Pa s/m^3, 228 drilled holes per side 1.89 mm deep (the
+  ~4 mm backplate's half), the stray capacitance 40 pF (its bound: the backplate to the
+  grounded membrane rings, its leads; it brings the sensitivity down to AKG's). Body:
+  radius 15.5 / rim 17 mm, spacing 4.1 mm (the backplates plus the gaps; 3.5 mm fit 0.04
+  dB better), the rings flush. Fit rms 1.1 dB: omni 0 deg 0.9 rms (max 1.9 at 8 kHz),
+  cardioid 0 deg 1.0 (2.0 at 14 kHz), cardioid 180 deg 2.9 (6.3 at 250 Hz, AKG's bump to
+  -16 dB). Dead ends: tension up to 200 N/m fitted ~50 N/m and lost the low-frequency rear
+  rejection (-8 dB at 50 Hz: the stiff rear diaphragm closes the gradient path), the K47's
+  slack regime; blind holes deeper than half the backplate were unphysical.
+- **The figure-8's side rejection is a known miss:** the model's halves are equal, so its
+  90 deg null is exact (the plot: below -40 dB), AKG's -17 to -23 dB comes from the halves'
+  differences (Austrian Audio: the two resistance disks differ). Not fitted, reported
+  (`figure8_90_rms_db` ~20). Modelling it needs unequal halves in `dual_lumped`.
+- The whole mic (tests/test_akg_c12.py, 2026-11-05): 10.2 / 10.5 / 10.9 / 11.2 / 11.5 mV/Pa
+  at 1 kHz from omni to figure-8 (br: 10 +-1.5 dB, 'equally high at all patterns'); the
+  cardioid's front / back 17.8 / 23.8 / 17.3 dB at 100 Hz / 1 kHz / 5 kHz (br: 15, 'better
+  than 20'); on axis re 1 kHz within +-2 dB of AKG's curves from 40 Hz to 15 kHz (omni:
+  40 Hz -1.2 vs -2.8, 8 kHz +0.5 vs +2.4, 10 kHz +2.5 vs +3.8; cardioid: 40 Hz -1.9 vs
+  -3.8, 8 kHz +0.2 vs +2.0, 15 kHz +1.1 vs -0.7). The entry table computes
+  (`varimu/rooms/entries.py`, ~3 min, cached).
+- The list and the app: `varimu/chains.py` PATTERNS and varimu-app's
+  `room::PATTERN_NAMES` are first-order figures by name (omni, wide omni, wide cardioid,
+  broad cardioid, cardioid, supercardioid, hypercardioid, narrow figure-8, figure-8;
+  `room::Pattern` the coefficient in eighths, `gain`); the Room view draws a figure-8
+  family's lobes apart. `akg_c12`'s entry: output `out`, drop RLOAD, the nine positions,
+  default cardioid. `c12_clean`, `c12_ua610` composed (the 10 others byte-identical). 94 dB
+  SPL at 1 kHz: -23.5 dBFS peak into the 610 at its default 35 dB, -16.1 into clean; one
+  draft render through a scratch scene (both chains, cardioid and figure-8) ran. The Room
+  view's new drawing wasn't seen on a screen (clippy and the room tests only).
+- Tests: `tests/test_akg_c12.py` (6), `test_chain_matrix.py`, `test_app_fixtures.py`
+  (fixtures for `akg_c12`, `c12_clean`, `c12_ua610`; nothing else moved), varimu-circuit's
+  `tests/agreement.rs`, varimu-app `room::` (the C12's patterns in `chain_list_reads`),
+  `test_versions.py`, `test_capsule.py`.
+
+Decisions:
+- The pattern as nine capsule instances, each at its position's polarization, the DC
+  network drawn and checked against them (the model is linear in polarization); a
+  position change rebuilds, where the real unit fades over R20 / C20's 2 s.
+- The model is the 1957 drawing's (6072, T14/1, 50 / 200 ohm), with the later brochure's
+  data and curves; the first 12AY7 version (40 / 250 / 500 ohm) isn't modelled.
+- The film is the first CK12's 10 um Styroflex (the C12 of 1957 may have had 9 um Mylar;
+  the fit's tension absorbs the difference).
+- T14/1's inductance fitted to the omni curve's low end (a genome parameter); the
+  figure-8's side rejection left as a known miss.
+
+### WP4-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -320,9 +451,10 @@ in `data/schematics/neumann_u47/README.md` and `data/schematics/shure_sm57/READM
 
 ## Owed
 
-Batched checks (the targeted-tests rule): the full `pytest` (WP1 and WP2 added four
-circuits and their app fixtures; they touched no device, engine or existing circuit, so
-`--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
+Batched checks (the targeted-tests rule): the full `pytest` (WP1-WP3 added seven
+circuits and their app fixtures; WP3 added the device builder `build_ck12` to
+`varimu/devices/library.py`, which moves every render's cache key: the full suite
+re-renders; no device model, engine or existing circuit changed, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work).
 
 ## Decisions (the user's)
@@ -345,3 +477,8 @@ before this session (not the chains' work).
   user from GroupDIY), the UTC O-1 on its 50 ohm tap (UTC's catalog and terminal sheet),
   the PA-5946 from forum figures; T1's gap / capacitance the user's option B; its profile
   against the 2-610's figures as a reference; U47 -> UA 610 composed: 10 of 51 available.
+- 2026-11-05: WP3 done: the AKG C12 from AKG's 1957 drawing (coutant.org) and brochure
+  (cieri.net), its curves digitized; the capsule `CK12@1` fitted to them (`fit_ck12.py`,
+  bounded by Austrian Audio's CK12 figures), T14/1 from Haufe's sheet, the nine patterns
+  as capsule instances; the Room view's patterns now first-order figures; C12 -> clean
+  and C12 -> UA 610 composed: 12 of 51 available.
