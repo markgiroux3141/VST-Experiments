@@ -15,6 +15,7 @@ three stems summed, no room.
 | `shoebox_geometric/` | 7 x 5.5 x 3.2 m, furnished (R5's live room) | the geometric model |
 | `shoebox_wave/` | the same | the wave solver |
 | `shoebox_dead_front/` | the same, drapes on the wall behind the players, plaster behind the pair (R7) | the wave solver |
+| `small_trapped/` | the small room treated from physics: 100 mm wool spaced 100 mm off both side walls, a plywood panel bass trap behind the pair | the wave solver |
 
 **Listen for**
 
@@ -31,6 +32,13 @@ three stems summed, no room.
   it, the front reflections gone; the mids and highs drier (RT at 1 kHz 0.78 -> 0.65 s) but
   the bass *longer* (125 Hz: 0.52 -> 0.74 s): the plaster wall reflects the low end the
   furnished one absorbed. Uneven treatment changes the balance, not just the amount.
+
+- `small_wave` against `small_trapped`: the same small room treated with absorbers whose
+  absorption comes from their construction (`varimu/rooms/materials.py`: Miki's porous model,
+  a mass-spring panel): every band decays faster (125 Hz 0.34 -> 0.25 s, 500 Hz 0.56 -> 0.38
+  s): a tighter, drier room, the modes still there but shorter. (Plywood traps on whole walls
+  alone made the room livelier above 250 Hz: they reflect the mids the furnished walls
+  absorbed. Real control rooms pair them with porous panels, as here.)
 
 `levels.png` / `levels.json`: each variant's third-octave levels at the pair (loudness-matched).
 

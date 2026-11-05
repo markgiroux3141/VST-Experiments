@@ -1488,6 +1488,11 @@ fn material_color(m: &str) -> Color32 {
         "carpet_on_pad" => Color32::from_rgb(0xb0, 0x7a, 0xc8),
         "heavy_drapes" => Color32::from_rgb(0xd0, 0x5c, 0x6c),
         "acoustic_tile" => Color32::from_rgb(0x6c, 0xc0, 0x8c),
+        "mineral_wool_50mm" | "mineral_wool_100mm" | "wool_100mm_gap_100mm" => {
+            Color32::from_rgb(0xe0, 0xc8, 0x5a)
+        }
+        "foam_25mm" => Color32::from_rgb(0x8a, 0x8f, 0xe0),
+        "panel_trap_plywood" => Color32::from_rgb(0xd8, 0x86, 0x3c),
         "anechoic" => Color32::from_rgb(0x50, 0x50, 0x58),
         _ => theme::WIRE,
     }

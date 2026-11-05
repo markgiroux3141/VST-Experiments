@@ -479,6 +479,16 @@ change differ from the night's demos in the tail's realization (and those dips).
 A source within a cell of a wall runs in the wave solver (its injection renormalized over the
 room's cells); a mic inside a directional source's body is refused (Python and the Room view).
 
+**Treatments from their physics** (MIC_ROOM_PLAN.md A5's "materials from physics";
+`varimu/rooms/materials.py`): a surface's locally reacting impedance from its construction,
+its random-incidence absorption by Paris' average per band (the lowest band over 44-177 Hz:
+it stands for everything under 125 Hz). Porous layers by Miki's model (flow resistivity,
+thickness, an air gap behind), panel absorbers as a mass on a cavity (empty or filled).
+Offered as materials beside the measured ones: `mineral_wool_50mm`, `mineral_wool_100mm`,
+`wool_100mm_gap_100mm`, `foam_25mm`, `panel_trap_plywood` (~58 Hz, 0.94 at 50 Hz); the Room
+view lists them. An ordinary stud wall stays the measured `gypsum_on_studs` (as a lightly
+damped panel it under-absorbs). The demo `wave_demo/small_trapped`.
+
 **Not done / limits.** Second-order diffraction (over a box's two edges: deep shadows behind
 thick objects come out too dark; thin panels are plates, so gobos are fine). Paths reflecting
 after an edge (edge then wall) aren't in the geometric part (below the crossover the wave

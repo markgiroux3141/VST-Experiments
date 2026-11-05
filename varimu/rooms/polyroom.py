@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+from varimu.rooms.materials import TREATMENT_SCATTERING
 from varimu.separation.room import BANDS_HZ, SPEED_OF_SOUND_M_S, air_absorption_db_per_m
 
 SCATTERING_SOURCE = (
@@ -62,6 +63,8 @@ SCATTERING = {
     "heavy_drapes": 0.4,
     "acoustic_tile": 0.3,
     "anechoic": 0.0,
+    "rigid": 0.0,
+    **TREATMENT_SCATTERING,
 }
 CEILINGS = ("flat", "shed", "gable", "vault")
 OBJECT_MAX_ORDER = 2  # reflections off objects: paths with an object face up to this order

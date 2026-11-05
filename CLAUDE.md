@@ -514,7 +514,10 @@ micro-images sharing a spectrum); the Room view's OBJECTS. **Directional sources
 plan's "Later", the same night): `varimu/rooms/directivity.py`, a cap on a sphere (presets
 voice, amp_1x12, amp_2x12, bass_1x15; a scene source's `directivity` and `aim`; on-axis
 normalized), images and diffraction weighted in their emission directions, rays started with
-|D|^2, the wave solver with the source's body in its grid. Demos: `scripts/room_wave_demo.py`
+|D|^2, the wave solver with the source's body in its grid. **Treatments from their physics**
+(`varimu/rooms/materials.py`: Miki porous layers with an optional gap, panel bass traps; the
+materials `mineral_wool_50mm`, `mineral_wool_100mm`, `wool_100mm_gap_100mm`, `foam_25mm`,
+`panel_trap_plywood`). Demos: `scripts/room_wave_demo.py`
 -> reports/rooms/wave_demo/, `scripts/room_gobo_demo.py` -> reports/rooms/gobo_demo/,
 `scripts/room_source_demo.py` -> reports/rooms/source_demo/, `room_demo.py --wave 500 --out
 reports/rooms/demo_wave` (READMEs there). Open: the user listens (reports/rooms/LISTEN.md); the Room view's new controls were seen drawn

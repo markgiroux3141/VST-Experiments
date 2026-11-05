@@ -707,8 +707,9 @@ def test_a_source_against_a_wall_and_a_mic_in_an_amp():
     b = _wave_or_skip()
     room = _rect_room()
     mics = [Mic(np.array([3.0, 2.5, 1.2]), aim_vector(0), _omni())]
-    low, _ = wave.responses(room, [np.array([0.01, 2.0, 1.2])], mics, FS, 1 << 16,
-                            crossover_hz=250, rt_s=np.full(7, 0.1), length_s=0.1, backend=b)  # fmt: skip
+    src = [np.array([0.01, 2.0, 1.2])]
+    low, _ = wave.responses(room, src, mics, FS, 1 << 16, crossover_hz=250,
+                            rt_s=np.full(7, 0.1), length_s=0.1, backend=b)  # fmt: skip
     assert np.all(np.isfinite(low)) and np.any(low != 0)
     scene = load_scene({
         "name": "t", "room": {"floor_m": RECT, "materials": dict(zip(
@@ -719,3 +720,44 @@ def test_a_source_against_a_wall_and_a_mic_in_an_amp():
     })  # fmt: skip
     with pytest.raises(ValueError, match="inside amp's body"):
         mic_pressures(scene, FS, [np.ones(100)])
+
+
+# --- treatments from their physics (MIC_ROOM_PLAN.md A5's "materials from physics") ---
+
+
+def test_porous_layers_absorb_as_their_thickness_and_gap_say():
+    from varimu.rooms import materials as m
+
+    f = np.array([125.0, 500.0, 4000.0])
+    thin = m.normal_absorption(m.Porous(10_000.0, 0.05).impedance(f))
+    assert thin[0] < 0.15 and thin[2] > 0.9  # transparent to the bass, black to the highs
+    thick = m.absorption(m.Porous(10_000.0, 0.10).impedance(f))
+    gap = m.absorption(m.Porous(10_000.0, 0.10, gap_m=0.10).impedance(f))
+    base = m.absorption(m.Porous(10_000.0, 0.05).impedance(f))
+    assert base[0] < thick[0] < gap[0]  # thicker, then spaced off the wall: more bass
+    assert np.all(m.absorption(np.full(3, 1e9)) < 1e-3)  # a rigid wall absorbs nothing
+
+
+def test_a_panel_trap_absorbs_at_its_resonance():
+    from varimu.rooms import materials as m
+
+    trap = m.TREATMENTS["panel_trap_plywood"]
+    f = np.geomspace(20, 400, 400)
+    a = m.absorption(trap.impedance(f))
+    assert abs(f[np.argmax(a)] / trap.resonance_hz() - 1) < 0.2
+    bands = m.band_absorption(trap)
+    assert bands[0] > 0.25 and bands[2] < 0.05  # the bass, not the mids
+
+
+def test_the_room_views_surfaces_are_the_rooms_materials():
+    """Every surface the native app's Room view offers (room.rs MATERIALS) exists here."""
+    import re
+
+    from varimu.config import REPO_ROOT
+    from varimu.rooms.shoebox import ROOM_MATERIALS
+
+    src = (REPO_ROOT / "crates" / "varimu-app" / "src" / "room.rs").read_text(encoding="utf-8")
+    start = src.index("pub const MATERIALS")
+    block = src[start : src.index("];", start)]
+    names = re.findall(r'"([a-z0-9_]+)"', block)
+    assert len(names) >= 10 and set(names) <= set(ROOM_MATERIALS)

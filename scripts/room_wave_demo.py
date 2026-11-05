@@ -17,7 +17,12 @@ Variants (each `<variant>/room_pair.wav` at -18 LUFS):
 - `shoebox_geometric`, `shoebox_wave`: the 7 x 5.5 x 3.2 m live room the same way;
 - `shoebox_dead_front` (R7, wave on): the shoebox with heavy drapes on the wall behind the
   players and plaster on the wall behind the pair (a "live end, dead end" room the other way
-  round), against `shoebox_wave`.
+  round), against `shoebox_wave`;
+- `small_trapped` (wave on): the small room treated from physics (varimu/rooms/materials.py):
+  100 mm of wool spaced 100 mm off both side walls (broadband, down into the bass), a plywood
+  panel bass trap (~58 Hz) on the wall behind the pair, against `small_wave`. (Panel traps on
+  whole walls alone made the room livelier above 250 Hz: plywood reflects the mids the
+  furnished walls absorbed.)
 
 `levels.png` and `levels.json`: each variant's third-octave levels at the pair (25 Hz-2 kHz).
 """
@@ -46,12 +51,19 @@ DEAD_FRONT = {
     **SHOEBOX,
     "materials": {**FURNISHED, "faces": {"wall 0": "heavy_drapes", "wall 2": "plaster"}},
 }
+TRAPPED = {
+    **SMALL,
+    "materials": {**FURNISHED, "faces": {"wall 1": "wool_100mm_gap_100mm",
+                                         "wall 3": "wool_100mm_gap_100mm",
+                                         "wall 2": "panel_trap_plywood"}},
+}  # fmt: skip
 VARIANTS = {
     "small_geometric": (SMALL, False),
     "small_wave": (SMALL, True),
     "shoebox_geometric": (SHOEBOX, False),
     "shoebox_wave": (SHOEBOX, True),
     "shoebox_dead_front": (DEAD_FRONT, True),
+    "small_trapped": (TRAPPED, True),
 }
 STEM = {"kick": ("01_Kick", 92.0), "bass": ("09_Bass", 90.0), "piano": ("15_Piano", 86.0)}
 PAIR = {"chain": "omni_clean", "set": {"gain_db_clean": 30}}

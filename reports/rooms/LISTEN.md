@@ -22,6 +22,10 @@ Headphones or good monitors; the low-end differences need a full-range system.
   behind the players, plaster behind the mics. The mids and highs drier, the bass longer (the
   plaster reflects what the furnished wall absorbed).
 
+- `small_wave/room_pair.wav` against `small_trapped/room_pair.wav`: the small room treated with
+  absorbers computed from their construction (100 mm of wool spaced off the side walls, a
+  plywood bass trap): tighter and drier, every band decaying faster.
+
 **4. Gobos and edge diffraction (R11).** `gobo_demo/`
 - `open/guitar_spot__vocal.wav` against `gobo/guitar_spot__vocal.wav`: the vocal's bleed into
   the guitar's omni, without and with a gobo between the players (live room: a few dB, the

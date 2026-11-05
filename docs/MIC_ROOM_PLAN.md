@@ -238,9 +238,9 @@ at a frequency (from the FDTD run) is a cheap aid for placing mics.
    image sources' spectra and the FDTD below a crossover, first-order edge diffraction; every
    done-when above checked there (the modes within 0.05%, FDTD against exact image sources
    within -38 dB, the ray-traced RT against Eyring's, the L-room's hidden source at its
-   corner path, GPU against the f64 references). "Materials from physics" is the one part
-   left: the walls are tabulated random-incidence absorption per octave, not porous or panel
-   models.
+   corner path, GPU against the f64 references). Materials from physics: treatments
+   (porous layers by Miki's model, panel absorbers as mass on a cavity) computed from their
+   construction (`varimu/rooms/materials.py`); ordinary walls stay the measured tables.
 6. **A6. The Room view** and its prints into session tracks.
 7. **A7. More mics:** the RCA 44-BX, the SM57, the C12; the small omni's electronics.
    The SM57 (and SM58) has its own plan, [SM57_PLAN.md](SM57_PLAN.md) (2026-11-04;

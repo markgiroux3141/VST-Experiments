@@ -102,6 +102,12 @@ pub const MATERIALS: &[&str] = &[
     "carpet_on_pad",
     "heavy_drapes",
     "acoustic_tile",
+    // treatments from their physics (varimu/rooms/materials.py)
+    "mineral_wool_50mm",
+    "mineral_wool_100mm",
+    "wool_100mm_gap_100mm",
+    "foam_25mm",
+    "panel_trap_plywood",
     "anechoic",
 ];
 
