@@ -114,6 +114,26 @@ SM57 -> V76 at 58 dB (the SM57 is ~24 dB less sensitive than the U47, printed at
 (R57@3; reprinted with @4 below), peak -1.6 dBFS, 5.5x real time. Against the dry source, re
 1 kHz: -5.9 dB at 63 Hz, -1.8 at 125, +2.4 at 4 kHz, +4.5 at 5.6 kHz, +5.3 at 8 kHz.
 
+Reprinted with R57@4 (same names, overwritten): the 5E3 take at 100 dB SPL (V76 at 58 dB) and
+the vocal `vocal_longwayhome.wav` at 94 dB SPL (V76 at 64 dB: the U47 was printed at 34 / 40),
+both peaking at -1.7 dBFS, 5.9x real time. The U47's prints of the same sources are in main's
+reports/mics/audio/ (same SPL, the V76 24 dB lower).
+
+**SM5's loading checks, on the provisional transformer** (`scripts/sm57_loading.py` ->
+reports/mics/sm57_loading.json; tones at the front entry, the JA core at 74 dB SPL): the
+output impedance at 1 kHz is 354 ohm on 'H' and 89 ohm on 'L' (published: s68 '150-250' and
+'30-50' ohm ratings; c88 '310 ohms actual'; a forum quote of an old rating '38 ohms (70
+actual)'; ee18 a vintage SM57 228 ohm at 1.28 kHz; hau's two figures imply ~245-250 ohm).
+Re open circuit at 1 kHz, 'H': -1.4 dB into 2 kOhm (hau ~1), -7.6 into 250 ohm (hau 6), -4.0
+into 600, -10.5 into 150. Below 200 Hz the loading bites much harder (into 150 ohm -17 dB at
+50 Hz, -20 at 100 Hz: the motional impedance peaks at the 104 Hz resonance; Stamler's 'the
+most load-sensitive dynamic microphone' fits, no curve to check). The impedance is 15-40%
+high: 4.53^2 x (1.5 + 12.1 ohm + the motional part) + 25.7 ohm, the ratio and the coil's DCR
+both forum figures from later units; the old sheets' lower sensitivity ('H' 0.149 mV/ubar
+against 0.16-0.17 from 1974 on) hints at a lower old ratio. Not forced here: SM5's designed
+transformer settles the ratio (a small lamination is being sourced: the designer's smallest,
+EI-375, doesn't fit the ~23 mm handle).
+
 The sphere-era notes follow.
 
 The presence peak and above were not in SM2: the model has no presence
