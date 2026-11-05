@@ -363,3 +363,19 @@ One mode hung from the coil (docs/SM57_PLAN.md "Status"): 8.15 kHz, q 5.0, 14% o
 mass, 5.1% of the area, fitted with the network on s68's whole curve (0.69 dB rms, 1.76 dB
 worst, 50 Hz-14 kHz). B l 2.28 T m, B 1.2 T, resonance 104 Hz, R1 1.93e6, q 14.8, d 17.7 mm,
 washer 1.37e7 Pa s/m^3, 2.9 cm^3 behind it; moving mass 60 mg; 1.488 mV/Pa.
+
+## The output transformer's construction (SM5; SM57_OT@1)
+
+Nothing from Shure. Found (2026-11-05): TAB-Funkenwerk's T58 replacement for the handle's
+cavity, "Lenght: 1 inch max." and "Maximum diameter: 0.8 inch max." (tab07's sheet, vendor);
+banex82 (GroupDIY, 19 Nov 2024, forum) on aftermarket SM58 transformers: "cross section is
+6mm x 6mm", "Size appears to be same as Edcors RMX1", "I unwinded one and it matches number of
+windings to @CJ s file on sm58 Xformer" (CJ's file not found), "They say its high nickel
+content. But i think its 50%-50%"; Edcor's RMX drawing 15000-EI025-025-R01: "EI025 x 1/4"",
+"Core Material: Supper "Q" 80 nickel (80%)"; Walrus (GroupDIY 2007, forum): the 57's and
+58's transformer "is/was the same"; Crimson Audio (via Tape Op): their double-E transformer "is
+40% larger than the original SM57's"; potting: "Brown 'gooey' ... changed to RTV silicone
+(1970's)" (vear95). The design (config/designs/sm57_ot.yaml) takes Tempel's EI-25 (web:
+https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf, PDF p.6) at a 1/4 in
+stack, mumetall (provisional), the windings fitted to cj06 and psw17 (docs/SM57_PLAN.md
+"Status").

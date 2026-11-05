@@ -119,53 +119,11 @@ values:
   coil_leak_ohm_sm57:
     value: 1000000000.0
     source: 'numerical: a DC path for the floating coil and primary'
-  t_r_pri_ohm_sm57:
-    value: 1.5
-    source: 'cj06: ''Pri- DCR - 1.50 ohms'' (a 1990 SM57)'
-  t_turns_sm57:
-    value: 150
-    source: 'provisional: model knowledge (a small mic transformer''s primary; with the core below the
-      gap gives cj06''s 386 mH)'
-    notes: the primary (the reference winding)
-  t_ratio_h_sm57:
-    value: 4.53
-    source: 'cj06: ''Turns Ratio: 1:4.53'' (the full secondary)'
-  t_ratio_l_sm57:
-    value: 2.22
-    source: 'derived: s68''s open-circuit voltages ''L'' .067 mv / ''H'' .149 mv = 0.450 of the full secondary''s
-      4.53 turns ratio (the tap from the BLUE end: psw17''s 10.8 of 25.7 ohms is the shorter, inner part)'
-  t_ratio_rest_sm57:
-    value: 2.31
-    source: 'derived: 4.53 - 2.22 (cj06, s68)'
-  t_r_tap_ohm_sm57:
-    value: 10.8
-    source: 'psw17: an old dual-impedance SM58, ''the 50 ohm side measured 10.8 ohms'''
-  t_r_rest_ohm_sm57:
-    value: 14.9
-    source: 'derived: psw17''s ''150 ohm side measured 25.7 ohms'' less the tap''s 10.8'
-  t_leakage_h_sm57:
-    value: 0.00015
-    source: 'cj06: ''Leakage - 150 uH'' (primary side, secondary shorted)'
-  t_c_sec_f_sm57:
-    value: 5.0e-11
-    source: 'provisional: model knowledge (a few hundred fine turns'' self-capacitance; cj06: ''Starts
-      to droop before 20 K'')'
-  t_core_material_sm57:
-    value: mumetall
-    source: 'provisional: model knowledge (a nickel-alloy core for a microphone transformer at tiny flux;
-      cj06: ''ratio changes ... as the level goes up ... probably the core'', the low-field permeability
-      rising: the Rayleigh region)'
-  t_core_area_m2_sm57:
-    value: 4.0e-05
-    source: 'provisional: model knowledge (a ~6.3 mm limb: the transformer sits in the SM57''s ~23-32
-      mm handle, s68 Figure C)'
-  t_core_path_m_sm57:
-    value: 0.04
-    source: 'provisional: model knowledge (a small EI core''s mean path)'
-  t_gap_m_sm57:
-    value: 1.563e-06
-    source: 'derived: cj06''s 386 mH primary in the core''s linear limit with 150 turns (parts.turns_for_inductance
-      inverted)'
+  transformer_model_sm57:
+    value: SM57_OT@1
+    source: 'config/components/sm57_ot/1.yaml (the old dual-impedance transformer by construction: EI-25
+      mumetall, fitted to cj06''s 1.50 ohm / 386 mH / 150 uH and psw17''s 10.8 / 25.7 ohm; the tap at
+      s68''s voltage ratio: data/schematics/shure_sm57/README.md)'
   load_ohm_sm57:
     value: 1000000.0
     source: 's68: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)'
@@ -716,27 +674,15 @@ sections:
           nodes:
           - cp_sm57
           - cm_sm57
-          r: t_r_pri_ohm_sm57
         s1:
           nodes:
           - ia_v76
           - tap_sm57
-          ratio: t_ratio_l_sm57
-          r: t_r_tap_ohm_sm57
-          c: t_c_sec_f_sm57
         s2:
           nodes:
           - tap_sm57
           - red_sm57
-          ratio: t_ratio_rest_sm57
-          r: t_r_rest_ohm_sm57
-      core:
-        material: t_core_material_sm57
-        area_m2: t_core_area_m2_sm57
-        path_m: t_core_path_m_sm57
-        gap_m: t_gap_m_sm57
-      turns: t_turns_sm57
-      leakage_h: t_leakage_h_sm57
+      component: transformer_model_sm57
     SIMP_sm57:
       switch: impedance_sm57
       parts:

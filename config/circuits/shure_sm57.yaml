@@ -7,7 +7,7 @@
 #   "cj06: ..."  CJ's bench measurements of a 1990 SM57's transformer (GroupDIY, forum)
 #   "psw17: ..." an old dual-impedance SM58's winding resistances (ProSoundWeb, forum)
 #   "derived: ..." arithmetic on sourced figures
-#   "provisional: ..." model knowledge; replaced when SM5 designs the transformer
+#   "provisional: ..." model knowledge
 #
 # The cartridge R57 (config/components/r57/): the pressure at its front entry on `in`, at
 # its rear entries on the control input `p_rear` (pascals as volts; varimu/mics/). Its coil
@@ -37,20 +37,8 @@ values:
   cartridge_model: {value: R57@4, source: "s68 / g25: the Unidyne III cartridge (Shure's replacement R57); config/components/r57/4.yaml (its geometry provisional and fitted by scripts/fit_sm57.py on the mic's body, varimu/mics/bor.py: data/schematics/shure_sm57/README.md; @1 was fitted on a sphere, @2 before the cap's fit, @3 before the dome's mode)"}
   coil_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating coil and primary"}
 
-  # --- The output transformer (version 1: no original construction; README 'The electrical side')
-  t_r_pri_ohm: {value: 1.50, source: "cj06: 'Pri- DCR - 1.50 ohms' (a 1990 SM57)"}
-  t_turns: {value: 150, source: "provisional: model knowledge (a small mic transformer's primary; with the core below the gap gives cj06's 386 mH)", notes: "the primary (the reference winding)"}
-  t_ratio_h: {value: 4.53, source: "cj06: 'Turns Ratio: 1:4.53' (the full secondary)"}
-  t_ratio_l: {value: 2.22, source: "derived: s68's open-circuit voltages 'L' .067 mv / 'H' .149 mv = 0.450 of the full secondary's 4.53 turns ratio (the tap from the BLUE end: psw17's 10.8 of 25.7 ohms is the shorter, inner part)"}
-  t_ratio_rest: {value: 2.31, source: "derived: 4.53 - 2.22 (cj06, s68)"}
-  t_r_tap_ohm: {value: 10.8, source: "psw17: an old dual-impedance SM58, 'the 50 ohm side measured 10.8 ohms'"}
-  t_r_rest_ohm: {value: 14.9, source: "derived: psw17's '150 ohm side measured 25.7 ohms' less the tap's 10.8"}
-  t_leakage_h: {value: 150.0e-6, source: "cj06: 'Leakage - 150 uH' (primary side, secondary shorted)"}
-  t_c_sec_f: {value: 50.0e-12, source: "provisional: model knowledge (a few hundred fine turns' self-capacitance; cj06: 'Starts to droop before 20 K')"}
-  t_core_material: {value: mumetall, source: "provisional: model knowledge (a nickel-alloy core for a microphone transformer at tiny flux; cj06: 'ratio changes ... as the level goes up ... probably the core', the low-field permeability rising: the Rayleigh region)"}
-  t_core_area_m2: {value: 4.0e-5, source: "provisional: model knowledge (a ~6.3 mm limb: the transformer sits in the SM57's ~23-32 mm handle, s68 Figure C)"}
-  t_core_path_m: {value: 0.040, source: "provisional: model knowledge (a small EI core's mean path)"}
-  t_gap_m: {value: 1.563e-6, source: "derived: cj06's 386 mH primary in the core's linear limit with 150 turns (parts.turns_for_inductance inverted)"}
+  # --- The output transformer: a designed component (SM5; config/designs/sm57_ot.yaml)
+  transformer_model: {value: SM57_OT@1, source: "config/components/sm57_ot/1.yaml (the old dual-impedance transformer by construction: EI-25 mumetall, fitted to cj06's 1.50 ohm / 386 mH / 150 uH and psw17's 10.8 / 25.7 ohm; the tap at s68's voltage ratio: data/schematics/shure_sm57/README.md)"}
   load_ohm: {value: 1.0e+6, source: "s68: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
   min_ohm: {value: 1.0e-3, source: "numerical: the impedance switch's closed contact"}
 
@@ -68,12 +56,10 @@ sections:
     parts:
       T1:
         transformer:
-          p: {nodes: [cp, cm], r: t_r_pri_ohm}
-          s1: {nodes: [out, tap], ratio: t_ratio_l, r: t_r_tap_ohm, c: t_c_sec_f}
-          s2: {nodes: [tap, red], ratio: t_ratio_rest, r: t_r_rest_ohm}
-        core: {material: t_core_material, area_m2: t_core_area_m2, path_m: t_core_path_m, gap_m: t_gap_m}
-        turns: t_turns
-        leakage_h: t_leakage_h
+          p: {nodes: [cp, cm]}
+          s1: {nodes: [out, tap]}
+          s2: {nodes: [tap, red]}
+        component: transformer_model
       SIMP:
         switch: impedance
         parts:

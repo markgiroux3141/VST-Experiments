@@ -21,6 +21,12 @@ groups:
       EI-150: {leg: 1.500, window_width: 0.750, window_height: 2.250, width: 4.500, height: 3.750, path: 9.000}
       EI-175: {leg: 1.750, window_width: 0.875, window_height: 2.625, width: 5.250, height: 4.375, path: 10.500}
       EI-200: {leg: 2.000, window_width: 1.000, window_height: 3.000, path: 12.000}
+  - source: "web: https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf (Tempel Transformer Index & Catalog, EI Section 1, the two smallest sizes: EI-18 (0018) PDF p.5, 'Window Dimensions .438 in. x .188 in.', 'Length of Magnetic Path 1.625 in.', 0.750 x 0.625 in overall; EI-25 (00251) PDF p.6, 'Window Dimensions .500 in. x .250 in.', 'Length of Magnetic Path 2.000 in.', 1.000 x 0.750 in overall); EI-25 is also Edcor's EI025 (drawing 15000-EI025-025-R01, 1.000 x 0.750 in, web: http://www.edcorusa.com/Content/DWG/15000-EI025-025-R01.pdf via the Wayback Machine)"
+    unit: inch
+    shape: EI
+    sizes:
+      EI-18: {leg: 0.1875, window_width: 0.188, window_height: 0.438, width: 0.750, height: 0.625, path: 1.625}
+      EI-25: {leg: 0.250, window_width: 0.250, window_height: 0.500, width: 1.000, height: 0.750, path: 2.000}
   - source: "web: https://ermeg.cz/wp-content/uploads/2022/07/Katalog_Waasner_12_2014.pdf (Waasner catalog 12/2014 p.8: scrapless EI per DIN 41302 / IEC 60740-1, YEI 1-xx; window width (e - d) / 2, height b + f); paths l_Fe from SEKELS / VAC 'Kernbleche aus Mumetall, Vacoperm, Permenorm' Tabelle 2 (web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf)"
     unit: mm
     shape: EI

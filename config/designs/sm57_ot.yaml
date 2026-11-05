@@ -1,0 +1,53 @@
+# The SM57's output transformer, old era (the dual-impedance secondary: s68 Figure A; docs/
+# SM57_PLAN.md SM5), by its construction. Nothing of it is published: the core from an
+# aftermarket SM58 replacement said to match the original's turns (data/schematics/
+# shure_sm57/README.md, 'The output transformer's construction'), the windings fitted to the
+# bench figures: cj06 (a 1990 SM57: primary 1.50 ohm, 386 mH, 150 uH leakage with the
+# secondary shorted; secondary 24.18 ohm, 7.95 H; turns 1 : 4.53) and psw17 (an old dual SM58:
+# the 50 ohm side 10.8 ohm, the 150 ohm side 25.7 ohm), the tap where s68's two open-circuit
+# voltages put it (0.067 / 0.149 mV/ubar: 2.22 / 4.53 of the secondary's turns).
+#
+# A design (the component editor's source), compiled and saved by
+# `cargo run -p varimu-components -- save config/designs/sm57_ot.yaml`.
+name: SM57_OT
+kind: transformer
+source: "Shure SM57 output transformer, pre-1988 dual-impedance (s68 27A308 Figure A; data/schematics/shure_sm57/README.md): construction unpublished, fitted to cj06 / psw17's measured resistances, inductances and leakage"
+core:
+  lamination: {value: EI-25, source: "web: https://groupdiy.com/threads/mismatch-the-transformer-core-al-and-the-result-inductance.85632/ (banex82, 2024, forum: SM58 replacement transformers' 'cross section is 6mm x 6mm', 'Size appears to be same as Edcors RMX1', and one unwound 'matches number of windings' of the original): Edcor's RMX1 is EI025 x 1/4 in (drawing 15000-EI025-025-R01); it fits the handle lengthwise (TAB-Funkenwerk's T58 for the same cavity: 1 in long, 0.8 in diameter max)"}
+  material: {value: mumetall, source: "provisional: model knowledge (a microphone transformer at tiny flux: a high-nickel core; Edcor's RMX1 is 80% nickel 'Supper Q'; banex82 suspects 50% nickel in the clones; the original's alloy isn't known)"}
+  stack_m: {value: 0.00635, source: "web: banex82 (above, forum): the 6 mm x 6 mm cross-section: a 1/4 in stack on the 1/4 in tongue, as Edcor's EI025 x 1/4"}
+  stacking_factor: {value: 0.92, source: "web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf (SEKELS / VAC Kernbleche, Tabelle 6: Mumetall-type laminations 0.35 mm, 92%)"}
+  stacking: {value: interleaved, source: "provisional: model knowledge (a small ungapped microphone transformer: E and I interleaved)"}
+  joint_gap_m: {value: 0.235e-6, source: "derived: fitted to cj06's primary inductance, 386 mH, in the material model's linear limit (interleaved: a near-ideal joint)"}
+bobbin:
+  wall_m: {value: 0.3e-3, source: "provisional: model knowledge (a thin nylon or paper bobbin on a 1/4 in tongue)"}
+  cheek_m: {value: 0.3e-3, source: "provisional: model knowledge (thin flanges)"}
+  margin_m: {value: 0.2e-3, source: "provisional: model knowledge (a small creepage margin each end)"}
+  pitch_factor: {value: 1.1765, source: "web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)"}
+arrangement: {value: layer, source: "provisional: model knowledge (layer-wound: the primary, then the tap's part of the secondary, then the rest; the tap's part has the shorter turns, psw17's 10.8 of 25.7 ohm for 49% of the turns)"}
+windings: [p, s1, s2]
+sections:
+  - winding: p
+    turns: {value: 135, source: "derived: fitted to cj06's 1.50 ohm primary on AWG 30 (with the joint gap: its 386 mH; the secondaries follow by the ratios)"}
+    layers: {value: 5, source: "derived: turns / turns per layer (33: the 11.70 mm traverse over AWG 30 heavy's 0.0117 in at the pitch factor)"}
+    wire: {value: AWG 30 heavy, source: "derived: cj06's 1.50 ohm primary, the nearest size"}
+    enamel: {value: enamel, source: "provisional: model knowledge (enamelled magnet wire)"}
+    interlayer: {thickness_m: {value: 0.025e-3, source: "provisional: model knowledge (0.001 in interlayer paper)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft interlayer paper)"}}
+  - insulation: {thickness_m: {value: 0.25e-3, source: "derived: fitted to cj06's leakage, 150 uH with the secondary shorted (the 2D field solution; bounds 0.05-0.5 mm of wraps)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge"}}
+  - winding: s1
+    turns: {value: 300, source: "derived: 2.22 x the primary's (s68's 'L' / 'H' open-circuit voltages, .067 / .149 mv, of cj06's 4.53)"}
+    layers: {value: 6, source: "derived: turns / turns per layer (52: the 11.70 mm traverse over AWG 34 heavy's 0.0075 in at the pitch factor)"}
+    wire: {value: AWG 34 heavy, source: "derived: psw17's 10.8 ohm, the nearest size"}
+    enamel: {value: enamel, source: "provisional: model knowledge"}
+    interlayer: {thickness_m: {value: 0.025e-3, source: "provisional: model knowledge (0.001 in interlayer paper)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge"}}
+  - winding: s2
+    turns: {value: 312, source: "derived: (4.53 - 2.22) x the primary's (cj06's ratio less the tap's)"}
+    layers: {value: 6, source: "derived: turns / turns per layer (52: the 11.70 mm traverse over AWG 34 heavy's 0.0075 in at the pitch factor)"}
+    wire: {value: AWG 34 heavy, source: "derived: psw17's 25.7 - 10.8 = 14.9 ohm, the nearest size"}
+    enamel: {value: enamel, source: "provisional: model knowledge"}
+    interlayer: {thickness_m: {value: 0.025e-3, source: "provisional: model knowledge (0.001 in interlayer paper)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge"}}
+leakage_method: field
+rating:
+  windings: [p]
+  v_rms: {value: 0.1, source: "provisional: model knowledge (the coil's EMF at ~140 dB SPL, 200 Pa x ~0.35 mV/Pa, peak-ish)"}
+  f_hz: {value: 50.0, source: "provisional: model knowledge (the bottom of the band)"}

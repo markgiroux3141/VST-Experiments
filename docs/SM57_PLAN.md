@@ -5,8 +5,8 @@ could make like an SM57 or SM58 to add to our list? what would this entail. No s
 and in keeping with our physics approach", then: "yes, let's write this plan"; the user's decisions 2026-11-05, see "Decisions"). It
 expands
 MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1, SM2 and SM3 done, SM4's
-polars done (its proximity open), SM6 started: a first print (2026-11-05, overnight in the
-`sm57` worktree): see "Status".
+polars done (its proximity open), SM5 built (the impedance open), SM6 started: prints for the
+user to hear (2026-11-05, overnight in the `sm57` worktree): see "Status".
 
 ## Status (2026-11-05)
 
@@ -130,9 +130,28 @@ into 600, -10.5 into 150. Below 200 Hz the loading bites much harder (into 150 o
 most load-sensitive dynamic microphone' fits, no curve to check). The impedance is 15-40%
 high: 4.53^2 x (1.5 + 12.1 ohm + the motional part) + 25.7 ohm, the ratio and the coil's DCR
 both forum figures from later units; the old sheets' lower sensitivity ('H' 0.149 mV/ubar
-against 0.16-0.17 from 1974 on) hints at a lower old ratio. Not forced here: SM5's designed
-transformer settles the ratio (a small lamination is being sourced: the designer's smallest,
-EI-375, doesn't fit the ~23 mm handle).
+against 0.16-0.17 from 1974 on) hints at a lower old ratio. Not forced here.
+
+**SM5 built: the transformer designed, SM57_OT@1** (`config/designs/sm57_ot.yaml`, compiled
+by varimu-components; the circuit and the chain pin it). The core: Tempel's EI-25 (1/4 in
+tongue, 2.000 in path; EI-18 and EI-25 added to config/transformer/laminations.yaml with their
+catalog pages), a 1/4 in stack (an aftermarket SM58 replacement's 6 x 6 mm cross-section,
+said to match the original's turns; Edcor's EI025 x 1/4; it fits the handle lengthwise, TAB's
+T58 for the cavity is 1 in x 0.8 in), mumetall (provisional). Layer-wound: the primary (135
+turns of AWG 30), the tap's part of the secondary (300 turns of AWG 34), the rest (312);
+fitted to the bench figures: primary 1.498 ohm (cj06 1.50), 385 mH (386: the joint gap),
+the leakage with the secondary shorted 0.147 mH by the 2D field solution (150 uH: the wrap
+between primary and secondary, 0.25 mm), the secondary 7.91 H (cj06 7.95, not a target),
+11.1 + 13.7 = 24.8 ohm (psw17's old dual unit 10.8 + 14.9 = 25.7, cj06's later 24.18). The
+loading through it is unchanged (the provisional transformer had the same figures):
+352 / 90 ohm at 1 kHz. **SM5's done-when, as far as the sources go:** the sensitivity and the
+impedance come out of the circuit; the published loading figures are two numbers (hau:
+~1 dB into 2 kOhm, model 1.4; 6 dB into 250 ohm, model 7.6), and the impedance runs high
+(352 against hau's implied ~250, c88's 310, ee18's 228 on a vintage unit). Open for the user:
+whether to fit the turns ratio to the impedance (it would move off cj06's measured 4.53 and
+the sensitivity's B l with it) or keep the bench figures.
+
+
 
 The sphere-era notes follow.
 
