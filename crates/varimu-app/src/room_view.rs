@@ -415,7 +415,7 @@ impl RoomView {
             }
         }
         ui.horizontal(|ui| {
-            for (label, prefix, size, z, mat) in OBJECT_KINDS {
+            for (label, prefix, size, z, mat, tilt) in OBJECT_KINDS {
                 if ui
                     .button(format!("+ {label}"))
                     .on_hover_text("an object in the room: its edges diffract, it shadows, reflects and absorbs")
@@ -428,7 +428,7 @@ impl RoomView {
                         center: [c[0], c[1], *z],
                         size: *size,
                         yaw_deg: 90.0,
-                        tilt_deg: 0.0,
+                        tilt_deg: *tilt,
                         material: mat.to_string(),
                     });
                     self.sel = Some(Sel::Object(self.scene.objects.len() - 1));

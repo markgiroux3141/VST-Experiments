@@ -329,16 +329,27 @@ pub struct RoomObject {
     pub material: String,
 }
 
-/// The objects offered: (label, name prefix, size, centre height, surface).
-pub const OBJECT_KINDS: &[(&str, &str, [f64; 3], f64, &str)] = &[
-    ("Gobo", "Gobo", [1.2, 0.08, 1.8], 0.9, "heavy_drapes"),
-    ("Riser", "Riser", [1.8, 1.2, 0.3], 0.15, "wood_floor"),
+/// The objects offered: (label, name prefix, size, centre height, surface, tilt). A piano's
+/// lid is a thin panel tilted up (a grand piano: an omni source under it; the lid reflects it
+/// out of the open side and its edges diffract).
+pub const OBJECT_KINDS: &[(&str, &str, [f64; 3], f64, &str, f64)] = &[
+    ("Gobo", "Gobo", [1.2, 0.08, 1.8], 0.9, "heavy_drapes", 0.0),
+    ("Riser", "Riser", [1.8, 1.2, 0.3], 0.15, "wood_floor", 0.0),
     (
         "Cabinet",
         "Cabinet",
         [0.6, 0.45, 1.0],
         0.5,
         "gypsum_on_studs",
+        0.0,
+    ),
+    (
+        "Piano lid",
+        "Lid",
+        [1.5, 1.6, 0.03],
+        1.45,
+        "wood_floor",
+        35.0,
     ),
 ];
 
@@ -1225,7 +1236,7 @@ mod tests {
     #[test]
     fn objects_round_trip_and_keep_things_out() {
         let mut s = scene();
-        let (_, prefix, size, z, mat) = OBJECT_KINDS[0];
+        let (_, prefix, size, z, mat, _) = OBJECT_KINDS[0];
         s.objects.push(RoomObject {
             name: format!("{prefix} 1"),
             center: [3.5, 2.5, z],
