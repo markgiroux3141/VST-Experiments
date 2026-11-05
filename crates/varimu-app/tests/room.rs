@@ -27,7 +27,11 @@ fn a_scene_renders_into_mic_prints() {
     audio::write_wav(&clip, &x, rate).unwrap();
     let mut scene = Scene {
         name: "test".into(),
-        dims: [4.0, 3.0, 2.5],
+        plan: varimu_app::room::preset_plan("shoebox", 4.0, 3.0),
+        roof: varimu_app::room::Ceiling {
+            height: 2.5,
+            ..Default::default()
+        },
         quality: "draft".into(),
         ..Scene::default()
     };

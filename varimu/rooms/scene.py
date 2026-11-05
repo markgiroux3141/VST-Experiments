@@ -7,9 +7,12 @@ JSON):
 
     name: two_sources
     room:
-      dims_m: [7.0, 5.5, 3.2]
+      dims_m: [7.0, 5.5, 3.2]          # a shoebox (varimu.rooms.shoebox), or:
+      # floor_m: [[0, 0], [7, 0], [6, 5.5], [0, 5]]   # any floor plan (polyroom), with
+      # ceiling: {type: gable, height_m: 2.8, peak_m: 4.5, axis_deg: 0, facets: 8}
+      #   (flat | shed | gable | vault; varimu/rooms/polyroom.py)
       materials: {walls: furnished_wall, floor: wood_floor, ceiling: gypsum_on_studs}
-        # or one per surface: {x0: ..., x1: ..., y0: ..., y1: ..., floor: ..., ceiling: ...}
+        # a shoebox may give one per surface: {x0, x1, y0, y1, floor, ceiling}
       source: "provisional: ..."
     sources:
       - name: A
@@ -58,6 +61,7 @@ import yaml
 
 from varimu.config import REPO_ROOT
 from varimu.rooms.entries import MIN_DISTANCE_M, entry_table
+from varimu.rooms.polyroom import PolyRoom
 from varimu.rooms.shoebox import SURFACES, Mic, Shoebox, aim_vector, responses
 
 P_REF = 20e-6
@@ -89,7 +93,7 @@ class MicSpec:
 @dataclass
 class Scene:
     name: str
-    room: Shoebox
+    room: Shoebox | PolyRoom
     sources: list[SourceSpec]
     mics: list[MicSpec]
     quality: str = "production"
@@ -117,12 +121,29 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
     else:
         d = yaml.safe_load(Path(path_or_data).read_text(encoding="utf-8"))
     r = d["room"]
-    room = Shoebox(
-        tuple(float(x) for x in r["dims_m"]),
-        _materials(r["materials"]),
-        float(r.get("temp_c", 20.0)),
-        float(r.get("rh_percent", 50.0)),
-    )
+    if "floor_m" in r:
+        m = r["materials"]
+        ce = r.get("ceiling") or {}
+        room = PolyRoom(
+            [[float(x), float(y)] for x, y in r["floor_m"]],
+            ce.get("type", "flat"),
+            float(ce.get("height_m", 3.0)),
+            None if ce.get("peak_m") is None else float(ce["peak_m"]),
+            float(ce.get("axis_deg", 0.0)),
+            int(ce.get("facets", 8)),
+            m["walls"],
+            m["floor"],
+            m["ceiling"],
+            float(r.get("temp_c", 20.0)),
+            float(r.get("rh_percent", 50.0)),
+        )
+    else:
+        room = Shoebox(
+            tuple(float(x) for x in r["dims_m"]),
+            _materials(r["materials"]),
+            float(r.get("temp_c", 20.0)),
+            float(r.get("rh_percent", 50.0)),
+        )
     sources = [
         SourceSpec(
             s["name"],
@@ -234,7 +255,7 @@ def mic_pressures(
         ism_s=scene.ism_s,
         length_s=scene.tail_s,
         seeds=seeds,
-        tail=not any(m == "anechoic" for m in scene.room.materials),
+        tail=not _anechoic(scene.room),
     )
     n = max(len(x) for x in signals) + h.shape[-1]
     p = np.zeros((len(scene.sources), len(scene.mics), 2, n))
@@ -243,6 +264,25 @@ def mic_pressures(
             for e in range(2):
                 p[si, mi, e] = _fftconv(x, h[si, mi, e], n)
     return p, kinds, n
+
+
+def _anechoic(room) -> bool:
+    if isinstance(room, PolyRoom):
+        return all(
+            m == "anechoic" for m in (room.walls, room.floor_material, room.ceiling_material)
+        )
+    return any(m == "anechoic" for m in room.materials)
+
+
+def rt60_s(room, source_m=None) -> np.ndarray:
+    """The room's reverberation time per band: Eyring for a shoebox, ray-traced for a
+    PolyRoom (from `source_m`, else the floor's centroid at 1.3 m)."""
+    if isinstance(room, PolyRoom):
+        from varimu.rooms.polyroom import ray_decay, rt60_from_decay
+
+        src = source_m if source_m is not None else np.r_[room.floor.mean(0), 1.3]
+        return rt60_from_decay(*ray_decay(room, np.asarray(src, float), 4.0, n_rays=8000))
+    return room.rt60_s()
 
 
 def _print_key(ir_json: str, front: np.ndarray, rear: np.ndarray, settings: Any) -> str:
@@ -359,7 +399,9 @@ def render(
         "fs": fs,
         "quality": scene.quality,
         "rt60_s": dict(zip(map(str, (125, 250, 500, 1000, 2000, 4000, 8000)),
-                           np.round(scene.room.rt60_s(), 3).tolist(), strict=True)),
+                           np.round(rt60_s(scene.room, scene.sources[0].position_m),
+                                    3).tolist(), strict=True)),
+        "room": "polygon" if isinstance(scene.room, PolyRoom) else "shoebox",
         "mics": [],
     }  # fmt: skip
     mix = np.zeros((2, n))

@@ -128,6 +128,140 @@ panned hard left and right.
 **Cost:** ~4 mics x 3 inputs (A, B, A + B) per condition at ~5.5x slower than real time:
 ~10 min of wall clock per condition for 10 s excerpts, in parallel.
 
+### R6. Rooms of any shape (2026-11-04, the user: "the square room obviously reflects a lot")
+
+Built the same evening, the user away (decisions delegated). The geometric half of
+MIC_ROOM_PLAN.md A5's hybrid, on the CPU; the wave solver (FDTD, GPU) stays A5's.
+
+- **Geometry** (`varimu/rooms/polyroom.py`): any floor polygon (convex or not), vertical walls,
+  a ceiling varying along one direction: flat, shed, gable, barrel vault (as facets). Every
+  surface a planar face with its material.
+- **Early part:** image sources for arbitrary polyhedra (Borish 1984) up to 4 reflections,
+  each path validated per mic (reflection points inside their faces, no segment leaving the
+  room: a source round an L's corner has no direct sound). Hand-over at 50 ms.
+- **Late part:** ray tracing (20,000 rays, specular or Lambert by a provisional scattering
+  coefficient per material) gives the room's energy decay per band, e_b(t); the tail's level
+  is 4 pi c e_b(t) / V per second (no Eyring, no matching at the hand-over). On a shoebox:
+  the image sets agree exactly up to order 3, the ray-traced RT is within 5-10% of Eyring's,
+  and the tail formula is within 0.2 dB of the exact images' energy (tests/test_rooms.py).
+- **Each mic's own late sound:** the same rays counted in a 0.35 m sphere at every mic
+  (50,000 rays, 1 ms bins) give the energy reaching that point; the shared diffuse field is
+  shaped per mic by its ratio to the room's mean (mid bands, smoothed over 5 ms). So flutter
+  between parallel surfaces and the shadow of an L's corner reach the tail, not only the
+  first 50 ms. Measured (the demo's room L mic, envelope autocorrelation at 8-60 ms lags,
+  1-4 kHz): the shoebox 0.15 at 15 ms, the same-volume angled room 0.09: with furnished
+  walls (scattering 0.3) flutter stays mild, as in a furnished room; the shapes differ most in
+  the early reflections' pattern and, by volume and height, in the decay.
+- **Found on the way:** the shoebox's tail (started at the images' energy in the 20 ms before
+  80 ms) runs ~2-3 dB hot at 0.1-0.4 s. Scenes with `floor_m` go through polyroom (the Room
+  view writes only those now); `dims_m` scenes keep the shoebox, so R5's numbers stand as
+  computed. Rerendering R5 through polyroom is open.
+- **The Room view:** a Shape preset (shoebox, splayed, trapezoid, L-shape, hexagon, octagon)
+  at a width and depth, corners dragged (5 cm snap), a double-click on a wall adds a corner, a
+  right-click removes one ("custom"); the Ceiling's form, height and peak, the direction it
+  rises along, a vault's facets; the plan draws the ceiling's facet lines with their heights,
+  the pointer's ceiling height; positions are kept inside the room (the plan and under the
+  ceiling). Old scenes (a shoebox's dims) load as a rectangle.
+- **The demo** (`scripts/room_demo.py` -> `reports/rooms/demo/`, README.md there): the vocal,
+  an acoustic guitar and the piano of "Long Way Home" (Cambridge-MT) in five rooms through the
+  same mics, mixes and room-pair-only files at -18 LUFS.
+
+Open: R7-R11 below.
+
+## Next: R7-R11 (2026-11-04, agreed with the user; they pick it up when ready)
+
+The user heard the demo ("sounds amazing") and asked what the rest costs. The estimates below
+(work, how much it changes the sound, render time) are the agreed basis; the order is the
+agreed one. Nothing in it is built.
+
+**Where the time goes today** (a demo room: 20 s of audio, 3 sources, 4 mics, ~150 s): the
+U47 -> V76 print ~110 s (~5.5x slower than real time; the chains run in parallel, so the
+slowest sets the wall time), the room ~40 s (ray tracing ~10 s per source; the image
+sources' spectra ~13 s per source and two mics). So speeding up the room alone takes a scene
+from ~150 s to ~115 s: the chain sets the floor.
+
+### R7. A material per wall (first)
+
+Each face its own material (a wall by its edge, the floor, each ceiling facet), the room's
+three as the defaults; the Room view picks a wall on the plan and sets it.
+- *Work:* 1-2 hours (polyroom already carries a material per face; the scene format, the
+  view).
+- *Sound:* clearly audible wherever a room is treated unevenly (a live back wall and a dead
+  front, a rug under the drums): how real studios are built.
+- *Cost:* none.
+- *Done when:* a room with one absorbent wall decays as its ray tracing and Eyring's
+  area-weighted absorption say; old scenes render unchanged.
+
+### R8. R5 again, on polyroom
+
+The separation experiment rendered through polyroom (its room as `floor_m`), the summary
+compared with the shoebox's.
+- *Work:* ~1 hour of rendering.
+- *Sound:* small: the shoebox's tail was ~2-3 dB hot at 0.1-0.4 s (R6); the numbers move a
+  little.
+- *Done when:* `summary.json` from polyroom, the differences noted in R5's table.
+
+### R9. The GPU groundwork: rays and reflections
+
+The project's first GPU code (wgpu proposed: MIC_ROOM_PLAN.md's open call wgpu vs CUDA), on
+two embarrassingly parallel jobs with a CPU reference already in place:
+- **ray tracing** (`polyroom.ray_decay`: 50,000 independent rays, faces, receivers): ~10 s ->
+  under 0.5 s per source;
+- **the image sources' spectra** (`shoebox.responses`: each image's smooth spectrum
+  interpolated and phased over ~65,000 bins, summed): ~13 s -> under 1 s per source and two
+  mics.
+- *Work:* a few days (the wgpu setup is shared with R10).
+- *Sound:* none (the same physics; f32 checked against the CPU's f64).
+- *Cost:* the room's ~40 s to a few seconds.
+- *Done when:* GPU and CPU agree (decay curves within 0.1 dB, spectra within -80 dB) and the
+  demo renders the same.
+
+### R10. The wave solver below a crossover (MIC_ROOM_PLAN.md A5's low half)
+
+3D FDTD of the room on the GPU (a compact / interpolated scheme, Kowalczyk & van Walstijn
+2011; walls as locally reacting impedances fitted to the materials), each source's run
+recording every mic's two capsule entries, blended with the geometric model above a
+crossover (zero-phase complementary, as the separation room's bands).
+- *Work:* 1-2 weeks (the scheme, boundaries, the crossover, validation).
+- *Sound:* **the biggest step for small rooms.** Below the Schroeder frequency (~160 Hz in a
+  7 m live room, 2000 sqrt(RT / V)) the sound is modes: boomy notes, bass that changes with
+  position, which the geometric model can't produce. Large on bass, kick and low piano; modest
+  on a vocal or a guitar.
+- *Cost:* to 500 Hz, ~4e9 cell updates per second of response in a 123 m^3 room: minutes per
+  source on the CPU, **1-2 s on the 3080**; to 2 kHz ~250x that, GPU only (~a minute per
+  source). The crossover a setting (draft low, overnight high).
+- *Done when:* a rigid shoebox's modes match the closed form; FDTD and image sources agree in
+  a shoebox around the crossover; GPU (f32) against the CPU reference (f64) on short runs.
+
+### R11. Objects and edge diffraction (together, last)
+
+Objects as primitives (boxes, thin panels at any angle: gobos, a piano lid, a riser) in the
+image sources (two-sided faces, occlusion), the rays and R10's grid; edge diffraction for the
+geometric part (first order, Svensson, Fred & Vanderkooy 1999; UTD as a cheaper option) so a
+gobo shadows the highs but lets the bass round it, and a source round an L's corner is heard
+by its edge too.
+- *Work:* ~1 day for objects, 2-4 days for diffraction. Objects without diffraction block
+  the bass too, which sounds wrong: build them together.
+- *Sound:* large for spill and separation (gobos are how studios get isolation: ~5-15 dB in
+  the mids and highs on shadowed paths); small in an open room.
+- *Cost:* image-source candidates grow with the faces to the 4th power (two gobos ~10x the
+  room's time) unless the order drops to 3 or visibility pruning (beam tracing) comes in;
+  first-order diffraction seconds, higher orders tens of seconds per scene. On the GPU
+  (R9) this stays small next to the chains.
+- *Done when:* a source behind a gobo measures against Svensson's edge-diffraction solution;
+  an L-room's hidden source against the same; R10's grid agrees below the crossover.
+
+### What the GPU doesn't help
+
+The mic chains' prints (circuit simulation: sample after sample, a small nonlinear solve each)
+are sequential and small-matrix: a GPU loses there. They already run one per CPU thread;
+faster prints come from CPU-side work (the draft quality, splitting a print in time:
+TAPE_SPEED_PLAN.md's parallel-in-time idea). The capsule tables (BEM) are a few minutes once
+per capsule, cached: not worth moving.
+
+Also open, unordered: the Rust port of the room (the app without Python; 2-3 days, the room
+3-10x faster on the CPU, no change to the sound), the U47's head basket (Known bias below).
+
 ## Known bias
 
 With K47@3 the U47's rear rejection is 20 dB at 1 kHz; Neumann's 1958 polars show 16 (the head
@@ -235,3 +369,5 @@ real time), a Rust port of the room (the app without Python).
   `*/mixes/`), the staircase (`uv run --extra listen --with sounddevice python
   scripts/separation_listen.py --room`), the Room view on a session of your own.
 - Whether the room goes to Rust (the app then renders without Python) before A5.
+- When to start R7-R11 (agreed order: per-wall materials, R5 on polyroom, the GPU groundwork,
+  the wave solver, objects with diffraction).

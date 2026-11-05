@@ -8,11 +8,12 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind, Vec2};
+use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, Vec2};
 use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::room::{
-    self, CHAINS, MATERIALS, Pattern, QUALITIES, RenderJob, RoomMic, RoomSource, Scene,
+    self, CEILINGS, CHAINS, MATERIALS, PRESETS, Pattern, QUALITIES, RenderJob, RoomMic, RoomSource,
+    Scene,
 };
 
 use crate::session_view::SessionView;
@@ -28,6 +29,7 @@ enum Sel {
 enum Drag {
     Move(Sel),
     Aim(usize),
+    Corner(usize),
 }
 
 /// A render underway: the job, where its tracks go on the timeline, at what rate.
@@ -52,6 +54,8 @@ pub struct RoomView {
     rt60: Option<String>,
     add_track: usize,
     add_chain: usize,
+    /// The preset's width and depth (m).
+    size: [f64; 2],
 }
 
 const SOURCE_COLOR: Color32 = theme::ACCENT;
@@ -72,6 +76,7 @@ impl RoomView {
             rt60: None,
             add_track: 0,
             add_chain: 0,
+            size: [7.0, 5.5],
         }
     }
 
@@ -142,18 +147,98 @@ impl RoomView {
             ui.text_edit_singleline(&mut self.scene.name);
         });
         ui.horizontal(|ui| {
-            for (i, l) in ["W", "D", "H"].iter().enumerate() {
-                ui.label(*l);
-                ui.add(
-                    egui::DragValue::new(&mut self.scene.dims[i])
-                        .range(1.0..=60.0)
-                        .speed(0.05)
-                        .suffix(" m")
-                        .max_decimals(2),
-                );
+            ui.label("Shape");
+            let mut pick = None;
+            egui::ComboBox::from_id_salt("room_shape")
+                .selected_text(&self.scene.shape)
+                .show_ui(ui, |ui| {
+                    for pr in PRESETS {
+                        if ui.selectable_label(self.scene.shape == *pr, *pr).clicked() {
+                            pick = Some(*pr);
+                        }
+                    }
+                });
+            let mut resized = false;
+            for i in 0..2 {
+                ui.label(["W", "D"][i]);
+                resized |= ui
+                    .add(
+                        egui::DragValue::new(&mut self.size[i])
+                            .range(2.0..=40.0)
+                            .speed(0.05)
+                            .suffix(" m")
+                            .max_decimals(2),
+                    )
+                    .changed();
+            }
+            let shape = self.scene.shape.clone();
+            if let Some(pr) = pick {
+                self.scene.set_preset(pr, self.size[0], self.size[1]);
+            } else if resized && shape != "custom" {
+                self.scene.set_preset(&shape, self.size[0], self.size[1]);
             }
         });
-        for (label, which) in [("Walls", 0), ("Floor", 1), ("Ceiling", 2)] {
+        if self.scene.shape == "custom" {
+            ui.label(
+                RichText::new("custom plan: drag corners, double-click a wall for a corner, right-click a corner to remove it")
+                    .small()
+                    .color(theme::FAINT),
+            );
+        }
+        ui.horizontal(|ui| {
+            ui.label("Ceiling");
+            let r = &mut self.scene.roof;
+            egui::ComboBox::from_id_salt("room_ceiling")
+                .selected_text(&r.kind)
+                .show_ui(ui, |ui| {
+                    for c in CEILINGS {
+                        ui.selectable_value(&mut r.kind, c.to_string(), *c);
+                    }
+                });
+            ui.add(
+                egui::DragValue::new(&mut r.height)
+                    .range(1.5..=30.0)
+                    .speed(0.02)
+                    .suffix(" m")
+                    .max_decimals(2),
+            )
+            .on_hover_text("height (at the eaves / the low side)");
+            if r.kind != "flat" {
+                ui.label("to");
+                ui.add(
+                    egui::DragValue::new(&mut r.peak)
+                        .range(1.5..=40.0)
+                        .speed(0.02)
+                        .suffix(" m")
+                        .max_decimals(2),
+                )
+                .on_hover_text("the peak (the ridge, the high side, the vault's crown)");
+            }
+        });
+        if self.scene.roof.kind != "flat" {
+            ui.horizontal(|ui| {
+                let r = &mut self.scene.roof;
+                ui.label("Slope across");
+                ui.add(
+                    egui::DragValue::new(&mut r.axis_deg)
+                        .range(-180.0..=180.0)
+                        .speed(1.0)
+                        .suffix("°"),
+                )
+                .on_hover_text(
+                    "the direction the ceiling rises along (0° = across the plan, left to right)",
+                );
+                if r.kind == "vault" {
+                    ui.label("facets");
+                    ui.add(egui::DragValue::new(&mut r.facets).range(2..=24));
+                }
+            });
+        }
+        for (label, which) in [
+            ("Wall surface", 0),
+            ("Floor surface", 1),
+            ("Ceiling surface", 2),
+        ] {
             let v = match which {
                 0 => &mut self.scene.walls,
                 1 => &mut self.scene.floor,
@@ -225,16 +310,20 @@ impl RoomView {
             if ui.button("+ Source").clicked() {
                 let (id, name) = tracks[self.add_track].clone();
                 let n = self.scene.sources.len() as f64;
-                let d = self.scene.dims;
+                let (lo, hi) = self.scene.bbox();
+                let mut pos = [
+                    lo[0] + (hi[0] - lo[0]) * (0.3 + 0.2 * n).min(0.8),
+                    lo[1] + (hi[1] - lo[1]) * 0.45,
+                    1.3,
+                ];
+                if !self.scene.inside(&pos) {
+                    pos = centroid(&self.scene);
+                }
                 self.scene.sources.push(RoomSource {
                     name: unique(&self.scene, &name),
                     track: id,
                     spl_db: 90.0,
-                    pos: [
-                        (d[0] * (0.3 + 0.2 * n)).min(d[0] - 0.5),
-                        d[1] * 0.45,
-                        1.3f64.min(d[2] - 0.2),
-                    ],
+                    pos,
                 });
                 self.sel = Some(Sel::Source(self.scene.sources.len() - 1));
             }
@@ -263,14 +352,13 @@ impl RoomView {
                     }
                 });
             if ui.button("+ Mic").clicked() {
-                let d = self.scene.dims;
+                let (lo, hi) = self.scene.bbox();
                 let name = self.scene.free_name("Mic");
-                let mut m = RoomMic::new(
-                    &name,
-                    CHAINS[self.add_chain].id,
-                    [d[0] * 0.5, d[1] * 0.8, 1.5f64.min(d[2] - 0.2)],
-                    -90.0,
-                );
+                let mut pos = [0.5 * (lo[0] + hi[0]), lo[1] + 0.8 * (hi[1] - lo[1]), 1.5];
+                if !self.scene.inside(&pos) {
+                    pos = centroid(&self.scene);
+                }
+                let mut m = RoomMic::new(&name, CHAINS[self.add_chain].id, pos, -90.0);
                 if let Some(s) = self.scene.sources.first() {
                     m.aim_at(s.pos[0], s.pos[1]);
                 }
@@ -301,7 +389,7 @@ impl RoomView {
     }
 
     fn source_form(&mut self, ui: &mut egui::Ui, i: usize, tracks: &[(String, String)]) {
-        let dims = self.scene.dims;
+        let dims = bounds(&self.scene);
         let mut delete = false;
         {
             let s = &mut self.scene.sources[i];
@@ -362,7 +450,7 @@ impl RoomView {
     }
 
     fn mic_form(&mut self, ui: &mut egui::Ui, i: usize) {
-        let dims = self.scene.dims;
+        let dims = bounds(&self.scene);
         let sources = self.scene.sources.clone();
         let mut delete = false;
         let m = &mut self.scene.mics[i];
@@ -606,67 +694,120 @@ impl RoomView {
 
     fn canvas(&mut self, ui: &mut egui::Ui) {
         let (rect, resp) = ui.allocate_exact_size(ui.available_size(), Sense::click_and_drag());
-        let d = self.scene.dims;
-        let pad = 40.0;
-        let k = ((rect.width() - 2.0 * pad) / d[0] as f32)
-            .min((rect.height() - 2.0 * pad) / d[1] as f32)
+        let (lo, hi) = self.scene.bbox();
+        let (w, h) = ((hi[0] - lo[0]).max(1.0), (hi[1] - lo[1]).max(1.0));
+        let pad = 48.0;
+        let k = ((rect.width() - 2.0 * pad) / w as f32)
+            .min((rect.height() - 2.0 * pad) / h as f32)
             .max(1.0);
-        let size = Vec2::new(d[0] as f32 * k, d[1] as f32 * k);
-        let o = rect.center() - size / 2.0; // the room's top-left on screen (y = D there)
-        let to_s = |x: f64, y: f64| Pos2::new(o.x + x as f32 * k, o.y + (d[1] - y) as f32 * k);
-        let to_w = |p: Pos2| (((p.x - o.x) / k) as f64, d[1] - ((p.y - o.y) / k) as f64);
+        let size = Vec2::new(w as f32 * k, h as f32 * k);
+        let o = rect.center() - size / 2.0; // the plan's top-left on screen (y = max there)
+        let to_s =
+            |x: f64, y: f64| Pos2::new(o.x + (x - lo[0]) as f32 * k, o.y + (hi[1] - y) as f32 * k);
+        let to_w = |p: Pos2| {
+            (
+                lo[0] + ((p.x - o.x) / k) as f64,
+                hi[1] - ((p.y - o.y) / k) as f64,
+            )
+        };
         let painter = ui.painter_at(rect);
+        let small = egui::FontId::proportional(11.0);
 
-        // the room, a 1 m grid
-        let room_rect = Rect::from_min_size(o, size);
-        painter.rect_filled(room_rect, 2.0, theme::CHROME2);
-        for i in 1..(d[0].ceil() as i32) {
-            let x = o.x + i as f32 * k;
+        // the floor: a 1 m grid inside the bounding box, the polygon over it
+        let plan: Vec<Pos2> = self.scene.plan.iter().map(|p| to_s(p[0], p[1])).collect();
+        for i in (lo[0].ceil() as i32)..=(hi[0].floor() as i32) {
+            let x = to_s(i as f64, 0.0).x;
             painter.line_segment(
                 [Pos2::new(x, o.y), Pos2::new(x, o.y + size.y)],
                 Stroke::new(1.0, theme::DOT),
             );
         }
-        for j in 1..(d[1].ceil() as i32) {
-            let y = o.y + size.y - j as f32 * k;
+        for j in (lo[1].ceil() as i32)..=(hi[1].floor() as i32) {
+            let y = to_s(0.0, j as f64).y;
             painter.line_segment(
                 [Pos2::new(o.x, y), Pos2::new(o.x + size.x, y)],
                 Stroke::new(1.0, theme::DOT),
             );
         }
-        painter.rect_stroke(
-            room_rect,
-            2.0,
-            Stroke::new(2.0, theme::FRAME),
-            StrokeKind::Inside,
-        );
-        let small = egui::FontId::proportional(11.0);
+        if plan.len() >= 3 {
+            // a fill by triangles from each edge to the centroid works for star-shaped
+            // plans; the outline is what reads, so keep the fill faint
+            let c = plan.iter().fold(Vec2::ZERO, |a, p| a + p.to_vec2()) / plan.len() as f32;
+            let c = c.to_pos2();
+            for i in 0..plan.len() {
+                let (a, b) = (plan[i], plan[(i + 1) % plan.len()]);
+                painter.add(egui::Shape::convex_polygon(
+                    vec![c, a, b],
+                    theme::CHROME2.gamma_multiply(0.6),
+                    Stroke::NONE,
+                ));
+            }
+            let mut closed = plan.clone();
+            closed.push(plan[0]);
+            painter.add(egui::Shape::line(closed, Stroke::new(2.5, theme::FRAME)));
+        }
+        // the ceiling: where its facets meet (dashed), heights at the knots
+        if self.scene.roof.kind != "flat" {
+            let a = self.scene.roof.axis_deg.to_radians();
+            let (ux, uy) = (a.cos(), a.sin());
+            let (vx, vy) = (-uy, ux);
+            let span = (w * w + h * h).sqrt();
+            let mid = [0.5 * (lo[0] + hi[0]), 0.5 * (lo[1] + hi[1])];
+            let mid_u = mid[0] * ux + mid[1] * uy;
+            for (u, z) in self.scene.profile() {
+                let base = [mid[0] + (u - mid_u) * ux, mid[1] + (u - mid_u) * uy];
+                let p0 = to_s(base[0] - span * vx, base[1] - span * vy);
+                let p1 = to_s(base[0] + span * vx, base[1] + span * vy);
+                let peak = (z - self.scene.top()).abs() < 1e-6;
+                let col = if peak { theme::WARN } else { theme::WIRE };
+                painter.add(egui::Shape::dashed_line(
+                    &[p0, p1],
+                    Stroke::new(1.0, col.gamma_multiply(0.7)),
+                    6.0,
+                    5.0,
+                ));
+                let lab = to_s(base[0], base[1]);
+                if rect.contains(lab) {
+                    painter.text(
+                        lab + Vec2::new(4.0, -8.0),
+                        egui::Align2::LEFT_CENTER,
+                        format!("{z:.1} m"),
+                        small.clone(),
+                        col,
+                    );
+                }
+            }
+        }
         painter.text(
-            Pos2::new(o.x + size.x / 2.0, o.y + size.y + 14.0),
+            Pos2::new(o.x + size.x / 2.0, o.y + size.y + 16.0),
             egui::Align2::CENTER_CENTER,
-            format!("{:.2} m", d[0]),
+            format!("{w:.2} m"),
             small.clone(),
             theme::MUTED,
         );
         painter.text(
-            Pos2::new(o.x - 22.0, o.y + size.y / 2.0),
+            Pos2::new(o.x - 24.0, o.y + size.y / 2.0),
             egui::Align2::CENTER_CENTER,
-            format!("{:.2} m", d[1]),
+            format!("{h:.2} m"),
             small.clone(),
             theme::MUTED,
         );
-        painter.text(
-            Pos2::new(o.x + size.x, o.y - 12.0),
-            egui::Align2::RIGHT_CENTER,
-            format!(
-                "{} · height {:.2} m · seen from above",
-                self.scene.name, d[2]
+        let ceiling = match self.scene.roof.kind.as_str() {
+            "flat" => format!("flat ceiling {:.2} m", self.scene.roof.height),
+            k => format!(
+                "{k} ceiling {:.2} → {:.2} m",
+                self.scene.roof.height, self.scene.roof.peak
             ),
+        };
+        painter.text(
+            Pos2::new(o.x + size.x, o.y - 14.0),
+            egui::Align2::RIGHT_CENTER,
+            format!("{} · {} · seen from above", self.scene.name, ceiling),
             small.clone(),
             theme::FAINT,
         );
 
-        // input: pick, move, aim
+        // input: pick, move, aim, corners
         let pointer = resp.interact_pointer_pos().or(resp.hover_pos());
         let marks: Vec<(Sel, Pos2)> = self
             .scene
@@ -690,16 +831,25 @@ impl RoomView {
                 .min_by(|a, b| a.1.total_cmp(&b.1))
                 .map(|(s, _)| s)
         };
+        let corner = |p: Pos2| -> Option<usize> {
+            plan.iter()
+                .enumerate()
+                .map(|(i, q)| (i, q.distance(p)))
+                .filter(|(_, dd)| *dd < 9.0)
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(i, _)| i)
+        };
         let shift = ui.input(|i| i.modifiers.shift);
         if resp.drag_started()
             && let Some(p) = pointer
         {
             let h = hit(p);
             let secondary = ui.input(|i| i.pointer.secondary_down());
-            self.drag = match h {
-                Some(Sel::Mic(i)) if secondary || shift => Some(Drag::Aim(i)),
-                Some(s) => Some(Drag::Move(s)),
-                None => match self.sel {
+            self.drag = match (h, corner(p)) {
+                (Some(Sel::Mic(i)), _) if secondary || shift => Some(Drag::Aim(i)),
+                (Some(s), _) => Some(Drag::Move(s)),
+                (None, Some(c)) if !secondary => Some(Drag::Corner(c)),
+                (None, _) => match self.sel {
                     Some(Sel::Mic(i)) if secondary || shift => Some(Drag::Aim(i)),
                     _ => None,
                 },
@@ -712,25 +862,39 @@ impl RoomView {
             && let (Some(dr), Some(p)) = (self.drag, pointer)
         {
             let (x, y) = to_w(p);
-            let cx = x.clamp(0.05, d[0] - 0.05);
-            let cy = y.clamp(0.05, d[1] - 0.05);
+            let (x, y) = (round_cm(x), round_cm(y));
+            let scene = &mut self.scene;
+            let ok = |sc: &Scene, z: f64| sc.inside(&[x, y, z]);
             match dr {
                 Drag::Move(Sel::Source(i)) => {
-                    if let Some(s) = self.scene.sources.get_mut(i) {
-                        s.pos[0] = round_cm(cx);
-                        s.pos[1] = round_cm(cy);
+                    let z = scene.sources.get(i).map_or(1.0, |s| s.pos[2]);
+                    if ok(scene, z)
+                        && let Some(s) = scene.sources.get_mut(i)
+                    {
+                        s.pos[0] = x;
+                        s.pos[1] = y;
                     }
                 }
                 Drag::Move(Sel::Mic(i)) => {
-                    if let Some(m) = self.scene.mics.get_mut(i) {
-                        m.pos[0] = round_cm(cx);
-                        m.pos[1] = round_cm(cy);
+                    let z = scene.mics.get(i).map_or(1.0, |m| m.pos[2]);
+                    if ok(scene, z)
+                        && let Some(m) = scene.mics.get_mut(i)
+                    {
+                        m.pos[0] = x;
+                        m.pos[1] = y;
                     }
                 }
                 Drag::Aim(i) => {
-                    if let Some(m) = self.scene.mics.get_mut(i) {
+                    if let Some(m) = scene.mics.get_mut(i) {
                         m.aim_at(x, y);
                         m.azimuth_deg = m.azimuth_deg.round();
+                    }
+                }
+                Drag::Corner(c) => {
+                    if c < scene.plan.len() {
+                        // snap to 5 cm
+                        scene.plan[c] = [(x * 20.0).round() / 20.0, (y * 20.0).round() / 20.0];
+                        scene.shape = "custom".to_string();
                     }
                 }
             }
@@ -742,6 +906,37 @@ impl RoomView {
             && let Some(p) = pointer
         {
             self.sel = hit(p);
+        }
+        // a double-click on a wall adds a corner there; a right-click removes one
+        if resp.double_clicked()
+            && let Some(p) = pointer
+            && hit(p).is_none()
+        {
+            let n = plan.len();
+            let best = (0..n)
+                .map(|i| {
+                    let (a, b) = (plan[i], plan[(i + 1) % n]);
+                    let ab = b - a;
+                    let t = ((p - a).dot(ab) / ab.length_sq().max(1e-6)).clamp(0.0, 1.0);
+                    (i, (a + ab * t).distance(p))
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1));
+            if let Some((i, dd)) = best
+                && dd < 10.0
+            {
+                let (x, y) = to_w(p);
+                self.scene.plan.insert(i + 1, [round_cm(x), round_cm(y)]);
+                self.scene.shape = "custom".to_string();
+            }
+        }
+        if resp.secondary_clicked()
+            && let Some(p) = pointer
+            && let Some(c) = corner(p)
+            && self.scene.plan.len() > 3
+            && hit(p).is_none()
+        {
+            self.scene.plan.remove(c);
+            self.scene.shape = "custom".to_string();
         }
         if resp.hovered()
             && ui.input(|i| i.key_pressed(egui::Key::Delete))
@@ -757,14 +952,32 @@ impl RoomView {
                 _ => {}
             }
         }
+        // corner handles
+        let near = pointer.and_then(corner);
+        for (i, q) in plan.iter().enumerate() {
+            let on = near == Some(i) || matches!(self.drag, Some(Drag::Corner(c)) if c == i);
+            let r = if on { 5.0 } else { 3.5 };
+            painter.rect_filled(
+                Rect::from_center_size(*q, Vec2::splat(2.0 * r)),
+                1.0,
+                if on {
+                    theme::INK
+                } else {
+                    theme::FRAME.gamma_multiply(1.6)
+                },
+            );
+        }
         if let Some(p) = resp.hover_pos()
-            && room_rect.contains(p)
+            && in_room_plan(&self.scene, to_w(p))
         {
             let (x, y) = to_w(p);
             painter.text(
-                Pos2::new(o.x, o.y - 12.0),
+                Pos2::new(o.x, o.y - 14.0),
                 egui::Align2::LEFT_CENTER,
-                format!("x {x:.2}  y {y:.2} m"),
+                format!(
+                    "x {x:.2}  y {y:.2} m · ceiling {:.2} m",
+                    self.scene.height_at(x, y)
+                ),
                 small.clone(),
                 theme::FAINT,
             );
@@ -820,11 +1033,10 @@ impl RoomView {
             if on {
                 painter.circle_stroke(c, 10.0, Stroke::new(2.0, theme::INK));
             }
-            let chain = room::chain(&m.chain).map_or("", |ch| ch.label);
             painter.text(
                 c + Vec2::new(10.0, 12.0),
                 egui::Align2::LEFT_CENTER,
-                format!("{} · {}", m.name, chain),
+                &m.name,
                 font.clone(),
                 col,
             );
@@ -841,13 +1053,26 @@ impl RoomView {
     }
 }
 
-fn position_fields(ui: &mut egui::Ui, pos: &mut [f64; 3], dims: [f64; 3]) {
+/// The room's bounds for the position fields: (low, high) per axis.
+fn bounds(scene: &Scene) -> [(f64, f64); 3] {
+    let (lo, hi) = scene.bbox();
+    [(lo[0], hi[0]), (lo[1], hi[1]), (0.0, scene.top())]
+}
+
+fn centroid(scene: &Scene) -> [f64; 3] {
+    let n = scene.plan.len().max(1) as f64;
+    let x = scene.plan.iter().map(|p| p[0]).sum::<f64>() / n;
+    let y = scene.plan.iter().map(|p| p[1]).sum::<f64>() / n;
+    [x, y, 1.3f64.min(0.5 * scene.roof.height)]
+}
+
+fn position_fields(ui: &mut egui::Ui, pos: &mut [f64; 3], dims: [(f64, f64); 3]) {
     ui.horizontal(|ui| {
         for (j, l) in ["x", "y", "z"].iter().enumerate() {
             ui.label(*l);
             ui.add(
                 egui::DragValue::new(&mut pos[j])
-                    .range(0.05..=(dims[j] - 0.05).max(0.06))
+                    .range((dims[j].0 + 0.05)..=(dims[j].1 - 0.05).max(dims[j].0 + 0.06))
                     .speed(0.01)
                     .suffix(" m")
                     .max_decimals(2),
@@ -868,6 +1093,10 @@ fn off_axis_deg(m: &RoomMic, p: &[f64; 3]) -> f64 {
     let n = dist(p, &m.pos).max(1e-9);
     let c = (aim[0] * v[0] + aim[1] * v[1] + aim[2] * v[2]) / n;
     c.clamp(-1.0, 1.0).acos().to_degrees()
+}
+
+fn in_room_plan(scene: &Scene, (x, y): (f64, f64)) -> bool {
+    room::in_polygon(&scene.plan, x, y)
 }
 
 fn round_cm(x: f64) -> f64 {

@@ -153,8 +153,50 @@ def _inside(room: Shoebox, p: np.ndarray, what: str) -> None:
         raise ValueError(f"{what} at {p.tolist()} is not inside the room {room.dims_m}")
 
 
+POLY_MAX_ORDER = 4  # image sources in a PolyRoom: every path of up to 4 reflections
+POLY_ISM_S = 0.05  # and the hand-over to the ray-traced tail (orders past 4 are thin by then)
+
+
+def _poly_early(room, src, mic_pos, beta):
+    """A PolyRoom's image sources valid for one mic: positions, log of the walls' product."""
+    from varimu.rooms import polyroom
+
+    pos, seqs = room._images_cache.get(tuple(src), (None, None))
+    if pos is None:
+        pos, seqs = polyroom.image_sources(room, src, POLY_MAX_ORDER)
+        room._images_cache[tuple(src)] = (pos, seqs)
+    ok = polyroom.valid_paths(room, pos, seqs, mic_pos)
+    pos, seqs = pos[ok], seqs[ok]
+    lb = np.zeros((len(pos), beta.shape[1]))
+    for j in range(seqs.shape[1]):
+        f = seqs[:, j]
+        has = f >= 0
+        lb[has] += np.log(beta[f[has]])
+    return pos, lb
+
+
+def _receiver_gains(decay, n: int, fs: float, volume: float) -> np.ndarray:
+    """Per mic, the tail's gain over time (mics, n): the ray-traced energy density at the mic
+    over the room's mean (e(t) / V), in the mid bands (500 Hz-4 kHz), smoothed over 5 ms
+    (flutter's 10-40 ms periods stay): the shared diffuse field shaped to what reaches
+    each point (polyroom.ray_decay's receivers)."""
+    t, e, w = decay
+    mid = slice(2, 6)
+    mean = e[mid].sum(0) / volume
+    win = np.hanning(7)[1:-1]
+    win /= win.sum()
+    out = np.zeros((w.shape[0], n))
+    ts = np.arange(n) / fs
+    for i, wi in enumerate(w):
+        ratio = np.convolve(wi[mid].sum(0), win, "same") / np.maximum(
+            np.convolve(mean, win, "same"), 1e-30
+        )
+        out[i] = np.sqrt(np.clip(np.interp(ts, t, ratio), 0.02, 16.0))
+    return out
+
+
 def responses(
-    room: Shoebox,
+    room,
     sources_m: list[np.ndarray],
     mics: list[Mic],
     fs: float,
@@ -166,19 +208,53 @@ def responses(
 ) -> np.ndarray:
     """The rooms' impulse responses, (sources, mics, 2 entries (front, rear), samples):
     the entries' pressure per unit source (1 / r in free field). `seeds` per source
-    seed its tail (default its index)."""
+    seed its tail (default its index). `room` is a Shoebox (images of every order up to
+    ism_s, the tail started at their energy, Eyring's decay) or a
+    varimu.rooms.polyroom.PolyRoom (images up to POLY_MAX_ORDER valid per mic, the hand-over
+    at POLY_ISM_S, the tail's level and decay ray-traced from the shape)."""
+    from varimu.rooms.polyroom import RECEIVER_RAYS, PolyRoom, ray_decay, rt60_from_decay
+
     c = SPEED_OF_SOUND_M_S
-    rt = room.rt60_s()
+    poly = isinstance(room, PolyRoom)
+    decays = {}
+    if poly:
+        ism_s = min(ism_s, POLY_ISM_S)
+        room._images_cache = {}
+        for si, src in enumerate(sources_m):
+            if not room.inside(np.asarray(src, float)):
+                raise ValueError(f"a source at {list(src)} is not inside the room")
+            decays[si] = ray_decay(
+                room,
+                np.asarray(src, float),
+                4.0,
+                n_rays=RECEIVER_RAYS,
+                seed=seeds[si] if seeds else si,
+                receivers=[m.position_m for m in mics],
+            )
+        rt = np.nanmax([rt60_from_decay(*d[:2]) for d in decays.values()], axis=0)
+        rt = np.where(np.isfinite(rt), rt, 1.0)
+    else:
+        rt = room.rt60_s()
     length_s = length_s if length_s is not None else float(rt.max()) * 1.1 + ism_s
     n = int(np.ceil(length_s * fs))
     n_fft = 1 << int(np.ceil(np.log2(n + int(0.05 * fs))))
     f_fine = np.fft.rfftfreq(n_fft, 1.0 / fs)
     for m in mics:
-        _inside(room, m.position_m, "a mic")
-    beta = np.maximum(np.sqrt(1 - room.alphas()), 1e-300)  # (6, bands)
+        if poly:
+            if not room.inside(m.position_m):
+                raise ValueError(f"a mic at {m.position_m.tolist()} is not inside the room")
+        else:
+            _inside(room, m.position_m, "a mic")
+    if poly:
+        alphas = np.stack([np.array(ROOM_MATERIALS[room.material(f)]) for f in room.faces])
+        beta = np.maximum(np.sqrt(1 - alphas), 1e-300)  # (faces, bands)
+        centre = np.r_[room.floor.mean(0), 0.5 * room.height_m]
+        volume = room.volume_m3()
+    else:
+        beta = np.maximum(np.sqrt(1 - room.alphas()), 1e-300)  # (6, bands)
+        centre = 0.5 * np.array(room.dims_m)
     seeds = seeds if seeds is not None else list(range(len(sources_m)))
     out = np.zeros((len(sources_m), len(mics), 2, n))
-    centre = 0.5 * np.array(room.dims_m)
     n_ism, win = int(ism_s * fs), int(FADE_S * fs)
 
     # Per mic table: the coarse grid and its map onto the FFT's bins.
@@ -195,12 +271,15 @@ def responses(
 
     for si, src in enumerate(sources_m):
         src = np.asarray(src, float)
-        _inside(room, src, "a source")
-        pos, hits = images(room, src, c * ism_s)
-        log_beta = hits @ np.log(beta)  # (images, bands): log of the walls' product
+        if not poly:
+            _inside(room, src, "a source")
+            pos, hits = images(room, src, c * ism_s)
+            log_beta = hits @ np.log(beta)  # (images, bands): log of the walls' product
         early = np.zeros((len(mics), len(BANDS_HZ)))
         for mi, m in enumerate(mics):
             idx, w, bw, air = grids[id(m.table)]
+            if poly:
+                pos, log_beta = _poly_early(room, src, m.position_m, beta)
             d = pos - m.position_m
             r = np.linalg.norm(d, axis=1)
             tau_s = r / c
@@ -236,11 +315,18 @@ def responses(
         bw_fine = band_weights_at(f_fine)
         noise_spec = np.zeros((TAIL_DIRECTIONS, len(f_fine)), complex)
         for b in range(len(BANDS_HZ)):
-            env = np.sqrt(e_rate[b] / TAIL_DIRECTIONS) * np.exp(-3 * np.log(10) * t / rt[b])
+            if poly:
+                # <h^2(t)> = 4 pi c e(t) / V per second (polyroom's docstring)
+                te, eb = decays[si][0], decays[si][1][b]
+                e_t = np.interp(np.arange(n_fft) / fs, te, eb, right=0.0)
+                env = np.sqrt(4 * np.pi * c * e_t / (volume * fs * TAIL_DIRECTIONS))
+            else:
+                env = np.sqrt(e_rate[b] / TAIL_DIRECTIONS) * np.exp(-3 * np.log(10) * t / rt[b])
             env *= fade_in
             env[n:] = 0.0
             x = rng.standard_normal((TAIL_DIRECTIONS, n_fft)) * env[None, :]
             noise_spec += bw_fine[b][None, :] * np.fft.rfft(x, axis=1)
+        gains = _receiver_gains(decays[si], n, fs, volume) if poly else None
         for mi, m in enumerate(mics):
             cos_t = np.clip(dirs @ m.aim, -1, 1)
             e_front, e_rear = m.table.at(np.arccos(cos_t), np.full(len(dirs), np.inf))
@@ -250,5 +336,6 @@ def responses(
             for e, ent in enumerate((e_front, e_rear)):
                 s_f = ent[:, idx] * (1 - w) + ent[:, idx + 1] * w
                 spec = np.einsum("if,if->f", s_f * ph, noise_spec)
-                out[si, mi, e] += np.fft.irfft(spec, n_fft)[:n]
+                tail_t = np.fft.irfft(spec, n_fft)[:n]
+                out[si, mi, e] += tail_t if gains is None else tail_t * gains[mi]
     return out

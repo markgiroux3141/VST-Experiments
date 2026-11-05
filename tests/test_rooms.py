@@ -147,3 +147,98 @@ def test_bmld_and_better_ear_on_the_textbook_cases():
     assert np.all((low > 13) & (low < 16)), low
     panned = band_measures(np.stack([s, 0 * s]), np.stack([0 * m, m]), FS)
     assert np.all(panned["be_tmr_db"] > 40)
+
+
+# --- rooms of any floor plan (docs/ROOM_LOOP_PLAN.md R6) ---
+
+RECT = [[0, 0], [7, 0], [7, 5.5], [0, 5.5]]
+FURNISHED = ("furnished_wall", "wood_floor", "gypsum_on_studs")
+
+
+def _rect_room():
+    from varimu.rooms.polyroom import PolyRoom
+
+    return PolyRoom(RECT, "flat", 3.2, None, 0.0, 8, *FURNISHED)
+
+
+def test_polyroom_finds_the_shoebox_images():
+    from varimu.rooms.polyroom import image_sources, valid_paths
+    from varimu.rooms.shoebox import images
+
+    src, mic = np.array([2.0, 2.55, 1.3]), np.array([4.5, 2.25, 1.6])
+    pr = _rect_room()
+    pos, seq = image_sources(pr, src, 3)
+    got = pos[valid_paths(pr, pos, seq, mic)]
+    sb = Shoebox((7.0, 5.5, 3.2), ("furnished_wall",) * 4 + ("wood_floor", "gypsum_on_studs"))
+    spos, hits = images(sb, src, 200.0)
+    want = spos[hits.sum(1) <= 3]
+    assert {tuple(np.round(p, 6)) for p in got} == {tuple(np.round(p, 6)) for p in want}
+
+
+def test_ray_traced_decay_meets_eyring_and_the_image_energy():
+    """In a shoebox: RT within 15% of Eyring's; the tail's level 4 pi c e(t) / V within
+    0.5 dB of the exact image sources' energy (specular rays)."""
+    import varimu.rooms.polyroom as P
+    from varimu.rooms.shoebox import images
+    from varimu.separation.room import BANDS_HZ
+
+    pr = _rect_room()
+    src, mic = np.array([2.0, 2.55, 1.3]), np.array([4.5, 2.25, 1.6])
+    t, e = P.ray_decay(pr, src, 1.5, n_rays=8000)
+    sb = Shoebox((7.0, 5.5, 3.2), ("furnished_wall",) * 4 + ("wood_floor", "gypsum_on_studs"))
+    rt = P.rt60_from_decay(t, e)
+    assert np.all(np.abs(rt / sb.rt60_s() - 1) < 0.15), (rt, sb.rt60_s())
+    saved = dict(P.SCATTERING)
+    try:
+        P.SCATTERING.update({k: 0.0 for k in P.SCATTERING})
+        t, e = P.ray_decay(pr, src, 0.3, n_rays=8000)
+    finally:
+        P.SCATTERING.update(saved)
+    c = 343.2
+    pos, hits = images(sb, src, c * 0.3)
+    lb = hits @ np.log(np.sqrt(1 - sb.alphas()))
+    r = np.linalg.norm(pos - mic, axis=1)
+    air = air_absorption_db_per_m(BANDS_HZ)
+    a2 = np.exp(2 * lb) / r[:, None] ** 2 * 10 ** (-air[None, :] * r[:, None] / 10)
+    sel = (r / c >= 0.1) & (r / c < 0.2)
+    ts = (t >= 0.1) & (t < 0.2)
+    form = 4 * np.pi * c / pr.volume_m3() * np.trapezoid(e[:, ts], t[ts], axis=1)
+    assert np.all(np.abs(10 * np.log10(a2[sel].sum(0) / form)) < 0.5)
+
+
+def test_l_shaped_room_hides_the_direct_sound_and_ceilings_shape_the_room():
+    from varimu.rooms.polyroom import PolyRoom, image_sources, valid_paths
+
+    room = PolyRoom([[0, 0], [8, 0], [8, 3], [3, 3], [3, 8], [0, 8]], "gable", 2.8, 4.5)
+    src, mic = np.array([6.5, 1.5, 1.5]), np.array([1.5, 6.5, 1.5])
+    pos, seq = image_sources(room, src, 3)
+    ok = valid_paths(room, pos, seq, mic)
+    assert not ok[0] and ok.sum() > 0  # no direct sound round the corner, reflections do
+    assert room.inside(np.array([4.0, 1.5, 4.3])) and not room.inside(np.array([0.3, 1.5, 3.5]))
+    vault = PolyRoom(RECT, "vault", 3.0, 5.0, 0.0, 8)
+    assert vault.height_at(np.array([3.5, 2.0])) == pytest.approx(5.0)
+    assert vault.height_at(np.array([0.0, 2.0])) == pytest.approx(3.0)
+
+
+def test_scene_with_a_floor_plan_renders_its_pressures(tmp_path):
+    from varimu.rooms.polyroom import PolyRoom
+    from varimu.rooms.scene import load_scene, mic_pressures
+
+    scene = load_scene(
+        {
+            "name": "t",
+            "room": {"floor_m": [[0, 0], [5, 0.3], [5.4, 4], [0.2, 4.4]],
+                     "ceiling": {"type": "shed", "height_m": 2.6, "peak_m": 3.4, "axis_deg": 90},
+                     "materials": {"walls": "furnished_wall", "floor": "wood_floor",
+                                   "ceiling": "acoustic_tile"}},
+            "sources": [{"name": "s", "clip": "x.wav", "spl_db": 94, "position_m": [2, 2, 1.2]}],
+            "mics": [{"name": "m", "chain": "capsule_bk4134", "position_m": [3, 2.2, 1.4],
+                      "aim": {"azimuth_deg": 180}}],
+            "settings": {"tail_s": 0.6},
+        }
+    )  # fmt: skip
+    assert isinstance(scene.room, PolyRoom)
+    p, kinds, _ = mic_pressures(scene, FS, [np.r_[1.0, np.zeros(99)]])
+    h = p[0, 0, 0]
+    assert abs(np.argmax(np.abs(h)) - int(round(np.linalg.norm([1, 0.2, 0.2]) / 343.2 * FS))) <= 2
+    assert np.sum(h[int(0.1 * FS) :] ** 2) > 0  # a tail

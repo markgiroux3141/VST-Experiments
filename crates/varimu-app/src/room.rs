@@ -104,6 +104,117 @@ pub const MATERIALS: &[&str] = &[
     "anechoic",
 ];
 
+/// The ceiling's forms (varimu/rooms/polyroom.py `CEILINGS`).
+pub const CEILINGS: &[&str] = &["flat", "shed", "gable", "vault"];
+
+/// Floor-plan presets (a polygon of the given width and depth; `Scene::set_preset`).
+pub const PRESETS: &[&str] = &[
+    "shoebox",
+    "splayed",
+    "trapezoid",
+    "L-shape",
+    "hexagon",
+    "octagon",
+];
+
+/// The ceiling over the floor plan: its form, the height at the eaves (or everywhere, flat),
+/// the peak, the direction it varies along (counterclockwise from +x), a vault's facets.
+#[derive(Clone, PartialEq, Debug)]
+pub struct Ceiling {
+    pub kind: String,
+    pub height: f64,
+    pub peak: f64,
+    pub axis_deg: f64,
+    pub facets: u32,
+}
+
+impl Default for Ceiling {
+    fn default() -> Ceiling {
+        Ceiling {
+            kind: "flat".into(),
+            height: 3.2,
+            peak: 4.5,
+            axis_deg: 0.0,
+            facets: 8,
+        }
+    }
+}
+
+/// A preset's floor polygon, counterclockwise, `w` x `d` metres from the origin.
+pub fn preset_plan(name: &str, w: f64, d: f64) -> Vec<[f64; 2]> {
+    let p = |pts: &[(f64, f64)]| pts.iter().map(|&(x, y)| [x * w, y * d]).collect();
+    match name {
+        "splayed" => p(&[
+            (0.0, 0.0),
+            (0.93, 0.08),
+            (1.0, 0.9),
+            (0.47, 1.0),
+            (-0.06, 0.8),
+        ]),
+        "trapezoid" => p(&[(0.0, 0.0), (1.0, 0.0), (0.8, 1.0), (0.2, 1.0)]),
+        "L-shape" => p(&[
+            (0.0, 0.0),
+            (1.0, 0.0),
+            (1.0, 0.45),
+            (0.45, 0.45),
+            (0.45, 1.0),
+            (0.0, 1.0),
+        ]),
+        "hexagon" => p(&[
+            (0.25, 0.0),
+            (0.75, 0.0),
+            (1.0, 0.5),
+            (0.75, 1.0),
+            (0.25, 1.0),
+            (0.0, 0.5),
+        ]),
+        "octagon" => p(&[
+            (0.2, 0.0),
+            (0.8, 0.0),
+            (1.0, 0.2),
+            (1.0, 0.8),
+            (0.8, 1.0),
+            (0.2, 1.0),
+            (0.0, 0.8),
+            (0.0, 0.2),
+        ]),
+        _ => p(&[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]),
+    }
+}
+
+/// Whether (x, y) is inside the polygon (even-odd; the boundary counts as inside).
+pub fn in_polygon(poly: &[[f64; 2]], x: f64, y: f64) -> bool {
+    let n = poly.len();
+    let mut inside = false;
+    for i in 0..n {
+        let ([x0, y0], [x1, y1]) = (poly[i], poly[(i + 1) % n]);
+        if (y0 > y) != (y1 > y) && x < x0 + (y - y0) * (x1 - x0) / (y1 - y0) {
+            inside = !inside;
+        }
+        let (ex, ey) = (x1 - x0, y1 - y0);
+        let t = (((x - x0) * ex + (y - y0) * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
+        if (x - (x0 + t * ex)).hypot(y - (y0 + t * ey)) < 1e-9 {
+            return true;
+        }
+    }
+    inside
+}
+
+fn polygon_area(poly: &[[f64; 2]]) -> f64 {
+    let n = poly.len();
+    0.5 * (0..n)
+        .map(|i| poly[i][0] * poly[(i + 1) % n][1] - poly[(i + 1) % n][0] * poly[i][1])
+        .sum::<f64>()
+}
+
+fn segments_cross(a: [f64; 2], b: [f64; 2], c: [f64; 2], d: [f64; 2]) -> bool {
+    let o = |p: [f64; 2], q: [f64; 2], r: [f64; 2]| {
+        (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+    };
+    let (d1, d2, d3, d4) = (o(c, d, a), o(c, d, b), o(a, b, c), o(a, b, d));
+    (d1 > 0.0) != (d2 > 0.0) && (d3 > 0.0) != (d4 > 0.0)
+}
+
 /// The qualities a scene renders at.
 pub const QUALITIES: &[&str] = &["production", "draft"];
 
@@ -181,7 +292,12 @@ impl RoomMic {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Scene {
     pub name: String,
-    pub dims: [f64; 3],
+    /// The floor plan's preset (`PRESETS`), or "custom" once a corner is moved.
+    pub shape: String,
+    /// The floor polygon (m, counterclockwise).
+    pub plan: Vec<[f64; 2]>,
+    pub roof: Ceiling,
+    /// Materials: the walls', the floor's, the ceiling's.
     pub walls: String,
     pub floor: String,
     pub ceiling: String,
@@ -194,7 +310,9 @@ impl Default for Scene {
     fn default() -> Scene {
         Scene {
             name: "Room".to_string(),
-            dims: [7.0, 5.5, 3.2],
+            shape: "shoebox".to_string(),
+            plan: preset_plan("shoebox", 7.0, 5.5),
+            roof: Ceiling::default(),
             walls: "furnished_wall".to_string(),
             floor: "wood_floor".to_string(),
             ceiling: "gypsum_on_studs".to_string(),
@@ -220,11 +338,96 @@ fn st(v: &Value, k: &str, d: &str) -> String {
 }
 
 impl Scene {
+    /// Replace the floor plan by a preset `w` x `d` m.
+    pub fn set_preset(&mut self, name: &str, w: f64, d: f64) {
+        self.shape = name.to_string();
+        self.plan = preset_plan(name, w, d);
+    }
+
+    /// The floor plan's bounding box: (min, max).
+    pub fn bbox(&self) -> ([f64; 2], [f64; 2]) {
+        let mut lo = [f64::INFINITY; 2];
+        let mut hi = [f64::NEG_INFINITY; 2];
+        for p in &self.plan {
+            for i in 0..2 {
+                lo[i] = lo[i].min(p[i]);
+                hi[i] = hi[i].max(p[i]);
+            }
+        }
+        (lo, hi)
+    }
+
+    fn u_dir(&self) -> [f64; 2] {
+        let a = self.roof.axis_deg.to_radians();
+        [a.cos(), a.sin()]
+    }
+
+    /// The ceiling's profile along its axis: knots (u, height), as polyroom.py's.
+    pub fn profile(&self) -> Vec<(f64, f64)> {
+        let u = self.u_dir();
+        let us: Vec<f64> = self
+            .plan
+            .iter()
+            .map(|p| p[0] * u[0] + p[1] * u[1])
+            .collect();
+        let lo = us.iter().cloned().fold(f64::INFINITY, f64::min);
+        let hi = us.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+        let (h, pk) = (self.roof.height, self.roof.peak);
+        match self.roof.kind.as_str() {
+            "shed" => vec![(lo, h), (hi, pk)],
+            "gable" => vec![(lo, h), (0.5 * (lo + hi), pk), (hi, h)],
+            "vault" => {
+                let n = self.roof.facets.max(2);
+                (0..=n)
+                    .map(|i| {
+                        let t = -1.0 + 2.0 * i as f64 / n as f64;
+                        (
+                            lo + 0.5 * (t + 1.0) * (hi - lo),
+                            h + (pk - h) * (1.0 - t * t).max(0.0).sqrt(),
+                        )
+                    })
+                    .collect()
+            }
+            _ => vec![(lo, h), (hi, h)],
+        }
+    }
+
+    /// The ceiling's height over (x, y).
+    pub fn height_at(&self, x: f64, y: f64) -> f64 {
+        let u = self.u_dir();
+        let v = x * u[0] + y * u[1];
+        let k = self.profile();
+        if v <= k[0].0 {
+            return k[0].1;
+        }
+        for w in k.windows(2) {
+            if v <= w[1].0 {
+                let t = (v - w[0].0) / (w[1].0 - w[0].0).max(1e-12);
+                return w[0].1 + t * (w[1].1 - w[0].1);
+            }
+        }
+        k[k.len() - 1].1
+    }
+
+    /// The highest point of the ceiling.
+    pub fn top(&self) -> f64 {
+        self.profile().iter().map(|k| k.1).fold(0.0, f64::max)
+    }
+
+    /// Whether a point is inside the room.
+    pub fn inside(&self, p: &[f64; 3]) -> bool {
+        in_polygon(&self.plan, p[0], p[1]) && p[2] > 0.0 && p[2] < self.height_at(p[0], p[1])
+    }
+
     /// The editor's state (what `<session>/rooms/<name>.json` holds: sources by track id).
     pub fn state(&self) -> Value {
         json!({
             "name": self.name,
-            "dims_m": self.dims,
+            "shape": self.shape,
+            "floor_m": self.plan,
+            "ceiling_form": {"type": self.roof.kind, "height_m": self.roof.height,
+                             "peak_m": self.roof.peak, "axis_deg": self.roof.axis_deg,
+                             "facets": self.roof.facets},
             "walls": self.walls, "floor": self.floor, "ceiling": self.ceiling,
             "quality": self.quality,
             "sources": self.sources.iter().map(|s| json!({
@@ -239,9 +442,42 @@ impl Scene {
 
     pub fn from_state(v: &Value) -> Scene {
         let d = Scene::default();
+        // older scenes: a shoebox's dims
+        let (plan, roof, shape) = match (v["floor_m"].as_array(), v["dims_m"].as_array()) {
+            (Some(a), _) => (
+                a.iter()
+                    .filter_map(|p| Some([p[0].as_f64()?, p[1].as_f64()?]))
+                    .collect(),
+                {
+                    let c = &v["ceiling_form"];
+                    Ceiling {
+                        kind: st(c, "type", "flat"),
+                        height: f(c, "height_m", 3.2),
+                        peak: f(c, "peak_m", 4.5),
+                        axis_deg: f(c, "axis_deg", 0.0),
+                        facets: c["facets"].as_u64().unwrap_or(8) as u32,
+                    }
+                },
+                st(v, "shape", "custom"),
+            ),
+            (None, Some(_)) => {
+                let dm = s3(&v["dims_m"]);
+                (
+                    preset_plan("shoebox", dm[0], dm[1]),
+                    Ceiling {
+                        height: dm[2],
+                        ..Ceiling::default()
+                    },
+                    "shoebox".to_string(),
+                )
+            }
+            _ => (d.plan.clone(), d.roof.clone(), d.shape.clone()),
+        };
         Scene {
             name: st(v, "name", &d.name),
-            dims: v.get("dims_m").map_or(d.dims, s3),
+            shape,
+            plan,
+            roof,
             walls: st(v, "walls", &d.walls),
             floor: st(v, "floor", &d.floor),
             ceiling: st(v, "ceiling", &d.ceiling),
@@ -290,7 +526,10 @@ impl Scene {
         json!({
             "name": self.name,
             "room": {
-                "dims_m": self.dims,
+                "floor_m": self.plan,
+                "ceiling": {"type": self.roof.kind, "height_m": self.roof.height,
+                            "peak_m": self.roof.peak, "axis_deg": self.roof.axis_deg,
+                            "facets": self.roof.facets},
                 "materials": {"walls": self.walls, "floor": self.floor, "ceiling": self.ceiling},
                 "source": "the Room view (docs/ROOM_LOOP_PLAN.md)",
             },
@@ -318,10 +557,30 @@ impl Scene {
         if self.mics.is_empty() {
             out.push("place a mic".to_string());
         }
-        if self.dims.iter().any(|&d| d < 1.0) {
-            out.push("the room needs at least 1 m each way".to_string());
+        let n = self.plan.len();
+        if n < 3 || polygon_area(&self.plan).abs() < 1.0 {
+            out.push("the floor needs at least 3 corners and 1 m²".to_string());
         }
-        let inside = |p: &[f64; 3]| p.iter().zip(self.dims).all(|(&x, d)| x > 0.0 && x < d);
+        let crossing = (0..n).any(|i| {
+            (i + 2..n).any(|j| {
+                (i + 1) % n != j
+                    && (j + 1) % n != i
+                    && segments_cross(
+                        self.plan[i],
+                        self.plan[(i + 1) % n],
+                        self.plan[j],
+                        self.plan[(j + 1) % n],
+                    )
+            })
+        });
+        if crossing {
+            out.push("the floor plan's walls cross".to_string());
+        }
+        if self.roof.height < 1.5 || (self.roof.kind != "flat" && self.roof.peak < self.roof.height)
+        {
+            out.push("the ceiling needs 1.5 m, its peak at least its height".to_string());
+        }
+        let inside = |p: &[f64; 3]| self.inside(p);
         let mut names = std::collections::HashSet::new();
         for s in &self.sources {
             if !inside(&s.pos) {
@@ -547,12 +806,38 @@ mod tests {
     }
 
     #[test]
+    fn shapes_and_ceilings() {
+        let mut s = scene();
+        assert!((s.height_at(3.0, 2.0) - 3.2).abs() < 1e-12);
+        s.roof = Ceiling {
+            kind: "gable".into(),
+            height: 2.8,
+            peak: 4.6,
+            ..Ceiling::default()
+        };
+        assert!((s.height_at(0.0, 1.0) - 2.8).abs() < 1e-9);
+        assert!((s.height_at(3.5, 1.0) - 4.6).abs() < 1e-9);
+        assert!(s.inside(&[3.5, 1.0, 4.0]) && !s.inside(&[0.5, 1.0, 4.0]));
+        s.set_preset("L-shape", 8.0, 8.0);
+        assert!(s.inside(&[1.0, 7.0, 1.0]) && !s.inside(&[7.0, 7.0, 1.0]));
+        let old = json!({"name": "x", "dims_m": [5.0, 4.0, 2.6]});
+        let o = Scene::from_state(&old);
+        assert_eq!(o.plan.len(), 4);
+        assert_eq!(o.roof.height, 2.6);
+        let mut bad = scene();
+        bad.plan = vec![[0.0, 0.0], [4.0, 4.0], [4.0, 0.0], [0.0, 4.0]];
+        assert!(bad.problems().iter().any(|p| p.contains("cross")));
+    }
+
+    #[test]
     fn render_json_is_the_python_format() {
         let s = scene();
         let clips = BTreeMap::from([("A".to_string(), PathBuf::from("a.wav"))]);
         let v = s.render_json(&clips);
         assert_eq!(v["sources"][0]["clip"], "a.wav");
         assert_eq!(v["room"]["materials"]["walls"], "furnished_wall");
+        assert_eq!(v["room"]["floor_m"][2][0], 7.0);
+        assert_eq!(v["room"]["ceiling"]["type"], "flat");
         assert_eq!(v["mics"][0]["aim"]["azimuth_deg"], 180.0);
         assert_eq!(v["mics"][0]["set"]["pattern_u47"], 0.0);
     }

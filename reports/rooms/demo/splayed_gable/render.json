@@ -1,0 +1,80 @@
+{
+ "scene": "demo_splayed_gable",
+ "fs": 96000,
+ "quality": "production",
+ "rt60_s": {
+  "125": 0.582,
+  "250": 0.925,
+  "500": 1.024,
+  "1000": 0.921,
+  "2000": 0.754,
+  "4000": 0.664,
+  "8000": 0.514
+ },
+ "room": "polygon",
+ "mics": [
+  {
+   "name": "vocal spot",
+   "file": "vocal_spot.wav",
+   "chain": "u47_v76",
+   "set": {
+    "pattern_u47": 0.0,
+    "gain_db_v76": 24.0
+   },
+   "pan": -0.1,
+   "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
+   "rms_dbfs": -22.61,
+   "peak_dbfs": -5.58
+  },
+  {
+   "name": "guitar spot",
+   "file": "guitar_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": 0.45,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -28.35,
+   "peak_dbfs": -4.0
+  },
+  {
+   "name": "room L",
+   "file": "room_L.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 40.0
+   },
+   "pan": -1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -24.16,
+   "peak_dbfs": -6.88
+  },
+  {
+   "name": "room R",
+   "file": "room_R.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 40.0
+   },
+   "pan": 1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -22.34,
+   "peak_dbfs": -6.0
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 155.6,
+ "seconds": 21.177
+}
