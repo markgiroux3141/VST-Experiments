@@ -1,0 +1,145 @@
+device: "SM58"
+curve: typical free-field frequency response and polar patterns (cardioid dynamic, ball grille), three printings 1970-2024
+publisher: Shure Brothers Inc. (s70, c81); Shure Incorporated (g24)
+documents:
+  g24:
+    title: "SM58 Vocal Microphone (user guide), Version: 6.4 (2024-F)"
+    date: "PDF created 2024-06-12 (metadata); version 6.4 (2024-F) as printed"
+    scan_source: "web: https://pubs.shure.com/view/guide/SM58/en-US.pdf"
+    sha256: 5932523424328412b0b7c0adb28e9cc25d73b9d15c1a3d5db1e59e6a94360344
+    bytes: 485578
+    page: >-
+      PDF p.6 (printed 6/7), 'Typical SM58 Frequency Response' (an embedded 2060 x 1200 RGB image with a soft
+      mask, placed 318.75 pt wide: 465 dpi) and 'Typical SM58 Polar Pattern' (2304 x 1296, 520 dpi). Not
+      vector paths (page.get_drawings() holds only filled boxes), so the images were traced
+  s70:
+    title: "Shure Professional Products Data, Model SM58 Unidirectional Dynamic Microphone, 27A378 (1-70)"
+    date: "printed 1-70 (code at the sheet's foot; 'Copyright 1966')"
+    scan_source: "web: https://www.worldradiohistory.com/Archive-Catalogs/Miscellaneous-Manufacturers/Shure-1964-1971-Catalog-Sheets.pdf"
+    sha256: 5839e761efb1ae1aa58ff944e5817ce5a5b8bf2936e94c034acc509f66d77ccc
+    bytes: 12622118
+    page: >-
+      PDF p.31 (the sheet's front; its reverse, p.32, has the Architect's Specifications and no plots):
+      Figure A (response) and the two Figure B polar plots, in the page's 300 dpi 1-bit JBIG2 foreground mask
+      (2564 x 3296, extracted natively)
+  c81:
+    title: "Shure 1981 Microphone and Circuitry Products (catalog), 'SM58'"
+    date: "1981 (catalog title)"
+    scan_source: "web: https://content-files.shure.com/KnowledgeBaseFiles/vintage-catalogs/1981_Microphone_and_Circuitry_Products.pdf"
+    sha256: 610866043de2989d8b6b14b0e5c81678bdec7acd21510764bf940d1bebf97bd2
+    bytes: 35608192
+    page: >-
+      PDF p.12 (printed 10): 'TYPICAL FREQUENCY RESPONSE' and 'TYPICAL POLAR PATTERNS', in the page's 300 dpi
+      black foreground layer (Indexed 2550 x 3300 with a 1-bit soft mask)
+local_copy: "none (the PDFs aren't committed; hashes above; data/schematics/shure_sm57/README.md lists them)"
+figures: >-
+  data/schematics/shure_sm57/: sm58_2024_response.png, sm58_2024_polar.png (the native images composited on
+  white), sm58_1970_response.png, sm58_1970_polar.png, sm58_1981_response.png, sm58_1981_polar.png (crops of
+  the native page images), 16 gray levels or fewer
+digitized_with: >-
+  as shure_sm57.provenance.yaml (same scripts and procedure, same session): rules fitted per line (s70's grid
+  is rotated about 0.24 deg: rule slopes +0.0037-0.0047), dB piecewise linear between rules, frequency
+  piecewise log-linear between rules; curves traced column by column and read at 1/6-octave frequencies as
+  the median within +-3 px; thin-stroke curves get their stroke's first / last point (coarse) where it lies
+  beyond the 1/6-octave grid. Polars: centre and rings from circle fits, unwrapped at 0.25 deg x 0.5 px,
+  modern curves separated by line style (connected-component size), 1-bit curves traced near hand-placed
+  anchors with rings / spokes / labels masked, read every 15 deg (median within +-1.5 deg). Every overlay
+  checked by eye. Claude Code subagent.
+digitized_by: Claude Code
+digitized_on: 2026-11-05
+files:
+  shure_sm58_response.csv:
+    columns: >-
+      freq_hz, db (as read on the chart's own axis), document (g24 | s70 | c81), reference, quality
+      (read | interp | coarse)
+    g24:
+      figure: "p.6, 'Typical SM58 Frequency Response'"
+      coverage: "49.6 Hz - 14.25 kHz, 50 points (the curve is drawn from ~49 Hz to ~15.4 kHz; the round stroke cap isn't read)"
+      reference: "the chart's 0 dB line ('dB'); no reference frequency printed; reads -0.05 dB at 1 kHz"
+      axis_calibration: >-
+        rules every 5 dB from +20 to -20 (labels +20, +10, 0, -10, -20), 18.4-19.4 px per dB, fitted rule
+        residuals <= 2.0 px (one rule, 0.1 dB); frequency rules 20 (frame), 50, 100 ... 1000, 2000 ... 10000,
+        20000 Hz (frame), no 15 kHz rule; the grid isn't uniform (50-100 Hz 531, 100-200 Hz 453, 100-1000 Hz 482,
+        1-10 kHz 493 px per decade), hence piecewise. The '20' and '20000' labels sit 15-50 px outside the
+        frame; the frame is 20 Hz / 20 kHz by the decade spacing
+      stroke: "10 px (about 0.5 dB)"
+    s70:
+      figure: "PDF p.31, Figure A ('Frequency in Hertz')"
+      coverage: "51.2 Hz (the curve starts on the 50 Hz rule) - 14.25 kHz, 50 points (the curve ends at ~14.7 kHz)"
+      reference: "the chart's 0 dB line ('RELATIVE RESPONSE IN db'); reads 0.00 dB at 1 kHz (on the rule)"
+      axis_calibration: >-
+        rules every 5 dB from +15 to -15 (labels +10, 0, -10), 9.0-10.0 px per dB, residuals <= 0.9 px
+        (the 0 dB rule 1.7 px: the curve runs along it for an octave); frequency rules as the SM57 sheets,
+        286 px per decade. A stray thin line runs just under the +5 dB rule from ~5 to ~12 kHz (printing); the
+        trace doesn't follow it
+      stroke: "3-4 px"
+    c81:
+      figure: "PDF p.12, 'TYPICAL FREQUENCY RESPONSE'"
+      coverage: "37.5 Hz (the curve's start) - 14.25 kHz, 53 points"
+      reference: "the chart's 0 dB line ('RELATIVE RESPONSE IN dB'); reads -0.13 dB at 1 kHz"
+      axis_calibration: >-
+        rules every 5 dB from +20 to -20 (labels +10, 0, -10), 7.7-8.0 px per dB, residuals <= 0.9 px;
+        frequency rules 20 (frame), 50, 100 ... 10000, 15000, 20000 Hz (frame), 232 px per decade
+      stroke: "3 px"
+  shure_sm58_polar.csv:
+    columns: >-
+      freq_hz (a single frequency, or a band's geometric centre), band_lo_hz, band_hi_hz (empty for a single
+      frequency), angle_deg (0 = on axis at the bottom of the drawing, 90 at its right, 180 at the top, 270 at
+      its left: counterclockwise on the page), db (re the curve at 0 deg), document (g24 | s70 | c81), quality
+    g24:
+      figure: "p.6, two polar plots: 125 Hz solid, 500 Hz dotted, 1000 Hz dashed; 2000 Hz solid, 4000 Hz dotted, 8000 Hz dashed"
+      axis_calibration: >-
+        rings labelled -5, -10, -15, -20 dB (labels just inside their rings), outer ring 0 dB; radii 403.3,
+        324.1, 241.2, 161.3, 80.0 px (both plots within 0.1 px), about 16 px per dB; the centre extrapolates to
+        -24.9 dB. Spokes every 30 deg
+      curves: >-
+        125, 2000, 8000 Hz all around; 1000 and 4000 Hz missing 45 / 315 deg (merged with the others);
+        500 Hz missing 150-210 deg (its rear null inside the -20 ring)
+    s70:
+      figure: >-
+        PDF p.31, Figure B, two 'TYPICAL DIRECTIONAL PATTERN' plots in bands: 'AT 70 HZ' (solid), '70 TO 250 HZ'
+        (dashed), '250 TO 3,500 HZ' (dash-dot); '3,500 TO 7,000 HZ' (solid), '7,000 TO 10,000 HZ' (dashed),
+        'AT 10,000 HZ' (dash-dot)
+      axis_calibration: >-
+        as the SM57's 1968 plots: rings +5 (outer), 0, -5, -10, -15 dB (labels -5 / -10 / -15 db printed just
+        outside their rings; the curves meet the second ring at 0 deg), radii 190.8, 152.6, 114.0, 76.0,
+        37.8 px, 7.7 px per dB; the centre extrapolates to -20 dB. Spokes at 0, 20, 40, 60, 80, 90, 100 ...
+        180 deg and mirror
+      curves: "as the SM57's s68 (same artwork): the low bands mostly all around, the high bands' rear lobes coarse"
+    c81:
+      figure: "PDF p.12, 'TYPICAL POLAR PATTERNS': 125 Hz dotted, 500 Hz dashed, 1000 Hz solid; 2000 Hz solid, 4000 Hz dashed, 8000 Hz dotted"
+      axis_calibration: >-
+        rings labelled -5, -10, -15, -20 dB, outer ring 0 dB; radii 149.0, 120.7, 90.6, 61.4, 30.3 px
+        (unequal: 28.3, 30.1, 29.2, 31.1 px per 5 dB; piecewise), about 6 px per dB. Spokes every 30 deg
+      curves: >-
+        125, 1000, 2000, 4000 Hz all around; 500 Hz missing 150-210 (null inside -20 dB) and coarse where it
+        runs under the solid (45-105, 255-315 deg); 8000 Hz missing 150 / 210
+    quality: "as shure_sm57.provenance.yaml; readings below the innermost labelled ring (-20 dB; -15 dB on s70) are coarse"
+estimated_error: >-
+  Responses: g24 +-0.1 dB (19 px per dB), frequency +-0.5%; s70 +-0.2 dB (9.5 px per dB; on the 0 dB rule
+  +-0.2 dB), frequency +-1%; c81 +-0.3 dB (8 px per dB), frequency +-2%. Polars: g24 +-0.1-0.2 dB where read;
+  s70 +-0.4 dB (7.7 px per dB); c81 +-0.4 dB where read, +-1 dB where coarse; inside the innermost ring
+  +-1-2 dB. Self-checks: 1 kHz reads -0.05 (g24), 0.00 (s70), -0.13 dB (c81) on the 0 dB lines; every polar
+  curve reads 0.0 (+-0.3) dB at 0 deg against its 0 dB ring; left / right pairs (both read) differ by
+  0.13 dB rms (max 0.33, n 43) on g24, 0.21 (max 0.44, n 13) on s70, 0.18 (max 0.42, n 22) on c81. s70's
+  sheet (p.32) specifies 'cancellation at the sides approximately 6 db, at the rear 15 to 20 db'; read: 90 deg
+  -7.0 (70 Hz), about -5.5 dB (70-250 Hz; partly on the -5 ring, coarse), rear -12.9 dB (70 Hz) to below -15 dB.
+notes: >-
+  (1) Shared artwork: s70's polar plots are the SM57 sheet's (s68) drawings at a smaller scale (the readings
+  agree within 0.06 / 0.09 dB rms, max 0.17 / 0.29 dB, n 13 / 11; the legends read 'HZ' instead of 'HERTZ'), and the 1981
+  catalog's SM58 polar plots are the same drawings as its SM56 / SM57 ones (0.10 / 0.10 dB rms, max 0.22 / 0.31, n 20 / 27). So these
+  polars are a family drawing, not an SM58 measurement; only g24's polars differ from the SM57's g25 (they
+  agree within ~1-3 dB: 180 deg 125 Hz -10.8 / -10.6, 1000 Hz -20.8 / -20.9, 2000 Hz -19.3 / -19.2,
+  4000 Hz -13.8 / -10.4, 8000 Hz -10.5 / -13.0). The response curves are the SM58's own in every era.
+  (2) Shape re the curve at 1 kHz, from the dense traces (my arithmetic): presence peak g24 4.9 kHz +5.0 dB
+  (a broad plateau, +4.5 to +5 from 4 to 6.3 kHz), s70 5.4 kHz +6.0 (after a +3.5 dB shoulder at 2.2-3.6 kHz),
+  c81 5.5 kHz +4.7; the dip after it g24 7.6 kHz +1.1, s70 7.2 kHz +2.3, c81 7.4 kHz +1.0; a second peak g24
+  9.8 kHz +4.2, s70 8.8 kHz +5.2, c81 9.6 kHz +4.0; then a steep fall to about -6 dB at 14.6-15.4 kHz in all
+  three. Low end: g24 -3 dB at 78 Hz, -7.7 at 50 Hz, a +0.5 dB bump near 190 Hz; s70 -3 dB at 108 Hz,
+  -10 dB at 64 Hz, -12.3 at 51 Hz; c81 -3 dB at 82 Hz, -8.1 at 50 Hz, -10 dB at 41 Hz (curve from 37 Hz),
+  a -1.1 dB dip near 400 Hz. (3) Era differences: the 1970 sheet's low end falls much faster (-12.3 against
+  -8 dB at 50 Hz) and its presence region is a shoulder plus a peak with a shallower dip; the 1981 and 2024
+  curves are close to each other (re 1 kHz, within 1 dB from 50 Hz to 10 kHz, the 1981 curve lower by at
+  most 1.0 dB at 400 Hz, 0.9 at 4 kHz, 1.3 at 7.1 kHz; 1.5-2.3 dB lower at 11-14 kHz). The 1970 and 1981 units are dual impedance (30-50 /
+  150-250, later 38 / 150 ohm); no sheet states the load or the test distance. (4) The 1964-71 compendium's
+  SM58 figures are on PDF p.31, not p.32.

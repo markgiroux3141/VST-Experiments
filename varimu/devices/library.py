@@ -45,6 +45,7 @@ from varimu.devices.fit import (
     load_csv,
 )
 from varimu.devices.lamp import Lamp, lamp_from_data
+from varimu.devices.moving_coil import MovingCoil, moving_coil_from_data
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
 from varimu.devices.plate import SIX_LN10 as SIX_LN10_PLATE
 from varimu.devices.plate import PlateComponent, plate_from_data
@@ -134,6 +135,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return thyratron_from_data(d, name)
     if kind == "speaker":
         raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
+    if kind == "moving_coil":
+        raise ValueError(f"{name} is a cartridge, not a device model: place it with `moving_coil`")
     if kind == "capsule":
         raise ValueError(f"{name} is a capsule, not a device model: place it with a `capsule` part")
     if kind == "plate":
@@ -165,6 +168,11 @@ def load_capsule(name: str, root: Path = DEVICE_DIR) -> Capsule:
 def load_dual_capsule(name: str, root: Path = DEVICE_DIR) -> DualCapsule:
     """Dual-diaphragm capsule component `name` (`NAME@N`, or `NAME` for its latest)."""
     return dual_capsule_from_data(_read(name, root), name)
+
+
+def load_moving_coil(name: str, root: Path = DEVICE_DIR) -> MovingCoil:
+    """Moving-coil cartridge component `name` (`NAME@N`, or `NAME` for its latest)."""
+    return moving_coil_from_data(_read(name, root), name)
 
 
 def load_plate(name: str, root: Path = DEVICE_DIR) -> PlateComponent:
@@ -698,6 +706,8 @@ def _plain(x: Any) -> Any:
         if set(x) == {"value"}:
             return x["value"]
         return {k: _plain(v) for k, v in x.items()}
+    if isinstance(x, list):
+        return [_plain(v) for v in x]
     return x
 
 
@@ -719,6 +729,48 @@ def build_k47() -> dict[str, Any]:
         "lumped": capsule.dual_lumped(geom),
         "lumped_source": "derived: varimu/devices/capsule.py's formulas (dual_lumped's "
         "docstring) on the geometry; air at 20 C",
+    }
+
+
+def build_r57() -> dict[str, Any]:
+    """The SM57's Unidyne III cartridge, Shure's replacement part R57 (docs/SM57_PLAN.md
+    SM2): its geometry (published_points.yaml "R57": sourced where a source exists, the
+    rest provisional, bounded and fitted by scripts/fit_sm57.py), the lumped network
+    compiled from it (varimu.devices.moving_coil.compile_network)."""
+    from varimu.devices import moving_coil
+
+    pub = _published()["R57"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "R57",
+        "kind": "moving_coil",
+        "source": "derived: varimu.devices.moving_coil.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": moving_coil.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/moving_coil.py's formulas (its docstring) on "
+        "the geometry; air at 20 C",
+    }
+
+
+def build_r59() -> dict[str, Any]:
+    """The SM58's Unidyne III cartridge, Shure's replacement R59 (s70: 99B352; docs/SM57_PLAN.md
+    SM8): its geometry (published_points.yaml "R59": the R57's network without its resonator
+    cap, on the ball grille's body; fitted by scripts/fit_sm57.py --mic sm58), compiled as
+    R57's (varimu.devices.moving_coil.compile_network)."""
+    from varimu.devices import moving_coil
+
+    pub = _published()["R59"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "R59",
+        "kind": "moving_coil",
+        "source": "derived: varimu.devices.moving_coil.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": moving_coil.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/moving_coil.py's formulas (its docstring) on "
+        "the geometry; air at 20 C",
     }
 
 
@@ -1658,6 +1710,8 @@ BUILDERS = {
     "E83F": build_e83f,
     "BK4134": build_bk4134,
     "K47": build_k47,
+    "R57": build_r57,
+    "R59": build_r59,
     "VF14T": build_vf14t,
     "6X4": build_6x4,
     "6AL5": build_6al5,

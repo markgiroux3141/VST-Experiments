@@ -41,7 +41,9 @@ def _entries(q, p: np.ndarray, theta_rad: float, fs: int, distance_m: float):
     """The capsule's front and rear entry pressures for a wave whose free-field pressure at
     its centre is `p` (free_field.capsule_entry_pressures); a circuit without a capsule
     component gets `p` on both."""
-    for key in ("capsule_model_u47", "capsule_model"):
+    keys = ("capsule_model_u47", "capsule_model", "cartridge_model_sm57", "cartridge_model_sm58",
+            "cartridge_model")  # fmt: skip
+    for key in keys:
         if key in q:
             g = component_data(str(q[key])).get("geometry", {})
             return capsule_entry_pressures(g, p, theta_rad, fs, distance_m)

@@ -1,0 +1,68 @@
+# Shure SM57 dynamic microphone, old era (docs/SM57_PLAN.md: the dual-impedance transformer,
+# as shipped until the 1986-88 change). Built by varimu/circuit/builder.py (the format:
+# varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/shure_sm57/README.md has their provenance):
+#   "s68: ..."   Shure data sheet 27A308 (2-68), Figure A (internal connections)
+#   "cj06: ..."  CJ's bench measurements of a 1990 SM57's transformer (GroupDIY, forum)
+#   "psw17: ..." an old dual-impedance SM58's winding resistances (ProSoundWeb, forum)
+#   "derived: ..." arithmetic on sourced figures
+#   "provisional: ..." model knowledge
+#
+# The cartridge R57 (config/components/r57/): the pressure at its front entry on `in`, at
+# its rear entries on the control input `p_rear` (pascals as volts; varimu/mics/). Its coil
+# (s68 Figure A: GREEN, the coded terminal, and YELLOW) drives the transformer's primary;
+# the secondary's BLUE end is pin 2 (`out`), its RED end (the whole winding, 'H', 150-250
+# ohm) or ORANGE tap ('L', 30-50 ohm) is pin 3, here the measuring ground; "positive
+# pressure produces positive voltage at pin 2 with respect to pin 3" (s68). The coil and
+# primary float (BLACK is the cartridge's ground to the case): a numerical leak holds them.
+# The output is open circuit, as the data sheet's figures; a chain replaces RLOAD with the
+# preamp's input.
+
+title: "Shure SM57"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, cp, cm]
+# 0 dBFS in = 20 Pa peak at the capsule (117 dB SPL for a sine, as the U47's); out = volts
+# across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.1, source: "provisional: model knowledge (s68 'H' 0.149 mV/ubar = 1.49 mV/Pa x 20 Pa = 30 mV peak, with headroom for the presence peak and proximity)"}
+
+controls:
+  impedance: {value: 0, choices: [0, 1], unit: position, source: "s68: 'Impedance: Dual. 30-50 ohms and 150-250 ohms. (Connected for 150-250 ohms when shipped)'", notes: "0 'H' 150-250 ohm (RED to pin 3), 1 'L' 30-50 ohm (ORANGE to pin 3)"}
+
+values:
+  cartridge_model: {value: R57@4, source: "s68 / g25: the Unidyne III cartridge (Shure's replacement R57); config/components/r57/4.yaml (its geometry provisional and fitted by scripts/fit_sm57.py on the mic's body, varimu/mics/bor.py: data/schematics/shure_sm57/README.md; @1 was fitted on a sphere, @2 before the cap's fit, @3 before the dome's mode)"}
+  coil_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating coil and primary"}
+
+  # --- The output transformer: a designed component (SM5; config/designs/sm57_ot.yaml)
+  transformer_model: {value: SM57_OT@1, source: "config/components/sm57_ot/1.yaml (the old dual-impedance transformer by construction: EI-25 mumetall, fitted to cj06's 1.50 ohm / 386 mH / 150 uH and psw17's 10.8 / 25.7 ohm; the tap at s68's voltage ratio: data/schematics/shure_sm57/README.md)"}
+  load_ohm: {value: 1.0e+6, source: "s68: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
+  min_ohm: {value: 1.0e-3, source: "numerical: the impedance switch's closed contact"}
+
+# No tolerance block: the nominal mic only (docs/SM57_PLAN.md Decisions 5).
+
+sections:
+  - title: cartridge
+    parts:
+      MC:
+        moving_coil: [in, p_rear, cp, cm]
+        component: cartridge_model
+      RCL: {R: [cm, "0"], r: coil_leak_ohm, tolerance: none}
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [cp, cm]}
+          s1: {nodes: [out, tap]}
+          s2: {nodes: [tap, red]}
+        component: transformer_model
+      SIMP:
+        switch: impedance
+        parts:
+          RH: {R: [red, "0"], r: min_ohm, tolerance: none, in: [0]}
+          RL: {R: [tap, "0"], r: min_ohm, tolerance: none, in: [1]}
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

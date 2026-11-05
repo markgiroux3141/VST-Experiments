@@ -45,13 +45,16 @@ class Mesh:
     (r = 0, z > 0) round to the rear pole, the body on the curve's right (so n = (-dz,
     dr) / ds points out). `tag` marks the diaphragms' panels (FRONT, REAR, else 0);
     `diaphragm_radius_m` is their mode shape's radius; `interior` are CHIEF points (r, z)
-    inside the body."""
+    inside the body; `uniform` tags are averaged over their area instead (a moving-coil
+    cartridge's rear ports: `dynamic_mesh`)."""
 
     p0: np.ndarray  # (N, 2) r, z
     p1: np.ndarray
     tag: np.ndarray  # (N,)
     diaphragm_radius_m: float
     interior: np.ndarray  # (M, 2)
+    uniform: tuple[int, ...] = ()  # tags averaged over their area (a band of ports), not
+    # with the diaphragm's mode shape
 
     @property
     def n(self) -> int:
@@ -71,13 +74,14 @@ class Mesh:
         return np.stack([-d[:, 1], d[:, 0]], axis=1)
 
     def face_weights(self, tag: int) -> np.ndarray:
-        """Per panel, the diaphragm's mode shape 1 - r^2 / a^2 integrated over the
-        panel's area (r ds), normalized: the entry pressure is weights @ p."""
+        """Per panel, the diaphragm's mode shape 1 - r^2 / a^2 (1 for a `uniform` tag)
+        integrated over the panel's area (r ds), normalized: the entry pressure is
+        weights @ p."""
         x, w = np.polynomial.legendre.leggauss(8)
         t = 0.5 * (x + 1)
         r = self.p0[:, 0, None] + t[None, :] * (self.p1[:, 0] - self.p0[:, 0])[:, None]
         a = self.diaphragm_radius_m
-        shape = np.clip(1 - (r / a) ** 2, 0.0, None) * r
+        shape = r if tag in self.uniform else np.clip(1 - (r / a) ** 2, 0.0, None) * r
         out = 0.5 * self.length * (shape @ w)
         out = np.where(self.tag == tag, out, 0.0)
         total = out.sum()
@@ -232,11 +236,51 @@ def pressure_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e-3
     )
 
 
+DYNAMIC_BODY_FIELDS = (
+    "face_radius_m",  # the cartridge's front face (its resonator cap), the front entry on it
+    "ports_m",  # [from, to]: the band of rear ports on the cartridge's side, behind the face
+    "cartridge_length_m",  # the face to the closing ring
+    "head_radius_m",  # the closing ring and the grille's base
+    "head_length_m",  # the face to the start of the handle's taper
+    "taper_length_m",
+    "end_radius_m",  # the handle at the connector
+    "end_length_m",  # the connector's straight part
+)
+
+
+def dynamic_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e-3) -> Mesh:
+    """A handheld moving-coil mic as a rigid body of revolution (`body`: form `dynamic`,
+    DYNAMIC_BODY_FIELDS; docs/SM57_PLAN.md SM4): the cartridge's front face at the origin
+    facing +z (the front entry, FRONT, with the diaphragm's mode shape of radius
+    `diaphragm_radius_m`), its side out to face_radius_m with the band of rear ports (REAR,
+    averaged over its area), the closing ring stepping out to head_radius_m, the head to
+    head_length_m, the handle's taper to end_radius_m and the connector's end. The grille is
+    acoustically open here (its screen is in the cartridge's network); panels grow away
+    from the cartridge."""
+    a, rc = diaphragm_radius_m, body["face_radius_m"]
+    p_lo, p_hi = body["ports_m"]
+    lc, rh, lh = body["cartridge_length_m"], body["head_radius_m"], body["head_length_m"]
+    lt, re_, le = body["taper_length_m"], body["end_radius_m"], body["end_length_m"]
+    if not (a < rc < rh and 0 < p_lo < p_hi < lc < lh and re_ <= rh):
+        raise ValueError(f"dynamic body: need diaphragm < face < head, ports on the side ({body})")
+    z_end = -(lh + lt + le)
+    c = [(0.0, 0.0), (a, 0.0), (rc, 0.0), (rc, -p_lo), (rc, -p_hi), (rc, -lc), (rh, -lc),
+         (rh, -lh), (re_, -(lh + lt)), (re_, z_end), (0.0, z_end)]  # fmt: skip
+    t = [FRONT, 0, 0, REAR, 0, 0, 0, 0, 0, 0]
+    sizes = [panel_m, panel_m, panel_m, panel_m, panel_m, panel_m, 2 * panel_m, 4 * panel_m,
+             6 * panel_m, 4 * panel_m]  # fmt: skip
+    m = polyline_mesh(c, t, panel_m, a, segment_panel_m=sizes)
+    return Mesh(m.p0, m.p1, m.tag, m.diaphragm_radius_m, m.interior, uniform=(REAR,))
+
+
 def body_mesh(body: dict, diaphragm_radius_m: float) -> Mesh:
     """The mesh of a capsule's `body` by its `form`: `cylinder` (a pressure capsule on its
-    housing, `pressure_mesh`), else the dual-diaphragm capsule (`capsule_mesh`)."""
+    housing, `pressure_mesh`), `dynamic` (a handheld moving-coil mic, `dynamic_mesh`), else
+    the dual-diaphragm capsule (`capsule_mesh`)."""
     if body.get("form") == "cylinder":
         return pressure_mesh(body, diaphragm_radius_m)
+    if body.get("form") == "dynamic":
+        return dynamic_mesh(body, diaphragm_radius_m)
     return capsule_mesh(body, diaphragm_radius_m)
 
 

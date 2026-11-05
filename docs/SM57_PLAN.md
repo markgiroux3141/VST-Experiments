@@ -4,7 +4,200 @@ Drafted 2026-11-04 from a conversation with the user ("are there any microphones
 could make like an SM57 or SM58 to add to our list? what would this entail. No shortcuts
 and in keeping with our physics approach", then: "yes, let's write this plan"; the user's decisions 2026-11-05, see "Decisions"). It
 expands
-MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). Nothing is built.
+MIC_ROOM_PLAN.md's SM57 row and its milestone A7 ("more mics"). SM1, SM2 and SM3 done, SM4's
+polars done (its proximity open), SM5 built (the impedance open), SM6 started: prints for the
+user to hear; SM8 built ahead of the listen (the SM58 to 10 kHz; its top octave open)
+(2026-11-05, overnight in the `sm57` worktree): see "Status".
+
+## Status (2026-11-05)
+
+**SM1 done:** the sources in `data/schematics/shure_sm57/README.md`: Shure's 1965 / 1968
+SM57 sheet 27A308 and the 1970 SM58 sheet with the dual-impedance transformer (wiring, the
+taps' voltages), the catalogs to 1993 (the tap went between the 1986 and 1988 catalogs, not
+"in the 1980s" generally), the user guides; Seeler's 1961 JAES paper (the Unidyne III's
+network and design equations) and the patents (US 3,240,883 the Unidyne III, US 3,132,713 the
+diaphragm, US 3,989,905 the shock path, Bauer's Uniphase); bench measurements of the
+transformer (cj06: 1 : 4.53, 1.50 / 24.18 ohm, 386 mH / 7.95 H, 150 uH / 4.26 mH leakage; an
+old dual unit's 10.8 / 25.7 ohm), the coil (12.1 ohm, ~200 uH), the resonance (~100 Hz,
+Shure's Born). No dimension of the cartridge is published anywhere found: the geometry is
+provisional and bounded, each element's reasoning in the README's table. Digitized: the
+response and polars of every era for both mics (`data/datasheets/shure_sm5{7,8}_*.csv`, their
+provenance sidecars). Not found: proximity curves, an impedance curve, loaded responses, the
+transformer's construction.
+
+**SM2 built (the Python half verified; the Rust half written, its agreement test building):**
+- `varimu/devices/moving_coil.py` (kind `moving_coil`): the acoustic network is data, a list
+  of physical elements (screen, tube with Poiseuille or Crandall's wide-tube loss, slit,
+  cavity, the cap's thin air `film`, `acoustic`, `seeler`, the `diaphragm`) compiled to R / L
+  / C and a gyrator (B l / S, two Vccs); the moving mass from its parts (the coil's copper
+  length B l / B at the measured DCR). `seeler_rear_network`: Seeler's Eqs. 5-10. **His
+  "larger root" gives Lb < 0 with the equations as printed; the smaller root gives a
+  physical network (both satisfy the series): the code takes the physical one.**
+- The part `moving_coil: [front, rear, plus, minus]` in both builders (Python `parts.py` /
+  `builder.py`; Rust `varimu-circuit/src/moving_coil.rs`), its symbol in both tables, noise
+  on every resistance but the diaphragm's numerical DC leak.
+- The head as a sphere, the rear entries a ring on it (`free_field.sphere_ring_factors`,
+  the addition theorem).
+- `R57@1` (`config/components/r57/1.yaml`), fitted by `scripts/fit_sm57.py` (one figure per
+  unknown): sensitivity 1.488 mV/Pa against s68's 1.49; the on-axis response 50 Hz-4 kHz
+  0.71 dB rms (max 2.1) against s68; the polars against c81 (side / rear): 125 Hz -4.9 /
+  -10.8 (published -3.8 / -10.8), 1 kHz -7.0 / -19.6 (-6.1 / -20.7), 2 kHz -6.7 / -22.2
+  (-6.05 / -20.0). Found on the way: the 125 Hz pattern is first order with the network's
+  delay ~1.8 times the entries' path, which the case and handle's air behind the washer
+  gives (pat883's branch C'b; Born: "part of the tuning process"): fitted, 4.6 cm^3 behind
+  2.0e7 Pa s/m^3; the rear entry sits at 98 degrees on the sphere. Moving mass 106 mg
+  (84 mg of it a 2.57 m, ~68 um copper coil at 12.1 ohm): no source either way.
+- `config/circuits/shure_sm57.yaml`: R57@1 into the transformer (cj06's figures, a
+  provisional mumetall core whose gap gives 386 mH; the H / L switch, s68 Figure A), open
+  circuit. `tests/test_moving_coil.py` (the network, Seeler's series, a cardioid, the gyrator
+  against a closed form, the formulas), `tests/test_sm57.py` (the figures above).
+
+**SM2 done** (the Rust half too: `tests/agreement.rs` bit for bit on `shure_sm57`, fmt and
+clippy clean).
+
+**SM4's body, built ahead of SM3** (the order changed overnight: SM3's done-when, the
+on-axis response to 15 kHz, can't be judged on a sphere, and the sphere couldn't make the
+presence peak without breaking the rejection): `bor.dynamic_mesh` (body form `dynamic`: the
+cartridge's face, a band of rear ports on its side averaged over its area (`Mesh.uniform`),
+the closing ring, the grille head, the taper and the connector end from s68 Figure C; the
+grille open, its screen in the network); `scripts/fit_sm57.py` on the body (entries cached in
+`cache/sm57/`, the port band a grid: `--ports-mm`, best at 3-9 mm behind the face), the band
+50 Hz-6.5 kHz with a guard above. **R57@2** (the circuit pins it): sensitivity 1.491 mV/Pa;
+on axis 1.08 dB rms (max 2.1) to 6.5 kHz, **the presence peak from the body's diffraction**
+(the handle baffles the face: +6 dB at 6 kHz on the front entry), no resonator tuned to it;
+the polars at every published frequency within 3 dB (c81, side / rear, model vs published:
+125 Hz -4.2 / -11.0 vs -3.8 / -10.8; 1 kHz -5.6 / -19.6 vs -6.1 / -20.7; 2 kHz -6.3 / -19.4
+vs -6.05 / -20.0; 4 kHz -6.8 / -15.8 vs -9.2 / -13.5; 8 kHz rear -9.2 vs -11.2): SM4's polar
+done-when met. The gap's field is fitted with B l to the sensitivity (the coil's mass grows
+as (B l / B)^2 at its measured DCR, so the output has a ceiling the field sets): B l 0.62 T m,
+B 1.14 T, moving mass 9.6 mg (a light coil, 0.55 m of wire: no source either way). At bounds:
+the handle's volume at the body's 20 cm^3 (the air behind the washer: the fit wants all of
+it). **Proximity** (no Shure curve, only text: "6 to 10 dB at 100 Hz" at about 6 mm): the
+model gives +18 dB at 100 Hz at 6 mm from the cartridge's face, +16 at 25 mm, +8 at 100 mm,
++2.5 at 300 mm (re 1 kHz). Not tuned to it: a sentence with an ambiguous distance (the grille's
+tip or the face behind it), and first-order theory with the 125 Hz pattern gives more still;
+open, for the user. `tests/test_sm57.py` checks R57@2 on its body.
+
+**SM3's ducts (the cap), R57@3** (the circuit pins it): on the body, the cap's holes and its
+air layer gridded against s68 at 6.5-14 kHz (`film` height 0.072 mm effective, holes 0.75 mm;
+the layer's loss is set by its thinnest part, where the dome rises toward the cap), then the
+network refitted: sensitivity 1.487 mV/Pa; on axis 0.60 dB rms (max 1.7) to 6.5 kHz and 2.42
+dB rms above; the polars within 2.4 dB at every c81 frequency (125 Hz -3.9 / -10.4, 1 kHz
+-5.7 / -19.9, 2 kHz -6.2 / -19.4, 4 kHz -6.8 / -15.8, 8 kHz rear -9.5; published as above).
+**The moving system's resonance came out at 97 Hz**, Born's "in the 100Hz area", which wasn't
+a target (the low end was). B l 2.45 T m, B 1.2 T (at its bound, the sensitivity met), moving
+mass 69 mg, the air behind the washer 2.5 cm^3. R57@2's geometry records the handle's volume
+as the string '2e-05' (PyYAML reads an exponent without a decimal point as a string; its
+lumped value is right, and the builders read only that); fit_sm57.py's writer is fixed.
+
+**SM3 done: the dome's mode, R57@4** (the circuit and the chain pin it). A mode hung from
+the coil (`moving_coil.py`'s diaphragm `modes`): a mass on a spring and damper in the
+mobility analogy on the gyrator's electrical side (the port's voltage is B l v of the coil,
+as speaker.py's cone modes), with its own gyrator to the diaphragm's acoustic port (its area
+S_k: the pressure pushes it, its velocity moves air); the rigid part keeps the rest of the
+mass and area. A stiff mode is the cartridge without it (tests/test_moving_coil.py). Not a
+shell FE: pat713's dome is two molded cones with bridges that break axial symmetry, and no
+source gives its dimensions, so the mode's four values are provisional and fitted (bounded:
+f 5-16 kHz, q 0.7-10, mass 2-50%, area 5-60%): 8.15 kHz, q 5.0, 14% of the mass, 5.1% of the
+area (near its bound). Fitted with the network on s68's whole curve: **0.69 dB rms, 1.76 dB
+worst, 50 Hz-14 kHz** (SM3's +-2 dB to 10 kHz and +-3 dB to 15 kHz met: `tests/test_sm57.py`
+test_on_axis_to_15_khz), the dip at 7.7 kHz and the second peak at 9.6 kHz drawn; the polars
+unchanged (within 2.4 dB); 1.488 mV/Pa; the resonance 104 Hz (Born's ~100); B l 2.28 T m, B
+1.2 T (bound), moving mass 60 mg. The Rust half (the gyrator's `c`, `@v` / `@minus`) agrees
+bit for bit. Webster ladders weren't needed (no duct here is long against a wavelength
+below 14 kHz: the longest, the rear slit's ~10 mm, is a fifth of one at 7 kHz).
+
+**SM6 started: the chain and a first print.** `sm57_v76.yaml` (compose_chain.py; a mic
+without a tolerance block allowed), `mic_print.py` finds a cartridge. The 5E3 take (the
+amp's sound pressure, the same source the U47 was printed from) at 100 dB SPL on axis into
+SM57 -> V76 at 58 dB (the SM57 is ~24 dB less sensitive than the U47, printed at 34):
+`reports/mics/audio/sm57_v76_5e3_take_vol0.5_speaker_pressure_100db_0deg_gain_db_v7658.wav`
+(R57@3; reprinted with @4 below), peak -1.6 dBFS, 5.5x real time. Against the dry source, re
+1 kHz: -5.9 dB at 63 Hz, -1.8 at 125, +2.4 at 4 kHz, +4.5 at 5.6 kHz, +5.3 at 8 kHz.
+
+Reprinted with R57@4 (same names, overwritten): the 5E3 take at 100 dB SPL (V76 at 58 dB) and
+the vocal `vocal_longwayhome.wav` at 94 dB SPL (V76 at 64 dB: the U47 was printed at 34 / 40),
+both peaking at -1.7 dBFS, 5.9x real time. The U47's prints of the same sources are in main's
+reports/mics/audio/ (same SPL, the V76 24 dB lower).
+
+**SM5's loading checks, on the provisional transformer** (`scripts/sm57_loading.py` ->
+reports/mics/sm57_loading.json; tones at the front entry, the JA core at 74 dB SPL): the
+output impedance at 1 kHz is 354 ohm on 'H' and 89 ohm on 'L' (published: s68 '150-250' and
+'30-50' ohm ratings; c88 '310 ohms actual'; a forum quote of an old rating '38 ohms (70
+actual)'; ee18 a vintage SM57 228 ohm at 1.28 kHz; hau's two figures imply ~245-250 ohm).
+Re open circuit at 1 kHz, 'H': -1.4 dB into 2 kOhm (hau ~1), -7.6 into 250 ohm (hau 6), -4.0
+into 600, -10.5 into 150. Below 200 Hz the loading bites much harder (into 150 ohm -17 dB at
+50 Hz, -20 at 100 Hz: the motional impedance peaks at the 104 Hz resonance; Stamler's 'the
+most load-sensitive dynamic microphone' fits, no curve to check). The impedance is 15-40%
+high: 4.53^2 x (1.5 + 12.1 ohm + the motional part) + 25.7 ohm, the ratio and the coil's DCR
+both forum figures from later units; the old sheets' lower sensitivity ('H' 0.149 mV/ubar
+against 0.16-0.17 from 1974 on) hints at a lower old ratio. Not forced here.
+
+**SM5 built: the transformer designed, SM57_OT@1** (`config/designs/sm57_ot.yaml`, compiled
+by varimu-components; the circuit and the chain pin it). The core: Tempel's EI-25 (1/4 in
+tongue, 2.000 in path; EI-18 and EI-25 added to config/transformer/laminations.yaml with their
+catalog pages), a 1/4 in stack (an aftermarket SM58 replacement's 6 x 6 mm cross-section,
+said to match the original's turns; Edcor's EI025 x 1/4; it fits the handle lengthwise, TAB's
+T58 for the cavity is 1 in x 0.8 in), mumetall (provisional). Layer-wound: the primary (135
+turns of AWG 30), the tap's part of the secondary (300 turns of AWG 34), the rest (312);
+fitted to the bench figures: primary 1.498 ohm (cj06 1.50), 385 mH (386: the joint gap),
+the leakage with the secondary shorted 0.147 mH by the 2D field solution (150 uH: the wrap
+between primary and secondary, 0.25 mm), the secondary 7.91 H (cj06 7.95, not a target),
+11.1 + 13.7 = 24.8 ohm (psw17's old dual unit 10.8 + 14.9 = 25.7, cj06's later 24.18). The
+loading through it is unchanged (the provisional transformer had the same figures):
+352 / 90 ohm at 1 kHz. **SM5's done-when, as far as the sources go:** the sensitivity and the
+impedance come out of the circuit; the published loading figures are two numbers (hau:
+~1 dB into 2 kOhm, model 1.4; 6 dB into 250 ohm, model 7.6), and the impedance runs high
+(352 against hau's implied ~250, c88's 310, ee18's 228 on a vintage unit). Open for the user:
+whether to fit the turns ratio to the impedance (it would move off cj06's measured 4.53 and
+the sensitivity's B l with it) or keep the bench figures.
+
+
+
+**SM8 built (ahead of SM6's listen; the plan's order put it after: the work is offline and
+doesn't change the SM57): the SM58, R59@1.**
+- The permeable sheet in the BEM: `varimu/mics/bor_permeable.py` (a new module; bor.py
+  untouched): two acoustic domains, the outside air and the air the sheet encloses, joined
+  through the sheet (the velocity continuous, p_in - p_out = Z_s v), direct BIEs on each
+  closed boundary with bor.py's double layer, a single layer (elliptic K, graded self
+  quadrature), CHIEF rows; no hypersingular operator. Checked on the textbook cases
+  (`varimu/mics/permeable.py`, the exact series of a spherical sheet, with a rigid core
+  inside): the sheet's outside and inside pressures to 1e-5..7e-4, a core to 6e-4, a rigid
+  body alone the rigid sphere's series (`tests/test_permeable.py`).
+- The SM58's body (`bor_permeable.ball_mesh`, form `ball`): s70 Figure D's outline (the 50.8
+  mm ball, the 33.7 mm neck, the 93.7 mm taper to 23.0 mm, 161.9 mm long), the cartridge in
+  the ball's air (its face 18 mm under the ball's pole, provisional), the handle outside.
+- R59@1 (`config/components/r59/1.yaml`; `scripts/fit_sm57.py --mic sm58`): the SM57's motor
+  shared (R57@4's coil, magnet and diaphragm: the same Unidyne III), its own tuning fitted
+  (the rear network, the case's air, the suspension's resonance, the dome mode's frequency
+  and damping under the ball's air: 7.67 kHz, q 5.3); no resonator cap (the SM57's: the
+  SM58's front air is the ball's, in the BEM). The grille (mesh and foam as one sheet) a
+  grid: 10 Pa s/m best of 10 / 30 / 60 (and of 30 / 100 / 300): nearly transparent. Target:
+  **c81's SM58 curve**, not s70's (the 1970 drawing falls far faster below 150 Hz than every
+  later one, c81 and g24 agreeing within 1 dB 50 Hz-10 kHz; c81 is still the dual-impedance
+  era). Result: 0.78 dB rms 50 Hz-14 kHz, **within +-2 dB to 10 kHz (1.42 worst)**; above it
+  +3.3 dB at 12.7 kHz and +4.6 at 14.25 kHz (the drawings fall to ~-6 dB by 14-15 kHz: a
+  frequency-independent grille can't; the foam's rising loss or a second dome mode: open).
+  Polars within 3 dB at every c81 frequency (c81's SM58 polars are the SM57's drawing). The
+  sensitivity, not fitted (the shared motor): 1.62 mV/Pa against the rated 1.49 (+0.7 dB,
+  the sheet's +-3). Resonance 74 Hz. `config/circuits/shure_sm58.yaml` (R59@1 on SM57_OT@1:
+  the same transformer, Walrus on GroupDIY, forum; s70 draws the same windings), the chain
+  `sm58_v76.yaml`; `tests/test_sm58.py`; Rust agreement bit for bit. Not yet: the Room view
+  (entries.py's tables take bor's bodies; the ball's needs bor_permeable there, after the
+  room session's work lands), proximity for the ball (plane waves only so far).
+
+The sphere-era notes follow.
+
+The presence peak and above were not in SM2: the model has no presence
+peak (~11 dB short at 5.8 kHz), a small bump at 11 kHz and a notch at 12.5 kHz. Why: on a
+sphere the presence peak's position pins the network's delay against the 1-2 kHz rejection
+(fitted to 6.5 kHz, -16.9 dB at the rear against -20.7), and a lumped front resonator
+can't draw the dip and second peak (a grid over the cap's holes and air: 5.3 dB rms at
+4.5-14 kHz at best; a series screen damps it but costs the rejection; the cap's thin air
+layer's radial flow damps it without that cost: the `film` element). So: the real head's
+diffraction (SM4: a cylinder with a grille face, not a sphere) and the dome's modes and a
+distributed cap (SM3), then R57@2. The 4 / 8 kHz polars (4.2 dB off at the side at 4 kHz,
+6.6 dB at the rear at 8 kHz) are SM4's.
 
 ## The target
 

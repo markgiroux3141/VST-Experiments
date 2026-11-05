@@ -283,7 +283,7 @@ pub enum Noise {
 }
 
 /// Parts whose resistors are resistors (their noise), and the param holding their value.
-const NOISY: [(&str, Option<&str>); 9] = [
+const NOISY: [(&str, Option<&str>); 10] = [
     ("R", Some("r")),
     ("pot", Some("r")),
     ("rheostat", Some("r")),
@@ -293,6 +293,7 @@ const NOISY: [(&str, Option<&str>); 9] = [
     ("capsule", None),
     ("capsule_dual", None),
     ("harp", None),
+    ("moving_coil", None),
 ];
 
 /// Whether a part's value (a key or {value, source}) is sourced `numerical:`.
@@ -341,6 +342,7 @@ fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Ve
                         .rsplit('_')
                         .next()
                         .is_some_and(|t| t.starts_with('x')))
+                && !(kind == "moving_coil" && r.name.ends_with("_leak"))
                 && !cores.contains(r.a.as_str())
                 && !cores.contains(r.b.as_str())
             {
@@ -507,7 +509,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 24] = [
+const MACROS: [&str; 25] = [
     "R",
     "C",
     "L",
@@ -526,6 +528,7 @@ const MACROS: [&str; 24] = [
     "vr_tube",
     "capsule",
     "capsule_dual",
+    "moving_coil",
     "speaker",
     "plate",
     "spring_tank",
@@ -676,6 +679,7 @@ fn macro_of(kind: &str) -> Macro {
             ],
             false,
         ),
+        "moving_coil" => (Some(4), vec![p("component", Raw)], false),
         "capsule_dual" => (
             Some(5),
             vec![
@@ -1016,6 +1020,7 @@ fn expand(
         }
         "capsule" => return capsule_part(ctx, name, nodes, a),
         "capsule_dual" => return capsule_dual_part(ctx, name, nodes, a),
+        "moving_coil" => return moving_coil_part(ctx, name, nodes, a),
         "speaker" => return speaker_part(ctx, name, nodes, a),
         "plate" => return plate_part(ctx, name, nodes, a),
         "spring_tank" => return spring_tank_part(ctx, name, nodes, a),
@@ -1064,6 +1069,20 @@ fn capsule_dual_part(
     Ok(crate::capsule::capsule_dual(
         name, &nodes[0], &nodes[1], &nodes[2], &nodes[3], &nodes[4], &model, ef, er,
     ))
+}
+
+fn moving_coil_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.moving_coil(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    crate::moving_coil::moving_coil(name, &nodes[0], &nodes[1], &nodes[2], &nodes[3], &model)
 }
 
 fn speaker_part(

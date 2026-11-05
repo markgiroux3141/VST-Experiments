@@ -17,6 +17,7 @@ use circuitsim::ir::{
 };
 
 use crate::capsule::{self, Capsule, DualCapsule};
+use crate::moving_coil::{self, MovingCoil};
 use crate::plate::{self, PlateComponent};
 use crate::speaker::{self, Speaker};
 use crate::spring::{self, SpringTankComponent};
@@ -43,6 +44,7 @@ pub struct Library {
     speakers: Mutex<HashMap<String, Speaker>>,
     capsules: Mutex<HashMap<String, Capsule>>,
     dual_capsules: Mutex<HashMap<String, DualCapsule>>,
+    moving_coils: Mutex<HashMap<String, MovingCoil>>,
     plates: Mutex<HashMap<String, PlateComponent>>,
     springs: Mutex<HashMap<String, SpringTankComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
@@ -61,6 +63,7 @@ impl Library {
             speakers: Mutex::new(HashMap::new()),
             capsules: Mutex::new(HashMap::new()),
             dual_capsules: Mutex::new(HashMap::new()),
+            moving_coils: Mutex::new(HashMap::new()),
             plates: Mutex::new(HashMap::new()),
             springs: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
@@ -141,6 +144,20 @@ impl Library {
         let (_, text) = versions::read_text(&root, &r)?;
         let c = capsule::dual_from_data(&yaml::parse(&text, name)?, name)?;
         self.dual_capsules.lock().unwrap().insert(key, c.clone());
+        Ok(c)
+    }
+
+    /// Moving-coil cartridge component `name` (`load_moving_coil` in library.py).
+    pub fn moving_coil(&self, name: &str) -> Result<MovingCoil, Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(c) = self.moving_coils.lock().unwrap().get(&key) {
+            return Ok(c.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let c = moving_coil::from_data(&yaml::parse(&text, name)?, name)?;
+        self.moving_coils.lock().unwrap().insert(key, c.clone());
         Ok(c)
     }
 

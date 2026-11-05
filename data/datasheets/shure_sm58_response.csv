@@ -1,0 +1,154 @@
+freq_hz,db,document,reference,quality
+49.61,-7.78,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),interp
+55.68,-6.64,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+62.50,-5.36,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+70.15,-4.17,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+78.75,-3.02,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+88.39,-1.86,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+99.21,-0.85,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+111.4,-0.01,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+125.0,0.24,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+140.3,0.38,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+157.5,0.40,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+176.8,0.40,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+198.4,0.38,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+222.7,0.33,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+250.0,0.22,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+280.6,0.19,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+315.0,0.09,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+353.6,-0.02,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+396.9,-0.09,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+445.4,-0.20,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+500.0,-0.26,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+561.2,-0.37,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+630.0,-0.38,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+707.1,-0.38,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+793.7,-0.27,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+890.9,-0.22,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1000,-0.06,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1122,0.09,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1260,0.25,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1414,0.52,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1587,0.76,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1782,1.04,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2000,1.36,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2245,1.71,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2520,2.19,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2828,2.75,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+3175,3.42,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+3564,4.14,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+4000,4.50,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+4490,4.82,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+5040,4.95,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+5657,4.79,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+6350,4.43,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+7127,2.29,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+8000,1.76,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+8980,3.61,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+10079,4.06,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+11314,2.24,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+12699,-0.68,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+14254,-4.31,g24,g24 chart 0 dB line ('dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+51.20,-12.27,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),coarse
+55.68,-11.76,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+62.50,-10.31,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+70.15,-8.45,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+78.75,-6.86,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+88.39,-5.37,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+99.21,-4.15,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+111.4,-2.64,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+125.0,-1.53,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+140.3,-0.57,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+157.5,0.00,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+176.8,0.32,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+198.4,0.33,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),interp
+222.7,0.33,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+250.0,0.14,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+280.6,0.15,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+315.0,0.00,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+353.6,0.00,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+396.9,-0.35,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),interp
+445.4,-0.35,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+500.0,-0.47,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),interp
+561.2,-0.44,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+630.0,-0.43,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+707.1,-0.38,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+793.7,-0.34,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+890.9,-0.34,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1000,0.00,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),interp
+1122,0.12,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1260,0.37,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1414,0.58,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1587,0.94,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1782,1.72,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2000,2.65,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2245,3.46,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2520,3.67,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2828,3.52,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+3175,3.63,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+3564,3.73,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+4000,4.14,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+4490,4.67,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+5040,5.88,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+5657,5.53,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+6350,3.39,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+7127,2.32,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+8000,3.85,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+8980,5.28,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+10079,1.56,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+11314,0.36,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+12699,-1.50,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+14254,-5.05,s70,s70 chart 0 dB line ('RELATIVE RESPONSE IN db'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+37.50,-10.91,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),coarse
+39.37,-10.56,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+44.19,-9.44,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+49.61,-8.30,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+55.68,-7.12,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+62.50,-5.82,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+70.15,-4.58,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+78.75,-3.46,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+88.39,-2.47,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+99.21,-1.70,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+111.4,-0.75,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+125.0,-0.33,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+140.3,0.00,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+157.5,-0.00,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+176.8,0.00,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+198.4,-0.00,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+222.7,0.00,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+250.0,-0.35,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+280.6,-0.48,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+315.0,-0.71,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+353.6,-0.97,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+396.9,-1.19,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+445.4,-1.26,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+500.0,-1.17,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+561.2,-1.01,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+630.0,-0.95,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+707.1,-0.82,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+793.7,-0.63,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),interp
+890.9,-0.45,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1000,-0.13,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1122,-0.07,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1260,-0.00,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1414,-0.00,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1587,0.39,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+1782,0.58,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2000,0.93,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),interp
+2245,1.44,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2520,2.07,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+2828,2.61,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+3175,3.22,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+3564,3.57,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+4000,3.50,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+4490,3.91,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+5040,4.62,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+5657,4.58,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+6350,3.65,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+7127,0.90,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+8000,1.92,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+8980,3.20,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+10079,3.04,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+11314,0.66,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+12699,-3.01,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read
+14254,-6.17,c81,c81 chart 0 dB line ('RELATIVE RESPONSE IN dB'; no reference frequency printed; the curve passes 0 dB near 1 kHz),read

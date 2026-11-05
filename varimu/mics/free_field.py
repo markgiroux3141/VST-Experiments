@@ -116,6 +116,36 @@ def sphere_entry_factors(
     return out[0], out[1]
 
 
+def sphere_ring_factors(
+    f_hz: np.ndarray, theta_rad: float, radius_m: float, cap_radius_m: float, ring_rad: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """As `sphere_entry_factors`, but the rear entry a ring at polar angle `ring_rad` from
+    the front axis (a moving-coil cartridge's rear ports around its side: docs/SM57_PLAN.md
+    SM2), averaged around the ring by the addition theorem: the azimuthal mean of
+    P_n(cos g) over the ring is P_n(cos theta) P_n(cos ring). The front entry is the cap
+    at the front pole, as there."""
+    from scipy.special import spherical_jn, spherical_yn
+
+    f = np.atleast_1d(np.asarray(f_hz, float))
+    ka = 2 * np.pi * f * radius_m / C_AIR
+    n_max = int(np.max(ka)) + 15
+    n = np.arange(n_max + 1)
+    alpha = np.arccos(1.0 - 0.5 * (cap_radius_m / radius_m) ** 2)
+    beta = np.linspace(0.0, alpha, 201)
+    rho = radius_m * np.sin(beta)
+    w = np.clip(1.0 - (rho / (radius_m * np.sin(alpha))) ** 2, 0.0, None) * np.sin(beta)
+    cap = np.trapezoid(_legendre(n_max, np.cos(beta)) * w, beta, axis=1) / np.trapezoid(w, beta)
+    ring = _legendre(n_max, np.array(np.cos(ring_rad)))
+    pn = _legendre(n_max, np.array(np.cos(theta_rad)))
+    out_f, out_r = [], []
+    for x in ka:
+        h2d = spherical_jn(n, x, derivative=True) - 1j * spherical_yn(n, x, derivative=True)
+        base = (1j) ** (n - 1) * (2 * n + 1) * pn / h2d / x**2
+        out_f.append(np.sum(base * cap))
+        out_r.append(np.sum(base * ring))
+    return np.array(out_f), np.array(out_r)
+
+
 def sphere_point_factors(
     f_hz: np.ndarray,
     theta_rad: float,
@@ -169,6 +199,15 @@ def body_entry_factors(
     `body_entry_grid` for a cached grid."""
     from varimu.mics import bor
 
+    if body.get("form") == "ball":  # a permeable grille (the SM58): bor_permeable
+        from varimu.mics import bor_permeable as bp
+
+        if not np.isinf(distance_m):
+            raise ValueError("a ball grille's entries are plane waves only (bor_permeable)")
+        op = bp.operator(bp.ball_mesh(body, diaphragm_radius_m))
+        return bp.entry_factors(
+            op, np.atleast_1d(f_hz), body["z_s_pa_s_m"], np.atleast_1d(theta_rad)
+        )
     op = bor.operator(bor.body_mesh(body, diaphragm_radius_m))
     return bor.entry_factors(op, np.atleast_1d(f_hz), np.atleast_1d(theta_rad), distance_m)
 
