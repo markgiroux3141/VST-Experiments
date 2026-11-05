@@ -281,3 +281,50 @@ def test_dynamic_body_entries():
     assert 20 * np.log10(abs(fr[1, 0])) > 5.0
     with pytest.raises(ValueError, match="dynamic body"):
         bor.dynamic_mesh({**body, "ports_m": [7e-3, 30e-3]}, 8e-3)
+
+
+def test_renders_agree_with_the_ac_solution():
+    """circuitsim's transient of the R57 cartridge (front driven, the rear entry held at 0
+    Pa) agrees with the AC solution, and its Johnson noise with the AC noise PSD (the coil's
+    DCR and every acoustic resistance; the diaphragm's numerical leak none)."""
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    import dataclasses
+
+    from scipy.signal import welch
+
+    from varimu.circuit.ir import NoiseCurrent, NoiseSpec
+    from varimu.devices.library import load_moving_coil
+    from varimu.measure import ac
+    from varimu.sim import fast
+    from varimu.sim.io import TransientSettings
+
+    c = load_moving_coil("R57@3")
+    quiet = networks.moving_coil_ir(c, r_load_ohm=1000.0, l_load_h=0.386)
+    s = TransientSettings.from_sim_settings(engine="circuitsim")
+    fs = s.sample_rate
+    tones = np.array([100.0, 1000.0, 5000.0, 12000.0])
+    t = np.arange(int(1.5 * fs)) / fs
+    x = sum(1.0 * np.sin(2 * np.pi * f * t) for f in tones) * np.minimum(1, t / 0.02)
+    rear = np.zeros_like(x)
+    v = fast.run_transient(quiet, x, settings=s, controls={"p_rear": rear}).vectors["v(out)"]
+    k, n = int(0.5 * fs), fs
+    bins = tones.astype(int)
+    h_tr = np.fft.rfft(v[k : k + n])[bins] / np.fft.rfft(x[k : k + n])[bins]
+    h_ac = ac.transfer(quiet, tones, "out")
+    assert np.max(np.abs(20 * np.log10(np.abs(h_tr / h_ac)))) < 0.05
+    # Noise: every resistor but the leak, 4kT/R (the builders' rule, by hand here).
+    els = [e for sec in quiet.sections for e in sec.elements]
+    noise = [
+        NoiseCurrent(f"IN_{e.name}", e.a, e.b, 4 * 1.380649e-23 * 293.15 / e.r_ohm)
+        for e in els
+        if type(e).__name__ == "Resistor" and not e.name.endswith("_leak") and e.name != "RLOAD"
+    ]
+    secs = (type(quiet.sections[0])("cartridge", tuple(els + noise)),)
+    noisy = dataclasses.replace(quiet, sections=secs, noise=NoiseSpec(seed=7, rate_hz=fs))
+    silence = np.zeros(3 * fs)
+    run = fast.run_transient(noisy, silence, settings=s, controls={"p_rear": silence})
+    vn = run.vectors["v(out)"][fs // 2 :]
+    f, p = welch(vn - vn.mean(), fs=fs, nperseg=fs // 4)
+    band = (f >= 100) & (f <= 20000)
+    p_ac = ac.noise_psd(noisy, f[band], "out")
+    assert abs(np.median(10 * np.log10(p[band] / p_ac))) < 1.0

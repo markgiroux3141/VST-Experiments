@@ -120,3 +120,24 @@ def test_above_the_presence_peak():
     h = _response(np.concatenate([[1000.0], f[keep]]), 0.0)
     on = 20 * np.log10(abs(h[1:]) / abs(h[0]))
     assert np.max(abs(on - db[keep])) < 3.0
+
+
+def test_chain_into_the_v76_is_current():
+    """sm57_v76.yaml is compose_chain.py's (the SM57's load replaced by the V76's input,
+    the cable across it), and builds with the rear entries' control input."""
+    import subprocess
+    import sys
+
+    from varimu.config import REPO_ROOT
+
+    r = subprocess.run(
+        [sys.executable, "scripts/compose_chain.py", "--mic", "shure_sm57",
+         "--pre", "telefunken_v76", "--check"],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )  # fmt: skip
+    assert r.returncode == 0, r.stdout + r.stderr
+    c = spec.load_circuit(spec.circuit_path("sm57_v76"))
+    ir = builder.build(c, {"impedance_sm57": 0}, cores="ja").ir
+    assert [x.name for x in ir.controls] == ["p_rear"]
+    names = {e.name for e in ir.elements()}
+    assert "RLOAD_SM57" not in names and "CCABLE" in names and "GMC_SM57_dia_ga" in names

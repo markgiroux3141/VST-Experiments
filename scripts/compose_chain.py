@@ -33,6 +33,7 @@ from varimu.config import CONFIG_DIR
 # generator's resistance) and the generator's parts.
 PORTS = {
     "neumann_u47": {"tag": "u47", "output": "out", "drop": ["RLOAD"]},
+    "shure_sm57": {"tag": "sm57", "output": "out", "drop": ["RLOAD"]},
     "telefunken_v76": {"tag": "v76", "input": "ia", "drop": ["RSRC"]},
     "omni_4134": {"tag": "omni", "output": "out", "drop": ["RMEAS"]},
     "clean_pre": {"tag": "clean", "input": "ia", "drop": ["RSRC"]},
@@ -163,15 +164,15 @@ def compose(mic_name: str, pre_name: str) -> dict:
         },
         "classes": {f"{b}_{tp}": [rp.part_name(p) for p in v] for b, v in tol["classes"].items()},
     }
-    if tol_tube := (pre["tolerance"].get("tube") or mic["tolerance"].get("tube")):
+    mt = mic.get("tolerance") or {}  # a nominal-only mic (the SM57) has none
+    if tol_tube := (pre["tolerance"].get("tube") or mt.get("tube")):
         r = rp if pre["tolerance"].get("tube") else rm
         tol = {**{k: tol[k] for k in ("source", "seed", "spread")},
                "tube": {k: r.key(v) for k, v in tol_tube.items()},
                **{k: tol[k] for k in ("bands", "classes")}}  # fmt: skip
-    mt = mic["tolerance"]
-    for b, v in mt["bands"].items():
+    for b, v in (mt.get("bands") or {}).items():
         tol["bands"][f"{b}_{tm}"] = [rm.key(x) for x in v] if isinstance(v, list) else rm.key(v)
-    for b, v in mt["classes"].items():
+    for b, v in (mt.get("classes") or {}).items():
         names = [rm.part_name(p) for p in v if p not in pm["drop"]]
         tol["classes"][f"{b}_{tm}"] = names
     out["tolerance"] = tol
