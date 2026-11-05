@@ -1,0 +1,83 @@
+{
+ "scene": "demo_shoebox",
+ "fs": 96000,
+ "quality": "production",
+ "rt60_s": {
+  "125": 0.518,
+  "250": 0.792,
+  "500": 0.87,
+  "1000": 0.786,
+  "2000": 0.644,
+  "4000": 0.569,
+  "8000": 0.454
+ },
+ "room": "polygon",
+ "room_backend": "gpu",
+ "gpu": "NVIDIA GeForce RTX 3080 (Vulkan)",
+ "wave_crossover_hz": 500.0,
+ "mics": [
+  {
+   "name": "vocal spot",
+   "file": "vocal_spot.wav",
+   "chain": "u47_v76",
+   "set": {
+    "pattern_u47": 0.0,
+    "gain_db_v76": 24.0
+   },
+   "pan": -0.1,
+   "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
+   "rms_dbfs": -22.1,
+   "peak_dbfs": -5.92
+  },
+  {
+   "name": "guitar spot",
+   "file": "guitar_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": 0.45,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -28.14,
+   "peak_dbfs": -4.19
+  },
+  {
+   "name": "room L",
+   "file": "room_L.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 40.0
+   },
+   "pan": -1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -23.49,
+   "peak_dbfs": -4.83
+  },
+  {
+   "name": "room R",
+   "file": "room_R.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 40.0
+   },
+   "pan": 1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -23.87,
+   "peak_dbfs": -7.71
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 164.9,
+ "seconds": 21.005
+}

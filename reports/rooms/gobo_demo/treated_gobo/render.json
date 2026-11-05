@@ -1,0 +1,120 @@
+{
+ "scene": "gobo_demo_treated_gobo",
+ "fs": 96000,
+ "quality": "production",
+ "rt60_s": {
+  "125": 0.582,
+  "250": 0.272,
+  "500": 0.174,
+  "1000": 0.118,
+  "2000": 0.122,
+  "4000": 0.137,
+  "8000": 0.129
+ },
+ "room": "polygon",
+ "room_backend": "gpu",
+ "gpu": "NVIDIA GeForce RTX 3080 (Vulkan)",
+ "wave_crossover_hz": 500.0,
+ "mics": [
+  {
+   "name": "vocal spot",
+   "file": "vocal_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": -0.3,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -26.84,
+   "peak_dbfs": -9.67,
+   "bleed": {
+    "vocal": {
+     "rms_dbfs": -26.97,
+     "octaves_db": [
+      -70.42,
+      -58.16,
+      -39.69,
+      -28.87,
+      -33.46,
+      -39.08,
+      -51.08,
+      -47.39,
+      -54.7
+     ]
+    },
+    "guitar": {
+     "rms_dbfs": -42.21,
+     "octaves_db": [
+      -54.51,
+      -47.8,
+      -44.13,
+      -62.06,
+      -62.06,
+      -67.47,
+      -68.39,
+      -72.14,
+      -71.63
+     ]
+    }
+   },
+   "intermod_db": -142.83
+  },
+  {
+   "name": "guitar spot",
+   "file": "guitar_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": 0.3,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -30.2,
+   "peak_dbfs": -4.24,
+   "bleed": {
+    "vocal": {
+     "rms_dbfs": -45.57,
+     "octaves_db": [
+      -77.11,
+      -69.66,
+      -54.21,
+      -48.43,
+      -50.75,
+      -61.28,
+      -72.76,
+      -71.66,
+      -81.48
+     ]
+    },
+    "guitar": {
+     "rms_dbfs": -30.34,
+     "octaves_db": [
+      -46.57,
+      -37.25,
+      -33.27,
+      -41.81,
+      -41.95,
+      -43.83,
+      -47.61,
+      -47.55,
+      -43.96
+     ]
+    }
+   },
+   "intermod_db": -139.22
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 32.1,
+ "seconds": 20.69
+}

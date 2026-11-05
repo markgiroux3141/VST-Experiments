@@ -1,0 +1,120 @@
+{
+ "scene": "gobo_demo_gobo",
+ "fs": 96000,
+ "quality": "production",
+ "rt60_s": {
+  "125": 0.505,
+  "250": 0.732,
+  "500": 0.769,
+  "1000": 0.69,
+  "2000": 0.58,
+  "4000": 0.52,
+  "8000": 0.422
+ },
+ "room": "polygon",
+ "room_backend": "gpu",
+ "gpu": "NVIDIA GeForce RTX 3080 (Vulkan)",
+ "wave_crossover_hz": 500.0,
+ "mics": [
+  {
+   "name": "vocal spot",
+   "file": "vocal_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": -0.3,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -26.47,
+   "peak_dbfs": -8.71,
+   "bleed": {
+    "vocal": {
+     "rms_dbfs": -26.73,
+     "octaves_db": [
+      -69.83,
+      -57.86,
+      -38.29,
+      -28.71,
+      -33.37,
+      -38.7,
+      -50.81,
+      -47.26,
+      -54.64
+     ]
+    },
+    "guitar": {
+     "rms_dbfs": -38.83,
+     "octaves_db": [
+      -51.67,
+      -46.34,
+      -40.81,
+      -50.51,
+      -52.69,
+      -55.91,
+      -60.47,
+      -63.93,
+      -62.94
+     ]
+    }
+   },
+   "intermod_db": -145.15
+  },
+  {
+   "name": "guitar spot",
+   "file": "guitar_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": 0.3,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -28.58,
+   "peak_dbfs": -4.26,
+   "bleed": {
+    "vocal": {
+     "rms_dbfs": -34.44,
+     "octaves_db": [
+      -74.36,
+      -67.92,
+      -49.35,
+      -35.48,
+      -42.47,
+      -51.66,
+      -64.31,
+      -63.39,
+      -72.77
+     ]
+    },
+    "guitar": {
+     "rms_dbfs": -29.89,
+     "octaves_db": [
+      -45.5,
+      -37.32,
+      -32.67,
+      -41.98,
+      -40.48,
+      -43.37,
+      -47.43,
+      -47.44,
+      -43.93
+     ]
+    }
+   },
+   "intermod_db": -139.89
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 43.1,
+ "seconds": 20.897
+}

@@ -1,0 +1,120 @@
+{
+ "scene": "gobo_demo_open",
+ "fs": 96000,
+ "quality": "production",
+ "rt60_s": {
+  "125": 0.518,
+  "250": 0.79,
+  "500": 0.868,
+  "1000": 0.784,
+  "2000": 0.642,
+  "4000": 0.568,
+  "8000": 0.454
+ },
+ "room": "polygon",
+ "room_backend": "gpu",
+ "gpu": "NVIDIA GeForce RTX 3080 (Vulkan)",
+ "wave_crossover_hz": 500.0,
+ "mics": [
+  {
+   "name": "vocal spot",
+   "file": "vocal_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": -0.3,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -25.95,
+   "peak_dbfs": -8.85,
+   "bleed": {
+    "vocal": {
+     "rms_dbfs": -26.25,
+     "octaves_db": [
+      -69.94,
+      -55.9,
+      -38.3,
+      -28.03,
+      -33.25,
+      -38.56,
+      -50.78,
+      -47.34,
+      -54.65
+     ]
+    },
+    "guitar": {
+     "rms_dbfs": -37.74,
+     "octaves_db": [
+      -52.0,
+      -44.4,
+      -40.62,
+      -47.12,
+      -50.11,
+      -51.88,
+      -55.93,
+      -60.17,
+      -59.58
+     ]
+    }
+   },
+   "intermod_db": -145.08
+  },
+  {
+   "name": "guitar spot",
+   "file": "guitar_spot.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": 0.3,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -28.03,
+   "peak_dbfs": -4.12,
+   "bleed": {
+    "vocal": {
+     "rms_dbfs": -31.73,
+     "octaves_db": [
+      -74.38,
+      -64.85,
+      -48.17,
+      -32.56,
+      -40.7,
+      -48.64,
+      -60.35,
+      -59.65,
+      -69.59
+     ]
+    },
+    "guitar": {
+     "rms_dbfs": -30.4,
+     "octaves_db": [
+      -47.06,
+      -36.43,
+      -34.11,
+      -41.91,
+      -40.45,
+      -43.27,
+      -47.29,
+      -47.47,
+      -43.96
+     ]
+    }
+   },
+   "intermod_db": -143.16
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 42.3,
+ "seconds": 21.006
+}

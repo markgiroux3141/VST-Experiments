@@ -1,0 +1,58 @@
+{
+ "scene": "wave_demo_small_geometric",
+ "fs": 96000,
+ "quality": "production",
+ "rt60_s": {
+  "125": 0.344,
+  "250": 0.519,
+  "500": 0.564,
+  "1000": 0.503,
+  "2000": 0.416,
+  "4000": 0.379,
+  "8000": 0.324
+ },
+ "room": "polygon",
+ "room_backend": "gpu",
+ "gpu": "NVIDIA GeForce RTX 3080 (Vulkan)",
+ "wave_crossover_hz": null,
+ "mics": [
+  {
+   "name": "room L",
+   "file": "room_L.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": -1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -30.7,
+   "peak_dbfs": -7.79
+  },
+  {
+   "name": "room R",
+   "file": "room_R.wav",
+   "chain": "omni_clean",
+   "set": {
+    "gain_db_clean": 30.0
+   },
+   "pan": 1.0,
+   "entries": "body {'form': 'cylinder', 'radius_m': 0.00635, 'length_m': 0.09}",
+   "rms_dbfs": -31.02,
+   "peak_dbfs": -7.02
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 28.3,
+ "seconds": 20.671
+}
