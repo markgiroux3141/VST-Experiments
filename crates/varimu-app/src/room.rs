@@ -332,7 +332,10 @@ pub struct RoomObject {
 /// The objects offered: (label, name prefix, size, centre height, surface, tilt). A piano's
 /// lid is a thin panel tilted up (a grand piano: an omni source under it; the lid reflects it
 /// out of the open side and its edges diffract).
-pub const OBJECT_KINDS: &[(&str, &str, [f64; 3], f64, &str, f64)] = &[
+/// (label, name prefix, size, centre height, surface, tilt).
+pub type ObjectKind = (&'static str, &'static str, [f64; 3], f64, &'static str, f64);
+
+pub const OBJECT_KINDS: &[ObjectKind] = &[
     ("Gobo", "Gobo", [1.2, 0.08, 1.8], 0.9, "heavy_drapes", 0.0),
     ("Riser", "Riser", [1.8, 1.2, 0.3], 0.15, "wood_floor", 0.0),
     (
