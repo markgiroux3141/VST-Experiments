@@ -241,8 +241,9 @@ at a frequency (from the FDTD run) is a cheap aid for placing mics.
 ### Status (2026-11-03)
 
 Started by the user (U47 -> V76 first, alongside the gas-tube work in its worktree).
-- **A1 (the V76) in progress:** tubes, circuit and idle check built; the profile is next
-  (DEVICE_BUILDER_PLAN.md B10's status).
+- **A1 (the V76) built:** tubes, circuit, idle check, profile (47 of the Braunbuch's 50
+  specs; the misses' causes in DEVICE_BUILDER_PLAN.md B10's status) and Play; the drawing
+  is open.
 - **A2 (the capsule machinery) built and checked on the B&K 4134:** capsules are components
   (kind `capsule`, `varimu/devices/capsule.py`: the geometry sourced, the lumped network
   derived at fit time so both builders read numbers), the `capsule` part ([front, backplate,

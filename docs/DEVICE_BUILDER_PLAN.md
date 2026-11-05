@@ -1114,7 +1114,12 @@ the U47 -> V76 chain). Steps 1-3 built:*
   BASS CUT, TREBLE CUT; draft-1x, the supply on its own thread): 0.26x real time on a vocal
   take at 34 dB (`examples/load_profile.rs`, worst block 1.18x, none over budget in 42 s).
   Not yet heard by the user.
-- **Next:** the drawing. The transformers' version 2 waits for C2.
+- **The misses' causes (2026-11-04, COMPONENT_EDITOR_PLAN.md C2 step 8):** the 90 Hz bump
+  and the 40 Hz k3 are T85 in its 40 Hz network (the loop pins ~3 H and needs damping the
+  version-1 core and copper lack; a gapped, higher-resistance T85 fixes both but costs the
+  top end at 1:30); the 40 Hz k2 at 76 dB is the output side's (T89 or L88). T85 stays at
+  version 1 (the user's call: too subtle for the work).
+- **Next:** the drawing.
 
 ## Devices and components together (2026-10-29, the user's call)
 

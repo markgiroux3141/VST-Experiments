@@ -465,7 +465,35 @@ and heard against the first in the 5E3.
    - *Not built:* the speaker's page (C3's component in this view: P12R is a Python fit,
      no Rust compiler yet); adding or removing windings (the circuit names them);
      moving a drawn circuit's pin from here.
-8. T85 version 2 for the V76.
+8. **Studied 2026-11-04, stopped (the user's call): T85 stays at version 1.** T85 version 2
+   for the V76.
+   *Findings* (`scripts/t85_study.py`, its docstring has the numbers):
+   - The 90 Hz bump is T85 and the 40 Hz network: C5-C8 and C9 across R54 sit in series
+     between the primary halves (rechecked on S 1176), a series loop that pins the whole
+     primary at ~3 H. V1's feedback capacitors 100x larger moved it by <= 0.04 dB.
+   - With version 1's 77 ohm per half, no inductance and no R54 meets sheet 6. The loop
+     needs damping: ~150-250 ohm of copper per half (R54 then 50-300) or a core loss angle
+     of ~0.1-0.2.
+   - The 40 Hz k3 (34 dB gain) is T85's flux: the same ~3 H on a gapped core with more
+     turns gives 0.92% (200 turns per half), 0.44% (270), 0.19% (400), against 2.43%.
+   - The 40 Hz k2 (76 dB gain, 0.33%) isn't T85's: it stays in every variant (T89 or
+     V4's 250 H choke).
+   - A gapped design compiled by varimu-components (BV 191's EI 48 and discs, 280 turns
+     per half of 0.05 mm, 171 ohm, the 1:30 secondary in 4 x 4200 turns of 0.04 mm),
+     its compiled form inline in a copy of the V76: the low end meets sheet 6 at the
+     drawn R54 of 300 ohm (93 Hz +0.4 dB, was +0.98; 40 Hz -1.1; 15 Hz -12.2) and 40 Hz k3
+     0.45%. The top end doesn't: at 1:30 the secondary's capacitance reflects 900x onto
+     the copper and the leakage (~5 mH per half). 15 kHz is -7.1 dB with BV 191's 0.5 mm
+     masks, -2.6 / -0.5 / +3.0 dB at 0.8 / 1.0 / 1.5 mm (a peak near 10 kHz: +0.7 / +1.6 /
+     +2.4), -12.2 dB interleaved (s | pa | s | pb ..., leakage 2.2 mH, more shield area).
+     Version 1 is flat there only on idealized leakage (0.05 mH) and secondary
+     capacitance (10 pF).
+   - Not saved: the low end's change (~0.5 dB broad, and distortion only at a hot input)
+     was judged too subtle for a whole provisional high-frequency construction without
+     BV 511 data. Where to pick up: a search over the masks, the shields' placement and the
+     primary discs' width with L84's self-capacitance (calibrated in version 1) refitted
+     against sheet 6, or a lossy core model (the damping without the copper's
+     treble cost).
 
 **C3. Speakers, physical: the 5E3's Jensen.** The user's choice for what the 5E3 is
 heard through (2026-10-29): a physical speaker, not a cabinet impulse response.
