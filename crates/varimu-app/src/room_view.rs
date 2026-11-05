@@ -1342,8 +1342,10 @@ impl RoomView {
                     ),
                 ));
             }
+            // the label under the outline (clear of the ceiling's height labels)
+            let below = fp.iter().map(|q| q.y).fold(f32::MIN, f32::max);
             painter.text(
-                to_s(o.center[0], o.center[1]) + Vec2::new(0.0, -14.0),
+                Pos2::new(to_s(o.center[0], o.center[1]).x, below + 10.0),
                 egui::Align2::CENTER_CENTER,
                 format!("{} {:.1} m", o.name, o.size[2]),
                 small.clone(),

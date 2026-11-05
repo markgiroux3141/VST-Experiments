@@ -484,8 +484,10 @@ thick objects come out too dark; thin panels are plates, so gobos are fine). Pat
 after an edge (edge then wall) aren't in the geometric part (below the crossover the wave
 solver has them). The rays' per-mic tail shaping uses the mid bands (shadowing by objects is
 the same for every band in the late part). The Room view's new controls (wall surfaces, facets,
-objects, the wave solver) are tested through the scene model but were not seen on screen: the
-app opens the user's last session, which an unattended run shouldn't touch.
+objects, directional sources, the wave solver) are tested through the scene model and were seen
+drawn on screen once (the app run on a scratch `APPDATA` and session, so the user's last session
+and prefs stayed untouched): the surfaces coloured and named on the plan, the gobo and a riser
+to scale, the sources' facing, the forms; dragging and clicking weren't driven.
 
 ## Decisions (2026-11-05, delegated: "be self reliant and make decisions")
 

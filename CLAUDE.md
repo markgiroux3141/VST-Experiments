@@ -517,7 +517,8 @@ normalized), images and diffraction weighted in their emission directions, rays 
 |D|^2, the wave solver with the source's body in its grid. Demos: `scripts/room_wave_demo.py`
 -> reports/rooms/wave_demo/, `scripts/room_gobo_demo.py` -> reports/rooms/gobo_demo/,
 `scripts/room_source_demo.py` -> reports/rooms/source_demo/, `room_demo.py --wave 500 --out
-reports/rooms/demo_wave` (READMEs there). Open: the user listens; the Room view's new controls are tested but not seen on screen.
+reports/rooms/demo_wave` (READMEs there). Open: the user listens (reports/rooms/LISTEN.md); the Room view's new controls were seen drawn
+(a scratch `APPDATA` and session: the app opens the user's last session otherwise), not driven.
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and
