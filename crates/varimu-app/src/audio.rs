@@ -148,6 +148,25 @@ pub fn write_wav(path: &Path, x: &[f64], sample_rate: u32) -> Result<(), String>
     w.finalize().map_err(|e| err(path, e))
 }
 
+/// Stereo float32 WAV, frames of (left, right).
+pub fn write_wav_stereo(path: &Path, x: &[[f32; 2]], sample_rate: u32) -> Result<(), String> {
+    if let Some(dir) = path.parent() {
+        std::fs::create_dir_all(dir).map_err(|e| err(path, e))?;
+    }
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate,
+        bits_per_sample: 32,
+        sample_format: hound::SampleFormat::Float,
+    };
+    let mut w = hound::WavWriter::create(path, spec).map_err(|e| err(path, e))?;
+    for f in x {
+        w.write_sample(f[0]).map_err(|e| err(path, e))?;
+        w.write_sample(f[1]).map_err(|e| err(path, e))?;
+    }
+    w.finalize().map_err(|e| err(path, e))
+}
+
 /// The start and end (s) of `x`'s loudest stretch of `len_s` (by energy, in steps of
 /// a tenth of it); the whole file if it is shorter.
 pub fn loudest(x: &[f64], rate: u32, len_s: f64) -> (f64, f64) {

@@ -127,6 +127,82 @@ impl Mix {
     }
 }
 
+/// A session's mixdown ([`Session::mixdown`]): `len` frames from timeline position
+/// `start`, each audible track's clip with its name.
+#[derive(Debug, Clone)]
+pub struct Mixdown {
+    pub rate: u32,
+    pub start: i64,
+    pub len: usize,
+    pub tracks: Vec<(String, MixClip)>,
+}
+
+impl Mixdown {
+    fn sum<'a>(&self, clips: impl Iterator<Item = &'a MixClip>) -> Vec<Frame> {
+        let mix = Mix {
+            clips: clips.cloned().collect(),
+            live: (0.0, 0.0),
+        };
+        let mut out = vec![[0.0f32; 2]; self.len];
+        mix.add(self.start, &mut out);
+        out
+    }
+
+    /// The mix, as ▶ plays it.
+    pub fn mix(&self) -> Vec<Frame> {
+        self.sum(self.tracks.iter().map(|(_, c)| c))
+    }
+
+    /// Track `i`'s part of the mix (its fader and pan): the stems sum to the mix.
+    pub fn stem(&self, i: usize) -> Vec<Frame> {
+        self.sum(self.tracks.get(i).map(|(_, c)| c).into_iter())
+    }
+
+    /// The mix to `path` (stereo float32 WAV) with `record` as `<path>.json`, and with
+    /// `stems` each track's part to `<path stem> stems/NN name.wav`. Returns the mix's
+    /// peak (dBFS, peak: above 0 a float file keeps it, fixed-point would clip).
+    pub fn write(&self, path: &Path, stems: bool, record: &Value) -> Result<f64, String> {
+        let mix = self.mix();
+        crate::audio::write_wav_stereo(path, &mix, self.rate)?;
+        let peak = mix
+            .iter()
+            .flat_map(|f| f.iter())
+            .fold(0.0f32, |m, &v| m.max(v.abs()));
+        let peak_dbfs = 20.0 * (peak.max(1e-12) as f64).log10();
+        let mut stem_files = Vec::new();
+        if stems {
+            let base = path
+                .file_stem()
+                .map_or("mix".into(), |s| s.to_string_lossy().to_string());
+            let dir = path.with_file_name(format!("{base} stems"));
+            for (i, (name, _)) in self.tracks.iter().enumerate() {
+                let safe: String = name
+                    .chars()
+                    .map(|c| {
+                        if c.is_alphanumeric() || " -_".contains(c) {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect();
+                let f = dir.join(format!("{:02} {safe}.wav", i + 1));
+                crate::audio::write_wav_stereo(&f, &self.stem(i), self.rate)?;
+                stem_files.push(f.to_string_lossy().to_string());
+            }
+        }
+        let mut record = record.clone();
+        record["start_s"] = json!(self.start as f64 / self.rate as f64);
+        record["seconds"] = json!(self.len as f64 / self.rate as f64);
+        record["peak_dbfs"] = json!(peak_dbfs);
+        record["stems"] = json!(stem_files);
+        let j = path.with_extension("json");
+        std::fs::write(&j, serde_json::to_string_pretty(&record).unwrap())
+            .map_err(|e| format!("{}: {e}", j.display()))?;
+        Ok(peak_dbfs)
+    }
+}
+
 /// A finished recording from the worker: the stream position of its first sample, the
 /// latency to take off, the samples, and (a device played from keys) the performance it
 /// came from with the performance's sample its first sample is.
@@ -715,6 +791,120 @@ impl Session {
         }
         m.live = if audible { track.gains() } else { (0.0, 0.0) };
         m
+    }
+
+    /// Why the session can't be exported yet, a line per track (empty: it can): a print
+    /// behind its chain, an event take playing the proxy or an older revision's render;
+    /// `fin` (a final): every insert at production and every event take on its production
+    /// render (not playing drafts). Only audible tracks count.
+    pub fn export_problems(&self, fin: bool) -> Vec<String> {
+        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let mut out = Vec::new();
+        for (i, t) in self.tracks.iter().enumerate() {
+            if (any_solo && !t.solo) || (!any_solo && t.mute) {
+                continue;
+            }
+            let Some(k) = t.active_take() else { continue };
+            let plays = k.sound(t.drafts).2;
+            let why = if !self.print_current(i) {
+                Some("its inserts are still printing".to_string())
+            } else if plays == Plays::Proxy {
+                Some("it plays the proxy until its render lands".into())
+            } else if plays == Plays::Stale {
+                Some("its render of the latest edit is still coming".into())
+            } else if fin && k.events.is_some() && plays != Plays::Render(Quality::Production) {
+                Some("its take has no production render playing".into())
+            } else if fin
+                && let Some(s) = t
+                    .inserts
+                    .iter()
+                    .find(|s| !s.bypass && s.quality != Quality::Production)
+            {
+                Some(format!("its insert {} isn't at production", s.device))
+            } else {
+                None
+            };
+            if let Some(w) = why {
+                out.push(format!("{}: {w}", t.name));
+            }
+        }
+        out
+    }
+
+    /// The mixdown: what ▶ plays (each audible track's sound through its fader and pan;
+    /// no click, no live device), from bar 1 (or the earliest take, if one starts before
+    /// it) to the end of the longest sound.
+    pub fn mixdown(&self) -> Mixdown {
+        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let tracks: Vec<(String, MixClip)> = self
+            .tracks
+            .iter()
+            .filter(|t| if any_solo { t.solo } else { !t.mute })
+            .filter_map(|t| {
+                t.playing(self.rate).map(|(start, audio, _)| {
+                    let clip = MixClip {
+                        start,
+                        audio: audio.clone(),
+                        gain: t.gains(),
+                    };
+                    (t.name.clone(), clip)
+                })
+            })
+            .collect();
+        let start = tracks
+            .iter()
+            .map(|(_, c)| c.start)
+            .min()
+            .unwrap_or(0)
+            .min(0);
+        let end = tracks
+            .iter()
+            .map(|(_, c)| c.start + c.audio.len() as i64)
+            .max()
+            .unwrap_or(0);
+        Mixdown {
+            rate: self.rate,
+            start,
+            len: (end - start).max(0) as usize,
+            tracks,
+        }
+    }
+
+    /// What an export was made from, for its JSON beside the audio: per audible track its
+    /// take, what plays (the print, a render at a quality, the take) and the strip.
+    pub fn export_record(&self) -> Value {
+        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let tracks: Vec<Value> = self
+            .tracks
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
+            .filter_map(|(i, t)| {
+                let k = t.active_take()?;
+                let (_, _, plays) = k.sound(t.drafts);
+                let printed = t.playing(self.rate).is_some_and(|p| p.2);
+                Some(json!({
+                    "id": t.id,
+                    "name": t.name,
+                    "take": k.id,
+                    "revision": k.events.as_ref().map(|e| e.rev),
+                    "plays": format!("{plays:?}"),
+                    "print": printed.then(|| self.chain_signature(i)),
+                    "inserts": t.inserts.iter().filter(|s| !s.bypass).map(Slot::to_json).collect::<Vec<_>>(),
+                    "volume_db": t.volume_db,
+                    "pan": t.pan,
+                }))
+            })
+            .collect();
+        json!({
+            "session": self.dir.to_string_lossy(),
+            "rate": self.rate,
+            "code": circuitsim::SOURCE_HASH,
+            "exported_unix_s": std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs()),
+            "tracks": tracks,
+        })
     }
 
     /// The track whose id is `id`.
@@ -1656,6 +1846,64 @@ mod tests {
         let u = Session::load(&dir).expect("loads");
         assert_eq!(u.tracks[0].takes[0].position, 48_000);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_mixdown_is_what_plays_and_its_stems_sum_to_it() {
+        let base = std::env::temp_dir().join(format!("varimu_export_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let mut s = Session::new(base.join("s"), 1000, TransportSettings::default());
+        s.tracks.push(Track::new("B"));
+        s.tracks.push(Track::new("muted"));
+        let rec = |start: i64, v: f32, n: usize| Recorded {
+            start,
+            latency: 0,
+            samples: vec![v; n],
+            performance: None,
+        };
+        s.add_take(0, rec(0, 0.25, 300), "x").expect("saved");
+        s.add_take(1, rec(-50, 0.5, 100), "x").expect("saved"); // a pickup before bar 1
+        s.add_take(2, rec(0, 0.9, 1000), "x").expect("saved");
+        s.tracks[1].pan = 1.0;
+        s.tracks[1].volume_db = -6.0;
+        s.tracks[2].mute = true;
+        assert!(s.export_problems(false).is_empty());
+        let md = s.mixdown();
+        // From the pickup to the longest audible take's end; the muted take isn't in it.
+        assert_eq!((md.start, md.len, md.tracks.len()), (-50, 350, 2));
+        let mix = md.mix();
+        let g = 10f32.powf(-6.0 / 20.0);
+        assert_eq!(mix[0], [0.0, 0.5 * g]); // B alone, panned right
+        assert_eq!(mix[60], [0.25, 0.25 + 0.5 * g]);
+        assert_eq!(mix[200], [0.25, 0.25]);
+        assert_eq!(mix[349], [0.25, 0.25]);
+        let (a, b) = (md.stem(0), md.stem(1));
+        for i in 0..md.len {
+            assert_eq!([a[i][0] + b[i][0], a[i][1] + b[i][1]], mix[i]);
+        }
+        // Written: the mix, the stems, the record.
+        let path = base.join("out/s mix.wav");
+        let peak = md.write(&path, true, &s.export_record()).expect("written");
+        assert!((peak - 20.0 * (0.25 + 0.5 * g).log10() as f64).abs() < 1e-6);
+        let d = crate::audio::decode(&path).expect("reads");
+        assert_eq!((d.rate, d.channels.len(), d.frames()), (1000, 2, 350));
+        assert!(base.join("out/s mix stems/02 B.wav").is_file());
+        let j: Value =
+            serde_json::from_str(&std::fs::read_to_string(base.join("out/s mix.json")).unwrap())
+                .unwrap();
+        assert_eq!(j["start_s"], json!(-0.05));
+        assert_eq!(j["tracks"].as_array().map(Vec::len), Some(2));
+        // A final waits for production; audio takes without inserts are already final.
+        assert!(s.export_problems(true).is_empty());
+        // An insert not printed yet: the export waits for it (a final for production too).
+        s.tracks[1].inserts.push(Slot::new("plate_reverb"));
+        assert_eq!(
+            s.export_problems(false),
+            vec!["B: its inserts are still printing"]
+        );
+        s.tracks[1].mute = true;
+        assert!(s.export_problems(false).is_empty()); // only audible tracks count
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

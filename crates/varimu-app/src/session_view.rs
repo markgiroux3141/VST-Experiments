@@ -59,6 +59,15 @@
 //! track, the MIDI take kept in the lane. Renders run below normal priority, one at a time
 //! while a device plays live, none while recording.
 //!
+//! **Export** (RECORDING_PLAN.md T4's bounce): ⤓ Export mix… writes what ▶ plays
+//! ([`Session::mixdown`]) to a stereo float WAV from bar 1 (or the earliest take), a .json
+//! of what it was made from beside it, and with "stems" each audible track's part (its
+//! fader and pan: they sum to the mix); it waits until every audible track plays what it
+//! will ([`Session::export_problems`]). ⤓ Export final… first sets the audible tracks'
+//! inserts to production and renders their MIDI takes at production, then waits for that.
+//! The track strip's ⤓ Draft bakes a chain at its inserts' play qualities (⤓ Render:
+//! production).
+//!
 //! **Audition** (F3): while an insert's panel is open, that device plays live in the
 //! session's player (the Play view's device stops: one live device), fed by the track's
 //! audio where the transport is (the prints of the inserts before it, else the take), so
@@ -190,6 +199,8 @@ struct Bake {
     track: usize,
     take: String,
     slots: Vec<Slot>,
+    /// At production, else a draft: each insert at its device's play quality.
+    production: bool,
     job: Job,
 }
 
@@ -274,6 +285,26 @@ pub struct SessionView {
     proxy_available: bool,
     /// Event takes to bounce to audio once their production render lands (take, revision).
     bounces: HashSet<(String, u32)>,
+    /// ⤓ Export: waiting for the tracks, or writing.
+    export: Option<Export>,
+    /// ⤓ Export writes each track's part too.
+    export_stems: bool,
+    /// The last export's outcome (the file, its peak).
+    export_note: Option<String>,
+}
+
+/// An export of the mix ([`Session::mixdown`]): waiting until every audible track plays
+/// what it will (`fin`: at production), then written on a thread.
+enum Export {
+    Waiting {
+        path: PathBuf,
+        stems: bool,
+        fin: bool,
+    },
+    Writing {
+        path: PathBuf,
+        handle: std::thread::JoinHandle<Result<f64, String>>,
+    },
 }
 
 fn prefs_path() -> Option<PathBuf> {
@@ -387,6 +418,9 @@ impl SessionView {
             roll: None,
             proxy_available: false,
             bounces: HashSet::new(),
+            export: None,
+            export_stems: false,
+            export_note: None,
         }
     }
 
@@ -483,6 +517,7 @@ impl SessionView {
             }
         }
         self.poll_bake();
+        self.poll_export(ui.ctx());
         if idle {
             if self.audition.is_none() {
                 play.apply_monitor();
@@ -1370,7 +1405,7 @@ impl SessionView {
         let rate = self.session.rate;
         let mut changed = false;
         let mut remove = false;
-        let mut render = false;
+        let mut render: Option<bool> = None;
         let mut moved: Option<usize> = None;
         let n = self.session.tracks[t].inserts.len();
         let last_on = self.session.tracks[t]
@@ -1433,7 +1468,17 @@ impl SessionView {
                     )
                     .clicked()
                 {
-                    render = true;
+                    render = Some(true);
+                }
+                if ui
+                    .add_enabled(self.bake.is_none(), egui::Button::new("⤓ Draft"))
+                    .on_hover_text(
+                        "The same at draft quality (each insert at its play quality, as the \
+                         mix's print: at once when the print is current), for demos",
+                    )
+                    .clicked()
+                {
+                    render = Some(false);
                 }
                 if ui
                     .add_enabled(k + 1 < n, egui::Button::new("▶"))
@@ -1551,9 +1596,9 @@ impl SessionView {
             self.insert_sel = None;
             changed = true;
         }
-        if render {
+        if let Some(production) = render {
             self.insert_sel = None;
-            self.start_bake(t);
+            self.start_bake(t, production);
         }
         if changed {
             self.save();
@@ -1659,7 +1704,7 @@ impl SessionView {
     /// The row of insert chips under a track's strip (+ adds one).
     fn inserts_row(&mut self, ui: &mut egui::Ui, i: usize) -> bool {
         let mut changed = false;
-        let mut bake = false;
+        let mut bake: Option<bool> = None;
         let mut add: Option<&'static str> = None;
         let mut action: Option<(usize, &'static str)> = None;
         ui.horizontal(|ui| {
@@ -1732,7 +1777,11 @@ impl SessionView {
                                 .small()
                                 .color(theme::ACCENT),
                         )
-                        .on_hover_text("Rendering into a new take at production quality");
+                        .on_hover_text(if b.production {
+                            "Rendering into a new take at production quality"
+                        } else {
+                            "Rendering into a new take at draft quality"
+                        });
                         if ui
                             .small_button("✕")
                             .on_hover_text("Cancel the render")
@@ -1742,11 +1791,9 @@ impl SessionView {
                         }
                     }
                     _ => {
+                        let free = self.bake.is_none() && self.recording.is_none();
                         if ui
-                            .add_enabled(
-                                self.bake.is_none() && self.recording.is_none(),
-                                egui::Button::new(RichText::new("⤓ Render").small()),
-                            )
+                            .add_enabled(free, egui::Button::new(RichText::new("⤓ Render").small()))
                             .on_hover_text(
                                 "Render this track through its inserts at production quality \
                                  into a new take, and remove the inserts (the effect is baked \
@@ -1755,14 +1802,25 @@ impl SessionView {
                             )
                             .clicked()
                         {
-                            bake = true;
+                            bake = Some(true);
+                        }
+                        if ui
+                            .add_enabled(free, egui::Button::new(RichText::new("⤓ Draft").small()))
+                            .on_hover_text(
+                                "The same at draft quality (each insert at its play quality, \
+                                 as the mix's print: at once when the print is current), for \
+                                 demos; Undo brings the inserts back for the final render",
+                            )
+                            .clicked()
+                        {
+                            bake = Some(false);
                         }
                     }
                 }
             }
         });
-        if bake {
-            self.start_bake(i);
+        if let Some(production) = bake {
+            self.start_bake(i, production);
         }
         if let Some((k, what)) = action {
             let ins = &mut self.session.tracks[i].inserts;
@@ -1783,8 +1841,10 @@ impl SessionView {
         changed
     }
 
-    /// Render track `t`'s chain (its inserts not bypassed, at production) into a new take.
-    fn start_bake(&mut self, t: usize) {
+    /// Render track `t`'s chain (its inserts not bypassed) into a new take: at production,
+    /// or a draft (each insert at its device's play quality, the quality the mix's print
+    /// is made at by default, so a current print comes from the cache at once).
+    fn start_bake(&mut self, t: usize, production: bool) {
         if self.bake.is_some() {
             self.error = Some("one render at a time".into());
             return;
@@ -1801,7 +1861,11 @@ impl SessionView {
             .iter()
             .filter(|s| !s.bypass)
             .map(|s| Slot {
-                quality: Quality::Production,
+                quality: if production {
+                    Quality::Production
+                } else {
+                    find_device(&s.device).map_or(Quality::Draft1x, |d| d.quality)
+                },
                 ..s.clone()
             })
             .collect();
@@ -1820,6 +1884,7 @@ impl SessionView {
             track: t,
             take: take.id.clone(),
             slots,
+            production,
             job,
         });
         self.error = None;
@@ -1870,7 +1935,7 @@ impl SessionView {
             "take": b.take,
             "keys": keys,
             "inserts": b.slots.iter().map(Slot::to_json).collect::<Vec<_>>(),
-            "quality": Quality::Production.name(),
+            "quality": if b.production { Quality::Production.name() } else { "draft" },
             "code": circuitsim::SOURCE_HASH,
         });
         self.saved = true;
@@ -2196,6 +2261,7 @@ impl SessionView {
                 Err(e) => self.error = Some(e),
             }
         }
+        self.export_controls(ui);
         let missing = self.production_missing();
         if !missing.is_empty()
             && ui
@@ -3115,6 +3181,187 @@ impl SessionView {
     }
 
     /// Event takes (track, take) whose revision has no production render, active ones.
+    /// ⤓ Export: a file picked, then the mix written once every audible track plays what
+    /// it will. `fin`: first every insert of the audible tracks set to production, their
+    /// event takes rendered at production and played so (prints follow; Undo restores).
+    fn start_export(&mut self, fin: bool) {
+        let name = self
+            .session
+            .dir
+            .file_name()
+            .map_or("session".into(), |n| n.to_string_lossy().to_string());
+        let dir = self.session.dir.join("exports");
+        let _ = std::fs::create_dir_all(&dir);
+        let file = format!("{name} {}.wav", if fin { "final" } else { "mix" });
+        let Some(path) = rfd::FileDialog::new()
+            .set_directory(&dir)
+            .set_file_name(file)
+            .add_filter("WAV", &["wav"])
+            .save_file()
+        else {
+            return;
+        };
+        let path = path.with_extension("wav");
+        if fin {
+            let any_solo = self.session.tracks.iter().any(|t| t.solo);
+            for t in &mut self.session.tracks {
+                if (any_solo && !t.solo) || (!any_solo && t.mute) {
+                    continue;
+                }
+                t.drafts = false;
+                for s in t.inserts.iter_mut().filter(|s| !s.bypass) {
+                    s.quality = Quality::Production;
+                }
+            }
+            let audible: Vec<bool> = self
+                .session
+                .tracks
+                .iter()
+                .map(|t| if any_solo { t.solo } else { !t.mute })
+                .collect();
+            for (t, k) in self.production_missing() {
+                if audible[t] {
+                    self.render_production(t, k);
+                }
+            }
+            self.save();
+        }
+        self.export_note = None;
+        self.export = Some(Export::Waiting {
+            path,
+            stems: self.export_stems,
+            fin,
+        });
+    }
+
+    /// An export waiting: written once the tracks are ready (given up when a print or a
+    /// render it waits for failed); one writing: its outcome.
+    fn poll_export(&mut self, ctx: &egui::Context) {
+        match &self.export {
+            None => return,
+            Some(Export::Waiting { path, stems, fin }) => {
+                let failed = (0..self.session.tracks.len()).find_map(|i| {
+                    let t = &self.session.tracks[i];
+                    let sig = self.session.chain_signature(i);
+                    if let Some(e) = sig.and_then(|s| self.print_errors.get(&s)) {
+                        return Some(format!("{}: its print failed: {e}", t.name));
+                    }
+                    let k = t.active_take()?;
+                    let rev = k.events.as_ref()?.rev;
+                    self.take_errors
+                        .iter()
+                        .find(|((id, r, _), _)| *id == k.id && *r == rev)
+                        .map(|(_, e)| format!("{}: its render failed: {e}", t.name))
+                });
+                if let Some(e) = failed {
+                    self.error = Some(format!("the export stopped: {e}"));
+                    self.export = None;
+                    return;
+                }
+                if self.session.export_problems(*fin).is_empty() {
+                    let (path, stems) = (path.clone(), *stems);
+                    let md = self.session.mixdown();
+                    let mut record = self.session.export_record();
+                    record["final"] = json!(*fin);
+                    let p = path.clone();
+                    let handle = std::thread::spawn(move || md.write(&p, stems, &record));
+                    self.export = Some(Export::Writing { path, handle });
+                }
+            }
+            Some(Export::Writing { handle, .. }) => {
+                if handle.is_finished() {
+                    let Some(Export::Writing { path, handle }) = self.export.take() else {
+                        return;
+                    };
+                    let file = path
+                        .file_name()
+                        .map_or("?".into(), |n| n.to_string_lossy().to_string());
+                    match handle.join() {
+                        Ok(Ok(peak)) => {
+                            self.export_note = Some(if peak > 0.0 {
+                                format!(
+                                    "exported {file}: peaks at {peak:+.1} dBFS (kept in the float file; turn the mix down before a fixed-point copy)"
+                                )
+                            } else {
+                                format!("exported {file} (peak {peak:.1} dBFS)")
+                            });
+                        }
+                        Ok(Err(e)) => self.error = Some(format!("the export failed: {e}")),
+                        Err(_) => {
+                            self.error = Some("the export failed (its thread panicked)".into())
+                        }
+                    }
+                    return;
+                }
+            }
+        }
+        ctx.request_repaint_after(Duration::from_millis(200));
+    }
+
+    /// The export's controls in the session line: ⤓ Export mix… / final…, stems, and what
+    /// a running export waits for.
+    fn export_controls(&mut self, ui: &mut egui::Ui) {
+        ui.add_space(12.0);
+        match &self.export {
+            None => {
+                if ui
+                    .small_button("⤓ Export mix…")
+                    .on_hover_text(
+                        "The mix as ▶ plays it (each audible track through its fader and pan, \
+                         no click) to a stereo float WAV from bar 1, with a .json of what it \
+                         was made from; waits for prints still running",
+                    )
+                    .clicked()
+                {
+                    self.start_export(false);
+                }
+                if ui
+                    .small_button("⤓ Export final…")
+                    .on_hover_text(
+                        "The same at production: every insert of the audible tracks set to \
+                         production and every MIDI take rendered at production first (this \
+                         takes a while; Undo restores the inserts' qualities)",
+                    )
+                    .clicked()
+                {
+                    self.start_export(true);
+                }
+                ui.checkbox(&mut self.export_stems, "stems").on_hover_text(
+                    "Also each track's part of the mix (its fader and pan) as a stereo WAV, \
+                         from the same start: the stems sum to the mix",
+                );
+                if let Some(n) = &self.export_note {
+                    ui.label(RichText::new(n).small().color(theme::MUTED));
+                }
+            }
+            Some(Export::Waiting { fin, .. }) => {
+                let problems = self.session.export_problems(*fin);
+                let first = problems.first().cloned().unwrap_or_default();
+                let more = problems.len().saturating_sub(1);
+                ui.label(
+                    RichText::new(if more > 0 {
+                        format!("⤓ export waits: {first} (+{more} more)")
+                    } else {
+                        format!("⤓ export waits: {first}")
+                    })
+                    .small()
+                    .color(theme::ACCENT),
+                )
+                .on_hover_text(problems.join("\n"));
+                if ui
+                    .small_button("✕")
+                    .on_hover_text("Cancel the export")
+                    .clicked()
+                {
+                    self.export = None;
+                }
+            }
+            Some(Export::Writing { .. }) => {
+                ui.label(RichText::new("⤓ writing…").small().color(theme::ACCENT));
+            }
+        }
+    }
+
     fn production_missing(&self) -> Vec<(usize, usize)> {
         self.session
             .tracks
