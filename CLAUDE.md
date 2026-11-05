@@ -461,12 +461,28 @@ azimuthal order 0 only: exact for the diaphragm's axisymmetric average; checked 
 series and Lamb's disk, `tests/test_bor.py`; the K47 geometry's `body` block), the network
 refitted on it: the omni's 6.5 kHz dip gone, the presence peak at ~11 kHz, omni 16.8 mV/Pa
 (in ds58). `free_field.capsule_entry_pressures` picks body / sphere / path from a capsule's
-geometry; `mic_print.py --distance-m` prints a point source (proximity). **The SM57** (and SM58), MIC_ROOM_PLAN.md's A7, is
-planned in [docs/SM57_PLAN.md](docs/SM57_PLAN.md) (2026-11-04; nothing built; milestones SM1-SM8; the user's 2026-11-05: both mics, the
-pre-1980s transformer, the nominal mic only, high SPL after the first listen): a
-`moving_coil` component (a gyrator B l / S to the coil, the rear phase-shift network, the
-dome's shell modes, B l(x) from a magnet FE map), its output transformer as a C2 design,
-the SM58's ball grille as a permeable BEM surface; passive, so no BJT model needed.
+geometry; `mic_print.py --distance-m` prints a point source (proximity). **The SM57 and SM58**
+([docs/SM57_PLAN.md](docs/SM57_PLAN.md), MIC_ROOM_PLAN.md's A7; the user's 2026-11-05: both
+mics, the old dual-impedance transformer, the nominal mic only, high SPL after the first
+listen) were built overnight 2026-11-05 in the `sm57` worktree and merged: SM1-SM5 and SM8
+built, the plan's "Status" has every number and open item. Sources:
+`data/schematics/shure_sm57/README.md` (Shure's 1965-70 sheets, Seeler's 1961 JAES paper and
+the Unidyne III patents, bench figures), curves `data/datasheets/shure_sm5{7,8}_*.csv`. The
+cartridge is the component kind **`moving_coil`** (`varimu/devices/moving_coil.py`): its
+acoustic network as data (screen, tube, slit, cavity, the cap's `film`, `acoustic`, Seeler's
+phase-shift network `seeler`, the diaphragm with dome `modes`) compiled to R / L / C and a
+gyrator (B l / S, two Vccs); the part `moving_coil: [front, rear, plus, minus]` in both
+builders (`varimu-circuit/src/moving_coil.rs`). **R57@4** (the SM57's, fitted by
+`scripts/fit_sm57.py` on the mic's body, `bor.dynamic_mesh`): within +-2 dB to 10 kHz, polars
+within 3 dB; **R59@1** (the SM58's, `fit_sm57.py --mic sm58`, on the ball grille as a
+permeable sheet: **`varimu/mics/bor_permeable.py`**, two acoustic domains, checked against
+`varimu/mics/permeable.py`'s exact series), within +-2 dB to 10 kHz. The transformer
+**SM57_OT@1** (`config/designs/sm57_ot.yaml`, EI-25: Tempel's EI-18 / EI-25 added to the
+lamination table). Circuits `shure_sm57.yaml`, `shure_sm58.yaml`, chains `sm57_v76.yaml`,
+`sm58_v76.yaml`; `scripts/sm57_loading.py`; tests `tests/test_{moving_coil,sm57,sm58,
+permeable}.py`. Open (the user's): the output impedance (352 ohm vs ~250-310 published),
+proximity (+18 dB at 100 Hz at 6 mm vs Shure's text 6-10 dB), the SM58's top octave (3-5 dB
+high above 12 kHz), the Room view (not yet offered there), the first listen (SM6), then SM7.
 
 **The room loop** ([docs/ROOM_LOOP_PLAN.md](docs/ROOM_LOOP_PLAN.md), started 2026-11-04, the
 user delegating its decisions; MIC_ROOM_PLAN.md's A4 and A9): sources placed in a shoebox room,
