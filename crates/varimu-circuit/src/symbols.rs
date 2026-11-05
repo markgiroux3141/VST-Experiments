@@ -686,6 +686,33 @@ fn table() -> Vec<SymbolDef> {
             (0.0, 6.35, 5.588, "left"),
         ),
         macro_sym(
+            "MovingCoil",
+            "moving_coil",
+            "MK",
+            "Moving-coil cartridge (varimu.devices.moving_coil, the SM57's Unidyne III): pins 1 and 2 the pressures at its front and rear entries (pascals as volts), 3 and 4 the coil's plus and minus; Value is its component version",
+            vec![
+                pin("1", "1", -7.62, 2.54, 0, 2.54),
+                pin("2", "2", -7.62, -2.54, 0, 2.54),
+                pin("3", "3", 7.62, 2.54, 180, 2.54),
+                pin("4", "4", 7.62, -2.54, 180, 2.54),
+            ],
+            vec![
+                circle(0.0, 0.0, 3.81, false),
+                poly(&[(-1.27, 2.54), (-1.27, -2.54)]),
+                poly(&[
+                    (0.0, 1.27),
+                    (1.27, 0.635),
+                    (0.0, 0.0),
+                    (1.27, -0.635),
+                    (0.0, -1.27),
+                ]),
+            ],
+            Some("component"),
+            &[],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
+        macro_sym(
             "OpAmp",
             "opamp",
             "U",
