@@ -1,0 +1,427 @@
+# The chain list: which microphone goes into which preamp (MIC_ROOM_PLAN.md "The chain
+# list", the user's curation of 2026-11-05; docs/CHAINS_PLAN.md builds it out).
+#
+# Read by varimu/chains.py (the reference: its docstring is the format), and through it by
+# scripts/compose_chain.py (composes every available chain into
+# config/circuits/<id>.yaml), scripts/chain_status.py (what is available, what is blocked
+# and by what) and tests/test_chain_matrix.py; and by varimu-app's room::chains (the Room
+# view's chain picker: label, settings, and the `use` note under the choice).
+#
+# circuits: every mic, booster and preamp the list names, by circuit file name
+#   (config/circuits/<name>.yaml). kind mic | booster | pre; tag: the suffix its keys,
+#   parts and nodes get in a chain (and the chain's id is its stages' tags joined by "_");
+#   label: its name in a chain's label. A built circuit has its ports: a mic's `output`
+#   node, a preamp's (or booster's) `input` node (behind its generator), the parts that
+#   are only its measuring setup (`drop`); and the settings the Room view offers (keys of
+#   its circuit file, unsuffixed; choices [value, label]). A built mic's `pattern` is how
+#   the Room view draws it: cardioid | omni, or {setting: KEY}, the label of that
+#   setting's choice. A circuit not built yet names the work package that builds it
+#   (`wp`, CHAINS_PLAN.md).
+# chains: per chain its id, stages (mic, optional booster, pre), what it is most likely
+#   used to record (`use`), what it needed beyond what was built when the list was made
+#   (`needs`, the tokens below; `needs_note` qualifies them), and `defaults` overriding
+#   a setting's default (chain keys, suffixed).
+# needs: the prerequisites, each with the work package that provides it.
+#
+# The default gains put 94 dB SPL on axis at -18.1 to -23.1 dBFS (a 1 kHz sine's peak,
+# measured at draft); a loud close source wants less.
+
+needs:
+  data: {what: "new mic or preamp files on kinds and tubes that exist"}
+  ribbon: {what: "the ribbon_motor transducer kind", wp: 5}
+  bjt: {what: "the BJT device model (Gummel-Poon subset)", wp: 10}
+  jfet: {what: "the JFET device model", wp: 21}
+  ef86: {what: "the EF86 pentode fit", wp: 28}
+  ac701: {what: "the AC701 triode fit", wp: 29}
+  crystal: {what: "the crystal (piezoelectric) transducer kind", wp: 30}
+  carbon: {what: "the carbon-granule transducer kind", wp: 31}
+
+circuits:
+  # --- microphones ---
+  neumann_u47:
+    kind: mic
+    tag: u47
+    label: U47
+    output: out
+    drop: [RLOAD]
+    pattern: {setting: pattern}
+    settings:
+      - key: pattern
+        label: Pattern
+        choices: [[0, cardioid], [1, omni]]
+        default: 0
+  shure_sm57:
+    kind: mic
+    tag: sm57
+    label: SM57
+    output: out
+    drop: [RLOAD]
+    pattern: cardioid
+    settings:
+      - key: impedance        # the output transformer's tap
+        label: Impedance
+        choices: [[0, "H (150-250 Ω)"], [1, "L (30-50 Ω)"]]
+        default: 0
+  shure_sm58:
+    kind: mic
+    tag: sm58
+    label: SM58
+    output: out
+    drop: [RLOAD]
+    pattern: cardioid
+    settings:
+      - key: impedance
+        label: Impedance
+        choices: [[0, "H (150-250 Ω)"], [1, "L (30-50 Ω)"]]
+        default: 0
+  omni_4134:
+    kind: mic
+    tag: omni
+    label: Omni (4134)
+    output: out
+    drop: [RMEAS]
+    pattern: omni
+    settings: []
+  rca_44bx: {kind: mic, tag: r44, label: RCA 44-BX, wp: 6}
+  rca_77dx: {kind: mic, tag: r77, label: RCA 77-DX, wp: 7}
+  coles_4038: {kind: mic, tag: c4038, label: Coles 4038, wp: 8}
+  royer_r121: {kind: mic, tag: r121, label: Royer R-121, wp: 16}
+  beyer_m160: {kind: mic, tag: m160, label: Beyer M160, wp: 17}
+  ev_re20: {kind: mic, tag: re20, label: EV RE20, wp: 13}
+  sennheiser_md421: {kind: mic, tag: md421, label: Sennheiser MD421, wp: 14}
+  shure_sm7: {kind: mic, tag: sm7, label: Shure SM7, wp: 15}
+  akg_d112: {kind: mic, tag: d112, label: AKG D112, wp: 9}
+  akg_c12: {kind: mic, tag: c12, label: AKG C12, wp: 3}
+  telefunken_ela_m251: {kind: mic, tag: m251, label: ELA M 251, wp: 18}
+  neumann_m49: {kind: mic, tag: m49, label: Neumann M49, wp: 29}
+  neumann_u67: {kind: mic, tag: u67, label: Neumann U67, wp: 28}
+  neumann_u87: {kind: mic, tag: u87, label: Neumann U87, wp: 22}
+  neumann_u47_fet: {kind: mic, tag: u47fet, label: U47 fet, wp: 25}
+  neumann_km84: {kind: mic, tag: km84, label: Neumann KM84, wp: 24}
+  akg_c414: {kind: mic, tag: c414, label: AKG C414, wp: 23}
+  crown_pzm: {kind: mic, tag: pzm, label: Crown PZM, wp: 26}
+  shure_green_bullet: {kind: mic, tag: bullet, label: Shure Green Bullet, wp: 30}
+  carbon_transmitter: {kind: mic, tag: carbon, label: Carbon transmitter, wp: 31}
+
+  # --- boosters ---
+  cloudlifter: {kind: booster, tag: cl, label: Cloudlifter, wp: 27}
+
+  # --- preamps ---
+  telefunken_v76:
+    kind: pre
+    tag: v76
+    label: V76
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: gain_db
+        label: V76 gain
+        choices: [[3, 3 dB], [9, 9 dB], [18, 18 dB], [24, 24 dB], [34, 34 dB], [40, 40 dB],
+                  [46, 46 dB], [52, 52 dB], [58, 58 dB], [64, 64 dB], [70, 70 dB], [76, 76 dB]]
+        default: 34
+  clean_pre:
+    kind: pre
+    tag: clean
+    label: clean
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: gain_db
+        label: Gain
+        choices: [[20, 20 dB], [30, 30 dB], [40, 40 dB], [50, 50 dB], [60, 60 dB]]
+        default: 30
+  telefunken_v72: {kind: pre, tag: v72, label: Telefunken V72, wp: 1}
+  ua_610: {kind: pre, tag: ua610, label: UA 610, wp: 2}
+  ssl_4000e: {kind: pre, tag: ssl, label: SSL 4000 E, wp: 4}
+  tascam_portastudio: {kind: pre, tag: porta, label: Portastudio, wp: 4}
+  ampex_351_record: {kind: pre, tag: a351, label: Ampex 351, wp: 7}
+  neve_1073: {kind: pre, tag: n1073, label: Neve 1073, wp: 11}
+  api_312: {kind: pre, tag: api312, label: API 312, wp: 12}
+  helios: {kind: pre, tag: helios, label: Helios, wp: 19}
+  emi_tg12345: {kind: pre, tag: tg, label: EMI TG12345, wp: 20}
+  emi_redd47: {kind: pre, tag: redd47, label: REDD.47, wp: 28}
+  fender_5e3: {kind: pre, tag: f5e3, label: Fender 5E3, wp: 30}   # the file exists; its
+                                    # input port as a chain's stage comes with WP30
+
+chains:
+  # --- built (the first matrix) ---
+  - id: u47_v76
+    mic: neumann_u47
+    pre: telefunken_v76
+    use: "Vocals, strings, acoustic guitar: the German broadcast tube sound"
+    needs: []
+  - id: u47_clean
+    mic: neumann_u47
+    pre: clean_pre
+    use: "Vocals; the U47 heard without a preamp's colour (the control)"
+    needs: []
+  - id: sm57_v76
+    mic: shure_sm57
+    pre: telefunken_v76
+    use: "Guitar cab, snare, thickened by a tube pre with transformers"
+    needs: []
+    defaults: {gain_db_v76: 58}
+  - id: sm57_clean
+    mic: shure_sm57
+    pre: clean_pre
+    use: "Snare, guitar cab; the SM57 as designed (the control)"
+    needs: []
+    defaults: {gain_db_clean: 60}
+  - id: sm58_v76
+    mic: shure_sm58
+    pre: telefunken_v76
+    use: "Vocals, a warmer take on the stage mic"
+    needs: []
+    defaults: {gain_db_v76: 58}
+  - id: sm58_clean
+    mic: shure_sm58
+    pre: clean_pre
+    use: "Live and stage vocals"
+    needs: []
+    defaults: {gain_db_clean: 60}
+  - id: omni_clean
+    mic: omni_4134
+    pre: clean_pre
+    use: "Classical, ambience pairs, measurement: the neutral reference"
+    needs: []
+    defaults: {gain_db_clean: 40}
+  - id: omni_v76
+    mic: omni_4134
+    pre: telefunken_v76
+    use: "Room mics with tube weight"
+    needs: []
+    defaults: {gain_db_v76: 40}
+
+  # --- ribbons ---
+  - id: r44_v76
+    mic: rca_44bx
+    pre: telefunken_v76
+    use: "Crooner vocals, horns, strings: the darkest chain (pole 1)"
+    needs: [ribbon]
+  - id: r44_ua610
+    mic: rca_44bx
+    pre: ua_610
+    use: "1950s-60s American vocals, big-band horns, upright bass"
+    needs: [ribbon, data]
+  - id: r44_n1073
+    mic: rca_44bx
+    pre: neve_1073
+    use: "Vocals, horns, guitar cab; its 300 / 1200 ohm switch shows ribbon loading"
+    needs: [ribbon, bjt]
+  - id: r44_cl_clean
+    mic: rca_44bx
+    booster: cloudlifter
+    pre: clean_pre
+    use: "Today's home-studio ribbon: the ribbon into a high impedance"
+    needs: [ribbon, jfet]
+  - id: r77_a351
+    mic: rca_77dx
+    pre: ampex_351_record
+    use: "1950s rockabilly vocals; the slapback machine's own electronics"
+    needs: [ribbon]
+  - id: r77_ua610
+    mic: rca_77dx
+    pre: ua_610
+    use: "Broadcast, voice-over, vocals; its pattern shutter (figure-8 / cardioid / omni)"
+    needs: [ribbon, data]
+  - id: c4038_v72
+    mic: coles_4038
+    pre: telefunken_v72
+    use: "Early-1960s British drum overheads, brass (the REDD.37 desk's V72s)"
+    needs: [ribbon, data]
+  - id: c4038_tg
+    mic: coles_4038
+    pre: emi_tg12345
+    use: "1970s drum overheads, strings, brass"
+    needs: [ribbon, bjt]
+  - id: r121_api312
+    mic: royer_r121
+    pre: api_312
+    use: "Rock guitar cabs, often blended with an SM57"
+    needs: [ribbon, bjt]
+  - id: m160_n1073
+    mic: beyer_m160
+    pre: neve_1073
+    use: "Snare top, toms, guitar cab: a hypercardioid ribbon"
+    needs: [ribbon, bjt]
+
+  # --- dynamics ---
+  - id: sm57_api312
+    mic: shure_sm57
+    pre: api_312
+    use: "Snare, guitar cab: mid-forward and punchy (pole 3)"
+    needs: [bjt]
+  - id: sm57_n1073
+    mic: shure_sm57
+    pre: neve_1073
+    use: "Guitar cab, snare, horns: the default rock cab chain"
+    needs: [bjt]
+  - id: sm57_helios
+    mic: shure_sm57
+    pre: helios
+    use: "1970s British rock guitar and drums"
+    needs: [bjt]
+  - id: sm57_porta
+    mic: shure_sm57
+    pre: tascam_portastudio
+    use: "Home demos: guitar into a cassette 4-track"
+    needs: [data]
+    needs_note: op-amps
+  - id: sm58_ssl
+    mic: shure_sm58
+    pre: ssl_4000e
+    use: "1980s-90s rock and pop vocals"
+    needs: [data]
+    needs_note: op-amps; the BJT if its input stage is discrete
+  - id: sm58_porta
+    mic: shure_sm58
+    pre: tascam_portastudio
+    use: "Bedroom demo vocals"
+    needs: [data]
+    needs_note: op-amps
+  - id: re20_api312
+    mic: ev_re20
+    pre: api_312
+    use: "Kick (in the port), bass cab"
+    needs: [data, bjt]
+  - id: re20_n1073
+    mic: ev_re20
+    pre: neve_1073
+    use: "Radio and voice-over; close vocals without proximity boom (Variable-D)"
+    needs: [data, bjt]
+  - id: md421_api312
+    mic: sennheiser_md421
+    pre: api_312
+    use: "Toms, guitar cab, horns: the 1970s-80s rock tom sound"
+    needs: [data, bjt]
+  - id: sm7_n1073
+    mic: shure_sm7
+    pre: neve_1073
+    use: "Rock and rap vocals, loud singers close up"
+    needs: [data, bjt]
+  - id: sm7_cl_clean
+    mic: shure_sm7
+    booster: cloudlifter
+    pre: clean_pre
+    use: "Podcasts and home vocals: a low-output dynamic and a booster"
+    needs: [data, jfet]
+  - id: d112_ssl
+    mic: akg_d112
+    pre: ssl_4000e
+    use: "1990s rock and pop kick"
+    needs: [data]
+    needs_note: op-amps
+
+  # --- tube condensers ---
+  - id: u47_v72
+    mic: neumann_u47
+    pre: telefunken_v72
+    use: "Early-1960s British pop vocals (U47s into the REDD.37's V72s)"
+    needs: [data]
+  - id: u47_n1073
+    mic: neumann_u47
+    pre: neve_1073
+    use: "Big, glossy vocals; bass cab (pole 4)"
+    needs: [bjt]
+  - id: u47_ua610
+    mic: neumann_u47
+    pre: ua_610
+    use: "American tube-console pop and jazz vocals"
+    needs: [data]
+  - id: c12_clean
+    mic: akg_c12
+    pre: clean_pre
+    use: "Bright and clean (pole 2): strings, acoustic guitar, overheads, airy vocals"
+    needs: [data]
+  - id: c12_ua610
+    mic: akg_c12
+    pre: ua_610
+    use: "Bright tube vocals, jazz vocals, horns"
+    needs: [data]
+  - id: m251_n1073
+    mic: telefunken_ela_m251
+    pre: neve_1073
+    use: "Classic pop and rock vocals: the CK12's top into a Neve"
+    needs: [data, bjt]
+  - id: m49_v76
+    mic: neumann_m49
+    pre: telefunken_v76
+    use: "Strings, choir, orchestra: the German radio studio"
+    needs: [ac701]
+  - id: u67_redd47
+    mic: neumann_u67
+    pre: emi_redd47
+    use: "Mid-1960s Abbey Road vocals, strings, piano"
+    needs: [ef86]
+  - id: u67_n1073
+    mic: neumann_u67
+    pre: neve_1073
+    use: "1970s rock vocals, guitar cab, piano"
+    needs: [ef86, bjt]
+
+  # --- FET condensers and boundary ---
+  - id: u87_n1073
+    mic: neumann_u87
+    pre: neve_1073
+    use: "The default studio vocal chain of the 1970s-90s; strings, piano, voice-over"
+    needs: [jfet, bjt]
+  - id: u87_ssl
+    mic: neumann_u87
+    pre: ssl_4000e
+    use: "1980s-90s pop vocals, voice-over"
+    needs: [jfet]
+  - id: u87_tg
+    mic: neumann_u87
+    pre: emi_tg12345
+    use: "1970s vocals and strings"
+    needs: [jfet, bjt]
+  - id: u47fet_api312
+    mic: neumann_u47_fet
+    pre: api_312
+    use: "Kick outside the head, bass cab"
+    needs: [jfet, bjt]
+  - id: km84_n1073
+    mic: neumann_km84
+    pre: neve_1073
+    use: "Acoustic guitar, hi-hat, overheads"
+    needs: [jfet, bjt]
+  - id: km84_tg
+    mic: neumann_km84
+    pre: emi_tg12345
+    use: "1970s overheads, acoustic guitar"
+    needs: [jfet, bjt]
+  - id: c414_ssl
+    mic: akg_c414
+    pre: ssl_4000e
+    use: "Overheads, piano, acoustic, choir: the 1980s-90s all-rounder"
+    needs: [jfet]
+  - id: c414_clean
+    mic: akg_c414
+    pre: clean_pre
+    use: "Classical spots, piano, neutral"
+    needs: [jfet]
+  - id: pzm_clean
+    mic: crown_pzm
+    pre: clean_pre
+    use: "Inside a piano lid, on a wall or floor as a room mic"
+    needs: [jfet]
+    needs_note: and a mic placed on a surface in scenes (WP26)
+  - id: pzm_ssl
+    mic: crown_pzm
+    pre: ssl_4000e
+    use: "1980s drum rooms, a boundary mic on the floor or wall"
+    needs: [jfet]
+    needs_note: and a mic placed on a surface in scenes (WP26)
+
+  # --- lo-fi wildcards ---
+  - id: bullet_f5e3
+    mic: shure_green_bullet
+    pre: fender_5e3
+    use: "Chicago blues harmonica: the mic into an amp, the amp then miked in the room"
+    needs: [crystal]
+    needs_note: an instrument, not a recording chain (its output is the speaker's pressure)
+  - id: carbon_clean
+    mic: carbon_transmitter
+    pre: clean_pre
+    use: "The telephone voice; 1920s-30s radio"
+    needs: [carbon]

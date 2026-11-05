@@ -1,62 +1,73 @@
-"""Every microphone into every preamp (scripts/compose_chain.py --all): the generated chain
-files are current, each builds as one netlist with the mic's load and the preamp's
-generator gone, the room finds its capsule, and the Room view offers each
-(varimu-app room::CHAINS)."""
+"""The chain list (config/chains.yaml, varimu/chains.py; docs/CHAINS_PLAN.md): every
+available chain's generated file is current (scripts/compose_chain.py --all), each builds
+as one netlist with the mic's load and the preamp's generator gone, the room finds its
+capsule, and every setting the Room view offers (varimu-app room::chains reads the same
+list) is a key of its chain."""
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 
 import pytest
 
+from varimu import chains as chain_list
 from varimu.circuit import builder, spec
 from varimu.config import REPO_ROOT
 
 sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import compose_chain  # noqa: E402
 
-PAIRS = [(m, p) for m in compose_chain.MICS for p in compose_chain.PREAMPS]
+LIST = chain_list.load()
+AVAILABLE = LIST.available()
 
 
-def test_every_pair_is_current():
+def test_every_available_chain_is_current():
     r = subprocess.run(
         [sys.executable, "scripts/compose_chain.py", "--all", "--check"],
         cwd=REPO_ROOT, capture_output=True, text=True,
     )  # fmt: skip
     assert r.returncode == 0, r.stdout + r.stderr
-    assert len(PAIRS) == 8
+    assert len(compose_chain.listed_pairs()) == len(AVAILABLE)
+    assert {c.id for c in AVAILABLE} >= {"u47_v76", "omni_clean", "sm58_clean"}
 
 
-@pytest.mark.parametrize("mic,pre", PAIRS)
-def test_each_pair_builds_as_one_netlist(mic, pre):
+def test_the_list():
+    assert len(LIST.chains) == 51  # MIC_ROOM_PLAN.md's curation; a change is the user's
+    for c in LIST.chains:
+        assert c.id == "_".join(s.tag for s in c.stages)
+        assert c.use
+        if not c.available:  # a blocked chain says what builds it
+            assert all(s.wp for s in c.missing), c.id
+    assert LIST.chain("sm57_v76").label == "SM57 → V76"
+    assert [(s.key, s.default) for s in LIST.chain("sm57_v76").settings()] == [
+        ("impedance_sm57", 0.0),
+        ("gain_db_v76", 58.0),
+    ]
+
+
+def test_a_wrong_id_is_refused(tmp_path):
+    text = chain_list.CHAINS_PATH.read_text(encoding="utf-8")
+    bad = tmp_path / "chains.yaml"
+    bad.write_text(text.replace("- id: u47_clean", "- id: u47_cln"), encoding="utf-8")
+    with pytest.raises(ValueError, match="u47_cln"):
+        chain_list.load(bad)
+
+
+@pytest.mark.parametrize("chain", AVAILABLE, ids=lambda c: c.id)
+def test_each_chain_builds_as_one_netlist(chain):
     from varimu.rooms.scene import _capsule_geometry
 
-    name = compose_chain.chain_name(mic, pre)
-    c = spec.load_circuit(spec.circuit_path(name))
+    c = spec.load_circuit(chain.path)
     ir = builder.build(c, {}).ir
     names = {e.name for e in ir.elements()}
-    pm, pp = compose_chain.PORTS[mic], compose_chain.PORTS[pre]
     assert "CCABLE" in names
-    for part in pm["drop"]:
-        assert f"{part}_{pm['tag'].upper()}" not in names
-    for part in pp["drop"]:
-        assert f"{part}_{pp['tag'].upper()}" not in names
+    for stage in chain.stages:
+        for part in stage.drop:
+            assert f"{part}_{stage.tag.upper()}" not in names
     has_rear = any(k.name == "p_rear" for k in ir.controls)
-    assert has_rear == (mic != "omni_4134")  # a pressure capsule has one entry
-    assert _capsule_geometry(name, {}).get("body")  # the room's entry tables need a body
-
-
-def test_the_room_view_offers_every_pair():
-    src = (REPO_ROOT / "crates" / "varimu-app" / "src" / "room.rs").read_text(encoding="utf-8")
-    start = src.index("pub const CHAINS")
-    block = src[start : src.index("\n];", start)]
-    ids = re.findall(r'id: "([a-z0-9_]+)"', block)
-    assert sorted(ids) == sorted(compose_chain.chain_name(m, p) for m, p in PAIRS)
-    for cid in ids:  # every setting the app offers is a key of the chain
-        c = spec.load_circuit(spec.circuit_path(cid))
-        q = spec.resolve(c, {})
-        chain_block = block[block.index(f'id: "{cid}"') :].split("Chain {")[0]
-        for key in re.findall(r'key: "([a-z0-9_]+)"', chain_block):
-            assert key in q, (cid, key)
+    assert has_rear == (chain.mic.name != "omni_4134")  # a pressure capsule has one entry
+    assert _capsule_geometry(chain.id, {}).get("body")  # the room's entry tables need a body
+    q = spec.resolve(c, {})
+    for s in chain.settings():  # every setting the app offers is a key of the chain
+        assert s.key in q, (chain.id, s.key)

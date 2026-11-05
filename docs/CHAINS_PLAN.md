@@ -13,10 +13,14 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 8 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean).
-- **Done:** nothing yet (the plan written 2026-11-05).
+- **Chains available:** 8 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+  `uv run python scripts/chain_status.py`).
+- **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
+  `chain_status.py` and the app.
 - **In progress:** none.
-- **Next:** WP0 (the list as data), step 1.
+- **Next:** WP1 (the Telefunken V72), Start step 4: write its steps here, sources first
+  (the V72's schematic and the Braunbuch's figures; BV 191 is compiled: `BV191@2`, fitted
+  to the V72's figures in COMPONENT_EDITOR_PLAN.md C2 step 5).
 - **Waiting on the user:** nothing.
 
 ## How a session runs
@@ -87,8 +91,8 @@ before it. Sizes are rough: S one session, M one or two, L several.
 
 | WP | What | Opens | Size | State |
 |---|---|---|---|---|
-| 0 | The list as data: `config/chains.yaml`, `chain_status.py`, compose / test / app read it | 0 | S | next |
-| 1 | Telefunken V72 (two EF804S; BV 191 is its input transformer, already compiled) | U47 -> V72 | M | |
+| 0 | The list as data: `config/chains.yaml`, `chain_status.py`, compose / test / app read it | 0 | S | done 2026-11-05 |
+| 1 | Telefunken V72 (two EF804S; BV 191 is its input transformer, already compiled) | U47 -> V72 | M | next |
 | 2 | Universal Audio 610 | U47 -> 610 | M | |
 | 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | |
 | 4 | The op-amp preamps: SSL 4000 E channel, Tascam Portastudio (sources decide: op-amps only, or wait for the BJT) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | |
@@ -136,7 +140,29 @@ Steps:
 5. Done when: the 8 built chains come out byte-identical (`--check`), the tests pass, the
    Room view shows the notes (seen on a scratch APPDATA, the memory rule).
 
-Notes: (none yet)
+Notes (2026-11-05, done):
+- `config/chains.yaml` (its header is the format): `needs` (token -> what, WP),
+  `circuits` (every mic / booster / preamp on the list by circuit file name: kind, tag,
+  label; built ones their port, `drop`, `pattern` (mics) and `settings`; unbuilt ones their
+  `wp`), `chains` (id = the stages' tags joined by "_", checked; mic, optional booster,
+  pre; `use`; `needs`, `needs_note`; `defaults` in chain keys). Labels are derived (stage
+  labels joined by " → "), not stored.
+- `varimu/chains.py` is the reference reader and checker (built = the circuit file exists
+  and has its port; available = every stage built). `fender_5e3`'s file exists but it has
+  no `input` port until WP30, so it counts as unbuilt.
+- `scripts/compose_chain.py`: `PORTS` is built from the list; `--all` = `listed_pairs()`,
+  the available chains (a booster raises NotImplementedError until WP27). `MICS` /
+  `PREAMPS` are gone. The 8 files come out byte-identical (`--check`).
+- `chain_status.py` prints available, blocked (missing circuits with their WP, needs),
+  and what each WP opens: it matches the WP table's "Opens" column exactly (43 blocked).
+- The app: `room::load_chains` / `chains()` / `chain()` read the list once (a `OnceLock`;
+  `RoomView::new` calls `init_chains(root/config)`, a load error shows with the preset
+  errors), offering chains whose composed file exists; `RoomMic::pattern` comes from the
+  mic's `pattern` (no tags hard-coded). The `use` note is a faint line under the add-mic
+  picker and the mic's Chain, and each entry's hover text. Seen on a scratch APPDATA.
+- When a WP builds a circuit: give its entry the port, `drop`, `pattern` (a mic) and
+  `settings`, remove its `wp`, run `compose_chain.py --all`, then `chain_status.py`.
+- Tests: `tests/test_chain_matrix.py` (11), varimu-app `room::tests::chain_list_reads`.
 
 ### WP1-WP31
 
@@ -146,7 +172,8 @@ in `data/schematics/neumann_u47/README.md` and `data/schematics/shure_sm57/READM
 
 ## Owed
 
-Batched checks (the targeted-tests rule): (none yet)
+Batched checks (the targeted-tests rule): none (WP0 touched no circuit, device or
+fixture; its targeted tests and `cargo test -p varimu-app --lib room::` passed).
 
 ## Decisions (the user's)
 
@@ -157,3 +184,6 @@ Batched checks (the targeted-tests rule): (none yet)
 
 - 2026-11-05: the list curated (MIC_ROOM_PLAN.md "The chain list"), this plan and the
   `/chains` skill written; commits on main decided.
+- 2026-11-05: WP0 done: `config/chains.yaml` + `varimu/chains.py`, `chain_status.py`,
+  compose / test_chain_matrix / the Room view read it (the `use` note under the picker);
+  8 of 51 available, the 8 files byte-identical.

@@ -573,7 +573,7 @@ wave solver at 250 Hz (finite).
 preamp (V76, clean): eight chains, the four new ones `u47_clean`, `sm57_clean`, `sm58_clean`,
 `omni_v76` (the existing four regenerate byte for byte). The Room view offers all eight
 (`room::CHAINS`: the mic's switch, pattern or impedance tap, and the preamp's gain; a dynamic
-drawn cardioid). For the SM57 and SM58 in a room: the scene finds a `cartridge_model*` as well
+drawn cardioid; since CHAINS_PLAN.md's WP0 read from `config/chains.yaml`). For the SM57 and SM58 in a room: the scene finds a `cartridge_model*` as well
 as a `capsule_model*`, and the SM58's ball grille has a room table at last
 (`bor_permeable.entry_table`: point sources as well as plane waves, the same solve;
 identical to `entry_factors` for plane waves, converging to it with distance; ~4 s per

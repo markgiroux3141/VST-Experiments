@@ -36,7 +36,7 @@ JSON):
     mics:
       - name: spot A
         chain: u47_v76               # a circuit file with a capsule or cartridge: any
-                                     # mic x preamp of scripts/compose_chain.py --all
+                                     # available chain of config/chains.yaml
         position_m: [2.0, 2.2, 1.2]
         aim: {azimuth_deg: 90, elevation_deg: 0}   # counterclockwise from +x
         set: {pattern_u47: 0, gain_db_v76: 40}     # the chain's controls and values

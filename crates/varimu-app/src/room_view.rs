@@ -16,8 +16,8 @@ use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::player::Player;
 use varimu_app::room::{
-    self, Balance, CEILINGS, CHAINS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, Pattern,
-    QUALITIES, RenderJob, RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
+    self, Balance, CEILINGS, DIRECTIVITIES, MATERIALS, OBJECT_KINDS, PRESETS, Pattern, QUALITIES,
+    RenderJob, RoomMic, RoomObject, RoomPreset, RoomSource, Scene, WAVE_CROSSOVERS,
 };
 use varimu_app::session::{Mix, MixClip};
 use varimu_app::settings::{Quality, Settings};
@@ -108,7 +108,8 @@ const MIC_COLOR: Color32 = theme::NET;
 
 impl RoomView {
     pub fn new(root: &std::path::Path) -> RoomView {
-        let (presets, preset_errors) = room::load_presets(&root.join("config"));
+        let (presets, mut preset_errors) = room::load_presets(&root.join("config"));
+        preset_errors.extend(room::init_chains(&root.join("config")).map(String::from));
         RoomView {
             root: root.to_path_buf(),
             scene: Scene::default(),
@@ -457,7 +458,7 @@ impl RoomView {
         ui.label(RichText::new("MICS").strong().color(theme::MUTED));
         for (i, m) in self.scene.mics.iter().enumerate() {
             let on = self.sel == Some(Sel::Mic(i));
-            let chain = room::chain(&m.chain).map_or(m.chain.as_str(), |c| c.label);
+            let chain = room::chain(&m.chain).map_or(m.chain.as_str(), |c| c.label.as_str());
             let text = format!("◉ {}  ·  {}  ·  pan {:+.2}", m.name, chain, m.pan);
             if ui
                 .selectable_label(on, RichText::new(text).color(MIC_COLOR))
@@ -466,12 +467,19 @@ impl RoomView {
                 self.sel = Some(Sel::Mic(i));
             }
         }
+        let chains = room::chains();
+        self.add_chain = self.add_chain.min(chains.len().saturating_sub(1));
         ui.horizontal(|ui| {
+            let Some(picked) = chains.get(self.add_chain) else {
+                ui.label("no chains: config/chains.yaml");
+                return;
+            };
             egui::ComboBox::from_id_salt("room_add_chain")
-                .selected_text(CHAINS[self.add_chain].label)
+                .selected_text(&picked.label)
                 .show_ui(ui, |ui| {
-                    for (k, c) in CHAINS.iter().enumerate() {
-                        ui.selectable_value(&mut self.add_chain, k, c.label);
+                    for (k, c) in chains.iter().enumerate() {
+                        ui.selectable_value(&mut self.add_chain, k, &c.label)
+                            .on_hover_text(&c.use_note);
                     }
                 });
             if ui.button("+ Mic").clicked() {
@@ -481,7 +489,7 @@ impl RoomView {
                 if !self.scene.inside(&pos) {
                     pos = centroid(&self.scene);
                 }
-                let mut m = RoomMic::new(&name, CHAINS[self.add_chain].id, pos, -90.0);
+                let mut m = RoomMic::new(&name, &picked.id, pos, -90.0);
                 if let Some(s) = self.scene.sources.first() {
                     m.aim_at(s.pos[0], s.pos[1]);
                 }
@@ -489,6 +497,9 @@ impl RoomView {
                 self.sel = Some(Sel::Mic(self.scene.mics.len() - 1));
             }
         });
+        if let Some(c) = chains.get(self.add_chain) {
+            ui.label(RichText::new(&c.use_note).small().color(theme::FAINT));
+        }
         ui.separator();
 
         // Objects
@@ -964,14 +975,18 @@ impl RoomView {
         });
         ui.horizontal(|ui| {
             ui.label("Chain");
-            let cur = room::chain(&m.chain).map_or(m.chain.clone(), |c| c.label.to_string());
+            let cur = room::chain(&m.chain).map_or(m.chain.clone(), |c| c.label.clone());
             let mut picked = None;
             egui::ComboBox::from_id_salt("room_mic_chain")
                 .selected_text(cur)
                 .show_ui(ui, |ui| {
-                    for c in CHAINS {
-                        if ui.selectable_label(m.chain == c.id, c.label).clicked() {
-                            picked = Some(c.id);
+                    for c in room::chains() {
+                        if ui
+                            .selectable_label(m.chain == c.id, &c.label)
+                            .on_hover_text(&c.use_note)
+                            .clicked()
+                        {
+                            picked = Some(c.id.as_str());
                         }
                     }
                 });
@@ -984,20 +999,21 @@ impl RoomView {
             }
         });
         if let Some(c) = room::chain(&m.chain) {
-            for st in c.settings {
-                let v = m.set.entry(st.key.to_string()).or_insert(st.default);
+            ui.label(RichText::new(&c.use_note).small().color(theme::FAINT));
+            for st in &c.settings {
+                let v = m.set.entry(st.key.clone()).or_insert(st.default);
                 ui.horizontal(|ui| {
-                    ui.label(st.label);
+                    ui.label(&st.label);
                     let cur = st
                         .choices
                         .iter()
                         .find(|(x, _)| x == v)
                         .map_or(format!("{v}"), |(_, l)| l.to_string());
-                    egui::ComboBox::from_id_salt(("room_set", st.key))
+                    egui::ComboBox::from_id_salt(("room_set", &st.key))
                         .selected_text(cur)
                         .show_ui(ui, |ui| {
-                            for (x, l) in st.choices {
-                                ui.selectable_value(v, *x, *l);
+                            for (x, l) in &st.choices {
+                                ui.selectable_value(v, *x, l);
                             }
                         });
                 });

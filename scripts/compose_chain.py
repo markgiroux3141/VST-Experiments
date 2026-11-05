@@ -2,7 +2,7 @@
 preamp are one netlist").
 
     uv run python scripts/compose_chain.py --mic neumann_u47 --pre telefunken_v76 [--check]
-    uv run python scripts/compose_chain.py --all [--check]   # every mic into every preamp
+    uv run python scripts/compose_chain.py --all [--check]   # every available chain of the list
 
 Writes config/circuits/<mic>_<pre>.yaml from the two circuit files: every parameter key,
 device key, part and node of each gets its circuit's suffix (_<tag>: `u47`, `v76`, ...),
@@ -14,8 +14,9 @@ the mic, out from the preamp; the preamp's mains, tolerance draws (seed, spread,
 spreads) and noise block, the mic's tolerance classes in bands of their own.
 
 The generated file says it is generated; edit its sources and rerun (`--check` exits 1
-when the file on disk differs: tests/test_chain_matrix.py). `--all` writes every pair of
-MICS x PREAMPS (the Room view offers each, varimu-app room::CHAINS).
+when the file on disk differs: tests/test_chain_matrix.py). The tags and ports are
+config/chains.yaml's (varimu/chains.py); `--all` writes every chain of that list whose
+stages are built (scripts/chain_status.py; the Room view offers them).
 """
 
 from __future__ import annotations
@@ -27,19 +28,19 @@ from typing import Any
 
 import yaml
 
+from varimu import chains as chain_list
+from varimu.chains import PORT
 from varimu.circuit import spec
 from varimu.config import CONFIG_DIR
 
-# Per circuit: its tag, and how it joins a chain. A mic: its output node and the parts
-# that are only its measuring setup. A preamp: the node a source drives (behind its
-# generator's resistance) and the generator's parts.
+# Per built circuit of the list: its tag, and how it joins a chain. A mic: its output node
+# and the parts that are only its measuring setup. A preamp: the node a source drives
+# (behind its generator's resistance) and the generator's parts.
+CHAINS = chain_list.load()
 PORTS = {
-    "neumann_u47": {"tag": "u47", "output": "out", "drop": ["RLOAD"]},
-    "shure_sm57": {"tag": "sm57", "output": "out", "drop": ["RLOAD"]},
-    "shure_sm58": {"tag": "sm58", "output": "out", "drop": ["RLOAD"]},
-    "telefunken_v76": {"tag": "v76", "input": "ia", "drop": ["RSRC"]},
-    "omni_4134": {"tag": "omni", "output": "out", "drop": ["RMEAS"]},
-    "clean_pre": {"tag": "clean", "input": "ia", "drop": ["RSRC"]},
+    c.name: {"tag": c.tag, PORT[c.kind]: getattr(c, PORT[c.kind]), "drop": list(c.drop)}
+    for c in CHAINS.circuits.values()
+    if c.built
 }
 CABLE = {
     "cable_c_f": {
@@ -49,8 +50,6 @@ CABLE = {
     },
 }
 GROUND = "0"
-MICS = [k for k, v in PORTS.items() if "output" in v]
-PREAMPS = [k for k, v in PORTS.items() if "input" in v]
 
 
 def _keys(c: dict) -> set[str]:
@@ -225,15 +224,25 @@ def chain_name(mic: str, pre: str) -> str:
     return f"{PORTS[mic]['tag']}_{PORTS[pre]['tag']}"
 
 
+def listed_pairs() -> list[tuple[str, str]]:
+    """The (mic, pre) of every available chain of the list."""
+    pairs = []
+    for c in CHAINS.available():
+        if c.booster is not None:  # three-stage chains: CHAINS_PLAN.md WP27
+            raise NotImplementedError(f"{c.id}: a chain with a booster")
+        pairs.append((c.mic.name, c.pre.name))
+    return pairs
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--mic")
     ap.add_argument("--pre")
-    ap.add_argument("--all", action="store_true", help="every mic into every preamp")
+    ap.add_argument("--all", action="store_true", help="every available chain of the list")
     ap.add_argument("--check", action="store_true")
     args = ap.parse_args()
     if args.all:
-        pairs = [(m, p) for m in MICS for p in PREAMPS]
+        pairs = listed_pairs()
     elif args.mic and args.pre:
         pairs = [(args.mic, args.pre)]
     else:

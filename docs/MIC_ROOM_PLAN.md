@@ -141,10 +141,12 @@ holds (call it verified, move on).
 The user's call: chains are precomputed (generated ahead, not composed when picked), but
 not every mic into every preamp; a curated list, each with what it is most likely used to
 record. That note is meant for the app too (the Room view's chain picker, as a tooltip or
-a line under the choice). `compose_chain.py --all` still writes MICS x PREAMPS; once a
-fourth mic or third preamp lands it should read this list instead (proposed: the list as
-data, `config/chains.yaml`, with the note per chain, read by `compose_chain.py`,
-`test_chain_matrix.py` and the app's `room::CHAINS`).
+a line under the choice). **Since CHAINS_PLAN.md's WP0 the list is data:
+`config/chains.yaml`** (`varimu/chains.py`), read by `compose_chain.py --all` (the available
+chains), `scripts/chain_status.py` (what is available, what blocks the rest),
+`test_chain_matrix.py` and the app's Room view (the `use` note under the picker). The
+tables below are the curation as written; the file is the source, and a change to the list
+goes there.
 
 **What precomputing costs (measured 2026-11-05).** A chain file is 9-43 KB of YAML (the V76
 chains ~36-43 KB, the clean ones ~9-16 KB): the list below is ~1.5 MB. The expensive part

@@ -16,186 +16,179 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use serde_json::{Value, json};
 
 /// A setting of a chain: its key in the chain's circuit file and its positions.
+#[derive(Clone, Debug, PartialEq)]
 pub struct Setting {
-    pub key: &'static str,
-    pub label: &'static str,
-    pub choices: &'static [(f64, &'static str)],
+    pub key: String,
+    pub label: String,
+    pub choices: Vec<(f64, String)>,
     pub default: f64,
 }
 
-/// A mic + preamp chain (a composed circuit file with a capsule).
-pub struct Chain {
-    pub id: &'static str,
-    pub label: &'static str,
-    pub settings: &'static [Setting],
+/// How a chain's mic is drawn: always one pattern, or the label of a setting's choice.
+#[derive(Clone, Debug, PartialEq)]
+enum MicPattern {
+    Fixed(Pattern),
+    Setting(String),
 }
 
-const V76_GAINS: &[(f64, &str)] = &[
-    (3.0, "3 dB"),
-    (9.0, "9 dB"),
-    (18.0, "18 dB"),
-    (24.0, "24 dB"),
-    (34.0, "34 dB"),
-    (40.0, "40 dB"),
-    (46.0, "46 dB"),
-    (52.0, "52 dB"),
-    (58.0, "58 dB"),
-    (64.0, "64 dB"),
-    (70.0, "70 dB"),
-    (76.0, "76 dB"),
-];
-const CLEAN_GAINS: &[(f64, &str)] = &[
-    (20.0, "20 dB"),
-    (30.0, "30 dB"),
-    (40.0, "40 dB"),
-    (50.0, "50 dB"),
-    (60.0, "60 dB"),
-];
+/// A chain of the list (`config/chains.yaml`, varimu/chains.py the reference): a mic, an
+/// optional booster and a preamp, composed into one circuit file with a capsule
+/// (`config/circuits/<id>.yaml`, scripts/compose_chain.py --all).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Chain {
+    pub id: String,
+    /// Its stages' labels joined by arrows.
+    pub label: String,
+    /// What it is most likely used to record (the list's `use`).
+    pub use_note: String,
+    /// The mic's settings, then the preamp's, in the chain's (suffixed) keys.
+    pub settings: Vec<Setting>,
+    pattern: MicPattern,
+}
 
-/// A dynamic mic's output transformer tap (shure_sm57.yaml, shure_sm58.yaml `impedance`).
-const SM_IMPEDANCE: &[(f64, &str)] = &[(0.0, "H (150-250 Ω)"), (1.0, "L (30-50 Ω)")];
+impl Chain {
+    /// The mic's pattern at these settings (a setting not in `set` at its default).
+    pub fn pattern(&self, set: &BTreeMap<String, f64>) -> Pattern {
+        match &self.pattern {
+            MicPattern::Fixed(p) => *p,
+            MicPattern::Setting(key) => {
+                let Some(st) = self.settings.iter().find(|s| &s.key == key) else {
+                    return Pattern::Omni;
+                };
+                let v = set.get(key).copied().unwrap_or(st.default);
+                let label = st
+                    .choices
+                    .iter()
+                    .find(|(x, _)| *x == v)
+                    .map(|(_, l)| l.as_str());
+                pattern_named(label.unwrap_or(""))
+            }
+        }
+    }
+}
 
-/// The chains a mic can be: every mic into every preamp (config/circuits/<mic>_<pre>.yaml,
-/// scripts/compose_chain.py --all). The default gains put 94 dB SPL on axis at -18.1 to
-/// -23.1 dBFS (a 1 kHz sine's peak, measured at draft); a loud close source wants less.
-pub const CHAINS: &[Chain] = &[
-    Chain {
-        id: "u47_v76",
-        label: "U47 → V76",
-        settings: &[
-            Setting {
-                key: "pattern_u47",
-                label: "Pattern",
-                choices: &[(0.0, "cardioid"), (1.0, "omni")],
-                default: 0.0,
+fn pattern_named(name: &str) -> Pattern {
+    match name {
+        "cardioid" => Pattern::Cardioid,
+        _ => Pattern::Omni,
+    }
+}
+
+/// The chains of `<config>/chains.yaml` that are available (their composed circuit file
+/// exists), in the list's order.
+pub fn load_chains(config: &Path) -> Result<Vec<Chain>, String> {
+    let path = config.join("chains.yaml");
+    let v = yaml_json(&varimu_circuit::yaml::load(&path).map_err(|e| e.to_string())?);
+    let bad = |what: String| format!("{}: {what}", path.display());
+    let circuits = &v["circuits"];
+    let mut out = Vec::new();
+    for c in v["chains"]
+        .as_array()
+        .ok_or_else(|| bad("no chains".into()))?
+    {
+        let id = c["id"]
+            .as_str()
+            .ok_or_else(|| bad("a chain without an id".into()))?;
+        if !config.join("circuits").join(format!("{id}.yaml")).is_file() {
+            continue;
+        }
+        let mut stages = Vec::new();
+        for kind in ["mic", "booster", "pre"] {
+            if let Some(name) = c[kind].as_str() {
+                let s = &circuits[name];
+                if !s.is_object() {
+                    return Err(bad(format!("{id}: {name} isn't in circuits")));
+                }
+                stages.push(s);
+            }
+        }
+        if stages.len() < 2 {
+            return Err(bad(format!("{id}: a chain is a mic and a preamp")));
+        }
+        let label = stages
+            .iter()
+            .map(|s| s["label"].as_str().unwrap_or("?"))
+            .collect::<Vec<_>>()
+            .join(" → ");
+        let mut settings = Vec::new();
+        for s in &stages {
+            let tag = s["tag"].as_str().unwrap_or("");
+            for st in s["settings"].as_array().into_iter().flatten() {
+                let key = format!("{}_{tag}", st["key"].as_str().unwrap_or(""));
+                let choices = st["choices"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|x| {
+                        let label = x[1].as_str().map_or_else(|| x[1].to_string(), String::from);
+                        (x[0].as_f64().unwrap_or(f64::NAN), label)
+                    })
+                    .collect();
+                let default = c["defaults"][&key].as_f64().or(st["default"].as_f64());
+                settings.push(Setting {
+                    label: st["label"].as_str().unwrap_or(&key).to_string(),
+                    default: default.ok_or_else(|| bad(format!("{id}: {key} has no default")))?,
+                    key,
+                    choices,
+                });
+            }
+        }
+        let mic = stages[0];
+        let pattern = match &mic["pattern"] {
+            Value::String(p) => MicPattern::Fixed(pattern_named(p)),
+            Value::Object(o) => match o.get("setting").and_then(Value::as_str) {
+                Some(k) => {
+                    MicPattern::Setting(format!("{k}_{}", mic["tag"].as_str().unwrap_or("")))
+                }
+                None => return Err(bad(format!("{id}: its mic's pattern names no setting"))),
             },
-            Setting {
-                key: "gain_db_v76",
-                label: "V76 gain",
-                choices: V76_GAINS,
-                default: 34.0,
-            },
-        ],
-    },
-    Chain {
-        id: "u47_clean",
-        label: "U47 → clean",
-        settings: &[
-            Setting {
-                key: "pattern_u47",
-                label: "Pattern",
-                choices: &[(0.0, "cardioid"), (1.0, "omni")],
-                default: 0.0,
-            },
-            Setting {
-                key: "gain_db_clean",
-                label: "Gain",
-                choices: CLEAN_GAINS,
-                default: 30.0,
-            },
-        ],
-    },
-    Chain {
-        id: "sm57_v76",
-        label: "SM57 → V76",
-        settings: &[
-            Setting {
-                key: "impedance_sm57",
-                label: "Impedance",
-                choices: SM_IMPEDANCE,
-                default: 0.0,
-            },
-            Setting {
-                key: "gain_db_v76",
-                label: "V76 gain",
-                choices: V76_GAINS,
-                default: 58.0,
-            },
-        ],
-    },
-    Chain {
-        id: "sm57_clean",
-        label: "SM57 → clean",
-        settings: &[
-            Setting {
-                key: "impedance_sm57",
-                label: "Impedance",
-                choices: SM_IMPEDANCE,
-                default: 0.0,
-            },
-            Setting {
-                key: "gain_db_clean",
-                label: "Gain",
-                choices: CLEAN_GAINS,
-                default: 60.0,
-            },
-        ],
-    },
-    Chain {
-        id: "sm58_v76",
-        label: "SM58 → V76",
-        settings: &[
-            Setting {
-                key: "impedance_sm58",
-                label: "Impedance",
-                choices: SM_IMPEDANCE,
-                default: 0.0,
-            },
-            Setting {
-                key: "gain_db_v76",
-                label: "V76 gain",
-                choices: V76_GAINS,
-                default: 58.0,
-            },
-        ],
-    },
-    Chain {
-        id: "sm58_clean",
-        label: "SM58 → clean",
-        settings: &[
-            Setting {
-                key: "impedance_sm58",
-                label: "Impedance",
-                choices: SM_IMPEDANCE,
-                default: 0.0,
-            },
-            Setting {
-                key: "gain_db_clean",
-                label: "Gain",
-                choices: CLEAN_GAINS,
-                default: 60.0,
-            },
-        ],
-    },
-    Chain {
-        id: "omni_v76",
-        label: "Omni (4134) → V76",
-        settings: &[Setting {
-            key: "gain_db_v76",
-            label: "V76 gain",
-            choices: V76_GAINS,
-            default: 40.0,
-        }],
-    },
-    Chain {
-        id: "omni_clean",
-        label: "Omni (4134) → clean",
-        settings: &[Setting {
-            key: "gain_db_clean",
-            label: "Gain",
-            choices: CLEAN_GAINS,
-            default: 40.0,
-        }],
-    },
-];
+            _ => MicPattern::Fixed(Pattern::Omni),
+        };
+        out.push(Chain {
+            id: id.to_string(),
+            label,
+            use_note: c["use"].as_str().unwrap_or("").to_string(),
+            settings,
+            pattern,
+        });
+    }
+    Ok(out)
+}
+
+static CHAINS: OnceLock<(Vec<Chain>, Option<String>)> = OnceLock::new();
+
+fn chain_list(config: Option<&Path>) -> &'static (Vec<Chain>, Option<String>) {
+    CHAINS.get_or_init(|| {
+        let default = std::env::var_os("VARIMU_CONFIG").map_or_else(
+            || Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config"),
+            PathBuf::from,
+        );
+        match load_chains(config.unwrap_or(&default)) {
+            Ok(list) => (list, None),
+            Err(e) => (Vec::new(), Some(e)),
+        }
+    })
+}
+
+/// Reads the chain list from `config` (the Room view does, at its start; the first read
+/// wins, a read before it takes `$VARIMU_CONFIG` or the repo's config/). Its error, if
+/// the list didn't read.
+pub fn init_chains(config: &Path) -> Option<&'static str> {
+    chain_list(Some(config)).1.as_deref()
+}
+
+/// The available chains of the list (config/chains.yaml), in its order.
+pub fn chains() -> &'static [Chain] {
+    &chain_list(None).0
+}
 
 pub fn chain(id: &str) -> Option<&'static Chain> {
-    CHAINS.iter().find(|c| c.id == id)
+    chains().iter().find(|c| c.id == id)
 }
 
 /// The surface materials (varimu/separation/room.py MATERIALS, and `anechoic`).
@@ -720,7 +713,7 @@ impl RoomMic {
             .map(|c| {
                 c.settings
                     .iter()
-                    .map(|s| (s.key.to_string(), s.default))
+                    .map(|s| (s.key.clone(), s.default))
                     .collect()
             })
             .unwrap_or_default();
@@ -736,14 +729,7 @@ impl RoomMic {
     }
 
     pub fn pattern(&self) -> Pattern {
-        let mic = self.chain.split('_').next().unwrap_or("");
-        match mic {
-            "u47" if self.set.get("pattern_u47").copied().unwrap_or(0.0) == 0.0 => {
-                Pattern::Cardioid
-            }
-            "sm57" | "sm58" => Pattern::Cardioid,
-            _ => Pattern::Omni,
-        }
+        chain(&self.chain).map_or(Pattern::Omni, |c| c.pattern(&self.set))
     }
 
     /// Point the mic at a floor-plan position.
@@ -1667,6 +1653,47 @@ mod tests {
     fn state_round_trips() {
         let s = scene();
         assert_eq!(Scene::from_state(&s.state()), s);
+    }
+
+    /// The list as varimu/chains.py reads it (tests/test_chain_matrix.py checks the same
+    /// chains there): the composed chains offered, labels, defaults, patterns.
+    #[test]
+    fn chain_list_reads() {
+        let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
+        let list = load_chains(&config).unwrap();
+        for c in &list {
+            assert!(
+                config
+                    .join("circuits")
+                    .join(format!("{}.yaml", c.id))
+                    .is_file()
+            );
+            assert!(!c.use_note.is_empty(), "{}", c.id);
+        }
+        let ids: Vec<&str> = list.iter().map(|c| c.id.as_str()).collect();
+        for id in [
+            "u47_v76",
+            "u47_clean",
+            "sm57_v76",
+            "sm58_clean",
+            "omni_v76",
+            "omni_clean",
+        ] {
+            assert!(ids.contains(&id), "{id}");
+        }
+        assert!(!ids.contains(&"r44_v76")); // not built: not offered
+        let c = list.iter().find(|c| c.id == "sm57_v76").unwrap();
+        assert_eq!(c.label, "SM57 → V76");
+        let keys: Vec<(&str, f64)> = c
+            .settings
+            .iter()
+            .map(|s| (s.key.as_str(), s.default))
+            .collect();
+        assert_eq!(keys, [("impedance_sm57", 0.0), ("gain_db_v76", 58.0)]);
+        assert_eq!(c.pattern(&BTreeMap::new()), Pattern::Cardioid);
+        let o = list.iter().find(|c| c.id == "omni_clean").unwrap();
+        assert_eq!(o.pattern(&BTreeMap::new()), Pattern::Omni);
+        assert_eq!(o.settings[0].choices[2], (40.0, "40 dB".to_string()));
     }
 
     #[test]
