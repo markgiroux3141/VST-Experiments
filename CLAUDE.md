@@ -630,6 +630,17 @@ sympathetic strings; then the BX20, wires, water, rooms). **A chain's end** (202
 a device after the one played, on threads of its own a block behind (`player::EndDevice`,
 `panel::CHAIN_ENDS`: the plate; Play's CHAIN END; `examples/play.rs --end plate_reverb`):
 the synth through the plate plays without dropouts (REVERB_PLAN.md, "Live chaining").
+**The spring and the EMT 240 (2026-11-04; REVERB_PLAN.md "Status (2026-11-04)", the
+decisions delegated):** the spring as a modal medium (Parker & Bilbao's curved rod has exact
+modes on a finite spring: `varimu/devices/spring.py` the reference, circuitsim's `spring.rs`;
+the IR element `Spring`; the plate's modal sum and convolver now `circuitsim::modal`, the
+plate bit for bit unchanged), the tank `ACC4AB3C1B@1` (kind `spring_tank`, part `spring_tank:
+[plus, minus, out]`; the input transducer saturates), `6K6GT@1` (RCA's points incl. its
+large-signal figures), the Fender 6G15 `config/circuits/fender_6g15.yaml` (the app's
+`fender_6g15`, a chain end, 0.40x load; `scripts/spring_report.py`); the EMT 240 as a plate
+(its brochure: bending, "constant resonant density"), `EMT240@1`, `foil_reverb.yaml` (the
+app's `foil_reverb`; `plate_report.py --circuit foil_reverb`). `scripts/reverb_listen.py`:
+one clip through the three, loudness-matched. Open: the user listens.
 
 **Devices in the session** ([docs/SESSION_FX_PLAN.md](docs/SESSION_FX_PLAN.md), 2026-10-30;
 milestones F1-F5): processors move into the Session view as track inserts and sends,
