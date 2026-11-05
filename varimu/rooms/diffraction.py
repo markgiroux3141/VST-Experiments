@@ -34,8 +34,13 @@ right angles closer than the wavelengths that matter) and a floor plan's reflex 
 reflection, before the edge or after it (the source's and the mic's first-order images: so a
 source and a mic swapped hear the same), checked for visibility along the edge (each leg clear
 of every face but the wedge's own; an image's leg through its face).
-Second-order diffraction (over a box's two edges) is left out: deep shadows behind thick
-objects come out too dark.
+**Second order** (`paths2`): over two edges of one thick object that share a face (a
+cabinet's front and back top edges), from the source to the mic directly: the edges' secondary
+sources chained (Svensson & Calamia's double integral, both edges' BTM terms over the three
+distances), times 1/2 for the path along the shared face. Checked in the limit: a thick
+screen's two top edges as its thickness goes to 0 give the knife edge's first-order response
+within 4% (0.35 dB). Thin panels need none (their edges are plates); between objects and with
+reflections it is left out.
 """
 
 from __future__ import annotations
@@ -272,4 +277,121 @@ def paths(room, source: np.ndarray, mic: np.ndarray, fs: float, beta: np.ndarray
                     if abs(nd) > 1e-12:
                         arrive = r_pos + ((f.d - r_pos @ f.normal) / nd) * d
                 out.append(DiffractionPath(n0, h, apex, lb, plen, s_pos, fs_, arrive))
+    return out
+
+
+def _coords_many(ed: Edge, p: np.ndarray):
+    q = p - ed.a
+    z = q @ ed.e
+    qp = q - z[:, None] * ed.e
+    th = np.arctan2(qp @ ed.y1, qp @ ed.t1) % (2 * np.pi)
+    return np.linalg.norm(qp, axis=1), th, z
+
+
+def _beta(nu, eta, ths, thr):
+    sh2 = np.sinh(0.5 * nu * eta) ** 2
+    acc = 0.0
+    for phi in (np.pi + ths + thr, np.pi + ths - thr, np.pi - ths + thr, np.pi - ths - thr):
+        acc = acc + np.sin(nu * phi) / np.maximum(2 * (sh2 + np.sin(0.5 * nu * phi) ** 2), 1e-30)
+    return acc
+
+
+def _eta(rs, zs, rr, zr, z):
+    ds, dr = z - zs, z - zr
+    m = np.sqrt(rs**2 + ds**2)
+    ll = np.sqrt(rr**2 + dr**2)
+    x = (rs * dr + rr * ds) ** 2 / (rs * rr * (m * ll + rs * rr - ds * dr))
+    return 2 * np.arcsinh(np.sqrt(0.5 * x))
+
+
+def btm2(e1: Edge, e2: Edge, s, r, fs: float, mask1=None, mask2=None, factor: float = 0.5,
+         c=SPEED_OF_SOUND_M_S, max_points: int = 500):  # fmt: skip
+    """Second-order diffraction, edge 1 then edge 2 (the module docstring): (first sample, h,
+    the shortest path's points on each edge), or None. `factor` 1/2 for edges sharing a face.
+    Each edge is sampled at a quarter of a sample's path, at most `max_points` along it (a
+    second-order path carries little above a few kHz)."""
+    dz1 = max(0.25 * c / fs, e1.length / max_points)
+    dz2 = max(0.25 * c / fs, e2.length / max_points)
+    if abs(e1.e @ e2.e) > 0.99:  # parallel edges: resolve the 1 / n peak between them
+        w = e2.a - e1.a
+        gap = float(np.linalg.norm(w - (w @ e1.e) * e1.e))
+        dz1 = max(min(dz1, 0.5 * gap), 0.25 * c / fs)
+        dz2 = max(min(dz2, 0.5 * gap), 0.25 * c / fs)
+    z1 = np.arange(0.5 * dz1, e1.length, dz1)
+    z2 = np.arange(0.5 * dz2, e2.length, dz2)
+    if mask1 is not None:
+        z1 = z1[mask1(z1)]
+    if mask2 is not None:
+        z2 = z2[mask2(z2)]
+    if len(z1) == 0 or len(z2) == 0:
+        return None
+    s, r = np.asarray(s, float), np.asarray(r, float)
+    p1 = e1.a + z1[:, None] * e1.e
+    p2 = e2.a + z2[:, None] * e2.e
+    rs, ths, zs = _coords_many(e1, s[None, :])
+    rq, thq, zq = _coords_many(e1, p2)  # edge 2's points round edge 1: its receivers
+    rp, thp, zp = _coords_many(e2, p1)  # edge 1's points round edge 2: its sources
+    rr, thr, zr = _coords_many(e2, r[None, :])
+    if rs[0] < 1e-6 or rr[0] < 1e-6 or np.any(rq < 1e-9) or np.any(rp < 1e-9):
+        return None
+    if ths[0] > e1.theta_w + 1e-9 or thr[0] > e2.theta_w + 1e-9:
+        return None
+    b1 = _beta(e1.nu, _eta(rs[0], zs[0], rq[None, :], zq[None, :], z1[:, None]), ths[0],
+               thq[None, :])  # fmt: skip
+    b2 = _beta(e2.nu, _eta(rp[:, None], zp[:, None], rr[0], zr[0], z2[None, :]), thp[:, None],
+               thr[0])  # fmt: skip
+    m = np.sqrt(rs[0] ** 2 + (z1 - zs[0]) ** 2)[:, None]
+    n = np.linalg.norm(p1[:, None, :] - p2[None, :, :], axis=2)
+    ll = np.sqrt(rr[0] ** 2 + (z2 - zr[0]) ** 2)[None, :]
+    g = factor * (e1.nu * e2.nu / (16 * np.pi**2)) * b1 * b2 / (m * n * ll) * dz1 * dz2
+    t = (m + n + ll) / c * fs
+    n0 = int(np.floor(t.min()))
+    h = np.zeros(int(np.ceil(t.max())) - n0 + 2)
+    i0 = (np.floor(t).astype(int) - n0).ravel()
+    fr = (t - np.floor(t)).ravel()
+    np.add.at(h, i0, g.ravel() * (1 - fr))
+    np.add.at(h, i0 + 1, g.ravel() * fr)
+    k = np.unravel_index(np.argmin(t), t.shape)
+    return n0, h, p1[k[0]], p2[k[1]]
+
+
+def paths2(room, source: np.ndarray, mic: np.ndarray, fs: float, nb: int):
+    """Second-order diffraction paths (the module docstring): over two edges of one thick
+    object sharing a face, from the source to the mic directly; only where the source doesn't
+    see the mic (in the shadows they fill; where the direct sound arrives they are far
+    weaker than it and its first-order neighbours, and cost the most)."""
+    src = np.asarray(source, float)
+    mic = np.asarray(mic, float)
+    if room.segment_clear(src[None, :], mic[None, :], np.full((1, 1), -1))[0]:
+        return []
+    eds = [e for e in edges(room) if len(e.skip) == 2 and e.skip[0] >= room.n_room_faces]
+    out = []
+    vis_s, vis_r = {}, {}
+    for i, ed in enumerate(eds):
+        zv = np.linspace(0.0, ed.length, VIS_POINTS)
+        pv = ed.point(zv)
+        sk = np.tile(np.array(ed.skip + (-1,) * 5)[None, :], (len(pv), 1))
+        vis_s[i] = (zv, room.segment_clear(np.repeat(src[None, :], len(pv), 0), pv, sk))
+        vis_r[i] = (zv, room.segment_clear(pv, np.repeat(mic[None, :], len(pv), 0), sk))
+
+    def mask_of(zv, ok):
+        def mask(z):
+            j = np.round(z / max(zv[1] - zv[0], 1e-12)).astype(int)
+            return ok[np.clip(j, 0, len(ok) - 1)]
+
+        return mask
+
+    for i, e1 in enumerate(eds):
+        if not np.any(vis_s[i][1]):
+            continue
+        for j, e2 in enumerate(eds):
+            if i == j or not set(e1.skip) & set(e2.skip) or not np.any(vis_r[j][1]):
+                continue
+            res = btm2(e1, e2, src, mic, fs, mask_of(*vis_s[i]), mask_of(*vis_r[j]))
+            if res is None or not np.any(res[1]):
+                continue
+            n0, h, a1, a2 = res
+            legs = (a1 - src, a2 - a1, mic - a2)
+            plen = float(sum(np.linalg.norm(v) for v in legs))
+            out.append(DiffractionPath(n0, h, a1, np.zeros(nb), plen, src, -1, a2))
     return out

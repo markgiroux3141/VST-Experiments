@@ -508,7 +508,8 @@ that band's admittance, capsule entries to first order from their tables, blende
 then power-complementary; a scene's `settings.wave_crossover_hz`, `room_print.py --wave`, the
 Room view's "Wave solver", 500 Hz for new scenes; ~6.5 s per source at 500 Hz in 123 m^3, x16
 per doubling); R11 **objects** (oriented boxes in `room.objects`, a gobo a thin one: image
-sources to order 2, occlusion, rays, the grid) with **first-order BTM edge diffraction**
+sources to order 2, occlusion, rays, the grid) with **BTM edge diffraction** (first order, reciprocal; second order over a thick
+object's edges)
 (`varimu/rooms/diffraction.py`: objects' edges, a plan's reflex corners; on the GPU as
 micro-images sharing a spectrum); the Room view's OBJECTS. **Directional sources** (from the
 plan's "Later", the same night): `varimu/rooms/directivity.py`, a cap on a sphere (presets

@@ -862,3 +862,52 @@ def test_random_rooms_are_finite_and_reciprocal(seed):
     x, y = early(srcs[0], mps[0]), early(mps[0], srcs[0])
     n = int(0.045 * FS)
     assert np.sum((x[:n] - y[:n]) ** 2) < 1e-8 * np.sum(x[:n] ** 2)
+
+
+def test_second_order_diffraction_meets_the_knife_edge_in_the_thin_limit():
+    """A thick screen's two top edges (right angles sharing the top face), 5 mm apart: their
+    second-order response is the knife edge's first-order within 0.5 dB (250 Hz-4 kHz)."""
+    from varimu.rooms.diffraction import Edge, btm, btm2
+
+    big_l, d = 2.0, 0.005
+    s, r = np.array([-1.0, 0.1, -0.3]), np.array([1.2, -0.2, -0.45])
+    y = np.array([0, 1.0, 0])
+    knife = Edge(np.array([0.0, -1.0, 0.0]), y, big_l, np.array([0, 0, -1.0]),
+                 np.array([1.0, 0, 0]), 2 * np.pi, ())  # fmt: skip
+    e1 = Edge(np.array([-d / 2, -1.0, 0.0]), y, big_l, np.array([1.0, 0, 0]),
+              np.array([0, 0, 1.0]), 1.5 * np.pi, ())  # fmt: skip
+    e2 = Edge(np.array([d / 2, -1.0, 0.0]), y, big_l, np.array([-1.0, 0, 0]),
+              np.array([0, 0, 1.0]), 1.5 * np.pi, ())  # fmt: skip
+    nk, hk = btm(knife, s, r, FS)
+    n2, h2, _, _ = btm2(e1, e2, s, r, FS)
+    nfft = 1 << 14
+    f = np.fft.rfftfreq(nfft, 1 / FS)
+    hk_f = np.fft.rfft(np.r_[np.zeros(nk), hk], nfft)
+    h2_f = np.fft.rfft(np.r_[np.zeros(n2), h2], nfft)
+    for fc in (250.0, 1000.0, 4000.0):
+        sel = (f > fc / 1.2) & (f < fc * 1.2)
+        ratio = np.sum(np.abs(h2_f[sel]) ** 2) / np.sum(np.abs(hk_f[sel]) ** 2)
+        assert abs(10 * np.log10(ratio)) < 0.5, (fc, ratio)
+
+
+def test_a_cabinet_casts_a_shadow_the_bass_wraps_round():
+    """Behind a thick cabinet (anechoic room) only second-order diffraction reaches the mic:
+    the bass wraps round (insertion loss under 3 dB at 250 Hz), the highs are shadowed
+    (over 12 dB from 4 kHz)."""
+    from varimu.rooms.polyroom import PolyRoom
+
+    b = _wave_or_skip()
+    cab = {"center_m": [5.0, 5.0, 0.6], "size_m": [0.6, 0.5, 1.2], "material": "gypsum_on_studs"}
+    args = ([[0, 0], [10, 0], [10, 10], [0, 10]], "flat", 6.0, None, 0.0, 8) + ("anechoic",) * 3
+    src, mic = np.array([3.5, 5.0, 0.8]), np.array([6.5, 5.05, 0.7])
+    mics = [Mic(mic, aim_vector(180), _omni())]
+
+    def lv(room):
+        h = responses(room, [src], mics, FS, length_s=0.04, tail=False, backend=b)[0, 0, 0]
+        spec = np.abs(np.fft.rfft(h, 1 << 17)) ** 2
+        f = np.fft.rfftfreq(1 << 17, 1 / FS)
+        return np.array([10 * np.log10(spec[(f > q / 1.12) & (f < q * 1.12)].sum())
+                         for q in (250.0, 4000.0, 8000.0)])  # fmt: skip
+
+    il = lv(PolyRoom(*args)) - lv(PolyRoom(*args, objects=[cab]))
+    assert il[0] < 3 and il[1] > 12 and il[2] > 12, il

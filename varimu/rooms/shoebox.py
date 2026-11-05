@@ -365,6 +365,8 @@ def responses(
             # the edges' diffraction (a PolyRoom's objects and reflex corners: R11), each
             # path one smooth spectrum (its walls, the air, the entries seen from its apex)
             dpaths = diffraction.paths(room, src, m.position_m, fs, beta) if poly else []
+            if poly and room.boxes:
+                dpaths += diffraction.paths2(room, src, m.position_m, fs, beta.shape[1])
             d_coarse, d_delay, d_spec, d_scale = [], [], [], []
             for k, dp in enumerate(dpaths):
                 dv = (dp.arrive_m if dp.arrive_m is not None else dp.apex_m) - m.position_m

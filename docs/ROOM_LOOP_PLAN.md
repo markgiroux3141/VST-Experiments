@@ -505,8 +505,17 @@ reciprocal within -122 to -140 dB; four of them run as `test_random_rooms_are_fi
 reciprocal`. The CPU wave solver (the fallback without a GPU) keeps its threads over a run:
 ~35x slower than the 3080, usable.
 
-**Not done / limits.** Second-order diffraction (over a box's two edges: deep shadows behind
-thick objects come out too dark; thin panels are plates, so gobos are fine). The rays' per-mic tail shaping uses the mid bands (shadowing by objects is
+**Second-order diffraction** (`diffraction.paths2`, `btm2`): over two edges of one thick object
+sharing a face, source to mic, where the source doesn't see the mic. Svensson & Calamia's
+double integral times 1/2 for the path along the shared face; checked in the thin limit (a
+thick screen's two top edges 5 mm apart against the knife edge: within 0.5 dB, 250 Hz-4 kHz).
+Behind a 0.6 x 0.5 x 1.2 m cabinet in an anechoic room first order alone gave silence; now the
+bass wraps round (0.6 dB at 250 Hz) and the highs are shadowed (15-25 dB from 4 kHz). Its
+cost is bounded (500 points an edge; skipped where the direct sound arrives): the fuzz's
+scenes with two large boxes 30-100 s -> under 11 s.
+
+**Not done / limits.** Diffraction of third order and over edges of different objects (thin
+panels are plates, so gobos are fine); a second-order path with a reflection. The rays' per-mic tail shaping uses the mid bands (shadowing by objects is
 the same for every band in the late part). The Room view's new controls (wall surfaces, facets,
 objects, directional sources, the wave solver) are tested through the scene model and were seen
 drawn on screen once (the app run on a scratch `APPDATA` and session, so the user's last session
@@ -529,7 +538,8 @@ to scale, the sources' facing, the forms; dragging and clicking weren't driven.
 6. **The crossover: 500 Hz for new scenes in the Room view** (6.5 s per source on the 3080);
    250 / 1000 offered; old scenes load with it off and render as before.
 7. **Objects as oriented boxes**, a gobo a thin one; image sources through objects to order 2.
-8. **First-order BTM**, thin panels as plates; no second order (the plan's cost note).
+8. **First-order BTM**, thin panels as plates; second order added later the same night for
+   a thick object's edges (validated in the thin limit), bounded in cost.
 9. **Source directivity as a cap on a sphere** (one physical model for voices and cabinets),
    built the same night from the "Later" list; in the wave solver the body itself, not a
    multipole fit.
@@ -544,7 +554,6 @@ to scale, the sources' facing, the forms; dragging and clicking weren't driven.
 - Whether the room goes to Rust (the app then renders without Python) before A5: roomsim now
   holds its heaviest parts (rays, image spectra, the wave solver); the geometry, image-source
   validation, diffraction, the tail's synthesis and the entry tables are still Python.
-- Next candidates (none agreed): second-order diffraction; the U47's head basket (Known
-  bias); a frequency-dependent wall admittance in one run (fewer runs at high crossovers);
+- Next candidates (none agreed): the U47's head basket (Known bias); a frequency-dependent wall admittance in one run (fewer runs at high crossovers);
   measured instrument directivities (a piano's lid, a trumpet's bell) beyond the cap on a
   sphere.
