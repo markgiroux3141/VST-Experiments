@@ -461,7 +461,12 @@ azimuthal order 0 only: exact for the diaphragm's axisymmetric average; checked 
 series and Lamb's disk, `tests/test_bor.py`; the K47 geometry's `body` block), the network
 refitted on it: the omni's 6.5 kHz dip gone, the presence peak at ~11 kHz, omni 16.8 mV/Pa
 (in ds58). `free_field.capsule_entry_pressures` picks body / sphere / path from a capsule's
-geometry; `mic_print.py --distance-m` prints a point source (proximity).
+geometry; `mic_print.py --distance-m` prints a point source (proximity). **The SM57** (and SM58), MIC_ROOM_PLAN.md's A7, is
+planned in [docs/SM57_PLAN.md](docs/SM57_PLAN.md) (2026-11-04; nothing built; milestones SM1-SM8; the user's 2026-11-05: both mics, the
+pre-1980s transformer, the nominal mic only, high SPL after the first listen): a
+`moving_coil` component (a gyrator B l / S to the coil, the rear phase-shift network, the
+dome's shell modes, B l(x) from a magnet FE map), its output transformer as a C2 design,
+the SM58's ball grille as a permeable BEM surface; passive, so no BJT model needed.
 
 **The room loop** ([docs/ROOM_LOOP_PLAN.md](docs/ROOM_LOOP_PLAN.md), started 2026-11-04, the
 user delegating its decisions; MIC_ROOM_PLAN.md's A4 and A9): sources placed in a shoebox room,
@@ -672,8 +677,14 @@ without a device (`Source::Mix`, `Player::start_mix`); the worker's output stage
 `player::Emitter`. An insert has a wet / dry share (`Slot::wet`, `Monitor::wet`): the
 plate reverb goes in at 30% wet with an 8 s tail. **⤓ Render** bakes a track's chain at
 production into a new take and removes its inserts (`Session::add_rendered_take`,
-`Take::rendered_from`; Undo restores); the session plays tracks-only when no instrument
-plays (▶ always there; ● starts the instrument and records once it plays).
+`Take::rendered_from`; Undo restores), **⤓ Draft** the same at the inserts' play qualities
+(from the print cache when current); the session plays tracks-only when no instrument
+plays (▶ always there; ● starts the instrument and records once it plays). **Export**
+(2026-11-05, RECORDING_PLAN.md T4's bounce): ⤓ Export mix… writes what ▶ plays
+(`Session::mixdown`) to a stereo float WAV from bar 1 with a .json of its sources and
+optional stems that sum to it, once every audible track is ready (`export_problems`);
+⤓ Export final… sets the inserts to production and renders MIDI takes at production first.
+The Room view renders each source track as the mix plays it (its print, not the raw take).
 
 **The sampler** (2026-11-02, the user's ask): the user's sample library sorted into the repo's
 git-ignored `samples/` by `scripts/import_samples.py` (drums first: `samples/drums/<category>/`,
