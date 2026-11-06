@@ -39,11 +39,11 @@ runs**.
   `RCA77DX_OT@1`; the reactor at mic level); WP7's Notes. WP8 (2026-11-06): the Coles 4038 (`config/circuits/coles_4038.yaml`:
   `RIBBON_4038@1` after BBC Monograph No. 4 fitted to STC's curve, `STC4038_OT@1`; a miss
   of +2.8 dB at 4-7 kHz); WP8's Notes.
-- **In progress:** nothing.
-- **Next:** WP9, the AKG D112 (-> SSL): write its steps (sources first: AKG's D112 data
-  sheet, its response and polars, the bass chamber's construction; the `moving_coil` kind
-  and the SM57's method). The user fetches login-walled files on request: each URL alone in
-  a code block.
+- **In progress:** WP9 (the AKG D112), step 1: steps written, the sources read
+  (`data/schematics/akg_d112/README.md`).
+- **Next:** WP9 step 1: digitize the D112's response, proximity curve and polars (the MKII
+  sheet's vector paths) to `data/datasheets/akg_d112_*.csv`; then step 2, the cartridge.
+  The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains and the 77-DX's in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
@@ -127,7 +127,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | done 2026-11-05 |
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's direct monitor as a preamp | 77-DX -> 351, 77-DX -> 610 | L | done 2026-11-06 |
 | 8 | Coles 4038 | 4038 -> V72 | M | done 2026-11-06 |
-| 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | |
+| 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | started 2026-11-06 (sources) |
 | 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types"; CLAVINET_PLAN.md's CL0 builds it if it gets there first) | 0 | L | done 2026-11-06 (CL0 on the `clavinet` branch: `varimu/devices/bjt.py`, the `bjt` part, `BC550C@1` / `BC413C@1` / `BC560C@1`, `bjt_stage.yaml`; DEVICE_BUILDER_PLAN.md "New device types") |
 | 11 | Neve 1073 (Marinair transformers as designs; 300 / 1200 ohm) | 44-BX, SM57, U47 -> 1073 | L | also DEVICE_BUILDER_PLAN.md's B13 (2026-11-06: built there, next after B11-B12) |
 | 12 | API 312 (the 2520) | SM57 -> API | L | |
@@ -1089,7 +1089,37 @@ Notes (2026-11-06, done):
   `test_ribbon.py`, `test_app_fixtures.py` (fixtures for `coles_4038`, `c4038_v72`;
   nothing else moved: 122 passed), varimu-circuit's tests, varimu-app `room::`.
 
-### WP9-WP31
+### WP9. The AKG D112
+
+The kick-drum dynamic (1986; the D12's descendant): a large-diaphragm moving coil with a
+low-tuned diaphragm, an acoustic "bass resonance volume chamber", a hum-compensation coil,
+a built-in windscreen. Published: 1.8 mV/Pa, 210 ohm (<= 200 ohm on the MKII), cardioid,
+40 Hz-17 kHz +-3 dB with a bass bump and a 4-6 kHz presence rise, polars at 125 Hz-16 kHz.
+Sources: `data/schematics/akg_d112/README.md`; the construction is unpublished (no
+teardown or patent found), so the diaphragm and chamber are fitted, not read.
+
+Steps:
+1. Sources: digitize the original sheet's response (and its 10 cm proximity curve) and the
+   polars at 125-16000 Hz (the MKII sheet's vector graphs are the sharper copy: extract
+   them from the PDF's paths, as `scripts/digitize_jensen_p12r.py` does) to
+   `data/datasheets/akg_d112_*.csv` with a provenance sidecar.
+2. The cartridge `R_D112@1` (kind `moving_coil`, the SM57's method: SM57_PLAN.md's table,
+   `scripts/fit_sm57.py`): a large diaphragm (the housing's 70 mm bounds it near 35-45 mm;
+   a bound, with the bass chamber's volume, a rear path and the coil's B l / S one unknown
+   each), the body for the entries (`bor.dynamic_mesh`), fitted one figure each to the
+   response, the proximity curve, the polars and 1.8 mV/Pa; the output impedance 210 ohm
+   checks the coil's resistance (a transformerless dynamic: the coil is the source).
+3. `config/circuits/akg_d112.yaml` (the coil into its cable; a chain's preamp load), the
+   list's entry (output, drop, pattern cardioid), `compose_chain.py --all` (d112_ssl),
+   `tests/test_akg_d112.py` (sensitivity, response within +-2 dB to 10 kHz and the bump,
+   front to back, proximity), `test_chain_matrix.py`, app fixtures; `chain_status.py` 21
+   of 51.
+
+Notes (2026-11-06, started): sources found and the specification read (the README); the
+curves and polars are not digitized yet. The construction is a dead end (no public
+internals), so step 2 fits its unknowns to the published response and polars.
+
+### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -1174,3 +1204,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   (read from its scan: the PGS ribbon's size, gap, screens, magnet), `RIBBON_4038@1` fitted
   to the brochure's curve (`fit_4038.py`; +2.8 dB at 4-7 kHz a known miss), `STC4038_OT@1`
   (30 ohm); 4038 -> V72 composed: 20 of 51 available.
+- 2026-11-06: WP9 started: its steps written; the D112's sheets (AKG's original and the
+  MKII's) read; no internals are published, so its diaphragm and chamber will be fitted;
+  still 20 of 51.
