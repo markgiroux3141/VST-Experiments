@@ -1949,13 +1949,7 @@ impl PlayView {
             let stale = t.stale(&self.config_dir);
             ui.horizontal(|ui| {
                 ui.checkbox(&mut on, "Monitor through the proxy")
-                    .on_hover_text(format!(
-                        "A cheap digital stand-in that follows the panel through tables measured on \
-                         the device (config/proxy/{}.json). Takes recorded through it render on \
-                         the device behind the recording. The heaters, the reservoir and the mains \
-                         are heard in the render only.",
-                        t.device
-                    ));
+                    .on_hover_text(t.about());
                 if stale {
                     ui.label(RichText::new("tables stale").small().color(theme::WARN))
                         .on_hover_text("The circuit file changed since the proxy's tables were measured: rerun scripts/proxy_tables.py");

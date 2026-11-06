@@ -338,6 +338,11 @@ the plan's "Status (2026-11-06)"):
   - a worn instrument has its own strike table, recorded in the background;
   - `scripts/clavinet_wear_demo.py` -> `reports/clavinet/wear/`. Per-strike variation is
     not built.
+- **A proxy** (2026-11-06, the user's: "fast and stupid simple"): `varimu_app::clav_proxy`,
+  Karplus-Strong strings through a pickup comb, a 3-semitone drop and fast decay on
+  release; it follows VOLUME and PICKUP SELECT only. `proxy::Tables` / `proxy::Proxy` are
+  now enums over it and tube_synth's (`SynthTables`, `SynthProxy`), so the Session view's
+  "hear PROXY" offers it for the Clavinet.
 
 Open: the user listens, the D6 schematic. Milestones CL0-CL5.
 

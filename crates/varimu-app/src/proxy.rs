@@ -1,7 +1,9 @@
-//! The proxy (docs/MIDI_TAKES_PLAN.md N2): a cheap digital stand-in for tube_synth, heard
-//! while a take is played and recorded; the take's real audio is a render of its events
-//! through the circuit, later.
+//! The proxy (docs/MIDI_TAKES_PLAN.md N2): a cheap digital stand-in for a device played
+//! from keys, heard while a take is played and recorded; the take's real audio is a render
+//! of its events through the circuit, later. [`Tables`] and [`Proxy`] pick the device's:
+//! tube_synth's ([`SynthProxy`], below) or the Clavinet's ([`crate::clav_proxy`]).
 //!
+//! **tube_synth's proxy**
 //! **It follows the panel** through tables measured on the real circuit
 //! (`config/proxy/tube_synth.json`, made by `scripts/proxy_tables.py`, each with its
 //! source; the ones not measured yet say provisional). It is built like the circuit, so
@@ -40,6 +42,115 @@ use serde_json::Value as Json;
 use crate::live::Values;
 use crate::midi::TestOsc;
 use crate::performance::{Ev, Playing};
+
+/// A device's proxy as the app picks it: tube_synth's measured tables, or the Clavinet's
+/// stand-in (no tables).
+#[derive(Debug, Clone)]
+pub enum Tables {
+    Synth(Box<SynthTables>),
+    Clav { device: String },
+}
+
+impl Tables {
+    /// `device`'s proxy: the Clavinet's, or tables in `<config>/proxy/<device>.json`; None
+    /// when it has none.
+    pub fn load(config_dir: &Path, device: &str) -> Result<Option<Tables>, String> {
+        if device == "clavinet_d6" {
+            return Ok(Some(Tables::Clav {
+                device: device.to_string(),
+            }));
+        }
+        Ok(SynthTables::load(config_dir, device)?.map(|t| Tables::Synth(Box::new(t))))
+    }
+
+    pub fn device(&self) -> &str {
+        match self {
+            Tables::Synth(t) => &t.device,
+            Tables::Clav { device } => device,
+        }
+    }
+
+    /// Whether the circuit changed since the tables were measured (the Clavinet's has none).
+    pub fn stale(&self, config_dir: &Path) -> bool {
+        match self {
+            Tables::Synth(t) => t.stale(config_dir),
+            Tables::Clav { .. } => false,
+        }
+    }
+
+    /// What the proxy is, for its tooltip.
+    pub fn about(&self) -> String {
+        match self {
+            Tables::Synth(t) => format!(
+                "A cheap digital stand-in that follows the panel through tables measured on \
+                 the device (config/proxy/{}.json). Takes recorded through it render on the \
+                 device behind the recording. The heaters, the reservoir and the mains are \
+                 heard in the render only.",
+                t.device
+            ),
+            Tables::Clav { .. } => "A fast, simple stand-in (plucked strings through a pickup \
+                comb; it follows VOLUME and PICKUP SELECT only). Takes recorded through it \
+                render on the real strings behind the recording."
+                .to_string(),
+        }
+    }
+}
+
+/// A device's proxy (see [`Tables`]).
+pub enum Proxy {
+    Synth(Box<SynthProxy>),
+    Clav(Box<crate::clav_proxy::ClavProxy>),
+}
+
+impl Proxy {
+    /// The proxy for `tables` at `rate` with `voices` voices (tube_synth's: 1 is mono; the
+    /// Clavinet's is polyphonic).
+    pub fn new(tables: std::sync::Arc<Tables>, rate: u32, voices: usize) -> Proxy {
+        match &*tables {
+            Tables::Synth(t) => Proxy::Synth(Box::new(SynthProxy::new(
+                std::sync::Arc::new((**t).clone()),
+                rate,
+                voices,
+            ))),
+            Tables::Clav { .. } => Proxy::Clav(Box::new(crate::clav_proxy::ClavProxy::new(rate))),
+        }
+    }
+
+    pub fn set_values(&mut self, values: &Values) {
+        match self {
+            Proxy::Synth(p) => p.set_values(values),
+            Proxy::Clav(p) => p.set_values(values),
+        }
+    }
+
+    pub fn set_playing(&mut self, playing: Playing) {
+        match self {
+            Proxy::Synth(p) => p.set_playing(playing),
+            Proxy::Clav(p) => p.set_playing(playing),
+        }
+    }
+
+    pub fn held(&self) -> &[(u8, u8)] {
+        match self {
+            Proxy::Synth(p) => p.held(),
+            Proxy::Clav(p) => p.held(),
+        }
+    }
+
+    pub fn sounding(&self) -> usize {
+        match self {
+            Proxy::Synth(p) => p.sounding(),
+            Proxy::Clav(p) => p.sounding(),
+        }
+    }
+
+    pub fn process(&mut self, events: &[(usize, Ev)], out: &mut [f32]) {
+        match self {
+            Proxy::Synth(p) => p.process(events, out),
+            Proxy::Clav(p) => p.process(events, out),
+        }
+    }
+}
 
 /// The most voices a proxy plays.
 pub const MAX_VOICES: usize = 16;
@@ -104,7 +215,7 @@ fn taper(pos: f64, mid: f64) -> f64 {
 
 /// The measured tables (see the module docs).
 #[derive(Debug, Clone)]
-pub struct Tables {
+pub struct SynthTables {
     pub device: String,
     /// The circuit file's sha256 when they were made.
     pub circuit_sha256: String,
@@ -145,21 +256,21 @@ pub struct Tables {
     velocity: Option<&'static [(f64, f64)]>,
 }
 
-impl Tables {
+impl SynthTables {
     /// The tables for `device` in `<config>/proxy/<device>.json`; None when it has none.
-    pub fn load(config_dir: &Path, device: &str) -> Result<Option<Tables>, String> {
+    pub fn load(config_dir: &Path, device: &str) -> Result<Option<SynthTables>, String> {
         let p = config_dir.join("proxy").join(format!("{device}.json"));
         if !p.is_file() {
             return Ok(None);
         }
         let text = std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?;
         let v: Json = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", p.display()))?;
-        Tables::from_json(&v, device)
+        SynthTables::from_json(&v, device)
             .map(Some)
             .map_err(|e| format!("{}: {e}", p.display()))
     }
 
-    fn from_json(v: &Json, device: &str) -> Result<Tables, String> {
+    fn from_json(v: &Json, device: &str) -> Result<SynthTables, String> {
         let num = |x: &Json, what: &str| x.as_f64().ok_or(format!("no {what}"));
         let pair = |x: &Json, what: &str| -> Result<(f64, f64), String> {
             Ok((num(&x[0], what)?, num(&x[1], what)?))
@@ -179,7 +290,7 @@ impl Tables {
         };
         let e = &v["envelope"];
         let r = &v["resonance"];
-        Ok(Tables {
+        Ok(SynthTables {
             device: device.to_string(),
             circuit_sha256: v["circuit_sha256"].as_str().unwrap_or("").to_string(),
             f0: Curve::from(&law["g4_v"], &law["f0_hz"])?,
@@ -409,8 +520,8 @@ impl Voice {
 }
 
 /// The proxy synth (see the module docs).
-pub struct Proxy {
-    tables: std::sync::Arc<Tables>,
+pub struct SynthProxy {
+    tables: std::sync::Arc<SynthTables>,
     rate: f64,
     panel: Panel,
     playing: Playing,
@@ -434,9 +545,9 @@ pub struct Proxy {
     counter: usize,
 }
 
-impl Proxy {
+impl SynthProxy {
     /// A proxy on `tables` at `rate` with `voices` voices (1: mono).
-    pub fn new(tables: std::sync::Arc<Tables>, rate: u32, voices: usize) -> Proxy {
+    pub fn new(tables: std::sync::Arc<SynthTables>, rate: u32, voices: usize) -> SynthProxy {
         let rate = rate as f64;
         let mut tables_by_octave = Vec::with_capacity(OCTAVES);
         for o in 0..OCTAVES {
@@ -463,7 +574,7 @@ impl Proxy {
             let h = &tables.harmonics;
             tables_by_octave.push([make(&h[0], false), make(&h[1], false), make(&h[2], true)]);
         }
-        let mut p = Proxy {
+        let mut p = SynthProxy {
             tables,
             rate,
             panel: Panel::default(),
@@ -509,7 +620,7 @@ impl Proxy {
     /// 127 (no velocity range) at the panel's defaults.
     fn probe_db(&self, note: u8) -> f64 {
         let t = self.tables.clone();
-        let mut probe = Proxy {
+        let mut probe = SynthProxy {
             tables: t.clone(),
             rate: self.rate,
             panel: Panel::default(),
@@ -853,10 +964,10 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    fn tables() -> Arc<Tables> {
+    fn tables() -> Arc<SynthTables> {
         let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
         Arc::new(
-            Tables::load(&config, "tube_synth")
+            SynthTables::load(&config, "tube_synth")
                 .unwrap()
                 .expect("the tables"),
         )
@@ -881,7 +992,7 @@ mod tests {
     #[test]
     fn a_held_key_plays_its_pitch_at_the_circuits_level() {
         let t = tables();
-        let mut p = Proxy::new(t.clone(), 48_000, 1);
+        let mut p = SynthProxy::new(t.clone(), 48_000, 1);
         let mut y = vec![0.0f32; 48_000];
         p.process(
             &[(
@@ -899,7 +1010,7 @@ mod tests {
         let cents = 1200.0 * (f / want).log2();
         assert!(cents.abs() < 2.0, "A4 at {f} Hz, the device's at {want}");
         // At the defaults, held (SUSTAIN 1), its level is the circuit's (calibrated at B4).
-        let mut p = Proxy::new(t.clone(), 48_000, 1);
+        let mut p = SynthProxy::new(t.clone(), 48_000, 1);
         let mut y = vec![0.0f32; 48_000];
         p.process(
             &[(
@@ -929,7 +1040,7 @@ mod tests {
     fn the_cutoff_follows_the_panel_and_glide_takes_its_time() {
         let t = tables();
         let level = |cutoff: f64| {
-            let mut p = Proxy::new(t.clone(), 48_000, 1);
+            let mut p = SynthProxy::new(t.clone(), 48_000, 1);
             p.set_values(&vec![
                 ("cutoff".into(), varimu_circuit::yaml::Value::Float(cutoff)),
                 ("wave".into(), varimu_circuit::yaml::Value::Float(1.0)),
@@ -957,7 +1068,7 @@ mod tests {
             "a brighter filter passes more of a square's harmonics"
         );
         // GLIDE 1: a fifth up takes a measured ~0.3 s time constant.
-        let mut p = Proxy::new(t.clone(), 48_000, 1);
+        let mut p = SynthProxy::new(t.clone(), 48_000, 1);
         p.set_values(&vec![(
             "glide".into(),
             varimu_circuit::yaml::Value::Float(1.0),
@@ -991,7 +1102,7 @@ mod tests {
     #[test]
     fn voices_are_allocated_and_sixteen_cost_little() {
         let t = tables();
-        let mut p = Proxy::new(t, 48_000, 4);
+        let mut p = SynthProxy::new(t, 48_000, 4);
         let on = |n| Ev::On {
             note: n,
             velocity: 100,
@@ -1006,7 +1117,7 @@ mod tests {
         p.process(&[(0, on(72)), (1, on(76))], &mut y);
         assert!(p.voices.iter().all(|v| v.note != Some(60)));
         // Sixteen voices, ten seconds: the time it takes.
-        let mut p = Proxy::new(tables(), 48_000, MAX_VOICES);
+        let mut p = SynthProxy::new(tables(), 48_000, MAX_VOICES);
         let ev: Vec<(usize, Ev)> = (0..16).map(|i| (i, on(40 + 3 * i as u8))).collect();
         let mut y = vec![0.0f32; 64];
         p.process(&ev, &mut y);

@@ -3179,14 +3179,14 @@ impl SessionView {
                     t.monitor = Monitor::Device;
                     changed = true;
                 }
-                if seg(ui, t.monitor == Monitor::Proxy, "PROXY", "While armed, play the device's proxy: a cheap digital stand-in that follows the panel through tables measured on the device. The take renders on the device behind the recording") {
+                if seg(ui, t.monitor == Monitor::Proxy, "PROXY", "While armed, play the device's proxy: a cheap digital stand-in (tube_synth's follows the panel through tables measured on it; the Clavinet's is a simple plucked string). The take renders on the device behind the recording") {
                     t.monitor = Monitor::Proxy;
                     changed = true;
                 }
             })
             .response
             .on_disabled_hover_text(if t.midi {
-                "The device chosen in Play has no proxy (tube_synth has one)"
+                "The device chosen in Play has no proxy (tube_synth and the Clavinet have one)"
             } else {
                 "A proxy only stands in for MIDI takes: an audio take records what the device plays"
             });

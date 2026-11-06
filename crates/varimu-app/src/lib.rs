@@ -27,6 +27,7 @@
 //! into session tracks).
 
 pub mod audio;
+pub mod clav_proxy;
 pub mod components;
 pub mod editor;
 pub mod live;
