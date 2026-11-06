@@ -86,6 +86,13 @@ pub fn from_data_of(data: &Value, what: &str, want: &str) -> Result<MovingCoil, 
         let m = e
             .as_map()
             .ok_or_else(|| Error(format!("{what}: an element is not a mapping")))?;
+        // A ribbon's shutter stops (varimu.devices.ribbon): picking one is CHAINS_PLAN.md
+        // WP7 step 6; until then a motor with stops is refused, as in Python's builder.
+        if m.get("stop").is_some_and(|s| !matches!(s, Value::Null)) {
+            return Err(Error(format!(
+                "{what}: a ribbon motor with stops needs one picked (not supported yet)"
+            )));
+        }
         elements.push(McElement {
             name: text(m, "name", what)?,
             kind: text(m, "kind", what)?,

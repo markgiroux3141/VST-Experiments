@@ -638,6 +638,8 @@ def moving_coil(
     port from <name>_v to minus. A mode's gyrator has its own electrical node (its `c`);
     `@v` and `@minus` name the coil's port node and minus (varimu.devices.moving_coil)."""
     n, upper = name.lower(), name.upper()
+    if any(e.stop is not None for e in c.elements):
+        raise ValueError(f"{name}: a ribbon motor with stops needs one picked (ribbon.at_stop)")
 
     v = f"{n}_v"
     ports = {"front": front, "rear": rear, "0": GROUND, "@v": v, "@minus": minus}

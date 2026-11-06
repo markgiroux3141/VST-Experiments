@@ -32,18 +32,17 @@ runs**.
   WP6 (2026-11-05): the RCA 44-BX (`config/circuits/rca_44bx.yaml`: `RIBBON_44BX@2` on its
   pole pieces as a baffle, fitted to RCA's curves; the reactor and the M / V1 / V2 jumper;
   the 30 / 150 / 250 ohm straps); WP6's Notes.
-- **In progress:** WP7 (the RCA 77-DX and the Ampex 351's direct monitor): steps 1-3 done
+- **In progress:** WP7 (the RCA 77-DX and the Ampex 351's direct monitor): steps 1-4 done
   (sources; the preamp `config/circuits/ampex_351_record.yaml`, its profile meeting 5 of 5
-  published figures; the 77-DX's figures digitized by `scripts/digitize_rca_77dx.py`), step 4's
-  sources found (Olson's 1944 paper with the acoustic circuit, Watts on the labyrinth; WP7's
-  Notes).
-- **Next:** WP7 step 4, the model: Olson's circuit in `ribbon_motor`'s network (the
-  labyrinth an `acoustic` resistance from the node behind the ribbon to `0`, the aperture a
-  `slit` / `acoustic` element to the `rear` port; the 77-DX's body for the entries, WP6's baffle
-  as the start), checked against Olson's limits (aperture wide: the 44-BX-like gradient; closed:
-  a resistance-controlled pressure ribbon) before step 5's fit. The sources are in
-  `data/schematics/rca_77dx/README.md` ("olson1944", "watts"); the PDFs in the git-ignored
-  `cache/sources/rca_77dx/` (URLs and hashes there).
+  published figures; the 77-DX's figures digitized by `scripts/digitize_rca_77dx.py`; the
+  labyrinth's model: the network kind `line` and the shutter's `stops`, Olson's three limits
+  in `tests/test_labyrinth.py`; WP7's Notes).
+- **Next:** WP7 step 5, the fit: `RIBBON_77DX`'s base geometry in `published_points.yaml`
+  (the network of WP7's Notes "step 4", the ribbon from ib2's parts list) and
+  `scripts/fit_77dx.py` on the body's BEM entries (`bor.baffle_mesh`, as `fit_44bx.py`): the
+  sensitivities (B to -50 dBm), the connector's volume and the line to N's response (the
+  3.5 kHz hump), each stop's slot breadth to its pattern's 90 / 180-degree levels, the slot's
+  width to their frequency dependence. Then step 5's transformer design and the reactor.
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains and the 44-BX's chains in the Room view (optional). One call of theirs: the JT-115K-E's
@@ -833,7 +832,8 @@ Steps:
    slot wide, the 44-BX's gradient; U: the slot's impedance against the line's gives the
    cardioid's delay. Whether `ribbon_motor`'s network (moving_coil's element kinds: `slit`,
    `cavity`, `tube`, `acoustic`) holds a lossy line or needs a new element kind; the shutter
-   as six component instances (the C12's patterns) or a part-level value.
+   as six component instances (the C12's patterns) or a part-level value (done: a `line`
+   kind and the shutter's `stops`; Notes "step 4").
 5. Fit `RIBBON_77DX@1` (`scripts/fit_77dx.py`, one figure per unknown: B to the sensitivities
    -50 / -53 / -56 dBm at B / U / N; the line's resistance to N's flatness; the slot's area per
    stop to the patterns' rear lobes; the top to Fig. 4's peaks), the transformer as a design
@@ -911,7 +911,42 @@ Notes (2026-11-05, step 3 done, step 4's sources):
   US2271988 (labyrinth terminating the ribbon), US2299342 (a damped pipe as the resistance),
   US2247663 (a felt-filled tube), US2102736 (the 1933 labyrinth).
 
+Notes (2026-11-05, step 4 done):
+- The network kind **`line`** (`varimu/devices/moving_coil.py`, shared by every transducer
+  kind): a stuffed or empty pipe as a staggered ladder (Zwikker & Kosten's rigid-frame
+  porous medium, low-frequency limit: flow resistivity, porosity, tortuosity, polytropic
+  exponent), its far end closed, open into a node, or **matched** (its high-frequency
+  characteristic resistance: Olson's damped pipe as a pure resistance after a modelled
+  first stretch). Checked against Z0 coth(gamma L) (400 sections: 0.1% to 2 kHz). 12 uniform
+  sections on 5 cm: 0.3 dB to 6 kHz, 2.5 dB near 13 kHz; graded sections don't pay on light
+  stuffing (the long ones see the high frequencies), so the 77-DX's line is uniform.
+- **Stops** (`varimu/devices/ribbon.py`): a network element with `stops` (a list of field
+  overrides, null = closed) compiles once per stop, elements `<name>_s<k>...` tagged `stop: k`
+  (`mc.Element.stop`); `ribbon.stops`, `ribbon.at_stop(c, k)` pick one. Both builders refuse a
+  motor with stops for now (`parts.moving_coil`; varimu-circuit's `moving_coil.rs`): picking
+  one in a circuit (a part param `stop`, in both builders, bit for bit) is step 6's. A stop
+  number with no elements is closed (not range-checked: the compiled form has no count).
+- Olson's limits on his own circuit (ribbon, the pipe as r3 = rho c / S of a 7.5 mm pipe, the
+  aperture an inertance; plane-wave entries 25 mm apart): closed, omni and flat within 1 dB
+  50 Hz-1 kHz at p / (Z1 + r3); wide, the 90-degree null below -40 dB and the rear equal; M2 =
+  r3 d / c, the cardioid, rear -25 dB to 400 Hz (first order in k d: -19 dB at 1 kHz), 90
+  degrees -6.0. `tests/test_labyrinth.py` (5).
+- Explored (scratch, not committed) with a 77-DX-sized network: front radiation and channel,
+  the ribbon (50.8 x 1.37 mm), the edge slits, **a connector cavity** at the ribbon's back (2
+  cm^3), the line (7.5 mm, 5 cm, sigma 2000, isothermal, matched), the slot (a wide slit 3 mm
+  x 2 mm, breadth per stop) to the rear radiation. Closed: omni, flat to 1 kHz, **+8.5 dB at
+  3.5 kHz** (the ribbon's mass against the connector's compliance, damped by the line: RCA's N
+  has +7.7 there), -0.8 dB at 50 Hz (RCA -1.2); a closed 1 m line instead: -5.7 at 50 Hz and
+  +16 at 3.5 kHz, so the matched end. Breadth 1 mm: near cardioid (rear -20 dB at 100-200
+  Hz); 3 mm: a rear lobe -7.5 dB; 45 mm: figure-8, 7.5 dB above closed (RCA: B 6 dB over N).
+  B = 0.5 T gave 2.1 mV/Pa at B through 1:23.5; RCA's 3.16 wants ~0.75 T (the BK-11A 0.65).
+
 Decisions:
+- The labyrinth as a matched `line` (Olson's resistance, Watts's lossy line: the first few cm
+  modelled, the rest absorbing), not a closed 1 m pipe (its bass and hump miss RCA's N); the
+  hump from the connector's volume, not the labyrinth's corners (not modelled).
+- The shutter as stops inside one component (one fit, one version), not six components or
+  versions; picked per part.
 - The 77-DX's figures from ib2's masks, not coutant's scan (sharper, the same drawings); the
   patterns at key angles with identified guides rather than whole traced curves (the user's
   "flag diminishing returns": whole-curve tracking of the dashed styles cost more than the fit
@@ -936,7 +971,9 @@ circuits and their app fixtures; WP3 added the device builder `build_ck12` to
 and windings to `varimu/measure/ac.py`, WP5 `varimu/devices/ribbon.py`, moving_coil.py's
 shared `compile_element` and the `ribbon_motor` macro in `varimu/circuit/builder.py` (WP6
 touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key; WP7 added
-`varimu/measure/a351_record_suite.py` and a circuit, outside the key; its step 3 a script and data only): these
+`varimu/measure/a351_record_suite.py` and a circuit, outside the key; its step 3 a script and data only;
+its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.py` and a refusal in
+`varimu/circuit/parts.py`, every existing component compiling to its saved elements): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -990,3 +1027,7 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   identified by RCA's labels) digitized from IB-24884-2's 262 dpi masks
   (`scripts/digitize_rca_77dx.py`); step 4's sources found (Olson's 1944 Proc. IRE paper with
   the acoustic circuit, Watts on the labyrinth); still 17 of 51.
+- 2026-11-05: WP7 step 4 done: the labyrinth's model, a `line` element kind (a stuffed pipe as
+  a staggered ladder, closed / open / matched) and the shutter as `stops` in one ribbon
+  motor; Olson's three limits tested on his circuit; a 77-DX-sized network gives N's 3.5 kHz
+  hump from the connector's volume; still 17 of 51.

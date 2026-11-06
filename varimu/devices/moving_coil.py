@@ -52,6 +52,30 @@ entries), `0` (the ambient) and the cartridge's own nodes, each compiled by its 
                (R, a -> <name>_m), <name>_m (L, to <name>_c), <name>_c (C, to the ambient)
     acoustic   a resistance r_pa_s_m3 and / or a mass m_kg_m4 in series, given directly
                (a fitted unknown whose geometry no source gives: its source says so)
+    line       a pipe of section area_m2 (or radius_m) and length length_m, empty or
+               filled with a fibrous stuffing (a ribbon's labyrinth, the RCA 77's damped
+               pipe), from its mouth `a`; its far end closed (`end: closed`, the default),
+               open into `b` (`end: open`), or `matched`: ended in the line's high-
+               frequency characteristic resistance sqrt(rho alpha gamma_p P0) / (phi S) to
+               the ambient (a long, lossy line beyond the modelled length, which returns
+               nothing: Olson's damped pipe as a pure resistance, with the first length_m
+               of it as a line). A staggered ladder of `sections` sections of length dx:
+               each one's compliance phi S dx / (gamma_p P0) to the ambient at its centre,
+               between two centres (and from the mouth, and to an open or matched end: half
+               a section) a series resistance sigma l / S and mass rho alpha l / (phi S) of
+               that span l (second-order accurate in dx; Zwikker & Kosten's rigid-
+               frame porous medium in its low-frequency limit: flow_resistivity_pa_s_m2
+               sigma, porosity phi, tortuosity alpha, the polytropic exponent gamma_p:
+               `polytropic`, adiabatic GAMMA unless given; Beranek, "Acoustics", ch. 4 / 7).
+               The sections may be graded (`grading`: the last's length over the first's,
+               1 uniform), short at the mouth and long further in, which pays only where
+               the stuffing kills the high frequencies before the long sections: a section
+               needs to be under ~a tenth of the wavelength that still reaches it (12
+               uniform sections on 5 cm: 0.3 dB to 6 kHz, ~2.5 near 13 kHz, against a 400-
+               section line: tests/test_labyrinth.py). An empty pipe (sigma 0) has no
+               resistance (its wall loss neglected). Elements <name>_<k> (R) and
+               <name>_<k>_m (L) of span k, <name>_<k>_c (C) of section k, on node
+               <name>_<k>; a matched end's resistance <name>_end on node <name>_e
     seeler     the Unidyne III's phase-shift network (`seeler_rear_network`) from the node
                under the dome `a` to the rear entry `b`, its magnet cavity on node `mid`:
                the back entry R1 + L1 (a -> b), the cavity under the dome Ca (a), the coil's
@@ -109,7 +133,8 @@ from typing import Any
 from varimu.devices.capsule import C_AIR, END_CORRECTION, GAMMA, MU_AIR, P0, RHO_AIR
 
 KINDS = (
-    "screen", "tube", "slit", "radiation", "cavity", "film", "acoustic", "seeler", "diaphragm",
+    "screen", "tube", "slit", "radiation", "cavity", "film", "acoustic", "line", "seeler",
+    "diaphragm",
 )  # fmt: skip
 PORTS = ("front", "rear", "0")
 # The leak across the diaphragm's compliance: a resistance this many times the
@@ -122,7 +147,8 @@ LEAK_RATIO = 1.0e6
 class Element:
     """A compiled element: kind R, L, C (between a and b) or G (the gyrator: its acoustic
     port a -> b, ratio `value` = B l / S in ohms, its electrical port from `c` to the part's
-    minus terminal: `@v`, the coil's node, unless a mode's)."""
+    minus terminal: `@v`, the coil's node, unless a mode's); `stop`: the shutter stop it
+    belongs to (varimu.devices.ribbon), None in every stop."""
 
     name: str
     kind: str
@@ -130,6 +156,7 @@ class Element:
     b: str
     value: float
     c: str = "@v"
+    stop: int | None = None  # a ribbon's shutter stop (varimu.devices.ribbon), else in all
 
 
 @dataclass(frozen=True)
@@ -359,6 +386,8 @@ def compile_element(e: Mapping[str, Any]) -> list[dict[str, Any]]:
             els.append(_el(name, "L", a, b, m_))
         else:
             raise ValueError(f"acoustic {name}: needs r_pa_s_m3 and / or m_kg_m4")
+    elif kind == "line":
+        els += _line(name, a, b, e)
     else:
         raise ValueError(f"network element {name}: kind {kind!r} isn't a passive element")
     return els
@@ -375,6 +404,63 @@ def rectangle_self_integral(a: float, b: float) -> float:
         + 2.0 * a * a * b * math.asinh(b / a)
         + 2.0 * a * b * b * math.asinh(a / b)
     )
+
+
+def line_sections(length_m: float, n: int, grading: float) -> list[float]:
+    """The lengths of a `line`'s n sections, in a geometric progression from the mouth whose
+    last is `grading` times the first, summing to length_m."""
+    if n < 1 or not grading > 0:
+        raise ValueError(f"line: sections {n}, grading {grading}")
+    if n == 1:
+        return [length_m]
+    q = grading ** (1.0 / (n - 1))
+    w = [q**k for k in range(n)]
+    total = 0.0
+    for x in w:  # a plain loop: the builders' float sums (CLAUDE.md)
+        total += x
+    return [length_m * x / total for x in w]
+
+
+def _line(name: str, a: str, b: str, e: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The `line` kind's ladder (the module docstring)."""
+    area = float(e["area_m2"]) if "area_m2" in e else math.pi * float(e["radius_m"]) ** 2
+    sigma = float(e.get("flow_resistivity_pa_s_m2", 0.0))
+    phi, alpha = float(e.get("porosity", 1.0)), float(e.get("tortuosity", 1.0))
+    gamma_p = float(e.get("polytropic", GAMMA))
+    end = str(e.get("end", "closed"))
+    if end not in ("closed", "open", "matched"):
+        raise ValueError(f"line {name}: end {end!r} (closed, open or matched)")
+    if end != "open" and b != "0":
+        raise ValueError(f"line {name}: a {end} line has no far node (b: '0' or none)")
+    if not (0 < phi <= 1 and alpha >= 1 and sigma >= 0 and gamma_p >= 1):
+        raise ValueError(f"line {name}: porosity {phi}, tortuosity {alpha}, sigma {sigma}")
+    dxs = line_sections(float(e["length_m"]), int(e["sections"]), float(e.get("grading", 1.0)))
+    n = len(dxs)
+    # The staggered ladder: a compliance at each section's centre, the series element between
+    # two centres their mean length, half a section's from the mouth and to the far end.
+    spans = [0.5 * dxs[0]] + [0.5 * (dxs[k] + dxs[k + 1]) for k in range(n - 1)]
+    far = {"closed": None, "open": b, "matched": f"{name}_e"}[end]
+    if far is not None:
+        spans.append(0.5 * dxs[-1])
+    els: list[dict[str, Any]] = []
+    for k, dx in enumerate(spans, 1):
+        src = a if k == 1 else f"{name}_{k - 1}"
+        dst = f"{name}_{k}" if k <= n else far
+        m = RHO_AIR * alpha * dx / (phi * area)
+        if sigma > 0:
+            els += [
+                _el(f"{name}_{k}", "R", src, f"{name}_{k}_n", sigma * dx / area),
+                _el(f"{name}_{k}_m", "L", f"{name}_{k}_n", dst, m),
+            ]
+        else:
+            els.append(_el(f"{name}_{k}_m", "L", src, dst, m))
+        if k <= n:
+            c = phi * area * dxs[k - 1] / (gamma_p * P0)
+            els.append(_el(f"{name}_{k}_c", "C", dst, "0", c))
+    if end == "matched":
+        z0 = math.sqrt(RHO_AIR * alpha * gamma_p * P0) / (phi * area)
+        els.append(_el(f"{name}_end", "R", far, "0", z0))
+    return els
 
 
 def _series(name: str, a: str, b: str, r: float, m: float) -> list[dict[str, Any]]:
@@ -446,7 +532,7 @@ def moving_coil_from_data(
     els = tuple(
         Element(
             str(e["name"]), str(e["kind"]), str(e["a"]), str(e["b"]), float(e["value"]),
-            str(e.get("c", "@v")),
+            str(e.get("c", "@v")), None if e.get("stop") is None else int(e["stop"]),
         )
         for e in lp["elements"]
     )  # fmt: skip

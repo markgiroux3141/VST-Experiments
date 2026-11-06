@@ -46,6 +46,12 @@ above every mode the bank is the whole mass (Eq. 4.1.6), at DC every branch is s
 Elements <name>_n<k>_m (L), _c (C), _leak (R), _r (R) per mode k (n = 2k - 1; the last the
 lumped rest), <name>_g the gyrator on node <name>_x.
 
+Stops (the RCA 77-DX's shutter, CHAINS_PLAN.md WP7): a network element with `stops`, a list
+of overrides of its fields (null: the element absent, e.g. the shutter closed), is compiled
+once per stop k (0, 1, ...), its elements named <name>_s<k>... and tagged `stop: k`; every
+other element is in every stop. A circuit picks one (the part's `stop`; `at_stop` here), and
+the builders refuse a motor with stops when none is picked (varimu.circuit.parts.moving_coil).
+
 The electrical side as moving_coil's: re_ohm = the foil's resistance (resistivity x length x
 corrugation / (width x thickness)) + the leads', le_h the loop's inductance, no eddy branch
 (l2_h 0). A fraction of an ohm: the step-up transformer is a separate part.
@@ -53,6 +59,7 @@ corrugation / (width x thickness)) + the leads', le_h the loop's inductance, no 
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from collections.abc import Mapping
 from typing import Any
@@ -75,6 +82,25 @@ def foil(g: Mapping[str, Any]) -> dict[str, float]:
         "foil_ohm": float(r["resistivity_ohm_m"]) * length * corr / (width * t),
         "bl_tm": float(m["b_gap_t"]) * min(length, float(m.get("gap_length_m", length))),
     }
+
+
+def stops(c: mc.MovingCoil) -> list[int]:
+    """The stops a compiled motor's elements are tagged with (empty: none)."""
+    return sorted({e.stop for e in c.elements if e.stop is not None})
+
+
+def at_stop(c: mc.MovingCoil, stop: int | None) -> mc.MovingCoil:
+    """The motor at one of its stops: the untagged elements and that stop's (a motor without
+    stops: unchanged, and `stop` must be None)."""
+    have = stops(c)
+    if not have:
+        if stop is not None:
+            raise ValueError(f"{c.name} has no stops (stop {stop})")
+        return c
+    if stop is None or not 0 <= stop:
+        raise ValueError(f"{c.name}: pick a stop (open ones: {have}; any other is closed)")
+    els = tuple(dataclasses.replace(e, stop=None) for e in c.elements if e.stop in (None, stop))
+    return dataclasses.replace(c, elements=els)
 
 
 def mode_fractions(n_modes: int) -> list[tuple[int, float]]:
@@ -108,6 +134,16 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
         if name in names:
             raise ValueError(f"network element {name}: the name is taken")
         names.add(name)
+        if kind == "ribbon" and "stops" in e:
+            raise ValueError(f"network element {name}: the ribbon has no stops")
+        if "stops" in e:
+            base = {k: v for k, v in e.items() if k != "stops"}
+            for k, over in enumerate(e["stops"]):
+                if over is None:
+                    continue
+                for x in mc.compile_element({**base, **over, "name": f"{name}_s{k}"}):
+                    els.append({**x, "stop": k})
+            continue
         if kind != "ribbon":
             els += mc.compile_element(e)
             continue
