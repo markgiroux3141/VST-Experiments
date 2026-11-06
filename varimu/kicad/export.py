@@ -126,6 +126,15 @@ class _Exporter:
                 if k not in ("instance", "parallel"):
                     raise ValueError(f"{name}: device key {k} has no field")
                 p.fields[k] = field_text(v)
+        if macro == "bjt":
+            dev = dict(self.spec.devices[entry["model"]])
+            p.value = dev.pop("device")
+            if entry["model"] != name:
+                p.fields["Model"] = entry["model"]
+            for k, v in dev.items():
+                if k not in ("instance", "parallel", "area"):
+                    raise ValueError(f"{name}: device key {k} has no field")
+                p.fields[k] = field_text(v)
         if macro == "vr_tube":
             dev = dict(self.spec.devices[entry["model"]])
             p.fields["device"] = field_text(dev.pop("device"))

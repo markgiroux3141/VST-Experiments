@@ -1,0 +1,42 @@
+# A BC550C common-emitter stage on 9 V: the BJT device's test circuit (varimu.devices.bjt;
+# CLAVINET_PLAN.md CL0, CHAINS_PLAN.md WP10). A divider biases the base, the emitter
+# resistance is split into an unbypassed part (the degeneration that sets the gain, ~31 dB)
+# and a bypassed part (with the first, the DC operating point: ~1 mA). Test circuit, not
+# modelled hardware: textbook values (tests/test_bjt.py checks the idle point against a
+# hand calculation, both engines against each other).
+
+title: "BC550C common-emitter stage"
+input: in
+probes: [b, c, e, o]
+
+values:
+  supply_v: {value: 9.0, source: "provisional: model knowledge (a 9 V battery, the classic small-signal supply)"}
+  r_source_ohm: {value: 1.0e+3, source: "provisional: model knowledge (a source impedance: a line or a pickup's buffer)"}
+  c_in_f: {value: 1.0e-6, source: "provisional: model knowledge (input coupling, ~20 Hz into the divider)"}
+  r_bias_top_ohm: {value: 47.0e+3, source: "provisional: model knowledge (bias divider top: ~1.6 V at the base on 9 V)"}
+  r_bias_bottom_ohm: {value: 10.0e+3, source: "provisional: model knowledge (bias divider bottom, 47k / 10k)"}
+  r_collector_ohm: {value: 4.7e+3, source: "provisional: model knowledge (collector load: ~4.3 V at the collector at ~1 mA, near mid-supply)"}
+  r_degen_ohm: {value: 100.0, source: "provisional: model knowledge (unbypassed emitter degeneration: gain ~ Rc / (re + 100))"}
+  r_emitter_ohm: {value: 820.0, source: "provisional: model knowledge (bypassed emitter resistor: with the degeneration, ~1 mA from ~0.95 V at the emitter)"}
+  c_emitter_f: {value: 47.0e-6, source: "provisional: model knowledge (emitter bypass electrolytic, a few Hz)"}
+  c_out_f: {value: 1.0e-6, source: "provisional: model knowledge (output coupling capacitor)"}
+  r_load_ohm: {value: 100.0e+3, source: "provisional: model knowledge (the next stage's input)"}
+
+devices:
+  Q1: {device: BC550C@1}
+
+sections:
+  - title: stage
+    parts:
+      VCC: {V: [vcc, "0"], v: supply_v}
+      RS: {R: [in, a], r: r_source_ohm}
+      CI: {C: [a, b], c: c_in_f}
+      R1: {R: [vcc, b], r: r_bias_top_ohm}
+      R2: {R: [b, "0"], r: r_bias_bottom_ohm}
+      Q1: {bjt: [c, b, e], model: Q1}
+      RC: {R: [vcc, c], r: r_collector_ohm}
+      RE1: {R: [e, e2], r: r_degen_ohm}
+      RE2: {R: [e2, "0"], r: r_emitter_ohm}
+      CE: {C: [e2, "0"], c: c_emitter_f}
+      CO: {C: [c, o], c: c_out_f}
+      RL: {R: [o, "0"], r: r_load_ohm}

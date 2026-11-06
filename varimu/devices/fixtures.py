@@ -11,6 +11,7 @@ pin (the cathode), and the currents flow into pins 0..P-1:
 - pentode (p, g2, g1, k): ports (Vpk, Vg2k, Vg1k), currents (Ip, Ig2, Ig1);
 - diodes (a, k): port Vak, current I;
 - lamp (a, t, b): ports (Vab, T - T_amb), currents (I, dT/dt);
+- BJT (c, b, e): ports (Vce, Vbe), currents (Ic, Ib);
 - thyratron, tetrode (a, g2, g1, w, k): ports (Va, Vg2, Vg1, w), currents (Ia, Ig2, Ig1, -dw/dt);
   triode (a, g, w, k): ports (Va, Vg, w), currents (Ia, Ig, -dw/dt);
 - magnetic core (b, ref): port B / TESLA_PER_V, current path * H. A core has
@@ -29,6 +30,7 @@ import numpy as np
 
 from varimu.circuit import netlist as nl
 from varimu.circuit.ir import model_to_dict
+from varimu.devices.bjt import Bjt
 from varimu.devices.core import DEMAGNETIZED, TESLA_PER_V, MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
@@ -67,6 +69,11 @@ _THY_VA = (-20, 0, 5, 9, 12, 16, 30, 100, 300)
 _THY_VG = (-100, -20, -5, -2, -0.6, 0, 3)
 _THY_VG2 = (-1, 0, 4)
 _THY_W = (W_MIN - 10, -30, -8, -1, 2, 6, 10, W_MAX + 5)
+# A BJT (NPN signs; a PNP's grid is negated) from reverse junctions through the active
+# region to saturation, both junctions at most ~0.95 V forward (past that the currents
+# would swamp the Jacobian test's absolute floor).
+_BJT_VBE = (-5, -1, -0.2, 0, 0.3, 0.5, 0.6, 0.65, 0.7, 0.75, 0.8, 0.9)
+_BJT_VCE = (-5, -0.5, 0, 0.05, 0.2, 1, 5, 20, 45)
 # Core: B history (T) whose accepted points are the states, and offsets from each state's B.
 _CORE_HISTORY = (0.0, 0.6, 0.3, 1.2, -0.4, 1.9)
 # (not multiples of DB_MAX: there the substep count changes, a ~1e-8 relative jump that
@@ -99,6 +106,8 @@ def _models() -> list:
         load_device("884@1"),
         load_device("EF804S@1"),  # the e1 screen law (pentode.py)
         load_device("E83F@1"),
+        load_device("BC550C@1"),
+        load_device("BC560C@1"),  # PNP
         core_model("CORE_GO", "grain_oriented_si_steel", 0.1),
         core_model("CORE_NI", "permalloy_fluxgate", 0.08),
         core_model("CORE_MU", "mumetall", 0.07),
@@ -147,6 +156,14 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
             grid = itertools.product(_THY_VA, _THY_VG2, _THY_VG, _THY_W)
         ports = [tuple(float(x) for x in p) for p in grid]
         currents = np.stack(m.currents(*np.array(ports, float).T), axis=1)
+    elif isinstance(m, Bjt):
+        ports = [
+            (m.sign * vce, m.sign * vbe)
+            for vbe, vce in itertools.product(_BJT_VBE, _BJT_VCE)
+            if max(vbe, vbe - vce) <= 0.95
+        ]
+        currents = np.stack(m.currents(*np.array(ports, float).T), axis=1)
+        ports = [(float(a), float(b)) for a, b in ports]
     elif isinstance(m, JunctionDiode | VacuumDiode):
         volts = _JUNCTION_V if isinstance(m, JunctionDiode) else _VACUUM_V
         if isinstance(m, JunctionDiode) and m.rs_ohm == 0:

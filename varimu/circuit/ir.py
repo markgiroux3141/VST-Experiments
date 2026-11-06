@@ -48,6 +48,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
+from varimu.devices.bjt import POLARITIES, Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
@@ -527,7 +528,7 @@ Element = (
     | Harp
     | ThyratronEvents
 )
-DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp | Thyratron
+DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp | Thyratron | Bjt
 
 PINS: dict[type, tuple[str, ...]] = {
     Triode: ("p", "g", "k"),
@@ -536,6 +537,7 @@ PINS: dict[type, tuple[str, ...]] = {
     VacuumDiode: ("a", "k"),
     MagneticCore: ("b", "ref"),
     Lamp: ("a", "t", "b"),
+    Bjt: ("c", "b", "e"),
 }
 
 
@@ -565,8 +567,11 @@ _PREFIX = {
 
 
 def instance_prefix(model: DeviceModel) -> str:
-    """SPICE letter of an instance: D for the built-in diode, X for subcircuits."""
-    return "D" if isinstance(model, JunctionDiode) else "X"
+    """SPICE letter of an instance: D for the built-in diode, Q for the built-in BJT, X for
+    subcircuits."""
+    if isinstance(model, JunctionDiode):
+        return "D"
+    return "Q" if isinstance(model, Bjt) else "X"
 
 
 def element_nodes(el: Element) -> tuple[str, ...]:
@@ -1032,6 +1037,17 @@ def _validate_model(m: DeviceModel) -> None:
             _finite(f"{m.name}.{w}", getattr(m, w))
         for w in ("g_leak_s", "c_gk", "c_ga", "c_ak"):
             nonneg(w, getattr(m, w))
+    elif isinstance(m, Bjt):
+        if m.polarity not in POLARITIES:
+            raise IRError(f"{m.name}.polarity = {m.polarity!r}: one of {POLARITIES}")
+        values += [(w, getattr(m, w)) for w in ("is_a", "bf", "br", "nf", "nr", "ne", "nc")]
+        values += [
+            (w, getattr(m, w))
+            for w in ("vaf_v", "var_v", "ikf_a", "ikr_a")
+            if getattr(m, w) is not None
+        ]
+        for w in ("ise_a", "isc_a", "rb_ohm", "rc_ohm", "re_ohm", "cje_f", "cjc_f"):
+            nonneg(w, getattr(m, w))
     elif isinstance(m, MagneticCore):
         problems = m.validate()
         if problems:
@@ -1074,6 +1090,7 @@ _MODEL_KINDS = {
     "magnetic_core": MagneticCore,
     "lamp": Lamp,
     "thyratron": Thyratron,
+    "bjt": Bjt,
 }
 _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 # Optional fields written only when set, so IRs without them read and write as before.

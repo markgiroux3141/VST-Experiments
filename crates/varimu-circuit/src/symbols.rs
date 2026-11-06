@@ -763,6 +763,29 @@ fn table() -> Vec<SymbolDef> {
             false,
             (0.0, 6.35, 5.588, "left"),
         ),
+        macro_sym(
+            "BJT",
+            "bjt",
+            "Q",
+            "Bipolar transistor (varimu.devices.bjt, NPN or PNP by its device file): pin 1 the collector, 2 the base, 3 the emitter; Value is the device file",
+            vec![
+                pin("1", "C", 2.54, 5.08, 270, 2.54),
+                pin("2", "B", -5.08, 0.0, 0, 2.54),
+                pin("3", "E", 2.54, -5.08, 90, 2.54),
+            ],
+            vec![
+                circle(0.635, 0.0, 3.302, false),
+                poly(&[(-2.54, 0.0), (-1.27, 0.0)]),
+                poly(&[(-1.27, 1.905), (-1.27, -1.905)]),
+                poly(&[(-1.27, 0.635), (2.54, 2.54)]),
+                poly(&[(-1.27, -0.635), (2.54, -2.54)]),
+                poly(&[(1.397, -2.413), (2.54, -2.54), (1.905, -1.524)]),
+            ],
+            None,
+            &["Model", "instance", "parallel", "area"],
+            false,
+            (4.318, 1.27, -1.27, "left"),
+        ),
     ];
     let dev_text = (5.842, 1.27, -1.27, "left");
     v.push(device(

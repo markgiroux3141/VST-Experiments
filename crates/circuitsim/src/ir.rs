@@ -511,6 +511,7 @@ pub enum DeviceModel {
     MagneticCore(MagneticCore),
     Lamp(Lamp),
     Thyratron(Thyratron),
+    Bjt(Bjt),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -649,6 +650,43 @@ pub struct Lamp {
     pub t_amb_k: f64,
 }
 
+/// A BJT's polarity.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Polarity {
+    Npn,
+    Pnp,
+}
+
+/// `varimu.devices.bjt.Bjt`: SPICE's Gummel-Poon BJT, DC subset; pins (c, b, e). Port
+/// currents: the collector's and the base's. `None` limits are infinite (SPICE's 0). The
+/// parasitics (`rb_ohm` .. `cjc_f`) are the `bjt` part's linear elements, which the
+/// builders place around the device; the device ignores them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Bjt {
+    pub name: String,
+    pub polarity: Polarity,
+    pub is_a: f64,
+    pub bf: f64,
+    pub br: f64,
+    pub nf: f64,
+    pub nr: f64,
+    pub vaf_v: Option<f64>,
+    pub var_v: Option<f64>,
+    pub ikf_a: Option<f64>,
+    pub ikr_a: Option<f64>,
+    pub ise_a: f64,
+    pub ne: f64,
+    pub isc_a: f64,
+    pub nc: f64,
+    pub rb_ohm: f64,
+    pub rc_ohm: f64,
+    pub re_ohm: f64,
+    pub cje_f: f64,
+    pub cjc_f: f64,
+}
+
 /// `varimu.devices.thyratron.Thyratron`: a hot-cathode gas thyratron as a lumped plasma.
 /// A tetrode (`mu_g2` set) has pins (a, g2, g1, w, k): the anode, the shield and control
 /// grids, the plasma's state (ln of its ion density; a 1 F capacitor from w to k holds it)
@@ -693,6 +731,7 @@ impl DeviceModel {
             DeviceModel::VacuumDiode(m) => &m.name,
             DeviceModel::MagneticCore(m) => &m.name,
             DeviceModel::Lamp(m) => &m.name,
+            DeviceModel::Bjt(m) => &m.name,
             DeviceModel::Thyratron(m) => &m.name,
         }
     }
@@ -705,15 +744,18 @@ impl DeviceModel {
             DeviceModel::JunctionDiode(_) | DeviceModel::VacuumDiode(_) => &["a", "k"],
             DeviceModel::MagneticCore(_) => &["b", "ref"],
             DeviceModel::Lamp(_) => &["a", "t", "b"],
+            DeviceModel::Bjt(_) => &["c", "b", "e"],
             DeviceModel::Thyratron(t) if t.mu_g2.is_some() => &["a", "g2", "g1", "w", "k"],
             DeviceModel::Thyratron(_) => &["a", "g", "w", "k"],
         }
     }
 
-    /// SPICE letter of an instance: `D` for the built-in diode, `X` for subcircuits.
+    /// SPICE letter of an instance: `D` for the built-in diode, `Q` for the built-in BJT,
+    /// `X` for subcircuits.
     pub fn instance_prefix(&self) -> char {
         match self {
             DeviceModel::JunctionDiode(_) => 'D',
+            DeviceModel::Bjt(_) => 'Q',
             _ => 'X',
         }
     }
@@ -1447,6 +1489,40 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             ]);
             for c in l.emissivity {
                 finite(&format!("{name}.emissivity[]"), c)?;
+            }
+        }
+        DeviceModel::Bjt(q) => {
+            values.extend([
+                ("is_a", q.is_a),
+                ("bf", q.bf),
+                ("br", q.br),
+                ("nf", q.nf),
+                ("nr", q.nr),
+                ("ne", q.ne),
+                ("nc", q.nc),
+            ]);
+            for (what, x) in [
+                ("vaf_v", q.vaf_v),
+                ("var_v", q.var_v),
+                ("ikf_a", q.ikf_a),
+                ("ikr_a", q.ikr_a),
+            ] {
+                if let Some(x) = x {
+                    values.push((what, x));
+                }
+            }
+            for (what, x) in [
+                ("ise_a", q.ise_a),
+                ("isc_a", q.isc_a),
+                ("rb_ohm", q.rb_ohm),
+                ("rc_ohm", q.rc_ohm),
+                ("re_ohm", q.re_ohm),
+                ("cje_f", q.cje_f),
+                ("cjc_f", q.cjc_f),
+            ] {
+                if !(x.is_finite() && x >= 0.0) {
+                    return err(format!("{name}.{what} = {x} must be >= 0"));
+                }
             }
         }
         DeviceModel::Thyratron(t) => {

@@ -838,3 +838,27 @@
   published:
     sensitivity_v_per_pa: {B: 3.16e-3, U: 2.24e-3, N: 1.58e-3}   # ib2: B -50, U -53, N -56 dbm at 10 dynes/cm^2 into 250 ohm (RETMA: matched power), open circuit sqrt(4 R P)
     turns_ratio: 23.5                     # ib2: 'turns ratio 1:23.5 +-2%' (97503)
+
+# BJTs (the Gummel-Poon subset, varimu.devices.bjt; CLAVINET_PLAN.md CL0, CHAINS_PLAN.md WP10).
+# The cards are NXP's own, verbatim, as Analog Devices ships them in LTspice's standard BJT
+# library (lib/cmp/standard.bjt, `mfg=NXP`; LTspice 24.1.9, file sha256 a611c0c1...b4a, UTF-16).
+# NXP / Nexperia publish the same cards per part (web: https://assets.nexperia.com/documents/spice-model/BC547C.txt;
+# that server refuses scripted downloads, so the LTspice copy is the one read). The BC550 is
+# the BC547's low-noise selection of the same die (Philips' BC549; BC550 sheet: 45 V, 100 mA,
+# the same hFE groups; BC560 is the BC557's): the BC547C card for the BC550C, the BC557C
+# card for the BC560C.
+"BJT_CARDS":
+  source: "NXP SPICE models as distributed in LTspice 24.1.9's lib/cmp/standard.bjt (mfg=NXP); NXP / Nexperia's per-part model files (web: https://assets.nexperia.com/documents/spice-model/BC547C.txt, https://assets.nexperia.com/documents/spice-model/BC557C.txt)"
+  BC547C: ".model BC547C NPN(IS=4.679E-14 NF=1.01 ISE=2.642E-15 NE=1.581 BF=458.7 IKF=0.1371 VAF=52.64 NR=1.019 ISC=2.337E-14 NC=1.164 BR=11.57 IKR=0.1144 VAR=364.5 RB=1 IRB=1.00E-06 RBM=1 RE=0.2598 RC=1 XTB=0 EG=1.11 XTI=3 CJE=1.229E-11 VJE=0.5591 MJE=0.3385 TF=4.689E-10 XTF=160 VTF=2.828 ITF=0.8842 PTF=0 CJC=4.42E-12 VJC=0.1994 MJC=0.2782 XCJC=0.6193 TR=1.00E-32 CJS=0 VJS=0.75 MJS=0.333 FC=0.7936 Vceo=45 Icrating=100m mfg=NXP)"
+  BC557C: ".model BC557C PNP(IS=5.83E-14 NF=1.009 ISE=3.88E-15 NE=1.408 BF=516.7 IKF=0.08039 VAF=26.03 NR=1.006 ISC=4.01E-14 NC=1.313 BR=12.45 IKR=0.07238 VAR=6.717 RB=1 IRB=1.00E-06 RBM=1 RE=0.5685 RC=0.6257 XTB=0 EG=1.11 XTI=3 CJE=1.26E-11 VJE=0.3809 MJE=0.3545 TF=5.23E-10 XTF=4.339 VTF=5.425 ITF=0.1896 PTF=0 CJC=7.80E-12 VJC=0.5897 MJC=0.4569 XCJC=0.6288 TR=1.00E-32 CJS=0 VJS=0.75 MJS=0.333 FC=0.5729 Vceo=45 Icrating=100m mfg=NXP)"
+
+"BC550C":
+  source: "Philips Semiconductors, BC549; BC550 NPN general purpose transistors, product specification 2004 Oct 11, Characteristics (Tamb = 25 C) and Fig. 2 (web: https://www.audiodesignguide.com/DACend2/BC549_550.pdf)"
+  hfe_2ma_5v: {min: 420, typ: 520, max: 800}    # hFE, VCE = 5 V, IC = 2 mA (BC549C; BC550C)
+  vbe_2ma_5v_v: {min: 0.580, typ: 0.660, max: 0.700}   # VBE, VCE = 5 V, IC = 2 mA
+  vbe_10ma_5v_v: {typ: 0.770}                   # VBE, VCE = 5 V, IC = 10 mA
+  cc_10v_f: {typ: 1.5e-12}                      # Cc, VCB = 10 V, IE = 0, f = 1 MHz
+  ce_0v5_f: {typ: 11.0e-12}                     # Ce, VEB = 0.5 V, IC = 0, f = 1 MHz
+  ft_hz: {min: 100.0e6}                         # fT, VCE = 5 V, IC = 10 mA
+  vceo_v: 45
+  ic_max_a: 0.100

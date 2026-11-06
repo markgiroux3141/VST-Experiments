@@ -181,11 +181,11 @@ def test_fresh_netlist_imports_the_same(tmp_path):
 
 
 @needs_kicad
-@pytest.mark.parametrize("name", ["fairchild_670", "triode_stage", "fender_5e3"])
+@pytest.mark.parametrize("name", ["fairchild_670", "triode_stage", "fender_5e3", "bjt_stage"])
 def test_round_trip_through_kicad(name, tmp_path):
     """The other circuits through KiCad and back: the 670 has the macros the EQP-1A
     lacks (T-pad, tapped pot, bridge, VR tube, interwinding capacitance, pentodes,
-    lumped parts, derived values)."""
+    lumped parts, derived values); bjt_stage the bjt part."""
     d = tmp_path / name
     export_circuit(circuit_path(name), d, name, "${KIPRJMOD}/varimu.kicad_sym")
     (d / "varimu.kicad_sym").write_text(library_text(), encoding="utf-8")

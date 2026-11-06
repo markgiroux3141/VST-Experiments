@@ -901,6 +901,37 @@ three-way test pattern. **The BJT model is a shared prerequisite** (the user's O
 ([MIC_ROOM_PLAN.md](MIC_ROOM_PLAN.md) A8), the TR-808 / CR-78 ([DRUM_PLAN.md](DRUM_PLAN.md)
 D3) and DEVICE_CANDIDATES.md's tier 2 all wait for it.
 
+*The BJT built 2026-11-06* (CLAVINET_PLAN.md CL0, CHAINS_PLAN.md WP10; overnight, the
+decisions delegated, on the lamp's pattern). SPICE's Gummel-Poon DC subset (IS, BF, BR,
+NF, NR, VAF, VAR, IKF, IKR, ISE, NE, ISC, NC; SPICE's definitions and defaults, at TNOM),
+NPN and PNP: the Python reference `varimu/devices/bjt.py` (its docstring has the equations
+and what's left out), ngspice's native `Q` with a DC-only `.model` card as the SPICE
+implementation, circuitsim's `devices/bjt.rs` (a stateless two-port, ports V(c, e) and
+V(b, e), SPICE's `pnjlim` on both junctions; gmin across both junctions in MNA, as
+ngspice), the IR model `Bjt` (kind `bjt`, pins (c, b, e), instance letter Q) in both
+languages. Stateless on purpose: TF and the diffusion charge are left out (fT >= 100 MHz),
+RB / RC / RE and CJE / CJC are linear elements the part macro `bjt: [c, b, e]` (model: a
+`devices` key) places around the device (CJE at zero bias, CJC at 5 V reverse); a `device`
+part refuses a BJT. No noise yet (junction shot noise and RB's Johnson noise are later
+work). Components (kind `bjt`, written by `varimu fit-devices --only BC550C BC413C BC560C`
+from `published_points.yaml`'s `BJT_CARDS`, NXP's cards as LTspice ships them): `BC550C@1`
+(NXP's BC547C card: the BC550 is its low-noise selection), `BC413C@1` (the same card,
+provisional: no published BC413C card found), `BC560C@1` (NXP's BC557C, the PNP complement);
+no BC238 (no sourced card at hand). Against Philips' BC549 / BC550 sheet: hFE 487 at 2 mA /
+5 V (420-800), VBE 0.639 V (0.58-0.70); VBE at 10 mA 0.68 V against a typical 0.77 (the
+card's, kept). Agreement: Python vs ngspice `.op` on a grid of bias points within 2e-8
+relative (NPN, PNP, and the card without its optional terms; ngspice's gmin, including its
+substrate junction's, added to the reference), Rust vs Python bit-equal on the device
+fixtures, the builders bit for bit (`tests/agreement.rs`). The test circuit
+`config/circuits/bjt_stage.yaml` (a 9 V common-emitter stage, 47k / 10k divider, 4.7k
+collector, 100 ohm unbypassed + 820 ohm bypassed emitter) idles at Ic 1.020 mA, base
+1.561 V, emitter 0.940 V, collector 4.207 V (ngspice's .op and circuitsim's DC point within
+1e-6 V of the hand calculation, which is within 5% of the textbook's); circuitsim vs ngspice
+in transient (three tones, trapezoidal, k = 8) -85.1 dB small, -73.4 dB driven into
+saturation; DK = full MNA; production's gain 29.73 dB against the textbook's 29.68.
+`tests/test_bjt.py`; the KiCad / editor symbol `BJT` (the native editor's palette:
+Transistor) and the KiCad round trip (`tests/test_kicad.py`).
+
 **B9. The Fender 5E3 Deluxe** ([DEVICE_CANDIDATES.md](DEVICE_CANDIDATES.md), the
 user's first pick; planned 2026-10-29). A guitar amp built from the format like the
 EQP-1A, its output transformer the component editor's first designed component

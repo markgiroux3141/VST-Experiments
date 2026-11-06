@@ -59,6 +59,7 @@ from varimu.devices import moving_coil as mc
 from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
 from varimu.devices import spring as spr
+from varimu.devices.bjt import Bjt
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
@@ -536,6 +537,29 @@ def opamp(
     return els
 
 
+def bjt(name: str, c: str, b: str, e: str, model: Bjt) -> list[Element]:
+    """Transistor `name` (varimu.devices.bjt): the device Q<name> (the part's name, which
+    starts with Q) on its internal nodes, and the model's linear parasitics around it:
+    R<NAME>_b, R<NAME>_c, R<NAME>_e from the terminals to the internal nodes <name>_b,
+    <name>_c, <name>_e (each only where its resistance is nonzero: else the device sits on
+    the terminal), C<NAME>_je (CJE) from the internal base to the internal emitter and
+    C<NAME>_jc (CJC) from the internal base to the internal collector (where nonzero)."""
+    n, upper = name.lower(), name.upper()
+    ci = f"{n}_c" if model.rc_ohm > 0 else c
+    bi = f"{n}_b" if model.rb_ohm > 0 else b
+    ei = f"{n}_e" if model.re_ohm > 0 else e
+    els: list[Element] = [Device(name, model.name, (ci, bi, ei))]
+    for tag, outer, inner, r in (("b", b, bi, model.rb_ohm), ("c", c, ci, model.rc_ohm),
+                                 ("e", e, ei, model.re_ohm)):  # fmt: skip
+        if r > 0:
+            els.append(Resistor(f"R{upper}_{tag}", outer, inner, r))
+    if model.cje_f > 0:
+        els.append(Capacitor(f"C{upper}_je", bi, ei, model.cje_f))
+    if model.cjc_f > 0:
+        els.append(Capacitor(f"C{upper}_jc", bi, ci, model.cjc_f))
+    return els
+
+
 def capsule(
     name: str, front: str, backplate: str, out: str, c: cap.Capsule, polarization_v: float
 ) -> list[Element]:
@@ -781,6 +805,28 @@ def device_instance(
             raise ValueError(f"{name}: a junction diode has no emission spread")
         k = n_parallel * area
         return dataclasses.replace(base, name=name, is_a=base.is_a * k, rs_ohm=base.rs_ohm / k)
+    if isinstance(base, Bjt):
+        if emission_scale != 1.0:
+            raise ValueError(f"{name}: a BJT has no emission spread")
+        k = n_parallel * area
+
+        def times(x):
+            return None if x is None else x * k
+
+        return dataclasses.replace(
+            base,
+            name=name,
+            is_a=base.is_a * k,
+            ikf_a=times(base.ikf_a),
+            ikr_a=times(base.ikr_a),
+            ise_a=base.ise_a * k,
+            isc_a=base.isc_a * k,
+            rb_ohm=base.rb_ohm / k,
+            rc_ohm=base.rc_ohm / k,
+            re_ohm=base.re_ohm / k,
+            cje_f=base.cje_f * k,
+            cjc_f=base.cjc_f * k,
+        )
     if isinstance(base, Lamp):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
             raise ValueError(f"{name}: a lamp takes no parallel, emission or area")

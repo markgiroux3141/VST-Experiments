@@ -126,7 +126,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's direct monitor as a preamp | 77-DX -> 351, 77-DX -> 610 | L | done 2026-11-06 |
 | 8 | Coles 4038 | 4038 -> V72 | M | |
 | 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | |
-| 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types"; CLAVINET_PLAN.md's CL0 builds it if it gets there first) | 0 | L | |
+| 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types"; CLAVINET_PLAN.md's CL0 builds it if it gets there first) | 0 | L | done 2026-11-06 (CL0 on the `clavinet` branch: `varimu/devices/bjt.py`, the `bjt` part, `BC550C@1` / `BC413C@1` / `BC560C@1`, `bjt_stage.yaml`; DEVICE_BUILDER_PLAN.md "New device types") |
 | 11 | Neve 1073 (Marinair transformers as designs; 300 / 1200 ohm) | 44-BX, SM57, U47 -> 1073 | L | |
 | 12 | API 312 (the 2520) | SM57 -> API | L | |
 | 13 | Electro-Voice RE20 (Variable-D: rear entries along the body) | RE20 -> API, RE20 -> 1073 | L | |

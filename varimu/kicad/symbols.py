@@ -544,6 +544,30 @@ _SYMBOLS: list[SymbolDef] = [
         toleranced=False,
         text=(0, 6.35, 5.588, "left"),
     ),
+    _macro(
+        "BJT",
+        "bjt",
+        "Q",
+        "Bipolar transistor (varimu.devices.bjt, NPN or PNP by its device file): pin 1 the "
+        "collector, 2 the base, 3 the emitter; Value is the device file",
+        (
+            Pin("1", "C", 2.54, 5.08, 270, 2.54),
+            Pin("2", "B", -5.08, 0, 0, 2.54),
+            Pin("3", "E", 2.54, -5.08, 90, 2.54),
+        ),  # fmt: skip
+        [
+            circle(0.635, 0, 3.302),
+            poly((-2.54, 0), (-1.27, 0)),
+            poly((-1.27, 1.905), (-1.27, -1.905)),
+            poly((-1.27, 0.635), (2.54, 2.54)),
+            poly((-1.27, -0.635), (2.54, -2.54)),
+            poly((1.397, -2.413), (2.54, -2.54), (1.905, -1.524)),
+        ],
+        None,
+        ("Model", "instance", "parallel", "area"),
+        toleranced=False,
+        text=(4.318, 1.27, -1.27, "left"),
+    ),
 ]
 
 _DEVICE_FIELDS = ("Tol", "Model", "emission", "mu", "grid_contact_v", "parallel", "area",

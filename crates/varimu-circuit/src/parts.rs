@@ -364,6 +364,49 @@ pub fn capacitor(name: &str, a: &str, b: &str, c_f: f64) -> Element {
     })
 }
 
+/// Transistor `name` (parts.py's `bjt`): the device on its internal nodes, the model's
+/// series resistances from the terminals to them (where nonzero) and its junction
+/// capacitances between them.
+pub fn bjt(name: &str, c: &str, b: &str, e: &str, model: &circuitsim::ir::Bjt) -> Vec<Element> {
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let inner = |r: f64, tag: &str, outer: &str| {
+        if r > 0.0 {
+            format!("{n}_{tag}")
+        } else {
+            s(outer)
+        }
+    };
+    let ci = inner(model.rc_ohm, "c", c);
+    let bi = inner(model.rb_ohm, "b", b);
+    let ei = inner(model.re_ohm, "e", e);
+    let mut els = vec![Element::Device(Device {
+        name: s(name),
+        model: model.name.clone(),
+        nodes: vec![ci.clone(), bi.clone(), ei.clone()],
+    })];
+    for (tag, outer, inner, r) in [
+        ("b", b, &bi, model.rb_ohm),
+        ("c", c, &ci, model.rc_ohm),
+        ("e", e, &ei, model.re_ohm),
+    ] {
+        if r > 0.0 {
+            els.push(Element::Resistor(Resistor {
+                name: format!("R{upper}_{tag}"),
+                a: s(outer),
+                b: inner.clone(),
+                r_ohm: r,
+            }));
+        }
+    }
+    if model.cje_f > 0.0 {
+        els.push(capacitor(&format!("C{upper}_je"), &bi, &ei, model.cje_f));
+    }
+    if model.cjc_f > 0.0 {
+        els.push(capacitor(&format!("C{upper}_jc"), &bi, &ci, model.cjc_f));
+    }
+    els
+}
+
 // --- Rectifiers, references, sources ------------------------------------------------
 
 pub fn bridge(
@@ -549,6 +592,25 @@ pub fn device_instance(
             d.is_a *= k;
             d.rs_ohm /= k;
             Ok(DeviceModel::JunctionDiode(d))
+        }
+        DeviceModel::Bjt(q) => {
+            if inst.emission_scale != 1.0 {
+                return Err(Error(format!("{name}: a BJT has no emission spread")));
+            }
+            let k = n * inst.area;
+            let mut q = q.clone();
+            q.name = s(name);
+            q.is_a *= k;
+            q.ikf_a = q.ikf_a.map(|x| x * k);
+            q.ikr_a = q.ikr_a.map(|x| x * k);
+            q.ise_a *= k;
+            q.isc_a *= k;
+            q.rb_ohm /= k;
+            q.rc_ohm /= k;
+            q.re_ohm /= k;
+            q.cje_f *= k;
+            q.cjc_f *= k;
+            Ok(DeviceModel::Bjt(q))
         }
         DeviceModel::Lamp(l) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {

@@ -77,6 +77,7 @@ from varimu.circuit.ir import (
     element_nodes,
 )
 from varimu.devices import noise as nz
+from varimu.devices.bjt import Bjt
 from varimu.devices.core import TESLA_PER_V, MagneticCore
 from varimu.devices.diode import JunctionDiode
 from varimu.devices.pentode import Pentode
@@ -322,7 +323,7 @@ def noise_lines(
 
 def instance_target(model: DeviceModel) -> str:
     """What a SPICE instance line names: the model card or the subcircuit."""
-    return model.model_name if isinstance(model, JunctionDiode) else model.subckt_name
+    return model.model_name if isinstance(model, JunctionDiode | Bjt) else model.subckt_name
 
 
 def table_file(model: Triode) -> str:
@@ -515,7 +516,7 @@ def emit(
             fname = table_file(m)
             files[fname] = cached_table(m, table_grids[m.name])
             lines.append(table_subckt(m, fname))
-        elif isinstance(m, JunctionDiode):
+        elif isinstance(m, JunctionDiode | Bjt):
             lines.append(m.model_card())
         elif isinstance(m, MagneticCore):
             raise IRError(

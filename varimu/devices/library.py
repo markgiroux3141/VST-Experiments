@@ -24,6 +24,7 @@ import yaml
 import varimu
 from varimu.config import REPO_ROOT
 from varimu.devices import versions
+from varimu.devices.bjt import Bjt, bjt_from_data, depletion_c_f, parse_card
 from varimu.devices.capsule import (
     Capsule,
     DualCapsule,
@@ -57,7 +58,7 @@ from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_s
 
 DEVICE_DIR = versions.COMPONENT_DIR
 REPORT_DIR = REPO_ROOT / "reports" / "devices"
-Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron
+Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron | Bjt
 
 # Oxide-cathode grid conduction. There's no datasheet figure for any of these
 # tubes, so this is the same placeholder everywhere until it becomes a genome parameter.
@@ -131,6 +132,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return VacuumDiode(d["name"], d["perveance"], d.get("smooth_v", 0.1))
     if kind == "lamp":
         return lamp_from_data(d, name)
+    if kind == "bjt":
+        return bjt_from_data(d, name)
     if kind == "thyratron":
         return thyratron_from_data(d, name)
     if kind == "speaker":
@@ -1310,6 +1313,90 @@ def build_scotch111() -> dict[str, Any]:
     }
 
 
+# The reverse bias CJC is taken at for the bjt part's linear collector capacitance: the
+# datasheets' hFE condition (VCE = 5 V), a typical audio stage's collector-base voltage.
+BJT_CJC_AT_V = 5.0
+
+
+def _bjt_component(name: str, card_key: str, source: str) -> dict[str, Any]:
+    """A BJT component (kind `bjt`, varimu.devices.bjt) from a published SPICE card: the
+    DC parameters as given, RB / RC / RE as given, CJE at zero bias and CJC at
+    BJT_CJC_AT_V reverse (the part's linear capacitors)."""
+    cards = _published()["BJT_CARDS"]
+    card = cards[card_key]
+    polarity, p = parse_card(card)
+    dc = {
+        "is_a": p["IS"],
+        "bf": p["BF"],
+        "br": p.get("BR", 1.0),
+        "nf": p.get("NF", 1.0),
+        "nr": p.get("NR", 1.0),
+        "vaf_v": p.get("VAF") or None,  # SPICE: 0 / absent = infinite
+        "var_v": p.get("VAR") or None,
+        "ikf_a": p.get("IKF") or None,
+        "ikr_a": p.get("IKR") or None,
+        "ise_a": p.get("ISE", 0.0),
+        "ne": p.get("NE", 1.5),
+        "isc_a": p.get("ISC", 0.0),
+        "nc": p.get("NC", 2.0),
+        "source": f"the {card_key} card's DC parameters ({cards['source']})",
+    }
+    cjc = depletion_c_f(p.get("CJC", 0.0), p.get("VJC", 0.75), p.get("MJC", 0.33), BJT_CJC_AT_V)
+    return {
+        "name": name,
+        "kind": "bjt",
+        "source": source,
+        "polarity": polarity,
+        "dc": dc,
+        "parasitics": {
+            "rb_ohm": p.get("RB", 0.0),
+            "rc_ohm": p.get("RC", 0.0),
+            "re_ohm": p.get("RE", 0.0),
+            "cje_f": p.get("CJE", 0.0),
+            "cjc_f": cjc,
+            "source": f"the {card_key} card (RB constant: IRB, RBM unused); cje_f its CJE at "
+            f"zero bias, cjc_f its CJC (1 + V / VJC)^-MJC at V = {BJT_CJC_AT_V:g} V reverse "
+            "(linear capacitors of the bjt part, varimu.devices.bjt)",
+        },
+        "card": card,
+    }
+
+
+def build_bc550c() -> dict[str, Any]:
+    """The BC550C (Philips / NXP), the project's first BJT (CLAVINET_PLAN.md CL0)."""
+    return _bjt_component(
+        "BC550C",
+        "BC547C",
+        "NXP's BC547C SPICE model: the BC550 is the BC547's low-noise selection of the same "
+        "die, hFE group C 420-800 for both (Philips BC549; BC550 product specification "
+        "2004 Oct 11, web: https://www.audiodesignguide.com/DACend2/BC549_550.pdf); "
+        "checked against that sheet's hFE and VBE at 2 mA (tests/test_bjt.py)",
+    )
+
+
+def build_bc413c() -> dict[str, Any]:
+    """The Clavinet D6's front-end transistor (web: https://clavinet.com/d6upgrade.php
+    names the 'BC 413C'), on the BC550C's card."""
+    return _bjt_component(
+        "BC413C",
+        "BC547C",
+        "provisional: model knowledge (BC413C is a low-noise NPN of the same class, hFE "
+        "group C 380-800; no published model card found): NXP's BC547C card, as BC550C@1's "
+        "(web: https://clavinet.com/d6upgrade.php names the D6's 'BC 413C')",
+    )
+
+
+def build_bc560c() -> dict[str, Any]:
+    """The BC550C's PNP complement (the BC557's low-noise selection), the tests' PNP."""
+    return _bjt_component(
+        "BC560C",
+        "BC557C",
+        "NXP's BC557C SPICE model: the BC560 is the BC557's low-noise selection of the same "
+        "die (the BC550's PNP complement: Philips BC549; BC550 product specification "
+        "2004 Oct 11, web: https://www.audiodesignguide.com/DACend2/BC549_550.pdf)",
+    )
+
+
 def build_lamp327() -> dict[str, Any]:
     """The #327 pilot lamp (28 V, 40 mA), the tube synth's LFO stabilizer (SYNTH_IDEAS.md #7):
     its filament's wire from the rating at an assumed rated temperature, its emissivity a
@@ -1802,6 +1889,9 @@ BUILDERS = {
     "ACC4AB3C1B": build_acc4ab3c1b,
     "SCOTCH111": build_scotch111,
     "LAMP327": build_lamp327,
+    "BC550C": build_bc550c,
+    "BC413C": build_bc413c,
+    "BC560C": build_bc560c,
     "2D21": build_2d21,
     "884": build_884,
 }

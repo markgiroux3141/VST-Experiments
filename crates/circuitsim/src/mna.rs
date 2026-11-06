@@ -292,7 +292,8 @@ fn noise_run(
 }
 
 impl Mna {
-    /// `gmin` (S) goes across every junction diode; [`SPICE_GMIN`] matches ngspice.
+    /// `gmin` (S) goes across every junction diode and both junctions of every BJT;
+    /// [`SPICE_GMIN`] matches ngspice.
     pub fn from_ir(ir: &CircuitIr, gmin: f64) -> Result<Mna, Error> {
         ir.validate()?;
         if !(gmin.is_finite() && gmin >= 0.0) {
@@ -443,6 +444,14 @@ impl Mna {
                         }
                         DeviceModel::JunctionDiode(_) => {
                             stamp(&mut g, pins[0], pins[1], gmin);
+                            vec![]
+                        }
+                        // pins (c, b, e): gmin across both junctions, as ngspice's BJT
+                        // (bjtload.c; its gmin across the substrate junction, to ground, has
+                        // no counterpart: the model has no substrate).
+                        DeviceModel::Bjt(_) => {
+                            stamp(&mut g, pins[1], pins[2], gmin);
+                            stamp(&mut g, pins[1], pins[0], gmin);
                             vec![]
                         }
                         // pins (a, g2, g1, w, k) or (a, g, w, k)

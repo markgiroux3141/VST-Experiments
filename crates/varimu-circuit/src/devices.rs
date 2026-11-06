@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use circuitsim::ir::{
-    DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Lamp, Pentode, PlateModel,
-    ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
+    Bjt, DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Lamp, Pentode,
+    PlateModel, Polarity, ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
 };
 
 use crate::capsule::{self, Capsule, DualCapsule};
@@ -457,6 +457,56 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 rad_fraction: num(w, "rad_fraction", what)?,
                 emissivity,
                 t_amb_k: num(d, "t_amb_k", what)?,
+            })
+        }
+        "bjt" => {
+            let dc = sub(d, "dc", what)?;
+            let empty = Map(Vec::new());
+            let par = match d.get("parasitics") {
+                Some(Value::Map(m)) => m,
+                _ => &empty,
+            };
+            // bjt.py's bjt_from_data: absent or null optional limits are infinite (None),
+            // other absent values SPICE's defaults.
+            let opt = |k: &str| -> Result<Option<f64>, Error> {
+                match dc.get(k) {
+                    None | Some(Value::Null) => Ok(None),
+                    Some(_) => Ok(Some(num(dc, k, what)?)),
+                }
+            };
+            let or = |m: &Map, k: &str, default: f64| -> Result<f64, Error> {
+                if m.contains(k) {
+                    num(m, k, what)
+                } else {
+                    Ok(default)
+                }
+            };
+            let polarity = match d.get("polarity").and_then(Value::as_str) {
+                Some("npn") => Polarity::Npn,
+                Some("pnp") => Polarity::Pnp,
+                _ => return Err(Error(format!("{what}: polarity must be npn or pnp"))),
+            };
+            DeviceModel::Bjt(Bjt {
+                name,
+                polarity,
+                is_a: num(dc, "is_a", what)?,
+                bf: num(dc, "bf", what)?,
+                br: or(dc, "br", 1.0)?,
+                nf: or(dc, "nf", 1.0)?,
+                nr: or(dc, "nr", 1.0)?,
+                vaf_v: opt("vaf_v")?,
+                var_v: opt("var_v")?,
+                ikf_a: opt("ikf_a")?,
+                ikr_a: opt("ikr_a")?,
+                ise_a: or(dc, "ise_a", 0.0)?,
+                ne: or(dc, "ne", 1.5)?,
+                isc_a: or(dc, "isc_a", 0.0)?,
+                nc: or(dc, "nc", 2.0)?,
+                rb_ohm: or(par, "rb_ohm", 0.0)?,
+                rc_ohm: or(par, "rc_ohm", 0.0)?,
+                re_ohm: or(par, "re_ohm", 0.0)?,
+                cje_f: or(par, "cje_f", 0.0)?,
+                cjc_f: or(par, "cjc_f", 0.0)?,
             })
         }
         "thyratron" => {

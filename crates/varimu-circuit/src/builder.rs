@@ -510,7 +510,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 26] = [
+const MACROS: [&str; 27] = [
     "R",
     "C",
     "L",
@@ -527,6 +527,7 @@ const MACROS: [&str; 26] = [
     "transformer",
     "bridge",
     "vr_tube",
+    "bjt",
     "capsule",
     "capsule_dual",
     "moving_coil",
@@ -573,6 +574,7 @@ fn macro_of(kind: &str) -> Macro {
             false,
         ),
         "device" => (None, vec![p("model", Device)], false),
+        "bjt" => (Some(3), vec![p("model", Device)], false),
         "pot" => (
             Some(3),
             vec![
@@ -911,6 +913,12 @@ fn expand(
         "device" => {
             let key = a["model"].as_str().unwrap();
             let model = ctx.model_of(key).clone();
+            if matches!(model, DeviceModel::Bjt(_)) {
+                return Err(ctx.fail(
+                    name,
+                    "a BJT is placed with a `bjt` part (its series R and junction C)",
+                ));
+            }
             let pins = model.pins();
             match conn.as_list() {
                 Some(l) if l.len() == pins.len() => {
@@ -987,6 +995,19 @@ fn expand(
             }
             let model = ctx.model_of(a["model"].as_str().unwrap());
             parts::bridge(name, [&nodes[0], &nodes[1], &nodes[2], &nodes[3]], model, c)
+        }
+        "bjt" => {
+            let DeviceModel::Bjt(model) = ctx.model_of(a["model"].as_str().unwrap()).clone() else {
+                let m = ctx
+                    .model_of(a["model"].as_str().unwrap())
+                    .name()
+                    .to_string();
+                return Err(ctx.fail(name, format!("bjt: {m} is not a BJT")));
+            };
+            if !name.to_uppercase().starts_with('Q') {
+                return Err(ctx.fail(name, "a bjt part's name starts with Q (its SPICE element)"));
+            }
+            parts::bjt(name, &nodes[0], &nodes[1], &nodes[2], &model)
         }
         "vr_tube" => {
             let DeviceModel::JunctionDiode(model) = ctx.model_of(a["model"].as_str().unwrap())

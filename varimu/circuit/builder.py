@@ -45,6 +45,10 @@ Macro parts (connection; params, * = required):
                 the nodes `shields: {name: node}` gives)
     bridge      [ac_a, ac_b, plus, minus]; model*, arm_c_f_per_area, area
     vr_tube     [anode, mid, cathode]; model*, operating_v*, ref_current_a*
+    bjt         [c, b, e]; model* (a `devices` key whose device is a BJT component, NAME@N):
+                a transistor, NAME starting with Q, with its model's RB / RC / RE and CJE /
+                CJC as linear elements around it (varimu.devices.bjt, varimu.circuit.parts
+                .bjt); a `device` part refuses a BJT (it would drop them)
     capsule     [front, backplate, out]; component* (a capsule component version, NAME@N, or a
                 parameter naming one), polarization_v*: the front pressure on `front`
                 (pascals as volts), the electrodes backplate and out (varimu.devices.capsule)
@@ -180,6 +184,7 @@ from varimu.devices import cathode as cathode_mod
 from varimu.devices import noise as noise_mod
 from varimu.devices import ribbon as ribbon_mod
 from varimu.devices import versions
+from varimu.devices.bjt import Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.library import (
@@ -480,10 +485,21 @@ def _heated(ctx: Context, els: list[Element]) -> list[Element]:
 
 def _nodes_device(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
     model = a["model"]
+    if isinstance(model, Bjt):
+        raise ctx.fail(name, "a BJT is placed with a `bjt` part (its series R and junction C)")
     pins = pins_of(model)
     if not isinstance(conn, list) or len(conn) != len(pins):
         raise ctx.fail(name, f"device {model.name} has pins {pins}, got {conn!r}")
     return [Device(name, model.name, tuple(str(n) for n in conn))]
+
+
+def _bjt(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    model = a["model"]
+    if not isinstance(model, Bjt):
+        raise ctx.fail(name, f"bjt: {model.name} is not a BJT")
+    if not name.upper().startswith("Q"):
+        raise ctx.fail(name, "a bjt part's name starts with Q (its SPICE element)")
+    return parts.bjt(name, *conn, model)
 
 
 def _mains(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -948,6 +964,7 @@ for _name, _macro in {
     ),
     "mains": Macro(_mains, 2, {"v_rms": _P, "phase_deg": Param("number", 0.0)}),
     "device": Macro(_nodes_device, None, {"model": Param("device")}),
+    "bjt": Macro(_bjt, 3, {"model": Param("device")}),
     "pot": Macro(
         lambda ctx, n, c, a: parts.pot(n, *c, a["r"], a["at"], a["taper_mid"], bool(a["reverse"])),
         3,
