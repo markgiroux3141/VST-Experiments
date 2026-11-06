@@ -50,6 +50,35 @@ TONES = {
 PICKUPS = {"AC_centre": 0, "BC_bridge": 1, "AD_anti": 2, "BD_both": 3}
 
 
+STRINGS_DIR = ROOT / "cache" / "clavinet" / "listen"
+
+
+def strings_key(events: list[midi.Event], mute: float) -> str:
+    """The strings' render depends on the events, the mute, the fits and the reference's
+    code: hashed, so the electronics can be rerun alone."""
+    import hashlib
+
+    from varimu.clavinet import fit
+
+    here = ROOT / "varimu" / "clavinet"
+    blob = repr([(e.t_s, e.kind, e.note, e.value) for e in events]).encode() + repr(mute).encode()
+    blob += fit._cache_key("d6").encode()
+    for mod in ("note.py", "knock.py", "pickup.py", "keyboard.py"):
+        blob += (here / mod).read_bytes()
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
+def strings(events: list[midi.Event], mute: float = 0.0) -> tuple[dict, dict]:
+    STRINGS_DIR.mkdir(parents=True, exist_ok=True)
+    path = STRINGS_DIR / f"{strings_key(events, mute)}.npz"
+    if path.exists():
+        d = np.load(path)
+        return {"centre": d["centre"], "bridge": d["bridge"]}, json.loads(str(d["stats"]))
+    emf, st = keyboard.render(events, FS, mute=mute)
+    np.savez(path, centre=emf["centre"], bridge=emf["bridge"], stats=json.dumps(st))
+    return emf, st
+
+
 def circuit(emf: dict, sets: dict, quality: str) -> np.ndarray:
     s = spec.load_circuit(CIRCUIT)
     ir = builder.build_ir(s, spec.resolve(s, sets))
@@ -93,7 +122,24 @@ def write(name: str, x: np.ndarray, what: str, lines: list[str]) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quality", default="production")
+    ap.add_argument(
+        "--strings-only", action="store_true", help="render and cache the strings, no electronics"
+    )
     args = ap.parse_args()
+    if args.strings_only:
+        demo = render_mod.demo_events()
+        strings(notes_events([29, 40, 52, 64, 76, 88], 80, 1.5, 0.6))
+        ev = []
+        t = 0.1
+        for vel in (25, 70, 120):
+            for hold in (0.12, 1.2):
+                ev += [midi.Event(t, "on", 52, vel), midi.Event(t + hold, "off", 52, 0)]
+                t += hold + 0.5
+        strings(ev)
+        strings(demo)
+        strings(demo, mute=1.0)
+        print("strings cached")
+        return
     OUT.mkdir(parents=True, exist_ok=True)
     lines = [
         "# The Clavinet D6, to listen to",
@@ -108,7 +154,7 @@ def main() -> None:
 
     # 1. single notes over the keyboard, mf, held 1.5 s, released
     keys = [29, 40, 52, 64, 76, 88]  # F1 E2 E3 E4 E5 E6
-    emf, _ = keyboard.render(notes_events(keys, 80, 1.5, 0.6), FS)
+    emf, _ = strings(notes_events(keys, 80, 1.5, 0.6))
     write(
         "notes_keyboard",
         circuit(emf, default, args.quality),
@@ -124,7 +170,7 @@ def main() -> None:
         for hold in (0.12, 1.2):
             ev += [midi.Event(t, "on", 52, vel), midi.Event(t + hold, "off", 52, 0)]
             t += hold + 0.5
-    emf, _ = keyboard.render(ev, FS)
+    emf, _ = strings(ev)
     write(
         "velocity_e3",
         circuit(emf, default, args.quality),
@@ -134,7 +180,7 @@ def main() -> None:
 
     # 3. the demo phrase through every pickup setting and tone rocker
     demo = render_mod.demo_events()
-    emf, st = keyboard.render(demo, FS)
+    emf, st = strings(demo)
     for name, sel in PICKUPS.items():
         write(
             f"riff_pickups_{name}",
@@ -149,10 +195,9 @@ def main() -> None:
             f"the demo phrase, tone {name.upper()} (both pickups in phase)",
             lines,
         )
-    np.save(OUT / "riff_emf_centre.npy", emf["centre"].astype(np.float32))
 
     # 4. the mute bar
-    emf_m, _ = keyboard.render(demo, FS, mute=1.0)
+    emf_m, _ = strings(demo, mute=1.0)
     write(
         "riff_muted",
         circuit(emf_m, default, args.quality),
