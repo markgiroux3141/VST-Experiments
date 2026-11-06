@@ -61,6 +61,7 @@ use cpal::{FromSample, Sample, SizedSample};
 use crate::live::{Circuit, Live, Meter, Values};
 use crate::midi::{Keys, Wave};
 use crate::monitor::Monitor;
+use crate::nickel::{Engine as NickelEngine, NickelPanel};
 use crate::panel::{Feed, RangeMode};
 pub use crate::performance::RETRIGGER_GAP_S;
 use crate::performance::{Ev, Performance, Performer, Playing, START_NOTE};
@@ -125,6 +126,9 @@ pub enum Source {
     /// The sampler's kit, played from a keyboard's keys (None: the pads on screen only) and
     /// its preview ([`Player::start_sampler`]).
     Sampler(Arc<Sampler>, Option<Arc<Keys>>),
+    /// The Nickel Organ (`crate::nickel`), played from a keyboard's keys
+    /// ([`Player::start_nickel`]).
+    Nickel(Arc<NickelPanel>, Option<Arc<Keys>>),
     /// A device's proxy (`crate::proxy`, docs/MIDI_TAKES_PLAN.md N2) played from a keyboard's
     /// keys in the device's place ([`Player::start_proxy`]).
     Proxy(Arc<Keys>, Box<ProxyStart>),
@@ -430,6 +434,18 @@ impl Player {
         Player::launch(None, source, Vec::new(), None, s, 1.0, buffer_s)
     }
 
+    /// The Nickel Organ from `keys` (None: silent), `buffer_s` queued. No circuit: it plays
+    /// at once.
+    pub fn start_nickel(
+        panel: Arc<NickelPanel>,
+        keys: Option<Arc<Keys>>,
+        s: Settings,
+        buffer_s: f64,
+    ) -> Result<Player, String> {
+        let source = Source::Nickel(panel, keys);
+        Player::launch(None, source, Vec::new(), None, s, 1.0, buffer_s)
+    }
+
     /// A device's proxy from `keys` with the panel `values`, at `s`'s host rate, `buffer_s`
     /// queued. No circuit: it plays at once.
     pub fn start_proxy(
@@ -542,6 +558,17 @@ impl Player {
                 );
                 (None, WorkerSource::Sampler(sampler, keys))
             }
+            Source::Nickel(panel, keys) => {
+                shared.status.lock().expect("status").input = Some(
+                    if keys.is_some() {
+                        "the Nickel Organ, from the MIDI keyboard"
+                    } else {
+                        "the Nickel Organ (no MIDI keyboard)"
+                    }
+                    .into(),
+                );
+                (None, WorkerSource::Nickel(panel, keys))
+            }
             Source::Proxy(keys, proxy) => {
                 shared.status.lock().expect("status").input = Some(format!(
                     "MIDI keyboard: the proxy of {} (the take renders on the device)",
@@ -580,6 +607,10 @@ impl Player {
                         }
                         (WorkerSource::Sampler(sm, keys), _) => {
                             work_sampler(rate, buffer, producer, &shared, &sm, keys.as_deref());
+                            Ok(())
+                        }
+                        (WorkerSource::Nickel(panel, keys), _) => {
+                            work_nickel(rate, buffer, producer, &shared, &panel, keys.as_deref());
                             Ok(())
                         }
                         (WorkerSource::Proxy(keys, proxy), _) => {
@@ -825,6 +856,7 @@ enum WorkerSource {
     Timeline(Arc<Vec<f32>>, i64, Option<TimelineKey>),
     Mix,
     Sampler(Arc<Sampler>, Option<Arc<Keys>>),
+    Nickel(Arc<NickelPanel>, Option<Arc<Keys>>),
     Proxy(Arc<Keys>, Box<ProxyStart>),
 }
 
@@ -1293,6 +1325,81 @@ fn work_sampler(
     }
 }
 
+/// The worker for the Nickel Organ (`Source::Nickel`): blocks of [`SAMPLER_BLOCK`] made as the
+/// queue drains, the keys pressed since the last block starting (or releasing) at its start.
+/// The keys sound on worker threads of the organ's own; the load reported is the block's
+/// compute over its duration.
+fn work_nickel(
+    rate: u32,
+    buffer: usize,
+    mut ring: rtrb::Producer<Frame>,
+    shared: &Shared,
+    panel: &Arc<NickelPanel>,
+    keys: Option<&Keys>,
+) {
+    let capacity = ring.buffer().capacity();
+    let mut em = Emitter::new(rate);
+    let Some(mut engine) = NickelEngine::new(panel, rate) else {
+        shared.status.lock().expect("status").state = State::Failed(
+            panel
+                .model
+                .as_ref()
+                .err()
+                .cloned()
+                .unwrap_or_else(|| "the Nickel Organ's model didn't load".into()),
+        );
+        return;
+    };
+    if let Some(k) = keys {
+        k.take_events();
+    }
+    let mut y = vec![0.0f32; SAMPLER_BLOCK];
+    let (mut peak, mut blocks, mut load) = (0.0f32, 0usize, 0.0f64);
+    let per_meter = (0.05 * rate as f64) as usize / SAMPLER_BLOCK;
+    let mut playing = false;
+    while !shared.stop.load(Ordering::Relaxed) {
+        if !playing && shared.played.load(Ordering::Relaxed) > 0 {
+            playing = true;
+            shared.status.lock().expect("status").state = State::Playing;
+        }
+        let queued = capacity - ring.slots();
+        shared.queued.store(queued, Ordering::Relaxed);
+        if queued >= buffer || ring.slots() < SAMPLER_BLOCK {
+            std::thread::sleep(Duration::from_micros(300));
+            continue;
+        }
+        if let Some(k) = keys {
+            for (_, ev) in k.take_events() {
+                match ev {
+                    Ev::On { note, velocity } => engine.note_on(note, velocity),
+                    Ev::Off { note } => engine.note_off(note),
+                    _ => {}
+                }
+            }
+        }
+        let t0 = Instant::now();
+        engine.render(&mut y);
+        load = load.max(t0.elapsed().as_secs_f64() / (SAMPLER_BLOCK as f64 / rate as f64));
+        peak = y.iter().fold(peak, |m, v| m.max(v.abs()));
+        let before = capacity - ring.slots();
+        em.emit(shared, &mut ring, &y, y.clone(), None);
+        blocks += 1;
+        if blocks >= per_meter.max(1) {
+            panel.set_stats(engine.running(), load);
+            let mut st = shared.status.lock().expect("status");
+            st.meter.out_dbfs = 20.0 * (peak as f64).max(1e-6).log10();
+            st.load = load;
+            let block_s = SAMPLER_BLOCK as f64 / rate as f64;
+            st.latency_s = Some(
+                block_s
+                    + before as f64 / rate as f64
+                    + shared.out_latency_us.load(Ordering::Relaxed) as f64 * 1e-6,
+            );
+            (peak, blocks, load) = (0.0, 0, 0.0);
+        }
+    }
+}
+
 /// The worker for a proxy (`Source::Proxy`): blocks of [`SAMPLER_BLOCK`] made as the queue
 /// drains, each key at its place in the block. An event take starts at once (the proxy has
 /// nothing to settle): its performance at the proxy's samples, the panel's changes logged
@@ -1450,6 +1557,7 @@ fn work(
         | WorkerSource::Timeline(..)
         | WorkerSource::Mix
         | WorkerSource::Proxy(..)
+        | WorkerSource::Nickel(..)
         | WorkerSource::Sampler(..) => &[],
     };
     let gain = f64::from_bits(shared.gain.load(Ordering::Relaxed));
@@ -1624,7 +1732,10 @@ fn work(
                 pending.drain(..used);
             }
         }
-        WorkerSource::Mix | WorkerSource::Sampler(..) | WorkerSource::Proxy(..) => {}
+        WorkerSource::Mix
+        | WorkerSource::Sampler(..)
+        | WorkerSource::Nickel(..)
+        | WorkerSource::Proxy(..) => {}
         WorkerSource::Timeline(audio, start, key) => {
             let mut block = vec![0.0; BLOCK];
             let mut ctl = vec![vec![0.0; BLOCK]; key.as_ref().map_or(0, |k| k.controls)];

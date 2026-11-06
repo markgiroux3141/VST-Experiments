@@ -26,6 +26,7 @@ pub mod media;
 pub mod mna;
 pub mod modal;
 pub mod newton;
+pub mod nickel;
 pub mod noise;
 pub mod partition;
 pub mod plate;

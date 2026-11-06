@@ -165,7 +165,13 @@ RC ladder, a 12AU7 driver, a triode-connected 6V6GT, the #327 lamp as AGC; `orga
 `scripts/nickel_organ_render.py (--demo | --midi F)` -> reports/nickel_organ/renders/ (~11x slower
 than real time per sounding key). Found: POLARIZE is timbre and level (growly at 0.05-0.25), no
 zero-bias sub-octave, remanence hears but can't sustain, JA's strike memory is a one-time shift.
-Open: the user listens; the shared yoke, Preisach strips and a live tier are the next options.
+Open: the user listens; the shared yoke, Preisach strips are the next options. **The Rust voice
+(2026-11-06):** `crates/circuitsim/src/nickel.rs`, `voice.py` step for step (-250 dB vs Python,
+`crates/circuitsim/tests/nickel.rs`), ~0.1x real time per key, keys on worker threads; its data
+`config/nickel/organ.live.json` by `scripts/compile_nickel_organ.py [--check]`; in the app a bare
+instrument beside the Sampler (`varimu_app::nickel`, Play's Nickel Organ). Making it a real device
+(a keyed medium like the Clavinet's: source, monitor, Render, chain end, event takes) is backlogged
+in [docs/NICKEL_ORGAN_DEVICE_PLAN.md](docs/NICKEL_ORGAN_DEVICE_PLAN.md).
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

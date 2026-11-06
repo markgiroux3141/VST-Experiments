@@ -34,6 +34,7 @@ pub mod live;
 pub mod loopback;
 pub mod midi;
 pub mod monitor;
+pub mod nickel;
 pub mod panel;
 pub mod performance;
 pub mod player;
