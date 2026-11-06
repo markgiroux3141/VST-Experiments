@@ -22,6 +22,12 @@ anvil over a few milliseconds; letting go of the pinch at once snapped the bent 
 in one step, a click across the whole band: CL1's first try). Then closed form: the string
 springs back and the yarn damps it.
 
+**Tension modulation** (`tension_mod=True`, the default; CL4): the hold's modes follow
+the tension their energies add (the string's elongation 1/2 int w'^2 through the geometric
+stiffness, both planes), per chunk of the closed form: the slack low plain strings glide
+down in pitch as a hard note decays. First order: each mode's frequency scales by
+1 + dT / 2T; the strike phase and the release are linear.
+
 **Pickups** read the string's displacement and velocity averaged over each bar's width
 (the static press shifts the operating point, it is included) through `pickup.emf`. The
 analytic free-space map has [R12]'s shape but not the bars' steel, so its level is scaled
@@ -80,26 +86,73 @@ def _foh(lam: np.ndarray, h: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
 def _closed_form(
-    sysm: strings.System, z0: np.ndarray, rows: np.ndarray, n_out: int, h: float, chunk: int = 2048
-) -> np.ndarray:
+    sysm: strings.System,
+    z0: np.ndarray,
+    rows: np.ndarray,
+    n_out: int,
+    h: float,
+    chunk: int = 1024,
+    fm: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """rows (r x 2n) applied to the state from modal state z0 at times h, 2h, ... n_out h
-    (the start excluded): conjugate pairs folded, modes above Nyquist dropped."""
-    lam = sysm.lam
+    (the start excluded): conjugate pairs folded, modes above Nyquist dropped. `fm`: the
+    tension modulation's coupling (`tension_coupling`): each mode's frequency then follows
+    the tension the modes' energies add, updated per chunk. Returns (outputs, each mode's
+    accumulated extra phase at the end, per eigenvalue: conjugates negated)."""
+    lam_all = sysm.lam
     amp = (rows @ sysm.v) * z0  # (r, 2n)
-    pos = lam.imag > 1e-9
-    real = np.abs(lam.imag) <= 1e-9
-    keep = (pos | real) & (np.abs(lam.imag) * h < np.pi)
-    lam = lam[keep]
+    pos = lam_all.imag > 1e-9
+    real = np.abs(lam_all.imag) <= 1e-9
+    keep = (pos | real) & (np.abs(lam_all.imag) * h < np.pi)
+    lam = lam_all[keep]
     amp = amp[:, keep] * np.where(pos[keep], 2.0, 1.0)
     out = np.zeros((rows.shape[0], n_out))
     steps = np.exp(np.outer(lam, h * np.arange(1, chunk + 1)))
     adv = np.exp(lam * h * chunk)
     a = amp.copy()
+    phase = np.zeros(lam_all.size)
+    e0 = np.abs(z0) ** 2 if fm is not None else None
     for s in range(0, n_out, chunk):
         m = min(chunk, n_out - s)
+        if fm is not None:
+            t_mid = (s + 0.5 * m) * h
+            rel = float(np.sum(fm * e0 * np.exp(2 * lam_all.real * t_mid)))  # dT / T
+            dphi = lam_all.imag * rel / 2 * m * h
+            a = a * np.exp(1j * dphi[keep])
+            phase += dphi
         out[:, s : s + m] = np.real(a @ steps[:, :m])
         a = a * adv
-    return out
+    return out, phase
+
+
+def tension_coupling(p: strings.Params, held: strings.System) -> np.ndarray:
+    """Per eigenvalue k: the share of dT / T one unit of |z_k|^2 adds. The string's
+    elongation is 1/2 x' Kg x (Kg the geometric stiffness per unit tension, both planes), so
+    a conjugate pair (z_k, conj z_k) adds |z_k|^2 v_k^H Kg v_k on average, and
+    dT = EA / L_total times the elongation."""
+    lay = held.lay
+    bump = replace(p, tension_held_n=p.tension_held_n + 1.0)
+    k1 = strings.matrices(bump, True, lay)[2]
+    k0 = held.k
+    kg = k1 - k0  # exact: K is linear in the tension
+    n = held.n
+    v = held.v[:n]
+    quad = np.real(np.einsum("ik,ij,jk->k", v.conj(), kg, v))
+    total_len = p.geom.length_m + p.nonspeaking_m
+    # only the ringing modes: lightly damped, in the band. The damped system's modes aren't
+    # orthogonal, and a bent shape decomposes into large mutually cancelling amplitudes on
+    # the stiff, heavily damped ones (the anvil's contact mode near 280 kHz): counting
+    # their |z|^2 as energy gave dT / T ~ 2 from the static press alone
+    ringing = (
+        (held.lam.imag > 1e-9)
+        & (-held.lam.real < RINGING_SIGMA)
+        & (held.lam.imag < 2 * np.pi * RINGING_HZ)
+    )
+    return np.where(ringing, 2.0, 0.0) * quad * p.geom.ea_n / total_len / (2 * p.tension_held_n)
+
+
+RINGING_SIGMA = 100.0  # 1/s
+RINGING_HZ = 8000.0
 
 
 @dataclass(frozen=True)
@@ -143,6 +196,7 @@ def play(
     level: bool = True,
     knock: bool = True,
     knock_s: float = 0.4,
+    tension_mod: bool = True,
 ) -> Played:
     """Key n struck at `velocity_m_s` (the tangent's speed), held `hold_s`, then released
     and followed for `tail_s`."""
@@ -191,7 +245,9 @@ def play(
     )
     static_out = np.concatenate([rows_h[:4, :nh] @ us, np.zeros(4)])
     n_hold = max(int(round((hold_s - t_hold0) / h_out)), 0)
-    hold_out = _closed_form(held, zh, rows_h, n_hold, h_out) + static_out[:, None]
+    fm = tension_coupling(p, held) if tension_mod else None
+    hold_out, hold_phase = _closed_form(held, zh, rows_h, n_hold, h_out, fm=fm)
+    hold_out = hold_out + static_out[:, None]
     knock_state = None
     if knock and n_hold > 0:
         # the board's ringing under the anvil, pushing the pinched string along the anvil's
@@ -215,7 +271,7 @@ def play(
 
     # --- release: back to the released modes, the press included; the tangent pulled
     # away by the key's return force, the contacts solved until they have opened ---
-    zh_end = zh * np.exp(held.lam * n_hold * h_out)
+    zh_end = zh * np.exp(held.lam * n_hold * h_out + 1j * hold_phase)
     if knock_state is not None:
         zk, n_k = knock_state
         zh_end = zh_end + zk * np.exp(held.lam * (n_hold - n_k) * h_out)
@@ -227,7 +283,7 @@ def play(
         zr, u[nh - 1], v[nh - 1], -cfg["tangent"]["return_force_n"], every, until="open"
     )
     n_tail = max(int(round(tail_s / h_out)) - release_out.shape[1], 0)
-    tail_out = _closed_form(rel, zr, rows8, n_tail, h_out)
+    tail_out, _ = _closed_form(rel, zr, rows8, n_tail, h_out)
 
     allout = np.hstack([strike_out, hold_out, release_out, tail_out])
     pks = pickup.pickups(name)
@@ -309,7 +365,12 @@ class _ContactStepper:
         gyy, gyx, gxy, gxx = self.gyy, self.gyx, self.gxy, self.gxx
         hyy, hyx, hxy, hxx = self.hyy, self.hyx, self.hxy, self.hxx
         fr_prev, fa_prev = self._forces(z, zt, vt)
-        fy_prev, fx_prev = fr_prev - fa_prev * cs, -fa_prev * sn
+        k_g, c_g = p.grip_k_n_m, p.grip_c_ns_m
+        # entering held (the release), the grip carries the state's sideways force
+        x_now, vx_now = float(np.real(self.cx @ z)), float(np.real(self.cvx @ z))
+        x_stick = 0.0 if fr_prev > 0 else None
+        fg_prev = -k_g * x_now - c_g * vx_now if fr_prev > 0 else 0.0
+        fy_prev, fx_prev = fr_prev - fa_prev * cs, -fa_prev * sn + fg_prev
         out = []
         fa_hist = []
         t_first = t_closed = closed_since = open_since = None
@@ -324,54 +385,62 @@ class _ContactStepper:
             a_prev = (f_h - fr_prev) / m_t
             ztf = zt + h * vt + h * h * (2 * a_prev) / 6 + cz * f_h
             vtf = vt + h * a_prev / 2 + cv * f_h
-            fr, fa = fr_prev, fa_prev
+            # the unknowns: the rubber's push fr, the anvil's push fa, the rubber's sideways
+            # grip fg (its shear, stuck where the rubber first touched: without it the
+            # anvil's tilted face slid the string millimetres sideways, CL1's first try)
+            if x_stick is None and fr_prev > 0:
+                x_stick = float(np.real(self.cx @ z))
+
+            def resid(
+                f: np.ndarray,
+                yf=yf,
+                xf=xf,
+                vyf=vyf,
+                vxf=vxf,
+                ztf=ztf,
+                vtf=vtf,
+                x_stick=x_stick,
+            ) -> tuple[np.ndarray, float, float]:
+                fr_, fa_, fg_ = f
+                fy_, fx_ = fr_ - fa_ * cs, -fa_ * sn + fg_
+                ya_ = yf + gyy * fy_ + gyx * fx_
+                xa_ = xf + gxy * fy_ + gxx * fx_
+                vya_ = vyf + hyy * fy_ + hyx * fx_
+                vxa_ = vxf + hxy * fy_ + hxx * fx_
+                dr_, ddr_ = ztf - cz * fr_ - ya_, vtf - cv * fr_ - vya_
+                da_, dda_ = cs * ya_ + sn * xa_ - gap, cs * vya_ + sn * vxa_
+                frh = k_r * dr_**p_r * max(1 + a_r * ddr_, 0.0) if dr_ > 0 else 0.0
+                fah = max(k_a * da_ + c_a * dda_, 0.0) if da_ > 0 else 0.0
+                stick = x_stick if x_stick is not None else xa_
+                fgh = -k_g * (xa_ - stick) - c_g * vxa_ if dr_ > 0 else 0.0
+                return np.array([fr_ - frh, fa_ - fah, fg_ - fgh]), dr_, da_
+
+            f = np.array([fr_prev, fa_prev, fg_prev])
             for _ in range(40):
-                fy, fx = fr - fa * cs, -fa * sn
-                ya = yf + gyy * fy + gyx * fx
-                xa = xf + gxy * fy + gxx * fx
-                vya = vyf + hyy * fy + hyx * fx
-                vxa = vxf + hxy * fy + hxx * fx
-                ztn, vtn = ztf - cz * fr, vtf - cv * fr
-                dr, ddr = ztn - ya, vtn - vya
-                da, dda = cs * ya + sn * xa - gap, cs * vya + sn * vxa
-                dr_r, dr_a = -cz - gyy, gyy * cs + gyx * sn
-                ddr_r, ddr_a = -cv - hyy, hyy * cs + hyx * sn
-                da_r = cs * gyy + sn * gxy
-                da_a = -(cs * (gyy * cs + gyx * sn) + sn * (gxy * cs + gxx * sn))
-                dda_r = cs * hyy + sn * hxy
-                dda_a = -(cs * (hyy * cs + hyx * sn) + sn * (hxy * cs + hxx * sn))
-                if dr > 0:
-                    hc = max(1 + a_r * ddr, 0.0)
-                    frh = k_r * dr**p_r * hc
-                    j_r = k_r * p_r * dr ** (p_r - 1) * hc
-                    j_rv = k_r * dr**p_r * a_r if hc > 0 else 0.0
-                else:
-                    frh, j_r, j_rv = 0.0, 0.0, 0.0
-                fah, j_a, j_av = 0.0, 0.0, 0.0
-                if da > 0:
-                    fah = k_a * da + c_a * dda
-                    if fah > 0:
-                        j_a, j_av = k_a, c_a
-                    else:
-                        fah = 0.0
-                r1, r2 = fr - frh, fa - fah
-                a11 = 1 - (j_r * dr_r + j_rv * ddr_r)
-                a12 = -(j_r * dr_a + j_rv * ddr_a)
-                a21 = -(j_a * da_r + j_av * dda_r)
-                a22 = 1 - (j_a * da_a + j_av * dda_a)
-                det = a11 * a22 - a12 * a21
-                s1 = (a22 * r1 - a12 * r2) / det
-                s2 = (-a21 * r1 + a11 * r2) / det
-                fr_new, fa_new = max(fr - s1, 0.0), max(fa - s2, 0.0)
-                done = abs(fr_new - fr) < 1e-10 * max(1.0, fr)
-                done = done and abs(fa_new - fa) < 1e-10 * max(1.0, fa)
-                fr, fa = fr_new, fa_new
+                r, _, _ = resid(f)
+                jac = np.empty((3, 3))
+                for c_ in range(3):
+                    d = 1e-7 * max(1.0, abs(f[c_]))
+                    fp = f.copy()
+                    fp[c_] += d
+                    jac[:, c_] = (resid(fp)[0] - r) / d
+                step = np.linalg.solve(jac, r)
+                f_new = f - step
+                f_new[0] = max(f_new[0], 0.0)
+                f_new[1] = max(f_new[1], 0.0)
+                done = np.all(np.abs(f_new - f) < 1e-10 * np.maximum(1.0, np.abs(f)))
+                f = f_new
                 if done:
                     break
-            fy, fx = fr - fa * cs, -fa * sn
+            fr, fa, fg = (float(v) for v in f)
+            if fr == 0.0:
+                fg = 0.0
+            fy, fx = fr - fa * cs, -fa * sn + fg
             z = zf + self.g1y * fy + self.g1x * fx
             zt, vt = ztf - cz * fr, vtf - cv * fr
-            fr_prev, fa_prev, fy_prev, fx_prev = fr, fa, fy, fx
+            fr_prev, fa_prev, fg_prev, fy_prev, fx_prev = fr, fa, fg, fy, fx
+            if fr == 0.0:
+                x_stick = None
             fa_hist.append(fa)
             f_max = max(f_max, fr)
             i += 1
@@ -414,7 +483,7 @@ def level_factor(name: str = "d6") -> float:
     [G13]'s figure, as configured, for E4 at the top velocity on the centre pickup."""
     cfg = spec.load(name)
     pc = cfg["pickups"]
-    key = hashlib.sha256((fit._cache_key(name) + "level3-along-release").encode()).hexdigest()[:16]
+    key = hashlib.sha256((fit._cache_key(name) + "level4-grip").encode()).hexdigest()[:16]
     spec.CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = spec.CACHE_DIR / f"level_{key}.json"
     if path.exists():

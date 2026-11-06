@@ -185,3 +185,26 @@ def test_knock() -> None:
     assert np.all(np.isfinite(a))
     ratio_db = 20 * np.log10(np.std(d) / np.std(b[seg]))
     assert -45 < ratio_db < -15
+
+
+def _pitch_cents(x: np.ndarray, f0: float, t0: float, t1: float) -> float:
+    from scipy import signal
+
+    sos = signal.butter(4, [0.8 * f0, 1.2 * f0], btype="band", fs=96000, output="sos")
+    y = signal.sosfiltfilt(sos, x)
+    f = np.diff(np.unwrap(np.angle(signal.hilbert(y)))) * 96000 / (2 * np.pi)
+    return float(1200 * np.log2(np.median(f[int(t0 * 96000) : int(t1 * 96000)]) / f0))
+
+
+def test_tension_modulation() -> None:
+    """CL4: a hard E3 (the slackest plain string) starts sharp and glides to pitch as it
+    decays (measured 2026-11-06: +16 cents at 50-100 ms, +2 by 1.5 s; a soft one +7); without
+    the modulation it holds its pitch within a cent."""
+    f0 = fit.params(24).geom.f_hz
+    hard = note.play(24, 4.0, 2.0, tail_s=0.05, knock=False, level=False).disp_m["centre"]
+    soft = note.play(24, 1.0, 2.0, tail_s=0.05, knock=False, level=False).disp_m["centre"]
+    flat = note.play(24, 4.0, 2.0, tail_s=0.05, knock=False, tension_mod=False, level=False)
+    early, late = _pitch_cents(hard, f0, 0.05, 0.1), _pitch_cents(hard, f0, 1.5, 1.9)
+    assert 5 < early < 40 and late < early / 3
+    assert 0 < _pitch_cents(soft, f0, 0.05, 0.1) < early
+    assert abs(_pitch_cents(flat.disp_m["centre"], f0, 0.05, 0.1)) < 1.0
