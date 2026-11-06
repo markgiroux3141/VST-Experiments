@@ -395,6 +395,47 @@ its three fitted values (Q1's 46.6 Ohm, its 16.4 uF bypass, the 41 nF high shelf
   were added on the E7 for adapters: the D6 may run its amp straight off the battery, a
   ~1.5 V higher rail and more headroom in Q2).
 
+## Strikes from rest replayed (2026-11-06, the user's lever 1)
+
+A strike on a string at rest depends only on its key and MIDI velocity (the touch curve
+hands the medium a whole velocity, 1-127), so circuitsim records all of them once and
+replays them (`circuitsim::clavinet::StrikeTable`; the module docs).
+
+- **What a record holds:** each internal sample's two pickup EMFs over the contact run, and
+  the state the strike leaves on the held modes, computed by a fresh voice exactly as a
+  voice runs a strike.
+- **Replay:** a voice struck while asleep replays its record, then continues from the
+  saved state. A key-up mid-replay releases at the strike's end, as a computed strike
+  does. A re-strike mid-replay first recomputes the strike up to that sample.
+  `crates/circuitsim/tests/clavinet.rs` checks a replaying medium against a computing one
+  sample for sample (strikes from rest, an unrecorded slot, a key-up and a re-strike
+  mid-replay, pressure, a re-strike while ringing, one after the string slept), and a saved
+  table loading back equal.
+- **Size and time:** 7620 strikes, 208 MB (f64, exact). Recorded in 26 s on all cores, ~75 s
+  on the app's three threads below normal priority, once; then loaded from
+  `cache/clavinet/strikes_<data and rates>_<code>.bin` at once. The name carries circuitsim's
+  source hash, so a Rust change records it again; saving prunes the older-code tables.
+- **Who uses it:** a process that calls `fill_strike_tables` (the app at start,
+  `live::replay_clavinet_strikes`; `examples/play.rs` unless `--compute-strikes`), at internal
+  rates up to 96 kHz (the live rate; a production print computes its strikes). Python
+  renders and the tests' renders compute every strike, as before. Either way the samples
+  are the same.
+- **Load** (draft-2x, 30 ms buffer, `--set volume=0`, the table filled):
+
+| Case | Worst block | Dropouts |
+|---|---|---|
+| Ten bass keys struck from rest and held, then ten more struck at once (all replays) | 46-47% (was 684-920%) | 0 |
+| Those ten released together (computed releases) | 330-470% | ~2 a release |
+| The same ten struck again 1 s after release (still ringing: computed) | ~300% | ~2 a strike |
+| One key repeated every 0.5 s, held 0.25 s (its releases and ringing re-strikes computed) | 220-300% | ~2 a second |
+
+- **What's left:** releases (always computed: the state at a key-up depends on how long it
+  was held) and re-strikes of strings still ringing. Repeated notes on one key, the
+  instrument's staple, hit both. The levers for them are the cheaper contact solver
+  (lever 2: 8 substeps, -40 to -90 dB from 16, half the cost; an analytic Jacobian) and,
+  as an approximation, treating a string that rings below some level as at rest when it
+  is struck again.
+
 ## Why it fits the project's methods
 
 The Clavinet is a struck string read by magnetic pickups, through passive switches into a

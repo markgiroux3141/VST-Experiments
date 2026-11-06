@@ -29,7 +29,10 @@
 //! with its N lowest keys (from MIDI NOTE, 29 = the Clavinet's F1) struck at velocity 100,
 //! one a millisecond, 2 s in and held for the run; then every S seconds (`--restrike`, 2)
 //! the next N keys struck at once (one burst) and released S/2 later: N strings held while
-//! N strike (the strikes' contacts are a voice's costliest samples).
+//! N strike (the strikes' contacts are a voice's costliest samples). Strikes from rest are
+//! replayed from the Clavinet's strike table, as in the app: the keys wait until it is
+//! filled (recorded once, then loaded from cache/clavinet/); `--compute-strikes` computes
+//! every strike instead.
 //! `--noise` plays a device whose file has noise sources (device builder B5) with them (off
 //! by default, as in the app).
 //! `--end ID` puts a device at the chain's end (`panel::CHAIN_ENDS`: the plate reverb) on
@@ -73,6 +76,26 @@ fn num(s: Option<String>, what: &str) -> Result<f64, String> {
         .map_err(|e| format!("{what}: {e}"))
 }
 
+/// Until every Clavinet strike table this process fills is complete (none: at once).
+fn wait_for_strike_tables() {
+    let t0 = std::time::Instant::now();
+    loop {
+        let t = circuitsim::clavinet::strike_tables_filled();
+        let (done, all) = t.iter().fold((0, 0), |(d, a), &(x, y)| (d + x, a + y));
+        if done == all {
+            if all > 0 {
+                eprintln!(
+                    "strike table ready ({all} strikes, {:.1} s)",
+                    t0.elapsed().as_secs_f64()
+                );
+            }
+            return;
+        }
+        eprintln!("strike table {done} / {all}");
+        std::thread::sleep(Duration::from_secs(5));
+    }
+}
+
 fn main() -> Result<(), String> {
     let mut args = std::env::args().skip(1).peekable();
     let (mut device, mut file, mut input) = ("fairchild_670".to_string(), None, None);
@@ -83,6 +106,7 @@ fn main() -> Result<(), String> {
     let mut sets = Vec::new();
     let mut turn: Option<(String, Value, Value)> = None;
     let mut normal_priority = false;
+    let mut compute_strikes = false;
     let mut record: Option<String> = None;
     let (mut midi_name, mut wave): (Option<Option<String>>, Wave) = (None, Wave::Saw);
     let mut hold: Option<u8> = None;
@@ -158,6 +182,7 @@ fn main() -> Result<(), String> {
                 }
             }
             "--normal-priority" => normal_priority = true,
+            "--compute-strikes" => compute_strikes = true,
             "--record" => record = Some(args.next().ok_or("--record needs a file")?),
             "--list-inputs" => {
                 for d in input_devices() {
@@ -167,6 +192,9 @@ fn main() -> Result<(), String> {
             }
             _ => return Err(format!("unknown argument {a}")),
         }
+    }
+    if !compute_strikes {
+        varimu_app::live::replay_clavinet_strikes();
     }
     let config = Path::new("config");
     let dev = DEVICES
@@ -214,6 +242,7 @@ fn main() -> Result<(), String> {
         std::thread::spawn(move || {
             // After the player has started (it drops what the keys did before).
             std::thread::sleep(Duration::from_secs(2));
+            wait_for_strike_tables();
             k.message(&[0xb0, 64, 127]);
             loop {
                 for note in 0..128u8 {
@@ -235,6 +264,7 @@ fn main() -> Result<(), String> {
         let every = restrike.unwrap_or(2.0);
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(2));
+            wait_for_strike_tables();
             for note in from_note..from_note.saturating_add(n) {
                 k.message(&[0x90, note & 127, 100]);
                 std::thread::sleep(Duration::from_millis(1));

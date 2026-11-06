@@ -36,6 +36,7 @@ fn main() -> eframe::Result {
         }
     };
     varimu_app::player::raise_priority();
+    varimu_app::live::replay_clavinet_strikes();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Vari-Mu")

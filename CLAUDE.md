@@ -294,8 +294,12 @@ the plan's "Status (2026-11-06)"):
   - circuitsim's medium `clavinet.rs` on the generic `keyed.rs` (the harp's machinery, bit
     for bit unchanged), the part `clav_strings: [centre, bridge, bridge_neg]` in both
     builders, `clavinet_d6_live.yaml` (`scripts/derive_clavinet_live.py`);
-  - the app's `clavinet_d6`. Held keys play (10 bass keys 29%), but every strike drops
-    out (one costs 2.3x real time for ~16 ms): the levers are in the plan.
+  - the app's `clavinet_d6`. Held keys play (10 bass keys 29%). Strikes from rest replay
+    from a recorded table since 2026-11-06 (circuitsim's `clavinet::StrikeTable`, bit for
+    bit; 208 MB in `cache/clavinet/`, recorded once in the background; the app's
+    `live::replay_clavinet_strikes`): ten at once 47% worst block, no dropouts. Releases
+    and re-strikes of ringing strings are still computed and drop out (the plan's
+    "Strikes from rest replayed").
 - **CL4 started:** the knock (`knock.py`) and tension modulation, in the Python reference.
 
 Open: the user listens, the D6 schematic. Milestones CL0-CL5.

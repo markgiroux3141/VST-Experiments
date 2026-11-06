@@ -202,6 +202,15 @@ impl Circuit {
     }
 }
 
+/// The Clavinet's strikes from rest replayed in this process (circuitsim's
+/// `clavinet::StrikeTable`): each table recorded once in the background below normal
+/// priority (~1-2 min on three threads; then loaded from cache/clavinet/ in a second), at
+/// the live rate only (96 kHz; a production print computes its strikes). Bit for bit the
+/// strikes computed, so renders and takes don't change. Call once at start.
+pub fn replay_clavinet_strikes() {
+    circuitsim::clavinet::fill_strike_tables(3, 96_000.0, crate::print::lower_priority);
+}
+
 /// The span (dB from velocity 127 to 1) of the velocity law of the medium played by keys in
 /// `ir` (a harp; a Clavinet's strings: their tangent's speed), None without one.
 pub fn key_velocity_span_db(ir: &CircuitIr) -> Option<f64> {

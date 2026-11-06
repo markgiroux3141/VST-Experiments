@@ -19,9 +19,19 @@
 //! **The data** lives in two files the IR names (the header JSON, by its path relative to
 //! the repository's root, and its float64 sidecar); they are loaded once per process and
 //! shared ([`load`]).
+//!
+//! **Strikes from rest** ([`StrikeTable`]): a strike on a string at rest depends only on its
+//! key and velocity, so a process that plays live (the app, [`fill_strike_tables`]) records
+//! all of them once, 60 keys x 127 velocities, in the background (saved under the
+//! repository's `cache/clavinet/`, keyed by the data, the rates and this crate's sources).
+//! A voice struck from rest replays its record, the pickups' EMF sample by sample and the
+//! state the strike leaves, bit for bit what it would compute; a string still ringing, or a
+//! strike not recorded yet, is computed. Renders that don't ask for tables compute every
+//! strike, as before.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Deserialize;
@@ -427,9 +437,14 @@ pub fn load(el: &crate::ir::ClavStrings) -> Result<Arc<ClavModel>, String> {
             el.name, m.sha256, el.sha256
         ));
     }
+    // Another thread may have loaded it meanwhile: the first one in is everyone's.
     let m = Arc::new(m);
-    cache.lock().expect("models").insert(key, m.clone());
-    Ok(m)
+    Ok(cache
+        .lock()
+        .expect("models")
+        .entry(key)
+        .or_insert(m)
+        .clone())
 }
 
 // --- A voice ----------------------------------------------------------------------
@@ -624,6 +639,16 @@ enum Phase {
     Free,
     Contact,
     Held,
+    /// A strike from rest replayed from the [`StrikeTable`].
+    Replay,
+}
+
+/// A strike being replayed: its slot in the table, the next sample, its velocity.
+#[derive(Debug, Clone, Copy)]
+struct Replaying {
+    slot: usize,
+    pos: usize,
+    vel: u8,
 }
 
 /// One key's string over the timeline.
@@ -648,6 +673,9 @@ pub struct Voice {
     /// Scratch: a substep's free part.
     xr: Vec<f64>,
     xi: Vec<f64>,
+    /// The strikes from rest recorded for this voice's model and rates, if any.
+    strikes: Option<Arc<StrikeTable>>,
+    replay: Option<Replaying>,
 }
 
 impl Voice {
@@ -676,6 +704,8 @@ impl Voice {
             free,
             held,
             step,
+            strikes: None,
+            replay: None,
         }
     }
 
@@ -728,23 +758,58 @@ impl Voice {
         self.transfer(&k.rr_a, &k.rr_b, &k.rr_c, k.lam_h.len());
     }
 
-    fn on(&mut self, speed: f64) {
+    /// A key down at MIDI velocity `vel` (the tangent's speed `speed`).
+    fn on(&mut self, vel: u8, speed: f64) {
+        if self.phase == Phase::Replay {
+            // A re-strike mid-replay: the state the strike has reached, computed.
+            self.materialize();
+        }
         if self.phase == Phase::Held {
             self.onto_released();
         }
         self.release_pending = false;
         if self.asleep {
             self.zero();
+            if let Some(t) = &self.strikes {
+                let slot = StrikeTable::slot(self.i, vel);
+                if t.slots[slot].get().is_some() {
+                    t.replays.fetch_add(1, Ordering::Relaxed);
+                    self.asleep = false;
+                    self.phase = Phase::Replay;
+                    self.run = None;
+                    self.replay = Some(Replaying { slot, pos: 0, vel });
+                    return;
+                }
+            }
         }
         self.asleep = false;
+        self.strike_from_here(speed);
+    }
+
+    fn strike_from_here(&mut self, speed: f64) {
         let c = &self.key().contact;
         let (travel, hold) = (c.travel_m, c.hold_force_n);
         self.start(-travel, speed, hold, Until::Closed);
     }
 
+    /// A replayed strike's state at its next sample, by computing the strike from rest up
+    /// to it (the same operations the replayed samples recorded): the voice continues as a
+    /// computed strike.
+    fn materialize(&mut self) {
+        let r = self.replay.take().expect("a replay");
+        let pending = self.release_pending;
+        self.zero();
+        self.strike_from_here(self.k.speed(r.vel));
+        for _ in 0..r.pos {
+            self.contact_sample();
+        }
+        self.release_pending = pending;
+    }
+
     fn off(&mut self) {
         match (self.phase, &self.run) {
             (Phase::Contact, Some(r)) if r.until == Until::Closed => self.release_pending = true,
+            (Phase::Replay, _) => self.release_pending = true,
             (Phase::Held, _) => self.release(),
             _ => {}
         }
@@ -833,12 +898,41 @@ impl Voice {
             })
             .collect();
         self.transfer(&key.th_a, &key.th_b, &c, cols);
+        self.onto_held();
+    }
+
+    /// The strike's end, its state on the held modes: held, or released at once when the
+    /// key went up during it.
+    fn onto_held(&mut self) {
         self.phase = Phase::Held;
         self.since_check = 0;
         if self.release_pending {
             self.release_pending = false;
             self.release();
         }
+    }
+
+    /// Samples of a replayed strike into `buf` from `i` (up to `to`); returns the next.
+    fn replay_into(&mut self, buf: &mut [f64], n: usize, i: usize, to: usize) -> usize {
+        let mut r = self.replay.expect("a replay");
+        let table = self.strikes.clone().expect("a strike table");
+        let rec = table.slots[r.slot].get().expect("a recorded strike");
+        let take = (rec.emf.len() - r.pos).min(to - i);
+        for (j, e) in rec.emf[r.pos..r.pos + take].iter().enumerate() {
+            buf[i + j] += e[0];
+            buf[n + i + j] += e[1];
+        }
+        r.pos += take;
+        if r.pos == rec.emf.len() {
+            self.zr.copy_from_slice(&rec.zr);
+            self.zi.copy_from_slice(&rec.zi);
+            self.replay = None;
+            self.run = None;
+            self.onto_held();
+        } else {
+            self.replay = Some(r);
+        }
+        i + take
     }
 
     /// One internal sample of a contact run in `s` substeps (note.py's loop): the unknowns
@@ -1084,6 +1178,10 @@ impl Voice {
     fn render_into(&mut self, buf: &mut [f64], n: usize, from: usize, to: usize) {
         let mut i = from;
         while i < to {
+            if self.phase == Phase::Replay {
+                i = self.replay_into(buf, n, i, to);
+                continue;
+            }
             if self.phase == Phase::Contact {
                 self.contact_sample();
                 let (c, b) = self.emf(&self.step.rows, self.free.m, false);
@@ -1225,6 +1323,351 @@ fn free_run_impl(v: &mut Voice, held: bool, buf: &mut [f64], n: usize, at: usize
 
 // --- The medium -------------------------------------------------------------------
 
+// --- Strikes from rest ------------------------------------------------------------
+
+/// FNV-1a 64 over byte strings in turn.
+fn fnv(parts: &[&[u8]]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for part in parts {
+        for &b in *part {
+            h ^= b as u64;
+            h = h.wrapping_mul(0x0100_0000_01b3);
+        }
+    }
+    h
+}
+
+/// The strike table file's format.
+const STRIKES_FORMAT: u32 = 1;
+const STRIKES_MAGIC: &[u8; 8] = b"CLAVSTRK";
+/// Velocities a key is recorded at (MIDI 1-127).
+const VELOCITIES: usize = 127;
+
+/// One strike from rest as a voice computes it: the pickups' EMF (centre, bridge) at each
+/// internal sample of the contact run, and the state the strike leaves on the held modes.
+#[derive(Debug)]
+pub struct StrikeRec {
+    emf: Vec<[f64; 2]>,
+    zr: Vec<f64>,
+    zi: Vec<f64>,
+}
+
+impl StrikeRec {
+    /// Key `i`'s strike from rest at velocity `vel`, computed by a fresh voice exactly as
+    /// [`Voice::render_into`] runs it.
+    fn record(model: &Arc<ClavModel>, i: usize, vel: u8, fs_int: f64, s: usize) -> StrikeRec {
+        let mut v = Voice::new(model, i, fs_int, s);
+        v.asleep = false;
+        v.strike_from_here(model.speed(vel));
+        let mut emf = Vec::new();
+        loop {
+            v.contact_sample();
+            let (c, b) = v.emf(&v.step.rows, v.free.m, false);
+            emf.push([c, b]);
+            if v.run_done() {
+                v.end_strike();
+                break;
+            }
+        }
+        StrikeRec {
+            emf,
+            zr: v.zr,
+            zi: v.zi,
+        }
+    }
+
+    fn bytes(&self) -> usize {
+        16 * self.emf.len() + 8 * (self.zr.len() + self.zi.len())
+    }
+}
+
+/// Every key's strike from rest at velocities 1-127, for one model at one internal rate and
+/// substep count. Slots fill on demand ([`StrikeTable::ensure`]) or all at once
+/// ([`StrikeTable::load_or_fill`]); a voice replays a slot only once it is filled.
+pub struct StrikeTable {
+    model: Arc<ClavModel>,
+    fs_int: f64,
+    s: usize,
+    slots: Vec<OnceLock<StrikeRec>>,
+    filled: AtomicUsize,
+    replays: AtomicUsize,
+}
+
+impl std::fmt::Debug for StrikeTable {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StrikeTable")
+            .field("fs_int", &self.fs_int)
+            .field("s", &self.s)
+            .field("filled", &self.filled())
+            .field("slots", &self.slots.len())
+            .finish()
+    }
+}
+
+impl StrikeTable {
+    /// An empty table for `model` at internal rate `fs_int` and `s` contact substeps.
+    pub fn new(model: Arc<ClavModel>, fs_int: f64, s: usize) -> StrikeTable {
+        let slots = (0..model.keys.len() * VELOCITIES)
+            .map(|_| OnceLock::new())
+            .collect();
+        StrikeTable {
+            model,
+            fs_int,
+            s,
+            slots,
+            filled: AtomicUsize::new(0),
+            replays: AtomicUsize::new(0),
+        }
+    }
+
+    /// Strikes replayed from this table so far (every medium sharing it).
+    pub fn replays(&self) -> usize {
+        self.replays.load(Ordering::Relaxed)
+    }
+
+    fn slot(i: usize, vel: u8) -> usize {
+        i * VELOCITIES + (vel.clamp(1, 127) - 1) as usize
+    }
+
+    /// Slots recorded so far, and of how many.
+    pub fn filled(&self) -> (usize, usize) {
+        (self.filled.load(Ordering::Relaxed), self.slots.len())
+    }
+
+    pub fn complete(&self) -> bool {
+        self.filled.load(Ordering::Relaxed) == self.slots.len()
+    }
+
+    /// Key `i`'s strike at `vel`, recorded now if it isn't yet.
+    pub fn ensure(&self, i: usize, vel: u8) {
+        self.slots[StrikeTable::slot(i, vel)].get_or_init(|| {
+            self.filled.fetch_add(1, Ordering::Relaxed);
+            StrikeRec::record(&self.model, i, vel, self.fs_int, self.s)
+        });
+    }
+
+    /// Whether every slot of both tables holds the same record (unfilled slots count as
+    /// equal only to unfilled ones).
+    pub fn same_as(&self, other: &StrikeTable) -> bool {
+        self.slots.len() == other.slots.len()
+            && self
+                .slots
+                .iter()
+                .zip(&other.slots)
+                .all(|(a, b)| match (a.get(), b.get()) {
+                    (Some(x), Some(y)) => x.emf == y.emf && x.zr == y.zr && x.zi == y.zi,
+                    (None, None) => true,
+                    _ => false,
+                })
+    }
+
+    /// Bytes the filled slots hold.
+    pub fn bytes(&self) -> usize {
+        self.slots
+            .iter()
+            .filter_map(OnceLock::get)
+            .map(StrikeRec::bytes)
+            .sum()
+    }
+
+    /// Where this table is saved: `cache/clavinet/` under the repository's root, named
+    /// `strikes_<what>_<code>.bin`: `what` a hash of the strings' data and the rates, `code`
+    /// of the format and this crate's sources (a change to the code records it again; saving
+    /// removes the tables of the same `what` and older code).
+    pub fn path(&self) -> PathBuf {
+        let what = fnv(&[
+            self.model.sha256.as_bytes(),
+            &self.fs_int.to_bits().to_le_bytes(),
+            &(self.s as u64).to_le_bytes(),
+        ]);
+        let code = fnv(&[&STRIKES_FORMAT.to_le_bytes(), crate::SOURCE_HASH.as_bytes()]);
+        data_root()
+            .join("cache")
+            .join("clavinet")
+            .join(format!("strikes_{what:016x}_{code:016x}.bin"))
+    }
+
+    /// Every slot, from the saved file when there is one, else recorded on `threads`
+    /// threads (each calling `on_thread` first: a priority, say) and saved. Blocks.
+    pub fn load_or_fill(&self, threads: usize, on_thread: fn()) -> Result<(), String> {
+        let path = self.path();
+        if path.exists() && self.load(&path).is_ok() {
+            return Ok(());
+        }
+        let next = AtomicUsize::new(0);
+        std::thread::scope(|sc| {
+            for _ in 0..threads.max(1) {
+                sc.spawn(|| {
+                    on_thread();
+                    loop {
+                        let j = next.fetch_add(1, Ordering::Relaxed);
+                        if j >= self.slots.len() {
+                            return;
+                        }
+                        self.ensure(j / VELOCITIES, (j % VELOCITIES + 1) as u8);
+                    }
+                });
+            }
+        });
+        self.save(&path)
+    }
+
+    fn save(&self, path: &Path) -> Result<(), String> {
+        let mut out = Vec::with_capacity(self.bytes() + 16 + 8 * self.slots.len());
+        out.extend_from_slice(STRIKES_MAGIC);
+        out.extend_from_slice(&STRIKES_FORMAT.to_le_bytes());
+        out.extend_from_slice(&(self.slots.len() as u32).to_le_bytes());
+        for slot in &self.slots {
+            let rec = slot.get().ok_or("an unfilled slot")?;
+            out.extend_from_slice(&(rec.emf.len() as u32).to_le_bytes());
+            out.extend_from_slice(&(rec.zr.len() as u32).to_le_bytes());
+            for e in &rec.emf {
+                out.extend_from_slice(&e[0].to_le_bytes());
+                out.extend_from_slice(&e[1].to_le_bytes());
+            }
+            for x in rec.zr.iter().chain(&rec.zi) {
+                out.extend_from_slice(&x.to_le_bytes());
+            }
+        }
+        let dir = path.parent().ok_or("no directory")?;
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+        std::fs::write(&tmp, &out).map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, path).map_err(|e| e.to_string())?;
+        // The same strings' tables from older code (and the old naming, strikes_<hash>.bin).
+        let name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or_default();
+        let what = &name[..name.len().min("strikes_".len() + 16)];
+        for e in std::fs::read_dir(dir).map_err(|e| e.to_string())?.flatten() {
+            let n = e.file_name().to_string_lossy().into_owned();
+            let stale = n != name
+                && n.ends_with(".bin")
+                && (n.starts_with(what) || (n.starts_with("strikes_") && n.len() == 28));
+            if stale {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+        Ok(())
+    }
+
+    fn load(&self, path: &Path) -> Result<(), String> {
+        let b = std::fs::read(path).map_err(|e| e.to_string())?;
+        let mut at = 0usize;
+        let mut take = |n: usize| -> Result<&[u8], String> {
+            let s = b.get(at..at + n).ok_or("the strike table is truncated")?;
+            at += n;
+            Ok(s)
+        };
+        let u32_ = |s: &[u8]| u32::from_le_bytes(s.try_into().expect("4 bytes")) as usize;
+        let f64_ = |s: &[u8]| f64::from_le_bytes(s.try_into().expect("8 bytes"));
+        if take(8)? != STRIKES_MAGIC
+            || u32_(take(4)?) != STRIKES_FORMAT as usize
+            || u32_(take(4)?) != self.slots.len()
+        {
+            return Err("not this strike table".into());
+        }
+        // Each key's state length, as its voice holds it (a record must fit it exactly).
+        let want: Vec<usize> = (0..self.model.keys.len())
+            .map(|i| Voice::new(&self.model, i, self.fs_int, self.s).zr.len())
+            .collect();
+        let mut recs = Vec::with_capacity(self.slots.len());
+        for j in 0..self.slots.len() {
+            let len = u32_(take(4)?);
+            let m = u32_(take(4)?);
+            if m != want[j / VELOCITIES] {
+                return Err("the strike table's states don't fit the voices".into());
+            }
+            let mut emf = Vec::with_capacity(len);
+            for _ in 0..len {
+                let e = take(16)?;
+                emf.push([f64_(&e[..8]), f64_(&e[8..])]);
+            }
+            let zr = take(8 * m)?.chunks_exact(8).map(f64_).collect();
+            let zi = take(8 * m)?.chunks_exact(8).map(f64_).collect();
+            recs.push(StrikeRec { emf, zr, zi });
+        }
+        // The whole file read and checked: fill the slots.
+        for (slot, rec) in self.slots.iter().zip(recs) {
+            if slot.set(rec).is_ok() {
+                self.filled.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// How a process that plays live fills its strike tables: threads and a hook each thread
+/// runs first (its priority).
+#[derive(Debug, Clone, Copy)]
+struct FillPolicy {
+    threads: usize,
+    max_rate_hz: f64,
+    on_thread: fn(),
+}
+
+static FILL: OnceLock<FillPolicy> = OnceLock::new();
+
+type Tables = Mutex<HashMap<(String, u64, usize), Arc<StrikeTable>>>;
+
+fn tables() -> &'static Tables {
+    static TABLES: OnceLock<Tables> = OnceLock::new();
+    TABLES.get_or_init(Default::default)
+}
+
+/// From now on, every medium this process builds at an internal rate up to `max_rate_hz`
+/// replays strikes from rest, its table loaded or recorded in the background (once per
+/// table) on `threads` threads that each run `on_thread` first (faster ones, a production
+/// render's, compute every strike). Call once, before playing (the app); the first call
+/// wins.
+pub fn fill_strike_tables(threads: usize, max_rate_hz: f64, on_thread: fn()) {
+    let _ = FILL.set(FillPolicy {
+        threads,
+        max_rate_hz,
+        on_thread,
+    });
+}
+
+/// Every shared strike table's progress: (slots filled, slots), in no order.
+pub fn strike_tables_filled() -> Vec<(usize, usize)> {
+    tables()
+        .lock()
+        .expect("strike tables")
+        .values()
+        .map(|t| t.filled())
+        .collect()
+}
+
+/// The shared table for `model` at `fs_int` and `s`, if this process fills tables: created
+/// (and its filling started) on first use.
+fn shared_table(model: &Arc<ClavModel>, fs_int: f64, s: usize) -> Option<Arc<StrikeTable>> {
+    let policy = *FILL.get()?;
+    if fs_int > policy.max_rate_hz {
+        return None;
+    }
+    let key = (model.sha256.clone(), fs_int.to_bits(), s);
+    let mut all = tables().lock().expect("strike tables");
+    if let Some(t) = all.get(&key) {
+        return Some(t.clone());
+    }
+    let t = Arc::new(StrikeTable::new(model.clone(), fs_int, s));
+    all.insert(key, t.clone());
+    let filler = t.clone();
+    let spawned = std::thread::Builder::new()
+        .name("clavinet strikes".into())
+        .spawn(move || {
+            (policy.on_thread)();
+            if let Err(e) = filler.load_or_fill(policy.threads, policy.on_thread) {
+                eprintln!("clavinet: the strike table wasn't saved: {e}");
+            }
+        });
+    if spawned.is_err() {
+        eprintln!("clavinet: no thread for the strike table: strikes computed");
+    }
+    Some(t)
+}
+
 /// What every voice reads: nothing beyond its own model (each holds the shared Arc).
 #[derive(Debug)]
 pub struct ClavCtx {
@@ -1235,12 +1678,12 @@ impl crate::keyed::KeyVoice for Voice {
     type Ctx = ClavCtx;
 
     fn asleep(&self) -> bool {
-        self.asleep && self.phase != Phase::Contact
+        self.asleep && !matches!(self.phase, Phase::Contact | Phase::Replay)
     }
 
     fn event(&mut self, ev: NoteEvent, ctx: &ClavCtx) {
         match ev {
-            NoteEvent::On { velocity, .. } => self.on(ctx.model.speed(velocity)),
+            NoteEvent::On { velocity, .. } => self.on(velocity, ctx.model.speed(velocity)),
             NoteEvent::Off { .. } => self.off(),
             NoteEvent::Pressure { value } => self.set_pressure(value),
             NoteEvent::Pedal { .. } => {}
@@ -1281,14 +1724,49 @@ impl Medium {
 
     /// [`Medium::new`] with `n` worker threads (the result is the same with any number).
     pub fn with_workers(el: &crate::ir::ClavStrings, fs: f64, n: usize) -> Result<Medium, String> {
+        let (model, fs_int, s) = Medium::rates(el, fs)?;
+        let strikes = shared_table(&model, fs_int, s);
+        Medium::with_strikes(el, fs, n, strikes)
+    }
+
+    /// The model, internal rate and contact substeps a medium for `el` at step rate `fs`
+    /// runs at (a [`StrikeTable`] for it is made at these).
+    pub fn rates(
+        el: &crate::ir::ClavStrings,
+        fs: f64,
+    ) -> Result<(Arc<ClavModel>, f64, usize), String> {
         let model = load(el)?;
         let k = ((el.rate_hz / fs) - 1e-9).ceil().max(1.0) as usize;
         let s = ((el.contact_rate_hz / (fs * k as f64)) - 1e-9)
             .ceil()
             .max(1.0) as usize;
-        let fs_int = fs * k as f64;
+        Ok((model, fs * k as f64, s))
+    }
+
+    /// [`Medium::with_workers`] replaying strikes from rest from `strikes` (None: every
+    /// strike computed); the table must be for this medium's [`Medium::rates`].
+    pub fn with_strikes(
+        el: &crate::ir::ClavStrings,
+        fs: f64,
+        n: usize,
+        strikes: Option<Arc<StrikeTable>>,
+    ) -> Result<Medium, String> {
+        let (model, fs_int, s) = Medium::rates(el, fs)?;
+        let k = (fs_int / fs).round() as usize;
+        if let Some(t) = &strikes
+            && (t.model.sha256 != model.sha256 || t.fs_int != fs_int || t.s != s)
+        {
+            return Err(format!(
+                "{}: a strike table for other rates or data",
+                el.name
+            ));
+        }
         let voices = (0..model.keys.len())
-            .map(|i| (model.keys[i].note, Voice::new(&model, i, fs_int, s)))
+            .map(|i| {
+                let mut v = Voice::new(&model, i, fs_int, s);
+                v.strikes = strikes.clone();
+                (model.keys[i].note, v)
+            })
             .collect();
         let ctx = ClavCtx {
             model: model.clone(),

@@ -4,8 +4,9 @@
 //! tests/test_clavinet_compiled.py's.
 
 use std::path::Path;
+use std::sync::Arc;
 
-use circuitsim::clavinet::Medium;
+use circuitsim::clavinet::{Medium, StrikeTable};
 use circuitsim::ir::ClavStrings;
 use circuitsim::media::NoteEvent;
 
@@ -62,6 +63,95 @@ fn the_threads_dont_change_a_sample() {
     let three = play(&el, 3, 6000);
     assert_eq!(one, three);
     assert!(one.iter().any(|v| v[0].abs() > 1e-3), "it sounds");
+}
+
+/// Strikes from rest replayed from a table, against the same notes computed: equal sample
+/// for sample. The notes cover strikes from rest (replayed), one not recorded (computed),
+/// a key up mid-replay, a re-strike mid-replay (the state computed up to there), pressure,
+/// a re-strike while ringing (computed) and one after the string slept (replayed again).
+#[test]
+fn replayed_strikes_equal_computed_ones() {
+    let Some(el) = strings() else { return };
+    let fs = 96_000.0;
+    let (model, fs_int, s) = Medium::rates(&el, fs).expect("the strings");
+    let first = model.keys[0].note;
+    let table = Arc::new(StrikeTable::new(model.clone(), fs_int, s));
+    for (note, vel) in [(29u8, 100u8), (41, 60), (53, 127)] {
+        table.ensure((note - first) as usize, vel);
+    }
+    // When key 29, struck and let go mid-strike, has gone to sleep (its output exactly 0).
+    let asleep_at = {
+        let mut m = Medium::with_strikes(&el, fs, 0, None).expect("the strings");
+        m.queue(10, on(29, 100));
+        m.queue(400, NoteEvent::Off { note: 29 });
+        m.known_until(usize::MAX);
+        let y: Vec<[f64; 2]> = (0..400_000).map(|_| m.push()).collect();
+        y.iter()
+            .rposition(|v| v[0] != 0.0 || v[1] != 0.0)
+            .expect("it sounded")
+            + 1
+    };
+    assert!(
+        asleep_at < 300_000,
+        "key 29 sleeps within ~3 s ({asleep_at})"
+    );
+    let again = asleep_at + 2000;
+    let events = [
+        (10, on(29, 100)),
+        (13, on(41, 60)),
+        (16, on(53, 127)),
+        (20, on(65, 30)),
+        (400, NoteEvent::Off { note: 29 }),
+        (600, on(41, 60)),
+        (3000, NoteEvent::Pressure { value: 100 }),
+        (4000, NoteEvent::Off { note: 53 }),
+        (5000, on(53, 127)),
+        (8000, NoteEvent::Off { note: 53 }),
+        (again, on(29, 100)),
+    ];
+    let run = |strikes: Option<Arc<StrikeTable>>| {
+        let mut m = Medium::with_strikes(&el, fs, 2, strikes).expect("the strings");
+        for &(at, ev) in &events {
+            m.queue(at, ev);
+        }
+        m.known_until(usize::MAX);
+        (0..again + 5000).map(|_| m.push()).collect::<Vec<_>>()
+    };
+    let computed = run(None);
+    let replayed = run(Some(table.clone()));
+    let first_diff = computed.iter().zip(&replayed).position(|(a, b)| a != b);
+    assert_eq!(first_diff, None, "the replay differs");
+    assert_eq!(table.filled().0, 3, "nothing else recorded");
+    // 29 and 41 and 53 from rest, 29 again after it slept (41's re-strike materializes).
+    assert_eq!(table.replays(), 4);
+    assert!(computed.iter().any(|v| v[0].abs() > 1e-4), "it sounds");
+}
+
+/// The whole table recorded and saved (under cache/clavinet/), then loaded into a second
+/// table: equal slot for slot. Slow (every key at every velocity): run by hand,
+/// `cargo test --release -p circuitsim --test clavinet -- --ignored`.
+#[test]
+#[ignore]
+fn a_saved_table_loads_back_equal() {
+    let Some(el) = strings() else { return };
+    let (model, fs_int, s) = Medium::rates(&el, 96_000.0).expect("the strings");
+    let a = StrikeTable::new(model.clone(), fs_int, s);
+    let t0 = std::time::Instant::now();
+    a.load_or_fill(
+        std::thread::available_parallelism().map_or(4, |n| n.get()),
+        || {},
+    )
+    .expect("saved");
+    eprintln!(
+        "filled or loaded in {:.1} s, {} MB",
+        t0.elapsed().as_secs_f64(),
+        a.bytes() / 1_000_000
+    );
+    assert!(a.complete());
+    let b = StrikeTable::new(model, fs_int, s);
+    b.load_or_fill(1, || {}).expect("loaded");
+    assert!(b.complete());
+    assert!(a.same_as(&b));
 }
 
 #[test]
