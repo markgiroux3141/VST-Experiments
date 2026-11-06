@@ -1,25 +1,33 @@
 """A key's string as two substructures joined at the anvil, released and held
 (docs/CLAVINET_PLAN.md, CL1, "The string" and "The release").
 
-**Substructures (Craig-Bampton).** The string runs from the tuning pin (fixed) through the
-anvil to the tailpiece. The anvil point a and the tailpiece end t are interface degrees of
-freedom; between them are two segments, each a uniform tensioned Euler-Bernoulli string
-pinned at its ends:
+**Substructures (Craig-Bampton, numeric).** The string runs from the tuning pin (fixed)
+through the anvil to the tailpiece. Two segments, each a uniform tensioned Euler-Bernoulli
+beam in Hermite cubic elements (w, w' per node):
 
 - **S**, the speaking part, anvil to tailpiece (length L), read by the pickups;
 - **N**, the non-speaking part, pin to anvil (length l), with the yarn woven over its pin
   end (added mass and a dashpot per metre).
 
-Each segment's coordinates are its fixed-interface modes, sin(k pi x / l) mass-normalized,
-exact for a pinned stiff string (omega_k^2 = (k pi / l)^2 T / mu + (k pi / l)^4 EI / mu), plus
-the static constraint shapes (linear: a tensioned beam pinned at both ends deflects in a
-straight line under an end displacement), whose stiffness coupling to the modes is exactly
-zero. The anvil is a hinge for bending (the slope isn't carried across it: the pinch holds
-the wire like one; B ~ 1e-4, so bending carries ~0.01% of the energy there).
+The interface degrees of freedom are the anvil point's deflection w_a **and slope**
+theta_a (the wire is continuous through the pinch: bending carries motion across it), and
+the tailpiece end's deflection w_t. Both ends are moment free (pinned).
+
+Each segment's coordinates are:
+- its fixed-interface modes (clamped at the anvil, held at the tailpiece or pin) up to
+  `f_cut_hz`, mass-normalized, by a sparse eigensolve;
+- the static constraint modes of its interface DOFs.
+
+The basis is computed once per key at the nominal tension mu (2 L f)^2, without the yarn,
+and used for both systems at their own tensions (a Rayleigh-Ritz basis: the reduced
+stiffness is exactly Kb + T Kg projected). An earlier version used analytic sines with the
+anvil as a hinge: the plain finite-element reference (`reference.py`) showed it missed the
+bending path into the pinch and the yarn (decays up to 100x short of loss on the sideways
+polarization).
 
 Both transverse planes are modelled: y (the tangent's push, the pickups' vertical) and x
 (across the strings, which the pickups barely see: [R12], [G13] 2.3.5). They share the
-basis, so the coordinates are (q_S, q_N, u_a, u_t) for y, then the same for x.
+basis; per plane the coordinates are (q_S, q_N, w_a, theta_a, w_t).
 
 **Released** (no key): the tailpiece end on a spring and dashpot to ground, nothing at the
 anvil; tension `tension_rest_n`.
@@ -35,27 +43,33 @@ The anvil is bilateral in the linearization, so the static state (`static`) has 
 pressed on it.
 
 **Losses:**
-- each segment mode's air drag (Valette & Cuesta's formula on the outer diameter), the
-  steel's loss factor on its bending energy and, on a wound string, the wrap's friction
-  (a loss factor on all its energy: sigma = pi f eta_wrap);
+- each fixed-interface mode's air drag (Valette & Cuesta's formula on the outer diameter),
+  the steel's loss factor on its bending energy (its exact share, from the element
+  matrices) and, on a wound string, the wrap's friction (sigma = pi f eta_wrap);
 - the yarn's dashpot;
 - the tailpiece's dashpot;
 - the pinch's dashpots and the rubber's;
 - the mute bar's felt (a spring and dashpot pressed on S near the tailpiece, both planes),
   when its slider is on.
 
-The basis is the same for both systems (modes kept up to `f_cut_hz` at the rest tension),
-so a state moves between them exactly, through the physical coordinates.
+The two systems share the coordinates, so a state moves between them exactly, through the
+physical coordinates.
 """
 
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass, field
 
 import numpy as np
-from scipy import linalg
+from scipy import linalg, sparse
+from scipy.sparse import linalg as spla
 
 from varimu.clavinet.spec import StringGeom
+
+ELEMENTS_PER_WAVELENGTH = 6.0  # at f_cut_hz, nominal tension
+MAX_ELEMENT_M = 4e-3
+GAUSS = np.polynomial.legendre.leggauss(4)
 
 
 @dataclass(frozen=True)
@@ -101,18 +115,6 @@ class Params:
         return float(d0), float(k), float(f * self.rubber_alpha_s_m)
 
 
-def _seg_omegas(n: int, length: float, tension: float, mu: float, ei: float) -> np.ndarray:
-    kk = np.arange(1, n + 1) * np.pi / length
-    return np.sqrt(kk**2 * tension / mu + kk**4 * ei / mu)
-
-
-def _count(length: float, tension: float, mu: float, ei: float, f_cut: float) -> int:
-    n = 1
-    while _seg_omegas(n + 1, length, tension, mu, ei)[-1] <= 2 * np.pi * f_cut:
-        n += 1
-    return n
-
-
 def air_sigma(f_hz: np.ndarray, p: Params) -> np.ndarray:
     """Amplitude decay rate from air drag (Valette & Cuesta 1993, as in Chaigne &
     Askenfelt 1994): R = 2 pi eta + 2 pi d sqrt(pi eta rho f), sigma = R / (2 mu)."""
@@ -121,16 +123,199 @@ def air_sigma(f_hz: np.ndarray, p: Params) -> np.ndarray:
     return r / (2 * p.geom.mu_kg_m)
 
 
+# --- one segment in finite elements ------------------------------------------------------
+
+
+def _element(h: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Hermite cubic element matrices per unit EI, unit T, unit mass per length."""
+    kb = (
+        np.array(
+            [
+                [12, 6 * h, -12, 6 * h],
+                [6 * h, 4 * h * h, -6 * h, 2 * h * h],
+                [-12, -6 * h, 12, -6 * h],
+                [6 * h, 2 * h * h, -6 * h, 4 * h * h],
+            ]
+        )
+        / h**3
+    )
+    kg = np.array(
+        [
+            [36, 3 * h, -36, 3 * h],
+            [3 * h, 4 * h * h, -3 * h, -h * h],
+            [-36, -3 * h, 36, -3 * h],
+            [3 * h, -h * h, -3 * h, 4 * h * h],
+        ]
+    ) / (30 * h)
+    m = (
+        np.array(
+            [
+                [156, 22 * h, 54, -13 * h],
+                [22 * h, 4 * h * h, 13 * h, -3 * h * h],
+                [54, 13 * h, 156, -22 * h],
+                [-13 * h, -3 * h * h, -22 * h, 4 * h * h],
+            ]
+        )
+        * h
+        / 420
+    )
+    return kb, kg, m
+
+
+def hermite(xi: np.ndarray, h: float) -> np.ndarray:
+    """Shape functions (4, n) at xi in [0, 1] of an element of length h."""
+    xi = np.asarray(xi, float)
+    return np.array(
+        [
+            1 - 3 * xi**2 + 2 * xi**3,
+            h * (xi - 2 * xi**2 + xi**3),
+            3 * xi**2 - 2 * xi**3,
+            h * (-(xi**2) + xi**3),
+        ]
+    )
+
+
+def _assemble(x: np.ndarray, weight: np.ndarray | None = None):
+    """(Kb, Kg, M) of a mesh per unit EI / T / mass (sparse); `weight` per element scales M."""
+    ne = x.size - 1
+    n = 2 * (ne + 1)
+    rows, cols, vb, vg, vm = [], [], [], [], []
+    for e in range(ne):
+        h = x[e + 1] - x[e]
+        kb, kg, m = _element(h)
+        idx = np.arange(2 * e, 2 * e + 4)
+        rr, cc = np.meshgrid(idx, idx, indexing="ij")
+        rows.append(rr.ravel())
+        cols.append(cc.ravel())
+        vb.append(kb.ravel())
+        vg.append(kg.ravel())
+        vm.append(m.ravel() * (1.0 if weight is None else weight[e]))
+    r, c = np.concatenate(rows), np.concatenate(cols)
+
+    def mk(v):
+        return sparse.csr_matrix((np.concatenate(v), (r, c)), shape=(n, n))
+
+    return mk(vb), mk(vg), mk(vm)
+
+
+@dataclass(frozen=True)
+class Segment:
+    """A segment's reduction: physical DOFs d = T @ (q, u_b); its interface DOFs (indices
+    into d) and the reduced matrices per unit EI / T / mass."""
+
+    x: np.ndarray  # node positions from the segment's start
+    t: np.ndarray  # (n_dof, nq + nb)
+    nq: int
+    boundary: tuple[int, ...]  # physical DOF indices of the interface, in order
+    kb: np.ndarray  # reduced, per unit EI
+    kg: np.ndarray  # per unit T
+    m: np.ndarray  # per unit mass per length
+    omega_nominal: np.ndarray  # the fixed-interface modes' rad/s at the nominal T
+    bend_share: np.ndarray  # their bending energy's share at the nominal T
+
+    def rows(self, xs: np.ndarray) -> np.ndarray:
+        """Displacement rows (len(xs), nq + nb) at positions xs."""
+        e = np.clip(np.searchsorted(self.x, xs, side="right") - 1, 0, self.x.size - 2)
+        h = self.x[e + 1] - self.x[e]
+        xi = (xs - self.x[e]) / h
+        out = np.zeros((xs.size, self.t.shape[1]))
+        for i in range(xs.size):
+            nfun = hermite(np.array([xi[i]]), h[i])[:, 0]
+            out[i] = nfun @ self.t[2 * e[i] : 2 * e[i] + 4]
+        return out
+
+    def matrix_on(self, x0: float, x1: float, per_m: float) -> np.ndarray:
+        """Reduced int over [x0, x1] of per_m * w_i * w_j (consistent: the yarn)."""
+        n = self.t.shape[1]
+        out = np.zeros((n, n))
+        if x1 <= x0:
+            return out
+        gx, gw = GAUSS
+        for e in range(self.x.size - 1):
+            a, b = max(self.x[e], x0), min(self.x[e + 1], x1)
+            if b <= a:
+                continue
+            h = self.x[e + 1] - self.x[e]
+            xs = 0.5 * (b - a) * (gx + 1) + a
+            ws = 0.5 * (b - a) * gw
+            nf = hermite((xs - self.x[e]) / h, h)  # (4, g)
+            local = (nf * ws) @ nf.T
+            te = self.t[2 * e : 2 * e + 4]
+            out += per_m * te.T @ local @ te
+        return out
+
+
+@functools.lru_cache(maxsize=256)
+def segment(
+    length: float, ei: float, mu: float, t_nominal: float, f_cut: float, anvil_at_start: bool
+) -> Segment:
+    """S (anvil at the start, the tailpiece end's w an interface) or N (the pin at the
+    start, held; the anvil at the end): fixed-interface modes to f_cut plus constraint modes."""
+    c = np.sqrt(t_nominal / mu)
+    h_max = min(MAX_ELEMENT_M, c / (f_cut * ELEMENTS_PER_WAVELENGTH))
+    ne = max(int(np.ceil(length / h_max)), 8)
+    x = np.linspace(0.0, length, ne + 1)
+    kb, kg, m = _assemble(x)
+    n = 2 * (ne + 1)
+    k = ei * kb + t_nominal * kg
+    mm = mu * m
+    last = n - 2
+    if anvil_at_start:
+        boundary, fixed = (0, 1, last), ()  # w_a, theta_a, w_t
+    else:
+        boundary, fixed = (last, last + 1), (0,)  # w_a, theta_a; the pin's w held
+    interior = np.setdiff1d(np.arange(n), np.r_[list(boundary), list(fixed)].astype(int))
+    k = k.tocsc()
+    mm = mm.tocsc()
+    kii = k[interior][:, interior]
+    mii = mm[interior][:, interior]
+    kib = k[interior][:, list(boundary)].toarray()
+    # how many modes: a stiff pinned string's count to f_cut, plus a margin
+    kk = np.arange(1, 4000) * np.pi / length
+    om = np.sqrt(kk**2 * t_nominal / mu + kk**4 * ei / mu)
+    want = int(np.searchsorted(om, 2 * np.pi * f_cut)) + 6
+    want = min(want, interior.size - 2)
+    lam, phi = spla.eigsh(kii, k=want, M=mii, sigma=0.0, which="LM")
+    order = np.argsort(lam)
+    lam, phi = lam[order], phi[:, order]
+    keep = lam <= (2 * np.pi * f_cut) ** 2 * 1.0001
+    if not keep.any():
+        keep[0] = True
+    lam, phi = lam[keep], phi[:, keep]
+    phi = phi / np.sqrt(np.einsum("ij,ij->j", phi, mii @ phi))
+    psi = -spla.splu(kii).solve(kib)
+    nq, nb = phi.shape[1], len(boundary)
+    t = np.zeros((n, nq + nb))
+    t[interior, :nq] = phi
+    t[interior, nq:] = psi
+    for j, b in enumerate(boundary):
+        t[b, nq + j] = 1.0
+    kbr = t.T @ (kb @ t)
+    kgr = t.T @ (kg @ t)
+    mr = t.T @ (m @ t)
+    bend = ei * np.einsum("ij,ij->j", phi, kb[interior][:, interior] @ phi)
+    share = bend / lam
+    return Segment(x, t, nq, boundary, kbr, kgr, mr, np.sqrt(lam), share)
+
+
+def segments(p: Params) -> tuple[Segment, Segment]:
+    g = p.geom
+    t_nom = g.mu_kg_m * (2 * g.length_m * g.f_hz) ** 2
+    s = segment(g.length_m, g.ei_n_m2, g.mu_kg_m, t_nom, p.f_cut_hz, True)
+    n = segment(p.nonspeaking_m, g.ei_n_m2, g.mu_kg_m, t_nom, p.f_cut_hz, False)
+    return s, n
+
+
 @dataclass
 class Layout:
-    """Coordinate indices. Per plane: q_S (ns), q_N (nn), u_a, u_t."""
+    """Coordinate indices. Per plane: q_S (ns), q_N (nn), w_a, theta_a, w_t."""
 
     ns: int
     nn: int
 
     @property
     def per_plane(self) -> int:
-        return self.ns + self.nn + 2
+        return self.ns + self.nn + 3
 
     def qs(self, plane: int) -> slice:
         o = plane * self.per_plane
@@ -143,8 +328,11 @@ class Layout:
     def ua(self, plane: int) -> int:
         return plane * self.per_plane + self.ns + self.nn
 
+    def tha(self, plane: int) -> int:
+        return self.ua(plane) + 1
+
     def ut(self, plane: int) -> int:
-        return plane * self.per_plane + self.ns + self.nn + 1
+        return self.ua(plane) + 2
 
     @property
     def n_string(self) -> int:
@@ -152,25 +340,18 @@ class Layout:
 
 
 def layout(p: Params) -> Layout:
-    g = p.geom
-    t = min(p.tension_rest_n, p.tension_held_n)
-    return Layout(
-        _count(g.length_m, t, g.mu_kg_m, g.ei_n_m2, p.f_cut_hz),
-        _count(p.nonspeaking_m, t, g.mu_kg_m, g.ei_n_m2, p.f_cut_hz),
-    )
+    s, n = segments(p)
+    return Layout(s.nq, n.nq)
 
 
-def _yarn_matrix(p: Params, lay: Layout, per_m: float) -> np.ndarray:
-    """int over the yarn of per_m * shape_i * shape_j on (q_N, u_a) of one plane."""
-    ln, mu = p.nonspeaking_m, p.geom.mu_kg_m
-    xy = min(p.yarn_length_m, ln)
-    pts = 64 + 8 * lay.nn
-    xg, wg = np.polynomial.legendre.leggauss(pts)
-    x = 0.5 * xy * (xg + 1)
-    w = 0.5 * xy * wg
-    k = np.arange(1, lay.nn + 1)
-    shapes = np.vstack([np.sqrt(2 / (mu * ln)) * np.sin(np.outer(k, x) * np.pi / ln), x / ln])
-    return per_m * (shapes * w) @ shapes.T
+def _s_index(lay: Layout, pl: int) -> np.ndarray:
+    """S's reduced coordinates (q_S, w_a, theta_a, w_t) in the plane's global indices."""
+    return np.r_[np.arange(lay.qs(pl).start, lay.qs(pl).stop), lay.ua(pl), lay.tha(pl), lay.ut(pl)]
+
+
+def _n_index(lay: Layout, pl: int) -> np.ndarray:
+    """N's reduced coordinates (q_N, w_a, theta_a)."""
+    return np.r_[np.arange(lay.qn(pl).start, lay.qn(pl).stop), lay.ua(pl), lay.tha(pl)]
 
 
 def matrices(p: Params, held: bool, lay: Layout | None = None) -> tuple[np.ndarray, ...]:
@@ -178,54 +359,37 @@ def matrices(p: Params, held: bool, lay: Layout | None = None) -> tuple[np.ndarr
     Held systems have one more coordinate, the tangent, last."""
     g = p.geom
     lay = lay or layout(p)
+    seg_s, seg_n = segments(p)
     mu, ei = g.mu_kg_m, g.ei_n_m2
     tension = p.tension_held_n if held else p.tension_rest_n
-    big_l, ln = g.length_m, p.nonspeaking_m
     n = lay.n_string + (1 if held else 0)
     m = np.zeros((n, n))
     c = np.zeros((n, n))
     k = np.zeros((n, n))
     f = np.zeros(n)
-    ks = np.arange(1, lay.ns + 1)
-    kn = np.arange(1, lay.nn + 1)
-    om_s = _seg_omegas(lay.ns, big_l, tension, mu, ei)
-    om_n = _seg_omegas(lay.nn, ln, tension, mu, ei)
+    wrap = p.eta_wrap if g.wound else 0.0
 
-    def seg_sigma(om: np.ndarray, length: float, kk: np.ndarray) -> np.ndarray:
-        wave = (kk * np.pi / length) ** 2
-        bend_frac = wave**2 * ei / (wave * tension + wave**2 * ei)
-        f_hz = om / (2 * np.pi)
-        wrap = p.eta_wrap if g.wound else 0.0
-        return air_sigma(f_hz, p) + np.pi * f_hz * (p.eta_bend * bend_frac + wrap)
+    def modal_sigma(seg: Segment) -> np.ndarray:
+        f_hz = seg.omega_nominal / (2 * np.pi)
+        return air_sigma(f_hz, p) + np.pi * f_hz * (p.eta_bend * seg.bend_share + wrap)
 
-    sig_s = seg_sigma(om_s, big_l, ks)
-    sig_n = seg_sigma(om_n, ln, kn)
-    # coupling of each segment's modes to its constraint shapes: int mu phi_k psi
-    cs_a = np.sqrt(2 * mu / big_l) * big_l / (ks * np.pi)  # psi = 1 - x/L (anvil at x=0)
-    cs_t = np.sqrt(2 * mu / big_l) * big_l * (-1.0) ** (ks + 1) / (ks * np.pi)  # psi = x/L
-    cn_a = np.sqrt(2 * mu / ln) * ln * (-1.0) ** (kn + 1) / (kn * np.pi)  # psi = x/l (anvil at x=l)
-    yarn_m = _yarn_matrix(p, lay, p.yarn_mass_kg_m)
-    yarn_c = _yarn_matrix(p, lay, p.yarn_damping_ns_m2)
+    yarn_end = min(p.yarn_length_m, p.nonspeaking_m)
+    yarn_m = seg_n.matrix_on(0.0, yarn_end, p.yarn_mass_kg_m)
+    yarn_c = seg_n.matrix_on(0.0, yarn_end, p.yarn_damping_ns_m2)
     for pl in (0, 1):
-        s_, n_, a, t = lay.qs(pl), lay.qn(pl), lay.ua(pl), lay.ut(pl)
-        m[s_, s_] = np.eye(lay.ns)
-        m[n_, n_] = np.eye(lay.nn)
-        m[s_, a] = m[a, s_] = cs_a
-        m[s_, t] = m[t, s_] = cs_t
-        m[n_, a] = m[a, n_] = cn_a
-        m[a, a] = mu * big_l / 3 + mu * ln / 3
-        m[t, t] = mu * big_l / 3
-        m[a, t] = m[t, a] = mu * big_l / 6
-        idx = np.r_[np.arange(n_.start, n_.stop), a]
-        m[np.ix_(idx, idx)] += yarn_m
-        c[np.ix_(idx, idx)] += yarn_c
-        k[s_, s_] = np.diag(om_s**2)
-        k[n_, n_] = np.diag(om_n**2)
-        c[s_, s_] += np.diag(2 * sig_s)
-        c[n_, n_] += np.diag(2 * sig_n)
-        k[a, a] = tension / big_l + tension / ln
-        k[t, t] = tension / big_l + p.tailpiece_k_n_m
-        k[a, t] = k[t, a] = -tension / big_l
+        for seg, idx, extra_m, extra_c in (
+            (seg_s, _s_index(lay, pl), None, None),
+            (seg_n, _n_index(lay, pl), yarn_m, yarn_c),
+        ):
+            ii = np.ix_(idx, idx)
+            m[ii] += mu * seg.m + (0 if extra_m is None else extra_m)
+            k[ii] += ei * seg.kb + tension * seg.kg
+            if extra_c is not None:
+                c[ii] += extra_c
+            q = idx[: seg.nq]
+            c[q, q] += 2 * modal_sigma(seg)
+        t = lay.ut(pl)
+        k[t, t] += p.tailpiece_k_n_m
         c[t, t] += p.tailpiece_c_ns_m
     if p.mute_k_n_m > 0 or p.mute_c_ns_m > 0:
         for pl in (0, 1):
@@ -313,23 +477,17 @@ def point_rows(
 ) -> np.ndarray:
     """The row giving the displacement on S averaged over `width_m` centred
     `dist_from_tailpiece_m` from the tailpiece end (a pickup's bar), in physical coordinates."""
-    g = p.geom
-    big_l, mu = g.length_m, g.mu_kg_m
+    seg_s, _ = segments(p)
+    big_l = p.geom.length_m
     xc = big_l - dist_from_tailpiece_m
-    x1, x2 = xc - width_m / 2, xc + width_m / 2
-    ks = np.arange(1, lay.ns + 1)
-    row = np.zeros(lay.n_string)
     if width_m > 0:
-        avg = (
-            big_l
-            / (ks * np.pi * width_m)
-            * (np.cos(ks * np.pi * x1 / big_l) - np.cos(ks * np.pi * x2 / big_l))
-        )
+        gx, gw = GAUSS
+        xs = xc + 0.5 * width_m * gx
+        local = (gw[:, None] * seg_s.rows(np.clip(xs, 0, big_l))).sum(axis=0) / 2
     else:
-        avg = np.sin(ks * np.pi * xc / big_l)
-    row[lay.qs(plane)] = np.sqrt(2 / (mu * big_l)) * avg
-    row[lay.ua(plane)] = 1 - xc / big_l
-    row[lay.ut(plane)] = xc / big_l
+        local = seg_s.rows(np.array([xc]))[0]
+    row = np.zeros(lay.n_string)
+    row[_s_index(lay, plane)] = local
     return row
 
 

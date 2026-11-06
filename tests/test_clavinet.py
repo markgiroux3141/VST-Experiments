@@ -72,29 +72,35 @@ def test_decays_vs_g13() -> None:
         assert t60[0] > t60[-1]
 
 
-@pytest.mark.parametrize("n", [24, 36])
-@pytest.mark.parametrize("held", [False, True])
-def test_substructures_vs_finite_elements(n: int, held: bool) -> None:
-    """strings.py's reduced model against plain FE of the whole string (no hinge, no
-    reduction), lossless (measured 2026-11-06, CL1):
-    - the ringing modes (sigma < 20/s: the speaking partials) within 4 cents (the hinge at
-      the anvil puts the substructures ~2.5 cents low; the tuning takes it out);
-    - the yarn's heavily damped modes within 25 cents;
-    - decay rates within 5% where the loss is real; where only the end and pinch dashpots
-      damp a mode (sigma < 0.3/s, lossless: a tiny end motion) within a factor of 3 (the
-      two models move the ends' few microns differently; the A2 fit absorbs it);
-    - the heavily damped ones within 15%."""
+@pytest.mark.parametrize("n", [1, 24, 36])
+def test_held_vs_finite_elements(n: int) -> None:
+    """strings.py's held system against plain FE of the whole string (no reduction),
+    lossless (measured 2026-11-06): the ringing modes (sigma < 20/s: the speaking partials,
+    both polarizations) within 0.5 cents, their decays within 10%; the yarn's heavily
+    damped ones within 20 cents and 10%."""
     p = fit.params(n)
-    rows = [r for r in reference.compare(p, held, 3000.0) if r[0] > 20.0]
+    rows = [r for r in reference.compare(p, True, 3000.0) if r[0] > 20.0]
     assert len(rows) > 10
     for f_ref, f_cb, s_ref, s_cb in rows:
         cents = 1200 * abs(np.log2(f_cb / f_ref))
-        assert cents < (4.0 if s_ref < 20 else 25.0)
+        assert cents < (0.5 if s_ref < 20 else 20.0)
         if s_ref > 1e-3:
-            if s_ref < 0.3:
-                assert 1 / 3 < s_cb / s_ref < 3
-            else:
-                assert s_cb == pytest.approx(s_ref, rel=0.05 if s_ref < 20 else 0.15)
+            assert s_cb == pytest.approx(s_ref, rel=0.10)
+
+
+@pytest.mark.parametrize("n", [1, 24, 36, 60])
+def test_release_vs_finite_elements(n: int) -> None:
+    """The released fundamental (what a release sounds: the drop and the yarn's kill)
+    against the plain FE's eigenvalue nearest it: within 5 cents and 15% in decay."""
+    p = fit.params(n)
+    f_cb, s_cb = fit.released_fundamental(p)
+    ref = reference.eigenvalues(reference.lossless(p), False)
+    q = reference.lossless(p)
+    f_q, s_q = fit.released_fundamental(q)
+    j = int(np.argmin(np.abs(ref - complex(-s_q, 2 * np.pi * f_q))))
+    assert 1200 * abs(np.log2(f_q / (ref[j].imag / (2 * np.pi)))) < 5.0
+    assert s_q == pytest.approx(-ref[j].real, rel=0.15)
+    assert np.isfinite(f_cb) and s_cb > 0
 
 
 def test_bend() -> None:

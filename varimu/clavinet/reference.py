@@ -70,7 +70,7 @@ def _element(h: float, ei: float, t: float, rho: float) -> tuple[np.ndarray, np.
 
 def lossless(p: strings.Params) -> strings.Params:
     """p without the distributed modal losses (for a like-for-like comparison)."""
-    return replace(p, air_viscosity_pa_s=0.0, eta_bend=0.0)
+    return replace(p, air_viscosity_pa_s=0.0, eta_bend=0.0, eta_wrap=0.0)
 
 
 def eigenvalues(p: strings.Params, held: bool, max_el_m: float = 1.5e-3) -> np.ndarray:
