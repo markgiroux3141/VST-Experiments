@@ -153,6 +153,19 @@ devices that never existed from parts we model, ten instruments (the Nickel Orga
 magnetostrictive bar organ, first) and ten processors (the Remanence Leveler, a compressor
 with Preisach memory instead of time constants, first), the prerequisites they share, and a
 suggested order nobody has agreed yet.
+**The Nickel Organ (I1) is built** ([docs/NICKEL_ORGAN_PLAN.md](docs/NICKEL_ORGAN_PLAN.md),
+2026-11-06, the user's ask; offline Python, the RH1 / D1 pattern): `varimu/nickel/` (`bar.py` a
+brass cantilever FE with a nickel strip at the root, tuned by length; `magnet.py` nickel's JA fit
+(`config/nickel/organ.yaml`: mu_max / Hc +53%, Br -34%, JA can't meet all four) and the
+magnetoelastic coupling from one energy, Sablik & Jiles' stress field; `voice.py` one key as one
+coupled system at 192 kHz: bar, coil and its dead twin in a bridge, 12AX7 x2, SUSTAIN, a per-key
+RC ladder, a 12AU7 driver, a triode-connected 6V6GT, the #327 lamp as AGC; `organ.py` voicing
+(onset at SUSTAIN 0.6, mixing per key, cached in cache/nickel/voicing.json) and renders),
+`tests/test_nickel.py`, `scripts/nickel_organ_study.py` -> reports/nickel_organ/first_experiment/,
+`scripts/nickel_organ_render.py (--demo | --midi F)` -> reports/nickel_organ/renders/ (~11x slower
+than real time per sounding key). Found: POLARIZE is timbre and level (growly at 0.05-0.25), no
+zero-bias sub-octave, remanence hears but can't sustain, JA's strike memory is a one-time shift.
+Open: the user listens; the shared yoke, Preisach strips and a live tier are the next options.
 
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)

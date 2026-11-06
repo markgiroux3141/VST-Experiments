@@ -1,7 +1,7 @@
 # Invented instruments and devices
 
-Brainstormed with the user on 2026-11-06. **Nothing here is built.** The ideas are parked
-until the user picks one up.
+Brainstormed with the user on 2026-11-06. The ideas are parked until the user picks one up.
+**Built:** I1, the Nickel Organ (2026-11-06, offline Python: docs/NICKEL_ORGAN_PLAN.md).
 
 Each idea is an instrument or processor that never existed but could have. It is built from
 parts this project already models, plus at most one or two new physical mechanisms, and it
@@ -38,6 +38,11 @@ come from. Nothing here is data yet.
 ## Instruments
 
 ### I1. The Nickel Organ (a magnetostrictive bar organ)
+
+**Built 2026-11-06** (offline Python; docs/NICKEL_ORGAN_PLAN.md has the manual, the first
+experiment's answers and what changed from this sketch: a dead-twin bridge for the one coil, a
+per-key voiced drive ladder, the lamp in series with a triode-connected 6V6GT). The zero-bias
+sub-octave doesn't happen; POLARIZE turned out to be a timbre and level control.
 
 **The phenomenon.** Magnetostriction: nickel and iron change length when magnetized,
 roughly as M². That's why transformers hum at twice the mains frequency. In the 1950s it

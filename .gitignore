@@ -74,3 +74,7 @@ mixdowns/
 
 # Multitrack stems the user works from (their own or licensed audio), never committed
 stems/
+
+# MIDI of songs for testing instruments (fan transcriptions: not ours to redistribute)
+midi/*
+!midi/README.md

@@ -1,0 +1,118 @@
+# The Nickel Organ (docs/NICKEL_ORGAN_PLAN.md; docs/INVENTED_DEVICES.md I1): an invented
+# magnetostrictive bar organ, "every part existed by 1955". varimu/nickel/spec.py reads this
+# file (every value `{value, source}`). Only the topology is invented: the parts are sourced
+# or tagged "provisional:" (model knowledge), and "design:" marks a choice of the invented
+# instrument's designer (a value a 1955 engineer would have picked, not a measurement).
+
+tuning:
+  a4_hz: {value: 440.0, source: "design: equal temperament from A4 = 440 Hz"}
+  lowest_note: {value: 36, source: "design: 61 keys, C2 (MIDI 36) to C7 (MIDI 96), an organ manual's compass"}
+  highest_note: {value: 96, source: "design: see lowest_note"}
+
+# The bar: a brass cantilever clamped in the iron yoke (the clamp block is a yoke pole),
+# a laminated nickel strip bonded to its top face over the root, inside the coil.
+bar:
+  youngs_pa: {value: 1.10e+11, source: "provisional: model knowledge (cartridge / yellow brass C26000, ~110 GPa)"}
+  density_kg_m3: {value: 8530.0, source: "provisional: model knowledge (C26000 brass)"}
+  thickness_m: {value: 3.0e-3, source: "design: 1/8 in class bar stock, in the plane of vibration"}
+  width_m: {value: 8.0e-3, source: "design: the coil's window"}
+  q_fundamental: {value: 1500.0, source: "provisional: model knowledge (a clamped brass reed's fundamental: loss factor ~5e-4 to 1e-3 with the clamp's loss; a Rhodes tine's measured Q is 1,000-3,000, G. Shear 2011)"}
+  q_exponent: {value: 0.5, source: "provisional: model knowledge (Q falling as (f1 / f)^0.5 over the bending partials: air and clamp losses rising with frequency, so the bell partials die first)"}
+  modes_max_hz: {value: 24000.0, source: "design: the modes kept (the first above it is dropped)"}
+
+strip:
+  youngs_pa: {value: 2.0e+11, source: "provisional: model knowledge (annealed nickel, 200-207 GPa)"}
+  density_kg_m3: {value: 8900.0, source: "provisional: model knowledge (nickel, 8.90 g/cm^3)"}
+  thickness_m: {value: 0.5e-3, source: "design: five 0.1 mm laminations, as magnetostrictive transducers were stacked (laminated so the strip's eddy currents can be left out: 0.1 mm nickel's classical eddy corner is ~35 kHz)"}
+  length_fraction: {value: 0.25, source: "design: the strip (and its coil) covers a quarter of the bar from the clamp, where the bending strain is; a fixed 16 mm left the bass bars (170 mm) barely coupled (C2's loop onset at 4x full SUSTAIN: the first experiment)"}
+  length_min_m: {value: 0.010, source: "design: the shortest coil worth winding"}
+  length_max_m: {value: 0.040, source: "design: the longest coil (the bass)"}
+  yield_pa: {value: 1.0e+8, source: "provisional: model knowledge (annealed nickel's 0.2% yield ~60-150 MPa); the study reports the strip's peak stress against it"}
+
+# Nickel's magnetics. JA parameters in varimu.devices.core's effective-field form, fitted to
+# the figures in `datasheet` by varimu.nickel.magnet.fit (tests/test_nickel.py checks they
+# still meet them).
+nickel:
+  ms_a_per_m: {value: 4.89e+5, source: "provisional: model knowledge (nickel's room-temperature saturation moment 55 emu/g x 8.90 g/cm^3 = 489 emu/cm^3; mu0 Ms = 0.61 T)"}
+  lambda_s: {value: -35.0e-6, source: "web: https://scilit.com/publications/376fd9755f18ee6f8b910b97957acc66 (Measurement of the Linear Magnetostriction of Hard-Worked Nickel, J. Appl. Phys. 1959: annealed grade A nickel saturates at -35 +- 1 ppm)"}
+  lambda_law: {value: quadratic, source: "provisional: model knowledge (lambda = lambda_s (M / Ms)^2, the isotropic domain-rotation law that makes transformers hum at 2f; nickel's measured lambda(M) is close to it; Sablik & Jiles, IEEE Trans. Magn. 29(4), 2113 (1993), use the same even law)"}
+  datasheet:
+    mu_initial: {value: 110.0, source: "provisional: model knowledge (Bozorth, Ferromagnetism (1951), the table of magnetic materials: annealed commercial nickel, initial permeability ~110)"}
+    h_initial_a_per_m: {value: 4.0, source: "provisional: model knowledge (where the initial permeability is read, 0.05 Oe)"}
+    mu_max: {value: 600.0, source: "provisional: model knowledge (Bozorth, ibid.: maximum permeability ~600)"}
+    coercivity_a_per_m: {value: 56.0, source: "provisional: model knowledge (Bozorth, ibid.: coercive force ~0.7 Oe)"}
+    remanence_t: {value: 0.30, source: "provisional: model knowledge (annealed nickel's major-loop remanence ~3,000 G, half its saturation)"}
+  ja:
+    # fit (2026-11-06): varimu.nickel.magnet.fit, equal weights in log. JA can't meet all
+    # four figures at once (every start lands here): mu_initial 110 (+0.0%), mu_max 919
+    # (+53%), coercivity 85.6 A/m (+53%), remanence 0.198 T (-34%). Fitting without mu_max
+    # meets the other three exactly but puts mu_max at 6,200 (a permalloy, not nickel).
+    a_a_per_m: {value: 566.81, source: "fit: varimu.nickel.magnet.fit to the datasheet block (see above)"}
+    k_a_per_m: {value: 117.24, source: "fit: as a_a_per_m"}
+    c: {value: 0.26463, source: "fit: as a_a_per_m"}
+    alpha: {value: 3.1974e-3, source: "fit: as a_a_per_m"}
+
+# One coil per bar drives it (magnetostriction) and senses it (Villari). Its twin, wound
+# identically on an identical strip on a blocked (dead) bar, is the bridge's other arm, so
+# the bridge cancels the coil's own nonlinear inductance and passes only the motion.
+coil:
+  turns: {value: 400.0, source: "design: 400 turns of AWG 36"}
+  dcr_ohm: {value: 20.0, source: "derived: ~15 m of AWG 36 (1.34 ohm/m) at a ~38 mm mean turn"}
+  leakage_h: {value: 5.0e-4, source: "provisional: model knowledge (the coil's air flux around the brass and strip, mu0 N^2 A_window / l with a ~10 x 5 mm window, 16 mm long)"}
+  gap_eff_m: {value: 2.5e-5, source: "design: the strip's free end faces a yoke pole across 0.1 mm, the pole 4x the strip's section (an equivalent 25 um gap at the strip's area)"}
+
+polarize:
+  # The POLARIZE winding on the yoke's return leg: a DC current from a pot on a regulated
+  # supply, through a choke (no audio current), shared by every bar and twin.
+  mmf_max_a: {value: 60.0, source: "design: 2,000 turns at 30 mA, the pot fully up (~3.7 kA/m in the strip: past nickel's knee, toward saturation)"}
+
+bridge:
+  arm_ohm: {value: 1500.0, source: "design: each coil's series arm (R_b); the sense is R_b (i_twin - i_live), ~ the Villari EMF whatever R_b (R_b >> the coil). The coils draw ~1/17 of the drive line's current, so the lamp in series heats before the bar swings far: with 500 ohm (1/5) the lamp only caught A4 at ~150 um of tip with the driver saturated (the first experiment)"}
+  shunt_ohm: {value: 100.0, source: "design: across the bridge's top, with the arms ~88 ohm: the drive line divides ~0.36 with the lamp cold, ~0.09 at its rated 2300 K (~800 ohm): the AGC's ~12 dB"}
+  balance_ohm: {value: 0.0, source: "design: the BALANCE trim, added to the live arm (0 = balanced)"}
+  input_ratio: {value: 0.05, source: "design: a 1:1 input transformer (the bridge's floating difference to ground) into a 26 dB pad (20k : 1k) on V1a's grid: the strip's Villari EMF is ~1.5 mV per um of tip; a forte strike (~120 um) stays clear of V1b's grid conduction (with 20 dB the line out swung 5-72 V, with 37 dB the loop fell short of its onset: the first experiment)"}
+  polarity: {value: -1.0, source: "design: the input transformer's sense, the one that regenerates the bar's fundamental: +1 with V1a, V1b and V2 (A4's decay rate by complex demodulation: -1.5 /s open, -0.4 at loop gain 0.03, +1.5 at 0.1; the other sense damps it), so -1 since the driver V3 added a fourth inversion (the first experiment, 2026-11-06). The sign is intrinsic (lambda_s^2 M^2), not the bias's"}
+  input_noise_ohm: {value: 3000.0, source: "provisional: model knowledge (the pad's 1k leg and a 12AX7's equivalent noise resistance, ~1.5-2 kOhm at 1.2 mA, as Johnson noise at V1a's grid)"}
+
+amp:
+  b_plus_v: {value: 250.0, source: "design: a 6X4 supply, regulated (ideal here)"}
+  plate_ohm: {value: 100000.0, source: "design: RCA's resistance-coupled 12AX7 chart, 100k plate load"}
+  cathode_ohm: {value: 1500.0, source: "design: RCA's chart, 1.5k bypassed"}
+  coupling_f: {value: 1.0e-8, source: "design: 0.01 uF into 1 MOhm, a high-pass at 16 Hz per stage (three with the driver's): with 0.022 uF (7 Hz, two stages) the loop motorboated at ~5 Hz (below its fundamental the bar's stiffness passes the Villari signal quasi-statically); with 34 Hz corners C2's 65 Hz fundamental saw ~83 deg of lead and no longer regenerated (the first experiment, 2026-11-06)"}
+  grid_leak_ohm: {value: 1.0e+6, source: "design: 1 MOhm grid leak (V1b), the SUSTAIN pot (the 6V6's grid)"}
+  sustain_taper: {value: audio, source: "design: an audio-taper pot (10% at half travel)"}
+  drive_ladder_ohm: {value: 100000.0, source: "design: a two-section RC ladder (each 100k and C) between the SUSTAIN wiper and V3's grid: the loop rolled off above the key's note, or the bridge's imbalance at high frequencies (the live and twin strips sit at different magnetizations, so their inductances differ) oscillated at ~44 kHz, and the bass bars' higher modes (more strongly coupled, low Q) won the loop (C2 sustained at 372 Hz and 1 kHz; the first experiment, 2026-11-06)"}
+  drive_ladder_pole_ratio: {value: 2.5, source: "design: each key's ladder capacitors voiced with its note: the ladder's dominant pole (0.382 / RC) at 2.5x the fundamental"}
+  drive_ladder_pole_max_hz: {value: 4000.0, source: "design: ... at most 4 kHz (the treble keys)"}
+  driver_plate_ohm: {value: 47000.0, source: "design: V3, a 12AU7 driver between the drive ladder and the 6V6GT (gain ~14): without it the keys' voicing trims needed 0.9-4.4 (a passive trim only cuts; the first experiment)"}
+  driver_cathode_ohm: {value: 1000.0, source: "design: V3's cathode, bypassed"}
+  driver_coupling_f: {value: 2.2e-8, source: "design: 0.022 uF into the 6V6GT's 470k grid leak (15 Hz, as the preamp's coupling)"}
+  power_grid_leak_ohm: {value: 470000.0, source: "design: the 6V6GT's grid leak (GE ET-T914: 0.5 MOhm max, cathode bias)"}
+  power_cathode_ohm: {value: 250.0, source: "design: the 6V6GT triode-connected (screen to plate) in class A, 250 ohm bypassed: a low source impedance (mu ~10, rp ~2.5k, ~100 ohm at the secondary) so the series lamp sets the drive line's level. As a pentode (a current source) the lamp in series changed the current ~2.5 dB from cold to hot: no AGC (the first experiment)"}
+  ot_ratio: {value: 5.0, source: "design: a 5k : 200 ohm output transformer (n = 5)"}
+  ot_primary_h: {value: 20.0, source: "provisional: model knowledge (a small single-ended OT's primary inductance)"}
+  ot_damping_ohm: {value: 47000.0, source: "design: a resistor across the primary (it damps the OT's primary resonance with the lamp hot)"}
+  out_load_ohm: {value: 470000.0, source: "design: the line output, V1b's plate through 0.1 uF into the console"}
+  out_coupling_f: {value: 1.0e-7, source: "design: see out_load_ohm"}
+  voicing_threshold: {value: 0.6, source: "design: each key's voicing trim puts the loop's onset (gain 1, lamp cold, POLARIZE default) at this SUSTAIN position"}
+  tubes:
+    preamp: {value: 12AX7@1, source: "design"}
+    driver: {value: 12AU7@1, source: "design"}
+    power: {value: 6V6GT@1, source: "design"}
+    lamp: {value: LAMP327@1, source: "design: the #327, as the tube synth's LFO uses it"}
+
+action:
+  hammer_mass_kg: {value: 0.002, source: "provisional: model knowledge (a small felt hammer, a celesta's class)"}
+  felt_k: {value: 1.0e+12, source: "provisional: model knowledge (a hard felt, F = K d^p: K puts a medium strike's contact at ~0.5 ms, d_max = ((p + 1) m v^2 / 2K)^(1 / (p + 1)) ~16 um at 0.1 m/s, a celesta-class hammer on a small bar; 4e8, a piano's soft-felt value at its mm compressions, only pushed this bar statically)"}
+  felt_p: {value: 2.5, source: "provisional: model knowledge (see felt_k)"}
+  felt_loss_s_per_m: {value: 0.3, source: "provisional: model knowledge (Hunt-Crossley loss of felt, 0.1-0.5 s/m)"}
+  strike_fraction: {value: 0.8, source: "design: the hammer meets the bar at 80% of its length"}
+  v_min_m_s: {value: 0.02, source: "design: the hammer's speed at velocity 1"}
+  v_max_m_s: {value: 0.25, source: "design: ... and at velocity 127 (the strip's peak stress stays near its yield: the study reports it)"}
+  damper_fraction: {value: 0.95, source: "design: the damper felt meets the bar near its tip"}
+  damper_t60_s: {value: 0.25, source: "provisional: model knowledge (a felt damper silences a released bar's fundamental in ~0.2-0.3 s)"}
+  relay_s: {value: 0.004, source: "provisional: model knowledge (the key contact closing the loop a few ms after the hammer leaves)"}
+
+panel:
+  sustain: {value: 0.5, source: "design: below voicing_threshold a struck bell with a longer ring; above it the loop sustains"}
+  polarize: {value: 0.35, source: "design: the default bias (fraction of mmf_max_a); set by the first experiment"}
