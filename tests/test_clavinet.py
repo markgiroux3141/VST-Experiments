@@ -116,21 +116,29 @@ def test_bend() -> None:
 
 
 def test_pickup_shape() -> None:
-    """[R12] Fig. 5 / [G13] Fig. 10: the linkage falls as the string rises, a string near
-    a bar's edge more steeply than one near its middle; vertical motion dominates."""
+    """The along-the-string model ([R12] Fig. 5 / [G13] Fig. 10): the linkage falls as the
+    string rises (measured 2026-11-06: to ~0.2 of its value at 0.25 mm by 2.5 mm; [R12]'s
+    Vizimag curve falls to ~0.4 there: ours is steeper, a provisional geometry), every
+    plain string over a bar is equally sensitive, horizontal motion is invisible to first
+    order ([R12]: 25-30 dB down). The cross-bar models (ferrite) put the gradient at the
+    bars' ends, as recorded."""
     pk = pickup.pickups()["centre"]
+    assert pk.model == "along"
     g = spec.string(36)
     mu_r = spec.load()["steel"]["mu_r"]
-    h = np.array([0.5, 1.0, 2.0, 4.0, 8.0]) * 1e-3
-    for n in (35, 31):  # mid-bar, bar edge
-        lm = pickup.linkage_map(pk, n, g.d_magnetic_m, mu_r)
-        lam = lm(np.zeros_like(h), h)
-        assert np.all(np.diff(np.abs(lam)) < 0)
-    mid = pickup.linkage_map(pk, 35, g.d_magnetic_m, mu_r)
-    edge = pickup.linkage_map(pk, 31, g.d_magnetic_m, mu_r)
+    h = np.array([0.25, 0.5, 1.0, 2.0, 2.5, 4.0, 8.0]) * 1e-3
+    lam = {n: pickup.linkage_map(pk, n, g.d_magnetic_m, mu_r) for n in (31, 35, 40)}
+    v = lam[35](np.zeros_like(h), h)
+    assert np.all(np.diff(np.abs(v)) < 0)
+    assert 0.1 < v[4] / v[0] < 0.6
+    for n in (31, 40):
+        assert lam[n](0.0, 3e-3, dh=1) == pytest.approx(lam[35](0.0, 3e-3, dh=1), rel=1e-9)
+    assert abs(lam[35](0.0, 3e-3, ddx=1)) < 1e-6 * abs(lam[35](0.0, 3e-3, dh=1))
+    ferrite = pickup.Pickup(**{**pk.__dict__, "model": "ferrite"})
+    mid = pickup.linkage_map(ferrite, 35, g.d_magnetic_m, mu_r)
+    edge = pickup.linkage_map(ferrite, 31, g.d_magnetic_m, mu_r)
     assert abs(edge(0.0, 3e-3, dh=1)) > 2 * abs(mid(0.0, 3e-3, dh=1))
-    assert abs(mid(0.0, 3e-3, ddx=1)) < 0.5 * abs(mid(0.0, 3e-3, dh=1))
-    assert 0.01 < pickup.mean_b_t(pk) < 0.1  # [R12]: ~0.075 T
+    assert 0.01 < pickup.mean_b_t(ferrite) < 0.1  # [R12]: ~0.075 T
 
 
 def test_play_e4() -> None:

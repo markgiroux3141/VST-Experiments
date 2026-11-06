@@ -102,7 +102,7 @@ class StringGeom:
     mu_kg_m: float
     ei_n_m2: float
     ea_n: float
-    d_magnetic_m: float  # the steel the pickup sees (a nickel wrap is magnetic)
+    d_magnetic_m: float  # the steel the pickup sees (the core, or core and wrap if magnetic)
 
     @property
     def b_nominal(self) -> float:
@@ -208,7 +208,10 @@ def string(n: int, name: str = "d6") -> StringGeom:
     dc = wound_cores(name)[i]
     d_out = cfg["wound"]["outer_diameter_m"][i]
     mu = _wound_mu(cfg, dc, d_out)
-    d_mag = float(np.sqrt(dc**2 + cfg["wound"]["wrap_fill"] * (d_out**2 - dc**2)))
+    if cfg["wound"]["wrap_magnetic"]:
+        d_mag = float(np.sqrt(dc**2 + cfg["wound"]["wrap_fill"] * (d_out**2 - dc**2)))
+    else:
+        d_mag = dc
     return StringGeom(
         n, f, True, length, dc, d_out, mu, e * np.pi * dc**4 / 64, e * np.pi * dc**2 / 4, d_mag
     )

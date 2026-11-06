@@ -8,10 +8,34 @@ pickup is a row of six bars (37 or 33 mm long, 3 mm apart, 7 mm high), each a ve
 magnetized ferrite with its own coil around it, the six coils in series. Ten strings cross
 each bar.
 
-**The fields** are analytic: a uniformly magnetized bar is two current sheets on its end
-faces (K = +-M, M = Br / mu0), a coil's sides two sheets just outside them
-(K = +-N I / h). The ferrite's recoil permeability (~1.05) is taken as 1, so free space
-holds everywhere (5% at most on the fields, the same on every string).
+**The fields**, three models (`pickups.model` in the config):
+
+- **along** (the default): the section *along* the string, where a bar is only
+  `bar_width_m` (5 mm) wide. A string crosses each bar over that width, so that is where
+  the field changes along it and with its height: the gradient the EMF comes from. The bar
+  is a pole (faces at +U and -U, solved as below) uniform across the strings, so every
+  string over a bar sees the same field whatever its place on the bar (the section across
+  the strings, the two models below, put the gradient at the bars' ends: strings mid-bar
+  20-40 dB quieter than at the ends, CL1's first tries; [R12] reports no such spread), and
+  horizontal motion is invisible to first order ([R12]: 25-30 dB down). The wire is
+  magnetized along its axis by the field's component along it (susceptibility mu_r - 1, a
+  thin wire has no demagnetization that way) and across it (2 (mu_r - 1)/(mu_r + 1)):
+  Lambda(h) = mu0 pi a^2 int [(mu_r - 1) H_x h_x + 2 chi' H_y h_y] dx along the string.
+  Saturation of the wire is left out (provisional mu_r; the level is fitted).
+- **pole**: [R12]'s "metal bar coils" as high-permeability pole bars on their
+  magnets. A pole's faces are magnetic equipotentials, so each bar is two strips (its top
+  face at +U, its bottom face at -U) whose surface charge is solved by a 2D boundary
+  element system (`SEGS_PER_FACE` segments per face, Chebyshev spaced for the edges'
+  singularity; the uniformly charged segment's potential and field are analytic). The
+  magnet's field and the coils' field per ampere have the same shape there (both are a
+  potential difference between the pole faces): the magnet's scaled to `face_b_t` just
+  above the bar's middle ([R12] Fig. 5: ~0.075 T), the coils' to N / (2 h) per ampere (the
+  coil's MMF across an air return of about twice the bar's height: provisional).
+- **ferrite**: free-space ferrite bars. A uniformly magnetized bar is two current sheets on
+  its end faces (K = +-M, M = Br / mu0), a coil's sides two sheets just outside them
+  (K = +-N I / h). It concentrates the field at the bars' ends: strings near a bar's middle
+  came out ~20 dB quieter than those near its ends (CL1's first try), which [R12] doesn't
+  report. Kept for comparison.
 
 **The string** is a small permeable cylinder (radius a, mu_r) in the magnet's field: per
 metre an induced dipole p = 2 pi a^2 (mu_r - 1)/(mu_r + 1) H_mag. By reciprocity, the flux
@@ -52,6 +76,8 @@ class Pickup:
     strings_per_bar: int
     side: str  # "below" or "above" the strings
     clearance_m: float
+    model: str = "along"
+    face_b_t: float = 0.075
 
     @property
     def pitch_m(self) -> float:
@@ -85,6 +111,8 @@ def pickups(name: str = "d6") -> dict[str, Pickup]:
             int(pc["strings_per_bar"]),
             pc["side"][w],
             pc["clearance_m"],
+            pc.get("model", "along"),
+            pc.get("face_b_t", 0.075),
         )
         for w in ("centre", "bridge")
     }
@@ -139,6 +167,121 @@ def mean_b_t(pk: Pickup) -> float:
     return float(np.mean(by))
 
 
+SEGS_PER_FACE = 40
+
+
+def _cheb(a: float, b: float, n: int) -> np.ndarray:
+    """n segment edges from a to b, Chebyshev spaced (dense at the ends)."""
+    return 0.5 * (a + b) - 0.5 * (b - a) * np.cos(np.linspace(0, np.pi, n + 1))
+
+
+def _seg_potential(
+    x: np.ndarray, y: np.ndarray, x1: np.ndarray, x2: np.ndarray, y0: np.ndarray
+) -> np.ndarray:
+    """Potential at points (rows) of unit-density segments (columns) on y = y0 from x1 to
+    x2, with the 2D Green's function -ln(r) / (2 pi)."""
+
+    def f(u, yy):
+        r2 = u * u + yy * yy
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t1 = np.where(r2 > 0, 0.5 * u * np.log(r2), 0.0)
+            t3 = np.where(np.abs(yy) > 0, yy * np.arctan(u / np.where(yy == 0, 1, yy)), 0.0)
+        return t1 - u + t3
+
+    yy = y[:, None] - y0[None, :]
+    return -(f(x2[None, :] - x[:, None], yy) - f(x1[None, :] - x[:, None], yy)) / (2 * np.pi)
+
+
+@functools.lru_cache(maxsize=8)
+def _pole_charges(pk: Pickup) -> tuple[np.ndarray, ...]:
+    """The pole faces' segments and their charge densities for +1 / -1 on the faces."""
+    x1s, x2s, ys, target = [], [], [], []
+    for j in range(N_BARS):
+        xl, xr = pk.bar_x(j)
+        e = _cheb(xl, xr, SEGS_PER_FACE)
+        for y0, u in ((0.0, 1.0), (-pk.magnet_height_m, -1.0)):
+            x1s.append(e[:-1])
+            x2s.append(e[1:])
+            ys.append(np.full(SEGS_PER_FACE, y0))
+            target.append(np.full(SEGS_PER_FACE, u))
+    x1, x2, y0, tgt = (np.concatenate(v) for v in (x1s, x2s, ys, target))
+    xm = 0.5 * (x1 + x2)
+    sigma = np.linalg.solve(_seg_potential(xm, y0, x1, x2, y0), tgt)
+    return x1, x2, y0, sigma
+
+
+def _pole_h(pk: Pickup, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """H per unit face potential at points above the faces (y > 0)."""
+    x1, x2, y0, sigma = _pole_charges(pk)
+    shape = x.shape
+    xf, yf = x.ravel(), y.ravel()
+    hx = np.zeros(xf.size)
+    hy = np.zeros(xf.size)
+    for s0 in range(0, x1.size, 120):
+        sl = slice(s0, s0 + 120)
+        yy = yf[:, None] - y0[None, sl]
+        a1 = xf[:, None] - x1[None, sl]
+        a2 = xf[:, None] - x2[None, sl]
+        hx += (np.log((a1 * a1 + yy * yy) / (a2 * a2 + yy * yy)) / (4 * np.pi)) @ sigma[sl]
+        hy += ((np.arctan(a1 / yy) - np.arctan(a2 / yy)) / (2 * np.pi)) @ sigma[sl]
+    return hx.reshape(shape), hy.reshape(shape)
+
+
+def pole_fields(pk: Pickup, x: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, ...]:
+    """(B_mag x, y; B_coil per ampere x, y) of the pole model."""
+    hx, hy = _pole_h(pk, x, y)
+    xl, xr = pk.bar_x(N_BARS // 2)
+    rx, ry = _pole_h(pk, np.array([0.5 * (xl + xr)]), np.array([0.2e-3]))
+    ref = float(np.hypot(rx[0], ry[0]))
+    b_mag = pk.face_b_t / ref
+    b_coil = MU0 * pk.turns_per_coil / (2 * pk.magnet_height_m) / ref
+    return b_mag * hx, b_mag * hy, b_coil * hx, b_coil * hy
+
+
+@functools.lru_cache(maxsize=8)
+def _strip_charges(width: float, height: float) -> tuple[np.ndarray, ...]:
+    """One pole bar in the section along the string: its top face (+1) and bottom face (-1)."""
+    e = _cheb(-width / 2, width / 2, 2 * SEGS_PER_FACE)
+    x1 = np.concatenate([e[:-1], e[:-1]])
+    x2 = np.concatenate([e[1:], e[1:]])
+    n = e.size - 1
+    y0 = np.concatenate([np.zeros(n), np.full(n, -height)])
+    tgt = np.concatenate([np.ones(n), -np.ones(n)])
+    xm = 0.5 * (x1 + x2)
+    return x1, x2, y0, np.linalg.solve(_seg_potential(xm, y0, x1, x2, y0), tgt)
+
+
+def _strip_h(
+    width: float, height: float, x: np.ndarray, y: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    x1, x2, y0, sigma = _strip_charges(width, height)
+    yy = y[:, None] - y0[None, :]
+    a1 = x[:, None] - x1[None, :]
+    a2 = x[:, None] - x2[None, :]
+    hx = (np.log((a1 * a1 + yy * yy) / (a2 * a2 + yy * yy)) / (4 * np.pi)) @ sigma
+    hy = ((np.arctan(a1 / yy) - np.arctan(a2 / yy)) / (2 * np.pi)) @ sigma
+    return hx, hy
+
+
+def along_linkage(pk: Pickup, d_magnetic_m: float, mu_r: float, h: np.ndarray) -> np.ndarray:
+    """Lambda(h) of the along-the-string model (weber-turns)."""
+    w, hm = pk.bar_width_m, pk.magnet_height_m
+    rx, ry = _strip_h(w, hm, np.array([0.0]), np.array([0.2e-3]))
+    ref = float(np.hypot(rx[0], ry[0]))
+    h_mag = pk.face_b_t / MU0 / ref  # A/m per unit of the solved field
+    h_coil = pk.turns_per_coil / (2 * hm) / ref  # per ampere
+    x = np.linspace(-6 * w, 6 * w, 1201)
+    dx = x[1] - x[0]
+    a = d_magnetic_m / 2
+    chi_t = 2 * (mu_r - 1) / (mu_r + 1)
+    out = np.zeros(h.size)
+    for i, hh in enumerate(h):
+        hx, hy = _strip_h(w, hm, x, np.full_like(x, hh))
+        integrand = (mu_r - 1) * hx * hx + chi_t * hy * hy
+        out[i] = MU0 * np.pi * a * a * h_mag * h_coil * np.sum(integrand) * dx
+    return out
+
+
 @dataclass(frozen=True)
 class LinkageMap:
     """Lambda(dx, h): a string's linkage (weber-turns) at dx across from its rest place
@@ -157,8 +300,11 @@ def linkage_map(pk: Pickup, n: int, d_magnetic_m: float, mu_r: float) -> Linkage
     x0 = pk.string_x(n)
     dx = np.linspace(-2.5e-3, 2.5e-3, 101)
     h = np.linspace(0.25e-3, pk.clearance_m + 6e-3, 181)
+    if pk.model == "along":
+        lam = np.tile(along_linkage(pk, d_magnetic_m, mu_r, h), (dx.size, 1))
+        return LinkageMap(dx, h, interpolate.RectBivariateSpline(dx, h, lam, kx=3, ky=3))
     xx, hh = np.meshgrid(x0 + dx, h, indexing="ij")
-    bmx, bmy, bcx, bcy = fields(pk, xx, hh)
+    bmx, bmy, bcx, bcy = (pole_fields if pk.model == "pole" else fields)(pk, xx, hh)
     a = d_magnetic_m / 2
     chi = (mu_r - 1) / (mu_r + 1)
     lam = pk.bar_width_m * 2 * np.pi * a * a * chi * (bmx * bcx + bmy * bcy) / MU0
