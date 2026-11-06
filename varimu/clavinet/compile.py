@@ -48,6 +48,7 @@ the header names the sidecar's sha256 and length again.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import hashlib
 import json
@@ -166,8 +167,43 @@ def _tables(p: strings.Params, name: str) -> dict[str, Any]:
     return out
 
 
+@contextlib.contextmanager
+def _seeded():
+    """scipy's eigsh with a fixed starting vector's generator while a key compiles.
+
+    strings.py's substructure bases come from `scipy.sparse.linalg.eigsh` with its v0 left
+    random, which scipy 1.18 draws from OS entropy on every call: the bases then differ at
+    rounding from run to run, and with them the modes' phases and the real / complex split
+    of near-critical pairs, so the compiled bytes did (the physics doesn't). Seeding it
+    here keeps the component's sha256 a function of the code and the config. (Passing
+    `rng=0` in strings.py itself would make this unneeded.)"""
+    from scipy.sparse import linalg as spla
+
+    orig = spla.eigsh
+
+    def eigsh(*args, **kwargs):
+        if kwargs.get("v0") is None and kwargs.get("rng") is None:
+            kwargs["rng"] = 0
+        return orig(*args, **kwargs)
+
+    strings.segment.cache_clear()
+    fit.params.cache_clear()  # a key's tuned tension follows its bases at rounding
+    spla.eigsh = eigsh
+    try:
+        yield
+    finally:
+        spla.eigsh = orig
+        strings.segment.cache_clear()
+        fit.params.cache_clear()
+
+
 def _key(job: tuple[int, str, float]) -> dict[str, Any]:
     """Key n compiled: its scalars, and its arrays as numpy (complex or real)."""
+    with _seeded():
+        return _key_seeded(job)
+
+
+def _key_seeded(job: tuple[int, str, float]) -> dict[str, Any]:
     n, name, band = job
     cfg = spec.load(name)
     p = replace(fit.params(n, name), f_cut_hz=band)
@@ -291,7 +327,9 @@ def compile_strings(
     workers: int = 6,
 ) -> dict[str, Any]:
     """The strings of instrument `name` as data: {"header": ..., "arrays": {key: {...}}}
-    (the arrays numpy; `pack` lays them out)."""
+    (the arrays numpy; `pack` lays them out), reproducible byte for byte on the workers
+    (`_seeded`; one BLAS thread each; with `workers` = 1 BLAS runs as the process has it,
+    and its threads' sums round differently)."""
     cfg = spec.load(name)
     keys = keys or range(1, int(cfg["tuning"]["keys"]) + 1)
     fit.globals_(name)  # the global fits once, before the workers read their cache

@@ -4,3 +4,4 @@ crates/varimu-circuit/tests/fixtures/** -text
 crates/varimu-app/tests/fixtures/** -text
 config/circuits/*.drawing.json -text
 config/circuits/*_drawn.yaml -text
+config/components/*/*.strings.bin binary
