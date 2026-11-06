@@ -37,11 +37,12 @@ runs**.
   (`config/circuits/rca_77dx.yaml`: `RIBBON_77DX@1` on Olson's polydirectional circuit, the
   shutter as six stops picked by the part's `stop`, fitted by `scripts/fit_77dx.py`;
   `RCA77DX_OT@1`; the reactor at mic level); WP7's Notes.
-- **In progress:** nothing.
-- **Next:** WP8, the Coles 4038 (-> V72): write its steps (sources first: BBC / STC's
-  4038 data, the ribbon's figures, its published response and pattern), then the
-  `ribbon_motor` on its body. The user fetches login-walled files on request: each URL
-  alone in a code block.
+- **In progress:** WP8 (the Coles 4038), step 1: steps written, STC's 1961 brochure read
+  (`data/schematics/coles_4038/README.md`).
+- **Next:** WP8 step 1: render and read BBC Monograph No. 4 (a scan, 24 pages, in
+  `cache/dl_4038/` or re-download from the README's URL) for the ribbon's size, gap, plates
+  and transformer; digitize the brochure's Fig. 1 and polars; then step 2. The user fetches
+  login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains and the 77-DX's in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
@@ -124,7 +125,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | done 2026-11-05 |
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | done 2026-11-05 |
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's direct monitor as a preamp | 77-DX -> 351, 77-DX -> 610 | L | done 2026-11-06 |
-| 8 | Coles 4038 | 4038 -> V72 | M | |
+| 8 | Coles 4038 | 4038 -> V72 | M | started 2026-11-06 (sources) |
 | 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | |
 | 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types"; CLAVINET_PLAN.md's CL0 builds it if it gets there first) | 0 | L | done 2026-11-06 (CL0 on the `clavinet` branch: `varimu/devices/bjt.py`, the `bjt` part, `BC550C@1` / `BC413C@1` / `BC560C@1`, `bjt_stage.yaml`; DEVICE_BUILDER_PLAN.md "New device types") |
 | 11 | Neve 1073 (Marinair transformers as designs; 300 / 1200 ohm) | 44-BX, SM57, U47 -> 1073 | L | also DEVICE_BUILDER_PLAN.md's B13 (2026-11-06: built there, next after B11-B12) |
@@ -1027,7 +1028,33 @@ Decisions:
 - The Room view names the six stops by first-order figures (`varimu/chains.py` PATTERNS),
   not RCA's letters.
 
-### WP8-WP31
+### WP8. The Coles 4038
+
+The BBC PGS ribbon (1953) as STC's 4038-A (1961 brochure: 30 ohm, 0.6 mV/Pa, 30 Hz-15 kHz,
+a toroidal step-up in the base). Sources: `data/schematics/coles_4038/README.md`.
+
+Steps:
+1. Sources: read BBC Monograph No. 4 (scanned, 24 pages: render the pages and read them;
+   the ribbon's size, gap, mass, tension, the perforated fibre plates, the transformer),
+   digitize the brochure's Fig. 1 (response) and Figs. 2-3 (polars) to
+   `data/datasheets/` with a provenance sidecar (`scripts/digitize_rca_77dx.py` is the
+   precedent for a scan).
+2. The ribbon `RIBBON_4038@1` (kind `ribbon_motor`, on 44-BX's `fit_44bx.py` method): the
+   short ~1 in ribbon, the plates as the slit / screen damping, the body (a rounded
+   perforated case: `bor` mesh) for the entries; fitted to Fig. 1 and the polars.
+3. The transformer `STC4038_OT@1` as a design (toroidal, ~30 ohm: ratio from the 20-50 ohm
+   source note and the preamp's load).
+4. `config/circuits/coles_4038.yaml`, `tests/test_coles_4038.py` (sensitivity 0.6 mV/Pa
+   +-1.5 dB, response within +-2 dB of Fig. 1, figure of eight), the list's entry (port,
+   drop, pattern, figure-of-eight), `compose_chain.py --all` (c4038_v72),
+   `test_chain_matrix.py`, app fixtures; `chain_status.py` 20 of 51.
+
+Notes (2026-11-06, started): sources found and the brochure read; the 1961 unit is 30 ohm
+and 0.6 mV/Pa (the modern Coles is 300 ohm / -65 dBV/Pa, the same sensitivity with a
+different transformer). The monograph is not read yet. Wayback copies of Coles' data sheet
+answer 429 to scripts.
+
+### WP9-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -1108,3 +1135,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   patterns on RCA's at 400-1000 cps, L-1 3.5 dB short; N within 1.3 dB, B's 4-5 kHz +3 dB),
   `RCA77DX_OT@1`, the reactor at mic level, a ribbon motor's `stop` in both builders;
   77-DX -> 351 and -> UA 610 composed: 19 of 51 available.
+- 2026-11-06: WP8 started: its steps written; the sources found (STC's 1961 brochure read:
+  30 ohm, 0.6 mV/Pa, response and polars on page 3-4; BBC Monograph No. 4 downloaded, a
+  scan not yet read); still 19 of 51.
