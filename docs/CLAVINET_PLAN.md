@@ -181,6 +181,19 @@ provisional where it rests on model knowledge.
   - takes rendered behind (MIDI_TAKES_PLAN.md);
   - the live tier's check against this tier.
 
+**Found, worth hearing (2026-11-06):** velocity changes the attack more than the
+loudness.
+- From 1 to 4 m/s at the tangent, the rubber's peak force rises 21 -> 57 N, but the
+  sustained level (E3, E4, C5) moves by under 2 dB, and the spectral centroid isn't
+  monotonic in velocity.
+- In this model the press's fixed displacement (the string pushed 1.5 mm onto the anvil)
+  sets the fundamental; the speed of the push mostly shapes the attack.
+- A real D6 is called touch sensitive. If it sounds too flat, the levers are physical: the
+  anvil gap (provisional 1.5 mm), the rubber (Shore 60, 2 mm tip), the hold force.
+- **The magnet's pull** (not built): the along-the-string model's field energy suggests a
+  negative stiffness of order 10 N/m at each pickup (against a string's few hundred N/m
+  there). The tuner tunes most of it out; it would mostly stretch the partials slightly.
+
 **Open (the user's):**
 - the listening (`reports/clavinet/listen/LISTEN.md`);
 - the D6 schematic (fetch the links above);
