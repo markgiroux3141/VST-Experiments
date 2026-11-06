@@ -1,0 +1,29 @@
+* Spice Model
+* Item: 2N3053
+* Date: 10/22/19
+* Revision History: A
+*==========================================================
+* This model was developed by: 
+* Central Semiconductor, LLC.
+* 145 Adams Avenue
+* Hauppauge, NY 11788
+*
+* These models are subject to change without notice.
+* Users may not directly or indirectly re-sell or 
+* re-distribute this model. This model may not 
+* be modified, or altered without the consent of Central Semiconductor, LLC. 
+*
+* For more information on this model contact
+* Central Semiconductor, LLC. at:
+* (631) 435-1110 or https://aeminc.com/en/contact-us
+*
+**==========================================================
+*SRC=sm_NPN;sm_NPN;SpiceMod;Test;DUT
+*DWG CIRCUITS\SpiceMod\NPN\NPN.DWG
+* BJTs NPN;Si;40.0V 0.700A 100MHz
+.MODEL sm_NPN NPN (IS=5.42e-017 NF=1.00 BF=205 VAF=114
++ IKF=0.425 ISE=1.64p NE=2.00 BR=4.00 NR=1.00
++ VAR=20.0 IKR=1.05 RE=0.102 RB=0.409 RC=40.9m
++ XTB=1.5 CJE=111p VJE=1.10 MJE=0.500 CJC=43.3p VJC=0.300
++ MJC=0.300 TF=1.49n TR=240n EG=1.12 )
+

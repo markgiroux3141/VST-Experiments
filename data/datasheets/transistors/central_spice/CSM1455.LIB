@@ -1,0 +1,36 @@
+* Spice Model
+* Item: 2N3819
+* Date: 6/25/24
+* Revision History: A
+*==========================================================
+* This model was developed by: 
+* Central Semiconductor, LLC.
+* 145 Adams Avenue
+* Hauppauge, NY 11788
+*
+* These models are subject to change without notice.
+* Users may not directly or indirectly re-sell or 
+* re-distribute this model. This model may not 
+* be modified, or altered without the consent of Central Semiconductor, LLC.  
+*
+* For more information on this model contact
+* Central Semiconductor, LLC. at:
+* (631) 435-1110 or https://aeminc.com/en/contact-us
+**==========================================================
+*SRC=2N3819;2N3819;JFETs N;Depl;35.0V 10.0mA 100ohms   Central Semi Central Semi
+.MODEL 2N3819 NJF(
++ VTO=-2.5
++ BETA=1.7524E-3
++ LAMBDA=0.02
++ IS=10.000E-21
++ NR=9.9900
++ ALPHA=1.0000E-6
++ VK=1
++ CGD=7.0632E-12
++ CGS=3.5966E-12
++ M=.62182
++ PB=.39253
++ KF=1.0000E-18
++ BETATCE=-.5
++ VTOTC=-2.5000E-3)
+******

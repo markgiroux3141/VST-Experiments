@@ -1,0 +1,29 @@
+******
+* Spice Model
+* Item: 2N5087
+* Date: 8/18/10
+* Revision History: A
+* ==========================================================
+* This model was developed by: 
+* Central Semiconductor, LLC.
+* 145 Adams Avenue
+* Hauppauge, NY 11788
+*
+* These models are subject to change without notice.
+* Users may not directly or indirectly re-sell or 
+* re-distribute this model. This model may not 
+* be modified, or altered without the consent of Central Semiconductor, LLC. 
+*
+* For more information on this model contact
+* Central Semiconductor, LLC. at:
+* (631) 435-1110 or https://aeminc.com/en/contact-us
+*
+* ==========================================================
+******
+*SRC=2N5087;2N5087;BJTs PNP;Si;  50.0V  50.0mA  40MHz   CENTRALSEMI 
+.MODEL 2N5087  PNP (IS=2.45f NF=1.00 BF=1.135k VAF=139
++ IKF=21.2m ISE=380f NE=2.00 BR=4.00 NR=1.00
++ VAR=20.0 IKR=45.0m RE=106 RB=426 RC=42.6
++ XTB=1.5 CJE=9.65p VJE=1.10 MJE=0.500 CJC=11.8p VJC=0.300
++ MJC=0.300 TF=0.80n TR=182.6n EG=1.12 )
+******

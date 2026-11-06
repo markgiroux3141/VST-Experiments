@@ -1,0 +1,24 @@
+* Spice Model
+* Item: CMPFJ175
+* Date: 7/15/24
+* Revision History: A
+*==========================================================
+* This model was developed by: 
+* Central Semiconductor, LLC.
+* 145 Adams Avenue
+* Hauppauge, NY 11788
+*
+* These models are subject to change without notice.
+* Users may not directly or indirectly re-sell or 
+* re-distribute this model. This model may not 
+* be modified, or altered without the consent of Central Semiconductor, LLC.  
+*
+* For more information on this model contact
+* Central Semiconductor, LLC. at:
+* (631) 435-1110 or https://aeminc.com/en/contact-us
+**==========================================================
+*SRC=CMPFJ175;CMPFJ175;SpiceMod;Test;DUT
+*DWG CIRCUITS\SpiceMod\PJFET\PJFET.DWG
+* JFETs P;Depl;30.0V 25.0mA 150ohms
+.MODEL CMPFJ175 PJF( VTO=-3.00 BETA=5.00m LAMBDA=1.20m RD=21.0
++ RS=18.9 IS=6.58f PB=1.00 FC=.5 CGS=12.5p CGD=17.1p )
