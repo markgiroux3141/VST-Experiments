@@ -16,13 +16,15 @@ from varimu.config import CONFIG_DIR
 from varimu.devices import moving_coil as mc
 from varimu.devices import ribbon
 from varimu.devices.capsule import C_AIR, RHO_AIR
-from varimu.devices.library import _plain, _published, load_ribbon_motor
+from varimu.devices.library import component_data, load_ribbon_motor
 from varimu.measure import ac
 from varimu.mics import networks
 
 
 def _geometry() -> dict:
-    return copy.deepcopy(_plain(_published()["RIBBON_44BX"]["geometry"]))
+    """RIBBON_44BX@1's geometry (WP5's motor: the formulas' tests; WP6's fitted @2 is
+    tests/test_rca_44bx.py's)."""
+    return copy.deepcopy(component_data("RIBBON_44BX@1")["geometry"])
 
 
 def _motor(g: dict) -> mc.MovingCoil:

@@ -13,7 +13,8 @@ By the capsule component's geometry, as `free_field.capsule_entry_pressures` pic
 - a `body`: the BEM (`bor.entry_table`: one system per frequency for every incidence),
   cached in cache/diffraction/ by the geometry, the grid and bor.py's source; a ball
   grille's (form `ball`, the SM58) with the grille a permeable sheet
-  (`bor_permeable.entry_table`);
+  (`bor_permeable.entry_table`); a ribbon's (form `baffle`) times its slot's length,
+  averaged over the arrival's azimuth (`bor.ribbon_line_factor`);
 - else a `path_m`: two entries `path_m` apart on the axis in free field (a point source's
   spherical wave to each, the plane wave's path delay in the limit);
 - else a pressure capsule: one entry, the free field (rear = front).
@@ -110,7 +111,9 @@ def entry_table(geometry: dict, fs: float) -> EntryTable:
     """The table for a capsule component's geometry (the module docstring) up to fs / 2."""
     f, th, d = _grid(fs)
     inv_r = np.where(np.isinf(d), 0.0, 1.0 / d)
-    a = geometry.get("diaphragm", {}).get("radius_m")
+    from varimu.mics.bor import entry_size, ribbon_line_factor
+
+    a = entry_size(geometry)
     if "body" in geometry:
         from varimu.mics import bor, bor_permeable
 
@@ -134,6 +137,9 @@ def entry_table(geometry: dict, fs: float) -> EntryTable:
                 front, rear = bor.entry_table(op, f, th, d)
             path.parent.mkdir(parents=True, exist_ok=True)
             np.savez(path, front=front, rear=rear)
+        if "ribbon" in geometry:  # the slot's length, the azimuthal mean (1 / r unchanged)
+            lf = ribbon_line_factor(geometry, f, th)[:, None, :]
+            front, rear = front * lf, rear * lf
         kind = f"body {geometry['body']}"
     elif "sphere_radius_m" in geometry:
         raise ValueError("a capsule with a fitted sphere (K47@2) has no room table: use its body")

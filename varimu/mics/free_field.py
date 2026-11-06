@@ -53,11 +53,19 @@ def capsule_entry_pressures(
 ) -> tuple[np.ndarray, np.ndarray, str]:
     """A capsule component's entries for a wave whose free-field pressure at its centre is
     `p`, by what its geometry gives: a `body` (the BEM, `body_entry_pressures`; a point
-    source when `distance_m` is finite), a `sphere_radius_m` (K47@2), else `path_m` apart
+    source when `distance_m` is finite; a ribbon's slot length on top,
+    `bor.ribbon_line_factor`), a `sphere_radius_m` (K47@2), else `path_m` apart
     in free field (0: a pressure capsule). The third value says which."""
-    a = geometry.get("diaphragm", {}).get("radius_m")
+    from varimu.mics.bor import entry_size, ribbon_line_factor
+
+    a = entry_size(geometry)
     if "body" in geometry:
-        front, rear = body_entry_pressures(p, theta_rad, geometry["body"], a, fs, distance_m)
+        if "ribbon" in geometry:  # the slot's length on top (bor.ribbon_line_factor)
+            grid, fr, rr = body_entry_grid(theta_rad, geometry["body"], a, distance_m, fs / 2)
+            lf = ribbon_line_factor(geometry, grid, [theta_rad])[:, 0]
+            front, rear = _apply(p, fs, grid, (fr * lf, rr * lf))
+        else:
+            front, rear = body_entry_pressures(p, theta_rad, geometry["body"], a, fs, distance_m)
         return front, rear, f"body {geometry['body']}, distance {distance_m} m"
     if not np.isinf(distance_m):
         raise ValueError("a source distance needs a capsule body (varimu.mics.bor)")

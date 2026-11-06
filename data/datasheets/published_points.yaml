@@ -754,8 +754,12 @@
 # 44-BX's aren't published). The motor's dimensions beyond the ribbon are provisional until WP6 fits them to the
 # 44-BX's published response and sensitivity (ib: IB-24267-5).
 "RIBBON_44BX":
-  source: "data/schematics/rca_44bx/README.md: the ribbon from AEA's R44 sheet (the original 44-B/BX ribbon material and dimensions), the motor after Olson's circuit (SBE handbook Fig. 4.1.11), the magnet and the slits from the handbook's BK-11A figures; the pole pieces, screens, tuning and leads provisional (refitted in WP6)"
+  source: "data/schematics/rca_44bx/README.md: the ribbon from AEA's R44 sheet (the original 44-B/BX ribbon material and dimensions), the motor after Olson's circuit (SBE handbook Fig. 4.1.11), the slits from the handbook's BK-11A figures; the pole pieces as a baffle (varimu.mics.bor.baffle_mesh), the tuning, the foil's loss and the gap's flux fitted to RCA's IB-24267-5 curves by scripts/fit_44bx.py (docs/CHAINS_PLAN.md WP6; reports/mics/rca44bx_fit.*); screens and leads provisional"
   geometry:
+    body:                                 # the pole pieces as the gradient's baffle (varimu.mics.bor.baffle_mesh), the channel mouths at its faces' centres
+      form: baffle
+      radius_m: {value: 20.26e-3}         # fitted (scripts/fit_44bx.py): ib Fig. 4's M from 1 to 15 kHz re 1 kHz (bounded by the grid 4-20 mm, refined; the 44-BX's pole structure is ~4 in wide in the case of 4-5/8 in, ib's dimensions: an equivalent disc, not a drawing)
+      depth_m: {value: 13.39e-3}          # fitted with radius_m to the same curve (the pole pieces' depth; the grid 6-24 mm); the channels below are half of it each side
     ribbon:
       length_m: {value: 59.7e-3}          # aea: 'Ribbon Length: 59.7 mm'
       width_m: {value: 4.7e-3}            # aea: 'Ribbon Width: 4.7 mm'
@@ -763,11 +767,11 @@
       density_kg_m3: {value: 2700.0}      # provisional: model knowledge (pure aluminium, CRC handbook 2.70 g/cm^3)
       resistivity_ohm_m: {value: 2.65e-8} # provisional: model knowledge (pure aluminium at 20 C, CRC handbook 2.65 uOhm cm)
       corrugation: {value: 1.1}           # provisional: model knowledge (the transverse corrugations' extra foil; sbe's BK-11A: 0.56 mg/cm^2 for a 2 um foil, 1.04 x flat; 1.1 puts the foil at sbe's '0.2-ohm ribbon')
-      resonance_hz: {value: 18.0}         # provisional: model knowledge (the foil's own tuning, in vacuo; with the network's air load the ribbon rings at ~8 Hz, Olson's 'limp' ribbon below the band; aea: the 44's 'resonance tuning the lowest of today's ribbon microphones'; sbe's BK-11A ~30 Hz)
-      q: {value: 10.0}                    # provisional: model knowledge (the foil's own loss per mode; the screens and the air load in the network damp it)
-      modes: {value: 5}                   # numerical: the odd length modes 1-9 (to 9 x 18 Hz), the rest lumped on the 11th
+      resonance_hz: {value: 102.0}        # fitted (scripts/fit_44bx.py): the foil's own tuning in vacuo, to ib Fig. 4's M bass bump (+2.8 dB at 65 Hz; in place the air load lowers it, and the 3rd mode's ripple lands near Fig. 4's at ~170 Hz)
+      q: {value: 1.25}                    # fitted with resonance_hz: the bump's height (the foil's own loss per mode)
+      modes: {value: 5}                   # numerical: the odd length modes 1-9, the rest lumped on the 11th
     magnet:
-      b_gap_t: {value: 0.65}              # sbe: the BK-11A's 'flux density of 6500 G (0.65 Wb/m2)' (provisional for the 44-BX's Alnico magnet: WP6 fits it to ib's sensitivity)
+      b_gap_t: {value: 0.29}              # fitted (scripts/fit_44bx.py): ib's -55 dBm at 10 dyn/cm^2 into 250 ohm (1.78 mV/Pa open circuit); no published figure for the 44-BX's gap found (sbe's later BK-11A: 0.65 T); it rides on the modelled air load and path
       gap_length_m: {value: 59.7e-3}      # provisional: model knowledge (the pole pieces span the ribbon's clamped length)
     leads:
       r_ohm: {value: 0.01}                # provisional: model knowledge (the clamps and the short heavy leads to the transformer)
@@ -775,12 +779,16 @@
     network:
       - {name: rad_f, kind: radiation, a: front, b: fo, width_m: {value: 4.95e-3}, length_m: {value: 59.7e-3}}   # the channel's mouth on the front face: the gap (the ribbon and two sbe clearances) x the ribbon's length
       - {name: screen_f, kind: screen, a: fo, b: fs, rayl: {value: 2.0}, area_m2: {value: 2.955e-4}}   # provisional: model knowledge (aea: 'a pure undamped ribbon design': only the grille's fine mesh over the mouth, a light screen)
-      - {name: chan_f, kind: slit, a: fs, b: f, width_m: {value: 4.95e-3}, breadth_m: {value: 59.7e-3}, length_m: {value: 4.75e-3}, wide_at_hz: {value: 1000.0}}   # provisional: model knowledge (the pole pieces ~9.5 mm deep, the ribbon at mid-depth: half the channel each face)
+      - {name: chan_f_a, kind: slit, a: fs, b: cf, width_m: {value: 4.95e-3}, breadth_m: {value: 59.7e-3}, length_m: {value: 3.3475e-3}, wide_at_hz: {value: 1000.0}}   # derived: the front channel (the ribbon at mid-depth: half the body's depth_m) as a T section, its first half's air mass
+      - {name: cav_f, kind: cavity, a: cf, volume_m3: {value: 1.97847e-6}}   # derived: the front channel's air as a compliance (width x length x depth_m / 2)
+      - {name: chan_f_b, kind: slit, a: cf, b: f, width_m: {value: 4.95e-3}, breadth_m: {value: 59.7e-3}, length_m: {value: 3.3475e-3}, wide_at_hz: {value: 1000.0}}   # derived: the front channel's second half
       - {name: rib, kind: ribbon, a: f, b: r}
       - {name: edge, kind: slit, a: f, b: r, width_m: {value: 125.0e-6}, breadth_m: {value: 119.4e-3}, length_m: {value: 0.5e-3}}   # sbe: the slits 'formed by the ribbon to pole-piece clearance, which is nominally 0.005 in (125 um)', both edges along the ribbon; their length along the flow provisional (the corrugations' depth)
-      - {name: chan_r, kind: slit, a: r, b: rs, width_m: {value: 4.95e-3}, breadth_m: {value: 59.7e-3}, length_m: {value: 4.75e-3}, wide_at_hz: {value: 1000.0}}   # as chan_f
+      - {name: chan_r_a, kind: slit, a: r, b: cr, width_m: {value: 4.95e-3}, breadth_m: {value: 59.7e-3}, length_m: {value: 3.3475e-3}, wide_at_hz: {value: 1000.0}}   # as chan_f_a, behind the ribbon
+      - {name: cav_r, kind: cavity, a: cr, volume_m3: {value: 1.97847e-6}}   # as cav_f
+      - {name: chan_r_b, kind: slit, a: cr, b: rs, width_m: {value: 4.95e-3}, breadth_m: {value: 59.7e-3}, length_m: {value: 3.3475e-3}, wide_at_hz: {value: 1000.0}}   # as chan_f_b
       - {name: screen_r, kind: screen, a: rs, b: ro, rayl: {value: 2.0}, area_m2: {value: 2.955e-4}}   # as screen_f
       - {name: rad_r, kind: radiation, a: rear, b: ro, width_m: {value: 4.95e-3}, length_m: {value: 59.7e-3}}   # as rad_f, on the rear face
   published:
-    sensitivity_v_per_pa: 2.25e-3         # aea: the R44C's 'Output Sensitivity: 2.25 mV / Pa into unloaded circuit' (a check for WP6: the R44CX is '6 dB more output than original')
+    sensitivity_v_per_pa: 1.78e-3         # ib: -55 dBm at 10 dyn/cm^2 into 250 ohm (RTMA: matched power), open circuit sqrt(4 R P) (the fit's target; aea's R44C reproduction: 2.25 mV/Pa)
     ribbon_ohm: 0.2                       # sbe: the BK-11A's '0.2-ohm ribbon impedance' (a check)

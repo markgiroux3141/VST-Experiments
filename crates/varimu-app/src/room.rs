@@ -1706,7 +1706,9 @@ mod tests {
         ] {
             assert!(ids.contains(&id), "{id}");
         }
-        assert!(!ids.contains(&"r44_v76")); // not built: not offered
+        assert!(!ids.contains(&"r77_a351")); // not built: not offered
+        let r = list.iter().find(|c| c.id == "r44_v76").unwrap(); // a ribbon (WP6)
+        assert_eq!(r.pattern(&BTreeMap::new()), Pattern::FIGURE8);
         let c = list.iter().find(|c| c.id == "sm57_v76").unwrap();
         assert_eq!(c.label, "SM57 → V76");
         let keys: Vec<(&str, f64)> = c

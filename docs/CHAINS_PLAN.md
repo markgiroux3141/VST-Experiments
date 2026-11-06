@@ -13,9 +13,9 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 15 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 17 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
-  Portastudio; `uv run python scripts/chain_status.py`).
+  Portastudio, 44-BX -> V76, 44-BX -> UA 610; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -29,14 +29,17 @@ runs**.
   (2026-11-05): the ribbon kind `ribbon_motor` (`varimu/devices/ribbon.py`, compiled to
   moving_coil's format), its first instance `RIBBON_44BX@1` and the 44-BX's step-up
   transformer `RCA44BX_OT@1` as a design, in `config/circuits/ribbon_test.yaml`; WP5's Notes.
+  WP6 (2026-11-05): the RCA 44-BX (`config/circuits/rca_44bx.yaml`: `RIBBON_44BX@2` on its
+  pole pieces as a baffle, fitted to RCA's curves; the reactor and the M / V1 / V2 jumper;
+  the 30 / 150 / 250 ohm straps); WP6's Notes.
 - **In progress:** none.
-- **Next:** WP6 (the RCA 44-BX), Start step 4: write its steps here. The sources are
-  already in `data/schematics/rca_44bx/README.md` (RCA's instruction book with its
-  response, polars and schematics); WP5's Notes, "For WP6", list what to digitize, build
-  and fit. The user fetches login-walled files on request: give each URL alone in a code
-  block (WP2's Notes).
-- **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL and
-  the Portastudio chains in the Room view (optional). One call of theirs: the JT-115K-E's
+- **Next:** WP7 (the RCA 77-DX and the Ampex 351's record amp as a preamp), Start step 4:
+  write its steps here, sources first (the 77-DX's instruction book: coutant.org has RCA
+  books for its mics; the 351's record amp is in `config/circuits/ampex_351.yaml` already).
+  WP6's ribbon kind, baffle body and fit script are the 77-DX's starting point. The user
+  fetches login-walled files on request: give each URL alone in a code block (WP2's Notes).
+- **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
+  Portastudio chains and the 44-BX's chains in the Room view (optional). One call of theirs: the JT-115K-E's
   20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the fitted mumetall's low-field
   hysteresis; WP4's Notes): leave it, or refit / add a nickel material (moves every render).
 
@@ -114,8 +117,8 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | done 2026-11-05 |
 | 4 | The op-amp preamps: SSL 4000 E channel (82E01, JT-115K-E), Tascam Portastudio (the 424 mk1) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | done 2026-11-05 |
 | 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | done 2026-11-05 |
-| 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | next |
-| 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's record amp as a preamp | 77-DX -> 351, 77-DX -> 610 | L | |
+| 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | done 2026-11-05 |
+| 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's record amp as a preamp | 77-DX -> 351, 77-DX -> 610 | L | next |
 | 8 | Coles 4038 | 4038 -> V72 | M | |
 | 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | |
 | 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types") | 0 | L | |
@@ -692,7 +695,102 @@ Decisions:
   piston's low-frequency real part); the leads' inductance 50 nH (provisional).
 - The transformer's tap at the least-squares compromise of the nominal 30 / 150 ohm labels.
 
-### WP6-WP31
+### WP6. The RCA 44-BX
+
+RCA's velocity microphone (MI-4027-H / -J / -K, 1938-55): `RIBBON_44BX` (WP5) between the
+pole pieces of two Alnico magnets, the step-up transformer #58871 (`RCA44BX_OT`), a reactor
+across part of its secondary for the voice positions (M: none; V1: across A-B; V2: across
+A-C, ib Fig. 5's jumper table), the cable strapped for 30 / 150 / 250 ohm. Sources:
+`data/schematics/rca_44bx/README.md` (RCA's instruction book IB-24267-5 whole: its Fig. 4
+is the response "to plane sound waves" for M, V1, V2; Fig. 3 the pattern in the vertical
+plane through the front axis, along the ribbon's length, at 100-1000, 3000, 6000, 10,000
+cps).
+
+Steps:
+1. Digitize ib Fig. 4 (M, V1, V2, 50 Hz-15 kHz) to `data/datasheets/rca_44bx_response.csv`
+   and Fig. 3 (the front lobe, 0-90 deg, the four curves) to `rca_44bx_polar.csv`, with a
+   provenance sidecar `rca_44bx.provenance.yaml` (the PDF re-rendered at a higher DPI for
+   the reading; the PDF not committed).
+2. The body: the pole structure as the gradient's baffle, a rigid disc of revolution
+   (`bor.capsule_mesh` with a flat face: radius the baffle's equivalent, thickness the pole
+   pieces' depth; the network's channels are half that depth each side), the entries the
+   channel mouths. The ribbon's mouth is a slot along its length, so its entry is a **line**
+   through the face's centre (`bor.Mesh.line`: the order-0 part averaged along a diameter's
+   half, weight dr, exactly the azimuth average a room's axisymmetric table needs); for the
+   vertical-plane polar (Fig. 3) the line's incident phase along the ribbon (sinc) on top,
+   an approximation recorded as such. The ribbon motor's geometry gets `body`;
+   `free_field.capsule_entry_pressures`, `rooms/entries.py`, `rooms/scene.py` and
+   `mic_print.py` read a ribbon (`ribbon_model*` values; its entry from `ribbon.length_m`).
+   `tests/test_bor.py`: the line weight on the sphere against the series.
+3. Fit `RIBBON_44BX@2` (`scripts/fit_44bx.py`, one figure per unknown, bounded): B to ib's
+   -55 dBm (1.78 mV/Pa open circuit at 250 ohm); the baffle's radius and depth to Fig. 4's
+   top (the 9 kHz dip, the 12 kHz peak, -6 dB at 15 kHz); the foil's tuning and the
+   screens to M's bass (+3 dB at ~65 Hz); polars against Fig. 3 as the check.
+   `varimu fit-devices --only RIBBON_44BX`; `ribbon_test.yaml` stays on @1.
+4. The reactor (its inductance unprinted: fitted to V2's curve, V1 the check; its
+   resistance provisional) and `config/circuits/rca_44bx.yaml`: the ribbon, #58871, the
+   reactor on a `response` switch (M / V1 / V2), the `impedance` straps (30 / 150 / 250,
+   default 250 as shipped), the load open (ib: "Unloaded input transformer").
+5. `tests/test_rca_44bx.py`: builds, preflight, the sensitivity (-55 dBm +-1.5 dB at 250
+   ohm), the strap ratios, M / V1 / V2 on axis against Fig. 4 (the SM57's bar, +-2 dB to
+   10 kHz, or why not), the polar against Fig. 3 (3 dB), the rear lobe equal and inverted.
+6. The list: `rca_44bx`'s entry in `config/chains.yaml` (output, drop, figure-8, the
+   impedance and response settings), `compose_chain.py --all` (r44_v76, r44_ua610),
+   `test_chain_matrix.py`, app fixtures, the entry table computes, one draft render
+   through a scene; `chain_status.py` 17 of 51.
+
+Notes (2026-11-05, done):
+- Sources: `data/schematics/rca_44bx/README.md`. The figures are read on jumpers.pdf's own
+  150 dpi page (1275 x 1650; the committed PNGs are smaller renders):
+  `data/datasheets/rca_44bx_response.csv` (M, V1, V2), `rca_44bx_polar.csv` (the front lobe,
+  four frequencies to ~70 deg), provenance `rca_44bx.provenance.yaml`. Fig. 4's lower labels
+  (-20, -25 on the rules 5 and 10 dB below -10) are a misprint for -15 / -20 (evenly spaced
+  rules, smooth curves through -10, V2 at 6 dB / octave). Fig. 3 is the vertical plane
+  (the mic drawn upright, 90 deg overhead): along the ribbon's length. Re-read on the page:
+  the reactor goes from the secondary's **C** end to D (WP5's README had A); E is tied to A.
+- The body: `bor.baffle_mesh` (form `baffle`: `radius_m`, `depth_m`; the entries the
+  slot's half-width at the faces' centres), `bor.entry_size`, and the slot's length as the
+  incident phase along it, `bor.ribbon_line_factor` (in the ribbon's plane sinc; for a
+  room's axisymmetric table its azimuthal mean, int_0^1 J0(a t) dt). A line entry in the BEM
+  itself was tried first and dropped: it needs the disc wider than the ribbon's half-length,
+  and a disc that size rolls the top off from ~4 kHz. `free_field.capsule_entry_pressures`,
+  `rooms/entries.py` apply it; `rooms/scene.py` and `mic_print.py` find `ribbon_model*`.
+- Without the channels' compliance no baffle size reaches RCA's top (a pure mass channel:
+  >= 2.2 dB rms, the top rolling off). The channels are T sections now (half the air mass,
+  the volume as a `cavity`, the other half), tied to the body's depth (half each side).
+- `RIBBON_44BX@2` (`scripts/fit_44bx.py [--grid] [--reactor]`; reports/mics/rca44bx_fit.*):
+  baffle 20.26 mm x 13.39 mm (the top: 1.26 dB rms 1-15 kHz), the foil's tuning 102 Hz in
+  vacuo with q 1.25 (the bass bump; M 0.38 dB rms 50 Hz-1 kHz, the 3rd mode's ripple near
+  RCA's at 170 Hz), B 0.29 T (to ib's 1.78 mV/Pa: below the BK-11A's 0.65 T; no published
+  44-BX figure found; it rides on the modelled air load and path). The reactor 0.1139 H,
+  28 ohm (V2 0.42, V1 0.46 dB rms 50-600 Hz). `ribbon_test.yaml` and `test_ribbon.py`'s
+  formula tests stay on `@1`.
+- **Known misses:** M at 2-4.5 kHz (RCA's -2.3 dB dip at ~2.7 kHz; the model rises +1.5
+  near 4 kHz: max 3.1 dB at 3 kHz; the rest of 50 Hz-15 kHz within 2 dB, 9 kHz's dip 1.9
+  dB shallow); the vertical polars at 6 and 10 kHz (the uniform line's sinc nulls 10 kHz at
+  ~33 deg, RCA's lobe has none: max 10.6 / 16.8 dB; 100-1000 and 3000 cps within 2.3 dB).
+  Candidates, not tried: the grille and the pill-shaped case, a transverse ribbon mode
+  (sbe), a tapered pressure along the slot.
+- The circuit: `config/circuits/rca_44bx.yaml` (the straps as contacts on the secondary's
+  A / B / C, the reactor in the `response` switch), whole circuit 1.775 mV/Pa at 250 ohm,
+  the straps -3.4 / -9.7 dB (the turns 209 / 101 of 310). Chains `r44_v76`, `r44_ua610`
+  (the 15 others unchanged); a scratch scene rendered both at draft (V76 at 58 dB: -21.4 dBFS
+  rms at 90 dB SPL, 0.6 m), the entry table computed (~4.5 min with the scene).
+- Tests: `tests/test_rca_44bx.py` (9), `test_bor.py` (baffle, line factor), `test_ribbon.py`,
+  `test_chain_matrix.py`, `test_app_fixtures.py` (fixtures `rca_44bx`, `r44_v76`,
+  `r44_ua610`; nothing else moved), varimu-circuit's agreement, varimu-app `room::`
+  (`chain_list_reads` now checks the 44-BX as a figure-8; `r77_a351` the unbuilt example),
+  `test_rooms.py`, `test_versions.py`, `test_capsule.py`, `test_sm57.py`.
+
+Decisions:
+- The baffle as an equivalent disc (fitted size, not a drawing) and the slot's length as an
+  analytic factor on top, not in the BEM.
+- The channels as one T section per side, their length and volume from the body's depth.
+- The reactor as a linear L with series R (no core data); its two values fitted to V2 and
+  V1.
+- The fitted values carry `provisional: fitted ...` sources (a value no source prints).
+
+### WP7-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -704,7 +802,8 @@ Batched checks (the targeted-tests rule): the full `pytest` (WP1-WP4 added thirt
 circuits and their app fixtures; WP3 added the device builder `build_ck12` to
 `varimu/devices/library.py`, WP4 the pot's `reverse` to `varimu/circuit/{parts,builder}.py`
 and windings to `varimu/measure/ac.py`, WP5 `varimu/devices/ribbon.py`, moving_coil.py's
-shared `compile_element` and the `ribbon_motor` macro in `varimu/circuit/builder.py`: these
+shared `compile_element` and the `ribbon_motor` macro in `varimu/circuit/builder.py` (WP6
+touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -745,3 +844,8 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   modes in parallel; `RIBBON_44BX@1` from AEA's ribbon figures and `RCA44BX_OT@1` (31:1,
   tapped as RCA's cable table); RCA's 44-BX instruction book found whole (coutant.org) for
   WP6; still 15 of 51 available.
+- 2026-11-05: WP6 done: the RCA 44-BX from RCA's IB-24267-5 (Figs. 3-5 digitized; the
+  reactor's wiring re-read); the pole pieces as a baffle in the BEM with the slot's length
+  analytic, the channels as T sections; `RIBBON_44BX@2` fitted to Fig. 4 (sensitivity, bass,
+  top; misses at 2-4.5 kHz and the 6 / 10 kHz vertical polars), the reactor to V1 / V2;
+  44-BX -> V76 and -> UA 610 composed: 17 of 51 available.

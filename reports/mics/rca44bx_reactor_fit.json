@@ -1,0 +1,8 @@
+{
+ "reactor_h": 0.1139,
+ "reactor_ohm": 28.0,
+ "V1_rms_db": 0.46,
+ "V1_max_db": 1.0,
+ "V2_rms_db": 0.42,
+ "V2_max_db": 0.9
+}

@@ -75,3 +75,39 @@ def test_capsule_body_is_symmetric():
     front, rear = bor.entry_factors(op, [3000.0, 12000.0], np.radians([30.0, 150.0, 90.0]))
     assert np.allclose(front[:, 0], rear[:, 1], rtol=1e-4)
     assert np.allclose(front[:, 2], rear[:, 2], rtol=1e-4)
+
+
+def test_baffle_is_a_symmetric_gradient_body():
+    """A ribbon's baffle (docs/CHAINS_PLAN.md WP6): the entries swap at pi - theta, are
+    equal at 90 deg, and at low frequency the difference is a figure-8 (cos theta) over a
+    path longer than the faces' spacing (the way round the disc's rim)."""
+    body = {"form": "baffle", "radius_m": 14e-3, "depth_m": 12e-3}
+    g = {"body": body, "ribbon": {"width_m": 4.7e-3, "length_m": 59.7e-3}}
+    assert bor.entry_size(g) == pytest.approx(2.35e-3)
+    op = bor.operator(bor.body_mesh(body, bor.entry_size(g)))
+    th = np.radians([0.0, 60.0, 120.0, 90.0])
+    front, rear = bor.entry_factors(op, [100.0, 8000.0], th)
+    assert np.allclose(front[:, 1], rear[:, 2], rtol=1e-4)
+    assert np.allclose(front[:, 3], rear[:, 3], rtol=1e-4)
+    d = front[0] - rear[0]
+    assert abs(d[1] / d[0]) == pytest.approx(0.5, abs=2e-3)
+    k = 2 * np.pi * 100.0 / C_AIR
+    assert 12e-3 < np.imag(d[0]) / k < 4 * 14e-3
+
+
+def test_ribbon_line_factor():
+    """The slot's length: 1 on axis and for a component without a ribbon; in the ribbon's
+    plane sinc(k L sin(theta) / 2); for a room, sinc(a cos psi) averaged over the azimuth
+    psi (checked by brute force)."""
+    g = {"ribbon": {"length_m": 0.06}}
+    f = np.array([1000.0, 6000.0, 12000.0])
+    th = np.radians([0.0, 30.0, 70.0])
+    plane = bor.ribbon_line_factor(g, f, th, in_plane=True)
+    mean = bor.ribbon_line_factor(g, f, th)
+    assert np.allclose(plane[:, 0], 1.0) and np.allclose(mean[:, 0], 1.0)
+    a = np.pi * f[:, None] * 0.06 * np.sin(th)[None, :] / C_AIR
+    assert np.allclose(plane, np.sinc(a / np.pi))
+    psi = np.linspace(0.0, np.pi, 4001)
+    brute = np.trapezoid(np.sinc(a[..., None] * np.cos(psi) / np.pi), psi, axis=-1) / np.pi
+    assert np.allclose(mean, brute, atol=1e-6)
+    assert np.allclose(bor.ribbon_line_factor({}, f, th), 1.0)

@@ -237,10 +237,11 @@ def _capsule_geometry(chain: str, over: dict) -> dict:
     from varimu.devices.library import component_data
 
     q = spec.resolve(spec.load_circuit(spec.circuit_path(chain)), over)
-    keys = [k for k in q if str(k).startswith(("capsule_model", "cartridge_model"))]
+    keys = [k for k in q if str(k).startswith(("capsule_model", "cartridge_model", "ribbon_model"))]
     if not keys:
         raise ValueError(
-            f"chain {chain} has no capsule (a `capsule_model*` or `cartridge_model*` value)"
+            f"chain {chain} has no capsule (a `capsule_model*`, `cartridge_model*` or "
+            "`ribbon_model*` value)"
         )
     return component_data(str(q[keys[0]])).get("geometry", {})
 

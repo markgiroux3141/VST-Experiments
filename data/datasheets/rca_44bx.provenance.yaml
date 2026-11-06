@@ -1,0 +1,60 @@
+device: "RCA 44-BX (MI-4027-H, -J, -K)"
+curve: free-field frequency responses M, V1, V2 to plane waves (Fig. 4); the directional pattern in the vertical plane through the front axis (Fig. 3)
+publisher: Radio Corporation of America, Industrial Electronic Products (Broadcast Audio Equipment)
+documents:
+  ib:
+    title: "Instructions for the Type 44-BX Velocity Microphone, IB-24267-5 (Figs. 3-8)"
+    date: "not printed (coutant.org: 'IB-24267-5(-5A), circa 1951')"
+    scan_source: "web: https://coutant.org/rca44bx/jumpers.pdf"
+    sha256: 01d64116b0f184ea38cfd25f18987bca129028f5c4b4289053486688ea810a93
+    bytes: 655017
+    page: "PDF p.1 (one 1275 x 1650 gray page image, 150 dpi, extracted with PyMuPDF, not resampled; data/schematics/rca_44bx/ib24267_5_fig3_fig4.png is a smaller render of the same page)"
+local_copy: "none (the PDF isn't committed, as for the rest of data/schematics/rca_44bx/; hash above)"
+digitized_with: >-
+  the PDF's own page image. Fig. 4: ruled lines located on column / row darkness profiles
+  (darkness-weighted centres): frequency log-linear, 332.12 px per decade, 100 Hz at x 333.7
+  (rules at 50 Hz 233.7, 1 kHz 666.1, 10 kHz 997.9; residuals < 0.25 px); level 11.09 px/dB, 0 dB
+  at y 1076.4 (rules every 5 dB from +10 to -25; residuals < 0.95 px). The scan is turned ~0.3 dB
+  over the chart's width: each column's reading is corrected by its own rules' offset from their
+  nominal level. Curves read as the darkness-weighted centres of dark runs (below gray 140 of 255) in
+  a 3-px column at each frequency (shifted 4-6 px off a vertical rule), tracked by continuity from
+  50 Hz (M above, V1, V2 below); the leaders of the M / V1 / V2 labels (105-135 Hz) and the 150 Hz rule
+  skipped. Fig. 3: the centre at (623, 627) px; rings every 5 dB at radii 68.4 (-20), 136.5, 204.8,
+  273.0, 341.2 (0 dB), 409.6 (+5): 13.64 px/dB; dark runs read along rays from the centre at angles
+  away from the drawn 10-degree rays (1.5-3 degrees off), the rings excluded. The four curves told
+  apart by line weight and dash: the thick run is 3000 cps, the dashed one next to it 100-1000 cps
+  (outside the thick from ~40 degrees, ~0.5 dB inside it below ~35), the inner pair's continuous run
+  6000 cps (thin solid) and the run with gaps 10,000 cps (dash-dot; outside the thin from 15 to 55
+  degrees). Scratch scripts not kept.
+digitized_by: Claude Code
+digitized_on: 2026-11-05
+files:
+  rca_44bx_response.csv:
+    columns: "curve (M | V1 | V2), freq_hz, db, document (ib), reference, quality (read | merged | steep | coarse)"
+    figures: "Fig. 4 'Frequency Response' S-350753: M, V1, V2, 50 Hz - 15 kHz, 'the frequency response to plane sound waves for the M, V1 and V2 positions' (ib's text beside Fig. 5)"
+    reference: >-
+      the chart's 0 dB rule; no reference frequency printed (all three curves pass 0 dB near 1 kHz).
+      The level axis's lower labels read '-20' and '-25' on the rules 5 and 10 dB below '-10' (the
+      rules are evenly spaced, 5 dB apart from +10 to -10 as labelled): read as a misprint for -15
+      and -20, because the curves are drawn smooth through the -10 rule (a broken scale would kink
+      them there) and V2's low end then falls at ~6 dB per octave, as one reactor shunting the
+      secondary gives (12 dB per octave on the printed labels).
+    quality: >-
+      read: one curve's run; merged: the curve shares one run with another (M and V1 from 400 Hz,
+      all three from 600 Hz: written for each); steep: 13.5-14.5 kHz, where the falling curve's run is
+      9-10 px tall (its centre read); coarse: 15 kHz, at the chart's right frame (the curve's last
+      pixels, ~-6.2 dB)
+  rca_44bx_polar.csv:
+    columns: "freq_label (100-1000 | 3000 | 6000 | 10000, as printed), freq_hz (a representative frequency: 500 for '100-1000'), angle_deg (from the front axis, the front lobe), db, document (ib), reference, quality (reference | read | merged | coarse)"
+    figures: >-
+      Fig. 3 'Directional Pattern About Horizontal Axis' S-350752: the microphone drawn upright from
+      the side, 0 degrees its front (left) and back (right), 90 degrees overhead: the vertical plane
+      through the front axis, along the ribbon's length. Only the front lobe is digitized (the back
+      lobe is drawn nearly mirrored)
+    reference: "the 0 dB ring (every curve passes it at 0 degrees)"
+    quality: >-
+      reference: 0 degrees, 0 dB by the chart's normalization; read: one curve's run; merged: two or
+      four curves share a run (written for each: 5 and 8 degrees, the outer pair at 33-45, the inner
+      pair at 57-58); coarse: the inner pair beyond 60 degrees (two runs, which is which by
+      continuity only) and the outer pair beyond 70 (the curves converge toward the null)
+    tolerance_band: "none drawn"

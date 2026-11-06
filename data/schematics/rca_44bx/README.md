@@ -52,7 +52,10 @@ The schematic (Fig. 5, MI-4027-H; Fig. 6, -J, the same circuit with the ribbon's
 crossed; Fig. 7, -K, M / V only): the ribbon's ends (YELLOW, BLACK) across the transformer's
 primary; one secondary with a tap: its ends to terminal A (BLACK) and C (GREEN), the tap to
 B (YELLOW); the REACTOR (its own core, drawn left of the transformer inside the shield's
-dashed outline) from the secondary's A end to terminal D (RED) on the jumper strip D / E.
+dashed outline): one lead along under the secondary to its C end (the junction with GREEN),
+the other (RED) to terminal D on the jumper strip D / E. (Read again in WP6 on the PDF's
+150 dpi page: WP5's first reading had it on the A end.) E is tied to A on the board's back
+(the drawing's dashed link from A's screw to the strip).
 The cable table (at the terminal board):
 
 | Wire | 30 ohm | 150 ohm | 250 ohm |
@@ -62,7 +65,10 @@ The cable table (at the terminal board):
 | RED | B | C | C |
 
 So 250 ohm is A-C (the whole secondary), 150 ohm B-C, 30 ohm A-B. Jumper connections for
-M / V1 / V2: "D only" / "D and B" / "D and E" (-K: M "D only", V "D and E"). "Phasing":
+M / V1 / V2: "D only" / "D and B" / "D and E" (-K: M "D only", V "D and E"): M leaves the
+reactor open, V1 puts it across B-C, V2 across A-C (the whole secondary: the deeper cut, as
+Fig. 4 shows). Fig. 4's level labels below -10 dB read -20 and -25 on evenly spaced 5 dB
+rules: a misprint for -15 and -20 (data/datasheets/rca_44bx.provenance.yaml). "Phasing":
 "when the sound pressure on the front of the microphone is in the positive half of the
 cycle the red cable lead is electrically positive". "CAUTION: Rotating a velocity
 microphone 180 degrees reverses the phase." Parts (Fig. 8): ribbon #20935, magnetic screen

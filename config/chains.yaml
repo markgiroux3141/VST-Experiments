@@ -82,7 +82,22 @@ circuits:
     drop: [RMEAS]
     pattern: omni
     settings: []
-  rca_44bx: {kind: mic, tag: r44, label: RCA 44-BX, wp: 6}
+  rca_44bx:
+    kind: mic
+    tag: r44
+    label: RCA 44-BX
+    output: out
+    drop: [RLOAD]
+    pattern: figure-8
+    settings:
+      - key: impedance        # the cable's strapping at the terminal board
+        label: Impedance
+        choices: [[0, "250 Ω"], [1, "150 Ω"], [2, "30 Ω"]]
+        default: 0
+      - key: response         # the reactor's jumper
+        label: Response
+        choices: [[0, "M (music)"], [1, "V1 (voice)"], [2, "V2 (close voice)"]]
+        default: 0
   rca_77dx: {kind: mic, tag: r77, label: RCA 77-DX, wp: 7}
   coles_4038: {kind: mic, tag: c4038, label: Coles 4038, wp: 8}
   royer_r121: {kind: mic, tag: r121, label: Royer R-121, wp: 16}

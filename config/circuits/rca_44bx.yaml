@@ -1,0 +1,77 @@
+# RCA 44-BX velocity microphone (MI-4027-H; docs/CHAINS_PLAN.md WP6). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/rca_44bx/README.md has their provenance):
+#   "ib: ..."  RCA IB-24267-5, Instructions for the Type 44-BX Velocity Microphone (c. 1951)
+#   "derived: ..." arithmetic on sourced figures
+#   "provisional: ..." model knowledge
+#
+# The ribbon motor RIBBON_44BX (config/components/ribbon_44bx/): the pressure at its front
+# channel's mouth on `in`, at its rear one's on the control input `p_rear` (pascals as volts;
+# varimu/mics/: the pole pieces as a baffle, bor.baffle_mesh). Its ends (ib Fig. 5: YELLOW,
+# BLACK) across the transformer #58871's primary; the secondary's ends A (BLACK) and C
+# (GREEN), its tap B (YELLOW). The cable's RED lead is `out`, BLACK the measuring ground,
+# by ib's cable table: 250 ohm A-C (as shipped), 150 ohm B-C, 30 ohm A-B; "when the sound
+# pressure on the front of the microphone is in the positive half of the cycle the red cable
+# lead is electrically positive" (ib, "Phasing"). The REACTOR: one end on the secondary's C
+# end, the other on terminal D (ib Fig. 5); the jumper (ib's table): M "D only" (open), V1
+# "D and B" (the reactor across B-C), V2 "D and E" (E is tied to A on the board's back, the
+# drawing's dashed link: across A-C). The ribbon and the primary float: a numerical leak
+# holds them. The output is open circuit (ib: "Recommended Load Impedance: Unloaded input
+# transformer"); a chain replaces RLOAD with the preamp's input.
+
+title: "RCA 44-BX"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, rp, rm]
+# 0 dBFS in = 20 Pa peak at the entries (as the other mics); out = volts across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.1, source: "provisional: model knowledge (ib's -55 dBm at 1 Pa = 1.78 mV/Pa open circuit x 20 Pa = 36 mV peak, with headroom for the bass bump and proximity)"}
+
+controls:
+  impedance: {value: 0, choices: [0, 1, 2], unit: position, source: "ib: 'Output Impedance: 30, 150 or 250 ohms (connected for 250 ohms when shipped)'; the cable table at the terminal board (Fig. 5)", notes: "0: 250 ohm (A-C), 1: 150 ohm (B-C), 2: 30 ohm (A-B)"}
+  response: {value: 0, choices: [0, 1, 2], unit: position, source: "ib Fig. 5's jumper table: M 'D only', V1 'D and B', V2 'D and E'; the text: V1 to about 12 in, V2 to about 7 in 'without causing objectionable low-frequency boost'", notes: "0: M (music), 1: V1, 2: V2 (voice: the reactor's low cut)"}
+
+values:
+  ribbon_model: {value: RIBBON_44BX@2, source: "config/components/ribbon_44bx/2.yaml (the 44-BX's ribbon after AEA's R44 sheet and Olson's circuit, its body and motor fitted to ib's curves by scripts/fit_44bx.py)"}
+  ribbon_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating ribbon and primary"}
+  transformer_model: {value: RCA44BX_OT@1, source: "config/components/rca44bx_ot/1.yaml (#58871's windings and tap by construction: config/designs/rca_44bx_ot.yaml)"}
+  reactor_h: {value: 0.1139, source: "provisional: fitted (ib prints no value): scripts/fit_44bx.py --reactor to Fig. 4's V2 and V1 on 50-600 Hz re 1 kHz, the whole circuit (reports/mics/rca44bx_reactor_fit.json: V1 0.46 dB rms, V2 0.42)"}
+  reactor_ohm: {value: 28.0, source: "provisional: fitted, the reactor's winding with reactor_h (scripts/fit_44bx.py --reactor; the reactor's core in its linear limit, a choke of a few millivolts)"}
+  contact_ohm: {value: 1.0e-3, source: "numerical: a strap or jumper (screw terminals)"}
+  load_ohm: {value: 1.0e+6, source: "ib: 'Recommended Load Impedance: Unloaded input transformer' (a chain replaces the load with its preamp)"}
+
+# No tolerance block: the nominal mic only (as the SM57's).
+
+sections:
+  - title: ribbon
+    parts:
+      RB:
+        ribbon_motor: [in, p_rear, rp, rm]
+        component: ribbon_model
+      RRL: {R: [rm, "0"], r: ribbon_leak_ohm, tolerance: none}
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [rm, rp]}   # the sense that puts the red lead positive (ib, 'Phasing'; as ribbon_test.yaml)
+          s1: {nodes: [ta, tb]}  # A (BLACK) to the tap B (YELLOW)
+          s2: {nodes: [tb, tc]}  # B to C (GREEN)
+        component: transformer_model
+      SRESP:
+        switch: response
+        parts:
+          LRX: {L: [tc, rx], l: reactor_h, in: [1, 2]}
+          RRX1: {R: [rx, tb], r: reactor_ohm, tolerance: none, in: [1]}
+          RRX2: {R: [rx, ta], r: reactor_ohm, tolerance: none, in: [2]}
+      SIMP:
+        switch: impedance
+        parts:
+          RO250: {R: [tc, out], r: contact_ohm, tolerance: none, in: [0, 1]}
+          RG250: {R: [ta, "0"], r: contact_ohm, tolerance: none, in: [0, 2]}
+          RG150: {R: [tb, "0"], r: contact_ohm, tolerance: none, in: [1]}
+          RO30: {R: [tb, out], r: contact_ohm, tolerance: none, in: [2]}
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

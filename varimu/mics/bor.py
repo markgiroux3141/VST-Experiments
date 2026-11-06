@@ -273,10 +273,64 @@ def dynamic_mesh(body: dict, diaphragm_radius_m: float, panel_m: float = 0.5e-3)
     return Mesh(m.p0, m.p1, m.tag, m.diaphragm_radius_m, m.interior, uniform=(REAR,))
 
 
+BAFFLE_BODY_FIELDS = (
+    "radius_m",  # the baffle's equivalent disc (a ribbon's pole pieces)
+    "depth_m",  # its thickness: the pole pieces' depth, the channel mouths on its faces
+)
+
+
+def baffle_mesh(body: dict, entry_radius_m: float, panel_m: float = 0.5e-3) -> Mesh:
+    """A ribbon's baffle as a rigid disc (`body`: form `baffle`, BAFFLE_BODY_FIELDS;
+    docs/CHAINS_PLAN.md WP6): its faces depth_m apart, the channel's mouth an entry of radius
+    `entry_radius_m` (the slot's half-width) at each face's centre (FRONT on +z). The disc
+    is the path around the pole pieces; the slot's length is `ribbon_line_factor`'s."""
+    rb, d = body["radius_m"], body["depth_m"]
+    h = 0.5 * d
+    if not (entry_radius_m < rb and d > 0):
+        raise ValueError(f"baffle body: need the entry < radius, depth > 0 ({body})")
+    c = [(0.0, h), (entry_radius_m, h), (rb, h), (rb, -h), (entry_radius_m, -h), (0.0, -h)]
+    t = [FRONT, 0, 0, 0, REAR]
+    return polyline_mesh(c, t, panel_m, entry_radius_m)
+
+
+def entry_size(geometry: dict) -> float:
+    """The entries' radius a component's `body` is meshed with: the diaphragm's, or on a
+    ribbon's `baffle` the slot's half-width."""
+    if geometry.get("body", {}).get("form") == "baffle":
+        return 0.5 * float(geometry["ribbon"]["width_m"])
+    return geometry.get("diaphragm", {}).get("radius_m")
+
+
+def ribbon_line_factor(
+    geometry: dict, f_hz: np.ndarray, theta_rad: np.ndarray, in_plane: bool = False
+) -> np.ndarray:
+    """A ribbon's slot along its length L: the incident wave's phase along it, averaged
+    (freqs, angles; 1 for a component without a `ribbon`). In the plane through the ribbon
+    (`in_plane`: the vertical-plane pattern, ib Fig. 3) sinc(a), a = k L sin(theta) / 2; for
+    a room's axisymmetric table its mean over the arrival's azimuth about the axis,
+    int_0^1 J0(a t) dt (sinc(a cos psi) averaged over psi). The baffle's diffraction is the
+    body's (`baffle_mesh`); this is the length's phase alone, an approximation (the
+    pressure along the face isn't the incident wave's)."""
+    f = np.atleast_1d(np.asarray(f_hz, float))[:, None]
+    th = np.atleast_1d(np.asarray(theta_rad, float))[None, :]
+    if "ribbon" not in geometry:
+        return np.ones((f.shape[0], th.shape[1]))
+    length = float(geometry["ribbon"]["length_m"])
+    a = np.abs(np.pi * f * length * np.sin(th) / C_AIR)
+    if in_plane:
+        return np.sinc(a / np.pi)
+    t, w = np.polynomial.legendre.leggauss(48)
+    t, w = 0.5 * (t + 1), 0.5 * w
+    return np.einsum("k,ijk->ij", w, j0(a[..., None] * t))
+
+
 def body_mesh(body: dict, diaphragm_radius_m: float) -> Mesh:
     """The mesh of a capsule's `body` by its `form`: `cylinder` (a pressure capsule on its
-    housing, `pressure_mesh`), `dynamic` (a handheld moving-coil mic, `dynamic_mesh`), else
-    the dual-diaphragm capsule (`capsule_mesh`)."""
+    housing, `pressure_mesh`), `dynamic` (a handheld moving-coil mic, `dynamic_mesh`),
+    `baffle` (a ribbon's pole pieces, `baffle_mesh`), else the dual-diaphragm capsule
+    (`capsule_mesh`)."""
+    if body.get("form") == "baffle":
+        return baffle_mesh(body, diaphragm_radius_m)
     if body.get("form") == "cylinder":
         return pressure_mesh(body, diaphragm_radius_m)
     if body.get("form") == "dynamic":
