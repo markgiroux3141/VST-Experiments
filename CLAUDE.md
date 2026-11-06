@@ -269,8 +269,8 @@ from physics, anchored on Gabrielli et al. 2013 and Remaggi et al. 2012 (a measu
 user's rule: long-standing prerequisites are built first inside a plan, not a reason to
 wait. **Built overnight 2026-11-06** (branch `clavinet`, the user delegating every call;
 the plan's "Status (2026-11-06)"):
-- **CL0:** the sources (`data/schematics/hohner_clavinet_d6/README.md`; the D6 schematic
-  still to fetch) and **the BJT model** (Gummel-Poon DC subset, part `bjt: [c, b, e]` in
+- **CL0:** the sources (`data/schematics/hohner_clavinet_d6/README.md`; Hohner's E7
+  schematic found by the user, the D6's own still not) and **the BJT model** (Gummel-Poon DC subset, part `bjt: [c, b, e]` in
   both builders, `BC550C@1` / `BC560C@1` / `BC413C@1`; CHAINS_PLAN.md WP10 done).
 - **CL1:** `varimu/clavinet/` (outside the render cache key; `config/clavinet/d6.yaml`):
   - each key's speaking and non-speaking segments as numeric substructures joined at the
@@ -282,11 +282,14 @@ the plan's "Status (2026-11-06)"):
   - one unknown fitted per published figure (`fit.py`, cached in `cache/clavinet/`);
   - `tests/test_clavinet.py`, `scripts/clavinet_key_study.py`.
 - **CL2:** `config/circuits/clavinet_d6.yaml` (pickups as control inputs, the rockers as a
-  switched chain to ground, a provisional two-stage BC413C amp fitted to the paper's THD
-  and shelves; `tests/test_clavinet_amp.py`) and `scripts/clavinet_render.py (--midi F |
-  --demo)`.
+  switched chain to ground; since 2026-11-06 the amp drawn from Hohner's E7 schematic:
+  a 1:15 input transformer, a BC550C transimpedance stage, the chain, a BC550C stage, a
+  BC238 / ZPD 8.2 rail, `BC238@1`, `ZPD8V2@1`; the plan's "The drawn amp") and
+  `scripts/clavinet_render.py (--midi F | --demo)`. The pickup level `level_v` follows
+  G13's THD through it (1% at a chord's peak in normal playing: 21.4 mV a forte E4, was
+  0.2 V; the user's choice); `tests/test_clavinet_amp.py`.
 - **CL3 built:**
-  - the strings compiled (`D6_STRINGS@2`, a 50 MB sidecar, `scripts/compile_clavinet_strings.py
+  - the strings compiled (`D6_STRINGS@3` since the level moved, a 50 MB sidecar, `scripts/compile_clavinet_strings.py
     [--check]`) and their Python twin (`live.py`, -124 dB vs `note.play`);
   - circuitsim's medium `clavinet.rs` on the generic `keyed.rs` (the harp's machinery, bit
     for bit unchanged), the part `clav_strings: [centre, bridge, bridge_neg]` in both

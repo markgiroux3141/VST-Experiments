@@ -70,14 +70,26 @@ marked `provisional`.
 - The Clavinet C's preamp: AC151 germanium PNP, positive ground, 9 V:
   https://chicagoelectricpiano.com/clavinet/hohner-clavinet-schematic-tone-controls/ and
   GroupDIY https://groupdiy.com/threads/clavinet-c-audio-issues.81284.
-- **Not in hand: the D6 schematic itself.** [G13] cites it as clavinet.com's "Clavinet D6
+- **In hand: Hohner's E7 schematic**, `clavinete7.jpg` ("Schaltbild Hohner-Clavinet E 7,
+  St.-Nr. 801 111"; found by the user 2026-11-06). Two pickups of six coils, the two
+  ganged pickup rockers, an input transformer (Beyer TR 145, BV 35 569, 1:15) into a 10 nF
+  and a BC550C with 1 MOhm || 8.2 pF collector-to-base feedback and a 12 kOhm load (emitter
+  grounded); 0.22 uF into the tone chain (30k || 0.1u, 10k || 15n, 2 H || 4.7n, 0.6 H, each
+  rocker shorting its cell: the chain [G13] Table 3 gives, and the topology inferred from
+  its Fig. 11); 30 kOhm and 10 nF into a second BC550C (620k / 100k divider, 10 kOhm load,
+  2.2 kOhm + 1 kOhm || 6.8 uF emitter), 0.22 uF to a 100 kOhm log volume and the jack; the
+  rail a BC238 follower on an 8.2 V zener (1.8 kOhm), 100 uF. The chokes: Siemens pot cores
+  14 x 8, N30, AL 4200 (B65541-K0000-R030), 2 H = 700 turns of 0.09 mm CuL, 0.6 H = 400
+  turns of 0.1 mm CuL (the drawing's 0.5 H symbol disagrees with its own table).
+- **Still not in hand: the D6's own schematic** (the E7's above is used: the same tone cells,
+  [G13] Table 3). [G13] cites it as clavinet.com's "Clavinet D6
   amplifier schematic" (http://www.gti.net/junebug/clavinet/Clavinet%5FD6%5Fschematic.pdf,
   dead). Copies: Chicago Electric Piano's translated D6 / E7 wiring
   (https://chicagoelectricpiano.com/hohner/clavinet-schematic-wiring/, an image), Vintage
   Vibe's preamp kit instructions (https://www.vintagevibe.com/products/clavinet-preamp-rebuild-kit,
-  "Instructions" tab), the GroupDIY threads' attachments (login). Until one is read, the amp in
-  `config/circuits/clavinet_d6.yaml` is a provisional two-stage design from the facts above
-  and [G13]'s measured response and THD.
+  "Instructions" tab), the GroupDIY threads' attachments (login): the user found the first
+  two pages gone (2026-11-06). The amp in `config/circuits/clavinet_d6.yaml` was a
+  provisional two-stage design until the E7's schematic was read (2026-11-06).
 
 ## Other
 

@@ -31,8 +31,8 @@ down in pitch as a hard note decays. First order: each mode's frequency scales b
 **Pickups** read the string's displacement and velocity averaged over each bar's width
 (the static press shifts the operating point, it is included) through `pickup.emf`. The
 analytic free-space map has [R12]'s shape but not the bars' steel, so its level is scaled
-once to [G13]'s 400 mV (`level_factor`). The EMF is computed at `oversample` x fs and
-decimated.
+once, to [G13]'s THD through the drawn amp (`level_factor`, d6.yaml's `level_v`). The EMF
+is computed at `oversample` x fs and decimated.
 """
 
 from __future__ import annotations
@@ -483,14 +483,20 @@ def level_factor(name: str = "d6") -> float:
     [G13]'s figure, as configured, for E4 at the top velocity on the centre pickup."""
     cfg = spec.load(name)
     pc = cfg["pickups"]
-    key = hashlib.sha256((fit._cache_key(name) + "level4-grip").encode()).hexdigest()[:16]
+    # the raw peak depends on the strings (the fits' key) and the pickups' geometry, not on
+    # the level asked for: cached without `level_v`, so a new level needs no replay
+    block = spec.split_block(spec.config_text(name), "pickups")[1]
+    block = "".join(
+        ln for ln in block.splitlines(keepends=True) if not ln.lstrip().startswith("level_v:")
+    )
+    key = hashlib.sha256((fit._cache_key(name) + block + "level5-raw").encode()).hexdigest()[:16]
     spec.CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = spec.CACHE_DIR / f"level_{key}.json"
     if path.exists():
-        return float(json.loads(path.read_text())["factor"])
-    v_top = cfg["tangent"]["velocity_range_m_s"][1]
-    pl = play(LEVEL_KEY, v_top, 0.3, tail_s=0.0, name=name, level=False)
-    peak = float(np.max(np.abs(pl.emf_v["centre"])))
-    factor = pc["level_v"] / peak
-    path.write_text(json.dumps({"factor": factor, "peak_raw_v": peak}))
-    return factor
+        peak = float(json.loads(path.read_text())["peak_raw_v"])
+    else:
+        v_top = cfg["tangent"]["velocity_range_m_s"][1]
+        pl = play(LEVEL_KEY, v_top, 0.3, tail_s=0.0, name=name, level=False)
+        peak = float(np.max(np.abs(pl.emf_v["centre"])))
+        path.write_text(json.dumps({"peak_raw_v": peak}))
+    return pc["level_v"] / peak

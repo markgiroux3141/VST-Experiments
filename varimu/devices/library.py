@@ -460,6 +460,24 @@ def build_si_rectifier() -> dict[str, Any]:
     }
 
 
+def build_zpd8v2() -> dict[str, Any]:
+    """The Clavinet E7's rail reference, a ZPD 8.2 zener (Hohner's E7 schematic): its
+    breakdown slope as a junction diode, used with the `vr_tube` part (the diode in series
+    with a fixed breakdown voltage, `operating_v` at `ref_current_a`)."""
+    return {
+        "name": "ZPD8V2",
+        "kind": "junction_diode",
+        "is_a": 1.0e-14,
+        "n": 1.0,
+        "rs_ohm": 5.0,
+        "source": "provisional: model knowledge (a 500 mW 8.2 V zener of the ZPD / BZX55 "
+        "class: Vz 7.7-8.7 V at 5 mA, dynamic resistance up to ~15 Ohm there; the slope "
+        "nVt / I + rs ~10 Ohm at 5 mA; the knee's softness below ~1 mA isn't modelled). "
+        "Hohner's E7 schematic names the 'ZPD 8,2' "
+        "(data/schematics/hohner_clavinet_d6/clavinete7.jpg)",
+    }
+
+
 def build_el34t() -> dict[str, Any]:
     """The EL34 triode-connected (the 670's series pass tube, V302): a Koren triode fit to
     Mullard's triode-connected plate curves."""
@@ -1386,6 +1404,19 @@ def build_bc413c() -> dict[str, Any]:
     )
 
 
+def build_bc238() -> dict[str, Any]:
+    """The Clavinet E7's rail regulator (Hohner's E7 schematic, St.-Nr. 801 111: a BC238
+    follower on an 8.2 V zener), on the BC547B's card."""
+    return _bjt_component(
+        "BC238",
+        "BC547B",
+        "provisional: model knowledge (the BC238 is the BC548's predecessor of the same "
+        "family, the BC237 / 238 / 239 = BC547 / 548 / 549; the drawing gives no hFE group, "
+        "B taken; no published BC238 card found): NXP's BC547B card (Hohner's E7 schematic "
+        "names the BC238, data/schematics/hohner_clavinet_d6/clavinete7.jpg)",
+    )
+
+
 def build_bc560c() -> dict[str, Any]:
     """The BC550C's PNP complement (the BC557's low-noise selection), the tests' PNP."""
     return _bjt_component(
@@ -1862,6 +1893,7 @@ BUILDERS = {
     "6973": build_6973,
     "GZ34": build_gz34,
     "SI_RECTIFIER": build_si_rectifier,
+    "ZPD8V2": build_zpd8v2,
     "EL34T": build_el34t,
     "6084": build_6084,
     "5651": build_5651,
@@ -1892,6 +1924,7 @@ BUILDERS = {
     "BC550C": build_bc550c,
     "BC413C": build_bc413c,
     "BC560C": build_bc560c,
+    "BC238": build_bc238,
     "2D21": build_2d21,
     "884": build_884,
 }

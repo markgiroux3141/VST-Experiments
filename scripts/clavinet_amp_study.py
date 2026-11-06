@@ -1,10 +1,12 @@
-"""CL2: the D6's electronics (config/circuits/clavinet_d6.yaml) against [G13]: the idle
-point, the tone rockers' responses (Fig. 11's shapes: TREBLE's peak, ALL's notch, BRILLIANT's
-high-pass, all off silent), the amp's own response (nearly flat: a -3 dB shelf at 130 Hz,
-+3 dB at 4 kHz) and THD at 1 kHz against level (1% at 400 mV, 3.6% on fortissimo peaks)
+"""CL2: the D6's electronics (config/circuits/clavinet_d6.yaml, drawn from Hohner's E7
+schematic) against [G13]: the idle point, the tone rockers' responses (Fig. 11's shapes:
+TREBLE's peak, ALL's notch, BRILLIANT's high-pass, all off silent), the amp with the tone
+stack removed (G13's simulation: nearly flat, -3 dB at 130 Hz, +3 dB at 4 kHz) and THD at
+1 kHz against the pickup's EMF (G13's measurement: 1% at the largest normal level, 3.6% on
+fortissimo chord peaks; `--level` prints the EMF at 1% and 3.6%, d6.yaml's `level_v`)
 -> reports/clavinet/amp/.
 
-    uv run --extra fast python scripts/clavinet_amp_study.py [--set k=v ...]
+    uv run --extra fast python scripts/clavinet_amp_study.py [--set k=v ...] [--level]
 """
 
 from __future__ import annotations
@@ -29,7 +31,7 @@ ROOT = Path(__file__).parents[1]
 OUT = ROOT / "reports" / "clavinet" / "amp"
 CIRCUIT = CONFIG_DIR / "circuits" / "clavinet_d6.yaml"
 FS = 96000
-PROBES = ("out", "x", "b1", "c1", "e1", "b2", "c2", "e2", "vcc")
+PROBES = ("out", "x", "sel", "ts", "b1", "c1", "b2", "c2", "e2", "vcc", "zb")
 TONES = {
     "ALL": dict(soft=1, medium=1, treble=1, brilliant=1),
     "SOFT": dict(soft=1, medium=0, treble=0, brilliant=0),
@@ -89,13 +91,18 @@ def thd_at(sets: dict, emf_peak_v: float) -> tuple[float, float]:
     return thd(seg, 1000.0), float(np.max(np.abs(seg)))
 
 
+# the tone stack removed ([G13] 2.3.6's simulation): SOFT's cell active and open, the
+# others shorted, so nothing loads the chain node
+NO_STACK = dict(soft=1, medium=0, treble=0, brilliant=0, r_soft_ohm=1e12, c_soft_f=1e-18)
+
+
 def amp_shelf(sets: dict) -> dict[str, float]:
-    """The amp alone, out over the chain node, at 130 Hz, 1 kHz and 4 kHz (dB)."""
+    """The amp with the tone stack removed: out over the pickup's EMF at 130 Hz and 4 kHz
+    against 1 kHz (dB), and at 1 kHz itself."""
     freqs = np.array([130.0, 1000.0, 4000.0])
-    x_in = multisine(freqs, 0.005, FS // 2)
-    v = render({**sets, **TONES["ALL"]}, x_in)
-    g = np.abs(tone_bins(v["out"], freqs) / tone_bins(v["x"], freqs))
-    db = 20 * np.log10(g)
+    x_in = multisine(freqs, 0.002, FS // 2)
+    v = render({**sets, **NO_STACK}, x_in)
+    db = 20 * np.log10(np.abs(tone_bins(v["out"], freqs) / tone_bins(x_in, freqs)))
     return {"130": float(db[0] - db[1]), "4000": float(db[2] - db[1]), "1000": float(db[1])}
 
 
@@ -109,26 +116,12 @@ def _bisect(f, lo: float, hi: float, target: float, rising: bool, steps: int = 1
     return float(np.exp(0.5 * (a + b)))
 
 
-def fit(base: dict) -> dict:
-    """Three unknowns, three of [G13]'s figures, in turn (twice: they interact a little):
-    Q1's unbypassed emitter resistor to 1% THD at 400 mV of EMF (1 kHz); Q1's emitter
-    bypass to the amp's -3 dB at 130 Hz against 1 kHz; the high shelf's cap to +3 dB at
-    4 kHz (its rising branch: corners from ~16 kHz down to ~1.6 kHz)."""
-    sets = {**base, "pickup_select": 0}
-    for _ in range(2):
-        sets["r_e1_ohm"] = _bisect(
-            lambda r: thd_at({**sets, "r_e1_ohm": r}, 0.4)[0], 5.0, 3000.0, 0.01, rising=False
-        )
-        sets["c_e2_f"] = _bisect(
-            lambda c: amp_shelf({**sets, "c_e2_f": c})["130"], 1e-7, 1e-3, -3.0, rising=True
-        )
-        sets["c_hf_f"] = _bisect(
-            lambda c: amp_shelf({**sets, "c_hf_f": c})["4000"], 1e-10, 1e-7, 3.0, rising=True
-        )
-    return {k: sets[k] for k in ("r_e1_ohm", "c_e2_f", "c_hf_f")} | {
-        "shelf": amp_shelf(sets),
-        "thd_400mv": thd_at(sets, 0.4)[0],
-        "thd_1600mv": thd_at(sets, 1.6)[0],
+def thd_levels(sets: dict) -> dict[str, float]:
+    """The centre pickup's EMF (1 kHz, peak) at which the amp reaches 1% and 3.6% THD."""
+    f = lambda a: thd_at({**sets, "pickup_select": 0}, a)[0]  # noqa: E731
+    return {
+        "emf_1pct_v": _bisect(f, 0.005, 0.5, 0.01, rising=True, steps=16),
+        "emf_3p6pct_v": _bisect(f, 0.005, 0.5, 0.036, rising=True, steps=16),
     }
 
 
@@ -136,15 +129,15 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--set", nargs="*", default=[])
     ap.add_argument(
-        "--fit",
+        "--level",
         action="store_true",
-        help="fit r_e1_ohm and c_hf_f, print them (write them into the circuit file)",
+        help="print the EMF at 1% and 3.6% THD (d6.yaml's level_v is half the first)",
     )
     args = ap.parse_args()
     base = dict(kv.split("=", 1) for kv in args.set)
     base = {k: float(v) for k, v in base.items()}
-    if args.fit:
-        print(json.dumps(fit(base), indent=1))
+    if args.level:
+        print(json.dumps(thd_levels(base), indent=1))
         return
     base.setdefault("pickup_select", 0)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -169,9 +162,9 @@ def main() -> None:
             "x_db": (20 * np.log10(np.abs(hx) + 1e-30)).tolist(),
             "out_db": (20 * np.log10(np.abs(ho) + 1e-30)).tolist(),
         }
-        if name == "ALL":
-            # the amp alone: out over x
-            resp["AMP"] = {"gain_db": (20 * np.log10(np.abs(ho / hx))).tolist()}
+    # the amp with the tone stack removed: out over the EMF
+    v = render({**base, **NO_STACK}, x_in)
+    resp["AMP"] = {"gain_db": (20 * np.log10(np.abs(tone_bins(v["out"], freqs) / inb))).tolist()}
     out["freqs_hz"] = freqs.tolist()
     out["tone"] = resp
     f = freqs
@@ -183,6 +176,7 @@ def main() -> None:
         "all_peak_hz": float(f[np.argmax(all_)]),
         "all_notch_hz": float(f[band][np.argmin(all_[band])]),
         "none_max_db": float(np.max(resp["NONE"]["x_db"])),
+        "none_below_all_db": float(np.max(all_) - np.max(resp["NONE"]["x_db"])),
         "treble_peak_db": float(np.max(tre)),
         "brilliant_10k_db": float(np.interp(10000, f, resp["BRILLIANT"]["x_db"])),
         "amp_gain_1k_db": float(np.interp(1000, f, resp["AMP"]["gain_db"])),
@@ -194,7 +188,7 @@ def main() -> None:
     n = int(0.5 * FS)
     t = np.arange(n) / FS
     rows = []
-    for amp in (0.05, 0.1, 0.2, 0.4, 0.8, 1.6):
+    for amp in (0.01, 0.02, 0.04, 0.08, 0.16, 0.32):
         v = render(base, amp * np.sin(2 * np.pi * 1000 * t))
         seg = v["out"][n // 2 :]
         rows.append(
@@ -207,6 +201,7 @@ def main() -> None:
         )
     out["thd"] = rows
     out["shelf_db"] = amp_shelf(base)
+    out["thd_levels"] = thd_levels(base)
     (OUT / "summary.json").write_text(json.dumps(out, indent=1))
 
     fig, ax = plt.subplots(1, 2, figsize=(12, 4.5))
@@ -219,13 +214,19 @@ def main() -> None:
     ax[0].legend()
     ax[0].grid(True, which="both", alpha=0.3)
     ax[1].semilogx(f, resp["AMP"]["gain_db"])
-    ax[1].set_title("the amp alone: out / chain node (volume at default)")
+    ax[1].set_title("the amp, tone stack removed: out / pickup EMF (volume at default)")
     ax[1].grid(True, which="both", alpha=0.3)
     fig.tight_layout()
     fig.savefig(OUT / "amp.png", dpi=110)
     print(
         json.dumps(
-            {"idle": out["idle_v"], "checks": out["checks"], "shelf": out["shelf_db"], "thd": rows},
+            {
+                "idle": out["idle_v"],
+                "checks": out["checks"],
+                "shelf": out["shelf_db"],
+                "thd": rows,
+                "thd_levels": out["thd_levels"],
+            },
             indent=1,
         )
     )

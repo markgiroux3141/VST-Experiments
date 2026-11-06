@@ -10,26 +10,27 @@
 # circuit as control inputs (scripts/clavinet_render.py), each pickup's EMF behind its
 # coils' resistance and inductance. Sources: data/schematics/hohner_clavinet_d6/README.md.
 #
-# The D6's schematic itself isn't in hand yet (the README lists where it is). What is known:
-#   pickups   [G13] Fig. 9: each pickup's impedance ~10.2-10.9 kOhm over the band.
-#   selector  [R12] Table 1: A+C the centre pickup, B+C the bridge, A+D both anti-phase,
-#             B+D both in phase. The two rockers are one 4-position control here; the
-#             anti-phase bridge is its own control input (the bridge EMF negated: a reversed
-#             coil, the same physics).
-#   tone      [G13] Table 3: SOFT 30k || 0.1u, MEDIUM 10k || 15n, TREBLE 2 H || 4.7n,
-#             BRILLIANT 0.6 H. Fig. 11's responses pin the topology: the four cells are a
-#             series chain from the signal line to ground, each shorted by its rocker when
-#             off. All on: TREBLE's L || C makes the 1.6 kHz peak (the chain's impedance
-#             infinite), TREBLE with BRILLIANT the ~3.4 kHz notch (their series resonance);
-#             one alone: SOFT and MEDIUM low-pass, TREBLE band-pass, BRILLIANT high-pass.
-#             All off: the chain shorts the signal and the instrument is silent.
-#   amp       [G13] 2.1, 2.3.6, 3.4: two-stage BJT, nearly flat without the tone stack (a
-#             -3 dB shelf at 130 Hz, +3 dB at 4 kHz), THD 1% at 1 kHz for 400 mV in.
-#             Clavinet.com's D6 preamp upgrade (web: https://clavinet.com/d6upgrade.php):
-#             the front end a BC 413C; .01 uF film caps, 4.7 nF (TREBLE's), .015 uF
-#             (MEDIUM's), .22 uF output, 100 uF / 16 V, 6.8 uF / 20 V tantalum.
-#             The stages' resistors are a provisional design (marked so), set to those
-#             figures: replace them when the schematic is read.
+# The amp is drawn from Hohner's E7 schematic (St.-Nr. 801 111,
+# data/schematics/hohner_clavinet_d6/clavinete7.jpg): the E7 is the D6's stage version, and
+# its tone cells are [G13] Table 3's D6 values exactly. What the drawing gives:
+#   pickups   two of six coils, the two ganged rockers; [G13] Fig. 9: each pickup's impedance
+#             ~10.2-10.9 kOhm over the band. [R12] Table 1: A+C the centre pickup, B+C the
+#             bridge, A+D both anti-phase, B+D both in phase (one 4-position control here; the
+#             anti-phase bridge its own control input, the bridge EMF negated).
+#   input     a transformer, Beyer TR 145 (BV 35 569), 1:15, into 10 nF and Q1's base.
+#   stage 1   BC550C, emitter grounded, collector to base 1 MOhm || 8.2 pF, 12 kOhm load: a
+#             transimpedance stage. The pickups stepped up 15x are a ~2.3 MOhm source, so
+#             Q1's output is the secondary's current times 1 MOhm, nearly flat.
+#   tone      0.22 uF from Q1's collector into the chain (SOFT 30k || 0.1u, MEDIUM 10k || 15n,
+#             TREBLE 2 H || 4.7n, BRILLIANT 0.6 H) to ground, each cell shorted by its rocker
+#             when off (all off: the chain shorts the signal, silent).
+#   stage 2   30 kOhm and 10 nF into a BC550C (620k / 100k divider, 10 kOhm load, 2.2 kOhm
+#             unbypassed and 1 kOhm || 6.8 uF in the emitter), 0.22 uF to a 100 kOhm log
+#             volume at the jack.
+#   supply    the 9 V battery, a BC238 follower on a ZPD 8.2 zener (1.8 kOhm from the
+#             battery), 100 uF on the rail.
+# [G13]'s figures (the amp nearly flat: -3 dB at 130 Hz, +3 dB at 4 kHz; THD 1% at 1 kHz for
+# 400 mV in) are checks now (scripts/clavinet_amp_study.py), not fitted.
 
 title: "Hohner Clavinet D6 (strings, pickups, rockers, two-stage BJT amp)"
 input: in
@@ -49,7 +50,7 @@ controls:
 
 values:
   # --- the strings (docs/CLAVINET_PLAN.md, CL3)
-  strings_model: {value: D6_STRINGS@2, source: "config/components/d6_strings/2.yaml (the D6's 60 strings from physics, compiled by varimu/clavinet/compile.py: the live band, the contacts, the pickups' maps)"}
+  strings_model: {value: D6_STRINGS@3, source: "config/components/d6_strings/3.yaml (the D6's 60 strings from physics, compiled by varimu/clavinet/compile.py: the live band, the contacts, the pickups' maps)"}
   strings_rate_hz: {value: 96000.0, source: "numerical: the voices at the step rate (96 kHz at draft-1x / draft-2x; the live band's modes reach 12 kHz, the pickups' map's products ~24 kHz)"}
   strings_contact_rate_hz: {value: 1536000.0, source: "numerical: the tangent's rubber and the anvil stepped at 16 x 96 kHz, as note.py's reference (varimu/clavinet/live.py)"}
   # --- the pickups (each one's six coils in series)
@@ -67,46 +68,56 @@ values:
   l_treble_h: {value: 2.0, source: "[G13] Table 3: TREBLE L = 2 H"}
   c_treble_f: {value: 4.7e-9, source: "[G13] Table 3: TREBLE C = 4.7 nF (clavinet.com: the 4.7 nF disc between the two inductors)"}
   l_brilliant_h: {value: 0.6, source: "[G13] Table 3: BRILLIANT L = 0.6 H"}
-  r_l_treble_ohm: {value: 400.0, source: "provisional: model knowledge (a 2 H audio choke's winding resistance)"}
-  r_l_brilliant_ohm: {value: 150.0, source: "provisional: model knowledge (a 0.6 H choke's winding resistance)"}
-  # The chain's absolute level: Fig. 11's TREBLE peak (-34 dB) and BRILLIANT at 10 kHz
-  # (-38 dB) give the series resistance into the chain and the amp's input resistance
-  # (two figures, two unknowns: Rs = 49 Rin, |j 2 pi 10k 0.6 H || Rin| = 0.617 Rin).
-  r_series_ohm: {value: 2.2e+6, source: "derived: [G13] Fig. 11's levels (2.35 MOhm, nearest E12); provisional: the series element itself isn't on a drawing in hand"}
-  r_bias_top_ohm: {value: 220.0e+3, source: "provisional: model knowledge (Q1's divider; with the bottom resistor ~1.6 V at the base, and with the base, ~47 kOhm in: [G13] Fig. 11's levels)"}
-  r_bias_bottom_ohm: {value: 56.0e+3, source: "provisional: model knowledge (Q1's divider bottom)"}
-  c_in_f: {value: 0.1e-6, source: "provisional: model knowledge (Q1's input coupling, ~35 Hz into its ~47 kOhm; clavinet.com's .01 uF film caps would put it at ~340 Hz, against [G13]'s nearly flat amp: their place isn't known)"}
-  # --- stage 1: BC413C common emitter
-  q1: {value: BC413C@1, source: "web: https://clavinet.com/d6upgrade.php ('the BC 413C' front end)"}
-  r_c1_ohm: {value: 22.0e+3, source: "provisional: model knowledge (Q1's collector load, ~0.2 mA: a low-noise front end)"}
-  r_e1_ohm: {value: 46.6, source: "provisional: fit (Q1's unbypassed emitter resistor: THD 1% at 1 kHz for 400 mV peak of the centre pickup's EMF, the default rockers, [G13] 3.4; scripts/clavinet_amp_study.py --fit)"}
-  r_e2_ohm: {value: 4.7e+3, source: "provisional: model knowledge (Q1's bypassed emitter resistor: sets ~0.2 mA)"}
-  c_e2_f: {value: 16.4e-6, source: "provisional: fit (Q1's emitter bypass: the amp's -3 dB at 130 Hz against 1 kHz, [G13] 2.3.6; scripts/clavinet_amp_study.py --fit). clavinet.com lists a 6.8 uF / 20 V tantalum on the board; its place isn't known"}
-  c_12_f: {value: 0.1e-6, source: "provisional: model knowledge (stage 1 to stage 2, ~25 Hz into Q2's divider; see c_in_f on the .01 uF caps)"}
-  # --- stage 2: BC413C common emitter into the output
-  q2: {value: BC413C@1, source: "provisional: model knowledge (the second transistor's type isn't given; the same as the first)"}
-  r_bias2_top_ohm: {value: 330.0e+3, source: "provisional: model knowledge (Q2's divider)"}
-  r_bias2_bottom_ohm: {value: 82.0e+3, source: "provisional: model knowledge (Q2's divider bottom)"}
-  r_c2_ohm: {value: 10.0e+3, source: "provisional: model knowledge (Q2's collector load, ~0.35 mA)"}
-  r_e3_ohm: {value: 1.0e+3, source: "provisional: model knowledge (Q2's unbypassed emitter: gain ~10)"}
-  r_e4_ohm: {value: 2.2e+3, source: "provisional: model knowledge (Q2's bypassed emitter)"}
-  c_e4_f: {value: 100.0e-6, source: "clavinet.com: the 100 uF / 16 V electrolytic (here Q2's emitter bypass)"}
-  r_hf_ohm: {value: 1.0e+3, source: "provisional: model knowledge (in series with c_hf_f across Q2's unbypassed emitter resistor: the high shelf's height)"}
-  c_hf_f: {value: 41.3e-9, source: "provisional: fit ([G13] 2.3.6: the amp's +3 dB at 4 kHz against 1 kHz; scripts/clavinet_amp_study.py --fit)"}
-  c_out_f: {value: 0.22e-6, source: "clavinet.com: the .22 uF output film cap"}
-  r_volume_ohm: {value: 50.0e+3, source: "provisional: model knowledge (the volume pot)"}
-  volume_taper_mid: {value: 0.15, source: "provisional: model knowledge (an audio taper)"}
+  r_l_treble_ohm: {value: 54.9, source: "derived: the E7 schematic's table (2 H: 700 turns of 0.09 mm CuL on a Siemens pot core 14 x 8, N30, AL 4200, B65541-K0000-R030) at a ~29 mm mean turn (provisional: model knowledge, the P 14 x 8's single-section bobbin): 20.3 m of copper at 1.72e-8 Ohm m"}
+  r_l_brilliant_ohm: {value: 25.4, source: "derived: the E7 schematic's table (0.6 H: 400 turns of 0.1 mm CuL on the same core; the drawing's symbol says 0.5 H, its table 0.6 H, AL 4200 x 400^2 = 0.67 H) at a ~29 mm mean turn: 11.6 m of copper"}
+  # --- the input transformer (Beyer TR 145, BV 35 569, 1:15: the E7 schematic)
+  t1_ratio: {value: 15.0, source: "the E7 schematic: 'Uebertrager 1:15, Beyer TR 145, BV 35 569' (the pickups on its primary, rot / schwarz; Q1 on its secondary, blau / gelb)"}
+  t1_turns: {value: 2000.0, source: "provisional: model knowledge (a small mumetall input transformer's primary; with t1_core_* and the joint gap ~30 H at the origin, so the pickups' 10 kOhm see it as open down to ~50 Hz: the drawing gives the ratio only)"}
+  t1_core_material: {value: mumetall, source: "provisional: model knowledge (a Beyer input transformer: a nickel-iron core)"}
+  t1_core_area_m2: {value: 20.0e-6, source: "provisional: model knowledge (a ~20 mm can's core, 4 x 5 mm)"}
+  t1_core_path_m: {value: 0.04, source: "provisional: model knowledge (its magnetic path)"}
+  t1_gap_m: {value: 2.0e-6, source: "provisional: model knowledge (interleaved laminations' effective joint gap)"}
+  t1_leakage_h: {value: 5.0e-3, source: "provisional: model knowledge (referred to the primary: ~1.1 H at the secondary, against the ~2.3 MOhm the stepped-up pickups present)"}
+  t1_r_pri_ohm: {value: 150.0, source: "provisional: model knowledge (2000 turns of ~0.07 mm copper)"}
+  t1_r_sec_ohm: {value: 20.0e+3, source: "provisional: model knowledge (30,000 turns of ~0.03 mm copper; small against the source)"}
+  t1_c_sec_f: {value: 50.0e-12, source: "provisional: model knowledge (the many-layer secondary's self-capacitance; small against the 10 nF it drives)"}
+  c_in_f: {value: 10.0e-9, source: "the E7 schematic: 10 n from the transformer's blau lead to Q1's base"}
+  # --- stage 1: BC550C transimpedance (the E7 schematic)
+  q1: {value: BC550C@1, source: "the E7 schematic: 'BC 550 C' (clavinet.com's D6 upgrade names a BC 413C front end: web: https://clavinet.com/d6upgrade.php; the same class, the same card)"}
+  r_f1_ohm: {value: 1.0e+6, source: "the E7 schematic: 1M collector to base"}
+  c_f1_f: {value: 8.2e-12, source: "the E7 schematic: 8,2 p across the 1M (GroupDIY's E7 thread: the 8.2 pF)"}
+  r_c1_ohm: {value: 12.0e+3, source: "the E7 schematic: 12K collector load"}
+  c_12_f: {value: 0.22e-6, source: "the E7 schematic: 0,22 u from Q1's collector to the tone chain (clavinet.com: a .22 uF film cap)"}
+  # --- stage 2: BC550C common emitter (the E7 schematic)
+  q2: {value: BC550C@1, source: "the E7 schematic: 'BC 550 C'"}
+  r_s2_ohm: {value: 30.0e+3, source: "the E7 schematic: 30K from the tone chain toward Q2"}
+  c_s2_f: {value: 10.0e-9, source: "the E7 schematic: 10 n into Q2's base (clavinet.com: .01 uF film caps)"}
+  r_bias2_top_ohm: {value: 620.0e+3, source: "the E7 schematic: 620K rail to Q2's base"}
+  r_bias2_bottom_ohm: {value: 100.0e+3, source: "the E7 schematic: 100K Q2's base to ground"}
+  r_c2_ohm: {value: 10.0e+3, source: "the E7 schematic: 10K collector load"}
+  r_e2_ohm: {value: 2.2e+3, source: "the E7 schematic: 2,2K emitter (unbypassed)"}
+  r_e3_ohm: {value: 1.0e+3, source: "the E7 schematic: 1K emitter, bypassed"}
+  c_e3_f: {value: 6.8e-6, source: "the E7 schematic: 6,8 u across the 1K (clavinet.com: a 6.8 uF / 20 V tantalum)"}
+  c_out_f: {value: 0.22e-6, source: "the E7 schematic: 0,22 u from Q2's collector to the volume (clavinet.com: the .22 uF output film cap)"}
+  r_volume_ohm: {value: 100.0e+3, source: "the E7 schematic: 'Lautstaerke 100 K + log'"}
+  volume_taper_mid: {value: 0.15, source: "provisional: model knowledge (a log taper, 15% at mid rotation)"}
   r_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (an amp's or console's input)"}
-  # --- the battery
-  battery_v: {value: 9.0, source: "web: https://groupdiy.com/threads/clavinet-e7.38507 ('my battery was running ~8.8v under load'); a 9 V battery"}
+  # --- the battery and the rail (the E7 schematic)
+  battery_v: {value: 9.0, source: "the E7 schematic: '+ Batterie' (a 9 V block; GroupDIY's E7 thread: ~8.8 V under load, web: https://groupdiy.com/threads/clavinet-e7.38507)"}
   r_battery_ohm: {value: 2.0, source: "provisional: model knowledge (a fresh 9 V battery's internal resistance, ~1-3 Ohm; a tired one tens: a condition dial)"}
-  r_decouple_ohm: {value: 220.0, source: "provisional: model knowledge (the supply's decoupling resistor)"}
-  c_decouple_f: {value: 100.0e-6, source: "provisional: model knowledge (a second 100 uF on the rail)"}
+  q3: {value: BC238@1, source: "the E7 schematic: 'BC 238', the rail's follower"}
+  r_zener_ohm: {value: 1.8e+3, source: "the E7 schematic: 1,8K battery to the BC238's base"}
+  zener: {value: ZPD8V2@1, source: "the E7 schematic: 'ZPD 8,2'"}
+  zener_v: {value: 8.2, source: "the E7 schematic: ZPD 8,2 (the ZPD series' nominal at 5 mA)"}
+  zener_ref_a: {value: 5.0e-3, source: "provisional: model knowledge (the ZPD / BZX55 series' test current, 5 mA)"}
+  c_rail_f: {value: 100.0e-6, source: "the E7 schematic: 100 u on the rail (clavinet.com: the 100 uF / 16 V electrolytic)"}
   r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
 
 devices:
   Q1: {device: q1}
   Q2: {device: q2}
+  Q3: {device: q3}
+  DZ: {device: zener}
 
 sections:
   - title: pickups
@@ -135,7 +146,6 @@ sections:
 
   - title: tone
     parts:
-      RS: {R: [sel, x], r: r_series_ohm}
       # the chain x -> t1 -> t2 -> t3 -> ground; each rocker shorts its cell when off
       RSOFT: {R: [x, t1], r: r_soft_ohm}
       CSOFT: {C: [x, t1], c: c_soft_f}
@@ -165,28 +175,39 @@ sections:
 
   - title: amp
     parts:
-      VB: {V: [bat, "0"], v: battery_v}
-      RBAT: {R: [bat, vbat], r: r_battery_ohm, tolerance: none}
-      RDEC: {R: [vbat, vcc], r: r_decouple_ohm}
-      CDEC: {C: [vcc, "0"], c: c_decouple_f}
-      CIN: {C: [x, b1], c: c_in_f}
-      R1: {R: [vcc, b1], r: r_bias_top_ohm}
-      R2: {R: [b1, "0"], r: r_bias_bottom_ohm}
-      Q1: {bjt: [c1, b1, e1], model: Q1}
+      # the input transformer: the pickups on the primary, Q1 on the secondary
+      T1:
+        transformer:
+          p: {nodes: [sel, "0"], r: t1_r_pri_ohm}
+          s: {nodes: [ts, "0"], ratio: t1_ratio, r: t1_r_sec_ohm, c: t1_c_sec_f}
+        core: {material: t1_core_material, area_m2: t1_core_area_m2, path_m: t1_core_path_m, gap_m: t1_gap_m}
+        turns: t1_turns
+        leakage_h: t1_leakage_h
+      CIN: {C: [ts, b1], c: c_in_f}
+      Q1: {bjt: [c1, b1, "0"], model: Q1}
+      RF1: {R: [c1, b1], r: r_f1_ohm}
+      CF1: {C: [c1, b1], c: c_f1_f}
       RC1: {R: [vcc, c1], r: r_c1_ohm}
-      RE1: {R: [e1, e1b], r: r_e1_ohm}
-      RE2: {R: [e1b, "0"], r: r_e2_ohm}
-      CE2: {C: [e1b, "0"], c: c_e2_f}
-      C12: {C: [c1, b2], c: c_12_f}
+      C12: {C: [c1, x], c: c_12_f}
+      # the tone chain hangs on x (section tone); 30k and 10 nF into stage 2
+      RS2: {R: [x, x2], r: r_s2_ohm}
+      CS2: {C: [x2, b2], c: c_s2_f}
       R3: {R: [vcc, b2], r: r_bias2_top_ohm}
       R4: {R: [b2, "0"], r: r_bias2_bottom_ohm}
       Q2: {bjt: [c2, b2, e2], model: Q2}
       RC2: {R: [vcc, c2], r: r_c2_ohm}
-      RE3: {R: [e2, e2b], r: r_e3_ohm}
-      RHF: {R: [e2, e2h], r: r_hf_ohm}
-      CHF: {C: [e2h, e2b], c: c_hf_f}
-      RE4: {R: [e2b, "0"], r: r_e4_ohm}
-      CE4: {C: [e2b, "0"], c: c_e4_f}
+      RE2: {R: [e2, e2b], r: r_e2_ohm}
+      RE3: {R: [e2b, "0"], r: r_e3_ohm}
+      CE3: {C: [e2b, "0"], c: c_e3_f}
       COUT: {C: [c2, v1], c: c_out_f}
       RVOL: {pot: ["0", out, v1], r: r_volume_ohm, at: volume, taper_mid: volume_taper_mid}
       RLOAD: {R: [out, "0"], r: r_load_ohm, tolerance: none}
+
+  - title: supply
+    parts:
+      VB: {V: [bat, "0"], v: battery_v}
+      RBAT: {R: [bat, vbat], r: r_battery_ohm, tolerance: none}
+      RZ: {R: [vbat, zb], r: r_zener_ohm}
+      VZ: {vr_tube: [zb, zm, "0"], model: DZ, operating_v: zener_v, ref_current_a: zener_ref_a}
+      Q3: {bjt: [vbat, zb, vcc], model: Q3}
+      CRAIL: {C: [vcc, "0"], c: c_rail_f}

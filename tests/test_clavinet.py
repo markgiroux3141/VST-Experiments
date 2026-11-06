@@ -148,7 +148,8 @@ def test_play_e4() -> None:
     assert np.isfinite(pl.contact_s) and 0 < pl.contact_s < 0.05
     c = pl.emf_v["centre"]
     assert np.all(np.isfinite(c))
-    assert 0.02 < np.max(np.abs(c)) < 0.5
+    level = spec.load()["pickups"]["level_v"]  # E4 at the top velocity peaks at it
+    assert 0.1 * level < np.max(np.abs(c)) < 1.5 * level
     tail = c[int(0.5 * 96000) :]
     assert np.max(np.abs(tail[-2000:])) < 0.02 * np.max(np.abs(c))
 

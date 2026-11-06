@@ -12,7 +12,7 @@ to postpone it. So CL0 below builds them unless another track has built them alr
 Milestones CL0-CL5, worked in order with the usual "done when" discipline. **Built
 overnight 2026-11-06 (the user: "let's build this now ... be self reliant, make decisions
 yourself"), branch `clavinet` in the worktree `VST-Experiments-clavinet`:** CL0 and CL1
-done, CL2 built (the amp provisional until the D6 schematic is read), CL3 built with its
+done, CL2 built (the amp drawn from Hohner's E7 schematic since 2026-11-06: "The drawn amp"), CL3 built with its
 live load over budget on strikes (its status section below), CL4 started (the knock, tension
 modulation). Every decision below was Claude's; each is marked
 provisional where it rests on model knowledge.
@@ -197,7 +197,7 @@ loudness.
 
 **Open (the user's):**
 - the listening (`reports/clavinet/listen/LISTEN.md`);
-- the D6 schematic (fetch the links above);
+- the D6 schematic (fetch the links above): the E7's found, "The drawn amp";
 - whether the strings' few provisional geometry choices need sources: the wound lengths'
   bottom (0.80 m), the anvil gap (1.5 mm), the pickup clearance (3 mm), the tangent's
   rubber.
@@ -338,6 +338,62 @@ data's.
 - polyphonic aftertouch (only channel pressure reaches the strings; the app's keyboard
   sends one pressure);
 - the user plays it.
+
+## The drawn amp (2026-11-06, after the merge)
+
+The user found Hohner's **E7 schematic** (St.-Nr. 801 111,
+`data/schematics/hohner_clavinet_d6/clavinete7.jpg`; the README transcribes it). The E7 is the
+D6 in a stage case, and its tone cells are [G13] Table 3's D6 values exactly, so
+`config/circuits/clavinet_d6.yaml`'s amp is now drawn from it. The provisional design and
+its three fitted values (Q1's 46.6 Ohm, its 16.4 uF bypass, the 41 nF high shelf) are gone.
+
+- **The circuit:**
+  - the pickups into an input transformer (Beyer TR 145, 1:15 step-up; its construction
+    provisional: mumetall, ~30 H primary);
+  - 10 nF into Q1, a BC550C with its emitter grounded and 1 MOhm || 8.2 pF from collector
+    to base. The stepped-up pickups are a ~2.3 MOhm source, so Q1 is a transimpedance
+    stage: its output is the secondary's current times 1 MOhm, about 6.5x the EMF and flat;
+  - 0.22 uF from Q1's collector into the tone chain;
+  - 30 kOhm and 10 nF into Q2, a BC550C (620k / 100k, 10k collector, 2.2k + 1k || 6.8 uF
+    emitter), 0.22 uF to a 100 kOhm log volume;
+  - the rail a BC238 follower (`BC238@1`, NXP's BC547B card, provisional) on a ZPD 8.2
+    zener (`ZPD8V2@1`, a junction diode on the `vr_tube` part: provisional), 1.8 kOhm from
+    the 9 V battery;
+  - the chokes' winding resistances from the drawing's turns and wire (55 and 25 Ohm, were
+    400 and 150 provisional).
+- **Idle:** rail 7.49 V, Q1's collector 1.65 V, Q2's 6.09 V (0.14 mA).
+- **Checks against [G13]** (`scripts/clavinet_amp_study.py` -> `reports/clavinet/amp/`):
+  - the amp with the tone stack removed (G13's own simulation): -3.5 dB at 130 Hz (G13 -3:
+    the 30 kOhm and 10 nF into Q2, nothing fitted), flat to 4 kHz (G13 +3 dB: missed).
+  - THD: Q1 is clean (0.16% at 200 mV of EMF); Q2, at 0.14 mA with 1.4 V to the rail,
+    distorts. 1% at 42.7 mV of the centre pickup's EMF, 3.6% at 91.3 mV, 6.6 dB higher.
+    G13 3.4: 1% at the largest level of normal polyphonic playing, 3.6% on fortissimo chord
+    peaks: the drawn amp has that spacing.
+- **The pickup level moved (the user's choice):** G13's "400 mV" is a generator's level
+  injected at a point the paper doesn't give, and through the drawn amp 400 mV of EMF is
+  ~37% THD (hard clipped). So d6.yaml's `level_v` now follows G13's THD instead: a chord's
+  peak in normal playing is the EMF at 1% (42.7 mV), one forte E4 half of it, 21.4 mV (was
+  0.2 V: -19.4 dB). The strings recompiled as **`D6_STRINGS@3`** (the live circuit pins
+  it).
+  - The fits' cache key no longer hashes the `pickups` block (no fit reads it), and the
+    level's cache holds the raw peak, so a level edit costs no refit or replay. The one
+    refit this took (5.4 min) reproduced the cached fits to 1e-11..1e-8 relative (BLAS
+    threading: the worktree's ran with more threads).
+- **The tone rockers on the drawn circuit** differ from [G13] Fig. 11, which simulated the
+  cells alone from a high-impedance source. Here the chain hangs on Q1's collector (~1.7
+  kOhm) through 0.22 uF:
+  - TREBLE alone is a high-pass with a bump at ~270 Hz (the 0.22 uF against its 2 H), not
+    a 1.6 kHz peak;
+  - BRILLIANT a steeper high-pass;
+  - SOFT a gentle low-pass (-18 dB at 10 kHz);
+  - MEDIUM nearly flat;
+  - ALL keeps its 3.7 kHz notch;
+  - all off is 80 dB below ALL (the D6's quirk).
+  `tests/test_clavinet_amp.py` keeps these and G13's checks.
+- **Open:** G13's +3 dB at 4 kHz; the transformer's construction (only its ratio is drawn);
+  whether the D6 board differs from the E7's (GroupDIY's E7 thread says the zener and BC238
+  were added on the E7 for adapters: the D6 may run its amp straight off the battery, a
+  ~1.5 V higher rail and more headroom in Q2).
 
 ## Why it fits the project's methods
 

@@ -39,8 +39,10 @@ FIT_KEYS = {"release": 36, "high": 36}
 
 
 def _cache_key(name: str) -> str:
+    """The fits' cache key: the config without its `pickups` block (no fit reads it: the
+    fits' probe is `pickup_row`, a fixed point on the string), and the fits' code."""
     here = Path(__file__).parent
-    blob = spec.config_text(name).encode()
+    blob = spec.split_block(spec.config_text(name), "pickups")[0].encode()
     for mod in ("spec.py", "strings.py", "fit.py"):
         blob += (here / mod).read_bytes()
     return hashlib.sha256(blob).hexdigest()[:16]

@@ -18,6 +18,7 @@ Tensions, the non-speaking length and the losses are fitted on the string model
 from __future__ import annotations
 
 import functools
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -64,6 +65,20 @@ def load(name: str = "d6") -> dict[str, Any]:
 
 def config_text(name: str = "d6") -> str:
     return (CLAVINET_DIR / f"{name}.yaml").read_text(encoding="utf-8")
+
+
+def split_block(text: str, block: str) -> tuple[str, str]:
+    """(the config's text without the top-level `block`, that block's text): a block runs
+    from its `block:` line to the next line that starts a top-level key (comments between
+    blocks go with the block after them only if indented)."""
+    lines = text.splitlines(keepends=True)
+    start = next((i for i, ln in enumerate(lines) if ln.startswith(f"{block}:")), None)
+    if start is None:
+        return text, ""
+    end = start + 1
+    while end < len(lines) and not re.match(r"[A-Za-z_]", lines[end]):
+        end += 1
+    return "".join(lines[:start] + lines[end:]), "".join(lines[start:end])
 
 
 def midi_note(n: int, cfg: dict[str, Any] | None = None) -> int:
