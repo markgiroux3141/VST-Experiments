@@ -1,0 +1,31 @@
+{
+ "settings": {
+  "ratio": 10,
+  "attack_position": 0,
+  "release_position": 0,
+  "threshold": 0.5,
+  "key_mode": "EXT",
+  "quality": "draft, Newton 1e-5"
+ },
+ "bpm": 128.0,
+ "gain_reduction_peak_db_per_beat": [
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96,
+  13.96
+ ],
+ "render_s": 26.8,
+ "audio_s": 8.0
+}
