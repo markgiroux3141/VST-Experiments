@@ -285,7 +285,15 @@ the plan's "Status (2026-11-06)"):
   switched chain to ground, a provisional two-stage BC413C amp fitted to the paper's THD
   and shelves; `tests/test_clavinet_amp.py`) and `scripts/clavinet_render.py (--midi F |
   --demo)`.
-- **CL3 (the live medium) in progress.**
+- **CL3 built:**
+  - the strings compiled (`D6_STRINGS@2`, a 50 MB sidecar, `scripts/compile_clavinet_strings.py
+    [--check]`) and their Python twin (`live.py`, -124 dB vs `note.play`);
+  - circuitsim's medium `clavinet.rs` on the generic `keyed.rs` (the harp's machinery, bit
+    for bit unchanged), the part `clav_strings: [centre, bridge, bridge_neg]` in both
+    builders, `clavinet_d6_live.yaml` (`scripts/derive_clavinet_live.py`);
+  - the app's `clavinet_d6`. Held keys play (10 bass keys 29%), but every strike drops
+    out (one costs 2.3x real time for ~16 ms): the levers are in the plan.
+- **CL4 started:** the knock (`knock.py`) and tension modulation, in the Python reference.
 
 Open: the user listens, the D6 schematic. Milestones CL0-CL5.
 

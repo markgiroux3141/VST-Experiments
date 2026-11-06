@@ -12,8 +12,9 @@ to postpone it. So CL0 below builds them unless another track has built them alr
 Milestones CL0-CL5, worked in order with the usual "done when" discipline. **Built
 overnight 2026-11-06 (the user: "let's build this now ... be self reliant, make decisions
 yourself"), branch `clavinet` in the worktree `VST-Experiments-clavinet`:** CL0 and CL1
-done, CL2 built (the amp provisional until the D6 schematic is read), CL3 in progress (its
-own status section below, when written). Every decision below was Claude's; each is marked
+done, CL2 built (the amp provisional until the D6 schematic is read), CL3 built with its
+live load over budget on strikes (its status section below), CL4 started (the knock, tension
+modulation). Every decision below was Claude's; each is marked
 provisional where it rests on model knowledge.
 
 ## Status (2026-11-06): CL0-CL2
@@ -208,7 +209,8 @@ builders, the live circuit, the app's device. Commits 07a8a58, 820ff15, fc3f50f 
 data's.
 
 - **The compile** (`varimu/clavinet/compile.py`, `scripts/compile_clavinet_strings.py
-  [--check]`): the component `D6_STRINGS@1`, kind `clav_strings`. Per key, at a 12 kHz live
+  [--check]`): the component `D6_STRINGS@2` (@1 the same before `eigsh` was seeded at its
+  source), kind `clav_strings`. Per key, at a 12 kHz live
   band (`LIVE_BAND_HZ`):
   - the released and held systems' modes, halved as the Rhodes harp's (pairs' upper modes,
     the rows doubled; 28-276 released modes a key);
@@ -230,7 +232,9 @@ data's.
     from OS entropy on every call. The bases then differed at rounding, so did the modes'
     phases and the real / complex split of near-critical pairs (key 36: 85 or 86 kept
     modes), and with them the bytes (not the physics).
-  - Passing `rng=0` to strings.py's `eigsh` would make the patch unneeded.
+  - **Since commit 12dc4db strings.py seeds `eigsh` itself (`rng=0`)**, so the fits are
+    reproducible too. That moved the fits at rounding, so the compile became
+    `D6_STRINGS@2`, which the live circuit pins. A second compile reproduces it ("current").
   - The workers each run one BLAS thread. A compile in one process (`workers=1`) rounds
     differently.
 - **The twin** (`varimu/clavinet/live.py`): `note.py` ported sample by sample.
@@ -321,14 +325,14 @@ data's.
 - A key-down during a release re-strikes from the ringing state.
 - The knock and the tension modulation stay out of the live tier (CL4, the parent's call).
 - The IR names the data by path and sha256, not inline (50 MB): circuitsim reads files.
-- `D6_STRINGS@1` holds the transfers as float32.
+- `D6_STRINGS@2` holds the transfers as float32.
 
 **Open:**
 - the strike's cost (above);
-- strings.py's `eigsh` seeded at the source (above);
-- `tests/test_rhodes_compiled.py`'s saved-harp check failed in this worktree (2026-11-06).
-  Neither varimu/rhodes nor the harp's arithmetic changed (`harp.rs` on `keyed.rs` is the
-  same bit for bit); not looked into;
+- `tests/test_rhodes_compiled.py`'s saved-harp check fails in this worktree (2026-11-06, a
+  rounding-level difference in the compiled bytes). Nothing it reads changed on this
+  branch, and numpy / scipy are main's versions. Likely the same unseeded solver or BLAS
+  thread class as the strings had; check on main before merging;
 - the knock and the tension modulation live;
 - the sidecar's size;
 - polyphonic aftertouch (only channel pressure reaches the strings; the app's keyboard
