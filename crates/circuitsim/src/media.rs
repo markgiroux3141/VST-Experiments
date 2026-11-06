@@ -1,9 +1,10 @@
 //! Media beside the circuit (a plate, `crate::plate`; tape, `crate::tape_stream`; a Rhodes
-//! harp, `crate::harp`): each senses a voltage in the circuit after every sample (a harp
-//! senses nothing: its keys are note events) and drives its `out` node at the next one,
-//! like a control input ([`crate::mna::Mna::media`]).
+//! harp, `crate::harp`; a Clavinet's strings, `crate::clavinet`): each senses a voltage in
+//! the circuit after every sample (the keyboards' media sense nothing: their keys are note
+//! events) and drives its outputs' nodes at the next one, like control inputs
+//! ([`crate::mna::Mna::media`]); most have one output, `out`.
 
-use crate::ir::{Harp, Plate, Spring, Tape};
+use crate::ir::{ClavStrings, Harp, Plate, Spring, Tape};
 
 /// A medium's element in the IR.
 #[derive(Debug, Clone, PartialEq)]
@@ -12,6 +13,7 @@ pub enum MediumElement {
     Spring(Spring),
     Tape(Tape),
     Harp(Harp),
+    ClavStrings(ClavStrings),
 }
 
 /// A keyboard's event for a medium played by keys (a harp): queued for the step it lands at
@@ -30,6 +32,11 @@ pub enum NoteEvent {
     Pedal {
         down: bool,
     },
+    /// Aftertouch, 0-127: channel pressure, every key held (the Clavinet's finger
+    /// pressure; a harp has none).
+    Pressure {
+        value: u8,
+    },
 }
 
 impl MediumElement {
@@ -39,22 +46,28 @@ impl MediumElement {
             MediumElement::Spring(p) => &p.name,
             MediumElement::Tape(t) => &t.name,
             MediumElement::Harp(h) => &h.name,
+            MediumElement::ClavStrings(c) => &c.name,
         }
     }
 
-    pub fn out(&self) -> &str {
+    /// The nodes its outputs drive, in order.
+    pub fn outs(&self) -> Vec<&str> {
         match self {
-            MediumElement::Plate(p) => &p.out,
-            MediumElement::Spring(p) => &p.out,
-            MediumElement::Tape(t) => &t.out,
-            MediumElement::Harp(h) => &h.out,
+            MediumElement::Plate(p) => vec![&p.out],
+            MediumElement::Spring(p) => vec![&p.out],
+            MediumElement::Tape(t) => vec![&t.out],
+            MediumElement::Harp(h) => vec![&h.out],
+            MediumElement::ClavStrings(c) => vec![&c.centre, &c.bridge, &c.bridge_neg],
         }
     }
 
     /// A tape's capstan supply node (varispeed), if any.
     pub fn supply(&self) -> Option<&str> {
         match self {
-            MediumElement::Plate(_) | MediumElement::Spring(_) | MediumElement::Harp(_) => None,
+            MediumElement::Plate(_)
+            | MediumElement::Spring(_)
+            | MediumElement::Harp(_)
+            | MediumElement::ClavStrings(_) => None,
             MediumElement::Tape(t) => t.supply.as_deref(),
         }
     }
@@ -65,7 +78,9 @@ impl MediumElement {
             MediumElement::Plate(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Spring(p) => (&p.sense_pos, &p.sense_neg),
             MediumElement::Tape(t) => (&t.sense_pos, &t.sense_neg),
-            MediumElement::Harp(_) => (crate::ir::GROUND, crate::ir::GROUND),
+            MediumElement::Harp(_) | MediumElement::ClavStrings(_) => {
+                (crate::ir::GROUND, crate::ir::GROUND)
+            }
         }
     }
 }
@@ -129,6 +144,22 @@ pub enum Medium {
     Spring(Box<crate::spring::Medium>),
     Tape(Box<TapeMedium>),
     Harp(Box<crate::harp::Medium>),
+    Clav(Box<ClavMedium>),
+}
+
+/// A Clavinet's strings and their last outputs (centre, bridge, bridge negated).
+#[derive(Debug)]
+pub struct ClavMedium {
+    pub strings: crate::clavinet::Medium,
+    last: [f64; 3],
+}
+
+impl ClavMedium {
+    fn push(&mut self) -> f64 {
+        let [c, b] = self.strings.push();
+        self.last = [c, b, -b];
+        c
+    }
 }
 
 impl Medium {
@@ -146,6 +177,10 @@ impl Medium {
                 emf: Vec::new(),
             })),
             MediumElement::Harp(h) => Medium::Harp(Box::new(crate::harp::Medium::new(h, fs))),
+            MediumElement::ClavStrings(c) => Medium::Clav(Box::new(ClavMedium {
+                strings: crate::clavinet::Medium::new(c, fs)?,
+                last: [0.0; 3],
+            })),
         })
     }
 
@@ -161,13 +196,30 @@ impl Medium {
                 m.push(std::iter::repeat_n(v, k), supply_hz)
             }
             Medium::Harp(m) => m.push(),
+            Medium::Clav(m) => m.push(),
+        }
+    }
+
+    /// Its outputs (one but a Clavinet's strings: three).
+    pub fn outs(&self) -> usize {
+        match self {
+            Medium::Clav(_) => 3,
+            _ => 1,
+        }
+    }
+
+    /// Output j's value after the last push (j = 0: the push's own).
+    pub fn output(&self, j: usize) -> f64 {
+        match self {
+            Medium::Clav(m) => m.last[j],
+            _ => panic!("a medium of one output"),
         }
     }
 
     /// Samples sensed per step (a tape with the literal bias: its `bias_substeps`; else 1).
     pub fn substeps(&self) -> usize {
         match self {
-            Medium::Plate(_) | Medium::Spring(_) | Medium::Harp(_) => 1,
+            Medium::Plate(_) | Medium::Spring(_) | Medium::Harp(_) | Medium::Clav(_) => 1,
             Medium::Tape(m) => m.stream.substeps(),
         }
     }
@@ -180,26 +232,33 @@ impl Medium {
             Medium::Spring(m) => m.push(*vs.last().expect("a sample")),
             Medium::Tape(m) => m.push(vs.iter().copied(), supply_hz),
             Medium::Harp(m) => m.push(),
+            Medium::Clav(m) => m.push(),
         }
     }
 
-    /// A keyboard's event at step `at` (a harp's; other media have no keys).
+    /// A keyboard's event at step `at` (a harp's or a Clavinet's; other media have no
+    /// keys).
     pub fn queue_note(&mut self, at: usize, ev: NoteEvent) {
-        if let Medium::Harp(m) = self {
-            m.queue(at, ev);
+        match self {
+            Medium::Harp(m) => m.queue(at, ev),
+            Medium::Clav(m) => m.strings.queue(at, ev),
+            _ => {}
         }
     }
 
-    /// Every keyboard event up to step `at` is queued (a harp renders that far ahead).
+    /// Every keyboard event up to step `at` is queued (the keys' media render that far
+    /// ahead).
     pub fn notes_known_until(&mut self, at: usize) {
-        if let Medium::Harp(m) = self {
-            m.known_until(at);
+        match self {
+            Medium::Harp(m) => m.known_until(at),
+            Medium::Clav(m) => m.strings.known_until(at),
+            _ => {}
         }
     }
 
-    /// Whether it is played by keys (a harp).
+    /// Whether it is played by keys (a harp, a Clavinet's strings).
     pub fn has_keys(&self) -> bool {
-        matches!(self, Medium::Harp(_))
+        matches!(self, Medium::Harp(_) | Medium::Clav(_))
     }
 
     /// New values mid-run. A plate keeps ringing; tape with the same medium keeps its
@@ -229,6 +288,12 @@ impl Medium {
             (Medium::Harp(m), MediumElement::Harp(h)) => {
                 if !m.same(h) {
                     return Err("a harp changed".into());
+                }
+            }
+            // Nor have the strings (the rockers and the volume are the circuit's).
+            (Medium::Clav(m), MediumElement::ClavStrings(c)) => {
+                if !m.strings.same(c) {
+                    return Err("the strings changed".into());
                 }
             }
             _ => return Err("a medium changed kind".into()),

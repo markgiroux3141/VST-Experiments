@@ -53,6 +53,7 @@ from varimu.circuit.ir import (
     GROUND,
     Capacitor,
     CircuitIR,
+    ClavStrings,
     Coupling,
     Device,
     DeviceModel,
@@ -356,6 +357,9 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
     if isinstance(el, Plate | Spring | Tape | Harp):
         # The medium cut out at its ports: the pickup held at 0 V, the sense unread.
         return f"{el.name} {el.out} 0 dc 0"
+    if isinstance(el, ClavStrings):
+        # The strings cut out: their three pickup nodes held at 0 V.
+        return "\n".join(f"{el.name}_{i} {o} 0 dc 0" for i, o in enumerate(el.outs))
     if isinstance(el, ThyratronEvents):
         # The off tube (SPICE has no events): its capacitances, the grid's leakage, the
         # state node held to the cathode.

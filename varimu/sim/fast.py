@@ -236,8 +236,9 @@ def run_transient(
     the circuit settles, and linear between samples at every rate (a gate's step stays a
     step, where band-limited resampling would ring). `stats`: a dict to fill with the
     engine's statistics of the run (circuitsim.simulate's). `notes` play the IR's media
-    played by keys (a harp, docs/RHODES_PLAN.md RH3): (seconds from the input's start,
-    "on" | "off" | "pedal", MIDI note, velocity or pedal 0 / 1), in order; each lands on
+    played by keys (a harp, docs/RHODES_PLAN.md RH3; a Clavinet's strings, CL3): (seconds
+    from the input's start, "on" | "off" | "pedal" | "pressure", MIDI note, velocity, pedal
+    0 / 1 or pressure 0-127), in order; each lands on
     the simulation's grid behind the settle (silent while the circuit settles)."""
     check_build()
     import circuitsim

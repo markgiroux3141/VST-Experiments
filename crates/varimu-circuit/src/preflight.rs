@@ -158,6 +158,16 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
             Element::Harp(h) => Some((h.out.clone(), format!("<harp {}>", h.name))),
             _ => None,
         }))
+        // A Clavinet's strings drive their three pickup nodes.
+        .chain(ir.elements().flat_map(|e| {
+            match e {
+                Element::ClavStrings(c) => [&c.centre, &c.bridge, &c.bridge_neg]
+                    .into_iter()
+                    .map(|o| (o.clone(), format!("<strings {}>", c.name)))
+                    .collect(),
+                _ => Vec::new(),
+            }
+        }))
         .collect();
     for n in driven.iter().map(|(n, _)| n.as_str()).chain(probes) {
         if !nodes.contains_key(n) {

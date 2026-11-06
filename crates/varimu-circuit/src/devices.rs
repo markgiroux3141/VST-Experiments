@@ -49,6 +49,7 @@ pub struct Library {
     springs: Mutex<HashMap<String, SpringTankComponent>>,
     tapes: Mutex<HashMap<String, TapeComponent>>,
     harps: Mutex<HashMap<String, std::sync::Arc<circuitsim::harp::HarpModel>>>,
+    clav_strings: Mutex<HashMap<String, (String, String)>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
     /// Versions not saved yet ({folder@N: data}): the Components view's design while it is
     /// edited, heard in a circuit before it is a version (docs/COMPONENT_EDITOR_PLAN.md C2).
@@ -68,6 +69,7 @@ impl Library {
             springs: Mutex::new(HashMap::new()),
             tapes: Mutex::new(HashMap::new()),
             harps: Mutex::new(HashMap::new()),
+            clav_strings: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
             unsaved: Mutex::new(HashMap::new()),
         }
@@ -244,6 +246,75 @@ impl Library {
         let model = std::sync::Arc::new(model);
         self.harps.lock().unwrap().insert(key, model.clone());
         Ok(model)
+    }
+
+    /// A Clavinet strings component `name` (kind `clav_strings`; `varimu.clavinet.compile`)
+    /// as the IR names it: (its header's path, relative to the repository's root with
+    /// forward slashes when it is inside it, else absolute; its sidecar's sha256), both
+    /// files checked against the sha256s the version gives (`compile.ir_data`).
+    pub fn clav_strings(&self, name: &str) -> Result<(String, String), Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(c) = self.clav_strings.lock().unwrap().get(&key) {
+            return Ok(c.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let d = yaml::parse(&text, name)?;
+        let d = d
+            .as_map()
+            .ok_or_else(|| Error(format!("{r}: not a mapping")))?;
+        let kind = d.get("kind").and_then(Value::as_str);
+        if kind != Some("clav_strings") {
+            return Err(Error(format!(
+                "{r} is not a Clavinet's strings (kind {kind:?})"
+            )));
+        }
+        let field = |block: &str, k: &str| {
+            d.get(block)
+                .and_then(Value::as_map)
+                .and_then(|m| m.get(k))
+                .and_then(Value::as_str)
+                .ok_or_else(|| Error(format!("{r}: {block}.{k} is missing")))
+        };
+        let folder = root.join(r.folder());
+        let header = folder.join(field("data", "file")?);
+        let raw = std::fs::read_to_string(&header)
+            .map_err(|e| Error(format!("{r}: {}: {e}", header.display())))?;
+        if versions::text_hash(&raw) != field("data", "sha256")? {
+            return Err(Error(format!(
+                "{r}'s data {} doesn't match the sha256 its version names",
+                header.display()
+            )));
+        }
+        let bin = folder.join(field("binary", "file")?);
+        let bytes =
+            std::fs::read(&bin).map_err(|e| Error(format!("{r}: {}: {e}", bin.display())))?;
+        let sha = field("binary", "sha256")?.to_string();
+        use sha2::Digest;
+        let digest = sha2::Sha256::digest(&bytes);
+        let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+        if hex != sha {
+            return Err(Error(format!(
+                "{r}'s sidecar {} doesn't match the sha256 its version names",
+                bin.display()
+            )));
+        }
+        let repo = self.config_dir.join("..");
+        let rel = match (header.canonicalize(), repo.canonicalize()) {
+            (Ok(h), Ok(top)) => match h.strip_prefix(&top) {
+                Ok(p) => p
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/"),
+                Err(_) => h.to_string_lossy().into_owned(),
+            },
+            _ => header.to_string_lossy().into_owned(),
+        };
+        let out = (rel, sha);
+        self.clav_strings.lock().unwrap().insert(key, out.clone());
+        Ok(out)
     }
 
     pub fn plate(&self, name: &str) -> Result<PlateComponent, Error> {

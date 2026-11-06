@@ -194,6 +194,7 @@ pub enum Element {
     Spring(Spring),
     Tape(Tape),
     Harp(Harp),
+    ClavStrings(ClavStrings),
     ThyratronEvents(ThyratronEvents),
 }
 
@@ -411,6 +412,29 @@ pub struct Harp {
     pub rate_hz: f64,
     pub contact_rate_hz: f64,
     pub model: Box<crate::harp::HarpModel>,
+}
+
+/// The Hohner Clavinet's strings (docs/CLAVINET_PLAN.md, CL3; `crate::clavinet`;
+/// `varimu.clavinet.live` is the reference): its keys struck, held and released by note
+/// events, the two pickups' EMFs driving `centre` and `bridge` to ground one sample after
+/// the step that rendered them, and `bridge_neg` the bridge EMF negated (the A / D
+/// rockers' reversed coil). The voices run at the least whole multiple of the step rate at
+/// or above `rate_hz`, the contacts at `contact_rate_hz`. `data` is the compiled strings'
+/// header (a component version of kind `clav_strings`: `varimu.clavinet.compile`), a path
+/// relative to the repository's root ([`crate::clavinet::data_root`]) or absolute; its
+/// float64 sidecar must have the sha256 `sha256`. SPICE has no strings: ngspice sees the
+/// three nodes held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClavStrings {
+    pub name: String,
+    pub centre: String,
+    pub bridge: String,
+    pub bridge_neg: String,
+    pub rate_hz: f64,
+    pub contact_rate_hz: f64,
+    pub data: String,
+    pub sha256: String,
 }
 
 /// A triode gas thyratron as technique K's event kernels (HYBRID_PHYSICS_PLAN.md H3, "K's
@@ -780,6 +804,7 @@ impl Element {
             Element::Spring(e) => &e.name,
             Element::Tape(e) => &e.name,
             Element::Harp(e) => &e.name,
+            Element::ClavStrings(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
         }
     }
@@ -806,6 +831,7 @@ impl Element {
                 v
             }
             Element::Harp(e) => vec![&e.out],
+            Element::ClavStrings(e) => vec![&e.centre, &e.bridge, &e.bridge_neg],
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
         }
     }
@@ -1228,6 +1254,27 @@ impl CircuitIr {
                             "{name}: its pickups drive {} (ground or the input)",
                             e.out
                         ));
+                    }
+                    'V'
+                }
+                Element::ClavStrings(e) => {
+                    positive(&format!("{name}.rate_hz"), e.rate_hz)?;
+                    positive(&format!("{name}.contact_rate_hz"), e.contact_rate_hz)?;
+                    if e.data.is_empty()
+                        || e.sha256.len() != 64
+                        || !e.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+                    {
+                        return err(format!(
+                            "{name}: data names the strings' header, sha256 its sidecar's"
+                        ));
+                    }
+                    let outs = [&e.centre, &e.bridge, &e.bridge_neg];
+                    for (i, o) in outs.iter().enumerate() {
+                        if *o == GROUND || **o == self.input_node || outs[..i].contains(o) {
+                            return err(format!(
+                                "{name}: its pickups drive {o} (ground, the input or twice)"
+                            ));
+                        }
                     }
                     'V'
                 }

@@ -382,6 +382,32 @@ class Harp:
 
 
 @dataclass(frozen=True)
+class ClavStrings:
+    """The Hohner Clavinet's strings (docs/CLAVINET_PLAN.md, CL3; varimu.clavinet.live is
+    the reference, circuitsim's clavinet.rs the port): its keys struck, held and released
+    by note events, the two pickups' EMFs driving `centre` and `bridge` to ground one
+    sample after the step that rendered them, `bridge_neg` the bridge EMF negated (the
+    selector's reversed coil). The voices run at the least whole multiple of the step rate
+    at or above `rate_hz`, the contacts at `contact_rate_hz`. `data` is the compiled
+    strings' header (a component version of kind clav_strings: varimu.clavinet.compile), a
+    path relative to the repository's root, `sha256` its float64 sidecar's. SPICE has no
+    strings: ngspice sees the three nodes held at 0 V."""
+
+    name: str
+    centre: str
+    bridge: str
+    bridge_neg: str
+    rate_hz: float
+    contact_rate_hz: float
+    data: str
+    sha256: str
+
+    @property
+    def outs(self) -> tuple[str, str, str]:
+        return (self.centre, self.bridge, self.bridge_neg)
+
+
+@dataclass(frozen=True)
 class NoiseCurrent:
     """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
     source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
@@ -526,6 +552,7 @@ Element = (
     | Spring
     | Tape
     | Harp
+    | ClavStrings
     | ThyratronEvents
 )
 DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp | Thyratron | Bjt
@@ -562,6 +589,7 @@ _PREFIX = {
     Spring: "V",
     Tape: "V",
     Harp: "V",
+    ClavStrings: "V",
     ThyratronEvents: "X",
 }
 
@@ -593,6 +621,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.sense_pos, el.sense_neg, el.out)
     if isinstance(el, Harp):
         return (el.out,)
+    if isinstance(el, ClavStrings):
+        return el.outs
     if isinstance(el, ThyratronEvents):
         return (el.a, el.g, el.w, el.k)
     return ()
@@ -780,6 +810,8 @@ class CircuitIR:
                 _validate_tape(el, self.input_node)
             elif isinstance(el, Harp):
                 _validate_harp(el, self.input_node)
+            elif isinstance(el, ClavStrings):
+                _validate_clav_strings(el, self.input_node)
             elif isinstance(el, ThyratronEvents):
                 _validate_thyratron_events(el)
             elif isinstance(el, Device):
@@ -1080,6 +1112,7 @@ _ELEMENT_KINDS = {
     "spring": Spring,
     "tape": Tape,
     "harp": Harp,
+    "clav_strings": ClavStrings,
     "thyratron_events": ThyratronEvents,
 }
 _MODEL_KINDS = {
@@ -1264,6 +1297,18 @@ def _validate_harp(el: Harp, input_node: str) -> None:
         raise IRError(f"{el.name}.model: a compiled harp (format 1) with keys")
     if el.out in (GROUND, input_node):
         raise IRError(f"{el.name}: its pickups drive {el.out} (ground or the input)")
+
+
+def _validate_clav_strings(el: ClavStrings, input_node: str) -> None:
+    """The Rust IR's checks for a Clavinet's strings (its data is checked on loading)."""
+    _positive(f"{el.name}.rate_hz", el.rate_hz)
+    _positive(f"{el.name}.contact_rate_hz", el.contact_rate_hz)
+    hexdigits = set("0123456789abcdefABCDEF")
+    if not el.data or len(el.sha256) != 64 or not set(el.sha256) <= hexdigits:
+        raise IRError(f"{el.name}: data names the strings' header, sha256 its sidecar's")
+    for i, o in enumerate(el.outs):
+        if o in (GROUND, input_node) or o in el.outs[:i]:
+            raise IRError(f"{el.name}: its pickups drive {o} (ground, the input or twice)")
 
 
 def _validate_thyratron_events(el: ThyratronEvents) -> None:

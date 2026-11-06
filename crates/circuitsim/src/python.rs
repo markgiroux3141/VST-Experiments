@@ -193,7 +193,8 @@ fn simulate<'py>(
 }
 
 /// Note events from Python: (sample, kind, note, value), kind "on" (value the velocity),
-/// "off" or "pedal" (value 0 up, 1 down).
+/// "off", "pedal" (value 0 up, 1 down) or "pressure" (channel aftertouch, value 0-127;
+/// note ignored).
 fn note_events(
     notes: Vec<(usize, String, u8, u8)>,
 ) -> PyResult<Vec<(usize, crate::media::NoteEvent)>> {
@@ -208,7 +209,14 @@ fn note_events(
                 },
                 "off" => NoteEvent::Off { note },
                 "pedal" => NoteEvent::Pedal { down: value > 0 },
-                k => return Err(invalid(format!("note event kind {k:?}: on, off or pedal"))),
+                "pressure" => NoteEvent::Pressure {
+                    value: value.min(127),
+                },
+                k => {
+                    return Err(invalid(format!(
+                        "note event kind {k:?}: on, off, pedal or pressure"
+                    )));
+                }
             };
             Ok((at, ev))
         })
@@ -239,6 +247,42 @@ fn harp_render<'py>(
         (y, raw, ks)
     });
     Ok((y.into_pyarray(py), raw.into_pyarray(py), ks)
+        .into_pyobject(py)?
+        .into_any())
+}
+
+/// A Clavinet's strings alone (`clavinet.rs`'s `render`; docs/CLAVINET_PLAN.md CL3):
+/// `element` an IR `clav_strings` element (JSON), `n` steps at `fs` from rest with `notes`
+/// as `simulate` takes them, on `workers` worker threads (None: the default). Returns
+/// (the centre pickup's EMF at every step, the bridge's, their internal samples, (k, s)):
+/// sample 0 is the rest's. Releases the GIL.
+#[pyfunction]
+#[pyo3(signature = (element, fs, n, notes, workers=None))]
+fn clav_render<'py>(
+    py: Python<'py>,
+    element: &str,
+    fs: f64,
+    n: usize,
+    notes: Vec<(usize, String, u8, u8)>,
+    workers: Option<usize>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let el: crate::ir::ClavStrings =
+        serde_json::from_str(element).map_err(|e| invalid(format!("clav_render: {e}")))?;
+    let notes = note_events(notes)?;
+    let (out, ks) = py.detach(|| {
+        let out = crate::clavinet::render(&el, fs, n.max(1), &notes, workers);
+        let ks = crate::clavinet::Medium::with_workers(&el, fs, 0).map(|m| (m.k, m.s));
+        (out, ks)
+    });
+    let ([yc, yb], [rc, rb]) = out.map_err(invalid)?;
+    let ks = ks.map_err(invalid)?;
+    Ok((
+        yc.into_pyarray(py),
+        yb.into_pyarray(py),
+        rc.into_pyarray(py),
+        rb.into_pyarray(py),
+        ks,
+    )
         .into_pyobject(py)?
         .into_any())
 }
@@ -583,6 +627,7 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ir_roundtrip, m)?)?;
     m.add_function(wrap_pyfunction!(simulate, m)?)?;
     m.add_function(wrap_pyfunction!(harp_render, m)?)?;
+    m.add_function(wrap_pyfunction!(clav_render, m)?)?;
     m.add_function(wrap_pyfunction!(tape_record, m)?)?;
     m.add_function(wrap_pyfunction!(tape_state_after, m)?)?;
     m.add_function(wrap_pyfunction!(tape_stream_run, m)?)?;

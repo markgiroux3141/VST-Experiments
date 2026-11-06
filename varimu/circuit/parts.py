@@ -37,6 +37,7 @@ import numpy as np
 from varimu.circuit.ir import (
     GROUND,
     Capacitor,
+    ClavStrings,
     Coupling,
     Device,
     DeviceModel,
@@ -987,6 +988,26 @@ def harp(name: str, out: str, data: dict, rate_hz: float, contact_rate_hz: float
         Harp(f"V{upper}", f"{n}_e", rate_hz, contact_rate_hz, data),
         Resistor(f"R{upper}_coils", f"{n}_e", f"{n}_r", float(coils["r_ohm"])),
         Inductor(f"L{upper}_coils", f"{n}_r", out, float(coils["l_h"])),
+    ]
+
+
+def clav_strings(
+    name: str,
+    centre: str,
+    bridge: str,
+    bridge_neg: str,
+    data: str,
+    sha256: str,
+    rate_hz: float,
+    contact_rate_hz: float,
+) -> list[Element]:
+    """A Clavinet's strings (docs/CLAVINET_PLAN.md, CL3): their pickups' EMFs V<NAME> on
+    `centre` and `bridge` (to ground) and the bridge EMF negated on `bridge_neg`
+    (circuitsim's clavinet medium); the pickups' coils are the circuit's own parts."""
+    return [
+        ClavStrings(
+            f"V{name.upper()}", centre, bridge, bridge_neg, rate_hz, contact_rate_hz, data, sha256
+        )
     ]
 
 

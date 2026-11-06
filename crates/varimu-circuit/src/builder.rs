@@ -283,7 +283,7 @@ pub enum Noise {
 }
 
 /// Parts whose resistors are resistors (their noise), and the param holding their value.
-const NOISY: [(&str, Option<&str>); 11] = [
+const NOISY: [(&str, Option<&str>); 12] = [
     ("R", Some("r")),
     ("pot", Some("r")),
     ("rheostat", Some("r")),
@@ -293,6 +293,7 @@ const NOISY: [(&str, Option<&str>); 11] = [
     ("capsule", None),
     ("capsule_dual", None),
     ("harp", None),
+    ("clav_strings", None),
     ("moving_coil", None),
     ("ribbon_motor", None),
 ];
@@ -510,7 +511,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 27] = [
+const MACROS: [&str; 28] = [
     "R",
     "C",
     "L",
@@ -537,6 +538,7 @@ const MACROS: [&str; 27] = [
     "spring_tank",
     "tape",
     "harp",
+    "clav_strings",
     "opamp",
 ];
 
@@ -641,6 +643,15 @@ fn macro_of(kind: &str) -> Macro {
         "spring_tank" => (Some(3), vec![p("component", Raw)], false),
         "harp" => (
             Some(1),
+            vec![
+                p("component", Raw),
+                p("rate_hz", Physical),
+                p("contact_rate_hz", Physical),
+            ],
+            false,
+        ),
+        "clav_strings" => (
+            Some(3),
             vec![
                 p("component", Raw),
                 p("rate_hz", Physical),
@@ -1057,6 +1068,7 @@ fn expand(
         "spring_tank" => return spring_tank_part(ctx, name, nodes, a),
         "tape" => return tape_part(ctx, name, nodes, a),
         "harp" => return harp_part(ctx, name, nodes, a),
+        "clav_strings" => return clav_strings_part(ctx, name, nodes, a),
         _ => unreachable!("{kind}"),
     })
 }
@@ -1408,6 +1420,33 @@ fn tape_reduction(
         demag_k: field(&d, "demag_k").map_err(bad)?,
     });
     Ok(())
+}
+
+/// A Clavinet's strings (docs/CLAVINET_PLAN.md, CL3; `varimu.circuit.parts.clav_strings`):
+/// the pickups' EMFs V<NAME> on centre and bridge, the bridge's negated on bridge_neg.
+fn clav_strings_part(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &[String],
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let (data, sha256) = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.clav_strings(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
+    let contact_rate_hz = ctx.float(&format!("{name}.contact_rate_hz"), &a["contact_rate_hz"])?;
+    Ok(vec![Element::ClavStrings(circuitsim::ir::ClavStrings {
+        name: format!("V{}", name.to_uppercase()),
+        centre: nodes[0].clone(),
+        bridge: nodes[1].clone(),
+        bridge_neg: nodes[2].clone(),
+        rate_hz,
+        contact_rate_hz,
+        data,
+        sha256,
+    })])
 }
 
 /// A Rhodes harp (docs/RHODES_PLAN.md, RH3; `varimu.circuit.parts.harp`): its EMF V<NAME>

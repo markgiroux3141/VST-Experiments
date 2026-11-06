@@ -85,6 +85,12 @@ Macro parts (connection; params, * = required):
                 (numerics: the voices' and the hammer's contact's rate floors): the harp's
                 EMF behind its coils' resistance and inductance into out, its keys played
                 by note events (docs/RHODES_PLAN.md RH3; varimu.circuit.parts.harp)
+    clav_strings [centre, bridge, bridge_neg]; component* (a Clavinet strings component
+                version, NAME@N, or a parameter naming one: kind clav_strings,
+                varimu.clavinet.compile), rate_hz* and contact_rate_hz* (numerics: the
+                voices' and the contacts' rate floors): the pickups' EMFs on centre and
+                bridge, the bridge's negated on bridge_neg, each to ground; its keys played
+                by note events (docs/CLAVINET_PLAN.md CL3; varimu.circuit.parts.clav_strings)
     tape        [rec_plus, rec_minus, out]; component* (a tape component version, NAME@N, or
                 a parameter naming one), and the machine's physical values (all *):
                 speed_m_s, f_bias_hz, bias_a_m (the bias's deep-gap field), rec_gap_m,
@@ -299,7 +305,7 @@ class Noise:
 # Parts whose resistors are resistors (their noise), and the param holding their value.
 _NOISY = {
     "R": "r", "pot": "r", "rheostat": "r", "tapped_pot": "r", "t_pad": "z", "transformer": None,
-    "capsule": None, "capsule_dual": None, "harp": None, "moving_coil": None,
+    "capsule": None, "capsule_dual": None, "harp": None, "clav_strings": None, "moving_coil": None,
     "ribbon_motor": None,
 }  # fmt: skip
 
@@ -822,6 +828,18 @@ def _harp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     return parts.harp(name, *conn, data, a["rate_hz"], a["contact_rate_hz"])
 
 
+def _clav_strings(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    from varimu.clavinet import compile as clav_compile
+
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        data, sha = clav_compile.ir_data(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.clav_strings(name, *conn, data, sha, a["rate_hz"], a["contact_rate_hz"])
+
+
 def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     where = f"{name}.component"
     try:
@@ -1036,6 +1054,11 @@ for _name, _macro in {
     ),
     "spring_tank": Macro(_spring_tank, 3, {"component": Param("raw")}),
     "harp": Macro(_harp, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}),
+    "clav_strings": Macro(
+        _clav_strings,
+        3,
+        {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P},
+    ),
     "tape": Macro(
         _tape,
         3,

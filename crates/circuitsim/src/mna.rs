@@ -340,14 +340,32 @@ impl Mna {
                 Element::Spring(p) => Some(crate::media::MediumElement::Spring(p.clone())),
                 Element::Tape(t) => Some(crate::media::MediumElement::Tape(t.clone())),
                 Element::Harp(h) => Some(crate::media::MediumElement::Harp(h.clone())),
+                Element::ClavStrings(c) => {
+                    Some(crate::media::MediumElement::ClavStrings(c.clone()))
+                }
                 _ => None,
             })
             .collect();
-        let media_rows: Vec<usize> = media_els
+        // One row per output (most media have one; a Clavinet's strings three).
+        let media_rows: Vec<(usize, String)> = media_els
             .iter()
-            .map(|m| {
-                unknowns.push(Unknown::Control(m.name().to_string()));
-                unknowns.len() - 1
+            .flat_map(|m| {
+                let outs = m.outs();
+                let many = outs.len() > 1;
+                outs.into_iter()
+                    .map(|o| {
+                        let name = if many {
+                            format!("{}.{o}", m.name())
+                        } else {
+                            m.name().to_string()
+                        };
+                        (name, o.to_string())
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .map(|(name, out)| {
+                unknowns.push(Unknown::Control(name));
+                (unknowns.len() - 1, out)
             })
             .collect();
 
@@ -512,7 +530,8 @@ impl Mna {
                 | Element::Plate(_)
                 | Element::Spring(_)
                 | Element::Tape(_)
-                | Element::Harp(_) => {}
+                | Element::Harp(_)
+                | Element::ClavStrings(_) => {}
             }
         }
         for el in ir.elements() {
@@ -527,8 +546,8 @@ impl Mna {
         for (c, &row) in ir.controls.iter().zip(&control_rows) {
             incidence(&mut g, row, node(&c.node), None);
         }
-        for (m, &row) in media_els.iter().zip(&media_rows) {
-            incidence(&mut g, row, node(m.out()), None);
+        for (row, out) in &media_rows {
+            incidence(&mut g, *row, node(out), None);
         }
         let media: Vec<MediumPorts> = media_els
             .into_iter()
@@ -618,7 +637,10 @@ impl Mna {
             devices: instances,
             n_controls: control_rows.len(),
             n_media: media_rows.len(),
-            externals: control_rows.into_iter().chain(media_rows).collect(),
+            externals: control_rows
+                .into_iter()
+                .chain(media_rows.into_iter().map(|(r, _)| r))
+                .collect(),
             media,
             outputs: Vec::new(),
             dc_starts,

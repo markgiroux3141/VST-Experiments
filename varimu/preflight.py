@@ -33,6 +33,7 @@ from varimu.circuit.ir import (
     GROUND,
     Capacitor,
     CircuitIR,
+    ClavStrings,
     Device,
     Harp,
     Inductor,
@@ -170,6 +171,12 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
     driven += [(el.out, f"<spring {el.name}>") for el in ir.elements() if isinstance(el, Spring)]
     driven += [(el.out, f"<tape {el.name}>") for el in ir.elements() if isinstance(el, Tape)]
     driven += [(el.out, f"<harp {el.name}>") for el in ir.elements() if isinstance(el, Harp)]
+    driven += [
+        (o, f"<strings {el.name}>")
+        for el in ir.elements()
+        if isinstance(el, ClavStrings)
+        for o in el.outs
+    ]
     for n in [*(d[0] for d in driven), *(p.node for p in ir.probes)]:
         if n not in nodes:
             problem("probe", f"{n!r} is not a node of the circuit", nodes=[n])

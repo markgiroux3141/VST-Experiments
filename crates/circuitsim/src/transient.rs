@@ -2337,7 +2337,7 @@ impl Transient {
     /// The media's pickups after a sample: each medium takes the voltage sensed now and
     /// gives its output's value at the next sample's end (its start is this one's).
     fn step_media(&mut self) {
-        let k = self.mna.n_controls;
+        let mut row = self.mna.n_controls;
         for (i, (m, ports)) in self.media.iter_mut().zip(&self.mna.media).enumerate() {
             let at = |u: Option<usize>| u.map_or(0.0, |j| self.x[j]);
             let supply = ports.supply.map(at);
@@ -2345,8 +2345,13 @@ impl Transient {
                 Some(b) => m.push_batch(&b, supply),
                 None => m.push(at(ports.sense.0) - at(ports.sense.1), supply),
             };
-            self.ext0[k + i] = self.ext1[k + i];
-            self.ext1[k + i] = y;
+            self.ext0[row] = self.ext1[row];
+            self.ext1[row] = y;
+            for j in 1..m.outs() {
+                self.ext0[row + j] = self.ext1[row + j];
+                self.ext1[row + j] = m.output(j);
+            }
+            row += m.outs();
         }
     }
 

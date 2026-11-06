@@ -24,19 +24,16 @@
 //!
 //! **One way.** The harp senses nothing in the circuit (the coils' current doesn't act on
 //! the tines), so it renders ahead: up to the last sample whose events are known
-//! ([`Medium::known_until`]), in chunks, voice by voice. An event lands at the sample it is
-//! queued for, or at the first sample not yet rendered if it comes too late.
-
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+//! ([`Medium::known_until`]), in chunks, voice by voice, on [`crate::keyed`]'s machinery
+//! (shared with the Clavinet's strings). An event lands at the sample it is queued for, or
+//! at the first sample not yet rendered if it comes too late.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::media::NoteEvent;
 
 /// Base samples rendered at a time when the events are known that far.
-pub const CHUNK: usize = 256;
+pub const CHUNK: usize = crate::keyed::CHUNK;
 /// Internal samples between a free voice's sleep checks.
 const SLEEP_EVERY: usize = 1024;
 /// A mode under this (|z|) at a sleep check is zeroed: decaying on, it would reach the
@@ -160,6 +157,14 @@ pub struct HarpVelocity {
     pub range_db: f64,
 }
 
+impl HarpVelocity {
+    /// The hammer's speed for MIDI velocity `vel` (1-127): `range_db` from 127 to 1.
+    pub fn hammer_speed(&self, vel: u8) -> f64 {
+        let vel = vel.clamp(1, 127) as f64;
+        self.ff_speed_m_s * 10f64.powf(-self.range_db / 20.0 * (127.0 - vel) / 126.0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct HarpCoils {
@@ -263,48 +268,46 @@ impl HarpModel {
 
     /// The hammer's speed for MIDI velocity `vel` (1-127): `range_db` from 127 to 1.
     pub fn hammer_speed(&self, vel: u8) -> f64 {
-        let v = &self.velocity;
-        let vel = vel.clamp(1, 127) as f64;
-        v.ff_speed_m_s * 10f64.powf(-v.range_db / 20.0 * (127.0 - vel) / 126.0)
+        self.velocity.hammer_speed(vel)
     }
 }
 
 // --- Complex arithmetic -----------------------------------------------------------
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct C64(f64, f64);
+pub(crate) struct C64(pub(crate) f64, pub(crate) f64);
 
 impl C64 {
-    fn mul(self, o: C64) -> C64 {
+    pub(crate) fn mul(self, o: C64) -> C64 {
         C64(self.0 * o.0 - self.1 * o.1, self.0 * o.1 + self.1 * o.0)
     }
-    fn add(self, o: C64) -> C64 {
+    pub(crate) fn add(self, o: C64) -> C64 {
         C64(self.0 + o.0, self.1 + o.1)
     }
-    fn sub(self, o: C64) -> C64 {
+    pub(crate) fn sub(self, o: C64) -> C64 {
         C64(self.0 - o.0, self.1 - o.1)
     }
-    fn scale(self, s: f64) -> C64 {
+    pub(crate) fn scale(self, s: f64) -> C64 {
         C64(self.0 * s, self.1 * s)
     }
-    fn exp(self) -> C64 {
+    pub(crate) fn exp(self) -> C64 {
         let m = self.0.exp();
         C64(m * self.1.cos(), m * self.1.sin())
     }
-    fn div(self, o: C64) -> C64 {
+    pub(crate) fn div(self, o: C64) -> C64 {
         let d = o.0 * o.0 + o.1 * o.1;
         C64(
             (self.0 * o.0 + self.1 * o.1) / d,
             (self.1 * o.0 - self.0 * o.1) / d,
         )
     }
-    fn norm(self) -> f64 {
+    pub(crate) fn norm(self) -> f64 {
         self.0.hypot(self.1)
     }
 }
 
 /// (e^x - 1) / x and (e^x - 1 - x) / x^2: the first-order hold's integrals.
-fn phi12(x: C64) -> (C64, C64) {
+pub(crate) fn phi12(x: C64) -> (C64, C64) {
     if x.norm() < 0.1 {
         // Their series to x^10: the rest is below 1e-15 here.
         let (mut e1, mut e2) = (C64(0.0, 0.0), C64(0.0, 0.0));
@@ -758,6 +761,8 @@ impl Voice {
                 self.pedal = down;
                 self.settle_damper();
             }
+            // The Rhodes has no aftertouch.
+            NoteEvent::Pressure { .. } => {}
         }
     }
 
@@ -999,162 +1004,53 @@ fn free_run_impl(
 
 // --- The medium -------------------------------------------------------------------
 
-/// A voice and the internal samples it rendered in the chunk (`silent`: none, asleep).
+/// What every harp voice reads.
 #[derive(Debug)]
-struct Slot {
-    voice: Voice,
-    buf: Vec<f64>,
-    silent: bool,
-}
-
-/// A chunk to render: its internal samples and its events (internal offset, event, the
-/// hammer's speed for a key down).
-#[derive(Debug, Default)]
-struct Job {
-    round: u64,
-    n: usize,
-    events: Arc<Vec<(usize, NoteEvent, f64)>>,
-}
-
-/// What every thread rendering voices sees.
-#[derive(Debug)]
-struct Shared {
-    slots: Vec<Mutex<Slot>>,
-    notes: Vec<usize>,
+pub struct HarpCtx {
     flux: FluxPoly,
     voicing: f64,
     sleep: f64,
     s: usize,
     window: usize,
-    job: Mutex<Job>,
-    wake: Condvar,
-    /// The next voice to take, the voices rendered, the workers inside a job.
-    next: AtomicUsize,
-    done: AtomicUsize,
-    active: AtomicUsize,
-    stop: AtomicBool,
+    velocity: HarpVelocity,
 }
 
-impl Shared {
-    /// Render voice i's share of the job into its buffer.
-    fn render_slot(&self, i: usize, job: &Job) {
-        let mut slot = self.slots[i].lock().expect("voice");
-        let Slot { voice, buf, silent } = &mut *slot;
-        let note = self.notes[i];
-        let mine = |ev: &NoteEvent| match *ev {
-            NoteEvent::On { note: q, .. } | NoteEvent::Off { note: q } => q as usize == note,
-            NoteEvent::Pedal { .. } => true,
+impl crate::keyed::KeyVoice for Voice {
+    type Ctx = HarpCtx;
+
+    fn asleep(&self) -> bool {
+        self.asleep
+    }
+
+    fn event(&mut self, ev: NoteEvent, ctx: &HarpCtx) {
+        let speed = match ev {
+            NoteEvent::On { velocity, .. } => ctx.velocity.hammer_speed(velocity),
+            NoteEvent::Pressure { .. } => return,
+            _ => 0.0,
         };
-        let struck = job
-            .events
-            .iter()
-            .any(|(_, ev, _)| matches!(ev, NoteEvent::On { note: q, .. } if *q as usize == note));
-        if voice.asleep && !struck {
-            // Asleep through the chunk: only the pedal moves it (onto the right system).
-            for (_, ev, speed) in job.events.iter() {
-                if mine(ev) {
-                    voice.event(*ev, *speed, self.window);
-                }
-            }
-            *silent = true;
-            return;
-        }
-        *silent = false;
-        buf.clear();
-        buf.resize(job.n, 0.0);
-        let mut t = 0;
-        for &(at, ev, speed) in job.events.iter() {
-            if !mine(&ev) {
-                continue;
-            }
-            voice.render(
-                &mut buf[t..at],
-                &self.flux,
-                self.voicing,
-                self.s,
-                self.sleep,
-            );
-            t = at;
-            voice.event(ev, speed, self.window);
-        }
-        voice.render(&mut buf[t..], &self.flux, self.voicing, self.s, self.sleep);
+        Voice::event(self, ev, speed, ctx.window);
     }
 
-    /// Take voices until none is left.
-    fn take(&self, job: &Job) {
-        loop {
-            let i = self.next.fetch_add(1, Ordering::AcqRel);
-            if i >= self.slots.len() {
-                return;
-            }
-            self.render_slot(i, job);
-            self.done.fetch_add(1, Ordering::AcqRel);
-        }
+    fn render(&mut self, buf: &mut [f64], _n: usize, from: usize, to: usize, ctx: &HarpCtx) {
+        Voice::render(
+            self,
+            &mut buf[from..to],
+            &ctx.flux,
+            ctx.voicing,
+            ctx.s,
+            ctx.sleep,
+        );
     }
 }
 
-/// A worker: each new job's voices taken until none is left.
-fn worker(sh: Arc<Shared>) {
-    let mut seen = 0;
-    loop {
-        let (round, n, events) = {
-            let mut job = sh.job.lock().expect("job");
-            while job.round == seen && !sh.stop.load(Ordering::Acquire) {
-                job = sh.wake.wait(job).expect("job");
-            }
-            if sh.stop.load(Ordering::Acquire) {
-                return;
-            }
-            sh.active.fetch_add(1, Ordering::AcqRel);
-            (job.round, job.n, job.events.clone())
-        };
-        seen = round;
-        sh.take(&Job { round, n, events });
-        sh.active.fetch_sub(1, Ordering::AcqRel);
-    }
-}
-
-/// Workers beside the calling thread: none with few cores; at most three, leaving four
-/// logical cores to the circuit's own threads (as the tape's stream does).
-fn workers() -> usize {
-    std::thread::available_parallelism()
-        .map_or(1, |n| n.get())
-        .saturating_sub(4)
-        .min(3)
-}
-
-/// The harp beside the circuit at step rate `fs` (see the module docs).
+/// The harp beside the circuit at step rate `fs` (see the module docs): its voices on
+/// [`crate::keyed::Medium`].
 pub struct Medium {
     pub harp: crate::ir::Harp,
     /// Internal samples per step and contact steps per internal sample.
     pub k: usize,
     pub s: usize,
-    fs: f64,
-    shared: Arc<Shared>,
-    threads: Vec<std::thread::JoinHandle<()>>,
-    /// MIDI note -> voice.
-    by_note: Vec<Option<usize>>,
-    pedal: bool,
-    /// Voices awake after the last chunk (the chunk renders on the workers only past a
-    /// few).
-    awake: usize,
-    /// Events by the step they land at (queued in order).
-    events: VecDeque<(usize, NoteEvent)>,
-    /// The last step whose events are all queued (None: none yet).
-    known: Option<usize>,
-    /// The next push's step.
-    pos: usize,
-    /// Steps rendered: the internal EMF through k * rendered.
-    rendered: usize,
-    /// Decimated values for steps pos + 1 ..= rendered.
-    out: VecDeque<f64>,
-    taps: Vec<f64>,
-    /// The last taps.len() internal samples, newest at `ring_at - 1`.
-    ring: Vec<f64>,
-    ring_at: usize,
-    chunk: Vec<f64>,
-    /// Every internal sample rendered (tests: `keep_raw`).
-    raw: Option<Vec<f64>>,
+    keys: crate::keyed::Medium<Voice>,
 }
 
 impl std::fmt::Debug for Medium {
@@ -1163,19 +1059,14 @@ impl std::fmt::Debug for Medium {
             .field("harp", &self.harp.name)
             .field("k", &self.k)
             .field("s", &self.s)
-            .field("fs", &self.fs)
-            .field("pos", &self.pos)
-            .field("threads", &self.threads.len())
+            .field("keys", &self.keys)
             .finish()
     }
 }
 
-/// Voices awake (or struck) up to which a chunk renders on the calling thread alone.
-const INLINE_VOICES: usize = 4;
-
 impl Medium {
     pub fn new(el: &crate::ir::Harp, fs: f64) -> Medium {
-        Medium::with_workers(el, fs, workers())
+        Medium::with_workers(el, fs, crate::keyed::workers())
     }
 
     /// [`Medium::new`] with `n` worker threads (the result is the same with any number).
@@ -1186,220 +1077,72 @@ impl Medium {
             .max(1.0) as usize;
         let dt = 1.0 / (fs * k as f64);
         let model = &el.model;
-        let mut by_note = vec![None; 128];
-        for (i, key) in model.keys.iter().enumerate() {
-            by_note[key.note] = Some(i);
-        }
-        let shared = Arc::new(Shared {
-            slots: model
-                .keys
-                .iter()
-                .map(|key| {
-                    Mutex::new(Slot {
-                        voice: Voice::new(key, dt, s),
-                        buf: Vec::new(),
-                        silent: true,
-                    })
-                })
-                .collect(),
-            notes: model.keys.iter().map(|key| key.note).collect(),
+        let voices = model
+            .keys
+            .iter()
+            .map(|key| (key.note as u8, Voice::new(key, dt, s)))
+            .collect();
+        let ctx = HarpCtx {
             flux: FluxPoly::new(&model.flux),
             voicing: model.voicing_m,
             sleep: model.sleep_m,
             s,
             window: (model.contact_window_s * fs * k as f64).round() as usize,
-            job: Mutex::new(Job::default()),
-            wake: Condvar::new(),
-            next: AtomicUsize::new(0),
-            done: AtomicUsize::new(0),
-            active: AtomicUsize::new(0),
-            stop: AtomicBool::new(false),
-        });
-        let threads = (0..n)
-            .filter_map(|i| {
-                let sh = shared.clone();
-                std::thread::Builder::new()
-                    .name(format!("harp {i}"))
-                    .spawn(move || worker(sh))
-                    .ok()
-            })
-            .collect();
-        let taps = if k > 1 {
-            crate::partition::Decimator::taps(k)
-        } else {
-            vec![1.0]
+            velocity: model.velocity.clone(),
         };
         Medium {
             harp: el.clone(),
             k,
             s,
-            fs,
-            shared,
-            threads,
-            by_note,
-            pedal: false,
-            awake: 0,
-            events: VecDeque::new(),
-            known: None,
-            pos: 0,
-            rendered: 0,
-            out: VecDeque::new(),
-            ring: vec![0.0; taps.len()],
-            taps,
-            ring_at: 0,
-            chunk: Vec::new(),
-            raw: None,
+            keys: crate::keyed::Medium::new(voices, ctx, fs, k, 1, n),
         }
     }
 
     /// Keep every internal sample rendered from now on ([`Medium::raw`]; tests).
     pub fn keep_raw(&mut self) {
-        self.raw = Some(Vec::new());
+        self.keys.keep_raw();
     }
 
     pub fn raw(&self) -> &[f64] {
-        self.raw.as_deref().unwrap_or(&[])
+        self.keys.raw(0)
     }
 
     /// The decimation's delay in steps.
     pub fn delay_steps(&self) -> f64 {
-        (self.taps.len() - 1) as f64 / 2.0 / self.k as f64
+        self.keys.delay_steps()
     }
 
     /// The next push's step (events for it and later land on time).
     pub fn position(&self) -> usize {
-        self.pos
+        self.keys.position()
     }
 
     /// An event at step `at` (in order with the others queued; one for a step already
     /// rendered lands at the first one that isn't).
     pub fn queue(&mut self, at: usize, ev: NoteEvent) {
-        let ev = match ev {
-            NoteEvent::On { note, velocity: 0 } => NoteEvent::Off { note },
-            e => e,
-        };
-        self.events.push_back((at, ev));
+        self.keys.queue(at, ev);
     }
 
     /// Every event up to step `at` is queued (`usize::MAX`: all of them).
     pub fn known_until(&mut self, at: usize) {
-        self.known = Some(self.known.map_or(at, |k| k.max(at)));
+        self.keys.known_until(at);
     }
 
     /// The EMF at the next step (the push at step p gives step p + 1's).
     pub fn push(&mut self) -> f64 {
-        let p = self.pos;
-        if self.rendered <= p {
-            let ahead = match self.known {
-                Some(k) if k >= p => (k - p).min(CHUNK - 1),
-                _ => 0,
-            };
-            self.render(p + 1 + ahead);
-        }
-        self.pos += 1;
-        self.out.pop_front().expect("rendered ahead")
-    }
-
-    /// Render steps `rendered .. end` (their events applied as they land).
-    fn render(&mut self, end: usize) {
-        let start = self.rendered;
-        let k = self.k;
-        let n = (end - start) * k;
-        // The chunk's events (late ones at its start), at their internal offsets.
-        let mut evs = Vec::new();
-        while let Some(&(at, ev)) = self.events.front() {
-            if at >= end {
-                break;
-            }
-            self.events.pop_front();
-            let speed = match ev {
-                NoteEvent::On { velocity, .. } => self.harp.model.hammer_speed(velocity),
-                _ => 0.0,
-            };
-            evs.push((at.saturating_sub(start) * k, ev, speed));
-        }
-        let struck = evs
-            .iter()
-            .filter(|e| matches!(e.1, NoteEvent::On { .. }))
-            .count();
-        let sh = &self.shared;
-        let job = Job {
-            round: 0,
-            n,
-            events: Arc::new(evs),
-        };
-        if self.threads.is_empty() || self.awake + struck <= INLINE_VOICES {
-            for i in 0..sh.slots.len() {
-                sh.render_slot(i, &job);
-            }
-        } else {
-            // Published once no worker is inside the last job (one that woke late must not
-            // take from this one with the last one's events).
-            loop {
-                let mut j = sh.job.lock().expect("job");
-                if sh.active.load(Ordering::Acquire) == 0 {
-                    sh.next.store(0, Ordering::Release);
-                    sh.done.store(0, Ordering::Release);
-                    j.round += 1;
-                    j.n = n;
-                    j.events = job.events.clone();
-                    sh.wake.notify_all();
-                    break;
-                }
-                drop(j);
-                std::hint::spin_loop();
-            }
-            sh.take(&job);
-            while sh.done.load(Ordering::Acquire) < sh.slots.len() {
-                std::hint::spin_loop();
-            }
-        }
-        // The voices summed in order (the same on any number of threads).
-        self.chunk.clear();
-        self.chunk.resize(n, 0.0);
-        let mut awake = 0;
-        for slot in &sh.slots {
-            let slot = slot.lock().expect("voice");
-            if !slot.silent {
-                for (c, b) in self.chunk.iter_mut().zip(&slot.buf) {
-                    *c += b;
-                }
-            }
-            awake += usize::from(!slot.voice.asleep);
-        }
-        self.awake = awake;
-        for (_, ev, _) in job.events.iter() {
-            if let NoteEvent::Pedal { down } = *ev {
-                self.pedal = down;
-            }
-        }
-        if let Some(r) = &mut self.raw {
-            r.extend_from_slice(&self.chunk);
-        }
-        // Decimate: one value per step, at its last internal sample.
-        let l = self.taps.len();
-        for (i, &x) in self.chunk.iter().enumerate() {
-            self.ring[self.ring_at] = x;
-            self.ring_at = (self.ring_at + 1) % l;
-            if (i + 1) % k == 0 {
-                let mut y = 0.0;
-                for (j, h) in self.taps.iter().enumerate() {
-                    y += h * self.ring[(self.ring_at + l - 1 - j) % l];
-                }
-                self.out.push_back(y);
-            }
-        }
-        self.rendered = end;
+        let mut y = [0.0];
+        self.keys.push_into(&mut y);
+        y[0]
     }
 
     /// Notes ringing (not asleep) after the last chunk.
     pub fn sounding(&self) -> usize {
-        self.awake
+        self.keys.sounding()
     }
 
     /// The pedal's state after the last chunk.
     pub fn pedal(&self) -> bool {
-        self.pedal
+        self.keys.pedal()
     }
 
     /// Whether `el` keeps this medium playing (the same model and rates).
@@ -1410,25 +1153,12 @@ impl Medium {
     }
 
     pub fn fs(&self) -> f64 {
-        self.fs
+        self.keys.fs()
     }
 
     /// Which voice plays MIDI `note` (None: not on the harp).
     pub fn voice_of(&self, note: u8) -> Option<usize> {
-        self.by_note.get(note as usize).copied().flatten()
-    }
-}
-
-impl Drop for Medium {
-    fn drop(&mut self) {
-        self.shared.stop.store(true, Ordering::Release);
-        {
-            let _j = self.shared.job.lock().expect("job");
-            self.shared.wake.notify_all();
-        }
-        for t in self.threads.drain(..) {
-            let _ = t.join();
-        }
+        self.keys.voice_of(note)
     }
 }
 

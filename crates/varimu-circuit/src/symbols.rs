@@ -619,6 +619,27 @@ fn table() -> Vec<SymbolDef> {
             (0.0, 6.35, 5.588, "left"),
         ),
         macro_sym(
+            "ClavStrings",
+            "clav_strings",
+            "CS",
+            "A Clavinet's strings (docs/CLAVINET_PLAN.md CL3, varimu.clavinet): pins 1 the centre pickup's EMF, 2 the bridge pickup's, 3 the bridge's negated (each to ground), its keys played by note events; Value is its component version",
+            vec![
+                pin("1", "1", 7.62, 2.54, 180, 2.54),
+                pin("2", "2", 7.62, 0.0, 180, 2.54),
+                pin("3", "3", 7.62, -2.54, 180, 2.54),
+            ],
+            vec![
+                rect(-5.08, -3.81, 5.08, 3.81),
+                poly(&[(-3.81, -1.27), (3.81, -1.27)]),
+                poly(&[(-3.81, 0.0), (3.81, 0.0)]),
+                poly(&[(-3.81, 1.27), (3.81, 1.27)]),
+            ],
+            Some("component"),
+            &["rate_hz", "contact_rate_hz"],
+            false,
+            (0.0, 6.35, 5.588, "left"),
+        ),
+        macro_sym(
             "Tape",
             "tape",
             "TP",
