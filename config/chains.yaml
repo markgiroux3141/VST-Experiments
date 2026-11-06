@@ -216,7 +216,18 @@ circuits:
                   [0.5, 19 dB], [0.6, 23 dB], [0.7, 27 dB], [0.8, 31 dB], [0.9, 35 dB],
                   [1.0, 40 dB]]
         default: 0.5
-  ampex_351_record: {kind: pre, tag: a351, label: Ampex 351, wp: 7}
+  ampex_351_record:                 # the direct monitor (METER AND OUTPUT at RECORD LEVEL);
+    kind: pre                       # RECORD LEVEL labelled by its gain re a 200 ohm EMF
+    tag: a351                       # (scripts/a351_record_trim.py --gains)
+    label: Ampex 351
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: record_level
+        label: 351 record level
+        choices: [[0.02, 44 dB], [0.05, 52 dB], [0.1, 58 dB], [0.15, 62 dB], [0.2, 64 dB],
+                  [0.3, 68 dB], [0.5, 72 dB], [0.7, 75 dB], [1.0, 78 dB]]
+        default: 0.1
   neve_1073: {kind: pre, tag: n1073, label: Neve 1073, wp: 11}
   api_312: {kind: pre, tag: api312, label: API 312, wp: 12}
   helios: {kind: pre, tag: helios, label: Helios, wp: 19}

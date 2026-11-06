@@ -25,6 +25,10 @@ checks of varimu.measure.generic and the circuit's own).
 - ua_610 (microphone preamp, the chains build-out's WP2): varimu.measure.ua610_suite: gain
   (the links, the LEVEL law), response per HF / LF position, input and output impedance,
   THD against level; the 2-610 reissue's figures as a reference only.
+- ampex_351_record (microphone preamp, the chains build-out's WP7): the 351's direct
+  monitor, varimu.measure.a351_record_suite: RECORD LEVEL's law, the sensitivity and the
+  drawing's stage levels, response, impedances, THD against level, the input stage's
+  overload.
 - fairchild_670_keyed (compressor with a KEY input, SIDECHAIN_PLAN.md K1):
   varimu.measure.keyed_suite: INT against the stock 670, the duck against the key's
   level, recovery per time constant, thump; keyed by a kick under a bass tone.
@@ -92,6 +96,12 @@ def _run_porta(*args, **kwargs):
     return opamp_pre_suite.run(*args, circuit="tascam_portastudio", **kwargs)
 
 
+def _run_a351_record(*args, **kwargs):
+    from varimu.measure import a351_record_suite
+
+    return a351_record_suite.run(*args, **kwargs)
+
+
 def _run_keyed(*args, **kwargs):
     from varimu.measure import keyed_suite
 
@@ -114,6 +124,7 @@ PROFILES = {
     "ua_610": Profile("ua_610", "mic_preamp", _run_ua610),
     "ssl_4000e": Profile("ssl_4000e", "mic_preamp", _run_ssl),
     "tascam_portastudio": Profile("tascam_portastudio", "mic_preamp", _run_porta),
+    "ampex_351_record": Profile("ampex_351_record", "mic_preamp", _run_a351_record),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
 }
 

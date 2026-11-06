@@ -1,0 +1,69 @@
+# What scripts/make_351_record.py adds to config/circuits/ampex_351.yaml for the 351's direct
+# monitor as a microphone preamp (docs/CHAINS_PLAN.md, WP7). The script's docstring says what
+# else changes; sources as in the circuit files ("sch: ...", "man: ...": the 1962 manual, as
+# in data/schematics/ampex_351/README.md).
+
+controls:
+  input_transfer: {value: 0, choices: [0, 1], unit: position, source: "sch: 4S1 INPUT TRANSFER SWITCH (MICROPHONE, BALANCED BRIDGE, UNBALANCED BRIDGE); man p 18-19", notes: "0 MICROPHONE (6T1 and 1V1b), 1 UNBALANCED BRIDGE (4R5 / 4R4 / 4R3 into RECORD LEVEL); BALANCED BRIDGE isn't modeled"}
+  # `value` is the script's RECORD_CALIBRATE (scripts/a351_record_trim.py prints it).
+  record_calibrate: {value: null, min: 0.0, max: 1.0, unit: rotation, source: "calibrated: scripts/a351_record_trim.py, as the manual's alignment sets it (man p 83: RECORD CALIBRATE for 0 VU on RECORD LEVEL): -10 dBm at the unbalanced bridge, RECORD LEVEL as aligned, +8 dBm into 600 ohm", notes: "sch: 4R12 RECORD CALIBRATE 250K, a screwdriver trimmer; its wiper feeds 2V4a's grid at RECORD LEVEL (4S3a)"}
+
+values:
+  # --- The source -----------------------------------------------------------------------
+  source_impedance_ohm: {value: 200.0, source: "provisional: a 200 ohm source (the chain list's preamps' measuring generator; man p 11: microphones 150 / 250 ohm, strappable 30-50)"}
+  # --- 6T1, the microphone input transformer: a part number only (man p 93) -------------
+  t1_ratio: {value: 14.1, source: "derived: the drawing's signal voltages, -80 dB at 5J1 and -57 dB at 1V1b's grid (dB re 0.78 V, 4S1 at MICROPHONE: sch p 95, circuit conditions), 23 dB; web: https://groupdiy.com/threads/ampex-351-transformers.68867 ('Input xfmr is 1:14'; dual primaries, 150-250 ohm in series), Sowter's catalog 'Ampex 350/351 Input 200/50k ohms' (1:15.8)", notes: "the primaries in series, the 150-250 ohm strap (man p 19: as shipped); the 30-50 ohm strap (parallel, +6 dB) isn't modeled"}
+  t1_turns: {value: 460, source: "provisional: model knowledge (the series primary's turns for ~5 H in the provisional core's linear limit: 460^2 x 4 pi e-7 x A / (l / mu + gap), mumetall's 29,300 at the origin)"}
+  t1_core_material: {value: mumetall, source: "provisional: model knowledge (a nickel-alloy microphone transformer in an octal can; the forum's 'Peerless' guess, groupdiy 68867)"}
+  t1_core_area_m2: {value: 8.1e-5, source: "provisional: model knowledge (a 3/8 in tongue, 3/8 in stack, 90% fill)"}
+  t1_core_path_m: {value: 0.054, source: "provisional: model knowledge (~5.6 x the 3/8 in tongue)"}
+  t1_gap_m: {value: 2.5e-6, source: "provisional: model knowledge (an interleaved nickel-alloy core's joint gap, as the UA 610's T1: config/circuits/ua_610.yaml)"}
+  t1_r_pri_ohm: {value: 10.0, source: "provisional: model knowledge (460 turns of ~0.2 mm wire, ~40 mm a turn, both primaries in series)"}
+  t1_r_sec_ohm: {value: 2500.0, source: "provisional: model knowledge (~6,500 turns of ~0.05 mm wire, ~45 mm a turn)"}
+  t1_leakage_h: {value: 20.0e-6, source: "provisional: model knowledge (referred to the primary)"}
+  t1_c_sec_f: {value: 30.0e-12, source: "provisional: model knowledge (self-capacitance of a ~40 k grid winding)"}
+  # --- 1V1b's output, 4S1's contacts ------------------------------------------------------
+  c_c1b_f: {value: 0.15e-6, source: "sch: 1C1 .15, 1V1b's plate to 4S1's MICROPHONE contact"}
+  r_g1b_out_ohm: {value: 1.0e+6, source: "sch: 1R8 1MEG, from 1C1's far side to ground"}
+  # --- The supply out of record mode ------------------------------------------------------
+  r_b300_play_ohm: {value: 1500, source: "sch: 3R54 1500 1W, in series with 3R55 out of record mode (3K1b open; man p 78: 'Relay contact 3K1B shorts resistor 3R54 in the record mode')"}
+  record_calibrate_pot_ohm: {value: 250.0e+3, source: "sch: 4R12 RECORD CALIBRATE 250K"}
+
+microphone_section:
+  title: microphone input
+  parts:
+    # The source, then 5J1's pins 2 and 3 on 6T1's primaries in series (one side at ground:
+    # the measuring setup). 4S1's MICROPHONE contacts: the pins to 6T1, 1C1's far side to
+    # RECORD LEVEL's top; its UNBALANCED BRIDGE contacts: the pins to 4R5, the bridge's
+    # junction to RECORD LEVEL (sch). Contacts always in the circuit (a flip is a value
+    # change).
+    RSRC: {R: [in, ia], r: source_impedance_ohm, tolerance: none}
+    RS1_MIC_IN: {rheostat: [ia, t1p], r: r_contact_open_ohm, at: input_transfer, tolerance: none}
+    T1:
+      transformer:
+        p: {nodes: [t1p, "0"], r: t1_r_pri_ohm}
+        s: {nodes: [g1b, "0"], ratio: t1_ratio, r: t1_r_sec_ohm, c: t1_c_sec_f}
+      core: {material: t1_core_material, area_m2: t1_core_area_m2, path_m: t1_core_path_m, gap_m: t1_gap_m}
+      turns: t1_turns
+      leakage_h: t1_leakage_h
+    # 1V1b, 12AX7: its grid on 6T1's secondary, 1R6 from the 220 V node, 1R7 unbypassed.
+    XV1B: {device: [p1b, g1b, k1b], model: V1B}
+    RP1B: {R: [b220, p1b], r: r_p1b_ohm}
+    RK1B: {R: [k1b, "0"], r: r_k1b_ohm}
+    CC1B: {C: [p1b, mo], c: c_c1b_f}
+    RG1B_OUT: {R: [mo, "0"], r: r_g1b_out_ohm}
+    RS1_MIC_OUT: {rheostat: [mo, ib], r: r_contact_open_ohm, at: input_transfer, tolerance: none}
+    # The unbalanced bridge (sch): 4R5 82K from the pins into 4R4 20K + 4R3 100.
+    RS1_BR_IN: {rheostat: [ia, bri], r: r_contact_open_ohm, at: input_transfer, reverse: 1, tolerance: none}
+    RIN_S: {R: [bri, brj], r: r_in_series_ohm}
+    RIN_SH: {R: [brj, ibf], r: r_in_shunt_ohm}
+    RIN_F: {R: [ibf, "0"], r: r_in_foot_ohm, tolerance: none}
+    RS1_BR_OUT: {rheostat: [brj, ib], r: r_contact_open_ohm, at: input_transfer, reverse: 1, tolerance: none}
+
+# RECORD CALIBRATE: 1C3 / 1C4 from 1V1a's plate to its top, the wiper to 2V4a's grid (4S3a
+# at RECORD LEVEL).
+record_calibrate_part: {pot: ["0", g4a, met], r: record_calibrate_pot_ohm, at: record_calibrate}
+
+full_scale:
+  input_volts_peak: {value: 1.0960, source: "derived: 0.775 V rms x sqrt(2) (0 dBu: the chain list's preamps' input scale)"}
+  output_volts_peak: {value: 17.36, source: "derived: +24 dBu peak, x sqrt(2) (the chain list's preamps'; the line output's +14 VU over +8 dBm, man p 11, is +22 dBm)"}
