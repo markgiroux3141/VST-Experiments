@@ -1,5 +1,5 @@
 device: "AKG D112 MKII (the original D112's response: the same shape on AKG's older sheet)"
-curve: free-field response on axis and at 10 cm (the dashed curve), dB re the graph's 0 line
+curve: free-field response on axis and at 10 cm (the dashed curve), dB re the graph's 0 line; the polar diagrams (akg_d112_polar.csv)
 publisher: AKG Acoustics GmbH (Harman), D112 MKII quick user guide, 08/15/5054724 (2015)
 documents:
   akg2:
@@ -17,5 +17,14 @@ digitized_with: >-
   residuals up to 0.9 pt, <1 % in frequency). Level: horizontal rules every 10 dB from +20
   (y 377.3 pt) to -30 (y 481.5), 2.084 pt/dB, 0 dB at y 419.0. Values interpolated on the
   1/3-octave grid within each curve's extent (20-20k Hz axial; 20-500 Hz at 10 cm).
+polar_digitized_with: >-
+  the same page's vector paths: the half-diagrams' centres at (514.4, 114.3) pt (left) and
+  (530.0, 114.3) (right), 0 dB ring radius 48.0 pt (the outer circle's bbox), 1.5 pt per dB (the
+  rings at -10 / -20 dB read from the labels, 62.5 px at 300 dpi per 10 dB), 0 deg at the bottom,
+  180 at the top. Stroke colour and dash identify the curves (red 125 Hz and 2000-4000 Hz, green
+  250 Hz, yellow dash-dot 500-1000 Hz and 8000 Hz, blue dotted 16000 Hz). The dashed curves' paths
+  carry only part of their length (a dash pattern's extent): 250 Hz from 60 deg, 500-1000 Hz
+  from 100 deg, 8000 Hz from 40 deg, 16000 Hz from 30 deg; the rest is not in the file.
+  Rear (180 deg): 125 Hz -15.0 dB, 2000-4000 Hz -14.8, 8000 Hz about -10, 16000 Hz about -13.
 digitized_by: Claude Code
 digitized_on: 2026-11-06
