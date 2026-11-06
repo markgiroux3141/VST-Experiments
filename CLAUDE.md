@@ -135,6 +135,13 @@ real-hardware captures, coupling between devices (loading, shared mains, ground 
 the combo amp's acoustic loop, AM broadcast and the tube radio, a theremin, circuits from
 scans, manuals for invented devices.
 
+Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
+built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
+devices that never existed from parts we model, ten instruments (the Nickel Organ, a
+magnetostrictive bar organ, first) and ten processors (the Remanence Leveler, a compressor
+with Preisach memory instead of time constants, first), the prerequisites they share, and a
+suggested order nobody has agreed yet.
+
 An invented tube synth (older parts in place of solid state; drift as character; draft to
 play, production to render the take) is drafted in [docs/TUBE_SYNTH_PLAN.md](docs/TUBE_SYNTH_PLAN.md)
 (2026-10-29; milestones S1-S5, the saturable-reactor filter first). S1 is built except one

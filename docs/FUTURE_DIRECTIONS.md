@@ -15,6 +15,10 @@ in section 1's table; nothing in it is built.
 physical simulator can do, the coupling between devices, the ends of the chain nobody models,
 and tools that save time). None of them is prioritized or built.
 
+**Added 2026-11-06:** invented instruments and processors (devices that never existed, built
+from parts we model) have their own brainstorm, [INVENTED_DEVICES.md](INVENTED_DEVICES.md).
+Section 8.9's manuals for invented devices would be their spec sheets.
+
 Ground rules carry over unchanged (CLAUDE.md "Hard rules"):
 - Every value needs a `source`.
 - The genome is physical only.

@@ -744,6 +744,105 @@ size, the anvil's geometry, coil turns and DC resistance, and the magnets.
    - a tired 9 V battery (sag into the amp's clipping);
    - the mute bar's position and pressure;
    - per-instrument tolerance draws.
+   - (Variation per key and per strike, and drift: "Variation and wear" below.)
+
+## Variation and wear (future work, 2026-11-06)
+
+The user, after listening: "decent, but a little too regular". Nothing here is built. **The
+user's rule for it: what costs no compute goes into the live tier; what adds compute is
+production only** (prints and ⤓ Production renders, which compute every strike anyway).
+
+### Why it repeats today
+
+- A strike from rest is a pure function of (key, velocity). Computed or replayed from the
+  strike table, the samples are the same: the table removed no variation, there was none.
+- The circuit adds none. `clavinet_d6.yaml` has no `noise:` block, its parts are
+  `tolerance: none`, and the Rust builder refuses a nonzero spread anyway. Noise through the
+  nearly linear BJT amp would add hiss, not change a transient. A real D6 varies
+  mechanically, not electrically.
+- What varies today: a re-strike of a ringing string (it starts from its state) and the
+  release (it depends on how long the key was held). The tube synth varies more because
+  its oscillators free-run, so a key catches them at any phase; the Clavinet and the Rhodes
+  start from rest.
+- Phase 5's caution: whole-unit tolerance spread at realistic values was inaudible (heard
+  only exaggerated 6-8x). What is heard should be per key and per strike, not a unit's RC
+  values.
+
+### Live: no compute added
+
+- **An instrument seed.** Every draw below comes from `default_rng([seed, crc32(name),
+  key, ...])` (the reproducibility rule). The app picks an instrument (a "unit #"). The
+  strike table is recorded per instrument (its cache name then carries the draws): ~26 s on
+  all cores and 208 MB, once per instrument. One-off work, not per sample.
+- **Per-key detune.** A few cents per string (provisional: model knowledge, a bounded
+  spread). A static ratio on each key's mode frequencies, folded in where `set_pressure`
+  already bends the held modes (`crates/circuitsim/src/clavinet.rs`), applied to the free
+  modes too. The transfers between mode sets stay nominal, as they do for pressure: check
+  that error against a recompile at a few cents.
+- **Pickup height per string.** Level and brightness about +-1-2 dB key to key
+  (provisional). The pickup coupling per key, set at load.
+- **Tangent rubber per key.** The contact law's stiffness and loss drawn per key
+  (provisional spread). That changes the contact solve's constants, not its work.
+- **The strike angle, as recorded variants.** The tangent's force is never exactly
+  vertical. A seeded angle per strike splits the strike between the string's two
+  polarizations (both are modelled), so the attack and the beating differ each time.
+  - Live: K variants per (key, velocity) in the strike table, a strike picking one by its
+    seed. Memory, not compute: K x 208 MB at f64 (K = 4 proposed; K is a memory decision).
+  - A strike computed live anyway (a re-strike of a ringing string) takes its own drawn
+    angle at no extra cost.
+  - The variant is seeded from (seed, key, the strike's count in the take), so a MIDI take
+    replays bit for bit.
+  - To check first: whether the contact solve takes an off-axis force as it is or needs the
+    tangent's motion in 2D; and whether the two planes are close enough to degenerate that
+    any angle is a blend of two records (then two records per (key, velocity) cover every
+    angle).
+- **Release speed.** The release is computed live anyway. The tangent's lift speed from
+  MIDI release velocity (if the keyboard sends it; `midi::Keys` ignores it today) changes how
+  the contact opens, not the work. It is the same open item as RHODES_VARIATION.md's damper
+  felt.
+- **Amp tolerances and age.** The amp's parts drawn from the instrument seed (the Rust
+  builder accepting a spread: values only), then FUTURE_DIRECTIONS.md section 2's aging laws
+  after the draw (carbon composition resistors up, electrolytics dried out). CL5's static
+  condition dials are values too: hardened rubber, worn yarn, old strings, pickup height, a
+  tired battery, the mute bar.
+
+### Production only: compute added
+
+- **The strike angle, continuous.** Every strike its own drawn angle (production computes
+  every strike).
+- **Strings never at rest.** Through the frame, the anvil and the mute bar, the other notes
+  keep a string slightly moving, so a strike starts from a slightly different state. It
+  keeps voices awake. Properly CL4's keybed and frame coupling; an approximation to measure:
+  the table's strike plus the leftover state ringing on top (exact for the linear string;
+  the nonlinear contact lasts milliseconds).
+- **Finger pressure tremor.** A player layer, labelled as one: a seeded physiological tremor
+  (8-12 Hz, a few cents) as pressure events on held keys, each a `set_pressure` recompute.
+  Small, but compute; it moves live only if measured negligible.
+- **Drift over a session.** Temperature as a state with its own dynamics, not an LFO:
+  - the strings detuning as the room and the player's hands warm (the strike table records
+    one tuning, so live can't follow it);
+  - the amp's tempcos on a thermal node (the lamp's and the heater's pattern);
+  - the room's temperature a seeded random walk shared by the session's devices;
+  - the battery discharging over a take.
+- **Noise and faults.**
+  - B5's noise on the amp: Johnson, the BJTs' shot and flicker noise (the app's Noise
+    switch keeps it off live anyway);
+  - popcorn (burst) noise in the old BJTs;
+  - crackle on the rocker switches' oxidized contacts (an intermittent pickup);
+  - a scratchy volume pot as it turns.
+- **The knock and tension modulation:** CL4's production tier already.
+
+### Proposed order (a recommendation, the user decides)
+
+1. The instrument seed with per-key detune, pickup height and rubber (live), heard against
+   today's instrument.
+2. The strike angle: check the contact first, then production's continuous angle and live's
+   K variants.
+3. If it still sounds mechanical: the leftover motion and the release speed.
+4. The rest alongside CL4 and CL5.
+
+The Rhodes repeats for the same reasons (RHODES_VARIATION.md). The seed and the variant
+machinery belong in `keyed.rs`, which both instruments share, so either can go first.
 
 ## Open decisions (the user's)
 
