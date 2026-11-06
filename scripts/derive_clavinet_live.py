@@ -47,7 +47,7 @@ PATCHES = [
         "values:\n",
         "values:\n"
         "  # --- the strings (docs/CLAVINET_PLAN.md, CL3)\n"
-        '  strings_model: {value: D6_STRINGS@1, source: "config/components/d6_strings/1.yaml'
+        '  strings_model: {value: D6_STRINGS@2, source: "config/components/d6_strings/2.yaml'
         " (the D6's 60 strings from physics, compiled by varimu/clavinet/compile.py: the live"
         " band, the contacts, the pickups' maps)\"}\n"
         '  strings_rate_hz: {value: 96000.0, source: "numerical: the voices at the step rate'

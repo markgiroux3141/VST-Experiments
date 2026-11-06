@@ -49,7 +49,7 @@ controls:
 
 values:
   # --- the strings (docs/CLAVINET_PLAN.md, CL3)
-  strings_model: {value: D6_STRINGS@1, source: "config/components/d6_strings/1.yaml (the D6's 60 strings from physics, compiled by varimu/clavinet/compile.py: the live band, the contacts, the pickups' maps)"}
+  strings_model: {value: D6_STRINGS@2, source: "config/components/d6_strings/2.yaml (the D6's 60 strings from physics, compiled by varimu/clavinet/compile.py: the live band, the contacts, the pickups' maps)"}
   strings_rate_hz: {value: 96000.0, source: "numerical: the voices at the step rate (96 kHz at draft-1x / draft-2x; the live band's modes reach 12 kHz, the pickups' map's products ~24 kHz)"}
   strings_contact_rate_hz: {value: 1536000.0, source: "numerical: the tangent's rubber and the anvil stepped at 16 x 96 kHz, as note.py's reference (varimu/clavinet/live.py)"}
   # --- the pickups (each one's six coils in series)

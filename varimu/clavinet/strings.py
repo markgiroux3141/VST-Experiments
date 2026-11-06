@@ -275,7 +275,10 @@ def segment(
     om = np.sqrt(kk**2 * t_nominal / mu + kk**4 * ei / mu)
     want = int(np.searchsorted(om, 2 * np.pi * f_cut)) + 6
     want = min(want, interior.size - 2)
-    lam, phi = spla.eigsh(kii, k=want, M=mii, sigma=0.0, which="LM")
+    # rng=0: eigsh's starting vector is otherwise drawn from OS entropy on every call, and
+    # the bases (with the fits and the compiled component built on them) then differed at
+    # rounding from run to run (the Hard rules' reproducibility)
+    lam, phi = spla.eigsh(kii, k=want, M=mii, sigma=0.0, which="LM", rng=0)
     order = np.argsort(lam)
     lam, phi = lam[order], phi[:, order]
     keep = lam <= (2 * np.pi * f_cut) ** 2 * 1.0001
