@@ -41,8 +41,8 @@ runs**.
   of +2.8 dB at 4-7 kHz); WP8's Notes.
 - **In progress:** WP9 (the AKG D112), step 1: steps written, the sources read
   (`data/schematics/akg_d112/README.md`).
-- **Next:** WP9 step 1: digitize the D112's response, proximity curve and polars (the MKII
-  sheet's vector paths) to `data/datasheets/akg_d112_*.csv`; then step 2, the cartridge.
+- **Next:** WP9 step 1's rest: the D112's polars from the MKII sheet's vector paths (WP9's
+  Notes) to `data/datasheets/akg_d112_polar.csv`; then step 2, the cartridge.
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains and the 77-DX's in the Room view (optional). One call
@@ -1115,9 +1115,19 @@ Steps:
    front to back, proximity), `test_chain_matrix.py`, app fixtures; `chain_status.py` 21
    of 51.
 
-Notes (2026-11-06, started): sources found and the specification read (the README); the
-curves and polars are not digitized yet. The construction is a dead end (no public
-internals), so step 2 fits its unknowns to the published response and polars.
+Notes (2026-11-06, started): sources found and the specification read (the README). The
+construction is a dead end (no public internals), so step 2 fits its unknowns to the
+published response and polars.
+- Step 1 half done: `data/datasheets/akg_d112_response.csv` (+ `akg_d112.provenance.yaml`)
+  from the MKII sheet's vector paths (no raster: Bezier segments of the two red strokes,
+  axes from the rules): axial 20 Hz-20 kHz and the 10 cm proximity curve to 500 Hz. The
+  curve: -10 dB at ~20 Hz, +3.9 dB at 100-125 Hz (the bass bump), flat 315 Hz-1.6 kHz, a
+  presence peak +6.2 dB at 3.15 kHz, ~0 at 6-8 kHz, +1.9 near 10 kHz, -2.6 at 16 kHz; at 10
+  cm +9.9 dB at 100 Hz (proximity +6 dB over the axial bump). **The polars are not
+  digitized**: the same page's paths are there (stroke colour and dash identify the
+  frequency: indices 297 / 301 / 305 / 315 / 317 / 319 in `get_drawings()` of PDF page 2;
+  the two half-polars' centres and the 10 dB rings (paths 230, 231, 286, 287) still to be
+  read: the left half-diagram shows 125-1000 Hz, the right 2000-16000 Hz).
 
 ### WP10-WP31
 

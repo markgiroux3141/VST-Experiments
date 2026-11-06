@@ -1,0 +1,45 @@
+curve,freq_hz,db,document,reference,quality
+axial,25,-6.92,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,31.5,-3.98,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,40,-1.26,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,50,0.82,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,63,2.39,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,80,3.42,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,100,3.92,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,125,3.87,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,160,2.99,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,200,1.74,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,250,0.59,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,315,0.03,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,400,0.03,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,500,0.04,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,630,0.05,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,800,0.06,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,1000,0.07,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,1250,0.07,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,1600,0.51,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,2000,2.36,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,2500,4.98,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,3150,6.17,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,4000,5.40,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,5000,3.03,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,6300,0.86,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,8000,0.20,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,10000,1.85,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,12500,1.38,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,15000,-1.25,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+axial,16000,-2.62,akg2,"akg2 page 2 frequency response, 0 deg, 0 dB at the graph's 0 line (a level relative to 1 kHz here: it reads +0.1)",read
+10cm,25,1.46,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,31.5,3.00,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,40,4.72,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,50,6.42,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,63,8.11,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,80,9.36,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,100,9.94,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,125,9.14,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,160,7.21,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,200,5.25,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,250,3.37,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,315,1.69,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,400,0.47,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
+10cm,500,0.13,akg2,"akg2 page 2 frequency response at 10 cm (the dashed curve: proximity), same 0 line; the curve ends at ~500 Hz",read
