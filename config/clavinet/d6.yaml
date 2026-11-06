@@ -1,0 +1,153 @@
+# A Hohner Clavinet D6's strings, action and pickups (docs/CLAVINET_PLAN.md, CL1;
+# varimu/clavinet/spec.py builds a key from these). Sources: data/schematics/hohner_clavinet_d6/README.md.
+# [G13] = Gabrielli, Valimaki, Penttinen, Squartini, Bilbao, "A digital waveguide-based
+#   approach for Clavinet modeling and synthesis", EURASIP J. Adv. Signal Process. 2013:103,
+#   measured on a D6 (web: https://www.ness.music.ed.ac.uk/wp-content/uploads/2013/06/Gabrielli.pdf).
+# [R12] = Remaggi, Gabrielli, de Paiva, Valimaki, Squartini, "A pickup model for the
+#   Clavinet", DAFx-12 (web: https://dafx.de/paper-archive/2012/papers/dafx12_submission_62.pdf).
+# Values marked "fit:" are unknowns set by spec.py, each to a different published figure.
+# Keys are numbered 1-60, F1 to E6 ([G13] 2): MIDI note = key + 28.
+
+tuning:
+  a4_hz: {value: 440.0, source: "provisional: model knowledge (concert pitch)"}
+  first_midi: {value: 29, source: "[G13] 2: the keyboard ranges from F1 to E6, 60 keys"}
+  keys: {value: 60, source: "[G13] 2: 60 keys, one string per key"}
+
+steel:
+  youngs_pa: {value: 2.0e11, source: "provisional: model knowledge (music wire, 200-210 GPa)"}
+  density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (carbon steel)"}
+  tensile_pa: {value: 3.0e9, source: "provisional: model knowledge (ASTM A228 music wire near 0.2 mm, ~2.9-3.1 GPa); a check, not used in the model"}
+  mu_r: {value: 80.0, source: "provisional: model knowledge (cold-drawn high-carbon steel, ~50-100; the pickup uses (mu_r-1)/(mu_r+1), 0.97-0.98 over that range)"}
+
+plain:
+  # Keys 24-60 share one gauge and differ in length (web: Clavinet.com message board,
+  # https://www.tapatalk.com/groups/clavinetdotcommessageboard39332/clavinet-strings-question-t514.html,
+  # "notes 24-60 were the same gauge just different lengths").
+  first_key: {value: 24, source: "[G13] 2: 'the first 23 strings wound and the remaining ones unwound'"}
+  diameter_m: {value: 2.032e-4, source: "web: https://ep-forum.com/smf/index.php?topic=9669.0 (a restorer: replacement plain strings .009 vs the original .008 in)"}
+  # [G13] Fig. 6: the measured B is flat (log10 B ~ -4.05) from ~150 Hz to 1050 Hz. One
+  # gauge with B = pi^3 E d^4 / (64 T L^2), T = mu (2 L f)^2 constant in key means
+  # L^4 f^2 constant: the speaking length goes as f^-1/2 (derived).
+  length_exponent: {value: -0.5, source: "derived: [G13] Fig. 6 (B constant over the plain strings) with one gauge"}
+  # fit: the top string's length (key 60) so its B is [G13] Table 1's.
+  b_top: {value: 8.0e-5, source: "[G13] Table 1: E6, B = 8E-5"}
+
+wound:
+  # Three wound types: keys 1-8, 9-14, 15-23 (web: https://www.ebay.com/itm/316149692228,
+  # a NOS D6 / E7 string listing: 'Type 1 ... notes 1-8 ... Type 4 notes 24 to 60 plain').
+  types: {value: [[1, 8], [9, 14], [15, 23]], source: "web: https://www.ebay.com/itm/316149692228 (string types by key)"}
+  # Outer gauges .032 / .028 / .022 in (web: https://www.vintagevibe.com/products/clavinet-strings,
+  # a replacement set's chart; its breakpoints differ by a key or two, mapped onto the types).
+  outer_diameter_m: {value: [8.13e-4, 7.11e-4, 5.59e-4], source: "web: https://www.vintagevibe.com/products/clavinet-strings (.032, .028, .022 in); provisional: mapped onto the eBay listing's types"}
+  wrap_fill: {value: 0.8, source: "provisional: model knowledge (a round wire wrap fills ~75-85% of its annulus with metal)"}
+  wrap_density_kg_m3: {value: 8900.0, source: "provisional: model knowledge (a nickel wrap: magnetic, for the pickups)"}
+  # fit: each type's core diameter so the model's B matches [G13]'s measured B on its keys
+  # (Table 1: F1 5E-4, A#1 2E-4, D3 9E-5, D#3 1E-4; Fig. 6 read for the middle type).
+  b_anchors: {value: [[1, 5.0e-4], [6, 2.0e-4], [11, 2.4e-4], [22, 9.0e-5], [23, 1.0e-4]], source: "[G13] Table 1 (keys 1, 6, 22, 23); key 11 read from Fig. 6 (log10 B ~ -3.62 at 69 Hz)"}
+  # The bass strings can't follow the plain law (F1 would be ~1 m): their lengths run
+  # linearly from the plain law at key 23 to this at key 1.
+  bottom_length_m: {value: 0.80, source: "provisional: model knowledge (the D6's case is ~0.9 m wide and the harp diagonal, web: https://en.wikipedia.org/wiki/Clavinet 'placed diagonally below the key surface')"}
+
+nonspeaking:
+  # fit: the non-speaking part (tuning pin to anvil) as a fraction of the speaking length,
+  # so a released key's fundamental is 3 semitones below the note ([G13] 2.3.1: 'the pitch
+  # decrease after release is three semitones for the whole keyboard').
+  release_drop_semitones: {value: 3.0, source: "[G13] 2.3.1"}
+  # The yarn is woven through the non-speaking part near the pin ([G13] Fig. 1, H).
+  yarn_fraction: {value: 0.7, source: "provisional: model knowledge (the weave covers most of the short side, [G13] Fig. 1)"}
+  yarn_mass_kg_m: {value: 1.0e-3, source: "provisional: model knowledge (wool yarn, ~1 g per metre woven on)"}
+  # fit: the yarn's damping (a dashpot per metre, a plain string's; it grips by the surface,
+  # so it scales with the string's diameter: provisional) so a released E4 dies 60 dB in this.
+  release_t60_s: {value: 0.1, source: "[G13] Fig. 5 (read: the partials are gone ~0.1 s after the key's release at 0.5 s)"}
+
+anvil:
+  gap_m: {value: 1.5e-3, source: "provisional: model knowledge (the string's rest clearance to the anvil; the tangent pushes it there)"}
+  contact_k_n_m: {value: 5.0e+6, source: "provisional: model knowledge (steel wire on a steel stud: Hertzian line contact, ~1e6-1e7 N/m at newtons)"}
+  contact_damping_ratio: {value: 0.05, source: "provisional: model knowledge"}
+  # fit: the rubber's wrap compliance, so pressing harder bends the pitch up by the target
+  # below (the Clavinet's finger vibrato). The pinch itself stays firm (a soft anvil let
+  # the speaking part's energy into the yarn: E6 died in 0.1 s, CL1's first try); the
+  # harder press deflects the string further around the stud's edge (F / k_wrap beside the
+  # anvil point), which only stretches it.
+  bend_target_cents: {value: 20.0, source: "provisional: model knowledge (a firm press bends a Clavinet note by roughly 10-30 cents)"}
+  bend_key: {value: 24, source: "provisional: the plain string with the least tension, where bends are largest"}
+  bend_force_n: {value: [1.0, 5.0], source: "provisional: model knowledge (a light hold to a firm press at the tangent)"}
+  # The pinch grips the string sideways too: friction between rubber, string and stud.
+  grip_k_n_m: {value: 3.0e+4, source: "provisional: model knowledge (rubber friction grip, softer than the anvil's push; CL1 tests it as the cause of [G13]'s beating)"}
+  grip_damping_ratio: {value: 0.1, source: "provisional: model knowledge"}
+  grip_tilt_deg: {value: 8.0, source: "provisional: model knowledge (the pinch's axes tilted against the pickups' vertical: the stud's face isn't square; couples the polarizations)"}
+
+tangent:
+  mass_kg: {value: 0.008, source: "provisional: model knowledge (the tangent and the key's effective mass at it)"}
+  travel_m: {value: 4.0e-3, source: "provisional: model knowledge (the tangent's distance to the string at rest)"}
+  # [G13] 3.2: 'the average key velocity normally varies linearly in the range 1 to 4 m/s
+  # and is mapped to integers from 1 to 127'.
+  velocity_range_m_s: {value: [1.0, 4.0], source: "[G13] 3.2"}
+  hold_force_n: {value: 2.0, source: "provisional: model knowledge (a finger holding a key down, at the tangent)"}
+  rubber_shore_a: {value: 60.0, source: "provisional: model knowledge (the tangent's rubber tip)"}
+  tip_radius_m: {value: 2.0e-3, source: "provisional: model knowledge"}
+  hysteresis_s_m: {value: 0.6, source: "provisional: model knowledge (rubber's Hunt-Crossley loss, as the Rhodes' neoprene)"}
+
+tailpiece:
+  # The far end: the string's loop on a metal bar ([G13] 2: 'the opposite side is connected
+  # to a tailpiece'; 2.3: energy leaves at the string ends, the metal bar and the tangent).
+  # The tailpiece bar is screwed to the case, which a string sees like a large plate: a
+  # driving-point admittance that is real and frequency independent (an infinite plate's
+  # 1 / (8 sqrt(D rho h))). So the end is a dashpot to ground (fit: A2's fundamental decays as
+  # [G13] Fig. 7(a), read ~2.7 dB/s, T60 ~22 s), with a spring soft against it at audio
+  # frequencies that holds the end statically. (A stiff bar with a dashpot can't absorb
+  # enough: T60 >= ~33 s; a soft spring fitted instead took the treble strings' energy:
+  # E6 died in 0.1 s; CL1's first tries.)
+  k_n_m: {value: 1.0e+4, source: "provisional: model knowledge (holds the end statically, far stiffer than a string's T / L; resistive above a few Hz against the fitted dashpot)"}
+  fundamental_t60_s: {value: 22.0, source: "[G13] Fig. 7(a) (read: A2 piano, the fundamental -8 to -35 dB over 10 s)"}
+  fit_key: {value: 17, source: "[G13] Fig. 7: A2"}
+
+mute:
+  # The mute slider presses a felt strip on every string near the tailpiece ([G13] Fig. 1,
+  # I: 'mute bar slider and mechanism'), for the muted, pizzicato sound.
+  distance_m: {value: 0.02, source: "provisional: model knowledge (the felt a couple of cm in from the tailpiece)"}
+  k_n_m: {value: 30.0, source: "provisional: model knowledge (felt pressed lightly on the wire)"}
+  # fit: the felt's dashpot so a muted E4 (slider fully on) decays in this.
+  muted_t60_s: {value: 0.3, source: "provisional: model knowledge (a muted Clavinet note is a short pluck, a few tenths of a second)"}
+  fit_key: {value: 36, source: "provisional: E4, as the other fits"}
+
+losses:
+  air_density_kg_m3: {value: 1.2, source: "provisional: model knowledge (air at 20 C)"}
+  air_viscosity_pa_s: {value: 1.8e-5, source: "provisional: model knowledge (air at 20 C)"}
+  # fit: the steel's loss factor on the bending energy so E4's partials near 3 kHz decay
+  # as [G13] Fig. 8 (read: T60 ~3-4 s at 2.3-3.3 kHz).
+  high_t60_s: {value: 3.8, source: "[G13] Fig. 8 (read: E4's partials 7-10, T60 3.5, 5.9, 3.1, 4.3 s)"}
+  high_fit_key: {value: 36, source: "[G13] Fig. 8: E4"}
+  high_fit_partials: {value: [7, 10], source: "[G13] Fig. 8"}
+  # fit: the wound strings' wrap friction (a loss factor, sigma = pi f eta) so A2's
+  # partials 2-5 decay as [G13] Fig. 7(a) (read from the slopes), least squares in log T60.
+  # (Without it A2's 5th partial rang 15 s: a wound string's wrap rubs on its core.)
+  wound_t60_s: {value: [16.0, 10.5, 9.7, 4.9], source: "[G13] Fig. 7(a) (read: A2 piano, partials 2-5)"}
+
+pickups:
+  # Six bars of ten strings each, epoxy-potted single coils ([R12] 2, Fig. 4; [G13] 2.1
+  # says ten bars of six: [R12]'s figure is dimensioned, so it is used).
+  strings_per_bar: {value: 10, source: "[R12] 2 and Fig. 4"}
+  bar_width_m: {value: 5.0e-3, source: "[R12] 2: 'each metal bar is 0.5 cm wide'"}
+  bar_length_m: {value: {centre: 0.037, bridge: 0.033}, source: "[R12] 2: ~3.7 cm (centre pickup), 3.3 cm (bridge)"}
+  bar_gap_m: {value: 3.0e-3, source: "[R12] Fig. 4"}
+  magnet_height_m: {value: 7.0e-3, source: "[R12] Fig. 4"}
+  # A ferrite bar: [R12] Fig. 5 / [G13] Fig. 10 put ~0.075 T through the pickup, about what
+  # a thin vertically magnetized ferrite gives in 2D (a check in tests/test_clavinet.py).
+  magnet_br_t: {value: 0.38, source: "provisional: model knowledge (ferrite, Br ~0.38 T), consistent with [R12] Fig. 5's ~0.075 T"}
+  magnet_mu_r: {value: 1.05, source: "provisional: model knowledge (ferrite's recoil permeability)"}
+  clearance_m: {value: 3.0e-3, source: "provisional: model knowledge (the string's centre above the bar's face)"}
+  # Positions from the string's termination at the tailpiece ([R12] 2).
+  centre_distance_m: {value: [0.185, 0.065], source: "[R12] 2: from 18.5 cm for the lowest string to 6.5 cm for the highest (linear in key: a straight bar)"}
+  bridge_distance_m: {value: 0.04, source: "[R12] 2: a constant 4 cm"}
+  # Each pickup's coils in series: [G13] Fig. 9 measured ~10.2-10.9 kOhm over the band.
+  dcr_ohm: {value: 10200.0, source: "[G13] Fig. 9 (read: |Z| ~10.2 kOhm at low frequency)"}
+  wire_ohm_per_m: {value: 5.4, source: "provisional: model knowledge (AWG 42 copper, 0.064 mm, ~5.4 Ohm/m)"}
+  turn_length_m: {value: 0.095, source: "provisional: model knowledge (a turn around a 37 x 5 mm bar with its build-up)"}
+  # Which side of the strings: [G13] 2.1 puts the bridge pickup above and the centre below
+  # ([R12] says the opposite; the journal paper is followed).
+  side: {value: {centre: below, bridge: above}, source: "[G13] 2.1"}
+  # fit: the analytic free-space map (pickup.py) has the shape of [R12]'s solve but not the
+  # bars' steel, which concentrates both fields: its level is one factor, set so E4 struck
+  # at the top velocity peaks at this on the centre pickup.
+  level_v: {value: 0.2, source: "[G13] 3.4: 'the maximum one generated by pickups with normal polyphonic playing (400 mV)'; provisional: one forte E4 on the centre pickup taken as half of a chord's"}

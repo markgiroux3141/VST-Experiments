@@ -1,0 +1,183 @@
+# The Hohner Clavinet D6's electronics (docs/CLAVINET_PLAN.md, CL2): the two pickups, the
+# A/B and C/D pickup rockers, the four tone rockers and the two-stage BJT amp on its 9 V
+# battery. The strings are the medium in varimu/clavinet/ (CL1): their EMFs drive this
+# circuit as control inputs (scripts/clavinet_render.py), each pickup's EMF behind its
+# coils' resistance and inductance. Sources: data/schematics/hohner_clavinet_d6/README.md.
+#
+# The D6's schematic itself isn't in hand yet (the README lists where it is). What is known:
+#   pickups   [G13] Fig. 9: each pickup's impedance ~10.2-10.9 kOhm over the band.
+#   selector  [R12] Table 1: A+C the centre pickup, B+C the bridge, A+D both anti-phase,
+#             B+D both in phase. The two rockers are one 4-position control here; the
+#             anti-phase bridge is its own control input (the bridge EMF negated: a reversed
+#             coil, the same physics).
+#   tone      [G13] Table 3: SOFT 30k || 0.1u, MEDIUM 10k || 15n, TREBLE 2 H || 4.7n,
+#             BRILLIANT 0.6 H. Fig. 11's responses pin the topology: the four cells are a
+#             series chain from the signal line to ground, each shorted by its rocker when
+#             off. All on: TREBLE's L || C makes the 1.6 kHz peak (the chain's impedance
+#             infinite), TREBLE with BRILLIANT the ~3.4 kHz notch (their series resonance);
+#             one alone: SOFT and MEDIUM low-pass, TREBLE band-pass, BRILLIANT high-pass.
+#             All off: the chain shorts the signal and the instrument is silent.
+#   amp       [G13] 2.1, 2.3.6, 3.4: two-stage BJT, nearly flat without the tone stack (a
+#             -3 dB shelf at 130 Hz, +3 dB at 4 kHz), THD 1% at 1 kHz for 400 mV in.
+#             Clavinet.com's D6 preamp upgrade (web: https://clavinet.com/d6upgrade.php):
+#             the front end a BC 413C; .01 uF film caps, 4.7 nF (TREBLE's), .015 uF
+#             (MEDIUM's), .22 uF output, 100 uF / 16 V, 6.8 uF / 20 V tantalum.
+#             The stages' resistors are a provisional design (marked so), set to those
+#             figures: replace them when the schematic is read.
+
+title: "Hohner Clavinet D6 electronics (pickups, rockers, two-stage BJT amp)"
+input: in
+cv_inputs:
+  centre: ec
+  bridge: eb
+  bridge_neg: ebn
+probes: [out, x, sel, b1, c1, e2]
+
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (the strings drive the pickups' control inputs)"}
+  output_volts_peak: {value: 2.0, source: "provisional: model knowledge (the D6's line-ish output: a forte chord at full volume peaks ~1-2 V on 9 V)"}
+
+controls:
+  pickup_select: {value: 3, choices: [0, 1, 2, 3], unit: position, source: "[R12] Table 1", notes: "0 = A+C (centre), 1 = B+C (bridge), 2 = A+D (both, anti-phase), 3 = B+D (both, in phase)"}
+  soft: {value: 0, choices: [0, 1], unit: switch, source: "[G13] 2.1: the SOFT rocker"}
+  medium: {value: 1, choices: [0, 1], unit: switch, source: "[G13] 2.1: the MEDIUM rocker"}
+  treble: {value: 1, choices: [0, 1], unit: switch, source: "[G13] 2.1: the TREBLE rocker"}
+  brilliant: {value: 0, choices: [0, 1], unit: switch, source: "[G13] 2.1: the BRILLIANT rocker"}
+  volume: {value: 0.8, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the D6's volume knob; default a design choice)"}
+
+values:
+  # --- the pickups (each one's six coils in series)
+  r_pickup_ohm: {value: 10.2e+3, source: "[G13] Fig. 9 (read: |Z| ~10.2 kOhm at low frequency)"}
+  l_pickup_h: {value: 0.03, source: "provisional: model knowledge (small: [G13] Fig. 9 stays within 10.2-10.9 kOhm to 18 kHz, so omega L << R)"}
+  c_pickup_f: {value: 1.0e-9, source: "provisional: model knowledge (the coils' self-capacitance and wiring; resonance ~29 kHz, above the band)"}
+  r_combine_ohm: {value: 100.0, source: "numerical: the selector's contacts and wiring (both pickups in parallel at A+D, B+D)"}
+  contact_ohm: {value: 0.05, source: "numerical: a closed rocker's contact"}
+  open_ohm: {value: 1.0e+9, source: "numerical: an open rocker's contact"}
+  # --- the tone chain ([G13] Table 3)
+  r_soft_ohm: {value: 30.0e+3, source: "[G13] Table 3: SOFT R = 30 kOhm"}
+  c_soft_f: {value: 0.1e-6, source: "[G13] Table 3: SOFT C = 0.1 uF"}
+  r_medium_ohm: {value: 10.0e+3, source: "[G13] Table 3: MEDIUM R = 10 kOhm"}
+  c_medium_f: {value: 15.0e-9, source: "[G13] Table 3: MEDIUM C = 15 nF (clavinet.com: the .015 uF cap)"}
+  l_treble_h: {value: 2.0, source: "[G13] Table 3: TREBLE L = 2 H"}
+  c_treble_f: {value: 4.7e-9, source: "[G13] Table 3: TREBLE C = 4.7 nF (clavinet.com: the 4.7 nF disc between the two inductors)"}
+  l_brilliant_h: {value: 0.6, source: "[G13] Table 3: BRILLIANT L = 0.6 H"}
+  r_l_treble_ohm: {value: 400.0, source: "provisional: model knowledge (a 2 H audio choke's winding resistance)"}
+  r_l_brilliant_ohm: {value: 150.0, source: "provisional: model knowledge (a 0.6 H choke's winding resistance)"}
+  # The chain's absolute level: Fig. 11's TREBLE peak (-34 dB) and BRILLIANT at 10 kHz
+  # (-38 dB) give the series resistance into the chain and the amp's input resistance
+  # (two figures, two unknowns: Rs = 49 Rin, |j 2 pi 10k 0.6 H || Rin| = 0.617 Rin).
+  r_series_ohm: {value: 2.2e+6, source: "derived: [G13] Fig. 11's levels (2.35 MOhm, nearest E12); provisional: the series element itself isn't on a drawing in hand"}
+  r_bias_top_ohm: {value: 220.0e+3, source: "provisional: model knowledge (Q1's divider; with the bottom resistor ~1.6 V at the base, and with the base, ~47 kOhm in: [G13] Fig. 11's levels)"}
+  r_bias_bottom_ohm: {value: 56.0e+3, source: "provisional: model knowledge (Q1's divider bottom)"}
+  c_in_f: {value: 0.1e-6, source: "provisional: model knowledge (Q1's input coupling, ~35 Hz into its ~47 kOhm; clavinet.com's .01 uF film caps would put it at ~340 Hz, against [G13]'s nearly flat amp: their place isn't known)"}
+  # --- stage 1: BC413C common emitter
+  q1: {value: BC413C@1, source: "web: https://clavinet.com/d6upgrade.php ('the BC 413C' front end)"}
+  r_c1_ohm: {value: 22.0e+3, source: "provisional: model knowledge (Q1's collector load, ~0.2 mA: a low-noise front end)"}
+  r_e1_ohm: {value: 46.6, source: "provisional: fit (Q1's unbypassed emitter resistor: THD 1% at 1 kHz for 400 mV peak of the centre pickup's EMF, the default rockers, [G13] 3.4; scripts/clavinet_amp_study.py --fit)"}
+  r_e2_ohm: {value: 4.7e+3, source: "provisional: model knowledge (Q1's bypassed emitter resistor: sets ~0.2 mA)"}
+  c_e2_f: {value: 16.4e-6, source: "provisional: fit (Q1's emitter bypass: the amp's -3 dB at 130 Hz against 1 kHz, [G13] 2.3.6; scripts/clavinet_amp_study.py --fit). clavinet.com lists a 6.8 uF / 20 V tantalum on the board; its place isn't known"}
+  c_12_f: {value: 0.1e-6, source: "provisional: model knowledge (stage 1 to stage 2, ~25 Hz into Q2's divider; see c_in_f on the .01 uF caps)"}
+  # --- stage 2: BC413C common emitter into the output
+  q2: {value: BC413C@1, source: "provisional: model knowledge (the second transistor's type isn't given; the same as the first)"}
+  r_bias2_top_ohm: {value: 330.0e+3, source: "provisional: model knowledge (Q2's divider)"}
+  r_bias2_bottom_ohm: {value: 82.0e+3, source: "provisional: model knowledge (Q2's divider bottom)"}
+  r_c2_ohm: {value: 10.0e+3, source: "provisional: model knowledge (Q2's collector load, ~0.35 mA)"}
+  r_e3_ohm: {value: 1.0e+3, source: "provisional: model knowledge (Q2's unbypassed emitter: gain ~10)"}
+  r_e4_ohm: {value: 2.2e+3, source: "provisional: model knowledge (Q2's bypassed emitter)"}
+  c_e4_f: {value: 100.0e-6, source: "clavinet.com: the 100 uF / 16 V electrolytic (here Q2's emitter bypass)"}
+  r_hf_ohm: {value: 1.0e+3, source: "provisional: model knowledge (in series with c_hf_f across Q2's unbypassed emitter resistor: the high shelf's height)"}
+  c_hf_f: {value: 41.3e-9, source: "provisional: fit ([G13] 2.3.6: the amp's +3 dB at 4 kHz against 1 kHz; scripts/clavinet_amp_study.py --fit)"}
+  c_out_f: {value: 0.22e-6, source: "clavinet.com: the .22 uF output film cap"}
+  r_volume_ohm: {value: 50.0e+3, source: "provisional: model knowledge (the volume pot)"}
+  volume_taper_mid: {value: 0.15, source: "provisional: model knowledge (an audio taper)"}
+  r_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (an amp's or console's input)"}
+  # --- the battery
+  battery_v: {value: 9.0, source: "web: https://groupdiy.com/threads/clavinet-e7.38507 ('my battery was running ~8.8v under load'); a 9 V battery"}
+  r_battery_ohm: {value: 2.0, source: "provisional: model knowledge (a fresh 9 V battery's internal resistance, ~1-3 Ohm; a tired one tens: a condition dial)"}
+  r_decouple_ohm: {value: 220.0, source: "provisional: model knowledge (the supply's decoupling resistor)"}
+  c_decouple_f: {value: 100.0e-6, source: "provisional: model knowledge (a second 100 uF on the rail)"}
+  r_in_ohm: {value: 1.0e+6, source: "numerical: a load on the unused audio input"}
+
+devices:
+  Q1: {device: q1}
+  Q2: {device: q2}
+
+sections:
+  - title: pickups
+    parts:
+      RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
+      # the centre pickup: EMF ec behind its coils
+      RPC: {R: [ec, pc1], r: r_pickup_ohm, tolerance: none}
+      LPC: {L: [pc1, pc], l: l_pickup_h}
+      CPC: {C: [pc, "0"], c: c_pickup_f, tolerance: none}
+      # the bridge pickup, and its reversed connection (the bridge EMF negated)
+      RPB: {R: [eb, pb1], r: r_pickup_ohm, tolerance: none}
+      LPB: {L: [pb1, pb], l: l_pickup_h}
+      CPB: {C: [pb, "0"], c: c_pickup_f, tolerance: none}
+      RPN: {R: [ebn, pn1], r: r_pickup_ohm, tolerance: none}
+      LPN: {L: [pn1, pn], l: l_pickup_h}
+      CPN: {C: [pn, "0"], c: c_pickup_f, tolerance: none}
+      SEL:
+        switch: pickup_select
+        parts:
+          RSC: {R: [pc, sel], r: r_combine_ohm, tolerance: none, in: [0, 2, 3]}
+          RSB: {R: [pb, sel], r: r_combine_ohm, tolerance: none, in: [1, 3]}
+          RSN: {R: [pn, sel], r: r_combine_ohm, tolerance: none, in: [2]}
+
+  - title: tone
+    parts:
+      RS: {R: [sel, x], r: r_series_ohm}
+      # the chain x -> t1 -> t2 -> t3 -> ground; each rocker shorts its cell when off
+      RSOFT: {R: [x, t1], r: r_soft_ohm}
+      CSOFT: {C: [x, t1], c: c_soft_f}
+      SSOFT:
+        switch: soft
+        parts:
+          RKSOFT: {R: [x, t1], r: contact_ohm, tolerance: none, in: [0]}
+      RMED: {R: [t1, t2], r: r_medium_ohm}
+      CMED: {C: [t1, t2], c: c_medium_f}
+      SMED:
+        switch: medium
+        parts:
+          RKMED: {R: [t1, t2], r: contact_ohm, tolerance: none, in: [0]}
+      LTRE: {L: [t2, t2r], l: l_treble_h}
+      RLTRE: {R: [t2r, t3], r: r_l_treble_ohm, tolerance: none}
+      CTRE: {C: [t2, t3], c: c_treble_f}
+      STRE:
+        switch: treble
+        parts:
+          RKTRE: {R: [t2, t3], r: contact_ohm, tolerance: none, in: [0]}
+      LBRI: {L: [t3, t3r], l: l_brilliant_h}
+      RLBRI: {R: [t3r, "0"], r: r_l_brilliant_ohm, tolerance: none}
+      SBRI:
+        switch: brilliant
+        parts:
+          RKBRI: {R: [t3, "0"], r: contact_ohm, tolerance: none, in: [0]}
+
+  - title: amp
+    parts:
+      VB: {V: [bat, "0"], v: battery_v}
+      RBAT: {R: [bat, vbat], r: r_battery_ohm, tolerance: none}
+      RDEC: {R: [vbat, vcc], r: r_decouple_ohm}
+      CDEC: {C: [vcc, "0"], c: c_decouple_f}
+      CIN: {C: [x, b1], c: c_in_f}
+      R1: {R: [vcc, b1], r: r_bias_top_ohm}
+      R2: {R: [b1, "0"], r: r_bias_bottom_ohm}
+      Q1: {bjt: [c1, b1, e1], model: Q1}
+      RC1: {R: [vcc, c1], r: r_c1_ohm}
+      RE1: {R: [e1, e1b], r: r_e1_ohm}
+      RE2: {R: [e1b, "0"], r: r_e2_ohm}
+      CE2: {C: [e1b, "0"], c: c_e2_f}
+      C12: {C: [c1, b2], c: c_12_f}
+      R3: {R: [vcc, b2], r: r_bias2_top_ohm}
+      R4: {R: [b2, "0"], r: r_bias2_bottom_ohm}
+      Q2: {bjt: [c2, b2, e2], model: Q2}
+      RC2: {R: [vcc, c2], r: r_c2_ohm}
+      RE3: {R: [e2, e2b], r: r_e3_ohm}
+      RHF: {R: [e2, e2h], r: r_hf_ohm}
+      CHF: {C: [e2h, e2b], c: c_hf_f}
+      RE4: {R: [e2b, "0"], r: r_e4_ohm}
+      CE4: {C: [e2b, "0"], c: c_e4_f}
+      COUT: {C: [c2, v1], c: c_out_f}
+      RVOL: {pot: ["0", out, v1], r: r_volume_ohm, at: volume, taper_mid: volume_taper_mid}
+      RLOAD: {R: [out, "0"], r: r_load_ohm, tolerance: none}
