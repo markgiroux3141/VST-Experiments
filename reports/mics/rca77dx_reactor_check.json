@@ -1,0 +1,112 @@
+{
+ "printed_C_U_V1_rms_db": 1.92,
+ "printed_C_U_V1_max_db": 3.65,
+ "printed_C_U_V1_at_100_db": [
+  -5.24,
+  -8.45
+ ],
+ "printed_C_U_V2_rms_db": 1.76,
+ "printed_C_U_V2_max_db": 3.28,
+ "printed_C_U_V2_at_100_db": [
+  -10.57,
+  -13.14
+ ],
+ "printed_C_B_V1_rms_db": 3.05,
+ "printed_C_B_V1_max_db": 5.52,
+ "printed_C_B_V1_at_100_db": [
+  -7.4,
+  -11.93
+ ],
+ "printed_C_B_V2_rms_db": 3.18,
+ "printed_C_B_V2_max_db": 5.06,
+ "printed_C_B_V2_at_100_db": [
+  -13.51,
+  -17.49
+ ],
+ "printed_C_N_V1_rms_db": 1.57,
+ "printed_C_N_V1_max_db": 2.84,
+ "printed_C_N_V1_at_100_db": [
+  -3.84,
+  -5.4
+ ],
+ "printed_C_N_V2_rms_db": 1.89,
+ "printed_C_N_V2_max_db": 3.42,
+ "printed_C_N_V2_at_100_db": [
+  -8.61,
+  -10.8
+ ],
+ "printed_A_U_V1_rms_db": 5.13,
+ "printed_A_U_V1_max_db": 8.34,
+ "printed_A_U_V1_at_100_db": [
+  -0.84,
+  -8.45
+ ],
+ "printed_A_U_V2_rms_db": 1.76,
+ "printed_A_U_V2_max_db": 3.28,
+ "printed_A_U_V2_at_100_db": [
+  -10.57,
+  -13.14
+ ],
+ "printed_A_B_V1_rms_db": 6.65,
+ "printed_A_B_V1_max_db": 10.23,
+ "printed_A_B_V1_at_100_db": [
+  -1.7,
+  -11.93
+ ],
+ "printed_A_B_V2_rms_db": 3.18,
+ "printed_A_B_V2_max_db": 5.06,
+ "printed_A_B_V2_at_100_db": [
+  -13.51,
+  -17.49
+ ],
+ "printed_A_N_V1_rms_db": 4.22,
+ "printed_A_N_V1_max_db": 9.4,
+ "printed_A_N_V1_at_100_db": [
+  0.07,
+  -5.4
+ ],
+ "printed_A_N_V2_rms_db": 1.89,
+ "printed_A_N_V2_max_db": 3.42,
+ "printed_A_N_V2_at_100_db": [
+  -8.61,
+  -10.8
+ ],
+ "wiring": "C",
+ "reactor_h": 0.221,
+ "fitted_U_V1_rms_db": 1.17,
+ "fitted_U_V1_max_db": 2.33,
+ "fitted_U_V1_at_100_db": [
+  -6.68,
+  -8.45
+ ],
+ "fitted_U_V2_rms_db": 1.05,
+ "fitted_U_V2_max_db": 2.51,
+ "fitted_U_V2_at_100_db": [
+  -12.27,
+  -13.14
+ ],
+ "fitted_B_V1_rms_db": 2.19,
+ "fitted_B_V1_max_db": 3.99,
+ "fitted_B_V1_at_100_db": [
+  -9.09,
+  -11.93
+ ],
+ "fitted_B_V2_rms_db": 2.15,
+ "fitted_B_V2_max_db": 3.23,
+ "fitted_B_V2_at_100_db": [
+  -15.33,
+  -17.49
+ ],
+ "fitted_N_V1_rms_db": 1.51,
+ "fitted_N_V1_max_db": 2.99,
+ "fitted_N_V1_at_100_db": [
+  -5.1,
+  -5.4
+ ],
+ "fitted_N_V2_rms_db": 1.56,
+ "fitted_N_V2_max_db": 3.19,
+ "fitted_N_V2_at_100_db": [
+  -10.2,
+  -10.8
+ ]
+}

@@ -1,0 +1,118 @@
+# Compiled by varimu-components 0.2.0 on 2026-11-06.
+# Don't edit by hand: edit the design and save it as a new version.
+name: RCA77DX_OT
+kind: transformer
+source: 'RCA 77-DX polydirectional microphone, transformer 97503 (IB-24884-2''s parts list, ib Fig. 2: data/schematics/rca_77dx/README.md): the turns ratio 1:23.5 printed, the taps from the cable table, the construction unpublished and provisional'
+compiler: varimu-components 0.2.0
+construction:
+  core:
+    lamination: {value: EI-625, source: 'provisional: model knowledge (ib2: a ''round can'' in the lower shell, the case 3-3/4 x 2-1/2 in (ib2''s dimensions; ib Fig. 5): a 5/8 in tongue)'}
+    material: {value: mumetall, source: 'provisional: model knowledge (a microphone transformer at a few millivolts: a high-nickel core; as RCA44BX_OT''s, the 77-DX''s alloy not given)'}
+    stack_m: {value: 0.015875, source: 'provisional: model knowledge (a square stack, 5/8 in)'}
+    stacking_factor: {value: 0.92, source: 'web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf (SEKELS / VAC Kernbleche, Tabelle 6: Mumetall-type laminations 0.35 mm, 92%)'}
+    stacking: {value: interleaved, source: 'provisional: model knowledge (an ungapped microphone transformer: E and I interleaved)'}
+    joint_gap_m: {value: 2.35e-07, source: 'provisional: as SM57_OT''s (config/designs/sm57_ot.yaml: an interleaved mumetall joint fitted to a measured primary inductance)'}
+  bobbin:
+    wall_m: {value: 0.0005, source: 'provisional: model knowledge (a paper or fibre bobbin)'}
+    cheek_m: {value: 0.0008, source: 'provisional: model knowledge (fibre flanges)'}
+    margin_m: {value: 0.0003, source: 'provisional: model knowledge (a small creepage margin each end)'}
+    pitch_factor: {value: 1.1765, source: 'web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)'}
+  arrangement: {value: layer, source: 'provisional: model knowledge (layer-wound: the ribbon''s primary on the tongue, then the secondary''s A-B part, then B-C)'}
+  windings: [p, s1, s2]
+  sections:
+  - winding: p
+    turns: {value: 14, source: 'provisional: model knowledge (a ribbon transformer''s primary: a few turns of heavy wire, ~16 mH in the core''s linear limit, ~3 ohm at 30 Hz against the ribbon''s ~0.6)'}
+    layers: {value: 1, source: 'derived: turns / turns per layer (one layer of AWG 18 heavy on the ~0.8 in traverse)'}
+    wire: {value: AWG 18 heavy, source: 'provisional: model knowledge (the heaviest the table has: the primary''s resistance in series with a ~0.6 ohm ribbon, ~0.02 ohm)'}
+    enamel: {value: enamel, source: 'provisional: model knowledge (enamelled magnet wire)'}
+    interlayer:
+      thickness_m: {value: 5.0e-05, source: 'provisional: model knowledge (0.002 in paper)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge (kraft paper)'}
+  - insulation:
+      thickness_m: {value: 0.00025, source: 'provisional: model knowledge (a few wraps of paper between the windings)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge'}
+  - winding: s1
+    turns: {value: 107, source: 'derived: the tap B where 250 x (N_AB / N_AC)^2 and 250 x (N_BC / N_AC)^2 best meet ib2''s 30 and 150 ohm together (least squares in log, as RCA44BX_OT: 26.4 and 113.8 ohm)'}
+    layers: {value: 3, source: 'derived: turns / turns per layer (~39: the traverse over AWG 26 heavy''s 0.0178 in at the pitch factor)'}
+    wire: {value: AWG 26 heavy, source: 'provisional: model knowledge (fills the EI-625''s window with the primary)'}
+    enamel: {value: enamel, source: 'provisional: model knowledge'}
+    interlayer:
+      thickness_m: {value: 2.5e-05, source: 'provisional: model knowledge (0.001 in interlayer paper)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge'}
+  - winding: s2
+    turns: {value: 222, source: 'derived: N_AC - N_AB, N_AC = 329 = 23.5 x the primary''s (ib2: ''turns ratio 1:23.5 +-2%'')'}
+    layers: {value: 6, source: 'derived: turns / turns per layer (~39, as s1)'}
+    wire: {value: AWG 26 heavy, source: 'provisional: as s1'}
+    enamel: {value: enamel, source: 'provisional: model knowledge'}
+    interlayer:
+      thickness_m: {value: 2.5e-05, source: 'provisional: model knowledge (0.001 in interlayer paper)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge'}
+  leakage_method: formula
+  rating:
+    windings: [p]
+    v_rms: {value: 0.015, source: 'provisional: model knowledge (the ribbon''s EMF at ~140 dB SPL: 200 Pa x ~0.13 mV/Pa at B)'}
+    f_hz: {value: 50.0, source: 'provisional: model knowledge (the bottom of the band)'}
+resolved:
+  lamination: {name: EI-625, shape: EI, leg_m: 0.015875, window_width_m: 0.0079502, window_height_m: 0.023825199999999998, path_m: 0.09525, path_derived: false, source: 'web: https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf (Tempel Transformer Index & Catalog: one data sheet per size, tongue, window and ''Length of Magnetic Path''; catalog pages 3-23); overall E width and assembled length (E + I) from Edcor''s drawings 20000-EIxxx (web: https://cdn.shopify.com/s/files/1/0586/3830/3419/files/20000-EI075.pdf and the like). EI-75 and up are scrapless (window T/2 x 1.5T, path 6T); McLyman, Transformer and Inductor Design Handbook 3rd ed., Tables 3-2/3-3 agree'}
+  material: {name: mumetall, source: 'fit (2026-10-24; mu4 +0.5%, mu_max -0.3%, Hc +2.3%, hysteresis loss at 0.5 T -2.2%, Rayleigh-region mu at 0.04 A/m -0.5%; origin permeability ~29,300): scripts/fit_core_material.py to the MUMETALL datasheet figures and its Rayleigh region (the datasheet block). Replaces the 2026-10-21 fit to the four scalars alone (c 0.00077: almost all irreversible, H ~ sqrt(B) at program levels, origin permeability 246; Phase 2''s ''Low-level core physics'', Option 1). Datasheet (web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf, Lamineries Matthey / Vacuumschmelze: ~76% Ni, 5% Mo, 5% Cu); Ms from its saturation polarization 0.8 T'}
+  copper: {resistivity_ohm_m: 1.7241e-08, temperature_c: 20.0, source: 'web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (NBS Handbook 100, Copper Wire Tables, 1966: the International Annealed Copper Standard, conductivity 58 m/(ohm mm^2) at 20 C, ''volume resistivity of annealed copper at 20 C = 100/58 = 1.7241 microhm-cm'', PDF p.16-17; temperature coefficient 0.00393 at 20 C, PDF p.10; IEC Publication 28, now IEC 60028)'}
+  wires:
+    AWG 18 heavy: {bare_m: 0.0010236873428326521, overall_m: 0.0010947399999999999, source: 'bare: web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (the American Wire Gage''s law, PDF p.12: No. 0000 0.4600 in, No. 36 0.0050 in, ratio 92^(1/39); published as ASTM B 258); overall (heavy, nominal): web: https://mwswire.com/wp-content/uploads/2024/01/MWS-copper-magnet-wire-data.pdf (MWS Wire, Copper Magnet Wire Data, p.2: overall diameters ''derived from NEMA MW1000-2020'', min / nom / max)'}
+    AWG 26 heavy: {bare_m: 0.00040489187450565083, overall_m: 0.00045212, source: 'bare: web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (the American Wire Gage''s law, PDF p.12: No. 0000 0.4600 in, No. 36 0.0050 in, ratio 92^(1/39); published as ASTM B 258); overall (heavy, nominal): web: https://mwswire.com/wp-content/uploads/2024/01/MWS-copper-magnet-wire-data.pdf (MWS Wire, Copper Magnet Wire Data, p.2: overall diameters ''derived from NEMA MW1000-2020'', min / nom / max)'}
+  dielectrics:
+    enamel: {eps_r: 3.8, source: 'provisional: model knowledge (magnet wire enamels: polyurethane, polyvinyl formal, polyester-imide, oleoresinous; no datasheet gives it; a patent snippet (US 10199138, unverified) puts conventional enamels at 3.8-4.2 at 25 C)'}
+    kraft_dry: {eps_r: 2.2, source: 'provisional: model knowledge (porous unimpregnated kraft, ~0.75-1.0 g/cm^3; Nomex 410 papers of like density read 1.6-2.7 at 60 Hz, same sheet as nomex410_*)'}
+compiled:
+  source: 'derived: varimu-components 0.2.0 from this version''s construction (the formulas: crates/varimu-components)'
+  core: {material: mumetall, area_m2: 0.00023185437500000003, path_m: 0.09525, gap_m: 4.7e-07}
+  turns: 14.0
+  windings:
+    p: {ratio: 1.0, r: 0.020804265699495013, c: 0.0, leak: 1.2020451866614719e-06}
+    s1: {ratio: 7.642857142857143, r: 1.1514854984511822, c: 1.7687770314020467e-11, leak: 6.493717030304614e-05}
+    s2: {ratio: 15.857142857142858, r: 2.7854151905566464, c: 3.22430380448565e-11, leak: 0.00020563021325936318}
+  leak_couplings:
+  - between: [p, s1]
+    k: 0.5839371013129045
+  - between: [p, s2]
+    k: -0.3913267550510197
+  - between: [s1, s2]
+    k: 0.2741993569062583
+  capacitors:
+  - between: [p.dot, s1.dot]
+    c: 3.16592061290741e-11
+  - between: [p.dot, s1.other]
+    c: 3.957400766134262e-12
+  - between: [p.other, s1.dot]
+    c: 2.7701805362939834e-11
+  - between: [p.other, s1.other]
+    c: 7.914801532268524e-12
+  - between: [s1.dot, s2.dot]
+    c: 8.264272314234128e-11
+  - between: [s1.dot, s2.other]
+    c: 4.86133665543184e-12
+  - between: [s1.other, s2.dot]
+    c: 3.986296057454108e-10
+  - between: [s1.other, s2.other]
+    c: 3.889069324345471e-11
+report:
+  windings:
+    p: {turns: 14.0, copper_m: 0.9931491799822726, dcr_ohm: 0.020804265699495013, magnetizing_h: 0.015331647931566009, star_leak_h: 1.1764544736659125e-06, self_c_f: 0.0}
+    s1: {turns: 107.0, copper_m: 8.599318311407876, dcr_ohm: 1.1514854984511822, magnetizing_h: 0.8955716182066288, star_leak_h: -1.2428375989864533e-05, self_c_f: 1.7687770314020467e-11}
+    s2: {turns: 222.0, copper_m: 20.8015401715829, dcr_ohm: 2.7854151905566464, magnetizing_h: 3.855127227853567, star_leak_h: 0.0004071834213076939, self_c_f: 3.22430380448565e-11}
+  leakage_method: formula
+  short_circuit_h: {p (s1 shorted): 9.636881452517762e-07, p (s2 shorted): 2.7958025496400217e-06, s1 (p shorted): 5.629217130095707e-05, s1 (s2 shorted): 8.216303279497003e-05, s2 (p shorted): 0.000703001698247239, s2 (s1 shorted): 0.0003536835451364576}
+  core: {area_m2: 0.00023185437500000003, path_m: 0.09525, gap_m: 4.7e-07, saturation_t: 0.7999751537455919}
+  window: {traverse_m: 0.021625199999999997, extent_m: 0.006042173040541973, window_width_m: 0.0079502, field_length_m: 0.021582861356927024, copper_fill: 0.28447272533093027}
+  flux:
+    windings: [p]
+    v_rms: 0.015
+    f_hz: 50.0
+    b_peak_t: 0.0208023813321194
+  facing_capacitance:
+  - between: [p, s1]
+    sections: [0, 2]
+    c_f: 7.123321379041671e-11
+  - between: [s1, s2]
+    sections: [2, 3]
+    c_f: 5.250243587866386e-10
+  warnings: ['leakage: the star needs a negative branch (branches p 0.0012 mH, s1 -0.0124 mH, s2 0.4072 mH): compiled as coupled series leakages', 'capacitance: p''s own capacitance plus its facing layers'' share is -11.87 pF: compiled as 0']

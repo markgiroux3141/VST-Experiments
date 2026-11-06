@@ -59,7 +59,9 @@ Macro parts (connection; params, * = required):
                 or a parameter naming one): as moving_coil, the ribbon's ends between plus
                 and minus (varimu.devices.ribbon: compiled to moving_coil's format and
                 expanded by varimu.circuit.parts.moving_coil; the step-up transformer is a
-                part of its own)
+                part of its own); stop (a motor with shutter stops, the RCA 77-DX's: the
+                stop picked, 0, 1, ..., or a parameter naming one; varimu.devices.ribbon
+                .at_stop; required for such a motor, refused for one without)
     speaker     [plus, minus, out]; component* (a speaker component version, NAME@N, or
                 a parameter naming one), distance_m* (the listening point, on axis), the
                 cabinet: width_m*, height_m*, depth_m* (0: a flat baffle), offset_x_m,
@@ -176,6 +178,7 @@ from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.config import ConfigError, load_sim_settings
 from varimu.devices import cathode as cathode_mod
 from varimu.devices import noise as noise_mod
+from varimu.devices import ribbon as ribbon_mod
 from varimu.devices import versions
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
@@ -762,6 +765,14 @@ def _ribbon_motor(ctx: Context, name: str, conn: list[str], a: dict) -> list[Ele
         model = load_ribbon_motor(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
+    stop = a["stop"]
+    if stop is not None:
+        if isinstance(stop, bool) or int(stop) != stop or stop < 0:
+            raise ctx.fail(f"{name}.stop", f"{stop} is not a stop (0, 1, ...)")
+        try:
+            model = ribbon_mod.at_stop(model, int(stop))
+        except ValueError as err:
+            raise ctx.fail(f"{name}.stop", str(err)) from err
     return parts.moving_coil(name, *conn, model)
 
 
@@ -1048,7 +1059,9 @@ for _name, _macro in {
     ),  # fmt: skip
     "capsule": Macro(_capsule, 3, {"component": Param("raw"), "polarization_v": _P}),
     "moving_coil": Macro(_moving_coil, 4, {"component": Param("raw")}),
-    "ribbon_motor": Macro(_ribbon_motor, 4, {"component": Param("raw")}),
+    "ribbon_motor": Macro(
+        _ribbon_motor, 4, {"component": Param("raw"), "stop": Param("number", None)}
+    ),
     "capsule_dual": Macro(
         _capsule_dual,
         5,

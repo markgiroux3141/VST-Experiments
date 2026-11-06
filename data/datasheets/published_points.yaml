@@ -792,3 +792,49 @@
   published:
     sensitivity_v_per_pa: 1.78e-3         # ib: -55 dBm at 10 dyn/cm^2 into 250 ohm (RTMA: matched power), open circuit sqrt(4 R P) (the fit's target; aea's R44C reproduction: 2.25 mV/Pa)
     ribbon_ohm: 0.2                       # sbe: the BK-11A's '0.2-ohm ribbon impedance' (a check)
+
+# --- RCA 77-DX ribbon motor (docs/CHAINS_PLAN.md WP7) ---
+# The 77-DX's ribbon on Olson's polydirectional circuit (Proc. IRE 32, 1944: the ribbon's back on a labyrinth
+# connector, a damped pipe and an aperture under the shutter). Sources: data/schematics/rca_77dx/README.md (ib2:
+# IB-24884-2's parts list and technical data; olson1944; watts: the labyrinth as a lossy line; the 44-BX's
+# sources for the foil and the clearances). The shutter is the slot's `stops` (0 N closed, 1 L-3, 2 U, 3 L-2,
+# 4 L-1, 5 B wide open: the cam's order). Unprinted dimensions are fitted one figure each to ib2's Figs. 4-5
+# (data/datasheets/rca_77dx_{response,polar}.csv) by scripts/fit_77dx.py (reports/mics/rca77dx_fit.*).
+"RIBBON_77DX":
+  source: "data/schematics/rca_77dx/README.md: the ribbon from IB-24884-2's parts list (2 in x 0.054 in), its foil as the 44-BX's (AEA), the motor after Olson's 1944 polydirectional circuit (the labyrinth a matched lossy line after Watts, the aperture under the shutter a slot with one breadth per stop), the pole pieces as a baffle (varimu.mics.bor.baffle_mesh); the body, the tuning, the foil's loss, the gap's flux, the labyrinth, the connector's volume and the slot fitted to IB-24884-2's Figs. 4-5 and sensitivities by scripts/fit_77dx.py (docs/CHAINS_PLAN.md WP7; reports/mics/rca77dx_fit.*); screens and leads provisional"
+  geometry:
+    body:                                 # the pole pieces and the connector as the gradient's baffle (varimu.mics.bor.baffle_mesh), the front mouth and the slot at its faces' centres
+      form: baffle
+      radius_m: {value: 0.018555}         # fitted (scripts/fit_77dx.py): ib2 Fig. 5's B and N (M) from 1 to 15 kHz re 1 kHz together (an equivalent disc, not a drawing: the head is 3-3/4 x 2-1/2 in, ib2)
+      depth_m: {value: 0.0056686}          # fitted with radius_m to the same curves; the front channel below is half of it
+    ribbon:
+      length_m: {value: 50.8e-3}          # ib2: 'Ribbon, microphone, corrigated aluminum foil, 2" lg. x .054 wide' (45385)
+      width_m: {value: 1.372e-3}          # ib2: the same part, 0.054 in
+      thickness_m: {value: 1.8e-6}        # provisional: as RIBBON_44BX (aea: the 44-B/BX's 1.8 um foil; RCA's ribbons of the period; ib2 prints no thickness)
+      density_kg_m3: {value: 2700.0}      # provisional: model knowledge (pure aluminium, CRC handbook 2.70 g/cm^3)
+      resistivity_ohm_m: {value: 2.65e-8} # provisional: model knowledge (pure aluminium at 20 C, CRC handbook 2.65 uOhm cm)
+      corrugation: {value: 1.1}           # provisional: as RIBBON_44BX ('corrigated': ib2)
+      resonance_hz: {value: 14.15}         # fitted (scripts/fit_77dx.py): the foil's own tuning in vacuo, to B's (M) bass in ib2 Fig. 5 (with screen_f's resistance)
+      q: {value: 1.25}                    # provisional: as RIBBON_44BX@2 (fitted there to the 44-BX's bass bump: the same corrugated foil); the damping B's bass asks for is the screen's (screen_f), not the foil's
+      modes: {value: 5}                   # numerical: the odd length modes 1-9, the rest lumped on the 11th
+    magnet:
+      b_gap_t: {value: 0.4355}              # fitted (scripts/fit_77dx.py): ib2's B -50 dBm at 10 dyn/cm^2 into 250 ohm (3.16 mV/Pa open circuit)
+      gap_length_m: {value: 50.8e-3}      # provisional: model knowledge (the pole pieces span the ribbon's clamped length)
+    leads:
+      r_ohm: {value: 0.01}                # provisional: as RIBBON_44BX (the clamps and the short heavy leads)
+      l_h: {value: 5.0e-8}                # provisional: as RIBBON_44BX (the ribbon and its return as a loop ~50 x 10 mm)
+    network:
+      - {name: rad_f, kind: radiation, a: front, b: fo, width_m: {value: 1.622e-3}, length_m: {value: 50.8e-3}}   # the front channel's mouth: the gap (the ribbon and two sbe clearances, 125 um each) x the ribbon's length
+      - {name: screen_f, kind: screen, a: fo, b: fs, rayl: {value: 8.273}, area_m2: {value: 8.240e-5}}   # fitted (scripts/fit_77dx.py): the screen over the front mouth (the grille's mesh and any cloth) as one flow resistance, to B's (M) bass with ribbon.resonance_hz (it damps the ribbon's resonance in place)
+      - {name: chan_f_a, kind: slit, a: fs, b: cf, width_m: {value: 1.622e-3}, breadth_m: {value: 50.8e-3}, length_m: {value: 0.0014172}, wide_at_hz: {value: 1000.0}}   # derived: the front channel (half the body's depth_m) as a T section, its first half's air mass
+      - {name: cav_f, kind: cavity, a: cf, volume_m3: {value: 2.3354e-07}}   # derived: the front channel's air as a compliance (width x length x depth_m / 2)
+      - {name: chan_f_b, kind: slit, a: cf, b: f, width_m: {value: 1.622e-3}, breadth_m: {value: 50.8e-3}, length_m: {value: 0.0014172}, wide_at_hz: {value: 1000.0}}   # derived: the front channel's second half
+      - {name: rib, kind: ribbon, a: f, b: r}
+      - {name: edge, kind: slit, a: f, b: r, width_m: {value: 125.0e-6}, breadth_m: {value: 101.6e-3}, length_m: {value: 0.5e-3}}   # as RIBBON_44BX's (sbe: 0.005 in clearance), both edges along the ribbon
+      - {name: conn, kind: cavity, a: r, volume_m3: {value: 3.0919e-06}}   # fitted (scripts/fit_77dx.py): the labyrinth connector's air behind the ribbon (olson1944: 'the entire one side of the ribbon is covered by the labyrinth connector'), to N's (M) hump at ~3.5 kHz in ib2 Fig. 5
+      - {name: lab, kind: line, a: r, radius_m: {value: 0.0056694}, length_m: {value: 0.05}, sections: {value: 12}, flow_resistivity_pa_s_m2: {value: 851.2}, porosity: {value: 0.98}, tortuosity: {value: 1.05}, polytropic: {value: 1.0}, end: matched}   # the labyrinth (olson1944's damped pipe; watts: a stuffed 6-9 mm pipe, a lossy line): radius fitted to N's sensitivity (-56 dBm), the stuffing's flow resistivity to N's hump with conn; its first 5 cm modelled, matched beyond (numerical: 12 sections, tests/test_labyrinth.py); porosity, tortuosity provisional: model knowledge (a light fibrous fill), isothermal in the fibres (provisional: model knowledge)
+      - {name: slot, kind: slit, a: r, b: ro, width_m: {value: 0.3e-3}, breadth_m: {value: 1.0e-3}, length_m: {value: 0.127e-3}, stops: [null, {width_m: {value: 0.00015302}, breadth_m: {value: 0.0069989}}, {width_m: {value: 0.0002696}, breadth_m: {value: 0.0071504}}, {width_m: {value: 8.733e-05}, breadth_m: {value: 0.04908}}, {width_m: {value: 0.00011957}, breadth_m: {value: 0.0508}}, {width_m: {value: 0.0062895}, breadth_m: {value: 0.038602}}]}   # the slot in the connector behind the ribbon under the cam-shaped shutter (ib, ib2: 'slotted directly behind the ribbon ... an adjustable shutter'): a narrow gap (plane Poiseuille flow: its resistance against its mass gives the omni part the phase the L stops' large rear lobes need; olson1944's aperture r_A2 + j w M_2), its length along the flow the cam's edge (ib2: 'Shutter, acoustic tube, .005 thick phos. bronze': 0.127 mm; the narrow gap's end corrections neglected); the cam's opening per stop (width and breadth: ib2 'cam shaped') fitted to that pattern's rows in ib2 Fig. 4 at 400-1000 cps (90 / 180 degrees; B's rear lobe), its breadth at most the ribbon's length (the 4 and 10 kHz rows are checks); stop 0 (N) closed; the base width_m / breadth_m are placeholders every stop overrides
+      - {name: rad_r, kind: radiation, a: rear, b: ro, width_m: {value: 0.3e-3}, length_m: {value: 1.0e-3}, stops: [null, {width_m: {value: 0.00015302}, length_m: {value: 0.0069989}}, {width_m: {value: 0.0002696}, length_m: {value: 0.0071504}}, {width_m: {value: 8.733e-05}, length_m: {value: 0.04908}}, {width_m: {value: 0.00011957}, length_m: {value: 0.0508}}, {width_m: {value: 0.0062895}, length_m: {value: 0.038602}}]}   # derived: the stop's opening (as slot's) radiating to the rear
+  published:
+    sensitivity_v_per_pa: {B: 3.16e-3, U: 2.24e-3, N: 1.58e-3}   # ib2: B -50, U -53, N -56 dbm at 10 dynes/cm^2 into 250 ohm (RETMA: matched power), open circuit sqrt(4 R P)
+    turns_ratio: 23.5                     # ib2: 'turns ratio 1:23.5 +-2%' (97503)

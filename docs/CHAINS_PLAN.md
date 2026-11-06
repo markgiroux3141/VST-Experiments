@@ -13,9 +13,10 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 17 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 19 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
-  Portastudio, 44-BX -> V76, 44-BX -> UA 610; `uv run python scripts/chain_status.py`).
+  Portastudio, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610;
+  `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -31,23 +32,21 @@ runs**.
   transformer `RCA44BX_OT@1` as a design, in `config/circuits/ribbon_test.yaml`; WP5's Notes.
   WP6 (2026-11-05): the RCA 44-BX (`config/circuits/rca_44bx.yaml`: `RIBBON_44BX@2` on its
   pole pieces as a baffle, fitted to RCA's curves; the reactor and the M / V1 / V2 jumper;
-  the 30 / 150 / 250 ohm straps); WP6's Notes.
-- **In progress:** WP7 (the RCA 77-DX and the Ampex 351's direct monitor): steps 1-4 done
-  (sources; the preamp `config/circuits/ampex_351_record.yaml`, its profile meeting 5 of 5
-  published figures; the 77-DX's figures digitized by `scripts/digitize_rca_77dx.py`; the
-  labyrinth's model: the network kind `line` and the shutter's `stops`, Olson's three limits
-  in `tests/test_labyrinth.py`; WP7's Notes).
-- **Next:** WP7 step 5, the fit: `RIBBON_77DX`'s base geometry in `published_points.yaml`
-  (the network of WP7's Notes "step 4", the ribbon from ib2's parts list) and
-  `scripts/fit_77dx.py` on the body's BEM entries (`bor.baffle_mesh`, as `fit_44bx.py`): the
-  sensitivities (B to -50 dBm), the connector's volume and the line to N's response (the
-  3.5 kHz hump), each stop's slot breadth to its pattern's 90 / 180-degree levels, the slot's
-  width to their frequency dependence. Then step 5's transformer design and the reactor.
-  The user fetches login-walled files on request: each URL alone in a code block.
+  the 30 / 150 / 250 ohm straps); WP6's Notes. WP7 (2026-11-06): the Ampex 351's direct
+  monitor as a preamp (`config/circuits/ampex_351_record.yaml`) and the RCA 77-DX
+  (`config/circuits/rca_77dx.yaml`: `RIBBON_77DX@1` on Olson's polydirectional circuit, the
+  shutter as six stops picked by the part's `stop`, fitted by `scripts/fit_77dx.py`;
+  `RCA77DX_OT@1`; the reactor at mic level); WP7's Notes.
+- **In progress:** nothing.
+- **Next:** WP8, the Coles 4038 (-> V72): write its steps (sources first: BBC / STC's
+  4038 data, the ribbon's figures, its published response and pattern), then the
+  `ribbon_motor` on its body. The user fetches login-walled files on request: each URL
+  alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
-  Portastudio chains and the 44-BX's chains in the Room view (optional). One call of theirs: the JT-115K-E's
-  20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the fitted mumetall's low-field
-  hysteresis; WP4's Notes): leave it, or refit / add a nickel material (moves every render).
+  Portastudio chains, the 44-BX's chains and the 77-DX's in the Room view (optional). One call
+  of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
+  fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
+  material (moves every render).
 
 ## How a session runs
 
@@ -124,7 +123,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 4 | The op-amp preamps: SSL 4000 E channel (82E01, JT-115K-E), Tascam Portastudio (the 424 mk1) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | done 2026-11-05 |
 | 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | done 2026-11-05 |
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | done 2026-11-05 |
-| 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's direct monitor as a preamp | 77-DX -> 351, 77-DX -> 610 | L | in progress (the 351 done) |
+| 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's direct monitor as a preamp | 77-DX -> 351, 77-DX -> 610 | L | done 2026-11-06 |
 | 8 | Coles 4038 | 4038 -> V72 | M | |
 | 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | |
 | 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types") | 0 | L | |
@@ -941,6 +940,67 @@ Notes (2026-11-05, step 4 done):
   Hz); 3 mm: a rear lobe -7.5 dB; 45 mm: figure-8, 7.5 dB above closed (RCA: B 6 dB over N).
   B = 0.5 T gave 2.1 mV/Pa at B through 1:23.5; RCA's 3.16 wants ~0.75 T (the BK-11A 0.65).
 
+Notes (2026-11-06, steps 5-6 done):
+- `scripts/fit_77dx.py` (`[--rounds N] [--write] [--polish] [--reactor]`, ~10 min a round):
+  the base geometry is published_points.yaml's "RIBBON_77DX"; `--write` puts the fit back
+  there (derived front-channel values too), then `varimu fit-devices --only RIBBON_77DX`.
+  The order per round: the body (radius, depth) to B's and N's 1-15 kHz tops together, the
+  foil's tuning and the front screen's resistance to B's bass, the connector's volume and
+  the stuffing to N's whole curve, each stop's opening (width, breadth) to its 400-1000 cps
+  rows, the sensitivities last (B: the gap's flux; N: the labyrinth's radius). `--polish`
+  reruns only the openings and the sensitivities. Reports: reports/mics/rca77dx_fit.*,
+  rca77dx_reactor_check.json.
+- `RIBBON_77DX@1`: the ribbon 50.8 x 1.37 mm (ib2), 0.60 ohm, 0.37 mg; the body an
+  equivalent disc 18.6 x 5.7 mm; the foil's tuning 14.2 Hz in vacuo, q 1.25 (the 44-BX's),
+  the front screen 8.3 rayl (it damps B's bass); B 0.436 T; the labyrinth 5.67 mm radius
+  (Watts's 6-9 mm pipe: 11.3 mm), sigma 851; the connector 3.09 cm^3; the slot's flow length
+  the shutter's 0.127 mm (ib2: .005 in phosphor bronze), the openings (w x b, mm) L-3 0.153
+  x 7.0, U 0.270 x 7.2, L-2 0.087 x 49.1, L-1 0.120 x 50.8 (at the bound: the ribbon's
+  length), B 6.29 x 38.6.
+- Results (the whole circuit agrees with the fit's model to 0.03 dB): sensitivities B 3.16,
+  N 1.58 (fitted), U 2.03 mV/Pa against 2.24 (a check, -0.9 dB). On axis vs Fig. 5: N within
+  1.3 dB 1-15 kHz (2.1 at 55 Hz), U 1.9 dB rms (max 3.7), B 50 Hz-1 kHz 0.9 dB rms and 10-15
+  kHz 1.0, but 1-10 kHz 2.9 rms (max 6: +3 dB at 4-5 kHz where RCA dips -2.7, and RCA's 8
+  kHz peak missing). Patterns at 400-1000 cps: U, L-2, B on the readings, L-3 within 1.4 dB,
+  L-1's rear lobe 3.5 dB short. The 4 and 10 kHz rows (checks) miss by up to 13.8 dB (B's 10
+  kHz rear lobe; N's 10 kHz rear -8 vs -18): the thin equivalent disc shadows far less than
+  the real 95 x 63 mm head.
+- What the fit taught: the L stops' rear lobes (L-1: -10.4 at 90, -1.8 at 180) need the
+  omni part ~70 degrees from the gradient, i.e. a resistive aperture (Olson's r_A2): a
+  narrow gap in Poiseuille flow (R / w M = 10 mu / rho w w^2, ~1 near 0.2 mm at 630 Hz),
+  not plug flow; and one width can't give B its figure-8, so the cam's opening is two
+  unknowns per stop. B's steep bass (-8 dB at 50 Hz against 200-500 Hz) wanted q 0.07 from
+  the foil: the screen's resistance instead. N's +7.7 dB hump at 3.5 kHz is mostly the head
+  (a pressure ribbon's on-axis rise), not the labyrinth: a neck before the line didn't help
+  (2.84 -> 2.67 dB), fitting the body to N's top too did (0.9 dB). The body keeps drifting
+  between rounds (an axisymmetric disc can't be the sideways head): the fit stops after two
+  rounds and a polish.
+- Corrected reading (step 3's Notes): L-3 lies between N and U (90 degrees -5.2 dB, rear
+  -7.2 at 400 cps), as ib says; L-2 and L-1 between U and B. The shutter's order, closed to
+  open: N, L-3, U, L-2, L-1, B (the circuit's `pattern` 0-5).
+- `RCA77DX_OT@1` (`config/designs/rca_77dx_ot.yaml`): EI-625 mumetall, 14 : 107 + 222
+  turns (1:23.5 printed; the tap where 30 and 150 ohm are best met, as RCA44BX_OT), primary
+  15.3 mH. The reactor's wiring from ib Fig. 2: its fixed end on the secondary's C (V1 across
+  C-B, V2 across C-A; the A end fits 2-4x worse); its inductance fitted at mic level to U's
+  V2, 0.221 H against the printed 0.276 H at 0.5 V (28 ohm printed): U's V1 / V2 1.2 / 1.05
+  dB rms, B and N 1.5-2.2.
+- Builders: a `ribbon_motor` part's `stop` (a number or a control key; both builders bit for
+  bit, varimu-circuit's `moving_coil::at_stop`); without it a motor with stops is refused, a
+  stop on a motor without stops too. `rca_77dx.yaml` holds the rear entry with a numerical
+  1 GOhm `RPR` (at N nothing else is on `p_rear`; kept in chains).
+- Chains: `config/chains.yaml`'s rca_77dx (the six stops named by the nearest first-order
+  figure: omni, broad cardioid, cardioid, supercardioid, hypercardioid, figure-8; U by
+  default); `r77_a351`, `r77_ua610` composed (the 17 others unchanged). A scratch scene
+  rendered both at draft (U into the 351 at 58 dB: -0.55 dBFS rms at 90 dB SPL, 0.6 m, near
+  the preamp's full scale; B into the 610 at its default level: -44.5), the entry table
+  computed with it (3.7 min).
+- Tests: `tests/test_rca_77dx.py` (18), `test_labyrinth.py`, `test_chain_matrix.py`,
+  `test_app_fixtures.py` (fixtures `rca_77dx`, `r77_a351`, `r77_ua610`; nothing else
+  moved), varimu-circuit's tests (agreement on all six stops), varimu-app `room::`
+  (`chain_list_reads`: c4038_v72 is now the unbuilt example; the 77-DX's patterns),
+  `test_rca_44bx.py`, `test_ribbon.py`, `test_circuit_format.py`, `test_versions.py`,
+  `test_bor.py`, `test_ampex_351_record.py`.
+
 Decisions:
 - The labyrinth as a matched `line` (Olson's resistance, Watts's lossy line: the first few cm
   modelled, the rest absorbing), not a closed 1 m pipe (its bass and hump miss RCA's N); the
@@ -956,6 +1016,16 @@ Decisions:
 - Generated from the machine's file, not hand-copied; the 30-50 ohm strap and BALANCED
   BRIDGE left out; the bridge kept only as RECORD CALIBRATE's reference.
 - RECORD LEVEL keeps the machine's linear pot (the base file's; no taper printed).
+- The aperture a narrow gap (Poiseuille), the cam's opening two unknowns per stop (width,
+  breadth), its flow length the shutter's printed thickness (not fitted); each stop fitted to
+  its 400-1000 cps rows only, the 4 and 10 kHz rows checks.
+- The bass's damping in the front screen's resistance (fitted), the foil's q the 44-BX's;
+  the body fitted to B's and N's tops together; the fit stopped at two rounds and a polish
+  (diminishing returns: the disc drifts, the misses are the disc's).
+- The reactor's inductance fitted at mic level (the printed one is at 0.5 V), its printed 28
+  ohm kept; the wiring read from ib Fig. 2 and confirmed by the fit (C, not A).
+- The Room view names the six stops by first-order figures (`varimu/chains.py` PATTERNS),
+  not RCA's letters.
 
 ### WP8-WP31
 
@@ -973,7 +1043,9 @@ shared `compile_element` and the `ribbon_motor` macro in `varimu/circuit/builder
 touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key; WP7 added
 `varimu/measure/a351_record_suite.py` and a circuit, outside the key; its step 3 a script and data only;
 its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.py` and a refusal in
-`varimu/circuit/parts.py`, every existing component compiling to its saved elements): these
+`varimu/circuit/parts.py`, every existing component compiling to its saved elements; its steps
+5-6 the ribbon motor's `stop` in `varimu/circuit/builder.py` and `RIBBON_77DX` in
+`varimu/devices/library.py`, every existing IR unchanged): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -1031,3 +1103,8 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   a staggered ladder, closed / open / matched) and the shutter as `stops` in one ribbon
   motor; Olson's three limits tested on his circuit; a 77-DX-sized network gives N's 3.5 kHz
   hump from the connector's volume; still 17 of 51.
+- 2026-11-06: WP7 done: the 77-DX fitted (`scripts/fit_77dx.py`: the shutter's openings as
+  narrow resistive gaps, the screen damping the bass, the body to B's and N's tops; U, L-2, B
+  patterns on RCA's at 400-1000 cps, L-1 3.5 dB short; N within 1.3 dB, B's 4-5 kHz +3 dB),
+  `RCA77DX_OT@1`, the reactor at mic level, a ribbon motor's `stop` in both builders;
+  77-DX -> 351 and -> UA 610 composed: 19 of 51 available.

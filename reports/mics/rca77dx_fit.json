@@ -1,0 +1,275 @@
+{
+ "unknowns": {
+  "radius_m": 0.018555,
+  "depth_m": 0.0056686,
+  "resonance_hz": 14.15,
+  "b_gap_t": 0.4355,
+  "lab_radius_m": 0.0056694,
+  "lab_sigma": 851.2,
+  "conn_m3": 3.0919e-06,
+  "screen_rayl": 8.273,
+  "slot_length_m": 0.000127,
+  "openings_m": [
+   null,
+   [
+    0.00015302,
+    0.00699886
+   ],
+   [
+    0.0002696,
+    0.00715042
+   ],
+   [
+    8.733e-05,
+    0.04907984
+   ],
+   [
+    0.00011957,
+    0.05079995
+   ],
+   [
+    0.00628954,
+    0.03860173
+   ]
+  ]
+ },
+ "sensitivity_B_mv_per_pa": 3.16,
+ "sensitivity_B_target_mv_per_pa": 3.16,
+ "B_50_1000_rms_db": 0.92,
+ "B_50_1000_max_db": 2.14,
+ "B_50_1000_max_at_hz": 275.0,
+ "B_1000_10000_rms_db": 2.87,
+ "B_1000_10000_max_db": 5.95,
+ "B_1000_10000_max_at_hz": 8500.0,
+ "B_10000_15000_rms_db": 1.02,
+ "B_10000_15000_max_db": 1.41,
+ "B_10000_15000_max_at_hz": 15000.0,
+ "sensitivity_U_mv_per_pa": 2.034,
+ "sensitivity_U_target_mv_per_pa": 2.2399999999999998,
+ "U_50_1000_rms_db": 0.59,
+ "U_50_1000_max_db": 1.52,
+ "U_50_1000_max_at_hz": 60.0,
+ "U_1000_10000_rms_db": 1.86,
+ "U_1000_10000_max_db": 3.69,
+ "U_1000_10000_max_at_hz": 5750.0,
+ "U_10000_15000_rms_db": 2.6,
+ "U_10000_15000_max_db": 3.76,
+ "U_10000_15000_max_at_hz": 11500.0,
+ "sensitivity_N_mv_per_pa": 1.58,
+ "sensitivity_N_target_mv_per_pa": 1.58,
+ "N_50_1000_rms_db": 1.02,
+ "N_50_1000_max_db": 2.07,
+ "N_50_1000_max_at_hz": 55.0,
+ "N_1000_10000_rms_db": 0.66,
+ "N_1000_10000_max_db": 1.28,
+ "N_1000_10000_max_at_hz": 1800.0,
+ "N_10000_15000_rms_db": 0.27,
+ "N_10000_15000_max_db": 0.57,
+ "N_10000_15000_max_at_hz": 15000.0,
+ "polars": [
+  {
+   "pattern": "B",
+   "f": 500.0,
+   "angle": 180.0,
+   "read_db": -1.48,
+   "model_db": -1.48,
+   "bound": false
+  },
+  {
+   "pattern": "B",
+   "f": 4000.0,
+   "angle": 180.0,
+   "read_db": -1.48,
+   "model_db": -1.27,
+   "bound": false
+  },
+  {
+   "pattern": "B",
+   "f": 10000.0,
+   "angle": 135.0,
+   "read_db": -10.09,
+   "model_db": -13.35,
+   "bound": false
+  },
+  {
+   "pattern": "B",
+   "f": 10000.0,
+   "angle": 150.0,
+   "read_db": -12.76,
+   "model_db": -5.78,
+   "bound": false
+  },
+  {
+   "pattern": "B",
+   "f": 10000.0,
+   "angle": 170.0,
+   "read_db": -14.88,
+   "model_db": -1.07,
+   "bound": false
+  },
+  {
+   "pattern": "B",
+   "f": 500.0,
+   "angle": 90.0,
+   "read_db": -15.0,
+   "model_db": -21.91,
+   "bound": true
+  },
+  {
+   "pattern": "N",
+   "f": 500.0,
+   "angle": 90.0,
+   "read_db": -1.73,
+   "model_db": -0.07,
+   "bound": false
+  },
+  {
+   "pattern": "N",
+   "f": 500.0,
+   "angle": 180.0,
+   "read_db": -2.56,
+   "model_db": -0.0,
+   "bound": false
+  },
+  {
+   "pattern": "N",
+   "f": 4000.0,
+   "angle": 90.0,
+   "read_db": -3.84,
+   "model_db": -6.45,
+   "bound": false
+  },
+  {
+   "pattern": "N",
+   "f": 4000.0,
+   "angle": 180.0,
+   "read_db": -5.14,
+   "model_db": -3.5,
+   "bound": false
+  },
+  {
+   "pattern": "N",
+   "f": 10000.0,
+   "angle": 90.0,
+   "read_db": -10.86,
+   "model_db": -9.18,
+   "bound": false
+  },
+  {
+   "pattern": "N",
+   "f": 10000.0,
+   "angle": 180.0,
+   "read_db": -17.95,
+   "model_db": -8.34,
+   "bound": false
+  },
+  {
+   "pattern": "U",
+   "f": 630.0,
+   "angle": 90.0,
+   "read_db": -5.86,
+   "model_db": -5.87,
+   "bound": false
+  },
+  {
+   "pattern": "U",
+   "f": 630.0,
+   "angle": 180.0,
+   "read_db": -15.0,
+   "model_db": -31.82,
+   "bound": true
+  },
+  {
+   "pattern": "U",
+   "f": 4000.0,
+   "angle": 180.0,
+   "read_db": -9.25,
+   "model_db": -6.69,
+   "bound": false
+  },
+  {
+   "pattern": "U",
+   "f": 10000.0,
+   "angle": 90.0,
+   "read_db": -12.82,
+   "model_db": -8.94,
+   "bound": false
+  },
+  {
+   "pattern": "L1",
+   "f": 630.0,
+   "angle": 90.0,
+   "read_db": -10.38,
+   "model_db": -11.77,
+   "bound": false
+  },
+  {
+   "pattern": "L1",
+   "f": 630.0,
+   "angle": 180.0,
+   "read_db": -1.81,
+   "model_db": -5.32,
+   "bound": false
+  },
+  {
+   "pattern": "L2",
+   "f": 630.0,
+   "angle": 90.0,
+   "read_db": -7.37,
+   "model_db": -7.38,
+   "bound": false
+  },
+  {
+   "pattern": "L2",
+   "f": 630.0,
+   "angle": 180.0,
+   "read_db": -6.15,
+   "model_db": -6.15,
+   "bound": false
+  },
+  {
+   "pattern": "L2",
+   "f": 4000.0,
+   "angle": 180.0,
+   "read_db": -7.67,
+   "model_db": -10.23,
+   "bound": false
+  },
+  {
+   "pattern": "L3",
+   "f": 400.0,
+   "angle": 90.0,
+   "read_db": -5.16,
+   "model_db": -3.76,
+   "bound": false
+  },
+  {
+   "pattern": "L3",
+   "f": 400.0,
+   "angle": 180.0,
+   "read_db": -7.24,
+   "model_db": -7.59,
+   "bound": false
+  },
+  {
+   "pattern": "L3",
+   "f": 1000.0,
+   "angle": 180.0,
+   "read_db": -11.9,
+   "model_db": -12.09,
+   "bound": false
+  }
+ ],
+ "polar_rms_db": 4.31,
+ "polar_max_db": 13.81,
+ "foil_ohm": 0.5996,
+ "moving_mass_mg": 0.373,
+ "log": [
+  "-- round 1",
+  "openings (w x b) -, 0.153 x 7.10, 0.329 x 6.60, 0.088 x 49.19, 0.120 x 50.80, 6.713 x 38.38 mm: polar rms (all rows) 4.10 dB",
+  "B 0.4346 T, lab radius 5.678 mm: B 3.160, N 1.580 mV/Pa",
+  "-- round 2",
+  "openings (w x b) -, 0.153 x 7.00, 0.270 x 7.15, 0.087 x 49.08, 0.120 x 50.80, 6.290 x 38.60 mm: polar rms (all rows) 4.09 dB",
+  "B 0.4355 T, lab radius 5.669 mm: B 3.160, N 1.580 mV/Pa"
+ ]
+}

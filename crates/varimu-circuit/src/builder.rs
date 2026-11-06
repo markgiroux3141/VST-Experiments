@@ -682,7 +682,12 @@ fn macro_of(kind: &str) -> Macro {
             ],
             false,
         ),
-        "moving_coil" | "ribbon_motor" => (Some(4), vec![p("component", Raw)], false),
+        "moving_coil" => (Some(4), vec![p("component", Raw)], false),
+        "ribbon_motor" => (
+            Some(4),
+            vec![p("component", Raw), opt("stop", Number)],
+            false,
+        ),
         "capsule_dual" => (
             Some(5),
             vec![
@@ -1094,6 +1099,24 @@ fn moving_coil_part(
             }
         })
         .map_err(|e| ctx.fail(&where_, e.0))?;
+    let model = if ribbon {
+        let w = format!("{name}.stop");
+        let stop = match &a["stop"] {
+            Value::Null => None,
+            v => match v.as_f64() {
+                Some(f) if f.trunc() == f && f >= 0.0 && !matches!(v, Value::Bool(_)) => {
+                    Some(f as i64)
+                }
+                _ => return Err(ctx.fail(&w, format!("{} is not a stop (0, 1, ...)", v.py_str()))),
+            },
+        };
+        match stop {
+            Some(_) => crate::moving_coil::at_stop(&model, stop).map_err(|e| ctx.fail(&w, e.0))?,
+            None => model,
+        }
+    } else {
+        model
+    };
     crate::moving_coil::moving_coil(name, &nodes[0], &nodes[1], &nodes[2], &nodes[3], &model)
 }
 

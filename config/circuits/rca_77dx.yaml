@@ -1,0 +1,86 @@
+# RCA 77-DX polydirectional ribbon microphone (MI-4045-F; docs/CHAINS_PLAN.md WP7). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/rca_77dx/README.md has their provenance):
+#   "ib: ..."   RCA, Instructions for the Type 77-DX Polydirectional Microphone (coutant.org)
+#   "ib2: ..."  RCA IB-24884-2, the later edition (its technical data and parts list)
+#   "derived: ..." arithmetic on sourced figures
+#   "provisional: ..." model knowledge
+#
+# The ribbon motor RIBBON_77DX (config/components/ribbon_77dx/): the pressure at its front
+# mouth on `in`, at the slot under the shutter on the control input `p_rear` (pascals as
+# volts; varimu/mics/: the pole pieces and the connector as a baffle, bor.baffle_mesh). The
+# PATTERN selector is the motor's shutter stop (its cam: "Stops are provided on the
+# continuously-variable pattern selector at the six marked positions", ib): N closed (a
+# pressure ribbon on the labyrinth), L-3, U, L-2, L-1, B wide open. The ribbon across the
+# transformer 97503's primary (1:23.5); the secondary's ends A and C, its tap B; the cable's
+# RED lead is `out`, BLACK the measuring ground, by ib Fig. 2's cable table: 250 ohm A-C (as
+# shipped), 150 ohm B-C, 30 ohm A-B; "the red cable lead is electrically positive when the
+# sound pressure on the front of the microphone is in the positive half of the cycle" (ib).
+# The REACTOR (its own can, 97504) on the M / V1 / V2 switch (ib Fig. 2: M's lug sleeved,
+# open; V1 by the YELLOW lead to the tap, V2 by BLACK to the secondary's end): "The voice
+# positions connect a reactor across the entire secondary or part of the secondary" (ib): V2
+# across A-C, V1 across B-C (the part whose curve the printed reactor meets: scripts/
+# fit_77dx.py --reactor). The ribbon and the primary float: a numerical leak holds them. The
+# output is open circuit (ib2: "Load impedance: Unloaded input transformer"); a chain
+# replaces RLOAD with the preamp's input.
+
+title: "RCA 77-DX"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, rp, rm]
+# 0 dBFS in = 20 Pa peak at the entries (as the other mics); out = volts across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.15, source: "provisional: model knowledge (ib2's B -50 dBm at 1 Pa = 3.16 mV/Pa open circuit x 20 Pa = 63 mV peak, with headroom for the bass and proximity)"}
+
+controls:
+  pattern: {value: 2, choices: [0, 1, 2, 3, 4, 5], unit: position, source: "ib: the pattern selector's six marked stops (Fig. 3: UNI-, BI-, NON-DIRECTIONAL, L-1, L-2, L-3); the shutter's order from closed to wide open (ib2 Fig. 4's patterns: L-3 between N and U, L-2 and L-1 between U and B)", notes: "0: N (non-directional), 1: L-3, 2: U (uni-directional), 3: L-2, 4: L-1, 5: B (bi-directional)"}
+  impedance: {value: 0, choices: [0, 1, 2], unit: position, source: "ib2: 'Output impedance 250 ohms, may be changed to 30 or 150 ohms'; ib Fig. 2's cable connections", notes: "0: 250 ohm (A-C), 1: 150 ohm (B-C), 2: 30 ohm (A-B)"}
+  response: {value: 0, choices: [0, 1, 2], unit: position, source: "ib Fig. 2: the music-voice switch M, V1, V2 (ib2: 'Switch, rotary, single circuit, 3 pos. screw driver slotted shaft, music-voice'); ib: V1 'for distances down to 1 foot', V2 'for still shorter distances'", notes: "0: M (music), 1: V1, 2: V2 (voice: the reactor's low cut)"}
+
+values:
+  ribbon_model: {value: RIBBON_77DX@1, source: "config/components/ribbon_77dx/1.yaml (the 77-DX's ribbon on Olson's polydirectional circuit, its body, labyrinth and shutter fitted to IB-24884-2's figures by scripts/fit_77dx.py)"}
+  ribbon_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating ribbon and primary"}
+  rear_hold_ohm: {value: 1.0e+9, source: "numerical: at N (the slot closed) nothing else is on the rear entry's control node; it is driven, so this carries nothing"}
+  transformer_model: {value: RCA77DX_OT@1, source: "config/components/rca77dx_ot/1.yaml (97503's ratio and taps by construction: config/designs/rca_77dx_ot.yaml)"}
+  reactor_h: {value: 0.221, source: "fitted at mic level (scripts/fit_77dx.py --reactor: U's V2 in ib2 Fig. 5, 50-600 Hz re 1 kHz, the whole circuit; reports/mics/rca77dx_reactor_check.json: U's V1 1.17 / V2 1.05 dB rms, B and N 1.5-2.2). ib2's parts list (97504) prints 'impedance at 50 CPS, 0.5 v, 91 ohms, +7%, -5%; D.C. res. 28 ohms', 0.276 H (derived: sqrt(91^2 - 28^2) / (2 pi 50)) at 0.5 V; at a ribbon's millivolts its iron is at its lower initial permeability (-20% here; the 44-BX's reactor of the same 28 ohm fitted 0.114 H). The core in its linear limit"}
+  reactor_ohm: {value: 28.0, source: "ib2's parts list (97504): 'D.C. res. 28 ohms'"}
+  contact_ohm: {value: 1.0e-3, source: "numerical: a strap or switch contact (screw terminals)"}
+  load_ohm: {value: 1.0e+6, source: "ib2: 'Load impedance: Unloaded input transformer' (a chain replaces the load with its preamp)"}
+
+# No tolerance block: the nominal mic only (as the SM57's).
+
+sections:
+  - title: ribbon
+    parts:
+      RB:
+        ribbon_motor: [in, p_rear, rp, rm]
+        component: ribbon_model
+        stop: pattern
+      RRL: {R: [rm, "0"], r: ribbon_leak_ohm, tolerance: none}
+      RPR: {R: [p_rear, "0"], r: rear_hold_ohm, tolerance: none}
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [rm, rp]}   # the sense that puts the red lead positive (ib, as rca_44bx.yaml)
+          s1: {nodes: [ta, tb]}  # A to the tap B
+          s2: {nodes: [tb, tc]}  # B to C
+        component: transformer_model
+      SRESP:
+        switch: response
+        parts:
+          LRX: {L: [tc, rx], l: reactor_h, in: [1, 2]}
+          RRX1: {R: [rx, tb], r: reactor_ohm, tolerance: none, in: [1]}
+          RRX2: {R: [rx, ta], r: reactor_ohm, tolerance: none, in: [2]}
+      SIMP:
+        switch: impedance
+        parts:
+          RO250: {R: [tc, out], r: contact_ohm, tolerance: none, in: [0, 1]}
+          RG250: {R: [ta, "0"], r: contact_ohm, tolerance: none, in: [0, 2]}
+          RG150: {R: [tb, "0"], r: contact_ohm, tolerance: none, in: [1]}
+          RO30: {R: [tb, out], r: contact_ohm, tolerance: none, in: [2]}
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

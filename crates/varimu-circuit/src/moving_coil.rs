@@ -22,6 +22,9 @@ pub struct McElement {
     pub b: String,
     pub value: f64,
     pub c: String,
+    /// The shutter stop the element belongs to (a ribbon motor's `stops`,
+    /// `varimu/devices/ribbon.py`); None: in every stop.
+    pub stop: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -86,13 +89,12 @@ pub fn from_data_of(data: &Value, what: &str, want: &str) -> Result<MovingCoil, 
         let m = e
             .as_map()
             .ok_or_else(|| Error(format!("{what}: an element is not a mapping")))?;
-        // A ribbon's shutter stops (varimu.devices.ribbon): picking one is CHAINS_PLAN.md
-        // WP7 step 6; until then a motor with stops is refused, as in Python's builder.
-        if m.get("stop").is_some_and(|s| !matches!(s, Value::Null)) {
-            return Err(Error(format!(
-                "{what}: a ribbon motor with stops needs one picked (not supported yet)"
-            )));
-        }
+        // A ribbon's shutter stop (varimu.devices.ribbon): picked by `at_stop`.
+        let stop = match m.get("stop") {
+            None | Some(Value::Null) => None,
+            Some(Value::Int(k)) => Some(*k),
+            Some(v) => return Err(Error(format!("{what}: an element's stop {v}"))),
+        };
         elements.push(McElement {
             name: text(m, "name", what)?,
             kind: text(m, "kind", what)?,
@@ -103,6 +105,7 @@ pub fn from_data_of(data: &Value, what: &str, want: &str) -> Result<MovingCoil, 
                 .and_then(Value::as_f64)
                 .ok_or_else(|| Error(format!("{what}: an element needs `value`")))?,
             c: m.get("c").map(Value::py_str).unwrap_or_else(|| "@v".into()),
+            stop,
         });
     }
     if elements
@@ -125,6 +128,37 @@ pub fn from_data_of(data: &Value, what: &str, want: &str) -> Result<MovingCoil, 
         r2_ohm: num(lp, "r2_ohm", what)?,
         elements,
     })
+}
+
+/// The motor at one of its shutter stops: the untagged elements and that stop's (a motor
+/// without stops: unchanged, and `stop` must be None), as `ribbon.at_stop`.
+pub fn at_stop(c: &MovingCoil, stop: Option<i64>) -> Result<MovingCoil, Error> {
+    let mut have: Vec<i64> = c.elements.iter().filter_map(|e| e.stop).collect();
+    have.sort_unstable();
+    have.dedup();
+    if have.is_empty() {
+        if let Some(k) = stop {
+            return Err(Error(format!("{} has no stops (stop {k})", c.name)));
+        }
+        return Ok(c.clone());
+    }
+    let Some(k) = stop.filter(|k| *k >= 0) else {
+        return Err(Error(format!(
+            "{}: pick a stop (open ones: {have:?}; any other is closed)",
+            c.name
+        )));
+    };
+    let mut out = c.clone();
+    out.elements = c
+        .elements
+        .iter()
+        .filter(|e| e.stop.is_none() || e.stop == Some(k))
+        .map(|e| McElement {
+            stop: None,
+            ..e.clone()
+        })
+        .collect();
+    Ok(out)
 }
 
 fn r(name: String, a: &str, b: &str, r_ohm: f64) -> Element {
@@ -165,6 +199,11 @@ pub fn moving_coil(
     minus: &str,
     c: &MovingCoil,
 ) -> Result<Vec<Element>, Error> {
+    if c.elements.iter().any(|e| e.stop.is_some()) {
+        return Err(Error(format!(
+            "{name}: a ribbon motor with stops needs one picked (ribbon.at_stop)"
+        )));
+    }
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let v = format!("{n}_v");
     let node = |x: &str| -> String {

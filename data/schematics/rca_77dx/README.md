@@ -111,9 +111,11 @@ shutter at U), `wiring.jpg`, `freq77.jpg` / `direc77.jpg` (the curves again, 300
 coutant's scan is ~150 dpi gray) into `data/datasheets/rca_77dx_response.csv` (U / B / N x M /
 V1 / V2, 50 Hz-15 kHz, whole curves) and `rca_77dx_polar.csv` (key angles: each pattern's
 curves at 90 and 180 degrees, B's 10 kHz rear lobe; the curves told by the labelled arrows);
-provenance `data/datasheets/rca_77dx.provenance.yaml`. Read on the patterns: L-1, L-2 and L-3
-all lie between U and B (their 90-degree levels -10.4, -7.4, -5.2 dB at 400-1000 cps against
-U's -5.9), with 400-1000 cps rear lobes of -1.8, -6.2 and -7.2 dB.
+provenance `data/datasheets/rca_77dx.provenance.yaml`. Read on the patterns: L-2 and L-1 lie
+between U and B (their 90-degree levels -7.4 and -10.4 dB at 400-1000 cps against U's -5.9,
+rear lobes -6.2 and -1.8 dB), L-3 between N and U (90 degrees -5.2 dB, N's -1.7; rear lobe
+-7.2 at 400 cps), as ib's text says (corrected 2026-11-06: an earlier note had all three
+between U and B). The shutter's order from closed to open: N, L-3, U, L-2, L-1, B.
 
 ## olson1944: H. F. Olson, "Polydirectional Microphone", Proc. I.R.E. 32, pp. 77-82 (Feb. 1944)
 
@@ -167,7 +169,11 @@ a copy in `cache/sources/rca_77dx/`). Not RCA's figures: a practitioner's, cite 
 ## Still to find
 
 - The labyrinth's own dimensions on the 77-DX (its pipe's section and length, its stuffing)
-  and the slot's area at each stop: not printed by RCA or Olson; Watts's 6-9 mm and <= 1 m bound
-  them. The fit (CHAINS_PLAN.md WP7 step 5) takes them from the patterns and the N response.
-- The ribbon's thickness and the magnet's flux (the 44-BX's fit gave 0.29 T on its pole
-  pieces).
+  and the slot's opening at each stop: not printed by RCA or Olson; Watts's 6-9 mm and <= 1 m
+  bound them. Fitted instead (scripts/fit_77dx.py, CHAINS_PLAN.md WP7's Notes): the
+  labyrinth's radius 5.67 mm, the openings as narrow gaps of the shutter's printed 0.127 mm
+  thickness. A drawing or measurement of the cam and the slot would replace the openings.
+- The ribbon's thickness and the magnet's flux (fitted: 0.436 T with the 44-BX's 1.8 um
+  foil; the 44-BX's fit gave 0.29 T on its pole pieces).
+- The head's real shape for the body's BEM (the fit's equivalent disc is 18.6 x 5.7 mm; the
+  head is 3-3/4 x 2-1/2 in, ib2): the 4 and 10 kHz patterns miss with the disc.

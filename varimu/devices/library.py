@@ -825,6 +825,29 @@ def build_ribbon_44bx() -> dict[str, Any]:
     }
 
 
+def build_ribbon_77dx() -> dict[str, Any]:
+    """The RCA 77-DX's ribbon motor (docs/CHAINS_PLAN.md WP7): its geometry
+    (published_points.yaml "RIBBON_77DX": the ribbon from IB-24884-2's parts list on Olson's
+    polydirectional circuit, the shutter as the slot's stops, the unprinted dimensions fitted
+    by scripts/fit_77dx.py), the lumped network compiled from it, one element set per stop
+    (varimu.devices.ribbon.compile_network)."""
+    from varimu.devices import ribbon
+
+    pub = _published()["RIBBON_77DX"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "RIBBON_77DX",
+        "kind": "ribbon_motor",
+        "source": "derived: varimu.devices.ribbon.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "stops": ["N", "L-3", "U", "L-2", "L-1", "B"],
+        "lumped": ribbon.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/ribbon.py's and moving_coil.py's formulas "
+        "(their docstrings) on the geometry; air at 20 C",
+    }
+
+
 # The 5651's current at which its operating voltage (circuit value v5651_operating_v) is
 # taken: the middle of its 1.5-3.5 mA range.
 V5651_REF_A = 2.5e-3
@@ -1765,6 +1788,7 @@ BUILDERS = {
     "R57": build_r57,
     "R59": build_r59,
     "RIBBON_44BX": build_ribbon_44bx,
+    "RIBBON_77DX": build_ribbon_77dx,
     "VF14T": build_vf14t,
     "6X4": build_6x4,
     "6AL5": build_6al5,
