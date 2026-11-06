@@ -101,10 +101,17 @@ provisional where it rests on model knowledge.
   - The linkage falls with height somewhat faster than [R12]'s Vizimag curve.
   - The sections across the strings (two tried) put the gradient at the bars' ends, with
     mid-bar strings 20-40 dB quieter, which [R12] doesn't report.
-  - The level factor is 0.32 (E4 forte 0.2 V). The keyboard's mf peaks run 0.03-0.4 V.
+  - The level factor is 0.80 (E4 forte 0.2 V on the centre pickup). The keyboard's mf
+    peaks run 0.07-0.25 V on the plain strings and up to ~1 V on the bass (the bridge
+    pickup).
 - **A played key** (`note.py`):
-  - The strike: the rubber and the anvil solved inside each step on the released modes. The
-    pinch closes ~11-20 ms after first contact, with peak forces of 15-34 N.
+  - The strike: three contacts solved inside each step on the released modes (a 3x3
+    Newton): the rubber's push, the anvil's push, and the rubber's shear grip sideways,
+    stuck where it first touched.
+    - Without the grip, the anvil's tilted face slid the string millimetres sideways and
+      past the anvil. The held model saw a huge vibration; the tension modulation's absurd
+      glide exposed it.
+    - The pinch closes 12-15 ms after first contact, at ~35 N peak.
   - The hold in closed form on the held modes.
   - The release: the contacts again while the key's return force pulls the tangent away.
     Releasing at once snapped the bent string back in one step, a full-band click.
@@ -137,8 +144,45 @@ provisional where it rests on model knowledge.
   - aftertouch in renders (the bend is modelled statically: `fit.bend_cents`);
   - the user hasn't listened.
 
+**CL4, started (the production tier's extras, in the Python reference):**
+- **The knock** (`knock.py`, `note.play(knock=True)`, the default):
+  - the anvil's contact force during the strike rings the board the anvils stand on (a
+    12 mm plywood plate, 0.80 x 0.30 m, simply supported, provisional; 29 modes to 4 kHz,
+    the lowest 263 Hz);
+  - its motion under each key's anvil pushes the pinched string for the hold's first
+    0.4 s;
+  - measured -29 to -37 dB under the note in its first 200 ms;
+  - in the treble the pickups hear it mostly as the string's own partials. [G13] isolated a
+    knock below 1.2 kHz, so the board is probably too stiff (open: its dimensions and
+    mount).
+- **The beating, measured** (`scripts/clavinet_beating.py` ->
+  `reports/clavinet/beating/summary.json`):
+  - the pinch's anisotropy splits every partial into two polarizations 0.08-1.8 Hz apart
+    up to E4 ([G13]: 0.5-2 Hz, up to E4);
+  - the weaker mode carries -17 dB at the provisional 8 deg tilt;
+  - the envelopes measured on rendered notes ripple mostly 1-5 dB at 0.2-0.8 Hz (larger
+    near the comb's notches), against [G13]'s up to 15 dB;
+  - the lever is the tilt (a fit to [G13] Fig. 7b is the obvious next step: one unknown,
+    one figure).
+- **A listening set:** `scripts/clavinet_listen_set.py` -> `reports/clavinet/listen/`
+  (LISTEN.md lists the files):
+  - single notes over the keyboard;
+  - E3 at three velocities;
+  - the demo phrase through every pickup setting and tone rocker, and muted.
+- **Tension modulation** (`note.play(tension_mod=True)`, the default):
+  - the hold's ringing modes follow the tension their energies add (the string's
+    elongation through the geometric stiffness, both planes);
+  - the stiff, heavily damped modes are left out: the damped system's modes aren't
+    orthogonal, and their cancelling amplitudes aren't energy;
+  - E3 ff starts +16 cents and glides to pitch (+2 by 1.5 s), E3 pp +7, E2 ff +32 (+8 at
+    1.5 s), E4 ff +4, E6 none (`test_tension_modulation`).
+- **Not done:**
+  - the magnet's pull;
+  - takes rendered behind (MIDI_TAKES_PLAN.md);
+  - the live tier's check against this tier.
+
 **Open (the user's):**
-- the listening;
+- the listening (`reports/clavinet/listen/LISTEN.md`);
 - the D6 schematic (fetch the links above);
 - whether the strings' few provisional geometry choices need sources: the wound lengths'
   bottom (0.80 m), the anvil gap (1.5 mm), the pickup clearance (3 mm), the tangent's
