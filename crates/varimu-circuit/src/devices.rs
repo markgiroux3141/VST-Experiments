@@ -149,6 +149,16 @@ impl Library {
 
     /// Moving-coil cartridge component `name` (`load_moving_coil` in library.py).
     pub fn moving_coil(&self, name: &str) -> Result<MovingCoil, Error> {
+        self.transducer(name, "moving_coil")
+    }
+
+    /// Ribbon motor component `name`, its network in the moving-coil format
+    /// (`load_ribbon_motor` in library.py).
+    pub fn ribbon_motor(&self, name: &str) -> Result<MovingCoil, Error> {
+        self.transducer(name, "ribbon_motor")
+    }
+
+    fn transducer(&self, name: &str, kind: &str) -> Result<MovingCoil, Error> {
         let root = self.components_dir();
         let r = versions::resolve(&root, &versions::parse(name)?)?;
         let key = format!("{}@{}", r.folder(), r.version.unwrap());
@@ -156,7 +166,7 @@ impl Library {
             return Ok(c.clone());
         }
         let (_, text) = versions::read_text(&root, &r)?;
-        let c = moving_coil::from_data(&yaml::parse(&text, name)?, name)?;
+        let c = moving_coil::from_data_of(&yaml::parse(&text, name)?, name, kind)?;
         self.moving_coils.lock().unwrap().insert(key, c.clone());
         Ok(c)
     }

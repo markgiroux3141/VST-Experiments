@@ -1,0 +1,52 @@
+# A ribbon motor and its step-up transformer (docs/CHAINS_PLAN.md WP5: the ribbon_motor
+# kind's test circuit; not a microphone yet: WP6 builds the RCA 44-BX around them, its body,
+# its reactor and its straps). Built by varimu/circuit/builder.py (the format:
+# varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/rca_44bx/README.md has their provenance):
+#   "ib: ..."  RCA IB-24267-5, Instructions for the Type 44-BX Velocity Microphone (c. 1951)
+#   "provisional: ..." model knowledge
+#
+# The ribbon RIBBON_44BX@1 (config/components/ribbon_44bx/): the pressure at its front
+# face's entry on `in`, at its rear face's on the control input `p_rear` (pascals as volts;
+# a test drives them; WP6's body gives the gradient). Its ends (ib Fig. 5: YELLOW, BLACK)
+# across the transformer's primary; the secondary strapped for 250 ohm as shipped (ib's
+# cable table: BLACK on A, RED on C): `out` is C (RED), A the measuring ground; "when the
+# sound pressure on the front of the microphone is in the positive half of the cycle the
+# red cable lead is electrically positive" (ib, "Phasing"). The ribbon and the primary
+# float: a numerical leak holds them. The output is open circuit (ib: "Recommended Load
+# Impedance: Unloaded input transformer").
+
+title: "Ribbon motor test (RCA 44-BX ribbon and transformer)"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, rp, rm]
+# 0 dBFS in = 20 Pa peak at the entries (as the other mics); out = volts across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.1, source: "provisional: model knowledge (AEA's R44 2.25 mV/Pa open circuit x 20 Pa = 45 mV peak, with headroom for proximity)"}
+
+values:
+  ribbon_model: {value: RIBBON_44BX@1, source: "config/components/ribbon_44bx/1.yaml (the 44-BX's ribbon after AEA's R44 sheet and Olson's circuit; the motor provisional until WP6)"}
+  ribbon_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating ribbon and primary"}
+  transformer_model: {value: RCA44BX_OT@1, source: "config/components/rca44bx_ot/1.yaml (ib Fig. 5's tapped secondary by construction: config/designs/rca_44bx_ot.yaml)"}
+  load_ohm: {value: 1.0e+6, source: "ib: 'Recommended Load Impedance: Unloaded input transformer' (a chain replaces the load with its preamp)"}
+
+sections:
+  - title: ribbon
+    parts:
+      RB:
+        ribbon_motor: [in, p_rear, rp, rm]
+        component: ribbon_model
+      RRL: {R: [rm, "0"], r: ribbon_leak_ohm, tolerance: none}
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [rm, rp]}   # the sense that puts the red lead positive (ib, 'Phasing'; the drawing shows no winding sense)
+          s1: {nodes: ["0", tap]}
+          s2: {nodes: [tap, out]}
+        component: transformer_model
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

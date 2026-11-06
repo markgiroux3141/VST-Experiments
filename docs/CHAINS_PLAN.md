@@ -25,13 +25,16 @@ runs**.
   capsule `CK12@1` fitted to AKG's curves, nine patterns; WP3's Notes). WP4 (2026-11-05):
   the SSL 4000 E's 82E01 mic amp with the Jensen JT-115K-E fitted to Jensen's sheet
   (`config/circuits/ssl_4000e.yaml`) and the Tascam 424's mic input
-  (`config/circuits/tascam_portastudio.yaml`), op-amps only; WP4's Notes.
+  (`config/circuits/tascam_portastudio.yaml`), op-amps only; WP4's Notes. WP5
+  (2026-11-05): the ribbon kind `ribbon_motor` (`varimu/devices/ribbon.py`, compiled to
+  moving_coil's format), its first instance `RIBBON_44BX@1` and the 44-BX's step-up
+  transformer `RCA44BX_OT@1` as a design, in `config/circuits/ribbon_test.yaml`; WP5's Notes.
 - **In progress:** none.
-- **Next:** WP5 (the ribbon kind `ribbon_motor`), Start step 4: write its steps here,
-  sources first (the RCA 44-BX's and 77-DX's ribbon and magnet figures, Olson's papers;
-  `varimu/devices/moving_coil.py` is the pattern: an acoustic network compiled to R / L / C
-  and a gyrator, and its part in both builders). The user fetches login-walled files on
-  request: give each URL alone in a code block (WP2's Notes).
+- **Next:** WP6 (the RCA 44-BX), Start step 4: write its steps here. The sources are
+  already in `data/schematics/rca_44bx/README.md` (RCA's instruction book with its
+  response, polars and schematics); WP5's Notes, "For WP6", list what to digitize, build
+  and fit. The user fetches login-walled files on request: give each URL alone in a code
+  block (WP2's Notes).
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL and
   the Portastudio chains in the Room view (optional). One call of theirs: the JT-115K-E's
   20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the fitted mumetall's low-field
@@ -110,8 +113,8 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 2 | Universal Audio 610 | U47 -> 610 | M | done 2026-11-05 |
 | 3 | AKG C12 (CK12 on `capsule_dual`; 6072 = `12AY7@1`; its transformer) | C12 -> clean, C12 -> 610 | L | done 2026-11-05 |
 | 4 | The op-amp preamps: SSL 4000 E channel (82E01, JT-115K-E), Tascam Portastudio (the 424 mk1) | SM57 / SM58 -> Portastudio, SM58 -> SSL | M | done 2026-11-05 |
-| 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | next |
-| 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | |
+| 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | done 2026-11-05 |
+| 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | next |
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's record amp as a preamp | 77-DX -> 351, 77-DX -> 610 | L | |
 | 8 | Coles 4038 | 4038 -> V72 | M | |
 | 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | |
@@ -581,7 +584,115 @@ Decisions:
 - The SSL is the E-series 82E01 (transformer input), not the G-series' transformerless
   mic amp (its drawing isn't public here).
 
-### WP5-WP31
+### WP5. The ribbon kind `ribbon_motor`
+
+A ribbon is Olson's velocity microphone: a corrugated aluminium foil, loosely suspended
+between two pole pieces, driven by the pressure difference between its faces; it is the
+conductor itself (EMF = B l v), a fraction of an ohm, stepped up by a transformer. Olson's
+complete mechanical circuit (SBE handbook Fig. 4.1.11, the RCA BK-11A): F1 -> R_L/2 ->
+M_L/2 -> [the ribbon M_R + C_R || the slits M_S + R_S] -> M_L/2 -> R_L/2 -> F2 (R_L / M_L
+the air load and the damping screens on both faces, the slits the ribbon's edge clearance
+to the pole pieces, "nominally 0.005 in", a leak). Above resonance the ribbon is mass
+controlled, v = (P1 - P2) A / (j w (M_R + M_L)) (Eq. 4.1.6). That is a moving-coil network
+with a different diaphragm: the kind reuses `moving_coil`'s element kinds and its lumped
+format, so both builders expand a ribbon with the moving-coil code they already agree on.
+
+What is new: the moving element from the foil's geometry (mass, resistance, B l, the
+tuning), the ribbon's length modes (a limp strip clamped at both ends: odd modes n couple to
+a uniform pressure and a uniform field, mass M n^2 pi^2 / 8 each, in parallel through one
+gyrator: their velocities sum into the EMF and the volume velocity, and above every mode
+the bank is the whole mass), the pole-piece channel (a wide parallel-plate duct: plug-flow
+mass and Crandall's boundary-layer resistance, `slit` with `wide_at_hz`), and the part
+`ribbon_motor`. Its first instance is the RCA 44-BX's ribbon (AEA's R44 sheet gives the
+original's ribbon: 1.8 um pure aluminium, 4.7 mm x 59.7 mm), provisional where nothing is
+published and refitted in WP6 against the 44-BX's curves.
+
+Steps:
+1. Sources: `data/schematics/rca_44bx/README.md` (RCA IB-24267-5, the 44-BX's technical
+   data: 30 / 150 / 250 ohm, -55 dBm at 10 dyn/cm^2; AEA's R44 sheet: the ribbon, 2.25 mV/Pa
+   open circuit, 270 ohm; SBE handbook 4.1.3: Olson's circuit, the BK-11A's 0.65 T in a
+   3.2 mm gap, 0.56 mg/cm^2, 0.2 ohm, ~30 Hz, 125 um clearance; Leckschat & David, DAGA
+   2010: the motional impedance up to ~5x the DCR at resonance; emrr's strapping table).
+2. `varimu/devices/ribbon.py`: geometry -> lumped (moving_coil's block: bl_tm, sd_m2,
+   re_ohm, le_h, elements); moving_coil's element compile factored out and shared (R57 /
+   R59 compile bit for bit unchanged); `slit` gains `wide_at_hz`; the element kind `ribbon`
+   (the moving system, its modes in parallel, one gyrator).
+3. The component `RIBBON_44BX@1` (`varimu fit-devices --only RIBBON_44BX`, a builder in
+   library.py), the loaders (`load_ribbon_motor`; varimu-circuit's devices.rs), the part
+   `ribbon_motor: [front, rear, plus, minus]` in both builders and symbol tables.
+4. The step-up transformer as a design, `config/designs/rca_44bx_ot.yaml` (the ratio from
+   the ribbon's resistance to the 250 ohm strapping; the 30 / 150 / 250 straps as
+   windings), compiled and saved by varimu-components.
+5. A test circuit `config/circuits/ribbon_test.yaml` (the ribbon, its transformer at 250
+   ohm, a load); `tests/test_ribbon.py`: the formulas, Eq. 4.1.6 and E = B l v above
+   resonance, the mode bank against the whole mass, the slit's leak, the motional
+   impedance at resonance, circuitsim's transient against the AC solution; app fixtures
+   (agreement in varimu-circuit).
+
+Notes (2026-11-05, done):
+- Sources: `data/schematics/rca_44bx/README.md`. RCA's whole instruction book is on
+  coutant.org in two PDFs (44bx.pdf, the technical data; jumpers.pdf, Figs. 3-8: the
+  polars, the M / V1 / V2 response, the schematics of the -H / -J / -K with the reactor, the
+  parts): WP6's curves are there. Olson's own texts weren't readable online (the 1931 JASA
+  paper; Elements 1940's OCR copies cut off before sec. 9.3): the SBE handbook's Fig.
+  4.1.11 is the circuit used.
+- The kind: `varimu/devices/ribbon.py` compiles `ribbon` / `magnet` / `leads` / `network`
+  to moving_coil's lumped block, so the part `ribbon_motor` expands through
+  `parts.moving_coil` (Python) and `moving_coil.rs` (Rust): nothing new to port, the
+  builders' agreement is the existing code's (`ribbon_test.json` in varimu-circuit's
+  fixtures passes). Loaders `load_ribbon_motor` / `Library::ribbon_motor`
+  (`moving_coil_from_data(..., kind)`, `moving_coil::from_data_of`). moving_coil.py's
+  per-element compile is `compile_element` now (shared); R57 / R59 compile byte for byte
+  as before (checked on their published geometries). New element kinds for every
+  transducer: `slit` with `wide_at_hz` (plug flow and Crandall's wall loss: the pole
+  channel) and `radiation` (an opening's mass from the Rayleigh self-integral,
+  `rectangle_self_integral`, checked against quadrature, || rho c / S).
+- `RIBBON_44BX@1` (published_points.yaml "RIBBON_44BX"): foil 1.50 mg, 0.206 ohm (+0.01
+  leads), B l 0.0388 T m, gyrator 138 ohm; the air load (radiation + half channel per face)
+  86 kg/m^4 against the foil's 19, so the foil's 18 Hz rings at ~8 Hz in place (Olson's
+  limp ribbon ~10 Hz); the motional impedance peaks at 6.3x the DC resistance at 8.4 Hz
+  (Leckschat & David: "up to five times"); within 2 dB of Eq. 4.1.6 from 100 Hz to 20 kHz.
+  Five odd length modes (to 162 Hz) plus the rest lumped: they move the response only
+  below ~200 Hz.
+- `RCA44BX_OT@1` (`config/designs/rca_44bx_ot.yaml`): EI-75 mumetall, 10 : 101 + 209
+  turns (31:1; the tap B puts the 30 / 150 ohm straps at 26 / 114 ohm), primary 0.018 ohm
+  9.6 mH, secondary 0.80 + 1.95 ohm; the formula's leakage (a negative star branch:
+  coupled series leakages).
+- `config/circuits/ribbon_test.yaml`: the ribbon into the transformer at 250 ohm (ib's
+  cable table: out = C, the red lead; A grounded), open circuit; the primary's sense chosen
+  by ib's "Phasing" (the drawing shows none: the first wiring was inverted, the test caught
+  it). With a 20 mm front-to-back path: 2.3 mV/Pa at 300 Hz (aea's 2.25; ib's -55 dBm is
+  1.78 mV/Pa open circuit, derived).
+- `varimu/measure/ac.py` takes `Coupling` now (mutual inductance between branches; the
+  transformer's coupled leakages): its transient-vs-AC test passes on ribbon_test.
+- Symbols `RibbonMotor` ("MR") in both tables; `kicad/varimu.kicad_sym` and the editor's
+  `symbols.json` regenerated (nothing else moved).
+- Tests: `tests/test_ribbon.py` (13: formulas, Olson's mass-controlled ribbon with and
+  without the air load, the modes, the slit's leak, the motional impedance, phasing and the
+  31:1 step-up, noise skipping the leaks, kinds checked, circuitsim's transient against AC,
+  ngspice's AC against ac.py within 1e-6); test_moving_coil, test_sm57 / sm58, test_kicad,
+  test_editor, test_app_fixtures, test_capsule, test_ssl_4000e, test_clean_chain,
+  test_versions (170 passed); varimu-circuit's tests (agreement included), clippy, fmt;
+  varimu-app checks.
+- For WP6: the 44-BX's M curve (ib Fig. 4: about +3 dB at ~65 Hz, a dip near 9 kHz to -4.5,
+  a peak at ~12 kHz, -6 at 15 kHz; sbe: dips and peaks up there from "pole-piece shape or
+  transverse resonances of the ribbon") and Fig. 3's polars to digitize; its body (the pole
+  pieces as the baffle: the path D; the guards); the reactor and the V1 / V2 jumpers (ib
+  Figs. 5-7); then fit the provisional unknowns one figure each (B to ib's -55 dBm; the
+  tuning to the bass; the pole depth and D to the top; the slit's length; the screens).
+
+Decisions:
+- The ribbon reuses moving_coil's lumped format and part expansion (no third expansion to
+  keep in agreement); a ribbon is a part of its own (`ribbon_motor`) for what it says.
+- `resonance_hz` is the foil's own tuning (in vacuo, its mass alone); the air load is the
+  network's, so the resonance in place comes out of it.
+- The length modes as a limp string's (f_n = n f_1, odd modes only, the rest of the mass on
+  the next one); no transverse modes (WP6 may need one for the 9 kHz dip).
+- The radiation load as mass || rho c / S (a lumped approximation, within ~45% of the
+  piston's low-frequency real part); the leads' inductance 50 nH (provisional).
+- The transformer's tap at the least-squares compromise of the nominal 30 / 150 ohm labels.
+
+### WP6-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
 the mic's or preamp's sources (schematic, datasheet curves, service documents) first, as
@@ -592,8 +703,9 @@ in `data/schematics/neumann_u47/README.md` and `data/schematics/shure_sm57/READM
 Batched checks (the targeted-tests rule): the full `pytest` (WP1-WP4 added thirteen
 circuits and their app fixtures; WP3 added the device builder `build_ck12` to
 `varimu/devices/library.py`, WP4 the pot's `reverse` to `varimu/circuit/{parts,builder}.py`
-and windings to `varimu/measure/ac.py`: the first two move every render's cache key, so
-the full suite re-renders; no device model, engine or existing circuit changed, every
+and windings to `varimu/measure/ac.py`, WP5 `varimu/devices/ribbon.py`, moving_coil.py's
+shared `compile_element` and the `ribbon_motor` macro in `varimu/circuit/builder.py`: these
+move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
 
@@ -628,3 +740,8 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   424 mk1's mic input (its service manual; the 144 / 244 need the JFET); one profile suite
   for both (`opamp_pre_suite.py`), the pot's `reverse` taper in both builders; SM58 -> SSL
   and SM57 / SM58 -> Portastudio composed: 15 of 51 available.
+- 2026-11-05: WP5 done: the ribbon kind `ribbon_motor` after Olson's circuit (the SBE
+  handbook's Fig. 4.1.11), compiled to moving_coil's format with the foil's odd length
+  modes in parallel; `RIBBON_44BX@1` from AEA's ribbon figures and `RCA44BX_OT@1` (31:1,
+  tapped as RCA's cable table); RCA's 44-BX instruction book found whole (coutant.org) for
+  WP6; still 15 of 51 available.

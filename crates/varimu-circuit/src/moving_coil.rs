@@ -50,14 +50,24 @@ fn text(m: &Map, key: &str, what: &str) -> Result<String, Error> {
 
 /// A cartridge version's data (kind moving_coil), as `moving_coil_from_data`.
 pub fn from_data(data: &Value, what: &str) -> Result<MovingCoil, Error> {
+    from_data_of(data, what, "moving_coil")
+}
+
+/// A component's compiled network of kind `want`: moving_coil, or ribbon_motor (a ribbon
+/// motor, `varimu/devices/ribbon.py`: compiled to the same lumped format), as
+/// `moving_coil_from_data(d, name, kind)`.
+pub fn from_data_of(data: &Value, what: &str, want: &str) -> Result<MovingCoil, Error> {
     let d = data
         .as_map()
         .ok_or_else(|| Error(format!("{what}: not a mapping")))?;
     let kind = d.get("kind").and_then(Value::as_str).unwrap_or("");
-    if kind != "moving_coil" {
-        return Err(Error(format!(
-            "{what} is not a moving-coil cartridge (kind '{kind}')"
-        )));
+    if kind != want {
+        let noun = if want == "ribbon_motor" {
+            "a ribbon motor"
+        } else {
+            "a moving-coil cartridge"
+        };
+        return Err(Error(format!("{what} is not {noun} (kind '{kind}')")));
     }
     let name = d
         .get("name")

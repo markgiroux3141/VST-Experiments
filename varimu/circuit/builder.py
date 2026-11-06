@@ -55,6 +55,11 @@ Macro parts (connection; params, * = required):
                 NAME@N, or a parameter naming one): the pressures at its front and rear
                 entries on front and rear (pascals as volts), the coil between plus and
                 minus (varimu.devices.moving_coil, varimu.circuit.parts.moving_coil)
+    ribbon_motor [front, rear, plus, minus]; component* (a ribbon motor version, NAME@N,
+                or a parameter naming one): as moving_coil, the ribbon's ends between plus
+                and minus (varimu.devices.ribbon: compiled to moving_coil's format and
+                expanded by varimu.circuit.parts.moving_coil; the step-up transformer is a
+                part of its own)
     speaker     [plus, minus, out]; component* (a speaker component version, NAME@N, or
                 a parameter naming one), distance_m* (the listening point, on axis), the
                 cabinet: width_m*, height_m*, depth_m* (0: a flat baffle), offset_x_m,
@@ -181,6 +186,7 @@ from varimu.devices.library import (
     load_dual_capsule,
     load_moving_coil,
     load_plate,
+    load_ribbon_motor,
     load_speaker,
     load_spring_tank,
     load_tape,
@@ -286,6 +292,7 @@ class Noise:
 _NOISY = {
     "R": "r", "pot": "r", "rheostat": "r", "tapped_pot": "r", "t_pad": "z", "transformer": None,
     "capsule": None, "capsule_dual": None, "harp": None, "moving_coil": None,
+    "ribbon_motor": None,
 }  # fmt: skip
 
 
@@ -313,8 +320,8 @@ def _noise_elements(ctx: Context, kind: str, entry: Mapping, els: list[Element])
         for e in els:
             if kind.startswith("capsule") and e.name.rsplit("_", 1)[-1].startswith("x"):
                 continue  # the capsule's readout resistor: a numerical element
-            if kind == "moving_coil" and e.name.endswith("_leak"):
-                continue  # the diaphragm's DC leak: a numerical element
+            if kind in ("moving_coil", "ribbon_motor") and e.name.endswith("_leak"):
+                continue  # the diaphragm's (a ribbon mode's) DC leak: a numerical element
             if isinstance(e, Resistor) and e.a not in cores and e.b not in cores:
                 psd = 4.0 * noise_mod.K_B * nz.temperature_k / e.r_ohm
                 out.append(NoiseCurrent(f"IN_{e.name}", e.a, e.b, psd))
@@ -749,6 +756,15 @@ def _moving_coil(ctx: Context, name: str, conn: list[str], a: dict) -> list[Elem
     return parts.moving_coil(name, *conn, model)
 
 
+def _ribbon_motor(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    where = f"{name}.component"
+    try:
+        model = load_ribbon_motor(str(versions.require_pinned(ctx.text(where, a["component"]))))
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    return parts.moving_coil(name, *conn, model)
+
+
 def _plate(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     where = f"{name}.component"
     try:
@@ -1032,6 +1048,7 @@ for _name, _macro in {
     ),  # fmt: skip
     "capsule": Macro(_capsule, 3, {"component": Param("raw"), "polarization_v": _P}),
     "moving_coil": Macro(_moving_coil, 4, {"component": Param("raw")}),
+    "ribbon_motor": Macro(_ribbon_motor, 4, {"component": Param("raw")}),
     "capsule_dual": Macro(
         _capsule_dual,
         5,

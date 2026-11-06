@@ -283,7 +283,7 @@ pub enum Noise {
 }
 
 /// Parts whose resistors are resistors (their noise), and the param holding their value.
-const NOISY: [(&str, Option<&str>); 10] = [
+const NOISY: [(&str, Option<&str>); 11] = [
     ("R", Some("r")),
     ("pot", Some("r")),
     ("rheostat", Some("r")),
@@ -294,6 +294,7 @@ const NOISY: [(&str, Option<&str>); 10] = [
     ("capsule_dual", None),
     ("harp", None),
     ("moving_coil", None),
+    ("ribbon_motor", None),
 ];
 
 /// Whether a part's value (a key or {value, source}) is sourced `numerical:`.
@@ -342,7 +343,7 @@ fn noise_elements(ctx: &Context, kind: &str, entry: &Map, els: &[Element]) -> Ve
                         .rsplit('_')
                         .next()
                         .is_some_and(|t| t.starts_with('x')))
-                && !(kind == "moving_coil" && r.name.ends_with("_leak"))
+                && !((kind == "moving_coil" || kind == "ribbon_motor") && r.name.ends_with("_leak"))
                 && !cores.contains(r.a.as_str())
                 && !cores.contains(r.b.as_str())
             {
@@ -509,7 +510,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 25] = [
+const MACROS: [&str; 26] = [
     "R",
     "C",
     "L",
@@ -529,6 +530,7 @@ const MACROS: [&str; 25] = [
     "capsule",
     "capsule_dual",
     "moving_coil",
+    "ribbon_motor",
     "speaker",
     "plate",
     "spring_tank",
@@ -680,7 +682,7 @@ fn macro_of(kind: &str) -> Macro {
             ],
             false,
         ),
-        "moving_coil" => (Some(4), vec![p("component", Raw)], false),
+        "moving_coil" | "ribbon_motor" => (Some(4), vec![p("component", Raw)], false),
         "capsule_dual" => (
             Some(5),
             vec![
@@ -1022,7 +1024,8 @@ fn expand(
         }
         "capsule" => return capsule_part(ctx, name, nodes, a),
         "capsule_dual" => return capsule_dual_part(ctx, name, nodes, a),
-        "moving_coil" => return moving_coil_part(ctx, name, nodes, a),
+        "moving_coil" => return moving_coil_part(ctx, name, nodes, a, false),
+        "ribbon_motor" => return moving_coil_part(ctx, name, nodes, a, true),
         "speaker" => return speaker_part(ctx, name, nodes, a),
         "plate" => return plate_part(ctx, name, nodes, a),
         "spring_tank" => return spring_tank_part(ctx, name, nodes, a),
@@ -1078,11 +1081,18 @@ fn moving_coil_part(
     name: &str,
     nodes: &[String],
     a: &Args,
+    ribbon: bool,
 ) -> Result<Vec<Element>, Error> {
     let where_ = format!("{name}.component");
     let reference = ctx.text(&where_, &a["component"])?;
     let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
-        .and_then(|r| ctx.lib.moving_coil(&r.to_string()))
+        .and_then(|r| {
+            if ribbon {
+                ctx.lib.ribbon_motor(&r.to_string())
+            } else {
+                ctx.lib.moving_coil(&r.to_string())
+            }
+        })
         .map_err(|e| ctx.fail(&where_, e.0))?;
     crate::moving_coil::moving_coil(name, &nodes[0], &nodes[1], &nodes[2], &nodes[3], &model)
 }

@@ -137,6 +137,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         raise ValueError(f"{name} is a speaker, not a device model: place it with a `speaker` part")
     if kind == "moving_coil":
         raise ValueError(f"{name} is a cartridge, not a device model: place it with `moving_coil`")
+    if kind == "ribbon_motor":
+        raise ValueError(f"{name} is a ribbon, not a device model: place it with `ribbon_motor`")
     if kind == "capsule":
         raise ValueError(f"{name} is a capsule, not a device model: place it with a `capsule` part")
     if kind == "plate":
@@ -173,6 +175,12 @@ def load_dual_capsule(name: str, root: Path = DEVICE_DIR) -> DualCapsule:
 def load_moving_coil(name: str, root: Path = DEVICE_DIR) -> MovingCoil:
     """Moving-coil cartridge component `name` (`NAME@N`, or `NAME` for its latest)."""
     return moving_coil_from_data(_read(name, root), name)
+
+
+def load_ribbon_motor(name: str, root: Path = DEVICE_DIR) -> MovingCoil:
+    """Ribbon motor component `name` (`NAME@N`, or `NAME` for its latest): its compiled
+    network in moving_coil's format (varimu.devices.ribbon)."""
+    return moving_coil_from_data(_read(name, root), name, "ribbon_motor")
 
 
 def load_plate(name: str, root: Path = DEVICE_DIR) -> PlateComponent:
@@ -793,6 +801,27 @@ def build_r59() -> dict[str, Any]:
         "lumped": moving_coil.compile_network(geom),
         "lumped_source": "derived: varimu/devices/moving_coil.py's formulas (its docstring) on "
         "the geometry; air at 20 C",
+    }
+
+
+def build_ribbon_44bx() -> dict[str, Any]:
+    """The RCA 44-BX's ribbon motor (docs/CHAINS_PLAN.md WP5): its geometry
+    (published_points.yaml "RIBBON_44BX": the ribbon from AEA's R44 sheet, the motor after
+    Olson's circuit, the rest provisional until WP6 fits it to the 44-BX's curves), the
+    lumped network compiled from it (varimu.devices.ribbon.compile_network)."""
+    from varimu.devices import ribbon
+
+    pub = _published()["RIBBON_44BX"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "RIBBON_44BX",
+        "kind": "ribbon_motor",
+        "source": "derived: varimu.devices.ribbon.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": ribbon.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/ribbon.py's and moving_coil.py's formulas "
+        "(their docstrings) on the geometry; air at 20 C",
     }
 
 
@@ -1735,6 +1764,7 @@ BUILDERS = {
     "CK12": build_ck12,
     "R57": build_r57,
     "R59": build_r59,
+    "RIBBON_44BX": build_ribbon_44bx,
     "VF14T": build_vf14t,
     "6X4": build_6x4,
     "6AL5": build_6al5,

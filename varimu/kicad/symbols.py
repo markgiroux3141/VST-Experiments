@@ -496,6 +496,38 @@ _SYMBOLS: list[SymbolDef] = [
         text=(0, 6.35, 5.588, "left"),
     ),
     _macro(
+        "RibbonMotor",
+        "ribbon_motor",
+        "MR",
+        "Ribbon motor (varimu.devices.ribbon, Olson's velocity microphone): pins 1 and 2 the "
+        "pressures at its front and rear faces' entries (pascals as volts), 3 and 4 the "
+        "ribbon's ends; Value is its component version",
+        (
+            Pin("1", "1", -7.62, 2.54, 0, 2.54),
+            Pin("2", "2", -7.62, -2.54, 0, 2.54),
+            Pin("3", "3", 7.62, 2.54, 180, 2.54),
+            Pin("4", "4", 7.62, -2.54, 180, 2.54),
+        ),  # fmt: skip
+        [
+            circle(0, 0, 3.81),
+            poly(
+                (0, 2.54),
+                (0.635, 1.905),
+                (-0.635, 1.27),
+                (0.635, 0.635),
+                (-0.635, 0),
+                (0.635, -0.635),
+                (-0.635, -1.27),
+                (0.635, -1.905),
+                (0, -2.54),
+            ),
+        ],
+        "component",
+        (),
+        toleranced=False,
+        text=(0, 6.35, 5.588, "left"),
+    ),
+    _macro(
         "OpAmp",
         "opamp",
         "U",

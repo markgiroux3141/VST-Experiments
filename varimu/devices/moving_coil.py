@@ -24,8 +24,21 @@ entries), `0` (the ambient) and the cartridge's own nodes, each compiled by its 
                taken at that frequency (a lumped element can't follow its sqrt(f))
     slit       a thin gap between parallel walls (the coil's annular gap): width w (the
                gap), breadth b (the circumference), length l along the flow: R = 12 mu l /
-               (b w^3), M = 6 rho l / (5 b w) (plane Poiseuille flow)
-    cavity     a closed volume of air to the ambient's reference: C = V / (gamma P0)
+               (b w^3), M = 6 rho l / (5 b w) (plane Poiseuille flow); with `wide_at_hz`,
+               a channel wide against its boundary layer there (a ribbon's pole-piece
+               channel): plug flow, M = rho l / (b w), and Crandall's wall loss on both
+               walls, R = l sqrt(2 w rho mu) / (b w^2) (the tube's formula with the walls'
+               area 2 b l over the section b w), the resistance taken at that frequency
+    radiation  an opening's radiation load into the free field, from the pressure there
+               (its blocked pressure, a: the entry) to the opening (b): a rectangle
+               width_m x length_m or a disk radius_m in a baffle, its low-frequency mass
+               rho I / (2 pi S^2) (the Rayleigh integral's self term, I the integral of
+               1 / |r - r'| over the face twice: `rectangle_self_integral`; a disk's gives
+               8 rho / (3 pi^2 r)) in parallel with its high-frequency limit rho c / S
+               (a lumped approximation: the real part rises as w^2 below the corner,
+               within ~45% of the piston's rho w^2 / (2 pi c), then flattens). Elements
+               <name>_m (L), <name>_r (R), both a -> b
+    cavity    a closed volume of air to the ambient's reference: C = V / (gamma P0)
                (adiabatic: the cavities are wide against the thermal boundary layer), or
                its compliance_m5_n where a fit gives it
     film       a thin layer of air (the cap's: between the resonator plate and the dome) of
@@ -95,7 +108,9 @@ from typing import Any
 
 from varimu.devices.capsule import C_AIR, END_CORRECTION, GAMMA, MU_AIR, P0, RHO_AIR
 
-KINDS = ("screen", "tube", "slit", "cavity", "film", "acoustic", "seeler", "diaphragm")
+KINDS = (
+    "screen", "tube", "slit", "radiation", "cavity", "film", "acoustic", "seeler", "diaphragm",
+)  # fmt: skip
 PORTS = ("front", "rear", "0")
 # The leak across the diaphragm's compliance: a resistance this many times the
 # compliance's reactance at LEAK_HZ (a time constant of ~1 / (2 pi LEAK_HZ x 1e6)): numerical.
@@ -195,78 +210,9 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
         if name in names:
             raise ValueError(f"network element {name}: the name is taken")
         names.add(name)
-        if kind == "screen":
-            area = float(e["area_m2"])
-            els.append(_el(f"{name}", "R", a, b, float(e["rayl"]) / area))
-            t = float(e.get("thickness_m", 0.0))
-            if t > 0:
-                m = RHO_AIR * t / (float(e.get("porosity", 1.0)) * area)
-                els[-1]["b"] = f"{name}_m"
-                els.append(_el(f"{name}_m", "L", f"{name}_m", b, m))
-        elif kind == "tube":
-            n, r, length = float(e.get("count", 1)), float(e["radius_m"]), float(e["length_m"])
-            ends = float(e.get("open_ends", 2))
-            l_eff = length + ends * END_CORRECTION * r
-            if "wide_at_hz" in e:
-                w = 2.0 * math.pi * float(e["wide_at_hz"])
-                res = l_eff * math.sqrt(2.0 * w * RHO_AIR * MU_AIR) / (n * math.pi * r**3)
-                mass = RHO_AIR * l_eff / (n * math.pi * r * r)
-            else:
-                res = 8.0 * MU_AIR * length / (n * math.pi * r**4)
-                mass = 4.0 * RHO_AIR * l_eff / (3.0 * n * math.pi * r * r)
-            els += _series(name, a, b, res, mass)
-        elif kind == "slit":
-            w, br, length = float(e["width_m"]), float(e["breadth_m"]), float(e["length_m"])
-            res = 12.0 * MU_AIR * length / (br * w**3)
-            mass = 6.0 * RHO_AIR * length / (5.0 * br * w)
-            els += _series(name, a, b, res, mass)
-        elif kind == "seeler":
-            k_s = float(e["d_m"]) / C_AIR
-            r1, q = float(e["r1_pa_s_m3"]), float(e["q"])
-            net = seeler_rear_network(k_s, r1, q * k_s * r1)
-            mid = str(e["mid"])
-            els += [
-                _el(f"{name}_r1", "R", a, f"{name}_1", r1),
-                _el(f"{name}_l1", "L", f"{name}_1", b, q * k_s * r1),
-                _el(f"{name}_ca", "C", a, "0", net["ca"]),
-                _el(f"{name}_rb", "R", a, f"{name}_b", net["rb"]),
-                _el(f"{name}_lb", "L", f"{name}_b", mid, net["lb"]),
-                _el(f"{name}_cb", "C", mid, "0", net["cb"]),
-            ]
-        elif kind == "cavity":
-            if b != "0":
-                raise ValueError(f"cavity {name}: a compliance to the ambient (b: '0')")
-            if "compliance_m5_n" in e:
-                comp = float(e["compliance_m5_n"])
-            else:
-                comp = float(e["volume_m3"]) / (GAMMA * P0)
-            els.append(_el(name, "C", a, "0", comp))
-        elif kind == "film":
-            if b != "0":
-                raise ValueError(f"film {name}: a compliance to the ambient (b: '0')")
-            h, rr = float(e["height_m"]), float(e["ring_radius_m"])
-            ro = float(e["radius_m"])
-            out_r = 6.0 * MU_AIR * math.log(ro / rr) / (math.pi * h**3)
-            in_r = 6.0 * MU_AIR * math.log(4.0) / (math.pi * h**3)
-            out_m = 6.0 * RHO_AIR * math.log(ro / rr) / (10.0 * math.pi * h)
-            in_m = 6.0 * RHO_AIR * math.log(4.0) / (10.0 * math.pi * h)
-            comp = float(e.get("fill", 1.0)) * math.pi * ro * ro * h / (GAMMA * P0)
-            els += [
-                _el(name, "R", a, f"{name}_m", out_r * in_r / (out_r + in_r)),
-                _el(f"{name}_m", "L", f"{name}_m", f"{name}_c", out_m * in_m / (out_m + in_m)),
-                _el(f"{name}_c", "C", f"{name}_c", "0", comp),
-            ]
-        elif kind == "acoustic":
-            r_, m_ = float(e.get("r_pa_s_m3", 0.0)), float(e.get("m_kg_m4", 0.0))
-            if r_ > 0 and m_ > 0:
-                els += _series(name, a, b, r_, m_)
-            elif r_ > 0:
-                els.append(_el(name, "R", a, b, r_))
-            elif m_ > 0:
-                els.append(_el(name, "L", a, b, m_))
-            else:
-                raise ValueError(f"acoustic {name}: needs r_pa_s_m3 and / or m_kg_m4")
-        else:  # diaphragm
+        if kind != "diaphragm":
+            els += compile_element(e)
+        else:
             n_diaphragm += 1
             modes = d.get("modes") or []
             mf = 1.0 - sum(float(x["mass_fraction"]) for x in modes)
@@ -316,6 +262,119 @@ def compile_network(g: Mapping[str, Any]) -> dict[str, Any]:
         "resistance_ns_per_m": d["resistance_ns_per_m"],
         **({"mass_parts": mass_parts} if mass_parts else {}),
     }
+
+
+def compile_element(e: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The lumped elements of one network element `e` of any kind but the moving system's
+    (`diaphragm`; a ribbon's `ribbon`, varimu.devices.ribbon): the module docstring's
+    formulas. Shared by every transducer kind built on these networks."""
+    name, kind, a = str(e["name"]), str(e["kind"]), str(e["a"])
+    b = str(e.get("b", "0"))
+    els: list[dict[str, Any]] = []
+    if kind == "screen":
+        area = float(e["area_m2"])
+        els.append(_el(f"{name}", "R", a, b, float(e["rayl"]) / area))
+        t = float(e.get("thickness_m", 0.0))
+        if t > 0:
+            m = RHO_AIR * t / (float(e.get("porosity", 1.0)) * area)
+            els[-1]["b"] = f"{name}_m"
+            els.append(_el(f"{name}_m", "L", f"{name}_m", b, m))
+    elif kind == "tube":
+        n, r, length = float(e.get("count", 1)), float(e["radius_m"]), float(e["length_m"])
+        ends = float(e.get("open_ends", 2))
+        l_eff = length + ends * END_CORRECTION * r
+        if "wide_at_hz" in e:
+            w = 2.0 * math.pi * float(e["wide_at_hz"])
+            res = l_eff * math.sqrt(2.0 * w * RHO_AIR * MU_AIR) / (n * math.pi * r**3)
+            mass = RHO_AIR * l_eff / (n * math.pi * r * r)
+        else:
+            res = 8.0 * MU_AIR * length / (n * math.pi * r**4)
+            mass = 4.0 * RHO_AIR * l_eff / (3.0 * n * math.pi * r * r)
+        els += _series(name, a, b, res, mass)
+    elif kind == "slit":
+        w, br, length = float(e["width_m"]), float(e["breadth_m"]), float(e["length_m"])
+        if "wide_at_hz" in e:
+            om = 2.0 * math.pi * float(e["wide_at_hz"])
+            res = length * math.sqrt(2.0 * om * RHO_AIR * MU_AIR) / (br * w * w)
+            mass = RHO_AIR * length / (br * w)
+        else:
+            res = 12.0 * MU_AIR * length / (br * w**3)
+            mass = 6.0 * RHO_AIR * length / (5.0 * br * w)
+        els += _series(name, a, b, res, mass)
+    elif kind == "radiation":
+        if "radius_m" in e:
+            r = float(e["radius_m"])
+            area, self_integral = math.pi * r * r, 16.0 * math.pi * r**3 / 3.0
+        else:
+            w, ln = float(e["width_m"]), float(e["length_m"])
+            area, self_integral = w * ln, rectangle_self_integral(w, ln)
+        mass = RHO_AIR * self_integral / (2.0 * math.pi * area * area)
+        els += [
+            _el(f"{name}_m", "L", a, b, mass),
+            _el(f"{name}_r", "R", a, b, RHO_AIR * C_AIR / area),
+        ]
+    elif kind == "seeler":
+        k_s = float(e["d_m"]) / C_AIR
+        r1, q = float(e["r1_pa_s_m3"]), float(e["q"])
+        net = seeler_rear_network(k_s, r1, q * k_s * r1)
+        mid = str(e["mid"])
+        els += [
+            _el(f"{name}_r1", "R", a, f"{name}_1", r1),
+            _el(f"{name}_l1", "L", f"{name}_1", b, q * k_s * r1),
+            _el(f"{name}_ca", "C", a, "0", net["ca"]),
+            _el(f"{name}_rb", "R", a, f"{name}_b", net["rb"]),
+            _el(f"{name}_lb", "L", f"{name}_b", mid, net["lb"]),
+            _el(f"{name}_cb", "C", mid, "0", net["cb"]),
+        ]
+    elif kind == "cavity":
+        if b != "0":
+            raise ValueError(f"cavity {name}: a compliance to the ambient (b: '0')")
+        if "compliance_m5_n" in e:
+            comp = float(e["compliance_m5_n"])
+        else:
+            comp = float(e["volume_m3"]) / (GAMMA * P0)
+        els.append(_el(name, "C", a, "0", comp))
+    elif kind == "film":
+        if b != "0":
+            raise ValueError(f"film {name}: a compliance to the ambient (b: '0')")
+        h, rr = float(e["height_m"]), float(e["ring_radius_m"])
+        ro = float(e["radius_m"])
+        out_r = 6.0 * MU_AIR * math.log(ro / rr) / (math.pi * h**3)
+        in_r = 6.0 * MU_AIR * math.log(4.0) / (math.pi * h**3)
+        out_m = 6.0 * RHO_AIR * math.log(ro / rr) / (10.0 * math.pi * h)
+        in_m = 6.0 * RHO_AIR * math.log(4.0) / (10.0 * math.pi * h)
+        comp = float(e.get("fill", 1.0)) * math.pi * ro * ro * h / (GAMMA * P0)
+        els += [
+            _el(name, "R", a, f"{name}_m", out_r * in_r / (out_r + in_r)),
+            _el(f"{name}_m", "L", f"{name}_m", f"{name}_c", out_m * in_m / (out_m + in_m)),
+            _el(f"{name}_c", "C", f"{name}_c", "0", comp),
+        ]
+    elif kind == "acoustic":
+        r_, m_ = float(e.get("r_pa_s_m3", 0.0)), float(e.get("m_kg_m4", 0.0))
+        if r_ > 0 and m_ > 0:
+            els += _series(name, a, b, r_, m_)
+        elif r_ > 0:
+            els.append(_el(name, "R", a, b, r_))
+        elif m_ > 0:
+            els.append(_el(name, "L", a, b, m_))
+        else:
+            raise ValueError(f"acoustic {name}: needs r_pa_s_m3 and / or m_kg_m4")
+    else:
+        raise ValueError(f"network element {name}: kind {kind!r} isn't a passive element")
+    return els
+
+
+def rectangle_self_integral(a: float, b: float) -> float:
+    """The integral of 1 / |r - r'| over a rectangle a x b twice (m^3): (2/3) (a^3 + b^3 -
+    d^3) + 2 a^2 b asinh(b / a) + 2 a b^2 asinh(a / b), d its diagonal (4 x the integral of
+    (a - u) (b - v) / sqrt(u^2 + v^2) over [0, a] x [0, b]; checked against quadrature in
+    tests/test_ribbon.py). A disk's is 16 pi r^3 / 3."""
+    d = math.hypot(a, b)
+    return (
+        2.0 * (a**3 + b**3 - d**3) / 3.0
+        + 2.0 * a * a * b * math.asinh(b / a)
+        + 2.0 * a * b * b * math.asinh(a / b)
+    )
 
 
 def _series(name: str, a: str, b: str, r: float, m: float) -> list[dict[str, Any]]:
@@ -370,9 +429,14 @@ def seeler_rear_network(k_s: float, r1: float, l1: float) -> dict[str, float]:
     raise ValueError(f"Seeler's Eq. 10 gives no physical network at q = {q:.4g} (roots {roots})")
 
 
-def moving_coil_from_data(d: Mapping[str, Any], name: str = "moving_coil") -> MovingCoil:
-    if d.get("kind") != "moving_coil":
-        raise ValueError(f"{name} is not a moving-coil cartridge (kind {d.get('kind')!r})")
+def moving_coil_from_data(
+    d: Mapping[str, Any], name: str = "moving_coil", kind: str = "moving_coil"
+) -> MovingCoil:
+    """A component's compiled network: a moving-coil cartridge, or with kind `ribbon_motor`
+    a ribbon motor (varimu.devices.ribbon: the same lumped format)."""
+    if d.get("kind") != kind:
+        what = {"moving_coil": "a moving-coil cartridge", "ribbon_motor": "a ribbon motor"}[kind]
+        raise ValueError(f"{name} is not {what} (kind {d.get('kind')!r})")
     lp = d["lumped"]
     missing = [
         k for k in ("bl_tm", "sd_m2", "re_ohm", "le_h", "l2_h", "r2_ohm", "elements") if k not in lp

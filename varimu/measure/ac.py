@@ -7,7 +7,9 @@
 Nodal analysis with the input node driven by an ideal source (1 V); a control input's
 node is driven by an ideal source too (0 V unless `drives` gives it a complex amplitude
 per frequency); DC sources (V, sine and mains sources) are AC shorts. Elements: Resistor,
-Capacitor, Inductor (its current an unknown, so a 0 H inductor is a short), Vccs,
+Capacitor, Inductor (its current an unknown, so a 0 H inductor is a short), Coupling
+(the mutual inductance k sqrt(La Lb) between two inductors' branches: a transformer's
+coupled series leakages, `leak_couplings`), Vccs,
 NoiseCurrent (noise only), Winding (its current an unknown: V(a) - V(b) = s N A
 TESLA_PER_V V(core), N i into the core node; a transformer in a build with
 `cores="linear"`, its core a resistor). A device or medium element is an error: this is
@@ -25,6 +27,7 @@ from varimu.circuit.ir import (
     GROUND,
     Capacitor,
     CircuitIR,
+    Coupling,
     Inductor,
     NoiseCurrent,
     Resistor,
@@ -55,7 +58,10 @@ def _system(ir: CircuitIR):
     els = list(ir.elements())
     branches = []  # (kind, a, b, value): Inductors and voltage sources get a current unknown
     stamps = []
+    couplings = [e for e in els if isinstance(e, Coupling)]
     for e in els:
+        if isinstance(e, Coupling):
+            continue
         if isinstance(e, Resistor):
             stamps.append(("g", node(e.a), node(e.b), 1.0 / e.r_ohm))
         elif isinstance(e, Capacitor):
@@ -75,6 +81,14 @@ def _system(ir: CircuitIR):
             branches.append(("w", node(e.a), node(e.b), (node(e.core), k, e.turns)))
         else:
             raise Unsupported(f"{type(e).__name__} {getattr(e, 'name', '')}: not linear")
+    l_index = {e.name: k for k, e in enumerate(x for x in els if isinstance(x, Inductor))}
+    l_rows = [k for k, b in enumerate(branches) if b[0] == "l"]
+    l_value = {e.name: e.l_h for e in els if isinstance(e, Inductor)}
+    for c in couplings:
+        if c.l_a not in l_index or c.l_b not in l_index:
+            raise Unsupported(f"Coupling {c.name}: {c.l_a} or {c.l_b} isn't an inductor")
+        mutual = c.k * (l_value[c.l_a] * l_value[c.l_b]) ** 0.5
+        stamps.append(("m", l_rows[l_index[c.l_a]], l_rows[l_index[c.l_b]], mutual))
     for ctl in ir.controls:
         branches.append(("ctl:" + ctl.node, node(ctl.node), -1, 0.0))
     inp = node(ir.input_node)
@@ -98,6 +112,9 @@ def _solve(ir: CircuitIR, f_hz: Sequence[float], rhs_fn) -> tuple[list[str], np.
             if kind in ("g", "c"):
                 y = v if kind == "g" else s * v
                 add(p, p, y), add(q, q, y), add(p, q, -y), add(q, p, -y)
+            elif kind == "m":  # branches p and q (indices): - s M i on each other's row
+                a[n + p, n + q] -= s * v
+                a[n + q, n + p] -= s * v
             else:  # current gm (V(cp) - V(cn)) from p to q through the source
                 cp, cn, gm = v
                 add(q, cp, -gm), add(q, cn, gm), add(p, cp, gm), add(p, cn, -gm)
