@@ -571,6 +571,73 @@ def build_2n3819() -> dict[str, Any]:
     )
 
 
+# The 2N5457's channel-length modulation, read off onsemi 2N5457/D Figure 2 (the same unit as
+# Figure 3): ~1.1e-3 / V at VGS = 0 and ~1.7e-3 at -0.2 V (data/datasheets/
+# onsemi_2n5457.provenance.yaml, notes).
+ONSEMI_2N5457_LAMBDA = 1.4e-3
+# PB (the gate junction's potential) only shapes the doping tail; Central's card's value.
+CENTRAL_2N5457_PB = 0.3905
+
+
+def fit_2n5457() -> tuple[dict[str, float], dict[str, float]]:
+    """VTO, BETA and the doping tail B fitted by least squares to onsemi 2N5457/D Figure 3
+    (one unit, VDS 15 V: the saturated level-1 law, varimu.devices.jfet), in mA; returns the
+    parameters and the fit's residuals."""
+    from scipy.optimize import least_squares
+
+    vgs, vds, i_d = load_csv("onsemi_2n5457_transfer.csv").T
+
+    def model(p):
+        vto, beta, b = p
+        vgst = np.maximum(vgs - vto, 0.0)
+        bfac = (1 - b) / (CENTRAL_2N5457_PB - vto)
+        return beta * (1 + ONSEMI_2N5457_LAMBDA * vds) * vgst**2 * (b + bfac * vgst)
+
+    r = least_squares(lambda p: (model(p) - i_d) * 1e3, [-1.2, 0.7e-3, 1.0])
+    res = model(r.x) - i_d
+    p = {"vto_v": float(r.x[0]), "beta_a_per_v2": float(r.x[1]), "b": float(r.x[2])}
+    return p, {"rms_a": float(np.sqrt(np.mean(res**2))), "max_a": float(np.max(np.abs(res)))}
+
+
+def build_2n5457() -> dict[str, Any]:
+    """The 2N5457 N-channel JFET: the 1176's VVR FET as repairers replace it (Rev F's "UREI
+    13-0027" is a selected house part; data/schematics/urei_1176/README.md, open questions).
+
+    Version 2 (2026-11-06): onsemi's sheet's Figure 3 unit (VGS(off) ~-1.2 V, IDSS ~1.05 mA),
+    fitted (fit_2n5457). Version 1 was Central's card (VTO -1.47 V, BETA 1.63 mA/V^2): twice
+    as steep as onsemi's measured unit, and its CGD a slipped exponent."""
+    p, fit = fit_2n5457()
+    data = {
+        **_jfet_component(
+            "2N5457",
+            "njf",
+            {
+                **p,
+                "lambda_per_v": ONSEMI_2N5457_LAMBDA,
+                "is_a": 783.14e-18,
+                "pb_v": CENTRAL_2N5457_PB,
+            },  # fmt: skip
+            {"rd_ohm": 60.461, "rs_ohm": 60.461, "cgs_f": 3.0e-12, "cgd_f": 1.5e-12},
+            "onsemi 2N5457/D Rev. 6 (data/schematics/urei_1176/2N5457-D.PDF): the Figure 3 "
+            "unit, a 2N5457 whose VGS(off) (~-1.2 V) the 1176's Q-bias network reaches (the "
+            "table's typical part, VGS(off) ~-3 V, it can't). cgs_f, cgd_f: the table's "
+            "typical Ciss 4.5 pF and Crss 1.5 pF (CGS = Ciss - Crss). rd_ohm, rs_ohm, is_a, "
+            "pb_v: Central's card (web: https://central.aeminc.com/docs/ENGINEERING/CSM/"
+            "2N5457_CSM.LIB, RD = RS 60.461, IS 783.14E-18, PB .3905): the sheet gives none",
+            "fit: vto_v, beta_a_per_v2 and b by least squares to onsemi 2N5457/D Figure 3 "
+            "(data/datasheets/onsemi_2n5457_transfer.csv, its provenance sidecar; "
+            "library.fit_2n5457), VDS 15 V, lambda_per_v from Figure 2 "
+            "(ONSEMI_2N5457_LAMBDA)",
+        ),
+        "fit_report": {"rms_error_a": fit["rms_a"], "max_error_a": fit["max_a"]},
+    }
+    data["parasitics"]["source"] = (
+        "rd_ohm, rs_ohm: Central's card's RD, RS; cgs_f, cgd_f: onsemi's typical Ciss - "
+        "Crss and Crss (linear elements of the jfet part, varimu.devices.jfet)"
+    )
+    return data
+
+
 def build_el34t() -> dict[str, Any]:
     """The EL34 triode-connected (the 670's series pass tube, V302): a Koren triode fit to
     Mullard's triode-connected plate curves."""
@@ -1473,6 +1540,116 @@ def _bjt_component(name: str, card_key: str, source: str) -> dict[str, Any]:
     }
 
 
+def _bjt_from_numbers(
+    name: str, polarity: str, p: dict[str, float], source: str, card_source: str
+) -> dict[str, Any]:
+    """A BJT component from a card whose licence forbids redistributing it (Central's):
+    its numbers, cited, without the card's text (as _jfet_component)."""
+    dc = {
+        "is_a": p["IS"],
+        "bf": p["BF"],
+        "br": p.get("BR", 1.0),
+        "nf": p.get("NF", 1.0),
+        "nr": p.get("NR", 1.0),
+        "vaf_v": p.get("VAF") or None,
+        "var_v": p.get("VAR") or None,
+        "ikf_a": p.get("IKF") or None,
+        "ikr_a": p.get("IKR") or None,
+        "ise_a": p.get("ISE", 0.0),
+        "ne": p.get("NE", 1.5),
+        "isc_a": p.get("ISC", 0.0),
+        "nc": p.get("NC", 2.0),
+        "source": card_source,
+    }
+    cjc = depletion_c_f(p.get("CJC", 0.0), p.get("VJC", 0.75), p.get("MJC", 0.33), BJT_CJC_AT_V)
+    return {
+        "name": name,
+        "kind": "bjt",
+        "source": source,
+        "polarity": polarity,
+        "dc": dc,
+        "parasitics": {
+            "rb_ohm": p.get("RB", 0.0),
+            "rc_ohm": p.get("RC", 0.0),
+            "re_ohm": p.get("RE", 0.0),
+            "cje_f": p.get("CJE", 0.0),
+            "cjc_f": cjc,
+            "source": "the card's RB, RC, RE; cje_f its CJE at zero bias, cjc_f its CJC (1 + V "
+            f"/ VJC)^-MJC at V = {BJT_CJC_AT_V:g} V reverse (linear capacitors of the bjt part, "
+            "varimu.devices.bjt)",
+        },
+    }
+
+
+def build_2n3707() -> dict[str, Any]:
+    """The 2N3707 (the 1176's control amp Q7-Q10 and Rev A's Q5)."""
+    return _bjt_from_numbers(
+        "2N3707",
+        "npn",
+        {
+            "IS": 38.116e-15,
+            "BF": 285.0,
+            "VAF": 100.0,
+            "IKF": 0.76234,
+            "ISE": 38.128e-15,
+            "NE": 1.9979,
+            "BR": 10.364,
+            "VAR": 100.0,
+            "IKR": 1.5810,
+            "ISC": 803.76e-15,
+            "NC": 1.5928,
+            "RB": 9.7439,
+            "RC": 30.0,
+            "CJE": 11.658e-12,
+            "CJC": 5.3208e-12,
+            "VJC": 0.42236,
+            "MJC": 0.29245,
+        },  # fmt: skip
+        "Central Semiconductor's 2N3707 SPICE model (data/datasheets/transistors/README.md: "
+        "a family template shared with its 2N5088 card but BF and RC, so the junction "
+        "constants are provisional). Its NK 1.2265 (PSpice's high-injection exponent) isn't "
+        "in the model: IKF 0.76 A is far above the 1176's currents",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N3707.LIB (2N3707, 11/16/21 "
+        "rev A: IS 38.116f, BF 285, VAF 100, IKF .76234, ISE 38.128f, NE 1.9979, BR 10.364, "
+        "VAR 100, IKR 1.5810, ISC 803.76f, NC 1.5928, RB 9.7439, RC 30, CJE 11.658p, CJC "
+        "5.3208p, VJC .42236, MJC .29245)",
+    )
+
+
+def build_2n3053() -> dict[str, Any]:
+    """The 2N3053 (the 1176 Rev A's class-A output transistor, Q6)."""
+    return _bjt_from_numbers(
+        "2N3053",
+        "npn",
+        {
+            "IS": 5.42e-17,
+            "BF": 205.0,
+            "VAF": 114.0,
+            "IKF": 0.425,
+            "ISE": 1.64e-12,
+            "NE": 2.0,
+            "BR": 4.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 1.05,
+            "RE": 0.102,
+            "RB": 0.409,
+            "RC": 40.9e-3,
+            "CJE": 111e-12,
+            "CJC": 43.3e-12,
+            "VJC": 0.3,
+            "MJC": 0.3,
+        },  # fmt: skip
+        "Central Semiconductor's 2N3053 SPICE model (data/datasheets/transistors/README.md: "
+        "named sm_NPN, a generic 40 V 0.7 A 100 MHz fit rather than a part-specific "
+        "extraction); its datasheet data/datasheets/transistors/central_2N3053.pdf",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N3053.LIB (2N3053, 10/22/19 "
+        "rev A: IS 5.42e-17, BF 205, VAF 114, IKF 0.425, ISE 1.64p, NE 2.00, BR 4.00, NR "
+        "1.00, VAR 20.0, IKR 1.05, RE 0.102, RB 0.409, RC 40.9m, CJE 111p, CJC 43.3p, VJC "
+        "0.300, MJC 0.300)",
+    )
+
+
 def build_bc550c() -> dict[str, Any]:
     """The BC550C (Philips / NXP), the project's first BJT (CLAVINET_PLAN.md CL0)."""
     return _bjt_component(
@@ -1991,6 +2168,9 @@ BUILDERS = {
     "1N4148": build_1n4148,
     "J175": build_j175,
     "2N3819": build_2n3819,
+    "2N5457": build_2n5457,
+    "2N3707": build_2n3707,
+    "2N3053": build_2n3053,
     "EL34T": build_el34t,
     "6084": build_6084,
     "5651": build_5651,

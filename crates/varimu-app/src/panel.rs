@@ -485,7 +485,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 21] = [
+pub const DEVICES: [Device; 22] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1155,6 +1155,39 @@ pub const DEVICES: [Device; 21] = [
         coupling: None,
         live_speaker_v: None,
         partition: None,
+        newton: Some((1e-5, 1e-5)),
+    },
+    Device {
+        id: "urei_1176",
+        label: "UREI 1176LN (FET limiter)",
+        short: "1176",
+        about: "The UREI 1176LN of the D / E era: a FET as the voltage-variable resistor, \
+            the LN circuit, the class-A output, four ratios; a feedback limiter",
+        group: Group::Dynamics,
+        circuit: "urei_1176",
+        panel: Some(&[
+            "input_atten_db",
+            "output",
+            "attack",
+            "release",
+            "ratio",
+            "attack_off",
+        ]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        partition: None,
+        // The LN circuit nulls the FET's distortion: the draft's 1 mV Newton reads ten
+        // times the THD at 10 dB of gain reduction (DEVICE_BUILDER_PLAN.md B12).
         newton: Some((1e-5, 1e-5)),
     },
 ];
@@ -1924,7 +1957,7 @@ mod tests {
                     vec!["tube_synth", "rhodes_stage_5e3", "clavinet_d6"]
                 ),
                 (Group::Drums, vec!["tube_kick", "sideman_bd"]),
-                (Group::Dynamics, vec!["fairchild_670"]),
+                (Group::Dynamics, vec!["fairchild_670", "urei_1176"]),
                 (Group::Eq, vec!["pultec_eqp1a"]),
                 (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
                 (
@@ -1939,7 +1972,12 @@ mod tests {
         assert_eq!(inserts[0].0, Group::Dynamics);
         assert_eq!(
             inserts[0].1,
-            vec!["fairchild_670", "fairchild_670_keyed", "ssl_bus_comp"]
+            vec![
+                "fairchild_670",
+                "fairchild_670_keyed",
+                "ssl_bus_comp",
+                "urei_1176"
+            ]
         );
         assert!(inserts.iter().all(|(g, _)| *g != Group::Instruments));
         // The retired prototypes are in no menu but still load by id.

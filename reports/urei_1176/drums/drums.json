@@ -1,0 +1,51 @@
+{
+ "samples": {
+  "kick": "samples/drums/kick/alchemist-vol_alchemist-kick-1.wav",
+  "snare": "samples/drums/snare/alchemist-vol_alchemist-snare-1.wav",
+  "hihat_closed": "samples/drums/hihat_closed/dpadex0003xambi_a42hhc065.wav"
+ },
+ "bpm": 96.0,
+ "quality": "draft",
+ "presets": {
+  "4to1": {
+   "panel": {
+    "ratio": 4,
+    "attack": 0.6,
+    "release": 0.7,
+    "input_atten_db": 20.0,
+    "output": 0.25
+   },
+   "gain_reduction_db": {
+    "peak": 10.12,
+    "mean_while_playing": 3.89
+   },
+   "lufs": {
+    "dry": -28.21,
+    "out": -23.35
+   },
+   "out_peak_dbfs": -0.69,
+   "render_s": 13.1,
+   "audio_s": 8.0
+  },
+  "20to1_fast": {
+   "panel": {
+    "ratio": 20,
+    "attack": 1.0,
+    "release": 1.0,
+    "input_atten_db": 12.0,
+    "output": 0.5
+   },
+   "gain_reduction_db": {
+    "peak": 21.66,
+    "mean_while_playing": 11.18
+   },
+   "lufs": {
+    "dry": -28.21,
+    "out": -20.37
+   },
+   "out_peak_dbfs": -5.57,
+   "render_s": 14.3,
+   "audio_s": 8.0
+  }
+ }
+}

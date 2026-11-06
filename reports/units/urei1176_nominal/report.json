@@ -1,0 +1,377 @@
+{
+ "name": "urei1176_nominal",
+ "circuit": "urei_1176",
+ "when": "2026-11-06T16:33:58",
+ "code": "0.1.0+67b40067538f",
+ "engine": "circuitsim",
+ "quality": "production",
+ "genome": {},
+ "checks": {
+  "idle_quiet": {
+   "passes": true,
+   "value": -188.1,
+   "limit": -80.0
+  }
+ },
+ "plausible": true,
+ "gain": {
+  "db": 45.0,
+  "manual": "45 dB +-1",
+  "passes": true
+ },
+ "response": {
+  "re_1khz_db": {
+   "20.0": 0.65,
+   "30.0": 0.3,
+   "50.0": 0.11,
+   "100.0": 0.03,
+   "300.0": 0.0,
+   "1000.0": 0.0,
+   "3000.0": 0.01,
+   "10000.0": -0.01,
+   "15000.0": -0.03,
+   "20000.0": -0.13
+  },
+  "manual": "+-1 dB, 20 Hz-20 kHz",
+  "passes": true
+ },
+ "max_output": {
+  "rows": [
+   {
+    "out_dbm": 16.0,
+    "thd_pct": 0.1465
+   },
+   {
+    "out_dbm": 17.0,
+    "thd_pct": 0.1641
+   },
+   {
+    "out_dbm": 18.0,
+    "thd_pct": 0.1836
+   },
+   {
+    "out_dbm": 19.0,
+    "thd_pct": 0.2049
+   },
+   {
+    "out_dbm": 20.0,
+    "thd_pct": 0.2282
+   },
+   {
+    "out_dbm": 20.99,
+    "thd_pct": 0.2526
+   },
+   {
+    "out_dbm": 21.99,
+    "thd_pct": 0.2755
+   },
+   {
+    "out_dbm": 22.98,
+    "thd_pct": 0.2872
+   },
+   {
+    "out_dbm": 23.88,
+    "thd_pct": 1.9519
+   },
+   {
+    "out_dbm": 24.58,
+    "thd_pct": 5.6116
+   },
+   {
+    "out_dbm": 24.56,
+    "thd_pct": 13.7976
+   },
+   {
+    "out_dbm": 24.38,
+    "thd_pct": 21.1539
+   },
+   {
+    "out_dbm": 24.27,
+    "thd_pct": 26.5697
+   }
+  ],
+  "out_dbm_at_0p5pct": 23.1,
+  "manual": "+22 dBm, no more than 0.5 % THD",
+  "passes": true
+ },
+ "curves": {
+  "in_dbu": [
+   -56.0,
+   -52.0,
+   -48.0,
+   -44.0,
+   -40.0,
+   -36.0,
+   -32.0,
+   -28.0,
+   -24.0,
+   -20.0,
+   -16.0,
+   -12.0,
+   -8.0,
+   -4.0,
+   0.0
+  ],
+  "output_pot": 0.45,
+  "panel": {
+   "input_atten_db": 0.0,
+   "attack": 0.5,
+   "release": 0.0
+  },
+  "rows": [
+   {
+    "ratio": 4,
+    "gain_below_db": 35.29,
+    "threshold_in_dbu": -18.69,
+    "threshold_out_dbm": 15.6,
+    "slope_6_to_15_db": 0.1485,
+    "ratio_measured": 6.74,
+    "gr_db": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     3.04,
+     6.68,
+     10.17,
+     13.49,
+     16.65
+    ],
+    "thd_pct": [
+     0.0021,
+     0.0034,
+     0.0053,
+     0.0087,
+     0.0138,
+     0.0219,
+     0.0347,
+     0.0549,
+     0.0869,
+     0.1374,
+     0.3378,
+     0.1306,
+     0.0627,
+     0.1513,
+     0.2408
+    ]
+   },
+   {
+    "ratio": 8,
+    "gain_below_db": 35.29,
+    "threshold_in_dbu": -19.44,
+    "threshold_out_dbm": 14.84,
+    "slope_6_to_15_db": 0.0988,
+    "ratio_measured": 10.12,
+    "gr_db": [
+     -0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.44,
+     4.44,
+     8.16,
+     11.77,
+     15.23,
+     18.53
+    ],
+    "thd_pct": [
+     0.0021,
+     0.0034,
+     0.0053,
+     0.0087,
+     0.0138,
+     0.0219,
+     0.0347,
+     0.0549,
+     0.0869,
+     0.811,
+     0.215,
+     0.074,
+     0.0887,
+     0.1594,
+     0.2235
+    ]
+   },
+   {
+    "ratio": 12,
+    "gain_below_db": 35.29,
+    "threshold_in_dbu": -21.64,
+    "threshold_out_dbm": 12.64,
+    "slope_6_to_15_db": 0.0804,
+    "ratio_measured": 12.44,
+    "gr_db": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     1.7,
+     5.56,
+     9.34,
+     13.02,
+     16.57,
+     19.97
+    ],
+    "thd_pct": [
+     0.0021,
+     0.0034,
+     0.0053,
+     0.0087,
+     0.0138,
+     0.0219,
+     0.0347,
+     0.0549,
+     0.087,
+     0.3413,
+     0.1524,
+     0.0657,
+     0.1022,
+     0.157,
+     0.2053
+    ]
+   },
+   {
+    "ratio": 20,
+    "gain_below_db": 35.29,
+    "threshold_in_dbu": -22.87,
+    "threshold_out_dbm": 11.41,
+    "slope_6_to_15_db": 0.0375,
+    "ratio_measured": 26.68,
+    "gr_db": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     3.55,
+     7.45,
+     11.3,
+     15.08,
+     18.74,
+     22.28
+    ],
+    "thd_pct": [
+     0.0021,
+     0.0034,
+     0.0053,
+     0.0087,
+     0.0138,
+     0.0219,
+     0.0347,
+     0.0549,
+     0.0869,
+     0.2184,
+     0.1028,
+     0.079,
+     0.1102,
+     0.144,
+     0.1733
+    ]
+   },
+   {
+    "ratio": 0,
+    "gain_below_db": 35.29,
+    "threshold_in_dbu": -26.94,
+    "threshold_out_dbm": 7.34,
+    "slope_6_to_15_db": 0.0623,
+    "ratio_measured": 16.05,
+    "gr_db": [
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     3.79,
+     7.63,
+     11.38,
+     15.02,
+     18.52,
+     21.86,
+     25.03
+    ],
+    "thd_pct": [
+     0.0021,
+     0.0034,
+     0.0053,
+     0.0087,
+     0.0137,
+     0.0216,
+     0.0343,
+     0.0545,
+     0.2629,
+     0.1683,
+     0.1196,
+     0.1042,
+     0.1084,
+     0.1219,
+     0.1389
+    ]
+   }
+  ],
+  "manual": "20:1, 12:1, 8:1, 4:1; higher ratios set the threshold higher",
+  "ratios_in_order": true,
+  "thresholds_rise": false
+ },
+ "timing": {
+  "step_dbu": [
+   -28.69,
+   1.31
+  ],
+  "attack_cw_us": 62.5,
+  "attack_ccw_us": 1135.4,
+  "release_cw_ms": 53.5,
+  "release_ccw_ms": 773.4,
+  "manual": "attack 20-800 us, release 50-1100 ms (fastest fully CW)",
+  "definition": "63 % of the GR line's swing after a 30 dB step of a 1 kHz tone (10 dB under the 4:1 threshold to 20 dB over it, and back)"
+ },
+ "thd_limiting": {
+  "in_dbu": -8.19,
+  "rows": [
+   {
+    "hz": 50.0,
+    "gr_db": 10.72,
+    "thd_pct": 0.5357
+   },
+   {
+    "hz": 1000.0,
+    "gr_db": 10.74,
+    "thd_pct": 0.0658
+   },
+   {
+    "hz": 15000.0,
+    "gr_db": 10.68,
+    "thd_pct": 0.283
+   }
+  ],
+  "manual": "< 0.5 % THD, 50 Hz-15 kHz, with limiting, at the 1.1 s release",
+  "passes": false
+ },
+ "noise": {
+  "measured": false,
+  "manual": "S/N > 81 dB at the threshold of limiting",
+  "why": "the circuit file has no noise block yet"
+ },
+ "elapsed_s": 196.1
+}

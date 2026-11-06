@@ -32,6 +32,9 @@ checks of varimu.measure.generic and the circuit's own).
 - fairchild_670_keyed (compressor with a KEY input, SIDECHAIN_PLAN.md K1):
   varimu.measure.keyed_suite: INT against the stock 670, the duck against the key's
   level, recovery per time constant, thump; keyed by a kick under a bass tone.
+- urei_1176 (FET limiter, B12): varimu.measure.limiter_suite: UA's reissue manual's
+  figures: gain, response, maximum output, static curves per ratio, attack and release
+  on the GR line, THD while limiting.
 """
 
 from __future__ import annotations
@@ -108,6 +111,12 @@ def _run_keyed(*args, **kwargs):
     return keyed_suite.run(*args, **kwargs)
 
 
+def _run_limiter(*args, **kwargs):
+    from varimu.measure import limiter_suite
+
+    return limiter_suite.run(*args, **kwargs)
+
+
 def _run_tape(*args, **kwargs):
     from varimu.measure import tape_suite
 
@@ -126,6 +135,7 @@ PROFILES = {
     "tascam_portastudio": Profile("tascam_portastudio", "mic_preamp", _run_porta),
     "ampex_351_record": Profile("ampex_351_record", "mic_preamp", _run_a351_record),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
+    "urei_1176": Profile("urei_1176", "compressor", _run_limiter),
 }
 
 

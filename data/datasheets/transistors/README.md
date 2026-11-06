@@ -169,23 +169,31 @@ registration; confirm on the page image:
 - |yos|: 50 µS max;
 - Ciss: 8.0 pF max; Crss: 4.0 pF max (VDS 15 V, VGS 0, f 1 MHz).
 
-The 2N5457 / 2N5458 / 2N5459 figures are needed from onsemi's or Central's sheet (not
-downloaded, see below). From memory of the JEDEC registration, to be confirmed:
-- 2N5457: IDSS 1-5 mA, VGS(off) -0.5 to -6 V;
-- 2N5458: IDSS 2-9 mA, VGS(off) -1 to -7 V;
-- 2N5459: IDSS 4-16 mA, VGS(off) -2 to -8 V.
+onsemi's 2N5457 / 2N5458 sheet (2N5457/D Rev. 6, fetched by the user 2026-11-06; kept at
+`data/schematics/urei_1176/2N5457-D.PDF`), its table at 25 C (min / typ / max):
+- VGS(off) (VDS 15 V, ID 10 nA): 2N5457 -0.5 / - / -6.0 V, 2N5458 -1.0 / - / -7.0 V;
+- VGS at VDS 15 V: 2N5457 typ -2.5 V at 100 uA, 2N5458 typ -3.5 V at 200 uA;
+- IDSS (VDS 15 V): 2N5457 1.0 / 3.0 / 5.0 mA, 2N5458 2.0 / 6.0 / 9.0 mA;
+- |Yfs| (VGS 0, 1 kHz): 2N5457 1000 / 3000 / 5000 umho, 2N5458 1500 / 4000 / 5500;
+- |Yos| typ 10, max 50 umho; Ciss typ 4.5, max 7.0 pF; Crss typ 1.5, max 3.0 pF;
+- IGSS max -1.0 nA at VGS -15 V (-200 nA at 100 C).
+
+Its Figures 2-3 (2N5457 only) are one unit's: VGS(off) ~-1.2 V, IDSS ~1.05 mA. Figure 3 is
+digitized (`data/datasheets/onsemi_2n5457_transfer.csv`) and fitted as `2N5457@2` (VTO -1.25
+V, BETA 0.69 mA/V^2, B 0.83; rms 2.5 uA). The typical part of the table (VGS(off) ~-3 V,
+BETA ~0.33 mA/V^2 by the square law) lies past the 1176's Q-bias range.
 
 ## Still missing
 
 - **The 1176's FET.** Rev F calls it "UREI 13-0027" (a selected house part). The Rev A
   label isn't legible. Repair practice uses 2N5457 / 2N5458 (data/schematics/urei_1176/
-  README.md, open questions). Fit to whichever the user picks; the Central 2N5457 card
-  above is a starting point after fixing CGD.
+  README.md, open questions). `2N5457@1` (2026-11-06) is the Central card's DC values
+  with CGD 2 pF (provisional) and plays Q1 and Q4 in `urei_1176`. Its beta makes the
+  1176's ratios several times their legend (DEVICE_CANDIDATES.md, B12's status).
+  `2N5457@2` is onsemi's Figure 3 unit (above), half as steep.
 - **Datasheets (onsemi's site refuses scripted downloads; the user can fetch them):**
 
-  ```
-  https://www.onsemi.com/download/data-sheet/pdf/2n5457-d.pdf
-  ```
+  (2n5457-d.pdf: fetched, above.)
 
   ```
   https://www.onsemi.com/download/data-sheet/pdf/mmbf5457-d.pdf

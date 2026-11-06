@@ -1,0 +1,30 @@
+device: "2N5457"
+document: "2N5457, 2N5458 JFETs - General Purpose, N-Channel - Depletion (Publication Order Number 2N5457/D)"
+publisher: "ON Semiconductor (onsemi)"
+date: "February, 2010 - Rev. 6"
+local_copy: ../schematics/urei_1176/2N5457-D.PDF
+local_copy_sha256: d547280c34509502772575b907afb58426da1e4795766b036d3a3e46eefcaf66
+scan_source: "web: https://www.onsemi.com/download/data-sheet/pdf/2n5457-d.pdf (fetched by the user, 2026-11-06)"
+digitized_with: >-
+  PyMuPDF render of page 4 (index 3) at 600 dpi, greyscale; the plot frame and grid found as
+  long dark rows / columns (7 x 7 lines: VGS -1.2 ... 0 V by 0.2 V, ID 0 ... 1.2 mA by 0.2
+  mA), the curve's stroke centre read per column every 0.05 V, following the curve from its
+  right end (the stroke nearest the previous point), columns on grid lines moved 10 px off
+files:
+  onsemi_2n5457_transfer.csv:
+    figure: >-
+      p.3, Figure 3 "Common Source Transfer Characteristics" (2N5457 only; "VGS(off) ~ -1.2
+      V", VDS = 15 V): one unit's curve, not the table's typical part
+    columns: vgs_v, vds_v (15 V, the figure's), id_a
+    dropped: >-
+      -0.325 V (the stroke there touches the "VDS = 15 V" label) and -1.175 V (the frame)
+digitized_by: Claude Code
+digitized_on: 2026-11-06
+axis_calibration: "the frame and grid lines (pixel centres of the 7 x 7 lines)"
+estimated_error: "about +-5 uA (half the stroke width, ~0.4 % of full scale)"
+notes: >-
+  Figure 2 (drain characteristics, the same unit) gives LAMBDA: VGS = 0 rises from ~1.025 mA
+  at 5 V to ~1.048 at 25 V, VGS = -0.2 V from ~0.72 to ~0.745 (read by eye at 7x): ~1.1e-3
+  and ~1.7e-3 per V. The table on p.2 (typical: IDSS 3.0 mA, VGS -2.5 V at 100 uA, |Yfs| 3000
+  umho, Ciss 4.5 pF, Crss 1.5 pF) describes a different, typical part: VGS(off) ~-3 V, which
+  the 1176's Q-bias network can't reach.
