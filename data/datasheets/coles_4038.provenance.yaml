@@ -1,0 +1,22 @@
+device: "STC 4038-A (the BBC PGS ribbon)"
+curve: typical free-field response, open circuit, level re 1 V per dyne/cm^2 (Fig. 1)
+publisher: Standard Telephones and Cables Limited, Public Address Department (C/PA22 Ed. 3/2, 1961)
+documents:
+  stc:
+    title: "4038 Ribbon Microphone, brochure C/PA22 Ed. 3/2"
+    date: "1961"
+    scan_source: "web: http://www.coutant.org/stc/4038/4038.pdf"
+    sha256: 58d667fed1204c90864b2aea230d5caa40d71a46e19a3b6ffbe446f0e225f511
+    bytes: 693615
+    page: "PDF p.3 (one 1234 x 1739 colour image, rendered at 200 dpi)"
+local_copy: "none (the PDF isn't committed; hash above)"
+digitized_with: >-
+  the page render (200 dpi gray). Frequency axis: log-linear, 383.8 px per decade fitted on the
+  vertical rules read from their column darkness (40, 50, 60, 80, 500-700, 1k-4k, 6k-10k Hz;
+  residuals up to 2 px, ~1% in frequency); level axis: rules every 5 dB at y 1193.5 (-80),
+  1242.0 (-85), 1288.5 (-90), 9.5 px/dB. The curve read as the darkness-weighted centre of its
+  3-10 px dark run in the median of 13 columns at each frequency (2 kHz skipped: a rule's column).
+  The curve's mean level is ~-83 dB, 2 dB above the table's printed -85 dB mean sensitivity
+  (typical values): the shape is the data here, the level the table's.
+digitized_by: Claude Code
+digitized_on: 2026-11-06

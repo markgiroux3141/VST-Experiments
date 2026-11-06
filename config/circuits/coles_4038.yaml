@@ -1,0 +1,53 @@
+# STC / Coles 4038 studio ribbon microphone (the BBC PGS; docs/CHAINS_PLAN.md WP8). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/coles_4038/README.md has their provenance):
+#   "stc: ..."  STC brochure C/PA22 Ed. 3/2 (1961): the 4038-A's specification
+#   "bbc: ..."  BBC Engineering Monograph No. 4 (Shorter and Harwood, 1955): the PGS' design
+#   "derived: ..." arithmetic on sourced figures
+#   "provisional: ..." model knowledge
+#
+# The ribbon motor RIBBON_4038 (config/components/ribbon_4038/): the pressure at its front
+# channel's mouth on `in`, at its rear one's on the control input `p_rear` (pascals as volts;
+# varimu/mics/: the pole pieces as a baffle, bor.baffle_mesh). Its ends across the
+# ribbon-to-line transformer's primary (STC4038_OT@1, 20 : 214); the secondary's ends are
+# the cable's two conductors: the output is the secondary's high end `out`, the other the
+# measuring ground (stc: "the two outer pins connect to the line"). The 4038-A is 30 ohm,
+# "normally worked into an impedance which is high compared with 30 ohms" (stc); a chain
+# replaces RLOAD with the preamp's input. Phasing as the 44-BX's (the front pressure
+# positive: `out` positive), provisional: neither source prints it.
+
+title: "STC / Coles 4038"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, rp, rm]
+# 0 dBFS in = 20 Pa peak at the entries (as the other mics); out = volts across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.05, source: "derived: stc's 0.6 mV/Pa open circuit x 20 Pa = 12 mV peak, with headroom for the bass rise and proximity"}
+
+values:
+  ribbon_model: {value: RIBBON_4038@1, source: "config/components/ribbon_4038/1.yaml (the PGS ribbon after BBC Monograph No. 4 and Olson's circuit, its body and motor fitted to stc's curve by scripts/fit_4038.py)"}
+  ribbon_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating ribbon and primary"}
+  transformer_model: {value: STC4038_OT@1, source: "config/components/stc4038_ot/1.yaml (the base's ribbon-to-line transformer by construction: config/designs/stc_4038_ot.yaml)"}
+  load_ohm: {value: 1.0e+6, source: "stc: 'normally worked into an impedance which is high compared with 30 ohms' (a chain replaces the load with its preamp)"}
+
+# No tolerance block: the nominal mic only (as the SM57's).
+
+sections:
+  - title: ribbon
+    parts:
+      RB:
+        ribbon_motor: [in, p_rear, rp, rm]
+        component: ribbon_model
+      RRL: {R: [rm, "0"], r: ribbon_leak_ohm, tolerance: none}
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [rm, rp]}   # the sense that puts the output positive for front pressure (as rca_44bx.yaml)
+          s: {nodes: ["0", out]}
+        component: transformer_model
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

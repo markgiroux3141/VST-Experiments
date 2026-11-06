@@ -13,9 +13,9 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 19 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 20 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
-  Portastudio, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610;
+  Portastudio, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72;
   `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
@@ -36,13 +36,14 @@ runs**.
   monitor as a preamp (`config/circuits/ampex_351_record.yaml`) and the RCA 77-DX
   (`config/circuits/rca_77dx.yaml`: `RIBBON_77DX@1` on Olson's polydirectional circuit, the
   shutter as six stops picked by the part's `stop`, fitted by `scripts/fit_77dx.py`;
-  `RCA77DX_OT@1`; the reactor at mic level); WP7's Notes.
-- **In progress:** WP8 (the Coles 4038), step 1: steps written, STC's 1961 brochure read
-  (`data/schematics/coles_4038/README.md`).
-- **Next:** WP8 step 1: render and read BBC Monograph No. 4 (a scan, 24 pages, in
-  `cache/dl_4038/` or re-download from the README's URL) for the ribbon's size, gap, plates
-  and transformer; digitize the brochure's Fig. 1 and polars; then step 2. The user fetches
-  login-walled files on request: each URL alone in a code block.
+  `RCA77DX_OT@1`; the reactor at mic level); WP7's Notes. WP8 (2026-11-06): the Coles 4038 (`config/circuits/coles_4038.yaml`:
+  `RIBBON_4038@1` after BBC Monograph No. 4 fitted to STC's curve, `STC4038_OT@1`; a miss
+  of +2.8 dB at 4-7 kHz); WP8's Notes.
+- **In progress:** nothing.
+- **Next:** WP9, the AKG D112 (-> SSL): write its steps (sources first: AKG's D112 data
+  sheet, its response and polars, the bass chamber's construction; the `moving_coil` kind
+  and the SM57's method). The user fetches login-walled files on request: each URL alone in
+  a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains and the 77-DX's in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
@@ -125,7 +126,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 5 | The ribbon kind `ribbon_motor` (ribbon in a gap compiled to R / L / C and a gyrator, like `moving_coil`; the step-up transformer as a design) | 0 | M | done 2026-11-05 |
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | done 2026-11-05 |
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's direct monitor as a preamp | 77-DX -> 351, 77-DX -> 610 | L | done 2026-11-06 |
-| 8 | Coles 4038 | 4038 -> V72 | M | started 2026-11-06 (sources) |
+| 8 | Coles 4038 | 4038 -> V72 | M | done 2026-11-06 |
 | 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | |
 | 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types"; CLAVINET_PLAN.md's CL0 builds it if it gets there first) | 0 | L | done 2026-11-06 (CL0 on the `clavinet` branch: `varimu/devices/bjt.py`, the `bjt` part, `BC550C@1` / `BC413C@1` / `BC560C@1`, `bjt_stage.yaml`; DEVICE_BUILDER_PLAN.md "New device types") |
 | 11 | Neve 1073 (Marinair transformers as designs; 300 / 1200 ohm) | 44-BX, SM57, U47 -> 1073 | L | also DEVICE_BUILDER_PLAN.md's B13 (2026-11-06: built there, next after B11-B12) |
@@ -1049,10 +1050,44 @@ Steps:
    drop, pattern, figure-of-eight), `compose_chain.py --all` (c4038_v72),
    `test_chain_matrix.py`, app fixtures; `chain_status.py` 20 of 51.
 
-Notes (2026-11-06, started): sources found and the brochure read; the 1961 unit is 30 ohm
-and 0.6 mV/Pa (the modern Coles is 300 ohm / -65 dBV/Pa, the same sensitivity with a
-different transformer). The monograph is not read yet. Wayback copies of Coles' data sheet
-answer 429 to scripts.
+Notes (2026-11-06, done):
+- Sources: `data/schematics/coles_4038/README.md`. STC's 1961 brochure (C/PA22: the 4038-A,
+  30 ohm, 0.06 mV per microbar = 0.6 mV/Pa, -85 dB re 1 V/microbar) and BBC Engineering
+  Monograph No. 4 (the PGS design, read page by page from its scan: the ribbon 1 in x 0.23
+  in x 0.6 um aluminium, 0.22 ohm, a 0.25 in gap, Ticonal 'G' at 4500-6500 G, Monel damping
+  screens 0.03 in either side, the unloaded fundamental 25-45 c/s; the PGS itself is 300 ohm
+  and -75 dB: the 4038-A is the same motor with a transformer 10 dB down, ratio over
+  sqrt(10)). Wikipedia's and the retailers' "300 ohm, -65 dBV/Pa" is the PGS' impedance with
+  the 4038's sensitivity: the brochure's 30 ohm is modelled. Coles' own data sheet (Wayback)
+  answers 429 to scripts: not read.
+- `data/datasheets/coles_4038_response.csv` (+ provenance): the brochure's Fig. 1 traced
+  (39 points, 35 Hz-15 kHz, within +-1 dB of flat 40 Hz-14 kHz; its mean reads ~-83 dB, 2 dB
+  above the table's -85: the table's level is the target). Its polars (Figs. 2-3) are not
+  digitized (too small): the figure of eight is a check.
+- `RIBBON_4038@1` (`config/components/ribbon_4038/1.yaml`, `scripts/fit_4038.py --write`
+  on fit_44bx.py's method; published_points.yaml's block regenerated by the script;
+  `build_ribbon_4038` in library.py): body 16.95 mm / 9.81 mm (the top, rms 1.4 dB), the
+  tuning at the monograph's 45 Hz bound (q 1.0, not sensitive) with the screens' flow
+  resistance 3.14 (the bass, 0.47 dB rms), the gap's flux 0.64 T (the sensitivity; the
+  monograph's 4500-6500 G brackets 0.45-0.65). The ribbon's d.c. resistance computes 0.21
+  ohm (0.22 published). Dead end: the screens' resistance in the top fit too ran to zero
+  without moving the top; a free tuning went to 3.7 Hz (the model's air load alone gave the
+  bass; bounded to the monograph's 25-45 Hz instead).
+- **Known miss:** the model rises +2.8 dB at 4-7 kHz re 1 kHz where STC's curve is flat to
+  -1 dB (the perforated reflectors that offset the natural fall, and the transverse modes
+  near 10-11 kHz, aren't in the model); the rest is within 1.6 dB, 1.0 dB rms from 40 Hz.
+- `STC4038_OT@1` (`config/designs/stc_4038_ot.yaml`, `varimu-components save`): 20 : 214 on
+  a stand-in EI-50 core (the table has no toroids): 22.7 mH primary, 0.04 / 5.3 ohm, 54 pF;
+  the ratio from 30 ohm over the ribbon's 0.22 ohm. The output measures 30 ohm (a 30 ohm
+  load halves the open-circuit level within 1.5 dB, a test).
+- `config/circuits/coles_4038.yaml` (no controls; RLOAD dropped by a chain), the list's
+  entry (output `out`, drop RLOAD, figure-8), `c4038_v72.yaml` composed (the 19 others
+  byte-identical), 20 of 51 available. 94 dB SPL at 1 kHz: -45.7 dBFS peak out of the V72
+  (`mic_print.py --draft`, 0.99x real time): a ribbon is ~26 dB quieter than the U47's
+  chain (-18.8), as published. Its entry table computes (`rooms/entries.py`, ~3.5 min).
+- Tests: `tests/test_coles_4038.py` (7), `test_chain_matrix.py`, `test_versions.py`,
+  `test_ribbon.py`, `test_app_fixtures.py` (fixtures for `coles_4038`, `c4038_v72`;
+  nothing else moved: 122 passed), varimu-circuit's tests, varimu-app `room::`.
 
 ### WP9-WP31
 
@@ -1072,7 +1107,7 @@ touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key; W
 its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.py` and a refusal in
 `varimu/circuit/parts.py`, every existing component compiling to its saved elements; its steps
 5-6 the ribbon motor's `stop` in `varimu/circuit/builder.py` and `RIBBON_77DX` in
-`varimu/devices/library.py`, every existing IR unchanged): these
+`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -1135,6 +1170,7 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   patterns on RCA's at 400-1000 cps, L-1 3.5 dB short; N within 1.3 dB, B's 4-5 kHz +3 dB),
   `RCA77DX_OT@1`, the reactor at mic level, a ribbon motor's `stop` in both builders;
   77-DX -> 351 and -> UA 610 composed: 19 of 51 available.
-- 2026-11-06: WP8 started: its steps written; the sources found (STC's 1961 brochure read:
-  30 ohm, 0.6 mV/Pa, response and polars on page 3-4; BBC Monograph No. 4 downloaded, a
-  scan not yet read); still 19 of 51.
+- 2026-11-06: WP8 done: the Coles 4038 from STC's 1961 brochure and BBC Monograph No. 4
+  (read from its scan: the PGS ribbon's size, gap, screens, magnet), `RIBBON_4038@1` fitted
+  to the brochure's curve (`fit_4038.py`; +2.8 dB at 4-7 kHz a known miss), `STC4038_OT@1`
+  (30 ohm); 4038 -> V72 composed: 20 of 51 available.

@@ -1,0 +1,46 @@
+# The STC 4038's ribbon-to-line transformer (the BBC PGS design; STC brochure C/PA22 and BBC
+# Engineering Monograph No. 4: data/schematics/coles_4038/README.md) by its construction. The
+# brochure says only "toroidal 'ribbon-to-line' transformer (housed in the base of the
+# microphone)", magnetically shielded (Mumetal, monograph 2.6), hum-neutralised wiring; the
+# 4038-A is 30 ohm nominal, 10 dB below the PGS' 300 ohm, so the ratio is the PGS' over
+# sqrt(10): derived from the ribbon's 0.22 ohm (monograph 2.3.3) reflected to 30 ohm. A
+# toroid isn't in the lamination table: an EI core of the size stands in (provisional).
+#
+# A design (the component editor's source), compiled and saved by
+# `cargo run -p varimu-components -- save config/designs/stc_4038_ot.yaml`.
+name: STC4038_OT
+kind: transformer
+source: "STC 4038 (BBC PGS) ribbon-to-line transformer (STC C/PA22 Ed. 3/2 page 2; BBC Engineering Monograph No. 4 section 2.6; data/schematics/coles_4038/README.md): toroidal in the base, 30 ohm; the construction unpublished, the ratio derived from the ribbon's 0.22 ohm and the 30 ohm output, the rest provisional"
+core:
+  lamination: {value: EI-50, source: "provisional: model knowledge (STC C/PA22: a toroid in the base of a 61 mm wide case, stirrup arm hollow; the lamination table has no toroids: an EI core of a toroid's size, 1/2 in tongue, stands in)"}
+  material: {value: mumetall, source: "provisional: model knowledge (a ribbon-to-line transformer at millivolts: a high-nickel core, Mumetal-screened per BBC Monograph No. 4 section 2.6; the alloy isn't given)"}
+  stack_m: {value: 0.0127, source: "provisional: model knowledge (a square 1/2 in stack on the 1/2 in tongue)"}
+  stacking_factor: {value: 0.92, source: "web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf (SEKELS / VAC Kernbleche, Tabelle 6: Mumetall-type laminations 0.35 mm, 92%)"}
+  stacking: {value: interleaved, source: "provisional: model knowledge (an ungapped microphone transformer: E and I interleaved)"}
+  joint_gap_m: {value: 0.235e-6, source: "provisional: as SM57_OT's (config/designs/sm57_ot.yaml: an interleaved mumetall joint fitted to a measured primary inductance)"}
+bobbin:
+  wall_m: {value: 0.5e-3, source: "provisional: model knowledge (a paper or fibre bobbin)"}
+  cheek_m: {value: 0.8e-3, source: "provisional: model knowledge (fibre flanges)"}
+  margin_m: {value: 0.3e-3, source: "provisional: model knowledge (a small creepage margin each end)"}
+  pitch_factor: {value: 1.1765, source: "web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)"}
+arrangement: {value: layer, source: "provisional: model knowledge (layer-wound: the ribbon's primary on the tongue, then the secondary's A-B part, then B-C)"}
+windings: [p, s]
+sections:
+  - winding: p
+    turns: {value: 20, source: "provisional: model knowledge (a ribbon transformer's primary: a few tens of turns of heavy wire; 20 on a 1/2 in stack for a primary inductance of some tens of mH, and a resistance of ~0.05 ohm against the ribbon's 0.22)"}
+    layers: {value: 2, source: "derived: turns / turns per layer (AWG 20 heavy at the pitch factor: 17 turns fit the 18.45 mm traverse; two layers of 10)"}
+    wire: {value: AWG 20 heavy, source: "provisional: model knowledge (the primary's resistance in series with a 0.22 ohm ribbon: ~0.04 ohm)"}
+    enamel: {value: enamel, source: "provisional: model knowledge (enamelled magnet wire)"}
+    interlayer: {thickness_m: {value: 0.05e-3, source: "provisional: model knowledge (0.002 in paper)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft paper)"}}
+  - insulation: {thickness_m: {value: 0.25e-3, source: "provisional: model knowledge (a few wraps of paper between the windings)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge"}}
+  - winding: s
+    turns: {value: 214, source: "derived: 30 ohm across the secondary reflects to 30 / n^2 = 0.26 ohm for n = 10.7: the ribbon motor's 0.22 ohm (monograph 2.3.3) plus the primary's and secondary's resistances; the PGS' 300 ohm / -75 dB over sqrt(10) is the 4038-A's 30 ohm / -85 dB (STC C/PA22 page 3)"}
+    layers: {value: 5, source: "derived: turns / turns per layer (~45 of AWG 30 heavy on the 1 in traverse at the pitch factor)"}
+    wire: {value: AWG 30 heavy, source: "provisional: model knowledge (fills the window with the primary)"}
+    enamel: {value: enamel, source: "provisional: model knowledge"}
+    interlayer: {thickness_m: {value: 0.025e-3, source: "provisional: model knowledge (0.001 in interlayer paper)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge"}}
+leakage_method: formula
+rating:
+  windings: [p]
+  v_rms: {value: 0.015, source: "provisional: model knowledge (the ribbon's EMF at ~140 dB SPL: 200 Pa x ~0.07 mV/Pa)"}
+  f_hz: {value: 50.0, source: "provisional: model knowledge (the bottom of the band)"}

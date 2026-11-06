@@ -1706,7 +1706,8 @@ mod tests {
         ] {
             assert!(ids.contains(&id), "{id}");
         }
-        assert!(!ids.contains(&"c4038_v72")); // not built: not offered
+        assert!(!ids.contains(&"r121_api312")); // not built: not offered
+        assert!(ids.contains(&"c4038_v72")); // the 4038 (WP8)
         let r = list.iter().find(|c| c.id == "r44_v76").unwrap(); // a ribbon (WP6)
         assert_eq!(r.pattern(&BTreeMap::new()), Pattern::FIGURE8);
         // The 77-DX's shutter (WP7): U by default, B a figure-8, N an omni.

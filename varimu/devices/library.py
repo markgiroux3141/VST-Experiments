@@ -1006,6 +1006,27 @@ def build_ribbon_44bx() -> dict[str, Any]:
     }
 
 
+def build_ribbon_4038() -> dict[str, Any]:
+    """The STC 4038's (BBC PGS) ribbon motor (docs/CHAINS_PLAN.md WP8): its geometry
+    (published_points.yaml "RIBBON_4038": the ribbon, gap and screens from BBC Engineering
+    Monograph No. 4, the body, tuning and gap flux fitted by scripts/fit_4038.py), the
+    lumped network compiled from it (varimu.devices.ribbon.compile_network)."""
+    from varimu.devices import ribbon
+
+    pub = _published()["RIBBON_4038"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "RIBBON_4038",
+        "kind": "ribbon_motor",
+        "source": "derived: varimu.devices.ribbon.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": ribbon.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/ribbon.py's and moving_coil.py's formulas "
+        "(their docstrings) on the geometry; air at 20 C",
+    }
+
+
 def build_ribbon_77dx() -> dict[str, Any]:
     """The RCA 77-DX's ribbon motor (docs/CHAINS_PLAN.md WP7): its geometry
     (published_points.yaml "RIBBON_77DX": the ribbon from IB-24884-2's parts list on Olson's
@@ -2184,6 +2205,7 @@ BUILDERS = {
     "R57": build_r57,
     "R59": build_r59,
     "RIBBON_44BX": build_ribbon_44bx,
+    "RIBBON_4038": build_ribbon_4038,
     "RIBBON_77DX": build_ribbon_77dx,
     "VF14T": build_vf14t,
     "6X4": build_6x4,

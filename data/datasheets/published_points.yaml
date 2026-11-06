@@ -793,6 +793,49 @@
     sensitivity_v_per_pa: 1.78e-3         # ib: -55 dBm at 10 dyn/cm^2 into 250 ohm (RTMA: matched power), open circuit sqrt(4 R P) (the fit's target; aea's R44C reproduction: 2.25 mV/Pa)
     ribbon_ohm: 0.2                       # sbe: the BK-11A's '0.2-ohm ribbon impedance' (a check)
 
+# --- STC 4038 (BBC PGS) ribbon motor (docs/CHAINS_PLAN.md WP8) ---
+# The PGS ribbon on Olson's circuit (the monograph: data/schematics/coles_4038/README.md), its body, tuning and
+# gap's flux fitted to STC's brochure by scripts/fit_4038.py (--write regenerates the block below).
+"RIBBON_4038":
+  source: "data/schematics/coles_4038/README.md: the ribbon, gap, damping screens and magnet from BBC Engineering Monograph No. 4 (Shorter and Harwood, 1955) for the PGS, the motor after Olson's circuit (SBE handbook Fig. 4.1.11), the pole pieces as a baffle (varimu.mics.bor.baffle_mesh); the body, the tuning, the foil's loss and the gap's flux fitted to STC's brochure C/PA22 Fig. 1 and sensitivity by scripts/fit_4038.py (docs/CHAINS_PLAN.md WP8; reports/mics/coles4038_fit.*); screens and leads provisional"
+  geometry:
+    body:
+      form: baffle
+      radius_m: {value: 0.01695}   # fitted (scripts/fit_4038.py): STC Fig. 1 from 1 to 15 kHz re 1 kHz (an equivalent disc, not a drawing)
+      depth_m: {value: 0.009810000000000001}   # fitted with radius_m to the same curve; the channels below are half of it each side
+    ribbon:
+      length_m: {value: 0.0254}   # bbc: 'ribbon length of 1 in' (Monograph 4, 2.3.1)
+      width_m: {value: 0.005842}   # bbc: 'a ribbon 0.23 in. wide working in a 0.25 in. wide gap' (2.3.2)
+      thickness_m: {value: 6.35e-07}   # bbc: 'thin beaten aluminium leaf 2.5 x 10^-5 in. (0.6 micron) thick, 0.2 mg/cm^2' (2.3.3)
+      density_kg_m3: {value: 2700.0}   # provisional: model knowledge (pure aluminium, CRC handbook 2.70 g/cm^3)
+      resistivity_ohm_m: {value: 2.65e-08}   # provisional: model knowledge (pure aluminium at 20 C, CRC handbook 2.65 uOhm cm)
+      corrugation: {value: 1.1}   # provisional: model knowledge (20 corrugations per inch under 0.002 in deep, bbc 2.3.6, pulled nearly flat; the extra foil near bbc's 0.22 ohm)
+      resonance_hz: {value: 45.0}   # fitted (scripts/fit_4038.py): the foil's own tuning in vacuo, to STC Fig. 1's bass (bbc: the unloaded ribbon's fundamental 25-45 c/s, over 40 c/s in the PGS)
+      q: {value: 1.0}   # fitted with resonance_hz: the bass shape (the screens' and the foil's damping together)
+      modes: {value: 5}   # numerical: the odd length modes 1-9, the rest lumped on the 11th
+    magnet:
+      b_gap_t: {value: 0.638}   # fitted (scripts/fit_4038.py): STC's 0.06 mV per microbar open circuit at the 30 ohm strapping (bbc 2.2: 6500 G at the pole tips to 4500 G at the centre, ~0.55 T mean: the check)
+      gap_length_m: {value: 0.0254}   # bbc: the pole pieces span the ribbon's 1 in
+    leads:
+      r_ohm: {value: 0.01}   # provisional: model knowledge (the four brass straps in parallel and short leads, bbc 2.6)
+      l_h: {value: 3.0e-8}   # provisional: model knowledge (the ribbon and its return as a loop ~25 x 8 mm)
+    network:
+      - {name: rad_f, kind: radiation, a: front, b: fo, width_m: {value: 0.00635}, length_m: {value: 0.0254}}
+      - {name: screen_f, kind: screen, a: fo, b: fs, rayl: {value: 3.136}, area_m2: {value: 0.00016129}}
+      - {name: chan_f_a, a: fs, b: cf, kind: slit, width_m: {value: 0.00635}, breadth_m: {value: 0.0254}, length_m: {value: 0.0024525000000000003}, wide_at_hz: {value: 1000.0}}
+      - {name: cav_f, kind: cavity, a: cf, volume_m3: {value: 7.911274500000001e-07}}
+      - {name: chan_f_b, a: cf, b: f, kind: slit, width_m: {value: 0.00635}, breadth_m: {value: 0.0254}, length_m: {value: 0.0024525000000000003}, wide_at_hz: {value: 1000.0}}
+      - {name: rib, kind: ribbon, a: f, b: r}
+      - {name: edge, kind: slit, a: f, b: r, width_m: {value: 0.000254}, breadth_m: {value: 0.0508}, length_m: {value: 0.0005}}
+      - {name: chan_r_a, a: r, b: cr, kind: slit, width_m: {value: 0.00635}, breadth_m: {value: 0.0254}, length_m: {value: 0.0024525000000000003}, wide_at_hz: {value: 1000.0}}
+      - {name: cav_r, kind: cavity, a: cr, volume_m3: {value: 7.911274500000001e-07}}
+      - {name: chan_r_b, a: cr, b: rs, kind: slit, width_m: {value: 0.00635}, breadth_m: {value: 0.0254}, length_m: {value: 0.0024525000000000003}, wide_at_hz: {value: 1000.0}}
+      - {name: screen_r, kind: screen, a: rs, b: ro, rayl: {value: 3.136}, area_m2: {value: 0.00016129}}
+      - {name: rad_r, kind: radiation, a: rear, b: ro, width_m: {value: 0.00635}, length_m: {value: 0.0254}}
+  published:
+    sensitivity_v_per_pa: 0.6e-3   # stc: 0.06 mV per microbar open circuit (the fit's target)
+    ribbon_ohm: 0.22               # bbc 2.3.3: 'The d.c. resistance of the ribbon in the PGS microphone is 0.22 ohm' (a check)
+
 # --- RCA 77-DX ribbon motor (docs/CHAINS_PLAN.md WP7) ---
 # The 77-DX's ribbon on Olson's polydirectional circuit (Proc. IRE 32, 1944: the ribbon's back on a labyrinth
 # connector, a damped pipe and an aperture under the shutter). Sources: data/schematics/rca_77dx/README.md (ib2:
