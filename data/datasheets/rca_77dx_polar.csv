@@ -1,0 +1,25 @@
+pattern,freq_label,freq_hz,angle_deg,db,document,reference,quality,n_rays,spread_db,curve
+B,50-1000,500,180,-1.48,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.00,"thick solid (arrow '50-1,000~'); the 4000 long dash merges"
+B,4000,4000,180,-1.48,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.00,"long dash (arrow '4,000~'); merged with 50-1000"
+B,10000,10000,135,-10.09,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,3,0.90,"medium dash, the rear lobe's inner curve (arrow '10,000~')"
+B,10000,10000,150,-12.76,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,3,0.88,medium dash
+B,10000,10000,170,-14.88,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.09,medium dash (a dash gap at 180)
+B,all,500,90,-15.00,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,bound,0,0.00,"the side nulls, inside -15 dB"
+N,50-1000,500,90,-1.73,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,3,0.35,"long dash, the outer circle (arrow '50-1,000~')"
+N,50-1000,500,180,-2.56,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,single,1,0.00,long dash
+N,4000,4000,90,-3.84,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,4,1.38,"thick solid (label '4,000~' on it)"
+N,4000,4000,180,-5.14,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,single,1,0.00,thick solid
+N,10000,10000,90,-10.86,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,3,0.95,"medium dash, the inner curve (arrow '10,000~')"
+N,10000,10000,180,-17.95,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.00,medium dash (inside -15 dB: coarse)
+U,400-1000,630,90,-5.86,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,4,0.82,"thick solid; the '400~' / '1,000~' arrows point at the curves near -4 to -6 dB at 80 / 270 deg"
+U,400-1000,630,180,-15.00,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,bound,0,0.00,"the rear null, inside -15 dB"
+U,4000,4000,180,-9.25,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,single,1,0.00,"long dash, flat across the rear (arrow '4,000~')"
+U,10000,10000,90,-12.82,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,4,0.87,"dash-dot, the inner lobe (arrow '10,000~')"
+L1,400-1000,630,90,-10.38,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.03,"thick solid (arrow '400-1,000~')"
+L1,400-1000,630,180,-1.81,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.07,"thick solid, the rear lobe's outer curve"
+L2,400 and 1000,630,90,-7.37,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,4,1.41,"thick solid (arrow '400 AND 1,000~'); among three curves within 3 dB at the sides"
+L2,400 and 1000,630,180,-6.15,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.11,"thick solid, the rear lobe's outer curve"
+L2,4000,4000,180,-7.67,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.01,"long dash (arrow '4,000~')"
+L3,400,400,90,-5.16,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,3,1.11,thick solid (arrow '400~')
+L3,400,400,180,-7.24,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.00,"thick solid, the rear lobe's outer curve"
+L3,1000,1000,180,-11.90,ib2,ib2 Fig. 4 (T-163143) the 0 dB ring,read,2,0.12,"medium dash (arrow '1,000~')"

@@ -1,0 +1,59 @@
+device: "RCA 77-DX polydirectional ribbon microphone (MI-4045-F, MI-11006-C)"
+curve: open-circuit frequency responses M, V1, V2 in the U, B and N positions (Fig. 5); the directional patterns in the six positions U, B, N, L-1, L-2, L-3 at their frequencies (Fig. 4), key angles only
+publisher: Radio Corporation of America, Engineering Products Division, Camden
+documents:
+  ib2:
+    title: "Instructions for Polydirectional Microphone Type 77-DX, IB-24884-2 (Figs. 4-5)"
+    date: "not printed"
+    scan_source: "web: https://worldradiohistory.com/Archive-Catalogs/RCA/RCA-BCA-77-Mic.pdf"
+    sha256: 4bc60769ed32dd610928af12c60e637d93a7f414efa355844d021b7ab235821b
+    bytes: 520204
+    page: >-
+      PDF p.9 (Fig. 5, the response: one 2224 x 2860 1-bit image, ~262 dpi) and p.8 (Fig. 4, the
+      patterns: five 2216-wide 1-bit strips, stacked to 2216 x 2856); the masks extracted with
+      PyMuPDF, not resampled. The same figures are coutant.org's instruction book's Figs. 3-4
+      (data/schematics/rca_77dx/README.md, 'ib'), scanned at ~150 dpi gray: not used for the reading.
+local_copy: "cache/sources/rca_77dx/RCA-BCA-77-Mic.pdf (git-ignored; hash above)"
+digitized_with: >-
+  scripts/digitize_rca_77dx.py (uv run --with pymupdf python scripts/digitize_rca_77dx.py
+  [--overlays DIR]), which reproduces both CSVs from the PDF. Fig. 5: per chart, frequency
+  log-linear through the 26 vertical rules (50 Hz - 20 kHz; 484.2-484.3 px per decade, residuals
+  < 1.05 px), level through the 8 horizontal rules (+10 to -25 dB; 16.04-16.21 px/dB, residuals
+  < 1.3 px), each horizontal rule a tilted line (the scan turns up to 4.6 px per 1000 px). Rules
+  erased where no curve touches them, the curve labels (M, V1, V2) dropped as small connected
+  components, each curve followed column by column from the chart's left frame by continuity, the
+  value at a frequency from the followed columns within +-3 px. Fig. 4: per chart, the centre that
+  sharpens the dB rings (5 dB apart, 43-44 px; 0 dB at r ~ 213.5 px), the chart unwrapped to
+  (radius, angle) and the rings and drawn rays erased; each value is the ink run on rays 2.5
+  degrees either side of its angle and mirrored (the charts are drawn symmetric) nearest a guide
+  level, averaged over the rays that have one within 1.2 dB. The guides and the curve each is
+  (the script's POLAR) were identified on the chart by its labelled arrows and line styles.
+digitized_by: Claude Code
+digitized_on: 2026-11-05
+files:
+  rca_77dx_response.csv:
+    columns: "pattern (U | B | N), curve (M | V1 | V2), freq_hz, db, document (ib2), reference, quality (read | merged | rule | coarse)"
+    figures: "Fig. 5 'Frequency Response Curves' 472178-0, 'OPEN CIRCUIT RESPONSE OF A TYPICAL TYPE 77DX MICROPHONE', UNIDIRECTIONAL, BIDIRECTIONAL and NONDIRECTIONAL POSITION, each M, V1, V2, 50 Hz - 15 kHz"
+    reference: "each chart's 0 dB rule; no reference frequency printed (the curves pass 0 dB near 1 kHz)"
+    quality: >-
+      read: the curve's own run; merged: it shares one run with another curve (V1 and V2 join M
+      from 250-400 Hz up: written for each); rule: the curve runs exactly along a rule there and is
+      hidden in it (its level is the rule's: U at 2 kHz, N at 110-120 and 700 Hz, all within 0.05 dB
+      of 0); coarse: the curve was lost along a vertical rule and is read from the columns within
+      +-10 px (none in this reading)
+  rca_77dx_polar.csv:
+    columns: "pattern (U | B | N | L1 | L2 | L3), freq_label (as printed: '50-1000', '400-1000', '400 and 1000', '400', '1000', '4000', '10000', 'all'), freq_hz (a representative frequency), angle_deg (from the front axis; mirrored sides averaged), db, document (ib2), reference, quality (read | single | bound), n_rays, spread_db, curve (its line style and the label that tells it)"
+    figures: "Fig. 4 'Directional Patterns' T-163143: UNI-, BI-, NON-DIRECTIONAL, L-1, L-2, L-3 POSITION, 0 to -20 dB"
+    reference: "the 0 dB ring (every curve passes it at 0 degrees)"
+    quality: >-
+      read: two or more rays agree (spread_db their range); single: one ray only (a dash gap or a
+      label on the others); bound: the curve is inside the -15 dB ring, where the drawn rays
+      converge and can't be told from it: db (-15) is an upper bound (U's rear null, B's side nulls)
+    coverage: >-
+      key angles only (90 and 180 degrees, B's 10 kHz rear lobe at 135 / 150 / 170): the curves
+      cross and break too often to be followed whole automatically. U's 400 and 1000 cps curves
+      aren't told apart at 90 degrees (both near -4 to -6 dB); L-2's three curves at 90 degrees lie
+      within 3 dB (its value is the thick solid's by the guide, less sure). L-1's, L-2's and L-3's
+      400-1000 cps rear lobes (-1.8, -6.2, -7.2 dB) are larger than a first-order pattern with their
+      90-degree levels would give
+    tolerance_band: "none drawn"

@@ -31,8 +31,8 @@ linked from web: https://coutant.org/rca77dx/index.html.
   rear lobe ~-12 dB (between N and U): read them on the image.
 - `ib_fig4_response.png` (p 5): Figure 4, "Frequency Response Curves" (472178-0), "OPEN
   CIRCUIT RESPONSE OF A TYPICAL TYPE 77DX MICROPHONE", 60-15,000 cps, for the
-  UNIDIRECTIONAL, BIDIRECTIONAL and NONDIRECTIONAL positions, each with M, V1, V2. Read
-  roughly here, to be digitized: U, M flat within ~1 dB from 60 Hz to ~6 kHz, a rise to
+  UNIDIRECTIONAL, BIDIRECTIONAL and NONDIRECTIONAL positions, each with M, V1, V2
+  (digitized from ib2's sharper copy: see "Digitized" below). Read roughly here: U, M flat within ~1 dB from 60 Hz to ~6 kHz, a rise to
   ~+2 dB at ~7 kHz, then -5 at 15 kHz; B, M rising from -3 at 60 Hz to ~+2 at 300-500 Hz,
   a dip near 6 kHz, a peak ~+1 at ~9 kHz, -10 at 15 kHz; N, M flat to ~2 kHz, a broad rise
   to ~+4 dB at 5-6 kHz, -3 at 15 kHz. V1 and V2 cut the bass below ~300 / ~500 Hz.
@@ -105,13 +105,69 @@ Not committed; in `cache/sources/rca_77dx/`: `77open.jpg` (the magnet), `u.jpg` 
 shutter at U), `wiring.jpg`, `freq77.jpg` / `direc77.jpg` (the curves again, 300 dpi crops:
 559 x 938 and 581 x 939), `freqrespset.jpg` (the M / V1 / V2 selector), `77chart.gif`.
 
+## Digitized (2026-11-05)
+
+`scripts/digitize_rca_77dx.py` reads ib2's Figs. 4-5 on the PDF's own 1-bit masks (~262 dpi;
+coutant's scan is ~150 dpi gray) into `data/datasheets/rca_77dx_response.csv` (U / B / N x M /
+V1 / V2, 50 Hz-15 kHz, whole curves) and `rca_77dx_polar.csv` (key angles: each pattern's
+curves at 90 and 180 degrees, B's 10 kHz rear lobe; the curves told by the labelled arrows);
+provenance `data/datasheets/rca_77dx.provenance.yaml`. Read on the patterns: L-1, L-2 and L-3
+all lie between U and B (their 90-degree levels -10.4, -7.4, -5.2 dB at 400-1000 cps against
+U's -5.9), with 400-1000 cps rear lobes of -1.8, -6.2 and -7.2 dB.
+
+## olson1944: H. F. Olson, "Polydirectional Microphone", Proc. I.R.E. 32, pp. 77-82 (Feb. 1944)
+
+RCA Laboratories (written 1941; the Varacoustic, the 77-D's forerunner, "developed by L. J.
+Anderson"). web: https://www.worldradiohistory.com/Archive-IRE/40s/IRE-1944-02.pdf (the whole
+issue, 19,081,965 bytes, sha256 `46c4986f4436dbcaf97b8a8d928f5af7f43f3fd9b1767fe1d71650e69954d50b`;
+the paper is PDF pp. 55-60, with a text layer; a copy in `cache/sources/rca_77dx/`).
+
+- Fig. 1 / 2: "a single ribbon, the back of which is coupled to a damped folded pipe and an
+  inertance in the form of an aperture"; "The entire one side of the ribbon is covered by the
+  labyrinth connector. The connector, in turn, is coupled to a damped pipe or labyrinth. The
+  type of directional characteristic is governed by the size of the aperture in the labyrinth
+  connector."
+- The acoustic circuit (his eqs. 6-8): the ribbon Z_A1 = r_A1 + j w M_1 (the air load's
+  resistance r_AA and inertance M_A plus the ribbon's inertance M_R; the slit between ribbon and
+  pole pieces, r_AS / M_S, "very large compared to" the ribbon's impedance, and the ribbon's
+  compliance C_AR, its resonance below the audible range, both neglected) between the front
+  pressure p1 and the node behind it; from that node the damped pipe, a pure resistance r_A3,
+  and the aperture Z_A2 = r_A2 + j w M_2 to the pressure p2 at the aperture. The ribbon's
+  volume current X = [p1 (Z_A2 + Z_A3) - p2 Z_A3] / (Z_A1 Z_A2 + Z_A1 Z_A3 + Z_A2 Z_A3).
+  Aperture wide (Z_A2 = 0): the velocity microphone; closed (Z_A2 infinite): the pressure
+  ribbon, X = p1 / (Z_A1 + Z_A3), resistance controlled by r_A3. "The values of the impedance
+  can be determined from the mass and dimensions of the ribbon, the area of the damped pipe or
+  labyrinth, and the diameter of the aperture" (no numbers printed).
+- Measured (Fig. 6, the Varacoustic): nondirectional "independent of frequency up to 3000
+  cycles", then up to 10 dB between 0 and 180 degrees (< 3 dB within 45); cardioid more than
+  30 dB at 180 degrees from 100 to 4000 cycles, > 25 dB 40-100, > 20 dB 4-14 kHz.
+
+## watts: L. M. Watts, "The Polyribbon Story" (L M Watts Technology, web archive)
+
+A ribbon designer's account (web:
+https://web.archive.org/web/20230329103029/http://lmwattstechnology.com/ via the Museum of
+Microphones' PDF, https://res.cloudinary.com/museum-of-microphones/image/upload/v1787487118/ThePolyribbonStory_pt3n8g.pdf,
+600,354 bytes, sha256 `28a09ae4df3178d72c82b634d48acdb751d28e977c58daec2b21422f807796e1`;
+a copy in `cache/sources/rca_77dx/`). Not RCA's figures: a practitioner's, cite as
+`web:` with care.
+
+- The labyrinth is a transmission line used as the pressure ribbon's resistance: "The right
+  loading for the ribbon was found to result in a pipe of 6-9 mm diameter"; "about a meter was
+  the maximum practical length"; the open pipe's resonance suppressed "by stuffing the tube with
+  fibrous sound absorbing media resulting in a lossy transmission line", which "gives the line a
+  reactive impedance but does suppress reflections". In the 77 "created either as stacked
+  spiral plates or a phenolic block drilled with many interconnected holes".
+- "corners where the labyrinth turned around abruptly still caused some pretty bad resonances,
+  particularly in the RCA 77 series, that created a very large midrange response hump".
+- The rear port: "a rear port resistance/inertance opening that formed a constant group delay
+  low pass filter to sound presented to the back of the ribbon"; the labyrinth and port
+  "create a longer front to back path and thus reduced high frequency response particularly in
+  the figure eight setting".
+
 ## Still to find
 
-- The labyrinth's construction: its length and section, its damping (felt or tow), the
-  slot's size at each stop. RCA's 77-DX doesn't print them; Olson's descriptions of the
-  polydirectional ribbon (his patents and Elements of Acoustical Engineering's chapter on
-  directional microphones; H. F. Olson, J. Preston, "Polydirectional microphone", RCA
-  Review) are where to look. The 44-BX's README notes Olson's own texts weren't readable
-  online in WP5.
+- The labyrinth's own dimensions on the 77-DX (its pipe's section and length, its stuffing)
+  and the slot's area at each stop: not printed by RCA or Olson; Watts's 6-9 mm and <= 1 m bound
+  them. The fit (CHAINS_PLAN.md WP7 step 5) takes them from the patterns and the N response.
 - The ribbon's thickness and the magnet's flux (the 44-BX's fit gave 0.29 T on its pole
   pieces).
