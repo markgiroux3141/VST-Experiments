@@ -52,6 +52,15 @@ MODELS = {
     "BC550C": lambda: load_device("BC550C@1"),
     "BC560C": lambda: load_device("BC560C@1"),  # PNP
     "BC550C_plain": lambda: _plain(load_device("BC550C@1")),
+    # At temperature (ngspice's instance `temp`): hot with XTB and EG set, cold with
+    # SPICE's defaults, and the leakage-free branch warm.
+    "BC550C_60C": lambda: dataclasses.replace(
+        load_device("BC550C@1"), name="BC550C_60C", temp_k=333.15, xtb=1.5, eg_ev=1.12
+    ),
+    "BC560C_0C": lambda: dataclasses.replace(
+        load_device("BC560C@1"), name="BC560C_0C", temp_k=273.15
+    ),
+    "BC550C_plain_40C": lambda: dataclasses.replace(_plain(load_device("BC550C@1")), temp_k=313.15),
 }
 
 # NPN-signed junction voltages: cut off, reverse active, active, saturated, both
@@ -74,11 +83,12 @@ def test_reference_agrees_with_ngspice(name):
     q = MODELS[name]()
     pts = _grid(q)
     lines = [q.model_card()]
+    temp = "" if q.temp_k is None else f" temp={q.temp_k - 273.15!r}"
     for k, (vce, vbe) in enumerate(pts):
         lines += [
             f"vc{k} c{k} 0 dc {vce}",
             f"vb{k} b{k} 0 dc {vbe}",
-            f"q{k} c{k} b{k} 0 {q.model_name}",
+            f"q{k} c{k} b{k} 0 {q.model_name}{temp}",
         ]
     vecs = [f"i(vc{k})" for k in range(len(pts))] + [f"i(vb{k})" for k in range(len(pts))]
     r = ngspice.run("\n".join(lines), "op", vecs, options=TIGHT)
@@ -199,6 +209,33 @@ def test_area_scales_the_instance(tmp_path):
     base = load_device("BC550C@1")
     assert q.is_a == base.is_a * 4 and q.ikf_a == base.ikf_a * 4 and q.isc_a == base.isc_a * 4
     assert q.rb_ohm == base.rb_ohm / 4 and q.cjc_f == base.cjc_f * 4 and q.bf == base.bf
+
+
+def test_temperature_sets_the_instance(tmp_path):
+    """A `devices` entry's temp_c (bjt.py's "Temperature"): the instance's temp_k, ngspice's
+    instance `temp` in the SPICE text, and the warm stage's DC point the same in ngspice and
+    circuitsim (a hotter junction: less VBE for the same current, so more Ic)."""
+    s = _variant(
+        tmp_path,
+        "Q1: {device: BC550C@1}",
+        'Q1: {device: BC550C@1, temp_c: {value: 45.0, source: "test"}}',
+    )
+    q = builder.build_ir(s, resolve(s)).models[0]
+    assert q.temp_k == pytest.approx(318.15) and q.eg_ev is None
+    c = builder.build(s, cores="linear")
+    assert " temp=45" in c.text
+    pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    from engine_compare import settings
+
+    from varimu.sim import fast
+
+    ngspice = _ngspice()
+    nodes = ("v(b)", "v(e)", "v(c)")
+    r = ngspice.run(c.text + "vin in 0 dc 0\n", "op", list(nodes), options=TIGHT)
+    rs = fast.run_transient(c.ir, np.zeros(16), settings=settings(2))
+    for n in nodes:
+        assert float(rs.vectors[n][0]) == pytest.approx(float(r[n][0]), abs=1e-6), n
+    assert float(r["v(e)"][0]) > _hand_idle()["v(e)"]  # warm: more current
 
 
 @pytest.mark.parametrize(

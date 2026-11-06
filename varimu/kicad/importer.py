@@ -242,15 +242,17 @@ class _Importer:
         if sym.primary:
             entry[sym.primary] = self.primary(c.ref, f, c.value)
         skip = {"device", "instance", "parallel"} if sym.macro in ("bridge", "vr_tube") else set()
-        if sym.macro == "bjt":  # its instance's fields are the device entry's
-            skip = {"device", "instance", "parallel", "area"}
+        if sym.macro in ("bjt", "jfet"):  # its instance's fields are the device entry's
+            skip = {"device", "instance", "parallel", "area", "temp_c"}
         entry.update(self.params(sym, f, skip))
         self._tol(c.ref, sym.macro, f, entry)
-        if sym.macro in ("bridge", "bjt"):
+        if sym.macro in ("bridge", "bjt", "jfet"):
             key = f.get("Model", c.ref)
             entry["model"] = key
             dev = {"device": c.value}
-            dev.update({k: _yaml_field(f[k]) for k in ("instance", "parallel", "area") if k in f})
+            dev.update(
+                {k: _yaml_field(f[k]) for k in ("instance", "parallel", "area", "temp_c") if k in f}
+            )
             self.add_device(key, dev, c.ref)
         elif sym.macro == "vr_tube":
             key = f.get("Model", c.ref)

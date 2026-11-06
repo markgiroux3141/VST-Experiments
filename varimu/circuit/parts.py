@@ -63,6 +63,7 @@ from varimu.devices import spring as spr
 from varimu.devices.bjt import Bjt
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
+from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.pentode import Pentode
 from varimu.devices.tape import TapeFormulation
@@ -561,6 +562,27 @@ def bjt(name: str, c: str, b: str, e: str, model: Bjt) -> list[Element]:
     return els
 
 
+def jfet(name: str, d: str, g: str, s: str, model: Jfet) -> list[Element]:
+    """JFET `name` (varimu.devices.jfet): the device J<name> (the part's name, which starts
+    with J) on its internal nodes, and the model's linear parasitics around it: R<NAME>_d,
+    R<NAME>_s from the terminals to the internal nodes <name>_d, <name>_s (each only where
+    its resistance is nonzero: else the device sits on the terminal), C<NAME>_gs (CGS) from
+    the gate to the internal source and C<NAME>_gd (CGD) from the gate to the internal drain
+    (where nonzero)."""
+    n, upper = name.lower(), name.upper()
+    di = f"{n}_d" if model.rd_ohm > 0 else d
+    si = f"{n}_s" if model.rs_ohm > 0 else s
+    els: list[Element] = [Device(name, model.name, (di, g, si))]
+    for tag, outer, inner, r in (("d", d, di, model.rd_ohm), ("s", s, si, model.rs_ohm)):
+        if r > 0:
+            els.append(Resistor(f"R{upper}_{tag}", outer, inner, r))
+    if model.cgs_f > 0:
+        els.append(Capacitor(f"C{upper}_gs", g, si, model.cgs_f))
+    if model.cgd_f > 0:
+        els.append(Capacitor(f"C{upper}_gd", g, di, model.cgd_f))
+    return els
+
+
 def capsule(
     name: str, front: str, backplate: str, out: str, c: cap.Capsule, polarization_v: float
 ) -> list[Element]:
@@ -775,11 +797,15 @@ def device_instance(
     mu_spread: float = 1.0,
     grid_contact_v: float | None = None,
     area: float = 1.0,
+    temp_c: float | None = None,
 ) -> DeviceModel:
     """An instance of any device model. Triodes and pentodes: see tube_instance /
     pentode_instance; a vacuum diode: perveance times n and emission; a junction
     diode: `area` times the device file's (saturation current times it, series
-    resistance over it: SPICE's area factor)."""
+    resistance over it: SPICE's area factor). A BJT: `area` as SPICE's, and `temp_c` its
+    junction temperature (varimu.devices.bjt; None: TNOM)."""
+    if temp_c is not None and not isinstance(base, Bjt):
+        raise ValueError(f"{name}: temp_c is for BJTs")
     if isinstance(base, Triode):
         return tube_instance(
             base,
@@ -827,6 +853,21 @@ def device_instance(
             re_ohm=base.re_ohm / k,
             cje_f=base.cje_f * k,
             cjc_f=base.cjc_f * k,
+            temp_k=None if temp_c is None else temp_c + 273.15,
+        )
+    if isinstance(base, Jfet):
+        if emission_scale != 1.0:
+            raise ValueError(f"{name}: a JFET has no emission spread")
+        k = n_parallel * area
+        return dataclasses.replace(
+            base,
+            name=name,
+            beta_a_per_v2=base.beta_a_per_v2 * k,
+            is_a=base.is_a * k,
+            rd_ohm=base.rd_ohm / k,
+            rs_ohm=base.rs_ohm / k,
+            cgs_f=base.cgs_f * k,
+            cgd_f=base.cgd_f * k,
         )
     if isinstance(base, Lamp):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):

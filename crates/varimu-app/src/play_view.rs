@@ -123,6 +123,7 @@ const DRAWING: Device = Device {
     coupling: None,
     pitch2: None,
     live_speaker_v: None,
+    newton: None,
 };
 
 /// A finished render: where it was saved and what it was.

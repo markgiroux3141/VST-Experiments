@@ -49,6 +49,10 @@ Macro parts (connection; params, * = required):
                 a transistor, NAME starting with Q, with its model's RB / RC / RE and CJE /
                 CJC as linear elements around it (varimu.devices.bjt, varimu.circuit.parts
                 .bjt); a `device` part refuses a BJT (it would drop them)
+    jfet        [d, g, s]; model* (a `devices` key whose device is a JFET component, NAME@N):
+                a JFET, NAME starting with J, with its model's RD / RS and CGS / CGD as linear
+                elements around it (varimu.devices.jfet, varimu.circuit.parts.jfet); a
+                `device` part refuses a JFET
     capsule     [front, backplate, out]; component* (a capsule component version, NAME@N, or a
                 parameter naming one), polarization_v*: the front pressure on `front`
                 (pascals as volts), the electrodes backplate and out (varimu.devices.capsule)
@@ -193,6 +197,7 @@ from varimu.devices import versions
 from varimu.devices.bjt import Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.jfet import Jfet
 from varimu.devices.library import (
     component_data,
     load_capsule,
@@ -493,6 +498,8 @@ def _nodes_device(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
     model = a["model"]
     if isinstance(model, Bjt):
         raise ctx.fail(name, "a BJT is placed with a `bjt` part (its series R and junction C)")
+    if isinstance(model, Jfet):
+        raise ctx.fail(name, "a JFET is placed with a `jfet` part (its series R and gate C)")
     pins = pins_of(model)
     if not isinstance(conn, list) or len(conn) != len(pins):
         raise ctx.fail(name, f"device {model.name} has pins {pins}, got {conn!r}")
@@ -506,6 +513,15 @@ def _bjt(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     if not name.upper().startswith("Q"):
         raise ctx.fail(name, "a bjt part's name starts with Q (its SPICE element)")
     return parts.bjt(name, *conn, model)
+
+
+def _jfet(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    model = a["model"]
+    if not isinstance(model, Jfet):
+        raise ctx.fail(name, f"jfet: {model.name} is not a JFET")
+    if not name.upper().startswith("J"):
+        raise ctx.fail(name, "a jfet part's name starts with J (its SPICE element)")
+    return parts.jfet(name, *conn, model)
 
 
 def _mains(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -983,6 +999,7 @@ for _name, _macro in {
     "mains": Macro(_mains, 2, {"v_rms": _P, "phase_deg": Param("number", 0.0)}),
     "device": Macro(_nodes_device, None, {"model": Param("device")}),
     "bjt": Macro(_bjt, 3, {"model": Param("device")}),
+    "jfet": Macro(_jfet, 3, {"model": Param("device")}),
     "pot": Macro(
         lambda ctx, n, c, a: parts.pot(n, *c, a["r"], a["at"], a["taper_mid"], bool(a["reverse"])),
         3,
@@ -1132,7 +1149,7 @@ for _name, _macro in {
 
 _DEVICE_KEYS = {
     "device", "name", "instance", "tolerance", "parallel", "emission", "mu", "grid_contact_v",
-    "area", "events", "source", "notes",
+    "area", "temp_c", "events", "source", "notes",
 }  # fmt: skip
 
 
@@ -1176,6 +1193,7 @@ def make_models(ctx: Context) -> dict[str, str]:
                     mu_spread=mu,
                     grid_contact_v=None if contact is None else ctx.physical(where, contact),
                     area=ctx.physical(f"{where}.area", e["area"]) if "area" in e else 1.0,
+                    temp_c=ctx.physical(f"{where}.temp_c", e["temp_c"]) if "temp_c" in e else None,
                 )
             except (TypeError, ValueError) as err:
                 raise ctx.fail(where, str(err)) from err

@@ -587,6 +587,30 @@ _SYMBOLS: list[SymbolDef] = [
             poly((1.397, -2.413), (2.54, -2.54), (1.905, -1.524)),
         ],
         None,
+        ("Model", "instance", "parallel", "area", "temp_c"),
+        toleranced=False,
+        text=(4.318, 1.27, -1.27, "left"),
+    ),
+    _macro(
+        "JFET",
+        "jfet",
+        "J",
+        "Junction FET (varimu.devices.jfet, N- or P-channel by its device file): pin 1 the "
+        "drain, 2 the gate, 3 the source; Value is the device file",
+        (
+            Pin("1", "D", 2.54, 5.08, 270, 2.54),
+            Pin("2", "G", -5.08, 0, 0, 2.54),
+            Pin("3", "S", 2.54, -5.08, 90, 2.54),
+        ),  # fmt: skip
+        [
+            circle(0.635, 0, 3.302),
+            poly((0, 1.905), (0, -1.905)),
+            poly((0, 1.27), (2.54, 1.27), (2.54, 2.54)),
+            poly((0, -1.27), (2.54, -1.27), (2.54, -2.54)),
+            poly((-2.54, 0), (0, 0)),
+            poly((-1.016, 0.508), (0, 0), (-1.016, -0.508)),
+        ],
+        None,
         ("Model", "instance", "parallel", "area"),
         toleranced=False,
         text=(4.318, 1.27, -1.27, "left"),

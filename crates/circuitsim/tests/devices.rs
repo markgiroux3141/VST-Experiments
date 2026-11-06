@@ -207,6 +207,12 @@ fn junction_diode_limits_and_tubes_do_not() {
                 assert!(limited && v[1] < 0.5 && v[0] == v[1], "{v:?}")
             }
             DeviceModel::Bjt(_) => assert!(!limited && v == [5.0, 5.0], "{v:?}"),
+            // A JFET's gate-source junction jumping 5 V forward is pulled back the same way
+            // (V(d, s) follows: the gate-drain junction is unmoved); a P-channel's is reverse.
+            DeviceModel::Jfet(ref j) if j.polarity == circuitsim::ir::JfetPolarity::Njf => {
+                assert!(limited && v[1] < 0.6 && v[0] == v[1], "{v:?}")
+            }
+            DeviceModel::Jfet(_) => assert!(!limited && v == [5.0, 5.0], "{v:?}"),
             // A thyratron's state moves at most 3 e-folds per iteration.
             DeviceModel::Thyratron(_) => {
                 assert!(limited && v[n - 1] == 3.0 && v[..n - 1].iter().all(|&x| x == 5.0))

@@ -71,6 +71,11 @@ pub struct Device {
     /// voltage, this many volts at full scale (the readout's states cost Play more than the
     /// amp: COMPONENT_EDITOR_PLAN.md C3; the pressure at production). None: as the file is.
     pub live_speaker_v: Option<f64>,
+    /// Newton's tolerances (reltol, vntol V) over its quality's (None: the quality's): a
+    /// log-domain gain cell's gain is exp(V / 2 Vt), so the draft's 1 mV is a 2 % gain
+    /// error (distortion near -50 dB); 1e-5 holds it at production's (DEVICE_BUILDER_PLAN.md
+    /// B11).
+    pub newton: Option<(f64, f64)>,
 }
 
 /// A section of the device menus, in their order.
@@ -472,11 +477,15 @@ impl Device {
         if let Some(c) = self.coupling {
             s.partition_coupling = c.to_string();
         }
+        if let Some((rel, vn)) = self.newton {
+            s.newton_reltol = rel;
+            s.newton_vntol = vn;
+        }
         s
     }
 }
 
-pub const DEVICES: [Device; 20] = [
+pub const DEVICES: [Device; 21] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -505,6 +514,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -527,6 +537,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -555,6 +566,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -579,6 +591,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -603,6 +616,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -627,6 +641,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -655,6 +670,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -703,6 +719,7 @@ pub const DEVICES: [Device; 20] = [
         }),
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: Some(&[
             "resonance",
             "|",
@@ -748,6 +765,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
         // oscillator and its pitch driver | the supplies.
         partition: Some(&["oscillator", "pitch", "|", "power supply", "bias supply"]),
@@ -779,6 +797,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: Some("hold"),
         live_speaker_v: None,
+        newton: None,
         // Two threads: the VCA | the rest (the oscillator, the keys and the envelope: control
         // inputs stay in the first part). The cuts are the VCA's grids (`ga`, `gt`), and the
         // saw's edge crosses at `ga`: extrapolated it was doubled for a sample (peaks 49 V
@@ -805,6 +824,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -841,6 +861,7 @@ pub const DEVICES: [Device; 20] = [
         // default DRIVE 0.50x, p95 1.35 against 0.55x, 0.80: DELAY_PLAN.md, DRIVE).
         coupling: Some("hold"),
         live_speaker_v: None,
+        newton: None,
         partition: Some(&[
             "heads and tape",
             "reproduce amplifier",
@@ -882,6 +903,7 @@ pub const DEVICES: [Device; 20] = [
         // against 3.4; 1.8x real time against 0.55x; DELAY_PLAN.md, "PING-PONG").
         coupling: Some("hold"),
         live_speaker_v: None,
+        newton: None,
         // Cut at the media: both record sides with the input, each channel's tape, repro
         // and output on a thread of its own (a tape senses its record head a sample late:
         // partition.rs), the supplies and the capstan's last.
@@ -921,6 +943,7 @@ pub const DEVICES: [Device; 20] = [
         partition: Some(&["power supply"]),
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         pitch2: None,
     },
     Device {
@@ -952,6 +975,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -978,6 +1002,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -1007,6 +1032,7 @@ pub const DEVICES: [Device; 20] = [
         // clipping hard (all 73 keys at velocity 127, volume 1, draft), rounded up (60 V,
         // its full scale before C3, left it 10 dB down at its loudest).
         live_speaker_v: Some(20.0),
+        newton: None,
     },
     Device {
         id: "clavinet_d6",
@@ -1042,6 +1068,7 @@ pub const DEVICES: [Device; 20] = [
         coupling: None,
         partition: None,
         live_speaker_v: None,
+        newton: None,
     },
     Device {
         id: "foil_reverb",
@@ -1063,6 +1090,7 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
     },
     Device {
@@ -1085,7 +1113,40 @@ pub const DEVICES: [Device; 20] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
+        newton: None,
         partition: None,
+    },
+    Device {
+        id: "ssl_bus_comp",
+        label: "SSL Bus Compressor (sidechain)",
+        short: "SSL",
+        about: "The SSL 4000 E / G mix-bus compressor (cards 82E26 / 82E27): dbx 202C VCAs \
+            from discrete Blackmer cells, a KEY input that keeps its ratio",
+        group: Group::Dynamics,
+        circuit: "ssl_bus_comp",
+        panel: Some(&[
+            "key_mode",
+            "threshold",
+            "ratio",
+            "attack",
+            "release",
+            "makeup",
+            "comp_in",
+        ]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: Some("key"),
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        partition: None,
+        newton: Some((1e-5, 1e-5)),
     },
 ];
 
@@ -1859,7 +1920,10 @@ mod tests {
         // Inserts: the processors, with the keyed 670 Play can't feed.
         let inserts = ids(insert_menu());
         assert_eq!(inserts[0].0, Group::Dynamics);
-        assert_eq!(inserts[0].1, vec!["fairchild_670", "fairchild_670_keyed"]);
+        assert_eq!(
+            inserts[0].1,
+            vec!["fairchild_670", "fairchild_670_keyed", "ssl_bus_comp"]
+        );
         assert!(inserts.iter().all(|(g, _)| *g != Group::Instruments));
         // The retired prototypes are in no menu but still load by id.
         let retired: Vec<&str> = DEVICES

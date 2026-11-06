@@ -83,7 +83,16 @@ def test_engineering_numbers_read_exactly():
 
 
 def test_library_symbols_match_the_macros():
-    device_keys = {"emission", "mu", "grid_contact_v", "parallel", "area", "instance", "name"}
+    device_keys = {
+        "emission",
+        "mu",
+        "grid_contact_v",
+        "parallel",
+        "area",
+        "temp_c",
+        "instance",
+        "name",
+    }
     for s in SYMBOLS.values():
         numbers = [p.number for p in s.pins]
         assert len(numbers) == len(set(numbers)), s.name

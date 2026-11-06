@@ -33,6 +33,7 @@ from varimu.circuit.ir import model_to_dict
 from varimu.devices.bjt import Bjt
 from varimu.devices.core import DEMAGNETIZED, TESLA_PER_V, MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.library import load_device
 from varimu.devices.pentode import Pentode
@@ -74,6 +75,10 @@ _THY_W = (W_MIN - 10, -30, -8, -1, 2, 6, 10, W_MAX + 5)
 # would swamp the Jacobian test's absolute floor).
 _BJT_VBE = (-5, -1, -0.2, 0, 0.3, 0.5, 0.6, 0.65, 0.7, 0.75, 0.8, 0.9)
 _BJT_VCE = (-5, -0.5, 0, 0.05, 0.2, 1, 5, 20, 45)
+# A JFET (N-channel signs; a P-channel grid is negated): cut off through the channel's
+# square law to a forward gate, both modes, avoiding the models' VTO (a kink).
+_JFET_VGS = (-8, -3.5, -2.7, -1.7, -1.2, -0.6, -0.2, 0, 0.3, 0.6, 0.8)
+_JFET_VDS = (-12, -3, -1, -0.2, -0.01, 0, 0.01, 0.2, 1, 1.3, 3, 12)
 # Core: B history (T) whose accepted points are the states, and offsets from each state's B.
 _CORE_HISTORY = (0.0, 0.6, 0.3, 1.2, -0.4, 1.9)
 # (not multiples of DB_MAX: there the substep count changes, a ~1e-8 relative jump that
@@ -108,6 +113,14 @@ def _models() -> list:
         load_device("E83F@1"),
         load_device("BC550C@1"),
         load_device("BC560C@1"),  # PNP
+        # At temperature (bjt.py's "Temperature"): XTB set on the hot one.
+        dataclasses.replace(load_device("BC550C@1"), name="BC550C_60C", temp_k=333.15, xtb=1.5),
+        dataclasses.replace(load_device("BC560C@1"), name="BC560C_0C", temp_k=273.15),
+        # JFETs (jfet.py): the square law, the doping tail B with a gate emission N, and a
+        # P-channel one.
+        Jfet("JFET_SQ", "njf", -3.0, 1.304e-3, lambda_per_v=2.25e-3, is_a=33.57e-15),
+        Jfet("JFET_B", "njf", -2.0, 1e-3, lambda_per_v=0.01, is_a=1e-14, n=1.2, b=0.9, pb_v=0.8),
+        Jfet("JFET_P", "pjf", -1.55, 2e-3, lambda_per_v=0.02, b=0.7, pb_v=1.0),
         core_model("CORE_GO", "grain_oriented_si_steel", 0.1),
         core_model("CORE_NI", "permalloy_fluxgate", 0.08),
         core_model("CORE_MU", "mumetall", 0.07),
@@ -161,6 +174,14 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
             (m.sign * vce, m.sign * vbe)
             for vbe, vce in itertools.product(_BJT_VBE, _BJT_VCE)
             if max(vbe, vbe - vce) <= 0.95
+        ]
+        currents = np.stack(m.currents(*np.array(ports, float).T), axis=1)
+        ports = [(float(a), float(b)) for a, b in ports]
+    elif isinstance(m, Jfet):
+        ports = [
+            (m.sign * vds, m.sign * vgs)
+            for vgs, vds in itertools.product(_JFET_VGS, _JFET_VDS)
+            if vgs - vds <= 0.9
         ]
         currents = np.stack(m.currents(*np.array(ports, float).T), axis=1)
         ports = [(float(a), float(b)) for a, b in ports]

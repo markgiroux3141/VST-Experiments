@@ -45,6 +45,7 @@ from varimu.devices.fit import (
     load_6386,
     load_csv,
 )
+from varimu.devices.jfet import Jfet, jfet_from_data
 from varimu.devices.lamp import Lamp, lamp_from_data
 from varimu.devices.moving_coil import MovingCoil, moving_coil_from_data
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
@@ -58,7 +59,7 @@ from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_s
 
 DEVICE_DIR = versions.COMPONENT_DIR
 REPORT_DIR = REPO_ROOT / "reports" / "devices"
-Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron | Bjt
+Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron | Bjt | Jfet
 
 # Oxide-cathode grid conduction. There's no datasheet figure for any of these
 # tubes, so this is the same placeholder everywhere until it becomes a genome parameter.
@@ -134,6 +135,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return lamp_from_data(d, name)
     if kind == "bjt":
         return bjt_from_data(d, name)
+    if kind == "jfet":
+        return jfet_from_data(d, name)
     if kind == "thyratron":
         return thyratron_from_data(d, name)
     if kind == "speaker":
@@ -476,6 +479,96 @@ def build_zpd8v2() -> dict[str, Any]:
         "Hohner's E7 schematic names the 'ZPD 8,2' "
         "(data/schematics/hohner_clavinet_d6/clavinete7.jpg)",
     }
+
+
+def build_zpd12() -> dict[str, Any]:
+    """A 12 V zener of the ZPD / BZX55 class (the SSL 82E27's make-up reference, D3 '12V'),
+    on ZPD8V2@1's breakdown slope, used with the `vr_tube` part."""
+    return {
+        "name": "ZPD12",
+        "kind": "junction_diode",
+        "is_a": 1.0e-14,
+        "n": 1.0,
+        "rs_ohm": 10.0,
+        "source": "provisional: model knowledge (a 500 mW 12 V zener of the ZPD / BZX55 "
+        "class: Vz 11.4-12.7 V at 5 mA, dynamic resistance up to ~20 Ohm there; the slope "
+        "nVt / I + rs ~15 Ohm at 5 mA; the knee isn't modelled). The SSL 82E27 prints only "
+        "'12v' (data/schematics/ssl_bus_comp/README.md)",
+    }
+
+
+def build_1n4148() -> dict[str, Any]:
+    """The 1N4148 small-signal diode (the SSL side chain's unmarked signal diodes)."""
+    return {
+        "name": "1N4148",
+        "kind": "junction_diode",
+        "is_a": 2.52e-9,
+        "n": 1.752,
+        "rs_ohm": 0.568,
+        "source": "the 1N4148 SPICE model's DC parameters (IS 2.52n, N 1.752, RS 0.568; "
+        "mfg=OnSemi, as LTspice 24's lib/cmp/standard.dio distributes it)",
+    }
+
+
+def _jfet_component(name: str, polarity: str, dc: dict, par: dict, source: str,
+                    dc_source: str) -> dict[str, Any]:  # fmt: skip
+    """A JFET component (kind `jfet`, varimu.devices.jfet): the DC parameters and the
+    parasitics (RD, RS; CGS, CGD at zero bias) of a published card, as numbers with their
+    source (the card's own text isn't kept: its licence forbids redistribution)."""
+    return {
+        "name": name,
+        "kind": "jfet",
+        "source": source,
+        "polarity": polarity,
+        "dc": {**dc, "source": dc_source},
+        "parasitics": {
+            **par,
+            "source": "the card's RD, RS and its CGS, CGD at zero bias (linear elements of "
+            "the jfet part, varimu.devices.jfet)",
+        },
+    }
+
+
+def build_j175() -> dict[str, Any]:
+    """The J175 P-channel JFET (the SSL 82E26's COMP IN / OUT switch, TR4)."""
+    return _jfet_component(
+        "J175",
+        "pjf",
+        {
+            "vto_v": -3.0,
+            "beta_a_per_v2": 5.0e-3,
+            "lambda_per_v": 1.2e-3,
+            "is_a": 6.58e-15,
+            "pb_v": 1.0,
+        },  # fmt: skip
+        {"rd_ohm": 21.0, "rs_ohm": 18.9, "cgs_f": 12.5e-12, "cgd_f": 17.1e-12},
+        "Central Semiconductor's CMPFJ175 SPICE model (the SMD J175; 30 V 25 mA 150 Ohm "
+        "class): data/datasheets/transistors/README.md",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/CSM1481.LIB (CMPFJ175, "
+        "7/15/24 rev A: VTO -3.00, BETA 5.00m, LAMBDA 1.20m, IS 6.58f, PB 1.00)",
+    )
+
+
+def build_2n3819() -> dict[str, Any]:
+    """The 2N3819 N-channel JFET (the 1176's voltage-variable resistor class)."""
+    return _jfet_component(
+        "2N3819",
+        "njf",
+        {
+            "vto_v": -2.5,
+            "beta_a_per_v2": 1.7524e-3,
+            "lambda_per_v": 0.02,
+            "is_a": 1.0e-20,
+            "pb_v": 0.39253,
+        },  # fmt: skip
+        {"rd_ohm": 0.0, "rs_ohm": 0.0, "cgs_f": 3.5966e-12, "cgd_f": 7.0632e-12},
+        "Central Semiconductor's 2N3819 SPICE model (data/datasheets/transistors/README.md); "
+        "its datasheet's IDSS 2-20 mA, VGS(off) up to -8 V "
+        "(data/datasheets/transistors/central_2N3819.pdf). The card's gate-diode NR 9.99 / "
+        "ALPHA / VK (breakdown fit artefacts) aren't in the level-1 model",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/CSM1455.LIB (2N3819, 6/25/24 "
+        "rev A: VTO -2.5, BETA 1.7524m, LAMBDA 0.02, IS 10.000E-21, PB .39253)",
+    )
 
 
 def build_el34t() -> dict[str, Any]:
@@ -1894,6 +1987,10 @@ BUILDERS = {
     "GZ34": build_gz34,
     "SI_RECTIFIER": build_si_rectifier,
     "ZPD8V2": build_zpd8v2,
+    "ZPD12": build_zpd12,
+    "1N4148": build_1n4148,
+    "J175": build_j175,
+    "2N3819": build_2n3819,
     "EL34T": build_el34t,
     "6084": build_6084,
     "5651": build_5651,

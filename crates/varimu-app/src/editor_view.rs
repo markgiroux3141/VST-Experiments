@@ -35,7 +35,7 @@ use crate::theme;
 const FAR_K: f64 = 2.6;
 
 /// The parts palette: (symbol, label).
-const PALETTE: [(&str, &str); 22] = [
+const PALETTE: [(&str, &str); 23] = [
     ("R", "R"),
     ("C", "C"),
     ("L", "L"),
@@ -51,6 +51,7 @@ const PALETTE: [(&str, &str); 22] = [
     ("Bridge", "Bridge"),
     ("VR_Tube", "VR tube"),
     ("BJT", "Transistor"),
+    ("JFET", "JFET"),
     ("Winding", "Winding"),
     ("Core", "Core"),
     ("K", "Coupling"),

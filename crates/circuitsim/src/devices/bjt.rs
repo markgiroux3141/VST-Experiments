@@ -50,30 +50,60 @@ pub struct Bjt {
 /// `(Ic, Ib, dIc/dvbe, dIc/dvbc, dIb/dvbe, dIb/dvbc)`, NPN signs.
 type Junction = (f64, f64, f64, f64, f64, f64);
 
+/// ngspice's k / q as it precomputes it (Python: `K_OVER_Q`).
+pub const K_OVER_Q: f64 = 1.38064852e-23 / 1.6021766208e-19;
+/// SPICE's TNOM (REFTEMP), kelvin.
+pub const TNOM_K: f64 = 300.15;
+
+/// `(Vt, IS, BF, BR, ISE, ISC)` at the model's temperature (`bjt.py`'s `at_temperature`:
+/// SPICE's scaling, TLEV 0; TNOM's values when `temp_k` is None).
+pub fn at_temperature(m: &ir::Bjt) -> (f64, f64, f64, f64, f64, f64) {
+    let Some(t) = m.temp_k else {
+        return (VT_TNOM, m.is_a, m.bf, m.br, m.ise_a, m.isc_a);
+    };
+    let eg = m.eg_ev.unwrap_or(1.11);
+    let xti = m.xti.unwrap_or(3.0);
+    let xtb = m.xtb.unwrap_or(0.0);
+    let vt = t * K_OVER_Q;
+    let ratlog = (t / TNOM_K).ln();
+    let ratio1 = t / TNOM_K - 1.0;
+    let factlog = ratio1 * eg / vt + xti * ratlog;
+    let factor = factlog.exp();
+    let bfactor = (ratlog * xtb).exp();
+    (
+        vt,
+        m.is_a * factor,
+        m.bf * bfactor,
+        m.br * bfactor,
+        m.ise_a * (factlog / m.ne).exp() / bfactor,
+        m.isc_a * (factlog / m.nc).exp() / bfactor,
+    )
+}
+
 impl Bjt {
     pub fn new(m: &ir::Bjt) -> Bjt {
-        let vt = VT_TNOM;
+        let (vt, is_a, bf, br, ise_a, isc_a) = at_temperature(m);
         let nfv = m.nf * vt;
         let nrv = m.nr * vt;
         let inv = |x: Option<f64>| x.map_or(0.0, |x| 1.0 / x);
-        let crit = |nv: f64| nv * (nv / (std::f64::consts::SQRT_2 * m.is_a)).ln();
+        let crit = |nv: f64| nv * (nv / (std::f64::consts::SQRT_2 * is_a)).ln();
         Bjt {
             sign: match m.polarity {
                 ir::Polarity::Npn => 1.0,
                 ir::Polarity::Pnp => -1.0,
             },
-            is_a: m.is_a,
-            bf: m.bf,
-            br: m.br,
+            is_a,
+            bf,
+            br,
             nfv,
             nrv,
             inv_f: inv(m.vaf_v),
             inv_r: inv(m.var_v),
             oik: inv(m.ikf_a),
             oikr: inv(m.ikr_a),
-            ise_a: m.ise_a,
+            ise_a,
             nev: m.ne * vt,
-            isc_a: m.isc_a,
+            isc_a,
             ncv: m.nc * vt,
             vcrit_e: crit(nfv),
             vcrit_c: crit(nrv),
@@ -185,6 +215,10 @@ mod tests {
             re_ohm: 0.2598,
             cje_f: 1.229e-11,
             cjc_f: 1.78e-12,
+            temp_k: None,
+            eg_ev: None,
+            xti: None,
+            xtb: None,
         }
     }
 

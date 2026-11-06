@@ -37,9 +37,22 @@ capacitances CJE, CJC are kept, as *linear* elements the `bjt` part macro places
 the device (internal nodes where a resistance is nonzero; varimu.circuit.parts.bjt), not as
 the device's nonlinear depletion charge: CJE at zero bias (a forward-biased junction's is
 at least that), CJC at a stated reverse bias (the component file's `parasitics` block says
-which). RB is constant (IRB, RBM unused). No substrate, no excess phase, no temperature.
+which). RB is constant (IRB, RBM unused). No substrate, no excess phase.
 No noise yet (shot noise of the junctions and RB's Johnson noise are later work: a `bjt`
 part gets no noise elements under a noise block).
+
+**Temperature (2026-11-06, DEVICE_BUILDER_PLAN.md B11).** A model whose `temp_k` is set is
+evaluated at that junction temperature, by SPICE's scaling (ngspice `bjttemp.c`, TLEV 0):
+Vt = k T / q, and with r = T / TNOM, f = (r - 1) EG / Vt + XTI ln r, b = r^XTB,
+
+    IS(T) = IS e^f,  BF(T) = BF b,  BR(T) = BR b,
+    ISE(T) = ISE e^(f / NE) / b,  ISC(T) = ISC e^(f / NC) / b
+
+(EG, XTI, XTB: `eg_ev`, `xti`, `xtb`, SPICE's defaults 1.11, 3, 0 when None). The other
+parameters keep their values (their temperature coefficients default to zero in SPICE).
+ngspice's instance parameter `temp` is its SPICE implementation. `temp_k` None is TNOM,
+exactly the model before temperature (every existing IR unchanged). A circuit sets it per
+`devices` entry (`temp_c`): matched transistors on one die share one temperature.
 
 The model's dataclass carries the parasitics too (rb_ohm .. cjc_f), so that an instance's
 `area` scales them with the junctions (SPICE's area factor: IS, ISE, ISC, IKF, IKR and
@@ -68,6 +81,11 @@ EXP_MAX = 80.0
 _E_MAX = math.exp(EXP_MAX)
 # ngspice's default GMIN across each junction (S): the tests' reference adds it.
 SPICE_GMIN = 1e-12
+# ngspice's constants (const.h): k / q as it precomputes it, TNOM (REFTEMP) in kelvin.
+K_OVER_Q = 1.38064852e-23 / 1.6021766208e-19
+TNOM_K = 300.15
+# SPICE's defaults for the temperature parameters.
+EG_DEFAULT_EV, XTI_DEFAULT, XTB_DEFAULT = 1.11, 3.0, 0.0
 
 POLARITIES = ("npn", "pnp")
 
@@ -107,6 +125,35 @@ class Bjt:
     re_ohm: float = 0.0
     cje_f: float = 0.0
     cjc_f: float = 0.0
+    # Temperature (the module docstring): None = TNOM / SPICE's defaults.
+    temp_k: float | None = None
+    eg_ev: float | None = None
+    xti: float | None = None
+    xtb: float | None = None
+
+    def at_temperature(self) -> tuple[float, float, float, float, float, float]:
+        """(Vt, IS, BF, BR, ISE, ISC) at the model's temperature (TNOM's values when
+        `temp_k` is None)."""
+        if self.temp_k is None:
+            return VT_TNOM, self.is_a, self.bf, self.br, self.ise_a, self.isc_a
+        t = self.temp_k
+        eg = EG_DEFAULT_EV if self.eg_ev is None else self.eg_ev
+        xti = XTI_DEFAULT if self.xti is None else self.xti
+        xtb = XTB_DEFAULT if self.xtb is None else self.xtb
+        vt = t * K_OVER_Q
+        ratlog = math.log(t / TNOM_K)
+        ratio1 = t / TNOM_K - 1.0
+        factlog = ratio1 * eg / vt + xti * ratlog
+        factor = math.exp(factlog)
+        bfactor = math.exp(ratlog * xtb)
+        return (
+            vt,
+            self.is_a * factor,
+            self.bf * bfactor,
+            self.br * bfactor,
+            self.ise_a * math.exp(factlog / self.ne) / bfactor,
+            self.isc_a * math.exp(factlog / self.nc) / bfactor,
+        )
 
     @property
     def sign(self) -> float:
@@ -115,26 +162,26 @@ class Bjt:
     def junction(self, vbe, vbc):
         """NPN-signed (vbe, vbc) -> (Ic, Ib, dIc/dvbe, dIc/dvbc, dIb/dvbe, dIb/dvbc)."""
         vbe, vbc = np.asarray(vbe, float), np.asarray(vbc, float)
-        vt = VT_TNOM
+        vt, is_a, bf, br, ise_a, isc_a = self.at_temperature()
         nfv, nrv = self.nf * vt, self.nr * vt
         ef, dfe = _exp(vbe / nfv)
         er, dre = _exp(vbc / nrv)
-        ibe = self.is_a * (ef - 1.0)
-        gbe = self.is_a * dfe / nfv
-        ibc = self.is_a * (er - 1.0)
-        gbc = self.is_a * dre / nrv
-        if self.ise_a > 0.0:
+        ibe = is_a * (ef - 1.0)
+        gbe = is_a * dfe / nfv
+        ibc = is_a * (er - 1.0)
+        gbc = is_a * dre / nrv
+        if ise_a > 0.0:
             nev = self.ne * vt
             en, den = _exp(vbe / nev)
-            iben = self.ise_a * (en - 1.0)
-            gben = self.ise_a * den / nev
+            iben = ise_a * (en - 1.0)
+            gben = ise_a * den / nev
         else:
             iben = gben = np.zeros_like(vbe)
-        if self.isc_a > 0.0:
+        if isc_a > 0.0:
             ncv = self.nc * vt
             ec, dec = _exp(vbc / ncv)
-            ibcn = self.isc_a * (ec - 1.0)
-            gbcn = self.isc_a * dec / ncv
+            ibcn = isc_a * (ec - 1.0)
+            gbcn = isc_a * dec / ncv
         else:
             ibcn = gbcn = np.zeros_like(vbc)
         inv_f = 0.0 if self.vaf_v is None else 1.0 / self.vaf_v
@@ -153,12 +200,12 @@ class Bjt:
             dqb_e = q1 * (qb * inv_r + oik * gbe / sq)
             dqb_c = q1 * (qb * inv_f + oikr * gbc / sq)
         it = (ibe - ibc) / qb
-        ic = it - ibc / self.br - ibcn
-        ib = ibe / self.bf + iben + ibc / self.br + ibcn
+        ic = it - ibc / br - ibcn
+        ib = ibe / bf + iben + ibc / br + ibcn
         dic_e = gbe / qb - it / qb * dqb_e
-        dic_c = -gbc / qb - it / qb * dqb_c - gbc / self.br - gbcn
-        dib_e = gbe / self.bf + gben
-        dib_c = gbc / self.br + gbcn
+        dic_c = -gbc / qb - it / qb * dqb_c - gbc / br - gbcn
+        dib_e = gbe / bf + gben
+        dib_c = gbc / br + gbcn
         return ic, ib, dic_e, dic_c, dib_e, dib_c
 
     def currents(self, vce, vbe):
@@ -190,6 +237,9 @@ class Bjt:
                 p.append((key, x))
         if self.ikr_a is not None:
             p.append(("IKR", self.ikr_a))
+        for key, x in (("EG", self.eg_ev), ("XTI", self.xti), ("XTB", self.xtb)):
+            if x is not None:
+                p.append((key, x))
         body = " ".join(f"{k}={num(v)}" for k, v in p)
         return f".model {self.model_name} {self.polarity.upper()}({body})\n"
 
@@ -230,6 +280,9 @@ def bjt_from_data(d: dict[str, Any], name: str) -> Bjt:
         re_ohm=float(par.get("re_ohm", 0.0)),
         cje_f=float(par.get("cje_f", 0.0)),
         cjc_f=float(par.get("cjc_f", 0.0)),
+        eg_ev=opt("eg_ev"),
+        xti=opt("xti"),
+        xtb=opt("xtb"),
     )
 
 

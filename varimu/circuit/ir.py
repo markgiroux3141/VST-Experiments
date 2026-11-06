@@ -48,6 +48,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Any
 
+from varimu.devices import jfet as jfet_mod
 from varimu.devices.bjt import POLARITIES, Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
@@ -555,7 +556,17 @@ Element = (
     | ClavStrings
     | ThyratronEvents
 )
-DeviceModel = Triode | Pentode | JunctionDiode | VacuumDiode | MagneticCore | Lamp | Thyratron | Bjt
+DeviceModel = (
+    Triode
+    | Pentode
+    | JunctionDiode
+    | VacuumDiode
+    | MagneticCore
+    | Lamp
+    | Thyratron
+    | Bjt
+    | jfet_mod.Jfet
+)
 
 PINS: dict[type, tuple[str, ...]] = {
     Triode: ("p", "g", "k"),
@@ -565,6 +576,7 @@ PINS: dict[type, tuple[str, ...]] = {
     MagneticCore: ("b", "ref"),
     Lamp: ("a", "t", "b"),
     Bjt: ("c", "b", "e"),
+    jfet_mod.Jfet: ("d", "g", "s"),
 }
 
 
@@ -599,6 +611,8 @@ def instance_prefix(model: DeviceModel) -> str:
     subcircuits."""
     if isinstance(model, JunctionDiode):
         return "D"
+    if isinstance(model, jfet_mod.Jfet):
+        return "J"
     return "Q" if isinstance(model, Bjt) else "X"
 
 
@@ -1080,6 +1094,19 @@ def _validate_model(m: DeviceModel) -> None:
         ]
         for w in ("ise_a", "isc_a", "rb_ohm", "rc_ohm", "re_ohm", "cje_f", "cjc_f"):
             nonneg(w, getattr(m, w))
+        values += [(w, getattr(m, w)) for w in ("temp_k", "eg_ev") if getattr(m, w) is not None]
+        for w in ("xti", "xtb"):
+            if getattr(m, w) is not None:
+                _finite(f"{m.name}.{w}", getattr(m, w))
+    elif isinstance(m, jfet_mod.Jfet):
+        if m.polarity not in jfet_mod.POLARITIES:
+            raise IRError(f"{m.name}.polarity = {m.polarity!r}: one of {jfet_mod.POLARITIES}")
+        values += [(w, getattr(m, w)) for w in ("beta_a_per_v2", "is_a", "n", "b", "pb_v")]
+        _finite(f"{m.name}.vto_v", m.vto_v)
+        if not m.pb_v > m.vto_v:
+            raise IRError(f"{m.name}: pb_v must exceed vto_v")
+        for w in ("lambda_per_v", "rd_ohm", "rs_ohm", "cgs_f", "cgd_f"):
+            nonneg(w, getattr(m, w))
     elif isinstance(m, MagneticCore):
         problems = m.validate()
         if problems:
@@ -1124,6 +1151,7 @@ _MODEL_KINDS = {
     "lamp": Lamp,
     "thyratron": Thyratron,
     "bjt": Bjt,
+    "jfet": jfet_mod.Jfet,
 }
 _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 # Optional fields written only when set, so IRs without them read and write as before.
@@ -1137,6 +1165,10 @@ _OMITTED_WHEN_NONE = {
     (TapeMedium, "varispeed"),
     (Tape, "supply"),
     (KorenPentode, "screen"),
+    (Bjt, "temp_k"),
+    (Bjt, "eg_ev"),
+    (Bjt, "xti"),
+    (Bjt, "xtb"),
 }
 _PROBE_KINDS = {"voltage": VoltageProbe}
 _KIND_OF = {

@@ -17,6 +17,7 @@ use crate::ir::DeviceModel;
 pub mod bjt;
 pub mod core;
 pub mod diode;
+pub mod jfet;
 pub mod lamp;
 pub mod pentode;
 pub mod thyratron;
@@ -26,6 +27,7 @@ pub mod triode_table;
 pub use self::core::MagneticCore;
 pub use bjt::Bjt;
 pub use diode::{JunctionDiode, VacuumDiode};
+pub use jfet::Jfet;
 pub use lamp::Lamp;
 pub use pentode::Pentode;
 pub use thyratron::Thyratron;
@@ -175,6 +177,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::Lamp(m) => Box::new(Lamp::new(m)),
         DeviceModel::Thyratron(m) => Box::new(Thyratron::new(m)),
         DeviceModel::Bjt(m) => Box::new(Bjt::new(m)),
+        DeviceModel::Jfet(m) => Box::new(Jfet::new(m)),
     }
 }
 

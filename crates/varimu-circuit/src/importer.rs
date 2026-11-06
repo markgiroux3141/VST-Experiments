@@ -390,9 +390,9 @@ impl Importer<'_> {
         }
         let skip: &[&str] = if matches!(macro_, "bridge" | "vr_tube") {
             &["device", "instance", "parallel"]
-        } else if macro_ == "bjt" {
+        } else if matches!(macro_, "bjt" | "jfet") {
             // its instance's fields are the device entry's
-            &["device", "instance", "parallel", "area"]
+            &["device", "instance", "parallel", "area", "temp_c"]
         } else {
             &[]
         };
@@ -401,11 +401,11 @@ impl Importer<'_> {
         }
         self.tol(&c.reference, macro_, f, &mut entry)?;
         let field = |k: &str| f.get(k).map(Value::py_str);
-        if macro_ == "bridge" || macro_ == "bjt" {
+        if matches!(macro_, "bridge" | "bjt" | "jfet") {
             let key = field("Model").unwrap_or_else(|| c.reference.clone());
             set(&mut entry, "model", Value::Str(key.clone()));
             let mut dev = map_of(vec![("device", Value::Str(c.value.clone()))]);
-            for k in ["instance", "parallel", "area"] {
+            for k in ["instance", "parallel", "area", "temp_c"] {
                 if let Some(t) = field(k) {
                     set(&mut dev, k, yaml_field(&t)?);
                 }

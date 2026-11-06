@@ -1152,6 +1152,24 @@ the U47 -> V76 chain). Steps 1-3 built:*
   version 1 (the user's call: too subtle for the work).
 - **Next:** the drawing.
 
+**B11-B13. Dynamics and EQ (2026-11-06, the user's call: the next work).** The user
+asked for two compressors: one for snappy drum attacks, one for sidechain pumping.
+[DEVICE_CANDIDATES.md](DEVICE_CANDIDATES.md)'s "Next: dynamics and EQ" has the steps and
+done-whens:
+- **B11, the SSL G bus compressor, keyed** (pumping, the drum bus): the BJT at
+  temperature, a Blackmer VCA built from matched BJTs, the detector, a KEY jack as for
+  the 670.
+- **B12, the JFET model and the UREI 1176 Rev A** (snappy drums): the JFET is
+  CHAINS_PLAN.md's WP21.
+- **B13, the Neve 1073 with its EQ:** CHAINS_PLAN.md's WP11.
+
+Status (2026-11-06; details in DEVICE_CANDIDATES.md's "Status"):
+- **Prerequisites built:** the BJT at temperature (`temp_c`), the JFET (`jfet` part,
+  `2N3819@1`, `J175@1`), the Blackmer cell from our BJTs.
+- **B11 built:** `ssl_bus_comp`, keyed; open: the user listens to the pump demo.
+- **B12:** the JFET is done; the 1176 circuit waits on better sources (its Q-bias
+  network, T&C values, the output transformer).
+
 ## Devices and components together (2026-10-29, the user's call)
 
 B9-B10 and [COMPONENT_EDITOR_PLAN.md](COMPONENT_EDITOR_PLAN.md) run interleaved, each

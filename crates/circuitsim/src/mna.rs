@@ -472,6 +472,13 @@ impl Mna {
                             stamp(&mut g, pins[1], pins[0], gmin);
                             vec![]
                         }
+                        // pins (d, g, s): gmin across both gate junctions, as ngspice's
+                        // JFET (jfetload.c).
+                        DeviceModel::Jfet(_) => {
+                            stamp(&mut g, pins[1], pins[2], gmin);
+                            stamp(&mut g, pins[1], pins[0], gmin);
+                            vec![]
+                        }
                         // pins (a, g2, g1, w, k) or (a, g, w, k)
                         DeviceModel::Thyratron(t) => {
                             let (g, k) = if t.mu_g2.is_some() { (2, 4) } else { (1, 3) };

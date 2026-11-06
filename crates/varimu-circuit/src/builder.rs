@@ -49,7 +49,7 @@ impl Cores {
 }
 
 const PART_KEYS: [&str; 3] = ["tolerance", "source", "notes"];
-const DEVICE_KEYS: [&str; 12] = [
+const DEVICE_KEYS: [&str; 13] = [
     "device",
     "name",
     "instance",
@@ -59,6 +59,7 @@ const DEVICE_KEYS: [&str; 12] = [
     "mu",
     "grid_contact_v",
     "area",
+    "temp_c",
     "events",
     "source",
     "notes",
@@ -511,7 +512,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 28] = [
+const MACROS: [&str; 29] = [
     "R",
     "C",
     "L",
@@ -529,6 +530,7 @@ const MACROS: [&str; 28] = [
     "bridge",
     "vr_tube",
     "bjt",
+    "jfet",
     "capsule",
     "capsule_dual",
     "moving_coil",
@@ -577,6 +579,7 @@ fn macro_of(kind: &str) -> Macro {
         ),
         "device" => (None, vec![p("model", Device)], false),
         "bjt" => (Some(3), vec![p("model", Device)], false),
+        "jfet" => (Some(3), vec![p("model", Device)], false),
         "pot" => (
             Some(3),
             vec![
@@ -930,6 +933,12 @@ fn expand(
                     "a BJT is placed with a `bjt` part (its series R and junction C)",
                 ));
             }
+            if matches!(model, DeviceModel::Jfet(_)) {
+                return Err(ctx.fail(
+                    name,
+                    "a JFET is placed with a `jfet` part (its series R and gate C)",
+                ));
+            }
             let pins = model.pins();
             match conn.as_list() {
                 Some(l) if l.len() == pins.len() => {
@@ -1019,6 +1028,20 @@ fn expand(
                 return Err(ctx.fail(name, "a bjt part's name starts with Q (its SPICE element)"));
             }
             parts::bjt(name, &nodes[0], &nodes[1], &nodes[2], &model)
+        }
+        "jfet" => {
+            let DeviceModel::Jfet(model) = ctx.model_of(a["model"].as_str().unwrap()).clone()
+            else {
+                let m = ctx
+                    .model_of(a["model"].as_str().unwrap())
+                    .name()
+                    .to_string();
+                return Err(ctx.fail(name, format!("jfet: {m} is not a JFET")));
+            };
+            if !name.to_uppercase().starts_with('J') {
+                return Err(ctx.fail(name, "a jfet part's name starts with J (its SPICE element)"));
+            }
+            parts::jfet(name, &nodes[0], &nodes[1], &nodes[2], &model)
         }
         "vr_tube" => {
             let DeviceModel::JunctionDiode(model) = ctx.model_of(a["model"].as_str().unwrap())
@@ -2091,6 +2114,14 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
                 }
                 None => 1.0,
             };
+            let temp_c = match e.get("temp_c") {
+                Some(x) => {
+                    let w = format!("{where_}.temp_c");
+                    let v = ctx.physical(&w, x)?;
+                    Some(ctx.float(&w, &v)?)
+                }
+                None => None,
+            };
             let n_parallel = ctx.count(
                 &format!("{where_}.parallel"),
                 e.get("parallel").unwrap_or(&Value::Int(1)),
@@ -2115,6 +2146,7 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
                     mu_spread: mu,
                     grid_contact_v: contact,
                     area,
+                    temp_c,
                 },
             )
             .map_err(|err| ctx.fail(&where_, err.0))?

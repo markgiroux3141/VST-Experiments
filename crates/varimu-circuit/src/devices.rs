@@ -12,8 +12,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use circuitsim::ir::{
-    Bjt, DeviceModel, GridCurrent, JunctionDiode, KorenPentode, KorenTriode, Lamp, Pentode,
-    PlateModel, Polarity, ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
+    Bjt, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode, KorenPentode, KorenTriode,
+    Lamp, Pentode, PlateModel, Polarity, ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
 };
 
 use crate::capsule::{self, Capsule, DualCapsule};
@@ -578,6 +578,46 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 re_ohm: or(par, "re_ohm", 0.0)?,
                 cje_f: or(par, "cje_f", 0.0)?,
                 cjc_f: or(par, "cjc_f", 0.0)?,
+                temp_k: None,
+                eg_ev: opt("eg_ev")?,
+                xti: opt("xti")?,
+                xtb: opt("xtb")?,
+            })
+        }
+        "jfet" => {
+            // jfet.py's jfet_from_data: absent values SPICE's defaults.
+            let dc = sub(d, "dc", what)?;
+            let empty = Map(Vec::new());
+            let par = match d.get("parasitics") {
+                Some(Value::Map(m)) => m,
+                _ => &empty,
+            };
+            let or = |m: &Map, k: &str, default: f64| -> Result<f64, Error> {
+                if m.contains(k) {
+                    num(m, k, what)
+                } else {
+                    Ok(default)
+                }
+            };
+            let polarity = match d.get("polarity").and_then(Value::as_str) {
+                Some("njf") => JfetPolarity::Njf,
+                Some("pjf") => JfetPolarity::Pjf,
+                _ => return Err(Error(format!("{what}: polarity must be njf or pjf"))),
+            };
+            DeviceModel::Jfet(Jfet {
+                name,
+                polarity,
+                vto_v: num(dc, "vto_v", what)?,
+                beta_a_per_v2: num(dc, "beta_a_per_v2", what)?,
+                lambda_per_v: or(dc, "lambda_per_v", 0.0)?,
+                is_a: or(dc, "is_a", 1e-14)?,
+                n: or(dc, "n", 1.0)?,
+                b: or(dc, "b", 1.0)?,
+                pb_v: or(dc, "pb_v", 1.0)?,
+                rd_ohm: or(par, "rd_ohm", 0.0)?,
+                rs_ohm: or(par, "rs_ohm", 0.0)?,
+                cgs_f: or(par, "cgs_f", 0.0)?,
+                cgd_f: or(par, "cgd_f", 0.0)?,
             })
         }
         "thyratron" => {

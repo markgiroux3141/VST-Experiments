@@ -536,6 +536,7 @@ pub enum DeviceModel {
     Lamp(Lamp),
     Thyratron(Thyratron),
     Bjt(Bjt),
+    Jfet(Jfet),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -709,6 +710,45 @@ pub struct Bjt {
     pub re_ohm: f64,
     pub cje_f: f64,
     pub cjc_f: f64,
+    /// The junction temperature (K) and SPICE's temperature parameters EG (eV), XTI, XTB;
+    /// `None`: TNOM and SPICE's defaults (`bjt.py`'s docstring, "Temperature").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temp_k: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eg_ev: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xti: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xtb: Option<f64>,
+}
+
+/// A JFET's channel type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum JfetPolarity {
+    Njf,
+    Pjf,
+}
+
+/// `varimu.devices.jfet.Jfet`: SPICE's level-1 JFET (DC); pins (d, g, s). Port currents: the
+/// drain's and the gate's. The parasitics (`rd_ohm` .. `cgd_f`) are the `jfet` part's linear
+/// elements, which the builders place around the device; the device ignores them.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Jfet {
+    pub name: String,
+    pub polarity: JfetPolarity,
+    pub vto_v: f64,
+    pub beta_a_per_v2: f64,
+    pub lambda_per_v: f64,
+    pub is_a: f64,
+    pub n: f64,
+    pub b: f64,
+    pub pb_v: f64,
+    pub rd_ohm: f64,
+    pub rs_ohm: f64,
+    pub cgs_f: f64,
+    pub cgd_f: f64,
 }
 
 /// `varimu.devices.thyratron.Thyratron`: a hot-cathode gas thyratron as a lumped plasma.
@@ -756,6 +796,7 @@ impl DeviceModel {
             DeviceModel::MagneticCore(m) => &m.name,
             DeviceModel::Lamp(m) => &m.name,
             DeviceModel::Bjt(m) => &m.name,
+            DeviceModel::Jfet(m) => &m.name,
             DeviceModel::Thyratron(m) => &m.name,
         }
     }
@@ -769,6 +810,7 @@ impl DeviceModel {
             DeviceModel::MagneticCore(_) => &["b", "ref"],
             DeviceModel::Lamp(_) => &["a", "t", "b"],
             DeviceModel::Bjt(_) => &["c", "b", "e"],
+            DeviceModel::Jfet(_) => &["d", "g", "s"],
             DeviceModel::Thyratron(t) if t.mu_g2.is_some() => &["a", "g2", "g1", "w", "k"],
             DeviceModel::Thyratron(_) => &["a", "g", "w", "k"],
         }
@@ -780,6 +822,7 @@ impl DeviceModel {
         match self {
             DeviceModel::JunctionDiode(_) => 'D',
             DeviceModel::Bjt(_) => 'Q',
+            DeviceModel::Jfet(_) => 'J',
             _ => 'X',
         }
     }
@@ -1566,6 +1609,44 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
                 ("re_ohm", q.re_ohm),
                 ("cje_f", q.cje_f),
                 ("cjc_f", q.cjc_f),
+            ] {
+                if !(x.is_finite() && x >= 0.0) {
+                    return err(format!("{name}.{what} = {x} must be >= 0"));
+                }
+            }
+            for (what, x) in [("temp_k", q.temp_k), ("eg_ev", q.eg_ev)] {
+                if let Some(x) = x {
+                    values.push((what, x));
+                }
+            }
+            for (what, x) in [("xti", q.xti), ("xtb", q.xtb)] {
+                if let Some(x) = x
+                    && !x.is_finite()
+                {
+                    return err(format!("{name}.{what} = {x} must be finite"));
+                }
+            }
+        }
+        DeviceModel::Jfet(j) => {
+            values.extend([
+                ("beta_a_per_v2", j.beta_a_per_v2),
+                ("is_a", j.is_a),
+                ("n", j.n),
+                ("b", j.b),
+                ("pb_v", j.pb_v),
+            ]);
+            if !j.vto_v.is_finite() {
+                return err(format!("{name}.vto_v = {} must be finite", j.vto_v));
+            }
+            if j.pb_v <= j.vto_v {
+                return err(format!("{name}: pb_v must exceed vto_v"));
+            }
+            for (what, x) in [
+                ("lambda_per_v", j.lambda_per_v),
+                ("rd_ohm", j.rd_ohm),
+                ("rs_ohm", j.rs_ohm),
+                ("cgs_f", j.cgs_f),
+                ("cgd_f", j.cgd_f),
             ] {
                 if !(x.is_finite() && x >= 0.0) {
                     return err(format!("{name}.{what} = {x} must be >= 0"));

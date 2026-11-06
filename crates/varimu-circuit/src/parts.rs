@@ -364,6 +364,43 @@ pub fn capacitor(name: &str, a: &str, b: &str, c_f: f64) -> Element {
     })
 }
 
+/// JFET `name` (parts.py's `jfet`): the device on its internal nodes, the model's series
+/// resistances from the terminals to them (where nonzero) and its gate capacitances.
+pub fn jfet(name: &str, d: &str, g: &str, src: &str, model: &circuitsim::ir::Jfet) -> Vec<Element> {
+    let (n, upper) = (name.to_lowercase(), name.to_uppercase());
+    let inner = |r: f64, tag: &str, outer: &str| {
+        if r > 0.0 {
+            format!("{n}_{tag}")
+        } else {
+            s(outer)
+        }
+    };
+    let di = inner(model.rd_ohm, "d", d);
+    let si = inner(model.rs_ohm, "s", src);
+    let mut els = vec![Element::Device(Device {
+        name: s(name),
+        model: model.name.clone(),
+        nodes: vec![di.clone(), s(g), si.clone()],
+    })];
+    for (tag, outer, inner, r) in [("d", d, &di, model.rd_ohm), ("s", src, &si, model.rs_ohm)] {
+        if r > 0.0 {
+            els.push(Element::Resistor(Resistor {
+                name: format!("R{upper}_{tag}"),
+                a: s(outer),
+                b: inner.clone(),
+                r_ohm: r,
+            }));
+        }
+    }
+    if model.cgs_f > 0.0 {
+        els.push(capacitor(&format!("C{upper}_gs"), g, &si, model.cgs_f));
+    }
+    if model.cgd_f > 0.0 {
+        els.push(capacitor(&format!("C{upper}_gd"), g, &di, model.cgd_f));
+    }
+    els
+}
+
 /// Transistor `name` (parts.py's `bjt`): the device on its internal nodes, the model's
 /// series resistances from the terminals to them (where nonzero) and its junction
 /// capacitances between them.
@@ -509,6 +546,8 @@ pub struct Instance {
     pub mu_spread: f64,
     pub grid_contact_v: Option<f64>,
     pub area: f64,
+    /// A BJT's junction temperature (parts.py's `temp_c`; None: TNOM).
+    pub temp_c: Option<f64>,
 }
 
 pub fn device_instance(
@@ -517,6 +556,9 @@ pub fn device_instance(
     inst: Instance,
 ) -> Result<DeviceModel, Error> {
     let n = inst.n_parallel as f64;
+    if inst.temp_c.is_some() && !matches!(base, DeviceModel::Bjt(_)) {
+        return Err(Error(format!("{name}: temp_c is for BJTs")));
+    }
     match base {
         DeviceModel::Triode(t) => {
             let k = n * inst.emission_scale;
@@ -610,7 +652,23 @@ pub fn device_instance(
             q.re_ohm /= k;
             q.cje_f *= k;
             q.cjc_f *= k;
+            q.temp_k = inst.temp_c.map(|t| t + 273.15);
             Ok(DeviceModel::Bjt(q))
+        }
+        DeviceModel::Jfet(j) => {
+            if inst.emission_scale != 1.0 {
+                return Err(Error(format!("{name}: a JFET has no emission spread")));
+            }
+            let k = n * inst.area;
+            let mut j = j.clone();
+            j.name = s(name);
+            j.beta_a_per_v2 *= k;
+            j.is_a *= k;
+            j.rd_ohm /= k;
+            j.rs_ohm /= k;
+            j.cgs_f *= k;
+            j.cgd_f *= k;
+            Ok(DeviceModel::Jfet(j))
         }
         DeviceModel::Lamp(l) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {

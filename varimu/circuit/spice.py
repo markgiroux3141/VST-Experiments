@@ -81,6 +81,7 @@ from varimu.devices import noise as nz
 from varimu.devices.bjt import Bjt
 from varimu.devices.core import TESLA_PER_V, MagneticCore
 from varimu.devices.diode import JunctionDiode
+from varimu.devices.jfet import Jfet
 from varimu.devices.pentode import Pentode
 from varimu.devices.table import TableGrid, cached_table, table_subckt
 from varimu.devices.triode import Triode, num
@@ -324,7 +325,9 @@ def noise_lines(
 
 def instance_target(model: DeviceModel) -> str:
     """What a SPICE instance line names: the model card or the subcircuit."""
-    return model.model_name if isinstance(model, JunctionDiode | Bjt) else model.subckt_name
+    if isinstance(model, JunctionDiode | Bjt | Jfet):
+        return model.model_name
+    return model.subckt_name
 
 
 def table_file(model: Triode) -> str:
@@ -353,7 +356,11 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
     if isinstance(el, Vccs):
         return f"{el.name} {el.pos} {el.neg} {el.ctrl_pos} {el.ctrl_neg} {num(el.gm_s)}"
     if isinstance(el, Device):
-        return f"{el.name} {' '.join(el.nodes)} {instance_target(models[el.model])}"
+        m = models[el.model]
+        line = f"{el.name} {' '.join(el.nodes)} {instance_target(m)}"
+        if isinstance(m, Bjt) and m.temp_k is not None:  # ngspice's instance temperature (C)
+            line += f" temp={num(m.temp_k - 273.15)}"
+        return line
     if isinstance(el, Plate | Spring | Tape | Harp):
         # The medium cut out at its ports: the pickup held at 0 V, the sense unread.
         return f"{el.name} {el.out} 0 dc 0"
@@ -520,7 +527,7 @@ def emit(
             fname = table_file(m)
             files[fname] = cached_table(m, table_grids[m.name])
             lines.append(table_subckt(m, fname))
-        elif isinstance(m, JunctionDiode | Bjt):
+        elif isinstance(m, JunctionDiode | Bjt | Jfet):
             lines.append(m.model_card())
         elif isinstance(m, MagneticCore):
             raise IRError(
