@@ -210,8 +210,9 @@ def main() -> None:
         "What to listen for: the attack's click (the tangent's strike on the anvil), the",
         "release's drop (three semitones, then gone), the bass's long sustain, the pickups'",
         "comb (A+D thin, B+D full), the rockers' colours, the knock under the attack (CL4: the",
-        "board under the anvils, subtle). Not modelled yet: aftertouch bends in renders, the",
-        "amp's real schematic.",
+        "board under the anvils, subtle). The amp is drawn from Hohner's E7 schematic (since",
+        "2026-11-06), the pickup level set so normal playing peaks at its 1% THD. Not modelled",
+        "yet: aftertouch bends in renders.",
     ]
     (OUT / "LISTEN.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     (OUT / "notes.json").write_text(
