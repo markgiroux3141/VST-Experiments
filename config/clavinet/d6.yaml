@@ -115,6 +115,20 @@ mute:
   muted_t60_s: {value: 0.3, source: "provisional: model knowledge (a muted Clavinet note is a short pluck, a few tenths of a second)"}
   fit_key: {value: 36, source: "provisional: E4, as the other fits"}
 
+keybed:
+  # The board the anvils stand on ([G13] 3.5 calls it the soundboard: 'not intended as an
+  # amplifying device, but rather as a mechanical support'). Its dimensions and plywood are
+  # provisional: the knock's spectrum and level follow from them (knock.py).
+  length_m: {value: 0.80, source: "provisional: model knowledge (the D6's case, ~0.9 m wide)"}
+  width_m: {value: 0.30, source: "provisional: model knowledge (the harp's depth under the strings)"}
+  thickness_m: {value: 0.012, source: "provisional: model knowledge (a 12 mm plywood board)"}
+  youngs_pa: {value: 9.0e+9, source: "provisional: model knowledge (birch plywood, ~8-10 GPa)"}
+  density_kg_m3: {value: 680.0, source: "provisional: model knowledge (birch plywood)"}
+  poisson: {value: 0.3, source: "provisional: model knowledge"}
+  loss_factor: {value: 0.03, source: "provisional: model knowledge (plywood, ~0.02-0.05)"}
+  anvil_line_m: {value: [0.06, 0.74], source: "provisional: model knowledge (the anvils along the board, key 1 to key 60)"}
+  anvil_y_m: {value: 0.18, source: "provisional: model knowledge (the anvil line across the board)"}
+
 losses:
   air_density_kg_m3: {value: 1.2, source: "provisional: model knowledge (air at 20 C)"}
   air_viscosity_pa_s: {value: 1.8e-5, source: "provisional: model knowledge (air at 20 C)"}

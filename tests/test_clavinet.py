@@ -172,3 +172,16 @@ def test_comb_notch() -> None:
         amps.append(amp[i] / np.sqrt(fk))  # per unit energy, roughly
     a = np.array(amps)
     assert a[k - 1] < 0.35 * np.median(a)
+
+
+def test_knock() -> None:
+    """CL4's knock (knock.py): the board under the anvils rings when the string slams onto
+    the anvil and moves the pinched string. Measured 2026-11-06: -29 to -37 dB under the note
+    in its first 200 ms (subtler than [G13]'s 'clearly audible'; the board is provisional)."""
+    a = note.play(60, 3.5, 0.4, tail_s=0.05, knock=True).emf_v["centre"]
+    b = note.play(60, 3.5, 0.4, tail_s=0.05, knock=False).emf_v["centre"]
+    seg = slice(int(0.02 * 96000), int(0.2 * 96000))
+    d = a[seg] - b[seg]
+    assert np.all(np.isfinite(a))
+    ratio_db = 20 * np.log10(np.std(d) / np.std(b[seg]))
+    assert -45 < ratio_db < -15

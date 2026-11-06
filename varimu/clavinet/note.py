@@ -40,6 +40,7 @@ import numpy as np
 from scipy import signal
 
 from varimu.clavinet import fit, pickup, spec, strings
+from varimu.clavinet import knock as keybed
 
 PICKUPS = ("centre", "bridge")
 
@@ -140,6 +141,8 @@ def play(
     params: strings.Params | None = None,
     name: str = "d6",
     level: bool = True,
+    knock: bool = True,
+    knock_s: float = 0.4,
 ) -> Played:
     """Key n struck at `velocity_m_s` (the tangent's speed), held `hold_s`, then released
     and followed for `tail_s`."""
@@ -189,10 +192,33 @@ def play(
     static_out = np.concatenate([rows_h[:4, :nh] @ us, np.zeros(4)])
     n_hold = max(int(round((hold_s - t_hold0) / h_out)), 0)
     hold_out = _closed_form(held, zh, rows_h, n_hold, h_out) + static_out[:, None]
+    knock_state = None
+    if knock and n_hold > 0:
+        # the board's ringing under the anvil, pushing the pinched string along the anvil's
+        # normal through its contact stiffness (knock.py), stepped on the held modes
+        n_k = min(n_hold, int(round(knock_s / h_out)))
+        u_kb = keybed.anvil_motion(n, st["fa"], h, n_k, h_out, name)
+        nrm = np.array([np.cos(p.tilt_rad), np.sin(p.tilt_rad)])
+        b_kn = nrm[0] * held.input(lay.ua(0)) + nrm[1] * held.input(lay.ua(1))
+        f_kn = p.anvil_k_n_m * u_kb
+        ph, e0k, e1k = _foh(held.lam, h_out)
+        zk = np.zeros_like(zh)
+        rows_hm = rows_h @ held.v
+        k_out = np.zeros((rows_h.shape[0], n_k))
+        f_prev = 0.0
+        for j in range(n_k):
+            zk = ph * zk + b_kn * (e0k * f_prev + e1k * f_kn[j])
+            f_prev = f_kn[j]
+            k_out[:, j] = np.real(rows_hm @ zk)
+        hold_out[:, :n_k] += k_out
+        knock_state = (zk, n_k)  # carried on (free) to the release
 
     # --- release: back to the released modes, the press included; the tangent pulled
     # away by the key's return force, the contacts solved until they have opened ---
     zh_end = zh * np.exp(held.lam * n_hold * h_out)
+    if knock_state is not None:
+        zk, n_k = knock_state
+        zh_end = zh_end + zk * np.exp(held.lam * (n_hold - n_k) * h_out)
     xh = held.to_phys(zh_end)
     u = xh[:nh] + us
     v = xh[nh:]
@@ -285,6 +311,7 @@ class _ContactStepper:
         fr_prev, fa_prev = self._forces(z, zt, vt)
         fy_prev, fx_prev = fr_prev - fa_prev * cs, -fa_prev * sn
         out = []
+        fa_hist = []
         t_first = t_closed = closed_since = open_since = None
         f_max = 0.0
         max_steps = int(round(max_s / h))
@@ -345,6 +372,7 @@ class _ContactStepper:
             z = zf + self.g1y * fy + self.g1x * fx
             zt, vt = ztf - cz * fr, vtf - cv * fr
             fr_prev, fa_prev, fy_prev, fx_prev = fr, fa, fy, fx
+            fa_hist.append(fa)
             f_max = max(f_max, fr)
             i += 1
             t = i * h
@@ -366,7 +394,13 @@ class _ContactStepper:
                 if i >= max_steps:
                     t_closed = closed_since
                     break
-        stats = {"t_first": t_first, "t_closed": t_closed, "f_max": f_max, "t_end": i * h}
+        stats = {
+            "t_first": t_first,
+            "t_closed": t_closed,
+            "f_max": f_max,
+            "t_end": i * h,
+            "fa": np.array(fa_hist),
+        }
         outs = np.array(out).T if out else np.zeros((8, 0))
         return z, zt, vt, outs, stats
 
