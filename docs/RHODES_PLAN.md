@@ -235,7 +235,7 @@ tine root's taper, spring masses, hammer mass, the pickup's magnet and coil, gro
 - **Not the clavinet:** "Superstition" and "Higher Ground" are a Hohner Clavinet, a struck
   string read by magnetic pickups. Its structure is the same as this plan's (a modal
   resonator into a field-solved pickup into a passive network), so it could follow cheaply
-  once this exists.
+  once this exists. Planned since 2026-11-06: [CLAVINET_PLAN.md](CLAVINET_PLAN.md).
 - **Stage and Suitcase share the action, the hammers, the tines and the pickups (the
   harp).** Only the amp differs:
   - **The Stage** is passive and plugs into an amp. The project's tube amps (the 5E3 and the

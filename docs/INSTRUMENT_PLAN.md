@@ -190,7 +190,7 @@ pickup offset, a leaky windchest, a weak blower, a dead or ciphering pipe.
 
 The Hammond (tonewheels: an electromagnetic pickup like the Rhodes) with a Leslie (a
 rotating horn and drum: Doppler and directivity in the room); the clavinet (a struck string
-with a magnetic pickup); bowed strings (stick-slip friction, tractable); brass (a lip valve
+with a magnetic pickup; planned since 2026-11-06 in [CLAVINET_PLAN.md](CLAVINET_PLAN.md)); bowed strings (stick-slip friction, tractable); brass (a lip valve
 and nonlinear wave steepening, the "brassy" shock); the acoustic guitar (a top plate like
 the soundboard).
 
