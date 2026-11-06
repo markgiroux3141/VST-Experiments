@@ -61,13 +61,14 @@ pub enum Ev {
 }
 
 impl Ev {
-    /// The event as a medium played by keys takes it (pressure: none).
+    /// The event as a medium played by keys takes it (pressure: channel aftertouch, every
+    /// key: the Clavinet's finger pressure; a harp ignores it).
     pub fn note_event(self) -> Option<NoteEvent> {
         match self {
             Ev::On { note, velocity } => Some(NoteEvent::On { note, velocity }),
             Ev::Off { note } => Some(NoteEvent::Off { note }),
             Ev::Pedal(down) => Some(NoteEvent::Pedal { down }),
-            Ev::Pressure(_) => None,
+            Ev::Pressure(value) => Some(NoteEvent::Pressure { value }),
         }
     }
 

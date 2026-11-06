@@ -5,7 +5,8 @@
 //!     cargo run --release -p varimu-app --example play -- --device fairchild_670
 //!         (--file FILE [--start S] [--seconds S] | --input [NAME] [--channel N]
 //!          | --midi [NAME] [--wave saw|square] | --hold NOTE
-//!          | --strike-all [VELOCITY] [--restrike S])
+//!          | --strike-all [VELOCITY] [--restrike S]
+//!          | --hold-bass N [--from NOTE] [--restrike S])
 //!         [--for SECONDS] [--buffer S] [--gain-db G] [--set KEY=VALUE ...] [--turn KEY=A,B]
 //!
 //! `--gain-db G` is the input gain (the Play view's normalization and trim).
@@ -24,6 +25,11 @@
 //! docs/RHODES_PLAN.md RH3) with the sustain pedal down and every MIDI note struck at
 //! VELOCITY (100), one a millisecond, 2 s in; `--restrike S` strikes them all again every S
 //! seconds (every key ringing at full strength: the worst case's load).
+//! `--hold-bass N` plays a device played by keys (the Clavinet, docs/CLAVINET_PLAN.md CL3)
+//! with its N lowest keys (from MIDI NOTE, 29 = the Clavinet's F1) struck at velocity 100,
+//! one a millisecond, 2 s in and held for the run; then every S seconds (`--restrike`, 2)
+//! the next N keys struck at once (one burst) and released S/2 later: N strings held while
+//! N strike (the strikes' contacts are a voice's costliest samples).
 //! `--noise` plays a device whose file has noise sources (device builder B5) with them (off
 //! by default, as in the app).
 //! `--end ID` puts a device at the chain's end (`panel::CHAIN_ENDS`: the plate reverb) on
@@ -82,6 +88,8 @@ fn main() -> Result<(), String> {
     let mut hold: Option<u8> = None;
     let mut strike_all: Option<u8> = None;
     let mut restrike: Option<f64> = None;
+    let mut hold_bass: Option<u8> = None;
+    let mut from_note: u8 = 29;
     let (mut end, mut end_sets, mut end_mix): (Option<String>, Vec<(String, Value)>, f64) =
         (None, Vec::new(), END_MIX);
     while let Some(a) = args.next() {
@@ -124,6 +132,8 @@ fn main() -> Result<(), String> {
                 })
             }
             "--restrike" => restrike = Some(num(args.next(), &a)?),
+            "--hold-bass" => hold_bass = Some(num(args.next(), &a)? as u8),
+            "--from" => from_note = num(args.next(), &a)? as u8,
             "--list-midi" => {
                 for p in midi::ports()? {
                     println!("{p}");
@@ -213,6 +223,31 @@ fn main() -> Result<(), String> {
                 match restrike {
                     Some(s) => std::thread::sleep(Duration::from_secs_f64(s)),
                     None => return,
+                }
+            }
+        });
+        keys
+    }));
+    // N keys held from `from_note`, the next N struck at once every `restrike` seconds.
+    let held = held.or(hold_bass.map(|n| {
+        let keys = Arc::new(Keys::default());
+        let k = keys.clone();
+        let every = restrike.unwrap_or(2.0);
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(2));
+            for note in from_note..from_note.saturating_add(n) {
+                k.message(&[0x90, note & 127, 100]);
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            let top = from_note.saturating_add(n);
+            loop {
+                std::thread::sleep(Duration::from_secs_f64(every / 2.0));
+                for note in top..top.saturating_add(n) {
+                    k.message(&[0x90, note & 127, 100]);
+                }
+                std::thread::sleep(Duration::from_secs_f64(every / 2.0));
+                for note in top..top.saturating_add(n) {
+                    k.message(&[0x80, note & 127, 0]);
                 }
             }
         });

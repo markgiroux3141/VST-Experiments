@@ -476,7 +476,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 19] = [
+pub const DEVICES: [Device; 20] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1007,6 +1007,41 @@ pub const DEVICES: [Device; 19] = [
         // clipping hard (all 73 keys at velocity 127, volume 1, draft), rounded up (60 V,
         // its full scale before C3, left it 10 dB down at its loudest).
         live_speaker_v: Some(20.0),
+    },
+    Device {
+        id: "clavinet_d6",
+        label: "Hohner Clavinet D6",
+        short: "Clavinet",
+        about: "A Hohner Clavinet D6: its strings struck and held by the tangents, its two \
+            bar pickups, the pickup and tone rockers and its transistor amp",
+        group: Group::Instruments,
+        circuit: "clavinet_d6_live",
+        // The rockers (pickups A/B x C/D as one selector; SOFT, MEDIUM, TREBLE, BRILLIANT)
+        // and the volume.
+        panel: Some(&[
+            "pickup_select",
+            "soft",
+            "medium",
+            "treble",
+            "brilliant",
+            "volume",
+        ]),
+        ahead_s: 0.25,
+        // As the Rhodes (docs/CLAVINET_PLAN.md CL3): the strings at the 96 kHz step.
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys strike the strings (note events, `Live::process_notes`; channel pressure
+        // presses the held keys harder: their pitch bends up): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
     },
     Device {
         id: "foil_reverb",
@@ -1806,7 +1841,10 @@ mod tests {
         assert_eq!(
             ids(play_menu()),
             vec![
-                (Group::Instruments, vec!["tube_synth", "rhodes_stage_5e3"]),
+                (
+                    Group::Instruments,
+                    vec!["tube_synth", "rhodes_stage_5e3", "clavinet_d6"]
+                ),
                 (Group::Drums, vec!["tube_kick", "sideman_bd"]),
                 (Group::Dynamics, vec!["fairchild_670"]),
                 (Group::Eq, vec!["pultec_eqp1a"]),

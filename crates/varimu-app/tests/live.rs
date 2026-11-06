@@ -482,3 +482,40 @@ fn the_harp_s_velocity_span_is_read_from_its_build() {
     let v = values(&knobs(pultec, eq.spec()));
     assert_eq!(eq.key_velocity_span_db(&v).unwrap(), None);
 }
+
+/// The Clavinet (docs/CLAVINET_PLAN.md, CL3): its strings are a medium played by keys; its
+/// touch spans the tangent's speed law (1-4 m/s: 12 dB); a key struck through `Live`
+/// sounds out of its amp, and channel pressure reaches the strings.
+#[test]
+fn the_clavinet_plays_from_note_events() {
+    use circuitsim::media::NoteEvent;
+    let dev = DEVICES.iter().find(|d| d.id == "clavinet_d6").unwrap();
+    let s = Settings::load(&config(), dev.quality).unwrap();
+    let Ok(circuit) = Circuit::load(&config(), dev.circuit, s.cores().unwrap()) else {
+        return; // a checkout without the strings' data
+    };
+    let v = values(&knobs(dev, circuit.spec()));
+    let span = circuit.key_velocity_span_db(&v).unwrap().unwrap();
+    assert!((span - 20.0 * 4f64.log10()).abs() < 1e-9, "{span}");
+    let mut live = Live::new(&vec![0.0; 48_000], v, circuit, s).unwrap();
+    assert!(live.has_keys());
+    let x = vec![0.0; 480];
+    let mut peak = 0.0f32;
+    for b in 0..40 {
+        let notes: Vec<(usize, NoteEvent)> = match b {
+            1 => vec![(
+                10,
+                NoteEvent::On {
+                    note: 60,
+                    velocity: 110,
+                },
+            )],
+            10 => vec![(0, NoteEvent::Pressure { value: 100 })],
+            30 => vec![(0, NoteEvent::Off { note: 60 })],
+            _ => vec![],
+        };
+        let (y, _) = live.process_notes(&x, &[], &notes).unwrap();
+        peak = y.iter().fold(peak, |p, v| p.max(v.abs()));
+    }
+    assert!(peak > 1e-3, "it sounds: {peak}");
+}

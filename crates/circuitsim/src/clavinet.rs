@@ -845,6 +845,25 @@ impl Voice {
     /// the rubber's push fr, the anvil's fa and the rubber's sideways grip fg (its shear
     /// about where it first touched), a 3x3 Newton on a forward-difference Jacobian.
     fn substeps(&mut self) {
+        #[cfg(target_arch = "x86_64")]
+        if std::is_x86_feature_detected!("avx2") {
+            // SAFETY: the CPU has AVX2 (checked above).
+            unsafe { self.substeps_avx2() };
+            return;
+        }
+        self.substeps_impl();
+    }
+
+    /// [`Voice::substeps_impl`] compiled for AVX2 (the same operations lane for lane: the
+    /// same result bit for bit; no FMA).
+    #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "avx2")]
+    unsafe fn substeps_avx2(&mut self) {
+        self.substeps_impl();
+    }
+
+    #[inline(always)]
+    fn substeps_impl(&mut self) {
         let k = self.k.clone();
         let c = &k.keys[self.i].contact;
         let st = &self.step;
