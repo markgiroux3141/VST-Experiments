@@ -264,13 +264,30 @@ separate instrument (the user's: divide-down for CPU, the Hammond Novachord as b
 vibrato is the ensemble (Claude's call, delegated); live tier the keys as a compiled medium
 (the Rhodes precedent). Milestones NV0 (sources: no schematic found yet) to NV7.
 
-The Clavinet ([docs/CLAVINET_PLAN.md](docs/CLAVINET_PLAN.md), 2026-11-06, parked until the
-user picks it up; nothing built): the Hohner D6 as the Rhodes' structure (string modes, a
-held tangent contact and a release that changes the string, the 2D pickup map, the harp's
-medium machinery) into its switches and two-stage BJT amp. The user's rule: long-standing
-prerequisites (the BJT model, CHAINS_PLAN.md's WP10) are built first inside the plan (CL0),
-not a reason to wait. Anchored on Gabrielli et al. 2013 and Remaggi et al. 2012 (a measured
-D6). Milestones CL0-CL5.
+The Clavinet ([docs/CLAVINET_PLAN.md](docs/CLAVINET_PLAN.md), 2026-11-06): the Hohner D6
+from physics, anchored on Gabrielli et al. 2013 and Remaggi et al. 2012 (a measured D6). The
+user's rule: long-standing prerequisites are built first inside a plan, not a reason to
+wait. **Built overnight 2026-11-06** (branch `clavinet`, the user delegating every call;
+the plan's "Status (2026-11-06)"):
+- **CL0:** the sources (`data/schematics/hohner_clavinet_d6/README.md`; the D6 schematic
+  still to fetch) and **the BJT model** (Gummel-Poon DC subset, part `bjt: [c, b, e]` in
+  both builders, `BC550C@1` / `BC560C@1` / `BC413C@1`; CHAINS_PLAN.md WP10 done).
+- **CL1:** `varimu/clavinet/` (outside the render cache key; `config/clavinet/d6.yaml`):
+  - each key's speaking and non-speaking segments as numeric substructures joined at the
+    anvil (slope carried through; checked against plain FE, `reference.py`), released and
+    held, both polarizations;
+  - a strike and a release with the tangent's rubber and the anvil solved inside each
+    step;
+  - the pickups by reciprocity along the string;
+  - one unknown fitted per published figure (`fit.py`, cached in `cache/clavinet/`);
+  - `tests/test_clavinet.py`, `scripts/clavinet_key_study.py`.
+- **CL2:** `config/circuits/clavinet_d6.yaml` (pickups as control inputs, the rockers as a
+  switched chain to ground, a provisional two-stage BC413C amp fitted to the paper's THD
+  and shelves; `tests/test_clavinet_amp.py`) and `scripts/clavinet_render.py (--midi F |
+  --demo)`.
+- **CL3 (the live medium) in progress.**
+
+Open: the user listens, the D6 schematic. Milestones CL0-CL5.
 
 The Victorian synth ([docs/VICTORIAN_SYNTH_PLAN.md](docs/VICTORIAN_SYNTH_PLAN.md),
 2026-11-01, the user's idea, parked until they pick it up; nothing built): a janky synth

@@ -9,8 +9,140 @@ and in RHODES_PLAN.md's "The target" ("could follow cheaply once this exists").
 are done **first, as part of this plan**, when the plan is picked up. They are not a reason
 to postpone it. So CL0 below builds them unless another track has built them already.
 
-Nothing is built. Milestones CL0-CL5, worked in order with the usual "done when"
-discipline.
+Milestones CL0-CL5, worked in order with the usual "done when" discipline. **Built
+overnight 2026-11-06 (the user: "let's build this now ... be self reliant, make decisions
+yourself"), branch `clavinet` in the worktree `VST-Experiments-clavinet`:** CL0 and CL1
+done, CL2 built (the amp provisional until the D6 schematic is read), CL3 in progress (its
+own status section below, when written). Every decision below was Claude's; each is marked
+provisional where it rests on model knowledge.
+
+## Status (2026-11-06): CL0-CL2
+
+**CL0.**
+- **Sources:** `data/schematics/hohner_clavinet_d6/README.md`. The two papers that measured
+  a D6 ([G13], [R12]), string gauges and types from sellers and forums, the D6's front end
+  (a BC 413C, clavinet.com), the E7 / C preamp notes.
+- **Not found:** the D6 schematic itself (its known copies are images and login-walled
+  attachments; the README lists them). The user fetches these:
+
+  ```
+  https://chicagoelectricpiano.com/hohner/clavinet-schematic-wiring/
+  ```
+  ```
+  https://www.vintagevibe.com/products/clavinet-preamp-rebuild-kit
+  ```
+  ```
+  https://groupdiy.com/threads/clavinet-e7.38507
+  ```
+- **Settled:** six bars of ten strings ([R12]'s dimensioned figure) and the bridge pickup
+  above the strings ([G13]).
+- **The BJT model** (commit f6646ac; CHAINS_PLAN.md WP10 marked done):
+  - the Gummel-Poon DC subset: a Python reference, ngspice's native model, circuitsim's
+    `devices/bjt.rs`;
+  - the part `bjt: [c, b, e]` in both builders, with its RB / RC / RE and CJE / CJC as
+    linear elements;
+  - `BC550C@1` and `BC560C@1` (NXP's cards), and `BC413C@1` (the BC550C's card,
+    provisional);
+  - agreement: Python vs ngspice `.op` to 2e-8; Rust bit-equal; the `bjt_stage` transient
+    vs ngspice -85 dB.
+
+**CL1, one string offline in Python** (`varimu/clavinet/`, `config/clavinet/d6.yaml`,
+`tests/test_clavinet.py` 29 tests, `scripts/clavinet_key_study.py` -> `reports/clavinet/key/`):
+
+- **Geometry:**
+  - The plain strings (keys 24-60, one 0.008 in gauge) run L ~ f^-1/2, from [G13] Fig. 6's
+    flat B. Key 60's length (18.5 cm) is solved from B(E6) = 8e-5; E6 then stands at 62% of
+    the wire's tensile strength (the forums: the originals "break easily").
+  - Tensions run 7.5 N (E3) to 60 N (E6): slack low plain strings, the largest pressure
+    bends.
+  - The wound strings (three types, copper wrap) run linearly from 0.80 m at F1. Each
+    type's core is fitted to [G13]'s B: the model gives 1.0-3.4e-4 against 1-5e-4.
+- **The string** (`strings.py`):
+  - The speaking and non-speaking segments are Hermite beam elements, reduced to their
+    fixed-interface modes plus the constraint modes of the anvil's deflection *and slope*
+    and the tailpiece end's deflection. Both polarizations are modelled.
+  - Released and held share these coordinates, so the key's release is an exact
+    projection.
+  - The pinch (anvil, rubber, sideways grip tilted 8 deg, the tangent's mass) is
+    linearized about the static press.
+  - The first version used analytic sines with the anvil as a hinge. The plain FE
+    reference (`reference.py`) showed that the hinge cut the bending path into the pinch
+    and the yarn: decays up to 100x short of loss sideways.
+  - Now the held ringing modes match the plain FE within 0.01 cents and 0.92-1.09 in decay,
+    and the released fundamental matches within 5 cents.
+- **Fits, one unknown per figure** (`fit.py`, cached in `cache/clavinet/`, ~5 min cold):
+  - the non-speaking fraction 0.168 and the yarn's dashpot 4.6 N s/m^2 (scaled with the
+    string's diameter): release drop 3 semitones at E4, gone in 0.1 s ([G13] 2.3.1,
+    Fig. 5);
+  - the rubber's wrap compliance 6.4 kN/m (the finger vibrato: +20 cents at E3 from 1 to
+    5 N, a provisional target);
+  - the tailpiece as a resistive termination (the case as a large plate) of 805 N s/m:
+    A2's fundamental 22 s ([G13] Fig. 7a);
+  - the wound strings' wrap friction 3.8e-4: A2's partials 2-5;
+  - the steel's bending loss went to its floor once the slope was carried through the
+    pinch;
+  - the mute felt's dashpot 0.08 N s/m (muted E4 0.3 s, provisional).
+- **Checks against [G13], not fitted:**
+  - the release drop is 2.4-3.2 semitones over the keyboard ("three semitones for the
+    whole keyboard");
+  - plain B 7.4e-5 measured from the partials as [G13] does (Table 1: 8-9e-5);
+  - A2's partial T60s 22 / 14 / 10.3 / 8.1 / 6.7 s (read 22 / 16 / 10.5 / 9.7 / 4.9);
+  - E4's 10.6 / 8.0 / 6.4 / 6.1 / 5.5 s (read 8.1 / 9.0 / 7.0 / 8.6 / 6.5);
+  - E6 ~5 s, F1 ~50 s.
+  - Bass releases ring 0.3-0.6 s, the plain strings' 0.09-0.14 s.
+  - The beating hypothesis: the pinch's anisotropy splits each partial into two
+    polarizations ~0.4 Hz apart at E4, the slow end of [G13]'s 0.5-2 Hz. Whether that
+    beating reaches [G13]'s 15 dB depth isn't measured yet.
+- **The pickups** (`pickup.py`):
+  - The model is the section *along* the string (each bar a 5 mm pole there), by
+    reciprocity, the wire magnetized along its axis and across it.
+  - Every string over a bar is equally sensitive, and horizontal motion is invisible to
+    first order ([R12]: 25-30 dB down).
+  - The linkage falls with height somewhat faster than [R12]'s Vizimag curve.
+  - The sections across the strings (two tried) put the gradient at the bars' ends, with
+    mid-bar strings 20-40 dB quieter, which [R12] doesn't report.
+  - The level factor is 0.32 (E4 forte 0.2 V). The keyboard's mf peaks run 0.03-0.4 V.
+- **A played key** (`note.py`):
+  - The strike: the rubber and the anvil solved inside each step on the released modes. The
+    pinch closes ~11-20 ms after first contact, with peak forces of 15-34 N.
+  - The hold in closed form on the held modes.
+  - The release: the contacts again while the key's return force pulls the tangent away.
+    Releasing at once snapped the bent string back in one step, a full-band click.
+
+**CL2, the keyboard and the electronics offline:**
+- **`varimu/clavinet/keyboard.py`:** MIDI notes summed per pickup; every key has its own
+  string, so the sum is exact.
+- **`config/circuits/clavinet_d6.yaml`:** the pickups as control inputs, the selector, the
+  tone rockers and a provisional two-stage BC413C amp on its 9 V battery. `varimu check`
+  is clean over all 64 switch combinations.
+- **The tone chain's topology** follows from [G13] Fig. 11: a switched series chain to
+  ground.
+  - TREBLE's peak lands at 1645 Hz and ALL's notch at 3675 Hz (Fig. 11: ~1.6 and
+    ~3.5 kHz).
+  - All rockers off is silent (-140 dB): the D6's known quirk.
+  - The levels are within 2-4 dB of Fig. 11.
+- **The amp's three fitted values** (`scripts/clavinet_amp_study.py --fit` ->
+  `reports/clavinet/amp/`):
+  - Q1's emitter resistor 46.6 Ohm: THD 1.0% at 400 mV;
+  - its bypass 16.4 uF: -3.0 dB at 130 Hz;
+  - the high shelf's 41 nF: +3.0 dB at 4 kHz.
+  - `tests/test_clavinet_amp.py` keeps all of these.
+- **MIDI renders** (`scripts/clavinet_render.py (--midi F | --demo)` ->
+  `reports/clavinet/renders/`):
+  - the demo (an original funk phrase, 107 notes, 12 s) renders in 80 s of strings plus
+    11 s of circuit at production;
+  - its EMF peaks 0.52 V ([G13]: ~400 mV).
+- **Not done:**
+  - the knock (CL4 as planned);
+  - aftertouch in renders (the bend is modelled statically: `fit.bend_cents`);
+  - the user hasn't listened.
+
+**Open (the user's):**
+- the listening;
+- the D6 schematic (fetch the links above);
+- whether the strings' few provisional geometry choices need sources: the wound lengths'
+  bottom (0.80 m), the anvil gap (1.5 mm), the pickup clearance (3 mm), the tangent's
+  rubber.
 
 ## Why it fits the project's methods
 
