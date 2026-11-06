@@ -251,6 +251,9 @@ pub fn structure(ir: &CircuitIr) -> Structure {
     let mut elements = BTreeSet::new();
     let mut nodes = BTreeSet::new();
     for e in ir.sections.iter().flat_map(|s| &s.elements) {
+        // A Clavinet's wear is another instrument (its own model and strike table): a
+        // change restarts the stream.
+        let worn;
         let (kind, name, ns): (&'static str, &str, Vec<&String>) = match e {
             Element::Resistor(r) => ("Resistor", &r.name, vec![&r.a, &r.b]),
             Element::Capacitor(c) => ("Capacitor", &c.name, vec![&c.a, &c.b]),
@@ -272,11 +275,17 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::Spring(p) => ("Spring", &p.name, vec![&p.sense_pos, &p.sense_neg, &p.out]),
             Element::Tape(t) => ("Tape", &t.name, vec![&t.sense_pos, &t.sense_neg, &t.out]),
             Element::Harp(h) => ("Harp", &h.name, vec![&h.out]),
-            Element::ClavStrings(c) => (
-                "ClavStrings",
-                &c.name,
-                vec![&c.centre, &c.bridge, &c.bridge_neg],
-            ),
+            Element::ClavStrings(c) => {
+                worn = match &c.wear {
+                    Some(w) => format!("{} {:016x}", c.name, circuitsim::clavinet::wear_hash(w)),
+                    None => c.name.clone(),
+                };
+                (
+                    "ClavStrings",
+                    &worn,
+                    vec![&c.centre, &c.bridge, &c.bridge_neg],
+                )
+            }
             Element::ThyratronEvents(t) => {
                 ("ThyratronEvents", &t.name, vec![&t.a, &t.g, &t.w, &t.k])
             }

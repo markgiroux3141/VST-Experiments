@@ -1043,7 +1043,9 @@ pub const DEVICES: [Device; 21] = [
         group: Group::Instruments,
         circuit: "clavinet_d6_live",
         // The rockers (pickups A/B x C/D as one selector; SOFT, MEDIUM, TREBLE, BRILLIANT)
-        // and the volume.
+        // and the volume; then the instrument's wear (docs/CLAVINET_PLAN.md, "Variation and
+        // wear": a change is another instrument, so the stream restarts and its strikes are
+        // recorded again in the background).
         panel: Some(&[
             "pickup_select",
             "soft",
@@ -1051,6 +1053,13 @@ pub const DEVICES: [Device; 21] = [
             "treble",
             "brilliant",
             "volume",
+            "wear_unit",
+            "wear_age",
+            "wear_tuning",
+            "wear_strings",
+            "wear_tangents",
+            "wear_yarn",
+            "wear_pickups",
         ]),
         ahead_s: 0.25,
         // As the Rhodes (docs/CLAVINET_PLAN.md CL3): the strings at the 96 kHz step.
@@ -1674,7 +1683,7 @@ const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 53] = [
+const LABELS: [(&str, &str); 60] = [
     ("range", "Range (AUTO: by key)"),
     ("drive", "Drive (console line amp)"),
     ("send", "Send"),
@@ -1728,6 +1737,14 @@ const LABELS: [(&str, &str); 53] = [
     ("drive", "Drive (send level)"),
     ("decay_500hz_s", "Decay at 500 Hz (s)"),
     ("return_level", "Return"),
+    // The Clavinet's wear (varimu/clavinet/wear.py): a part's amount is AGE x its share.
+    ("wear_unit", "Unit # (which instrument)"),
+    ("wear_age", "Age (0 serviced, 1 worn, 2 neglected)"),
+    ("wear_tuning", "  Tuning drift (share of age)"),
+    ("wear_strings", "  Old strings (share of age)"),
+    ("wear_tangents", "  Hard tangents (share of age)"),
+    ("wear_yarn", "  Worn yarn (share of age)"),
+    ("wear_pickups", "  Pickup heights (share of age)"),
 ];
 
 /// How a knob moves.

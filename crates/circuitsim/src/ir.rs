@@ -422,8 +422,8 @@ pub struct Harp {
 /// or above `rate_hz`, the contacts at `contact_rate_hz`. `data` is the compiled strings'
 /// header (a component version of kind `clav_strings`: `varimu.clavinet.compile`), a path
 /// relative to the repository's root ([`crate::clavinet::data_root`]) or absolute; its
-/// float64 sidecar must have the sha256 `sha256`. SPICE has no strings: ngspice sees the
-/// three nodes held at 0 V.
+/// float64 sidecar must have the sha256 `sha256`. `wear` (absent: as compiled) wears the
+/// instrument ([`ClavWear`]). SPICE has no strings: ngspice sees the three nodes held at 0 V.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ClavStrings {
@@ -435,6 +435,24 @@ pub struct ClavStrings {
     pub contact_rate_hz: f64,
     pub data: String,
     pub sha256: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wear: Option<ClavWear>,
+}
+
+/// A worn Clavinet (docs/CLAVINET_PLAN.md, "Variation and wear"; `varimu.clavinet.wear` is
+/// the reference, [`crate::clavinet::ClavModel::worn`] the port): the unit `seed` (a whole
+/// number, as the JSON's floats carry it), its `age` and each part's share of it (a part's
+/// amount is age x share, at most [`crate::clavinet::WEAR_MAX`]), every one in [0, 2].
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ClavWear {
+    pub seed: f64,
+    pub age: f64,
+    pub tuning: f64,
+    pub strings: f64,
+    pub tangents: f64,
+    pub yarn: f64,
+    pub pickups: f64,
 }
 
 /// A triode gas thyratron as technique K's event kernels (HYBRID_PHYSICS_PLAN.md H3, "K's
@@ -1310,6 +1328,10 @@ impl CircuitIr {
                         return err(format!(
                             "{name}: data names the strings' header, sha256 its sidecar's"
                         ));
+                    }
+                    if let Some(w) = &e.wear {
+                        crate::clavinet::check_wear(w)
+                            .map_err(|m| IrError(format!("{name}.wear: {m}")))?;
                     }
                     let outs = [&e.centre, &e.bridge, &e.bridge_neg];
                     for (i, o) in outs.iter().enumerate() {

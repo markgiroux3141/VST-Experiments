@@ -38,6 +38,7 @@ from varimu.circuit.ir import (
     GROUND,
     Capacitor,
     ClavStrings,
+    ClavWear,
     Coupling,
     Device,
     DeviceModel,
@@ -1041,15 +1042,40 @@ def clav_strings(
     sha256: str,
     rate_hz: float,
     contact_rate_hz: float,
+    wear: dict[str, float] | None = None,
 ) -> list[Element]:
     """A Clavinet's strings (docs/CLAVINET_PLAN.md, CL3): their pickups' EMFs V<NAME> on
     `centre` and `bridge` (to ground) and the bridge EMF negated on `bridge_neg`
-    (circuitsim's clavinet medium); the pickups' coils are the circuit's own parts."""
+    (circuitsim's clavinet medium); the pickups' coils are the circuit's own parts. `wear`:
+    `CLAV_WEAR`'s values (the instrument's wear: varimu.clavinet.wear), or None."""
+    w = None
+    if wear is not None:
+        w = ClavWear(int(wear["wear_seed"]), *(float(wear[k]) for k in CLAV_WEAR[1:]))
     return [
         ClavStrings(
-            f"V{name.upper()}", centre, bridge, bridge_neg, rate_hz, contact_rate_hz, data, sha256
+            f"V{name.upper()}",
+            centre,
+            bridge,
+            bridge_neg,
+            rate_hz,
+            contact_rate_hz,
+            data,
+            sha256,
+            w,
         )
     ]
+
+
+#: A Clavinet strings part's wear: optional, all or none, in `ClavWear`'s order.
+CLAV_WEAR = (
+    "wear_seed",
+    "wear_age",
+    "wear_tuning",
+    "wear_strings",
+    "wear_tangents",
+    "wear_yarn",
+    "wear_pickups",
+)
 
 
 #: The tape part's numerics (TAPE_PLAN.md, "Speed" and TM4: each a measured setting;

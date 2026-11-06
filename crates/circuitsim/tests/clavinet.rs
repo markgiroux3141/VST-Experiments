@@ -24,6 +24,7 @@ fn strings() -> Option<ClavStrings> {
         contact_rate_hz: 1_536_000.0,
         data: "config/components/d6_strings/1.strings.json".into(),
         sha256: h["binary"]["sha256"].as_str().expect("a sha").into(),
+        wear: None,
     })
 }
 
@@ -125,6 +126,75 @@ fn replayed_strikes_equal_computed_ones() {
     // 29 and 41 and 53 from rest, 29 again after it slept (41's re-strike materializes).
     assert_eq!(table.replays(), 4);
     assert!(computed.iter().any(|v| v[0].abs() > 1e-4), "it sounds");
+}
+
+/// A worn instrument (docs/CLAVINET_PLAN.md, "Variation and wear") has a strike table of its
+/// own, and its replays equal its computed strikes too; it plays otherwise than the compiled
+/// one, and every amount at its largest still rings every struck key without running away.
+#[test]
+fn a_worn_instrument_replays_its_own_strikes() {
+    let Some(el) = strings() else { return };
+    let worn = ClavStrings {
+        wear: Some(circuitsim::ir::ClavWear {
+            seed: 4.0,
+            age: 2.0,
+            tuning: 1.0,
+            strings: 1.0,
+            tangents: 1.0,
+            yarn: 1.0,
+            pickups: 1.0,
+        }),
+        ..el.clone()
+    };
+    let fs = 96_000.0;
+    let (model, fs_int, s) = Medium::rates(&worn, fs).expect("the strings");
+    let (compiled, _, _) = Medium::rates(&el, fs).expect("the strings");
+    assert_ne!(model.id(), compiled.id());
+    let first = model.keys[0].note;
+    let table = Arc::new(StrikeTable::new(model.clone(), fs_int, s));
+    for (note, vel) in [(29u8, 100u8), (53, 127), (77, 90)] {
+        table.ensure((note - first) as usize, vel);
+    }
+    assert!(Medium::with_strikes(&el, fs, 0, Some(table.clone())).is_err());
+    let events = [
+        (10, on(29, 100)),
+        (16, on(53, 127)),
+        (20, on(77, 90)),
+        (3000, NoteEvent::Pressure { value: 100 }),
+        (4000, NoteEvent::Off { note: 53 }),
+        (6000, NoteEvent::Off { note: 29 }),
+        (6000, NoteEvent::Off { note: 77 }),
+    ];
+    let run = |el: &ClavStrings, strikes: Option<Arc<StrikeTable>>| {
+        let mut m = Medium::with_strikes(el, fs, 2, strikes).expect("the strings");
+        for &(at, ev) in &events {
+            m.queue(at, ev);
+        }
+        m.known_until(usize::MAX);
+        (0..40_000).map(|_| m.push()).collect::<Vec<_>>()
+    };
+    let computed = run(&worn, None);
+    let replayed = run(&worn, Some(table.clone()));
+    assert_eq!(
+        computed.iter().zip(&replayed).position(|(a, b)| a != b),
+        None,
+        "the replay differs"
+    );
+    assert_eq!(table.replays(), 3);
+    let new = run(&el, None);
+    let peak = |y: &[[f64; 2]]| {
+        y.iter()
+            .map(|v| v[0].abs().max(v[1].abs()))
+            .fold(0.0, f64::max)
+    };
+    assert!(
+        computed.iter().zip(&new).any(|(a, b)| a != b),
+        "worn sounds otherwise"
+    );
+    assert!(peak(&computed) < 4.0 * peak(&new) && peak(&computed) > 1e-4);
+    // After the release, worn yarn lets the notes ring longer.
+    let tail = |y: &[[f64; 2]]| y[12_000..].iter().map(|v| v[0] * v[0]).sum::<f64>();
+    assert!(tail(&computed) > tail(&new));
 }
 
 /// The whole table recorded and saved (under cache/clavinet/), then loaded into a second

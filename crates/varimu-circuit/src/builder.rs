@@ -655,11 +655,14 @@ fn macro_of(kind: &str) -> Macro {
         ),
         "clav_strings" => (
             Some(3),
-            vec![
+            [
                 p("component", Raw),
                 p("rate_hz", Physical),
                 p("contact_rate_hz", Physical),
-            ],
+            ]
+            .into_iter()
+            .chain(CLAV_WEAR.iter().map(|k| opt(k, Physical)))
+            .collect(),
             false,
         ),
         "tape" => (
@@ -1460,6 +1463,28 @@ fn clav_strings_part(
         .map_err(|e| ctx.fail(&where_, e.0))?;
     let rate_hz = ctx.float(&format!("{name}.rate_hz"), &a["rate_hz"])?;
     let contact_rate_hz = ctx.float(&format!("{name}.contact_rate_hz"), &a["contact_rate_hz"])?;
+    let given = CLAV_WEAR.iter().filter(|k| !a[**k].is_null()).count();
+    let wear = if given == 0 {
+        None
+    } else {
+        let mut w = [0.0; 7];
+        for (x, k) in w.iter_mut().zip(CLAV_WEAR) {
+            if a[k].is_null() {
+                return Err(ctx.fail(&format!("{name}.{k}"), "the wear's values go all or none"));
+            }
+            *x = ctx.float(&format!("{name}.{k}"), &a[k])?;
+        }
+        let [seed, age, tuning, strings, tangents, yarn, pickups] = w;
+        Some(circuitsim::ir::ClavWear {
+            seed,
+            age,
+            tuning,
+            strings,
+            tangents,
+            yarn,
+            pickups,
+        })
+    };
     Ok(vec![Element::ClavStrings(circuitsim::ir::ClavStrings {
         name: format!("V{}", name.to_uppercase()),
         centre: nodes[0].clone(),
@@ -1469,8 +1494,21 @@ fn clav_strings_part(
         contact_rate_hz,
         data,
         sha256,
+        wear,
     })])
 }
+
+/// A Clavinet strings part's wear (`parts.CLAV_WEAR`): optional, all or none, in
+/// `circuitsim::ir::ClavWear`'s order.
+const CLAV_WEAR: [&str; 7] = [
+    "wear_seed",
+    "wear_age",
+    "wear_tuning",
+    "wear_strings",
+    "wear_tangents",
+    "wear_yarn",
+    "wear_pickups",
+];
 
 /// A Rhodes harp (docs/RHODES_PLAN.md, RH3; `varimu.circuit.parts.harp`): its EMF V<NAME>
 /// on <name>_e behind its coils' resistance R<NAME>_coils and inductance L<NAME>_coils

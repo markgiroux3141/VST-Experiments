@@ -64,6 +64,7 @@ def test_a_note_through_the_medium_is_the_offline_paths():
     )
     (el,) = [e for e in live.elements() if isinstance(e, ClavStrings)]
     d = {f.name: getattr(el, f.name) for f in dataclasses.fields(el)}
+    d["wear"] = dataclasses.asdict(d["wear"])  # the instrument's wear, as the IR writes it
     yc, yb, _, _, _ = circuitsim.clav_render(
         json.dumps(d), fs, n, [(on, "on", 60, 100), (off, "off", 60, 0)], 0
     )

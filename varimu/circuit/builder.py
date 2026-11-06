@@ -94,7 +94,10 @@ Macro parts (connection; params, * = required):
                 varimu.clavinet.compile), rate_hz* and contact_rate_hz* (numerics: the
                 voices' and the contacts' rate floors): the pickups' EMFs on centre and
                 bridge, the bridge's negated on bridge_neg, each to ground; its keys played
-                by note events (docs/CLAVINET_PLAN.md CL3; varimu.circuit.parts.clav_strings)
+                by note events (docs/CLAVINET_PLAN.md CL3; varimu.circuit.parts.clav_strings).
+                Optional, all or none: wear_seed, wear_age, wear_tuning, wear_strings,
+                wear_tangents, wear_yarn, wear_pickups (the instrument's wear:
+                varimu.clavinet.wear)
     tape        [rec_plus, rec_minus, out]; component* (a tape component version, NAME@N, or
                 a parameter naming one), and the machine's physical values (all *):
                 speed_m_s, f_bias_hz, bias_a_m (the bias's deep-gap field), rec_gap_m,
@@ -853,7 +856,12 @@ def _clav_strings(ctx: Context, name: str, conn: list[str], a: dict) -> list[Ele
         data, sha = clav_compile.ir_data(ref)
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
-    return parts.clav_strings(name, *conn, data, sha, a["rate_hz"], a["contact_rate_hz"])
+    given = [k for k in parts.CLAV_WEAR if a[k] is not None]
+    if given and len(given) < len(parts.CLAV_WEAR):
+        missing = sorted(set(parts.CLAV_WEAR) - set(given))
+        raise ctx.fail(f"{name}.{missing[0]}", "the wear's values go all or none")
+    wear = {k: a[k] for k in parts.CLAV_WEAR} if given else None
+    return parts.clav_strings(name, *conn, data, sha, a["rate_hz"], a["contact_rate_hz"], wear)
 
 
 def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -1074,7 +1082,12 @@ for _name, _macro in {
     "clav_strings": Macro(
         _clav_strings,
         3,
-        {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P},
+        {
+            "component": Param("raw"),
+            "rate_hz": _P,
+            "contact_rate_hz": _P,
+            **{k: Param("physical", None) for k in parts.CLAV_WEAR},
+        },
     ),
     "tape": Macro(
         _tape,

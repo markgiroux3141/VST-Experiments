@@ -53,6 +53,9 @@ import math
 
 import numpy as np
 
+from varimu.clavinet.wear import Wear
+from varimu.clavinet.wear import apply as apply_wear
+
 SLEEP_EVERY = 1024
 MODE_FLOOR = 1e-100
 PICKUPS = ("centre", "bridge")
@@ -121,15 +124,19 @@ class Voice:
         self.sleep_v = header["sleep_v"]
         self.max_force = header["pressure"]["max_force_n"]
         self.c = kd["contact"]
+        # a worn tangent's rubber (wear.py): the compression's difference under the hold force
+        self.shift = self.c.get("hold_shift_m", 0.0)
         lam_r, lam_h = arrays["released.lam"], arrays["held.lam"]
+        # a worn instrument's free rotations (wear.py; the contacts step lam_r)
+        lam_f = arrays.get("released.lam_free", lam_r)
         self.lam_r, self.lam_h = lam_r, lam_h
-        self.rot_r = np.exp(lam_r / fs_int)
+        self.rot_r = np.exp(lam_f / fs_int)
         self.ratio = 1.0
         self._set_rot_h()
         nyq = np.pi * fs_int
         rr, hr = arrays["released.rows"], arrays["held.rows"]
         self.rows_contact = rr[4:]  # the pickups through every mode (note.py's stepper)
-        self.rows_r = rr[4:] * (np.abs(lam_r.imag) < nyq)[None, :]
+        self.rows_r = rr[4:] * (np.abs(lam_f.imag) < nyq)[None, :]
         self.rows_h = hr * (np.abs(lam_h.imag) < nyq)[None, :]
         # the contacts' substep
         x = lam_r * self.h
@@ -206,7 +213,8 @@ class Voice:
         vt = float(np.sum(t[1].real * self.z.real - t[1].imag * self.z.imag))
         self.z = self._to_released()
         self.asleep = False
-        self._start(zt + self.kd["static_tangent_m"], vt, -self.c["return_force_n"], "open")
+        zt0 = zt + self.kd["static_tangent_m"] - self.shift
+        self._start(zt0, vt, -self.c["return_force_n"], "open")
 
     def _start(self, zt: float, vt: float, f_h: float, until: str) -> None:
         fr, fa = self._forces(zt, vt)
@@ -260,7 +268,7 @@ class Voice:
         self.z = (
             a["to_held.a"] @ z
             + a["to_held.b"] @ z.conj()
-            + a["to_held.t_z"] * st["zt"]
+            + a["to_held.t_z"] * (st["zt"] + self.shift)
             + a["to_held.t_v"] * st["vt"]
             + a["to_held.c"]
         )
@@ -474,8 +482,8 @@ class Voice:
 
 class Strings:
     """Every key's voice at internal rate fs k with s contact substeps per internal
-    sample; events by MIDI note: ("on", note, velocity), ("off", note), ("pressure",
-    value)."""
+    sample, the instrument worn by `wear` (`varimu.clavinet.wear`; None: as compiled);
+    events by MIDI note: ("on", note, velocity), ("off", note), ("pressure", value)."""
 
     def __init__(
         self,
@@ -484,7 +492,9 @@ class Strings:
         fs_hz: float,
         rate_hz: float = 96000.0,
         contact_rate_hz: float = 96000.0 * 16,
+        wear: Wear | None = None,
     ):
+        header, arrays = apply_wear(header, arrays, wear)
         self.header = header
         self.k = internal(fs_hz, rate_hz)
         self.s = substeps(fs_hz, self.k, contact_rate_hz)

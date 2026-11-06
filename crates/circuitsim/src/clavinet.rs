@@ -28,10 +28,18 @@
 //! state the strike leaves, bit for bit what it would compute; a string still ringing, or a
 //! strike not recorded yet, is computed. Renders that don't ask for tables compute every
 //! strike, as before.
+//!
+//! **Wear** ([`ClavModel::worn`], `varimu.clavinet.wear` the reference): an IR element's
+//! `wear` gives an instrument of its own, drawn from a seed: per key detune, old strings,
+//! hardened tangents, worn yarn and pickup heights, applied to the model once, at load
+//! (no cost per sample). The worn modes rotate freely (the hold, the released string between
+//! contacts); the contact runs keep the compiled released modes (a changed decay under the
+//! compiled residues is active under the contact's feedback). A worn model has its own
+//! strike table ([`ClavModel::id`]).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Deserialize;
@@ -92,6 +100,10 @@ struct Contact {
     tilt_rad: f64,
     grip_k_n_m: f64,
     grip_c_ns_m: f64,
+    /// A worn tangent's rubber ([`ClavModel::worn`]): the nominal rubber's compression under
+    /// the hold force less the worn one's (0 as compiled).
+    #[serde(default)]
+    hold_shift_m: f64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -164,7 +176,7 @@ struct Table {
     hi: f64,
     step: f64,
     dmax: f64,
-    dh: Vec<f64>,
+    dh: Arc<[f64]>,
 }
 
 impl Table {
@@ -192,6 +204,8 @@ pub struct ClavKey {
     bend_c: Vec<f64>,
     tables: [Table; 2],
     lam_r: Vec<C64>,
+    /// The released modes as they rotate freely (worn; `lam_r` as compiled).
+    lam_f: Vec<C64>,
     b_y: Vec<C64>,
     b_x: Vec<C64>,
     /// anvil y, x, vy, vx; centre y, vy; bridge y, vy (8 x m_r).
@@ -201,13 +215,13 @@ pub struct ClavKey {
     h_rows: Vec<Vec<C64>>,
     /// The tangent's position and velocity (2 x m_h).
     t_rows: Vec<Vec<C64>>,
-    th_a: Vec<C64>,
-    th_b: Vec<C64>,
+    th_a: Arc<[C64]>,
+    th_b: Arc<[C64]>,
     th_z: Vec<C64>,
     th_v: Vec<C64>,
     th_c: Vec<C64>,
-    rr_a: Vec<C64>,
-    rr_b: Vec<C64>,
+    rr_a: Arc<[C64]>,
+    rr_b: Arc<[C64]>,
     rr_c: Vec<C64>,
 }
 
@@ -228,6 +242,8 @@ pub struct ClavModel {
     sleep_v: f64,
     /// The sidecar's sha256 (as the header names it).
     pub sha256: String,
+    /// A worn model's wear (its hash: [`wear_hash`]); None as compiled.
+    pub wear: Option<u64>,
 }
 
 impl ClavModel {
@@ -284,8 +300,218 @@ impl ClavModel {
             num: header.contact,
             sleep_v: header.sleep_v,
             sha256: header.binary.sha256,
+            wear: None,
         })
     }
+
+    /// What tells this model's strike table apart: the sidecar's sha256, and a worn
+    /// model's wear.
+    pub fn id(&self) -> String {
+        match self.wear {
+            None => self.sha256.clone(),
+            Some(h) => format!("{}w{h:016x}", self.sha256),
+        }
+    }
+
+    /// This (compiled) model worn by `w` (`varimu.clavinet.wear.apply`, the module docs):
+    /// the big arrays shared, every key's modes, rubber and pickup clearances its own.
+    pub fn worn(&self, w: &crate::ir::ClavWear) -> ClavModel {
+        let amounts = [w.tuning, w.strings, w.tangents, w.yarn, w.pickups]
+            .map(|share| wear_amount(w.age, share));
+        let seed = w.seed as u64;
+        ClavModel {
+            keys: self
+                .keys
+                .iter()
+                .map(|k| worn_key(k, seed, amounts))
+                .collect(),
+            velocity: self.velocity.clone(),
+            max_force: self.max_force,
+            num: self.num.clone(),
+            sleep_v: self.sleep_v,
+            sha256: self.sha256.clone(),
+            wear: Some(wear_hash(w)),
+        }
+    }
+}
+
+// --- Wear (`varimu.clavinet.wear`: the constants' sources are there) -----------------
+
+/// The largest wear amount (2: beyond a realistic old instrument).
+pub const WEAR_MAX: f64 = 2.0;
+const TUNING_CENTS: f64 = 6.0;
+const STRINGS_SIGMA_REF: f64 = 6.91 / 3.8;
+const STRINGS_F_REF_HZ: f64 = 3000.0;
+const STRINGS_SPREAD: f64 = 0.3;
+const STRINGS_JITTER_CENTS: f64 = 0.5;
+const NOMINAL_SHORE: f64 = 60.0;
+const TANGENTS_SHORE: f64 = 12.0;
+const TANGENTS_SPREAD: f64 = 0.4;
+const SHORE_MAX: f64 = 90.0;
+const YARN_LOSS: f64 = 0.6;
+const YARN_SPREAD: f64 = 0.3;
+const YARN_BAND: f64 = 0.15;
+const PICKUP_BAR_M: f64 = 0.25e-3;
+const PICKUP_STRING_M: f64 = 0.15e-3;
+const PICKUP_RANGE: (f64, f64) = (0.6, 1.6);
+const BAR_STRINGS: usize = 10;
+const PAIR: f64 = 1e-12;
+
+/// The IR's checks of a wear (`wear.check`).
+pub fn check_wear(w: &crate::ir::ClavWear) -> Result<(), String> {
+    if !(w.seed.is_finite() && w.seed >= 0.0 && w.seed < 9_007_199_254_740_992.0)
+        || w.seed.fract() != 0.0
+    {
+        return Err(format!("seed {}: a whole number in [0, 2^53)", w.seed));
+    }
+    for (name, v) in [
+        ("age", w.age),
+        ("tuning", w.tuning),
+        ("strings", w.strings),
+        ("tangents", w.tangents),
+        ("yarn", w.yarn),
+        ("pickups", w.pickups),
+    ] {
+        if !(v.is_finite() && (0.0..=WEAR_MAX).contains(&v)) {
+            return Err(format!("{name} = {v}: in [0, {WEAR_MAX}]"));
+        }
+    }
+    Ok(())
+}
+
+/// A part's amount: age x its share, at most [`WEAR_MAX`].
+fn wear_amount(age: f64, share: f64) -> f64 {
+    (age * share).min(WEAR_MAX)
+}
+
+/// No wear at all: the compiled model exactly (the seed doesn't matter).
+pub fn wear_is_new(w: &crate::ir::ClavWear) -> bool {
+    [w.tuning, w.strings, w.tangents, w.yarn, w.pickups]
+        .iter()
+        .all(|&share| wear_amount(w.age, share) == 0.0)
+}
+
+/// A wear's hash (its seven numbers' bits).
+pub fn wear_hash(w: &crate::ir::ClavWear) -> u64 {
+    let bits = [
+        w.seed, w.age, w.tuning, w.strings, w.tangents, w.yarn, w.pickups,
+    ]
+    .map(|x| x.to_bits().to_le_bytes());
+    fnv(&bits.iter().map(|b| &b[..]).collect::<Vec<_>>())
+}
+
+fn wear_normals(seed: u64, name: &str, stream: usize, n: usize) -> Vec<f64> {
+    let mut out = vec![0.0; n];
+    crate::noise::normals(crate::noise::key(seed, name, stream as u32), 0, &mut out);
+    out
+}
+
+fn is_pair(l: &C64) -> bool {
+    l.1.abs() > PAIR * l.norm()
+}
+
+/// Rubber's Young's modulus from its Shore A hardness (Gent 1958; `spec.gent_youngs_pa`).
+fn gent_youngs_pa(shore_a: f64) -> f64 {
+    1e6 * 0.0981 * (56.0 + 7.62336 * shore_a) / (0.137505 * (254.0 - 2.54 * shore_a))
+}
+
+/// The released modes keeping `keep` of their damping above the string's own (`wear._yarn`).
+fn wear_yarn(lam_r: &[C64], lam_h: &[C64], keep: f64) -> Vec<C64> {
+    let mut out = lam_r.to_vec();
+    let held: Vec<(f64, f64)> = lam_h
+        .iter()
+        .filter(|l| is_pair(l))
+        .map(|l| (l.1.abs(), -l.0))
+        .collect();
+    if held.is_empty() {
+        return out;
+    }
+    let floor_all = held.iter().map(|h| h.1).fold(f64::INFINITY, f64::min);
+    for (j, l) in lam_r.iter().enumerate() {
+        if !is_pair(l) {
+            continue;
+        }
+        let f = l.1.abs();
+        let floor = held
+            .iter()
+            .filter(|h| (h.0 - f).abs() <= YARN_BAND * f)
+            .map(|h| h.1)
+            .fold(f64::INFINITY, f64::min);
+        let floor = if floor.is_finite() { floor } else { floor_all };
+        let s = -l.0;
+        if s > floor {
+            out[j] = C64(-(floor + (s - floor) * keep), l.1);
+        }
+    }
+    out
+}
+
+/// Old strings' loss: `extra` 1/s at the reference frequency, as its square (`wear._decay`).
+fn wear_decay(lam: &mut [C64], extra: f64) {
+    for l in lam.iter_mut().filter(|l| is_pair(l)) {
+        let f = l.1.abs() / (2.0 * std::f64::consts::PI);
+        let r = f / STRINGS_F_REF_HZ;
+        l.0 -= extra * (r * r);
+    }
+}
+
+/// Every oscillating mode's frequency by 2^((cents + jitter_cents z_j) / 1200).
+fn wear_tune(lam: &mut [C64], cents: f64, jitter: &[f64], jitter_cents: f64) {
+    for (l, z) in lam.iter_mut().zip(jitter) {
+        if is_pair(l) {
+            let ratio = 2f64.powf((cents + jitter_cents * z) / 1200.0);
+            l.1 *= ratio;
+        }
+    }
+}
+
+/// Key `k` worn by the amounts (tuning, strings, tangents, yarn, pickups) under `seed`.
+fn worn_key(k: &ClavKey, seed: u64, a: [f64; 5]) -> ClavKey {
+    let [tuning, strings, tangents, yarn, pickups] = a;
+    let mut k = k.clone();
+    let n = k.key;
+    let z = wear_normals(seed, "clavinet.wear", n, 6);
+    let mut lam_r = k.lam_r.clone();
+    let mut lam_h = k.lam_h.clone();
+    if yarn > 0.0 {
+        let g = yarn * (YARN_SPREAD * z[3]).exp();
+        lam_r = wear_yarn(&lam_r, &lam_h, (1.0 - YARN_LOSS).powf(g));
+    }
+    let (mr, mh) = (lam_r.len(), lam_h.len());
+    let mut jitter = vec![0.0; mr + mh];
+    if strings > 0.0 {
+        let extra = strings * STRINGS_SIGMA_REF * (STRINGS_SPREAD * z[1]).exp();
+        wear_decay(&mut lam_r, extra);
+        wear_decay(&mut lam_h, extra);
+        jitter = wear_normals(seed, "clavinet.wear.modes", n, mr + mh);
+    }
+    if tuning > 0.0 || strings > 0.0 {
+        let cents = tuning * TUNING_CENTS * z[0];
+        let jc = strings * STRINGS_JITTER_CENTS;
+        wear_tune(&mut lam_r, cents, &jitter[..mr], jc);
+        wear_tune(&mut lam_h, cents, &jitter[mr..], jc);
+    }
+    k.lam_f = lam_r;
+    k.lam_h = lam_h;
+    if tangents > 0.0 {
+        let c = &mut k.contact;
+        let shore = (NOMINAL_SHORE + tangents * TANGENTS_SHORE * (TANGENTS_SPREAD * z[2]).exp())
+            .min(SHORE_MAX);
+        let k0 = c.rubber_k;
+        let k1 = k0 * gent_youngs_pa(shore) / gent_youngs_pa(NOMINAL_SHORE);
+        let (p, f) = (c.rubber_p, c.hold_force_n);
+        c.rubber_k = k1;
+        c.hold_shift_m = (f / k0).powf(1.0 / p) - (f / k1).powf(1.0 / p);
+    }
+    if pickups > 0.0 {
+        let bar = wear_normals(seed, "clavinet.wear.bars", (n - 1) / BAR_STRINGS, 2);
+        for (j, t) in k.tables.iter_mut().enumerate() {
+            let c0 = t.clearance;
+            let moved = c0 + pickups * (PICKUP_BAR_M * bar[j] + PICKUP_STRING_M * z[4 + j]);
+            t.clearance = moved.max(PICKUP_RANGE.0 * c0).min(PICKUP_RANGE.1 * c0);
+        }
+    }
+    k
 }
 
 fn key_data(k: &KeyHeader, bytes: &[u8], points: usize) -> Result<ClavKey, String> {
@@ -360,7 +586,7 @@ fn key_data(k: &KeyHeader, bytes: &[u8], points: usize) -> Result<ClavKey, Strin
             hi: p.h_hi_m,
             step: (p.h_hi_m - p.h_lo_m) / (points - 1) as f64,
             dmax: p.dmax_dh,
-            dh,
+            dh: dh.into(),
         })
     };
     let b = &k.bend;
@@ -390,14 +616,15 @@ fn key_data(k: &KeyHeader, bytes: &[u8], points: usize) -> Result<ClavKey, Strin
         r_rows: rows(mat("released.rows", 8, mr)?, mr),
         h_rows: rows(mat("held.rows", 4, mh)?, mh),
         t_rows: rows(mat("held.tangent", 2, mh)?, mh),
-        th_a: mat("to_held.a", mh, mr)?,
-        th_b: mat("to_held.b", mh, mr)?,
+        th_a: mat("to_held.a", mh, mr)?.into(),
+        th_b: mat("to_held.b", mh, mr)?.into(),
         th_z: vec("to_held.t_z", mh)?,
         th_v: vec("to_held.t_v", mh)?,
         th_c: vec("to_held.c", mh)?,
-        rr_a: mat("release.a", mr, mh)?,
-        rr_b: mat("release.b", mr, mh)?,
+        rr_a: mat("release.a", mr, mh)?.into(),
+        rr_b: mat("release.b", mr, mh)?.into(),
         rr_c: vec("release.c", mr)?,
+        lam_f: lam_r.clone(),
         lam_r,
         lam_h,
     })
@@ -413,9 +640,39 @@ pub fn data_root() -> PathBuf {
 
 type Loaded = Mutex<HashMap<(PathBuf, String), Arc<ClavModel>>>;
 
-/// The model the IR element names, loaded once per process (by its path and sidecar
-/// sha256); its sidecar must be the one the element pins.
+/// The model the IR element names, worn by its `wear` ([`ClavModel::worn`]; a wear of
+/// nothing is the compiled model): loaded once per process (by its path and sidecar
+/// sha256), worn copies kept for the last few wears.
 pub fn load(el: &crate::ir::ClavStrings) -> Result<Arc<ClavModel>, String> {
+    let base = load_compiled(el)?;
+    let Some(w) = el.wear.as_ref().filter(|w| !wear_is_new(w)) else {
+        return Ok(base);
+    };
+    check_wear(w).map_err(|e| format!("{}.wear: {e}", el.name))?;
+    type Worn = Mutex<Vec<(String, Arc<ClavModel>)>>;
+    static WORN: OnceLock<Worn> = OnceLock::new();
+    /// Worn models kept (each holds its own modes; the big arrays are the compiled one's).
+    const KEEP: usize = 4;
+    let id = format!("{}w{:016x}", base.sha256, wear_hash(w));
+    let cache = WORN.get_or_init(Default::default);
+    if let Some((_, m)) = cache.lock().expect("worn").iter().find(|(i, _)| *i == id) {
+        return Ok(m.clone());
+    }
+    let m = Arc::new(base.worn(w));
+    let mut all = cache.lock().expect("worn");
+    if let Some((_, m)) = all.iter().find(|(i, _)| *i == id) {
+        return Ok(m.clone());
+    }
+    all.push((id, m.clone()));
+    if all.len() > KEEP {
+        all.remove(0);
+    }
+    Ok(m)
+}
+
+/// The compiled model the IR element names, loaded once per process (by its path and
+/// sidecar sha256); its sidecar must be the one the element pins.
+fn load_compiled(el: &crate::ir::ClavStrings) -> Result<Arc<ClavModel>, String> {
     static LOADED: OnceLock<Loaded> = OnceLock::new();
     let path = {
         let p = Path::new(&el.data);
@@ -682,7 +939,7 @@ impl Voice {
     fn new(model: &Arc<ClavModel>, i: usize, fs_int: f64, s: usize) -> Voice {
         let k = &model.keys[i];
         let dt = 1.0 / fs_int;
-        let free = Run::new(&k.lam_r, &k.r_rows[4..], dt, true);
+        let free = Run::new(&k.lam_f, &k.r_rows[4..], dt, true);
         let held = Run::new(&k.lam_h, &k.h_rows, dt, true);
         let step = Step::new(k, fs_int, s);
         let m = free.m.max(held.m);
@@ -826,7 +1083,8 @@ impl Voice {
         self.onto_released();
         self.asleep = false;
         let f = -key.contact.return_force_n;
-        self.start(zt + key.static_tangent, vt, f, Until::Open);
+        let zt0 = zt + key.static_tangent - key.contact.hold_shift_m;
+        self.start(zt0, vt, f, Until::Open);
     }
 
     fn start(&mut self, zt: f64, vt: f64, f_h: f64, until: Until) {
@@ -890,10 +1148,11 @@ impl Voice {
         let k = self.k.clone();
         let key = &k.keys[self.i];
         let cols = key.lam_r.len();
+        let zt = run.zt + key.contact.hold_shift_m;
         let c: Vec<C64> = (0..key.lam_h.len())
             .map(|r| {
                 key.th_c[r]
-                    .add(key.th_z[r].scale(run.zt))
+                    .add(key.th_z[r].scale(zt))
                     .add(key.th_v[r].scale(run.vt))
             })
             .collect();
@@ -1391,6 +1650,9 @@ pub struct StrikeTable {
     slots: Vec<OnceLock<StrikeRec>>,
     filled: AtomicUsize,
     replays: AtomicUsize,
+    /// No longer shared (another wear of the same strings took its place): its filling
+    /// stops and it isn't saved.
+    abandoned: AtomicBool,
 }
 
 impl std::fmt::Debug for StrikeTable {
@@ -1417,6 +1679,7 @@ impl StrikeTable {
             slots,
             filled: AtomicUsize::new(0),
             replays: AtomicUsize::new(0),
+            abandoned: AtomicBool::new(false),
         }
     }
 
@@ -1471,9 +1734,11 @@ impl StrikeTable {
     }
 
     /// Where this table is saved: `cache/clavinet/` under the repository's root, named
-    /// `strikes_<what>_<code>.bin`: `what` a hash of the strings' data and the rates, `code`
-    /// of the format and this crate's sources (a change to the code records it again; saving
-    /// removes the tables of the same `what` and older code).
+    /// `strikes_<what>_<code>.bin` (a worn model's `strikes_<what>w<wear>_<code>.bin`):
+    /// `what` a hash of the strings' data and the rates, `wear` the wear's ([`wear_hash`]),
+    /// `code` of the format and this crate's sources (a change to the code records it again;
+    /// saving removes the tables of the same `what` and wear and older code, and a worn one
+    /// the other wears' of the same `what`: one worn table is kept beside the compiled one).
     pub fn path(&self) -> PathBuf {
         let what = fnv(&[
             self.model.sha256.as_bytes(),
@@ -1481,10 +1746,19 @@ impl StrikeTable {
             &(self.s as u64).to_le_bytes(),
         ]);
         let code = fnv(&[&STRIKES_FORMAT.to_le_bytes(), crate::SOURCE_HASH.as_bytes()]);
+        let wear = match self.model.wear {
+            None => String::new(),
+            Some(h) => format!("w{h:016x}"),
+        };
         data_root()
             .join("cache")
             .join("clavinet")
-            .join(format!("strikes_{what:016x}_{code:016x}.bin"))
+            .join(format!("strikes_{what:016x}{wear}_{code:016x}.bin"))
+    }
+
+    /// Stop filling (the slots recorded so far stay) and don't save.
+    fn abandon(&self) {
+        self.abandoned.store(true, Ordering::Relaxed);
     }
 
     /// Every slot, from the saved file when there is one, else recorded on `threads`
@@ -1501,7 +1775,7 @@ impl StrikeTable {
                     on_thread();
                     loop {
                         let j = next.fetch_add(1, Ordering::Relaxed);
-                        if j >= self.slots.len() {
+                        if j >= self.slots.len() || self.abandoned.load(Ordering::Relaxed) {
                             return;
                         }
                         self.ensure(j / VELOCITIES, (j % VELOCITIES + 1) as u8);
@@ -1509,6 +1783,9 @@ impl StrikeTable {
                 });
             }
         });
+        if self.abandoned.load(Ordering::Relaxed) {
+            return Ok(());
+        }
         self.save(&path)
     }
 
@@ -1534,17 +1811,23 @@ impl StrikeTable {
         let tmp = path.with_extension(format!("tmp{}", std::process::id()));
         std::fs::write(&tmp, &out).map_err(|e| e.to_string())?;
         std::fs::rename(&tmp, path).map_err(|e| e.to_string())?;
-        // The same strings' tables from older code (and the old naming, strikes_<hash>.bin).
+        // The same strings' tables from older code (and the old naming, strikes_<hash>.bin);
+        // a worn table's, every other wear's of the same strings.
         let name = path
             .file_name()
             .and_then(|n| n.to_str())
             .unwrap_or_default();
         let what = &name[..name.len().min("strikes_".len() + 16)];
+        // the name up to its code: "strikes_<what>" or "strikes_<what>w<wear>"
+        let own = &name[..name.len().saturating_sub("_".len() + 16 + ".bin".len())];
+        let worn = self.model.wear.is_some();
         for e in std::fs::read_dir(dir).map_err(|e| e.to_string())?.flatten() {
             let n = e.file_name().to_string_lossy().into_owned();
             let stale = n != name
                 && n.ends_with(".bin")
-                && (n.starts_with(what) || (n.starts_with("strikes_") && n.len() == 28));
+                && (n.starts_with(&format!("{own}_"))
+                    || (worn && n.starts_with(&format!("{what}w")))
+                    || (n.starts_with("strikes_") && n.len() == 28));
             if stale {
                 let _ = std::fs::remove_file(e.path());
             }
@@ -1646,10 +1929,21 @@ fn shared_table(model: &Arc<ClavModel>, fs_int: f64, s: usize) -> Option<Arc<Str
     if fs_int > policy.max_rate_hz {
         return None;
     }
-    let key = (model.sha256.clone(), fs_int.to_bits(), s);
+    let key = (model.id(), fs_int.to_bits(), s);
     let mut all = tables().lock().expect("strike tables");
     if let Some(t) = all.get(&key) {
         return Some(t.clone());
+    }
+    if model.wear.is_some() {
+        // One worn table per strings and rates: the media that hold the others keep theirs.
+        let other = format!("{}w", model.sha256);
+        all.retain(|(id, f, n), t| {
+            let keep = !(id.starts_with(&other) && *f == key.1 && *n == key.2);
+            if !keep {
+                t.abandon();
+            }
+            keep
+        });
     }
     let t = Arc::new(StrikeTable::new(model.clone(), fs_int, s));
     all.insert(key, t.clone());
@@ -1754,7 +2048,7 @@ impl Medium {
         let (model, fs_int, s) = Medium::rates(el, fs)?;
         let k = (fs_int / fs).round() as usize;
         if let Some(t) = &strikes
-            && (t.model.sha256 != model.sha256 || t.fs_int != fs_int || t.s != s)
+            && (t.model.id() != model.id() || t.fs_int != fs_int || t.s != s)
         {
             return Err(format!(
                 "{}: a strike table for other rates or data",
@@ -1822,6 +2116,7 @@ impl Medium {
     pub fn same(&self, el: &crate::ir::ClavStrings) -> bool {
         el.data == self.el.data
             && el.sha256 == self.el.sha256
+            && el.wear == self.el.wear
             && el.rate_hz == self.el.rate_hz
             && el.contact_rate_hz == self.el.contact_rate_hz
     }
@@ -1891,7 +2186,7 @@ mod tests {
             hi: 3.0,
             step: 1.0,
             dmax: 3.0,
-            dh: vec![1.0, 2.0, 3.0],
+            dh: vec![1.0, 2.0, 3.0].into(),
         };
         // h = 2 - y: y = 0 reads the middle point, y = -0.5 halfway up, y = 5 the floor.
         assert_eq!(t.emf(0.0, 1.0), 2.0);

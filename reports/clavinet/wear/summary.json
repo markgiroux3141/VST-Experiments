@@ -1,0 +1,57 @@
+{
+ "age_0_unit_1": {
+  "settings": {
+   "wear_age": 0.0,
+   "wear_unit": 1
+  },
+  "quality": "draft",
+  "lufs_before": -29.747120588245416,
+  "gain_db": 6.747120588245416,
+  "peak_after": 1.4202709424573916,
+  "render_s": 7.115029573440552
+ },
+ "age_0.5_unit_1": {
+  "settings": {
+   "wear_age": 0.5,
+   "wear_unit": 1
+  },
+  "quality": "draft",
+  "lufs_before": -29.819728378573362,
+  "gain_db": 6.8197283785733624,
+  "peak_after": 1.3932041029976907,
+  "render_s": 6.7895331382751465
+ },
+ "age_1_unit_1": {
+  "settings": {
+   "wear_age": 1.0,
+   "wear_unit": 1
+  },
+  "quality": "draft",
+  "lufs_before": -29.820822765090828,
+  "gain_db": 6.820822765090828,
+  "peak_after": 1.3627998206740264,
+  "render_s": 6.771003246307373
+ },
+ "age_2_unit_1": {
+  "settings": {
+   "wear_age": 2.0,
+   "wear_unit": 1
+  },
+  "quality": "draft",
+  "lufs_before": -29.48296171437833,
+  "gain_db": 6.48296171437833,
+  "peak_after": 1.48473046111068,
+  "render_s": 8.652495861053467
+ },
+ "age_1_unit_2": {
+  "settings": {
+   "wear_age": 1.0,
+   "wear_unit": 2
+  },
+  "quality": "draft",
+  "lufs_before": -28.892468238864218,
+  "gain_db": 5.892468238864218,
+  "peak_after": 1.9218694062340163,
+  "render_s": 8.84149980545044
+ }
+}

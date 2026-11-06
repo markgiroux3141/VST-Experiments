@@ -328,6 +328,17 @@ the plan's "Status (2026-11-06)"):
     "Strikes from rest replayed").
 - **CL4 started:** the knock (`knock.py`) and tension modulation, in the Python reference.
 
+- **Wear built (2026-11-06, CLAVINET_PLAN.md "Variation and wear"):**
+  - `varimu/clavinet/wear.py` (the reference) and circuitsim's `ClavModel::worn`: per-key
+    detune, old strings, hardened tangents, worn yarn and pickup heights, drawn from a
+    seed and applied at load (no cost per sample; in the free rotations only, the contacts
+    keep the compiled modes);
+  - the IR's optional `clav_strings.wear`; the live circuit's UNIT #, AGE and per-part
+    shares on the app's panel;
+  - a worn instrument has its own strike table, recorded in the background;
+  - `scripts/clavinet_wear_demo.py` -> `reports/clavinet/wear/`. Per-strike variation is
+    not built.
+
 Open: the user listens, the D6 schematic. Milestones CL0-CL5.
 
 The Victorian synth ([docs/VICTORIAN_SYNTH_PLAN.md](docs/VICTORIAN_SYNTH_PLAN.md),

@@ -746,11 +746,56 @@ size, the anvil's geometry, coil turns and DC resistance, and the magnets.
    - per-instrument tolerance draws.
    - (Variation per key and per strike, and drift: "Variation and wear" below.)
 
-## Variation and wear (future work, 2026-11-06)
+## Variation and wear (2026-11-06)
 
-The user, after listening: "decent, but a little too regular". Nothing here is built. **The
-user's rule for it: what costs no compute goes into the live tier; what adds compute is
-production only** (prints and ⤓ Production renders, which compute every strike anyway).
+The user, after listening: "decent, but a little too regular". **The user's rule for it:
+what costs no compute goes into the live tier; what adds compute is production only**
+(prints and ⤓ Production renders, which compute every strike anyway). The user asked for
+"a slider or sliders for how worn out the instrument is".
+
+### Status (2026-11-06, branch `clav-wear`): the live tier's wear built
+
+- **Built:** the instrument's wear, applied to the compiled strings once at load, no cost
+  per sample. `varimu/clavinet/wear.py` is the reference (its docstring has the physics and
+  every constant's source), and circuitsim's `ClavModel::worn` the port (Rust against the
+  Python twin < -120 dB). It covers:
+  - per-key detune;
+  - old strings: loss growing as f^2, and each mode's frequency scattered (false beats);
+  - hardened tangents: Shore A up, Gent's modulus scaling the Hunt-Crossley stiffness;
+  - worn yarn: the released modes keep less of their damping above the string's own;
+  - pickup heights, per bar and per string.
+- **The sliders** (clavinet_d6_live.yaml's controls, on the app's Clavinet panel):
+  - UNIT # (1-64, the seed: which instrument);
+  - AGE (0 serviced, 1 a well-worn old one, 2 neglected; default 0.5);
+  - each part's share of the age (TUNING DRIFT, OLD STRINGS, HARD TANGENTS, WORN YARN,
+    PICKUP HEIGHTS; default 1, 0 keeps that part new, 2 twice as worn).
+
+  A part's amount is age x share, at most 2. AGE 0 is the compiled instrument exactly.
+- **In the IR:** an optional `wear` on the `clav_strings` element (`ClavWear`; absent:
+  unchanged IRs). The part takes `wear_seed`, `wear_age`, `wear_tuning`, `wear_strings`,
+  `wear_tangents`, `wear_yarn` and `wear_pickups`, all or none, in both builders.
+- **Where it acts:** in the free rotations only (the hold, the released string between
+  contacts). The contacts keep the compiled released modes: a decay changed under the
+  compiled residues made the driving point active, and yarn damping kept at 0.4 blew up
+  strikes on 2 of 6 keys.
+- **The strike table:** a worn instrument is its own model (`ClavModel::id`), with its own
+  strike table, recorded in the background (~75 s on the app's three threads). A change of
+  wear restarts the stream. One worn table is kept on disk beside the compiled one (208 MB
+  each); an evicted table stops filling.
+- **Load** (`examples/play.rs --hold-bass 10 --restrike 3 --for 100`, after the table filled):
+  the re-strikes of held strings are computed as before (worst blocks ~400-500% either way).
+  Dropouts were 51 worn against 10 new: worn yarn keeps released strings ringing, so more
+  re-strikes land on moving strings. Lever 2 (the cheaper contact) is the fix, as before.
+- **Heard:** `scripts/clavinet_wear_demo.py` puts the demo phrase through the live circuit
+  at ages 0 / 0.5 / 1 / 2 and a second unit -> `reports/clavinet/wear/` (-23 LUFS each).
+  The release tail's level rises with age (-91 / -73 / -62 / -49 dB).
+- **Tests:** `tests/test_clavinet_wear.py`, `crates/circuitsim/tests/clavinet.rs`
+  (`a_worn_instrument_replays_its_own_strikes`).
+- **Not built:** everything per strike. Wear varies key to key; a repeated note on one key
+  is still the same strike. The strike angle (both the live variants and production's
+  continuous angle) needs the contact to take an off-axis tangent force first. The
+  production-only list below is untouched.
+- **Open:** the user listens and judges the amounts (all provisional).
 
 ### Why it repeats today
 

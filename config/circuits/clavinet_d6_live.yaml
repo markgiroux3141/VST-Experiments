@@ -47,6 +47,16 @@ controls:
   treble: {value: 1, choices: [0, 1], unit: switch, source: "[G13] 2.1: the TREBLE rocker"}
   brilliant: {value: 0, choices: [0, 1], unit: switch, source: "[G13] 2.1: the BRILLIANT rocker"}
   volume: {value: 0.8, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model knowledge (the D6's volume knob; default a design choice)"}
+  # The instrument's wear (docs/CLAVINET_PLAN.md, "Variation and wear"; varimu/clavinet/wear.py):
+  # which unit, its age (0 freshly serviced, 1 a well-worn old one, 2 neglected) and each
+  # part's share of the age (1: as old as the instrument; 0 new, 2 twice as worn).
+  wear_unit: {value: 1, min: 1, max: 64, unit: position, source: "design choice: the instrument (the seed of its per-key draws)"}
+  wear_age: {value: 0.5, min: 0.0, max: 2.0, unit: ratio, source: "design choice (2026-11-06: a played, maintained vintage D6 by default; the user's sliders for how worn the instrument is)"}
+  wear_tuning: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: the strings' tuning drift's share of the age"}
+  wear_strings: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: the strings' age's share (dull upper partials, false beats)"}
+  wear_tangents: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: the tangents' rubber hardening's share"}
+  wear_yarn: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: the yarn's wear's share (notes ring on after release)"}
+  wear_pickups: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice: the pickup heights' scatter's share"}
 
 values:
   # --- the strings (docs/CLAVINET_PLAN.md, CL3)
@@ -125,7 +135,7 @@ sections:
       RIN: {R: [in, "0"], r: r_in_ohm, tolerance: none}
       # the strings: the centre pickup's EMF on ec, the bridge's on eb and negated on
       # ebn (each to ground), the keys played by note events
-      STRINGS: {clav_strings: [ec, eb, ebn], component: strings_model, rate_hz: strings_rate_hz, contact_rate_hz: strings_contact_rate_hz}
+      STRINGS: {clav_strings: [ec, eb, ebn], component: strings_model, rate_hz: strings_rate_hz, contact_rate_hz: strings_contact_rate_hz, wear_seed: wear_unit, wear_age: wear_age, wear_tuning: wear_tuning, wear_strings: wear_strings, wear_tangents: wear_tangents, wear_yarn: wear_yarn, wear_pickups: wear_pickups}
       # the centre pickup: EMF ec behind its coils
       RPC: {R: [ec, pc1], r: r_pickup_ohm, tolerance: none}
       LPC: {L: [pc1, pc], l: l_pickup_h}

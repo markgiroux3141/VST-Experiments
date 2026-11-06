@@ -36,6 +36,12 @@ HEADER = """\
 #
 """
 
+# The stock file's volume control (the wear's controls follow it).
+VOLUME = (
+    '  volume: {value: 0.8, min: 0.0, max: 1.0, unit: rotation, source: "provisional: model'
+    " knowledge (the D6's volume knob; default a design choice)\"}\n"
+)
+
 # (anchor in the stock file, its replacement): each anchor must occur exactly once.
 PATCHES = [
     (
@@ -63,7 +69,33 @@ PATCHES = [
         "      # the strings: the centre pickup's EMF on ec, the bridge's on eb and negated on\n"
         "      # ebn (each to ground), the keys played by note events\n"
         "      STRINGS: {clav_strings: [ec, eb, ebn], component: strings_model,"
-        " rate_hz: strings_rate_hz, contact_rate_hz: strings_contact_rate_hz}\n",
+        " rate_hz: strings_rate_hz, contact_rate_hz: strings_contact_rate_hz,"
+        " wear_seed: wear_unit, wear_age: wear_age, wear_tuning: wear_tuning,"
+        " wear_strings: wear_strings, wear_tangents: wear_tangents, wear_yarn: wear_yarn,"
+        " wear_pickups: wear_pickups}\n",
+    ),
+    (
+        VOLUME,
+        VOLUME + '  # The instrument\'s wear (docs/CLAVINET_PLAN.md, "Variation and wear";'
+        " varimu/clavinet/wear.py):\n"
+        "  # which unit, its age (0 freshly serviced, 1 a well-worn old one, 2 neglected) and"
+        " each\n"
+        "  # part's share of the age (1: as old as the instrument; 0 new, 2 twice as worn).\n"
+        '  wear_unit: {value: 1, min: 1, max: 64, unit: position, source: "design choice:'
+        ' the instrument (the seed of its per-key draws)"}\n'
+        '  wear_age: {value: 0.5, min: 0.0, max: 2.0, unit: ratio, source: "design choice'
+        " (2026-11-06: a played, maintained vintage D6 by default; the user's sliders for how"
+        ' worn the instrument is)"}\n'
+        '  wear_tuning: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design'
+        " choice: the strings' tuning drift's share of the age\"}\n"
+        '  wear_strings: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design'
+        " choice: the strings' age's share (dull upper partials, false beats)\"}\n"
+        '  wear_tangents: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design'
+        " choice: the tangents' rubber hardening's share\"}\n"
+        '  wear_yarn: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design choice:'
+        " the yarn's wear's share (notes ring on after release)\"}\n"
+        '  wear_pickups: {value: 1.0, min: 0.0, max: 2.0, unit: ratio, source: "design'
+        " choice: the pickup heights' scatter's share\"}\n",
     ),
 ]
 

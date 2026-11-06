@@ -383,6 +383,21 @@ class Harp:
 
 
 @dataclass(frozen=True)
+class ClavWear:
+    """A worn Clavinet (docs/CLAVINET_PLAN.md, "Variation and wear"; varimu.clavinet.wear is
+    the reference, circuitsim's `ClavModel::worn` the port): the unit `seed` (a whole
+    number), its `age` and each part's share of it, every one in [0, 2]."""
+
+    seed: int
+    age: float
+    tuning: float
+    strings: float
+    tangents: float
+    yarn: float
+    pickups: float
+
+
+@dataclass(frozen=True)
 class ClavStrings:
     """The Hohner Clavinet's strings (docs/CLAVINET_PLAN.md, CL3; varimu.clavinet.live is
     the reference, circuitsim's clavinet.rs the port): its keys struck, held and released
@@ -391,8 +406,9 @@ class ClavStrings:
     selector's reversed coil). The voices run at the least whole multiple of the step rate
     at or above `rate_hz`, the contacts at `contact_rate_hz`. `data` is the compiled
     strings' header (a component version of kind clav_strings: varimu.clavinet.compile), a
-    path relative to the repository's root, `sha256` its float64 sidecar's. SPICE has no
-    strings: ngspice sees the three nodes held at 0 V."""
+    path relative to the repository's root, `sha256` its float64 sidecar's. `wear` (None: as
+    compiled) wears the instrument (`ClavWear`). SPICE has no strings: ngspice sees the three
+    nodes held at 0 V."""
 
     name: str
     centre: str
@@ -402,6 +418,7 @@ class ClavStrings:
     contact_rate_hz: float
     data: str
     sha256: str
+    wear: ClavWear | None = None
 
     @property
     def outs(self) -> tuple[str, str, str]:
@@ -1157,6 +1174,7 @@ _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 # Optional fields written only when set, so IRs without them read and write as before.
 _OMITTED_WHEN_NONE = {
     (Capacitor, "v0_v"),
+    (ClavStrings, "wear"),
     (Section, "substeps"),
     (Section, "decimate"),
     (Section, "owns"),
@@ -1249,6 +1267,10 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         )
     if cls is Tape:
         return _fields(cls, d, tagged=True, medium=_decode_tape_medium)
+    if cls is ClavStrings:
+        return _fields(
+            cls, d, tagged=True, wear=lambda w: _fields(ClavWear, w, tagged=False, seed=_count)
+        )
     if cls is ThyratronEvents:
 
         def grid(v):
@@ -1338,6 +1360,13 @@ def _validate_clav_strings(el: ClavStrings, input_node: str) -> None:
     hexdigits = set("0123456789abcdefABCDEF")
     if not el.data or len(el.sha256) != 64 or not set(el.sha256) <= hexdigits:
         raise IRError(f"{el.name}: data names the strings' header, sha256 its sidecar's")
+    if el.wear is not None:
+        from varimu.clavinet import wear as clav_wear
+
+        try:
+            clav_wear.check(clav_wear.Wear(**dataclasses.asdict(el.wear)))
+        except ValueError as err:
+            raise IRError(f"{el.name}.wear: {err}") from err
     for i, o in enumerate(el.outs):
         if o in (GROUND, input_node) or o in el.outs[:i]:
             raise IRError(f"{el.name}: its pickups drive {o} (ground, the input or twice)")
