@@ -181,6 +181,7 @@ impl ComponentsView {
                 play.set_drawing(DrawingDevice {
                     name: p.name,
                     title: p.title,
+                    origin: "Components",
                     spec: p.spec,
                     lib: p.lib,
                     ahead_s,

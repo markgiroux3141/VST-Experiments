@@ -13,8 +13,16 @@ use crate::settings::{Quality, Settings};
 /// A device: a circuit file and what its panel shows.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Device {
+    /// What sessions, takes, prints and `--device` name it by (never renamed).
     pub id: &'static str,
+    /// Its name in the menus: the make and model, then what it is.
     pub label: &'static str,
+    /// Its name on a Session view's insert chip.
+    pub short: &'static str,
+    /// What it is, in a sentence: the menus' hover text.
+    pub about: &'static str,
+    /// Its section in the menus ([`Group::Retired`]: in none).
+    pub group: Group,
     /// Its circuit file (`config/circuits/<circuit>.yaml`).
     pub circuit: &'static str,
     /// The controls on its panel (None: every control but the mains settings).
@@ -63,6 +71,72 @@ pub struct Device {
     /// voltage, this many volts at full scale (the readout's states cost Play more than the
     /// amp: COMPONENT_EDITOR_PLAN.md C3; the pressure at production). None: as the file is.
     pub live_speaker_v: Option<f64>,
+}
+
+/// A section of the device menus, in their order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Group {
+    Instruments,
+    Drums,
+    Dynamics,
+    Eq,
+    Amps,
+    Reverb,
+    Delay,
+    /// In no menu: the prototypes the tube synth grew out of, kept so the sessions, takes
+    /// and `--device` that name them still play.
+    Retired,
+}
+
+impl Group {
+    /// The menus' sections, in order.
+    pub const MENU: [Group; 7] = [
+        Group::Instruments,
+        Group::Drums,
+        Group::Dynamics,
+        Group::Eq,
+        Group::Amps,
+        Group::Reverb,
+        Group::Delay,
+    ];
+
+    /// The section's heading.
+    pub fn title(self) -> &'static str {
+        match self {
+            Group::Instruments => "INSTRUMENTS",
+            Group::Drums => "DRUMS",
+            Group::Dynamics => "DYNAMICS",
+            Group::Eq => "EQ",
+            Group::Amps => "PREAMPS & AMPS",
+            Group::Reverb => "REVERB",
+            Group::Delay => "DELAY",
+            Group::Retired => "RETIRED",
+        }
+    }
+}
+
+/// The Play view's device menu: each section with its devices (indices into
+/// [`DEVICES`], in its order), empty sections left out.
+pub fn play_menu() -> Vec<(Group, Vec<usize>)> {
+    menu(Device::in_play)
+}
+
+/// The Session view's insert menu, as [`play_menu`].
+pub fn insert_menu() -> Vec<(Group, Vec<usize>)> {
+    menu(Device::as_insert)
+}
+
+fn menu(offered: fn(&Device) -> bool) -> Vec<(Group, Vec<usize>)> {
+    Group::MENU
+        .iter()
+        .map(|&g| {
+            let ids = (0..DEVICES.len())
+                .filter(|&i| DEVICES[i].group == g && offered(&DEVICES[i]))
+                .collect();
+            (g, ids)
+        })
+        .filter(|(_, ids): &(Group, Vec<usize>)| !ids.is_empty())
+        .collect()
 }
 
 /// A keyboard's pitch into a circuit's control input: the control and the keyboard's
@@ -369,6 +443,18 @@ impl Device {
         self.own_oscillator || self.pitch.is_some()
     }
 
+    /// Whether the Play view offers it: not retired, and no key input (Play has nothing
+    /// to feed one: the keyed 670 is a session insert).
+    pub fn in_play(&self) -> bool {
+        self.group != Group::Retired && self.key.is_none()
+    }
+
+    /// Whether the Session view offers it as an insert: not retired, and a processor
+    /// (it doesn't make its own sound).
+    pub fn as_insert(&self) -> bool {
+        self.group != Group::Retired && !self.plays_own_oscillator()
+    }
+
     /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`).
     pub fn live(&self, c: crate::live::Circuit) -> crate::live::Circuit {
         c.with_live_speaker(self.live_speaker_v)
@@ -393,7 +479,10 @@ impl Device {
 pub const DEVICES: [Device; 19] = [
     Device {
         id: "fairchild_670",
-        label: "Fairchild 670 (compressor)",
+        label: "Fairchild 670 Compressor",
+        short: "670",
+        about: "Fairchild 670 variable-mu tube compressor, one channel",
+        group: Group::Dynamics,
         circuit: "fairchild_670",
         panel: Some(&[
             "input_atten_db",
@@ -420,7 +509,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "pultec_eqp1a",
-        label: "Pultec EQP-1A (program EQ)",
+        label: "Pultec EQP-1A Program EQ",
+        short: "EQP-1A",
+        about: "Pultec EQP-1A passive program equalizer and its tube make-up amplifier",
+        group: Group::Eq,
         circuit: "pultec_eqp1a",
         panel: None,
         ahead_s: AHEAD_S,
@@ -439,7 +531,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "fender_5e3",
-        label: "Fender 5E3 Deluxe (guitar amp)",
+        label: "Fender Deluxe 5E3 Guitar Amp",
+        short: "5E3",
+        about: "Fender 5E3 tweed Deluxe guitar amplifier into its Jensen P12R speaker",
+        group: Group::Amps,
         circuit: "fender_5e3",
         panel: None,
         // At full volume a guitar take (data/clips' dry guitar) clips hard enough to run
@@ -464,7 +559,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "reactor_filter",
-        label: "Saturable-reactor low-pass (tube synth)",
+        label: "Saturable-Reactor Low-Pass",
+        short: "Reactor LP",
+        about: "A tube synth prototype: the passive saturable-reactor low-pass",
+        group: Group::Retired,
         circuit: "reactor_filter",
         panel: None,
         ahead_s: AHEAD_S,
@@ -485,7 +583,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "tube_filter",
-        label: "Tube reactor filter + VCA (tube synth)",
+        label: "Tube Reactor Filter",
+        short: "Reactor filter",
+        about: "A tube synth prototype: tube stages around the saturable reactor, and a VCA",
+        group: Group::Retired,
         circuit: "tube_filter",
         panel: None,
         ahead_s: AHEAD_S,
@@ -506,7 +607,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "tube_voice",
-        label: "Tube synth voice (envelope, push-pull VCA)",
+        label: "Tube Synth Voice",
+        short: "Voice",
+        about: "A tube synth prototype: a keyed envelope into a push-pull VCA",
+        group: Group::Retired,
         circuit: "tube_voice",
         panel: None,
         ahead_s: AHEAD_S,
@@ -527,7 +631,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "vco_lc",
-        label: "Tube synth VCO (b): reactor-tuned LC",
+        label: "Tube Synth Oscillator",
+        short: "VCO",
+        about: "A tube synth prototype: the reactor-tuned LC oscillator alone",
+        group: Group::Retired,
         circuit: "vco_lc",
         panel: None,
         ahead_s: AHEAD_S,
@@ -552,7 +659,11 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "tube_synth",
-        label: "Tube synth (oscillator, filter, envelope, VCA)",
+        label: "Tube Synth",
+        short: "Synth",
+        about: "The tube synth: reactor-tuned LC and gas-tube oscillators, saturable-reactor \
+            filter, ADSR, push-pull VCA, LFO and ring modulator",
+        group: Group::Instruments,
         circuit: "tube_synth",
         panel: None,
         ahead_s: AHEAD_S,
@@ -618,7 +729,11 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "tube_kick",
-        label: "Tube kick (oscillator, pitch sweep, decaying VCA)",
+        label: "Tube Kick",
+        short: "Kick",
+        about: "A tube kick drum: the synth's reactor oscillator, a pitch sweep and a decaying \
+            tube VCA",
+        group: Group::Drums,
         circuit: "tube_kick",
         panel: None,
         ahead_s: AHEAD_S,
@@ -639,7 +754,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "saw_884",
-        label: "Gas-tube sawtooth (884 thyratron)",
+        label: "Gas-Tube Sawtooth",
+        short: "884 saw",
+        about: "A tube synth prototype: the 884 thyratron sawtooth alone (now the synth's SAW)",
+        group: Group::Retired,
         circuit: "saw_884",
         panel: None,
         ahead_s: AHEAD_S,
@@ -669,7 +787,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "plate_reverb",
-        label: "Plate reverb (EMT 140 plate)",
+        label: "EMT 140 Plate Reverb",
+        short: "EMT 140",
+        about: "An EMT 140-sized steel plate with tube drive and pickup amplifiers",
+        group: Group::Reverb,
         circuit: "plate_reverb",
         panel: Some(&["drive", "decay_500hz_s", "return_level"]),
         ahead_s: AHEAD_S,
@@ -688,7 +809,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "ampex_351_echo",
-        label: "Ampex 351 slap echo (tape)",
+        label: "Ampex 351 Tape Echo",
+        short: "351 echo",
+        about: "Slapback from an Ampex 351 tape machine through a console's send and repeat",
+        group: Group::Delay,
         circuit: "ampex_351_echo",
         panel: Some(&[
             "drive",
@@ -727,7 +851,11 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "ampex_351_2_echo",
-        label: "Ampex 351-2 ping-pong echo (tape, stereo)",
+        label: "Ampex 351-2 Ping-Pong Echo",
+        short: "351-2 echo",
+        about: "Stereo ping-pong echo: an Ampex 351-2's two tracks on one tape, the console \
+            crossed",
+        group: Group::Delay,
         circuit: "ampex_351_2_echo",
         panel: Some(&[
             "drive",
@@ -773,7 +901,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "telefunken_v76",
-        label: "Telefunken V76 (mic preamp)",
+        label: "Telefunken V76 Mic Preamp",
+        short: "V76",
+        about: "Telefunken V76 tube microphone preamplifier with its bass and treble cuts",
+        group: Group::Amps,
         circuit: "telefunken_v76",
         panel: Some(&["gain_db", "bass_cut", "treble_cut"]),
         ahead_s: AHEAD_S,
@@ -794,7 +925,11 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "fairchild_670_keyed",
-        label: "Fairchild 670 + key (compressor, sidechain)",
+        label: "Fairchild 670 Compressor (sidechain)",
+        short: "670",
+        about: "The Fairchild 670 with a key input: another track's audio drives its gain \
+            reduction",
+        group: Group::Dynamics,
         circuit: "fairchild_670_keyed",
         panel: Some(&[
             "key_mode",
@@ -821,7 +956,11 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "sideman_bd",
-        label: "Side Man bass drum (Wurlitzer, 1960)",
+        label: "Wurlitzer Side Man Kick",
+        short: "Side Man",
+        about: "The Wurlitzer Side Man drum machine's bass drum (1960): a ringing 12AX7 \
+            oscillator struck by its key line",
+        group: Group::Drums,
         circuit: "sideman_bd",
         panel: None,
         ahead_s: AHEAD_S,
@@ -843,7 +982,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "rhodes_stage_5e3",
-        label: "Rhodes Mark I Stage into a 5E3 (electric piano)",
+        label: "Rhodes Stage Piano",
+        short: "Rhodes",
+        about: "A Rhodes Mark I Stage 73 electric piano played into a Fender 5E3 Deluxe",
+        group: Group::Instruments,
         circuit: "rhodes_stage_5e3",
         panel: None,
         ahead_s: 0.25,
@@ -868,7 +1010,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "foil_reverb",
-        label: "Foil reverb (EMT 240 gold foil)",
+        label: "EMT 240 Gold Foil Reverb",
+        short: "EMT 240",
+        about: "An EMT 240's gold foil with tube drive and pickup amplifiers",
+        group: Group::Reverb,
         circuit: "foil_reverb",
         panel: Some(&["drive", "decay_500hz_s", "return_level"]),
         ahead_s: AHEAD_S,
@@ -887,7 +1032,10 @@ pub const DEVICES: [Device; 19] = [
     },
     Device {
         id: "fender_6g15",
-        label: "Spring reverb (Fender 6G15, Accutronics tank)",
+        label: "Fender 6G15 Spring Reverb",
+        short: "6G15",
+        about: "Fender's 6G15 outboard tube spring reverb with an Accutronics tank",
+        group: Group::Reverb,
         circuit: "fender_6g15",
         panel: Some(&["dwell", "tone", "mixer"]),
         ahead_s: AHEAD_S,
@@ -1646,6 +1794,61 @@ mod tests {
     fn spec_of(name: &str) -> CircuitSpec {
         let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
         spec::load_circuit(&spec::circuit_path(&config, name).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn menus_offer_the_kept_devices_in_sections() {
+        let ids = |m: Vec<(Group, Vec<usize>)>| -> Vec<(Group, Vec<&str>)> {
+            m.into_iter()
+                .map(|(g, is)| (g, is.into_iter().map(|i| DEVICES[i].id).collect()))
+                .collect()
+        };
+        assert_eq!(
+            ids(play_menu()),
+            vec![
+                (Group::Instruments, vec!["tube_synth", "rhodes_stage_5e3"]),
+                (Group::Drums, vec!["tube_kick", "sideman_bd"]),
+                (Group::Dynamics, vec!["fairchild_670"]),
+                (Group::Eq, vec!["pultec_eqp1a"]),
+                (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
+                (
+                    Group::Reverb,
+                    vec!["plate_reverb", "foil_reverb", "fender_6g15"]
+                ),
+                (Group::Delay, vec!["ampex_351_echo", "ampex_351_2_echo"]),
+            ]
+        );
+        // Inserts: the processors, with the keyed 670 Play can't feed.
+        let inserts = ids(insert_menu());
+        assert_eq!(inserts[0].0, Group::Dynamics);
+        assert_eq!(inserts[0].1, vec!["fairchild_670", "fairchild_670_keyed"]);
+        assert!(inserts.iter().all(|(g, _)| *g != Group::Instruments));
+        // The retired prototypes are in no menu but still load by id.
+        let retired: Vec<&str> = DEVICES
+            .iter()
+            .filter(|d| d.group == Group::Retired)
+            .map(|d| d.id)
+            .collect();
+        assert_eq!(
+            retired,
+            vec![
+                "reactor_filter",
+                "tube_filter",
+                "tube_voice",
+                "vco_lc",
+                "saw_884"
+            ]
+        );
+        // Every chain end is offered by Play, as a reverb or a delay.
+        for id in CHAIN_ENDS {
+            let d = DEVICES.iter().find(|d| d.id == id).unwrap();
+            assert!(d.in_play() && matches!(d.group, Group::Reverb | Group::Delay));
+        }
+        // Names are unique, and each has a short name and a description.
+        for (i, d) in DEVICES.iter().enumerate() {
+            assert!(!d.short.is_empty() && !d.about.is_empty(), "{}", d.id);
+            assert!(DEVICES[..i].iter().all(|e| e.label != d.label), "{}", d.id);
+        }
     }
 
     #[test]

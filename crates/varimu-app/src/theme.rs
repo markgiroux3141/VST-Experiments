@@ -30,6 +30,11 @@ pub fn alpha(c: Color32, a: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (a * 255.0).round() as u8)
 }
 
+/// A section's heading inside a dropdown menu (the device and file pickers).
+pub fn menu_heading(ui: &mut egui::Ui, text: &str) {
+    ui.label(egui::RichText::new(text).small().strong().color(ACCENT));
+}
+
 /// The web editor's font stacks where Windows has them: Segoe UI for text, Cascadia
 /// Mono (else Consolas) for numbers and nodes, Segoe UI Symbol for the glyphs egui's
 /// own fonts lack (arrows, dots, checks). Missing files keep egui's fonts.

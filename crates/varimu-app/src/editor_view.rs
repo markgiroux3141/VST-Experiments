@@ -257,6 +257,7 @@ impl EditorView {
             play.set_drawing(DrawingDevice {
                 name: self.ed.name.clone(),
                 title: spec.title.clone(),
+                origin: "Editor",
                 spec,
                 lib: self.ed.lib.clone(),
                 ahead_s: varimu_app::player::AHEAD_S,

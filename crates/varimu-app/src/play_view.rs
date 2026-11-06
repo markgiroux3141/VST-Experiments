@@ -92,6 +92,8 @@ pub struct DrawingDevice {
     /// The drawing's name (its circuit's, once saved).
     pub name: String,
     pub title: String,
+    /// The view it comes from, for the menu ("Editor", "Components").
+    pub origin: &'static str,
     pub spec: CircuitSpec,
     pub lib: Arc<Library>,
     /// Audio kept ahead of playback (s): `AHEAD_S`, or a Play device's for its circuit
@@ -103,6 +105,9 @@ pub struct DrawingDevice {
 const DRAWING: Device = Device {
     id: "drawing",
     label: "The editor's drawing",
+    short: "Drawing",
+    about: "The editor's drawing, as it is now: edits are heard as they are made",
+    group: panel::Group::Retired,
     circuit: "",
     panel: None,
     ahead_s: AHEAD_S,
@@ -540,7 +545,7 @@ impl PlayView {
             return ("Sampler".into(), "sampler".into());
         }
         match self.drawing_device() {
-            Some(d) => (format!("Drawing: {}", d.title), d.name.clone()),
+            Some(d) => (format!("{}: {}", d.origin, d.title), d.name.clone()),
             None => {
                 let dev = &DEVICES[self.device];
                 (dev.label.to_string(), dev.id.to_string())
@@ -1230,9 +1235,18 @@ impl PlayView {
             .selected_text(shown)
             .show_ui(ui, |ui| {
                 ui.selectable_value(&mut self.end, None, "(none)");
-                for (i, d) in DEVICES.iter().enumerate() {
-                    if panel::CHAIN_ENDS.contains(&d.id) {
-                        ui.selectable_value(&mut self.end, Some(i), d.label);
+                for (group, ids) in panel::play_menu() {
+                    let ends: Vec<usize> = ids
+                        .into_iter()
+                        .filter(|&i| panel::CHAIN_ENDS.contains(&DEVICES[i].id))
+                        .collect();
+                    if ends.is_empty() {
+                        continue;
+                    }
+                    theme::menu_heading(ui, group.title());
+                    for i in ends {
+                        ui.selectable_value(&mut self.end, Some(i), DEVICES[i].label)
+                            .on_hover_text(DEVICES[i].about);
                     }
                 }
             })
@@ -1705,37 +1719,46 @@ impl PlayView {
         let drawing_title = self
             .drawing
             .as_ref()
-            .map(|d| format!("Drawing: {}", d.title));
+            .map(|d| format!("{}: {}", d.origin, d.title));
         egui::ComboBox::from_id_salt("device")
             .width(ui.available_width())
             .selected_text(shown)
+            .height(640.0)
             .show_ui(ui, |ui| {
-                for (i, d) in DEVICES.iter().enumerate() {
-                    if ui
-                        .selectable_label(!self.sampler_on && self.device == i, d.label)
-                        .clicked()
+                for (group, ids) in panel::play_menu() {
+                    theme::menu_heading(ui, group.title());
+                    for i in ids {
+                        let d = &DEVICES[i];
+                        if ui
+                            .selectable_label(!self.sampler_on && self.device == i, d.label)
+                            .on_hover_text(d.about)
+                            .clicked()
+                        {
+                            (self.device, self.sampler_on) = (i, false);
+                        }
+                    }
+                    // The sampler is an instrument with no circuit.
+                    if group == panel::Group::Instruments
+                        && ui
+                            .selectable_label(self.sampler_on, "Sampler")
+                            .on_hover_text(
+                                "A kit of sounds, one per key of an octave, and a browser of \
+                                 samples/",
+                            )
+                            .clicked()
                     {
-                        (self.device, self.sampler_on) = (i, false);
+                        self.sampler_on = true;
                     }
                 }
-                if let Some(t) = drawing_title
-                    && ui
+                if let Some(t) = drawing_title {
+                    theme::menu_heading(ui, "FROM THE EDITOR");
+                    if ui
                         .selectable_label(!self.sampler_on && self.device == DEVICES.len(), t)
-                        .on_hover_text(
-                            "The editor's drawing, as it is now: edits are heard as they are made",
-                        )
+                        .on_hover_text("As it is now: edits are heard as they are made")
                         .clicked()
-                {
-                    (self.device, self.sampler_on) = (DEVICES.len(), false);
-                }
-                if ui
-                    .selectable_label(self.sampler_on, "Sampler")
-                    .on_hover_text(
-                        "A kit of sounds, one per key of an octave, and a browser of samples/",
-                    )
-                    .clicked()
-                {
-                    self.sampler_on = true;
+                    {
+                        (self.device, self.sampler_on) = (DEVICES.len(), false);
+                    }
                 }
             });
         if (self.device, self.sampler_on) != before {
@@ -1806,7 +1829,7 @@ impl PlayView {
             .selected_text(current)
             .show_ui(ui, |ui| {
                 for (group, files) in &self.sources {
-                    ui.label(RichText::new(group).small().strong().color(theme::ACCENT));
+                    theme::menu_heading(ui, group);
                     for p in files {
                         let name = p.file_name().unwrap_or_default().to_string_lossy();
                         let on = playing_path.as_ref() == Some(p);

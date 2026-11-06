@@ -1795,10 +1795,10 @@ impl SessionView {
             ui.spacing_mut().item_spacing.x = 4.0;
             for k in 0..self.session.tracks[i].inserts.len() {
                 let slot = &self.session.tracks[i].inserts[k];
-                let name = find_device(&slot.device).map_or(slot.device.clone(), |d| {
-                    d.label.split(" (").next().unwrap_or(d.label).to_string()
-                });
-                let mut short = name.split_whitespace().last().unwrap_or(&name).to_string();
+                let (name, mut short) = find_device(&slot.device).map_or_else(
+                    || (slot.device.clone(), slot.device.clone()),
+                    |d| (d.label.to_string(), d.short.to_string()),
+                );
                 if let Some(r) = slot.key.as_ref().filter(|_| print_key_input(slot)) {
                     let key = self
                         .session
@@ -1839,10 +1839,14 @@ impl SessionView {
                 });
             }
             ui.menu_button(RichText::new("+").small(), |ui| {
-                for d in DEVICES.iter().filter(|d| !d.plays_own_oscillator()) {
-                    if ui.button(d.label).clicked() {
-                        add = Some(d.id);
-                        ui.close();
+                for (group, ids) in vpanel::insert_menu() {
+                    theme::menu_heading(ui, group.title());
+                    for j in ids {
+                        let d = &DEVICES[j];
+                        if ui.button(d.label).on_hover_text(d.about).clicked() {
+                            add = Some(d.id);
+                            ui.close();
+                        }
                     }
                 }
             })
