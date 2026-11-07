@@ -37,22 +37,29 @@
 //!
 //! **Inserts** (docs/SESSION_FX_PLAN.md, F2): under each track's strip its chain of devices
 //! (+ adds one; a click selects one, its panel opens at the bottom; right-click bypasses,
-//! moves or removes it). The chain is rendered on the active take in the background
-//! (`varimu_app::print`, at most [`MAX_PRINT_JOBS`] at a time, none while recording or
-//! while a knob is held), and the track plays that render (a preview: the inserts stay
-//! editable): ✓ ready, ◔ rendering, … waiting
-//! (the older print plays meanwhile), ! failed. The first insert's trim is set once from
-//! the take's loudest stretch to the alignment level (-18 dBFS); later ones start at 0 dB.
+//! moves or removes it). **Prints are made when asked for** (docs/SESSION_EDITING_PLAN.md
+//! SE1, decision 2): Print on the insert row or in the panel, Print inserts (n) in the
+//! session line, Ctrl+R with the track selected. The chain is rendered on the active take
+//! in the background (`varimu_app::print`, at most [`MAX_PRINT_JOBS`] at a time, none
+//! while recording or while a knob is held), and the track plays that render (a preview:
+//! the inserts stay editable): ✓ printed, ◔ printing, … waiting, ○ changed and not printed
+//! (the last print plays, stale, or the take dry), ! failed. A chain that isn't current is
+//! looked up in the prints' cache by itself (undo finds the old print), never rendered.
+//! The first insert's trim is set once from the take's loudest stretch to the alignment
+//! level (-18 dBFS); later ones start at 0 dB.
 //!
 //! **Event takes** (docs/MIDI_TAKES_PLAN.md N1, N3, N4): Record with a device played from
 //! the MIDI keyboard records its performance: the device restarts fresh (a defined start,
 //! PREPARING while it settles), then the count-in and the take. The lane plays the audio
 //! heard; a take's ♪ badge says what it plays (draft (live), proxy, draft, PROD, stale) and
 //! what renders. Double-click an event take (or its context menu) for the piano roll
-//! (`crate::piano_roll`): each edit is a new revision of the take, one undo step, rendered
-//! behind at the take's quality once editing pauses for a second (the older render plays
-//! meanwhile, stale). Render at production is on demand (the take's context menu, or
-//! ⤓ Production for every event take); a production render, once there, is what plays
+//! (`crate::piano_roll`): each edit is a new revision of the take, one undo step, and
+//! **nothing renders until asked** (SE1): the roll's Render, the take's menu, Render edits
+//! (n) in the session line, Ctrl+R. Until then an edited take plays its revision through
+//! the device's proxy where it has one (made offline at once, `proxy::render_performance`;
+//! decision 1), else its last render, stale. Render at production is on demand too (the
+//! take's context menu, the roll's ⤓ PROD, or ⤓ Production for every event take); a
+//! production render, once there, is what plays
 //! unless the track plays drafts (context menu). Each track's strip has ⤓ PROD for its own
 //! take (◔ while it renders, PROD ✓ once it plays), and a take's context menu bounces it
 //! to audio: its production render (made first if it isn't there) as a new audio take on the
@@ -74,15 +81,17 @@
 //! Space plays the session with it and its knobs, trim, make-up and bypass are heard as
 //! they turn (an instrument playing from the Play view gives way only to a panel just
 //! opened, and plays again when it closes; one started while a panel is open closes the
-//! panel). The other tracks play their prints; the inserts after it aren't heard. The
-//! track isn't rendered while it is auditioned: closing the panel renders it. No recording
-//! while auditioning.
+//! panel). The other tracks play their prints; the inserts after it aren't heard. Closing
+//! the panel prints nothing (Print does). No recording while auditioning.
+//!
+//! **Export** with something not rendered or printed waits, and offers "Render them and
+//! export"; Export final… asks for every render and print it needs itself.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 use serde_json::{Value, json};
@@ -174,12 +183,21 @@ struct Drag {
     press_x: f32,
 }
 
-/// A track's chain printing: what it is made from, the take, the job.
+/// A track's chain printing: what it is made from, the take, the job; `lookup`: only
+/// looking for the print in the cache (SE1: a print is made when asked for).
 struct PrintJob {
     signature: String,
     take: String,
     job: Job,
     cancelled: bool,
+    lookup: bool,
+}
+
+/// A take's proxy stand-in being made on a thread (take id, revision).
+struct ProxyJob {
+    id: String,
+    rev: u32,
+    handle: std::thread::JoinHandle<Vec<f32>>,
 }
 
 /// An insert playing live (F3): which, what its input is (to see it change), and what
@@ -260,6 +278,16 @@ pub struct SessionView {
     /// panel is open (track, slot), each device's knobs (by id).
     jobs: Vec<PrintJob>,
     print_errors: HashMap<String, String>,
+    /// Tracks (by id) whose print was asked for and hasn't started (SE1); chains already
+    /// looked up in the cache (by signature).
+    print_wanted: HashSet<String>,
+    looked_up: HashSet<String>,
+    /// Renders of event takes asked for and not started yet (take, revision, quality).
+    render_queue: Vec<(String, u32, Quality)>,
+    /// Each device's proxy tables (None: it has none), and the stand-ins being made.
+    proxy_tables: HashMap<String, Option<Arc<varimu_app::proxy::Tables>>>,
+    proxy_jobs: Vec<ProxyJob>,
+    proxy_tried: HashSet<(String, u32)>,
     insert_sel: Option<(usize, usize)>,
     knobs: HashMap<String, Result<Vec<Knob>, String>>,
     audition: Option<Audition>,
@@ -279,7 +307,6 @@ pub struct SessionView {
     take_jobs: Vec<TakeJob>,
     tried: HashSet<(String, u32, Quality, bool)>,
     take_errors: HashMap<(String, u32, Quality), String>,
-    last_edit: Option<Instant>,
     roll: Option<Roll>,
     /// The Play view's device has a proxy (set every frame: the strips offer it).
     proxy_available: bool,
@@ -446,6 +473,20 @@ impl SessionView {
                 )
             }
         };
+        let mut v = SessionView::with_session(repo, session, saved, calibrations);
+        v.error = error;
+        v.import_normalize = import_normalize;
+        v.import_target_dbfs = import_target_dbfs;
+        v
+    }
+
+    /// A view on `session` (its prefs not read: tests use this on a scratch session).
+    fn with_session(
+        repo: &Path,
+        session: Session,
+        saved: bool,
+        calibrations: Vec<Calibration>,
+    ) -> SessionView {
         let undo = if saved {
             session.load_history()
         } else {
@@ -475,9 +516,15 @@ impl SessionView {
             cal_channel: 0,
             calibrate: Calibrate::Idle,
             last: None,
-            error,
+            error: None,
             jobs: Vec::new(),
             print_errors: HashMap::new(),
+            print_wanted: HashSet::new(),
+            looked_up: HashSet::new(),
+            render_queue: Vec::new(),
+            proxy_tables: HashMap::new(),
+            proxy_jobs: Vec::new(),
+            proxy_tried: HashSet::new(),
             insert_sel: None,
             knobs: HashMap::new(),
             audition: None,
@@ -490,7 +537,6 @@ impl SessionView {
             take_jobs: Vec::new(),
             tried: HashSet::new(),
             take_errors: HashMap::new(),
-            last_edit: None,
             roll: None,
             proxy_available: false,
             bounces: HashSet::new(),
@@ -500,8 +546,8 @@ impl SessionView {
             import: None,
             import_note: None,
             lanes: Vec::new(),
-            import_normalize,
-            import_target_dbfs,
+            import_normalize: ImportNormalize::Off,
+            import_target_dbfs: ALIGNMENT_DBFS,
         }
     }
 
@@ -714,14 +760,32 @@ impl SessionView {
                 i.key_pressed(egui::Key::Z) && i.modifiers.command && !i.modifiers.shift,
             )
         });
-        let (redo, save) = ui.input(|i| {
+        let (redo, save, render) = ui.input(|i| {
             (
                 i.modifiers.command
                     && (i.key_pressed(egui::Key::Y)
                         || (i.key_pressed(egui::Key::Z) && i.modifiers.shift)),
                 i.modifiers.command && i.key_pressed(egui::Key::S),
+                i.modifiers.command && i.key_pressed(egui::Key::R),
             )
         });
+        // Ctrl+R: the roll's take, else the selected take, else the selected track: its
+        // take's render and its print, whichever isn't current (SE1).
+        if render {
+            let at = match (&self.roll, self.selected) {
+                (Some(r), _) => self.session.tracks.get(r.track).and_then(|t| {
+                    t.takes
+                        .iter()
+                        .position(|k| k.id == r.take)
+                        .map(|k| (r.track, Some(k)))
+                }),
+                (None, Some((t, k))) => Some((t, Some(k))),
+                (None, None) => self.session.armed.map(|t| (t, None)),
+            };
+            if let Some((t, k)) = at {
+                self.render_track(t, k);
+            }
+        }
         if redo {
             self.redo();
         }
@@ -1276,9 +1340,10 @@ impl SessionView {
         Ok(p)
     }
 
-    /// Prints: finished ones to their tracks, ones no track wants any more cancelled, and
-    /// new ones started for chains whose print isn't current (not while recording or while
-    /// a gesture is in progress: a knob held prints once, when it's let go).
+    /// Prints: finished ones to their tracks, ones no track wants any more cancelled. A
+    /// print is made only when asked for ([`SessionView::request_print`]; SE1, decision 2);
+    /// a chain not current is looked up in the cache (undo, a session opened), never
+    /// rendered by itself. Nothing starts while recording or while a gesture is in progress.
     fn poll_prints(&mut self, ctx: &egui::Context, recording: bool) {
         let rate = self.session.rate;
         let mut i = 0;
@@ -1307,7 +1372,7 @@ impl SessionView {
                         }
                     }
                 }
-                Some(Err(e)) if !j.cancelled => {
+                Some(Err(e)) if !j.cancelled && !j.lookup => {
                     self.print_errors.insert(j.signature, e);
                 }
                 _ => {}
@@ -1322,6 +1387,24 @@ impl SessionView {
                 j.cancelled = true;
             }
         }
+        // Asked for: a track's key tracks print first when they aren't current.
+        let asked: Vec<usize> = (0..self.session.tracks.len())
+            .filter(|&i| self.print_wanted.contains(&self.session.tracks[i].id))
+            .collect();
+        for t in asked {
+            if self.session.print_current(t) {
+                let id = self.session.tracks[t].id.clone();
+                self.print_wanted.remove(&id);
+                continue;
+            }
+            for k in self.session.key_tracks(t) {
+                if !self.session.print_current(k) {
+                    self.print_wanted.insert(self.session.tracks[k].id.clone());
+                }
+            }
+        }
+        let ids: HashSet<String> = self.session.tracks.iter().map(|t| t.id.clone()).collect();
+        self.print_wanted.retain(|id| ids.contains(id));
         let busy = recording
             || self.recording.is_some()
             || ctx.input(|i| i.pointer.any_down())
@@ -1329,46 +1412,108 @@ impl SessionView {
         if !busy {
             let config = self.root.join("config");
             let cache = self.session.dir.join("prints");
-            let auditioned = self.audition.as_ref().map(|a| a.track);
-            for (ti, t) in self.session.tracks.iter().enumerate() {
-                if Some(ti) == auditioned {
-                    continue;
-                }
-                let running = self.jobs.iter().filter(|j| !j.cancelled).count();
-                if running >= MAX_PRINT_JOBS {
-                    break;
-                }
+            for ti in 0..self.session.tracks.len() {
+                let t = &self.session.tracks[ti];
                 let (Some(sig), Some(k)) = (self.session.chain_signature(ti), t.active_take())
                 else {
                     continue;
                 };
-                // A keyed track waits for its key tracks' prints (one print per change).
                 if self.session.print_current(ti)
-                    || !self.session.keys_ready(ti)
                     || self.print_errors.contains_key(&sig)
-                    || self.jobs.iter().any(|j| !j.cancelled && j.signature == sig)
+                    || self
+                        .jobs
+                        .iter()
+                        .any(|j| !j.cancelled && !j.lookup && j.signature == sig)
                 {
                     continue;
                 }
+                let asked = self.print_wanted.contains(&t.id);
+                let lookup = !asked;
+                if lookup
+                    && (self.looked_up.contains(&sig)
+                        || self.jobs.iter().any(|j| !j.cancelled && j.signature == sig))
+                {
+                    continue;
+                }
+                // A keyed track waits for its key tracks' prints (one print per change).
+                if asked && !self.session.keys_ready(ti) {
+                    continue;
+                }
+                let running = self
+                    .jobs
+                    .iter()
+                    .filter(|j| !j.cancelled && j.lookup == lookup)
+                    .count();
+                if running >= MAX_PRINT_JOBS {
+                    continue;
+                }
                 let slots: Vec<Slot> = t.inserts.iter().filter(|s| !s.bypass).cloned().collect();
-                self.jobs.push(PrintJob {
-                    job: Job::spawn(
+                let input = k.sound(t.drafts).0.clone();
+                let sides = self.session.sidechains(ti);
+                let job = if lookup {
+                    Job::lookup(config.clone(), slots, sides, input, rate, cache.clone())
+                } else {
+                    Job::spawn(
                         config.clone(),
                         slots,
-                        self.session.sidechains(ti),
-                        k.sound(t.drafts).0.clone(),
+                        sides,
+                        input,
                         rate,
                         Some(cache.clone()),
-                    ),
+                    )
+                };
+                let (id, take) = (t.id.clone(), k.id.clone());
+                if lookup {
+                    self.looked_up.insert(sig.clone());
+                } else {
+                    self.print_wanted.remove(&id);
+                }
+                self.jobs.push(PrintJob {
+                    job,
                     signature: sig,
-                    take: k.id.clone(),
+                    take,
                     cancelled: false,
+                    lookup,
                 });
             }
         }
-        if !self.jobs.is_empty() {
+        if !self.jobs.is_empty() || !self.print_wanted.is_empty() {
             ctx.request_repaint_after(Duration::from_millis(100));
         }
+    }
+
+    /// Print track `t`'s chain (SE1: the Print buttons, Ctrl+R): its key tracks first when
+    /// they aren't current. A print that failed is tried again.
+    fn request_print(&mut self, t: usize) {
+        let Some(track) = self.session.tracks.get(t) else {
+            return;
+        };
+        let id = track.id.clone();
+        if let Some(sig) = self.session.chain_signature(t) {
+            self.print_errors.remove(&sig);
+        }
+        self.print_wanted.insert(id);
+    }
+
+    /// Tracks whose chain isn't printed as it is now (and has something to print), not
+    /// asked for or printing yet.
+    fn prints_missing(&self) -> Vec<usize> {
+        (0..self.session.tracks.len())
+            .filter(|&i| !self.session.print_current(i) && !self.printing(i))
+            .collect()
+    }
+
+    /// Whether track `t`'s print is asked for or running.
+    fn printing(&self, t: usize) -> bool {
+        let Some(track) = self.session.tracks.get(t) else {
+            return false;
+        };
+        self.print_wanted.contains(&track.id)
+            || self.session.chain_signature(t).is_some_and(|sig| {
+                self.jobs
+                    .iter()
+                    .any(|j| !j.cancelled && !j.lookup && j.signature == sig)
+            })
     }
 
     /// Insert `k` of track `t`'s state: its glyph, colour and what it says on hover.
@@ -1409,23 +1554,34 @@ impl SessionView {
                 ),
             };
         }
+        let plays = if track.playing(self.session.rate).is_some_and(|p| p.2) {
+            "the last print plays, stale"
+        } else {
+            "the track plays dry"
+        };
         if self.session.print_current(t) {
             (
                 "✓".into(),
                 theme::OK,
-                "rendered for playback (still editable; ⤓ Render bakes it into a new take)".into(),
+                "printed for playback (still editable; ⤓ Render bakes it into a new take)".into(),
             )
-        } else if !self.session.keys_ready(t) {
+        } else if self.printing(t) && !self.session.keys_ready(t) {
             (
                 "…".into(),
                 theme::WARN,
-                "waiting for its key track to render (the older render plays meanwhile)".into(),
+                format!("waiting for its key track to print ({plays} meanwhile)"),
+            )
+        } else if self.printing(t) {
+            (
+                "…".into(),
+                theme::WARN,
+                format!("waiting to print ({plays} meanwhile)"),
             )
         } else {
             (
-                "…".into(),
+                "○".into(),
                 theme::WARN,
-                "waiting to render (the older render plays meanwhile)".into(),
+                format!("inserts changed · not printed ({plays}; Print, or Ctrl+R)"),
             )
         }
     }
@@ -1489,6 +1645,7 @@ impl SessionView {
         let rate = self.session.rate;
         let mut changed = false;
         let mut remove = false;
+        let mut print = false;
         let mut render: Option<bool> = None;
         let mut moved: Option<usize> = None;
         let n = self.session.tracks[t].inserts.len();
@@ -1530,13 +1687,24 @@ impl SessionView {
             ui.label(RichText::new(&live_line).small().color(theme::ACCENT))
                 .on_hover_text(
                     "While this panel is open the device plays live on the track (Space plays \
-                     the session); closing it renders the chain again for playback. The \
-                     inserts after it \
-                     aren't heard meanwhile.",
+                     the session); Print renders the chain for playback when you're happy \
+                     with it (nothing prints by itself). The inserts after it aren't heard \
+                     meanwhile.",
                 );
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui.button("✕").on_hover_text("Close the panel").clicked() {
                     self.insert_sel = None;
+                }
+                if !self.session.print_current(t)
+                    && !self.printing(t)
+                    && ui
+                        .button(RichText::new("Print").color(theme::ACCENT))
+                        .on_hover_text(
+                            "Render the track's chain for playback (in the background; Ctrl+R)",
+                        )
+                        .clicked()
+                {
+                    print = true;
                 }
                 if ui.button("Remove").clicked() {
                     remove = true;
@@ -1684,6 +1852,9 @@ impl SessionView {
             self.insert_sel = None;
             self.start_bake(t, production);
         }
+        if print {
+            self.request_print(t);
+        }
         if changed {
             self.save();
         }
@@ -1788,6 +1959,7 @@ impl SessionView {
     /// The row of insert chips under a track's strip (+ adds one).
     fn inserts_row(&mut self, ui: &mut egui::Ui, i: usize) -> bool {
         let mut changed = false;
+        let mut print = false;
         let mut bake: Option<bool> = None;
         let mut add: Option<&'static str> = None;
         let mut action: Option<(usize, &'static str)> = None;
@@ -1852,9 +2024,24 @@ impl SessionView {
             })
             .response
             .on_hover_text(
-                "Add a device to this track's chain (rendered in the background for \
-                 playback; open it to hear it live while you turn it)",
+                "Add a device to this track's chain (open it to hear it live while you turn \
+                 it; Print renders the chain for playback)",
             );
+            let has_chain = self.session.chain_signature(i).is_some();
+            if has_chain && !self.session.print_current(i) && !self.printing(i) {
+                let b = egui::Button::new(RichText::new("Print").small().color(theme::ACCENT))
+                    .min_size(egui::vec2(0.0, 18.0));
+                if ui
+                    .add(b)
+                    .on_hover_text(
+                        "The inserts changed since the last print: render the chain for \
+                         playback (in the background; Ctrl+R with the track selected)",
+                    )
+                    .clicked()
+                {
+                    print = true;
+                }
+            }
             if self.session.tracks[i].inserts.iter().any(|s| !s.bypass) {
                 match &self.bake {
                     Some(b) if b.track == i => {
@@ -1909,6 +2096,9 @@ impl SessionView {
         });
         if let Some(production) = bake {
             self.start_bake(i, production);
+        }
+        if print {
+            self.request_print(i);
         }
         if let Some((k, what)) = action {
             let ins = &mut self.session.tracks[i].inserts;
@@ -2350,6 +2540,48 @@ impl SessionView {
             }
         }
         self.export_controls(ui);
+        let (edits, prints) = (self.renders_missing(), self.prints_missing());
+        if !edits.is_empty()
+            && ui
+                .small_button(format!("Render edits ({})", edits.len()))
+                .on_hover_text(
+                    "Render every edited MIDI take that isn't rendered on its device yet (a \
+                     draft, at the quality it was played at; they play the proxy or their \
+                     last render until then)",
+                )
+                .clicked()
+        {
+            for &(t, k) in &edits {
+                self.request_render(t, k, false);
+            }
+        }
+        if !prints.is_empty()
+            && ui
+                .small_button(format!("Print inserts ({})", prints.len()))
+                .on_hover_text(
+                    "Print every track whose inserts changed since its last print (it plays \
+                     that print, stale, or dry until then)",
+                )
+                .clicked()
+        {
+            for &t in &prints {
+                self.request_print(t);
+            }
+        }
+        if !edits.is_empty()
+            && !prints.is_empty()
+            && ui
+                .small_button(format!("Render all ({})", edits.len() + prints.len()))
+                .on_hover_text("Both: the edited takes' renders and the inserts' prints")
+                .clicked()
+        {
+            for (t, k) in edits {
+                self.request_render(t, k, false);
+            }
+            for t in prints {
+                self.request_print(t);
+            }
+        }
         let missing = self.production_missing();
         if !missing.is_empty()
             && ui
@@ -2796,6 +3028,16 @@ impl SessionView {
                     if t.takes[k].events.is_some() {
                         if ui.button("Piano roll").clicked() {
                             take_action = Some((k, 0));
+                            ui.close();
+                        }
+                        let needs = t.takes[k].needs_render(t.drafts);
+                        if ui
+                            .add_enabled(needs, egui::Button::new("Render the edit (draft)"))
+                            .on_hover_text("Render this revision on the device at the quality it was played at (Ctrl+R)")
+                            .on_disabled_hover_text("Its revision is rendered")
+                            .clicked()
+                        {
+                            take_action = Some((k, 4));
                             ui.close();
                         }
                         let has = t.takes[k].has_render(Quality::Production);
@@ -3263,6 +3505,7 @@ impl SessionView {
         match take_action {
             Some((k, 0)) => self.open_roll(i, k),
             Some((k, 1)) => self.render_production(i, k),
+            Some((k, 4)) => self.request_render(i, k, false),
             Some((k, 3)) => self.bounce(i, k),
             Some((_, 2)) => {
                 let t = &mut self.session.tracks[i];
@@ -3299,6 +3542,17 @@ impl SessionView {
         let mut line = take.sound(track.drafts).2.badge().to_string();
         if e.rev > 0 {
             line.push_str(&format!(" · rev {}", e.rev));
+        }
+        if take.needs_render(track.drafts) {
+            let pending = self
+                .render_queue
+                .iter()
+                .any(|(i, r, _)| *i == take.id && *r == e.rev);
+            line.push_str(if pending {
+                " · render queued"
+            } else {
+                " · edited, not rendered (Ctrl+R)"
+            });
         }
         for j in self
             .take_jobs
@@ -3365,6 +3619,8 @@ impl SessionView {
                 }
             }
             self.save();
+            // A final asks for its renders: the prints follow the inserts' new quality.
+            self.render_audible();
         }
         self.export_note = None;
         self.export = Some(Export::Waiting {
@@ -3752,6 +4008,18 @@ impl SessionView {
                     .color(theme::ACCENT),
                 )
                 .on_hover_text(problems.join("\n"));
+                let idle = !self.audible_stale().is_empty();
+                if idle
+                    && ui
+                        .small_button("Render them and export")
+                        .on_hover_text(
+                            "Render and print what the export waits for (in the background); \
+                             the export follows once they land",
+                        )
+                        .clicked()
+                {
+                    self.render_audible();
+                }
                 if ui
                     .small_button("✕")
                     .on_hover_text("Cancel the export")
@@ -3763,6 +4031,28 @@ impl SessionView {
             Some(Export::Writing { .. }) => {
                 ui.label(RichText::new("⤓ writing…").small().color(theme::ACCENT));
             }
+        }
+    }
+
+    /// The audible tracks whose take isn't rendered or whose print isn't current, not asked
+    /// for yet (what an export waits for).
+    fn audible_stale(&self) -> Vec<usize> {
+        let any_solo = self.session.tracks.iter().any(|t| t.solo);
+        let edits: HashSet<usize> = self.renders_missing().into_iter().map(|(t, _)| t).collect();
+        let prints: HashSet<usize> = self.prints_missing().into_iter().collect();
+        (0..self.session.tracks.len())
+            .filter(|&i| {
+                let t = &self.session.tracks[i];
+                (if any_solo { t.solo } else { !t.mute })
+                    && (edits.contains(&i) || prints.contains(&i))
+            })
+            .collect()
+    }
+
+    /// Every audible track's stale take rendered and its print made (an export asked).
+    fn render_audible(&mut self) {
+        for t in self.audible_stale() {
+            self.render_track(t, None);
         }
     }
 
@@ -3788,36 +4078,78 @@ impl SessionView {
 
     /// Render event take `k` of track `t` at production, in the background.
     fn render_production(&mut self, t: usize, k: usize) {
+        self.request_render(t, k, true);
+    }
+
+    /// Render event take `k` of track `t`'s revision (SE1: only when asked for): at
+    /// production, or a draft at the quality it was played at. It waits in a queue while
+    /// recording, and runs one at a time while a device plays live.
+    fn request_render(&mut self, t: usize, k: usize, production: bool) {
         let Some(take) = self.session.tracks.get(t).and_then(|x| x.takes.get(k)) else {
             return;
         };
         let Some(e) = &take.events else { return };
-        let (id, rev, perf) = (take.id.clone(), e.rev, e.perf.clone());
-        if self
-            .take_jobs
-            .iter()
-            .any(|j| j.wanted && j.id == id && j.rev == rev && j.quality == Quality::Production)
-        {
+        let q = if production {
+            Quality::Production
+        } else {
+            e.perf.quality
+        };
+        let (id, rev) = (take.id.clone(), e.rev);
+        if take.has_render(q) || self.render_pending(&id, rev, q) {
             return;
         }
-        self.take_errors
-            .remove(&(id.clone(), rev, Quality::Production));
-        self.tried
-            .insert((id.clone(), rev, Quality::Production, true));
-        let job = take_render::Job::spawn(
-            self.root.join("config"),
-            perf,
-            Quality::Production,
-            take_dir(&self.session.dir, &id).join("renders"),
-            true,
-        );
-        self.take_jobs.push(TakeJob {
-            id,
-            rev,
-            quality: Quality::Production,
-            wanted: true,
-            job,
-        });
+        self.take_errors.remove(&(id.clone(), rev, q));
+        self.render_queue.push((id, rev, q));
+    }
+
+    /// Whether take `id`'s revision `rev` at `q` is queued or rendering.
+    fn render_pending(&self, id: &str, rev: u32, q: Quality) -> bool {
+        self.render_queue
+            .iter()
+            .any(|(i, r, x)| i == id && *r == rev && *x == q)
+            || self
+                .take_jobs
+                .iter()
+                .any(|j| j.wanted && j.id == id && j.rev == rev && j.quality == q)
+    }
+
+    /// Event takes (track, take) that play the proxy or an older render: edited and not
+    /// rendered, active ones, none asked for yet.
+    fn renders_missing(&self) -> Vec<(usize, usize)> {
+        self.session
+            .tracks
+            .iter()
+            .enumerate()
+            .filter_map(|(t, track)| {
+                let k = track.active?;
+                let take = track.takes.get(k)?;
+                let e = take.events.as_ref()?;
+                (take.needs_render(track.drafts)
+                    && !self.render_pending(&take.id, e.rev, e.perf.quality))
+                .then_some((t, k))
+            })
+            .collect()
+    }
+
+    /// Ctrl+R / Render: what is asked for at track `t` (with take `k` when one is meant):
+    /// the take's draft render if it needs one, and the track's print if it isn't current.
+    fn render_track(&mut self, t: usize, k: Option<usize>) {
+        let Some(track) = self.session.tracks.get(t) else {
+            return;
+        };
+        let Some(k) = k.or(track.active) else {
+            return;
+        };
+        let needs = track
+            .takes
+            .get(k)
+            .is_some_and(|x| x.needs_render(track.drafts));
+        if needs {
+            self.request_render(t, k, false);
+        }
+        if !self.session.print_current(t) {
+            self.request_print(t);
+        }
     }
 
     /// Event take `k` of track `t` bounced to audio: now if its production render is there,
@@ -3874,10 +4206,12 @@ impl SessionView {
     }
 
     /// Event takes' renders: finished ones attached to their takes, ones for revisions no
-    /// take plays cancelled, new ones started (a lookup of every revision's renders in the
-    /// cache; a draft render of an active take whose revision isn't what was heard), none
-    /// while recording or a roll edit is in progress or under a second old.
+    /// take plays cancelled, a lookup of every revision's renders in the cache, the renders
+    /// asked for started from the queue (SE1: none by itself), the proxy's stand-in made for
+    /// an edited take whose device has one (decision 1); none while recording or a roll
+    /// edit is in progress.
     fn poll_take_renders(&mut self, ctx: &egui::Context, recording: bool, live: bool) {
+        self.poll_proxies(ctx);
         let mut i = 0;
         while i < self.take_jobs.len() {
             if !self.take_jobs[i].job.is_finished() {
@@ -3916,10 +4250,10 @@ impl SessionView {
         if !self.take_jobs.is_empty() {
             ctx.request_repaint_after(Duration::from_millis(200));
         }
-        let editing = self.roll.as_ref().is_some_and(Roll::busy)
-            || self
-                .last_edit
-                .is_some_and(|t| t.elapsed() < Duration::from_secs(1));
+        // Queued renders no take plays any more are dropped.
+        self.render_queue
+            .retain(|(id, rev, _)| current.contains(&(id.clone(), *rev)));
+        let editing = self.roll.as_ref().is_some_and(Roll::busy);
         if recording || self.recording.is_some() || editing {
             if editing {
                 ctx.request_repaint_after(Duration::from_millis(250));
@@ -3929,25 +4263,38 @@ impl SessionView {
         let limit = if live { 1 } else { MAX_PRINT_JOBS };
         let mut rendering = self.take_jobs.iter().filter(|j| j.wanted).count();
         let mut start = Vec::new();
+        // Lookups: every revision's renders found in the cache (never rendered here).
         for t in &self.session.tracks {
-            for (ki, k) in t.takes.iter().enumerate() {
+            for k in &t.takes {
                 let Some(e) = &k.events else { continue };
                 for q in [Quality::Production, e.perf.quality] {
-                    if k.has_render(q) || self.take_errors.contains_key(&(k.id.clone(), e.rev, q)) {
+                    let key = (k.id.clone(), e.rev, q, false);
+                    if k.has_render(q) || self.tried.contains(&key) {
                         continue;
                     }
-                    // A draft render where what plays isn't this revision heard.
-                    let render = q != Quality::Production
-                        && t.active == Some(ki)
-                        && (e.rev > 0 || e.monitor == Monitor::Proxy);
-                    let key = (k.id.clone(), e.rev, q, render);
-                    if self.tried.contains(&key) || (render && rendering >= limit) {
-                        continue;
-                    }
-                    rendering += render as usize;
                     start.push((key, e.perf.clone()));
                 }
             }
+        }
+        // The renders asked for, in the order asked.
+        while rendering < limit && !self.render_queue.is_empty() {
+            let (id, rev, q) = self.render_queue.remove(0);
+            let perf = self
+                .session
+                .tracks
+                .iter()
+                .flat_map(|t| &t.takes)
+                .find(|k| k.id == id)
+                .and_then(|k| k.events.as_ref())
+                .filter(|e| e.rev == rev)
+                .map(|e| e.perf.clone());
+            if let Some(perf) = perf {
+                rendering += 1;
+                start.push(((id, rev, q, true), perf));
+            }
+        }
+        if !self.render_queue.is_empty() {
+            ctx.request_repaint_after(Duration::from_millis(250));
         }
         let config = self.root.join("config");
         for ((id, rev, q, render), perf) in start {
@@ -3969,6 +4316,58 @@ impl SessionView {
         }
     }
 
+    /// The proxy's stand-ins (decision 1): an active event take edited and not rendered,
+    /// whose device has a proxy, plays its revision through the proxy, played offline on a
+    /// thread (a fraction of a second for a long take) as soon as the edit lands.
+    fn poll_proxies(&mut self, ctx: &egui::Context) {
+        let mut i = 0;
+        while i < self.proxy_jobs.len() {
+            if !self.proxy_jobs[i].handle.is_finished() {
+                i += 1;
+                continue;
+            }
+            let j = self.proxy_jobs.remove(i);
+            if let Ok(audio) = j.handle.join() {
+                self.session.attach_proxy(&j.id, j.rev, &audio);
+            }
+        }
+        let config = self.root.join("config");
+        let mut start = Vec::new();
+        for t in &self.session.tracks {
+            let Some(k) = t.active_take() else { continue };
+            let Some(e) = &k.events else { continue };
+            if e.rev == 0
+                || k.has_proxy()
+                || k.has_render(e.perf.quality)
+                || k.has_render(Quality::Production)
+                || self.proxy_tried.contains(&(k.id.clone(), e.rev))
+            {
+                continue;
+            }
+            start.push((k.id.clone(), e.rev, e.perf.clone()));
+        }
+        for (id, rev, perf) in start {
+            self.proxy_tried.insert((id.clone(), rev));
+            let tables = self
+                .proxy_tables
+                .entry(perf.device.clone())
+                .or_insert_with(|| {
+                    varimu_app::proxy::Tables::load(&config, &perf.device)
+                        .ok()
+                        .flatten()
+                        .map(Arc::new)
+                })
+                .clone();
+            let Some(tables) = tables else { continue };
+            let handle =
+                std::thread::spawn(move || varimu_app::proxy::render_performance(tables, &perf));
+            self.proxy_jobs.push(ProxyJob { id, rev, handle });
+        }
+        if !self.proxy_jobs.is_empty() {
+            ctx.request_repaint_after(Duration::from_millis(50));
+        }
+    }
+
     /// The piano roll's view of event take `k` of track `t`.
     fn roll_place(&self, t: usize, k: usize, playhead: Option<i64>) -> Option<piano_roll::Place> {
         let take = self.session.tracks.get(t)?.takes.get(k)?;
@@ -3985,6 +4384,10 @@ impl SessionView {
             playhead,
             colour: COLOURS[t % COLOURS.len()],
             status: self.take_status(t, k),
+            needs_render: take.needs_render(self.session.tracks[t].drafts)
+                && !self.render_pending(&take.id, e.rev, e.perf.quality),
+            has_production: take.has_render(Quality::Production)
+                || self.render_pending(&take.id, e.rev, Quality::Production),
         })
     }
 
@@ -4042,12 +4445,12 @@ impl SessionView {
                                 r.saved_as(rev);
                             }
                             self.saved = true;
-                            self.last_edit = Some(Instant::now());
                         }
                         Err(e) => self.error = Some(e),
                     }
                 }
                 piano_roll::Out::Preview(note, vel, on) => play.preview_key(note, vel, on),
+                piano_roll::Out::Render(production) => self.request_render(t, k, production),
                 piano_roll::Out::Close => self.roll = None,
             }
         }
@@ -4718,5 +5121,155 @@ fn draw_notes(
             1.0,
             fill,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use varimu_app::performance::{Ev, Performance, Playing};
+    use varimu_app::session::{Monitor, Recorded};
+
+    fn repo() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    }
+
+    /// A view on a scratch session in the temp folder (never the user's).
+    fn scratch(name: &str) -> (SessionView, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("varimu_view_{name}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let s = Session::new(dir.clone(), 48_000, TransportSettings::default());
+        (SessionView::with_session(&repo(), s, true, Vec::new()), dir)
+    }
+
+    fn wait(jobs: &[PrintJob]) {
+        for j in jobs {
+            while !j.job.is_finished() {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+    }
+
+    #[test]
+    fn a_chain_change_prints_nothing_until_asked() {
+        let (mut v, dir) = scratch("prints");
+        let ctx = egui::Context::default();
+        let tone: Vec<f32> = (0..24_000).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
+        v.session
+            .add_rendered_take(0, tone, 0, json!({"device": "test"}))
+            .unwrap();
+        v.session.tracks[0].inserts.push(Slot::new("pultec_eqp1a"));
+        // A chain added: a lookup in the cache, no print.
+        v.poll_prints(&ctx, false);
+        assert!(!v.jobs.is_empty() && v.jobs.iter().all(|j| j.lookup));
+        wait(&v.jobs);
+        v.poll_prints(&ctx, false);
+        assert!(v.jobs.is_empty(), "a lookup once per chain");
+        assert!(!v.session.print_current(0));
+        assert_eq!(v.prints_missing(), vec![0]);
+        // A knob turned, bypassed, another added, moved, removed: lookups only.
+        for step in 0..5 {
+            let ins = &mut v.session.tracks[0].inserts;
+            match step {
+                0 => ins[0].trim_db = -3.0,
+                1 => ins[0].bypass = true,
+                2 => {
+                    ins[0].bypass = false;
+                    ins.push(Slot::new("pultec_eqp1a"));
+                }
+                3 => ins.swap(0, 1),
+                _ => {
+                    ins.remove(1);
+                }
+            }
+            v.poll_prints(&ctx, false);
+            assert!(v.jobs.iter().all(|j| j.lookup), "step {step}");
+            wait(&v.jobs);
+            v.poll_prints(&ctx, false);
+        }
+        // Asked: one print.
+        v.request_print(0);
+        assert!(v.printing(0) && v.prints_missing().is_empty());
+        v.poll_prints(&ctx, false);
+        let prints: Vec<&PrintJob> = v.jobs.iter().filter(|j| !j.lookup).collect();
+        assert_eq!(prints.len(), 1);
+        for j in &v.jobs {
+            j.job.cancel();
+        }
+        wait(&v.jobs);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_edit_renders_nothing_until_asked_and_plays_the_proxy() {
+        let (mut v, dir) = scratch("renders");
+        let ctx = egui::Context::default();
+        let perf = Performance {
+            device: "tube_synth".into(),
+            quality: Quality::Draft2x,
+            rate: 48_000,
+            values: Vec::new(),
+            playing: Playing::default(),
+            gain: 1.0,
+            noise: false,
+            start_note: 57,
+            start_low: false,
+            events: vec![
+                (
+                    4_800,
+                    Ev::On {
+                        note: 60,
+                        velocity: 100,
+                    },
+                ),
+                (24_000, Ev::Off { note: 60 }),
+            ],
+            knobs: Vec::new(),
+            knobs_applied: true,
+            end: 48_000,
+        };
+        let rec = Recorded {
+            start: 0,
+            latency: 0,
+            samples: vec![0.0; 48_000],
+            performance: Some((Arc::new(perf), 0)),
+        };
+        v.session
+            .add_take_heard(0, rec, "tube_synth", Monitor::Device)
+            .unwrap();
+        let k = v.session.tracks[0].active_take().unwrap();
+        let mut notes = k.events.as_ref().unwrap().perf.notes();
+        notes[0].note = 64;
+        let edited = k.events.as_ref().unwrap().perf.edited(&notes, None);
+        v.session.revise(0, 0, edited).unwrap();
+        // The edit: lookups only, and the proxy's stand-in plays.
+        for _ in 0..200 {
+            v.poll_take_renders(&ctx, false, false);
+            if v.proxy_jobs.is_empty() && v.session.tracks[0].takes[0].has_proxy() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert!(v.take_jobs.iter().all(|j| !j.wanted));
+        let k = &v.session.tracks[0].takes[0];
+        assert_eq!(k.sound(false).2, varimu_app::session::Plays::Proxy);
+        let peak = k.sound(false).0.iter().fold(0.0f32, |m, x| m.max(x.abs()));
+        assert!(peak > 1e-3, "the stand-in sounds ({peak})");
+        assert_eq!(v.renders_missing(), vec![(0, 0)]);
+        // Asked: one render, at the quality it was played at.
+        v.request_render(0, 0, false);
+        assert!(v.renders_missing().is_empty());
+        v.poll_take_renders(&ctx, false, false);
+        let wanted: Vec<&TakeJob> = v.take_jobs.iter().filter(|j| j.wanted).collect();
+        assert_eq!(wanted.len(), 1);
+        assert_eq!((wanted[0].rev, wanted[0].quality), (1, Quality::Draft2x));
+        // Not while recording: a second request waits in the queue.
+        v.request_render(0, 0, true);
+        v.poll_take_renders(&ctx, true, false);
+        assert_eq!(v.render_queue.len(), 1);
+        for j in &v.take_jobs {
+            j.job.cancel();
+        }
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

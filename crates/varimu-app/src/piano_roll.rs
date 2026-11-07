@@ -84,6 +84,8 @@ pub enum Out {
     Edited(Vec<Note>),
     /// A note to play (on) or let go.
     Preview(u8, u8, bool),
+    /// Render the take's revision: at production (true) or a draft.
+    Render(bool),
     Close,
 }
 
@@ -105,6 +107,10 @@ pub struct Place {
     pub colour: Color32,
     /// What it plays now, for the header.
     pub status: String,
+    /// Its revision isn't rendered (it plays the proxy or an older render), and whether
+    /// its production render is there.
+    pub needs_render: bool,
+    pub has_production: bool,
 }
 
 pub struct Roll {
@@ -791,6 +797,31 @@ impl Roll {
                     out.push(Out::Close);
                 }
                 if ui
+                    .add_enabled(!place.has_production, egui::Button::new("⤓ PROD").small())
+                    .on_hover_text("Render this revision at production in the background")
+                    .clicked()
+                {
+                    out.push(Out::Render(true));
+                }
+                if ui
+                    .add_enabled(
+                        place.needs_render,
+                        egui::Button::new(RichText::new("Render").color(if place.needs_render {
+                            theme::ACCENT
+                        } else {
+                            theme::MUTED
+                        }))
+                        .small(),
+                    )
+                    .on_hover_text(
+                        "Render this revision on the device (a draft at the quality it was \
+                         played at; Ctrl+R). Until then it plays the proxy, or its last render",
+                    )
+                    .clicked()
+                {
+                    out.push(Out::Render(false));
+                }
+                if ui
                     .small_button("Fit")
                     .on_hover_text("The take in view")
                     .clicked()
@@ -844,6 +875,8 @@ mod tests {
             playhead: None,
             colour: Color32::WHITE,
             status: String::new(),
+            needs_render: false,
+            has_production: false,
         }
     }
 

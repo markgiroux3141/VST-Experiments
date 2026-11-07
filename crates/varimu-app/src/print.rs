@@ -42,6 +42,9 @@ use crate::render::render_controls;
 use crate::resample::resample;
 use crate::settings::{Quality, Settings};
 
+/// A lookup's answer when the cache doesn't hold a print ([`Job::lookup`]).
+pub const NOT_PRINTED: &str = "not printed";
+
 /// What a print runs past its input's end when the slot doesn't say (s).
 pub const DEFAULT_TAIL_S: f64 = 0.5;
 /// A reverb's tail: the plate's longest decay (about 10 s at 100 Hz, undamped) down 60 dB.
@@ -355,6 +358,25 @@ pub fn print(
     progress: impl FnMut(f64),
     cancel: &AtomicBool,
 ) -> Result<Print, String> {
+    print_or_find(
+        prep, slot, input, sidechain, rate, cache, progress, cancel, true,
+    )
+}
+
+/// [`print`], or with `render` false only from the cache ([`NOT_PRINTED`] when it isn't
+/// there).
+#[allow(clippy::too_many_arguments)]
+fn print_or_find(
+    prep: &Prepared,
+    slot: &Slot,
+    input: &Arc<Vec<f32>>,
+    sidechain: Option<&[f32]>,
+    rate: u32,
+    cache: Option<&Path>,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+    render: bool,
+) -> Result<Print, String> {
     if slot.bypass {
         return Ok(Print {
             key: String::new(),
@@ -373,6 +395,9 @@ pub fn print(
             cached: true,
             realtime_factor: 0.0,
         });
+    }
+    if !render {
+        return Err(NOT_PRINTED.into());
     }
     let (audio, rtf) = print_uncached(prep, slot, input, sidechain, rate, progress, cancel)?;
     if let Some(dir) = cache {
@@ -453,8 +478,25 @@ pub fn print_chain(
     input: &Arc<Vec<f32>>,
     rate: u32,
     cache: Option<&Path>,
+    progress: impl FnMut(usize, f64),
+    cancel: &AtomicBool,
+) -> Result<Vec<Print>, String> {
+    chain(
+        preps, slots, sidechains, input, rate, cache, progress, cancel, true,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn chain(
+    preps: &[Prepared],
+    slots: &[Slot],
+    sidechains: &[Option<Arc<Vec<f32>>>],
+    input: &Arc<Vec<f32>>,
+    rate: u32,
+    cache: Option<&Path>,
     mut progress: impl FnMut(usize, f64),
     cancel: &AtomicBool,
+    render: bool,
 ) -> Result<Vec<Print>, String> {
     if preps.len() != slots.len() {
         return Err("a chain needs a prepared device per slot".into());
@@ -466,7 +508,7 @@ pub fn print_chain(
             .get(k)
             .and_then(|c| c.as_deref())
             .map(Vec::as_slice);
-        out.push(print(
+        out.push(print_or_find(
             p,
             s,
             &x,
@@ -475,6 +517,7 @@ pub fn print_chain(
             cache,
             |f| progress(k, f),
             cancel,
+            render,
         )?);
     }
     Ok(out)
@@ -518,6 +561,40 @@ impl Job {
         rate: u32,
         cache: Option<PathBuf>,
     ) -> Job {
+        Job::start(config_dir, slots, sidechains, input, rate, cache, true)
+    }
+
+    /// The chain's prints looked up in `cache` only, none rendered: its result is
+    /// [`NOT_PRINTED`] unless every insert's print is there (docs/SESSION_EDITING_PLAN.md
+    /// SE1: prints are made when asked for, found in the cache whenever they exist).
+    pub fn lookup(
+        config_dir: PathBuf,
+        slots: Vec<Slot>,
+        sidechains: Vec<Option<Arc<Vec<f32>>>>,
+        input: Arc<Vec<f32>>,
+        rate: u32,
+        cache: PathBuf,
+    ) -> Job {
+        Job::start(
+            config_dir,
+            slots,
+            sidechains,
+            input,
+            rate,
+            Some(cache),
+            false,
+        )
+    }
+
+    fn start(
+        config_dir: PathBuf,
+        slots: Vec<Slot>,
+        sidechains: Vec<Option<Arc<Vec<f32>>>>,
+        input: Arc<Vec<f32>>,
+        rate: u32,
+        cache: Option<PathBuf>,
+        render: bool,
+    ) -> Job {
         let progress = Arc::new(AtomicU64::new(0));
         let cancel = Arc::new(AtomicBool::new(false));
         let (p, c) = (progress.clone(), cancel.clone());
@@ -527,7 +604,7 @@ impl Job {
                 .iter()
                 .map(|s| Prepared::load(&config_dir, &s.device, s.quality, s.noise))
                 .collect::<Result<Vec<_>, _>>()?;
-            print_chain(
+            chain(
                 &preps,
                 &slots,
                 &sidechains,
@@ -541,6 +618,7 @@ impl Job {
                     )
                 },
                 &c,
+                render,
             )
         });
         Job {

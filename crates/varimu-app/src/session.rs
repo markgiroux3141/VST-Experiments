@@ -460,6 +460,10 @@ pub struct Events {
 pub struct TakeRender {
     pub rev: u32,
     pub quality: Quality,
+    /// The device's proxy played offline (`crate::proxy::render_performance`), a stand-in
+    /// until the revision is rendered on the device (docs/SESSION_EDITING_PLAN.md decision
+    /// 1); `quality` is then the performance's own.
+    pub proxy: bool,
     pub audio: Arc<Vec<f32>>,
     pub overview: Arc<Overview>,
 }
@@ -557,7 +561,7 @@ impl Take {
             self.renders
                 .iter()
                 .rev()
-                .find(|r| r.rev == rev && (r.quality == Quality::Production) == prod)
+                .find(|r| !r.proxy && r.rev == rev && (r.quality == Quality::Production) == prod)
         };
         let order = if drafts { [false, true] } else { [true, false] };
         for prod in order {
@@ -572,10 +576,18 @@ impl Take {
             };
             return (&self.audio, &self.overview, p);
         }
+        if let Some(r) = self
+            .renders
+            .iter()
+            .rev()
+            .find(|r| r.proxy && r.rev == e.rev)
+        {
+            return (&r.audio, &r.overview, Plays::Proxy);
+        }
         match self
             .renders
             .iter()
-            .filter(|r| r.rev < e.rev)
+            .filter(|r| !r.proxy && r.rev < e.rev)
             .max_by_key(|r| r.rev)
         {
             Some(r) => (&r.audio, &r.overview, Plays::Stale),
@@ -588,8 +600,22 @@ impl Take {
         self.events.as_ref().is_some_and(|e| {
             self.renders
                 .iter()
-                .any(|r| r.rev == e.rev && r.quality == quality)
+                .any(|r| !r.proxy && r.rev == e.rev && r.quality == quality)
         })
+    }
+
+    /// Whether its revision has the proxy's stand-in.
+    pub fn has_proxy(&self) -> bool {
+        self.events
+            .as_ref()
+            .is_some_and(|e| self.renders.iter().any(|r| r.proxy && r.rev == e.rev))
+    }
+
+    /// An event take edited (or recorded through the proxy) whose revision isn't rendered
+    /// on the device: it plays the proxy's stand-in or an older render until it is
+    /// (docs/SESSION_EDITING_PLAN.md SE1: renders are made when asked for).
+    pub fn needs_render(&self, drafts: bool) -> bool {
+        self.events.is_some() && matches!(self.sound(drafts).2, Plays::Proxy | Plays::Stale)
     }
 }
 
@@ -807,11 +833,11 @@ impl Session {
             let Some(k) = t.active_take() else { continue };
             let plays = k.sound(t.drafts).2;
             let why = if !self.print_current(i) {
-                Some("its inserts are still printing".to_string())
+                Some("its inserts aren't printed as they are now".to_string())
             } else if plays == Plays::Proxy {
-                Some("it plays the proxy until its render lands".into())
+                Some("it plays the proxy: its take isn't rendered on the device".into())
             } else if plays == Plays::Stale {
-                Some("its render of the latest edit is still coming".into())
+                Some("its latest edit isn't rendered".into())
             } else if fin && k.events.is_some() && plays != Plays::Render(Quality::Production) {
                 Some("its take has no production render playing".into())
             } else if fin
@@ -961,6 +987,20 @@ impl Session {
                 .as_ref()
                 .is_some_and(|p| p.signature == s),
         }
+    }
+
+    /// The tracks keying track `t`'s chain (its keyed inserts not bypassed), not `t`.
+    pub fn key_tracks(&self, t: usize) -> Vec<usize> {
+        let Some(track) = self.tracks.get(t) else {
+            return Vec::new();
+        };
+        track
+            .inserts
+            .iter()
+            .filter(|s| !s.bypass && key_control(s).is_some())
+            .filter_map(|s| s.key.as_ref().and_then(|r| self.track_index(&r.track)))
+            .filter(|&i| i != t)
+            .collect()
     }
 
     /// Whether every track keying track `t`'s chain plays what it will (its print
@@ -1195,9 +1235,36 @@ impl Session {
         let r = TakeRender {
             rev,
             quality,
+            proxy: false,
             overview: Arc::new(Overview::of(&a, OVERVIEW_BIN)),
             audio: Arc::new(a),
         };
+        self.attach(id, r);
+    }
+
+    /// The proxy's stand-in for take `id`'s revision `rev` (`audio`: the whole
+    /// performance's), attached wherever the take is.
+    pub fn attach_proxy(&mut self, id: &str, rev: u32, audio: &[f32]) {
+        let Some((from, quality)) = self
+            .known
+            .get(id)
+            .and_then(|k| k.events.as_ref())
+            .map(|e| (e.from as usize, e.perf.quality))
+        else {
+            return;
+        };
+        let a: Vec<f32> = audio.get(from..).unwrap_or(&[]).to_vec();
+        let r = TakeRender {
+            rev,
+            quality,
+            proxy: true,
+            overview: Arc::new(Overview::of(&a, OVERVIEW_BIN)),
+            audio: Arc::new(a),
+        };
+        self.attach(id, r);
+    }
+
+    fn attach(&mut self, id: &str, r: TakeRender) {
         let takes = self
             .tracks
             .iter_mut()
@@ -1206,7 +1273,7 @@ impl Session {
         for t in takes {
             if t.id == id {
                 t.renders
-                    .retain(|x| !(x.rev == rev && x.quality == quality));
+                    .retain(|x| !(x.rev == r.rev && x.quality == r.quality && x.proxy == r.proxy));
                 t.renders.push(r.clone());
             }
         }
@@ -1902,7 +1969,7 @@ mod tests {
         s.tracks[1].inserts.push(Slot::new("plate_reverb"));
         assert_eq!(
             s.export_problems(false),
-            vec!["B: its inserts are still printing"]
+            vec!["B: its inserts aren't printed as they are now"]
         );
         s.tracks[1].mute = true;
         assert!(s.export_problems(false).is_empty()); // only audible tracks count
@@ -2163,9 +2230,17 @@ mod tests {
             s.tracks[0].active_take().unwrap().sound(false).2,
             Plays::Stale
         );
+        assert!(s.tracks[0].active_take().unwrap().needs_render(false));
+        // The proxy's stand-in plays until it's rendered, and doesn't count as a render.
+        s.attach_proxy(&id, 1, &vec![0.1; 500]);
+        let k = s.tracks[0].active_take().unwrap();
+        assert_eq!(k.sound(false).2, Plays::Proxy);
+        assert_eq!(k.sound(false).0.len(), 400);
+        assert!(k.has_proxy() && !k.has_render(Quality::Draft1x) && k.needs_render(false));
         s.attach_render(&id, 1, Quality::Draft1x, &vec![0.5; 500]);
         let k = s.tracks[0].active_take().unwrap();
         assert_eq!(k.sound(false).2, Plays::Render(Quality::Draft1x));
+        assert!(!k.needs_render(false));
         assert_eq!(k.sound(false).0.len(), 400); // from the take's first sample
         s.attach_render(&id, 1, Quality::Production, &vec![0.75; 500]);
         let k = s.tracks[0].active_take().unwrap();

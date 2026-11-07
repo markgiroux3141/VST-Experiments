@@ -959,6 +959,48 @@ impl SynthProxy {
     }
 }
 
+/// The block an offline proxy render steps in (samples; a knob change or a key lands
+/// exactly at its sample within it).
+const OFFLINE_BLOCK: usize = 256;
+
+/// A performance played through its device's proxy offline, from its sample 0 to its end,
+/// at its rate: what an edited take plays until it is rendered on the device
+/// (docs/SESSION_EDITING_PLAN.md decision 1). The panel starts at the performance's values
+/// and follows its knob changes from their samples; keys land at theirs. tube_synth's
+/// proxy is mono, as the device is; the Clavinet's plays every key.
+pub fn render_performance(
+    tables: std::sync::Arc<Tables>,
+    perf: &crate::performance::Performance,
+) -> Vec<f32> {
+    let mut p = Proxy::new(tables, perf.rate, 1);
+    p.set_values(&perf.values);
+    p.set_playing(perf.playing);
+    let n = perf.end as usize;
+    let mut out = vec![0.0f32; n];
+    let (mut ev, mut kn) = (0, 0);
+    let mut at = 0usize;
+    while at < n {
+        // Up to the next knob change (it applies from its sample) or the block's end.
+        let mut end = (at + OFFLINE_BLOCK).min(n);
+        while kn < perf.knobs.len() && perf.knobs[kn].at as usize <= at {
+            p.set_values(&perf.knobs[kn].values);
+            kn += 1;
+        }
+        if let Some(k) = perf.knobs.get(kn) {
+            end = end.min(k.at as usize).max(at + 1);
+        }
+        let mut events = Vec::new();
+        while ev < perf.events.len() && (perf.events[ev].0 as usize) < end {
+            let (t, e) = perf.events[ev];
+            events.push(((t as usize).saturating_sub(at), e));
+            ev += 1;
+        }
+        p.process(&events, &mut out[at..end]);
+        at = end;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
