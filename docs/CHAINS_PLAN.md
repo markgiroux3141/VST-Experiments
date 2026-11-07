@@ -41,7 +41,7 @@ runs**.
   of +2.8 dB at 4-7 kHz); WP8's Notes. WP9 (2026-11-06): the AKG D112 (`config/circuits/akg_d112.yaml`: `R_D112@1`
   fitted by `scripts/fit_d112.py`, no construction published; D112 -> SSL composed); WP9's Notes.
 - **In progress:** WP12 (API 312): step 1 half done (`data/schematics/api_312/README.md`: API's own 1972 mic preamp circuit, Fig. 1, and the 2520's data sheet). **Blocked on the 2520's internal schematic** (nine transistors, epoxy-potted: no public source but GroupDIY attachments).
-- **Next:** WP14 step 2-3 (the MD421's patent, then `fit_md421.py`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+- **Next:** WP14's bass switch network (step 4) and the patent (step 2), then WP15-WP17 by open sources; WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -1234,6 +1234,7 @@ Steps:
 
 Notes (2026-11-06, started): step 1 done. The curves: M flat -54 dBV (2.0 mV/Pa) 100 Hz-1
 kHz, +7 dB at 5-7 kHz; the four dips at 50 Hz: -3 / -6 / -15 / -15 dB re M (by rank).
+Step 3 done (2026-11-06): `R_MD421@1` (`config/components/r_md421/1.yaml`; geometry block `R_MD421` in `published_points.yaml`, builder `build_r_md421`), fitted by `scripts/fit_md421.py` (the D112's method; a 49 mm head body): 2.000 mV/Pa, on axis rms 0.83 dB / max 1.7 dB over 40 Hz-8 kHz, the 90 deg side within 1 dB at 125 Hz-2 kHz. **Known misses:** the 4 kHz side (-4.3 vs the sheet's -10.4 dB) and the 8 kHz rear (-10.1 vs -16.7), above 8 kHz not fitted; bounds hit: B l 20 T m, resonance 110 Hz, the washer, the chamber's volume 400 cm^3, the dome's mass 2% (a heavy moving system, as the D112). `config/circuits/sennheiser_md421.yaml` (the M position, open circuit), the list's entry (output out, drop RLOAD, cardioid), `tests/test_sennheiser_md421.py` (5) and `test_chain_matrix.py` pass. **Not done:** the patent lookup (step 2) and the five-position bass switch's network (step 4: fitted to the four dips: -3 / -6 / -15 / -15 dB at 50 Hz by rank); no new chain opens until WP12 builds the API 312 (md421_api312).
 
 ### WP10-WP31
 
@@ -1253,7 +1254,7 @@ touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key; W
 its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.py` and a refusal in
 `varimu/circuit/parts.py`, every existing component compiling to its saved elements; its steps
 5-6 the ribbon motor's `stop` in `varimu/circuit/builder.py` and `RIBBON_77DX` in
-`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, likewise): these
+`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').

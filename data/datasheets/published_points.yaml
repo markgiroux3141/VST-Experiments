@@ -951,3 +951,45 @@
   published:
     sensitivity_v_per_pa: 1.8e-3         # akg: 1.8 mV/Pa (-54 dB re 1 V)
     resistance_ohm: 210.0                # akg: 210 ohm (<= 200 ohm on the MKII)
+
+# The Sennheiser MD 421-II's cartridge (docs/CHAINS_PLAN.md WP14): no dimension is published; scripts/fit_md421.py
+# fits it to the sheet's M-position response, polars and 2 mV/Pa; the housing's 49 mm head is the body's.
+"R_MD421":
+  source: "data/schematics/sennheiser_md421/README.md (no construction published: Sennheiser's MD 421-II sheet: 2 mV/Pa, 250 ohm, cardioid, internal bass tubes, 215 x 46 x 49 mm): seeler61's phase-shift network with a chamber branch for the bass tubes; geometry provisional and bounded, fitted by scripts/fit_md421.py"
+  geometry:
+    diaphragm:
+      radius_m: {value: 15.0e-3}         # provisional: model knowledge (the effective radius of a ~40 mm 'large' diaphragm in a 70 mm head; bounds 15-22 mm, not fitted: the body's entry table depends on it)
+      thickness_m: {value: 4.3445e-05}      # provisional: model knowledge (a PET dome; the D12's descendant is low-tuned)
+      density_kg_m3: {value: 1390.0}     # provisional: model knowledge (PET film)
+      resonance_hz: {value: 110}        # akg: 'a low resonance frequency' (fitted to the low end, bounds 35-110 Hz)
+      q: {value: 3.0}                    # provisional: model knowledge
+      # the presence rise: a large dome breaks up low (the sheet's +6 dB at 3 kHz): one mode hung from the coil, fitted to akg2's response (bounds f 1.8-9 kHz, q 0.7-10, mass 2-50%, area 5-60%)
+      modes:
+        - {name: dome, f_hz: {value: 4653.5}, q: {value: 1.708}, mass_fraction: {value: 0.02}, area_fraction: {value: 0.098673}}
+    coil:
+      bl_tm: {value: 20}                # fit: 1.8 mV/Pa open circuit
+      b_gap_t: {value: 0.77513}              # provisional: fitted with Bl to the sensitivity (bounds 0.6-1.4 T)
+      re_ohm: {value: 230.0}             # akg: 210 ohm nominal output impedance (<= 200 ohm on the MKII), the coil's DC resistance a little under it
+      le_h: {value: 3.0e-3}              # provisional: model knowledge (a 200 ohm coil's inductance, a few mH)
+      wire_density_kg_m3: {value: 2700.0}  # provisional: model knowledge (aluminium wire keeps a 200 ohm coil light)
+      wire_resistivity_ohm_m: {value: 2.82e-8}   # provisional: aluminium at 20 C
+      adhesive_fraction: {value: 0.2}    # provisional: model knowledge
+    network:
+      - {name: grille, kind: screen, a: front, b: g, rayl: {value: 10.0}, area_m2: {value: 1.0e-3}}   # provisional: model knowledge (the built-in windscreen's mesh)
+      - {name: dia, kind: diaphragm, a: g, b: u}
+      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.03224}, r1_pa_s_m3: {value: 1.9688e+06}, q: {value: 11.269}}   # d: fitted (bounds 15-60 mm: the diaphragm's centre to the rear entries around the head); r1: fitted to the low end; q: fitted to the side / rear ratio
+      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 1.0e+05}}   # provisional: fitted to the pattern at 125 Hz (bounds 1e5-1e10)
+      - {name: handle, kind: cavity, a: h, volume_m3: {value: 0.0004}}   # akg: 'a bass resonance volume chamber', its volume fitted (bounds 5-400 cm^3: at most the housing's air)
+    body:
+      form: dynamic
+      face_radius_m: {value: 19.0e-3}        # provisional: model knowledge (the cartridge's face inside the 70 mm head)
+      ports_m: {value: [0.012, 0.035]}    # provisional: model knowledge (rear openings on the head's side behind the face)
+      cartridge_length_m: {value: 55.0e-3}   # provisional: model knowledge
+      head_radius_m: {value: 24.5e-3}        # akg: 70 mm wide
+      head_length_m: {value: 100.0e-3}        # provisional: model knowledge (150 mm overall)
+      taper_length_m: {value: 70.0e-3}       # provisional: model knowledge
+      end_radius_m: {value: 12.0e-3}         # provisional: model knowledge
+      end_length_m: {value: 45.0e-3}         # provisional: model knowledge (150 mm overall: 80 + 40 + 30)
+  published:
+    sensitivity_v_per_pa: 2.0e-3         # akg: 1.8 mV/Pa (-54 dB re 1 V)
+    resistance_ohm: 250.0                # akg: 210 ohm (<= 200 ohm on the MKII)

@@ -1,0 +1,41 @@
+# Sennheiser MD 421-II dynamic microphone (docs/CHAINS_PLAN.md WP14). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/sennheiser_md421/README.md has their provenance):
+#   "sennheiser: ..."  Sennheiser's MD 421-II Product Specification V1.1 (2 mV/Pa +-2.5 dB,
+#                      250 ohm, cardioid, 30-17000 Hz; the M position's response and polars
+#                      digitized from its vector paths)
+#   "provisional: ..." model knowledge
+#
+# The cartridge R_MD421 (config/components/r_md421/): the pressure at its front entry on `in`,
+# at its rear entries on the control input `p_rear` (pascals as volts; varimu/mics/). The MD 421
+# is transformerless: the coil's two ends are the XLR's pins 2 and 3 (`out`, and the measuring
+# ground); the output is open circuit, as the sheet's 2 mV/Pa, and a chain replaces RLOAD with
+# the preamp's input. The five-position bass roll-off switch (M = flat) is not modelled yet
+# (CHAINS_PLAN.md WP14 step 4: its network is fitted to the sheet's four dips); the circuit is
+# the M position.
+
+title: "Sennheiser MD 421-II"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out]
+# 0 dBFS in = 20 Pa peak at the capsule (117 dB SPL for a sine, as the U47's); out = volts
+# across the load.
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.1, source: "provisional: model knowledge (sennheiser: 2 mV/Pa x 20 Pa = 40 mV peak, with headroom for the presence peak and proximity)"}
+
+values:
+  cartridge_model: {value: R_MD421@1, source: "config/components/r_md421/1.yaml (the MD 421's cartridge: no construction is published, the geometry bounded and fitted by scripts/fit_md421.py to Sennheiser's figures: data/schematics/sennheiser_md421/README.md)"}
+  load_ohm: {value: 1.0e+6, source: "sennheiser: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
+
+# No tolerance block: the nominal mic only (docs/SM57_PLAN.md Decisions 5).
+
+sections:
+  - title: cartridge
+    parts:
+      MC:
+        moving_coil: [in, p_rear, out, "0"]
+        component: cartridge_model
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

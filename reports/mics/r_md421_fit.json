@@ -1,0 +1,87 @@
+{
+ "fitted": {
+  "coil/bl_tm": 19.999999049515797,
+  "coil/b_gap_t": 0.7751327819162853,
+  "diaphragm/resonance_hz": 109.99999999999999,
+  "diaphragm/thickness_m": 4.3445144793838806e-05,
+  "ps/r1_pa_s_m3": 1968811.6152828129,
+  "ps/q": 11.268608480170016,
+  "ps/d_m": 0.03224001435004884,
+  "washer/r_pa_s_m3": 100000.00000001743,
+  "handle/volume_m3": 0.00039999999999999975,
+  "diaphragm/modes/0/f_hz": 4653.536424024293,
+  "diaphragm/modes/0/q": 1.7080158947442579,
+  "diaphragm/modes/0/mass_fraction": 0.020000000000004986,
+  "diaphragm/modes/0/area_fraction": 0.09867283191041804
+ },
+ "body": {
+  "form": "dynamic",
+  "face_radius_m": 0.019,
+  "ports_m": [
+   0.012,
+   0.035
+  ],
+  "cartridge_length_m": 0.055,
+  "head_radius_m": 0.0245,
+  "head_length_m": 0.1,
+  "taper_length_m": 0.07,
+  "end_radius_m": 0.012,
+  "end_length_m": 0.045
+ },
+ "sensitivity_mv_pa": 1.9997,
+ "sensitivity_target_mv_pa": 2.0,
+ "rms_on_axis_db_fit_band": 0.827,
+ "max_on_axis_db_fit_band": 1.673,
+ "rms_on_axis_db_above": 7.207,
+ "polar": {
+  "125 Hz 90 deg": {
+   "model_db": -4.38,
+   "published_db": -3.5
+  },
+  "250 Hz 90 deg": {
+   "model_db": -6.11,
+   "published_db": -5.43
+  },
+  "500 Hz 90 deg": {
+   "model_db": -6.93,
+   "published_db": -7.72
+  },
+  "1000 Hz 90 deg": {
+   "model_db": -7.51,
+   "published_db": -7.74
+  },
+  "2000 Hz 90 deg": {
+   "model_db": -7.02,
+   "published_db": -7.75
+  },
+  "4000 Hz 90 deg": {
+   "model_db": -4.31,
+   "published_db": -10.39
+  },
+  "8000 Hz 90 deg": {
+   "model_db": -11.3,
+   "published_db": -11.8
+  },
+  "8000 Hz 180 deg": {
+   "model_db": -10.13,
+   "published_db": -16.72
+  }
+ },
+ "moving_mass_mg": 328.83,
+ "mass_parts_mg": {
+  "dome_kg": 42.686,
+  "wire_kg": 220.39,
+  "adhesive_kg": 44.078,
+  "air_kg": 21.672,
+  "total_kg": 328.827
+ },
+ "wire_length_m": 25.802,
+ "cost": 173.58700766961186,
+ "at_bounds": [
+  "coil/bl_tm",
+  "diaphragm/resonance_hz",
+  "washer/r_pa_s_m3",
+  "handle/volume_m3",
+  "diaphragm/modes/0/mass_fraction"
+ ]
+}
