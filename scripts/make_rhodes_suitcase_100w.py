@@ -133,8 +133,11 @@ def board(x: str, pre: str, out: str, amp: str, rear: str, front_off: str, rear_
       {q("9")}: {{bjt: [{amp}, {n("b9")}, {n("e9")}], model: QO}}
       {c("5")}: {{C: [{amp}, {n("b9")}], c: c5a_f}}
       {r("21")}: {{R: [{n("e9")}, vn], r: r_emitter_ohm}}
+  - title: "speakers {X}"
+    parts:
       # F1 / F2 (4 A) to the CH {X} SPEAKER jack, then the two speakers in series: the front
-      # one reads out as the player's pressure, the rear one as the audience's.
+      # one reads out as the player's pressure; the rear one is only a load (`readout: 0`: its
+      # terminal voltage on {rear}; a second readout's states would double a render's cost).
       {r("F1")}: {{R: [{amp}, {n("spk")}], r: fuse_ohm, tolerance: none}}
       {p("SPKF")}:
         speaker: [{n("spk")}, {n("mid")}, {out}]
@@ -154,6 +157,7 @@ def board(x: str, pre: str, out: str, amp: str, rear: str, front_off: str, rear_
         depth_m: cab_depth_m
         offset_x_m: {rear_off}
         offset_y_m: cab_offset_y_m
+        readout: 0
 """
 
 
@@ -295,7 +299,7 @@ AMP_VALUES = """\
 """
 
 SUPPLY = """\
-  - title: supply
+  - title: mains supply
     parts:
       # T1's two halves from the mains at phase 90 / 270 (a run starts at the peak), each behind
       # its winding resistance and leakage; the bridge across the ends with the centre tap as
@@ -325,7 +329,32 @@ def generate() -> str:
         if text.count(old) != 1:
             raise SystemExit(f"patch anchor occurs {text.count(old)} times: {old[:70]!r}")
         text = text.replace(old, new)
+    # The output op-amps A3A / A3B leave the "vibrato" section for sections of their own, so the
+    # app's draft can put each with its power amp on a thread: the cut is at the op-amp's
+    # inverting input (nodes a3am / a3bm), where the later partition is nearly a virtual
+    # ground (its impedance is a few kilohms at 20 kHz against R32 / R33's 100K), the one
+    # place the signal path takes a sample's lag stably (a cut at the amp's input, a 5K node
+    # behind a 100 ohm source, diverged: docs/RHODES_PLAN.md "The Suitcase").
+    moved: dict[str, list[str]] = {"a": [], "b": []}
+    kept = []
+    for line in text.split("\n"):
+        key = line.strip().split(":", 1)[0]
+        if line.startswith("      ") and key in ("U3A", "R34", "C17", "R37"):
+            moved["a"].append(line)
+        elif line.startswith("      ") and key in ("U3B", "R35", "C18", "R38"):
+            moved["b"].append(line)
+        else:
+            kept.append(line)
+    if [len(moved["a"]), len(moved["b"])] != [4, 4]:
+        raise SystemExit("the output op-amp parts moved: expected 4 per channel")
+    text = "\n".join(kept)
     text = HEADER + text.rstrip("\n") + "\n"
+    for x in "ab":
+        text += (
+            f'\n  - title: "output amp {x.upper()}"\n    parts:\n'
+            f"      # A3{x.upper()}'s feedback and output (fig11-1), apart from the pan network "
+            "so a partitioned draft can cut at its input.\n" + "\n".join(moved[x]) + "\n"
+        )
     text += "\n" + SUPPLY
     text += board("a", "pre_a", "out", "a_amp", "out_rear_a", "spk_left_m", "spk_right_m")
     text += board("b", "pre_b", "out_r", "b_amp", "out_rear_b", "spk_right_m", "spk_left_m")

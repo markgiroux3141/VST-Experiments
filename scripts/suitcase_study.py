@@ -144,7 +144,11 @@ def render(overrides: dict, quality: str, seconds: float, tone_hz: float = 1000.
     s = TransientSettings.from_sim_settings(
         engine="circuitsim", quality=None if quality == "production" else quality
     )
-    ir = builder.build(c, {"accessory_in": 1, **overrides}).ir
+    # The whole Suitcase (rhodes_suitcase_100w): the speakers' terminal voltages, not the
+    # sound pressures (the balance L over R is the same, and the readouts' states cost 14x).
+    q = dict(spec.resolve(c))
+    q.update({"accessory_in": 1, **overrides})
+    ir = builder.build_ir(c, q, speaker_readout=False)
     fs = float(s.sample_rate)
     t = np.arange(int(seconds * fs)) / fs
     x = 0.05 * np.sin(2 * np.pi * tone_hz * t)
@@ -218,6 +222,9 @@ def number_or_text(v: str):
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument(
+        "--circuit", default=CIRCUIT, help="rhodes_suitcase (the preamp) | rhodes_suitcase_100w"
+    )
     ap.add_argument("--calibrate", action="store_true")
     ap.add_argument("--quality", default="draft", choices=["production", "draft", "draft-1x"])
     ap.add_argument("--seconds", type=float, default=4.0)
@@ -231,7 +238,13 @@ def main() -> None:
         help="a candidate's settings over --set (repeatable): each calibrated and compared",
     )
     args = ap.parse_args()
+    globals()["CIRCUIT"] = args.circuit  # render() reads it
     OUT.mkdir(parents=True, exist_ok=True)
+    tag = (
+        ""
+        if args.circuit == "rhodes_suitcase"
+        else "_" + args.circuit.removeprefix("rhodes_suitcase_")
+    )
 
     def parse(kvs):
         return {k: number_or_text(v) for k, v in (kv.split("=", 1) for kv in kvs)}
@@ -256,9 +269,9 @@ def main() -> None:
             f"{r['shape_error_db']:.2f} dB, settings {over}",
             flush=True,
         )
-    (OUT / "vibrato.json").write_text(json.dumps(result, indent=1))
-    plot(result, OUT / "vibrato.png")
-    print(f"-> {OUT / 'vibrato.json'}, vibrato.png")
+    (OUT / f"vibrato{tag}.json").write_text(json.dumps(result, indent=1))
+    plot(result, OUT / f"vibrato{tag}.png")
+    print(f"-> {OUT / f'vibrato{tag}.json'}, vibrato{tag}.png")
 
 
 if __name__ == "__main__":

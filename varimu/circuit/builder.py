@@ -765,7 +765,8 @@ def _speaker(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]
         model = load_speaker(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
-    if not ctx.speaker_readout:
+    # `readout: 0`: only a load (its terminal voltage on `out`), whatever the build.
+    if not ctx.speaker_readout or a["readout"] == 0:
         return parts.speaker_terminal(name, *conn, model)
     cab = Cabinet(a["width_m"], a["height_m"], a["depth_m"], a["offset_x_m"], a["offset_y_m"])
     return parts.speaker(name, *conn, model, cab, a["distance_m"])
@@ -1152,6 +1153,7 @@ for _name, _macro in {
             "depth_m": _P,
             "offset_x_m": Param("physical", 0.0),
             "offset_y_m": Param("physical", 0.0),
+            "readout": Param("number", 1.0),
         },
     ),
 }.items():

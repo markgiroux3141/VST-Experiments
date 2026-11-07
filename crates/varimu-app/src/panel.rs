@@ -1039,9 +1039,10 @@ pub const DEVICES: [Device; 23] = [
         label: "Rhodes Suitcase Piano",
         short: "Suitcase",
         about: "A Rhodes Mark I Suitcase 73 (1978): the harp into the 100 W preamp, its \
-            LED / photocell vibrato panning left and right",
+            LED / photocell vibrato panning left and right, and the dual 50 W power amp on \
+            its mains supply driving the 12-inch speakers",
         group: Group::Instruments,
-        circuit: "rhodes_suitcase",
+        circuit: "rhodes_suitcase_100w",
         // The preamp's front panel (ACCESSORY IN stays empty: the harp plays).
         panel: Some(&["volume", "bass", "treble", "vibrato", "speed", "intensity"]),
         ahead_s: 0.25,
@@ -1057,9 +1058,28 @@ pub const DEVICES: [Device; 23] = [
         key: None,
         pitch2: None,
         coupling: None,
-        partition: None,
-        live_speaker_v: None,
-        newton: None,
+        // The preamp (the first partition: the harp, the pan network, the oscillator), then
+        // the speakers, each channel's output amp with its power amp, and the mains supply,
+        // each on a thread: the cuts are at the output op-amps' inverting inputs (a virtual
+        // ground: stable at a sample's lag), at the amps' outputs (a stiff driver into 16
+        // ohm) and across the rails (docs/RHODES_PLAN.md "The Suitcase").
+        partition: Some(&[
+            "speakers A",
+            "speakers B",
+            "|",
+            "output amp A",
+            "power amp A",
+            "|",
+            "output amp B",
+            "power amp B",
+            "|",
+            "mains supply",
+        ]),
+        // Live without the speakers' readout (as the Stage's): each channel's front
+        // speaker's terminal voltage, about half the amp's swing (24.5 V peak at clipping
+        // over two drivers in series), full scale 14 V.
+        live_speaker_v: Some(14.0),
+        newton: Some((4e-3, 4e-2)),
     },
     Device {
         id: "clavinet_d6",

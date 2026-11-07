@@ -90,3 +90,22 @@ def test_gain_and_clipping():
     _, p, thd_hard = run(0.2)
     assert 20.0 < p < 27.0, p  # model: 24.2 W
     assert thd_hard > 0.1  # clipped
+
+
+def test_only_the_front_speakers_read_out():
+    """Each channel's front speaker has its sound-pressure readout (the player's `out` /
+    `out_r`); the rear one, `readout: 0`, is only a load with its terminal voltage on its
+    node. A live build drops every readout."""
+    c = load()
+    q = dict(spec.resolve(c))
+
+    def names(**kw):
+        return {e.name for e in builder.build_ir(c, q, **kw).elements()}
+
+    full = names()
+    assert {"LASPKF_pf", "LBSPKF_pf"} <= full
+    assert not ({"LASPKR_pf", "LBSPKR_pf"} & full)
+    assert {"GASPKR_t", "GBSPKR_t"} <= full
+    live = names(speaker_readout=False)
+    assert not ({"LASPKF_pf", "LBSPKF_pf"} & live)
+    assert {"GASPKF_t", "GBSPKF_t"} <= live

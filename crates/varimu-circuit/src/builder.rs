@@ -726,6 +726,7 @@ fn macro_of(kind: &str) -> Macro {
                 p("depth_m", Physical),
                 Param("offset_x_m", Physical, Some(Value::Float(0.0))),
                 Param("offset_y_m", Physical, Some(Value::Float(0.0))),
+                Param("readout", Number, Some(Value::Float(1.0))),
             ],
             false,
         ),
@@ -1199,7 +1200,8 @@ fn speaker_part(
         offset_y_m: f("offset_y_m")?,
     };
     let distance = f("distance_m")?;
-    if !ctx.speaker_readout {
+    // `readout: 0`: this speaker is only a load (its terminal voltage on `out`), whatever the build.
+    if !ctx.speaker_readout || f("readout")? == 0.0 {
         return Ok(speaker::terminal(
             name, &nodes[0], &nodes[1], &nodes[2], &model,
         ));

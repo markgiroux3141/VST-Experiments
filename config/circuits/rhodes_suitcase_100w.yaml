@@ -313,15 +313,7 @@ sections:
       R30: {R: [pb, vm], r: r30_ohm}
       R31: {rheostat: [vm, "0"], r: intensity_pot_ohm, at: intensity, reverse: 1, taper_mid: audio_taper_mid}
       R32: {R: [pa, a3am], r: r32_ohm}
-      U3A: {opamp: ["0", a3am, a3ao], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DSI, swing_v: u_swing_v}
-      R34: {R: [a3ao, a3am], r: r34_ohm}
-      C17: {C: [a3ao, "0"], c: c17_f}
-      R37: {R: [a3ao, pre_a], r: r37_ohm}
       R33: {R: [pb, a3bm], r: r33_ohm}
-      U3B: {opamp: ["0", a3bm, a3bo], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DSI, swing_v: u_swing_v}
-      R35: {R: [a3bo, a3bm], r: r35_ohm}
-      C18: {C: [a3bo, "0"], c: c18_f}
-      R38: {R: [a3bo, pre_b], r: r38_ohm}
 
   - title: oscillator
     parts:
@@ -358,7 +350,23 @@ sections:
       RNL3: {R: [l2k, "0"], r: numerical_leak_ohm, tolerance: none}
       RNL4: {R: [cr23, "0"], r: numerical_leak_ohm, tolerance: none}
 
-  - title: supply
+  - title: "output amp A"
+    parts:
+      # A3A's feedback and output (fig11-1), apart from the pan network so a partitioned draft can cut at its input.
+      U3A: {opamp: ["0", a3am, a3ao], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DSI, swing_v: u_swing_v}
+      R34: {R: [a3ao, a3am], r: r34_ohm}
+      C17: {C: [a3ao, "0"], c: c17_f}
+      R37: {R: [a3ao, pre_a], r: r37_ohm}
+
+  - title: "output amp B"
+    parts:
+      # A3B's feedback and output (fig11-1), apart from the pan network so a partitioned draft can cut at its input.
+      U3B: {opamp: ["0", a3bm, a3bo], a0: u_a0, gbw_hz: u_gbw_hz, r_out_ohm: u_r_out_ohm, r_in_ohm: u_r_in_ohm, clamp: DSI, swing_v: u_swing_v}
+      R35: {R: [a3bo, a3bm], r: r35_ohm}
+      C18: {C: [a3bo, "0"], c: c18_f}
+      R38: {R: [a3bo, pre_b], r: r38_ohm}
+
+  - title: mains supply
     parts:
       # T1's two halves from the mains at phase 90 / 270 (a run starts at the peak), each behind
       # its winding resistance and leakage; the bridge across the ends with the centre tap as
@@ -440,8 +448,11 @@ sections:
       QA9: {bjt: [a_amp, a_b9, a_e9], model: QO}
       CA5: {C: [a_amp, a_b9], c: c5a_f}
       RA21: {R: [a_e9, vn], r: r_emitter_ohm}
+  - title: "speakers A"
+    parts:
       # F1 / F2 (4 A) to the CH A SPEAKER jack, then the two speakers in series: the front
-      # one reads out as the player's pressure, the rear one as the audience's.
+      # one reads out as the player's pressure; the rear one is only a load (`readout: 0`: its
+      # terminal voltage on out_rear_a; a second readout's states would double a render's cost).
       RAF1: {R: [a_amp, a_spk], r: fuse_ohm, tolerance: none}
       ASPKF:
         speaker: [a_spk, a_mid, out]
@@ -461,6 +472,7 @@ sections:
         depth_m: cab_depth_m
         offset_x_m: spk_right_m
         offset_y_m: cab_offset_y_m
+        readout: 0
   - title: "power amp B"
     parts:
       # Input: the preamp's output through fig11-3's 680 (R1 / R2 beside the jacks), then the
@@ -523,8 +535,11 @@ sections:
       QB9: {bjt: [b_amp, b_b9, b_e9], model: QO}
       CB5: {C: [b_amp, b_b9], c: c5a_f}
       RB21: {R: [b_e9, vn], r: r_emitter_ohm}
+  - title: "speakers B"
+    parts:
       # F1 / F2 (4 A) to the CH B SPEAKER jack, then the two speakers in series: the front
-      # one reads out as the player's pressure, the rear one as the audience's.
+      # one reads out as the player's pressure; the rear one is only a load (`readout: 0`: its
+      # terminal voltage on out_rear_b; a second readout's states would double a render's cost).
       RBF1: {R: [b_amp, b_spk], r: fuse_ohm, tolerance: none}
       BSPKF:
         speaker: [b_spk, b_mid, out_r]
@@ -544,3 +559,4 @@ sections:
         depth_m: cab_depth_m
         offset_x_m: spk_left_m
         offset_y_m: cab_offset_y_m
+        readout: 0
