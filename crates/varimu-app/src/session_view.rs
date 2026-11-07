@@ -20,9 +20,21 @@
 //! survives a restart. Selecting a track and showing its takes aren't steps.
 //!
 //! Mouse: a click on a track (its strip or lane) selects it: the selected track is the armed
-//! one, which records. A click on a take selects it, a drag moves it (by whole beats; Alt:
-//! freely), right-click deletes a take or a track. Deleted takes leave the session but
-//! their files stay in its folder. Ctrl+Z undoes moves and deletions.
+//! one, which records.
+//!
+//! **Clips** (docs/SESSION_EDITING_PLAN.md SE5): a lane is clips, stretches of the track's
+//! takes. A click selects one, a drag moves it (by the snap; Alt inverts it), onto another
+//! track too; a drag on its left or right edge trims it (the audio under it stays: a trim is
+//! undone by trimming back), on a top corner's handle sets its fade, on the gain handle (top
+//! middle) its gain. S splits the selected clip (or the armed track's under the cursor) at
+//! the cursor, Delete deletes it (its take stays in the track's pool), right-click offers
+//! split, mute, reset, delete and its take's actions. A later clip lies on top of an earlier
+//! one; the earlier crossfades under its fades. Cut edges get a 2 ms fade, a take's own ends
+//! none, an untouched split none (it plays seamlessly). With every take shown (▸), a click
+//! on a take's row puts it in the lane whole, a drag across it promotes that stretch into
+//! the lane on top (comping); ‹ › put the earlier / later take in the lane whole. A track's
+//! inserts print its lane as arranged. Deleted takes leave the session but their files stay
+//! in its folder. Ctrl+Z undoes every gesture.
 //!
 //! **The cursor** (docs/SESSION_EDITING_PLAN.md SE2) is where play starts and a take
 //! records: a click on the ruler or on empty lane space puts it there (snapped; Alt: the
@@ -117,8 +129,8 @@ use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey,
 use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, Slot, find_device};
 use varimu_app::session::{
-    Marker, Monitor, OVERVIEW_BIN, Overview, Printed, Session, Take, Track, take_dir,
-    transport_from, transport_json,
+    Clip, Marker, Monitor, OVERVIEW_BIN, Overview, Printed, Session, Take, Track, default_fade,
+    new_clip_id, take_dir, transport_from, transport_json,
 };
 use varimu_app::settings::{Quality, Settings};
 use varimu_app::take_render::{self, NOT_RENDERED};
@@ -189,19 +201,33 @@ struct Recording {
     notes: Option<(u64, Vec<varimu_app::performance::Note>)>,
 }
 
-/// A take being dragged: its track and index, where it was, where the drag started (px).
+/// What a drag on a clip does (decided where the press went down).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DragKind {
+    Move,
+    TrimLeft,
+    TrimRight,
+    FadeIn,
+    FadeOut,
+    Gain,
+}
+
+/// A clip being dragged: its track and index, what the drag does, the clip as it was, where
+/// the press was.
 struct Drag {
     track: usize,
-    take: usize,
-    from: i64,
-    press_x: f32,
+    clip: usize,
+    kind: DragKind,
+    from: Clip,
+    press: Pos2,
 }
 
 /// A track's chain printing: what it is made from, the take, the job; `lookup`: only
 /// looking for the print in the cache (SE1: a print is made when asked for).
 struct PrintJob {
     signature: String,
-    take: String,
+    lane: String,
+    start: i64,
     job: Job,
     cancelled: bool,
     lookup: bool,
@@ -229,7 +255,9 @@ struct Audition {
 /// job.
 struct Bake {
     track: usize,
-    take: String,
+    /// Where its lane started, and the clips it was made from.
+    start: i64,
+    clips: Vec<Clip>,
     slots: Vec<Slot>,
     /// At production, else a draft: each insert at its device's play quality.
     production: bool,
@@ -267,9 +295,14 @@ pub struct SessionView {
     lanes_w: f64,
     /// A drag on the scrollbar's thumb: where it started (px) and the view then (s).
     scroll_drag: Option<(f32, f64)>,
-    /// The selected take (track, index), a drag in progress, the right-clicked take.
+    /// The selected clip (track, index), a drag in progress, the right-clicked clip, a
+    /// comp being dragged across a take's row (track, take, where it started).
     selected: Option<(usize, usize)>,
     drag: Option<Drag>,
+    menu_clip: Option<(usize, usize)>,
+    comp: Option<(usize, usize, i64)>,
+    /// The lanes as last frame drew them (a clip dropped on another track finds it).
+    prev_lanes: Vec<(usize, Rect)>,
     /// The session's states before each step (oldest first) and the ones undone; the
     /// state the last step left (what the next change is compared with).
     undo: Vec<Value>,
@@ -532,6 +565,9 @@ impl SessionView {
             scroll_drag: None,
             selected: None,
             drag: None,
+            menu_clip: None,
+            comp: None,
+            prev_lanes: Vec::new(),
             saved,
             calibrations,
             recording: None,
@@ -840,7 +876,10 @@ impl SessionView {
                         .position(|k| k.id == r.take)
                         .map(|k| (r.track, Some(k)))
                 }),
-                (None, Some((t, k))) => Some((t, Some(k))),
+                (None, Some((t, c))) => self.session.tracks.get(t).and_then(|x| {
+                    let id = &x.clips.get(c)?.take;
+                    Some((t, x.take_index(id)))
+                }),
                 (None, None) => self.session.armed.map(|t| (t, None)),
             };
             if let Some((t, k)) = at {
@@ -909,11 +948,35 @@ impl SessionView {
         if zoom_in {
             self.zoom(2.0, Some(self.lanes_w * 0.5));
         }
+        // Delete removes the selected clip (its take stays in the pool), S splits it (none
+        // selected: the armed track's clip under the cursor) at the cursor.
         if delete
             && self.roll.is_none()
-            && let Some((t, k)) = self.selected
+            && let Some((t, c)) = self.selected
+            && self.recording.is_none()
         {
-            self.delete_take(t, k);
+            self.clip_action(t, c, "delete");
+            self.save();
+        }
+        let split = ui.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.command);
+        if split && self.roll.is_none() && self.recording.is_none() {
+            let cursor = self.session.transport.cursor;
+            let at = self.selected.or_else(|| {
+                let t = self.session.armed?;
+                let c = self
+                    .session
+                    .tracks
+                    .get(t)?
+                    .clips
+                    .iter()
+                    .rposition(|c| !c.muted && c.position < cursor && c.end() > cursor)?;
+                Some((t, c))
+            });
+            if let Some((t, c)) = at
+                && self.clip_action(t, c, "split")
+            {
+                self.save();
+            }
         }
         if undo {
             self.undo();
@@ -1175,7 +1238,9 @@ impl SessionView {
             return;
         }
         let track = &mut self.session.tracks[t];
-        track.takes.remove(k);
+        let id = track.takes.remove(k).id;
+        // Its clips leave the lane with it.
+        track.clips.retain(|c| c.take != id);
         track.active = match track.active {
             _ if track.takes.is_empty() => None,
             Some(a) if a == k => Some(track.takes.len() - 1),
@@ -1258,26 +1323,27 @@ impl SessionView {
     /// that changes when it does.
     fn audition_input(&self, t: usize, k: usize) -> Option<(Arc<Vec<f32>>, i64, String)> {
         let track = self.session.tracks.get(t)?;
-        let take = track.active_take()?;
+        let (start, lane) = track.lane()?;
+        let sig = track.lane_signature();
         let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
         let printed = track
             .printed
             .as_ref()
-            .filter(|p| p.take == take.id && stage > 0 && p.stages.len() >= stage);
+            .filter(|p| p.lane == sig && stage > 0 && p.stages.len() >= stage);
         let audio = match printed {
             Some(p) => p.stages[stage - 1].clone(),
-            None => take.sound(track.drafts).0.clone(),
+            None => lane,
         };
         let key = format!(
             "{}|{}|{}|{}|{:p}|{}",
-            take.id,
+            sig,
             stage,
-            take.position,
+            start,
             audio.len(),
             Arc::as_ptr(&audio),
             self.session.key_signature(t, &track.inserts[k])
         );
-        Some((audio, take.position, key))
+        Some((audio, start, key))
     }
 
     /// The audition follows the open panel: started (the Play view's device stops) when an
@@ -1496,7 +1562,8 @@ impl SessionView {
                     };
                     let printed = Printed {
                         signature: j.signature.clone(),
-                        take: j.take.clone(),
+                        lane: j.lane.clone(),
+                        start: j.start,
                         overview: Arc::new(Overview::of(&audio, OVERVIEW_BIN)),
                         audio,
                         stages: prints.iter().map(|p| p.audio.clone()).collect(),
@@ -1550,7 +1617,7 @@ impl SessionView {
             let cache = self.session.dir.join("prints");
             for ti in 0..self.session.tracks.len() {
                 let t = &self.session.tracks[ti];
-                let (Some(sig), Some(k)) = (self.session.chain_signature(ti), t.active_take())
+                let (Some(sig), Some((start, lane))) = (self.session.chain_signature(ti), t.lane())
                 else {
                     continue;
                 };
@@ -1584,7 +1651,7 @@ impl SessionView {
                     continue;
                 }
                 let slots: Vec<Slot> = t.inserts.iter().filter(|s| !s.bypass).cloned().collect();
-                let input = k.sound(t.drafts).0.clone();
+                let input = lane;
                 let sides = self.session.sidechains(ti);
                 let job = if lookup {
                     Job::lookup(config.clone(), slots, sides, input, rate, cache.clone())
@@ -1598,7 +1665,7 @@ impl SessionView {
                         Some(cache.clone()),
                     )
                 };
-                let (id, take) = (t.id.clone(), k.id.clone());
+                let (id, lane) = (t.id.clone(), t.lane_signature());
                 if lookup {
                     self.looked_up.insert(sig.clone());
                 } else {
@@ -1607,7 +1674,8 @@ impl SessionView {
                 self.jobs.push(PrintJob {
                     job,
                     signature: sig,
-                    take,
+                    lane,
+                    start,
                     cancelled: false,
                     lookup,
                 });
@@ -2073,9 +2141,9 @@ impl SessionView {
         };
         let mut slot = Slot::new(device);
         if track.inserts.iter().all(|s| s.bypass)
-            && let Some(k) = track.active_take()
+            && let Some((_, lane)) = track.lane()
         {
-            let x: Vec<f64> = k.sound(track.drafts).0.iter().map(|&v| v as f64).collect();
+            let x: Vec<f64> = lane.iter().map(|&v| v as f64).collect();
             let level = audio::level_dbfs(&x, rate, 8.0);
             slot.trim_db = ((ALIGNMENT_DBFS - level).clamp(-40.0, 40.0) * 10.0).round() / 10.0;
         }
@@ -2110,9 +2178,9 @@ impl SessionView {
         // The take's and the print's levels, for Match.
         let levels = {
             let tr = &self.session.tracks[t];
-            match (tr.active_take(), &tr.printed) {
-                (Some(take), Some(p)) if self.session.print_current(t) => {
-                    let a: Vec<f64> = take.sound(tr.drafts).0.iter().map(|&v| v as f64).collect();
+            match (tr.lane(), &tr.printed) {
+                (Some((_, lane)), Some(p)) if self.session.print_current(t) => {
+                    let a: Vec<f64> = lane.iter().map(|&v| v as f64).collect();
                     let b: Vec<f64> = p.audio.iter().map(|&v| v as f64).collect();
                     Some((
                         audio::level_dbfs(&a, rate, 8.0),
@@ -2583,8 +2651,8 @@ impl SessionView {
         let Some(track) = self.session.tracks.get(t) else {
             return;
         };
-        let Some(take) = track.active_take() else {
-            self.error = Some("the track has no take to render".into());
+        let Some((start, lane)) = track.lane() else {
+            self.error = Some("the track has nothing in its lane to render".into());
             return;
         };
         let slots: Vec<Slot> = track
@@ -2607,13 +2675,14 @@ impl SessionView {
             self.root.join("config"),
             slots.clone(),
             self.session.sidechains(t),
-            take.sound(track.drafts).0.clone(),
+            lane,
             self.session.rate,
             Some(self.session.dir.join("prints")),
         );
         self.bake = Some(Bake {
             track: t,
-            take: take.id.clone(),
+            start,
+            clips: track.clips.clone(),
             slots,
             production,
             job,
@@ -2641,29 +2710,25 @@ impl SessionView {
             }
             None => return,
         };
-        let Some(pos) = self
-            .session
-            .tracks
-            .get(b.track)
-            .and_then(|t| t.takes.iter().find(|k| k.id == b.take))
-            .map(|k| k.position)
-        else {
-            self.error = Some("the rendered take's track or source take is gone".into());
+        if b.track >= self.session.tracks.len() {
+            self.error = Some("the rendered track is gone".into());
             return;
-        };
-        // A keyed insert's key: the track and the take it played then.
+        }
+        let pos = b.start;
+        // A keyed insert's key: the track and the lane it played then.
         let keys: Vec<Value> = b
             .slots
             .iter()
             .filter_map(|s| s.key.as_ref())
             .filter_map(|r| {
                 let i = self.session.track_index(&r.track)?;
-                let k = self.session.tracks[i].active_take()?;
-                Some(json!({"track": r.track, "take": k.id, "position": k.position}))
+                let t = &self.session.tracks[i];
+                let (start, _) = t.lane_span()?;
+                Some(json!({"track": r.track, "lane": t.lane_signature(), "position": start}))
             })
             .collect();
         let from = json!({
-            "take": b.take,
+            "clips": b.clips.iter().map(Clip::to_json).collect::<Vec<_>>(),
             "keys": keys,
             "inserts": b.slots.iter().map(Slot::to_json).collect::<Vec<_>>(),
             "quality": if b.production { Quality::Production.name() } else { "draft" },
@@ -2672,7 +2737,12 @@ impl SessionView {
         self.saved = true;
         match self.session.add_rendered_take(b.track, audio, pos, from) {
             Ok(_) => {
-                self.session.tracks[b.track].inserts.retain(|s| s.bypass);
+                // The lane is the render now (its clips baked in; Undo brings them back).
+                let t = &mut self.session.tracks[b.track];
+                if let Some(k) = t.active {
+                    t.set_active(k);
+                }
+                t.inserts.retain(|s| s.bypass);
                 if self.insert_sel.is_some_and(|(t, _)| t == b.track) {
                     self.insert_sel = None;
                 }
@@ -3338,7 +3408,7 @@ impl SessionView {
         const BAR_H: f32 = 16.0;
         let mut changed = false;
         let tracks_h = (ui.available_height() - BAR_H - 4.0).max(40.0);
-        self.lanes.clear();
+        self.prev_lanes = std::mem::take(&mut self.lanes);
         let tracks_area = egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .max_height(tracks_h)
@@ -3481,34 +3551,59 @@ impl SessionView {
         let strip_resp = ui.interact(strip, ui.id().with(("strip", i)), Sense::click());
         let lane_resp = ui.interact(lane, ui.id().with(("lane", i)), Sense::click_and_drag());
         let mut changed = false;
-        let clip_rect = |k: &Take| {
-            Rect::from_min_max(
-                Pos2::new(view.x(k.position), lane.top() + 4.0),
-                Pos2::new(
-                    view.x(k.end()).max(view.x(k.position) + 1.0),
-                    lane.bottom() - 4.0,
-                ),
-            )
+        // The lane's clips (SE5): a click selects one, a drag moves it (to another track
+        // too), a drag on an edge trims it, on a top corner's handle sets its fade, on the
+        // gain handle (top middle) its gain. What a press grabs is decided where it went
+        // down.
+        let rects: Vec<(usize, Rect)> = {
+            let t = &self.session.tracks[i];
+            t.clips
+                .iter()
+                .enumerate()
+                .map(|(c, clip)| (c, clip_box(view, lane, clip.position, clip.end())))
+                .collect()
         };
-        let on_clip = |p: Option<Pos2>, t: &Track| {
-            p.zip(t.active_take())
-                .is_some_and(|(p, k)| clip_rect(k).contains(p))
+        let rate = self.session.rate;
+        let grab_at = |p: Pos2, t: &Track| -> Option<(usize, DragKind)> {
+            let (c, r) = rects.iter().rev().find(|(_, r)| r.contains(p))?;
+            let clip = &t.clips[*c];
+            let px = |n: usize| (n as f64 / rate as f64 * view.px_per_s) as f32;
+            let near = |x: f32| (p.x - x).abs() < 5.0;
+            let top = p.y < r.top() + 12.0;
+            let kind = if top && near(r.left() + px(clip.fade_in).max(6.0)) {
+                DragKind::FadeIn
+            } else if top && near(r.right() - px(clip.fade_out).max(6.0)) {
+                DragKind::FadeOut
+            } else if top && (p.x - r.center().x).abs() < 14.0 && r.width() > 60.0 {
+                DragKind::Gain
+            } else if r.width() > 16.0 && p.x < r.left() + 5.0 {
+                DragKind::TrimLeft
+            } else if r.width() > 16.0 && p.x > r.right() - 5.0 {
+                DragKind::TrimRight
+            } else {
+                DragKind::Move
+            };
+            Some((*c, kind))
         };
-        // Select (and arm) the track; select a take, drag it, delete it.
+        let origin = ui.input(|x| x.pointer.press_origin());
+        // Select (and arm) the track; select a clip, drag it.
         if strip_resp.clicked() || lane_resp.clicked() || lane_resp.drag_started() {
             if self.session.armed != Some(i) && self.recording.is_none() {
                 self.session.armed = Some(i);
                 changed = true;
             }
-            let t = &self.session.tracks[i];
-            let hit = on_clip(lane_resp.interact_pointer_pos(), t)
-                && lane_resp
-                    .interact_pointer_pos()
-                    .is_some_and(|p| lane.contains(p));
-            self.selected = if hit { t.active.map(|k| (i, k)) } else { None };
+            let at = origin
+                .or(lane_resp.interact_pointer_pos())
+                .filter(|p| lane.contains(*p));
+            let hit = at.and_then(|p| grab_at(p, &self.session.tracks[i]));
+            if strip_resp.clicked() {
+                self.selected = None;
+            } else {
+                self.selected = hit.map(|(c, _)| (i, c));
+            }
             // A click on empty lane space puts the cursor there (snapped; Alt: inverted).
             if lane_resp.clicked()
-                && !hit
+                && hit.is_none()
                 && let Some(p) = lane_resp.interact_pointer_pos()
                 && lane.contains(p)
             {
@@ -3518,16 +3613,15 @@ impl SessionView {
                 self.relocate = playhead.is_some();
                 changed = true;
             }
-            let t = &self.session.tracks[i];
             if lane_resp.drag_started()
-                && hit
-                && let (Some(k), Some(p)) = (t.active, lane_resp.interact_pointer_pos())
+                && let (Some((c, kind)), Some(p)) = (hit, at)
             {
                 self.drag = Some(Drag {
                     track: i,
-                    take: k,
-                    from: t.takes[k].position,
-                    press_x: p.x,
+                    clip: c,
+                    kind,
+                    from: self.session.tracks[i].clips[c].clone(),
+                    press: p,
                 });
             }
         }
@@ -3536,106 +3630,216 @@ impl SessionView {
             && d.track == i
             && let Some(p) = ui.ctx().pointer_interact_pos()
         {
-            // Whole steps of the snap (SE2, decision 4: a take off the grid stays as far
-            // off it); Alt inverts the snap.
             let alt = ui.input(|x| x.modifiers.alt);
-            let delta = ((p.x - d.press_x) as f64 / view.px_per_s * view.rate).round() as i64;
-            let delta = grid.snap_delta(delta, self.session.transport.snap.inverted(alt));
-            let (k, from) = (d.take, d.from);
-            if let Some(take) = self.session.tracks[i].takes.get_mut(k) {
-                take.position = from + delta;
+            let snap = self.session.transport.snap.inverted(alt);
+            let delta = ((p.x - d.press.x) as f64 / view.px_per_s * view.rate).round() as i64;
+            let (c, from, kind) = (d.clip, d.from.clone(), d.kind);
+            let t = &mut self.session.tracks[i];
+            let take_len = t
+                .take_of(&from)
+                .map_or(from.src_start + from.len, Take::len);
+            let fade = default_fade(rate);
+            if let Some(clip) = t.clips.get_mut(c) {
+                match kind {
+                    // Whole steps of the snap (SE2, decision 4: a clip off the grid stays as
+                    // far off it).
+                    DragKind::Move => clip.position = from.position + grid.snap_delta(delta, snap),
+                    DragKind::TrimLeft => {
+                        let lo = from.position - from.src_start as i64;
+                        let edge = grid
+                            .snap(from.position + delta, snap)
+                            .clamp(lo, from.end() - 1);
+                        let d = edge - from.position;
+                        clip.position = edge;
+                        clip.src_start = (from.src_start as i64 + d) as usize;
+                        clip.len = (from.len as i64 - d) as usize;
+                        if clip.src_start > 0 && from.fade_in == 0 {
+                            clip.fade_in = fade;
+                        }
+                    }
+                    DragKind::TrimRight => {
+                        let hi = from.position + (take_len - from.src_start) as i64;
+                        let end = grid
+                            .snap(from.end() + delta, snap)
+                            .clamp(from.position + 1, hi.max(from.position + 1));
+                        clip.len = (end - from.position) as usize;
+                        if (clip.src_start + clip.len) < take_len && from.fade_out == 0 {
+                            clip.fade_out = fade;
+                        }
+                    }
+                    DragKind::FadeIn => {
+                        let n = ((p.x - view.x(from.position)) as f64 / view.px_per_s * view.rate)
+                            .round()
+                            .max(0.0) as usize;
+                        clip.fade_in = n.min(from.len / 2);
+                    }
+                    DragKind::FadeOut => {
+                        let n = ((view.x(from.end()) - p.x) as f64 / view.px_per_s * view.rate)
+                            .round()
+                            .max(0.0) as usize;
+                        clip.fade_out = n.min(from.len / 2);
+                    }
+                    DragKind::Gain => {
+                        let db = from.gain_db + (d.press.y - p.y) as f64 * 0.1;
+                        clip.gain_db = (db * 10.0).round().clamp(-400.0, 120.0) / 10.0;
+                    }
+                }
             }
         }
         if lane_resp.drag_stopped()
             && let Some(d) = self.drag.take()
         {
-            changed |= self.session.tracks[d.track]
-                .takes
-                .get(d.take)
-                .is_some_and(|k| k.position != d.from);
+            let moved = self.session.tracks[d.track]
+                .clips
+                .get(d.clip)
+                .is_some_and(|c| *c != d.from);
+            changed |= moved;
+            // Dropped on another track's lane: the clip goes there (its take with it).
+            if d.kind == DragKind::Move
+                && let Some(p) = ui.ctx().pointer_interact_pos()
+                && let Some(&(j, _)) = self
+                    .prev_lanes
+                    .iter()
+                    .find(|(j, r)| *j != d.track && r.contains(p))
+            {
+                changed |= self.move_clip(d.track, d.clip, j);
+            }
+        }
+        if lane_resp.secondary_clicked() {
+            let p = lane_resp.interact_pointer_pos();
+            self.menu_clip = p
+                .and_then(|p| grab_at(p, &self.session.tracks[i]))
+                .map(|(c, _)| (i, c));
+            if let Some(m) = self.menu_clip {
+                self.selected = Some(m);
+            }
         }
         let mut delete_take = None;
         let mut take_action: Option<(usize, u8)> = None;
         let mut place_take: Option<(usize, bool)> = None;
+        let mut clip_action: Option<(usize, &'static str)> = None;
         lane_resp.context_menu(|ui| {
             let t = &self.session.tracks[i];
-            match t.active {
-                Some(k) => {
-                    let take = &t.takes[k];
-                    if take.latency != 0 {
-                        let ms = take.latency as f64 / self.session.rate as f64 * 1e3;
-                        let (label, hover, heard) = if take.heard {
-                            (
-                                format!("Place on the click ({ms:.0} ms earlier)"),
-                                "Where you meant it if you played to the click, not to what you heard: the monitor's latency taken off",
-                                false,
-                            )
-                        } else {
-                            (
-                                format!("Place as heard ({ms:.0} ms later)"),
-                                "Where it was recorded: it plays against the click and the other tracks exactly as the monitor played it",
-                                true,
-                            )
-                        };
-                        if ui.button(label).on_hover_text(hover).clicked() {
-                            place_take = Some((k, heard));
-                            ui.close();
-                        }
-                        ui.separator();
-                    }
-                    if t.takes[k].events.is_some() {
-                        if ui.button("Piano roll").clicked() {
-                            take_action = Some((k, 0));
-                            ui.close();
-                        }
-                        let needs = t.takes[k].needs_render(t.drafts);
-                        if ui
-                            .add_enabled(needs, egui::Button::new("Render the edit (draft)"))
-                            .on_hover_text("Render this revision on the device at the quality it was played at (Ctrl+R)")
-                            .on_disabled_hover_text("Its revision is rendered")
-                            .clicked()
-                        {
-                            take_action = Some((k, 4));
-                            ui.close();
-                        }
-                        let has = t.takes[k].has_render(Quality::Production);
-                        if ui
-                            .add_enabled(!has, egui::Button::new("Render at production"))
-                            .clicked()
-                        {
-                            take_action = Some((k, 1));
-                            ui.close();
-                        }
-                        if ui
-                            .button("Bounce to an audio take (production)")
-                            .on_hover_text("Its production render (rendered first if it isn't there yet) as a new audio take on this track; the MIDI take stays in the lane")
-                            .clicked()
-                        {
-                            take_action = Some((k, 3));
-                            ui.close();
-                        }
-                        let mut drafts = t.drafts;
-                        if ui
-                            .checkbox(&mut drafts, "Play drafts on this track")
-                            .on_hover_text("Its event takes play their draft renders over production ones (to compare)")
-                            .clicked()
-                        {
-                            take_action = Some((k, 2));
-                            ui.close();
-                        }
-                        ui.separator();
-                    }
-                    if ui
-                        .button(format!("Delete take {}", t.takes[k].id))
-                        .clicked()
-                    {
-                        delete_take = Some(k);
-                        ui.close();
-                    }
+            let Some(c) = self
+                .menu_clip
+                .filter(|m| m.0 == i)
+                .map(|m| m.1)
+                .filter(|&c| c < t.clips.len())
+            else {
+                ui.label(RichText::new("no clip here").color(theme::MUTED));
+                return;
+            };
+            let clip = &t.clips[c];
+            let Some(k) = t.take_index(&clip.take) else {
+                return;
+            };
+            ui.label(
+                RichText::new(format!("clip of take {}", clip.take))
+                    .small()
+                    .color(theme::MUTED),
+            );
+            let cursor = self.session.transport.cursor;
+            if ui
+                .add_enabled(
+                    cursor > clip.position && cursor < clip.end(),
+                    egui::Button::new("Split at the cursor (S)"),
+                )
+                .clicked()
+            {
+                clip_action = Some((c, "split"));
+                ui.close();
+            }
+            if ui
+                .button(if clip.muted { "Unmute clip" } else { "Mute clip" })
+                .clicked()
+            {
+                clip_action = Some((c, "mute"));
+                ui.close();
+            }
+            if ui
+                .button("Reset gain and fades")
+                .on_hover_text("0 dB; no fades at the take's own ends, the default at cuts")
+                .clicked()
+            {
+                clip_action = Some((c, "reset"));
+                ui.close();
+            }
+            if ui.button("Delete clip (Delete)").clicked() {
+                clip_action = Some((c, "delete"));
+                ui.close();
+            }
+            ui.separator();
+            let take = &t.takes[k];
+            if take.latency != 0 {
+                let ms = take.latency as f64 / self.session.rate as f64 * 1e3;
+                let (label, hover, heard) = if take.heard {
+                    (
+                        format!("Place on the click ({ms:.0} ms earlier)"),
+                        "Where you meant it if you played to the click, not to what you heard: the monitor's latency taken off (its clips move with it)",
+                        false,
+                    )
+                } else {
+                    (
+                        format!("Place as heard ({ms:.0} ms later)"),
+                        "Where it was recorded: it plays against the click and the other tracks exactly as the monitor played it (its clips move with it)",
+                        true,
+                    )
+                };
+                if ui.button(label).on_hover_text(hover).clicked() {
+                    place_take = Some((k, heard));
+                    ui.close();
                 }
-                None => {
-                    ui.label(RichText::new("no take").color(theme::MUTED));
+                ui.separator();
+            }
+            if t.takes[k].events.is_some() {
+                if ui.button("Piano roll").clicked() {
+                    take_action = Some((k, 0));
+                    ui.close();
                 }
+                let needs = t.takes[k].needs_render(t.drafts);
+                if ui
+                    .add_enabled(needs, egui::Button::new("Render the edit (draft)"))
+                    .on_hover_text("Render this revision on the device at the quality it was played at (Ctrl+R)")
+                    .on_disabled_hover_text("Its revision is rendered")
+                    .clicked()
+                {
+                    take_action = Some((k, 4));
+                    ui.close();
+                }
+                let has = t.takes[k].has_render(Quality::Production);
+                if ui
+                    .add_enabled(!has, egui::Button::new("Render at production"))
+                    .clicked()
+                {
+                    take_action = Some((k, 1));
+                    ui.close();
+                }
+                if ui
+                    .button("Bounce to audio (production)")
+                    .on_hover_text("Its production render (rendered first if it isn't there yet) as audio clips on this track where its MIDI clips are; the MIDI clips muted beside them")
+                    .clicked()
+                {
+                    take_action = Some((k, 3));
+                    ui.close();
+                }
+                let mut drafts = t.drafts;
+                if ui
+                    .checkbox(&mut drafts, "Play drafts on this track")
+                    .on_hover_text("Its event takes play their draft renders over production ones (to compare)")
+                    .clicked()
+                {
+                    take_action = Some((k, 2));
+                    ui.close();
+                }
+                ui.separator();
+            }
+            if ui
+                .button(format!("Delete take {} and its clips", t.takes[k].id))
+                .on_hover_text("Out of the track (its files stay in the session's folder; Undo brings it back)")
+                .clicked()
+            {
+                delete_take = Some(k);
+                ui.close();
             }
         });
         let mut delete_track = false;
@@ -3648,6 +3852,9 @@ impl SessionView {
                 ui.close();
             }
         });
+        if let Some((c, what)) = clip_action {
+            changed |= self.clip_action(i, c, what);
+        }
         // Paint.
         let armed = self.session.armed == Some(i);
         let painter = ui.painter_at(row);
@@ -3705,57 +3912,60 @@ impl SessionView {
             }
         }
         let track = &self.session.tracks[i];
-        if let Some(k) = track.active_take() {
-            let printed = track
-                .playing(self.session.rate)
-                .is_some_and(|p| p.2)
-                .then_some(track.printed.as_ref())
-                .flatten();
-            let (sound, sound_ov, _) = k.sound(track.drafts);
-            let (len, overview) = match printed {
-                Some(p) => (p.audio.len(), &p.overview),
-                None => (sound.len(), sound_ov),
+        let printed = track.playing(self.session.rate).is_some_and(|p| p.2);
+        let no_wave = Overview::new(OVERVIEW_BIN);
+        for (c, clip) in track.clips.iter().enumerate() {
+            let Some(k) = track.take_of(clip) else {
+                continue;
             };
-            let label = match (printed.is_some(), &k.events) {
-                (true, _) => format!("{} · with inserts", k.id),
-                (false, Some(_)) => format!(
-                    "{} · ♪ {}",
-                    k.id,
-                    self.take_status(i, track.active.unwrap_or(0))
-                ),
-                (false, None) => k.id.clone(),
+            let ki = track.take_index(&clip.take).unwrap_or(0);
+            let mut label = match &k.events {
+                Some(_) => format!("{} · ♪ {}", k.id, self.take_status(i, ki)),
+                None => k.id.clone(),
             };
+            if printed {
+                label.push_str(" · with inserts");
+            }
+            if clip.gain_db != 0.0 {
+                label.push_str(&format!(" · {:+.1} dB", clip.gain_db));
+            }
+            if clip.muted {
+                label.push_str(" · muted");
+            }
             // A MIDI take shows its notes, not the audio it plays.
-            let no_wave = Overview::new(OVERVIEW_BIN);
-            let overview = if k.events.is_some() && printed.is_none() {
-                &no_wave
-            } else {
-                overview
-            };
-            draw_clip(&lp, lane, view, k.position, len, overview, colour, &label);
+            let (_, ov, _) = k.sound(track.drafts);
+            let ov = if k.events.is_some() { &no_wave } else { ov };
+            let col = if clip.muted { theme::FAINT } else { colour };
+            let r = clip_box(view, lane, clip.position, clip.end());
+            draw_clip_from(
+                &lp,
+                lane,
+                view,
+                clip.position,
+                clip.len,
+                ov,
+                clip.src_start,
+                col,
+                &label,
+            );
+            draw_fades(&lp, r, view, clip, col);
             if let Some(e) = &k.events {
                 draw_notes(
                     &lp,
-                    clip_rect(k),
+                    r,
                     view,
-                    k.position,
+                    clip.position - clip.src_start as i64,
                     e.from,
                     &e.perf.notes(),
-                    colour,
+                    col,
                 );
             }
-            if self.selected == track.active.map(|a| (i, a)) {
-                lp.rect_stroke(
-                    clip_rect(k),
-                    3.0,
-                    Stroke::new(2.0, theme::INK),
-                    StrokeKind::Inside,
-                );
+            if self.selected == Some((i, c)) {
+                lp.rect_stroke(r, 3.0, Stroke::new(2.0, theme::INK), StrokeKind::Inside);
             }
         }
         if armed && let Some(r) = &self.recording {
             // A MIDI take draws its notes as they're played, an audio take its waveform.
-            let no_wave = Overview::new(OVERVIEW_BIN);
             let (ov, label) = match &r.notes {
                 Some(_) => (&no_wave, "recording MIDI"),
                 None => (&r.overview, "recording audio"),
@@ -3767,13 +3977,7 @@ impl SessionView {
             };
             draw_clip(&lp, lane, view, at, r.len, ov, REC, label);
             if let Some((from, notes)) = &r.notes {
-                let rect = Rect::from_min_max(
-                    Pos2::new(view.x(at), lane.top() + 4.0),
-                    Pos2::new(
-                        view.x(at + r.len as i64).max(view.x(at) + 1.0),
-                        lane.bottom() - 4.0,
-                    ),
-                );
+                let rect = clip_box(view, lane, at, at + r.len as i64);
                 draw_notes(&lp, rect, view, at, *from, notes, REC);
             }
         }
@@ -3787,12 +3991,21 @@ impl SessionView {
                 );
             }
         }
-        if lane_resp.hovered() && on_clip(ui.ctx().pointer_hover_pos(), track) {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+        if lane_resp.hovered()
+            && let Some(p) = ui.ctx().pointer_hover_pos()
+            && let Some((_, kind)) = grab_at(p, track)
+        {
+            ui.ctx().set_cursor_icon(match kind {
+                DragKind::Move => egui::CursorIcon::Grab,
+                DragKind::Gain => egui::CursorIcon::ResizeVertical,
+                _ => egui::CursorIcon::ResizeHorizontal,
+            });
         }
         if lane_resp.double_clicked()
-            && on_clip(lane_resp.interact_pointer_pos(), track)
-            && let Some(k) = track.active
+            && let Some(p) = lane_resp.interact_pointer_pos()
+            && let Some((c, _)) = grab_at(p, track)
+            && let Some(k) = track.take_index(&track.clips[c].take)
+            && track.takes[k].events.is_some()
         {
             self.open_roll(i, k);
         }
@@ -3936,10 +4149,10 @@ impl SessionView {
                 let a = t.active.unwrap_or(0);
                 if ui
                     .add_enabled(a > 0, egui::Button::new("‹").small())
-                    .on_hover_text("The earlier take")
+                    .on_hover_text("The earlier take, whole, in place of the lane's clips")
                     .clicked()
                 {
-                    t.active = Some(a - 1);
+                    t.set_active(a - 1);
                     changed = true;
                 }
                 ui.label(
@@ -3949,10 +4162,10 @@ impl SessionView {
                 );
                 if ui
                     .add_enabled(a + 1 < n, egui::Button::new("›").small())
-                    .on_hover_text("The later take")
+                    .on_hover_text("The later take, whole, in place of the lane's clips")
                     .clicked()
                 {
-                    t.active = Some(a + 1);
+                    t.set_active(a + 1);
                     changed = true;
                 }
                 if ui
@@ -4011,7 +4224,9 @@ impl SessionView {
             );
         }
         changed |= self.inserts_row(&mut child, i);
-        // Every take, stacked under the track: the one playing marked, a click plays another.
+        // Every take, stacked under the track: the ones in the lane marked; a click puts a
+        // take in the lane whole, a drag across one promotes that stretch into the lane on
+        // top (comping, SE5).
         if shown > 0 {
             for j in 0..self.session.tracks[i].takes.len() {
                 let y = row.bottom() + j as f32 * TAKE_H;
@@ -4019,11 +4234,38 @@ impl SessionView {
                 let sstrip = Rect::from_min_size(srow.min, egui::vec2(STRIP_W, TAKE_H));
                 let slane = Rect::from_min_max(Pos2::new(srow.left() + STRIP_W, y), srow.max);
                 let resp = ui
-                    .interact(srow, ui.id().with(("take_lane", i, j)), Sense::click())
-                    .on_hover_text("Click: play this take on the track");
+                    .interact(
+                        srow,
+                        ui.id().with(("take_lane", i, j)),
+                        Sense::click_and_drag(),
+                    )
+                    .on_hover_text(
+                        "Click: this take in the lane, whole (replacing its clips); drag across \
+                         it: that stretch into the lane on top (comping)",
+                    );
+                let alt = ui.input(|x| x.modifiers.alt);
+                let snap = self.session.transport.snap.inverted(alt);
+                if resp.drag_started()
+                    && let Some(p) = ui.input(|x| x.pointer.press_origin())
+                {
+                    self.comp = Some((i, j, grid.snap(view.position(p.x), snap)));
+                }
+                let mut comp_band = None;
+                if let Some((ti, tj, a)) = self.comp
+                    && ti == i
+                    && tj == j
+                    && let Some(p) = ui.ctx().pointer_interact_pos()
+                {
+                    let b = grid.snap(view.position(p.x), snap);
+                    comp_band = Some((a.min(b), a.max(b)));
+                    if resp.drag_stopped() {
+                        self.comp = None;
+                        changed |= self.comp_in(i, j, a.min(b), a.max(b));
+                    }
+                }
                 let t = &self.session.tracks[i];
                 let k = &t.takes[j];
-                let active = t.active == Some(j);
+                let active = t.lane_takes().contains(&j);
                 let p = ui.painter_at(srow);
                 p.rect_filled(sstrip, 0.0, theme::CHROME);
                 p.rect_filled(slane, 0.0, theme::BG);
@@ -4060,8 +4302,19 @@ impl SessionView {
                     if active { colour } else { theme::FAINT },
                     "",
                 );
-                if resp.clicked() && !active {
-                    self.session.tracks[i].active = Some(j);
+                if let Some((a, b)) = comp_band {
+                    lp.rect_filled(
+                        Rect::from_min_max(
+                            Pos2::new(view.x(a), slane.top()),
+                            Pos2::new(view.x(b), slane.bottom()),
+                        ),
+                        0.0,
+                        theme::ACCENT.gamma_multiply(0.25),
+                    );
+                }
+                if resp.clicked() {
+                    self.session.tracks[i].set_active(j);
+                    self.selected = None;
                     changed = true;
                 }
                 resp.context_menu(|ui| {
@@ -4084,10 +4337,8 @@ impl SessionView {
             }
             _ => {}
         }
-        if let Some((k, heard)) = place_take
-            && let Some(take) = self.session.tracks[i].takes.get_mut(k)
-        {
-            changed |= take.place(heard);
+        if let Some((k, heard)) = place_take {
+            changed |= self.session.tracks[i].place_take(k, heard);
         }
         if let Some(k) = delete_take {
             self.delete_take(i, k);
@@ -4096,6 +4347,115 @@ impl SessionView {
             self.delete_track(i);
         }
         changed
+    }
+
+    /// Clip `c` of track `t` moved to the top of track `to`'s lane (its take copied into
+    /// that track's pool if it isn't there). Whether it moved.
+    fn move_clip(&mut self, t: usize, c: usize, to: usize) -> bool {
+        if t == to || self.recording.is_some() {
+            return false;
+        }
+        let Some(clip) = self
+            .session
+            .tracks
+            .get(t)
+            .and_then(|x| x.clips.get(c))
+            .cloned()
+        else {
+            return false;
+        };
+        let Some(take) = self.session.tracks[t].take_of(&clip).cloned() else {
+            return false;
+        };
+        let Some(dest) = self.session.tracks.get_mut(to) else {
+            return false;
+        };
+        if dest.take_index(&take.id).is_none() {
+            dest.takes.push(take);
+        }
+        dest.clips.push(clip);
+        let n = dest.clips.len() - 1;
+        self.session.tracks[t].clips.remove(c);
+        self.selected = Some((to, n));
+        true
+    }
+
+    /// What a clip's menu (or a key) asks: split it at the cursor, mute it, reset its gain
+    /// and fades, delete it. Whether the session changed.
+    fn clip_action(&mut self, t: usize, c: usize, what: &str) -> bool {
+        let rate = self.session.rate;
+        let cursor = self.session.transport.cursor;
+        let Some(track) = self.session.tracks.get_mut(t) else {
+            return false;
+        };
+        if c >= track.clips.len() {
+            return false;
+        }
+        match what {
+            "split" => {
+                let r = track.split_clip(c, cursor, rate);
+                if let Some(r) = r {
+                    self.selected = Some((t, r));
+                }
+                r.is_some()
+            }
+            "mute" => {
+                track.clips[c].muted = !track.clips[c].muted;
+                true
+            }
+            "reset" => {
+                let take_len = track.take_of(&track.clips[c]).map_or(0, Take::len);
+                let fade = default_fade(rate);
+                let clip = &mut track.clips[c];
+                clip.gain_db = 0.0;
+                clip.fade_in = if clip.src_start > 0 { fade } else { 0 };
+                clip.fade_out = if clip.src_start + clip.len < take_len {
+                    fade
+                } else {
+                    0
+                };
+                true
+            }
+            "delete" => {
+                track.clips.remove(c);
+                self.selected = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Take `j` of track `t` from `a` to `b` (timeline) promoted into the lane on top, the
+    /// cuts with the default fade (comping). Whether it was.
+    fn comp_in(&mut self, t: usize, j: usize, a: i64, b: i64) -> bool {
+        let rate = self.session.rate;
+        let Some(track) = self.session.tracks.get_mut(t) else {
+            return false;
+        };
+        let Some(take) = track.takes.get(j) else {
+            return false;
+        };
+        let (a, b) = (a.max(take.position), b.min(take.end()));
+        if b - a < 2 {
+            return false;
+        }
+        let src = (a - take.position) as usize;
+        let len = (b - a) as usize;
+        let fade = default_fade(rate);
+        let clip = Clip {
+            id: new_clip_id(),
+            take: take.id.clone(),
+            src_start: src,
+            len,
+            position: a,
+            gain_db: 0.0,
+            fade_in: if src > 0 { fade } else { 0 },
+            fade_out: if src + len < take.len() { fade } else { 0 },
+            muted: false,
+        };
+        track.clips.push(clip);
+        self.selected = Some((t, track.clips.len() - 1));
+        true
     }
 
     /// What event take `k` of track `t` plays and what renders for it, for its lane.
@@ -4476,12 +4836,14 @@ impl SessionView {
                     if let Some(e) = sig.and_then(|s| self.print_errors.get(&s)) {
                         return Some(format!("{}: its print failed: {e}", t.name));
                     }
-                    let k = t.active_take()?;
-                    let rev = k.events.as_ref()?.rev;
-                    self.take_errors
-                        .iter()
-                        .find(|((id, r, _), _)| *id == k.id && *r == rev)
-                        .map(|(_, e)| format!("{}: its render failed: {e}", t.name))
+                    t.lane_takes().into_iter().find_map(|k| {
+                        let k = &t.takes[k];
+                        let rev = k.events.as_ref()?.rev;
+                        self.take_errors
+                            .iter()
+                            .find(|((id, r, _), _)| *id == k.id && *r == rev)
+                            .map(|(_, e)| format!("{}: its render failed: {e}", t.name))
+                    })
                 });
                 if let Some(e) = failed {
                     self.error = Some(format!("the export stopped: {e}"));
@@ -4626,24 +4988,21 @@ impl SessionView {
         }
     }
 
+    /// Event takes in the lanes (track, take) whose revision has no production render.
     fn production_missing(&self) -> Vec<(usize, usize)> {
-        self.session
-            .tracks
-            .iter()
-            .enumerate()
-            .filter_map(|(t, track)| {
-                let k = track.active?;
-                let take = track.takes.get(k)?;
-                let e = take.events.as_ref()?;
-                let running = self.take_jobs.iter().any(|j| {
-                    j.wanted
-                        && j.id == take.id
-                        && j.rev == e.rev
-                        && j.quality == Quality::Production
-                });
-                (!take.has_render(Quality::Production) && !running).then_some((t, k))
-            })
-            .collect()
+        let mut out = Vec::new();
+        for (t, track) in self.session.tracks.iter().enumerate() {
+            for k in track.lane_takes() {
+                let take = &track.takes[k];
+                let Some(e) = &take.events else { continue };
+                if !take.has_render(Quality::Production)
+                    && !self.render_pending(&take.id, e.rev, Quality::Production)
+                {
+                    out.push((t, k));
+                }
+            }
+        }
+        out
     }
 
     /// Render event take `k` of track `t` at production, in the background.
@@ -4686,19 +5045,19 @@ impl SessionView {
     /// Event takes (track, take) that play the proxy or an older render: edited and not
     /// rendered, active ones, none asked for yet.
     fn renders_missing(&self) -> Vec<(usize, usize)> {
-        self.session
-            .tracks
-            .iter()
-            .enumerate()
-            .filter_map(|(t, track)| {
-                let k = track.active?;
-                let take = track.takes.get(k)?;
-                let e = take.events.as_ref()?;
-                (take.needs_render(track.drafts)
-                    && !self.render_pending(&take.id, e.rev, e.perf.quality))
-                .then_some((t, k))
-            })
-            .collect()
+        let mut out = Vec::new();
+        for (t, track) in self.session.tracks.iter().enumerate() {
+            for k in track.lane_takes() {
+                let take = &track.takes[k];
+                let Some(e) = &take.events else { continue };
+                if take.needs_render(track.drafts)
+                    && !self.render_pending(&take.id, e.rev, e.perf.quality)
+                {
+                    out.push((t, k));
+                }
+            }
+        }
+        out
     }
 
     /// Ctrl+R / Render: what is asked for at track `t` (with take `k` when one is meant):
@@ -4707,14 +5066,20 @@ impl SessionView {
         let Some(track) = self.session.tracks.get(t) else {
             return;
         };
-        let Some(k) = k.or(track.active) else {
-            return;
+        let takes = match k {
+            Some(k) => vec![k],
+            None => track.lane_takes(),
         };
-        let needs = track
-            .takes
-            .get(k)
-            .is_some_and(|x| x.needs_render(track.drafts));
-        if needs {
+        let needs: Vec<usize> = takes
+            .into_iter()
+            .filter(|&k| {
+                track
+                    .takes
+                    .get(k)
+                    .is_some_and(|x| x.needs_render(track.drafts))
+            })
+            .collect();
+        for k in needs {
             self.request_render(t, k, false);
         }
         if !self.session.print_current(t) {
@@ -4770,7 +5135,10 @@ impl SessionView {
             .session
             .add_rendered_take(t, (*audio).clone(), position, from)
         {
-            Ok(_) => self.save(),
+            Ok(new) => {
+                self.session.tracks[t].bounce_clips(id, &new);
+                self.save();
+            }
             Err(e) => self.error = Some(e),
         }
     }
@@ -4903,8 +5271,12 @@ impl SessionView {
         }
         let config = self.root.join("config");
         let mut start = Vec::new();
-        for t in &self.session.tracks {
-            let Some(k) = t.active_take() else { continue };
+        for k in self
+            .session
+            .tracks
+            .iter()
+            .flat_map(|t| t.lane_takes().into_iter().map(move |k| &t.takes[k]))
+        {
             let Some(e) = &k.events else { continue };
             if e.rev == 0
                 || k.has_proxy()
@@ -5700,6 +6072,49 @@ fn draw_grid(painter: &egui::Painter, rect: Rect, view: &View, grid: &Grid) {
     }
 }
 
+/// A clip's box in a lane, from `start` to `end` (timeline).
+fn clip_box(view: &View, lane: Rect, start: i64, end: i64) -> Rect {
+    Rect::from_min_max(
+        Pos2::new(view.x(start), lane.top() + 4.0),
+        Pos2::new(view.x(end).max(view.x(start) + 1.0), lane.bottom() - 4.0),
+    )
+}
+
+/// A clip's fades as lines across its top corners, and its gain handle (top middle).
+fn draw_fades(painter: &egui::Painter, r: Rect, view: &View, clip: &Clip, colour: Color32) {
+    let px = |n: usize| (n as f64 / view.rate * view.px_per_s) as f32;
+    let stroke = Stroke::new(1.0, colour.gamma_multiply(0.9));
+    let (fi, fo) = (px(clip.fade_in), px(clip.fade_out));
+    if fi > 1.0 {
+        painter.line_segment([r.left_bottom(), Pos2::new(r.left() + fi, r.top())], stroke);
+    }
+    if fo > 1.0 {
+        painter.line_segment(
+            [Pos2::new(r.right() - fo, r.top()), r.right_bottom()],
+            stroke,
+        );
+    }
+    // The handles: small squares where a drag sets the fades.
+    for x in [r.left() + fi.max(6.0), r.right() - fo.max(6.0)] {
+        painter.rect_filled(
+            Rect::from_center_size(Pos2::new(x, r.top() + 3.0), egui::vec2(5.0, 5.0)),
+            1.0,
+            colour.gamma_multiply(0.7),
+        );
+    }
+    if r.width() > 60.0 {
+        painter.rect_stroke(
+            Rect::from_center_size(
+                Pos2::new(r.center().x, r.top() + 4.0),
+                egui::vec2(16.0, 6.0),
+            ),
+            2.0,
+            Stroke::new(1.0, colour.gamma_multiply(0.6)),
+            StrokeKind::Inside,
+        );
+    }
+}
+
 /// A clip: a rounded box from `start` for `len` samples, its waveform from `ov`.
 #[allow(clippy::too_many_arguments)]
 fn draw_clip(
@@ -5709,6 +6124,22 @@ fn draw_clip(
     start: i64,
     len: usize,
     ov: &Overview,
+    colour: Color32,
+    label: &str,
+) {
+    draw_clip_from(painter, lane, view, start, len, ov, 0, colour, label);
+}
+
+/// [`draw_clip`] of a stretch whose first sample is the outline's sample `offset`.
+#[allow(clippy::too_many_arguments)]
+fn draw_clip_from(
+    painter: &egui::Painter,
+    lane: Rect,
+    view: &View,
+    start: i64,
+    len: usize,
+    ov: &Overview,
+    offset: usize,
     colour: Color32,
     label: &str,
 ) {
@@ -5748,7 +6179,7 @@ fn draw_clip(
     );
     let wave = colour.gamma_multiply(0.95);
     for px in a..b {
-        let s0 = (px as f32 - x0) as f64 * spp;
+        let s0 = (px as f32 - x0) as f64 * spp + offset as f64;
         if let Some((lo, hi)) = ov.range(s0, s0 + spp) {
             let (lo, hi) = (lo.clamp(-1.0, 1.0), hi.clamp(-1.0, 1.0));
             painter.line_segment(

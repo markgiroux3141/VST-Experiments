@@ -16,7 +16,14 @@
 //! default); either can be switched afterwards, since a take keeps its latency. Takes are
 //! never replaced: a new one is added to the track's lane and made the active one.
 //!
-//! **The mix** is a console's: each track's active take times its fader and balance
+//! **Clips** (docs/SESSION_EDITING_PLAN.md SE5): a track's lane is a list of [`Clip`]s,
+//! stretches of its takes (the pool) placed on the timeline with a gain and fades; later
+//! clips lie on top of earlier ones ([`Track::pieces`]). A recording or a render lays its take
+//! whole on top. A session saved before clips (version 1) opens with each track's active take
+//! as one clip, playing exactly as before; its old `session.json` is kept as
+//! `session.v1.json` on the first save.
+//!
+//! **The mix** is a console's: each track's lane times its fader and balance
 //! (center unity, a side down toward silence), mute and solo, summed; the device playing
 //! live goes through the armed track's fader. Arithmetic, not a device (RECORDING_PLAN.md,
 //! "Physical honesty").
@@ -766,13 +773,14 @@ impl Take {
     }
 }
 
-/// A track's chain printed on one of its takes: what it was made from (the chain's
-/// signature, [`Track::chain_signature`]), the take, the audio (from the take's position,
-/// the tail past its end) and its outline.
+/// A track's chain printed on its lane: what it was made from (the chain's signature,
+/// [`Session::chain_signature`]), the lane it was made from ([`Track::lane_signature`]),
+/// where the lane started, the audio (from there, the tail past its end) and its outline.
 #[derive(Debug, Clone)]
 pub struct Printed {
     pub signature: String,
-    pub take: String,
+    pub lane: String,
+    pub start: i64,
     pub audio: Arc<Vec<f32>>,
     pub overview: Arc<Overview>,
     /// Each insert's print, in order (the inserts not bypassed): the input of the one
@@ -791,19 +799,133 @@ fn new_track_id() -> String {
     format!("k{ms:x}-{}", TRACKS_MADE.fetch_add(1, Ordering::Relaxed))
 }
 
-/// A track: its takes (the lane), the one playing, its channel strip.
+/// Clips made in this process (with the clock, a new clip's id).
+static CLIPS_MADE: AtomicU64 = AtomicU64::new(0);
+
+/// A new clip's id: unique (the clock and a count).
+pub fn new_clip_id() -> String {
+    let ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_millis());
+    format!("c{ms:x}-{}", CLIPS_MADE.fetch_add(1, Ordering::Relaxed))
+}
+
+/// A cut's default fade (s): every edge a split or a trim makes gets it, so a cut never
+/// clicks (docs/SESSION_EDITING_PLAN.md decision 5). A take's own ends get none, so a
+/// session made before clips plays exactly as it did.
+pub const DEFAULT_FADE_S: f64 = 0.002;
+
+/// The default fade in samples at `rate`.
+pub fn default_fade(rate: u32) -> usize {
+    (DEFAULT_FADE_S * rate as f64).round() as usize
+}
+
+/// A stretch of a take placed in a lane (docs/SESSION_EDITING_PLAN.md SE5): `len` samples
+/// of the take's sound from `src_start`, at timeline `position`, its gain and fades. A
+/// lane's later clips lie on top of earlier ones (they win where they overlap; the earlier
+/// one crossfades under the later one's fades).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Clip {
+    pub id: String,
+    /// The take's id (in its track's takes).
+    pub take: String,
+    pub src_start: usize,
+    pub len: usize,
+    pub position: i64,
+    pub gain_db: f64,
+    pub fade_in: usize,
+    pub fade_out: usize,
+    pub muted: bool,
+}
+
+impl Clip {
+    /// The whole of `take`, where it sits, no fades.
+    pub fn whole(take: &Take) -> Clip {
+        Clip {
+            id: new_clip_id(),
+            take: take.id.clone(),
+            src_start: 0,
+            len: take.len(),
+            position: take.position,
+            gain_db: 0.0,
+            fade_in: 0,
+            fade_out: 0,
+            muted: false,
+        }
+    }
+
+    pub fn end(&self) -> i64 {
+        self.position + self.len as i64
+    }
+
+    /// The fades kept inside its length (each at most half of it).
+    fn fades(&self) -> (usize, usize) {
+        let half = self.len / 2;
+        (self.fade_in.min(half), self.fade_out.min(half))
+    }
+
+    pub fn to_json(&self) -> Value {
+        json!({
+            "id": self.id,
+            "take": self.take,
+            "src": self.src_start,
+            "len": self.len,
+            "pos": self.position,
+            "gain_db": self.gain_db,
+            "fade_in": self.fade_in,
+            "fade_out": self.fade_out,
+            "muted": self.muted,
+        })
+    }
+
+    pub fn from_json(v: &Value) -> Option<Clip> {
+        Some(Clip {
+            id: v["id"].as_str().map_or_else(new_clip_id, str::to_string),
+            take: v["take"].as_str()?.to_string(),
+            src_start: v["src"].as_u64().unwrap_or(0) as usize,
+            len: v["len"].as_u64()? as usize,
+            position: v["pos"].as_i64()?,
+            gain_db: v["gain_db"].as_f64().unwrap_or(0.0),
+            fade_in: v["fade_in"].as_u64().unwrap_or(0) as usize,
+            fade_out: v["fade_out"].as_u64().unwrap_or(0) as usize,
+            muted: v["muted"].as_bool().unwrap_or(false),
+        })
+    }
+}
+
+/// What a lane plays of a clip once the clips above it are taken out: a stretch of its
+/// take's sound at a place, with fades (a cut edge crossfades under the clip that cut it).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Piece {
+    pub clip: usize,
+    pub start: i64,
+    pub from: usize,
+    pub len: usize,
+    pub fade_in: usize,
+    pub fade_out: usize,
+    pub gain: f32,
+}
+
+/// A lane's sum as cached: its signature, where it starts, its samples.
+type LaneSum = (String, i64, Arc<Vec<f32>>);
+
+/// A track: its takes (the pool clips play from), its clips (the lane), the take last given
+/// to the lane, its channel strip.
 #[derive(Debug, Clone)]
 pub struct Track {
     /// Its id (saved; what a key route names: it survives renaming and reordering).
     pub id: String,
     pub name: String,
     pub takes: Vec<Take>,
+    /// The take last recorded, chosen or rendered into the lane (the take switcher's).
     pub active: Option<usize>,
+    /// The lane: clips in the order they were laid (later on top).
+    pub clips: Vec<Clip>,
     pub volume_db: f64,
     pub pan: f64,
     pub mute: bool,
     pub solo: bool,
-    /// Every take shown, stacked under the active one (a view setting, saved).
+    /// Every take shown, stacked under the lane (a view setting, saved).
     pub show_takes: bool,
     /// Its inserts, in signal order.
     pub inserts: Vec<Slot>,
@@ -817,6 +939,8 @@ pub struct Track {
     /// What a take from the keyboard records: its notes (an event take, with the audio heard
     /// as its first draft) or only its audio.
     pub midi: bool,
+    /// The lane's sum, made once per arrangement (shared by clones: keyed by signature).
+    lane_cache: Arc<std::sync::Mutex<Option<LaneSum>>>,
 }
 
 impl Track {
@@ -826,6 +950,7 @@ impl Track {
             name: name.to_string(),
             takes: Vec::new(),
             active: None,
+            clips: Vec::new(),
             volume_db: 0.0,
             pan: 0.0,
             mute: false,
@@ -836,6 +961,7 @@ impl Track {
             drafts: false,
             monitor: Monitor::Device,
             midi: true,
+            lane_cache: Arc::new(std::sync::Mutex::new(None)),
         }
     }
 
@@ -843,50 +969,244 @@ impl Track {
         self.active.and_then(|i| self.takes.get(i))
     }
 
+    /// The lane replaced by take `k` whole (the take switcher; a session from before clips).
+    pub fn set_active(&mut self, k: usize) {
+        if let Some(take) = self.takes.get(k) {
+            self.clips = vec![Clip::whole(take)];
+            self.active = Some(k);
+        }
+    }
+
+    /// The take a clip plays.
+    pub fn take_of(&self, c: &Clip) -> Option<&Take> {
+        self.takes.iter().find(|k| k.id == c.take)
+    }
+
+    pub fn take_index(&self, id: &str) -> Option<usize> {
+        self.takes.iter().position(|k| k.id == id)
+    }
+
+    /// The takes its unmuted clips play (each once, in the lane's order).
+    pub fn lane_takes(&self) -> Vec<usize> {
+        let mut v: Vec<usize> = Vec::new();
+        for c in self.clips.iter().filter(|c| !c.muted) {
+            if let Some(i) = self.take_index(&c.take)
+                && !v.contains(&i)
+            {
+                v.push(i);
+            }
+        }
+        v
+    }
+
     pub fn gains(&self) -> (f32, f32) {
         balance(self.volume_db, self.pan)
     }
 
-    /// What the chain's print of the active take is made from (the take, the rate, every
-    /// insert that isn't bypassed); None when there's nothing to print.
+    /// What the lane plays: each unmuted clip less what later clips cover (their cores,
+    /// inside their fades), each piece with its fades: a clip's own at its own edges, at an
+    /// edge another clip cut the cutter's fade (a crossfade under it).
+    pub fn pieces(&self) -> Vec<Piece> {
+        let mut out = Vec::new();
+        for (i, c) in self.clips.iter().enumerate() {
+            if c.muted || c.len == 0 {
+                continue;
+            }
+            let Some(take) = self.take_of(c) else {
+                continue;
+            };
+            // What its take has from src_start on.
+            let avail = take.sound(self.drafts).0.len().saturating_sub(c.src_start);
+            let len = c.len.min(avail);
+            if len == 0 {
+                continue;
+            }
+            let (fi, fo) = c.fades();
+            // Its stretches: (start, end, fade in, fade out).
+            let mut parts: Vec<(i64, i64, usize, usize)> =
+                vec![(c.position, c.position + len as i64, fi, fo.min(len / 2))];
+            for d in self.clips[i + 1..].iter().filter(|d| !d.muted && d.len > 0) {
+                if self.take_of(d).is_none() {
+                    continue;
+                }
+                let (dfi, dfo) = d.fades();
+                let (a, b) = (d.position + dfi as i64, d.end() - dfo as i64);
+                if b <= a {
+                    continue;
+                }
+                let mut next = Vec::new();
+                for (s, e, f0, f1) in parts {
+                    if b <= s || a >= e {
+                        next.push((s, e, f0, f1));
+                        continue;
+                    }
+                    if a > s {
+                        next.push((s, a, f0, dfi));
+                    }
+                    if b < e {
+                        next.push((b, e, dfo, f1));
+                    }
+                }
+                parts = next;
+            }
+            let gain = 10f64.powf(c.gain_db / 20.0) as f32;
+            for (s, e, f0, f1) in parts {
+                let n = (e - s) as usize;
+                out.push(Piece {
+                    clip: i,
+                    start: s,
+                    from: c.src_start + (s - c.position) as usize,
+                    len: n,
+                    fade_in: f0.min(n / 2),
+                    fade_out: f1.min(n / 2),
+                    gain,
+                });
+            }
+        }
+        // Where two pieces of one take meet seamlessly (an untouched split), their fades
+        // there come off: the take plays on as if never cut.
+        for a in 0..out.len() {
+            for b in 0..out.len() {
+                let (p, q) = (&out[a], &out[b]);
+                if a != b
+                    && p.start + p.len as i64 == q.start
+                    && p.from + p.len == q.from
+                    && p.gain == q.gain
+                    && self.clips[p.clip].take == self.clips[q.clip].take
+                {
+                    out[a].fade_out = 0;
+                    out[b].fade_in = 0;
+                }
+            }
+        }
+        out
+    }
+
+    /// What the lane is made of: its clips and what their takes play (for prints: a
+    /// change re-prints; and to find a print of the same lane).
+    pub fn lane_signature(&self) -> String {
+        let mut s = String::new();
+        for c in self.clips.iter().filter(|c| !c.muted) {
+            let Some(k) = self.take_of(c) else { continue };
+            let (audio, _, plays) = k.sound(self.drafts);
+            let what = match &k.events {
+                Some(e) => format!("{}@{}:{plays:?}:{}", k.id, e.rev, audio.len()),
+                None => k.id.clone(),
+            };
+            s.push_str(&format!(
+                "{what}[{},{},{},{},{},{}];",
+                c.src_start, c.len, c.position, c.gain_db, c.fade_in, c.fade_out
+            ));
+        }
+        s
+    }
+
+    /// The lane summed (mono, before the strip), from its first sound: a lone clip playing
+    /// its whole take plainly is the take's own audio (so a print of it keeps its key).
+    pub fn lane(&self) -> Option<(i64, Arc<Vec<f32>>)> {
+        let pieces = self.pieces();
+        let start = pieces.iter().map(|p| p.start).min()?;
+        let end = pieces.iter().map(|p| p.start + p.len as i64).max()?;
+        if let [p] = pieces.as_slice()
+            && let Some(k) = self.take_of(&self.clips[p.clip])
+        {
+            let audio = k.sound(self.drafts).0;
+            if p.from == 0
+                && p.len == audio.len()
+                && p.fade_in == 0
+                && p.fade_out == 0
+                && p.gain == 1.0
+            {
+                return Some((p.start, audio.clone()));
+            }
+        }
+        let sig = self.lane_signature();
+        if let Ok(c) = self.lane_cache.lock()
+            && let Some((s, st, a)) = c.as_ref()
+            && *s == sig
+        {
+            return Some((*st, a.clone()));
+        }
+        let mut out = vec![[0.0f32; 2]; (end - start) as usize];
+        for c in self.piece_clips(&pieces, (1.0, 1.0), NO_TRACK) {
+            c.add(start, &mut out, None);
+        }
+        let a: Arc<Vec<f32>> = Arc::new(out.into_iter().map(|f| f[0]).collect());
+        if let Ok(mut c) = self.lane_cache.lock() {
+            *c = Some((sig, start, a.clone()));
+        }
+        Some((start, a))
+    }
+
+    /// The pieces as the mix's clips through `gain` (the strip's), on meter `track`.
+    fn piece_clips(&self, pieces: &[Piece], gain: (f32, f32), track: usize) -> Vec<MixClip> {
+        pieces
+            .iter()
+            .filter_map(|p| {
+                let k = self.take_of(&self.clips[p.clip])?;
+                Some(MixClip {
+                    start: p.start,
+                    audio: k.sound(self.drafts).0.clone(),
+                    gain: (gain.0 * p.gain, gain.1 * p.gain),
+                    from: p.from,
+                    len: p.len,
+                    fade_in: p.fade_in,
+                    fade_out: p.fade_out,
+                    track,
+                })
+            })
+            .collect()
+    }
+
+    /// Where its lane starts and ends (none: no clip sounds).
+    pub fn lane_span(&self) -> Option<(i64, i64)> {
+        let pieces = self.pieces();
+        Some((
+            pieces.iter().map(|p| p.start).min()?,
+            pieces.iter().map(|p| p.start + p.len as i64).max()?,
+        ))
+    }
+
+    /// What the chain's print of the lane is made from (the lane, the rate, every insert
+    /// that isn't bypassed); None when there's nothing to print.
     pub fn chain_signature(&self, rate: u32) -> Option<String> {
-        let k = self.active_take()?;
+        self.lane_span()?;
         let on: Vec<Value> = self
             .inserts
             .iter()
             .filter(|s| !s.bypass)
             .map(Slot::to_json)
             .collect();
-        let (audio, _, plays) = k.sound(self.drafts);
-        let what = match &k.events {
-            Some(e) => format!("{}@{}:{plays:?}:{}", k.id, e.rev, audio.len()),
-            None => k.id.clone(),
-        };
-        (!on.is_empty()).then(|| format!("{what}|{rate}|{}", Value::Array(on)))
+        (!on.is_empty()).then(|| format!("{}|{rate}|{}", self.lane_signature(), Value::Array(on)))
     }
 
-    /// The audio the mix plays and where it starts: the print of the active take (stale
-    /// or not) while there's a chain to print, else the take.
-    pub fn playing(&self, rate: u32) -> Option<(i64, &Arc<Vec<f32>>, bool)> {
-        let k = self.active_take()?;
-        if self.chain_signature(rate).is_some()
-            && let Some(p) = self.printed.as_ref().filter(|p| p.take == k.id)
-        {
-            return Some((k.position, &p.audio, true));
+    /// The print that plays: of the lane as it is (current, or of older inserts: stale)
+    /// while there's a chain to print.
+    fn print_playing(&self, rate: u32) -> Option<&Printed> {
+        self.chain_signature(rate)?;
+        let lane = self.lane_signature();
+        self.printed.as_ref().filter(|p| p.lane == lane)
+    }
+
+    /// The audio the mix plays and where it starts: the print of the lane (stale or not)
+    /// while there's a chain to print, else the lane.
+    pub fn playing(&self, rate: u32) -> Option<(i64, Arc<Vec<f32>>, bool)> {
+        if let Some(p) = self.print_playing(rate) {
+            return Some((p.start, p.audio.clone(), true));
         }
-        Some((k.position, k.sound(self.drafts).0, false))
+        self.lane().map(|(s, a)| (s, a, false))
     }
 
-    /// What the mix plays of it, as track `index`: its sound through its strip (each clip's
-    /// stretch, offset, gain and fades; SE5).
+    /// What the mix plays of it, as track `index`: its print through its strip, else each
+    /// piece of its lane (its stretch, offset, the clip's gain and fades; SE5).
     pub fn mix_clips(&self, rate: u32, index: usize) -> Vec<MixClip> {
-        self.playing(rate)
-            .map(|(start, audio, _)| MixClip {
+        if let Some(p) = self.print_playing(rate) {
+            return vec![MixClip {
                 track: index,
-                ..MixClip::whole(start, audio.clone(), self.gains())
-            })
-            .into_iter()
-            .collect()
+                ..MixClip::whole(p.start, p.audio.clone(), self.gains())
+            }];
+        }
+        self.piece_clips(&self.pieces(), self.gains(), index)
     }
 
     /// Whether the print playing is the chain as it is now.
@@ -895,6 +1215,73 @@ impl Track {
             None => true,
             Some(s) => self.printed.as_ref().is_some_and(|p| p.signature == s),
         }
+    }
+
+    /// Where its last clip ends (0: none).
+    pub fn end(&self) -> i64 {
+        self.clips.iter().map(Clip::end).max().unwrap_or(0)
+    }
+
+    /// Take `k` placed as heard or on the click, its clips moved with it. Whether it moved.
+    pub fn place_take(&mut self, k: usize, heard: bool) -> bool {
+        let Some(take) = self.takes.get_mut(k) else {
+            return false;
+        };
+        let before = take.position;
+        if !take.place(heard) {
+            return false;
+        }
+        let (d, id) = (take.position - before, take.id.clone());
+        for c in self.clips.iter_mut().filter(|c| c.take == id) {
+            c.position += d;
+        }
+        true
+    }
+
+    /// Take `from`'s bounce `to` (its render as audio, aligned with it) laid where `from`'s
+    /// clips are, each with their stretch, gain and fades, and `from`'s clips muted beside
+    /// them (decision 7). The whole clip a new take arrives with is replaced.
+    pub fn bounce_clips(&mut self, from: &str, to: &str) {
+        let copies: Vec<Clip> = self
+            .clips
+            .iter()
+            .filter(|c| c.take == from && !c.muted)
+            .map(|c| Clip {
+                id: new_clip_id(),
+                take: to.to_string(),
+                ..c.clone()
+            })
+            .collect();
+        if copies.is_empty() {
+            return;
+        }
+        self.clips.retain(|c| c.take != to);
+        for c in self.clips.iter_mut().filter(|c| c.take == from) {
+            c.muted = true;
+        }
+        self.clips.extend(copies);
+    }
+
+    /// Clip `c` split at timeline position `at` (inside it): two clips, the cut edges with
+    /// the default fade. The right half's index, or None.
+    pub fn split_clip(&mut self, c: usize, at: i64, rate: u32) -> Option<usize> {
+        let clip = self.clips.get(c)?.clone();
+        if at <= clip.position || at >= clip.end() {
+            return None;
+        }
+        let left_len = (at - clip.position) as usize;
+        let fade = default_fade(rate);
+        let mut right = clip.clone();
+        right.id = new_clip_id();
+        right.position = at;
+        right.src_start += left_len;
+        right.len = clip.len - left_len;
+        right.fade_in = fade;
+        let left = &mut self.clips[c];
+        left.len = left_len;
+        left.fade_out = fade;
+        self.clips.insert(c + 1, right);
+        Some(c + 1)
     }
 }
 
@@ -994,15 +1381,25 @@ impl Session {
             if (any_solo && !t.solo) || (!any_solo && t.mute) {
                 continue;
             }
-            let Some(k) = t.active_take() else { continue };
-            let plays = k.sound(t.drafts).2;
+            if t.lane_span().is_none() {
+                continue;
+            }
+            let plays: Vec<(&Take, Plays)> = t
+                .lane_takes()
+                .into_iter()
+                .map(|k| (&t.takes[k], t.takes[k].sound(t.drafts).2))
+                .collect();
             let why = if !self.print_current(i) {
                 Some("its inserts aren't printed as they are now".to_string())
-            } else if plays == Plays::Proxy {
+            } else if plays.iter().any(|p| p.1 == Plays::Proxy) {
                 Some("it plays the proxy: its take isn't rendered on the device".into())
-            } else if plays == Plays::Stale {
+            } else if plays.iter().any(|p| p.1 == Plays::Stale) {
                 Some("its latest edit isn't rendered".into())
-            } else if fin && k.events.is_some() && plays != Plays::Render(Quality::Production) {
+            } else if fin
+                && plays
+                    .iter()
+                    .any(|(k, p)| k.events.is_some() && *p != Plays::Render(Quality::Production))
+            {
                 Some("its take has no production render playing".into())
             } else if fin
                 && let Some(s) = t
@@ -1056,15 +1453,24 @@ impl Session {
             .enumerate()
             .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
             .filter_map(|(i, t)| {
-                let k = t.active_take()?;
-                let (_, _, plays) = k.sound(t.drafts);
+                t.lane_span()?;
                 let printed = t.playing(self.rate).is_some_and(|p| p.2);
+                let clips: Vec<Value> = t
+                    .clips
+                    .iter()
+                    .filter(|c| !c.muted)
+                    .filter_map(|c| {
+                        let k = t.take_of(c)?;
+                        let mut v = c.to_json();
+                        v["revision"] = json!(k.events.as_ref().map(|e| e.rev));
+                        v["plays"] = json!(format!("{:?}", k.sound(t.drafts).2));
+                        Some(v)
+                    })
+                    .collect();
                 Some(json!({
                     "id": t.id,
                     "name": t.name,
-                    "take": k.id,
-                    "revision": k.events.as_ref().map(|e| e.rev),
-                    "plays": format!("{plays:?}"),
+                    "clips": clips,
                     "print": printed.then(|| self.chain_signature(i)),
                     "inserts": t.inserts.iter().filter(|s| !s.bypass).map(Slot::to_json).collect::<Vec<_>>(),
                     "volume_db": t.volume_db,
@@ -1098,7 +1504,7 @@ impl Session {
     fn signature_of(&self, t: usize, seen: &mut Vec<usize>) -> Option<String> {
         let track = self.tracks.get(t)?;
         let mut sig = track.chain_signature(self.rate)?;
-        let pos = track.active_take()?.position;
+        let pos = track.lane_span()?.0;
         seen.push(t);
         for s in track.inserts.iter().filter(|s| !s.bypass) {
             let (Some(_), Some(route)) = (key_control(s), &s.key) else {
@@ -1115,14 +1521,14 @@ impl Session {
         Some(sig)
     }
 
-    /// What track `i` plays, as a key hears it: its active take, where it sits, its chain.
+    /// What track `i` plays, as a key hears it: its lane, where it sits, its chain.
     fn plays_signature(&self, i: usize, seen: &mut Vec<usize>) -> String {
-        match self.tracks[i].active_take() {
+        let t = &self.tracks[i];
+        match t.lane_span() {
             None => "silence".to_string(),
-            Some(k) => format!(
-                "{}@{}[{}]",
-                k.id,
-                k.position,
+            Some((start, _)) => format!(
+                "{}@{start}[{}]",
+                t.lane_signature(),
                 self.signature_of(i, seen).unwrap_or_default()
             ),
         }
@@ -1168,20 +1574,21 @@ impl Session {
     }
 
     /// Insert `slot`'s sidechain on track `t`: its key track's playing audio from the
-    /// active take's position over the take and the slot's tail, silence where it has
-    /// none; None without a route (or a device without a key input, or a route to itself).
+    /// lane's start over the lane and the slot's tail, silence where it has none; None
+    /// without a route (or a device without a key input, or a route to itself).
     pub fn sidechain(&self, t: usize, slot: &Slot) -> Option<Arc<Vec<f32>>> {
         key_control(slot)?;
-        let take = self.tracks.get(t)?.active_take()?;
+        let (lane_start, lane_end) = self.tracks.get(t)?.lane_span()?;
         let i = self.track_index(&slot.key.as_ref()?.track)?;
         if i == t {
             return None;
         }
-        let n = take.len() + (slot.tail_s.max(0.0) * self.rate as f64).round() as usize;
+        let n = (lane_end - lane_start) as usize
+            + (slot.tail_s.max(0.0) * self.rate as f64).round() as usize;
         let mut out = vec![0f32; n];
         if let Some((start, audio, _)) = self.tracks[i].playing(self.rate) {
             for (j, o) in out.iter_mut().enumerate() {
-                let p = take.position + j as i64 - start;
+                let p = lane_start + j as i64 - start;
                 if p >= 0
                     && let Some(&v) = audio.get(p as usize)
                 {
@@ -1215,11 +1622,7 @@ impl Session {
             Some(i) if i != t => self.plays_signature(i, &mut vec![t]),
             _ => "none".to_string(),
         };
-        let pos = self
-            .tracks
-            .get(t)
-            .and_then(Track::active_take)
-            .map(|k| k.position);
+        let pos = self.tracks.get(t).and_then(Track::lane_span).map(|s| s.0);
         format!("{}|{}|{pos:?}|{what}", route.track, route.trim_db)
     }
 
@@ -1244,13 +1647,9 @@ impl Session {
         false
     }
 
-    /// Where the last take ends (0: none).
+    /// Where the last clip ends (0: none).
     pub fn end(&self) -> i64 {
-        self.tracks
-            .iter()
-            .flat_map(|t| t.takes.iter().map(Take::end))
-            .max()
-            .unwrap_or(0)
+        self.tracks.iter().map(Track::end).max().unwrap_or(0)
     }
 
     /// A take id never used in this session: past every take a track holds, every take it
@@ -1332,6 +1731,7 @@ impl Session {
         }
         self.known.insert(take.id.clone(), take.clone());
         let t = self.tracks.get_mut(track).ok_or("no such track")?;
+        t.clips.push(Clip::whole(&take));
         t.takes.push(take);
         t.active = Some(t.takes.len() - 1);
         self.save()?;
@@ -1472,18 +1872,20 @@ impl Session {
         write_take(&self.dir, &take, self.rate)?;
         self.known.insert(id.clone(), take.clone());
         let t = self.tracks.get_mut(track).ok_or("no such track")?;
+        t.clips.push(Clip::whole(&take));
         t.takes.push(take);
         t.active = Some(t.takes.len() - 1);
         self.save()?;
         Ok(id)
     }
 
-    /// Every take with a latency placed as heard (`true`) or on the click. Whether any moved.
+    /// Every take with a latency placed as heard (`true`) or on the click, its clips with
+    /// it. Whether any moved.
     pub fn place_all(&mut self, heard: bool) -> bool {
         let mut moved = false;
         for t in &mut self.tracks {
-            for k in &mut t.takes {
-                moved |= k.place(heard);
+            for k in 0..t.takes.len() {
+                moved |= t.place_take(k, heard);
             }
         }
         moved
@@ -1518,6 +1920,7 @@ impl Session {
                         .map(|k| (k.id.clone(), json!(if k.heard { "heard" } else { "click" })))
                         .collect::<serde_json::Map<_, _>>(),
                     "active": t.active_take().map(|k| k.id.clone()),
+                    "clips": t.clips.iter().map(Clip::to_json).collect::<Vec<_>>(),
                     "revisions": t
                         .takes
                         .iter()
@@ -1530,7 +1933,7 @@ impl Session {
             })
             .collect();
         json!({
-            "version": 1,
+            "version": 2,
             "rate": self.rate,
             "transport": transport_json(&self.transport),
             "tracks": tracks,
@@ -1607,6 +2010,22 @@ impl Session {
                 .takes
                 .iter()
                 .position(|k| Some(k.id.as_str()) == active);
+            // The lane: its clips; a session from before clips, its active take whole
+            // (it plays as it did: SE5's migration).
+            match t["clips"].as_array() {
+                Some(clips) => {
+                    track.clips = clips
+                        .iter()
+                        .filter_map(Clip::from_json)
+                        .filter(|c| track.take_of(c).is_some())
+                        .collect();
+                }
+                None => {
+                    if let Some(k) = track.active {
+                        track.set_active(k);
+                    }
+                }
+            }
             tracks.push(track);
         }
         self.armed = v["armed"]
@@ -1632,7 +2051,7 @@ impl Session {
             .unwrap_or_default();
         self.markers.sort_by_key(|m| m.position);
         // Prints carry over to the restored tracks: the one made from the same chain on the
-        // same take, else any print of that take (stale until it is printed again).
+        // same lane, else any print of that lane (stale until it is printed again).
         let prints: Vec<Printed> = self
             .tracks
             .iter()
@@ -1642,12 +2061,10 @@ impl Session {
         for i in 0..self.tracks.len() {
             let sig = self.chain_signature(i);
             let t = &mut self.tracks[i];
-            let Some(k) = t.active_take() else {
-                continue;
-            };
+            let lane = t.lane_signature();
             let same = prints.iter().find(|p| Some(&p.signature) == sig.as_ref());
             t.printed = same
-                .or_else(|| prints.iter().find(|p| p.take == k.id))
+                .or_else(|| prints.iter().find(|p| p.lane == lane))
                 .cloned();
         }
         Ok(())
@@ -1656,6 +2073,15 @@ impl Session {
     pub fn save(&self) -> Result<(), String> {
         std::fs::create_dir_all(&self.dir).map_err(|e| format!("{}: {e}", self.dir.display()))?;
         let p = self.dir.join("session.json");
+        // A session from before clips keeps its file beside the new one (SE5).
+        let old = self.dir.join("session.v1.json");
+        if !old.exists()
+            && let Ok(text) = std::fs::read_to_string(&p)
+            && serde_json::from_str::<Value>(&text)
+                .is_ok_and(|v| v["version"].as_u64().unwrap_or(1) < 2)
+        {
+            let _ = std::fs::write(&old, text);
+        }
         std::fs::write(
             &p,
             serde_json::to_string_pretty(&self.state()).unwrap_or_default() + "\n",
@@ -2006,10 +2432,10 @@ mod tests {
             renders: Vec::new(),
         };
         s.tracks[0].takes.push(take(5, 1.0));
-        s.tracks[0].active = Some(0);
+        s.tracks[0].set_active(0);
         let mut t2 = Track::new("2");
         t2.takes.push(take(0, 0.5));
-        t2.active = Some(0);
+        t2.set_active(0);
         t2.pan = 1.0;
         s.tracks.push(t2);
         let mut out = vec![[0.0f32; 2]; 20];
@@ -2056,10 +2482,10 @@ mod tests {
             renders: Vec::new(),
         };
         s.tracks[0].takes.push(take(sine));
-        s.tracks[0].active = Some(0);
+        s.tracks[0].set_active(0);
         let mut t2 = Track::new("2");
         t2.takes.push(take(vec![0.0; 48_000]));
-        t2.active = Some(0);
+        t2.set_active(0);
         s.tracks.push(t2);
         let mix = s.mix();
         assert_eq!(
@@ -2093,6 +2519,249 @@ mod tests {
             assert!((a[0] * 0.5 - b[0]).abs() < 1e-6);
         }
         assert_eq!(s.mix().master, md.master);
+    }
+
+    fn plain_take(id: &str, position: i64, audio: Vec<f32>) -> Take {
+        Take {
+            id: id.into(),
+            position,
+            latency: 0,
+            heard: true,
+            device: String::new(),
+            recorded_unix_s: 0,
+            code: String::new(),
+            overview: Arc::new(Overview::default()),
+            audio: Arc::new(audio),
+            rendered_from: None,
+            events: None,
+            renders: Vec::new(),
+        }
+    }
+
+    fn render_mix(s: &Session, at: i64, n: usize) -> Vec<Frame> {
+        let mut out = vec![[0.0f32; 2]; n];
+        s.mix().add(at, &mut out);
+        out
+    }
+
+    #[test]
+    fn a_split_plays_seamlessly_and_a_cut_moved_away_never_clicks() {
+        let rate = 48_000;
+        let mut s = Session::new(PathBuf::from("unused"), rate, TransportSettings::default());
+        let sine: Vec<f32> = (0..48_000)
+            .map(|i| 0.5 * (2.0 * std::f32::consts::PI * 1000.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        s.tracks[0]
+            .takes
+            .push(plain_take("t0001", 1000, sine.clone()));
+        s.tracks[0].set_active(0);
+        let whole = render_mix(&s, 0, 50_000);
+        // Split: the same samples, bit for bit (the cut's fades come off where it's seamless).
+        let r = s.tracks[0]
+            .split_clip(0, 1000 + 20_000, rate)
+            .expect("split");
+        assert_eq!(r, 1);
+        assert_eq!(s.tracks[0].clips[0].fade_out, default_fade(rate));
+        assert_eq!(render_mix(&s, 0, 50_000), whole);
+        // The right half moved a little: its edges fade, no step above the sine's own.
+        s.tracks[0].clips[1].position += 7;
+        let y = render_mix(&s, 0, 50_000);
+        let own = sine
+            .windows(2)
+            .map(|w| (w[1] - w[0]).abs())
+            .fold(0.0f32, f32::max);
+        let worst = y
+            .windows(2)
+            .map(|w| (w[1][0] - w[0][0]).abs())
+            .fold(0.0f32, f32::max);
+        assert!(worst <= own * 1.1, "{worst} vs the sine's own {own}");
+        // Trimmed (a clip shorter than its take) and muted.
+        s.tracks[0].clips[1].len = 1000;
+        assert_eq!(s.tracks[0].end(), 1000 + 20_007 + 1000);
+        s.tracks[0].clips[1].muted = true;
+        assert_eq!(s.tracks[0].pieces().len(), 1);
+    }
+
+    #[test]
+    fn a_later_clip_wins_and_the_earlier_crossfades_under_its_fade() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        s.tracks[0].takes.push(plain_take("a", 0, vec![1.0; 1000]));
+        s.tracks[0].takes.push(plain_take("b", 0, vec![0.5; 1000]));
+        s.tracks[0].set_active(0);
+        let b = Clip {
+            src_start: 0,
+            len: 300,
+            position: 400,
+            fade_in: 100,
+            fade_out: 50,
+            ..Clip::whole(&s.tracks[0].takes[1])
+        };
+        s.tracks[0].clips.push(b);
+        let p = s.tracks[0].pieces();
+        // A before B (fading out under B's fade in), A after B, B whole.
+        assert_eq!(
+            p.iter()
+                .map(|p| (p.clip, p.start, p.len, p.fade_in, p.fade_out))
+                .collect::<Vec<_>>(),
+            vec![
+                (0, 0, 500, 0, 100),
+                (0, 650, 350, 50, 0),
+                (1, 400, 300, 100, 50)
+            ]
+        );
+        // In the crossfade the two sum to the level between them; under B, B alone.
+        let y = render_mix(&s, 0, 1000);
+        assert!(
+            (y[450][0] - (1.0 * 0.495 + 0.5 * 0.505)).abs() < 0.02,
+            "{}",
+            y[450][0]
+        );
+        assert_eq!(y[550][0], 0.5);
+        assert_eq!(y[900][0], 1.0);
+        // The lane's sum is what the track plays (a print's input), from its start.
+        let (start, lane) = s.tracks[0].lane().unwrap();
+        assert_eq!((start, lane.len()), (0, 1000));
+        assert_eq!(lane[550], 0.5);
+        // A print of it follows the clips: moving one changes the chain's signature.
+        s.tracks[0].inserts.push(Slot::new("pultec_eqp1a"));
+        let sig = s.tracks[0].chain_signature(1000).unwrap();
+        s.tracks[0].clips[1].position += 10;
+        assert_ne!(s.tracks[0].chain_signature(1000).unwrap(), sig);
+    }
+
+    #[test]
+    fn a_session_from_before_clips_plays_as_it_did() {
+        // A version-1 state: no clips, each track's active take whole.
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        s.tracks[0].takes.push(plain_take(
+            "t0001",
+            5,
+            (0..100).map(|i| i as f32 * 0.01).collect(),
+        ));
+        s.tracks[0]
+            .takes
+            .push(plain_take("t0002", -20, vec![0.25; 300]));
+        s.tracks[0].active = Some(1);
+        s.tracks[0].volume_db = -3.0;
+        s.tracks[0].pan = 0.4;
+        let mut v = s.state();
+        v["version"] = json!(1);
+        for t in v["tracks"].as_array_mut().unwrap() {
+            t.as_object_mut().unwrap().remove("clips");
+        }
+        for (id, k) in [("t0001", 0), ("t0002", 1)] {
+            s.known.insert(id.into(), s.tracks[0].takes[k].clone());
+        }
+        let mut u = s.clone();
+        u.restore(&v).expect("restored");
+        assert_eq!(u.tracks[0].clips.len(), 1);
+        assert_eq!(u.tracks[0].clips[0].take, "t0002");
+        // The old mix: the active take whole through the strip.
+        let k = &s.tracks[0].takes[1];
+        let old = Mix {
+            clips: vec![MixClip::whole(
+                k.position,
+                k.audio.clone(),
+                s.tracks[0].gains(),
+            )],
+            ..Mix::default()
+        };
+        let mut want = vec![[0.0f32; 2]; 400];
+        old.add(-50, &mut want);
+        assert_eq!(render_mix(&u, -50, 400), want);
+        // The lane is the take's own audio (a print's key stays what it was).
+        assert!(Arc::ptr_eq(&u.tracks[0].lane().unwrap().1, &k.audio));
+    }
+
+    #[test]
+    fn a_bounce_lies_where_the_midi_clips_were_and_mutes_them() {
+        let mut t = Track::new("x");
+        t.takes.push(plain_take("m", 0, vec![0.1; 1000]));
+        t.set_active(0);
+        t.clips[0].src_start = 100;
+        t.clips[0].len = 500;
+        t.clips[0].position = 100;
+        t.takes.push(plain_take("audio", 0, vec![0.2; 1000]));
+        t.clips.push(Clip::whole(&t.takes[1]));
+        t.bounce_clips("m", "audio");
+        assert_eq!(t.clips.len(), 2);
+        assert!(t.clips[0].muted && t.clips[0].take == "m");
+        let c = &t.clips[1];
+        assert_eq!(
+            (c.take.as_str(), c.src_start, c.len, c.position),
+            ("audio", 100, 500, 100)
+        );
+    }
+
+    /// Every session in `$VARIMU_SESSIONS` (a folder of session folders, read only) plays
+    /// the same mix as before clips: each track's active take whole. Run by hand:
+    /// `VARIMU_SESSIONS=../../sessions cargo test -p varimu-app --lib -- --ignored every_session`.
+    #[test]
+    #[ignore]
+    fn every_session_opens_to_the_same_mix() {
+        let Ok(root) = std::env::var("VARIMU_SESSIONS") else {
+            return;
+        };
+        let mut checked = 0;
+        for e in std::fs::read_dir(&root)
+            .expect("a sessions folder")
+            .flatten()
+        {
+            let dir = e.path();
+            if !dir.join("session.json").is_file() {
+                continue;
+            }
+            let text = std::fs::read_to_string(dir.join("session.json")).unwrap();
+            let v: Value = serde_json::from_str(&text).unwrap();
+            if v["version"].as_u64().unwrap_or(1) >= 2 {
+                continue;
+            }
+            let s = match Session::load(&dir) {
+                Ok(s) => s,
+                Err(err) => {
+                    println!("{}: doesn't load ({err})", dir.display());
+                    continue;
+                }
+            };
+            // Before clips: each audible track's active take's sound, whole, at its place.
+            let any_solo = s.tracks.iter().any(|t| t.solo);
+            let old = Mix {
+                clips: s
+                    .tracks
+                    .iter()
+                    .filter(|t| if any_solo { t.solo } else { !t.mute })
+                    .filter_map(|t| {
+                        let k = t.active_take()?;
+                        Some(MixClip::whole(
+                            k.position,
+                            k.sound(t.drafts).0.clone(),
+                            t.gains(),
+                        ))
+                    })
+                    .collect(),
+                ..Mix::default()
+            };
+            let end = s.end();
+            let start = s
+                .tracks
+                .iter()
+                .filter_map(Track::lane_span)
+                .map(|x| x.0)
+                .min()
+                .unwrap_or(0)
+                .min(0);
+            let n = (end - start).max(0) as usize;
+            let mut want = vec![[0.0f32; 2]; n];
+            old.add(start, &mut want);
+            assert_eq!(render_mix(&s, start, n), want, "{}", dir.display());
+            println!(
+                "{}: {} tracks, {n} frames, the same",
+                dir.display(),
+                s.tracks.len()
+            );
+            checked += 1;
+        }
+        println!("{checked} sessions checked");
     }
 
     #[test]
@@ -2291,7 +2960,8 @@ mod tests {
         assert_eq!(out[50][0], 0.1);
         s.tracks[0].printed = Some(Printed {
             signature: sig.clone(),
-            take: "t0001".into(),
+            lane: s.tracks[0].lane_signature(),
+            start: s.tracks[0].lane_span().unwrap().0,
             audio: Arc::new(vec![0.7; 150]),
             overview: Arc::new(Overview::default()),
             stages: Vec::new(),
@@ -2381,7 +3051,7 @@ mod tests {
         // The bass's signature follows what the kick plays.
         let sig = s.chain_signature(0).expect("a chain");
         assert!(sig.starts_with(&s.tracks[0].chain_signature(1000).unwrap()));
-        s.tracks[1].takes[0].position = 130;
+        s.tracks[1].clips[0].position = 130;
         let moved = s.chain_signature(0).unwrap();
         assert_ne!(sig, moved, "the kick moved");
         s.tracks[1].inserts.push(Slot::new("pultec_eqp1a"));
@@ -2391,7 +3061,8 @@ mod tests {
         assert!(!s.keys_ready(0));
         s.tracks[1].printed = Some(Printed {
             signature: s.chain_signature(1).unwrap(),
-            take: s.tracks[1].takes[0].id.clone(),
+            lane: s.tracks[1].lane_signature(),
+            start: s.tracks[1].lane_span().unwrap().0,
             audio: Arc::new(vec![0.5; 25]),
             overview: Arc::new(Overview::default()),
             stages: Vec::new(),

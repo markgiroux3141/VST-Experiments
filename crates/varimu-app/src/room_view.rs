@@ -379,7 +379,7 @@ impl RoomView {
             .session()
             .tracks
             .iter()
-            .filter(|t| t.active_take().is_some())
+            .filter(|t| t.lane_span().is_some())
             .map(|t| (t.id.clone(), t.name.clone()))
             .collect();
         let track_name = |id: &str| {
@@ -1150,7 +1150,7 @@ impl RoomView {
                     return None;
                 }
                 let (_, audio, _) = t.playing(session.rate)?;
-                let r = room::sounding_rms(audio, session.rate);
+                let r = room::sounding_rms(&audio, session.rate);
                 (r > 0.0).then(|| 20.0 * r.log10() + t.volume_db)
             })
             .collect();
