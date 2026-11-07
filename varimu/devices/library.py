@@ -1713,6 +1713,43 @@ def build_2n3053() -> dict[str, Any]:
     )
 
 
+def build_2n5087() -> dict[str, Any]:
+    """The 2N5087 (the API 2520's Q6 and Q9, PNP: docs/CHAINS_PLAN.md WP12)."""
+    return _bjt_from_numbers(
+        "2N5087",
+        "pnp",
+        {
+            "IS": 2.45e-15, "BF": 1135.0, "VAF": 139.0, "IKF": 21.2e-3, "ISE": 380e-15,
+            "NE": 2.0, "BR": 4.0, "NR": 1.0, "VAR": 20.0, "IKR": 45.0e-3, "RE": 106.0,
+            "RB": 426.0, "RC": 42.6, "CJE": 9.65e-12, "CJC": 11.8e-12, "VJC": 0.3, "MJC": 0.3,
+        },  # fmt: skip
+        "Central Semiconductor's 2N5087 SPICE model (8/18/10 rev A; Central's licence forbids "
+        "redistributing the card, so its numbers are cited here)",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N5087.LIB (2N5087, 8/18/10 rev "
+        "A: IS 2.45f, BF 1.135k, VAF 139, IKF 21.2m, ISE 380f, NE 2.00, BR 4.00, VAR 20.0, "
+        "IKR 45.0m, RE 106, RB 426, RC 42.6, CJE 9.65p, CJC 11.8p, VJC 0.300, MJC 0.300)",
+    )
+
+
+def build_2n4033() -> dict[str, Any]:
+    """The 2N4033 (PNP, 80 V 1 A): the stand-in for the API 2520's Q8, a 2N4036 (Central has
+    no 2N4036 card; the two are siblings of the 2N3053's complement family)."""
+    return _bjt_from_numbers(
+        "2N4033",
+        "pnp",
+        {
+            "IS": 57.5e-15, "BF": 449.0, "VAF": 161.0, "IKF": 0.313, "ISE": 33.6e-12,
+            "NE": 2.0, "BR": 4.0, "NR": 1.0, "VAR": 20.0, "IKR": 0.870, "RE": 0.112,
+            "RB": 0.449, "RC": 44.9e-3, "CJE": 134e-12, "CJC": 42.4e-12, "VJC": 0.3, "MJC": 0.3,
+        },  # fmt: skip
+        "Central Semiconductor's 2N4033 SPICE model (11/12/08 rev A; numbers cited, the card "
+        "not redistributed); a stand-in for the 2N4036 of the 2520's drawing",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N4033.LIB (2N4033, 11/12/08 "
+        "rev A: IS 57.5f, BF 449, VAF 161, IKF 0.313, ISE 33.6p, NE 2.00, BR 4.00, VAR 20.0, "
+        "IKR 0.870, RE 0.112, RB 0.449, RC 44.9m, CJE 134p, CJC 42.4p, VJC 0.300, MJC 0.300)",
+    )
+
+
 def build_bc550c() -> dict[str, Any]:
     """The BC550C (Philips / NXP), the project's first BJT (CLAVINET_PLAN.md CL0)."""
     return _bjt_component(
@@ -2234,6 +2271,8 @@ BUILDERS = {
     "2N5457": build_2n5457,
     "2N3707": build_2n3707,
     "2N3053": build_2n3053,
+    "2N5087": build_2n5087,
+    "2N4033": build_2n4033,
     "EL34T": build_el34t,
     "6084": build_6084,
     "5651": build_5651,

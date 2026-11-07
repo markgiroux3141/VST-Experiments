@@ -40,8 +40,8 @@ runs**.
   `RIBBON_4038@1` after BBC Monograph No. 4 fitted to STC's curve, `STC4038_OT@1`; a miss
   of +2.8 dB at 4-7 kHz); WP8's Notes. WP9 (2026-11-06): the AKG D112 (`config/circuits/akg_d112.yaml`: `R_D112@1`
   fitted by `scripts/fit_d112.py`, no construction published; D112 -> SSL composed); WP9's Notes.
-- **In progress:** WP12 (API 312): step 1 half done (`data/schematics/api_312/README.md`: API's own 1972 mic preamp circuit, Fig. 1, and the 2520's data sheet). **Blocked on the 2520's internal schematic** (nine transistors, epoxy-potted: no public source but GroupDIY attachments).
-- **Next:** WP14's bass switch network (step 4) and the patent (step 2), then WP15-WP17 by open sources; WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+- **In progress:** WP12 (API 312): the 2520 built from BJTs (`api_2520_test.yaml`, WP12's Notes); next its step 4, the 312 around it.
+- **Next:** WP12 step 4 (the 312); then WP19 (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -1161,6 +1161,28 @@ Steps:
    fixtures, `chain_status.py` 22 of 51.
 
 Notes (2026-11-06, started): step 1 half done. The user's folder held API's marketing cut sheet (block diagram, no schematic). Found instead: API's 1972 circuit sheet (Fig. 1: the 58 dB mic preamp, AP2622 1:8, Rs 470 / 60 uF, Rf 47 k / 47 pF) and the data sheet, both in the README; the 2520's internals are published nowhere open (potted). Needed from the user: `API_2520_schematic2.gif` (and 1) from GroupDIY thread 62035, and any AP2516 / AP2503 figures.
+- **Step 2-3, the 2520 (2026-11-06):** the user supplied GroupDIY's "2520 R1" drawing
+  (`data/schematics/api_312/api_2520_schematic_*.{gif,png}`). Transcribed into
+  `config/circuits/api_2520_test.yaml` (the 1972 Fig. 1 feedback: 47k / 470, 47 pF; +-15 V,
+  600 ohm). New components: `2N5087@1`, `2N4033@1` (Central's cards, numbers cited:
+  `library.build_2n5087`, `build_2n4033`); the BC550C stands in for the BC414C / SKA4693 and
+  the TIS97 / TIS98 (no cards), the 2N4033 for the 2N4036. **Two deviations from the
+  drawing**, both forced: (1) Q7's base on Q9's collector (vH), not Q9's emitter (as drawn the
+  output sat near +14 V: Q9 is the voltage amplifier's upper half, R9 its degeneration, D1
+  the bias string between the output bases); (2) C5 from Q4's base (Q1's collector, vA) to
+  vJ, not from Q3's base: from Q3's base to vJ the path doesn't invert, so the drawn C5 was
+  positive feedback (it oscillated at ~28 kHz; without C5 it was stable; on vA it is a Miller
+  capacitor). With both: idle offset 1 mV, gain 40.08 dB (40.09 expected), THD at 1 kHz
+  0.035% at the rated 7.75 V rms into 600 ohm (api: < 0.2%), 10 V rms 0.32%. **Misses:**
+  0.16% THD at 1 V rms (crossover: the quiescent current is a few mA, api 15 mA; Q9's current
+  is set by R6 and Q9's Vbe, and Central's 2N5087 card has RE 106 ohm); -2 dB at 20 kHz at
+  40 dB (GBW ~3 MHz; api's Fig. 1 is +-0.25 dB to 20 kHz at 58 dB): the stand-in transistors'
+  and the guessed C5's. D2 / D3 (current-limit clamps) not modelled. `tests/test_api_2520.py`
+  (4). **Next (step 4):** the 312 itself: the input transformer (1:8 AP2622 in Fig. 1; the
+  312's AP2516, ratio unpublished: assume 1:8 provisional), the 2520 at the 312's gain range
+  (max 69 dB, the gain pot in Rs), the pad, the 3:1 output transformer tap (AP2503 1:3,
+  provisional), then the profile and `sm57_api312`; first look at the quiescent current (R7's
+  3k-5k selection) and the bandwidth (C5's value) against the sheet.
 
 ### WP13. The Electro-Voice RE20 (Variable-D)
 

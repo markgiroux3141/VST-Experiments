@@ -33,11 +33,23 @@ Sources and provenance. Nothing here is a transistor-level 2520 yet: see "Missin
   stages. Revisions: Melville and Huntington (API's two best known). A stability cap across
   Rf: one builder 100 pF.
 
-## Missing (the user fetches; GroupDIY attachments are login-walled)
+## The 2520's internal schematic (supplied by the user, 2026-11-06)
 
-The 2520's internal schematic with its values:
-GroupDIY "Origin of 2520 Schematic?" thread, Di_Sousa's attachments of 2016-04-15,
-`API_2520_schematic1.pdf` and `API_2520_schematic2.gif` (the second has the right D2 / Q9
-connection), `https://groupdiy.com/threads/origin-of-2520-schematic.62035/`; also
-`https://groupdiy.com/threads/current-api-2520-schematic.53738/`. Also the AP2516 / AP2622
-and AP2503 transformers' figures (turns, DCR, inductance).
+- `api_2520_schematic_r1.gif` and `api_2520_schematic_groupdiy.png`: GroupDIY's "Origin of
+  2520 Schematic?" thread (https://groupdiy.com/threads/origin-of-2520-schematic.62035/,
+  Di_Sousa's attachment `API_2520_schematic2.gif`, "2520 R1", and a cleaner redraw of the
+  same). A reverse-engineered drawing, not API's. Q1 / Q2 SKA4693 (BC414C in another version),
+  Q3 / Q4 TIS98 / TIS97, Q5 TIS98, Q6 / Q9 2N5087, Q7 2N3053, Q8 2N4036; R1 150k, R2 100R, R3
+  82k, R4 22k, R5 68k (the trim tap between them), R6 3k, R7 3k-5k, R8 1k, R9 56R, R10 800,
+  R11 / R12 5R6, R13 56R, R14 1k, R15 1k, R16 47k; C1 1000p, C2 47p, C3 47p, C4 39p, C5 47p;
+  D1 MZ2361 (two in series on the R1 drawing), D2 / D3 MZ2361 clamps. Its notes list variants
+  (C4 68p, R3 20k, R4 3k9, R5 16k, R6 3k9, R7 3k3, R14 0R, a current-source tail).
+- Transcribed into `config/circuits/api_2520_test.yaml`, with two deviations a working op-amp
+  needs (Q7's base on Q9's collector; C5 on Q4's base): the circuit file's header and
+  CHAINS_PLAN.md WP12's Notes say why.
+
+## Still missing
+
+The AP2516 / AP2622 input and AP2503 output transformers' figures (turns, DCR, inductance):
+only their ratios are published (API: 1:8 for the AP2622 in the 1972 Fig. 1; the 312 cut
+sheet's "3:1 output transformer tap selection"; the AP2503 1:3 in Fig. 2).

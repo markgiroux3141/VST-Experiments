@@ -78,3 +78,8 @@ stems/
 # MIDI of songs for testing instruments (fan transcriptions: not ours to redistribute)
 midi/*
 !midi/README.md
+# third-party documents supplied for the chains (CHAINS_PLAN.md): READMEs only are committed
+data/schematics/helios_ia_h9/*
+!data/schematics/helios_ia_h9/README.md
+data/schematics/emi_tg12345/*.txt
+data/schematics/api_312/*.pdf

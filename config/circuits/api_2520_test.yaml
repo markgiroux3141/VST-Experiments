@@ -1,0 +1,121 @@
+# The API 2520 discrete op-amp in a closed-loop test circuit (docs/CHAINS_PLAN.md WP12 step 3).
+#
+# The 2520's schematic is the GroupDIY "Origin of 2520 Schematic?" thread's reverse-engineered
+# R1 drawing (data/schematics/api_312/api_2520_schematic_r1.gif and ..._groupdiy.png): nine
+# transistors, the Q1 / Q2 input pair on a 150k tail, Q3 / Q4 the second differential pair,
+# Q6 (the current mirror-less load return) and Q5 / Q9 the voltage-amplifier halves, Q7 / Q8 the
+# output pair with 5R6 emitter resistors, D1 the bias spreader (two diodes in series, the
+# drawing's first variant). No values are API's own: the drawing is a reconstruction ("2520
+# R1"); API's data sheet (Automated Processes Inc., the 1972 circuit sheet) gives the
+# performance this circuit is checked against (gain > 110 dB DC, GBW ~50 MHz, quiescent
+# 15 mA at +-15 V, 0.2% THD at rated output).
+#
+# Two deviations from the drawing, each needed for a working op-amp (CHAINS_PLAN.md WP12's
+# Notes): Q7's base is Q9's collector (vH, the top of the bias string), not Q9's emitter (the
+# drawn wire would hold the output near +14 V: Q9 is the voltage amplifier's upper half, R9 its
+# emitter degeneration); C5 goes from Q4's base (vA, Q1's collector) to vJ, not from Q3's base
+# (from Q3's base the path to vJ doesn't invert, so the drawn C5 is positive feedback: it
+# oscillated at ~28 kHz; on vA it is Miller compensation).
+#
+# Not modelled: the output current-limit clamps D2 / D3 (MZ2361 in the drawing, a zener-like
+# clamp across each output transistor's base-emitter path: the drawing names them but their
+# voltage is unknown); they act only at overload. The input pair is the BC414C (a low-noise
+# hFE 400+ NPN, the drawing's note); Central has no card, the BC550C stands in (same class).
+# Q3 / Q4 / Q5 are TIS98 / TIS97 (no card found): BC550C stands in. Q8 is a 2N4036: the
+# 2N4033 (Central's card) stands in.
+#
+# Test circuit: +-15 V ideal rails, a non-inverting gain of 101 (the 1972 sheet's Fig. 1
+# feedback: Rf 47k, Rs 470 ohm, 47 pF across Rf), a 1k source, a 600 ohm load.
+
+title: "API 2520 op-amp test"
+input: in
+probes: [out, outc, inm, vA, vB, vC, vD, vF, vG, vH, vJ]
+
+values:
+  supply_neg_v: {value: -15.0, source: "api: the data sheet's +-15 VDC supply"}
+  supply_v: {value: 15.0, source: "api: the data sheet's +-15 VDC supply (quiescent 15 mA, 7.75 V rms out)"}
+  r_source_ohm: {value: 1.0e+3, source: "provisional: model knowledge (a source impedance giving the input a DC path)"}
+  r_feedback_ohm: {value: 47.0e+3, source: "api: the 1972 circuit sheet's Fig. 1 (Rf 47K)"}
+  c_feedback_f: {value: 47.0e-12, source: "api: the 1972 circuit sheet's Fig. 1 (47 pf across Rf)"}
+  r_gain_ohm: {value: 470.0, source: "api: the 1972 circuit sheet's Fig. 1 (Rs 470, 58 dB with the AP2622's 1:8)"}
+  c_gain_f: {value: 60.0e-6, source: "api: the 1972 circuit sheet's Fig. 1 (60/10, Rs's bypass)"}
+  c_out_f: {value: 60.0e-6, source: "api: the 1972 circuit sheet's Fig. 1 (60/10 into 600 ohm)"}
+  r_load_ohm: {value: 600.0, source: "api: the 1972 circuit sheet (600 ohm load impedance)"}
+  r1_ohm: {value: 150.0e+3, source: "web: groupdiy.com/threads/origin-of-2520-schematic.62035 (R1 150k, the Q1 / Q2 tail)"}
+  r2_ohm: {value: 100.0, source: "web: groupdiy 2520 R1 drawing (R2 100R)"}
+  c1_f: {value: 1000.0e-12, source: "web: groupdiy 2520 R1 drawing (C1 1000p)"}
+  r3_ohm: {value: 82.0e+3, source: "web: groupdiy 2520 R1 drawing (R3 82k)"}
+  c4_f: {value: 39.0e-12, source: "web: groupdiy 2520 R1 drawing (C4 39p)"}
+  r4_ohm: {value: 22.0e+3, source: "web: groupdiy 2520 R1 drawing (R4 22k)"}
+  r5_ohm: {value: 68.0e+3, source: "web: groupdiy 2520 R1 drawing (R5 68k)"}
+  r6_ohm: {value: 3.0e+3, source: "web: groupdiy 2520 R1 drawing (R6 3k)"}
+  r7_ohm: {value: 4.0e+3, source: "web: groupdiy 2520 R1 drawing (R7 3k-5k, a selected value: the middle)"}
+  r8_ohm: {value: 1.0e+3, source: "web: groupdiy 2520 R1 drawing (R8 1k)"}
+  r9_ohm: {value: 56.0, source: "web: groupdiy 2520 R1 drawing (R9 56R)"}
+  r10_ohm: {value: 800.0, source: "web: groupdiy 2520 R1 drawing (R10 800)"}
+  c2_f: {value: 47.0e-12, source: "web: groupdiy 2520 R1 drawing (C2 47p)"}
+  r11_ohm: {value: 5.6, source: "web: groupdiy 2520 R1 drawing (R11 5R6)"}
+  r12_ohm: {value: 5.6, source: "web: groupdiy 2520 R1 drawing (R12 5R6)"}
+  r13_ohm: {value: 56.0, source: "web: groupdiy 2520 R1 drawing (R13 56R)"}
+  r14_ohm: {value: 1.0e+3, source: "web: groupdiy 2520 R1 drawing (R14 1k)"}
+  c3_f: {value: 47.0e-12, source: "web: groupdiy 2520 R1 drawing (C3 47p)"}
+  r15_ohm: {value: 1.0e+3, source: "web: groupdiy 2520 R1 drawing (R15 1k)"}
+  r16_ohm: {value: 47.0e+3, source: "web: groupdiy 2520 R1 drawing (R16 47k)"}
+  c5_f: {value: 47.0e-12, source: "web: groupdiy 2520 R1 drawing (C5 47p)"}
+
+devices:
+  QIN: {device: BC550C@1, source: "provisional: the BC414C of the drawing's notes (hFE > 400, matched); no card"}
+  QSM: {device: BC550C@1, source: "provisional: the TIS98 / TIS97 of the drawing; no card"}
+  QPN: {device: 2N5087@1, source: "web: the drawing (Q6, Q9 2N5087)"}
+  QOP: {device: 2N3053@1, source: "web: the drawing (Q7 2N3053)"}
+  QOM: {device: 2N4033@1, source: "provisional: the drawing's Q8 is a 2N4036; the 2N4033 is its sibling"}
+  DB: {device: 1N4148@1, source: "provisional: the drawing's D1 (MZ2361 x 2 in series, forward): two small-signal silicon diodes"}
+
+sections:
+  - title: rails
+    parts:
+      VP: {V: [vp, "0"], v: supply_v}
+      VN: {V: [vn, "0"], v: supply_neg_v}
+  - title: source and feedback
+    parts:
+      RS: {R: [in, inp], r: r_source_ohm}
+      RF: {R: [out, inm], r: r_feedback_ohm}
+      CF: {C: [out, inm], c: c_feedback_f}
+      RG: {R: [inm, g1], r: r_gain_ohm}
+      CG: {C: [g1, "0"], c: c_gain_f}
+      CO: {C: [out, outc], c: c_out_f}
+      RL: {R: [outc, "0"], r: r_load_ohm}
+  - title: "the 2520"
+    parts:
+      Q1: {bjt: [vA, inp, tail], model: QIN}
+      Q2: {bjt: [vB, inm, tail], model: QIN}
+      R1: {R: [tail, vn], r: r1_ohm}
+      R3: {R: [vp, vA], r: r3_ohm}
+      C4: {C: [vp, vA], c: c4_f}
+      R2: {R: [vA, c1m], r: r2_ohm}
+      C1: {C: [c1m, vB], c: c1_f}
+      R4: {R: [vp, vT], r: r4_ohm}
+      R5: {R: [vT, vB], r: r5_ohm}
+      Q3: {bjt: [vD, vB, e34], model: QSM}
+      Q4: {bjt: [vF, vA, e34], model: QSM}
+      R6: {R: [vp, vD], r: r6_ohm}
+      R7: {R: [vp, vF], r: r7_ohm}
+      R16: {R: [e34, vC], r: r16_ohm}
+      Q6: {bjt: [vC, vF, e6], model: QPN}
+      R8: {R: [vp, e6], r: r8_ohm}
+      R15: {R: [vC, vn], r: r15_ohm}
+      Q9: {bjt: [vH, vD, vG], model: QPN}
+      R9: {R: [vp, vG], r: r9_ohm}
+      C2: {C: [vD, c2m], c: c2_f}
+      R10: {R: [c2m, vH], r: r10_ohm}
+      D1A: {device: [vH, d1m], model: DB}
+      D1B: {device: [d1m, vJ], model: DB}
+      Q5: {bjt: [vJ, vC, e5], model: QSM}
+      R13: {R: [e5, vn], r: r13_ohm}
+      R14: {R: [vC, r14m], r: r14_ohm}
+      C3: {C: [r14m, vJ], c: c3_f}
+      C5: {C: [vA, vJ], c: c5_f}
+      Q7: {bjt: [vp, vH, e7], model: QOP}
+      R11: {R: [e7, out], r: r11_ohm}
+      Q8: {bjt: [vn, vJ, e8], model: QOM}
+      R12: {R: [e8, out], r: r12_ohm}
