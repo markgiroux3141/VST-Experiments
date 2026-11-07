@@ -165,3 +165,19 @@ The two contour sections are the same circuit (filter: Q1-Q8, Q21, Q22; loudness
 C6 1 uF (glide up), R64 100K, R21 10K, R31 22M, R2 330, CR5 1N4004, R65 5.1K, C13 .01, R34 100K; the current source
 Q9 / Q11 (TIS93 / TIS92, matched PNP 10 to 20 mV under the NPN at 200 uA), R1 590, R20 1K, R22 1.1K 1%, R25 1K; output
 R18 3.9K to -10 V at pins 4 / 5 (to the oscillators and filter). Not yet traced node by node.
+
+### Fig 9-7 resolved with a sharper scan (2026-11-07)
+
+The user found www.fantasyjackpalance.com's Minimoog page (http://www.fantasyjackpalance.com/fjp/sound/synth/synthdata/16-moog-minimoog.html;
+WebFetch gets 403, `curl` with a browser User-Agent gets 200). It hosts the manual's schematics as GIFs in three
+resolutions (`16-minimoog/000|001|002/907-cont-gen-key-schem.gif`; 002 is 4572 x 3084), also 906 (board layout), 912
+(left controller), 916 (front panel wiring, Fig 9-16), 917 (interconnect wiring). Scratch copies in `cache/fjp/` (not committed).
+Read there:
+- **Q1 base is NOT tied to its collector.** Q1's base goes through R3 (10K) to Q4's collector node; the small dot at
+  Q1 is a printing blot. Same for Q25 (R38 to Q15's collector, R40 3.3K on its collector). Both pairs are
+  Eccles-Jordan flip-flops (the user's reading of Q25's missing dot, confirmed on the 002 scan).
+- Q4's base (the pair's other input) joins R14 33K (up) and CR3 (to the peak-detector node); CR1 (points right,
+  user and scan agree) joins R35 / R37 pull-ups to that same base node.
+- **Trigger section:** CR10 points toward R60 (the user: "points left"; scan: cathode on the R60 side), so a
+  positive voltage at pin 20 (keyboard trigger) charges C7 through R60 / R55 into Q20's base: Q20 (NPN) conducts when the
+  key trigger goes HIGH. R19 10K / R49 220 from pin 19 (EXT. S-TRIG) feed Q12's base and Q20's collector line.

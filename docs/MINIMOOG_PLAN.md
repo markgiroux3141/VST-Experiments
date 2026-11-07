@@ -132,6 +132,12 @@ detector (CR3 on N_B) then sets the ~4 V top. Also open: which panel pot is whic
 trigger's polarity at pin 20. The click (a bare 5 V gate stepped in one sample into the VCA) is unchanged.
 MM3's prerequisites (uA726, LM393, E112, the reset exception) are not started.
 
+**MM4's reading resolved (2026-11-07, with the user's help):** a sharper scan of Fig 9-7 (fantasyjackpalance.com's
+GIFs, README) shows Q1's base wired through R3 to Q4's collector, not to its own collector: the section is an
+Eccles-Jordan flip-flop, the blot at Q1 a misprint (the user spotted it from Q25's missing dot). Pin 20's trigger is
+positive-going (CR10 conducts toward Q20's base). Fig 9-16's pot assignments are still untraced (the panel sheet is
+916 there, 5988 px wide); building the contour generator on this reading is next.
+
 ## CPU while another session runs
 
 `CARGO_BUILD_JOBS=3`, builds started with `cmd /c start /belownormal /wait /b ...`; one render
