@@ -138,6 +138,19 @@ Eccles-Jordan flip-flop, the blot at Q1 a misprint (the user spotted it from Q25
 positive-going (CR10 conducts toward Q20's base). Fig 9-16's pot assignments are still untraced (the panel sheet is
 916 there, 5988 px wide); building the contour generator on this reading is next.
 
+**MM4, the filter contour built (2026-11-07):** `config/circuits/minimoog_contour.yaml` (board No. 2's filter
+section with the trigger section, Fig 9-7 read on the sharp 002 scans: the flip-flop Q1 / Q4 through R3 / R14 / R35 +
+CR1, Q5's attack current into C5, Q6 / Q7 / Q8 the decay and the SUSTAIN clamp, Q21 / Q22 the output, CR3's peak
+detector, Q20 / Q12 / C1 the trigger that starts the attack), `scripts/minimoog_contour_study.py`,
+`scripts/minimoog_contour_times.py`, `tests/test_minimoog_contour.py` (3 tests). Measured (production): attack
+(knob 0 to 10) 3.1 ms to 7.7 s to the peak, decay's 1/e time 0.9 ms to 9.6 s, against the panel's 1 ms - 10 s; the
+peak 4.86 V at the output (a germanium CR3 would put it ~0.3 V lower: the 1N4148 stands in); SUSTAIN holds E7 at its
+setting + a diode drop (0.5 -> 2.2 V); a key-up releases through DECAY. Calls made: the DECAY switch is `decay_on`
+(1 = release follows DECAY, pin 2 open; 0 = pin 2 tied to V-TRIG, an instant release); SUSTAIN is a 5K pot from the
+panel's +10 V to ground; the +9.3 V is ideal. Idle the output sits at 0.16 V (the VCA's -40 dB leak): from Q8 / CR2's
+drops, not chased. Not yet: the loudness section (same flip-flop; Q16-Q19, Q2 / Q3, CR4 / CR9 output), the join to
+pin 16 / pin 9, the keyboard circuit, the app.
+
 ## CPU while another session runs
 
 `CARGO_BUILD_JOBS=3`, builds started with `cmd /c start /belownormal /wait /b ...`; one render
