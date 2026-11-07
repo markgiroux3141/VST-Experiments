@@ -906,3 +906,48 @@
   ft_hz: {min: 100.0e6}                         # fT, VCE = 5 V, IC = 10 mA
   vceo_v: 45
   ic_max_a: 0.100
+
+# --- AKG D112 (docs/CHAINS_PLAN.md WP9 step 2) ---
+# The D112's large-diaphragm moving-coil cartridge with its bass resonance chamber. No construction is published
+# (data/schematics/akg_d112/README.md "Not found"): every dimension below is bounded and fitted by
+# scripts/fit_d112.py to the MKII sheet's response, 10 cm curve and polars and 1.8 mV/Pa, each unknown to its own
+# figure; the housing is 150 x 70 x 115 mm (the sheet), so the body of revolution is a 70 mm head.
+"R_D112":
+  source: "data/schematics/akg_d112/README.md ('Not found': no construction published; akg: 1.8 mV/Pa, 210 ohm, cardioid, the bass resonance chamber and hum-compensation coil): seeler61's phase-shift network (Fig. 2) with pat883's case branch as the chamber, a transformerless coil; geometry provisional and bounded, fitted by scripts/fit_d112.py"
+  geometry:
+    diaphragm:
+      radius_m: {value: 18.0e-3}         # provisional: model knowledge (the effective radius of a ~40 mm 'large' diaphragm in a 70 mm head; bounds 15-22 mm, not fitted: the body's entry table depends on it)
+      thickness_m: {value: 6.0e-05}      # provisional: model knowledge (a PET dome; the D12's descendant is low-tuned)
+      density_kg_m3: {value: 1390.0}     # provisional: model knowledge (PET film)
+      resonance_hz: {value: 106.85}        # akg: 'a low resonance frequency' (fitted to the low end, bounds 35-110 Hz)
+      q: {value: 3.0}                    # provisional: model knowledge
+      # the presence rise: a large dome breaks up low (the sheet's +6 dB at 3 kHz): one mode hung from the coil, fitted to akg2's response (bounds f 1.8-9 kHz, q 0.7-10, mass 2-50%, area 5-60%)
+      modes:
+        - {name: dome, f_hz: {value: 6473.7}, q: {value: 1.9813}, mass_fraction: {value: 0.02}, area_fraction: {value: 0.17905}}
+    coil:
+      bl_tm: {value: 20}                # fit: 1.8 mV/Pa open circuit
+      b_gap_t: {value: 0.6}              # provisional: fitted with Bl to the sensitivity (bounds 0.6-1.4 T)
+      re_ohm: {value: 190.0}             # akg: 210 ohm nominal output impedance (<= 200 ohm on the MKII), the coil's DC resistance a little under it
+      le_h: {value: 3.0e-3}              # provisional: model knowledge (a 200 ohm coil's inductance, a few mH)
+      wire_density_kg_m3: {value: 2700.0}  # provisional: model knowledge (aluminium wire keeps a 200 ohm coil light)
+      wire_resistivity_ohm_m: {value: 2.82e-8}   # provisional: aluminium at 20 C
+      adhesive_fraction: {value: 0.2}    # provisional: model knowledge
+    network:
+      - {name: grille, kind: screen, a: front, b: g, rayl: {value: 10.0}, area_m2: {value: 1.0e-3}}   # provisional: model knowledge (the built-in windscreen's mesh)
+      - {name: dia, kind: diaphragm, a: g, b: u}
+      - {name: ps, kind: seeler, a: u, b: rear, mid: m, d_m: {value: 0.02942}, r1_pa_s_m3: {value: 3.9881e+05}, q: {value: 45.264}}   # d: fitted (bounds 15-60 mm: the diaphragm's centre to the rear entries around the head); r1: fitted to the low end; q: fitted to the side / rear ratio
+      - {name: washer, kind: acoustic, a: m, b: h, r_pa_s_m3: {value: 1.0e+05}}   # provisional: fitted to the pattern at 125 Hz (bounds 1e5-1e10)
+      - {name: handle, kind: cavity, a: h, volume_m3: {value: 0.0002396}}   # akg: 'a bass resonance volume chamber', its volume fitted (bounds 5-400 cm^3: at most the housing's air)
+    body:
+      form: dynamic
+      face_radius_m: {value: 26.0e-3}        # provisional: model knowledge (the cartridge's face inside the 70 mm head)
+      ports_m: {value: [0.010, 0.030]}    # provisional: model knowledge (rear openings on the head's side behind the face)
+      cartridge_length_m: {value: 50.0e-3}   # provisional: model knowledge
+      head_radius_m: {value: 35.0e-3}        # akg: 70 mm wide
+      head_length_m: {value: 80.0e-3}        # provisional: model knowledge (150 mm overall)
+      taper_length_m: {value: 40.0e-3}       # provisional: model knowledge
+      end_radius_m: {value: 15.0e-3}         # provisional: model knowledge
+      end_length_m: {value: 30.0e-3}         # provisional: model knowledge (150 mm overall: 80 + 40 + 30)
+  published:
+    sensitivity_v_per_pa: 1.8e-3         # akg: 1.8 mV/Pa (-54 dB re 1 V)
+    resistance_ohm: 210.0                # akg: 210 ohm (<= 200 ohm on the MKII)

@@ -1,0 +1,87 @@
+{
+ "fitted": {
+  "coil/bl_tm": 19.9999998356332,
+  "coil/b_gap_t": 0.6000000000000001,
+  "diaphragm/resonance_hz": 106.84611389986917,
+  "diaphragm/thickness_m": 5.999999999999985e-05,
+  "ps/r1_pa_s_m3": 398810.4322306568,
+  "ps/q": 45.26441677365259,
+  "ps/d_m": 0.029419909011387985,
+  "washer/r_pa_s_m3": 100000.0000000002,
+  "handle/volume_m3": 0.00023959788332304207,
+  "diaphragm/modes/0/f_hz": 6473.691516741695,
+  "diaphragm/modes/0/q": 1.9812563721402345,
+  "diaphragm/modes/0/mass_fraction": 0.020000000082369677,
+  "diaphragm/modes/0/area_fraction": 0.17905062825563567
+ },
+ "body": {
+  "form": "dynamic",
+  "face_radius_m": 0.026,
+  "ports_m": [
+   0.01,
+   0.03
+  ],
+  "cartridge_length_m": 0.05,
+  "head_radius_m": 0.035,
+  "head_length_m": 0.08,
+  "taper_length_m": 0.04,
+  "end_radius_m": 0.015,
+  "end_length_m": 0.03
+ },
+ "sensitivity_mv_pa": 1.8013,
+ "sensitivity_target_mv_pa": 1.8,
+ "rms_on_axis_db_fit_band": 1.18,
+ "max_on_axis_db_fit_band": 2.923,
+ "rms_on_axis_db_above": 7.086,
+ "polar": {
+  "125 Hz 90 deg": {
+   "model_db": -6.73,
+   "published_db": -4.88
+  },
+  "125 Hz 180 deg": {
+   "model_db": -15.12,
+   "published_db": -15.01
+  },
+  "250 Hz 90 deg": {
+   "model_db": -7.02,
+   "published_db": -6.86
+  },
+  "2000 Hz 90 deg": {
+   "model_db": -9.76,
+   "published_db": -6.11
+  },
+  "2000 Hz 180 deg": {
+   "model_db": -15.73,
+   "published_db": -14.82
+  },
+  "4000 Hz 90 deg": {
+   "model_db": -8.72,
+   "published_db": -6.11
+  },
+  "4000 Hz 180 deg": {
+   "model_db": -9.83,
+   "published_db": -14.82
+  },
+  "8000 Hz 90 deg": {
+   "model_db": -13.3,
+   "published_db": -9.55
+  }
+ },
+ "moving_mass_mg": 656.66,
+ "mass_parts_mg": {
+  "dome_kg": 84.891,
+  "wire_kg": 445.263,
+  "adhesive_kg": 89.053,
+  "air_kg": 37.449,
+  "total_kg": 656.656
+ },
+ "wire_length_m": 33.3333,
+ "cost": 143.44136362428895,
+ "at_bounds": [
+  "coil/bl_tm",
+  "coil/b_gap_t",
+  "diaphragm/thickness_m",
+  "washer/r_pa_s_m3",
+  "diaphragm/modes/0/mass_fraction"
+ ]
+}

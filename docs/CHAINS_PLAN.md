@@ -13,9 +13,9 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 20 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 21 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
-  Portastudio, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72;
+  Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72;
   `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
@@ -38,15 +38,13 @@ runs**.
   shutter as six stops picked by the part's `stop`, fitted by `scripts/fit_77dx.py`;
   `RCA77DX_OT@1`; the reactor at mic level); WP7's Notes. WP8 (2026-11-06): the Coles 4038 (`config/circuits/coles_4038.yaml`:
   `RIBBON_4038@1` after BBC Monograph No. 4 fitted to STC's curve, `STC4038_OT@1`; a miss
-  of +2.8 dB at 4-7 kHz); WP8's Notes.
-- **In progress:** WP9 (the AKG D112): step 1 done (the sources, the response and the
-  polars digitized); step 2 is next.
-- **Next:** WP9 step 2: the cartridge `R_D112@1` (kind `moving_coil`; the SM57's method,
-  `scripts/fit_sm57.py` and SM57_PLAN.md's table), fitted to `akg_d112_response.csv` and
-  `akg_d112_polar.csv` and 1.8 mV/Pa.
+  of +2.8 dB at 4-7 kHz); WP8's Notes. WP9 (2026-11-06): the AKG D112 (`config/circuits/akg_d112.yaml`: `R_D112@1`
+  fitted by `scripts/fit_d112.py`, no construction published; D112 -> SSL composed); WP9's Notes.
+- **In progress:** nothing: WP9 is done.
+- **Next:** WP11 (the Neve 1073) is DEVICE_BUILDER_PLAN.md's B13 and built there; the next WP in order that this plan builds is WP12 (the API 312, the 2520), unless the user names another. Its steps are to be written first (sources first, step 4 of "Start").
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
-  Portastudio chains, the 44-BX's chains and the 77-DX's in the Room view (optional). One call
+  Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
   fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
   material (moves every render).
@@ -128,7 +126,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 6 | RCA 44-BX | 44-BX -> V76, 44-BX -> 610 | L | done 2026-11-05 |
 | 7 | RCA 77-DX (the shutter labyrinth) and the Ampex 351's direct monitor as a preamp | 77-DX -> 351, 77-DX -> 610 | L | done 2026-11-06 |
 | 8 | Coles 4038 | 4038 -> V72 | M | done 2026-11-06 |
-| 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | started 2026-11-06 (sources) |
+| 9 | AKG D112 (moving_coil; its bass chamber) | D112 -> SSL (if WP4 built the SSL) | L | done 2026-11-06 |
 | 10 | **The BJT model** (Gummel-Poon subset; DEVICE_BUILDER_PLAN.md "New device types"; CLAVINET_PLAN.md's CL0 builds it if it gets there first) | 0 | L | done 2026-11-06 (CL0 on the `clavinet` branch: `varimu/devices/bjt.py`, the `bjt` part, `BC550C@1` / `BC413C@1` / `BC560C@1`, `bjt_stage.yaml`; DEVICE_BUILDER_PLAN.md "New device types") |
 | 11 | Neve 1073 (Marinair transformers as designs; 300 / 1200 ohm) | 44-BX, SM57, U47 -> 1073 | L | also DEVICE_BUILDER_PLAN.md's B13 (2026-11-06: built there, next after B11-B12) |
 | 12 | API 312 (the 2520) | SM57 -> API | L | |
@@ -1133,6 +1131,9 @@ published response and polars.
   deg): 125 Hz -15.0 dB, 2-4 kHz -14.8, 8 kHz ~-10, 16 kHz ~-13: a loose cardioid at HF; the
   side (90 deg): -4.9 / -6.9 / -6.1 (2-4 kHz) / -9.5 / -12.2 dB at 125 / 250 / 2-4k / 8k / 16k.
 
+- Step 2 done (2026-11-06): `R_D112@1` (`config/components/r_d112/1.yaml`; geometry block `R_D112` in `published_points.yaml`, builder `build_r_d112`), fitted by `scripts/fit_d112.py` (the SM57's machinery from `fit_sm57.py` on the D112's body, no transformer: a 70 mm head as a `dynamic` body of revolution, diaphragm radius 18 mm fixed because the body's entry table depends on it; free: B l, the gap field, the diaphragm's resonance and thickness, the network's r1 / q / d, the washer and the chamber's volume, and one dome mode for the presence rise). Result: 1.801 mV/Pa (target 1.8), on axis rms 1.18 dB / max 2.9 dB over 40 Hz-8 kHz, rear -15.1 dB at 125 Hz and -15.7 at 2 kHz (sheet -15.0 / -14.8). **Known misses:** the side at 2-4 kHz is -9.8 / -8.7 dB (sheet -6.1), the rear at 4 kHz -9.8 (sheet -14.8), the side at 8 kHz -13.3 (sheet -9.5): the head's diffraction narrows what the sheet shows as a loose cardioid; above 8 kHz the curve (+1.9 near 10 kHz, -2.6 at 16 kHz) isn't fitted (the model falls from ~9 kHz). **Bounds hit:** thickness 60 um, B l 20 T m, gap 0.6 T, washer 1e5, the dome's mass 2%: the fit wants a heavy moving system (657 mg, 33 m of aluminium wire at 190 ohm) for the 60 Hz-100 Hz bump at 1.8 mV/Pa, which a real 200 ohm coil can't carry: the bump is probably the chamber's, the mass a stand-in. A better physical split would need the chamber's acoustics (a ported cavity, as the Seeler network's `handle`) fitted to the 10 cm proximity curve, which isn't a target yet (`akg_d112_response.csv` has it). The coil is 190 ohm (akg: 210 nominal, <= 200 MKII). The hum-compensation coil isn't modelled (no acoustic input).
+- Step 3 done: `config/circuits/akg_d112.yaml` (the coil into `out`, open circuit; the chain replaces RLOAD), the list's entry (`akg_d112`: output out, drop RLOAD, cardioid), `d112_ssl.yaml` composed (the other chains' files byte-identical), `tests/test_akg_d112.py` (5 pass: lock, sensitivity, response within 3.5 dB, polars, circuit), `test_chain_matrix.py` 24 pass. App fixtures not due (no existing circuit or device changed; the app plays no mic).
+
 ### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
@@ -1151,7 +1152,7 @@ touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key; W
 its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.py` and a refusal in
 `varimu/circuit/parts.py`, every existing component compiling to its saved elements; its steps
 5-6 the ribbon motor's `stop` in `varimu/circuit/builder.py` and `RIBBON_77DX` in
-`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise): these
+`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, likewise): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -1221,3 +1222,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
 - 2026-11-06: WP9 started: its steps written; the D112's sheets (AKG's original and the
   MKII's) read; no internals are published, so its diaphragm and chamber will be fitted;
   still 20 of 51.
+- 2026-11-06: WP9 done: `R_D112@1` fitted by `scripts/fit_d112.py` (1.8 mV/Pa, within 2.9 dB to 8 kHz; side
+  / rear 3-5 dB narrow at 2-8 kHz, parameters at their bounds: the notes), `akg_d112.yaml`, D112 -> SSL
+  composed: 21 of 51 available.

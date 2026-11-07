@@ -131,7 +131,14 @@ circuits:
   ev_re20: {kind: mic, tag: re20, label: EV RE20, wp: 13}
   sennheiser_md421: {kind: mic, tag: md421, label: Sennheiser MD421, wp: 14}
   shure_sm7: {kind: mic, tag: sm7, label: Shure SM7, wp: 15}
-  akg_d112: {kind: mic, tag: d112, label: AKG D112, wp: 9}
+  akg_d112:
+    kind: mic
+    tag: d112
+    label: D112
+    output: out
+    drop: [RLOAD]
+    pattern: cardioid
+    settings: []
   akg_c12:
     kind: mic
     tag: c12
