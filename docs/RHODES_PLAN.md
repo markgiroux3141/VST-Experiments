@@ -501,6 +501,17 @@ power amp, the speakers, the whole Suitcase as one netlist.**
    slow sag crosses) would let the supply and speakers run ahead (TAPE_SPEED_PLAN.md P2's
    "decoupled by a block of lag" is the same idea). My recommendation: (b) now, (c) if the
    whole instrument should be the one played.
+5. **Renders' cost (the user's call).** At production (one solve, 0.2 s of a tone, no
+   settle): the preamp alone 4x real time, the whole Suitcase **30x with the speakers as
+   loads (terminal voltages) and 158x with the two pressure readouts** (the demo with its 1 s
+   settle measured 455x; the readouts' delay lines for the back wave are most of the states,
+   and DK's cost grows with their square; halving the drivers with `series: 2` didn't change
+   that). The readout draws no current from the circuit (every coupling is a Vccs), so it is
+   exactly separable: simulate with the coil's radiating nodes probed, then run the readout
+   network as a linear filter on them afterwards, the same discretization. Option: build that
+   (a render option in both engines' callers, `parts.speaker_readout` as the filter; it would
+   speed up the 5E3's renders the same way); without it, a 3-minute song through the whole
+   Suitcase takes ~8 h at production, ~1.3 h at draft.
 
 **Options (model changes: the user's call, numbers before renders change).**
 1. **The pickup's field and the hammer's speed** (the biggest win): fit the velocity law's
