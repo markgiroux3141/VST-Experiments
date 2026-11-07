@@ -59,7 +59,7 @@
 
 title: "Rhodes Mark I Suitcase 73 (100 W preamp, power amp and speakers)"
 input: in
-probes: [out, out_r, out_rear_a, out_rear_b, pre_a, pre_b, a_amp, b_amp, vp, vn, a_e, a_t, a_b, a_e8, a_e9, a_c1, a_c3, a_q1b, a_spk, b_spk, b_e, b_t, b_b, b_e8, b_e9, inn, a1o, e2, n9, vs, vm, pa, pb, v, x, a2ao, vbp, vbn, l1s, l2s]
+probes: [out, out_r, pre_a, pre_b, a_amp, b_amp, vp, vn, a_e, a_t, a_b, a_e8, a_e9, a_c1, a_c3, a_q1b, a_spk, b_spk, b_e, b_t, b_b, b_e8, b_e9, inn, a1o, e2, n9, vs, vm, pa, pb, v, x, a2ao, vbp, vbn, l1s, l2s]
 full_scale:
   input_volts_peak: {value: 0.5, source: "derived: a harp's EMF at a hard chord, ~0.5 V peak (a key at ff 50-60 mV, docs/RHODES_PLAN.md MK1_HARP@2; rhodes_render.py's harp scale), for test signals into ACCESSORY IN"}
   output_pascals_peak: {value: 25.0, source: "derived: the pressure 1 m on axis of a front speaker with its amp clipping a tone: 12.7 Pa at 100 Hz, 21.4 Pa at 1 kHz, 23.0 Pa at 3 kHz (a pre-clipping peak of 13 Pa at 3 kHz and 0.025 of the input scale); rounded up (scripts/rhodes_amp_study.py, docs/RHODES_PLAN.md The Suitcase)"}
@@ -450,29 +450,23 @@ sections:
       RA21: {R: [a_e9, vn], r: r_emitter_ohm}
   - title: "speakers A"
     parts:
-      # F1 / F2 (4 A) to the CH A SPEAKER jack, then the two speakers in series: the front
-      # one reads out as the player's pressure; the rear one is only a load (`readout: 0`: its
-      # terminal voltage on out_rear_a; a second readout's states would double a render's cost).
+      # F1 / F2 (4 A) to the CH A SPEAKER jack, then the front and rear speakers in series,
+      # as one part with `series: 2`: two identical drivers carry one current, so one force
+      # and one velocity, and the pair is exactly one driver with every impedance doubled (the
+      # speaker macro scales the elements; its readout and terminal voltage are one driver's).
+      # Half the states of two parts. `out` is the front driver's pressure 1 m in front of it
+      # (the rear one, behind it, isn't read out).
       RAF1: {R: [a_amp, a_spk], r: fuse_ohm, tolerance: none}
-      ASPKF:
-        speaker: [a_spk, a_mid, out]
+      ASPK:
+        speaker: [a_spk, "0", out]
         component: speaker_model
+        series: 2
         distance_m: listen_distance_m
         width_m: cab_width_m
         height_m: cab_height_m
         depth_m: cab_depth_m
         offset_x_m: spk_left_m
         offset_y_m: cab_offset_y_m
-      ASPKR:
-        speaker: [a_mid, "0", out_rear_a]
-        component: speaker_model
-        distance_m: listen_distance_m
-        width_m: cab_width_m
-        height_m: cab_height_m
-        depth_m: cab_depth_m
-        offset_x_m: spk_right_m
-        offset_y_m: cab_offset_y_m
-        readout: 0
   - title: "power amp B"
     parts:
       # Input: the preamp's output through fig11-3's 680 (R1 / R2 beside the jacks), then the
@@ -537,26 +531,20 @@ sections:
       RB21: {R: [b_e9, vn], r: r_emitter_ohm}
   - title: "speakers B"
     parts:
-      # F1 / F2 (4 A) to the CH B SPEAKER jack, then the two speakers in series: the front
-      # one reads out as the player's pressure; the rear one is only a load (`readout: 0`: its
-      # terminal voltage on out_rear_b; a second readout's states would double a render's cost).
+      # F1 / F2 (4 A) to the CH B SPEAKER jack, then the front and rear speakers in series,
+      # as one part with `series: 2`: two identical drivers carry one current, so one force
+      # and one velocity, and the pair is exactly one driver with every impedance doubled (the
+      # speaker macro scales the elements; its readout and terminal voltage are one driver's).
+      # Half the states of two parts. `out_r` is the front driver's pressure 1 m in front of it
+      # (the rear one, behind it, isn't read out).
       RBF1: {R: [b_amp, b_spk], r: fuse_ohm, tolerance: none}
-      BSPKF:
-        speaker: [b_spk, b_mid, out_r]
+      BSPK:
+        speaker: [b_spk, "0", out_r]
         component: speaker_model
+        series: 2
         distance_m: listen_distance_m
         width_m: cab_width_m
         height_m: cab_height_m
         depth_m: cab_depth_m
         offset_x_m: spk_right_m
         offset_y_m: cab_offset_y_m
-      BSPKR:
-        speaker: [b_mid, "0", out_rear_b]
-        component: speaker_model
-        distance_m: listen_distance_m
-        width_m: cab_width_m
-        height_m: cab_height_m
-        depth_m: cab_depth_m
-        offset_x_m: spk_left_m
-        offset_y_m: cab_offset_y_m
-        readout: 0

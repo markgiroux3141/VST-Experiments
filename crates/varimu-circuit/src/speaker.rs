@@ -181,12 +181,15 @@ fn g(name: String, pos: &str, neg: &str, cp: &str, cn: &str, gm_s: f64) -> Eleme
     })
 }
 
-/// The driver's electrical equivalent, and each radiating node with its area.
+/// The driver's electrical equivalent, and each radiating node with its area. `series` n:
+/// n identical drivers in series, exactly (`parts.speaker_driver`): resistances and
+/// inductances times n, capacitances over n (n = 1: bit for bit one driver's).
 pub fn driver(
     name: &str,
     plus: &str,
     minus: &str,
     s: &Speaker,
+    series: f64,
 ) -> (Vec<Element>, Vec<(String, f64)>) {
     let (n, up) = (name.to_lowercase(), name.to_uppercase());
     let bl2 = s.bl_tm * s.bl_tm;
@@ -195,13 +198,23 @@ pub fn driver(
     let coil = format!("{n}_m");
     let (nl, ne) = (format!("{n}_l"), format!("{n}_e"));
     let mut els = vec![
-        r(format!("R{up}_re"), plus, &nl, s.re_ohm),
-        l(format!("L{up}_le"), &nl, &ne, s.le_h),
-        l(format!("L{up}_l2"), &ne, &coil, s.l2_h),
-        r(format!("R{up}_r2"), &ne, &coil, s.r2_ohm),
-        c(format!("C{up}_m"), &coil, minus, m0 / bl2),
-        l(format!("L{up}_cms"), &coil, minus, s.cms_m_per_n * bl2),
-        r(format!("R{up}_rms"), &coil, minus, bl2 / s.rms_ns_per_m),
+        r(format!("R{up}_re"), plus, &nl, s.re_ohm * series),
+        l(format!("L{up}_le"), &nl, &ne, s.le_h * series),
+        l(format!("L{up}_l2"), &ne, &coil, s.l2_h * series),
+        r(format!("R{up}_r2"), &ne, &coil, s.r2_ohm * series),
+        c(format!("C{up}_m"), &coil, minus, m0 / bl2 / series),
+        l(
+            format!("L{up}_cms"),
+            &coil,
+            minus,
+            s.cms_m_per_n * bl2 * series,
+        ),
+        r(
+            format!("R{up}_rms"),
+            &coil,
+            minus,
+            bl2 / s.rms_ns_per_m * series,
+        ),
     ];
     let mut radiating = vec![(coil.clone(), s0)];
     for (i, m) in s.modes.iter().enumerate() {
@@ -210,15 +223,32 @@ pub fn driver(
         let stiffness = m.mass_kg * (w * w);
         let damping = w * m.mass_kg / m.q;
         let node = format!("{n}_k{k}");
-        els.push(r(format!("R{up}_k{k}"), &coil, &node, bl2 / damping));
-        els.push(l(format!("L{up}_k{k}"), &coil, &node, bl2 / stiffness));
-        els.push(c(format!("C{up}_k{k}"), &node, minus, m.mass_kg / bl2));
+        els.push(r(
+            format!("R{up}_k{k}"),
+            &coil,
+            &node,
+            bl2 / damping * series,
+        ));
+        els.push(l(
+            format!("L{up}_k{k}"),
+            &coil,
+            &node,
+            bl2 / stiffness * series,
+        ));
+        els.push(c(
+            format!("C{up}_k{k}"),
+            &node,
+            minus,
+            m.mass_kg / bl2 / series,
+        ));
         radiating.push((node, m.area_m2));
     }
     (els, radiating)
 }
 
-/// The sound pressure on `out` (pascals as volts), drawing nothing from the driver.
+/// The sound pressure on `out` (pascals as volts), drawing nothing from the driver: one
+/// driver's of `series` (the nodes carry all of theirs).
+#[allow(clippy::too_many_arguments)]
 pub fn readout(
     name: &str,
     minus: &str,
@@ -227,13 +257,14 @@ pub fn readout(
     radiating: &[(String, f64)],
     cab: &Cabinet,
     distance_m: f64,
+    series: f64,
 ) -> Vec<Element> {
     let (n, up) = (name.to_lowercase(), name.to_uppercase());
     let r0 = READOUT_OHM;
     let (pf, lp) = (format!("{n}_pf"), format!("{n}_b"));
     let mut els = Vec::new();
     for (i, (node, area)) in radiating.iter().enumerate() {
-        let gm = RHO_AIR_KG_M3 * area / (2.0 * PI * distance_m * s.bl_tm);
+        let gm = RHO_AIR_KG_M3 * area / (2.0 * PI * distance_m * s.bl_tm) / series;
         if gm != 0.0 {
             els.push(g(format!("G{up}_a{i}"), GROUND, &pf, node, minus, gm));
         }
@@ -278,7 +309,9 @@ pub fn readout(
     els
 }
 
-/// Speaker `name` between plus and minus, its sound pressure on `out`.
+/// Speaker `name` between plus and minus (`series` identical drivers), one driver's sound
+/// pressure on `out`.
+#[allow(clippy::too_many_arguments)]
 pub fn speaker(
     name: &str,
     plus: &str,
@@ -287,17 +320,27 @@ pub fn speaker(
     s: &Speaker,
     cab: &Cabinet,
     distance_m: f64,
+    series: f64,
 ) -> Vec<Element> {
-    let (mut els, radiating) = driver(name, plus, minus, s);
-    els.extend(readout(name, minus, out, s, &radiating, cab, distance_m));
+    let (mut els, radiating) = driver(name, plus, minus, s, series);
+    els.extend(readout(
+        name, minus, out, s, &radiating, cab, distance_m, series,
+    ));
     els
 }
 
 /// Speaker `name` without its readout (a live build's; `parts.speaker_terminal`): the driver
 /// between plus and minus, its terminal voltage on `out` (G<NAME>_t into R<NAME>_t, 1 ohm
-/// to ground).
-pub fn terminal(name: &str, plus: &str, minus: &str, out: &str, s: &Speaker) -> Vec<Element> {
-    let (mut els, _) = driver(name, plus, minus, s);
+/// to ground); with `series` drivers, one driver's (the pair's voltage over n).
+pub fn terminal(
+    name: &str,
+    plus: &str,
+    minus: &str,
+    out: &str,
+    s: &Speaker,
+    series: f64,
+) -> Vec<Element> {
+    let (mut els, _) = driver(name, plus, minus, s, series);
     let upper = name.to_uppercase();
     els.push(Element::Vccs(circuitsim::ir::Vccs {
         name: format!("G{upper}_t"),
@@ -305,7 +348,7 @@ pub fn terminal(name: &str, plus: &str, minus: &str, out: &str, s: &Speaker) -> 
         neg: out.into(),
         ctrl_pos: plus.into(),
         ctrl_neg: minus.into(),
-        gm_s: 1.0,
+        gm_s: 1.0 / series,
     }));
     els.push(Element::Resistor(circuitsim::ir::Resistor {
         name: format!("R{upper}_t"),

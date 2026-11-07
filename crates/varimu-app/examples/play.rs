@@ -12,6 +12,8 @@
 //! `--gain-db G` is the input gain (the Play view's normalization and trim).
 //! `--record FILE` records live input for the run and saves the take (as the app does).
 //! The process runs at high priority, as the app does (`--normal-priority`: not).
+//! `--mute` computes everything but sends silence out (the monitor's gain at -300 dB,
+//! compensation off): a load measurement that doesn't sound in the room.
 //! `--turn` switches a knob between two values every 2 s and reports how long each
 //! change took to reach the output (`Status::knob_to_ear_s`). `--input` without a
 //! name is the default input device; `--list-inputs` lists them.
@@ -106,6 +108,7 @@ fn main() -> Result<(), String> {
     let mut sets = Vec::new();
     let mut turn: Option<(String, Value, Value)> = None;
     let mut normal_priority = false;
+    let mut mute = false;
     let mut compute_strikes = false;
     let mut record: Option<String> = None;
     let (mut midi_name, mut wave): (Option<Option<String>>, Wave) = (None, Wave::Saw);
@@ -182,6 +185,7 @@ fn main() -> Result<(), String> {
                 }
             }
             "--normal-priority" => normal_priority = true,
+            "--mute" => mute = true,
             "--compute-strikes" => compute_strikes = true,
             "--record" => record = Some(args.next().ok_or("--record needs a file")?),
             "--list-inputs" => {
@@ -324,6 +328,11 @@ fn main() -> Result<(), String> {
     }
     let gain = 10f64.powf(gain_db / 20.0);
     let player = Player::start(source, v.clone(), circuit, s, gain, buffer)?;
+    if mute {
+        // Everything computes; only the monitor's gain after the device is at -300 dB.
+        player.set_compensation(false);
+        player.set_output_db(-300.0);
+    }
     if let Some(id) = &end {
         let d = DEVICES
             .iter()

@@ -727,6 +727,7 @@ fn macro_of(kind: &str) -> Macro {
                 Param("offset_x_m", Physical, Some(Value::Float(0.0))),
                 Param("offset_y_m", Physical, Some(Value::Float(0.0))),
                 Param("readout", Number, Some(Value::Float(1.0))),
+                Param("series", Number, Some(Value::Float(1.0))),
             ],
             false,
         ),
@@ -1200,14 +1201,21 @@ fn speaker_part(
         offset_y_m: f("offset_y_m")?,
     };
     let distance = f("distance_m")?;
+    let series = f("series")?;
+    if series < 1.0 || series.fract() != 0.0 {
+        return Err(ctx.fail(
+            &format!("{name}.series"),
+            format!("{series}: a whole number of drivers, 1 or more"),
+        ));
+    }
     // `readout: 0`: this speaker is only a load (its terminal voltage on `out`), whatever the build.
     if !ctx.speaker_readout || f("readout")? == 0.0 {
         return Ok(speaker::terminal(
-            name, &nodes[0], &nodes[1], &nodes[2], &model,
+            name, &nodes[0], &nodes[1], &nodes[2], &model, series,
         ));
     }
     Ok(speaker::speaker(
-        name, &nodes[0], &nodes[1], &nodes[2], &model, &cab, distance,
+        name, &nodes[0], &nodes[1], &nodes[2], &model, &cab, distance, series,
     ))
 }
 

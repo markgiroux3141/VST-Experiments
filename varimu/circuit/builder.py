@@ -765,11 +765,15 @@ def _speaker(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]
         model = load_speaker(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
+    series = a["series"]
+    if series < 1 or series != int(series):
+        raise ctx.fail(f"{name}.series", f"{series}: a whole number of drivers, 1 or more")
+    series = int(series)
     # `readout: 0`: only a load (its terminal voltage on `out`), whatever the build.
     if not ctx.speaker_readout or a["readout"] == 0:
-        return parts.speaker_terminal(name, *conn, model)
+        return parts.speaker_terminal(name, *conn, model, series)
     cab = Cabinet(a["width_m"], a["height_m"], a["depth_m"], a["offset_x_m"], a["offset_y_m"])
-    return parts.speaker(name, *conn, model, cab, a["distance_m"])
+    return parts.speaker(name, *conn, model, cab, a["distance_m"], series)
 
 
 def _capsule(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -1154,6 +1158,7 @@ for _name, _macro in {
             "offset_x_m": Param("physical", 0.0),
             "offset_y_m": Param("physical", 0.0),
             "readout": Param("number", 1.0),
+            "series": Param("number", 1.0),
         },
     ),
 }.items():

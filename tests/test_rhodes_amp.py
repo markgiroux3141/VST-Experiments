@@ -92,20 +92,61 @@ def test_gain_and_clipping():
     assert thd_hard > 0.1  # clipped
 
 
-def test_only_the_front_speakers_read_out():
-    """Each channel's front speaker has its sound-pressure readout (the player's `out` /
-    `out_r`); the rear one, `readout: 0`, is only a load with its terminal voltage on its
-    node. A live build drops every readout."""
-    c = load()
-    q = dict(spec.resolve(c))
+_PAIR = """\
+title: "speaker pair"
+input: in
+probes: [PROBES]
+values:
+  speaker_model: {value: P12R@1, source: "config/components/p12r/1.yaml"}
+  r_src_ohm: {value: 0.5, source: "test"}
+  d_m: {value: 1.0, source: "test"}
+  w_m: {value: 1.2, source: "test"}
+  h_m: {value: 0.7, source: "test"}
+  dp_m: {value: 0.35, source: "test"}
+sections:
+  - title: s
+    parts:
+      RS: {R: [in, a], r: r_src_ohm, tolerance: none}
+"""
+_CAB = "component: speaker_model, distance_m: d_m, width_m: w_m, height_m: h_m, depth_m: dp_m"
+_TWO = (
+    f"      SPK1: {{speaker: [a, m, o1], {_CAB}}}\n"
+    f'      SPK2: {{speaker: [m, "0", o2], {_CAB}, readout: 0}}\n'
+)
+_ONE = f'      SPK: {{speaker: [a, "0", o1], {_CAB}, series: 2}}\n'
 
-    def names(**kw):
-        return {e.name for e in builder.build_ir(c, q, **kw).elements()}
 
-    full = names()
-    assert {"LASPKF_pf", "LBSPKF_pf"} <= full
-    assert not ({"LASPKR_pf", "LBSPKR_pf"} & full)
-    assert {"GASPKR_t", "GBSPKR_t"} <= full
-    live = names(speaker_readout=False)
-    assert not ({"LASPKF_pf", "LBSPKF_pf"} & live)
-    assert {"GASPKF_t", "GBSPKF_t"} <= live
+def _pair(tmp_path, name, parts, live):
+    from varimu.sim import fast, io
+
+    path = tmp_path / f"{name}.yaml"
+    probes = "o1, o2, a, m" if "SPK2" in parts else "o1, a"
+    path.write_text(_PAIR.replace("PROBES", probes) + parts)
+    c = spec.load_circuit(path)
+    ir = builder.build_ir(c, dict(spec.resolve(c)), speaker_readout=not live)
+    st = io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
+    st = dataclasses.replace(st, settle_s=0.0)
+    t = np.arange(int(0.06 * st.sample_rate)) / st.sample_rate
+    x = 0.3 * np.sin(2 * np.pi * 180 * t) + 0.2 * np.sin(2 * np.pi * 2900 * t)
+    return {
+        k[2:-1]: np.asarray(a) for k, a in fast.run_transient(ir, x, settings=st).vectors.items()
+    }
+
+
+def test_a_series_pair_is_one_part(tmp_path):
+    """Two identical drivers in series (the Suitcase's front and rear speakers) are exactly
+    one `series: 2` speaker part: one current, one force, one velocity in each, every
+    impedance doubled. The part's readout is one driver's pressure and, live, one driver's
+    terminal voltage; a `readout: 0` driver is only a load."""
+    pytest.importorskip("circuitsim")
+    two = _pair(tmp_path, "two", _TWO, live=False)
+    one = _pair(tmp_path, "one", _ONE, live=False)
+    ref = np.sqrt(np.mean(two["o1"] ** 2))
+    assert ref > 0
+    assert np.sqrt(np.mean((one["o1"] - two["o1"]) ** 2)) < 1e-9 * ref  # the front's pressure
+    assert np.max(np.abs(one["a"] - two["a"])) < 1e-9 * np.max(np.abs(two["a"]))  # the load
+    two_live = _pair(tmp_path, "two_live", _TWO, live=True)
+    one_live = _pair(tmp_path, "one_live", _ONE, live=True)
+    front = two_live["a"] - two_live["m"]
+    assert np.max(np.abs(one_live["o1"] - front)) < 1e-9 * np.max(np.abs(front))
+    assert np.max(np.abs(two_live["o2"] - two_live["m"])) < 1e-9 * np.max(np.abs(front))

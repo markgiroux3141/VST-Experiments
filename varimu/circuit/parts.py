@@ -370,13 +370,18 @@ def mains_sine(
 
 
 def speaker_driver(
-    name: str, plus: str, minus: str, s: spk.Speaker
+    name: str, plus: str, minus: str, s: spk.Speaker, series: int = 1
 ) -> tuple[list[Element], list[tuple[str, float]]]:
     """The driver's electrical equivalent (varimu.devices.speaker): the elements, and each
     radiating node (its voltage to `minus` is BL times a velocity) with its area. Element
     names: R<name>_re, L<name>_le, L<name>_l2 || R<name>_r2, then C<name>_m, L<name>_cms,
     R<name>_rms on the coil's node <name>_m, and per mode k (from 1) R<name>_k || L<name>_k
-    to its node <name>_k<k>, C<name>_k<k> from there to minus."""
+    to its node <name>_k<k>, C<name>_k<k> from there to minus.
+
+    `series` n: n identical drivers in series, exactly (one current, so one force and one
+    velocity in each): every resistance and inductance n times, every capacitance over n,
+    so a radiating node's voltage is n BL v (the n drivers' back EMF). n = 1 multiplies
+    and divides by 1.0: the elements are bit for bit those of one driver."""
     n, upper = name.lower(), name.upper()
     bl2 = s.bl_tm * s.bl_tm
     # Plain left-to-right sums (Python 3.12's sum() compensates; Rust's builder doesn't).
@@ -388,13 +393,13 @@ def speaker_driver(
     s0 = s.sd_m2 - modes_m2
     coil = f"{n}_m"
     els: list[Element] = [
-        Resistor(f"R{upper}_re", plus, f"{n}_l", s.re_ohm),
-        Inductor(f"L{upper}_le", f"{n}_l", f"{n}_e", s.le_h),
-        Inductor(f"L{upper}_l2", f"{n}_e", coil, s.l2_h),
-        Resistor(f"R{upper}_r2", f"{n}_e", coil, s.r2_ohm),
-        Capacitor(f"C{upper}_m", coil, minus, m0 / bl2),
-        Inductor(f"L{upper}_cms", coil, minus, s.cms_m_per_n * bl2),
-        Resistor(f"R{upper}_rms", coil, minus, bl2 / s.rms_ns_per_m),
+        Resistor(f"R{upper}_re", plus, f"{n}_l", s.re_ohm * series),
+        Inductor(f"L{upper}_le", f"{n}_l", f"{n}_e", s.le_h * series),
+        Inductor(f"L{upper}_l2", f"{n}_e", coil, s.l2_h * series),
+        Resistor(f"R{upper}_r2", f"{n}_e", coil, s.r2_ohm * series),
+        Capacitor(f"C{upper}_m", coil, minus, m0 / bl2 / series),
+        Inductor(f"L{upper}_cms", coil, minus, s.cms_m_per_n * bl2 * series),
+        Resistor(f"R{upper}_rms", coil, minus, bl2 / s.rms_ns_per_m * series),
     ]
     radiating = [(coil, s0)]
     for k, m in enumerate(s.modes, 1):
@@ -403,9 +408,9 @@ def speaker_driver(
         damping = w * m.mass_kg / m.q
         node = f"{n}_k{k}"
         els += [
-            Resistor(f"R{upper}_k{k}", coil, node, bl2 / damping),
-            Inductor(f"L{upper}_k{k}", coil, node, bl2 / stiffness),
-            Capacitor(f"C{upper}_k{k}", node, minus, m.mass_kg / bl2),
+            Resistor(f"R{upper}_k{k}", coil, node, bl2 / damping * series),
+            Inductor(f"L{upper}_k{k}", coil, node, bl2 / stiffness * series),
+            Capacitor(f"C{upper}_k{k}", node, minus, m.mass_kg / bl2 / series),
         ]
         radiating.append((node, m.area_m2))
     return els, radiating
@@ -419,10 +424,12 @@ def speaker_readout(
     radiating: Sequence[tuple[str, float]],
     cabinet: spk.Cabinet,
     distance_m: float,
+    series: int = 1,
 ) -> list[Element]:
     """The sound pressure at `out` (pascals as volts, to ground), on axis at `distance_m`
     in front of the cabinet: front wave, back wave around the edges (varimu.devices
-    .speaker). It draws no current from the driver (every coupling is a Vccs)."""
+    .speaker). It draws no current from the driver (every coupling is a Vccs). `series`:
+    the driver's nodes are n drivers' (speaker_driver), so this reads one of them."""
     n, upper = name.lower(), name.upper()
     r0 = spk.READOUT_OHM
     pf, lp = f"{n}_pf", f"{n}_b"
@@ -430,7 +437,7 @@ def speaker_readout(
     # Front: rho S a / (2 pi r) per radiating node, as currents through one 1 H inductor
     # (its voltage is the derivative of the current, the voltage BL v giving BL a).
     for i, (node, area) in enumerate(radiating):
-        gm = spk.RHO_AIR_KG_M3 * area / (2 * math.pi * distance_m * s.bl_tm)
+        gm = spk.RHO_AIR_KG_M3 * area / (2 * math.pi * distance_m * s.bl_tm) / series
         if gm != 0:
             els.append(Vccs(f"G{upper}_a{i}", GROUND, pf, node, minus, gm))
     els.append(Inductor(f"L{upper}_pf", pf, GROUND, 1.0))
@@ -471,20 +478,25 @@ def speaker(
     s: spk.Speaker,
     cabinet: spk.Cabinet,
     distance_m: float,
+    series: int = 1,
 ) -> list[Element]:
-    """Speaker `name` between plus and minus, its sound pressure on `out`."""
-    els, radiating = speaker_driver(name, plus, minus, s)
-    return els + speaker_readout(name, minus, out, s, radiating, cabinet, distance_m)
+    """Speaker `name` between plus and minus (`series` identical drivers), the sound
+    pressure of one of them on `out`."""
+    els, radiating = speaker_driver(name, plus, minus, s, series)
+    return els + speaker_readout(name, minus, out, s, radiating, cabinet, distance_m, series)
 
 
-def speaker_terminal(name: str, plus: str, minus: str, out: str, s: spk.Speaker) -> list[Element]:
+def speaker_terminal(
+    name: str, plus: str, minus: str, out: str, s: spk.Speaker, series: int = 1
+) -> list[Element]:
     """Speaker `name` without its readout (a live build's, docs/RHODES_PLAN.md RH3): the
     driver between plus and minus as the amp's load, and its terminal voltage on `out`
-    (G<NAME>_t into R<NAME>_t, 1 ohm to ground: it draws no current)."""
-    els, _ = speaker_driver(name, plus, minus, s)
+    (G<NAME>_t into R<NAME>_t, 1 ohm to ground: it draws no current); with `series`
+    drivers, one driver's (the pair's voltage over n)."""
+    els, _ = speaker_driver(name, plus, minus, s, series)
     upper = name.upper()
     return els + [
-        Vccs(f"G{upper}_t", GROUND, out, plus, minus, 1.0),
+        Vccs(f"G{upper}_t", GROUND, out, plus, minus, 1.0 / series),
         Resistor(f"R{upper}_t", out, GROUND, 1.0),
     ]
 

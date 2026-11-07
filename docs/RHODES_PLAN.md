@@ -371,10 +371,18 @@ power amp, the speakers, the whole Suitcase as one netlist.**
      unknown, provisional). Each channel's **front** speaker reads out as the player's pressure
      1 m on axis (`out` / `out_r`, the 5E3's readout: pascals as volts, `full_scale.
      output_pascals_peak` **25 Pa**: the clipping peaks measured 12.7 / 21.4 / 23.0 Pa at 100 Hz
-     / 1 kHz / 3 kHz); the **rear** one (mirrored, directly behind it) is only a load, the new
-     macro option `readout: 0` (both builders; a second readout's states doubled a render's
-     cost: 80x real time at draft with four, 25x with two). The cabinet is the 48 x 27 x 14 in
-     speaker section as an open baffle (open / closed back unknown, below).
+     / 1 kHz / 3 kHz). **Each channel's pair is one speaker part with `series: 2`** (a macro
+     option in both builders, added in the review the same day): two identical drivers in
+     series carry one current, so one force and one velocity, and the pair is *exactly* one
+     driver with every resistance and inductance doubled and every capacitance halved; its
+     readout and its live terminal voltage are one driver's (`tests/test_rhodes_amp.py::
+     test_a_series_pair_is_one_part`: two parts against one, 1e-9; n = 1 is bit for bit the
+     old element list, so the 5E3 and the Stage didn't move). The rear driver (mirrored,
+     directly behind the front one) isn't read out. Half the states of two parts (40 a
+     channel to 20). The first version had two parts, the rear one `readout: 0` (also a
+     macro option now: a driver as a load only), and before that four readouts: 80x real time
+     at draft with four, 25x with two. The cabinet is the 48 x 27 x 14 in speaker section as an
+     open baffle (open / closed back unknown, below).
 - **The amp measured** (`scripts/rhodes_amp_study.py` -> `reports/rhodes/suitcase_amp/`,
   1 kHz at ACCESSORY IN, draft with Newton 1e-5, THD up to the 10th):
   gain **25.31 dB** from `pre_a` to the output (fig11-3's -100K / (680 + 4.7K) = 25.4), flat to
@@ -402,9 +410,23 @@ power amp, the speakers, the whole Suitcase as one netlist.**
   10%). The tolerance costs accuracy: the amp's waveform against Newton 1e-5 is -70 dB at the
   draft's (1e-3, 1e-2), **-59 to -64 dB at (3e-3, 3e-2) and at the chosen (4e-3, 4e-2)** (a
   step looser, (1e-2, 5e-2), -36 to -55 dB: audibly noisy, rejected); the THD reads the same
-  to 0.01% at all of them. Not measured with every key struck and re-struck: `play.rs
-  --strike-all` sounds out of the speakers (the user asked it not to run at night); the harp's
-  cost sits on the first thread (the preamp alone measured 72% with every key).
+  to 0.01% at all of them.
+- **Every key struck and re-struck** (the review, 2026-11-07, with the user back: `play.rs
+  --device rhodes_suitcase --strike-all 127 --restrike 3 --mute`; `--mute` is new, everything
+  computes and the monitor's gain after the device is -300 dB, so nothing sounds; the stats
+  line's `out` / `gain` are the circuit's own, before the monitor): **not clean. 6-62
+  dropouts in 12-15 s, worst block 150-210%** (the preamp-only device in the same session: 0
+  dropouts, worst 113-115%). Measured per thread (temporary instrumentation of circuitsim's
+  `run_part`, not committed): each amp thread is busy **5.2-6.3 us a sample**, the speakers'
+  2.0-2.4, the supply 1.2-1.6, against 10.4 us at 96 kHz; their maxima of 0.1-2.7 ms are the
+  OS descheduling a spinning thread. So the compute fits; what drops out is scheduling: in
+  this test, five partition threads in lockstep every sample, the harp's three voice workers
+  and the audio thread on 8 cores (16 logical), with another session's pytest and
+  explorer.exe each holding a core. Tried and worse: the speakers in the first partition
+  (223%), the supply folded into amp B's group (129%), each channel's speakers on its amp's
+  thread (113-150 dropouts against 12-62 for five threads, alternated three times); a 50 ms
+  buffer instead of 30 doesn't help. The five threads stay. The runs vary 5x with what else
+  runs on the desktop: CLAUDE.md's "Benchmarking on this desktop" applies.
 - **Against the reference recording, redone** (`scripts/suitcase_bands.py`: each band's power
   re 200-2000 Hz, both channels; the recording is the preamp's output, so the fair row for
   the preamp is `pre_a`; the whole Suitcase adds the P12R's response at 1 m):
@@ -469,10 +491,16 @@ power amp, the speakers, the whole Suitcase as one netlist.**
 3. The power amp's step response and its high-frequency stability against the real 2N5784's
    fT of 1-4 MHz: the model has no transit time, so it can't say (the amp is clean in the
    model; the sheet's loop would be the check if a bench measurement turned up).
-4. The live device with every key struck and re-struck: not measured here (it sounds out of the
-   speakers; the user asked it not to run at night): `examples/play.rs --device rhodes_suitcase
-   --strike-all` is the check. Expect the first thread (the preamp with the harp: 72% in the
-   preamp-only run) to stay under the amps' threads (0.82-0.86x on a loud program).
+4. **The live device's worst case (the user's call):** every key at 127 re-struck every 3 s
+   drops out (above). Options: (a) keep it: a stress test far past playing (all 73 keys
+   ringing at ff, the amps clipping), and the per-thread compute fits; (b) offer the
+   preamp-only circuit as a second Play device ("Suitcase preamp", 0 dropouts in the same
+   test) beside the whole instrument, the whole one for takes and renders; (c) engine work:
+   the partition threads spin in lockstep every sample, so a thread the OS deschedules for a
+   millisecond stalls all of them; a looser coupling (a block of lag on the rails, where only
+   slow sag crosses) would let the supply and speakers run ahead (TAPE_SPEED_PLAN.md P2's
+   "decoupled by a block of lag" is the same idea). My recommendation: (b) now, (c) if the
+   whole instrument should be the one played.
 
 **Options (model changes: the user's call, numbers before renders change).**
 1. **The pickup's field and the hammer's speed** (the biggest win): fit the velocity law's

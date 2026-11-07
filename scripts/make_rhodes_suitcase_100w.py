@@ -61,7 +61,7 @@ HEADER = """\
 """
 
 
-def board(x: str, pre: str, out: str, amp: str, rear: str, front_off: str, rear_off: str) -> str:
+def board(x: str, pre: str, out: str, amp: str, front_off: str) -> str:
     """One power amplifier board (fig11-3's P.C. board power amplifier, channel `x`)."""
     X = x.upper()
     n = lambda s: f"{x}_{s}"  # noqa: E731  (a node of this board)
@@ -135,29 +135,23 @@ def board(x: str, pre: str, out: str, amp: str, rear: str, front_off: str, rear_
       {r("21")}: {{R: [{n("e9")}, vn], r: r_emitter_ohm}}
   - title: "speakers {X}"
     parts:
-      # F1 / F2 (4 A) to the CH {X} SPEAKER jack, then the two speakers in series: the front
-      # one reads out as the player's pressure; the rear one is only a load (`readout: 0`: its
-      # terminal voltage on {rear}; a second readout's states would double a render's cost).
+      # F1 / F2 (4 A) to the CH {X} SPEAKER jack, then the front and rear speakers in series,
+      # as one part with `series: 2`: two identical drivers carry one current, so one force
+      # and one velocity, and the pair is exactly one driver with every impedance doubled (the
+      # speaker macro scales the elements; its readout and terminal voltage are one driver's).
+      # Half the states of two parts. `{out}` is the front driver's pressure 1 m in front of it
+      # (the rear one, behind it, isn't read out).
       {r("F1")}: {{R: [{amp}, {n("spk")}], r: fuse_ohm, tolerance: none}}
-      {p("SPKF")}:
-        speaker: [{n("spk")}, {n("mid")}, {out}]
+      {p("SPK")}:
+        speaker: [{n("spk")}, "0", {out}]
         component: speaker_model
+        series: 2
         distance_m: listen_distance_m
         width_m: cab_width_m
         height_m: cab_height_m
         depth_m: cab_depth_m
         offset_x_m: {front_off}
         offset_y_m: cab_offset_y_m
-      {p("SPKR")}:
-        speaker: [{n("mid")}, "0", {rear}]
-        component: speaker_model
-        distance_m: listen_distance_m
-        width_m: cab_width_m
-        height_m: cab_height_m
-        depth_m: cab_depth_m
-        offset_x_m: {rear_off}
-        offset_y_m: cab_offset_y_m
-        readout: 0
 """
 
 
@@ -179,7 +173,7 @@ def patches() -> list[tuple[str, str]]:
         ),
         (
             "probes: [out, out_r, inn, a1o,",
-            "probes: [out, out_r, out_rear_a, out_rear_b, pre_a, pre_b, a_amp, b_amp, vp, vn, "
+            "probes: [out, out_r, pre_a, pre_b, a_amp, b_amp, vp, vn, "
             "a_e, a_t, a_b, a_e8, a_e9, a_c1, a_c3, a_q1b, a_spk, b_spk, b_e, b_t, b_b, b_e8, b_e9, "
             "inn, a1o,",
         ),
@@ -356,8 +350,8 @@ def generate() -> str:
             "so a partitioned draft can cut at its input.\n" + "\n".join(moved[x]) + "\n"
         )
     text += "\n" + SUPPLY
-    text += board("a", "pre_a", "out", "a_amp", "out_rear_a", "spk_left_m", "spk_right_m")
-    text += board("b", "pre_b", "out_r", "b_amp", "out_rear_b", "spk_right_m", "spk_left_m")
+    text += board("a", "pre_a", "out", "a_amp", "spk_left_m")
+    text += board("b", "pre_b", "out_r", "b_amp", "spk_right_m")
     return text
 
 
