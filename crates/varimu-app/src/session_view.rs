@@ -1868,8 +1868,10 @@ impl SessionView {
     fn mixer(&mut self, ui: &mut egui::Ui) {
         const STRIP: f32 = 104.0;
         let full = ui.available_rect_before_wrap();
-        let master_rect =
-            Rect::from_min_max(Pos2::new(full.right() - STRIP - 8.0, full.top()), full.max);
+        let master_rect = Rect::from_min_max(
+            Pos2::new(full.right() - STRIP - 12.0, full.top()),
+            full.max - egui::vec2(8.0, 4.0),
+        );
         let tracks_rect =
             Rect::from_min_max(full.min, Pos2::new(master_rect.left() - 4.0, full.bottom()));
         let mut changed = false;
@@ -1925,11 +1927,8 @@ impl SessionView {
         {
             self.meters.master.clipped = false;
         }
-        mui.label(
-            RichText::new("inserts: with the stereo bus (T5)")
-                .small()
-                .color(theme::FAINT),
-        );
+        mui.label(RichText::new("inserts: T5").small().color(theme::FAINT))
+            .on_hover_text("Master inserts come with the stereo bus (RECORDING_PLAN.md T5)");
         let h = (master_rect.height() - 150.0).max(80.0);
         mui.horizontal(|ui| {
             ui.add_space(12.0);
@@ -2100,14 +2099,29 @@ impl SessionView {
                 }
             }
         });
+        // Room for the most inserts any strip has and its Print, so the faders line up.
+        let most = self
+            .session
+            .tracks
+            .iter()
+            .map(|t| t.inserts.len())
+            .max()
+            .unwrap_or(0);
+        let have = self.session.tracks[i].inserts.len();
+        s.add_space((most - have) as f32 * (18.0 + s.spacing().item_spacing.y));
         let mut print = false;
         if self.session.chain_signature(i).is_some()
             && !self.session.print_current(i)
             && !self.printing(i)
-            && s.small_button(RichText::new("Print").color(theme::ACCENT))
-                .clicked()
         {
-            print = true;
+            print = s
+                .add(
+                    egui::Button::new(RichText::new("Print").small().color(theme::ACCENT))
+                        .min_size(egui::vec2(0.0, 18.0)),
+                )
+                .clicked();
+        } else {
+            s.add_space(18.0);
         }
         if let Some((k, what)) = action {
             let ins = &mut self.session.tracks[i].inserts;
