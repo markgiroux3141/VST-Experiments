@@ -1,6 +1,7 @@
-"""The Minimoog VCF (config/circuits/minimoog_vcf.yaml, docs/MINIMOOG_PLAN.md MM1): its idle
-bias, self-oscillation (where it starts, its frequency), the small-signal response and the
-cutoff's law over the keyboard.
+"""The Minimoog VCF on its board (config/circuits/minimoog_filter_board.yaml, docs/MINIMOOG_PLAN.md
+MM1): its idle bias, self-oscillation (where it starts, its frequency), the small-signal response
+and the cutoff's law over the keyboard, read at the filter's output `o7` (the VCA after it is
+scripts/minimoog_vca_study.py's).
 
     uv run --extra fast python scripts/minimoog_vcf_study.py [--only idle osc response track]
         [--set k=v ...] [--quality production|draft]
@@ -23,9 +24,10 @@ from varimu.sim import fast
 from varimu.sim.io import TransientSettings
 
 FS = 96000.0
-CIRCUIT = CONFIG_DIR / "circuits" / "minimoog_vcf.yaml"
+CIRCUIT = CONFIG_DIR / "circuits" / "minimoog_filter_board.yaml"
 OUT = Path(__file__).resolve().parents[1] / "reports" / "minimoog" / "vcf"
 SETTLE_S = 0.3  # the slowest network: C24 220 uF on ~200 ohm (44 ms), C5 / C1 on 47K (10 ms)
+VCF = "v(o7)"  # the filter's output (Q7 / Q8's collectors), the VCA's input through R2
 
 
 def load():
@@ -41,9 +43,13 @@ def settings(quality: str = "production") -> TransientSettings:
     return dataclasses.replace(s, settle_s=SETTLE_S)
 
 
-def run(ir, x, *, key_v=0.0, quality="production", stats=None):
+def run(ir, x, *, key_v=0.0, contour_v=0.0, quality="production", stats=None):
+    """`key_v`, `contour_v`: constants, or arrays as long as `x`."""
     n = len(x)
-    ctl = {"key": np.full(n, float(key_v))}
+    ctl = {
+        "key": np.broadcast_to(np.asarray(key_v, float), (n,)).copy(),
+        "contour": np.broadcast_to(np.asarray(contour_v, float), (n,)).copy(),
+    }
     r = fast.run_transient(ir, x, settings=settings(quality), controls=ctl, stats=stats)
     return {k: np.asarray(v) for k, v in r.vectors.items()}
 
@@ -71,7 +77,7 @@ def ring(v: np.ndarray) -> tuple[float, float]:
 
 def oscillates(ir, dur_s=0.6, **kw) -> tuple[bool, float, float]:
     """Kicked, does it still ring at full size at the end (pp at the end vs 0.2 s in)?"""
-    v = run(ir, kick(dur_s), **kw)["v(out)"]
+    v = run(ir, kick(dur_s), **kw)[VCF]
     mid = v[int(0.2 * FS) : int(0.3 * FS)]
     pp_mid = float(mid.max() - mid.min())
     pp, f = ring(v)
@@ -109,7 +115,7 @@ def response(s, base: dict, amp_v: float = 0.005) -> dict:
     x = multisine(dur + 0.2, amp_v, freqs)
     v = run(build(s, base), x)
     n = int(dur * FS)
-    o, i = v["v(out)"][-n:], x[-n:]
+    o, i = v[VCF][-n:], x[-n:]
     spec_o, spec_i = np.fft.rfft(o), np.fft.rfft(i)
     k = freqs.astype(int)  # 1 Hz bins
     h = np.abs(spec_o[k] / spec_i[k])
@@ -126,7 +132,7 @@ def drive(s, base: dict, f_hz: float = 110.0) -> dict:
     for amp in (0.005, 0.02, 0.05, 0.1, 0.2, 0.5):
         t = np.arange(int(0.5 * FS)) / FS
         x = amp * np.sin(2 * np.pi * f_hz * t)
-        o = run(ir, x)["v(out)"][-int(0.2 * FS) :]
+        o = run(ir, x)[VCF][-int(0.2 * FS) :]
         o = o - o.mean()
         sp = np.abs(np.fft.rfft(o * np.hanning(len(o))))
         fr = np.fft.rfftfreq(len(o), 1 / FS)

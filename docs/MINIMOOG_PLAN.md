@@ -77,7 +77,30 @@ MM0 done. **MM1 built; open: the user plays it.**
   KEYBOARD CONTROL 1 / 2 as 300K / 150K by inference), the keyboard (0 V at the low A, MIDI 45
   provisional), AMOUNT OF CONTOUR at 0, ideal +-10 V, the mixer as an ideal source.
 
-Next: MM2, the VCA (circuit No. 7, read in the sources README).
+**MM2 built (2026-11-07): the VCA**, in the same file, renamed
+`config/circuits/minimoog_filter_board.yaml` (the app's `minimoog_filter_board`; the VCF's
+measurements read `o7`, the filter's output). Values checked against the manual's Table 7-8,
+which corrected the reading in places (R67 200 at the string's foot, R12 100 ohm, R40 2.2K vs the
+drawing's 22K, R54 470), and R2 82K is in series into the VCA, not a load to ground (MM1's file
+had it wrong; the load is the same, the trims held).
+- `scripts/minimoog_vca_trim.py --write`: Folkman's VCA Balance read as nulling the EXT.
+  LOUDNESS feedthrough (his jumper puts audio on a control line), measured quasi-statically
+  (the output's DC shift for EXT. LOUDNESS 4 -> 8 V): 2ND VCA BAL 0.710 (key up), 1ST VCA BAL
+  0.618 (key held); untrimmed, hundreds of mV; trimmed, 2.3 mV key up, ~0 held.
+- Gain over the contour (220 Hz, 50 mV into the filter): -96 dB at 0 V (shut), -21.7 at 0.5 V,
+  -10.3 at 1 V, -2.8 at 2 V, ~0 to +1 dB from 3 V, where the output tops out at ~5.6 V pp (Q17's
+  collector idles at 3.1 V, CR2 clamps it at -0.6 V). A contour step 0 -> 5 V with no audio
+  thumps 109 mV at the MAIN OUTPUT (attack 0; the contour generators will round it, MM4).
+- `tests/test_minimoog_vca.py` (3 tests) with the VCF's 5 on the new file.
+- Live: one solve ran 1.22x real time at draft-1x; the VCA now runs as a partition (its own
+  ideal rails, the contour's R59 / Q18 on the filter's side so the control input stays in the
+  first part; the cut at Q18's collector and Q16's base: a cut at Q18's base diverged): **0.89x,
+  263 of 938 blocks over** (the filter's side sets it). Open: marginal for live play; the next
+  levers are the Newton tolerance (1e-5 for the expo converter) against its measured cutoff
+  error, or a cheaper draft for the output amplifier.
+- The contour input is the keys' gate (0 / 5 V, provisional) until MM4.
+
+Next: MM3, the oscillators (board No. 1, Fig 9-2).
 
 ## CPU while another session runs
 

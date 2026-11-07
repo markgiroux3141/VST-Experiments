@@ -1,5 +1,5 @@
-"""The Minimoog VCF (config/circuits/minimoog_vcf.yaml, docs/MINIMOOG_PLAN.md MM1): its idle
-bias from the drawing, and Folkman's three adjustment procedures met at the circuit file's
+"""The Minimoog VCF (config/circuits/minimoog_filter_board.yaml, docs/MINIMOOG_PLAN.md MM1): its
+idle bias from the drawing, and Folkman's three adjustment procedures met at the circuit file's
 trims (scripts/minimoog_vcf_trim.py --write sets them)."""
 
 from __future__ import annotations

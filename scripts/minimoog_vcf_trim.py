@@ -9,8 +9,8 @@ service manual, p. 14; data/schematics/minimoog/README.md), in his order:
    CUTOFF for zero beats two octaves above 440 (1760 Hz); the low "A" key: the Scale trimpot
    (R49) for zero beats (440 Hz). Repeat until it tracks three octaves.
 
-CUTOFF -1 is the fixture's 0 V (config/circuits/minimoog_vcf.yaml); the low A is keyboard 0 V,
-the third A 2 V (1 V / octave).
+CUTOFF -1 is the fixture's 0 V (config/circuits/minimoog_filter_board.yaml); the low A is
+keyboard 0 V, the third A 2 V (1 V / octave).
 
     uv run --extra fast python scripts/minimoog_vcf_trim.py [--write]
 
@@ -35,7 +35,7 @@ A_HZ = 440.0
 
 def envelope_growth(s, ov: dict, key_v: float = 0.0) -> tuple[float, float, float]:
     """(end / middle peak-to-peak, end pp, frequency) after a small kick: > 1 grows."""
-    v = st.run(st.build(s, ov), st.kick(DUR_S, 0.005), key_v=key_v)["v(out)"]
+    v = st.run(st.build(s, ov), st.kick(DUR_S, 0.005), key_v=key_v)[st.VCF]
     mid = v[int(0.15 * st.FS) : int(0.25 * st.FS)]
     end = v[-int(0.1 * st.FS) :]
     pp_mid, pp_end = float(np.ptp(mid)), float(np.ptp(end))

@@ -31,7 +31,8 @@ Q28 matched to +-3 mV at 20 mA**; C17 / C25 selected 600-1200 pF (the A-440 osci
   capacitor between each pair's emitters (C3, C7, C11, C16); the input differential pair Q29/Q30 (TIS97,
   marked (M): matched) at the bottom. Collectors of Q2/Q3 at +10 V.
 - **Base bias string** from +10 V: R4 220, R16 150, R32 150, R41 150, R52 150 to the Q29/Q30 bases' node, then
-  R61 200 to ground with C24 220 uF across it. R54 (470; the scan reads "410", no E-series value) feeds Q29's base.
+  R67 200 to ground with C24 220 uF across it (Table 7-8: R67 200 Ohm; R61 is the pre-amp's 200K). R54 470
+  (Table 7-8; the drawing prints "410") feeds Q29's base.
 - **Audio in:** pin 4 -> C27 10 uF -> Q29's base. **Feedback (EMPHASIS):** pin 6 -> R73 1K trim (REGEN CAL) ->
   R76 330 -> Q30's base.
 - **Control current:** Q28 (TIS92) sinks the tail of Q29/Q30 through R60 680. Its base is driven by Q26 (TIS93,
@@ -40,15 +41,32 @@ Q28 matched to +-3 mV at 20 mA**; C17 / C25 selected 600-1200 pF (the A-440 osci
   +10 V via R46 68K, C18 100 pF to ground; R45 330 in Q26's base lead.
 - **Output amplifier:** the top stage's emitters via C5 0.22 / C1 0.22 into followers Q8 / Q6 (TIS97; R31 47K,
   R38 47K to ground), their emitters (R24 220K, R20 100K to -10 V) into the differential pair Q7 / Q5 (TIS97, tail
-  R26 1K to -10 V); Q7's collector load R3 1K + R7 180 from +10 V (C9 100 uF at the junction); output via C10 10 uF
-  to pin 7 (EMPHASIS pot and the VCA).
+  R26 1K to -10 V); Q7's and Q8's collectors share R3 1K + R7 180 from a decoupled +10 V (R6 47, C9 100 uF); that
+  node feeds the VCA through R2 82K (in series: see below); the R7 / R3 junction feeds EMPHASIS through C10 10 uF
+  (pin 7). EMPHASIS (R14 on the panel, 50K rev. audio) is a rheostat between pins 7 and 6 (Fig 9-16: its
+  terminal 1 unconnected).
+- **The panel's pins** (Fig 9-16's connector CO4): 1 +10 V, 3 -10 V (BD5-3A), 4 the mixer (SW13), 5 the control
+  node, 6 / 7 EMPHASIS, 9 the contour, 10 EXT. LOUDNESS (J3), 16 AMOUNT OF CONTOUR (a 5K linear pot: board 2's
+  contour on one end, ground on the other).
 
-## Filter board No. 4, circuit No. 7, the VCA (read, transcribe when it is built)
+## Filter board No. 4, circuit No. 7, the VCA (read 2026-11-07; values per Table 7-8)
 
-TIS97 pairs Q13/Q14 and Q15/Q16, Q21 (TIS97) the tail current source (R33 470, R34 820, R35 1K, R43 270K, R59
-68K), 2N4058 PNP Q1, Q12, Q17 (output), balance trims R14 25 ohm (1ST VCA BAL) and R12 100 ohm (2ND VCA BAL),
-C4 220 uF, C6 0.33, C15 220 uF, C2 10 uF, CR1 / CR2 1N458A (or CL1), R29 / R30 680, R75 / R77 1K to the main and
-headphone outputs.
+- **Input:** the filter's output through R2 82K, then C6 0.33 into Q16's base; R34 820 to Q15's base, which
+  R22 120 / R36 510 from the loads' chain hold (C15 220 uF): the filter arrives ~1/100 down.
+- **1st stage:** Q16 / Q15 (TIS97), tail R35 1K into Q18 (TIS97), whose base takes the contour (pin 9) through
+  R59 68K (emitter R37 6.8K to ground, R43 270K to -10 V); loads R19 / R23 100 on R14 (25 ohm trim, 1ST VCA BAL).
+- **2nd stage:** Q14 / Q13 (TIS97) on the 1st's collectors, tail R33 470 into Q21 (TIS97), base from EXT.
+  LOUDNESS (pin 10) through R51 33K (emitter R42 3.3K, R44 150K to -10 V); loads R18 / R21 330 on R12 (100 ohm
+  trim, 2ND VCA BAL). J3 empty: pin 10 on +10 V through the panel's R56 (Fig 9-16, label faint: 33K read).
+- **Loads' chain:** +10 V, R10 120 (C4 220 uF across it; Q1's base at its foot), R11 150 (R12's wiper), R13 120
+  (R14's wiper and R22).
+- **Output:** Q12 / Q17 (2N4058, PNP) on the 2nd's collectors (Q14 -> Q12, Q13 -> Q17), emitters R8 / R28 8.2 into
+  Q1 (2N4058, R9 62 from +10 V); Q12's collector R30 680 to ground, Q17's R29 680 the output, CR2 (from ground)
+  and CR1 (to +10 V) 1N458A clamps, C2 10 uF, R75 1K MAIN OUTPUT (pin 21), R77 1K headphone amp (pin 22).
+- **A-440** (circuit No. 13, powered by pin 14): its output Q4's emitter (R5 22K) through R40 and C8 0.1 onto
+  Q14's collector. R40: Table 7-8 2.2K (852-512222-001), the drawing 22K.
+- Folkman's VCA Balance (p. 13) jumps filter-board point "A" to oscillator-board point "A" (the points' places
+  are on component location drawings his copy lacks).
 
 ## Oscillator board (read next)
 

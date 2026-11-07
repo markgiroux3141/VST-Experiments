@@ -1191,19 +1191,20 @@ pub const DEVICES: [Device; 23] = [
         newton: Some((1e-5, 1e-5)),
     },
     Device {
-        id: "minimoog_vcf",
-        label: "Minimoog Ladder Filter",
-        short: "Moog VCF",
-        about: "The Minimoog Model D's transistor ladder filter (filter board No. 4), \
-            the test oscillator into it, the keys on its keyboard input (docs/MINIMOOG_PLAN.md)",
+        id: "minimoog_filter_board",
+        label: "Minimoog Filter + VCA",
+        short: "Moog VCF+VCA",
+        about: "The Minimoog Model D's filter board No. 4: the transistor ladder filter into \
+            the VCA, the test oscillator into it, the keys on its keyboard input and their \
+            gate on the contour input (docs/MINIMOOG_PLAN.md)",
         group: Group::Instruments,
-        circuit: "minimoog_vcf",
+        circuit: "minimoog_filter_board",
         panel: Some(&["cutoff_v", "emphasis", "kb1", "kb2"]),
         ahead_s: AHEAD_S,
         quality: Quality::Draft1x,
         cores: None,
         mod_wheel: Some("cutoff_v"),
-        gate: None,
+        gate: Some("contour"),
         velocity: None,
         pitch: None,
         own_oscillator: false,
@@ -1211,7 +1212,9 @@ pub const DEVICES: [Device; 23] = [
         pitch2: None,
         coupling: None,
         live_speaker_v: None,
-        partition: None,
+        // The VCA on a thread of its own, joined to the filter only at Q16's base (one
+        // sample late through R2 82K / C6): 1.22x real time as one solve.
+        partition: Some(&["vca"]),
         // The expo converter's current is exp(V / Vt): the draft's 1 mV Newton would be a
         // 4 % cutoff error, as in the SSL's log-domain cells.
         newton: Some((1e-5, 1e-5)),
