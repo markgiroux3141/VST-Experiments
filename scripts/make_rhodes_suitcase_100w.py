@@ -236,9 +236,9 @@ def patches() -> list[tuple[str, str]]:
             '  D4148: {device: 1N4148@1, source: "fig11-3: CR1 1N4148 (064089 for CR2-CR8: 1 A 200 V, a generic silicon rectifier here)"}\n'
             '  QN: {device: 2N5784@1, source: "fig11-3: Q1, Q2, Q3, Q5 2N5784 (RCA, fitted to its sheet: library.build_2n5784)"}\n'
             '  QP: {device: 2N5781@1, source: "fig11-3: Q4 2N5781 (library.build_2n5781)"}\n'
-            '  QD: {device: RCA29B@1, source: "fig11-3: Q6 RCA29B (provisional model: library.build_rca29b)"}\n'
-            '  QPD: {device: RCA30B@1, source: "fig11-3: Q7 RCA30B (provisional model: library.build_rca30b)"}\n'
-            '  QO: {device: 2N6254@1, source: "fig11-3: Q8, Q9 2N6254 (library.build_2n6254)"}\n',
+            '  QD: {device: RCA29B@1, tol_scale: 0.025, source: "fig11-3: Q6 RCA29B (provisional model: library.build_rca29b). Its ports converge to 0.025 of the Newton tolerance (`tol_scale`, numerics only: at 40 mV, the live setting, the output stage junctions accepted errors heard as crackle as the pan moved the level, docs/RHODES_PLAN.md The Suitcase)"}\n'
+            '  QPD: {device: RCA30B@1, tol_scale: 0.025, source: "fig11-3: Q7 RCA30B (provisional model: library.build_rca30b). Its ports converge to 0.025 of the Newton tolerance (`tol_scale`, numerics only: at 40 mV, the live setting, the output stage junctions accepted errors heard as crackle as the pan moved the level, docs/RHODES_PLAN.md The Suitcase)"}\n'
+            '  QO: {device: 2N6254@1, tol_scale: 0.025, source: "fig11-3: Q8, Q9 2N6254 (library.build_2n6254). Its ports converge to 0.025 of the Newton tolerance (`tol_scale`, numerics only: at 40 mV, the live setting, the output stage junctions accepted errors heard as crackle as the pan moved the level, docs/RHODES_PLAN.md The Suitcase)"}\n',
         ),
     ]
 
@@ -329,7 +329,15 @@ def generate() -> str:
     # ground (its impedance is a few kilohms at 20 kHz against R32 / R33's 100K), the one
     # place the signal path takes a sample's lag stably (a cut at the amp's input, a 5K node
     # behind a 100 ohm source, diverged: docs/RHODES_PLAN.md "The Suitcase").
-    moved: dict[str, list[str]] = {"a": [], "b": []}
+    # The LED strings leave the "oscillator" section for one of their own, so the draft can
+    # run the oscillator A2A / A2B (with the +-15 V decoupling it shares, "supply") on a
+    # thread of its own: its rail-to-rail flips then never make the audio's solve iterate,
+    # and the cut is at `v`, A2B's output through S1, a stiff driver (the LEDs see it a
+    # sample late, at 3.8 Hz nothing). With the oscillator in the audio's solve, a loose
+    # Newton voltage tolerance let the photocells' port error through at every flip, ~40x
+    # louder after A3A and the power amp: the crackle at the pan's cycle (RHODES_PLAN.md).
+    led_keys = ("DCR1", "R23", "R25", "DCR2", "DCR3", "RNL1", "RNL2", "RNL3", "RNL4")
+    moved: dict[str, list[str]] = {"a": [], "b": [], "led": []}
     kept = []
     for line in text.split("\n"):
         key = line.strip().split(":", 1)[0]
@@ -337,10 +345,12 @@ def generate() -> str:
             moved["a"].append(line)
         elif line.startswith("      ") and key in ("U3B", "R35", "C18", "R38"):
             moved["b"].append(line)
+        elif line.startswith("      ") and key in led_keys:
+            moved["led"].append(line)
         else:
             kept.append(line)
-    if [len(moved["a"]), len(moved["b"])] != [4, 4]:
-        raise SystemExit("the output op-amp parts moved: expected 4 per channel")
+    if [len(moved["a"]), len(moved["b"]), len(moved["led"])] != [4, 4, len(led_keys)]:
+        raise SystemExit("the moved parts: expected 4 per output amp and the 9 of the LED strings")
     text = "\n".join(kept)
     text = HEADER + text.rstrip("\n") + "\n"
     for x in "ab":
@@ -349,6 +359,13 @@ def generate() -> str:
             f"      # A3{x.upper()}'s feedback and output (fig11-1), apart from the pan network "
             "so a partitioned draft can cut at its input.\n" + "\n".join(moved[x]) + "\n"
         )
+    text += (
+        '\n  - title: "LED drive"\n    parts:\n'
+        "      # The LED strings between VB+ and VB- with `v` between them (fig11-1), apart from\n"
+        "      # the oscillator so a partitioned draft can cut at `v`.\n"
+        + "\n".join(moved["led"])
+        + "\n"
+    )
     text += "\n" + SUPPLY
     text += board("a", "pre_a", "out", "a_amp", "spk_left_m")
     text += board("b", "pre_b", "out_r", "b_amp", "spk_right_m")

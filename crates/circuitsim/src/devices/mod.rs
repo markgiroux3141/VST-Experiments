@@ -62,6 +62,16 @@ pub trait Device: fmt::Debug + Send + Sync {
         0.0
     }
 
+    /// A factor on Newton's tolerance (`reltol |v| + vntol`) at this port, for the
+    /// convergence test and the bypass of unmoved devices (`dk.rs`): numerics only. 1 (the
+    /// default) is the solver's tolerance exactly. Below 1 for a port whose voltage is a
+    /// small signal the circuit then amplifies (an optocoupler's cell carries tens of
+    /// millivolts of audio into a gain of ~40: at a live draft's 40 mV the solver accepted
+    /// errors of the signal's size there, heard as crackle as the cell's conductance moved).
+    fn tol_scale(&self, _port: usize) -> f64 {
+        1.0
+    }
+
     /// Called once per accepted time step with the final port voltages. The
     /// hook for devices with memory (a hysteretic transformer core, an
     /// optical cell); stateless models ignore it.

@@ -100,7 +100,7 @@ values:
   c16_f: {value: 1.0e-6, source: "fig11-1: C16 1 (fig11-2.html: 15 V non-polar)"}
 
   # --- The panning network and A3 (fig11-1) ----------------------------------------------
-  opto_model: {value: VTL5C2@1, source: "config/components/vtl5c2/1.yaml (PerkinElmer's VTL5C2 Vactrol, fitted), provisional: standing in for Rhodes P/N 013556 (a 4-terminal LED / LDR, maker unknown; a VTL5C-type Vactrol is the usual replacement: README). Chosen by the reference recording's pan (scripts/suitcase_study.py -> reports/rhodes/suitcase/): a fast flip, then a creep over the whole half period as the darkened cell recovers; the VTL5C2 (off to 100 kOhm in ~190 ms) fits its shape within 1.21 dB rms, the VTL5C1 (~20 ms) flat-tops, 1.51"}
+  opto_model: {value: VTL5C2@2, source: "config/components/vtl5c2/2.yaml (PerkinElmer's VTL5C2 Vactrol, fitted; version 2 is version 1 with its state node at 1 uS per volt, numerics only), provisional: standing in for Rhodes P/N 013556 (a 4-terminal LED / LDR, maker unknown; a VTL5C-type Vactrol is the usual replacement: README). Chosen by the reference recording's pan (scripts/suitcase_study.py -> reports/rhodes/suitcase/): a fast flip, then a creep over the whole half period as the darkened cell recovers; the VTL5C2 (off to 100 kOhm in ~190 ms) fits its shape within 1.21 dB rms, the VTL5C1 (~20 ms) flat-tops, 1.51"}
   opto_state_c_f: {value: 1.0, source: "numerical: the optocoupler's state node capacitor (varimu/devices/opto.py: 1 F, the device's convention)"}
   r24_ohm: {value: 3.3e+3, source: "fig11-1: R24 3.3K"}
   r29_ohm: {value: 10.0e+3, source: "fig11-1: R29 10K"}

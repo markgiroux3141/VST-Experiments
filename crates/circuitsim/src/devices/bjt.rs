@@ -45,6 +45,8 @@ pub struct Bjt {
     /// SPICE's critical voltages for junction limiting (b-e, b-c).
     vcrit_e: f64,
     vcrit_c: f64,
+    /// [`Device::tol_scale`] (the model's `tol_scale`, 1 without).
+    tol: f64,
 }
 
 /// `(Ic, Ib, dIc/dvbe, dIc/dvbc, dIb/dvbe, dIb/dvbc)`, NPN signs.
@@ -107,6 +109,7 @@ impl Bjt {
             ncv: m.nc * vt,
             vcrit_e: crit(nfv),
             vcrit_c: crit(nrv),
+            tol: m.tol_scale.unwrap_or(1.0),
         }
     }
 
@@ -157,6 +160,10 @@ impl Bjt {
 }
 
 impl Device for Bjt {
+    fn tol_scale(&self, _port: usize) -> f64 {
+        self.tol
+    }
+
     fn ports(&self) -> usize {
         2
     }
@@ -219,6 +226,7 @@ mod tests {
             eg_ev: None,
             xti: None,
             xtb: None,
+            tol_scale: None,
         }
     }
 

@@ -654,6 +654,10 @@ pub struct JunctionDiode {
     pub is_a: f64,
     pub n: f64,
     pub rs_ohm: f64,
+    /// Newton's tolerance at its ports, as a factor (numerics only: [`crate::devices::
+    /// Device::tol_scale`]; `None`: 1, the solver's own). A circuit's `devices` entry sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tol_scale: Option<f64>,
 }
 
 /// Child-law thermionic diode: pins (anode, cathode).
@@ -757,6 +761,10 @@ pub struct Bjt {
     pub xti: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub xtb: Option<f64>,
+    /// Newton's tolerance at its ports, as a factor (numerics only: [`crate::devices::
+    /// Device::tol_scale`]; `None`: 1, the solver's own). A circuit's `devices` entry sets it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tol_scale: Option<f64>,
 }
 
 /// A JFET's channel type.
@@ -1606,6 +1614,9 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
         }
         DeviceModel::JunctionDiode(d) => {
             values.extend([("is_a", d.is_a), ("n", d.n)]);
+            if let Some(k) = d.tol_scale {
+                values.push(("tol_scale", k));
+            }
             if !(d.rs_ohm.is_finite() && d.rs_ohm >= 0.0) {
                 return err(format!("{name}.rs_ohm = {} must be >= 0", d.rs_ohm));
             }
@@ -1669,7 +1680,11 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
                     return err(format!("{name}.{what} = {x} must be >= 0"));
                 }
             }
-            for (what, x) in [("temp_k", q.temp_k), ("eg_ev", q.eg_ev)] {
+            for (what, x) in [
+                ("temp_k", q.temp_k),
+                ("eg_ev", q.eg_ev),
+                ("tol_scale", q.tol_scale),
+            ] {
                 if let Some(x) = x {
                     values.push((what, x));
                 }

@@ -167,6 +167,8 @@ class Optocoupler:
 def opto_from_data(d: dict, ref: str) -> Optocoupler:
     """An optocoupler component version's model."""
     led, cell = d["led"], d["cell"]
+    # The state node's unit (numerics only): a version's `state` block, else 1 mS per volt.
+    s_unit = (d.get("state") or {}).get("s_unit_s", 1e-3)
     return Optocoupler(
         d["name"],
         led["is_a"],
@@ -176,6 +178,7 @@ def opto_from_data(d: dict, ref: str) -> Optocoupler:
         cell["tau0_s"],
         cell["kappa_s_s"],
         cell["g_dark_s"],
+        s_unit_s=float(s_unit),
     )
 
 
@@ -195,8 +198,18 @@ def fit_vtl5c1() -> dict:
 
 def fit_vtl5c2() -> dict:
     """The VTL5C2's (`fit_vactrol`): the sheet's slow type ("a very steep slope ... a small
-    light history memory"; turn-off to 100 kOhm in 500 ms max., the VTL5C1's 35 ms)."""
-    return fit_vactrol("VTL5C2")
+    light history memory"; turn-off to 100 kOhm in 500 ms max., the VTL5C1's 35 ms). Since
+    version 2 its state node carries 1 uS per volt (numerics only, the same fit)."""
+    d = fit_vactrol("VTL5C2")
+    d["state"] = {
+        "s_unit_s": 1e-6,
+        "source": "numerics: the state node's siemens per volt. At the default 1 mS per volt a "
+        "dark cell's conductance (~10 uS) is ~10 mV on the node, under a live draft's 40 mV "
+        "Newton tolerance, so its changes were taken in steps, heard as crackle as the Suitcase's "
+        "pan swept; at 1 uS per volt the tolerance's relative part governs "
+        "(docs/RHODES_PLAN.md The Suitcase). The model's dynamics don't depend on it",
+    }
+    return d
 
 
 # Per part: the sheet's OFF resistance at 10 s (min.), how the source names it, and the

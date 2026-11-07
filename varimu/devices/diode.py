@@ -24,6 +24,10 @@ class JunctionDiode:
     is_a: float
     n: float
     rs_ohm: float = 0.0
+    # Newton's tolerance at this model's ports, as a factor (numerics only, not the model:
+    # circuitsim's `Device::tol_scale`; None = 1, the solver's own). A circuit's `devices`
+    # entry sets it (`tol_scale`) where a loose live tolerance was heard.
+    tol_scale: float | None = None
 
     def i(self, v):
         v = np.asarray(v, float)

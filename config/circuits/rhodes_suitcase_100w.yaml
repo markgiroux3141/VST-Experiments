@@ -114,7 +114,7 @@ values:
   c16_f: {value: 1.0e-6, source: "fig11-1: C16 1 (fig11-2.html: 15 V non-polar)"}
 
   # --- The panning network and A3 (fig11-1) ----------------------------------------------
-  opto_model: {value: VTL5C2@1, source: "config/components/vtl5c2/1.yaml (PerkinElmer's VTL5C2 Vactrol, fitted), provisional: standing in for Rhodes P/N 013556 (a 4-terminal LED / LDR, maker unknown; a VTL5C-type Vactrol is the usual replacement: README). Chosen by the reference recording's pan (scripts/suitcase_study.py -> reports/rhodes/suitcase/): a fast flip, then a creep over the whole half period as the darkened cell recovers; the VTL5C2 (off to 100 kOhm in ~190 ms) fits its shape within 1.21 dB rms, the VTL5C1 (~20 ms) flat-tops, 1.51"}
+  opto_model: {value: VTL5C2@2, source: "config/components/vtl5c2/2.yaml (PerkinElmer's VTL5C2 Vactrol, fitted; version 2 is version 1 with its state node at 1 uS per volt, numerics only), provisional: standing in for Rhodes P/N 013556 (a 4-terminal LED / LDR, maker unknown; a VTL5C-type Vactrol is the usual replacement: README). Chosen by the reference recording's pan (scripts/suitcase_study.py -> reports/rhodes/suitcase/): a fast flip, then a creep over the whole half period as the darkened cell recovers; the VTL5C2 (off to 100 kOhm in ~190 ms) fits its shape within 1.21 dB rms, the VTL5C1 (~20 ms) flat-tops, 1.51"}
   opto_state_c_f: {value: 1.0, source: "numerical: the optocoupler's state node capacitor (varimu/devices/opto.py: 1 F, the device's convention)"}
   r24_ohm: {value: 3.3e+3, source: "fig11-1: R24 3.3K"}
   r29_ohm: {value: 10.0e+3, source: "fig11-1: R29 10K"}
@@ -247,9 +247,9 @@ devices:
   D4148: {device: 1N4148@1, source: "fig11-3: CR1 1N4148 (064089 for CR2-CR8: 1 A 200 V, a generic silicon rectifier here)"}
   QN: {device: 2N5784@1, source: "fig11-3: Q1, Q2, Q3, Q5 2N5784 (RCA, fitted to its sheet: library.build_2n5784)"}
   QP: {device: 2N5781@1, source: "fig11-3: Q4 2N5781 (library.build_2n5781)"}
-  QD: {device: RCA29B@1, source: "fig11-3: Q6 RCA29B (provisional model: library.build_rca29b)"}
-  QPD: {device: RCA30B@1, source: "fig11-3: Q7 RCA30B (provisional model: library.build_rca30b)"}
-  QO: {device: 2N6254@1, source: "fig11-3: Q8, Q9 2N6254 (library.build_2n6254)"}
+  QD: {device: RCA29B@1, tol_scale: 0.025, source: "fig11-3: Q6 RCA29B (provisional model: library.build_rca29b). Its ports converge to 0.025 of the Newton tolerance (`tol_scale`, numerics only: at 40 mV, the live setting, the output stage junctions accepted errors heard as crackle as the pan moved the level, docs/RHODES_PLAN.md The Suitcase)"}
+  QPD: {device: RCA30B@1, tol_scale: 0.025, source: "fig11-3: Q7 RCA30B (provisional model: library.build_rca30b). Its ports converge to 0.025 of the Newton tolerance (`tol_scale`, numerics only: at 40 mV, the live setting, the output stage junctions accepted errors heard as crackle as the pan moved the level, docs/RHODES_PLAN.md The Suitcase)"}
+  QO: {device: 2N6254@1, tol_scale: 0.025, source: "fig11-3: Q8, Q9 2N6254 (library.build_2n6254). Its ports converge to 0.025 of the Newton tolerance (`tol_scale`, numerics only: at 40 mV, the live setting, the output stage junctions accepted errors heard as crackle as the pan moved the level, docs/RHODES_PLAN.md The Suitcase)"}
 
 sections:
   - title: supply
@@ -340,15 +340,6 @@ sections:
         parts:
           RS1: {R: [a2bo, v], r: switch_contact_ohm, tolerance: none, in: [1]}
       # The LED strings between VB+ and VB-, `v` between them.
-      DCR1: {device: [vbp, l1a], model: DSI}
-      R23: {R: [l1k, v], r: r23_ohm}
-      R25: {R: [v, l2a], r: r25_ohm}
-      DCR2: {device: [l2k, cr23], model: DSI}
-      DCR3: {device: [cr23, vbn], model: DSI}
-      RNL1: {R: [l1a, "0"], r: numerical_leak_ohm, tolerance: none}
-      RNL2: {R: [v, "0"], r: numerical_leak_ohm, tolerance: none}
-      RNL3: {R: [l2k, "0"], r: numerical_leak_ohm, tolerance: none}
-      RNL4: {R: [cr23, "0"], r: numerical_leak_ohm, tolerance: none}
 
   - title: "output amp A"
     parts:
@@ -365,6 +356,20 @@ sections:
       R35: {R: [a3bo, a3bm], r: r35_ohm}
       C18: {C: [a3bo, "0"], c: c18_f}
       R38: {R: [a3bo, pre_b], r: r38_ohm}
+
+  - title: "LED drive"
+    parts:
+      # The LED strings between VB+ and VB- with `v` between them (fig11-1), apart from
+      # the oscillator so a partitioned draft can cut at `v`.
+      DCR1: {device: [vbp, l1a], model: DSI}
+      R23: {R: [l1k, v], r: r23_ohm}
+      R25: {R: [v, l2a], r: r25_ohm}
+      DCR2: {device: [l2k, cr23], model: DSI}
+      DCR3: {device: [cr23, vbn], model: DSI}
+      RNL1: {R: [l1a, "0"], r: numerical_leak_ohm, tolerance: none}
+      RNL2: {R: [v, "0"], r: numerical_leak_ohm, tolerance: none}
+      RNL3: {R: [l2k, "0"], r: numerical_leak_ohm, tolerance: none}
+      RNL4: {R: [cr23, "0"], r: numerical_leak_ohm, tolerance: none}
 
   - title: mains supply
     parts:

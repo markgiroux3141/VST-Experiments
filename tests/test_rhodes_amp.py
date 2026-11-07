@@ -150,3 +150,60 @@ def test_a_series_pair_is_one_part(tmp_path):
     front = two_live["a"] - two_live["m"]
     assert np.max(np.abs(one_live["o1"] - front)) < 1e-9 * np.max(np.abs(front))
     assert np.max(np.abs(two_live["o2"] - two_live["m"])) < 1e-9 * np.max(np.abs(front))
+
+
+APP_PARTITION = (
+    "speakers A",
+    "speakers B",
+    "|",
+    "output amp A",
+    "power amp A",
+    "|",
+    "output amp B",
+    "power amp B",
+    "|",
+    "mains supply",
+)  # fmt: skip  (panel::Device::partition of the app's rhodes_suitcase)
+
+
+def test_the_pan_does_not_crackle_live():
+    """The app's live settings (draft, Newton (4e-3, 4e-2), its partition) against a tight
+    solve (1e-5), a steady tone through ACCESSORY IN with the pan sweeping: the outputs'
+    difference above 5 kHz (the crackle the user heard at every cycle, -5 to -18 dB re the
+    signal before the fixes) stays under -30 dB (measured -38 to -40 dB). The fixes: the
+    photocell's cell port converges to 1e-2 of the tolerance (circuitsim's `Optocoupler::
+    tol_scale`), its state node at 1 uS per volt (VTL5C2@2), the output stage's devices at
+    0.025 (`tol_scale` in the circuit's `devices`)."""
+    pytest.importorskip("circuitsim")
+    from scipy import signal
+
+    from varimu.sim import fast, io
+
+    c = load()
+    q = dict(spec.resolve(c))
+    q.update(accessory_in=1, vibrato=1)
+    ir = builder.build_ir(c, q, speaker_readout=False)
+    base = io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
+    fs = base.sample_rate
+    t = np.arange(int(1.2 * fs)) / fs
+    x = 0.02 * np.sin(2 * np.pi * 440 * t) * np.clip(t / 0.05, 0, 1)
+
+    def run(rel, vn):
+        st = dataclasses.replace(base, newton_reltol=rel, newton_vntol=vn, partition=APP_PARTITION)
+        v = fast.run_transient(ir, x, settings=st).vectors
+        return {k: np.asarray(v[f"v({k})"]) for k in ("out", "out_r")}
+
+    live, tight = run(4e-3, 4e-2), run(1e-5, 1e-5)
+    sos = signal.butter(4, 5000, "highpass", fs=fs, output="sos")
+    k0 = int(0.3 * fs)
+    for node in ("out", "out_r"):
+        h = signal.sosfiltfilt(sos, live[node] - tight[node])[k0:]
+        rms = np.sqrt(np.mean(tight[node][k0:] ** 2))
+        assert 20 * np.log10(np.max(np.abs(h)) / rms) < -30.0, node
+
+
+def test_only_the_output_stage_is_tightened():
+    models = {m.name: m for m in builder.build_ir(load(), dict(spec.resolve(load()))).models}
+    tight = {n for n, m in models.items() if getattr(m, "tol_scale", None) is not None}
+    assert tight == {"RCA29B_QD", "RCA30B_QPD", "2N6254_QO"}, tight
+    assert all(models[n].tol_scale == 0.025 for n in tight)

@@ -21,6 +21,8 @@ pub const VT_TNOM: f64 = 1.38064852e-23 * 300.15 / 1.6021766208e-19;
 pub struct JunctionDiode {
     is_a: f64,
     rs_ohm: f64,
+    /// [`Device::tol_scale`] (the model's `tol_scale`, 1 without).
+    tol: f64,
     nvt: f64,
     /// SPICE's critical voltage for junction limiting.
     vcrit: f64,
@@ -32,6 +34,7 @@ impl JunctionDiode {
         JunctionDiode {
             is_a: m.is_a,
             rs_ohm: m.rs_ohm,
+            tol: m.tol_scale.unwrap_or(1.0),
             nvt,
             vcrit: nvt * (nvt / (std::f64::consts::SQRT_2 * m.is_a)).ln(),
         }
@@ -60,6 +63,10 @@ impl JunctionDiode {
 }
 
 impl Device for JunctionDiode {
+    fn tol_scale(&self, _port: usize) -> f64 {
+        self.tol
+    }
+
     fn ports(&self) -> usize {
         1
     }

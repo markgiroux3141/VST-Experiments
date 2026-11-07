@@ -130,6 +130,10 @@ class Bjt:
     eg_ev: float | None = None
     xti: float | None = None
     xtb: float | None = None
+    # Newton's tolerance at this model's ports, as a factor (numerics only, not the model:
+    # circuitsim's `Device::tol_scale`; None = 1, the solver's own). A circuit's `devices`
+    # entry sets it (`tol_scale`) where a loose live tolerance was heard.
+    tol_scale: float | None = None
 
     def at_temperature(self) -> tuple[float, float, float, float, float, float]:
         """(Vt, IS, BF, BR, ISE, ISC) at the model's temperature (TNOM's values when

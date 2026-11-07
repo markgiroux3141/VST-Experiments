@@ -18,6 +18,12 @@ pub const V_LIN_V: f64 = 2.5;
 pub const STATE_SHUNT: f64 = 1.0;
 /// [`Device::shunt`] of the cell: between its dark (2e-8 S) and bright (~5e-3 S) ends.
 pub const CELL_SHUNT: f64 = 1e-6;
+/// [`Device::tol_scale`] of the cell and the state ports: the cell carries the audio (tens
+/// of millivolts in the Suitcase's pan network, amplified ~40x after it), so a live draft's
+/// 40 mV tolerance there let errors of the signal's size through, a crackle as the pan
+/// swept (docs/RHODES_PLAN.md "The Suitcase"); 1e-3 of it is 40 uV there, the cell's
+/// linear in its voltage, so it costs about an iteration where the conductance moved.
+pub const CELL_TOL_SCALE: f64 = 1e-2;
 
 #[derive(Debug, Clone)]
 pub struct Optocoupler {
@@ -101,6 +107,13 @@ impl Device for Optocoupler {
             v[0] = v[1] + vd;
         }
         limited
+    }
+
+    fn tol_scale(&self, port: usize) -> f64 {
+        match port {
+            3 => CELL_TOL_SCALE,
+            _ => 1.0,
+        }
     }
 
     fn shunt(&self, port: usize) -> f64 {

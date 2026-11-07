@@ -83,6 +83,7 @@ fn steep_diode() -> JunctionDiode {
         is_a: 1e-14,
         n: 1.0,
         rs_ohm: 0.0,
+        tol_scale: None,
     }
 }
 
@@ -92,6 +93,7 @@ fn rectifier_diode() -> JunctionDiode {
         is_a: 7e-9,
         n: 1.8,
         rs_ohm: 0.034,
+        tol_scale: None,
     }
 }
 

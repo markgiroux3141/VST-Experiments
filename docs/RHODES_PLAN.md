@@ -410,7 +410,43 @@ power amp, the speakers, the whole Suitcase as one netlist.**
   10%). The tolerance costs accuracy: the amp's waveform against Newton 1e-5 is -70 dB at the
   draft's (1e-3, 1e-2), **-59 to -64 dB at (3e-3, 3e-2) and at the chosen (4e-3, 4e-2)** (a
   step looser, (1e-2, 5e-2), -36 to -55 dB: audibly noisy, rejected); the THD reads the same
-  to 0.01% at all of them.
+  to 0.01% at all of them. **That check was wrong for the pan:** it ran with the vibrato off.
+- **The crackle at the pan's cycle (the user heard it, 2026-11-07; fixed the same day).** Not
+  dropouts: the live Newton tolerance (4e-3, 4e-2). Found by running a steady tone through
+  ACCESSORY IN with the pan on, live settings against a 1e-5 solve, and high-passing the
+  difference node by node: clicks of **-5 to -18 dB re the signal** at the outputs (-23 dB rms
+  at the draft's own (1e-3, 1e-2) too), appearing first at the photocells' nodes pa / pb and in
+  the power amp's output stage. Three sources, three fixes, numerics only:
+  1. **The photocell's cell port** carries ~90 mV of audio into a gain of ~40; at 40 mV of
+     tolerance the solver accepted errors of the signal's size there while the cell's
+     conductance moved under a reused Jacobian. circuitsim now has `Device::tol_scale` (a
+     per-port factor on Newton's tolerance, for the convergence test and the bypass of
+     unmoved devices; 1 for every device but this one, so every other solve is bit for bit
+     unchanged); the optocoupler's cell port is 1e-2 (`CELL_TOL_SCALE`; 1e-3 is cleaner but the
+     first partition then takes 7.4 iterations a sample, 1.4-1.5x real time).
+  2. **The cell's state node** carried the conductance at 1 mS per volt, so a dark cell (~10
+     uS) sat at ~10 mV, under the absolute tolerance: its changes came in steps. `VTL5C2@2` is
+     @1 with a `state` block, 1 uS per volt (both loaders read it, default 1 mS; the fit is
+     unchanged); both Suitcase circuits pin it.
+  3. **The output stage's junctions** (the crossover, as the pan moves the level): a circuit's
+     `devices` entry takes `tol_scale` (a factor in (0, 1] on BJTs and junction diodes, in the
+     IR as the model's optional `tol_scale`, absent = 1; both builders), set to 0.025 on the
+     drivers and outputs (QD, QPD, QO). On every amp device it cost 1.65x real time; on the
+     output stage alone nothing measurable.
+
+  | Live setting | Load (loud program) | Clicks at the outputs (re rms) |
+  |---|---|---|
+  | as first shipped | 0.82-0.86x | -5 to -18 dB |
+  | **the three fixes, (4e-3, 4e-2)** (shipped) | **0.75-0.81x** | **-38 to -40 dB** |
+  | the fixes, (2e-3, 2e-2) | 1.55x | -46 dB |
+  | cell 1e-3, (2e-3, 2e-2) | 1.4x and up | -62 to -66 dB |
+
+  `tests/test_rhodes_amp.py::test_the_pan_does_not_crackle_live` keeps it under -30 dB. Wrong
+  turns, for the record: the oscillator's flips (its own partition, the LED strings split into
+  a "LED drive" section, changed nothing; the split stays, unused by the app) and the state's
+  unit alone (no change until the cell port was fixed). Production renders are unaffected
+  (their tolerance is 1e-4 / 1e-3 V, the factors only tighten it). **Open (the user's call):**
+  whether -38 to -40 dB is clean enough by ear; the cleaner rows cost real time.
 - **Every key struck and re-struck** (the review, 2026-11-07, with the user back: `play.rs
   --device rhodes_suitcase --strike-all 127 --restrike 3 --mute`; `--mute` is new, everything
   computes and the monitor's gain after the device is -300 dB, so nothing sounds; the stats

@@ -496,6 +496,7 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
             is_a: num(d, "is_a", what)?,
             n: num(d, "n", what)?,
             rs_ohm: num(d, "rs_ohm", what)?,
+            tol_scale: None,
         }),
         "vacuum_diode" => DeviceModel::VacuumDiode(VacuumDiode {
             name,
@@ -544,7 +545,14 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 tau0_s: num(cell, "tau0_s", what)?,
                 kappa_s_s: num(cell, "kappa_s_s", what)?,
                 g_dark_s: num(cell, "g_dark_s", what)?,
-                s_unit_s: 1e-3,
+                // The state node's unit (numerics): a version's `state` block, else 1 mS / V.
+                s_unit_s: match d.get("state") {
+                    Some(Value::Map(st)) => match st.get("s_unit_s") {
+                        Some(_) => num(st, "s_unit_s", what)?,
+                        None => 1e-3,
+                    },
+                    _ => 1e-3,
+                },
             })
         }
         "bjt" => {
@@ -599,6 +607,7 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 eg_ev: opt("eg_ev")?,
                 xti: opt("xti")?,
                 xtb: opt("xtb")?,
+                tol_scale: None,
             })
         }
         "jfet" => {

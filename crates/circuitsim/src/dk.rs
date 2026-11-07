@@ -90,6 +90,8 @@ pub struct Ports {
     /// Conductance moved from each port's device into the step matrix
     /// (see [`crate::devices::Device::shunt`]).
     pub shunts: Vec<f64>,
+    /// Each port's factor on Newton's tolerance ([`crate::devices::Device::tol_scale`]).
+    pub tol_scales: Vec<f64>,
     /// First entry of each device's Jacobian (row-major, ports x ports) in a
     /// packed list of all of them.
     g_offsets: Vec<usize>,
@@ -100,6 +102,7 @@ impl Ports {
     pub fn new(devices: &[DeviceInstance]) -> Ports {
         let (mut nodes, mut offsets, mut widths, mut g_offsets, mut shunts) =
             (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+        let mut tol_scales = Vec::new();
         let mut g_len = 0;
         for d in devices {
             let np = d.device.ports();
@@ -111,11 +114,13 @@ impl Ports {
             for (k, &p) in d.pins[..np].iter().enumerate() {
                 nodes.push((p, reference));
                 shunts.push(d.device.shunt(k));
+                tol_scales.push(d.device.tol_scale(k));
             }
         }
         Ports {
             nodes,
             shunts,
+            tol_scales,
             offsets,
             widths,
             g_offsets,
@@ -631,7 +636,10 @@ impl DkNewton {
             return Ok(0);
         }
         let (k, lda) = (sys.k(), sys.rows);
-        let tol = |a: f64, b: f64| opts.reltol * a.abs().max(b.abs()) + opts.vntol;
+        // A port's tolerance: the solver's, times its device's factor (1: exactly it).
+        let tol = |j: usize, a: f64, b: f64| {
+            ports.tol_scales[j] * (opts.reltol * a.abs().max(b.abs()) + opts.vntol)
+        };
         // This step size's factored matrix, or the oldest to replace.
         self.solves += 1;
         self.cur = match self.slots.iter().position(|f| f.id == sys.id) {
@@ -659,7 +667,7 @@ impl DkNewton {
                 let moved = !self.reuse
                     || !self.evaluated[d]
                     || (o..o + np)
-                        .any(|j| (v[j] - self.v_eval[j]).abs() > tol(v[j], self.v_eval[j]));
+                        .any(|j| (v[j] - self.v_eval[j]).abs() > tol(j, v[j], self.v_eval[j]));
                 if !moved {
                     continue;
                 }
@@ -726,7 +734,7 @@ impl DkNewton {
             worst = (0, 0.0);
             let mut r = 0.0;
             for (a, (&old, &new)) in v.iter().zip(&self.rhs).enumerate() {
-                let ratio = (new - old).abs() / tol(old, new);
+                let ratio = (new - old).abs() / tol(a, old, new);
                 if ratio.is_nan() || ratio > r {
                     r = if ratio.is_nan() { f64::INFINITY } else { ratio };
                     worst = (a, new - old);

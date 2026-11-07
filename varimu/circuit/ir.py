@@ -1063,6 +1063,8 @@ def _validate_model(m: DeviceModel) -> None:
     elif isinstance(m, JunctionDiode):
         values += [("is_a", m.is_a), ("n", m.n)]
         nonneg("rs_ohm", m.rs_ohm)
+        if m.tol_scale is not None:
+            values.append(("tol_scale", m.tol_scale))
     elif isinstance(m, VacuumDiode):
         values += [("perveance", m.perveance), ("smooth_v", m.smooth_v)]
     elif isinstance(m, Lamp):
@@ -1120,7 +1122,11 @@ def _validate_model(m: DeviceModel) -> None:
         ]
         for w in ("ise_a", "isc_a", "rb_ohm", "rc_ohm", "re_ohm", "cje_f", "cjc_f"):
             nonneg(w, getattr(m, w))
-        values += [(w, getattr(m, w)) for w in ("temp_k", "eg_ev") if getattr(m, w) is not None]
+        values += [
+            (w, getattr(m, w))
+            for w in ("temp_k", "eg_ev", "tol_scale")
+            if getattr(m, w) is not None
+        ]
         for w in ("xti", "xtb"):
             if getattr(m, w) is not None:
                 _finite(f"{m.name}.{w}", getattr(m, w))
@@ -1197,6 +1203,8 @@ _OMITTED_WHEN_NONE = {
     (Bjt, "eg_ev"),
     (Bjt, "xti"),
     (Bjt, "xtb"),
+    (Bjt, "tol_scale"),
+    (JunctionDiode, "tol_scale"),
 }
 _PROBE_KINDS = {"voltage": VoltageProbe}
 _KIND_OF = {

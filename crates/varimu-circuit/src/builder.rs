@@ -49,7 +49,7 @@ impl Cores {
 }
 
 const PART_KEYS: [&str; 3] = ["tolerance", "source", "notes"];
-const DEVICE_KEYS: [&str; 13] = [
+const DEVICE_KEYS: [&str; 14] = [
     "device",
     "name",
     "instance",
@@ -63,6 +63,7 @@ const DEVICE_KEYS: [&str; 13] = [
     "events",
     "source",
     "notes",
+    "tol_scale",
 ];
 
 // --- Tolerance -------------------------------------------------------------------------
@@ -2198,6 +2199,29 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
                 },
             )
             .map_err(|err| ctx.fail(&where_, err.0))?
+        };
+        // Numerics: Newton's tolerance at these ports, as a factor (builder.py's).
+        let model = match e.get("tol_scale") {
+            None => model,
+            Some(x) => {
+                let w = format!("{where_}.tol_scale");
+                let v = ctx.number(&w, x)?;
+                let k = ctx.float(&w, &v)?;
+                if !(k > 0.0 && k <= 1.0) {
+                    return Err(ctx.fail(&w, format!("{k}: a factor in (0, 1]")));
+                }
+                match model {
+                    DeviceModel::Bjt(mut q) => {
+                        q.tol_scale = Some(k);
+                        DeviceModel::Bjt(q)
+                    }
+                    DeviceModel::JunctionDiode(mut d) => {
+                        d.tol_scale = Some(k);
+                        DeviceModel::JunctionDiode(d)
+                    }
+                    _ => return Err(ctx.fail(&w, "for BJTs and junction diodes")),
+                }
+            }
         };
         ctx.types.insert(model.name().to_string(), base_name);
         ctx.models.push((key.to_string(), model));

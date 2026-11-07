@@ -1169,7 +1169,7 @@ for _name, _macro in {
 
 _DEVICE_KEYS = {
     "device", "name", "instance", "tolerance", "parallel", "emission", "mu", "grid_contact_v",
-    "area", "temp_c", "events", "source", "notes",
+    "area", "temp_c", "events", "source", "notes", "tol_scale",
 }  # fmt: skip
 
 
@@ -1217,6 +1217,14 @@ def make_models(ctx: Context) -> dict[str, str]:
                 )
             except (TypeError, ValueError) as err:
                 raise ctx.fail(where, str(err)) from err
+            if "tol_scale" in e:
+                # Numerics: Newton's tolerance at these ports, as a factor (Device::tol_scale).
+                if not isinstance(model, Bjt | JunctionDiode):
+                    raise ctx.fail(f"{where}.tol_scale", "for BJTs and junction diodes")
+                k = ctx.number(f"{where}.tol_scale", e["tol_scale"])
+                if not 0.0 < k <= 1.0:
+                    raise ctx.fail(f"{where}.tol_scale", f"{k}: a factor in (0, 1]")
+                model = dataclasses.replace(model, tol_scale=float(k))
         ctx.models[key] = model
         ctx.parallel[model.name] = (
             1 if e.get("instance", True) is False else ctx.count(where, e.get("parallel", 1))

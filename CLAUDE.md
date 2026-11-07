@@ -63,7 +63,10 @@ Telefunken V76). **Next (2026-11-06, the user's call): dynamics and EQ**, the fi
 - B13, the Neve 1073 with its EQ (CHAINS_PLAN.md WP11).
 
 A BJT's junction temperature is a `devices` entry's `temp_c` (SPICE's scaling; absent =
-TNOM, IR unchanged). A component editor (tubes and transformers designed from geometry and
+TNOM, IR unchanged). A `devices` entry's `tol_scale` (BJTs, junction diodes; a factor in (0, 1]
+on Newton's tolerance at their ports: circuitsim's `Device::tol_scale`, the optocoupler's cell
+port 1e-2 by itself; absent = 1, IR and solves unchanged) is numerics for a live draft's loose
+tolerance where it was heard (the Suitcase's crackle, RHODES_PLAN.md). A component editor (tubes and transformers designed from geometry and
 materials, compiled to device files the circuit editors offer) is planned in
 [docs/COMPONENT_EDITOR_PLAN.md](docs/COMPONENT_EDITOR_PLAN.md) (2026-10-29; milestones
 C1-C8; the user's decisions: it starts alongside the 5E3, whose output transformer is the
@@ -470,7 +473,10 @@ the app's `rhodes_suitcase` is the whole instrument (five threads, Newton (4e-3,
 on a loud program; cuts at the output op-amps' inverting inputs, the amps' outputs and the
 rails: a cut at the amp's own input diverges; every key at 127 re-struck still drops out, from
 thread scheduling, not compute: each helper thread uses 1-6 us of a 10.4 us sample;
-`examples/play.rs --mute` measures without sound). The pan holds with the amp in (1.18 dB shape
+`examples/play.rs --mute` measures without sound; the crackle the user heard at the pan's cycle
+was that loose tolerance at the photocells and the output stage, fixed with `tol_scale` and
+`VTL5C2@2`'s 1 uS-per-volt state: -38 to -40 dB re the signal, was -5 to -18, at 0.75-0.81x;
+`test_the_pan_does_not_crackle_live`). The pan holds with the amp in (1.18 dB shape
 error); `scripts/rhodes_suitcase_notes.py` writes a jRhodes-style single-note set,
 `scripts/suitcase_bands.py` the band table. Next: the user listens; the plan's options (the
 vibrato's last dB, the 4-16 kHz deficit, the cabinet's back).
