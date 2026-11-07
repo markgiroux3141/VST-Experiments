@@ -122,6 +122,16 @@ Nothing built. What it needs, in order (each a prerequisite inside this plan, th
    waveshapes against the sheet's levels (+-1.75 V ramp, -2.5 V = 15 % pulse), then three
    oscillators and the octave buffer (board 6).
 
+**MM4 started (2026-11-07, unattended session): board No. 2 read, nothing built.** Fig 9-7 read in 230 dpi tiles
+(data/schematics/minimoog/README.md, "Contour generator and keyboard"). Call made: do not build a netlist from a
+reading that does not yet make a working envelope. The Q1 / Q4 pair, wired as drawn (Q1 base to collector), holds
+N_A at one diode drop and no input could flip the generator, so one of the wires is misread (an Eccles-Jordan
+reading is proposed there). Next step: build the section as its own file under both readings, drive it with the
+trigger section (Q12 / Q20) and keep the one that gives attack, decay to the SUSTAIN clamp and release; the peak
+detector (CR3 on N_B) then sets the ~4 V top. Also open: which panel pot is which on Fig 9-16, and the key
+trigger's polarity at pin 20. The click (a bare 5 V gate stepped in one sample into the VCA) is unchanged.
+MM3's prerequisites (uA726, LM393, E112, the reset exception) are not started.
+
 ## CPU while another session runs
 
 `CARGO_BUILD_JOBS=3`, builds started with `cmd /c start /belownormal /wait /b ...`; one render

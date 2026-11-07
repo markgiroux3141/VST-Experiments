@@ -122,3 +122,46 @@ reissue keeps the 1970s signal path.
   TIS93; the TIS97 is used as the 2N3904 until a sheet is found (provisional).
 - Matching of the middle ladder pairs is unspecified (Norlin bulletin 804C, quoted secondhand on the Moog forum:
   only Q29/Q30 is marked matched).
+
+## Contour generator and keyboard, board No. 2 (Fig 9-7, PDF page 9; read 2026-11-07, not yet built)
+
+Parts values: Table 7-6 (PDF page 27). Rails: +9.3 V from the decoupling circuit (Q26 2N3415 / TIS92 alt 2N3904,
+R62 330 from +10 V, R63 15 from +15 V), -10 V. Transistors 2N3392 (NPN; alt 2N3904), TIS93 (PNP; alt 2N3906).
+The two contour sections are the same circuit (filter: Q1-Q8, Q21, Q22; loudness: Q25, Q15-Q19, Q2, Q3), read at
+230 dpi in tiles (render the page with PyMuPDF and clip).
+
+**One section (filter's names; loudness's in brackets):**
+- Pair Q1 / Q4 [Q25 / Q15], both emitters grounded. Q1's collector node N_A runs to R5 3.3K [R40] and R6 560 [R41]
+  from +9.3 V (the PNP Q5 [Q16] has its emitter on +9.3 V and its base on the R6 / R5 junction, collector through
+  R7 100 [R42] to pin 14 [18], "TO ATTACK": the attack current source into the attack pot). Q1's collector, its base
+  (wire to the dot), R3 10K [R38] to Q4's collector, which has R4 10K [R39] to +9.3 V. Q4's base: R14 33K [R56] from
+  N_A, CR3 1N34A [CR6] from N_B, CR1 1N34A [CR8] from the trigger line through R35 10K [R36].
+  **Open: a diode-connected Q1 (base wired to collector) pins N_A near 0.65 V and nothing could flip it, so either
+  the base wire does not meet the collector at the dot (an Eccles-Jordan bistable, Q1's base fed by R3 from Q4's
+  collector, state switched by C1 .01 / R26 10K from the trigger node and by CR3 from the output) or the drawing
+  was misread. The bistable reading gives the right logic: Q1 on = Q5 on = attack, Q1 off = N_A high = decay.**
+- N_A also drives follower Q6 [Q17], whose emitter (R8 10K [R43] to -10 V) feeds Q7 [Q18]'s base through R9 4.7K
+  [R44]. Q7's collector = pin 13 [17] "TO DECAY" (the decay pot's end); its emitter E7 has R10 27K [R45] to +9.3 V,
+  CR2 1N4004 [CR9] (anode E7) to pin 6 [15], "to pin 22 (trigger) thru LHC", and the emitter of PNP Q8 [Q19]: base on
+  the SUSTAIN node (R13 4.7K to pin 12 [R57 to pin 16], R1 3K to ground and R17 150K to -10 V [R41 4.7K to ground]),
+  collector R11 100 [R46] to ground: a clamp, E7 = sustain + 0.65 V.
+- C5 10 uF [C2] is the envelope capacitor, on pin 10 [9] (the attack and decay pots' wipers); CR7 1N4004 [CR4], cathode to
+  pin 2 [8] "TO DECAY SWITCH" (the release path); R48 10K [R16] into Q22 [Q3]'s base. The output stage: Q22 NPN
+  with Q21 TIS93 [Q2, Q3 as an NPN pair with R15 560 on the collectors] a complementary pair onto the output node
+  (pin 11 [7]), R50 560 [R15] from +9.3 V, C11 47 pF / C12 500 pF compensation. Output node to N_B through R33 5.6K
+  [R24 6.8K]; N_B has R29 16.9K 1% [R27] to -10 V and CR3 [CR6] (anode N_B) to Q4's base: the peak detector,
+  flipping at Vout of about 4 V (N_B > ~0.5 V).
+- Trigger section: Q12 2N3392 (base from pin 21 / 22 "decay switch (V-TRIG)" and, through R49 220 + R19 10K, from pin 19
+  EXT. S-TRIG; collector T1 pulled up by R32 10K and R23 3.3K, feeding both sections' C1 / R26 and C4 / R28);
+  Q20 2N3392 (base from pin 20 KEYBOARD TRIG through R60 100K, CR10 1N34A, R55 47K, C1 .1 to ground; collector TL,
+  R37 10K from +9.3 V, feeding R35 / CR1 and R36 / CR8). CR10's and CR1's orientations are not read with certainty.
+- Panel pots (Table 7-3, listed in order): R9, R12, R13, R15, R16 are 1 Megohm audio (the attack / decay pots and
+  glide); R17-R21 5K linear (sustain levels, amount of contour); R2 5 Megohm; R3, R6, R7, R8, R10 25K. Which is
+  which is on Fig 9-16 (PDF page 18; 2994 x 1566 pt: render clips) and not yet traced.
+
+**Keyboard circuit (circuit No. 1, same sheet, right half):** pitch bus 43 x 10 ohm 1% string from the +10 V bar, current
+8.33 mA; the pitch bus into the Q23 / Q14 matched pair (2N3392, R58 6.2K, R51 560, R52 43K, R54 1.5K, R30 10K, R59
+8.9K, R61 330) with PNP Q24 (2N4058), the sample-and-hold C9 .33 uF (R53 4.1M), glide: JFETs Q13 / Q10 (2N4303),
+C6 1 uF (glide up), R64 100K, R21 10K, R31 22M, R2 330, CR5 1N4004, R65 5.1K, C13 .01, R34 100K; the current source
+Q9 / Q11 (TIS93 / TIS92, matched PNP 10 to 20 mV under the NPN at 200 uA), R1 590, R20 1K, R22 1.1K 1%, R25 1K; output
+R18 3.9K to -10 V at pins 4 / 5 (to the oscillators and filter). Not yet traced node by node.
