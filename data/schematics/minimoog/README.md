@@ -68,7 +68,31 @@ Q28 matched to +-3 mV at 20 mA**; C17 / C25 selected 600-1200 pF (the A-440 osci
 - Folkman's VCA Balance (p. 13) jumps filter-board point "A" to oscillator-board point "A" (the points' places
   are on component location drawings his copy lacks).
 
-## Oscillator board (read next)
+## Oscillator board No. 1, oscillator 1 (Fig 9-2, PDF page 4; read 2026-11-07 at ~1.25x, check the
+## values against Table 7-4 before building)
+
+- **Summer** IC1B (1/2 MC1458, inverting): inputs from the octave range (R20 121K 1%), OSC 1 SCALE (R16 10K trim
+  via R17 90.9K 1%), OSC 1 OCT ADJ (R18 5K trim via R19 53.6K 1%), the primary summer (R15 402K 1%; N2 network
+  949-042331-001: R12 82.5K, R13 69.8K, R15, R17, R19, R20, R21), OSC 1 SHIFT (R14 10K trim, R13 69.8K, R12 82.5K);
+  feedback R21 50K 1%, R22 15K at the + input. Its output through R23 2.32K 1% onto R24 100 1% (C4 100 pF): the
+  726's base, "0.00 mV @ 2' LO F = 350 Hz" (note 3), ~18 mV / octave there.
+- **Expo converter** IC5, a uA726 (a matched pair on a die held at a set temperature: the drawing marks
+  "T = 78.4 C"): Q7 the reference, its collector fed I_R = 5.0 uA from R30 2.0M 1%; IC6 (TL081, "OSC 1 CURRENT
+  SOURCE") closes the loop on the common emitters (pins 10 / 13, ~-2.5 V) through R27 49.9K 1%, R28 100K, R29 1K,
+  C8 .001; Q8's base grounded, its collector the oscillator's current I_c, "200 Hz / uA". C5 .01 decouples the
+  726's heater supply (pins 8 / 4 from +10 V).
+- **Core:** I_c from the capacitor node (C7 .001 uF; C6 1.5 uF / 20 V and R31 10K trim at the +5 V reference),
+  the reset switch Q4, an E112 JFET (source to IC4A's +5 V, drain to the capacitor node); IC7 (TL081, C10 / C11 .01
+  supply bypass) buffers the ramp (+1.75 V .. -1.75 V); IC8B (1/2 LM393, R34 1M, C12 18 pF, R35 100 ohm, pull-up
+  R36 1K) compares it and, through C9 100 pF / R33 2K (a ~1 us pulse, "+10 .. -10, 1 us"), drives Q4's gate.
+- **HI END COMP** IC4A (1/2 1458): R25 10K / R26 10K at its input, R32 100K and CR1 from the core (a correction
+  for the reset's dead time at the top of the range).
+- **Shapers:** the 2N3904 pair Q5 / Q6 (R40 10K, R41 10K, R42 10K, C13 500 pF; R43 8.25K, R44 4.99K into IC4B 1/2
+  1458) makes the triangle; R37 5.6K / R38 4.02K the sawtooth output; IC8A (1/2 393; R39 1K, C14 .01, R45 / R47
+  100K, R46 2.2M, R48 5.1K, R49 2.7K) the rectangle, its width from PW 1 IN (pin 22B: 0 V = square, -2.5 V = 15 %).
+  Outputs at pins 10B (R135 220K, note 4), 9B, 20B, 21B.
+
+## Oscillator board (notes from Fig 9-1)
 
 Fig 9-1's notes: the expo converter's matched pair is a **uA726** (a temperature-regulated pair: the chip heats
 itself to a set point; units between serials 11362 and 11794 with date codes 7850 / 7907 won't hold tune); R27,

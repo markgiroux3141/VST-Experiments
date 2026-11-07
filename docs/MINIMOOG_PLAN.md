@@ -100,7 +100,24 @@ had it wrong; the load is the same, the trims held).
   error, or a cheaper draft for the output amplifier.
 - The contour input is the keys' gate (0 / 5 V, provisional) until MM4.
 
-Next: MM3, the oscillators (board No. 1, Fig 9-2).
+**MM3 started (2026-11-07): oscillator 1 read** (the sources README, "Oscillator board No. 1").
+Nothing built. What it needs, in order (each a prerequisite inside this plan, the user's rule):
+1. **The uA726** as a component: a matched NPN pair at the die's regulated 78.4 C (the drawing's
+   mark; the BJT model's `temp_c`), first static; its heater loop (a thermal node, B6's pattern)
+   later if the drift is wanted (it is the 726's character: units from date codes 7850 / 7907
+   wouldn't hold tune).
+2. **The LM393** as a comparator: the `opamp` macro with its clamp at the output swing and an
+   open-collector pull-up, or a part of its own (its datasheet's gain, slew, output stage).
+3. **The E112** reset JFET: no card yet (InterFET / Siliconix N-channel switch); the 2N3819 card
+   stands in until one is found.
+4. **The reset** (~1 us, from IC8B through C9 100 pF / R33 2K): far below a sample at 48-96 kHz.
+   Offline, production's error control can subdivide it; live it is HYBRID_PHYSICS_PLAN.md's
+   case (the 884's M1 island or K event kernels), generated from a full-physics reference of this
+   core.
+5. Then `config/circuits/minimoog_vco.yaml` (one oscillator), Folkman's tuning procedure (p. 12:
+   Range trimpot for 3520 Hz at the high "A", Scale trimpot for 440 Hz at the low "A"), the
+   waveshapes against the sheet's levels (+-1.75 V ramp, -2.5 V = 15 % pulse), then three
+   oscillators and the octave buffer (board 6).
 
 ## CPU while another session runs
 
