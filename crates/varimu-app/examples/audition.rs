@@ -92,12 +92,9 @@ fn main() -> Result<(), String> {
     let p = if mix_only {
         let p = Player::start_mix(None, Settings::load(&config, Quality::Draft1x)?, 0.05)?;
         p.set_mix(Arc::new(Mix {
-            clips: vec![MixClip {
-                start: 0,
-                audio: x.clone(),
-                gain: (1.0, 1.0),
-            }],
+            clips: vec![MixClip::whole(0, x.clone(), (1.0, 1.0))],
             live: (0.0, 0.0),
+            ..Mix::default()
         }));
         p
     } else {

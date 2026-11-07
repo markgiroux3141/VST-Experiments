@@ -6,36 +6,56 @@
 //! in the performance's samples; the roll shows beats and writes samples.
 //!
 //! **Tools** (the header's buttons, or 1 / 2 / 3 over the roll):
-//! - **Select**: a click selects a note (Shift adds to the selection) and plays it on the
-//!   keyboard playing; a drag on a note moves the selection (by the grid; Alt: freely; up and
-//!   down by semitones), a drag on a note's right end (its last few pixels, on a note wide
-//!   enough to have one: the cursor says so) resizes it, a drag on empty space selects what
-//!   it covers, a double-click on empty space draws a note one grid step long.
-//! - **Draw**: a click on empty space draws a note one grid step long, a drag draws it as long
-//!   as the drag (by the grid); on a note it moves and resizes as Select does.
+//! - **Select**: a click selects a note (Shift adds to the selection) and plays it; a drag on
+//!   a note moves the selection (by the grid; Alt: freely; up and down by semitones; Shift:
+//!   copies it, the copies left behind), a drag on a note's right end (its last few pixels,
+//!   on a note wide enough to have one: the cursor says so) resizes it, a drag on empty
+//!   space selects what it covers, a click on empty space puts the session's cursor there,
+//!   a double-click on empty space draws a note.
+//! - **Draw**: a click on empty space draws a note, a drag draws it as long as the drag (by
+//!   the grid); on a note it moves and resizes as Select does. A drawn note is as long as
+//!   the last one drawn or resized (one grid step at first).
 //! - **Erase**: a click or a drag deletes the notes under it.
+//!
+//! **Previews** (docs/SESSION_EDITING_PLAN.md SE3): a note sounds when drawn, when dragged
+//! to another pitch (each semitone crossed), when transposed, resized or its velocity set
+//! (briefly), and a press on the keys column plays that key. They go through the device
+//! playing live in Play when it is the take's, else the device's proxy, else the test
+//! oscillator (the Session view routes them; `player::Player::preview_key`). The header's
+//! "preview" turns them off.
 //!
 //! What a press grabs is decided where the button went down, not where the pointer is once
 //! the drag has begun. Right-click deletes the note under the pointer with any tool. In the
 //! velocity lane a drag sets the velocity of the note under it (of every selected note, when
 //! it is one of them).
 //!
-//! Keys (over the roll): Delete deletes the selection, ↑ / ↓ transpose it (Shift: an
-//! octave), Q quantizes it (none selected: every note) to the grid at the strength, Ctrl+A
-//! selects every note. The wheel scrolls the keys, Shift+wheel scrolls in time, Ctrl+wheel
-//! zooms.
+//! Keys (over the roll): Delete deletes the selection, ↑ / ↓ transpose it (Shift or Ctrl:
+//! an octave), ← / → nudge it a grid step, Q quantizes it (none selected: every note) to
+//! the grid at the strength (with "ends", the ends too), Ctrl+A selects every note, Ctrl+C
+//! / X / V copy, cut and paste (at the session's cursor, keeping their spacing; the
+//! clipboard is shared by every roll), Ctrl+D duplicates the selection right after itself.
+//! The wheel scrolls the keys, Shift+wheel scrolls in time, Ctrl+wheel zooms.
 //!
 //! Every gesture is one edit: when it ends the roll hands back the notes, and the Session
 //! view saves them as the take's next revision (one undo step; the take renders again
 //! behind, `crate::session_view`).
 
 use std::collections::BTreeSet;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 use varimu_app::performance::Note;
 use varimu_app::transport::Grid;
 
 use crate::theme;
+
+/// The notes copied (Ctrl+C / X), their starts relative to the first: shared by every roll,
+/// so notes paste into another take.
+static CLIPBOARD: Mutex<Vec<Note>> = Mutex::new(Vec::new());
+
+/// How long a brief preview sounds (a transpose, a resize, a velocity: SE3).
+const BRIEF: Duration = Duration::from_millis(280);
 
 const KEYS_W: f32 = 44.0;
 const VEL_H: f32 = 56.0;
@@ -86,6 +106,8 @@ pub enum Out {
     Preview(u8, u8, bool),
     /// Render the take's revision: at production (true) or a draft.
     Render(bool),
+    /// Put the session's cursor here (a timeline sample): a click on empty space.
+    Cursor(i64),
     Close,
 }
 
@@ -111,6 +133,10 @@ pub struct Place {
     /// its production render is there.
     pub needs_render: bool,
     pub has_production: bool,
+    /// The session's cursor (paste lands there).
+    pub cursor: i64,
+    /// What a preview plays through (for the header).
+    pub preview_via: String,
 }
 
 pub struct Roll {
@@ -129,9 +155,18 @@ pub struct Roll {
     top_key: f64,
     key_h: f32,
     division: u32,
-    /// Quantize strength (0-1).
+    /// Quantize strength (0-1), and whether quantize moves the ends too.
     strength: f64,
+    quantize_ends: bool,
     tool: Tool,
+    /// Previews on (the header's toggle), the notes sounding briefly and when they stop,
+    /// the note a move is sounding.
+    preview: bool,
+    brief: Vec<(u8, Instant)>,
+    moving: Option<u8>,
+    grab: Option<usize>,
+    /// The length the next drawn note gets (the last drawn or resized; samples).
+    last_len: Option<u64>,
 }
 
 impl Roll {
@@ -151,7 +186,13 @@ impl Roll {
             key_h: 12.0,
             division: 4,
             strength: 1.0,
+            quantize_ends: false,
             tool: Tool::Select,
+            preview: true,
+            brief: Vec::new(),
+            moving: None,
+            grab: None,
+            last_len: None,
         };
         if let (Some(lo), Some(hi)) = (
             place.notes.iter().map(|n| n.note).min(),
@@ -177,6 +218,143 @@ impl Roll {
         self.gesture.is_some()
     }
 
+    /// Sound `notes` briefly (a transpose, a resize, a velocity change): on now, off after
+    /// [`BRIEF`]. Four at most.
+    fn sound_briefly(&mut self, notes: &[Note], out: &mut Vec<Out>) {
+        for n in notes.iter().take(4) {
+            if let Some(i) = self.brief.iter().position(|b| b.0 == n.note) {
+                self.brief.remove(i);
+                out.push(Out::Preview(n.note, 0, false));
+            }
+            out.push(Out::Preview(n.note, n.velocity, true));
+            self.brief.push((n.note, Instant::now() + BRIEF));
+        }
+    }
+
+    /// The selected notes, in order.
+    fn selection(&self) -> Vec<Note> {
+        self.selected.iter().map(|&i| self.notes[i]).collect()
+    }
+
+    /// The selection transposed by `d` semitones (one edit), heard briefly.
+    fn transpose(&mut self, d: i64, out: &mut Vec<Out>, place: &Place) {
+        if self.selected.is_empty() {
+            return;
+        }
+        for &i in &self.selected {
+            self.notes[i].note = (self.notes[i].note as i64 + d).clamp(0, 127) as u8;
+        }
+        let sel = self.selection();
+        self.sound_briefly(&sel, out);
+        self.edited(out, place);
+    }
+
+    /// The selection moved by `steps` grid steps (one edit).
+    fn nudge(&mut self, steps: i64, out: &mut Vec<Out>, place: &Place) {
+        if self.selected.is_empty() {
+            return;
+        }
+        let d = (step(place, self.division) * steps as f64).round() as i64;
+        for &i in &self.selected {
+            let n = self.notes[i];
+            let start = (n.start as i64 + d).max(0) as u64;
+            self.notes[i] = Note {
+                start,
+                end: start + (n.end - n.start),
+                ..n
+            };
+        }
+        self.edited(out, place);
+    }
+
+    /// The selection copied (Ctrl+C); `cut` also deletes it (Ctrl+X, one edit).
+    fn copy(&mut self, cut: bool, out: &mut Vec<Out>, place: &Place) {
+        let sel = self.selection();
+        let Some(first) = sel.iter().map(|n| n.start).min() else {
+            return;
+        };
+        *CLIPBOARD.lock().expect("clipboard") = sel
+            .iter()
+            .map(|n| Note {
+                start: n.start - first,
+                end: n.end - first,
+                ..*n
+            })
+            .collect();
+        if cut {
+            self.delete_selected(out, place);
+        }
+    }
+
+    /// The clipboard's notes pasted with their spacing, the first at timeline position
+    /// `at`, selected (one edit).
+    fn paste_at(&mut self, at: i64, out: &mut Vec<Out>, place: &Place) {
+        let clip = CLIPBOARD.lock().expect("clipboard").clone();
+        if clip.is_empty() {
+            return;
+        }
+        let base = sample(place, at);
+        self.selected.clear();
+        for n in clip {
+            self.notes.push(Note {
+                start: base + n.start,
+                end: base + n.end,
+                ..n
+            });
+            self.selected.insert(self.notes.len() - 1);
+        }
+        self.edited(out, place);
+    }
+
+    /// The selection duplicated right after itself (its span to the grid), the copies
+    /// selected (one edit): a bar's notes, D four times, make five bars.
+    fn duplicate(&mut self, out: &mut Vec<Out>, place: &Place) {
+        let sel = self.selection();
+        let (Some(a), Some(b)) = (
+            sel.iter().map(|n| n.start).min(),
+            sel.iter().map(|n| n.end).max(),
+        ) else {
+            return;
+        };
+        let st = step(place, self.division);
+        let (pa, pb) = (timeline(place, a), timeline(place, b));
+        let floor = snap(place, self.division, pa - (st / 2.0) as i64).min(pa);
+        let steps = ((pb - floor) as f64 / st).ceil().max(1.0);
+        let span = (steps * st).round() as u64;
+        self.selected.clear();
+        for n in sel {
+            self.notes.push(Note {
+                start: n.start + span,
+                end: n.end + span,
+                ..n
+            });
+            self.selected.insert(self.notes.len() - 1);
+        }
+        self.edited(out, place);
+    }
+
+    fn delete_selected(&mut self, out: &mut Vec<Out>, place: &Place) {
+        if self.selected.is_empty() {
+            return;
+        }
+        let keep: Vec<Note> = self
+            .notes
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| !self.selected.contains(i))
+            .map(|(_, n)| *n)
+            .collect();
+        self.notes = keep;
+        self.selected.clear();
+        self.edited(out, place);
+    }
+
+    /// A drawn note's length: the last drawn or resized, else a grid step.
+    fn draw_len(&self, place: &Place) -> u64 {
+        self.last_len
+            .unwrap_or_else(|| step(place, self.division).round().max(1.0) as u64)
+    }
+
     fn snap(&self, place: &Place, pos: i64) -> i64 {
         snap(place, self.division, pos)
     }
@@ -197,6 +375,15 @@ impl Roll {
             self.notes = place.notes.clone();
             self.rev = place.rev;
             self.selected.clear();
+        }
+        // Brief previews end.
+        let now = Instant::now();
+        while let Some(i) = self.brief.iter().position(|b| b.1 <= now) {
+            let (n, _) = self.brief.remove(i);
+            out.push(Out::Preview(n, 0, false));
+        }
+        if !self.brief.is_empty() {
+            ui.ctx().request_repaint_after(Duration::from_millis(30));
         }
         self.header(ui, place, &mut out);
         let full = ui.available_rect_before_wrap();
@@ -369,6 +556,16 @@ impl Roll {
                 Stroke::new(3.0, if sel { theme::INK } else { place.colour }),
             );
         }
+        let xc = x_of(place.cursor);
+        if xc >= grid_rect.left() {
+            painter.line_segment(
+                [
+                    Pos2::new(xc, grid_rect.top()),
+                    Pos2::new(xc, vel_rect.bottom()),
+                ],
+                Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.6)),
+            );
+        }
         if let Some(h) = place.playhead {
             let x = x_of(h);
             if x >= grid_rect.left() {
@@ -418,6 +615,22 @@ impl Roll {
         // Where the button went down: what a drag grabs (the pointer has moved by the time
         // the drag begins).
         let origin = ui.input(|i| i.pointer.press_origin());
+        let keys_rect = Rect::from_min_max(
+            rect.min,
+            Pos2::new(rect.left() + KEYS_W, grid_rect.bottom()),
+        );
+        // The keys column: a press plays that key while it's held.
+        if resp.is_pointer_button_down_on()
+            && self.sounding.is_none()
+            && self.gesture.is_none()
+            && let Some(p) = origin
+            && keys_rect.contains(p)
+            && ui.input(|i| i.pointer.primary_pressed())
+        {
+            let note = key_of(p.y).clamp(0.0, 127.0) as u8;
+            out.push(Out::Preview(note, 100, true));
+            self.sounding = Some(note);
+        }
         if resp.drag_started()
             && let Some(p) = origin.or(resp.interact_pointer_pos())
         {
@@ -434,15 +647,18 @@ impl Roll {
                             place,
                             snap(place, division, pos_of(p.x) - (step / 2.0) as i64),
                         );
+                        let note = key_of(p.y).clamp(0.0, 127.0) as u8;
                         self.notes.push(Note {
                             start,
                             end: start + step.round().max(1.0) as u64,
-                            note: key_of(p.y).clamp(0.0, 127.0) as u8,
+                            note,
                             velocity: 100,
                         });
                         let i = self.notes.len() - 1;
                         self.selected = [i].into();
                         self.gesture = Some(Gesture::Draw(i));
+                        out.push(Out::Preview(note, 100, true));
+                        self.sounding = Some(note);
                     }
                     (_, Some((i, edge))) => {
                         if !self.selected.contains(&i) {
@@ -451,7 +667,18 @@ impl Roll {
                             }
                             self.selected.insert(i);
                         }
+                        // Shift+drag copies: the copies stay, the originals move.
+                        if shift && !edge {
+                            let copies = self.selection();
+                            self.notes.extend(copies);
+                        }
                         let from = self.notes.clone();
+                        if !edge {
+                            let n = self.notes[i];
+                            out.push(Out::Preview(n.note, n.velocity, true));
+                            self.moving = Some(n.note);
+                            self.grab = Some(i);
+                        }
                         self.gesture = Some(if edge {
                             Gesture::Resize { from, press: p }
                         } else {
@@ -504,6 +731,15 @@ impl Roll {
                             velocity: n.velocity,
                         };
                     }
+                    // Each semitone crossed sounds the grabbed note there, the old let go.
+                    if let (Some(was), Some(i)) = (self.moving, self.grab)
+                        && let Some(now) = self.notes.get(i).copied()
+                        && now.note != was
+                    {
+                        out.push(Out::Preview(was, 0, false));
+                        out.push(Out::Preview(now.note, now.velocity, true));
+                        self.moving = Some(now.note);
+                    }
                 }
                 Some(Gesture::Resize { from, press }) => {
                     let dpos = pos_of(p.x) - pos_of(press.x);
@@ -546,6 +782,10 @@ impl Roll {
             }
         }
         if resp.drag_stopped() {
+            if let Some(n) = self.moving.take() {
+                out.push(Out::Preview(n, 0, false));
+            }
+            self.grab = None;
             match self.gesture.take() {
                 Some(Gesture::Band { start }) => {
                     let band =
@@ -558,6 +798,31 @@ impl Roll {
                             self.selected.insert(i);
                         }
                     }
+                }
+                Some(Gesture::Draw(i)) => {
+                    if let Some(n) = self.notes.get(i) {
+                        self.last_len = Some(n.end - n.start);
+                    }
+                    self.edited(&mut out, place);
+                }
+                Some(Gesture::Resize { .. }) => {
+                    let sel = self.selection();
+                    if let Some(n) = sel.first() {
+                        self.last_len = Some(n.end - n.start);
+                    }
+                    self.sound_briefly(&sel, &mut out);
+                    self.edited(&mut out, place);
+                }
+                Some(Gesture::Velocity) => {
+                    let changed: Vec<Note> = self
+                        .notes
+                        .iter()
+                        .zip(&place.notes)
+                        .filter(|(a, b)| a.velocity != b.velocity)
+                        .map(|(a, _)| *a)
+                        .collect();
+                    self.sound_briefly(&changed, &mut out);
+                    self.edited(&mut out, place);
                 }
                 Some(_) => self.edited(&mut out, place),
                 None => {}
@@ -581,15 +846,15 @@ impl Roll {
                         snap(place, division, pos_of(p.x) - (step / 2.0) as i64),
                     );
                     let note = key_of(p.y).clamp(0.0, 127.0) as u8;
-                    self.notes.push(Note {
+                    let n = Note {
                         start,
-                        end: start + step.round().max(1.0) as u64,
+                        end: start + self.draw_len(place),
                         note,
                         velocity: 100,
-                    });
+                    };
+                    self.notes.push(n);
                     self.selected = [self.notes.len() - 1].into();
-                    out.push(Out::Preview(note, 100, true));
-                    self.sounding = Some(note);
+                    self.sound_briefly(&[n], &mut out);
                     self.edited(&mut out, place);
                 }
                 (_, Some((i, _))) => {
@@ -601,7 +866,17 @@ impl Roll {
                     out.push(Out::Preview(n.note, n.velocity, true));
                     self.sounding = Some(n.note);
                 }
-                (Tool::Select, None) if !shift => self.selected.clear(),
+                (Tool::Select, None) if !shift => {
+                    self.selected.clear();
+                    // A click on empty space puts the session's cursor there (paste lands
+                    // there, Space plays from it).
+                    let pos = if alt {
+                        pos_of(p.x)
+                    } else {
+                        snap(place, division, pos_of(p.x))
+                    };
+                    out.push(Out::Cursor(pos.max(0)));
+                }
                 (Tool::Select, None) => {}
             }
         }
@@ -614,14 +889,16 @@ impl Roll {
             let pos = snap(place, division, pos_of(p.x) - (step / 2.0) as i64);
             let start = sample(place, pos);
             let note = key_of(p.y).clamp(0.0, 127.0) as u8;
-            self.notes.push(Note {
+            let n = Note {
                 start,
-                end: start + step.round().max(1.0) as u64,
+                end: start + self.draw_len(place),
                 note,
                 velocity: 100,
-            });
+            };
+            self.notes.push(n);
             self.selected.clear();
             self.selected.insert(self.notes.len() - 1);
+            self.sound_briefly(&[n], &mut out);
             self.edited(&mut out, place);
         }
         if resp.secondary_clicked()
@@ -649,6 +926,41 @@ impl Roll {
                     command && i.key_pressed(egui::Key::A),
                 )
             });
+            let (left, right, copy, cut, paste, dup) = ui.input(|i| {
+                (
+                    !command && i.key_pressed(egui::Key::ArrowLeft),
+                    !command && i.key_pressed(egui::Key::ArrowRight),
+                    command && i.key_pressed(egui::Key::C),
+                    command && i.key_pressed(egui::Key::X),
+                    command && i.key_pressed(egui::Key::V),
+                    command && i.key_pressed(egui::Key::D),
+                )
+            });
+            // egui turns Ctrl+C / X / V into clipboard events.
+            let (copy, cut, paste) = ui.input(|i| {
+                let mut c = (copy, cut, paste);
+                for e in &i.events {
+                    match e {
+                        egui::Event::Copy => c.0 = true,
+                        egui::Event::Cut => c.1 = true,
+                        egui::Event::Paste(_) => c.2 = true,
+                        _ => {}
+                    }
+                }
+                c
+            });
+            if copy || cut {
+                self.copy(cut, &mut out, place);
+            }
+            if paste {
+                self.paste_at(place.cursor, &mut out, place);
+            }
+            if dup {
+                self.duplicate(&mut out, place);
+            }
+            if left || right {
+                self.nudge(if right { 1 } else { -1 }, &mut out, place);
+            }
             if all {
                 self.selected = (0..self.notes.len()).collect();
             }
@@ -665,29 +977,21 @@ impl Roll {
             if let Some(t) = tool {
                 self.tool = t;
             }
-            if del && !self.selected.is_empty() {
-                let keep: Vec<Note> = self
-                    .notes
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, _)| !self.selected.contains(i))
-                    .map(|(_, n)| *n)
-                    .collect();
-                self.notes = keep;
-                self.selected.clear();
-                self.edited(&mut out, place);
+            if del {
+                self.delete_selected(&mut out, place);
             }
-            if (up || down) && !self.selected.is_empty() {
-                let d: i64 = if shift { 12 } else { 1 } * if up { 1 } else { -1 };
-                for &i in &self.selected {
-                    self.notes[i].note = (self.notes[i].note as i64 + d).clamp(0, 127) as u8;
-                }
-                self.edited(&mut out, place);
+            if up || down {
+                let d: i64 = if shift || command { 12 } else { 1 } * if up { 1 } else { -1 };
+                self.transpose(d, &mut out, place);
             }
             if q {
                 self.quantize(place);
                 self.edited(&mut out, place);
             }
+        }
+        // Previews off: none sent (a key let go still is, so nothing hangs).
+        if !self.preview {
+            out.retain(|o| !matches!(o, Out::Preview(_, _, true)));
         }
         out
     }
@@ -700,17 +1004,23 @@ impl Roll {
         } else {
             self.selected.iter().copied().collect()
         };
+        let min_len = (step(place, self.division) / 4.0).max(1.0) as u64;
         for i in which {
             let n = self.notes[i];
             let pos = self.timeline(place, n.start);
             let target = self.snap(place, pos);
             let moved = pos + ((target - pos) as f64 * self.strength).round() as i64;
             let start = self.sample(place, moved);
-            self.notes[i] = Note {
-                start,
-                end: start + (n.end - n.start),
-                ..n
+            // The end too (its own nearest line), else the length kept.
+            let end = if self.quantize_ends {
+                let e = self.timeline(place, n.end);
+                let te = self.snap(place, e);
+                let me = e + ((te - e) as f64 * self.strength).round() as i64;
+                self.sample(place, me).max(start + min_len)
+            } else {
+                start + (n.end - n.start)
             };
+            self.notes[i] = Note { start, end, ..n };
         }
     }
 
@@ -784,6 +1094,14 @@ impl Roll {
                 self.quantize(place);
                 self.edited(out, place);
             }
+            ui.checkbox(&mut self.quantize_ends, RichText::new("ends").small())
+                .on_hover_text("Quantize moves each note's end to the grid too (else its length is kept)");
+            ui.checkbox(&mut self.preview, RichText::new("preview").small())
+                .on_hover_text(format!(
+                    "Sound each note as it's drawn, moved, transposed, resized or its \
+                     velocity set, and the keys column ({})",
+                    place.preview_via
+                ));
             ui.label(
                 RichText::new(format!(
                     "{} notes · {} selected",
@@ -882,7 +1200,149 @@ mod tests {
             status: String::new(),
             needs_render: false,
             has_production: false,
+            cursor: 0,
+            preview_via: String::new(),
         }
+    }
+
+    fn note(start: u64, len: u64, key: u8) -> Note {
+        Note {
+            start,
+            end: start + len,
+            note: key,
+            velocity: 90,
+        }
+    }
+
+    fn edits(out: &[Out]) -> usize {
+        out.iter().filter(|o| matches!(o, Out::Edited(_))).count()
+    }
+
+    fn sounded(out: &[Out]) -> Vec<u8> {
+        out.iter()
+            .filter_map(|o| match o {
+                Out::Preview(n, _, true) => Some(*n),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn edits_sound_their_notes_and_each_is_one_revision() {
+        let p = place(vec![note(1_000, 6_000, 60), note(13_000, 6_000, 64)]);
+        let mut r = Roll::new(0, &p);
+        r.selected = [0, 1].into();
+        // Transposed: both sound, briefly (let go after BRIEF), one edit.
+        let mut out = Vec::new();
+        r.transpose(1, &mut out, &p);
+        assert_eq!(sounded(&out), vec![61, 65]);
+        assert_eq!(edits(&out), 1);
+        assert_eq!(r.brief.len(), 2);
+        // An octave.
+        let mut out = Vec::new();
+        r.transpose(12, &mut out, &p);
+        assert_eq!(sounded(&out), vec![73, 77]);
+        // Nudged by a grid step: one edit, each note moved by the step.
+        let mut out = Vec::new();
+        let before = r.notes.clone();
+        r.nudge(1, &mut out, &p);
+        let st = step(&p, r.division).round() as u64;
+        assert_eq!(edits(&out), 1);
+        assert_eq!(r.notes[0].start, before[0].start + st);
+        // Copied and pasted at the cursor, keeping their spacing; one edit.
+        let mut out = Vec::new();
+        r.copy(false, &mut out, &p);
+        assert_eq!(edits(&out), 0);
+        let mut q = place(r.notes.clone());
+        q.cursor = q.position + 48_000;
+        r.paste_at(q.cursor, &mut out, &q);
+        assert_eq!(edits(&out), 1);
+        assert_eq!(r.notes.len(), 4);
+        let pasted: Vec<Note> = r.selection();
+        assert_eq!(timeline(&q, pasted[0].start), q.cursor);
+        assert_eq!(pasted[1].start - pasted[0].start, 12_000);
+        // Duplicated right after itself on the grid: one edit.
+        let p2 = place(r.notes.clone());
+        let mut out = Vec::new();
+        let sel = r.selection();
+        r.duplicate(&mut out, &p2);
+        assert_eq!(edits(&out), 1);
+        let dup = r.selection();
+        let shift = dup[0].start - sel[0].start;
+        assert!(shift >= sel[1].end - sel[0].start, "after the selection");
+        assert!((shift as f64 / st as f64).fract().abs() < 1e-6 || shift % st <= 1);
+        // Cut: gone, one edit; the clipboard keeps them.
+        let p3 = place(r.notes.clone());
+        let mut out = Vec::new();
+        r.copy(true, &mut out, &p3);
+        assert_eq!((edits(&out), r.notes.len()), (1, 4));
+        assert_eq!(CLIPBOARD.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn drawing_uses_the_last_length_and_quantize_can_move_ends() {
+        let p = place(vec![note(7_777, 9_111, 60)]);
+        let mut r = Roll::new(0, &p);
+        assert_eq!(r.draw_len(&p), step(&p, r.division).round() as u64);
+        r.last_len = Some(5_000);
+        assert_eq!(r.draw_len(&p), 5_000);
+        r.quantize_ends = true;
+        r.quantize(&p);
+        let n = r.notes[0];
+        let st = step(&p, r.division);
+        for t in [n.start, n.end] {
+            let k = (timeline(&p, t) - p.grid.beat(0)) as f64 / st;
+            assert!((k - k.round()).abs() * st < 0.51, "{t} on the grid");
+        }
+    }
+
+    #[test]
+    fn a_click_with_the_draw_tool_draws_and_sounds_a_note() {
+        let p = place(Vec::new());
+        let mut r = Roll::new(0, &p);
+        r.tool = Tool::Draw;
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(Pos2::ZERO, egui::vec2(1200.0, 500.0));
+        let at = Pos2::new(600.0, 200.0);
+        let mut all = Vec::new();
+        let frames = [
+            vec![egui::Event::PointerMoved(at)],
+            vec![egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: true,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            vec![egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: false,
+                modifiers: egui::Modifiers::NONE,
+            }],
+            vec![],
+        ];
+        for (i, events) in frames.into_iter().enumerate() {
+            let input = egui::RawInput {
+                screen_rect: Some(screen),
+                time: Some(i as f64 * 0.05),
+                events,
+                ..Default::default()
+            };
+            let _ = ctx.run_ui(input, |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    all.extend(r.ui(ui, &p));
+                });
+            });
+        }
+        assert_eq!(r.notes.len(), 1);
+        assert_eq!(sounded(&all), vec![r.notes[0].note]);
+        assert_eq!(edits(&all), 1);
+        // Previews off: the next one is silent.
+        r.preview = false;
+        let mut out = Vec::new();
+        r.sound_briefly(&[r.notes[0]], &mut out);
+        out.retain(|o| r.preview || !matches!(o, Out::Preview(_, _, true)));
+        assert!(sounded(&out).is_empty());
     }
 
     #[test]

@@ -69,7 +69,7 @@ pub use crate::performance::RETRIGGER_GAP_S;
 use crate::performance::{Ev, Performance, Performer, Playing, START_NOTE};
 use crate::resample::StreamResampler;
 use crate::sampler::{Engine, Sampler};
-use crate::session::{Frame, Mix, Recorded, Recorder};
+use crate::session::{Frame, Meters, Mix, Recorded, Recorder};
 use crate::settings::Settings;
 use crate::transport::{Clock, Grid, Phase, TransportSettings};
 
@@ -379,6 +379,85 @@ struct Shared {
     end_mix: AtomicU64,
     /// The end's status, written by its thread.
     end_status: Mutex<Option<Arc<Mutex<EndStatus>>>>,
+    /// The mix's levels since the window last read them (SE4).
+    meters: Mutex<Meters>,
+    /// The piano roll's preview voice (SE3): what it plays and the keys for it.
+    preview: Mutex<PreviewCtl>,
+}
+
+/// The preview voice as the window sets it: the proxy's tables (None: the test oscillator),
+/// the panel it follows, the keys pressed and let go since the worker last looked, and a
+/// count that changes with the voice.
+#[derive(Default)]
+struct PreviewCtl {
+    tables: Option<Arc<crate::proxy::Tables>>,
+    values: Values,
+    playing: crate::performance::Playing,
+    events: Vec<Ev>,
+    generation: u64,
+}
+
+/// The preview voice in the worker (SE3): heard only, never recorded, after the mix and
+/// before the click.
+enum Previewer {
+    Proxy(Box<crate::proxy::Proxy>),
+    Osc {
+        osc: crate::midi::TestOsc,
+        held: Vec<(u8, u8)>,
+    },
+}
+
+impl Previewer {
+    fn new(ctl: &PreviewCtl, rate: u32) -> Previewer {
+        match &ctl.tables {
+            Some(t) => {
+                let mut p = crate::proxy::Proxy::new(t.clone(), rate, 4);
+                p.set_values(&ctl.values);
+                p.set_playing(ctl.playing);
+                Previewer::Proxy(Box::new(p))
+            }
+            None => {
+                let mut osc = crate::midi::TestOsc::new(rate as f64);
+                osc.level = 0.25;
+                Previewer::Osc {
+                    osc,
+                    held: Vec::new(),
+                }
+            }
+        }
+    }
+
+    /// The next `out.len()` samples, `events` at the block's start; whether it sounds.
+    fn render(&mut self, events: &[Ev], out: &mut [f32]) -> bool {
+        match self {
+            Previewer::Proxy(p) => {
+                if events.is_empty() && p.sounding() == 0 && p.held().is_empty() {
+                    return false;
+                }
+                let ev: Vec<(usize, Ev)> = events.iter().map(|&e| (0, e)).collect();
+                p.process(&ev, out);
+                true
+            }
+            Previewer::Osc { osc, held } => {
+                for e in events {
+                    match *e {
+                        Ev::On { note, velocity } => {
+                            held.retain(|h| h.0 != note);
+                            held.push((note, velocity));
+                        }
+                        Ev::Off { note } => held.retain(|h| h.0 != note),
+                        _ => {}
+                    }
+                }
+                let mut y = vec![0.0f64; out.len()];
+                osc.fill(held.last().copied(), &mut y);
+                for (o, v) in out.iter_mut().zip(y) {
+                    *o = v as f32;
+                }
+                true
+            }
+        }
+    }
 }
 
 /// A session playing out of the default output.
@@ -508,6 +587,8 @@ impl Player {
             end_values: Mutex::new(None),
             end_mix: AtomicU64::new(END_MIX.to_bits()),
             end_status: Mutex::new(None),
+            meters: Mutex::new(Meters::default()),
+            preview: Mutex::new(PreviewCtl::default()),
         });
         // Room for the buffer, the drift allowance and a block in flight.
         let (producer, consumer) = rtrb::RingBuffer::<Frame>::new(buffer + 4 * BLOCK);
@@ -795,6 +876,46 @@ impl Player {
     /// live device's gains.
     pub fn set_mix(&self, mix: Arc<Mix>) {
         *self.shared.mix.lock().expect("mix") = mix;
+    }
+
+    /// The mix's levels since the last call (SE4: per track, post-fader, and the master).
+    pub fn take_meters(&self) -> Meters {
+        std::mem::take(&mut *self.shared.meters.lock().expect("meters"))
+    }
+
+    /// The preview voice (SE3): a device's proxy following `values` (None: the test
+    /// oscillator). A change of voice lets its keys go.
+    pub fn set_preview_voice(
+        &self,
+        tables: Option<Arc<crate::proxy::Tables>>,
+        values: Values,
+        playing: crate::performance::Playing,
+    ) {
+        let mut c = self.shared.preview.lock().expect("preview");
+        let same = match (&c.tables, &tables) {
+            (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same || c.values != values {
+            c.tables = tables;
+            c.values = values;
+            c.playing = playing;
+            c.generation += 1;
+        }
+    }
+
+    /// A key down (`on`) or up on the preview voice: heard at once, never recorded.
+    pub fn preview_key(&self, note: u8, velocity: u8, on: bool) {
+        let e = if on {
+            Ev::On {
+                note: note & 127,
+                velocity: velocity.clamp(1, 127),
+            }
+        } else {
+            Ev::Off { note: note & 127 }
+        };
+        self.shared.preview.lock().expect("preview").events.push(e);
     }
 
     /// Record an event take from a device played by keys (`device`: its id): the worker
@@ -1091,6 +1212,8 @@ struct Emitter {
     /// A stereo device's right channel for the next [`Emitter::emit`] (monitored as its
     /// left; its circuit probes `out_r`).
     device_right: Option<Vec<f32>>,
+    /// The preview voice and the generation it was made for.
+    preview: Option<(u64, Previewer)>,
 }
 
 impl Emitter {
@@ -1103,7 +1226,27 @@ impl Emitter {
             history: std::collections::VecDeque::new(),
             end: None,
             device_right: None,
+            preview: None,
         }
+    }
+
+    /// The preview voice's next `n` samples (None: silent).
+    fn preview(
+        slot: &mut Option<(u64, Previewer)>,
+        rate: u32,
+        shared: &Shared,
+        n: usize,
+    ) -> Option<Vec<f32>> {
+        let events = {
+            let mut c = shared.preview.lock().expect("preview");
+            if slot.as_ref().is_none_or(|(g, _)| *g != c.generation) {
+                *slot = Some((c.generation, Previewer::new(&c, rate)));
+            }
+            std::mem::take(&mut c.events)
+        };
+        let (_, p) = slot.as_mut()?;
+        let mut y = vec![0.0f32; n];
+        p.render(&events, &mut y).then_some(y)
     }
 
     /// The chain's end as the window last asked: put on, changed, taken off.
@@ -1221,8 +1364,38 @@ impl Emitter {
                 .map(|&v| [mix.live.0 * v, mix.live.1 * v])
                 .collect(),
         };
+        // The meters (SE4): the live device on its track, each clip on its own, the master.
+        let mut meters = Meters {
+            frames: out.len(),
+            ..Meters::default()
+        };
+        if let Some(t) = mix.live_track {
+            let m = meters.track(t);
+            for o in &out {
+                m[0] = m[0].max(o[0].abs());
+                m[1] = m[1].max(o[1].abs());
+                m[2] += o[0] * o[0];
+                m[3] += o[1] * o[1];
+            }
+        }
         for &(pos, off, len) in &segments {
-            mix.add(pos, &mut out[off..off + len]);
+            mix.add_metered(pos, &mut out[off..off + len], &mut meters);
+        }
+        for o in out.iter_mut() {
+            o[0] *= mix.master;
+            o[1] *= mix.master;
+            let m = &mut meters.master;
+            m[0] = m[0].max(o[0].abs());
+            m[1] = m[1].max(o[1].abs());
+            m[2] += o[0] * o[0];
+            m[3] += o[1] * o[1];
+        }
+        shared.meters.lock().expect("meters").merge(&meters);
+        if let Some(p) = Emitter::preview(&mut self.preview, rate, shared, out.len()) {
+            for (o, v) in out.iter_mut().zip(p) {
+                o[0] += v;
+                o[1] += v;
+            }
         }
         for (o, &c) in out.iter_mut().zip(&self.click) {
             o[0] += c;
@@ -2271,6 +2444,48 @@ mod tests {
     use super::note_offsets;
     use circuitsim::media::NoteEvent;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn the_preview_voice_sounds_a_key_and_lets_it_go() {
+        use super::{Ev, PreviewCtl, Previewer};
+        let rate = 48_000;
+        let rms = |y: &[f32]| (y.iter().map(|v| v * v).sum::<f32>() / y.len() as f32).sqrt();
+        // The test oscillator (no proxy).
+        let mut p = Previewer::new(&PreviewCtl::default(), rate);
+        let mut y = vec![0.0f32; 4800];
+        assert!(p.render(
+            &[Ev::On {
+                note: 69,
+                velocity: 127
+            }],
+            &mut y
+        ));
+        assert!(rms(&y[2400..]) > 0.05);
+        p.render(&[Ev::Off { note: 69 }], &mut y);
+        p.render(&[], &mut y);
+        assert!(rms(&y) < 1e-4);
+        // A proxy: tube_synth's tables.
+        let config = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
+        let t = crate::proxy::Tables::load(&config, "tube_synth")
+            .unwrap()
+            .expect("tube_synth has a proxy");
+        let ctl = PreviewCtl {
+            tables: Some(std::sync::Arc::new(t)),
+            ..PreviewCtl::default()
+        };
+        let mut p = Previewer::new(&ctl, rate);
+        let mut y = vec![0.0f32; 9600];
+        // Silent and idle: it costs nothing.
+        assert!(!p.render(&[], &mut y));
+        assert!(p.render(
+            &[Ev::On {
+                note: 60,
+                velocity: 100
+            }],
+            &mut y
+        ));
+        assert!(rms(&y[4800..]) > 1e-3);
+    }
 
     #[test]
     fn note_events_keep_their_spacing_in_a_block() {

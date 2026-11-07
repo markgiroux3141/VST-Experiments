@@ -91,19 +91,107 @@ pub fn balance(volume_db: f64, pan: f64) -> (f32, f32) {
     )
 }
 
-/// A take in the mix: where it starts on the timeline, its samples, its gains.
+/// A stretch of a take in the mix: `len` samples of `audio` from `from`, placed at timeline
+/// position `start`, through its gains (the track's fader and pan, the clip's gain), with
+/// linear fades of `fade_in` / `fade_out` samples at its ends (docs/SESSION_EDITING_PLAN.md
+/// SE5), on track `track` (its meter; [`NO_TRACK`]: none).
 #[derive(Debug, Clone)]
 pub struct MixClip {
     pub start: i64,
     pub audio: Arc<Vec<f32>>,
     pub gain: (f32, f32),
+    pub from: usize,
+    pub len: usize,
+    pub fade_in: usize,
+    pub fade_out: usize,
+    pub track: usize,
 }
 
-/// What the worker plays while the transport runs, and the live device's gains.
+/// A clip on no track's meter.
+pub const NO_TRACK: usize = usize::MAX;
+
+impl MixClip {
+    /// The whole of `audio` from `start`, no fades, on no meter.
+    pub fn whole(start: i64, audio: Arc<Vec<f32>>, gain: (f32, f32)) -> MixClip {
+        MixClip {
+            start,
+            len: audio.len(),
+            audio,
+            gain,
+            from: 0,
+            fade_in: 0,
+            fade_out: 0,
+            track: NO_TRACK,
+        }
+    }
+
+    pub fn end(&self) -> i64 {
+        self.start + self.len as i64
+    }
+
+    /// Its gain envelope at its sample `i` (0..len): the fades' ramps.
+    fn fade(&self, i: usize) -> f32 {
+        let mut g = 1.0f32;
+        if i < self.fade_in {
+            g *= (i as f32 + 0.5) / self.fade_in as f32;
+        }
+        let left = self.len - i;
+        if left <= self.fade_out {
+            g *= (left as f32 - 0.5) / self.fade_out as f32;
+        }
+        g
+    }
+
+    /// Add it over `[at, at + out.len())`; with `meter`, its post-fader peaks and sums of
+    /// squares added there.
+    fn add(&self, at: i64, out: &mut [Frame], meter: Option<&mut [f32; 4]>) {
+        let n = out.len() as i64;
+        let (a, b) = (at.max(self.start), (at + n).min(self.end()));
+        if b <= a {
+            return;
+        }
+        let avail = self.audio.len();
+        let mut m = [0.0f32; 4];
+        for p in a..b {
+            let i = (p - self.start) as usize;
+            let Some(&v) = self
+                .audio
+                .get(self.from + i)
+                .filter(|_| self.from + i < avail)
+            else {
+                continue;
+            };
+            let v = if self.fade_in > 0 || self.fade_out > 0 {
+                v * self.fade(i)
+            } else {
+                v
+            };
+            let (l, r) = (self.gain.0 * v, self.gain.1 * v);
+            let o = &mut out[(p - at) as usize];
+            o[0] += l;
+            o[1] += r;
+            m[0] = m[0].max(l.abs());
+            m[1] = m[1].max(r.abs());
+            m[2] += l * l;
+            m[3] += r * r;
+        }
+        if let Some(t) = meter {
+            t[0] = t[0].max(m[0]);
+            t[1] = t[1].max(m[1]);
+            t[2] += m[2];
+            t[3] += m[3];
+        }
+    }
+}
+
+/// What the worker plays while the transport runs, the live device's gains and the track it
+/// plays on, and the master fader (linear, on the sum: SE4).
 #[derive(Debug, Clone)]
 pub struct Mix {
     pub clips: Vec<MixClip>,
     pub live: (f32, f32),
+    pub live_track: Option<usize>,
+    pub master: f32,
 }
 
 impl Default for Mix {
@@ -111,24 +199,67 @@ impl Default for Mix {
         Mix {
             clips: Vec::new(),
             live: (1.0, 1.0),
+            live_track: None,
+            master: 1.0,
         }
     }
 }
 
+/// The mix's levels since they were last read (SE4): per track and for the master, the
+/// peak (left, right) and the sum of squares (left, right) over `frames` frames, post-fader.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Meters {
+    pub tracks: Vec<[f32; 4]>,
+    pub master: [f32; 4],
+    pub frames: usize,
+}
+
+impl Meters {
+    /// Track `t`'s entry (grown as needed).
+    pub fn track(&mut self, t: usize) -> &mut [f32; 4] {
+        if self.tracks.len() <= t {
+            self.tracks.resize(t + 1, [0.0; 4]);
+        }
+        &mut self.tracks[t]
+    }
+
+    /// Another reading folded in (later frames).
+    pub fn merge(&mut self, o: &Meters) {
+        for (t, m) in o.tracks.iter().enumerate() {
+            let e = self.track(t);
+            e[0] = e[0].max(m[0]);
+            e[1] = e[1].max(m[1]);
+            e[2] += m[2];
+            e[3] += m[3];
+        }
+        self.master[0] = self.master[0].max(o.master[0]);
+        self.master[1] = self.master[1].max(o.master[1]);
+        self.master[2] += o.master[2];
+        self.master[3] += o.master[3];
+        self.frames += o.frames;
+    }
+}
+
+/// A level as dBFS (peak: of a sine's amplitude 1.0), with a floor.
+pub fn to_dbfs(x: f32) -> f64 {
+    20.0 * (x.max(1e-7) as f64).log10()
+}
+
 impl Mix {
-    /// Add the clips sounding over `[at, at + out.len())`.
+    /// Add the clips sounding over `[at, at + out.len())` (the master fader not applied).
     pub fn add(&self, at: i64, out: &mut [Frame]) {
-        let n = out.len() as i64;
         for c in &self.clips {
-            let (a, b) = (
-                at.max(c.start),
-                (at + n).min(c.start + c.audio.len() as i64),
-            );
-            for p in a..b {
-                let v = c.audio[(p - c.start) as usize];
-                let o = &mut out[(p - at) as usize];
-                o[0] += c.gain.0 * v;
-                o[1] += c.gain.1 * v;
+            c.add(at, out, None);
+        }
+    }
+
+    /// [`Mix::add`] with each clip's level added to its track's meter.
+    pub fn add_metered(&self, at: i64, out: &mut [Frame], meters: &mut Meters) {
+        for c in &self.clips {
+            if c.track == NO_TRACK {
+                c.add(at, out, None);
+            } else {
+                c.add(at, out, Some(meters.track(c.track)));
             }
         }
     }
@@ -141,7 +272,9 @@ pub struct Mixdown {
     pub rate: u32,
     pub start: i64,
     pub len: usize,
-    pub tracks: Vec<(String, MixClip)>,
+    pub tracks: Vec<(String, Vec<MixClip>)>,
+    /// The master fader (linear): the mix and every stem through it.
+    pub master: f32,
 }
 
 impl Mixdown {
@@ -149,20 +282,27 @@ impl Mixdown {
         let mix = Mix {
             clips: clips.cloned().collect(),
             live: (0.0, 0.0),
+            ..Mix::default()
         };
         let mut out = vec![[0.0f32; 2]; self.len];
         mix.add(self.start, &mut out);
+        if self.master != 1.0 {
+            for f in &mut out {
+                f[0] *= self.master;
+                f[1] *= self.master;
+            }
+        }
         out
     }
 
     /// The mix, as ▶ plays it.
     pub fn mix(&self) -> Vec<Frame> {
-        self.sum(self.tracks.iter().map(|(_, c)| c))
+        self.sum(self.tracks.iter().flat_map(|(_, c)| c.iter()))
     }
 
     /// Track `i`'s part of the mix (its fader and pan): the stems sum to the mix.
     pub fn stem(&self, i: usize) -> Vec<Frame> {
-        self.sum(self.tracks.get(i).map(|(_, c)| c).into_iter())
+        self.sum(self.tracks.get(i).into_iter().flat_map(|(_, c)| c.iter()))
     }
 
     /// The mix to `path` (stereo float32 WAV) with `record` as `<path>.json`, and with
@@ -737,6 +877,18 @@ impl Track {
         Some((k.position, k.sound(self.drafts).0, false))
     }
 
+    /// What the mix plays of it, as track `index`: its sound through its strip (each clip's
+    /// stretch, offset, gain and fades; SE5).
+    pub fn mix_clips(&self, rate: u32, index: usize) -> Vec<MixClip> {
+        self.playing(rate)
+            .map(|(start, audio, _)| MixClip {
+                track: index,
+                ..MixClip::whole(start, audio.clone(), self.gains())
+            })
+            .into_iter()
+            .collect()
+    }
+
     /// Whether the print playing is the chain as it is now.
     pub fn print_current(&self, rate: u32) -> bool {
         match self.chain_signature(rate) {
@@ -759,6 +911,8 @@ pub struct Session {
     pub place_heard: bool,
     /// The markers, in timeline order.
     pub markers: Vec<Marker>,
+    /// The master fader (dB, on the stereo sum: SE4).
+    pub master_db: f64,
     /// Every take loaded or recorded in this session, by id, deleted ones too: a state
     /// restored by undo takes them from here before reading their folders.
     known: HashMap<String, Take>,
@@ -776,6 +930,7 @@ impl Session {
             armed: Some(0),
             place_heard: true,
             markers: Vec::new(),
+            master_db: 0.0,
             known: HashMap::new(),
             revisions: HashMap::new(),
         }
@@ -789,14 +944,9 @@ impl Session {
         let clips = self
             .tracks
             .iter()
-            .filter(|t| audible(t))
-            .filter_map(|t| {
-                t.playing(self.rate).map(|(start, audio, _)| MixClip {
-                    start,
-                    audio: audio.clone(),
-                    gain: t.gains(),
-                })
-            })
+            .enumerate()
+            .filter(|(_, t)| audible(t))
+            .flat_map(|(i, t)| t.mix_clips(self.rate, i))
             .collect();
         let live = self
             .armed
@@ -805,7 +955,17 @@ impl Session {
                 (1.0, 1.0),
                 |t| if audible(t) { t.gains() } else { (0.0, 0.0) },
             );
-        Mix { clips, live }
+        Mix {
+            clips,
+            live,
+            live_track: self.armed,
+            master: self.master_gain(),
+        }
+    }
+
+    /// The master fader's gain (linear).
+    pub fn master_gain(&self) -> f32 {
+        10f64.powf(self.master_db / 20.0) as f32
     }
 
     /// The mix while track `t`'s insert is auditioned: its own audio comes from the live
@@ -817,15 +977,9 @@ impl Session {
             return m;
         };
         let audible = if any_solo { track.solo } else { !track.mute };
-        if let Some((start, audio, _)) = track.playing(self.rate)
-            && let Some(i) = m
-                .clips
-                .iter()
-                .position(|c| c.start == start && Arc::ptr_eq(&c.audio, audio))
-        {
-            m.clips.remove(i);
-        }
+        m.clips.retain(|c| c.track != t);
         m.live = if audible { track.gains() } else { (0.0, 0.0) };
+        m.live_track = Some(t);
         m
     }
 
@@ -872,36 +1026,22 @@ impl Session {
     /// it) to the end of the longest sound.
     pub fn mixdown(&self) -> Mixdown {
         let any_solo = self.tracks.iter().any(|t| t.solo);
-        let tracks: Vec<(String, MixClip)> = self
+        let tracks: Vec<(String, Vec<MixClip>)> = self
             .tracks
             .iter()
-            .filter(|t| if any_solo { t.solo } else { !t.mute })
-            .filter_map(|t| {
-                t.playing(self.rate).map(|(start, audio, _)| {
-                    let clip = MixClip {
-                        start,
-                        audio: audio.clone(),
-                        gain: t.gains(),
-                    };
-                    (t.name.clone(), clip)
-                })
-            })
+            .enumerate()
+            .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
+            .map(|(i, t)| (t.name.clone(), t.mix_clips(self.rate, i)))
+            .filter(|(_, c)| !c.is_empty())
             .collect();
-        let start = tracks
-            .iter()
-            .map(|(_, c)| c.start)
-            .min()
-            .unwrap_or(0)
-            .min(0);
-        let end = tracks
-            .iter()
-            .map(|(_, c)| c.start + c.audio.len() as i64)
-            .max()
-            .unwrap_or(0);
+        let clips = || tracks.iter().flat_map(|(_, c)| c.iter());
+        let start = clips().map(|c| c.start).min().unwrap_or(0).min(0);
+        let end = clips().map(MixClip::end).max().unwrap_or(0);
         Mixdown {
             rate: self.rate,
             start,
             len: (end - start).max(0) as usize,
+            master: self.master_gain(),
             tracks,
         }
     }
@@ -1396,6 +1536,7 @@ impl Session {
             "tracks": tracks,
             "armed": self.armed,
             "place_new": if self.place_heard { "heard" } else { "click" },
+            "master_db": self.master_db,
             "markers": self
                 .markers
                 .iter()
@@ -1475,6 +1616,7 @@ impl Session {
         self.rate = rate;
         self.place_heard = v["place_new"].as_str() != Some("click");
         self.transport = transport_from(&v["transport"], rate);
+        self.master_db = v["master_db"].as_f64().unwrap_or(0.0);
         self.markers = v["markers"]
             .as_array()
             .map(|a| {
@@ -1533,6 +1675,7 @@ impl Session {
             armed: None,
             place_heard: true,
             markers: Vec::new(),
+            master_db: 0.0,
             known: HashMap::new(),
             revisions: HashMap::new(),
         };

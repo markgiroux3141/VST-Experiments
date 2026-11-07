@@ -753,11 +753,8 @@ impl RoomView {
             for ((l, r), g) in b.stems.iter().zip(self.balance_gains()) {
                 let g = g as f32;
                 for (audio, gain) in [(l, (g, 0.0)), (r, (0.0, g))] {
-                    mix.clips.push(MixClip {
-                        start: b.position,
-                        audio: audio.clone(),
-                        gain,
-                    });
+                    mix.clips
+                        .push(MixClip::whole(b.position, audio.clone(), gain));
                 }
             }
         }

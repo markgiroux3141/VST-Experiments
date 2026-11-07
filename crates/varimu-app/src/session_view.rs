@@ -112,6 +112,7 @@ use varimu_app::audio;
 use varimu_app::live::{Circuit, Values};
 use varimu_app::loopback::{self, Analysis, Calibration, Run};
 use varimu_app::panel::{self as vpanel, DEVICES, Kind, Knob};
+use varimu_app::performance::Performance;
 use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey, input_devices};
 use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, Slot, find_device};
@@ -4586,6 +4587,55 @@ impl SessionView {
         }
     }
 
+    /// A device's proxy tables (loaded once; None: it has none).
+    fn proxy_for(&mut self, device: &str) -> Option<Arc<varimu_app::proxy::Tables>> {
+        let config = self.root.join("config");
+        self.proxy_tables
+            .entry(device.to_string())
+            .or_insert_with(|| {
+                varimu_app::proxy::Tables::load(&config, device)
+                    .ok()
+                    .flatten()
+                    .map(Arc::new)
+            })
+            .clone()
+    }
+
+    /// What the roll's previews of `device`'s take play through (decision 8): the device
+    /// itself when Play plays it from keys, else its proxy, else the test oscillator.
+    fn preview_via(&mut self, play: &PlayView, device: &str) -> &'static str {
+        if play.player().is_some()
+            && !play.adopted()
+            && play.plays_keys()
+            && play.device_label_id().1 == device
+        {
+            "through the device, playing live in Play"
+        } else if self.proxy_for(device).is_some() {
+            "through the device's proxy"
+        } else {
+            "through the test oscillator: the device has no proxy"
+        }
+    }
+
+    /// A preview of a note of `perf`'s take, through what [`SessionView::preview_via`] says
+    /// (the preview voice rides on whatever player plays: the session's tracks-only one
+    /// when nothing else does). Heard only, never recorded.
+    fn preview_note(&mut self, play: &PlayView, perf: &Performance, note: u8, vel: u8, on: bool) {
+        if play.player().is_some()
+            && !play.adopted()
+            && play.plays_keys()
+            && play.device_label_id().1 == perf.device
+        {
+            play.preview_key(note, vel, on);
+            return;
+        }
+        let tables = self.proxy_for(&perf.device);
+        if let Some(p) = play.player() {
+            p.set_preview_voice(tables, perf.values.clone(), perf.playing);
+            p.preview_key(note, vel, on);
+        }
+    }
+
     /// The piano roll's view of event take `k` of track `t`.
     fn roll_place(&self, t: usize, k: usize, playhead: Option<i64>) -> Option<piano_roll::Place> {
         let take = self.session.tracks.get(t)?.takes.get(k)?;
@@ -4606,6 +4656,8 @@ impl SessionView {
                 && !self.render_pending(&take.id, e.rev, e.perf.quality),
             has_production: take.has_render(Quality::Production)
                 || self.render_pending(&take.id, e.rev, Quality::Production),
+            cursor: self.session.transport.cursor,
+            preview_via: String::new(),
         })
     }
 
@@ -4640,7 +4692,7 @@ impl SessionView {
             .map(|p| p.status().transport)
             .filter(|s| s.running)
             .map(|s| s.heard);
-        let Some(place) = self.roll_place(t, k, playhead) else {
+        let Some(mut place) = self.roll_place(t, k, playhead) else {
             self.roll = None;
             return;
         };
@@ -4651,6 +4703,7 @@ impl SessionView {
         else {
             return;
         };
+        place.preview_via = self.preview_via(play, &perf.device).to_string();
         let outs = match &mut self.roll {
             Some(r) => r.ui(ui, &place),
             None => return,
@@ -4672,8 +4725,14 @@ impl SessionView {
                         Err(e) => self.error = Some(e),
                     }
                 }
-                piano_roll::Out::Preview(note, vel, on) => play.preview_key(note, vel, on),
+                piano_roll::Out::Preview(note, vel, on) => {
+                    self.preview_note(play, &perf, note, vel, on);
+                }
                 piano_roll::Out::Render(production) => self.request_render(t, k, production),
+                piano_roll::Out::Cursor(pos) => {
+                    self.session.transport.cursor = pos;
+                    self.save();
+                }
                 piano_roll::Out::Close => self.roll = None,
             }
         }
