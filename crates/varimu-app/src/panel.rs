@@ -485,7 +485,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 23] = [
+pub const DEVICES: [Device; 24] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1220,6 +1220,51 @@ pub const DEVICES: [Device; 23] = [
         partition: Some(&["vca"]),
         // The expo converter's current is exp(V / Vt): the draft's 1 mV Newton would be a
         // 4 % cutoff error, as in the SSL's log-domain cells.
+        newton: Some((1e-5, 1e-5)),
+    },
+    Device {
+        id: "minimoog_voice",
+        label: "Minimoog Voice (VCF, VCA, contours)",
+        short: "Moog voice",
+        about: "The Model D's filter board with its two contour generators and the keyboard             trigger (board No. 2): the keys' gate starts the loudness and filter contours             (ATTACK / DECAY / SUSTAIN each, DECAY switch), AMOUNT OF CONTOUR TO FILTER; the test             oscillator into the ladder (docs/MINIMOOG_PLAN.md, MM4)",
+        group: Group::Instruments,
+        circuit: "minimoog_voice",
+        panel: Some(&[
+            "cutoff_v", "emphasis", "kb1", "kb2", "amount", "lattack", "ldecay", "lsustain",
+            "attack", "decay", "sustain", "decay_on",
+        ]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: Some("cutoff_v"),
+        gate: Some("gate"),
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        // The gate reaches the VCA through the loudness contour now (rounded by the
+        // generator, not one sample), but the cut at Q18's collector still sees fast edges at
+        // minimum ATTACK: held, as the filter board's (extrapolated, the contour's own cut
+        // diverged at the loudness peak detector).
+        coupling: Some("hold"),
+        live_speaker_v: None,
+        // Three threads: the filter with the trigger's CR10 / R60 (the gate's control node
+        // stays in the first part) | the VCA | the contour board, cut at R60 into C7, at the
+        // contour outputs (p9 into R59, the filter contour into AMOUNT) and at Q18's
+        // collector. One solve ran ~1.8x real time live.
+        partition: Some(&[
+            "vca",
+            "|",
+            "contour: rails",
+            "contour: flip-flop",
+            "contour: envelope",
+            "contour: output",
+            "contour: trigger switches",
+            "contour: loudness flip-flop",
+            "contour: loudness envelope",
+            "contour: loudness output",
+        ]),
         newton: Some((1e-5, 1e-5)),
     },
 ];

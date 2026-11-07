@@ -129,6 +129,8 @@ values:
   r5_ohm: {value: 22000.0, source: 'Fig 9-11: R5 22K (Q4''s emitter resistor in the A-440, here off)'}
   clamp_diode: {value: 1N4148@1, source: 'provisional: Fig 9-11''s CR1 / CR2 1N458A (or CL1), a low-leakage silicon signal diode; the 1N4148 stands in'}
   k_v9_v: {value: 9.3, source: 'Fig 9-7: the board''s +9.3 V (Q26''s decoupling from +10 V; ideal here)'}
+  k_vneg_v: {value: -10.0, source: 'Fig 9-7: -10 V'}
+  k_vpanel_v: {value: 10.0, source: 'Fig 9-7: +10 V (the SUSTAIN pot''s supply, panel wiring)'}
   k_taper_mid: {value: 0.1, source: 'provisional: model knowledge (an audio taper''s 10% at half rotation)'}
   k_r12_ohm: {value: 1000000.0, source: 'Table 7-3: R12 1 Meg Audio'}
   k_r15_ohm: {value: 1000000.0, source: 'Table 7-3: R15 1 Meg Audio'}
@@ -565,6 +567,15 @@ sections:
     V9_k:
       V: [k_v9, '0']
       v: k_v9_v
+    VN_k:
+      V: [k_vn, '0']
+      v: k_vneg_v
+    VPAN_k:
+      V: [k_vpan, '0']
+      v: k_vpanel_v
+    RIN_k:
+      R: [k_gate_in, '0']
+      r: k_r_leak_ohm
 - title: 'contour: flip-flop'
   parts:
     R32_k:
@@ -609,6 +620,9 @@ sections:
     DCR3_k:
       device: [k_nb, k_b4]
       model: k_DD
+    R23_k:
+      R: [k_ta, k_vtrig]
+      r: k_r23_ohm
 - title: 'contour: envelope'
   parts:
     Q5_k:
@@ -629,7 +643,7 @@ sections:
       bjt: [k_v9, k_col1, k_e6]
       model: k_QN
     R8_k:
-      R: [k_e6, vn]
+      R: [k_e6, k_vn]
       r: k_r8_ohm
     R9_k:
       R: [k_e6, k_b7]
@@ -655,13 +669,13 @@ sections:
       R: [k_p12, k_sn]
       r: k_r13_ohm
     R17_k:
-      R: [k_sn, vn]
+      R: [k_sn, k_vn]
       r: k_r17_ohm
     R1_k:
       R: [k_sn, '0']
       r: k_r1_ohm
     R18_k:
-      pot: ['0', k_p12, vp]
+      pot: ['0', k_p12, k_vpan]
       r: k_r18_ohm
       at: sustain
     DCR2_k:
@@ -701,7 +715,7 @@ sections:
       R: [k_outn, k_nb]
       r: k_r33_ohm
     R29_k:
-      R: [k_nb, vn]
+      R: [k_nb, k_vn]
       r: k_r29_ohm
 - title: 'contour: trigger'
   parts:
@@ -711,9 +725,17 @@ sections:
     R60_k:
       R: [k_k10, k_c7n]
       r: k_r60_ohm
+    RKG_k:
+      R: [k_kg, '0']
+      r: k_r_leak_ohm
+- title: 'contour: trigger switches'
+  parts:
     C7_k:
       C: [k_c7n, '0']
       c: k_c7_f
+    RC7_k:
+      R: [k_c7n, '0']
+      r: k_r_leak_ohm
     R55_k:
       R: [k_c7n, k_b20]
       r: k_r55_ohm
@@ -726,9 +748,6 @@ sections:
     Q12_k:
       bjt: [k_vtrig, k_bq12, '0']
       model: k_QN
-    R23_k:
-      R: [k_ta, k_vtrig]
-      r: k_r23_ohm
 - title: 'contour: loudness flip-flop'
   parts:
     R28_k:
@@ -787,7 +806,7 @@ sections:
       bjt: [k_v9, k_col25, k_e17]
       model: k_QN
     R43_k:
-      R: [k_e17, vn]
+      R: [k_e17, k_vn]
       r: k_r43_ohm
     R44_k:
       R: [k_e17, k_b18]
@@ -816,7 +835,7 @@ sections:
       R: [k_sl, '0']
       r: k_rsl_ohm
     RLS_k:
-      pot: ['0', k_p16, vp]
+      pot: ['0', k_p16, k_vpan]
       r: k_r18_ohm
       at: lsustain
     DCR9_k:
@@ -853,5 +872,5 @@ sections:
       R: [p9, k_nbl]
       r: k_r24_ohm
     R27_k:
-      R: [k_nbl, vn]
+      R: [k_nbl, k_vn]
       r: k_r27_ohm

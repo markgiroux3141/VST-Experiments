@@ -128,6 +128,9 @@ sections:
       R35: {R: [tb, d1], r: r35_ohm}
       DCR1: {device: [d1, b4], model: DD}
       DCR3: {device: [nb, b4], model: DD}
+      # R23 (V-TRIG to the C1 / C4 feed) sits here, not with Q12 in the trigger: a partition cut at
+      # Q12's collector leaves V-TRIG a linear DC path (R23, R32 to +9.3 V) in the part that owns it
+      R23: {R: [ta, vtrig], r: r23_ohm}
   - title: envelope
     parts:
       Q5: {bjt: [c5, j6, v9], model: QP}
@@ -167,12 +170,16 @@ sections:
     parts:
       DCR10: {device: [kg, k10], model: DD}
       R60: {R: [k10, c7n], r: r60_ohm}
+  - title: trigger switches
+    parts:
+      # Q20 / Q12 are saturated switches: a partition cut at their collectors (their current
+      # a sample late) diverges, so they go with the contour and the cut is R60 (100K into C7)
       C7: {C: [c7n, "0"], c: c7_f}
+      RC7: {R: [c7n, "0"], r: r_leak_ohm}
       R55: {R: [c7n, b20], r: r55_ohm}
       Q20: {bjt: [tb, b20, "0"], model: QN}
       R19: {R: [tb, bq12], r: r19_ohm}
       Q12: {bjt: [vtrig, bq12, "0"], model: QN}
-      R23: {R: [ta, vtrig], r: r23_ohm}
   - title: loudness flip-flop
     parts:
       R28: {R: [ta, rbl], r: r28_ohm}

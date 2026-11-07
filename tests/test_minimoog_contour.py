@@ -71,3 +71,26 @@ def test_loudness_section_peaks_higher_and_shares_the_trigger():
     assert lo[int(0.95 * FS)] > 4.0  # SUSTAIN 10: stays up
     assert lo[int(1.9 * FS)] < 0.5  # released
     assert fo[int(0.95 * FS)] > 3.5  # both on the one trigger
+
+
+def test_voice_plays_through_the_apps_partition_without_the_click():
+    """minimoog_voice (generated) through the app's three-way partition, coupled hold: a gated note
+    plays, and the key-down click at the default contours is far below the old bare gate's ~49 mV."""
+    from scipy.signal import butter, sosfilt
+
+    import minimoog_gate_check as gc
+    from varimu.circuit import builder, spec
+    from varimu.config import CONFIG_DIR
+
+    vs = spec.load_circuit(CONFIG_DIR / "circuits" / "minimoog_voice.yaml")
+    ir = builder.build_ir(vs, spec.resolve(vs, {}), "ja")
+    n = int(FS * 1.0)
+    gate = np.zeros(n)
+    gate[int(0.3 * FS) : int(0.8 * FS)] = 5.0
+    out = gc.play(ir, np.zeros(n), gate, np.zeros(n), gc.VOICE_PARTITION, "hold", "gate")
+    h = sosfilt(butter(2, 150 / (FS / 2), "high", output="sos"), out)
+    assert np.abs(h[int(0.29 * FS) : int(0.5 * FS)]).max() < 0.01
+    t = np.arange(n) / FS
+    tone = gc.play(ir, 0.25 * (2 * ((t * 220.0) % 1.0) - 1), gate, np.zeros(n), gc.VOICE_PARTITION, "hold", "gate")
+    assert np.std(tone[int(0.5 * FS) : int(0.7 * FS)]) > 0.3  # key held: sounds
+    assert np.std(tone[int(0.1 * FS) : int(0.25 * FS)]) < 1e-3  # key up: shut
