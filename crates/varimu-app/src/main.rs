@@ -104,6 +104,10 @@ impl App {
     fn new(config_dir: PathBuf, args: play_view::Args) -> App {
         let view = if args.room {
             View::Room
+        } else if args.mixer {
+            View::Mixer
+        } else if args.session {
+            View::Session
         } else if args.component.is_some() {
             View::Components
         } else if args.edit.is_some() {

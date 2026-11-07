@@ -289,6 +289,8 @@ pub struct SessionView {
     ruler_menu: Option<(i64, Option<usize>)>,
     /// The cursor moved while the transport ran: play on from it (next frame).
     relocate: bool,
+    /// Insert (true) or delete time between the locators, asked from the ruler's menu.
+    time_edit: Option<bool>,
     /// Where play last stopped (Shift+Space plays from there).
     stopped_at: Option<i64>,
     /// The lanes' width as last drawn (px): G and H zoom about its middle.
@@ -301,6 +303,13 @@ pub struct SessionView {
     drag: Option<Drag>,
     menu_clip: Option<(usize, usize)>,
     comp: Option<(usize, usize, i64)>,
+    /// The clipboard (SE6), a range selected across tracks (from, to, first and last
+    /// track), the range being dragged (its track and start), the roll's area last frame
+    /// (keys over it are the roll's).
+    clipboard: Vec<varimu_app::session::Copied>,
+    range_sel: Option<(i64, i64, usize, usize)>,
+    range_drag: Option<(usize, i64)>,
+    roll_rect: Option<Rect>,
     /// The lanes as last frame drew them (a clip dropped on another track finds it).
     prev_lanes: Vec<(usize, Rect)>,
     /// The session's states before each step (oldest first) and the ones undone; the
@@ -560,6 +569,7 @@ impl SessionView {
             ruler_drag: None,
             ruler_menu: None,
             relocate: false,
+            time_edit: None,
             stopped_at: None,
             lanes_w: 800.0,
             scroll_drag: None,
@@ -567,6 +577,10 @@ impl SessionView {
             drag: None,
             menu_clip: None,
             comp: None,
+            clipboard: Vec::new(),
+            range_sel: None,
+            range_drag: None,
+            roll_rect: None,
             prev_lanes: Vec::new(),
             saved,
             calibrations,
@@ -804,6 +818,9 @@ impl SessionView {
                 )
                 .show(ui, |ui| self.insert_panel(ui));
         }
+        if self.roll.is_none() || mixer {
+            self.roll_rect = None;
+        }
         if self.roll.is_some() && !mixer {
             egui::Panel::bottom("session_roll")
                 .resizable(true)
@@ -948,15 +965,71 @@ impl SessionView {
         if zoom_in {
             self.zoom(2.0, Some(self.lanes_w * 0.5));
         }
-        // Delete removes the selected clip (its take stays in the pool), S splits it (none
-        // selected: the armed track's clip under the cursor) at the cursor.
-        if delete
-            && self.roll.is_none()
-            && let Some((t, c)) = self.selected
-            && self.recording.is_none()
-        {
-            self.clip_action(t, c, "delete");
-            self.save();
+        // Delete removes the selected range or clip (its take stays in the pool), S splits it
+        // (none selected: the armed track's clip under the cursor) at the cursor.
+        let over_roll = self
+            .roll_rect
+            .zip(ui.input(|i| i.pointer.hover_pos()))
+            .is_some_and(|(r, p)| r.contains(p));
+        if delete && self.roll.is_none() && self.recording.is_none() {
+            if let Some((a, b, lo, hi)) = self.range_sel {
+                let rate = self.session.rate;
+                for t in lo..=hi.min(self.session.tracks.len().saturating_sub(1)) {
+                    self.session.tracks[t].delete_range(a, b, rate);
+                }
+                self.save();
+            } else if let Some((t, c)) = self.selected {
+                self.clip_action(t, c, "delete");
+                self.save();
+            }
+        }
+        // The clipboard (SE6): Ctrl+C / X / V / D on the selected range or clip.
+        if !over_roll && self.recording.is_none() {
+            let (copy, cut, paste, dup) = ui.input(|i| {
+                let mut c = (false, false, false, false);
+                for e in &i.events {
+                    match e {
+                        egui::Event::Copy => c.0 = true,
+                        egui::Event::Cut => c.1 = true,
+                        egui::Event::Paste(_) => c.2 = true,
+                        egui::Event::Key {
+                            key: egui::Key::C,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if modifiers.command => c.0 = true,
+                        egui::Event::Key {
+                            key: egui::Key::X,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if modifiers.command => c.1 = true,
+                        egui::Event::Key {
+                            key: egui::Key::V,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if modifiers.command => c.2 = true,
+                        egui::Event::Key {
+                            key: egui::Key::D,
+                            pressed: true,
+                            modifiers,
+                            ..
+                        } if modifiers.command => c.3 = true,
+                        _ => {}
+                    }
+                }
+                c
+            });
+            if copy || cut {
+                self.copy_selection(cut);
+            }
+            if paste {
+                self.paste_clipboard();
+            }
+            if dup {
+                self.duplicate_selection();
+            }
         }
         let split = ui.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.command);
         if split && self.roll.is_none() && self.recording.is_none() {
@@ -3302,7 +3375,36 @@ impl SessionView {
                 marker_action = Some((None, pos));
                 ui.close();
             }
+            ui.separator();
+            if ui
+                .button("Insert time between the locators")
+                .on_hover_text("Every track's clips (and the markers) from the left locator on move later by the locators' span; clips across it are split")
+                .clicked()
+            {
+                self.time_edit = Some(true);
+                ui.close();
+            }
+            if ui
+                .button("Delete time between the locators")
+                .on_hover_text("Everything between the locators goes on every track; what comes after moves earlier to close the gap")
+                .clicked()
+            {
+                self.time_edit = Some(false);
+                ui.close();
+            }
         });
+        if let Some(insert) = self.time_edit.take() {
+            let t = &self.session.transport;
+            let (a, b) = (grid.beat(t.left_beat), grid.beat(t.right_beat));
+            if insert {
+                self.session.insert_time(a, b - a);
+            } else {
+                self.session.delete_time(a, b);
+            }
+            self.selected = None;
+            self.range_sel = None;
+            self.save();
+        }
         match marker_action {
             Some((Some(i), _)) => {
                 self.session.markers.remove(i);
@@ -3601,6 +3703,18 @@ impl SessionView {
             } else {
                 self.selected = hit.map(|(c, _)| (i, c));
             }
+            if hit.is_some() || lane_resp.clicked() {
+                self.range_sel = None;
+            }
+            // A drag on empty lane space selects a range (time x tracks: SE6).
+            if lane_resp.drag_started()
+                && hit.is_none()
+                && let Some(p) = at
+            {
+                let alt = ui.input(|x| x.modifiers.alt);
+                let snap = self.session.transport.snap.inverted(alt);
+                self.range_drag = Some((i, grid.snap(view.position(p.x), snap)));
+            }
             // A click on empty lane space puts the cursor there (snapped; Alt: inverted).
             if lane_resp.clicked()
                 && hit.is_none()
@@ -3623,6 +3737,29 @@ impl SessionView {
                     from: self.session.tracks[i].clips[c].clone(),
                     press: p,
                 });
+            }
+        }
+        if lane_resp.dragged()
+            && let Some((t0, a)) = self.range_drag
+            && t0 == i
+            && let Some(p) = ui.ctx().pointer_interact_pos()
+        {
+            let alt = ui.input(|x| x.modifiers.alt);
+            let b = grid.snap(
+                view.position(p.x),
+                self.session.transport.snap.inverted(alt),
+            );
+            let t1 = self
+                .prev_lanes
+                .iter()
+                .find(|(_, r)| p.y >= r.top() && p.y < r.bottom())
+                .map_or(i, |(j, _)| *j);
+            self.range_sel = Some((a.min(b), a.max(b), t0.min(t1), t0.max(t1)));
+        }
+        if lane_resp.drag_stopped() && self.range_drag.is_some_and(|(t0, _)| t0 == i) {
+            self.range_drag = None;
+            if self.range_sel.is_some_and(|(a, b, _, _)| b <= a) {
+                self.range_sel = None;
             }
         }
         if lane_resp.dragged()
@@ -3980,6 +4117,18 @@ impl SessionView {
                 let rect = clip_box(view, lane, at, at + r.len as i64);
                 draw_notes(&lp, rect, view, at, *from, notes, REC);
             }
+        }
+        if let Some((a, b, lo, hi)) = self.range_sel
+            && (lo..=hi).contains(&i)
+        {
+            lp.rect_filled(
+                Rect::from_min_max(
+                    Pos2::new(view.x(a), lane.top()),
+                    Pos2::new(view.x(b), lane.bottom()),
+                ),
+                0.0,
+                theme::INK.gamma_multiply(0.12),
+            );
         }
         draw_cursor(&lp, lane, view, self.session.transport.cursor);
         if let Some(h) = playhead {
@@ -4347,6 +4496,129 @@ impl SessionView {
             self.delete_track(i);
         }
         changed
+    }
+
+    /// What is selected as a span: the range, else the selected clip (from, to, first and
+    /// last track).
+    fn selection_span(&self) -> Option<(i64, i64, usize, usize)> {
+        if let Some(r) = self.range_sel {
+            return Some(r);
+        }
+        let (t, c) = self.selected?;
+        let clip = self.session.tracks.get(t)?.clips.get(c)?;
+        Some((clip.position, clip.end(), t, t))
+    }
+
+    /// The selection copied (a range: every clip in it, cut at its edges; a clip: itself);
+    /// `cut` also takes it out of the lanes.
+    fn copy_selection(&mut self, cut: bool) {
+        let items = if let Some((a, b, lo, hi)) = self.range_sel {
+            self.session.copy_range(a, b, lo..=hi)
+        } else if let Some((t, c)) = self.selected
+            && let Some(track) = self.session.tracks.get(t)
+            && let Some(clip) = track.clips.get(c)
+            && let Some(take) = track.take_of(clip)
+        {
+            let mut clip = clip.clone();
+            clip.position = 0;
+            vec![varimu_app::session::Copied {
+                track: 0,
+                clip,
+                take: take.clone(),
+            }]
+        } else {
+            return;
+        };
+        if items.is_empty() {
+            return;
+        }
+        self.clipboard = items;
+        if cut {
+            if let Some((a, b, lo, hi)) = self.range_sel {
+                let rate = self.session.rate;
+                for t in lo..=hi.min(self.session.tracks.len().saturating_sub(1)) {
+                    self.session.tracks[t].delete_range(a, b, rate);
+                }
+            } else if let Some((t, c)) = self.selected {
+                self.clip_action(t, c, "delete");
+            }
+            self.save();
+        }
+    }
+
+    /// The clipboard laid at the cursor on the armed track (a range keeps its tracks'
+    /// offsets), the pasted clips selected.
+    fn paste_clipboard(&mut self) {
+        if self.clipboard.is_empty() {
+            return;
+        }
+        let t = self
+            .selected
+            .map(|s| s.0)
+            .or(self.session.armed)
+            .unwrap_or(0);
+        let at = self.session.transport.cursor;
+        let items = self.clipboard.clone();
+        let new = self.session.paste(&items, at, t);
+        self.after_paste(&items, at, t, new);
+    }
+
+    /// The selection duplicated right after itself (a range: its length later; a clip: from
+    /// its end), the copy selected so a second press repeats it again.
+    fn duplicate_selection(&mut self) {
+        let Some((a, b, lo, hi)) = self.selection_span() else {
+            return;
+        };
+        let items = match self.range_sel {
+            Some(_) => self.session.copy_range(a, b, lo..=hi),
+            None => {
+                let Some((t, c)) = self.selected else { return };
+                let track = &self.session.tracks[t];
+                let clip = track.clips[c].clone();
+                let Some(take) = track.take_of(&clip).cloned() else {
+                    return;
+                };
+                vec![varimu_app::session::Copied {
+                    track: 0,
+                    clip: varimu_app::session::Clip {
+                        position: 0,
+                        ..clip
+                    },
+                    take,
+                }]
+            }
+        };
+        let new = self.session.paste(&items, b, lo);
+        self.after_paste(&items, b, lo, new);
+        if self.range_sel.is_some() {
+            self.range_sel = Some((b, b + (b - a), lo, hi));
+        }
+    }
+
+    fn after_paste(
+        &mut self,
+        items: &[varimu_app::session::Copied],
+        at: i64,
+        t: usize,
+        new: Vec<(usize, usize)>,
+    ) {
+        if new.is_empty() {
+            return;
+        }
+        if items.len() == 1 && self.range_sel.is_none() {
+            self.selected = new.first().copied();
+        } else if self.range_sel.is_none() {
+            let len = items
+                .iter()
+                .map(|i| i.clip.position + i.clip.len as i64)
+                .max()
+                .unwrap_or(0);
+            let hi = t + items.iter().map(|i| i.track).max().unwrap_or(0);
+            self.range_sel = Some((at, at + len, t, hi));
+            self.selected = None;
+        }
+        self.saved = true;
+        self.save();
     }
 
     /// Clip `c` of track `t` moved to the top of track `to`'s lane (its take copied into
@@ -5427,6 +5699,7 @@ impl SessionView {
             return;
         };
         place.preview_via = self.preview_via(play, &perf.device).to_string();
+        self.roll_rect = Some(ui.max_rect());
         let outs = match &mut self.roll {
             Some(r) => r.ui(ui, &place),
             None => return,

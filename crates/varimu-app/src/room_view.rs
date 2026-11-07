@@ -1261,7 +1261,7 @@ impl RoomView {
             let track = &session.tracks[i];
             if !session.print_current(i) {
                 return Err(format!(
-                    "{}: its track's inserts are still printing (wait for the print, or \
+                    "{}: its track's inserts aren't printed as they are (Print them, or \
                      ⤓ Draft it into a take)",
                     s.name
                 ));

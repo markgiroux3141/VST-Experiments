@@ -77,6 +77,15 @@ use crate::print::{Slot, key_control};
 use crate::settings::Quality;
 use crate::transport::{ClickMode, Snap, TransportSettings};
 
+/// A clip on the clipboard (SE6): its track from the copied range's first, the clip (its
+/// position from the range's start), its take (so it pastes into any track).
+#[derive(Debug, Clone)]
+pub struct Copied {
+    pub track: usize,
+    pub clip: Clip,
+    pub take: Take,
+}
+
 /// A named place on the timeline (SE2): M drops one at the cursor, a click jumps there.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Marker {
@@ -1238,6 +1247,51 @@ impl Track {
         true
     }
 
+    /// Its clips' parts inside `[a, b)` (timeline), each cut at the range's edges (a cut
+    /// edge with the default fade), muted ones too.
+    pub fn clips_in(&self, a: i64, b: i64, rate: u32) -> Vec<Clip> {
+        let fade = default_fade(rate);
+        self.clips
+            .iter()
+            .filter(|c| c.position < b && c.end() > a)
+            .map(|c| {
+                let (s, e) = (c.position.max(a), c.end().min(b));
+                let mut k = c.clone();
+                k.src_start += (s - c.position) as usize;
+                k.len = (e - s) as usize;
+                k.position = s;
+                if s > c.position {
+                    k.fade_in = fade;
+                }
+                if e < c.end() {
+                    k.fade_out = fade;
+                }
+                k
+            })
+            .collect()
+    }
+
+    /// Everything in `[a, b)` taken out of the lane (clips across its edges cut there, the
+    /// parts outside kept). Whether anything changed.
+    pub fn delete_range(&mut self, a: i64, b: i64, rate: u32) -> bool {
+        if b <= a {
+            return false;
+        }
+        let mut changed = false;
+        for edge in [a, b] {
+            let mut c = 0;
+            while c < self.clips.len() {
+                if self.split_clip(c, edge, rate).is_some() {
+                    changed = true;
+                }
+                c += 1;
+            }
+        }
+        let before = self.clips.len();
+        self.clips.retain(|c| c.end() <= a || c.position >= b);
+        changed || self.clips.len() != before
+    }
+
     /// Take `from`'s bounce `to` (its render as audio, aligned with it) laid where `from`'s
     /// clips are, each with their stretch, gain and fades, and `from`'s clips muted beside
     /// them (decision 7). The whole clip a new take arrives with is replaced.
@@ -1519,6 +1573,98 @@ impl Session {
         }
         seen.pop();
         Some(sig)
+    }
+
+    /// The clips in `[a, b)` on tracks `tracks` (cut at the range's edges) as clipboard
+    /// items, their positions from `a` and their tracks from the first (SE6).
+    pub fn copy_range(
+        &self,
+        a: i64,
+        b: i64,
+        tracks: std::ops::RangeInclusive<usize>,
+    ) -> Vec<Copied> {
+        let first = *tracks.start();
+        let mut out = Vec::new();
+        for t in tracks {
+            let Some(track) = self.tracks.get(t) else {
+                continue;
+            };
+            for mut c in track.clips_in(a, b, self.rate) {
+                let Some(take) = track.take_of(&c).cloned() else {
+                    continue;
+                };
+                c.position -= a;
+                out.push(Copied {
+                    track: t - first,
+                    clip: c,
+                    take,
+                });
+            }
+        }
+        out
+    }
+
+    /// Clipboard items laid at `at` from track `track` down (each on its track offset; past
+    /// the last track, new tracks), on top of what's there; their takes added to the
+    /// tracks' pools where they aren't (audio is never copied: clips share their take).
+    /// Returns the new clips (track, index).
+    pub fn paste(&mut self, items: &[Copied], at: i64, track: usize) -> Vec<(usize, usize)> {
+        let mut out = Vec::new();
+        for it in items {
+            let t = track + it.track;
+            while self.tracks.len() <= t {
+                let n = self.tracks.len() + 1;
+                self.tracks.push(Track::new(&format!("Track {n}")));
+            }
+            let dest = &mut self.tracks[t];
+            if dest.take_index(&it.take.id).is_none() {
+                dest.takes.push(it.take.clone());
+            }
+            let mut c = it.clip.clone();
+            c.id = new_clip_id();
+            c.position += at;
+            dest.clips.push(c);
+            out.push((t, dest.clips.len() - 1));
+        }
+        out
+    }
+
+    /// Time inserted at `at` (`len` samples) across every track: clips across `at` split
+    /// there, clips and markers from `at` on moved later (SE6).
+    pub fn insert_time(&mut self, at: i64, len: i64) {
+        let rate = self.rate;
+        for t in &mut self.tracks {
+            let mut c = 0;
+            while c < t.clips.len() {
+                t.split_clip(c, at, rate);
+                c += 1;
+            }
+            for c in t.clips.iter_mut().filter(|c| c.position >= at) {
+                c.position += len;
+            }
+        }
+        for m in self.markers.iter_mut().filter(|m| m.position >= at) {
+            m.position += len;
+        }
+    }
+
+    /// The time `[a, b)` deleted across every track: what's in it removed, clips and
+    /// markers after it moved earlier by its length.
+    pub fn delete_time(&mut self, a: i64, b: i64) {
+        if b <= a {
+            return;
+        }
+        let rate = self.rate;
+        for t in &mut self.tracks {
+            t.delete_range(a, b, rate);
+            for c in t.clips.iter_mut().filter(|c| c.position >= b) {
+                c.position -= b - a;
+            }
+        }
+        self.markers.retain(|m| m.position < a || m.position >= b);
+        for m in self.markers.iter_mut().filter(|m| m.position >= b) {
+            m.position -= b - a;
+        }
     }
 
     /// What track `i` plays, as a key hears it: its lane, where it sits, its chain.
@@ -2671,6 +2817,66 @@ mod tests {
         assert_eq!(render_mix(&u, -50, 400), want);
         // The lane is the take's own audio (a print's key stays what it was).
         assert!(Arc::ptr_eq(&u.tracks[0].lane().unwrap().1, &k.audio));
+    }
+
+    #[test]
+    fn copy_paste_duplicate_and_time_edits_keep_the_audio_shared() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        s.tracks[0].takes.push(plain_take("a", 0, vec![0.5; 1000]));
+        s.tracks[0].set_active(0);
+        let mut t2 = Track::new("2");
+        t2.takes.push(plain_take("b", 200, vec![0.25; 400]));
+        t2.set_active(0);
+        s.tracks.push(t2);
+        // A range across both tracks, cut at its edges.
+        let items = s.copy_range(100, 300, 0..=1);
+        assert_eq!(items.len(), 2);
+        assert_eq!(
+            (
+                items[0].clip.position,
+                items[0].clip.src_start,
+                items[0].clip.len
+            ),
+            (0, 100, 200)
+        );
+        assert_eq!(
+            (items[1].track, items[1].clip.position, items[1].clip.len),
+            (1, 100, 100)
+        );
+        // Pasted at 2000: the same offsets; the takes shared, not copied.
+        let new = s.paste(&items, 2000, 0);
+        assert_eq!(new, vec![(0, 1), (1, 1)]);
+        assert_eq!(s.tracks[1].clips[1].position, 2100);
+        assert_eq!(s.tracks[0].takes.len(), 1);
+        assert!(Arc::ptr_eq(
+            &s.tracks[0].takes[0].audio,
+            &items[0].take.audio
+        ));
+        let y = render_mix(&s, 2000, 300);
+        assert_eq!((y[50][0], y[150][0]), (0.5, 0.75));
+        // Pasted below the last track: a new track with the take in its pool.
+        s.paste(&items[1..], 0, 2);
+        assert_eq!(s.tracks.len(), 4);
+        assert_eq!(s.tracks[3].takes[0].id, "b");
+        // Delete a range: the clip across it cut, the part outside kept.
+        assert!(s.tracks[0].delete_range(400, 600, 1000));
+        let spans: Vec<(i64, i64)> = s.tracks[0]
+            .clips
+            .iter()
+            .map(|c| (c.position, c.end()))
+            .collect();
+        assert_eq!(spans, vec![(0, 400), (600, 1000), (2000, 2200)]);
+        // Insert time at 500, then delete it: back where they were; markers follow.
+        s.markers.push(Marker {
+            position: 700,
+            name: "m".into(),
+        });
+        s.insert_time(500, 250);
+        assert_eq!(s.tracks[0].clips[1].position, 850);
+        assert_eq!(s.markers[0].position, 950);
+        s.delete_time(500, 750);
+        assert_eq!(s.tracks[0].clips[1].position, 600);
+        assert_eq!(s.markers[0].position, 700);
     }
 
     #[test]

@@ -254,6 +254,9 @@ pub struct Args {
     pub component: Option<String>,
     /// Open the Room view.
     pub room: bool,
+    /// Open on the Session view (`--session`) or the Mixer (`--mixer`).
+    pub session: bool,
+    pub mixer: bool,
 }
 
 impl Args {
@@ -264,6 +267,8 @@ impl Args {
             match x.as_str() {
                 "--play" => a.play = true,
                 "--room" => a.room = true,
+                "--session" => a.session = true,
+                "--mixer" => a.mixer = true,
                 "--device" => a.device = Some(it.next().ok_or("--device needs an id")?),
                 "--edit" => a.edit = Some(it.next().ok_or("--edit needs a circuit name")?),
                 "--component" => {
