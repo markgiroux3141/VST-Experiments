@@ -420,7 +420,7 @@ power amp, the speakers, the whole Suitcase as one netlist.**
   speaker): it shows what the speakers add to the preamp's row, **+7.6 dB at 1-2 kHz, +13.3 dB at
   2-4 kHz, +6 dB at 4-8 kHz and -12.5 dB at 8-16 kHz** (the P12R stand-in's rising
   pressure response and its roll-off above ~5 kHz; draft quality: the production render of
-  the same demo, `suitcase_100w_demo.wav`, was still running after 90 minutes, over 250x real
+  the same demo, was stopped after 95 minutes unfinished, over 280x real
   time for the whole instrument at 192 kHz, so the table's last row and the note set are at
   draft, ~25x). The preamp row is the same demo as before (the table's 8-16k entry read -82.9 with a coarser
   window). The 4-8 kHz deficit is 7 dB at the harp and 11.5 dB at the preamp's output (A1A's
@@ -434,7 +434,7 @@ power amp, the speakers, the whole Suitcase as one netlist.**
 
 **Next:**
 1. The user listens: Play's Rhodes Suitcase (the whole instrument now: preamp, amp, speakers),
-   `reports/rhodes/renders/suitcase_100w_demo.wav`, the single-note set.
+   `reports/rhodes/renders/suitcase_100w_demo_draft.wav`, the single-note set.
 2. **The user's calls, with numbers:**
    - **The vibrato's last dB and the creep's curve.** Against the recording: depth +-6.76 dB
      at full INTENSITY against +-7.82 (0.9-1.0 dB, 13% short; the peak to peak is right, 17.96
