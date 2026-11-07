@@ -30,12 +30,12 @@ cv_inputs:
 probes: [env, outn, col1, c4, tb, vtrig, e7, nb, b1, b4, ta, envl, outl, col25, e18, nbl]
 
 controls:
-  attack: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R12 Rotary Pot, 1 Meg Audio (ATTACK; its wiring per Fig 9-17, user-read: R12 into pin 14); 0 = the knob at 0, 1 = at 10"}
-  decay: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R15 Rotary Pot, 1 Meg Audio (DECAY; into pin 18)"}
+  attack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R12 Rotary Pot, 1 Meg Audio (ATTACK; its wiring per Fig 9-17, user-read: R12 into pin 14); 0 = the knob at 0, 1 = at 10"}
+  decay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R15 Rotary Pot, 1 Meg Audio (DECAY; into pin 18)"}
   sustain: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R18 5K linear (SUSTAIN, wiper to pin 12; the pot between +10 V and ground is provisional, the panel wiring untraced)"}
-  lattack: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness ATTACK; which of R13 / R16 is provisional, the panel wiring untraced; into pin 18 of the loudness section)"}
-  ldecay: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness DECAY; into pin 17)"}
-  lsustain: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 5K linear pot (the loudness SUSTAIN, wiper to pin 16)"}
+  lattack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness ATTACK; which of R13 / R16 is provisional, the panel wiring untraced; into pin 18 of the loudness section)"}
+  ldecay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness DECAY; into pin 17)"}
+  lsustain: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 5K linear pot (the loudness SUSTAIN, wiper to pin 16)"}
   decay_on: {value: 1, choices: [0, 1], unit: switch, source: "the panel's DECAY switch: 1 = release follows DECAY (pin 2 open), 0 = pin 2 tied to V-TRIG (instant release); provisional reading of Fig 9-7's pin 2 / pin 22"}
 
 values:
