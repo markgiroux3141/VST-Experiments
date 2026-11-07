@@ -157,6 +157,8 @@ const CALIBRATE_S: f64 = 8.0;
 /// The channel strips' width and a track's height (px).
 const STRIP_W: f32 = 250.0;
 const TRACK_H: f32 = 124.0;
+/// The lowest a track's height goes (its strip's controls need it).
+const MIN_TRACK_H: f32 = 124.0;
 const RULER_H: f32 = 26.0;
 /// A take's row when a track shows every take (px).
 const TAKE_H: f32 = 34.0;
@@ -291,6 +293,9 @@ pub struct SessionView {
     relocate: bool,
     /// Insert (true) or delete time between the locators, asked from the ruler's menu.
     time_edit: Option<bool>,
+    /// The tracks' height (px; Ctrl+wheel over the strips), the keys overlay shown.
+    track_h: f32,
+    show_keys: bool,
     /// Where play last stopped (Shift+Space plays from there).
     stopped_at: Option<i64>,
     /// The lanes' width as last drawn (px): G and H zoom about its middle.
@@ -570,6 +575,8 @@ impl SessionView {
             ruler_menu: None,
             relocate: false,
             time_edit: None,
+            track_h: TRACK_H,
+            show_keys: false,
             stopped_at: None,
             lanes_w: 800.0,
             scroll_drag: None,
@@ -841,6 +848,16 @@ impl SessionView {
                     self.arrangement(ui, play);
                 }
             });
+        if self.show_keys {
+            let mut open = true;
+            egui::Window::new("Keys")
+                .open(&mut open)
+                .collapsible(false)
+                .resizable(false)
+                .default_pos(ui.max_rect().center() - egui::vec2(260.0, 220.0))
+                .show(ui.ctx(), keys_overlay);
+            self.show_keys = open;
+        }
         // The cursor moved while playing: play on from there (not while recording).
         if std::mem::take(&mut self.relocate)
             && !play.player().is_some_and(|p| p.take_armed())
@@ -955,7 +972,15 @@ impl SessionView {
                 .map_or(self.session.transport.cursor, |t| t.heard.max(0));
             self.add_marker(at);
         }
-        if slash {
+        // ? (Shift+/) shows the keys; / turns the loop on or off.
+        let question = ui.input(|i| {
+            i.events
+                .iter()
+                .any(|e| matches!(e, egui::Event::Text(t) if t == "?"))
+        });
+        if question {
+            self.show_keys = !self.show_keys;
+        } else if slash {
             self.session.transport.loop_on = !self.session.transport.loop_on;
             self.save();
         }
@@ -1321,6 +1346,26 @@ impl SessionView {
             a => a,
         };
         self.selected = None;
+        self.save();
+    }
+
+    /// Track `t` moved to place `to` (the others shift; ids, routes and the armed track
+    /// follow it).
+    fn move_track(&mut self, t: usize, to: usize) {
+        let n = self.session.tracks.len();
+        if t >= n || to >= n || t == to || self.recording.is_some() {
+            return;
+        }
+        let armed = self
+            .session
+            .armed
+            .map(|a| self.session.tracks[a].id.clone());
+        let track = self.session.tracks.remove(t);
+        self.session.tracks.insert(to, track);
+        self.session.armed = armed.and_then(|id| self.session.track_index(&id));
+        self.selected = None;
+        self.range_sel = None;
+        self.insert_sel = None;
         self.save();
     }
 
@@ -3007,7 +3052,11 @@ impl SessionView {
                     .range(0..=16)
                     .suffix(" bars"),
             )
-            .on_hover_text("The tracks play before the start bar; a take starts at it");
+            .on_hover_text("The tracks play before the cursor; a take starts at it");
+            ui.checkbox(&mut s.punch, "punch").on_hover_text(
+                "Punch in / out: a take records only between the locators (the loop off); \
+                 the tracks play before and after it",
+            );
             ui.add_space(8.0);
             ui.label("cursor");
             let grid = Grid::new(rate, s);
@@ -3289,7 +3338,11 @@ impl SessionView {
                     i.pointer.hover_pos(),
                 )
             });
-            if zoom != 1.0 {
+            // Ctrl+wheel over the strips: the tracks' height (SE7); over the lanes: zoom.
+            let over_strips = pointer.is_some_and(|p| p.x < full.left() + STRIP_W);
+            if zoom != 1.0 && over_strips {
+                self.track_h = (self.track_h * zoom).clamp(MIN_TRACK_H, 320.0);
+            } else if zoom != 1.0 {
                 let x = pointer.map_or(lanes_w * 0.5, |p| {
                     ((p.x - full.left() - STRIP_W) as f64).max(0.0)
                 });
@@ -3655,11 +3708,11 @@ impl SessionView {
         let t = &self.session.tracks[i];
         let shown = if t.show_takes { t.takes.len() } else { 0 };
         let (whole, _) = ui.allocate_exact_size(
-            egui::vec2(width, TRACK_H + shown as f32 * TAKE_H),
+            egui::vec2(width, self.track_h + shown as f32 * TAKE_H),
             Sense::hover(),
         );
-        let row = Rect::from_min_size(whole.min, egui::vec2(width, TRACK_H));
-        let strip = Rect::from_min_size(row.min, egui::vec2(STRIP_W, TRACK_H));
+        let row = Rect::from_min_size(whole.min, egui::vec2(width, self.track_h));
+        let strip = Rect::from_min_size(row.min, egui::vec2(STRIP_W, self.track_h));
         let lane = Rect::from_min_max(Pos2::new(row.left() + STRIP_W, row.top()), row.max);
         self.lanes.push((i, lane.intersect(ui.clip_rect())));
         // The strip and lane take clicks and drags; the strip's controls, added after, sit
@@ -3994,7 +4047,24 @@ impl SessionView {
             }
         });
         let mut delete_track = false;
+        let mut move_track: Option<usize> = None;
+        let n_tracks = self.session.tracks.len();
         strip_resp.context_menu(|ui| {
+            if ui
+                .add_enabled(i > 0, egui::Button::new("Move up"))
+                .clicked()
+            {
+                move_track = Some(i - 1);
+                ui.close();
+            }
+            if ui
+                .add_enabled(i + 1 < n_tracks, egui::Button::new("Move down"))
+                .clicked()
+            {
+                move_track = Some(i + 1);
+                ui.close();
+            }
+            ui.separator();
             if ui
                 .button(format!("Delete track {}", self.session.tracks[i].name))
                 .clicked()
@@ -4003,6 +4073,10 @@ impl SessionView {
                 ui.close();
             }
         });
+        if let Some(to) = move_track {
+            self.move_track(i, to);
+            changed = true;
+        }
         if let Some((c, what)) = clip_action {
             changed |= self.clip_action(i, c, what);
         }
@@ -4015,7 +4089,7 @@ impl SessionView {
             if armed { theme::CHROME3 } else { theme::CHROME },
         );
         painter.rect_filled(
-            Rect::from_min_size(strip.min, egui::vec2(4.0, TRACK_H)),
+            Rect::from_min_size(strip.min, egui::vec2(4.0, self.track_h)),
             0.0,
             colour,
         );
@@ -5645,6 +5719,31 @@ impl SessionView {
         }
     }
 
+    /// The other tracks' MIDI notes where their clips play them (timeline start, end, key):
+    /// the roll's ghosts.
+    fn ghost_notes(&self, t: usize) -> Vec<(i64, i64, u8)> {
+        let mut out = Vec::new();
+        for (i, track) in self.session.tracks.iter().enumerate() {
+            if i == t {
+                continue;
+            }
+            for c in track.clips.iter().filter(|c| !c.muted) {
+                let Some(k) = track.take_of(c) else { continue };
+                let Some(e) = &k.events else { continue };
+                // The clip plays the take's samples src_start.. at its position.
+                let origin = c.position - c.src_start as i64 - e.from as i64;
+                for n in e.perf.notes() {
+                    let (a, b) = (origin + n.start as i64, origin + n.end as i64);
+                    let (a, b) = (a.max(c.position), b.min(c.end()));
+                    if b > a {
+                        out.push((a, b, n.note));
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// The piano roll's view of event take `k` of track `t`.
     fn roll_place(&self, t: usize, k: usize, playhead: Option<i64>) -> Option<piano_roll::Place> {
         let take = self.session.tracks.get(t)?.takes.get(k)?;
@@ -5667,6 +5766,29 @@ impl SessionView {
                 || self.render_pending(&take.id, e.rev, Quality::Production),
             cursor: self.session.transport.cursor,
             preview_via: String::new(),
+            ghosts: self.ghost_notes(t),
+            pressure: e
+                .perf
+                .events
+                .iter()
+                .filter_map(|&(at, ev)| match ev {
+                    varimu_app::performance::Ev::Pressure(v) => {
+                        Some((take.position + at as i64 - e.from as i64, v))
+                    }
+                    _ => None,
+                })
+                .collect(),
+            pedal: e
+                .perf
+                .events
+                .iter()
+                .filter_map(|&(at, ev)| match ev {
+                    varimu_app::performance::Ev::Pedal(d) => {
+                        Some((take.position + at as i64 - e.from as i64, d))
+                    }
+                    _ => None,
+                })
+                .collect(),
         })
     }
 
@@ -6057,6 +6179,89 @@ fn show_folder(dir: &Path) {
     let _ = std::process::Command::new("explorer").arg(dir).spawn();
     #[cfg(not(windows))]
     let _ = std::process::Command::new("xdg-open").arg(dir).spawn();
+}
+
+/// The keys overlay (?): the Session view's keys and the piano roll's.
+fn keys_overlay(ui: &mut egui::Ui) {
+    let rows: [(&str, &[(&str, &str)]); 3] = [
+        (
+            "SESSION",
+            &[
+                (
+                    "Space / Shift+Space",
+                    "play, stop / play from where it stopped",
+                ),
+                ("R", "record into the armed track"),
+                ("Home / End", "cursor to bar 1 / the session's end"),
+                ("Ctrl+← / →", "cursor by bars"),
+                ("M", "a marker at the cursor (playing: the playhead)"),
+                ("S", "split the selected clip at the cursor"),
+                ("Delete", "delete the selected clip or range"),
+                (
+                    "Ctrl+C / X / V / D",
+                    "copy, cut, paste at the cursor, duplicate",
+                ),
+                ("Ctrl+R", "render / print what's selected"),
+                ("/", "loop on / off"),
+                (
+                    "G / H, Ctrl+wheel",
+                    "zoom out / in (over the strips: track height)",
+                ),
+                ("X", "Mixer / Session"),
+                ("Ctrl+Z / Ctrl+Y, Ctrl+S", "undo / redo, save"),
+                ("Alt (dragging)", "the snap inverted"),
+                ("?", "these keys"),
+            ],
+        ),
+        (
+            "PIANO ROLL (pointer over it)",
+            &[
+                ("1 / 2 / 3", "Select / Draw / Erase"),
+                ("↑ / ↓ (Shift, Ctrl: octave)", "transpose the selection"),
+                ("← / →", "nudge a grid step"),
+                ("Q", "quantize (none selected: every note)"),
+                (
+                    "Ctrl+C / X / V / D",
+                    "copy, cut, paste at the cursor, duplicate",
+                ),
+                ("Ctrl+A, Delete", "select every note, delete the selection"),
+                ("Shift+drag a note", "copy it"),
+            ],
+        ),
+        (
+            "MOUSE",
+            &[
+                (
+                    "ruler: click / Ctrl / Shift",
+                    "cursor / left / right locator",
+                ),
+                (
+                    "ruler: drag, right-click",
+                    "draw the loop; markers, time edits",
+                ),
+                ("clip: drag, edges, corners, top", "move, trim, fades, gain"),
+                ("empty lane: click / drag", "cursor / select a range"),
+                (
+                    "take row: click / drag",
+                    "the take whole / comp a stretch in",
+                ),
+            ],
+        ),
+    ];
+    for (title, keys) in rows {
+        ui.label(RichText::new(title).small().strong().color(theme::ACCENT));
+        egui::Grid::new(title)
+            .num_columns(2)
+            .spacing([16.0, 2.0])
+            .show(ui, |ui| {
+                for (k, what) in keys {
+                    ui.label(RichText::new(*k).monospace().small().color(theme::INK));
+                    ui.label(RichText::new(*what).small().color(theme::MUTED));
+                    ui.end_row();
+                }
+            });
+        ui.add_space(6.0);
+    }
 }
 
 /// A take's line under its strip: its id, device, length and placement.

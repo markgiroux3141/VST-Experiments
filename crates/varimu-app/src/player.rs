@@ -1343,7 +1343,14 @@ impl Emitter {
             if running {
                 for &(pos, off, len) in &segments {
                     let at = stream_at.map(|s| s + off as u64);
-                    r.capture(pos, &raw[off..off + len], clock.record_from(), latency, at);
+                    r.capture_until(
+                        pos,
+                        &raw[off..off + len],
+                        clock.record_from(),
+                        clock.record_to(),
+                        latency,
+                        at,
+                    );
                 }
             } else {
                 r.finish();

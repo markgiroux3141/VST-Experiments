@@ -424,10 +424,28 @@ impl Recorder {
         latency: i64,
         stream_at: Option<u64>,
     ) {
+        self.capture_until(at, raw, record_from, i64::MAX, latency, stream_at);
+    }
+
+    /// [`Recorder::capture`] up to `record_to` (punching out: the take ends there; SE7).
+    pub fn capture_until(
+        &mut self,
+        at: i64,
+        raw: &[f32],
+        record_from: i64,
+        record_to: i64,
+        latency: i64,
+        stream_at: Option<u64>,
+    ) {
         if !self.armed {
             self.finish();
             return;
         }
+        if at >= record_to {
+            self.stop();
+            return;
+        }
+        let raw = &raw[..(raw.len() as i64).min(record_to.saturating_sub(at)) as usize];
         if self
             .active
             .as_ref()
@@ -2321,6 +2339,7 @@ pub fn transport_json(s: &TransportSettings) -> Value {
         "click_db": s.click_db,
         "count_in_bars": s.count_in_bars,
         "pre_roll_bars": s.pre_roll_bars,
+        "punch": s.punch,
         "cursor": s.cursor,
         "snap": s.snap.id(),
         "return_to_cursor": s.return_to_cursor,
@@ -2351,6 +2370,7 @@ pub fn transport_from(t: &Value, rate: u32) -> TransportSettings {
         return_to_cursor: t["return_to_cursor"]
             .as_bool()
             .unwrap_or(d.return_to_cursor),
+        punch: t["punch"].as_bool().unwrap_or(false),
         left_beat: t["left_beat"].as_i64().unwrap_or(d.left_beat),
         right_beat: t["right_beat"].as_i64().unwrap_or(d.right_beat),
         loop_on: t["loop_on"].as_bool().unwrap_or(d.loop_on),
@@ -2527,6 +2547,22 @@ mod tests {
         let rec = r.take_finished().expect("a take");
         assert_eq!(rec.start, 0);
         assert_eq!(rec.samples, expected);
+        assert!(r.take_finished().is_none());
+    }
+
+    #[test]
+    fn punching_records_only_between_the_locators() {
+        let mut r = Recorder::new(1000);
+        r.armed = true;
+        let mut at = 0;
+        for _ in 0..10 {
+            let raw: Vec<f32> = (0..100).map(|i| (at + i) as f32).collect();
+            r.capture_until(at, &raw, 250, 640, 0, None);
+            at += 100;
+        }
+        let rec = r.take_finished().expect("a take");
+        assert_eq!((rec.start, rec.samples.len()), (250, 390));
+        assert_eq!((rec.samples[0], rec.samples[389]), (250.0, 639.0));
         assert!(r.take_finished().is_none());
     }
 

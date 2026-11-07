@@ -195,6 +195,9 @@ pub struct TransportSettings {
     /// Stop puts the cursor back where play started (else it stays where play stopped,
     /// and the next play goes on from there).
     pub return_to_cursor: bool,
+    /// Punch in / out (SE7): with the loop off, a take records only between the locators
+    /// (the tracks play before and after it).
+    pub punch: bool,
     /// The left and right locators (beats from bar 1's downbeat) and whether play loops
     /// between them.
     pub left_beat: i64,
@@ -215,6 +218,7 @@ impl Default for TransportSettings {
             cursor: 0,
             snap: Snap::Beat,
             return_to_cursor: true,
+            punch: false,
             left_beat: 0,
             right_beat: 16,
             loop_on: false,
@@ -428,12 +432,27 @@ impl Clock {
             .bar(self.grid.bar_at(s.cursor) - s.pre_roll_bars as i64)
     }
 
-    /// Where recording starts: the cursor (the loop's start, looping).
+    /// Where recording starts: the cursor (the loop's start, looping; punching in, the left
+    /// locator or the cursor, whichever is later).
     pub fn record_from(&self) -> i64 {
-        if self.settings.loop_on {
-            return self.grid.beat(self.settings.left_beat);
+        let s = &self.settings;
+        if s.loop_on {
+            return self.grid.beat(s.left_beat);
         }
-        self.settings.cursor
+        if s.punch {
+            return self.grid.beat(s.left_beat).max(s.cursor);
+        }
+        s.cursor
+    }
+
+    /// Where recording stops by itself: the right locator punching out (else never).
+    pub fn record_to(&self) -> i64 {
+        let s = &self.settings;
+        if s.punch && !s.loop_on {
+            self.grid.beat(s.right_beat)
+        } else {
+            i64::MAX
+        }
     }
 
     /// The loop's start and end (positions), while it is on.
@@ -683,6 +702,17 @@ mod tests {
         c.process(&mut y);
         let want: Vec<usize> = (4..12).map(|k| (g.beat(k) - g.bar(2)) as usize).collect();
         assert_eq!(onsets(&y), want);
+        // Punching: recording from the left locator to the right one.
+        let p = Clock::new(
+            rate,
+            TransportSettings {
+                punch: true,
+                left_beat: 16,
+                right_beat: 24,
+                ..s.clone()
+            },
+        );
+        assert_eq!((p.record_from(), p.record_to()), (g.beat(16), g.beat(24)));
         // Without count-in or pre-roll, play starts at the cursor itself.
         let c = Clock::new(
             rate,

@@ -137,6 +137,12 @@ pub struct Place {
     pub cursor: i64,
     /// What a preview plays through (for the header).
     pub preview_via: String,
+    /// The other MIDI tracks' notes as (start, end, key) on the timeline (ghosts, SE7).
+    pub ghosts: Vec<(i64, i64, u8)>,
+    /// The take's aftertouch and sustain pedal as recorded (timeline, value), shown under
+    /// the velocities.
+    pub pressure: Vec<(i64, u8)>,
+    pub pedal: Vec<(i64, bool)>,
 }
 
 pub struct Roll {
@@ -167,7 +173,26 @@ pub struct Roll {
     grab: Option<usize>,
     /// The length the next drawn note gets (the last drawn or resized; samples).
     last_len: Option<u64>,
+    /// The view follows the playhead; the other MIDI tracks' notes shown faintly; the
+    /// scale whose keys are lit (root 0-11 and minor; None: off).
+    follow: bool,
+    show_ghosts: bool,
+    scale: Option<(u8, bool)>,
 }
+
+/// Whether `key` is in the scale of `root` (major, or natural minor).
+fn in_scale(key: i64, root: u8, minor: bool) -> bool {
+    let steps: [i64; 7] = if minor {
+        [0, 2, 3, 5, 7, 8, 10]
+    } else {
+        [0, 2, 4, 5, 7, 9, 11]
+    };
+    steps.contains(&(key - root as i64).rem_euclid(12))
+}
+
+const NOTE_NAMES: [&str; 12] = [
+    "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B",
+];
 
 impl Roll {
     /// A roll on take `take` of `track`, fitted to it.
@@ -193,6 +218,9 @@ impl Roll {
             moving: None,
             grab: None,
             last_len: None,
+            follow: true,
+            show_ghosts: false,
+            scale: None,
         };
         if let (Some(lo), Some(hi)) = (
             place.notes.iter().map(|n| n.note).min(),
@@ -420,6 +448,17 @@ impl Roll {
             }
         }
         let rate = place.rate as f64;
+        // Follow the playhead while it runs (the header's toggle).
+        if self.follow
+            && self.gesture.is_none()
+            && let Some(h) = place.playhead
+        {
+            let w = (grid_rect.width() as f64).max(1.0);
+            let x = (h as f64 / rate - self.view_s) * self.px_per_s;
+            if x > w * 0.92 || x < 0.0 {
+                self.view_s = h as f64 / rate - w * 0.1 / self.px_per_s;
+            }
+        }
         let (view_s, px_per_s, top_key, key_h) =
             (self.view_s, self.px_per_s, self.top_key, self.key_h);
         let division = self.division;
@@ -449,6 +488,11 @@ impl Roll {
             );
             if black {
                 painter.rect_filled(row, 0.0, theme::BG);
+            }
+            if let Some((root, minor)) = self.scale
+                && in_scale(k as i64, root, minor)
+            {
+                painter.rect_filled(row, 0.0, theme::ACCENT.gamma_multiply(0.06));
             }
             let key = Rect::from_min_max(
                 Pos2::new(rect.left(), y),
@@ -538,6 +582,54 @@ impl Roll {
         // Notes and velocities.
         let gp = ui.painter_at(grid_rect);
         let vp = ui.painter_at(vel_rect);
+        if self.show_ghosts {
+            for &(a, b, key) in &place.ghosts {
+                let r = Rect::from_min_max(
+                    Pos2::new(x_of(a), y_of(key as f64) + 2.0),
+                    Pos2::new(x_of(b).max(x_of(a) + 2.0), y_of(key as f64) + key_h - 2.0),
+                );
+                gp.rect_filled(r, 2.0, theme::FAINT.gamma_multiply(0.35));
+            }
+        }
+        // Aftertouch as a step line over the velocities, the pedal as bars along their foot.
+        if !place.pressure.is_empty() {
+            let mut pts = Vec::new();
+            let mut last = 0u8;
+            for &(at, v) in &place.pressure {
+                let x = x_of(at);
+                let y = |v: u8| vel_rect.bottom() - (vel_rect.height() - 4.0) * v as f32 / 127.0;
+                pts.push(Pos2::new(x, y(last)));
+                pts.push(Pos2::new(x, y(v)));
+                last = v;
+            }
+            vp.add(egui::Shape::line(
+                pts,
+                Stroke::new(1.0, theme::WARN.gamma_multiply(0.8)),
+            ));
+        }
+        let mut down: Option<i64> = None;
+        let pedal_end = timeline(place, place.from + place.len);
+        for &(at, d) in place
+            .pedal
+            .iter()
+            .chain(std::iter::once(&(pedal_end, false)))
+        {
+            match (down, d) {
+                (None, true) => down = Some(at),
+                (Some(a), false) => {
+                    vp.rect_filled(
+                        Rect::from_min_max(
+                            Pos2::new(x_of(a), vel_rect.bottom() - 3.0),
+                            Pos2::new(x_of(at), vel_rect.bottom()),
+                        ),
+                        0.0,
+                        theme::OK.gamma_multiply(0.7),
+                    );
+                    down = None;
+                }
+                _ => {}
+            }
+        }
         for (i, n) in self.notes.iter().enumerate() {
             let sel = self.selected.contains(&i);
             let r = note_rect(n);
@@ -1096,6 +1188,31 @@ impl Roll {
             }
             ui.checkbox(&mut self.quantize_ends, RichText::new("ends").small())
                 .on_hover_text("Quantize moves each note's end to the grid too (else its length is kept)");
+            ui.checkbox(&mut self.follow, RichText::new("follow").small())
+                .on_hover_text("The view follows the playhead while it runs");
+            ui.checkbox(&mut self.show_ghosts, RichText::new("ghosts").small())
+                .on_hover_text("The other MIDI tracks' notes, faintly, for context");
+            let label = self.scale.map_or("scale".to_string(), |(r, m)| {
+                format!("{} {}", NOTE_NAMES[r as usize], if m { "minor" } else { "major" })
+            });
+            egui::ComboBox::from_id_salt("roll_scale")
+                .width(78.0)
+                .selected_text(RichText::new(label).small())
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(&mut self.scale, None, "off");
+                    for minor in [false, true] {
+                        for r in 0..12u8 {
+                            let name = format!(
+                                "{} {}",
+                                NOTE_NAMES[r as usize],
+                                if minor { "minor" } else { "major" }
+                            );
+                            ui.selectable_value(&mut self.scale, Some((r, minor)), name);
+                        }
+                    }
+                })
+                .response
+                .on_hover_text("Light the keys of a scale");
             ui.checkbox(&mut self.preview, RichText::new("preview").small())
                 .on_hover_text(format!(
                     "Sound each note as it's drawn, moved, transposed, resized or its \
@@ -1202,6 +1319,9 @@ mod tests {
             has_production: false,
             cursor: 0,
             preview_via: String::new(),
+            ghosts: Vec::new(),
+            pressure: Vec::new(),
+            pedal: Vec::new(),
         }
     }
 
@@ -1277,6 +1397,14 @@ mod tests {
         r.copy(true, &mut out, &p3);
         assert_eq!((edits(&out), r.notes.len()), (1, 4));
         assert_eq!(CLIPBOARD.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_scale_lights_its_keys() {
+        // C major: no C#, F# or Bb; A minor: the same keys.
+        let lit: Vec<i64> = (60..72).filter(|&k| in_scale(k, 0, false)).collect();
+        assert_eq!(lit, vec![60, 62, 64, 65, 67, 69, 71]);
+        assert!((60..72).all(|k| in_scale(k, 0, false) == in_scale(k, 9, true)));
     }
 
     #[test]
