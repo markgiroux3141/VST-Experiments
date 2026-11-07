@@ -218,3 +218,24 @@ BETA ~0.33 mA/V^2 by the square law) lies past the 1176's Q-bias range.
 - **Siliconix AN104, "SPICE parameters"** (measured JFET parameters), cited at
   https://www.technicalaudio.com/pdf/Siliconix/Siliconix_AN104_spice_parameters.pdf:
   that URL returns 404 now.
+
+## The Rhodes 100 W power amp's transistors (added 2026-11-07)
+
+For `config/circuits/rhodes_amp*.yaml` (docs/RHODES_PLAN.md "The Suitcase"). None has a
+published SPICE card (Central has no 2N5784 / 2N5781 / 2N6254 / RCA29B / RCA30B model), so
+`varimu.devices.library` fits each to the sheet's typical curve and limits and marks the rest
+provisional.
+
+| File | What | Source | sha256 |
+|---|---|---|---|
+| `rca_1981_2N5781-2N5786.pdf` | RCA Power Devices 1981 p. 160-162 (3 pp): 2N5781 (PNP) / 2N5784 (NPN), Fig. 8-9 dc beta | web: https://ftp.mirrorservice.org/sites/www.bitsavers.org/components/rca/_dataBooks/1981_RCA_Power_Devices.pdf | `aa6f163e915d1429e159161e8ead8d6af2da3d61af54f64b58c7606f43606d86` |
+| `rca_1981_2N6254_pages.pdf` | the same book's 2N3055 (Hometaxial) / 2N6253 / 2N6254 / 2N6371 pages (5 pp, p. 80-84) | same | `f70ef92ef05d6b1bc85db8f9330c75eb9373d5d53dda28bb4b62ef351372a823` |
+| `central_2N5781_2N5784.pdf` | Central's R1 sheet of the same pair (agrees with RCA's limits) | web: https://my.centralsemi.com/datasheets/2N5781.PDF | `05d239076cbb45f20d55b79f3f706964cac1ec926e2008df0130aea74666fe93` |
+| `comset_2N6253_6254.pdf` | Comset's 2N6253 / 2N6254 / 2N6371 sheet (agrees with RCA's limits) | web: https://datasheetq.com/pdf-view/2N6253-Comset.pdf | `8bb42190b5ef7893873dd7c8e341709d63144a5bc5cda62c0468a625849984aa` |
+
+RCA29B / RCA30B (the drivers): the RCA sheet wasn't retrievable (datasheetspdf.com refused
+downloads; the 1981 databook doesn't list them). Reseller listing only: web:
+https://www.littlediode.com/components/RCA29B.html (80 V, 3 A, hFE 15-150 at 1 A / VCE 4 V,
+fT 3 MHz min); RCA30 = the PNP complement (datasheetspdf.com's index). Their model is
+provisional. A 1966-69 RCA Transistor Manual (worldradiohistory.com, > 10 MB) would have the
+RCA29 / RCA30 sheet, if someone wants to fetch it.

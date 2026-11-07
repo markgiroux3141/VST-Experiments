@@ -1724,9 +1724,23 @@ def build_2n5087() -> dict[str, Any]:
         "2N5087",
         "pnp",
         {
-            "IS": 2.45e-15, "BF": 1135.0, "VAF": 139.0, "IKF": 21.2e-3, "ISE": 380e-15,
-            "NE": 2.0, "BR": 4.0, "NR": 1.0, "VAR": 20.0, "IKR": 45.0e-3, "RE": 106.0,
-            "RB": 426.0, "RC": 42.6, "CJE": 9.65e-12, "CJC": 11.8e-12, "VJC": 0.3, "MJC": 0.3,
+            "IS": 2.45e-15,
+            "BF": 1135.0,
+            "VAF": 139.0,
+            "IKF": 21.2e-3,
+            "ISE": 380e-15,
+            "NE": 2.0,
+            "BR": 4.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 45.0e-3,
+            "RE": 106.0,
+            "RB": 426.0,
+            "RC": 42.6,
+            "CJE": 9.65e-12,
+            "CJC": 11.8e-12,
+            "VJC": 0.3,
+            "MJC": 0.3,
         },  # fmt: skip
         "Central Semiconductor's 2N5087 SPICE model (8/18/10 rev A; Central's licence forbids "
         "redistributing the card, so its numbers are cited here)",
@@ -1743,15 +1757,210 @@ def build_2n4033() -> dict[str, Any]:
         "2N4033",
         "pnp",
         {
-            "IS": 57.5e-15, "BF": 449.0, "VAF": 161.0, "IKF": 0.313, "ISE": 33.6e-12,
-            "NE": 2.0, "BR": 4.0, "NR": 1.0, "VAR": 20.0, "IKR": 0.870, "RE": 0.112,
-            "RB": 0.449, "RC": 44.9e-3, "CJE": 134e-12, "CJC": 42.4e-12, "VJC": 0.3, "MJC": 0.3,
+            "IS": 57.5e-15,
+            "BF": 449.0,
+            "VAF": 161.0,
+            "IKF": 0.313,
+            "ISE": 33.6e-12,
+            "NE": 2.0,
+            "BR": 4.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 0.870,
+            "RE": 0.112,
+            "RB": 0.449,
+            "RC": 44.9e-3,
+            "CJE": 134e-12,
+            "CJC": 42.4e-12,
+            "VJC": 0.3,
+            "MJC": 0.3,
         },  # fmt: skip
         "Central Semiconductor's 2N4033 SPICE model (11/12/08 rev A; numbers cited, the card "
         "not redistributed); a stand-in for the 2N4036 of the 2520's drawing",
         "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N4033.LIB (2N4033, 11/12/08 "
         "rev A: IS 57.5f, BF 449, VAF 161, IKF 0.313, ISE 33.6p, NE 2.00, BR 4.00, VAR 20.0, "
         "IKR 0.870, RE 0.112, RB 0.449, RC 44.9m, CJE 134p, CJC 42.4p, VJC 0.300, MJC 0.300)",
+    )
+
+
+def build_2n5784() -> dict[str, Any]:
+    """The 2N5784 (NPN, TO-39 epitaxial-base, 65 V 3.5 A: the Rhodes 100 W power amp's Q1,
+    Q2, Q3, Q5, docs/RHODES_PLAN.md "The Suitcase"). No card is published; the numbers are
+    fitted to RCA's sheet (data/datasheets/transistors/rca_1981_2N5781-2N5786.pdf, p. 160-162,
+    Central's R1 sheet agrees): Fig. 9's typical dc beta at 25 C and VCE 2 V (about 61 at
+    10 mA, 85 at 0.1 A, 68 at 0.2 A, 21 at 1 A, 7 at 3 A: BF 90, IKF 0.33 A), the limits hFE
+    20-100 at 1 A and 4 min at 3.2 A. IS puts VBE near 0.85 V at 1 A (limit 1.5 V). VAF,
+    the junction capacitances and the series resistances are provisional (model knowledge
+    of the TO-39 class; Central's 2N3053 for the capacitances' size). fT 1-4 MHz (the sheet)
+    is not in the model: it has no transit time."""
+    return _bjt_from_numbers(
+        "2N5784",
+        "npn",
+        {
+            "IS": 2.1e-14,
+            "BF": 90.0,
+            "VAF": 100.0,
+            "IKF": 0.33,
+            "ISE": 1.5e-11,
+            "NE": 1.8,
+            "BR": 4.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 1.0,
+            "RE": 0.1,
+            "RB": 2.0,
+            "RC": 0.15,
+            "CJE": 200e-12,
+            "CJC": 100e-12,
+            "VJC": 0.75,
+            "MJC": 0.33,
+        },  # fmt: skip
+        "RCA 2N5784 (RCA Power Devices 1981 p. 160-162; Central 2N5784 R1 sheet): dc beta "
+        "curve and limits fitted, junction and capacitance numbers provisional",
+        "web: https://ftp.mirrorservice.org/sites/www.bitsavers.org/components/rca/_dataBooks/"
+        "1981_RCA_Power_Devices.pdf (p. 160-162: hFE 20-100 at 1 A, 4 at 3.2 A, VBE 1.5 V max "
+        "at 1 A; Fig. 9 typical dc beta); provisional: model knowledge (VAF, capacitances, RB)",
+    )
+
+
+def build_2n5781() -> dict[str, Any]:
+    """The 2N5781 (PNP complement of the 2N5784: the Rhodes 100 W power amp's Q4). Same limits
+    as the 2N5784 on the same RCA sheet (hFE 20-100 at 1 A, 4 min at 3.2 A; Fig. 8's typical
+    dc beta peaks near 100 and falls to ~10 by 3 A: BF 90, IKF 0.35 A); the junction numbers
+    mirror the NPN's, provisional. fT 8-60 MHz isn't in the model (no transit time)."""
+    return _bjt_from_numbers(
+        "2N5781",
+        "pnp",
+        {
+            "IS": 2.1e-14,
+            "BF": 90.0,
+            "VAF": 80.0,
+            "IKF": 0.35,
+            "ISE": 1.5e-11,
+            "NE": 1.8,
+            "BR": 4.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 1.0,
+            "RE": 0.1,
+            "RB": 2.0,
+            "RC": 0.15,
+            "CJE": 200e-12,
+            "CJC": 100e-12,
+            "VJC": 0.75,
+            "MJC": 0.33,
+        },  # fmt: skip
+        "RCA 2N5781 (RCA Power Devices 1981 p. 160-162; Central 2N5781 R1 sheet): limits and "
+        "Fig. 8 read, junction numbers mirror the 2N5784's and are provisional",
+        "web: https://ftp.mirrorservice.org/sites/www.bitsavers.org/components/rca/_dataBooks/"
+        "1981_RCA_Power_Devices.pdf (p. 160-162: hFE 20-100 at 1 A, 4 at 3.2 A, VBE -1.5 V max "
+        "at 1 A; Fig. 8); provisional: model knowledge (VAF, capacitances, RB)",
+    )
+
+
+def build_2n6254() -> dict[str, Any]:
+    """The 2N6254 (NPN, TO-3 hometaxial, 80 V 15 A 150 W: the Rhodes 100 W power amp's Q8 and
+    Q9). No card is published. RCA's sheet (rca_1981_2N6254_pages.pdf, p. 80-84; Comset's
+    agrees) limits hFE 20-70 at 5 A (VCE 2 V), 5 min at 15 A (VCE 4 V), VBE 1.5 V max at 5 A,
+    VCE(sat) 0.5 V at 5 A / 0.5 A; with IKF 4 A and BF 75 the model gives hFE 33 at 5 A and 16
+    at 15 A (inside the limits; typical, not worst case). IS 1e-12 puts VBE near 0.65 V at
+    100 mA, as power transistors of this die size read (provisional, no curve read); RB, RE,
+    RC, VAF and the capacitances are provisional. fT 0.8 MHz min (Comset) isn't in the model."""
+    return _bjt_from_numbers(
+        "2N6254",
+        "npn",
+        {
+            "IS": 1.0e-12,
+            "BF": 75.0,
+            "VAF": 100.0,
+            "IKF": 4.0,
+            "ISE": 2.0e-11,
+            "NE": 1.8,
+            "BR": 2.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 8.0,
+            "RE": 0.01,
+            "RB": 0.3,
+            "RC": 0.02,
+            "CJE": 1.0e-9,
+            "CJC": 1.2e-9,
+            "VJC": 0.75,
+            "MJC": 0.33,
+        },  # fmt: skip
+        "RCA 2N6254 (RCA Power Devices 1981 p. 80-84; Comset 2N6253 / 2N6254 / 2N6371 sheet): "
+        "hFE limits and VCE(sat) bracketed, the rest provisional",
+        "web: https://ftp.mirrorservice.org/sites/www.bitsavers.org/components/rca/_dataBooks/"
+        "1981_RCA_Power_Devices.pdf (p. 81: hFE 20-70 at 5 A, 5 min at 15 A, VBE 1.5 V max at "
+        "5 A); provisional: model knowledge (IS, RB, RE, RC, VAF, capacitances)",
+    )
+
+
+def build_rca29b() -> dict[str, Any]:
+    """The RCA29B (NPN, VERSAWATT TO-220, 80 V 3 A: the Rhodes 100 W power amp's driver Q6).
+    The RCA sheet wasn't found (the 1981 databook has no RCA29 pages; reseller listings:
+    80 V, 3 A, hFE 15-150 at 1 A and VCE 4 V, fT 3 MHz min): BF 100 with IKF 0.7 A gives
+    hFE 41 at 1 A (inside the limits); every junction number is provisional (model
+    knowledge of TIP29-class parts, the RCA29's modern equivalent)."""
+    return _bjt_from_numbers(
+        "RCA29B",
+        "npn",
+        {
+            "IS": 6.0e-13,
+            "BF": 100.0,
+            "VAF": 100.0,
+            "IKF": 0.7,
+            "ISE": 2.0e-12,
+            "NE": 1.8,
+            "BR": 4.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 2.0,
+            "RE": 0.2,
+            "RB": 1.0,
+            "RC": 0.1,
+            "CJE": 150e-12,
+            "CJC": 120e-12,
+            "VJC": 0.75,
+            "MJC": 0.33,
+        },  # fmt: skip
+        "RCA29B: only the reseller limits were found (littlediode.com RCA29B: 80 V, 3 A, hFE "
+        "15-150 at 1 A / 4 V, fT 3 MHz min); the rest is provisional model knowledge",
+        "web: https://www.littlediode.com/components/RCA29B.html (80 V, 3 A, hFE 15-150 at "
+        "1 A / VCE 4 V); provisional: model knowledge (IS, BF, IKF, RB, capacitances)",
+    )
+
+
+def build_rca30b() -> dict[str, Any]:
+    """The RCA30B (PNP complement of the RCA29B, the 100 W power amp's driver Q7); the
+    RCA30 series is RCA's stated complement of RCA29 (datasheetspdf.com index of its sheet).
+    Numbers mirror the RCA29B's, provisional."""
+    return _bjt_from_numbers(
+        "RCA30B",
+        "pnp",
+        {
+            "IS": 6.0e-13,
+            "BF": 100.0,
+            "VAF": 80.0,
+            "IKF": 0.7,
+            "ISE": 2.0e-12,
+            "NE": 1.8,
+            "BR": 4.0,
+            "NR": 1.0,
+            "VAR": 20.0,
+            "IKR": 2.0,
+            "RE": 0.2,
+            "RB": 1.0,
+            "RC": 0.1,
+            "CJE": 150e-12,
+            "CJC": 120e-12,
+            "VJC": 0.75,
+            "MJC": 0.33,
+        },  # fmt: skip
+        "RCA30B: the RCA29B's complement (the sheet wasn't found); numbers mirror it and are "
+        "provisional",
+        "web: https://datasheetspdf.com/pdf/1293560/RCA/RCA30/1 (RCA30 series: p-n-p, "
+        "complements of RCA29); provisional: model knowledge (all junction numbers)",
     )
 
 
@@ -2278,6 +2487,11 @@ BUILDERS = {
     "2N3053": build_2n3053,
     "2N5087": build_2n5087,
     "2N4033": build_2n4033,
+    "2N5784": build_2n5784,
+    "2N5781": build_2n5781,
+    "2N6254": build_2n6254,
+    "RCA29B": build_rca29b,
+    "RCA30B": build_rca30b,
     "EL34T": build_el34t,
     "6084": build_6084,
     "5651": build_5651,
