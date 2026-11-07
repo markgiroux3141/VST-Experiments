@@ -6,7 +6,7 @@
 #        attack, Q1 OFF = decay and sustain (latched by R14)
 #   attack   Q5 (PNP) takes its base from the R6 / R5 junction: with Q1 on, a current source through
 #        R7 100 and the ATTACK rheostat (R12, 1M audio, pin 14) into C5 10 uF (the envelope, pin 10)
-#   decay    Q6 follows Q1's collector, Q7 (R9) passes the DECAY rheostat's (R15, 1M audio, pin 18)
+#   decay    Q6 follows Q1's collector, Q7 (R9) passes the DECAY rheostat's (R15, 1M audio, pin 13)
 #        current from C5 down to E7, which Q8 (PNP, base on the SUSTAIN divider R13 / R1 / R17,
 #        pin 12) holds at the sustain level + a diode drop; R10 27K from +9.3 V biases E7
 #   release  CR2 takes E7 down through the V-TRIG line (Q12 on) at key-up; CR7 from C5 to pin 2 (the
@@ -31,11 +31,11 @@ probes: [env, outn, col1, c4, tb, vtrig, e7, nb, b1, b4, ta, envl, outl, col25, 
 
 controls:
   attack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R12 Rotary Pot, 1 Meg Audio (ATTACK; its wiring per Fig 9-17, user-read: R12 into pin 14); 0 = the knob at 0, 1 = at 10"}
-  decay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R15 Rotary Pot, 1 Meg Audio (DECAY; into pin 18)"}
-  sustain: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R18 5K linear (SUSTAIN, wiper to pin 12; the pot between +10 V and ground is provisional, the panel wiring untraced)"}
-  lattack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness ATTACK; which of R13 / R16 is provisional, the panel wiring untraced; into pin 18 of the loudness section)"}
-  ldecay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness DECAY; into pin 17)"}
-  lsustain: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 5K linear pot (the loudness SUSTAIN, wiper to pin 16)"}
+  decay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R15 Rotary Pot, 1 Meg Audio (the filter DECAY; Fig 9-17: between 13B and the wipers' 10B)"}
+  sustain: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R18 5K linear (the filter SUSTAIN; Fig 9-17: wiper to 12B, one end to ground, the other end's connection not legible on the scan: taken as +10 V like its twin R19, provisional; read literally the filter SUSTAIN would have no positive source)"}
+  lattack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness ATTACK: Fig 9-17's R13, between 18B and the wipers' 9B)"}
+  ldecay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness DECAY: Fig 9-17's R16, between 17B and 9B)"}
+  lsustain: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 5K linear pot (the loudness SUSTAIN: Fig 9-17's R19, +10 V to ground, its wiper to 16B)"}
   decay_on: {value: 1, choices: [0, 1], unit: switch, source: "the panel's DECAY switch: 1 = release follows DECAY (pin 2 open), 0 = pin 2 tied to V-TRIG (instant release); provisional reading of Fig 9-7's pin 2 / pin 22"}
 
 values:

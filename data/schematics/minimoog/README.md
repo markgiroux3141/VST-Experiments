@@ -181,3 +181,14 @@ Read there:
 - **Trigger section:** CR10 points toward R60 (the user: "points left"; scan: cathode on the R60 side), so a
   positive voltage at pin 20 (keyboard trigger) charges C7 through R60 / R55 into Q20's base: Q20 (NPN) conducts when the
   key trigger goes HIGH. R19 10K / R49 220 from pin 19 (EXT. S-TRIG) feed Q12's base and Q20's collector line.
+
+### The panel's contour wiring (Fig 9-17, the 002 scan's `917-interconnect-wiring.gif`; read 2026-11-07)
+
+- Filter contour: ATTACK R12 (1 Meg audio) between 14B and 10B (the wipers' junction), DECAY R15 (1 Meg audio)
+  between 13B and 10B (Fig 9-7's "to decay" pin is 13, not 18: 18 is the loudness attack). SUSTAIN R18 (5K): wiper
+  to 12B, one end to ground, the other end's connection not legible; taken as +10 V like R19 (read literally, the
+  filter's sustain node would have no positive source).
+- Loudness contour: ATTACK R13 (1 Meg audio) 18B - 9B, DECAY R16 (1 Meg audio) 17B - 9B, SUSTAIN R19 (5K) from
+  +10 V to ground, its wiper to 16B.
+- AMOUNT OF CONTROL R17 (5K, printed "56"): one end to ground, the other on the filter contour (board 2's 11B), its
+  wiper to board 4's pin 16 (R74). GLIDE R2 (5 Meg audio). EXT. S-TRIG jack SO-1 to 19B.
