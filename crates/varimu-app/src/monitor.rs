@@ -187,9 +187,43 @@ impl Monitor {
         if self.compensate { self.comp_db } else { 0.0 }
     }
 
+    /// A stereo device's (its circuit probes `out_r`: the Rhodes Suitcase's vibrato) left
+    /// and right through the monitor: one gain for both, its compensation measured on their
+    /// mid, the dry in both. What to play, left and right.
+    pub fn process_stereo(
+        &mut self,
+        dry: &[f64],
+        left: &[f32],
+        right: &[f32],
+    ) -> (Vec<f32>, Vec<f32>) {
+        let mid: Vec<f32> = left
+            .iter()
+            .zip(right)
+            .map(|(&l, &r)| 0.5 * (l + r))
+            .collect();
+        let (out_mid, k) = self.run(dry, &mid);
+        // Each side is the mid's output plus its difference from the mid at the same
+        // sample's device gain (the blend is linear in the device's output).
+        let side = |s: &[f32]| -> Vec<f32> {
+            out_mid
+                .iter()
+                .zip(&k)
+                .zip(s.iter().zip(&mid))
+                .map(|((&o, &k), (&x, &m))| o + (x - m) * k)
+                .collect()
+        };
+        (side(left), side(right))
+    }
+
     /// The device's output `wet` for its input `dry` (the same block, as the engine
     /// took and gave it): what to play.
     pub fn process(&mut self, dry: &[f64], wet: &[f32]) -> Vec<f32> {
+        self.run(dry, wet).0
+    }
+
+    /// `process`, and per sample the device's own gain in what is played (wet x gain x
+    /// the share not bypassed).
+    fn run(&mut self, dry: &[f64], wet: &[f32]) -> (Vec<f32>, Vec<f32>) {
         let target_mix = if self.bypass { 1.0 } else { 0.0 };
         let lag = self.delay.len();
         dry.iter()
@@ -214,9 +248,12 @@ impl Monitor {
                     self.mix = (self.mix - self.step_mix).max(0.0);
                 }
                 let blend = self.wet * w * g + (1.0 - self.wet) * d * self.dry_gain;
-                (blend * (1.0 - self.mix) + d * self.mix) as f32
+                (
+                    (blend * (1.0 - self.mix) + d * self.mix) as f32,
+                    (self.wet * g * (1.0 - self.mix)) as f32,
+                )
             })
-            .collect()
+            .unzip()
     }
 }
 
@@ -296,6 +333,34 @@ mod tests {
         let y = m.process(&dry, &wet);
         for (i, &v) in y.iter().enumerate().skip(1) {
             assert_eq!(v, dry[i - 1] as f32);
+        }
+    }
+
+    #[test]
+    fn a_stereo_device_shares_one_gain() {
+        // Equal sides play as the mono path does; unequal ones differ by the device's gain.
+        let dry = sine(480, 0.1);
+        let l: Vec<f32> = dry.iter().map(|&v| (0.8 * v) as f32).collect();
+        let r: Vec<f32> = dry.iter().map(|&v| (0.3 * v) as f32).collect();
+        let (mut a, mut b) = (Monitor::new(48_000, 1), Monitor::new(48_000, 1));
+        for m in [&mut a, &mut b] {
+            m.output_db = -6.0;
+        }
+        let mono = a.process(&dry, &l);
+        let (sl, sr) = b.process_stereo(&dry, &l, &l);
+        assert_eq!(mono, sl);
+        assert_eq!(mono, sr);
+        let mut m = Monitor::new(48_000, 1);
+        m.compensate = false;
+        m.output_db = -6.0;
+        for _ in 0..50 {
+            m.process_stereo(&dry, &l, &r);
+        }
+        let (yl, yr) = m.process_stereo(&dry, &l, &r);
+        let g = 10f64.powf(-6.0 / 20.0);
+        for i in 0..l.len() {
+            assert!((yl[i] as f64 - l[i] as f64 * g).abs() < 1e-6);
+            assert!((yr[i] as f64 - r[i] as f64 * g).abs() < 1e-6);
         }
     }
 

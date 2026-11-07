@@ -12,6 +12,8 @@ pin (the cathode), and the currents flow into pins 0..P-1:
 - diodes (a, k): port Vak, current I;
 - lamp (a, t, b): ports (Vab, T - T_amb), currents (I, dT/dt);
 - BJT (c, b, e): ports (Vce, Vbe), currents (Ic, Ib);
+- optocoupler (la, lk, s, ra, rb): ports (V(la), V(lk), V(s), V(ra)) re rb, currents
+  (I_led, -I_led, -dg/dt / s_unit, I_cell);
 - thyratron, tetrode (a, g2, g1, w, k): ports (Va, Vg2, Vg1, w), currents (Ia, Ig2, Ig1, -dw/dt);
   triode (a, g, w, k): ports (Va, Vg, w), currents (Ia, Ig, -dw/dt);
 - magnetic core (b, ref): port B / TESLA_PER_V, current path * H. A core has
@@ -36,6 +38,7 @@ from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.library import load_device
+from varimu.devices.opto import Optocoupler
 from varimu.devices.pentode import Pentode
 from varimu.devices.thyratron import W_MAX, W_MIN, Thyratron
 from varimu.devices.triode import Triode
@@ -63,6 +66,12 @@ _VACUUM_V = (-50, -5, -1, -0.3, -0.1, 0, 0.05, 0.1, 0.5, 1, 5, 20, 50, 100, 300)
 # fits' range (clamped), never on its edges.
 _LAMP_V = (-40, -5, -0.3, 0, 0.02, 0.5, 2, 10, 28, 60)
 _LAMP_DT = (-150, -40, 0, 1, 50, 300, 700, 1500, 2000, 2600, 3300)
+# An optocoupler's LED off, at its knee, bright and past its tangent's start; its cell's
+# state dark, dim, bright and (Newton's excursions) negative; the cell's voltage both ways.
+_OPTO_VLED = (-2.0, 0.0, 1.3, 1.45, 1.55, 1.7, 2.6)
+_OPTO_LK = (-3.0, 0.0, 5.0)
+_OPTO_U = (-0.5, 0.0, 1e-4, 0.05, 1.0, 4.0)
+_OPTO_VR = (-7.0, 0.0, 0.3, 12.0)
 # A thyratron from reverse anode volts through the arc's drop to its strike, the grid from
 # deep cutoff past its floating potential, the state from below its range (held) through
 # the pre-breakdown densities and the arc to above its range (never on the range's edges).
@@ -107,6 +116,7 @@ def _models() -> list:
         dataclasses.replace(diode, name=diode.name + "_rs0", rs_ohm=0.0),
         load_device("GZ34"),
         load_device("LAMP327@1"),
+        load_device("VTL5C1@1"),
         load_device("2D21@1"),
         load_device("884@1"),
         load_device("EF804S@1"),  # the e1 screen law (pentode.py)
@@ -162,6 +172,10 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
         ports = [(float(v), float(u)) for v, u in itertools.product(_LAMP_V, _LAMP_DT)]
         v, u = np.array(ports, float).T
         currents = np.stack(m.currents(v, u), axis=1)
+    elif isinstance(m, Optocoupler):
+        grid = itertools.product(_OPTO_VLED, _OPTO_LK, _OPTO_U, _OPTO_VR)
+        ports = [(vl + lk, lk, u, vr) for vl, lk, u, vr in grid]
+        currents = np.array([m.currents(p) for p in ports])
     elif isinstance(m, Thyratron):
         if m.mu_g2 is None:
             grid = itertools.product(_THY_VA, _THY_VG, _THY_W)

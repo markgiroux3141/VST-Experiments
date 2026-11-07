@@ -15,14 +15,14 @@ tine:
   density_kg_m3: {value: 7850.0, source: "provisional: model knowledge (carbon steel)"}
   tip_diameter_m: {value: 1.5e-3, source: "web: G. Shear, The Electromagnetically Sustained Rhodes Piano, MS thesis, UC Santa Barbara 2011, p.4 ('cylindrical with a diameter of 1.5 mm, except for slight widening at the base'), https://www.mat.ucsb.edu/Masters/GregShearMasters2011_12_5.pdf"}
   root_diameter_m: {value: 3.0e-3, source: "provisional: fit (the tapered root, manual ch.7 Fig. 7-5 and Shear p.4, undimensioned): with the taper below, every key of the 73 (8-80) is 4-19% above its note bare (the least: key 57), so the spring (which only lowers) tunes it with room for the chart's reading error (~+-0.3 mm, ~1.4% at 43 mm); a uniform 1.5 mm tine is 26% flat at key 88"}
-  taper_length_m: {value: 7.0e-3, source: "provisional: fit, with root_diameter_m"}
+  taper_length_m: {value: 11.0e-3, source: "fit (2026-11-06, docs/RHODES_PLAN.md 'Single notes: jRhodes3d'): with spring.position_fraction, puts the tine's second bending mode at jRhodes3d's measured bell partial, 7.17-7.41 x f0 over D3-E5 (its softest layers' strongest non-harmonic peak); 7 mm gave 6.2-6.7 x f0; 11 mm with the spring at 0.85: 7.0-7.7, rms 0.24 over seven keys"}
 
 spring:
   # The crimped coil spring is a counterweight (manual ch.1, ch.5); its mass per key isn't
   # published (the spring sets are colour coded by key range: web: https://rhodesmusic.com/product/tuning-spring-set).
   # fit: its mass is solved so the key is in tune with its centre at `position_fraction`
   # of the tine; moving it then retunes (the manual: 1.5 semitones either way).
-  position_fraction: {value: 0.7, source: "provisional: model knowledge (springs sit in the tine's outer half, manual Fig. 5-1)"}
+  position_fraction: {value: 0.85, source: "fit (2026-11-06), with tine.taper_length_m: the bell partial's ratio (jRhodes3d); springs sit in the tine's outer half (manual Fig. 5-1); was 0.7 (model knowledge)"}
   length_m: {value: 4.0e-3, source: "provisional: model knowledge (a few turns of wire; capped at 15% of the tine)"}
   max_length_fraction: {value: 0.15, source: "provisional: model knowledge"}
 
@@ -63,10 +63,11 @@ damper:
 
 velocity:
   # MIDI velocity to the hammer's speed (varimu/rhodes/harp.py): v_ff 10^(-range_db / 20
-  # (127 - vel) / 126), v_ff set so `calibration_key` at 127 swings its tip `ff_swing_m`.
-  calibration_key: {value: 8, source: "the 73-key piano's lowest (E1)"}
-  ff_swing_m: {value: 9.5e-3, source: "provisional: model knowledge (the bass tines' full swing nearly reaches their bars: Shear 2011 p.32, the original bars reshaped for clearance; ~3/8 in)"}
-  range_db: {value: 30.0, source: "provisional: model knowledge (a keyboard's velocity 1 to 127 spans ~30 dB of hammer speed)"}
+  # (127 - vel) / 126). Until 2026-11-06 v_ff was set so E1 at 127 swung its tip 9.5 mm
+  # (0.73 m/s): the middle keys then swung 0.05 mm at velocity 64, nearly linear in the
+  # pickup's field, far duller than a real Mk I (RHODES_PLAN.md "Single notes: jRhodes3d").
+  ff_speed_m_s: {value: 5.0, source: "fit (2026-11-06): jRhodes3d's five velocity layers (a 1977 Mk I Stage 73, web: https://github.com/sfzinstruments/jlearman.jRhodes3d), each key's harmonic patterns fitted with a hammer speed per layer, the voicing and one shared EQ curve; the layers' median speeds over keys 20-76 against their velocity ranges' centres (24 / 60 / 84 / 104 / 120), log-linear: 5.0 m/s at 127 (the loudest layers 3-6 m/s; grand piano hammers reach several m/s at ff). The swings that follow (10-14 mm in the bass, 2-5 mm in the middle at ff) match Pfeifle's high-speed camera (DAFx-17 Fig. 4: a tine's tip over ~+-1.5 cm, web: https://www.dafx17.eca.ed.ac.uk/papers/DAFx17_paper_79.pdf)"}
+  range_db: {value: 21.0, source: "fit (2026-11-06), with ff_speed_m_s: the slope of that line, 0.168 dB per velocity step; was 30 (model knowledge)"}
 
 hammer:
   mass_kg: {value: 0.010, source: "provisional: model knowledge (a Rhodes hammer's effective mass at the tip; checked against the measured contact time, anchors)"}
@@ -89,7 +90,15 @@ hammer:
 
 pickup:
   gap_m: {value: 1.588e-3, source: "manual ch.4 (Pickup, volume): 1/16 to 1/8 in between tine and pickup (the smaller is louder, more dynamic)"}
-  voicing_m: {value: 0.4e-3, source: "provisional: model knowledge (manual ch.4 (Voicing, timbre): the tine's tip 'slightly above dead center' of the pickup; a control)"}
+  voicing_m: {value: 2.0e-3, source: "fit (2026-11-06), with velocity.ff_speed_m_s: jRhodes3d's layers (a voicing per key fits 0.9-2.4 mm, median 2.0; one global 2.0 mm costs ~1 dB rms of the fit, 5.5 against 4.5 dB); manual ch.4 (Voicing, timbre): the tip 'slightly above dead center', a control; was 0.4 mm (model knowledge)"}
+  # The field: "3d" is varimu/rhodes/pickup3d.py (a volume integral for the tine, the
+  # magnet's charges, reciprocity for the coil), "2d" the planar section (pickup.py). The 3D
+  # field is ~20% narrower; its shape doesn't depend on the tine's length (20-80 mm) or
+  # permeability (30-1000), its level does. Pfeifle & Muenster's pickup has a steel frustum
+  # on the magnet (DAGA 2017, web: https://pub.dega-akustik.de/DAGA_2017/data/articles/000210.pdf):
+  # in the 2D section an iron tip narrowed the field only ~10% (2026-11-06), not modelled yet.
+  field: {value: 3d, source: "numerical: the 3D solve (RH5's pickup), 2026-11-06"}
+  field_tine_length_m: {value: 0.04, source: "numerical: the tine's length behind its end in the 3D solve (the field's shape is the same at 20 and 80 mm)"}
   coil_ohm: {value: 180.0, source: "web: https://www.fenderrhodes.com/service/pickups.html (healthy pickups 170-190 ohm, by vintage)"}
   turns: {value: 2800, source: "provisional: model knowledge (180 ohm of AWG 38, 2.1 ohm/m, at ~30 mm a turn)"}
   magnet_width_m: {value: 4.76e-3, source: "provisional: model knowledge (a 3/16 in round magnet)"}
@@ -104,6 +113,12 @@ pickup:
 
 # Published measurements the fits use or the study compares with.
 anchors:
+  # The fundamental's Q the tine's loss is fitted to: a cubic in log f through these
+  # (least squares on log Q), held at the ends outside them.
+  q_fit: {value: q_jrhodes, source: "2026-11-06: jRhodes3d and the user's Suitcase recording (its tail 2-6 dB/s) both decay ~1.5-2.5x slower than Shear's piano in the middle; was q_shear"}
+  q_jrhodes:  # [Hz, Q]: the fundamental's band-pass envelope, its slope from 0.3 s to 45 dB down, median over the layers
+    value: [[43.7, 735], [61.7, 1072], [82.4, 1557], [110.0, 1565], [146.8, 1532], [196.0, 2280], [246.9, 2028], [293.7, 2511], [349.2, 2692], [493.9, 2993], [659.3, 1836], [880.0, 3871], [1174.7, 4651], [1568.0, 2879], [2093.0, 1735]]
+    source: "measured (2026-11-06) on jRhodes3d (a 1977 Mk I Stage 73, its samples CC-BY-NC-4.0, web: https://github.com/sfzinstruments/jlearman.jRhodes3d): the layers agree within ~20% from E2 up"
   q_shear:  # Shear 2011 Tables 2.1 and 5.1 (a 1974 Mark I, 88 keys): [Hz, Q]
     value: [[77.8, 949], [155.6, 731], [246.9, 1101], [261.6, 1238], [277.1, 1040], [293.7, 1156], [311.1, 1520], [622.3, 2175], [1244.5, 1761]]
     source: "web: Shear 2011, Table 2.1 p.5 and Table 5.1 p.28 (the original systems), https://www.mat.ucsb.edu/Masters/GregShearMasters2011_12_5.pdf"

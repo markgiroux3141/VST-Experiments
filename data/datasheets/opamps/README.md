@@ -51,3 +51,23 @@ Characteristics", V+- = +-15 V, 25 C, typical (minimum):
 | en at 1 kHz, RS = 100 ohm | 4.5 nV/rtHz |
 | in at 1 kHz | 0.7 pA/rtHz |
 | IB | 100 nA (PNP input: out of the IC) |
+
+## MC1458 (the Rhodes Suitcase's preamp, docs/RHODES_PLAN.md "The Suitcase")
+
+web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (SLOS069C, revised August 2010; kept here as
+`ti_mc1458.pdf`, 1,226,247 bytes, sha256
+`84827ff7b0210b43b4c7337ec92badf96565a63d08be9603a4bed8e0e0da1fb1`, read with PyMuPDF), "electrical characteristics", VCC+- = +-15 V, 25 C, typical
+(minimum) for the MC1458; each half "electrically similar to the uA741":
+
+| Figure | Value |
+|---|---|
+| AVD, large-signal differential voltage amplification (RL >= 2 kohm, VO = +-10 V) | 200 V/mV (20) |
+| B1, unity-gain bandwidth | 1 MHz |
+| ri, input resistance | 2 Mohm (0.3) |
+| ro, output resistance (VO = 0; above a few hundred Hz) | 75 ohm |
+| VOM, maximum peak output swing (RL = 10 kohm) | +-14 V (+-12) |
+| VOM (RL = 2 kohm) | +-13 V (+-10) |
+| SR, slew rate at unity gain (RL = 2 kohm, CL = 100 pF) | 0.5 V/us |
+| Vn, equivalent input noise (closed loop, AVD 100, RS 0, 1 kHz) | 45 nV/rtHz |
+| IIB, input bias current | 80 nA (500 max.) |
+| IOS, short-circuit output current | +-25 mA (+-40 max.) |

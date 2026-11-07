@@ -19,6 +19,7 @@ pub mod core;
 pub mod diode;
 pub mod jfet;
 pub mod lamp;
+pub mod opto;
 pub mod pentode;
 pub mod thyratron;
 pub mod triode;
@@ -29,6 +30,7 @@ pub use bjt::Bjt;
 pub use diode::{JunctionDiode, VacuumDiode};
 pub use jfet::Jfet;
 pub use lamp::Lamp;
+pub use opto::Optocoupler;
 pub use pentode::Pentode;
 pub use thyratron::Thyratron;
 pub use triode::Triode;
@@ -175,6 +177,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::VacuumDiode(m) => Box::new(VacuumDiode::new(m)),
         DeviceModel::MagneticCore(m) => Box::new(MagneticCore::new(m)),
         DeviceModel::Lamp(m) => Box::new(Lamp::new(m)),
+        DeviceModel::Optocoupler(m) => Box::new(Optocoupler::new(m)),
         DeviceModel::Thyratron(m) => Box::new(Thyratron::new(m)),
         DeviceModel::Bjt(m) => Box::new(Bjt::new(m)),
         DeviceModel::Jfet(m) => Box::new(Jfet::new(m)),

@@ -13,7 +13,8 @@ use std::sync::Mutex;
 
 use circuitsim::ir::{
     Bjt, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode, KorenPentode, KorenTriode,
-    Lamp, Pentode, PlateModel, Polarity, ScreenLaw, Thyratron, Triode, VacuumDiode, VariMuTriode,
+    Lamp, Optocoupler, Pentode, PlateModel, Polarity, ScreenLaw, Thyratron, Triode, VacuumDiode,
+    VariMuTriode,
 };
 
 use crate::capsule::{self, Capsule, DualCapsule};
@@ -528,6 +529,22 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 rad_fraction: num(w, "rad_fraction", what)?,
                 emissivity,
                 t_amb_k: num(d, "t_amb_k", what)?,
+            })
+        }
+        "optocoupler" => {
+            // opto.py's opto_from_data
+            let led = sub(d, "led", what)?;
+            let cell = sub(d, "cell", what)?;
+            DeviceModel::Optocoupler(Optocoupler {
+                name,
+                led_is_a: num(led, "is_a", what)?,
+                led_n: num(led, "n", what)?,
+                i_eta_a: num(led, "i_eta_a", what)?,
+                gen_s_per_s_a: num(cell, "gen_s_per_s_a", what)?,
+                tau0_s: num(cell, "tau0_s", what)?,
+                kappa_s_s: num(cell, "kappa_s_s", what)?,
+                g_dark_s: num(cell, "g_dark_s", what)?,
+                s_unit_s: 1e-3,
             })
         }
         "bjt" => {

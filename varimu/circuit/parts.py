@@ -66,6 +66,7 @@ from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, mate
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
+from varimu.devices.opto import Optocoupler
 from varimu.devices.pentode import Pentode
 from varimu.devices.tape import TapeFormulation
 from varimu.devices.thyratron import Thyratron
@@ -873,6 +874,10 @@ def device_instance(
     if isinstance(base, Lamp):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
             raise ValueError(f"{name}: a lamp takes no parallel, emission or area")
+        return dataclasses.replace(base, name=name)
+    if isinstance(base, Optocoupler):
+        if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
+            raise ValueError(f"{name}: an optocoupler takes no parallel, emission or area")
         return dataclasses.replace(base, name=name)
     if isinstance(base, Thyratron):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):

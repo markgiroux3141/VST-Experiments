@@ -154,7 +154,11 @@ pub fn render(
         if !exact && let Some(want) = b.range {
             live.apply_now(with_range(&panel_values, want), last_input, None)?;
         }
-        out.extend_from_slice(&y);
+        match live.right() {
+            // A stereo device's take is its mid (as the player keeps it).
+            Some(r) => out.extend(y.iter().zip(r).map(|(a, b)| 0.5 * (a + b))),
+            None => out.extend_from_slice(&y),
+        }
         pos += n;
         progress(pos as f64 / total.max(1) as f64);
     }

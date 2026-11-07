@@ -469,14 +469,14 @@ fn the_synth_powers_on_from_cold() {
 }
 
 /// The keyboard's touch plays on the harp's own velocity law (docs/RHODES_PLAN.md, "Touch"):
-/// the span the Play view reads from the Rhodes' build is its component's 30 dB, and none
-/// from a circuit without a harp.
+/// the span the Play view reads from the Rhodes' build is its component's (MK1_HARP@2: 21 dB,
+/// fitted to jRhodes3d's layers), and none from a circuit without a harp.
 #[test]
 fn the_harp_s_velocity_span_is_read_from_its_build() {
     let rhodes = DEVICES.iter().find(|d| d.id == "rhodes_stage_5e3").unwrap();
     let c = Circuit::load(&config(), rhodes.circuit, varimu_circuit::Cores::Linear).unwrap();
     let v = values(&knobs(rhodes, c.spec()));
-    assert_eq!(c.key_velocity_span_db(&v).unwrap(), Some(30.0));
+    assert_eq!(c.key_velocity_span_db(&v).unwrap(), Some(21.0));
     let pultec = DEVICES.iter().find(|d| d.id == "pultec_eqp1a").unwrap();
     let eq = Circuit::load(&config(), pultec.circuit, varimu_circuit::Cores::Linear).unwrap();
     let v = values(&knobs(pultec, eq.spec()));

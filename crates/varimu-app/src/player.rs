@@ -27,7 +27,9 @@
 //! the output after the monitor, so the click never reaches the device or a take.
 //!
 //! The output is stereo (RECORDING_PLAN.md T2-T3): the device (mono, through the monitor
-//! and the armed track's strip), the session's tracks while the transport runs
+//! and the armed track's strip; a stereo device, its circuit probing `out_r` like the Rhodes
+//! Suitcase's vibrato, plays its left and right apart and a take keeps their mid), the
+//! session's tracks while the transport runs
 //! ([`Player::set_mix`], `crate::session::Mix`) and the click. While a take is armed
 //! ([`Player::arm_take`]) the worker's `session::Recorder` keeps the device's output from
 //! the start bar on, before the monitor.
@@ -1066,6 +1068,15 @@ fn tail_loop(
 /// The worker's last stage: each block on its way to the ring. The device's output `raw`
 /// recorded into a take (armed), the monitored `y` through the armed track's strip, the
 /// session's tracks and the transport's click mixed in; the transport's status.
+/// What a take keeps of a device's raw output: a stereo device's mid (tracks are mono), as a
+/// stereo chain end's.
+fn device_mid(y: &[f32], right: Option<&[f32]>) -> Vec<f32> {
+    match right {
+        Some(r) => y.iter().zip(r).map(|(a, b)| 0.5 * (a + b)).collect(),
+        None => y.to_vec(),
+    }
+}
+
 struct Emitter {
     rate: u32,
     clock: Clock,
@@ -1077,6 +1088,9 @@ struct Emitter {
     history: std::collections::VecDeque<(u64, i64, usize)>,
     /// The device at the chain's end.
     end: Option<Tail>,
+    /// A stereo device's right channel for the next [`Emitter::emit`] (monitored as its
+    /// left; its circuit probes `out_r`).
+    device_right: Option<Vec<f32>>,
 }
 
 impl Emitter {
@@ -1088,6 +1102,7 @@ impl Emitter {
             click: Vec::with_capacity(BLOCK),
             history: std::collections::VecDeque::new(),
             end: None,
+            device_right: None,
         }
     }
 
@@ -1138,10 +1153,16 @@ impl Emitter {
         let device_raw = raw.to_vec();
         self.update_end(shared);
         let chained: Vec<f32>;
-        let mut right: Option<Vec<f32>> = None;
+        // A stereo device plays its left and right apart; a chain's end gets their mid.
+        let device_right = self.device_right.take();
+        let right: Option<Vec<f32>>;
         let (raw, y) = match &mut self.end {
             Some(t) => {
                 let mix = f64::from_bits(shared.end_mix.load(Ordering::Relaxed));
+                let y = match &device_right {
+                    Some(r) => y.iter().zip(r).map(|(a, b)| 0.5 * (a + b)).collect(),
+                    None => y,
+                };
                 let (left, r) = t.process(&y, mix);
                 // A take keeps a stereo end's mid.
                 chained = match &r {
@@ -1151,7 +1172,10 @@ impl Emitter {
                 right = r;
                 (chained.as_slice(), left)
             }
-            None => (raw, y),
+            None => {
+                right = device_right;
+                (raw, y)
+            }
         };
         let rate = self.rate;
         let clock = &mut self.clock;
@@ -1602,13 +1626,19 @@ fn work(
         } else {
             0.0
         };
-        let out = monitor.process(live.last_input(), y);
+        let (out, right) = match live.right() {
+            Some(r) => {
+                let (l, r) = monitor.process_stereo(live.last_input(), y, r);
+                (l, Some(r))
+            }
+            None => (monitor.process(live.last_input(), y), None),
+        };
         shared.status.lock().expect("status").compensation_db = if own_oscillator {
             0.0
         } else {
             monitor.compensation_db()
         };
-        out
+        (out, right)
     };
     let mut em = Emitter::new(rate);
     let mut loads = Loads(Vec::new(), (rate as usize / BLOCK).max(1));
@@ -1662,7 +1692,10 @@ fn work(
                     .next_block(BLOCK)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                em.emit(shared, &mut ring, &y, monitored(&live, &y), None);
+                let (m, right) = monitored(&live, &y);
+                let raw = device_mid(&y, live.right());
+                em.device_right = right;
+                em.emit(shared, &mut ring, &raw, m, None);
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let pos = (live.position() + len - (capacity - ring.slots()) % len) % len;
@@ -1713,7 +1746,10 @@ fn work(
                         .process(block)
                         .map_err(|e| format!("the circuit stopped: {e}"))?;
                     let before = capacity - ring.slots();
-                    em.emit(shared, &mut ring, &y, monitored(&live, &y), None);
+                    let (m, right) = monitored(&live, &y);
+                    let raw = device_mid(&y, live.right());
+                    em.device_right = right;
+                    em.emit(shared, &mut ring, &raw, m, None);
                     heard(&live, before);
                     let queued = capacity - ring.slots();
                     shared.queued.store(queued, Ordering::Relaxed);
@@ -1766,7 +1802,10 @@ fn work(
                     .process_with(&block, &refs)
                     .map_err(|e| format!("the circuit stopped: {e}"))?;
                 let before = capacity - ring.slots();
-                em.emit(shared, &mut ring, &y, monitored(&live, &y), None);
+                let (m, right) = monitored(&live, &y);
+                let raw = device_mid(&y, live.right());
+                em.device_right = right;
+                em.emit(shared, &mut ring, &raw, m, None);
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
             }
@@ -1942,7 +1981,10 @@ fn work(
                 }
                 let before = capacity - ring.slots();
                 let stream_at = log.as_ref().map(|_| at);
-                em.emit(shared, &mut ring, &y, monitored(&live, &y), stream_at);
+                let (m, right) = monitored(&live, &y);
+                let raw = device_mid(&y, live.right());
+                em.device_right = right;
+                em.emit(shared, &mut ring, &raw, m, stream_at);
                 heard(&live, before);
                 report(&live, meter, loads.push(meter.load));
                 let block_s = BLOCK as f64 / rate as f64;

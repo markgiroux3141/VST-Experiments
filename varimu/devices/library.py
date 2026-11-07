@@ -48,6 +48,7 @@ from varimu.devices.fit import (
 from varimu.devices.jfet import Jfet, jfet_from_data
 from varimu.devices.lamp import Lamp, lamp_from_data
 from varimu.devices.moving_coil import MovingCoil, moving_coil_from_data
+from varimu.devices.opto import Optocoupler, fit_vtl5c1, fit_vtl5c2, opto_from_data
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
 from varimu.devices.plate import SIX_LN10 as SIX_LN10_PLATE
 from varimu.devices.plate import PlateComponent, plate_from_data
@@ -59,7 +60,9 @@ from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_s
 
 DEVICE_DIR = versions.COMPONENT_DIR
 REPORT_DIR = REPO_ROOT / "reports" / "devices"
-Device = Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron | Bjt | Jfet
+Device = (
+    Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron | Bjt | Jfet | Optocoupler
+)
 
 # Oxide-cathode grid conduction. There's no datasheet figure for any of these
 # tubes, so this is the same placeholder everywhere until it becomes a genome parameter.
@@ -133,6 +136,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return VacuumDiode(d["name"], d["perveance"], d.get("smooth_v", 0.1))
     if kind == "lamp":
         return lamp_from_data(d, name)
+    if kind == "optocoupler":
+        return opto_from_data(d, name)
     if kind == "bjt":
         return bjt_from_data(d, name)
     if kind == "jfet":
@@ -2303,6 +2308,8 @@ BUILDERS = {
     "ACC4AB3C1B": build_acc4ab3c1b,
     "SCOTCH111": build_scotch111,
     "LAMP327": build_lamp327,
+    "VTL5C1": fit_vtl5c1,
+    "VTL5C2": fit_vtl5c2,
     "BC550C": build_bc550c,
     "BC413C": build_bc413c,
     "BC560C": build_bc560c,

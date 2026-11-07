@@ -129,6 +129,35 @@ def test_lamp_agrees():
     np.testing.assert_allclose(got_t, it, rtol=RTOL, atol=1e-4, err_msg="dT/dt")
 
 
+def test_optocoupler_agrees():
+    """The optocoupler's four port currents (the LED's both ends, the cell's state, the cell):
+    the LED off, at its knee, bright and past its tangent's start; the state dark to bright
+    and negative (Newton's excursions); the cell both ways."""
+    d = load_device("VTL5C1@1")
+    pts = [
+        (vl + lk, lk, u, vr)
+        for vl in (-2.0, 0.0, 1.45, 1.6, 2.6)
+        for lk in (0.0, 4.0)
+        for u in (-0.3, 0.0, 0.02, 2.0)
+        for vr in (-6.0, 0.5)
+    ]
+    lines = [d.subckt()]
+    for k, (v0, v1, u, vr) in enumerate(pts):
+        lines += [
+            f"vla{k} la{k} 0 dc {v0}",
+            f"vlk{k} lk{k} 0 dc {v1}",
+            f"vs{k} s{k} 0 dc {u}",
+            f"vra{k} ra{k} 0 dc {vr}",
+            f"x{k} la{k} lk{k} s{k} ra{k} 0 {d.subckt_name}",
+        ]
+    pins = ("vla", "vlk", "vs", "vra")
+    r = _op(lines, [f"i({p}{k})" for k in range(len(pts)) for p in pins])
+    want = np.array([d.currents(p) for p in pts])
+    got = -np.array([[r[f"i({p}{k})"] for p in pins] for k in range(len(pts))])
+    for j, what in enumerate(("LED (la)", "LED (lk)", "state", "cell")):
+        np.testing.assert_allclose(got[:, j], want[:, j], rtol=RTOL, atol=ATOL, err_msg=what)
+
+
 def test_6386_capacitances_in_ac():
     """Grid-driven AC current with the plate at AC ground: jw(Cgk + Cgp), well into cutoff."""
     t = load_device("6386")

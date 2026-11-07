@@ -4,14 +4,16 @@ medium in the netlist played by the MIDI's notes and pedal (circuitsim's harp.rs
 component MK1_HARP), its output the sound pressure 1 m in front of the 5E3's speaker.
 
     uv run --extra fast python scripts/rhodes_render.py (--midi FILE | --demo)
+        [--circuit rhodes_stage_5e3 | rhodes_suitcase]
         [--seconds S] [--tail 3] [--quality production|draft|draft-1x]
         [--set stage_volume=1 stage_bass=1 volume_bright=0.5 ...] [--out NAME] [--reference]
 
 Writes reports/rhodes/renders/<name>.wav (the amp, 0 dBFS = the circuit's 50 Pa) and
 <name>_harp.wav (the harp's EMF straight, 0 dBFS = 0.5 V: circuitsim's medium alone, or with
 `--reference` the Python reference, varimu/rhodes/harp.py, ~4x slower than real time), and
-prints the times. `--demo` plays a phrase of its own (soft and hard chords, a bass line, the
-pedal; the MIDI written beside the WAVs).
+prints the times. `--circuit rhodes_suitcase` plays the Suitcase's preamp instead (its outputs
+`out` and `out_r` as a stereo WAV, 0 dBFS = the circuit's full scale). `--demo` plays a phrase
+of its own (soft and hard chords, a bass line, the pedal; the MIDI written beside the WAVs).
 """
 
 from __future__ import annotations
@@ -74,6 +76,7 @@ def main() -> None:
     src.add_argument("--demo", action="store_true")
     ap.add_argument("--seconds", type=float, help="cut the MIDI there")
     ap.add_argument("--tail", type=float, default=3.0, help="seconds after the last event")
+    ap.add_argument("--circuit", default=CIRCUIT)
     ap.add_argument("--quality", default="production", choices=["production", "draft", "draft-1x"])
     ap.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE")
     ap.add_argument("--out", help="the WAVs' name")
@@ -94,7 +97,7 @@ def main() -> None:
         events = [e for e in events if e.t_s < args.seconds]
     duration = max(e.t_s for e in events) + args.tail
 
-    c = spec.load_circuit(spec.circuit_path(CIRCUIT))
+    c = spec.load_circuit(spec.circuit_path(args.circuit))
     over = {}
     for kv in args.set:
         k, v = kv.split("=", 1)
@@ -138,12 +141,15 @@ def main() -> None:
     # The Stage into the 5E3, the harp a medium in the netlist.
     t0 = time.perf_counter()
     x = np.zeros(int(round(duration * s.sample_rate)))
-    v = fast.run_transient(ir, x, settings=s, notes=notes).vectors["v(out)"]
+    vec = fast.run_transient(ir, x, settings=s, notes=notes).vectors
     t_amp = time.perf_counter() - t0
+    v = vec["v(out)"]
+    if "v(out_r)" in vec:  # a stereo circuit (the Suitcase's two channels)
+        v = np.column_stack([v, vec["v(out_r)"]])
     y = v / full_scale(s, c)[1]
     write_audio(OUT / f"{name}.wav", y.astype(np.float32), int(s.sample_rate))
     print(
-        f"5E3 ({args.quality}): peak {np.max(np.abs(y)):.3f} FS, {t_amp:.0f} s "
+        f"{args.circuit} ({args.quality}): peak {np.max(np.abs(y)):.3f} FS, {t_amp:.0f} s "
         f"({t_amp / duration:.1f}x real time) -> {OUT / name}.wav"
     )
 

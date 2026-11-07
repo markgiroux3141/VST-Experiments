@@ -19,8 +19,8 @@
 - the spring: its mass solved so the tine's fundamental is the note with the spring's
   centre at `spring.position_fraction` of the tine;
 - the grommets' dashpots from the rubber's loss factor at the mount's lowest mode;
-- the tine's own loss (its root, the air), fitted so that fundamental decays at Shear's
-  measured Q (interpolated in log frequency, held flat outside his range);
+- the tine's own loss (its root, the air), fitted so that fundamental decays at the
+  measured Q `q_target` gives (jRhodes3d's since 2026-11-06, Shear's before);
 - the hammer: its tip's hardness by key (the manual's grading, Gent's relation to Young's
   modulus), a Hertz contact with Hunt-Crossley loss, the striking point from the manual's
   striking line;
@@ -101,8 +101,16 @@ def gent_youngs_pa(shore_a: float) -> float:
 
 
 def q_target(f_hz: float, cfg: dict[str, Any]) -> float:
-    pts = np.array(sorted(cfg["anchors"]["q_shear"]))
-    return float(np.interp(np.log(f_hz), np.log(pts[:, 0]), pts[:, 1]))
+    """The fundamental's Q: Shear's points interpolated in log f, or (`anchors.q_fit`
+    q_jrhodes) a cubic in log f through jRhodes3d's, least squares on log Q; both held at the
+    anchors' ends outside them."""
+    which = cfg["anchors"].get("q_fit", "q_shear")
+    pts = np.array(sorted(cfg["anchors"][which]), dtype=float)
+    lf = float(np.clip(np.log(f_hz), np.log(pts[0, 0]), np.log(pts[-1, 0])))
+    if which == "q_shear":
+        return float(np.interp(lf, np.log(pts[:, 0]), pts[:, 1]))
+    c = np.polyfit(np.log(pts[:, 0]), np.log(pts[:, 1]), 3)
+    return float(np.exp(np.polyval(c, lf)))
 
 
 def tonebar_f0_hz(n: int, cfg: dict[str, Any]) -> float:
@@ -143,6 +151,8 @@ class Pickup:
     coil_inner_m: float
     coil_outer_m: float
     coil_length_m: float
+    field: str = "2d"  # the flux map's solve: "2d" (pickup.py) or "3d" (pickup3d.py)
+    field_tine_length_m: float = 0.04  # the 3D solve's tine behind its end
 
 
 @dataclass(frozen=True)
@@ -213,6 +223,8 @@ def _pickup(cfg: dict[str, Any]) -> Pickup:
         p["coil_inner_m"],
         p["coil_outer_m"],
         p["coil_length_m"],
+        str(p.get("field", "2d")),
+        float(p.get("field_tine_length_m", 0.04)),
     )
 
 

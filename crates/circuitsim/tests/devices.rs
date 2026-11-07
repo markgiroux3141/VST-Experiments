@@ -111,6 +111,8 @@ fn near_kink(model: &DeviceModel, v: &[f64], d: f64, state: Option<&[f64; 3]>) -
             (v[1] - 1e-3).abs() <= 2.0 * d || (v[2] + v[1] / p.model.mu).abs() <= 4.0 * d
         }
         DeviceModel::Triode(_) => v[0].abs() <= 2.0 * d,
+        // An optocoupler's cell conducts max(g, 0): a corner at g = 0 (the state port).
+        DeviceModel::Optocoupler(_) => v[2].abs() <= 2.0 * d,
         _ => false,
     }
 }

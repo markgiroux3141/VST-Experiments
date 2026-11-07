@@ -67,8 +67,281 @@ ringing.
   reference); the demo at production 7.6x real time.
 
 **Open (RH3):** the user plays it from a MIDI keyboard; RH4 (the amp: hearing it against the
-songs). Repeated notes sound alike (the user's first playing): why, and what varies on a real
+songs). Against a real Mk I Suitcase recording the harp was too dark and has no pan:
+"Against a real recording (2026-11-06)" below; refitted to a real Mk I's single notes as
+MK1_HARP@2 (2026-11-07, "Single notes: jRhodes3d"). Next: the Suitcase's electronics (the
+1978 100 W "Janus" preamp with its LED / photocell vibrato, `data/schematics/rhodes_suitcase/`). Repeated notes sound alike (the user's first playing): why, and what varies on a real
 Rhodes, is parked in [RHODES_VARIATION.md](RHODES_VARIATION.md) (future work).
+
+## Against a real recording (2026-11-06): the gaps
+
+The user: "our version isn't that close to this sound". The reference is a real Mk I (1978)
+through its Suitcase electronics: `real instrument samples/Rhodes Mk I 1978 - with Suitcase
+preamp by Tines and reeds.mp3` (untracked, not committed; a 14.2 s stereo mp3, 44.1
+kHz, ~95 kb/s, so low-passed near 16 kHz; a comping phrase of chords with a sustained tail,
+no isolated notes). The analysis was run once outside the repo (Welch spectra, STFTs, the
+L / R envelopes); nothing built, no file changed but this one. The chords limit what it can
+prove: the measurements below are firm, the causes are ranked suspicions.
+
+**What it shows.**
+- **The Suitcase "Vibrato" is the most obvious difference.** L and R swing in antiphase at
+  **3.83 Hz**, ~16 dB peak to peak per channel (+-8 dB), phase between them 163 deg,
+  nearly sinusoidal (the balance curve's 2nd harmonic 2%); side / mid -9.6 dB, L / R
+  correlation 0.80. The Stage into the 5E3 is mono and static ("The side-to-side pan",
+  below: nothing built).
+- **The harp is far too dark before any amp.** Band energy normalized to 200-2000 Hz:
+
+  | Band | Real | Our harp (`demo_rh3_harp.wav`) | Our 5E3 out (`demo_rh3.wav`) |
+  |---|---|---|---|
+  | 500 Hz-1 kHz | -8.8 dB | -21.1 dB | -21.8 dB |
+  | 1-2 kHz | -18.6 dB | -46.5 dB | -42.5 dB |
+  | 2-4 kHz | -37.2 dB | -62.0 dB | -48.5 dB |
+  | 4-8 kHz | -46.5 dB | -77.5 dB | -70.9 dB |
+
+  The real recording falls ~10 dB per octave from 1 to 8 kHz; ours collapses above ~1
+  kHz, 12-30 dB short, and already at the pickup, so the 5E3 isn't the main cause. Per
+  key (`reports/rhodes/key/audio/`, the harmonics re the strongest over 0.05-0.6 s): D#4
+  (key 43) at 1 m/s 0 / -3 / -35 / -47 dB, at 2 m/s -4 / 0 / -25 / -31; G#5 (key 55) at
+  2 m/s 0 / -5 / -39 / -53. The real tail (12.6-14.1 s) holds even partials near the 2nd
+  (~622, ~1251 Hz within 2 dB of their fundamentals) and lines at 2.2-3 kHz ~33 dB under
+  the fundamentals still audible 1.5 s on; ours has no partial, harmonic or inharmonic,
+  above -100 dB re the fundamental after 0.1 s past the 5th harmonic. (The demo plays other
+  notes, and the real partials can belong to other chord tones: strong evidence, not
+  proof.)
+- **What already matches:** the fundamentals' decay (real tail 2-6 dB/s; ours at key 43
+  -5.6 dB/s, Shear's Q), and a strong 2nd harmonic (the centred voicing's).
+- **Also seen:** the real recording is high-passed below ~80-90 Hz (the Suitcase or the
+  capture; our demo carries far more 60-200 Hz, partly its notes). The attack couldn't be
+  isolated (chords over ringing notes): the real onsets show broadband energy to ~8 kHz,
+  but how much is mechanical noise is open.
+
+**Likely causes, most confident first.**
+1. **The pickup's nonlinearity is too gentle.** The 2D section (and the tip and pole's
+   shapes, all provisional) gives too few harmonics past the 2nd-3rd. The real field is
+   sharper near the tip-to-pole gap, which puts energy into harmonics 3-8. RH5's 3D solve
+   and the magnet's and coil's real dimensions are where it is decided.
+2. **The tine's bell partials are weak or damped too fast.** The second beam mode (~6.3x
+   bare, moved by the spring) and up ring for hundreds of ms on a real tine; our losses
+   are stiffness proportional (`beam.py`: "the bell partials die fast"), so the upper modes
+   die faster than the fit to the fundamental's Q justifies. Their decay has no source yet.
+3. **No mechanical noise.** The hammer's thump, the key bottoming, the damper and the rail
+   aren't modelled (RHODES_VARIATION.md judged them barely at the pickup; the real attacks
+   suggest checking).
+4. **No Suitcase electronics.** The 5E3 and P12R are a guitar amp and speaker that roll off
+   hard by design; the Suitcase is a transistor preamp and power amp into its own speakers,
+   brighter, with the vibrato. The BJT model now exists (CL0), so this waits only on the
+   Peterson schematic.
+
+**Proposed next steps (the user's to pick).**
+1. **Isolated notes:** a ladder of single notes (e.g. C3, C4, C5 at soft / medium / hard)
+   from a real Mk I, so the harmonics per velocity and the bell partials' decay can be
+   fitted rather than suspected.
+2. **The stereo tremolo now:** a chain end at the measured 3.83 Hz, +-8 dB antiphase (the
+   pan's option 2 below, or the Suitcase's own once its schematic is found).
+3. **The pickup's harmonic series against the real one** on those notes: the gap, the tip
+   and pole shapes, then the 3D solve; and the upper modes' damping.
+4. **A brighter amp path:** the Suitcase, or the Stage without the 5E3's speaker readout,
+   to compare like with like.
+
+### Single notes: jRhodes3d (2026-11-06)
+
+**The source.** Jeff Learman's jRhodes3d, a 1977 Mark I Stage 73 recorded from the harp
+connector: 15 notes (F1-C7, every 4th white key), up to 5 velocity layers, 16-bit / 44.1 kHz
+FLAC, up to 25 s unlooped (`real instrument samples/jrhodes3d_download/`, untracked; samples
+CC-BY-NC-4.0, web: https://github.com/sfzinstruments/jlearman.jRhodes3d). **Caveats from
+its README:** recorded through an EQ ("a treble boost and low-mid scoop", settings not given),
+noise removed (CoolEdit), the layers level-normalized (their peaks lie within ~4 dB), and
+the voicing the owner's. So only what an EQ can't change is firm: decays, partial
+frequencies, pitch, and how the harmonic balance changes from layer to layer. Compared with
+our harp (circuitsim's medium, `harp_render`, the same 15 notes at velocities 20-127; analysis
+run outside the repo like the one above).
+
+**What it shows.**
+- **The pickup's nonlinearity, the main gap.** Harmonics 1-8 re the strongest, 0.05-0.35 s:
+
+  | D4 | h1 | h2 | h3 | h4 | h5 | h6 |
+  |---|---|---|---|---|---|---|
+  | real, loudest layer | -4 | 0 | -2 | -21 | -10 | -21 |
+  | real, softest layer | 0 | -22 | -35 | -59 | -72 | -106 |
+  | ours, velocity 127 | 0 | -3 | -35 | -47 | -79 | -92 |
+  | ours, velocity 40 | 0 | -34 | -96 | -151 | -161 | -166 |
+
+  The real softest layer is richer than our velocity 127 from D3 up; the deficit grows
+  with the harmonic's order (h3 ~30 dB, h5 ~60 dB), far beyond any EQ. The bass at 127 is
+  closer (F1, B1) but still short at soft and middle velocities.
+- **Why: the tine swings near the top of a wide field.** Our 2D map's Phi(y) is a bump
+  whose slope peaks at +-3.1 mm (half-max +-7.2 mm), while a struck tine swings (the tip's
+  peak) 0.02 mm at velocity 40, 0.05 mm at 64, 0.64 mm at 127 on D4 (A2: 0.16 / 0.40 /
+  2.63 mm; B4: 0.01 / 0.04 / 0.45 mm), with velocity 127's hammer at 0.73 m/s. At those
+  swings the field is nearly a parabola: the 2nd harmonic and little else.
+- **A test, not a change** (the Python reference `key.strike` with the map scaled in y,
+  Phi_s(y) = Phi(s y), and the hammer's speed multiplied; mean |dB| of harmonics 2-6 against
+  the loudest, middle and softest layers):
+
+  | Key | Today (s 1, x1, voicing 0.4 mm) | Best in the grid |
+  |---|---|---|
+  | A2 (key 25) | 28.5 dB | 2.9 dB: s 3, hammer x2, voicing 0.8 mm (swing 4.9 mm at 127) |
+  | D4 (key 42) | 44.0 dB | 7.9 dB: s 4, hammer x4, voicing 0.4 mm (2.9 mm) |
+  | B4 (key 51) | 37.4 dB | 12.4 dB: hammer x4 (the grid's edge: wants more) |
+
+  A2's best reproduces every real layer within a few dB (loudest: real -11 0 -3 -2 -3 -8
+  -5 -18, ours -16 0 -4 -2 -3 -8 -5 -21). So the real sound needs **a field ~3-4x narrower
+  than the 2D section's and 2-4x more hammer speed** (ff ~1.5-3 m/s; grand-piano hammers
+  reach several m/s at ff (provisional: model knowledge), ours 0.73 m/s, set by E1's 9.5 mm
+  alone). Both are physical and plausible: a 3D tine end (a small cylinder, its
+  perturbation falling off faster than a 2D slab's) is RH5's solve, and the velocity law's
+  scale is provisional. The 30 dB range looks right (the real layers' h3 moves ~33 dB from
+  softest to loudest; the scaled model's ~32).
+- **Decay: our mid and treble notes die ~2x too fast.** Fundamentals in dB/s, real
+  (loudest layer) vs ours (v110): D3 -2 / -6, G3 -3 / -7, B3 -4 / -7, D4 -3 / -8, F4 -4 /
+  -7, B4 -5 / -8, D6 -9 / -18, G6 -18 / -26; harmonics 2-3 likewise (real -6 to -13, ours
+  -12 to -18). The Suitcase recording's tail agrees (2-6 dB/s). Ours are fitted to Shear's Q
+  (another piano), so the two real Mk Is here say Q is ~1.5-2.5x higher in the middle.
+- **The bell partial: weaker, shorter, and in another place.** In the first 60 ms the real
+  B3-B4 show an inharmonic mode with sidebands at +-f0 (the pickup mixing it with the
+  fundamental): B3 3.38 / 4.38 / 6.38 x f0, D4 3.36 / 4.36 / 5.65, B4 6.15 / 7.15 / 8.15,
+  at -9 to -23 dB re the fundamental, still -36 to -44 dB at 60-400 ms (D4 7.35 / 8.35, B4
+  7.15 / 8.15). Ours: the same keys' mode at 6.51-6.58 / 7.52-7.57 x f0, at -38 to -54 dB
+  early and -70 to -100 dB by 60-400 ms. So the tine's second mode sits elsewhere relative
+  to the fundamental (the spring's mass and position, provisional) and is excited and kept
+  too little; a narrower field would raise its sidebands too. The treble's (D6 6.52 / ours
+  6.28, G6 6.31 / 6.24) is closer.
+- **Pitch with velocity:** the real loudest layers sit sharper than the softest in the low
+  bass only (F1 +20 cents, B1 +7; from E2 up within ~3 cents, mostly the tuning); ours has
+  no amplitude-dependent pitch (linear modes; the magnet's pull and the large-swing
+  nonlinearity are RH5's).
+- **Attack:** the time to the envelope's peak matches (real 2.7-6 ms from G3 up, ours
+  3.8-5 ms); not resolved further.
+
+**Applied (2026-11-07, the user: "do whatever you need to so we can get close to the real
+sound"): MK1_HARP@2**, `rhodes_stage_5e3` pinned to it. Each change is a provisional value
+fitted to the real piano, or a better solve; mk1.yaml's sources have the numbers.
+- **The pickup in 3D** (`varimu/rhodes/pickup3d.py`, `pickup.field: 3d`): the tine as cuboid
+  cells magnetized by the magnet's surface charges (a volume integral, its self-interaction
+  factored once), the coil's linkage by reciprocity (mu0 int M . h dV, the coil as current
+  loops); `tests/test_pickup3d.py` checks it against closed forms and against the direct flux
+  through the turns (2e-3). Its field is only ~20% narrower than the 2D section's (slope peak
+  2.5 mm against 3.1) and its shape doesn't move with the tine's length or permeability. An
+  iron frustum tip (Pfeifle & Muenster's pickup), tried in the 2D section, narrowed it ~10%:
+  not the lever, not modelled. The map covers the tip's pull-back to 1.6 mm (was 0.35).
+- **The swing, the real lever:** the velocity law fitted to jRhodes3d's layers (a hammer
+  speed per key and layer, a voicing, one shared EQ curve; the scratch fit's EQ came out +1 /
+  -3 / +2 / +7 / +6 dB at 0.1 / 0.3 / 1 / 3 / 8 kHz, the sample's README's "treble boost and
+  low-mid scoop" found blind): **5.0 m/s at 127 (was 0.73), 21 dB of range (was 30)**,
+  swings 10-14 mm in the bass and 2-5 mm in the middle at ff (Pfeifle's camera: ~+-1.5 cm).
+  **Voicing 2.0 mm** (was 0.4; per key the fit wants 0.9-2.4 mm, one global value costs ~1
+  dB rms).
+- **The decays:** the tine's loss fitted to jRhodes3d's Q (a cubic in log f through 15 keys'
+  medians, `anchors.q_fit`); D4 now decays at -3.15 dB/s (real -3.19), B4 -4.51 (real -4.51).
+- **The bell partial:** the root's taper 11 mm (was 7) and the spring at 0.85 of the tine
+  (was 0.7) put the tine's second mode at 7.0-7.7 x f0 over D3-E5 (real 7.17-7.41; was
+  6.2-6.7); the springs now weigh ~0.1-0.4 g.
+- **The arc's rank:** the larger swings pull the tip back far more, so `compile.py` keeps
+  more of it (ARC_RANK_TOL 3e-3, rank 3-7): circuitsim against the Python reference -137 dB
+  (at the old 1e-2: -107.5).
+
+Result (`scripts/rhodes_vs_jrhodes.py` -> `reports/rhodes/jrhodes/`, per note and layer the
+real sample, then @2, then @1, loudness matched): D4's harmonics 1-5, real loudest -4 / 0 /
+-2 / -21 / -10 dB against @2 at 127 -7 / 0 / -2 / -10 / -7 (@1: 0 / -3 / -35 / -47 / -79);
+real softest 0 / -22 / -35 / -59 / -72 against @2 at 20 0 / -25 / -34 / -59 / -85. A key's
+EMF at ff is now 50-60 mV peak (was 25), ~10 mV at velocity 40 (was 0.4), even across the
+keyboard. **Open:** the low bass (F1, B1) is too rich at soft velocities (real F1's softest
+layer 0 / -14 / -45 dB, @2's at 24 -10 / 0 / -2: the fit's worst keys at any voicing; a
+larger gap there, as the manual allows 1/16-1/8 in, is the first candidate); the treble's
+decays above A5 (the cubic's Q ~3000 against the real 3900-4700); the iron tip and the
+magnet's pull (RH5).
+
+### The Suitcase (started 2026-11-07; the user: "real suitcase circuit")
+
+**Sources** (`data/schematics/rhodes_suitcase/README.md`, the service manual's ch. 11): a 1978
+Mk I Suitcase has the 100 W Haigler / "Janus" electronics (fig11-1 the preamp, transcribed
+node by node there and checked against the drawing; fig11-3 the dual 50 W power amp; the
+speaker data are forum-grade). The reference recording's name says "with Suitcase preamp":
+likely the preamp's outputs, so the preamp and vibrato come first.
+
+**Built: the optocoupler device** (the vibrato's LED / photocell pair, Rhodes P/N 013556,
+unidentified; a VTL5C1 Vactrol stands in, provisional): `varimu/devices/opto.py` (an LED
+whose light ~ I^2 / (I + I_eta), a CdS cell dg/dt = a L - g / tau0 - g|g| / kappa, the state
+on a node s with a 1 F capacitor to rb; pins la, lk, s, ra, rb), its SPICE subcircuit, the
+component `VTL5C1@1` (`varimu fit-devices --only VTL5C1`: fitted to PerkinElmer's sheet,
+`scripts/digitize_vtl5c1.py` -> `data/datasheets/vtl5c1_{resistance,response}.csv`, steady
+rms 25%, the dim turn-on's first ms missed: one state, no trap filling), the IR model in both
+languages, circuitsim's `devices/opto.rs`, both builders, preflight; tests
+`tests/test_opto.py`, `tests/test_spice_agreement.py::test_optocoupler_agrees`,
+`crates/circuitsim/tests/devices.rs` (1e-12). A circuit places it as a generic part:
+`XOPTO1: {device: [la, lk, s, ra, rb], model: OPTO1}` plus `C: [s, rb]` of 1 F.
+
+**Built (2026-11-07, overnight; the user: "do whatever you need to so we can get close to the
+real sound"): the preamp, its vibrato fitted to the reference recording, the app's device.**
+- **The circuit** `config/circuits/rhodes_suitcase.yaml` (hand-written; every value from
+  fig11-1 or marked): the harp (`MK1_HARP@2`, a 150 pF lead) through J1's normally closed
+  contact into A1A (-22), VOLUME (5K audio), A1B's Baxandall (BASS / TREBLE), C16 into the
+  panning network, A3A / A3B onto `out` (P2-4, CH 2) and `out_r` (P2-3, CH 1), each loaded by
+  the power amp's input (fig11-3: 680 + 4.7K + 5 uF); the oscillator A2A / A2B onto `v`
+  through S1 VIBRATO; the LED strings between VB+ / VB- (R21 / R19, C14 / C12 off ideal
+  +-15 V). The MC1458s by the `opamp` macro from TI's sheet (now read:
+  `data/datasheets/opamps/README.md`: 200 V/mV, 1 MHz, 2 Mohm, 75 ohm, +-14 V). C3 starts at
+  +2 V over VB- (`v0`) so the oscillator leaves its balance. Left out (the file says why): VA+
+  / VA- (the macro draws no supply current), Q1 / LED3, LED4, J2. ACCESSORY IN (`accessory_in`
+  1) puts the audio input on the preamp in the harp's place: how test tones get in. Pre-flight
+  clean at every switch (the LED strings' nodes, held only by junctions, have 1 GOhm
+  numerical leaks).
+- **The vibrato against the recording** (`scripts/suitcase_study.py [--calibrate]
+  [--candidate ...]` -> `reports/rhodes/suitcase/vibrato.{json,png}`): both balances (L over R,
+  20 ms rms) are fitted with a Fourier series and folded over one period; the shape error is
+  their rms difference at the best phase. The recording's pan is not a sine: **a fast flip
+  (~30 ms), then a creep over the whole half period** (3rd harmonic 0.17 of the fundamental,
+  in quadrature: skewed), the signature of a cell that lights fast and darkens slowly. The
+  VTL5C1 stand-in darkens in ~20 ms, so it flat-tops (shape error 1.51 dB at its best
+  INTENSITY). So **the VTL5C2** (the same sheet's slow type: off to 100 kOhm in ~190 ms,
+  `VTL5C2@1`, `varimu fit-devices --only VTL5C2`, digitized by `scripts/digitize_vtl5c1.py
+  --part VTL5C2`; `opto.fit_vactrol` fits both, VTL5C1@1 unchanged) is the stand-in now:
+  shape error **1.21 dB**, the flip and the creep both there. Its limit: **+-6.75 dB** of
+  fundamental at full INTENSITY against the recording's +-7.8 (peak to peak ~18 dB against
+  17.5: the shape spends its swing differently). The board revision's 1K LED resistors
+  (fig11-2) fit worse (2.32 dB: a brighter cell darkens later). Defaults: SPEED 0.563 (3.83
+  Hz), INTENSITY 1.0 (full).
+- **The tone:** the demo through it (`scripts/rhodes_render.py --demo --circuit
+  rhodes_suitcase`, stereo, 2.3x slower than real time at production) against the recording,
+  band energy re 200-2000 Hz (other notes: coarse):
+
+  | Band (Hz) | 80-200 | 200-500 | 500-1k | 1-2k | 2-4k | 4-8k | 8-16k |
+  |---|---|---|---|---|---|---|---|
+  | Recording | -12.6 | -0.7 | -8.7 | -18.3 | -37.1 | -46.8 | -66.8 |
+  | Suitcase (MK1_HARP@2) | -12.5 | -1.8 | -5.1 | -14.8 | -30.8 | -58.2 | -82.9 |
+
+  Within ~3.5 dB to 2 kHz (the 5E3 path was 28 dB short at 1-2 kHz before @2); 4-16 kHz is
+  11-16 dB short, most of it already at the harp's EMF (C2 takes ~4 dB more above 6 kHz).
+- **The app's device** `rhodes_suitcase` (Instruments; panel VOLUME, BASS, TREBLE, VIBRATO,
+  SPEED, INTENSITY; draft-2x): every key struck and re-struck, 72% load, 0 dropouts (worst
+  block 122%, absorbed by the buffer). Played devices can now be stereo
+  (`Monitor::process_stereo`: one gain for both sides, compensation on their mid; the
+  Emitter's `device_right`), a take keeps their mid as it does a stereo chain end's (the
+  player and `take_render` alike). Tests: `tests/test_rhodes_suitcase.py`,
+  `tests/test_opto.py`, varimu-app's (the Rhodes' velocity span test now expects @2's 21 dB).
+
+**Next:**
+1. The user listens (Play's Rhodes Suitcase; `reports/rhodes/renders/suitcase_demo.wav`).
+2. The depth's last dB and the creep's curvature (ours bends upward, the recording's is
+   straight): a cell between the two types, or the cell's second state; both are fits to the
+   recording rather than to a sheet (the part is unidentified), so the user's call.
+3. The power amp (fig11-3: 2N5784 / 2N5781 / RCA29B / RCA30B / 2N6254 on +-30 V, none in
+   the library yet) and the four 12" speakers (data thin: P12R as a stand-in), then the
+   jRhodes-style listening set. The power amp is clean below clipping; the speakers are the
+   bigger change to the sound.
+4. The top octaves (4-16 kHz): at the harp (the attack's mechanical noise, the pickup's
+   higher harmonics), not the preamp.
+
+**Options (model changes: the user's call, numbers before renders change).**
+1. **The pickup's field and the hammer's speed** (the biggest win): fit the velocity law's
+   scale and the pickup's width (provisional magnet width, wedge, the tine's 2D slab) to
+   jRhodes' layer patterns key by key; then RH5's 3D solve replaces the stand-in scale.
+2. **The decays:** refit the tine's loss to these two pianos' Q instead of (or beside)
+   Shear's; check that the damper fit still holds.
+3. **The bell mode:** the spring's position or mass (provisional) so the second mode lands
+   where jRhodes puts it, and its loss (constant loss factor instead of stiffness
+   proportional) so it rings 0.4 s and more.
+4. **Pitch with swing (bass):** the magnet's pull as a force (RH5).
 
 ## Touch (2026-11-04): a keyboard's sensitivity
 

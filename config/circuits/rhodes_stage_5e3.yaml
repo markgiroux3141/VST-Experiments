@@ -52,7 +52,7 @@ controls:
 
 values:
   # The Rhodes harp and the Stage's controls (data/schematics/rhodes/README.md).
-  harp_model: {value: MK1_HARP@1, source: "config/components/mk1_harp/1.yaml (the Mark I's 73-key harp from physics, compiled by varimu/rhodes/compile.py; its coils' resistance and inductance with their sources there)"}
+  harp_model: {value: MK1_HARP@2, source: "config/components/mk1_harp/2.yaml (the Mark I's 73-key harp from physics, compiled by varimu/rhodes/compile.py; its coils' resistance and inductance with their sources there)"}
   harp_rate_hz: {value: 96000.0, source: "numerical: the voices at the step rate (96 kHz at draft-2x, 192 kHz at production): below 20 kHz within -72 to -110 dB of 8x the rate (docs/RHODES_PLAN.md, RH3)"}
   harp_contact_rate_hz: {value: 384000.0, source: "numerical: the hammer's contact stepped at 384 kHz (RH1's rate; 768 kHz changes nothing measurable, RH3)"}
   r_input_unused_ohm: {value: 1.0e+6, source: "numerical: the circuit's audio input, unused (the harp is the source), terminated"}

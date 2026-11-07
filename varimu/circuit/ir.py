@@ -53,6 +53,7 @@ from varimu.devices.bjt import POLARITIES, Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
+from varimu.devices.opto import Optocoupler
 from varimu.devices.pentode import KorenPentode, Pentode
 from varimu.devices.thyratron import Thyratron
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
@@ -583,6 +584,7 @@ DeviceModel = (
     | Thyratron
     | Bjt
     | jfet_mod.Jfet
+    | Optocoupler
 )
 
 PINS: dict[type, tuple[str, ...]] = {
@@ -592,6 +594,7 @@ PINS: dict[type, tuple[str, ...]] = {
     VacuumDiode: ("a", "k"),
     MagneticCore: ("b", "ref"),
     Lamp: ("a", "t", "b"),
+    Optocoupler: ("la", "lk", "s", "ra", "rb"),
     Bjt: ("c", "b", "e"),
     jfet_mod.Jfet: ("d", "g", "s"),
 }
@@ -1073,6 +1076,12 @@ def _validate_model(m: DeviceModel) -> None:
             raise IRError(f"{m.name}.emissivity: 4 coefficients (c0..c3)")
         for c in m.emissivity:
             _finite(f"{m.name}.emissivity[]", c)
+    elif isinstance(m, Optocoupler):
+        values += [
+            (w, getattr(m, w))
+            for w in ("led_is_a", "led_n", "i_eta_a", "gen_s_per_s_a", "tau0_s", "kappa_s_s")
+        ]
+        values += [("g_dark_s", m.g_dark_s), ("s_unit_s", m.s_unit_s)]
     elif isinstance(m, Thyratron):
         values += [
             (w, getattr(m, w))
@@ -1166,6 +1175,7 @@ _MODEL_KINDS = {
     "vacuum_diode": VacuumDiode,
     "magnetic_core": MagneticCore,
     "lamp": Lamp,
+    "optocoupler": Optocoupler,
     "thyratron": Thyratron,
     "bjt": Bjt,
     "jfet": jfet_mod.Jfet,

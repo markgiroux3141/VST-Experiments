@@ -1,0 +1,39 @@
+device: "VTL5C1 (Vactec / PerkinElmer Vactrol: a red LED and a CdS photocell, axial)"
+document: "Low Cost Axial Vactrols VTL5C1, 5C2"
+publisher: "PerkinElmer Optoelectronics, St. Louis (the Vactec line, now Excelitas)"
+date: "undated (PerkinElmer era, ~2001-2010; the VTL5C series dates to Vactec in the 1970s)"
+local_copy: vactrol/perkinelmer_vtl5c1_5c2.pdf
+local_copy_sha256: 5a9c0f7009cfd87cabc0b7a7e33a9610a71573023682324eca537bb4c117098d
+scan_source: "web: https://logosfoundation.org/instrum_gwr/teno/datasheets/Vactrol_VTL5C1.pdf"
+digitized_with: >-
+  scripts/digitize_vtl5c1.py (PyMuPDF 2.1): the page-2 bitmaps. The resistance plot traced
+  automatically (white runs >= 4 px per pixel column, ordered top to bottom, outliers past 8%
+  of a 15-column running median dropped; the axes calibrated on the plot's own decade grid
+  lines, 302.7 px per decade of current, 173.7 per decade of resistance). The response plot's
+  points read by eye at its grid lines (the script's RESPONSE)
+digitized_by: Claude Code
+digitized_on: 2026-11-07
+files:
+  vtl5c1_resistance.csv:
+    figure: >-
+      p.2, "Output Resistance vs. Input Current, VTL5C1": curve 1 (light adapt condition (1),
+      25 C, 24 hours at no input: dark adapted) and curve 2 (condition (2), 25 C, 24 hours at
+      40 mA: light adapted). Curves 3 (+50 C) and 4 (-20 C) not digitized
+    columns: "curve (1 or 2), i_a (the LED's current), r_ohm (the cell's resistance)"
+  vtl5c1_response.csv:
+    figure: >-
+      p.2, "Response Time, VTL5C1": the cell's resistance after the LED's current is applied
+      (turn-on, 0-12 ms axis) or removed (turn-off, 0-30 ms axis), at 10 and 40 mA, "based
+      upon test following adapt condition (2)" (note 3)
+    columns: "curve (on_10mA, on_40mA, off_10mA, off_40mA), t_s, r_ohm"
+estimated_error: >-
+  resistance plot: ~1 px of trace (~1.3% in R, ~0.8% in I); its curve 1 meets the table's
+  20 kOhm at 1 mA within 5%. Response points: ~5% in log R, ~0.1 ms (turn-on) / 0.25 ms
+  (turn-off) in time
+notes: >-
+  The sheet's plot and its table disagree at high current: the table's "dark adapted (typ.)"
+  on-resistance is 600 ohm at 10 mA and 200 at 40, the plot's curve 1 reads ~500 and ~140.
+  The plot is used. Note 1: "At 1.0 mA and below, units may have substantially higher
+  resistance than shown in the typical curves". The Rhodes Suitcase preamp's optocoupler
+  (Rhodes P/N 013556, data/schematics/rhodes_suitcase/README.md) isn't identified; the VTL5C1
+  is a contemporary LED / CdS part standing in for it (provisional).

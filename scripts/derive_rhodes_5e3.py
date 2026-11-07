@@ -58,7 +58,7 @@ PATCHES = [
         "values:\n",
         "values:\n"
         "  # The Rhodes harp and the Stage's controls (data/schematics/rhodes/README.md).\n"
-        '  harp_model: {value: MK1_HARP@1, source: "config/components/mk1_harp/1.yaml (the'
+        '  harp_model: {value: MK1_HARP@2, source: "config/components/mk1_harp/2.yaml (the'
         " Mark I's 73-key harp from physics, compiled by varimu/rhodes/compile.py; its coils'"
         ' resistance and inductance with their sources there)"}\n'
         '  harp_rate_hz: {value: 96000.0, source: "numerical: the voices at the step rate'

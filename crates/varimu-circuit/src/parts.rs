@@ -680,6 +680,16 @@ pub fn device_instance(
             l.name = s(name);
             Ok(DeviceModel::Lamp(l))
         }
+        DeviceModel::Optocoupler(o) => {
+            if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
+                return Err(Error(format!(
+                    "{name}: an optocoupler takes no parallel, emission or area"
+                )));
+            }
+            let mut o = o.clone();
+            o.name = s(name);
+            Ok(DeviceModel::Optocoupler(o))
+        }
         DeviceModel::Thyratron(t) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
                 return Err(Error(format!(

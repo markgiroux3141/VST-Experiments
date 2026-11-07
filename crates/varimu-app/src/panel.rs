@@ -485,7 +485,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 22] = [
+pub const DEVICES: [Device; 23] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1032,6 +1032,33 @@ pub const DEVICES: [Device; 22] = [
         // clipping hard (all 73 keys at velocity 127, volume 1, draft), rounded up (60 V,
         // its full scale before C3, left it 10 dB down at its loudest).
         live_speaker_v: Some(20.0),
+        newton: None,
+    },
+    Device {
+        id: "rhodes_suitcase",
+        label: "Rhodes Suitcase Piano",
+        short: "Suitcase",
+        about: "A Rhodes Mark I Suitcase 73 (1978): the harp into the 100 W preamp, its \
+            LED / photocell vibrato panning left and right",
+        group: Group::Instruments,
+        circuit: "rhodes_suitcase",
+        // The preamp's front panel (ACCESSORY IN stays empty: the harp plays).
+        panel: Some(&["volume", "bass", "treble", "vibrato", "speed", "intensity"]),
+        ahead_s: 0.25,
+        // The harp's voices step at 96 kHz (its rate_hz), as the Stage's.
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys strike the harp (note events): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        partition: None,
+        live_speaker_v: None,
         newton: None,
     },
     Device {
@@ -1954,7 +1981,12 @@ mod tests {
             vec![
                 (
                     Group::Instruments,
-                    vec!["tube_synth", "rhodes_stage_5e3", "clavinet_d6"]
+                    vec![
+                        "tube_synth",
+                        "rhodes_stage_5e3",
+                        "rhodes_suitcase",
+                        "clavinet_d6"
+                    ]
                 ),
                 (Group::Drums, vec!["tube_kick", "sideman_bd"]),
                 (Group::Dynamics, vec!["fairchild_670", "urei_1176"]),

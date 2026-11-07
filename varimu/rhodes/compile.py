@@ -17,8 +17,11 @@ tine, and the tine under the damper's felt):
   left singular vectors of `[Re M, -Im M]` so scaled (singular values above
   `arc_rank_tol` of the first), `p = Re(P z)` with `P = U_r' M`; then `arc = |p|^2 / 2`
   and `arc' = p . Re(P Lambda z)` (a mode's slope rate is lambda times its slope). Exact
-  at full rank. At the default tolerance the rank is 3-4 and a struck key's EMF is within
-  -114 dB of the full forms' (keys 8-80 at velocity 127, 2026-11-04; rank 2 was -76 dB).
+  at full rank. At 1e-2 the rank was 3-4 and a struck key's EMF within -114 dB of the full
+  forms' (keys 8-80 at velocity 127, 2026-11-04; rank 2 was -76 dB); the swings of the
+  2026-11-06 velocity law (5-10x larger) pull the tip back far more, and 1e-2 left circuitsim
+  -107.5 dB from the reference on tests/test_rhodes_compiled.py's events. At 3e-3 the rank
+  is 3-7 and that is -137 dB (1e-3: -141.5, 3e-4: -170; 2026-11-07).
 - **The damper's switch**: the state moved to the other system's modes through the
   physical coordinates, `z_new = A z + B conj(z)` (B's columns zero for real modes).
 
@@ -49,7 +52,7 @@ from varimu.rhodes import key as ky
 from varimu.rhodes import pickup as pk
 
 FORMAT = 1
-ARC_RANK_TOL = 1e-2  # the arc's directions kept: singular values over the first's
+ARC_RANK_TOL = 3e-3  # the arc's directions kept: singular values over the first's
 COMPONENT = "MK1_HARP"
 DATA_SUFFIX = ".harp.json"
 
@@ -221,7 +224,8 @@ def _yaml(data: dict[str, Any], data_file: str, sha: str, name: str) -> str:
         "kind: ep_harp\n"
         "source: \"the Rhodes Mark I's harp from physics (docs/RHODES_PLAN.md RH1-RH3): the\n"
         f"  instrument's values and their sources in config/rhodes/{data['instrument']}.yaml,\n"
-        "  through varimu/rhodes/ (beam FE per key, the hammer's contact, the 2D pickup map),\n"
+        "  through varimu/rhodes/ (beam FE per key, the hammer's contact, the"
+        f" {p.field.upper()} pickup map),\n"
         "  compiled to the live tier's complex modes by varimu/rhodes/compile.py\"\n"
         "instrument:\n"
         f"  file: config/rhodes/{data['instrument']}.yaml\n"

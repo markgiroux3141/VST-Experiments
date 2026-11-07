@@ -48,7 +48,9 @@ BAND_Y_M = 20e-3  # uniform cells in y within +-this
 GROWTH = 1.18  # the cells' growth outside the fine regions
 SWING_M = 18e-3  # the map covers the tine's centre within +-this of the pole's axis
 FINE_SWING_M = 6e-3  # every cell within +-this, every third beyond
-MAP_DG_M = np.array([0.0, 0.1e-3, 0.2e-3, 0.35e-3])  # the tip's pull-back from the gap
+# the tip's pull-back from the gap (the arc's shortening: ~0.6 swing^2 / length, ~1.2 mm for
+# a bass tine swinging 14 mm at ff since the velocity law's 2026-11-06 fit)
+MAP_DG_M = np.array([0.0, 0.1e-3, 0.2e-3, 0.35e-3, 0.6e-3, 1.0e-3, 1.6e-3])
 
 
 def _grow(start: float, step: float, end: float) -> list[float]:
@@ -232,7 +234,14 @@ class FluxMap:
 def flux_map(p: Pickup, progress: bool = False, workers: int = 1) -> FluxMap:
     """Phi(y, dg): the coil's flux linkage (N turns, depth = the magnet's width) with the
     tine's centre at y from the pole's axis and its end dg further than the gap. The
-    section is symmetric, so only y >= 0 is solved."""
+    section is symmetric, so only y >= 0 is solved. A pickup whose `field` is "3d" is
+    solved in 3D instead (`pickup3d.flux_map`)."""
+    if p.field == "3d":
+        from varimu.rhodes import pickup3d
+
+        return pickup3d.flux_map(p, p.field_tine_length_m, workers=workers, progress=progress)
+    if p.field != "2d":
+        raise ValueError(f"pickup field {p.field!r}: '2d' or '3d'")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     path = CACHE_DIR / f"pickup_{_cache_key(p)}.npz"
     m = mesh(p)

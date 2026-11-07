@@ -486,7 +486,8 @@ impl Mna {
                         }
                         DeviceModel::VacuumDiode(_)
                         | DeviceModel::MagneticCore(_)
-                        | DeviceModel::Lamp(_) => vec![],
+                        | DeviceModel::Lamp(_)
+                        | DeviceModel::Optocoupler(_) => vec![],
                     };
                     for (a, b, cf) in caps {
                         if cf > 0.0 {

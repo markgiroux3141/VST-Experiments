@@ -436,7 +436,27 @@ device `rhodes_stage_5e3`; the 5E3's own Play unchanged, C3 open). The app: `mid
 take_events`, `player::note_offsets`, `Live::process_notes`. Every key ringing live: 80-84%
 load, 0 dropouts (`examples/play.rs --strike-all [VEL] --restrike S`); live full scale 20 V
 (the 5E3's largest swing; the user: raise the level only where it doesn't change the sound).
-Open: the user plays it; next RH4. **Touch** (2026-11-04, RHODES_PLAN.md "Touch"): a
+Open: the user plays it; next RH4. **MK1_HARP@2** (2026-11-07, RHODES_PLAN.md "Single notes:
+jRhodes3d"; the user: "do whatever you need to so we can get close to the real sound"): the harp
+refitted to a real Mk I's single notes (jRhodes3d, in the untracked `real instrument samples/`;
+`scripts/rhodes_vs_jrhodes.py` -> reports/rhodes/jrhodes/): the pickup's map in 3D
+(`varimu/rhodes/pickup3d.py`, `tests/test_pickup3d.py`), the velocity law 5.0 m/s at 127 over
+21 dB (was 0.73 / 30: the tines swung far too little to reach the pickup's nonlinearity),
+voicing 2.0 mm, Q from jRhodes3d's decays, the bell mode at ~7.3 f0 (the root's taper, the
+spring's place), the arc's rank tolerance 3e-3. Open: the low bass too rich at soft
+velocities. **The Suitcase** (started 2026-11-07, RHODES_PLAN.md "The Suitcase"): the
+optocoupler device built (`varimu/devices/opto.py`, `VTL5C1@1`, circuitsim `devices/opto.rs`,
+both builders; a generic `device` part plus a 1 F capacitor on its state node). **The 100 W
+preamp built** (2026-11-07): `config/circuits/rhodes_suitcase.yaml` from fig11-1 (the harp in,
+MC1458s by the `opamp` macro, the LED / LDR vibrato; outputs `out` / `out_r`; ACCESSORY IN
+`accessory_in` 1 takes test tones), its pan fitted to the reference recording by
+`scripts/suitcase_study.py` (-> reports/rhodes/suitcase/): the recording's flip-then-creep
+shape needs a slow cell, so the stand-in is `VTL5C2@1` (`opto.fit_vactrol`, `digitize_vtl5c1.py
+--part VTL5C2`), 1.21 dB rms of shape, +-6.75 dB against +-7.8; `rhodes_render.py --circuit
+rhodes_suitcase` (stereo); the app's `rhodes_suitcase` (played devices may be stereo now:
+`Monitor::process_stereo`, takes keep the mid). Next: the user listens, the power amp
+(fig11-3) and speakers (RHODES_PLAN.md "The Suitcase").
+**Touch** (2026-11-04, RHODES_PLAN.md "Touch"): a
 keyboard's Sensitivity (`curve`: the dB line bent into an ease-out, (1 - x)^p, p 1-5) and
 Range as `midi::Touch`, applied to velocities as they
 arrive (`Keys::message`: devices, takes and renders get the velocity heard), on the harp's own

@@ -20,8 +20,9 @@ adds in phase (the alternating groups reverse coil and magnet together: hum canc
 tines don't; provisional, Shear's p.9 names the hum only).
 
 **Velocity** (`hammer_speed`): MIDI velocity to the hammer's speed, `v_ff 10^(-range_db /
-20 (127 - vel) / 126)`, `v_ff` set so the 73's lowest key at 127 swings its tip
-`ff_swing_m` (provisional; config `velocity`).
+20 (127 - vel) / 126)`, `v_ff` the instrument's `ff_speed_m_s` (fitted to jRhodes3d's
+layers since 2026-11-06), or, without it, set so the 73's lowest key at 127 swings its tip
+`ff_swing_m` (config `velocity`).
 """
 
 from __future__ import annotations
@@ -192,8 +193,12 @@ def _velocity_cache(name: str) -> str:
 
 
 def ff_speed_m_s(name: str = "mk1", flux: pk.FluxMap | None = None) -> float:
-    """The hammer speed at velocity 127: the 73's lowest key's tip swings `ff_swing_m`
-    (cached in cache/rhodes/)."""
+    """The hammer speed at velocity 127: `velocity.ff_speed_m_s` when the instrument gives
+    it (fitted to a real piano's layers), else the speed at which `calibration_key` at 127
+    swings its tip `ff_swing_m` (cached in cache/rhodes/)."""
+    given = spec.load(name)["velocity"].get("ff_speed_m_s")
+    if given is not None:
+        return float(given)
     path = spec.CACHE_DIR / f"velocity_{_velocity_cache(name)}.json"
     if path.exists():
         return float(json.loads(path.read_text(encoding="utf-8"))["ff_speed_m_s"])

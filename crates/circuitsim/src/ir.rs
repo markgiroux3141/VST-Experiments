@@ -555,6 +555,7 @@ pub enum DeviceModel {
     Thyratron(Thyratron),
     Bjt(Bjt),
     Jfet(Jfet),
+    Optocoupler(Optocoupler),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -693,6 +694,24 @@ pub struct Lamp {
     pub t_amb_k: f64,
 }
 
+/// `varimu.devices.opto.Optocoupler`: an LED / photoresistor optocoupler, pins (la, lk, s,
+/// ra, rb): the LED from la to lk, the cell's photoconductance on s (`s_unit_s` siemens per
+/// volt; a 1 F capacitor from s to rb holds it), the cell from ra to rb. Port currents: the
+/// LED's (into la, out of lk), -dg/dt / s_unit, the cell's.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Optocoupler {
+    pub name: String,
+    pub led_is_a: f64,
+    pub led_n: f64,
+    pub i_eta_a: f64,
+    pub gen_s_per_s_a: f64,
+    pub tau0_s: f64,
+    pub kappa_s_s: f64,
+    pub g_dark_s: f64,
+    pub s_unit_s: f64,
+}
+
 /// A BJT's polarity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -813,6 +832,7 @@ impl DeviceModel {
             DeviceModel::VacuumDiode(m) => &m.name,
             DeviceModel::MagneticCore(m) => &m.name,
             DeviceModel::Lamp(m) => &m.name,
+            DeviceModel::Optocoupler(m) => &m.name,
             DeviceModel::Bjt(m) => &m.name,
             DeviceModel::Jfet(m) => &m.name,
             DeviceModel::Thyratron(m) => &m.name,
@@ -827,6 +847,7 @@ impl DeviceModel {
             DeviceModel::JunctionDiode(_) | DeviceModel::VacuumDiode(_) => &["a", "k"],
             DeviceModel::MagneticCore(_) => &["b", "ref"],
             DeviceModel::Lamp(_) => &["a", "t", "b"],
+            DeviceModel::Optocoupler(_) => &["la", "lk", "s", "ra", "rb"],
             DeviceModel::Bjt(_) => &["c", "b", "e"],
             DeviceModel::Jfet(_) => &["d", "g", "s"],
             DeviceModel::Thyratron(t) if t.mu_g2.is_some() => &["a", "g2", "g1", "w", "k"],
@@ -1602,6 +1623,18 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             for c in l.emissivity {
                 finite(&format!("{name}.emissivity[]"), c)?;
             }
+        }
+        DeviceModel::Optocoupler(o) => {
+            values.extend([
+                ("led_is_a", o.led_is_a),
+                ("led_n", o.led_n),
+                ("i_eta_a", o.i_eta_a),
+                ("gen_s_per_s_a", o.gen_s_per_s_a),
+                ("tau0_s", o.tau0_s),
+                ("kappa_s_s", o.kappa_s_s),
+                ("g_dark_s", o.g_dark_s),
+                ("s_unit_s", o.s_unit_s),
+            ]);
         }
         DeviceModel::Bjt(q) => {
             values.extend([
