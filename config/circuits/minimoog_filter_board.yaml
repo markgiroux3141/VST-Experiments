@@ -62,7 +62,7 @@ controls:
   kb2: {value: 1, choices: [0, 1], unit: switch, source: "the front panel's KEYBOARD CONTROL 2 rocker"}
   # --- the board's trims (set by scripts/minimoog_vcf_trim.py from Folkman's procedures)
   range_trim: {value: 0.3065, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 'Filter Range' (CUTOFF -1, EMPHASIS 10, keyboard control off: zero beat with A-440)"}
-  scale_trim: {value: 0.4658, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 'Filter Scale' (tracks the keyboard three octaves)"}
+  scale_trim: {value: 0.4014, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 'Filter Scale' (tracks the keyboard three octaves)"}
   ext_loudness: {value: 0, choices: [0, 1], unit: switch, source: "Fig 9-16: the EXT. LOUDNESS jack J3 (a shorting jack): 0 empty (pin 10 on +10 V through R56), 1 a plug carrying ext_loudness_v"}
   ext_loudness_v: {value: 5.0, min: 0.0, max: 10.0, unit: V, source: "numerical: test fixture (a control voltage plugged into EXT. LOUDNESS; Folkman's VCA Balance feeds audio there)"}
   vca1_bal: {value: 0.6181, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R14 25 ohm 1ST VCA BAL trim; default calibrated: Folkman p. 13 'VCA Balance' (scripts/minimoog_vca_trim.py)"}
@@ -77,12 +77,12 @@ values:
   r_kb1_ohm: {value: 300.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 1, one third of the tracking: the front panel's R53 300K by inference; Table 7-2 lists R53 300K, R54 150K, R55 200K, R51 100K without their places)"}
   r_kb2_ohm: {value: 150.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 2, two thirds: the front panel's R54 150K by inference; with KB1, 100K together)"}
   r_kbd_load_ohm: {value: 1.0e+9, source: "numerical: a leak on the keyboard input (it stays defined with both rockers off)"}
-  # The keyboard (a fixture until board 2, MM4): 1 V / octave, the last key held (Folkman: the
-  # keyboard's sample-and-hold), 0 V at the procedures' "low A".
-  key_v_per_semitone: {value: 0.08333333333333333, source: "provisional: model knowledge (the Minimoog's 1 V / octave keyboard; Folkman's Filter Scale: two A keys two octaves apart give two octaves of the filter)"}
-  key_ref_note: {value: 45.0, source: "provisional: model knowledge (the procedures' 'low A' as MIDI 45, A2: the Model D's 44 keys run F to C, its lowest A the fifth key)"}
-  key_min_v: {value: -0.3333333333333333, source: "provisional: model knowledge (the lowest key, F: four semitones under the low A)"}
-  key_max_v: {value: 3.25, source: "provisional: model knowledge (the top key, C: 39 semitones over the low A)"}
+  # The keyboard (a fixture here; minimoog_voice.yaml has the circuit, minimoog_keyboard.yaml): the
+  # string's volts, 0 V at the lowest key (F), the last key held (the sample-and-hold).
+  key_v_per_semitone: {value: 0.084368, source: "minimoog_keyboard.yaml's key_v_per_semitone: Fig 9-7's 10 ohm string steps times its current source's measured 8.437 mA (scripts/minimoog_keyboard_study.py)"}
+  key_ref_note: {value: 41.0, source: "provisional: model knowledge (as minimoog_keyboard.yaml: the lowest F, the string's grounded end, as MIDI 41; the procedures' 'low A' is MIDI 45)"}
+  key_min_v: {value: 0.0, source: "Fig 9-7's keyboard wiring: the string's bottom (the lowest key) on ground"}
+  key_max_v: {value: 3.6278, source: "Fig 9-7: the top key, C, 43 steps up the string"}
   contour_off_v: {value: 0.0, source: "provisional: model knowledge (the contour at rest, a key up; a fixture until the contour generators, MM4)"}
   contour_on_v: {value: 5.0, source: "provisional: model knowledge (the contour at SUSTAIN 10, a key down; a fixture until MM4 measures board 2's swing)"}
   emphasis_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper's 10% at half rotation, read from the far end: Table 7-3's 'Rev. Audio')"}

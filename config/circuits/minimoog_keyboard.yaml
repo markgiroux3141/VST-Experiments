@@ -1,0 +1,147 @@
+# The Model D's keyboard circuit (board No. 2, Fig 9-7's circuit No. 1, its right half; values from
+# the figure and Table 7-6; docs/MINIMOOG_PLAN.md MM4, the reading in data/schematics/minimoog/README.md
+# "The keyboard circuit"). Alone here; scripts/make_minimoog_voice.py joins it to the voice.
+#   current source  Q11 (TIS92) follows the R20 / R22 1K 1% divider (+5 V) into R25 1K (C3 .1);
+#        Q9 (TIS93, matched to Q11: its Vbe 10-20 mV under Q11's at 200 uA, note 4) sits on that node
+#        and sets R1 590 1%'s current from +10 V: the string's 8.33 mA (Fig 9-7; Fig 9-17 writes
+#        8.48 mA). Its collector feeds the top of the 43 x 10 ohm 1% string (pin 10), the string's
+#        bottom (the lowest key, F) on ground: 0 V at the low F, one 10 ohm step a key
+#   the keys  a key's contact puts its string tap on the N.O. pitch bar (pin 9); two keys short the
+#        string between them, so the lowest key sounds (low-note priority). Here the string is one
+#        430 ohm resistor carrying the source's current, and the pitch bar is the control input
+#        `key` (the tap's volts, read by the app from key_*: key_v_per_semitone is 10 ohm times the
+#        current this circuit's source measures, scripts/minimoog_keyboard_study.py --write) through
+#        the tap's resistance; the bar never floats here: the app holds the last key (the S&H's hold)
+#   S&H  C9 .33 uF on the pitch bar (R53 4.7M from +10 V) is Q23's base; Q23 / Q14 (2N3392, matched,
+#        note 5; tail R52 43K to -10 V, loads R58 6.2K / R51 560) and Q24 (2N4058) make an op-amp,
+#        its output Q24's collector (R59 3.9K up, R54 1.5K down), its inverting input Q14's base fed
+#        back through R30 10K from the output (Q14's base meets only R30: Fig 9-7's corner, no dot)
+#   glide  the op-amp's output through R61 330 to pin 8, the panel's GLIDE (R2 5 Meg audio, a
+#        rheostat between 7A and its wiper on 8A, shorted by the left-hand controller's GLIDE switch:
+#        Fig 9-17) back on pin 7, then Q13 (2N4303, "glide up") onto C6 1 uF; Q10 (2N4303, "glide
+#        down": its gate on C6 through R21 10K, drain R2 330 from +10 V) follows C6 to the output
+#        (pins 4 / 5, R18 3.9K to -10 V), which closes the op-amp's loop through R30
+#   the trigger  a key closes the trigger bus onto the +10 V bar (the keyboard wiring diagram); the
+#        bus through R65 5.1K onto C13 .01 / R34 100K to -10 V and CR5 (1N4004) holds Q13's gate (R64
+#        100K, R31 22M to its source): key down CR5 is off and Q13 conducts (Vgs = 0); key up the bus
+#        falls toward -10 V, CR5 pulls the gate down and Q13 opens: C6 holds the last pitch.
+#        The key's trigger contact is a diode (`gate` the control input): it lifts the bus to +10 V
+#        and lets it float at key-up (the Side Man's precedent)
+# Rails ideal (+10, -10 V); the board's +9.3 V isn't used here.
+
+title: "Minimoog keyboard circuit (board No. 2, circuit No. 1)"
+input: kb_in
+cv_inputs:
+  key: pbar
+  gate: kg
+probes: [out, s9, n24, g8, g7, c6, b14, tbus, tn, gb, top, e9, b9, c23]
+
+controls:
+  glide: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R2 Rotary Pot, 5 Megohm audio (GLIDE; Fig 9-17: a rheostat between 7A and its wiper on 8A); 0 = the knob at 0, 1 = at 10"}
+  glide_on: {value: 0, choices: [0, 1], unit: switch, source: "the left-hand controller's GLIDE switch (Fig 9-17: its wires to 7A and 8A short the GLIDE pot when off): 0 off (shorted), 1 on; a contact always in the circuit, so a flip updates a stream in place"}
+
+values:
+  vpos_v: {value: 10.0, source: "Fig 9-7: +10 V (pin 1)"}
+  vneg_v: {value: -10.0, source: "Fig 9-7: -10 V (pin 3)"}
+  # --- the keys (read by the app: varimu-app panel::KeyString; the S&H's input, the pitch bar)
+  key_v_per_semitone: {value: 0.084368, source: "Fig 9-7: the string's 10 ohm 1% steps times the current source's current as this circuit measures it (8.437 mA; Fig 9-7 writes 8.33 mA, Fig 9-17 8.48 mA): scripts/minimoog_keyboard_study.py --write"}
+  key_ref_note: {value: 41.0, source: "provisional: model knowledge (the 44 keys run F to C, the lowest F, the string's grounded end, as MIDI 41, F2: the procedures' 'low A' four keys up at MIDI 45)"}
+  key_min_v: {value: 0.0, source: "Fig 9-7's keyboard wiring: the string's bottom (the lowest key) on ground"}
+  key_max_v: {value: 3.6278, source: "Fig 9-7: the top key, C, 43 steps up the string (43 x key_v_per_semitone)"}
+  gate_off_v: {value: -10.0, source: "provisional: model knowledge (key up the trigger bus floats down to R34's -10 V; the contact diode's source sits there so it stays off)"}
+  gate_on_v: {value: 10.55, source: "provisional: model knowledge (the keyboard wiring's +10 V bar, plus the contact diode's ~0.55 V at the bus's ~0.3 mA, so the bus sits at +10 V)"}
+  r_tap_ohm: {value: 100.0, source: "provisional: model knowledge (the pitch bar's source: a key's contact on the string's tap, k x 10 ohm beside (43 - k) x 10 ohm, 0-107 ohm; 100 ohm taken)"}
+  r_string_ohm: {value: 430.0, source: "Fig 9-7's keyboard wiring: 43 resistors, all 10 ohm 1%, in series"}
+  # --- the current source
+  r1_ohm: {value: 590.0, source: "Fig 9-7 / Table 7-6: R1 590 ohm 1%"}
+  r20_ohm: {value: 1.0e+3, source: "Fig 9-7 / Table 7-6: R20, R22 1K ohm 1%"}
+  r25_ohm: {value: 1.0e+3, source: "Fig 9-7 / Table 7-6: R25 1K ohm (the table's part number reads 1.6K, its text and the drawing 1K)"}
+  c3_f: {value: 0.1e-6, source: "Fig 9-7 / Table 7-6: C3 0.1 uF polyester"}
+  # --- the S&H
+  c9_f: {value: 0.33e-6, source: "Fig 9-7 / Table 7-6: C9 0.33 uF polyester"}
+  r53_ohm: {value: 4.7e+6, source: "Fig 9-7 / Table 7-6: R53 4.7 Megohm"}
+  r52_ohm: {value: 43.0e+3, source: "Fig 9-7 / Table 7-6: R52 43K"}
+  r58_ohm: {value: 6.2e+3, source: "Fig 9-7 / Table 7-6: R58 6.2K"}
+  r51_ohm: {value: 560.0, source: "Fig 9-7 / Table 7-6: R51 560"}
+  r59_ohm: {value: 3.9e+3, source: "Fig 9-7 / Table 7-6: R59 3.9K"}
+  r54_ohm: {value: 1.5e+3, source: "Fig 9-7: R54 1.5K (Table 7-6's text reads 15K, its part number 852-512152 1.5K)"}
+  r30_ohm: {value: 10.0e+3, source: "Fig 9-7 / Table 7-6: R30 10K"}
+  # --- glide
+  r61_ohm: {value: 330.0, source: "Fig 9-7 / Table 7-6: R61 330"}
+  r_glide_ohm: {value: 5.0e+6, source: "Table 7-3: R2 5 Megohm audio (GLIDE)"}
+  glide_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper's 10% at half rotation)"}
+  r_switch_open_ohm: {value: 1.0e+10, source: "provisional: model knowledge (an open switch contact's insulation, 1e10-1e12 ohm; closed it is a pot's end)"}
+  c6_f: {value: 1.0e-6, source: "Fig 9-7 / Table 7-6: C6 1 uF polyester"}
+  r21_ohm: {value: 10.0e+3, source: "Fig 9-7 / Table 7-6: R21 10K"}
+  r2_ohm: {value: 330.0, source: "Fig 9-7 / Table 7-6: R2 330 (the board's R2, Q10's drain; not the panel's GLIDE R2)"}
+  r18_ohm: {value: 3.9e+3, source: "Fig 9-7 / Table 7-6: R18 3.9K"}
+  # --- the trigger into Q13's gate
+  r65_ohm: {value: 5.1e+3, source: "Fig 9-7 / Table 7-6: R65 5.1K (the table's part number 852-512152 reads 1.5K; its text and the drawing 5.1K)"}
+  c13_f: {value: 0.01e-6, source: "Fig 9-7 / Table 7-6: C13 0.01 uF polyester"}
+  r34_ohm: {value: 100.0e+3, source: "Fig 9-7 / Table 7-6: R34 100K"}
+  r64_ohm: {value: 100.0e+3, source: "Fig 9-7 / Table 7-6: R64 100K"}
+  r31_ohm: {value: 22.0e+6, source: "Fig 9-7 / Table 7-6: R31 22 Megohm"}
+  r_leak_ohm: {value: 1.0e+9, source: "numerical: a leak on the unused audio input and the trigger bus (defined with the contact open)"}
+  diode: {value: 1N4148@1, source: "provisional: Fig 9-7's CR5 1N4004 (a rectifier; no card): the 1N4148 stands in"}
+  contact: {value: 1N4148@1, source: "numerical: the key's trigger contact as a diode (closes the bus onto the +10 V bar, open at key-up)"}
+
+devices:
+  QN: {device: 2N3904@1, source: "provisional: Fig 9-7's 2N3392 (Q23 / Q14, matched: one model instance; no card found): the 2N3904 stands in"}
+  QNS: {device: 2N3904@1, source: "Fig 9-7: Q11 TIS92, alternate 2N3904 (Table 7-6)"}
+  QPS: {device: 2N3906@1, source: "Fig 9-7: Q9 TIS93, alternate 2N3906 (Table 7-6; the matched set's Vbe offset is the cards')"}
+  QO: {device: 2N3906@1, source: "provisional: Fig 9-7's Q24 2N4058 (PNP; no card): the 2N3906 stands in, as on the filter board"}
+  JG: {device: 2N3819@1, source: "provisional: Fig 9-7's Q13 / Q10 2N4303 (N-channel, IDSS 4-10 mA, no card found): the 2N3819 card (IDSS ~11 mA, VGS(off) -2.5 V) stands in, nearer than the 2N5457 (1-5 mA)"}
+  DD: {device: diode}
+  DK: {device: contact}
+
+sections:
+  - title: rails
+    parts:
+      VP: {V: [vp, "0"], v: vpos_v}
+      VN: {V: [vn, "0"], v: vneg_v}
+      RIN: {R: [kb_in, "0"], r: r_leak_ohm}
+  - title: current source
+    parts:
+      R20: {R: [vp, b11], r: r20_ohm}
+      R22: {R: [b11, "0"], r: r20_ohm}
+      Q11: {bjt: [vp, b11, b9], model: QNS}
+      R25: {R: [b9, "0"], r: r25_ohm}
+      C3: {C: [b9, "0"], c: c3_f}
+      R1: {R: [vp, e9], r: r1_ohm}
+      Q9: {bjt: [top, b9, e9], model: QPS}
+      RSTR: {R: [top, "0"], r: r_string_ohm}
+  - title: keys
+    parts:
+      RTAP: {R: [pbar, s9], r: r_tap_ohm}
+      DKEY: {device: [kg, tbus], model: DK}
+      RTB: {R: [tbus, "0"], r: r_leak_ohm}
+      R65: {R: [tbus, tn], r: r65_ohm}
+  - title: sample and hold
+    parts:
+      C9: {C: [s9, "0"], c: c9_f}
+      R53: {R: [vp, s9], r: r53_ohm}
+      Q23: {bjt: [c23, s9, et], model: QN}
+      Q14: {bjt: [c14, b14, et], model: QN}
+      R52: {R: [et, vn], r: r52_ohm}
+      R58: {R: [vp, c23], r: r58_ohm}
+      R51: {R: [vp, c14], r: r51_ohm}
+      Q24: {bjt: [n24, c23, vp], model: QO}
+      R59: {R: [vp, n24], r: r59_ohm}
+      R54: {R: [n24, vn], r: r54_ohm}
+      R30: {R: [out, b14], r: r30_ohm}
+  - title: glide
+    parts:
+      R61: {R: [n24, g8], r: r61_ohm}
+      RGL: {rheostat: [g8, g7], r: r_glide_ohm, at: glide, taper_mid: glide_taper_mid}
+      RGSW: {rheostat: [g8, g7], r: r_switch_open_ohm, at: glide_on}
+      J13: {jfet: [c6, gq13, g7], model: JG}
+      C6: {C: [c6, "0"], c: c6_f}
+      R21: {R: [c6, gq10], r: r21_ohm}
+      J10: {jfet: [d10, gq10, out], model: JG}
+      R2: {R: [vp, d10], r: r2_ohm}
+      R18: {R: [out, vn], r: r18_ohm}
+      C13: {C: [tn, vn], c: c13_f}
+      R34: {R: [tn, vn], r: r34_ohm}
+      DCR5: {device: [gb, tn], model: DD}
+      R64: {R: [gb, gq13], r: r64_ohm}
+      R31: {R: [g7, gb], r: r31_ohm}

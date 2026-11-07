@@ -1,4 +1,5 @@
-"""The Minimoog's filter contour generator (board No. 2, Fig 9-7), alone (docs/MINIMOOG_PLAN.md, MM4)."""
+"""The Minimoog's filter contour generator (board No. 2, Fig 9-7), alone (docs/MINIMOOG_PLAN.md,
+MM4)."""
 
 import sys
 from pathlib import Path
@@ -15,7 +16,8 @@ T_ON = ct.T_ON
 
 
 def test_attack_range_matches_the_panel():
-    """ATTACK at 0 is a few ms (the trigger's C7 delay included), at 10 several seconds (1 ms - 10 s)."""
+    """ATTACK at 0 is a few ms (the trigger's C7 delay included), at 10 several seconds (1 ms - 10
+    s)."""
     out0, _ = ct.one(0.0, 0.0, 1.0, 1.0, 1.5)
     seg = out0[int(T_ON * FS) :]
     t_fast = np.argmax(seg > 0.98 * seg.max()) / FS
@@ -28,7 +30,8 @@ def test_attack_range_matches_the_panel():
 
 
 def test_decay_range_and_the_sustain_level():
-    """DECAY at 0 falls in ~1 ms, at 8 in seconds; the fall stops at the SUSTAIN level while the key is held."""
+    """DECAY at 0 falls in ~1 ms, at 8 in seconds; the fall stops at the SUSTAIN level while the
+    key is held."""
     out, env = ct.one(0.0, 0.0, 0.0, 1.0, 1.4)
     seg = out[int(T_ON * FS) :]
     ipk = int(np.argmax(seg))
@@ -44,7 +47,8 @@ def test_decay_range_and_the_sustain_level():
 
 
 def test_release_follows_decay_and_gate_off_ends_the_note():
-    """After the key goes up the output falls to ~0 (release through DECAY), and a second gate attacks again."""
+    """After the key goes up the output falls to ~0 (release through DECAY), and a second gate
+    attacks again."""
     ir = ct.cs.build({"attack": 0.0, "decay": 0.2, "sustain": 1.0})
     n = int(FS * 3.0)
     gate = np.zeros(n)
@@ -57,9 +61,17 @@ def test_release_follows_decay_and_gate_off_ends_the_note():
 
 
 def test_loudness_section_peaks_higher_and_shares_the_trigger():
-    """The loudness contour (a Darlington output) peaks near 5.7 V, holds at SUSTAIN, releases; same gate."""
+    """The loudness contour (a Darlington output) peaks near 5.7 V, holds at SUSTAIN, releases;
+    same gate."""
     ir = ct.cs.build(
-        {"attack": 0.0, "decay": 0.2, "sustain": 1.0, "lattack": 0.0, "ldecay": 0.2, "lsustain": 1.0}
+        {
+            "attack": 0.0,
+            "decay": 0.2,
+            "sustain": 1.0,
+            "lattack": 0.0,
+            "ldecay": 0.2,
+            "lsustain": 1.0,
+        }
     )
     n = int(FS * 2.0)
     gate = np.zeros(n)
@@ -74,23 +86,28 @@ def test_loudness_section_peaks_higher_and_shares_the_trigger():
 
 
 def test_voice_plays_through_the_apps_partition_without_the_click():
-    """minimoog_voice (generated) through the app's three-way partition, coupled hold: a gated note
-    plays, and the key-down click at the default contours is far below the old bare gate's ~49 mV."""
+    """minimoog_voice (generated) through the app's partition, coupled hold: a gated note on the
+    keyboard's trigger contact plays, and the key-down click at the default contours is far below
+    the old bare gate's ~49 mV."""
+    import minimoog_gate_check as gc
     from scipy.signal import butter, sosfilt
 
-    import minimoog_gate_check as gc
     from varimu.circuit import builder, spec
     from varimu.config import CONFIG_DIR
 
     vs = spec.load_circuit(CONFIG_DIR / "circuits" / "minimoog_voice.yaml")
     ir = builder.build_ir(vs, spec.resolve(vs, {}), "ja")
+    g_off, g_on = gc.gate_levels(vs, "gate")
     n = int(FS * 1.0)
-    gate = np.zeros(n)
-    gate[int(0.3 * FS) : int(0.8 * FS)] = 5.0
-    out = gc.play(ir, np.zeros(n), gate, np.zeros(n), gc.VOICE_PARTITION, "hold", "gate")
+    gate = np.full(n, g_off)
+    gate[int(0.3 * FS) : int(0.8 * FS)] = g_on
+    key = np.full(n, gc.key_volts(vs, 57))
+    out = gc.play(ir, np.zeros(n), gate, key, gc.VOICE_PARTITION, "hold", "gate")
     h = sosfilt(butter(2, 150 / (FS / 2), "high", output="sos"), out)
     assert np.abs(h[int(0.29 * FS) : int(0.5 * FS)]).max() < 0.01
     t = np.arange(n) / FS
-    tone = gc.play(ir, 0.25 * (2 * ((t * 220.0) % 1.0) - 1), gate, np.zeros(n), gc.VOICE_PARTITION, "hold", "gate")
+    tone = gc.play(
+        ir, 0.25 * (2 * ((t * 220.0) % 1.0) - 1), gate, key, gc.VOICE_PARTITION, "hold", "gate"
+    )
     assert np.std(tone[int(0.5 * FS) : int(0.7 * FS)]) > 0.3  # key held: sounds
     assert np.std(tone[int(0.1 * FS) : int(0.25 * FS)]) < 1e-3  # key up: shut

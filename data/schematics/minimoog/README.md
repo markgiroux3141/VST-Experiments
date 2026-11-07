@@ -159,12 +159,8 @@ The two contour sections are the same circuit (filter: Q1-Q8, Q21, Q22; loudness
   glide); R17-R21 5K linear (sustain levels, amount of contour); R2 5 Megohm; R3, R6, R7, R8, R10 25K. Which is
   which is on Fig 9-16 (PDF page 18; 2994 x 1566 pt: render clips) and not yet traced.
 
-**Keyboard circuit (circuit No. 1, same sheet, right half):** pitch bus 43 x 10 ohm 1% string from the +10 V bar, current
-8.33 mA; the pitch bus into the Q23 / Q14 matched pair (2N3392, R58 6.2K, R51 560, R52 43K, R54 1.5K, R30 10K, R59
-8.9K, R61 330) with PNP Q24 (2N4058), the sample-and-hold C9 .33 uF (R53 4.1M), glide: JFETs Q13 / Q10 (2N4303),
-C6 1 uF (glide up), R64 100K, R21 10K, R31 22M, R2 330, CR5 1N4004, R65 5.1K, C13 .01, R34 100K; the current source
-Q9 / Q11 (TIS93 / TIS92, matched PNP 10 to 20 mV under the NPN at 200 uA), R1 590, R20 1K, R22 1.1K 1%, R25 1K; output
-R18 3.9K to -10 V at pins 4 / 5 (to the oscillators and filter). Not yet traced node by node.
+**Keyboard circuit (circuit No. 1, same sheet, right half):** read node by node on the 002 scan below
+("The keyboard circuit, traced").
 
 ### Fig 9-7 resolved with a sharper scan (2026-11-07)
 
@@ -192,3 +188,35 @@ Read there:
   +10 V to ground, its wiper to 16B.
 - AMOUNT OF CONTROL R17 (5K, printed "56"): one end to ground, the other on the filter contour (board 2's 11B), its
   wiper to board 4's pin 16 (R74). GLIDE R2 (5 Meg audio). EXT. S-TRIG jack SO-1 to 19B.
+
+### The keyboard circuit, traced (Fig 9-7's right half on the 002 scan, Table 7-6; read 2026-11-07)
+
+Built as `config/circuits/minimoog_keyboard.yaml` (docs/MINIMOOG_PLAN.md MM4).
+- **The keyboard wiring diagram:** the 43-resistor string (all 10 ohm 1%) has its left end (the lowest key, F) on
+  GROUND (PL-1 pin 3) and takes CURRENT IN (pin 9, from the board's pin 10) at its top; a key's pitch contact puts its
+  tap on the N.O. pitch bar (pin 2, the board's pin 9), its trigger contact closes the TRIGGER BUS (pin 6) onto the
+  +10 bar (pin 4). So the pitch is the lowest key's tap (two keys short the string between them) and the trigger is
+  positive-going, +10 V.
+- **Current source:** Q11 (TIS92) base on R20 1K / R22 1K 1% (+10 V to ground; Table 7-6: R20, R22 1K 1%, the
+  earlier "1.1K" a misreading), emitter on R25 1K and C3 .1 to ground and on Q9's base; Q9 (TIS93) emitter through R1
+  590 1% from +10 V, collector the 8.33 mA ("<- 8.33 ma" on pin 10). Fig 9-17 writes **8.48 mA** on the same wire;
+  the circuit as built measures 8.437 mA.
+- **S&H:** the pitch bar (pin 9) runs straight to C9 .33 (to ground) and Q23's base; R53 4.7M from +10 V to that node.
+  Q23 / Q14 (2N3392, matched) share R52 43K to -10 V; Q23's collector R58 6.2K, Q14's R51 560 from +10 V; Q24 (2N4058,
+  emitter on +10 V) has its base on Q23's collector, its collector on R59 3.9K (to +10 V), R54 1.5K (to -10 V) and R61
+  330 to pin 8. **Q14's base meets only R30 10K** (a corner, no dot: zoomed); R30's other end is the output node.
+- **Glide:** pin 8 (OUTPUT TO GLIDE) -> the panel's GLIDE R2 5M audio (Fig 9-17: between 7A and its wiper on 8A, the
+  third lug open; both wires also run to the left-hand controller, whose GLIDE switch shorts them) -> pin 7 (INPUT FROM
+  GLIDE) -> Q13's source (2N4303, "glide up"); Q13's drain on C6 1 uF (to ground) and R21 10K into Q10's gate (2N4303,
+  "glide down"); Q10's drain R2 330 from +10 V, its source the output node (pins 4 / 5 to the oscillators and filter,
+  R18 3.9K to -10 V at pin 3).
+- **Q13's gate:** the trigger (pin 6) through R65 5.1K onto C13 .01 and R34 100K (both to -10 V); CR5 (1N4004) cathode
+  on that node, anode on the junction of R64 100K (to Q13's gate) and R31 22M (to Q13's source).
+- **Table 7-6 against the drawing:** R54's text reads 15K, its part number 852-512152 is 1.5K (the drawing's);
+  R65's part number is also 852-512152 (1.5K), its text and the drawing 5.1K (Table 7-5's R178 shows 512512 = 5.1K, so
+  the code is the slip); R25's part number reads 1.6K, text and drawing 1K. Two of three taken each time. C6 1 uF and C9
+  0.33 uF polyester, C13 .01, C3 .1; Q10 / Q13 2N4303; Q14 / Q23 a matched 2N3392 set; Q9 / Q11 a matched TIS93 / TIS92
+  set (alternates 2N3906 / 2N3904).
+- Also on Fig 9-17: the filter's KEYBOARD CONTROL rockers SW16 (FILTER KBD 1/3) with R53 300K and SW17 (2/3) with R54
+  150K, confirming MM1's inference; R55 200K and R51 100K (FILTER EXT CONTROL IN) beside them.
+

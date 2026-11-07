@@ -44,10 +44,12 @@ def test_range_rings_at_440_with_the_keyboard_off(s):
 
 
 def test_scale_tracks_three_octaves(s):
-    """Folkman, 'Filter Scale': the filter tracks the keyboard over three octaves (1 V /
-    octave), within 3 % of an octave per volt."""
+    """Folkman, 'Filter Scale': the filter tracks the keyboard over three octaves (its four A keys
+    on the string's volts, ~1.012 V / octave), within 3 % of an octave per keyboard octave."""
+    import minimoog_vcf_trim as trim
+
     ir = st.build(s, {"emphasis": 1.0})
-    f = np.array([st.oscillates(ir, key_v=k)[2] for k in (0.0, 1.0, 2.0, 3.0)])
+    f = np.array([st.oscillates(ir, key_v=trim.key_volts(s, 45 + 12 * i))[2] for i in range(4)])
     assert np.all(np.abs(np.diff(np.log2(f)) - 1.0) < 0.03)
 
 

@@ -178,6 +178,52 @@ read on Fig 9-17 (sources README): every contour pot placed but the filter SUSTA
   filter through the KEYBOARD CONTROL fixture; the filter SUSTAIN's top end; the 1N34A germanium diodes (1N4148 stands
   in: peaks ~0.3 V high); the 2N3392 (2N3904 stands in); EXT. S-TRIG; the +9.3 V decoupling (Q26); the user listens.
 
+**MM4, the keyboard circuit built (2026-11-07):** `config/circuits/minimoog_keyboard.yaml` (Fig 9-7's circuit No. 1 traced
+on the 002 scan, values checked against Table 7-6: sources README "The keyboard circuit, traced"), joined into the voice by
+`make_minimoog_voice.py` in place of the KEYBOARD CONTROL fixture; `scripts/minimoog_keyboard_study.py [--write]`,
+`tests/test_minimoog_keyboard.py` (5 tests).
+- **The string and its current source:** Q9 / Q11 (2N3906 / 2N3904, the sheet's alternates) set **8.437 mA** into the
+  43 x 10 ohm string (Fig 9-7 says 8.33, Fig 9-17 8.48): **84.37 mV a key, 1.0124 V an octave**, 0 V at the lowest F
+  (MIDI 41, provisional), 3.628 V at the top C. The keys are the control input `key` on the pitch bar (through the tap's
+  ~100 ohm); `key_v_per_semitone` is 10 ohm times the measured current (`--write`), and the app's `Feed::Key` reads it.
+  Calls made: the string is one 430 ohm resistor (only its total loads the source); the tap is an ideal source the app
+  holds at the last key, so the pitch bar never floats (the hardware's C9 would creep toward +10 V through R53 at key-up,
+  ~3 V/s, inaudible while Q13 holds C6); the voice doesn't carry the current source (a constant on ideal rails; revisit
+  with the supply board, MM5).
+- **The trigger is the real bus:** a key closes the trigger bus onto the +10 V bar (the keyboard wiring diagram), so the
+  gate is now +10 V, not the old 5 V. The contact is a diode from the control input `gate` (`gate_on_v` 10.55, so the bus
+  sits at +10 V; `gate_off_v` -10 V): at key-up the bus floats down with C13 through R34 (1 ms), as the hardware's does.
+  The same bus is the contour board's pin 20.
+- **Tracking** (a key held, production): the output follows the bar within -2 / +11 mV over the keyboard, gain 1.0035
+  (+4 cents an octave: the matched pair's base currents through R30 10K against the tap's 100 ohm; the oscillators'
+  Scale trims take it out).
+- **Glide** (an octave, the low A to the next, key held): GLIDE off 0.05 ms (1/e); on, 1/e 8 ms at 2.5, 32 ms at 5,
+  105 ms at 7.5, 323 ms at 10 (10-90 %: 0.42 s). **Down is ~2.5x slower than up** (83 vs 32 ms at 5): C6 sits a JFET
+  Vgs (~1.3 V) under the output, near 0 V, so the op-amp's +9.9 V swing drives it up with ~10 V and its -4.44 V swing
+  (R59 / R54 with Q24 off) down with ~4.4 V. A property of the circuit; its size rests on the stand-in JFET's Vgs.
+- **Hold:** after key-up Q13 opens (CR5 pulls its gate to ~-9.3 V) and C6 holds: the output moves < 0.1 mV in 2 s.
+  Before the first key after power-up the output sits at C6's DC solution (1.55 V here), as an unplayed instrument's would.
+- Stand-ins: the 2N4303 (Q13 / Q10, no card) is the 2N3819 (IDSS ~11 mA, VGS(off) -2.5 V; nearer the 2N4303's 4-10 mA
+  than the 2N5457); the 2N3392 pair the 2N3904; Q24's 2N4058 the 2N3906; CR5's 1N4004 the 1N4148.
+- **Filter Scale re-trimmed on the real keys:** the filter board's fixture now gives the string's volts (0 V at the low
+  F, 84.37 mV a key), and `minimoog_vcf_trim.py --scale-only` runs Folkman's Filter Scale on the A keys' real volts:
+  SCALE 0.4658 -> **0.4014**, tracking 440.5 / 876.4 / 1756.2 / 3509.4 Hz (0.992 / 1.003 / 0.999 octaves a keyboard
+  octave). REGEN CAL and RANGE don't read the keys and stay. The script's regeneration search failed on the MM2 board
+  (a saturated oscillation read as no onset; it hadn't been rerun since MM2): fixed, not rerun.
+- Pre-flight counts a JFET's channel as a DC path (C6 is held only by Q13).
+- **Live:** the app's `minimoog_voice` gets GLIDE and the GLIDE switch; three threads, the keyboard's S&H and glide beside
+  the VCA (cuts at the tap resistance into C9, at R65 into C13, at its output into KEYBOARD CONTROL's 300K / 150K; the
+  contacts stay in the first part with the control inputs): **61-86 % load with a key held, worst block 121-126 %, 0
+  dropouts** (the keyboard in the first part: 79-90 %, worst 135 %). The gate check, partition vs one solve: -49.8 dB at
+  the defaults, with GLIDE on and at ATTACK / DECAY 0; -40.5 dB at EMPHASIS 0.9 (the VCA cut's sample of phase).
+- **Open, not understood:** with the keyboard on a thread of its own (four parts, in any order) the loudness contour's
+  attack ends early (~5.4 V instead of one solve's 6.8 V; sustain 4.4 V instead of 5.1 V): the gate check fell to -30 dB.
+  The keyboard shares no node with the contour board (only with the first part), a fourth part holding only the
+  keyboard's rails changes nothing, and the slot wiring in `stream.rs::couple` reads consistently. Beside the VCA it
+  matches one solve to the printed digits. Worth a look at circuitsim's partition with three parts sourcing from the first.
+- Open: the Model D's keyboard is low-note priority (the string), the app's keyboard logic last-key (a device option
+  would make `Feed::Key` and the test oscillator follow the lowest held key); the user listens (glide, the bigger trigger).
+
 ## CPU while another session runs
 
 `CARGO_BUILD_JOBS=3`, builds started with `cmd /c start /belownormal /wait /b ...`; one render

@@ -1,7 +1,8 @@
-"""The filter contour generator alone (docs/MINIMOOG_PLAN.md, MM4): gate on / off, the envelope's shape.
+"""The filter contour generator alone (docs/MINIMOOG_PLAN.md, MM4): gate on / off, the envelope's
+shape.
 
-    uv run --extra fast python scripts/minimoog_contour_study.py [--attack A] [--decay D] [--sustain S]
-        [--gate-s 1.0] [--total-s 3.0] [--quality production|draft-1x]
+uv run --extra fast python scripts/minimoog_contour_study.py [--attack A] [--decay D] [--sustain S]
+    [--gate-s 1.0] [--total-s 3.0] [--quality production|draft-1x]
 """
 
 import argparse
@@ -47,7 +48,26 @@ def main():
     gate[int(0.2 * FS) : int((0.2 + a.gate_s) * FS)] = 5.0
     v = run(ir, gate, a.quality)
     out, env = v["outn"], v["env"]
-    times = [0.0, 0.1, 0.19, 0.2, 0.202, 0.205, 0.21, 0.25, 0.3, 0.5, 0.7, 1.0, 1.19, 1.21, 1.3, 1.6, 2.0, 2.9]
+    times = [
+        0.0,
+        0.1,
+        0.19,
+        0.2,
+        0.202,
+        0.205,
+        0.21,
+        0.25,
+        0.3,
+        0.5,
+        0.7,
+        1.0,
+        1.19,
+        1.21,
+        1.3,
+        1.6,
+        2.0,
+        2.9,
+    ]
     for t in times:
         i = min(int(t * FS), n - 1)
         print(

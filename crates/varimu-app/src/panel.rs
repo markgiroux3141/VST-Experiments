@@ -1224,14 +1224,18 @@ pub const DEVICES: [Device; 24] = [
     },
     Device {
         id: "minimoog_voice",
-        label: "Minimoog Voice (VCF, VCA, contours)",
+        label: "Minimoog Voice (keyboard, VCF, VCA, contours)",
         short: "Moog voice",
-        about: "The Model D's filter board with its two contour generators and the keyboard             trigger (board No. 2): the keys' gate starts the loudness and filter contours             (ATTACK / DECAY / SUSTAIN each, DECAY switch), AMOUNT OF CONTOUR TO FILTER; the test             oscillator into the ladder (docs/MINIMOOG_PLAN.md, MM4)",
+        about: "The Model D's filter board with board No. 2: the keyboard circuit (the keys on \
+            its string's pitch bar, the sample-and-hold, GLIDE) into KEYBOARD CONTROL, the two \
+            contour generators started by its trigger bus (ATTACK / DECAY / SUSTAIN each, DECAY \
+            switch), AMOUNT OF CONTOUR TO FILTER; the test oscillator into the ladder \
+            (docs/MINIMOOG_PLAN.md, MM4)",
         group: Group::Instruments,
         circuit: "minimoog_voice",
         panel: Some(&[
             "cutoff_v", "emphasis", "kb1", "kb2", "amount", "lattack", "ldecay", "lsustain",
-            "attack", "decay", "sustain", "decay_on",
+            "attack", "decay", "sustain", "decay_on", "glide", "glide_on",
         ]),
         ahead_s: AHEAD_S,
         quality: Quality::Draft1x,
@@ -1249,12 +1253,20 @@ pub const DEVICES: [Device; 24] = [
         // diverged at the loudness peak detector).
         coupling: Some("hold"),
         live_speaker_v: None,
-        // Three threads: the filter with the trigger's CR10 / R60 (the gate's control node
-        // stays in the first part) | the VCA | the contour board, cut at R60 into C7, at the
-        // contour outputs (p9 into R59, the filter contour into AMOUNT) and at Q18's
-        // collector. One solve ran ~1.8x real time live.
+        // Three threads: the filter with the trigger's CR10 / R60 and the keyboard's contacts
+        // (the control inputs' nodes stay in the first part) | the VCA with the keyboard's S&H
+        // and glide (cut at the pitch bar's tap resistance into C9, at R65 into C13 and at its
+        // output into KEYBOARD CONTROL's 300K / 150K) | the contour board, cut at R60 into C7,
+        // at the contour outputs (p9 into R59, the filter contour into AMOUNT) and at Q18's
+        // collector. One solve ran ~1.8x real time live; the keyboard in the first part loaded
+        // 79-90 % with a key held (worst block 135 %). On a thread of its own (four parts) the
+        // loudness contour's attack ends early (~5.4 V for one solve's 6.8 V), not understood
+        // (docs/MINIMOOG_PLAN.md MM4); beside the VCA it matches one solve.
         partition: Some(&[
             "vca",
+            "keyboard: rails",
+            "keyboard: sample and hold",
+            "keyboard: glide",
             "|",
             "contour: rails",
             "contour: flip-flop",

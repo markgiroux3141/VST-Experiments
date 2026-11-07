@@ -1,7 +1,8 @@
 """Envelope times of the filter contour generator against the panel's ranges (MM4).
 
 The Model D's panel: ATTACK TIME 1 ms to 10 s, DECAY TIME 1 ms to 10 s (the operation manual's
-published ranges). Attack = gate on to the output's peak; decay = peak to 1 / e of its fall toward the
+published ranges). Attack = gate on to the output's peak; decay = peak to 1 / e of its fall toward
+the
 SUSTAIN level; release = gate off to 1 / e of the fall toward 0.
 
     uv run --extra fast python scripts/minimoog_contour_times.py [--attack-only | --decay-only]
@@ -35,7 +36,9 @@ def main():
     p.add_argument("--decay-only", action="store_true")
     a = p.parse_args()
     if not a.decay_only:
-        print("ATTACK (decay 0, sustain 1): time from key-down to the peak (out within 2% of its max)")
+        print(
+            "ATTACK (decay 0, sustain 1): time from key-down to the peak (out within 2% of its max)"
+        )
         for k in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
             tot = 14.0 if k >= 0.8 else 4.0
             out, _ = one(k, 0.0, 1.0, tot - 0.5, tot)
@@ -43,7 +46,10 @@ def main():
             pk = seg.max()
             t10 = np.argmax(seg > 0.1 * pk) / FS
             tpk = np.argmax(seg > 0.98 * pk) / FS
-            print(f"  attack {k:.1f}: peak {pk:5.2f} V, 10% at {t10 * 1e3:8.1f} ms, 98% at {tpk * 1e3:9.1f} ms")
+            print(
+                f"  attack {k:.1f}: peak {pk:5.2f} V, 10% at {t10 * 1e3:8.1f} ms, "
+                f"98% at {tpk * 1e3:9.1f} ms"
+            )
     if not a.attack_only:
         print("DECAY (attack 0, sustain 0): peak to 1/e of the fall to the idle level, key held")
         for k in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]:
@@ -55,7 +61,10 @@ def main():
             tail = seg[-1]
             target = tail + (pk - tail) / np.e
             t = np.argmax(seg[ipk:] < target) / FS
-            print(f"  decay {k:.1f}: peak {pk:5.2f} V, 1/e after {t * 1e3:9.1f} ms (end {tail:5.2f} V)")
+            print(
+                f"  decay {k:.1f}: peak {pk:5.2f} V, 1/e after {t * 1e3:9.1f} ms "
+                f"(end {tail:5.2f} V)"
+            )
 
 
 if __name__ == "__main__":
