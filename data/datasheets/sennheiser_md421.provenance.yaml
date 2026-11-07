@@ -1,0 +1,27 @@
+device: Sennheiser MD 421-II (dynamic cardioid, five-position bass roll-off)
+curve: frequency response (absolute, dBV for 1 Pa: bass control M and the four other positions' dips) and the polar diagram (125-16000 Hz)
+publisher: Sennheiser electronic SE & Co. KG, MD 421-II Product Specification V1.1 (2/2)
+documents:
+  sennheiser:
+    title: "MD 421-II Dynamic microphone, Product Specification (V1.1)"
+    scan_source: "web: https://sennheiser.com/globalassets/digizuite/47848-en-md-421-ii-product-specification-v1.1-en.pdf"
+    sha256: e4155c5d591a5a5c3326e11254d6a0fd04c73c93df49ff22f0de3f976adfb1d1
+    page: "PDF p.2 (vector graphs: the curves are Bezier paths)"
+local_copy: "none (the PDF isn't committed; hash above; a PNG of page 2 in data/schematics/sennheiser_md421/)"
+digitized_with: >-
+  scripts/digitize_md421.py on the PDF's own vector paths (PyMuPDF get_drawings), no raster.
+  Frequency: log-linear, fitted on the ten major vertical rules (20 50 100 200 500 1k 2k 5k 10k
+  20k Hz). Level: rules every 10 dB, -40 dBV at y 667.65 pt to -90 at 750.0 (dBV per pascal:
+  M position at 1 kHz -53.95 dBV = 2.0 mV/Pa, the sheet's 2 mV/Pa +-2.5 dB). Values on a
+  1/3-octave grid within each trace's extent (40 Hz-20 kHz). The five traces are told apart
+  by stroke (M solid; four dotted dips) and ranked by their level at 50 Hz (rank k = a stronger
+  roll-off): which switch position each is (1-4) is therefore by order, not by the sheet.
+polar_digitized_with: >-
+  the same page's paths: left half (125, 250, 500, 1000 Hz) centred at x 404.1, right half
+  (2000-16000 Hz) at x 419.1, y 486.4 pt; rings every 13.86 pt = 5 dB, 0 dB at the outer ring
+  (r 82.1 pt) to 25 dB at the centre hole (12.8); 0 deg up, 180 down; curves told apart by
+  dash pattern against the legend. Dashed traces' paths carry only part of their length
+  (the 125 Hz curve stops near 150 deg): read each frequency only where it has values.
+  Normalized to the sheet's own levels (each curve is 0 dB on axis).
+digitized_by: Claude Code
+digitized_on: 2026-11-06

@@ -41,7 +41,7 @@ runs**.
   of +2.8 dB at 4-7 kHz); WP8's Notes. WP9 (2026-11-06): the AKG D112 (`config/circuits/akg_d112.yaml`: `R_D112@1`
   fitted by `scripts/fit_d112.py`, no construction published; D112 -> SSL composed); WP9's Notes.
 - **In progress:** WP12 (API 312): step 1 half done (`data/schematics/api_312/README.md`: API's own 1972 mic preamp circuit, Fig. 1, and the 2520's data sheet). **Blocked on the 2520's internal schematic** (nine transistors, epoxy-potted: no public source but GroupDIY attachments).
-- **Next:** WP20 (EMI TG12345: 4038 -> TG) and WP19 (Helios: SM57 -> Helios), then WP14 (MD421: a plain dynamic); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+- **Next:** WP14 step 2-3 (the MD421's patent, then `fit_md421.py`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -1213,6 +1213,27 @@ optional `rears` (a space-separated node list; ports `rear_1`..) in both builder
 `slotted_line` network kind. Do it as its own plan file when picked up. The sheet's curves
 are digitized; nothing else of the RE20 is built. The order moves on to the WPs that
 open chains with the machinery that exists.
+
+### WP14. The Sennheiser MD 421
+
+A plain pressure-gradient dynamic (one rear entry through its "bass tubes"), so it fits the
+D112's machinery: `R_MD421@1` (kind `moving_coil`, `scripts/fit_md421.py` on `fit_d112.py`'s
+method) fitted to the sheet, a body for the entries (`bor.dynamic_mesh`), the five-position
+bass switch as a passive network between the coil and the XLR. Sources:
+`data/schematics/sennheiser_md421/README.md`.
+
+Steps:
+1. Sources and curves (done 2026-11-06): `scripts/digitize_md421.py` ->
+   `data/datasheets/sennheiser_md421_{response,polar}.csv`.
+2. Look up Sennheiser's MD 421 patent for the construction (bass tubes) to bound the fit.
+3. `scripts/fit_md421.py`: `R_MD421@1` to the M-position response (2 mV/Pa, the presence
+   rise, the 30 Hz and 17 kHz ends) and the polars; the switch network to the four dips.
+4. `config/circuits/sennheiser_md421.yaml` (the coil, the bass switch as a `switch`
+   selector, 250 ohm), the list's entry (output, drop, pattern cardioid), `compose_chain.py
+   --all` once an API chain exists, `tests/test_sennheiser_md421.py`, `test_chain_matrix.py`.
+
+Notes (2026-11-06, started): step 1 done. The curves: M flat -54 dBV (2.0 mV/Pa) 100 Hz-1
+kHz, +7 dB at 5-7 kHz; the four dips at 50 Hz: -3 / -6 / -15 / -15 dB re M (by rank).
 
 ### WP10-WP31
 
