@@ -1792,6 +1792,111 @@ def build_2n3906() -> dict[str, Any]:
     )
 
 
+# The uA726's die temperature in the Minimoog (Fig 9-2's mark "T = 78.4 C"): its transistors' gain
+# is fitted where they run. A circuit sets the same `temp_c` on its devices entry.
+UA726_TEMP_C = 78.4
+# Neither the sheet nor the Minimoog's manual gives a saturation current or an Early voltage: a
+# small IC NPN's (the pair's Vbe cancels in an expo converter; its exponent is kT / q).
+UA726_IS_A = 1.0e-15
+UA726_VAF_V = 100.0
+UA726_FIT_MAX_A = 2.0e-3
+
+
+def fit_ua726() -> tuple[dict[str, float], dict[str, float]]:
+    """BF, ISE, NE and IKF fitted by least squares (in log hfe) to the uA726 sheet's current gain
+    against collector current up to 2 mA (VCE 5 V, the die at its regulated temperature), the
+    Gummel-Poon DC subset (varimu.devices.bjt) evaluated at UA726_TEMP_C with IS and VAF fixed."""
+    from scipy.optimize import brentq, least_squares
+
+    ic, vce, hfe = load_csv("fairchild_ua726_hfe.csv").T
+    # Above ~2 mA the sheet's gain falls about as 1 / Ic (595 at 1.2 mA, 160 at 5 mA), steeper
+    # than the model's high-injection 1 / sqrt(Ic): fitted to UA726_FIT_MAX_A, where the
+    # Minimoog's 0.05-20 uA are far inside.
+    keep = ic <= UA726_FIT_MAX_A
+    ic, vce, hfe = ic[keep], vce[keep], hfe[keep]
+
+    def card(p):
+        bf, ise, ne, ikf = np.exp(p)
+        return Bjt(
+            "UA726", "npn", is_a=UA726_IS_A, bf=float(bf), vaf_v=UA726_VAF_V, ikf_a=float(ikf),
+            ise_a=float(ise), ne=float(ne), temp_k=UA726_TEMP_C + 273.15,
+        )  # fmt: skip
+
+    def gain(m: Bjt, i_c: float, v_ce: float) -> float:
+        vbe = brentq(lambda v: float(m.junction(v, v - v_ce)[0]) - i_c, 0.1, 1.2, xtol=1e-12)
+        out = m.junction(vbe, vbe - v_ce)
+        return float(out[0] / out[1])
+
+    def resid(p):
+        m = card(p)
+        return [np.log(gain(m, i, v) / h) for i, v, h in zip(ic, vce, hfe, strict=True)]
+
+    r = least_squares(resid, np.log([600.0, 1e-13, 2.0, 5e-3]))
+    bf, ise, ne, ikf = (float(x) for x in np.exp(r.x))
+    m = card(r.x)
+    err = [gain(m, i, v) - h for i, v, h in zip(ic, vce, hfe, strict=True)]
+    p = {"bf": bf, "ise_a": ise, "ne": ne, "ikf_a": ikf}
+    rms, worst = float(np.sqrt(np.mean(np.square(err)))), float(np.max(np.abs(err)))
+    return p, {"rms_hfe": rms, "max_hfe": worst}
+
+
+def build_ua726() -> dict[str, Any]:
+    """One transistor of the uA726 temperature-controlled pair (the Minimoog's expo converters,
+    docs/MINIMOOG_PLAN.md MM3): matched as one model instance on one die, run at UA726_TEMP_C
+    through a circuit's `temp_c`. Its heater regulator (Q3-Q8, the TEMP ADJ resistor) isn't in the
+    component: the die's temperature is a fixed setting until the thermal node."""
+    p, fit = fit_ua726()
+    return {
+        "name": "UA726",
+        "kind": "bjt",
+        "source": (
+            "Fairchild uA726 Temperature-Controlled Differential Pair (1979 Linear Op Amp Data "
+            "Book pp. 7-33 to 7-35, data/datasheets/transistors/fairchild_ua726_1979.pdf): bf, "
+            "ise_a, ne, ikf_a fitted to its current gain curve at the die's 78.4 C (the "
+            "Minimoog's Fig 9-2); is_a and vaf_v provisional: model knowledge (a small IC NPN; the "
+            "sheet gives neither); cje_f, cjc_f the sheet's typical 1.0 pF emitter transition (IE "
+            "100 uA) and "
+            "output (VCB 5 V) capacitances"
+        ),
+        "polarity": "npn",
+        "dc": {
+            "is_a": UA726_IS_A,
+            "bf": p["bf"],
+            "br": 1.0,
+            "nf": 1.0,
+            "nr": 1.0,
+            "vaf_v": UA726_VAF_V,
+            "var_v": None,
+            "ikf_a": p["ikf_a"],
+            "ikr_a": None,
+            "ise_a": p["ise_a"],
+            "ne": p["ne"],
+            "isc_a": 0.0,
+            "nc": 2.0,
+            "source": (
+                "fit: bf, ise_a, ne, ikf_a by least squares in log hfe to the sheet's p. 7-35 "
+                "curve up to 2 mA (data/datasheets/fairchild_ua726_hfe.csv, its provenance "
+                "sidecar; library.fit_ua726) at 78.4 C (above 2 mA the sheet's gain falls as "
+                "~1 / Ic, steeper than the model's roll-off: not fitted, the Minimoog runs "
+                "0.05-20 uA); "
+                "is_a 1e-15 A and vaf_v 100 V provisional: model knowledge"
+            ),
+        },
+        "parasitics": {
+            "rb_ohm": 0.0,
+            "rc_ohm": 0.0,
+            "re_ohm": 0.0,
+            "cje_f": 1.0e-12,
+            "cjc_f": 1.0e-12,
+            "source": (
+                "the sheet's p. 7-34: emitter transition capacitance 1.0 pF (IE 100 uA), output "
+                "capacitance 1.0 pF (IE 0, VCB 5 V), typical; no terminal resistances given"
+            ),
+        },
+        "fit_report": {"rms_error_hfe": fit["rms_hfe"], "max_error_hfe": fit["max_hfe"]},
+    }
+
+
 def build_bc550c() -> dict[str, Any]:
     """The BC550C (Philips / NXP), the project's first BJT (CLAVINET_PLAN.md CL0)."""
     return _bjt_component(
@@ -2317,6 +2422,7 @@ BUILDERS = {
     "2N4033": build_2n4033,
     "2N3904": build_2n3904,
     "2N3906": build_2n3906,
+    "UA726": build_ua726,
     "EL34T": build_el34t,
     "6084": build_6084,
     "5651": build_5651,

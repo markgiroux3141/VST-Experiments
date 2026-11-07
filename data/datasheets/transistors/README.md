@@ -218,3 +218,12 @@ BETA ~0.33 mA/V^2 by the square law) lies past the 1176's Q-bias range.
 - **Siliconix AN104, "SPICE parameters"** (measured JFET parameters), cited at
   https://www.technicalaudio.com/pdf/Siliconix/Siliconix_AN104_spice_parameters.pdf:
   that URL returns 404 now.
+
+## uA726 (the Minimoog's expo converters, 2026-11-07)
+
+- `fairchild_ua726_1979.pdf`: Fairchild's uA726 Temperature-Controlled Differential Pair, pp. 7-33 to
+  7-35 of the 1979 Fairchild Linear Op Amp Data Book (extracted from bitsavers' scan:
+  https://www.mirrorservice.org/sites/www.bitsavers.org/components/fairchild/_dataBooks/1979_Fairchild_Linear_Op-Amp_Data_Book.pdf,
+  PDF pages 342-344). Its current gain curve is digitized in `../fairchild_ua726_hfe.csv`
+  (`../fairchild_ua726.provenance.yaml`); `UA726@1` is fitted to it (`library.fit_ua726`). No SPICE
+  card or saturation current is published; the heater regulator (Q3-Q8) is drawn but not modelled.

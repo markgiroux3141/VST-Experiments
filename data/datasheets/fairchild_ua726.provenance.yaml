@@ -1,0 +1,26 @@
+device: "uA726"
+document: "uA726 Temperature-Controlled Differential Pair, in the 1979 Fairchild Linear Op Amp Data Book, pp. 7-33 to 7-35"
+publisher: "Fairchild Camera and Instrument Corporation"
+date: "1979"
+local_copy: transistors/fairchild_ua726_1979.pdf
+local_copy_sha256: dd5a7c80b8199cea3eff30ad1c02fe504713ab26e912e2708744d0cecf0c4926
+scan_source: "web: https://www.mirrorservice.org/sites/www.bitsavers.org/components/fairchild/_dataBooks/1979_Fairchild_Linear_Op-Amp_Data_Book.pdf (PDF pages 342-344, fetched 2026-11-07)"
+digitized_with: >-
+  PyMuPDF render of p. 7-35's "Current gain as a function of collector current" (uA726) at 300 dpi;
+  read by eye against the grid (a log axis 10 uA - 10 mA, a linear axis 0 - 1000 by 200), at the
+  decade's 1-2-5 points and along the high-current roll-off
+files:
+  fairchild_ua726_hfe.csv:
+    figure: >-
+      p. 7-35, uA726 "Current gain as a function of collector current" (VCE = 5.0 V, VS = +-15 V,
+      Radj = 62 kohm, -55 C <= TA <= +125 C: the die held at its regulated temperature)
+    columns: ic_a, vce_v (5 V, the figure's), hfe
+digitized_by: Claude Code
+digitized_on: 2026-11-07
+axis_calibration: "the grid lines (10 uA, 100 uA, 1 mA, 10 mA; 0 - 1000 by 200)"
+estimated_error: "about +-15 in hfe (the stroke's width and reading by eye), +-5 % in Ic along the roll-off"
+notes: >-
+  The curve's ends agree with the electrical characteristics on p. 7-34: average input bias current
+  50 nA at 10 uA (hfe 200) and 250 nA at 100 uA (hfe 400). Also there: input offset voltage 1.0 mV
+  typical (2.5 max), output capacitance 1.0 pF (IE = 0, VCB = 5 V), emitter transition capacitance
+  1.0 pF (IE = 100 uA), collector saturation 0.5 V (IB 100 uA, IC 1 mA).
