@@ -148,8 +148,11 @@ peak 4.86 V at the output (a germanium CR3 would put it ~0.3 V lower: the 1N4148
 setting + a diode drop (0.5 -> 2.2 V); a key-up releases through DECAY. Calls made: the DECAY switch is `decay_on`
 (1 = release follows DECAY, pin 2 open; 0 = pin 2 tied to V-TRIG, an instant release); SUSTAIN is a 5K pot from the
 panel's +10 V to ground; the +9.3 V is ideal. Idle the output sits at 0.16 V (the VCA's -40 dB leak): from Q8 / CR2's
-drops, not chased. Not yet: the loudness section (same flip-flop; Q16-Q19, Q2 / Q3, CR4 / CR9 output), the join to
-pin 16 / pin 9, the keyboard circuit, the app.
+drops, not chased. **The loudness section is in the same file** (same flip-flop, Q16 attack, Q17 / Q18 / Q19 decay and SUSTAIN,
+output Q3 / Q2 a Darlington follower, so out = envelope - 2 drops: peak 5.7 V, idle -0.46 V; it shares the trigger bus,
+V-TRIG and the DECAY switch; `lattack`, `ldecay`, `lsustain` provisional pot assignments; R27 read 16.9K, the sheet's
+'169K' taken as the filter divider's value). `tests/test_minimoog_contour.py` has 4 tests. Not yet: the join to
+pin 16 / pin 9 (AMOUNT OF CONTOUR, R59), the keyboard circuit (current source, S&H, glide), the app.
 
 ## CPU while another session runs
 

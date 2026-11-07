@@ -54,3 +54,20 @@ def test_release_follows_decay_and_gate_off_ends_the_note():
     assert out[int(0.7 * FS)] > 3.5
     assert out[int(1.4 * FS)] < 0.4
     assert out[int(1.9 * FS)] > 3.5
+
+
+def test_loudness_section_peaks_higher_and_shares_the_trigger():
+    """The loudness contour (a Darlington output) peaks near 5.7 V, holds at SUSTAIN, releases; same gate."""
+    ir = ct.cs.build(
+        {"attack": 0.0, "decay": 0.2, "sustain": 1.0, "lattack": 0.0, "ldecay": 0.2, "lsustain": 1.0}
+    )
+    n = int(FS * 2.0)
+    gate = np.zeros(n)
+    gate[int(0.2 * FS) : int(1.0 * FS)] = 5.0
+    v = ct.cs.run(ir, gate)
+    lo, fo = v["outl"], v["outn"]
+    assert lo[int(0.1 * FS)] < 0.2  # idle: shut
+    assert 5.0 < lo[int(0.21 * FS) : int(0.5 * FS)].max() < 6.5
+    assert lo[int(0.95 * FS)] > 4.0  # SUSTAIN 10: stays up
+    assert lo[int(1.9 * FS)] < 0.5  # released
+    assert fo[int(0.95 * FS)] > 3.5  # both on the one trigger
