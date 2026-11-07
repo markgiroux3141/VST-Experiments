@@ -1750,6 +1750,48 @@ def build_2n4033() -> dict[str, Any]:
     )
 
 
+def build_2n3904() -> dict[str, Any]:
+    """The 2N3904 (NPN): the Minimoog filter board's printed alternate for the TIS92, and
+    the stand-in for its TIS97 ladder transistors (data/schematics/minimoog/README.md)."""
+    return _bjt_from_numbers(
+        "2N3904",
+        "npn",
+        {
+            "IS": 4.9148e-15, "BF": 191.70, "VAF": 100.0, "IKF": 0.28579, "ISE": 11.882e-15,
+            "NE": 1.4422, "BR": 5.6808, "VAR": 100.0, "IKR": 61.753e-3, "ISC": 71.145e-12,
+            "NC": 1.6595, "RB": 5.8072, "RC": 0.70808, "CJE": 6.9435e-12, "CJC": 3.7572e-12,
+            "VJC": 1.2237, "MJC": 0.28886,
+        },  # fmt: skip
+        "Central Semiconductor's 2N3904 SPICE model (8/18/10 rev A; numbers cited, the card "
+        "not redistributed). Its NK .8296 (PSpice's high-injection exponent) isn't in the "
+        "model: IKF 0.29 A is far above the Minimoog's currents",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N3904.LIB (2N3904, 8/18/10 rev "
+        "A: IS 4.9148f, BF 191.70, VAF 100, IKF .28579, ISE 11.882f, NE 1.4422, BR 5.6808, VAR "
+        "100, IKR 61.753m, ISC 71.145p, NC 1.6595, RB 5.8072, RC .70808, CJE 6.9435p, CJC "
+        "3.7572p, VJC 1.2237, MJC .28886)",
+    )
+
+
+def build_2n3906() -> dict[str, Any]:
+    """The 2N3906 (PNP): the Minimoog filter board's printed alternate for the TIS93."""
+    return _bjt_from_numbers(
+        "2N3906",
+        "pnp",
+        {
+            "IS": 7.9190e-15, "BF": 196.89, "VAF": 100.0, "IKF": 0.7271, "ISE": 13.654e-15,
+            "NE": 1.4535, "BR": 124.61, "VAR": 100.0, "IKR": 10.010e-3, "ISC": 18.518e-12,
+            "NC": 1.6031, "RB": 8.6624, "RC": 0.55428, "CJE": 11.640e-12, "CJC": 7.8722e-12,
+            "VJC": 0.98301, "MJC": 0.53872,
+        },  # fmt: skip
+        "Central Semiconductor's 2N3906 SPICE model (8/25/10 rev A; numbers cited, the card "
+        "not redistributed). Its NK 1.1475 isn't in the model (IKF 0.73 A)",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/2N3906.LIB (2N3906, 8/25/10 rev "
+        "A: IS 7.9190f, BF 196.89, VAF 100, IKF .7271, ISE 13.654f, NE 1.4535, BR 124.61, VAR "
+        "100, IKR 10.010m, ISC 18.518p, NC 1.6031, RB 8.6624, RC .55428, CJE 11.640p, CJC "
+        "7.8722p, VJC .98301, MJC .53872)",
+    )
+
+
 def build_bc550c() -> dict[str, Any]:
     """The BC550C (Philips / NXP), the project's first BJT (CLAVINET_PLAN.md CL0)."""
     return _bjt_component(
@@ -2273,6 +2315,8 @@ BUILDERS = {
     "2N3053": build_2n3053,
     "2N5087": build_2n5087,
     "2N4033": build_2n4033,
+    "2N3904": build_2n3904,
+    "2N3906": build_2n3906,
     "EL34T": build_el34t,
     "6084": build_6084,
     "5651": build_5651,

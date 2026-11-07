@@ -48,6 +48,7 @@ from varimu.circuit.ir import (
     element_nodes,
 )
 from varimu.circuit.spec import CircuitSpec, resolve
+from varimu.devices.bjt import Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
@@ -201,6 +202,12 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
         if isinstance(el, Resistor | Inductor | VoltageSource | SineSource | Winding):
             dc.join(*t)
         if isinstance(el, Device) and isinstance(models.get(el.model), MagneticCore | Lamp):
+            for n in el.nodes[1:]:
+                dc.join(el.nodes[0], n)
+        if isinstance(el, Device) and isinstance(models.get(el.model), Bjt):
+            # A BJT's junctions are a DC path: each carries GMIN in both engines (SPICE's,
+            # varimu.devices.bjt), and a stacked transistor's emitter (a ladder's nodes,
+            # the Minimoog's filter) is held by the forward-biased junction above it.
             for n in el.nodes[1:]:
                 dc.join(el.nodes[0], n)
         if isinstance(el, Device) and isinstance(models.get(el.model), Thyratron):

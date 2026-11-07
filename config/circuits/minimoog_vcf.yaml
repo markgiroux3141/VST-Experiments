@@ -1,0 +1,174 @@
+# The Minimoog Model D's voltage controlled filter (docs/MINIMOOG_PLAN.md, MM1): circuit No. 6
+# of filter board No. 4, Fig 9-11 of the Model 204D service manual (sources and the reading:
+# data/schematics/minimoog/README.md).
+#   ladder  four stages of two TIS97 (Q2/Q3 top .. Q23/Q24 bottom), .068 uF across each pair's
+#        emitters (C3, C7, C11, C16), driven by the input pair Q29/Q30 (matched). The bases sit on
+#        a string from +10 V: R4 220, R16 / R32 / R41 / R52 150, R61 200 (C24 220 uF) to ground;
+#        R54 470 to Q29's base, R76 330 and REGEN CAL R73 (1K, its wiper Q30's base) to pin 6
+#   expo  the control node (pin 5) is Q26's base (TIS93, PNP), loaded by SCALE (R70 1.8K + R49
+#        500 ohm trim) and C18 100 pF; Q26's emitter is Q28's base (TIS92), so Q28's collector
+#        current (the ladder's tail, through R60 680) is RANGE's reference current (R39 10K trim
+#        via R46 68K) times exp(V(node) / Vt): Q26 and Q28 matched (the sheet's note 3). Q26's
+#        collector returns to -10 V (pin 3, the wiring diagram's BD5-3A) through R45 330
+#   out  the top stage's emitters through C5 / C1 .22 into followers Q8 / Q6 (R31 / R38 47K),
+#        a differential pair Q7 / Q5 (R24 220K, R20 100K, tail R26 1K to -10 V); Q7's and Q8's
+#        collectors share R3 1K + R7 180 from a decoupled +10 V (R6 47, C9 100 uF). That node
+#        feeds the VCA (circuit No. 7) through C6 .33; the R7 / R3 junction feeds EMPHASIS
+#        through C10 10 uF (pin 7)
+#   EMPHASIS  R14, 50K reverse audio, wired as a rheostat between pins 7 and 6 (Fig 9-16: its
+#        terminal 1 unconnected)
+#   AMOUNT OF CONTOUR  a 5K linear pot from the contour (board 2) to ground, its wiper into
+#        R74 47K (pin 16)
+# The panel's summing into the control node is a test fixture here (MM5 traces it): CUTOFF as a
+# voltage through 100K and the keyboard through KEYBOARD CONTROL 1 and 2 (300K, 150K: R53 / R54
+# of the front panel's parts list by inference, together 100K). Rails ideal +-10 V until the
+# power supply board (MM5). The audio input is pin 4 from an ideal source (the mixer, MM5).
+
+title: "Minimoog VCF (filter board No. 4, circuit No. 6)"
+input: in
+cv_inputs:
+  key: kbd
+  contour: cont
+probes: [out, o7, vr, a4, b4, ctl, e26, tail, nb, b29, b30]
+
+full_scale:
+  input_volts_peak: {value: 0.25, source: "provisional: model knowledge (the mixer's output into the ladder's input pair; the input pair limits near +-50 mV, the Minimoog's mixer overdrives it; set again when the mixer is drawn, MM5)"}
+  output_volts_peak: {value: 3.0, source: "provisional: model knowledge (Q7's collector swing into the VCA; set from renders)"}
+
+controls:
+  cutoff_v: {value: 0.0, min: -5.0, max: 5.0, unit: V, source: "numerical: test fixture (the CUTOFF FREQUENCY knob's contribution, a voltage through r_cutoff_ohm; the panel's own circuit comes at MM5); 0 V stands for the procedure's CUTOFF -1"}
+  emphasis: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R14 Rotary Pot, Rev. Audio, 50K Ohm (EMPHASIS); 0 = the knob at 0, 1 = at 10"}
+  contour_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3 / Fig 9-16: AMOUNT OF CONTOUR, a 5K linear pot (contour on terminal 3, wiper to CO4-16)"}
+  kb1: {value: 1, choices: [0, 1], unit: switch, source: "the front panel's KEYBOARD CONTROL 1 rocker (Folkman's adjustment procedures)"}
+  kb2: {value: 1, choices: [0, 1], unit: switch, source: "the front panel's KEYBOARD CONTROL 2 rocker"}
+  # --- the board's trims (set by scripts/minimoog_vcf_trim.py from Folkman's procedures)
+  range_trim: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 'Filter Range' (CUTOFF -1, EMPHASIS 10, keyboard control off: zero beat with A-440)"}
+  scale_trim: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 'Filter Scale' (tracks the keyboard three octaves)"}
+  regen_cal: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R73 1K REGEN CAL trim (its wiper Q30's base); default calibrated: Folkman p. 14 'Regeneration Cal.' (regeneration starts between EMPHASIS 7 and 8 at CUTOFF -1)"}
+
+values:
+  # --- rails and fixtures
+  supply_v: {value: 10.0, source: "Fig 9-11: +10 V (pins 1 / 13; Folkman: set to +10.00 V)"}
+  supply_neg_v: {value: -10.0, source: "Fig 9-11: -10 V (pins 3 / 8; Folkman: set to -10.00 V)"}
+  r_cutoff_ohm: {value: 100.0e+3, source: "numerical: test fixture (the CUTOFF knob's summing resistor; the front panel's R51 100K by inference, unverified)"}
+  r_kb1_ohm: {value: 300.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 1, one third of the tracking: the front panel's R53 300K by inference; Table 7-2 lists R53 300K, R54 150K, R55 200K, R51 100K without their places)"}
+  r_kb2_ohm: {value: 150.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 2, two thirds: the front panel's R54 150K by inference; with KB1, 100K together)"}
+  r_kbd_load_ohm: {value: 1.0e+9, source: "numerical: a leak on the keyboard input (it stays defined with both rockers off)"}
+  r_contour_pot_ohm: {value: 5.0e+3, source: "the 204D manual's Table 7-3: Rotary Pot, Linear, 5K Ohm (AMOUNT OF CONTOUR, Fig 9-16)"}
+  r_vca_in_ohm: {value: 82.0e+3, source: "Fig 9-11: R2 82K at the VCA's input (circuit No. 7; its return to ground provisional until the VCA is drawn, MM2)"}
+  c_vca_in_f: {value: 0.33e-6, source: "Fig 9-11: C6 0.33 into the VCA"}
+  emphasis_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper's 10% at half rotation, read from the far end: Table 7-3's 'Rev. Audio')"}
+  r_emphasis_ohm: {value: 50.0e+3, source: "the 204D manual's Table 7-3: R14 Rotary Pot, Rev. Audio, 50K Ohm"}
+  # --- the control current
+  r74_ohm: {value: 47.0e+3, source: "Fig 9-11: R74 47K (from pin 16, AMT OF CONTOUR)"}
+  r70_ohm: {value: 1.8e+3, source: "Fig 9-11: R70 1.8K"}
+  r49_ohm: {value: 500.0, source: "Fig 9-11: R49 500 ohm SCALE trim"}
+  c18_f: {value: 100.0e-12, source: "Fig 9-11: C18 100 pF"}
+  r39_ohm: {value: 10.0e+3, source: "Fig 9-11: R39 10K RANGE trim"}
+  r46_ohm: {value: 68.0e+3, source: "Fig 9-11: R46 68K"}
+  r45_ohm: {value: 330.0, source: "Fig 9-11: R45 330"}
+  r60_ohm: {value: 680.0, source: "Fig 9-11: R60 680"}
+  # --- the ladder
+  c_ladder_f: {value: 0.068e-6, source: "Fig 9-11: C3, C7, C11, C16 .068"}
+  r4_ohm: {value: 220.0, source: "Fig 9-11: R4 220"}
+  r_string_ohm: {value: 150.0, source: "Fig 9-11: R16, R32, R41, R52 150"}
+  r61_ohm: {value: 200.0, source: "Fig 9-11: R61 200"}
+  c24_f: {value: 220.0e-6, source: "Fig 9-11: C24 220 uF"}
+  r54_ohm: {value: 470.0, source: "Fig 9-11: R54 (printed '410', not an E-series value: 470 read; R76 330 + R73's half make Q30's side ~830 at most, so 470 balances it with REGEN CAL near a third)"}
+  c27_f: {value: 10.0e-6, source: "Fig 9-11: C27 10 uF (the audio input, pin 4)"}
+  r76_ohm: {value: 330.0, source: "Fig 9-11: R76 330"}
+  r73_ohm: {value: 1.0e+3, source: "Fig 9-11: R73 1K REGEN CAL"}
+  # --- the output amplifier
+  c_out_f: {value: 0.22e-6, source: "Fig 9-11: C5, C1 .22"}
+  r31_ohm: {value: 47.0e+3, source: "Fig 9-11: R31, R38 47K"}
+  r24_ohm: {value: 220.0e+3, source: "Fig 9-11: R24 220K"}
+  r20_ohm: {value: 100.0e+3, source: "Fig 9-11: R20 100K"}
+  r26_ohm: {value: 1.0e+3, source: "Fig 9-11: R26 1K"}
+  r3_ohm: {value: 1.0e+3, source: "Fig 9-11: R3 1K"}
+  r7_ohm: {value: 180.0, source: "Fig 9-11: R7 180"}
+  r6_ohm: {value: 47.0, source: "Fig 9-11: R6 47"}
+  c9_f: {value: 100.0e-6, source: "Fig 9-11: C9 100 uF"}
+  c10_f: {value: 10.0e-6, source: "Fig 9-11: C10 10 uF (to pin 7, EMPHASIS)"}
+
+devices:
+  QL: {device: 2N3904@1, source: "provisional: the sheet's TIS97 (no card found); the 2N3904, the sheet's printed alternate for the TIS92, stands in"}
+  QN: {device: 2N3904@1, source: "Fig 9-11: TIS92, alternate 2N3904 (note 1)"}
+  QP: {device: 2N3906@1, source: "Fig 9-11: TIS93, alternate 2N3906 (note 2)"}
+
+sections:
+  - title: rails and fixtures
+    parts:
+      VP: {V: [vp, "0"], v: supply_v}
+      VN: {V: [vn, "0"], v: supply_neg_v}
+      VCUT: {V: [cutv, "0"], v: cutoff_v}
+      RCUT: {R: [cutv, ctl], r: r_cutoff_ohm}
+      SKB1:
+        switch: kb1
+        parts:
+          RKB1: {R: [kbd, ctl], r: r_kb1_ohm, in: [1]}
+      SKB2:
+        switch: kb2
+        parts:
+          RKB2: {R: [kbd, ctl], r: r_kb2_ohm, in: [1]}
+      RKBL: {R: [kbd, "0"], r: r_kbd_load_ohm}
+      RCONT: {pot: ["0", p16, cont], r: r_contour_pot_ohm, at: contour_amount}
+  - title: control current
+    parts:
+      R74: {R: [p16, ctl], r: r74_ohm}
+      R70: {R: [ctl, sc], r: r70_ohm}
+      R49: {rheostat: [sc, "0"], r: r49_ohm, at: scale_trim}
+      C18: {C: [ctl, "0"], c: c18_f}
+      R39: {pot: ["0", rw, vp], r: r39_ohm, at: range_trim}
+      R46: {R: [rw, e26], r: r46_ohm}
+      Q26: {bjt: [c26, ctl, e26], model: QP}
+      R45: {R: [c26, vn], r: r45_ohm}
+      Q28: {bjt: [c28, e26, "0"], model: QN}
+      R60: {R: [tail, c28], r: r60_ohm}
+  - title: ladder
+    parts:
+      R4: {R: [vp, n1], r: r4_ohm}
+      R16: {R: [n1, n2], r: r_string_ohm}
+      R32: {R: [n2, n3], r: r_string_ohm}
+      R41: {R: [n3, n4], r: r_string_ohm}
+      R52: {R: [n4, nb], r: r_string_ohm}
+      R61: {R: [nb, "0"], r: r61_ohm}
+      C24: {C: [nb, "0"], c: c24_f}
+      Q2: {bjt: [vp, n1, a4], model: QL}
+      Q3: {bjt: [vp, n1, b4], model: QL}
+      C3: {C: [a4, b4], c: c_ladder_f}
+      Q10: {bjt: [a4, n2, a3], model: QL}
+      Q11: {bjt: [b4, n2, b3], model: QL}
+      C7: {C: [a3, b3], c: c_ladder_f}
+      Q19: {bjt: [a3, n3, a2], model: QL}
+      Q20: {bjt: [b3, n3, b2], model: QL}
+      C11: {C: [a2, b2], c: c_ladder_f}
+      Q23: {bjt: [a2, n4, a1], model: QL}
+      Q24: {bjt: [b2, n4, b1], model: QL}
+      C16: {C: [a1, b1], c: c_ladder_f}
+      Q29: {bjt: [a1, b29, tail], model: QL}
+      Q30: {bjt: [b1, b30, tail], model: QL}
+      C27: {C: [in, b29], c: c27_f}
+      R54: {R: [nb, b29], r: r54_ohm}
+      R76: {R: [nb, x76], r: r76_ohm}
+      R73: {pot: [x76, b30, p6], r: r73_ohm, at: regen_cal}
+      R14: {rheostat: [p7, p6], r: r_emphasis_ohm, at: emphasis, taper_mid: emphasis_taper_mid, reverse: 1}
+  - title: output amplifier
+    parts:
+      C5: {C: [a4, b8], c: c_out_f}
+      R31: {R: [b8, "0"], r: r31_ohm}
+      C1: {C: [b4, b6], c: c_out_f}
+      R38: {R: [b6, "0"], r: r31_ohm}
+      Q8: {bjt: [o7, b8, e8], model: QL}
+      R24: {R: [e8, vn], r: r24_ohm}
+      Q6: {bjt: [vp, b6, e6], model: QL}
+      R20: {R: [e6, vn], r: r20_ohm}
+      Q7: {bjt: [o7, e8, et], model: QL}
+      Q5: {bjt: [vp, e6, et], model: QL}
+      R26: {R: [et, vn], r: r26_ohm}
+      R6: {R: [vp, vf], r: r6_ohm}
+      C9: {C: [vf, "0"], c: c9_f}
+      R7: {R: [vf, vr], r: r7_ohm}
+      R3: {R: [vr, o7], r: r3_ohm}
+      C10: {C: [vr, p7], c: c10_f}
+      C6: {C: [o7, out], c: c_vca_in_f}
+      R2: {R: [out, "0"], r: r_vca_in_ohm}
