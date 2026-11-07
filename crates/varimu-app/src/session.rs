@@ -68,7 +68,14 @@ use serde_json::{Value, json};
 use crate::performance::Performance;
 use crate::print::{Slot, key_control};
 use crate::settings::Quality;
-use crate::transport::{ClickMode, TransportSettings};
+use crate::transport::{ClickMode, Snap, TransportSettings};
+
+/// A named place on the timeline (SE2): M drops one at the cursor, a click jumps there.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Marker {
+    pub position: i64,
+    pub name: String,
+}
 
 /// A stereo frame (left, right).
 pub type Frame = [f32; 2];
@@ -750,6 +757,8 @@ pub struct Session {
     pub armed: Option<usize>,
     /// New takes placed as heard (else on the click): [`Take::heard`].
     pub place_heard: bool,
+    /// The markers, in timeline order.
+    pub markers: Vec<Marker>,
     /// Every take loaded or recorded in this session, by id, deleted ones too: a state
     /// restored by undo takes them from here before reading their folders.
     known: HashMap<String, Take>,
@@ -766,6 +775,7 @@ impl Session {
             tracks: vec![Track::new("Track 1")],
             armed: Some(0),
             place_heard: true,
+            markers: Vec::new(),
             known: HashMap::new(),
             revisions: HashMap::new(),
         }
@@ -1386,6 +1396,11 @@ impl Session {
             "tracks": tracks,
             "armed": self.armed,
             "place_new": if self.place_heard { "heard" } else { "click" },
+            "markers": self
+                .markers
+                .iter()
+                .map(|m| json!([m.position, m.name]))
+                .collect::<Vec<_>>(),
         })
     }
 
@@ -1459,7 +1474,21 @@ impl Session {
             .filter(|&i| i < tracks.len());
         self.rate = rate;
         self.place_heard = v["place_new"].as_str() != Some("click");
-        self.transport = transport_from(&v["transport"]);
+        self.transport = transport_from(&v["transport"], rate);
+        self.markers = v["markers"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|m| {
+                        Some(Marker {
+                            position: m[0].as_i64()?,
+                            name: m[1].as_str().unwrap_or("").to_string(),
+                        })
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.markers.sort_by_key(|m| m.position);
         // Prints carry over to the restored tracks: the one made from the same chain on the
         // same take, else any print of that take (stale until it is printed again).
         let prints: Vec<Printed> = self
@@ -1503,6 +1532,7 @@ impl Session {
             tracks: Vec::new(),
             armed: None,
             place_heard: true,
+            markers: Vec::new(),
             known: HashMap::new(),
             revisions: HashMap::new(),
         };
@@ -1576,17 +1606,21 @@ pub fn transport_json(s: &TransportSettings) -> Value {
         "click_db": s.click_db,
         "count_in_bars": s.count_in_bars,
         "pre_roll_bars": s.pre_roll_bars,
-        "start_bar": s.start_bar,
+        "cursor": s.cursor,
+        "snap": s.snap.id(),
+        "return_to_cursor": s.return_to_cursor,
         "left_beat": s.left_beat,
         "right_beat": s.right_beat,
         "loop_on": s.loop_on,
     })
 }
 
-pub fn transport_from(t: &Value) -> TransportSettings {
+/// The transport from its JSON at `rate` (a session saved before the cursor: its start bar
+/// as the cursor, SE2 decision 3).
+pub fn transport_from(t: &Value, rate: u32) -> TransportSettings {
     let d = TransportSettings::default();
     let u = |k: &str, def: u32| t[k].as_u64().map_or(def, |x| x as u32);
-    TransportSettings {
+    let mut s = TransportSettings {
         bpm: t["bpm"].as_f64().unwrap_or(d.bpm),
         beats_per_bar: u("beats_per_bar", d.beats_per_bar),
         beat_unit: u("beat_unit", d.beat_unit),
@@ -1597,12 +1631,21 @@ pub fn transport_from(t: &Value) -> TransportSettings {
         click_db: t["click_db"].as_f64().unwrap_or(d.click_db),
         count_in_bars: u("count_in_bars", d.count_in_bars),
         pre_roll_bars: u("pre_roll_bars", d.pre_roll_bars),
-        start_bar: t["start_bar"].as_i64().unwrap_or(d.start_bar),
+        cursor: 0,
+        snap: t["snap"].as_str().and_then(Snap::from_id).unwrap_or(d.snap),
+        return_to_cursor: t["return_to_cursor"]
+            .as_bool()
+            .unwrap_or(d.return_to_cursor),
         left_beat: t["left_beat"].as_i64().unwrap_or(d.left_beat),
         right_beat: t["right_beat"].as_i64().unwrap_or(d.right_beat),
         loop_on: t["loop_on"].as_bool().unwrap_or(d.loop_on),
-    }
-    .clamped()
+    };
+    s.cursor = match (t["cursor"].as_i64(), t["start_bar"].as_i64()) {
+        (Some(c), _) => c,
+        (None, Some(bar)) => crate::transport::Grid::new(rate, &s).bar(bar.max(1)),
+        (None, None) => 0,
+    };
+    s.clamped()
 }
 
 /// A take's folder in the session's.
@@ -2266,6 +2309,37 @@ mod tests {
         assert_eq!(e.perf.notes()[0].note, 62);
         assert_eq!(k.audio.len(), 400);
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_old_sessions_start_bar_is_its_cursor_and_markers_are_kept() {
+        let mut v = json!({
+            "rate": 48_000,
+            "transport": {"bpm": 120.0, "start_bar": 3},
+            "tracks": [],
+        });
+        let t = transport_from(&v["transport"], 48_000);
+        assert_eq!(t.cursor, 2 * 4 * 24_000);
+        assert_eq!((t.snap, t.return_to_cursor), (Snap::Beat, true));
+        let mut s = Session::new(
+            PathBuf::from("unused"),
+            48_000,
+            TransportSettings::default(),
+        );
+        v["markers"] = json!([[96_000, "chorus"], [10, "intro"]]);
+        s.restore(&v).expect("restored");
+        assert_eq!(s.transport.cursor, 192_000);
+        assert_eq!(
+            s.markers
+                .iter()
+                .map(|m| m.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["intro", "chorus"]
+        );
+        // Saved again: the cursor and the markers as they are.
+        let state = s.state();
+        assert_eq!(state["transport"]["cursor"], json!(192_000));
+        assert_eq!(state["markers"][1], json!([96_000, "chorus"]));
     }
 
     #[test]

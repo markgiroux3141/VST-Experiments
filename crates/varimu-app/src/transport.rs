@@ -13,10 +13,13 @@
 //! It is a function of continuous time ([`click_wave`]): the loopback analysis samples
 //! the same click at the capture's rate (`crate::loopback`).
 //!
-//! **Starting.** Play starts at `start_bar`, after `pre_roll_bars` (the timeline plays,
-//! recording waits) and before them `count_in_bars` (click only). So a start runs from
-//! `bar(start_bar - pre_roll - count_in)`, and positions in the count-in can be negative.
-//! Stop keeps the position; the next play starts from `start_bar` again.
+//! **Starting.** Play starts at the cursor (a timeline sample, docs/SESSION_EDITING_PLAN.md
+//! SE2), after `pre_roll_bars` (the timeline plays, recording waits) and before them
+//! `count_in_bars` (click only), counted back in bars from the bar the cursor is in: a
+//! start runs from `bar(b - pre_roll - count_in)` (b: the cursor's bar), the timeline plays
+//! from bar b's start and a take records from the cursor itself. Without count-in or
+//! pre-roll, play starts at the cursor. Positions in the count-in can be negative. Stop
+//! keeps the position; the next play starts from the cursor again.
 //!
 //! **Locators and the loop.** The left and right locators are beats. With the loop on,
 //! play starts at the left locator (after the count-in; no pre-roll) and, on reaching the
@@ -98,6 +101,80 @@ impl ClickMode {
     }
 }
 
+/// What the arrangement's gestures snap to (SE2): a bar, a beat, a division of it, or
+/// nothing (free).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Snap {
+    Bar,
+    Beat,
+    Eighth,
+    EighthTriplet,
+    Sixteenth,
+    ThirtySecond,
+    Off,
+}
+
+impl Snap {
+    pub const ALL: [Snap; 7] = [
+        Snap::Bar,
+        Snap::Beat,
+        Snap::Eighth,
+        Snap::EighthTriplet,
+        Snap::Sixteenth,
+        Snap::ThirtySecond,
+        Snap::Off,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Snap::Bar => "Bar",
+            Snap::Beat => "Beat",
+            Snap::Eighth => "1/8",
+            Snap::EighthTriplet => "1/8T",
+            Snap::Sixteenth => "1/16",
+            Snap::ThirtySecond => "1/32",
+            Snap::Off => "Off",
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Snap::Bar => "bar",
+            Snap::Beat => "beat",
+            Snap::Eighth => "1/8",
+            Snap::EighthTriplet => "1/8t",
+            Snap::Sixteenth => "1/16",
+            Snap::ThirtySecond => "1/32",
+            Snap::Off => "off",
+        }
+    }
+
+    pub fn from_id(s: &str) -> Option<Snap> {
+        Snap::ALL.into_iter().find(|m| m.id() == s)
+    }
+
+    /// Steps per beat (a bar: none, it's per bar; off: none).
+    pub fn per_beat(self) -> Option<u32> {
+        match self {
+            Snap::Beat => Some(1),
+            Snap::Eighth => Some(2),
+            Snap::EighthTriplet => Some(3),
+            Snap::Sixteenth => Some(4),
+            Snap::ThirtySecond => Some(8),
+            Snap::Bar | Snap::Off => None,
+        }
+    }
+
+    /// For a gesture with Alt held: free when snapping, the beat when not.
+    pub fn inverted(self, alt: bool) -> Snap {
+        match (alt, self) {
+            (false, s) => s,
+            (true, Snap::Off) => Snap::Beat,
+            (true, _) => Snap::Off,
+        }
+    }
+}
+
 /// Tempo, meter, click and where play starts.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TransportSettings {
@@ -110,8 +187,14 @@ pub struct TransportSettings {
     pub click_db: f64,
     pub count_in_bars: u32,
     pub pre_roll_bars: u32,
-    /// The bar play starts at (from 1; recording starts here).
-    pub start_bar: i64,
+    /// Where play starts (a timeline sample at the session's rate, from bar 1; recording
+    /// starts here): the cursor.
+    pub cursor: i64,
+    /// What the arrangement's gestures snap to.
+    pub snap: Snap,
+    /// Stop puts the cursor back where play started (else it stays where play stopped,
+    /// and the next play goes on from there).
+    pub return_to_cursor: bool,
     /// The left and right locators (beats from bar 1's downbeat) and whether play loops
     /// between them.
     pub left_beat: i64,
@@ -129,7 +212,9 @@ impl Default for TransportSettings {
             click_db: -12.0,
             count_in_bars: 1,
             pre_roll_bars: 0,
-            start_bar: 1,
+            cursor: 0,
+            snap: Snap::Beat,
+            return_to_cursor: true,
             left_beat: 0,
             right_beat: 16,
             loop_on: false,
@@ -138,7 +223,7 @@ impl Default for TransportSettings {
 }
 
 impl TransportSettings {
-    /// Within what the transport takes: 20-400 bpm, 1-16 beats, a positive start bar.
+    /// Within what the transport takes: 20-400 bpm, 1-16 beats, the cursor from bar 1.
     pub fn clamped(mut self) -> TransportSettings {
         self.bpm = if self.bpm.is_finite() {
             self.bpm.clamp(20.0, 400.0)
@@ -152,7 +237,7 @@ impl TransportSettings {
         self.click_db = self.click_db.clamp(-60.0, 0.0);
         self.count_in_bars = self.count_in_bars.min(4);
         self.pre_roll_bars = self.pre_roll_bars.min(16);
-        self.start_bar = self.start_bar.max(1);
+        self.cursor = self.cursor.max(0);
         self.left_beat = self.left_beat.max(0);
         self.right_beat = self.right_beat.max(self.left_beat + 1);
         self
@@ -192,6 +277,53 @@ impl Grid {
 
     pub fn is_downbeat(&self, k: i64) -> bool {
         k.rem_euclid(self.beats_per_bar as i64) == 0
+    }
+
+    /// The bar (from 1) `pos` is in.
+    pub fn bar_at(&self, pos: i64) -> i64 {
+        self.beat_at(pos).div_euclid(self.beats_per_bar as i64) + 1
+    }
+
+    /// One step of `snap` (samples; none for Off).
+    pub fn snap_step(&self, snap: Snap) -> Option<f64> {
+        match snap {
+            Snap::Off => None,
+            Snap::Bar => Some(self.samples_per_beat() * self.beats_per_bar as f64),
+            s => s.per_beat().map(|d| self.samples_per_beat() / d as f64),
+        }
+    }
+
+    /// `pos` on the nearest line of `snap` (from bar 1's downbeat; Off: as it is).
+    pub fn snap(&self, pos: i64, snap: Snap) -> i64 {
+        match self.snap_step(snap) {
+            None => pos,
+            Some(step) => ((pos as f64 / step).round() * step).round() as i64,
+        }
+    }
+
+    /// `pos` on the line of `snap` at or before it.
+    pub fn snap_floor(&self, pos: i64, snap: Snap) -> i64 {
+        match self.snap_step(snap) {
+            None => pos,
+            Some(step) => {
+                let k = (pos as f64 / step).floor();
+                let at = (k * step).round() as i64;
+                if at > pos {
+                    ((k - 1.0) * step).round() as i64
+                } else {
+                    at
+                }
+            }
+        }
+    }
+
+    /// A move of `delta` samples in whole steps of `snap` (what a drag does: whatever sat
+    /// off the grid stays as far off it).
+    pub fn snap_delta(&self, delta: i64, snap: Snap) -> i64 {
+        match self.snap_step(snap) {
+            None => delta,
+            Some(step) => ((delta as f64 / step).round() * step).round() as i64,
+        }
     }
 
     /// The last beat at or before `pos`.
@@ -276,24 +408,32 @@ impl Clock {
             let per = self.grid.beats_per_bar as i64;
             return self.grid.beat(s.left_beat - s.count_in_bars as i64 * per);
         }
+        if s.count_in_bars == 0 && s.pre_roll_bars == 0 {
+            return s.cursor;
+        }
         self.grid
-            .bar(s.start_bar - s.pre_roll_bars as i64 - s.count_in_bars as i64)
+            .bar(self.grid.bar_at(s.cursor) - s.pre_roll_bars as i64 - s.count_in_bars as i64)
     }
 
-    /// Where the count-in ends and where recording starts (the loop's start, looping).
+    /// Where the count-in ends (the loop's start, looping).
     pub fn count_in_end(&self) -> i64 {
         let s = &self.settings;
         if s.loop_on {
             return self.grid.beat(s.left_beat);
         }
-        self.grid.bar(s.start_bar - s.pre_roll_bars as i64)
+        if s.count_in_bars == 0 && s.pre_roll_bars == 0 {
+            return s.cursor;
+        }
+        self.grid
+            .bar(self.grid.bar_at(s.cursor) - s.pre_roll_bars as i64)
     }
 
+    /// Where recording starts: the cursor (the loop's start, looping).
     pub fn record_from(&self) -> i64 {
         if self.settings.loop_on {
             return self.grid.beat(self.settings.left_beat);
         }
-        self.grid.bar(self.settings.start_bar)
+        self.settings.cursor
     }
 
     /// The loop's start and end (positions), while it is on.
@@ -482,15 +622,15 @@ mod tests {
     #[test]
     fn count_in_pre_roll_and_click_modes() {
         let rate = 48_000;
+        let g = Grid::new(rate, &settings(120.0));
         let s = TransportSettings {
             count_in_bars: 2,
             pre_roll_bars: 1,
-            start_bar: 5,
+            cursor: g.bar(5),
             click: ClickMode::CountIn,
             ..settings(120.0)
         };
         let mut c = Clock::new(rate, s.clone());
-        let g = c.grid();
         assert_eq!(c.start_position(), g.bar(2));
         assert_eq!(c.count_in_end(), g.bar(4));
         assert_eq!(c.record_from(), g.bar(5));
@@ -517,6 +657,54 @@ mod tests {
         c.start();
         c.process(&mut z);
         assert!(z.iter().all(|&v| v == 0.0));
+    }
+
+    #[test]
+    fn a_cursor_mid_bar_counts_in_on_the_grid_and_records_from_itself() {
+        let rate = 48_000;
+        let g = Grid::new(rate, &settings(120.0));
+        let cursor = g.bar(3) + (g.samples_per_beat() * 1.5) as i64;
+        let s = TransportSettings {
+            count_in_bars: 1,
+            cursor,
+            ..settings(120.0)
+        };
+        let mut c = Clock::new(rate, s.clone());
+        // The count-in is the bar before the cursor's, the timeline plays from its bar's
+        // start, the take from the cursor.
+        assert_eq!(c.start_position(), g.bar(2));
+        assert_eq!(c.count_in_end(), g.bar(3));
+        assert_eq!(c.record_from(), cursor);
+        assert_eq!(c.phase_at(g.bar(3) + 10), Phase::PreRoll);
+        assert_eq!(c.phase_at(cursor), Phase::Rolling);
+        // The click stays on its grid: every onset a beat's sample.
+        c.start();
+        let mut y = vec![0.0f32; (g.bar(4) - g.bar(2)) as usize];
+        c.process(&mut y);
+        let want: Vec<usize> = (4..12).map(|k| (g.beat(k) - g.bar(2)) as usize).collect();
+        assert_eq!(onsets(&y), want);
+        // Without count-in or pre-roll, play starts at the cursor itself.
+        let c = Clock::new(
+            rate,
+            TransportSettings {
+                count_in_bars: 0,
+                ..s
+            },
+        );
+        assert_eq!(c.start_position(), cursor);
+        // Snaps: a 1/16 step, a move keeps its offset from the grid.
+        let sixteenth = g.samples_per_beat() / 4.0;
+        assert_eq!(
+            g.snap((sixteenth * 3.4) as i64, Snap::Sixteenth),
+            (sixteenth * 3.0).round() as i64
+        );
+        assert_eq!(g.snap(12_345, Snap::Off), 12_345);
+        let bar = g.bar(2);
+        assert_eq!(g.snap_delta(bar + 500, Snap::Bar), bar);
+        assert_eq!(g.snap(g.bar(3) - 10, Snap::Bar), g.bar(3));
+        assert_eq!(g.snap_floor(g.bar(3) - 10, Snap::Bar), g.bar(2));
+        assert_eq!(Snap::Beat.inverted(true), Snap::Off);
+        assert_eq!(Snap::Off.inverted(true), Snap::Beat);
     }
 
     #[test]

@@ -162,6 +162,11 @@ impl Roll {
         r
     }
 
+    /// Its grid: `d` steps a beat.
+    pub fn set_division(&mut self, d: u32) {
+        self.division = d.max(1);
+    }
+
     /// Its edit was saved as revision `rev`.
     pub fn saved_as(&mut self, rev: u32) {
         self.rev = rev;

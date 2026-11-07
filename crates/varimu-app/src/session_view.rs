@@ -24,15 +24,28 @@
 //! freely), right-click deletes a take or a track. Deleted takes leave the session but
 //! their files stay in its folder. Ctrl+Z undoes moves and deletions.
 //!
-//! The ruler: a click moves the start bar, Ctrl+click puts the left locator there,
-//! Alt+click the right one; a drag draws the loop between them (and turns it on), a drag on
-//! a locator's handle moves it. With the loop on, play (and recording) repeats from the
-//! left locator to the right one, each recorded pass a new take in the lane. Below the
-//! lanes a scrollbar scrolls in time; −, + and Fit zoom.
+//! **The cursor** (docs/SESSION_EDITING_PLAN.md SE2) is where play starts and a take
+//! records: a click on the ruler or on empty lane space puts it there (snapped; Alt: the
+//! snap inverted), a click on a marker's flag jumps to it. Moving it while playing plays on
+//! from it. Stop puts the playhead back at the cursor, or with "return" off leaves the
+//! cursor where play stopped. Moving the cursor isn't an undo step.
 //!
-//! Keys: Space plays / stops, R records, / turns the loop on or off, G and H zoom out and
-//! in, Delete deletes the selected take, Ctrl+Z / Ctrl+Y undo and redo, Ctrl+S saves
-//! (while no text field has focus).
+//! **Snap** (the transport's second row): Bar, Beat, 1/8, 1/8T, 1/16, 1/32 or Off, for
+//! every gesture on the timeline (moving takes, the cursor, the locators on beats or bars);
+//! Alt inverts it. A snapped move keeps a take's offset from the grid. The piano roll opens
+//! with the snap as its grid.
+//!
+//! The ruler: Ctrl+click puts the left locator there, Shift+click the right one; a drag
+//! draws the loop between them (and turns it on), a drag on a locator's handle moves it;
+//! right-click adds a marker, or renames or deletes the one under it. With the loop on, play
+//! (and recording) repeats from the left locator to the right one, each recorded pass a new
+//! take in the lane. Below the lanes a scrollbar scrolls in time; −, + and Fit zoom.
+//!
+//! Keys: Space plays / stops (Shift+Space: from where it stopped), R records, Home / End
+//! put the cursor at bar 1 / the session's end, Ctrl+← / → move it by bars, M drops a
+//! marker, / turns the loop on or off, G and H zoom out and in, Delete deletes the
+//! selected take, Ctrl+R renders / prints what's selected, Ctrl+Z / Ctrl+Y undo and redo,
+//! Ctrl+S saves (while no text field has focus).
 //! Over the lanes, Shift+wheel scrolls in time, Ctrl+wheel zooms.
 //!
 //! **Inserts** (docs/SESSION_FX_PLAN.md, F2): under each track's strip its chain of devices
@@ -103,12 +116,12 @@ use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey,
 use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, Slot, find_device};
 use varimu_app::session::{
-    Monitor, OVERVIEW_BIN, Overview, Printed, Session, Take, Track, take_dir, transport_from,
-    transport_json,
+    Marker, Monitor, OVERVIEW_BIN, Overview, Printed, Session, Take, Track, take_dir,
+    transport_from, transport_json,
 };
 use varimu_app::settings::{Quality, Settings};
 use varimu_app::take_render::{self, NOT_RENDERED};
-use varimu_app::transport::{ClickMode, Grid, Phase, TransportSettings};
+use varimu_app::transport::{ClickMode, Grid, Phase, Snap, TransportSettings};
 use varimu_circuit::spec;
 use varimu_circuit::yaml::Value as YValue;
 
@@ -243,6 +256,12 @@ enum RulerDrag {
 pub struct SessionView {
     session: Session,
     ruler_drag: Option<RulerDrag>,
+    /// The ruler's context menu: where it was opened and the marker under it.
+    ruler_menu: Option<(i64, Option<usize>)>,
+    /// The cursor moved while the transport ran: play on from it (next frame).
+    relocate: bool,
+    /// Where play last stopped (Shift+Space plays from there).
+    stopped_at: Option<i64>,
     /// The lanes' width as last drawn (px): G and H zoom about its middle.
     lanes_w: f64,
     /// A drag on the scrollbar's thumb: where it started (px) and the view then (s).
@@ -448,6 +467,8 @@ fn folder_name(s: &str) -> String {
 fn step_key(v: &Value) -> Value {
     let mut v = v.clone();
     v["armed"] = Value::Null;
+    // Moving the cursor isn't an edit (SE2).
+    v["transport"]["cursor"] = Value::Null;
     if let Some(tracks) = v["tracks"].as_array_mut() {
         for t in tracks {
             t["show_takes"] = Value::Null;
@@ -501,6 +522,9 @@ impl SessionView {
             root: repo.to_path_buf(),
             save_as: None,
             ruler_drag: None,
+            ruler_menu: None,
+            relocate: false,
+            stopped_at: None,
             lanes_w: 800.0,
             scroll_drag: None,
             selected: None,
@@ -740,6 +764,19 @@ impl SessionView {
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
             .show(ui, |ui| self.arrangement(ui, play));
+        // The cursor moved while playing: play on from there (not while recording).
+        if std::mem::take(&mut self.relocate)
+            && !play.player().is_some_and(|p| p.take_armed())
+            && self.recording.is_none()
+        {
+            let keep = self.session.transport.cursor;
+            self.stop(play);
+            self.session.transport.cursor = keep;
+            if let Some(p) = play.player() {
+                p.set_transport(&self.session.transport);
+            }
+            self.play(play, false);
+        }
         let armed = play.player().is_some_and(|p| p.take_armed());
         self.commit(ui.ctx(), armed);
         if play.player().is_some() || !idle {
@@ -799,6 +836,45 @@ impl SessionView {
                 i.key_pressed(egui::Key::H),
             )
         });
+        // The cursor: Home to bar 1, End to the session's end, Ctrl+← / → by bars, M
+        // drops a marker.
+        let (home, end, left, right, marker, shift_space) = ui.input(|i| {
+            (
+                i.key_pressed(egui::Key::Home),
+                i.key_pressed(egui::Key::End),
+                i.modifiers.command && i.key_pressed(egui::Key::ArrowLeft),
+                i.modifiers.command && i.key_pressed(egui::Key::ArrowRight),
+                i.key_pressed(egui::Key::M) && !i.modifiers.command,
+                i.modifiers.shift && i.key_pressed(egui::Key::Space),
+            )
+        });
+        let grid = Grid::new(self.session.rate, &self.session.transport);
+        if home {
+            self.move_cursor(0, play);
+        }
+        if end {
+            self.move_cursor(self.session.end(), play);
+        }
+        if left || right {
+            let c = self.session.transport.cursor;
+            let bar = grid.bar_at(c);
+            let to = if right {
+                grid.bar(bar + 1)
+            } else if grid.bar(bar) < c {
+                grid.bar(bar)
+            } else {
+                grid.bar(bar - 1)
+            };
+            self.move_cursor(to, play);
+        }
+        if marker {
+            let at = play
+                .player()
+                .map(|p| p.status().transport)
+                .filter(|t| t.running)
+                .map_or(self.session.transport.cursor, |t| t.heard.max(0));
+            self.add_marker(at);
+        }
         if slash {
             self.session.transport.loop_on = !self.session.transport.loop_on;
             self.save();
@@ -823,6 +899,11 @@ impl SessionView {
             if running {
                 self.stop(play);
             } else {
+                // Shift+Space: from where play last stopped.
+                if shift_space && let Some(at) = self.stopped_at {
+                    self.session.transport.cursor = at;
+                    self.save();
+                }
                 self.play(play, false);
             }
         }
@@ -895,11 +976,42 @@ impl SessionView {
         self.error = None;
     }
 
+    /// Stop: the playhead back at the cursor, or (return off) the cursor where play
+    /// stopped, so the next play goes on from there.
     fn stop(&mut self, play: &PlayView) {
         if let Some(p) = play.player() {
+            let st = p.status().transport;
             p.arm_take(false);
             p.transport_run(false);
+            if st.running {
+                self.stopped_at = Some(st.heard.max(0));
+                if !self.session.transport.return_to_cursor {
+                    self.session.transport.cursor = st.heard.max(0);
+                    self.save();
+                }
+            }
         }
+    }
+
+    /// A marker at `pos`, named by its count.
+    fn add_marker(&mut self, pos: i64) {
+        let n = (1..)
+            .find(|n| !self.session.markers.iter().any(|m| m.name == n.to_string()))
+            .unwrap_or(1);
+        self.session.markers.push(Marker {
+            position: pos,
+            name: n.to_string(),
+        });
+        self.session.markers.sort_by_key(|m| m.position);
+        self.save();
+    }
+
+    /// Move the cursor to `pos` (from bar 1), relocating a running transport (not while
+    /// recording).
+    fn move_cursor(&mut self, pos: i64, play: &PlayView) {
+        self.session.transport.cursor = pos.max(0);
+        self.relocate = play.player().is_some_and(|p| p.status().transport.running);
+        self.save();
     }
 
     /// A new track, selected (armed) for the next take.
@@ -2267,7 +2379,7 @@ impl SessionView {
             if ui
                 .add_enabled(ready, rec_button)
                 .on_hover_text(
-                    "Record into the armed track (R): the count-in, then from the start bar",
+                    "Record into the armed track (R): the count-in, then from the cursor",
                 )
                 .clicked()
             {
@@ -2294,7 +2406,9 @@ impl SessionView {
                     .min_size(egui::vec2(40.0, 30.0));
                 if ui
                     .add_enabled(ready, go)
-                    .on_hover_text("Play from the start bar (Space)")
+                    .on_hover_text(
+                        "Play from the cursor (Space; Shift+Space: from where it stopped)",
+                    )
                     .clicked()
                 {
                     action = Some(Some(false));
@@ -2343,6 +2457,7 @@ impl SessionView {
 
     fn settings_ui(&mut self, ui: &mut egui::Ui) {
         let before = self.session.transport.clone();
+        let rate = self.session.rate;
         let s = &mut self.session.transport;
         ui.horizontal_wrapped(|ui| {
             ui.add(
@@ -2396,8 +2511,48 @@ impl SessionView {
             )
             .on_hover_text("The tracks play before the start bar; a take starts at it");
             ui.add_space(8.0);
-            ui.label("start bar");
-            ui.add(egui::DragValue::new(&mut s.start_bar).range(1..=9999));
+            ui.label("cursor");
+            let grid = Grid::new(rate, s);
+            let spb = grid.samples_per_beat();
+            ui.add(
+                egui::DragValue::new(&mut s.cursor)
+                    .range(0..=i64::MAX / 4)
+                    .speed(spb / 16.0)
+                    .custom_formatter(move |v, _| grid.label(v as i64))
+                    .custom_parser(move |t| {
+                        let mut it = t.split('.');
+                        let bar: i64 = it.next()?.trim().parse().ok()?;
+                        let beat: i64 = it.next().map_or(Some(1), |b| b.trim().parse().ok())?;
+                        let six: i64 = it.next().map_or(Some(1), |b| b.trim().parse().ok())?;
+                        let k = (bar - 1) * grid.beats_per_bar as i64 + beat - 1;
+                        Some(grid.beat(k) as f64 + (six - 1) as f64 * spb / 4.0)
+                    }),
+            )
+            .on_hover_text(
+                "Where play starts and a take records (bar.beat.sixteenth): click the ruler \
+                 or empty lane space, Home / End, Ctrl+← / →",
+            );
+            ui.checkbox(&mut s.return_to_cursor, "return")
+                .on_hover_text(
+                    "Stop puts the playhead back at the cursor; off, the cursor stays where \
+                     play stopped (Shift+Space always plays from there)",
+                );
+            ui.add_space(8.0);
+            ui.label("snap");
+            egui::ComboBox::from_id_salt("snap")
+                .width(56.0)
+                .selected_text(s.snap.label())
+                .show_ui(ui, |ui| {
+                    for m in Snap::ALL {
+                        ui.selectable_value(&mut s.snap, m, m.label());
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "What moving takes, the cursor and the locators snap to (Alt inverts it \
+                     for the gesture: free when on, the beat when off). A snapped move keeps \
+                     a take's offset from the grid",
+                );
             ui.add_space(14.0);
             let per = s.beats_per_bar as i64;
             let looping = s.loop_on;
@@ -2446,7 +2601,7 @@ impl SessionView {
             beat_field(
                 ui,
                 &mut s.right_beat,
-                "The right locator (bar.beat): Alt+click the ruler",
+                "The right locator (bar.beat): Shift+click the ruler",
             );
         });
         if self.session.transport != before {
@@ -2697,11 +2852,58 @@ impl SessionView {
             self.px_per_s = (lanes_w / (end_s + 1.0)).clamp(2.0, 2000.0);
             self.view_s = -0.5;
         }
-        // Clicks and drags on the bars.
+        // Clicks and drags on the bars. Locators sit on beats (on bars with the bar snap).
+        let bar_snap = self.session.transport.snap == Snap::Bar;
         let snap = |x: f32| {
             let p = view.position(x);
-            grid.beat_at(p + (grid.samples_per_beat() * 0.5) as i64)
+            if bar_snap {
+                let per = grid.beats_per_bar as i64;
+                let k = grid.beat_at(p + (grid.samples_per_beat() * per as f64 * 0.5) as i64);
+                k - k.rem_euclid(per)
+            } else {
+                grid.beat_at(p + (grid.samples_per_beat() * 0.5) as i64)
+            }
         };
+        let marker_at = |x: f32, markers: &[Marker]| {
+            markers
+                .iter()
+                .position(|m| (view.x(m.position) - x).abs() < 6.0)
+        };
+        if resp.secondary_clicked()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            self.ruler_menu = Some((view.position(p.x), marker_at(p.x, &self.session.markers)));
+        }
+        let mut marker_action: Option<(Option<usize>, i64)> = None;
+        resp.context_menu(|ui| {
+            let Some((pos, m)) = self.ruler_menu else {
+                return;
+            };
+            if let Some(i) = m.filter(|&i| i < self.session.markers.len()) {
+                let name = self.session.markers[i].name.clone();
+                ui.label(RichText::new(format!("marker {name}")).color(theme::MUTED));
+                ui.text_edit_singleline(&mut self.session.markers[i].name);
+                if ui.button("Delete marker").clicked() {
+                    marker_action = Some((Some(i), pos));
+                    ui.close();
+                }
+            } else if ui.button("Add a marker here").clicked() {
+                marker_action = Some((None, pos));
+                ui.close();
+            }
+        });
+        match marker_action {
+            Some((Some(i), _)) => {
+                self.session.markers.remove(i);
+                self.save();
+            }
+            Some((None, pos)) => {
+                let snap = self.session.transport.snap;
+                self.add_marker(grid.snap(pos, snap).max(0));
+            }
+            None => {}
+        }
+        let (markers, snap_setting) = (self.session.markers.clone(), self.session.transport.snap);
         let t = &mut self.session.transport;
         let mut moved = false;
         if resp.drag_started()
@@ -2746,18 +2948,22 @@ impl SessionView {
             && let Some(p) = resp.interact_pointer_pos()
             && p.x >= view.left
         {
-            let (ctrl, alt) = ui.input(|i| (i.modifiers.command, i.modifiers.alt));
+            let (ctrl, shift, alt) =
+                ui.input(|i| (i.modifiers.command, i.modifiers.shift, i.modifiers.alt));
             let k = snap(p.x).max(0);
             if ctrl {
                 t.left_beat = k.min(t.right_beat - 1);
-            } else if alt {
+            } else if shift {
                 t.right_beat = k.max(t.left_beat + 1);
-            } else if !running {
-                let bar = grid
-                    .beat_at(view.position(p.x))
-                    .div_euclid(grid.beats_per_bar as i64)
-                    + 1;
-                t.start_bar = bar.max(1);
+            } else if let Some(i) =
+                marker_at(p.x, &markers).filter(|_| p.y < ruler.top() + RULER_H * 0.5)
+            {
+                t.cursor = markers[i].position;
+                self.relocate = running;
+            } else {
+                let pos = grid.snap(view.position(p.x), snap_setting.inverted(alt));
+                t.cursor = pos.max(0);
+                self.relocate = running;
             }
             moved = true;
         }
@@ -2786,6 +2992,7 @@ impl SessionView {
                 );
             }
         }
+        draw_markers(&painter, lanes_rect, &view, &self.session.markers);
         // The tracks, above the scrollbar.
         const BAR_H: f32 = 16.0;
         let mut changed = false;
@@ -2958,6 +3165,19 @@ impl SessionView {
                     .interact_pointer_pos()
                     .is_some_and(|p| lane.contains(p));
             self.selected = if hit { t.active.map(|k| (i, k)) } else { None };
+            // A click on empty lane space puts the cursor there (snapped; Alt: inverted).
+            if lane_resp.clicked()
+                && !hit
+                && let Some(p) = lane_resp.interact_pointer_pos()
+                && lane.contains(p)
+            {
+                let alt = ui.input(|x| x.modifiers.alt);
+                let snap = self.session.transport.snap.inverted(alt);
+                self.session.transport.cursor = grid.snap(view.position(p.x), snap).max(0);
+                self.relocate = playhead.is_some();
+                changed = true;
+            }
+            let t = &self.session.tracks[i];
             if lane_resp.drag_started()
                 && hit
                 && let (Some(k), Some(p)) = (t.active, lane_resp.interact_pointer_pos())
@@ -2975,14 +3195,11 @@ impl SessionView {
             && d.track == i
             && let Some(p) = ui.ctx().pointer_interact_pos()
         {
-            let free = ui.input(|x| x.modifiers.alt);
+            // Whole steps of the snap (SE2, decision 4: a take off the grid stays as far
+            // off it); Alt inverts the snap.
+            let alt = ui.input(|x| x.modifiers.alt);
             let delta = ((p.x - d.press_x) as f64 / view.px_per_s * view.rate).round() as i64;
-            let delta = if free {
-                delta
-            } else {
-                let spb = grid.samples_per_beat();
-                ((delta as f64 / spb).round() * spb).round() as i64
-            };
+            let delta = grid.snap_delta(delta, self.session.transport.snap.inverted(alt));
             let (k, from) = (d.take, d.from);
             if let Some(take) = self.session.tracks[i].takes.get_mut(k) {
                 take.position = from + delta;
@@ -3219,6 +3436,7 @@ impl SessionView {
                 draw_notes(&lp, rect, view, at, *from, notes, REC);
             }
         }
+        draw_cursor(&lp, lane, view, self.session.transport.cursor);
         if let Some(h) = playhead {
             let x = view.x(h);
             if x >= lane.left() {
@@ -4394,7 +4612,12 @@ impl SessionView {
     /// Open the piano roll on event take `k` of track `t`.
     fn open_roll(&mut self, t: usize, k: usize) {
         if let Some(place) = self.roll_place(t, k, None) {
-            self.roll = Some(Roll::new(t, &place));
+            let mut r = Roll::new(t, &place);
+            // Its grid starts at the session's snap (it edits notes: finer as it likes).
+            if let Some(d) = self.session.transport.snap.per_beat() {
+                r.set_division(d);
+            }
+            self.roll = Some(r);
         }
     }
 
@@ -4752,7 +4975,12 @@ fn load_prefs() -> (
             .unwrap_or(ALIGNMENT_DBFS)
             .clamp(-60.0, 0.0),
     );
-    (last, transport_from(&v["transport"]), cals, normalize)
+    (
+        last,
+        transport_from(&v["transport"], DEFAULT_RATE),
+        cals,
+        normalize,
+    )
 }
 
 fn show_folder(dir: &Path) {
@@ -4982,8 +5210,8 @@ fn draw_ruler(
             );
         }
     }
-    // The start bar.
-    let x = view.x(grid.bar(s.start_bar));
+    // The cursor: where play starts.
+    let x = view.x(s.cursor);
     if x >= rect.left() && x <= rect.right() {
         let y = rect.bottom();
         painter.add(egui::Shape::convex_polygon(
@@ -4995,6 +5223,42 @@ fn draw_ruler(
             theme::ACCENT,
             Stroke::NONE,
         ));
+    }
+}
+
+/// The markers on the ruler: a flag at each with its name.
+fn draw_markers(painter: &egui::Painter, rect: Rect, view: &View, markers: &[Marker]) {
+    for m in markers {
+        let x = view.x(m.position);
+        if x < rect.left() || x > rect.right() + 40.0 {
+            continue;
+        }
+        painter.line_segment(
+            [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+            Stroke::new(1.0, theme::WARN.gamma_multiply(0.8)),
+        );
+        let label = painter.layout_no_wrap(
+            m.name.clone(),
+            egui::FontId::proportional(9.0),
+            theme::ACCENT_INK,
+        );
+        let flag = Rect::from_min_size(
+            Pos2::new(x, rect.top()),
+            egui::vec2(label.size().x + 6.0, 11.0),
+        );
+        painter.rect_filled(flag, 2.0, theme::WARN);
+        painter.galley(Pos2::new(x + 3.0, rect.top()), label, theme::ACCENT_INK);
+    }
+}
+
+/// The cursor through a lane (a thin line where play starts).
+fn draw_cursor(painter: &egui::Painter, rect: Rect, view: &View, cursor: i64) {
+    let x = view.x(cursor);
+    if x >= rect.left() && x <= rect.right() {
+        painter.line_segment(
+            [Pos2::new(x, rect.top()), Pos2::new(x, rect.bottom())],
+            Stroke::new(1.0, theme::ACCENT.gamma_multiply(0.55)),
+        );
     }
 }
 
