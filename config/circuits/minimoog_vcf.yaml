@@ -18,7 +18,7 @@
 #   EMPHASIS  R14, 50K reverse audio, wired as a rheostat between pins 7 and 6 (Fig 9-16: its
 #        terminal 1 unconnected)
 #   AMOUNT OF CONTOUR  a 5K linear pot from the contour (board 2) to ground, its wiper into
-#        R74 47K (pin 16)
+#        R74 47K (pin 16). Here at 0 (R74 to ground) until the contour generators (MM4)
 # The panel's summing into the control node is a test fixture here (MM5 traces it): CUTOFF as a
 # voltage through 100K and the keyboard through KEYBOARD CONTROL 1 and 2 (300K, 150K: R53 / R54
 # of the front panel's parts list by inference, together 100K). Rails ideal +-10 V until the
@@ -28,7 +28,6 @@ title: "Minimoog VCF (filter board No. 4, circuit No. 6)"
 input: in
 cv_inputs:
   key: kbd
-  contour: cont
 probes: [out, o7, vr, a4, b4, ctl, e26, tail, nb, b29, b30]
 
 full_scale:
@@ -38,13 +37,12 @@ full_scale:
 controls:
   cutoff_v: {value: 0.0, min: -5.0, max: 5.0, unit: V, source: "numerical: test fixture (the CUTOFF FREQUENCY knob's contribution, a voltage through r_cutoff_ohm; the panel's own circuit comes at MM5); 0 V stands for the procedure's CUTOFF -1"}
   emphasis: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R14 Rotary Pot, Rev. Audio, 50K Ohm (EMPHASIS); 0 = the knob at 0, 1 = at 10"}
-  contour_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3 / Fig 9-16: AMOUNT OF CONTOUR, a 5K linear pot (contour on terminal 3, wiper to CO4-16)"}
   kb1: {value: 1, choices: [0, 1], unit: switch, source: "the front panel's KEYBOARD CONTROL 1 rocker (Folkman's adjustment procedures)"}
   kb2: {value: 1, choices: [0, 1], unit: switch, source: "the front panel's KEYBOARD CONTROL 2 rocker"}
   # --- the board's trims (set by scripts/minimoog_vcf_trim.py from Folkman's procedures)
-  range_trim: {value: 0.2, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 'Filter Range' (CUTOFF -1, EMPHASIS 10, keyboard control off: zero beat with A-440)"}
-  scale_trim: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 'Filter Scale' (tracks the keyboard three octaves)"}
-  regen_cal: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R73 1K REGEN CAL trim (its wiper Q30's base); default calibrated: Folkman p. 14 'Regeneration Cal.' (regeneration starts between EMPHASIS 7 and 8 at CUTOFF -1)"}
+  range_trim: {value: 0.3065, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 'Filter Range' (CUTOFF -1, EMPHASIS 10, keyboard control off: zero beat with A-440)"}
+  scale_trim: {value: 0.4658, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 'Filter Scale' (tracks the keyboard three octaves)"}
+  regen_cal: {value: 0.8467, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R73 1K REGEN CAL trim (its wiper Q30's base); default calibrated: Folkman p. 14 'Regeneration Cal.' (regeneration starts between EMPHASIS 7 and 8 at CUTOFF -1)"}
 
 values:
   # --- rails and fixtures
@@ -54,7 +52,12 @@ values:
   r_kb1_ohm: {value: 300.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 1, one third of the tracking: the front panel's R53 300K by inference; Table 7-2 lists R53 300K, R54 150K, R55 200K, R51 100K without their places)"}
   r_kb2_ohm: {value: 150.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 2, two thirds: the front panel's R54 150K by inference; with KB1, 100K together)"}
   r_kbd_load_ohm: {value: 1.0e+9, source: "numerical: a leak on the keyboard input (it stays defined with both rockers off)"}
-  r_contour_pot_ohm: {value: 5.0e+3, source: "the 204D manual's Table 7-3: Rotary Pot, Linear, 5K Ohm (AMOUNT OF CONTOUR, Fig 9-16)"}
+  # The keyboard (a fixture until board 2, MM4): 1 V / octave, the last key held (Folkman: the
+  # keyboard's sample-and-hold), 0 V at the procedures' "low A".
+  key_v_per_semitone: {value: 0.08333333333333333, source: "provisional: model knowledge (the Minimoog's 1 V / octave keyboard; Folkman's Filter Scale: two A keys two octaves apart give two octaves of the filter)"}
+  key_ref_note: {value: 45.0, source: "provisional: model knowledge (the procedures' 'low A' as MIDI 45, A2: the Model D's 44 keys run F to C, its lowest A the fifth key)"}
+  key_min_v: {value: -0.3333333333333333, source: "provisional: model knowledge (the lowest key, F: four semitones under the low A)"}
+  key_max_v: {value: 3.25, source: "provisional: model knowledge (the top key, C: 39 semitones over the low A)"}
   r_vca_in_ohm: {value: 82.0e+3, source: "Fig 9-11: R2 82K at the VCA's input (circuit No. 7; its return to ground provisional until the VCA is drawn, MM2)"}
   c_vca_in_f: {value: 0.33e-6, source: "Fig 9-11: C6 0.33 into the VCA"}
   emphasis_taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper's 10% at half rotation, read from the far end: Table 7-3's 'Rev. Audio')"}
@@ -111,10 +114,9 @@ sections:
         parts:
           RKB2: {R: [kbd, ctl], r: r_kb2_ohm, in: [1]}
       RKBL: {R: [kbd, "0"], r: r_kbd_load_ohm}
-      RCONT: {pot: ["0", p16, cont], r: r_contour_pot_ohm, at: contour_amount}
   - title: control current
     parts:
-      R74: {R: [p16, ctl], r: r74_ohm}
+      R74: {R: ["0", ctl], r: r74_ohm}
       R70: {R: [ctl, sc], r: r70_ohm}
       R49: {rheostat: [sc, "0"], r: r49_ohm, at: scale_trim}
       C18: {C: [ctl, "0"], c: c18_f}

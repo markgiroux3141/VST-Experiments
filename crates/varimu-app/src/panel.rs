@@ -485,7 +485,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 22] = [
+pub const DEVICES: [Device; 23] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1188,6 +1188,32 @@ pub const DEVICES: [Device; 22] = [
         partition: None,
         // The LN circuit nulls the FET's distortion: the draft's 1 mV Newton reads ten
         // times the THD at 10 dB of gain reduction (DEVICE_BUILDER_PLAN.md B12).
+        newton: Some((1e-5, 1e-5)),
+    },
+    Device {
+        id: "minimoog_vcf",
+        label: "Minimoog Ladder Filter",
+        short: "Moog VCF",
+        about: "The Minimoog Model D's transistor ladder filter (filter board No. 4), \
+            the test oscillator into it, the keys on its keyboard input (docs/MINIMOOG_PLAN.md)",
+        group: Group::Instruments,
+        circuit: "minimoog_vcf",
+        panel: Some(&["cutoff_v", "emphasis", "kb1", "kb2"]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: Some("cutoff_v"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        partition: None,
+        // The expo converter's current is exp(V / Vt): the draft's 1 mV Newton would be a
+        // 4 % cutoff error, as in the SSL's log-domain cells.
         newton: Some((1e-5, 1e-5)),
     },
 ];

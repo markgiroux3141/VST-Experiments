@@ -74,41 +74,48 @@ def main(argv=None) -> int:
         print(f"  regen_cal {r:.4f}: growth {g:.3f} (f {f:.0f} Hz)", flush=True)
         return np.log(g)
 
-    g0, g1 = regen(0.0), regen(1.0)
-    if (g0 > 0) == (g1 > 0):
-        print("REGEN CAL: no onset at EMPHASIS 7.5 within the trim's range", flush=True)
-        regen_cal = 0.0 if g0 > g1 else 1.0
-    else:
-        regen_cal = bisect(regen, 0.0, 1.0)
-    ov["regen_cal"] = regen_cal
-
-    # 2. range: keyboard off, EMPHASIS 10 at 440 Hz
+    # 2. range: keyboard off, EMPHASIS 10 at 440 Hz. Below ~0.1 the reference current is
+    # nearly nothing (the wiper under Q26's emitter) and the ladder stops tracking: the
+    # search stays in the trim's working span.
     def rng(x):
         f = freq(s, {**ov, "kb1": 0, "kb2": 0, "range_trim": x})
         print(f"  range_trim {x:.4f}: {f:.1f} Hz", flush=True)
         return np.log(max(f, 1e-3) / A_HZ)
 
-    range_trim = bisect(rng, 0.02, 1.0)
-    ov["range_trim"] = range_trim
+    # The onset of regeneration depends on the frequency, so 1 and 2 alternate twice
+    # (the procedure's "repeat" in practice).
+    regen_cal = range_trim = None
+    for _ in range(2):
+        g0, g1 = regen(0.0), regen(1.0)
+        if (g0 > 0) == (g1 > 0):
+            print("REGEN CAL: no onset at EMPHASIS 7.5 within the trim's range", flush=True)
+            regen_cal = 0.0 if g0 > g1 else 1.0
+        else:
+            regen_cal = bisect(regen, 0.0, 1.0)
+        ov["regen_cal"] = regen_cal
+        range_trim = bisect(rng, 0.1, 1.0)
+        ov["range_trim"] = range_trim
 
-    # 3. scale: third A (2 V) by CUTOFF to 1760 Hz, low A (0 V) by SCALE to 440 Hz; repeat
-    scale = 0.5
-    cut = 0.0
+    # 3. scale. Folkman's loop (CUTOFF for 1760 Hz at the third A, SCALE for 440 Hz at the
+    # low A, repeated) ends where the third A sounds two octaves over the low A and the low
+    # A at 440 Hz. The loop leans on the low A's own keyboard volts, which the fixture puts
+    # at 0 V, so it is solved for that end state directly: SCALE for a ratio of 4 between
+    # the two A keys, then CUTOFF for 440 Hz at the low A.
+    def ratio(x):
+        o = {**ov, "scale_trim": x}
+        f0, f2 = freq(s, o, key_v=0.0), freq(s, o, key_v=2.0)
+        print(f"  scale_trim {x:.4f}: {f0:.1f} -> {f2:.1f} Hz ({f2 / max(f0, 1e-3):.3f}x)")
+        return np.log(max(f2, 1e-3) / max(f0, 1e-3) / 4.0)
 
-    def cutf(c, scale, it):
-        f = freq(s, {**ov, "scale_trim": scale, "cutoff_v": c}, key_v=2.0)
-        print(f"  [{it}] cutoff_v {c:+.4f} @ key 2 V: {f:.1f} Hz", flush=True)
-        return np.log(max(f, 1e-3) / (4 * A_HZ))
+    scale = bisect(ratio, 0.0, 1.0, 9)
+    ov["scale_trim"] = scale
 
-    def scf(x, cut, it):
-        f = freq(s, {**ov, "scale_trim": x, "cutoff_v": cut}, key_v=0.0)
-        print(f"  [{it}] scale_trim {x:.4f} @ key 0 V: {f:.1f} Hz", flush=True)
+    def cutf(c):
+        f = freq(s, {**ov, "cutoff_v": c}, key_v=0.0)
+        print(f"  cutoff_v {c:+.4f} @ key 0 V: {f:.1f} Hz", flush=True)
         return np.log(max(f, 1e-3) / A_HZ)
 
-    for it in range(3):
-        cut = bisect(lambda c, sc=scale, i=it: cutf(c, sc, i), -3.0, 3.0, 8)
-        scale = bisect(lambda x, cu=cut, i=it: scf(x, cu, i), 0.0, 1.0, 8)
-    ov["scale_trim"] = scale
+    cut = bisect(cutf, -1.0, 1.0, 9)
 
     # the result: tracking over three octaves at the trimmed scale (keyboard 0..3 V)
     track = [freq(s, {**ov, "cutoff_v": cut}, key_v=k) for k in (0.0, 1.0, 2.0, 3.0)]

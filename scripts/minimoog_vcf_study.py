@@ -41,9 +41,9 @@ def settings(quality: str = "production") -> TransientSettings:
     return dataclasses.replace(s, settle_s=SETTLE_S)
 
 
-def run(ir, x, *, key_v=0.0, contour_v=0.0, quality="production", stats=None):
+def run(ir, x, *, key_v=0.0, quality="production", stats=None):
     n = len(x)
-    ctl = {"key": np.full(n, float(key_v)), "contour": np.full(n, float(contour_v))}
+    ctl = {"key": np.full(n, float(key_v))}
     r = fast.run_transient(ir, x, settings=settings(quality), controls=ctl, stats=stats)
     return {k: np.asarray(v) for k, v in r.vectors.items()}
 
@@ -117,6 +117,31 @@ def response(s, base: dict, amp_v: float = 0.005) -> dict:
     return {"base": base, "freq_hz": freqs.tolist(), "gain_db": db.tolist(), "g0": float(h[0])}
 
 
+def drive(s, base: dict, f_hz: float = 110.0) -> dict:
+    """THD and gain of a sine through the filter against its level (EMPHASIS 0, the cutoff
+    ~4 octaves above): the input pair is a differential pair, tanh(V / 2 Vt) (Huovilainen),
+    so it compresses from tens of mV."""
+    ir = build(s, {**base, "emphasis": 0.0, "cutoff_v": 4.0})
+    rows = []
+    for amp in (0.005, 0.02, 0.05, 0.1, 0.2, 0.5):
+        t = np.arange(int(0.5 * FS)) / FS
+        x = amp * np.sin(2 * np.pi * f_hz * t)
+        o = run(ir, x)["v(out)"][-int(0.2 * FS) :]
+        o = o - o.mean()
+        sp = np.abs(np.fft.rfft(o * np.hanning(len(o))))
+        fr = np.fft.rfftfreq(len(o), 1 / FS)
+
+        def pk(h, sp=sp, fr=fr):
+            i = int(np.argmin(np.abs(fr - f_hz * h)))
+            return sp[i - 3 : i + 4].max()
+
+        thd = float(np.sqrt(sum(pk(k) ** 2 for k in range(2, 10))) / pk(1))
+        gain = float(np.ptp(o) / (2 * amp))
+        rows.append({"amp_v": amp, "thd": thd, "gain": gain})
+        print(f"  {amp * 1e3:6.1f} mV: gain {gain:6.2f}  THD {100 * thd:6.2f} %", flush=True)
+    return {"base": base, "f_hz": f_hz, "rows": rows}
+
+
 def track(s, base: dict) -> dict:
     """Oscillation frequency at EMPHASIS 10 over keyboard volts (1 V / octave expected)."""
     ir = build(s, {**base, "emphasis": 1.0})
@@ -135,7 +160,7 @@ def track(s, base: dict) -> dict:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--only", nargs="*", default=["idle", "osc", "response", "track"])
+    ap.add_argument("--only", nargs="*", default=["idle", "osc", "response", "drive", "track"])
     ap.add_argument("--set", nargs="*", default=[], metavar="K=V")
     a = ap.parse_args(argv)
     base = {}
@@ -177,6 +202,9 @@ def main(argv=None) -> int:
             fig.savefig(OUT / "response.png", dpi=120, bbox_inches="tight")
         except ImportError:
             pass
+    if "drive" in a.only:
+        print("overdrive (110 Hz sine, EMPHASIS 0, cutoff +4 V):")
+        out["drive"] = drive(s, base)
     if "track" in a.only:
         print("keyboard tracking at EMPHASIS 10:")
         out["track"] = track(s, base)
