@@ -40,8 +40,8 @@ runs**.
   `RIBBON_4038@1` after BBC Monograph No. 4 fitted to STC's curve, `STC4038_OT@1`; a miss
   of +2.8 dB at 4-7 kHz); WP8's Notes. WP9 (2026-11-06): the AKG D112 (`config/circuits/akg_d112.yaml`: `R_D112@1`
   fitted by `scripts/fit_d112.py`, no construction published; D112 -> SSL composed); WP9's Notes.
-- **In progress:** nothing: WP9 is done.
-- **Next:** WP11 (the Neve 1073) is DEVICE_BUILDER_PLAN.md's B13 and built there; the next WP in order that this plan builds is WP12 (the API 312, the 2520), unless the user names another. Its steps are to be written first (sources first, step 4 of "Start").
+- **In progress:** WP12 (API 312), steps written below; step 1 (sources) is blocked on the user's files.
+- **Next:** WP12 step 1: the user fetches the API 312 cut sheet and a 2520 schematic (WP12's list), then write `data/schematics/api_312/README.md`. WP11 (the Neve 1073) is DEVICE_BUILDER_PLAN.md's B13 and built there; if the user doesn't fetch, take WP13 or another WP whose sources are open.
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -1134,6 +1134,34 @@ published response and polars.
 - Step 2 done (2026-11-06): `R_D112@1` (`config/components/r_d112/1.yaml`; geometry block `R_D112` in `published_points.yaml`, builder `build_r_d112`), fitted by `scripts/fit_d112.py` (the SM57's machinery from `fit_sm57.py` on the D112's body, no transformer: a 70 mm head as a `dynamic` body of revolution, diaphragm radius 18 mm fixed because the body's entry table depends on it; free: B l, the gap field, the diaphragm's resonance and thickness, the network's r1 / q / d, the washer and the chamber's volume, and one dome mode for the presence rise). Result: 1.801 mV/Pa (target 1.8), on axis rms 1.18 dB / max 2.9 dB over 40 Hz-8 kHz, rear -15.1 dB at 125 Hz and -15.7 at 2 kHz (sheet -15.0 / -14.8). **Known misses:** the side at 2-4 kHz is -9.8 / -8.7 dB (sheet -6.1), the rear at 4 kHz -9.8 (sheet -14.8), the side at 8 kHz -13.3 (sheet -9.5): the head's diffraction narrows what the sheet shows as a loose cardioid; above 8 kHz the curve (+1.9 near 10 kHz, -2.6 at 16 kHz) isn't fitted (the model falls from ~9 kHz). **Bounds hit:** thickness 60 um, B l 20 T m, gap 0.6 T, washer 1e5, the dome's mass 2%: the fit wants a heavy moving system (657 mg, 33 m of aluminium wire at 190 ohm) for the 60 Hz-100 Hz bump at 1.8 mV/Pa, which a real 200 ohm coil can't carry: the bump is probably the chamber's, the mass a stand-in. A better physical split would need the chamber's acoustics (a ported cavity, as the Seeler network's `handle`) fitted to the 10 cm proximity curve, which isn't a target yet (`akg_d112_response.csv` has it). The coil is 190 ohm (akg: 210 nominal, <= 200 MKII). The hum-compensation coil isn't modelled (no acoustic input).
 - Step 3 done: `config/circuits/akg_d112.yaml` (the coil into `out`, open circuit; the chain replaces RLOAD), the list's entry (`akg_d112`: output out, drop RLOAD, cardioid), `d112_ssl.yaml` composed (the other chains' files byte-identical), `tests/test_akg_d112.py` (5 pass: lock, sensitivity, response within 3.5 dB, polars, circuit), `test_chain_matrix.py` 24 pass. App fixtures not due (no existing circuit or device changed; the app plays no mic).
 
+### WP12. The API 312 (the 2520)
+
+API's 500-series mic preamp: a bespoke input transformer (AP2516 now; the 512C used a
+Cinemag 75101A, ~1:7), the 2520 discrete op-amp as the variable-gain stage (BJTs, class AB
+output) and an output transformer (the 2503 in the 512C). The BJT model exists (WP10).
+
+Steps:
+1. Sources, first: the 2520's schematic and the 312's wiring (gain pot, feedback network,
+   rails). Found so far (2026-11-06): API's cut sheet
+   (`https://apiaudio.com/docs/files/API_312_Mic_Preamp_Cut_Sheet_R2.pdf`: too large for
+   WebFetch, 10 MB cap: the user fetches it), a 2520 schematic PDF said to be on
+   waltzingbear.com (linked from a Gearspace thread that returns 403), GroupDIY's "API 312
+   thread" (login-walled attachments). Forum builders: 25.5k feedback with 255 ohm series
+   and a 25k reverse-log gain pot; 62 pF feedback cap oscillates, 100 pF cures it (one
+   builder's figure). Not found: a verified transistor-level 2520 (count, types, values).
+   Write `data/schematics/api_312/README.md` with provenance per value.
+2. The transistors: the 2520 era's parts as `bjt` devices (`library._bjt_from_numbers`,
+   cited sheets), each a component version.
+3. `config/circuits/api_312.yaml`: input transformer and output transformer as designs
+   (`config/designs/`, provisional from published ratios / DCRs), the 2520 from BJTs, the
+   gain control as `reverse` pot; ideal +-16 V rails behind a provisional resistance.
+4. `tests/test_api_312.py` (builds, preflight, idle against the drawing / published
+   voltages, gain range), a profile (`opamp_pre_suite.py` entry if it fits).
+5. The list: `api_312`'s entry, `compose_chain.py --all` (sm57_api312), test matrix,
+   fixtures, `chain_status.py` 22 of 51.
+
+Notes (2026-11-06, started): step 1 only. Nothing built.
+
 ### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
@@ -1225,3 +1253,6 @@ before this session (not the chains' work), and `ruff format --check` one file, 
 - 2026-11-06: WP9 done: `R_D112@1` fitted by `scripts/fit_d112.py` (1.8 mV/Pa, within 2.9 dB to 8 kHz; side
   / rear 3-5 dB narrow at 2-8 kHz, parameters at their bounds: the notes), `akg_d112.yaml`, D112 -> SSL
   composed: 21 of 51 available.
+- 2026-11-06: WP12 started: steps written; the 2520's transistor-level schematic isn't on
+  the open web (cut sheet over WebFetch's size cap, the other leads walled); waiting on the
+  user for files; still 21 of 51.
