@@ -1,0 +1,229 @@
+# The Model D's filter contour generator with the keyboard's trigger section (board No. 2, Fig 9-7,
+# circuit No. 8; docs/MINIMOOG_PLAN.md MM4; values from the figure and Table 7-6, the reading and the
+# resolved wiring in data/schematics/minimoog/README.md). One contour section alone:
+#   flip-flop  Q1 / Q4 (an Eccles-Jordan pair): Q4's collector (R4 10K) feeds Q1's base through R3,
+#        Q1's collector (R6 560 + R5 3.3K) feeds Q4's base through R14 33K and R35 + CR1. Q1 ON =
+#        attack, Q1 OFF = decay and sustain (latched by R14)
+#   attack   Q5 (PNP) takes its base from the R6 / R5 junction: with Q1 on, a current source through
+#        R7 100 and the ATTACK rheostat (R12, 1M audio, pin 14) into C5 10 uF (the envelope, pin 10)
+#   decay    Q6 follows Q1's collector, Q7 (R9) passes the DECAY rheostat's (R15, 1M audio, pin 13)
+#        current from C5 down to E7, which Q8 (PNP, base on the SUSTAIN divider R13 / R1 / R17,
+#        pin 12) holds at the sustain level + a diode drop; R10 27K from +9.3 V biases E7
+#   release  CR2 takes E7 down through the V-TRIG line (Q12 on) at key-up; CR7 from C5 to pin 2 (the
+#        DECAY switch: off = pin 2 tied to V-TRIG, an instant release)
+#   output   Q22 / Q21 (a complementary pair, R48, R50, C11) follow C5 to pin 11; R33 5.6K / R29
+#        16.9K to -10 V is the peak detector's divider: CR3 from that node turns Q4 on near 4 V out
+#   trigger  CR10, R60, C7, R55 into Q20 (key trigger at pin 20: positive-going); Q20's collector is the
+#        trigger bus (R37 10K to +9.3 V, R35 / CR1 to Q4's base, R19 into Q12's base); Q12 on with the
+#        bus high, off when a key pulls it down: V-TRIG then rises through R23 / R32 and C1 / R26 hand
+#        that step to Q1's base as the pulse that starts the attack
+# The loudness section (Q25 / Q15, Q16, Q17 / Q18 / Q19, Q3 / Q2; below) is the same flip-flop and
+# envelope with its own output stage (a Darlington follower: out = envelope - 2 diode drops) and shares
+# the trigger bus, V-TRIG and the DECAY switch. Not drawn here: EXT. S-TRIG (pin 19, R49),
+# C8 100 pF and C12 500 pF (parasitic-oscillation caps, "use as required"). The board's +9.3 V is
+# ideal (Q26's decoupling, R62 / R63, not built); the panel's +10 V feeds the SUSTAIN pot.
+
+title: "Minimoog filter contour generator (board No. 2)"
+input: gate_in
+cv_inputs:
+  gate: kg
+probes: [env, outn, col1, c4, tb, vtrig, e7, nb, b1, b4, ta, envl, outl, col25, e18, nbl]
+
+controls:
+  attack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R12 Rotary Pot, 1 Meg Audio (ATTACK; its wiring per Fig 9-17, user-read: R12 into pin 14); 0 = the knob at 0, 1 = at 10"}
+  decay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R15 Rotary Pot, 1 Meg Audio (the filter DECAY; Fig 9-17: between 13B and the wipers' 10B)"}
+  sustain: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: R18 5K linear (the filter SUSTAIN; Fig 9-17: wiper to 12B, one end to ground, the other end's connection not legible on the scan: taken as +10 V like its twin R19, provisional; read literally the filter SUSTAIN would have no positive source)"}
+  lattack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness ATTACK: Fig 9-17's R13, between 18B and the wipers' 9B)"}
+  ldecay: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 1 Meg Audio pot (the loudness DECAY: Fig 9-17's R16, between 17B and 9B)"}
+  lsustain: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "Table 7-3: a 5K linear pot (the loudness SUSTAIN: Fig 9-17's R19, +10 V to ground, its wiper to 16B)"}
+  decay_on: {value: 1, choices: [0, 1], unit: switch, source: "the panel's DECAY switch: 1 = release follows DECAY (pin 2 open), 0 = pin 2 tied to V-TRIG (instant release); provisional reading of Fig 9-7's pin 2 / pin 22"}
+
+values:
+  v9_v: {value: 9.3, source: "Fig 9-7: the board's +9.3 V (Q26's decoupling from +10 V; ideal here)"}
+  vneg_v: {value: -10.0, source: "Fig 9-7: -10 V"}
+  vpanel_v: {value: 10.0, source: "Fig 9-7: +10 V (the SUSTAIN pot's supply, panel wiring)"}
+  taper_mid: {value: 0.1, source: "provisional: model knowledge (an audio taper's 10% at half rotation)"}
+  r12_ohm: {value: 1.0e+6, source: "Table 7-3: R12 1 Meg Audio"}
+  r15_ohm: {value: 1.0e+6, source: "Table 7-3: R15 1 Meg Audio"}
+  r18_ohm: {value: 5.0e+3, source: "Table 7-3: R18 5K linear"}
+  r32_ohm: {value: 10.0e+3, source: "Fig 9-7: R32 10K"}
+  r26_ohm: {value: 10.0e+3, source: "Fig 9-7: R26 10K"}
+  c1_f: {value: 0.01e-6, source: "Fig 9-7: C1 .01"}
+  r3_ohm: {value: 10.0e+3, source: "Fig 9-7: R3 10K"}
+  r4_ohm: {value: 10.0e+3, source: "Fig 9-7: R4 10K"}
+  r6_ohm: {value: 560.0, source: "Fig 9-7: R6 560"}
+  r5_ohm: {value: 3.3e+3, source: "Fig 9-7: R5 3.3K"}
+  r14_ohm: {value: 33.0e+3, source: "Fig 9-7: R14 33K"}
+  r37_ohm: {value: 10.0e+3, source: "Fig 9-7: R37 10K"}
+  r35_ohm: {value: 10.0e+3, source: "Fig 9-7: R35 10K"}
+  r7_ohm: {value: 100.0, source: "Fig 9-7: R7 100"}
+  c5_f: {value: 10.0e-6, source: "Fig 9-7: C5 10 (uF)"}
+  r8_ohm: {value: 10.0e+3, source: "Fig 9-7: R8 10K"}
+  r9_ohm: {value: 4.7e+3, source: "Fig 9-7: R9 4.7K"}
+  r10_ohm: {value: 27.0e+3, source: "Fig 9-7: R10 27K"}
+  r13_ohm: {value: 4.7e+3, source: "Fig 9-7: R13 4.7K"}
+  r1_ohm: {value: 3.0e+3, source: "Fig 9-7: R1 3K"}
+  r17_ohm: {value: 150.0e+3, source: "Fig 9-7: R17 150K"}
+  r11_ohm: {value: 100.0, source: "Fig 9-7: R11 100"}
+  r48_ohm: {value: 10.0e+3, source: "Fig 9-7: R48 10K"}
+  r50_ohm: {value: 560.0, source: "Fig 9-7: R50 560"}
+  c11_f: {value: 47.0e-12, source: "Fig 9-7: C11 47 pF"}
+  r33_ohm: {value: 5.6e+3, source: "Fig 9-7: R33 5.6K"}
+  r29_ohm: {value: 16.9e+3, source: "Fig 9-7: R29 16.9K 1%"}
+  r23_ohm: {value: 3.3e+3, source: "Fig 9-7: R23 3.3K"}
+  r19_ohm: {value: 10.0e+3, source: "Fig 9-7: R19 10K"}
+  r60_ohm: {value: 100.0e+3, source: "Fig 9-7: R60 100K"}
+  r55_ohm: {value: 47.0e+3, source: "Fig 9-7: R55 47K"}
+  c7_f: {value: 0.1e-6, source: "Fig 9-7: C7 .1"}
+  r28_ohm: {value: 10.0e+3, source: "Fig 9-7: R28 10K"}
+  c4_f: {value: 0.01e-6, source: "Fig 9-7: C4 .01"}
+  r38_ohm: {value: 10.0e+3, source: "Fig 9-7: R38 10K"}
+  r39_ohm: {value: 10.0e+3, source: "Fig 9-7: R39 10K"}
+  r41_ohm: {value: 560.0, source: "Fig 9-7: R41 560 ohm"}
+  r40_ohm: {value: 3.3e+3, source: "Fig 9-7: R40 3.3K"}
+  r56_ohm: {value: 33.0e+3, source: "Fig 9-7: R56 33K"}
+  r36_ohm: {value: 10.0e+3, source: "Fig 9-7: R36 10K"}
+  r42_ohm: {value: 100.0, source: "Fig 9-7: R42 100"}
+  c2_f: {value: 10.0e-6, source: "Fig 9-7: C2 10 (uF)"}
+  r43_ohm: {value: 10.0e+3, source: "Fig 9-7: R43 10K"}
+  r44_ohm: {value: 4.7e+3, source: "Fig 9-7: R44 4.7K"}
+  r45_ohm: {value: 27.0e+3, source: "Fig 9-7: R45 27K"}
+  r46_ohm: {value: 100.0, source: "Fig 9-7: R46 100"}
+  r57_ohm: {value: 4.7e+3, source: "Fig 9-7: the 4.7K from pin 16 (printed R51 / R57)"}
+  rsl_ohm: {value: 4.7e+3, source: "Fig 9-7: the 4.7K from the sustain node to ground (printed R41, a second R41)"}
+  r16_ohm: {value: 10.0e+3, source: "Fig 9-7: R16 10K"}
+  r15_ohm_out: {value: 560.0, source: "Fig 9-7: R15 560 (the Darlington's collector supply)"}
+  r24_ohm: {value: 6.8e+3, source: "Fig 9-7: R24 6.8K"}
+  r27_ohm: {value: 16.9e+3, source: "Fig 9-7: R27 16.9K 1% (the sheet's '169K' read as the filter divider's 16.9K 1%: the filter's R29 is printed 16.9K)"}
+  r_pin2_ohm: {value: 1.0, source: "numerical: the closed DECAY switch's contact"}
+  r_leak_ohm: {value: 1.0e+9, source: "numerical: a leak on pin 2 (stays defined with the switch open)"}
+  r_load_ohm: {value: 100.0e+3, source: "numerical: test load on the contour output (the VCF's AMOUNT pot and the VCA's R59 come at the join)"}
+  clamp_diode: {value: 1N4148@1, source: "provisional: Fig 9-7's 1N34A (germanium, ~0.3 V) and 1N4004 diodes; the 1N4148 stands in (no germanium card)"}
+
+devices:
+  QN: {device: 2N3904@1, source: "provisional: Fig 9-7's 2N3392 (NPN, no card found); the 2N3904 stands in"}
+  QP: {device: 2N3906@1, source: "Fig 9-7: TIS93, alternate 2N3906 (note 3)"}
+  DD: {device: clamp_diode}
+
+sections:
+  - title: rails
+    parts:
+      V9: {V: [v9, "0"], v: v9_v}
+      VN: {V: [vn, "0"], v: vneg_v}
+      VPAN: {V: [vpan, "0"], v: vpanel_v}
+      RIN: {R: [gate_in, "0"], r: r_leak_ohm}
+  - title: flip-flop
+    parts:
+      R32: {R: [v9, ta], r: r32_ohm}
+      R26: {R: [ta, rb], r: r26_ohm}
+      C1: {C: [rb, b1], c: c1_f}
+      R3: {R: [b1, c4], r: r3_ohm}
+      R4: {R: [v9, c4], r: r4_ohm}
+      Q1: {bjt: [col1, b1, "0"], model: QN}
+      Q4: {bjt: [c4, b4, "0"], model: QN}
+      R6: {R: [v9, j6], r: r6_ohm}
+      R5: {R: [j6, col1], r: r5_ohm}
+      R14: {R: [col1, b4], r: r14_ohm}
+      R37: {R: [v9, tb], r: r37_ohm}
+      R35: {R: [tb, d1], r: r35_ohm}
+      DCR1: {device: [d1, b4], model: DD}
+      DCR3: {device: [nb, b4], model: DD}
+      # R23 (V-TRIG to the C1 / C4 feed) sits here, not with Q12 in the trigger: a partition cut at
+      # Q12's collector leaves V-TRIG a linear DC path (R23, R32 to +9.3 V) in the part that owns it
+      R23: {R: [ta, vtrig], r: r23_ohm}
+  - title: envelope
+    parts:
+      Q5: {bjt: [c5, j6, v9], model: QP}
+      R7: {R: [c5, p14], r: r7_ohm}
+      R12: {rheostat: [p14, env], r: r12_ohm, at: attack, taper_mid: taper_mid}
+      C5: {C: [env, "0"], c: c5_f}
+      Q6: {bjt: [v9, col1, e6], model: QN}
+      R8: {R: [e6, vn], r: r8_ohm}
+      R9: {R: [e6, b7], r: r9_ohm}
+      Q7: {bjt: [p18, b7, e7], model: QN}
+      R15: {rheostat: [p18, env], r: r15_ohm, at: decay, taper_mid: taper_mid}
+      R10: {R: [v9, e7], r: r10_ohm}
+      Q8: {bjt: [c8, sn, e7], model: QP}
+      R11: {R: [c8, "0"], r: r11_ohm}
+      R13: {R: [p12, sn], r: r13_ohm}
+      R17: {R: [sn, vn], r: r17_ohm}
+      R1: {R: [sn, "0"], r: r1_ohm}
+      R18: {pot: ["0", p12, vpan], r: r18_ohm, at: sustain}
+      DCR2: {device: [e7, vtrig], model: DD}
+      DCR7: {device: [env, p2], model: DD}
+      RLK: {R: [p2, "0"], r: r_leak_ohm}
+      SDEC:
+        switch: decay_on
+        parts:
+          RP2: {R: [p2, vtrig], r: r_pin2_ohm, in: [0]}
+  - title: output
+    parts:
+      R48: {R: [env, b22], r: r48_ohm}
+      Q22: {bjt: [c22, b22, outn], model: QN}
+      Q21: {bjt: [outn, c22, e21], model: QP}
+      R50: {R: [v9, e21], r: r50_ohm}
+      C11: {C: [e21, c22], c: c11_f}
+      R33: {R: [outn, nb], r: r33_ohm}
+      R29: {R: [nb, vn], r: r29_ohm}
+      RL: {R: [outn, "0"], r: r_load_ohm}
+  - title: trigger
+    parts:
+      DCR10: {device: [kg, k10], model: DD}
+      R60: {R: [k10, c7n], r: r60_ohm}
+  - title: trigger switches
+    parts:
+      # Q20 / Q12 are saturated switches: a partition cut at their collectors (their current
+      # a sample late) diverges, so they go with the contour and the cut is R60 (100K into C7)
+      C7: {C: [c7n, "0"], c: c7_f}
+      RC7: {R: [c7n, "0"], r: r_leak_ohm}
+      R55: {R: [c7n, b20], r: r55_ohm}
+      Q20: {bjt: [tb, b20, "0"], model: QN}
+      R19: {R: [tb, bq12], r: r19_ohm}
+      Q12: {bjt: [vtrig, bq12, "0"], model: QN}
+  - title: loudness flip-flop
+    parts:
+      R28: {R: [ta, rbl], r: r28_ohm}
+      C4: {C: [rbl, b25], c: c4_f}
+      R38: {R: [b25, c15], r: r38_ohm}
+      R39: {R: [v9, c15], r: r39_ohm}
+      Q25: {bjt: [col25, b25, "0"], model: QN}
+      Q15: {bjt: [c15, b15, "0"], model: QN}
+      R41: {R: [v9, j41], r: r41_ohm}
+      R40: {R: [j41, col25], r: r40_ohm}
+      R56: {R: [col25, b15], r: r56_ohm}
+      R36: {R: [tb, d8], r: r36_ohm}
+      DCR8: {device: [d8, b15], model: DD}
+      DCR6: {device: [nbl, b15], model: DD}
+  - title: loudness envelope
+    parts:
+      Q16: {bjt: [c16, j41, v9], model: QP}
+      R42: {R: [c16, p18l], r: r42_ohm}
+      RLA: {rheostat: [p18l, envl], r: r12_ohm, at: lattack, taper_mid: taper_mid}
+      C2: {C: [envl, "0"], c: c2_f}
+      Q17: {bjt: [v9, col25, e17], model: QN}
+      R43: {R: [e17, vn], r: r43_ohm}
+      R44: {R: [e17, b18], r: r44_ohm}
+      Q18: {bjt: [p17l, b18, e18], model: QN}
+      RLD: {rheostat: [p17l, envl], r: r15_ohm, at: ldecay, taper_mid: taper_mid}
+      R45: {R: [v9, e18], r: r45_ohm}
+      Q19: {bjt: [c19, sl, e18], model: QP}
+      R46: {R: [c19, "0"], r: r46_ohm}
+      R57: {R: [p16, sl], r: r57_ohm}
+      RSL: {R: [sl, "0"], r: rsl_ohm}
+      RLS: {pot: ["0", p16, vpan], r: r18_ohm, at: lsustain}
+      DCR9: {device: [e18, vtrig], model: DD}
+      DCR4: {device: [envl, p8], model: DD}
+      RLK8: {R: [p8, "0"], r: r_leak_ohm}
+      SDEC8:
+        switch: decay_on
+        parts:
+          RP8: {R: [p8, vtrig], r: r_pin2_ohm, in: [0]}
+  - title: loudness output
+    parts:
+      R16: {R: [envl, b3], r: r16_ohm}
+      Q3: {bjt: [c3, b3, b2], model: QN}
+      Q2: {bjt: [c3, b2, outl], model: QN}
+      R15L: {R: [v9, c3], r: r15_ohm_out}
+      R24: {R: [outl, nbl], r: r24_ohm}
+      R27: {R: [nbl, vn], r: r27_ohm}
+      RLL: {R: [outl, "0"], r: r_load_ohm}

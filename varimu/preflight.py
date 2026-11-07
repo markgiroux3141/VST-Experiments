@@ -48,8 +48,10 @@ from varimu.circuit.ir import (
     element_nodes,
 )
 from varimu.circuit.spec import CircuitSpec, resolve
+from varimu.devices.bjt import Bjt
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
+from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.opto import Optocoupler
 from varimu.devices.thyratron import Thyratron
@@ -207,6 +209,17 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
         if isinstance(el, Device) and isinstance(models.get(el.model), Optocoupler):
             dc.join(el.nodes[2], el.nodes[4])  # the state node: the device is its DC path
             dc.join(el.nodes[3], el.nodes[4])  # the cell conducts (at least its dark leak)
+        if isinstance(el, Device) and isinstance(models.get(el.model), Bjt):
+            # A BJT's junctions are a DC path: each carries GMIN in both engines (SPICE's,
+            # varimu.devices.bjt), and a stacked transistor's emitter (a ladder's nodes,
+            # the Minimoog's filter) is held by the forward-biased junction above it.
+            for n in el.nodes[1:]:
+                dc.join(el.nodes[0], n)
+        if isinstance(el, Device) and isinstance(models.get(el.model), Jfet):
+            # A JFET's channel conducts at any bias short of pinch-off and its gate junctions
+            # carry GMIN (varimu.devices.jfet): the Minimoog's glide capacitor is held by one.
+            for n in el.nodes[1:]:
+                dc.join(el.nodes[0], n)
         if isinstance(el, Device) and isinstance(models.get(el.model), Thyratron):
             dc.join(el.nodes[-2], el.nodes[-1])  # the state node: the device is its DC path
         if isinstance(el, ThyratronEvents):
