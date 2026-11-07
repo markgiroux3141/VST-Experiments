@@ -967,12 +967,27 @@ memory instead of JA's ratchet; live stays JA; an A/B in Q6), excess noise and h
 per-voice tolerance draws; tuning tables per quality. Capacitor DA is out (measured inaudible).
 
 The Session view as a DAW ([docs/SESSION_EDITING_PLAN.md](docs/SESSION_EDITING_PLAN.md),
-2026-11-05, the user's review of the Session tab; nothing built): renders after MIDI edits as
-a deliberate step (SE1), a play cursor and a snap setting (SE2), piano roll previews on every
-edit and its clipboard (SE3), a Mixer view with meters and a master (SE4), clips (split, trim,
-move, fades, comping; SE5), copy / paste and MIDI clips rendered per track as one performance
-(SE6), lanes and the rest (SE7). Decided the same day (the user's): Claude's recommendations,
-and insert prints manual too (nothing renders or prints until the user asks); SE1 first.
+2026-11-05, the user's review of the Session tab). **SE1-SE7 built 2026-11-07** (one session,
+the user delegating; the plan's "Status" lists what is open):
+- SE1: nothing renders or prints until asked (Print, Render edits, Ctrl+R); stale chains are
+  looked up in the print cache (`print::Job::lookup`); an edited take plays the proxy offline
+  (`proxy::render_performance`).
+- SE2: a cursor in samples (`TransportSettings::cursor`, replacing `start_bar`), the snap
+  setting (`transport::Snap`; Alt inverts it), markers.
+- SE3: roll previews on every edit through a preview voice in the player's emitter
+  (`Player::preview_key`), the roll's clipboard, nudges and quantize ends.
+- SE4: the Mixer tab (`mixer.rs`; X toggles it), per-track and master meters
+  (`Player::take_meters`), a master fader (`Session::master_db`, exports follow it).
+- SE5: clips (`session::Clip`, `Track::pieces`, `Track::lane`); session file version 2, old
+  sessions open as one clip per track, and all 24 in `sessions/` play bit for bit
+  (`every_session_opens_to_the_same_mix`, ignored).
+- SE6: range selection, clipboard and duplicate, insert / delete time.
+- SE7: punch (`Clock::record_to`), the ? overlay, track order and height, roll ghosts,
+  scale, follow.
+
+Open: a track's MIDI clips rendered as one performance (decision 6), editing the
+pressure / pedal lanes, drag reorders, the user's first try. `varimu-app --session` /
+`--mixer` open those views.
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
 layered and overdubbed) is drafted in [docs/RECORDING_PLAN.md](docs/RECORDING_PLAN.md)

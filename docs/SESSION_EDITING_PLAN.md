@@ -2,7 +2,7 @@
 
 Drafted 2026-11-05 from the user's review of the Session tab ("let's see if there's any
 gaps"); the same day the user took every recommendation and made insert prints manual too
-("Decisions" below). Nothing here is built. It continues RECORDING_PLAN.md's T6 (editing), MIDI_TAKES_PLAN.md's
+("Decisions" below). Built 2026-11-07 (SE1-SE7; "Status" below has what is open). It continues RECORDING_PLAN.md's T6 (editing), MIDI_TAKES_PLAN.md's
 N4 (the piano roll) and SESSION_FX_PLAN.md's F2-F4 (inserts, sends), and doesn't redo them:
 where one of those already plans a piece (knob automation lanes, `.mid` import, sends), this
 plan says where it fits and leaves it there.
@@ -12,6 +12,121 @@ it around; quantized or free placement; copy and paste of audio and MIDI; a poin
 from; the piano roll playing a note when one is added or edited; and a synth's render after
 a MIDI edit as a deliberate step, not automatic. The rest (marked *added*) is what the survey
 below turned up.
+
+## Status (2026-11-07, built in one session, the user away and delegating every call)
+
+Branch `session-editing` (worktree `../VST-Experiments-session`), commits SE1-SE7. Every
+milestone is built. The exceptions are listed per milestone and under "Open". Tests:
+`cargo test -p varimu-app` (the view's tests drive a scratch session, never the user's).
+The app was looked at on a scratch copy of `sessions/beat1` with a scratch `APPDATA`
+(`varimu-app --session` / `--mixer`, new flags).
+
+**SE1, deliberate renders: built.**
+- Prints and MIDI renders start only when asked: Print on the insert row and panel;
+  Print inserts (n), Render edits (n) and Render all (n) in the session line; the roll's
+  Render and ⤓ PROD; the take menu; Ctrl+R.
+- A chain that isn't current is looked up in the print cache by itself, never rendered
+  (`print::Job::lookup`, `NOT_PRINTED`), so undo and a reopened session find old prints.
+- An edited take plays its revision through the device's proxy, made offline at once
+  (`proxy::render_performance`, `TakeRender::proxy`, `Plays::Proxy`; decision 1). With no
+  proxy it plays its last render, stale.
+- Badges: `edited, not rendered (Ctrl+R)`, `render queued`; on inserts ○ `inserts changed ·
+  not printed` (the last print plays stale, or the lane dry).
+- Export waiting offers "Render them and export"; Export final… asks for what it needs.
+- Tests: `session_view::tests::a_chain_change_prints_nothing_until_asked`,
+  `an_edit_renders_nothing_until_asked_and_plays_the_proxy`.
+- Not built: a render button on the track strip itself (Ctrl+R and the take menu cover it).
+
+**SE2, the cursor and snap: built.**
+- `TransportSettings::cursor` (samples) replaces `start_bar`; old sessions' start bar
+  becomes the cursor (`transport_from(.., rate)`).
+- Count-in and pre-roll count back from the cursor's bar, and the take records from the
+  cursor. With neither, play starts at the cursor itself.
+- Stop: back to the cursor or stays where it stopped (the "return" toggle); Shift+Space
+  plays from where it stopped. Moving the cursor while playing plays on from it. The
+  cursor isn't an undo step.
+- Snap: Bar, Beat, 1/8, 1/8T, 1/16, 1/32, Off; Alt inverts it. Moves keep their offset
+  from the grid (`Grid::snap_delta`); locators sit on beats (bars with the Bar snap).
+- Markers: M, or the ruler's right-click (add, rename, delete); a click on a flag jumps
+  there.
+- Changed: the right locator moved from Alt+click to Shift+click, since Alt now inverts
+  the snap.
+
+**SE3, piano roll previews and editing: built.**
+- Every edit kind sounds the note. Drawn notes sound briefly, a move each semitone
+  crossed, transpose / resize / velocity briefly on release; the keys column plays its
+  key. The "preview" toggle turns them off.
+- Previews go through the device when Play plays it from keys, else its proxy, else the
+  test oscillator. A preview voice in the player's emitter rides on any player
+  (`Player::set_preview_voice`, `preview_key`).
+- Decision 8's middle option (the track's device started live for the roll) is not built:
+  devices without a proxy preview on the test oscillator.
+- Editing:
+  - Ctrl+C / X / V / D on notes; paste lands at the session's cursor, which a click on
+    empty roll space sets.
+  - ← / → nudge; Ctrl+↑ / ↓ octave; Shift+drag copies.
+  - Drawing uses the last drawn or resized length; quantize "ends".
+- Not built: quantize-on-record per track.
+
+**SE4, the Mixer and meters: built.**
+- A Mixer tab (X toggles). Each strip has name, arm / M / S, the insert chips (the same
+  panel; reorder by their menu's "Earlier", not by drag), a reserved sends row, a pan
+  knob, a vertical fader and a stereo meter (peak, hold, RMS).
+- The fader's law (`mixer::fader_pos`) puts 75% of its travel between −30 and +6 dB.
+- The master strip has a fader on the sum (`Session::master_db`, saved; the mixdown
+  and stems follow it), a meter and a clip light.
+- The player meters per block, post-fader: each clip on its track, the live device on the
+  armed track, and the master (`Meters`, `Player::take_meters`).
+- The arrangement's strip fader is a slider with the meter behind it.
+
+**SE5, clips: built.**
+- The model:
+  - `Clip { id, take, src_start, len, position, gain_db, fade_in, fade_out, muted }`; a
+    track's `clips` are its lane, later ones on top.
+  - `Track::pieces` takes out what later clips cover; the earlier clip crossfades under
+    their fades.
+  - Cut edges get 2 ms. A take's own ends and an untouched split get none, so a split
+    plays bit for bit as before.
+- Gestures: split (S), trim by the edges, move (to another track too: the take joins
+  its pool), fade handles, gain handle, mute, delete, comping by dragging across a take
+  row. ‹ › and a take row's click put that take in the lane whole.
+- Prints, auditions, sidechains and bakes take the lane as arranged (`Track::lane`). A
+  lone whole clip is the take's own audio, so old prints keep their cache keys.
+- Bounce lays audio clips where the MIDI clips were and mutes those (decision 7).
+- The session file is version 2. A version-1 session opens as one clip per track, and
+  its `session.v1.json` is kept on the first save.
+- **All 24 sessions in `sessions/` play the same mix bit for bit**
+  (`session::tests::every_session_opens_to_the_same_mix`, ignored; run with
+  `VARIMU_SESSIONS=<sessions dir>`).
+
+**SE6, clipboard and MIDI clips: built except decision 6.**
+- A drag on empty lane space selects a range across tracks. Ctrl+C / X / V / D copy, cut,
+  paste (at the cursor on the armed track, with the tracks' offsets) and duplicate
+  (repeats) a range or a clip. Delete deletes a range.
+- Clips share their take: no audio is copied.
+- Insert / delete time between the locators, from the ruler's menu.
+- MIDI clips copy, trim and move as clips of their event take. **Decision 6 (a track's
+  MIDI clips rendered as one performance) is not built.** Each event take still renders
+  whole and its clips play stretches of that render, so a pasted bar repeats the same
+  audio rather than continuing the device's state.
+
+**SE7: built, except editing the lanes.**
+- Punch in / out (`TransportSettings::punch`, `Clock::record_to`,
+  `Recorder::capture_until`).
+- The ? overlay.
+- Tracks: moved up / down (the strip's menu, not by drag); height by Ctrl+wheel over the
+  strips.
+- The roll follows the playhead, shows ghost notes and lights a scale.
+- Aftertouch and pedal are drawn under the velocities, shown but not editable (knob lanes
+  stay with N5).
+
+### Open
+
+- Decision 6, a track's MIDI as one performance (see SE6), and quantize on record.
+- Dragging to reorder tracks and inserts.
+- Editing the pressure and pedal lanes.
+- The user's first try: the plan's milestones each ended with one, and none has happened
+  yet.
 
 ## What exists (2026-11-05)
 
