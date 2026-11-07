@@ -224,6 +224,28 @@ on the 002 scan, values checked against Table 7-6: sources README "The keyboard 
 - Open: the Model D's keyboard is low-note priority (the string), the app's keyboard logic last-key (a device option
   would make `Feed::Key` and the test oscillator follow the lowest held key); the user listens (glide, the bigger trigger).
 
+**MM3's prerequisites (2026-11-07):**
+1. **The uA726 built: `UA726@1`** (`library.build_ua726`, `tests/test_ua726.py`). Fairchild's sheet (1979 Linear Op Amp
+   Data Book pp. 7-33 to 7-35, extracted to `data/datasheets/transistors/fairchild_ua726_1979.pdf`), its current gain
+   curve digitized (`data/datasheets/fairchild_ua726_hfe.csv`, provenance sidecar; it agrees with the sheet's bias
+   currents: hfe 200 at 10 uA, 400 at 100 uA). BF, ISE, NE, IKF fitted at the die's 78.4 C up to 2 mA (rms 14 in hfe;
+   above 2 mA the sheet's gain falls as ~1 / Ic, steeper than Gummel-Poon's roll-off, not fitted: the Minimoog runs
+   0.05-20 uA); IS 1e-15 A and VAF 100 V provisional; Cje, Cjc the sheet's 1 pF. A circuit runs the pair as one model
+   instance with `temp_c: 78.4`: 21.0 mV of Vbe an octave (the fitted IKF adds ~0.2 % at a few uA, a scale error the
+   Scale trim takes out). Fig 9-1's "20.5 +-0.4 mV an octave across pins 1 and 10" is the summer's scale (R27 selected),
+   not the bare pair's: not a check on the die temperature. The heater regulator (Q3-Q8) stays out until the thermal node.
+2. **The LM393: decided, not built.** The sheet's open-collector output to V- (-10 V on board 1: the reset pulse swings
+   "+10 .. -10") can't be made from the `opamp` macro and the existing parts (it is ground-referenced, and circuit files
+   have no VCCS part), so it needs builder work in both languages: an `opamp` option `open_collector` adding an output
+   NPN on a V- node, driven from the integrator node through a VCCS. Its speed (the sheet's ~1.3 us response) only
+   matters inside the ~1 us reset, which item 4 turns into an exception generated from a full-physics reference of the
+   core (integrator, comparator, reset JFET): so the comparator's form is decided with that reference, next session.
+3. **The E112:** the 2N3819 card stands in (provisional; an N-channel switch, as the plan said), to be named in the VCO file.
+4. **The reset exception** and 5. `minimoog_vco.yaml` and Folkman's tuning: not started. Next: read
+   HYBRID_PHYSICS_PLAN.md's H1-H4 (the 884 saw's M1 island and K kernels) against board 1's core and propose the split
+   (what is the island, what the kernels tabulate: the ramp's slope from the expo converter's current, the reset's
+   charge and dead time, HI END COMP's correction).
+
 ## CPU while another session runs
 
 `CARGO_BUILD_JOBS=3`, builds started with `cmd /c start /belownormal /wait /b ...`; one render
