@@ -349,6 +349,8 @@ pub struct SessionView {
     /// This frame's track lanes as seen (the part inside the scroll area), for files
     /// dragged in from a folder: (track, rect).
     lanes: Vec<(usize, Rect)>,
+    /// The tracks' and the master's meters as shown (SE4).
+    meters: crate::mixer::MeterBank,
 }
 
 /// Audio files picked by Import… or dropped on the view, decoding on a thread (each its
@@ -571,6 +573,7 @@ impl SessionView {
             import: None,
             import_note: None,
             lanes: Vec::new(),
+            meters: crate::mixer::MeterBank::default(),
             import_normalize: ImportNormalize::Off,
             import_target_dbfs: ALIGNMENT_DBFS,
         }
@@ -647,7 +650,21 @@ impl SessionView {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, play: &mut PlayView) {
+        self.show(ui, play, false);
+    }
+
+    /// The Mixer tab (SE4): the same session, transport and panels, the strips side by
+    /// side in place of the arrangement.
+    pub fn mixer_ui(&mut self, ui: &mut egui::Ui, play: &mut PlayView) {
+        self.show(ui, play, true);
+    }
+
+    fn show(&mut self, ui: &mut egui::Ui, play: &mut PlayView, mixer: bool) {
         play.tick(ui.ctx());
+        // The meters: the player's readings since the last frame (none: they fall).
+        let readings = play.player().map(|p| p.take_meters());
+        self.meters
+            .update(readings.as_ref(), self.session.tracks.len());
         play.live_controls();
         self.poll_calibration(play);
         let idle = matches!(self.calibrate, Calibrate::Idle);
@@ -751,7 +768,7 @@ impl SessionView {
                 )
                 .show(ui, |ui| self.insert_panel(ui));
         }
-        if self.roll.is_some() {
+        if self.roll.is_some() && !mixer {
             egui::Panel::bottom("session_roll")
                 .resizable(true)
                 .default_size(320.0)
@@ -764,7 +781,13 @@ impl SessionView {
         }
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE.fill(theme::CANVAS))
-            .show(ui, |ui| self.arrangement(ui, play));
+            .show(ui, |ui| {
+                if mixer {
+                    self.mixer(ui);
+                } else {
+                    self.arrangement(ui, play);
+                }
+            });
         // The cursor moved while playing: play on from there (not while recording).
         if std::mem::take(&mut self.relocate)
             && !play.player().is_some_and(|p| p.take_armed())
@@ -1697,6 +1720,323 @@ impl SessionView {
                 format!("inserts changed · not printed ({plays}; Print, or Ctrl+R)"),
             )
         }
+    }
+
+    /// The Mixer tab (SE4): a strip per track left to right, the master at the right. The
+    /// strips' values are the tracks' (the arrangement's strips show the same ones).
+    fn mixer(&mut self, ui: &mut egui::Ui) {
+        const STRIP: f32 = 104.0;
+        let full = ui.available_rect_before_wrap();
+        let master_rect =
+            Rect::from_min_max(Pos2::new(full.right() - STRIP - 8.0, full.top()), full.max);
+        let tracks_rect =
+            Rect::from_min_max(full.min, Pos2::new(master_rect.left() - 4.0, full.bottom()));
+        let mut changed = false;
+        let mut tui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("mixer_tracks")
+                .max_rect(tracks_rect)
+                .layout(egui::Layout::left_to_right(egui::Align::Min)),
+        );
+        egui::ScrollArea::horizontal()
+            .auto_shrink([false, false])
+            .show(&mut tui, |ui| {
+                ui.horizontal_top(|ui| {
+                    for i in 0..self.session.tracks.len() {
+                        changed |= self.mixer_strip(ui, i, STRIP, full.height());
+                    }
+                    if self.session.tracks.is_empty() {
+                        ui.label(RichText::new("no tracks yet").color(theme::MUTED));
+                    }
+                });
+            });
+        // The master: its fader on the stereo sum (export follows it) and its meter.
+        let mut mui = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt("mixer_master")
+                .max_rect(master_rect)
+                .layout(egui::Layout::top_down(egui::Align::Center)),
+        );
+        let p = mui.painter_at(master_rect);
+        p.rect_filled(master_rect, 4.0, theme::CHROME);
+        p.rect_filled(
+            Rect::from_min_size(master_rect.min, egui::vec2(master_rect.width(), 4.0)),
+            0.0,
+            theme::ACCENT,
+        );
+        mui.add_space(8.0);
+        mui.label(RichText::new("MASTER").strong().color(theme::INK));
+        let clipped = self.meters.master.clipped;
+        let clip = egui::Button::new(RichText::new("CLIP").small().color(if clipped {
+            Color32::WHITE
+        } else {
+            theme::FAINT
+        }))
+        .fill(if clipped {
+            theme::FAULT
+        } else {
+            theme::CHROME2
+        });
+        if mui
+            .add(clip)
+            .on_hover_text("Lit when the mix went over full scale (click to clear)")
+            .clicked()
+        {
+            self.meters.master.clipped = false;
+        }
+        mui.label(
+            RichText::new("inserts: with the stereo bus (T5)")
+                .small()
+                .color(theme::FAINT),
+        );
+        let h = (master_rect.height() - 150.0).max(80.0);
+        mui.horizontal(|ui| {
+            ui.add_space(12.0);
+            changed |= crate::mixer::fader(
+                ui,
+                &mut self.session.master_db,
+                egui::vec2(30.0, h),
+                true,
+                ui.id().with("master_fader"),
+            );
+            ui.add_space(4.0);
+            let (r, _) = ui.allocate_exact_size(egui::vec2(22.0, h), Sense::hover());
+            crate::mixer::draw_meter(&ui.painter_at(r), r, &self.meters.master);
+        });
+        changed |= mui
+            .add(
+                egui::DragValue::new(&mut self.session.master_db)
+                    .range(crate::mixer::FADER_MIN_DB..=crate::mixer::FADER_MAX_DB)
+                    .speed(0.2)
+                    .max_decimals(1)
+                    .suffix(" dB"),
+            )
+            .on_hover_text("The master fader (on the stereo sum; exports follow it)")
+            .changed();
+        let m = &self.meters.master;
+        mui.label(
+            RichText::new(format!(
+                "pk {:.1} · rms {:.1}",
+                m.hold_db[0].max(m.hold_db[1]),
+                m.rms_db[0].max(m.rms_db[1])
+            ))
+            .small()
+            .color(theme::MUTED),
+        );
+        if changed {
+            self.save();
+        }
+    }
+
+    /// One track's strip in the mixer. Returns whether it changed.
+    fn mixer_strip(&mut self, ui: &mut egui::Ui, i: usize, width: f32, height: f32) -> bool {
+        let colour = COLOURS[i % COLOURS.len()];
+        let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), Sense::hover());
+        let armed = self.session.armed == Some(i);
+        let p = ui.painter_at(rect);
+        p.rect_filled(
+            rect.shrink2(egui::vec2(2.0, 0.0)),
+            4.0,
+            if armed { theme::CHROME3 } else { theme::CHROME },
+        );
+        p.rect_filled(
+            Rect::from_min_size(
+                rect.min + egui::vec2(2.0, 0.0),
+                egui::vec2(width - 4.0, 4.0),
+            ),
+            0.0,
+            colour,
+        );
+        let mut changed = false;
+        let mut s = ui.new_child(
+            egui::UiBuilder::new()
+                .id_salt(("mixer_strip", i))
+                .max_rect(rect.shrink2(egui::vec2(8.0, 8.0)))
+                .layout(egui::Layout::top_down(egui::Align::Center)),
+        );
+        s.spacing_mut().item_spacing.y = 4.0;
+        s.add_space(2.0);
+        let t = &mut self.session.tracks[i];
+        changed |= s
+            .add(
+                egui::TextEdit::singleline(&mut t.name)
+                    .id_salt(("mixer_name", i))
+                    .desired_width(width - 18.0),
+            )
+            .lost_focus();
+        let mut arm = false;
+        s.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            let b = egui::Button::new(RichText::new("●").color(if armed {
+                Color32::WHITE
+            } else {
+                REC
+            }))
+            .fill(if armed { REC } else { theme::CHROME2 })
+            .min_size(egui::vec2(24.0, 18.0));
+            if ui
+                .add(b)
+                .on_hover_text("Arm: records and plays the live device")
+                .clicked()
+            {
+                arm = true;
+            }
+            for (on, text, col) in [
+                (&mut t.mute, "M", theme::WARN),
+                (&mut t.solo, "S", theme::OK),
+            ] {
+                let b = egui::Button::new(RichText::new(text).color(if *on {
+                    theme::ACCENT_INK
+                } else {
+                    theme::MUTED
+                }))
+                .fill(if *on { col } else { theme::CHROME2 })
+                .min_size(egui::vec2(24.0, 18.0));
+                if ui.add(b).clicked() {
+                    *on = !*on;
+                    changed = true;
+                }
+            }
+        });
+        if arm && self.recording.is_none() {
+            self.session.armed = Some(i);
+            changed = true;
+        }
+        // The inserts, top to bottom (the same chips and panel as the arrangement's).
+        s.label(RichText::new("INSERTS").small().color(theme::FAINT));
+        let mut action: Option<(usize, &'static str)> = None;
+        let mut add: Option<&'static str> = None;
+        for k in 0..self.session.tracks[i].inserts.len() {
+            let slot = &self.session.tracks[i].inserts[k];
+            let short =
+                find_device(&slot.device).map_or(slot.device.clone(), |d| d.short.to_string());
+            let (glyph, colour, state) = self.insert_state(i, k);
+            let selected = self.insert_selected() == Some((i, k));
+            let bypass = slot.bypass;
+            let b = egui::Button::new(
+                RichText::new(format!("{short} {glyph}"))
+                    .small()
+                    .color(if bypass { theme::FAINT } else { colour }),
+            )
+            .fill(if selected { theme::CHROME3 } else { theme::BG })
+            .stroke(Stroke::new(
+                1.0,
+                if selected { theme::ACCENT } else { theme::LINE },
+            ))
+            .min_size(egui::vec2(width - 18.0, 18.0));
+            let r = s.add(b).on_hover_text(state);
+            if r.clicked() {
+                self.insert_sel = if selected { None } else { Some((i, k)) };
+                self.audition_request = !selected;
+            }
+            r.context_menu(|ui| {
+                if ui
+                    .button(if bypass { "Bypass off" } else { "Bypass" })
+                    .clicked()
+                {
+                    action = Some((k, "bypass"));
+                    ui.close();
+                }
+                if k > 0 && ui.button("Earlier").clicked() {
+                    action = Some((k, "up"));
+                    ui.close();
+                }
+                if ui.button("Remove").clicked() {
+                    action = Some((k, "remove"));
+                    ui.close();
+                }
+            });
+        }
+        s.menu_button(RichText::new("+ insert").small(), |ui| {
+            for (group, ids) in vpanel::insert_menu() {
+                theme::menu_heading(ui, group.title());
+                for j in ids {
+                    let d = &DEVICES[j];
+                    if ui.button(d.label).on_hover_text(d.about).clicked() {
+                        add = Some(d.id);
+                        ui.close();
+                    }
+                }
+            }
+        });
+        let mut print = false;
+        if self.session.chain_signature(i).is_some()
+            && !self.session.print_current(i)
+            && !self.printing(i)
+            && s.small_button(RichText::new("Print").color(theme::ACCENT))
+                .clicked()
+        {
+            print = true;
+        }
+        if let Some((k, what)) = action {
+            let ins = &mut self.session.tracks[i].inserts;
+            match what {
+                "bypass" => ins[k].bypass = !ins[k].bypass,
+                "up" => ins.swap(k, k - 1),
+                _ => {
+                    ins.remove(k);
+                    if self.insert_sel.is_some_and(|(t, _)| t == i) {
+                        self.insert_sel = None;
+                    }
+                }
+            }
+            changed = true;
+        }
+        if let Some(d) = add {
+            self.add_insert(i, d);
+            changed = true;
+        }
+        if print {
+            self.request_print(i);
+        }
+        // Sends: their row is reserved until F4 builds them.
+        s.label(RichText::new("SENDS —").small().color(theme::FAINT))
+            .on_hover_text("Sends come with docs/SESSION_FX_PLAN.md F4");
+        let t = &mut self.session.tracks[i];
+        changed |=
+            crate::mixer::pan_knob(&mut s, &mut t.pan, 30.0, egui::Id::new(("mixer_pan", i)));
+        s.label(
+            RichText::new(crate::mixer::pan_label(t.pan))
+                .small()
+                .color(theme::MUTED),
+        );
+        let used = s.min_rect().height();
+        let h = (height - used - 60.0).max(60.0);
+        let meter = self.meters.tracks.get(i).cloned().unwrap_or_default();
+        let t = &mut self.session.tracks[i];
+        s.horizontal(|ui| {
+            ui.add_space(10.0);
+            changed |= crate::mixer::fader(
+                ui,
+                &mut t.volume_db,
+                egui::vec2(26.0, h),
+                true,
+                egui::Id::new(("mixer_fader", i)),
+            );
+            ui.add_space(4.0);
+            let (r, _) = ui.allocate_exact_size(egui::vec2(18.0, h), Sense::hover());
+            crate::mixer::draw_meter(&ui.painter_at(r), r, &meter);
+        });
+        changed |= s
+            .add(
+                egui::DragValue::new(&mut t.volume_db)
+                    .range(crate::mixer::FADER_MIN_DB..=crate::mixer::FADER_MAX_DB)
+                    .speed(0.2)
+                    .max_decimals(1)
+                    .suffix(" dB"),
+            )
+            .on_hover_text("Fader (click to type)")
+            .changed();
+        s.label(
+            RichText::new(format!("pk {:.1}", meter.hold_db[0].max(meter.hold_db[1])))
+                .small()
+                .color(if meter.clipped {
+                    theme::FAULT
+                } else {
+                    theme::MUTED
+                }),
+        );
+        changed
     }
 
     /// The selected insert, if it still exists.
@@ -3555,17 +3895,28 @@ impl SessionView {
             self.session.armed = Some(i);
             changed = true;
         }
+        let meter = self.meters.tracks.get(i).cloned().unwrap_or_default();
         let t = &mut self.session.tracks[i];
         child.horizontal(|ui| {
+            // The fader as a slider with the track's meter behind it (SE4).
+            let (r, _) = ui.allocate_exact_size(egui::vec2(70.0, 18.0), Sense::hover());
+            crate::mixer::draw_meter_h(&ui.painter_at(r), r.shrink(1.0), &meter);
+            let mut fui = ui.new_child(egui::UiBuilder::new().max_rect(r));
+            changed |= crate::mixer::fader(
+                &mut fui,
+                &mut t.volume_db,
+                r.size(),
+                false,
+                egui::Id::new(("strip_fader", i)),
+            );
             changed |= ui
                 .add(
                     egui::DragValue::new(&mut t.volume_db)
-                        .range(-60.0..=12.0)
+                        .range(crate::mixer::FADER_MIN_DB..=crate::mixer::FADER_MAX_DB)
                         .speed(0.2)
-                        .max_decimals(1)
-                        .suffix(" dB"),
+                        .max_decimals(1),
                 )
-                .on_hover_text("Fader")
+                .on_hover_text("Fader (dB)")
                 .changed();
             changed |= ui
                 .add(

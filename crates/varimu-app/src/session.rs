@@ -2031,6 +2031,71 @@ mod tests {
     }
 
     #[test]
+    fn the_meters_read_the_mix_post_fader_and_the_master_moves_the_export() {
+        let mut s = Session::new(
+            PathBuf::from("unused"),
+            48_000,
+            TransportSettings::default(),
+        );
+        // A -6 dBFS sine on track 0 at 0 dB, centred; silence on track 1.
+        let sine: Vec<f32> = (0..48_000)
+            .map(|i| 0.5 * (2.0 * std::f32::consts::PI * 1000.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let take = |audio: Vec<f32>| Take {
+            id: "t".into(),
+            position: 0,
+            latency: 0,
+            heard: true,
+            device: String::new(),
+            recorded_unix_s: 0,
+            code: String::new(),
+            overview: Arc::new(Overview::default()),
+            audio: Arc::new(audio),
+            rendered_from: None,
+            events: None,
+            renders: Vec::new(),
+        };
+        s.tracks[0].takes.push(take(sine));
+        s.tracks[0].active = Some(0);
+        let mut t2 = Track::new("2");
+        t2.takes.push(take(vec![0.0; 48_000]));
+        t2.active = Some(0);
+        s.tracks.push(t2);
+        let mix = s.mix();
+        assert_eq!(
+            mix.clips.iter().map(|c| c.track).collect::<Vec<_>>(),
+            vec![0, 1]
+        );
+        let mut out = vec![[0.0f32; 2]; 4800];
+        let mut m = Meters {
+            frames: out.len(),
+            ..Meters::default()
+        };
+        mix.add_metered(0, &mut out, &mut m);
+        let peak = to_dbfs(m.tracks[0][0]);
+        assert!((peak - -6.02).abs() < 0.01, "{peak}");
+        assert_eq!(m.tracks[0][0], m.tracks[0][1]); // centred: the balance law's unity
+        assert_eq!(m.tracks[1][0], 0.0);
+        // The fader moves the meter (post-fader): -6 dB more.
+        s.tracks[0].volume_db = -6.0;
+        let mut m2 = Meters::default();
+        s.mix()
+            .add_metered(0, &mut vec![[0.0f32; 2]; 4800], &mut m2);
+        assert!((to_dbfs(m2.tracks[0][0]) - -12.04).abs() < 0.02);
+        // The master on the export: -6 dB halves the mix and its stems.
+        s.tracks[0].volume_db = 0.0;
+        let before = s.mixdown().mix();
+        s.master_db = -20.0 * 2f64.log10();
+        let md = s.mixdown();
+        let after = md.mix();
+        assert!((md.master - 0.5).abs() < 1e-6);
+        for (a, b) in before.iter().zip(&after).take(1000) {
+            assert!((a[0] * 0.5 - b[0]).abs() < 1e-6);
+        }
+        assert_eq!(s.mix().master, md.master);
+    }
+
+    #[test]
     fn a_session_survives_a_save_and_load() {
         let dir = std::env::temp_dir().join(format!("varimu_session_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);

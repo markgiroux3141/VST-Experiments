@@ -14,6 +14,7 @@
 
 mod components_view;
 mod editor_view;
+mod mixer;
 mod piano_roll;
 mod play_view;
 mod room_view;
@@ -83,6 +84,7 @@ enum View {
     Components,
     Play,
     Session,
+    Mixer,
     Room,
 }
 
@@ -133,6 +135,17 @@ impl App {
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // X toggles the Mixer and the Session view (SE4, decision 9).
+        if matches!(self.view, View::Session | View::Mixer)
+            && !ui.ctx().egui_wants_keyboard_input()
+            && ui.input(|i| i.key_pressed(egui::Key::X) && !i.modifiers.command)
+        {
+            self.view = if self.view == View::Mixer {
+                View::Session
+            } else {
+                View::Mixer
+            };
+        }
         egui::Panel::top("bar")
             .frame(
                 egui::Frame::NONE
@@ -147,6 +160,10 @@ impl eframe::App for App {
                     ui.selectable_value(&mut self.view, View::Components, "Components");
                     ui.selectable_value(&mut self.view, View::Play, "Play");
                     ui.selectable_value(&mut self.view, View::Session, "Session");
+                    ui.selectable_value(&mut self.view, View::Mixer, "Mixer")
+                        .on_hover_text(
+                            "The session's strips side by side (X toggles it with Session)",
+                        );
                     ui.selectable_value(&mut self.view, View::Room, "Room");
                 });
             });
@@ -167,6 +184,10 @@ impl eframe::App for App {
                 View::Session => {
                     self.editor.sync_player(&mut self.play);
                     self.session.ui(ui, &mut self.play);
+                }
+                View::Mixer => {
+                    self.editor.sync_player(&mut self.play);
+                    self.session.mixer_ui(ui, &mut self.play);
                 }
                 View::Room => self.room.ui(ui, &mut self.session),
             });
