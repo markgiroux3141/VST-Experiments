@@ -1210,10 +1210,13 @@ pub const DEVICES: [Device; 23] = [
         own_oscillator: false,
         key: None,
         pitch2: None,
-        coupling: None,
+        // A key's gate steps Q18's current (the contour, 0 -> 5 V) across the cut in one
+        // sample: extrapolated, it overshoots and Newton fails in the VCA; held, it is
+        // -52..-57 dB from the one solve (with the cut's one sample of lag removed).
+        coupling: Some("hold"),
         live_speaker_v: None,
-        // The VCA on a thread of its own, joined to the filter only at Q16's base (one
-        // sample late through R2 82K / C6): 1.22x real time as one solve.
+        // The VCA on a thread of its own, joined to the filter at Q18's collector and Q16's
+        // base (one sample late through R2 82K / C6): 1.22x real time as one solve.
         partition: Some(&["vca"]),
         // The expo converter's current is exp(V / Vt): the draft's 1 mV Newton would be a
         // 4 % cutoff error, as in the SSL's log-domain cells.

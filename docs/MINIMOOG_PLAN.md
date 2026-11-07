@@ -94,10 +94,13 @@ had it wrong; the load is the same, the trims held).
 - `tests/test_minimoog_vca.py` (3 tests) with the VCF's 5 on the new file.
 - Live: one solve ran 1.22x real time at draft-1x; the VCA now runs as a partition (its own
   ideal rails, the contour's R59 / Q18 on the filter's side so the control input stays in the
-  first part; the cut at Q18's collector and Q16's base: a cut at Q18's base diverged): **0.89x,
-  263 of 938 blocks over** (the filter's side sets it). Open: marginal for live play; the next
-  levers are the Newton tolerance (1e-5 for the expo converter) against its measured cutoff
-  error, or a cheaper draft for the output amplifier.
+  first part; the cut at Q18's collector and Q16's base: a cut at Q18's base diverged), coupled
+  **hold** (`panel::Device::coupling`; fixed 2026-11-07 after the user's first note: a key's
+  gate steps Q18's current across the cut in one sample, and extrapolated it overshot and
+  Newton failed in the VCA at key-down; the load measurement fed no gate, so it hadn't shown):
+  **0.71x, 33 of 938 blocks over** (was 0.89x extrapolated). Hold vs the one solve on gated
+  220 Hz saws: -57 dB at EMPHASIS 0, -52 dB at 0.9 (the cut's one host sample of lag removed);
+  `scripts/minimoog_gate_check.py` runs gated notes through the partitioned draft.
 - The contour input is the keys' gate (0 / 5 V, provisional) until MM4.
 
 **MM3 started (2026-11-07): oscillator 1 read** (the sources README, "Oscillator board No. 1").
