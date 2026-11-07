@@ -185,7 +185,7 @@ def patches() -> list[tuple[str, str]]:
         ),
         (
             '  output_volts_peak: {value: 14.0, source: "web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (VOM +-14 V typ into 10 kOhm: the outputs\' largest swing)"}\n',
-            '  output_pascals_peak: {value: 100.0, source: "derived: set from the loudest pressure the speakers reach at the amp\'s clipping, scripts/rhodes_amp_study.py (docs/RHODES_PLAN.md \\"The Suitcase\\")"}\n',
+            '  output_pascals_peak: {value: 25.0, source: "derived: the pressure 1 m on axis of a front speaker with its amp clipping a tone: 12.7 Pa at 100 Hz, 21.4 Pa at 1 kHz, 23.0 Pa at 3 kHz (a pre-clipping peak of 13 Pa at 3 kHz and 0.025 of the input scale); rounded up (scripts/rhodes_amp_study.py, docs/RHODES_PLAN.md The Suitcase)"}\n',
         ),
         (
             '  accessory_in: {value: 0, choices: [0, 1], unit: switch, source: "fig11-1: J1 ACCESSORY IN", notes: "0 empty (the harp plays), 1 a plug (the audio input `in` plays, the harp is cut off)"}\n',

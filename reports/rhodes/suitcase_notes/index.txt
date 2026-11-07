@@ -1,0 +1,22 @@
+quality draft, circuit rhodes_suitcase_100w, vibrato 1
+F1_v030.wav: MIDI 29, velocity 30, peak 0.010 FS
+F1_v075.wav: MIDI 29, velocity 75, peak 0.037 FS
+F1_v120.wav: MIDI 29, velocity 120, peak 0.162 FS
+E2_v030.wav: MIDI 40, velocity 30, peak 0.013 FS
+E2_v075.wav: MIDI 40, velocity 75, peak 0.047 FS
+E2_v120.wav: MIDI 40, velocity 120, peak 0.169 FS
+D3_v030.wav: MIDI 50, velocity 30, peak 0.008 FS
+D3_v075.wav: MIDI 50, velocity 75, peak 0.028 FS
+D3_v120.wav: MIDI 50, velocity 120, peak 0.112 FS
+C4_v030.wav: MIDI 60, velocity 30, peak 0.006 FS
+C4_v075.wav: MIDI 60, velocity 75, peak 0.017 FS
+C4_v120.wav: MIDI 60, velocity 120, peak 0.098 FS
+B4_v030.wav: MIDI 71, velocity 30, peak 0.013 FS
+B4_v075.wav: MIDI 71, velocity 75, peak 0.033 FS
+B4_v120.wav: MIDI 71, velocity 120, peak 0.169 FS
+A5_v030.wav: MIDI 81, velocity 30, peak 0.005 FS
+A5_v075.wav: MIDI 81, velocity 75, peak 0.019 FS
+A5_v120.wav: MIDI 81, velocity 120, peak 0.093 FS
+G6_v030.wav: MIDI 91, velocity 30, peak 0.007 FS
+G6_v075.wav: MIDI 91, velocity 75, peak 0.027 FS
+G6_v120.wav: MIDI 91, velocity 120, peak 0.095 FS

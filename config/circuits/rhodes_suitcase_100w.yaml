@@ -62,7 +62,7 @@ input: in
 probes: [out, out_r, out_rear_a, out_rear_b, pre_a, pre_b, a_amp, b_amp, vp, vn, a_e, a_t, a_b, a_e8, a_e9, a_c1, a_c3, a_q1b, a_spk, b_spk, b_e, b_t, b_b, b_e8, b_e9, inn, a1o, e2, n9, vs, vm, pa, pb, v, x, a2ao, vbp, vbn, l1s, l2s]
 full_scale:
   input_volts_peak: {value: 0.5, source: "derived: a harp's EMF at a hard chord, ~0.5 V peak (a key at ff 50-60 mV, docs/RHODES_PLAN.md MK1_HARP@2; rhodes_render.py's harp scale), for test signals into ACCESSORY IN"}
-  output_pascals_peak: {value: 100.0, source: "derived: set from the loudest pressure the speakers reach at the amp's clipping, scripts/rhodes_amp_study.py (docs/RHODES_PLAN.md \"The Suitcase\")"}
+  output_pascals_peak: {value: 25.0, source: "derived: the pressure 1 m on axis of a front speaker with its amp clipping a tone: 12.7 Pa at 100 Hz, 21.4 Pa at 1 kHz, 23.0 Pa at 3 kHz (a pre-clipping peak of 13 Pa at 3 kHz and 0.025 of the input scale); rounded up (scripts/rhodes_amp_study.py, docs/RHODES_PLAN.md The Suitcase)"}
 
 controls:
   volume: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "fig11-1: R7 5K audio VOLUME (a knob on the 100 W preamp, README)"}
