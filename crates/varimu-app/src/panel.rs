@@ -2094,7 +2094,9 @@ mod tests {
                         "tube_synth",
                         "rhodes_stage_5e3",
                         "rhodes_suitcase",
-                        "clavinet_d6"
+                        "clavinet_d6",
+                        "minimoog_filter_board",
+                        "minimoog_voice"
                     ]
                 ),
                 (Group::Drums, vec!["tube_kick", "sideman_bd"]),
