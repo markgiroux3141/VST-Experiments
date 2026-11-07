@@ -41,7 +41,7 @@ runs**.
   of +2.8 dB at 4-7 kHz); WP8's Notes. WP9 (2026-11-06): the AKG D112 (`config/circuits/akg_d112.yaml`: `R_D112@1`
   fitted by `scripts/fit_d112.py`, no construction published; D112 -> SSL composed); WP9's Notes.
 - **In progress:** WP12 (API 312): step 1 half done (`data/schematics/api_312/README.md`: API's own 1972 mic preamp circuit, Fig. 1, and the 2520's data sheet). **Blocked on the 2520's internal schematic** (nine transistors, epoxy-potted: no public source but GroupDIY attachments).
-- **Next:** WP13 step 2 (the multi-entry rear path; steps and sources written, the curves digitized); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+- **Next:** WP20 (EMI TG12345: 4038 -> TG) and WP19 (Helios: SM57 -> Helios), then WP14 (MD421: a plain dynamic); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -1199,6 +1199,20 @@ Notes (2026-11-06, started): step 1 done. The digitized curves: 0 deg flat withi
 -5 to -5.6 dB at 90 deg and -17 to -21 at 180 deg above 700 Hz (the dashed below-700 trace
 only at 90 / 180 deg: README / provenance). Steps 2-3 are the new machinery: a cartridge
 with several rear entries (every existing mic has one).
+
+Decision (2026-11-06, Claude's call, the user away): **steps 2-3 are deferred.** The room
+pipeline carries exactly two entries per capsule (front, rear) through `EntryTable`,
+`shoebox` / `polyroom` (the response arrays' "2 entries"), `wave.py`, `scene.py`,
+`balance.py`, `mic_print.py` and the GPU kernels; a single rear entry can't give a
+Variable-D (the far slot's external path length against the tube's internal delay is what
+makes the low-frequency pattern, and the proximity cancellation), so the RE20 needs the
+**N-entry generalization**: a body form `variable_d` with a band of slots tagged one
+entry each (`bor`: more `uniform` tags), `EntryTable.rears`, N control inputs `p_rear`,
+`p_rear_2`... (consumers: the sites above, `networks.py`, `ac.py`), the `moving_coil` part's
+optional `rears` (a space-separated node list; ports `rear_1`..) in both builders and the
+`slotted_line` network kind. Do it as its own plan file when picked up. The sheet's curves
+are digitized; nothing else of the RE20 is built. The order moves on to the WPs that
+open chains with the machinery that exists.
 
 ### WP10-WP31
 
