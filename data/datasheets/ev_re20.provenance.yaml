@@ -1,0 +1,26 @@
+device: Electro-Voice RE20 (Variable-D dynamic cardioid)
+curve: frequency response (0 deg and 180 deg, bass-tilt switch off solid / on dashed) and the polar diagram (above / below 700 Hz)
+publisher: Electro-Voice (Bosch Communications Systems), RE20 data sheet, Part Number 534678 Rev G, 07/2010
+documents:
+  ev:
+    title: "RE20 Variable-D Dynamic Cardioid Microphone"
+    scan_source: "web: https://products.electrovoice.com/download/970110"
+    sha256: 1467df35ac4755c8c4db8e378aec03980b3fcee5f1ddeebb81f159f895107266
+    page: "PDF p.2 (vector graphs: the curves are Bezier paths)"
+local_copy: "none (the PDF isn't committed; hash above; PNGs of both pages in data/schematics/ev_re20/)"
+digitized_with: >-
+  scripts/digitize_ev_re20.py on the PDF's own vector paths (PyMuPDF get_drawings), no raster.
+  Frequency: log-linear, fitted on the thick vertical rules (50 100 200 500 1k 2k 5k 10k Hz).
+  Level: horizontal rules every 15.1 pt = 5 dB. The sheet prints no absolute level: dB are re the
+  0 deg bass-tilt-off curve at 1 kHz. Values on a 1/3-octave grid within each trace's extent.
+  The dashed traces (bass tilt on, 0 and 180 deg) carry only part of their length (to ~250 Hz at
+  0 deg, ~400 Hz at 180 deg: a dash pattern's extent).
+polar_digitized_with: >-
+  the same page's paths: centre from the outer ring's bbox (427.95, 329.24 pt), rings every 9.6 pt
+  = 5 dB, 0 deg up; dB re each curve's own 0 deg radius (the dashed below-700-Hz trace has no
+  0 deg part in the file: it is referred to the solid trace's 0 deg radius, so its absolute
+  level is the sheet's, but its path between dashes is interpolated and should be read at 90
+  and 180 deg only: about -4.2 and -16.6 dB). Solid (above 700 Hz): 90 deg -5.2 / -5.6 dB, 180 deg
+  about -18 to -21 dB (the diagram's rear lobe flare).
+digitized_by: Claude Code
+digitized_on: 2026-11-06

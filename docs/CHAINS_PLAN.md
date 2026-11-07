@@ -41,7 +41,7 @@ runs**.
   of +2.8 dB at 4-7 kHz); WP8's Notes. WP9 (2026-11-06): the AKG D112 (`config/circuits/akg_d112.yaml`: `R_D112@1`
   fitted by `scripts/fit_d112.py`, no construction published; D112 -> SSL composed); WP9's Notes.
 - **In progress:** WP12 (API 312): step 1 half done (`data/schematics/api_312/README.md`: API's own 1972 mic preamp circuit, Fig. 1, and the 2520's data sheet). **Blocked on the 2520's internal schematic** (nine transistors, epoxy-potted: no public source but GroupDIY attachments).
-- **Next:** WP13 (the RE20) while WP12 waits; then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+- **Next:** WP13 step 2 (the multi-entry rear path; steps and sources written, the curves digitized); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -1161,6 +1161,44 @@ Steps:
    fixtures, `chain_status.py` 22 of 51.
 
 Notes (2026-11-06, started): step 1 half done. The user's folder held API's marketing cut sheet (block diagram, no schematic). Found instead: API's 1972 circuit sheet (Fig. 1: the 58 dB mic preamp, AP2622 1:8, Rs 470 / 60 uF, Rf 47 k / 47 pF) and the data sheet, both in the README; the 2520's internals are published nowhere open (potted). Needed from the user: `API_2520_schematic2.gif` (and 1) from GroupDIY thread 62035, and any AP2516 / AP2503 figures.
+
+### WP13. The Electro-Voice RE20 (Variable-D)
+
+A dynamic cardioid whose rear path is a distributed acoustic transmission line: the
+"continuously Variable-D" of Mawby's US 3,378,649 (two parallel tubes behind the diaphragm,
+each with a long cloth-covered slot facing the casing's slots), so low frequencies enter
+far back along the body and high frequencies near the diaphragm: a cardioid with no
+proximity boom. 1.5 mV/Pa, 150 ohm, bass-tilt switch. Sources: `data/schematics/ev_re20/README.md`.
+
+Steps:
+1. Sources (done 2026-11-06): the data sheet's response, 180 deg response and polars
+   digitized from its vector paths (`scripts/digitize_ev_re20.py` ->
+   `data/datasheets/ev_re20_{response,polar}.csv`), the wiring diagram (bass-tilt network),
+   the two patents.
+2. The rear path as data: a `moving_coil` network kind `slotted_line` (a tube of length L
+   with a resistive slot along it: a ladder of n sections, each with the tube's series mass
+   / resistance and a shunt resistance (the cloth over the slot) to that section's own rear
+   entry pressure `rear_k`): the cartridge gets rear entries as a list (`rear: [..]`), in
+   both builders (`parts.moving_coil`, `moving_coil.rs`), the old single `rear` unchanged.
+3. The entries: `varimu/rooms/entries.py` and `varimu/mics/free_field.py`: a body's rear
+   entries tabulated per axial position (the plane wave's delay k z cos(theta) plus the
+   body's diffraction; the BEM's `bor.entry_table` at each slot position), and the chain /
+   scene wiring giving every rear control input its pressure.
+4. `R_RE20@1` fitted by `scripts/fit_re20.py` (the D112's method): the diaphragm, the
+   magnet channel and the terminating cavity, the slot's resistance and length one unknown
+   each, to the response (both traces), the 180 deg trace, the polars (90 / 180 deg, below
+   and above 700 Hz) and 1.5 mV/Pa; the bass-tilt network as a circuit part.
+5. `config/circuits/ev_re20.yaml`, the list's entry (output, drop, pattern cardioid),
+   `compose_chain.py --all` (re20_api312 and re20_n1073 once their preamps exist),
+   `tests/test_ev_re20.py` (sensitivity, response, front to back, **no proximity rise**: the
+   10 cm response within ~2 dB of the far field at 100 Hz, against the SM57's +18 dB),
+   `test_chain_matrix.py`, fixtures.
+
+Notes (2026-11-06, started): step 1 done. The digitized curves: 0 deg flat within +-1 dB
+80 Hz-6 kHz (+1.7 at 10 kHz, -3 at 40 Hz and ~18 kHz), 180 deg 15-16 dB down, the polars
+-5 to -5.6 dB at 90 deg and -17 to -21 at 180 deg above 700 Hz (the dashed below-700 trace
+only at 90 / 180 deg: README / provenance). Steps 2-3 are the new machinery: a cartridge
+with several rear entries (every existing mic has one).
 
 ### WP10-WP31
 
