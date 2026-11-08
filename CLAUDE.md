@@ -523,7 +523,9 @@ was that loose tolerance at the photocells and the output stage, fixed with `tol
 `VTL5C2@2`'s 1 uS-per-volt state: -38 to -40 dB re the signal, was -5 to -18, at 0.75-0.81x;
 `test_the_pan_does_not_crackle_live`; a power amp latched at +20 V on loud playing, silent with
 the rail's hum, fixed 2026-11-08 by `tol_scale` on Q4 too: RHODES_PLAN.md "A channel latched",
-`examples/suitcase_latch.rs`). The pan holds with the amp in (1.18 dB shape
+`examples/suitcase_latch.rs`). Ideas for its remaining dropouts without changing the sound
+(the harp off partition 0, thread priority, pinning, the wait's fallback; a 50 ms buffer in use
+meanwhile): [docs/SUITCASE_REALTIME_PLAN.md](docs/SUITCASE_REALTIME_PLAN.md), nothing built. The pan holds with the amp in (1.18 dB shape
 error); `scripts/rhodes_suitcase_notes.py` writes a jRhodes-style single-note set,
 `scripts/suitcase_bands.py` the band table. Next: the user listens; the plan's options (the
 vibrato's last dB, the 4-16 kHz deficit, the cabinet's back).
