@@ -1450,6 +1450,48 @@ impl Track {
 
     /// Clip `c` split at timeline position `at` (inside it): two clips, the cut edges with
     /// the default fade. The right half's index, or None.
+    /// Clip `c`'s gain set so its stretch of its take meets `target_dbfs`: its peak (`peak`;
+    /// either channel), else its level (`crate::audio::level_dbfs` over its loudest 8 s, as
+    /// an import's normalize; a stereo clip's louder channel). The take is untouched. Returns
+    /// the gain set (dB), None for a silent clip.
+    pub fn normalize_clip(
+        &mut self,
+        c: usize,
+        peak: bool,
+        target_dbfs: f64,
+        rate: u32,
+    ) -> Option<f64> {
+        let clip = self.clips.get(c)?;
+        let take = self.take_of(clip)?;
+        let stretch = |x: &Arc<Vec<f32>>| -> Vec<f32> {
+            let a = clip.src_start.min(x.len());
+            let b = (clip.src_start + clip.len).min(x.len());
+            x[a..b].to_vec()
+        };
+        let mut chans = vec![stretch(take.sound(self.drafts).0)];
+        if let Some(r) = take.sound_right(self.drafts) {
+            chans.push(stretch(r));
+        }
+        let level = chans
+            .iter()
+            .map(|x| {
+                if peak {
+                    let p = x.iter().fold(0.0f32, |m, v| m.max(v.abs())) as f64;
+                    20.0 * p.max(1e-12).log10()
+                } else {
+                    let y: Vec<f64> = x.iter().map(|&v| v as f64).collect();
+                    crate::audio::level_dbfs(&y, rate, 8.0)
+                }
+            })
+            .fold(f64::NEG_INFINITY, f64::max);
+        if level <= -200.0 {
+            return None;
+        }
+        let g = ((target_dbfs - level) * 100.0).round() / 100.0;
+        self.clips[c].gain_db = g;
+        Some(g)
+    }
+
     pub fn split_clip(&mut self, c: usize, at: i64, rate: u32) -> Option<usize> {
         let clip = self.clips.get(c)?.clone();
         if at <= clip.position || at >= clip.end() {
@@ -3166,6 +3208,32 @@ mod tests {
             checked += 1;
         }
         println!("{checked} sessions checked");
+    }
+
+    #[test]
+    fn a_clip_normalizes_by_its_gain() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        let mut k = plain_take(
+            "t0001",
+            0,
+            (0..3000).map(|i| (i as f32 * 0.3).sin() * 0.1).collect(),
+        );
+        k.right = Some(Arc::new(k.audio.iter().map(|v| v * 2.0).collect()));
+        s.tracks[0].takes.push(k);
+        s.tracks[0].set_active(0);
+        // Peak: the louder (right) channel's 0.2 to -1 dBFS.
+        let g = s.tracks[0].normalize_clip(0, true, -1.0, 1000).unwrap();
+        assert!((g - (-1.0 - 20.0 * 0.2f64.log10())).abs() < 0.01, "{g}");
+        assert_eq!(s.tracks[0].clips[0].gain_db, g);
+        // Level: a sine's rms as its peak, so a 0.2 sine reads -14 dBFS.
+        let g = s.tracks[0].normalize_clip(0, false, -18.0, 1000).unwrap();
+        assert!((g - (-18.0 - 20.0 * 0.2f64.log10())).abs() < 0.1, "{g}");
+        // Silence: nothing to do.
+        s.tracks[0]
+            .takes
+            .push(plain_take("t0002", 0, vec![0.0; 100]));
+        s.tracks[0].set_active(1);
+        assert_eq!(s.tracks[0].normalize_clip(0, true, -1.0, 1000), None);
     }
 
     #[test]

@@ -120,6 +120,11 @@ The app was looked at on a scratch copy of `sessions/beat1` with a scratch `APPD
 - Aftertouch and pedal are drawn under the velocities, shown but not editable (knob lanes
   stay with N5).
 
+**Normalize (2026-11-08, the user's ask):** a clip's right-click menu normalizes its peak (either
+channel, -1 dBFS by default) or its level (its loudest 8 s, as an import's, -18 dBFS by default)
+by setting the clip's gain (`Track::normalize_clip`); the take is untouched, Undo or "Reset gain
+and fades" takes it back.
+
 ### Open
 
 - Decision 6, a track's MIDI as one performance (see SE6), and quantize on record.

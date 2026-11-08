@@ -314,6 +314,9 @@ pub struct SessionView {
     hear: Hear,
     mid_cache: std::cell::RefCell<Option<(String, Arc<Vec<f32>>)>>,
     show_keys: bool,
+    /// The clip menu's normalize targets (dBFS): its peak, its level (as an import's).
+    normalize_peak_dbfs: f64,
+    normalize_level_dbfs: f64,
     /// Where play last stopped (Shift+Space plays from there).
     stopped_at: Option<i64>,
     /// The lanes' width as last drawn (px): G and H zoom about its middle.
@@ -597,6 +600,8 @@ impl SessionView {
             hear: Hear::Left,
             mid_cache: std::cell::RefCell::new(None),
             show_keys: false,
+            normalize_peak_dbfs: -1.0,
+            normalize_level_dbfs: -18.0,
             stopped_at: None,
             lanes_w: 800.0,
             scroll_drag: None,
@@ -4058,6 +4063,7 @@ impl SessionView {
         let mut take_action: Option<(usize, u8)> = None;
         let mut place_take: Option<(usize, bool)> = None;
         let mut clip_action: Option<(usize, &'static str)> = None;
+        let mut normalize: Option<(usize, bool)> = None;
         lane_resp.context_menu(|ui| {
             let t = &self.session.tracks[i];
             let Some(c) = self
@@ -4109,6 +4115,50 @@ impl SessionView {
                 ui.close();
             }
             ui.separator();
+            // Normalize: the clip's gain set so its stretch of the take meets a target (the
+            // take untouched; Undo, or "Reset gain and fades", takes it back).
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Normalize peak to")
+                    .on_hover_text(
+                        "The clip's gain set so its loudest sample (either channel) is at the \
+                         target",
+                    )
+                    .clicked()
+                {
+                    normalize = Some((c, true));
+                    ui.close();
+                }
+                ui.add(
+                    egui::DragValue::new(&mut self.normalize_peak_dbfs)
+                        .range(-60.0..=0.0)
+                        .speed(0.1)
+                        .max_decimals(1)
+                        .suffix(" dBFS"),
+                );
+            });
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Normalize level to")
+                    .on_hover_text(
+                        "The clip's gain set so its loudest 8 s is at the target as a sine's \
+                         peak (as an import's normalize; a stereo clip: its louder channel)",
+                    )
+                    .clicked()
+                {
+                    normalize = Some((c, false));
+                    ui.close();
+                }
+                ui.add(
+                    egui::DragValue::new(&mut self.normalize_level_dbfs)
+                        .range(-60.0..=0.0)
+                        .speed(0.1)
+                        .max_decimals(1)
+                        .suffix(" dBFS"),
+                );
+            });
+            ui.separator();
+            let t = &self.session.tracks[i];
             let take = &t.takes[k];
             if take.latency != 0 {
                 let ms = take.latency as f64 / self.session.rate as f64 * 1e3;
@@ -4215,6 +4265,17 @@ impl SessionView {
         }
         if let Some((c, what)) = clip_action {
             changed |= self.clip_action(i, c, what);
+        }
+        if let Some((c, peak)) = normalize {
+            let target = if peak {
+                self.normalize_peak_dbfs
+            } else {
+                self.normalize_level_dbfs
+            };
+            match self.session.tracks[i].normalize_clip(c, peak, target, self.session.rate) {
+                Some(_) => changed = true,
+                None => self.error = Some("the clip is silent: nothing to normalize".into()),
+            }
         }
         // Paint.
         let armed = self.session.armed == Some(i);
