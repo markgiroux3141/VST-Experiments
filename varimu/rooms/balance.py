@@ -20,7 +20,9 @@ the app bound how hard a balance drives each chain: sum_s g_s peak_sm per block.
 
 `prepare(scene, out_dir)` writes `balance.json` (the sources' SPLs as prepared and their
 stems' files, the mics, the peaks) and each source's `<name>.L.wav` / `<name>.R.wav` (mono
-float32 at the project's rate, all the same length, from the scene's first sample).
+float32 at the project's rate, all the same length, from the scene's first sample). A stereo
+source's two sides (varimu.rooms.scene: one gain for both) are one source here: one stem, its
+peaks their sum (a bound), under the pair's name.
 """
 
 from __future__ import annotations
@@ -148,14 +150,22 @@ def prepare(scene, out_dir: Path, log: Callable[[str], None] = print) -> dict:
     block = int(round(PEAK_BLOCK_S * fs))
     nb = -(-n // block)
     out_dir.mkdir(parents=True, exist_ok=True)
-    peaks = np.zeros((len(scene.sources), len(scene.mics), nb))
+    # one stem per source, a stereo pair's two sides together (in the scene's order)
+    groups: list[str] = []
+    for src in scene.sources:
+        g = src.pair or src.name
+        if g not in groups:
+            groups.append(g)
+    peaks = np.zeros((len(groups), len(scene.mics), nb))
     pans = [balance(m.pan) for m in scene.mics]
     nm = len(scene.mics)
     stems = Step(log, "stems", "stems", [len(x) * nm for x in signals])
     sources = []
+    acc: dict[str, np.ndarray] = {}
     for si, (src, x) in enumerate(zip(scene.sources, signals, strict=True)):
         stems.start(si, f"source {si + 1} ({src.name}) through {nm} mics' chains")
-        st = np.zeros((2, n))
+        gi = groups.index(src.pair or src.name)
+        st = acc.setdefault(groups[gi], np.zeros((2, n)))
         for mi in range(nm):
             hf, hr = got[keys[mi]]
             g = fftconvolve(h[si, mi, 0], hf)
@@ -164,17 +174,19 @@ def prepare(scene, out_dir: Path, log: Callable[[str], None] = print) -> dict:
             g = g[PROXY_LEAD:]  # back to t = 0 (`chain_proxy`)
             y = oaconvolve(x, g)[:n]
             y = np.pad(y, (0, n - len(y)))
-            peaks[si, mi] = np.abs(np.pad(y, (0, nb * block - n))).reshape(nb, block).max(1)
+            peaks[gi, mi] += np.abs(np.pad(y, (0, nb * block - n))).reshape(nb, block).max(1)
             st[0] += pans[mi][0] * y
             st[1] += pans[mi][1] * y
+    stems.end()
+    for g in groups:
         files = []
         for side, ch in (("L", 0), ("R", 1)):
-            f = out_dir / f"{_safe(src.name)}.{side}.wav"
-            write_audio(f, st[ch].astype(np.float32), fs)
+            f = out_dir / f"{_safe(g)}.{side}.wav"
+            write_audio(f, acc[g][ch].astype(np.float32), fs)
             files.append(f.name)
-        sources.append({"name": src.name, "spl_db": src.spl_db, "left": files[0],
+        spl = next(s.spl_db for s in scene.sources if (s.pair or s.name) == g)
+        sources.append({"name": g, "spl_db": spl, "left": files[0],
                         "right": files[1]})  # fmt: skip
-    stems.end()
     result = {
         "scene": scene.name,
         "fs": fs,

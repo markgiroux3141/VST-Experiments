@@ -135,7 +135,7 @@ fn run() -> Result<(), String> {
             end: n as u64,
         };
         let prep = Prepared::load(&config, &perf, dev.quality)?;
-        let d = render(&prep, &perf, |_| {}, &AtomicBool::new(false))?;
+        let d = render(&prep, &perf, |_| {}, &AtomicBool::new(false))?.0;
         let mut p = Proxy::new(tables.clone(), rate, 1);
         p.set_values(&v);
         p.set_playing(playing);

@@ -115,6 +115,8 @@ pub fn balance(volume_db: f64, pan: f64) -> (f32, f32) {
 pub struct MixClip {
     pub start: i64,
     pub audio: Arc<Vec<f32>>,
+    /// A stereo take's right channel (`audio` is then its left; docs/STEREO_PLAN.md ST2).
+    pub right: Option<Arc<Vec<f32>>>,
     pub gain: (f32, f32),
     pub from: usize,
     pub len: usize,
@@ -133,6 +135,7 @@ impl MixClip {
             start,
             len: audio.len(),
             audio,
+            right: None,
             gain,
             from: 0,
             fade_in: 0,
@@ -177,12 +180,18 @@ impl MixClip {
             else {
                 continue;
             };
-            let v = if self.fade_in > 0 || self.fade_out > 0 {
-                v * self.fade(i)
-            } else {
-                v
+            // A stereo clip's right channel (a mono clip plays `v` on both sides).
+            let w = match &self.right {
+                Some(r) => r.get(self.from + i).copied().unwrap_or(0.0),
+                None => v,
             };
-            let (l, r) = (self.gain.0 * v, self.gain.1 * v);
+            let (v, w) = if self.fade_in > 0 || self.fade_out > 0 {
+                let g = self.fade(i);
+                (v * g, w * g)
+            } else {
+                (v, w)
+            };
+            let (l, r) = (self.gain.0 * v, self.gain.1 * w);
             let o = &mut out[(p - at) as usize];
             o[0] += l;
             o[1] += r;
@@ -374,6 +383,8 @@ pub struct Recorded {
     pub start: i64,
     pub latency: i64,
     pub samples: Vec<f32>,
+    /// A stereo device's right channel (`samples` its left; docs/STEREO_PLAN.md ST1).
+    pub right: Option<Vec<f32>>,
     pub performance: Option<(Arc<Performance>, u64)>,
 }
 
@@ -397,6 +408,8 @@ struct Active {
     start: i64,
     latency: i64,
     chunks: Vec<Vec<f32>>,
+    /// A stereo device's right channel, chunked alike (empty: mono).
+    right: Vec<Vec<f32>>,
     len: usize,
     /// The performance's sample of its first sample.
     stream_from: Option<u64>,
@@ -424,14 +437,17 @@ impl Recorder {
         latency: i64,
         stream_at: Option<u64>,
     ) {
-        self.capture_until(at, raw, record_from, i64::MAX, latency, stream_at);
+        self.capture_until(at, raw, None, record_from, i64::MAX, latency, stream_at);
     }
 
-    /// [`Recorder::capture`] up to `record_to` (punching out: the take ends there; SE7).
+    /// [`Recorder::capture`] up to `record_to` (punching out: the take ends there; SE7);
+    /// `right`: a stereo device's right channel beside `raw` (its left).
+    #[allow(clippy::too_many_arguments)]
     pub fn capture_until(
         &mut self,
         at: i64,
         raw: &[f32],
+        right: Option<&[f32]>,
         record_from: i64,
         record_to: i64,
         latency: i64,
@@ -446,11 +462,10 @@ impl Recorder {
             return;
         }
         let raw = &raw[..(raw.len() as i64).min(record_to.saturating_sub(at)) as usize];
-        if self
-            .active
-            .as_ref()
-            .is_some_and(|a| a.start + a.len as i64 != at)
-        {
+        // A take is mono or stereo throughout: a change (another device) starts the next.
+        if self.active.as_ref().is_some_and(|a| {
+            a.start + a.len as i64 != at || (a.len > 0 && a.right.is_empty() != right.is_none())
+        }) {
             self.stop();
         }
         let end = at + raw.len() as i64;
@@ -463,17 +478,28 @@ impl Recorder {
             start: at + from as i64,
             latency,
             chunks: Vec::new(),
+            right: Vec::new(),
             len: 0,
             stream_from: stream_at.map(|s| s + from as u64),
         });
         let mut x = &raw[from..];
+        let mut y = right.map(|r| &r[from.min(r.len())..raw.len().min(r.len())]);
         while !x.is_empty() {
             if a.chunks.last().is_none_or(|c| c.len() == chunk) {
                 a.chunks.push(Vec::with_capacity(chunk));
+                if y.is_some() {
+                    a.right.push(Vec::with_capacity(chunk));
+                }
             }
             let c = a.chunks.last_mut().expect("a chunk");
             let k = (chunk - c.len()).min(x.len());
             c.extend_from_slice(&x[..k]);
+            if let (Some(r), Some(yy)) = (a.right.last_mut(), y.as_mut()) {
+                let kk = k.min(yy.len());
+                r.extend_from_slice(&yy[..kk]);
+                r.resize(c.len(), 0.0);
+                *yy = &yy[kk..];
+            }
             a.len += k;
             x = &x[k..];
         }
@@ -486,6 +512,14 @@ impl Recorder {
             for c in a.chunks {
                 samples.extend_from_slice(&c);
             }
+            let right = (!a.right.is_empty()).then(|| {
+                let mut r = Vec::with_capacity(a.len);
+                for c in a.right {
+                    r.extend_from_slice(&c);
+                }
+                r.resize(samples.len(), 0.0);
+                r
+            });
             let performance = match (&self.performance, a.stream_from) {
                 (Some(p), Some(from)) => {
                     Some((Arc::new(p.lock().expect("performance").clone()), from))
@@ -496,6 +530,7 @@ impl Recorder {
                 start: a.start,
                 latency: a.latency,
                 samples,
+                right,
                 performance,
             });
         }
@@ -556,6 +591,19 @@ impl Overview {
     pub fn of(x: &[f32], bin: usize) -> Overview {
         let mut o = Overview::new(bin);
         o.extend(x);
+        o
+    }
+
+    /// The outline of a left (or mono) channel and, stereo, its right: each bin the lowest
+    /// and highest of either.
+    pub fn of_lr(l: &[f32], r: Option<&[f32]>, bin: usize) -> Overview {
+        let mut o = Overview::of(l, bin);
+        if let Some(r) = r {
+            let b = Overview::of(r, bin);
+            for (p, q) in o.peaks.iter_mut().zip(&b.peaks) {
+                *p = (p.0.min(q.0), p.1.max(q.1));
+            }
+        }
         o
     }
 
@@ -646,6 +694,8 @@ pub struct TakeRender {
     /// 1); `quality` is then the performance's own.
     pub proxy: bool,
     pub audio: Arc<Vec<f32>>,
+    /// A stereo device's right channel (`audio` its left).
+    pub right: Option<Arc<Vec<f32>>>,
     pub overview: Arc<Overview>,
 }
 
@@ -694,6 +744,9 @@ pub struct Take {
     pub recorded_unix_s: u64,
     pub code: String,
     pub audio: Arc<Vec<f32>>,
+    /// A stereo take's right channel (`audio` its left; docs/STEREO_PLAN.md ST1). Takes
+    /// recorded before it are mono: a stereo device's mid.
+    pub right: Option<Arc<Vec<f32>>>,
     pub overview: Arc<Overview>,
     /// A take rendered from another through a chain of inserts (Render): the take, the
     /// inserts, the quality and the code version (None: recorded).
@@ -733,10 +786,31 @@ impl Take {
     }
 
     /// What it plays and its outline (see the module docs); `drafts`: a draft render over a
-    /// production one (to compare them).
+    /// production one (to compare them). Stereo: the left channel ([`Take::sound_right`]).
     pub fn sound(&self, drafts: bool) -> (&Arc<Vec<f32>>, &Arc<Overview>, Plays) {
+        match self.pick(drafts) {
+            (Some(r), p) => (&r.audio, &r.overview, p),
+            (None, p) => (&self.audio, &self.overview, p),
+        }
+    }
+
+    /// The right channel of what it plays ([`Take::sound`]), None when that is mono.
+    pub fn sound_right(&self, drafts: bool) -> Option<&Arc<Vec<f32>>> {
+        match self.pick(drafts) {
+            (Some(r), _) => r.right.as_ref(),
+            (None, _) => self.right.as_ref(),
+        }
+    }
+
+    /// Whether what it plays is stereo.
+    pub fn is_stereo(&self, drafts: bool) -> bool {
+        self.sound_right(drafts).is_some()
+    }
+
+    /// Which render it plays (None: its own audio) and what that is.
+    fn pick(&self, drafts: bool) -> (Option<&TakeRender>, Plays) {
         let Some(e) = &self.events else {
-            return (&self.audio, &self.overview, Plays::Audio);
+            return (None, Plays::Audio);
         };
         let of = |rev: u32, prod: bool| {
             self.renders
@@ -747,7 +821,7 @@ impl Take {
         let order = if drafts { [false, true] } else { [true, false] };
         for prod in order {
             if let Some(r) = of(e.rev, prod) {
-                return (&r.audio, &r.overview, Plays::Render(r.quality));
+                return (Some(r), Plays::Render(r.quality));
             }
         }
         if e.rev == 0 {
@@ -755,7 +829,7 @@ impl Take {
                 Monitor::Device => Plays::Heard,
                 Monitor::Proxy => Plays::Proxy,
             };
-            return (&self.audio, &self.overview, p);
+            return (None, p);
         }
         if let Some(r) = self
             .renders
@@ -763,7 +837,7 @@ impl Take {
             .rev()
             .find(|r| r.proxy && r.rev == e.rev)
         {
-            return (&r.audio, &r.overview, Plays::Proxy);
+            return (Some(r), Plays::Proxy);
         }
         match self
             .renders
@@ -771,8 +845,8 @@ impl Take {
             .filter(|r| !r.proxy && r.rev < e.rev)
             .max_by_key(|r| r.rev)
         {
-            Some(r) => (&r.audio, &r.overview, Plays::Stale),
-            None => (&self.audio, &self.overview, Plays::Stale),
+            Some(r) => (Some(r), Plays::Stale),
+            None => (None, Plays::Stale),
         }
     }
 
@@ -809,10 +883,15 @@ pub struct Printed {
     pub lane: String,
     pub start: i64,
     pub audio: Arc<Vec<f32>>,
+    /// A stereo lane's print's right channel (each insert dual-mono, docs/STEREO_PLAN.md
+    /// ST3; `audio` the left).
+    pub right: Option<Arc<Vec<f32>>>,
     pub overview: Arc<Overview>,
     /// Each insert's print, in order (the inserts not bypassed): the input of the one
     /// after it, which an audition plays into it.
     pub stages: Vec<Arc<Vec<f32>>>,
+    /// A stereo lane's: each insert's right channel's print (empty: mono).
+    pub stages_right: Vec<Arc<Vec<f32>>>,
 }
 
 /// Tracks made in this process (with the clock, a new track's id).
@@ -933,8 +1012,13 @@ pub struct Piece {
     pub gain: f32,
 }
 
-/// A lane's sum as cached: its signature, where it starts, its samples.
-type LaneSum = (String, i64, Arc<Vec<f32>>);
+/// A lane's sum as cached: its signature, where it starts, its samples (left or mono, and
+/// a stereo lane's right).
+type LaneSum = (String, i64, Arc<Vec<f32>>, Option<Arc<Vec<f32>>>);
+
+/// A sound placed on the timeline: where it starts, its left (or mono) channel and, stereo,
+/// its right.
+pub type Placed = (i64, Arc<Vec<f32>>, Option<Arc<Vec<f32>>>);
 
 /// A track: its takes (the pool clips play from), its clips (the lane), the take last given
 /// to the lane, its channel strip.
@@ -1116,10 +1200,15 @@ impl Track {
         for c in self.clips.iter().filter(|c| !c.muted) {
             let Some(k) = self.take_of(c) else { continue };
             let (audio, _, plays) = k.sound(self.drafts);
-            let what = match &k.events {
+            let mut what = match &k.events {
                 Some(e) => format!("{}@{}:{plays:?}:{}", k.id, e.rev, audio.len()),
                 None => k.id.clone(),
             };
+            // A stereo sound (a mono one's signature is as it was, so its prints keep
+            // their keys).
+            if k.is_stereo(self.drafts) {
+                what.push_str(":stereo");
+            }
             s.push_str(&format!(
                 "{what}[{},{},{},{},{},{}];",
                 c.src_start, c.len, c.position, c.gain_db, c.fade_in, c.fade_out
@@ -1128,9 +1217,25 @@ impl Track {
         s
     }
 
-    /// The lane summed (mono, before the strip), from its first sound: a lone clip playing
-    /// its whole take plainly is the take's own audio (so a print of it keeps its key).
+    /// The lane summed (before the strip; a stereo lane's left), from its first sound: a
+    /// lone clip playing its whole take plainly is the take's own audio (so a print of it
+    /// keeps its key).
     pub fn lane(&self) -> Option<(i64, Arc<Vec<f32>>)> {
+        self.lane_lr().map(|(s, a, _)| (s, a))
+    }
+
+    /// Whether its lane is stereo: a clip of a stereo sound plays in it (its mono clips then
+    /// play on both sides; docs/STEREO_PLAN.md ST2).
+    pub fn is_stereo(&self) -> bool {
+        self.clips
+            .iter()
+            .filter(|c| !c.muted && c.len > 0)
+            .filter_map(|c| self.take_of(c))
+            .any(|k| k.is_stereo(self.drafts))
+    }
+
+    /// [`Track::lane`] with a stereo lane's right channel.
+    pub fn lane_lr(&self) -> Option<Placed> {
         let pieces = self.pieces();
         let start = pieces.iter().map(|p| p.start).min()?;
         let end = pieces.iter().map(|p| p.start + p.len as i64).max()?;
@@ -1144,25 +1249,27 @@ impl Track {
                 && p.fade_out == 0
                 && p.gain == 1.0
             {
-                return Some((p.start, audio.clone()));
+                return Some((p.start, audio.clone(), k.sound_right(self.drafts).cloned()));
             }
         }
         let sig = self.lane_signature();
         if let Ok(c) = self.lane_cache.lock()
-            && let Some((s, st, a)) = c.as_ref()
+            && let Some((s, st, a, r)) = c.as_ref()
             && *s == sig
         {
-            return Some((*st, a.clone()));
+            return Some((*st, a.clone(), r.clone()));
         }
         let mut out = vec![[0.0f32; 2]; (end - start) as usize];
         for c in self.piece_clips(&pieces, (1.0, 1.0), NO_TRACK) {
             c.add(start, &mut out, None);
         }
+        let stereo = self.is_stereo();
+        let r: Option<Arc<Vec<f32>>> = stereo.then(|| Arc::new(out.iter().map(|f| f[1]).collect()));
         let a: Arc<Vec<f32>> = Arc::new(out.into_iter().map(|f| f[0]).collect());
         if let Ok(mut c) = self.lane_cache.lock() {
-            *c = Some((sig, start, a.clone()));
+            *c = Some((sig, start, a.clone(), r.clone()));
         }
-        Some((start, a))
+        Some((start, a, r))
     }
 
     /// The pieces as the mix's clips through `gain` (the strip's), on meter `track`.
@@ -1174,6 +1281,7 @@ impl Track {
                 Some(MixClip {
                     start: p.start,
                     audio: k.sound(self.drafts).0.clone(),
+                    right: k.sound_right(self.drafts).cloned(),
                     gain: (gain.0 * p.gain, gain.1 * p.gain),
                     from: p.from,
                     len: p.len,
@@ -1218,10 +1326,15 @@ impl Track {
     /// The audio the mix plays and where it starts: the print of the lane (stale or not)
     /// while there's a chain to print, else the lane.
     pub fn playing(&self, rate: u32) -> Option<(i64, Arc<Vec<f32>>, bool)> {
+        self.playing_lr(rate).map(|((s, a, _), p)| (s, a, p))
+    }
+
+    /// [`Track::playing`] with a stereo track's right channel.
+    pub fn playing_lr(&self, rate: u32) -> Option<(Placed, bool)> {
         if let Some(p) = self.print_playing(rate) {
-            return Some((p.start, p.audio.clone(), true));
+            return Some(((p.start, p.audio.clone(), p.right.clone()), true));
         }
-        self.lane().map(|(s, a)| (s, a, false))
+        self.lane_lr().map(|l| (l, false))
     }
 
     /// What the mix plays of it, as track `index`: its print through its strip, else each
@@ -1230,6 +1343,7 @@ impl Track {
         if let Some(p) = self.print_playing(rate) {
             return vec![MixClip {
                 track: index,
+                right: p.right.clone(),
                 ..MixClip::whole(p.start, p.audio.clone(), self.gains())
             }];
         }
@@ -1750,13 +1864,17 @@ impl Session {
         let n = (lane_end - lane_start) as usize
             + (slot.tail_s.max(0.0) * self.rate as f64).round() as usize;
         let mut out = vec![0f32; n];
-        if let Some((start, audio, _)) = self.tracks[i].playing(self.rate) {
+        // A stereo key track keys from its mid (docs/STEREO_PLAN.md ST3).
+        if let Some(((start, audio, right), _)) = self.tracks[i].playing_lr(self.rate) {
             for (j, o) in out.iter_mut().enumerate() {
                 let p = lane_start + j as i64 - start;
                 if p >= 0
                     && let Some(&v) = audio.get(p as usize)
                 {
-                    *o = v;
+                    *o = match right.as_ref().and_then(|r| r.get(p as usize)) {
+                        Some(&w) => 0.5 * (v + w),
+                        None => v,
+                    };
                 }
             }
         }
@@ -1882,8 +2000,13 @@ impl Session {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs()),
             code: circuitsim::SOURCE_HASH.to_string(),
-            overview: Arc::new(Overview::of(&rec.samples, OVERVIEW_BIN)),
+            overview: Arc::new(Overview::of_lr(
+                &rec.samples,
+                rec.right.as_deref(),
+                OVERVIEW_BIN,
+            )),
             audio: Arc::new(rec.samples),
+            right: rec.right.map(Arc::new),
             rendered_from: None,
             events,
             renders: Vec::new(),
@@ -1935,8 +2058,16 @@ impl Session {
     }
 
     /// A render of take `id`'s revision `rev` at `quality` (`audio`: the whole
-    /// performance's), attached wherever the take is (undo keeps it).
-    pub fn attach_render(&mut self, id: &str, rev: u32, quality: Quality, audio: &[f32]) {
+    /// performance's; `right`: a stereo device's right channel), attached wherever the take
+    /// is (undo keeps it).
+    pub fn attach_render(
+        &mut self,
+        id: &str,
+        rev: u32,
+        quality: Quality,
+        audio: &[f32],
+        right: Option<&[f32]>,
+    ) {
         let Some(from) = self
             .known
             .get(id)
@@ -1946,12 +2077,14 @@ impl Session {
             return;
         };
         let a: Vec<f32> = audio.get(from..).unwrap_or(&[]).to_vec();
+        let b: Option<Vec<f32>> = right.map(|r| r.get(from..).unwrap_or(&[]).to_vec());
         let r = TakeRender {
             rev,
             quality,
             proxy: false,
-            overview: Arc::new(Overview::of(&a, OVERVIEW_BIN)),
+            overview: Arc::new(Overview::of_lr(&a, b.as_deref(), OVERVIEW_BIN)),
             audio: Arc::new(a),
+            right: b.map(Arc::new),
         };
         self.attach(id, r);
     }
@@ -1974,6 +2107,7 @@ impl Session {
             proxy: true,
             overview: Arc::new(Overview::of(&a, OVERVIEW_BIN)),
             audio: Arc::new(a),
+            right: None,
         };
         self.attach(id, r);
     }
@@ -2005,11 +2139,13 @@ impl Session {
 
     /// A track's chain rendered into a new take of `track` (now its active one) at
     /// `position`, its files written; `from` says what it was rendered from (the take, the
-    /// inserts, the quality; or its `device` label, as an imported file's). Returns its id.
+    /// inserts, the quality; or its `device` label, as an imported file's). `right`: a
+    /// stereo take's right channel (`samples` its left). Returns its id.
     pub fn add_rendered_take(
         &mut self,
         track: usize,
         samples: Vec<f32>,
+        right: Option<Vec<f32>>,
         position: i64,
         from: Value,
     ) -> Result<String, String> {
@@ -2027,8 +2163,9 @@ impl Session {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs()),
             code: circuitsim::SOURCE_HASH.to_string(),
-            overview: Arc::new(Overview::of(&samples, OVERVIEW_BIN)),
+            overview: Arc::new(Overview::of_lr(&samples, right.as_deref(), OVERVIEW_BIN)),
             audio: Arc::new(samples),
+            right: right.map(Arc::new),
             rendered_from: Some(from),
             events: None,
             renders: Vec::new(),
@@ -2442,8 +2579,22 @@ fn write_take(dir: &Path, k: &Take, rate: u32) -> Result<(), String> {
     std::fs::create_dir_all(dir.join("takes")).map_err(|e| format!("{}: {e}", dir.display()))?;
     std::fs::create_dir(&d)
         .map_err(|e| format!("{}: {e} (takes are never written over)", d.display()))?;
-    let x: Vec<f64> = k.audio.iter().map(|&v| v as f64).collect();
-    crate::audio::write_wav(&d.join(heard_file(k)), &x, rate)?;
+    match &k.right {
+        // A stereo take: one 2-channel file (docs/STEREO_PLAN.md ST1).
+        Some(r) => {
+            let frames: Vec<[f32; 2]> = k
+                .audio
+                .iter()
+                .zip(r.iter())
+                .map(|(&a, &b)| [a, b])
+                .collect();
+            crate::audio::write_wav_stereo(&d.join(heard_file(k)), &frames, rate)?;
+        }
+        None => {
+            let x: Vec<f64> = k.audio.iter().map(|&v| v as f64).collect();
+            crate::audio::write_wav(&d.join(heard_file(k)), &x, rate)?;
+        }
+    }
     let v = json!({
         "id": k.id,
         "position": k.position,
@@ -2488,7 +2639,14 @@ fn read_take(dir: &Path, id: &str, rate: u32) -> Result<Take, String> {
             w.rate
         ));
     }
-    let audio: Vec<f32> = w.mono().iter().map(|&v| v as f32).collect();
+    // A 2-channel file is a stereo take (more channels: their mean, as before).
+    let (audio, right): (Vec<f32>, Option<Vec<f32>>) = match w.channels.as_slice() {
+        [l, r] => (
+            l.iter().map(|&v| v as f32).collect(),
+            Some(r.iter().map(|&v| v as f32).collect()),
+        ),
+        _ => (w.mono().iter().map(|&v| v as f32).collect(), None),
+    };
     let events = match &v["events"] {
         Value::Null => None,
         e => Some(Events {
@@ -2510,8 +2668,9 @@ fn read_take(dir: &Path, id: &str, rate: u32) -> Result<Take, String> {
         device: v["device"].as_str().unwrap_or("").to_string(),
         recorded_unix_s: v["recorded_unix_s"].as_u64().unwrap_or(0),
         code: v["code"].as_str().unwrap_or("").to_string(),
-        overview: Arc::new(Overview::of(&audio, OVERVIEW_BIN)),
+        overview: Arc::new(Overview::of_lr(&audio, right.as_deref(), OVERVIEW_BIN)),
         audio: Arc::new(audio),
+        right: right.map(Arc::new),
         rendered_from: v.get("rendered_from").filter(|f| !f.is_null()).cloned(),
         events,
         renders: Vec::new(),
@@ -2557,7 +2716,7 @@ mod tests {
         let mut at = 0;
         for _ in 0..10 {
             let raw: Vec<f32> = (0..100).map(|i| (at + i) as f32).collect();
-            r.capture_until(at, &raw, 250, 640, 0, None);
+            r.capture_until(at, &raw, None, 250, 640, 0, None);
             at += 100;
         }
         let rec = r.take_finished().expect("a take");
@@ -2609,6 +2768,7 @@ mod tests {
             code: String::new(),
             audio: Arc::new(vec![v; 10]),
             overview: Arc::new(Overview::default()),
+            right: None,
             rendered_from: None,
             events: None,
             renders: Vec::new(),
@@ -2659,6 +2819,7 @@ mod tests {
             code: String::new(),
             overview: Arc::new(Overview::default()),
             audio: Arc::new(audio),
+            right: None,
             rendered_from: None,
             events: None,
             renders: Vec::new(),
@@ -2714,6 +2875,7 @@ mod tests {
             code: String::new(),
             overview: Arc::new(Overview::default()),
             audio: Arc::new(audio),
+            right: None,
             rendered_from: None,
             events: None,
             renders: Vec::new(),
@@ -3007,6 +3169,93 @@ mod tests {
     }
 
     #[test]
+    fn a_stereo_recording_keeps_both_channels() {
+        let mut r = Recorder::new(100);
+        r.armed = true;
+        let mut at = 0;
+        for _ in 0..5 {
+            let l: Vec<f32> = (0..70).map(|i| (at + i) as f32).collect();
+            let rr: Vec<f32> = l.iter().map(|v| -v).collect();
+            r.capture_until(at, &l, Some(&rr), 30, i64::MAX, 0, None);
+            at += 70;
+        }
+        // A mono block after it: a take of its own (a take is mono or stereo throughout).
+        r.capture_until(at, &[9.0; 70], None, 30, i64::MAX, 0, None);
+        r.armed = false;
+        r.capture(at + 70, &[0.0; 10], 0, 0, None);
+        let a = r.take_finished().expect("the stereo take");
+        assert_eq!((a.start, a.samples.len()), (30, 320));
+        let right = a.right.expect("stereo");
+        assert_eq!(right.len(), 320);
+        assert!(a.samples.iter().zip(&right).all(|(l, r)| *r == -*l));
+        let b = r.take_finished().expect("the mono take");
+        assert_eq!((b.start, b.samples.len(), b.right), (350, 70, None));
+    }
+
+    #[test]
+    fn a_stereo_take_saves_loads_and_mixes_through_the_balance() {
+        let dir = std::env::temp_dir().join(format!("varimu_stereo_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        let l: Vec<f32> = (0..400).map(|i| (i as f32 * 0.07).sin() * 0.5).collect();
+        let r: Vec<f32> = (0..400).map(|i| (i as f32 * 0.11).cos() * 0.25).collect();
+        let rec = Recorded {
+            start: 100,
+            latency: 0,
+            samples: l.clone(),
+            right: Some(r.clone()),
+            performance: None,
+        };
+        s.add_take(0, rec, "rhodes_suitcase").expect("saved");
+        let t = Session::load(&dir).expect("loads");
+        let k = &t.tracks[0].takes[0];
+        assert_eq!(*k.audio, l);
+        assert_eq!(k.right.as_deref(), Some(&r)); // one 2-channel float file, bit for bit
+        assert!(t.tracks[0].is_stereo());
+        // The mix: left on the left, right on the right; the balance turns one side down.
+        let mut t = t;
+        let mix = |t: &Session| {
+            let mut out = vec![[0.0f32; 2]; 600];
+            t.mix().add(0, &mut out);
+            out
+        };
+        let out = mix(&t);
+        assert_eq!(out[150], [l[50], r[50]]);
+        t.tracks[0].pan = 0.5;
+        let out = mix(&t);
+        assert_eq!(out[150], [0.5 * l[50], r[50]]);
+        // The lane's right channel; a mono clip on it plays on both sides.
+        let (start, a, b) = t.tracks[0].lane_lr().expect("a lane");
+        assert_eq!(
+            (start, a.len(), b.as_ref().map(|b| b.len())),
+            (100, 400, Some(400))
+        );
+        let mono = Recorded {
+            start: 600,
+            latency: 0,
+            samples: vec![0.3; 50],
+            right: None,
+            performance: None,
+        };
+        t.add_take(0, mono, "test").expect("saved");
+        let t0 = &mut t.tracks[0];
+        let first = t0.takes[0].clone();
+        t0.clips.insert(0, Clip::whole(&first));
+        let (start, a, b) = t0.lane_lr().expect("a lane");
+        let b = b.expect("still stereo");
+        assert_eq!((start, a.len(), b.len()), (100, 550, 550));
+        assert_eq!((a[520], b[520]), (0.3, 0.3));
+        assert_eq!((a[10], b[10]), (l[10], r[10]));
+        // A mono lane keeps no right channel and its signature as before.
+        let mut m = Track::new("m");
+        m.takes.push(t.tracks[0].takes[1].clone());
+        m.set_active(0);
+        assert!(!m.is_stereo() && m.lane_lr().expect("a lane").2.is_none());
+        assert!(!m.lane_signature().contains("stereo"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_session_survives_a_save_and_load() {
         let dir = std::env::temp_dir().join(format!("varimu_session_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -3016,6 +3265,7 @@ mod tests {
             start: 1000,
             latency: 240,
             samples: (0..4800).map(|i| (i as f32 * 0.01).sin() * 0.5).collect(),
+            right: None,
             performance: None,
         };
         s.add_take(0, rec.clone(), "tube_synth").expect("saved");
@@ -3091,6 +3341,7 @@ mod tests {
             start,
             latency: 0,
             samples: vec![v; n],
+            right: None,
             performance: None,
         };
         s.add_take(0, rec(0, 0.25, 300), "x").expect("saved");
@@ -3147,6 +3398,7 @@ mod tests {
             start: 0,
             latency: 0,
             samples: vec![v; 100],
+            right: None,
             performance: None,
         };
         s.add_take(0, rec(0.1), "x").expect("saved");
@@ -3188,6 +3440,7 @@ mod tests {
             start: 10,
             latency: 0,
             samples: vec![v; 100],
+            right: None,
             performance: None,
         };
         s.add_take(0, rec(0.1), "x").expect("saved");
@@ -3205,6 +3458,8 @@ mod tests {
             lane: s.tracks[0].lane_signature(),
             start: s.tracks[0].lane_span().unwrap().0,
             audio: Arc::new(vec![0.7; 150]),
+            right: None,
+            stages_right: Vec::new(),
             overview: Arc::new(Overview::default()),
             stages: Vec::new(),
         });
@@ -3239,7 +3494,7 @@ mod tests {
             .expect("a take");
         let from = json!({"take": "t0002", "quality": "production"});
         let id = s
-            .add_rendered_take(0, vec![0.25; 120], pos, from.clone())
+            .add_rendered_take(0, vec![0.25; 120], None, pos, from.clone())
             .expect("saved");
         assert_eq!(
             s.tracks[0].active_take().map(|k| k.id.clone()),
@@ -3266,6 +3521,7 @@ mod tests {
             start,
             latency: 0,
             samples: x,
+            right: None,
             performance: None,
         };
         s.add_take(0, rec(100, vec![0.1; 50]), "x").expect("saved");
@@ -3306,6 +3562,8 @@ mod tests {
             lane: s.tracks[1].lane_signature(),
             start: s.tracks[1].lane_span().unwrap().0,
             audio: Arc::new(vec![0.5; 25]),
+            right: None,
+            stages_right: Vec::new(),
             overview: Arc::new(Overview::default()),
             stages: Vec::new(),
         });
@@ -3374,6 +3632,7 @@ mod tests {
             start: 500,
             latency: 20,
             samples: vec![0.25; 400],
+            right: None,
             performance: Some((Arc::new(perf.clone()), 100)),
         };
         let id = s
@@ -3401,12 +3660,12 @@ mod tests {
         assert_eq!(k.sound(false).2, Plays::Proxy);
         assert_eq!(k.sound(false).0.len(), 400);
         assert!(k.has_proxy() && !k.has_render(Quality::Draft1x) && k.needs_render(false));
-        s.attach_render(&id, 1, Quality::Draft1x, &vec![0.5; 500]);
+        s.attach_render(&id, 1, Quality::Draft1x, &vec![0.5; 500], None);
         let k = s.tracks[0].active_take().unwrap();
         assert_eq!(k.sound(false).2, Plays::Render(Quality::Draft1x));
         assert!(!k.needs_render(false));
         assert_eq!(k.sound(false).0.len(), 400); // from the take's first sample
-        s.attach_render(&id, 1, Quality::Production, &vec![0.75; 500]);
+        s.attach_render(&id, 1, Quality::Production, &vec![0.75; 500], None);
         let k = s.tracks[0].active_take().unwrap();
         assert_eq!(k.sound(false).2, Plays::Render(Quality::Production));
         assert_eq!(k.sound(true).2, Plays::Render(Quality::Draft1x));
@@ -3471,6 +3730,7 @@ mod tests {
             start: 0,
             latency: 0,
             samples: vec![v; 50],
+            right: None,
             performance: None,
         };
         let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());

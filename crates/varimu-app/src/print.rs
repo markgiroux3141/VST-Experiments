@@ -239,6 +239,9 @@ impl Prepared {
 pub struct Print {
     pub key: String,
     pub audio: Arc<Vec<f32>>,
+    /// A stereo input's right channel through the same insert, printed apart with the
+    /// same panel (dual-mono, docs/STEREO_PLAN.md ST3; `audio` the left's print).
+    pub right: Option<Arc<Vec<f32>>>,
     /// Found in the cache (nothing rendered).
     pub cached: bool,
     /// Seconds of wall clock per second of audio (0 when cached).
@@ -381,6 +384,7 @@ fn print_or_find(
         return Ok(Print {
             key: String::new(),
             audio: input.clone(),
+            right: None,
             cached: true,
             realtime_factor: 0.0,
         });
@@ -392,6 +396,7 @@ fn print_or_find(
         return Ok(Print {
             key,
             audio: Arc::new(audio),
+            right: None,
             cached: true,
             realtime_factor: 0.0,
         });
@@ -406,6 +411,7 @@ fn print_or_find(
     Ok(Print {
         key,
         audio: Arc::new(audio),
+        right: None,
         cached: false,
         realtime_factor: rtf,
     })
@@ -552,16 +558,20 @@ pub struct Job {
 
 impl Job {
     /// `slots` loaded from `config_dir` and printed on `input` (each with its sidechain,
-    /// `print_chain`'s) in the background.
+    /// `print_chain`'s) in the background; `right`: a stereo input's right channel, printed
+    /// through the same chain beside it (dual-mono: [`Print::right`]).
     pub fn spawn(
         config_dir: PathBuf,
         slots: Vec<Slot>,
         sidechains: Vec<Option<Arc<Vec<f32>>>>,
         input: Arc<Vec<f32>>,
+        right: Option<Arc<Vec<f32>>>,
         rate: u32,
         cache: Option<PathBuf>,
     ) -> Job {
-        Job::start(config_dir, slots, sidechains, input, rate, cache, true)
+        Job::start(
+            config_dir, slots, sidechains, input, right, rate, cache, true,
+        )
     }
 
     /// The chain's prints looked up in `cache` only, none rendered: its result is
@@ -572,6 +582,7 @@ impl Job {
         slots: Vec<Slot>,
         sidechains: Vec<Option<Arc<Vec<f32>>>>,
         input: Arc<Vec<f32>>,
+        right: Option<Arc<Vec<f32>>>,
         rate: u32,
         cache: PathBuf,
     ) -> Job {
@@ -580,17 +591,20 @@ impl Job {
             slots,
             sidechains,
             input,
+            right,
             rate,
             Some(cache),
             false,
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn start(
         config_dir: PathBuf,
         slots: Vec<Slot>,
         sidechains: Vec<Option<Arc<Vec<f32>>>>,
         input: Arc<Vec<f32>>,
+        right: Option<Arc<Vec<f32>>>,
         rate: u32,
         cache: Option<PathBuf>,
         render: bool,
@@ -600,26 +614,70 @@ impl Job {
         let (p, c) = (progress.clone(), cancel.clone());
         let handle = std::thread::spawn(move || {
             lower_priority();
-            let preps = slots
-                .iter()
-                .map(|s| Prepared::load(&config_dir, &s.device, s.quality, s.noise))
-                .collect::<Result<Vec<_>, _>>()?;
-            chain(
-                &preps,
-                &slots,
-                &sidechains,
-                &input,
-                rate,
-                cache.as_deref(),
-                |k, f| {
-                    p.store(
-                        ((k as u64) << 32) | (f as f32).to_bits() as u64,
-                        Ordering::Relaxed,
-                    )
-                },
-                &c,
-                render,
-            )
+            let load = || {
+                slots
+                    .iter()
+                    .map(|s| Prepared::load(&config_dir, &s.device, s.quality, s.noise))
+                    .collect::<Result<Vec<_>, _>>()
+            };
+            let preps = load()?;
+            // A right channel equal to the left (mono clips on a stereo lane) prints once.
+            let right = right.filter(|r| **r != *input);
+            std::thread::scope(|scope| {
+                // The right channel on a thread of its own, the same chain and sidechains.
+                let other = right.as_ref().map(|r| {
+                    let (slots, sidechains, cache, c) = (&slots, &sidechains, &cache, &c);
+                    scope.spawn(move || {
+                        lower_priority();
+                        let preps = load()?;
+                        chain(
+                            &preps,
+                            slots,
+                            sidechains,
+                            r,
+                            rate,
+                            cache.as_deref(),
+                            |_, _| {},
+                            c,
+                            render,
+                        )
+                    })
+                });
+                let mut left = chain(
+                    &preps,
+                    &slots,
+                    &sidechains,
+                    &input,
+                    rate,
+                    cache.as_deref(),
+                    |k, f| {
+                        p.store(
+                            ((k as u64) << 32) | (f as f32).to_bits() as u64,
+                            Ordering::Relaxed,
+                        )
+                    },
+                    &c,
+                    render,
+                );
+                if left.is_err() {
+                    c.store(true, Ordering::Relaxed);
+                }
+                if let Some(h) = other {
+                    let r = h
+                        .join()
+                        .unwrap_or_else(|_| Err("the print's thread panicked".into()));
+                    match (&mut left, r) {
+                        (Ok(l), Ok(r)) => {
+                            for (a, b) in l.iter_mut().zip(r) {
+                                a.right = Some(b.audio);
+                            }
+                        }
+                        (Ok(_), Err(e)) => left = Err(e),
+                        _ => {}
+                    }
+                }
+                left
+            })
         });
         Job {
             progress,
@@ -826,6 +884,49 @@ mod tests {
     }
 
     #[test]
+    fn a_stereo_input_prints_dual_mono() {
+        // Each channel through its own copy of the chain with the same panel: the right's
+        // print is the chain's print of the right alone (docs/STEREO_PLAN.md ST3).
+        let rate = 48_000;
+        let (l, r) = (tone(48_000, 0.1, 0.2), tone(48_000, 0.05, 0.2));
+        let slots = vec![stage(-6.0)];
+        let dir = temp("dual");
+        let job = Job::spawn(
+            config(),
+            slots.clone(),
+            vec![],
+            l.clone(),
+            Some(r.clone()),
+            rate,
+            Some(dir.clone()),
+        );
+        let p = job.join().expect("a result").expect("printed");
+        let prep: Vec<Prepared> = slots
+            .iter()
+            .map(|s| Prepared::load(&config(), &s.device, s.quality, s.noise).unwrap())
+            .collect();
+        let no = AtomicBool::new(false);
+        let alone = |x: &Arc<Vec<f32>>| {
+            print_chain(&prep, &slots, &[], x, rate, None, |_, _| {}, &no).unwrap()
+        };
+        assert_eq!(p[0].audio, alone(&l)[0].audio);
+        assert_eq!(p[0].right.as_ref(), Some(&alone(&r)[0].audio));
+        // A right channel equal to the left prints once (none apart).
+        let same = Job::spawn(
+            config(),
+            slots,
+            vec![],
+            l.clone(),
+            Some(Arc::new((*l).clone())),
+            rate,
+            Some(dir.clone()),
+        );
+        let q = same.join().expect("a result").expect("printed");
+        assert!(q[0].cached && q[0].right.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn a_cancelled_print_leaves_nothing() {
         let (rate, x) = (48_000, tone(48_000, 0.3, 0.3));
         let dir = temp("cancel");
@@ -834,6 +935,7 @@ mod tests {
             vec![stage(0.0)],
             vec![],
             x,
+            None,
             rate,
             Some(dir.clone()),
         );

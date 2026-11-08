@@ -247,6 +247,7 @@ def responses(
     backend: str | None = None,
     wave: dict | None = None,
     directivity: list | None = None,
+    tail_offsets: list | None = None,
     log=None,
 ) -> np.ndarray:
     """The rooms' impulse responses, (sources, mics, 2 entries (front, rear), samples):
@@ -262,7 +263,10 @@ def responses(
     (omni) or (varimu.rooms.directivity.Directivity, its aim as a unit vector): every image
     and diffraction path weighted by D in the direction it leaves the source, the rays started
     with |D|^2, the wave solver's source a monopole and a dipole. `log` takes progress lines
-    with ETAs (varimu.rooms.progress)."""
+    with ETAs (varimu.rooms.progress). `tail_offsets` per source (sources sharing a seed: a
+    stereo pair's sides, docs/STEREO_PLAN.md ST4): where it sits from the place its seed's
+    field is drawn for, its tail's plane waves delayed by u . offset / c as a mic's are, so
+    two sides cohere as the diffuse field's sinc(k d) and at zero spacing are one field."""
     from varimu.rooms import diffraction, gpu
     from varimu.rooms.polyroom import RECEIVER_RAYS, PolyRoom, ray_decay, rt60_from_decay
     from varimu.rooms.progress import Step
@@ -467,6 +471,12 @@ def responses(
             env *= fade_in
             env[n:] = 0.0
             noise_spec += bw_fine[b][None, :] * sfft.rfft(white * env[None, :], axis=1, workers=-1)
+        if tail_offsets is not None and np.any(tail_offsets[si]):
+            # a pair's side: the shared field's plane waves shifted to where it sits (a
+            # direction at a time: the whole table of phases is as big as the field)
+            lead = dirs @ np.asarray(tail_offsets[si], float) / c
+            for i in range(len(dirs)):
+                noise_spec[i] *= np.exp(2j * np.pi * f_fine * lead[i])
         gains = _receiver_gains(decays[si], n, fs, volume) if poly else None
         tails.append((si, noise_spec, gains))
         tail_step.done()

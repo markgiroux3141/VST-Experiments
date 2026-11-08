@@ -14,7 +14,11 @@
 //! stream with its local error control: `Settings::live_options`) at production's 96 kHz:
 //! the events at that rate, the output brought back to the take's rate.
 //!
-//! **The cache**: `<take>/renders/<key>/audio.wav` (mono float32 at the take's rate) and
+//! **Stereo devices** (their circuit probes `out_r`) render both channels: the file is then
+//! 2-channel and the key says so (docs/STEREO_PLAN.md ST1; renders from before kept the
+//! mid under the old key).
+//!
+//! **The cache**: `<take>/renders/<key>/audio.wav` (float32 at the take's rate) and
 //! `render.json`, `key` a sha256 over the performance, the quality's settings, the device's
 //! IR as it starts and circuitsim's `SOURCE_HASH`. Written to a temporary folder and renamed
 //! into place, as prints are.
@@ -75,6 +79,9 @@ impl Prepared {
         let ir = self.circuit.build(&perf.values)?;
         let mut h = Sha256::new();
         h.update(b"varimu take render 1\n");
+        if is_stereo(&ir) {
+            h.update(b"stereo\n");
+        }
         h.update(circuitsim::SOURCE_HASH.as_bytes());
         h.update(serde_json::to_vec(&perf.to_json()).map_err(|e| e.to_string())?);
         h.update(serde_json::to_vec(&ir).map_err(|e| e.to_string())?);
@@ -87,15 +94,25 @@ impl Prepared {
     }
 }
 
+/// Whether a circuit is stereo: it probes `out_r` beside `out`.
+pub fn is_stereo(ir: &circuitsim::ir::CircuitIr) -> bool {
+    ir.probes
+        .iter()
+        .any(|p| matches!(p, circuitsim::ir::Probe::Voltage { node } if node == "out_r"))
+}
+
+/// A render's channels: the left (or mono) and a stereo device's right.
+pub type Channels = (Vec<f32>, Option<Vec<f32>>);
+
 /// `perf` through its device (see the module docs): the device's output at `perf.rate`,
-/// `perf.end` samples from the performance's start. `progress(fraction)` as it goes;
-/// `cancel` stops it.
+/// `perf.end` samples from the performance's start (a stereo device's left, and its right).
+/// `progress(fraction)` as it goes; `cancel` stops it.
 pub fn render(
     prep: &Prepared,
     perf: &Performance,
     mut progress: impl FnMut(f64),
     cancel: &AtomicBool,
-) -> Result<Vec<f32>, String> {
+) -> Result<Channels, String> {
     let s = prep.settings.clone();
     let host = s.host();
     let p = perf.at_rate(host);
@@ -115,6 +132,7 @@ pub fn render(
     let block = ((BLOCK as f64 * host as f64 / perf.rate as f64).round() as usize).max(1);
     let total = p.end as usize;
     let mut out: Vec<f32> = Vec::with_capacity(total + block);
+    let mut out_r: Vec<f32> = Vec::new();
     let mut panel_values = p.values.clone();
     let (mut e, mut k) = (0, 0);
     let mut last_input = 0.0;
@@ -154,28 +172,34 @@ pub fn render(
         if !exact && let Some(want) = b.range {
             live.apply_now(with_range(&panel_values, want), last_input, None)?;
         }
-        match live.right() {
-            // A stereo device's take is its mid (as the player keeps it).
-            Some(r) => out.extend(y.iter().zip(r).map(|(a, b)| 0.5 * (a + b))),
-            None => out.extend_from_slice(&y),
+        // A stereo device's take keeps both channels (as the player keeps them).
+        out.extend_from_slice(&y);
+        if let Some(r) = live.right() {
+            out_r.resize(out.len() - y.len(), 0.0);
+            out_r.extend_from_slice(&r[..r.len().min(y.len())]);
+            out_r.resize(out.len(), 0.0);
         }
         pos += n;
         progress(pos as f64 / total.max(1) as f64);
     }
+    let right = (!out_r.is_empty()).then_some(out_r);
     if host == perf.rate {
-        return Ok(out);
+        return Ok((out, right));
     }
-    let x: Vec<f64> = out.iter().map(|&v| v as f64).collect();
-    let mut y: Vec<f32> = resample(&x, host, perf.rate)
-        .iter()
-        .map(|&v| v as f32)
-        .collect();
-    y.resize(perf.end as usize, 0.0);
-    Ok(y)
+    let back = |out: Vec<f32>| -> Vec<f32> {
+        let x: Vec<f64> = out.iter().map(|&v| v as f64).collect();
+        let mut y: Vec<f32> = resample(&x, host, perf.rate)
+            .iter()
+            .map(|&v| v as f32)
+            .collect();
+        y.resize(perf.end as usize, 0.0);
+        y
+    };
+    Ok((back(out), right.map(back)))
 }
 
 /// A render of `perf` at `quality` kept in `dir` (a take's `renders/`), or None.
-pub fn cached(dir: &Path, key: &str, rate: u32) -> Result<Option<Vec<f32>>, String> {
+pub fn cached(dir: &Path, key: &str, rate: u32) -> Result<Option<Channels>, String> {
     let wav = dir.join(key).join("audio.wav");
     if !wav.is_file() {
         return Ok(None);
@@ -184,7 +208,11 @@ pub fn cached(dir: &Path, key: &str, rate: u32) -> Result<Option<Vec<f32>>, Stri
     if w.rate != rate {
         return Err(format!("{}: {} Hz, not {rate}", wav.display(), w.rate));
     }
-    Ok(Some(w.mono().iter().map(|&v| v as f32).collect()))
+    let f = |c: &[f64]| c.iter().map(|&v| v as f32).collect::<Vec<f32>>();
+    Ok(Some(match w.channels.as_slice() {
+        [l, r] => (f(l), Some(f(r))),
+        _ => (f(&w.mono()), None),
+    }))
 }
 
 /// Keep a render in `dir` under `key` (with what it was made from).
@@ -192,7 +220,7 @@ pub fn store(
     dir: &Path,
     key: &str,
     quality: Quality,
-    audio: &[f32],
+    (audio, right): (&[f32], Option<&[f32]>),
     rate: u32,
     wall_s: f64,
 ) -> Result<(), String> {
@@ -203,8 +231,16 @@ pub fn store(
         std::thread::current().id()
     ));
     let _ = std::fs::remove_dir_all(&tmp);
-    let x: Vec<f64> = audio.iter().map(|&v| v as f64).collect();
-    crate::audio::write_wav(&tmp.join("audio.wav"), &x, rate)?;
+    match right {
+        Some(r) => {
+            let frames: Vec<[f32; 2]> = audio.iter().zip(r).map(|(&a, &b)| [a, b]).collect();
+            crate::audio::write_wav_stereo(&tmp.join("audio.wav"), &frames, rate)?;
+        }
+        None => {
+            let x: Vec<f64> = audio.iter().map(|&v| v as f64).collect();
+            crate::audio::write_wav(&tmp.join("audio.wav"), &x, rate)?;
+        }
+    }
     let meta = json!({
         "key": key,
         "quality": quality.name(),
@@ -236,6 +272,8 @@ pub fn store(
 pub struct Done {
     pub key: String,
     pub audio: Arc<Vec<f32>>,
+    /// A stereo device's right channel (`audio` its left).
+    pub right: Option<Arc<Vec<f32>>>,
     pub cached: bool,
 }
 
@@ -267,10 +305,11 @@ impl Job {
             crate::print::lower_priority();
             let prep = Prepared::load(&config_dir, &perf, quality)?;
             let key = prep.key(&perf)?;
-            if let Some(audio) = cached(&cache, &key, perf.rate)? {
+            if let Some((audio, right)) = cached(&cache, &key, perf.rate)? {
                 return Ok(Done {
                     key,
                     audio: Arc::new(audio),
+                    right: right.map(Arc::new),
                     cached: true,
                 });
             }
@@ -278,7 +317,7 @@ impl Job {
                 return Err(NOT_RENDERED.into());
             }
             let t0 = std::time::Instant::now();
-            let audio = render(
+            let (audio, right) = render(
                 &prep,
                 &perf,
                 |f| pr.store(f.to_bits(), Ordering::Relaxed),
@@ -288,13 +327,14 @@ impl Job {
                 &cache,
                 &key,
                 quality,
-                &audio,
+                (&audio, right.as_deref()),
                 perf.rate,
                 t0.elapsed().as_secs_f64(),
             )?;
             Ok(Done {
                 key,
                 audio: Arc::new(audio),
+                right: right.map(Arc::new),
                 cached: false,
             })
         });
@@ -434,7 +474,9 @@ mod tests {
         let text = serde_json::to_string(&perf.to_json()).unwrap();
         let perf = Performance::from_json(&serde_json::from_str(&text).unwrap()).unwrap();
         let prep = Prepared::load(&config(), &perf, d.quality).unwrap();
-        let replay = render(&prep, &perf, |_| {}, &AtomicBool::new(false)).unwrap();
+        let replay = render(&prep, &perf, |_| {}, &AtomicBool::new(false))
+            .unwrap()
+            .0;
         assert_eq!(replay.len(), heard.len());
         let first = replay
             .iter()
@@ -448,7 +490,9 @@ mod tests {
         let mut notes = perf.notes();
         notes[0].note += 2;
         let edited = perf.edited(&notes, None);
-        let y = render(&prep, &edited, |_| {}, &AtomicBool::new(false)).unwrap();
+        let y = render(&prep, &edited, |_| {}, &AtomicBool::new(false))
+            .unwrap()
+            .0;
         assert_eq!(y.len(), heard.len());
         assert!(y.iter().zip(&heard).any(|(a, b)| a != b));
     }
@@ -483,7 +527,9 @@ mod tests {
         let prep = Prepared::load(&config(), &perf, Quality::Production).unwrap();
         assert_eq!(prep.settings.host(), 96_000);
         let t0 = std::time::Instant::now();
-        let y = render(&prep, &perf, |_| {}, &AtomicBool::new(false)).unwrap();
+        let y = render(&prep, &perf, |_| {}, &AtomicBool::new(false))
+            .unwrap()
+            .0;
         eprintln!("production: {:.1} s for 0.4 s", t0.elapsed().as_secs_f64());
         assert_eq!(y.len(), 19_200);
         let level = |a: usize, b: usize| {
@@ -495,7 +541,9 @@ mod tests {
         );
         // The draft of it is close, not equal.
         let dprep = Prepared::load(&config(), &perf, Quality::Draft1x).unwrap();
-        let d = render(&dprep, &perf, |_| {}, &AtomicBool::new(false)).unwrap();
+        let d = render(&dprep, &perf, |_| {}, &AtomicBool::new(false))
+            .unwrap()
+            .0;
         assert_eq!(d.len(), y.len());
         assert_ne!(prep.key(&perf).unwrap(), dprep.key(&perf).unwrap());
     }

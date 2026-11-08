@@ -101,6 +101,9 @@ pub struct RoomView {
     /// The room presets (config/rooms/), and the files that didn't read.
     presets: Vec<RoomPreset>,
     preset_errors: Vec<String>,
+    /// The session's stereo tracks (id -> the device of the take its lane starts with): their
+    /// sources are speaker pairs (docs/STEREO_PLAN.md ST5).
+    stereo_tracks: std::collections::HashMap<String, String>,
 }
 
 const SOURCE_COLOR: Color32 = theme::ACCENT;
@@ -130,6 +133,7 @@ impl RoomView {
             size: [7.0, 5.5],
             presets,
             preset_errors,
+            stereo_tracks: Default::default(),
         }
     }
 
@@ -382,6 +386,21 @@ impl RoomView {
             .filter(|t| t.lane_span().is_some())
             .map(|t| (t.id.clone(), t.name.clone()))
             .collect();
+        self.stereo_tracks = sv
+            .session()
+            .tracks
+            .iter()
+            .filter(|t| t.is_stereo())
+            .map(|t| {
+                let device = t
+                    .clips
+                    .iter()
+                    .filter_map(|c| t.take_of(c))
+                    .find(|k| k.is_stereo(t.drafts))
+                    .map_or(String::new(), |k| k.device.clone());
+                (t.id.clone(), device)
+            })
+            .collect();
         let track_name = |id: &str| {
             tracks
                 .iter()
@@ -433,9 +452,11 @@ impl RoomView {
                     pos = centroid(&self.scene);
                 }
                 let name = unique(&self.scene, &name);
-                self.scene
-                    .sources
-                    .push(RoomSource::new(&name, &id, 90.0, pos));
+                let mut src = RoomSource::new(&name, &id, 90.0, pos);
+                if let Some(device) = self.stereo_tracks.get(&id) {
+                    src.spacing_m = room::default_spacing_m(device);
+                }
+                self.scene.sources.push(src);
                 self.sel = Some(Sel::Source(self.scene.sources.len() - 1));
             }
         });
@@ -847,7 +868,47 @@ impl RoomView {
                          with the cone; small against the wavelength every source is omni",
                     );
             });
-            if s.directional() {
+            let stereo = self.stereo_tracks.get(&s.track);
+            if let Some(device) = stereo {
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut s.as_mono, "as one point").on_hover_text(
+                        "The stereo track placed as one source (its mid), to compare with its \
+                         two speakers",
+                    );
+                    if !s.as_mono {
+                        ui.label("speakers");
+                        ui.add(
+                            egui::DragValue::new(&mut s.spacing_m)
+                                .range(0.0..=20.0)
+                                .speed(0.01)
+                                .max_decimals(2)
+                                .suffix(" m apart"),
+                        )
+                        .on_hover_text(
+                            match room::STEREO_SPACINGS.iter().find(|(d, _, _)| d == device) {
+                                Some((_, m, src)) => {
+                                    format!(
+                                        "Its left and right speakers' spacing; the {device}'s \
+                                         {m} m is {src}"
+                                    )
+                                }
+                                None => "Its left and right speakers' spacing (no figure for its \
+                                     device: two monitors on a desk)"
+                                    .to_string(),
+                            },
+                        );
+                        if room::STEREO_SPACINGS.iter().any(|(d, _, _)| d == device)
+                            && ui
+                                .small_button("↺")
+                                .on_hover_text("Back to the device's own spacing")
+                                .clicked()
+                        {
+                            s.spacing_m = room::default_spacing_m(device);
+                        }
+                    }
+                });
+            }
+            if s.directional() || (stereo.is_some() && !s.as_mono) {
                 ui.horizontal(|ui| {
                     ui.label("faces");
                     ui.add(
@@ -1149,8 +1210,12 @@ impl RoomView {
                 if t.mute {
                     return None;
                 }
-                let (_, audio, _) = t.playing(session.rate)?;
-                let r = room::sounding_rms(&audio, session.rate);
+                // A stereo track: its louder channel (the pair's level, varimu/rooms/scene.py).
+                let ((_, audio, right), _) = t.playing_lr(session.rate)?;
+                let mut r = room::sounding_rms(&audio, session.rate);
+                if let Some(right) = right {
+                    r = r.max(room::sounding_rms(&right, session.rate));
+                }
                 (r > 0.0).then(|| 20.0 * r.log10() + t.volume_db)
             })
             .collect();
@@ -1266,22 +1331,50 @@ impl RoomView {
                     s.name
                 ));
             }
-            let (position, audio, _) = track
-                .playing(rate)
+            let ((position, audio, right), _) = track
+                .playing_lr(rate)
                 .ok_or(format!("{}: its track has no take", s.name))?;
-            takes.push((s.name.clone(), position, audio.clone()));
+            // A stereo track: a pair of speakers (its two channels), or its mid at one point.
+            let (audio, right) = match right {
+                Some(r) if s.as_mono => (
+                    Arc::new(
+                        audio
+                            .iter()
+                            .zip(r.iter())
+                            .map(|(a, b)| 0.5 * (a + b))
+                            .collect(),
+                    ),
+                    None,
+                ),
+                r => (audio, r),
+            };
+            takes.push((s.name.clone(), position, audio, right));
         }
         let start = takes.iter().map(|t| t.1).min().unwrap_or(0);
         let mut clips = BTreeMap::new();
-        for (name, pos, audio) in &takes {
+        let mut rights = BTreeMap::new();
+        for (name, pos, audio, right) in &takes {
             let lead = (pos - start).max(0) as usize;
-            let mut x = vec![0.0f64; lead];
-            x.extend(audio.iter().map(|&v| v as f64));
-            let path = dir.join("sources").join(format!("{}.wav", safe(name)));
-            audio::write_wav(&path, &x, rate)?;
-            clips.insert(name.clone(), path);
+            let write = |x: &[f32], suffix: &str| -> Result<PathBuf, String> {
+                let mut y = vec![0.0f64; lead];
+                y.extend(x.iter().map(|&v| v as f64));
+                let path = dir
+                    .join("sources")
+                    .join(format!("{}{suffix}.wav", safe(name)));
+                audio::write_wav(&path, &y, rate)?;
+                Ok(path)
+            };
+            match right {
+                Some(r) => {
+                    clips.insert(name.clone(), write(audio, ".L")?);
+                    rights.insert(name.clone(), write(r, ".R")?);
+                }
+                None => {
+                    clips.insert(name.clone(), write(audio, "")?);
+                }
+            }
         }
-        let scene_json = self.scene.render_json(&clips);
+        let scene_json = self.scene.render_json_lr(&clips, &rights);
         let scene_path = dir.join("scene.json");
         std::fs::write(
             &scene_path,
@@ -1766,6 +1859,26 @@ impl RoomView {
         for (i, s) in self.scene.sources.iter().enumerate() {
             let c = to_s(s.pos[0], s.pos[1]);
             let on = self.sel == Some(Sel::Source(i));
+            // A stereo track's speakers, left and right of its centre (ST5).
+            if self.stereo_tracks.contains_key(&s.track) && !s.as_mono {
+                let [l, r] = s.sides();
+                let (pl, pr) = (to_s(l[0], l[1]), to_s(r[0], r[1]));
+                painter.line_segment([pl, pr], Stroke::new(1.5, SOURCE_COLOR.gamma_multiply(0.6)));
+                for (p, t) in [(pl, "L"), (pr, "R")] {
+                    painter.rect_filled(
+                        egui::Rect::from_center_size(p, Vec2::splat(12.0)),
+                        2.0,
+                        SOURCE_COLOR.gamma_multiply(0.85),
+                    );
+                    painter.text(
+                        p,
+                        egui::Align2::CENTER_CENTER,
+                        t,
+                        egui::FontId::proportional(9.0),
+                        theme::BG,
+                    );
+                }
+            }
             if s.directional() {
                 // which way it faces: an arrow and a wedge toward its axis
                 let az = (s.azimuth_deg as f32).to_radians();

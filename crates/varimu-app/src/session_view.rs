@@ -230,6 +230,8 @@ struct PrintJob {
     signature: String,
     lane: String,
     start: i64,
+    /// Its lane is stereo: each insert printed dual-mono.
+    stereo: bool,
     job: Job,
     cancelled: bool,
     lookup: bool,
@@ -244,6 +246,17 @@ struct ProxyJob {
 
 /// An insert playing live (F3): which, what its input is (to see it change), and what
 /// was last sent to the player.
+/// What a live audition of an insert on a stereo track plays into its one instance
+/// (docs/STEREO_PLAN.md ST3: prints run both channels; live, one device fits).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Hear {
+    /// The left channel, up the middle: exactly what its print gets.
+    Left,
+    Right,
+    /// (L + R) / 2: exactly neither (a level-dependent device's print will differ).
+    Mid,
+}
+
 struct Audition {
     track: usize,
     slot: usize,
@@ -259,6 +272,8 @@ struct Bake {
     track: usize,
     /// Where its lane started, and the clips it was made from.
     start: i64,
+    /// Its lane is stereo: the render is too (each insert dual-mono).
+    stereo: bool,
     clips: Vec<Clip>,
     slots: Vec<Slot>,
     /// At production, else a draft: each insert at its device's play quality.
@@ -295,6 +310,9 @@ pub struct SessionView {
     time_edit: Option<bool>,
     /// The tracks' height (px; Ctrl+wheel over the strips), the keys overlay shown.
     track_h: f32,
+    /// What a stereo track's audition plays (ST3), and the last mid made for one.
+    hear: Hear,
+    mid_cache: std::cell::RefCell<Option<(String, Arc<Vec<f32>>)>>,
     show_keys: bool,
     /// Where play last stopped (Shift+Space plays from there).
     stopped_at: Option<i64>,
@@ -576,6 +594,8 @@ impl SessionView {
             relocate: false,
             time_edit: None,
             track_h: TRACK_H,
+            hear: Hear::Left,
+            mid_cache: std::cell::RefCell::new(None),
             show_keys: false,
             stopped_at: None,
             lanes_w: 800.0,
@@ -690,7 +710,8 @@ impl SessionView {
             t.midi = false;
             self.session.tracks.push(t);
             let i = self.session.tracks.len() - 1;
-            self.session.add_rendered_take(i, samples, position, from)?;
+            self.session
+                .add_rendered_take(i, samples, None, position, from)?;
         }
         self.save();
         Ok(())
@@ -1441,19 +1462,47 @@ impl SessionView {
     /// that changes when it does.
     fn audition_input(&self, t: usize, k: usize) -> Option<(Arc<Vec<f32>>, i64, String)> {
         let track = self.session.tracks.get(t)?;
-        let (start, lane) = track.lane()?;
+        let (start, lane, lane_r) = track.lane_lr()?;
         let sig = track.lane_signature();
         let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
         let printed = track
             .printed
             .as_ref()
             .filter(|p| p.lane == sig && stage > 0 && p.stages.len() >= stage);
-        let audio = match printed {
-            Some(p) => p.stages[stage - 1].clone(),
-            None => lane,
+        let (audio, right) = match printed {
+            Some(p) => (
+                p.stages[stage - 1].clone(),
+                p.stages_right.get(stage - 1).cloned(),
+            ),
+            None => (lane, lane_r),
+        };
+        // A stereo input plays one instance (docs/STEREO_PLAN.md ST3): the channel picked,
+        // or their mid (made once per input).
+        let (audio, hear) = match (right, self.hear) {
+            (None, _) | (Some(_), Hear::Left) => (audio, ""),
+            (Some(r), Hear::Right) => (r, "R"),
+            (Some(r), Hear::Mid) => {
+                let id = format!("{:p}|{:p}", Arc::as_ptr(&audio), Arc::as_ptr(&r));
+                let mut cache = self.mid_cache.borrow_mut();
+                let mid = match cache.as_ref() {
+                    Some((i, m)) if *i == id => m.clone(),
+                    _ => {
+                        let m: Arc<Vec<f32>> = Arc::new(
+                            audio
+                                .iter()
+                                .zip(r.iter())
+                                .map(|(a, b)| 0.5 * (a + b))
+                                .collect(),
+                        );
+                        *cache = Some((id, m.clone()));
+                        m
+                    }
+                };
+                (mid, "M")
+            }
         };
         let key = format!(
-            "{}|{}|{}|{}|{:p}|{}",
+            "{}|{}|{}|{}|{:p}|{}|{hear}",
             sig,
             stage,
             start,
@@ -1678,13 +1727,30 @@ impl SessionView {
                     let Some(audio) = prints.last().map(|p| p.audio.clone()) else {
                         continue;
                     };
+                    // A stereo lane printed dual-mono: each insert's right channel too (a
+                    // right equal to the left printed once: the left's).
+                    let stereo = j.stereo;
+                    let right_of = |p: &varimu_app::print::Print| {
+                        p.right.clone().unwrap_or_else(|| p.audio.clone())
+                    };
+                    let right = stereo.then(|| prints.last().map(right_of)).flatten();
                     let printed = Printed {
                         signature: j.signature.clone(),
                         lane: j.lane.clone(),
                         start: j.start,
-                        overview: Arc::new(Overview::of(&audio, OVERVIEW_BIN)),
+                        overview: Arc::new(Overview::of_lr(
+                            &audio,
+                            right.as_deref().map(Vec::as_slice),
+                            OVERVIEW_BIN,
+                        )),
                         audio,
+                        right,
                         stages: prints.iter().map(|p| p.audio.clone()).collect(),
+                        stages_right: if stereo {
+                            prints.iter().map(right_of).collect()
+                        } else {
+                            Vec::new()
+                        },
                     };
                     for i in 0..self.session.tracks.len() {
                         if self.session.chain_signature(i).as_deref() == Some(j.signature.as_str())
@@ -1735,7 +1801,8 @@ impl SessionView {
             let cache = self.session.dir.join("prints");
             for ti in 0..self.session.tracks.len() {
                 let t = &self.session.tracks[ti];
-                let (Some(sig), Some((start, lane))) = (self.session.chain_signature(ti), t.lane())
+                let (Some(sig), Some((start, lane, lane_r))) =
+                    (self.session.chain_signature(ti), t.lane_lr())
                 else {
                     continue;
                 };
@@ -1770,15 +1837,25 @@ impl SessionView {
                 }
                 let slots: Vec<Slot> = t.inserts.iter().filter(|s| !s.bypass).cloned().collect();
                 let input = lane;
+                let stereo = lane_r.is_some();
                 let sides = self.session.sidechains(ti);
                 let job = if lookup {
-                    Job::lookup(config.clone(), slots, sides, input, rate, cache.clone())
+                    Job::lookup(
+                        config.clone(),
+                        slots,
+                        sides,
+                        input,
+                        lane_r,
+                        rate,
+                        cache.clone(),
+                    )
                 } else {
                     Job::spawn(
                         config.clone(),
                         slots,
                         sides,
                         input,
+                        lane_r,
                         rate,
                         Some(cache.clone()),
                     )
@@ -1794,6 +1871,7 @@ impl SessionView {
                     signature: sig,
                     lane,
                     start,
+                    stereo,
                     cancelled: false,
                     lookup,
                 });
@@ -2193,13 +2271,25 @@ impl SessionView {
         s.label(RichText::new("SENDS —").small().color(theme::FAINT))
             .on_hover_text("Sends come with docs/SESSION_FX_PLAN.md F4");
         let t = &mut self.session.tracks[i];
+        let stereo = t.is_stereo();
         changed |=
             crate::mixer::pan_knob(&mut s, &mut t.pan, 30.0, egui::Id::new(("mixer_pan", i)));
+        // A stereo track's knob is a balance (each side turned down past the centre).
+        let label = crate::mixer::pan_label(t.pan);
         s.label(
-            RichText::new(crate::mixer::pan_label(t.pan))
-                .small()
-                .color(theme::MUTED),
-        );
+            RichText::new(if stereo {
+                format!("BAL {label}")
+            } else {
+                label
+            })
+            .small()
+            .color(theme::MUTED),
+        )
+        .on_hover_text(if stereo {
+            "A stereo track: the knob is a balance (the other side turns down)"
+        } else {
+            "Pan"
+        });
         let used = s.min_rect().height();
         let h = (height - used - 60.0).max(60.0);
         let meter = self.meters.tracks.get(i).cloned().unwrap_or_default();
@@ -2327,6 +2417,7 @@ impl SessionView {
             (Some(_), Some(s)) => s.clone(),
             _ => "not playing live".to_string(),
         };
+        let stereo = self.session.tracks[t].is_stereo();
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(format!("{track_name} · {label}"))
@@ -2336,6 +2427,41 @@ impl SessionView {
             ui.label(RichText::new(glyph).color(colour))
                 .on_hover_text(&state);
             ui.label(RichText::new(&state).small().color(theme::MUTED));
+            if stereo {
+                ui.add_space(12.0);
+                ui.label(RichText::new("hear").small().color(theme::MUTED))
+                    .on_hover_text(
+                        "A stereo track prints each channel through its own copy of the \
+                         device with the same knobs. Live, one copy plays: the channel you \
+                         pick, up the middle.",
+                    );
+                for (h, name, tip) in [
+                    (
+                        Hear::Left,
+                        "L",
+                        "The left channel: exactly what its print gets",
+                    ),
+                    (
+                        Hear::Right,
+                        "R",
+                        "The right channel: exactly what its print gets",
+                    ),
+                    (
+                        Hear::Mid,
+                        "mid",
+                        "(L + R) / 2: near the whole for an EQ; a compressor or anything that \
+                         saturates prints differently (each side has its own level)",
+                    ),
+                ] {
+                    if ui
+                        .selectable_label(self.hear == h, RichText::new(name).small())
+                        .on_hover_text(tip)
+                        .clicked()
+                    {
+                        self.hear = h;
+                    }
+                }
+            }
             ui.add_space(12.0);
             ui.label(RichText::new(&live_line).small().color(theme::ACCENT))
                 .on_hover_text(
@@ -2783,10 +2909,11 @@ impl SessionView {
         let Some(track) = self.session.tracks.get(t) else {
             return;
         };
-        let Some((start, lane)) = track.lane() else {
+        let Some((start, lane, lane_r)) = track.lane_lr() else {
             self.error = Some("the track has nothing in its lane to render".into());
             return;
         };
+        let stereo = lane_r.is_some();
         let slots: Vec<Slot> = track
             .inserts
             .iter()
@@ -2808,12 +2935,14 @@ impl SessionView {
             slots.clone(),
             self.session.sidechains(t),
             lane,
+            lane_r,
             self.session.rate,
             Some(self.session.dir.join("prints")),
         );
         self.bake = Some(Bake {
             track: t,
             start,
+            stereo,
             clips: track.clips.clone(),
             slots,
             production,
@@ -2829,9 +2958,13 @@ impl SessionView {
             return;
         }
         let b = self.bake.take().expect("a render");
-        let audio = match b.job.join() {
+        let (audio, right) = match b.job.join() {
             Some(Ok(prints)) => match prints.last() {
-                Some(p) => (*p.audio).clone(),
+                Some(p) => (
+                    (*p.audio).clone(),
+                    b.stereo
+                        .then(|| (*p.right.clone().unwrap_or_else(|| p.audio.clone())).clone()),
+                ),
                 None => return,
             },
             Some(Err(e)) => {
@@ -2867,7 +3000,10 @@ impl SessionView {
             "code": circuitsim::SOURCE_HASH,
         });
         self.saved = true;
-        match self.session.add_rendered_take(b.track, audio, pos, from) {
+        match self
+            .session
+            .add_rendered_take(b.track, audio, right, pos, from)
+        {
             Ok(_) => {
                 // The lane is the render now (its clips baked in; Undo brings them back).
                 let t = &mut self.session.tracks[b.track];
@@ -5167,7 +5303,10 @@ impl SessionView {
         let n = takes.len() + tracks.len();
         for (i, samples, from) in takes {
             self.saved = true;
-            if let Err(e) = self.session.add_rendered_take(i, samples, position, from) {
+            if let Err(e) = self
+                .session
+                .add_rendered_take(i, samples, None, position, from)
+            {
                 self.error = Some(format!("the import failed: {e}"));
                 return;
             }
@@ -5477,9 +5616,9 @@ impl SessionView {
                     .renders
                     .iter()
                     .find(|r| r.rev == rev && r.quality == Quality::Production)?;
-                Some((t, k.position, r.audio.clone()))
+                Some((t, k.position, r.audio.clone(), r.right.clone()))
             });
-        let Some((t, position, audio)) = found else {
+        let Some((t, position, audio, right)) = found else {
             self.error = Some(format!("{id}: its production render isn't there to bounce"));
             return;
         };
@@ -5491,10 +5630,13 @@ impl SessionView {
             "code": circuitsim::SOURCE_HASH,
         });
         self.saved = true;
-        match self
-            .session
-            .add_rendered_take(t, (*audio).clone(), position, from)
-        {
+        match self.session.add_rendered_take(
+            t,
+            (*audio).clone(),
+            right.map(|r| (*r).clone()),
+            position,
+            from,
+        ) {
             Ok(new) => {
                 self.session.tracks[t].bounce_clips(id, &new);
                 self.save();
@@ -5519,8 +5661,13 @@ impl SessionView {
             let j = self.take_jobs.remove(i);
             match j.job.join() {
                 Some(Ok(done)) => {
-                    self.session
-                        .attach_render(&j.id, j.rev, j.quality, &done.audio);
+                    self.session.attach_render(
+                        &j.id,
+                        j.rev,
+                        j.quality,
+                        &done.audio,
+                        done.right.as_deref().map(Vec::as_slice),
+                    );
                     if j.quality == Quality::Production
                         && self.bounces.remove(&(j.id.clone(), j.rev))
                     {
@@ -6277,10 +6424,11 @@ fn take_line(k: &Take, rate: u32) -> String {
         )
     };
     format!(
-        "{} · {} · {:.1} s{placed}",
+        "{} · {} · {:.1} s{}{placed}",
         k.id,
         if k.device.is_empty() { "?" } else { &k.device },
         k.len() as f64 / rate as f64,
+        if k.is_stereo(false) { " · stereo" } else { "" },
     )
 }
 
@@ -6753,7 +6901,7 @@ mod tests {
         let ctx = egui::Context::default();
         let tone: Vec<f32> = (0..24_000).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
         v.session
-            .add_rendered_take(0, tone, 0, json!({"device": "test"}))
+            .add_rendered_take(0, tone, None, 0, json!({"device": "test"}))
             .unwrap();
         v.session.tracks[0].inserts.push(Slot::new("pultec_eqp1a"));
         // A chain added: a lookup in the cache, no print.
@@ -6829,6 +6977,7 @@ mod tests {
             start: 0,
             latency: 0,
             samples: vec![0.0; 48_000],
+            right: None,
             performance: Some((Arc::new(perf), 0)),
         };
         v.session

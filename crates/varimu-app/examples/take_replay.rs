@@ -240,7 +240,7 @@ fn run() -> Result<(), String> {
     )?;
     let prep = Prepared::load(&config, &perf, perf.quality)?;
     let t0 = Instant::now();
-    let replay = render(&prep, &perf, |_| {}, &AtomicBool::new(false))?;
+    let replay = render(&prep, &perf, |_| {}, &AtomicBool::new(false))?.0;
     let wall = t0.elapsed().as_secs_f64();
     let replay = &replay[from as usize..];
     let n = replay.len().min(rec.samples.len());
@@ -270,7 +270,7 @@ fn run() -> Result<(), String> {
     if production {
         let prep = Prepared::load(&config, &perf, Quality::Production)?;
         let t0 = Instant::now();
-        let y = render(&prep, &perf, |_| {}, &AtomicBool::new(false))?;
+        let y = render(&prep, &perf, |_| {}, &AtomicBool::new(false))?.0;
         let wall = t0.elapsed().as_secs_f64();
         let y = &y[from as usize..];
         let prms =

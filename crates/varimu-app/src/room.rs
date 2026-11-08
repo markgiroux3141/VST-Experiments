@@ -444,6 +444,32 @@ pub struct RoomSource {
     /// Where it faces: counterclockwise from +x, and up.
     pub azimuth_deg: f64,
     pub elevation_deg: f64,
+    /// A stereo track's two speakers apart (m; docs/STEREO_PLAN.md ST4-ST5): its left at the
+    /// facing direction's left as its player sees it, its right at the other side.
+    pub spacing_m: f64,
+    /// A stereo track placed as one point anyway (its mid), to compare.
+    pub as_mono: bool,
+}
+
+/// The spacing a stereo device's speakers have (device id, metres, source): the default for
+/// a source placed from its track (others: [`DEFAULT_SPACING_M`]).
+pub const STEREO_SPACINGS: &[(&str, f64, &str)] = &[(
+    "rhodes_suitcase",
+    0.6,
+    "provisional: model knowledge (two 12 in drivers across the 48 in speaker section, \
+     RHODES_PLAN.md 'The Suitcase'; to be measured from a dimensioned photo or the manual)",
+)];
+
+/// A stereo source's spacing when its device has none in [`STEREO_SPACINGS`]: two monitors
+/// on a desk (provisional).
+pub const DEFAULT_SPACING_M: f64 = 1.5;
+
+/// A device's speakers' spacing ([`STEREO_SPACINGS`], else [`DEFAULT_SPACING_M`]).
+pub fn default_spacing_m(device: &str) -> f64 {
+    STEREO_SPACINGS
+        .iter()
+        .find(|(d, _, _)| *d == device)
+        .map_or(DEFAULT_SPACING_M, |e| e.1)
 }
 
 /// A source's patterns (id, label): a cap on a sphere (varimu/rooms/directivity.py PRESETS).
@@ -555,11 +581,29 @@ impl RoomSource {
             directivity: "omni".to_string(),
             azimuth_deg: 0.0,
             elevation_deg: 0.0,
+            spacing_m: DEFAULT_SPACING_M,
+            as_mono: false,
         }
     }
 
     pub fn directional(&self) -> bool {
         self.directivity != "omni"
+    }
+
+    /// A stereo source's two speakers on the plan, (left, right): across its facing
+    /// direction, `spacing_m` apart about its position (varimu/rooms/scene.py's expansion).
+    pub fn sides(&self) -> [[f64; 3]; 2] {
+        let a = self.azimuth_deg.to_radians();
+        let left = [-a.sin(), a.cos()];
+        let h = 0.5 * self.spacing_m;
+        let at = |s: f64| {
+            [
+                self.pos[0] + s * h * left[0],
+                self.pos[1] + s * h * left[1],
+                self.pos[2],
+            ]
+        };
+        [at(1.0), at(-1.0)]
     }
 
     /// Face a floor-plan position.
@@ -1098,7 +1142,8 @@ impl Scene {
             "sources": self.sources.iter().map(|s| json!({
                 "name": s.name, "track": s.track, "spl_db": s.spl_db, "position_m": s.pos,
                 "directivity": s.directivity, "azimuth_deg": s.azimuth_deg,
-                "elevation_deg": s.elevation_deg,
+                "elevation_deg": s.elevation_deg, "spacing_m": s.spacing_m,
+                "as_mono": s.as_mono,
             })).collect::<Vec<_>>(),
             "mics": self.mics.iter().map(|m| json!({
                 "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
@@ -1174,6 +1219,8 @@ impl Scene {
                             directivity: st(s, "directivity", "omni"),
                             azimuth_deg: f(s, "azimuth_deg", 0.0),
                             elevation_deg: f(s, "elevation_deg", 0.0),
+                            spacing_m: f(s, "spacing_m", DEFAULT_SPACING_M),
+                            as_mono: s["as_mono"].as_bool().unwrap_or(false),
                         })
                         .collect()
                 })
@@ -1206,6 +1253,16 @@ impl Scene {
 
     /// The scene in varimu/rooms/scene.py's format, each source's clip from `clips`.
     pub fn render_json(&self, clips: &BTreeMap<String, PathBuf>) -> Value {
+        self.render_json_lr(clips, &BTreeMap::new())
+    }
+
+    /// [`Scene::render_json`] with stereo sources' right channels (`rights`, by source name):
+    /// each such source a stereo pair (docs/STEREO_PLAN.md ST4: varimu/rooms/scene.py).
+    pub fn render_json_lr(
+        &self,
+        clips: &BTreeMap<String, PathBuf>,
+        rights: &BTreeMap<String, PathBuf>,
+    ) -> Value {
         let mut materials =
             json!({"walls": self.walls, "floor": self.floor, "ceiling": self.ceiling});
         let faces = self.faces_in_room();
@@ -1231,14 +1288,21 @@ impl Scene {
         json!({
             "name": self.name,
             "room": room,
-            "sources": self.sources.iter().map(|s| json!({
-                "name": s.name,
-                "clip": clips.get(&s.name).map(|p| p.to_string_lossy().to_string()),
-                "spl_db": s.spl_db,
-                "position_m": s.pos,
-                "directivity": s.directivity,
-                "aim": {"azimuth_deg": s.azimuth_deg, "elevation_deg": s.elevation_deg},
-            })).collect::<Vec<_>>(),
+            "sources": self.sources.iter().map(|s| {
+                let mut v = json!({
+                    "name": s.name,
+                    "clip": clips.get(&s.name).map(|p| p.to_string_lossy().to_string()),
+                    "spl_db": s.spl_db,
+                    "position_m": s.pos,
+                    "directivity": s.directivity,
+                    "aim": {"azimuth_deg": s.azimuth_deg, "elevation_deg": s.elevation_deg},
+                });
+                if let Some(r) = rights.get(&s.name) {
+                    v["clip_r"] = json!(r.to_string_lossy().to_string());
+                    v["stereo"] = json!({"spacing_m": s.spacing_m});
+                }
+                v
+            }).collect::<Vec<_>>(),
             "mics": self.mics.iter().map(|m| json!({
                 "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
                 "aim": {"azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg},
@@ -1782,6 +1846,40 @@ mod tests {
         let mut bad = scene();
         bad.plan = vec![[0.0, 0.0], [4.0, 4.0], [4.0, 0.0], [0.0, 4.0]];
         assert!(bad.problems().iter().any(|p| p.contains("cross")));
+    }
+
+    #[test]
+    fn a_stereo_source_is_a_pair_in_the_scene() {
+        // docs/STEREO_PLAN.md ST4-ST5: a right channel makes it a pair, its speakers across
+        // its facing direction, its left on the left as its player sees it.
+        let mut s = scene();
+        s.sources[0].azimuth_deg = 90.0; // facing +y: its left is -x
+        s.sources[0].spacing_m = 0.6;
+        let [l, r] = s.sources[0].sides();
+        let p = s.sources[0].pos;
+        assert!((l[0] - (p[0] - 0.3)).abs() < 1e-12 && (r[0] - (p[0] + 0.3)).abs() < 1e-12);
+        assert!((l[1] - p[1]).abs() < 1e-12 && l[2] == p[2]);
+        let clips = BTreeMap::from([("A".to_string(), PathBuf::from("a.L.wav"))]);
+        let rights = BTreeMap::from([("A".to_string(), PathBuf::from("a.R.wav"))]);
+        let v = s.render_json_lr(&clips, &rights);
+        let src = &v["sources"][0];
+        assert_eq!(
+            (src["clip"].as_str(), src["clip_r"].as_str()),
+            (Some("a.L.wav"), Some("a.R.wav"))
+        );
+        assert_eq!(src["stereo"]["spacing_m"], 0.6);
+        // mono: as before
+        let m = s.render_json(&clips);
+        assert!(m["sources"][0].get("clip_r").is_none() && m["sources"][0].get("stereo").is_none());
+        // kept in the session's scene
+        s.sources[0].as_mono = true;
+        let back = Scene::from_state(&s.state());
+        assert_eq!(
+            (back.sources[0].spacing_m, back.sources[0].as_mono),
+            (0.6, true)
+        );
+        assert_eq!(default_spacing_m("rhodes_suitcase"), 0.6);
+        assert_eq!(default_spacing_m("anything"), DEFAULT_SPACING_M);
     }
 
     #[test]

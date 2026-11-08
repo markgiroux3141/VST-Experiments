@@ -33,6 +33,18 @@ JSON):
                                      # bass_1x15, or {sphere_radius_m, cap_radius_m}
                                      # (varimu/rooms/directivity.py: a cap on a sphere)
         aim: {azimuth_deg: 0, elevation_deg: 0}   # where it faces (a directional source)
+      - name: rhodes                 # a stereo source (docs/STEREO_PLAN.md ST4): two
+        clip: rhodes.L.wav           # speakers fed its left and right channels
+        clip_r: rhodes.R.wav
+        spl_db: 88                   # the louder channel's sounding rms; the other keeps
+                                     # its level relative to it
+        position_m: [4.0, 2.5, 0.9]  # the pair's centre
+        aim: {azimuth_deg: 90}       # where the pair faces; its axis is across it
+        directivity: amp_1x12        # each side's, unless a side overrides it
+        stereo:
+          spacing_m: 0.6             # L at the facing direction's left (seen from behind
+                                     # the pair, as its player sees it), R at its right
+          sides: {L: {aim: {azimuth_deg: 100}}, R: {aim: {azimuth_deg: 80}}}  # optional
     mics:
       - name: spot A
         chain: u47_v76               # a circuit file with a capsule or cartridge: any
@@ -44,6 +56,11 @@ JSON):
     settings: {quality: production, ism_s: 0.08, seed: 0, tail_s: null,
                wave_crossover_hz: 500}   # the wave solver below 500 Hz (varimu.rooms.wave,
                                          # ROOM_LOOP_PLAN.md R10); absent or null: off
+
+A stereo source is expanded at load into two mono sources, `<name>.L` and `<name>.R`, each a
+source of its own from then on (responses, solos, prints): the room is linear, so a pair at
+zero spacing fed L and R is a mono source fed L + R. They share one gain, from the louder
+channel's sounding rms, so the instrument's own balance survives.
 
 The sources' clips are mono (any rate, resampled to the project's), each scaled to its
 SPL, so a source is the free-field sound pressure 1 m away (pascals). The SPL is its rms
@@ -106,6 +123,16 @@ class SourceSpec:
     directivity: object = None
     azimuth_deg: float = 0.0
     elevation_deg: float = 0.0
+    # a side of a stereo source: the pair's name and its other side's clip (their gain is
+    # set by the louder of the two)
+    pair: str | None = None
+    partner_clip: Path | None = None
+    # its place in the scene file's sources (both sides of a pair share it): the seed of its
+    # diffuse tail, so a pair's sides share one field and the sources after it keep theirs
+    seed_index: int = 0
+    # a pair's side: where it sits from the pair's centre (its tail's plane waves are the
+    # shared ones shifted by it, so the sides cohere as the diffuse field says)
+    tail_offset_m: np.ndarray | None = None
 
 
 @dataclass
@@ -182,20 +209,7 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
             from varimu.rooms.wave import poly_of
 
             room = poly_of(room, list(r["objects"]))
-    sources = [
-        SourceSpec(
-            s["name"],
-            _path(s["clip"]),
-            float(s["spl_db"]),
-            np.array(s["position_m"], float),
-            float(s.get("start_s", 0.0)),
-            None if s.get("seconds") is None else float(s["seconds"]),
-            s.get("directivity"),
-            float((s.get("aim") or {}).get("azimuth_deg", 0.0)),
-            float((s.get("aim") or {}).get("elevation_deg", 0.0)),
-        )
-        for s in d["sources"]
-    ]
+    sources = [side for i, s in enumerate(d["sources"]) for side in _source_specs(s, i)]
     from varimu.rooms.directivity import from_spec
 
     for s in sources:
@@ -230,6 +244,52 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
         str(r.get("source", "")),
         None if not st.get("wave_crossover_hz") else float(st["wave_crossover_hz"]),
     )
+
+
+def _source_specs(s: dict, index: int = 0) -> list[SourceSpec]:
+    """A scene file's source as its SourceSpecs: one, or a stereo source's two sides (the
+    module docstring)."""
+    aim = s.get("aim") or {}
+    az, el = float(aim.get("azimuth_deg", 0.0)), float(aim.get("elevation_deg", 0.0))
+    common = dict(
+        spl_db=float(s["spl_db"]),
+        start_s=float(s.get("start_s", 0.0)),
+        seconds=None if s.get("seconds") is None else float(s["seconds"]),
+    )
+    pos = np.array(s["position_m"], float)
+    st = s.get("stereo")
+    if not st:
+        return [SourceSpec(s["name"], _path(s["clip"]), position_m=pos,
+                           directivity=s.get("directivity"), azimuth_deg=az, elevation_deg=el,
+                           seed_index=index, **common)]  # fmt: skip
+    if not s.get("clip_r"):
+        raise ValueError(f"source {s['name']}: a stereo source needs clip_r")
+    spacing = float(st["spacing_m"])
+    if spacing < 0:
+        raise ValueError(f"source {s['name']}: spacing_m is negative")
+    a = np.radians(az)
+    left = np.array([-np.sin(a), np.cos(a), 0.0])  # the facing direction turned +90 degrees
+    clips = {"L": _path(s["clip"]), "R": _path(s["clip_r"])}
+    out = []
+    for side, sign in (("L", 1.0), ("R", -1.0)):
+        o = (st.get("sides") or {}).get(side) or {}
+        oa = o.get("aim") or {}
+        out.append(
+            SourceSpec(
+                f"{s['name']}.{side}",
+                clips[side],
+                position_m=pos + sign * spacing / 2 * left,
+                directivity=o.get("directivity", s.get("directivity")),
+                azimuth_deg=float(oa.get("azimuth_deg", az)),
+                elevation_deg=float(oa.get("elevation_deg", el)),
+                pair=s["name"],
+                partner_clip=clips["R" if side == "L" else "L"],
+                seed_index=index,
+                tail_offset_m=sign * spacing / 2 * left,
+                **common,
+            )
+        )
+    return out
 
 
 def _capsule_geometry(chain: str, over: dict) -> dict:
@@ -288,14 +348,19 @@ def source_signals(scene: Scene, fs: int) -> list[np.ndarray]:
     rms while it sounds (`sounding_rms`) is its SPL."""
     from varimu.sim.io import load_audio
 
-    out = []
-    for s in scene.sources:
-        x = load_audio(s.clip, fs)
+    def clip(path: Path, s: SourceSpec) -> np.ndarray:
+        x = load_audio(path, fs)
         x = x[int(s.start_s * fs) :]
         if s.seconds is not None:
             x = x[: int(s.seconds * fs)]
-        x = x - np.mean(x)
+        return x - np.mean(x)
+
+    out = []
+    for s in scene.sources:
+        x = clip(s.clip, s)
         rms = sounding_rms(x, fs)
+        if s.partner_clip is not None:  # a stereo pair: the louder side's level
+            rms = max(rms, sounding_rms(clip(s.partner_clip, s), fs))
         if rms == 0:
             raise ValueError(f"source {s.name}: its clip is silent")
         out.append(x * (P_REF * 10 ** (s.spl_db / 20) / rms))
@@ -370,7 +435,7 @@ def scene_responses(
                 log(f"capsule table {len(tables)}: {how}")
         kinds.append(tables[key].kind)
         mics.append(Mic(m.position_m, aim_vector(m.azimuth_deg, m.elevation_deg), tables[key]))
-    seeds = [scene.seed * 1000 + i for i in range(len(scene.sources))]
+    seeds = [scene.seed * 1000 + s.seed_index for s in scene.sources]
     from varimu.rooms.directivity import from_spec
 
     dirs = [from_spec(s.directivity) for s in scene.sources]
@@ -390,6 +455,11 @@ def scene_responses(
         ),
         "directivity": directivity if any(directivity) else None,
     }
+    if any(s.tail_offset_m is not None for s in scene.sources):  # (absent: keys as before)
+        kw["tail_offsets"] = [
+            [0.0, 0.0, 0.0] if s.tail_offset_m is None else s.tail_offset_m.tolist()
+            for s in scene.sources
+        ]
     return _cached_responses(scene, mics, fs, kw, log), kinds
 
 

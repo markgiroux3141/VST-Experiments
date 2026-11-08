@@ -953,3 +953,82 @@ def test_a_scene_names_a_preset_and_overrides_it():
     assert room.height_m == 3.6 and room.walls == "brick"
     with pytest.raises(ValueError, match="unknown room preset"):
         load_scene({**base, "room": {"preset": "nope"}})
+
+
+def test_a_stereo_source_is_two_speakers_with_one_gain(tmp_path):
+    """docs/STEREO_PLAN.md ST4: a stereo source expands into its two sides, placed across
+    its facing direction, sharing the louder channel's gain; at zero spacing each side's
+    responses are the mono source's (the room is linear)."""
+    import soundfile as sf
+
+    from varimu.rooms.scene import load_scene, scene_responses, sounding_rms, source_signals
+
+    rng = np.random.default_rng(1)
+    x = rng.standard_normal(9600).astype("<f4")
+    sf.write(tmp_path / "l.wav", x, FS, subtype="FLOAT")
+    sf.write(tmp_path / "r.wav", 0.5 * x, FS, subtype="FLOAT")
+    room = {"dims_m": [6, 5, 3], "materials": {"walls": "furnished_wall", "floor": "wood_floor",
+                                                "ceiling": "gypsum_on_studs"}}  # fmt: skip
+    mic = {"name": "m", "chain": "capsule_bk4134", "position_m": [3, 4, 1.5],
+           "aim": {"azimuth_deg": -90}}  # fmt: skip
+
+    def scene(spacing, stereo=True):
+        src = {"name": "rh", "clip": str(tmp_path / "l.wav"), "spl_db": 90,
+               "position_m": [3, 2, 1.5], "aim": {"azimuth_deg": 90}}  # fmt: skip
+        if stereo:
+            src |= {"clip_r": str(tmp_path / "r.wav"), "stereo": {"spacing_m": spacing,
+                    "sides": {"R": {"directivity": "amp_1x12"}}}}  # fmt: skip
+        return load_scene({"name": "s", "room": room, "sources": [src], "mics": [mic],
+                           "settings": {"ism_s": 0.02}})  # fmt: skip
+
+    s = scene(0.6)
+    assert [x.name for x in s.sources] == ["rh.L", "rh.R"]
+    # facing +y, so its left is -x (seen from behind it)
+    assert np.allclose(s.sources[0].position_m, [2.7, 2, 1.5])
+    assert np.allclose(s.sources[1].position_m, [3.3, 2, 1.5])
+    assert (s.sources[0].directivity, s.sources[1].directivity) == (None, "amp_1x12")
+    assert s.sources[0].pair == s.sources[1].pair == "rh"
+    # one gain: the louder (left) side at 90 dB SPL, the right 6 dB under it
+    left, right = source_signals(s, FS)
+    spl = 20 * np.log10(np.array([sounding_rms(left, FS), sounding_rms(right, FS)]) / 20e-6)
+    assert spl[0] == pytest.approx(90, abs=1e-6)
+    assert spl[1] == pytest.approx(90 + 20 * np.log10(0.5), abs=1e-6)
+    # zero spacing, the same pattern on both sides: each side is the mono source
+    z = scene(0.0)
+    z.sources[1].directivity = None
+    h2, _ = scene_responses(z, FS)
+    h1, _ = scene_responses(scene(0.0, stereo=False), FS)
+    assert np.array_equal(h2[0], h1[0]) and np.array_equal(h2[1], h1[0])
+
+
+def test_a_stereo_pairs_tails_cohere_as_the_diffuse_field_says(tmp_path):
+    """The two sides of a pair share their diffuse field, shifted to where each sits: their
+    tails at one mic cohere near 1 at low frequencies and fall away as sinc(k d) above."""
+    import soundfile as sf
+    from scipy.signal import coherence
+
+    from varimu.rooms.scene import load_scene, scene_responses
+
+    x = np.random.default_rng(2).standard_normal(4800).astype("<f4")
+    for side in "lr":
+        sf.write(tmp_path / f"{side}.wav", x, FS, subtype="FLOAT")
+    scene = load_scene({
+        "name": "s",
+        "room": {"dims_m": [7, 6, 3.2], "materials": {"walls": "furnished_wall",
+                 "floor": "wood_floor", "ceiling": "gypsum_on_studs"}},
+        "sources": [{"name": "rh", "clip": str(tmp_path / "l.wav"),
+                     "clip_r": str(tmp_path / "r.wav"), "spl_db": 90,
+                     "position_m": [3.5, 2.0, 1.2], "aim": {"azimuth_deg": 90},
+                     "stereo": {"spacing_m": 1.0}}],
+        "mics": [{"name": "m", "chain": "capsule_bk4134", "position_m": [3.5, 4.5, 1.5],
+                  "aim": {"azimuth_deg": -90}}],
+        "settings": {"ism_s": 0.02},
+    })  # fmt: skip
+    h, _ = scene_responses(scene, FS)
+    t0 = int(0.1 * FS)  # the tail, past the images
+    a, b = h[0, 0, 0, t0:], h[1, 0, 0, t0:]
+    f, coh = coherence(a, b, FS, nperseg=8192)
+    lo = coh[(f > 20) & (f < 60)].mean()
+    f, coh = coherence(a, b, FS, nperseg=512)  # many segments: the estimate's bias small
+    hi = coh[(f > 2000) & (f < 6000)].mean()
+    assert lo > 0.8 and hi < 0.15, (lo, hi)
