@@ -33,6 +33,7 @@ import numpy as np
 from varimu.circuit import netlist as nl
 from varimu.circuit.ir import model_to_dict
 from varimu.devices.bjt import Bjt
+from varimu.devices.contact import Contact
 from varimu.devices.core import DEMAGNETIZED, TESLA_PER_V, MagneticCore, core_model
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.jfet import Jfet
@@ -72,6 +73,10 @@ _OPTO_VLED = (-2.0, 0.0, 1.3, 1.45, 1.55, 1.7, 2.6)
 _OPTO_LK = (-3.0, 0.0, 5.0)
 _OPTO_U = (-0.5, 0.0, 1e-4, 0.05, 1.0, 4.0)
 _OPTO_VR = (-7.0, 0.0, 0.3, 12.0)
+# A contact's springs both ways (a few volts: closed, the currents stay finite-difference
+# sized); its control open, at both ends of the smoothstep, inside it and closed.
+_CONTACT_V = (-3.0, -0.5, 0.0, 0.4, 2.0)
+_CONTACT_C = (-1.0, 0.0, 0.1, 0.25, 0.5, 0.75, 0.9, 1.0, 2.0)
 # A thyratron from reverse anode volts through the arc's drop to its strike, the grid from
 # deep cutoff past its floating potential, the state from below its range (held) through
 # the pre-breakdown densities and the arc to above its range (never on the range's edges).
@@ -117,6 +122,8 @@ def _models() -> list:
         load_device("GZ34"),
         load_device("LAMP327@1"),
         load_device("VTL5C1@1"),
+        load_device("KEY_CONTACT@1"),
+        load_device("KEY_BREAK@1"),
         load_device("2D21@1"),
         load_device("884@1"),
         load_device("EF804S@1"),  # the e1 screen law (pentode.py)
@@ -175,6 +182,10 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
     elif isinstance(m, Optocoupler):
         grid = itertools.product(_OPTO_VLED, _OPTO_LK, _OPTO_U, _OPTO_VR)
         ports = [(vl + lk, lk, u, vr) for vl, lk, u, vr in grid]
+        currents = np.array([m.currents(p) for p in ports])
+    elif isinstance(m, Contact):
+        grid = itertools.product(_CONTACT_V, _CONTACT_V, _CONTACT_C)
+        ports = [(float(a), float(b), float(c)) for a, b, c in grid]
         currents = np.array([m.currents(p) for p in ports])
     elif isinstance(m, Thyratron):
         if m.mu_g2 is None:

@@ -1,0 +1,47 @@
+# The Hammond Novachord's power amplifier output transformer (SM2 Fig. 22, the Hammond organ
+# amplifier's: not printed). Provisional throughout: the 5E3's design (config/designs/ot_5e3.yaml)
+# scaled to four 2A3s push-pull parallel (RCA's fixed-bias column: 3,000 ohm plate to plate)
+# into the two 12-inch speakers in parallel (~4 ohm). Compiled and saved by `cargo run -p
+# varimu-components -- save config/designs/novachord_ot.yaml`.
+name: NOVACHORD_OT
+kind: transformer
+source: "provisional: model knowledge (the Hammond organ amplifier's output transformer: 3,000 ohm plate to plate, RCA 2A3 fixed-bias column, into ~4 ohm; construction scaled from the 5E3's design, nothing published)"
+core:
+  lamination: {value: EI-125, source: "provisional: model knowledge (a 30 W push-pull transformer: about EI-125)"}
+  material: {value: grain_oriented_si_steel, source: "provisional: model knowledge (silicon-steel EI laminations; the only silicon steel in config/magnetics.yaml, as the 5E3 circuit used it before; the era's non-oriented M-19 is an option)"}
+  stack_m: {value: 0.0381, source: "provisional: model knowledge (a 1.5 in stack)"}
+  stacking_factor: {value: 0.9, source: "web: McLyman, Transformer and Inductor Design Handbook 3rd ed. Table 3-1 (14 mil laminations interleaved 1x1: 0.90), https://coefs.charlotte.edu/mnoras/files/2013/03/Transformer-and-Inductor-Design-Handbook_Chapter_3.pdf"}
+  stacking: {value: interleaved, source: "provisional: model knowledge (push-pull output transformers, ungapped: E and I interleaved)"}
+  joint_gap_m: {value: 5.0e-05, source: "provisional: model knowledge (an interleaved stack's joint, the 5E3 fit's order)"}
+bobbin:
+  wall_m: {value: 0.001, source: "provisional: model knowledge (a paper or fibre tube, ~1 mm)"}
+  cheek_m: {value: 0.0008, source: "provisional: model knowledge (fibre flanges, ~0.8 mm)"}
+  margin_m: {value: 0.0015, source: "provisional: model knowledge (creepage margin each end, ~1.5 mm)"}
+  pitch_factor: {value: 1.1765, source: "web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)"}
+arrangement: {value: layer, source: "provisional: model knowledge (layer-wound primary halves and secondary, no interleaving: what the measured asymmetries imply, scripts/fit_ot_5e3.py)"}
+windings: [pa, pb, s]
+sections:
+  - winding: pa
+    turns: {value: 1300, source: "provisional: model knowledge (the primary halves sized for ~15 H per half on the core)"}
+    layers: {value: 8, source: "derived: turns / turns per layer (the traverse over the wire at the pitch factor)"}
+    wire: {value: 0.2 mm grade 1, source: "provisional: model knowledge (the 2A3s' ~40 mA a side)"}
+    enamel: {value: enamel, source: "provisional: model knowledge (heavy-build enamelled magnet wire)"}
+    interlayer: {thickness_m: {value: 1.3000e-04, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the outer half's resistance and the leakages (bounds 0.025-0.13 mm, 0.001-0.005 in kraft)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft interlayer paper)"}}
+  - insulation: {thickness_m: {value: 2.0000e-03, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): between the primary halves (bounds 0.05-2.0 mm)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft wraps between windings)"}}
+  - winding: pb
+    turns: {value: 1300, source: "provisional: model knowledge (as pa)"}
+    layers: {value: 8, source: "derived: turns / turns per layer (the traverse over the wire at the pitch factor)"}
+    wire: {value: 0.2 mm grade 1, source: "provisional: model knowledge (the 2A3s' ~40 mA a side)"}
+    enamel: {value: enamel, source: "provisional: model knowledge (heavy-build enamelled magnet wire)"}
+    interlayer: {thickness_m: {value: 1.3000e-04, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): the outer half's resistance and the leakages (bounds 0.025-0.13 mm, 0.001-0.005 in kraft)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft interlayer paper)"}}
+  - insulation: {thickness_m: {value: 1.7373e-03, source: "derived: scripts/fit_ot_5e3.py to P-TGO-002 (web: https://www.amplifiedparts.com/sites/default/files/associated_files/p-tgo-002.pdf): between the primary and the secondary (bounds 0.05-2.0 mm)"}, dielectric: {value: kraft_dry, source: "provisional: model knowledge (kraft wraps between windings)"}}
+  - winding: s
+    turns: {value: 95, source: "derived: 3,000 ohm plate to plate : ~4 ohm (two 8 ohm voice coils in parallel), 2 x 1300 / sqrt(3000 / 4)"}
+    layers: {value: 4, source: "derived: turns / turns per layer (the traverse over the wire at the pitch factor)"}
+    wire: {value: AWG 18 heavy, source: "provisional: model knowledge (~2-3 A into 4 ohm; the table's largest)"}
+    enamel: {value: enamel, source: "provisional: model knowledge (heavy-build enamelled magnet wire)"}
+leakage_method: field
+rating:
+  windings: [pa, pb]
+  v_rms: {value: 212.1, source: "derived: 15 W into 3,000 ohm (RCA 2A3 push-pull, fixed bias), sqrt(P Z)"}
+  f_hz: {value: 40.0, source: "provisional: model knowledge (an organ amplifier rated near its lowest notes)"}

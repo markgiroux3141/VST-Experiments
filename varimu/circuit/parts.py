@@ -62,6 +62,7 @@ from varimu.devices import plate as plt
 from varimu.devices import speaker as spk
 from varimu.devices import spring as spr
 from varimu.devices.bjt import Bjt
+from varimu.devices.contact import Contact
 from varimu.devices.core import MU0, TESLA_PER_V, MagneticCore, core_model, materials
 from varimu.devices.diode import VT_TNOM, JunctionDiode, VacuumDiode
 from varimu.devices.jfet import Jfet
@@ -886,6 +887,10 @@ def device_instance(
     if isinstance(base, Lamp):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
             raise ValueError(f"{name}: a lamp takes no parallel, emission or area")
+        return dataclasses.replace(base, name=name)
+    if isinstance(base, Contact):
+        if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
+            raise ValueError(f"{name}: a contact takes no parallel, emission or area")
         return dataclasses.replace(base, name=name)
     if isinstance(base, Optocoupler):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):

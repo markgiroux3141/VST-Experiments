@@ -266,6 +266,25 @@ _SYMBOLS: list[SymbolDef] = [
         text=(-3.81, 5.08, 3.302, "left"),
     ),
     _source("V", "V", "DC voltage source: pin 1 +, 2 -", [], "v", ()),
+    _macro(
+        "G",
+        "G",
+        "G",
+        "Voltage-controlled current source: gm (V(3) - V(4)) from pin 1 through it to pin 2",
+        (
+            Pin("1", "1", 0, 5.08, 270, 2.54),
+            Pin("2", "2", 0, -5.08, 90, 2.54),
+            Pin("3", "3", -5.08, 1.27, 0, 2.54),
+            Pin("4", "4", -5.08, -1.27, 0, 2.54),
+        ),  # fmt: skip
+        [
+            poly((0, 2.54), (2.54, 0), (0, -2.54), (-2.54, 0), (0, 2.54)),
+            poly((0, 1.27), (0, -1.27)),
+        ],
+        "gm",
+        toleranced=False,
+        text=(3.302, 1.27, -1.27, "left"),
+    ),
     _source(
         "Sine",
         "sine",

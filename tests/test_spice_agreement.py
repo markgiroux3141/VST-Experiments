@@ -158,6 +158,30 @@ def test_optocoupler_agrees():
         np.testing.assert_allclose(got[:, j], want[:, j], rtol=RTOL, atol=ATOL, err_msg=what)
 
 
+@pytest.mark.parametrize("name", ["KEY_CONTACT@1", "KEY_BREAK@1"])
+def test_contact_agrees(name):
+    """A contact's current (into a, out of b; none into its control pin): its springs both
+    ways, its control open, inside the smoothstep and closed (a make and a break contact)."""
+    d = load_device(name)
+    pts = [
+        (va, vb, c) for va in (-2.0, 0.3) for vb in (0.0, 1.5) for c in (-1.0, 0.3, 0.5, 0.7, 2.0)
+    ]
+    lines = [d.subckt()]
+    for k, (va, vb, c) in enumerate(pts):
+        lines += [
+            f"va{k} a{k} 0 dc {va}",
+            f"vb{k} b{k} 0 dc {vb}",
+            f"vc{k} c{k} 0 dc {c}",
+            f"x{k} a{k} b{k} c{k} 0 {d.subckt_name}",
+        ]
+    pins = ("va", "vb", "vc")
+    r = _op(lines, [f"i({p}{k})" for k in range(len(pts)) for p in pins])
+    want = np.array([d.currents(p) for p in pts])
+    got = -np.array([[r[f"i({p}{k})"] for p in pins] for k in range(len(pts))])
+    for j, what in enumerate(("a", "b", "control")):
+        np.testing.assert_allclose(got[:, j], want[:, j], rtol=RTOL, atol=ATOL, err_msg=what)
+
+
 def test_6386_capacitances_in_ac():
     """Grid-driven AC current with the plate at AC ground: jw(Cgk + Cgp), well into cutoff."""
     t = load_device("6386")

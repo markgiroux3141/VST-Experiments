@@ -31,6 +31,7 @@ from varimu.devices.capsule import (
     capsule_from_data,
     dual_capsule_from_data,
 )
+from varimu.devices.contact import Contact, contact_from_data
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.fit import (
     DATASHEETS,
@@ -61,7 +62,16 @@ from varimu.devices.triode import GridCurrent, KorenTriode, Triode, koren_from_s
 DEVICE_DIR = versions.COMPONENT_DIR
 REPORT_DIR = REPO_ROOT / "reports" / "devices"
 Device = (
-    Triode | Pentode | JunctionDiode | VacuumDiode | Lamp | Thyratron | Bjt | Jfet | Optocoupler
+    Triode
+    | Pentode
+    | JunctionDiode
+    | VacuumDiode
+    | Lamp
+    | Thyratron
+    | Bjt
+    | Jfet
+    | Optocoupler
+    | Contact
 )
 
 # Oxide-cathode grid conduction. There's no datasheet figure for any of these
@@ -138,6 +148,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return lamp_from_data(d, name)
     if kind == "optocoupler":
         return opto_from_data(d, name)
+    if kind == "contact":
+        return contact_from_data(d, name)
     if kind == "bjt":
         return bjt_from_data(d, name)
     if kind == "jfet":
@@ -1962,6 +1974,8 @@ def build_rca30b() -> dict[str, Any]:
         "web: https://datasheetspdf.com/pdf/1293560/RCA/RCA30/1 (RCA30 series: p-n-p, "
         "complements of RCA29); provisional: model knowledge (all junction numbers)",
     )
+
+
 def build_2n3904() -> dict[str, Any]:
     """The 2N3904 (NPN): the Minimoog filter board's printed alternate for the TIS92, and
     the stand-in for its TIS97 ladder transistors (data/schematics/minimoog/README.md)."""
@@ -1969,10 +1983,23 @@ def build_2n3904() -> dict[str, Any]:
         "2N3904",
         "npn",
         {
-            "IS": 4.9148e-15, "BF": 191.70, "VAF": 100.0, "IKF": 0.28579, "ISE": 11.882e-15,
-            "NE": 1.4422, "BR": 5.6808, "VAR": 100.0, "IKR": 61.753e-3, "ISC": 71.145e-12,
-            "NC": 1.6595, "RB": 5.8072, "RC": 0.70808, "CJE": 6.9435e-12, "CJC": 3.7572e-12,
-            "VJC": 1.2237, "MJC": 0.28886,
+            "IS": 4.9148e-15,
+            "BF": 191.70,
+            "VAF": 100.0,
+            "IKF": 0.28579,
+            "ISE": 11.882e-15,
+            "NE": 1.4422,
+            "BR": 5.6808,
+            "VAR": 100.0,
+            "IKR": 61.753e-3,
+            "ISC": 71.145e-12,
+            "NC": 1.6595,
+            "RB": 5.8072,
+            "RC": 0.70808,
+            "CJE": 6.9435e-12,
+            "CJC": 3.7572e-12,
+            "VJC": 1.2237,
+            "MJC": 0.28886,
         },  # fmt: skip
         "Central Semiconductor's 2N3904 SPICE model (8/18/10 rev A; numbers cited, the card "
         "not redistributed). Its NK .8296 (PSpice's high-injection exponent) isn't in the "
@@ -1990,10 +2017,23 @@ def build_2n3906() -> dict[str, Any]:
         "2N3906",
         "pnp",
         {
-            "IS": 7.9190e-15, "BF": 196.89, "VAF": 100.0, "IKF": 0.7271, "ISE": 13.654e-15,
-            "NE": 1.4535, "BR": 124.61, "VAR": 100.0, "IKR": 10.010e-3, "ISC": 18.518e-12,
-            "NC": 1.6031, "RB": 8.6624, "RC": 0.55428, "CJE": 11.640e-12, "CJC": 7.8722e-12,
-            "VJC": 0.98301, "MJC": 0.53872,
+            "IS": 7.9190e-15,
+            "BF": 196.89,
+            "VAF": 100.0,
+            "IKF": 0.7271,
+            "ISE": 13.654e-15,
+            "NE": 1.4535,
+            "BR": 124.61,
+            "VAR": 100.0,
+            "IKR": 10.010e-3,
+            "ISC": 18.518e-12,
+            "NC": 1.6031,
+            "RB": 8.6624,
+            "RC": 0.55428,
+            "CJE": 11.640e-12,
+            "CJC": 7.8722e-12,
+            "VJC": 0.98301,
+            "MJC": 0.53872,
         },  # fmt: skip
         "Central Semiconductor's 2N3906 SPICE model (8/25/10 rev A; numbers cited, the card "
         "not redistributed). Its NK 1.1475 isn't in the model (IKF 0.73 A)",
@@ -2499,6 +2539,333 @@ def build_6k6gt() -> dict[str, Any]:
     }
 
 
+# --- The Hammond Novachord (docs/NOVACHORD_PLAN.md, NV1) --------------------------------
+
+C8G_SIGMA = {"rel": 0.02, "abs_": 0.05e-3, "sigma_x": 2.0}  # A, A, V of Vp
+
+
+def _triode_figures(t: Triode, vg: float, vp: float) -> tuple[float, float, float]:
+    return float(t.ip(vg, vp)), float(t.gm(vg, vp)), float(t.rp(vg, vp))
+
+
+def build_6c8g() -> dict[str, Any]:
+    """The Novachord's top-octave oscillator: a Koren triode fit to RCA's plate curves
+    (digitized, 1.0-6.2 mA) with the printed class-A1 point (Ip, gm, rp) weighed in."""
+    from scipy.optimize import least_squares
+
+    from varimu.devices.triode import KorenTriode
+
+    pub = _published()["6C8G"]
+    a = pub["class_a1"]
+    vg, vp, ip = load_csv("rca_6c8g_plate.csv").T
+    sigma = effective_sigma(vp, ip, vg, 20.0, **C8G_SIGMA)
+
+    def resid(x):
+        t = Triode("fit", KorenTriode(*np.exp(x)))
+        r = (t.ip(vg, vp) - ip) / sigma
+        f = _triode_figures(t, a["vg_v"], a["vp_v"])
+        pts = [
+            np.log(f[0] / a["ip_a"]) / 0.03,
+            np.log(f[1] / a["gm_s"]) / 0.05,
+            np.log(f[2] / a["rp_ohm"]) / 0.10,
+        ]
+        return np.r_[r, pts]
+
+    best = None
+    for x0 in ([36.0, 1.35, 1500.0, 300.0, 300.0], [36.0, 1.4, 800.0, 100.0, 30.0]):
+        sol = least_squares(resid, np.log(x0), x_scale="jac", max_nfev=20000)
+        if best is None or sol.cost < best.cost:
+            best = sol
+    mu, ex, kg1, kp, kvb = (float(v) for v in np.exp(best.x))
+    t = Triode("fit", KorenTriode(mu, ex, kg1, kp, kvb))
+    rep = curve_report(t.ip(vg, vp), ip, sigma)
+    f = _triode_figures(t, a["vg_v"], a["vp_v"])
+    caps = pub["capacitances_f"]["t1"]
+    return {
+        "name": "6C8G",
+        "kind": "triode",
+        "source": "fit: Koren triode, least squares (effective variance) on the RCA 6C8-G "
+        "(1941) plate curves, grid 0..-11 V, digitized: data/datasheets/rca_6c8g.provenance.yaml, "
+        f"with the printed class-A1 point (Ip 3%, gm 5%, rp 10%) ({pub['source']})",
+        "plate": {"model": "koren", "mu": mu, "ex": ex, "kg1": kg1, "kp": kp, "kvb": kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": caps["gk"],
+            "gp": caps["gp"],
+            "pk": caps["pk"],
+            "source": f"{pub['source']} (triode unit T1, the larger)",
+        },
+        "fit_report": {
+            "plate": rep.as_dict(),
+            "sigma": "2% of Ip + 50 uA, with the curve's slope times 2 V of Vp",
+            "class_a1_pct": {
+                "ip": 100 * (f[0] / a["ip_a"] - 1),
+                "gm": 100 * (f[1] / a["gm_s"] - 1),
+                "rp": 100 * (f[2] / a["rp_ohm"] - 1),
+            },
+        },
+    }
+
+
+def build_6w7g() -> dict[str, Any]:
+    """The Novachord's divider and control tube: a Koren pentode fit to RCA's class-A1
+    figures (Ip, Ig2, gm, rp a third), the cathode-current cutoff (a tenth) and the 6J7's
+    triode connection (a third each: the same electrode structure), all six parameters
+    free. No curves are printed for it (the sheet points to the 6J7's): the knee is the
+    plate resistance's, not a curve's."""
+    from scipy.optimize import least_squares
+
+    pub = _published()["6W7G"]
+    a, cut, tr = pub["class_a1"], pub["cutoff"], pub["triode_6j7"]
+    dv = 1e-3
+
+    def figures(m: KorenPentode):
+        vg1, vg2, vp = a["vg1_v"], a["vg2_v"], a["vp_v"]
+        gm = (m.ip(vg1 + dv, vg2, vp) - m.ip(vg1 - dv, vg2, vp)) / (2 * dv)
+        rp = 2 * dv / (m.ip(vg1, vg2, vp + dv) - m.ip(vg1, vg2, vp - dv))
+        return float(m.ip(vg1, vg2, vp)), float(m.ig2(vg1, vg2)), float(gm), float(rp)
+
+    def triode(m: KorenPentode, vg, v):
+        return float(m.ip(vg, v, v) + m.ig2(vg, v))
+
+    def resid(x):
+        m = KorenPentode(*np.exp(x))
+        ip, ig2, gm, rp = figures(m)
+        vg, v = tr["vg_v"], tr["vp_v"]
+        it = triode(m, vg, v)
+        gmt = (triode(m, vg + dv, v) - triode(m, vg - dv, v)) / (2 * dv)
+        rpt = 2 * dv / (triode(m, vg, v + dv) - triode(m, vg, v - dv))
+        ik = float(
+            m.ip(cut["vg1_v"], cut["vg2_v"], cut["vp_v"]) + m.ig2(cut["vg1_v"], cut["vg2_v"])
+        )
+        ik = max(ik, 1e-30)
+        return [
+            np.log(ip / a["ip_a"]),
+            np.log(ig2 / a["ig2_a"]),
+            np.log(gm / a["gm_s"]),
+            np.log(rp / a["rp_ohm"]) / 3.0,
+            0.1 * np.log(ik / cut["ik_a"]),
+            np.log(it / tr["ip_a"]) / 3.0,
+            np.log(gmt / tr["gm_s"]) / 3.0,
+            np.log(rpt / tr["rp_ohm"]) / 3.0,
+        ]
+
+    x0 = np.log([20.0, 1.4, 2000.0, 8000.0, 20.0, 20.0])
+    sol = least_squares(resid, x0, xtol=1e-12, ftol=1e-12, max_nfev=4000)
+    mu, ex, kg1, kg2, kp, kvb = (float(v) for v in np.exp(sol.x))
+    m = KorenPentode(mu, ex, kg1, kg2, kp, kvb)
+    ip, ig2, gm, rp = figures(m)
+    vg, v = tr["vg_v"], tr["vp_v"]
+    caps = pub["capacitances_f"]
+    return {
+        "name": "6W7G",
+        "kind": "pentode",
+        "source": "fit: Koren pentode to the class-A1 figures (Ip, Ig2, gm, rp a third), the "
+        "cathode-current cutoff (a tenth) and the 6J7's triode connection (a third), log least "
+        f"squares ({pub['source']}); no curves printed (the knee from rp alone)",
+        "model": {"mu": mu, "ex": ex, "kg1": kg1, "kg2": kg2, "kp": kp, "kvb": kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "g1k": caps["input"],
+            "g1p": caps["g1p"],
+            "pk": caps["output"],
+            "source": f"{pub['source']} (with close-fitting shield)",
+        },
+        "fit_report": {
+            "class_a1_pct": {
+                "ip": 100 * (ip / a["ip_a"] - 1),
+                "ig2": 100 * (ig2 / a["ig2_a"] - 1),
+                "gm": 100 * (gm / a["gm_s"] - 1),
+                "rp": 100 * (rp / a["rp_ohm"] - 1),
+            },
+            "cutoff_ik_a": float(
+                m.ip(cut["vg1_v"], cut["vg2_v"], cut["vp_v"]) + m.ig2(cut["vg1_v"], cut["vg2_v"])
+            ),
+            "triode_6j7_ip_a": triode(m, vg, v),
+        },
+    }
+
+
+def build_2a3() -> dict[str, Any]:
+    """The Novachord's output tubes: a Koren triode fit to RCA's class-A1 point (Ip, gm,
+    rp), the push-pull zero-signal point (40 mA a tube at 300 V, -62 V) and the transfer
+    curve's foot (a tenth: read by eye). Directly heated: the filament's midpoint is the
+    cathode."""
+    from scipy.optimize import least_squares
+
+    from varimu.devices.triode import KorenTriode
+
+    pub = _published()["2A3"]
+    a, pp, foot = pub["class_a1"], pub["push_pull_ab1"]["fixed_bias"], pub["transfer_foot"]
+
+    def resid(x):
+        t = Triode("fit", KorenTriode(*np.exp(x)))
+        f = _triode_figures(t, a["vg_v"], a["vp_v"])
+        return [
+            np.log(f[0] / a["ip_a"]),
+            np.log(f[1] / a["gm_s"]),
+            np.log(f[2] / a["rp_ohm"]),
+            np.log(float(t.ip(pp["vg_v"], pp["vp_v"])) / (pp["ip0_a"] / 2)),
+            0.1 * np.log(float(t.ip(foot["vg_v"], foot["vp_v"])) / foot["ip_a"]),
+        ]
+
+    sol = least_squares(resid, np.log([4.2, 1.4, 1500.0, 50.0, 300.0]), xtol=1e-14, ftol=1e-14)
+    mu, ex, kg1, kp, kvb = (float(v) for v in np.exp(sol.x))
+    t = Triode("fit", KorenTriode(mu, ex, kg1, kp, kvb))
+    f = _triode_figures(t, a["vg_v"], a["vp_v"])
+    caps = pub["capacitances_f"]
+    return {
+        "name": "2A3",
+        "kind": "triode",
+        "source": "fit: Koren triode to the class-A1 point (Ip, gm, rp), the push-pull "
+        "zero-signal point and the transfer curve's foot (a tenth), log least squares "
+        f"({pub['source']})",
+        "plate": {"model": "koren", "mu": mu, "ex": ex, "kg1": kg1, "kp": kp, "kvb": kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": caps["gk"],
+            "gp": caps["gp"],
+            "pk": caps["pk"],
+            "source": f"{pub['source']} (no external shield)",
+        },
+        "fit_report": {
+            "class_a1_pct": {
+                "ip": 100 * (f[0] / a["ip_a"] - 1),
+                "gm": 100 * (f[1] / a["gm_s"] - 1),
+                "rp": 100 * (f[2] / a["rp_ohm"] - 1),
+            },
+            "push_pull_ip0_a": float(t.ip(pp["vg_v"], pp["vp_v"])),
+            "foot_ip_a": float(t.ip(foot["vg_v"], foot["vp_v"])),
+        },
+    }
+
+
+def build_key_contact() -> dict[str, Any]:
+    """An organ key's contact spring on its bus bar (the Novachord's playing keys, manual
+    Fig. 19): closed a fraction of an ohm, open the insulation between springs. Worked by
+    a key's gate: a make contact, open at 0.25 V and below, closed at 0.75 V and above (a
+    0 / 1 V gate)."""
+    return {
+        "name": "KEY_CONTACT",
+        "kind": "contact",
+        "source": "provisional: model knowledge (a precious-metal key contact's resistance "
+        "and a bakelite channel's insulation); the gate's thresholds a convention: numerics",
+        "contact": {
+            "r_on_ohm": 1.0,
+            "r_off_ohm": 1.0e12,
+            "v_open_v": 0.25,
+            "v_closed_v": 0.75,
+            "source": "provisional: model knowledge (organ key contacts: palladium or silver "
+            "wire on a bus bar, tens of milliohms; 1 ohm keeps the solver's matrix modest and "
+            "is negligible against the key circuit's tens of kilohms. Insulation: a dry "
+            "bakelite channel, >= 1e12 ohm)",
+        },
+    }
+
+
+def build_key_break() -> dict[str, Any]:
+    """A key's break contact: KEY_CONTACT's spring on its bus bar, closed with the key up
+    (gate 0.25 V and below), opened as the key goes down (0.75 V and above): the
+    Novachord's spring 3 on bus A and spring 1 on the cut-off bus (manual Fig. 19)."""
+    d = build_key_contact()
+    d["name"] = "KEY_BREAK"
+    d["contact"] = dict(d["contact"], v_open_v=0.75, v_closed_v=0.25)
+    d["source"] += "; a break contact: the gate's thresholds swapped"
+    return d
+
+
+def _triode_from_columns(name: str, key: str, use: str) -> dict[str, Any]:
+    """A Koren triode fit to a sheet's class-A1 columns (Ip, gm, rp at each), log least
+    squares, all five parameters free."""
+    from scipy.optimize import least_squares
+
+    from varimu.devices.triode import KorenTriode
+
+    pub = _published()[key]
+    pts = pub["class_a1"]
+
+    def resid(x):
+        t = Triode("fit", KorenTriode(*np.exp(x)))
+        r = []
+        for p in pts:
+            f = _triode_figures(t, p["vg_v"], p["vp_v"])
+            r += [np.log(f[0] / p["ip_a"]), np.log(f[1] / p["gm_s"]), np.log(f[2] / p["rp_ohm"])]
+        return r
+
+    best = None
+    for x0 in ([20.0, 1.4, 1000.0, 300.0, 300.0], [14.0, 1.35, 1500.0, 100.0, 30.0]):
+        sol = least_squares(resid, np.log(x0), xtol=1e-14, ftol=1e-14, max_nfev=20000)
+        if best is None or sol.cost < best.cost:
+            best = sol
+    mu, ex, kg1, kp, kvb = (float(v) for v in np.exp(best.x))
+    t = Triode("fit", KorenTriode(mu, ex, kg1, kp, kvb))
+    caps = pub["capacitances_f"]
+    report = {}
+    for p in pts:
+        f = _triode_figures(t, p["vg_v"], p["vp_v"])
+        report[f"vp_{p['vp_v']}_pct"] = {
+            "ip": 100 * (f[0] / p["ip_a"] - 1),
+            "gm": 100 * (f[1] / p["gm_s"] - 1),
+            "rp": 100 * (f[2] / p["rp_ohm"] - 1),
+        }
+    return {
+        "name": name,
+        "kind": "triode",
+        "source": f"fit: Koren triode to the class-A1 columns (Ip, gm, rp at each), log least "
+        f"squares ({pub['source']}); {use}",
+        "plate": {"model": "koren", "mu": mu, "ex": ex, "kg1": kg1, "kp": kp, "kvb": kvb},
+        "grid_current": dict(PROVISIONAL_GRID),
+        "capacitances_f": {
+            "gk": caps["gk"],
+            "gp": caps["gp"],
+            "pk": caps["pk"],
+            "source": pub["source"],
+        },
+        "fit_report": _clean(report),
+    }
+
+
+def build_6j5g() -> dict[str, Any]:
+    """The Novachord preamplifier's 6J5-G (manual Fig. 21)."""
+    return _triode_from_columns("6J5G", "6J5", "the 6J5-G (glass) shares the 6J5's ratings")
+
+
+def build_56() -> dict[str, Any]:
+    """The Novachord power amplifier's input pair (manual Fig. 22)."""
+    return _triode_from_columns("56", "56", "the Hammond organ amplifier's input pair")
+
+
+def build_reed_contact() -> dict[str, Any]:
+    """A vibrato reed's contact (the Novachord's six reeds, manual p.22: 'three contacts on
+    each reed ... The contacts should make in the middle of the reed's motion'): worked by the
+    reed's displacement as a voltage (1 V per mm, the circuit's mechanical analogue), a make
+    contact closing as the reed passes its middle going positive, within +-0.05 mm."""
+    return {
+        "name": "REED_CONTACT",
+        "kind": "contact",
+        "source": "provisional: model knowledge (a tungsten or silver reed contact's resistance "
+        "and its insulation); the switching band a contact's travel, numerics",
+        "contact": {
+            "r_on_ohm": 1.0,
+            "r_off_ohm": 1.0e12,
+            "v_open_v": -0.05,
+            "v_closed_v": 0.05,
+            "source": "provisional: model knowledge (contacts 'make in the middle of the "
+            "reed's motion', SM2 p.22: the band +-0.05 mm of a ~1 mm swing)",
+        },
+    }
+
+
+def build_reed_drive() -> dict[str, Any]:
+    """The reed's drive contact: REED_CONTACT closing on the other half of the swing (a
+    break contact on the displacement), so the drive coil pulls while the reed is away."""
+    d = build_reed_contact()
+    d["name"] = "REED_DRIVE"
+    d["contact"] = dict(d["contact"], v_open_v=0.05, v_closed_v=-0.05)
+    d["source"] += "; the drive contact: closed on the reed's negative half"
+    return d
+
+
 # The Type 4 tank's coils (codes A in, B out), Rod Elliott's measurements.
 ESP_REVERB = "web: https://sound-au.com/articles/reverb.htm"
 PARKER_BILBAO = (
@@ -2678,6 +3045,15 @@ BUILDERS = {
     "BC238": build_bc238,
     "2D21": build_2d21,
     "884": build_884,
+    "6C8G": build_6c8g,
+    "6W7G": build_6w7g,
+    "2A3": build_2a3,
+    "KEY_CONTACT": build_key_contact,
+    "KEY_BREAK": build_key_break,
+    "REED_CONTACT": build_reed_contact,
+    "REED_DRIVE": build_reed_drive,
+    "6J5G": build_6j5g,
+    "56": build_56,
 }
 
 REPORT_FOR = {

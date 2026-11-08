@@ -219,6 +219,65 @@
   heater: {v: 6.3, a: 0.4}
   pins: "1 no connection, 2 heater, 3 plate, 4 screen, 5 grid 1, 7 heater, 8 cathode and grid 3 (7S)"
 
+"6C8G":
+  # The Hammond Novachord's top-octave oscillators (docs/NOVACHORD_PLAN.md, NV1).
+  source: "RCA 6C8-G DATA (Dec. 1, 1941) p.1; local copy sources/rca_6c8g_1941.pdf (web: https://frank.pocnet.net/sheets/049/6/6C8G.pdf)"
+  class_a1: {vp_v: 250, vg_v: -4.5, mu: 36, rp_ohm: 22500, gm_s: 1.6e-3, ip_a: 3.2e-3}   # each triode unit
+  capacitances_f:   # triode unit T1 / T2 (approx.)
+    t1: {gp: 2.6e-12, gk: 2.6e-12, pk: 2.0e-12}
+    t2: {gp: 1.8e-12, gk: 1.3e-12, pk: 2.2e-12}
+  max_ratings: {vp_v: 250, pd_w: 1.0}
+  heater: {v: 6.3, a: 0.3}
+  pins: "1 no connection, 2 heater, 3 plate T2, 4 cathode T2, 5 grid T1, 6 plate T1, 7 heater, 8 cathode T1, cap grid T2 (8G)"
+
+"6W7G":
+  # The Novachord's dividers and per-key control tubes (docs/NOVACHORD_PLAN.md, NV1). The
+  # sheet says the 6J7's and 57's curves apply within its ratings; no curves of its own.
+  source: "RCA 6W7-G DATA (Dec. 1, 1941) p.1; local copy sources/rca_6w7g_1941.pdf (web: https://frank.pocnet.net/sheets/049/6/6W7G.pdf)"
+  class_a1: {vp_v: 250, vg2_v: 100, vg1_v: -3, rp_ohm: 1.5e+6, gm_s: 1.225e-3, ip_a: 2.0e-3, ig2_a: 0.5e-3}   # suppressor at cathode; rp "approx."
+  cutoff: {vp_v: 250, vg2_v: 100, vg1_v: -7, ik_a: 10.0e-6}   # "grid bias (approx.) for cathode-current cutoff"; the current read as 10 uA (provisional: model knowledge, RCA's usual cutoff criterion for this class of sheet)
+  # The 6J7 triode-connected (screen and suppressor on the plate), whose structure the 6W7-G
+  # shares: provisional: model knowledge (RCA receiving tube manuals list the 6J7 as a triode
+  # at 250 V, -8 V: mu 20, rp 10500 ohm, gm 1.9 mS, Ip 6.5 mA); weighs a third in the fit.
+  triode_6j7: {vp_v: 250, vg_v: -8, mu: 20, rp_ohm: 10500, gm_s: 1.9e-3, ip_a: 6.5e-3}
+  capacitances_f: {g1p: 0.007e-12, input: 5.0e-12, output: 8.5e-12}   # with close-fitting shield
+  max_ratings: {vp_v: 300, vg2_v: 100, vg2_supply_v: 300, pd_w: 0.5, pg2_w: 0.1}
+  heater: {v: 6.3, a: 0.15}
+  pins: "1 no connection, 2 heater, 3 plate, 4 screen, 5 suppressor, 7 heater, 8 cathode, cap grid (7R)"
+
+"2A3":
+  # The Novachord's power amplifier: four in parallel push-pull (docs/NOVACHORD_PLAN.md).
+  source: "RCA 2A3 DATA (Oct. 15, 1947) pp.1-2; local copy sources/rca_2a3_1947.pdf (web: https://frank.pocnet.net/sheets/049/2/2A3.pdf)"
+  class_a1: {vp_v: 250, vg_v: -45, mu: 4.2, rp_ohm: 800, gm_s: 5.25e-3, ip_a: 60.0e-3, rl_ohm: 2500, h2_pct: 5, power_w: 3.5}
+  push_pull_ab1:   # values for 2 tubes
+    fixed_bias: {vp_v: 300, vg_v: -62, ip0_a: 80.0e-3, ip_max_a: 147.0e-3, rl_pp_ohm: 3000, thd_pct: 2.5, power_w: 15, peak_grid_to_grid_v: 124}
+    cathode_bias: {vp_v: 300, rk_ohm: 780, ip0_a: 80.0e-3, ip_max_a: 100.0e-3, rl_pp_ohm: 5000, thd_pct: 5.0, power_w: 10, peak_grid_to_grid_v: 156}
+  # p.2's transfer curves (Eb 300 V), read by eye at the foot: provisional: digitized by eye
+  transfer_foot: {vp_v: 300, vg_v: -100, ip_a: 2.0e-3}
+  capacitances_f: {gp: 16.5e-12, gk: 7.5e-12, pk: 5.5e-12}   # no external shield
+  max_ratings: {vp_v: 300, pd_w: 15, rg_fixed_bias_ohm: 5.0e+4, rg_cathode_bias_ohm: 5.0e+5}
+  heater: {v: 2.5, a: 2.5}   # filament (directly heated)
+  pins: "1 filament, 2 plate, 3 grid, 4 filament (4D)"
+
+"6J5":
+  # The Novachord preamplifier's second stage (a 6J5-G; manual Fig. 21): RCA prints the 6J5's
+  # and 6J5-GT's characteristics together, the glass 6J5-G the same structure.
+  source: "RCA 6J5, 6J5-GT DATA (Sept. 1, 1950) p.1; local copy sources/rca_6j5.pdf (web: https://frank.pocnet.net/sheets/049/6/6J5.pdf)"
+  class_a1:
+    - {vp_v: 90, vg_v: 0, mu: 20, rp_ohm: 6700, gm_s: 3.0e-3, ip_a: 10.0e-3}
+    - {vp_v: 250, vg_v: -8, mu: 20, rp_ohm: 7700, gm_s: 2.6e-3, ip_a: 9.0e-3}
+  capacitances_f: {gp: 3.4e-12, gk: 3.4e-12, pk: 3.6e-12}   # 6J5 (approx.)
+  heater: {v: 6.3, a: 0.3}
+
+"56":
+  # The Novachord power amplifier's input pair (manual Fig. 22, the Hammond organ amplifier).
+  source: "provisional: model knowledge (RCA receiving tube manuals, type 56, class-A amplifier columns at 100 and 250 V; no scan found)"
+  class_a1:
+    - {vp_v: 100, vg_v: -5, mu: 13.8, rp_ohm: 12000, gm_s: 1.15e-3, ip_a: 2.5e-3}
+    - {vp_v: 250, vg_v: -13.5, mu: 13.8, rp_ohm: 9500, gm_s: 1.45e-3, ip_a: 5.0e-3}
+  capacitances_f: {gp: 2.8e-12, gk: 3.2e-12, pk: 2.2e-12}   # provisional: model knowledge
+  heater: {v: 2.5, a: 1.0}
+
 "5Y3GT":
   source: "GE 5Y3-GT ET-T965 (10-55) p.1-2; local copy sources/ge_5y3gt_ET-T965.pdf (web: https://frank.pocnet.net/sheets/093/5/5Y3GT.pdf)"
   tube_drop_v_at_125ma_dc_per_plate: 50

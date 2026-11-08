@@ -90,3 +90,8 @@ assets/songs/
 
 # Claude Code's parallel-session git worktrees (each is its own checkout of a branch)
 .claude/worktrees/
+
+# The Novachord service manual scans (archive.org; cited by data/schematics/hammond_novachord/README.md)
+data/schematics/hammond_novachord/*.pdf
+data/schematics/hammond_novachord/*.txt
+data/schematics/hammond_novachord/*.png

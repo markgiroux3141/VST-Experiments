@@ -680,6 +680,16 @@ pub fn device_instance(
             l.name = s(name);
             Ok(DeviceModel::Lamp(l))
         }
+        DeviceModel::Contact(c) => {
+            if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
+                return Err(Error(format!(
+                    "{name}: a contact takes no parallel, emission or area"
+                )));
+            }
+            let mut c = c.clone();
+            c.name = s(name);
+            Ok(DeviceModel::Contact(c))
+        }
         DeviceModel::Optocoupler(o) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
                 return Err(Error(format!(

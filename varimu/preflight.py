@@ -49,6 +49,7 @@ from varimu.circuit.ir import (
 )
 from varimu.circuit.spec import CircuitSpec, resolve
 from varimu.devices.bjt import Bjt
+from varimu.devices.contact import Contact
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.jfet import Jfet
@@ -206,6 +207,8 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
         if isinstance(el, Device) and isinstance(models.get(el.model), MagneticCore | Lamp):
             for n in el.nodes[1:]:
                 dc.join(el.nodes[0], n)
+        if isinstance(el, Device) and isinstance(models.get(el.model), Contact):
+            dc.join(el.nodes[0], el.nodes[1])  # open, the contact still leaks its insulation
         if isinstance(el, Device) and isinstance(models.get(el.model), Optocoupler):
             dc.join(el.nodes[2], el.nodes[4])  # the state node: the device is its DC path
             dc.join(el.nodes[3], el.nodes[4])  # the cell conducts (at least its dark leak)

@@ -17,7 +17,8 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use circuitsim::ir::{
     CircuitIr, Coupling, Device, DeviceModel, Element, HeatedCathode, HeaterSpec, Inductor,
-    MagneticCore, NoiseCurrent, NoiseSpec, Probe, Section, SineSource, TubeNoise, VoltageSource,
+    MagneticCore, NoiseCurrent, NoiseSpec, Probe, Section, SineSource, TubeNoise, Vccs,
+    VoltageSource,
 };
 use circuitsim::noise as nz;
 
@@ -513,11 +514,12 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 29] = [
+const MACROS: [&str; 30] = [
     "R",
     "C",
     "L",
     "K",
+    "G",
     "V",
     "sine",
     "mains",
@@ -562,6 +564,7 @@ fn macro_of(kind: &str) -> Macro {
         "C" => (Some(2), vec![p("c", Physical), opt("v0", Physical)], true),
         "L" => (Some(2), vec![p("l", Physical)], false),
         "K" => (Some(2), vec![p("k", Physical)], false),
+        "G" => (Some(4), vec![p("gm", Physical)], false),
         "V" => (Some(2), vec![p("v", Physical)], false),
         "sine" => (
             Some(2),
@@ -895,6 +898,14 @@ fn expand(
             l_a: nodes[0].clone(),
             l_b: nodes[1].clone(),
             k: f("k")?,
+        })],
+        "G" => vec![Element::Vccs(Vccs {
+            name: s(name),
+            pos: nodes[0].clone(),
+            neg: nodes[1].clone(),
+            ctrl_pos: nodes[2].clone(),
+            ctrl_neg: nodes[3].clone(),
+            gm_s: f("gm")?,
         })],
         "V" => vec![Element::VoltageSource(VoltageSource {
             name: s(name),

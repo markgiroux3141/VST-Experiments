@@ -556,6 +556,7 @@ pub enum DeviceModel {
     Bjt(Bjt),
     Jfet(Jfet),
     Optocoupler(Optocoupler),
+    Contact(Contact),
 }
 
 /// `varimu.devices.triode.Triode`: pins (plate, grid, cathode).
@@ -716,6 +717,20 @@ pub struct Optocoupler {
     pub s_unit_s: f64,
 }
 
+/// `varimu.devices.contact.Contact`: a switch contact worked by a control voltage, pins
+/// (a, b, c, ref): the contact from a to b, its conductance moving from 1 / r_off to
+/// 1 / r_on as V(c, ref) goes from v_open to v_closed. Port currents: the contact's into a,
+/// out of b; none into c.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Contact {
+    pub name: String,
+    pub r_on_ohm: f64,
+    pub r_off_ohm: f64,
+    pub v_open_v: f64,
+    pub v_closed_v: f64,
+}
+
 /// A BJT's polarity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -841,6 +856,7 @@ impl DeviceModel {
             DeviceModel::MagneticCore(m) => &m.name,
             DeviceModel::Lamp(m) => &m.name,
             DeviceModel::Optocoupler(m) => &m.name,
+            DeviceModel::Contact(m) => &m.name,
             DeviceModel::Bjt(m) => &m.name,
             DeviceModel::Jfet(m) => &m.name,
             DeviceModel::Thyratron(m) => &m.name,
@@ -856,6 +872,7 @@ impl DeviceModel {
             DeviceModel::MagneticCore(_) => &["b", "ref"],
             DeviceModel::Lamp(_) => &["a", "t", "b"],
             DeviceModel::Optocoupler(_) => &["la", "lk", "s", "ra", "rb"],
+            DeviceModel::Contact(_) => &["a", "b", "c", "ref"],
             DeviceModel::Bjt(_) => &["c", "b", "e"],
             DeviceModel::Jfet(_) => &["d", "g", "s"],
             DeviceModel::Thyratron(t) if t.mu_g2.is_some() => &["a", "g2", "g1", "w", "k"],
@@ -1633,6 +1650,14 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             ]);
             for c in l.emissivity {
                 finite(&format!("{name}.emissivity[]"), c)?;
+            }
+        }
+        DeviceModel::Contact(c) => {
+            values.extend([("r_on_ohm", c.r_on_ohm), ("r_off_ohm", c.r_off_ohm)]);
+            finite(&format!("{name}.v_open_v"), c.v_open_v)?;
+            finite(&format!("{name}.v_closed_v"), c.v_closed_v)?;
+            if c.v_closed_v == c.v_open_v {
+                return err(format!("{name}: v_closed_v must differ from v_open_v"));
             }
         }
         DeviceModel::Optocoupler(o) => {

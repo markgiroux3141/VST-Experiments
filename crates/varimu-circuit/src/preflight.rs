@@ -232,6 +232,12 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
                 dc.join(&d.nodes[0], n);
             }
         }
+        // a contact leaks its insulation when open
+        if let Element::Device(d) = el
+            && matches!(models.get(d.model.as_str()), Some(DeviceModel::Contact(_)))
+        {
+            dc.join(&d.nodes[0], &d.nodes[1]);
+        }
         // an optocoupler's state node (the device is its DC path) and its cell
         if let Element::Device(d) = el
             && matches!(

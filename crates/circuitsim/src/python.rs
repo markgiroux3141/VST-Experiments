@@ -319,7 +319,8 @@ impl PyStream {
     #[pyo3(signature = (
         ir_json, dt, u0, method = "trap", *, solver = None, reltol = None, vntol = None,
         input_order = None, newton_reuse = None, tube_tables = None, partition = None,
-        partition_coupling = None, c0 = None
+        partition_coupling = None, c0 = None, error_abstol = None, error_reltol = None,
+        step_selection = None, error_norm = None
     ))]
     #[allow(clippy::too_many_arguments)]
     fn new(
@@ -337,6 +338,10 @@ impl PyStream {
         partition: Option<Vec<String>>,
         partition_coupling: Option<&str>,
         c0: Option<Vec<f64>>,
+        error_abstol: Option<f64>,
+        error_reltol: Option<f64>,
+        step_selection: Option<bool>,
+        error_norm: Option<&str>,
     ) -> PyResult<PyStream> {
         let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
         let d = Options::default();
@@ -350,6 +355,12 @@ impl PyStream {
             input_order: input_order.unwrap_or(d.input_order),
             newton_reuse: newton_reuse.unwrap_or(d.newton_reuse),
             tube_tables: tube_tables.unwrap_or(d.tube_tables),
+            error_abstol: error_abstol.unwrap_or(d.error_abstol),
+            error_reltol: error_reltol.unwrap_or(d.error_reltol),
+            step_selection: step_selection.unwrap_or(d.step_selection),
+            error_norm: error_norm
+                .map_or(Ok(d.error_norm), ErrorNorm::parse)
+                .map_err(invalid)?,
             all_unknowns: false,
             ..d
         };

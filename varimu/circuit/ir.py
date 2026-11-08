@@ -50,6 +50,7 @@ from typing import Any
 
 from varimu.devices import jfet as jfet_mod
 from varimu.devices.bjt import POLARITIES, Bjt
+from varimu.devices.contact import Contact
 from varimu.devices.core import MagneticCore
 from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
@@ -585,6 +586,7 @@ DeviceModel = (
     | Bjt
     | jfet_mod.Jfet
     | Optocoupler
+    | Contact
 )
 
 PINS: dict[type, tuple[str, ...]] = {
@@ -597,6 +599,7 @@ PINS: dict[type, tuple[str, ...]] = {
     Optocoupler: ("la", "lk", "s", "ra", "rb"),
     Bjt: ("c", "b", "e"),
     jfet_mod.Jfet: ("d", "g", "s"),
+    Contact: ("a", "b", "c", "ref"),
 }
 
 
@@ -1078,6 +1081,12 @@ def _validate_model(m: DeviceModel) -> None:
             raise IRError(f"{m.name}.emissivity: 4 coefficients (c0..c3)")
         for c in m.emissivity:
             _finite(f"{m.name}.emissivity[]", c)
+    elif isinstance(m, Contact):
+        values += [("r_on_ohm", m.r_on_ohm), ("r_off_ohm", m.r_off_ohm)]
+        _finite(f"{m.name}.v_open_v", m.v_open_v)
+        _finite(f"{m.name}.v_closed_v", m.v_closed_v)
+        if m.v_closed_v == m.v_open_v:
+            raise IRError(f"{m.name}: v_closed_v must differ from v_open_v")
     elif isinstance(m, Optocoupler):
         values += [
             (w, getattr(m, w))
@@ -1182,6 +1191,7 @@ _MODEL_KINDS = {
     "magnetic_core": MagneticCore,
     "lamp": Lamp,
     "optocoupler": Optocoupler,
+    "contact": Contact,
     "thyratron": Thyratron,
     "bjt": Bjt,
     "jfet": jfet_mod.Jfet,

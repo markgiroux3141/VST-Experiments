@@ -12,9 +12,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use circuitsim::ir::{
-    Bjt, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode, KorenPentode, KorenTriode,
-    Lamp, Optocoupler, Pentode, PlateModel, Polarity, ScreenLaw, Thyratron, Triode, VacuumDiode,
-    VariMuTriode,
+    Bjt, Contact, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode, KorenPentode,
+    KorenTriode, Lamp, Optocoupler, Pentode, PlateModel, Polarity, ScreenLaw, Thyratron, Triode,
+    VacuumDiode, VariMuTriode,
 };
 
 use crate::capsule::{self, Capsule, DualCapsule};
@@ -530,6 +530,17 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                 rad_fraction: num(w, "rad_fraction", what)?,
                 emissivity,
                 t_amb_k: num(d, "t_amb_k", what)?,
+            })
+        }
+        "contact" => {
+            // contact.py's contact_from_data
+            let c = sub(d, "contact", what)?;
+            DeviceModel::Contact(Contact {
+                name,
+                r_on_ohm: num(c, "r_on_ohm", what)?,
+                r_off_ohm: num(c, "r_off_ohm", what)?,
+                v_open_v: num(c, "v_open_v", what)?,
+                v_closed_v: num(c, "v_closed_v", what)?,
             })
         }
         "optocoupler" => {

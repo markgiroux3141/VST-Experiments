@@ -186,6 +186,7 @@ from varimu.circuit.ir import (
     TapeReductionPoint,
     ThyratronEvents,
     TubeNoise,
+    Vccs,
     VoltageProbe,
     VoltageSource,
     Winding,
@@ -996,6 +997,10 @@ for _name, _macro in {
     ),
     "L": Macro(lambda ctx, n, c, a: [Inductor(n, *c, a["l"])], 2, {"l": _P}),
     "K": Macro(lambda ctx, n, c, a: [Coupling(n, *c, a["k"])], 2, {"k": _P}),
+    # A voltage-controlled current source (SPICE G), nodes (pos, neg, ctrl_pos, ctrl_neg):
+    # gm (v(ctrl_pos) - v(ctrl_neg)) from pos through the source to neg (a transducer's
+    # coupling, a mechanical analogue's force)
+    "G": Macro(lambda ctx, n, c, a: [Vccs(n, *c, a["gm"])], 4, {"gm": _P}),
     "V": Macro(lambda ctx, n, c, a: [VoltageSource(n, *c, a["v"])], 2, {"v": _P}),
     "sine": Macro(
         lambda ctx, n, c, a: [

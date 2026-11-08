@@ -1,0 +1,63 @@
+{
+  "quality": "draft",
+  "vibrato": {
+    "off": {
+      "pitch_c": -0.87,
+      "depth_c_p2p": 0.11,
+      "reed_hz": 7.024,
+      "reed_mm": 0.422,
+      "x_real_time": 6.2
+    },
+    "normal": {
+      "pitch_c": 8.8,
+      "depth_c_p2p": 21.18,
+      "reed_hz": 7.024,
+      "reed_mm": 0.422,
+      "x_real_time": 6.7
+    },
+    "small": {
+      "pitch_c": -6.29,
+      "depth_c_p2p": 1.71,
+      "reed_hz": 7.024,
+      "reed_mm": 0.422,
+      "x_real_time": 7.4
+    },
+    "both": {
+      "pitch_c": 0.35,
+      "depth_c_p2p": 2.1,
+      "reed_hz": 7.024,
+      "reed_mm": 0.422,
+      "x_real_time": 7.0
+    }
+  },
+  "chord_sag": {
+    "1": {
+      "bct_v": 257.83,
+      "bct_idle_v": 260.0,
+      "out_rms_v": 0.02611,
+      "x_real_time": 85.5,
+      "wall_s": 129.2
+    },
+    "5": {
+      "bct_v": 249.11,
+      "bct_idle_v": 260.0,
+      "out_rms_v": 0.05964,
+      "x_real_time": 87.2,
+      "wall_s": 130.8
+    },
+    "10": {
+      "bct_v": 238.22,
+      "bct_idle_v": 260.0,
+      "out_rms_v": 0.08489,
+      "x_real_time": 100.3,
+      "wall_s": 150.5
+    },
+    "20": {
+      "bct_v": 216.9,
+      "bct_idle_v": 260.0,
+      "out_rms_v": 0.14284,
+      "x_real_time": 84.8,
+      "wall_s": 127.3
+    }
+  }
+}
