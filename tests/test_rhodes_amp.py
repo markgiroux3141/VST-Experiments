@@ -202,8 +202,48 @@ def test_the_pan_does_not_crackle_live():
         assert 20 * np.log10(np.max(np.abs(h)) / rms) < -30.0, node
 
 
-def test_only_the_output_stage_is_tightened():
+def _loud_chords(seconds):
+    """Chords at velocity 127 in both hands, the pedal down, one every 0.5 s (the
+    diagnostic's that latched the live power amps)."""
+    shapes = [(0, 4, 7, 12), (0, 3, 7, 10), (0, 5, 9, 12), (0, 4, 7, 11)]
+    roots = [36, 41, 43, 48, 53, 55]
+    notes = [(0.4, "pedal", 0, 1)]
+    t, i = 0.5, 0
+    while t < seconds - 0.2:
+        for o in shapes[i % 4]:
+            for base in (roots[i % 6] - 12, roots[i % 6]):
+                notes.append((t, "on", base + o, 127))
+                notes.append((t + 0.4, "off", base + o, 0))
+        t, i = t + 0.5, i + 1
+    return sorted(notes, key=lambda e: (e[0], e[1] != "off"))
+
+
+def test_loud_chords_do_not_latch_the_power_amps_live():
+    """The app's live settings (draft, Newton (4e-3, 4e-2), its partition), loud chords from
+    the harp: before Q4 (the voltage amplifier) converged to 0.025 of the tolerance, Newton
+    accepted a false state there within ~1.25 s and each power amp's output latched at +20 V
+    for good (the user heard one channel go silent with the rail's hum until a restart; the
+    tight solve doesn't latch). Each output's mean over every 0.25 s stays near 0 V."""
+    pytest.importorskip("circuitsim")
+    from varimu.sim import fast, io
+
+    c = load()
+    ir = builder.build_ir(c, dict(spec.resolve(c)), speaker_readout=False)
+    st = io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft")
+    st = dataclasses.replace(st, newton_reltol=4e-3, newton_vntol=4e-2, partition=APP_PARTITION)
+    seconds = 2.5
+    fs = st.sample_rate
+    x = np.zeros(int(seconds * fs))
+    v = fast.run_transient(ir, x, settings=st, notes=_loud_chords(seconds))
+    w = int(0.25 * fs)
+    for node in ("a_amp", "b_amp"):
+        y = np.asarray(v.vectors[f"v({node})"])
+        means = [abs(np.mean(y[k : k + w])) for k in range(0, len(y) - w + 1, w)]
+        assert max(means) < 2.0, (node, max(means))  # latched: 20.2 V; fixed: <= 0.3 V
+
+
+def test_only_the_output_stage_and_q4_are_tightened():
     models = {m.name: m for m in builder.build_ir(load(), dict(spec.resolve(load()))).models}
     tight = {n for n, m in models.items() if getattr(m, "tol_scale", None) is not None}
-    assert tight == {"RCA29B_QD", "RCA30B_QPD", "2N6254_QO"}, tight
+    assert tight == {"2N5781_QP", "RCA29B_QD", "RCA30B_QPD", "2N6254_QO"}, tight
     assert all(models[n].tol_scale == 0.025 for n in tight)

@@ -447,6 +447,25 @@ power amp, the speakers, the whole Suitcase as one netlist.**
   unit alone (no change until the cell port was fixed). Production renders are unaffected
   (their tolerance is 1e-4 / 1e-3 V, the factors only tighten it). **Open (the user's call):**
   whether -38 to -40 dB is clean enough by ear; the cleaner rows cost real time.
+- **A channel latched silent with a hum (the user heard it, 2026-11-08; fixed the same day).**
+  Loud playing, then one channel silent but for a low hum until the instrument restarted.
+  Reproduced offline by `crates/varimu-app/examples/suitcase_latch.rs` (the live device run
+  deterministically at its own settings, with each power amp's inner nodes per 0.25 s; `--tol
+  MODEL=K`, `--newton`, `--coupling`, `--one-solve` vary the numerics): chords at velocity 127
+  with the pedal down latched each power amp's output at **+20.2 V DC** within 0.75-1.25 s, for
+  good (DC through the speakers: silence; the positive rail sagging 29.7 -> 22.7 V under 1.3 A,
+  its ripple the hum). Not the partition: one solve at the live tolerance latched too, the
+  partition at 1e-5 didn't, `hold` coupling latched. Newton at 40 mV accepted a false state of
+  **Q4, the voltage amplifier** (QP): its ports at 0.025 of the tolerance (as the output stage's)
+  remove it; Q1-Q3 / Q5 (QN) alone don't. On velocity-80 chords that never latched, the fix is
+  -49 / -53 dB from the shipped sound (L / R, rms), its cost +1-2% (offline, 10 s); adding the
+  diodes too reached -31 dB of the tight solve but moved the sound -16 dB (DSI is shared with
+  the pan's oscillator and LED strings: its phase, most likely), so they stay at 1. The shipped
+  live device is itself -15 dB from the tight solve on that material (the pan's phase, most
+  likely; unchanged by the fix). 20 s each of loud chords, pounded bass and every key re-struck
+  at 127: no latch with the fix (the old circuit latched in all three).
+  `tests/test_rhodes_amp.py::test_loud_chords_do_not_latch_the_power_amps_live` (the old
+  circuit fails it: both outputs at 20.2 V from 1.25 s).
 - **Every key struck and re-struck** (the review, 2026-11-07, with the user back: `play.rs
   --device rhodes_suitcase --strike-all 127 --restrike 3 --mute`; `--mute` is new, everything
   computes and the monitor's gain after the device is -300 dB, so nothing sounds; the stats
