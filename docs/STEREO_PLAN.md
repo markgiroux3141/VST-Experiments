@@ -1,6 +1,8 @@
 # Stereo tracks and stereo sources in the room
 
-2026-11-07, the user's idea, parked until they pick it up; nothing built.
+2026-11-07, the user's idea. **ST1-ST5 built 2026-11-08** (branch `stereo`; the stereo
+compressor, ST3's LINK and ST3b, left for later: the user's call). "Status (2026-11-08)" at
+the end says what was built, how it was checked and what is open.
 
 Instruments with their own stereo, the Rhodes Suitcase first (its side-to-side pan),
 should reach the mix and the room as two channels, and in the Room view as two speakers
@@ -282,3 +284,72 @@ per how the rear driver is wired) is an option once the back's construction is k
 7. **Old stereo-device event takes:** re-rendered in stereo when the session is opened,
    offered per track, or left until the user renders them (proposed: left; ST1's Render
    does it).
+
+## Status (2026-11-08)
+
+Built in one session, the user's ask: "record instruments like the Rhodes in the session and
+place it in a room, and use the EQ, applied separately to each channel; compression after".
+The decisions went as proposed (1-4, 6, 7; 5 is the compressor, not built).
+
+**ST1, stereo takes: built.**
+- The recorder keeps a right channel beside the left (`session::Recorder::capture_until`'s
+  `right`; a take is mono or stereo throughout: a change starts the next take).
+- The player passes a stereo device's raw right channel (`Emitter::raw_right`; `device_mid`
+  is gone), a stereo chain end's too.
+- `take_render::render` returns both channels (`Channels`); a stereo device's render key
+  adds `stereo` (its old mid renders aren't found; mono devices' keys are unchanged).
+- Files: a stereo take's `draft.wav`, and its renders' `audio.wav`, are 2-channel float32.
+- Old takes of stereo devices stay their mid. An event take is re-rendered in stereo by its
+  Render.
+
+**ST2, stereo through the session: built.**
+- `Take::right`, `TakeRender::right`, `Printed::right` / `stages_right`, `MixClip::right`;
+  `Take::sound_right`, `Track::is_stereo`, `Track::lane_lr`, `Track::playing_lr`.
+- A lane is stereo when one of its clips plays a stereo sound; its mono clips play on both
+  sides. The lane signature marks stereo sounds only, so mono prints keep their keys.
+- The strip's pan on a stereo track is the same balance law (the Mixer labels it `BAL`);
+  the meters, export and stems carry both channels; the take line says `stereo`.
+- `session::tests::every_session_opens_to_the_same_mix`: the 24 sessions in `sessions/`
+  play bit for bit.
+
+**ST3, inserts on stereo tracks: built, except LINK (the compressor).**
+- `print::Job::spawn` / `lookup` take the right channel: the same chain on a thread of its
+  own, `Print::right` (a right equal to the left prints once).
+- Prints and ⤓ Render / ⤓ Draft of a stereo lane are stereo.
+- The insert panel's **hear L | R | mid** on a stereo track (L by default; the mid made once
+  per input); a stereo key track keys from its mid.
+- Not built: Hear "stereo" (two live instances), LINK (independent / key-linked), ST3b.
+
+**ST4, stereo room sources: built.**
+- A scene source with `clip_r` and `stereo: {spacing_m, sides?}` expands at load into
+  `<name>.L` / `<name>.R` (varimu/rooms/scene.py), its left at the facing direction's left.
+- One gain from the louder channel's sounding rms.
+- **The tail:** both sides share one diffuse field (the scene source's seed), each shifted to
+  where it sits (`shoebox.responses`' `tail_offsets`), so they cohere as the diffuse field's
+  sinc(k d). Independent seeds made a pair at zero spacing two different rooms.
+- Sources after a pair keep their seeds (`SourceSpec.seed_index`); mono scenes' response keys
+  are unchanged (the code's hash still moves every key once, as any edit of varimu/rooms does).
+- Solos (the bleed matrix) are per side, not per pair (a deviation from the plan: simpler,
+  and informative). BALANCE's stems are per pair (one fader).
+- Tests: `tests/test_rooms.py::test_a_stereo_source_is_two_speakers_with_one_gain` (the
+  expansion, the gain, zero spacing equal to the mono source),
+  `test_a_stereo_pairs_tails_cohere_as_the_diffuse_field_says`.
+- End to end (a 3.8 Hz complementary pan, 0.6 m apart, `amp_1x12`, 7 x 5.5 m room, the clean
+  omni chain at draft): the mono mic 1.5 m in front hears a 2.3 dB swing, a spaced pair's
+  mics 3.5 / 4.1 dB.
+
+**ST5, the Room view: built.**
+- A source whose track is stereo draws its two speakers (L, R) across its facing direction;
+  its form has "speakers N m apart" and "as one point" (the mid), and faces for any pair.
+- The spacing defaults from `room::STEREO_SPACINGS` (the Suitcase's provisional 0.6 m), else
+  1.5 m; kept in the scene state (`spacing_m`, `as_mono`).
+- The render writes `<name>.L.wav` / `.R.wav` and the pair (`Scene::render_json_lr`);
+  "Levels from the mix" measures a stereo track's louder channel.
+
+**Open.**
+- The stereo compressor: LINK, ST3b (the user: after).
+- Hear "stereo" (two live instances).
+- Imported stereo files still import as their mid (`import_files` uses `audio::load`).
+- The Suitcase's real spacing (to source).
+- The user's first try.
+
