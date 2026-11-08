@@ -18,13 +18,15 @@ varimu.circuit.builder, which expands its parts with the parts library
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
-    sections: [{title, tolerance?, substeps?, decimate?, owns?,
+    sections: [{title, tolerance?, substeps?, decimate?, owns?, lag_samples?,
                 parts: {NAME: {<macro>: <nodes>, ...}}}]
                                     # substeps: steps per sample on a thread of its own (a
                                     # multi-rate part: circuitsim's partition.rs);
                                     # decimate: fir (what it hands on through an
                                     # anti-alias low-pass); owns: [node, ...] (shared nodes
-                                    # it owns: an island's output)
+                                    # it owns: an island's output); lag_samples: N
+                                    # (it reads the others N samples late and runs
+                                    # ahead: a cut only through stiff rails)
 
 Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
@@ -228,7 +230,9 @@ def load_circuit(path: Path) -> CircuitSpec:
     for i, s in enumerate(sections):
         if not isinstance(s, Mapping) or "title" not in s or "parts" not in s:
             errors.append(f"sections[{i}]: needs `title` and `parts`")
-        elif extra := set(s) - {"title", "parts", "tolerance", "substeps", "decimate", "owns"}:
+        elif extra := set(s) - {
+            "title", "parts", "tolerance", "substeps", "decimate", "owns", "lag_samples"
+        }:  # fmt: skip
             errors.append(f"sections[{i}]: unknown keys {sorted(extra)}")
         elif "substeps" in s and (
             isinstance(s["substeps"], bool)
@@ -236,8 +240,21 @@ def load_circuit(path: Path) -> CircuitSpec:
             or s["substeps"] < 1
         ):
             errors.append(f"sections[{i}]: substeps {s['substeps']} (a count, 1 or more)")
-        elif ("decimate" in s or "owns" in s) and s.get("substeps", 1) < 2:
-            errors.append(f"sections[{i}]: decimate and owns are for a multi-rate section")
+        elif ("decimate" in s or "owns" in s or "lag_samples" in s) and s.get("substeps", 1) < 2:
+            errors.append(
+                f"sections[{i}]: decimate, owns and lag_samples are for a multi-rate section"
+            )
+        elif "lag_samples" in s and (
+            isinstance(s["lag_samples"], bool)
+            or not isinstance(s["lag_samples"], int)
+            or s["lag_samples"] < 1
+            or "decimate" in s
+            or "owns" in s
+        ):
+            errors.append(
+                f"sections[{i}]: lag_samples {s['lag_samples']!r} (a count, 1 or more,"
+                " without decimate or owns)"
+            )
         elif "decimate" in s and s["decimate"] not in DECIMATIONS:
             errors.append(f"sections[{i}]: decimate {s['decimate']!r} (one of {DECIMATIONS})")
         elif "owns" in s and (

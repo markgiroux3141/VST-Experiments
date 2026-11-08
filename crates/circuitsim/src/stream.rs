@@ -11,7 +11,15 @@
 //! A partitioned stream keeps each partition past the first on a thread of its
 //! own for its lifetime (stepping in lockstep with the caller's, as
 //! `partition.rs` describes; idle, it waits without spinning after a few
-//! milliseconds).
+//! milliseconds). A multi-rate part whose sections have `lag_samples` reads the others
+//! that many samples late and runs ahead of them (TAPE_SPEED_PLAN.md P2); such a stream
+//! refuses updates.
+//!
+//! Environment switches for measurements (TAPE_SPEED_PLAN.md; nothing sets them by
+//! default): `CIRCUITSIM_PART_TIMING` prints each part's busy and waiting time and the tape
+//! worker's when a partitioned stream ends; `CIRCUITSIM_MULTIRATE_METHOD` (a method name) and
+//! `CIRCUITSIM_MULTIRATE_TABLES` give the multi-rate parts their own method and tube tables
+//! (P4's experiment; a render with them isn't production's).
 //!
 //! [`Stream::update`] changes component values (a knob turned): applied at the
 //! next sample boundary the stream reaches, in every partition at the same
@@ -22,7 +30,7 @@
 //! jumps can stall Newton, so callers ramp them.
 
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -69,6 +77,11 @@ struct Shared {
     error: Mutex<Option<Error>>,
     /// The input, when a multi-rate part has the input node.
     input: Mutex<InputHist>,
+    /// Per partition: nanoseconds spent waiting for the others (or the input), for
+    /// `CIRCUITSIM_PART_TIMING` (TAPE_SPEED_PLAN.md P1).
+    waited_ns: Vec<AtomicU64>,
+    /// When the stream started (the timing's wall clock).
+    created: Instant,
 }
 
 impl Shared {
@@ -98,27 +111,42 @@ impl Shared {
     /// or extrapolated through n - 1). Waits until every partition has published
     /// sample n, not only those read: no partition gets more than a sample ahead
     /// of another, so a ring of three samples is never overwritten while read.
-    /// False if stopped.
+    ///
+    /// A part reading `lag` > 0 samples late (`Options::multirate_lag`) takes the
+    /// published samples n - lag and n + 1 - lag instead (sample 0 before them), and
+    /// waits only for those: it runs up to `lag` samples ahead. The others still wait
+    /// for its sample n, so it is never behind them, and a ring of 2 lag + 3 samples
+    /// is never overwritten while read. False if stopped.
+    #[allow(clippy::too_many_arguments)]
     fn feeds(
         &self,
+        me: usize,
         coupling: Coupling,
+        lag: usize,
         feeds: &[Feed],
         n: usize,
         e0: &mut [f64],
         e1: &mut [f64],
     ) -> bool {
+        let (a0, a1) = (n.saturating_sub(lag), (n + 1).saturating_sub(lag));
         let one = |p: usize, slot: usize| -> (f64, f64) {
+            if lag > 0 {
+                return (self.rings[p].value(a0, slot), self.rings[p].value(a1, slot));
+            }
             let x0 = self.rings[p].value(n, slot);
             match (coupling, n) {
                 (Coupling::Extrapolate, 1..) => (x0, 2.0 * x0 - self.rings[p].value(n - 1, slot)),
                 _ => (x0, x0),
             }
         };
+        let t0 = Instant::now();
+        let target = if lag > 0 { a1 } else { n };
         for p in 0..self.rings.len() {
-            if !self.wait(p, n) {
+            if p != me && !self.wait(p, target) {
                 return false;
             }
         }
+        self.waited_ns[me].fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
         for (k, f) in feeds.iter().enumerate() {
             (e0[k], e1[k]) = match f {
                 Feed::Value(p, slot) => one(*p, *slot),
@@ -141,8 +169,9 @@ impl Shared {
     /// The input over step n -> n + 1 (interpolation `order`), as the first partition
     /// takes it (`Stream::step_one`), once the samples it needs are in; None if stopped or
     /// the input has ended before it.
-    fn input_window(&self, n: usize, order: usize) -> Option<StepInput> {
+    fn input_window(&self, me: usize, n: usize, order: usize) -> Option<StepInput> {
         let half = (order - 1) / 2;
+        let t0 = Instant::now();
         let mut spins = 0u32;
         let mut since: Option<Instant> = None;
         loop {
@@ -175,6 +204,7 @@ impl Shared {
                         g.hist.drain(..d);
                         g.hist0 = keep;
                     }
+                    self.waited_ns[me].fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
                     return Some(inp);
                 }
             }
@@ -222,6 +252,8 @@ struct PartIo {
     input_order: Option<usize>,
     /// A multi-rate part handing on its values through a [`Decimator`].
     decimate: bool,
+    /// Samples late it reads the others (`Options::multirate_lag`; 0: lockstep).
+    lag: usize,
 }
 
 /// The partitions past the first: their threads, and what all share.
@@ -241,6 +273,9 @@ struct Parts {
     /// The first partition's senses for tapes elsewhere (unknowns; None: ground),
     /// published after its couplings.
     senses: Vec<(Option<usize>, Option<usize>)>,
+    /// A part reads the others late (`Options::multirate_lag`): it may be ahead of a
+    /// sample boundary when a command for it is queued, so updates are refused.
+    lagged: bool,
 }
 
 /// A partition's thread: step after the others' sample, applying commands
@@ -276,7 +311,7 @@ fn run_part(
         // for sample n before it publishes it, so they are all here after this (read
         // before the wait, a partition running ahead missed them and never applied a
         // knob turned on its sections).
-        if !shared.feeds(coupling, &feeds, n, &mut e0, &mut e1) {
+        if !shared.feeds(p, coupling, io.lag, &feeds, n, &mut e0, &mut e1) {
             return;
         }
         // Commands for this sample.
@@ -306,7 +341,7 @@ fn run_part(
             tr.set_media_batch(f.medium, &buf);
         }
         let inp = match io.input_order {
-            Some(order) => match shared.input_window(n, order) {
+            Some(order) => match shared.input_window(p, n, order) {
                 Some(inp) => inp,
                 // Stopped, or the input has ended: nothing more to step.
                 None => return,
@@ -604,6 +639,7 @@ impl Stream {
                     substeps: None,
                     decimate: None,
                     owns: None,
+                    lag_samples: None,
                     elements: owned
                         .iter()
                         .flat_map(|&i| {
@@ -678,6 +714,7 @@ impl Stream {
                 feeds: Vec::new(),
                 input_order: (p == sp.input_part && p > 0).then_some(opts.input_order.max(1)),
                 decimate: sp.decimate[p].is_some(),
+                lag: 0,
             };
             let ext: Vec<f64> = f
                 .iter()
@@ -711,6 +748,14 @@ impl Stream {
                 let mut o = *opts;
                 if sp.substeps[p] > 1 {
                     o.error_abstol = 0.0;
+                    // P4's experiment switches (the module docs): the fast part's method and
+                    // tube tables.
+                    if let Ok(m) = std::env::var("CIRCUITSIM_MULTIRATE_METHOD") {
+                        o.method = crate::transient::Method::parse(&m)?;
+                    }
+                    if std::env::var_os("CIRCUITSIM_MULTIRATE_TABLES").is_some() {
+                        o.tube_tables = true;
+                    }
                 }
                 Transient::with_externals(mna, h / sp.substeps[p] as f64, o, u, &ext)?
             };
@@ -754,6 +799,24 @@ impl Stream {
             };
             ios[r.reader].feeds.push(feed);
         }
+        // The parts that read the others late (their sections' `lag_samples`;
+        // TAPE_SPEED_PLAN.md P2): multi-rate, owning nothing, not decimating (the IR checks
+        // those), reading no senses.
+        for (p, io) in ios.iter_mut().enumerate() {
+            if sp.lag[p] > 0 {
+                if !io.feeds.is_empty() || !sp.owned(p).is_empty() {
+                    return Err(Error::new(format!(
+                        "partition {:?}: lag_samples in a part that owns shared nodes or \
+                         reads another part's senses",
+                        sp.titles[p]
+                    )));
+                }
+                io.lag = sp.lag[p];
+            }
+        }
+        let max_lag = ios.iter().map(|io| io.lag).max().unwrap_or(0);
+        let lagged = max_lag > 0;
+        let depth = 2 * max_lag + 3;
 
         // The IR's probes from the partition that has them (a shared node's, its
         // owner: the others copy its voltage).
@@ -770,7 +833,7 @@ impl Stream {
             sources.push(found.ok_or_else(|| Error::new(format!("partition: probe {name} lost")))?);
         }
         let shared = Arc::new(Shared {
-            rings: dc_out.iter().map(|o| Ring::new(o.len())).collect(),
+            rings: dc_out.iter().map(|o| Ring::new(o.len(), depth)).collect(),
             stop: AtomicBool::new(false),
             commands: (0..n_parts).map(|_| Mutex::new(VecDeque::new())).collect(),
             probes: trs
@@ -783,6 +846,8 @@ impl Stream {
                 hist0: 0,
                 len: None,
             }),
+            waited_ns: (0..n_parts).map(|_| AtomicU64::new(0)).collect(),
+            created: Instant::now(),
         });
         // Sample 0 (DC), published by all.
         for (ring, o) in shared.rings.iter().zip(&dc_out) {
@@ -819,6 +884,7 @@ impl Stream {
             media_feeds: ios[0].feeds.clone(),
             shares_input: sp.input_part > 0,
             senses: ios[0].senses.clone(),
+            lagged,
         };
         let out_len = ios[0].n_coupling + ios[0].senses.len();
         let mut stream = base(a, Some(parts), sources, k);
@@ -863,6 +929,11 @@ impl Stream {
     pub fn update(&mut self, ir: &CircuitIr) -> Result<(), Error> {
         let parts = match &self.parts {
             None => None,
+            Some(s) if s.lagged => {
+                return Err(Error::new(
+                    "update: a part reads the others late (multirate_lag): renders only",
+                ));
+            }
             Some(s) => {
                 let sp = split(ir, &s.second)?;
                 let nodes: Vec<(String, usize)> = sp
@@ -1036,7 +1107,7 @@ impl Stream {
         if let Some(s) = &self.parts {
             if !s
                 .shared
-                .feeds(self.coupling, &s.feeds, n, &mut self.e0, &mut self.e1)
+                .feeds(0, self.coupling, 0, &s.feeds, n, &mut self.e0, &mut self.e1)
             {
                 return Err(Error::new("stopped"));
             }
@@ -1143,6 +1214,25 @@ impl Stream {
 impl Drop for Stream {
     fn drop(&mut self) {
         if let Some(s) = &mut self.parts {
+            if std::env::var_os("CIRCUITSIM_PART_TIMING").is_some() {
+                let wall = s.shared.created.elapsed().as_secs_f64();
+                let waits: Vec<String> = s
+                    .shared
+                    .waited_ns
+                    .iter()
+                    .enumerate()
+                    .map(|(p, w)| {
+                        let w = w.load(Ordering::Relaxed) as f64 * 1e-9;
+                        format!("part {p} busy {:.2} s wait {:.2} s", wall - w, w)
+                    })
+                    .collect();
+                eprintln!(
+                    "circuitsim partition timing: wall {wall:.2} s, {} samples; {}; {}",
+                    self.n,
+                    waits.join("; "),
+                    crate::tape_stream::timing_line()
+                );
+            }
             s.shared.stop.store(true, Ordering::Relaxed);
             for h in s.handles.iter_mut() {
                 if let Some(h) = h.take() {

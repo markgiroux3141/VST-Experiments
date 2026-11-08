@@ -153,6 +153,18 @@ pub struct Section {
     /// their users' currents). Absent: it owns none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owns: Option<Vec<String>>,
+    /// A multi-rate section that owns nothing and doesn't decimate (its part reading no
+    /// other part's senses) reads the other parts' couplings this many samples late,
+    /// interpolated between published samples, so its part runs up to that many samples
+    /// ahead of them instead of in lockstep (`stream.rs`; TAPE_SPEED_PLAN.md P2: the Ampex
+    /// 351's record side, coupled to the rest only through its supply's reservoirs). A
+    /// part's lag is the largest of its sections'. Absent: lockstep.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "opt_count"
+    )]
+    pub lag_samples: Option<usize>,
 }
 
 /// How a multi-rate part turns its steps into the values it publishes per sample.
@@ -1244,6 +1256,15 @@ impl CircuitIr {
             if s.owns.as_ref().is_some_and(|o| o.is_empty() || !multirate) {
                 return err(format!(
                     "section {:?}: owns needs nodes, in a multi-rate section",
+                    s.title
+                ));
+            }
+            if let Some(l) = s.lag_samples
+                && (l == 0 || !multirate || s.decimate.is_some() || s.owns.is_some())
+            {
+                return err(format!(
+                    "section {:?}: lag_samples {l} (1 or more, in a multi-rate section that \
+                     owns nothing and doesn't decimate)",
                     s.title
                 ));
             }

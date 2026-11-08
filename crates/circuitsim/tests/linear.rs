@@ -69,6 +69,7 @@ fn circuit(elements: Vec<Element>, probes: &[&str]) -> CircuitIr {
             substeps: None,
             decimate: None,
             owns: None,
+            lag_samples: None,
             elements,
         }],
     }

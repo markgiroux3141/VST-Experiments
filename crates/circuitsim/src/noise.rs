@@ -357,6 +357,18 @@ impl Stream {
 
     /// Hold samples `k0 .. k0 + w` (the run only moves forward).
     fn seek(&mut self, k0: u64, w: usize, filter: Option<&FlickerFilter>) {
+        // A white stream holding nothing jumps (a run's origin far from t = 0,
+        // `Options::origin_samples`): its samples are a pure function of their index. A
+        // flicker or low-passed one walks there, its state carried.
+        if self.vals.is_empty()
+            && self.flicker.is_none()
+            && self.lowpass.is_none()
+            && self.start < k0
+            && self.white.position() == self.start
+        {
+            self.white = Normals::new(self.white.key, k0);
+            self.start = k0;
+        }
         while self.start < k0 {
             // Sample `start` is the window's first, or (window empty) the generator's next.
             if self.vals.is_empty() {

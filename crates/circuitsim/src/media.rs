@@ -105,6 +105,8 @@ pub struct TapeMedium {
     stream: crate::tape_stream::TapeStream,
     fs: f64,
     noise_seed: Option<u64>,
+    /// The run's origin (`Medium::set_origin`), for a stream made anew.
+    origin: u64,
     /// Scratch: a push's fields and its EMF.
     fields: Vec<f64>,
     emf: Vec<f64>,
@@ -126,8 +128,15 @@ impl TapeMedium {
         // Leave four logical cores to the circuit's own threads (its parts, a multi-rate
         // part, the stream's worker): the Ampex 351 runs 72.9x real time with 12 of 16,
         // 80x with all 16 (TAPE_PLAN.md, "Speed").
+        // CIRCUITSIM_TAPE_THREADS overrides it (pieces of a print run at once:
+        // TAPE_SPEED_PLAN.md P3); the output doesn't depend on it.
         let cores = std::thread::available_parallelism().map_or(1, |n| n.get());
-        st.set_threads(cores.saturating_sub(4).max(1))?;
+        let threads = std::env::var("CIRCUITSIM_TAPE_THREADS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(cores.saturating_sub(4))
+            .max(1);
+        st.set_threads(threads)?;
         Ok(st)
     }
 
@@ -187,6 +196,7 @@ impl Medium {
                 stream: TapeMedium::stream(t, fs, noise_seed)?,
                 fs,
                 noise_seed,
+                origin: 0,
                 fields: Vec::new(),
                 emf: Vec::new(),
             })),
@@ -199,6 +209,17 @@ impl Medium {
                 Medium::Nova(Box::new(crate::novachord::Medium::new(k, fs)?))
             }
         })
+    }
+
+    /// Start at sample `k0` of a longer run (`Options::origin_samples`): a tape's
+    /// transport and grain; the other media don't depend on time alone. Before the first
+    /// push.
+    pub fn set_origin(&mut self, k0: u64) -> Result<(), String> {
+        if let Medium::Tape(m) = self {
+            m.origin = k0;
+            m.stream.set_origin(k0)?;
+        }
+        Ok(())
     }
 
     /// The sensed voltage at this sample (and a tape's capstan supply, if it has one);
@@ -314,6 +335,7 @@ impl Medium {
                     } == **old;
                 if t.name != m.tape.name || (t.medium != *old && !same_but_bias) {
                     m.stream = TapeMedium::stream(t, m.fs, m.noise_seed)?;
+                    m.stream.set_origin(m.origin)?;
                 } else if same_but_bias {
                     m.stream.set_bias(t.medium.hg_bias_a_m)?;
                 }

@@ -410,3 +410,27 @@ def test_a_multirate_part_feeds_the_literal_bias():
     # Push k's EMF drives sample k + 1 (push 0 at the DC point).
     assert np.abs(ref).max() > 0
     assert _rel(out[1:], ref[: n - 1]) < 1e-6
+
+
+def test_a_streams_origin_moves_only_what_depends_on_time():
+    """`origin` (TAPE_SPEED_PLAN.md P3): the stream starts at that step of a longer run. A
+    stream without grain or flutter doesn't depend on time: the same output. The flutter's
+    phase and noise continue from there: other speeds, the same level. The grain
+    comes from cells further along the tape: the same coating, other cells."""
+    cs = _rust()
+    spec, tape, h, bias = _small()
+    still = dataclasses.replace(spec, flutter=False)
+    plain = json.dumps(stream_params(still, tape, bias))
+    base = np.asarray(cs.tape_stream_run(plain, FS, h))
+    for k in (0, 96_000):
+        got = np.asarray(cs.tape_stream_run(plain, FS, h, origin=k))
+        np.testing.assert_array_equal(got, base)
+    moving = json.dumps(stream_params(spec, tape, bias))
+    f0 = np.asarray(cs.tape_stream_run(moving, FS, h, transport_seed=3))
+    fk = np.asarray(cs.tape_stream_run(moving, FS, h, transport_seed=3, origin=96_000))
+    assert _rel(fk, f0) > 1e-9 and abs(np.std(fk) / np.std(f0) - 1.0) < 0.05
+    grainy = json.dumps(stream_params(still, _grainy(tape), bias))
+    g0 = np.asarray(cs.tape_stream_run(grainy, FS, h, noise_seed=7))
+    gk = np.asarray(cs.tape_stream_run(grainy, FS, h, noise_seed=7, origin=96_000))
+    assert _rel(gk, g0) > 1e-6
+    assert abs(np.std(gk - base) / np.std(g0 - base) - 1.0) < 0.5

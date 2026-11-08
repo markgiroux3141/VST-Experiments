@@ -529,6 +529,12 @@ pub struct Options {
     /// current, ~40x cheaper for a bank of four 6386s). Off by default: a
     /// setting for fast draft runs.
     pub tube_tables: bool,
+    /// The run's first sample is this sample of a longer run from t = 0: what depends on
+    /// time alone starts there (the sine sources' phase, at the DC point too; the noise
+    /// streams; a tape's transport and grain, `TapeStream::set_origin`), so pieces of a
+    /// long render run apart can continue each other (TAPE_SPEED_PLAN.md P3). The state
+    /// still starts at the DC operating point. 0 (the default): from t = 0.
+    pub origin_samples: u64,
 }
 
 impl Default for Options {
@@ -553,6 +559,7 @@ impl Default for Options {
             all_unknowns: true,
             newton_reuse: true,
             tube_tables: false,
+            origin_samples: 0,
         }
     }
 }
@@ -964,7 +971,11 @@ impl Transient {
         let media = mna
             .media
             .iter()
-            .map(|m| crate::media::Medium::new(&m.element, 1.0 / h, m.noise_seed))
+            .map(|m| {
+                let mut md = crate::media::Medium::new(&m.element, 1.0 / h, m.noise_seed)?;
+                md.set_origin(opts.origin_samples)?;
+                Ok(md)
+            })
             .collect::<Result<Vec<_>, String>>()
             .map_err(Error::new)?;
         let events = mna
@@ -993,7 +1004,7 @@ impl Transient {
             f: vec![0.0; n],
             ports,
             u: u0,
-            n: 0,
+            n: opts.origin_samples,
             ext0: ext.to_vec(),
             ext1: ext.to_vec(),
             x_full: true,
@@ -1128,7 +1139,8 @@ impl Transient {
             }
         }
         base[self.mna.input_row] += u0;
-        self.mna.add_waves(0.0, &mut base);
+        self.mna
+            .add_waves(self.opts.origin_samples as f64 * self.h, &mut base);
         for (&row, &e) in self.mna.externals.iter().zip(&self.ext0) {
             base[row] += e;
         }

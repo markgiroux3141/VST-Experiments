@@ -43,6 +43,8 @@ pub struct SectionSpec {
     pub decimate: Option<circuitsim::ir::Decimate>,
     /// Shared nodes a multi-rate part owns (`owns: [node, ...]`), if given.
     pub owns: Option<Vec<String>>,
+    /// Samples late a multi-rate part reads the others (`lag_samples: N`), if given.
+    pub lag_samples: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -326,6 +328,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                     "substeps",
                     "decimate",
                     "owns",
+                    "lag_samples",
                 ]
                 .contains(k)
             })
@@ -346,12 +349,27 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                 continue;
             }
         };
-        if (m.contains("decimate") || m.contains("owns")) && substeps.unwrap_or(1) < 2 {
+        if (m.contains("decimate") || m.contains("owns") || m.contains("lag_samples"))
+            && substeps.unwrap_or(1) < 2
+        {
             errors.push(format!(
-                "sections[{i}]: decimate and owns are for a multi-rate section"
+                "sections[{i}]: decimate, owns and lag_samples are for a multi-rate section"
             ));
             continue;
         }
+        let lag_samples = match m.get("lag_samples") {
+            None => None,
+            Some(Value::Int(n)) if *n >= 1 && !m.contains("decimate") && !m.contains("owns") => {
+                Some(*n as usize)
+            }
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: lag_samples {} (a count, 1 or more, without decimate or owns)",
+                    v.py_str()
+                ));
+                continue;
+            }
+        };
         let decimate = match m.get("decimate") {
             None => None,
             Some(Value::Str(d)) if d == "fir" => Some(circuitsim::ir::Decimate::Fir),
@@ -385,6 +403,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             substeps,
             decimate,
             owns,
+            lag_samples,
         });
     }
     let devices = map_or_empty(data.get("devices"));

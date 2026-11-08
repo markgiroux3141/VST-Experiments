@@ -44,6 +44,7 @@ fn circuit() -> CircuitIr {
             substeps: None,
             decimate: None,
             owns: None,
+            lag_samples: None,
             elements: vec![
                 r("R1", "in", "a", 100.0),
                 Element::Inductor(Inductor {

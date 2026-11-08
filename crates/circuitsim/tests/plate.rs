@@ -80,6 +80,7 @@ fn circuit(controls: bool) -> CircuitIr {
                 substeps: None,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: audio,
             },
             Section {
@@ -87,6 +88,7 @@ fn circuit(controls: bool) -> CircuitIr {
                 substeps: None,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: vec![resistor("R3", "x", "0", 1e5)],
             },
         ],

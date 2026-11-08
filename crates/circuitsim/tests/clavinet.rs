@@ -264,6 +264,7 @@ fn circuit(el: ClavStrings) -> circuitsim::ir::CircuitIr {
             substeps: None,
             decimate: None,
             owns: None,
+            lag_samples: None,
         }],
         controls: vec![],
         noise: None,

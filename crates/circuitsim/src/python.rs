@@ -58,7 +58,7 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
     newton_reuse = None, step_selection = None, error_norm = None, tube_tables = None,
     partition = None, partition_coupling = None, stats = false, progress = None, controls = None,
-    notes = None
+    notes = None, origin_samples = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -89,6 +89,7 @@ fn simulate<'py>(
     progress: Option<Py<PyAny>>,
     controls: Option<Vec<PyReadonlyArray1<'py, f64>>>,
     notes: Option<Vec<(usize, String, u8, u8)>>,
+    origin_samples: Option<u64>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
     let notes = note_events(notes.unwrap_or_default())?;
@@ -121,6 +122,7 @@ fn simulate<'py>(
             .map_or(Ok(d.error_norm), ErrorNorm::parse)
             .map_err(invalid)?,
         tube_tables: tube_tables.unwrap_or(d.tube_tables),
+        origin_samples: origin_samples.unwrap_or(d.origin_samples),
         // Python gets the probes only.
         all_unknowns: false,
         ..d
@@ -546,11 +548,12 @@ fn tape_record<'py>(
 /// transport's random parts' (seed, "transport"); `supply_hz`: varispeed's capstan supply
 /// frequency per push (a medium with `varispeed` needs it); `bias_a_m`: a reduced
 /// medium's bias changes, (push index, deep-gap peak A/m) rising, each set before that
-/// push (the pushes split there). Returns the repro EMF after each push (at t_{n+1}).
+/// push (the pushes split there); `origin`: the stream starts at that step of a longer run
+/// (`TapeStream::set_origin`). Returns the repro EMF after each push (at t_{n+1}).
 /// With the literal bias (`bias_substeps` M), `h` is the head's whole field, M samples per
 /// step (`chunk` a multiple of M). Releases the GIL.
 #[pyfunction]
-#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None))]
+#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None, origin = 0))]
 #[allow(clippy::too_many_arguments)]
 fn tape_stream_run<'py>(
     py: Python<'py>,
@@ -562,6 +565,7 @@ fn tape_stream_run<'py>(
     transport_seed: u64,
     supply_hz: Option<PyReadonlyArray1<'py, f64>>,
     bias_a_m: Option<Vec<(usize, f64)>>,
+    origin: u64,
 ) -> PyResult<Bound<'py, PyAny>> {
     let p: crate::tape_stream::TapeParams =
         serde_json::from_str(params).map_err(|e| invalid(format!("tape_stream_run: {e}")))?;
@@ -575,6 +579,7 @@ fn tape_stream_run<'py>(
             noise_seed.map(|seed| (seed, "tape")),
             transport_seed,
         )?;
+        st.set_origin(origin)?;
         let mut out = Vec::with_capacity(h.len());
         let m = st.substeps();
         let chunk = (chunk.max(1)).div_ceil(m) * m;

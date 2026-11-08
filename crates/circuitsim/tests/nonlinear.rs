@@ -68,6 +68,7 @@ fn circuit(models: Vec<DeviceModel>, elements: Vec<Element>, probes: &[&str]) ->
             substeps: None,
             decimate: None,
             owns: None,
+            lag_samples: None,
             elements,
         }],
     };

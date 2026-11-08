@@ -63,6 +63,7 @@ fn rc(external: bool) -> CircuitIr {
             substeps: None,
             decimate: None,
             owns: None,
+            lag_samples: None,
             elements,
         }],
     }
@@ -253,6 +254,7 @@ fn multirate_ir(substeps: Option<usize>) -> CircuitIr {
                 substeps: None,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: vec![resistor("R1", "in", "s", 100.0), cap("C1", "s", 10e-6)],
             },
             Section {
@@ -260,6 +262,7 @@ fn multirate_ir(substeps: Option<usize>) -> CircuitIr {
                 substeps,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: vec![
                     resistor("R2", "s", "f", 1e3),
                     cap("C2", "f", 1e-9),
@@ -484,6 +487,7 @@ fn an_island_owns_its_output() {
                 substeps: None,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: vec![
                     Element::VoltageSource(VoltageSource {
                         name: "VB".into(),
@@ -502,6 +506,7 @@ fn an_island_owns_its_output() {
                 substeps,
                 decimate: substeps.map(|_| circuitsim::ir::Decimate::Fir),
                 owns: substeps.map(|_| vec!["o".to_string()]),
+                lag_samples: None,
                 elements: vec![
                     resistor("R1", "in", "o", 1e3),
                     cap("C1", "o", "0", 100e-9),
@@ -596,4 +601,86 @@ fn ownership_is_checked() {
     let mut ir = multirate_ir(None);
     ir.sections[0].owns = Some(vec!["s".into()]);
     assert!(ir.validate().is_err());
+}
+
+/// `multirate_ir` with the multi-rate section reading the rest `lag` samples late.
+fn lagged(lag: Option<usize>) -> CircuitIr {
+    let mut ir = multirate_ir(Some(16));
+    ir.sections[1].lag_samples = lag;
+    ir
+}
+
+#[test]
+fn a_lagged_multirate_part_sees_the_rest_late() {
+    // TAPE_SPEED_PLAN.md P2: the multi-rate part reads the stiff node s `lag` samples
+    // late (interpolated between published samples), so it runs ahead of the audio part.
+    let h = 1.0 / 192_000.0;
+    let n = 3000;
+    let x: Vec<f64> = (0..n)
+        .map(|i| 10.0 + 5.0 * (2.0 * std::f64::consts::PI * 1e3 * i as f64 * h).sin())
+        .collect();
+    let opts = Options {
+        input_order: 1,
+        ..Options::with_method(Method::Esdirk4)
+    };
+    let run = |ir: &CircuitIr| {
+        simulate_partitioned(
+            ir,
+            &[],
+            Coupling::Extrapolate,
+            &x,
+            h,
+            &opts,
+            usize::MAX,
+            |_| Ok(()),
+        )
+        .unwrap()
+    };
+    let lock = run(&lagged(None));
+    let lag = 33;
+    let (a, b) = (run(&lagged(Some(lag))), run(&lagged(Some(lag))));
+    // Whatever the threads' timing, the same result.
+    for (u, v) in a.values.iter().zip(&b.values) {
+        assert!(u.iter().zip(v).all(|(x, y)| x.to_bits() == y.to_bits()));
+    }
+    // The audio part's node: the fast part's current reaches it on time; only that
+    // current's own response to a late s differs (block means, the audio band).
+    let block = |s: &[f64], i: usize| s[i..i + 16].iter().sum::<f64>() / 16.0;
+    let (s_l, s_a) = (series(&lock, "v(s)"), series(&a, "v(s)"));
+    let ds = (200..n - 16)
+        .step_by(16)
+        .map(|i| (block(s_a, i) - block(s_l, i)).abs())
+        .fold(0.0, f64::max);
+    // The fast part's node is half s and half the source (R2 = R3): it differs from the
+    // lockstep run by half of s's change over the lag - 1 samples it sees s late (at the
+    // same samples, so the source cancels).
+    let (f_l, f_a) = (series(&lock, "v(f)"), series(&a, "v(f)"));
+    let d = lag - 1;
+    let (mut worst, mut predicted) = (0.0f64, 0.0f64);
+    for i in (200..n - 16).step_by(16) {
+        let want = 0.5 * (block(s_l, i - d) - block(s_l, i));
+        let got = block(f_a, i) - block(f_l, i);
+        worst = worst.max((got - want).abs());
+        predicted = predicted.max(want.abs());
+    }
+    eprintln!("lag {lag}: s {ds:.2e} V, f {worst:.2e} V from the prediction ({predicted:.2e} V)");
+    // Measured: s 7.1 mV (its load, f, answers its late view of s), f 3.9% of the change.
+    assert!(ds < 2e-2, "v(s) moved {ds} V");
+    assert!(
+        worst < 0.1 * predicted,
+        "v(f) {worst} V from the prediction ({predicted})"
+    );
+}
+
+#[test]
+fn lag_is_checked() {
+    let mut ir = lagged(Some(0));
+    assert!(ir.validate().is_err());
+    ir.sections[1].lag_samples = Some(8);
+    ir.sections[1].decimate = Some(circuitsim::ir::Decimate::Fir);
+    assert!(ir.validate().is_err());
+    let mut ir = multirate_ir(None);
+    ir.sections[1].lag_samples = Some(8);
+    assert!(ir.validate().is_err());
+    assert!(lagged(Some(8)).validate().is_ok());
 }

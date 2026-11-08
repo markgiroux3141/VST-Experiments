@@ -1,6 +1,7 @@
 # Tape speed: a faster literal print, and a fast tier trained on it
 
-Drafted 2026-11-02 from a brainstorm with the user, parked until picked up; nothing built.
+Drafted 2026-11-02 from a brainstorm with the user. Picked up 2026-11-08 (the user away,
+every call delegated): P1-P3 built and measured, P4 measured; see "Status (2026-11-08)".
 It continues TAPE_PLAN.md's "Speed: the GPU" (levers 1-4; lever 1, the stream's recording
 worker, is done) and feeds TM7 (real time) and DELAY_PLAN.md's "Real time". Milestones P1-P6
 (the literal machine faster) and F1-F5 (a fast tier), each finished only when its "done when"
@@ -26,6 +27,101 @@ is met, as in the other plans.
   machine's floor (`scripts/tape_snr_study.py --cells`), not only on band levels of music. A
   -78 dBFS line is invisible in drums. The bound (the user's): the floor at least 14 dB under
   the real noise, <= -89.4 dBFS.
+
+## Status (2026-11-08): P1-P3 built and measured; the kernel is the bound
+
+The harness throughout: `scripts/speed_351.py` (0.5 s of drums at +6 dB, production, noise
+off, one job alone, the 1 s settle counted; `--alignment` takes a cached alignment's panel,
+since `tape_align.aligned()` re-aligns, ~32 min, after any change to the Python it hashes).
+`CIRCUITSIM_PART_TIMING=1` makes circuitsim print each part's busy and waiting time and the
+tape worker's (`stream.rs`, `tape_stream.rs`).
+
+**P1, the split (done).** Lockstep, 76-79x real time (137 s wall):
+
+| thread | busy | waiting |
+|---|---|---|
+| part 0: supply, tape, reproduce side | 21 s | 117 s |
+| part 1: the record side at 3.84 MHz | 117-122 s | 15-16 s |
+| the tape's recording worker (its kernel on 12 threads) | ~120 s | the stream waited on it 9-11 s |
+
+The kernel's threads (`ttN`, `CIRCUITSIM_TAPE_THREADS`, a new override; the output doesn't
+depend on it), with the process's CPU time:
+
+| kernel threads | wall | x real time | process CPU | record side busy |
+|---|---|---|---|---|
+| 12 (default) | 137 s | 79 | 1500 s | 117 s |
+| 8 | 161 s | 93 | 1351 s | 114 s |
+| 4 | 244 s | 141 | 1115 s | 97 s |
+| 2 | 444 s | 256 | 1055 s | 93 s |
+
+- **The recording kernel is ~90% of the CPU work** (~900 thread-seconds for 1.7 s of audio,
+  ~500 per second of audio). The record side looks like the bound only because the kernel is
+  spread over 12 threads; alone, without the kernel's threads beside it, it runs ~54x.
+- So the machine is saturated by one print: a 3-minute song is ~3-4 hours whatever P2-P4 do
+  to the circuit. **P5 (the kernel on the GPU) comes first now**; P4 and P3 multiply after it.
+
+**P2, the record side decoupled (built, measured: no gain now).** A multi-rate section's
+`lag_samples: N` (IR `Section.lag_samples`, both builders, absent = lockstep; refused on a
+section that owns nodes or decimates): its part reads the others' couplings N samples late,
+interpolated between published samples, and runs up to N samples ahead (rings of 2N + 3
+samples; a lagged stream refuses `update`). Tests: `crates/circuitsim/tests/partition.rs`
+(`a_lagged_multirate_part_sees_the_rest_late`: the fast part sees the stiff node N - 1
+samples late, within 3.9% of the prediction; bit for bit from run to run),
+`tests/test_circuit_ir.py`. On the 351:
+
+| lag | x real time | waveform vs lockstep | bands vs lockstep |
+|---|---|---|---|
+| lockstep | 76-79 | | |
+| 16 | 81 | -85.8 dB | 0.000 dB |
+| 64 | 78 | -74.0 dB | 0.001 dB |
+| 256 | 77 | -57.6 dB | 0.006 dB |
+
+The record side still waits 13-15 s: part 0 stalls on the tape worker a whole 16 mm block
+(~8000 samples) at a time, more than any lag across the rails should absorb (256 samples is
+already 1.3 ms of the supply). Nothing in config uses it; revisit after P5, when the
+worker no longer stalls part 0. The spin-wait (`Shared::wait`) is not the cost: the
+waiting threads are the cheap ones.
+
+**P3, prints in pieces (built; not useful until P5).** `Options::origin_samples` (circuitsim;
+Python `simulate(origin_samples=)`, `fast.run_transient(origin_s=)`): a run starts as sample
+K of a longer run from t = 0 in everything that depends on time alone: the sine sources'
+phase (at the DC point too), the noise streams (white ones jump there, flicker and the mains
+wander walk), a tape's transport (flutter's phase, its random parts) and grain (from the cell
+the nominal speed has brought to the gap; `TapeStream::set_origin`, `tape_stream_run(origin=)`).
+`fast.run_transient_chunked` runs pieces at once on threads: each starts `warmup_s` early at
+its place (the input faded in over 50 ms or half the warm-up), runs 20 ms past what it keeps
+(the resamplers' edges), and hands over through a raised-cosine crossfade. Tests:
+`crates/circuitsim/tests/origin.rs` (a piece from origin K equals the whole run from K to
+1e-9 V, noise and mains wander included), `tests/test_chunked.py` (pieces rebuild a noisy RC's
+continuous run to 1e-6 rms), `tests/test_tape_stream.py` (the origin moves only grain and
+flutter). `scripts/chunk_351.py` compares the 351 in pieces with the whole print (band levels
+overall and around each seam, waveform at the seams). On this machine it can't be faster
+than the whole print until the kernel leaves the CPU: one print already uses 11 cores.
+Measured on 8 s of the drums at +6 dB (4 s pieces, 2 s warm-up, 2 at once; with noise):
+- the whole excerpt's band levels within **0.030 dB** of the continuous print (the done-when
+  asks 0.05 on 3 minutes: that run waits until the pieces are worth running, after P5);
+- at the seams the waveform differs -46 / -53 dB re rms and 200 ms windows' bands 0.14-0.15
+  dB, the same as in the pieces' middles (-46 dB, 0.06-0.20 dB): the free bias oscillator's
+  phase and the grain's cells, not the seams;
+- 138x real time against the whole print's 95x (Rust tests ran beside both): as expected,
+  no faster while the kernel saturates the CPU.
+
+**P4, a cheaper method in the record side (measured; adopt after P5).** circuitsim's
+experiment switches `CIRCUITSIM_MULTIRATE_METHOD` / `_TABLES` (`speed_351.py` variants
+`mtrbdf2`, `mtables`), the floor on the noiseless machine (`--floor`) and the drums:
+
+| record side | floor line | noiseless noise | record side busy (drums) | drums x real time | bands vs 40 substeps |
+|---|---|---|---|---|---|
+| esdirk4 (production) | -114.0 dBFS | -95.16 dBFS | 117 s | 79 | 0.061 dB |
+| **trbdf2** | -113.7 | -95.18 | **65 s** | 69 | **0.043 dB** |
+| trbdf2 + tube tables | -113.7 | -95.18 | 59 s | 68 | 0.043 dB |
+| tube tables | -114.0 | -95.16 | ~6% less | | |
+
+trbdf2 at 20 substeps holds the floor (bound <= -89.4) and halves the record side's cost
+(1.8x), closer to 40 substeps than esdirk4 is. The wall moves only 79 -> 69x: the kernel is
+the bound. Adopting it is a per-section method (an IR field like `lag_samples`, both
+builders, instead of the switch), then the 351 re-aligned and profiled: worth it once P5
+makes the record side the bound.
 
 ## What is not the limit
 
@@ -84,8 +180,8 @@ can move it.
 - An f32 tier validated against the f64 kernel (the user's rule: keep a CPU reference).
 - Also SIMD on the CPU kernel: check it vectorizes over cells and orientations, and try f32
   lanes.
-- Expected: 5-10x on the tape part (GPU), 1.5-3x (SIMD); it pays only once P2-P4 make the
-  tape part the bound.
+- Expected: 5-10x on the tape part (GPU), 1.5-3x (SIMD). P1 (2026-11-08) found the kernel
+  ~90% of the CPU: this is now the first lever ("Order").
 - Done when the f32 print is within -80 dB of the f64 print and its floor holds.
 
 **P6: the draft tier (TAPE_PLAN.md TM5's option B).**
@@ -159,9 +255,38 @@ Main-plan Phase 7 (the 670's neural surrogate: a TCN or RNN with FiLM conditioni
 - The fast tier as varimu-app's live device (TM6), with "print" rendering the literal machine.
 - Done when the user plays through it live and the print replaces it on render.
 
-## Order (proposed)
+## Order (revised 2026-11-08, after P1's measurement)
 
-1. P1, then P2 and P3: cheap, and they speed up everything after, F4's data included.
-2. Then F1-F2, the grey box first, for real time.
-3. P4-P5 when a literal print's wait matters more than real time.
+1. **P5's GPU kernel first**: it is ~90% of the CPU (Status above). With it the record side
+   (~54x alone) becomes the bound.
+2. **Then P4** (a cheaper method in the record side: its measurement is in the Status), and
+   **P3** (pieces at once: each piece is then about one core, so ~6 at a time on this
+   machine): together perhaps a 3-minute song in ~30-60 minutes instead of 3-4 hours.
+3. Then F1-F2, the grey box first, for real time (DELAY_PLAN.md's reduced tape is most of
+   F2 already: tables of M_x per layer, recording apertures and D(k), measured off the
+   literal machine and playing live in the echo).
 4. P6 if auditioning is needed before F2 is ready.
+
+### P5's design (2026-11-08, not built)
+
+- **What runs:** `tape::record` per 16 mm block: every (layer, cell) a backward pass over
+  the bias peaks in its zone (`s_rec`, `hg`, the head field from `FieldTable` or
+  `head_field`), 8 orientations each a `Corner` (a branch and a bicubic `q_diff` on the
+  Preisach table at each new maximum), then `finish` and the orientation sum. Independent
+  over (layer, cell, orientation): ~50 M threads per second of audio, each a loop of a few
+  hundred peaks. On the GPU: one invocation per (layer, cell, orientation) (or per cell with
+  the 8 orientations in registers, which shares the field lookups), the peaks and the
+  Preisach / field tables in storage buffers.
+- **Precision:** f32 (the 3080's f64 is ~1/64 rate). `up` sums positive increments of O(1):
+  ~1e-6 relative after a pass, near -120 dB of the magnetization; the field arithmetic is
+  benign. Done when the f32 print is within -80 dB of the f64 print and the noiseless floor
+  holds (P5's done-when above). The f64 CPU kernel stays the reference and the default
+  without a GPU (the user's rule: keep a CPU reference).
+- **Where:** a crate beside `roomsim` (whose wgpu device setup, buffers and "f64 CPU
+  reference per kernel" tests it copies), used by circuitsim behind a cargo feature so the
+  Python extension and the app opt in; `Recording` gets the switch (a setting, like
+  `threads`; the output differs from the CPU's by the f32 rounding, so prints say which).
+  The worker already records a block at a time off the circuit's threads: the GPU call goes
+  there.
+- **Then measure again:** the kernel's GPU time per block against the record side's per
+  block; if the GPU leaves the worker idle, P4 and P3 are next.

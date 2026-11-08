@@ -1453,15 +1453,18 @@ def _build(
             els += expand_part(ctx, str(name), entry)
         owns = tuple(s["owns"]) if "owns" in s else None
         substeps, decimate = s.get("substeps"), s.get("decimate")
+        lag = s.get("lag_samples")
         if not els or any(isinstance(e, ThyratronEvents) for e in els):
             # K replaces the island it plays in (technique M1 renders it, K plays it live); a
             # section its switches leave empty is no island (it owns nothing it doesn't have)
-            substeps = decimate = owns = None
-        sections.append(Section(s["title"], tuple(els), substeps, decimate, owns))
+            substeps = decimate = owns = lag = None
+        sections.append(Section(s["title"], tuple(els), substeps, decimate, owns, lag))
     if ctx.tape_islands:
         # A reduced tape replaces the literal bias's island: those sections at the sample rate.
         sections = [
-            Section(x.title, x.elements, None, None, None) if x.substeps in ctx.tape_islands else x
+            Section(x.title, x.elements, None, None, None, None)
+            if x.substeps in ctx.tape_islands
+            else x
             for x in sections
         ]
     if ctx.missing_class:

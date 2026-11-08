@@ -232,3 +232,42 @@ def test_circuit_files_take_decimation_and_ownership(tmp_path):
         path.write_text(bad, "utf-8")
         with pytest.raises(ConfigError, match="decimate|owns"):
             spec.load_circuit(path)
+
+
+def test_a_multirate_sections_lag_round_trips_and_is_checked():
+    """`Section.lag_samples` (TAPE_SPEED_PLAN.md P2) is written only when set, round-trips
+    through Rust, and is refused outside a multi-rate section that owns nothing and doesn't
+    decimate, in both languages."""
+    from varimu.circuit.ir import Capacitor, VoltageProbe
+
+    def ir(substeps, lag, decimate=None):
+        return CircuitIR(
+            title="t",
+            input_node="in",
+            probes=(VoltageProbe("a"),),
+            models=(),
+            sections=(
+                Section("slow", (Resistor("R2", "a", "0", 1e6),)),
+                Section(
+                    "fast",
+                    (Resistor("R1", "in", "a", 1e3), Capacitor("C1", "a", "0", 1e-6)),
+                    substeps,
+                    decimate,
+                    None,
+                    lag,
+                ),
+            ),
+        )
+
+    plain, lagged = ir(8, None), ir(8, 64)
+    assert '"lag_samples"' not in plain.to_json()
+    assert CircuitIR.from_json(lagged.to_json()) == lagged
+    for args in ((None, 64), (8, 0), (8, 64, "fir")):
+        with pytest.raises(IRError, match="lag_samples"):
+            ir(*args).validate()
+    circuitsim = pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    assert CircuitIR.from_json(circuitsim.ir_roundtrip(lagged.to_json())) == lagged
+    d = lagged.to_dict()
+    del d["sections"][1]["substeps"]
+    with pytest.raises(ValueError, match="lag_samples"):
+        circuitsim.ir_roundtrip(json.dumps(d))

@@ -13,6 +13,7 @@
 
 use std::f64::consts::PI;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
 use std::sync::{Mutex, mpsc};
 use std::thread::JoinHandle;
 
@@ -1002,6 +1003,20 @@ struct Worker {
     thread: Option<JoinHandle<()>>,
 }
 
+/// Process-wide timing of the literal recording (TAPE_SPEED_PLAN.md P1): the workers'
+/// time recording blocks, and the streams' time waiting for a block they read.
+static WORKER_BUSY_NS: AtomicU64 = AtomicU64::new(0);
+static WAITED_NS: AtomicU64 = AtomicU64::new(0);
+
+/// The recording's timing so far, for `CIRCUITSIM_PART_TIMING`.
+pub(crate) fn timing_line() -> String {
+    format!(
+        "tape worker busy {:.2} s, the stream waited on it {:.2} s",
+        WORKER_BUSY_NS.load(AtomicOrdering::Relaxed) as f64 * 1e-9,
+        WAITED_NS.load(AtomicOrdering::Relaxed) as f64 * 1e-9
+    )
+}
+
 impl Worker {
     fn spawn(ctx: Arc<Ctx>) -> Self {
         let (jobs, rx) = mpsc::channel::<Job>();
@@ -1015,7 +1030,11 @@ impl Worker {
                     kernels: Vec::new(),
                 };
                 while let Ok(job) = rx.recv() {
-                    if tx.send(r.record(job)).is_err() {
+                    let t0 = std::time::Instant::now();
+                    let done = r.record(job);
+                    WORKER_BUSY_NS
+                        .fetch_add(t0.elapsed().as_nanos() as u64, AtomicOrdering::Relaxed);
+                    if tx.send(done).is_err() {
                         break;
                     }
                 }
@@ -1037,11 +1056,15 @@ impl Worker {
 
     /// The next recorded block (in the order submitted), waiting for it.
     fn next(&self) -> Result<Done, String> {
-        self.done
+        let t0 = std::time::Instant::now();
+        let d = self
+            .done
             .lock()
             .map_err(|_| "tape: the recording thread stopped".to_string())?
             .recv()
-            .map_err(|_| "tape: the recording thread stopped".to_string())?
+            .map_err(|_| "tape: the recording thread stopped".to_string())?;
+        WAITED_NS.fetch_add(t0.elapsed().as_nanos() as u64, AtomicOrdering::Relaxed);
+        d
     }
 }
 
@@ -1071,6 +1094,8 @@ struct Finisher {
     demag: Vec<(usize, Arc<ReductionPoint>)>,
     /// The grain's (seed, name) of its Philox streams (`noise::key`), if on.
     grain: Option<(u64, String)>,
+    /// The grain's first cell along the tape (`TapeStream::set_origin`; 0 from t = 0).
+    cell_origin: u64,
     /// The packing field at the last cell recorded.
     packing_prev: f64,
     /// The next block to finish.
@@ -1078,6 +1103,25 @@ struct Finisher {
 }
 
 impl Finisher {
+    /// A finisher of the same tape, with nothing finished yet.
+    fn fresh(&self) -> Finisher {
+        Finisher {
+            p: self.p.clone(),
+            axes: self.axes.clone(),
+            rep_head: self.rep_head,
+            nb: self.nb,
+            nr: self.nr,
+            k_max: self.k_max,
+            planner: FftPlanner::new(),
+            rec: Vec::new(),
+            demag: Vec::new(),
+            grain: self.grain.clone(),
+            cell_origin: self.cell_origin,
+            packing_prev: 0.0,
+            next: 0,
+        }
+    }
+
     /// A recorded block: its cells (without the margins), the grain, and its predecessor's
     /// flux slope (which reads it), in block order.
     fn finish(&mut self, d: Done) -> Option<(usize, Vec<f64>)> {
@@ -1092,7 +1136,8 @@ impl Finisher {
             by.extend_from_slice(&d.my[l * cells + i0..l * cells + i0 + nb]);
         }
         if let Some((seed, name)) = self.grain.clone() {
-            self.grain_block(&mut bx, &mut by, b * nb, seed, &name);
+            let i0 = b * nb + self.cell_origin as usize;
+            self.grain_block(&mut bx, &mut by, i0, b * nb == 0, seed, &name);
         }
         self.rec.push((b, bx, by));
         if let Some(q) = d.demag {
@@ -1111,7 +1156,17 @@ impl Finisher {
     /// The reference's `_grain`: the block's cells from i0 times 1 + the packing field (an
     /// AR(1) along the tape, one for the coating's depth, its state carried from block to
     /// block), plus the Poisson particle noise.
-    fn grain_block(&mut self, mx: &mut [f64], my: &mut [f64], i0: usize, seed: u64, name: &str) {
+    /// `i0` counts from the tape's start at t = 0 (the origin's cell included); `first`:
+    /// the stream's first block, where the packing field starts from its stationary law.
+    fn grain_block(
+        &mut self,
+        mx: &mut [f64],
+        my: &mut [f64],
+        i0: usize,
+        first: bool,
+        seed: u64,
+        name: &str,
+    ) {
         let (nb, layers) = (self.nb, self.p.layers);
         let ds = self.p.ds_m;
         let dy = self.p.coating_m / layers as f64;
@@ -1127,10 +1182,10 @@ impl Finisher {
             let rho = (-ds / self.p.packing_corr_m).exp();
             let c = (1.0 - rho * rho).sqrt();
             let k = crate::noise::key(seed, name, 0);
-            if i0 == 0 {
-                let mut first = [0.0];
-                crate::noise::normals(k, 0, &mut first);
-                self.packing_prev = first[0];
+            if first {
+                let mut start = [0.0];
+                crate::noise::normals(k, i0 as u64, &mut start);
+                self.packing_prev = start[0];
             }
             let mut xi = vec![0.0; nb];
             crate::noise::normals(k, i0 as u64 + 1, &mut xi);
@@ -1416,6 +1471,9 @@ pub struct TapeStream {
     fac_first: usize,
     motor: [f64; 5],
     v0: f64,
+    /// The run's first sample in a longer run from t = 0 (`set_origin`): the transport's
+    /// flutter and noise continue from there.
+    origin: u64,
 }
 
 impl std::fmt::Debug for TapeStream {
@@ -1522,6 +1580,7 @@ impl TapeStream {
             rec: Vec::new(),
             demag: Vec::new(),
             grain: grain.map(|(seed, name)| (seed, name.to_string())),
+            cell_origin: 0,
             packing_prev: 0.0,
             next: 0,
         };
@@ -1555,6 +1614,7 @@ impl TapeStream {
             s: vec![0.0],
             s_first: 0,
             v_last: 0.0,
+            origin: 0,
             p: p.clone(),
         };
         // With varispeed the first speed waits for the supply's first frequency.
@@ -1575,6 +1635,34 @@ impl TapeStream {
         ctx.threads = threads;
         self.ctx = Arc::new(ctx);
         self.worker = Worker::spawn(self.ctx.clone());
+        Ok(())
+    }
+
+    /// Start at sample `k0` of a longer run from t = 0 (`Options::origin_samples`;
+    /// TAPE_SPEED_PLAN.md P3): the transport's flutter and its random parts continue from
+    /// there (their filters start at rest, as at t = 0), and the grain from the cell the
+    /// tape's nominal speed has brought to the record gap by then (a continuous run's
+    /// position differs by its flutter's integral: the grain is the same coating, not the
+    /// same cells). Before the first push.
+    pub fn set_origin(&mut self, k0: u64) -> Result<(), String> {
+        if self.n > 0 || self.next_submit > 0 {
+            return Err("tape: set_origin after the first push".into());
+        }
+        if k0 == self.origin {
+            return Ok(());
+        }
+        self.origin = k0;
+        let cell = (k0 as f64 / self.fs * self.p.speed_m_s / self.p.ds_m).round() as u64;
+        self.fin.cell_origin = cell;
+        if let Some(r) = &self.p.reduced {
+            let mut fin = self.fin.fresh();
+            fin.cell_origin = cell;
+            self.reduced = Some(ReducedWorker::spawn(r.h_a_m.clone(), fin));
+        }
+        self.zi = vec![[0.0; 2]; self.p.flutter_noise.len()];
+        if self.moving && self.p.varispeed.is_none() {
+            self.v_last = self.speeds(0, 1)[0];
+        }
         Ok(())
     }
 
@@ -1614,9 +1702,10 @@ impl TapeStream {
     /// `_speeds`: v (1 + eps) at samples k0 .. k1, the resonances' filters run on.
     fn speeds(&mut self, k0: usize, k1: usize) -> Vec<f64> {
         let fs = self.fs;
+        let o = self.origin as usize;
         let mut eps: Vec<f64> = (k0..k1)
             .map(|k| {
-                let t = k as f64 / fs;
+                let t = (k + o) as f64 / fs;
                 let mut e = 0.0;
                 for c in &self.p.flutter {
                     e += c[0] * (2.0 * PI * c[1] * t + c[2]).cos();
@@ -1634,7 +1723,7 @@ impl TapeStream {
             let b0 = rms / var.sqrt();
             crate::noise::normals(
                 crate::noise::key(self.transport_seed, "transport", i as u32),
-                k0 as u64,
+                (k0 + o) as u64,
                 &mut x,
             );
             let [mut z0, mut z1] = self.zi[i];

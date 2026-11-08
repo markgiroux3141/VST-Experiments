@@ -746,13 +746,20 @@ class Section:
       over its steps, instead of their average over the sample;
     - `owns`: shared nodes the part owns (it publishes their voltages and is fed their
       users' currents), where by default a multi-rate part owns none: an island's
-      low-impedance output into a high-impedance load."""
+      low-impedance output into a high-impedance load.
+
+    `lag_samples` (TAPE_SPEED_PLAN.md P2; None: absent, lockstep): a multi-rate section
+    that owns nothing and doesn't decimate reads the other parts' couplings this many
+    samples late, interpolated between published samples, so its part runs up to that many
+    samples ahead of the rest (the Ampex 351's record side, coupled only through its
+    supply's reservoirs). A part's lag is the largest of its sections'."""
 
     title: str
     elements: tuple[Element, ...]
     substeps: int | None = None
     decimate: str | None = None
     owns: tuple[str, ...] | None = None
+    lag_samples: int | None = None
 
 
 # --- The circuit ------------------------------------------------------------------------
@@ -836,6 +843,18 @@ class CircuitIR:
                 )
             if s.owns is not None and (not multirate or not s.owns):
                 raise IRError(f"section {s.title!r}: owns needs nodes, in a multi-rate section")
+            if s.lag_samples is not None and (
+                not isinstance(s.lag_samples, int)
+                or isinstance(s.lag_samples, bool)
+                or s.lag_samples < 1
+                or not multirate
+                or s.decimate is not None
+                or s.owns is not None
+            ):
+                raise IRError(
+                    f"section {s.title!r}: lag_samples {s.lag_samples!r} (1 or more, in a"
+                    " multi-rate section that owns nothing and doesn't decimate)"
+                )
         names: set[str] = set()
         inductors: set[str] = set()
         nodes: set[str] = set()
@@ -1035,6 +1054,7 @@ class CircuitIR:
                     elements=lambda els: tuple(_decode(e, _ELEMENT_KINDS) for e in els),
                     substeps=_count,
                     owns=tuple,
+                    lag_samples=_count,
                 )
                 for s in d["sections"]
             ),
@@ -1248,6 +1268,7 @@ _OMITTED_WHEN_NONE = {
     (Section, "substeps"),
     (Section, "decimate"),
     (Section, "owns"),
+    (Section, "lag_samples"),
     (TapeMedium, "bias_substeps"),
     (TapeMedium, "reduced"),
     (TapeMedium, "varispeed"),

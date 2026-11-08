@@ -32,8 +32,10 @@ from __future__ import annotations
 import ctypes
 import dataclasses
 import sys
+import threading
 import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from functools import cache
 
@@ -227,6 +229,7 @@ def run_transient(
     controls: Mapping[str, np.ndarray] | None = None,
     stats: dict | None = None,
     notes: Sequence[tuple[float, str, int, int]] | None = None,
+    origin_s: float = 0.0,
 ) -> TransientResult:
     """Drive `ir.input_node` (to ground) with `input_v` volts; every IR probe comes back
     on the input's sample grid, keyed like ngspice vectors ("v(out)"). `method`
@@ -239,7 +242,10 @@ def run_transient(
     played by keys (a harp, docs/RHODES_PLAN.md RH3; a Clavinet's strings, CL3): (seconds
     from the input's start, "on" | "off" | "pedal" | "pressure", MIDI note, velocity, pedal
     0 / 1 or pressure 0-127), in order; each lands on
-    the simulation's grid behind the settle (silent while the circuit settles)."""
+    the simulation's grid behind the settle (silent while the circuit settles).
+    `origin_s`: the input starts that many seconds into a longer input (circuitsim's
+    `origin_samples`: the mains' phase, the noise streams, a tape's transport and grain
+    continue that run; the settle in front is that run's too), for `run_transient_chunked`."""
     check_build()
     import circuitsim
 
@@ -277,6 +283,7 @@ def run_transient(
             controls=ctl or None,
             stats=stats is not None,
             notes=note_steps(notes, n0, s) or None,
+            **({"origin_samples": round(origin_s * s.sim_rate)} if origin_s else {}),
         )
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e
@@ -290,3 +297,76 @@ def run_transient(
 
     out = {p.spice: back(raw[p.spice]) for p in ir.probes}
     return TransientResult(out, s.sample_rate, wall, len(x_up))
+
+
+def run_transient_chunked(
+    ir: CircuitIR,
+    input_v: np.ndarray,
+    *,
+    settings: TransientSettings | None = None,
+    chunk_s: float = 20.0,
+    warmup_s: float = 2.0,
+    fade_s: float = 0.01,
+    workers: int = 4,
+    progress: Callable[[float], None] | None = None,
+) -> TransientResult:
+    """`run_transient` in pieces of `chunk_s` seconds run at once on `workers` threads
+    (TAPE_SPEED_PLAN.md P3: a long offline print in a fraction of the wall time).
+
+    Each piece starts `warmup_s` early (the input faded in over its first 50 ms or half, after the
+    usual settle) at its place in the whole run (`origin_s`: the mains, the noise, a tape's
+    transport and grain continue the whole run's), and runs `fade_s` past its end, where
+    the next piece takes over through a raised-cosine crossfade. The warm-up must cover
+    the circuit's memory of its input: its supply's and coupling capacitors' settling, a
+    tape's head distance and its playback EQ's bass. What a piece can't continue is the
+    state the warm-up doesn't bring back: a free oscillator's phase (the Ampex 351's bias:
+    compare pieces with the whole in band levels, not waveforms), a tape's grain cells
+    (the same coating, cells a flutter's integral apart). No control inputs or notes."""
+    s = settings or TransientSettings.from_sim_settings(engine="circuitsim")
+    x = np.asarray(input_v, float)
+    fs, n = s.sample_rate, len(x)
+    c, w, f = round(chunk_s * fs), round(warmup_s * fs), max(1, round(fade_s * fs))
+    ramp = min(w // 2, round(0.05 * fs))
+    # Past what a piece keeps, so the resampling filters' edges fall outside it.
+    tail = round(0.02 * fs)
+    if c <= f:
+        raise ValueError("run_transient_chunked: chunk_s must exceed fade_s")
+    starts = list(range(0, n, c))
+    done = np.zeros(len(starts))
+    lock = threading.Lock()
+
+    def piece(j: int) -> tuple[int, int, dict[str, np.ndarray], float]:
+        s0 = starts[j]
+        a, b = max(0, s0 - w), min(n, s0 + c + f + tail)
+        keep = min(n, s0 + c + f) - a
+        u = x[a:b].copy()
+        if a > 0 and ramp:
+            u[:ramp] *= 0.5 - 0.5 * np.cos(np.pi * np.arange(ramp) / ramp)
+
+        def prog(frac: float) -> None:
+            if progress is not None:
+                with lock:
+                    done[j] = frac * (b - a)
+                    progress(float(done.sum()) / sum(min(n, q + c + f + tail) - max(0, q - w)
+                                                     for q in starts))  # fmt: skip
+
+        r = run_transient(ir, u, settings=s, progress=prog, origin_s=a / fs)
+        return a, s0, {k: v[s0 - a : keep] for k, v in r.vectors.items()}, r.wall_s
+
+    t0 = time.perf_counter()
+    with ThreadPoolExecutor(max(1, workers)) as ex:
+        pieces = list(ex.map(piece, range(len(starts))))
+    names = pieces[0][2].keys()
+    out = {k: np.zeros(n) for k in names}
+    up = 0.5 - 0.5 * np.cos(np.pi * (np.arange(f) + 0.5) / f)
+    for j, (_, s0, vec, _) in enumerate(pieces):
+        for k in names:
+            v = vec[k]
+            if j == 0:
+                out[k][s0 : s0 + len(v)] = v
+                continue
+            m = min(f, len(v))
+            out[k][s0 : s0 + m] = out[k][s0 : s0 + m] * (1.0 - up[:m]) + v[:m] * up[:m]
+            out[k][s0 + m : s0 + len(v)] = v[m:]
+    wall = time.perf_counter() - t0
+    return TransientResult(out, fs, wall, 0)

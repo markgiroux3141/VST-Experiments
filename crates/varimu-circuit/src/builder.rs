@@ -2505,6 +2505,7 @@ pub fn build_ir_live(
             substeps: if k { None } else { s.substeps },
             decimate: if k { None } else { s.decimate },
             owns: if k { None } else { s.owns.clone() },
+            lag_samples: if k { None } else { s.lag_samples },
             elements,
         });
     }
@@ -2516,6 +2517,7 @@ pub fn build_ir_live(
                 s.substeps = None;
                 s.decimate = None;
                 s.owns = None;
+                s.lag_samples = None;
             }
         }
     }

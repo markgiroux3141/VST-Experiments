@@ -43,6 +43,14 @@
 //! control's subdivisions there follow the fast signal's phase in a step and beat against
 //! it: the 351's noise floor, docs/TAPE_PLAN.md "Speed").
 //!
+//! **A lagged multi-rate part** (its sections' `lag_samples` N; TAPE_SPEED_PLAN.md P2): one
+//! that owns nothing, doesn't decimate and reads no other part's senses may read the others'
+//! couplings N samples late, interpolated between published samples (the samples n - N and
+//! n + 1 - N over step n -> n + 1), and so run up to N samples ahead of them. The others still
+//! read it on time. For a cut through stiff rails only (the 351's record side meets the rest
+//! at its supply's reservoirs); measured on the 351: no gain while its tape worker stalls the
+//! audio part a block at a time.
+//!
 //! **Decimation and ownership (HYBRID_PHYSICS_PLAN.md H3a, M1).** A multi-rate section
 //! with `decimate: fir` hands on everything through [`Decimator`] (an anti-alias low-pass
 //! over its steps) instead: the currents, the voltages of nodes it owns and its probes,
@@ -176,6 +184,8 @@ pub(crate) struct Split {
     pub substeps: Vec<usize>,
     /// Each part's decimation (a multi-rate part's `decimate`; None: the average).
     pub decimate: Vec<Option<Decimate>>,
+    /// Each part's lag (the largest `lag_samples` of its sections; 0: lockstep).
+    pub lag: Vec<usize>,
     /// Each part's section titles (part 0: none, it's the rest).
     pub titles: Vec<Vec<String>>,
     /// Tapes sensing a multi-rate part (the literal bias), in IR order.
@@ -255,6 +265,11 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
         })
         .collect();
     let part = |i: usize| part_of[i].unwrap_or(0);
+    let mut lag = vec![0usize; n_parts];
+    for (i, s) in ir.sections.iter().enumerate() {
+        let l = &mut lag[part(i)];
+        *l = (*l).max(s.lag_samples.unwrap_or(0));
+    }
     let secs: Vec<Vec<&Section>> = (0..n_parts)
         .map(|p| {
             ir.sections
@@ -448,6 +463,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 substeps: None,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: s
                     .elements
                     .iter()
@@ -472,6 +488,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 substeps: None,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: sourced
                     .iter()
                     .map(|s| {
@@ -491,6 +508,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 substeps: None,
                 decimate: None,
                 owns: None,
+                lag_samples: None,
                 elements: vec![Element::Resistor(Resistor {
                     name: "RPART_INPUT".into(),
                     a: STUB_INPUT.into(),
@@ -558,6 +576,7 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
         shared,
         substeps,
         decimate,
+        lag,
         titles,
         remote,
         input_part,
@@ -661,26 +680,29 @@ impl Decimator {
     }
 }
 
-/// Values one partition publishes per sample, read by the other: a ring of
-/// three samples (the reader is at most one sample behind the writer).
+/// Values one partition publishes per sample, read by the others: a ring of `depth`
+/// samples (three in lockstep: the reader is at most one sample behind the writer; more
+/// when a part reads the others late, `Options::multirate_lag`).
 pub(crate) struct Ring {
     slots: Vec<AtomicU64>,
     width: usize,
-    /// Samples published (sample n is in slot n % 3).
+    depth: usize,
+    /// Samples published (sample n is in slot n % depth).
     done: AtomicUsize,
 }
 
 impl Ring {
-    pub(crate) fn new(width: usize) -> Ring {
+    pub(crate) fn new(width: usize, depth: usize) -> Ring {
         Ring {
-            slots: (0..3 * width).map(|_| AtomicU64::new(0)).collect(),
+            slots: (0..depth * width).map(|_| AtomicU64::new(0)).collect(),
             width,
+            depth,
             done: AtomicUsize::new(0),
         }
     }
 
     pub(crate) fn publish(&self, n: usize, values: &[f64]) {
-        let s = (n % 3) * self.width;
+        let s = (n % self.depth) * self.width;
         for (slot, v) in self.slots[s..s + self.width].iter().zip(values) {
             slot.store(v.to_bits(), Ordering::Relaxed);
         }
@@ -694,7 +716,7 @@ impl Ring {
 
     /// Slot `slot` of sample `n`.
     pub(crate) fn value(&self, n: usize, slot: usize) -> f64 {
-        f64::from_bits(self.slots[(n % 3) * self.width + slot].load(Ordering::Relaxed))
+        f64::from_bits(self.slots[(n % self.depth) * self.width + slot].load(Ordering::Relaxed))
     }
 }
 

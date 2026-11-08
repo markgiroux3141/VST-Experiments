@@ -893,11 +893,17 @@ its S/N miss was a numerical line from 10 substeps (the bias peaks' parabola; no
 `refine_extremum`, both languages; back to 20 substeps; `scripts/tape_snr_study.py`). Profile
 `ampex351_heads51`; `scripts/speed_351.py` times the record side's settings (TAPE_PLAN.md
 "Gaps" 3-4, "Speed"). **Tape speed and a fast tier** are planned in
-[docs/TAPE_SPEED_PLAN.md](docs/TAPE_SPEED_PLAN.md) (2026-11-02, parked; nothing built): the
-literal print faster (P1-P6: the parts' split measured, decoupled by a block of lag, parallel
-in time, a cheaper fast-part method, the tape kernel on the GPU, the draft tier) and a fast
-tier trained on it (F1-F5: flutter and noise split off, a grey-box reduced medium first, a
-neural core if needed; the literal machine stays the print).
+[docs/TAPE_SPEED_PLAN.md](docs/TAPE_SPEED_PLAN.md) (2026-11-02): the literal print faster
+(P1-P6) and a fast tier trained on it (F1-F5). **P1-P3 built 2026-11-08** (its "Status"):
+the tape's recording kernel is ~90% of a print's CPU (~1500 CPU-s for a 137 s run on 16
+threads), so **P5, the kernel on the GPU, comes first** (its design there), then P4 and P3.
+Built: `CIRCUITSIM_PART_TIMING=1` (each part's busy / waiting time), `CIRCUITSIM_TAPE_THREADS`;
+a multi-rate section's `lag_samples` (IR `Section.lag_samples`, both builders; measured: no
+gain yet, nothing uses it); a run's origin (circuitsim `Options::origin_samples`,
+`fast.run_transient(origin_s=)`: sines, noise, a tape's flutter and grain continue a longer
+run) and `fast.run_transient_chunked` (pieces at once, crossfaded; `scripts/chunk_351.py`);
+`scripts/speed_351.py` (`--floor`, `--alignment`, variants `lagN`, `ttN`, `m<method>`,
+`mtables`).
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->
