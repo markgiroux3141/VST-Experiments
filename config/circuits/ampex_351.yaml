@@ -340,6 +340,11 @@ sections:
     # the bias section below. 10 leaves a line near 96 kHz - f_osc in the noise (-86 dBFS with
     # the quartic peak finder; 20: -96): TAPE_PLAN.md "Gaps" 4.
     substeps: 20
+    # trbdf2 with tube tables (TAPE_SPEED_PLAN.md P4): the floor holds (-113.7 dBFS line,
+    # bound -89.4), closer to 40 substeps than esdirk4 (0.043 vs 0.061 dB in bands), the
+    # record side ~1.9x cheaper.
+    method: trbdf2
+    tube_tables: true
     parts:
       # The unbalanced bridge (sch): 4R5 82K from the input into 4R4 20K + 4R3 100, their
       # junction to RECORD LEVEL's top, its wiper to 1V1a's grid.
@@ -372,8 +377,11 @@ sections:
       CLF: {C: [lf, "0"], c: c_lf_f}
 
   - title: bias and head driver
-    # Above the audio rate's Nyquist frequency: 20 steps per sample on a thread of its own.
+    # Above the audio rate's Nyquist frequency: 20 steps per sample on a thread of its own,
+    # trbdf2 with tube tables as the record amplifier (one part: they agree).
     substeps: 20
+    method: trbdf2
+    tube_tables: true
     parts:
       # The record line from the 330 V reservoir through 3K1c (3R56, 3R57) and 1R59 to
       # 1C2c, feeding the oscillator's centre tap and the head driver's 1R23 (sch).

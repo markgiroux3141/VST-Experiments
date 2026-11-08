@@ -9,7 +9,7 @@ requires-python = ">=3.11"
 dynamic = ["version"]
 
 [tool.maturin]
-features = ["python"]
+features = ["python", "gpu"]
 module-name = "circuitsim"
 
 [tool.uv]
@@ -20,4 +20,8 @@ cache-keys = [
     { file = "build.rs" },
     { file = "../../Cargo.toml" },
     { file = "src/**/*.rs" },
+    # The tape kernel's GPU crate (feature "gpu"), hashed into SOURCE_HASH too.
+    { file = "../tapegpu/Cargo.toml" },
+    { file = "../tapegpu/src/**/*.rs" },
+    { file = "../tapegpu/src/**/*.wgsl" },
 ]

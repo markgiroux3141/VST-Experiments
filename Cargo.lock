@@ -666,6 +666,7 @@ dependencies = [
  "rustfft",
  "serde",
  "serde_json",
+ "tapegpu",
 ]
 
 [[package]]
@@ -3750,6 +3751,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "tapegpu"
+version = "0.1.0"
+dependencies = [
+ "bytemuck",
+ "pollster",
+ "wgpu",
 ]
 
 [[package]]

@@ -18,15 +18,18 @@ varimu.circuit.builder, which expands its parts with the parts library
     noise: {seed, temperature_k?, flicker_v2?, mains_rms?}   # noise on (device builder B5)
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
-    sections: [{title, tolerance?, substeps?, decimate?, owns?, lag_samples?,
-                parts: {NAME: {<macro>: <nodes>, ...}}}]
+    sections: [{title, tolerance?, substeps?, decimate?, owns?, lag_samples?, method?,
+                tube_tables?, parts: {NAME: {<macro>: <nodes>, ...}}}]
                                     # substeps: steps per sample on a thread of its own (a
                                     # multi-rate part: circuitsim's partition.rs);
                                     # decimate: fir (what it hands on through an
                                     # anti-alias low-pass); owns: [node, ...] (shared nodes
                                     # it owns: an island's output); lag_samples: N
                                     # (it reads the others N samples late and runs
-                                    # ahead: a cut only through stiff rails)
+                                    # ahead: a cut only through stiff rails);
+                                    # method: its own integration method (e.g.
+                                    # trbdf2), tube_tables: true (its triodes from
+                                    # tables): TAPE_SPEED_PLAN.md P4
 
 Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
@@ -84,7 +87,7 @@ from typing import Any
 
 import yaml
 
-from varimu.circuit.ir import DECIMATIONS
+from varimu.circuit.ir import DECIMATIONS, MULTIRATE_METHODS
 from varimu.config import ConfigError, load_genome_bounds
 
 # PyYAML reads 1.0e6 (no sign in the exponent) as a string: such a value is an error.
@@ -231,7 +234,8 @@ def load_circuit(path: Path) -> CircuitSpec:
         if not isinstance(s, Mapping) or "title" not in s or "parts" not in s:
             errors.append(f"sections[{i}]: needs `title` and `parts`")
         elif extra := set(s) - {
-            "title", "parts", "tolerance", "substeps", "decimate", "owns", "lag_samples"
+            "title", "parts", "tolerance", "substeps", "decimate", "owns", "lag_samples",
+            "method", "tube_tables",
         }:  # fmt: skip
             errors.append(f"sections[{i}]: unknown keys {sorted(extra)}")
         elif "substeps" in s and (
@@ -240,10 +244,17 @@ def load_circuit(path: Path) -> CircuitSpec:
             or s["substeps"] < 1
         ):
             errors.append(f"sections[{i}]: substeps {s['substeps']} (a count, 1 or more)")
-        elif ("decimate" in s or "owns" in s or "lag_samples" in s) and s.get("substeps", 1) < 2:
+        elif {"decimate", "owns", "lag_samples", "method", "tube_tables"} & set(s) and s.get(
+            "substeps", 1
+        ) < 2:
             errors.append(
-                f"sections[{i}]: decimate, owns and lag_samples are for a multi-rate section"
+                f"sections[{i}]: decimate, owns, lag_samples, method and tube_tables are for a"
+                " multi-rate section"
             )
+        elif "method" in s and s["method"] not in MULTIRATE_METHODS:
+            errors.append(f"sections[{i}]: method {s['method']!r} (one of {MULTIRATE_METHODS})")
+        elif "tube_tables" in s and not isinstance(s["tube_tables"], bool):
+            errors.append(f"sections[{i}]: tube_tables {s['tube_tables']!r} (true or false)")
         elif "lag_samples" in s and (
             isinstance(s["lag_samples"], bool)
             or not isinstance(s["lag_samples"], int)

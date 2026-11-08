@@ -95,7 +95,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use crate::Error;
 use crate::ir::{CircuitIr, Decimate, Element, GROUND, Probe, Resistor, Section, VoltageSource};
 use crate::stream::Stream;
-use crate::transient::{Options, Output};
+use crate::transient::{Method, Options, Output};
 
 /// How a partition sees the other's values within a sample.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -186,6 +186,10 @@ pub(crate) struct Split {
     pub decimate: Vec<Option<Decimate>>,
     /// Each part's lag (the largest `lag_samples` of its sections; 0: lockstep).
     pub lag: Vec<usize>,
+    /// Each part's own method (its multi-rate sections' `method`; None: the run's).
+    pub method: Vec<Option<Method>>,
+    /// Each part's tube tables (its multi-rate sections' `tube_tables`; None: the run's).
+    pub tube_tables: Vec<Option<bool>>,
     /// Each part's section titles (part 0: none, it's the rest).
     pub titles: Vec<Vec<String>>,
     /// Tapes sensing a multi-rate part (the literal bias), in IR order.
@@ -269,6 +273,31 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
     for (i, s) in ir.sections.iter().enumerate() {
         let l = &mut lag[part(i)];
         *l = (*l).max(s.lag_samples.unwrap_or(0));
+    }
+    // A part's own method and tube tables: its sections' (they must agree).
+    let mut method: Vec<Option<Method>> = vec![None; n_parts];
+    let mut tube_tables: Vec<Option<bool>> = vec![None; n_parts];
+    for (i, s) in ir.sections.iter().enumerate() {
+        let p = part(i);
+        if let Some(m) = &s.method {
+            let m = Method::parse(m)?;
+            if method[p].is_some_and(|q| q != m) {
+                return Err(Error::new(format!(
+                    "partition: {:?}'s method differs from its part's other sections'",
+                    s.title
+                )));
+            }
+            method[p] = Some(m);
+        }
+        if let Some(t) = s.tube_tables {
+            if tube_tables[p].is_some_and(|q| q != t) {
+                return Err(Error::new(format!(
+                    "partition: {:?}'s tube_tables differ from its part's other sections'",
+                    s.title
+                )));
+            }
+            tube_tables[p] = Some(t);
+        }
     }
     let secs: Vec<Vec<&Section>> = (0..n_parts)
         .map(|p| {
@@ -464,6 +493,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: s
                     .elements
                     .iter()
@@ -489,6 +520,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: sourced
                     .iter()
                     .map(|s| {
@@ -509,6 +542,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![Element::Resistor(Resistor {
                     name: "RPART_INPUT".into(),
                     a: STUB_INPUT.into(),
@@ -577,6 +612,8 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
         substeps,
         decimate,
         lag,
+        method,
+        tube_tables,
         titles,
         remote,
         input_part,

@@ -732,6 +732,8 @@ struct Ctx {
     zone_tables: Vec<Vec<f64>>,
     /// The recording kernel's threads (`Recording::threads`).
     threads: usize,
+    /// The recording kernel on the GPU (`Recording::gpu`).
+    gpu: bool,
 }
 
 /// A block to record: its cells (with margins) and the field at the record gap.
@@ -850,7 +852,7 @@ impl Recorder {
         zones: &[f64],
         h_static: Option<(&[f64], &[f64])>,
         h_end: Option<(&[f64], &[f64])>,
-    ) -> (Vec<f64>, Vec<f64>) {
+    ) -> Result<(Vec<f64>, Vec<f64>), String> {
         record(&Recording {
             preisach: &self.ctx.pre,
             head: self.ctx.rec_head,
@@ -864,6 +866,7 @@ impl Recorder {
             h_end,
             table_step: self.ctx.p.table_step,
             threads: self.ctx.threads,
+            gpu: self.ctx.gpu,
         })
     }
 
@@ -914,7 +917,7 @@ impl Recorder {
         } = job;
         let zones = self.zones(&hg, &srec, &s, peak)?;
         let cells = s.len();
-        let (mut mx, mut my) = self.record_once(&hg, &srec, &s, &zones, None, None);
+        let (mut mx, mut my) = self.record_once(&hg, &srec, &s, &zones, None, None)?;
         let mut x: Vec<f64> = mx.iter().chain(&my).copied().collect();
         let (mut xs, mut gs): (Vec<Vec<f64>>, Vec<Vec<f64>>) = (Vec::new(), Vec::new());
         let half_len = mx.len();
@@ -934,9 +937,9 @@ impl Recorder {
                     &zones,
                     Some((&hz.0, &hz.1)),
                     Some((&hd.0, &hd.1)),
-                )
+                )?
             } else {
-                self.record_once(&hg, &srec, &s, &zones, Some((&f[0].0, &f[0].1)), None)
+                self.record_once(&hg, &srec, &s, &zones, Some((&f[0].0, &f[0].1)), None)?
             };
             let g: Vec<f64> = nx.iter().chain(&ny).zip(&x).map(|(a, b)| a - b).collect();
             let change = g.iter().fold(0.0, |a: f64, &v| a.max(v.abs()));
@@ -991,6 +994,18 @@ impl Recorder {
             demag: None,
         })
     }
+}
+
+/// The GPU the recording kernel would run on, or why it can't.
+#[cfg(feature = "gpu")]
+pub fn gpu_available() -> Result<String, String> {
+    tapegpu::available()
+}
+
+/// The GPU the recording kernel would run on, or why it can't.
+#[cfg(not(feature = "gpu"))]
+pub fn gpu_available() -> Result<String, String> {
+    Err("tape: circuitsim was built without the GPU kernel (the `gpu` feature)".into())
 }
 
 /// A thread recording the stream's blocks in the order they come (each block's recording
@@ -1568,6 +1583,7 @@ impl TapeStream {
             axes,
             zone_tables,
             threads: 0,
+            gpu: false,
         });
         let finisher = || Finisher {
             p: p.clone(),
@@ -1633,6 +1649,25 @@ impl TapeStream {
         }
         let mut ctx = Ctx::clone(&self.ctx);
         ctx.threads = threads;
+        self.ctx = Arc::new(ctx);
+        self.worker = Worker::spawn(self.ctx.clone());
+        Ok(())
+    }
+
+    /// Record on the GPU in f32 (`Recording::gpu`; TAPE_SPEED_PLAN.md P5) or on the CPU in
+    /// f64 (the default). Refused without a GPU or the `gpu` feature. Before the first push.
+    pub fn set_gpu(&mut self, gpu: bool) -> Result<(), String> {
+        if self.next_submit > 0 {
+            return Err("tape: set_gpu after recording started".into());
+        }
+        if gpu == self.ctx.gpu {
+            return Ok(());
+        }
+        if gpu {
+            gpu_available()?;
+        }
+        let mut ctx = Ctx::clone(&self.ctx);
+        ctx.gpu = gpu;
         self.ctx = Arc::new(ctx);
         self.worker = Worker::spawn(self.ctx.clone());
         Ok(())

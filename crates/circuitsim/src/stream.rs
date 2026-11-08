@@ -17,9 +17,8 @@
 //!
 //! Environment switches for measurements (TAPE_SPEED_PLAN.md; nothing sets them by
 //! default): `CIRCUITSIM_PART_TIMING` prints each part's busy and waiting time and the tape
-//! worker's when a partitioned stream ends; `CIRCUITSIM_MULTIRATE_METHOD` (a method name) and
-//! `CIRCUITSIM_MULTIRATE_TABLES` give the multi-rate parts their own method and tube tables
-//! (P4's experiment; a render with them isn't production's).
+//! worker's when a partitioned stream ends. (P4's experiment switches for the multi-rate
+//! parts' method and tube tables are now their sections' `method` and `tube_tables`.)
 //!
 //! [`Stream::update`] changes component values (a knob turned): applied at the
 //! next sample boundary the stream reaches, in every partition at the same
@@ -640,6 +639,8 @@ impl Stream {
                     decimate: None,
                     owns: None,
                     lag_samples: None,
+                    method: None,
+                    tube_tables: None,
                     elements: owned
                         .iter()
                         .flat_map(|&i| {
@@ -748,13 +749,12 @@ impl Stream {
                 let mut o = *opts;
                 if sp.substeps[p] > 1 {
                     o.error_abstol = 0.0;
-                    // P4's experiment switches (the module docs): the fast part's method and
-                    // tube tables.
-                    if let Ok(m) = std::env::var("CIRCUITSIM_MULTIRATE_METHOD") {
-                        o.method = crate::transient::Method::parse(&m)?;
+                    // Its sections' own method and tube tables (TAPE_SPEED_PLAN.md P4).
+                    if let Some(m) = sp.method[p] {
+                        o.method = m;
                     }
-                    if std::env::var_os("CIRCUITSIM_MULTIRATE_TABLES").is_some() {
-                        o.tube_tables = true;
+                    if let Some(t) = sp.tube_tables[p] {
+                        o.tube_tables = t;
                     }
                 }
                 Transient::with_externals(mna, h / sp.substeps[p] as f64, o, u, &ext)?

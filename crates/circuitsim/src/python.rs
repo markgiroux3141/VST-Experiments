@@ -58,7 +58,7 @@ fn ir_roundtrip(json: &str) -> PyResult<String> {
     predictor = None, error_abstol = None, error_reltol = None, max_error_halvings = None,
     newton_reuse = None, step_selection = None, error_norm = None, tube_tables = None,
     partition = None, partition_coupling = None, stats = false, progress = None, controls = None,
-    notes = None, origin_samples = None
+    notes = None, origin_samples = None, tape_gpu = None
 ))]
 #[allow(clippy::too_many_arguments)]
 fn simulate<'py>(
@@ -90,6 +90,7 @@ fn simulate<'py>(
     controls: Option<Vec<PyReadonlyArray1<'py, f64>>>,
     notes: Option<Vec<(usize, String, u8, u8)>>,
     origin_samples: Option<u64>,
+    tape_gpu: Option<bool>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let ir = CircuitIr::from_json(ir_json).map_err(invalid)?;
     let notes = note_events(notes.unwrap_or_default())?;
@@ -123,6 +124,7 @@ fn simulate<'py>(
             .map_err(invalid)?,
         tube_tables: tube_tables.unwrap_or(d.tube_tables),
         origin_samples: origin_samples.unwrap_or(d.origin_samples),
+        tape_gpu: tape_gpu.unwrap_or(d.tape_gpu),
         // Python gets the probes only.
         all_unknowns: false,
         ..d
@@ -451,6 +453,16 @@ impl PyStream {
     }
 }
 
+/// The GPU the tape's recording kernel runs on with `tape_gpu=True` ("name (backend)"), or
+/// None with why not: (description, None) or (None, reason).
+#[pyfunction]
+fn tape_gpu() -> (Option<String>, Option<String>) {
+    match crate::tape_stream::gpu_available() {
+        Ok(d) => (Some(d), None),
+        Err(e) => (None, Some(e)),
+    }
+}
+
 /// The tape medium's recording kernel (`crate::tape::record`; the reference is
 /// `varimu.devices.tape.record`). `preisach`: (hc_median, sigma_ln_hc, sigma_hi, h_max,
 /// n_table); `head`: (gap, pole, relax) in metres; `heights`: per layer; `zones`: per
@@ -458,10 +470,10 @@ impl PyStream {
 /// `s_rec`, `hg`: per bias sample; `axes`: (cos, sin, weight) per easy-axis direction,
 /// flattened; `h_static_x` / `_y` (during the pass), `h_end_x` / `_y` (after it): layers x
 /// cells, flattened, or None; `table_step`: the head field's table step over the layer's
-/// height (0: exact). Returns (M_x, M_y)
+/// height (0: exact); `gpu`: on the GPU in f32 (the `gpu` feature). Returns (M_x, M_y)
 /// / Ms, layers x cells flattened. Releases the GIL.
 #[pyfunction]
-#[pyo3(signature = (preisach, head, heights, zones, s_rec, hg, s_cells, axes, h_static_x = None, h_static_y = None, h_end_x = None, h_end_y = None, table_step = 0.0))]
+#[pyo3(signature = (preisach, head, heights, zones, s_rec, hg, s_cells, axes, h_static_x = None, h_static_y = None, h_end_x = None, h_end_y = None, table_step = 0.0, gpu = false))]
 #[allow(clippy::too_many_arguments)]
 fn tape_record<'py>(
     py: Python<'py>,
@@ -478,6 +490,7 @@ fn tape_record<'py>(
     h_end_x: Option<PyReadonlyArray1<'py, f64>>,
     h_end_y: Option<PyReadonlyArray1<'py, f64>>,
     table_step: f64,
+    gpu: bool,
 ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>)> {
     let (heights, zones) = (heights.as_array().to_vec(), zones.as_array().to_vec());
     let (s_rec, hg) = (s_rec.as_array().to_vec(), hg.as_array().to_vec());
@@ -507,34 +520,38 @@ fn tape_record<'py>(
         (Some(_), None) => Some(vec![0.0; n]),
         (_, y) => y,
     };
-    let (mx, my) = py.detach(|| {
-        let p = crate::tape::preisach(preisach.0, preisach.1, preisach.2, preisach.3, preisach.4);
-        let rec = crate::tape::Recording {
-            preisach: &p,
-            head: crate::tape::Head {
-                gap: head.0,
-                pole: head.1,
-                relax: head.2,
-            },
-            heights: &heights,
-            zones: &zones,
-            s_rec: &s_rec,
-            hg: &hg,
-            s_cells: &s_cells,
-            axes: &axes,
-            h_static: match (&hx, &hy) {
-                (Some(x), Some(y)) => Some((x.as_slice(), y.as_slice())),
-                _ => None,
-            },
-            h_end: match (&ex, &ey) {
-                (Some(x), Some(y)) => Some((x.as_slice(), y.as_slice())),
-                _ => None,
-            },
-            table_step,
-            threads: 0,
-        };
-        crate::tape::record(&rec)
-    });
+    let (mx, my) = py
+        .detach(|| {
+            let p =
+                crate::tape::preisach(preisach.0, preisach.1, preisach.2, preisach.3, preisach.4);
+            let rec = crate::tape::Recording {
+                preisach: &p,
+                head: crate::tape::Head {
+                    gap: head.0,
+                    pole: head.1,
+                    relax: head.2,
+                },
+                heights: &heights,
+                zones: &zones,
+                s_rec: &s_rec,
+                hg: &hg,
+                s_cells: &s_cells,
+                axes: &axes,
+                h_static: match (&hx, &hy) {
+                    (Some(x), Some(y)) => Some((x.as_slice(), y.as_slice())),
+                    _ => None,
+                },
+                h_end: match (&ex, &ey) {
+                    (Some(x), Some(y)) => Some((x.as_slice(), y.as_slice())),
+                    _ => None,
+                },
+                table_step,
+                threads: 0,
+                gpu,
+            };
+            crate::tape::record(&rec)
+        })
+        .map_err(invalid)?;
     Ok((
         mx.into_pyarray(py).into_any(),
         my.into_pyarray(py).into_any(),
@@ -549,11 +566,12 @@ fn tape_record<'py>(
 /// frequency per push (a medium with `varispeed` needs it); `bias_a_m`: a reduced
 /// medium's bias changes, (push index, deep-gap peak A/m) rising, each set before that
 /// push (the pushes split there); `origin`: the stream starts at that step of a longer run
-/// (`TapeStream::set_origin`). Returns the repro EMF after each push (at t_{n+1}).
+/// (`TapeStream::set_origin`); `gpu`: the recording kernel on the GPU in f32
+/// (`TapeStream::set_gpu`). Returns the repro EMF after each push (at t_{n+1}).
 /// With the literal bias (`bias_substeps` M), `h` is the head's whole field, M samples per
 /// step (`chunk` a multiple of M). Releases the GIL.
 #[pyfunction]
-#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None, origin = 0))]
+#[pyo3(signature = (params, fs, h, chunk = 4800, noise_seed = None, transport_seed = 0, supply_hz = None, bias_a_m = None, origin = 0, gpu = false))]
 #[allow(clippy::too_many_arguments)]
 fn tape_stream_run<'py>(
     py: Python<'py>,
@@ -566,6 +584,7 @@ fn tape_stream_run<'py>(
     supply_hz: Option<PyReadonlyArray1<'py, f64>>,
     bias_a_m: Option<Vec<(usize, f64)>>,
     origin: u64,
+    gpu: bool,
 ) -> PyResult<Bound<'py, PyAny>> {
     let p: crate::tape_stream::TapeParams =
         serde_json::from_str(params).map_err(|e| invalid(format!("tape_stream_run: {e}")))?;
@@ -580,6 +599,7 @@ fn tape_stream_run<'py>(
             transport_seed,
         )?;
         st.set_origin(origin)?;
+        st.set_gpu(gpu)?;
         let mut out = Vec::with_capacity(h.len());
         let m = st.substeps();
         let chunk = (chunk.max(1)).div_ceil(m) * m;
@@ -645,6 +665,7 @@ fn circuitsim(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(harp_render, m)?)?;
     m.add_function(wrap_pyfunction!(clav_render, m)?)?;
     m.add_function(wrap_pyfunction!(tape_record, m)?)?;
+    m.add_function(wrap_pyfunction!(tape_gpu, m)?)?;
     m.add_function(wrap_pyfunction!(tape_state_after, m)?)?;
     m.add_function(wrap_pyfunction!(tape_stream_run, m)?)?;
     m.add_class::<PyStream>()?;

@@ -271,3 +271,46 @@ def test_a_multirate_sections_lag_round_trips_and_is_checked():
     del d["sections"][1]["substeps"]
     with pytest.raises(ValueError, match="lag_samples"):
         circuitsim.ir_roundtrip(json.dumps(d))
+
+
+def test_a_multirate_sections_method_and_tables_round_trip_and_are_checked():
+    """`Section.method` / `tube_tables` (TAPE_SPEED_PLAN.md P4) are written only when set,
+    round-trip through Rust, are refused outside a multi-rate section (or with an unknown
+    method) in both languages and both circuit-file parsers' Python one, and the builder
+    carries them from a circuit file."""
+    from varimu.circuit import builder, spec
+    from varimu.circuit.ir import Capacitor, VoltageProbe
+
+    def ir(substeps, method=None, tables=None):
+        fast = Section(
+            "fast",
+            (Resistor("R1", "in", "a", 1e3), Capacitor("C1", "a", "0", 1e-6)),
+            substeps,
+        )
+        fast = dataclasses.replace(fast, method=method, tube_tables=tables)
+        return CircuitIR(
+            title="t",
+            input_node="in",
+            probes=(VoltageProbe("a"),),
+            models=(),
+            sections=(Section("slow", (Resistor("R2", "a", "0", 1e6),)), fast),
+        )
+
+    plain, own = ir(8), ir(8, "trbdf2", True)
+    assert '"method"' not in plain.to_json() and '"tube_tables"' not in plain.to_json()
+    assert CircuitIR.from_json(own.to_json()) == own
+    for args in ((None, "trbdf2"), (None, None, True), (8, "rk4")):
+        with pytest.raises(IRError, match="method|tube_tables"):
+            ir(*args).validate()
+    circuitsim = pytest.importorskip("circuitsim", reason="needs `uv sync --extra fast`")
+    assert CircuitIR.from_json(circuitsim.ir_roundtrip(own.to_json())) == own
+    d = own.to_dict()
+    del d["sections"][1]["substeps"]
+    with pytest.raises(ValueError, match="method"):
+        circuitsim.ir_roundtrip(json.dumps(d))
+    # The circuit file: the 351's record side (trbdf2 with tables since P4).
+    c = spec.load_circuit(spec.circuit_path("ampex_351"))
+    built = builder.build_ir(c, spec.resolve(c))
+    fast = [x for x in built.sections if x.substeps]
+    assert fast and all((x.method, x.tube_tables) == ("trbdf2", True) for x in fast)
+    assert all(x.method is None and x.tube_tables is None for x in built.sections if not x.substeps)

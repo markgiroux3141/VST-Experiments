@@ -2506,6 +2506,8 @@ pub fn build_ir_live(
             decimate: if k { None } else { s.decimate },
             owns: if k { None } else { s.owns.clone() },
             lag_samples: if k { None } else { s.lag_samples },
+            method: if k { None } else { s.method.clone() },
+            tube_tables: if k { None } else { s.tube_tables },
             elements,
         });
     }
@@ -2518,6 +2520,8 @@ pub fn build_ir_live(
                 s.decimate = None;
                 s.owns = None;
                 s.lag_samples = None;
+                s.method = None;
+                s.tube_tables = None;
             }
         }
     }

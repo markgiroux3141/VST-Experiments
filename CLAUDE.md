@@ -894,16 +894,23 @@ its S/N miss was a numerical line from 10 substeps (the bias peaks' parabola; no
 `ampex351_heads51`; `scripts/speed_351.py` times the record side's settings (TAPE_PLAN.md
 "Gaps" 3-4, "Speed"). **Tape speed and a fast tier** are planned in
 [docs/TAPE_SPEED_PLAN.md](docs/TAPE_SPEED_PLAN.md) (2026-11-02): the literal print faster
-(P1-P6) and a fast tier trained on it (F1-F5). **P1-P3 built 2026-11-08** (its "Status"):
-the tape's recording kernel is ~90% of a print's CPU (~1500 CPU-s for a 137 s run on 16
-threads), so **P5, the kernel on the GPU, comes first** (its design there), then P4 and P3.
+(P1-P6) and a fast tier trained on it (F1-F5). **P1-P5 built 2026-11-08** (its two
+"Status" blocks): the tape's recording kernel was ~90% of a print's CPU, so **P5 put it on
+the GPU**: `crates/tapegpu` (WGSL in f32, an f64 CPU reference per kernel, roomsim's wgpu
+setup), circuitsim feature `gpu` (on in the Python extension; SOURCE_HASH covers tapegpu),
+switched by `tape::Recording::gpu` / `TapeStream::set_gpu` / `Options::tape_gpu` / Python
+`TransientSettings.tape_gpu` (in the cache key only when on): the print -117 dB from the f64
+one, the floor unchanged; **the f64 CPU kernel stays the default and the reference**. **P4
+adopted:** a multi-rate section's own `method` and `tube_tables` (IR `Section.method` /
+`tube_tables`, both builders), the 351's record side `trbdf2` with tables. The 0.5 s drums
+print: 79x real time -> 54x (GPU) -> 27x (GPU + P4). The record side is the bound now; P3 next.
 Built: `CIRCUITSIM_PART_TIMING=1` (each part's busy / waiting time), `CIRCUITSIM_TAPE_THREADS`;
 a multi-rate section's `lag_samples` (IR `Section.lag_samples`, both builders; measured: no
 gain yet, nothing uses it); a run's origin (circuitsim `Options::origin_samples`,
 `fast.run_transient(origin_s=)`: sines, noise, a tape's flutter and grain continue a longer
 run) and `fast.run_transient_chunked` (pieces at once, crossfaded; `scripts/chunk_351.py`);
-`scripts/speed_351.py` (`--floor`, `--alignment`, variants `lagN`, `ttN`, `m<method>`,
-`mtables`).
+`scripts/speed_351.py` (`--floor`, `--alignment`, variants `gpu`, `lagN`, `ttN`, `m<method>`,
+`mtables`, `mnotables`).
 **The first print** (idealized NAB electronics, aligned as the 351 manual says;
 `varimu/devices/tape_machine.py`): `uv run --extra fast --extra listen python
 scripts/tape_print.py --clip drums_setmefree.wav --seconds 10 --drive-db 0 6 12` ->
@@ -1288,6 +1295,8 @@ uv run --extra fast --extra listen python scripts/room_separation.py [--render-o
 uv run --extra fast --extra listen python scripts/room_wave_demo.py [--only VARIANT ...] [--crossover 500]   # R7 / R10: the wave solver off / on, a dead front wall -> reports/rooms/wave_demo/
 uv run --extra fast --extra listen python scripts/room_gobo_demo.py   # R11: two players without / with a gobo, live and treated -> reports/rooms/gobo_demo/
 cargo test -p roomsim --release   # R9-R11: the GPU kernels against their f64 CPU references (skip without a GPU)
+cargo test -p tapegpu --release; cargo test -p circuitsim --release --features gpu --test tape_gpu   # TAPE_SPEED_PLAN.md P5: the tape kernel on the GPU vs f64 (skip without a GPU)
+CIRCUITSIM_PART_TIMING=1 uv run --extra fast --extra listen python scripts/speed_351.py --alignment cache/tape/align_351_<key>.json [--floor] gpu   # the 351's print speed / floor per setting
 uv run --extra listen --with sounddevice python scripts/separation_listen.py --room   # its staircase on headphones
 uv run python scripts/compose_chain.py --mic omni_4134 --pre clean_pre [--check]   # the opposite chain -> config/circuits/omni_clean.yaml
 cargo run --release -p varimu-app --example render -- --circuit NAME --input FILE [--set k=v ...] [--out out.wav]

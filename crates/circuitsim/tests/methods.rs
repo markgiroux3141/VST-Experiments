@@ -45,6 +45,8 @@ fn circuit() -> CircuitIr {
             decimate: None,
             owns: None,
             lag_samples: None,
+            method: None,
+            tube_tables: None,
             elements: vec![
                 r("R1", "in", "a", 100.0),
                 Element::Inductor(Inductor {

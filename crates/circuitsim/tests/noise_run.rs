@@ -70,6 +70,8 @@ fn circuit(seed: u64) -> CircuitIr {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![
                     r("RIN", "in", "0", 1e3),
                     r("R1", "out", "0", 1e4),
@@ -85,6 +87,8 @@ fn circuit(seed: u64) -> CircuitIr {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![
                     r("R2", "x", "0", 1e4),
                     noise("R2", "x", "0", 1e4),
@@ -255,6 +259,8 @@ fn the_mains_wander_multiplies_the_mains_amplitude() {
             decimate: None,
             owns: None,
             lag_samples: None,
+            method: None,
+            tube_tables: None,
             elements: vec![
                 r("RIN", "in", "0", 1e3),
                 Element::SineSource(SineSource {
@@ -313,6 +319,8 @@ fn a_partitioned_run_keeps_the_mains_wander_where_the_mains_are() {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![
                     r("RIN", "in", "0", 1e3),
                     r("R1", "m", "out", 1e4),
@@ -326,6 +334,8 @@ fn a_partitioned_run_keeps_the_mains_wander_where_the_mains_are() {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![
                     Element::SineSource(SineSource {
                         name: "VM".into(),

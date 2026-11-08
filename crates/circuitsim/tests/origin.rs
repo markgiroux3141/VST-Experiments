@@ -39,6 +39,8 @@ fn circuit() -> CircuitIr {
             decimate: None,
             owns: None,
             lag_samples: None,
+            method: None,
+            tube_tables: None,
             elements: vec![
                 r("RIN", "in", "0", 1e3),
                 Element::SineSource(SineSource {

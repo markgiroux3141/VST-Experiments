@@ -45,6 +45,10 @@ pub struct SectionSpec {
     pub owns: Option<Vec<String>>,
     /// Samples late a multi-rate part reads the others (`lag_samples: N`), if given.
     pub lag_samples: Option<usize>,
+    /// A multi-rate part's own method (`method: trbdf2`), if given.
+    pub method: Option<String>,
+    /// A multi-rate part's own tube tables (`tube_tables: true`), if given.
+    pub tube_tables: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
@@ -329,6 +333,8 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                     "decimate",
                     "owns",
                     "lag_samples",
+                    "method",
+                    "tube_tables",
                 ]
                 .contains(k)
             })
@@ -349,14 +355,44 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                 continue;
             }
         };
-        if (m.contains("decimate") || m.contains("owns") || m.contains("lag_samples"))
+        if (m.contains("decimate")
+            || m.contains("owns")
+            || m.contains("lag_samples")
+            || m.contains("method")
+            || m.contains("tube_tables"))
             && substeps.unwrap_or(1) < 2
         {
             errors.push(format!(
-                "sections[{i}]: decimate, owns and lag_samples are for a multi-rate section"
+                "sections[{i}]: decimate, owns, lag_samples, method and tube_tables are for a \
+                 multi-rate section"
             ));
             continue;
         }
+        let method = match m.get("method") {
+            None => None,
+            Some(Value::Str(s)) if circuitsim::transient::Method::parse(s).is_ok() => {
+                Some(s.clone())
+            }
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: method '{}' (one of {:?})",
+                    v.py_str(),
+                    circuitsim::transient::Method::NAMES
+                ));
+                continue;
+            }
+        };
+        let tube_tables = match m.get("tube_tables") {
+            None => None,
+            Some(Value::Bool(b)) => Some(*b),
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: tube_tables {} (true or false)",
+                    v.py_str()
+                ));
+                continue;
+            }
+        };
         let lag_samples = match m.get("lag_samples") {
             None => None,
             Some(Value::Int(n)) if *n >= 1 && !m.contains("decimate") && !m.contains("owns") => {
@@ -404,6 +440,8 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             decimate,
             owns,
             lag_samples,
+            method,
+            tube_tables,
         });
     }
     let devices = map_or_empty(data.get("devices"));

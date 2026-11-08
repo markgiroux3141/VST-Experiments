@@ -69,6 +69,8 @@ fn circuit(models: Vec<DeviceModel>, elements: Vec<Element>, probes: &[&str]) ->
             decimate: None,
             owns: None,
             lag_samples: None,
+            method: None,
+            tube_tables: None,
             elements,
         }],
     };

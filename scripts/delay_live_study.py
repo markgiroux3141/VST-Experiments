@@ -57,7 +57,11 @@ def electronics_ir(overrides: dict, feed_ohm: float | None) -> irm.CircuitIR:
         els = [e for e in s.elements if not isinstance(e, irm.Tape)]
         if feed_ohm is not None and s.title == "reproduce amplifier":
             els.append(irm.Resistor("RFEED", ir.input_node, "rh", feed_ohm))
-        secs.append(dataclasses.replace(s, elements=tuple(els), substeps=None))
+        secs.append(
+            dataclasses.replace(
+                s, elements=tuple(els), substeps=None, method=None, tube_tables=None
+            )
+        )
     return dataclasses.replace(ir, sections=tuple(secs))
 
 

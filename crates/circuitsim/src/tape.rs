@@ -17,6 +17,10 @@
 //! its demagnetization) as it leaves. Each easy-axis direction of the particles is an
 //! ensemble driven by the field along it (the vector Preisach model). Cells run in
 //! parallel.
+//!
+//! **On the GPU** (TAPE_SPEED_PLAN.md P5): with the `gpu` feature a recording that asks for
+//! it ([`Recording::gpu`]) runs on `crates/tapegpu` in f32, its zones resolved to peak
+//! ranges here in f64. The f64 CPU kernel stays the reference and the default.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -24,6 +28,8 @@ use std::sync::{Arc, Mutex, OnceLock};
 /// The particles' tables.
 #[derive(Debug, Clone)]
 pub struct Preisach {
+    /// The parameters' bits (`preisach`'s cache key; the GPU's too).
+    key: [u64; 5],
     h_max: f64,
     n: usize,
     /// Q at the nodes, (n + 1) x (n + 1), row a (alpha) major.
@@ -112,6 +118,13 @@ impl Preisach {
             d_tab[i] = acc;
         }
         Preisach {
+            key: [
+                hc_median.to_bits(),
+                sigma_ln_hc.to_bits(),
+                sigma_hi.to_bits(),
+                h_max.to_bits(),
+                n as u64,
+            ],
             h_max,
             n,
             q,
@@ -221,7 +234,7 @@ impl Corner {
 }
 
 /// Tables built recently, by their parameters (a demag iteration records many times).
-type Cache = Mutex<Vec<([u64; 5], Arc<Preisach>)>>;
+type Cache = Mutex<Vec<Arc<Preisach>>>;
 
 fn cache() -> &'static Cache {
     static C: OnceLock<Cache> = OnceLock::new();
@@ -243,17 +256,12 @@ pub fn preisach(
         h_max.to_bits(),
         n as u64,
     ];
-    if let Some((_, p)) = cache()
-        .lock()
-        .expect("cache")
-        .iter()
-        .find(|(k, _)| *k == key)
-    {
+    if let Some(p) = cache().lock().expect("cache").iter().find(|p| p.key == key) {
         return p.clone();
     }
     let p = Arc::new(Preisach::new(hc_median, sigma_ln_hc, sigma_hi, h_max, n));
     let mut c = cache().lock().expect("cache");
-    c.push((key, p.clone()));
+    c.push(p.clone());
     if c.len() > 4 {
         c.remove(0);
     }
@@ -332,6 +340,9 @@ pub struct Recording<'a> {
     /// Threads to record on (0: every logical core). The cells are split into fixed
     /// chunks, so the result doesn't depend on it.
     pub threads: usize,
+    /// Record on the GPU in f32 (`crates/tapegpu`; the `gpu` feature, else refused): within
+    /// f32's rounding of this kernel, ~1e-6 of Ms (TAPE_SPEED_PLAN.md P5).
+    pub gpu: bool,
 }
 
 /// One layer's head field (Hx, Hy) / Hg tabulated over its zone, read by Catmull-Rom
@@ -384,20 +395,19 @@ type Chunk = (usize, usize, Vec<f64>, Vec<f64>);
 const CHUNK: usize = 256;
 
 /// The remanent (M_x, M_y) / Ms per layer and cell (layer major), as
-/// `varimu.devices.tape.record` computes it.
-pub fn record(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
-    let layers = r.heights.len();
-    let cells = r.s_cells.len();
-    let chunks = cells.div_ceil(CHUNK);
-    let tasks = layers * chunks;
-    let next = AtomicUsize::new(0);
-    let out: Mutex<Vec<Chunk>> = Mutex::new(Vec::new());
-    let threads = match r.threads {
-        0 => std::thread::available_parallelism().map_or(1, |n| n.get()),
-        n => n,
+/// `varimu.devices.tape.record` computes it; on the GPU if `r.gpu` (an error there: no GPU,
+/// or a build without the `gpu` feature).
+pub fn record(r: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
+    if r.gpu {
+        return record_gpu(r);
     }
-    .clamp(1, 16);
-    let tables: Vec<Option<FieldTable>> = (0..layers)
+    Ok(record_cpu(r))
+}
+
+/// Each layer's head field table, if the recording tabulates it.
+fn field_tables(r: &Recording<'_>) -> Vec<Option<FieldTable>> {
+    let (layers, cells) = (r.heights.len(), r.s_cells.len());
+    (0..layers)
         .map(|l| {
             (r.table_step > 0.0).then(|| {
                 let y = r.heights[l];
@@ -411,7 +421,84 @@ pub fn record(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
                 FieldTable::new(&r.head, y, widest, r.table_step * y)
             })
         })
+        .collect()
+}
+
+/// The bias peaks [k0, k1) a cell sees: those within its zone (as [`cell`] finds them).
+fn peak_range(r: &Recording<'_>, l: usize, ci: usize) -> (usize, usize) {
+    let s = r.s_cells[ci];
+    let xz = if r.zones.len() == r.heights.len() {
+        r.zones[l]
+    } else {
+        r.zones[l * r.s_cells.len() + ci]
+    };
+    let k0 = r.s_rec.partition_point(|&v| v < s - xz);
+    let k1 = r.s_rec.partition_point(|&v| v <= s + xz);
+    (k0, k1)
+}
+
+#[cfg(not(feature = "gpu"))]
+fn record_gpu(_: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
+    Err("tape: circuitsim was built without the GPU kernel (the `gpu` feature)".into())
+}
+
+#[cfg(feature = "gpu")]
+fn record_gpu(r: &Recording<'_>) -> Result<(Vec<f64>, Vec<f64>), String> {
+    let (layers, cells) = (r.heights.len(), r.s_cells.len());
+    let tables = field_tables(r);
+    let ft: Vec<tapegpu::FieldTable> = tables
+        .iter()
+        .flatten()
+        .map(|t| tapegpu::FieldTable {
+            x0: t.x0,
+            inv_dx: t.inv_dx,
+            fx: &t.fx,
+            fy: &t.fy,
+        })
         .collect();
+    let mut ranges = Vec::with_capacity(layers * cells);
+    for l in 0..layers {
+        for ci in 0..cells {
+            let (k0, k1) = peak_range(r, l, ci);
+            ranges.push([k0 as u32, k1 as u32]);
+        }
+    }
+    let p = r.preisach;
+    tapegpu::record(&tapegpu::Block {
+        tables: tapegpu::Tables {
+            key: p.key,
+            h_max: p.h_max,
+            n: p.n,
+            q: &p.q,
+            d: &p.d,
+        },
+        head: [r.head.gap, r.head.pole, r.head.relax],
+        heights: r.heights,
+        field: (r.table_step > 0.0).then_some(&ft[..]),
+        s_cells: r.s_cells,
+        ranges: &ranges,
+        s_rec: r.s_rec,
+        hg: r.hg,
+        axes: r.axes,
+        h_static: r.h_static,
+        h_end: r.h_end,
+    })
+}
+
+/// [`record`] on the CPU, in f64.
+fn record_cpu(r: &Recording<'_>) -> (Vec<f64>, Vec<f64>) {
+    let layers = r.heights.len();
+    let cells = r.s_cells.len();
+    let chunks = cells.div_ceil(CHUNK);
+    let tasks = layers * chunks;
+    let next = AtomicUsize::new(0);
+    let out: Mutex<Vec<Chunk>> = Mutex::new(Vec::new());
+    let threads = match r.threads {
+        0 => std::thread::available_parallelism().map_or(1, |n| n.get()),
+        n => n,
+    }
+    .clamp(1, 16);
+    let tables = field_tables(r);
     let tables = &tables;
     std::thread::scope(|scope| {
         for _ in 0..threads {
@@ -457,13 +544,7 @@ fn cell(
     let cells = r.s_cells.len();
     let s = r.s_cells[ci];
     let y = r.heights[l];
-    let xz = if r.zones.len() == r.heights.len() {
-        r.zones[l]
-    } else {
-        r.zones[l * cells + ci]
-    };
-    let k0 = r.s_rec.partition_point(|&v| v < s - xz);
-    let k1 = r.s_rec.partition_point(|&v| v <= s + xz);
+    let (k0, k1) = peak_range(r, l, ci);
     let at = |h: Option<(&[f64], &[f64])>| match h {
         Some((hx, hy)) => (hx[l * cells + ci], hy[l * cells + ci]),
         None => (0.0, 0.0),

@@ -28,6 +28,55 @@ is met, as in the other plans.
   -78 dBFS line is invisible in drums. The bound (the user's): the floor at least 14 dB under
   the real noise, <= -89.4 dBFS.
 
+## Status (2026-11-08, second session): P5 built, P4 adopted
+
+Same harness (0.5 s of drums at +6 dB, production, noise off, alignment
+`align_351_068bf2c9b0c8fb42.json`), `CIRCUITSIM_PART_TIMING=1`:
+
+| setting | x real time | wall | process CPU | record side busy | tape worker busy | vs the f64 print |
+|---|---|---|---|---|---|---|
+| CPU kernel, esdirk4 (P1's `p1ref`) | 76-79 | 137 s | 1500 s | 117 s | ~120 s | |
+| **GPU kernel**, esdirk4 (`gpu`) | 54 | 94 s | 207 s | 90 s | 31.5 s | **-117.4 dB**, bands 7e-6 dB |
+| GPU, trbdf2 in the record side | 29.5 | 51 s | 120 s | 46.5 s | 30.6 s | |
+| **GPU, trbdf2 + its tube tables** (the circuit file since P4) | **27.0** | 47 s | 111 s | 42 s | 30.7 s | |
+
+**P5, the kernel on the GPU (done).** `crates/tapegpu`: `record.wgsl` in f32, one
+invocation per (layer, cell, easy axis), the corner formula's backward pass over the cell's
+peaks; `reference.rs` its f64 CPU reference step for step (`tests/record.rs`: 3e-6 of Ms);
+its wgpu setup copied from roomsim (`VARIMU_GPU=off` turns it off). Positions go up as f32
+(hi, lo) pairs from the block's middle (the tape runs to tens of metres; f32 alone would
+hold a position to ~4 um there, two bias wavelengths), and the zones' peak ranges are found
+in f64 on the CPU, so every cell sees the CPU's peaks. circuitsim's feature `gpu` (on in the
+Python extension, `pyproject.toml`; off in plain cargo builds and the app) puts it behind
+`tape::Recording::gpu`, `TapeStream::set_gpu`, `Options::tape_gpu`, Python
+`simulate(tape_gpu=)` and `TransientSettings.tape_gpu` (left out of `as_dict` when off, so
+no render's cache key moved; on, it is in the key: prints say which). Without the feature a
+GPU recording is refused, never silently on the CPU. **The f64 CPU kernel stays the default
+and the reference.** circuitsim's `SOURCE_HASH` now covers `crates/tapegpu` (build.rs and
+`fast.source_hash`, files named `tapegpu/...`). Tests: `crates/tapegpu/tests/record.rs`,
+`crates/circuitsim/tests/tape_gpu.rs` (`--features gpu`; refused without it),
+`tests/test_tape_gpu.py` (the stream and the literal stream within -90 dB, the GPU the same
+numbers run to run). Measured: the print **-117.4 dB** from the f64 print (bound -80), the
+noiseless floor unchanged (line -114.03 dBFS, noise -95.163: the CPU's to the digit; bound
+<= -89.4). One block's recording (up to 9 kernel calls: the demag fixed point) costs ~0.8 s
+of worker time, mostly the CPU's FFTs and transfers; the stream never waits on it.
+
+**P4, a cheaper method in the record side (adopted).** A multi-rate section's own `method`
+and `tube_tables` (IR `Section.method` / `tube_tables`, both languages; both circuit-file
+parsers and builders; a part's sections must agree; refused outside a multi-rate section),
+replacing the `CIRCUITSIM_MULTIRATE_METHOD` / `_TABLES` switches. `ampex_351.yaml`'s record
+amplifier and bias sections are `method: trbdf2`, `tube_tables: true` (the echoes regenerated
+by `make_351_echo.py`; `ampex_351_record.yaml` has no multi-rate section). With the GPU it is
+27x real time, 2.0x P5 alone and ~2.9x the morning's print; the floor holds (line -113.72
+dBFS at 14.1 kHz, noise -95.175; the CPU's trbdf2 numbers); bands 0.043 dB from 40 substeps
+(esdirk4: 0.061). Tables against trbdf2 alone: -117.5 dB, ~10%. Tests:
+`crates/circuitsim/tests/partition.rs` (`a_multirate_section_steps_with_its_own_method`,
+`..._are_checked`), `tests/test_circuit_ir.py`. `speed_351.py`'s `m<method>`, `mtables`,
+`mnotables` now edit the IR (`mesdirk4_mnotables` is the old record side).
+
+What bounds the print now: the record side (part 1, 42 of 47 s busy). Its 3.84 MHz steps
+are sequential; P3 (pieces at once) is the next multiplier, then P2's lag may matter.
+
 ## Status (2026-11-08): P1-P3 built and measured; the kernel is the bound
 
 The harness throughout: `scripts/speed_351.py` (0.5 s of drums at +6 dB, production, noise
@@ -106,8 +155,9 @@ Measured on 8 s of the drums at +6 dB (4 s pieces, 2 s warm-up, 2 at once; with 
 - 138x real time against the whole print's 95x (Rust tests ran beside both): as expected,
   no faster while the kernel saturates the CPU.
 
-**P4, a cheaper method in the record side (measured; adopt after P5).** circuitsim's
-experiment switches `CIRCUITSIM_MULTIRATE_METHOD` / `_TABLES` (`speed_351.py` variants
+**P4, a cheaper method in the record side (measured; adopted in the second session above).**
+circuitsim's experiment switches `CIRCUITSIM_MULTIRATE_METHOD` / `_TABLES` (since replaced
+by the sections' `method` / `tube_tables`; `speed_351.py` variants
 `mtrbdf2`, `mtables`), the floor on the noiseless machine (`--floor`) and the drums:
 
 | record side | floor line | noiseless noise | record side busy (drums) | drums x real time | bands vs 40 substeps |
@@ -267,7 +317,9 @@ Main-plan Phase 7 (the 670's neural surrogate: a TCN or RNN with FiLM conditioni
    literal machine and playing live in the echo).
 4. P6 if auditioning is needed before F2 is ready.
 
-### P5's design (2026-11-08, not built)
+Second session (2026-11-08): 1 and 2's P4 are done (the Status at the top); P3 is next.
+
+### P5's design (2026-11-08; built as designed, one invocation per orientation)
 
 - **What runs:** `tape::record` per 16 mm block: every (layer, cell) a backward pass over
   the bias peaks in its zone (`s_rec`, `hg`, the head field from `FieldTable` or

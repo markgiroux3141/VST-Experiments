@@ -165,6 +165,15 @@ pub struct Section {
         deserialize_with = "opt_count"
     )]
     pub lag_samples: Option<usize>,
+    /// A multi-rate section's own integration method (a `Method` name: TAPE_SPEED_PLAN.md
+    /// P4, the Ampex 351's record side on trbdf2). A part's sections agree on it. Absent:
+    /// the run's.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub method: Option<String>,
+    /// A multi-rate section's triodes from tables of the same model (`Options::tube_tables`
+    /// for its part alone; TAPE_SPEED_PLAN.md P4). Absent: the run's setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tube_tables: Option<bool>,
 }
 
 /// How a multi-rate part turns its steps into the values it publishes per sample.
@@ -1267,6 +1276,17 @@ impl CircuitIr {
                      owns nothing and doesn't decimate)",
                     s.title
                 ));
+            }
+            if (s.method.is_some() || s.tube_tables.is_some()) && !multirate {
+                return err(format!(
+                    "section {:?}: method and tube_tables are for a multi-rate section",
+                    s.title
+                ));
+            }
+            if let Some(m) = &s.method
+                && let Err(e) = crate::transient::Method::parse(m)
+            {
+                return err(format!("section {:?}: {e}", s.title));
             }
         }
 

@@ -15,6 +15,10 @@ crate-type = ["cdylib", "rlib"]
 python = ["dep:pyo3", "dep:numpy"]
 # Cycle counts per part of a DK step (examples/profile.rs); off in builds.
 timing = []
+# The tape's recording kernel on the GPU (crates/tapegpu; TAPE_SPEED_PLAN.md P5), used when
+# a recording asks for it (`tape::Recording::gpu`, `Options::tape_gpu`). Without it such a
+# run is refused; the f64 CPU kernel is the default either way.
+gpu = ["dep:tapegpu"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -23,3 +27,4 @@ serde_json = { version = "1", features = ["float_roundtrip"] }
 rustfft = "6.4.1"
 pyo3 = { version = "0.29", optional = true, features = ["abi3-py311"] }
 numpy = { version = "0.29", optional = true }
+tapegpu = { version = "0.1.0", path = "../tapegpu", optional = true }

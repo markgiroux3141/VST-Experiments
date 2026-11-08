@@ -12,11 +12,14 @@ Writes both prints and their difference to reports/tape/chunks/ and the numbers 
 results.json.
 
     uv run --extra fast --extra listen python scripts/chunk_351.py --seconds 30 --chunk-s 7.5
+
+`--gpu`: the tape's recording kernel on the GPU (TAPE_SPEED_PLAN.md P5), both prints.
 """
 
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import hashlib
 import json
 import math
@@ -65,6 +68,9 @@ def main() -> int:
         help="each piece's tape kernel threads (default: the cores less 4, shared)",
     )
     ap.add_argument("--no-noise", action="store_true")
+    ap.add_argument(
+        "--gpu", action="store_true", help="the tape kernel on the GPU (TransientSettings.tape_gpu)"
+    )
     ap.add_argument("--alignment", type=Path, help="a cached alignment's JSON (its panel)")
     ap.add_argument("--skip-whole", action="store_true", help="only the pieces (timing)")
     a = ap.parse_args()
@@ -73,6 +79,8 @@ def main() -> int:
     tape_threads = a.tape_threads or max(1, (cores - 4) // max(1, a.workers))
     al = ta.Alignment(**json.loads(a.alignment.read_text())) if a.alignment else ta.aligned()
     st = TransientSettings.from_sim_settings(engine="circuitsim")
+    if a.gpu:
+        st = dataclasses.replace(st, tape_gpu=True)
     fs = st.sample_rate
     c = spec.load_circuit(spec.circuit_path(ta.CIRCUIT))
     v_in, v_out = c.full_scale
@@ -80,10 +88,20 @@ def main() -> int:
     delay = int(round(p["head_distance_m"] / p["speed_m_s"] * fs))
     ir = builder.build(c, al.overrides, cores="ja", noise=not a.no_noise).ir
     x = load_audio(REPO_ROOT / "data" / "clips" / a.clip, fs)
-    x = x[int(a.start * fs) : int((a.start + a.seconds) * fs)]
+    x = x[int(a.start * fs) :]
+    if len(x) < int(a.seconds * fs):
+        # A clip shorter than the excerpt plays again from its start (P3's 3 minutes from
+        # the ~39 s drums: the seams' comparison doesn't depend on the music).
+        x = np.tile(x, math.ceil(a.seconds * fs / len(x)))
+        res_note = f"the clip ({Path(a.clip).name} from {a.start:g} s) tiled to {a.seconds:g} s"
+    else:
+        res_note = None
+    x = x[: int(a.seconds * fs)]
     u = np.concatenate([x, np.zeros(delay + int(TAIL_S * fs))]) * v_in * 10 ** (a.drive_db / 20)
-    tag = f"{Path(a.clip).stem}_{a.start:g}s_{a.seconds:g}s_{a.drive_db:+g}dB" + (
-        "_nonoise" if a.no_noise else ""
+    tag = (
+        f"{Path(a.clip).stem}_{a.start:g}s_{a.seconds:g}s_{a.drive_db:+g}dB"
+        + ("_nonoise" if a.no_noise else "")
+        + ("_gpu" if a.gpu else "")
     )
     CACHE.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -91,6 +109,8 @@ def main() -> int:
     whole_path = CACHE / f"whole_{tag}_{h.hexdigest()[:16]}.npy"
     res: dict = {"tag": tag, "chunk_s": a.chunk_s, "warmup_s": a.warmup_s, "workers": a.workers}
     res["tape_threads"] = tape_threads
+    if res_note:
+        res["note"] = res_note
     audio_s = len(u) / fs
 
     def show(label):

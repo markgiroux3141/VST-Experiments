@@ -752,7 +752,12 @@ class Section:
     that owns nothing and doesn't decimate reads the other parts' couplings this many
     samples late, interpolated between published samples, so its part runs up to that many
     samples ahead of the rest (the Ampex 351's record side, coupled only through its
-    supply's reservoirs). A part's lag is the largest of its sections'."""
+    supply's reservoirs). A part's lag is the largest of its sections'.
+
+    `method` and `tube_tables` (TAPE_SPEED_PLAN.md P4; None: absent, the run's): a
+    multi-rate section's own integration method (one of MULTIRATE_METHODS, circuitsim's
+    names) and triodes from tables (the Ampex 351's record side: trbdf2 with tables). A
+    part's sections agree on them."""
 
     title: str
     elements: tuple[Element, ...]
@@ -760,6 +765,12 @@ class Section:
     decimate: str | None = None
     owns: tuple[str, ...] | None = None
     lag_samples: int | None = None
+    method: str | None = None
+    tube_tables: bool | None = None
+
+
+#: circuitsim's integration methods (`transient::Method::NAMES`), for a section's `method`.
+MULTIRATE_METHODS = ("trap", "euler", "trbdf2", "sdirk3", "esdirk4", "radau3", "radau5")
 
 
 # --- The circuit ------------------------------------------------------------------------
@@ -855,6 +866,16 @@ class CircuitIR:
                     f"section {s.title!r}: lag_samples {s.lag_samples!r} (1 or more, in a"
                     " multi-rate section that owns nothing and doesn't decimate)"
                 )
+            if (s.method is not None or s.tube_tables is not None) and not multirate:
+                raise IRError(
+                    f"section {s.title!r}: method and tube_tables are for a multi-rate section"
+                )
+            if s.method is not None and s.method not in MULTIRATE_METHODS:
+                raise IRError(
+                    f"section {s.title!r}: method {s.method!r} (one of {MULTIRATE_METHODS})"
+                )
+            if s.tube_tables is not None and not isinstance(s.tube_tables, bool):
+                raise IRError(f"section {s.title!r}: tube_tables {s.tube_tables!r} (a bool)")
         names: set[str] = set()
         inductors: set[str] = set()
         nodes: set[str] = set()
@@ -1269,6 +1290,8 @@ _OMITTED_WHEN_NONE = {
     (Section, "decimate"),
     (Section, "owns"),
     (Section, "lag_samples"),
+    (Section, "method"),
+    (Section, "tube_tables"),
     (TapeMedium, "bias_substeps"),
     (TapeMedium, "reduced"),
     (TapeMedium, "varispeed"),

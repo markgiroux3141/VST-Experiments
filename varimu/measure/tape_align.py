@@ -220,7 +220,9 @@ def _sub_ir(full: irm.CircuitIR, titles: set[str], input_node: str, drop=()) -> 
     for s in full.sections:
         if s.title in titles:
             els = tuple(e for e in s.elements if not isinstance(e, tuple(drop)))
-            secs.append(dataclasses.replace(s, elements=els, substeps=None))
+            secs.append(
+                dataclasses.replace(s, elements=els, substeps=None, method=None, tube_tables=None)
+            )
     nodes = {n for s in secs for e in s.elements for n in irm.element_nodes(e)}
     probes = tuple(p for p in full.probes if p.node in nodes)
     return dataclasses.replace(full, sections=tuple(secs), input_node=input_node, probes=probes)
@@ -548,7 +550,7 @@ def _key(b: Bench, genome: Mapping[str, Any] | None = None) -> str:
     h.update(json.dumps(dict(genome or {}), sort_keys=True, default=str).encode())
     h.update(spec.circuit_path(CIRCUIT).read_bytes())
     h.update(Path(__file__).read_bytes())
-    h.update(json.dumps(dataclasses.asdict(b.settings), sort_keys=True, default=str).encode())
+    h.update(json.dumps(b.settings.as_dict(), sort_keys=True, default=str).encode())
     h.update(runner.code_version().encode())
     return h.hexdigest()[:16]
 

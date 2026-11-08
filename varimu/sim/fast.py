@@ -82,9 +82,14 @@ def available() -> bool:
 
 def source_hash() -> str:
     """The crate sources' hash, computed like crates/circuitsim/build.rs: FNV-1a 64 over
-    each file (Cargo.toml and src/**/*.rs, sorted by relative path) as path, 0, bytes, 0."""
+    each file (Cargo.toml and src/**/*.rs, then the GPU kernel's crate crates/tapegpu's
+    Cargo.toml and src/**/*.{rs,wgsl} named "tapegpu/<path>"; sorted by name) as name, 0,
+    bytes, 0."""
     files = [CRATE_DIR / "Cargo.toml", *(CRATE_DIR / "src").rglob("*.rs")]
-    named = sorted((p.relative_to(CRATE_DIR).as_posix(), p) for p in files)
+    named = [(p.relative_to(CRATE_DIR).as_posix(), p) for p in files]
+    gpu = CRATE_DIR.parent / "tapegpu"
+    gfiles = [gpu / "Cargo.toml", *(gpu / "src").rglob("*.rs"), *(gpu / "src").rglob("*.wgsl")]
+    named = sorted(named + [("tapegpu/" + p.relative_to(gpu).as_posix(), p) for p in gfiles])
     h = 0xCBF29CE484222325
     for name, path in named:
         for b in name.encode() + b"\0" + path.read_bytes() + b"\0":
@@ -284,6 +289,7 @@ def run_transient(
             stats=stats is not None,
             notes=note_steps(notes, n0, s) or None,
             **({"origin_samples": round(origin_s * s.sim_rate)} if origin_s else {}),
+            **({"tape_gpu": True} if s.tape_gpu else {}),
         )
     except circuitsim.SimulationError as e:
         raise SimulationFailed(str(e)) from e

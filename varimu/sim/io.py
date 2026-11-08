@@ -143,6 +143,10 @@ class TransientSettings:
     # render's input and outputs stay at sample_rate; the engine resamples to the host
     # rate and back, so a 48 kHz plugin's result can be heard in a 96 kHz project.
     host_rate: int = 0
+    # circuitsim only: a tape's recording kernel on the GPU in f32 (crates/tapegpu, TAPE_SPEED_
+    # PLAN.md P5; within ~-100 dB of the f64 CPU kernel's print). Off: the CPU, the reference.
+    # Left out of as_dict when off, so the cache keys of every render without it stand.
+    tape_gpu: bool = False
 
     @classmethod
     def from_sim_settings(
@@ -204,7 +208,7 @@ class TransientSettings:
                  "error_abstol": float, "error_reltol": float, "newton_reltol": float,
                  "newton_vntol": float, "newton_reuse": bool, "cores": str,
                  "tube_tables": bool, "partition_coupling": str, "host_rate": int,
-                 "events": bool}  # fmt: skip
+                 "events": bool, "tape_gpu": bool}  # fmt: skip
         for block in QUALITY_BLOCKS[quality]:
             d = s.data[block]
             unknown = set(d) - set(kinds) - {"partition"}
@@ -225,7 +229,10 @@ class TransientSettings:
         return self.host * self.oversample
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        if not d["tape_gpu"]:
+            del d["tape_gpu"]
+        return d
 
 
 def full_scale(s: TransientSettings, circuit: Any = None) -> tuple[float, float]:

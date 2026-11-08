@@ -107,6 +107,8 @@ pub struct TapeMedium {
     noise_seed: Option<u64>,
     /// The run's origin (`Medium::set_origin`), for a stream made anew.
     origin: u64,
+    /// The recording kernel on the GPU (`Medium::set_tape_gpu`), for a stream made anew.
+    gpu: bool,
     /// Scratch: a push's fields and its EMF.
     fields: Vec<f64>,
     emf: Vec<f64>,
@@ -197,6 +199,7 @@ impl Medium {
                 fs,
                 noise_seed,
                 origin: 0,
+                gpu: false,
                 fields: Vec::new(),
                 emf: Vec::new(),
             })),
@@ -218,6 +221,16 @@ impl Medium {
         if let Medium::Tape(m) = self {
             m.origin = k0;
             m.stream.set_origin(k0)?;
+        }
+        Ok(())
+    }
+
+    /// A tape's recording kernel on the GPU (`Options::tape_gpu`; TAPE_SPEED_PLAN.md P5).
+    /// Before the first push; the other media have none.
+    pub fn set_tape_gpu(&mut self, gpu: bool) -> Result<(), String> {
+        if let Medium::Tape(m) = self {
+            m.gpu = gpu;
+            m.stream.set_gpu(gpu)?;
         }
         Ok(())
     }
@@ -336,6 +349,7 @@ impl Medium {
                 if t.name != m.tape.name || (t.medium != *old && !same_but_bias) {
                     m.stream = TapeMedium::stream(t, m.fs, m.noise_seed)?;
                     m.stream.set_origin(m.origin)?;
+                    m.stream.set_gpu(m.gpu)?;
                 } else if same_but_bias {
                     m.stream.set_bias(t.medium.hg_bias_a_m)?;
                 }

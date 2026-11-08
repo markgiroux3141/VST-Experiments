@@ -1,0 +1,12 @@
+[package]
+name = "tapegpu"
+version = "0.1.0"
+description = "The tape medium's recording kernel on the GPU (wgpu, f32) with its f64 CPU reference (docs/TAPE_SPEED_PLAN.md P5)"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+wgpu = "29.0.4"
+pollster = "0.4.0"
+bytemuck = { version = "1.25.2", features = ["derive"] }

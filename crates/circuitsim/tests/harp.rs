@@ -160,6 +160,8 @@ fn circuit(el: Harp) -> circuitsim::ir::CircuitIr {
             decimate: None,
             owns: None,
             lag_samples: None,
+            method: None,
+            tube_tables: None,
         }],
         controls: vec![],
         noise: None,

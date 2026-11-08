@@ -64,6 +64,8 @@ fn rc(external: bool) -> CircuitIr {
             decimate: None,
             owns: None,
             lag_samples: None,
+            method: None,
+            tube_tables: None,
             elements,
         }],
     }
@@ -255,6 +257,8 @@ fn multirate_ir(substeps: Option<usize>) -> CircuitIr {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![resistor("R1", "in", "s", 100.0), cap("C1", "s", 10e-6)],
             },
             Section {
@@ -263,6 +267,8 @@ fn multirate_ir(substeps: Option<usize>) -> CircuitIr {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![
                     resistor("R2", "s", "f", 1e3),
                     cap("C2", "f", 1e-9),
@@ -488,6 +494,8 @@ fn an_island_owns_its_output() {
                 decimate: None,
                 owns: None,
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![
                     Element::VoltageSource(VoltageSource {
                         name: "VB".into(),
@@ -507,6 +515,8 @@ fn an_island_owns_its_output() {
                 decimate: substeps.map(|_| circuitsim::ir::Decimate::Fir),
                 owns: substeps.map(|_| vec!["o".to_string()]),
                 lag_samples: None,
+                method: None,
+                tube_tables: None,
                 elements: vec![
                     resistor("R1", "in", "o", 1e3),
                     cap("C1", "o", "0", 100e-9),
@@ -683,4 +693,66 @@ fn lag_is_checked() {
     ir.sections[1].lag_samples = Some(8);
     assert!(ir.validate().is_err());
     assert!(lagged(Some(8)).validate().is_ok());
+}
+
+#[test]
+fn a_multirate_section_steps_with_its_own_method() {
+    // TAPE_SPEED_PLAN.md P4: the multi-rate part's sections name its method (and tube
+    // tables); the rest keeps the run's.
+    let h = 1.0 / 96_000.0;
+    let n = 2000;
+    let x: Vec<f64> = (0..n)
+        .map(|i| 10.0 + 5.0 * (2.0 * std::f64::consts::PI * 2e3 * i as f64 * h).sin())
+        .collect();
+    let opts = Options {
+        input_order: 1,
+        ..Options::with_method(Method::Esdirk4)
+    };
+    let run = |method: Option<&str>| {
+        // 64 steps per sample: the fast part's 0.5 us RC resolved (at 8 a step is longer
+        // than it, and the two methods' damping of the 99 kHz drive differs by ~1%).
+        let mut ir = multirate_ir(Some(64));
+        ir.sections[1].method = method.map(str::to_string);
+        ir.validate().unwrap();
+        simulate_partitioned(
+            &ir,
+            &[],
+            Coupling::Extrapolate,
+            &x,
+            h,
+            &opts,
+            usize::MAX,
+            |_| Ok(()),
+        )
+        .unwrap()
+    };
+    let (base, same, other) = (run(None), run(Some("esdirk4")), run(Some("trbdf2")));
+    // The run's own method named: the same numbers.
+    for (u, v) in base.values.iter().zip(&same.values) {
+        assert!(u.iter().zip(v).all(|(a, b)| a.to_bits() == b.to_bits()));
+    }
+    // Another: the fast part steps differently, within its truncation error (of its ~25 V
+    // carrier).
+    let (f0, f1) = (series(&base, "v(f)"), series(&other, "v(f)"));
+    let d = f0.iter().zip(f1).fold(0.0f64, |w, (a, b)| w.max((a - b).abs()));
+    eprintln!("trbdf2 vs esdirk4 in the fast part: {d:.2e} V");
+    assert!(d > 0.0 && d < 0.05, "{d}");
+}
+
+#[test]
+fn a_sections_method_and_tables_are_checked() {
+    let mut ir = multirate_ir(Some(8));
+    ir.sections[1].method = Some("rk4".into());
+    assert!(ir.validate().is_err());
+    let mut ir = multirate_ir(Some(8));
+    ir.sections[1].method = Some("trbdf2".into());
+    ir.sections[1].tube_tables = Some(true);
+    assert!(ir.validate().is_ok());
+    // In a single-rate section: refused.
+    let mut ir = multirate_ir(None);
+    ir.sections[1].method = Some("trbdf2".into());
+    assert!(ir.validate().is_err());
+    let mut ir = multirate_ir(None);
+    ir.sections[1].tube_tables = Some(true);
+    assert!(ir.validate().is_err());
 }

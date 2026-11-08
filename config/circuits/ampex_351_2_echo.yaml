@@ -1185,6 +1185,8 @@ sections:
       r: r_k1b_ohm
 - title: record amplifier
   substeps: 20
+  method: trbdf2
+  tube_tables: true
   parts:
     RSB:
       R:
@@ -1322,6 +1324,8 @@ sections:
       c: c_lf_f
 - title: bias and head driver
   substeps: 20
+  method: trbdf2
+  tube_tables: true
   parts:
     RREC:
       R:
@@ -2038,6 +2042,8 @@ sections:
       r: r_k1b_ohm
 - title: record amplifier (right)
   substeps: 20
+  method: trbdf2
+  tube_tables: true
   parts:
     RSB_r:
       R:
@@ -2175,6 +2181,8 @@ sections:
       c: c_lf_f
 - title: bias and head driver (right)
   substeps: 20
+  method: trbdf2
+  tube_tables: true
   parts:
     RREC_r:
       R:

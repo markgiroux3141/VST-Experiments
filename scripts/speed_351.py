@@ -18,9 +18,12 @@ The harness: 0.5 s of the drums at +6 dB drive through the aligned machine at pr
   lockstep whatever the circuit file says.
 - `ttN`: the tape's recording kernel on N threads (CIRCUITSIM_TAPE_THREADS; the output
   doesn't depend on it); each row reports the process's CPU seconds beside the wall time;
-- `mtrbdf2` (any method name after `m`), `mtables`: the record side's own method or tube
-  tables (TAPE_SPEED_PLAN.md P4; circuitsim's experiment switches
-  CIRCUITSIM_MULTIRATE_METHOD / _TABLES).
+- `mtrbdf2` (any method name after `m`), `mtables` / `mnotables`: the record side's own
+  method or tube tables (its sections' `method` / `tube_tables`; TAPE_SPEED_PLAN.md P4: the
+  circuit file has trbdf2 with tables since P4, so `mesdirk4_mnotables` is the old record
+  side);
+- `gpu`: the tape's recording kernel on the GPU in f32 (`TransientSettings.tape_gpu`;
+  TAPE_SPEED_PLAN.md P5).
 `--floor` measures each variant on the noiseless machine with no input instead (the plan's
 rule: judge the record side's numerics on its floor): the strongest line 1-15 kHz (the bias
 residue near 96 kHz - f_osc) and the band noise 50 Hz-15 kHz, as tape_snr_study.py --cells;
@@ -84,6 +87,19 @@ def with_lag(ir: irm.CircuitIR, lag: int) -> irm.CircuitIR:
     return dataclasses.replace(ir, sections=secs)
 
 
+def with_record_side(ir: irm.CircuitIR, method: str | None, tables: bool | None) -> irm.CircuitIR:
+    """Every multi-rate section with its own method and / or tube tables (None: as is)."""
+    secs = []
+    for s in ir.sections:
+        if s.substeps:
+            if method is not None:
+                s = dataclasses.replace(s, method=method)
+            if tables is not None:
+                s = dataclasses.replace(s, tube_tables=tables)
+        secs.append(s)
+    return dataclasses.replace(ir, sections=tuple(secs))
+
+
 def band_diff(y: np.ndarray, yr: np.ndarray, fs: int) -> float:
     """The largest difference of third-octave band levels, 50 Hz-15 kHz (dB): what the
     record side's step changes beyond the free oscillator's phase (which moves the bias
@@ -131,16 +147,15 @@ def main() -> int:
             ir = with_substeps(ir, int(m.group(1)))
         if m := re.search(r"lag(\d+)", v):
             ir = with_lag(ir, int(m.group(1)))
-        if "tables" in v:
+        if re.search(r"(^|_)tables", v):
             st = dataclasses.replace(st, tube_tables=True)
+        if re.search(r"(^|_)gpu", v):
+            st = dataclasses.replace(st, tape_gpu=True)
         if "noctl" in v:
             st = dataclasses.replace(st, error_abstol=0.0)
-        os.environ.pop("CIRCUITSIM_MULTIRATE_METHOD", None)
-        os.environ.pop("CIRCUITSIM_MULTIRATE_TABLES", None)
-        if m := re.search(r"m(trap|trbdf2|sdirk3|esdirk4|euler)", v):
-            os.environ["CIRCUITSIM_MULTIRATE_METHOD"] = m.group(1)
-        if "mtables" in v:
-            os.environ["CIRCUITSIM_MULTIRATE_TABLES"] = "1"
+        m = re.search(r"m(trap|trbdf2|sdirk3|esdirk4|euler)", v)
+        tables = False if "mnotables" in v else (True if "mtables" in v else None)
+        ir = with_record_side(ir, m.group(1) if m else None, tables)
         os.environ.pop("CIRCUITSIM_TAPE_THREADS", None)
         if m := re.search(r"tt(\d+)", v):
             os.environ["CIRCUITSIM_TAPE_THREADS"] = m.group(1)

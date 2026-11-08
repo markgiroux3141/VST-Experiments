@@ -535,6 +535,10 @@ pub struct Options {
     /// long render run apart can continue each other (TAPE_SPEED_PLAN.md P3). The state
     /// still starts at the DC operating point. 0 (the default): from t = 0.
     pub origin_samples: u64,
+    /// A tape's recording kernel on the GPU in f32 (`tape::Recording::gpu`, the `gpu`
+    /// feature; TAPE_SPEED_PLAN.md P5): within ~-100 dB of the f64 CPU kernel's print.
+    /// Off (the default): the CPU, the reference.
+    pub tape_gpu: bool,
 }
 
 impl Default for Options {
@@ -560,6 +564,7 @@ impl Default for Options {
             newton_reuse: true,
             tube_tables: false,
             origin_samples: 0,
+            tape_gpu: false,
         }
     }
 }
@@ -974,6 +979,7 @@ impl Transient {
             .map(|m| {
                 let mut md = crate::media::Medium::new(&m.element, 1.0 / h, m.noise_seed)?;
                 md.set_origin(opts.origin_samples)?;
+                md.set_tape_gpu(opts.tape_gpu)?;
                 Ok(md)
             })
             .collect::<Result<Vec<_>, String>>()
