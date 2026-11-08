@@ -2343,6 +2343,10 @@ impl Transient {
             let supply = ports.supply.map(at);
             let y = match self.media_batches[i].take() {
                 Some(b) => m.push_batch(&b, supply),
+                None if !ports.senses.is_empty() => {
+                    let vs: Vec<f64> = ports.senses.iter().map(|&u| at(u)).collect();
+                    m.push_senses(&vs)
+                }
                 None => m.push(at(ports.sense.0) - at(ports.sense.1), supply),
             };
             self.ext0[row] = self.ext1[row];

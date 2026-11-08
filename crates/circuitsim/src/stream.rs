@@ -561,7 +561,12 @@ impl Stream {
         if let Some(e) = sp.parts[1..]
             .iter()
             .flat_map(CircuitIr::elements)
-            .find(|e| matches!(e, Element::Harp(_) | Element::ClavStrings(_)))
+            .find(|e| {
+                matches!(
+                    e,
+                    Element::Harp(_) | Element::ClavStrings(_) | Element::NovaKeys(_)
+                )
+            })
         {
             return Err(Error::new(format!(
                 "partition: the keys' medium {} must stay in the first part (its keys are played there)",

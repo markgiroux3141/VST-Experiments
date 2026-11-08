@@ -76,7 +76,7 @@ def test_generated_files_are_current():
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-@pytest.mark.parametrize("name", ["novachord_note", "novachord"])
+@pytest.mark.parametrize("name", ["novachord_note", "novachord", "novachord_live"])
 def test_circuits_pass_the_checks(name):
     s = spec.load_circuit(CONFIG_DIR / "circuits" / f"{name}.yaml")
     for sets in ({}, {"normal_vibrato": 1, "mellow": 1, "attack": 1, "res1": 2, "full": 0}):
@@ -187,3 +187,61 @@ def test_the_renderer_keys_follow_notes_and_pedals():
     assert by_t[1.5]["k4"] == 1
     assert by_t[1.8]["s36"] == 0 and by_t[1.8]["s4"] == 1
     assert by_t[2.0]["s36"] == 1 and by_t[2.0]["s37"] == 0
+
+
+# --- the live tier (NV4) --------------------------------------------------------------------
+
+
+def test_the_compiled_keys_are_the_current_reference():
+    """The live tier's component was compiled from today's reference circuit (else rerun
+    scripts/compile_novachord_keys.py and move make_novachord's KEYS_COMPONENT)."""
+    import hashlib
+
+    from varimu.novachord import compile as nc
+
+    mk = _script("make_novachord")
+    data = nc.load(mk.KEYS_COMPONENT)
+    want = hashlib.sha256((CONFIG_DIR / "circuits" / "novachord.yaml").read_bytes()).hexdigest()
+    assert data["provenance"]["circuit_sha256"] == want
+    assert len(data["keys"]) == 72 and len(data["notes"]) == 12
+    for nd in data["notes"]:
+        assert len(nd["vibrato"]) == 4 and len(nd["tap"]) == data["points_per_cycle"]
+        # NORMAL vibrato bends the pitch up by 15-40 cents over the reed line's swing
+        f = nd["vibrato"][2]["f_hz"]
+        assert 15 < 1200 * np.log2(max(f) / min(f)) < 40
+
+
+def test_the_live_tier_plays_a_key():
+    """A key on the live circuit (the keys medium, partitioned as the app plays it): the
+    line sounds while it is held, the control tubes' B+ sags, and it is quiet after."""
+    import circuitsim
+
+    from varimu.sim import fast, io
+
+    fast.check_build()
+    mk = _script("make_novachord")
+    s = spec.load_circuit(CONFIG_DIR / "circuits" / "novachord_live.yaml")
+    ir = builder.build_ir(s, spec.resolve(s, {"attack": 4}))
+    ir = dataclasses.replace(ir, probes=(VoltageProbe("out"), VoltageProbe("bct")))
+    st = dataclasses.replace(
+        io.TransientSettings.from_sim_settings(engine="circuitsim", quality="draft"), method="trap"
+    )
+    n = int(1.0 * FS)
+    notes = [(int(0.2 * FS), "on", 69, 100), (int(0.6 * FS), "off", 69, 0)]
+    o = circuitsim.simulate(
+        ir.to_json(), np.zeros(n), 1.0 / FS, st.method, solver=st.solver,
+        reltol=st.newton_reltol, vntol=st.newton_vntol, input_order=st.input_order,
+        newton_reuse=st.newton_reuse, tube_tables=st.tube_tables, partition=mk.live_partition(),
+        partition_coupling=st.partition_coupling, notes=notes,
+    )  # fmt: skip
+    out, bct = np.asarray(o["v(out)"]), np.asarray(o["v(bct)"])
+
+    def rms(a, b):
+        y = out[int(a * FS) : int(b * FS)]
+        return float(np.sqrt(np.mean((y - y.mean()) ** 2)))
+
+    assert rms(0.1, 0.2) < 1e-6
+    held = rms(0.45, 0.6)
+    assert held > 3e-3  # the line: ~12 mV rms for A4 at ATTACK 4 (live_check.json)
+    assert rms(0.9, 1.0) < 0.05 * held
+    assert bct[int(0.55 * FS)] < bct[int(0.15 * FS)] - 0.5

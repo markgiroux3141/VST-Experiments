@@ -28,6 +28,7 @@ pub mod modal;
 pub mod newton;
 pub mod nickel;
 pub mod noise;
+pub mod novachord;
 pub mod partition;
 pub mod plate;
 pub mod spring;

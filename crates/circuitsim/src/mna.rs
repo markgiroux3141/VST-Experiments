@@ -108,6 +108,9 @@ pub struct DeviceInstance {
 pub struct MediumPorts {
     pub element: crate::media::MediumElement,
     pub sense: (Option<usize>, Option<usize>),
+    /// A medium of many senses (the Novachord's keys): their unknowns, in its order
+    /// ([`crate::media::MediumElement::senses`]); empty for the others.
+    pub senses: Vec<Option<usize>>,
     /// A tape's capstan supply node (varispeed), if it has one.
     pub supply: Option<Option<usize>>,
     /// The circuit's noise seed, if its noise is on (a tape's grain).
@@ -343,6 +346,7 @@ impl Mna {
                 Element::ClavStrings(c) => {
                     Some(crate::media::MediumElement::ClavStrings(c.clone()))
                 }
+                Element::NovaKeys(k) => Some(crate::media::MediumElement::NovaKeys(k.clone())),
                 _ => None,
             })
             .collect();
@@ -540,7 +544,8 @@ impl Mna {
                 | Element::Spring(_)
                 | Element::Tape(_)
                 | Element::Harp(_)
-                | Element::ClavStrings(_) => {}
+                | Element::ClavStrings(_)
+                | Element::NovaKeys(_) => {}
             }
         }
         for el in ir.elements() {
@@ -564,9 +569,11 @@ impl Mna {
                 let (pos, neg) = m.sense();
                 let sense = (node(pos), node(neg));
                 let supply = m.supply().map(node);
+                let senses = m.senses().into_iter().map(node).collect();
                 MediumPorts {
                     element: m,
                     sense,
+                    senses,
                     supply,
                     noise_seed: ir.noise.as_ref().map(|n| n.seed),
                 }
@@ -700,7 +707,11 @@ impl Mna {
     pub fn media_senses(&self) -> Vec<usize> {
         self.media
             .iter()
-            .flat_map(|m| [m.sense.0, m.sense.1, m.supply.flatten()])
+            .flat_map(|m| {
+                [m.sense.0, m.sense.1, m.supply.flatten()]
+                    .into_iter()
+                    .chain(m.senses.iter().copied())
+            })
             .flatten()
             .collect()
     }

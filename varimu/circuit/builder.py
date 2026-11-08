@@ -98,6 +98,14 @@ Macro parts (connection; params, * = required):
                 Optional, all or none: wear_seed, wear_age, wear_tuning, wear_strings,
                 wear_tangents, wear_yarn, wear_pickups (the instrument's wear:
                 varimu.clavinet.wear)
+    nova_keys   [the 12 oscillators' vibrato grids (F to E), bus A, bus C, the + rail, the 3 cut-off
+                taps, then a plate lead per four keys and an output per lead]; component* (a
+                Novachord keys component version, NAME@N: kind nova_keys,
+                varimu.novachord.compile), first_key*, last_key* (whole plate leads),
+                mellow*, normal_vibrato*, small_vibrato* (0 / 1: the switches),
+                v_per_a* (each output's volts per ampere of
+                its lead's plate current): the keys as circuitsim's medium, played by note
+                events (docs/NOVACHORD_PLAN.md NV4; varimu.circuit.parts.nova_keys)
     tape        [rec_plus, rec_minus, out]; component* (a tape component version, NAME@N, or
                 a parameter naming one), and the machine's physical values (all *):
                 speed_m_s, f_bias_hz, bias_a_m (the bias's deep-gap field), rec_gap_m,
@@ -870,6 +878,25 @@ def _clav_strings(ctx: Context, name: str, conn: list[str], a: dict) -> list[Ele
     return parts.clav_strings(name, *conn, data, sha, a["rate_hz"], a["contact_rate_hz"], wear)
 
 
+def _nova_keys(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
+    from varimu.novachord import compile as nova_compile
+
+    where = f"{name}.component"
+    try:
+        ref = str(versions.require_pinned(ctx.text(where, a["component"])))
+        data, sha = nova_compile.ir_data(ref)
+    except (versions.VersionError, ValueError) as err:
+        raise ctx.fail(where, str(err)) from err
+    lo, hi = a["first_key"], a["last_key"]
+    if not 1 <= lo <= hi <= 72 or (lo - 1) % 4 or hi % 4:
+        raise ctx.fail(f"{name}.first_key", f"keys {lo}-{hi}: whole plate leads of four in 1-72")
+    n = parts.NOVA_KEYS_SENSES + 2 * ((hi - lo + 1) // 4)
+    if not isinstance(conn, list) or len(conn) != n:
+        raise ctx.fail(name, f"nova_keys takes {n} nodes for keys {lo}-{hi}, got {conn!r}")
+    sw = [float(a[k]) for k in ("mellow", "normal_vibrato", "small_vibrato")]
+    return parts.nova_keys(name, [str(c) for c in conn], data, sha, lo, hi, *sw, a["v_per_a"])
+
+
 def _tape(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     where = f"{name}.component"
     try:
@@ -1089,6 +1116,19 @@ for _name, _macro in {
     ),
     "spring_tank": Macro(_spring_tank, 3, {"component": Param("raw")}),
     "harp": Macro(_harp, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}),
+    "nova_keys": Macro(
+        _nova_keys,
+        None,
+        {
+            "component": Param("raw"),
+            "first_key": Param("count"),
+            "last_key": Param("count"),
+            "mellow": Param("number"),
+            "normal_vibrato": Param("number"),
+            "small_vibrato": Param("number"),
+            "v_per_a": _P,
+        },
+    ),
     "clav_strings": Macro(
         _clav_strings,
         3,

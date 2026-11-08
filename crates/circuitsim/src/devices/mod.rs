@@ -176,7 +176,9 @@ impl Device for Parallel {
     /// A bank of triodes as one table.
     fn tabulate(&self) -> Option<Box<dyn Device>> {
         let tubes: Option<Vec<&Triode>> = self.parts.iter().map(|d| d.triode()).collect();
-        tubes.map(|t| Box::new(TriodeTable::new(&t)) as Box<dyn Device>)
+        tubes
+            .filter(|t| TriodeTable::fits(t))
+            .map(|t| Box::new(TriodeTable::new(&t)) as Box<dyn Device>)
     }
 }
 

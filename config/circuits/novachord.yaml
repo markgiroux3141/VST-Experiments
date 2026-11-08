@@ -1205,6 +1205,13 @@ controls:
     unit: switch
     source: 'SM2 p.10: the power amplifier and speakers (1), or the preamplifier''s 500 ohm line alone (0: ''played
       through a separate tone cabinet'', the feedback lead on its 12 ohm post); 0 renders faster'
+  expression_c_f:
+    value: 1.5e-10
+    min: 2.5e-11
+    max: 5.0e-10
+    unit: F
+    source: 'provisional: model knowledge (the EXPRESSION CONTROL''s variable condenser, SM2 p.10: ''a reduction
+      in its capacity increases the volume''; its range isn''t printed: 25-500 pF assumed, 150 pF mid-pedal)'
 values:
   b270_v:
     value: 270.0
@@ -1222,9 +1229,11 @@ values:
     value: 260.0
     source: 'SM2 Fig. 19: the 260 V keying supply (rectifier tube J, p.11)'
   r_bus_ohm:
-    value: 10000.0
+    value: 100.0
     source: 'provisional: model knowledge (the attack switch''s RN52 strings aren''t printed: a source resistance
-      for buses A and C)'
+      for buses A and C. SM2 p.16''s table gives the buses'' voltages on the working instrument, the keys'' load
+      included (72 x RN12 + RN11, ~32k between A and C): a stiff 100 ohm, so the buses read the table; was 10k until
+      2026-11-07, which moved them ~20% under that load)'
   r_in_ohm:
     value: 1000000.0
     source: 'numerical: a load on the unused audio input'
@@ -1615,10 +1624,6 @@ values:
     value: 4.6475800154489e-10
     source: 'Hammond, The Novachord: a manual for the service technician, 2nd ed. Fig. 21: VOLUME ADJUST .0003 TO
       .00072 (set at the factory; geometric middle)'
-  expression_c_f:
-    value: 1.5e-10
-    source: 'provisional: model knowledge: the EXPRESSION CONTROL''s variable condenser (unprinted range; ''a reduction
-      in its capacity increases the volume'', SM2 p.10): mid-pedal 150 pF (25-500 pF assumed)'
   pre_r_fb_ohm:
     value: 5000000.0
     source: 'Hammond, The Novachord: a manual for the service technician, 2nd ed. Fig. 21: 5 MEG (two, the feedback

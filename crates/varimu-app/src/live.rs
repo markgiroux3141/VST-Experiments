@@ -289,6 +289,21 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::ThyratronEvents(t) => {
                 ("ThyratronEvents", &t.name, vec![&t.a, &t.g, &t.w, &t.k])
             }
+            // MELLOW plays on (a value); other keys, data or nodes are another instrument.
+            Element::NovaKeys(k) => {
+                worn = format!("{} {} {:?}", k.name, k.sha256, k.range());
+                (
+                    "NovaKeys",
+                    &worn,
+                    k.grids
+                        .iter()
+                        .chain([&k.abus, &k.cbus, &k.keyp])
+                        .chain(&k.cuts)
+                        .chain(&k.plates)
+                        .chain(&k.outs)
+                        .collect(),
+                )
+            }
         };
         elements.insert((kind, name.to_string()));
         nodes.extend(ns.into_iter().cloned());

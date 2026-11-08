@@ -125,6 +125,7 @@ const DRAWING: Device = Device {
     pitch2: None,
     live_speaker_v: None,
     newton: None,
+    method: None,
 };
 
 /// A finished render: where it was saved and what it was.
@@ -1497,10 +1498,14 @@ impl PlayView {
             return;
         }
         self.wheel_seen = n;
+        let reversed = DEVICES
+            .get(self.device)
+            .is_some_and(|d| panel::WHEEL_REVERSED.contains(&d.id));
         if let Some(k) = self.knobs.iter_mut().find(|k| k.key == key)
             && let Kind::Range { min, max } = k.kind
         {
-            k.value = Value::Float(min + (max - min) * cc as f64 / 127.0);
+            let x = if reversed { 127 - cc } else { cc };
+            k.value = Value::Float(min + (max - min) * x as f64 / 127.0);
             p.set(panel::values(&self.knobs));
         }
     }

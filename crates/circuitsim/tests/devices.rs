@@ -358,3 +358,29 @@ fn tabulated_triodes_match_the_exact_model() {
     }
     println!("tabulated triodes: worst relative difference {worst:.1e}");
 }
+
+/// A triode whose table would be enormous (a fit with Kp ~1e7: a knee sharp as a corner, the
+/// provisional 56@1's) isn't tabulated (`TriodeTable::fits`): the tube stays exact, where its
+/// table took 20 s and gigabytes. The 670's tubes are tabulated as before.
+#[test]
+fn enormous_tables_stay_exact() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
+    let ir = circuitsim::ir::CircuitIr::from_json(
+        &fs::read_to_string(dir.join("mismatch.json")).unwrap(),
+    )
+    .unwrap();
+    let Some(DeviceModel::Triode(m)) = ir.model("12AX7_V105A") else {
+        panic!("12AX7_V105A");
+    };
+    let ax7 = devices::Triode::new(m);
+    assert!(devices::TriodeTable::fits(&[&ax7]));
+    assert!(ax7.tabulate().is_some());
+    let mut sharp = m.clone();
+    match &mut sharp.plate {
+        circuitsim::ir::PlateModel::Koren(k) => k.kp = 1.08e7,
+        _ => panic!("a Koren triode"),
+    }
+    let sharp = devices::Triode::new(&sharp);
+    assert!(!devices::TriodeTable::fits(&[&sharp]));
+    assert!(sharp.tabulate().is_none());
+}

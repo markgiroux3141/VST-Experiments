@@ -41,6 +41,8 @@ const DU_KP: f64 = 0.05;
 const TAIL_A: f64 = -40.0;
 /// The table's upper end in u (Vg / sqrt(Kvb + Vp^2)); exact above.
 pub const U_HI: f64 = 0.5;
+/// The most points a group's table takes ([`TriodeTable::fits`]); a Kp of 1000 needs ~10^4.
+pub const MAX_POINTS: usize = 200_000;
 
 /// Sections sharing (Kp, Ex, Kvb), tabulated.
 #[derive(Debug, Clone)]
@@ -231,6 +233,18 @@ impl TriodeTable {
                 .collect(),
             grids,
         }
+    }
+
+    /// Whether `tubes`' table stays small enough to build ([`MAX_POINTS`] per group): a
+    /// fit whose Kp is enormous (a knee sharp as a corner: the provisional 56@1's Kp is
+    /// 1.1e7, ~1e8 points, 20 s and gigabytes to build) is evaluated exactly instead.
+    pub fn fits(tubes: &[&Triode]) -> bool {
+        tubes.iter().all(|t| {
+            let (inv_mu, _, kp, _, _) = t.koren();
+            let max_inv_mu = inv_mu.iter().copied().fold(f64::MIN, f64::max);
+            let u_lo = -max_inv_mu + TAIL_A / kp;
+            (U_HI - u_lo) / (DU_KP / kp) <= MAX_POINTS as f64
+        })
     }
 
     /// Table points (all groups), for the record.

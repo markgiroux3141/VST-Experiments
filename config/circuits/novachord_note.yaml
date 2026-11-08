@@ -135,9 +135,11 @@ values:
     value: 260.0
     source: 'SM2 Fig. 19: the 260 V keying supply (rectifier tube J, p.11)'
   r_bus_ohm:
-    value: 10000.0
+    value: 100.0
     source: 'provisional: model knowledge (the attack switch''s RN52 strings aren''t printed: a source resistance
-      for buses A and C)'
+      for buses A and C. SM2 p.16''s table gives the buses'' voltages on the working instrument, the keys'' load
+      included (72 x RN12 + RN11, ~32k between A and C): a stiff 100 ohm, so the buses read the table; was 10k until
+      2026-11-07, which moved them ~20% under that load)'
   r_in_ohm:
     value: 1000000.0
     source: 'numerical: a load on the unused audio input'

@@ -514,7 +514,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 30] = [
+const MACROS: [&str; 31] = [
     "R",
     "C",
     "L",
@@ -544,6 +544,7 @@ const MACROS: [&str; 30] = [
     "tape",
     "harp",
     "clav_strings",
+    "nova_keys",
     "opamp",
 ];
 
@@ -667,6 +668,19 @@ fn macro_of(kind: &str) -> Macro {
             .into_iter()
             .chain(CLAV_WEAR.iter().map(|k| opt(k, Physical)))
             .collect(),
+            false,
+        ),
+        "nova_keys" => (
+            None,
+            vec![
+                p("component", Raw),
+                p("first_key", Count),
+                p("last_key", Count),
+                p("mellow", Number),
+                p("normal_vibrato", Number),
+                p("small_vibrato", Number),
+                p("v_per_a", Physical),
+            ],
             false,
         ),
         "tape" => (
@@ -1109,6 +1123,7 @@ fn expand(
         "tape" => return tape_part(ctx, name, nodes, a),
         "harp" => return harp_part(ctx, name, nodes, a),
         "clav_strings" => return clav_strings_part(ctx, name, nodes, a),
+        "nova_keys" => return nova_keys_part(ctx, name, conn, a),
         _ => unreachable!("{kind}"),
     })
 }
@@ -1517,6 +1532,63 @@ fn clav_strings_part(
         data,
         sha256,
         wear,
+    })])
+}
+
+/// The Novachord's keys (docs/NOVACHORD_PLAN.md, NV4; `varimu.circuit.parts.nova_keys`):
+/// the connection is the twelve vibrato grids, bus A, bus C, the + rail, the three cut-off taps, then
+/// a plate lead per four keys and an output per lead.
+fn nova_keys_part(
+    ctx: &mut Context,
+    name: &str,
+    conn: &Value,
+    a: &Args,
+) -> Result<Vec<Element>, Error> {
+    let where_ = format!("{name}.component");
+    let reference = ctx.text(&where_, &a["component"])?;
+    let (data, sha256) = versions::require_pinned(&ctx.lib.components_dir(), &reference)
+        .and_then(|r| ctx.lib.nova_keys(&r.to_string()))
+        .map_err(|e| ctx.fail(&where_, e.0))?;
+    let lo = a["first_key"].as_f64().unwrap_or(0.0);
+    let hi = a["last_key"].as_f64().unwrap_or(0.0);
+    let (lo, hi) = (lo as i64, hi as i64);
+    if !(1 <= lo && lo <= hi && hi <= 72) || (lo - 1) % 4 != 0 || hi % 4 != 0 {
+        return Err(ctx.fail(
+            &format!("{name}.first_key"),
+            format!("keys {lo}-{hi}: whole plate leads of four in 1-72"),
+        ));
+    }
+    let leads = ((hi - lo + 1) / 4) as usize;
+    let n = 18 + 2 * leads;
+    let nodes: Vec<String> = match conn.as_list() {
+        Some(l) if l.len() == n => l.iter().map(Value::py_str).collect(),
+        _ => {
+            return Err(ctx.fail(
+                name,
+                format!("nova_keys takes {n} nodes for keys {lo}-{hi}, got {conn}"),
+            ));
+        }
+    };
+    let mellow = ctx.float(&format!("{name}.mellow"), &a["mellow"])?;
+    let normal_vibrato = ctx.float(&format!("{name}.normal_vibrato"), &a["normal_vibrato"])?;
+    let small_vibrato = ctx.float(&format!("{name}.small_vibrato"), &a["small_vibrato"])?;
+    let v_per_a = ctx.float(&format!("{name}.v_per_a"), &a["v_per_a"])?;
+    Ok(vec![Element::NovaKeys(circuitsim::ir::NovaKeys {
+        name: format!("V{}", name.to_uppercase()),
+        data,
+        sha256,
+        keys: vec![lo as f64, hi as f64],
+        mellow,
+        normal_vibrato,
+        small_vibrato,
+        v_per_a,
+        grids: nodes[..12].to_vec(),
+        abus: nodes[12].clone(),
+        cbus: nodes[13].clone(),
+        keyp: nodes[14].clone(),
+        cuts: nodes[15..18].to_vec(),
+        plates: nodes[18..18 + leads].to_vec(),
+        outs: nodes[18 + leads..].to_vec(),
     })])
 }
 

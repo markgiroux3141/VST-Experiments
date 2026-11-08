@@ -195,6 +195,7 @@ pub enum Element {
     Tape(Tape),
     Harp(Harp),
     ClavStrings(ClavStrings),
+    NovaKeys(NovaKeys),
     ThyratronEvents(ThyratronEvents),
 }
 
@@ -453,6 +454,107 @@ pub struct ClavWear {
     pub tangents: f64,
     pub yarn: f64,
     pub pickups: f64,
+}
+
+/// The Hammond Novachord's keys (docs/NOVACHORD_PLAN.md, NV4; [`crate::novachord`]): keys
+/// `keys` = [first, last] (whole plate leads of four), played by note events. It senses the
+/// twelve oscillators' vibrato grids `grids` (F to E; the oscillators are compiled
+/// phases), the attack switch's buses `abus` / `cbus`,
+/// the keying supply's + rail `keyp`, the cut-off taps `cuts` (notes 45-72, 13-44, 5-12) and
+/// its plate leads `plates` a sample late, and drives `outs` (one per plate lead) to the
+/// lead's plate current times `v_per_a` at the next sample (the circuit's `G` parts draw it
+/// from the lead). `mellow` (0 / 1) is the BRIGHT-MELLOW switch's CN30, `normal_vibrato`
+/// and `small_vibrato` (0 / 1) the vibrato's switches (the oscillators' curves). `data` is the
+/// compiled keys (a component version of kind `nova_keys`: `varimu.novachord.compile`), a
+/// path relative to the repository's root or absolute, its sha256 `sha256`. SPICE has no
+/// keys: ngspice sees `outs` held at 0 V.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NovaKeys {
+    pub name: String,
+    pub data: String,
+    pub sha256: String,
+    /// [first, last] (whole numbers, as the JSON's floats carry them).
+    pub keys: Vec<f64>,
+    pub mellow: f64,
+    pub normal_vibrato: f64,
+    pub small_vibrato: f64,
+    pub v_per_a: f64,
+    pub grids: Vec<String>,
+    pub abus: String,
+    pub cbus: String,
+    pub keyp: String,
+    pub cuts: Vec<String>,
+    pub plates: Vec<String>,
+    pub outs: Vec<String>,
+}
+
+impl NovaKeys {
+    /// The nodes it senses, in the medium's order: the vibrato grids, A, C, the + rail, the
+    /// cut-off taps, the plate leads.
+    pub fn senses(&self) -> Vec<&str> {
+        self.grids
+            .iter()
+            .map(String::as_str)
+            .chain([self.abus.as_str(), &self.cbus, &self.keyp])
+            .chain(self.cuts.iter().map(String::as_str))
+            .chain(self.plates.iter().map(String::as_str))
+            .collect()
+    }
+
+    /// Its keys' range, [first, last] (checked by validation).
+    pub fn range(&self) -> (usize, usize) {
+        (self.keys[0] as usize, self.keys[1] as usize)
+    }
+
+    fn check(&self, input: &str) -> Result<(), String> {
+        let [lo, hi] = self.keys[..] else {
+            return Err("keys is [first, last]".into());
+        };
+        if lo.fract() != 0.0 || hi.fract() != 0.0 || lo < 1.0 || hi > 72.0 {
+            return Err(format!("keys [{lo}, {hi}]: whole numbers within 1-72"));
+        }
+        let (lo, hi) = (lo as usize, hi as usize);
+        if !(1..=72).contains(&lo) || !(lo..=72).contains(&hi) || (lo - 1) % 4 != 0 || hi % 4 != 0 {
+            return Err(format!(
+                "keys [{lo}, {hi}]: whole plate leads of four within 1-72"
+            ));
+        }
+        let leads = (hi - lo + 1) / 4;
+        if self.grids.len() != 12 || self.cuts.len() != 3 {
+            return Err("twelve vibrato grids and three cut-off taps".into());
+        }
+        if self.plates.len() != leads || self.outs.len() != leads {
+            return Err(format!("{leads} plate leads and as many outputs"));
+        }
+        for (what, x) in [
+            ("mellow", self.mellow),
+            ("normal_vibrato", self.normal_vibrato),
+            ("small_vibrato", self.small_vibrato),
+        ] {
+            if x != 0.0 && x != 1.0 {
+                return Err(format!("{what} {x} (0 or 1)"));
+            }
+        }
+        if self.v_per_a.is_nan() || self.v_per_a <= 0.0 || !self.v_per_a.is_finite() {
+            return Err("v_per_a must be positive".into());
+        }
+        if self.data.is_empty()
+            || self.sha256.len() != 64
+            || !self.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("data names the compiled keys, sha256 its hash".into());
+        }
+        for (i, o) in self.outs.iter().enumerate() {
+            if o == GROUND || o == input || self.outs[..i].contains(o) {
+                return Err(format!("it drives {o} (ground, the input or twice)"));
+            }
+            if self.senses().contains(&o.as_str()) {
+                return Err(format!("it drives {o}, which it senses"));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A triode gas thyratron as technique K's event kernels (HYBRID_PHYSICS_PLAN.md H3, "K's
@@ -912,6 +1014,7 @@ impl Element {
             Element::Tape(e) => &e.name,
             Element::Harp(e) => &e.name,
             Element::ClavStrings(e) => &e.name,
+            Element::NovaKeys(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
         }
     }
@@ -939,6 +1042,11 @@ impl Element {
             }
             Element::Harp(e) => vec![&e.out],
             Element::ClavStrings(e) => vec![&e.centre, &e.bridge, &e.bridge_neg],
+            Element::NovaKeys(e) => {
+                let mut v = e.senses();
+                v.extend(e.outs.iter().map(String::as_str));
+                v
+            }
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
         }
     }
@@ -1386,6 +1494,12 @@ impl CircuitIr {
                                 "{name}: its pickups drive {o} (ground, the input or twice)"
                             ));
                         }
+                    }
+                    'V'
+                }
+                Element::NovaKeys(e) => {
+                    if let Err(m) = e.check(&self.input_node) {
+                        return err(format!("{name}: {m}"));
                     }
                     'V'
                 }

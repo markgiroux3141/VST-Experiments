@@ -51,6 +51,7 @@ pub struct Library {
     tapes: Mutex<HashMap<String, TapeComponent>>,
     harps: Mutex<HashMap<String, std::sync::Arc<circuitsim::harp::HarpModel>>>,
     clav_strings: Mutex<HashMap<String, (String, String)>>,
+    nova_keys: Mutex<HashMap<String, (String, String)>>,
     materials: Mutex<Option<HashMap<String, Material>>>,
     /// Versions not saved yet ({folder@N: data}): the Components view's design while it is
     /// edited, heard in a circuit before it is a version (docs/COMPONENT_EDITOR_PLAN.md C2).
@@ -71,6 +72,7 @@ impl Library {
             tapes: Mutex::new(HashMap::new()),
             harps: Mutex::new(HashMap::new()),
             clav_strings: Mutex::new(HashMap::new()),
+            nova_keys: Mutex::new(HashMap::new()),
             materials: Mutex::new(None),
             unsaved: Mutex::new(HashMap::new()),
         }
@@ -315,6 +317,62 @@ impl Library {
         };
         let out = (rel, sha);
         self.clav_strings.lock().unwrap().insert(key, out.clone());
+        Ok(out)
+    }
+
+    /// The Novachord's keys component `name` (kind `nova_keys`; `varimu.novachord.compile`):
+    /// (its data's path relative to the repository when it is inside it, forward slashes,
+    /// else absolute; the data's sha256), the file checked against the sha256 its version
+    /// gives (`compile.ir_data`).
+    pub fn nova_keys(&self, name: &str) -> Result<(String, String), Error> {
+        let root = self.components_dir();
+        let r = versions::resolve(&root, &versions::parse(name)?)?;
+        let key = format!("{}@{}", r.folder(), r.version.unwrap());
+        if let Some(c) = self.nova_keys.lock().unwrap().get(&key) {
+            return Ok(c.clone());
+        }
+        let (_, text) = versions::read_text(&root, &r)?;
+        let d = yaml::parse(&text, name)?;
+        let d = d
+            .as_map()
+            .ok_or_else(|| Error(format!("{r}: not a mapping")))?;
+        let kind = d.get("kind").and_then(Value::as_str);
+        if kind != Some("nova_keys") {
+            return Err(Error(format!(
+                "{r} is not the Novachord's keys (kind {kind:?})"
+            )));
+        }
+        let field = |k: &str| {
+            d.get("data")
+                .and_then(Value::as_map)
+                .and_then(|m| m.get(k))
+                .and_then(Value::as_str)
+                .ok_or_else(|| Error(format!("{r}: data.{k} is missing")))
+        };
+        let path = root.join(r.folder()).join(field("file")?);
+        let raw = std::fs::read_to_string(&path)
+            .map_err(|e| Error(format!("{r}: {}: {e}", path.display())))?;
+        let sha = field("sha256")?.to_string();
+        if versions::text_hash(&raw) != sha {
+            return Err(Error(format!(
+                "{r}'s data {} doesn't match the sha256 its version names",
+                path.display()
+            )));
+        }
+        let repo = self.config_dir.join("..");
+        let rel = match (path.canonicalize(), repo.canonicalize()) {
+            (Ok(h), Ok(top)) => match h.strip_prefix(&top) {
+                Ok(p) => p
+                    .components()
+                    .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                    .collect::<Vec<_>>()
+                    .join("/"),
+                Err(_) => h.to_string_lossy().into_owned(),
+            },
+            _ => path.to_string_lossy().into_owned(),
+        };
+        let out = (rel, sha);
+        self.nova_keys.lock().unwrap().insert(key, out.clone());
         Ok(out)
     }
 

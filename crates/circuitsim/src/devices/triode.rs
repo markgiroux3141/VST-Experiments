@@ -237,7 +237,8 @@ impl Device for Triode {
     }
 
     fn tabulate(&self) -> Option<Box<dyn Device>> {
-        Some(Box::new(super::TriodeTable::new(&[self])))
+        super::TriodeTable::fits(&[self])
+            .then(|| Box::new(super::TriodeTable::new(&[self])) as Box<dyn Device>)
     }
 
     fn eval(&self, v: &[f64], i: &mut [f64], g: &mut [f64]) {

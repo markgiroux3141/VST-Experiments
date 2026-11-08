@@ -45,6 +45,7 @@ from varimu.circuit.ir import (
     Element,
     Harp,
     Inductor,
+    NovaKeys,
     Plate,
     Resistor,
     SineSource,
@@ -1084,6 +1085,50 @@ def clav_strings(
             data,
             sha256,
             w,
+        )
+    ]
+
+
+#: A Novachord keys part's fixed senses: the oscillators' vibrato grids, then these.
+NOVA_KEYS_SENSES = 12 + 6
+
+
+def nova_keys(
+    name: str,
+    conn: list[str],
+    data: str,
+    sha256: str,
+    first_key: int,
+    last_key: int,
+    mellow: float,
+    normal_vibrato: float,
+    small_vibrato: float,
+    v_per_a: float,
+) -> list[Element]:
+    """The Novachord's keys (docs/NOVACHORD_PLAN.md, NV4) as circuitsim's medium V<NAME>:
+    `conn` the twelve vibrato grids, bus A, bus C, the + rail, the three cut-off taps, then
+    the plate leads and their outputs (one each)."""
+    leads = (last_key - first_key + 1) // 4
+    grids, rest = conn[:12], conn[12:]
+    abus, cbus, keyp, *cuts = rest[:6]
+    plates, outs = rest[6 : 6 + leads], rest[6 + leads :]
+    return [
+        NovaKeys(
+            f"V{name.upper()}",
+            data,
+            sha256,
+            (first_key, last_key),
+            mellow,
+            normal_vibrato,
+            small_vibrato,
+            v_per_a,
+            tuple(grids),
+            abus,
+            cbus,
+            keyp,
+            tuple(cuts),
+            tuple(plates),
+            tuple(outs),
         )
     ]
 

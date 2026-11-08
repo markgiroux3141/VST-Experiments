@@ -165,6 +165,11 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
                     .into_iter()
                     .map(|o| (o.clone(), format!("<strings {}>", c.name)))
                     .collect(),
+                Element::NovaKeys(k) => k
+                    .outs
+                    .iter()
+                    .map(|o| (o.clone(), format!("<keys {}>", k.name)))
+                    .collect(),
                 _ => Vec::new(),
             }
         }))

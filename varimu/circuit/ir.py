@@ -428,6 +428,43 @@ class ClavStrings:
 
 
 @dataclass(frozen=True)
+class NovaKeys:
+    """The Hammond Novachord's keys (docs/NOVACHORD_PLAN.md, NV4; circuitsim's novachord.rs):
+    keys `keys` = (first, last) (whole plate leads of four), played by note events. It senses
+    the twelve oscillators' vibrato grids `grids` (F to E; the oscillators are compiled
+    phases), the attack switch's buses `abus` /
+    `cbus`, the keying supply's + rail `keyp`, the cut-off taps `cuts` (notes 45-72, 13-44,
+    5-12) and its plate leads `plates` a sample late, and drives `outs` (one per plate lead)
+    to the lead's plate current times `v_per_a` at the next sample (the circuit's G parts draw
+    it from the lead). `mellow` (0 / 1) is BRIGHT-MELLOW's CN30, `normal_vibrato` and
+    `small_vibrato` (0 / 1) the vibrato's switches. `data` is the compiled keys
+    (a component version of kind nova_keys: varimu.novachord.compile), a path relative to the
+    repository's root, `sha256` its hash. SPICE has no keys: ngspice sees `outs` held at
+    0 V."""
+
+    name: str
+    data: str
+    sha256: str
+    keys: tuple[int, int]
+    mellow: float
+    normal_vibrato: float
+    small_vibrato: float
+    v_per_a: float
+    grids: tuple[str, ...]
+    abus: str
+    cbus: str
+    keyp: str
+    cuts: tuple[str, ...]
+    plates: tuple[str, ...]
+    outs: tuple[str, ...]
+
+    @property
+    def senses(self) -> tuple[str, ...]:
+        """The nodes it senses, in the medium's order."""
+        return (*self.grids, self.abus, self.cbus, self.keyp, *self.cuts, *self.plates)
+
+
+@dataclass(frozen=True)
 class NoiseCurrent:
     """White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from a through the
     source to b: a resistor's Johnson noise, its Norton source (B5). Its samples are the
@@ -573,6 +610,7 @@ Element = (
     | Tape
     | Harp
     | ClavStrings
+    | NovaKeys
     | ThyratronEvents
 )
 DeviceModel = (
@@ -625,6 +663,7 @@ _PREFIX = {
     Tape: "V",
     Harp: "V",
     ClavStrings: "V",
+    NovaKeys: "V",
     ThyratronEvents: "X",
 }
 
@@ -660,6 +699,8 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (el.out,)
     if isinstance(el, ClavStrings):
         return el.outs
+    if isinstance(el, NovaKeys):
+        return (*el.senses, *el.outs)
     if isinstance(el, ThyratronEvents):
         return (el.a, el.g, el.w, el.k)
     return ()
@@ -849,6 +890,8 @@ class CircuitIR:
                 _validate_harp(el, self.input_node)
             elif isinstance(el, ClavStrings):
                 _validate_clav_strings(el, self.input_node)
+            elif isinstance(el, NovaKeys):
+                _validate_nova_keys(el, self.input_node)
             elif isinstance(el, ThyratronEvents):
                 _validate_thyratron_events(el)
             elif isinstance(el, Device):
@@ -1181,6 +1224,7 @@ _ELEMENT_KINDS = {
     "tape": Tape,
     "harp": Harp,
     "clav_strings": ClavStrings,
+    "nova_keys": NovaKeys,
     "thyratron_events": ThyratronEvents,
 }
 _MODEL_KINDS = {
@@ -1299,6 +1343,8 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
         return _fields(
             cls, d, tagged=True, wear=lambda w: _fields(ClavWear, w, tagged=False, seed=_count)
         )
+    if cls is NovaKeys:
+        return _fields(cls, d, tagged=True, keys=lambda v: tuple(_count(x) for x in v))
     if cls is ThyratronEvents:
 
         def grid(v):
@@ -1398,6 +1444,32 @@ def _validate_clav_strings(el: ClavStrings, input_node: str) -> None:
     for i, o in enumerate(el.outs):
         if o in (GROUND, input_node) or o in el.outs[:i]:
             raise IRError(f"{el.name}: its pickups drive {o} (ground, the input or twice)")
+
+
+def _validate_nova_keys(el: NovaKeys, input_node: str) -> None:
+    """The Rust IR's checks for the Novachord's keys (its data is checked on loading)."""
+    if len(el.keys) != 2:
+        raise IRError(f"{el.name}: keys is (first, last)")
+    lo, hi = el.keys
+    if not (1 <= lo <= hi <= 72) or (lo - 1) % 4 or hi % 4:
+        raise IRError(f"{el.name}: keys {el.keys}: whole plate leads of four within 1-72")
+    leads = (hi - lo + 1) // 4
+    if len(el.grids) != 12 or len(el.cuts) != 3:
+        raise IRError(f"{el.name}: twelve vibrato grids and three cut-off taps")
+    if len(el.plates) != leads or len(el.outs) != leads:
+        raise IRError(f"{el.name}: {leads} plate leads and as many outputs")
+    for what in ("mellow", "normal_vibrato", "small_vibrato"):
+        if getattr(el, what) not in (0.0, 1.0):
+            raise IRError(f"{el.name}: {what} {getattr(el, what)} (0 or 1)")
+    _positive(f"{el.name}.v_per_a", el.v_per_a)
+    hexdigits = set("0123456789abcdefABCDEF")
+    if not el.data or len(el.sha256) != 64 or not set(el.sha256) <= hexdigits:
+        raise IRError(f"{el.name}: data names the compiled keys, sha256 its hash")
+    for i, o in enumerate(el.outs):
+        if o in (GROUND, input_node) or o in el.outs[:i]:
+            raise IRError(f"{el.name}: it drives {o} (ground, the input or twice)")
+        if o in el.senses:
+            raise IRError(f"{el.name}: it drives {o}, which it senses")
 
 
 def _validate_thyratron_events(el: ThyratronEvents) -> None:

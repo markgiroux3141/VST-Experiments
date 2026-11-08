@@ -76,7 +76,20 @@ pub struct Device {
     /// error (distortion near -50 dB); 1e-5 holds it at production's (DEVICE_BUILDER_PLAN.md
     /// B11).
     pub newton: Option<(f64, f64)>,
+    /// The integration method over its quality's (None: the quality's): "trap" where the
+    /// quality's two implicit stages a step cost more than they buy (the Novachord's
+    /// twelve LC oscillators: one solve a sample, its frequency warping compensated in the
+    /// circuit's coils, docs/NOVACHORD_PLAN.md NV5).
+    pub method: Option<&'static str>,
 }
+
+/// Devices whose mod wheel turns its knob from the top of its range down: the
+/// Novachord's swell pedal, whose condenser is louder with less capacitance (SM2 p.10).
+pub const WHEEL_REVERSED: &[&str] = &["novachord"];
+
+/// The Novachord's full scale live, its voice coils' volts (`live_speaker_v`): measured
+/// by `examples/play.rs` (docs/NOVACHORD_PLAN.md, NV5).
+pub const NOVACHORD_SPEAKER_V: f64 = 10.0;
 
 /// A section of the device menus, in their order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -481,11 +494,14 @@ impl Device {
             s.newton_reltol = rel;
             s.newton_vntol = vn;
         }
+        if let Some(m) = self.method {
+            s.method = m.to_string();
+        }
         s
     }
 }
 
-pub const DEVICES: [Device; 25] = [
+pub const DEVICES: [Device; 26] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -515,6 +531,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -538,6 +555,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -567,6 +585,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -592,6 +611,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -617,6 +637,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -642,6 +663,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -671,6 +693,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -720,6 +743,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: Some(&[
             "resonance",
             "|",
@@ -766,6 +790,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         // Three threads: the trigger, the envelopes and the VCA (with the keys) | the
         // oscillator and its pitch driver | the supplies.
         partition: Some(&["oscillator", "pitch", "|", "power supply", "bias supply"]),
@@ -798,6 +823,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: Some("hold"),
         live_speaker_v: None,
         newton: None,
+        method: None,
         // Two threads: the VCA | the rest (the oscillator, the keys and the envelope: control
         // inputs stay in the first part). The cuts are the VCA's grids (`ga`, `gt`), and the
         // saw's edge crosses at `ga`: extrapolated it was doubled for a sample (peaks 49 V
@@ -825,6 +851,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -862,6 +889,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: Some("hold"),
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: Some(&[
             "heads and tape",
             "reproduce amplifier",
@@ -904,6 +932,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: Some("hold"),
         live_speaker_v: None,
         newton: None,
+        method: None,
         // Cut at the media: both record sides with the input, each channel's tape, repro
         // and output on a thread of its own (a tape senses its record head a sample late:
         // partition.rs), the supplies and the capstan's last.
@@ -944,6 +973,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         pitch2: None,
     },
     Device {
@@ -976,6 +1006,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -1003,6 +1034,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -1033,6 +1065,7 @@ pub const DEVICES: [Device; 25] = [
         // its full scale before C3, left it 10 dB down at its loudest).
         live_speaker_v: Some(20.0),
         newton: None,
+        method: None,
     },
     Device {
         id: "rhodes_suitcase",
@@ -1080,6 +1113,7 @@ pub const DEVICES: [Device; 25] = [
         // over two drivers in series), full scale 14 V.
         live_speaker_v: Some(14.0),
         newton: Some((4e-3, 4e-2)),
+        method: None,
     },
     Device {
         id: "clavinet_d6",
@@ -1125,6 +1159,75 @@ pub const DEVICES: [Device; 25] = [
         partition: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
+    },
+    Device {
+        id: "novachord",
+        label: "Hammond Novachord",
+        short: "Novachord",
+        about: "A Hammond Novachord (1939): twelve tube oscillators with their vibrato reeds, \
+            sixty dividers and seventy-two keyed control tubes, the tone controls, the \
+            preamplifier with its expression condenser and the 2A3 power amplifier",
+        group: Group::Instruments,
+        // The live tier (docs/NOVACHORD_PLAN.md NV4): the dividers and keys as circuitsim's
+        // keys medium.
+        circuit: "novachord_live",
+        // The front panel: ATTACK, the six tone tabs, BRIGHT-MELLOW, the vibrato, VOLUME;
+        // the swell pedal (the mod wheel, reversed: WHEEL_REVERSED); the amplifier or the
+        // line.
+        panel: Some(&[
+            "attack",
+            "deep",
+            "res1",
+            "res2",
+            "res3",
+            "brilliant",
+            "full",
+            "mellow",
+            "normal_vibrato",
+            "small_vibrato",
+            "volume",
+            "expression_c_f",
+            "amp",
+        ]),
+        ahead_s: 0.25,
+        // Draft at 96 kHz, as the reference's renders and the keys' tables.
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: Some("expression_c_f"),
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // The keys play the medium (note events, `Live::process_notes`; the sustain pedal
+        // lifts every key's spring 1): no test oscillator.
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        // scripts/make_novachord.py's live_partition(): the keys' medium (its oscillators,
+        // dividers and keys) and the vibrato grids it senses in the first part; the control
+        // box, amplifiers and keying network; the rails and reeds. AMP is off by default live
+        // (the amplifier doesn't fit; a take renders with it on).
+        partition: Some(&[
+            "control box",
+            "preamplifier",
+            "power amplifier",
+            "keying",
+            "|",
+            "supply",
+            "vibrato bias",
+            "vibrato reed 0",
+            "vibrato reed 1",
+            "vibrato reed 2",
+            "vibrato reed 3",
+            "vibrato reed 4",
+            "vibrato reed 5",
+        ]),
+        // Live without the two speakers' readout (as the Rhodes): `out` their voice coils'
+        // voltage.
+        live_speaker_v: Some(NOVACHORD_SPEAKER_V),
+        newton: None,
+        method: Some("trap"),
     },
     Device {
         id: "foil_reverb",
@@ -1147,6 +1250,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -1170,6 +1274,7 @@ pub const DEVICES: [Device; 25] = [
         coupling: None,
         live_speaker_v: None,
         newton: None,
+        method: None,
         partition: None,
     },
     Device {
@@ -1203,6 +1308,7 @@ pub const DEVICES: [Device; 25] = [
         live_speaker_v: None,
         partition: None,
         newton: Some((1e-5, 1e-5)),
+        method: None,
     },
     Device {
         id: "urei_1176",
@@ -1236,6 +1342,7 @@ pub const DEVICES: [Device; 25] = [
         // The LN circuit nulls the FET's distortion: the draft's 1 mV Newton reads ten
         // times the THD at 10 dB of gain reduction (DEVICE_BUILDER_PLAN.md B12).
         newton: Some((1e-5, 1e-5)),
+        method: None,
     },
     Device {
         id: "minimoog_filter_board",
@@ -1268,6 +1375,7 @@ pub const DEVICES: [Device; 25] = [
         // The expo converter's current is exp(V / Vt): the draft's 1 mV Newton would be a
         // 4 % cutoff error, as in the SSL's log-domain cells.
         newton: Some((1e-5, 1e-5)),
+        method: None,
     },
     Device {
         id: "minimoog_voice",
@@ -1325,6 +1433,7 @@ pub const DEVICES: [Device; 25] = [
             "contour: loudness output",
         ]),
         newton: Some((1e-5, 1e-5)),
+        method: None,
     },
 ];
 
@@ -2095,6 +2204,7 @@ mod tests {
                         "rhodes_stage_5e3",
                         "rhodes_suitcase",
                         "clavinet_d6",
+                        "novachord",
                         "minimoog_filter_board",
                         "minimoog_voice"
                     ]

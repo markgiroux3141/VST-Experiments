@@ -37,6 +37,7 @@ from varimu.circuit.ir import (
     Device,
     Harp,
     Inductor,
+    NovaKeys,
     Plate,
     Resistor,
     SineSource,
@@ -179,6 +180,12 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
         (o, f"<strings {el.name}>")
         for el in ir.elements()
         if isinstance(el, ClavStrings)
+        for o in el.outs
+    ]
+    driven += [
+        (o, f"<keys {el.name}>")
+        for el in ir.elements()
+        if isinstance(el, NovaKeys)
         for o in el.outs
     ]
     for n in [*(d[0] for d in driven), *(p.node for p in ir.probes)]:
