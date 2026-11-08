@@ -272,6 +272,9 @@ GPU candidate). Report results with this caveat until then.
 
 ## Later (not needed to close the loop)
 
+Stereo sources (a speaker pair with a spacing, the Suitcase's pan) are planned in
+[STEREO_PLAN.md](STEREO_PLAN.md) (2026-11-07), after stereo tracks in the session.
+
 MIC_ROOM_PLAN.md's A5 (arbitrary rooms: GPU FDTD below a crossover, geometric above), A6 (the
 Room view in the native app, prints into session tracks), source directivity, the head basket,
 more mics and preamps (A7-A8).
