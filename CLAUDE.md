@@ -764,7 +764,11 @@ panel's "hear"), and a stereo track in the Room view is two speakers with a spac
 (`room::STEREO_SPACINGS`; a scene source's `clip_r` and `stereo: {spacing_m}` expand at load
 into `<name>.L` / `.R` sharing one gain and one diffuse field, `shoebox.responses`'
 `tail_offsets`). Open: the stereo compressor (LINK, ST3b, the user's: after), Hear "stereo",
-stereo imports, the Suitcase's real spacing.
+stereo imports, the Suitcase's real spacing. **ST6-ST7 planned (2026-11-09, nothing built):**
+a stereo track's knob is a balance (it drops a side, the image doesn't move), so ST6 gives it
+two pan pots (POSITION + SPREAD) and a pan law (today's mono pan has no centre dip); ST7
+inserts with two inputs (LINK's and ST3b's prerequisite too) and a mid / side matrix in iron
+with WIDTH and Blumlein's shuffler, the analog imager. Decisions 8-12 are the user's.
 
 Headless mixing ([docs/HEADLESS_MIX_PLAN.md](docs/HEADLESS_MIX_PLAN.md), 2026-11-05, the
 user's idea; nothing built): Claude mixes a song from stems to a final export without the app,

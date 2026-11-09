@@ -2,7 +2,10 @@
 
 2026-11-07, the user's idea. **ST1-ST5 built 2026-11-08** (branch `stereo`; the stereo
 compressor, ST3's LINK and ST3b, left for later: the user's call). "Status (2026-11-08)" at
-the end says what was built, how it was checked and what is open.
+the end says what was built, how it was checked and what is open. **ST6-ST7** (2026-11-09,
+a brainstorm with the user, planned for the future, nothing built): placing a stereo track in
+the mix the way period consoles did, with pan pots, and a mid / side matrix in iron as the
+analog "stereo imager".
 
 Instruments with their own stereo, the Rhodes Suitcase first (its side-to-side pan),
 should reach the mix and the room as two channels, and in the Room view as two speakers
@@ -62,7 +65,8 @@ Since the player is already stereo, playing live needs nothing.
   for real.
 - **The strip's pan on a stereo track** is a balance, like a console's stereo channel (the
   same `session::balance` law: each side loses gain only past the centre). Width isn't a
-  control (not something a period console had).
+  control here. (Corrected 2026-11-09: period consoles did have width, on mid / side
+  matrices. ST6-ST7 plan the pan and the width.)
 - Export and stems are stereo as they are now; a stereo track's stem carries its two
   channels.
 - Proxies stay mono and play in both channels (stand-ins only).
@@ -231,6 +235,128 @@ untouched.
 **Done when:** a scratch scene's pair is placed, turned, spread and rendered from the view.
 It is looked at with a scratch `APPDATA` and session, as usual.
 
+### ST6: placing a stereo track (pan pots, the pan law)
+
+2026-11-09, the user's question: "now that we have stereo tracks, how do we pan them; do we
+need a stereo imager; was there an analog version?" Planned for the future, nothing built.
+
+**The problem.** A stereo track's knob is a balance (`session::balance`). Turned right, it
+fades the left channel down. At hard right the left channel's content is gone; the image
+doesn't move. That is a console's stereo-channel balance, but it isn't panning.
+
+**What period engineers did.** Until stereo channels were common on consoles (into the
+1980s on many desks), a stereo source came in on **two adjacent mono channels, each with
+its own pan pot**:
+- narrowed: L to about 10 o'clock, R to about 2 o'clock;
+- moved: both turned towards one side;
+- collapsed: both at the centre.
+
+No imager is involved. The pan pot (Disney's "panoramic potentiometer", Fantasound, 1940) is
+a passive dual-gang pot. This is the strip's control to build: faithful to the period and
+nearly free (two gain pairs per stereo track instead of one).
+
+**The control.**
+- A stereo track's strip gets **two pans**, `pan` (the left channel's) and `pan_r` (the
+  right's), drawn as two small knobs or as one knob with a second ring.
+- Optionally the same two as **POSITION + SPREAD**: the centre and the distance between the
+  two pans. This is only a different way to turn the same two pots; the mix is the same
+  either way.
+- The balance stays available (a stereo channel's `BAL`). Which is the default is a
+  decision below.
+- A mono track keeps one pan.
+- The Mixer's strip, the Session view's strip, the session file (a new field, absent = the
+  old balance), and the stems all follow.
+
+**The pan law (a finding, 2026-11-09).** A mono track uses the same balance law. Centred, it
+plays at unity on both sides; hard left, at unity on one side. So a sound panned to the
+centre is about 3 dB louder in power than the same sound panned hard. Real pan pots dip at
+the centre to hold the level steady through a sweep:
+- -3 dB: constant power;
+- -4.5 dB: the compromise many large consoles used;
+- -6 dB: constant voltage, so a mono sum keeps a steady level.
+
+A passive pan pot's real law also depends on its taper and on how it loads the mix bus's
+summing resistor. Options:
+- a. Keep the current law: the 24 sessions play bit for bit.
+- b. A console-wide pan law setting (0 / -3 / -4.5 / -6 dB), new sessions at a dip, old
+  sessions opened at 0 dB, so they don't change.
+- c. The law from a drawn period pan pot into a summing bus (its taper and loading),
+  tabulated once. It needs a sourced pan pot and bus. Later, if at all.
+
+Proposed: b, at -3 dB for new sessions. The law is a table or a formula, so it stays free in
+the mix.
+
+**Not here:** width as a matrix (ST7); Haas delays and pseudo-stereo boxes (they widen a
+mono source rather than place a stereo one; parked); the room (ST4-ST5 already place a
+stereo source physically: two speakers moved and spread in the Room view, which is re-amping,
+period practice too).
+
+**Done when:**
+- a stereo track with both pans at the centre plays its mid on both sides, scaled by the
+  pan law;
+- with pans at hard left and hard right, it plays exactly as before (L on the left, R on the
+  right);
+- POSITION and SPREAD drive the same two pans as the two knobs, so the mix is identical;
+- at the 0 dB law, the 24 sessions in `sessions/` play bit for bit
+  (`every_session_opens_to_the_same_mix`);
+- the stems sum to the mix.
+
+### ST7: two-input inserts and the mid / side matrix (the analog imager)
+
+2026-11-09, planned for the future, nothing built.
+
+**History.** Width is real analog history (ST2's "not something a period console had" was
+wrong):
+- **Blumlein's stereo patent** (GB 394,325, filed 1931) is built on the sum / difference
+  (mid / side) matrix. His **"shuffler"** is a frequency-dependent network in the
+  difference channel that converts a coincident pair's phase differences into level
+  differences, widening the bass.
+- **EMI's Stereosonic** recording chain and **BBC** stereo desks matrixed M/S with
+  transformers (provisional: model knowledge; to source).
+- **German broadcast consoles** had a *Richtungsmischer* (direction mixer) and a
+  *Basisbreitensteller* (width control) (provisional: model knowledge; to source, e.g. from
+  a Neumann, Siemens or Telefunken broadcast console's manual or the IRT drawings that gave
+  us the V76).
+
+**The device.** It is a circuit like any other, so the width comes from physics, not a
+formula:
+- an **M/S matrix in iron**: two transformers wired as sum and difference (L + R into M,
+  L - R into S), on our JA cores, designed and compiled in the transformer designer (C2);
+- **WIDTH** a pot or stepped attenuator in the S leg (0 = mono, the nominal at unity, past
+  it wider), then the inverse matrix back to L / R;
+- optionally **the Blumlein shuffler**: an LC network in the S leg, with its corner as a
+  part value;
+- optionally the direction mixer's **POSITION** (a rotation of M against S), if the sources
+  show how the period did it;
+- iron colours both legs (saturation, bass at level, the windings' HF): this is the
+  character a digital imager doesn't have.
+
+**The prerequisite: inserts with two inputs.** Today a stereo track's insert prints
+dual-mono: two independent runs of a mono circuit. A matrix needs both channels in one
+netlist. The machinery mostly exists:
+- the keyed 670's KEY carries a second audio signal into a circuit as a control input
+  (`render::render_controls`, `print::Slot::key`, K2);
+- a circuit already probes `out_r` (the 351-2, the Suitcase);
+- so a two-input circuit could declare its right input as a control input (`in_r`, say)
+  behind a source impedance, fed from the track's right channel. Its print and live hear
+  would then be one run, not two.
+
+This is the same prerequisite as ST3's LINK and ST3b's stereo 670 (whose LAT / VERT mode is
+itself an M/S matrix around two compressors). Built once, all three use it. The master
+inserts (RECORDING_PLAN.md T5) could take it too: an M/S matrix on the mix bus.
+
+**Sources first:** the period matrix and width-control circuits (the transformers' ratios,
+the width pot's network, a shuffler's values) before any values are invented; provisional
+values carry their sources, as always.
+
+**Done when:**
+- a stereo insert with a two-input circuit prints in one run and plays live in one run;
+- the matrix at nominal WIDTH returns L / R within its iron's measured colouring (bound
+  written down), at WIDTH 0 equal channels, and with the S leg inverted, swapped channels;
+- a hard-panned and a centred source show the expected width change (S / M ratio in dB per
+  WIDTH step);
+- mono inserts' and dual-mono prints' keys are unchanged.
+
 ## The Suitcase's numbers (to source)
 
 RHODES_PLAN.md "The Suitcase" has:
@@ -284,6 +410,20 @@ per how the rear driver is wired) is an option once the back's construction is k
 7. **Old stereo-device event takes:** re-rendered in stereo when the session is opened,
    offered per track, or left until the user renders them (proposed: left; ST1's Render
    does it).
+
+ST6-ST7's (2026-11-09; open until they are picked up):
+
+8. **A stereo track's default control:** two pans, starting hard left and hard right
+   (proposed: it plays like today's balance at the centre), or the balance with the two pans
+   behind a toggle.
+9. **How the two pans are drawn:** two knobs, or POSITION + SPREAD, or both with a toggle
+   (proposed: POSITION + SPREAD on the strip, the two pans in its hover / right-click).
+10. **The pan law:** ST6's options a-c (proposed: b, -3 dB for new sessions, old sessions at
+    0 dB).
+11. **ST7's order:** two-input inserts with the M/S matrix first, or with ST3's LINK / ST3b
+    first (the same prerequisite; proposed: whichever the user wants to hear first).
+12. **The matrix's sources:** which period unit to follow (Blumlein / EMI, BBC, a German
+    broadcast console's width control), once one with a published circuit is found.
 
 ## Status (2026-11-08)
 
@@ -352,4 +492,6 @@ The decisions went as proposed (1-4, 6, 7; 5 is the compressor, not built).
 - Imported stereo files still import as their mid (`import_files` uses `audio::load`).
 - The Suitcase's real spacing (to source).
 - The user's first try.
+- ST6 (pan pots on stereo tracks, the pan law) and ST7 (two-input inserts, the M/S matrix in
+  iron): planned 2026-11-09, nothing built; decisions 8-12.
 
