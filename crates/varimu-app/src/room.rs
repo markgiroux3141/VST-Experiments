@@ -808,11 +808,40 @@ impl RoomMic {
         }
     }
 
-    /// Whether it records the source called `name`.
+    /// Whether it records the source called `name` (either side of a stereo source).
     pub fn hears_source(&self, name: &str) -> bool {
         self.hears
             .as_ref()
-            .is_none_or(|h| h.iter().any(|n| n == name))
+            .is_none_or(|h| h.iter().any(|n| side_of(n, name).is_some()))
+    }
+
+    /// Whether it records side `side` of the stereo source `name` (`'L'` or `'R'`): its
+    /// `hears` names the source (both sides) or that side, `name.L` (varimu/rooms/scene.py).
+    pub fn hears_side(&self, name: &str, side: char) -> bool {
+        self.hears.as_ref().is_none_or(|h| {
+            h.iter().any(|n| {
+                matches!(side_of(n, name), Some(None)) || side_of(n, name) == Some(Some(side))
+            })
+        })
+    }
+
+    /// Which sides of the stereo source `name` it records, (left, right).
+    pub fn heard_sides(&self, name: &str) -> (bool, bool) {
+        (self.hears_side(name, 'L'), self.hears_side(name, 'R'))
+    }
+
+    /// Record the stereo source `name`'s sides as given (`hears` must be gated): both as
+    /// its name, one as `name.L` / `name.R`, neither as nothing.
+    pub fn set_heard_sides(&mut self, name: &str, left: bool, right: bool) {
+        if let Some(h) = &mut self.hears {
+            h.retain(|n| side_of(n, name).is_none());
+            match (left, right) {
+                (true, true) => h.push(name.to_string()),
+                (true, false) => h.push(format!("{name}.L")),
+                (false, true) => h.push(format!("{name}.R")),
+                (false, false) => {}
+            }
+        }
     }
 
     pub fn pattern(&self) -> Pattern {
@@ -827,6 +856,24 @@ impl RoomMic {
         }
     }
 }
+
+/// A `hears` entry against the source `name`: `Some(None)` names the source (both sides of
+/// a stereo one), `Some(Some('L'))` / `Some(Some('R'))` one side (`name.L`), `None` another
+/// source.
+pub fn side_of(entry: &str, name: &str) -> Option<Option<char>> {
+    if entry == name {
+        return Some(None);
+    }
+    match entry.strip_prefix(name)? {
+        ".L" => Some(Some('L')),
+        ".R" => Some(Some('R')),
+        _ => None,
+    }
+}
+
+/// How far in front of each speaker [`Scene::mic_per_side`] puts its mics (m): a close mic
+/// on a combo's cone, off the grille cloth.
+pub const SIDE_MIC_DISTANCE_M: f64 = 0.3;
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct Scene {
@@ -1338,8 +1385,18 @@ impl Scene {
                 });
                 // (absent when off: scenes render as before)
                 if let Some(h) = &m.hears {
-                    let known: Vec<&String> =
-                        h.iter().filter(|n| self.sources.iter().any(|s| &s.name == *n)).collect();
+                    // Known entries only; a side (`name.L`) of a source that renders as one
+                    // point (a mono track, or "as one point") is that source.
+                    let mut known: Vec<String> = Vec::new();
+                    for n in h {
+                        let Some(s) = self.sources.iter().find(|s| side_of(n, &s.name).is_some())
+                        else { continue };
+                        let pair = rights.contains_key(&s.name) && !s.as_mono;
+                        let e = if pair { n.clone() } else { s.name.clone() };
+                        if !known.contains(&e) {
+                            known.push(e);
+                        }
+                    }
                     v["hears"] = json!(known);
                 }
                 if m.separate_passes {
@@ -1457,21 +1514,59 @@ impl Scene {
         }
         for m in &mut self.mics {
             if let Some(h) = &mut m.hears {
-                for n in h.iter_mut().filter(|n| *n == old) {
-                    *n = new.to_string();
+                for n in h.iter_mut() {
+                    match side_of(n, old) {
+                        Some(None) => *n = new.to_string(),
+                        Some(Some(side)) => *n = format!("{new}.{side}"),
+                        None => {}
+                    }
                 }
             }
         }
     }
 
-    /// Source i removed, and from every mic's `hears`.
+    /// Source i removed, and from every mic's `hears` (its sides too).
     pub fn remove_source(&mut self, i: usize) {
         let s = self.sources.remove(i);
         for m in &mut self.mics {
             if let Some(h) = &mut m.hears {
-                h.retain(|n| *n != s.name);
+                h.retain(|n| side_of(n, &s.name).is_none());
             }
         }
+    }
+
+    /// A mic per speaker of the stereo source i, through `chain_id`: each `distance_m` in
+    /// front of its speaker on the source's axis, aimed back at it, hearing that side alone
+    /// (its bleed from the other gated) and panned hard to it. The pair is symmetric, so
+    /// the chains colour both sides alike and the image stays the source's. Returns the
+    /// new mics' indices (left, right).
+    pub fn mic_per_side(&mut self, i: usize, chain_id: &str, distance_m: f64) -> [usize; 2] {
+        let s = self.sources[i].clone();
+        let (az, el) = (s.azimuth_deg.to_radians(), s.elevation_deg.to_radians());
+        let aim = [el.cos() * az.cos(), el.cos() * az.sin(), el.sin()];
+        let sides = s.sides();
+        let mut out = [0; 2];
+        for (k, (side, pan)) in [('L', -1.0), ('R', 1.0)].into_iter().enumerate() {
+            let at = sides[k];
+            let pos: [f64; 3] = std::array::from_fn(|j| at[j] + distance_m * aim[j]);
+            let wanted = format!("{} {side}", s.name);
+            let taken = |n: &str| {
+                self.sources.iter().any(|x| x.name == n) || self.mics.iter().any(|m| m.name == n)
+            };
+            let name = if taken(&wanted) {
+                self.free_name(&wanted)
+            } else {
+                wanted
+            };
+            let mut m = RoomMic::new(&name, chain_id, pos, s.azimuth_deg + 180.0);
+            m.azimuth_deg = (m.azimuth_deg + 180.0).rem_euclid(360.0) - 180.0;
+            m.elevation_deg = -s.elevation_deg;
+            m.pan = pan;
+            m.hears = Some(vec![format!("{}.{side}", s.name)]);
+            self.mics.push(m);
+            out[k] = self.mics.len() - 1;
+        }
+        out
     }
 
     /// No room at all: every face anechoic and nothing standing in it (scene.py's
@@ -1826,6 +1921,84 @@ mod tests {
         g.mics[0].separate_passes = true;
         g.mics[0].free_field = true;
         assert_eq!(Scene::from_state(&g.state()), g);
+    }
+
+    /// A stereo source heard a side at a time (2026-11-09): `name.L` / `name.R` in `hears`,
+    /// both sides as the name; renames and deletes follow the sides; a side of a source that
+    /// renders as one point (mono, or "as one point") goes to the render as the source.
+    #[test]
+    fn a_mic_hears_one_side_of_a_pair() {
+        let mut s = scene();
+        s.sources
+            .push(RoomSource::new("AB", "k2", 90.0, [4.0, 2.5, 1.3]));
+        let m = &mut s.mics[0];
+        m.hears = Some(vec![]);
+        m.set_heard_sides("A", true, false);
+        assert_eq!(m.hears, Some(vec!["A.L".to_string()]));
+        assert!(m.hears_source("A") && m.hears_side("A", 'L') && !m.hears_side("A", 'R'));
+        assert!(!m.hears_source("AB"), "a longer name isn't a side");
+        m.set_heard_sides("A", true, true);
+        assert_eq!(m.hears, Some(vec!["A".to_string()]));
+        assert_eq!(m.heard_sides("A"), (true, true));
+        m.set_heard_sides("A", false, true);
+        assert_eq!(m.heard_sides("A"), (false, true));
+        // the render: a pair keeps the side, a source rendered as one point is the source
+        let rights = BTreeMap::from([("A".to_string(), PathBuf::from("a.R.wav"))]);
+        let v = s.render_json_lr(&BTreeMap::new(), &rights);
+        assert_eq!(v["mics"][0]["hears"], json!(["A.R"]));
+        let v = s.render_json(&BTreeMap::new());
+        assert_eq!(v["mics"][0]["hears"], json!(["A"]));
+        s.sources[0].as_mono = true;
+        let v = s.render_json_lr(&BTreeMap::new(), &rights);
+        assert_eq!(v["mics"][0]["hears"], json!(["A"]));
+        // rename and delete follow the side
+        s.sources[0].name = "Rhodes".to_string();
+        s.rename_source("A", "Rhodes");
+        assert_eq!(s.mics[0].hears, Some(vec!["Rhodes.R".to_string()]));
+        s.remove_source(0);
+        assert_eq!(s.mics[0].hears, Some(vec![]));
+    }
+
+    /// "A mic per side": each mic on its speaker's axis, aimed back at it, hearing that side,
+    /// panned to it; the pair mirrored about the source's axis.
+    #[test]
+    fn a_mic_per_side_is_a_mirrored_pair() {
+        let mut s = scene();
+        s.mics.clear();
+        s.sources[0].azimuth_deg = 90.0; // facing +y
+        s.sources[0].spacing_m = 0.6;
+        let [l, r] = s.mic_per_side(0, "u47_v76", 0.3);
+        let sides = s.sources[0].sides();
+        for (k, (i, side, pan)) in [(l, "A.L", -1.0), (r, "A.R", 1.0)].into_iter().enumerate() {
+            let m = &s.mics[i];
+            assert_eq!(m.hears, Some(vec![side.to_string()]));
+            assert_eq!(m.pan, pan);
+            let d: f64 = (0..3)
+                .map(|j| (m.pos[j] - sides[k][j]).powi(2))
+                .sum::<f64>()
+                .sqrt();
+            assert!((d - 0.3).abs() < 1e-12, "{d}");
+            assert!(
+                (m.pos[1] - (2.5 + 0.3)).abs() < 1e-12,
+                "in front: {:?}",
+                m.pos
+            );
+            assert!(
+                (m.azimuth_deg + 90.0).abs() < 1e-9,
+                "aimed back: {}",
+                m.azimuth_deg
+            );
+        }
+        let (ml, mr) = (&s.mics[l], &s.mics[r]);
+        assert!(
+            (ml.pos[0] - 2.0 + (mr.pos[0] - 2.0)).abs() < 1e-12,
+            "mirrored"
+        );
+        assert_eq!((ml.name.as_str(), mr.name.as_str()), ("A L", "A R"));
+        assert!(s.problems().is_empty(), "{:?}", s.problems());
+        // a second pair gets fresh names
+        let [l2, _] = s.mic_per_side(0, "u47_v76", 0.5);
+        assert_ne!(s.mics[l2].name, "A L");
     }
 
     /// A mic's hears / passes / free field (2026-11-09): in the render's scene only when on,

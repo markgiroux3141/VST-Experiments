@@ -104,6 +104,8 @@ pub struct RoomView {
     /// The session's stereo tracks (id -> the device of the take its lane starts with): their
     /// sources are speaker pairs (docs/STEREO_PLAN.md ST5).
     stereo_tracks: std::collections::HashMap<String, String>,
+    /// "A mic per side"'s distance in front of each speaker (m).
+    side_mic_distance_m: f64,
 }
 
 const SOURCE_COLOR: Color32 = theme::ACCENT;
@@ -134,7 +136,14 @@ impl RoomView {
             presets,
             preset_errors,
             stereo_tracks: Default::default(),
+            side_mic_distance_m: room::SIDE_MIC_DISTANCE_M,
         }
+    }
+
+    /// Whether source `s` is a speaker pair in this session (a stereo track not placed as
+    /// one point).
+    fn is_pair(&self, s: &RoomSource) -> bool {
+        self.stereo_tracks.contains_key(&s.track) && !s.as_mono
     }
 
     fn scene_file(dir: &std::path::Path) -> PathBuf {
@@ -966,6 +975,37 @@ impl RoomView {
         }
         let s = self.scene.sources[i].clone();
         self.scene.rename_source(&old_name, &s.name); // the mics that hear it by name
+        // A speaker pair miked a side each: the stereo image kept through the chains.
+        if self.is_pair(&s) && !delete {
+            let chains = room::chains();
+            let chain = chains.get(self.add_chain.min(chains.len().saturating_sub(1)));
+            ui.horizontal(|ui| {
+                let clicked = ui
+                    .add_enabled(chain.is_some(), egui::Button::new("+ A mic per side"))
+                    .on_hover_text(
+                        "Two mics through the chain picked under MICS, one in front of each \
+                         speaker, aimed at it, hearing that side alone (the other's bleed \
+                         gated) and panned hard to it: the image stays the source's, \
+                         coloured alike on both sides. Keep them symmetric when you move \
+                         them; pick the anechoic preset for no room at all.",
+                    )
+                    .clicked();
+                ui.add(
+                    egui::DragValue::new(&mut self.side_mic_distance_m)
+                        .range(room::MIN_DISTANCE_M..=3.0)
+                        .speed(0.01)
+                        .max_decimals(2)
+                        .suffix(" m in front"),
+                );
+                if let Some(c) = chain {
+                    ui.label(RichText::new(&c.label).small().color(theme::FAINT));
+                }
+                if clicked && let Some(c) = chain {
+                    let [l, _] = self.scene.mic_per_side(i, &c.id, self.side_mic_distance_m);
+                    self.sel = Some(Sel::Mic(l));
+                }
+            });
+        }
         for m in &self.scene.mics {
             ui.label(
                 RichText::new(format!(
@@ -1053,6 +1093,25 @@ impl RoomView {
     fn mic_form(&mut self, ui: &mut egui::Ui, i: usize) {
         let dims = bounds(&self.scene);
         let sources = self.scene.sources.clone();
+        // Each source a speaker pair or not, and the points a mic can hear: (source, side
+        // or None for the whole source, where).
+        let pairs: Vec<bool> = sources.iter().map(|s| self.is_pair(s)).collect();
+        let points: Vec<(usize, Option<char>, [f64; 3])> = sources
+            .iter()
+            .enumerate()
+            .flat_map(|(k, s)| {
+                if pairs[k] {
+                    let [l, r] = s.sides();
+                    vec![(k, Some('L'), l), (k, Some('R'), r)]
+                } else {
+                    vec![(k, None, s.pos)]
+                }
+            })
+            .collect();
+        let point_name = |k: usize, side: Option<char>| match side {
+            Some(c) => format!("{}.{c}", sources[k].name),
+            None => sources[k].name.clone(),
+        };
         let room_free = self.scene.is_free_field();
         let mut delete = false;
         let m = &mut self.scene.mics[i];
@@ -1129,11 +1188,15 @@ impl RoomView {
             );
         });
         ui.horizontal_wrapped(|ui| {
-            for s in &sources {
-                if ui.small_button(format!("Aim at {}", s.name)).clicked() {
-                    m.aim_at(s.pos[0], s.pos[1]);
-                    let d = ((s.pos[0] - m.pos[0]).powi(2) + (s.pos[1] - m.pos[1]).powi(2)).sqrt();
-                    m.elevation_deg = (s.pos[2] - m.pos[2]).atan2(d).to_degrees();
+            for &(k, side, at) in &points {
+                let label = match side {
+                    Some(c) => format!("Aim at {} {c}", sources[k].name),
+                    None => format!("Aim at {}", sources[k].name),
+                };
+                if ui.small_button(label).clicked() {
+                    m.aim_at(at[0], at[1]);
+                    let d = ((at[0] - m.pos[0]).powi(2) + (at[1] - m.pos[1]).powi(2)).sqrt();
+                    m.elevation_deg = (at[2] - m.pos[2]).atan2(d).to_degrees();
                 }
             }
         });
@@ -1156,31 +1219,52 @@ impl RoomView {
                     m.hears = if all {
                         None
                     } else {
-                        // start from the source it points at most directly
-                        sources
+                        // start from the source (or speaker) it points at most directly
+                        points
                             .iter()
-                            .min_by(|a, b| {
-                                off_axis_deg(m, &a.pos).total_cmp(&off_axis_deg(m, &b.pos))
-                            })
-                            .map(|s| vec![s.name.clone()])
+                            .min_by(|a, b| off_axis_deg(m, &a.2).total_cmp(&off_axis_deg(m, &b.2)))
+                            .map(|&(k, side, _)| vec![point_name(k, side)])
                     };
                 }
             });
-            if let Some(h) = &mut m.hears {
+            if m.hears.is_some() {
                 ui.horizontal_wrapped(|ui| {
-                    for s in &sources {
-                        let mut on = h.contains(&s.name);
-                        if ui.checkbox(&mut on, &s.name).changed() {
-                            if on {
-                                h.push(s.name.clone());
-                            } else {
-                                h.retain(|n| *n != s.name);
+                    for (k, s) in sources.iter().enumerate() {
+                        if pairs[k] {
+                            // a speaker pair: each side ticked on its own
+                            let (mut l, mut r) = m.heard_sides(&s.name);
+                            ui.label(&s.name);
+                            let cl = ui
+                                .checkbox(&mut l, "L")
+                                .on_hover_text("its left speaker (channel)");
+                            let cr = ui
+                                .checkbox(&mut r, "R")
+                                .on_hover_text("its right speaker (channel)");
+                            if cl.changed() || cr.changed() {
+                                m.set_heard_sides(&s.name, l, r);
+                            }
+                            ui.add_space(8.0);
+                        } else {
+                            let mut on = m.hears_source(&s.name);
+                            if ui.checkbox(&mut on, &s.name).changed() {
+                                let h = m.hears.get_or_insert_with(Vec::new);
+                                h.retain(|n| room::side_of(n, &s.name).is_none());
+                                if on {
+                                    h.push(s.name.clone());
+                                }
                             }
                         }
                     }
                 });
             }
-            let heard = sources.iter().filter(|s| m.hears_source(&s.name)).count();
+            // what goes through the chain: a pair's sides are two sources (scene.py)
+            let heard = points
+                .iter()
+                .filter(|&&(k, side, _)| match side {
+                    Some(c) => m.hears_side(&sources[k].name, c),
+                    None => m.hears_source(&sources[k].name),
+                })
+                .count();
             if heard > 1 {
                 ui.horizontal(|ui| {
                     ui.label("Takes");
@@ -1214,19 +1298,22 @@ impl RoomView {
                     .color(theme::FAINT),
             );
         }
-        for s in &sources {
-            let off = off_axis_deg(m, &s.pos);
+        for &(k, side, at) in &points {
+            let name = &sources[k].name;
+            let heard = match side {
+                Some(c) => m.hears_side(name, c),
+                None => m.hears_source(name),
+            };
             ui.label(
                 RichText::new(format!(
                     "{}: {:.2} m, {:.0}° off axis{}",
-                    s.name,
-                    dist(&s.pos, &m.pos),
-                    off,
-                    if m.hears_source(&s.name) {
-                        ""
-                    } else {
-                        " (not heard)"
-                    }
+                    match side {
+                        Some(c) => format!("{name} {c}"),
+                        None => name.clone(),
+                    },
+                    dist(&at, &m.pos),
+                    off_axis_deg(m, &at),
+                    if heard { "" } else { " (not heard)" }
                 ))
                 .small()
                 .color(theme::MUTED),
@@ -1991,25 +2078,39 @@ impl RoomView {
             } else {
                 SOURCE_COLOR.gamma_multiply(0.3)
             };
+            let pair = self.is_pair(s);
             if let Some(m) = picked_mic
                 && m.hears.is_some()
                 && heard
+                && !pair
             {
                 painter.line_segment(
                     [to_s(m.pos[0], m.pos[1]), c],
                     Stroke::new(1.0, MIC_COLOR.gamma_multiply(0.5)),
                 );
             }
-            // A stereo track's speakers, left and right of its centre (ST5).
-            if self.stereo_tracks.contains_key(&s.track) && !s.as_mono {
+            // A stereo track's speakers, left and right of its centre (ST5); with a mic
+            // selected, the sides it doesn't hear dimmed and a line to each it does.
+            if pair {
                 let [l, r] = s.sides();
                 let (pl, pr) = (to_s(l[0], l[1]), to_s(r[0], r[1]));
                 painter.line_segment([pl, pr], Stroke::new(1.5, SOURCE_COLOR.gamma_multiply(0.6)));
                 for (p, t) in [(pl, "L"), (pr, "R")] {
+                    let side = if t == "L" { 'L' } else { 'R' };
+                    let side_heard = picked_mic.is_none_or(|m| m.hears_side(&s.name, side));
+                    if let Some(m) = picked_mic
+                        && m.hears.is_some()
+                        && side_heard
+                    {
+                        painter.line_segment(
+                            [to_s(m.pos[0], m.pos[1]), p],
+                            Stroke::new(1.0, MIC_COLOR.gamma_multiply(0.5)),
+                        );
+                    }
                     painter.rect_filled(
                         egui::Rect::from_center_size(p, Vec2::splat(12.0)),
                         2.0,
-                        SOURCE_COLOR.gamma_multiply(0.85),
+                        SOURCE_COLOR.gamma_multiply(if side_heard { 0.85 } else { 0.25 }),
                     );
                     painter.text(
                         p,

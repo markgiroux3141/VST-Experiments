@@ -1123,3 +1123,24 @@ def test_the_anechoic_preset_is_the_free_field_and_one_absorbent_wall_keeps_the_
     one = Shoebox((6.0, 5.0, 3.0), ("anechoic",) + ("furnished_wall",) * 3
                   + ("wood_floor", "gypsum_on_studs"))  # fmt: skip
     assert not sc._anechoic(one) and sc._anechoic(Shoebox((6.0, 5.0, 3.0), ("anechoic",) * 6))
+
+
+def test_a_mic_per_side_keeps_a_stereo_sources_image(tmp_path):
+    """The Room view's "a mic per side" (2026-11-09): a stereo source's speakers miked one
+    each, the mic hearing its own side alone (`hears: [a.L]`), in the anechoic preset. Each
+    mic records one channel and the pair is mirrored, so the two sides' responses are the
+    same: the chains colour both alike and the image stays the source's."""
+    from varimu.rooms import scene as sc
+
+    # the pair facing +y (its left speaker at -x, seen from behind it), 0.4 m apart; the
+    # app's mic_per_side: 0.3 m in front of each speaker, aimed back at it
+    mics = [_mic("a L", [1.8, 2.3, 1.5], hears=["a.L"]),
+            _mic("a R", [2.2, 2.3, 1.5], hears=["a.R"])]  # fmt: skip
+    s = _bleed_scene(tmp_path, mics, room={"preset": "anechoic"}, stereo=True)
+    for x, at in zip(s.sources[:2], ([1.8, 2.0, 1.5], [2.2, 2.0, 1.5]), strict=True):
+        x.directivity, x.azimuth_deg, x.position_m = "amp_1x12", 90.0, np.array(at)
+    assert [x.name for x in s.sources] == ["a.L", "a.R", "b"]
+    assert s.heard(0) == [0] and s.heard(1) == [1]
+    h, _ = sc.scene_responses(s, FS)
+    left, right = h[0, 0, 0], h[1, 1, 0]
+    assert np.allclose(left, right, rtol=0, atol=1e-9 * np.max(np.abs(left)))

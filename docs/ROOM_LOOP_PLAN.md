@@ -612,6 +612,18 @@ brainstorm, all built the same day; varimu/rooms/scene.py's docstring has the fo
   every pass starts at the same mains phase). Its solos are its passes; render.json's
   `intermod_db` is null for it.
 
+- **A stereo source miked a side at a time** (the user's, the same day: the Suitcase's image
+  kept through mic chains). A mic's `hears` takes a side, `rhodes.L` (scene.py had it; the
+  app now offers it): the mic panel ticks a pair's L and R apart, the plan dims a speaker the
+  selected mic doesn't hear. **"+ A mic per side"** on a stereo source's panel
+  (`Scene::mic_per_side`) adds two mics through the chain picked under MICS, each
+  `SIDE_MIC_DISTANCE_M` (0.3 m, editable) in front of its speaker on the source's axis, aimed
+  back at it, hearing its side alone and panned hard to it; the pair is mirrored, so both
+  channels are coloured alike (`tests/test_rooms.py`: the two sides' responses equal in the
+  anechoic preset). Each mic is its own chain run (two preamps share nothing, no LINK). A side
+  of a source that renders as one point (a mono track, "as one point") goes to the render as
+  the source; renames and deletes follow the sides. Moving one mic doesn't move the other.
+
 The Room view dims the sources a selected mic doesn't hear and draws a line to each it does;
 a mic's list row and plan label say "hears …", "passes", "free field"; a mic hearing nothing
 is a problem that stops the render; renaming or deleting a source follows into every mic's
