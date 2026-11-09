@@ -87,6 +87,20 @@ pub struct Settings {
     /// Gas thyratrons as their event kernels where a circuit has tables (technique K: the
     /// live qualities'; production renders the tube itself, M1).
     pub events: bool,
+    /// A literal tape's recording kernel on the GPU in f32 (circuitsim's `gpu` feature,
+    /// docs/TAPE_SPEED_PLAN.md P5: a print within ~-117 dB of the f64 CPU kernel's, ~3x
+    /// faster on the 351). [`Settings::load`] turns it on at production when the app was
+    /// built with the GPU kernel and a GPU is there (`VARIMU_GPU=off` keeps the CPU's, the
+    /// reference); the live qualities play a reduced tape, which has no kernel. In the
+    /// print cache's key with the rest of the settings.
+    pub tape_gpu: bool,
+}
+
+/// Whether a literal tape's recording kernel can run on the GPU here (`tape_gpu`): the app
+/// built with circuitsim's `gpu` feature, a GPU found, `VARIMU_GPU` not off. Asked once.
+pub fn tape_gpu_available() -> bool {
+    static AVAILABLE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *AVAILABLE.get_or_init(|| circuitsim::tape_stream::gpu_available().is_ok())
 }
 
 fn get<'a>(m: &'a Map, key: &str, block: &str) -> Result<&'a Value, String> {
@@ -131,7 +145,9 @@ impl Settings {
         let top = doc
             .as_map()
             .ok_or_else(|| format!("{}: not a mapping", path.display()))?;
-        Settings::from_map(top, quality)
+        let mut s = Settings::from_map(top, quality)?;
+        s.tape_gpu = quality == Quality::Production && tape_gpu_available();
+        Ok(s)
     }
 
     pub fn from_map(top: &Map, quality: Quality) -> Result<Settings, String> {
@@ -196,6 +212,7 @@ impl Settings {
             partition_coupling: "extrapolate".into(),
             host_rate: 0,
             events: false,
+            tape_gpu: false,
         };
         for name in quality.blocks() {
             let d = block(name)?;
@@ -286,6 +303,7 @@ impl Settings {
             error_norm: ErrorNorm::parse(&self.error_norm).map_err(|e| e.to_string())?,
             tube_tables: self.tube_tables,
             all_unknowns: false,
+            tape_gpu: self.tape_gpu,
             ..d
         })
     }
@@ -302,6 +320,7 @@ impl Settings {
             newton_reuse: self.newton_reuse,
             tube_tables: self.tube_tables,
             all_unknowns: false,
+            tape_gpu: self.tape_gpu,
             ..d
         })
     }
@@ -350,6 +369,21 @@ mod tests {
 
     fn config() -> std::path::PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config")
+    }
+
+    #[test]
+    fn only_production_records_tape_on_the_gpu() {
+        for q in [Quality::Draft, Quality::Draft1x, Quality::Draft2x] {
+            let s = Settings::load(&config(), q).unwrap();
+            assert!(!s.tape_gpu && !s.run_options().unwrap().tape_gpu);
+        }
+        let p = Settings::load(&config(), Quality::Production).unwrap();
+        assert_eq!(p.tape_gpu, tape_gpu_available());
+        assert_eq!(p.run_options().unwrap().tape_gpu, p.tape_gpu);
+        // from_map alone (the settings as Python reads them) keeps the CPU's kernel.
+        let doc = yaml::load(&config().join("sim_settings.yaml")).unwrap();
+        let m = Settings::from_map(doc.as_map().unwrap(), Quality::Production).unwrap();
+        assert!(!m.tape_gpu);
     }
 
     #[test]

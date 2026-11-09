@@ -20,10 +20,36 @@ def _generator():
 
 def test_generated_files_are_current():
     m = _generator()
-    for name, text in ((m.OUT, m.render()), (m.OUT_PINGPONG, m.render_pingpong())):
+    outs = (
+        (m.OUT, m.render()),
+        (m.OUT_PINGPONG, m.render_pingpong()),
+        (m.OUT_INSERT, m.render_insert()),
+    )
+    for name, text in outs:
         assert spec.circuit_path(name).read_text(encoding="utf-8") == text, (
             f"stale {name}: rerun `uv run python scripts/make_351_echo.py`"
         )
+
+
+def test_insert_is_the_aligned_351_with_its_live_tier():
+    """The tape insert (TAPE_SPEED_PLAN.md F2): the aligned machine line in to line out;
+    production the literal 351, an events build the reduced tape without VARISPEED."""
+    from varimu.circuit import ir as irm
+
+    c = spec.load_circuit(spec.circuit_path("ampex_351_insert"))
+    al = json.loads((REPO_ROOT / "reports" / "tape" / "ampex_351_alignment.json").read_text())
+    p = spec.resolve(c, {})
+    assert all(p[k] == v for k, v in al["overrides"].items())
+    assert not {"drive", "send", "repeat", "capstan_hz"} & set(c.controls)
+    live = builder.build(c, cores="linear", noise=False, events=True).ir
+    prod = builder.build(c, cores="linear", noise=False).ir
+    (tape,) = [e for s in live.sections for e in s.elements if isinstance(e, irm.Tape)]
+    assert tape.medium.reduced is not None and tape.medium.varispeed is None
+    assert tape.supply is None
+    (lit,) = [e for s in prod.sections for e in s.elements if isinstance(e, irm.Tape)]
+    assert lit.medium.reduced is None and lit.medium.bias_substeps == 20
+    names = {e.name for s in prod.sections for e in s.elements}
+    assert {"RIN_S", "XV6A", "LER"} <= names and not names & {"RSB", "RRB", "VCAP"}
 
 
 def test_echo_is_the_aligned_351_with_a_console():

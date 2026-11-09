@@ -99,6 +99,7 @@ pub enum Group {
     Dynamics,
     Eq,
     Amps,
+    Tape,
     Reverb,
     Delay,
     /// In no menu: the prototypes the tube synth grew out of, kept so the sessions, takes
@@ -108,12 +109,13 @@ pub enum Group {
 
 impl Group {
     /// The menus' sections, in order.
-    pub const MENU: [Group; 7] = [
+    pub const MENU: [Group; 8] = [
         Group::Instruments,
         Group::Drums,
         Group::Dynamics,
         Group::Eq,
         Group::Amps,
+        Group::Tape,
         Group::Reverb,
         Group::Delay,
     ];
@@ -126,6 +128,7 @@ impl Group {
             Group::Dynamics => "DYNAMICS",
             Group::Eq => "EQ",
             Group::Amps => "PREAMPS & AMPS",
+            Group::Tape => "TAPE",
             Group::Reverb => "REVERB",
             Group::Delay => "DELAY",
             Group::Retired => "RETIRED",
@@ -467,10 +470,11 @@ impl Device {
         self.group != Group::Retired && self.key.is_none()
     }
 
-    /// Whether the Session view offers it as an insert: not retired, and a processor
-    /// (it doesn't make its own sound).
+    /// Whether the Session view offers it as an insert: not retired, not an instrument (the
+    /// Minimoog's filter board is played from keys though it has no oscillator), and a
+    /// processor (it doesn't make its own sound).
     pub fn as_insert(&self) -> bool {
-        self.group != Group::Retired && !self.plays_own_oscillator()
+        !matches!(self.group, Group::Retired | Group::Instruments) && !self.plays_own_oscillator()
     }
 
     /// `c` as it plays live (its speakers without their readouts: `live_speaker_v`).
@@ -501,7 +505,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 26] = [
+pub const DEVICES: [Device; 27] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1435,6 +1439,52 @@ pub const DEVICES: [Device; 26] = [
         newton: Some((1e-5, 1e-5)),
         method: None,
     },
+    Device {
+        id: "ampex_351_insert",
+        label: "Ampex 351 Tape Machine",
+        short: "351 tape",
+        about: "An Ampex 351 recording and playing back, line in to line out: tape \
+            saturation, hiss, wow and flutter",
+        group: Group::Tape,
+        circuit: "ampex_351_insert",
+        panel: Some(&[
+            "record_level",
+            "playback_level",
+            "speed",
+            "equalization",
+            "bias_adjust_f",
+        ]),
+        ahead_s: AHEAD_S,
+        // Live, the tape plays its reduction (an events build, the echo's live tier:
+        // TAPE_SPEED_PLAN.md F2); production prints the literal machine. Heard live it
+        // plays a head distance late (133 ms at 15 ips), as off a real machine's repro head;
+        // a print is shifted back by it (`print::latency_s`). Draft-2x: draft-1x's 48 kHz
+        // engine droops the top octave (-1.1 / -2.3 / -3.6 dB re the print at 10 / 12.5 /
+        // 15 kHz, `scripts/tape_tier_study.py`; at 96 kHz within 0.3 dB) and spikes more
+        // (`examples/load_profile.rs`, the drums, noise off: draft-2x 0.56x mean, 260 of
+        // 3637 blocks over 1; draft-1x 0.49x, 863).
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        // Cut at the medium, as the echo.
+        coupling: Some("hold"),
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&[
+            "heads and tape",
+            "reproduce amplifier",
+            "output",
+            "|",
+            "power supply",
+        ]),
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2213,6 +2263,7 @@ mod tests {
                 (Group::Dynamics, vec!["fairchild_670", "urei_1176"]),
                 (Group::Eq, vec!["pultec_eqp1a"]),
                 (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
+                (Group::Tape, vec!["ampex_351_insert"]),
                 (
                     Group::Reverb,
                     vec!["plate_reverb", "foil_reverb", "fender_6g15"]

@@ -296,6 +296,32 @@ pub fn key(
         .collect())
 }
 
+/// Devices that play their input a fixed time late: a tape machine's repro head a head
+/// distance behind its record head. A print is shifted back by it so the track stays in time
+/// (the live audition is heard late, as off a real machine's repro head).
+pub const TAPE_MACHINES: [&str; 1] = ["ampex_351_insert"];
+
+/// The slot's device's latency in seconds: a tape machine's head distance over the speed its
+/// `speed` switch picks (1 its `speed_m_s`, 0 its `speed_lo_m_s`); 0 for the rest.
+pub fn latency_s(circuit: &Circuit, slot: &Slot) -> Result<f64, String> {
+    if !TAPE_MACHINES.contains(&slot.device.as_str()) {
+        return Ok(0.0);
+    }
+    let p =
+        varimu_circuit::spec::resolve(circuit.spec(), &slot.values).map_err(|e| e.to_string())?;
+    let num = |k: &str| {
+        p.get(k)
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| format!("{}: no number `{k}`", slot.device))
+    };
+    let speed = if num("speed")? >= 0.5 {
+        num("speed_m_s")?
+    } else {
+        num("speed_lo_m_s")?
+    };
+    Ok(num("head_distance_m")? / speed)
+}
+
 /// `input` through the slot's device with `sidechain` (see the module docs), uncached.
 pub fn print_uncached(
     prep: &Prepared,
@@ -309,14 +335,16 @@ pub fn print_uncached(
     let s = &prep.settings;
     let trim = db(slot.trim_db);
     let tail = (slot.tail_s.max(0.0) * rate as f64).round() as usize;
+    let late = (latency_s(&prep.circuit, slot)? * rate as f64).round() as usize;
     let mut x: Vec<f64> = input.iter().map(|&v| v as f64 * trim).collect();
-    x.resize(input.len() + tail, 0.0);
-    let n = x.len();
+    let n = input.len() + tail;
+    // Run `late` longer, then drop the first `late` samples of the output.
+    x.resize(n + late, 0.0);
     let side_v: Option<(&str, Vec<f64>)> = match (key_control(slot), sidechain, &slot.key) {
         (Some(c), Some(side), Some(route)) => {
             let v = db(route.trim_db) * prep.circuit.full_scale(s).input_v;
-            let mut k: Vec<f64> = side.iter().take(n).map(|&u| u as f64 * v).collect();
-            k.resize(n, 0.0);
+            let mut k: Vec<f64> = side.iter().take(n + late).map(|&u| u as f64 * v).collect();
+            k.resize(n + late, 0.0);
             Some((c, resample(&k, rate, s.sample_rate)))
         }
         _ => None,
@@ -332,6 +360,7 @@ pub fn print_uncached(
         cancel,
     )?;
     let mut y = resample(&r.out, s.sample_rate, rate);
+    y.drain(..late.min(y.len()));
     y.resize(n, 0.0);
     // The device's share after its make-up, the rest the input as it came (dry).
     let (g, wet) = (db(slot.makeup_db), slot.wet.clamp(0.0, 1.0));
@@ -747,6 +776,21 @@ mod tests {
         let d = std::env::temp_dir().join(format!("varimu_print_{name}_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&d);
         d
+    }
+
+    #[test]
+    fn a_tape_machine_prints_a_head_distance_early() {
+        let mut slot = Slot::new("ampex_351_insert");
+        let p = Prepared::load(&config(), &slot.device, slot.quality, slot.noise).unwrap();
+        // 2 in between the heads at 15 ips (the manual's 133 ms), twice that at 7-1/2.
+        let hi = latency_s(&p.circuit, &slot).unwrap();
+        assert!((hi - 2.0 / 15.0).abs() < 1e-3, "{hi}");
+        slot.values = vec![("speed".to_string(), Value::Int(0))];
+        let lo = latency_s(&p.circuit, &slot).unwrap();
+        assert!((lo - 2.0 * hi).abs() < 1e-9, "{lo}");
+        let stage = stage(0.0);
+        let q = Prepared::load(&config(), &stage.device, stage.quality, stage.noise).unwrap();
+        assert_eq!(latency_s(&q.circuit, &stage).unwrap(), 0.0);
     }
 
     #[test]

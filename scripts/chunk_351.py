@@ -14,6 +14,7 @@ and the numbers to its results.json.
     uv run --extra fast --extra listen python scripts/chunk_351.py --seconds 30 --chunk-s 7.5
 
 `--gpu`: the tape's recording kernel on the GPU (TAPE_SPEED_PLAN.md P5), both prints.
+`--lag N`: the record side reads the rest N samples late (P2's `lag_samples`), both prints.
 """
 
 from __future__ import annotations
@@ -103,6 +104,12 @@ def main() -> int:
     )
     ap.add_argument("--alignment", type=Path, help="a cached alignment's JSON (its panel)")
     ap.add_argument("--skip-whole", action="store_true", help="only the pieces (timing)")
+    ap.add_argument(
+        "--lag",
+        type=int,
+        default=0,
+        help="the record side reads the rest N samples late (P2's lag_samples; 0 lockstep)",
+    )
     a = ap.parse_args()
 
     cores = os.cpu_count() or 1
@@ -117,6 +124,13 @@ def main() -> int:
     p = spec.resolve(c, al.overrides)
     delay = int(round(p["head_distance_m"] / p["speed_m_s"] * fs))
     ir = builder.build(c, al.overrides, cores="ja", noise=not a.no_noise).ir
+    if a.lag:
+        ir = dataclasses.replace(
+            ir,
+            sections=tuple(
+                dataclasses.replace(s, lag_samples=a.lag) if s.substeps else s for s in ir.sections
+            ),
+        )
     x = load_audio(REPO_ROOT / "data" / "clips" / a.clip, fs)
     x = x[int(a.start * fs) :]
     if len(x) < int(a.seconds * fs):
@@ -132,6 +146,7 @@ def main() -> int:
         f"{Path(a.clip).stem}_{a.start:g}s_{a.seconds:g}s_{a.drive_db:+g}dB"
         + ("_nonoise" if a.no_noise else "")
         + ("_gpu" if a.gpu else "")
+        + (f"_lag{a.lag}" if a.lag else "")
     )
     CACHE.mkdir(parents=True, exist_ok=True)
     OUT.mkdir(parents=True, exist_ok=True)

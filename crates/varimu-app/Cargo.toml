@@ -20,6 +20,13 @@ symphonia = { version = "0.6.1", features = ["mp3"] }
 varimu-circuit = { path = "../varimu-circuit" }
 varimu-components = { path = "../varimu-components" }
 
+[features]
+# A literal tape's recording kernel on the GPU at production (circuitsim's `gpu`, crates/tapegpu;
+# docs/TAPE_SPEED_PLAN.md P5): used when a GPU is found (`settings::tape_gpu_available`); build
+# with --no-default-features for the f64 CPU kernel only.
+default = ["gpu"]
+gpu = ["circuitsim/gpu"]
+
 [dev-dependencies]
 serde_json = { version = "1.0.154", features = ["float_roundtrip"] }
 
