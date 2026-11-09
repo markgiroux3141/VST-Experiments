@@ -79,5 +79,45 @@
    "p90": -41.54426259577052,
    "max": -29.689319710597772
   }
+ },
+ "drums_setmefree_0s_60s_+6dB_gpu_c10_w2_j6": {
+  "tag": "drums_setmefree_0s_60s_+6dB_gpu",
+  "chunk_s": 10.0,
+  "warmup_s": 2.0,
+  "workers": 6,
+  "tape_threads": 2,
+  "note": "the clip (drums_setmefree.wav from 0 s) tiled to 60 s",
+  "pieces_wall_s": 766.0494794845581,
+  "pieces_x_real_time": 12.675942848613758
+ },
+ "drums_setmefree_0s_60s_+6dB_gpu_c7.5_w2_j8": {
+  "tag": "drums_setmefree_0s_60s_+6dB_gpu",
+  "chunk_s": 7.5,
+  "warmup_s": 2.0,
+  "workers": 8,
+  "tape_threads": 1,
+  "note": "the clip (drums_setmefree.wav from 0 s) tiled to 60 s",
+  "pieces_wall_s": 742.4395289421082,
+  "pieces_x_real_time": 12.285265233460146
+ },
+ "drums_setmefree_0s_60s_+6dB_gpu_c5_w2_j12": {
+  "tag": "drums_setmefree_0s_60s_+6dB_gpu",
+  "chunk_s": 5.0,
+  "warmup_s": 2.0,
+  "workers": 12,
+  "tape_threads": 1,
+  "note": "the clip (drums_setmefree.wav from 0 s) tiled to 60 s",
+  "pieces_wall_s": 896.133975982666,
+  "pieces_x_real_time": 14.82847174819635
+ },
+ "drums_setmefree_0s_60s_+6dB_gpu_lag64_c10_w2_j6": {
+  "tag": "drums_setmefree_0s_60s_+6dB_gpu_lag64",
+  "chunk_s": 10.0,
+  "warmup_s": 2.0,
+  "workers": 6,
+  "tape_threads": 2,
+  "note": "the clip (drums_setmefree.wav from 0 s) tiled to 60 s",
+  "pieces_wall_s": 725.8765277862549,
+  "pieces_x_real_time": 12.0111946131206
  }
 }

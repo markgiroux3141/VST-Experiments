@@ -734,7 +734,10 @@ fn a_multirate_section_steps_with_its_own_method() {
     // Another: the fast part steps differently, within its truncation error (of its ~25 V
     // carrier).
     let (f0, f1) = (series(&base, "v(f)"), series(&other, "v(f)"));
-    let d = f0.iter().zip(f1).fold(0.0f64, |w, (a, b)| w.max((a - b).abs()));
+    let d = f0
+        .iter()
+        .zip(f1)
+        .fold(0.0f64, |w, (a, b)| w.max((a - b).abs()));
     eprintln!("trbdf2 vs esdirk4 in the fast part: {d:.2e} V");
     assert!(d > 0.0 && d < 0.05, "{d}");
 }

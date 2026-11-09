@@ -83,6 +83,21 @@ struct Shared {
     created: Instant,
 }
 
+/// How many times a partition waiting for another's sample spins before it yields: 2^14
+/// (live streams hand over within microseconds), `CIRCUITSIM_WAIT_SPINS` overriding it (an
+/// experiment for prints in pieces, TAPE_SPEED_PLAN.md: a part waiting ~100 us a sample on
+/// the 351's record side spins a logical CPU away from the other pieces). Only scheduling:
+/// the numbers don't depend on it. Read once.
+fn wait_spins() -> u32 {
+    static SPINS: std::sync::OnceLock<u32> = std::sync::OnceLock::new();
+    *SPINS.get_or_init(|| {
+        std::env::var("CIRCUITSIM_WAIT_SPINS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1 << 14)
+    })
+}
+
 impl Shared {
     /// Wait until partition `p` has published sample `n`; false if stopped.
     /// Spins, then yields, then (idle for milliseconds: a paused stream) sleeps.
@@ -90,12 +105,13 @@ impl Shared {
         let ring = &self.rings[p];
         let mut spins = 0u32;
         let mut since: Option<Instant> = None;
+        let limit = wait_spins();
         while !ring.published(n) {
             if self.stop.load(Ordering::Relaxed) {
                 return false;
             }
             spins += 1;
-            if spins < 1 << 14 {
+            if spins < limit {
                 std::hint::spin_loop();
             } else if since.get_or_insert_with(Instant::now).elapsed() < Duration::from_millis(2) {
                 std::thread::yield_now();

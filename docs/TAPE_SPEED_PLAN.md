@@ -98,12 +98,46 @@ and the profile's renders missed the cache. And the Session view's insert menu o
 Minimoog's filter board (an instrument without an oscillator): `Device::as_insert` now leaves
 instruments out, as its test said.
 
+**(b) P3's tuning and P2's lag (measured; nothing to adopt yet).** 60 s of the drums (tiled)
+at +6 dB, production with noise, the GPU kernel, pieces only (`chunk_351.py --skip-whole
+--gpu`, 2 s of warm-up; `--lag N` new):
+
+| pieces | workers | lag | x real time |
+|---|---|---|---|
+| 10 s | 6 | 0 | 13.0 (the fixture tests ran beside its first 3.5 min) |
+| 7.5 s | 8 | 0 | 13.1 |
+| 5 s | 12 | 0 | 14.8 |
+| 10 s | 6 | 64 | 12.0 |
+
+and on the single print (`speed_351.py`, 0.5 s, the GPU kernel, back to back): lockstep 27.6 /
+26.9x, lag 64 26.4 / 27.1x, lag 256 26.2x. The record side is busy 42-43 s of a 45-46 s wall
+(part 0 busy 8 s, waiting 37), so **P2's lag can't buy more than ~5%**, and doesn't. More
+pieces don't help either: each piece holds two logical CPUs, the record side and part 0,
+which waits ~110 us a sample on it and spins most of that (2^14 spins before it yields), so
+6 pieces already fill 12 of the 16 and more oversubscribe; shorter pieces also pay the 3 s
+of warm-up and settle more often (P3's 30 s pieces: 10.1x on 3 minutes). A shorter spin
+before the wait yields (`CIRCUITSIM_WAIT_SPINS`, a new override in `stream.rs`, default 2^14
+as before; scheduling only): at 64, 8 x 7.5 s 12.3x and 6 x 10 s 12.7x, 3-6%, inside this
+desktop's drift: not adopted. **What bounds a literal print now is the record side's
+sequential 3.84 MHz steps, one physical core per piece**; P3 at ~6 pieces of 30 s is near
+what this 8-core machine gives. More would take fewer record-side steps (P4's levers spent),
+or another machine.
+
 **(c) The app on the GPU.** varimu-app's default feature `gpu` turns on circuitsim's;
 `Settings::tape_gpu` is on at production when a GPU is found (`settings::tape_gpu_available`,
 asked once; `VARIMU_GPU=off`, or `--no-default-features`, keeps the f64 CPU kernel), off at
 the live qualities (a reduced tape has no kernel). It is in the print cache's key with the
 settings, so a print says which kernel made it. Tests: `settings::tests::only_production_
-records_tape_on_the_gpu`.
+records_tape_on_the_gpu`. Checking it end to end found that **the app couldn't render a
+literal tape machine at production at all**: `render::render_controls` ran an IR without a
+partition list unpartitioned, which circuitsim refuses for multi-rate sections (Python's
+binding always partitions them). Fixed: a multi-rate IR runs partitioned. The insert at
+production, 0.3 s of a 1 kHz tone: GPU 41 s, `VARIMU_GPU=off` 85 s (the 1 s settle
+counted), the two -124 dB apart.
+
+**Open (the user's):** listen to `reports/tape/tiers/audio/` (F2's ABX); the bias asymmetry
+in the live tier (above); the transport's random parts on a fixed grid (above); merge
+`tape-tiers`; the full pytest run (still owed from the merge).
 
 ## Status (2026-11-08, second session): P5 built, P4 adopted, P3 measured
 
@@ -427,6 +461,12 @@ Main-plan Phase 7 (the 670's neural surrogate: a TCN or RNN with FiLM conditioni
 Second session (2026-11-08): 1 and 2 are done (the Status at the top): a 3-minute song
 prints in ~30 min (P3's pieces at 10.1x real time). Next is 3 (F1-F2), or P2 / P3's tuning
 for more of the literal print.
+
+Third session (2026-11-08): F1-F2 measured with the reduced tape as the grey box (the 351 as
+an insert, live at draft-2x), P2 / P3's tuning measured without a gain, the app on the GPU
+(Status at the top). Next, the user's: the ABX, then the live tier's two options (the bias
+asymmetry, the transport on a fixed grid); F3 (a neural core) only if the ABX tells them
+apart.
 
 ### P5's design (2026-11-08; built as designed, one invocation per orientation)
 

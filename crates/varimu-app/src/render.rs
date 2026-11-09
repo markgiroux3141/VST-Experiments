@@ -125,7 +125,9 @@ pub fn render_controls(
     let ctl = control_streams(&given, n0, s.sample_rate, s.sim_rate(), x_up.len());
     let ctl: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
     let second = s.partition_sections(&ir);
-    let out = if second.is_empty() {
+    // Multi-rate sections (a literal tape's record side, its substeps) always run
+    // partitioned, as Python's `circuitsim.simulate` runs them: the 351 at production.
+    let out = if second.is_empty() && !ir.multirate() {
         circuitsim::simulate_controls(&ir, &x_up, &ctl, h, &opts, every, report)
     } else {
         simulate_partitioned_controls(

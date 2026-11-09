@@ -916,7 +916,9 @@ missing bias asymmetry, Option B; the tiers' flutter realizations differ: the tr
 random parts are drawn per sample of the stream's own rate); the app's `ampex_351_insert`
 (a TAPE section, draft-2x, 0.56x real time; prints shifted back by the head distance,
 `print::latency_s`); varimu-app's default feature `gpu` (`Settings::tape_gpu` at production
-when a GPU is found).
+when a GPU is found; the app's render now partitions multi-rate IRs, so it prints the 351 at
+all); P2's lag and more / shorter pieces measured: no gain (the record side's steps bound a
+print, one core per piece; `CIRCUITSIM_WAIT_SPINS` an experiment).
 Built: `CIRCUITSIM_PART_TIMING=1` (each part's busy / waiting time), `CIRCUITSIM_TAPE_THREADS`;
 a multi-rate section's `lag_samples` (IR `Section.lag_samples`, both builders; measured: no
 gain yet, nothing uses it); a run's origin (circuitsim `Options::origin_samples`,
