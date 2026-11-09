@@ -28,7 +28,7 @@
 //!
 //! The output is stereo (RECORDING_PLAN.md T2-T3): the device (mono, through the monitor
 //! and the armed track's strip; a stereo device, its circuit probing `out_r` like the Rhodes
-//! Suitcase's vibrato, plays its left and right apart and a take keeps their mid), the
+//! Suitcase's vibrato, plays its left and right apart and a take keeps both), the
 //! session's tracks while the transport runs
 //! ([`Player::set_mix`], `crate::session::Mix`) and the click. While a take is armed
 //! ([`Player::arm_take`]) the worker's `session::Recorder` keeps the device's output from
@@ -48,8 +48,10 @@
 //! ([`BLOCK`], 10 ms); it can be put on, changed and taken off while playing (the end
 //! settles on its thread, the device's output going on dry meanwhile). The audio only
 //! flows one way (a reverb's input is a grid), so nothing couples it back. A stereo end
-//! (its circuit probes `out_r`: the 351-2's ping-pong) plays its left and right apart,
-//! the dry in both; a take keeps their mid (tracks are mono).
+//! (its circuit probes `out_r`: the 351-2's ping-pong) plays its left and right apart.
+//! A stereo device's mid goes into the end and its dry stays stereo (a mono end's output
+//! in both sides), so an audio take keeps both channels; an event take keeps the device's
+//! own output, before the end.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -1057,8 +1059,10 @@ struct Tail {
     /// The thread has settled its stream and takes blocks.
     ready: Arc<AtomicBool>,
     status: Arc<Mutex<EndStatus>>,
-    /// The device's last block (what comes out dry with the end's next output).
+    /// The device's last block (what comes out dry with the end's next output), and a
+    /// stereo device's right.
     pending: Vec<f32>,
+    pending_r: Option<Vec<f32>>,
     in_flight: bool,
 }
 
@@ -1096,6 +1100,7 @@ impl Tail {
             ready,
             status,
             pending: Vec::new(),
+            pending_r: None,
             in_flight: false,
         })
     }
@@ -1104,36 +1109,61 @@ impl Tail {
         let _ = self.tx.send(TailMsg::Set(values));
     }
 
-    /// `y` (block n) to the end; block n - 1 out: `mix` of the end's output, the rest the
-    /// device's dry (a stereo end: left and right, the dry in both). The end computes block
-    /// n while the worker computes block n + 1.
-    fn process(&mut self, y: &[f32], mix: f64) -> (Vec<f32>, Option<Vec<f32>>) {
+    /// `y` (block n; a stereo device's left, `y_r` its right) to the end; block n - 1 out:
+    /// `mix` of the end's output, the rest the device's dry. The end takes a stereo
+    /// device's mid; its dry stays stereo, a mono end's output in both sides (a mono send's
+    /// return in the centre), a stereo end's left and right in theirs. A mono device's dry
+    /// goes into both sides of a stereo end. The end computes block n while the worker
+    /// computes block n + 1.
+    fn process(
+        &mut self,
+        y: &[f32],
+        y_r: Option<&[f32]>,
+        mix: f64,
+    ) -> (Vec<f32>, Option<Vec<f32>>) {
         let mut dry = std::mem::replace(&mut self.pending, y.to_vec());
         dry.resize(y.len(), 0.0);
+        let mut dry_r = std::mem::replace(&mut self.pending_r, y_r.map(<[f32]>::to_vec));
+        if let Some(r) = &mut dry_r {
+            r.resize(y.len(), 0.0);
+        } else if y_r.is_some() {
+            // The device turned stereo with this block: its last block was mono.
+            dry_r = Some(dry.clone());
+        }
         let wet = if std::mem::take(&mut self.in_flight) {
             self.rx.recv().ok()
         } else {
             None
         };
-        if self.ready.load(Ordering::Acquire)
-            && self
-                .tx
-                .send(TailMsg::Block(y.iter().map(|&v| v as f64).collect()))
-                .is_ok()
-        {
+        let input: Vec<f64> = match y_r {
+            Some(r) => y
+                .iter()
+                .zip(r)
+                .map(|(&a, &b)| 0.5 * (a as f64 + b as f64))
+                .collect(),
+            None => y.iter().map(|&v| v as f64).collect(),
+        };
+        if self.ready.load(Ordering::Acquire) && self.tx.send(TailMsg::Block(input)).is_ok() {
             self.in_flight = true;
         }
         let m = mix as f32;
-        let blend = |dry: &[f32], mut w: Vec<f32>| -> Vec<f32> {
-            w.resize(dry.len(), 0.0);
+        let blend = |dry: &[f32], w: &[f32]| -> Vec<f32> {
             dry.iter()
-                .zip(&w)
-                .map(|(d, w)| d * (1.0 - m) + w * m)
+                .enumerate()
+                .map(|(i, d)| d * (1.0 - m) + w.get(i).copied().unwrap_or(0.0) * m)
                 .collect()
         };
-        match wet {
-            Some((w, r)) => (blend(&dry, w), r.map(|r| blend(&dry, r))),
-            None => (dry.iter().map(|d| d * (1.0 - m)).collect(), None),
+        match (wet, dry_r) {
+            (Some((w, Some(wr))), dry_r) => (
+                blend(&dry, &w),
+                Some(blend(dry_r.as_deref().unwrap_or(&dry), &wr)),
+            ),
+            (Some((w, None)), Some(dr)) => (blend(&dry, &w), Some(blend(&dr, &w))),
+            (Some((w, None)), None) => (blend(&dry, &w), None),
+            (None, dry_r) => (
+                dry.iter().map(|d| d * (1.0 - m)).collect(),
+                dry_r.map(|r| r.iter().map(|d| d * (1.0 - m)).collect()),
+            ),
         }
     }
 }
@@ -1293,18 +1323,15 @@ impl Emitter {
         let device_raw_right = self.raw_right.take();
         self.update_end(shared);
         let chained: Vec<f32>;
-        // A stereo device plays its left and right apart; a chain's end gets their mid.
+        // A stereo device plays its left and right apart; a chain's end gets their mid and
+        // keeps the dry stereo (`Tail::process`).
         let device_right = self.device_right.take();
         let right: Option<Vec<f32>>;
         let raw_right: Option<Vec<f32>>;
         let (raw, y) = match &mut self.end {
             Some(t) => {
                 let mix = f64::from_bits(shared.end_mix.load(Ordering::Relaxed));
-                let y = match &device_right {
-                    Some(r) => y.iter().zip(r).map(|(a, b)| 0.5 * (a + b)).collect(),
-                    None => y,
-                };
-                let (left, r) = t.process(&y, mix);
+                let (left, r) = t.process(&y, device_right.as_deref(), mix);
                 // A take keeps a stereo end's left and right.
                 chained = left.clone();
                 raw_right = r.clone();
