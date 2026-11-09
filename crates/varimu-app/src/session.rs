@@ -894,6 +894,16 @@ pub struct Printed {
     pub stages_right: Vec<Arc<Vec<f32>>>,
 }
 
+impl Printed {
+    /// It as the mix's one clip (the master's print): stereo, on no track's meter.
+    pub fn mix_clip(&self) -> MixClip {
+        MixClip {
+            right: self.right.clone(),
+            ..MixClip::whole(self.start, self.audio.clone(), (1.0, 1.0))
+        }
+    }
+}
+
 /// Tracks made in this process (with the clock, a new track's id).
 static TRACKS_MADE: AtomicU64 = AtomicU64::new(0);
 
@@ -1019,6 +1029,9 @@ type LaneSum = (String, i64, Arc<Vec<f32>>, Option<Arc<Vec<f32>>>);
 /// A sound placed on the timeline: where it starts, its left (or mono) channel and, stereo,
 /// its right.
 pub type Placed = (i64, Arc<Vec<f32>>, Option<Arc<Vec<f32>>>);
+
+/// Stereo audio placed on the timeline: where it starts, its left and right.
+pub type Stereo = (i64, Arc<Vec<f32>>, Arc<Vec<f32>>);
 
 /// A track: its takes (the pool clips play from), its clips (the lane), the take last given
 /// to the lane, its channel strip.
@@ -1528,6 +1541,11 @@ pub struct Session {
     pub markers: Vec<Marker>,
     /// The master fader (dB, on the stereo sum: SE4).
     pub master_db: f64,
+    /// The master's inserts, in signal order: on the tracks' stereo sum, before the master
+    /// fader. Each prints dual-mono (a tape machine's right side its own grain).
+    pub master_inserts: Vec<Slot>,
+    /// The master chain's latest print (not saved: found again in the cache).
+    pub master_printed: Option<Printed>,
     /// Every take loaded or recorded in this session, by id, deleted ones too: a state
     /// restored by undo takes them from here before reading their folders.
     known: HashMap<String, Take>,
@@ -1546,14 +1564,35 @@ impl Session {
             place_heard: true,
             markers: Vec::new(),
             master_db: 0.0,
+            master_inserts: Vec::new(),
+            master_printed: None,
             known: HashMap::new(),
             revisions: HashMap::new(),
         }
     }
 
     /// The mix: each audible track's active take (solo wins over mute), the live device
-    /// through the armed track's strip.
+    /// through the armed track's strip; the master's print in place of the tracks while
+    /// it is of the mix as it is (its inserts as they are or older: stale).
     pub fn mix(&self) -> Mix {
+        let mut m = self.tracks_mix();
+        if let Some(p) = self.master_print_playing() {
+            m.clips = vec![p.mix_clip()];
+        }
+        m
+    }
+
+    /// The mix while the master's insert is auditioned: only the live device (it plays the
+    /// tracks' sum), through the master fader.
+    pub fn mix_master_audition(&self) -> Mix {
+        Mix {
+            master: self.master_gain(),
+            ..Mix::default()
+        }
+    }
+
+    /// The tracks' mix (no master print).
+    fn tracks_mix(&self) -> Mix {
         let any_solo = self.tracks.iter().any(|t| t.solo);
         let audible = |t: &Track| if any_solo { t.solo } else { !t.mute };
         let clips = self
@@ -1586,7 +1625,7 @@ impl Session {
     /// The mix while track `t`'s insert is auditioned: its own audio comes from the live
     /// device (through its strip), so it leaves the tracks.
     pub fn mix_audition(&self, t: usize) -> Mix {
-        let mut m = self.mix();
+        let mut m = self.tracks_mix();
         let any_solo = self.tracks.iter().any(|x| x.solo);
         let Some(track) = self.tracks.get(t) else {
             return m;
@@ -1643,6 +1682,20 @@ impl Session {
                 out.push(format!("{}: {w}", t.name));
             }
         }
+        if !self.master_print_current() {
+            out.push("Master: its inserts aren't printed as they are now".into());
+        } else if fin
+            && self.master_signature().is_some()
+            && let Some(s) = self
+                .master_inserts
+                .iter()
+                .find(|s| !s.bypass && s.quality != Quality::Production)
+        {
+            out.push(format!(
+                "Master: its insert {} isn't at production",
+                s.device
+            ));
+        }
         out
     }
 
@@ -1650,6 +1703,19 @@ impl Session {
     /// no click, no live device), from bar 1 (or the earliest take, if one starts before
     /// it) to the end of the longest sound.
     pub fn mixdown(&self) -> Mixdown {
+        let mut md = self.tracks_mixdown();
+        if let Some(p) = self.master_print_playing() {
+            // The master chain's print is the mix; the stems are what went into it.
+            let clip = p.mix_clip();
+            md.start = clip.start.min(0);
+            md.len = (clip.end().max(md.start + md.len as i64) - md.start).max(0) as usize;
+            md.tracks = vec![("Master".to_string(), vec![clip])];
+        }
+        md
+    }
+
+    /// The tracks' mixdown (no master print): what the master's inserts print.
+    fn tracks_mixdown(&self) -> Mixdown {
         let any_solo = self.tracks.iter().any(|t| t.solo);
         let tracks: Vec<(String, Vec<MixClip>)> = self
             .tracks
@@ -1714,7 +1780,82 @@ impl Session {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0, |d| d.as_secs()),
             "tracks": tracks,
+            "master": {
+                "inserts": self.master_inserts.iter().filter(|s| !s.bypass).map(Slot::to_json).collect::<Vec<_>>(),
+                "print": self.master_print_playing().map(|p| p.signature.clone()),
+                "master_db": self.master_db,
+            },
         })
+    }
+
+    /// What the tracks' sum (the master's input) is made from: each audible track's id,
+    /// what it plays (its print or its lane) and its strip, and the rate.
+    pub fn master_mix_signature(&self) -> String {
+        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let mut s = format!("{}|", self.rate);
+        for t in &self.tracks {
+            if (any_solo && !t.solo) || (!any_solo && t.mute) || t.lane_span().is_none() {
+                continue;
+            }
+            let plays = match t.print_playing(self.rate) {
+                Some(p) => format!("print {}@{}", p.signature, p.start),
+                None => format!("lane {}@{}", t.lane_signature(), t.lane_span().unwrap().0),
+            };
+            s.push_str(&format!("{}:{plays}:{}:{};", t.id, t.volume_db, t.pan));
+        }
+        s
+    }
+
+    /// What the master chain's print is made from (the tracks' sum and every master insert
+    /// that isn't bypassed); None when there's nothing to print.
+    pub fn master_signature(&self) -> Option<String> {
+        let on: Vec<Value> = self
+            .master_inserts
+            .iter()
+            .filter(|s| !s.bypass)
+            .map(Slot::to_json)
+            .collect();
+        if on.is_empty() || self.tracks_mixdown().len == 0 {
+            return None;
+        }
+        Some(format!(
+            "master|{}|{}",
+            self.master_mix_signature(),
+            Value::Array(on)
+        ))
+    }
+
+    /// The master's input: the tracks' stereo sum (before the master fader), where it
+    /// starts, its left and right. None when nothing sounds.
+    pub fn master_input(&self) -> Option<Stereo> {
+        let md = self.tracks_mixdown();
+        if md.len == 0 {
+            return None;
+        }
+        let md = Mixdown { master: 1.0, ..md };
+        let frames = md.mix();
+        let l = frames.iter().map(|f| f[0]).collect();
+        let r = frames.iter().map(|f| f[1]).collect();
+        Some((md.start, Arc::new(l), Arc::new(r)))
+    }
+
+    /// The master print that plays: of the tracks' sum as it is (its inserts as they are,
+    /// or older: stale) while there's a master chain.
+    pub fn master_print_playing(&self) -> Option<&Printed> {
+        self.master_signature()?;
+        let mix = self.master_mix_signature();
+        self.master_printed.as_ref().filter(|p| p.lane == mix)
+    }
+
+    /// Whether the master's print is its chain as it is now.
+    pub fn master_print_current(&self) -> bool {
+        match self.master_signature() {
+            None => true,
+            Some(s) => self
+                .master_printed
+                .as_ref()
+                .is_some_and(|p| p.signature == s),
+        }
     }
 
     /// The track whose id is `id`.
@@ -2283,6 +2424,7 @@ impl Session {
             "armed": self.armed,
             "place_new": if self.place_heard { "heard" } else { "click" },
             "master_db": self.master_db,
+            "master_inserts": self.master_inserts.iter().map(Slot::to_json).collect::<Vec<_>>(),
             "markers": self
                 .markers
                 .iter()
@@ -2379,6 +2521,11 @@ impl Session {
         self.place_heard = v["place_new"].as_str() != Some("click");
         self.transport = transport_from(&v["transport"], rate);
         self.master_db = v["master_db"].as_f64().unwrap_or(0.0);
+        let mut master = Vec::new();
+        for s in v["master_inserts"].as_array().cloned().unwrap_or_default() {
+            master.push(Slot::from_json(&s)?);
+        }
+        self.master_inserts = master;
         self.markers = v["markers"]
             .as_array()
             .map(|a| {
@@ -2445,6 +2592,8 @@ impl Session {
             place_heard: true,
             markers: Vec::new(),
             master_db: 0.0,
+            master_inserts: Vec::new(),
+            master_printed: None,
             known: HashMap::new(),
             revisions: HashMap::new(),
         };
@@ -3497,6 +3646,80 @@ mod tests {
         c.tracks.clear();
         assert!(s.copy_to(&base.join("b")).is_err()); // never over an existing folder
         let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn the_master_chain_prints_the_sum_and_plays_in_its_place() {
+        let dir = std::env::temp_dir().join(format!("varimu_master_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut s = Session::new(dir.clone(), 1000, TransportSettings::default());
+        let rec = |v: f32| Recorded {
+            start: 10,
+            latency: 0,
+            samples: vec![v; 100],
+            right: None,
+            performance: None,
+        };
+        s.add_take(0, rec(0.1), "x").expect("saved");
+        // No master insert: nothing to print, the export doesn't wait.
+        assert_eq!(s.master_signature(), None);
+        assert!(s.master_print_current() && s.export_problems(true).is_empty());
+        s.master_inserts.push(Slot::new("ampex_351_insert"));
+        let sig = s.master_signature().expect("a master chain");
+        assert!(!s.master_print_current());
+        assert_eq!(s.export_problems(false).len(), 1);
+        // Its input is the tracks' sum (before the master fader), both channels.
+        s.master_db = -6.0;
+        let (start, l, r) = s.master_input().expect("the sum");
+        assert_eq!(start, 0);
+        assert_eq!((l[50], r[50], l[5]), (0.1, 0.1, 0.0));
+        // Printed: the mix plays the print (stereo), the master fader after it.
+        s.master_printed = Some(Printed {
+            signature: sig.clone(),
+            lane: s.master_mix_signature(),
+            start: 0,
+            audio: Arc::new(vec![0.4; 200]),
+            right: Some(Arc::new(vec![0.2; 200])),
+            stages_right: Vec::new(),
+            overview: Arc::new(Overview::default()),
+            stages: Vec::new(),
+        });
+        assert!(s.master_print_current());
+        let mut out = vec![[0.0f32; 2]; 200];
+        s.mix().add(0, &mut out);
+        assert_eq!(out[150], [0.4, 0.2]);
+        assert_eq!(s.mix().master, s.master_gain());
+        let md = s.mixdown();
+        assert_eq!(md.tracks.len(), 1);
+        assert_eq!((md.start, md.len), (0, 200));
+        assert_eq!(md.mix()[150][0], 0.4 * s.master_gain());
+        // An insert's knob turned: the print plays, stale; the export waits.
+        s.master_inserts[0].trim_db = 6.0;
+        assert!(!s.master_print_current() && s.master_print_playing().is_some());
+        assert!(s.export_problems(false)[0].starts_with("Master"));
+        // The master fader is after it: the print stays current.
+        s.master_inserts[0].trim_db = 0.0;
+        s.master_db = 0.0;
+        assert!(s.master_print_current());
+        // A track's fader moves the sum: the old print stops, the tracks play.
+        s.tracks[0].volume_db = -3.0;
+        assert!(s.master_print_playing().is_none());
+        let mut out = vec![[0.0f32; 2]; 200];
+        s.mix().add(0, &mut out);
+        assert!((out[50][0] - 0.1 * 10f32.powf(-3.0 / 20.0)).abs() < 1e-6);
+        // Auditioning a track's insert plays the tracks, not the master print.
+        s.tracks[0].volume_db = 0.0;
+        assert!(s.master_print_playing().is_some());
+        assert_eq!(s.mix_audition(0).clips.len(), 0);
+        assert_eq!(s.mix_master_audition().clips.len(), 0);
+        // Saved and loaded.
+        s.master_inserts[0].makeup_db = 1.5;
+        s.save().expect("saved");
+        let u = Session::load(&dir).expect("loads");
+        assert_eq!(u.master_inserts.len(), 1);
+        assert_eq!(u.master_inserts[0].device, "ampex_351_insert");
+        assert_eq!(u.master_inserts[0].makeup_db, 1.5);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

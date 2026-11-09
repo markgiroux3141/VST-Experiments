@@ -235,7 +235,16 @@ struct PrintJob {
     job: Job,
     cancelled: bool,
     lookup: bool,
+    /// The master chain's print (else a track's).
+    master: bool,
 }
+
+/// An audition's or a selection's track index for the master's inserts.
+const MASTER: usize = usize::MAX;
+
+/// The master's input as last summed: the tracks' signature it was made from, and where it
+/// starts, its left and right (None: nothing sounds).
+type MasterInput = (String, Option<varimu_app::session::Stereo>);
 
 /// A take's proxy stand-in being made on a thread (take id, revision).
 struct ProxyJob {
@@ -313,6 +322,8 @@ pub struct SessionView {
     /// What a stereo track's audition plays (ST3), and the last mid made for one.
     hear: Hear,
     mid_cache: std::cell::RefCell<Option<(String, Arc<Vec<f32>>)>>,
+    /// The master's input (the tracks' sum), made once per change of the tracks.
+    master_input: std::cell::RefCell<Option<MasterInput>>,
     show_keys: bool,
     /// The clip menu's normalize targets (dBFS): its peak, its level (as an import's).
     normalize_peak_dbfs: f64,
@@ -377,6 +388,10 @@ pub struct SessionView {
     proxy_jobs: Vec<ProxyJob>,
     proxy_tried: HashSet<(String, u32)>,
     insert_sel: Option<(usize, usize)>,
+    /// The master's insert whose panel is open (a track's insert closes it, and it theirs).
+    master_sel: Option<usize>,
+    /// The master's print asked for (SE1: made when asked for).
+    master_wanted: bool,
     knobs: HashMap<String, Result<Vec<Knob>, String>>,
     audition: Option<Audition>,
     /// The audition's state as the panel shows it (set each frame).
@@ -599,6 +614,7 @@ impl SessionView {
             track_h: TRACK_H,
             hear: Hear::Left,
             mid_cache: std::cell::RefCell::new(None),
+            master_input: std::cell::RefCell::new(None),
             show_keys: false,
             normalize_peak_dbfs: -1.0,
             normalize_level_dbfs: -18.0,
@@ -635,6 +651,8 @@ impl SessionView {
             proxy_jobs: Vec::new(),
             proxy_tried: HashSet::new(),
             insert_sel: None,
+            master_sel: None,
+            master_wanted: false,
             knobs: HashMap::new(),
             audition: None,
             audition_status: None,
@@ -780,6 +798,7 @@ impl SessionView {
             if let Some(p) = play.player() {
                 p.set_transport(&self.session.transport);
                 let mix = match &self.audition {
+                    Some(a) if a.track == MASTER => self.session.mix_master_audition(),
                     Some(a) => self.session.mix_audition(a.track),
                     None => self.session.mix(),
                 };
@@ -842,7 +861,15 @@ impl SessionView {
                     ui.colored_label(theme::FAULT, e);
                 }
             });
-        if self.insert_selected().is_some() {
+        if self.master_selected().is_some() {
+            egui::Panel::bottom("session_master_insert")
+                .frame(
+                    egui::Frame::NONE
+                        .fill(theme::CHROME2)
+                        .inner_margin(egui::Margin::symmetric(14, 10)),
+                )
+                .show(ui, |ui| self.master_panel(ui));
+        } else if self.insert_selected().is_some() {
             egui::Panel::bottom("session_insert")
                 .frame(
                     egui::Frame::NONE
@@ -1518,6 +1545,75 @@ impl SessionView {
         Some((audio, start, key))
     }
 
+    /// The tracks' sum (the master's input), summed once per change of the tracks.
+    fn master_input(&self) -> Option<varimu_app::session::Stereo> {
+        let sig = self.session.master_mix_signature();
+        let mut cache = self.master_input.borrow_mut();
+        if cache.as_ref().is_none_or(|(s, _)| *s != sig) {
+            *cache = Some((sig, self.session.master_input()));
+        }
+        cache.as_ref().and_then(|(_, i)| i.clone())
+    }
+
+    /// The master's insert `k`'s input for an audition: the master print's stage before it
+    /// (if that print is of the tracks as they are), else the tracks' sum; the channel the
+    /// panel's "hear" picks (the mid made once per input), where it starts, and a key that
+    /// changes when it does.
+    fn master_audition_input(&self, k: usize) -> Option<(Arc<Vec<f32>>, i64, String)> {
+        let (start, l, r) = self.master_input()?;
+        let mix = self.session.master_mix_signature();
+        let stage = self.session.master_inserts[..k]
+            .iter()
+            .filter(|s| !s.bypass)
+            .count();
+        let printed = self
+            .session
+            .master_printed
+            .as_ref()
+            .filter(|p| p.lane == mix && stage > 0 && p.stages.len() >= stage);
+        let (start, l, r) = match printed {
+            Some(p) => (
+                p.start,
+                p.stages[stage - 1].clone(),
+                p.stages_right
+                    .get(stage - 1)
+                    .cloned()
+                    .unwrap_or_else(|| p.stages[stage - 1].clone()),
+            ),
+            None => (start, l, r),
+        };
+        let (audio, hear) = match self.hear {
+            Hear::Left => (l, "L"),
+            Hear::Right => (r, "R"),
+            Hear::Mid => {
+                let id = format!("{:p}|{:p}", Arc::as_ptr(&l), Arc::as_ptr(&r));
+                let mut cache = self.mid_cache.borrow_mut();
+                let mid = match cache.as_ref() {
+                    Some((i, m)) if *i == id => m.clone(),
+                    _ => {
+                        let m: Arc<Vec<f32>> =
+                            Arc::new(l.iter().zip(r.iter()).map(|(a, b)| 0.5 * (a + b)).collect());
+                        *cache = Some((id, m.clone()));
+                        m
+                    }
+                };
+                (mid, "M")
+            }
+        };
+        let key = format!(
+            "master|{mix}|{stage}|{start}|{}|{:p}|{hear}",
+            audio.len(),
+            Arc::as_ptr(&audio)
+        );
+        Some((audio, start, key))
+    }
+
+    /// Every insert panel closed (a track's and the master's).
+    fn close_insert_panels(&mut self) {
+        self.insert_sel = None;
+        self.master_sel = None;
+    }
+
     /// The audition follows the open panel: started (the Play view's device stops) when an
     /// insert is selected or its input changes, its knobs and gains sent as they change,
     /// stopped when the panel closes.
@@ -1529,12 +1625,14 @@ impl SessionView {
         if self.audition.is_some() && instrument {
             self.audition = None;
             self.audition_status = None;
-            self.insert_sel = None;
+            self.close_insert_panels();
             self.resume_instrument = false;
             return;
         }
         let want = self
-            .insert_selected()
+            .master_selected()
+            .map(|k| (MASTER, k))
+            .or_else(|| self.insert_selected())
             .filter(|_| idle && self.recording.is_none());
         let Some((t, k)) = want else {
             if self.audition.take().is_some() {
@@ -1542,14 +1640,23 @@ impl SessionView {
             }
             return;
         };
-        let Some((audio, start, input)) = self.audition_input(t, k) else {
+        let input = if t == MASTER {
+            self.master_audition_input(k)
+        } else {
+            self.audition_input(t, k)
+        };
+        let Some((audio, start, input)) = input else {
             // Nothing to play into it yet (no take).
             if self.audition.take().is_some() {
                 self.end_audition(play);
             }
             return;
         };
-        let slot = self.session.tracks[t].inserts[k].clone();
+        let slot = if t == MASTER {
+            self.session.master_inserts[k].clone()
+        } else {
+            self.session.tracks[t].inserts[k].clone()
+        };
         let same = self.audition.as_ref().is_some_and(|a| {
             a.track == t && a.slot == k && a.device == slot.device && a.input == input
         }) && play.adopted();
@@ -1558,13 +1665,17 @@ impl SessionView {
             // comes back when the panel closes); a panel left open closes instead.
             if self.audition.is_none() && instrument {
                 if !requested {
-                    self.insert_sel = None;
+                    self.close_insert_panels();
                     return;
                 }
                 self.resume_instrument = true;
             }
             let running = play.player().is_some_and(|p| p.status().transport.running);
-            let side = self.session.sidechain(t, &slot);
+            let side = if t == MASTER {
+                None
+            } else {
+                self.session.sidechain(t, &slot)
+            };
             match self.start_audition(&slot, audio, start, side) {
                 Ok(p) => {
                     if p.rate != self.session.rate && self.session.end() > 0 {
@@ -1572,7 +1683,7 @@ impl SessionView {
                             "{} plays at {} Hz, the session is at {} Hz",
                             slot.device, p.rate, self.session.rate
                         ));
-                        self.insert_sel = None;
+                        self.close_insert_panels();
                         return;
                     }
                     p.set_transport(&self.session.transport);
@@ -1592,7 +1703,7 @@ impl SessionView {
                 }
                 Err(e) => {
                     self.error = Some(format!("can't play {} live: {e}", slot.device));
-                    self.insert_sel = None;
+                    self.close_insert_panels();
                     return;
                 }
             }
@@ -1757,6 +1868,13 @@ impl SessionView {
                             Vec::new()
                         },
                     };
+                    if j.master {
+                        if self.session.master_signature().as_deref() == Some(j.signature.as_str())
+                        {
+                            self.session.master_printed = Some(printed);
+                        }
+                        continue;
+                    }
                     for i in 0..self.session.tracks.len() {
                         if self.session.chain_signature(i).as_deref() == Some(j.signature.as_str())
                         {
@@ -1772,6 +1890,7 @@ impl SessionView {
         }
         let wanted: HashSet<String> = (0..self.session.tracks.len())
             .filter_map(|i| self.session.chain_signature(i))
+            .chain(self.session.master_signature())
             .collect();
         for j in &mut self.jobs {
             if !j.cancelled && !wanted.contains(&j.signature) {
@@ -1879,11 +1998,418 @@ impl SessionView {
                     stereo,
                     cancelled: false,
                     lookup,
+                    master: false,
                 });
             }
+            self.poll_master_print();
         }
         if !self.jobs.is_empty() || !self.print_wanted.is_empty() {
             ctx.request_repaint_after(Duration::from_millis(100));
+        }
+    }
+
+    /// The master chain's print: looked up in the cache when it isn't current, made when
+    /// asked for once every audible track's print is current (the tracks' prints are asked
+    /// for with it).
+    fn poll_master_print(&mut self) {
+        if !self.session.master_print_current() && self.master_wanted {
+            let any_solo = self.session.tracks.iter().any(|t| t.solo);
+            for t in 0..self.session.tracks.len() {
+                let x = &self.session.tracks[t];
+                let audible = if any_solo { x.solo } else { !x.mute };
+                if audible && !self.session.print_current(t) && !self.printing(t) {
+                    self.request_print(t);
+                }
+            }
+        }
+        let Some(sig) = self.session.master_signature() else {
+            self.master_wanted = false;
+            return;
+        };
+        if self.session.master_print_current() {
+            self.master_wanted = false;
+            return;
+        }
+        if self.print_errors.contains_key(&sig)
+            || self
+                .jobs
+                .iter()
+                .any(|j| !j.cancelled && !j.lookup && j.signature == sig)
+        {
+            return;
+        }
+        let lookup = !self.master_wanted;
+        if lookup
+            && (self.looked_up.contains(&sig)
+                || self.jobs.iter().any(|j| !j.cancelled && j.signature == sig))
+        {
+            return;
+        }
+        // The tracks it sums play their prints as they are first (one print per change).
+        let any_solo = self.session.tracks.iter().any(|t| t.solo);
+        let tracks_ready = (0..self.session.tracks.len()).all(|i| {
+            let t = &self.session.tracks[i];
+            (any_solo && !t.solo) || (!any_solo && t.mute) || self.session.print_current(i)
+        });
+        if !lookup && !tracks_ready {
+            return;
+        }
+        let running = self
+            .jobs
+            .iter()
+            .filter(|j| !j.cancelled && j.lookup == lookup)
+            .count();
+        if running >= MAX_PRINT_JOBS {
+            return;
+        }
+        let Some((start, l, r)) = self.master_input() else {
+            return;
+        };
+        let slots: Vec<Slot> = self
+            .session
+            .master_inserts
+            .iter()
+            .filter(|s| !s.bypass)
+            .cloned()
+            .collect();
+        let sides = vec![None; slots.len()];
+        let (config, cache, rate) = (
+            self.root.join("config"),
+            self.session.dir.join("prints"),
+            self.session.rate,
+        );
+        let job = if lookup {
+            Job::lookup(config, slots, sides, l, Some(r), rate, cache)
+        } else {
+            Job::spawn(config, slots, sides, l, Some(r), rate, Some(cache))
+        };
+        if lookup {
+            self.looked_up.insert(sig.clone());
+        } else {
+            self.master_wanted = false;
+        }
+        self.jobs.push(PrintJob {
+            job,
+            signature: sig,
+            lane: self.session.master_mix_signature(),
+            start,
+            stereo: true,
+            cancelled: false,
+            lookup,
+            master: true,
+        });
+    }
+
+    /// Print the master's chain (its Print buttons): the tracks' prints first when they
+    /// aren't current. A print that failed is tried again.
+    fn request_master_print(&mut self) {
+        if let Some(sig) = self.session.master_signature() {
+            self.print_errors.remove(&sig);
+        }
+        self.master_wanted = true;
+    }
+
+    /// Whether the master's print is asked for or running.
+    fn master_printing(&self) -> bool {
+        self.master_wanted
+            || self.session.master_signature().is_some_and(|sig| {
+                self.jobs
+                    .iter()
+                    .any(|j| !j.cancelled && !j.lookup && j.signature == sig)
+            })
+    }
+
+    /// The master's selected insert, if it still exists.
+    fn master_selected(&self) -> Option<usize> {
+        self.master_sel
+            .filter(|&k| k < self.session.master_inserts.len())
+    }
+
+    /// The master's insert `k`'s state: its glyph, colour and what it says on hover.
+    fn master_insert_state(&self, k: usize) -> (String, Color32, String) {
+        let slot = &self.session.master_inserts[k];
+        if slot.bypass {
+            return ("⏻".into(), theme::FAINT, "bypassed".into());
+        }
+        let Some(sig) = self.session.master_signature() else {
+            return ("".into(), theme::MUTED, "nothing to print".into());
+        };
+        if let Some(e) = self.print_errors.get(&sig) {
+            return ("!".into(), theme::FAULT, format!("the render failed: {e}"));
+        }
+        if let Some(j) = self
+            .jobs
+            .iter()
+            .find(|j| !j.cancelled && !j.lookup && j.signature == sig)
+        {
+            let stage = self.session.master_inserts[..k]
+                .iter()
+                .filter(|s| !s.bypass)
+                .count();
+            let (at, f) = j.job.progress();
+            return match stage.cmp(&at) {
+                std::cmp::Ordering::Less => ("✓".into(), theme::OK, "rendered".into()),
+                std::cmp::Ordering::Equal => (
+                    format!("◔ {:.0}%", f * 100.0),
+                    theme::ACCENT,
+                    "rendering the mix through it".into(),
+                ),
+                std::cmp::Ordering::Greater => (
+                    "…".into(),
+                    theme::MUTED,
+                    "waiting for the inserts before it".into(),
+                ),
+            };
+        }
+        let plays = if self.session.master_print_playing().is_some() {
+            "the last print plays, stale"
+        } else {
+            "the mix plays without it"
+        };
+        if self.session.master_print_current() {
+            (
+                "✓".into(),
+                theme::OK,
+                "printed: the mix plays through it (still editable)".into(),
+            )
+        } else if self.master_printing() {
+            (
+                "…".into(),
+                theme::WARN,
+                format!("waiting for the tracks' prints ({plays} meanwhile)"),
+            )
+        } else {
+            (
+                "○".into(),
+                theme::WARN,
+                format!("the mix or its inserts changed · not printed ({plays}; Print)"),
+            )
+        }
+    }
+
+    /// `device` added at the end of the master's chain, its panel opened. The first insert
+    /// that isn't bypassed gets its trim from the mix (its louder channel's loudest stretch
+    /// to the alignment level), set once.
+    fn add_master_insert(&mut self, device: &str) {
+        let rate = self.session.rate;
+        let mut slot = Slot::new(device);
+        if self.session.master_inserts.iter().all(|s| s.bypass)
+            && let Some((_, l, r)) = self.master_input()
+        {
+            let level = [l, r]
+                .iter()
+                .map(|x| {
+                    let y: Vec<f64> = x.iter().map(|&v| v as f64).collect();
+                    audio::level_dbfs(&y, rate, 8.0)
+                })
+                .fold(f64::NEG_INFINITY, f64::max);
+            if level > -200.0 {
+                slot.trim_db = ((ALIGNMENT_DBFS - level).clamp(-40.0, 40.0) * 10.0).round() / 10.0;
+            }
+        }
+        self.session.master_inserts.push(slot);
+        self.insert_sel = None;
+        self.master_sel = Some(self.session.master_inserts.len() - 1);
+        self.audition_request = true;
+        self.save();
+    }
+
+    /// The master's selected insert's panel: gains, bypass, quality, place, knobs.
+    fn master_panel(&mut self, ui: &mut egui::Ui) {
+        let Some(k) = self.master_selected() else {
+            self.master_sel = None;
+            return;
+        };
+        let device = self.session.master_inserts[k].device.clone();
+        let label = find_device(&device).map_or(device.clone(), |d| d.label.to_string());
+        let (glyph, colour, state) = self.master_insert_state(k);
+        let knobs = self.knobs_for(&device);
+        let rate = self.session.rate;
+        let n = self.session.master_inserts.len();
+        let last_on = self.session.master_inserts.iter().rposition(|s| !s.bypass) == Some(k);
+        let (mut changed, mut remove, mut print) = (false, false, false);
+        let mut moved: Option<usize> = None;
+        // The mix's and the print's levels (their louder channels), for Match.
+        let levels = match (self.master_input(), &self.session.master_printed) {
+            (Some((_, l, r)), Some(p)) if self.session.master_print_current() => {
+                let lv = |chans: [&[f32]; 2]| {
+                    chans
+                        .iter()
+                        .map(|x| {
+                            let y: Vec<f64> = x.iter().map(|&v| v as f64).collect();
+                            audio::level_dbfs(&y, rate, 8.0)
+                        })
+                        .fold(f64::NEG_INFINITY, f64::max)
+                };
+                let pr = p.right.as_deref().unwrap_or(&p.audio);
+                Some((lv([&l, &r]), lv([&p.audio, pr])))
+            }
+            _ => None,
+        };
+        let live_line = match (&self.audition, self.audition_status.as_ref()) {
+            (Some(_), Some(s)) => s.clone(),
+            _ => "not playing live".to_string(),
+        };
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(format!("Master · {label}"))
+                    .strong()
+                    .color(theme::INK),
+            );
+            ui.label(RichText::new(glyph).color(colour))
+                .on_hover_text(&state);
+            ui.label(RichText::new(&state).small().color(theme::MUTED));
+            ui.add_space(12.0);
+            ui.label(RichText::new("hear").small().color(theme::MUTED))
+                .on_hover_text(
+                    "The mix prints each channel through its own copy of the device with the                      same knobs (a tape machine's right side its own grain, the same                      transport). Live, one copy plays: the channel you pick, up the middle.",
+                );
+            for (h, name) in [(Hear::Left, "L"), (Hear::Right, "R"), (Hear::Mid, "mid")] {
+                if ui
+                    .selectable_label(self.hear == h, RichText::new(name).small())
+                    .clicked()
+                {
+                    self.hear = h;
+                }
+            }
+            ui.add_space(12.0);
+            ui.label(RichText::new(&live_line).small().color(theme::ACCENT))
+                .on_hover_text(
+                    "While this panel is open the device plays live on the mix (Space plays the                      session); Print renders the mix through the master's chain for playback                      and export (nothing prints by itself). The inserts after it aren't heard                      meanwhile.",
+                );
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.button("✕").on_hover_text("Close the panel").clicked() {
+                    self.master_sel = None;
+                }
+                if !self.session.master_print_current()
+                    && !self.master_printing()
+                    && ui
+                        .button(RichText::new("Print").color(theme::ACCENT))
+                        .on_hover_text(
+                            "Render the mix through the master's chain for playback (in the                              background; the tracks' prints first)",
+                        )
+                        .clicked()
+                {
+                    print = true;
+                }
+                if ui.button("Remove").clicked() {
+                    remove = true;
+                }
+                if ui
+                    .add_enabled(k + 1 < n, egui::Button::new("▶"))
+                    .on_hover_text("Later in the chain")
+                    .clicked()
+                {
+                    moved = Some(k + 1);
+                }
+                if ui
+                    .add_enabled(k > 0, egui::Button::new("◀"))
+                    .on_hover_text("Earlier in the chain")
+                    .clicked()
+                {
+                    moved = Some(k - 1);
+                }
+            });
+        });
+        ui.add_space(4.0);
+        let slot = &mut self.session.master_inserts[k];
+        let play_quality = find_device(&slot.device).map_or(Quality::Draft1x, |d| d.quality);
+        ui.horizontal(|ui| {
+            ui.label("Trim");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut slot.trim_db)
+                        .range(-40.0..=40.0)
+                        .speed(0.1)
+                        .max_decimals(1)
+                        .suffix(" dB"),
+                )
+                .on_hover_text(
+                    "The fader in front of the device: how hard the mix drives it (a tape                      machine: 0 VU at -18 dBFS rms; +6 dB is ~4% THD at 400 Hz, +12 ~13%)",
+                )
+                .changed();
+            ui.add_space(8.0);
+            ui.label("Make-up");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut slot.makeup_db)
+                        .range(-40.0..=40.0)
+                        .speed(0.1)
+                        .max_decimals(1)
+                        .suffix(" dB"),
+                )
+                .on_hover_text("The gain after the device")
+                .changed();
+            if last_on
+                && let Some((a, b)) = levels
+                && ui
+                    .small_button("Match")
+                    .on_hover_text(format!(
+                        "Make-up so the print is as loud as the mix (mix {a:.1} dBFS, print                          {b:.1} dBFS)"
+                    ))
+                    .clicked()
+            {
+                slot.makeup_db = ((slot.makeup_db + a - b) * 10.0).round() / 10.0;
+                changed = true;
+            }
+            ui.add_space(8.0);
+            ui.label("Wet");
+            changed |= ui
+                .add(
+                    egui::DragValue::new(&mut slot.wet)
+                        .range(0.0..=1.0)
+                        .speed(0.01)
+                        .custom_formatter(|v, _| format!("{:.0}%", v * 100.0)),
+                )
+                .on_hover_text("The device's share of the mix: 100% is the device only")
+                .changed();
+            ui.add_space(8.0);
+            changed |= ui.checkbox(&mut slot.bypass, "Bypass").changed();
+            ui.add_space(8.0);
+            egui::ComboBox::from_id_salt(("master_insert_quality", k))
+                .selected_text(slot.quality.name())
+                .show_ui(ui, |ui| {
+                    for q in [play_quality, Quality::Production] {
+                        changed |= ui
+                            .selectable_value(&mut slot.quality, q, q.name())
+                            .changed();
+                    }
+                })
+                .response
+                .on_hover_text(
+                    "The quality it prints at: its play quality while iterating, production                      for the final mix (a tape machine prints in 30 s pieces at once)",
+                );
+        });
+        ui.add_space(6.0);
+        match knobs {
+            Err(e) => {
+                ui.colored_label(theme::FAULT, e);
+            }
+            Ok(knobs) => {
+                ui.horizontal_wrapped(|ui| {
+                    for knob in &knobs {
+                        changed |= knob_ui(ui, knob, &mut slot.values, (MASTER, k));
+                    }
+                });
+            }
+        }
+        if let Some(to) = moved {
+            let ins = &mut self.session.master_inserts;
+            let s = ins.remove(k);
+            ins.insert(to, s);
+            self.master_sel = Some(to);
+            changed = true;
+        }
+        if remove {
+            self.session.master_inserts.remove(k);
+            self.master_sel = None;
+            changed = true;
+        }
+        if print {
+            self.request_master_print();
+        }
+        if changed {
+            self.save();
         }
     }
 
@@ -2055,9 +2581,10 @@ impl SessionView {
         {
             self.meters.master.clipped = false;
         }
-        mui.label(RichText::new("inserts: T5").small().color(theme::FAINT))
-            .on_hover_text("Master inserts come with the stereo bus (RECORDING_PLAN.md T5)");
-        let h = (master_rect.height() - 150.0).max(80.0);
+        changed |= self.master_inserts_ui(&mut mui, STRIP);
+        // The fader takes what the inserts' chips, "+ insert" and Print leave.
+        let chips = self.session.master_inserts.len() as f32 + 3.0;
+        let h = (master_rect.height() - 150.0 - chips * 22.0).max(80.0);
         mui.horizontal(|ui| {
             ui.add_space(12.0);
             changed |= crate::mixer::fader(
@@ -2094,6 +2621,101 @@ impl SessionView {
         if changed {
             self.save();
         }
+    }
+
+    /// The master's inserts in its strip: chips (click: the panel; right-click: bypass,
+    /// earlier, remove), "+ insert" and Print. Returns whether they changed.
+    fn master_inserts_ui(&mut self, s: &mut egui::Ui, width: f32) -> bool {
+        let mut changed = false;
+        s.label(RichText::new("INSERTS").small().color(theme::FAINT))
+            .on_hover_text(
+                "On the tracks' stereo sum, before the master fader: printed dual-mono when                  you press Print, then the mix plays (and exports) the print",
+            );
+        let mut action: Option<(usize, &'static str)> = None;
+        let mut add: Option<&'static str> = None;
+        for k in 0..self.session.master_inserts.len() {
+            let slot = &self.session.master_inserts[k];
+            let short =
+                find_device(&slot.device).map_or(slot.device.clone(), |d| d.short.to_string());
+            let (glyph, colour, state) = self.master_insert_state(k);
+            let selected = self.master_selected() == Some(k);
+            let bypass = slot.bypass;
+            let b = egui::Button::new(
+                RichText::new(format!("{short} {glyph}"))
+                    .small()
+                    .color(if bypass { theme::FAINT } else { colour }),
+            )
+            .fill(if selected { theme::CHROME3 } else { theme::BG })
+            .stroke(Stroke::new(
+                1.0,
+                if selected { theme::ACCENT } else { theme::LINE },
+            ))
+            .min_size(egui::vec2(width - 18.0, 18.0));
+            let r = s.add(b).on_hover_text(state);
+            if r.clicked() {
+                self.insert_sel = None;
+                self.master_sel = if selected { None } else { Some(k) };
+                self.audition_request = !selected;
+            }
+            r.context_menu(|ui| {
+                if ui
+                    .button(if bypass { "Bypass off" } else { "Bypass" })
+                    .clicked()
+                {
+                    action = Some((k, "bypass"));
+                    ui.close();
+                }
+                if k > 0 && ui.button("Earlier").clicked() {
+                    action = Some((k, "up"));
+                    ui.close();
+                }
+                if ui.button("Remove").clicked() {
+                    action = Some((k, "remove"));
+                    ui.close();
+                }
+            });
+        }
+        s.menu_button(RichText::new("+ insert").small(), |ui| {
+            for (group, ids) in vpanel::insert_menu() {
+                theme::menu_heading(ui, group.title());
+                for j in ids {
+                    let d = &DEVICES[j];
+                    if ui.button(d.label).on_hover_text(d.about).clicked() {
+                        add = Some(d.id);
+                        ui.close();
+                    }
+                }
+            }
+        });
+        if self.session.master_signature().is_some()
+            && !self.session.master_print_current()
+            && !self.master_printing()
+            && s.add(
+                egui::Button::new(RichText::new("Print").small().color(theme::ACCENT))
+                    .min_size(egui::vec2(0.0, 18.0)),
+            )
+            .on_hover_text("Render the mix through the master's chain (the tracks' prints first)")
+            .clicked()
+        {
+            self.request_master_print();
+        }
+        if let Some((k, what)) = action {
+            let ins = &mut self.session.master_inserts;
+            match what {
+                "bypass" => ins[k].bypass = !ins[k].bypass,
+                "up" => ins.swap(k, k - 1),
+                _ => {
+                    ins.remove(k);
+                    self.master_sel = None;
+                }
+            }
+            changed = true;
+        }
+        if let Some(d) = add {
+            self.add_master_insert(d);
+            changed = true;
+        }
+        changed
     }
 
     /// One track's strip in the mixer. Returns whether it changed.
@@ -2194,6 +2816,7 @@ impl SessionView {
             .min_size(egui::vec2(width - 18.0, 18.0));
             let r = s.add(b).on_hover_text(state);
             if r.clicked() {
+                self.master_sel = None;
                 self.insert_sel = if selected { None } else { Some((i, k)) };
                 self.audition_request = !selected;
             }
@@ -2375,6 +2998,7 @@ impl SessionView {
             slot.trim_db = ((ALIGNMENT_DBFS - level).clamp(-40.0, 40.0) * 10.0).round() / 10.0;
         }
         track.inserts.push(slot);
+        self.master_sel = None;
         self.insert_sel = Some((t, track.inserts.len() - 1));
         self.audition_request = true;
         self.save();
@@ -2777,6 +3401,7 @@ impl SessionView {
                     .min_size(egui::vec2(0.0, 18.0));
                 let r = ui.add(b).on_hover_text(format!("{name}: {state}"));
                 if r.clicked() {
+                    self.master_sel = None;
                     self.insert_sel = if selected { None } else { Some((i, k)) };
                     self.audition_request = !selected;
                 }
@@ -5094,6 +5719,9 @@ impl SessionView {
                     s.quality = Quality::Production;
                 }
             }
+            for s in self.session.master_inserts.iter_mut().filter(|s| !s.bypass) {
+                s.quality = Quality::Production;
+            }
             let audible: Vec<bool> = self
                 .session
                 .tracks
@@ -5405,6 +6033,13 @@ impl SessionView {
                             .map(|(_, e)| format!("{}: its render failed: {e}", t.name))
                     })
                 });
+                let failed = failed.or_else(|| {
+                    let e = self
+                        .session
+                        .master_signature()
+                        .and_then(|s| self.print_errors.get(&s))?;
+                    Some(format!("Master: its print failed: {e}"))
+                });
                 if let Some(e) = failed {
                     self.error = Some(format!("the export stopped: {e}"));
                     self.export = None;
@@ -5500,7 +6135,8 @@ impl SessionView {
                     .color(theme::ACCENT),
                 )
                 .on_hover_text(problems.join("\n"));
-                let idle = !self.audible_stale().is_empty();
+                let idle = !self.audible_stale().is_empty()
+                    || (!self.session.master_print_current() && !self.master_printing());
                 if idle
                     && ui
                         .small_button("Render them and export")
@@ -5545,6 +6181,9 @@ impl SessionView {
     fn render_audible(&mut self) {
         for t in self.audible_stale() {
             self.render_track(t, None);
+        }
+        if !self.session.master_print_current() && !self.master_printing() {
+            self.request_master_print();
         }
     }
 
@@ -7003,6 +7642,51 @@ mod tests {
             j.job.cancel();
         }
         wait(&v.jobs);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_master_prints_the_stereo_sum_once_its_tracks_are_printed() {
+        let (mut v, dir) = scratch("master");
+        let ctx = egui::Context::default();
+        for (t, (f, pan)) in [(0.05f32, -1.0), (0.11, 1.0)].into_iter().enumerate() {
+            if t > 0 {
+                v.session.tracks.push(Track::new("2"));
+            }
+            let tone: Vec<f32> = (0..12_000).map(|i| (i as f32 * f).sin() * 0.3).collect();
+            v.session
+                .add_rendered_take(t, tone, None, 0, json!({"device": "test"}))
+                .unwrap();
+            v.session.tracks[t].pan = pan;
+        }
+        v.session.master_inserts.push(Slot::new("pultec_eqp1a"));
+        // Added: a lookup in the cache, no print.
+        v.poll_prints(&ctx, false);
+        assert!(v.jobs.iter().any(|j| j.master) && v.jobs.iter().all(|j| j.lookup));
+        wait(&v.jobs);
+        v.poll_prints(&ctx, false);
+        assert!(v.jobs.is_empty() && !v.session.master_print_current());
+        // A track's chain not printed: asked, the master waits for it.
+        v.session.tracks[1].inserts.push(Slot::new("pultec_eqp1a"));
+        v.request_master_print();
+        assert!(v.master_printing());
+        v.poll_prints(&ctx, false);
+        assert!(v.printing(1));
+        assert!(!v.jobs.iter().any(|j| j.master && !j.lookup));
+        for _ in 0..200 {
+            wait(&v.jobs);
+            v.poll_prints(&ctx, false);
+            if v.session.master_print_current() {
+                break;
+            }
+        }
+        assert!(v.session.print_current(1) && v.session.master_print_current());
+        // The mix plays the print: each side through its own copy of the device.
+        let p = v.session.master_print_playing().expect("the print plays");
+        let r = p.right.as_ref().expect("stereo");
+        assert_ne!(p.audio, *r);
+        assert_eq!(v.session.mix().clips.len(), 1);
+        assert!(v.session.export_problems(false).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

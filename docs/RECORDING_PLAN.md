@@ -420,6 +420,21 @@ its cache, badges, the draft / production switch, bounce, stems, MIDI export, Py
 - The mix through a device: the 670 on the bus. That needs a stereo or two-channel
   device; today's 670 circuit is one channel with channel 2 lumped, so that's its own
   decision when T5 comes.
+- **Built (2026-11-09): master inserts.** `Session::master_inserts` (saved with the session) on
+  the tracks' stereo sum, before the master fader, in the Mixer's master strip (chips, "+
+  insert", Print; the panel `SessionView::master_panel`). Each prints dual-mono like a stereo
+  track's insert (`print::Job`'s `right`; a tape machine's right side its own grain, the
+  left's transport; a tape machine at production in 30 s pieces), made only when asked
+  (Print; an export asks for it), once every audible track's print is current; looked up in
+  the cache otherwise. The mix and the export play the print while it is of the tracks as
+  they are (`Session::master_print_playing`: its inserts as they are or older, stale; a
+  track's fader, pan, take or print moved: the tracks play until it is printed again); the
+  export waits for it like a track's. Live, the open panel plays one copy on the sum (L, R or
+  the mid). Not done: the 670 as a stereo device (still one channel: two unlinked copies
+  aren't a 670, the decision above); per-track meters while the master print plays (it is
+  one clip); the master's print under a recording (the armed device plays dry on top).
+  Tests: `session::tests::the_master_chain_prints_the_sum_and_plays_in_its_place`,
+  `session_view::tests::the_master_prints_the_stereo_sum_once_its_tracks_are_printed`.
 
 *Done when:* a chain renders reproducibly at production and plays back in the session.
 

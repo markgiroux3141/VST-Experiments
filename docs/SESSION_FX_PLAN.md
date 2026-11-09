@@ -80,8 +80,9 @@ take lane ──► trim ─► [insert 1] ─► [insert 2] ─► ... ─► f
   mono). The FX track's input is the sum; its inserts print like a track's; its return
   has a fader and balance. A reverb as a send prints wet only (its own mix control fully
   wet); as an insert it uses its own mix.
-- **No master-bus device yet.** The 670 on the stereo bus needs a two-channel device
-  (RECORDING_PLAN.md T5's open question). Two unlinked mono 670s aren't a 670.
+- **Master inserts (built 2026-11-09, RECORDING_PLAN.md T5):** any insert on the stereo sum,
+  printed dual-mono (right for tape: its own grain, one transport). The 670 on the bus still
+  needs a two-channel device (T5's open question): two unlinked mono 670s aren't a 670.
 
 ### Printing (F1)
 
