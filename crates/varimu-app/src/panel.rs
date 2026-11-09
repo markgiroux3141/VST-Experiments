@@ -508,7 +508,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 29] = [
+pub const DEVICES: [Device; 30] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
