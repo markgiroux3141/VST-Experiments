@@ -70,6 +70,7 @@ from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.opto import Optocoupler
 from varimu.devices.pentode import Pentode
+from varimu.devices.photocell import Photocell
 from varimu.devices.tape import TapeFormulation
 from varimu.devices.thyratron import Thyratron
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
@@ -892,6 +893,10 @@ def device_instance(
     if isinstance(base, Contact):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
             raise ValueError(f"{name}: a contact takes no parallel, emission or area")
+        return dataclasses.replace(base, name=name)
+    if isinstance(base, Photocell):
+        if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):
+            raise ValueError(f"{name}: a photocell takes no parallel, emission or area")
         return dataclasses.replace(base, name=name)
     if isinstance(base, Optocoupler):
         if (n_parallel, emission_scale, area) != (1, 1.0, 1.0):

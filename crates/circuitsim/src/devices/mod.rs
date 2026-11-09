@@ -22,6 +22,7 @@ pub mod jfet;
 pub mod lamp;
 pub mod opto;
 pub mod pentode;
+pub mod photocell;
 pub mod thyratron;
 pub mod triode;
 pub mod triode_table;
@@ -34,6 +35,7 @@ pub use jfet::Jfet;
 pub use lamp::Lamp;
 pub use opto::Optocoupler;
 pub use pentode::Pentode;
+pub use photocell::Photocell;
 pub use thyratron::Thyratron;
 pub use triode::Triode;
 pub use triode_table::TriodeTable;
@@ -192,6 +194,7 @@ pub fn from_model(model: &DeviceModel) -> Box<dyn Device> {
         DeviceModel::MagneticCore(m) => Box::new(MagneticCore::new(m)),
         DeviceModel::Lamp(m) => Box::new(Lamp::new(m)),
         DeviceModel::Optocoupler(m) => Box::new(Optocoupler::new(m)),
+        DeviceModel::Photocell(m) => Box::new(Photocell::new(m)),
         DeviceModel::Contact(m) => Box::new(Contact::new(m)),
         DeviceModel::Thyratron(m) => Box::new(Thyratron::new(m)),
         DeviceModel::Bjt(m) => Box::new(Bjt::new(m)),

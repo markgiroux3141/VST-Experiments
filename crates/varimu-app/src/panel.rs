@@ -100,6 +100,7 @@ pub enum Group {
     Eq,
     Amps,
     Tape,
+    Modulation,
     Reverb,
     Delay,
     /// In no menu: the prototypes the tube synth grew out of, kept so the sessions, takes
@@ -109,13 +110,14 @@ pub enum Group {
 
 impl Group {
     /// The menus' sections, in order.
-    pub const MENU: [Group; 8] = [
+    pub const MENU: [Group; 9] = [
         Group::Instruments,
         Group::Drums,
         Group::Dynamics,
         Group::Eq,
         Group::Amps,
         Group::Tape,
+        Group::Modulation,
         Group::Reverb,
         Group::Delay,
     ];
@@ -129,6 +131,7 @@ impl Group {
             Group::Eq => "EQ",
             Group::Amps => "PREAMPS & AMPS",
             Group::Tape => "TAPE",
+            Group::Modulation => "MODULATION",
             Group::Reverb => "REVERB",
             Group::Delay => "DELAY",
             Group::Retired => "RETIRED",
@@ -505,7 +508,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 28] = [
+pub const DEVICES: [Device; 29] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1282,6 +1285,32 @@ pub const DEVICES: [Device; 28] = [
         partition: None,
     },
     Device {
+        id: "univibe",
+        label: "Shin-ei Uni-Vibe",
+        short: "Uni-Vibe",
+        about: "The lamp-and-photocell phase shifter: a tungsten bulb swept by its LFO             lights four CdS cells, one per phase-splitter stage (CHORUS / VIBRATO)",
+        group: Group::Modulation,
+        circuit: "univibe",
+        panel: Some(&["speed", "intensity", "mode", "cancel", "volume"]),
+        ahead_s: AHEAD_S,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        // The LFO, the lamp and the rails on a thread of their own: the cells sense the
+        // lamp's thermal node (a 1 F capacitor's) and the rail a sample late.
+        partition: Some(&["lfo", "lamp", "rails"]),
+    },
+    Device {
         id: "ssl_bus_comp",
         label: "SSL Bus Compressor (sidechain)",
         short: "SSL",
@@ -1528,7 +1557,8 @@ pub const DEVICES: [Device; 28] = [
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
 /// on a thread of its own). The 670 and the EQP-1A would fit too; the reverb first.
-pub const CHAIN_ENDS: [&str; 5] = [
+pub const CHAIN_ENDS: [&str; 6] = [
+    "univibe",
     "plate_reverb",
     "foil_reverb",
     "fender_6g15",
@@ -2303,6 +2333,7 @@ mod tests {
                 (Group::Eq, vec!["pultec_eqp1a"]),
                 (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
                 (Group::Tape, vec!["ampex_351_insert", "ampex_351_2_insert"]),
+                (Group::Modulation, vec!["univibe"]),
                 (
                     Group::Reverb,
                     vec!["plate_reverb", "foil_reverb", "fender_6g15"]
@@ -2339,10 +2370,12 @@ mod tests {
                 "saw_884"
             ]
         );
-        // Every chain end is offered by Play, as a reverb or a delay.
+        // Every chain end is offered by Play, as a modulation, a reverb or a delay.
         for id in CHAIN_ENDS {
             let d = DEVICES.iter().find(|d| d.id == id).unwrap();
-            assert!(d.in_play() && matches!(d.group, Group::Reverb | Group::Delay));
+            assert!(
+                d.in_play() && matches!(d.group, Group::Modulation | Group::Reverb | Group::Delay)
+            );
         }
         // Names are unique, and each has a short name and a description.
         for (i, d) in DEVICES.iter().enumerate() {

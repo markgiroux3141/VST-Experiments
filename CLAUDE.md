@@ -425,6 +425,21 @@ is `UA726@1` (fitted to Fairchild's gain curve at 78.4 C, `tests/test_ua726.py`)
 open-collector `opamp` option in both builders; decided with the reset exception), the E112 (2N3819 stands in), the
 reset exception, `minimoog_vco.yaml`, Folkman's tuning.
 
+Modulation effects ([docs/MODULATION_PLAN.md](docs/MODULATION_PLAN.md), 2026-11-09, the
+user's ask: chorus, flanger, phaser, vibrato, tremolo as chain ends; the Leslie skipped for now):
+MD1-MD8 in build order (Uni-Vibe, Phase 90, tape flanging / ADT, Hammond scanner, BBD chorus,
+Bi-Phase / Bode shifter, tube tremolos and vibratos, wah / Mu-Tron III). **MD1 the Uni-Vibe is
+built** (the plan's "Status (2026-11-09)"): a new device kind **`photocell`** (a CdS cell lit by a
+lamp's filament: it senses the lamp's thermal node, Wien's law at the cell's spectral peak from a
+per-instance `lux` at 2856 K, the optocoupler's cell; `varimu/devices/photocell.py`, circuitsim
+`devices/photocell.rs`, both builders; `PDVP9203@1` fitted to its sheet), the circuit
+`config/circuits/univibe.yaml` (Aion's Straylight documentation with the original's values, the
+DAFx-19 paper's measured unit; `LAMP327@1`; ideal +17 / +21 V rails; sources
+`data/schematics/univibe/README.md`), the cells trimmed to the paper's minima by
+`scripts/univibe_trim.py --write`, measured by `scripts/univibe_study.py` -> `reports/univibe/`,
+`tests/test_univibe.py`; the app's `univibe` (group MODULATION, a chain end; draft-1x, the LFO /
+lamp / rails on their own thread, 0.61x real time). Open: the user listens.
+
 The Victorian synth ([docs/VICTORIAN_SYNTH_PLAN.md](docs/VICTORIAN_SYNTH_PLAN.md),
 2026-11-01, the user's idea, parked until they pick it up; nothing built): a janky synth
 from parts that existed by ~1881, wired with today's knowledge (Leclanché cells that sag,

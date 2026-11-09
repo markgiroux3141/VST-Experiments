@@ -158,6 +158,37 @@ def test_optocoupler_agrees():
         np.testing.assert_allclose(got[:, j], want[:, j], rtol=RTOL, atol=ATOL, err_msg=what)
 
 
+def test_photocell_agrees():
+    """The photocell's four port currents (none at the lamp's two sensing pins, the cell's
+    state, the cell): the lamp below the floor, glowing, at its rating and past 2856 K, its
+    reference pin off ground; the state dark to bright and negative; the cell both ways."""
+    import dataclasses
+
+    d = dataclasses.replace(load_device("PDVP9203@1"), lux=40.0)
+    pts = [
+        (dt + tb, tb, u, vr)
+        for dt in (-250.0, 900.0, 2000.0, 3100.0)
+        for tb in (0.0, 21.0)
+        for u in (-0.3, 0.0, 2e3, 5e4)
+        for vr in (-6.0, 0.5)
+    ]
+    lines = [d.subckt()]
+    for k, (vt, vtb, u, vr) in enumerate(pts):
+        lines += [
+            f"vt{k} t{k} 0 dc {vt}",
+            f"vtb{k} tb{k} 0 dc {vtb}",
+            f"vs{k} s{k} 0 dc {u}",
+            f"vra{k} ra{k} 0 dc {vr}",
+            f"x{k} t{k} tb{k} s{k} ra{k} 0 {d.subckt_name}",
+        ]
+    pins = ("vt", "vtb", "vs", "vra")
+    r = _op(lines, [f"i({p}{k})" for k in range(len(pts)) for p in pins])
+    want = np.array([d.currents(p) for p in pts])
+    got = -np.array([[r[f"i({p}{k})"] for p in pins] for k in range(len(pts))])
+    for j, what in enumerate(("lamp (t)", "lamp (tb)", "state", "cell")):
+        np.testing.assert_allclose(got[:, j], want[:, j], rtol=RTOL, atol=ATOL, err_msg=what)
+
+
 @pytest.mark.parametrize("name", ["KEY_CONTACT@1", "KEY_BREAK@1"])
 def test_contact_agrees(name):
     """A contact's current (into a, out of b; none into its control pin): its springs both

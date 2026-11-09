@@ -226,6 +226,7 @@ from varimu.devices.library import (
     load_tape,
 )
 from varimu.devices.pentode import Pentode
+from varimu.devices.photocell import Photocell
 from varimu.devices.speaker import Cabinet
 from varimu.devices.table import GRIDS
 from varimu.devices.thyratron import Thyratron
@@ -1239,7 +1240,7 @@ for _name, _macro in {
 
 _DEVICE_KEYS = {
     "device", "name", "instance", "tolerance", "parallel", "emission", "mu", "grid_contact_v",
-    "area", "temp_c", "events", "source", "notes", "tol_scale",
+    "area", "temp_c", "events", "source", "notes", "tol_scale", "lux",
 }  # fmt: skip
 
 
@@ -1261,6 +1262,8 @@ def make_models(ctx: Context) -> dict[str, str]:
         if e.get("instance", True) is False:
             if set(e) - {"device", "instance", "events", "source", "notes"}:
                 raise ctx.fail(where, "instance: false takes the device file's model as is")
+            if isinstance(base, Photocell):
+                raise ctx.fail(where, "a photocell is an instance (its lux)")
             model = base
         else:
             emission = ctx.number(f"{where}.emission", e.get("emission", 1.0))
@@ -1295,6 +1298,17 @@ def make_models(ctx: Context) -> dict[str, str]:
                 if not 0.0 < k <= 1.0:
                     raise ctx.fail(f"{where}.tol_scale", f"{k}: a factor in (0, 1]")
                 model = dataclasses.replace(model, tol_scale=float(k))
+            # A photocell's illuminance from its lamp at 2856 K (varimu.devices.photocell):
+            # the cell's place in the lamp's box, so per instance and required.
+            if isinstance(model, Photocell):
+                if "lux" not in e:
+                    raise ctx.fail(f"{where}.lux", "a photocell needs its lux at 2856 K")
+                lux = ctx.physical(f"{where}.lux", e["lux"])
+                if not lux >= 0.0:
+                    raise ctx.fail(f"{where}.lux", f"{lux}: an illuminance, >= 0")
+                model = dataclasses.replace(model, lux=float(lux))
+            elif "lux" in e:
+                raise ctx.fail(f"{where}.lux", "for photocells")
         ctx.models[key] = model
         ctx.parallel[model.name] = (
             1 if e.get("instance", True) is False else ctx.count(where, e.get("parallel", 1))

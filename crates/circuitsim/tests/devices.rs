@@ -113,6 +113,10 @@ fn near_kink(model: &DeviceModel, v: &[f64], d: f64, state: Option<&[f64; 3]>) -
         DeviceModel::Triode(_) => v[0].abs() <= 2.0 * d,
         // An optocoupler's cell conducts max(g, 0): a corner at g = 0 (the state port).
         DeviceModel::Optocoupler(_) => v[2].abs() <= 2.0 * d,
+        // A photocell's too, and its light's floor (photocell.py's T_FLOOR_K).
+        DeviceModel::Photocell(p) => {
+            v[2].abs() <= 2.0 * d || (v[0] - v[1] + p.t_amb_k - 100.0).abs() <= 2.0 * d
+        }
         // A contact's smoothstep ends (its second derivative jumps in ln g's ~28 nepers).
         DeviceModel::Contact(c) => {
             (v[2] - c.v_open_v).abs() <= 2.0 * d || (v[2] - c.v_closed_v).abs() <= 2.0 * d
@@ -136,7 +140,15 @@ fn jacobians_match_finite_differences() {
             let dev = device_at(&e, p);
             let (_, g) = eval(&*dev, v);
             for k in 0..n {
-                let d = 1e-6 * v[k].abs().max(1e-3);
+                // A photocell's lamp ports are kelvin: a millikelvin is inside the light's
+                // curvature and above the state current's roundoff (test_photocell.py's); its
+                // state current runs to ~1e4 (the light over s_unit), so its other ports
+                // step at least a microvolt too.
+                let d = match e.model {
+                    DeviceModel::Photocell(_) if k < 2 => 1e-3,
+                    DeviceModel::Photocell(_) => 1e-6 * v[k].abs().max(1.0),
+                    _ => 1e-6 * v[k].abs().max(1e-3),
+                };
                 if near_kink(&e.model, v, d, e.states.get(p)) {
                     continue;
                 }

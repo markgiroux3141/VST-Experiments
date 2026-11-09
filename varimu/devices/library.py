@@ -51,6 +51,7 @@ from varimu.devices.lamp import Lamp, lamp_from_data
 from varimu.devices.moving_coil import MovingCoil, moving_coil_from_data
 from varimu.devices.opto import Optocoupler, fit_vtl5c1, fit_vtl5c2, opto_from_data
 from varimu.devices.pentode import KorenPentode, Pentode, koren_pentode_from_spec
+from varimu.devices.photocell import Photocell, fit_pdvp9203, photocell_from_data
 from varimu.devices.plate import SIX_LN10 as SIX_LN10_PLATE
 from varimu.devices.plate import PlateComponent, plate_from_data
 from varimu.devices.speaker import Speaker, speaker_from_data
@@ -71,6 +72,7 @@ Device = (
     | Bjt
     | Jfet
     | Optocoupler
+    | Photocell
     | Contact
 )
 
@@ -148,6 +150,8 @@ def load_device(name: str, root: Path = DEVICE_DIR) -> Device:
         return lamp_from_data(d, name)
     if kind == "optocoupler":
         return opto_from_data(d, name)
+    if kind == "photocell":
+        return photocell_from_data(d, name)
     if kind == "contact":
         return contact_from_data(d, name)
     if kind == "bjt":
@@ -3059,6 +3063,7 @@ BUILDERS = {
     "LAMP327": build_lamp327,
     "VTL5C1": fit_vtl5c1,
     "VTL5C2": fit_vtl5c2,
+    "PDVP9203": fit_pdvp9203,
     "BC550C": build_bc550c,
     "BC413C": build_bc413c,
     "BC560C": build_bc560c,

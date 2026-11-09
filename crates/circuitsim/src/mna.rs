@@ -492,6 +492,7 @@ impl Mna {
                         | DeviceModel::MagneticCore(_)
                         | DeviceModel::Lamp(_)
                         | DeviceModel::Optocoupler(_)
+                        | DeviceModel::Photocell(_)
                         | DeviceModel::Contact(_) => vec![],
                     };
                     for (a, b, cf) in caps {

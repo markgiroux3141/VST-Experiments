@@ -247,7 +247,7 @@ pub fn check_ir(ir: &CircuitIr, config: &str) -> Vec<Problem> {
         if let Element::Device(d) = el
             && matches!(
                 models.get(d.model.as_str()),
-                Some(DeviceModel::Optocoupler(_))
+                Some(DeviceModel::Optocoupler(_) | DeviceModel::Photocell(_))
             )
         {
             dc.join(&d.nodes[2], &d.nodes[4]);

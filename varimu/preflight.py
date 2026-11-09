@@ -56,6 +56,7 @@ from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.jfet import Jfet
 from varimu.devices.lamp import Lamp
 from varimu.devices.opto import Optocoupler
+from varimu.devices.photocell import Photocell
 from varimu.devices.thyratron import Thyratron
 
 MAX_CONFIGS = 4096
@@ -216,7 +217,7 @@ def check_ir(ir: CircuitIR, config: str = "") -> list[Problem]:
                 dc.join(el.nodes[0], n)
         if isinstance(el, Device) and isinstance(models.get(el.model), Contact):
             dc.join(el.nodes[0], el.nodes[1])  # open, the contact still leaks its insulation
-        if isinstance(el, Device) and isinstance(models.get(el.model), Optocoupler):
+        if isinstance(el, Device) and isinstance(models.get(el.model), Optocoupler | Photocell):
             dc.join(el.nodes[2], el.nodes[4])  # the state node: the device is its DC path
             dc.join(el.nodes[3], el.nodes[4])  # the cell conducts (at least its dark leak)
         if isinstance(el, Device) and isinstance(models.get(el.model), Bjt):

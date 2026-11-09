@@ -56,6 +56,7 @@ from varimu.devices.diode import JunctionDiode, VacuumDiode
 from varimu.devices.lamp import Lamp
 from varimu.devices.opto import Optocoupler
 from varimu.devices.pentode import KorenPentode, Pentode
+from varimu.devices.photocell import Photocell
 from varimu.devices.thyratron import Thyratron
 from varimu.devices.triode import GridCurrent, KorenTriode, Triode, VariMuTriode
 
@@ -624,6 +625,7 @@ DeviceModel = (
     | Bjt
     | jfet_mod.Jfet
     | Optocoupler
+    | Photocell
     | Contact
 )
 
@@ -635,6 +637,7 @@ PINS: dict[type, tuple[str, ...]] = {
     MagneticCore: ("b", "ref"),
     Lamp: ("a", "t", "b"),
     Optocoupler: ("la", "lk", "s", "ra", "rb"),
+    Photocell: ("t", "tb", "s", "ra", "rb"),
     Bjt: ("c", "b", "e"),
     jfet_mod.Jfet: ("d", "g", "s"),
     Contact: ("a", "b", "c", "ref"),
@@ -1177,6 +1180,15 @@ def _validate_model(m: DeviceModel) -> None:
             for w in ("led_is_a", "led_n", "i_eta_a", "gen_s_per_s_a", "tau0_s", "kappa_s_s")
         ]
         values += [("g_dark_s", m.g_dark_s), ("s_unit_s", m.s_unit_s)]
+    elif isinstance(m, Photocell):
+        values += [
+            (w, getattr(m, w))
+            for w in ("gen_s_per_s_lux", "tau0_s", "kappa_s_s", "g_dark_s", "lambda_m")
+        ]
+        values += [("t_amb_k", m.t_amb_k), ("s_unit_s", m.s_unit_s)]
+        _finite(f"{m.name}.lux", m.lux)
+        if m.lux < 0.0:
+            raise IRError(f"{m.name}.lux: {m.lux} (an illuminance, >= 0)")
     elif isinstance(m, Thyratron):
         values += [
             (w, getattr(m, w))
@@ -1276,6 +1288,7 @@ _MODEL_KINDS = {
     "magnetic_core": MagneticCore,
     "lamp": Lamp,
     "optocoupler": Optocoupler,
+    "photocell": Photocell,
     "contact": Contact,
     "thyratron": Thyratron,
     "bjt": Bjt,

@@ -690,6 +690,16 @@ pub fn device_instance(
             c.name = s(name);
             Ok(DeviceModel::Contact(c))
         }
+        DeviceModel::Photocell(p) => {
+            if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
+                return Err(Error(format!(
+                    "{name}: a photocell takes no parallel, emission or area"
+                )));
+            }
+            let mut p = p.clone();
+            p.name = s(name);
+            Ok(DeviceModel::Photocell(p))
+        }
         DeviceModel::Optocoupler(o) => {
             if n != 1.0 || inst.emission_scale != 1.0 || inst.area != 1.0 {
                 return Err(Error(format!(

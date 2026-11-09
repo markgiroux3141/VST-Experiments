@@ -679,6 +679,7 @@ pub enum DeviceModel {
     Bjt(Bjt),
     Jfet(Jfet),
     Optocoupler(Optocoupler),
+    Photocell(Photocell),
     Contact(Contact),
 }
 
@@ -840,6 +841,24 @@ pub struct Optocoupler {
     pub s_unit_s: f64,
 }
 
+/// `varimu.devices.photocell.Photocell`: a CdS cell lit by a lamp's filament, pins (t, tb, s,
+/// ra, rb): t and tb sense the lamp's thermal node and reference (no current), the cell's
+/// photoconductance on s (`s_unit_s` siemens per volt; a 1 F capacitor from s to rb holds it),
+/// the cell from ra to rb. Port currents: 0, 0, -dg/dt / s_unit, the cell's.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Photocell {
+    pub name: String,
+    pub gen_s_per_s_lux: f64,
+    pub tau0_s: f64,
+    pub kappa_s_s: f64,
+    pub g_dark_s: f64,
+    pub lambda_m: f64,
+    pub t_amb_k: f64,
+    pub lux: f64,
+    pub s_unit_s: f64,
+}
+
 /// `varimu.devices.contact.Contact`: a switch contact worked by a control voltage, pins
 /// (a, b, c, ref): the contact from a to b, its conductance moving from 1 / r_off to
 /// 1 / r_on as V(c, ref) goes from v_open to v_closed. Port currents: the contact's into a,
@@ -979,6 +998,7 @@ impl DeviceModel {
             DeviceModel::MagneticCore(m) => &m.name,
             DeviceModel::Lamp(m) => &m.name,
             DeviceModel::Optocoupler(m) => &m.name,
+            DeviceModel::Photocell(m) => &m.name,
             DeviceModel::Contact(m) => &m.name,
             DeviceModel::Bjt(m) => &m.name,
             DeviceModel::Jfet(m) => &m.name,
@@ -995,6 +1015,7 @@ impl DeviceModel {
             DeviceModel::MagneticCore(_) => &["b", "ref"],
             DeviceModel::Lamp(_) => &["a", "t", "b"],
             DeviceModel::Optocoupler(_) => &["la", "lk", "s", "ra", "rb"],
+            DeviceModel::Photocell(_) => &["t", "tb", "s", "ra", "rb"],
             DeviceModel::Contact(_) => &["a", "b", "c", "ref"],
             DeviceModel::Bjt(_) => &["c", "b", "e"],
             DeviceModel::Jfet(_) => &["d", "g", "s"],
@@ -1813,6 +1834,20 @@ fn validate_model(m: &DeviceModel) -> Result<(), IrError> {
             finite(&format!("{name}.v_closed_v"), c.v_closed_v)?;
             if c.v_closed_v == c.v_open_v {
                 return err(format!("{name}: v_closed_v must differ from v_open_v"));
+            }
+        }
+        DeviceModel::Photocell(p) => {
+            values.extend([
+                ("gen_s_per_s_lux", p.gen_s_per_s_lux),
+                ("tau0_s", p.tau0_s),
+                ("kappa_s_s", p.kappa_s_s),
+                ("g_dark_s", p.g_dark_s),
+                ("lambda_m", p.lambda_m),
+                ("t_amb_k", p.t_amb_k),
+                ("s_unit_s", p.s_unit_s),
+            ]);
+            if !(p.lux.is_finite() && p.lux >= 0.0) {
+                return err(format!("{name}.lux = {} must be >= 0", p.lux));
             }
         }
         DeviceModel::Optocoupler(o) => {

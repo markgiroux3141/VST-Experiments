@@ -50,7 +50,7 @@ impl Cores {
 }
 
 const PART_KEYS: [&str; 3] = ["tolerance", "source", "notes"];
-const DEVICE_KEYS: [&str; 14] = [
+const DEVICE_KEYS: [&str; 15] = [
     "device",
     "name",
     "instance",
@@ -65,6 +65,7 @@ const DEVICE_KEYS: [&str; 14] = [
     "source",
     "notes",
     "tol_scale",
+    "lux",
 ];
 
 // --- Tolerance -------------------------------------------------------------------------
@@ -2242,6 +2243,9 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
                     "instance: false takes the device file's model as is",
                 ));
             }
+            if matches!(base, DeviceModel::Photocell(_)) {
+                return Err(ctx.fail(&where_, "a photocell is an instance (its lux)"));
+            }
             base
         } else {
             let one = Value::Float(1.0);
@@ -2339,6 +2343,29 @@ fn make_models(ctx: &mut Context) -> Result<(), Error> {
                     }
                     _ => return Err(ctx.fail(&w, "for BJTs and junction diodes")),
                 }
+            }
+        };
+        // A photocell's illuminance from its lamp at 2856 K (builder.py's): per instance,
+        // required.
+        let model = match model {
+            DeviceModel::Photocell(mut p) if e.get("instance") != Some(&Value::Bool(false)) => {
+                let w = format!("{where_}.lux");
+                let Some(x) = e.get("lux") else {
+                    return Err(ctx.fail(&w, "a photocell needs its lux at 2856 K"));
+                };
+                let v = ctx.physical(&w, x)?;
+                let lux = ctx.float(&w, &v)?;
+                if lux.is_nan() || lux < 0.0 {
+                    return Err(ctx.fail(&w, format!("{lux}: an illuminance, >= 0")));
+                }
+                p.lux = lux;
+                DeviceModel::Photocell(p)
+            }
+            m => {
+                if e.get("lux").is_some() {
+                    return Err(ctx.fail(&format!("{where_}.lux"), "for photocells"));
+                }
+                m
             }
         };
         ctx.types.insert(model.name().to_string(), base_name);

@@ -13,8 +13,8 @@ use std::sync::Mutex;
 
 use circuitsim::ir::{
     Bjt, Contact, DeviceModel, GridCurrent, Jfet, JfetPolarity, JunctionDiode, KorenPentode,
-    KorenTriode, Lamp, Optocoupler, Pentode, PlateModel, Polarity, ScreenLaw, Thyratron, Triode,
-    VacuumDiode, VariMuTriode,
+    KorenTriode, Lamp, Optocoupler, Pentode, Photocell, PlateModel, Polarity, ScreenLaw, Thyratron,
+    Triode, VacuumDiode, VariMuTriode,
 };
 
 use crate::capsule::{self, Capsule, DualCapsule};
@@ -622,6 +622,23 @@ fn load_device(data: &Value, what: &str) -> Result<DeviceModel, Error> {
                     },
                     _ => 1e-3,
                 },
+            })
+        }
+        "photocell" => {
+            // photocell.py's photocell_from_data (its lux 0: an instance sets its own)
+            let cell = sub(d, "cell", what)?;
+            let light = sub(d, "light", what)?;
+            let state = sub(d, "state", what)?;
+            DeviceModel::Photocell(Photocell {
+                name,
+                gen_s_per_s_lux: num(cell, "gen_s_per_s_lux", what)?,
+                tau0_s: num(cell, "tau0_s", what)?,
+                kappa_s_s: num(cell, "kappa_s_s", what)?,
+                g_dark_s: num(cell, "g_dark_s", what)?,
+                lambda_m: num(light, "lambda_m", what)?,
+                t_amb_k: num(light, "t_amb_k", what)?,
+                lux: 0.0,
+                s_unit_s: num(state, "s_unit_s", what)?,
             })
         }
         "bjt" => {

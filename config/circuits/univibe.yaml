@@ -1,0 +1,307 @@
+# Shin-ei / Univox Uni-Vibe (1968), the lamp-and-photocell phase shifter, as a circuit file
+# (docs/MODULATION_PLAN.md, MD1). Built by varimu/circuit/builder.py.
+#
+# Sources (data/schematics/univibe/README.md):
+#   "aion: ..."   Aion FX, Straylight Chorus/Vibe documentation 1.0.4 (2026-08-21): its
+#                 schematic (p.15, read at high zoom: straylight_*.png) and parts list, "based
+#                 on the parts that were most often used in actual units throughout production",
+#                 with its "Part variations" list of the factory values (p.13): we use the
+#                 original value wherever it names one, and leave out its additions (the charge
+#                 pump, the second SPEED pot and footswitch, the rate LEDs, the OFFSET / GAIN /
+#                 PHASE trimmers, the 2.2M input option)
+#   "dafx: ..."   C. Darabundit, R. Wedelich, P. Bischoff, "Digital Grey Box Model of the
+#                 Uni-Vibe Effects Pedal", DAFx-19 (a measured original unit: its drawing,
+#                 Fig. 2-3, and Table 1)
+#   "keen: ..."   R.G. Keen, "The Technology of the Univibe" (geofex.com), as Aion quotes it
+#
+# The signal: the input's 22k / 47k divider -> C1 -> Q1 (a high-gain stage, R5 1M2 from a
+# filtered supply) -> Q2 -> Q3, whose emitter feeds Q1's emitter back through R10 / R11; Q3
+# is also stage 1's phase splitter (dafx: "phase stage 1 is not driven by a Darlington"):
+# its collector through the phasing capacitor (C7 15n), its emitter through the blocking
+# capacitor (C6 1u), the cell LDR1 and 4.7k, into Q4's base. Stages 2-4: a Darlington
+# emitter follower (bootstrapped bias) driving a phase splitter (4.7k / 4.7k) into the next
+# capacitor (220n, 470p, 4n7) and cell; the last into Q10's emitter follower. The mixer: the
+# dry signal (Q3's emitter) and the wet (Q10's) through 100k + 100k: CHORUS takes their
+# junction, VIBRATO the wet through 47k / 220k; then VOLUME.
+#
+# The LFO: a Darlington emitter follower (Q11A / Q11B, dafx Fig. 2's QO1 / QO2) whose emitter
+# drives a three-capacitor ladder (C19 / C20 / C21, 1u each) back to its base through two
+# legs, each 220k in parallel with 4.7k and one gang of SPEED; back-to-back 1N914s across
+# C20 hold its amplitude. The lamp driver: INTENSITY on the LFO's emitter into Q12's base
+# (biased collector to base, 100k / 47k), the lamp from +21 V to Q12's collector, 150 ohm in
+# its emitter; CANCEL grounds Q12's base (the lamp off, the cells dark: the original's bypass).
+#
+# The lamp is the #327 (28 V 40 mA: keen, via aion p.9) LAMP327@1 (varimu.devices.lamp); its
+# light falls on the four cells (varimu.devices.photocell: each senses the lamp's thermal node
+# and the rail its reference sits on), PDV-P9203s standing in for Shin-ei's custom cells, each
+# with its own illuminance at 2856 K (`ldrN_lux`: its place in the box), trimmed to dafx
+# Table 1's measured minimum resistances by scripts/univibe_trim.py.
+#
+# Transistors: 2SC828 (Q2-Q12) and 2SC539 (Q1) in the original (aion p.12); the BC550C
+# (BC550C@1) stands in for both (aion: "You can also use the BC549C for all of them"; the
+# BC550 is the BC549's selection, the same die). The rails are ideal (dafx Fig. 2-3: +17 V
+# audio, +21 V for the LFO and lamp): the mains supply (a transformer, half-wave, aion p.3)
+# isn't drawn yet.
+
+title: "Shin-ei Uni-Vibe (lamp and photocell phase shifter)"
+input: in
+probes: [out, wet, chz, vib, e3, c3, s1, s2, s3, s4, e10, spd, n1, b11, b12, lc, lt, ps1, ps2, ps3, ps4]
+full_scale:
+  input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)"}
+  output_volts_peak: {value: 1.0, source: "provisional: model knowledge (a guitar pedal into an amplifier: about unity at full VOLUME; aion p.2: the original's input divider costs a third of the level)"}
+
+controls:
+  speed: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "aion: SPEED, a dual 100kC (reverse-log) pot (the original's foot treadle; dafx 2.1: toe to heel ~0-7.6 Hz)", notes: "0 = slowest, 1 = fastest"}
+  intensity: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "aion: INTENSITY 50kB (linear), the LFO's swing into the lamp driver"}
+  volume: {value: 0.8, min: 0.0, max: 1.0, unit: rotation, source: "aion: VOLUME 100kB (linear)"}
+  mode: {value: 0, choices: [0, 1], unit: switch, source: "aion: the CHORUS / VIBRATO switch", notes: "0 = CHORUS (dry and wet mixed), 1 = VIBRATO (wet only)"}
+  cancel: {value: 0, choices: [0, 1], unit: switch, source: "dafx 2.2 / aion p.4: the cancel switch at the treadle's heel grounds the lamp driver's base", notes: "1: the lamp off, the cells dark, the signal still through the stages"}
+
+values:
+  # --- Rails (ideal) ------------------------------------------------------------------------
+  va_v: {value: 17.0, source: "dafx Fig. 3: the phase stages' +17 VDC (aion p.3: 'an isolated and heavily filtered (but unregulated) 16V')"}
+  vc_v: {value: 21.0, source: "dafx Fig. 2: the LFO's and lamp's +21 VDC (aion p.3: 'around 22VDC')"}
+
+  # --- Input and preamp (aion R1-R11, C1-C5) ---------------------------------------------------
+  r_in_series_ohm: {value: 22.0e+3, source: "aion: R1 22k from the input jack"}
+  r_in_shunt_ohm: {value: 47.0e+3, source: "aion: R2 47k to ground (the original's; 'the 22k/47k resistors acting as a voltage divider', p.2)"}
+  c_in_f: {value: 1.0e-6, source: "aion: C1 1uF (the original's electrolytics, p.14: 'The original Uni-Vibe used electrolytic for all 1uFs')"}
+  r_q1_bias_ohm: {value: 1.2e+6, source: "aion: R4 1M2 (sometimes 1M, p.13), Q1's base from Q2's emitter"}
+  c_q1_bias_f: {value: 1.0e-6, source: "aion: C2 1uF on Q2's emitter (the bias's bypass)"}
+  r_q1_load_ohm: {value: 1.2e+6, source: "aion: R5 1M2 (sometimes 1M, p.13), Q1's collector load"}
+  r_q1_filter_ohm: {value: 100.0e+3, source: "aion: R6 100k from +VA to R5"}
+  c_q1_filter_f: {value: 10.0e-6, source: "aion: C3 10uF"}
+  r_q2_collector_ohm: {value: 47.0e+3, source: "aion: R7 47k"}
+  r_q2_emitter_ohm: {value: 6.8e+3, source: "aion: R8 6k8"}
+  c_q3_base_f: {value: 330.0e-12, source: "aion: C4 330pF from Q3's base to ground"}
+  r_q3_collector_ohm: {value: 4.7e+3, source: "aion: R9 4k7"}
+  r_q3_emitter_ohm: {value: 3.3e+3, source: "aion: R10 3k3 (sometimes 3k, p.13), Q3's emitter to Q1's"}
+  r_q1_emitter_ohm: {value: 1.2e+3, source: "aion: R11 1k2 (sometimes 1k, p.13), Q1's emitter to ground"}
+
+  # --- Phase stages (aion R16-R38, C6-C18; dafx Table 1's C_p) --------------------------------
+  c_block_f: {value: 1.0e-6, source: "aion: C6, C9, C12, C15 1uF (dafx: C_DC), each stage's blocking capacitor"}
+  c_phase1_f: {value: 15.0e-9, source: "aion: C7 15n (dafx Table 1: .015u)"}
+  c_phase2_f: {value: 220.0e-9, source: "aion: C10 220n (dafx Table 1: .22u)"}
+  c_phase3_f: {value: 470.0e-12, source: "aion: C13 470pF (dafx Table 1: 470p)"}
+  c_phase4_f: {value: 4.7e-9, source: "aion: C16 4n7 (dafx Table 1: .0047u)"}
+  r_ldr_series_ohm: {value: 4.7e+3, source: "aion: R16, R22, R28, R34 4k7 in series with each cell (dafx: R6)"}
+  r_bias_top_ohm: {value: 100.0e+3, source: "aion: R18, R24, R30 100k from +VA"}
+  r_bias_bottom_ohm: {value: 47.0e+3, source: "aion: R19, R25, R31, R37 47k to ground"}
+  r_bias_feed_ohm: {value: 100.0e+3, source: "aion: R17, R23, R29, R35 100k, the bias into each follower's base"}
+  c_bootstrap_f: {value: 1.0e-6, source: "aion: C8, C11, C14, C17 1uF from the bias to the emitter (dafx: the bootstrap capacitor C1)"}
+  r_splitter_ohm: {value: 4.7e+3, source: "aion: R20 / R21, R26 / R27, R32 / R33 4k7 (collector and emitter)"}
+  r_out_bias_top_ohm: {value: 68.0e+3, source: "aion: R36 68k (Q10's bias from +VA)"}
+  r_out_emitter_ohm: {value: 22.0e+3, source: "aion: R38 22k, Q10's emitter"}
+  c_out_f: {value: 1.0e-6, source: "aion: C18 1uF, the wet out"}
+
+  # --- Mixer (aion R12-R15, C5, VOLUME) ------------------------------------------------------
+  c_dry_f: {value: 1.0e-6, source: "aion: C5 1uF from Q3's emitter"}
+  r_mix_ohm: {value: 100.0e+3, source: "aion p.11: without the PHASE trimmer, 'use 100k for both R12 and R13' (the original's)"}
+  r_vib_series_ohm: {value: 47.0e+3, source: "aion: R14 47k (sometimes 100k, p.13)"}
+  r_vib_shunt_ohm: {value: 220.0e+3, source: "aion: R15 220k"}
+  volume_pot_ohm: {value: 100.0e+3, source: "aion: VOLUME 100kB"}
+  contact_ohm: {value: 0.05, source: "numerical: a closed switch contact"}
+  r_load_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a guitar amplifier's 1 MEG input)"}
+
+  # --- LFO (aion R39-R44, R52 / R53, C19-C21, D5 / D6, SPEED) ----------------------------------
+  r_lfo_div_top_ohm: {value: 3.3e+3, source: "aion: R39 3k3 (sometimes 3k, p.13)"}
+  r_lfo_div_bottom_ohm: {value: 4.7e+3, source: "aion: R40 4k7"}
+  r_lfo_base_ohm: {value: 2.2e+6, source: "aion: R41 2M2"}
+  c_lfo_f: {value: 1.0e-6, source: "aion: C19, C20, C21 1uF (sometimes 0.68uF, p.13)"}
+  r_lfo_leg_ohm: {value: 220.0e+3, source: "aion: R42, R43 220k across each SPEED gang"}
+  r_lfo_min_ohm: {value: 2.2e+3, source: "aion p.13: R52 / R53 'often 4k7 and sometimes 1k8, 2k or 2k2 ... These resistors limit the maximum speed of the LFO'; 2k2 (also Aion's choice) puts the fastest SPEED at ~8 Hz, the DAFx-19 unit's 'approximately 0 Hz to 7.6 Hz' (scripts/univibe_study.py rates; 4k7 gave 4.4 Hz, 2k 8.6, 1k8 9.4)"}
+  speed_pot_ohm: {value: 100.0e+3, source: "aion: SPEED 100kC dual (p.13: 'sometimes 250kC ... most DIY clones use 100k')"}
+  speed_taper_mid: {value: 0.1, source: "provisional: model knowledge (a reverse-log 'C' track: ~10% of its resistance at half rotation)"}
+  r_lfo_emitter_ohm: {value: 4.7e+3, source: "aion: R44 4k7"}
+  lfo_kick_v: {value: 0.5, source: "provisional: model knowledge (numerical stand-in for the power-on transient: C20 starts 0.5 V off its operating point, about the diodes' limit, so the LFO starts at its running amplitude instead of growing from an exactly balanced DC point for ~4 s on its 2-4% excess loop gain)"}
+  lfo_diode: {value: 1N4148@1, source: "aion: D5, D6 1N914 (the 1N4148 is its successor, the same die)"}
+
+  # --- Lamp driver (aion R45-R48, C22 / C23, INTENSITY, the lamp) -------------------------------
+  c_int_in_f: {value: 10.0e-6, source: "aion: C22 10uF from the LFO into INTENSITY"}
+  intensity_pot_ohm: {value: 50.0e+3, source: "aion: INTENSITY 50kB"}
+  c_int_out_f: {value: 10.0e-6, source: "aion: C23 10uF"}
+  r_drive_base_ohm: {value: 4.7e+3, source: "aion: R45 4k7 (p.13: 'incorrectly listed on the factory schematic as 47k')"}
+  r_drive_fb_ohm: {value: 100.0e+3, source: "aion p.11: without the OFFSET trimmer, 'use 100k for R48' (collector to base; p.11: 'the exact voltage divider ratio of the original (47k/100k)')"}
+  r_drive_bias_ohm: {value: 47.0e+3, source: "aion: R47 47k, Q12's base to ground"}
+  r_drive_emitter_ohm: {value: 150.0, source: "aion p.13: R46 'usually 150R ... directly connected to ground' (dafx Fig. 2's trim not modeled)"}
+  lamp_model: {value: LAMP327@1, source: "keen via aion p.9: 'the original Uni-Vibe used a 28V/40mA lamp' (the #327, config/components/lamp327/1.yaml)"}
+  lamp_c_thermal_f: {value: 1.0, source: "numerical: the lamp's thermal node, 1 V = 1 K, integrates the device's dT/dt (varimu.devices.lamp)"}
+
+  # --- Photocells (dafx 2.2, Table 1) -------------------------------------------------------------
+  ldr_model: {value: PDVP9203@1, source: "aion p.9: 'The original Uni-Vibe used a custom photocell with no cross reference ... the PDV-P9203 is the easiest type to find that meets these specifications' (config/components/pdvp9203/1.yaml, fitted to its sheet): provisional"}
+  ldr_state_c_f: {value: 1.0, source: "numerical: the photocell's state node capacitor (varimu.devices.photocell: 1 F, the device's convention)"}
+  ldr1_lux: {value: 2552.3, source: "scripts/univibe_trim.py: LDR1's illuminance at 2856 K (its place in the lamp's box), trimmed so its minimum resistance at full INTENSITY over SPEED is the DAFx-19 paper's measured 12.7 kOhm (Table 1)"}
+  ldr2_lux: {value: 4788.9, source: "scripts/univibe_trim.py: LDR2's illuminance at 2856 K (its place in the lamp's box), trimmed so its minimum resistance at full INTENSITY over SPEED is the DAFx-19 paper's measured 6.86 kOhm (Table 1)"}
+  ldr3_lux: {value: 4259.1, source: "scripts/univibe_trim.py: LDR3's illuminance at 2856 K (its place in the lamp's box), trimmed so its minimum resistance at full INTENSITY over SPEED is the DAFx-19 paper's measured 7.69 kOhm (Table 1)"}
+  ldr4_lux: {value: 5296.8, source: "scripts/univibe_trim.py: LDR4's illuminance at 2856 K (its place in the lamp's box), trimmed so its minimum resistance at full INTENSITY over SPEED is the DAFx-19 paper's measured 6.22 kOhm (Table 1)"}
+
+  # --- Transistors ---------------------------------------------------------------------------------
+  q_small: {value: BC550C@1, source: "aion p.12: the original's 2SC828 (Q2-Q12) and 2SC539 (Q1); 'You can also use the BC549C for all of them' (the BC550C is the BC549C's low-noise selection: config/components/bc550c/1.yaml): provisional"}
+
+devices:
+  Q1: {device: q_small}
+  Q2: {device: q_small}
+  Q3: {device: q_small}
+  Q4: {device: q_small}
+  Q5: {device: q_small}
+  Q6: {device: q_small}
+  Q7: {device: q_small}
+  Q8: {device: q_small}
+  Q9: {device: q_small}
+  Q10: {device: q_small}
+  Q11A: {device: q_small}
+  Q11B: {device: q_small}
+  Q12: {device: q_small}
+  D5: {device: lfo_diode}
+  D6: {device: lfo_diode}
+  L1: {device: lamp_model}
+  LDR1: {device: ldr_model, lux: ldr1_lux}
+  LDR2: {device: ldr_model, lux: ldr2_lux}
+  LDR3: {device: ldr_model, lux: ldr3_lux}
+  LDR4: {device: ldr_model, lux: ldr4_lux}
+
+sections:
+  - title: rails
+    parts:
+      VA: {V: [va, "0"], v: va_v}
+      VC: {V: [vc, "0"], v: vc_v}
+
+  - title: preamp
+    parts:
+      R1: {R: [in, inj], r: r_in_series_ohm}
+      R2: {R: [inj, "0"], r: r_in_shunt_ohm}
+      C1: {C: [inj, b1], c: c_in_f}
+      R4: {R: [b1, e2], r: r_q1_bias_ohm}
+      C2: {C: [e2, "0"], c: c_q1_bias_f}
+      R6: {R: [va, nf], r: r_q1_filter_ohm}
+      C3: {C: [nf, "0"], c: c_q1_filter_f}
+      R5: {R: [nf, c1], r: r_q1_load_ohm}
+      Q1: {bjt: [c1, b1, e1], model: Q1}
+      Q2: {bjt: [c2, c1, e2], model: Q2}
+      R7: {R: [va, c2], r: r_q2_collector_ohm}
+      R8: {R: [e2, "0"], r: r_q2_emitter_ohm}
+      C4: {C: [c2, "0"], c: c_q3_base_f}
+      # Q3: the preamp's output and stage 1's phase splitter
+      Q3: {bjt: [c3, c2, e3], model: Q3}
+      R9: {R: [va, c3], r: r_q3_collector_ohm}
+      R10: {R: [e3, e1], r: r_q3_emitter_ohm}
+      R11: {R: [e1, "0"], r: r_q1_emitter_ohm}
+
+  - title: stage 1
+    parts:
+      C7: {C: [c3, s1], c: c_phase1_f}
+      C6: {C: [e3, l1a], c: c_block_f}
+      XLDR1: {device: [lt, vc, ps1, l1a, l1b], model: LDR1}
+      CS1: {C: [ps1, l1b], c: ldr_state_c_f, tolerance: none}
+      R16: {R: [l1b, s1], r: r_ldr_series_ohm}
+
+  - title: stage 2
+    parts:
+      R17: {R: [s1, bi2], r: r_bias_feed_ohm}
+      R18: {R: [va, bi2], r: r_bias_top_ohm}
+      R19: {R: [bi2, "0"], r: r_bias_bottom_ohm}
+      C8: {C: [bi2, e5], c: c_bootstrap_f}
+      Q4: {bjt: [va, s1, e4], model: Q4}
+      Q5: {bjt: [c5, e4, e5], model: Q5}
+      R20: {R: [va, c5], r: r_splitter_ohm}
+      R21: {R: [e5, "0"], r: r_splitter_ohm}
+      C10: {C: [c5, s2], c: c_phase2_f}
+      C9: {C: [e5, l2a], c: c_block_f}
+      XLDR2: {device: [lt, vc, ps2, l2a, l2b], model: LDR2}
+      CS2: {C: [ps2, l2b], c: ldr_state_c_f, tolerance: none}
+      R22: {R: [l2b, s2], r: r_ldr_series_ohm}
+
+  - title: stage 3
+    parts:
+      R23: {R: [s2, bi3], r: r_bias_feed_ohm}
+      R24: {R: [va, bi3], r: r_bias_top_ohm}
+      R25: {R: [bi3, "0"], r: r_bias_bottom_ohm}
+      C11: {C: [bi3, e7], c: c_bootstrap_f}
+      Q6: {bjt: [va, s2, e6], model: Q6}
+      Q7: {bjt: [c7, e6, e7], model: Q7}
+      R26: {R: [va, c7], r: r_splitter_ohm}
+      R27: {R: [e7, "0"], r: r_splitter_ohm}
+      C13: {C: [c7, s3], c: c_phase3_f}
+      C12: {C: [e7, l3a], c: c_block_f}
+      XLDR3: {device: [lt, vc, ps3, l3a, l3b], model: LDR3}
+      CS3: {C: [ps3, l3b], c: ldr_state_c_f, tolerance: none}
+      R28: {R: [l3b, s3], r: r_ldr_series_ohm}
+
+  - title: stage 4
+    parts:
+      R29: {R: [s3, bi4], r: r_bias_feed_ohm}
+      R30: {R: [va, bi4], r: r_bias_top_ohm}
+      R31: {R: [bi4, "0"], r: r_bias_bottom_ohm}
+      C14: {C: [bi4, e9], c: c_bootstrap_f}
+      Q8: {bjt: [va, s3, e8], model: Q8}
+      Q9: {bjt: [c9, e8, e9], model: Q9}
+      R32: {R: [va, c9], r: r_splitter_ohm}
+      R33: {R: [e9, "0"], r: r_splitter_ohm}
+      C16: {C: [c9, s4], c: c_phase4_f}
+      C15: {C: [e9, l4a], c: c_block_f}
+      XLDR4: {device: [lt, vc, ps4, l4a, l4b], model: LDR4}
+      CS4: {C: [ps4, l4b], c: ldr_state_c_f, tolerance: none}
+      R34: {R: [l4b, s4], r: r_ldr_series_ohm}
+
+  - title: output
+    parts:
+      R35: {R: [s4, bi5], r: r_bias_feed_ohm}
+      R36: {R: [va, bi5], r: r_out_bias_top_ohm}
+      R37: {R: [bi5, "0"], r: r_bias_bottom_ohm}
+      C17: {C: [bi5, e10], c: c_bootstrap_f}
+      Q10: {bjt: [va, s4, e10], model: Q10}
+      R38: {R: [e10, "0"], r: r_out_emitter_ohm}
+      C18: {C: [e10, wet], c: c_out_f}
+
+  - title: mixer
+    parts:
+      C5: {C: [e3, d1], c: c_dry_f}
+      R12: {R: [d1, chz], r: r_mix_ohm}
+      R13: {R: [chz, wet], r: r_mix_ohm}
+      R14: {R: [wet, vib], r: r_vib_series_ohm}
+      R15: {R: [vib, "0"], r: r_vib_shunt_ohm}
+      SMODE:
+        switch: mode
+        parts:
+          RKCH: {R: [chz, vt], r: contact_ohm, tolerance: none, in: [0]}
+          RKVI: {R: [vib, vt], r: contact_ohm, tolerance: none, in: [1]}
+      RVOL: {pot: ["0", out, vt], r: volume_pot_ohm, at: volume}
+      RLOAD: {R: [out, "0"], r: r_load_ohm, tolerance: none}
+
+  - title: lfo
+    parts:
+      R39: {R: [vc, lb], r: r_lfo_div_top_ohm}
+      R40: {R: [lb, "0"], r: r_lfo_div_bottom_ohm}
+      R41: {R: [lb, b11], r: r_lfo_base_ohm}
+      Q11A: {bjt: [vc, b11, e11], model: Q11A}
+      Q11B: {bjt: [vc, e11, spd], model: Q11B}
+      R44: {R: [spd, "0"], r: r_lfo_emitter_ohm}
+      C19: {C: [b11, n1], c: c_lfo_f}
+      C20: {C: [n1, n2], c: c_lfo_f, v0: lfo_kick_v}
+      C21: {C: [n2, "0"], c: c_lfo_f}
+      D5: {device: [n1, n2], model: D5}
+      D6: {device: [n2, n1], model: D6}
+      R42: {R: [spd, n1], r: r_lfo_leg_ohm}
+      R52: {R: [spd, sa], r: r_lfo_min_ohm}
+      RSPA: {rheostat: [sa, n1], r: speed_pot_ohm, at: speed, taper_mid: speed_taper_mid, reverse: 1}
+      R43: {R: [spd, n2], r: r_lfo_leg_ohm}
+      R53: {R: [spd, sb], r: r_lfo_min_ohm}
+      RSPB: {rheostat: [sb, n2], r: speed_pot_ohm, at: speed, taper_mid: speed_taper_mid, reverse: 1}
+
+  - title: lamp
+    parts:
+      C22: {C: [spd, it], c: c_int_in_f}
+      RINT: {pot: ["0", iw, it], r: intensity_pot_ohm, at: intensity}
+      C23: {C: [iw, i1], c: c_int_out_f}
+      R45: {R: [i1, b12], r: r_drive_base_ohm}
+      R48: {R: [lc, b12], r: r_drive_fb_ohm}
+      R47: {R: [b12, "0"], r: r_drive_bias_ohm}
+      Q12: {bjt: [lc, b12, e12], model: Q12}
+      R46: {R: [e12, "0"], r: r_drive_emitter_ohm}
+      # The lamp from the rail to Q12's collector; its thermal node lt referred to the rail
+      XL1: {device: [lc, lt, vc], model: L1}
+      CLT: {C: [lt, vc], c: lamp_c_thermal_f, tolerance: none}
+      SCANCEL:
+        switch: cancel
+        parts:
+          RKCAN: {R: [b12, "0"], r: contact_ohm, tolerance: none, in: [1]}

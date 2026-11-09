@@ -14,6 +14,8 @@ pin (the cathode), and the currents flow into pins 0..P-1:
 - BJT (c, b, e): ports (Vce, Vbe), currents (Ic, Ib);
 - optocoupler (la, lk, s, ra, rb): ports (V(la), V(lk), V(s), V(ra)) re rb, currents
   (I_led, -I_led, -dg/dt / s_unit, I_cell);
+- photocell (t, tb, s, ra, rb): ports (V(t), V(tb), V(s), V(ra)) re rb, currents
+  (0, 0, -dg/dt / s_unit, I_cell);
 - thyratron, tetrode (a, g2, g1, w, k): ports (Va, Vg2, Vg1, w), currents (Ia, Ig2, Ig1, -dw/dt);
   triode (a, g, w, k): ports (Va, Vg, w), currents (Ia, Ig, -dw/dt);
 - magnetic core (b, ref): port B / TESLA_PER_V, current path * H. A core has
@@ -41,6 +43,7 @@ from varimu.devices.lamp import Lamp
 from varimu.devices.library import load_device
 from varimu.devices.opto import Optocoupler
 from varimu.devices.pentode import Pentode
+from varimu.devices.photocell import Photocell
 from varimu.devices.thyratron import W_MAX, W_MIN, Thyratron
 from varimu.devices.triode import Triode
 
@@ -73,6 +76,10 @@ _OPTO_VLED = (-2.0, 0.0, 1.3, 1.45, 1.55, 1.7, 2.6)
 _OPTO_LK = (-3.0, 0.0, 5.0)
 _OPTO_U = (-0.5, 0.0, 1e-4, 0.05, 1.0, 4.0)
 _OPTO_VR = (-7.0, 0.0, 0.3, 12.0)
+# A photocell's lamp below the floor (dark), cold, glowing, at its rating and past 2856 K,
+# its reference pin both ways; its state and cell as the optocoupler's.
+_PCELL_DT = (-250.0, 0.0, 700.0, 1500.0, 2000.0, 2556.0, 3000.0)
+_PCELL_TB = (-21.0, 0.0, 17.0)
 # A contact's springs both ways (a few volts: closed, the currents stay finite-difference
 # sized); its control open, at both ends of the smoothstep, inside it and closed.
 _CONTACT_V = (-3.0, -0.5, 0.0, 0.4, 2.0)
@@ -122,6 +129,7 @@ def _models() -> list:
         load_device("GZ34"),
         load_device("LAMP327@1"),
         load_device("VTL5C1@1"),
+        dataclasses.replace(load_device("PDVP9203@1"), name="PDVP9203_40lux", lux=40.0),
         load_device("KEY_CONTACT@1"),
         load_device("KEY_BREAK@1"),
         load_device("2D21@1"),
@@ -182,6 +190,10 @@ def _evaluate(m) -> tuple[list[list[float]], list[list[float]]]:
     elif isinstance(m, Optocoupler):
         grid = itertools.product(_OPTO_VLED, _OPTO_LK, _OPTO_U, _OPTO_VR)
         ports = [(vl + lk, lk, u, vr) for vl, lk, u, vr in grid]
+        currents = np.array([m.currents(p) for p in ports])
+    elif isinstance(m, Photocell):
+        grid = itertools.product(_PCELL_DT, _PCELL_TB, _OPTO_U, _OPTO_VR)
+        ports = [(dt + tb, tb, u, vr) for dt, tb, u, vr in grid]
         currents = np.array([m.currents(p) for p in ports])
     elif isinstance(m, Contact):
         grid = itertools.product(_CONTACT_V, _CONTACT_V, _CONTACT_C)
