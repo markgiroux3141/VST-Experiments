@@ -140,3 +140,30 @@ def test_the_reference_response_decays_at_its_table() -> None:
     slope = np.polyfit(tt[sel], level[sel], 1)[0]
     sigma_e = plt.energy_decay(p.decay, np.array([500.0]))[0]
     assert -60 / slope == pytest.approx(plt.SIX_LN10 / sigma_e, rel=0.1)
+
+
+def test_a_stereo_plate_reads_a_second_pickup_on_the_same_exciter() -> None:
+    """STEREO (docs/REVERB_PLAN.md, "Stereo"; the EMT 140 TS): the part's second medium
+    senses the same coil and reads the component's pickup2_xy, behind its own capacitance;
+    a component without one refuses it, and the reverbs' STEREO off builds one medium."""
+    from varimu.circuit import builder, parts, spec
+
+    c = load_plate("EMT140@2")
+    assert c.pickup2_xy == (0.75, 0.55)
+    mono = parts.plate("PL", "ex", "0", "pu", c, 2.5)
+    st = parts.plate("PL", "ex", "0", "pu", c, 2.5, out_r="pu_r")
+    assert st[: len(mono)] == mono
+    second, cap = st[len(mono) :]
+    assert isinstance(second, Plate)
+    assert (
+        dataclasses.replace(second, name=mono[3].name, out=mono[3].out, pickup_xy=mono[3].pickup_xy)
+        == mono[3]
+    )
+    assert second.pickup_xy == c.pickup2_xy and (cap.a, cap.b) == (second.out, "pu_r")
+    with pytest.raises(ValueError, match="no second pickup"):
+        parts.plate("PL", "ex", "0", "pu", load_plate("EMT140@1"), 2.5, out_r="pu_r")
+    for name in ("plate_reverb", "foil_reverb"):
+        sp_ = spec.load_circuit(spec.circuit_path(name))
+        for on, count in ((0, 1), (1, 2)):
+            ir = builder.build(sp_, {"stereo": on}).ir
+            assert sum(isinstance(e, Plate) for e in ir.elements()) == count, (name, on)

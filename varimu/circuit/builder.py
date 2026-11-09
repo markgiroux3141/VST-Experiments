@@ -76,14 +76,17 @@ Macro parts (connection; params, * = required):
                 offset_y_m (the driver's centre from the baffle's): the driver between
                 plus and minus, the sound pressure at the listening point on `out`
                 (pascals as volts; varimu.devices.speaker)
-    plate       [plus, minus, out]; component* (a plate component version, NAME@N, or a
-                parameter naming one), decay_500hz_s* (the damper, as the decay at 500 Hz):
-                the exciter between plus and minus, the pickup (its capacitance in series)
-                from out to ground (varimu.devices.plate, varimu.circuit.parts.plate)
-    spring_tank [plus, minus, out]; component* (a spring tank component version, NAME@N):
-                the input coil between plus and minus, the output coil from the springs'
-                EMF to out, its cold end grounded (varimu.devices.spring,
-                varimu.circuit.parts.spring_tank)
+    plate       [plus, minus, out, out_r?]; component* (a plate component version, NAME@N,
+                or a parameter naming one), decay_500hz_s* (the damper, as the decay at
+                500 Hz): the exciter between plus and minus, the pickup (its capacitance in
+                series) from out to ground; out_r: the component's second pickup, the
+                stereo pair (stereo, 1: a control's switch; 0 builds mono, out_r left
+                alone) (varimu.devices.plate, varimu.circuit.parts.plate)
+    spring_tank [plus, minus, out, out_r?]; component* (a spring tank component version,
+                NAME@N): the input coil between plus and minus, the output coil from the
+                springs' EMF to out, its cold end grounded; out_r: a split tank, every
+                second spring on an output coil of its own to out_r (stereo, 1: as the
+                plate's) (varimu.devices.spring, varimu.circuit.parts.spring_tank)
     harp        [out]; component* (a harp component version, NAME@N, or a parameter naming
                 one: kind ep_harp, varimu.rhodes.compile), rate_hz* and contact_rate_hz*
                 (numerics: the voices' and the hammer's contact's rate floors): the harp's
@@ -385,12 +388,14 @@ class Param:
 @dataclass(frozen=True)
 class Macro:
     """How a macro part reads: its connection (n_nodes nodes, or None: the macro reads
-    the connection itself), its params, and the expansion into elements."""
+    the connection itself; up to `optional_nodes` more may follow), its params, and the
+    expansion into elements."""
 
     expand: Callable[[Context, str, Any, dict[str, Any]], list[Element]]
     n_nodes: int | None
     params: dict[str, Param]
     toleranced: bool = False
+    optional_nodes: int = 0
 
 
 MACROS: dict[str, Macro] = {}
@@ -438,8 +443,10 @@ def expand_part(ctx: Context, name: str, entry: Mapping, *, extra=()) -> list[El
         raise ctx.fail(name, f"{kind}: unknown keys {sorted(unknown)}")
     conn = entry[kind]
     if macro.n_nodes is not None:
-        if not isinstance(conn, list) or len(conn) != macro.n_nodes:
-            raise ctx.fail(name, f"{kind} takes {macro.n_nodes} nodes, got {conn!r}")
+        top = macro.n_nodes + macro.optional_nodes
+        if not isinstance(conn, list) or not macro.n_nodes <= len(conn) <= top:
+            count = f"{macro.n_nodes}" if top == macro.n_nodes else f"{macro.n_nodes}-{top}"
+            raise ctx.fail(name, f"{kind} takes {count} nodes, got {conn!r}")
         conn = [str(n) for n in conn]
     els = macro.expand(ctx, name, conn, _resolve_params(ctx, name, macro, entry))
     tol = entry.get("tolerance", ctx.section_tolerance)
@@ -831,13 +838,22 @@ def _ribbon_motor(ctx: Context, name: str, conn: list[str], a: dict) -> list[Ele
     return parts.moving_coil(name, *conn, model)
 
 
+def _stereo_out(conn: list[str], a: dict) -> str | None:
+    """A stereo medium's out_r: its fourth node, unless `stereo` is 0 (a STEREO switch off:
+    the part then builds mono and leaves out_r alone)."""
+    return conn[3] if len(conn) > 3 and a["stereo"] != 0 else None
+
+
 def _plate(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
     where = f"{name}.component"
     try:
         model = load_plate(str(versions.require_pinned(ctx.text(where, a["component"]))))
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
-    return parts.plate(name, *conn, model, a["decay_500hz_s"])
+    try:
+        return parts.plate(name, *conn[:3], model, a["decay_500hz_s"], _stereo_out(conn, a))
+    except ValueError as err:
+        raise ctx.fail(name, str(err)) from err
 
 
 def _spring_tank(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -847,7 +863,10 @@ def _spring_tank(ctx: Context, name: str, conn: list[str], a: dict) -> list[Elem
         model = load_spring_tank(ref)
     except (versions.VersionError, ValueError) as err:
         raise ctx.fail(where, str(err)) from err
-    return parts.spring_tank(name, *conn, model)
+    try:
+        return parts.spring_tank(name, *conn[:3], model, _stereo_out(conn, a))
+    except ValueError as err:
+        raise ctx.fail(name, str(err)) from err
 
 
 def _harp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -1112,9 +1131,15 @@ for _name, _macro in {
     "plate": Macro(
         _plate,
         3,
-        {"component": Param("raw"), "decay_500hz_s": _P},
+        {"component": Param("raw"), "decay_500hz_s": _P, "stereo": Param("number", 1.0)},
+        optional_nodes=1,
     ),
-    "spring_tank": Macro(_spring_tank, 3, {"component": Param("raw")}),
+    "spring_tank": Macro(
+        _spring_tank,
+        3,
+        {"component": Param("raw"), "stereo": Param("number", 1.0)},
+        optional_nodes=1,
+    ),
     "harp": Macro(_harp, 1, {"component": Param("raw"), "rate_hz": _P, "contact_rate_hz": _P}),
     "nova_keys": Macro(
         _nova_keys,

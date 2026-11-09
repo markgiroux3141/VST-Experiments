@@ -31,6 +31,8 @@ pub struct PlateComponent {
     pub tail_db: f64,
     pub decay_f_hz: Vec<f64>,
     pub decay_curves_s: Vec<Vec<f64>>,
+    /// A second pickup (the stereo pair's other side; None: a mono plate).
+    pub pickup2_xy: Option<[f64; 2]>,
 }
 
 fn num(m: &Map, key: &str, what: &str) -> Result<f64, Error> {
@@ -115,6 +117,10 @@ pub fn from_data(data: &Value, what: &str) -> Result<PlateComponent, Error> {
         tail_db: num(m, "tail_db", what)?,
         decay_f_hz: f_hz,
         decay_curves_s: curves,
+        pickup2_xy: match pos.get("pickup2_xy") {
+            Some(_) => Some(pair(pos, "pickup2_xy", what)?),
+            None => None,
+        },
     })
 }
 
@@ -177,7 +183,8 @@ pub fn plate_impedance_ns_per_m(c: &PlateComponent) -> f64 {
     8.0 * (d * c.density_kg_m3 * h).sqrt()
 }
 
-/// The plate part (`parts.plate`): the exciter coil, the plate and the pickup's capacitance.
+/// The plate part (`parts.plate`): the exciter coil, the plate and the pickup's capacitance;
+/// `out_r`, the component's second pickup (the stereo pair: one plate, read in two places).
 pub fn plate(
     name: &str,
     plus: &str,
@@ -185,10 +192,44 @@ pub fn plate(
     out: &str,
     c: &PlateComponent,
     decay_500hz_s: f64,
-) -> Vec<Element> {
+    out_r: Option<&str>,
+) -> Result<Vec<Element>, Error> {
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let bl = c.exciter_bl_tm;
-    vec![
+    let second = match (out_r, c.pickup2_xy) {
+        (Some(o), Some(xy)) => Some((o, xy)),
+        (Some(o), None) => {
+            return Err(Error(format!(
+                "{} has no second pickup (positions.pickup2_xy) for {o}",
+                c.name
+            )));
+        }
+        (None, _) => None,
+    };
+    let decay = decay_table(c, decay_500hz_s);
+    let medium = |el: String, xy: [f64; 2], node: String| {
+        Element::Plate(Plate {
+            name: el,
+            sense_pos: format!("{n}_c"),
+            sense_neg: minus.to_string(),
+            force_per_v: bl / c.exciter_re_ohm,
+            out: node,
+            out_per_m_s2: c.pickup_v_per_m_s2,
+            lx_m: c.lx_m,
+            ly_m: c.ly_m,
+            thickness_m: c.thickness_m,
+            density_kg_m3: c.density_kg_m3,
+            youngs_pa: c.youngs_pa,
+            poisson: c.poisson,
+            tension_n_m: c.tension_n_m,
+            drive_xy: c.drive_xy,
+            pickup_xy: xy,
+            f_max_hz: c.f_max_hz,
+            decay: decay.clone(),
+            tail_db: c.tail_db,
+        })
+    };
+    let mut els = vec![
         Element::Inductor(Inductor {
             name: format!("L{upper}_le"),
             a: plus.to_string(),
@@ -207,26 +248,7 @@ pub fn plate(
             b: minus.to_string(),
             r_ohm: c.exciter_re_ohm,
         }),
-        Element::Plate(Plate {
-            name: format!("V{upper}"),
-            sense_pos: format!("{n}_c"),
-            sense_neg: minus.to_string(),
-            force_per_v: bl / c.exciter_re_ohm,
-            out: format!("{n}_p"),
-            out_per_m_s2: c.pickup_v_per_m_s2,
-            lx_m: c.lx_m,
-            ly_m: c.ly_m,
-            thickness_m: c.thickness_m,
-            density_kg_m3: c.density_kg_m3,
-            youngs_pa: c.youngs_pa,
-            poisson: c.poisson,
-            tension_n_m: c.tension_n_m,
-            drive_xy: c.drive_xy,
-            pickup_xy: c.pickup_xy,
-            f_max_hz: c.f_max_hz,
-            decay: decay_table(c, decay_500hz_s),
-            tail_db: c.tail_db,
-        }),
+        medium(format!("V{upper}"), c.pickup_xy, format!("{n}_p")),
         Element::Capacitor(Capacitor {
             name: format!("C{upper}_pu"),
             a: format!("{n}_p"),
@@ -234,5 +256,16 @@ pub fn plate(
             c_f: c.pickup_c_f,
             v0_v: None,
         }),
-    ]
+    ];
+    if let Some((o, xy)) = second {
+        els.push(medium(format!("V{upper}_R"), xy, format!("{n}_p2")));
+        els.push(Element::Capacitor(Capacitor {
+            name: format!("C{upper}_pu2"),
+            a: format!("{n}_p2"),
+            b: o.to_string(),
+            c_f: c.pickup_c_f,
+            v0_v: None,
+        }));
+    }
+    Ok(els)
 }

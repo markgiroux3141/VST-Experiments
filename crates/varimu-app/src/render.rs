@@ -26,6 +26,8 @@ const PROGRESS_CALLS: usize = 200;
 pub struct Rendered {
     /// The output at the project's rate, full scale 1.0 (`Render.out`).
     pub out: Vec<f64>,
+    /// A stereo circuit's right output (its `out_r` probe), as `out`; None for a mono one.
+    pub out_r: Option<Vec<f64>>,
     /// Every probe in circuit volts, before the float32 cast (`TransientResult.vectors`).
     pub probes: Vec<(String, Vec<f64>)>,
     pub sample_rate: u32,
@@ -221,20 +223,31 @@ pub fn render_pieces(
         }
     }
     let output_v = circuit.full_scale(s).output_v;
-    let out = probes
-        .iter()
-        .find(|(k, _)| k == "v(out)")
-        .ok_or("the circuit has no `out` probe")?
-        .1
-        .iter()
-        .map(|&y| (y as f32 as f64) / output_v)
-        .collect();
+    let (out, out_r) = outputs(&probes, output_v)?;
     Ok(Rendered {
         out,
+        out_r,
         probes,
         sample_rate: s.sample_rate,
         wall_s: t0.elapsed().as_secs_f64(),
     })
+}
+
+/// The output and a stereo circuit's right output from the probes (circuit volts): each
+/// cast to float32 (what Python's render cache keeps), over the output's full scale.
+fn outputs(
+    probes: &[(String, Vec<f64>)],
+    output_v: f64,
+) -> Result<(Vec<f64>, Option<Vec<f64>>), String> {
+    let scaled = |name: &str| {
+        probes.iter().find(|(n, _)| n == name).map(|(_, v)| {
+            v.iter()
+                .map(|&y| (y as f32 as f64) / output_v)
+                .collect::<Vec<f64>>()
+        })
+    };
+    let out = scaled("v(out)").ok_or("the circuit has no `out` probe")?;
+    Ok((out, scaled("v(out_r)")))
 }
 
 /// One run of [`render_controls`] starting `origin` simulation samples into a longer run.
@@ -346,17 +359,10 @@ fn render_at(
         .zip(&out.values)
         .map(|(name, p)| (name.clone(), back(p)))
         .collect();
-    let vout = &probes
-        .iter()
-        .find(|(n, _)| n == "v(out)")
-        .ok_or("the circuit has no `out` probe")?
-        .1;
-    let out = vout
-        .iter()
-        .map(|&y| (y as f32 as f64) / fs.output_v)
-        .collect();
+    let (out, out_r) = outputs(&probes, fs.output_v)?;
     Ok(Rendered {
         out,
+        out_r,
         probes,
         sample_rate: s.sample_rate,
         wall_s: t0.elapsed().as_secs_f64(),

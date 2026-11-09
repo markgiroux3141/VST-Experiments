@@ -341,6 +341,56 @@ pub fn latency_s(circuit: &Circuit, slot: &Slot) -> Result<f64, String> {
     Ok(num("head_distance_m")? / speed)
 }
 
+/// Whether the slot prints stereo from one input (docs/REVERB_PLAN.md, "Stereo"): its
+/// device's circuit probes `out_r` and its STEREO switch (`stereo`) is on, as the reverbs'.
+/// Such a print takes the mid of a stereo input (the EMT 140 TS's "M" channel) and gives
+/// both channels, on a mono track too.
+pub fn stereo_out(prep: &Prepared, slot: &Slot) -> Result<bool, String> {
+    if slot.bypass || !prep.circuit.spec().probes.iter().any(|p| p == "out_r") {
+        return Ok(false);
+    }
+    let p = varimu_circuit::spec::resolve(prep.circuit.spec(), &slot.values)
+        .map_err(|e| e.to_string())?;
+    Ok(p.get("stereo")
+        .and_then(|v| v.as_f64())
+        .is_some_and(|v| v >= 0.5))
+}
+
+/// A stereo print's key: the key of its mid input's print (the device, values and gains)
+/// with both channels of the input in it (each side's dry is mixed in).
+fn stereo_key(base: &str, left: &[f32], right: Option<&[f32]>) -> String {
+    let mut h = Sha256::new();
+    h.update(b"varimu stereo print 1\n");
+    h.update(base.as_bytes());
+    for side in [Some(left), right] {
+        match side {
+            Some(x) => {
+                h.update((x.len() as u64).to_le_bytes());
+                for v in x {
+                    h.update(v.to_le_bytes());
+                }
+            }
+            None => h.update(b"mono\n"),
+        }
+    }
+    h.finalize()[..16]
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+/// The mid of a stereo input (its left alone when mono).
+fn mid(left: &[f32], right: Option<&[f32]>) -> Vec<f32> {
+    match right {
+        Some(r) => left
+            .iter()
+            .enumerate()
+            .map(|(i, &l)| 0.5 * (l + r.get(i).copied().unwrap_or(0.0)))
+            .collect(),
+        None => left.to_vec(),
+    }
+}
+
 /// `input` through the slot's device with `sidechain` (see the module docs), uncached.
 pub fn print_uncached(
     prep: &Prepared,
@@ -351,6 +401,62 @@ pub fn print_uncached(
     progress: impl FnMut(f64),
     cancel: &AtomicBool,
 ) -> Result<(Vec<f32>, f64), String> {
+    let (y, _, rtf) = device_out(prep, slot, input, sidechain, rate, progress, cancel)?;
+    Ok((mixed(slot, &y, input), rtf))
+}
+
+/// A stereo slot's print ([`stereo_out`]), uncached: the mid of `left` and `right` (`left`
+/// when mono) through the device once, its `out` and `out_r` each mixed with its own side's
+/// dry input (a mono input's in both). Returns (left, right, realtime factor).
+#[allow(clippy::too_many_arguments)]
+pub fn print_uncached_stereo(
+    prep: &Prepared,
+    slot: &Slot,
+    left: &[f32],
+    right: Option<&[f32]>,
+    sidechain: Option<&[f32]>,
+    rate: u32,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+) -> Result<(Vec<f32>, Vec<f32>, f64), String> {
+    let m = mid(left, right);
+    let (y, yr, rtf) = device_out(prep, slot, &m, sidechain, rate, progress, cancel)?;
+    let yr = yr.ok_or_else(|| format!("{}: no right output (out_r)", slot.device))?;
+    Ok((
+        mixed(slot, &y, left),
+        mixed(slot, &yr, right.unwrap_or(left)),
+        rtf,
+    ))
+}
+
+/// The device's share after its make-up, the rest `dry` as it came (the input before the
+/// trim), as float32.
+fn mixed(slot: &Slot, y: &[f64], dry: &[f32]) -> Vec<f32> {
+    let (g, wet) = (db(slot.makeup_db), slot.wet.clamp(0.0, 1.0));
+    y.iter()
+        .enumerate()
+        .map(|(i, &v)| {
+            let d = dry.get(i).map_or(0.0, |&u| u as f64);
+            (wet * v * g + (1.0 - wet) * d) as f32
+        })
+        .collect()
+}
+
+/// A device's output, a stereo circuit's right output, the render's realtime factor.
+type DeviceOut = (Vec<f64>, Option<Vec<f64>>, f64);
+
+/// The slot's device's output for `input` at the session's rate (the input's length plus
+/// the tail, a tape machine's latency taken off), before the wet / dry mix; a stereo
+/// circuit's right output beside it; the render's realtime factor.
+fn device_out(
+    prep: &Prepared,
+    slot: &Slot,
+    input: &[f32],
+    sidechain: Option<&[f32]>,
+    rate: u32,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+) -> Result<DeviceOut, String> {
     let s = &prep.settings;
     let trim = db(slot.trim_db);
     let tail = (slot.tail_s.max(0.0) * rate as f64).round() as usize;
@@ -392,19 +498,15 @@ pub fn print_uncached(
             cancel,
         )?
     };
-    let mut y = resample(&r.out, s.sample_rate, rate);
-    y.drain(..late.min(y.len()));
-    y.resize(n, 0.0);
-    // The device's share after its make-up, the rest the input as it came (dry).
-    let (g, wet) = (db(slot.makeup_db), slot.wet.clamp(0.0, 1.0));
+    let back = |out: &[f64]| {
+        let mut y = resample(out, s.sample_rate, rate);
+        y.drain(..late.min(y.len()));
+        y.resize(n, 0.0);
+        y
+    };
     Ok((
-        y.iter()
-            .enumerate()
-            .map(|(i, &v)| {
-                let dry = input.get(i).map_or(0.0, |&u| u as f64);
-                (wet * v * g + (1.0 - wet) * dry) as f32
-            })
-            .collect(),
+        back(&r.out),
+        r.out_r.as_deref().map(back),
         r.realtime_factor(),
     ))
 }
@@ -453,7 +555,7 @@ fn print_or_find(
     }
     let key = key(prep, slot, input, sidechain, rate)?;
     if let Some(dir) = cache
-        && let Some(audio) = read_print(&dir.join(&key), rate)?
+        && let Some((audio, _)) = read_print(&dir.join(&key), rate)?
     {
         return Ok(Print {
             key,
@@ -468,7 +570,7 @@ fn print_or_find(
     }
     let (audio, rtf) = print_uncached(prep, slot, input, sidechain, rate, progress, cancel)?;
     if let Some(dir) = cache {
-        write_print(dir, &key, slot, &audio, rate, rtf)?;
+        write_print(dir, &key, slot, &audio, None, rate, rtf)?;
     }
     Ok(Print {
         key,
@@ -479,7 +581,56 @@ fn print_or_find(
     })
 }
 
-fn read_print(dir: &Path, rate: u32) -> Result<Option<Vec<f32>>, String> {
+/// A stereo slot's print ([`stereo_out`]) of `left` and `right`, as [`print_or_find`]:
+/// its [`Print::right`] always there, its cache file two channels.
+#[allow(clippy::too_many_arguments)]
+fn print_or_find_stereo(
+    prep: &Prepared,
+    slot: &Slot,
+    left: &Arc<Vec<f32>>,
+    right: Option<&Arc<Vec<f32>>>,
+    sidechain: Option<&[f32]>,
+    rate: u32,
+    cache: Option<&Path>,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+    render: bool,
+) -> Result<Print, String> {
+    let r = right.map(|r| r.as_slice());
+    let m = mid(left, r);
+    let key = stereo_key(&key(prep, slot, &m, sidechain, rate)?, left, r);
+    if let Some(dir) = cache
+        && let Some((audio, Some(audio_r))) = read_print(&dir.join(&key), rate)?
+    {
+        return Ok(Print {
+            key,
+            audio: Arc::new(audio),
+            right: Some(Arc::new(audio_r)),
+            cached: true,
+            realtime_factor: 0.0,
+        });
+    }
+    if !render {
+        return Err(NOT_PRINTED.into());
+    }
+    let (audio, audio_r, rtf) =
+        print_uncached_stereo(prep, slot, left, r, sidechain, rate, progress, cancel)?;
+    if let Some(dir) = cache {
+        write_print(dir, &key, slot, &audio, Some(&audio_r), rate, rtf)?;
+    }
+    Ok(Print {
+        key,
+        audio: Arc::new(audio),
+        right: Some(Arc::new(audio_r)),
+        cached: false,
+        realtime_factor: rtf,
+    })
+}
+
+/// A cached print: its left (or mono) channel and a stereo print's right.
+type Kept = (Vec<f32>, Option<Vec<f32>>);
+
+fn read_print(dir: &Path, rate: u32) -> Result<Option<Kept>, String> {
     let wav = dir.join("print.wav");
     if !wav.is_file() {
         return Ok(None);
@@ -488,14 +639,20 @@ fn read_print(dir: &Path, rate: u32) -> Result<Option<Vec<f32>>, String> {
     if w.rate != rate {
         return Err(format!("{}: {} Hz, not {rate}", wav.display(), w.rate));
     }
-    Ok(Some(w.mono().iter().map(|&v| v as f32).collect()))
+    let f32s = |x: &[f64]| x.iter().map(|&v| v as f32).collect::<Vec<f32>>();
+    Ok(Some(match w.channels.as_slice() {
+        [l, r] => (f32s(l), Some(f32s(r))),
+        _ => (f32s(&w.mono()), None),
+    }))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn write_print(
     cache: &Path,
     key: &str,
     slot: &Slot,
     audio: &[f32],
+    right: Option<&[f32]>,
     rate: u32,
     rtf: f64,
 ) -> Result<(), String> {
@@ -506,8 +663,17 @@ fn write_print(
         std::thread::current().id()
     ));
     let _ = std::fs::remove_dir_all(&tmp);
-    let x: Vec<f64> = audio.iter().map(|&v| v as f64).collect();
-    crate::audio::write_wav(&tmp.join("print.wav"), &x, rate)?;
+    match right {
+        // A stereo print: one 2-channel file.
+        Some(r) => {
+            let frames: Vec<[f32; 2]> = audio.iter().zip(r).map(|(&a, &b)| [a, b]).collect();
+            crate::audio::write_wav_stereo(&tmp.join("print.wav"), &frames, rate)?;
+        }
+        None => {
+            let x: Vec<f64> = audio.iter().map(|&v| v as f64).collect();
+            crate::audio::write_wav(&tmp.join("print.wav"), &x, rate)?;
+        }
+    }
     let meta = json!({
         "key": key,
         "slot": slot.to_json(),
@@ -550,16 +716,25 @@ pub fn print_chain(
     cancel: &AtomicBool,
 ) -> Result<Vec<Print>, String> {
     chain(
-        preps, slots, sidechains, input, rate, cache, progress, cancel, true,
+        preps, None, slots, sidechains, input, None, rate, cache, progress, cancel, true,
     )
 }
 
+/// The right channel's devices, loaded when a chain first needs them.
+type LoadRight<'a> = &'a dyn Fn() -> Result<Vec<Prepared>, String>;
+
+/// A chain's prints of `input` and a stereo input's `right`, insert by insert: a stereo
+/// insert ([`stereo_out`]) prints their mid once into both channels; any other prints each
+/// channel apart once the chain is stereo (dual-mono, the right on a thread of its own with
+/// `load_right`'s devices: a tape machine's second track; None: the left's).
 #[allow(clippy::too_many_arguments)]
 fn chain(
     preps: &[Prepared],
+    load_right: Option<LoadRight>,
     slots: &[Slot],
     sidechains: &[Option<Arc<Vec<f32>>>],
     input: &Arc<Vec<f32>>,
+    right: Option<Arc<Vec<f32>>>,
     rate: u32,
     cache: Option<&Path>,
     mut progress: impl FnMut(usize, f64),
@@ -569,24 +744,77 @@ fn chain(
     if preps.len() != slots.len() {
         return Err("a chain needs a prepared device per slot".into());
     }
+    let mut preps_r: Option<Vec<Prepared>> = None;
     let mut out: Vec<Print> = Vec::with_capacity(slots.len());
+    let (mut x, mut xr) = (input.clone(), right);
     for (k, (p, s)) in preps.iter().zip(slots).enumerate() {
-        let x = out.last().map_or(input, |q| &q.audio).clone();
         let side = sidechains
             .get(k)
             .and_then(|c| c.as_deref())
             .map(Vec::as_slice);
-        out.push(print_or_find(
-            p,
-            s,
-            &x,
-            side,
-            rate,
-            cache,
-            |f| progress(k, f),
-            cancel,
-            render,
-        )?);
+        let print = if stereo_out(p, s)? {
+            print_or_find_stereo(
+                p,
+                s,
+                &x,
+                xr.as_ref(),
+                side,
+                rate,
+                cache,
+                |f| progress(k, f),
+                cancel,
+                render,
+            )?
+        } else if let Some(r) = &xr {
+            if preps_r.is_none()
+                && let Some(load) = load_right
+            {
+                preps_r = Some(load()?);
+            }
+            let pr = preps_r.as_ref().map_or(p, |v| &v[k]);
+            let (left, right) = std::thread::scope(|scope| {
+                let other = scope.spawn(|| {
+                    lower_priority();
+                    print_or_find(pr, s, r, side, rate, cache, |_| {}, cancel, render)
+                });
+                let left = print_or_find(
+                    p,
+                    s,
+                    &x,
+                    side,
+                    rate,
+                    cache,
+                    |f| progress(k, f),
+                    cancel,
+                    render,
+                );
+                if left.is_err() {
+                    cancel.store(true, Ordering::Relaxed);
+                }
+                let right = other
+                    .join()
+                    .unwrap_or_else(|_| Err("the print's thread panicked".into()));
+                (left, right)
+            });
+            let mut left = left?;
+            left.right = Some(right?.audio);
+            left
+        } else {
+            print_or_find(
+                p,
+                s,
+                &x,
+                side,
+                rate,
+                cache,
+                |f| progress(k, f),
+                cancel,
+                render,
+            )?
+        };
+        x = print.audio.clone();
+        xr = print.right.clone();
+        out.push(print);
     }
     Ok(out)
 }
@@ -685,68 +913,35 @@ impl Job {
             let preps = load()?;
             // A right channel equal to the left (mono clips on a stereo lane) prints once.
             let right = right.filter(|r| **r != *input);
-            std::thread::scope(|scope| {
-                // The right channel on a thread of its own, the same chain and sidechains.
-                let other = right.as_ref().map(|r| {
-                    let (slots, sidechains, cache, c) = (&slots, &sidechains, &cache, &c);
-                    scope.spawn(move || {
-                        lower_priority();
-                        // A tape machine's second track: its own grain, the left's transport.
-                        let preps: Vec<Prepared> = load()?
-                            .into_iter()
-                            .map(|p| Prepared {
-                                circuit: p.circuit.with_track(Some("r")),
-                                ..p
-                            })
-                            .collect();
-                        chain(
-                            &preps,
-                            slots,
-                            sidechains,
-                            r,
-                            rate,
-                            cache.as_deref(),
-                            |_, _| {},
-                            c,
-                            render,
-                        )
+            // The right channel's devices: a tape machine's second track (its own grain,
+            // the left's transport).
+            let load_right = || -> Result<Vec<Prepared>, String> {
+                Ok(load()?
+                    .into_iter()
+                    .map(|p| Prepared {
+                        circuit: p.circuit.with_track(Some("r")),
+                        ..p
                     })
-                });
-                let mut left = chain(
-                    &preps,
-                    &slots,
-                    &sidechains,
-                    &input,
-                    rate,
-                    cache.as_deref(),
-                    |k, f| {
-                        p.store(
-                            ((k as u64) << 32) | (f as f32).to_bits() as u64,
-                            Ordering::Relaxed,
-                        )
-                    },
-                    &c,
-                    render,
-                );
-                if left.is_err() {
-                    c.store(true, Ordering::Relaxed);
-                }
-                if let Some(h) = other {
-                    let r = h
-                        .join()
-                        .unwrap_or_else(|_| Err("the print's thread panicked".into()));
-                    match (&mut left, r) {
-                        (Ok(l), Ok(r)) => {
-                            for (a, b) in l.iter_mut().zip(r) {
-                                a.right = Some(b.audio);
-                            }
-                        }
-                        (Ok(_), Err(e)) => left = Err(e),
-                        _ => {}
-                    }
-                }
-                left
-            })
+                    .collect())
+            };
+            chain(
+                &preps,
+                Some(&load_right),
+                &slots,
+                &sidechains,
+                &input,
+                right,
+                rate,
+                cache.as_deref(),
+                |k, f| {
+                    p.store(
+                        ((k as u64) << 32) | (f as f32).to_bits() as u64,
+                        Ordering::Relaxed,
+                    )
+                },
+                &c,
+                render,
+            )
         });
         Job {
             progress,
@@ -1065,6 +1260,90 @@ mod tests {
         );
         let q = same.join().expect("a result").expect("printed");
         assert!(q[0].cached && q[0].right.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The 6G15 fully wet with its STEREO switch at `on` (the split tank), a short tail.
+    fn spring(on: i64) -> Slot {
+        let mut s = Slot::new("fender_6g15");
+        s.values = vec![
+            ("stereo".into(), Value::Int(on)),
+            ("mixer".into(), Value::Float(1.0)),
+        ];
+        s.tail_s = 0.1;
+        s
+    }
+
+    #[test]
+    fn a_stereo_reverb_prints_both_channels_from_the_mid() {
+        // docs/REVERB_PLAN.md "Stereo": a stereo insert takes the mid of its input and
+        // gives both channels; inserts after it print dual-mono; STEREO off stays mono.
+        let rate = 48_000;
+        let no = AtomicBool::new(false);
+        let (l, r) = (tone(rate, 0.1, 0.2), tone(rate, 0.1, 0.05));
+        let on = spring(1);
+        let prep = Prepared::load(&config(), &on.device, on.quality, on.noise).unwrap();
+        assert!(stereo_out(&prep, &on).unwrap());
+        assert!(!stereo_out(&prep, &spring(0)).unwrap());
+        let off_bypassed = Slot {
+            bypass: true,
+            ..spring(1)
+        };
+        assert!(!stereo_out(&prep, &off_bypassed).unwrap());
+        // A mono track: both channels, unlike each other (the tank's two springs).
+        let dir = temp("stereo_reverb");
+        let slots = vec![on.clone(), stage(-6.0)];
+        let job = Job::spawn(
+            config(),
+            slots.clone(),
+            vec![],
+            l.clone(),
+            None,
+            rate,
+            Some(dir.clone()),
+        );
+        let p = job.join().expect("a result").expect("printed");
+        let right = p[0].right.as_ref().expect("a stereo print");
+        assert_eq!(right.len(), p[0].audio.len());
+        let diff: f32 = right
+            .iter()
+            .zip(p[0].audio.iter())
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+        assert!(diff > 0.0);
+        // The insert after it printed each side apart (the stage alone on the right).
+        let stage_alone = |x: &Arc<Vec<f32>>| {
+            let pr = vec![
+                Prepared::load(&config(), "triode_stage_drawn", Quality::Draft1x, true).unwrap(),
+            ];
+            print_chain(&pr, &slots[1..], &[], x, rate, None, |_, _| {}, &no).unwrap()
+        };
+        assert_eq!(p[1].right.as_ref(), Some(&stage_alone(right)[0].audio));
+        // Cached as two channels.
+        let again = Job::spawn(
+            config(),
+            slots,
+            vec![],
+            l.clone(),
+            None,
+            rate,
+            Some(dir.clone()),
+        )
+        .join()
+        .expect("a result")
+        .expect("printed");
+        assert!(again[0].cached && again[0].right.as_ref() == Some(right));
+        // A stereo input: its mid through the tank, each side's dry its own (fully wet:
+        // the device's outputs alone, the mid's).
+        let (a, b, _) =
+            print_uncached_stereo(&prep, &on, &l, Some(&r), None, rate, |_| {}, &no).unwrap();
+        let m: Vec<f32> = l.iter().zip(r.iter()).map(|(x, y)| 0.5 * (x + y)).collect();
+        let (am, bm, _) =
+            print_uncached_stereo(&prep, &on, &m, None, None, rate, |_| {}, &no).unwrap();
+        assert_eq!((a, b), (am, bm));
+        // STEREO off: a mono print, as before.
+        let off = print_chain(&[prep], &[spring(0)], &[], &l, rate, None, |_, _| {}, &no).unwrap();
+        assert!(off[0].right.is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 

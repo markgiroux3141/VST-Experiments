@@ -61,6 +61,9 @@ class PlateComponent:
     # The measured decay curves: a frequency grid and, per curve, T60 (s) at each.
     decay_f_hz: tuple[float, ...]
     decay_curves_s: tuple[tuple[float, ...], ...]
+    # A second pickup (the stereo pair's other side; None: a mono plate), the same kind
+    # of pickup as the first.
+    pickup2_xy: tuple[float, float] | None = None
 
     def t500_range(self) -> tuple[float, float]:
         """The damper's range: the curves' decay at 500 Hz, shortest and longest."""
@@ -98,6 +101,11 @@ def plate_from_data(d: dict[str, Any], name: str) -> PlateComponent:
         tail_db=float(m["tail_db"]),
         decay_f_hz=tuple(float(f) for f in dec["f_hz"]),
         decay_curves_s=tuple(tuple(float(t) for t in c["t60_s"]) for c in dec["curves"]),
+        pickup2_xy=(
+            (float(pos["pickup2_xy"][0]), float(pos["pickup2_xy"][1]))
+            if "pickup2_xy" in pos
+            else None
+        ),
     )
 
 

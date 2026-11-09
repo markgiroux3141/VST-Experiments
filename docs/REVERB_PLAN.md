@@ -346,6 +346,59 @@ guitar by default) through the 140, the 240 and the 6G15's wet path, each wet al
 mixed at the same share (-12 LU under the dry), every file at -23 LUFS. Open: the user
 listens.
 
+### Status (2026-11-09): stereo
+
+The user's ask: stereo options for all three reverbs (branch `stereo-reverb`). Each has a
+STEREO switch (`stereo`, off by default; on the panels), `out_r` beside `out`:
+
+- **The plate and the foil** read the plate in a second place, as the EMT 140 TS does (its
+  brochure, p.6: the A + B "M" channel drives the plate; two pickups "mounted at unequal
+  distances from the driving coil" give outputs "entirely uncorrelated"; the 240: "for both
+  stereo and mono channels", p.3). The components' version 2 (`EMT140@2`, `EMT240@2`) adds
+  `positions.pickup2_xy`; the `plate` part's optional fourth node `out_r` (both builders)
+  emits a second `Plate` element sensing the same exciter coil (no engine change: two media
+  on one coil agree with one to -240 dB). The positions aren't published: placed by
+  `scripts/plate_pickups.py` on the exciter's other side at an unequal distance, as loud as
+  the first per octave and uncorrelated with it. Near the exciter the two see the same
+  direct wave (the first try, 0.21 m from it on the 140: r -0.98 and +11 dB at 250 Hz),
+  which a modal energy sum misses, so the full responses decide: the 140's at (0.75, 0.55),
+  0.46 m from the exciter (pickup 1: 0.13 m), the 240's at (0.80, 0.30). A second pickup
+  amplifier (the first's copy, RETURN's second gang) on its own B+5, two RC stages off B+1:
+  fed from B+2 it dropped B+2 16 V and moved the first side by 0.6 dB (-15 dB residual);
+  off B+1, -0.07 dB (-25 dB residual, the 2 V that remain).
+- **The 6G15** (not Fender's: a modded unit) splits its tank: the `spring_tank` part's
+  `out_r` puts every second spring on an output coil of its own (the 4AB3C1B's two springs,
+  one a side; the halves sum to the whole tank to 1e-15), into a second recovery stage
+  (a 7025, V3A's copy) and TONE's and MIXER's second gangs; the dry follower feeds both.
+- A part's `stereo: 0` builds it mono and leaves `out_r` alone, so one part serves both
+  positions. STEREO off is the old circuit plus `out_r` tied to `out` (1 ohm, and the 1
+  GOhm numerical leak preflight needs: a 1e-4 load on the plate's out, 1e-3 on the 6G15's).
+
+`scripts/stereo_reverb_report.py [--quality Q]` -> `reports/reverb/stereo/` (a 60 ms noise
+burst, fully wet; the right side against the left per octave, 125 Hz-8 kHz):
+
+| | production | draft-1x |
+|---|---|---|
+| plate | -0.1 to +1.0 dB, \|r\| <= 0.23 (250 Hz) | +0.1 to +1.1 dB, \|r\| <= 0.16 |
+| foil | -0.1 to +0.4 dB, r 0.39 / 0.28 at 125 / 500 Hz, <= 0.17 above | -0.0 to +1.8 dB, \|r\| <= 0.11 |
+| 6G15 | -1.3 to +1.3 dB, r 0.31 at 125 Hz, <= 0.19 above | -1.0 to +4.0 dB, r 0.44 at 125 Hz |
+
+The right a little louder on the plates (B+5 sits a few volts above B+4). STEREO moves the
+plates' left side by -39 dB (production; -24 dB at draft-1x, its supply partition). A
+render costs 1.4-1.5x the mono unit's (production, 3 s: the plate 15.1 -> 22.3 s).
+
+**In the app.** A stereo insert (`print::stereo_out`: a circuit probing `out_r` with its
+`stereo` on) prints once from its input's mid into both channels, each mixed with its own
+side's dry (`print_uncached_stereo`; the key `stereo_key`, the cache file two channels); the
+inserts after it print dual-mono; a mono track's print becomes stereo from there, and so
+does a bake. A chain's end plays a stereo end's left and right (as the 351-2's). Live at
+draft-1x on this desktop: the 6G15 75% load (48% mono), no dropouts; the plate 121% (70%
+mono) and the foil 97% (63%) drop out: STEREO is for prints there. Cutting the second
+amplifier onto a thread of its own (`panel::Device::partition`) diverged: the cut runs
+through its grid, fed by the pickup's 1 nF across the cut. What would work: the second
+pickup's medium in the amplifier's part, sensing the exciter a sample late (partition.rs
+does that for a tape's record head only); not built.
+
 ### The spring's research (2026-10-30; used by the status above)
 
 - Accutronics / Belton Type 4 part code (Belton's "Part Numbering Specifications",
@@ -489,10 +542,9 @@ sourced; otherwise a plate driven by electronics we have, or a plate in the tube
 
 - **~~Where the track goes in the order.~~** Picked up 2026-10-30 (the user), the plate
   first, its first use the session's sends (SESSION_FX_PLAN.md).
-- **Stereo returns.** The EMT 140's two pickups make a stereo pair. Devices and prints
-  are mono today: a plate device with two outputs means a print with two channels and an
-  FX track with a stereo return. Recommended: one pickup first (mono, panned), the pair
-  right after E7.
+- **~~Stereo returns.~~** Built 2026-11-09 (the user's ask: all three reverbs): see
+  "Status (2026-11-09): stereo". The FX track with a stereo return waits for sends
+  (SESSION_FX_PLAN.md F4).
 - **~~Live chaining in the app.~~** Built 2026-10-31 (the user's call: a device that goes
   at a chain's end, the Play view as the debug window): `player::EndDevice` /
   `Player::set_end`, a second device on a thread of its own (its partitions on theirs),

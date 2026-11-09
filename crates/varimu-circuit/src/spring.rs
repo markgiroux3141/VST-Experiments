@@ -140,17 +140,66 @@ pub fn characteristic_impedance_ns_per_m(c: &SpringTankComponent) -> f64 {
 }
 
 /// The spring tank part (`parts.spring_tank`): the input coil, the springs and the output
-/// coil.
+/// coil; `out_r`, a split tank (every second spring on an output coil of its own).
 pub fn spring_tank(
     name: &str,
     plus: &str,
     minus: &str,
     out: &str,
     c: &SpringTankComponent,
-) -> Vec<Element> {
+    out_r: Option<&str>,
+) -> Result<Vec<Element>, Error> {
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let k = c.input_force_per_a;
-    vec![
+    let all: Vec<[f64; 3]> = c
+        .springs
+        .iter()
+        .map(|s| {
+            [
+                0.5 * s.wire_diameter_m,
+                0.5 * s.helix_diameter_m,
+                s.wire_length_m(),
+            ]
+        })
+        .collect();
+    if let Some(o) = out_r
+        && all.len() < 2
+    {
+        return Err(Error(format!(
+            "{} has one spring: it can't be split onto {o}",
+            c.name
+        )));
+    }
+    let medium = |el: String, springs: Vec<[f64; 3]>, node: String| {
+        Element::Spring(Spring {
+            name: el,
+            sense_pos: format!("{n}_c"),
+            sense_neg: minus.to_string(),
+            force_per_v: k / c.input_re_ohm,
+            out: node,
+            out_per_m_s: c.output_v_per_m_s,
+            density_kg_m3: c.density_kg_m3,
+            youngs_pa: c.youngs_pa,
+            springs,
+            f_max_hz: c.f_max_hz,
+            decay: decay_table(c.t60_500hz_s, c.loss_factor),
+            tail_db: c.tail_db,
+            saturation_v: c.input_saturation_a * c.input_re_ohm,
+        })
+    };
+    // Split: the first, third, ... spring on out, the second, fourth, ... on out_r.
+    let every = |from: usize| {
+        all.iter()
+            .skip(from)
+            .step_by(2)
+            .copied()
+            .collect::<Vec<_>>()
+    };
+    let left = match out_r {
+        Some(_) => every(0),
+        None => all.clone(),
+    };
+    let mut els = vec![
         Element::Inductor(Inductor {
             name: format!("L{upper}_in"),
             a: plus.to_string(),
@@ -169,31 +218,7 @@ pub fn spring_tank(
             b: minus.to_string(),
             r_ohm: c.input_re_ohm,
         }),
-        Element::Spring(Spring {
-            name: format!("V{upper}"),
-            sense_pos: format!("{n}_c"),
-            sense_neg: minus.to_string(),
-            force_per_v: k / c.input_re_ohm,
-            out: format!("{n}_e"),
-            out_per_m_s: c.output_v_per_m_s,
-            density_kg_m3: c.density_kg_m3,
-            youngs_pa: c.youngs_pa,
-            springs: c
-                .springs
-                .iter()
-                .map(|s| {
-                    [
-                        0.5 * s.wire_diameter_m,
-                        0.5 * s.helix_diameter_m,
-                        s.wire_length_m(),
-                    ]
-                })
-                .collect(),
-            f_max_hz: c.f_max_hz,
-            decay: decay_table(c.t60_500hz_s, c.loss_factor),
-            tail_db: c.tail_db,
-            saturation_v: c.input_saturation_a * c.input_re_ohm,
-        }),
+        medium(format!("V{upper}"), left, format!("{n}_e")),
         Element::Inductor(Inductor {
             name: format!("L{upper}_out"),
             a: format!("{n}_e"),
@@ -206,5 +231,21 @@ pub fn spring_tank(
             b: out.to_string(),
             r_ohm: c.output_re_ohm,
         }),
-    ]
+    ];
+    if let Some(o) = out_r {
+        els.push(medium(format!("V{upper}_R"), every(1), format!("{n}_e2")));
+        els.push(Element::Inductor(Inductor {
+            name: format!("L{upper}_out2"),
+            a: format!("{n}_e2"),
+            b: format!("{n}_b2"),
+            l_h: c.output_le_h,
+        }));
+        els.push(Element::Resistor(Resistor {
+            name: format!("R{upper}_out2"),
+            a: format!("{n}_b2"),
+            b: o.to_string(),
+            r_ohm: c.output_re_ohm,
+        }));
+    }
+    Ok(els)
 }

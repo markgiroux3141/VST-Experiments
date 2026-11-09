@@ -973,7 +973,14 @@ large-signal figures), the Fender 6G15 `config/circuits/fender_6g15.yaml` (the a
 `fender_6g15`, a chain end, 0.40x load; `scripts/spring_report.py`); the EMT 240 as a plate
 (its brochure: bending, "constant resonant density"), `EMT240@1`, `foil_reverb.yaml` (the
 app's `foil_reverb`; `plate_report.py --circuit foil_reverb`). `scripts/reverb_listen.py`:
-one clip through the three, loudness-matched. Open: the user listens.
+one clip through the three, loudness-matched. Open: the user listens. **Stereo** (2026-11-09,
+REVERB_PLAN.md "Status (2026-11-09): stereo"): each has a STEREO switch (`stereo`, off by
+default) and `out_r`; the plate and the foil a second pickup (`EMT140@2` / `EMT240@2`'s
+`pickup2_xy`, placed by `scripts/plate_pickups.py`) and pickup amplifier, the 6G15 a split
+tank (a spring per side; not Fender's); the `plate` / `spring_tank` parts' optional fourth
+node `out_r` and `stereo` param (both builders). A stereo insert prints its input's mid into
+both channels (`print::stereo_out`), on a mono track too; `scripts/stereo_reverb_report.py`.
+Live, only the 6G15's stereo fits (the plate's and foil's drop out: for prints).
 
 **Devices in the session** ([docs/SESSION_FX_PLAN.md](docs/SESSION_FX_PLAN.md), 2026-10-30;
 milestones F1-F5): processors move into the Session view as track inserts and sends,

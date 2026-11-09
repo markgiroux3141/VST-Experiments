@@ -168,3 +168,29 @@ def test_the_part_and_its_validation() -> None:
         divider_with_springs(dataclasses.replace(small_springs(), springs=((3e-3, 2e-3, 4.0),)))
     with pytest.raises(IRError, match="ground or the input"):
         divider_with_springs(dataclasses.replace(small_springs(), out="0"))
+
+
+def test_a_split_tank_puts_every_second_spring_on_out_r() -> None:
+    """STEREO (docs/REVERB_PLAN.md, "Stereo"): the springs on two output coils, the input
+    coil and its load as the whole tank's; the halves' responses sum to the whole tank's."""
+    c = tank()
+    whole = parts.spring_tank("SP", "ti", "0", "to", c)
+    split = parts.spring_tank("SP", "ti", "0", "to", c, out_r="to_r")
+    assert [e.name for e in split] == [e.name for e in whole] + ["VSP_R", "LSP_out2", "RSP_out2"]
+    assert split[:3] == whole[:3]  # the input coil and the springs' load
+    left, right = split[3], split[6]
+    assert isinstance(left, Spring) and isinstance(right, Spring)
+    assert left.springs == whole[3].springs[0::2] and right.springs == whole[3].springs[1::2]
+    assert (left.sense_pos, left.sense_neg) == (right.sense_pos, right.sense_neg)
+    assert split[-1].b == "to_r"
+    spec = sp.spec_of(c, 4000.0)
+    fs = 12000.0
+    h = sp.impulse_response(spec, fs)
+    h0 = sp.impulse_response(dataclasses.replace(spec, springs=spec.springs[0::2]), fs)
+    h1 = sp.impulse_response(dataclasses.replace(spec, springs=spec.springs[1::2]), fs)
+    n = min(len(h), len(h0), len(h1))
+    assert np.max(np.abs(h0[:n] + h1[:n] - h[:n])) < 1e-12 * np.max(np.abs(h))
+    with pytest.raises(ValueError, match="one spring"):
+        parts.spring_tank(
+            "SP", "ti", "0", "to", dataclasses.replace(c, springs=c.springs[:1]), "to_r"
+        )

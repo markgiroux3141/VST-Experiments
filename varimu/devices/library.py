@@ -1408,6 +1408,13 @@ EMT140_GRID_HZ = [
 ]
 
 
+# The stereo plates' second pickups (fractions of the sides; the builds' sources): placed by
+# scripts/plate_pickups.py, each about as loud as the first pickup per octave (125 Hz-2 kHz)
+# and uncorrelated with it, on the exciter's other side at an unequal distance.
+EMT140_PICKUP2_XY = [0.75, 0.55]
+EMT240_PICKUP2_XY = [0.8, 0.3]
+
+
 def build_emt140() -> dict[str, Any]:
     """An EMT 140 plate (docs/REVERB_PLAN.md, E6): the plate and its suspension from the
     literature's model of it, its decay against frequency for three damper settings from
@@ -1446,10 +1453,17 @@ def build_emt140() -> dict[str, Any]:
         "positions": {
             "drive_xy": [0.52, 0.53],
             "pickup_xy": [0.47, 0.62],
+            "pickup2_xy": EMT140_PICKUP2_XY,
             "source": f"provisional: {ducceschi} (Fig. 3) and {russo} (p.48): the models' "
             "exciter and pickup, fractions of the sides; the brochure (pp.3-4) puts the "
             "exciter on the middle of three bridges across the frame and two pickups at "
-            "unequal distances either side, without dimensions",
+            "unequal distances either side, without dimensions; pickup2_xy (the 140 TS's "
+            "second pickup): provisional, on the exciter's other side from the first and "
+            "farther from it (0.46 m against 0.13 m), as the brochure (p.6) has the two "
+            "'mounted at unequal distances from the driving coil' so their outputs are "
+            "'entirely uncorrelated'; placed where it is as loud as the first per octave "
+            "(125 Hz-2 kHz, within 1.6 dB) and uncorrelated with it (|r| <= 0.11): "
+            "scripts/plate_pickups.py",
         },
         "exciter": {
             "re_ohm": 6.0,
@@ -2402,8 +2416,14 @@ def build_emt240() -> dict[str, Any]:
         "positions": {
             "drive_xy": [0.52, 0.53],
             "pickup_xy": [0.47, 0.62],
+            "pickup2_xy": EMT240_PICKUP2_XY,
             "source": "provisional: EMT140@1's model positions (fractions of the sides); the "
-            "240's aren't published",
+            "240's aren't published; pickup2_xy, the stereo unit's second pickup (the brochure, "
+            f"p.3: 'for both stereo and mono channels', {EMT240_BROCHURE}): provisional, on the "
+            "exciter's other side at an unequal distance (0.10 m against 0.03 m), placed "
+            "where it is as loud as the first per octave (125 Hz-2 kHz, within 0.8 dB) and "
+            "uncorrelated with it (|r| <= 0.21 at 125 Hz, 0.05 above): "
+            "scripts/plate_pickups.py",
         },
         "exciter": {
             "re_ohm": 6.0,

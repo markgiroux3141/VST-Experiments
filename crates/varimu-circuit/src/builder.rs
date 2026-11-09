@@ -548,6 +548,10 @@ const MACROS: [&str; 31] = [
     "opamp",
 ];
 
+/// The macros that take one more, optional node (builder.py's `optional_nodes`): a stereo
+/// medium's `out_r`.
+const ONE_MORE_NODE: &[&str] = &["plate", "spring_tank"];
+
 fn macro_of(kind: &str) -> Macro {
     use Kind::*;
     let p = |n, k| Param(n, k, None);
@@ -645,10 +649,18 @@ fn macro_of(kind: &str) -> Macro {
         ),
         "plate" => (
             Some(3),
-            vec![p("component", Raw), p("decay_500hz_s", Physical)],
+            vec![
+                p("component", Raw),
+                p("decay_500hz_s", Physical),
+                num("stereo", 1.0),
+            ],
             false,
         ),
-        "spring_tank" => (Some(3), vec![p("component", Raw)], false),
+        "spring_tank" => (
+            Some(3),
+            vec![p("component", Raw), num("stereo", 1.0)],
+            false,
+        ),
         "harp" => (
             Some(1),
             vec![
@@ -820,10 +832,21 @@ fn expand_part(
     }
     let conn = entry.get(kind).unwrap();
     let nodes: Vec<String> = match m.n_nodes {
-        Some(n) => match conn.as_list() {
-            Some(l) if l.len() == n => l.iter().map(Value::py_str).collect(),
-            _ => return Err(ctx.fail(name, format!("{kind} takes {n} nodes, got {conn}"))),
-        },
+        Some(n) => {
+            // A stereo medium's optional last node (`out_r`): builder.py's optional_nodes.
+            let top = n + usize::from(ONE_MORE_NODE.contains(&kind));
+            match conn.as_list() {
+                Some(l) if (n..=top).contains(&l.len()) => l.iter().map(Value::py_str).collect(),
+                _ => {
+                    let count = if top == n {
+                        format!("{n}")
+                    } else {
+                        format!("{n}-{top}")
+                    };
+                    return Err(ctx.fail(name, format!("{kind} takes {count} nodes, got {conn}")));
+                }
+            }
+        }
         None => Vec::new(),
     };
     let a = resolve_params(ctx, name, &m, entry)?;
@@ -1645,6 +1668,18 @@ fn harp_part(
     ])
 }
 
+/// A stereo medium's out_r (builder.py's `_stereo_out`): its fourth node, unless `stereo`
+/// is 0 (a STEREO switch off: the part builds mono and leaves out_r alone).
+fn stereo_out<'a>(
+    ctx: &mut Context,
+    name: &str,
+    nodes: &'a [String],
+    a: &Args,
+) -> Result<Option<&'a str>, Error> {
+    let on = ctx.float(&format!("{name}.stereo"), &a["stereo"])? != 0.0;
+    Ok(nodes.get(3).filter(|_| on).map(String::as_str))
+}
+
 fn plate_part(
     ctx: &mut Context,
     name: &str,
@@ -1657,9 +1692,9 @@ fn plate_part(
         .and_then(|r| ctx.lib.plate(&r.to_string()))
         .map_err(|e| ctx.fail(&where_, e.0))?;
     let decay = ctx.float(&format!("{name}.decay_500hz_s"), &a["decay_500hz_s"])?;
-    Ok(crate::plate::plate(
-        name, &nodes[0], &nodes[1], &nodes[2], &model, decay,
-    ))
+    let out_r = stereo_out(ctx, name, nodes, a)?;
+    crate::plate::plate(name, &nodes[0], &nodes[1], &nodes[2], &model, decay, out_r)
+        .map_err(|e| ctx.fail(name, e.0))
 }
 
 fn spring_tank_part(
@@ -1673,9 +1708,9 @@ fn spring_tank_part(
     let model = versions::require_pinned(&ctx.lib.components_dir(), &reference)
         .and_then(|r| ctx.lib.spring_tank(&r.to_string()))
         .map_err(|e| ctx.fail(&where_, e.0))?;
-    Ok(crate::spring::spring_tank(
-        name, &nodes[0], &nodes[1], &nodes[2], &model,
-    ))
+    let out_r = stereo_out(ctx, name, nodes, a)?;
+    crate::spring::spring_tank(name, &nodes[0], &nodes[1], &nodes[2], &model, out_r)
+        .map_err(|e| ctx.fail(name, e.0))
 }
 
 fn switch(

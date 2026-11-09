@@ -1925,8 +1925,9 @@ impl SessionView {
                         continue;
                     };
                     // A stereo lane printed dual-mono: each insert's right channel too (a
-                    // right equal to the left printed once: the left's).
-                    let stereo = j.stereo;
+                    // right equal to the left printed once: the left's). A stereo insert (a
+                    // reverb with STEREO on) makes a mono lane's print stereo from there.
+                    let stereo = j.stereo || prints.iter().any(|p| p.right.is_some());
                     let right_of = |p: &varimu_app::print::Print| {
                         p.right.clone().unwrap_or_else(|| p.audio.clone())
                     };
@@ -3671,9 +3672,10 @@ impl SessionView {
         let b = self.bake.take().expect("a render");
         let (audio, right) = match b.job.join() {
             Some(Ok(prints)) => match prints.last() {
+                // A stereo insert (a reverb with STEREO on) makes a mono track's take stereo.
                 Some(p) => (
                     (*p.audio).clone(),
-                    b.stereo
+                    (b.stereo || p.right.is_some())
                         .then(|| (*p.right.clone().unwrap_or_else(|| p.audio.clone())).clone()),
                 ),
                 None => return,

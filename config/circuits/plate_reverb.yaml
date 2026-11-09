@@ -11,6 +11,12 @@
 # Used as a send in the Session view (docs/SESSION_FX_PLAN.md): the output is the plate
 # only (wet). DECAY is the damper, read as the decay at 500 Hz as on the EMT's remote.
 #
+# STEREO (`stereo`, the EMT 140 TS's arrangement, its brochure p.6): the plate's second
+# pickup (EMT140@2's pickup2_xy) into a second pickup amplifier (a second 12AU7, RETURN's
+# second gang, its own decoupling from B+1) on `out_r`. A stereo source's mid drives the
+# plate (the brochure's "M" channel: the app's chain end and inserts send the mid). Off,
+# the second pickup and amplifier are out of the circuit and `out_r` follows `out`.
+#
 # Sources:
 #   "5e3: ..."         the same part as the Fender 5E3's (config/circuits/fender_5e3.yaml):
 #                      the push-pull 6V6GT stage, its output transformer and its supply
@@ -19,9 +25,10 @@
 
 title: "Plate reverb (EMT 140 plate)"
 input: in
-probes: [out, ex, pu, g1, p1, g3, oa, ob, p6a, p6b, k6, p2, g2b, b1, b2, b3, b4]
+probes: [out, out_r, ex, pu, g1, p1, g3, oa, ob, p6a, p6b, k6, p2, g2b, b1, b2, b3, b4]
 
 controls:
+  stereo: {value: 0, choices: [0, 1], unit: switch, source: "web: https://www.barryrudolph.com/recall/manuals/emt140ts.pdf (the 140 TS: one plate, two pickups at unequal distances from the driving coil, their outputs uncorrelated, p.6)", notes: "1: the second pickup and its amplifier on out_r; 0: mono, out_r = out"}
   drive: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "provisional: the send's level into the drive amplifier (a 1 MEG audio-taper pot), as a plate's input level control"}
   decay_500hz_s: {value: 2.5, min: 1.0, max: 4.8, unit: s, source: "web: https://www.barryrudolph.com/recall/manuals/emt140ts.pdf (the damper: 1 to 4 s at 500 Hz in the technical data, p.8; the measured curves reach 4.8 s, data/datasheets/emt_140ts.provenance.yaml)", notes: "the damper's distance, set by the decay at 500 Hz it gives"}
   return_level: {value: 0.7, min: 0.0, max: 1.0, unit: rotation, source: "provisional: the pickup amplifier's output level (a 1 MEG audio-taper pot)"}
@@ -30,7 +37,7 @@ controls:
 
 values:
   # --- The plate ---------------------------------------------------------------------
-  plate_model: {value: EMT140@1, source: "config/components/emt140/1.yaml (the plate, its decay curves, its provisional transducers)"}
+  plate_model: {value: EMT140@2, source: "config/components/emt140/2.yaml (the plate, its decay curves, its provisional transducers; version 2 adds the second pickup)"}
 
   # --- Drive amplifier: input and 12AX7 gain stage ---------------------------------------
   r_input_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a tube line input's 1 MEG, here the DRIVE pot itself)"}
@@ -91,6 +98,10 @@ values:
   r_b23_ohm: {value: 22.0e+3, source: "5e3: 22K from B+2 to B+3"}
   r_b34_ohm: {value: 10.0e+3, source: "provisional: model knowledge (a decoupling stage for the pickup amplifier, whose gain follows a low-level pickup: B+3's 120 Hz ripple, ~95 mV, came through at -46 dBFS)"}
   c_b4_f: {value: 47.0e-6, source: "provisional: model knowledge (with r_b34_ohm, ~350x less ripple at 120 Hz)"}
+  r_b15_ohm: {value: 27.0e+3, source: "derived: STEREO's second pickup amplifier fed from B+1 (372 V at idle; its low source impedance: B+2 and the rest stay put, so STEREO leaves the first side alone) through r_b15_ohm + r_b55_ohm, 49k, to about B+4's idle 162 V at its ~4.2 mA (the first amplifier's, through RB34), E12 values"}
+  r_b55_ohm: {value: 22.0e+3, source: "derived: see r_b15_ohm"}
+  c_b5_f: {value: 47.0e-6, source: "provisional: model knowledge (two RC stages, each 47 uF: B+1's ripple down ~1e-6 at 120 Hz)"}
+  r_mono_tie_ohm: {value: 1.0, source: "numerical: out_r tied to out with STEREO off (out_r follows out; its only other part is numerical_leak_ohm to ground, a 1e-4..1e-3 load on out)"}
   numerical_leak_ohm: {value: 1.0e+9, source: "numerical: DC path for the B+ nodes (not physical)"}
 
 mains:
@@ -105,6 +116,8 @@ devices:
   V6B: {device: 6V6GT@1}
   V2A: {device: 12AU7@1}
   V2B: {device: 12AU7@1}
+  V3A: {device: 12AU7@1}
+  V3B: {device: 12AU7@1}
   V5: {device: rectifier_tube}
 
 sections:
@@ -128,6 +141,12 @@ sections:
       RB34: {R: [b3, b4], r: r_b34_ohm}
       CB4: {C: [b4, "0"], c: c_b4_f}
       RLEAK: {R: [b1, "0"], r: numerical_leak_ohm}
+      # STEREO: the second pickup amplifier's supply, its first RC stage off B+1.
+      SWB5:
+        switch: stereo
+        parts:
+          RB15: {R: [b1, b5a], r: r_b15_ohm, in: [1]}
+          CB5A: {C: [b5a, "0"], c: c_b5_f, in: [1]}
 
   - title: drive amplifier
     parts:
@@ -168,10 +187,12 @@ sections:
     parts:
       # The exciter on the transformer's secondary; the pickup (behind its capacitance)
       # into the pickup amplifier's grid.
+      # STEREO: its second pickup on pu_r.
       PL:
-        plate: [ex, "0", pu]
+        plate: [ex, "0", pu, pu_r]
         component: plate_model
         decay_500hz_s: decay_500hz_s
+        stereo: stereo
 
   - title: pickup amplifier
     parts:
@@ -193,3 +214,35 @@ sections:
       RCF: {R: [k2b, "0"], r: r_cathode_follower_ohm}
       COUT: {C: [k2b, out], c: c_out_f}
       RLOAD: {R: [out, "0"], r: r_load_ohm}
+      # STEREO off: out_r tied to out.
+      SWMONO:
+        switch: stereo
+        parts:
+          RMONO: {R: [out, out_r], r: r_mono_tie_ohm, in: [0]}
+          RMONOL: {R: [out_r, "0"], r: numerical_leak_ohm, in: [0]}
+
+  - title: pickup amplifier r
+    parts:
+      # STEREO: the second pickup's amplifier, the first's copy on its own B+5 (RETURN's
+      # second gang), a thread of its own live (panel::Device::partition).
+      SWPR:
+        switch: stereo
+        parts:
+          RB55: {R: [b5a, b5], r: r_b55_ohm, in: [1]}
+          CB5: {C: [b5, "0"], c: c_b5_f, in: [1]}
+          RPGR: {R: [pu_r, "0"], r: r_pickup_grid_ohm, in: [1]}
+          XV3A: {device: [p3r, pu_r, k3r], model: V3A, in: [1]}
+          RK3R: {R: [k3r, "0"], r: r_cathode2_ohm, in: [1]}
+          CK3R: {C: [k3r, "0"], c: c_cathode2_f, in: [1]}
+          RPL3R: {R: [b5, p3r], r: r_plate2_ohm, in: [1]}
+          CC3R: {C: [p3r, rvr], c: c_couple2_f, in: [1]}
+          RRETR: {pot: ["0", rvwr, rvr], r: return_pot_ohm, at: return_level, taper_mid: audio_taper_mid, in: [1]}
+          CRVR: {C: [rvwr, g3b], c: c_couple2_f, in: [1]}
+          RBHR: {R: [b5, gbr], r: r_cf_bias_ohm, in: [1]}
+          RBLR: {R: [gbr, "0"], r: r_cf_bias_low_ohm, in: [1]}
+          CBBR: {C: [gbr, "0"], c: c_cf_bias_f, in: [1]}
+          RCFGR: {R: [g3b, gbr], r: r_cf_grid_ohm, in: [1]}
+          XV3B: {device: [b5, g3b, k3b], model: V3B, in: [1]}
+          RCFR: {R: [k3b, "0"], r: r_cathode_follower_ohm, in: [1]}
+          COUTR: {C: [k3b, out_r], c: c_out_f, in: [1]}
+          RLOADR: {R: [out_r, "0"], r: r_load_ohm, in: [1]}

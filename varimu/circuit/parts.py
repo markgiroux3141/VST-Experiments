@@ -967,26 +967,37 @@ class Tolerance:
 
 
 def plate(
-    name: str, plus: str, minus: str, out: str, c: plt.PlateComponent, decay_500hz_s: float
+    name: str,
+    plus: str,
+    minus: str,
+    out: str,
+    c: plt.PlateComponent,
+    decay_500hz_s: float,
+    out_r: str | None = None,
 ) -> list[Element]:
     """A plate reverb's plate between its exciter's terminals (plus, minus) and its pickup's
     (out to ground): the exciter coil (L<name>_le, then R<name>_mot, the plate's resistive
     load BL^2 / (8 sqrt(D rho H)), then R<name>_re into minus), the plate V<name> sensing
     the coil's current across R<name>_re (force BL / Re per volt) and driving <name>_p with
     the pickup's open-circuit voltage, and the pickup's capacitance C<name>_pu from there
-    to out. The damper set to decay_500hz_s at 500 Hz (varimu.devices.plate)."""
+    to out. The damper set to decay_500hz_s at 500 Hz (varimu.devices.plate).
+
+    `out_r` (the stereo pair): the component's second pickup, V<NAME>_R sensing the same
+    coil (one plate, two places on it read) and driving <name>_p2, behind C<NAME>_pu2 to
+    out_r."""
     n, upper = name.lower(), name.upper()
     bl = c.exciter_bl_tm
-    return [
-        Inductor(f"L{upper}_le", plus, f"{n}_a", c.exciter_le_h),
-        Resistor(f"R{upper}_mot", f"{n}_a", f"{n}_c", bl * bl / plt.plate_impedance_ns_per_m(c)),
-        Resistor(f"R{upper}_re", f"{n}_c", minus, c.exciter_re_ohm),
-        Plate(
-            name=f"V{upper}",
+    if out_r is not None and c.pickup2_xy is None:
+        raise ValueError(f"{c.name} has no second pickup (positions.pickup2_xy) for {out_r}")
+    decay = plt.decay_table(c, decay_500hz_s)
+
+    def medium(el: str, xy: tuple[float, float], node: str) -> Plate:
+        return Plate(
+            name=el,
             sense_pos=f"{n}_c",
             sense_neg=minus,
             force_per_v=bl / c.exciter_re_ohm,
-            out=f"{n}_p",
+            out=node,
             out_per_m_s2=c.pickup_v_per_m_s2,
             lx_m=c.lx_m,
             ly_m=c.ly_m,
@@ -996,51 +1007,89 @@ def plate(
             poisson=c.poisson,
             tension_n_m=c.tension_n_m,
             drive_xy=c.drive_xy,
-            pickup_xy=c.pickup_xy,
+            pickup_xy=xy,
             f_max_hz=c.f_max_hz,
-            decay=plt.decay_table(c, decay_500hz_s),
+            decay=decay,
             tail_db=c.tail_db,
-        ),
+        )
+
+    els: list[Element] = [
+        Inductor(f"L{upper}_le", plus, f"{n}_a", c.exciter_le_h),
+        Resistor(f"R{upper}_mot", f"{n}_a", f"{n}_c", bl * bl / plt.plate_impedance_ns_per_m(c)),
+        Resistor(f"R{upper}_re", f"{n}_c", minus, c.exciter_re_ohm),
+        medium(f"V{upper}", c.pickup_xy, f"{n}_p"),
         Capacitor(f"C{upper}_pu", f"{n}_p", out, c.pickup_c_f),
     ]
+    if out_r is not None:
+        assert c.pickup2_xy is not None
+        els += [
+            medium(f"V{upper}_R", c.pickup2_xy, f"{n}_p2"),
+            Capacitor(f"C{upper}_pu2", f"{n}_p2", out_r, c.pickup_c_f),
+        ]
+    return els
 
 
 def spring_tank(
-    name: str, plus: str, minus: str, out: str, c: spr.SpringTankComponent
+    name: str,
+    plus: str,
+    minus: str,
+    out: str,
+    c: spr.SpringTankComponent,
+    out_r: str | None = None,
 ) -> list[Element]:
     """A spring reverb tank between its input coil's terminals (plus, minus) and its output
     coil's hot end (out; the cold end grounded, as a C1B tank's output is): the input coil
     (L<NAME>_in, then R<NAME>_mot, the springs' load force_per_a^2 / their impedance, then
     R<NAME>_in into minus), the springs V<NAME> sensing the coil's current across
     R<NAME>_in and driving <name>_e with the output coil's EMF, then the output coil
-    L<NAME>_out and R<NAME>_out to out (varimu.devices.spring)."""
+    L<NAME>_out and R<NAME>_out to out (varimu.devices.spring).
+
+    `out_r` (a split tank, the stereo option): the springs' far ends on two output coils,
+    the first, third, ... spring's on out (V<NAME>, as above) and the second, fourth, ...
+    on out_r (V<NAME>_R driving <name>_e2, then L<NAME>_out2 and R<NAME>_out2, the same
+    coil): the input and its load unchanged, every spring driven by the one input coil.
+    A tank needs two springs or more for it."""
     n, upper = name.lower(), name.upper()
     k = c.input_force_per_a
     spec = spr.spec_of(c)
-    return [
+    if out_r is not None and len(spec.springs) < 2:
+        raise ValueError(f"{c.name} has one spring: it can't be split onto {out_r}")
+
+    def medium(el: str, springs: tuple, node: str) -> Spring:
+        return Spring(
+            name=el,
+            sense_pos=f"{n}_c",
+            sense_neg=minus,
+            force_per_v=k / c.input_re_ohm,
+            out=node,
+            out_per_m_s=c.output_v_per_m_s,
+            density_kg_m3=c.density_kg_m3,
+            youngs_pa=c.youngs_pa,
+            springs=springs,
+            f_max_hz=spec.f_max_hz,
+            decay=spec.decay,
+            tail_db=spec.tail_db,
+            saturation_v=c.input_saturation_a * c.input_re_ohm,
+        )
+
+    left = spec.springs if out_r is None else spec.springs[0::2]
+    els: list[Element] = [
         Inductor(f"L{upper}_in", plus, f"{n}_a", c.input_le_h),
         Resistor(
             f"R{upper}_mot", f"{n}_a", f"{n}_c", k * k / spr.characteristic_impedance_ns_per_m(c)
         ),
         Resistor(f"R{upper}_in", f"{n}_c", minus, c.input_re_ohm),
-        Spring(
-            name=f"V{upper}",
-            sense_pos=f"{n}_c",
-            sense_neg=minus,
-            force_per_v=k / c.input_re_ohm,
-            out=f"{n}_e",
-            out_per_m_s=c.output_v_per_m_s,
-            density_kg_m3=c.density_kg_m3,
-            youngs_pa=c.youngs_pa,
-            springs=spec.springs,
-            f_max_hz=spec.f_max_hz,
-            decay=spec.decay,
-            tail_db=spec.tail_db,
-            saturation_v=c.input_saturation_a * c.input_re_ohm,
-        ),
+        medium(f"V{upper}", left, f"{n}_e"),
         Inductor(f"L{upper}_out", f"{n}_e", f"{n}_b", c.output_le_h),
         Resistor(f"R{upper}_out", f"{n}_b", out, c.output_re_ohm),
     ]
+    if out_r is not None:
+        els += [
+            medium(f"V{upper}_R", spec.springs[1::2], f"{n}_e2"),
+            Inductor(f"L{upper}_out2", f"{n}_e2", f"{n}_b2", c.output_le_h),
+            Resistor(f"R{upper}_out2", f"{n}_b2", out_r, c.output_re_ohm),
+        ]
+    return els
 
 
 def harp(name: str, out: str, data: dict, rate_hz: float, contact_rate_hz: float) -> list[Element]:

@@ -27,16 +27,23 @@
 # Probe voltages printed on the drawing (+-20%): V1A plate 105, cathode 1.8; V1B plate
 # 120, cathode 2; 6K6GT plate 285, cathode 24; V3A plate 160, cathode 1.2; V3B grid 120,
 # cathode 130; the rails 300, 295, 250 (tests/test_fender_6g15.py).
+#
+# STEREO (`stereo`, not Fender's: a modded unit): the tank split, its second spring on an
+# output coil of its own (ACC4AB3C1B's two springs, one per side), into a second recovery
+# stage (a 7025, the first's copy), TONE's and MIXER's second gangs on `out_r`; the dry
+# follower feeds both MIXER gangs. A stereo source's mid drives the tank. Off, the tank
+# and the circuit are Fender's and `out_r` follows `out`.
 
 title: "Fender 6G15 Reverb (spring tank)"
 input: in
-probes: [out, wet, dry, tap, p1a, k1a, dw, g1b, p1b, k1b, g6, p6, k6, ti, sp_c, to, p3a, k3a, tone, g3b, k3b, b1, b2, b3, hv]
+probes: [out, out_r, wet, dry, tap, p1a, k1a, dw, g1b, p1b, k1b, g6, p6, k6, ti, sp_c, to, p3a, k3a, tone, g3b, k3b, b1, b2, b3, hv]
 # A guitar plugs into it, an amplifier's input follows it.
 full_scale:
   input_volts_peak: {value: 1.0, source: "web: https://www.sound-au.com/articles/guitar-voltage.htm (a hot pickup peaks just under 1 V)"}
   output_volts_peak: {value: 1.0, source: "derived: the dry path is a cathode follower (about unity), so 0 dBFS out is about the guitar's 0 dBFS in"}
 
 controls:
+  stereo: {value: 0, choices: [0, 1], unit: switch, source: "provisional: model knowledge (design, 2026-11-09: a modded tank, each of the 4AB3C1B's two springs on an output coil of its own, and a second recovery stage; Fender's 6G15 is mono)", notes: "1: the split tank's second spring and its recovery on out_r; 0: Fender's mono unit, out_r = out"}
   dwell: {value: 0.3, min: 0.0, max: 1.0, unit: rotation, source: "sch: DWELL 250K-L, the drive into the tank", notes: "the default 0.3 (\"3\"): a session track at -18 dBFS rms already drives the tank past its rated 28 mA there; past ~0.5 the input transducer saturates (the drip)"}
   tone: {value: 0.6, min: 0.0, max: 1.0, unit: rotation, source: "sch: TONE 50K-L on the recovery's output", notes: "0 = dark (the wiper at the .01 to ground), 1 = bright (at the .1 from V3A)"}
   mixer: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "sch: MIXER 250K-L between the dry follower and the wet", notes: "0 = dry only, 1 = wet only"}
@@ -106,6 +113,7 @@ values:
   r_choke_ohm: {value: 175.0, source: "derived: the drawing's 300 - 295 V at ~28.5 mA (the 6K6GT's 24 mA and the 250 V rail's 4.5 mA, the 10K's 45 V)"}
   r_b23_ohm: {value: 10.0e+3, source: "sch: 10K 1W from +295 to +250 V"}
   numerical_leak_ohm: {value: 1.0e+9, source: "numerical: DC path for the B+ nodes (not physical)"}
+  r_mono_tie_ohm: {value: 1.0, source: "numerical: out_r tied to out with STEREO off (out_r follows out; its only other part is numerical_leak_ohm to ground, a 1e-4..1e-3 load on out)"}
 
 mains:
   v_rms: mains_v_rms
@@ -118,6 +126,7 @@ devices:
   V2: {device: 6K6GT@1}
   V3A: {device: 12AX7@1}
   V3B: {device: 12AX7@1}
+  V4A: {device: 12AX7@1}
   D1: {device: rectifier_diode}
 
 sections:
@@ -171,8 +180,13 @@ sections:
     parts:
       # The input coil on TR2's secondary ("input insulated": its other end to TR2's
       # grounded end); the output coil's cold end grounded, its hot end down the cable.
-      SP: {spring_tank: [ti, "0", to], component: tank_model}
+      # STEREO: the tank split, its second spring's output coil on to_r (a cable of its own).
+      SP: {spring_tank: [ti, "0", to, to_r], component: tank_model, stereo: stereo}
       CCABLE: {C: [to, "0"], c: c_cable_f}
+      SWSP:
+        switch: stereo
+        parts:
+          CCABLER: {C: [to_r, "0"], c: c_cable_f, in: [1]}
 
   - title: recovery
     parts:
@@ -197,3 +211,24 @@ sections:
       CDRYO: {C: [k3b, dry], c: c_dry_out_f}
       RMIX: {pot: [dry, out, wet], r: mixer_pot_ohm, at: mixer}
       RLOAD: {R: [out, "0"], r: r_load_ohm}
+
+  - title: recovery r
+    parts:
+      # STEREO: the second spring's recovery, V3A's copy, TONE's and MIXER's second gangs
+      # (the dry follower on both MIXER gangs); off, out_r tied to out.
+      SWRR:
+        switch: stereo
+        parts:
+          RMONO: {R: [out, out_r], r: r_mono_tie_ohm, in: [0]}
+          RMONOL: {R: [out_r, "0"], r: numerical_leak_ohm, in: [0]}
+          XV4A: {device: [p4a, to_r, k4a], model: V4A, in: [1]}
+          RK4A: {R: [k4a, "0"], r: r_cathode3a_ohm, in: [1]}
+          CK4A: {C: [k4a, "0"], c: c_cathode3a_f, in: [1]}
+          RPL4A: {R: [p4a, b3], r: r_plate3a_ohm, in: [1]}
+          CC4A: {C: [p4a, tone_r], c: c_couple3a_f, in: [1]}
+          RTONER: {pot: [tlr, twr, tone_r], r: tone_pot_ohm, at: tone, in: [1]}
+          CTONER: {C: [tlr, "0"], c: c_tone_f, in: [1]}
+          CWETR: {C: [twr, wet_r], c: c_wet_f, in: [1]}
+          RTLEAKR: {R: [tone_r, "0"], r: numerical_leak_ohm, in: [1]}
+          RMIXR: {pot: [dry, out_r, wet_r], r: mixer_pot_ohm, at: mixer, in: [1]}
+          RLOADR: {R: [out_r, "0"], r: r_load_ohm, in: [1]}
