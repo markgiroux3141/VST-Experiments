@@ -130,6 +130,27 @@ pub fn load(path: &Path, sample_rate: u32) -> Result<Vec<f64>, String> {
     ))
 }
 
+/// The file at `sample_rate` as one channel or two: a stereo file keeps left and right
+/// (unless they're identical: a mono recording saved as stereo stays mono), a mono file
+/// is its channel, a file of more channels is their average (as [`load`]). Each channel
+/// resampled as [`load`] does.
+pub fn load_channels(path: &Path, sample_rate: u32) -> Result<Vec<Vec<f64>>, String> {
+    let d = decode(path)?;
+    let chans = match d.channels.len() {
+        2 if d.channels[0] != d.channels[1] => d.channels.clone(),
+        2 => vec![d.channels[0].clone()],
+        1 => d.channels.clone(),
+        _ => vec![d.mono()],
+    };
+    if d.rate == sample_rate {
+        return Ok(chans);
+    }
+    Ok(chans
+        .iter()
+        .map(|x| resample_poly(x, sample_rate as usize, d.rate as usize, Pad::Zero))
+        .collect())
+}
+
 /// Mono float32 WAV (`varimu.sim.io.write_audio`).
 pub fn write_wav(path: &Path, x: &[f64], sample_rate: u32) -> Result<(), String> {
     if let Some(dir) = path.parent() {
@@ -218,9 +239,26 @@ pub fn normalize_gains_db(
     target_dbfs: f64,
     together: bool,
 ) -> Vec<f64> {
-    let gain = |x: &[f64]| {
-        let level = level_dbfs(x, rate, len_s);
-        if level <= -240.0 + 1e-9 || x.iter().all(|&v| v == 0.0) {
+    let files: Vec<Vec<Vec<f64>>> = files.iter().map(|x| vec![x.clone()]).collect();
+    normalize_gains_db_channels(&files, rate, len_s, target_dbfs, together)
+}
+
+/// [`normalize_gains_db`] of files of one or two channels each: a stereo file's level is
+/// its louder channel's (as the clip menu's normalize); together, a mono file counts in
+/// both channels of the sum. Mono files alone get exactly [`normalize_gains_db`]'s gains.
+pub fn normalize_gains_db_channels(
+    files: &[Vec<Vec<f64>>],
+    rate: u32,
+    len_s: f64,
+    target_dbfs: f64,
+    together: bool,
+) -> Vec<f64> {
+    let gain = |chans: &[Vec<f64>]| {
+        let level = chans
+            .iter()
+            .map(|x| level_dbfs(x, rate, len_s))
+            .fold(-240.0, f64::max);
+        if level <= -240.0 + 1e-9 || chans.iter().all(|x| x.iter().all(|&v| v == 0.0)) {
             0.0
         } else {
             (target_dbfs - level).clamp(-40.0, 40.0)
@@ -229,10 +267,18 @@ pub fn normalize_gains_db(
     if !together {
         return files.iter().map(|x| gain(x)).collect();
     }
-    let mut sum = vec![0.0; files.iter().map(Vec::len).max().unwrap_or(0)];
-    for x in files {
-        for (s, v) in sum.iter_mut().zip(x) {
-            *s += v;
+    let width = files.iter().map(Vec::len).max().unwrap_or(1).clamp(1, 2);
+    let n = files
+        .iter()
+        .flat_map(|f| f.iter().map(Vec::len))
+        .max()
+        .unwrap_or(0);
+    let mut sum = vec![vec![0.0; n]; width];
+    for f in files.iter().filter(|f| !f.is_empty()) {
+        for (ch, s) in sum.iter_mut().enumerate() {
+            for (s, v) in s.iter_mut().zip(&f[ch.min(f.len() - 1)]) {
+                *s += v;
+            }
         }
     }
     vec![gain(&sum); files.len()]
@@ -240,7 +286,63 @@ pub fn normalize_gains_db(
 
 #[cfg(test)]
 mod tests {
-    use super::{level_dbfs, loudest, normalize_gains_db};
+    use super::{
+        level_dbfs, load_channels, loudest, normalize_gains_db, normalize_gains_db_channels,
+    };
+
+    #[test]
+    fn stereo_files_load_as_two_channels() {
+        let dir = std::env::temp_dir().join(format!("varimu_load_lr_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let write = |name: &str, lr: &dyn Fn(usize) -> (f32, f32)| {
+            let path = dir.join(name);
+            let spec = hound::WavSpec {
+                channels: 2,
+                sample_rate: 48_000,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            };
+            let mut w = hound::WavWriter::create(&path, spec).unwrap();
+            for i in 0..4800 {
+                let (l, r) = lr(i);
+                w.write_sample(l).unwrap();
+                w.write_sample(r).unwrap();
+            }
+            w.finalize().unwrap();
+            path
+        };
+        let wide = write("wide.wav", &|i| ((i as f32 * 0.01).sin() * 0.5, 0.25));
+        let ch = load_channels(&wide, 48_000).unwrap();
+        assert_eq!(ch.len(), 2);
+        assert_eq!(ch[0].len(), 4800);
+        assert!(ch[1].iter().all(|&v| v == 0.25));
+        // Resampled: both channels, the same length.
+        let ch = load_channels(&wide, 96_000).unwrap();
+        assert_eq!((ch.len(), ch[0].len(), ch[1].len()), (2, 9600, 9600));
+        // Identical channels: a mono recording saved as stereo stays mono.
+        let dual = write("dual.wav", &|i| {
+            let v = (i as f32 * 0.01).sin();
+            (v, v)
+        });
+        assert_eq!(load_channels(&dual, 48_000).unwrap().len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stereo_file_normalizes_by_its_louder_channel() {
+        let rate = 1000;
+        let sine = |a: f64| -> Vec<f64> {
+            (0..2000)
+                .map(|i| a * (2.0 * std::f64::consts::PI * 50.0 * i as f64 / rate as f64).sin())
+                .collect()
+        };
+        let files = vec![vec![sine(0.1), sine(0.5)], vec![sine(0.5)]];
+        let each = normalize_gains_db_channels(&files, rate, 1.0, -18.0, false);
+        assert!((each[0] - each[1]).abs() < 1e-9, "{each:?}");
+        // Together: the mono file counts in both channels; the right sums to 1.0.
+        let tog = normalize_gains_db_channels(&files, rate, 1.0, -18.0, true);
+        assert!(tog.iter().all(|g| (g + 18.0).abs() < 1e-3), "{tog:?}");
+    }
 
     #[test]
     fn normalizing_each_or_together() {

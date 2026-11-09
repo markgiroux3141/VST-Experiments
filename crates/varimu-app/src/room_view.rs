@@ -141,7 +141,23 @@ impl RoomView {
         dir.join("rooms").join("scene.json")
     }
 
-    /// Follow the session: its scene loaded when it changes, ours saved when edited.
+    /// The plan's width and depth (m), for the W / D fields.
+    fn plan_size(scene: &Scene) -> [f64; 2] {
+        let ext = |i: usize| {
+            let it = || scene.plan.iter().map(|q| q[i]);
+            it().fold(f64::MIN, f64::max) - it().fold(f64::MAX, f64::min)
+        };
+        if scene.plan.is_empty() {
+            [7.0, 5.5]
+        } else {
+            [ext(0), ext(1)]
+        }
+    }
+
+    /// Follow the session: its scene loaded when it changes (a new session's is the
+    /// default room), ours saved when edited. A change of session drops everything that
+    /// belonged to the old one: a render or a balance running for it (cancelled: its
+    /// tracks would land in this one), the balance playing, the selection, the readouts.
     fn sync_session(&mut self, sv: &SessionView) {
         let dir = sv.session().dir.clone();
         if self.dir.as_ref() != Some(&dir) {
@@ -151,10 +167,23 @@ impl RoomView {
                 .map(|v| Scene::from_state(&v))
                 .unwrap_or_default();
             self.saved = self.scene.state();
+            self.size = Self::plan_size(&self.scene);
             self.sel = None;
+            self.drag = None;
             self.dir = Some(dir);
+            if let Some(r) = self.running.take() {
+                r.job.cancel();
+            }
+            if let Some(b) = self.balancing.take() {
+                b.job.cancel();
+            }
             self.preview = None;
+            self.preview_gains.clear();
             self.balanced = None;
+            self.status.clear();
+            self.error = None;
+            self.rt60 = None;
+            self.add_track = 0;
             return;
         }
         let state = self.scene.state();
@@ -226,11 +255,7 @@ impl RoomView {
             if let Some(k) = pick {
                 let p = self.presets[k].clone();
                 self.scene.apply_room_preset(&p);
-                let ext = |i: usize| {
-                    let it = || self.scene.plan.iter().map(|q| q[i]);
-                    it().fold(f64::MIN, f64::max) - it().fold(f64::MAX, f64::min)
-                };
-                self.size = [ext(0), ext(1)];
+                self.size = Self::plan_size(&self.scene);
                 self.sel = None;
                 self.status = format!("room: {} (sources and mics kept)", p.title);
             }
@@ -2118,4 +2143,59 @@ fn unique(scene: &Scene, base: &str) -> String {
         .map(|i| format!("{base} {i}"))
         .find(|n| !taken(n))
         .unwrap()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use varimu_app::session::Session;
+    use varimu_app::transport::TransportSettings;
+
+    fn repo() -> PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    }
+
+    #[test]
+    fn a_session_brings_its_room_and_new_brings_the_default() {
+        let dir = std::env::temp_dir().join(format!("varimu_room_sync_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let session = Session::new(dir.clone(), 48_000, TransportSettings::default());
+        // The session's room: a 12 x 9 m shoebox with a mic and an object.
+        let mut scene = Scene {
+            name: "Big room".into(),
+            ..Scene::default()
+        };
+        scene.set_preset("shoebox", 12.0, 9.0);
+        scene.walls = "brick".into();
+        scene
+            .mics
+            .push(RoomMic::new("Room L", "u47_v76", [6.0, 4.5, 1.6], 90.0));
+        scene.objects.push(RoomObject {
+            name: "Gobo 1".into(),
+            center: [3.0, 3.0, 0.9],
+            size: [1.2, 0.08, 1.8],
+            yaw_deg: 30.0,
+            tilt_deg: 0.0,
+            material: "heavy_drapes".into(),
+        });
+        std::fs::create_dir_all(dir.join("rooms")).unwrap();
+        std::fs::write(
+            RoomView::scene_file(&dir),
+            serde_json::to_string(&scene.state()).unwrap(),
+        )
+        .unwrap();
+        let mut sv = SessionView::with_session(&repo(), session, true, Vec::new());
+        let mut rv = RoomView::new(&repo());
+        rv.sync_session(&sv);
+        assert_eq!(rv.scene, scene);
+        assert_eq!(rv.size, [12.0, 9.0]);
+        rv.status = "added 2 tracks to the session".into();
+        // New: the default room, nothing of the old one's.
+        sv.new_session();
+        rv.sync_session(&sv);
+        assert_eq!(rv.scene, Scene::default());
+        assert_eq!(rv.size, [7.0, 5.5]);
+        assert!(rv.status.is_empty() && rv.sel.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

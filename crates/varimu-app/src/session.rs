@@ -574,7 +574,10 @@ impl Recorder {
 #[derive(Debug, Clone, Default)]
 pub struct Overview {
     pub bin: usize,
+    /// Each bin's lowest and highest sample (stereo: of either channel).
     pub peaks: Vec<(f32, f32)>,
+    /// Stereo: each channel's own outline (left, right), so a lane can draw both.
+    pub lr: Option<[Vec<(f32, f32)>; 2]>,
     /// Samples in a last, unfinished bin.
     partial: Vec<f32>,
 }
@@ -584,6 +587,7 @@ impl Overview {
         Overview {
             bin: bin.max(1),
             peaks: Vec::new(),
+            lr: None,
             partial: Vec::new(),
         }
     }
@@ -595,16 +599,32 @@ impl Overview {
     }
 
     /// The outline of a left (or mono) channel and, stereo, its right: each bin the lowest
-    /// and highest of either.
+    /// and highest of either, and each channel's own outline in `lr`.
     pub fn of_lr(l: &[f32], r: Option<&[f32]>, bin: usize) -> Overview {
         let mut o = Overview::of(l, bin);
         if let Some(r) = r {
             let b = Overview::of(r, bin);
+            let left = o.peaks.clone();
             for (p, q) in o.peaks.iter_mut().zip(&b.peaks) {
                 *p = (p.0.min(q.0), p.1.max(q.1));
             }
+            o.lr = Some([left, b.peaks]);
         }
         o
+    }
+
+    /// Whether it outlines two channels.
+    pub fn is_stereo(&self) -> bool {
+        self.lr.is_some()
+    }
+
+    /// The outline of channel `ch` (0 left, 1 right) over samples `a..b`; a mono outline's
+    /// for either.
+    pub fn range_ch(&self, ch: usize, a: f64, b: f64) -> Option<(f32, f32)> {
+        match &self.lr {
+            Some(lr) => range_of(&lr[ch.min(1)], self.bin, a, b),
+            None => self.range(a, b),
+        }
     }
 
     /// More samples at the end.
@@ -620,23 +640,28 @@ impl Overview {
 
     /// The outline of samples `a..b` (min, max), None where there are none.
     pub fn range(&self, a: f64, b: f64) -> Option<(f32, f32)> {
-        let bins = self.peaks.len() as f64;
-        let (i, j) = ((a / self.bin as f64).floor(), (b / self.bin as f64).ceil());
-        if j <= 0.0 || i >= bins {
-            return None;
-        }
-        let (i, j) = (
-            i.max(0.0) as usize,
-            (j.min(bins) as usize).max(i.max(0.0) as usize + 1),
-        );
-        let s = &self.peaks[i..j.min(self.peaks.len())];
-        if s.is_empty() {
-            return None;
-        }
-        Some(s.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &(a, b)| {
-            (lo.min(a), hi.max(b))
-        }))
+        range_of(&self.peaks, self.bin, a, b)
     }
+}
+
+/// The outline `peaks` (bins of `bin` samples) over samples `a..b` (min, max).
+fn range_of(peaks: &[(f32, f32)], bin: usize, a: f64, b: f64) -> Option<(f32, f32)> {
+    let bins = peaks.len() as f64;
+    let (i, j) = ((a / bin as f64).floor(), (b / bin as f64).ceil());
+    if j <= 0.0 || i >= bins {
+        return None;
+    }
+    let (i, j) = (
+        i.max(0.0) as usize,
+        (j.min(bins) as usize).max(i.max(0.0) as usize + 1),
+    );
+    let s = &peaks[i..j.min(peaks.len())];
+    if s.is_empty() {
+        return None;
+    }
+    Some(s.iter().fold((f32::MAX, f32::MIN), |(lo, hi), &(a, b)| {
+        (lo.min(a), hi.max(b))
+    }))
 }
 
 fn min_max(x: &[f32]) -> (f32, f32) {
@@ -1461,8 +1486,6 @@ impl Track {
         self.clips.extend(copies);
     }
 
-    /// Clip `c` split at timeline position `at` (inside it): two clips, the cut edges with
-    /// the default fade. The right half's index, or None.
     /// Clip `c`'s gain set so its stretch of its take meets `target_dbfs`: its peak (`peak`;
     /// either channel), else its level (`crate::audio::level_dbfs` over its loudest 8 s, as
     /// an import's normalize; a stereo clip's louder channel). The take is untouched. Returns
@@ -1505,6 +1528,8 @@ impl Track {
         Some(g)
     }
 
+    /// Clip `c` split at timeline position `at` (inside it): two clips, the cut edges with
+    /// the default fade. The right half's index, or None.
     pub fn split_clip(&mut self, c: usize, at: i64, rate: u32) -> Option<usize> {
         let clip = self.clips.get(c)?.clone();
         if at <= clip.position || at >= clip.end() {
@@ -2620,8 +2645,8 @@ impl Session {
     }
 
     /// The session in a new folder `dir` (which must not exist): every take recorded in
-    /// this one (deleted ones too, so its history still works) and the history, copied.
-    /// The copy is returned; this one is left as it is.
+    /// this one (deleted ones too, so its history still works), the history and the room's
+    /// scene, copied. The copy is returned; this one is left as it is.
     pub fn copy_to(&self, dir: &Path) -> Result<Session, String> {
         if dir.exists() {
             return Err(format!("{} exists already", dir.display()));
@@ -2635,6 +2660,15 @@ impl Session {
         if history.is_file() {
             std::fs::copy(&history, dir.join("history.json"))
                 .map_err(|e| format!("{}: {e}", history.display()))?;
+        }
+        // The Room view's scene (the room, its sources and mics); not its past renders'
+        // working folders, whose tracks are takes already.
+        let scene = self.dir.join("rooms").join("scene.json");
+        if scene.is_file() {
+            let to = dir.join("rooms");
+            std::fs::create_dir_all(&to).map_err(|e| format!("{}: {e}", to.display()))?;
+            std::fs::copy(&scene, to.join("scene.json"))
+                .map_err(|e| format!("{}: {e}", scene.display()))?;
         }
         let mut copy = self.clone();
         copy.dir = dir.to_path_buf();
@@ -3473,6 +3507,23 @@ mod tests {
     }
 
     #[test]
+    fn save_as_copies_the_room_but_not_its_renders() {
+        let tmp = std::env::temp_dir().join(format!("varimu_copy_room_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&tmp);
+        let s = Session::new(tmp.join("a"), 48_000, TransportSettings::default());
+        s.save().unwrap();
+        let rooms = s.dir.join("rooms");
+        std::fs::create_dir_all(rooms.join("render_1")).unwrap();
+        std::fs::write(rooms.join("scene.json"), r#"{"name": "Chapel"}"#).unwrap();
+        std::fs::write(rooms.join("render_1").join("mix.wav"), b"x").unwrap();
+        let copy = s.copy_to(&tmp.join("b")).unwrap();
+        let scene = std::fs::read_to_string(copy.dir.join("rooms").join("scene.json")).unwrap();
+        assert_eq!(scene, r#"{"name": "Chapel"}"#);
+        assert!(!copy.dir.join("rooms").join("render_1").exists());
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
     fn a_session_survives_a_save_and_load() {
         let dir = std::env::temp_dir().join(format!("varimu_session_test_{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -4051,5 +4102,23 @@ mod tests {
         assert_eq!(o.range(500.0, 600.0), Some((0.0, 0.9)));
         assert_eq!(o.range(0.0, 500.0), Some((0.0, 0.0)));
         assert_eq!(o.range(2000.0, 3000.0), None);
+        assert!(!o.is_stereo());
+        assert_eq!(o.range_ch(1, 500.0, 600.0), Some((0.0, 0.9)));
+    }
+
+    #[test]
+    fn a_stereo_overview_keeps_each_channel() {
+        let l: Vec<f32> = (0..1000)
+            .map(|i| if i == 150 { 0.8 } else { 0.0 })
+            .collect();
+        let r: Vec<f32> = (0..1000)
+            .map(|i| if i == 750 { -0.6 } else { 0.0 })
+            .collect();
+        let o = Overview::of_lr(&l, Some(&r), 100);
+        assert!(o.is_stereo());
+        // The merged outline as before, each channel on its own.
+        assert_eq!(o.range(0.0, 1000.0), Some((-0.6, 0.8)));
+        assert_eq!(o.range_ch(0, 0.0, 1000.0), Some((0.0, 0.8)));
+        assert_eq!(o.range_ch(1, 0.0, 1000.0), Some((-0.6, 0.0)));
     }
 }

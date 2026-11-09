@@ -130,7 +130,7 @@ use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, Slot, find_device};
 use varimu_app::session::{
     Clip, Marker, Monitor, OVERVIEW_BIN, Overview, Printed, Session, Take, Track, default_fade,
-    new_clip_id, take_dir, transport_from, transport_json,
+    new_clip_id, take_dir,
 };
 use varimu_app::settings::{Quality, Settings};
 use varimu_app::take_render::{self, NOT_RENDERED};
@@ -437,7 +437,7 @@ pub struct SessionView {
 }
 
 /// Audio files picked by Import… or dropped on the view, decoding on a thread (each its
-/// path and its samples, mono at the session's rate), and where they go.
+/// path and its samples, mono or stereo at the session's rate), and where they go.
 struct Import {
     files: usize,
     normalize: ImportNormalize,
@@ -454,9 +454,13 @@ enum ImportDest {
     Onto { track: String, position: i64 },
 }
 
-/// An imported file and its samples with the gain (dB) normalizing gave them, or why it
-/// couldn't be read.
-type Decoded = (PathBuf, Result<(Vec<f32>, f64), String>);
+/// An imported file and its samples (left or mono, and a stereo file's right) with the
+/// gain (dB) normalizing gave them, or why it couldn't be read.
+type Decoded = (PathBuf, Result<(Vec<f32>, Option<Vec<f32>>, f64), String>);
+
+/// A new audio track: its name, pan, its take's samples (left or mono, a stereo take's
+/// right), timeline position and what it came from.
+type NewAudioTrack = (String, f64, Vec<f32>, Option<Vec<f32>>, i64, Value);
 
 /// How Import… normalizes: not at all, each file's loudest stretch to the target, or one
 /// gain for all the files picked together, from their sum (stems keep their balance).
@@ -515,7 +519,12 @@ enum Export {
     },
 }
 
+/// The view's prefs (`%APPDATA%\varimu\recording.json`); none in tests, which must never
+/// read or write the user's.
 fn prefs_path() -> Option<PathBuf> {
+    if cfg!(test) {
+        return None;
+    }
     varimu_app::prefs::path().map(|p| p.with_file_name("recording.json"))
 }
 
@@ -531,6 +540,17 @@ fn new_session_dir(repo: &Path) -> PathBuf {
         .map(|n| root.join(format!("Session {n}")))
         .find(|d| !d.exists())
         .expect("a free name")
+}
+
+/// A new session in its own new folder, everything at the defaults: the rate, the transport
+/// (tempo, meter, click, locators), no tracks; its room starts as the default room (it has
+/// no `rooms/scene.json`).
+fn fresh_session(repo: &Path) -> Session {
+    Session::new(
+        new_session_dir(repo),
+        DEFAULT_RATE,
+        TransportSettings::default(),
+    )
 }
 
 /// A folder name from what the user typed: no path separators or characters Windows
@@ -564,31 +584,18 @@ fn step_key(v: &Value) -> Value {
 }
 
 impl SessionView {
+    /// The app starts on a fresh session (the defaults' rate and transport, an empty
+    /// room), never the last one: Open… brings that back.
     pub fn new(repo: &Path) -> SessionView {
-        let (last, transport, calibrations, (import_normalize, import_target_dbfs)) = load_prefs();
-        let (session, saved, error) = match last.as_deref().map(Session::load) {
-            Some(Ok(s)) => (s, true, None),
-            r => {
-                let e = match r {
-                    Some(Err(e)) => Some(format!("couldn't open the last session: {e}")),
-                    _ => None,
-                };
-                (
-                    Session::new(new_session_dir(repo), DEFAULT_RATE, transport),
-                    false,
-                    e,
-                )
-            }
-        };
-        let mut v = SessionView::with_session(repo, session, saved, calibrations);
-        v.error = error;
+        let (calibrations, (import_normalize, import_target_dbfs)) = load_prefs();
+        let mut v = SessionView::with_session(repo, fresh_session(repo), false, calibrations);
         v.import_normalize = import_normalize;
         v.import_target_dbfs = import_target_dbfs;
         v
     }
 
     /// A view on `session` (its prefs not read: tests use this on a scratch session).
-    fn with_session(
+    pub(crate) fn with_session(
         repo: &Path,
         session: Session,
         saved: bool,
@@ -694,8 +701,6 @@ impl SessionView {
             })
             .collect();
         let v = json!({
-            "last_session": self.saved.then(|| self.session.dir.display().to_string()),
-            "transport": transport_json(&self.session.transport),
             "calibrations": cals,
             "import_normalize": self.import_normalize.name(),
             "import_target_dbfs": self.import_target_dbfs,
@@ -726,15 +731,25 @@ impl SessionView {
         &mut self,
         tracks: Vec<(String, f64, Vec<f32>, i64, Value)>,
     ) -> Result<(), String> {
+        self.add_audio_tracks_lr(
+            tracks
+                .into_iter()
+                .map(|(name, pan, x, position, from)| (name, pan, x, None, position, from))
+                .collect(),
+        )
+    }
+
+    /// [`Self::add_audio_tracks`] whose takes may be stereo (left, then `Some(right)`).
+    fn add_audio_tracks_lr(&mut self, tracks: Vec<NewAudioTrack>) -> Result<(), String> {
         self.saved = true;
-        for (name, pan, samples, position, from) in tracks {
+        for (name, pan, samples, right, position, from) in tracks {
             let mut t = Track::new(&name);
             t.pan = pan;
             t.midi = false;
             self.session.tracks.push(t);
             let i = self.session.tracks.len() - 1;
             self.session
-                .add_rendered_take(i, samples, None, position, from)?;
+                .add_rendered_take(i, samples, right, position, from)?;
         }
         self.save();
         Ok(())
@@ -1360,7 +1375,19 @@ impl SessionView {
         }
     }
 
-    /// Another session in place of this one (its history with it).
+    /// New: a fresh session (everything at its defaults) in place of this one.
+    pub(crate) fn new_session(&mut self) {
+        let s = fresh_session(&self.root);
+        self.switch_to(s, false);
+        self.error = None;
+    }
+
+    /// Another session in place of this one (its history with it). Nothing of the old one
+    /// carries over: work running for it is cancelled (a print, a render or a bake would
+    /// land on the new session's tracks and takes, whose indices and ids can repeat), its
+    /// selections, panels, clipboard and caches are dropped, and the view goes back to the
+    /// first bar. An insert playing live stops with its panel (next frame). The Room view follows
+    /// the session's folder (`RoomView::sync_session`).
     fn switch_to(&mut self, session: Session, saved: bool) {
         self.session = session;
         self.saved = saved;
@@ -1371,9 +1398,63 @@ impl SessionView {
         };
         self.redo.clear();
         self.committed = self.session.state();
+        // Work running for the old session.
+        for j in self.jobs.drain(..) {
+            j.job.cancel();
+        }
+        for j in self.take_jobs.drain(..) {
+            j.job.cancel();
+        }
+        if let Some(b) = self.bake.take() {
+            b.job.cancel();
+        }
+        self.proxy_jobs.clear();
+        self.import = None;
+        self.import_note = None;
+        if matches!(self.export, Some(Export::Waiting { .. })) {
+            self.export = None;
+        }
+        self.export_note = None;
+        self.render_queue.clear();
+        self.record_pending = false;
+        self.recording = None;
+        // What pointed into it: selections, menus, panels, the roll.
         self.selected = None;
         self.drag = None;
-        self.recording = None;
+        self.menu_clip = None;
+        self.comp = None;
+        self.clipboard.clear();
+        self.range_sel = None;
+        self.range_drag = None;
+        self.roll = None;
+        self.roll_rect = None;
+        self.ruler_drag = None;
+        self.ruler_menu = None;
+        self.time_edit = None;
+        self.relocate = false;
+        self.insert_sel = None;
+        self.master_sel = None;
+        self.master_wanted = false;
+        self.save_as = None;
+        self.prev_lanes.clear();
+        self.lanes.clear();
+        // What was learned about it.
+        self.print_errors.clear();
+        self.print_wanted.clear();
+        self.looked_up.clear();
+        self.proxy_tried.clear();
+        self.tried.clear();
+        self.take_errors.clear();
+        self.bounces.clear();
+        *self.mid_cache.borrow_mut() = None;
+        *self.master_input.borrow_mut() = None;
+        self.meters = crate::mixer::MeterBank::default();
+        self.mix_failed = false;
+        // The view: bar 1 at the default zoom.
+        self.stopped_at = None;
+        self.scroll_drag = None;
+        self.view_s = -0.5;
+        self.px_per_s = 40.0;
         self.save_prefs();
     }
 
@@ -3986,13 +4067,15 @@ impl SessionView {
                 }
             }
         }
-        if ui.small_button("New").clicked() {
-            let s = Session::new(
-                new_session_dir(&self.root),
-                self.session.rate,
-                self.session.transport.clone(),
-            );
-            self.switch_to(s, false);
+        if ui
+            .small_button("New")
+            .on_hover_text(
+                "A new session with everything at its defaults: tempo, meter, click, \
+                 locators and the room (this one stays as saved)",
+            )
+            .clicked()
+        {
+            self.new_session();
         }
         if ui.small_button("Open…").clicked()
             && let Some(dir) = rfd::FileDialog::new()
@@ -4992,6 +5075,7 @@ impl SessionView {
                 clip.len,
                 ov,
                 clip.src_start,
+                clip.gain_db,
                 col,
                 &label,
             );
@@ -5861,9 +5945,9 @@ impl SessionView {
         self.import_files(files, dest);
     }
 
-    /// Import…: audio files picked (several at once), decoded on a thread, each mono at the
-    /// session's rate (`audio::load`: channels averaged, resampled as Python does), then
-    /// normalized as [`ImportNormalize`] says.
+    /// Import…: audio files picked (several at once), decoded on a thread at the session's
+    /// rate (`audio::load_channels`: a stereo file a stereo take, more channels averaged,
+    /// resampled as Python does), then normalized as [`ImportNormalize`] says.
     fn start_import(&mut self) {
         let Some(files) = rfd::FileDialog::new()
             .add_filter("Audio", &AUDIO_EXT)
@@ -5887,11 +5971,12 @@ impl SessionView {
         let n = files.len();
         let (normalize, target) = (self.import_normalize, self.import_target_dbfs);
         let handle = std::thread::spawn(move || {
-            let loaded: Vec<(PathBuf, Result<Vec<f64>, String>)> = files
+            type Channels = Result<Vec<Vec<f64>>, String>;
+            let loaded: Vec<(PathBuf, Channels)> = files
                 .into_iter()
                 .map(|p| {
-                    let x = audio::load(&p, rate).and_then(|x| {
-                        if x.is_empty() {
+                    let x = audio::load_channels(&p, rate).and_then(|x| {
+                        if x.first().is_none_or(Vec::is_empty) {
                             Err(format!("{}: no audio in it", p.display()))
                         } else {
                             Ok(x)
@@ -5900,28 +5985,33 @@ impl SessionView {
                     (p, x)
                 })
                 .collect();
-            let ok: Vec<Vec<f64>> = loaded
+            let ok: Vec<Vec<Vec<f64>>> = loaded
                 .iter()
                 .filter_map(|(_, x)| x.as_ref().ok().cloned())
                 .collect();
             let mut gains = match normalize {
                 ImportNormalize::Off => vec![0.0; ok.len()],
-                ImportNormalize::Each | ImportNormalize::Together => audio::normalize_gains_db(
-                    &ok,
-                    rate,
-                    NORMALIZE_LOUDEST_S,
-                    target,
-                    normalize == ImportNormalize::Together,
-                ),
+                ImportNormalize::Each | ImportNormalize::Together => {
+                    audio::normalize_gains_db_channels(
+                        &ok,
+                        rate,
+                        NORMALIZE_LOUDEST_S,
+                        target,
+                        normalize == ImportNormalize::Together,
+                    )
+                }
             }
             .into_iter();
             loaded
                 .into_iter()
                 .map(|(p, x)| {
-                    let x = x.map(|x| {
+                    let x = x.map(|chans| {
                         let g_db = gains.next().unwrap_or(0.0);
                         let g = 10f64.powf(g_db / 20.0);
-                        (x.iter().map(|&v| (v * g) as f32).collect(), g_db)
+                        let scaled = |x: &[f64]| x.iter().map(|&v| (v * g) as f32).collect();
+                        let left = scaled(&chans[0]);
+                        let right = chans.get(1).map(|r| scaled(r));
+                        (left, right, g_db)
                     });
                     (p, x)
                 })
@@ -5962,7 +6052,7 @@ impl SessionView {
         let mut failed = Vec::new();
         for (path, x) in decoded {
             match x {
-                Ok((samples, gain_db)) => {
+                Ok((samples, right, gain_db)) => {
                     let file = path
                         .file_name()
                         .map_or("?".into(), |n| n.to_string_lossy().to_string());
@@ -5976,31 +6066,32 @@ impl SessionView {
                             "rate": self.session.rate,
                             "normalize": imp.normalize.name(),
                             "gain_db": gain_db,
+                            "channels": if right.is_some() { 2 } else { 1 },
                         },
                     });
                     match next {
                         Some(i) if i < self.session.tracks.len() => {
-                            takes.push((i, samples, from));
+                            takes.push((i, samples, right, from));
                             next = Some(i + 1);
                         }
-                        _ => tracks.push((name, 0.0, samples, position, from)),
+                        _ => tracks.push((name, 0.0, samples, right, position, from)),
                     }
                 }
                 Err(e) => failed.push(e),
             }
         }
         let n = takes.len() + tracks.len();
-        for (i, samples, from) in takes {
+        for (i, samples, right, from) in takes {
             self.saved = true;
             if let Err(e) = self
                 .session
-                .add_rendered_take(i, samples, None, position, from)
+                .add_rendered_take(i, samples, right, position, from)
             {
                 self.error = Some(format!("the import failed: {e}"));
                 return;
             }
         }
-        if let Err(e) = self.add_audio_tracks(tracks) {
+        if let Err(e) = self.add_audio_tracks_lr(tracks) {
             self.error = Some(format!("the import failed: {e}"));
             return;
         }
@@ -6973,24 +7064,13 @@ impl SessionView {
     }
 }
 
-/// The last session, the default transport, the calibrations and Import…'s normalizing
-/// (`recording.json`).
-fn load_prefs() -> (
-    Option<PathBuf>,
-    TransportSettings,
-    Vec<Calibration>,
-    (ImportNormalize, f64),
-) {
+/// The calibrations and Import…'s normalizing (`recording.json`; its `last_session` and
+/// `transport` from before the app started fresh are ignored).
+fn load_prefs() -> (Vec<Calibration>, (ImportNormalize, f64)) {
     let Some(text) = prefs_path().and_then(|p| std::fs::read_to_string(p).ok()) else {
-        return (
-            None,
-            TransportSettings::default(),
-            Vec::new(),
-            (ImportNormalize::Off, ALIGNMENT_DBFS),
-        );
+        return (Vec::new(), (ImportNormalize::Off, ALIGNMENT_DBFS));
     };
     let v: Value = serde_json::from_str(&text).unwrap_or(Value::Null);
-    let last = v["last_session"].as_str().map(PathBuf::from);
     let cals = v["calibrations"]
         .as_array()
         .map(|a| {
@@ -7013,12 +7093,7 @@ fn load_prefs() -> (
             .unwrap_or(ALIGNMENT_DBFS)
             .clamp(-60.0, 0.0),
     );
-    (
-        last,
-        transport_from(&v["transport"], DEFAULT_RATE),
-        cals,
-        normalize,
-    )
+    (cals, normalize)
 }
 
 fn show_folder(dir: &Path) {
@@ -7467,10 +7542,12 @@ fn draw_clip(
     colour: Color32,
     label: &str,
 ) {
-    draw_clip_from(painter, lane, view, start, len, ov, 0, colour, label);
+    draw_clip_from(painter, lane, view, start, len, ov, 0, 0.0, colour, label);
 }
 
-/// [`draw_clip`] of a stretch whose first sample is the outline's sample `offset`.
+/// [`draw_clip`] of a stretch whose first sample is the outline's sample `offset`, drawn
+/// at the clip's gain `gain_db` (as it plays: louder than full scale draws flat at the
+/// edges). A stereo outline draws as two waveforms, left above right.
 #[allow(clippy::too_many_arguments)]
 fn draw_clip_from(
     painter: &egui::Painter,
@@ -7480,6 +7557,7 @@ fn draw_clip_from(
     len: usize,
     ov: &Overview,
     offset: usize,
+    gain_db: f64,
     colour: Color32,
     label: &str,
 ) {
@@ -7518,17 +7596,34 @@ fn draw_clip_from(
         x1.min(lane.right()).ceil() as i32,
     );
     let wave = colour.gamma_multiply(0.95);
+    let g = 10f64.powf(gain_db / 20.0) as f32;
+    // (channel, its centre line, its half height): one for mono, two halves for stereo
+    let lanes: Vec<(usize, f32, f32)> = if ov.is_stereo() {
+        let h = half * 0.5;
+        painter.line_segment(
+            [
+                Pos2::new(x0.max(lane.left()), mid),
+                Pos2::new(x1.min(lane.right()), mid),
+            ],
+            Stroke::new(1.0, colour.gamma_multiply(0.25)),
+        );
+        vec![(0, mid - h, h * 0.92), (1, mid + h, h * 0.92)]
+    } else {
+        vec![(0, mid, half)]
+    };
     for px in a..b {
         let s0 = (px as f32 - x0) as f64 * spp + offset as f64;
-        if let Some((lo, hi)) = ov.range(s0, s0 + spp) {
-            let (lo, hi) = (lo.clamp(-1.0, 1.0), hi.clamp(-1.0, 1.0));
-            painter.line_segment(
-                [
-                    Pos2::new(px as f32 + 0.5, mid - hi * half),
-                    Pos2::new(px as f32 + 0.5, mid - lo * half + 0.5),
-                ],
-                Stroke::new(1.0, wave),
-            );
+        for &(ch, m, h) in &lanes {
+            if let Some((lo, hi)) = ov.range_ch(ch, s0, s0 + spp) {
+                let (lo, hi) = ((lo * g).clamp(-1.0, 1.0), (hi * g).clamp(-1.0, 1.0));
+                painter.line_segment(
+                    [
+                        Pos2::new(px as f32 + 0.5, m - hi * h),
+                        Pos2::new(px as f32 + 0.5, m - lo * h + 0.5),
+                    ],
+                    Stroke::new(1.0, wave),
+                );
+            }
         }
     }
 }
@@ -7593,6 +7688,77 @@ mod tests {
                 std::thread::sleep(Duration::from_millis(20));
             }
         }
+    }
+
+    #[test]
+    fn new_starts_at_the_defaults_and_drops_the_old_session() {
+        let (mut v, dir) = scratch("new_defaults");
+        v.session.transport.bpm = 87.0;
+        v.session.transport.beats_per_bar = 3;
+        v.session.transport.loop_on = true;
+        let tone: Vec<f32> = (0..4800).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
+        v.session
+            .add_rendered_take(0, tone, None, 0, json!({"device": "test"}))
+            .unwrap();
+        v.session.tracks.push(Track::new("Bass"));
+        v.selected = Some((0, 0));
+        v.insert_sel = Some((1, 0));
+        v.range_sel = Some((0, 4800, 0, 1));
+        v.view_s = 30.0;
+        v.new_session();
+        assert_eq!(v.session.transport, TransportSettings::default());
+        assert_eq!(v.session.rate, DEFAULT_RATE);
+        assert_eq!(v.session.tracks.len(), 1);
+        assert!(v.session.tracks[0].takes.is_empty());
+        assert_ne!(v.session.dir, dir);
+        assert!(!v.saved && v.undo.is_empty());
+        assert_eq!((v.selected, v.insert_sel, v.range_sel), (None, None, None));
+        assert_eq!(v.view_s, -0.5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_stereo_file_imports_as_a_stereo_take() {
+        let (mut v, dir) = scratch("import_lr");
+        let wav = |name: &str, right: f32| {
+            let path = dir.join(name);
+            std::fs::create_dir_all(&dir).unwrap();
+            let spec = hound::WavSpec {
+                channels: 2,
+                sample_rate: 48_000,
+                bits_per_sample: 32,
+                sample_format: hound::SampleFormat::Float,
+            };
+            let mut w = hound::WavWriter::create(&path, spec).unwrap();
+            for i in 0..4800 {
+                let l = (i as f32 * 0.02).sin() * 0.5;
+                w.write_sample(l).unwrap();
+                w.write_sample(if right < 0.0 { l } else { right }).unwrap();
+            }
+            w.finalize().unwrap();
+            path
+        };
+        let files = vec![wav("wide.wav", 0.1), wav("dual.wav", -1.0)];
+        let before = v.session.tracks.len();
+        v.import_files(files, ImportDest::NewTracks);
+        let ctx = egui::Context::default();
+        while v.import.is_some() {
+            std::thread::sleep(Duration::from_millis(10));
+            v.poll_import(&ctx);
+        }
+        assert_eq!(v.error, None);
+        let t = &v.session.tracks[before..];
+        assert_eq!(t.len(), 2);
+        let wide = t[0].active_take().unwrap();
+        assert!(
+            wide.right
+                .as_ref()
+                .is_some_and(|r| r.iter().all(|&x| x == 0.1))
+        );
+        assert!(wide.overview.is_stereo());
+        let dual = t[1].active_take().unwrap();
+        assert!(dual.right.is_none() && !dual.overview.is_stereo());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
