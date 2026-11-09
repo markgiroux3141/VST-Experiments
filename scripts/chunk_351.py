@@ -8,8 +8,8 @@ the largest third-octave band difference 50 Hz-15 kHz over the whole excerpt, th
 200 ms windows around every seam (against the same windows of the whole print), and each
 seam's waveform difference re the print's rms (the bias oscillator's free phase and the
 grain's cells set its floor, -46 to -57 dB between any two runs: TAPE_PLAN.md "Speed").
-Writes both prints and their difference to reports/tape/chunks/ and the numbers to its
-results.json.
+Writes both prints, their difference and spectrograms around the seams to reports/tape/chunks/
+and the numbers to its results.json.
 
     uv run --extra fast --extra listen python scripts/chunk_351.py --seconds 30 --chunk-s 7.5
 
@@ -50,6 +50,36 @@ def bands_db(y: np.ndarray, fs: int) -> np.ndarray:
         b = (f >= fc * 2 ** (-1 / 6)) & (f < fc * 2 ** (1 / 6))
         out.append(10 * math.log10(p[b].sum() + 1e-300))
     return np.array(out)
+
+
+def seams_png(yc: np.ndarray, yw: np.ndarray, fs: int, at_s: list[float], path: Path) -> None:
+    """Spectrograms of the pieces and of pieces - whole, 1 s either side of each seam."""
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from scipy.signal import spectrogram
+
+    fig, ax = plt.subplots(len(at_s), 2, figsize=(12, 2.8 * len(at_s)), squeeze=False)
+    for i, s in enumerate(at_s):
+        lo, hi = max(0, int((s - 1) * fs)), min(len(yc), int((s + 1) * fs))
+        for j, (y, name) in enumerate(((yc, "pieces"), (yc - yw, "pieces - whole"))):
+            f, t, sxx = spectrogram(y[lo:hi], fs, nperseg=2048, noverlap=1536)
+            ax[i, j].pcolormesh(
+                t + lo / fs,
+                f / 1e3,
+                10 * np.log10(sxx + 1e-20),
+                vmin=-150,
+                vmax=-40,
+                shading="auto",
+            )
+            ax[i, j].set_ylim(0, 20)
+            ax[i, j].axvline(s, color="w", lw=0.5, ls=":")
+            ax[i, j].set_title(f"{name} around the seam at {s:.2f} s")
+            ax[i, j].set_ylabel("kHz")
+    fig.tight_layout()
+    fig.savefig(path, dpi=80)
+    plt.close(fig)
 
 
 def main() -> int:
@@ -177,10 +207,26 @@ def main() -> int:
                 }
             )
         res["seams"] = seams
-        # Away from the seams, for the floor between any two runs.
-        mid = int(min(a.chunk_s / 2, a.seconds / 2) * fs)
-        d = yc[mid : mid + int(0.2 * fs)] - yw[mid : mid + int(0.2 * fs)]
-        res["mid_chunk_diff_db_re_rms"] = 20 * math.log10(np.sqrt(np.mean(d**2)) / rms + 1e-30)
+        if seams:
+            seams_png(yc[:n], yw[:n], fs, [s["at_s"] for s in seams], OUT / f"{tag}_seams.png")
+        # Away from the seams, for the floor between any two runs: 200 ms windows in the
+        # pieces after the first (the first starts at t = 0 and is the whole print exactly),
+        # 0.4 s clear of the seams.
+        w = int(0.2 * fs)
+        chunk = round(a.chunk_s * fs)
+        floor = []
+        for k in range(n // w):
+            t = k * w + w // 2 + delay  # the window's middle in the input's time
+            if t < chunk or min(t % chunk, chunk - t % chunk) < 0.4 * fs:
+                continue
+            d = yc[k * w : (k + 1) * w] - yw[k * w : (k + 1) * w]
+            floor.append(20 * math.log10(np.sqrt(np.mean(d**2)) / rms + 1e-30))
+        if floor:
+            res["mid_chunk_diff_db_re_rms"] = {
+                "median": float(np.median(floor)),
+                "p90": float(np.percentile(floor, 90)),
+                "max": float(np.max(floor)),
+            }
     log = OUT / "results.json"
     allres = json.loads(log.read_text()) if log.exists() else {}
     allres[f"{tag}_c{a.chunk_s:g}_w{a.warmup_s:g}_j{a.workers}"] = res

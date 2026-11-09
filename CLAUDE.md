@@ -903,7 +903,10 @@ switched by `tape::Recording::gpu` / `TapeStream::set_gpu` / `Options::tape_gpu`
 one, the floor unchanged; **the f64 CPU kernel stays the default and the reference**. **P4
 adopted:** a multi-rate section's own `method` and `tube_tables` (IR `Section.method` /
 `tube_tables`, both builders), the 351's record side `trbdf2` with tables. The 0.5 s drums
-print: 79x real time -> 54x (GPU) -> 27x (GPU + P4). The record side is the bound now; P3 next.
+print: 79x real time -> 54x (GPU) -> 27x (GPU + P4); re-aligned (settings moved < 0.03%) and
+re-profiled (`ampex351_p4`, every spec as before). **P3 done:** a 3-minute print in six 30 s
+pieces at once (`scripts/chunk_351.py --gpu`) runs 10.1x real time against 31.6x whole, bands
+within 0.0069 dB, no seam visible. Next: F1-F2, or P2 / P3's tuning.
 Built: `CIRCUITSIM_PART_TIMING=1` (each part's busy / waiting time), `CIRCUITSIM_TAPE_THREADS`;
 a multi-rate section's `lag_samples` (IR `Section.lag_samples`, both builders; measured: no
 gain yet, nothing uses it); a run's origin (circuitsim `Options::origin_samples`,

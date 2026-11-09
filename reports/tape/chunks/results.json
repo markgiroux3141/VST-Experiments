@@ -1,0 +1,83 @@
+{
+ "drums_setmefree_0s_8s_+6dB_c4_w2_j2": {
+  "tag": "drums_setmefree_0s_8s_+6dB",
+  "chunk_s": 4.0,
+  "warmup_s": 2.0,
+  "workers": 2,
+  "tape_threads": 6,
+  "whole_x_real_time": 95.33950506360681,
+  "pieces_wall_s": 1167.59850025177,
+  "pieces_x_real_time": 138.450415049617,
+  "bands_whole_db": 0.03005456028149922,
+  "seams": [
+   {
+    "at_s": 3.8666666666666667,
+    "bands_db": 0.14355042908525206,
+    "diff_db_re_rms": -46.42883875201144,
+    "peak_diff_db_re_rms": -31.47358879288502
+   },
+   {
+    "at_s": 7.866666666666666,
+    "bands_db": 0.15268334411374695,
+    "diff_db_re_rms": -52.72737112786949,
+    "peak_diff_db_re_rms": -36.04079879285103
+   }
+  ],
+  "mid_chunk_diff_db_re_rms": -600.0
+ },
+ "drums_setmefree_0s_180s_+6dB_gpu_c30_w2_j6": {
+  "tag": "drums_setmefree_0s_180s_+6dB_gpu",
+  "chunk_s": 30.0,
+  "warmup_s": 2.0,
+  "workers": 6,
+  "tape_threads": 2,
+  "note": "the clip (drums_setmefree.wav from 0 s) tiled to 180 s",
+  "whole_x_real_time": 31.575658612711937,
+  "pieces_wall_s": 1825.4331953525543,
+  "pieces_x_real_time": 10.116939933599967,
+  "bands_whole_db": 0.006900011152922048,
+  "seams": [
+   {
+    "at_s": 29.866666666666667,
+    "bands_db": 0.052462121698842346,
+    "diff_db_re_rms": -29.658313636253745,
+    "peak_diff_db_re_rms": -13.763735522111622
+   },
+   {
+    "at_s": 59.86666666666667,
+    "bands_db": 0.1969027673011503,
+    "diff_db_re_rms": -34.693029249580185,
+    "peak_diff_db_re_rms": -11.704610183356362
+   },
+   {
+    "at_s": 89.86666666666666,
+    "bands_db": 0.18137936315400083,
+    "diff_db_re_rms": -29.199836942527778,
+    "peak_diff_db_re_rms": -15.7090826497065
+   },
+   {
+    "at_s": 119.86666666666666,
+    "bands_db": 0.14176635226043643,
+    "diff_db_re_rms": -43.01528130057713,
+    "peak_diff_db_re_rms": -27.10094215306875
+   },
+   {
+    "at_s": 149.86666666666667,
+    "bands_db": 0.19130400303742334,
+    "diff_db_re_rms": -28.249453800870874,
+    "peak_diff_db_re_rms": -12.945446421798936
+   },
+   {
+    "at_s": 179.86666666666667,
+    "bands_db": 0.0707963322350551,
+    "diff_db_re_rms": -39.77381918417346,
+    "peak_diff_db_re_rms": -15.246845914419293
+   }
+  ],
+  "mid_chunk_diff_db_re_rms": {
+   "median": -48.902507169038714,
+   "p90": -41.54426259577052,
+   "max": -29.689319710597772
+  }
+ }
+}

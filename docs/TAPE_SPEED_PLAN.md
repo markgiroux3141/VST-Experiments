@@ -1,7 +1,8 @@
 # Tape speed: a faster literal print, and a fast tier trained on it
 
 Drafted 2026-11-02 from a brainstorm with the user. Picked up 2026-11-08 (the user away,
-every call delegated): P1-P3 built and measured, P4 measured; see "Status (2026-11-08)".
+every call delegated): P1-P5 built and measured, P4 adopted, P3 done on 3 minutes; see the
+two "Status (2026-11-08...)" blocks.
 It continues TAPE_PLAN.md's "Speed: the GPU" (levers 1-4; lever 1, the stream's recording
 worker, is done) and feeds TM7 (real time) and DELAY_PLAN.md's "Real time". Milestones P1-P6
 (the literal machine faster) and F1-F5 (a fast tier), each finished only when its "done when"
@@ -28,7 +29,7 @@ is met, as in the other plans.
   -78 dBFS line is invisible in drums. The bound (the user's): the floor at least 14 dB under
   the real noise, <= -89.4 dBFS.
 
-## Status (2026-11-08, second session): P5 built, P4 adopted
+## Status (2026-11-08, second session): P5 built, P4 adopted, P3 measured
 
 Same harness (0.5 s of drums at +6 dB, production, noise off, alignment
 `align_351_068bf2c9b0c8fb42.json`), `CIRCUITSIM_PART_TIMING=1`:
@@ -76,6 +77,36 @@ dBFS at 14.1 kHz, noise -95.175; the CPU's trbdf2 numbers); bands 0.043 dB from 
 
 What bounds the print now: the record side (part 1, 42 of 47 s busy). Its 3.84 MHz steps
 are sequential; P3 (pieces at once) is the next multiplier, then P2's lag may matter.
+
+**Re-aligned and re-profiled on P4.** `align_351.py --refresh` (CPU kernel, ~55 min) ->
+`cache/tape/align_351_3d19e2a715b4de7b.json`, `reports/tape/ampex_351_alignment.*`: the
+settings moved by under 0.03% (RECORD LEVEL 0.944765 vs 0.944792, PLAYBACK LEVEL 0.390716
+vs 0.390677, bias 3.10728e-11 vs 3.10788e-11 F; the EQs unchanged). The profile
+`varimu unit --circuit ampex_351 --name ampex351_p4` (`reports/units/ampex351_p4/`) passes
+every spec with ampex351_heads51's numbers (response -1.84 / +0.94 dB, S/N 61.06 dB, idle
+within the drawing's +-20%), 1775 s against 1983 s.
+
+**P3, pieces at once (done).** `scripts/chunk_351.py --gpu --seconds 180 --chunk-s 30
+--warmup-s 2 --workers 6` (the drums tiled to 3 minutes, +6 dB, production with noise, the
+GPU kernel, P4's record side; `reports/tape/chunks/results.json`, the spectrograms around
+each seam `..._seams.png`):
+- the whole print **31.6x real time** (95 min; the 0.5 s harness's 27x pays proportionally
+  more of the settle), the six pieces at once **10.1x** (30 min): **3.1x**, so a 3-minute
+  song prints in about half an hour (the morning's literal print: ~4 h);
+- the whole excerpt's third-octave bands within **0.0069 dB** of the continuous print (the
+  done-when: 0.05 dB);
+- **no seam visible** in the pieces' spectrogram. The difference from the whole print is the
+  floor between any two runs (the bias oscillator's free phase, the grain read a little
+  further along: its difference is a comb, ~3.5 kHz apart in the second piece, i.e. the
+  grain shifted ~0.1 mm by the transport's flutter): 200 ms windows in the pieces' middles
+  median -48.9 dB re rms, p90 -41.5, worst -29.7; the windows across the seams -27 to -55
+  dB, bands 0.06-0.47 dB (the middles' p90 0.23-0.32, quiet windows up to 2.3);
+- the first piece starts at t = 0 and is the whole print bit for bit (the GPU kernel is
+  deterministic), which the script's old "mid-chunk" figure measured (-600 dB); it now takes
+  every window of the later pieces 0.4 s clear of the seams.
+Open, not measured: more workers or shorter pieces (six pieces used ~6 cores and the GPU:
+each piece's record side is one core; the GPU is shared), and P2's lag now that the worker
+no longer stalls.
 
 ## Status (2026-11-08): P1-P3 built and measured; the kernel is the bound
 
@@ -317,7 +348,9 @@ Main-plan Phase 7 (the 670's neural surrogate: a TCN or RNN with FiLM conditioni
    literal machine and playing live in the echo).
 4. P6 if auditioning is needed before F2 is ready.
 
-Second session (2026-11-08): 1 and 2's P4 are done (the Status at the top); P3 is next.
+Second session (2026-11-08): 1 and 2 are done (the Status at the top): a 3-minute song
+prints in ~30 min (P3's pieces at 10.1x real time). Next is 3 (F1-F2), or P2 / P3's tuning
+for more of the literal print.
 
 ### P5's design (2026-11-08; built as designed, one invocation per orientation)
 
