@@ -1032,3 +1032,94 @@ def test_a_stereo_pairs_tails_cohere_as_the_diffuse_field_says(tmp_path):
     f, coh = coherence(a, b, FS, nperseg=512)  # many segments: the estimate's bias small
     hi = coh[(f > 2000) & (f < 6000)].mean()
     assert lo > 0.8 and hi < 0.15, (lo, hi)
+
+
+def _bleed_scene(tmp_path, mics, room=None, stereo=False):
+    """Two sources (`a` mono or a stereo pair, `b` mono) in a furnished shoebox."""
+    import soundfile as sf
+
+    from varimu.rooms.scene import load_scene
+
+    rng = np.random.default_rng(3)
+    for name in ("a", "a_r", "b"):
+        sf.write(tmp_path / f"{name}.wav", rng.standard_normal(4800).astype("<f4"), FS,
+                 subtype="FLOAT")  # fmt: skip
+    a = {"name": "a", "clip": str(tmp_path / "a.wav"), "spl_db": 90, "position_m": [2, 2, 1.5]}
+    if stereo:
+        a |= {"clip_r": str(tmp_path / "a_r.wav"), "stereo": {"spacing_m": 0.4}}
+    b = {"name": "b", "clip": str(tmp_path / "b.wav"), "spl_db": 90, "position_m": [4, 2, 1.5]}
+    room = room or {"dims_m": [6, 5, 3], "materials": {"walls": "furnished_wall",
+                    "floor": "wood_floor", "ceiling": "gypsum_on_studs"}}  # fmt: skip
+    return load_scene({"name": "bleed", "room": room, "sources": [a, b], "mics": mics,
+                       "settings": {"ism_s": 0.03, "tail_s": 0.25}})  # fmt: skip
+
+
+def _mic(name, pos, **kw):
+    return {"name": name, "chain": "capsule_bk4134", "position_m": pos,
+            "aim": {"azimuth_deg": -90}, **kw}  # fmt: skip
+
+
+def test_a_mics_hears_list_gates_its_bleed(tmp_path):
+    """A mic's `hears` (2026-11-09): only those sources reach it (a stereo pair's name is both
+    sides), each with the room's sound as before; the room's responses are the same whatever
+    it hears; unknown or empty lists and unknown passes fail at load."""
+    from varimu.rooms.scene import mic_pressures, source_signals
+
+    mics = [_mic("m1", [2, 3, 1.5]), _mic("m2", [4, 3, 1.5])]
+    all_ = _bleed_scene(tmp_path, mics, stereo=True)
+    gated = _bleed_scene(tmp_path, [mics[0] | {"hears": ["a"]}, mics[1] | {"hears": ["a.R", "b"]}],
+                         stereo=True)  # fmt: skip
+    assert [s.name for s in gated.sources] == ["a.L", "a.R", "b"]
+    assert gated.mics[0].hears == ["a.L", "a.R"] and gated.heard(0) == [0, 1]
+    assert gated.heard(1) == [1, 2] and gated.gated(1) and not all_.gated(0)
+    sig = source_signals(all_, FS)
+    p_all, _, _ = mic_pressures(all_, FS, sig)
+    p, _, _ = mic_pressures(gated, FS, sig)
+    assert np.array_equal(p[:2, 0], p_all[:2, 0]) and not p[2, 0].any()
+    assert not p[0, 1].any() and np.array_equal(p[1:, 1], p_all[1:, 1])
+    for bad, match in (({"hears": ["c"]}, "no such source"), ({"hears": []}, "hears no source"),
+                       ({"passes": "twice"}, "passes")):  # fmt: skip
+        with pytest.raises(ValueError, match=match):
+            _bleed_scene(tmp_path, [mics[0] | bad])
+
+
+def test_a_free_field_mic_hears_the_direct_sound_alone(tmp_path):
+    """A `free_field` mic in a furnished room hears the direct sound as the room's other mic
+    at the same place does (until the first reflection), and nothing after it; the other mic
+    keeps its room."""
+    from varimu.rooms.scene import scene_responses
+
+    s = _bleed_scene(tmp_path, [_mic("room", [2, 3, 1.5]), _mic("dry", [2, 3, 1.5],
+                                                                free_field=True)])  # fmt: skip
+    h, _ = scene_responses(s, FS)
+    room, dry = h[0, 0, 0], h[0, 1, 0]
+    lag = int(1.0 / 343.2 * FS)  # a 1 m away, the floor's reflection 1.8 m later
+    first = int((np.hypot(1.0, 3.0) - 1.0) / 343.2 * FS) // 2
+    sl = slice(0, lag + first)
+    err = np.sqrt(np.sum((room[sl] - dry[sl]) ** 2) / np.sum(dry[sl] ** 2))
+    # (-46 dB: the room's reflections, synthesized per bin, leak a little ahead of themselves)
+    assert err < 1e-2, err
+    after = slice(lag + int(0.005 * FS), None)
+    # (-40 dB: a band-limited impulse at a fractional delay rings at Nyquist, as in a room)
+    assert np.sum(dry[after] ** 2) < 1e-3 * np.sum(dry**2)
+    assert np.sum(room[after] ** 2) > 0.3 * np.sum(room[: lag + first] ** 2)
+    # 1 / r: a 1 m away, b sqrt(5) m (the responses' sums: their DC gains)
+    assert np.sum(dry) == pytest.approx(1.0, rel=1e-3)
+    assert np.sum(h[1, 1, 0]) == pytest.approx(1 / np.sqrt(5.0), rel=1e-3)
+
+
+def test_the_anechoic_preset_is_the_free_field_and_one_absorbent_wall_keeps_the_tail(tmp_path):
+    """The preset `anechoic` takes the free field's path for every mic (a short response, the
+    direct sound 1 / r); a shoebox with one anechoic wall is still a room (until 2026-11-09 it
+    lost its tail)."""
+    from varimu.rooms import scene as sc
+
+    s = _bleed_scene(tmp_path, [_mic("m", [2, 3, 1.5])], room={"preset": "anechoic"})
+    assert sc.free_field_room(s.room)
+    h, _ = sc.scene_responses(s, FS)
+    far = np.hypot(2.0, 1.0)
+    assert h.shape[-1] <= int((far / 343.2 + sc.FREE_FIELD_MARGIN_S + 0.1) * FS) + 1
+    assert np.sum(h[0, 0, 0]) == pytest.approx(1.0, rel=1e-3)  # 1 / r at 1 m (DC gain)
+    one = Shoebox((6.0, 5.0, 3.0), ("anechoic",) + ("furnished_wall",) * 3
+                  + ("wood_floor", "gypsum_on_studs"))  # fmt: skip
+    assert not sc._anechoic(one) and sc._anechoic(Shoebox((6.0, 5.0, 3.0), ("anechoic",) * 6))

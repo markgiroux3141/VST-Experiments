@@ -69,6 +69,8 @@ def stems(
                 pan, g = (-1.0 if name.endswith("L") else 1.0), room_gain
             else:
                 pan, g = (-spot_pan if name.endswith("A") else spot_pan), 1.0
+            if src not in m.get("hears", [src]):
+                continue  # a gated mic (its `hears`) has no print of this source
             y, _ = _read(folder / f"{_safe(name)}__{_safe(src)}.wav")
             gl, gr = balance(pan)
             s = g * np.stack([gl * y, gr * y])

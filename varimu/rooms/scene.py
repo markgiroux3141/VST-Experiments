@@ -53,7 +53,14 @@ JSON):
         aim: {azimuth_deg: 90, elevation_deg: 0}   # counterclockwise from +x
         set: {pattern_u47: 0, gain_db_v76: 40}     # the chain's controls and values
         pan: -0.5                    # -1 left .. 1 right (the session's balance law)
-    settings: {quality: production, ism_s: 0.08, seed: 0, tail_s: null,
+        hears: [A]                   # optional: the sources it records (a stereo source's
+                                     # name is both sides, `rhodes.L` one); absent = all
+        passes: together             # optional: together (one take: what it hears summed
+                                     # into its chain) | separate (a pass per source through
+                                     # the chain, the prints summed: overdubs)
+        free_field: false            # optional: true = no room for this mic (the direct
+                                     # sound only: the room's surfaces and objects removed)
+    settings:{quality: production, ism_s: 0.08, seed: 0, tail_s: null,
                wave_crossover_hz: 500}   # the wave solver below 500 Hz (varimu.rooms.wave,
                                          # ROOM_LOOP_PLAN.md R10); absent or null: off
 
@@ -68,6 +75,18 @@ while it sounds (`sounding_rms`, BS.1770's gates on 50 ms blocks; since 2026-11-
 plain rms counted a part's silences, so a sparse part came out louder than its number).
 Mic positions are kept 0.1 m from sources (the entry tables' nearest distance,
 varimu.rooms.entries).
+
+**Bleed and the room per mic (2026-11-09).** A mic's `hears` list gates its bleed: it
+records only those sources, each still with the room's sound of it. That is what recording
+each source in its own pass in the same room gives (overdubs), so it bends nothing physical
+per take; `passes` says whether the heard sources go through the chain together (one take:
+the chain's nonlinearity mixes them) or a pass each, the prints summed (each pass's own
+hum and noise add up too, coherently: the passes start at the same instant of the mains).
+Responses are computed for every pair either way (a change of `hears` reuses the room's
+cache); the convolutions of the pairs not heard are skipped. A `free_field` mic hears the
+direct sound alone (`free_field_responses`: a large anechoic shoebox, no tail, no wave
+solver, no objects); a room whose every face is `anechoic` and that has no objects (the
+preset `anechoic`) takes that path for every mic.
 
 `render(scene)` writes, in its output folder: each mic's print `<mic>.wav` (mono float32 at
 the project's rate, the chain's out at its full scale), `mix.wav` (stereo, the mics
@@ -144,6 +163,10 @@ class MicSpec:
     elevation_deg: float = 0.0
     set: dict[str, float] = field(default_factory=dict)
     pan: float = 0.0
+    # the sources it records (SourceSpec names, a pair's sides expanded), None = all
+    hears: list[str] | None = None
+    passes: str = "together"  # together | separate
+    free_field: bool = False
 
 
 @dataclass
@@ -158,6 +181,14 @@ class Scene:
     tail_s: float | None = None
     room_source: str = ""
     wave_crossover_hz: float | None = None
+
+    def heard(self, mi: int) -> list[int]:
+        """The indices of the sources mic mi records (all, unless its `hears` gates them)."""
+        h = self.mics[mi].hears
+        return [si for si, s in enumerate(self.sources) if h is None or s.name in h]
+
+    def gated(self, mi: int) -> bool:
+        return len(self.heard(mi)) < len(self.sources)
 
 
 def _materials(m: dict) -> tuple[str, ...]:
@@ -217,6 +248,9 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
     mics = []
     for m in d["mics"]:
         aim = m.get("aim", {})
+        passes = str(m.get("passes", "together"))
+        if passes not in ("together", "separate"):
+            raise ValueError(f"mic {m['name']}: passes is together or separate, not {passes!r}")
         mics.append(
             MicSpec(
                 m["name"],
@@ -226,6 +260,9 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
                 float(aim.get("elevation_deg", 0.0)),
                 {k: float(v) for k, v in (m.get("set") or {}).items()},
                 float(m.get("pan", 0.0)),
+                _hears(m, sources),
+                passes,
+                bool(m.get("free_field", False)),
             )
         )
     st = d.get("settings") or {}
@@ -244,6 +281,21 @@ def load_scene(path_or_data: str | Path | dict) -> Scene:
         str(r.get("source", "")),
         None if not st.get("wave_crossover_hz") else float(st["wave_crossover_hz"]),
     )
+
+
+def _hears(m: dict, sources: list[SourceSpec]) -> list[str] | None:
+    """A mic's `hears` as SourceSpec names: a stereo source's name is both its sides."""
+    if m.get("hears") is None:
+        return None
+    out: list[str] = []
+    for name in m["hears"]:
+        got = [s.name for s in sources if s.name == name or s.pair == name]
+        if not got:
+            raise ValueError(f"mic {m['name']} hears {name!r}: no such source")
+        out += [g for g in got if g not in out]
+    if not out:
+        raise ValueError(f"mic {m['name']} hears no source (`hears` is empty)")
+    return out
 
 
 def _source_specs(s: dict, index: int = 0) -> list[SourceSpec]:
@@ -379,19 +431,27 @@ def mic_pressures(
     scene: Scene, fs: int, signals: list[np.ndarray], log: Callable[[str], None] | None = None
 ) -> tuple[np.ndarray, list[str], int]:
     """Per source and mic the entries' pressures, (sources, mics, 2, samples): each
-    source's signal convolved with its room response; and the tables' kinds, and the
-    length (the longest source plus the room's tail)."""
+    source's signal convolved with its room response (zeros where a mic doesn't hear the
+    source: its `hears`); and the tables' kinds, and the length (the longest source plus
+    the room's tail)."""
     from varimu.rooms.progress import Step
 
     h, kinds = scene_responses(scene, fs, log)
     n = max(len(x) for x in signals) + h.shape[-1]
     p = np.zeros((len(scene.sources), len(scene.mics), 2, n))
     nm = len(scene.mics)
+    heard = [set(scene.heard(mi)) for mi in range(nm)]
     sizes = [1 << int(np.ceil(np.log2(len(x) + h.shape[-1]))) for x in signals]
-    works = [2 * m * np.log2(m) for m in sizes for _ in range(nm)]
+    works = [
+        2 * m * np.log2(m) if si in heard[mi] else 0.0
+        for si, m in enumerate(sizes)
+        for mi in range(nm)
+    ]
     conv = Step(log, "convolution", "convolve", works)
     for si, x in enumerate(signals):
         for mi in range(nm):
+            if si not in heard[mi]:
+                continue
             conv.start(si * nm + mi, f"source {si + 1} -> mic {mi + 1}, {len(x) / fs:.1f} s "
                                      f"of audio, {sizes[si]:,}-point FFTs")  # fmt: skip
             for e in range(2):
@@ -460,7 +520,74 @@ def scene_responses(
             [0.0, 0.0, 0.0] if s.tail_offset_m is None else s.tail_offset_m.tolist()
             for s in scene.sources
         ]
-    return _cached_responses(scene, mics, fs, kw, log), kinds
+    free_room = free_field_room(scene.room)
+    ff = [mi for mi, m in enumerate(scene.mics) if free_room or m.free_field]
+    in_room = [mi for mi in range(len(mics)) if mi not in ff]
+    if not ff:  # (every mic in the room: the key and the responses as before)
+        return _cached_responses(scene.room, scene, mics, fs, kw, log), kinds
+    for mi in ff:  # the room isn't simulated for these: its bounds still hold them
+        _check_inside(scene.room, scene.mics[mi].position_m, f"mic {scene.mics[mi].name}")
+    for s in scene.sources:
+        _check_inside(scene.room, s.position_m, f"source {s.name}")
+    parts = []
+    if in_room:
+        parts.append((in_room, _cached_responses(scene.room, scene, [mics[i] for i in in_room],
+                                                 fs, kw, log)))  # fmt: skip
+    if log:
+        log(f"free field: {len(ff)} mic{'s' * (len(ff) > 1)}, the direct sound alone")
+    box, shift, kw_ff = _free_field_box(scene, [mics[i] for i in ff], kw)
+    ff_mics = [Mic(mics[i].position_m - shift, mics[i].aim, mics[i].table) for i in ff]
+    parts.append((ff, _cached_responses(box, scene, ff_mics, fs, kw_ff, log, shift=shift)))
+    n = max(h.shape[-1] for _, h in parts)
+    out = np.zeros((len(scene.sources), len(mics), 2, n))
+    for idx, h in parts:
+        out[:, idx, :, : h.shape[-1]] = h
+    return out, kinds
+
+
+def free_field_room(room) -> bool:
+    """Whether a room is a free field: every face anechoic and nothing in it (objects would
+    still occlude and diffract)."""
+    return _anechoic(room) and not (isinstance(room, PolyRoom) and room.boxes)
+
+
+def _check_inside(room, p: np.ndarray, what: str) -> None:
+    if isinstance(room, PolyRoom):
+        if not room.inside(np.asarray(p, float)):
+            raise ValueError(f"{what} at {list(p)} is not inside the room")
+    else:
+        from varimu.rooms.shoebox import _inside
+
+        _inside(room, np.asarray(p, float), what)
+
+
+FREE_FIELD_MARGIN_S = 0.03  # past the farthest direct sound: the images' fade (20 ms) and some
+
+
+def _free_field_box(scene: Scene, mics: list[Mic], kw: dict) -> tuple[Shoebox, np.ndarray, dict]:
+    """A free field as shoebox.responses computes it: an anechoic box around the sources and
+    the mics, its walls so far that no image arrives before the images' horizon (only the
+    direct sound is computed), no tail, no wave solver; the room's air. Returns the box, the
+    shift of positions into it, and responses' settings."""
+    from varimu.rooms.shoebox import SPEED_OF_SOUND_M_S
+
+    pts = np.array([s.position_m for s in scene.sources] + [m.position_m for m in mics])
+    r_max = max(
+        float(np.linalg.norm(s.position_m - m.position_m)) for s in scene.sources for m in mics
+    )
+    ism_s = r_max / SPEED_OF_SOUND_M_S + FREE_FIELD_MARGIN_S
+    pad = SPEED_OF_SOUND_M_S * ism_s  # an image path is at least twice this: past the horizon
+    lo = pts.min(0) - pad
+    dims = tuple(float(x) for x in pts.max(0) + pad - lo)
+    box = Shoebox(dims, ("anechoic",) * 6, scene.room.temp_c, scene.room.rh_percent)
+    kw_ff = {
+        **{k: v for k, v in kw.items() if k != "tail_offsets"},
+        "ism_s": ism_s,
+        "length_s": ism_s + 0.1,  # the capsules' own responses after the direct sound
+        "tail": False,
+        "wave": None,
+    }
+    return box, lo, kw_ff
 
 
 def _plain(x: Any) -> Any:
@@ -478,7 +605,9 @@ def _plain(x: Any) -> Any:
     return repr(x)
 
 
-def _responses_key(scene: Scene, mics: list[Mic], fs: int, kw: dict) -> str:
+def _responses_key(
+    room, scene: Scene, mics: list[Mic], fs: int, kw: dict, shift: np.ndarray | None = None
+) -> str:
     """The room responses' cache key: everything shoebox.responses reads (the room, the
     sources' places, patterns and seeds, the mics' places, aims and entry tables, the
     settings, the backend) and the code it runs (varimu/rooms, the separation room's bands
@@ -493,8 +622,8 @@ def _responses_key(scene: Scene, mics: list[Mic], fs: int, kw: dict) -> str:
     mod = gpu.module()
     backend = gpu.backend()
     data = {
-        "room": _plain(scene.room),
-        "sources": [s.position_m.tolist() for s in scene.sources],
+        "room": _plain(room),
+        "sources": [_shifted(s.position_m, shift).tolist() for s in scene.sources],
         "directivity": [
             None if d is None else [_plain(d[0]), d[1].tolist()] for d in (kw["directivity"] or [])
         ],
@@ -511,12 +640,19 @@ def _responses_key(scene: Scene, mics: list[Mic], fs: int, kw: dict) -> str:
     return hsh.hexdigest()[:32]
 
 
-def _cached_responses(scene: Scene, mics: list[Mic], fs: int, kw: dict, log) -> np.ndarray:
-    """shoebox.responses for the scene, from cache/rooms/responses/ when the room, the
+def _shifted(p: np.ndarray, shift: np.ndarray | None) -> np.ndarray:
+    return p if shift is None else p - shift
+
+
+def _cached_responses(
+    room, scene: Scene, mics: list[Mic], fs: int, kw: dict, log, shift: np.ndarray | None = None
+) -> np.ndarray:
+    """shoebox.responses for the scene's sources (moved by -`shift`) in `room` (the scene's,
+    or a free field's box) to `mics`, from cache/rooms/responses/ when the room, the
     places and the settings are unchanged (a change of level or audio skips the room's
     physics: the rays, reflections, diffraction and the wave solver). The newest
     `RESPONSES_KEEP` entries are kept."""
-    key = _responses_key(scene, mics, fs, kw)
+    key = _responses_key(room, scene, mics, fs, kw, shift)
     path = RESPONSES / f"{key}.npy"
     if path.exists():
         try:
@@ -529,8 +665,8 @@ def _cached_responses(scene: Scene, mics: list[Mic], fs: int, kw: dict, log) -> 
             pass  # a torn file: compute it again
     wave = kw["wave"] and {**kw["wave"], "log": log}
     h = responses(
-        scene.room,
-        [s.position_m for s in scene.sources],
+        room,
+        [_shifted(s.position_m, shift) for s in scene.sources],
         mics,
         fs,
         **{**kw, "wave": wave},
@@ -550,9 +686,11 @@ def _cached_responses(scene: Scene, mics: list[Mic], fs: int, kw: dict, log) -> 
 
 
 def _anechoic(room) -> bool:
+    """Every face anechoic (a shoebox with only some anechoic still has a tail: until
+    2026-11-09 one anechoic face took a shoebox's tail away)."""
     if isinstance(room, PolyRoom):
         return all(m == "anechoic" for m in room.materials())
-    return any(m == "anechoic" for m in room.materials)
+    return all(m == "anechoic" for m in room.materials)
 
 
 def rt60_s(room, source_m=None) -> np.ndarray:
@@ -657,11 +795,16 @@ def render(
     p, kinds, n = mic_pressures(scene, fs, signals, log)
     log(f"room responses in {fmt_s(time.perf_counter() - t0)}")
 
-    jobs = []  # (mic index, source index or None)
+    # Prints (mic index, source index or None: all it hears together). A mic recording its
+    # sources in separate passes is the sum of a print per source; solos are those prints.
+    heard = [scene.heard(mi) for mi in range(len(scene.mics))]
+    split = [m.passes == "separate" and len(heard[mi]) > 1 for mi, m in enumerate(scene.mics)]
+    jobs: list[tuple[int, int | None]] = []
     for mi in range(len(scene.mics)):
-        jobs.append((mi, None))
-        if solo and len(scene.sources) > 1:
-            jobs += [(mi, si) for si in range(len(scene.sources))]
+        if not split[mi]:
+            jobs.append((mi, None))
+        if split[mi] or (solo and len(heard[mi]) > 1):
+            jobs += [(mi, si) for si in heard[mi]]
     done = np.zeros(len(jobs))
     workers = workers or max(1, min(len(jobs), (os.cpu_count() or 4) - 2))
     log(f"chains: {len(jobs)} prints of {fmt_s(n / fs)} at {scene.quality} on {workers} threads")
@@ -670,6 +813,7 @@ def render(
     def run(j: int) -> np.ndarray:
         mi, si = jobs[j]
         m = scene.mics[mi]
+        # (the sources a mic doesn't hear are zeros in p: summing them changes nothing)
         sel = slice(None) if si is None else slice(si, si + 1)
         front, rear = p[sel, mi, 0].sum(0), p[sel, mi, 1].sum(0)
 
@@ -682,60 +826,72 @@ def render(
 
     t1 = time.perf_counter()
     with ThreadPoolExecutor(workers) as ex:
-        outs = list(ex.map(run, range(len(jobs))))
+        outs = dict(zip(jobs, ex.map(run, range(len(jobs))), strict=True))
     log(f"chains: done in {fmt_s(time.perf_counter() - t1)}")
 
     out_dir.mkdir(parents=True, exist_ok=True)
     log("writing: RT60s, the mics' files and the mix")
+    rt = (
+        np.zeros(7)
+        if free_field_room(scene.room)
+        else np.round(rt60_s(scene.room, scene.sources[0].position_m), 3)
+    )
     result: dict[str, Any] = {
         "scene": scene.name,
         "fs": fs,
         "quality": scene.quality,
-        "rt60_s": dict(zip(map(str, (125, 250, 500, 1000, 2000, 4000, 8000)),
-                           np.round(rt60_s(scene.room, scene.sources[0].position_m),
-                                    3).tolist(), strict=True)),
+        "rt60_s": dict(zip(map(str, (125, 250, 500, 1000, 2000, 4000, 8000)), rt.tolist(),
+                           strict=True)),
         "room": "polygon" if isinstance(scene.room, PolyRoom) else "shoebox",
+        "free_field": free_field_room(scene.room),
         "room_backend": gpu.backend(),
         "gpu": gpu.gpu_info(),
         "wave_crossover_hz": scene.wave_crossover_hz,
         "mics": [],
     }  # fmt: skip
     mix = np.zeros((2, n))
-    for j, (mi, si) in enumerate(jobs):
-        m = scene.mics[mi]
-        y = outs[j]
-        if si is None:
-            f = out_dir / f"{_safe(m.name)}.wav"
-            write_audio(f, y.astype(np.float32), fs)
-            gl, gr = balance(m.pan)
-            mix[0, : len(y)] += gl * y
-            mix[1, : len(y)] += gr * y
-            result["mics"].append(
-                {
-                    "name": m.name,
-                    "file": f.name,
-                    "chain": m.chain,
-                    "set": m.set,
-                    "pan": m.pan,
-                    "entries": kinds[mi],
-                    "rms_dbfs": round(_db(y), 2),
-                    "peak_dbfs": round(float(20 * np.log10(np.max(np.abs(y)) + 1e-15)), 2),
-                }
-            )
+    for mi, m in enumerate(scene.mics):
+        if split[mi]:
+            y = np.sum([outs[(mi, si)] for si in heard[mi]], axis=0)
         else:
-            src = scene.sources[si]
-            f = out_dir / f"{_safe(m.name)}__{_safe(src.name)}.wav"
-            write_audio(f, y.astype(np.float32), fs)
-    if solo and len(scene.sources) > 1:
-        for mi in range(len(scene.mics)):
-            full = outs[jobs.index((mi, None))]
-            solos = [outs[jobs.index((mi, si))] for si in range(len(scene.sources))]
-            entry = result["mics"][mi]
+            y = outs[(mi, None)]
+        f = out_dir / f"{_safe(m.name)}.wav"
+        write_audio(f, y.astype(np.float32), fs)
+        gl, gr = balance(m.pan)
+        mix[0, : len(y)] += gl * y
+        mix[1, : len(y)] += gr * y
+        entry = {
+            "name": m.name,
+            "file": f.name,
+            "chain": m.chain,
+            "set": m.set,
+            "pan": m.pan,
+            "entries": kinds[mi],
+            "rms_dbfs": round(_db(y), 2),
+            "peak_dbfs": round(float(20 * np.log10(np.max(np.abs(y)) + 1e-15)), 2),
+            "hears": [scene.sources[si].name for si in heard[mi]],
+            "passes": "separate" if split[mi] else "together",
+            "free_field": bool(m.free_field or free_field_room(scene.room)),
+        }
+        result["mics"].append(entry)
+        solos = {si: outs[(mi, si)] for si in heard[mi] if (mi, si) in outs}
+        for si, ys in solos.items():
+            fs_ = out_dir / f"{_safe(m.name)}__{_safe(scene.sources[si].name)}.wav"
+            write_audio(fs_, ys.astype(np.float32), fs)
+        if solo and len(scene.sources) > 1:
+            if len(heard[mi]) == 1:
+                solos = {heard[mi][0]: y}
             entry["bleed"] = {
-                src.name: {"rms_dbfs": round(_db(y), 2), "octaves_db": octave_levels_db(y, fs)}
-                for src, y in zip(scene.sources, solos, strict=True)
-            }
-            entry["intermod_db"] = round(_db(full - sum(solos)) - _db(full), 2)
+                scene.sources[si].name: {"rms_dbfs": round(_db(ys), 2),
+                                         "octaves_db": octave_levels_db(ys, fs)}
+                for si, ys in solos.items()
+            }  # fmt: skip
+            # separate passes: the print is the solos' sum, nothing mixed in the chain
+            entry["intermod_db"] = (
+                None
+                if split[mi] or len(heard[mi]) == 1
+                else round(_db(y - sum(solos.values())) - _db(y), 2)
+            )
     write_audio(out_dir / "mix.wav", mix.T.astype(np.float32), fs)
     result["mix"] = "mix.wav"
     result["octaves_hz"] = list(OCTAVES_HZ)

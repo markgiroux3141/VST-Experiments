@@ -585,8 +585,48 @@ limit for it (proximity in `mic_print.py --distance-m`). `mic_print.py` finds th
 capsule now (it fell back to a bare pressure entry without its body). Tests:
 `tests/test_chain_matrix.py`, the Rust agreement fixtures for the four new chains.
 
+## No room, and bleed per mic (2026-11-09, the user's ask)
+
+Three ways to hear a chain without the room, or a mic without the others' bleed (the user's
+brainstorm, all built the same day; varimu/rooms/scene.py's docstring has the format):
+
+- **The preset `anechoic`** (`config/rooms/anechoic.yaml`, "Anechoic (free field)" in the
+  Preset menu): every face anechoic, nothing in it, 10 x 8 x 5 m only to bound placement. A
+  room whose every face is anechoic and that has no objects (`scene.free_field_room`, the app's
+  `Scene::is_free_field`) takes the free field's path for every mic: no rays, tail or wave
+  solver, render.json `free_field: true`, its RT60s zeros.
+- **A mic's `free_field`** (the mic panel's "Free field (no room for this mic)"): that mic
+  hears the direct sound alone while the others keep the room. The free field is
+  `shoebox.responses` on an anechoic box so large that no image arrives before the images'
+  horizon (`_free_field_box`: only the direct path is computed; the room's air; cached apart).
+  It agrees with the room mic's direct sound at the same place to -46 dB (the room's later
+  reflections, synthesized per bin, leak that much ahead of themselves).
+- **A mic's `hears`** (the panel's "Hears: every source | only…" with a box per source): the
+  bleed gated. Each heard source keeps the room's sound of it, so this is each source recorded
+  in its own pass in the same room (overdubs), nothing unphysical within a take. A stereo
+  source's name is both sides. The responses are computed for every pair (a change of `hears`
+  reuses the room's cache), the convolutions it doesn't hear are skipped, the balance's stems
+  and peaks follow it. **`passes: separate`** (the panel's "Takes: one take | a pass per
+  source", shown when it hears more than one): each heard source through the chain alone, the
+  prints summed: no intermodulation between them, each pass's hum and noise added (coherently:
+  every pass starts at the same mains phase). Its solos are its passes; render.json's
+  `intermod_db` is null for it.
+
+The Room view dims the sources a selected mic doesn't hear and draws a line to each it does;
+a mic's list row and plan label say "hears …", "passes", "free field"; a mic hearing nothing
+is a problem that stops the render; renaming or deleting a source follows into every mic's
+list. Found on the way: a shoebox with one anechoic face lost its whole diffuse tail
+(`_anechoic` asked any face, now every face, as the polygon room did). Tests:
+`tests/test_rooms.py` (`hears`, free field, the preset, the one anechoic wall),
+`tests/test_room_balance.py` (a gated mic prints its solo bit for bit, separate passes the sum
+of the solos, the balance follows), `room.rs`'s `hears_follows_the_sources`,
+`the_anechoic_preset_is_a_free_field`. Not seen drawn yet (the app starts on a fresh session,
+so a scratch scene can't be preloaded unattended).
+
 ## Open (the user's)
 
+- Try the bleed controls and the anechoic preset in the Room view (2026-11-09: built, not yet
+  seen drawn).
 - Phantom power and balanced lines (asked 2026-11-05; nothing built): every mic's power is in
   its own file today (the U47's supply, the omni's polarization, the dynamics need none), and the
   chains join single-ended; phantom needs both legs and the common mode modelled, and a mic's

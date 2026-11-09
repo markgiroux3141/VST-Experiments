@@ -138,3 +138,65 @@ def test_the_balance_stems_sum_to_the_render(tmp_path, monkeypatch):
     peaks = np.array(data["peaks"])
     assert peaks.shape[:2] == (2, 2)
     assert peaks[0, 0].max() > 1.3 * peaks[0, 1].max()  # a is near ma (omnis, a room)
+
+
+def test_gated_mics_and_separate_passes_print_their_sources_alone(tmp_path, monkeypatch):
+    """2026-11-09: a mic hearing only `a` prints what it printed of `a` alone (the ungated
+    render's solo); a mic recording both in separate passes prints the sum of its solos; the
+    balance's stems follow the gate (they sum to the gated render)."""
+    import json
+
+    import soundfile as sf
+
+    from varimu.rooms import balance
+    from varimu.rooms import scene as sc
+
+    monkeypatch.setattr(sc, "RESPONSES", tmp_path / "responses")
+    monkeypatch.setattr(sc, "CACHE", tmp_path / "prints")
+    rng = np.random.default_rng(2)
+    for name in ("a", "b"):
+        x = rng.standard_normal(FS // 4) * np.hanning(FS // 4)
+        sf.write(tmp_path / f"{name}.wav", x.astype("<f4"), FS)
+
+    def scene(gate: bool):
+        ma = {"name": "ma", "chain": "omni_clean", "position_m": [1.5, 2.6, 1.5], "pan": -0.7}
+        mb = {"name": "mb", "chain": "omni_clean", "position_m": [3.5, 2.6, 1.5], "pan": 0.7}
+        if gate:
+            ma |= {"hears": ["a"]}
+            mb |= {"passes": "separate"}
+        return sc.load_scene(
+            {
+                "name": "t",
+                "room": {"dims_m": [5, 4, 3], "materials": {"walls": "furnished_wall",
+                                                            "floor": "wood_floor",
+                                                            "ceiling": "gypsum_on_studs"}},
+                "sources": [
+                    {"name": "a", "clip": str(tmp_path / "a.wav"), "spl_db": 90,
+                     "position_m": [1.5, 2, 1.5]},
+                    {"name": "b", "clip": str(tmp_path / "b.wav"), "spl_db": 90,
+                     "position_m": [3.5, 2, 1.5]},
+                ],
+                "mics": [ma, mb],
+                "settings": {"tail_s": 0.3, "quality": "draft"},
+            }
+        )  # fmt: skip
+
+    def read(d, f):
+        return sf.read(tmp_path / d / f)[0]
+
+    sc.render(scene(False), tmp_path / "all", solo=True, log=lambda s: None)
+    info = sc.render(scene(True), tmp_path / "gated", log=lambda s: None)
+    assert np.array_equal(read("gated", "ma.wav"), read("all", "ma__a.wav"))
+    both = read("all", "mb__a.wav") + read("all", "mb__b.wav")
+    assert np.max(np.abs(read("gated", "mb.wav") - both)) < 1e-6
+    ma, mb = info["mics"]
+    assert (ma["hears"], ma["passes"], mb["hears"], mb["passes"]) == (
+        ["a"], "together", ["a", "b"], "separate")  # fmt: skip
+    data = balance.prepare(scene(True), tmp_path / "bal", log=lambda s: None)
+    mix = sum(np.stack([read("bal", s[k]) for k in ("left", "right")]) for s in data["sources"])
+    ref = read("gated", "mix.wav").T
+    n = min(ref.shape[1], mix.shape[1])
+    err = 20 * np.log10(np.std(ref[:, :n] - mix[:, :n]) / np.std(ref[:, :n]))
+    assert err < -50, err
+    assert not np.array(data["peaks"])[1, 0].any()  # b doesn't reach ma
+    assert json.loads((tmp_path / "gated" / "render.json").read_text())["free_field"] is False

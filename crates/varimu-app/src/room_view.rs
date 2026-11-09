@@ -505,7 +505,13 @@ impl RoomView {
         for (i, m) in self.scene.mics.iter().enumerate() {
             let on = self.sel == Some(Sel::Mic(i));
             let chain = room::chain(&m.chain).map_or(m.chain.as_str(), |c| c.label.as_str());
-            let text = format!("◉ {}  ·  {}  ·  pan {:+.2}", m.name, chain, m.pan);
+            let text = format!(
+                "◉ {}  ·  {}  ·  pan {:+.2}{}",
+                m.name,
+                chain,
+                m.pan,
+                mic_badges(m)
+            );
             if ui
                 .selectable_label(on, RichText::new(text).color(MIC_COLOR))
                 .clicked()
@@ -839,6 +845,7 @@ impl RoomView {
     fn source_form(&mut self, ui: &mut egui::Ui, i: usize, tracks: &[(String, String)]) {
         let dims = bounds(&self.scene);
         let mut delete = false;
+        let old_name = self.scene.sources[i].name.clone();
         {
             let s = &mut self.scene.sources[i];
             ui.label(
@@ -958,6 +965,7 @@ impl RoomView {
             }
         }
         let s = self.scene.sources[i].clone();
+        self.scene.rename_source(&old_name, &s.name); // the mics that hear it by name
         for m in &self.scene.mics {
             ui.label(
                 RichText::new(format!(
@@ -971,7 +979,7 @@ impl RoomView {
             );
         }
         if delete {
-            self.scene.sources.remove(i);
+            self.scene.remove_source(i);
             self.sel = None;
         }
     }
@@ -1045,6 +1053,7 @@ impl RoomView {
     fn mic_form(&mut self, ui: &mut egui::Ui, i: usize) {
         let dims = bounds(&self.scene);
         let sources = self.scene.sources.clone();
+        let room_free = self.scene.is_free_field();
         let mut delete = false;
         let m = &mut self.scene.mics[i];
         ui.label(
@@ -1132,14 +1141,92 @@ impl RoomView {
             ui.label("Pan");
             ui.add(egui::Slider::new(&mut m.pan, -1.0..=1.0).step_by(0.05));
         });
+        // Bleed: which sources it records (scene.py's `hears`), how (`passes`), the room.
+        if !sources.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label("Hears");
+                let mut all = m.hears.is_none();
+                ui.radio_value(&mut all, true, "every source");
+                ui.radio_value(&mut all, false, "only…").on_hover_text(
+                    "Gate the bleed: this mic records only the sources ticked below, each \
+                     still with the room's sound of it. The same as recording each source \
+                     in a pass of its own in this room (overdubs).",
+                );
+                if all != m.hears.is_none() {
+                    m.hears = if all {
+                        None
+                    } else {
+                        // start from the source it points at most directly
+                        sources
+                            .iter()
+                            .min_by(|a, b| {
+                                off_axis_deg(m, &a.pos).total_cmp(&off_axis_deg(m, &b.pos))
+                            })
+                            .map(|s| vec![s.name.clone()])
+                    };
+                }
+            });
+            if let Some(h) = &mut m.hears {
+                ui.horizontal_wrapped(|ui| {
+                    for s in &sources {
+                        let mut on = h.contains(&s.name);
+                        if ui.checkbox(&mut on, &s.name).changed() {
+                            if on {
+                                h.push(s.name.clone());
+                            } else {
+                                h.retain(|n| *n != s.name);
+                            }
+                        }
+                    }
+                });
+            }
+            let heard = sources.iter().filter(|s| m.hears_source(&s.name)).count();
+            if heard > 1 {
+                ui.horizontal(|ui| {
+                    ui.label("Takes");
+                    ui.radio_value(&mut m.separate_passes, false, "one take")
+                        .on_hover_text(
+                            "Everything it hears goes through its chain together: the \
+                             chain's saturation mixes the sources (intermodulation).",
+                        );
+                    ui.radio_value(&mut m.separate_passes, true, "a pass per source")
+                        .on_hover_text(
+                            "Each source through the chain on its own, the prints summed \
+                             (overdubs): no intermodulation between them; each pass's own \
+                             hum and noise add up. Costs a print per source.",
+                        );
+                });
+            }
+        }
+        ui.add_enabled_ui(!room_free, |ui| {
+            ui.checkbox(&mut m.free_field, "Free field (no room for this mic)")
+                .on_hover_text(
+                    "This mic hears the direct sound alone, as in an anechoic chamber: the \
+                     room's walls and objects removed for it (distance, the source's \
+                     radiation, the capsule's angle and proximity stay). Other mics keep \
+                     the room.",
+                );
+        });
+        if room_free {
+            ui.label(
+                RichText::new("the room is anechoic: every mic is in free field")
+                    .small()
+                    .color(theme::FAINT),
+            );
+        }
         for s in &sources {
             let off = off_axis_deg(m, &s.pos);
             ui.label(
                 RichText::new(format!(
-                    "{}: {:.2} m, {:.0}° off axis",
+                    "{}: {:.2} m, {:.0}° off axis{}",
                     s.name,
                     dist(&s.pos, &m.pos),
-                    off
+                    off,
+                    if m.hears_source(&s.name) {
+                        ""
+                    } else {
+                        " (not heard)"
+                    }
                 ))
                 .small()
                 .color(theme::MUTED),
@@ -1189,6 +1276,15 @@ impl RoomView {
              model above: boomy notes and bass that changes with position. Higher costs more \
              (~6 s per source at 500 Hz, ~1.5 min at 1 kHz in a mid-sized room)",
         );
+        if self.scene.is_free_field() {
+            ui.label(
+                RichText::new(
+                    "Anechoic room: the direct sound only (no rays, tail or wave solver)",
+                )
+                .small()
+                .color(theme::FAINT),
+            );
+        }
         let problems = self.scene.problems();
         for p in &problems {
             ui.label(RichText::new(format!("• {p}")).small().color(theme::WARN));
@@ -1784,7 +1880,7 @@ impl RoomView {
         {
             match self.sel.take() {
                 Some(Sel::Source(i)) if i < self.scene.sources.len() => {
-                    self.scene.sources.remove(i);
+                    self.scene.remove_source(i);
                 }
                 Some(Sel::Mic(i)) if i < self.scene.mics.len() => {
                     self.scene.mics.remove(i);
@@ -1879,11 +1975,31 @@ impl RoomView {
             );
         }
 
-        // sources, then mics with their patterns
+        // sources, then mics with their patterns; with a mic selected, the sources it
+        // doesn't record are dimmed and a line runs to each it does (when it is gated)
         let font = egui::FontId::proportional(12.0);
+        let picked_mic = match self.sel {
+            Some(Sel::Mic(i)) => self.scene.mics.get(i),
+            _ => None,
+        };
         for (i, s) in self.scene.sources.iter().enumerate() {
             let c = to_s(s.pos[0], s.pos[1]);
             let on = self.sel == Some(Sel::Source(i));
+            let heard = picked_mic.is_none_or(|m| m.hears_source(&s.name));
+            let source_color = if heard {
+                SOURCE_COLOR
+            } else {
+                SOURCE_COLOR.gamma_multiply(0.3)
+            };
+            if let Some(m) = picked_mic
+                && m.hears.is_some()
+                && heard
+            {
+                painter.line_segment(
+                    [to_s(m.pos[0], m.pos[1]), c],
+                    Stroke::new(1.0, MIC_COLOR.gamma_multiply(0.5)),
+                );
+            }
             // A stereo track's speakers, left and right of its centre (ST5).
             if self.stereo_tracks.contains_key(&s.track) && !s.as_mono {
                 let [l, r] = s.sides();
@@ -1920,7 +2036,7 @@ impl RoomView {
                 ));
                 painter.line_segment([c, c + dir * 20.0], Stroke::new(2.5, SOURCE_COLOR));
             }
-            painter.circle_filled(c, 9.0, SOURCE_COLOR);
+            painter.circle_filled(c, 9.0, source_color);
             if on {
                 painter.circle_stroke(c, 13.0, Stroke::new(2.0, theme::INK));
             }
@@ -1929,7 +2045,7 @@ impl RoomView {
                 egui::Align2::LEFT_CENTER,
                 format!("{}  {:.0} dB", s.name, s.spl_db),
                 font.clone(),
-                SOURCE_COLOR,
+                source_color,
             );
         }
         for (i, m) in self.scene.mics.iter().enumerate() {
@@ -1992,7 +2108,7 @@ impl RoomView {
             painter.text(
                 c + Vec2::new(10.0, 12.0),
                 egui::Align2::LEFT_CENTER,
-                &m.name,
+                format!("{}{}", m.name, mic_badges(m)),
                 font.clone(),
                 col,
             );
@@ -2094,6 +2210,21 @@ fn position_fields(ui: &mut egui::Ui, pos: &mut [f64; 3], dims: [(f64, f64); 3])
             );
         }
     });
+}
+
+/// A mic's bleed and room settings in a few words (its list row and its label).
+fn mic_badges(m: &RoomMic) -> String {
+    let mut out = String::new();
+    if let Some(h) = &m.hears {
+        out += &format!("  · hears {}", h.join(", "));
+    }
+    if m.separate_passes {
+        out += "  · passes";
+    }
+    if m.free_field {
+        out += "  · free field";
+    }
+    out
 }
 
 fn dist(a: &[f64; 3], b: &[f64; 3]) -> f64 {

@@ -774,6 +774,14 @@ pub struct RoomMic {
     pub azimuth_deg: f64,
     pub elevation_deg: f64,
     pub pan: f64,
+    /// The sources it records, by name; None = all (varimu/rooms/scene.py's `hears`: the
+    /// others' bleed gated out, as if each source were recorded in a pass of its own).
+    pub hears: Option<Vec<String>>,
+    /// What it hears goes through its chain a pass per source, the prints summed (scene.py's
+    /// `passes: separate`), instead of together in one take.
+    pub separate_passes: bool,
+    /// No room for this mic: the direct sound only (scene.py's `free_field`).
+    pub free_field: bool,
 }
 
 impl RoomMic {
@@ -794,7 +802,17 @@ impl RoomMic {
             azimuth_deg,
             elevation_deg: 0.0,
             pan: 0.0,
+            hears: None,
+            separate_passes: false,
+            free_field: false,
         }
+    }
+
+    /// Whether it records the source called `name`.
+    pub fn hears_source(&self, name: &str) -> bool {
+        self.hears
+            .as_ref()
+            .is_none_or(|h| h.iter().any(|n| n == name))
     }
 
     pub fn pattern(&self) -> Pattern {
@@ -1148,6 +1166,8 @@ impl Scene {
             "mics": self.mics.iter().map(|m| json!({
                 "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
                 "azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg, "pan": m.pan,
+                "hears": m.hears, "separate_passes": m.separate_passes,
+                "free_field": m.free_field,
             })).collect::<Vec<_>>(),
         })
     }
@@ -1244,6 +1264,13 @@ impl Scene {
                             azimuth_deg: f(m, "azimuth_deg", 0.0),
                             elevation_deg: f(m, "elevation_deg", 0.0),
                             pan: f(m, "pan", 0.0),
+                            hears: m["hears"].as_array().map(|a| {
+                                a.iter()
+                                    .filter_map(|x| Some(x.as_str()?.to_string()))
+                                    .collect()
+                            }),
+                            separate_passes: m["separate_passes"].as_bool().unwrap_or(false),
+                            free_field: m["free_field"].as_bool().unwrap_or(false),
                         })
                         .collect()
                 })
@@ -1303,11 +1330,26 @@ impl Scene {
                 }
                 v
             }).collect::<Vec<_>>(),
-            "mics": self.mics.iter().map(|m| json!({
-                "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
-                "aim": {"azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg},
-                "pan": m.pan,
-            })).collect::<Vec<_>>(),
+            "mics": self.mics.iter().map(|m| {
+                let mut v = json!({
+                    "name": m.name, "chain": m.chain, "set": m.set, "position_m": m.pos,
+                    "aim": {"azimuth_deg": m.azimuth_deg, "elevation_deg": m.elevation_deg},
+                    "pan": m.pan,
+                });
+                // (absent when off: scenes render as before)
+                if let Some(h) = &m.hears {
+                    let known: Vec<&String> =
+                        h.iter().filter(|n| self.sources.iter().any(|s| &s.name == *n)).collect();
+                    v["hears"] = json!(known);
+                }
+                if m.separate_passes {
+                    v["passes"] = json!("separate");
+                }
+                if m.free_field {
+                    v["free_field"] = json!(true);
+                }
+                v
+            }).collect::<Vec<_>>(),
             "settings": {"quality": self.quality, "seed": 0,
                          "wave_crossover_hz": if self.wave_hz > 0.0 { json!(self.wave_hz) }
                                               else { Value::Null }},
@@ -1385,6 +1427,9 @@ impl Scene {
             if chain(&m.chain).is_none() {
                 out.push(format!("{}: unknown chain {}", m.name, m.chain));
             }
+            if !self.sources.is_empty() && !self.sources.iter().any(|s| m.hears_source(&s.name)) {
+                out.push(format!("{} hears no source", m.name));
+            }
             for s in &self.sources {
                 let d: f64 = (0..3)
                     .map(|i| (m.pos[i] - s.pos[i]).powi(2))
@@ -1403,6 +1448,40 @@ impl Scene {
             }
         }
         out
+    }
+
+    /// A source's name changed from `old` to `new`: the mics that hear it by name follow.
+    pub fn rename_source(&mut self, old: &str, new: &str) {
+        if old == new {
+            return;
+        }
+        for m in &mut self.mics {
+            if let Some(h) = &mut m.hears {
+                for n in h.iter_mut().filter(|n| *n == old) {
+                    *n = new.to_string();
+                }
+            }
+        }
+    }
+
+    /// Source i removed, and from every mic's `hears`.
+    pub fn remove_source(&mut self, i: usize) {
+        let s = self.sources.remove(i);
+        for m in &mut self.mics {
+            if let Some(h) = &mut m.hears {
+                h.retain(|n| *n != s.name);
+            }
+        }
+    }
+
+    /// No room at all: every face anechoic and nothing standing in it (scene.py's
+    /// `free_field_room`: every mic hears the direct sound alone).
+    pub fn is_free_field(&self) -> bool {
+        self.objects.is_empty()
+            && [&self.walls, &self.floor, &self.ceiling]
+                .into_iter()
+                .chain(self.faces_in_room().values())
+                .all(|m| m == "anechoic")
     }
 
     /// The next free name with this prefix ("A", "B", ... or "Mic 1", "Mic 2", ...).
@@ -1742,6 +1821,57 @@ mod tests {
     fn state_round_trips() {
         let s = scene();
         assert_eq!(Scene::from_state(&s.state()), s);
+        let mut g = scene();
+        g.mics[0].hears = Some(vec!["A".to_string()]);
+        g.mics[0].separate_passes = true;
+        g.mics[0].free_field = true;
+        assert_eq!(Scene::from_state(&g.state()), g);
+    }
+
+    /// A mic's hears / passes / free field (2026-11-09): in the render's scene only when on,
+    /// following renames and deletes, a mic hearing nothing a problem.
+    #[test]
+    fn hears_follows_the_sources() {
+        let mut s = scene();
+        s.sources
+            .push(RoomSource::new("B", "k2", 90.0, [4.0, 2.5, 1.3]));
+        let json = s.render_json(&BTreeMap::new());
+        let m = &json["mics"][0];
+        assert!(m.get("hears").is_none() && m.get("passes").is_none());
+        assert!(m.get("free_field").is_none());
+        s.mics[0].hears = Some(vec!["A".to_string(), "gone".to_string()]);
+        s.mics[0].separate_passes = true;
+        s.mics[0].free_field = true;
+        let m = &s.render_json(&BTreeMap::new())["mics"][0];
+        assert_eq!(m["hears"], json!(["A"]));
+        assert_eq!(
+            (m["passes"].as_str(), m["free_field"].as_bool()),
+            (Some("separate"), Some(true))
+        );
+        assert!(s.mics[0].hears_source("A") && !s.mics[0].hears_source("B"));
+        s.sources[0].name = "Kick".to_string(); // (the Room view's name field)
+        s.rename_source("A", "Kick");
+        assert!(s.mics[0].hears_source("Kick") && !s.mics[0].hears_source("A"));
+        assert!(!s.problems().iter().any(|p| p.contains("hears no source")));
+        s.remove_source(0);
+        assert_eq!(s.sources.len(), 1);
+        assert!(s.problems().iter().any(|p| p == "Mic 1 hears no source"));
+        s.mics[0].hears = None;
+        assert!(!s.problems().iter().any(|p| p.contains("hears no source")));
+    }
+
+    #[test]
+    fn the_anechoic_preset_is_a_free_field() {
+        let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config");
+        let (presets, errors) = load_presets(&config);
+        assert!(errors.is_empty(), "{errors:?}");
+        let p = presets.iter().find(|p| p.name == "anechoic").unwrap();
+        let mut s = scene();
+        assert!(!s.is_free_field());
+        s.apply_room_preset(p);
+        assert!(s.is_free_field());
+        s.faces.insert("wall 0".to_string(), "brick".to_string());
+        assert!(!s.is_free_field());
     }
 
     /// The list as varimu/chains.py reads it (tests/test_chain_matrix.py checks the same

@@ -1,0 +1,13 @@
+# A room preset (varimu/rooms/presets.py; a scene's `room: {preset: anechoic}`, the Room
+# view's Preset menu).
+title: Anechoic (free field)
+description: >-
+  No room: every face absorbs everything and nothing stands in it, so each mic hears only the
+  direct sound (distance, the source's directivity, the capsule's angle and proximity) and
+  then its chain. For hearing a chain's own texture. Renders skip the rays, the tail and the
+  wave solver. The 10 x 8 x 5 m only bounds where sources and mics may stand.
+room:
+  floor_m: [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [0.0, 8.0]]
+  ceiling: {type: flat, height_m: 5.0}
+  materials: {walls: anechoic, floor: anechoic, ceiling: anechoic}
+  source: "an ideal free field (no surface reflects: alpha = 1 in every band)"

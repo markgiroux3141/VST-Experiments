@@ -23,6 +23,10 @@ stems' files, the mics, the peaks) and each source's `<name>.L.wav` / `<name>.R.
 float32 at the project's rate, all the same length, from the scene's first sample). A stereo
 source's two sides (varimu.rooms.scene: one gain for both) are one source here: one stem, its
 peaks their sum (a bound), under the pair's name.
+
+A mic's `hears` gates it here as in the render: a source it doesn't hear adds nothing to its
+share of a stem or its peaks. Its `passes` don't matter (the proxy is linear), its
+`free_field` comes with the responses.
 """
 
 from __future__ import annotations
@@ -159,6 +163,7 @@ def prepare(scene, out_dir: Path, log: Callable[[str], None] = print) -> dict:
     peaks = np.zeros((len(groups), len(scene.mics), nb))
     pans = [balance(m.pan) for m in scene.mics]
     nm = len(scene.mics)
+    heard = [set(scene.heard(mi)) for mi in range(nm)]
     stems = Step(log, "stems", "stems", [len(x) * nm for x in signals])
     sources = []
     acc: dict[str, np.ndarray] = {}
@@ -167,6 +172,8 @@ def prepare(scene, out_dir: Path, log: Callable[[str], None] = print) -> dict:
         gi = groups.index(src.pair or src.name)
         st = acc.setdefault(groups[gi], np.zeros((2, n)))
         for mi in range(nm):
+            if si not in heard[mi]:
+                continue  # the mic doesn't record this source (its `hears`)
             hf, hr = got[keys[mi]]
             g = fftconvolve(h[si, mi, 0], hf)
             if hr is not None:
