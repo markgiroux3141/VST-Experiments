@@ -3,7 +3,7 @@
 
     uv run python scripts/export_nickel_fixture.py
 
-Writes crates/circuitsim/tests/fixtures/nickel_voice.json (about 0.3 s of audio per case).
+Writes crates/circuitsim/tests/fixtures/nickel/voice.json (about 0.3 s of audio per case).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from varimu.nickel import organ as norgan  # noqa: E402
 from varimu.nickel import spec as nspec  # noqa: E402
 from varimu.nickel import voice as nvoice  # noqa: E402
 
-OUT = REPO / "crates" / "circuitsim" / "tests" / "fixtures" / "nickel_voice.json"
+OUT = REPO / "crates" / "circuitsim" / "tests" / "fixtures" / "nickel" / "voice.json"
 FS = 96000
 
 

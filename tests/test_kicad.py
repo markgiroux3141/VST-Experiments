@@ -108,10 +108,14 @@ def test_library_symbols_match_the_macros():
             for unit in s.units:
                 roles = tuple(p.name for p in unit)
                 assert roles in (PINS[Triode], PINS[Pentode], ("a", "k")), (s.name, roles)
+    # Not one symbol each: parts without a fixed pin count (a switch's contacts, a
+    # transformer's windings, the Novachord's keys: nodes per plate lead in its key range,
+    # written only by scripts/make_novachord.py).
     assert {s.macro for s in SYMBOLS.values() if s.macro} == set(MACROS) - {
         "device",
         "switch",
         "transformer",
+        "nova_keys",
     }
 
 

@@ -38,7 +38,7 @@ fn err_db(got: &[f64], want: &[f64]) -> f64 {
 fn a_struck_key_matches_the_python_reference() {
     let m = model();
     let text =
-        std::fs::read_to_string(repo().join("crates/circuitsim/tests/fixtures/nickel_voice.json"))
+        std::fs::read_to_string(repo().join("crates/circuitsim/tests/fixtures/nickel/voice.json"))
             .expect("fixture (scripts/export_nickel_fixture.py)");
     let fx: Value = serde_json::from_str(&text).expect("json");
     for c in fx["cases"].as_array().expect("cases") {
