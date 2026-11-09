@@ -62,6 +62,190 @@ pub fn render_controls(
     samples: &[f64],
     controls: &[(&str, &[f64])],
     s: &Settings,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+) -> Result<Rendered, String> {
+    render_at(circuit, values, samples, controls, s, 0, progress, cancel)
+}
+
+/// How a long render is cut into pieces run at once ([`render_pieces`]; Python's
+/// `fast.run_transient_chunked`, TAPE_SPEED_PLAN.md P3).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Pieces {
+    /// Each piece's length.
+    pub chunk_s: f64,
+    /// How early each piece after the first starts (its input faded in over its first
+    /// 50 ms or half): it must cover the circuit's memory of its input.
+    pub warmup_s: f64,
+    /// The raised-cosine crossfade into the next piece.
+    pub fade_s: f64,
+}
+
+/// A tape machine's print in pieces (the layout P3 measured on the 351: 30 s pieces, 2 s of
+/// warm-up, a 10 ms crossfade; bands within 0.007 dB of the whole print, no seam seen).
+/// Fixed, so a print is the same on any machine: the cores only set how many run at once.
+pub const PRINT_PIECES: Pieces = Pieces {
+    chunk_s: 30.0,
+    warmup_s: 2.0,
+    fade_s: 0.01,
+};
+
+/// One piece's probes: (name, samples kept).
+type PieceProbes = Vec<(String, Vec<f64>)>;
+
+/// [`render`] in pieces of `p.chunk_s` run at once on up to `workers` threads, each at its
+/// place in the whole run (circuitsim's `origin_samples`: the mains, the noise, a tape's
+/// transport and grain continue the whole run's), joined by crossfades: Python's
+/// `fast.run_transient_chunked`, step for step. What a piece can't continue is what its
+/// warm-up doesn't bring back (a free oscillator's phase, a tape's grain cells). One
+/// piece is a plain [`render`]. No control inputs.
+#[allow(clippy::too_many_arguments)]
+pub fn render_pieces(
+    circuit: &Circuit,
+    values: &Values,
+    samples: &[f64],
+    s: &Settings,
+    p: Pieces,
+    workers: usize,
+    mut progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+) -> Result<Rendered, String> {
+    let (fs, n) = (s.sample_rate as f64, samples.len());
+    let c = (p.chunk_s * fs).round_ties_even() as usize;
+    let w = (p.warmup_s * fs).round_ties_even() as usize;
+    let f = ((p.fade_s * fs).round_ties_even() as usize).max(1);
+    if c <= f {
+        return Err("render_pieces: chunk_s must exceed fade_s".into());
+    }
+    if n <= c {
+        return render(circuit, values, samples, s, progress, cancel);
+    }
+    let t0 = std::time::Instant::now();
+    let ramp = (w / 2).min((0.05 * fs).round_ties_even() as usize);
+    // Past what a piece keeps, so the resampling filters' edges fall outside it.
+    let tail = (0.02 * fs).round_ties_even() as usize;
+    let starts: Vec<usize> = (0..n).step_by(c).collect();
+    let span = |s0: usize| (s0.saturating_sub(w), n.min(s0 + c + f + tail));
+    let total: usize = starts.iter().map(|&s0| span(s0).1 - span(s0).0).sum();
+    let done: Vec<std::sync::atomic::AtomicU64> = starts
+        .iter()
+        .map(|_| std::sync::atomic::AtomicU64::new(0))
+        .collect();
+    let next = std::sync::atomic::AtomicUsize::new(0);
+    let finished = std::sync::atomic::AtomicUsize::new(0);
+    // Set by the caller's cancel or by a piece that failed: the others stop too.
+    let stop = AtomicBool::new(false);
+    let results: std::sync::Mutex<Vec<Option<Result<PieceProbes, String>>>> =
+        std::sync::Mutex::new(vec![None; starts.len()]);
+    let piece = |j: usize| -> Result<PieceProbes, String> {
+        let s0 = starts[j];
+        let (a, b) = span(s0);
+        let keep = n.min(s0 + c + f) - a;
+        let mut u = samples[a..b].to_vec();
+        if a > 0 && ramp > 0 {
+            for (i, x) in u.iter_mut().take(ramp).enumerate() {
+                *x *= 0.5 - 0.5 * (std::f64::consts::PI * i as f64 / ramp as f64).cos();
+            }
+        }
+        let origin = (a as f64 / fs * s.sim_rate() as f64).round_ties_even() as u64;
+        let len = (b - a) as f64;
+        let r = render_at(
+            circuit,
+            values,
+            &u,
+            &[],
+            s,
+            origin,
+            |x| done[j].store((x * len).to_bits(), Ordering::Relaxed),
+            &stop,
+        )?;
+        Ok(r.probes
+            .into_iter()
+            .map(|(k, v)| (k, v[s0 - a..keep.min(v.len())].to_vec()))
+            .collect())
+    };
+    std::thread::scope(|scope| {
+        for _ in 0..workers.clamp(1, starts.len()) {
+            scope.spawn(|| {
+                loop {
+                    let j = next.fetch_add(1, Ordering::Relaxed);
+                    if j >= starts.len() {
+                        break;
+                    }
+                    let r = piece(j);
+                    if r.is_err() {
+                        stop.store(true, Ordering::Relaxed);
+                    }
+                    results.lock().unwrap()[j] = Some(r);
+                    finished.fetch_add(1, Ordering::Relaxed);
+                }
+            });
+        }
+        while finished.load(Ordering::Relaxed) < starts.len() {
+            if cancel.load(Ordering::Relaxed) {
+                stop.store(true, Ordering::Relaxed);
+            }
+            let sum: f64 = done
+                .iter()
+                .map(|d| f64::from_bits(d.load(Ordering::Relaxed)))
+                .sum();
+            progress(sum / total as f64);
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+    });
+    let pieces: Vec<Vec<(String, Vec<f64>)>> = results
+        .into_inner()
+        .unwrap()
+        .into_iter()
+        .map(|r| r.unwrap_or_else(|| Err("a piece didn't run".into())))
+        .collect::<Result<_, _>>()?;
+    let up: Vec<f64> = (0..f)
+        .map(|i| 0.5 - 0.5 * (std::f64::consts::PI * (i as f64 + 0.5) / f as f64).cos())
+        .collect();
+    let mut probes: Vec<(String, Vec<f64>)> = pieces[0]
+        .iter()
+        .map(|(k, _)| (k.clone(), vec![0.0; n]))
+        .collect();
+    for (j, vecs) in pieces.iter().enumerate() {
+        let s0 = starts[j];
+        for ((_, out), (_, v)) in probes.iter_mut().zip(vecs) {
+            if j == 0 {
+                out[s0..s0 + v.len()].copy_from_slice(v);
+                continue;
+            }
+            let m = f.min(v.len());
+            for i in 0..m {
+                out[s0 + i] = out[s0 + i] * (1.0 - up[i]) + v[i] * up[i];
+            }
+            out[s0 + m..s0 + v.len()].copy_from_slice(&v[m..]);
+        }
+    }
+    let output_v = circuit.full_scale(s).output_v;
+    let out = probes
+        .iter()
+        .find(|(k, _)| k == "v(out)")
+        .ok_or("the circuit has no `out` probe")?
+        .1
+        .iter()
+        .map(|&y| (y as f32 as f64) / output_v)
+        .collect();
+    Ok(Rendered {
+        out,
+        probes,
+        sample_rate: s.sample_rate,
+        wall_s: t0.elapsed().as_secs_f64(),
+    })
+}
+
+/// One run of [`render_controls`] starting `origin` simulation samples into a longer run.
+#[allow(clippy::too_many_arguments)]
+fn render_at(
+    circuit: &Circuit,
+    values: &Values,
+    samples: &[f64],
+    controls: &[(&str, &[f64])],
+    s: &Settings,
+    origin: u64,
     mut progress: impl FnMut(f64),
     cancel: &AtomicBool,
 ) -> Result<Rendered, String> {
@@ -110,7 +294,10 @@ pub fn render_controls(
     } else {
         xh.clone()
     };
-    let opts = s.run_options()?;
+    let opts = circuitsim::Options {
+        origin_samples: origin,
+        ..s.run_options()?
+    };
     let h = 1.0 / s.sim_rate() as f64;
     let total = x_up.len();
     let every = total.div_ceil(PROGRESS_CALLS);
@@ -228,4 +415,57 @@ fn interp(x: f64, xp: &[f64], fp: &[f64]) -> f64 {
     }
     let slope = (fp[j + 1] - fp[j]) / (xp[j + 1] - xp[j]);
     slope * (x - xp[j]) + fp[j]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::print::Prepared;
+    use crate::settings::Quality;
+
+    fn config() -> std::path::PathBuf {
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../config")
+    }
+
+    #[test]
+    fn pieces_join_into_the_whole_render() {
+        let p = Prepared::load(&config(), "triode_stage_drawn", Quality::Draft1x, false).unwrap();
+        let s = &p.settings;
+        let fs = s.sample_rate as f64;
+        let x: Vec<f64> = (0..(3.3 * fs) as usize)
+            .map(|i| {
+                let t = i as f64 / fs;
+                0.3 * (2.0 * std::f64::consts::PI * 440.0 * t).sin() * (1.0 + 0.5 * (3.0 * t).sin())
+            })
+            .collect();
+        let no = AtomicBool::new(false);
+        let whole = render(&p.circuit, &Vec::new(), &x, s, |_| {}, &no).unwrap();
+        let cut = Pieces {
+            chunk_s: 1.0,
+            warmup_s: 0.5,
+            fade_s: 0.01,
+        };
+        let mut last = 0.0;
+        let pieces =
+            render_pieces(&p.circuit, &Vec::new(), &x, s, cut, 3, |f| last = f, &no).unwrap();
+        assert_eq!(pieces.out.len(), whole.out.len());
+        assert!(last > 0.0 && last <= 1.0 + 1e-12, "{last}");
+        let rms = |v: &[f64]| (v.iter().map(|a| a * a).sum::<f64>() / v.len() as f64).sqrt();
+        let diff: Vec<f64> = whole
+            .out
+            .iter()
+            .zip(&pieces.out)
+            .map(|(a, b)| a - b)
+            .collect();
+        let db = 20.0 * (rms(&diff) / rms(&whole.out)).log10();
+        assert!(db < -80.0, "pieces vs whole {db:.1} dB re signal");
+        // One piece is the whole render.
+        let long = Pieces {
+            chunk_s: 10.0,
+            ..cut
+        };
+        let one = render_pieces(&p.circuit, &Vec::new(), &x, s, long, 3, |_| {}, &no).unwrap();
+        assert_eq!(one.out, whole.out);
+        eprintln!("pieces vs whole: {db:.1} dB re signal");
+    }
 }

@@ -6,6 +6,8 @@ from __future__ import annotations
 import importlib.util
 import json
 
+import pytest
+
 from varimu.circuit import builder, spec
 from varimu.config import REPO_ROOT
 
@@ -24,6 +26,7 @@ def test_generated_files_are_current():
         (m.OUT, m.render()),
         (m.OUT_PINGPONG, m.render_pingpong()),
         (m.OUT_INSERT, m.render_insert()),
+        (m.OUT_INSERT_2, m.render_insert_2()),
     )
     for name, text in outs:
         assert spec.circuit_path(name).read_text(encoding="utf-8") == text, (
@@ -50,6 +53,18 @@ def test_insert_is_the_aligned_351_with_its_live_tier():
     assert lit.medium.reduced is None and lit.medium.bias_substeps == 20
     names = {e.name for s in prod.sections for e in s.elements}
     assert {"RIN_S", "XV6A", "LER"} <= names and not names & {"RSB", "RRB", "VCAP"}
+
+
+def test_two_track_insert_is_the_insert_on_two_track_heads():
+    """The 351-2 insert (stereo): the insert's machine, only its heads two-track."""
+    one = spec.resolve(spec.load_circuit(spec.circuit_path("ampex_351_insert")), {})
+    two = spec.resolve(spec.load_circuit(spec.circuit_path("ampex_351_2_insert")), {})
+    assert {k for k in one if one[k] != two[k]} == {"track_m", "rep_h_per_a"}
+    assert two["track_m"] == pytest.approx(1.905e-3)
+    # The repro head wound for the full-track head's output: the alignment carries over.
+    assert two["rep_h_per_a"] * two["track_m"] == pytest.approx(
+        one["rep_h_per_a"] * one["track_m"]
+    )
 
 
 def test_echo_is_the_aligned_351_with_a_console():

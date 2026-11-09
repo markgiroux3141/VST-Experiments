@@ -65,6 +65,8 @@ pub struct Circuit {
     /// Its speakers without their readouts, `out` their terminal voltage at this many volts
     /// full scale (a live build: docs/RHODES_PLAN.md RH3; None: as the file has them).
     live_speaker_v: Option<f64>,
+    /// Its tape's track (`with_track`): None the first, Some a further one's name.
+    track: Option<String>,
 }
 
 impl Circuit {
@@ -83,6 +85,7 @@ impl Circuit {
             heaters: Heaters::File,
             events: false,
             live_speaker_v: None,
+            track: None,
         })
     }
 
@@ -97,6 +100,7 @@ impl Circuit {
             heaters: Heaters::File,
             events: false,
             live_speaker_v: None,
+            track: None,
         }
     }
 
@@ -111,6 +115,17 @@ impl Circuit {
     /// `v` volts at full scale: a device played live, `panel::Device::live_speaker_v`).
     pub fn with_live_speaker(mut self, v: Option<f64>) -> Circuit {
         self.live_speaker_v = v;
+        self
+    }
+
+    /// Its tapes on another track of the same tape (`Some(name)`; None the first): the
+    /// transport's random parts are the tape's (keyed by the circuit's seed alone), the
+    /// coating's grain each track's own (keyed by the tape element's name, suffixed with the
+    /// track's here). A stereo track's right channel through a mono tape machine is the
+    /// second track of a two-track machine (docs/TAPE_SPEED_PLAN.md, stereo): its flutter
+    /// moves with the left's, its hiss is its own. No tape: nothing changes.
+    pub fn with_track(mut self, track: Option<&str>) -> Circuit {
+        self.track = track.map(str::to_string);
         self
     }
 
@@ -193,6 +208,16 @@ impl Circuit {
             self.live_speaker_v.is_none(),
         )
         .map_err(|e| e.to_string())
+        .map(|mut ir| {
+            if let Some(t) = &self.track {
+                for e in ir.sections.iter_mut().flat_map(|s| s.elements.iter_mut()) {
+                    if let circuitsim::ir::Element::Tape(tape) = e {
+                        tape.name = format!("{}_{t}", tape.name);
+                    }
+                }
+            }
+            ir
+        })
     }
 
     /// The span (dB from velocity 127 to 1) of the velocity law of its medium played by keys,

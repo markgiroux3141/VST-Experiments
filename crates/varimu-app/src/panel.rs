@@ -505,7 +505,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 27] = [
+pub const DEVICES: [Device; 28] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1485,6 +1485,45 @@ pub const DEVICES: [Device; 27] = [
             "power supply",
         ]),
     },
+    Device {
+        id: "ampex_351_2_insert",
+        label: "Ampex 351-2 Tape Machine (two-track)",
+        short: "351-2 tape",
+        about: "An Ampex 351-2 two-track for stereo tracks: each channel on its own track of \
+            one tape, the flutter shared, the hiss each track's own",
+        group: Group::Tape,
+        circuit: "ampex_351_2_insert",
+        panel: Some(&[
+            "record_level",
+            "playback_level",
+            "speed",
+            "equalization",
+            "bias_adjust_f",
+        ]),
+        ahead_s: AHEAD_S,
+        // As the 351 insert (its live tier, latency and load), on two-track heads; a stereo
+        // track's right channel prints as the tape's second track (`Circuit::with_track`).
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: Some("hold"),
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: Some(&[
+            "heads and tape",
+            "reproduce amplifier",
+            "output",
+            "|",
+            "power supply",
+        ]),
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2263,7 +2302,7 @@ mod tests {
                 (Group::Dynamics, vec!["fairchild_670", "urei_1176"]),
                 (Group::Eq, vec!["pultec_eqp1a"]),
                 (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
-                (Group::Tape, vec!["ampex_351_insert"]),
+                (Group::Tape, vec!["ampex_351_insert", "ampex_351_2_insert"]),
                 (
                     Group::Reverb,
                     vec!["plate_reverb", "foil_reverb", "fender_6g15"]

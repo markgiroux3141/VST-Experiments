@@ -38,7 +38,7 @@ use varimu_circuit::yaml::Value;
 
 use crate::live::{Circuit, Values};
 use crate::panel::{DEVICES, Device};
-use crate::render::render_controls;
+use crate::render::{PRINT_PIECES, render_controls, render_pieces};
 use crate::resample::resample;
 use crate::settings::{Quality, Settings};
 
@@ -281,6 +281,9 @@ pub fn key(
     for x in [slot.trim_db, slot.makeup_db, slot.tail_s, slot.wet] {
         h.update(x.to_bits().to_le_bytes());
     }
+    if in_pieces(slot) {
+        h.update(format!("pieces {PRINT_PIECES:?}\n").as_bytes());
+    }
     if let (Some(c), Some(side), Some(route)) = (key_control(slot), sidechain, &slot.key) {
         h.update(b"sidechain\n");
         h.update(c.as_bytes());
@@ -299,7 +302,23 @@ pub fn key(
 /// Devices that play their input a fixed time late: a tape machine's repro head a head
 /// distance behind its record head. A print is shifted back by it so the track stays in time
 /// (the live audition is heard late, as off a real machine's repro head).
-pub const TAPE_MACHINES: [&str; 1] = ["ampex_351_insert"];
+pub const TAPE_MACHINES: [&str; 2] = ["ampex_351_insert", "ampex_351_2_insert"];
+
+/// Whether the slot's device prints in pieces run at once ([`render_pieces`] at
+/// [`PRINT_PIECES`]): the tape machines, whose literal print is long and bounded by one
+/// core per run, and whose memory P3's warm-up covers (TAPE_SPEED_PLAN.md P3).
+pub fn in_pieces(slot: &Slot) -> bool {
+    TAPE_MACHINES.contains(&slot.device.as_str())
+}
+
+/// How many pieces run at once: the cores less two for the desktop, at most six (P3's
+/// measurement: one core per piece; more at once gained nothing).
+fn piece_workers() -> usize {
+    std::thread::available_parallelism()
+        .map_or(1, |c| c.get())
+        .saturating_sub(2)
+        .clamp(1, 6)
+}
 
 /// The slot's device's latency in seconds: a tape machine's head distance over the speed its
 /// `speed` switch picks (1 its `speed_m_s`, 0 its `speed_lo_m_s`); 0 for the rest.
@@ -350,15 +369,29 @@ pub fn print_uncached(
         _ => None,
     };
     let controls: Vec<(&str, &[f64])> = side_v.iter().map(|(c, k)| (*c, k.as_slice())).collect();
-    let r = render_controls(
-        &prep.circuit,
-        &slot.values,
-        &resample(&x, rate, s.sample_rate),
-        &controls,
-        s,
-        progress,
-        cancel,
-    )?;
+    let xs = resample(&x, rate, s.sample_rate);
+    let r = if in_pieces(slot) && controls.is_empty() {
+        render_pieces(
+            &prep.circuit,
+            &slot.values,
+            &xs,
+            s,
+            PRINT_PIECES,
+            piece_workers(),
+            progress,
+            cancel,
+        )?
+    } else {
+        render_controls(
+            &prep.circuit,
+            &slot.values,
+            &xs,
+            &controls,
+            s,
+            progress,
+            cancel,
+        )?
+    };
     let mut y = resample(&r.out, s.sample_rate, rate);
     y.drain(..late.min(y.len()));
     y.resize(n, 0.0);
@@ -658,7 +691,14 @@ impl Job {
                     let (slots, sidechains, cache, c) = (&slots, &sidechains, &cache, &c);
                     scope.spawn(move || {
                         lower_priority();
-                        let preps = load()?;
+                        // A tape machine's second track: its own grain, the left's transport.
+                        let preps: Vec<Prepared> = load()?
+                            .into_iter()
+                            .map(|p| Prepared {
+                                circuit: p.circuit.with_track(Some("r")),
+                                ..p
+                            })
+                            .collect();
                         chain(
                             &preps,
                             slots,
@@ -791,6 +831,64 @@ mod tests {
         let stage = stage(0.0);
         let q = Prepared::load(&config(), &stage.device, stage.quality, stage.noise).unwrap();
         assert_eq!(latency_s(&q.circuit, &stage).unwrap(), 0.0);
+    }
+
+    #[test]
+    fn a_second_track_has_its_own_grain_and_key() {
+        let x = tone(48_000, 0.05, 0.3);
+        let slot = Slot::new("ampex_351_insert");
+        let left = Prepared::load(&config(), &slot.device, slot.quality, slot.noise).unwrap();
+        let right = Prepared::load(&config(), &slot.device, slot.quality, slot.noise).unwrap();
+        let right = Prepared {
+            circuit: right.circuit.with_track(Some("r")),
+            ..right
+        };
+        let (a, b) = (
+            left.circuit.build(&slot.values).unwrap(),
+            right.circuit.build(&slot.values).unwrap(),
+        );
+        let tapes = |ir: &circuitsim::ir::CircuitIr| -> Vec<String> {
+            ir.elements()
+                .filter_map(|e| match e {
+                    circuitsim::ir::Element::Tape(t) => Some(t.name.clone()),
+                    _ => None,
+                })
+                .collect()
+        };
+        let (ta, tb) = (tapes(&a), tapes(&b));
+        assert!(!ta.is_empty());
+        assert_eq!(tb, ta.iter().map(|n| format!("{n}_r")).collect::<Vec<_>>());
+        // Everything else is the same circuit.
+        let mut b2 = b.clone();
+        for (e, n) in b2
+            .sections
+            .iter_mut()
+            .flat_map(|s| s.elements.iter_mut())
+            .filter_map(|e| match e {
+                circuitsim::ir::Element::Tape(t) => Some(t),
+                _ => None,
+            })
+            .zip(&ta)
+        {
+            e.name = n.clone();
+        }
+        assert_eq!(
+            serde_json::to_string(&a).unwrap(),
+            serde_json::to_string(&b2).unwrap()
+        );
+        assert_ne!(
+            key(&left, &slot, &x, None, 48_000).unwrap(),
+            key(&right, &slot, &x, None, 48_000).unwrap()
+        );
+        // No tape: the track changes nothing.
+        let st = stage(0.0);
+        let p = Prepared::load(&config(), &st.device, st.quality, st.noise).unwrap();
+        let k = key(&p, &st, &x, None, 48_000).unwrap();
+        let q = Prepared {
+            circuit: p.circuit.with_track(Some("r")),
+            ..p
+        };
+        assert_eq!(k, key(&q, &st, &x, None, 48_000).unwrap());
     }
 
     #[test]
