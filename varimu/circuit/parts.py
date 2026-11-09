@@ -505,6 +505,14 @@ def speaker_terminal(
 
 
 OPAMP_GM_S = 1e-3  # the macro model's input stage transconductance (sets only its impedances)
+# The slew limit's knee: the nominal drop of the clamp diodes that limit the input stage
+# (numerical: the slew comes out within ~10 % of slew_v_per_s, the diodes' knee is soft).
+OPAMP_SLEW_KNEE_V = 0.65
+# The open-collector output's base drive at the integrator's full swing, and the base's
+# resistor to V- (provisional: model knowledge, a comparator's output transistor driven
+# well into saturation at its rated sink current; MINIMOOG_PLAN.md MM3).
+OPAMP_OC_BASE_A = 0.5e-3
+OPAMP_OC_RB_OHM = 10e3
 
 
 def opamp(
@@ -518,6 +526,9 @@ def opamp(
     r_in_ohm: float,
     clamp: str | None = None,
     swing_v: float | None = None,
+    slew_v_per_s: float | None = None,
+    open_collector: Bjt | None = None,
+    v_minus: str | None = None,
 ) -> list[Element]:
     """Op-amp `name` as a single-pole macro model (ROOM_LOOP_PLAN.md R4: the clean
     preamp, the small omni's impedance converter): the datasheet's open-loop gain `a0` and
@@ -528,14 +539,45 @@ def opamp(
     r_out_ohm onto `out`). With a `clamp` diode model and `swing_v`, the integrator node is
     held between -swing_v and +swing_v by D<NAME>_p / D<NAME>_n on sources V<NAME>_p /
     V<NAME>_n (the output's swing a diode drop past them): the output clips and recovers
-    at once, as an op-amp whose internal stages saturate. No slew limit and no crossover
-    distortion: its harmonics are the clamp's. Noise is the circuit's (an equivalent
-    resistor at its input under the noise block)."""
+    at once, as an op-amp whose internal stages saturate. No crossover distortion: its
+    harmonics are the clamp's. Noise is the circuit's (an equivalent resistor at its input
+    under the noise block).
+
+    `slew_v_per_s` (needs the clamp's diode model) limits the input stage, as a differential
+    pair's tail does: G<NAME>_s drives the input, scaled, into <name>_s (R<NAME>_s, 1 / gm, to
+    ground), held near +-OPAMP_SLEW_KNEE_V by the antiparallel diodes D<NAME>_sp / D<NAME>_sn,
+    and G<NAME>_1 takes <name>_s instead of the input: the small-signal gain and pole are
+    unchanged, the integrator's current tops out at slew times C<NAME>_1.
+
+    `open_collector` (a BJT model; needs the clamp and the fourth node `v_minus`) replaces
+    the output buffer with a comparator's output transistor (an LM393's): G<NAME>_o drives
+    base current into <name>_b as the integrator node goes negative (the minus input above
+    the plus), OPAMP_OC_BASE_A at the full swing, R<NAME>_b holds the base at v_minus
+    otherwise, and Q<NAME>_o (collector `out`, emitter v_minus, the model's parasitics)
+    sinks; `out` needs its pull-up in the circuit. r_out_ohm is then unused."""
     n, upper = name.lower(), name.upper()
     n1 = f"{n}_1"
-    els: list[Element] = [
-        Resistor(f"R{upper}_i", plus, minus, r_in_ohm),
-        Vccs(f"G{upper}_1", GROUND, n1, plus, minus, OPAMP_GM_S),
+    if (slew_v_per_s is not None or open_collector is not None) and clamp is None:
+        raise ValueError(f"op-amp {name}: slew_v_per_s and open_collector need a clamp")
+    if open_collector is not None and v_minus is None:
+        raise ValueError(f"op-amp {name}: an open collector needs the v_minus node")
+    if open_collector is None and v_minus is not None:
+        raise ValueError(f"op-amp {name}: a v_minus node is only for an open collector")
+    els: list[Element] = [Resistor(f"R{upper}_i", plus, minus, r_in_ohm)]
+    if slew_v_per_s is None:
+        els.append(Vccs(f"G{upper}_1", GROUND, n1, plus, minus, OPAMP_GM_S))
+    else:
+        assert clamp is not None
+        k = OPAMP_SLEW_KNEE_V * 2 * math.pi * gbw_hz / slew_v_per_s
+        ns = f"{n}_s"
+        els += [
+            Vccs(f"G{upper}_s", GROUND, ns, plus, minus, OPAMP_GM_S * k),
+            Resistor(f"R{upper}_s", ns, GROUND, 1 / OPAMP_GM_S),
+            Device(f"D{upper}_sp", clamp, (ns, GROUND)),
+            Device(f"D{upper}_sn", clamp, (GROUND, ns)),
+            Vccs(f"G{upper}_1", GROUND, n1, ns, GROUND, OPAMP_GM_S / k),
+        ]
+    els += [
         Resistor(f"R{upper}_1", n1, GROUND, a0 / OPAMP_GM_S),
         Capacitor(f"C{upper}_1", n1, GROUND, OPAMP_GM_S / (2 * math.pi * gbw_hz)),
     ]
@@ -549,6 +591,15 @@ def opamp(
             VoltageSource(f"V{upper}_n", rn, GROUND, -swing_v),
             Device(f"D{upper}_n", clamp, (rn, n1)),
         ]
+    if open_collector is not None:
+        assert swing_v is not None and v_minus is not None
+        nb = f"{n}_b"
+        els += [
+            Vccs(f"G{upper}_o", GROUND, nb, GROUND, n1, OPAMP_OC_BASE_A / swing_v),
+            Resistor(f"R{upper}_b", nb, v_minus, OPAMP_OC_RB_OHM),
+            *bjt(f"Q{upper}_o", out, nb, v_minus, open_collector),
+        ]
+        return els
     els += [
         Vccs(f"G{upper}_o", GROUND, out, n1, GROUND, 1 / r_out_ohm),
         Resistor(f"R{upper}_o", out, GROUND, r_out_ohm),

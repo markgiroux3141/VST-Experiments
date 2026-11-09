@@ -57,6 +57,7 @@ from varimu.circuit.ir import (
     Coupling,
     Device,
     DeviceModel,
+    EdgeEvents,
     Element,
     Harp,
     HeatedCathode,
@@ -67,6 +68,7 @@ from varimu.circuit.ir import (
     NoiseSpec,
     NovaKeys,
     Plate,
+    ResetEvents,
     Resistor,
     SineSource,
     Spring,
@@ -371,6 +373,9 @@ def element_line(el: Element, models: Mapping[str, DeviceModel]) -> str:
     if isinstance(el, NovaKeys):
         # The keys cut out: their plate leads' current outputs held at 0 V.
         return "\n".join(f"{el.name}_{i} {o} 0 dc 0" for i, o in enumerate(el.outs))
+    if isinstance(el, ResetEvents | EdgeEvents):
+        # SPICE has no events: the replaced parts' off state is the circuit's own parts.
+        return f"* {el.name}: event kernels (circuitsim only)"
     if isinstance(el, ThyratronEvents):
         # The off tube (SPICE has no events): its capacitances, the grid's leakage, the
         # state node held to the cathode.

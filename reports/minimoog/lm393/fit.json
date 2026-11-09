@@ -1,0 +1,19 @@
+{
+ "gbw_hz": 36962131.878379315,
+ "slew_v_per_s": 5398949.412857689,
+ "response_s": {
+  "small": [
+   1.1319383146921303e-06,
+   1.468061672285026e-06
+  ],
+  "ttl": [
+   2.419822490146942e-07,
+   3.5801769582318116e-07
+  ]
+ },
+ "sheet_s": {
+  "small": 1.3e-06,
+  "ttl": 3e-07
+ },
+ "note": "each figure fitted as the mean of the rising and falling output's response"
+}

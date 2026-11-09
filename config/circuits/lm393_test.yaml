@@ -1,0 +1,36 @@
+# The LM393 comparator as the `opamp` macro with an open collector (docs/MINIMOOG_PLAN.md MM3,
+# the oscillator's reset comparator IC8B), in TI's response-time test (SLCS005AH, "Switching
+# Characteristics: LM193, LM239, LM393, ...": VCC 5 V, RL 5.1 kOhm to 5 V, CL 15 pF, the response
+# time from the input step to the output crossing 1.4 V). IN- at 0 V; the input `in` is IN+.
+# scripts/fit_lm393.py fits cmp_gbw_hz and cmp_slew_v_per_s to the sheet's two response times
+# (1.3 us for a 100 mV step with 5 mV overdrive, 0.3 us for a TTL step) and writes them here and
+# into the Minimoog oscillator's file.
+
+title: "LM393 response-time test"
+input: in
+probes: [out]
+
+values:
+  vcc_v: {value: 5.0, source: "web: https://www.ti.com/lit/ds/symlink/lm393.pdf (SLCS005AH, Switching Characteristics: VCC = 5 V)"}
+  r_load_ohm: {value: 5.1e+3, source: "web: https://www.ti.com/lit/ds/symlink/lm393.pdf (SLCS005AH, Switching Characteristics: RL connected to 5 V through 5.1 kOhm)"}
+  c_load_f: {value: 15.0e-12, source: "web: https://www.ti.com/lit/ds/symlink/lm393.pdf (SLCS005AH, Switching Characteristics: CL = 15 pF, probe and jig included)"}
+  cmp_a0: {value: 2.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/lm393.pdf (SLCS005AH, AVD 200 V/mV typ, VCC 15 V, RL >= 15 kOhm)"}
+  cmp_gbw_hz: {value: 3.6962e+07, source: "fitted: scripts/fit_lm393.py, the sheet's response times (SLCS005AH: 1.3 us at 5 mV overdrive, 0.3 us for a TTL step)"}
+  cmp_slew_v_per_s: {value: 5.3989e+06, source: "fitted: scripts/fit_lm393.py, the sheet's response times (SLCS005AH: 1.3 us at 5 mV overdrive, 0.3 us for a TTL step)"}
+  cmp_swing_v: {value: 1.0, source: "numerical: the macro's internal swing (the gain stage's saturation; the response times are fitted with it)"}
+  cmp_r_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a PNP-input comparator's differential input resistance, ~1 MOhm; the sheet gives IB 25 nA typ)"}
+  cmp_r_out_ohm: {value: 1.0, source: "numerical: unused with an open collector (the macro needs it)"}
+  clamp_diode: {value: 1N4148@1, source: "numerical: the macro's clamp and slew-limit diodes"}
+  cmp_output: {value: 2N3904@1, source: "provisional: model knowledge (the LM393's open-collector output NPN; no die data: a small-signal NPN's card stands in)"}
+
+devices:
+  DCL: {device: clamp_diode}
+  QOC: {device: cmp_output}
+
+sections:
+  - title: test
+    parts:
+      VCC: {V: [vcc, "0"], v: vcc_v}
+      RL: {R: [vcc, out], r: r_load_ohm}
+      CL: {C: [out, "0"], c: c_load_f}
+      UC: {opamp: [in, "0", out, "0"], a0: cmp_a0, gbw_hz: cmp_gbw_hz, r_out_ohm: cmp_r_out_ohm, r_in_ohm: cmp_r_in_ohm, clamp: DCL, swing_v: cmp_swing_v, slew_v_per_s: cmp_slew_v_per_s, open_collector: QOC}

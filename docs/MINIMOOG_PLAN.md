@@ -246,6 +246,48 @@ on the 002 scan, values checked against Table 7-6: sources README "The keyboard 
    (what is the island, what the kernels tabulate: the ramp's slope from the expo converter's current, the reset's
    charge and dead time, HI END COMP's correction).
 
+**MM3, the reference built (2026-11-09, worktree `minimoog`):**
+- **The LM393 and the TL081's slew** (prerequisite 2): the `opamp` macro's options `slew_v_per_s` (the
+  input stage limited by antiparallel clamp diodes: small signal unchanged, the integrator's current
+  capped at slew x C) and `open_collector: BJT` with a fourth node `v_minus` (an output NPN driven from
+  the integrator node, its emitter on V-); both builders, refused without a clamp
+  (`tests/test_minimoog_vco.py`, the app fixtures' agreement). The LM393's gain-bandwidth and slew
+  fitted to TI's two response times (1.3 us at 5 mV overdrive, 0.3 us TTL; `scripts/fit_lm393.py`,
+  `config/circuits/lm393_test.yaml`): 37 MHz, 5.4 V/us internal. TL081 / LM393 figures in
+  data/datasheets/opamps/README.md.
+- **The E112** (prerequisite 3): `PN4092@1` (Central's card of the 2N4092, the J112's 50 ohm switch
+  class) stands in; the 2N3819 (~100 ohm) left C7 at ~4 V, the reset incomplete.
+- **`config/circuits/minimoog_vco.yaml`** (prerequisite 5): oscillator 1 with the primary summer, its
+  summer, the expo (UA726@1 at 78.4 C), the core, the saw / triangle / rectangle shapers; RANGE as the
+  ladder's volts (a switch), TUNE, PITCH WHEEL, PW; the keyboard's volts on the control input `key`.
+  The board re-read (data/schematics/minimoog/README.md, "Core": the 002 GIF's dots at IC7's output and
+  node 2 are crossings; R31 is the HI END trim, IC4A the +5 V reference).
+- **Folkman's tuning** (`scripts/minimoog_vco_trim.py --write`): SHIFT, SCALE, HI END, OCT ADJ solved
+  jointly on the reference for 440 / 3520 / 4186 Hz on 2' and 110 Hz on 8': all within 0.05 cents, 32'
+  -0.4 cents untrimmed.
+- **The reset studied** (`scripts/minimoog_vco_study.py`, reports/minimoog/vco/README.md): the
+  reference needs 12.288 MHz with error control (205-280x slower than real time per oscillator; at
+  3.072 MHz 2 cents rms of period jitter from the reset's unresolved end state). **Every direct
+  candidate fails**: the draft, draft-2x and production stall (the solver's large step damps the
+  ~0.3 us comparator / Q4 loop into a DC equilibrium), production at 8x jitters 17-24 c and stalls at
+  the top C, M1 islands up to 128x (no error control inside) are tens to hundreds of cents off.
+  So M1 isn't a render tier here, unlike the 884: the options (K for live and renders, the reference
+  for renders, event location in circuitsim) are with the user (MINIMOOG_BACKLOG.md, Next 1); nothing
+  of K built.
+
+**MM3, technique K built (2026-11-09; the user's call: K for live play and renders):** the reset
+and the rectangle's comparator as event kernels generated from the reference
+(`scripts/minimoog_event_tables.py` -> `config/events/minimoog_osc_{reset,edge}.json`; the circuit's
+`exceptions` XRESET / XRECT with `renders: true`; HYBRID_PHYSICS_PLAN.md H5 for the machinery).
+Against the reference at the draft's 96 kHz and production's 192 kHz: pitch within 0.6 cents from
+27.5 Hz to 4186 Hz, the saw and rectangle as clean as the reference (-53 to -107 dB inharmonic),
+the rectangle's duty within 0.6 % of it; the triangle at the draft -31 to -70 dB (the reset's
+band-limited jump through Q6's fold; production -50 to -97). Draft 0.47-0.89x real time; the app's
+`minimoog_vco` (draft-2x, Newton 1e-3) plays it at 41 % load, no dropouts
+(reports/minimoog/vco/README.md). Tests: `tests/test_minimoog_vco.py`, circuitsim
+`tests/reset_events.rs` (Rust vs Python on `fixtures/events/reset_events.json`), the app fixtures'
+agreement.
+
 ## CPU while another session runs
 
 `CARGO_BUILD_JOBS=3`, builds started with `cmd /c start /belownormal /wait /b ...`; one render

@@ -71,3 +71,35 @@ web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (SLOS069C, revised August 2010
 | Vn, equivalent input noise (closed loop, AVD 100, RS 0, 1 kHz) | 45 nV/rtHz |
 | IIB, input bias current | 80 nA (500 max.) |
 | IOS, short-circuit output current | +-25 mA (+-40 max.) |
+
+## TL081 (the Minimoog oscillator's IC6 current source and IC7 ramp buffer, docs/MINIMOOG_PLAN.md MM3)
+
+web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, revised September 2025; 5,554,423 bytes,
+sha256 `cf8c2abd4242fab26418bf641f6caab368046f1c5f65d566142a7502a3687951`, read with PyMuPDF, not kept
+here), "Electrical Characteristics (DC) / (AC): TL08xC, TL08xAC, TL08xBC, TL08xI, TL08xM" (the legacy
+die), VS = +-15 V, 25 C, typical (minimum):
+
+| Figure | Value |
+|---|---|
+| AOL, open-loop voltage gain (TL08xC) | 200 V/mV (25) |
+| GBW (all NS and PS packages; all TL08xM) | 3 MHz (5.25 MHz all other devices) |
+| RID, input resistance | 1 Tohm |
+| VOM, maximum peak output swing (RL = 10 kohm) | +-13.5 V (+-12) |
+| SR, slew rate (TL08xC; VI = 10 V, CL = 100 pF, RL = 2 kohm) | 20 V/us (8) |
+
+## LM393 (the Minimoog oscillator's comparators IC8A / IC8B)
+
+web: https://www.ti.com/lit/ds/symlink/lm393.pdf (SLCS005AH, revised April 2025; 3,290,463 bytes,
+sha256 `b8503035c014ad5c6ab40f2230509a407deed99a6b998997e7535f8b0bce986b`, not kept here), the
+LM193 / LM293 / LM393 / LM2903 tables (not the newer B parts), VCC = 5 V, 25 C, typical (max.):
+
+| Figure | Value |
+|---|---|
+| AVD, large-signal differential voltage amplification (VCC 15 V, RL >= 15 kohm) | 200 V/mV (50 min.) |
+| VOL, low-level output voltage (IOL = 4 mA) | 150 mV (400) |
+| IOL, low-level output current (VOL = 1.5 V) | 6 mA min. |
+| Response time (RL 5.1 kohm to 5 V, CL 15 pF; to the output crossing 1.4 V), 100 mV step with 5 mV overdrive | 1.3 us |
+| Response time, TTL-level input step | 0.3 us |
+
+The `opamp` macro's open-collector option carries it; its gain-bandwidth and slew limit are fitted
+to the two response times by `scripts/fit_lm393.py` (`config/circuits/lm393_test.yaml`).

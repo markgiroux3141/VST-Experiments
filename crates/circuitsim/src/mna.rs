@@ -117,16 +117,18 @@ pub struct MediumPorts {
     pub noise_seed: Option<u64>,
 }
 
-/// A thyratron's event kernels in the circuit: its element and the unknowns of its anode,
-/// grid and cathode (`None`: ground). Its current columns are (a, k), (g, k) and (ground,
-/// a): from the anode, and from the grid, through the tube to the cathode, and the charging
-/// network's deficit from ground into the anode.
+/// An event kernel in the circuit (`crate::events`, `crate::reset_events`): its element, its
+/// three current columns (each current leaves the first unknown and enters the second;
+/// `None`: ground) and the unknowns it senses, in its order. A thyratron's columns are (a,
+/// k), (g, k) and (ground, a), its senses a, g, k; a reset's (src, dst), (dst, ground: the
+/// deficit) and an empty one, its sense the ramp; an edge's (src, dst) and two empty ones, its senses plus, minus.
 #[derive(Debug, Clone)]
 pub struct EventPorts {
-    pub element: crate::ir::ThyratronEvents,
-    pub a: Option<usize>,
-    pub g: Option<usize>,
-    pub k: Option<usize>,
+    pub element: crate::reset_events::EventElement,
+    pub columns: [(Option<usize>, Option<usize>); 3],
+    pub senses: Vec<Option<usize>>,
+    /// An edge's followed reset ([`Mna::events`] index, before it), if it follows one.
+    pub follows: Option<usize>,
 }
 
 /// The circuit as matrices, ready for DC and transient analysis.
@@ -531,10 +533,36 @@ impl Mna {
                     }
                     stamp(&mut g, w, k, 1.0);
                     events.push(EventPorts {
-                        element: e.clone(),
-                        a,
-                        g: gr,
-                        k,
+                        element: crate::reset_events::EventElement::Thyratron(e.clone()),
+                        columns: [(a, k), (gr, k), (None, a)],
+                        senses: vec![a, gr, k],
+                        follows: None,
+                    });
+                }
+                Element::ResetEvents(e) => {
+                    events.push(EventPorts {
+                        element: crate::reset_events::EventElement::Reset(e.clone()),
+                        // the event's charge src -> dst, the deficit dst -> ground
+                        columns: [
+                            (node(&e.src), node(&e.dst)),
+                            (node(&e.dst), None),
+                            (None, None),
+                        ],
+                        senses: vec![node(&e.sense)],
+                        follows: None,
+                    });
+                }
+                Element::EdgeEvents(e) => {
+                    events.push(EventPorts {
+                        element: crate::reset_events::EventElement::Edge(e.clone()),
+                        columns: [(node(&e.src), node(&e.dst)), (None, None), (None, None)],
+                        senses: vec![node(&e.plus), node(&e.minus)],
+                        follows: e.follows.as_ref().map(|f| {
+                            events
+                                .iter()
+                                .position(|p: &EventPorts| p.element.name() == f)
+                                .expect("validated: a reset before it")
+                        }),
                     });
                 }
                 Element::Coupling(_)
@@ -668,18 +696,14 @@ impl Mna {
     }
 
     /// The DK current columns: the noise sources' ([`NoiseRun::columns`]), then each
-    /// event kernel's (a, k), (g, k) and (ground, a).
+    /// event kernel's three ([`EventPorts::columns`]).
     pub fn current_columns(&self) -> Vec<(Option<usize>, Option<usize>)> {
         self.noise
             .as_ref()
             .map_or(&[][..], |n| &n.columns)
             .iter()
             .copied()
-            .chain(
-                self.events
-                    .iter()
-                    .flat_map(|e| [(e.a, e.k), (e.g, e.k), (None, e.a)]),
-            )
+            .chain(self.events.iter().flat_map(|e| e.columns))
             .collect()
     }
 
@@ -687,7 +711,7 @@ impl Mna {
     pub fn event_senses(&self) -> Vec<usize> {
         self.events
             .iter()
-            .flat_map(|e| [e.a, e.g, e.k])
+            .flat_map(|e| e.senses.iter().copied())
             .flatten()
             .collect()
     }

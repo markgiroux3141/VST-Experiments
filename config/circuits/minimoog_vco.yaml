@@ -1,0 +1,284 @@
+# The Minimoog Model D's oscillator 1 (board No. 1, Fig 9-2 of the 204D service manual, serial
+# 10175 and above; docs/MINIMOOG_PLAN.md MM3, the reading in data/schematics/minimoog/README.md
+# "Oscillator board No. 1, oscillator 1"), with the board's primary summer. Alone here: the full-
+# physics reference of the oscillator, before the reset's exception is decided.
+#
+#   primary summer  IC1A (1/2 MC1458) sums the keyboard (R4 102K), PITCH WHEEL (R1 301K), TUNE (R3
+#        1.24M), OSC MOD and EXT (R5, R6 100K; off: grounded) over R2 100K: -1 V an octave
+#   osc 1 summer  IC1B (1/2 MC1458) over R21 50K: the primary through SCALE (R16 10K trim + R17
+#        90.9K), the RANGE switch's volts through OCT ADJ (R18 5K trim + R19 53.6K), SHIFT from +10 V
+#        (R13 69.8K + R14 10K trim); R12, R15, R20 (the network's spare inputs) are open on this
+#        oscillator. Out through R23 2.32K onto R24 100 / C4 100 pF: V01, the 726's base, ~21 mV an
+#        octave
+#   expo  IC5, a uA726 at its regulated 78.4 C (Q7 / Q8, one model instance): IC6 (TL081) holds Q8's
+#        collector at ground through the common emitters (R28 100K, C8 .001 + R29 1K), so Q8 carries
+#        I_R = 10 V / R30 2.0M = 5 uA and Q7, its base on V01, sinks I_R exp(V01 / Vt) from the core
+#   core  C7 .001 from the +5 V reference (IC4A, 1/2 MC1458, a follower of R25 / R26 on +10 V; C6
+#        1.5 uF tantalum) to D; the ramp falls from +5 V at I / C7 (200 Hz / uA). R31 (10K trim, HI
+#        END) between D and Q7's collector, where IC7 (TL081) + Q5 (2N3904, the output follower)
+#        buffer it: the comparator sees the ramp I x R31 early, which takes out the reset's dead time.
+#        IC8B (1/2 LM393, open collector to -10 V, R33 2K up to +10 V; R34 1M, C12 18 pF and R35 100
+#        its hysteresis) trips at ~0 V; its rising edge through C9 100 pF lifts Q4's gate (E112;
+#        R32 100K to its source, CR1 holding it at -9.4 V between resets), Q4 shorts C7: back to +5 V
+#        in ~0.5 us ("+10 .. -10, .5 us")
+#   shapers  saw: R36 1K onto R37 5.6K / R38 4.02K to -10 V, +-1.75 V at node 9 (out). Triangle:
+#        Q6 (base on the ramp, R42 10K, R40 10K from +5 V) saturates past mid-ramp: a V from +5 V
+#        to ~2.75 V and back, through R41 10K / C13 500 pF into IC4B (1/2 MC1458; R44 4.99K, R43
+#        8.25K to +10 V): +-1.75 V. Rectangle: IC8A (1/2 LM393) compares node 9 with PW / 2 (R47 /
+#        R45 100K, C14 .01; R39 1K, R46 2.2M hysteresis), its open collector onto R48 5.1K / R49
+#        2.7K: 0 / -3.5 V, 0 V PW = square, -2.5 V = 15 %
+# Rails ideal (+10, -10 V); the 726's heater regulation isn't modelled (its die at 78.4 C); the
+# RANGE switch's volts are its buffered ladder's (ideal sources).
+
+title: "Minimoog oscillator 1 (board No. 1)"
+input: osc_in
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (a leak to ground)"}
+  output_volts_peak: {value: 2.0, source: "derived: Fig 9-2's waveshapes at pins 9B / 21B, +-1.75 V (the saw on `out` a little under full scale)"}
+cv_inputs:
+  key: kbd
+probes: [out, tri, rect, ramp, d, ref5, v01, n4, ne]
+
+controls:
+  range: {value: 5, choices: [0, 1, 2, 3, 4, 5], unit: switch, source: "Fig 9-2: the OSC 1 RANGE switch (LO, 32', 16', 8', 4', 2' as 0-5); a change rewires (restarts a live stream)"}
+  tune: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-2: TUNE, a 5K linear pot from +10 V over 5.1K to ground (7.5 V +- 2.5 V, +- 2 semitones); 0.5 = centred"}
+  bend: {value: 0.5, min: 0.3, max: 0.7, unit: rotation, source: "Fig 9-2: PITCH WHEEL, a 25K linear pot from +10 V to ground (5 V +- 2 V: its travel 0.3-0.7); 0.5 = centred"}
+  pw_v: {value: 0.0, min: -2.5, max: 0.0, unit: V, source: "Fig 9-2: PW 1 IN (pin 22B): 0 V = square, -2.5 V = 15 % (the front panel's waveform switch sets it)"}
+
+values:
+  vpos_v: {value: 10.0, source: "Fig 9-2: +10 V (pin 1A)"}
+  # --- the keys (read by the app: varimu-app panel::KeyString; the keyboard circuit's string)
+  key_v_per_semitone: {value: 0.084368, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_v_per_semitone: Fig 9-7's 10 ohm steps at its current source's measured 8.437 mA)"}
+  key_ref_note: {value: 41.0, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_ref_note: the lowest F as MIDI 41)"}
+  key_min_v: {value: 0.0, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_min_v)"}
+  key_max_v: {value: 3.6278, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_max_v: 43 steps)"}
+  vneg_v: {value: -10.0, source: "Fig 9-2: -10 V (pin 3A)"}
+  # --- the RANGE switch's volts (the ladder's taps, buffered by a 741)
+  range_2_v: {value: -5.0, source: "Fig 9-2: 14A, '-571 mV/OCT, 2' = -5V'"}
+  range_4_v: {value: -4.429, source: "derived: Fig 9-2's 2' = -5 V plus one octave of its -571 mV/OCT (the ladder's 1K 1% steps)"}
+  range_8_v: {value: -3.858, source: "derived: Fig 9-2's 2' = -5 V plus two octaves of -571 mV/OCT"}
+  range_16_v: {value: -3.287, source: "derived: Fig 9-2's 2' = -5 V plus three octaves of -571 mV/OCT"}
+  range_32_v: {value: -2.716, source: "derived: Fig 9-2's 2' = -5 V plus four octaves of -571 mV/OCT"}
+  range_lo_v: {value: -0.004, source: "derived: Fig 9-2's ladder, LO 4.75K 1% below 32' at -571 mV per 1K"}
+  # --- the primary summer (IC1A)
+  r_bend_ohm: {value: 25.0e+3, source: "Fig 9-2: PITCH WHEEL 25K LIN"}
+  r_tune_ohm: {value: 5.0e+3, source: "Fig 9-2: TUNE 5K LIN"}
+  r_tune_foot_ohm: {value: 5.1e+3, source: "Fig 9-2: TUNE's 5.1K to ground"}
+  r1_ohm: {value: 301.0e+3, source: "Fig 9-2: R1 301K 1% (network N1, 949-042330-001)"}
+  r2_ohm: {value: 100.0e+3, source: "Fig 9-2: R2 100K 1% (N1)"}
+  r3_ohm: {value: 1.24e+6, source: "Fig 9-2: R3 1.24M 1%"}
+  r4_ohm: {value: 102.0e+3, source: "Fig 9-2: R4 102K 1% (N1)"}
+  r5_ohm: {value: 100.0e+3, source: "Fig 9-2: R5 100K 1% (N1)"}
+  r6_ohm: {value: 100.0e+3, source: "Fig 9-2: R6 100K 1% (N1)"}
+  r7_ohm: {value: 22.0e+3, source: "Fig 9-2: R7 22K"}
+  # --- oscillator 1's summer (IC1B)
+  r13_ohm: {value: 69.8e+3, source: "Fig 9-2: R13 69.8K 1% (network N2, 949-042331-001)"}
+  r14_ohm: {value: 10.0e+3, source: "Fig 9-2: R14 10K trim (OSC 1 SHIFT)"}
+  r14_at: {value: 0.83128, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's oscillator tuning: the 'Range trimpot' for 3520 Hz at the high A on 2')"}
+  r16_ohm: {value: 10.0e+3, source: "Fig 9-2: R16 10K trim (OSC 1 SCALE)"}
+  r16_at: {value: 0.66595, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's oscillator tuning: the Scale trimpot for 440 Hz at the low A on 2')"}
+  r17_ohm: {value: 90.9e+3, source: "Fig 9-2: R17 90.9K 1% (N2)"}
+  r18_ohm: {value: 5.0e+3, source: "Fig 9-2: R18 5K trim (OSC 1 OCT ADJ)"}
+  r18_at: {value: 0.50821, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's Octave Range trimmer: 8' an octave below 2')"}
+  r19_ohm: {value: 53.6e+3, source: "Fig 9-2: R19 53.6K 1% (N2)"}
+  r21_ohm: {value: 50.0e+3, source: "Fig 9-2: R21 50K 1% (N2)"}
+  r22_ohm: {value: 15.0e+3, source: "Fig 9-2: R22 15K"}
+  r23_ohm: {value: 2.32e+3, source: "Fig 9-2: R23 2.32K 1%"}
+  r24_ohm: {value: 100.0, source: "Fig 9-2: R24 100 ohm 1%"}
+  c4_f: {value: 100.0e-12, source: "Fig 9-2: C4 100 pF"}
+  # --- the expo converter (IC5, IC6)
+  r27_temp_c: {value: 78.4, source: "Fig 9-2: IC5 'T = 78.4 C' (the 726's regulated die; R27 49.9K selects it)"}
+  r28_ohm: {value: 100.0e+3, source: "Fig 9-2: R28 100K"}
+  r29_ohm: {value: 1.0e+3, source: "Fig 9-2: R29 1K"}
+  c8_f: {value: 1.0e-9, source: "Fig 9-2: C8 .001"}
+  r30_ohm: {value: 2.0e+6, source: "Fig 9-2: R30 2.0M 1% (I_R 5.0 uA)"}
+  # --- the core
+  r25_ohm: {value: 10.0e+3, source: "Fig 9-2: R25 10K 1%"}
+  r26_ohm: {value: 10.0e+3, source: "Fig 9-2: R26 10K 1%"}
+  c6_f: {value: 1.5e-6, source: "Fig 9-2: C6 1.5 / 20 V tantalum"}
+  c6_esr_ohm: {value: 3.0, source: "provisional: model knowledge (a 1.5 uF solid tantalum's ESR, a few ohms)"}
+  c7_f: {value: 1.0e-9, source: "Fig 9-2: C7 .001 (200 Hz / uA with the 5 V ramp)"}
+  r31_ohm: {value: 10.0e+3, source: "Fig 9-2: R31 10K trim (the HI END compensation)"}
+  r31_at: {value: 0.28662, source: "trimmed: scripts/minimoog_vco_trim.py (the top key's pitch on 2' after SHIFT and SCALE)"}
+  r32_ohm: {value: 100.0e+3, source: "Fig 9-2: R32 100K"}
+  c9_f: {value: 100.0e-12, source: "Fig 9-2: C9 100 pF"}
+  r33_ohm: {value: 2.0e+3, source: "Fig 9-2: R33 2K"}
+  r34_ohm: {value: 1.0e+6, source: "Fig 9-2: R34 1M"}
+  r35_ohm: {value: 100.0, source: "Fig 9-2: R35 100 ohm"}
+  c12_f: {value: 18.0e-12, source: "Fig 9-2: C12 18 pF"}
+  # --- the shapers
+  r36_ohm: {value: 1.0e+3, source: "Fig 9-2: R36 1K 1% (network N5, 949-042332-001)"}
+  r37_ohm: {value: 5.6e+3, source: "Fig 9-2: R37 5.6K (N5)"}
+  r38_ohm: {value: 4.02e+3, source: "Fig 9-2: R38 4.02K 1% (N5)"}
+  r39_ohm: {value: 1.0e+3, source: "Fig 9-2: R39 1K (N5)"}
+  r40_ohm: {value: 10.0e+3, source: "Fig 9-2: R40 10K 1% (N5)"}
+  r41_ohm: {value: 10.0e+3, source: "Fig 9-2: R41 10K (N5)"}
+  r42_ohm: {value: 10.0e+3, source: "Fig 9-2: R42 10K 1%"}
+  r43_ohm: {value: 8.25e+3, source: "Fig 9-2: R43 8.25K 1% (N5)"}
+  r44_ohm: {value: 4.99e+3, source: "Fig 9-2: R44 4.99K 1% (N5)"}
+  r45_ohm: {value: 100.0e+3, source: "Fig 9-2: R45 100K 1%"}
+  r46_ohm: {value: 2.2e+6, source: "Fig 9-2: R46 2.2M"}
+  r47_ohm: {value: 100.0e+3, source: "Fig 9-2: R47 100K 1%"}
+  r48_ohm: {value: 5.1e+3, source: "Fig 9-2: R48 5.1K"}
+  r49_ohm: {value: 2.7e+3, source: "Fig 9-2: R49 2.7K"}
+  c13_f: {value: 500.0e-12, source: "Fig 9-2: C13 500 pF"}
+  c14_f: {value: 10.0e-9, source: "Fig 9-2: C14 .01"}
+  rect_follow_gain: {value: 0.700292, source: "derived: the ramp's share at IC8A's + input, (R37 || R38) / (R36 + R37 || R38) x R46 / (R39 + R46) (the events build's rectangle follows the reset through it)"}
+  r_leak_ohm: {value: 1.0e+9, source: "numerical: a leak on the unused audio input"}
+  # --- the op-amps
+  u1458_a0: {value: 2.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (AVD 200 V/mV typ; data/datasheets/opamps/README.md)"}
+  u1458_gbw_hz: {value: 1.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (B1 1 MHz typ)"}
+  u1458_r_in_ohm: {value: 2.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (ri 2 MOhm typ)"}
+  u1458_r_out_ohm: {value: 75.0, source: "web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (ro 75 ohm typ)"}
+  tl081_a0: {value: 2.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, AOL 200 V/mV typ, TL08xC)"}
+  tl081_gbw_hz: {value: 3.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, GBW 3 MHz: the TL08xM and NS / PS packages; the 1970s die's)"}
+  tl081_r_in_ohm: {value: 1.0e+12, source: "web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, RID 1 TOhm typ)"}
+  tl081_r_out_ohm: {value: 100.0, source: "provisional: model knowledge (a JFET-input op-amp's open-loop output resistance, ~100 ohm; the sheet gives none)"}
+  tl081_slew_v_per_s: {value: 20.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, SR 20 V/us typ, 8 min)"}
+  tl081_swing_v: {value: 7.9, source: "derived: the sheet's VOM +-13.5 V at +-15 V (1.5 V from each rail) on this board's +-10 V, less the clamp diode's ~0.6 V"}
+  cmp_a0: {value: 2.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/lm393.pdf (SLCS005AH, AVD 200 V/mV typ)"}
+  cmp_gbw_hz: {value: 3.6962e+07, source: "fitted: scripts/fit_lm393.py, the sheet's response times (SLCS005AH: 1.3 us at 5 mV overdrive, 0.3 us for a TTL step)"}
+  cmp_slew_v_per_s: {value: 5.3989e+06, source: "fitted: scripts/fit_lm393.py, the sheet's response times (SLCS005AH: 1.3 us at 5 mV overdrive, 0.3 us for a TTL step)"}
+  cmp_swing_v: {value: 1.0, source: "numerical: the macro's internal swing (the response times are fitted with it: config/circuits/lm393_test.yaml)"}
+  cmp_r_in_ohm: {value: 1.0e+6, source: "provisional: model knowledge (a PNP-input comparator's differential input resistance, ~1 MOhm)"}
+  cmp_r_out_ohm: {value: 1.0, source: "numerical: unused with an open collector (the macro needs it)"}
+  # --- the devices
+  clamp_diode: {value: 1N4148@1, source: "numerical: the op-amp macros' clamp and slew-limit diodes"}
+  cr1_diode: {value: 1N4148@1, source: "provisional: model knowledge (Fig 9-2's CR1, a small-signal silicon diode; the parts list's type not read)"}
+  q_726: {value: UA726@1, source: "Fig 9-2: IC5 726 (Fairchild uA726)"}
+  q_n: {value: 2N3904@1, source: "Fig 9-2: Q5, Q6 2N3904"}
+  q_cmp_out: {value: 2N3904@1, source: "provisional: model knowledge (the LM393's open-collector output NPN; no die data: a small-signal NPN's card stands in)"}
+  j_reset_cgd_f: {value: 7.5e-12, source: "derived: the PN4092@1 card's CGD (Q4's gate-to-drain capacitance; in an events build its off state, from C7's lower plate to the gate held at ~-9.4 V, an AC ground)"}
+  j_reset: {value: PN4092@1, source: "provisional: model knowledge (Fig 9-2's Q4 E112, Siliconix's J112-class chopper in its plastic E package, rDS(on) <= 50 ohm; no card found): Central's PN4092 card (the 2N4092, the same 50 ohm switch class) stands in"}
+
+# Physics exceptions (HYBRID_PHYSICS_PLAN.md technique K; varimu/devices/reset_events.py): every
+# build (`renders: true`; the user's call, 2026-11-09: K for live and renders) replaces the reset
+# (Q4, IC8B and their network: a ~0.3 us loop no render's rate holds, reports/minimoog/vco/
+# README.md) and the rectangle's comparator by event kernels generated from the reference
+# (scripts/minimoog_event_tables.py); only a `literal` build (the reference) has the parts.
+exceptions:
+  XRESET:
+    kind: reset
+    tables: minimoog_osc_reset
+    sense: ramp
+    src: ref5
+    dst: d
+    replaces: [JQ4, IC8B, DCR1, C9, R32, R33, R34, R35, C12]
+    renders: true
+    parts:
+      CQ4OFF: {C: [d, "0"], c: j_reset_cgd_f}
+    source: "scripts/minimoog_event_tables.py: the reset unit (this circuit less its summers and expo, a constant current from Q7's collector node) at 12.288 MHz with error control; the off Q4's gate-to-drain capacitance kept (its gate held at ~-9.4 V between resets)"
+  XRECT:
+    kind: edge
+    tables: minimoog_osc_edge
+    plus: n11
+    minus: n12
+    src: rc
+    dst: vn
+    replaces: [IC8A]
+    renders: true
+    follows: XRESET
+    follow_gain: rect_follow_gain
+    source: "scripts/minimoog_event_tables.py: the edge unit (IC8A, R39, R46, PW's divider at 0 V, R48 / R49) driven through zero at each slope, both ways, at 12.288 MHz with error control"
+
+devices:
+  QX: {device: q_726, temp_c: r27_temp_c}
+  QN: {device: q_n}
+  QO: {device: q_cmp_out}
+  JR: {device: j_reset}
+  DCL: {device: clamp_diode}
+  DCR: {device: cr1_diode}
+
+sections:
+  - title: rails and panel
+    parts:
+      VP: {V: [vp, "0"], v: vpos_v}
+      VN: {V: [vn, "0"], v: vneg_v}
+      RIN: {R: [osc_in, "0"], r: r_leak_ohm}
+      RBEND: {pot: [vp, bendw, "0"], r: r_bend_ohm, at: bend}
+      RTUNE: {pot: [vp, tunew, tunef], r: r_tune_ohm, at: tune}
+      RTUNEF: {R: [tunef, "0"], r: r_tune_foot_ohm}
+      VPW: {V: [pw, "0"], v: pw_v}
+      SRANGE:
+        switch: range
+        parts:
+          VR0: {V: [rng, "0"], v: range_lo_v, in: [0]}
+          VR1: {V: [rng, "0"], v: range_32_v, in: [1]}
+          VR2: {V: [rng, "0"], v: range_16_v, in: [2]}
+          VR3: {V: [rng, "0"], v: range_8_v, in: [3]}
+          VR4: {V: [rng, "0"], v: range_4_v, in: [4]}
+          VR5: {V: [rng, "0"], v: range_2_v, in: [5]}
+  - title: primary summer
+    parts:
+      R1: {R: [bendw, p2], r: r1_ohm}
+      R3: {R: [tunew, p2], r: r3_ohm}
+      R4: {R: [kbd, p2], r: r4_ohm}
+      R5: {R: ["0", p2], r: r5_ohm}
+      R6: {R: ["0", p2], r: r6_ohm}
+      R2: {R: [pri, p2], r: r2_ohm}
+      R7: {R: [p3, "0"], r: r7_ohm}
+      IC1A: {opamp: [p3, p2, pri], a0: u1458_a0, gbw_hz: u1458_gbw_hz, r_out_ohm: u1458_r_out_ohm, r_in_ohm: u1458_r_in_ohm}
+  - title: osc 1 summer
+    parts:
+      R13: {R: [vp, s9], r: r13_ohm}
+      R14: {rheostat: [s9, s6], r: r14_ohm, at: r14_at}
+      R16: {rheostat: [pri, s8], r: r16_ohm, at: r16_at}
+      R17: {R: [s8, s6], r: r17_ohm}
+      R18: {rheostat: [rng, s7], r: r18_ohm, at: r18_at}
+      R19: {R: [s7, s6], r: r19_ohm}
+      R21: {R: [s5, s6], r: r21_ohm}
+      R22: {R: [sp, "0"], r: r22_ohm}
+      IC1B: {opamp: [sp, s6, s5], a0: u1458_a0, gbw_hz: u1458_gbw_hz, r_out_ohm: u1458_r_out_ohm, r_in_ohm: u1458_r_in_ohm}
+      R23: {R: [s5, v01], r: r23_ohm}
+      R24: {R: [v01, "0"], r: r24_ohm}
+      C4: {C: [v01, "0"], c: c4_f}
+  - title: expo
+    parts:
+      Q7: {bjt: [e, v01, ne], model: QX}
+      Q8: {bjt: [n4, "0", ne], model: QX}
+      R30: {R: [vp, n4], r: r30_ohm}
+      IC6: {opamp: ["0", n4, n6], a0: tl081_a0, gbw_hz: tl081_gbw_hz, r_out_ohm: tl081_r_out_ohm, r_in_ohm: tl081_r_in_ohm}
+      C8: {C: [n6, n29], c: c8_f}
+      R29: {R: [n29, n4], r: r29_ohm}
+      R28: {R: [n6, ne], r: r28_ohm}
+  - title: core
+    parts:
+      R25: {R: [vp, r5p], r: r25_ohm}
+      R26: {R: [r5p, "0"], r: r26_ohm}
+      IC4A: {opamp: [r5p, ref5, ref5], a0: u1458_a0, gbw_hz: u1458_gbw_hz, r_out_ohm: u1458_r_out_ohm, r_in_ohm: u1458_r_in_ohm}
+      C6: {C: [c6t, "0"], c: c6_f}
+      RC6: {R: [ref5, c6t], r: c6_esr_ohm}
+      C7: {C: [ref5, d], c: c7_f}
+      JQ4: {jfet: [d, gate, ref5], model: JR}
+      R31: {rheostat: [d, e], r: r31_ohm, at: r31_at}
+      IC7: {opamp: [e, ramp, n7], a0: tl081_a0, gbw_hz: tl081_gbw_hz, r_out_ohm: tl081_r_out_ohm, r_in_ohm: tl081_r_in_ohm, clamp: DCL, swing_v: tl081_swing_v, slew_v_per_s: tl081_slew_v_per_s}
+      Q5: {bjt: [vp, n7, ramp], model: QN}
+      R32: {R: [ref5, gate], r: r32_ohm}
+      DCR1: {device: [gate, cmp], model: DCR}
+      C9: {C: [gate, cmp], c: c9_f}
+      R33: {R: [vp, cmp], r: r33_ohm}
+      R34: {R: [cmp, h8], r: r34_ohm}
+      C12: {C: [cmp, h8], c: c12_f}
+      R35: {R: [h8, "0"], r: r35_ohm}
+      IC8B: {opamp: [h8, ramp, cmp, vn], a0: cmp_a0, gbw_hz: cmp_gbw_hz, r_out_ohm: cmp_r_out_ohm, r_in_ohm: cmp_r_in_ohm, clamp: DCL, swing_v: cmp_swing_v, slew_v_per_s: cmp_slew_v_per_s, open_collector: QO}
+  - title: shapers
+    parts:
+      R36: {R: [ramp, out], r: r36_ohm}
+      R37: {R: [out, "0"], r: r37_ohm}
+      R38: {R: [out, vn], r: r38_ohm}
+      Q6: {bjt: [n1, ramp, e6], model: QN}
+      R42: {R: [e6, "0"], r: r42_ohm}
+      R40: {R: [ref5, n1], r: r40_ohm}
+      R41: {R: [n1, n3], r: r41_ohm}
+      C13: {C: [n3, "0"], c: c13_f}
+      IC4B: {opamp: [n3, n44, tri], a0: u1458_a0, gbw_hz: u1458_gbw_hz, r_out_ohm: u1458_r_out_ohm, r_in_ohm: u1458_r_in_ohm}
+      R44: {R: [tri, n44], r: r44_ohm}
+      R43: {R: [n44, vp], r: r43_ohm}
+      R39: {R: [out, n11], r: r39_ohm}
+      R46: {R: [n11, rc], r: r46_ohm}
+      R47: {R: [pw, n12], r: r47_ohm}
+      R45: {R: [n12, "0"], r: r45_ohm}
+      C14: {C: [n12, "0"], c: c14_f}
+      IC8A: {opamp: [n11, n12, rc, vn], a0: cmp_a0, gbw_hz: cmp_gbw_hz, r_out_ohm: cmp_r_out_ohm, r_in_ohm: cmp_r_in_ohm, clamp: DCL, swing_v: cmp_swing_v, slew_v_per_s: cmp_slew_v_per_s, open_collector: QO}
+      R48: {R: [rc, rect], r: r48_ohm}
+      R49: {R: [rect, "0"], r: r49_ohm}

@@ -919,6 +919,30 @@ per cycle, aliasing floor), and its draft and production costs are measured.
 **H5. The second exception.** Generalize the machinery only once a second user exists,
 likely candidate 2 or TM5's bias oscillator. Until then, keep it specific to the first.
 
+*Status 2026-11-09: the second user is the Minimoog's oscillator (docs/MINIMOOG_PLAN.md MM3,
+reports/minimoog/vco/README.md; the user's call: K for live and renders, since no direct
+simulation below ~10 MHz holds its 0.3 us comparator / JFET reset and M1 islands up to 128x jitter
+tens of cents).* Generalized:
+- **A circuit file's `exceptions` block** (both builders): a group of parts (`replaces`) an events
+  build drops, the kind's element standing in where the first was, `parts` beside it (their off
+  state), `renders: true` for every build but a `literal` one (Python's `build_ir(literal=True)`:
+  the reference behind the tables), `follows` / `follow_gain` for an edge driven by a reset.
+- **Two kinds** (`varimu/devices/reset_events.py` the reference, circuitsim `reset_events.rs` the
+  port, IR `ResetEvents` / `EdgeEvents`): a **reset** (a ramp's crossing of a tabulated trigger
+  level fires a band-limited charge src -> dst; tables over log slope; the H3 deficit with the
+  other sign: the discharging network's conductance, here Q7's Early effect) and an **edge** (a
+  comparator's output current stepping through a band-limited step at a predicted zero of its
+  input; tables per direction over log slope).
+- **The engine** keeps one enum of event runs (thyratron, reset, edge) with three current
+  columns each and their sense nodes (`Mna::events`, `EventPorts::columns`, `senses`,
+  `follows`); the thyratron's arithmetic is unchanged (its per-row jumps summed before adding).
+- Lessons for the next user: after an event, no prediction until its history lies past the
+  event's end (a quadratic through a sample before a jump far shorter than a step puts a false
+  root after it); an exception whose input is another's band-limited output must sense the
+  physical signal and take the first's timing, or the kernels' delays stack (63 % duty for
+  52 %); table interpolation across conditions is fine for pulses and steps whose shape varies
+  smoothly, a delay-dominated shape needs aligned tables (the edge's are within a sample).
+
 ## Open decisions (the user's)
 
 - **Production: exception or reference?** Renders are offline, and for tape the user

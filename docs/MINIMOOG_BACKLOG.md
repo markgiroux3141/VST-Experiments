@@ -6,19 +6,26 @@ when the work paused. The plan's Status section has the measurements behind each
 
 ## Next (MM3, the oscillators)
 
-1. **The reset exception.** Read HYBRID_PHYSICS_PLAN.md's H1-H4 (the 884 saw's M1 island and K event
-   kernels) against board 1's core and propose the split: what is the island, and what the kernels
-   tabulate (the ramp's slope from the expo converter's current, the reset's charge and dead time,
-   HI END COMP's correction). The ~1 us reset (IC8B through C9 100 pF / R33 2K) is far below a
-   sample.
-2. **The LM393.** Its open-collector output to V- (-10 V on board 1) needs an `opamp` option
-   `open_collector` in both builders (an output NPN on a V- node, driven from the integrator node
-   through a VCCS). Decide its form with the reset exception's reference (item 1).
-3. **`config/circuits/minimoog_vco.yaml`** (one oscillator), the E112 reset JFET as the 2N3819 card
-   (provisional), `UA726@1` at `temp_c: 78.4`.
-4. **Folkman's tuning procedure** (p. 12) as a trim script: Range trimpot for 3520 Hz at the high
-   "A", Scale trimpot for 440 Hz at the low "A"; the waveshapes against the sheet's levels.
-5. Then three oscillators and the octave buffer (board 6).
+Built 2026-11-09 (MINIMOOG_PLAN.md MM3's "the reference built"): the LM393 (`opamp`'s
+`open_collector`) and the TL081's slew, `PN4092@1` for the E112, `minimoog_vco.yaml`, Folkman's tuning
+(`scripts/minimoog_vco_trim.py`), the reset study (reports/minimoog/vco/README.md: every direct
+candidate stalls or jitters; the reference is 12.288 MHz with error control, ~200-280x real time).
+
+K built 2026-11-09 (the user's call: K for live and renders; MINIMOOG_PLAN.md MM3's "technique K
+built", reports/minimoog/vco/README.md): the app's `minimoog_vco` plays oscillator 1. Next:
+
+1. **The user listens** to `minimoog_vco` (RANGE, TUNE, PW; the saw on `out`, the triangle and
+   rectangle as probes).
+2. **The triangle at the draft** (-31 to -70 dB inharmonic, the saw -53 to -105): the reset's
+   band-limited jump (~2 samples) goes through Q6's fold whole; options: the fold's node fed the
+   reset's physical ramp (as the edge follows it), or the shaper's own event (a corner at the
+   fold), or draft at 192 kHz for this device (cost).
+3. Three oscillators (each its own tables only if its board's values differ; oscillator 3's LO /
+   control switch), the octave buffer (board 6); the waveshapes against the sheet's levels.
+4. The 726's heater loop (drift), MM5's mixer and noise, the voice as one instrument.
+5. The comparator macro's slow-ramp delay: the reference's rectangle is 51.6-52.2 % (the manual's
+   50 +-1 %); a single-pole comparator fitted to 1.3 us at 5 mV is slower than an LM393 on a slow
+   ramp.
 
 ## Open from MM4 (contours and keyboard)
 

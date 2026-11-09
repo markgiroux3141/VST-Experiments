@@ -172,7 +172,7 @@ pub fn predict_crossing(m: [f64; 3]) -> Option<f64> {
 }
 
 /// The cell of an ascending grid holding x (clamped to it) and x's fraction in it.
-fn ix(grid: &[f64], x: f64) -> (usize, f64) {
+pub(crate) fn ix(grid: &[f64], x: f64) -> (usize, f64) {
     let x = x.max(grid[0]).min(grid[grid.len() - 1]);
     let i = (grid.partition_point(|&g| g <= x) - 1).min(grid.len() - 2);
     (i, (x - grid[i]) / (grid[i + 1] - grid[i]))
@@ -221,7 +221,7 @@ fn phase_at(q: &[f64], j: isize, k: usize, m: usize, steps: usize) -> f64 {
 
 /// The charges at phase row `j0 + a` (0 <= a < 1), step k: Lagrange through rows j0 - 1 ..=
 /// j0 + 2 (`thyratron_events.cubic_phase`).
-fn cubic_phase(q: &[f64], j0: usize, a: f64, k: usize, m: usize, steps: usize) -> f64 {
+pub(crate) fn cubic_phase(q: &[f64], j0: usize, a: f64, k: usize, m: usize, steps: usize) -> f64 {
     let w = [
         -a * (a - 1.0) * (a - 2.0) / 6.0,
         (a + 1.0) * (a - 1.0) * (a - 2.0) / 2.0,

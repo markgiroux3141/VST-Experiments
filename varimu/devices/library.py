@@ -592,6 +592,27 @@ def build_2n3819() -> dict[str, Any]:
     )
 
 
+def build_pn4092() -> dict[str, Any]:
+    """The PN4092 N-channel switching JFET (the 50 ohm chopper class; the Minimoog
+    oscillator's reset switch, an E112, stands on it: docs/MINIMOOG_PLAN.md MM3)."""
+    return _jfet_component(
+        "PN4092",
+        "njf",
+        {
+            "vto_v": -3.25,
+            "beta_a_per_v2": 27.5e-3,
+            "lambda_per_v": 851e-6,
+            "is_a": 14.8e-15,
+            "pb_v": 1.0,
+        },  # fmt: skip
+        {"rd_ohm": 4.87, "rs_ohm": 4.38, "cgs_f": 50.4e-12, "cgd_f": 7.50e-12},
+        "Central Semiconductor's PN4092 SPICE model (the TO-92 2N4092: 40 V 75 mA, the card's "
+        "header 34.8 Ohm on)",
+        "web: https://central.aeminc.com/docs/ENGINEERING/CSM/CSM1471.LIB (PN4092, 7/2/24 rev "
+        "A: VTO -3.25, BETA 27.5m, LAMBDA 851u, IS 14.8f, PB 1.00, FC .5)",
+    )
+
+
 # The 2N5457's channel-length modulation, read off onsemi 2N5457/D Figure 2 (the same unit as
 # Figure 3): ~1.1e-3 / V at VGS = 0 and ~1.7e-3 at -0.2 V (data/datasheets/
 # onsemi_2n5457.provenance.yaml, notes).
@@ -3018,6 +3039,7 @@ BUILDERS = {
     "1N4148": build_1n4148,
     "J175": build_j175,
     "2N3819": build_2n3819,
+    "PN4092": build_pn4092,
     "2N5457": build_2n5457,
     "2N3707": build_2n3707,
     "2N3053": build_2n3053,

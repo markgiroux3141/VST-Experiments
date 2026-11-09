@@ -169,6 +169,7 @@ ratio (the mains setting over the rated mains; 1 without a `mains` block).
 from __future__ import annotations
 
 import dataclasses
+import json
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -182,12 +183,14 @@ from varimu.circuit.ir import (
     Coupling,
     Device,
     DeviceModel,
+    EdgeEvents,
     Element,
     HeatedCathode,
     HeaterSpec,
     Inductor,
     NoiseCurrent,
     NoiseSpec,
+    ResetEvents,
     Resistor,
     Section,
     SineSource,
@@ -524,6 +527,70 @@ def _nodes_device(ctx: Context, name: str, conn: Any, a: dict) -> list[Element]:
     if not isinstance(conn, list) or len(conn) != len(pins):
         raise ctx.fail(name, f"device {model.name} has pins {pins}, got {conn!r}")
     return [Device(name, model.name, tuple(str(n) for n in conn))]
+
+
+def _opamp(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
+    """The op-amp macro (parts.opamp): nodes plus, minus, out and, with an open
+    collector, its emitter's rail v_minus."""
+    oc = a["open_collector"]
+    if oc is not None and not isinstance(oc, Bjt):
+        raise ctx.fail(name, f"opamp: open_collector {oc.name} is not a BJT")
+    try:
+        return parts.opamp(
+            name,
+            *conn[:3],
+            a["a0"],
+            a["gbw_hz"],
+            a["r_out_ohm"],
+            a["r_in_ohm"],
+            None if a["clamp"] is None else a["clamp"].name,
+            a["swing_v"],
+            a["slew_v_per_s"],
+            oc,
+            conn[3] if len(conn) > 3 else None,
+        )
+    except ValueError as e:
+        raise ctx.fail(name, str(e)) from None
+
+
+def _exception(ctx: Context, name: str, x: Mapping) -> list[Element]:
+    """A physics exception's element (spec.exceptions; varimu.devices.reset_events) from its
+    tables, config/events/<tables>.json, and its `parts` expanded beside it."""
+    where = f"exceptions.{name}"
+    tname = ctx.text(where, x["tables"])
+    path = EVENTS_DIR / f"{tname}.json"
+    if not path.exists():
+        raise ctx.fail(where, f"no tables {path.name} in config/events/")
+    d = json.loads(path.read_text(encoding="utf-8"))
+    if d.get("kind") != x["kind"]:
+        raise ctx.fail(where, f"{path.name} holds {d.get('kind')!r} tables, not {x['kind']!r}")
+    source = f"config/events/{tname}.json"
+    if x["kind"] == "reset":
+        el: Element = ResetEvents(
+            name=name, sense=str(x["sense"]), src=str(x["src"]), dst=str(x["dst"]),
+            c_f=float(d["c_f"]), ref_rate_hz=float(d["ref_rate_hz"]),
+            log_slope=tuple(float(v) for v in d["log_slope"]),
+            v_t_v=tuple(float(v) for v in d["v_t_v"]),
+            dead_s=tuple(float(v) for v in d["dead_s"]),
+            pulses_a=tuple(tuple(float(v) for v in pl) for pl in d["pulses_a"]),
+            g_s=tuple(float(v) for v in d["g_s"]),
+            source=source,
+        )  # fmt: skip
+    else:
+        el = EdgeEvents(
+            name=name, plus=str(x["plus"]), minus=str(x["minus"]), src=str(x["src"]),
+            dst=str(x["dst"]), ref_rate_hz=float(d["ref_rate_hz"]),
+            log_slope=tuple(float(v) for v in d["log_slope"]),
+            waves_a=tuple(tuple(tuple(float(v) for v in w) for w in r) for r in d["waves_a"]),
+            source=source,
+            follows=None if x.get("follows") is None else str(x["follows"]),
+            follow_gain=(None if x.get("follow_gain") is None
+                         else float(ctx.physical(f"{where}.follow_gain", x["follow_gain"]))),
+        )  # fmt: skip
+    els = [el]
+    for pname, entry in (x.get("parts") or {}).items():
+        els += expand_part(ctx, str(pname), entry)
+    return els
 
 
 def _bjt(ctx: Context, name: str, conn: list[str], a: dict) -> list[Element]:
@@ -1183,16 +1250,7 @@ for _name, _macro in {
         },
     ),
     "opamp": Macro(
-        lambda ctx, n, c, a: parts.opamp(
-            n,
-            *c,
-            a["a0"],
-            a["gbw_hz"],
-            a["r_out_ohm"],
-            a["r_in_ohm"],
-            None if a["clamp"] is None else a["clamp"].name,
-            a["swing_v"],
-        ),
+        _opamp,
         3,
         {
             "a0": _P,
@@ -1201,8 +1259,11 @@ for _name, _macro in {
             "r_in_ohm": _P,
             "clamp": Param("device", None),
             "swing_v": Param("physical", None),
+            "slew_v_per_s": Param("physical", None),
+            "open_collector": Param("device", None),
         },
-    ),  # fmt: skip
+        optional_nodes=1,
+    ),
     "capsule": Macro(_capsule, 3, {"component": Param("raw"), "polarization_v": _P}),
     "moving_coil": Macro(_moving_coil, 4, {"component": Param("raw")}),
     "ribbon_motor": Macro(
@@ -1461,6 +1522,7 @@ def build_ir(
     heaters: bool | str | None = None,
     events: bool = False,
     speaker_readout: bool = True,
+    literal: bool = False,
 ) -> CircuitIR:
     """The circuit IR for resolved parameters `p`; `cores`: "ja" or "linear" (each core
     in its linear limit); `noise`: None, the file's `noise` block; False, none; True, on
@@ -1469,8 +1531,10 @@ def build_ir(
     thyratrons as their event kernels (the module docstring); `speaker_readout` False: each
     speaker part without its sound pressure readout, its terminal voltage on its `out` (a
     live build: the readout's states cost Play more than the amp, COMPONENT_EDITOR_PLAN.md
-    C3; docs/RHODES_PLAN.md RH3)."""
-    return _build(spec, p, cores, noise, heaters, events, speaker_readout)[0]
+    C3; docs/RHODES_PLAN.md RH3); `literal`: the circuit's physics exceptions never stand in
+    (an exception with `renders: true` otherwise does in every build: the reference runs
+    behind its tables use this)."""
+    return _build(spec, p, cores, noise, heaters, events, speaker_readout, literal)[0]
 
 
 def _build(
@@ -1481,20 +1545,41 @@ def _build(
     heaters: bool | str | None = None,
     events: bool = False,
     speaker_readout: bool = True,
+    literal: bool = False,
 ) -> tuple[CircuitIR, dict]:
     ctx = context(spec, p, cores, noise, heaters, events, speaker_readout)
     types = make_models(ctx)
+    # Physics exceptions (spec.exceptions; an events build, or every build for one with
+    # `renders: true`, never a literal one): each one's replaced parts are expanded as usual
+    # (their devices count as used) and dropped; its element and its `parts` go where its
+    # first replaced part was.
+    exc_at: dict[str, list[str]] = {}
+    dropped: set[str] = set()
+    if not literal:
+        for xname, x in spec.exceptions.items():
+            if not (ctx.events or x.get("renders") is True):
+                continue
+            rep = [str(n) for n in x["replaces"]]
+            exc_at.setdefault(rep[0], []).append(xname)
+            dropped |= set(rep)
+    dropped_models: set[str] = set()
     sections = []
     for s in spec.sections:
         ctx.section_tolerance = s.get("tolerance")
         els: list[Element] = []
         for name, entry in s["parts"].items():
-            els += expand_part(ctx, str(name), entry)
+            part = expand_part(ctx, str(name), entry)
+            if str(name) not in dropped:
+                els += part
+            else:
+                dropped_models |= {e.model for e in part if isinstance(e, Device)}
+            for xname in exc_at.get(str(name), []):
+                els += _exception(ctx, xname, spec.exceptions[xname])
         owns = tuple(s["owns"]) if "owns" in s else None
         substeps, decimate = s.get("substeps"), s.get("decimate")
         lag = s.get("lag_samples")
         method, tables = s.get("method"), s.get("tube_tables")
-        if not els or any(isinstance(e, ThyratronEvents) for e in els):
+        if not els or any(isinstance(e, ThyratronEvents | ResetEvents | EdgeEvents) for e in els):
             # K replaces the island it plays in (technique M1 renders it, K plays it live); a
             # section its switches leave empty is no island (it owns nothing it doesn't have)
             substeps = decimate = owns = lag = method = tables = None
@@ -1509,6 +1594,8 @@ def _build(
             else x
             for x in sections
         ]
+    kept_models = {e.model for x in sections for e in x.elements if isinstance(e, Device)}
+    ctx.replaced_models |= dropped_models - kept_models
     if ctx.missing_class:
         raise ConfigError(f"parts without a tolerance class: {sorted(ctx.missing_class)}")
     if ctx.tolerance is not None:
@@ -1557,12 +1644,13 @@ def build(
     noise: bool | int | None = None,
     heaters: bool | str | None = None,
     events: bool = False,
+    literal: bool = False,
 ) -> Circuit:
     """The circuit for `spec` with `overrides`. `triode_formulation` is "table" or
     "exact" (default from sim_settings.yaml, devices.triode_formulation); `cores` is
     "ja" or "linear" (default devices.cores). A "ja" build has no SPICE text, nor
     does one with control inputs (ngspice runs none). `noise`, `heaters`, `events` as
-    build_ir's."""
+    build_ir's, and `literal`."""
     p = resolve(spec, overrides)
     devices = load_sim_settings().data["devices"]
     form = triode_formulation or devices["triode_formulation"]
@@ -1571,7 +1659,7 @@ def build(
     cores = cores or devices.get("cores", "ja")
     if cores not in CORE_MODES:
         raise ValueError(f"unknown core model {cores!r} ({' | '.join(CORE_MODES)})")
-    ir, types = _build(spec, p, cores, noise, heaters, events)
+    ir, types = _build(spec, p, cores, noise, heaters, events, literal=literal)
     # Each triode instance's table grid is its tube type's.
     grids = {m.name: GRIDS[types[m.name]] for m in ir.models if isinstance(m, Triode)}
     text, files = None, {}

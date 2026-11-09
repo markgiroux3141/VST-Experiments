@@ -421,9 +421,21 @@ bar, `key`, and the trigger contact, `gate`), the app's `minimoog_voice` on thre
 61-86 % load with a key held). Filter Scale re-trimmed on the string's real A keys (`minimoog_vcf_trim.py --scale-only`).
 Partition lessons there: a part's owned nodes need a linear DC path in it; never cut at a saturated switch's collector;
 the keyboard on a fourth thread changed the loudness contour (not understood, the plan's MM4). MM3's oscillators: the uA726
-is `UA726@1` (fitted to Fairchild's gain curve at 78.4 C, `tests/test_ua726.py`); open: the LM393 (needs an
-open-collector `opamp` option in both builders; decided with the reset exception), the E112 (2N3819 stands in), the
-reset exception, `minimoog_vco.yaml`, Folkman's tuning.
+is `UA726@1` (fitted to Fairchild's gain curve at 78.4 C, `tests/test_ua726.py`). **Oscillator 1's reference
+built (2026-11-09, worktree `minimoog`):** `config/circuits/minimoog_vco.yaml` (primary summer to saw / triangle /
+rectangle; the keys on the control input `key`), the `opamp` macro's `slew_v_per_s` and `open_collector: BJT` with a
+fourth node `v_minus` (both builders; the LM393 fitted to TI's response times by `scripts/fit_lm393.py`,
+`lm393_test.yaml`), `PN4092@1` for the E112, Folkman's tuning plus HI END solved jointly (`scripts/minimoog_vco_trim.py
+--write`, all within 0.05 c); `tests/test_minimoog_vco.py`. The reset (`scripts/minimoog_vco_study.py`,
+reports/minimoog/vco/README.md): the reference needs 12.288 MHz with error control (200-280x real time per
+oscillator); the draft and production stall, M1 islands jitter tens to hundreds of cents. **K built (2026-11-09, the
+user's call: K for live and renders):** the circuit's `exceptions` block (both builders: `replaces`, the kind's element in
+their place, `parts`, `renders: true` for every build but Python's `build_ir(literal=True)`, `follows` / `follow_gain`)
+with two new kinds, a **reset** and an **edge** (`varimu/devices/reset_events.py`, circuitsim `reset_events.rs`, IR
+`ResetEvents` / `EdgeEvents`; the engine's event runs one enum with thyratron's: HYBRID_PHYSICS_PLAN.md H5); tables by
+`scripts/minimoog_event_tables.py` -> `config/events/minimoog_osc_{reset,edge}.json`. Within 0.6 cents of the reference at
+96 and 192 kHz, saw and rectangle as clean as it; the triangle at the draft is the open item. The app's `minimoog_vco`
+(draft-2x, Newton 1e-3): 41 % load. Next: the user listens (MINIMOOG_BACKLOG.md).
 
 Modulation effects ([docs/MODULATION_PLAN.md](docs/MODULATION_PLAN.md), 2026-11-09, the
 user's ask: chorus, flanger, phaser, vibrato, tremolo as chain ends; the Leslie skipped for now):

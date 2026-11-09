@@ -31,6 +31,7 @@ pub mod noise;
 pub mod novachord;
 pub mod partition;
 pub mod plate;
+pub mod reset_events;
 pub mod spring;
 pub mod stream;
 pub mod tape;

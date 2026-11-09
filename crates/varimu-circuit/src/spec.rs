@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 use crate::yaml::{self, Map, Value};
 
-const TOP_KEYS: [&str; 15] = [
+const TOP_KEYS: [&str; 16] = [
     "title",
     "input",
     "cv_inputs",
@@ -26,6 +26,13 @@ const TOP_KEYS: [&str; 15] = [
     "sections",
     "noise",
     "heaters",
+    "exceptions",
+];
+
+/// An exception's nodes per kind (spec.py's EXCEPTION_NODES).
+pub const EXCEPTION_NODES: [(&str, &[&str]); 2] = [
+    ("reset", &["sense", "src", "dst"]),
+    ("edge", &["plus", "minus", "src", "dst"]),
 ];
 
 /// Resolved parameters: every control, value and non-null device parameter (plus, in a
@@ -77,6 +84,8 @@ pub struct CircuitSpec {
     pub noise: Option<Map>,
     /// The `heaters` block (device builder B6; None: cathodes not heated).
     pub heaters: Option<Map>,
+    /// Physics exceptions (spec.py's `exceptions`; empty: none), in file order.
+    pub exceptions: Map,
 }
 
 /// Circuit volts peak at full scale: what a sample of 1.0 puts on the input node, and
@@ -488,6 +497,61 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         }
     }
     let heaters = heaters.and_then(Value::as_map).cloned();
+    let exceptions = data
+        .get("exceptions")
+        .and_then(Value::as_map)
+        .cloned()
+        .unwrap_or_default();
+    let part_names: Vec<String> = sections
+        .iter()
+        .flat_map(|s| s.parts.keys().map(|k| k.to_string()))
+        .collect();
+    for (name, e) in exceptions.iter() {
+        let where_ = format!("exceptions.{name}");
+        let Some((_, nodes)) = e.as_map().and_then(|m| {
+            let kind = m.get("kind").and_then(Value::as_str)?;
+            EXCEPTION_NODES.iter().find(|(k, _)| *k == kind)
+        }) else {
+            errors.push(format!(
+                "{where_}: a mapping with kind [\"edge\", \"reset\"]"
+            ));
+            continue;
+        };
+        let m = e.as_map().expect("a mapping");
+        let is_edge = m.get("kind").and_then(Value::as_str) == Some("edge");
+        let allowed = |k: &str| {
+            [
+                "kind", "tables", "replaces", "parts", "source", "notes", "renders",
+            ]
+            .contains(&k)
+                || nodes.contains(&k)
+                || (is_edge && ["follows", "follow_gain"].contains(&k))
+        };
+        let needed = ["tables", "replaces", "source"].iter().chain(nodes.iter());
+        if m.keys().any(|k| !allowed(k)) || needed.clone().any(|k| !m.contains(k)) {
+            let mut got: Vec<String> = m.keys().map(|k| k.to_string()).collect();
+            got.sort();
+            errors.push(format!(
+                "{where_}: keys kind, tables, {}, replaces, source (parts optional); got {got:?}",
+                nodes.join(", ")
+            ));
+            continue;
+        }
+        if let Some(r) = m.get("renders")
+            && !matches!(r, Value::Bool(_))
+        {
+            errors.push(format!("{where_}.renders: true or false"));
+        }
+        let ok = m
+            .get("replaces")
+            .and_then(Value::as_list)
+            .is_some_and(|l| !l.is_empty() && l.iter().all(|v| part_names.contains(&v.py_str())));
+        if !ok {
+            errors.push(format!(
+                "{where_}.replaces: a list of the circuit's part names"
+            ));
+        }
+    }
     if !errors.is_empty() {
         return Err(Error(format!(
             "{}:\n  {}",
@@ -524,6 +588,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         full_scale,
         noise,
         heaters,
+        exceptions,
     })
 }
 
