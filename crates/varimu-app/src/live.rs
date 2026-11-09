@@ -314,6 +314,12 @@ pub fn structure(ir: &CircuitIr) -> Structure {
             Element::ThyratronEvents(t) => {
                 ("ThyratronEvents", &t.name, vec![&t.a, &t.g, &t.w, &t.k])
             }
+            Element::ResetEvents(r) => ("ResetEvents", &r.name, vec![&r.sense, &r.src, &r.dst]),
+            Element::EdgeEvents(r) => (
+                "EdgeEvents",
+                &r.name,
+                vec![&r.plus, &r.minus, &r.src, &r.dst],
+            ),
             // MELLOW plays on (a value); other keys, data or nodes are another instrument.
             Element::NovaKeys(k) => {
                 worn = format!("{} {} {:?}", k.name, k.sha256, k.range());

@@ -108,7 +108,12 @@ _TOP_KEYS = {
     "sections",
     "noise",
     "heaters",
+    "exceptions",
 }
+
+# An exception's nodes per kind (HYBRID_PHYSICS_PLAN.md: technique K's event kernels for a
+# group of parts; varimu.devices.reset_events).
+EXCEPTION_NODES = {"reset": ("sense", "src", "dst"), "edge": ("plus", "minus", "src", "dst")}
 
 
 @dataclass(frozen=True)
@@ -133,6 +138,13 @@ class CircuitSpec:
     full_scale_unit: str = "V"  # the output's: "V", or "Pa" (output_pascals_peak)
     noise: dict[str, Any] | None = None  # the `noise` block as written (None: no noise)
     heaters: dict[str, Any] | None = None  # the `heaters` block (None: cathodes not heated)
+    # Physics exceptions (`exceptions: {NAME: {kind, tables, <nodes>, replaces, parts?,
+    # renders?, source}}`): in an events build the parts `replaces` names are dropped and the
+    # kind's event element (named NAME, its tables config/events/<tables>.json) stands in
+    # their place, with `parts` (their off state, ordinary parts) beside it; with `renders:
+    # true` in every build (the literal parts can't be simulated at a render's rate either)
+    # but a `literal` one (builder.build_ir).
+    exceptions: dict[str, dict[str, Any]] = dataclasses.field(default_factory=dict)
 
     def part_classes(self) -> dict[str, str]:
         """Designator -> tolerance class."""
@@ -294,6 +306,27 @@ def load_circuit(path: Path) -> CircuitSpec:
             seed = noise["seed"]
             if isinstance(seed, bool) or not isinstance(seed, int) or not 0 <= seed < 2**64:
                 errors.append(f"noise.seed: {seed!r} is not an integer in [0, 2^64)")
+    exceptions = data.get("exceptions") or {}
+    part_names = {str(n) for s in sections if isinstance(s, Mapping)
+                  for n in (s.get("parts") or {})}  # fmt: skip
+    for name, e in exceptions.items():
+        where = f"exceptions.{name}"
+        if not isinstance(e, Mapping) or e.get("kind") not in EXCEPTION_NODES:
+            errors.append(f"{where}: a mapping with kind {sorted(EXCEPTION_NODES)}")
+            continue
+        nodes = EXCEPTION_NODES[e["kind"]]
+        allowed = {"kind", "tables", "replaces", "parts", "source", "notes", "renders", *nodes}
+        if e["kind"] == "edge":
+            allowed |= {"follows", "follow_gain"}
+        if set(e) - allowed or not {"tables", "replaces", "source", *nodes} <= set(e):
+            errors.append(f"{where}: keys kind, tables, {', '.join(nodes)}, replaces, source "
+                          f"(parts optional); got {sorted(e)}")  # fmt: skip
+            continue
+        if e.get("renders", False) not in (True, False):
+            errors.append(f"{where}.renders: true or false")
+        rep = e["replaces"]
+        if not isinstance(rep, list) or not rep or not set(map(str, rep)) <= part_names:
+            errors.append(f"{where}.replaces: a list of the circuit's part names")
     if errors:
         raise ConfigError(f"{path}:\n  " + "\n  ".join(errors))
     return CircuitSpec(
@@ -315,6 +348,7 @@ def load_circuit(path: Path) -> CircuitSpec:
         full_scale_unit=unit,
         noise=noise,
         heaters=heaters,
+        exceptions=dict(exceptions),
     )
 
 

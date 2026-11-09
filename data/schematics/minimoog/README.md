@@ -81,16 +81,41 @@ Q28 matched to +-3 mV at 20 mA**; C17 / C25 selected 600-1200 pF (the A-440 osci
   SOURCE") closes the loop on the common emitters (pins 10 / 13, ~-2.5 V) through R27 49.9K 1%, R28 100K, R29 1K,
   C8 .001; Q8's base grounded, its collector the oscillator's current I_c, "200 Hz / uA". C5 .01 decouples the
   726's heater supply (pins 8 / 4 from +10 V).
-- **Core:** I_c from the capacitor node (C7 .001 uF; C6 1.5 uF / 20 V and R31 10K trim at the +5 V reference),
-  the reset switch Q4, an E112 JFET (source to IC4A's +5 V, drain to the capacitor node); IC7 (TL081, C10 / C11 .01
-  supply bypass) buffers the ramp (+1.75 V .. -1.75 V); IC8B (1/2 LM393, R34 1M, C12 18 pF, R35 100 ohm, pull-up
-  R36 1K) compares it and, through C9 100 pF / R33 2K (a ~1 us pulse, "+10 .. -10, 1 us"), drives Q4's gate.
-- **HI END COMP** IC4A (1/2 1458): R25 10K / R26 10K at its input, R32 100K and CR1 from the core (a correction
-  for the reset's dead time at the top of the range).
-- **Shapers:** the 2N3904 pair Q5 / Q6 (R40 10K, R41 10K, R42 10K, C13 500 pF; R43 8.25K, R44 4.99K into IC4B 1/2
-  1458) makes the triangle; R37 5.6K / R38 4.02K the sawtooth output; IC8A (1/2 393; R39 1K, C14 .01, R45 / R47
-  100K, R46 2.2M, R48 5.1K, R49 2.7K) the rectangle, its width from PW 1 IN (pin 22B: 0 V = square, -2.5 V = 15 %).
-  Outputs at pins 10B (R135 220K, note 4), 9B, 20B, 21B.
+- **Core** (re-read 2026-11-09 from the 002 GIF at 2-3x and the Internet Archive scan's page 4; the 002 GIF's
+  junction dots on the +5 V line at IC7's output and at node 2 are crossings: taken as joins, Q5's base and
+  emitter would be one node and the triangle a constant, and the archive scan has no dot at IC7's output):
+  IC4A (1/2 1458, the box "OSC 1 HI END COMP" printed beside it) follows R25 10K / R26 10K on +10 V: the +5 V
+  reference (C6 1.5 uF / 20 V tantalum on its output), which is Q4's source, C7's top and R40's top (node 2,
+  "+5V"). C7 .001 from it to D, Q4's drain (an E112 JFET). R31 10K trim (its wiper on the CW end) from D to the
+  expo's collector line (I_c, "200Hz/uA"), which is IC7's + input: IC7 (TL081; C10 / C11 .01 bypass) drives Q5's
+  base, Q5 (2N3904, collector on +10 V) its emitter, which is IC7's - input and the ramp (node 10: "+5V .. 0.0V",
+  falling): the comparator sees the ramp I_c x R31 early, R31 x C7 (up to 10 us) of each period, which takes out
+  the reset's dead time: R31 is the HI END trim. IC8B (1/2 LM393, open collector to -10 V): - input the ramp, +
+  input R35 100 to ground with R34 1M || C12 18 pF from its output (hysteresis and a speed-up), output pin 7
+  pulled up by R33 2K to +10 V ("+10 .. -10, .5 us"). Q4's gate: R32 100K to the +5 V reference, C9 100 pF and CR1
+  (anode at the gate) to the comparator's output: between resets CR1 holds the gate at -9.4 V; the comparator's
+  rising edge through C9 lifts it, Q4 shorts C7 back to +5 V, the ramp rises through IC7 and the comparator
+  falls again.
+- **Shapers:** saw: the ramp through R36 1K onto node 9, R37 5.6K to ground and R38 4.02K to -10 V: +1.76 ..
+  -1.74 V (pins 10B through R135 220K, note 4, and 9B). Triangle: Q6 (2N3904) base on the ramp, R42 10K emitter
+  to ground, R40 10K from the +5 V reference to its collector (node 1): 5.6 V - ramp until it saturates past mid-
+  ramp, then the ramp less a drop: a V from ~+5 V down to "+2.75V" and back; R41 10K / C13 500 pF (to ground)
+  into IC4B (1/2 1458; R44 4.99K feedback, R43 8.25K to +10 V: x1.6, -6 V): +-1.75 V at 21B. Rectangle: IC8A
+  (1/2 393) + input node 11 (R39 1K from node 9, R46 2.2M from its output), - input PW / 2 (R47 100K from PW 1
+  IN, 22B; R45 100K and C14 .01 to ground); its open collector through R48 5.1K onto R49 2.7K to ground: 0 /
+  -3.5 V at 20B (0 V PW = square, -2.5 V = 15 %).
+- **Summer inputs, re-read:** the primary summer's output (-1.00 V / oct) enters through SCALE (R16 10K trim +
+  R17 90.9K), the RANGE line 14A (-571 mV / oct) through OCT ADJ (R18 5K trim + R19 53.6K), SHIFT from +10 V (R13
+  69.8K + R14 10K trim); the network's R12 82.5K, R15 402K and R20 121K have open ends on oscillator 1. Fig 9-2's
+  "+2.10V @ LO F" at the primary summer's output must read -2.10 V (its inputs at nominal sum to ~-2.3 V, and only
+  a negative low F puts 2' near the printed 350 Hz). Note 3's "0.00 mV = 2' LO F = 350 Hz" at V01 doesn't fit
+  I_R 5 uA at 200 Hz / uA (0 mV would be ~1 kHz): the trims set the tuning (scripts/minimoog_vco_trim.py).
+- **The range ladder** (Fig 9-2, lower left): from -5 V, 1K 1% per octave (2', 4', 8', 16', 32'), 4.75K 1% to LO,
+  909 ohm 1% on; each oscillator's RANGE switch picks a tap into its 741 buffer (osc 1's to 14A).
+- **Folkman's oscillator tuning** (p. 12-13 of his TECHNICAL SERVICE MANUAL): on 2' the oscillator's "Range
+  Trimpot" for 3520 Hz at the high A, its Scale Trimpot for 440 Hz at the low A, repeated; the Octave Range
+  trimmer for 8' to beat with 2' on the second A. On this board: SHIFT R14, SCALE R16, OCT ADJ R18; HI END R31
+  isn't in his text.
 
 ## Oscillator board (notes from Fig 9-1)
 

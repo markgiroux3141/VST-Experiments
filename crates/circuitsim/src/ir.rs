@@ -218,6 +218,8 @@ pub enum Element {
     ClavStrings(ClavStrings),
     NovaKeys(NovaKeys),
     ThyratronEvents(ThyratronEvents),
+    ResetEvents(ResetEvents),
+    EdgeEvents(EdgeEvents),
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -614,6 +616,60 @@ pub struct ThyratronEvents {
     pub pulses_a: Vec<Vec<Vec<f64>>>,
     pub grid_pulses_a: Vec<Vec<Vec<f64>>>,
     pub source: String,
+}
+
+/// A relaxation oscillator's reset as technique K's event kernels (Python's
+/// `varimu.circuit.ir.ResetEvents`; `varimu.devices.reset_events` is the reference,
+/// [`crate::reset_events`] the port): it senses `sense` (to ground), and when that ramp,
+/// falling, is predicted to cross its trigger level `v_t_v` within the next step, injects the
+/// event's charges from `src` into `dst`, held over each step (a DK current column). Tables
+/// over `log_slope` (ln V/s of the falling ramp, ascending): the trigger level, the dead time,
+/// the injected current's pulse at `ref_rate_hz` from the event's start; `c_f` the
+/// capacitance the charge lands on (the band-limiting's lag correction). Draws nothing between
+/// events. SPICE has none of it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ResetEvents {
+    pub name: String,
+    pub sense: String,
+    pub src: String,
+    pub dst: String,
+    pub c_f: f64,
+    pub ref_rate_hz: f64,
+    pub log_slope: Vec<f64>,
+    pub v_t_v: Vec<f64>,
+    pub dead_s: Vec<f64>,
+    pub pulses_a: Vec<Vec<f64>>,
+    /// The discharging network's conductance per point (the deficit, removed from dst).
+    pub g_s: Vec<f64>,
+    pub source: String,
+}
+
+/// A comparator's output as technique K's event kernels (Python's
+/// `varimu.circuit.ir.EdgeEvents`; [`crate::reset_events`] the port): it senses plus - minus,
+/// and when that is predicted to cross zero within the next step in the direction that flips
+/// its state (on: sinking, plus below minus), moves the current it holds from `src` into `dst`
+/// to the new state's level through the table's band-limited step. `waves_a[direction][slope]`:
+/// the output current from the input's zero crossing to settled at `ref_rate_hz` (direction 0
+/// turning on, 1 off), over `log_slope` (ln V/s of |plus - minus|, ascending).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EdgeEvents {
+    pub name: String,
+    pub plus: String,
+    pub minus: String,
+    pub src: String,
+    pub dst: String,
+    pub ref_rate_hz: f64,
+    pub log_slope: Vec<f64>,
+    pub waves_a: Vec<Vec<Vec<f64>>>,
+    pub source: String,
+    /// A [`ResetEvents`] it follows (its input `follow_gain` of that reset's sensed ramp:
+    /// `reset_events.EdgeRun`'s lead), absent from the JSON when none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follows: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub follow_gain: Option<f64>,
 }
 
 /// White noise current of one-sided density `psd_a2_hz` (A^2/Hz) from `a` through
@@ -1037,6 +1093,8 @@ impl Element {
             Element::ClavStrings(e) => &e.name,
             Element::NovaKeys(e) => &e.name,
             Element::ThyratronEvents(e) => &e.name,
+            Element::ResetEvents(e) => &e.name,
+            Element::EdgeEvents(e) => &e.name,
         }
     }
 
@@ -1069,6 +1127,8 @@ impl Element {
                 v
             }
             Element::ThyratronEvents(e) => vec![&e.a, &e.g, &e.w, &e.k],
+            Element::ResetEvents(e) => vec![&e.sense, &e.src, &e.dst],
+            Element::EdgeEvents(e) => vec![&e.plus, &e.minus, &e.src, &e.dst],
         }
     }
 }
@@ -1085,6 +1145,84 @@ impl fmt::Display for IrError {
 }
 
 impl std::error::Error for IrError {}
+
+/// An ascending axis of two or more finite values (Python's `_validate_axis`).
+fn validate_axis(what: &str, ax: &[f64]) -> Result<(), IrError> {
+    if ax.len() < 2 || !ax.iter().all(|x| x.is_finite()) {
+        return err(format!("{what}: two or more finite values"));
+    }
+    if ax.windows(2).any(|w| w[1] <= w[0]) {
+        return err(format!("{what}: ascending"));
+    }
+    Ok(())
+}
+
+/// The checks of a reset's event kernels (Python's `_validate_reset_events`).
+fn validate_reset_events(e: &ResetEvents) -> Result<(), IrError> {
+    let name = &e.name;
+    for (k, v) in [("c_f", e.c_f), ("ref_rate_hz", e.ref_rate_hz)] {
+        positive(&format!("{name}.{k}"), v)?;
+    }
+    validate_axis(&format!("{name}.log_slope"), &e.log_slope)?;
+    let n = e.log_slope.len();
+    for (k, l) in [
+        ("v_t_v", e.v_t_v.len()),
+        ("dead_s", e.dead_s.len()),
+        ("pulses_a", e.pulses_a.len()),
+        ("g_s", e.g_s.len()),
+    ] {
+        if l != n {
+            return err(format!("{name}.{k}: one per log_slope point"));
+        }
+    }
+    for ((v, d), p) in e.v_t_v.iter().zip(&e.dead_s).zip(&e.pulses_a) {
+        if !v.is_finite() {
+            return err(format!("{name}.v_t_v: finite, got {v}"));
+        }
+        nonneg(&format!("{name}.dead_s"), *d)?;
+        if p.is_empty() || !p.iter().all(|x| x.is_finite()) {
+            return err(format!("{name}: a pulse of finite samples at every point"));
+        }
+    }
+    for g in &e.g_s {
+        nonneg(&format!("{name}.g_s"), *g)?;
+    }
+    if e.src == e.dst {
+        return err(format!("{name}: src and dst on two nodes"));
+    }
+    Ok(())
+}
+
+/// The checks of a comparator edge's event kernels (Python's `_validate_edge_events`).
+fn validate_edge_events(e: &EdgeEvents) -> Result<(), IrError> {
+    let name = &e.name;
+    positive(&format!("{name}.ref_rate_hz"), e.ref_rate_hz)?;
+    validate_axis(&format!("{name}.log_slope"), &e.log_slope)?;
+    if e.waves_a.len() != 2 || e.waves_a.iter().any(|r| r.len() != e.log_slope.len()) {
+        return err(format!(
+            "{name}.waves_a: two directions of one wave per log_slope point"
+        ));
+    }
+    for w in e.waves_a.iter().flatten() {
+        if w.len() < 2 || !w.iter().all(|x| x.is_finite()) || w[0] == w[w.len() - 1] {
+            return err(format!(
+                "{name}: a wave of finite samples between two levels"
+            ));
+        }
+    }
+    if e.plus == e.minus || e.src == e.dst {
+        return err(format!(
+            "{name}: plus and minus, src and dst on two nodes each"
+        ));
+    }
+    if e.follows.is_some() != e.follow_gain.is_some() {
+        return err(format!("{name}: follows and follow_gain together"));
+    }
+    if let Some(g) = e.follow_gain {
+        positive(&format!("{name}.follow_gain"), g)?;
+    }
+    Ok(())
+}
 
 /// The checks of a thyratron's event kernels (Python's `_validate_thyratron_events`).
 fn validate_thyratron_events(e: &ThyratronEvents) -> Result<(), IrError> {
@@ -1291,6 +1429,8 @@ impl CircuitIr {
         }
 
         let mut names = HashSet::new();
+        // reset event kernels seen so far (an edge may follow one)
+        let mut resets_before: HashSet<&str> = HashSet::new();
         let mut inductors = HashSet::new();
         let mut nodes: HashSet<&str> = HashSet::new();
         for el in self.elements() {
@@ -1546,6 +1686,22 @@ impl CircuitIr {
                 }
                 Element::ThyratronEvents(e) => {
                     validate_thyratron_events(e)?;
+                    'X'
+                }
+                Element::ResetEvents(e) => {
+                    validate_reset_events(e)?;
+                    resets_before.insert(e.name.as_str());
+                    'X'
+                }
+                Element::EdgeEvents(e) => {
+                    validate_edge_events(e)?;
+                    if let Some(f) = &e.follows
+                        && !resets_before.contains(f.as_str())
+                    {
+                        return err(format!(
+                            "{name}: follows {f}, no reset's event kernels before it"
+                        ));
+                    }
                     'X'
                 }
                 Element::Device(e) => {

@@ -592,6 +592,59 @@ class Device:
     nodes: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ResetEvents:
+    """A relaxation oscillator's reset as technique K's event kernels (HYBRID_PHYSICS_PLAN.md;
+    varimu.devices.reset_events is the reference, circuitsim's reset_events.rs the port): it
+    senses the node `sense` (to ground), and when that ramp, falling, is predicted to cross
+    its trigger level v_t_v within the next step, injects the event's charges from `src` into
+    `dst`, held over each step. Tables over log_slope (ln V/s of the falling ramp, ascending):
+    the trigger level, the dead time, the injected current's pulse at ref_rate_hz from the
+    event's start (pulses_a), the discharging network's conductance g_s (the deficit:
+    reset_events.ResetRun, its current removed from dst into ground). c_f: the capacitance the
+    charge lands on (the sensed ramp's step
+    is charge / c_f), for the band-limiting's lag correction. Draws nothing between events (the
+    replaced parts' off state is the circuit's own parts). SPICE has none of it."""
+
+    name: str
+    sense: str
+    src: str
+    dst: str
+    c_f: float
+    ref_rate_hz: float
+    log_slope: tuple[float, ...]
+    v_t_v: tuple[float, ...]
+    dead_s: tuple[float, ...]
+    pulses_a: tuple[tuple[float, ...], ...]
+    g_s: tuple[float, ...]
+    source: str
+
+
+@dataclass(frozen=True)
+class EdgeEvents:
+    """A comparator's output as technique K's event kernels (varimu.devices.reset_events): it
+    senses plus - minus, and when that is predicted to cross zero within the next step in the
+    direction that flips its state (on: sinking, plus below minus), moves the current it holds
+    from `src` into `dst` to the new state's level through the table's band-limited step.
+    waves_a[direction][slope]: the output current from the input's zero crossing to settled at
+    ref_rate_hz (direction 0 turning on, 1 off), over log_slope (ln V/s of |plus - minus|,
+    ascending). SPICE has none of it."""
+
+    name: str
+    plus: str
+    minus: str
+    src: str
+    dst: str
+    ref_rate_hz: float
+    log_slope: tuple[float, ...]
+    waves_a: tuple[tuple[tuple[float, ...], ...], ...]
+    source: str
+    # A ResetEvents it follows (its input `follow_gain` of that reset's sensed ramp):
+    # reset_events.EdgeRun's lead. None: absent from the JSON.
+    follows: str | None = None
+    follow_gain: float | None = None
+
+
 Element = (
     Resistor
     | Capacitor
@@ -612,6 +665,8 @@ Element = (
     | ClavStrings
     | NovaKeys
     | ThyratronEvents
+    | ResetEvents
+    | EdgeEvents
 )
 DeviceModel = (
     Triode
@@ -665,6 +720,8 @@ _PREFIX = {
     ClavStrings: "V",
     NovaKeys: "V",
     ThyratronEvents: "X",
+    ResetEvents: "X",
+    EdgeEvents: "X",
 }
 
 
@@ -703,6 +760,10 @@ def element_nodes(el: Element) -> tuple[str, ...]:
         return (*el.senses, *el.outs)
     if isinstance(el, ThyratronEvents):
         return (el.a, el.g, el.w, el.k)
+    if isinstance(el, ResetEvents):
+        return (el.sense, el.src, el.dst)
+    if isinstance(el, EdgeEvents):
+        return (el.plus, el.minus, el.src, el.dst)
     return ()
 
 
@@ -841,6 +902,7 @@ class CircuitIR:
             models[m.name] = m
             _validate_model(m)
 
+        resets_before: set[str] = set()  # reset event kernels seen so far (an edge follows one)
         for s in self.sections:
             if s.substeps is not None and (
                 not isinstance(s.substeps, int) or isinstance(s.substeps, bool) or s.substeps < 1
@@ -934,6 +996,14 @@ class CircuitIR:
                 _validate_nova_keys(el, self.input_node)
             elif isinstance(el, ThyratronEvents):
                 _validate_thyratron_events(el)
+            elif isinstance(el, ResetEvents):
+                _validate_reset_events(el)
+                resets_before.add(el.name)
+            elif isinstance(el, EdgeEvents):
+                _validate_edge_events(el)
+                if el.follows is not None and el.follows not in resets_before:
+                    raise IRError(f"{el.name}: follows {el.follows}, no reset's event kernels "
+                                  "before it")  # fmt: skip
             elif isinstance(el, Device):
                 if el.model not in models:
                     raise IRError(f"{el.name}: unknown model {el.model}")
@@ -1267,6 +1337,8 @@ _ELEMENT_KINDS = {
     "clav_strings": ClavStrings,
     "nova_keys": NovaKeys,
     "thyratron_events": ThyratronEvents,
+    "reset_events": ResetEvents,
+    "edge_events": EdgeEvents,
 }
 _MODEL_KINDS = {
     "triode": Triode,
@@ -1285,6 +1357,8 @@ _PLATE_KINDS = {"koren": KorenTriode, "varimu": VariMuTriode}
 # Optional fields written only when set, so IRs without them read and write as before.
 _OMITTED_WHEN_NONE = {
     (Capacitor, "v0_v"),
+    (EdgeEvents, "follows"),
+    (EdgeEvents, "follow_gain"),
     (ClavStrings, "wear"),
     (Section, "substeps"),
     (Section, "decimate"),
@@ -1403,6 +1477,12 @@ def _decode(d: dict, kinds: dict[str, type]) -> Any:
             latched=grid,
             pulses_a=lambda v: tuple(tuple(tuple(p) for p in row) for row in v),
             grid_pulses_a=lambda v: tuple(tuple(tuple(p) for p in row) for row in v),
+        )
+    if cls is ResetEvents:
+        return _fields(cls, d, tagged=True, pulses_a=lambda v: tuple(tuple(p) for p in v))
+    if cls is EdgeEvents:
+        return _fields(
+            cls, d, tagged=True, waves_a=lambda v: tuple(tuple(tuple(w) for w in r) for r in v)
         )
     return _fields(cls, d, tagged=True)
 
@@ -1554,6 +1634,50 @@ def _validate_thyratron_events(el: ThyratronEvents) -> None:
         raise IRError(f"{el.name}: every point latched")
     if len({el.a, el.g, el.w, el.k}) != 4:
         raise IRError(f"{el.name}: its pins (a, g, w, k) on four nodes")
+
+
+def _validate_axis(name: str, ax: tuple[float, ...]) -> None:
+    if len(ax) < 2 or not all(math.isfinite(x) for x in ax):
+        raise IRError(f"{name}: two or more finite values")
+    if not all(b > a for a, b in zip(ax, ax[1:], strict=False)):
+        raise IRError(f"{name}: ascending")
+
+
+def _validate_reset_events(el: ResetEvents) -> None:
+    """The same checks as the Rust IR's for a reset's event kernels."""
+    for k in ("c_f", "ref_rate_hz"):
+        _positive(f"{el.name}.{k}", getattr(el, k))
+    _validate_axis(f"{el.name}.log_slope", el.log_slope)
+    n = len(el.log_slope)
+    for k in ("v_t_v", "dead_s", "pulses_a", "g_s"):
+        if len(getattr(el, k)) != n:
+            raise IRError(f"{el.name}.{k}: one per log_slope point")
+    for v, d, p, g in zip(el.v_t_v, el.dead_s, el.pulses_a, el.g_s, strict=True):
+        _finite(f"{el.name}.v_t_v", v)
+        _nonneg(f"{el.name}.dead_s", d)
+        _nonneg(f"{el.name}.g_s", g)
+        if not (p and all(math.isfinite(x) for x in p)):
+            raise IRError(f"{el.name}: a pulse of finite samples at every point")
+    if el.src == el.dst:
+        raise IRError(f"{el.name}: src and dst on two nodes")
+
+
+def _validate_edge_events(el: EdgeEvents) -> None:
+    """The same checks as the Rust IR's for a comparator edge's event kernels."""
+    _positive(f"{el.name}.ref_rate_hz", el.ref_rate_hz)
+    _validate_axis(f"{el.name}.log_slope", el.log_slope)
+    if len(el.waves_a) != 2 or any(len(r) != len(el.log_slope) for r in el.waves_a):
+        raise IRError(f"{el.name}.waves_a: two directions of one wave per log_slope point")
+    for r in el.waves_a:
+        for w in r:
+            if len(w) < 2 or not all(math.isfinite(x) for x in w) or w[0] == w[-1]:
+                raise IRError(f"{el.name}: a wave of finite samples between two levels")
+    if el.plus == el.minus or el.src == el.dst:
+        raise IRError(f"{el.name}: plus and minus, src and dst on two nodes each")
+    if (el.follows is None) != (el.follow_gain is None):
+        raise IRError(f"{el.name}: follows and follow_gain together")
+    if el.follow_gain is not None:
+        _positive(f"{el.name}.follow_gain", el.follow_gain)
 
 
 #: Recording runs this much tape past a block's ends (`tape_machine.ZONE_PAD_M`).

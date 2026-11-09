@@ -790,7 +790,7 @@ pub struct Transient {
     /// `partition.rs`): taken by the step's media push instead of its own sense.
     media_batches: Vec<Option<Vec<f64>>>,
     /// The thyratrons' event kernels ([`Mna::events`] order).
-    events: Vec<crate::events::Run>,
+    events: Vec<crate::reset_events::EventRun>,
     opts: Options,
     tab: Tableau,
     h: f64,
@@ -987,7 +987,7 @@ impl Transient {
         let events = mna
             .events
             .iter()
-            .map(|e| crate::events::Run::new(&e.element, h))
+            .map(|e| crate::reset_events::EventRun::new(&e.element, h))
             .collect::<Result<Vec<_>, String>>()
             .map_err(Error::new)?;
         let mut tr = Transient {
@@ -1814,9 +1814,7 @@ impl Transient {
             let ne = 3 * self.events.len();
             let len = dk.wv.len();
             for (v, r) in dk.wv[len - ne..].chunks_exact_mut(3).zip(&self.events) {
-                v[0] = r.current();
-                v[1] = r.grid_current();
-                v[2] = r.comp_current();
+                v.copy_from_slice(&r.currents());
             }
             sys.stage(&dk.base, u, &dk.wv, &dk.w, &mut dk.out);
             // The initial guess, as try_step_dirk's on the device nodes (the
@@ -2156,13 +2154,14 @@ impl Transient {
                 .events
                 .iter()
                 .zip(&self.events)
-                .any(|(new, old)| new.element.name != old.element.name)
+                .any(|(new, old)| new.element.name() != old.name())
         {
             return Err(changed());
         }
         for (r, new) in self.events.iter_mut().zip(&mna.events) {
-            if r.element != new.element {
-                *r = crate::events::Run::new(&new.element, self.h).map_err(Error::new)?;
+            if r.element() != new.element {
+                *r =
+                    crate::reset_events::EventRun::new(&new.element, self.h).map_err(Error::new)?;
             }
         }
         let same_devices = mna.devices.len() == self.mna.devices.len()
@@ -2249,16 +2248,13 @@ impl Transient {
         }
         // The event kernels' currents over the next sample (set after the last).
         for (e, r) in self.mna.events.iter().zip(&self.events) {
-            for (pin, i) in [(e.a, r.current()), (e.g, r.grid_current())] {
-                if let Some(p) = pin {
+            for (&(from, to), i) in e.columns.iter().zip(r.currents()) {
+                if let Some(p) = from {
                     f[p] -= i;
                 }
-                if let Some(k) = e.k {
-                    f[k] += i;
+                if let Some(q) = to {
+                    f[q] += i;
                 }
-            }
-            if let Some(a) = e.a {
-                f[a] += r.comp_current();
             }
         }
         for (w, v) in self.mna.waves.iter().zip(&waves) {
@@ -2384,26 +2380,56 @@ impl Transient {
     /// stage uses) moves by the jumps on the a, g and k rows, or the first stage would
     /// average the old and new currents and the step's charge wouldn't be the table's.
     fn step_events(&mut self) {
-        let at = |u: Option<usize>| u.map_or(0.0, |j| self.x[j]);
-        for (r, e) in self.events.iter_mut().zip(&self.mna.events) {
-            let (va, vg, vk) = (at(e.a), at(e.g), at(e.k));
-            let before = (r.counts, r.current(), r.grid_current(), r.comp_current());
-            r.sense(va - vk, vg - vk);
-            let counts = r.counts;
-            let (jump_a, jump_g) = (r.current() - before.1, r.grid_current() - before.2);
-            let jump_c = r.comp_current() - before.3;
-            self.stats.events += counts.events - before.0.events;
-            self.stats.late_events += counts.late - before.0.late;
-            self.stats.latched_events += counts.latched - before.0.latched;
-            if (jump_a != 0.0 || jump_g != 0.0 || jump_c != 0.0)
+        let x = &self.x;
+        let mut v = [0.0; 3];
+        for idx in 0..self.events.len() {
+            let e = &self.mna.events[idx];
+            for (o, u) in v.iter_mut().zip(&e.senses) {
+                *o = u.map_or(0.0, |j| x[j]);
+            }
+            // a followed reset sensed this sample already (it comes first)
+            let lead = e.follows.and_then(|j| self.events[j].lead());
+            let r = &mut self.events[idx];
+            let (before, i0) = (r.counts(), r.currents());
+            r.sense(&v[..e.senses.len()], lead);
+            let (counts, i1) = (r.counts(), r.currents());
+            self.stats.events += counts.0 - before.0;
+            self.stats.late_events += counts.1 - before.1;
+            self.stats.latched_events += counts.2 - before.2;
+            if i0 != i1
                 && let Some(dk) = &mut self.dk
             {
-                for (row, d) in [
-                    (e.a, jump_c - jump_a),
-                    (e.g, -jump_g),
-                    (e.k, jump_a + jump_g),
-                ] {
-                    if let Some(p) = row.and_then(|u| dk.support.iter().position(|&s| s == u)) {
+                // Each column's jump leaves its first row and enters its second (a
+                // thyratron's: a -= jump_a - jump_c, g -= jump_g, k += jump_a + jump_g).
+                // Summed per row in the columns' order, as the rows were before.
+                let mut rows: [(Option<usize>, f64); 6] = [(None, 0.0); 6];
+                for (c, (&(from, to), (a, b))) in
+                    e.columns.iter().zip(i0.iter().zip(&i1)).enumerate()
+                {
+                    let d = b - a;
+                    rows[2 * c] = (from, -d);
+                    rows[2 * c + 1] = (to, d);
+                }
+                // merged per row first (a row's sum added once: the thyratron's as before)
+                let mut merged: [(Option<usize>, f64); 6] = [(None, 0.0); 6];
+                let mut n_rows = 0;
+                for (row, d) in rows {
+                    if row.is_none() {
+                        continue;
+                    }
+                    match merged[..n_rows].iter_mut().find(|(r, _)| *r == row) {
+                        Some((_, s)) => *s += d,
+                        None => {
+                            merged[n_rows] = (row, d);
+                            n_rows += 1;
+                        }
+                    }
+                }
+                for &(row, d) in &merged[..n_rows] {
+                    if d == 0.0 {
+                        continue;
+                    }
+                    if let Some(p) = row.and_then(|u| dk.support.iter().position(|&w| w == u)) {
                         dk.f[p] += d;
                     }
                 }

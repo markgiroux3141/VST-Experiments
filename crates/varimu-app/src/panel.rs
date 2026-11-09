@@ -505,7 +505,7 @@ impl Device {
     }
 }
 
-pub const DEVICES: [Device; 28] = [
+pub const DEVICES: [Device; 29] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1379,6 +1379,35 @@ pub const DEVICES: [Device; 28] = [
         // The expo converter's current is exp(V / Vt): the draft's 1 mV Newton would be a
         // 4 % cutoff error, as in the SSL's log-domain cells.
         newton: Some((1e-5, 1e-5)),
+        method: None,
+    },
+    Device {
+        id: "minimoog_vco",
+        label: "Minimoog Oscillator 1 (board No. 1)",
+        short: "Moog osc 1",
+        about: "The Model D's oscillator 1 from its schematic: the primary summer and its own             summer, the uA726 expo converter, the sawtooth core with its reset and the             rectangle's comparator as event kernels generated from a 12.288 MHz reference, the             triangle and rectangle shapers; the keys on the keyboard circuit's string; out the             sawtooth (docs/MINIMOOG_PLAN.md, MM3)",
+        group: Group::Instruments,
+        circuit: "minimoog_vco",
+        panel: Some(&["range", "tune", "bend", "pw_v"]),
+        ahead_s: AHEAD_S,
+        // The reset's event tables are for whole numbers of 12.288 MHz samples a step: the
+        // draft's 96 kHz (reports/minimoog/vco/README.md: within 0.6 cents of the reference).
+        quality: Quality::Draft2x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        // it drones: the keys set its pitch (the `key` string), the test oscillator stays off
+        own_oscillator: true,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        partition: None,
+        // The kernels predict the reset from the sensed ramp (23 mV a sample at 440 Hz): the
+        // draft's 10 mV put tens of cents of error on it and broke the triangle's fold.
+        newton: Some((1e-3, 1e-3)),
         method: None,
     },
     Device {
@@ -2295,6 +2324,7 @@ mod tests {
                         "clavinet_d6",
                         "novachord",
                         "minimoog_filter_board",
+                        "minimoog_vco",
                         "minimoog_voice"
                     ]
                 ),

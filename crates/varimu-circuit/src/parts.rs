@@ -279,9 +279,16 @@ pub fn transformer(
 
 /// The op-amp macro model's input stage transconductance (sets only its impedances).
 pub const OPAMP_GM_S: f64 = 1e-3;
+/// The slew limit's knee (parts.py's OPAMP_SLEW_KNEE_V).
+pub const OPAMP_SLEW_KNEE_V: f64 = 0.65;
+/// The open-collector output's base drive at full swing and base resistor (parts.py's).
+pub const OPAMP_OC_BASE_A: f64 = 0.5e-3;
+pub const OPAMP_OC_RB_OHM: f64 = 10e3;
 
 /// Op-amp `name` as a single-pole macro model (Python's `parts.opamp`, whose docstring
-/// is the reference): `clamp` is the clamp diodes' model name with its `swing_v`.
+/// is the reference): `clamp` is the clamp diodes' model name with its `swing_v`;
+/// `slew_v_per_s` and `open_collector` (the output transistor's model and the emitter's
+/// rail) need the clamp (the caller checks).
 #[allow(clippy::too_many_arguments)]
 pub fn opamp(
     name: &str,
@@ -293,6 +300,8 @@ pub fn opamp(
     r_out_ohm: f64,
     r_in_ohm: f64,
     clamp: Option<(&str, f64)>,
+    slew_v_per_s: Option<f64>,
+    open_collector: Option<(&circuitsim::ir::Bjt, &str)>,
 ) -> Vec<Element> {
     let (n, upper) = (name.to_lowercase(), name.to_uppercase());
     let n1 = format!("{n}_1");
@@ -306,9 +315,54 @@ pub fn opamp(
             gm_s,
         })
     };
-    let mut els = vec![
-        resistor(&format!("R{upper}_i"), plus, minus, r_in_ohm),
-        vccs(format!("G{upper}_1"), GROUND, &n1, plus, minus, OPAMP_GM_S),
+    let mut els = vec![resistor(&format!("R{upper}_i"), plus, minus, r_in_ohm)];
+    match slew_v_per_s {
+        None => els.push(vccs(
+            format!("G{upper}_1"),
+            GROUND,
+            &n1,
+            plus,
+            minus,
+            OPAMP_GM_S,
+        )),
+        Some(slew) => {
+            let model = clamp.expect("checked: a slew limit has a clamp").0;
+            let k = OPAMP_SLEW_KNEE_V * 2.0 * std::f64::consts::PI * gbw_hz / slew;
+            let ns = format!("{n}_s");
+            let diode = |nm: String, a: &str, b: &str| {
+                Element::Device(Device {
+                    name: nm,
+                    model: s(model),
+                    nodes: vec![s(a), s(b)],
+                })
+            };
+            els.push(vccs(
+                format!("G{upper}_s"),
+                GROUND,
+                &ns,
+                plus,
+                minus,
+                OPAMP_GM_S * k,
+            ));
+            els.push(resistor(
+                &format!("R{upper}_s"),
+                &ns,
+                GROUND,
+                1.0 / OPAMP_GM_S,
+            ));
+            els.push(diode(format!("D{upper}_sp"), &ns, GROUND));
+            els.push(diode(format!("D{upper}_sn"), GROUND, &ns));
+            els.push(vccs(
+                format!("G{upper}_1"),
+                GROUND,
+                &n1,
+                &ns,
+                GROUND,
+                OPAMP_GM_S / k,
+            ));
+        }
+    }
+    els.extend([
         resistor(&format!("R{upper}_1"), &n1, GROUND, a0 / OPAMP_GM_S),
         capacitor(
             &format!("C{upper}_1"),
@@ -316,7 +370,7 @@ pub fn opamp(
             GROUND,
             OPAMP_GM_S / (2.0 * std::f64::consts::PI * gbw_hz),
         ),
-    ];
+    ]);
     if let Some((model, swing_v)) = clamp {
         let (rp, rn) = (format!("{n}_p"), format!("{n}_n"));
         els.push(Element::VoltageSource(VoltageSource {
@@ -341,6 +395,26 @@ pub fn opamp(
             model: s(model),
             nodes: vec![rn, n1.clone()],
         }));
+    }
+    if let Some((model, v_minus)) = open_collector {
+        let swing_v = clamp.expect("checked: an open collector has a clamp").1;
+        let nb = format!("{n}_b");
+        els.push(vccs(
+            format!("G{upper}_o"),
+            GROUND,
+            &nb,
+            GROUND,
+            &n1,
+            OPAMP_OC_BASE_A / swing_v,
+        ));
+        els.push(resistor(
+            &format!("R{upper}_b"),
+            &nb,
+            v_minus,
+            OPAMP_OC_RB_OHM,
+        ));
+        els.extend(bjt(&format!("Q{upper}_o"), out, &nb, v_minus, model));
+        return els;
     }
     els.push(vccs(
         format!("G{upper}_o"),

@@ -549,8 +549,8 @@ const MACROS: [&str; 31] = [
 ];
 
 /// The macros that take one more, optional node (builder.py's `optional_nodes`): a stereo
-/// medium's `out_r`.
-const ONE_MORE_NODE: &[&str] = &["plate", "spring_tank"];
+/// medium's `out_r`, an open-collector op-amp's `v_minus`.
+const ONE_MORE_NODE: &[&str] = &["plate", "spring_tank", "opamp"];
 
 fn macro_of(kind: &str) -> Macro {
     use Kind::*;
@@ -728,6 +728,8 @@ fn macro_of(kind: &str) -> Macro {
                 p("r_in_ohm", Physical),
                 opt("clamp", Device),
                 opt("swing_v", Physical),
+                opt("slew_v_per_s", Physical),
+                opt("open_collector", Device),
             ],
             false,
         ),
@@ -1124,6 +1126,41 @@ fn expand(
                 }
                 None => None,
             };
+            let slew = opt("slew_v_per_s")?;
+            let oc = match a["open_collector"].as_str() {
+                Some(key) => match ctx.model_of(key).clone() {
+                    DeviceModel::Bjt(model) => Some(model),
+                    other => {
+                        let m = other.name().to_string();
+                        return Err(
+                            ctx.fail(name, format!("opamp: open_collector {m} is not a BJT"))
+                        );
+                    }
+                },
+                None => None,
+            };
+            if (slew.is_some() || oc.is_some()) && clamp.is_none() {
+                return Err(ctx.fail(
+                    name,
+                    format!("op-amp {name}: slew_v_per_s and open_collector need a clamp"),
+                ));
+            }
+            let v_minus = nodes.get(3).map(|s| s.as_str());
+            match (&oc, v_minus) {
+                (Some(_), None) => {
+                    return Err(ctx.fail(
+                        name,
+                        format!("op-amp {name}: an open collector needs the v_minus node"),
+                    ));
+                }
+                (None, Some(_)) => {
+                    return Err(ctx.fail(
+                        name,
+                        format!("op-amp {name}: a v_minus node is only for an open collector"),
+                    ));
+                }
+                _ => {}
+            }
             parts::opamp(
                 name,
                 p,
@@ -1134,6 +1171,8 @@ fn expand(
                 f("r_out_ohm")?,
                 f("r_in_ohm")?,
                 clamp.as_ref().map(|(k, v)| (k.as_str(), *v)),
+                slew,
+                oc.as_ref().zip(v_minus),
             )
         }
         "capsule" => return capsule_part(ctx, name, nodes, a),
@@ -2212,6 +2251,92 @@ fn events_element(
     Ok(Element::ThyratronEvents(el))
 }
 
+/// A physics exception's element (spec.exceptions; Python's `builder._exception`) from its
+/// tables, config/events/<tables>.json, and its `parts` expanded beside it.
+fn exception(ctx: &mut Context, name: &str) -> Result<Vec<Element>, Error> {
+    let x = ctx
+        .spec
+        .exceptions
+        .get(name)
+        .and_then(Value::as_map)
+        .expect("checked in load_circuit")
+        .clone();
+    let where_ = format!("exceptions.{name}");
+    let kind = x
+        .get("kind")
+        .and_then(Value::as_str)
+        .expect("checked in load_circuit")
+        .to_string();
+    let table = ctx.text(&where_, x.get("tables").expect("checked in load_circuit"))?;
+    let path = ctx
+        .lib
+        .config_dir()
+        .join("events")
+        .join(format!("{table}.json"));
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Err(ctx.fail(&where_, format!("no tables {table}.json in config/events/")));
+    };
+    let bad = |e: String| ctx.fail(&where_, format!("tables {table}: {e}"));
+    let f: serde_json::Value = serde_json::from_str(&text).map_err(|e| bad(e.to_string()))?;
+    let held = f
+        .get("kind")
+        .and_then(|k| k.as_str())
+        .unwrap_or("?")
+        .to_string();
+    if held != kind {
+        return Err(ctx.fail(
+            &where_,
+            format!("{table}.json holds {held:?} tables, not {kind:?}"),
+        ));
+    }
+    let node = |k: &str| x.get(k).expect("checked in load_circuit").py_str();
+    let source = format!("config/events/{table}.json");
+    let el = if kind == "reset" {
+        Element::ResetEvents(circuitsim::ir::ResetEvents {
+            name: name.to_string(),
+            sense: node("sense"),
+            src: node("src"),
+            dst: node("dst"),
+            c_f: field(&f, "c_f").map_err(bad)?,
+            ref_rate_hz: field(&f, "ref_rate_hz").map_err(bad)?,
+            log_slope: field(&f, "log_slope").map_err(bad)?,
+            v_t_v: field(&f, "v_t_v").map_err(bad)?,
+            dead_s: field(&f, "dead_s").map_err(bad)?,
+            pulses_a: field(&f, "pulses_a").map_err(bad)?,
+            g_s: field(&f, "g_s").map_err(bad)?,
+            source,
+        })
+    } else {
+        Element::EdgeEvents(circuitsim::ir::EdgeEvents {
+            name: name.to_string(),
+            plus: node("plus"),
+            minus: node("minus"),
+            src: node("src"),
+            dst: node("dst"),
+            ref_rate_hz: field(&f, "ref_rate_hz").map_err(bad)?,
+            log_slope: field(&f, "log_slope").map_err(bad)?,
+            waves_a: field(&f, "waves_a").map_err(bad)?,
+            source,
+            follows: x.get("follows").filter(|v| !v.is_null()).map(Value::py_str),
+            follow_gain: match x.get("follow_gain").filter(|v| !v.is_null()) {
+                Some(g) => Some(
+                    ctx.physical(&format!("{where_}.follow_gain"), g)?
+                        .as_f64()
+                        .ok_or_else(|| ctx.fail(&where_, "follow_gain: a number"))?,
+                ),
+                None => None,
+            },
+        })
+    };
+    let mut els = vec![el];
+    if let Some(parts) = x.get("parts").and_then(Value::as_map) {
+        for (pname, entry) in parts.iter() {
+            els.extend(expand_part(ctx, pname, entry, &[])?);
+        }
+    }
+    Ok(els)
+}
+
 // --- Devices ---------------------------------------------------------------------------
 
 fn make_models(ctx: &mut Context) -> Result<(), Error> {
@@ -2522,19 +2647,65 @@ pub fn build_ir_live(
     ctx.noise = noise_setting(&ctx, noise)?;
     ctx.tolerance = tolerance(&ctx)?;
     make_models(&mut ctx)?;
+    // Physics exceptions (spec.exceptions; an events build, or every build for one with
+    // `renders: true`): each one's replaced parts are expanded as usual (their devices count
+    // as used) and dropped; its element and its `parts` go where its first replaced part was
+    // (Python's `_build`; its `literal` builds, the references behind the tables, aren't the
+    // app's).
+    let mut exc_at: HashMap<String, Vec<String>> = HashMap::new();
+    let mut dropped: HashSet<String> = HashSet::new();
+    {
+        for (xname, x) in spec.exceptions.iter() {
+            let renders = x.as_map().and_then(|m| m.get("renders")) == Some(&Value::Bool(true));
+            if !(ctx.events || renders) {
+                continue;
+            }
+            let rep: Vec<String> = x
+                .as_map()
+                .and_then(|m| m.get("replaces"))
+                .and_then(Value::as_list)
+                .expect("checked in load_circuit")
+                .iter()
+                .map(Value::py_str)
+                .collect();
+            exc_at
+                .entry(rep[0].clone())
+                .or_default()
+                .push(xname.to_string());
+            dropped.extend(rep);
+        }
+    }
+    let mut dropped_models: HashSet<String> = HashSet::new();
     let mut sections = Vec::new();
     for s in &spec.sections {
         ctx.section_tolerance = s.tolerance.clone();
         let mut elements = Vec::new();
         for (name, entry) in s.parts.iter() {
-            elements.extend(expand_part(&mut ctx, name, entry, &[])?);
+            let part = expand_part(&mut ctx, name, entry, &[])?;
+            if dropped.contains(name) {
+                for e in &part {
+                    if let Element::Device(d) = e {
+                        dropped_models.insert(d.model.clone());
+                    }
+                }
+            } else {
+                elements.extend(part);
+            }
+            if let Some(xs) = exc_at.get(name) {
+                for x in xs.clone() {
+                    elements.extend(exception(&mut ctx, &x)?);
+                }
+            }
         }
         // K replaces the island it plays in (technique M1 renders it, K plays it live); a
         // section its switches leave empty is no island (it owns nothing it doesn't have).
         let k = elements.is_empty()
-            || elements
-                .iter()
-                .any(|e| matches!(e, Element::ThyratronEvents(_)));
+            || elements.iter().any(|e| {
+                matches!(
+                    e,
+                    Element::ThyratronEvents(_) | Element::ResetEvents(_) | Element::EdgeEvents(_)
+                )
+            });
         sections.push(Section {
             title: s.title.clone(),
             substeps: if k { None } else { s.substeps },
@@ -2558,6 +2729,19 @@ pub fn build_ir_live(
                 s.method = None;
                 s.tube_tables = None;
             }
+        }
+    }
+    let kept_models: HashSet<&str> = sections
+        .iter()
+        .flat_map(|s| s.elements.iter())
+        .filter_map(|e| match e {
+            Element::Device(d) => Some(d.model.as_str()),
+            _ => None,
+        })
+        .collect();
+    for m in dropped_models {
+        if !kept_models.contains(m.as_str()) {
+            ctx.replaced_models.insert(m);
         }
     }
     if !ctx.missing_class.is_empty() {
