@@ -1417,7 +1417,7 @@ pub const DEVICES: [Device; 30] = [
         about: "The Model D's oscillator 1 from its schematic: the primary summer and its own             summer, the uA726 expo converter, the sawtooth core with its reset and the             rectangle's comparator as event kernels generated from a 12.288 MHz reference, the             triangle and rectangle shapers; the keys on the keyboard circuit's string; out the             sawtooth (docs/MINIMOOG_PLAN.md, MM3)",
         group: Group::Instruments,
         circuit: "minimoog_vco",
-        panel: Some(&["range", "tune", "bend", "pw_v"]),
+        panel: Some(&["osc_range", "tune", "bend", "pw_v"]),
         ahead_s: AHEAD_S,
         // The reset's event tables are for whole numbers of 12.288 MHz samples a step: the
         // draft's 96 kHz (reports/minimoog/vco/README.md: within 0.6 cents of the reference).
@@ -2109,8 +2109,9 @@ const SYNTH_SAW_TUNING: &[(f64, f64)] = &[
 const OFF_PANEL: [&str; 2] = ["mains_v_rms", "mains_hz"];
 
 /// Labels for control keys (keys otherwise).
-const LABELS: [(&str, &str); 60] = [
+const LABELS: [(&str, &str); 61] = [
     ("range", "Range (AUTO: by key)"),
+    ("osc_range", "Range (0 LO, 1 32', 2 16', 3 8', 4 4', 5 2')"),
     ("drive", "Drive (console line amp)"),
     ("send", "Send"),
     ("repeat", "Repeat"),

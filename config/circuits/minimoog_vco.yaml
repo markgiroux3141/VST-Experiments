@@ -40,7 +40,7 @@ cv_inputs:
 probes: [out, tri, rect, ramp, d, ref5, v01, n4, ne]
 
 controls:
-  range: {value: 5, choices: [0, 1, 2, 3, 4, 5], unit: switch, source: "Fig 9-2: the OSC 1 RANGE switch (LO, 32', 16', 8', 4', 2' as 0-5); a change rewires (restarts a live stream)"}
+  osc_range: {value: 3, choices: [0, 1, 2, 3, 4, 5], unit: position, source: "Fig 9-2: the OSC 1 RANGE switch (LO, 32', 16', 8', 4', 2' as 0-5); a change rewires (restarts a live stream)", notes: "8' by default (the keyboard from ~87 Hz); Folkman's tuning is on 2' (position 5)"}
   tune: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-2: TUNE, a 5K linear pot from +10 V over 5.1K to ground (7.5 V +- 2.5 V, +- 2 semitones); 0.5 = centred"}
   bend: {value: 0.5, min: 0.3, max: 0.7, unit: rotation, source: "Fig 9-2: PITCH WHEEL, a 25K linear pot from +10 V to ground (5 V +- 2 V: its travel 0.3-0.7); 0.5 = centred"}
   pw_v: {value: 0.0, min: -2.5, max: 0.0, unit: V, source: "Fig 9-2: PW 1 IN (pin 22B): 0 V = square, -2.5 V = 15 % (the front panel's waveform switch sets it)"}
@@ -200,7 +200,7 @@ sections:
       RTUNEF: {R: [tunef, "0"], r: r_tune_foot_ohm}
       VPW: {V: [pw, "0"], v: pw_v}
       SRANGE:
-        switch: range
+        switch: osc_range
         parts:
           VR0: {V: [rng, "0"], v: range_lo_v, in: [0]}
           VR1: {V: [rng, "0"], v: range_32_v, in: [1]}

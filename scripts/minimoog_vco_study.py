@@ -79,7 +79,7 @@ def build(note: int, rng: int, probes: tuple[str, ...] = PROBES, events: bool = 
     s = spec.load_circuit(trim.CIRCUIT)
     # K's candidates the events build, the others (and the reference) the literal circuit
     ir = builder.build_ir(
-        s, spec.resolve(s, {"range": rng}), "linear", events=events, literal=not events
+        s, spec.resolve(s, {"osc_range": rng}), "linear", events=events, literal=not events
     )
     return dataclasses.replace(ir, probes=tuple(VoltageProbe(p) for p in probes))
 

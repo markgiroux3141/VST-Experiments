@@ -85,7 +85,7 @@ def measure_hz(
     st = settings or reference_settings()
     s = spec.load_circuit(CIRCUIT)
     # the literal circuit (its reset's exception is generated from this reference)
-    ir = builder.build_ir(s, spec.resolve(s, {**overrides, "range": rng}), "linear", literal=True)
+    ir = builder.build_ir(s, spec.resolve(s, {**overrides, "osc_range": rng}), "linear", literal=True)
     n = round((periods + 2) / target_hz(note, rng) * 1.3 * st.sample_rate)
     r = fast.run_transient(
         ir, np.zeros(n), settings=st, controls={"key": np.full(n, keyboard_volts(note))}
