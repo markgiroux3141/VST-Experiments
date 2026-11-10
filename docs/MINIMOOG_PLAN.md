@@ -350,6 +350,79 @@ data/schematics/minimoog/README.md, "Oscillators 2 and 3, the RANGE path, the mi
   linear; OSC 1 at 8 and the others at 0 by default; the sawtooth on every waveform switch by default; Folkman's noise
   "-5 dB" read against a sawtooth; the E101 as a 2N5457; Q15's avalanche as 7 V and 20K; EXT's full scale 0.1 V.
 
+## Real time (2026-11-09, worktree `minimoog-rt`)
+
+The aim: `minimoog_voice` live on this desktop (8 cores / 16 threads) without changing its sound. Measured with
+`examples/voice_bench.rs` (the voice through `Live` as fast as it runs, a key held from 0.2 s; `--probe NODE` runs the
+stream directly with those probes, `--restrike S`, the heaviest blocks) and `examples/play.rs --hold-bass 1 --from 57
+--restrike 4 --mute`; `CIRCUITSIM_PART_TIMING=1` now prints each part's states, ports, Newton solves / iterations /
+factorizations / device evaluations and halvings (with the cargo feature `timing`, its DK cycles per part of a step).
+
+**Built (no change to the sound):**
+- **Only what can be heard is built.** A section's `when: [control | [control, ...], ...]` (`!control`: at 0; both
+  builders, spec.py's docstring) builds it only while an entry holds; otherwise its parts expand as a switched-off part's
+  and it gets no thread. The voice (`make_minimoog_voice.py`'s WHEN): each oscillator while its ON and LEVEL are up
+  (oscillator 3 also with OSC MOD or FILTER MOD on), the noise while ON and level are up or MOD MIX gives it a share of a
+  routed wheel, the modulation mix while OSC MOD or FILTER MOD is on (else a copy of their grounding contacts, section
+  `modulation: grounds`, grounds R5 and R52 as the switches do), the external pre-amp while EXT is ON (its LEVEL is at
+  its input: at 0 the pre-amp's output still loads the bus through R46). The mixer's own parts are always built, so the
+  bus's load never changes. With everything built the voice is the old one to -155 dB; a gated build equals the same
+  panel with those sources built (pitch 0.000 c, harmonics within 0.001 dB). Crossing a gate (a LEVEL leaving or
+  reaching 0, a mixer switch, OSC MOD / FILTER MOD) restarts the live stream (`play.rs --turn osc2_level=0,0.5`:
+  restarts 1, knob to ear 368 ms). The voice's probes are the nodes every build has (`o*_wf`, `nsel`, `xw`, `om`, `fm`).
+- **Live streams keep only the probes they read** (`out`, `out_r`, `cv`; varimu-app `live.rs`): bit for bit the same.
+- Partition lesson: OSC MOD's / FILTER MOD's grounding contacts moved across the cut into the first part (an open 1e10
+  contact there while the modulation mix ran in its own part) stalled the start with OSC MOD on; they stay in the
+  modulation mix's section.
+
+**Numbers** (offline factor = wall / audio time; live = play.rs, 20 ms queued):
+
+| Patch | Threads (before: 8, everything built) | Offline now | Live now |
+|---|---|---|---|
+| default (oscillator 1; before 1.07-1.10x, ~100 % live, ~50 dropouts in 13 s) | 5 | 0.75-0.79x | ~70 % load, ~1 dropout a minute (a note every 4 s) |
+| two oscillators | 6 | 0.89-0.91x | 85-94 % load, dropouts |
+| three oscillators | 7 | 1.02x | |
+| all three, noise, EXT, OSC MOD (as before: everything built) | 8 | 1.25x | |
+
+**Where the time goes** (default panel, per part, a sample at 48 kHz): the ladder + output amplifier (53 states, 30
+ports: 2.1 Newton iterations a solve, 34 device evaluations, ~46 kcycles) is the critical path, ~0.85 of wall; the VCA
++ keyboard 38 kcycles; the contours 37 kcycles with almost no device work (1.0 iteration, 1.6 evaluations: DK's dense
+linear algebra over 53 states and 44 ports); oscillator 1's island 27 kcycles; the first part 17. In the ladder 25 % is
+device evaluation, 73 % linear algebra (the iteration's solve and test 33 %, the stage 21 %, the step 19 %). With every
+source on the ladder alone is 1.05x real time (3.5 iterations a solve) and the noise part needs 6.8 iterations and 2.4
+factorizations a sample (white noise moves every device every sample).
+
+**The spikes:** each key-down and each contour's attack end (the flip-flops' flips at ~60 and ~90 ms) costs 5-9 ms
+(`voice_bench --block 64 --restrike 1`): a regenerative flip inside one 20.8 us step, Newton junction-limited for up to
+36 iterations and the step halved to h/8. A lower iteration cap halves deeper and costs more (+17 ms at 15). These are
+what's left of the dropouts at the default panel.
+
+**Tried, no gain:** a release build with fat LTO and one codegen unit (bit for bit, 0.76-0.79x against 0.75-0.81x);
+one logical CPU per physical core (`start /affinity 5555`): nothing at five threads, 8-12 % at eight (the full patch at
+1e-4: 0.92-0.98x against 1.05x).
+
+**K at 48 kHz (why the islands stay at 96 kHz):** the reset's band-limited charge spans ~15 samples at either rate (the
+kernel scales with the step); at 48 kHz that is 0.31 ms, longer than the top C's period (0.24 ms, 11.5 samples), so
+resets overlap and the crossing prediction breaks (the top C ran at ~8 kHz, 1760 Hz jittered 2.4 c rms, 110 Hz +2 c).
+A shorter kernel (more aliasing) or overlapping events would be needed.
+
+**Options that change the sound (the user's call; MINIMOOG_BACKLOG.md):** Newton 1e-4 instead of 1e-5. The default
+panel 0.64-0.65x offline (from 0.75-0.79), the full patch 1.06x (from 1.25), three oscillators 0.88x (from 1.02). Its
+cost: the ladder's resonance ~1 cent flat (self-oscillation -0.98 c against the one solve, the partition at 1e-5 -0.07
+c; EMPHASIS 0.9 -0.87 c), harmonics within 0.12 dB, oscillator pitch +0.01 c. Holding only the ladder's transistors
+tight (`tol_scale` 0.1 on QL) restores the resonance but also the ladder's cost (the critical path), so it buys nothing;
+the filter's expo converter (Q28) isn't the source. At 1e-3 the noise floor rises (-29.5 dB inharmonic in
+self-oscillation, from -40).
+
+**Found, not fixed: a contour's flip can land either way.** The two flip-flops share the trigger node (k_ta, R26 / R28),
+so the filter contour's flip at its attack's end kicks the loudness flip-flop. Within one 20.8 us step the outcome
+depends on Newton's path: in some partitioned runs the loudness attack ends with the filter's (5.41 V instead of 6.87 V,
+~1.9 dB lower through the decay, gone by ~2 s). The one solve never did in these tests; the partitioned voice did at
+the default panel on A3 at 1e-5 (`voice_bench --note 57 --probe k_envl`), at ATTACK = LOUDNESS ATTACK 0.15 at 1e-4, in
+the old eight-part layout too (at 1e-4 with both attacks at 0.15), and in the gate check with all three sources and OSC
+MOD on (-22.3 dB, 1.88 dB envelopes; deterministic). Fourteen other notes and five other attack settings were fine.
+This is MM4's "attack ends early", not understood: options in the backlog.
+
 ## CPU while another session runs
 
 `CARGO_BUILD_JOBS=3`, builds started with `cmd /c start /belownormal /wait /b ...`; one render

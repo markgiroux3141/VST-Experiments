@@ -444,8 +444,17 @@ the panel's real CUTOFF summing (the filter board's `cutoff` rotation, its proce
 by `minimoog_vco_trim.py [--circuit NAME] --write` through the keyboard circuit's output (within 0.07 c). New: a
 section's `substeps_in: events` (K's kernels inside a multi-rate island, both builders), named multi-rate partition
 groups (an island a thread), the part `noise_source` (an always-on white current, both builders). The app's
-`minimoog_voice` (draft-1x, each oscillator an island at 96 kHz, eight threads): ~100 % load with dropouts on this
-desktop (options in MINIMOOG_BACKLOG.md); levels -18 dBFS one oscillator, silent before a key. Next: the user listens.
+`minimoog_voice` (draft-1x, each oscillator an island at 96 kHz); levels -18 dBFS one oscillator, silent before a key.
+**Real time (2026-11-09, MINIMOOG_PLAN.md "Real time"):** a section's **`when: [control | [control, ...], ...]`**
+(`!control`: at 0; both builders) builds it only while an entry holds, else as a switched-off part: the voice builds a
+source only while its ON and LEVEL are up (oscillator 3 and the noise also while the MODULATION wheel can reach them,
+the modulation mix while OSC MOD / FILTER MOD is on, the pre-amp while EXT is ON), bit for bit the old voice where all
+is built; crossing a gate restarts a live stream. The default panel plays on five threads at ~70 % (about a dropout a
+minute: 5-9 ms Newton spikes at key-down and each contour's flip); more sources: two oscillators 85-94 %, the full patch
+1.25x offline. Live streams keep only the probes they read; `CIRCUITSIM_PART_TIMING` prints each part's solver counters;
+`examples/voice_bench.rs` (a keyed device as fast as it runs, `--probe`, `--restrike`). Open (the user's): Newton 1e-4
+(~15-20 % faster, the ladder's resonance ~1 cent flat), a contour flip-flop's flip landing either way in the partition
+(MINIMOOG_BACKLOG.md 2b). Next: the user listens.
 
 Modulation effects ([docs/MODULATION_PLAN.md](docs/MODULATION_PLAN.md), 2026-11-09, the
 user's ask: chorus, flanger, phaser, vibrato, tremolo as chain ends; the Leslie skipped for now):

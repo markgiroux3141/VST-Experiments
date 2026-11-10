@@ -9,12 +9,25 @@ when the work paused. The plan's Status section has the measurements behind each
 1. **The user listens** to `minimoog_voice`: three oscillators (RANGE, FREQUENCY, WAVEFORM, OSC 3 CONTROL), the mixer
    (NOISE white / pink, EXTERNAL INPUT through the pre-amp), the MODULATION wheel (MOD MIX, OSC MOD, FILTER MOD), CUTOFF
    as the real pot. The stand-alone `minimoog_vco` too.
-2. **Live load: ~100 % on this desktop, dropouts** (eight spinning threads saturate the 8 cores; every part 0.57-0.79x).
-   The user's call among: (a) a buffer and machine margin (an idle machine; the other sessions' builds cost it here);
-   (b) a lighter live tier: the noise generator and the modulation mix only while their levels / switches are up
-   (a rebuild when they change; the hardware's run always); (c) the oscillators' islands at a shared thread when two are
-   off (a structural option, like tube_synth's OSC ON); (d) partition waits that sleep (the engine); (e) accept dropouts
-   live and use renders. Nothing chosen.
+2. **Live load** (MINIMOOG_PLAN.md "Real time", 2026-11-09): what nobody hears isn't built (a section's `when`), so the
+   default panel plays on five threads at ~70 % with about one dropout a minute (was ~100 %, ~50 in 13 s); two
+   oscillators 85-94 % with dropouts, three 1.02x and the full patch 1.25x offline. The user's calls:
+   (a) **Newton 1e-4** (the only lever left that the default and the bigger patches feel: default 0.64x, three
+   oscillators 0.88x, full 1.06x offline; costs the ladder's resonance ~1 cent, harmonics within 0.12 dB);
+   (b) a bigger buffer (the Suitcase's 50 ms: the 5-9 ms spikes at key-down and at each contour's attack end are what
+   drops out now);
+   (c) not done, no sound change, in order of payoff: pinning each partition thread to its own physical core (8-12 % at
+   eight threads, nothing at five; `GetLogicalProcessorInformationEx`, the caller's thread too, a process-wide core
+   allocator for a chain end's streams); thread priority (SUITCASE_REALTIME_PLAN.md idea 2, untested); fewer Newton
+   iterations at the flip-flops' flips (junction limiting through a regenerative flip; a better predictor);
+   (d) for the full patch something structural: the ladder alone is 1.05x real time at 1e-5 with every source on.
+   Restarts: a LEVEL leaving or reaching 0, a mixer switch, OSC MOD / FILTER MOD restart the live stream (~0.37 s).
+2b. **A contour's flip lands either way in the partition** (MINIMOOG_PLAN.md "Real time", "Found, not fixed"): the
+   filter flip-flop's flip at its attack's end sometimes ends the loudness attack too (5.41 V instead of 6.87 V, ~1.9 dB
+   quieter through the decay), at single settings (the default panel's A3 at 1e-5: `voice_bench --note 57 --probe
+   k_envl`), in old and new layouts; the one solve never did. Options: the contour board at a finer step (an island; its
+   flips are faster than a sample), a smaller step only at a flip (local error control for that part), or the flip as an
+   event (technique K, a third kind). Worth deciding before the user's listening judges the envelopes.
 3. **The triangle at the draft** (MINIMOOG_PLAN.md MM3's K): the reset's band-limited jump through Q6's fold; options:
    the fold's node fed the reset's physical ramp (as the edge follows it), the shaper's own event, or 192 kHz islands.
 4. **R135-R137** (Fig 9-1 note 4: "factory selected (if necessary) to achieve 50 % +-1 % rect. duty cycle"): the
