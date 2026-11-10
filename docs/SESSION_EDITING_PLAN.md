@@ -125,8 +125,71 @@ channel, -1 dBFS by default) or its level (its loudest 8 s, as an import's, -18 
 by setting the clip's gain (`Track::normalize_clip`); the take is untouched, Undo or "Reset gain
 and fades" takes it back.
 
+**SE8, audio editing tools and bounce: built 2026-11-10** (in main, the user's ask: "add
+these features now" after a brainstorm of what the Session view still lacked; the user hadn't
+found SE5-SE6's editing behind keys and right-click menus, so the first item is a toolbar).
+- **A toolbar** over the arrangement: the tools, Cut / Copy / Paste / Duplicate / Delete /
+  Split, the switches Zero crossings and Ripple (both kept in `recording.json`), the Clip
+  menu and Bounce, ? for the keys. Undo / Redo stay in the bottom bar.
+- **Tools** (keys 1-5 with the pointer off the roll, as the roll's 1-3): Pointer; Blade (a
+  click splits there, the cut previewed as a line); Erase (a click deletes); Slip (a drag
+  slides the audio inside the clip, `src_start` only: the pointer does it with Ctrl+drag);
+  Envelope (a click adds a point or removes the one under it, a drag moves one).
+- **Pointer additions:** Shift+drag drags a copy of the clip; ← / → nudge the selected clip,
+  or the clips wholly inside the selected range, a snap step (10 ms with the snap off; Alt:
+  one sample).
+- **The clip** (`session::Clip`) gained `invert` (polarity), `curve` (`FadeCurve`: linear or
+  equal power; a cut it makes in a clip under it crossfades in its shape) and `env` (a gain
+  envelope: points (samples from the clip's start, dB), linear in dB between, -48 to +12 dB;
+  it belongs to the clip, so a slip moves the audio under it; splits, trims, range copies and
+  strip silence keep it where it was on the timeline). Written to `session.json` only where
+  set and added to the lane's signature only where set, so every existing session and print
+  key is unchanged (`every_session_opens_to_the_same_mix` passes on all of `sessions/`).
+- **Clip menu** (a clip's right-click and the toolbar's): Invert polarity; fades linear /
+  equal power; Crossfade into the next clip (the clip starting within 50 ms of its end; both
+  stretched over the join as far as their takes have audio, the later one on top), either
+  as a **tape splice** (`edit::splice_s`: 1/4-inch tape cut at 45° or 60°, at 15 or 7.5 ips:
+  16.7 / 9.6 / 33.3 / 19.2 ms; a diagonal splice crossing the head's gap is a linear
+  crossfade in amplitude of that length) or over a set length, linear or equal power;
+  **Reverse** and **Varispeed** (pitch and time together, as a capstan does it: `edit::
+  varispeed`, the ratio as a fraction of numbers up to 1000 through `resample_poly`'s Kaiser
+  filter, so speeding up doesn't alias; no time-stretching, deliberately) into a **new take**
+  (`Session::process_clip`: fades and envelope follow the audio); **Split at transients**
+  (`edit::onsets`: the first difference's level in 2.5 ms hops rising a set number of dB over
+  the quietest of the 30 ms before, at least 50 ms apart; the cut 3 ms ahead so its 2 ms fade
+  ends before the attack; the slices end up selected); **Quantize** to the snap (each clip's
+  attack, the first sample at a quarter of its first 50 ms' peak, onto the nearest line; the
+  selected range's clips, else the clip); **Strip silence** (10 ms windows under a level,
+  silences under 250 ms kept, 20 ms of room each side); **Consolidate** (the selected range on
+  each track it covers, else the clip, rendered as it plays before inserts into one new take);
+  Clear envelope. "Reset gain and fades" also resets the shape.
+- **Bounce** (`Session::bounce_audible`): what plays, the soloed tracks or else every unmuted
+  one, each as the mix plays it (its print, fader and pan; not the master's chain or fader),
+  over the selected range, else the loop when it's on, else everything, into a stereo take on
+  a new track at the end ("Bounce of A + B"), or a mono take of (L + R) / 2 ("Mono bounce of
+  A + B": a centred track comes back as its own samples, the pan having no centre dip; one
+  panned hard at -6 dB); optionally the sources muted and unsoloed. It
+  waits like Export: a stale print or an unrendered edit on an audible track is refused with
+  the reason. Its `take.json` holds the export record of what went into it.
+- **Ripple** (the switch): Delete, Cut and Erase move what follows on that track earlier by
+  what was taken out (`Track::delete_clip`, `delete_range_ripple`); markers and other tracks
+  stay (Delete time between the locators is the all-tracks version).
+- **Zero crossings** (the switch): S and the Blade move a split to the nearest zero crossing
+  within 5 ms (`Track::zero_crossing`; a stereo clip's mid).
+- Tests: `edit::tests` (onsets within a ms, silences, zero crossings, varispeed's pitch and
+  length, splice lengths), `session::tests` (polarity, shapes and envelopes as they play, a
+  split inside an envelope seamless, a crossfade over a split of one take equal to the take,
+  ripple, a drum take sliced and quantized onto beats, strip silence, reverse / varispeed /
+  consolidate / bounce as new takes), `session_view::tests::the_editing_tools_split_ripple_
+  nudge_process_and_bounce` (with undo). The toolbar was looked at in a window capture on a
+  fresh session.
+- Not built: envelope segments are straight in dB (no curves); quantize has no strength or swing; nothing fills the gaps quantized
+  slices leave (pulling audio in would double the next hit); Blade and Erase on MIDI clips
+  act as on audio clips (Reverse / Varispeed of one makes audio from what it plays).
+
 ### Open
 
+- SE8 as a whole: the user's first try.
 - Decision 6, a track's MIDI as one performance (see SE6), and quantize on record.
 - Dragging to reorder tracks and inserts.
 - Editing the pressure and pedal lanes.
@@ -391,6 +454,13 @@ insert / delete time.
 **SE7. Lanes and the rest.** Pressure and pedal lanes in the roll (knob lanes with N5);
 track reorder and height; punch in / out; the `?` overlay; ghost notes, scale highlight,
 follow.
+
+**SE8. Audio editing tools and bounce** (added 2026-11-10, the user's ask): a toolbar with
+tools (Pointer, Blade, Erase, Slip, Envelope), polarity, fade shapes, crossfades as tape
+splices, reverse and varispeed into new takes, slicing at transients and quantizing, strip
+silence, consolidate, ripple, splits on zero crossings, nudges, and the soloed tracks bounced
+to a new track. *Done when:* each works on a scratch session in tests, existing sessions play
+bit for bit, the user has tried it.
 
 ## Decisions (2026-11-05, the user's)
 

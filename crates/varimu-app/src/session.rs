@@ -23,6 +23,11 @@
 //! as one clip, playing exactly as before; its old `session.json` is kept as
 //! `session.v1.json` on the first save.
 //!
+//! A clip also has a polarity, a fade shape and a gain envelope (SE8); editing that changes
+//! its audio (reverse, varispeed, consolidate, a bounce of what plays) writes a new take
+//! ([`Session::process_clip`], [`Session::consolidate`], [`Session::bounce_audible`]), never
+//! over the old one. The signal work is `crate::edit`'s.
+//!
 //! **The mix** is a console's: each track's lane times its fader and balance
 //! (center unity, a side down toward silence), mute and solo, summed; the device playing
 //! live goes through the armed track's fader. Arithmetic, not a device (RECORDING_PLAN.md,
@@ -107,10 +112,63 @@ pub fn balance(volume_db: f64, pan: f64) -> (f32, f32) {
     )
 }
 
+/// The shape of a fade (docs/SESSION_EDITING_PLAN.md SE8): a straight line in amplitude
+/// (a tape splice is one: correlated sound crossfades to unity) or equal power (sine /
+/// cosine: unrelated sounds crossfade at a constant level).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FadeCurve {
+    #[default]
+    Linear,
+    EqualPower,
+}
+
+impl FadeCurve {
+    pub fn id(self) -> &'static str {
+        match self {
+            FadeCurve::Linear => "linear",
+            FadeCurve::EqualPower => "equal_power",
+        }
+    }
+
+    pub fn from_id(s: &str) -> FadeCurve {
+        match s {
+            "equal_power" => FadeCurve::EqualPower,
+            _ => FadeCurve::Linear,
+        }
+    }
+
+    /// The gain at `x` of the way in (0..1).
+    fn at(self, x: f32) -> f32 {
+        match self {
+            FadeCurve::Linear => x,
+            FadeCurve::EqualPower => (x * std::f32::consts::FRAC_PI_2).sin(),
+        }
+    }
+}
+
+/// A clip's gain envelope placed on the timeline: (position, dB), rising positions.
+pub type Envelope = Arc<Vec<(i64, f32)>>;
+
+/// An envelope's dB at timeline position `p`: linear in dB between its points, flat past
+/// its ends (0 dB without one).
+pub fn envelope_db(env: Option<&Envelope>, p: i64) -> f32 {
+    let Some(e) = env else { return 0.0 };
+    let Some(first) = e.first() else { return 0.0 };
+    if p <= first.0 {
+        return first.1;
+    }
+    let k = e.partition_point(|q| q.0 <= p);
+    if k >= e.len() {
+        return e[e.len() - 1].1;
+    }
+    let ((a, da), (b, db)) = (e[k - 1], e[k]);
+    da + (db - da) * ((p - a) as f32 / (b - a).max(1) as f32)
+}
+
 /// A stretch of a take in the mix: `len` samples of `audio` from `from`, placed at timeline
 /// position `start`, through its gains (the track's fader and pan, the clip's gain), with
-/// linear fades of `fade_in` / `fade_out` samples at its ends (docs/SESSION_EDITING_PLAN.md
-/// SE5), on track `track` (its meter; [`NO_TRACK`]: none).
+/// fades of `fade_in` / `fade_out` samples at its ends (docs/SESSION_EDITING_PLAN.md SE5;
+/// their shapes and a gain envelope: SE8), on track `track` (its meter; [`NO_TRACK`]: none).
 #[derive(Debug, Clone)]
 pub struct MixClip {
     pub start: i64,
@@ -122,6 +180,10 @@ pub struct MixClip {
     pub len: usize,
     pub fade_in: usize,
     pub fade_out: usize,
+    pub curve_in: FadeCurve,
+    pub curve_out: FadeCurve,
+    /// Its clip's gain envelope (timeline positions).
+    pub env: Option<Envelope>,
     pub track: usize,
 }
 
@@ -140,6 +202,9 @@ impl MixClip {
             from: 0,
             fade_in: 0,
             fade_out: 0,
+            curve_in: FadeCurve::Linear,
+            curve_out: FadeCurve::Linear,
+            env: None,
             track: NO_TRACK,
         }
     }
@@ -148,15 +213,17 @@ impl MixClip {
         self.start + self.len as i64
     }
 
-    /// Its gain envelope at its sample `i` (0..len): the fades' ramps.
+    /// Its fades' gain at its sample `i` (0..len): the ramps in their shapes.
     fn fade(&self, i: usize) -> f32 {
         let mut g = 1.0f32;
         if i < self.fade_in {
-            g *= (i as f32 + 0.5) / self.fade_in as f32;
+            g *= self.curve_in.at((i as f32 + 0.5) / self.fade_in as f32);
         }
         let left = self.len - i;
         if left <= self.fade_out {
-            g *= (left as f32 - 0.5) / self.fade_out as f32;
+            g *= self
+                .curve_out
+                .at((left as f32 - 0.5) / self.fade_out as f32);
         }
         g
     }
@@ -190,6 +257,13 @@ impl MixClip {
                 (v * g, w * g)
             } else {
                 (v, w)
+            };
+            let (v, w) = match &self.env {
+                Some(e) => {
+                    let g = 10f32.powf(envelope_db(Some(e), p) / 20.0);
+                    (v * g, w * g)
+                }
+                None => (v, w),
             };
             let (l, r) = (self.gain.0 * v, self.gain.1 * w);
             let o = &mut out[(p - at) as usize];
@@ -977,21 +1051,37 @@ pub struct Clip {
     pub fade_in: usize,
     pub fade_out: usize,
     pub muted: bool,
+    /// Its polarity inverted (SE8).
+    pub invert: bool,
+    /// Its fades' shape (SE8); a cut it makes in a clip under it crossfades in this shape.
+    pub curve: FadeCurve,
+    /// Its gain envelope (SE8): (samples from its start, dB), rising; empty: none. It
+    /// belongs to the clip, not the audio: a slip moves the audio under it.
+    pub env: Vec<(i64, f64)>,
 }
 
 impl Clip {
     /// The whole of `take`, where it sits, no fades.
     pub fn whole(take: &Take) -> Clip {
+        Clip::of(&take.id, 0, take.len(), take.position)
+    }
+
+    /// `len` samples of take `take` from `src_start`, at `position`: no gain, fades or
+    /// envelope.
+    pub fn of(take: &str, src_start: usize, len: usize, position: i64) -> Clip {
         Clip {
             id: new_clip_id(),
-            take: take.id.clone(),
-            src_start: 0,
-            len: take.len(),
-            position: take.position,
+            take: take.to_string(),
+            src_start,
+            len,
+            position,
             gain_db: 0.0,
             fade_in: 0,
             fade_out: 0,
             muted: false,
+            invert: false,
+            curve: FadeCurve::Linear,
+            env: Vec::new(),
         }
     }
 
@@ -1005,8 +1095,71 @@ impl Clip {
         (self.fade_in.min(half), self.fade_out.min(half))
     }
 
+    /// Its envelope's dB at `off` samples from its start (0 without one).
+    pub fn env_db(&self, off: i64) -> f64 {
+        let Some(first) = self.env.first() else {
+            return 0.0;
+        };
+        if off <= first.0 {
+            return first.1;
+        }
+        let k = self.env.partition_point(|q| q.0 <= off);
+        if k >= self.env.len() {
+            return self.env[self.env.len() - 1].1;
+        }
+        let ((a, da), (b, db)) = (self.env[k - 1], self.env[k]);
+        da + (db - da) * ((off - a) as f64 / (b - a).max(1) as f64)
+    }
+
+    /// Its envelope between `a` and `b` samples from its start, as from `a` (points at both
+    /// ends, so the gain there is kept): what a cut or a trim leaves it.
+    pub fn env_window(&self, a: i64, b: i64) -> Vec<(i64, f64)> {
+        if self.env.is_empty() || b <= a {
+            return Vec::new();
+        }
+        let mut out = vec![(0, self.env_db(a))];
+        out.extend(
+            self.env
+                .iter()
+                .filter(|p| p.0 > a && p.0 < b)
+                .map(|p| (p.0 - a, p.1)),
+        );
+        out.push((b - a, self.env_db(b)));
+        out
+    }
+
+    /// A point set on its envelope at `off` (one there replaced; a first point starts a
+    /// flat 0 dB line at its ends, so the rest of the clip keeps its gain).
+    pub fn set_env_point(&mut self, off: i64, db: f64) {
+        let off = off.clamp(0, self.len as i64);
+        if self.env.is_empty() {
+            self.env = vec![(0, 0.0), (self.len as i64, 0.0)];
+        }
+        self.env.retain(|p| p.0 != off);
+        let k = self.env.partition_point(|p| p.0 < off);
+        self.env.insert(k, (off, db.clamp(ENV_MIN_DB, ENV_MAX_DB)));
+    }
+
+    /// The envelope placed on the timeline.
+    fn envelope(&self) -> Option<Envelope> {
+        (!self.env.is_empty()).then(|| {
+            Arc::new(
+                self.env
+                    .iter()
+                    .map(|&(o, d)| (self.position + o, d as f32))
+                    .collect(),
+            )
+        })
+    }
+
+    /// Its linear gain: the clip's gain, its polarity.
+    fn linear_gain(&self) -> f32 {
+        let g = 10f64.powf(self.gain_db / 20.0) as f32;
+        if self.invert { -g } else { g }
+    }
+
     pub fn to_json(&self) -> Value {
-        json!({
+        let mut v = json!({
             "id": self.id,
             "take": self.take,
             "src": self.src_start,
@@ -1016,7 +1169,18 @@ impl Clip {
             "fade_in": self.fade_in,
             "fade_out": self.fade_out,
             "muted": self.muted,
-        })
+        });
+        // SE8's fields only where they aren't the default (older files read the same).
+        if self.invert {
+            v["invert"] = json!(true);
+        }
+        if self.curve != FadeCurve::Linear {
+            v["curve"] = json!(self.curve.id());
+        }
+        if !self.env.is_empty() {
+            v["env"] = json!(self.env);
+        }
+        v
     }
 
     pub fn from_json(v: &Value) -> Option<Clip> {
@@ -1030,9 +1194,24 @@ impl Clip {
             fade_in: v["fade_in"].as_u64().unwrap_or(0) as usize,
             fade_out: v["fade_out"].as_u64().unwrap_or(0) as usize,
             muted: v["muted"].as_bool().unwrap_or(false),
+            invert: v["invert"].as_bool().unwrap_or(false),
+            curve: FadeCurve::from_id(v["curve"].as_str().unwrap_or("linear")),
+            env: v["env"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|p| Some((p[0].as_i64()?, p[1].as_f64()?)))
+                        .collect()
+                })
+                .unwrap_or_default(),
         })
     }
 }
+
+/// A clip envelope's range (dB): what the Envelope tool draws from the clip's bottom to
+/// its top.
+pub const ENV_MIN_DB: f64 = -48.0;
+pub const ENV_MAX_DB: f64 = 12.0;
 
 /// What a lane plays of a clip once the clips above it are taken out: a stretch of its
 /// take's sound at a place, with fades (a cut edge crossfades under the clip that cut it).
@@ -1044,7 +1223,11 @@ pub struct Piece {
     pub len: usize,
     pub fade_in: usize,
     pub fade_out: usize,
+    /// Its gain (negative: its polarity inverted).
     pub gain: f32,
+    pub curve_in: FadeCurve,
+    pub curve_out: FadeCurve,
+    pub env: Option<Envelope>,
 }
 
 /// A lane's sum as cached: its signature, where it starts, its samples (left or mono, and
@@ -1171,9 +1354,16 @@ impl Track {
                 continue;
             }
             let (fi, fo) = c.fades();
-            // Its stretches: (start, end, fade in, fade out).
-            let mut parts: Vec<(i64, i64, usize, usize)> =
-                vec![(c.position, c.position + len as i64, fi, fo.min(len / 2))];
+            // Its stretches: (start, end, fade in, fade out, their shapes).
+            type Part = (i64, i64, usize, usize, FadeCurve, FadeCurve);
+            let mut parts: Vec<Part> = vec![(
+                c.position,
+                c.position + len as i64,
+                fi,
+                fo.min(len / 2),
+                c.curve,
+                c.curve,
+            )];
             for d in self.clips[i + 1..].iter().filter(|d| !d.muted && d.len > 0) {
                 if self.take_of(d).is_none() {
                     continue;
@@ -1184,22 +1374,23 @@ impl Track {
                     continue;
                 }
                 let mut next = Vec::new();
-                for (s, e, f0, f1) in parts {
+                for (s, e, f0, f1, c0, c1) in parts {
                     if b <= s || a >= e {
-                        next.push((s, e, f0, f1));
+                        next.push((s, e, f0, f1, c0, c1));
                         continue;
                     }
                     if a > s {
-                        next.push((s, a, f0, dfi));
+                        next.push((s, a, f0, dfi, c0, d.curve));
                     }
                     if b < e {
-                        next.push((b, e, dfo, f1));
+                        next.push((b, e, dfo, f1, d.curve, c1));
                     }
                 }
                 parts = next;
             }
-            let gain = 10f64.powf(c.gain_db / 20.0) as f32;
-            for (s, e, f0, f1) in parts {
+            let gain = c.linear_gain();
+            let env = c.envelope();
+            for (s, e, f0, f1, c0, c1) in parts {
                 let n = (e - s) as usize;
                 out.push(Piece {
                     clip: i,
@@ -1209,11 +1400,15 @@ impl Track {
                     fade_in: f0.min(n / 2),
                     fade_out: f1.min(n / 2),
                     gain,
+                    curve_in: c0,
+                    curve_out: c1,
+                    env: env.clone(),
                 });
             }
         }
         // Where two pieces of one take meet seamlessly (an untouched split), their fades
-        // there come off: the take plays on as if never cut.
+        // there come off: the take plays on as if never cut (their envelopes meeting at
+        // one gain).
         for a in 0..out.len() {
             for b in 0..out.len() {
                 let (p, q) = (&out[a], &out[b]);
@@ -1222,6 +1417,9 @@ impl Track {
                     && p.from + p.len == q.from
                     && p.gain == q.gain
                     && self.clips[p.clip].take == self.clips[q.clip].take
+                    && (envelope_db(p.env.as_ref(), q.start) - envelope_db(q.env.as_ref(), q.start))
+                        .abs()
+                        < 1e-3
                 {
                     out[a].fade_out = 0;
                     out[b].fade_in = 0;
@@ -1248,9 +1446,21 @@ impl Track {
                 what.push_str(":stereo");
             }
             s.push_str(&format!(
-                "{what}[{},{},{},{},{},{}];",
+                "{what}[{},{},{},{},{},{}",
                 c.src_start, c.len, c.position, c.gain_db, c.fade_in, c.fade_out
             ));
+            // SE8's only where set (a lane without them keeps its signature, its prints
+            // their keys).
+            if c.invert {
+                s.push_str(",inv");
+            }
+            if c.curve != FadeCurve::Linear {
+                s.push_str(&format!(",{}", c.curve.id()));
+            }
+            if !c.env.is_empty() {
+                s.push_str(&format!(",env{:?}", c.env));
+            }
+            s.push_str("];");
         }
         s
     }
@@ -1286,6 +1496,7 @@ impl Track {
                 && p.fade_in == 0
                 && p.fade_out == 0
                 && p.gain == 1.0
+                && p.env.is_none()
             {
                 return Some((p.start, audio.clone(), k.sound_right(self.drafts).cloned()));
             }
@@ -1325,6 +1536,9 @@ impl Track {
                     len: p.len,
                     fade_in: p.fade_in,
                     fade_out: p.fade_out,
+                    curve_in: p.curve_in,
+                    curve_out: p.curve_out,
+                    env: p.env.clone(),
                     track,
                 })
             })
@@ -1427,6 +1641,7 @@ impl Track {
             .map(|c| {
                 let (s, e) = (c.position.max(a), c.end().min(b));
                 let mut k = c.clone();
+                k.env = c.env_window(s - c.position, e - c.position);
                 k.src_start += (s - c.position) as usize;
                 k.len = (e - s) as usize;
                 k.position = s;
@@ -1543,12 +1758,271 @@ impl Track {
         right.src_start += left_len;
         right.len = clip.len - left_len;
         right.fade_in = fade;
+        right.env = clip.env_window(left_len as i64, clip.len as i64);
         let left = &mut self.clips[c];
         left.len = left_len;
         left.fade_out = fade;
+        left.env = clip.env_window(0, left_len as i64);
         self.clips.insert(c + 1, right);
         Some(c + 1)
     }
+
+    /// Clip `c` split at each of `at` (timeline positions inside it). The clips it became,
+    /// left to right (their indices: `c` on).
+    pub fn split_clip_at(&mut self, c: usize, at: &[i64], rate: u32) -> Vec<usize> {
+        let mut at: Vec<i64> = at.to_vec();
+        at.sort_unstable();
+        at.dedup();
+        let mut n = 0;
+        // From the right: the left part keeps index `c`.
+        for &p in at.iter().rev() {
+            if self.split_clip(c, p, rate).is_some() {
+                n += 1;
+            }
+        }
+        (c..=c + n).collect()
+    }
+
+    /// Clip `c` deleted (its take stays in the pool); with `ripple` the clips that start
+    /// at or after its end move earlier by its length (SE8). Whether it was.
+    pub fn delete_clip(&mut self, c: usize, ripple: bool) -> bool {
+        if c >= self.clips.len() {
+            return false;
+        }
+        let gone = self.clips.remove(c);
+        if ripple {
+            for d in self.clips.iter_mut().filter(|d| d.position >= gone.end()) {
+                d.position -= gone.len as i64;
+            }
+        }
+        true
+    }
+
+    /// [`Track::delete_range`], and with `ripple` what starts at or after `b` moves earlier
+    /// by the range's length (this track only: SE8). Whether anything changed.
+    pub fn delete_range_ripple(&mut self, a: i64, b: i64, rate: u32, ripple: bool) -> bool {
+        let mut changed = self.delete_range(a, b, rate);
+        if ripple && b > a {
+            for c in self.clips.iter_mut().filter(|c| c.position >= b) {
+                c.position -= b - a;
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    /// Clip `c`'s stretch of what its take plays, raw (no gain, fades or envelope): its
+    /// left (or mono) channel and a stereo take's right.
+    pub fn clip_sound(&self, c: usize) -> Option<(Vec<f32>, Option<Vec<f32>>)> {
+        let clip = self.clips.get(c)?;
+        let take = self.take_of(clip)?;
+        let stretch = |x: &Arc<Vec<f32>>| -> Vec<f32> {
+            let a = clip.src_start.min(x.len());
+            let b = (clip.src_start + clip.len).min(x.len());
+            let mut v = x[a..b].to_vec();
+            v.resize(clip.len, 0.0);
+            v
+        };
+        Some((
+            stretch(take.sound(self.drafts).0),
+            take.sound_right(self.drafts).map(stretch),
+        ))
+    }
+
+    /// [`Track::clip_sound`] as one channel (a stereo clip's mid).
+    pub fn clip_mono(&self, c: usize) -> Option<Vec<f32>> {
+        let (l, r) = self.clip_sound(c)?;
+        Some(match r {
+            Some(r) => l.iter().zip(&r).map(|(a, b)| 0.5 * (a + b)).collect(),
+            None => l,
+        })
+    }
+
+    /// The zero crossing of clip `c`'s audio nearest timeline position `at` (within 5 ms),
+    /// else `at` (SE8: a split there doesn't click).
+    pub fn zero_crossing(&self, c: usize, at: i64, rate: u32) -> i64 {
+        let (Some(clip), Some(x)) = (self.clips.get(c), self.clip_mono(c)) else {
+            return at;
+        };
+        if at <= clip.position || at >= clip.end() {
+            return at;
+        }
+        let i = (at - clip.position) as usize;
+        let radius = (0.005 * rate as f64) as usize;
+        clip.position + crate::edit::nearest_zero_crossing(&x, i, radius) as i64
+    }
+
+    /// Clip `c` split at its hits (SE8: a drum take sliced): each onset found with
+    /// `sensitivity_db` ([`crate::edit::onsets`]), cut [`SLICE_LEAD_S`] before it so the
+    /// cut's fade ends before the attack; none in its first 20 ms. The slices (indices),
+    /// left to right.
+    pub fn split_at_transients(&mut self, c: usize, rate: u32, sensitivity_db: f64) -> Vec<usize> {
+        let (Some(clip), Some(x)) = (self.clips.get(c), self.clip_mono(c)) else {
+            return Vec::new();
+        };
+        let lead = (SLICE_LEAD_S * rate as f64).round() as i64;
+        let skip = (0.020 * rate as f64) as usize;
+        let at: Vec<i64> = crate::edit::onsets(&x, rate, sensitivity_db, 0.05)
+            .into_iter()
+            .filter(|&i| i > skip)
+            .map(|i| clip.position + i as i64 - lead)
+            .collect();
+        self.split_clip_at(c, &at, rate)
+    }
+
+    /// Clip `c` with its silences taken out (SE8): a clip per stretch that sounds above
+    /// `threshold_dbfs` ([`crate::edit::sounding`]: silences under `min_silence_s` kept,
+    /// `pad_s` around each), cut edges with the default fade. The clips it became (none:
+    /// all silent, the clip kept as it was).
+    pub fn strip_silence(
+        &mut self,
+        c: usize,
+        rate: u32,
+        threshold_dbfs: f64,
+        min_silence_s: f64,
+        pad_s: f64,
+    ) -> Vec<usize> {
+        let (Some(clip), Some(x)) = (self.clips.get(c).cloned(), self.clip_mono(c)) else {
+            return Vec::new();
+        };
+        let runs = crate::edit::sounding(&x, rate, threshold_dbfs, min_silence_s, pad_s);
+        if runs.is_empty() {
+            return Vec::new();
+        }
+        let fade = default_fade(rate);
+        let parts: Vec<Clip> = runs
+            .iter()
+            .map(|&(a, b)| {
+                let mut k = clip.clone();
+                k.id = new_clip_id();
+                k.env = clip.env_window(a as i64, b as i64);
+                k.src_start += a;
+                k.len = b - a;
+                k.position += a as i64;
+                if a > 0 {
+                    k.fade_in = fade;
+                }
+                if b < clip.len {
+                    k.fade_out = fade;
+                }
+                k
+            })
+            .collect();
+        let n = parts.len();
+        self.clips.splice(c..=c, parts);
+        (c..c + n).collect()
+    }
+
+    /// Clips `cs` moved so each one's attack ([`crate::edit::attack`] in its first 50 ms)
+    /// lands on the nearest line of `snap` (SE8: slices quantized). How many moved.
+    pub fn quantize_clips(
+        &mut self,
+        cs: &[usize],
+        grid: &crate::transport::Grid,
+        snap: Snap,
+        rate: u32,
+    ) -> usize {
+        let mut moved = 0;
+        for &c in cs {
+            let Some(x) = self.clip_mono(c) else { continue };
+            let lead = crate::edit::attack(&x, rate, 0.05) as i64;
+            let clip = &mut self.clips[c];
+            let to = grid.snap(clip.position + lead, snap) - lead;
+            if to != clip.position {
+                clip.position = to;
+                moved += 1;
+            }
+        }
+        moved
+    }
+
+    /// Clip `c` crossfaded into the clip that starts nearest its end (within 50 ms; SE8):
+    /// both stretched over the join by half of `len` each (as far as their takes have audio
+    /// there), the later one on top fading in while `c` fades out, in shape `curve`. The
+    /// two clips' indices now (`c`'s, the other's), or why not.
+    pub fn crossfade(
+        &mut self,
+        c: usize,
+        len: usize,
+        curve: FadeCurve,
+        rate: u32,
+    ) -> Result<(usize, usize), String> {
+        let a = self.clips.get(c).ok_or("no such clip")?.clone();
+        let near = (0.05 * rate as f64) as i64;
+        let d = self
+            .clips
+            .iter()
+            .enumerate()
+            .filter(|(j, x)| {
+                *j != c && x.position > a.position && (x.position - a.end()).abs() <= near
+            })
+            .min_by_key(|(_, x)| (x.position - a.end()).abs())
+            .map(|(j, _)| j)
+            .ok_or("no clip starts at this clip's end (within 50 ms) to crossfade into")?;
+        let b = self.clips[d].clone();
+        let join = (a.end() + b.position) / 2;
+        let a_avail = self
+            .take_of(&a)
+            .map_or(0, |k| k.len().saturating_sub(a.src_start)) as i64;
+        let half = (len as i64 / 2)
+            .min(a.position + a_avail - join) // a's take must reach join + half
+            .min(join - (b.position - b.src_start as i64)) // b's must reach back to join - half
+            .min((a.len as i64).min(b.len as i64) / 4);
+        if half < 1 {
+            return Err("the takes have no audio past the join to crossfade with".into());
+        }
+        let (s, e) = (join - half, join + half);
+        // `a` runs to e, `b` starts at s (b's end stays).
+        {
+            let x = &mut self.clips[c];
+            x.len = (e - x.position) as usize;
+            x.env = a.env_window(0, e - a.position);
+            x.fade_out = (e - s) as usize;
+            x.curve = curve;
+        }
+        {
+            let y = &mut self.clips[d];
+            let dl = b.position - s;
+            y.env = b.env_window(-dl, b.len as i64);
+            y.position = s;
+            y.src_start = (b.src_start as i64 - dl) as usize;
+            y.len = (b.len as i64 + dl) as usize;
+            y.fade_in = (e - s) as usize;
+            y.curve = curve;
+        }
+        // The later clip on top of `c`.
+        if d < c {
+            let y = self.clips.remove(d);
+            self.clips.insert(c, y);
+            return Ok((c - 1, c));
+        }
+        Ok((c, d))
+    }
+
+    /// The lane as it plays (its clips, before inserts and the strip) over `[a, b)`: its
+    /// left (or mono) channel and, stereo, its right.
+    pub fn render_range(&self, a: i64, b: i64) -> (Vec<f32>, Option<Vec<f32>>) {
+        let n = (b - a).max(0) as usize;
+        let mut out = vec![[0.0f32; 2]; n];
+        for c in self.piece_clips(&self.pieces(), (1.0, 1.0), NO_TRACK) {
+            c.add(a, &mut out, None);
+        }
+        let r = self.is_stereo().then(|| out.iter().map(|f| f[1]).collect());
+        (out.into_iter().map(|f| f[0]).collect(), r)
+    }
+}
+
+/// How far before an onset a transient split cuts (s): the cut's 2 ms fade ends before
+/// the attack.
+pub const SLICE_LEAD_S: f64 = 0.003;
+
+/// What [`Session::process_clip`] does to a clip's audio, into a new take (SE8).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Process {
+    /// Backwards.
+    Reverse,
+    /// Played faster by this many semitones (slower below 0): pitch and time together.
+    Varispeed(f64),
 }
 
 /// A session: its folder, rate, transport and tracks.
@@ -2386,6 +2860,205 @@ impl Session {
         t.active = Some(t.takes.len() - 1);
         self.save()?;
         Ok(id)
+    }
+
+    /// Clip `c` of track `t` processed into a new take (SE8: its audio is never written
+    /// over): its stretch reversed or varispeeded, laid in its place with its gain,
+    /// polarity and fade shape; its fades and envelope follow the audio (swapped and
+    /// mirrored when reversed, scaled with the length when varispeeded). The new clip's
+    /// index (`c`).
+    pub fn process_clip(&mut self, t: usize, c: usize, how: Process) -> Result<usize, String> {
+        let track = self.tracks.get(t).ok_or("no such track")?;
+        let clip = track.clips.get(c).ok_or("no such clip")?.clone();
+        let (l, r) = track.clip_sound(c).ok_or("its take isn't in the track")?;
+        let (l, r, scale, what) = match how {
+            Process::Reverse => {
+                let rev = |mut x: Vec<f32>| {
+                    x.reverse();
+                    x
+                };
+                (rev(l), r.map(rev), 1.0, "reversed".to_string())
+            }
+            Process::Varispeed(st) => (
+                crate::edit::varispeed(&l, st),
+                r.map(|r| crate::edit::varispeed(&r, st)),
+                1.0 / crate::edit::varispeed_ratio(st),
+                format!("varispeed {st:+.2} semitones"),
+            ),
+        };
+        if l.is_empty() {
+            return Err("nothing is left of the clip".into());
+        }
+        let from = json!({
+            "device": format!("{what} {}", clip.take),
+            "take": clip.take,
+            "src": clip.src_start,
+            "len": clip.len,
+            "process": what,
+            "semitones": match how { Process::Varispeed(st) => st, Process::Reverse => 0.0 },
+            "code": circuitsim::SOURCE_HASH,
+        });
+        self.add_rendered_take(t, l, r, clip.position, from)?;
+        let track = &mut self.tracks[t];
+        let mut new = track.clips.pop().ok_or("the new take has no clip")?;
+        new.gain_db = clip.gain_db;
+        new.invert = clip.invert;
+        new.curve = clip.curve;
+        let n = new.len as i64;
+        match how {
+            Process::Reverse => {
+                new.fade_in = clip.fade_out;
+                new.fade_out = clip.fade_in;
+                new.env = clip
+                    .env
+                    .iter()
+                    .rev()
+                    .map(|&(o, d)| (clip.len as i64 - o, d))
+                    .collect();
+            }
+            Process::Varispeed(_) => {
+                let s = |x: usize| (x as f64 * scale).round() as usize;
+                new.fade_in = s(clip.fade_in);
+                new.fade_out = s(clip.fade_out);
+                new.env = clip
+                    .env
+                    .iter()
+                    .map(|&(o, d)| (((o as f64 * scale).round() as i64).min(n), d))
+                    .collect();
+                new.env.dedup_by_key(|p| p.0);
+            }
+        }
+        track.clips[c] = new;
+        Ok(c)
+    }
+
+    /// Track `t`'s lane over `[a, b)` glued into one take (SE8, Consolidate): the clips
+    /// there as they play (gains, fades, envelopes, polarity; before inserts and the strip),
+    /// laid in their place as one clip (muted clips in the range go). Its index.
+    pub fn consolidate(&mut self, t: usize, a: i64, b: i64) -> Result<usize, String> {
+        let rate = self.rate;
+        let track = self.tracks.get(t).ok_or("no such track")?;
+        if b <= a {
+            return Err("an empty range".into());
+        }
+        if !track
+            .pieces()
+            .iter()
+            .any(|p| p.start < b && p.start + p.len as i64 > a)
+        {
+            return Err("nothing sounds there to consolidate".into());
+        }
+        let (l, r) = track.render_range(a, b);
+        let from = json!({
+            "device": "consolidated",
+            "consolidated": track.clips_in(a, b, rate).iter().map(Clip::to_json).collect::<Vec<_>>(),
+            "range": [a, b],
+            "code": circuitsim::SOURCE_HASH,
+        });
+        let sounds = |i: usize| l[i] != 0.0 || r.as_ref().is_some_and(|r| r[i] != 0.0);
+        let (cut_in, cut_out) = (sounds(0), sounds(l.len() - 1));
+        self.tracks[t].delete_range(a, b, rate);
+        self.add_rendered_take(t, l, r, a, from)?;
+        let track = &mut self.tracks[t];
+        let k = track.clips.len() - 1;
+        let fade = default_fade(rate);
+        if cut_in {
+            track.clips[k].fade_in = fade;
+        }
+        if cut_out {
+            track.clips[k].fade_out = fade;
+        }
+        Ok(k)
+    }
+
+    /// What plays (the soloed tracks, else every unmuted one: each through its inserts'
+    /// print, fader and pan; not the master's chain or fader) bounced over `range` (None:
+    /// all of it) into a stereo take on a new track at the end (SE8); with `mono` a mono
+    /// take of (L + R) / 2 (a centred track's own samples: the pan sends it to both sides at
+    /// full level; a track panned hard to one side at half). With `mute_sources` the tracks
+    /// bounced are muted (and unsoloed). Waits, as an export does, until every audible track
+    /// plays what it will. The new track's index.
+    pub fn bounce_audible(
+        &mut self,
+        range: Option<(i64, i64)>,
+        mute_sources: bool,
+        mono: bool,
+    ) -> Result<usize, String> {
+        let problems: Vec<String> = self
+            .export_problems(false)
+            .into_iter()
+            .filter(|p| !p.starts_with("Master:"))
+            .collect();
+        if !problems.is_empty() {
+            return Err(format!(
+                "render or print first (Render all): {}",
+                problems.join("; ")
+            ));
+        }
+        let md = self.tracks_mixdown();
+        if md.tracks.is_empty() {
+            return Err("nothing audible to bounce".into());
+        }
+        let (a, b) = range.unwrap_or((md.start, md.start + md.len as i64));
+        if b <= a {
+            return Err("an empty range".into());
+        }
+        let mix = Mix {
+            clips: md
+                .tracks
+                .iter()
+                .flat_map(|(_, c)| c.iter().cloned())
+                .collect(),
+            live: (0.0, 0.0),
+            ..Mix::default()
+        };
+        let mut out = vec![[0.0f32; 2]; (b - a) as usize];
+        mix.add(a, &mut out);
+        if out.iter().all(|f| f[0] == 0.0 && f[1] == 0.0) {
+            return Err("it's silent there".into());
+        }
+        let any_solo = self.tracks.iter().any(|t| t.solo);
+        let sources: Vec<usize> = self
+            .tracks
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| if any_solo { t.solo } else { !t.mute })
+            .filter(|(_, t)| t.lane_span().is_some())
+            .map(|(i, _)| i)
+            .collect();
+        let names: Vec<&str> = md.tracks.iter().map(|(n, _)| n.as_str()).collect();
+        let kind = if mono { "Mono bounce" } else { "Bounce" };
+        let mut name = format!("{kind} of {}", names.join(" + "));
+        if name.chars().count() > 40 {
+            name = name.chars().take(39).collect::<String>() + "…";
+        }
+        let from = json!({
+            "device": "bounce",
+            "bounced": self.export_record(),
+            "range": [a, b],
+            "channels": if mono { 1 } else { 2 },
+            "code": circuitsim::SOURCE_HASH,
+        });
+        self.tracks.push(Track::new(&name));
+        let nt = self.tracks.len() - 1;
+        let (l, r) = if mono {
+            (out.into_iter().map(|f| 0.5 * (f[0] + f[1])).collect(), None)
+        } else {
+            let (l, r): (Vec<f32>, Vec<f32>) = out.into_iter().map(|f| (f[0], f[1])).unzip();
+            (l, Some(r))
+        };
+        if let Err(e) = self.add_rendered_take(nt, l, r, a, from) {
+            self.tracks.pop();
+            return Err(e);
+        }
+        if mute_sources {
+            for i in sources {
+                self.tracks[i].mute = true;
+                self.tracks[i].solo = false;
+            }
+            self.save()?;
+        }
+        Ok(nt)
     }
 
     /// Every take with a latency placed as heard (`true`) or on the click, its clips with
@@ -3417,6 +4090,263 @@ mod tests {
             .push(plain_take("t0002", 0, vec![0.0; 100]));
         s.tracks[0].set_active(1);
         assert_eq!(s.tracks[0].normalize_clip(0, true, -1.0, 1000), None);
+    }
+
+    fn sine(n: usize, period: f32) -> Vec<f32> {
+        (0..n)
+            .map(|i| 0.5 * (2.0 * std::f32::consts::PI * i as f32 / period).sin())
+            .collect()
+    }
+
+    fn max_diff(a: &[Frame], b: &[Frame]) -> f32 {
+        a.iter()
+            .zip(b)
+            .map(|(x, y)| (x[0] - y[0]).abs().max((x[1] - y[1]).abs()))
+            .fold(0.0, f32::max)
+    }
+
+    #[test]
+    fn polarity_fade_shapes_and_envelopes_play_as_set() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        s.tracks[0]
+            .takes
+            .push(plain_take("t0001", 0, vec![1.0; 1000]));
+        s.tracks[0].set_active(0);
+        let lane_sig = s.tracks[0].lane_signature();
+        s.tracks[0].clips[0].invert = true;
+        assert_eq!(render_mix(&s, 0, 1000)[10], [-1.0, -1.0]);
+        assert_ne!(s.tracks[0].lane_signature(), lane_sig);
+        s.tracks[0].clips[0].invert = false;
+        assert_eq!(s.tracks[0].lane_signature(), lane_sig);
+        // An equal-power fade is at -3 dB halfway (a linear one at -6).
+        s.tracks[0].clips[0].fade_in = 100;
+        s.tracks[0].clips[0].curve = FadeCurve::EqualPower;
+        let y = render_mix(&s, 0, 1000);
+        assert!((y[50][0] - (0.505f32 * std::f32::consts::FRAC_PI_2).sin()).abs() < 1e-6);
+        s.tracks[0].clips[0].fade_in = 0;
+        // An envelope: 0 dB at the ends, -6.02 dB in the middle, linear in dB between.
+        s.tracks[0].clips[0].set_env_point(500, -20.0 * 2f64.log10());
+        assert_eq!(s.tracks[0].clips[0].env.len(), 3);
+        let y = render_mix(&s, 0, 1000);
+        assert!((y[500][0] - 0.5).abs() < 1e-5, "{}", y[500][0]);
+        assert!((y[250][0] - 0.5f32.sqrt()).abs() < 1e-4, "{}", y[250][0]);
+        assert_eq!(y[0][0], 1.0);
+        // Split inside the envelope: it plays on as before (no fade, no step at the cut).
+        let before = y;
+        s.tracks[0].split_clip(0, 333, 1000).unwrap();
+        assert!(max_diff(&render_mix(&s, 0, 1000), &before) < 1e-5);
+        assert_eq!(s.tracks[0].pieces()[0].fade_out, 0);
+        // The fields survive the file.
+        let c = &s.tracks[0].clips[1];
+        assert_eq!(Clip::from_json(&c.to_json()).as_ref(), Some(c));
+        let plain = Clip::of("x", 0, 10, 0);
+        assert_eq!(plain.to_json().get("env"), None);
+    }
+
+    #[test]
+    fn a_crossfade_over_a_split_of_one_take_plays_it_as_it_was() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        let x = sine(4000, 37.0);
+        s.tracks[0].takes.push(plain_take("t0001", 0, x.clone()));
+        s.tracks[0].set_active(0);
+        let whole = render_mix(&s, 0, 4000);
+        s.tracks[0].split_clip(0, 2000, 1000).unwrap();
+        // Moved apart a little: a gap, then crossfaded back over the join.
+        s.tracks[0].clips[1].position += 10;
+        s.tracks[0].clips[1].src_start += 10;
+        s.tracks[0].clips[1].len -= 10;
+        let (a, b) = s.tracks[0]
+            .crossfade(0, 200, FadeCurve::Linear, 1000)
+            .expect("crossfades");
+        assert_eq!((a, b), (0, 1));
+        let t = &s.tracks[0];
+        assert_eq!((t.clips[0].end(), t.clips[1].position), (2105, 1905));
+        // The same take, aligned: a linear crossfade sums back to it.
+        assert!(max_diff(&render_mix(&s, 0, 4000), &whole) < 1e-5);
+        // Nothing to crossfade into past the last clip.
+        assert!(
+            s.tracks[0]
+                .crossfade(1, 200, FadeCurve::Linear, 1000)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn a_ripple_delete_closes_the_gap_on_its_track() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        s.tracks[0]
+            .takes
+            .push(plain_take("t0001", 0, vec![0.5; 3000]));
+        s.tracks[0].set_active(0);
+        let t = &mut s.tracks[0];
+        let parts = t.split_clip_at(0, &[1000, 2000], 1000);
+        assert_eq!(parts, vec![0, 1, 2]);
+        assert!(t.delete_clip(1, true));
+        assert_eq!(
+            t.clips
+                .iter()
+                .map(|c| (c.position, c.len))
+                .collect::<Vec<_>>(),
+            vec![(0, 1000), (1000, 1000)]
+        );
+        // A range on this track: what follows moves up.
+        assert!(t.delete_range_ripple(500, 700, 1000, true));
+        assert_eq!(t.end(), 1800);
+        assert!(t.delete_clip(0, false));
+        assert_eq!(t.clips[0].position, 500);
+    }
+
+    #[test]
+    fn a_drum_take_slices_at_its_hits_and_quantizes_onto_the_grid() {
+        let rate = 48_000;
+        let mut s = Session::new(PathBuf::from("unused"), rate, TransportSettings::default());
+        let grid = crate::transport::Grid::new(rate, &s.transport);
+        let beat = grid.samples_per_beat() as usize;
+        // Hits a little off the beats 1-3 (and one on the downbeat).
+        let at = [0usize, beat + 700, 2 * beat - 900, 3 * beat + 300];
+        let mut x = vec![0.0f32; 4 * beat];
+        for &a in &at {
+            for i in 0..(rate as usize / 10) {
+                x[a + i] += 0.8 * (i as f32 * 0.9 + 1.0).sin() * (-(i as f32) / 900.0).exp();
+            }
+        }
+        s.tracks[0].takes.push(plain_take("t0001", 0, x));
+        s.tracks[0].set_active(0);
+        let slices = s.tracks[0].split_at_transients(0, rate, 9.0);
+        assert_eq!(slices.len(), 4, "{:?}", s.tracks[0].clips);
+        let lead = (SLICE_LEAD_S * rate as f64).round() as i64;
+        for (c, &a) in s.tracks[0].clips[1..].iter().zip(&at[1..]) {
+            assert!(
+                (c.position + lead - a as i64).abs() < 48,
+                "{} vs {a}",
+                c.position
+            );
+        }
+        let n = s.tracks[0].quantize_clips(&slices, &grid, Snap::Beat, rate);
+        assert_eq!(n, 3);
+        for (k, c) in s.tracks[0].clips.iter().enumerate() {
+            let x = s.tracks[0].clip_mono(k).unwrap();
+            let hit = c.position + crate::edit::attack(&x, rate, 0.05) as i64;
+            assert_eq!(hit, grid.beat(k as i64), "slice {k}");
+        }
+    }
+
+    #[test]
+    fn silence_is_stripped_out_of_a_clip() {
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        let mut x = vec![0.0f32; 3000];
+        x[500..800].fill(0.5);
+        x[2000..2200].fill(0.5);
+        s.tracks[0].takes.push(plain_take("t0001", 100, x));
+        s.tracks[0].set_active(0);
+        let parts = s.tracks[0].strip_silence(0, 1000, -40.0, 0.1, 0.02);
+        assert_eq!(parts, vec![0, 1]);
+        let t = &s.tracks[0];
+        assert_eq!(
+            t.clips
+                .iter()
+                .map(|c| (c.position, c.src_start, c.len))
+                .collect::<Vec<_>>(),
+            vec![(580, 480, 340), (2080, 1980, 240)]
+        );
+        // The zero crossing nearest a split.
+        let mut s = Session::new(PathBuf::from("unused"), 1000, TransportSettings::default());
+        s.tracks[0]
+            .takes
+            .push(plain_take("t0001", 0, sine(1000, 100.0)));
+        s.tracks[0].set_active(0);
+        let z = s.tracks[0].zero_crossing(0, 153, 1000);
+        assert!((149..=151).contains(&z), "{z}");
+    }
+
+    #[test]
+    fn reverse_varispeed_consolidate_and_bounce_make_new_takes() {
+        let base = std::env::temp_dir().join(format!("varimu_edit_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        let rate = 8000;
+        let mut s = Session::new(base.join("s"), rate, TransportSettings::default());
+        let rec = |start: i64, x: Vec<f32>| Recorded {
+            start,
+            latency: 0,
+            samples: x,
+            right: None,
+            performance: None,
+        };
+        let ramp: Vec<f32> = (0..1000).map(|i| i as f32 / 1000.0).collect();
+        s.add_take(0, rec(0, ramp.clone()), "x").expect("saved");
+        // Reversed: a new take, the old one kept in the pool; reversed twice: as it was.
+        s.tracks[0].clips[0].fade_in = 10;
+        s.tracks[0].clips[0].set_env_point(100, -6.0);
+        let c = s.process_clip(0, 0, Process::Reverse).expect("reversed");
+        let t = &s.tracks[0];
+        assert_eq!((t.takes.len(), t.clips.len()), (2, 1));
+        assert_eq!(t.clips[c].fade_out, 10);
+        assert_eq!(t.clips[c].env[1], (900, -6.0));
+        assert_eq!(t.clip_sound(0).unwrap().0[0], ramp[999]);
+        s.process_clip(0, 0, Process::Reverse)
+            .expect("reversed back");
+        assert_eq!(s.tracks[0].clip_sound(0).unwrap().0, ramp);
+        // Varispeed an octave up: half as long.
+        s.process_clip(0, 0, Process::Varispeed(12.0))
+            .expect("varispeed");
+        assert_eq!(s.tracks[0].clips[0].len, 500);
+        assert_eq!(s.tracks[0].clips[0].fade_in, 5);
+        // Consolidate: the lane as it plays, one clip of a new take.
+        let mut s = Session::new(base.join("c"), rate, TransportSettings::default());
+        s.add_take(0, rec(0, vec![0.25; 1000]), "x").expect("saved");
+        s.add_take(0, rec(400, vec![0.5; 200]), "x").expect("saved");
+        s.tracks[0].clips[1].gain_db = -6.0;
+        let before = s.tracks[0].render_range(0, 1000).0;
+        let k = s.consolidate(0, 0, 1000).expect("consolidated");
+        let t = &s.tracks[0];
+        assert_eq!((t.clips.len(), k), (1, 0));
+        assert_eq!(t.clip_sound(0).unwrap().0, before);
+        assert!(s.consolidate(0, 2000, 3000).is_err());
+        // Bounce the soloed tracks: their sum through faders and pans, on a new stereo track.
+        let mut s = Session::new(base.join("b"), rate, TransportSettings::default());
+        s.tracks.push(Track::new("B"));
+        s.tracks.push(Track::new("C"));
+        s.add_take(0, rec(0, vec![0.25; 500]), "x").expect("saved");
+        s.add_take(1, rec(100, vec![0.5; 500]), "x").expect("saved");
+        s.add_take(2, rec(0, vec![0.9; 800]), "x").expect("saved");
+        s.tracks[1].pan = 1.0;
+        s.tracks[0].solo = true;
+        s.tracks[1].solo = true;
+        s.master_db = -6.0; // not in a bounce
+        let nt = s.bounce_audible(None, true, false).expect("bounced");
+        assert_eq!(nt, 3);
+        let t = &s.tracks[3];
+        assert_eq!(t.name, "Bounce of Track 1 + B");
+        assert!(t.is_stereo());
+        let (l, r) = t.clip_sound(0).unwrap();
+        assert_eq!((t.clips[0].position, l.len()), (0, 600));
+        assert_eq!((l[50], r.as_ref().unwrap()[50]), (0.25, 0.25));
+        assert_eq!((l[150], r.as_ref().unwrap()[150]), (0.25, 0.75));
+        assert_eq!((l[550], r.as_ref().unwrap()[550]), (0.0, 0.5));
+        // The sources muted and unsoloed: now the bounce and C play.
+        assert!(s.tracks[0].mute && !s.tracks[0].solo && s.tracks[1].mute);
+        assert_eq!(s.tracks_mixdown().tracks.len(), 2);
+        // A range: just that stretch.
+        let nt = s
+            .bounce_audible(Some((100, 200)), false, false)
+            .expect("bounced");
+        assert_eq!(s.tracks[nt].clips[0].len, 100);
+        // To mono: a centred track comes back as its own samples, one panned hard at half.
+        for t in 0..s.tracks.len() {
+            s.tracks[t].mute = t != 2;
+        }
+        let nt = s.bounce_audible(None, false, true).expect("bounced");
+        let t = &s.tracks[nt];
+        assert_eq!(t.name, "Mono bounce of C");
+        assert!(!t.is_stereo());
+        assert_eq!(t.clip_sound(0).unwrap(), (vec![0.9; 800], None));
+        for t in 0..s.tracks.len() {
+            s.tracks[t].mute = t != 1;
+        }
+        let nt = s.bounce_audible(None, false, true).expect("bounced");
+        let l = s.tracks[nt].clip_sound(0).unwrap().0;
+        assert_eq!((l.len(), l[99], l[100], l[599]), (600, 0.0, 0.25, 0.25));
+        let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]

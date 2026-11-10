@@ -36,6 +36,17 @@
 //! inserts print its lane as arranged. Deleted takes leave the session but their files stay
 //! in its folder. Ctrl+Z undoes every gesture.
 //!
+//! **Editing** (docs/SESSION_EDITING_PLAN.md SE8): a toolbar over the arrangement has the
+//! tools (1-5: Pointer; Blade, a click splits; Erase, a click deletes; Slip, a drag slides the
+//! audio inside a clip, as Ctrl+drag does with the pointer; Envelope, points on a clip's gain
+//! envelope), Cut / Copy / Paste / Duplicate / Delete / Split, two switches (Zero crossings:
+//! splits move to the nearest one within 5 ms; Ripple: deletes close their gap on the track),
+//! the Clip menu (also in a clip's context menu: polarity, fade shape, crossfade into the next
+//! clip with a tape splice's length, Reverse and Varispeed into a new take, Split at transients,
+//! Quantize, Strip silence, Consolidate, Clear envelope) and Bounce (what plays: the soloed
+//! tracks, else the mix, over the selected range or the loop, to a new stereo track; and
+//! Consolidate the selection). Shift+drag copies a clip, ← / → nudge.
+//!
 //! **The cursor** (docs/SESSION_EDITING_PLAN.md SE2) is where play starts and a take
 //! records: a click on the ruler or on empty lane space puts it there (snapped; Alt: the
 //! snap inverted), a click on a marker's flag jumps to it. Moving it while playing plays on
@@ -212,6 +223,91 @@ enum DragKind {
     FadeIn,
     FadeOut,
     Gain,
+    /// The audio slid under the clip, the clip staying put (SE8).
+    Slip,
+}
+
+/// The arrangement's tools (SE8; keys 1-5 with the pointer off the piano roll).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Tool {
+    /// Select, move, trim, fades and gain (Ctrl+drag slips, Shift+drag copies).
+    Pointer,
+    /// A click splits the clip there.
+    Blade,
+    /// A click deletes the clip.
+    Erase,
+    /// A drag slides the audio inside the clip.
+    Slip,
+    /// Points on the clip's gain envelope.
+    Envelope,
+}
+
+impl Tool {
+    const ALL: [Tool; 5] = [
+        Tool::Pointer,
+        Tool::Blade,
+        Tool::Erase,
+        Tool::Slip,
+        Tool::Envelope,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            Tool::Pointer => "⬉ Pointer",
+            Tool::Blade => "✂ Blade",
+            Tool::Erase => "⌫ Erase",
+            Tool::Slip => "⇔ Slip",
+            Tool::Envelope => "↗ Envelope",
+        }
+    }
+
+    fn key(self) -> egui::Key {
+        match self {
+            Tool::Pointer => egui::Key::Num1,
+            Tool::Blade => egui::Key::Num2,
+            Tool::Erase => egui::Key::Num3,
+            Tool::Slip => egui::Key::Num4,
+            Tool::Envelope => egui::Key::Num5,
+        }
+    }
+
+    fn tip(self) -> &'static str {
+        match self {
+            Tool::Pointer => {
+                "(1) Select and move clips, trim by the edges, fades by the top corners, gain by \
+                 the top middle; Ctrl+drag slips the audio, Shift+drag copies the clip"
+            }
+            Tool::Blade => {
+                "(2) A click on a clip splits it there (on the snap; Alt inverts it; on a zero \
+                 crossing with that switched on)"
+            }
+            Tool::Erase => "(3) A click on a clip deletes it (with Ripple, what follows moves up)",
+            Tool::Slip => {
+                "(4) Drag a clip to slide its audio inside it: the clip stays where it is (by the \
+                 snap; Alt inverts it)"
+            }
+            Tool::Envelope => {
+                "(5) The clip's gain envelope: a click adds a point (or removes the one under the \
+                 pointer), a drag moves one; from -48 dB at the clip's bottom to +12 dB at its top"
+            }
+        }
+    }
+}
+
+/// What a clip's menu (or the toolbar's Clip menu) asks for (SE8).
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum ClipOp {
+    Invert,
+    Curve(varimu_app::session::FadeCurve),
+    /// Crossfade into the next clip over this many seconds, in this shape.
+    Crossfade(f64, varimu_app::session::FadeCurve),
+    Reverse,
+    Varispeed(f64),
+    Transients,
+    StripSilence,
+    Quantize,
+    Consolidate,
+    ClearEnvelope,
 }
 
 /// A clip being dragged: its track and index, what the drag does, the clip as it was, where
@@ -328,6 +424,21 @@ pub struct SessionView {
     /// The clip menu's normalize targets (dBFS): its peak, its level (as an import's).
     normalize_peak_dbfs: f64,
     normalize_level_dbfs: f64,
+    /// SE8's editing: the arrangement's tool, deletes closing their gaps (Ripple), splits
+    /// moved to the nearest zero crossing (prefs, both); an envelope point being dragged
+    /// (track, clip, point); the clip menu's settings (transient sensitivity, strip silence's
+    /// threshold, varispeed, a crossfade's length); a bounce mutes its sources; the last
+    /// edit's outcome, shown on the toolbar.
+    tool: Tool,
+    ripple: bool,
+    zero_cross: bool,
+    env_drag: Option<(usize, usize, usize)>,
+    transient_db: f64,
+    silence_dbfs: f64,
+    varispeed_st: f64,
+    xfade_ms: f64,
+    bounce_mute: bool,
+    edit_note: Option<String>,
     /// Where play last stopped (Shift+Space plays from there).
     stopped_at: Option<i64>,
     /// The lanes' width as last drawn (px): G and H zoom about its middle.
@@ -591,6 +702,7 @@ impl SessionView {
         let mut v = SessionView::with_session(repo, fresh_session(repo), false, calibrations);
         v.import_normalize = import_normalize;
         v.import_target_dbfs = import_target_dbfs;
+        (v.ripple, v.zero_cross) = load_edit_prefs();
         v
     }
 
@@ -625,6 +737,16 @@ impl SessionView {
             show_keys: false,
             normalize_peak_dbfs: -1.0,
             normalize_level_dbfs: -18.0,
+            tool: Tool::Pointer,
+            ripple: false,
+            zero_cross: false,
+            env_drag: None,
+            transient_db: 9.0,
+            silence_dbfs: -45.0,
+            varispeed_st: 0.0,
+            xfade_ms: 10.0,
+            bounce_mute: false,
+            edit_note: None,
             stopped_at: None,
             lanes_w: 800.0,
             scroll_drag: None,
@@ -704,6 +826,8 @@ impl SessionView {
             "calibrations": cals,
             "import_normalize": self.import_normalize.name(),
             "import_target_dbfs": self.import_target_dbfs,
+            "ripple": self.ripple,
+            "zero_crossings": self.zero_cross,
         });
         let r = p
             .parent()
@@ -1065,15 +1189,31 @@ impl SessionView {
             .zip(ui.input(|i| i.pointer.hover_pos()))
             .is_some_and(|(r, p)| r.contains(p));
         if delete && self.roll.is_none() && self.recording.is_none() {
-            if let Some((a, b, lo, hi)) = self.range_sel {
-                let rate = self.session.rate;
-                for t in lo..=hi.min(self.session.tracks.len().saturating_sub(1)) {
-                    self.session.tracks[t].delete_range(a, b, rate);
-                }
-                self.save();
-            } else if let Some((t, c)) = self.selected {
-                self.clip_action(t, c, "delete");
-                self.save();
+            self.delete_selection();
+        }
+        // The tools (1-5) and nudges (← / →: a snap step, or 10 ms with the snap off; Alt:
+        // a sample), with the pointer off the roll (SE8).
+        if !over_roll && self.recording.is_none() {
+            let (tool, nudge) = ui.input(|i| {
+                let tool = (!i.modifiers.any())
+                    .then(|| Tool::ALL.into_iter().find(|t| i.key_pressed(t.key())))
+                    .flatten();
+                let dir = if i.modifiers.command {
+                    0
+                } else if i.key_pressed(egui::Key::ArrowLeft) {
+                    -1
+                } else if i.key_pressed(egui::Key::ArrowRight) {
+                    1
+                } else {
+                    0
+                };
+                (tool, (dir, i.modifiers.alt))
+            });
+            if let Some(t) = tool {
+                self.tool = t;
+            }
+            if nudge.0 != 0 {
+                self.nudge(nudge.0, nudge.1);
             }
         }
         // The clipboard (SE6): Ctrl+C / X / V / D on the selected range or clip.
@@ -1125,24 +1265,13 @@ impl SessionView {
             }
         }
         let split = ui.input(|i| i.key_pressed(egui::Key::S) && !i.modifiers.command);
-        if split && self.roll.is_none() && self.recording.is_none() {
-            let cursor = self.session.transport.cursor;
-            let at = self.selected.or_else(|| {
-                let t = self.session.armed?;
-                let c = self
-                    .session
-                    .tracks
-                    .get(t)?
-                    .clips
-                    .iter()
-                    .rposition(|c| !c.muted && c.position < cursor && c.end() > cursor)?;
-                Some((t, c))
-            });
-            if let Some((t, c)) = at
-                && self.clip_action(t, c, "split")
-            {
-                self.save();
-            }
+        if split
+            && self.roll.is_none()
+            && self.recording.is_none()
+            && let Some((t, c)) = self.split_target()
+            && self.clip_action(t, c, "split")
+        {
+            self.save();
         }
         if undo {
             self.undo();
@@ -4172,6 +4301,9 @@ impl SessionView {
 
     /// The ruler, the tracks, the scrollbar.
     fn arrangement(&mut self, ui: &mut egui::Ui, play: &PlayView) {
+        ui.add_space(4.0);
+        self.toolbar(ui);
+        ui.add_space(4.0);
         let rate = self.session.rate as f64;
         let grid = Grid::new(self.session.rate, &self.session.transport);
         let st = play.player().map(|p| p.status());
@@ -4606,8 +4738,98 @@ impl SessionView {
             Some((*c, kind))
         };
         let origin = ui.input(|x| x.pointer.press_origin());
+        let (ctrl, shift, alt) =
+            ui.input(|x| (x.modifiers.command, x.modifiers.shift, x.modifiers.alt));
+        // SE8: the Blade, Erase and Envelope tools act on the clip under a press (on empty
+        // lane space every tool does what the pointer does).
+        let mut tool_used = false;
+        if (lane_resp.clicked() || lane_resp.drag_started())
+            && self.recording.is_none()
+            && let Some(p) = origin
+                .or(lane_resp.interact_pointer_pos())
+                .filter(|p| lane.contains(*p))
+            && let Some(&(c, r)) = rects.iter().rev().find(|(_, r)| r.contains(p))
+        {
+            match self.tool {
+                Tool::Blade | Tool::Erase => {
+                    tool_used = true;
+                    if lane_resp.clicked() {
+                        if self.tool == Tool::Blade {
+                            let snap = self.session.transport.snap.inverted(alt);
+                            let mut at = grid.snap(view.position(p.x), snap);
+                            if self.zero_cross {
+                                at = self.session.tracks[i].zero_crossing(c, at, rate);
+                            }
+                            if let Some(k) = self.session.tracks[i].split_clip(c, at, rate) {
+                                self.selected = Some((i, k));
+                                changed = true;
+                            }
+                        } else {
+                            self.session.tracks[i].delete_clip(c, self.ripple);
+                            self.selected = None;
+                            changed = true;
+                        }
+                    }
+                }
+                Tool::Envelope => {
+                    tool_used = true;
+                    let clip = &mut self.session.tracks[i].clips[c];
+                    let near = clip.env.iter().position(|&(o, d)| {
+                        (view.x(clip.position + o) - p.x).abs() < 6.0
+                            && (env_y(r, d) - p.y).abs() < 6.0
+                    });
+                    let off = ((p.x - view.x(clip.position)) as f64 / view.px_per_s * view.rate)
+                        .round() as i64;
+                    let db = env_db_at(r, p.y);
+                    if lane_resp.drag_started() {
+                        let k = near.unwrap_or_else(|| {
+                            clip.set_env_point(off, db);
+                            let off = off.clamp(0, clip.len as i64);
+                            clip.env.iter().position(|q| q.0 == off).unwrap_or(0)
+                        });
+                        self.env_drag = Some((i, c, k));
+                    } else {
+                        match near {
+                            Some(k) => {
+                                clip.env.remove(k);
+                            }
+                            None => clip.set_env_point(off, db),
+                        }
+                        changed = true;
+                    }
+                    self.selected = Some((i, c));
+                    self.range_sel = None;
+                }
+                Tool::Pointer | Tool::Slip => {}
+            }
+            if tool_used && self.session.armed != Some(i) {
+                self.session.armed = Some(i);
+                changed = true;
+            }
+        }
+        if lane_resp.dragged()
+            && let Some((ti, c, k)) = self.env_drag
+            && ti == i
+            && let Some(p) = ui.ctx().pointer_interact_pos()
+            && let Some(&(_, r)) = rects.get(c)
+            && let Some(clip) = self.session.tracks[i].clips.get_mut(c)
+            && k < clip.env.len()
+        {
+            let lo = if k == 0 { 0 } else { clip.env[k - 1].0 + 1 };
+            let hi = match clip.env.get(k + 1) {
+                Some(q) => q.0 - 1,
+                None => clip.len as i64,
+            };
+            let off =
+                ((p.x - view.x(clip.position)) as f64 / view.px_per_s * view.rate).round() as i64;
+            clip.env[k] = (off.clamp(lo, hi.max(lo)), env_db_at(r, p.y));
+        }
+        if lane_resp.drag_stopped() && self.env_drag.is_some_and(|d| d.0 == i) {
+            self.env_drag = None;
+            changed = true;
+        }
         // Select (and arm) the track; select a clip, drag it.
-        if strip_resp.clicked() || lane_resp.clicked() || lane_resp.drag_started() {
+        if !tool_used && (strip_resp.clicked() || lane_resp.clicked() || lane_resp.drag_started()) {
             if self.session.armed != Some(i) && self.recording.is_none() {
                 self.session.armed = Some(i);
                 changed = true;
@@ -4646,8 +4868,20 @@ impl SessionView {
                 changed = true;
             }
             if lane_resp.drag_started()
-                && let (Some((c, kind)), Some(p)) = (hit, at)
+                && let (Some((mut c, mut kind)), Some(p)) = (hit, at)
             {
+                // The Slip tool slides the audio wherever the clip is grabbed; the pointer
+                // does with Ctrl on its body, and Shift drags a copy (SE8).
+                if self.tool == Tool::Slip || (kind == DragKind::Move && ctrl) {
+                    kind = DragKind::Slip;
+                } else if kind == DragKind::Move && shift {
+                    let t = &mut self.session.tracks[i];
+                    let mut copy = t.clips[c].clone();
+                    copy.id = new_clip_id();
+                    t.clips.push(copy);
+                    c = t.clips.len() - 1;
+                    self.selected = Some((i, c));
+                }
                 self.drag = Some(Drag {
                     track: i,
                     clip: c,
@@ -4711,6 +4945,15 @@ impl SessionView {
                         if clip.src_start > 0 && from.fade_in == 0 {
                             clip.fade_in = fade;
                         }
+                        // The envelope stays where it was on the timeline.
+                        if !from.env.is_empty() {
+                            clip.env = from.env_window(d, from.len as i64);
+                        }
+                    }
+                    DragKind::Slip => {
+                        let d = grid.snap_delta(delta, snap);
+                        let max = take_len.saturating_sub(from.len) as i64;
+                        clip.src_start = (from.src_start as i64 - d).clamp(0, max) as usize;
                     }
                     DragKind::TrimRight => {
                         let hi = from.position + (take_len - from.src_start) as i64;
@@ -4774,6 +5017,7 @@ impl SessionView {
         let mut place_take: Option<(usize, bool)> = None;
         let mut clip_action: Option<(usize, &'static str)> = None;
         let mut normalize: Option<(usize, bool)> = None;
+        let mut clip_op: Option<(usize, ClipOp)> = None;
         lane_resp.context_menu(|ui| {
             let t = &self.session.tracks[i];
             let Some(c) = self
@@ -4814,7 +5058,7 @@ impl SessionView {
             }
             if ui
                 .button("Reset gain and fades")
-                .on_hover_text("0 dB; no fades at the take's own ends, the default at cuts")
+                .on_hover_text("0 dB; no fades at the take's own ends, the default at cuts, a linear shape (its envelope and polarity stay)")
                 .clicked()
             {
                 clip_action = Some((c, "reset"));
@@ -4867,6 +5111,10 @@ impl SessionView {
                         .suffix(" dBFS"),
                 );
             });
+            ui.separator();
+            if let Some(o) = self.clip_ops_ui(ui, i, c) {
+                clip_op = Some((c, o));
+            }
             ui.separator();
             let t = &self.session.tracks[i];
             let take = &t.takes[k];
@@ -4976,6 +5224,9 @@ impl SessionView {
         if let Some((c, what)) = clip_action {
             changed |= self.clip_action(i, c, what);
         }
+        if let Some((c, o)) = clip_op {
+            changed |= self.apply_clip_op(i, c, o);
+        }
         if let Some((c, peak)) = normalize {
             let target = if peak {
                 self.normalize_peak_dbfs
@@ -5061,6 +5312,9 @@ impl SessionView {
             if clip.gain_db != 0.0 {
                 label.push_str(&format!(" · {:+.1} dB", clip.gain_db));
             }
+            if clip.invert {
+                label.push_str(" · Ø");
+            }
             if clip.muted {
                 label.push_str(" · muted");
             }
@@ -5082,6 +5336,9 @@ impl SessionView {
                 &label,
             );
             draw_fades(&lp, r, view, clip, col);
+            if !clip.env.is_empty() || self.tool == Tool::Envelope {
+                draw_envelope(&lp, r, view, clip, self.tool == Tool::Envelope);
+            }
             if let Some(e) = &k.events {
                 draw_notes(
                     &lp,
@@ -5138,13 +5395,36 @@ impl SessionView {
         }
         if lane_resp.hovered()
             && let Some(p) = ui.ctx().pointer_hover_pos()
-            && let Some((_, kind)) = grab_at(p, track)
+            && let Some((c, kind)) = grab_at(p, track)
         {
-            ui.ctx().set_cursor_icon(match kind {
-                DragKind::Move => egui::CursorIcon::Grab,
-                DragKind::Gain => egui::CursorIcon::ResizeVertical,
+            ui.ctx().set_cursor_icon(match (self.tool, kind) {
+                (Tool::Blade, _) => egui::CursorIcon::Crosshair,
+                (Tool::Erase, _) => egui::CursorIcon::NotAllowed,
+                (Tool::Envelope, _) => egui::CursorIcon::PointingHand,
+                (Tool::Slip, _) => egui::CursorIcon::AllScroll,
+                (_, DragKind::Move) if ctrl => egui::CursorIcon::AllScroll,
+                (_, DragKind::Move) if shift => egui::CursorIcon::Copy,
+                (_, DragKind::Move) => egui::CursorIcon::Grab,
+                (_, DragKind::Gain) => egui::CursorIcon::ResizeVertical,
                 _ => egui::CursorIcon::ResizeHorizontal,
             });
+            // The Blade shows where it would cut.
+            if self.tool == Tool::Blade
+                && let Some(&(_, r)) = rects.get(c)
+            {
+                let snap = self.session.transport.snap.inverted(alt);
+                let mut at = grid.snap(view.position(p.x), snap);
+                if self.zero_cross {
+                    at = track.zero_crossing(c, at, rate);
+                }
+                let x = view.x(at);
+                if x > r.left() && x < r.right() {
+                    lp.line_segment(
+                        [Pos2::new(x, r.top()), Pos2::new(x, r.bottom())],
+                        Stroke::new(1.5, theme::WARN),
+                    );
+                }
+            }
         }
         if lane_resp.double_clicked()
             && let Some(p) = lane_resp.interact_pointer_pos()
@@ -5530,14 +5810,24 @@ impl SessionView {
         }
         self.clipboard = items;
         if cut {
-            if let Some((a, b, lo, hi)) = self.range_sel {
-                let rate = self.session.rate;
-                for t in lo..=hi.min(self.session.tracks.len().saturating_sub(1)) {
-                    self.session.tracks[t].delete_range(a, b, rate);
-                }
-            } else if let Some((t, c)) = self.selected {
-                self.clip_action(t, c, "delete");
+            self.delete_selection();
+        }
+    }
+
+    /// The selected range (on its tracks) or clip deleted; with Ripple, what follows on
+    /// those tracks moves up to close the gap (SE8).
+    fn delete_selection(&mut self) {
+        if let Some((a, b, lo, hi)) = self.range_sel {
+            let rate = self.session.rate;
+            for t in lo..=hi.min(self.session.tracks.len().saturating_sub(1)) {
+                self.session.tracks[t].delete_range_ripple(a, b, rate, self.ripple);
             }
+            if self.ripple {
+                self.range_sel = None;
+            }
+            self.save();
+        } else if let Some((t, c)) = self.selected {
+            self.clip_action(t, c, "delete");
             self.save();
         }
     }
@@ -5661,7 +5951,12 @@ impl SessionView {
         }
         match what {
             "split" => {
-                let r = track.split_clip(c, cursor, rate);
+                let at = if self.zero_cross {
+                    track.zero_crossing(c, cursor, rate)
+                } else {
+                    cursor
+                };
+                let r = track.split_clip(c, at, rate);
                 if let Some(r) = r {
                     self.selected = Some((t, r));
                 }
@@ -5676,6 +5971,7 @@ impl SessionView {
                 let fade = default_fade(rate);
                 let clip = &mut track.clips[c];
                 clip.gain_db = 0.0;
+                clip.curve = varimu_app::session::FadeCurve::Linear;
                 clip.fade_in = if clip.src_start > 0 { fade } else { 0 };
                 clip.fade_out = if clip.src_start + clip.len < take_len {
                     fade
@@ -5685,7 +5981,7 @@ impl SessionView {
                 true
             }
             "delete" => {
-                track.clips.remove(c);
+                track.delete_clip(c, self.ripple);
                 self.selected = None;
                 true
             }
@@ -5711,19 +6007,646 @@ impl SessionView {
         let len = (b - a) as usize;
         let fade = default_fade(rate);
         let clip = Clip {
-            id: new_clip_id(),
-            take: take.id.clone(),
-            src_start: src,
-            len,
-            position: a,
-            gain_db: 0.0,
             fade_in: if src > 0 { fade } else { 0 },
             fade_out: if src + len < take.len() { fade } else { 0 },
-            muted: false,
+            ..Clip::of(&take.id, src, len, a)
         };
         track.clips.push(clip);
         self.selected = Some((t, track.clips.len() - 1));
         true
+    }
+
+    /// The clip S splits: the selected one, else the armed track's under the cursor.
+    fn split_target(&self) -> Option<(usize, usize)> {
+        let cursor = self.session.transport.cursor;
+        self.selected.or_else(|| {
+            let t = self.session.armed?;
+            let c = self
+                .session
+                .tracks
+                .get(t)?
+                .clips
+                .iter()
+                .rposition(|c| !c.muted && c.position < cursor && c.end() > cursor)?;
+            Some((t, c))
+        })
+    }
+
+    /// The selected clip, or the clips wholly inside the selected range, moved by a step
+    /// (SE8): `dir` steps of the snap (10 ms with it off), or with `sample` one sample.
+    fn nudge(&mut self, dir: i64, sample: bool) {
+        let rate = self.session.rate;
+        let grid = Grid::new(rate, &self.session.transport);
+        let step = if sample {
+            1
+        } else {
+            grid.snap_step(self.session.transport.snap)
+                .unwrap_or(0.01 * rate as f64)
+                .round() as i64
+        };
+        let d = dir * step.max(1);
+        if let Some((a, b, lo, hi)) = self.range_sel {
+            let mut moved = false;
+            for t in lo..=hi.min(self.session.tracks.len().saturating_sub(1)) {
+                for c in self.session.tracks[t]
+                    .clips
+                    .iter_mut()
+                    .filter(|c| c.position >= a && c.end() <= b)
+                {
+                    c.position += d;
+                    moved = true;
+                }
+            }
+            if moved {
+                self.range_sel = Some((a + d, b + d, lo, hi));
+                self.save();
+            }
+        } else if let Some((t, c)) = self.selected
+            && let Some(clip) = self
+                .session
+                .tracks
+                .get_mut(t)
+                .and_then(|x| x.clips.get_mut(c))
+        {
+            clip.position += d;
+            self.save();
+        }
+    }
+
+    /// The range a bounce covers: the selected range, else the loop while it's on, else
+    /// None (everything).
+    fn bounce_range(&self) -> Option<(i64, i64)> {
+        if let Some((a, b, _, _)) = self.range_sel {
+            return Some((a, b));
+        }
+        let t = &self.session.transport;
+        let grid = Grid::new(self.session.rate, t);
+        t.loop_on
+            .then(|| (grid.beat(t.left_beat), grid.beat(t.right_beat)))
+    }
+
+    /// What plays (the soloed tracks, else the unmuted ones) bounced to a new track (SE8),
+    /// stereo or `mono` ((L + R) / 2).
+    fn bounce_audible(&mut self, mono: bool) {
+        if self.recording.is_some() {
+            return;
+        }
+        let range = self.bounce_range();
+        self.saved = true;
+        match self.session.bounce_audible(range, self.bounce_mute, mono) {
+            Ok(nt) => {
+                self.selected = Some((nt, 0));
+                self.range_sel = None;
+                self.edit_note = Some(format!("bounced to \"{}\"", self.session.tracks[nt].name));
+                self.save();
+            }
+            Err(e) => self.error = Some(format!("Bounce: {e}")),
+        }
+    }
+
+    /// The selected range glued into a take per track it covers, else clip `fallback`'s
+    /// span (SE8, Consolidate). Whether anything changed.
+    fn consolidate_selection(&mut self, fallback: Option<(usize, usize)>) -> bool {
+        let spans: Vec<(usize, i64, i64)> = match (self.range_sel, fallback) {
+            (Some((a, b, lo, hi)), _) => (lo..=hi.min(self.session.tracks.len().saturating_sub(1)))
+                .map(|t| (t, a, b))
+                .collect(),
+            (None, Some((t, c))) => match self.session.tracks.get(t).and_then(|x| x.clips.get(c)) {
+                Some(clip) => vec![(t, clip.position, clip.end())],
+                None => Vec::new(),
+            },
+            (None, None) => Vec::new(),
+        };
+        self.saved = true;
+        let mut done = Vec::new();
+        for (t, a, b) in spans {
+            match self.session.consolidate(t, a, b) {
+                Ok(k) => done.push((t, k)),
+                // A track with nothing in the range is left alone.
+                Err(e) if e.starts_with("nothing sounds") => {}
+                Err(e) => self.error = Some(format!("Consolidate: {e}")),
+            }
+        }
+        if done.len() == 1 && self.range_sel.is_none() {
+            self.selected = done.first().copied();
+        }
+        self.edit_note = Some(format!(
+            "consolidated {} track{}",
+            done.len(),
+            if done.len() == 1 { "" } else { "s" }
+        ));
+        !done.is_empty()
+    }
+
+    /// A clip operation (SE8) on clip `c` of track `t`. Whether the session changed.
+    fn apply_clip_op(&mut self, t: usize, c: usize, op: ClipOp) -> bool {
+        use varimu_app::session::Process;
+        let rate = self.session.rate;
+        if self.recording.is_some()
+            || self
+                .session
+                .tracks
+                .get(t)
+                .is_none_or(|x| c >= x.clips.len())
+        {
+            return false;
+        }
+        self.edit_note = None;
+        match op {
+            ClipOp::Invert => {
+                let clip = &mut self.session.tracks[t].clips[c];
+                clip.invert = !clip.invert;
+                true
+            }
+            ClipOp::Curve(k) => {
+                self.session.tracks[t].clips[c].curve = k;
+                true
+            }
+            ClipOp::ClearEnvelope => {
+                let env = &mut self.session.tracks[t].clips[c].env;
+                let had = !env.is_empty();
+                env.clear();
+                had
+            }
+            ClipOp::Crossfade(s, k) => {
+                let len = (s * rate as f64).round() as usize;
+                match self.session.tracks[t].crossfade(c, len, k, rate) {
+                    Ok((a, b)) => {
+                        let n = self.session.tracks[t].clips[b].fade_in;
+                        self.selected = Some((t, a));
+                        self.edit_note = Some(format!(
+                            "crossfaded over {:.1} ms",
+                            n as f64 / rate as f64 * 1e3
+                        ));
+                        true
+                    }
+                    Err(e) => {
+                        self.error = Some(format!("Crossfade: {e}"));
+                        false
+                    }
+                }
+            }
+            ClipOp::Reverse | ClipOp::Varispeed(_) => {
+                let how = match op {
+                    ClipOp::Varispeed(st) => Process::Varispeed(st),
+                    _ => Process::Reverse,
+                };
+                if how == Process::Varispeed(0.0) {
+                    return false;
+                }
+                self.saved = true;
+                match self.session.process_clip(t, c, how) {
+                    Ok(k) => {
+                        self.selected = Some((t, k));
+                        true
+                    }
+                    Err(e) => {
+                        self.error = Some(e);
+                        false
+                    }
+                }
+            }
+            ClipOp::Transients => {
+                let s = self.session.tracks[t].split_at_transients(c, rate, self.transient_db);
+                if s.len() <= 1 {
+                    self.edit_note = Some("no hits found: lower the sensitivity's dB".into());
+                    return false;
+                }
+                let clips = &self.session.tracks[t].clips;
+                let (a, b) = (clips[s[0]].position, clips[s[s.len() - 1]].end());
+                self.range_sel = Some((a, b, t, t));
+                self.selected = None;
+                self.edit_note = Some(format!(
+                    "{} slices, selected: Quantize puts their hits on the snap",
+                    s.len()
+                ));
+                true
+            }
+            ClipOp::StripSilence => {
+                let s =
+                    self.session.tracks[t].strip_silence(c, rate, self.silence_dbfs, 0.25, 0.02);
+                if s.is_empty() {
+                    self.edit_note = Some("all of it is below the threshold: nothing kept".into());
+                    return false;
+                }
+                self.selected = None;
+                self.edit_note = Some(format!("{} clips kept", s.len()));
+                true
+            }
+            ClipOp::Quantize => {
+                let snap = self.session.transport.snap;
+                if snap == Snap::Off {
+                    self.error = Some("Quantize: pick a snap (the transport's second row)".into());
+                    return false;
+                }
+                let grid = Grid::new(rate, &self.session.transport);
+                let mut n = 0;
+                if let Some((a, b, lo, hi)) = self.range_sel {
+                    for tt in lo..=hi.min(self.session.tracks.len().saturating_sub(1)) {
+                        let cs: Vec<usize> = self.session.tracks[tt]
+                            .clips
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, x)| {
+                                x.position >= a - (0.05 * rate as f64) as i64 && x.position < b
+                            })
+                            .map(|(k, _)| k)
+                            .collect();
+                        n += self.session.tracks[tt].quantize_clips(&cs, &grid, snap, rate);
+                    }
+                } else {
+                    n = self.session.tracks[t].quantize_clips(&[c], &grid, snap, rate);
+                }
+                self.edit_note = Some(format!("{n} clips moved onto the {}", snap.label()));
+                n > 0
+            }
+            ClipOp::Consolidate => self.consolidate_selection(Some((t, c))),
+        }
+    }
+
+    /// The clip operations' menu items (SE8), in a clip's context menu and the toolbar's
+    /// Clip menu. What was picked.
+    fn clip_ops_ui(&mut self, ui: &mut egui::Ui, t: usize, c: usize) -> Option<ClipOp> {
+        use varimu_app::edit::{SPLICES, splice_s, varispeed_ratio};
+        use varimu_app::session::FadeCurve;
+        let clip = self.session.tracks.get(t)?.clips.get(c)?.clone();
+        let mut op = None;
+        if ui
+            .button(if clip.invert {
+                "Polarity back to normal"
+            } else {
+                "Invert polarity"
+            })
+            .on_hover_text("The clip's audio upside down (Ø): a mic's phase, a snare's bottom mic")
+            .clicked()
+        {
+            op = Some(ClipOp::Invert);
+        }
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("fades").small().color(theme::FAINT));
+            for (k, name, tip) in [
+                (
+                    FadeCurve::Linear,
+                    "linear",
+                    "A straight line in amplitude: a tape splice; correlated audio crossfades to unity",
+                ),
+                (
+                    FadeCurve::EqualPower,
+                    "equal power",
+                    "Sine / cosine: unrelated sounds crossfade at a constant loudness",
+                ),
+            ] {
+                if ui
+                    .selectable_label(clip.curve == k, RichText::new(name).small())
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    op = Some(ClipOp::Curve(k));
+                }
+            }
+        });
+        ui.menu_button("Crossfade into the next clip", |ui| {
+            ui.label(
+                RichText::new(
+                    "The clip that starts at this one's end (within 50 ms): both stretched over \
+                     the join, this one fading out under it",
+                )
+                .small()
+                .color(theme::MUTED),
+            );
+            for (label, angle, ips) in SPLICES {
+                let s = splice_s(angle, ips);
+                if ui
+                    .button(format!("Splice {label} ({:.1} ms)", s * 1e3))
+                    .on_hover_text(
+                        "As a razor-blade splice on 1/4-inch tape crosses the reproduce head: a \
+                         linear crossfade as long as the cut takes to pass it",
+                    )
+                    .clicked()
+                {
+                    op = Some(ClipOp::Crossfade(s, FadeCurve::Linear));
+                }
+            }
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::DragValue::new(&mut self.xfade_ms)
+                        .range(1.0..=2000.0)
+                        .speed(0.5)
+                        .max_decimals(1)
+                        .suffix(" ms"),
+                );
+                if ui.button("linear").clicked() {
+                    op = Some(ClipOp::Crossfade(self.xfade_ms * 1e-3, FadeCurve::Linear));
+                }
+                if ui.button("equal power").clicked() {
+                    op = Some(ClipOp::Crossfade(
+                        self.xfade_ms * 1e-3,
+                        FadeCurve::EqualPower,
+                    ));
+                }
+            });
+        });
+        ui.separator();
+        if ui
+            .button("Reverse")
+            .on_hover_text(
+                "The clip's audio backwards, as a new take (the old one stays in the pool)",
+            )
+            .clicked()
+        {
+            op = Some(ClipOp::Reverse);
+        }
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(self.varispeed_st != 0.0, egui::Button::new("Varispeed"))
+                .on_hover_text(
+                    "Played faster or slower, pitch and time together, as a tape machine's \
+                     capstan does it (no time-stretching): a new take",
+                )
+                .clicked()
+            {
+                op = Some(ClipOp::Varispeed(self.varispeed_st));
+            }
+            ui.add(
+                egui::DragValue::new(&mut self.varispeed_st)
+                    .range(-24.0..=24.0)
+                    .speed(0.05)
+                    .max_decimals(2)
+                    .suffix(" st"),
+            );
+            let r = varispeed_ratio(self.varispeed_st);
+            ui.label(
+                RichText::new(format!("{:.1}% speed", r * 100.0))
+                    .small()
+                    .color(theme::MUTED),
+            );
+        });
+        ui.separator();
+        ui.horizontal(|ui| {
+            if ui
+                .button("Split at transients")
+                .on_hover_text(
+                    "A cut 3 ms before each hit (a rise of this many dB in the attack's \
+                     brightness over the 30 ms before it); the slices end up selected",
+                )
+                .clicked()
+            {
+                op = Some(ClipOp::Transients);
+            }
+            ui.add(
+                egui::DragValue::new(&mut self.transient_db)
+                    .range(3.0..=40.0)
+                    .speed(0.2)
+                    .max_decimals(1)
+                    .suffix(" dB"),
+            );
+        });
+        let snap = self.session.transport.snap;
+        if ui
+            .add_enabled(
+                snap != Snap::Off,
+                egui::Button::new(format!("Quantize to the {}", snap.label())),
+            )
+            .on_hover_text(
+                "Each clip's hit (its attack, in its first 50 ms) moved onto the nearest line of \
+                 the snap: the selected range's clips, else this one",
+            )
+            .on_disabled_hover_text("Pick a snap in the transport's second row")
+            .clicked()
+        {
+            op = Some(ClipOp::Quantize);
+        }
+        ui.horizontal(|ui| {
+            if ui
+                .button("Strip silence below")
+                .on_hover_text(
+                    "A clip per stretch that sounds above the level (silences under 250 ms \
+                     kept, 20 ms of room around each)",
+                )
+                .clicked()
+            {
+                op = Some(ClipOp::StripSilence);
+            }
+            ui.add(
+                egui::DragValue::new(&mut self.silence_dbfs)
+                    .range(-90.0..=-6.0)
+                    .speed(0.2)
+                    .max_decimals(1)
+                    .suffix(" dBFS"),
+            );
+        });
+        ui.separator();
+        if ui
+            .button("Consolidate")
+            .on_hover_text(
+                "The selected range (each track in it), else this clip, glued into one new take \
+                 as it plays: gains, fades, envelopes and polarity baked in (before inserts)",
+            )
+            .clicked()
+        {
+            op = Some(ClipOp::Consolidate);
+        }
+        if ui
+            .add_enabled(!clip.env.is_empty(), egui::Button::new("Clear envelope"))
+            .clicked()
+        {
+            op = Some(ClipOp::ClearEnvelope);
+        }
+        if op.is_some() {
+            ui.close();
+        }
+        op
+    }
+
+    /// The arrangement's toolbar (SE8): the tools, the clipboard, split, the editing
+    /// switches, the Clip menu and Bounce (Undo and Redo are in the bottom bar).
+    fn toolbar(&mut self, ui: &mut egui::Ui) {
+        let mut op: Option<(usize, usize, ClipOp)> = None;
+        let mut action: Option<&'static str> = None;
+        ui.horizontal(|ui| {
+            ui.add_space(10.0);
+            ui.spacing_mut().item_spacing.x = 3.0;
+            for tool in Tool::ALL {
+                if ui
+                    .selectable_label(self.tool == tool, RichText::new(tool.label()).small())
+                    .on_hover_text(tool.tip())
+                    .clicked()
+                {
+                    self.tool = tool;
+                }
+            }
+            ui.separator();
+            let idle = self.recording.is_none();
+            let small = |s: &str| egui::Button::new(RichText::new(s).small());
+            let sel = idle && self.selection_span().is_some();
+            for (label, tip, on, what) in [
+                ("Cut", "The selected clip or range (Ctrl+X)", sel, "cut"),
+                ("Copy", "Ctrl+C", sel, "copy"),
+                (
+                    "Paste",
+                    "At the cursor, on the selected (else the armed) track (Ctrl+V)",
+                    idle && !self.clipboard.is_empty(),
+                    "paste",
+                ),
+                ("Duplicate", "Right after itself (Ctrl+D)", sel, "dup"),
+                (
+                    "Delete",
+                    "The selected clip or range (Delete; with Ripple, what follows moves up)",
+                    sel,
+                    "delete",
+                ),
+                (
+                    "Split",
+                    "The selected clip (else the armed track's under the cursor) at the cursor (S)",
+                    idle && self.split_target().is_some(),
+                    "split",
+                ),
+            ] {
+                if ui
+                    .add_enabled(on, small(label))
+                    .on_hover_text(tip)
+                    .clicked()
+                {
+                    action = Some(what);
+                }
+            }
+            ui.separator();
+            let before = (self.zero_cross, self.ripple);
+            if ui
+                .selectable_label(self.zero_cross, RichText::new("Zero crossings").small())
+                .on_hover_text(
+                    "Splits (S, the Blade) move to the nearest zero crossing within 5 ms of where \
+                     they were asked",
+                )
+                .clicked()
+            {
+                self.zero_cross = !self.zero_cross;
+            }
+            if ui
+                .selectable_label(self.ripple, RichText::new("Ripple").small())
+                .on_hover_text(
+                    "Deleting a clip or a range (Delete, Cut, the Erase tool) moves what follows \
+                     on that track earlier to close the gap",
+                )
+                .clicked()
+            {
+                self.ripple = !self.ripple;
+            }
+            if (self.zero_cross, self.ripple) != before {
+                self.save_prefs();
+            }
+            ui.separator();
+            ui.add_enabled_ui(idle && self.selected.is_some(), |ui| {
+                ui.menu_button(RichText::new("Clip ▾").small(), |ui| {
+                    if let Some((t, c)) = self.selected
+                        && let Some(o) = self.clip_ops_ui(ui, t, c)
+                    {
+                        op = Some((t, c, o));
+                    }
+                })
+                .response
+                .on_disabled_hover_text("Select a clip");
+            });
+            ui.add_enabled_ui(idle, |ui| {
+                ui.menu_button(RichText::new("⤓ Bounce ▾").small(), |ui| {
+                    let any_solo = self.session.tracks.iter().any(|t| t.solo);
+                    let what = if any_solo {
+                        "the soloed tracks"
+                    } else {
+                        "the mix"
+                    };
+                    let rate = self.session.rate as f64;
+                    let span = match self.bounce_range() {
+                        Some((a, b)) => format!(
+                            "{:.2} s from {}",
+                            (b - a) as f64 / rate,
+                            Grid::new(self.session.rate, &self.session.transport).label(a)
+                        ),
+                        None => "from start to end".into(),
+                    };
+                    ui.label(
+                        RichText::new(format!(
+                            "{what}, {span} (the selected range, else the loop)"
+                        ))
+                        .small()
+                        .color(theme::MUTED),
+                    );
+                    if ui
+                        .button(format!("Bounce {what} to a new stereo track"))
+                        .on_hover_text(
+                            "What you hear (each track's inserts as printed, its fader and pan; \
+                             not the master's chain or fader) as a stereo take on a new track",
+                        )
+                        .clicked()
+                    {
+                        action = Some("bounce");
+                        ui.close();
+                    }
+                    if ui
+                        .button(format!("Bounce {what} to a new mono track"))
+                        .on_hover_text(
+                            "The same, summed to mono as (L + R) / 2: a track panned to the \
+                             centre comes back as it was, one panned hard to a side at -6 dB",
+                        )
+                        .clicked()
+                    {
+                        action = Some("bounce_mono");
+                        ui.close();
+                    }
+                    ui.checkbox(&mut self.bounce_mute, "then mute the tracks bounced");
+                    ui.separator();
+                    if ui
+                        .add_enabled(
+                            self.selection_span().is_some(),
+                            egui::Button::new("Consolidate the selection"),
+                        )
+                        .on_hover_text(
+                            "Each track in the selected range (else the selected clip) glued into \
+                             one new take as it plays, before its inserts",
+                        )
+                        .clicked()
+                    {
+                        action = Some("consolidate");
+                        ui.close();
+                    }
+                });
+            });
+            ui.separator();
+            if ui.add(small("?")).on_hover_text("The keys (?)").clicked() {
+                self.show_keys = !self.show_keys;
+            }
+            if let Some(n) = &self.edit_note {
+                ui.label(RichText::new(n).small().color(theme::MUTED));
+            }
+        });
+        match action {
+            Some("cut") => self.copy_selection(true),
+            Some("copy") => self.copy_selection(false),
+            Some("paste") => self.paste_clipboard(),
+            Some("dup") => self.duplicate_selection(),
+            Some("delete") => self.delete_selection(),
+            Some("split") => {
+                if let Some((t, c)) = self.split_target()
+                    && self.clip_action(t, c, "split")
+                {
+                    self.save();
+                }
+            }
+            Some("bounce") => self.bounce_audible(false),
+            Some("bounce_mono") => self.bounce_audible(true),
+            Some("consolidate") => {
+                if self.consolidate_selection(self.selected) {
+                    self.save();
+                }
+            }
+            _ => {}
+        }
+        if let Some((t, c, o)) = op
+            && self.apply_clip_op(t, c, o)
+        {
+            self.save();
+        }
     }
 
     /// What event take `k` of track `t` plays and what renders for it, for its lane.
@@ -7068,6 +7991,18 @@ impl SessionView {
 
 /// The calibrations and Import…'s normalizing (`recording.json`; its `last_session` and
 /// `transport` from before the app started fresh are ignored).
+/// The editing switches kept in the prefs (SE8): Ripple, splits on zero crossings.
+fn load_edit_prefs() -> (bool, bool) {
+    let v: Value = prefs_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(Value::Null);
+    (
+        v["ripple"].as_bool().unwrap_or(false),
+        v["zero_crossings"].as_bool().unwrap_or(false),
+    )
+}
+
 fn load_prefs() -> (Vec<Calibration>, (ImportNormalize, f64)) {
     let Some(text) = prefs_path().and_then(|p| std::fs::read_to_string(p).ok()) else {
         return (Vec::new(), (ImportNormalize::Off, ALIGNMENT_DBFS));
@@ -7122,6 +8057,14 @@ fn keys_overlay(ui: &mut egui::Ui) {
                 ("S", "split the selected clip at the cursor"),
                 ("Delete", "delete the selected clip or range"),
                 (
+                    "1 / 2 / 3 / 4 / 5",
+                    "Pointer / Blade / Erase / Slip / Envelope",
+                ),
+                (
+                    "← / → (Alt: a sample)",
+                    "nudge the selected clip or range a snap step",
+                ),
+                (
                     "Ctrl+C / X / V / D",
                     "copy, cut, paste at the cursor, duplicate",
                 ),
@@ -7164,6 +8107,14 @@ fn keys_overlay(ui: &mut egui::Ui) {
                     "draw the loop; markers, time edits",
                 ),
                 ("clip: drag, edges, corners, top", "move, trim, fades, gain"),
+                (
+                    "clip: Ctrl+drag / Shift+drag",
+                    "slip its audio / drag a copy",
+                ),
+                (
+                    "clip: right-click",
+                    "split, fades, crossfade, reverse, varispeed, slice, ...",
+                ),
                 ("empty lane: click / drag", "cursor / select a range"),
                 (
                     "take row: click / drag",
@@ -7502,14 +8453,28 @@ fn draw_fades(painter: &egui::Painter, r: Rect, view: &View, clip: &Clip, colour
     let px = |n: usize| (n as f64 / view.rate * view.px_per_s) as f32;
     let stroke = Stroke::new(1.0, colour.gamma_multiply(0.9));
     let (fi, fo) = (px(clip.fade_in), px(clip.fade_out));
+    // A linear fade is a straight line; an equal-power one bows up (SE8).
+    let ramp = |x0: f32, w: f32, rising: bool| -> Vec<Pos2> {
+        let n = 16;
+        (0..=n)
+            .map(|k| {
+                let u = k as f32 / n as f32;
+                let g = match clip.curve {
+                    varimu_app::session::FadeCurve::Linear => u,
+                    varimu_app::session::FadeCurve::EqualPower => {
+                        (u * std::f32::consts::FRAC_PI_2).sin()
+                    }
+                };
+                let x = if rising { x0 + u * w } else { x0 + w - u * w };
+                Pos2::new(x, r.bottom() - g * r.height())
+            })
+            .collect()
+    };
     if fi > 1.0 {
-        painter.line_segment([r.left_bottom(), Pos2::new(r.left() + fi, r.top())], stroke);
+        painter.add(egui::Shape::line(ramp(r.left(), fi, true), stroke));
     }
     if fo > 1.0 {
-        painter.line_segment(
-            [Pos2::new(r.right() - fo, r.top()), r.right_bottom()],
-            stroke,
-        );
+        painter.add(egui::Shape::line(ramp(r.right() - fo, fo, false), stroke));
     }
     // The handles: small squares where a drag sets the fades.
     for x in [r.left() + fi.max(6.0), r.right() - fo.max(6.0)] {
@@ -7529,6 +8494,48 @@ fn draw_fades(painter: &egui::Painter, r: Rect, view: &View, clip: &Clip, colour
             Stroke::new(1.0, colour.gamma_multiply(0.6)),
             StrokeKind::Inside,
         );
+    }
+}
+
+/// Where `db` sits on a clip's envelope, in its box `r` (SE8: -48 dB at the bottom, +12 at
+/// the top).
+fn env_y(r: Rect, db: f64) -> f32 {
+    use varimu_app::session::{ENV_MAX_DB, ENV_MIN_DB};
+    let u = ((db - ENV_MIN_DB) / (ENV_MAX_DB - ENV_MIN_DB)).clamp(0.0, 1.0) as f32;
+    r.bottom() - u * r.height()
+}
+
+/// The envelope's dB at height `y` in a clip's box `r` (to a tenth of a dB).
+fn env_db_at(r: Rect, y: f32) -> f64 {
+    use varimu_app::session::{ENV_MAX_DB, ENV_MIN_DB};
+    let u = ((r.bottom() - y) / r.height().max(1.0)).clamp(0.0, 1.0) as f64;
+    ((ENV_MIN_DB + u * (ENV_MAX_DB - ENV_MIN_DB)) * 10.0).round() / 10.0
+}
+
+/// A clip's gain envelope as a line across it (none: 0 dB), with its points as handles
+/// while the Envelope tool is out.
+fn draw_envelope(painter: &egui::Painter, r: Rect, view: &View, clip: &Clip, handles: bool) {
+    let col = theme::WARN;
+    let mut pts: Vec<(i64, f64)> = vec![(0, clip.env_db(0))];
+    pts.extend(
+        clip.env
+            .iter()
+            .copied()
+            .filter(|p| p.0 > 0 && p.0 < clip.len as i64),
+    );
+    pts.push((clip.len as i64, clip.env_db(clip.len as i64)));
+    let line: Vec<Pos2> = pts
+        .iter()
+        .map(|&(o, d)| Pos2::new(view.x(clip.position + o), env_y(r, d)))
+        .collect();
+    painter.add(egui::Shape::line(
+        line,
+        Stroke::new(1.2, col.gamma_multiply(0.9)),
+    ));
+    if handles {
+        for &(o, d) in &clip.env {
+            painter.circle_filled(Pos2::new(view.x(clip.position + o), env_y(r, d)), 3.5, col);
+        }
     }
 }
 
@@ -7716,6 +8723,68 @@ mod tests {
         assert!(!v.saved && v.undo.is_empty());
         assert_eq!((v.selected, v.insert_sel, v.range_sel), (None, None, None));
         assert_eq!(v.view_s, -0.5);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_editing_tools_split_ripple_nudge_process_and_bounce() {
+        let (mut v, dir) = scratch("editing");
+        let ctx = egui::Context::default();
+        let tone: Vec<f32> = (0..48_000).map(|i| (i as f32 * 0.05).sin() * 0.3).collect();
+        v.session
+            .add_rendered_take(0, tone.clone(), None, 0, json!({"device": "test"}))
+            .unwrap();
+        v.commit(&ctx, false);
+        // A split on a zero crossing (S with the switch on).
+        v.zero_cross = true;
+        v.session.transport.cursor = 24_000;
+        v.selected = Some((0, 0));
+        assert!(v.clip_action(0, 0, "split"));
+        let at = v.session.tracks[0].clips[1].position as usize;
+        assert!((at as i64 - 24_000).abs() <= 240, "{at}");
+        assert!((tone[at - 1] < 0.0) != (tone[at] < 0.0) || tone[at] == 0.0);
+        // Ripple: deleting the first half pulls the second up to where it began.
+        v.ripple = true;
+        v.selected = Some((0, 0));
+        v.delete_selection();
+        assert_eq!(v.session.tracks[0].clips.len(), 1);
+        assert_eq!(v.session.tracks[0].clips[0].position, 0);
+        // Nudges: 10 ms with the snap off, a sample with Alt.
+        v.session.transport.snap = Snap::Off;
+        v.selected = Some((0, 0));
+        v.nudge(1, false);
+        v.nudge(-1, true);
+        assert_eq!(v.session.tracks[0].clips[0].position, 479);
+        // Polarity, then Reverse as a new take, undone back to the old one.
+        assert!(v.apply_clip_op(0, 0, ClipOp::Invert));
+        assert!(v.session.tracks[0].clips[0].invert);
+        v.commit(&ctx, false);
+        let take = v.session.tracks[0].clips[0].take.clone();
+        assert!(v.apply_clip_op(0, 0, ClipOp::Reverse));
+        assert_ne!(v.session.tracks[0].clips[0].take, take);
+        assert!(v.session.tracks[0].clips[0].invert);
+        v.commit(&ctx, false);
+        v.undo();
+        assert_eq!(v.session.tracks[0].clips[0].take, take);
+        // Bounce the soloed track to a new one, muting it.
+        v.session.tracks[0].solo = true;
+        v.bounce_mute = true;
+        v.range_sel = None;
+        v.bounce_audible(false);
+        assert_eq!(v.error, None);
+        assert_eq!(v.session.tracks.len(), 2);
+        assert!(v.session.tracks[0].mute && v.session.tracks[1].is_stereo());
+        assert_eq!(v.selected, Some((1, 0)));
+        // ... and that bounce to mono.
+        v.session.tracks[1].solo = true;
+        v.bounce_audible(true);
+        assert_eq!(v.error, None);
+        assert!(!v.session.tracks[2].is_stereo());
+        // The envelope's height and dB map onto each other.
+        let r = Rect::from_min_size(Pos2::new(0.0, 100.0), egui::vec2(50.0, 60.0));
+        for db in [-48.0, -6.0, 0.0, 12.0] {
+            assert!((env_db_at(r, env_y(r, db)) - db).abs() < 0.11, "{db}");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 

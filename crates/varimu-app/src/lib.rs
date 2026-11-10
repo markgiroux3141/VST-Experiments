@@ -23,12 +23,16 @@
 //! Components (docs/COMPONENT_EDITOR_PLAN.md C2 step 7): `components` (a transformer's
 //! design edited, compiled, heard in a circuit that pins it, saved as a version).
 //!
+//! Editing (docs/SESSION_EDITING_PLAN.md SE8): `edit` (onsets, silences, zero crossings,
+//! splices and varispeed for the Session view's clips).
+//!
 //! Rooms (docs/ROOM_LOOP_PLAN.md): `room` (a scene of sources and placed mics, rendered
 //! into session tracks).
 
 pub mod audio;
 pub mod clav_proxy;
 pub mod components;
+pub mod edit;
 pub mod editor;
 pub mod live;
 pub mod loopback;

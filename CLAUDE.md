@@ -1131,8 +1131,17 @@ the user delegating; the plan's "Status" lists what is open):
 - SE7: punch (`Clock::record_to`), the ? overlay, track order and height, roll ghosts,
   scale, follow.
 
+**SE8 (2026-11-10, in main): audio editing tools and bounce** (the plan's "SE8"): a toolbar
+over the arrangement (tools 1-5 Pointer / Blade / Erase / Slip / Envelope, the clipboard,
+Zero crossings, Ripple, the Clip menu, Bounce); a clip's `invert`, `curve` (`FadeCurve`) and
+gain `env` (written and signed only where set: old sessions and print keys unchanged);
+crossfades as tape splices (`edit::splice_s`), Reverse / Varispeed / Consolidate into new
+takes (`Session::process_clip`, `consolidate`), Split at transients + Quantize, Strip
+silence, nudges, Shift+drag copies, and **Bounce** (`Session::bounce_audible`: the soloed
+tracks, else the mix, post-fader, over the range or loop, to a new stereo track, or mono as (L + R) / 2). The signal
+work is `varimu_app::edit`.
 Open: a track's MIDI clips rendered as one performance (decision 6), editing the
-pressure / pedal lanes, drag reorders, the user's first try. `varimu-app --session` /
+pressure / pedal lanes, drag reorders, the user's first try (SE1-SE8). `varimu-app --session` /
 `--mixer` open those views.
 
 Recording in the native app (a metronome click, takes from the keyboard or an input, tracks
