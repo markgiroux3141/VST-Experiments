@@ -208,7 +208,22 @@ circuits:
         label: KM84 pad
         choices: [[0, "off"], [1, "-10 dB"]]
         default: 0
-  akg_c414: {kind: mic, tag: c414, label: AKG C414, wp: 23}
+  akg_c414:                         # the C414 B-ULS by inference (CHAINS_PLAN.md WP23)
+    kind: mic
+    tag: c414
+    label: AKG C414
+    output: out
+    drop: [RLOAD]
+    pattern: {setting: pattern}
+    settings:
+      - key: pattern
+        label: Pattern
+        choices: [[0, omni], [1, cardioid], [2, hypercardioid], [3, figure-8]]
+        default: 1
+      - key: pad
+        label: C414 pad
+        choices: [[0, "off"], [10, "-10 dB"], [20, "-20 dB"]]
+        default: 0
   crown_pzm: {kind: mic, tag: pzm, label: Crown PZM, wp: 26}
   shure_green_bullet: {kind: mic, tag: bullet, label: Shure Green Bullet, wp: 30}
   carbon_transmitter: {kind: mic, tag: carbon, label: Carbon transmitter, wp: 31}

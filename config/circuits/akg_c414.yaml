@@ -1,0 +1,136 @@
+# The AKG C414 B-ULS (docs/CHAINS_PLAN.md WP23), built by inference (the user's decision,
+# 2026-11-10: AKG's C414 schematic can't be had): its published figures (data/schematics/
+# akg_c414/README.md: AKG's C414B/ULS sheet) and a generic FET impedance converter fitted to
+# them; every call is in CHAINS_PLAN.md WP23's Decisions.
+#
+# The capsule CK12@1 (the C12's: the 414's capsule is AKG's CK12 family, 25 mm dual
+# diaphragms), the pressure at its front on `in`, at its rear on the control input `p_rear`.
+# The backplate is the signal electrode, at the polarization through R1 1G, into the gate through
+# C1; the front diaphragm at ground; the rear diaphragm at the pattern's voltage (the four
+# patterns as the C12's equivalent polarizations: rear +60 omni, 0 cardioid, -30 hypercardioid,
+# -60 figure-8). The pads (-10, -20 dB) are capacitors across the capsule (fitted to their
+# steps). The FET (a 2N3819 stands in) common source with a partly bypassed source resistor
+# (RS1 unbypassed, RS2 || C3), its drain on RD from the rail into a BJT emitter follower (the
+# ULS has transistors after its FET; inferred), C4 into the output transformer;
+# the secondary into RLOAD (AKG's > 1000 ohm load, dropped in a chain). Rails ideal: the
+# polarization converter's 60 / 90 / 120 V and a 20 V FET rail off the phantom. Not modelled: the
+# bass cut (75 / 150 Hz), the phantom's supply and converter, the BJT stages a real ULS has
+# after the FET.
+
+title: "AKG C414 B-ULS"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, bp, g, d, s, e, rd]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "derived: 20 Pa peak (117 dB SPL) at the capsule, as neumann_u87.yaml"}
+  output_volts_peak: {value: 1.0960, source: "derived: 0 dBu peak, as neumann_u87.yaml"}
+controls:
+  pattern: {value: 1, choices: [0, 1, 2, 3], unit: position, source: "akg: the C414B/ULS sheet (omnidirectional, cardioid, hypercardioid, figure-eight)", notes: "0 omni, 1 cardioid, 2 hypercardioid, 3 figure-8"}
+  pad: {value: 0, choices: [0, 10, 20], unit: switch, source: "akg: the C414B/ULS sheet (pre-preamp attenuation of either 10 or 20 dB)", notes: "0 off, 10 -10 dB, 20 -20 dB"}
+values:
+  capsule_model: {value: CK12@1, source: "derived: akg_c12.yaml's (AKG's CK12 family; its on-axis curves within AKG's +-2 dB for the ULS: CHAINS_PLAN.md WP23's Notes)"}
+  pol_v: {value: 60.0, source: "provisional: model knowledge (the ULS's DC converter polarizing the CK12 at ~60 V, the C12's backplate voltage)"}
+  pol_hyper_v: {value: 90.0, source: "derived: the rear at pol_v x 1.5 (the hypercardioid: the C12's position 6)"}
+  pol_eight_v: {value: 120.0, source: "derived: the rear at 2 x pol_v (figure-8)"}
+  pol_front_v: {value: 60.0, source: "derived: the backplate at pol_v, the front diaphragm at ground"}
+  pol_rear_omni_v: {value: 60.0, source: "derived: the rear diaphragm at ground (omni)"}
+  pol_rear_card_v: {value: 0.0, source: "derived: the rear diaphragm at pol_v (cardioid)"}
+  pol_rear_hyper_v: {value: -30.0, source: "derived: pol_v - pol_hyper_v (hypercardioid)"}
+  pol_rear_eight_v: {value: -60.0, source: "derived: pol_v - pol_eight_v (figure-8)"}
+  r1_ohm: {value: 1.0e+9, source: "provisional: model knowledge (the backplate's polarization feed, ~1 GOhm in a FET condenser)"}
+  r2_ohm: {value: 1.0e+9, source: "provisional: model knowledge (the gate leak, ~1 GOhm)"}
+  rg1_ohm: {value: 12.3e+6, source: "fit: the gate bias divider's upper leg (1.5 V of gate bias), fit (scripts: CHAINS_PLAN.md WP23's Notes): jointly with rs1_ohm, t_ratio and rg1_ohm to the sheet's 12.5 mV/Pa (cardioid, 1 kHz), 180 ohm and 0.5% THD at 140 dB SPL (1 kHz): 12.50 mV/Pa, 180 ohm, 0.49%"}
+  rg2_ohm: {value: 1.0e+6, source: "provisional: model knowledge (the gate bias divider's lower leg)"}
+  cg_f: {value: 1.0e-6, source: "provisional: model knowledge (the gate bias's decoupling)"}
+  c1_f: {value: 470.0e-12, source: "provisional: model knowledge (the backplate to the gate, as the U 87's C4 470p)"}
+  c_pad10_f: {value: 580.0e-12, source: "fit: across the capsule, to the sheet's -10 dB (tests/test_akg_c414.py)"}
+  c_pad20_f: {value: 2400.0e-12, source: "fit: across the capsule, to the sheet's -20 dB (tests/test_akg_c414.py)"}
+  rail_v: {value: 20.0, source: "provisional: model knowledge (a FET rail regulated off 48 V phantom)"}
+  rd_ohm: {value: 5567.0, source: "derived: the drain halfway from the source to the rail at 1.5 mA (the fit's bias point)"}
+  rs1_ohm: {value: 2115.0, source: "fit: the unbypassed source resistor, fit (scripts: CHAINS_PLAN.md WP23's Notes): jointly with rs1_ohm, t_ratio and rg1_ohm to the sheet's 12.5 mV/Pa (cardioid, 1 kHz), 180 ohm and 0.5% THD at 140 dB SPL (1 kHz): 12.50 mV/Pa, 180 ohm, 0.49%"}
+  rs2_ohm: {value: 84.5, source: "derived: RS1 + RS2 = (1.5 V + 1.8 V) / 1.5 mA, the FET's current at the fit's gate bias"}
+  c3_f: {value: 47.0e-6, source: "provisional: model knowledge (RS2's bypass)"}
+  re_ohm: {value: 1500.0, source: "provisional: model knowledge (the emitter follower's load, ~7 mA: its peak current into the reflected load at 140 dB SPL is ~6 mA)"}
+  c4_f: {value: 22.0e-6, source: "provisional: model knowledge (the follower to the transformer)"}
+  t_ratio: {value: 1.609, source: "fit: secondary : primary, fit (scripts: CHAINS_PLAN.md WP23's Notes): jointly with rs1_ohm, t_ratio and rg1_ohm to the sheet's 12.5 mV/Pa (cardioid, 1 kHz), 180 ohm and 0.5% THD at 140 dB SPL (1 kHz): 12.50 mV/Pa, 180 ohm, 0.49%"}
+  t_r_p_ohm: {value: 40.0, source: "provisional: model knowledge (a low-impedance-driven output transformer's primary)"}
+  t_r_s_ohm: {value: 40.0, source: "provisional: model knowledge (its secondary)"}
+  t_core_material: {value: mumetall, source: "provisional: model knowledge (a microphone transformer's nickel core)"}
+  t_core_area_m2: {value: 2.0e-5, source: "provisional: model knowledge (a ~4.5 mm square tongue, as neumann_u87.yaml)"}
+  t_core_path_m: {value: 0.04, source: "provisional: model knowledge (~9 x the tongue)"}
+  t_turns: {value: 1500, source: "provisional: model knowledge (the primary, driven from the follower)"}
+  t_gap_m: {value: 2.0e-6, source: "provisional: model knowledge (an interleaved core's joint gap)"}
+  t_leakage_h: {value: 0.002, source: "provisional: model knowledge (referred to the primary)"}
+  t_c_p_f: {value: 2.0e-10, source: "provisional: model knowledge (the primary's capacitance)"}
+  r_load_ohm: {value: 1000.0, source: "akg: the C414B/ULS sheet (load impedance > 1,000 ohms)"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch contact, ~10 mOhm)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (5% resistors)"}
+  tol_cap_pct: {value: 10.0, source: "provisional: model knowledge (film and electrolytic capacitors)"}
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r5: tol_resistor_pct
+    cap: tol_cap_pct
+  classes:
+    r5: [R1, R2, RG1, RG2, RD, RS1, RS2, RE]
+    cap: [C1, CG, CPAD10, CPAD20, C3, C4]
+devices:
+  QB: {device: BC550C@1, source: "provisional: model knowledge (a small-signal NPN as the emitter follower after the FET)"}
+  QJ: {device: 2N3819@1, source: "provisional: model knowledge (an N-channel JFET of the 2N3819 class stands in for the ULS's FET)"}
+sections:
+  - title: supply
+    parts:
+      VPOL: {V: [p60, "0"], v: pol_v}
+      VR: {V: [rail, "0"], v: rail_v}
+  - title: capsule
+    parts:
+      R1: {R: [p60, bp], r: r1_ohm}
+      SREAR:
+        switch: pattern
+        parts:
+          RW0: {R: ["0", rd], r: contact_ohm, tolerance: none, in: [0]}
+          RW1: {R: [p60, rd], r: contact_ohm, tolerance: none, in: [1]}
+          RW2: {R: [p90, rd], r: contact_ohm, tolerance: none, in: [2]}
+          VPH: {V: [p90, "0"], v: pol_hyper_v, in: [2]}
+          RW3: {R: [p120, rd], r: contact_ohm, tolerance: none, in: [3]}
+          VPE: {V: [p120, "0"], v: pol_eight_v, in: [3]}
+      SCAP:
+        switch: pattern
+        parts:
+          KC0: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_omni_v, in: [0]}
+          KC1: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_card_v, in: [1]}
+          KC2: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_hyper_v, in: [2]}
+          KC3: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_eight_v, in: [3]}
+      SPAD:
+        switch: pad
+        parts:
+          CPAD10: {C: [bp, "0"], c: c_pad10_f, in: [10]}
+          CPAD20: {C: [bp, "0"], c: c_pad20_f, in: [20]}
+  - title: amplifier
+    parts:
+      C1: {C: [bp, g], c: c1_f}
+      R2: {R: [g, gb], r: r2_ohm}
+      RG1: {R: [rail, gb], r: rg1_ohm}
+      RG2: {R: [gb, "0"], r: rg2_ohm}
+      CG: {C: [gb, "0"], c: cg_f}
+      J1: {jfet: [d, g, s], model: QJ}
+      RS1: {R: [s, s2], r: rs1_ohm}
+      RS2: {R: [s2, "0"], r: rs2_ohm}
+      C3: {C: [s2, "0"], c: c3_f}
+      RD: {R: [rail, d], r: rd_ohm}
+      Q1: {bjt: [rail, d, e], model: QB}
+      RE: {R: [e, "0"], r: re_ohm}
+      C4: {C: [e, tp], c: c4_f}
+      TU:
+        transformer:
+          p: {nodes: [tp, "0"], r: t_r_p_ohm, c: t_c_p_f}
+          s: {nodes: [out, "0"], ratio: t_ratio, r: t_r_s_ohm}
+        core: {material: t_core_material, area_m2: t_core_area_m2, path_m: t_core_path_m, gap_m: t_gap_m}
+        turns: t_turns
+        leakage_h: t_leakage_h
+      RLOAD: {R: [out, "0"], r: r_load_ohm, tolerance: none}

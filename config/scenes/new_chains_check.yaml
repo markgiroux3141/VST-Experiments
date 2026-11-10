@@ -46,3 +46,8 @@ mics:
     position_m: [2.4, 2.75, 1.4]
     aim: {azimuth_deg: -150}
     pan: -0.1
+  - name: C414 into SSL
+    chain: c414_ssl
+    position_m: [1.6, 2.35, 1.6]
+    aim: {azimuth_deg: 30}
+    pan: 0.4
