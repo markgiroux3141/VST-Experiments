@@ -851,6 +851,11 @@ for bit). Milestones H0 (a headless session render and export), H1 (the analysis
 (sends, the echo chamber as a Room-view room, a mix-bus chain, fader automation, a keyed-670
 de-esser), H3 (the experiment: *Did She Mention My Name*), H4 (the user listens). Open: the
 user's decisions in the plan (period-faithful or not, a reference track, H2's scope first).
+The gear such a mix wants that no plan has is [docs/PERIOD_GEAR_BACKLOG.md](docs/PERIOD_GEAR_BACKLOG.md)
+(2026-11-10; nothing built): PG1 a 1960s multitrack deck on Scotch 201 / 202 (the user's favourite
+and choices: the tube Ampex 300-4, the 351's electronics on a 1/2 in headblock, 4 tracks on one
+tape and transport, Sel-Sync and crosstalk in the first pass; milestones MT0-MT6, next MT0), PG2 a console bus with iron, PG3 the Ampeg B-15, PG4 Altec 436 / UA 175-176, PG5
+the Langevin EQ-251A. A mix from scratch starts from `stems/Did she mention my name/full/` (the user's call).
 
 Track separation ([docs/SEPARATION_PLAN.md](docs/SEPARATION_PLAN.md), 2026-10-31): tracks
 diverged by opposite physical recording chains (devices, per-pass tape flutter, rooms and

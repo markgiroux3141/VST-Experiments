@@ -137,3 +137,6 @@ using U47, U67, AKG C24, RCA 44, Coles 4038 and a Neve 8014 with 1073s, on an un
 *Updated at the end of every session.*
 
 - Nothing built. Next: the user's decisions above, then H0.
+- 2026-11-10: a brainstorm on the stems (measured from `stems/Did she mention my name/full/`,
+  the user's wish: start from them, not the session's setup). The gear it wants that no plan
+  has is in [PERIOD_GEAR_BACKLOG.md](PERIOD_GEAR_BACKLOG.md) (the 1960s multitrack deck first).
