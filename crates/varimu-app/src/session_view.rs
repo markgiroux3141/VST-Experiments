@@ -378,7 +378,7 @@ struct Audition {
 struct LoopState {
     track: usize,
     slot: usize,
-    wanted: Option<(String, Excerpt, Instant)>,
+    wanted: Option<(String, Instant)>,
     job: Option<(String, Excerpt, Job)>,
     done: Option<Rendered>,
     /// The clip playing: the render's key and the gains it was made with.
@@ -943,6 +943,14 @@ impl SessionView {
         self.poll_calibration(play);
         let idle = matches!(self.calibrate, Calibrate::Idle);
         self.sync_audition(play, idle);
+        // A loop render waiting for the knobs or rendering: its line keeps moving.
+        if self
+            .loop_render
+            .as_ref()
+            .is_some_and(|l| l.wanted.is_some() || l.job.is_some())
+        {
+            ui.ctx().request_repaint_after(Duration::from_millis(100));
+        }
         // Nothing playing: the tracks-only player, so ▶ is always there.
         if idle && self.audition.is_none() && play.player().is_none() && !self.mix_failed {
             self.mix_failed = !self.start_mix(play);
@@ -1874,36 +1882,70 @@ impl SessionView {
             });
         }
         let quality = find_device(&slot.device).map_or(slot.quality, |d| d.quality);
+        let rs = loop_render::render_slot(&slot, quality);
+        // What would render: the input as the session holds it (its buffers, stable from
+        // frame to frame, and what they are of), the loop, the slot. The excerpt is cut only
+        // when a render starts.
         let tr = &self.session.transport;
-        let ex = if !tr.loop_on {
+        let wanted = if !tr.loop_on {
             Err("turn the loop on (its L and R are what renders)")
         } else {
             let grid = Grid::new(rate, tr);
             let range = (grid.beat(tr.left_beat), grid.beat(tr.right_beat));
-            let input = if t == MASTER {
-                self.master_input_lr(k)
+            let (input, what) = if t == MASTER {
+                (
+                    self.master_input_lr(k),
+                    format!("master|{}", self.session.master_mix_signature()),
+                )
             } else {
-                self.insert_input_lr(t, k)
-            };
-            let side = if t == MASTER {
-                None
-            } else {
-                self.session.sidechain(t, &slot)
+                (
+                    self.insert_input_lr(t, k),
+                    format!(
+                        "{}|{}",
+                        self.session.tracks[t].lane_signature(),
+                        self.session.key_signature(t, &slot)
+                    ),
+                )
             };
             input
-                .and_then(|(start, l, r)| {
-                    loop_render::excerpt(
-                        start,
-                        &l,
-                        r.as_deref().map(Vec::as_slice),
-                        side.as_deref().map(Vec::as_slice),
-                        range,
-                        rate,
-                    )
+                .and_then(|placed| {
+                    let (start, l, r) = &placed;
+                    let span = loop_render::span(*start, l.len(), range, rate)?;
+                    let id = format!(
+                        "{what}|{k}|{start}|{}|{:p}|{:?}",
+                        l.len(),
+                        Arc::as_ptr(l),
+                        r.as_ref().map(Arc::as_ptr)
+                    );
+                    Some((loop_render::key(&rs, &id, span), placed, range))
                 })
                 .ok_or("nothing to play in the loop")
         };
         let config = self.root.join("config");
+        let settled = self
+            .loop_render
+            .as_ref()
+            .and_then(|st| st.wanted.as_ref())
+            .is_some_and(|(_, at)| at.elapsed() >= LOOP_SETTLE);
+        // The excerpt (and the key track's audio), cut when a render starts.
+        let excerpt = match &wanted {
+            Ok((_, (start, l, r), range)) if settled => {
+                let side = if t == MASTER {
+                    None
+                } else {
+                    self.session.sidechain(t, &slot)
+                };
+                loop_render::excerpt(
+                    *start,
+                    l,
+                    r.as_deref().map(Vec::as_slice),
+                    side.as_deref().map(Vec::as_slice),
+                    *range,
+                    rate,
+                )
+            }
+            _ => None,
+        };
         let st = self.loop_render.as_mut().expect("just made");
         // A render finished.
         if st.job.as_ref().is_some_and(|(_, _, j)| j.is_finished()) {
@@ -1917,39 +1959,31 @@ impl SessionView {
                 None => {}
             }
         }
-        let status = match ex {
+        let status = match wanted {
             Err(m) => format!("⟲ loop: {m}"),
-            Ok(ex) => {
-                let rs = loop_render::render_slot(&slot, quality);
-                let key = loop_render::key(&rs, &ex);
+            Ok((key, _, _)) => {
                 let current = st.done.as_ref().is_some_and(|d| d.key == key)
                     || st.job.as_ref().is_some_and(|(j, _, _)| *j == key);
                 if current {
                     st.wanted = None;
-                } else {
-                    if st.wanted.as_ref().is_none_or(|(w, _, _)| *w != key) {
-                        st.wanted = Some((key, ex, Instant::now()));
+                } else if st.wanted.as_ref().is_none_or(|(w, _)| *w != key) {
+                    st.wanted = Some((key, Instant::now()));
+                } else if let Some(ex) = excerpt {
+                    // The panel held still: render.
+                    let (key, _) = st.wanted.take().expect("wanted");
+                    if let Some((_, _, old)) = st.job.take() {
+                        old.cancel();
                     }
-                    if st
-                        .wanted
-                        .as_ref()
-                        .is_some_and(|(_, _, at)| at.elapsed() >= LOOP_SETTLE)
-                    {
-                        let (key, ex, _) = st.wanted.take().expect("wanted");
-                        if let Some((_, _, old)) = st.job.take() {
-                            old.cancel();
-                        }
-                        let job = Job::spawn(
-                            config,
-                            vec![rs],
-                            vec![ex.side.clone()],
-                            ex.left.clone(),
-                            ex.right.clone(),
-                            rate,
-                            None,
-                        );
-                        st.job = Some((key, ex, job));
-                    }
+                    let job = Job::spawn(
+                        config,
+                        vec![rs],
+                        vec![ex.side.clone()],
+                        ex.left.clone(),
+                        ex.right.clone(),
+                        rate,
+                        None,
+                    );
+                    st.job = Some((key, ex, job));
                 }
                 let heard = if running {
                     ", playing"

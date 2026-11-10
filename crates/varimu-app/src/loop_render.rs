@@ -49,13 +49,7 @@ pub fn excerpt(
     loop_range: (i64, i64),
     rate: u32,
 ) -> Option<Excerpt> {
-    let (a, b) = loop_range;
-    let input_end = input_start + left.len() as i64;
-    if b <= a || b <= input_start || a >= input_end {
-        return None;
-    }
-    let warm = (WARMUP_S * rate as f64).round() as i64;
-    let from = (a - warm).max(input_start);
+    let (from, start, b) = span(input_start, left.len(), loop_range, rate)?;
     let cut = |x: &[f32]| -> Arc<Vec<f32>> {
         Arc::new(
             (from..b)
@@ -65,12 +59,29 @@ pub fn excerpt(
     };
     Some(Excerpt {
         from,
-        start: a.max(input_start),
+        start,
         end: b,
         left: cut(left),
         right: right.map(cut),
         side: side.map(cut),
     })
+}
+
+/// The span an excerpt covers, for an input of `len` samples placed at `input_start` and the
+/// loop `[a, b)`: (the warm-up's start, the loop's start within the input, the loop's end).
+/// None: the loop is empty or outside the input.
+pub fn span(
+    input_start: i64,
+    len: usize,
+    loop_range: (i64, i64),
+    rate: u32,
+) -> Option<(i64, i64, i64)> {
+    let (a, b) = loop_range;
+    if b <= a || b <= input_start || a >= input_start + len as i64 {
+        return None;
+    }
+    let warm = (WARMUP_S * rate as f64).round() as i64;
+    Some(((a - warm).max(input_start), a.max(input_start), b))
 }
 
 /// The slot as a loop render prints it: at `quality` (its device's play quality), no tail,
@@ -86,21 +97,12 @@ pub fn render_slot(slot: &Slot, quality: Quality) -> Slot {
     }
 }
 
-/// What a loop render is of: the excerpt (its place and samples, by pointer and length: a
-/// new input is a new `Arc`) and the slot as printed. Two equal keys render the same.
-pub fn key(slot: &Slot, ex: &Excerpt) -> String {
-    let p = |x: &Option<Arc<Vec<f32>>>| x.as_ref().map_or(0, |v| Arc::as_ptr(v) as usize);
-    format!(
-        "{}|{}|{}|{:x}|{:x}|{:x}|{}|{}",
-        ex.from,
-        ex.start,
-        ex.end,
-        Arc::as_ptr(&ex.left) as usize,
-        p(&ex.right),
-        p(&ex.side),
-        ex.left.len(),
-        slot.to_json()
-    )
+/// What a loop render is of: its input (`input`, an id that changes with it: what it is of
+/// and its buffers), the warmed loop's `span` ([`span`]) and the slot as printed. Equal keys
+/// render the same.
+pub fn key(slot: &Slot, input: &str, span: (i64, i64, i64)) -> String {
+    let (from, start, end) = span;
+    format!("{from}|{start}|{end}|{input}|{}", slot.to_json())
 }
 
 /// A finished loop render: from the loop's start to its end, the device's output (fully wet,
@@ -197,7 +199,11 @@ mod tests {
             None,
         );
         let prints = job.join().expect("a result").expect("rendered");
-        let done = Rendered::new(key(&rs, &ex), &ex, &prints[0]);
+        let done = Rendered::new(
+            key(&rs, "test", (ex.from, ex.start, ex.end)),
+            &ex,
+            &prints[0],
+        );
         let clip = done.clip(&slot, (1.0, 1.0), 0);
         assert_eq!(clip.len, (loop_range.1 - loop_range.0) as usize);
         let right = clip.right.as_ref().expect("stereo");
