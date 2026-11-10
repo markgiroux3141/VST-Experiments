@@ -1415,7 +1415,7 @@ touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key; W
 its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.py` and a refusal in
 `varimu/circuit/parts.py`, every existing component compiling to its saved elements; its steps
 5-6 the ribbon motor's `stop` in `varimu/circuit/builder.py` and `RIBBON_77DX` in
-`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise): these
+`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise; 2026-11-10: `build_k87`, `build_kk84`, `build_r_sm7` there, the API 312's and the 1073's entries in `varimu/measure/opamp_pre_suite.py` and `profiles.py`; the 2520's bias / C5 fits change only `api_2520_test.yaml`; the app fixtures re-exported, `varimu-circuit`'s agreement test passes): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
