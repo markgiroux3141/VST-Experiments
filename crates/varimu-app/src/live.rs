@@ -383,6 +383,22 @@ pub struct Meter {
     pub load: f64,
 }
 
+/// The probes a live stream reads: its output, a stereo circuit's right channel and the 670's
+/// control voltage.
+const LIVE_PROBES: [&str; 3] = ["out", "out_r", "cv"];
+
+/// `ir` with only the probes a live stream reads ([`LIVE_PROBES`]): every probe is computed at
+/// every step (a multi-rate part's through its decimator), and the circuit's others are for
+/// inspection. The solution doesn't depend on them.
+fn live_probes(ir: &CircuitIr) -> CircuitIr {
+    let mut ir = ir.clone();
+    ir.probes.retain(|p| {
+        let circuitsim::ir::Probe::Voltage { node } = p;
+        LIVE_PROBES.contains(&node.as_str())
+    });
+    ir
+}
+
 /// A stream and where its probes are.
 struct Running {
     stream: Stream,
@@ -418,8 +434,16 @@ impl Running {
         } else {
             &[]
         };
-        let mut stream = Stream::with_controls(ir, &second, s.coupling()?, h, &opts, u0 * v, c0)
-            .map_err(|e| e.to_string())?;
+        let mut stream = Stream::with_controls(
+            &live_probes(ir),
+            &second,
+            s.coupling()?,
+            h,
+            &opts,
+            u0 * v,
+            c0,
+        )
+        .map_err(|e| e.to_string())?;
         let find = |name: &str| stream.names().iter().position(|n| n == name);
         let out = find("v(out)").ok_or("the circuit has no `out` probe")?;
         let cv = find("v(cv)");
@@ -827,7 +851,9 @@ impl Live {
                         Some(new) => &mut new.stream,
                         None => &mut self.run.stream,
                     };
-                    target.update(&ir).map_err(|e| e.to_string())?;
+                    target
+                        .update(&live_probes(&ir))
+                        .map_err(|e| e.to_string())?;
                     if let Some(log) = &mut self.log {
                         log.push(Knob {
                             at,

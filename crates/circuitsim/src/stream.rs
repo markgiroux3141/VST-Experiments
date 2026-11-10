@@ -81,6 +81,37 @@ struct Shared {
     waited_ns: Vec<AtomicU64>,
     /// When the stream started (the timing's wall clock).
     created: Instant,
+    /// Per partition (index 0 unused), with `CIRCUITSIM_PART_TIMING`: its solver's counters,
+    /// copied every 4096 samples (the timing line prints them).
+    stats: Vec<Mutex<Option<crate::transient::Stats>>>,
+    /// Per partition, with `CIRCUITSIM_PART_TIMING` and the cargo feature `timing`: its DK
+    /// steps' cycles per part of a step (`crate::timing::PARTS`).
+    cycles: Vec<Mutex<[u64; 5]>>,
+}
+
+/// Whether `CIRCUITSIM_PART_TIMING` is set (read once).
+fn part_timing() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("CIRCUITSIM_PART_TIMING").is_some())
+}
+
+/// A part's solver counters for the timing line: Newton solves, iterations per solve,
+/// factorizations and device evaluations per sample, samples halved.
+fn stats_line(st: &crate::transient::Stats) -> String {
+    let n = st.steps.max(1) as f64;
+    format!(
+        "{} states, {} ports, {} unknowns: {:.2} solves, {:.2} its a solve (max {}), {:.2} facts, {:.1} evals a sample, {} halved, by level {:?}",
+        st.states,
+        st.nonlinear_unknowns,
+        st.linear_unknowns,
+        st.solves as f64 / n,
+        st.iterations as f64 / st.solves.max(1) as f64,
+        st.max_iterations,
+        st.factorizations as f64 / n,
+        st.device_evaluations as f64 / n,
+        st.halved_steps,
+        st.accepted_by_level
+    )
 }
 
 /// How many times a partition waiting for another's sample spins before it yields: 2^14
@@ -443,6 +474,13 @@ fn run_part(
         }
         n += 1;
         shared.rings[p].publish(n, &out);
+        if n.is_multiple_of(4096) && part_timing() {
+            *shared.stats[p].lock().expect("stats") = Some(tr.stats().clone());
+            let c = crate::timing::take();
+            for (a, b) in shared.cycles[p].lock().expect("cycles").iter_mut().zip(c) {
+                *a += b;
+            }
+        }
     }
 }
 
@@ -864,6 +902,8 @@ impl Stream {
             }),
             waited_ns: (0..n_parts).map(|_| AtomicU64::new(0)).collect(),
             created: Instant::now(),
+            stats: (0..n_parts).map(|_| Mutex::new(None)).collect(),
+            cycles: (0..n_parts).map(|_| Mutex::new([0; 5])).collect(),
         });
         // Sample 0 (DC), published by all.
         for (ring, o) in shared.rings.iter().zip(&dc_out) {
@@ -1239,7 +1279,41 @@ impl Drop for Stream {
                     .enumerate()
                     .map(|(p, w)| {
                         let w = w.load(Ordering::Relaxed) as f64 * 1e-9;
-                        format!("part {p} busy {:.2} s wait {:.2} s", wall - w, w)
+                        let st = if p == 0 {
+                            Some(self.a.stats().clone())
+                        } else {
+                            s.shared.stats[p].lock().expect("stats").clone()
+                        };
+                        let mut cyc = *s.shared.cycles[p].lock().expect("cycles");
+                        if p == 0 {
+                            for (a, b) in cyc.iter_mut().zip(crate::timing::take()) {
+                                *a += b;
+                            }
+                        }
+                        let total: u64 = cyc.iter().sum();
+                        let cyc = if total > 0 {
+                            let parts: Vec<String> = crate::timing::PARTS
+                                .iter()
+                                .zip(cyc)
+                                .map(|((_, name), c)| {
+                                    format!("{name} {:.0}%", 100.0 * c as f64 / total as f64)
+                                })
+                                .collect();
+                            format!(
+                                " [{:.0} kcycles a sample: {}]",
+                                total as f64 / self.n.max(1) as f64 * 1e-3,
+                                parts.join(", ")
+                            )
+                        } else {
+                            String::new()
+                        };
+                        let st = st.map(|st| format!(" ({}){cyc}", stats_line(&st)));
+                        format!(
+                            "part {p} busy {:.2} s wait {:.2} s{}",
+                            wall - w,
+                            w,
+                            st.unwrap_or_default()
+                        )
                     })
                     .collect();
                 eprintln!(
