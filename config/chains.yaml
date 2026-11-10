@@ -195,7 +195,18 @@ circuits:
         label: U87 pad
         choices: [[0, "off"], [1, "-10 dB"]]
         default: 0
-  neumann_u47_fet: {kind: mic, tag: u47fet, label: U47 fet, wp: 25}
+  neumann_u47_fet:                  # the K47 at cardioid; -10 dB pad (S1: -9 dB)
+    kind: mic
+    tag: u47fet
+    label: U47 fet
+    output: out
+    drop: [RLOAD]
+    pattern: cardioid
+    settings:
+      - key: pad
+        label: U47 fet pad
+        choices: [[0, "off"], [1, "-10 dB"]]
+        default: 0
   neumann_km84:                     # the KK 84 cardioid; -10 dB pad
     kind: mic
     tag: km84

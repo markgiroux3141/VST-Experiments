@@ -56,3 +56,8 @@ mics:
     position_m: [2.6, 2.55, 1.3]
     aim: {azimuth_deg: 180}
     pan: -0.4
+  - name: U47 fet into API
+    chain: u47fet_api312
+    position_m: [2.0, 2.95, 1.0]
+    aim: {azimuth_deg: -90}
+    pan: 0.3
