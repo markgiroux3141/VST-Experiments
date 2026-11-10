@@ -1580,15 +1580,27 @@ def _build(
     k_island_of: list[bool] = []
     for s in spec.sections:
         ctx.section_tolerance = s.get("tolerance")
+
+        # `when`: built only while one of its controls is on (else expanded, as a switched-off
+        # part: its devices count as used, nothing of it, nor its exceptions, in the IR)
+        def nonzero(c: str, s=s) -> bool:
+            v = float(ctx.ref(f"sections.{s['title']}.when", c.removeprefix("!"))) != 0
+            return v != c.startswith("!")  # `!control`: at 0
+
+        # an entry: a control, or a list of controls all nonzero
+        on = "when" not in s or any(
+            nonzero(c) if isinstance(c, str) else all(nonzero(x) for x in c) for c in s["when"]
+        )
         els: list[Element] = []
         for name, entry in s["parts"].items():
             part = expand_part(ctx, str(name), entry)
-            if str(name) not in dropped:
-                els += part
-            else:
+            if str(name) in dropped:
                 dropped_models |= {e.model for e in part if isinstance(e, Device)}
-            for xname in exc_at.get(str(name), []):
-                els += _exception(ctx, xname, spec.exceptions[xname])
+            elif on:
+                els += part
+            if on:
+                for xname in exc_at.get(str(name), []):
+                    els += _exception(ctx, xname, spec.exceptions[xname])
         owns = tuple(s["owns"]) if "owns" in s else None
         substeps, decimate = s.get("substeps"), s.get("decimate")
         lag = s.get("lag_samples")

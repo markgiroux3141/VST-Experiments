@@ -30,7 +30,7 @@ def test_the_oscillators_are_islands_only_with_their_kernels():
     """`substeps_in: events`: the island in a build with its kernels, the literal reference at the
     sample rate."""
     s = spec.load_circuit(spec.circuit_path("minimoog_voice"))
-    p = spec.resolve(s, {})
+    p = spec.resolve(s, {"osc2_level": 0.5, "osc3_level": 0.5})  # all three heard
     k = {x.title: x for x in builder.build_ir(s, p, "linear").sections}
     lit = {x.title: x for x in builder.build_ir(s, p, "linear", literal=True).sections}
     for i in (1, 2, 3):
@@ -41,14 +41,47 @@ def test_the_oscillators_are_islands_only_with_their_kernels():
     assert k["ladder"].substeps is None
 
 
+def test_only_what_can_be_heard_is_built():
+    """A section's `when` (docs/MINIMOOG_PLAN.md "Real time"): at the default panel oscillators 2
+    and 3 (LEVEL 0), the noise (level 0) and the modulation mix (OSC MOD, FILTER MOD off) aren't
+    built, R5 and R52 grounded by the switches' copies; the pre-amp is (EXT ON: its output loads
+    the bus through R46 whatever its level). A LEVEL up, OSC MOD on, builds them."""
+    s = spec.load_circuit(spec.circuit_path("minimoog_voice"))
+
+    def built(over):
+        ir = builder.build_ir(s, spec.resolve(s, over), "linear", events=True)
+        return {x.title for x in ir.sections if x.elements}, ir
+
+    on, ir = built({})
+    for t in ("osc 2: core", "osc 3: core", "osc 3: reverse sawtooth", "noise: white"):
+        assert t not in on
+    assert {"osc 1: core", "external pre-amp", "modulation: grounds"} <= on
+    assert "modulation mix" not in on and "panel: rails" not in on
+    assert ir.sections[[x.title for x in ir.sections].index("osc 2: core")].substeps is None
+    on, _ = built({"osc2_level": 0.3})
+    assert "osc 2: core" in on and "osc 3: core" not in on
+    on, _ = built({"osc2_level": 0.3, "osc2_on": 0})  # its switch off: not heard
+    assert "osc 2: core" not in on
+    on, _ = built({"osc_mod": 1})  # oscillator 3 into the wheel; the noise only with MOD MIX
+    assert {"osc 3: core", "modulation mix"} <= on and "noise: white" not in on
+    assert "modulation: grounds" not in on
+    on, _ = built({"filter_mod": 1, "mod_mix": 0.5})
+    assert {"osc 3: core", "noise: white", "modulation mix"} <= on
+    on, _ = built({"ext_on": 0})
+    assert "external pre-amp" not in on and "external input" in on
+
+
 @pytest.mark.parametrize(
     "old, new, message",
     [
         ("  substeps: 2\n  decimate: fir\n", "  decimate: fir\n", "for a multi-rate section"),
         ("substeps_in: events", "substeps_in: later", "substeps_in 'later'"),
+        ("  when: [osc_mod, filter_mod]", "  when: [osc_mod, nothing]", "when"),
+        ("  when: [osc_mod, filter_mod]", "  when: osc_mod", "when"),
+        ("- ['!osc_mod', '!filter_mod']", "- ['!osc_mod', []]", "when"),
     ],
 )
-def test_substeps_in_refusals(old, new, message, tmp_path):
+def test_section_key_refusals(old, new, message, tmp_path):
     text = spec.circuit_path("minimoog_voice").read_text(encoding="utf-8")
     assert old in text
     bad = tmp_path / "bad.yaml"

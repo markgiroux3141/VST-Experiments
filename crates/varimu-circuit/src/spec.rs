@@ -59,6 +59,12 @@ pub struct SectionSpec {
     /// `substeps_in: events`: the island only in a build with event kernels (K's at a finer
     /// step than the sample); a literal build runs it at the sample rate.
     pub substeps_in_events: bool,
+    /// `when: [control | [control, ...], ...]`: built only while one entry holds (a control
+    /// nonzero, a switch on, or a list's every control nonzero; `!control`: that control at
+    /// 0); otherwise its parts expand
+    /// (devices count as used) and nothing of it, nor its exceptions, is in the IR, as a
+    /// switched-off part (spec.py). Each entry here is the list of controls it needs.
+    pub when: Option<Vec<Vec<String>>>,
 }
 
 #[derive(Debug, Clone)]
@@ -348,6 +354,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                     "method",
                     "tube_tables",
                     "substeps_in",
+                    "when",
                 ]
                 .contains(k)
             })
@@ -357,6 +364,39 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             errors.push(format!("sections[{i}]: unknown keys {extra:?}"));
             continue;
         }
+        let when = match m.get("when") {
+            None => None,
+            Some(Value::List(l))
+                if !l.is_empty()
+                    && l.iter().all(|v| match v {
+                        Value::Str(c) => controls.contains(c.strip_prefix('!').unwrap_or(c)),
+                        Value::List(cs) => {
+                            !cs.is_empty()
+                                && cs.iter().all(|x| {
+                                    matches!(x, Value::Str(c)
+                                        if controls.contains(c.strip_prefix('!').unwrap_or(c)))
+                                })
+                        }
+                        _ => false,
+                    }) =>
+            {
+                Some(
+                    l.iter()
+                        .map(|v| match v {
+                            Value::List(cs) => cs.iter().map(Value::py_str).collect(),
+                            v => vec![v.py_str()],
+                        })
+                        .collect(),
+                )
+            }
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: when {} (a list of controls or lists of controls)",
+                    v.py_str()
+                ));
+                continue;
+            }
+        };
         let substeps = match m.get("substeps") {
             None => None,
             Some(Value::Int(n)) if *n >= 1 => Some(*n as usize),
@@ -468,6 +508,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             method,
             tube_tables,
             substeps_in_events,
+            when,
         });
     }
     let devices = map_or_empty(data.get("devices"));

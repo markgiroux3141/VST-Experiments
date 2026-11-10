@@ -22,6 +22,7 @@ a `k_` prefix, its nodes a `k_` prefix) join the filter board (minimoog_filter_b
 """
 
 import argparse
+import copy
 import re
 import sys
 
@@ -229,8 +230,48 @@ def build() -> str:
     join_noise(out, sections)
     join_external(out, sections)
     join_modulation(out, sections)
-    out["sections"] = sections
+    out["sections"] = gate_sections(sections)
     return HEADER + yaml.safe_dump(out, sort_keys=False, default_flow_style=None, width=200)
+
+
+# What runs only while someone can hear it (a section's `when`, both builders): a source's
+# circuit while its mixer switch is ON and its LEVEL above 0, oscillator 3 also while OSC MOD or
+# FILTER MOD is on (the MODULATION wheel reaches it), the noise while MOD MIX gives it a share
+# there, the modulation mix while either is on. Otherwise the source reaches the bus only
+# through a 1e10 ohm open contact or a LEVEL wiper on ground (-110 dB): nothing to hear; not
+# built, its thread isn't spent (docs/MINIMOOG_PLAN.md "Real time"). The mixer's own parts
+# (the pots, the summing resistors, the switches) are always built, so the bus's load doesn't
+# change. Crossing one (a switch flipped, a LEVEL leaving or reaching 0) changes the circuit's
+# structure: a live stream restarts.
+MOD_ROUTES = ["osc_mod", "filter_mod"]
+WHEN = {
+    "osc 1: ": [["osc1_on", "osc1_level"]],
+    "osc 2: ": [["osc2_on", "osc2_level"]],
+    "osc 3: ": [["osc3_on", "osc3_level"], *MOD_ROUTES],
+    "noise: ": [["noise_on", "noise_level"], ["osc_mod", "mod_mix"], ["filter_mod", "mod_mix"]],
+    "modulation mix": MOD_ROUTES,
+    "panel: rails": MOD_ROUTES,
+    # OSC MOD's and FILTER MOD's grounding contacts while the modulation mix isn't built (R5
+    # and R52 grounded as the switches off ground them); with it, its own (a copy in the first
+    # part across the cut stalled the start)
+    "modulation: grounds": [["!osc_mod", "!filter_mod"]],
+    "external pre-amp": ["ext_on"],
+}
+
+
+def gate_sections(sections: list) -> list:
+    """Each section with its `when` (WHEN, by title prefix) after its title."""
+    out = []
+    for sec in sections:
+        when = next((w for t, w in WHEN.items() if sec["title"].startswith(t)), None)
+        if when is None:
+            out.append(sec)
+            continue
+        out.append(
+            {"title": sec["title"], "when": [list(w) if isinstance(w, list) else w for w in when]}
+            | {k: v for k, v in sec.items() if k != "title"}
+        )
+    return out
 
 
 # --- the oscillator board (minimoog_vco.yaml, minimoog_osc2 / 3) and the panel's mixer ---------
@@ -537,10 +578,13 @@ def join_oscillators(out: dict, sections: list, oscs: tuple[int, ...] = (1, 2, 3
             "choices": [0, 1],
             "unit": "switch",
             "source": f"Fig 9-17: {p['on']}, OSC {i}'s mixer switch (ON: its summing resistor "
-            "onto the bus, board 4's pin 4); a contact always in the circuit, so a flip updates "
-            "a stream in place",
+            "onto the bus, board 4's pin 4); off (or its LEVEL at 0) the oscillator isn't built"
+            + (" unless OSC MOD or FILTER MOD is on" if i == 3 else "")
+            + " (nothing of it reaches the bus: WHEN), so a flip restarts a live stream",
         }
-        out["probes"] += [pre + "out", pre + "tri", pre + "rect", pre + "ramp", pre + "wf"]
+        # the waveform switch's common only: the rest is a gated section's (WHEN), and a probe's
+        # node must be in every build
+        out["probes"] += [pre + "wf"]
     out["probes"] += ["mix", "o_pri", "o_m5"]
     # the ladder's input (C27) now on the mixer's bus; the circuit's audio input a leak until
     # EXTERNAL INPUT is drawn
@@ -628,10 +672,11 @@ def join_noise(out: dict, sections: list) -> None:
         "value": 1,
         "choices": [0, 1],
         "unit": "switch",
-        "source": "Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); a contact always "
-        "in the circuit",
+        "source": "Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); off (or its "
+        "level at 0) the noise generator isn't built unless OSC MOD or FILTER MOD with MOD MIX "
+        "above 0 reaches it (WHEN), so a flip restarts a live stream",
     }
-    out["probes"] += ["n_wn", "n_pn", "nsel"]
+    out["probes"] += ["nsel"]
 
 
 EXT_VALUES = {
@@ -686,16 +731,10 @@ def join_external(out: dict, sections: list) -> None:
         "value": 1,
         "choices": [0, 1],
         "unit": "switch",
-        "source": "Fig 9-17: SW10, the EXTERNAL INPUT mixer switch (ON: R46 onto the bus); a "
-        "contact always in the circuit",
+        "source": "Fig 9-17: SW10, the EXTERNAL INPUT mixer switch (ON: R46 onto the bus); off "
+        "(or its level at 0) the pre-amp isn't built (WHEN), so a flip restarts a live stream",
     }
     pre = {
-        "R9_p": {
-            "pot": ["0", "xw", "in"],
-            "r": "x_r_ext_ohm",
-            "at": "ext_level",
-            "taper_mid": "x_ext_taper_mid",
-        },
         "R78_x": {"R": ["xw", "x78"], "r": "x_r78_ohm"},
         "C23_x": {"C": ["x78", "xb27"], "c": "x_c23_f"},
         "R66_x": {"R": ["xb27", "0"], "r": "x_r66_ohm"},
@@ -716,6 +755,17 @@ def join_external(out: dict, sections: list) -> None:
     mixer = next(s for s in sections if s["title"] == "mixer")["parts"]
     # in the first part with the audio input (a cut at Q27's base, R66's 100K against R78's 1K,
     # diverged)
+    # the jack's pot a section of its own just ahead of the pre-amp (the same order of parts),
+    # always built: the circuit's audio input is its node
+    jack = {
+        "R9_p": {
+            "pot": ["0", "xw", "in"],
+            "r": "x_r_ext_ohm",
+            "at": "ext_level",
+            "taper_mid": "x_ext_taper_mid",
+        }
+    }
+    sections.append({"title": "external input", "parts": jack})
     sections.append({"title": "external pre-amp", "parts": pre})
     mixer.pop("RIN_p", None)  # the input is the jack now
     mixer["R46_p"] = {"R": ["xo", "xms"], "r": "x_r46_ohm"}
@@ -725,7 +775,7 @@ def join_external(out: dict, sections: list) -> None:
         "at": "ext_on",
         "reverse": 1,
     }
-    out["probes"] += ["xo"]
+    out["probes"] += ["xw"]
 
 
 MOD_VALUES = {
@@ -842,6 +892,14 @@ def join_modulation(out: dict, sections: list) -> None:
     sections.append({"title": "modulation mix", "parts": mod})
     sections.append(
         {
+            "title": "modulation: grounds",
+            "parts": {
+                n.replace("0_m", "0G_m"): copy.deepcopy(mod[n]) for n in ("RSWOM0_m", "RSWFM0_m")
+            },
+        }
+    )
+    sections.append(
+        {
             "title": "panel: rails",
             "parts": {
                 "VPP_m": {"V": ["pvp", "0"], "v": "supply_v"},
@@ -849,7 +907,7 @@ def join_modulation(out: dict, sections: list) -> None:
             },
         }
     )
-    out["probes"] += ["mo", "mw"]
+    out["probes"] += ["om", "fm"]
 
 
 PANEL_VALUES = {

@@ -5,8 +5,8 @@
 title: 'Minimoog voice: the oscillator board, the mixer, the filter board (VCF, VCA), the contour generators and the keyboard'
 input: in
 cv_inputs: {key: b_pbar, gate: b_kg}
-probes: [out, o7, vo, c16, c15, c14, c13, e1, c1, vt1, b15, vr, a4, b4, ctl, e26, tail, nb, b29, b30, p9, kbd, k_kg, k_env, k_envl, k_outn, k_tb, k_vtrig, b_s9, b_c6, b_n24, o1_out, o1_tri, o1_rect, o1_ramp,
-  o1_wf, o2_out, o2_tri, o2_rect, o2_ramp, o2_wf, o3_out, o3_tri, o3_rect, o3_ramp, o3_wf, mix, o_pri, o_m5, n_wn, n_pn, nsel, xo, mo, mw]
+probes: [out, o7, vo, c16, c15, c14, c13, e1, c1, vt1, b15, vr, a4, b4, ctl, e26, tail, nb, b29, b30, p9, kbd, k_kg, k_env, k_envl, k_outn, k_tb, k_vtrig, b_s9, b_c6, b_n24, o1_wf, o2_wf, o3_wf, mix, o_pri,
+  o_m5, nsel, xw, om, fm]
 full_scale:
   input_volts_peak: {value: 0.1, source: 'provisional: model knowledge (an instrument''s or a microphone''s level at the EXTERNAL INPUT jack, 0.1 V peak: the pre-amp''s +46 dB clips it with the level pot
       past about half, as the Model D overdrives external signals)'}
@@ -82,7 +82,8 @@ controls:
     value: 1
     choices: [0, 1]
     unit: switch
-    source: 'Fig 9-17: SW9, OSC 1''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); a contact always in the circuit, so a flip updates a stream in place'
+    source: 'Fig 9-17: SW9, OSC 1''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); off (or its LEVEL at 0) the oscillator isn''t built (nothing of it reaches the bus: WHEN), so
+      a flip restarts a live stream'
   osc2_range:
     value: 3
     choices: [0, 1, 2, 3, 4, 5]
@@ -102,7 +103,8 @@ controls:
     value: 1
     choices: [0, 1]
     unit: switch
-    source: 'Fig 9-17: SW11, OSC 2''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); a contact always in the circuit, so a flip updates a stream in place'
+    source: 'Fig 9-17: SW11, OSC 2''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); off (or its LEVEL at 0) the oscillator isn''t built (nothing of it reaches the bus: WHEN), so
+      a flip restarts a live stream'
   osc3_range:
     value: 3
     choices: [0, 1, 2, 3, 4, 5]
@@ -128,7 +130,8 @@ controls:
     value: 1
     choices: [0, 1]
     unit: switch
-    source: 'Fig 9-17: SW13, OSC 3''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); a contact always in the circuit, so a flip updates a stream in place'
+    source: 'Fig 9-17: SW13, OSC 3''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); off (or its LEVEL at 0) the oscillator isn''t built unless OSC MOD or FILTER MOD is on (nothing
+      of it reaches the bus: WHEN), so a flip restarts a live stream'
   noise_level_trim: {value: 0.4844, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-8: R26 2.5K NOISE LEVEL trim (Q12''s emitter; 0 = no resistance, the most gain); default trimmed: scripts/minimoog_noise_trim.py
       (Folkman''s ''Noise Level'': -5 dB at most in the white position)'}
   noise_color:
@@ -141,13 +144,14 @@ controls:
     value: 1
     choices: [0, 1]
     unit: switch
-    source: 'Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); a contact always in the circuit'
+    source: 'Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); off (or its level at 0) the noise generator isn''t built unless OSC MOD or FILTER MOD with MOD MIX above 0 reaches it (WHEN),
+      so a flip restarts a live stream'
   ext_level: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R9 EXTERNAL INPUT level, 1 Megohm audio; 0 by default'}
   ext_on:
     value: 1
     choices: [0, 1]
     unit: switch
-    source: 'Fig 9-17: SW10, the EXTERNAL INPUT mixer switch (ON: R46 onto the bus); a contact always in the circuit'
+    source: 'Fig 9-17: SW10, the EXTERNAL INPUT mixer switch (ON: R46 onto the bus); off (or its level at 0) the pre-amp isn''t built (WHEN), so a flip restarts a live stream'
   mod_mix: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R3 MOD MIX, 25K (0 = all oscillator 3: its wiper shorts the noise''s pin 4; 1 = all noise); linear, provisional; 0 by default'}
   mod_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'the left-hand controller''s MODULATION wheel (50K audio, Fig 9-8): 0 none'}
   osc_mod:
@@ -1620,6 +1624,8 @@ sections:
       r_out_ohm: o_u1458_r_out_ohm
       r_in_ohm: o_u1458_r_in_ohm
 - title: 'osc 1: range'
+  when:
+  - [osc1_on, osc1_level]
   parts:
     SRANGE_o1:
       switch: osc1_range
@@ -1658,6 +1664,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 1: summer'
+  when:
+  - [osc1_on, osc1_level]
   parts:
     R13_o1:
       R: [o_vp, o1_s9]
@@ -1705,6 +1713,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 1: expo'
+  when:
+  - [osc1_on, osc1_level]
   parts:
     Q7_o1:
       bjt: [o1_e, o1_v01, o1_ne]
@@ -1734,6 +1744,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 1: core'
+  when:
+  - [osc1_on, osc1_level]
   parts:
     R25_o1:
       R: [o_vp, o1_r5p]
@@ -1810,6 +1822,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 1: shapers'
+  when:
+  - [osc1_on, osc1_level]
   parts:
     R36_o1:
       R: [o1_ramp, o1_out]
@@ -1883,6 +1897,8 @@ sections:
   substeps_in: events
   owns: [o1_out, o1_tri, o1_rect]
 - title: 'osc 1: pulse width'
+  when:
+  - [osc1_on, osc1_level]
   parts:
     R34_p1:
       R: ['0', o1_pwa]
@@ -1912,6 +1928,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 2: panel'
+  when:
+  - [osc2_on, osc2_level]
   parts:
     RFREQ_o2:
       pot: [o_vp, o2_freqw, o2_freqf]
@@ -1924,6 +1942,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 2: range'
+  when:
+  - [osc2_on, osc2_level]
   parts:
     SRANGE_o2:
       switch: osc2_range
@@ -1962,6 +1982,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 2: summer'
+  when:
+  - [osc2_on, osc2_level]
   parts:
     R13_o2:
       R: [o_vp, o2_s9]
@@ -2012,6 +2034,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 2: expo'
+  when:
+  - [osc2_on, osc2_level]
   parts:
     Q7_o2:
       bjt: [o2_e, o2_v01, o2_ne]
@@ -2041,6 +2065,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 2: core'
+  when:
+  - [osc2_on, osc2_level]
   parts:
     R25_o2:
       R: [o_vp, o2_r5p]
@@ -2117,6 +2143,8 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 2: shapers'
+  when:
+  - [osc2_on, osc2_level]
   parts:
     R36_o2:
       R: [o2_ramp, o2_out]
@@ -2190,6 +2218,8 @@ sections:
   substeps_in: events
   owns: [o2_out, o2_tri, o2_rect]
 - title: 'osc 2: pulse width'
+  when:
+  - [osc2_on, osc2_level]
   parts:
     R40_p2:
       R: ['0', o2_pwa]
@@ -2219,6 +2249,10 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 3: panel'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     RFREQ_o3:
       pot: [o_vp, o3_freqw, o3_freqf]
@@ -2235,6 +2269,10 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 3: range'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     SRANGE_o3:
       switch: osc3_range
@@ -2273,6 +2311,10 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 3: control'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     JQ2_o3:
       jfet: [o3_sl3, o3_g2, o_pri]
@@ -2302,6 +2344,10 @@ sections:
       at: osc3_control
       reverse: 1
 - title: 'osc 3: summer'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     R13_o3:
       R: [o_vp, o3_s9]
@@ -2355,6 +2401,10 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 3: expo'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     Q7_o3:
       bjt: [o3_e, o3_v01, o3_ne]
@@ -2384,6 +2434,10 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 3: core'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     R25_o3:
       R: [o_vp, o3_r5p]
@@ -2460,6 +2514,10 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'osc 3: reverse sawtooth'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     R123_o3:
       R: [o_vp, o3_va]
@@ -2492,6 +2550,10 @@ sections:
       R: [o3_rsaw, o_vn]
       r: o3_r134_ohm
 - title: 'osc 3: shapers'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     R36_o3:
       R: [o3_ramp, o3_out]
@@ -2565,6 +2627,10 @@ sections:
   substeps_in: events
   owns: [o3_out, o3_tri, o3_rect]
 - title: 'osc 3: pulse width'
+  when:
+  - [osc3_on, osc3_level]
+  - osc_mod
+  - filter_mod
   parts:
     R44_p3:
       R: ['0', o3_pwa]
@@ -2594,6 +2660,10 @@ sections:
   decimate: fir
   substeps_in: events
 - title: 'noise: rails'
+  when:
+  - [noise_on, noise_level]
+  - [osc_mod, mod_mix]
+  - [filter_mod, mod_mix]
   parts:
     VP_n:
       V: [n_vp, '0']
@@ -2605,6 +2675,10 @@ sections:
       R: [n_pn, '0']
       r: p_r_bus_leak_ohm
 - title: 'noise: source'
+  when:
+  - [noise_on, noise_level]
+  - [osc_mod, mod_mix]
+  - [filter_mod, mod_mix]
   parts:
     R47_n:
       R: [n_vp, n_n47]
@@ -2625,6 +2699,10 @@ sections:
       noise_source: [n_e15, '0']
       psd_a2_hz: n_avalanche_psd_a2_hz
 - title: 'noise: white'
+  when:
+  - [noise_on, noise_level]
+  - [osc_mod, mod_mix]
+  - [filter_mod, mod_mix]
   parts:
     C12_n:
       C: [n_e15, n_b12]
@@ -2661,6 +2739,10 @@ sections:
       C: [n_e4, n_wn]
       c: n_c18_f
 - title: 'noise: pink'
+  when:
+  - [noise_on, noise_level]
+  - [osc_mod, mod_mix]
+  - [filter_mod, mod_mix]
   parts:
     R16_n:
       R: [n_e4, n_n1]
@@ -2701,13 +2783,16 @@ sections:
     C20_n:
       C: [n_c3, n_pn]
       c: n_c20_f
-- title: external pre-amp
+- title: external input
   parts:
     R9_p:
       pot: ['0', xw, in]
       r: x_r_ext_ohm
       at: ext_level
       taper_mid: x_ext_taper_mid
+- title: external pre-amp
+  when: [ext_on]
+  parts:
     R78_x:
       R: [xw, x78]
       r: x_r78_ohm
@@ -2757,6 +2842,7 @@ sections:
       C: [xb32, xo]
       c: x_c21_f
 - title: modulation mix
+  when: [osc_mod, filter_mod]
   parts:
     RMIN_m:
       R: [n_pn, m4]
@@ -2824,7 +2910,20 @@ sections:
       rheostat: [fm, '0']
       r: p_r_switch_open_ohm
       at: filter_mod
+- title: 'modulation: grounds'
+  when:
+  - ['!osc_mod', '!filter_mod']
+  parts:
+    RSWOM0G_m:
+      rheostat: [om, '0']
+      r: p_r_switch_open_ohm
+      at: osc_mod
+    RSWFM0G_m:
+      rheostat: [fm, '0']
+      r: p_r_switch_open_ohm
+      at: filter_mod
 - title: 'panel: rails'
+  when: [osc_mod, filter_mod]
   parts:
     VPP_m:
       V: [pvp, '0']

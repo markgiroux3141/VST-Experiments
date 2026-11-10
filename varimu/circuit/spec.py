@@ -19,7 +19,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
     sections: [{title, tolerance?, substeps?, decimate?, owns?, lag_samples?, method?,
-                tube_tables?, substeps_in?, parts: {NAME: {<macro>: <nodes>, ...}}}]
+                tube_tables?, substeps_in?, when?, parts: {NAME: {<macro>: <nodes>, ...}}}]
                                     # substeps: steps per sample on a thread of its own (a
                                     # multi-rate part: circuitsim's partition.rs);
                                     # decimate: fir (what it hands on through an
@@ -34,7 +34,15 @@ varimu.circuit.builder, which expands its parts with the parts library
                                     # build with event kernels, K's at a finer step
                                     # than the sample; a literal build, the kernels'
                                     # reference, runs it at the sample rate: the
-                                    # Minimoog's oscillators, HYBRID_PHYSICS_PLAN.md H5)
+                                    # Minimoog's oscillators, HYBRID_PHYSICS_PLAN.md H5);
+                                    # when: [control | [control, ...], ...] (built only
+                                    # while one entry holds: a control nonzero, a switch
+                                    # on, or a list's every control nonzero; `!control`:
+                                    # that control at 0: else its parts expand,
+                                    # their devices count as used, and nothing of it is in
+                                    # the IR, as a switched-off part; its exceptions too: a
+                                    # circuit nobody hears needn't run, the Minimoog's
+                                    # mixer switches, docs/MINIMOOG_PLAN.md "Real time")
 
 Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
@@ -252,9 +260,25 @@ def load_circuit(path: Path) -> CircuitSpec:
             errors.append(f"sections[{i}]: needs `title` and `parts`")
         elif extra := set(s) - {
             "title", "parts", "tolerance", "substeps", "decimate", "owns", "lag_samples",
-            "method", "tube_tables", "substeps_in",
+            "method", "tube_tables", "substeps_in", "when",
         }:  # fmt: skip
             errors.append(f"sections[{i}]: unknown keys {sorted(extra)}")
+        elif "when" in s and (
+            not isinstance(s["when"], list)
+            or not s["when"]
+            or not all(
+                (isinstance(c, str) and c.removeprefix("!") in controls)
+                or (
+                    isinstance(c, list)
+                    and c
+                    and all(isinstance(x, str) and x.removeprefix("!") in controls for x in c)
+                )
+                for c in s["when"]
+            )
+        ):
+            errors.append(
+                f"sections[{i}]: when {s['when']!r} (a list of controls or lists of controls)"
+            )
         elif "substeps" in s and (
             isinstance(s["substeps"], bool)
             or not isinstance(s["substeps"], int)

@@ -2716,6 +2716,24 @@ pub fn build_ir_live(
     let mut k_island_of: Vec<bool> = Vec::new();
     for s in &spec.sections {
         ctx.section_tolerance = s.tolerance.clone();
+        // `when`: built only while one of its controls is on (else expanded, as a
+        // switched-off part: its devices count as used, nothing of it, nor its exceptions,
+        // in the IR)
+        let mut on = s.when.is_none();
+        let where_ = format!("sections.{}.when", s.title);
+        for entry in s.when.iter().flatten() {
+            // an entry: its controls all nonzero (`!control`: at 0)
+            let mut all = true;
+            for c in entry {
+                let (name, negated) = match c.strip_prefix('!') {
+                    Some(n) => (n, true),
+                    None => (c.as_str(), false),
+                };
+                let v = ctx.reference(&where_, name)?;
+                all &= (ctx.float(&where_, &v)? != 0.0) != negated;
+            }
+            on |= all;
+        }
         let mut elements = Vec::new();
         for (name, entry) in s.parts.iter() {
             let part = expand_part(&mut ctx, name, entry, &[])?;
@@ -2725,8 +2743,11 @@ pub fn build_ir_live(
                         dropped_models.insert(d.model.clone());
                     }
                 }
-            } else {
+            } else if on {
                 elements.extend(part);
+            }
+            if !on {
+                continue;
             }
             if let Some(xs) = exc_at.get(name) {
                 for x in xs.clone() {
