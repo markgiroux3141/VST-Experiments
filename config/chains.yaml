@@ -165,7 +165,18 @@ circuits:
         label: Pattern
         choices: [[0, omni], [1, wide omni], [2, wide cardioid], [3, broad cardioid], [4, cardioid], [5, supercardioid], [6, hypercardioid], [7, narrow figure-8], [8, figure-8]]
         default: 4
-  telefunken_ela_m251: {kind: mic, tag: m251, label: ELA M 251, wp: 18}
+  telefunken_ela_m251:              # by inference (CHAINS_PLAN.md WP18): the CK12, the 6072
+    kind: mic                       # cathode-biased, T14/1; the head's three patterns
+    tag: m251
+    label: ELA M 251
+    output: out
+    drop: [RLOAD]
+    pattern: {setting: pattern}
+    settings:
+      - key: pattern
+        label: Pattern
+        choices: [[0, omni], [1, cardioid], [2, figure-8]]
+        default: 1
   neumann_m49: {kind: mic, tag: m49, label: Neumann M49, wp: 29}
   neumann_u67: {kind: mic, tag: u67, label: Neumann U67, wp: 28}
   neumann_u87:                      # the K87 at its three patterns; -10 dB pad

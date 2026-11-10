@@ -1,0 +1,134 @@
+# Telefunken ELA M 251 E (AKG for Telefunken, 1959-) as a circuit file (the chains build-out's
+# WP18). Built by inference (the user's decision, 2026-11-10: a legible drawing can't be had):
+# data/schematics/telefunken_ela_m251/README.md has what AKG's 1961 drawing Z. Nr. 1524 Sch 2 f
+# shows legibly and what is inferred; CHAINS_PLAN.md WP18's Decisions the calls.
+#
+# Sources:
+#   "akg: ..."         AKG's drawing 1524 Sch 2 f (2 Jan. 1961), its parts list, read upscaled
+#   "derived: ..."     from akg_c12.yaml (the same capsule, tube and transformer) or arithmetic
+#   "provisional: ..." model knowledge
+#
+# The capsule CK12@1 as in akg_c12.yaml (the pressure at its front on `in`, at its rear on the
+# control input `p_rear`); the backplate the signal electrode, polarized at B+ / 2 (R3 / R4)
+# through R2 / C1 and R9 (the head), into the grid through C5; the front diaphragm at ground; the
+# rear diaphragm switched by the head's PATTERN switch to ground (omni), to the polarization line
+# (cardioid: the rear unpolarized) or to B+ (figure-8; inferred). Each position is a capsule
+# instance at its equivalent polarizations (akg_c12.yaml's positions 0 / 4 / 8). The 6072 (=
+# 12AY7) with cathode bias R11 / C4 (the drawing; the C12 grounds its cathode), R10 the anode
+# load, C2 across it, C3 into T14/1 strapped 200 ohm. Not modelled: the supply (B+ ideal), the
+# heater, the cable, the second triode section, noise.
+
+title: "Telefunken ELA M 251 E"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, g, a, k, bp, rd, pol, bplus, op]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "derived: akg_c12.yaml's (0 dBFS = 20 Pa peak at the capsule)"}
+  output_volts_peak: {value: 0.5, source: "derived: akg_c12.yaml's (the same capsule into a similar stage, ~10 mV/Pa)"}
+
+controls:
+  pattern: {value: 1, choices: [0, 1, 2], unit: position, source: "akg: the 251 E's head, a three-position pattern switch (O / B / 8)", notes: "0 omni, 1 cardioid, 2 figure-8"}
+
+values:
+  capsule_model: {value: CK12@1, source: "derived: akg_c12.yaml's (AKG's CK12; the 251 E used it)"}
+  bplus_v: {value: 120.0, source: "derived: akg_c12.yaml (the C12 brochure's 'plate voltage 120 vdc'); the 251's supply isn't documented (provisional)"}
+  pol_front_v: {value: 60.0, source: "derived: B+ x R4 / (R3 + R4) = 60 V on the backplate (no DC in R2 / R9), the front diaphragm at ground"}
+  pol_rear_omni_v: {value: 60.0, source: "derived: the rear diaphragm at ground (as the front: omni)"}
+  pol_rear_cardioid_v: {value: 0.0, source: "derived: the rear diaphragm on the polarization line (at the backplate's voltage: cardioid)"}
+  pol_rear_eight_v: {value: -60.0, source: "derived: the rear diaphragm at B+ (60 - 120 V: figure-8; inferred, the head's decks aren't legible)"}
+  r1_ohm: {value: 30.0e+6, source: "akg: R1 30 MOhm 1/2 W (the grid leak)"}
+  r2_ohm: {value: 8.0e+6, source: "akg: R2 8 MOhm 1/4 W"}
+  r3_ohm: {value: 0.5e+6, source: "akg: R3 0.5 MOhm 1/10 W"}
+  r4_ohm: {value: 0.5e+6, source: "akg: R4 0.5 MOhm 1/10 W"}
+  r9_ohm: {value: 30.0e+6, source: "akg: R9 30 MOhm 1/4 W (the 251 E's head; its place, the backplate's feed, inferred)"}
+  r10_ohm: {value: 0.1e+6, source: "akg: R10 0.1 MOhm 1/4 W (the anode load)"}
+  r11_ohm: {value: 1800.0, source: "akg: R11 1.8 kOhm 1/8 W (the cathode)"}
+  c1_f: {value: 4000.0e-12, source: "akg: C1 4000 pF / 350 V ceramic"}
+  c2_f: {value: 100.0e-12, source: "akg: C2 100 pF / 500 V ceramic"}
+  c3_f: {value: 1.0e-6, source: "akg: C3 1 uF / 160 V electrolytic"}
+  c4_f: {value: 20.0e-6, source: "akg: C4 20 uF / 6 V electrolytic"}
+  c5_f: {value: 1000.0e-12, source: "akg: C5 1000 pF / 125 V Styroflex (the backplate to the grid, as the C12's C13)"}
+  contact_ohm: {value: 0.01, source: "provisional: model knowledge (a switch contact, ~10 mOhm)"}
+  # --- T14/1, as akg_c12.yaml -------------------------------------------------------------
+  t14_ratio: {value: 0.0869565, source: "derived: akg_c12.yaml (haufe: 11,5 : 1, the 200 ohm strapping)"}
+  t14_turns: {value: 8000, source: "derived: akg_c12.yaml (provisional there)"}
+  t14_r_pri_ohm: {value: 3080.0, source: "derived: akg_c12.yaml (haufe: bu-bu 3,08 kOhm)"}
+  t14_r_sec_ohm: {value: 61.0, source: "derived: akg_c12.yaml (haufe: rd-rd 61 ohm)"}
+  t14_core_material: {value: mumetall, source: "derived: akg_c12.yaml (provisional there)"}
+  t14_core_area_m2: {value: 1.35e-5, source: "derived: akg_c12.yaml (provisional there)"}
+  t14_core_path_m: {value: 0.017, source: "derived: akg_c12.yaml (provisional there)"}
+  t14_gap_m: {value: 9.0e-6, source: "derived: akg_c12.yaml (fitted there to the C12 brochure's omni curve at 40-60 Hz)"}
+  t14_leakage_h: {value: 0.3, source: "derived: akg_c12.yaml (provisional there)"}
+  t14_c_pri_f: {value: 60.0e-12, source: "derived: akg_c12.yaml (provisional there)"}
+  load_ohm: {value: 100.0e+3, source: "derived: akg_c12.yaml's no-load stand-in (a sensitivity at the open 200 ohm winding)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its printed value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (1950s precision carbon resistors)"}
+  tol_film_pct: {value: 10.0, source: "provisional: model knowledge (ceramic and Styroflex capacitors of the 1950s)"}
+  tol_electrolytic_minus_pct: {value: 20.0, source: "provisional: model knowledge (electrolytics, -20 / +50 %)"}
+  tol_electrolytic_plus_pct: {value: 50.0, source: "provisional: model knowledge (electrolytics, -20 / +50 %)"}
+  tube_emission_pct: {value: 10.0, source: "provisional: model knowledge (plate current of new tubes of one type at fixed bias, +-10..20%)"}
+  tube_mu_pct: {value: 3.0, source: "provisional: model knowledge (grid-pitch tolerance, a few %)"}
+
+tolerance:
+  source: "provisional: the drawing prints no tolerances; classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  tube: {emission_pct: tube_emission_pct, mu_pct: tube_mu_pct}
+  bands:
+    r5: tol_resistor_pct
+    film: tol_film_pct
+    electrolytic: [tol_electrolytic_minus_pct, tol_electrolytic_plus_pct]
+  classes:
+    r5: [R1, R2, R3, R4, R9, R10, R11]
+    film: [C1, C2, C5]
+    electrolytic: [C3, C4]
+
+devices:
+  V1: {device: 12AY7@1, tolerance: tube}
+
+sections:
+  - title: supply
+    parts:
+      VB: {V: [bplus, "0"], v: bplus_v}
+      # B+ / 2 by R3 / R4, through R2 with C1 to ground (the drawing).
+      R3: {R: [bplus, pd], r: r3_ohm}
+      R4: {R: [pd, "0"], r: r4_ohm}
+      R2: {R: [pd, pol], r: r2_ohm}
+      C1: {C: [pol, "0"], c: c1_f}
+
+  - title: capsule
+    parts:
+      R9: {R: [pol, bp], r: r9_ohm}
+      SREAR:
+        switch: pattern
+        parts:
+          RW0: {R: ["0", rd], r: contact_ohm, tolerance: none, in: [0]}
+          RW1: {R: [pol, rd], r: contact_ohm, tolerance: none, in: [1]}
+          RW2: {R: [bplus, rd], r: contact_ohm, tolerance: none, in: [2]}
+      SCAP:
+        switch: pattern
+        parts:
+          KC0: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_omni_v, in: [0]}
+          KC1: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_cardioid_v, in: [1]}
+          KC2: {capsule_dual: [in, p_rear, bp, "0", rd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_eight_v, in: [2]}
+
+  - title: amplifier
+    parts:
+      C5: {C: [bp, g], c: c5_f}
+      R1: {R: [g, "0"], r: r1_ohm}
+      XV1: {device: [a, g, k], model: V1}
+      R11: {R: [k, "0"], r: r11_ohm}
+      C4: {C: [k, "0"], c: c4_f}
+      R10: {R: [bplus, a], r: r10_ohm}
+      C2: {C: [a, "0"], c: c2_f}
+      C3: {C: [a, op], c: c3_f}
+      T14:
+        transformer:
+          p: {nodes: [op, "0"], r: t14_r_pri_ohm, c: t14_c_pri_f}
+          s: {nodes: [out, "0"], ratio: t14_ratio, r: t14_r_sec_ohm}
+        core: {material: t14_core_material, area_m2: t14_core_area_m2, path_m: t14_core_path_m, gap_m: t14_gap_m}
+        turns: t14_turns
+        leakage_h: t14_leakage_h
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

@@ -91,6 +91,21 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "SM57 into Helios",
+   "file": "SM57_into_Helios.wav",
+   "chain": "sm57_helios",
+   "set": {},
+   "pan": 0.1,
+   "entries": "body {'form': 'dynamic', 'face_radius_m': 0.013, 'ports_m': [0.003, 0.009], 'cartridge_length_m': 0.022, 'head_radius_m': 0.015875, 'head_length_m': 0.0635, 'taper_length_m': 0.07539, 'end_radius_m': 0.0119, 'end_length_m': 0.02024}",
+   "rms_dbfs": -29.96,
+   "peak_dbfs": -19.16,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -105,6 +120,6 @@
   8000,
   16000
  ],
- "wall_s": 1089.9,
+ "wall_s": 24.9,
  "seconds": 8.999
 }

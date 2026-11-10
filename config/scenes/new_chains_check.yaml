@@ -41,3 +41,8 @@ mics:
     position_m: [2.0, 2.25, 1.0]
     aim: {azimuth_deg: 90, elevation_deg: 30}
     pan: 0.1
+  - name: ELA M 251 into 1073
+    chain: m251_n1073
+    position_m: [2.4, 2.75, 1.4]
+    aim: {azimuth_deg: -150}
+    pan: -0.1
