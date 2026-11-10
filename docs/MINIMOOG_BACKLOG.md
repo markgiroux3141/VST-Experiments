@@ -32,7 +32,9 @@ when the work paused. The plan's Status section has the measurements behind each
    bring it to the manual's 50 %. Not drawn yet.
 5. **Red noise** (board 3: R12, C7, C8, Q6, R28 / R23, C10, C28, R59: not traced in full) and SW14's second pole (pink /
    red to the modulation mix); the overload lamp driver (circuit No. 11).
-6. **The sub-audio step at key-down** with every mixer level at 0 (~93 mV at the MAIN OUTPUT, -42 dBFS peak).
+6. **The sub-audio step at key-down** with every mixer level at 0 (~93 mV at the MAIN OUTPUT, -42 dBFS peak), and its
+   twin at key-up with the DECAY switch off: the note gone within 50 ms (the audio band down >100 dB), a sub-20 Hz
+   offset of ~-64 mV left fading over ~0.3 s (`voice_bench --up 1.5 --set decay_on=0 --probe out`).
 7. **The 726's heater loop** (drift), the comparator macro's slow-ramp delay (item 4 may make it moot).
 8. **Python's YAML loader accepts duplicated keys** (the Rust builder refuses them): a duplicated `r11_ohm` in the filter
    board silently replaced the VCA's R11 for a moment this session. A load-time check in `varimu.circuit.spec` would

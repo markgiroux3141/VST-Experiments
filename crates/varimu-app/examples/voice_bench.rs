@@ -3,7 +3,7 @@
 //! Minimoog voice (docs/MINIMOOG_PLAN.md, "Real time").
 //!
 //!     cargo run --release -p varimu-app --example voice_bench -- [--device minimoog_voice]
-//!         [--for S] [--note 57] [--block 512] [--restrike S] [--set KEY=VALUE ...]
+//!         [--for S] [--note 57] [--block 512] [--restrike S] [--up S] [--set KEY=VALUE ...]
 //!         [--partition "TITLE,TITLE|TITLE"] [--newton REL,VN] [--out out.f32]
 //!         [--quality draft-1x|draft-2x|draft|production] (the device's by default)
 //!
@@ -40,6 +40,7 @@ fn main() -> Result<(), String> {
     let mut device = "minimoog_voice".to_string();
     let (mut seconds, mut note, mut block) = (10.0f64, 57u8, 512usize);
     let mut restrike: Option<f64> = None;
+    let mut up_at: Option<f64> = None;
     let mut sets: Vec<(String, Value)> = Vec::new();
     let mut partition: Option<String> = None;
     let mut newton: Option<(f64, f64)> = None;
@@ -52,6 +53,7 @@ fn main() -> Result<(), String> {
             "--device" => device = next()?,
             "--for" => seconds = next()?.parse().map_err(|e| format!("{e}"))?,
             "--note" => note = next()?.parse().map_err(|e| format!("{e}"))?,
+            "--up" => up_at = Some(next()?.parse().map_err(|e| format!("{e}"))?),
             "--restrike" => restrike = Some(next()?.parse().map_err(|e| format!("{e}"))?),
             "--block" => block = next()?.parse().map_err(|e| format!("{e}"))?,
             "--set" => {
@@ -127,7 +129,7 @@ fn main() -> Result<(), String> {
     let rate = s.host() as usize;
     if !probes.is_empty() {
         return probe_run(
-            &circuit, &v, &s, &feeds, &level, &c0, seconds, block, &probes, out,
+            &circuit, &v, &s, &feeds, &level, &c0, seconds, block, &probes, out, up_at,
         );
     }
     let t_build = Instant::now();
@@ -143,7 +145,8 @@ fn main() -> Result<(), String> {
     let mut peak = 0.0f32;
     let mut audio: Vec<f32> = Vec::new();
     for b in 0..n_blocks {
-        let down = key_down(b * block, rate, restrike);
+        let down = key_down(b * block, rate, restrike)
+            && !up_at.is_some_and(|u| (b * block) as f64 >= u * rate as f64);
         let ctl: Vec<Vec<f64>> = feeds.iter().map(|f| vec![level(f, down); block]).collect();
         let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
         let t0 = Instant::now();
@@ -211,6 +214,7 @@ fn probe_run(
     block: usize,
     probes: &[String],
     out: Option<String>,
+    up_at: Option<f64>,
 ) -> Result<(), String> {
     let mut ir = circuit.build(v)?;
     ir.probes = probes
@@ -228,7 +232,8 @@ fn probe_run(
     let mut got: Vec<Vec<f64>> = vec![Vec::new(); probes.len()];
     let n_blocks = (seconds * rate as f64 / block as f64).ceil() as usize;
     for b in 0..n_blocks {
-        let down = key_down(b * block, rate, None);
+        let down = key_down(b * block, rate, None)
+            && !up_at.is_some_and(|u| (b * block) as f64 >= u * rate as f64);
         let ctl: Vec<Vec<f64>> = feeds.iter().map(|f| vec![level(f, down); block]).collect();
         let refs: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
         let o = stream
