@@ -51,10 +51,14 @@ runs**.
   the Neumann KM 84 (`config/circuits/neumann_km84.yaml` from Neumann's 930-12; `KK84@1`); WP24's
   Notes. WP15 (2026-11-10): the Shure SM7 (`config/circuits/shure_sm7.yaml`, `R_SM7@1` fitted to
   the SM7B sheet; the switches not modelled); WP15's Notes.
-- **Next:** WP25 (U47 fet: Neumann's drawing is in `data/schematics/neumann_u47_fet/`, the
-  input network read: its README); WP17 (Beyer M160: its sheets on RecordingHacks,
-  `http://recordinghacks.com/pdf/beyerdynamic/m160_data_en.pdf`); WP16 (Royer R-121); WP19
-  (Helios); WP15's switches; WP23 (C414) and WP18 (ELA M 251) wait on files (below) (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+- **Next:** WP25 (U47 fet: Neumann's drawing and manual in `data/schematics/neumann_u47_fet/`, the
+  input network and the output side read, the amplifier loop T2-T6 still to trace: its README;
+  `K47@3` exists); WP17 (Beyer M160: its sheets in `data/schematics/beyer_m160/`, raster charts;
+  a double ribbon at hypercardioid on the 77-DX's labyrinth machinery); WP16 (Royer R-121); WP19
+  (Helios: the user's IA-H9 files in `data/schematics/helios_ia_h9/`); WP15's switches and WP14's
+  bass switch (their curves digitized); WP13 (RE20) waits on the N-entry room generalization (its
+  Decision); WP20 (TG) waits on drawings BE232 / AE.203 (`data/schematics/emi_tg12345/README.md`);
+  WP23 (C414) and WP18 (ELA M 251) wait on files (below).
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user (files, 2026-11-10):** the AKG C414's schematic (no open copy found:
   the C414 B-ULS's is an attachment in this GroupDIY thread, or radiomuseum.org by request):
