@@ -82,10 +82,13 @@ second machine on the same medium. The first build is the **Ampex 300-4**: four 
 351's electronics on a 1/2 in headblock. 8 tracks (1 in) is a later variant: the same medium with
 N = 8.
 
-### Formats *(to source: NAB multitrack standard, the Ampex manuals)*
+### Formats (sourced 2026-11-10: data/schematics/ampex_300_4/README.md)
 - **4 tracks on 1/2 in tape (the build)**; 8 on 1 in later. Tracks 0.070 in (1.78 mm) wide on
   0.130 in centres, so a 0.060 in (1.52 mm) guard band between neighbours: the gap the crosstalk
-  crosses.
+  crosses (the 354 manual's "4 track master" layout; Ampex's 1959 bulletin AI-14 says 80 mil,
+  which can't fit four with 60 mil gaps on 500 mil). AI-14: S/N about 55 dB, crosstalk about
+  50 dB for this format. The 300 came with 1/2 in heads in three- and four-channel versions,
+  separate erase heads, and one **master bias oscillator** feeding "slave" channels.
 - On 1/2 in, tracks 1 and 4 run along the tape's edges and 2 and 3 have two neighbours each. Who
   sits next to whom is the engineer's choice and sets the crosstalk.
 - 15 ips (30 later). NAB equalization.
@@ -171,6 +174,44 @@ optional overdub-sequence render (decision 4). Cost: four times the 351's record
 pieces (P3). The 351's print runs 10x slower than real time in pieces on the GPU, so 4 tracks may
 be ~0.5-1 hour for this song. Measure before promising.
 
+### Where it stands (2026-11-10, the first build session)
+
+- **MT0 done.** `data/schematics/ampex_300_4/README.md`: Ampex's 1959 *Technical Notes on
+  Multi-Channel Recording* (AI-14: formats, S/N against width, crosstalk, Sel-Sync, the master
+  bias oscillator), the 1976 head assembly list (the 300-4's stack 02-31055-02, part numbers
+  only), the 1970 catalog, the 354 manual's primer. Its **measured crosstalk curve** (a
+  three-track Model 300) is digitized: `data/datasheets/ampex_300_crosstalk.csv`, sidecar
+  `ampex_354_manual.provenance.yaml` (one of its dB labels is misprinted; read so the mid band
+  is -59 dB, in line with Ampex's figures). Sel-Sync has no published response: AI-14 only says
+  a record head "can serve reasonably well as a playback head". Still missing: the 300's own
+  manual (head dimensions, the Sel-Sync switching) and 3M's 201 / 202 data sheets (the AES
+  archive refuses scripted fetches: the user fetches it).
+- **MT1 provisional.** `SCOTCH202@1` (`scripts/make_scotch202.py`): SCOTCH111@3 moved to
+  Eilers' row (315 Oe, the same 0.64 lines per 1/4 in on 0.51 mil), the grain's particle volume
+  halved for "low noise" (a reseller's -3 dB). A fitted version when 3M's sheet is in.
+- **MT2: the medium already does it.** Every tape element of a circuit draws its transport from
+  the circuit's seed and its grain from its own name, so four tape parts share one transport
+  bit for bit and hiss independently; the grain's S/N goes as sqrt(width) (70 mil vs 234 mil:
+  5.24 dB, as Ampex says). `tests/test_multitrack.py`. Still to build: the four tape parts
+  in the deck's circuit (MT5).
+- **MT3: the model, in Python** (`varimu/multitrack/crosstalk.py`, outside the render cache key;
+  `scripts/multitrack_crosstalk_study.py` -> `reports/multitrack/crosstalk/`). Three
+  mechanisms, each named by Ampex:
+  1. *the heads' outer contour* reads the neighbour's long wavelengths (the shields screen the
+     gap, not the field in air past the stack): our head's contour term times a lateral factor
+     (a strip's 3D field, K0 across the width), the bass bleed, -30 to -40 dB below ~60 Hz;
+  2. *the cores' coupling* ("stacked heads form a small transformer"): flat, the -59 dB
+     plateau;
+  3. *the record heads' mutual inductance and capacitance*: +6 / +12 dB an octave, recorded on
+     the neighbour, -43 dB at 16 kHz.
+  Fitted with our 351's repro head on the curve's octave envelope: **1.85 dB rms** (third
+  octaves 4.8 dB: the curve's lobes sit elsewhere, worst 71 Hz, -16.7 dB). Scaled to four
+  tracks by AI-14's 55 -> 50 dB: **-52 dB mid band**, -30 dB at 31.5 Hz, -38 dB at 16 kHz
+  (15 ips). Above 16 kHz Ampex's curve levels off; ours keeps rising (3 dB over at 20 kHz).
+- **Not built yet:** crosstalk in the engine (the medium's neighbour pickup, terms 1-2; the
+  record coils' coupling in the circuit, term 3), Sel-Sync (MT4), the deck's circuit (MT5),
+  the session (MT6).
+
 ### Milestones (first pass: the tube Ampex 300-4 with Sel-Sync and crosstalk)
 - **MT0 Sources.** The Ampex 300-4's manual (the 1/2 in headblock, track format, head spacings,
   the Sel-Sync switching and its EQ), tape data for 201 / 202, published crosstalk and Sel-Sync
@@ -203,14 +244,34 @@ Decided (the user's, 2026-11-10):
 1. The machine: **A, the tube Ampex 300 with the 351's electronics.**
 2. **4 tracks** on 1/2 in first (this song's guitar, bass, lead, harmonies); 8 later.
 3. **Sel-Sync and crosstalk in the first pass.**
+- Later the same day, the user took Claude's recommendations on 4, 6 and 7: **a one-pass print**
+  of the four stems (4); **the 351's repro head** for the deck, the lobe-fitted head a later
+  refinement (6a); **one multi-rate island** for the four record sides on the master oscillator,
+  its speed measured first (7). 5 (the track assignment) stays open.
 
-Open:
+The questions as they were put:
 4. For this song: a one-pass print of the four stems (no Sel-Sync heard), or a period overdub
    sequence (e.g. guitar and bass as the basic tracks, then the lead and the harmonies overdubbed,
    the session rendered in that order with Sel-Sync monitoring). With finished stems the second
    changes only what a performer would have heard, so it matters for live overdubs, not for these
    stems.
 5. The track assignment for this song (which part sits next to the bass).
+6. **The deck's repro heads** (MT3's study, 2026-11-10):
+   - (a) the 351's head (pole 1.5 mm, relax 5.5 mm, calibrated with the 351's electronics):
+     crosstalk fits the octave envelope (1.85 dB rms) but not the lobes (4.8 dB at third
+     octaves);
+   - (b) a head whose contour is fitted to the lobes too: pole 6.3 mm, relax 12 mm (at the
+     search's bound), third octaves 2.1 dB rms, its own response within about +-2.2 dB
+     20 Hz-1 kHz at 15 ips (the 351's head: +3.7 dB at 40 Hz). But its unshielded fraction
+     comes out 1.6 (above 1: the lateral factor runs low), and the deck would need its own
+     alignment.
+   Recommended: (a) for the first pass (one head model for the 351 and the deck), (b) as a
+   refinement once the 300's head dimensions are found.
+7. **The record side's threads.** One master oscillator biases all four record heads, and
+   term 3 couples their coils: physically one solve, one multi-rate island for the four record
+   sides (about 4x the 351's record side on one thread; prints run in pieces, P3). Four
+   islands would need the oscillator and the coupling cut a sample late. Recommended: one
+   island ("most organic first"); measure before anything else.
 
 ## PG2: a console mix bus with iron
 
@@ -244,5 +305,9 @@ HLF-3C wait.
 
 *Updated at the end of every session.*
 
-- 2026-11-10: written. Nothing built. The user chose PG1's machine (the tube Ampex 300-4), 4
-  tracks, Sel-Sync and crosstalk in the first pass. Next: MT0 (sources).
+- 2026-11-10: written. The user chose PG1's machine (the tube Ampex 300-4), 4 tracks, Sel-Sync
+  and crosstalk in the first pass.
+- 2026-11-10 (later, on main): MT0 done, MT1 provisional (`SCOTCH202@1`), MT2 verified on the
+  medium, MT3's model built and fitted in Python ("Where it stands" above). Decisions 4, 6, 7
+  taken (Claude's recommendations). Next: crosstalk in the engine (circuitsim's tape stream reading its neighbours, the Python
+  reference first) and MT4 (Sel-Sync: the record head's playback).

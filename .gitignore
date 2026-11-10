@@ -63,6 +63,7 @@ _autosave-*
 
 # Source scans too large or not ours to redistribute (their READMEs list URLs and sha256)
 data/schematics/ampex_351/*.pdf
+data/schematics/ampex_300_4/*.pdf
 data/datasheets/tape/aes_3m_audio_open_reel_products.pdf
 
 # Generated audio under reports/ (the room loop's prints and mixes, the reverbs' impulses and

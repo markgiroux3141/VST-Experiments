@@ -1,0 +1,41 @@
+device: "Ampex Model 300, three channels on 1/2 in tape (100 mil tracks, 85 mil apart)"
+document: "Ampex 354 instruction manual, TM-2011B, 89-0131 Issue A (section 5, the magnetic recording primer)"
+publisher: "Ampex Corporation"
+date: "copyright 1960"
+local_copy: ../schematics/ampex_351/Ampex354_TM-2011B.pdf
+local_copy_sha256_prefix: f53db5d04589f7c0
+scan_source: "web: https://bh.hallikainen.org/uploads/harold/20140710132548.pdf"
+digitized_with: >-
+  pdftoppm render of PDF page index 44 (printed p. 12) at 600 dpi; the plot's frame and grid
+  found from dark-pixel rows and columns (20 Hz at x 2721, 20 kHz at x 4497: 592 px a decade;
+  the 100 Hz and 10 kHz lines fall on the labels; dB lines at y 369, 568, 767, 965, 1166);
+  the curve traced column by column with the grid masked (a script, scratch), checked on an
+  overlay, binned to 1/24 octave (median); the three nulls read by eye on the render where the
+  printed line thins (34.8 Hz -45.0, 94.4 Hz -60.1, 228 Hz -59.8 dB); one bin at 153 Hz
+  (-46.0, four columns flat: a printed mark, not the line, which reads -51.5 there) removed; the
+  trace has no points 115-130 Hz (the line's top of the bump, hidden by a grid line)
+digitized_by: Claude Code
+digitized_on: 2026-11-10
+axis_calibration: >-
+  x: log, 20 Hz - 20 kHz. y: five evenly spaced lines printed -30, -40, -50, -70, -80 (the
+  last two barely legible): one label is misprinted. Read as -30 / -40 / -50 / -60 / -70
+  (10 dB a line, the top three labels taken as right): the mid band then sits at about -59 dB,
+  in line with Ampex's crosstalk figures for these machines (55 dB and up: AmpexMultiChannel
+  Recording.pdf p. 10-13; 50 dB min at 500 Hz on the 1970 machines). Read the other way (the
+  bottom two labels right), every point is 10 dB lower; the CSV is reading (a).
+estimated_error: "+-1 dB on the traced line, +-3% in frequency; the whole curve's offset is the label question above"
+files:
+  ampex_300_crosstalk.csv:
+    figures: >-
+      p. 12, "Typical crosstalk vs. frequency curve on adjacent channels of an Ampex three
+      channel Model 300. Channel 2 was recording at normal operating level and the record head
+      of Channel 1 was connected. Normal bias and NAB equalization were used." The axis:
+      "recorded level in channel 2, db" (the crosstalk on channel 1 re channel 2's level).
+    columns: f_hz, db (crosstalk re channel 2's operating level)
+    notes: >-
+      The tape speed isn't printed (a Model 300 master: 15 ips is the likely one). The text
+      beside it (p. 12) gives the two mechanisms: at long wavelengths the reproduce head picks
+      up the neighbouring track's recorded flux; at high frequencies the record heads' mutual
+      inductance and capacitance put one track's signal into the other record head, which
+      records it. The head layouts on the same page: three tracks of 100 mil 85 mil apart, four
+      tracks (4 track master) of 70 mil 60 mil apart, on 1/2 in tape.

@@ -358,6 +358,14 @@
   oxide_m: 12.7e-6              # 0.5 mil
   base_m: 36.1e-6               # 1.42 mil acetate
 
+"SCOTCH202":
+  source: "D. A. Eilers (ex-3M), '3M Audio Open Reel Tapes, in Customary Units', rev.2-cust 2011-07-24, AES Historical Committee, p.1, row 202 (1962, binder C, black, polyester; 201 is the same on acetate, 203 on 0.92 mil polyester); local copy tape/aes_3m_audio_open_reel_products.pdf (web: https://aes2.org/wp-content/uploads/2025/01/aorprod-cust.pdf)"
+  coercivity_a_m: 25067.0       # 315 Oe
+  retentivity_t: 0.079          # 790 G
+  remanence_wb_per_m: 1.008e-6  # 0.64 lines per 1/4" (0 dB re 111)
+  oxide_m: 12.95e-6             # 0.51 mil
+  base_m: 36.1e-6               # 1.42 mil polyester
+
 "LAMP327":
   source: "the #327 miniature lamp (ANSI 327), as distributors list it: 28 V, 0.04 A, T-1 3/4 bulb, midget flanged base, C-2F filament, MSCP 0.34, 4,000 h (web: https://1000bulbs.com/product/1208/IND-327-10PK.html; web: https://www.platt.com/p/0888213/sylvania/miniature-incandescent-lamp-t1-3-4-04a-28v-/046135351556/syl327)"
   v_rated: 28.0
