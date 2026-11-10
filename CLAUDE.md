@@ -151,6 +151,13 @@ real-hardware captures, coupling between devices (loading, shared mains, ground 
 the combo amp's acoustic loop, AM broadcast and the tube radio, a theremin, circuits from
 scans, manuals for invented devices.
 
+Going deeper for emergence ([docs/EMERGENCE_RESEARCH.md](docs/EMERGENCE_RESEARCH.md),
+2026-11-10, a brainstorm with the user; nothing built, mostly for offline renders): eleven
+research directions ranked by Claude (voices pulling into tune through a shared supply,
+counterfactual hardware, charting the design space, feedback edges, tubes from their
+electrodes, ...), each with experiments and a short prior-art search, plus the rules any
+"it emerged" claim must pass (physics or numerics, inside the model's fitted range).
+
 Invented instruments and processors (2026-11-06, a brainstorm with the user, parked; nothing
 built): [docs/INVENTED_DEVICES.md](docs/INVENTED_DEVICES.md). It has a method for designing
 devices that never existed from parts we model, ten instruments (the Nickel Organ, a
