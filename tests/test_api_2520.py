@@ -1,7 +1,7 @@
 """The API 2520 op-amp from BJTs (docs/CHAINS_PLAN.md WP12): config/circuits/api_2520_test.yaml,
 the GroupDIY "2520 R1" drawing in API's 1972 Fig. 1 feedback (gain 1 + 47k / 470). Checked
-against API's data sheet where the model meets it; the misses (quiescent current, bandwidth) are
-asserted at their measured size (WP12's Notes)."""
+against API's data sheet; the bias string and C5 are fitted to the sheet's quiescent current and
+bandwidth (WP12's Notes)."""
 
 from __future__ import annotations
 
@@ -60,9 +60,43 @@ def test_rated_output_distortion(ir):
     assert o.max() > 10.5  # 7.75 V rms reached unclipped
 
 
-def test_bandwidth_is_a_known_miss(ir):
-    """At 40 dB the model is ~2 dB down at 20 kHz (a gain-bandwidth near 3 MHz); API's Fig. 1
-    is flat +-0.25 dB to 20 kHz at 58 dB. Asserted at its measured size."""
+def test_quiescent_current(ir):
+    """api: 15 mA quiescent at +-15 V (the bias resistor's fit), most of it in Q7 / Q8."""
+    v = _run(ir, 1000.0, 0.0, 0.02)
+    L = {k: v[f"v({k})"][-1] for k in ("vA", "vT", "vD", "vF", "e6", "vG", "e7", "out")}
+    iq7 = (L["e7"] - L["out"]) / 5.6
+    total = (
+        (15 - L["vA"]) / 82e3
+        + (15 - L["vT"]) / 22e3
+        + (15 - L["vD"]) / 3e3
+        + (15 - L["vF"]) / 4e3
+        + (15 - L["e6"]) / 1e3
+        + (15 - L["vG"]) / 56
+        + iq7
+    )
+    assert total == pytest.approx(0.015, rel=0.05)
+    assert 0.010 < iq7 < 0.014
+
+
+def test_low_level_distortion(ir):
+    """Class AB at 12.7 mA: 1 V rms into 600 ohm well under api's 0.2% (the class-B idle of the
+    first transcription gave 0.16%)."""
+    o = _run(ir, 1000.0, np.sqrt(2) / 101.0)["v(outc)"][-4800:]
+    o = o - o.mean()
+    sp = abs(np.fft.rfft(o * np.hanning(len(o))))
+    fr = np.fft.rfftfreq(len(o), 1 / FS)
+
+    def pk(h):
+        i = int(np.argmin(abs(fr - 1000.0 * h)))
+        return sp[i - 3 : i + 4].max()
+
+    thd = np.sqrt(sum(pk(k) ** 2 for k in range(2, 8))) / pk(1)
+    assert thd < 0.0005
+
+
+def test_bandwidth(ir):
+    """At 40 dB the model is -0.5 dB at 20 kHz (-0.3 dB of it the feedback's 47 pF, C5's fit);
+    API's Fig. 1 is +-0.25 dB to 20 kHz at 58 dB."""
     o = _run(ir, 20000.0, 0.01)["v(outc)"][-4800:]
     g = 20 * np.log10((o.max() - o.min()) / 0.02)
-    assert 37.0 < g < 39.5
+    assert 39.3 < g < 39.9

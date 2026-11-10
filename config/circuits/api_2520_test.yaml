@@ -17,6 +17,9 @@
 # (from Q3's base the path to vJ doesn't invert, so the drawn C5 is positive feedback: it
 # oscillated at ~28 kHz; on vA it is Miller compensation).
 #
+# The bias string: two 1N4148 and a resistor fitted to the data sheet's 15 mA quiescent
+# current, for the drawing's two MZ2361 forward-reference diodes (r_bias_ohm's source says why).
+#
 # Not modelled: the output current-limit clamps D2 / D3 (MZ2361 in the drawing, a zener-like
 # clamp across each output transistor's base-emitter path: the drawing names them but their
 # voltage is unknown); they act only at overload. The input pair is the BC414C (a low-noise
@@ -29,7 +32,7 @@
 
 title: "API 2520 op-amp test"
 input: in
-probes: [out, outc, inm, vA, vB, vC, vD, vF, vG, vH, vJ]
+probes: [out, outc, inm, vA, vB, vC, vD, vF, vG, vH, vJ, vT, e6, e7]
 
 values:
   supply_neg_v: {value: -15.0, source: "api: the data sheet's +-15 VDC supply"}
@@ -61,7 +64,9 @@ values:
   c3_f: {value: 47.0e-12, source: "web: groupdiy 2520 R1 drawing (C3 47p)"}
   r15_ohm: {value: 1.0e+3, source: "web: groupdiy 2520 R1 drawing (R15 1k)"}
   r16_ohm: {value: 47.0e+3, source: "web: groupdiy 2520 R1 drawing (R16 47k)"}
-  c5_f: {value: 47.0e-12, source: "web: groupdiy 2520 R1 drawing (C5 47p)"}
+  c5_f: {value: 10.0e-12, source: "fit: the drawing's C5 47p, moved onto Q4's base (the header), took 1.8 dB at 20 kHz at 40 dB against api's +-0.25 dB (the 1972 sheet's Fig. 1); 10 pF leaves -0.5 dB (-0.3 of it the feedback's 47 pF), and the step response at gain 2 and 101 overshoots 13% / 4% for any C5 from 0 to 47 pF (CHAINS_PLAN.md WP12's Notes)"}
+  r_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the bias string's middle node (between two diodes: varimu check)"}
+  r_bias_ohm: {value: 368.0, source: "fit: the quiescent supply current to api's 15 mA at +-15 V (the data sheet): the drawing's bias string D1 is two MZ2361 forward-reference diodes (~1.3 V each: web: https://datasheets360.com/part/detail/mz2361/-5806921243758777724/), but with the stand-in output cards (Central's generic 2N3053 fit, IS 5.4e-17) two such would run ~65 mA and two 1N4148 0.02 mA; so two 1N4148 plus this resistor (12.7 mA in Q7 / Q8, 14.9 mA in all)"}
 
 devices:
   QIN: {device: BC550C@1, source: "provisional: the BC414C of the drawing's notes (hFE > 400, matched); no card"}
@@ -108,8 +113,10 @@ sections:
       R9: {R: [vp, vG], r: r9_ohm}
       C2: {C: [vD, c2m], c: c2_f}
       R10: {R: [c2m, vH], r: r10_ohm}
-      D1A: {device: [vH, d1m], model: DB}
+      RB: {R: [vH, vHb], r: r_bias_ohm}
+      D1A: {device: [vHb, d1m], model: DB}
       D1B: {device: [d1m, vJ], model: DB}
+      RD1L: {R: [d1m, vJ], r: r_leak_ohm}
       Q5: {bjt: [vJ, vC, e5], model: QSM}
       R13: {R: [e5, vn], r: r13_ohm}
       R14: {R: [vC, r14m], r: r14_ohm}

@@ -82,7 +82,7 @@ controls:
       shorter distances'''
     notes: '0: M (music), 1: V1, 2: V2 (voice: the reactor''s low cut)'
   record_level_a351:
-    value: 0.9447993136689979
+    value: 0.9447651829377177
     min: 0.0
     max: 1.0
     unit: rotation

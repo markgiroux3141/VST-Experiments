@@ -83,6 +83,15 @@ def _porta_law_db(trim: float) -> float:
     return float(20 * np.log10((470e3 + rw) / (rw + 470e3 * k)))
 
 
+def _api_law_db(gain: float) -> float:
+    """312: the 2520's 1 + 47k / (470 + GAIN's reverse audio track) and the AP2503's 1:3
+    (api_312.yaml, the 1972 sheet's Figs. 1 and 2)."""
+    from varimu.circuit import parts
+
+    r = parts.rheostat("R", "a", "b", 25e3, gain, 0.15, reverse=True).r_ohm
+    return float(20 * np.log10((1 + 47e3 / (470.0 + r)) * 3.0))
+
+
 PREAMPS = {
     "ssl_4000e": Preamp(
         circuit="ssl_4000e",
@@ -116,6 +125,20 @@ PREAMPS = {
         sweep_out_db=(-20, -10, -5, 0, 2, 4, 5, 6, 7, 8, 9, 10, 12),
         published_source="sm: the 424's MIC/LINE jacks, '-50 ~ -10 dBV' (a 40 dB range to "
         "-10 dBV; data/schematics/tascam_424/README.md)",
+    ),
+    "api_312": Preamp(
+        circuit="api_312",
+        nominal={"gain": 0.6, "pad": 0, "tap": 0},
+        nominal_gain_db=47.0,
+        gain_key="gain",
+        gain_points=(0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0),
+        law_db=_api_law_db,
+        load_key="r_load_ohm",
+        published={"max_gain_db": 69.0, "flat_tol_db": 0.25, "pad_db": -20.0},  # Z in: "> 1500"
+        published_source="api: the 312 cut sheet (69 dB most gain, 20 dB pad) and the 1972 "
+        "circuit sheet's Fig. 1 (input impedance > 1500 ohm, +-0.25 dB 20-20 kHz; "
+        "data/schematics/api_312/README.md)",
+        pad_key="pad",
     ),
 }
 

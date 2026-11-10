@@ -93,6 +93,12 @@ def _run_ssl(*args, **kwargs):
     return opamp_pre_suite.run(*args, circuit="ssl_4000e", **kwargs)
 
 
+def _run_api312(*args, **kwargs):
+    from varimu.measure import opamp_pre_suite
+
+    return opamp_pre_suite.run(*args, circuit="api_312", **kwargs)
+
+
 def _run_porta(*args, **kwargs):
     from varimu.measure import opamp_pre_suite
 
@@ -133,6 +139,7 @@ PROFILES = {
     "ua_610": Profile("ua_610", "mic_preamp", _run_ua610),
     "ssl_4000e": Profile("ssl_4000e", "mic_preamp", _run_ssl),
     "tascam_portastudio": Profile("tascam_portastudio", "mic_preamp", _run_porta),
+    "api_312": Profile("api_312", "mic_preamp", _run_api312),
     "ampex_351_record": Profile("ampex_351_record", "mic_preamp", _run_a351_record),
     "fairchild_670_keyed": Profile("fairchild_670_keyed", "compressor", _run_keyed),
     "urei_1176": Profile("urei_1176", "compressor", _run_limiter),
