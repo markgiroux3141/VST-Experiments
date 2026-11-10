@@ -273,3 +273,25 @@ code version, and its prints equal Python's renders of the same inputs.
 | Prints pile up on disk (a 3-minute mono print is ~35 MB) | Clean-up removes prints no state in the undo history refers to |
 | An audition sounds different from its print at the start | Expected (a defined start vs. the playhead); measured in F3, shown |
 | Draft-1x's double resampling (48 kHz session -> 96 kHz -> 48 kHz host) | Correct and Python's path; skip the round trip later if it costs |
+
+## Loop renders (2026-11-10, the user's idea)
+
+For a device too slow to play live (the stereo 670: 1.93x real time at draft-1x), the insert
+panel's **⟲ loop** toggle (track and master inserts) renders instead of playing live:
+`varimu_app::loop_render` and `SessionView::sync_loop`.
+
+- The insert's input over the transport's loop (L to R), from 2 s before L (not before the
+  input's start: the device warmed up by the music, the warm-up dropped), is printed in the
+  background through that insert alone at its device's play quality, uncached
+  (`print::Job`, so a stereo input goes the print's way: a two-input device in one run, a
+  stereo device from the mid, others dual-mono). Both channels are heard: no hear L / R / mid.
+- The render plays as a clip on its track in the mix (the audition's mix, the track's own audio
+  replaced), looped by the transport; Space plays it with the other tracks.
+- A change of the input, the loop, the device's values or the trim renders again once the panel
+  holds still for 300 ms; the last render plays meanwhile, the panel's line shows the progress.
+  Make-up, wet and bypass apply at playback (the render is fully wet, no make-up): heard at once.
+- The live status line suggests the toggle when a device's load passes 100 %.
+- As live, the inserts after it aren't heard. What the warm-up doesn't cover (a long release,
+  a tape's run) differs from the print, which stays the reference.
+- Tests: `loop_render::tests` (the excerpt, the gains at playback, a stereo loop through the
+  stereo 670).

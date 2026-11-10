@@ -35,6 +35,7 @@ pub mod components;
 pub mod edit;
 pub mod editor;
 pub mod live;
+pub mod loop_render;
 pub mod loopback;
 pub mod midi;
 pub mod monitor;

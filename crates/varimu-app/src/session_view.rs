@@ -127,12 +127,13 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Sense, Stroke, StrokeKind};
 use serde_json::{Value, json};
 use varimu_app::audio;
 use varimu_app::live::{Circuit, Values};
+use varimu_app::loop_render::{self, Excerpt, Rendered};
 use varimu_app::loopback::{self, Analysis, Calibration, Run};
 use varimu_app::panel::{self as vpanel, DEVICES, Kind, Knob};
 use varimu_app::performance::Performance;
@@ -140,8 +141,8 @@ use varimu_app::player::{BLOCK, InputDevice, Player, Source, State, TimelineKey,
 use varimu_app::prefs::ALIGNMENT_DBFS;
 use varimu_app::print::{Job, KeyRoute, Slot, find_device};
 use varimu_app::session::{
-    Clip, Marker, Monitor, OVERVIEW_BIN, Overview, Printed, Session, Take, Track, default_fade,
-    new_clip_id, take_dir,
+    Clip, Marker, Mix, MixClip, Monitor, NO_TRACK, OVERVIEW_BIN, Overview, Placed, Printed,
+    Session, Take, Track, default_fade, new_clip_id, take_dir,
 };
 use varimu_app::settings::{Quality, Settings};
 use varimu_app::take_render::{self, NOT_RENDERED};
@@ -371,6 +372,34 @@ struct Audition {
     gains: (f64, f64, bool, f64),
 }
 
+/// The open insert's loop render (the panel's "⟲ loop": `varimu_app::loop_render`): the
+/// render wanted (waiting out a knob being turned), the one rendering, the last one finished
+/// and the clip it plays (for its make-up, wet and bypass).
+struct LoopState {
+    track: usize,
+    slot: usize,
+    wanted: Option<(String, Excerpt, Instant)>,
+    job: Option<(String, Excerpt, Job)>,
+    done: Option<Rendered>,
+    /// The clip playing: the render's key and the gains it was made with.
+    clip: Option<(String, (f64, f64, bool), MixClip)>,
+    error: Option<String>,
+}
+
+impl Drop for LoopState {
+    fn drop(&mut self) {
+        if let Some((_, _, j)) = &self.job {
+            j.cancel();
+        }
+    }
+}
+
+/// How long the panel's knobs hold still before a loop render starts (a turn renders once).
+const LOOP_SETTLE: Duration = Duration::from_millis(300);
+
+/// The loop toggle's hover text (both insert panels).
+const LOOP_TIP: &str = "Render the transport's loop through this insert instead of playing it live (for a device too slow to play live): at its play quality, both channels as its print takes them, from 2 s before the loop so it is warmed up; a change of the knobs renders again in the background, the last render plays meanwhile. Make-up, wet and bypass are heard at once.";
+
 /// A track's chain rendering into a new take (⤓ Render): the track, its source take, the
 /// job.
 struct Bake {
@@ -507,6 +536,9 @@ pub struct SessionView {
     audition: Option<Audition>,
     /// The audition's state as the panel shows it (set each frame).
     audition_status: Option<String>,
+    /// The insert panel renders the loop instead of playing its device live ("⟲ loop").
+    loop_mode: bool,
+    loop_render: Option<LoopState>,
     bake: Option<Bake>,
     /// The tracks-only player couldn't start (don't retry every frame).
     mix_failed: bool,
@@ -785,6 +817,8 @@ impl SessionView {
             knobs: HashMap::new(),
             audition: None,
             audition_status: None,
+            loop_mode: false,
+            loop_render: None,
             bake: None,
             mix_failed: false,
             record_pending: false,
@@ -939,7 +973,7 @@ impl SessionView {
                 let mix = match &self.audition {
                     Some(a) if a.track == MASTER => self.session.mix_master_audition(),
                     Some(a) => self.session.mix_audition(a.track),
-                    None => self.session.mix(),
+                    None => self.loop_mix().unwrap_or_else(|| self.session.mix()),
                 };
                 p.set_mix(Arc::new(mix));
             }
@@ -1545,6 +1579,7 @@ impl SessionView {
         }
         self.export_note = None;
         self.render_queue.clear();
+        self.loop_render = None;
         self.record_pending = false;
         self.recording = None;
         // What pointed into it: selections, menus, panels, the roll.
@@ -1755,6 +1790,229 @@ impl SessionView {
         Some((audio, start, key))
     }
 
+    /// Track `t`'s insert `k`'s input, both channels: the print of the inserts before it (if
+    /// the track's print holds it), else the active take; where it starts.
+    fn insert_input_lr(&self, t: usize, k: usize) -> Option<Placed> {
+        let track = self.session.tracks.get(t)?;
+        let (start, lane, lane_r) = track.lane_lr()?;
+        let sig = track.lane_signature();
+        let stage = track.inserts[..k].iter().filter(|s| !s.bypass).count();
+        let printed = track
+            .printed
+            .as_ref()
+            .filter(|p| p.lane == sig && stage > 0 && p.stages.len() >= stage);
+        Some(match printed {
+            Some(p) => (
+                start,
+                p.stages[stage - 1].clone(),
+                p.stages_right.get(stage - 1).cloned(),
+            ),
+            None => (start, lane, lane_r),
+        })
+    }
+
+    /// The master's insert `k`'s input, both channels: the master print's stage before it (if
+    /// that print is of the tracks as they are), else the tracks' sum; where it starts.
+    fn master_input_lr(&self, k: usize) -> Option<Placed> {
+        let (start, l, r) = self.master_input()?;
+        let mix = self.session.master_mix_signature();
+        let stage = self.session.master_inserts[..k]
+            .iter()
+            .filter(|s| !s.bypass)
+            .count();
+        let printed = self
+            .session
+            .master_printed
+            .as_ref()
+            .filter(|p| p.lane == mix && stage > 0 && p.stages.len() >= stage);
+        Some(match printed {
+            Some(p) => (
+                p.start,
+                p.stages[stage - 1].clone(),
+                Some(
+                    p.stages_right
+                        .get(stage - 1)
+                        .cloned()
+                        .unwrap_or_else(|| p.stages[stage - 1].clone()),
+                ),
+            ),
+            None => (start, l, Some(r)),
+        })
+    }
+
+    /// The loop render of insert `k` on track `t` (or the master): its excerpt over the
+    /// transport's loop, rendered again in the background once the panel holds still for
+    /// [`LOOP_SETTLE`], the last render's clip kept for the mix ([`SessionView::loop_mix`]),
+    /// and the panel's status line.
+    fn sync_loop(&mut self, t: usize, k: usize, running: bool) {
+        let rate = self.session.rate;
+        let slot = if t == MASTER {
+            self.session.master_inserts.get(k).cloned()
+        } else {
+            self.session
+                .tracks
+                .get(t)
+                .and_then(|x| x.inserts.get(k).cloned())
+        };
+        let Some(slot) = slot else {
+            self.loop_render = None;
+            return;
+        };
+        if self
+            .loop_render
+            .as_ref()
+            .is_none_or(|l| l.track != t || l.slot != k)
+        {
+            self.loop_render = Some(LoopState {
+                track: t,
+                slot: k,
+                wanted: None,
+                job: None,
+                done: None,
+                clip: None,
+                error: None,
+            });
+        }
+        let quality = find_device(&slot.device).map_or(slot.quality, |d| d.quality);
+        let tr = &self.session.transport;
+        let ex = if !tr.loop_on {
+            Err("turn the loop on (its L and R are what renders)")
+        } else {
+            let grid = Grid::new(rate, tr);
+            let range = (grid.beat(tr.left_beat), grid.beat(tr.right_beat));
+            let input = if t == MASTER {
+                self.master_input_lr(k)
+            } else {
+                self.insert_input_lr(t, k)
+            };
+            let side = if t == MASTER {
+                None
+            } else {
+                self.session.sidechain(t, &slot)
+            };
+            input
+                .and_then(|(start, l, r)| {
+                    loop_render::excerpt(
+                        start,
+                        &l,
+                        r.as_deref().map(Vec::as_slice),
+                        side.as_deref().map(Vec::as_slice),
+                        range,
+                        rate,
+                    )
+                })
+                .ok_or("nothing to play in the loop")
+        };
+        let config = self.root.join("config");
+        let st = self.loop_render.as_mut().expect("just made");
+        // A render finished.
+        if st.job.as_ref().is_some_and(|(_, _, j)| j.is_finished()) {
+            let (key, ex, job) = st.job.take().expect("a job");
+            match job.join() {
+                Some(Ok(prints)) => {
+                    st.done = prints.first().map(|p| Rendered::new(key, &ex, p));
+                    st.error = None;
+                }
+                Some(Err(e)) => st.error = Some(e),
+                None => {}
+            }
+        }
+        let status = match ex {
+            Err(m) => format!("⟲ loop: {m}"),
+            Ok(ex) => {
+                let rs = loop_render::render_slot(&slot, quality);
+                let key = loop_render::key(&rs, &ex);
+                let current = st.done.as_ref().is_some_and(|d| d.key == key)
+                    || st.job.as_ref().is_some_and(|(j, _, _)| *j == key);
+                if current {
+                    st.wanted = None;
+                } else {
+                    if st.wanted.as_ref().is_none_or(|(w, _, _)| *w != key) {
+                        st.wanted = Some((key, ex, Instant::now()));
+                    }
+                    if st
+                        .wanted
+                        .as_ref()
+                        .is_some_and(|(_, _, at)| at.elapsed() >= LOOP_SETTLE)
+                    {
+                        let (key, ex, _) = st.wanted.take().expect("wanted");
+                        if let Some((_, _, old)) = st.job.take() {
+                            old.cancel();
+                        }
+                        let job = Job::spawn(
+                            config,
+                            vec![rs],
+                            vec![ex.side.clone()],
+                            ex.left.clone(),
+                            ex.right.clone(),
+                            rate,
+                            None,
+                        );
+                        st.job = Some((key, ex, job));
+                    }
+                }
+                let heard = if running {
+                    ", playing"
+                } else {
+                    " (Space plays)"
+                };
+                match (&st.job, &st.done, &st.error) {
+                    (Some((_, _, j)), done, _) => format!(
+                        "⟲ loop: rendering {:.0}% at {}{}",
+                        j.progress().1 * 100.0,
+                        quality.name(),
+                        if done.is_some() {
+                            " (the last render plays)"
+                        } else {
+                            ""
+                        }
+                    ),
+                    (None, _, Some(e)) => format!("⟲ loop: the render failed ({e})"),
+                    (None, Some(_), None) if st.wanted.is_some() => {
+                        format!("⟲ loop: rendered{heard} · a change waits")
+                    }
+                    (None, Some(_), None) => format!("⟲ loop: rendered{heard}"),
+                    (None, None, None) => "⟲ loop: about to render".to_string(),
+                }
+            }
+        };
+        // The clip that plays, made again when the render or its gains change.
+        let gains = (slot.makeup_db, slot.wet, slot.bypass);
+        if let Some(d) = &st.done
+            && st
+                .clip
+                .as_ref()
+                .is_none_or(|(k, g, _)| *k != d.key || *g != gains)
+        {
+            let track = if t == MASTER { NO_TRACK } else { t };
+            st.clip = Some((d.key.clone(), gains, d.clip(&slot, (1.0, 1.0), track)));
+        }
+        self.audition_status = Some(status);
+    }
+
+    /// The mix while the open insert's loop render plays: the track's own audio from the
+    /// render (through its strip), the rest as an audition's mix; the master's render alone
+    /// through the master fader. None: no loop render to play.
+    fn loop_mix(&self) -> Option<Mix> {
+        if !self.loop_mode {
+            return None;
+        }
+        let l = self.loop_render.as_ref()?;
+        let (_, _, clip) = l.clip.as_ref()?;
+        if l.track == MASTER {
+            return Some(Mix {
+                clips: vec![clip.clone()],
+                ..self.session.mix_master_audition()
+            });
+        }
+        let mut m = self.session.mix_audition(l.track);
+        m.clips.push(MixClip {
+            gain: m.live,
+            ..clip.clone()
+        });
+        Some(m)
+    }
+
     /// The tracks' sum (the master's input), summed once per change of the tracks.
     fn master_input(&self) -> Option<varimu_app::session::Stereo> {
         let sig = self.session.master_mix_signature();
@@ -1844,6 +2102,21 @@ impl SessionView {
             .map(|k| (MASTER, k))
             .or_else(|| self.insert_selected())
             .filter(|_| idle && self.recording.is_none());
+        match want {
+            Some((t, k)) if self.loop_mode => {
+                // The loop render plays in the mix: no device live.
+                if self.audition.take().is_some() {
+                    self.end_audition(play);
+                }
+                self.sync_loop(
+                    t,
+                    k,
+                    play.player().is_some_and(|p| p.status().transport.running),
+                );
+                return;
+            }
+            _ => self.loop_render = None,
+        }
         let Some((t, k)) = want else {
             if self.audition.take().is_some() {
                 self.end_audition(play);
@@ -1926,13 +2199,18 @@ impl SessionView {
             State::Starting => "● live: starting…".to_string(),
             State::Failed(e) => format!("live: stopped ({e})"),
             State::Playing => format!(
-                "● live{} · load {:.0}%",
+                "● live{} · load {:.0}%{}",
                 if st.transport.running {
                     ", playing"
                 } else {
                     " (Space plays)"
                 },
-                st.load * 100.0
+                st.load * 100.0,
+                if st.load > 1.0 {
+                    " · too slow live: try ⟲ loop"
+                } else {
+                    ""
+                }
             ),
         });
         if a.values != slot.values {
@@ -2457,10 +2735,11 @@ impl SessionView {
             }
             _ => None,
         };
-        let live_line = match (&self.audition, self.audition_status.as_ref()) {
-            (Some(_), Some(s)) => s.clone(),
+        let live_line = match self.audition_status.as_ref() {
+            Some(s) if self.audition.is_some() || self.loop_mode => s.clone(),
             _ => "not playing live".to_string(),
         };
+        let loop_mode = self.loop_mode;
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(format!("Master · {label}"))
@@ -2470,6 +2749,14 @@ impl SessionView {
             ui.label(RichText::new(glyph).color(colour))
                 .on_hover_text(&state);
             ui.label(RichText::new(&state).small().color(theme::MUTED));
+            ui.add_space(12.0);
+            if ui
+                .selectable_label(loop_mode, RichText::new("⟲ loop").small())
+                .on_hover_text(LOOP_TIP)
+                .clicked()
+            {
+                self.loop_mode = !loop_mode;
+            }
             ui.add_space(12.0);
             ui.label(RichText::new("hear").small().color(theme::MUTED))
                 .on_hover_text(
@@ -3253,11 +3540,12 @@ impl SessionView {
             }
         };
         let track_name = self.session.tracks[t].name.clone();
-        let live_line = match (&self.audition, self.audition_status.as_ref()) {
-            (Some(_), Some(s)) => s.clone(),
+        let live_line = match self.audition_status.as_ref() {
+            Some(s) if self.audition.is_some() || self.loop_mode => s.clone(),
             _ => "not playing live".to_string(),
         };
         let stereo = self.session.tracks[t].is_stereo();
+        let loop_mode = self.loop_mode;
         ui.horizontal(|ui| {
             ui.label(
                 RichText::new(format!("{track_name} · {label}"))
@@ -3267,7 +3555,15 @@ impl SessionView {
             ui.label(RichText::new(glyph).color(colour))
                 .on_hover_text(&state);
             ui.label(RichText::new(&state).small().color(theme::MUTED));
-            if stereo {
+            ui.add_space(12.0);
+            if ui
+                .selectable_label(loop_mode, RichText::new("⟲ loop").small())
+                .on_hover_text(LOOP_TIP)
+                .clicked()
+            {
+                self.loop_mode = !loop_mode;
+            }
+            if stereo && !loop_mode {
                 ui.add_space(12.0);
                 ui.label(RichText::new("hear").small().color(theme::MUTED))
                     .on_hover_text(
