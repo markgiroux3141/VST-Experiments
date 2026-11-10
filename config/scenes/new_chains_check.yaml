@@ -51,3 +51,8 @@ mics:
     position_m: [1.6, 2.35, 1.6]
     aim: {azimuth_deg: 30}
     pan: 0.4
+  - name: 4038 into TG
+    chain: c4038_tg
+    position_m: [2.6, 2.55, 1.3]
+    aim: {azimuth_deg: 180}
+    pan: -0.4

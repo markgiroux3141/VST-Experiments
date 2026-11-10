@@ -22,3 +22,16 @@
   verified, GroupDIY "EMI TG mic preamp schematic"): input stage BC109 / BCY71 (later BC184 /
   BC214), 0.47 uF input coupling, ~390k base to ground, 75k collector, 8200 pF collector to
   ground, a 43k second-stage collector, ~75 dB overall.
+
+## What `config/circuits/emi_tg12345.yaml` infers (2026-11-10, CHAINS_PLAN.md WP20)
+
+The topology is the handbook's (3.2, 3.4.1, 12.3, 12.27); the forum's figures are provisional
+values (0.47 uF, 390k, 75k, 43k); what neither gives is derived or fitted: R6 || AOT1 3883
+and R8 356.5 from hb 12.27's 20 dB at 1.2 kohm and the control's +5 dB at 0; the FINE positions
+(1 dB steps, not the A191's 0.5 dB) from the same arithmetic; COARSE's taps at -5 / -10 / -15
+dB of the secondary and the 8.33 kohm ladder across the -15 dB tap in 5 dB steps; VT1's
+emitter resistor for the direct-coupled output at 0 V DC. The forum's 8200 pF slewed VT1's ~10
+uA at 20 kHz, so C2 is 470 pF (the handbook: "against r.f. oscillation"). Measured
+(reports/units/tg12345_nominal/): 34.8 dB at COARSE 0 / FINE 0 (29.8-39.8 over FINE), COARSE
+5 dB a step to -20.4 dB, flat to -0.1 dB at 20 kHz, 1% THD at +13.8 dBu out into 3k, output
+0.35 ohm, input 16 kohm at 1 kHz (4.2 kohm at 40 Hz: the provisional primary inductance).

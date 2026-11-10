@@ -105,6 +105,12 @@ def _helios_law_db(gain: float) -> float:
     return float(20 * np.log10((1 + 47e3 / r) * 10.0 * cut * (1 + 47e3 / 8.2e3)))
 
 
+def _tg_law_db(coarse: float) -> float:
+    """TG12345: the input transformer's 1:3.16 and Amplifier D's nominal 25 dB, less COARSE's
+    attenuation (emi_tg12345.yaml; the handbook's 3.2, 3.4.1, 12.27)."""
+    return float(20 * np.log10(3.16) + 25.0 - coarse)
+
+
 PREAMPS = {
     "ssl_4000e": Preamp(
         circuit="ssl_4000e",
@@ -164,6 +170,18 @@ PREAMPS = {
         "circuit sheet's Fig. 1 (input impedance > 1500 ohm, +-0.25 dB 20-20 kHz; "
         "data/schematics/api_312/README.md)",
         pad_key="pad",
+    ),
+    "emi_tg12345": Preamp(
+        circuit="emi_tg12345",
+        nominal={"coarse": 0, "fine": 0},
+        nominal_gain_db=35.0,
+        gain_key="coarse",
+        gain_points=(55, 50, 45, 40, 35, 30, 25, 20, 15, 10, 5, 0),  # least gain first
+        law_db=_tg_law_db,
+        load_key="r_load_ohm",
+        published={"max_gain_db": 40.0},
+        published_source="hb: the TG12345 Mk II handbook (1:3.16, Amplifier D 25 +-5 dB, "
+        "COARSE 5 dB steps; >= 1.4 V rms into 3k; data/schematics/emi_tg12345/README.md)",
     ),
     "helios": Preamp(
         circuit="helios",

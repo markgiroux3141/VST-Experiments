@@ -384,7 +384,21 @@ circuits:
         label: Helios HPF
         choices: [[0, "off"], [1, "80 Hz"]]
         default: 0
-  emi_tg12345: {kind: pre, tag: tg, label: EMI TG12345, wp: 20}
+  emi_tg12345:                      # by inference (CHAINS_PLAN.md WP20): COARSE / FINE,
+    kind: pre                       # labelled by the gain from a 200 ohm source into 3k
+    tag: tg
+    label: EMI TG12345
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: coarse
+        label: TG coarse
+        choices: [[0, "35 dB"], [5, "30 dB"], [10, "25 dB"], [15, "20 dB"], [20, "15 dB"], [25, "10 dB"], [30, "5 dB"]]
+        default: 0
+      - key: fine
+        label: TG fine
+        choices: [[-5, "-5 dB"], [-3, "-3 dB"], [0, "0 dB"], [3, "+3 dB"], [5, "+5 dB"]]
+        default: 0
   emi_redd47: {kind: pre, tag: redd47, label: REDD.47, wp: 28}
   fender_5e3: {kind: pre, tag: f5e3, label: Fender 5E3, wp: 30}   # the file exists; its
                                     # input port as a chain's stage comes with WP30
