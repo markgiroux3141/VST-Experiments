@@ -268,7 +268,23 @@ circuits:
         choices: [[0.02, 44 dB], [0.05, 52 dB], [0.1, 58 dB], [0.15, 62 dB], [0.2, 64 dB],
                   [0.3, 68 dB], [0.5, 72 dB], [0.7, 75 dB], [1.0, 78 dB]]
         default: 0.1
-  neve_1073: {kind: pre, tag: n1073, label: Neve 1073, wp: 11}
+  neve_1073:                        # SENSITIVITY labelled by its gain from a 150 ohm
+    kind: pre                       # generator at HI into 600 ohm (reports/units/n1073_nominal/)
+    tag: n1073
+    label: Neve 1073
+    input: ia
+    drop: [RSRC]
+    settings:
+      - key: sensitivity
+        label: 1073 mic gain
+        choices: [[-20, 20 dB], [-25, 25 dB], [-30, 29 dB], [-35, 34 dB], [-40, 40 dB],
+                  [-45, 45 dB], [-50, 50 dB], [-55, 54 dB], [-60, 59 dB], [-65, 63 dB],
+                  [-70, 69 dB], [-75, 74 dB], [-80, 79 dB]]
+        default: -50
+      - key: impedance
+        label: 1073 input
+        choices: [[1, "HI (1200 ohm)"], [0, "LO (300 ohm)"]]
+        default: 1
   api_312:                          # GAIN labelled by its gain from a 150 ohm generator
     kind: pre                       # into 600 ohm (reports/units/api312_nominal/)
     tag: api312

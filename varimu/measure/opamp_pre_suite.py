@@ -92,6 +92,11 @@ def _api_law_db(gain: float) -> float:
     return float(20 * np.log10((1 + 47e3 / (470.0 + r)) * 3.0))
 
 
+def _neve_law_db(sensitivity: float) -> float:
+    """1073: EK20033's labels, the gain about minus the setting in dBm (neve_1073.yaml)."""
+    return float(-sensitivity)
+
+
 PREAMPS = {
     "ssl_4000e": Preamp(
         circuit="ssl_4000e",
@@ -125,6 +130,18 @@ PREAMPS = {
         sweep_out_db=(-20, -10, -5, 0, 2, 4, 5, 6, 7, 8, 9, 10, 12),
         published_source="sm: the 424's MIC/LINE jacks, '-50 ~ -10 dBV' (a 40 dB range to "
         "-10 dBV; data/schematics/tascam_424/README.md)",
+    ),
+    "neve_1073": Preamp(
+        circuit="neve_1073",
+        nominal={"sensitivity": -50, "impedance": 1},
+        nominal_gain_db=50.0,
+        gain_key="sensitivity",
+        gain_points=(-20, -25, -30, -35, -40, -45, -50, -55, -60, -65, -70, -75, -80),
+        law_db=_neve_law_db,
+        load_key="r_load_ohm",
+        published={"min_gain_db": 20.0, "max_gain_db": 80.0},
+        published_source="neve: EK20033's mic positions -20 to -80 dBm; AMS Neve's 1073 "
+        "(mic gain +20 to +80 dB in 5 dB steps; data/schematics/neve_1073/README.md)",
     ),
     "api_312": Preamp(
         circuit="api_312",
