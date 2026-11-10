@@ -10,10 +10,13 @@ the cut's lag removed.
     uv run --extra fast python scripts/minimoog_gate_check.py [--coupling hold|extrapolate]
         [--emphasis 0.9] [--amp 0.25]
 
-`--voice` plays `minimoog_voice` instead (the contour generators and the keyboard circuit joined,
-MM4): the keys' gate on the keyboard's trigger contact (the circuit file's gate_off_v / gate_on_v),
-the key on its pitch bar (key_*: an octave over the low A while held), the app's partition
-(VOICE_PARTITION, as crates/varimu-app/src/panel.rs has it), with knobs given by `--set k=v`.
+`--voice` plays `minimoog_voice` instead (the contour generators, the keyboard circuit and
+oscillator
+1 joined, MM4 / MM5): the keys' gate on the keyboard's trigger contact (the circuit file's
+gate_off_v / gate_on_v), the key on its pitch bar (key_*: an octave over the low A while held), the
+app's partition (VOICE_PARTITION, as crates/varimu-app/src/panel.rs has it), with knobs given by
+`--set k=v`. The oscillator's island runs in both (a multi-rate part never runs in the one solve):
+the reference is the rest as one solve.
 
 Exit 1 if the partitioned run fails."""
 
@@ -49,7 +52,44 @@ def gate_levels(s, name: str) -> tuple[float, float]:
     return spec_value(s, f"{name}_off_v"), spec_value(s, f"{name}_on_v")
 
 
+# The oscillators' islands (multi-rate parts: they never run in the one solve), each a group.
+VOICE_ISLANDS = [
+    "|",
+    "osc 1: range",
+    "osc 1: summer",
+    "osc 1: expo",
+    "osc 1: core",
+    "osc 1: shapers",
+    "osc 1: pulse width",
+    "|",
+    "osc 2: panel",
+    "osc 2: range",
+    "osc 2: summer",
+    "osc 2: expo",
+    "osc 2: core",
+    "osc 2: shapers",
+    "osc 2: pulse width",
+    "|",
+    "osc 3: panel",
+    "osc 3: range",
+    "osc 3: summer",
+    "osc 3: expo",
+    "osc 3: core",
+    "osc 3: shapers",
+    "osc 3: pulse width",
+]
 VOICE_PARTITION = [
+    "ladder",
+    "output amplifier",
+    "filter: rails",
+    "|",
+    "noise: rails",
+    "noise: source",
+    "noise: white",
+    "noise: pink",
+    "modulation mix",
+    "panel: rails",
+    "|",
     "vca",
     "keyboard: rails",
     "keyboard: sample and hold",
@@ -63,6 +103,7 @@ VOICE_PARTITION = [
     "contour: loudness flip-flop",
     "contour: loudness envelope",
     "contour: loudness output",
+    *VOICE_ISLANDS,
 ]
 
 
@@ -89,6 +130,17 @@ def aligned_diff_db(x, ref):
     return 20 * np.log10(np.std(y - ref) / np.std(ref)), tau * FS
 
 
+def envelope_db(x, ref, block_s=0.01):
+    """The largest difference of 10 ms rms envelopes (dB) where ref is within 40 dB of its peak:
+    what a cut's sample of phase leaves of the level."""
+    n = int(block_s * FS)
+    m = len(ref) // n
+    a = np.sqrt(np.mean(x[: m * n].reshape(m, n) ** 2, axis=1)) + 1e-12
+    b = np.sqrt(np.mean(ref[: m * n].reshape(m, n) ** 2, axis=1)) + 1e-12
+    k = b > b.max() * 1e-2
+    return float(np.max(np.abs(20 * np.log10(a[k] / b[k]))))
+
+
 def main() -> int:
     p = argparse.ArgumentParser()
     p.add_argument("--coupling", default="hold")
@@ -109,21 +161,24 @@ def main() -> int:
         vs = spec.load_circuit(CONFIG_DIR / "circuits" / "minimoog_voice.yaml")
         ir = builder.build_ir(vs, spec.resolve(vs, over), "ja")
         partition, gate_name = VOICE_PARTITION, "gate"
+        one_solve = VOICE_ISLANDS[1:]  # the oscillators' islands, the rest one solve
         (g_off, g_on), key_v = gate_levels(vs, "gate"), key_volts(vs, KEY_NOTE)
     else:
         fs = st.load()
         ir = st.build(fs, over)
         partition, gate_name = ["vca"], "contour"
+        one_solve = []
         (g_off, g_on), key_v = gate_levels(fs, "contour"), key_volts(fs, KEY_NOTE)
     n = int(FS * 2.0)
     t = np.arange(n) / FS
-    x = a.amp * (2 * ((t * 220.0) % 1.0) - 1)
+    # the voice plays its own oscillator (its audio input a leak)
+    x = np.zeros(n) if a.voice else a.amp * (2 * ((t * 220.0) % 1.0) - 1)
     gate = np.full(n, g_off)
     for t0, t1 in GATES_S:
         gate[int(t0 * FS) : int(t1 * FS)] = g_on
     key = np.full(n, key_v)  # the key held from the start: the bar keeps the last key
 
-    ref = play(ir, x, gate, key, [], a.coupling, gate_name)
+    ref = play(ir, x, gate, key, one_solve, a.coupling, gate_name)
     try:
         out = play(ir, x, gate, key, partition, a.coupling, gate_name)
     except fast.SimulationFailed as e:
@@ -132,7 +187,8 @@ def main() -> int:
     d, lag = aligned_diff_db(out, ref)
     print(
         f"{a.coupling}, EMPHASIS {a.emphasis}: peak out {np.abs(out).max():.2f} V "
-        f"(one solve {np.abs(ref).max():.2f}); vs one solve {d:.1f} dB, lag {lag:.2f} samples"
+        f"(one solve {np.abs(ref).max():.2f}); vs one solve {d:.1f} dB, lag {lag:.2f} samples; "
+        f"10 ms envelopes within {envelope_db(out, ref):.2f} dB"
     )
     return 0
 

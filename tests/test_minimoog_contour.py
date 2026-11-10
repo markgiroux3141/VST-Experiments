@@ -96,7 +96,8 @@ def test_voice_plays_through_the_apps_partition_without_the_click():
     from varimu.config import CONFIG_DIR
 
     vs = spec.load_circuit(CONFIG_DIR / "circuits" / "minimoog_voice.yaml")
-    ir = builder.build_ir(vs, spec.resolve(vs, {}), "ja")
+    # the click with every mixer level at 0 (MM5: the voice plays its own oscillators)
+    ir = builder.build_ir(vs, spec.resolve(vs, {"osc1_level": 0.0}), "ja")
     g_off, g_on = gc.gate_levels(vs, "gate")
     n = int(FS * 1.0)
     gate = np.full(n, g_off)
@@ -105,9 +106,7 @@ def test_voice_plays_through_the_apps_partition_without_the_click():
     out = gc.play(ir, np.zeros(n), gate, key, gc.VOICE_PARTITION, "hold", "gate")
     h = sosfilt(butter(2, 150 / (FS / 2), "high", output="sos"), out)
     assert np.abs(h[int(0.29 * FS) : int(0.5 * FS)]).max() < 0.01
-    t = np.arange(n) / FS
-    tone = gc.play(
-        ir, 0.25 * (2 * ((t * 220.0) % 1.0) - 1), gate, key, gc.VOICE_PARTITION, "hold", "gate"
-    )
+    played = builder.build_ir(vs, spec.resolve(vs, {}), "ja")  # oscillator 1 at the defaults
+    tone = gc.play(played, np.zeros(n), gate, key, gc.VOICE_PARTITION, "hold", "gate")
     assert np.std(tone[int(0.5 * FS) : int(0.7 * FS)]) > 0.3  # key held: sounds
     assert np.std(tone[int(0.1 * FS) : int(0.25 * FS)]) < 1e-3  # key up: shut

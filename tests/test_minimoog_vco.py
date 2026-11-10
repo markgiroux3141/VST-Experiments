@@ -126,7 +126,7 @@ def test_exceptions_stand_in_unless_literal():
     assert {"JQ4", "DCR1", "GIC8A_1", "GIC8B_1"} <= names and "XRESET" not in names
     # the replaced parts' models leave the IR with them
     k = builder.build_ir(s, p, "linear")
-    assert {m.name for m in k.models} == {"UA726_QX", "2N3904_QN", "1N4148_DCL"}
+    assert {m.name for m in k.models} == {"UA726_QX", "2N3904_QN", "1N4148_DCL", "2N3906_QREF"}
 
 
 @pytest.mark.parametrize(

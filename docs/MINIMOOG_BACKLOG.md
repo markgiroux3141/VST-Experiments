@@ -4,28 +4,31 @@ Open items from the Minimoog Model D build ([MINIMOOG_PLAN.md](MINIMOOG_PLAN.md)
 [data/schematics/minimoog/README.md](../data/schematics/minimoog/README.md)), collected 2026-11-07
 when the work paused. The plan's Status section has the measurements behind each item.
 
-## Next (MM3, the oscillators)
+## Next (2026-11-09: the voice is a Model D; MINIMOOG_PLAN.md "MM3 done and MM5 built")
 
-Built 2026-11-09 (MINIMOOG_PLAN.md MM3's "the reference built"): the LM393 (`opamp`'s
-`open_collector`) and the TL081's slew, `PN4092@1` for the E112, `minimoog_vco.yaml`, Folkman's tuning
-(`scripts/minimoog_vco_trim.py`), the reset study (reports/minimoog/vco/README.md: every direct
-candidate stalls or jitters; the reference is 12.288 MHz with error control, ~200-280x real time).
-
-K built 2026-11-09 (the user's call: K for live and renders; MINIMOOG_PLAN.md MM3's "technique K
-built", reports/minimoog/vco/README.md): the app's `minimoog_vco` plays oscillator 1. Next:
-
-1. **The user listens** to `minimoog_vco` (RANGE, TUNE, PW; the saw on `out`, the triangle and
-   rectangle as probes).
-2. **The triangle at the draft** (-31 to -70 dB inharmonic, the saw -53 to -105): the reset's
-   band-limited jump (~2 samples) goes through Q6's fold whole; options: the fold's node fed the
-   reset's physical ramp (as the edge follows it), or the shaper's own event (a corner at the
-   fold), or draft at 192 kHz for this device (cost).
-3. Three oscillators (each its own tables only if its board's values differ; oscillator 3's LO /
-   control switch), the octave buffer (board 6); the waveshapes against the sheet's levels.
-4. The 726's heater loop (drift), MM5's mixer and noise, the voice as one instrument.
-5. The comparator macro's slow-ramp delay: the reference's rectangle is 51.6-52.2 % (the manual's
-   50 +-1 %); a single-pole comparator fitted to 1.3 us at 5 mV is slower than an LM393 on a slow
-   ramp.
+1. **The user listens** to `minimoog_voice`: three oscillators (RANGE, FREQUENCY, WAVEFORM, OSC 3 CONTROL), the mixer
+   (NOISE white / pink, EXTERNAL INPUT through the pre-amp), the MODULATION wheel (MOD MIX, OSC MOD, FILTER MOD), CUTOFF
+   as the real pot. The stand-alone `minimoog_vco` too.
+2. **Live load: ~100 % on this desktop, dropouts** (eight spinning threads saturate the 8 cores; every part 0.57-0.79x).
+   The user's call among: (a) a buffer and machine margin (an idle machine; the other sessions' builds cost it here);
+   (b) a lighter live tier: the noise generator and the modulation mix only while their levels / switches are up
+   (a rebuild when they change; the hardware's run always); (c) the oscillators' islands at a shared thread when two are
+   off (a structural option, like tube_synth's OSC ON); (d) partition waits that sleep (the engine); (e) accept dropouts
+   live and use renders. Nothing chosen.
+3. **The triangle at the draft** (MINIMOOG_PLAN.md MM3's K): the reset's band-limited jump through Q6's fold; options:
+   the fold's node fed the reset's physical ramp (as the edge follows it), the shaper's own event, or 192 kHz islands.
+4. **R135-R137** (Fig 9-1 note 4: "factory selected (if necessary) to achieve 50 % +-1 % rect. duty cycle"): the
+   reference's rectangle runs 51.6-52.2 %; a duty trim selecting R135 (220K from +10 V onto the sawtooth's pin) would
+   bring it to the manual's 50 %. Not drawn yet.
+5. **Red noise** (board 3: R12, C7, C8, Q6, R28 / R23, C10, C28, R59: not traced in full) and SW14's second pole (pink /
+   red to the modulation mix); the overload lamp driver (circuit No. 11).
+6. **The sub-audio step at key-down** with every mixer level at 0 (~93 mV at the MAIN OUTPUT, -42 dBFS peak).
+7. **The 726's heater loop** (drift), the comparator macro's slow-ramp delay (item 4 may make it moot).
+8. **Python's YAML loader accepts duplicated keys** (the Rust builder refuses them): a duplicated `r11_ohm` in the filter
+   board silently replaced the VCA's R11 for a moment this session. A load-time check in `varimu.circuit.spec` would
+   catch it.
+9. **The filter's procedures** now run on the real CUTOFF pot (CUTOFF -1 = 0.4); `minimoog_vcf_study.py`'s figures in
+   the plan (MM1) predate it.
 
 ## Open from MM4 (contours and keyboard)
 
@@ -54,9 +57,8 @@ built", reports/minimoog/vco/README.md): the app's `minimoog_vco` plays oscillat
 
 ## Later milestones (the plan's)
 
-- **MM5, the whole voice:** the mixer, noise (board 3), the front panel's real summing (Fig 9-16 /
-  9-17, replacing the CUTOFF and KEYBOARD CONTROL fixtures), the +-10 V regulators; the app's
-  `minimoog` device with a partition measured for real time.
+- **MM5, the rest:** the +-10 V regulators (board 3's circuit No. 10), the keyboard's current source on them, the
+  headphone amplifier, EXT. S-TRIG, the A-440.
 - **The uA726's heater loop** as a thermal node (B6's pattern), if the drift is wanted.
 - **MM6, bending:** after the user has played it.
 

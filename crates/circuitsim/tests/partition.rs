@@ -593,9 +593,10 @@ fn ownership_is_checked() {
     )
     .unwrap_err();
     assert!(e.0.contains("doesn't have"), "{e}");
-    // `f` is the island's alone: owned but not shared
+    // `f` is the island's alone: owned but not shared, it stays the island's (a switch can leave
+    // an island's output unused)
     ir = with_decimate(multirate_ir(Some(8)), Some(vec!["f".into()]));
-    let e = simulate_partitioned(
+    simulate_partitioned(
         &ir,
         &[],
         Coupling::Hold,
@@ -605,8 +606,7 @@ fn ownership_is_checked() {
         usize::MAX,
         |_| Ok(()),
     )
-    .unwrap_err();
-    assert!(e.0.contains("no other part"), "{e}");
+    .unwrap();
     // in a single-rate section: the IR refuses it
     let mut ir = multirate_ir(None);
     ir.sections[0].owns = Some(vec!["s".into()]);

@@ -127,7 +127,7 @@ def drive(s, base: dict, f_hz: float = 110.0) -> dict:
     """THD and gain of a sine through the filter against its level (EMPHASIS 0, the cutoff
     ~4 octaves above): the input pair is a differential pair, tanh(V / 2 Vt) (Huovilainen),
     so it compresses from tens of mV."""
-    ir = build(s, {**base, "emphasis": 0.0, "cutoff_v": 4.0})
+    ir = build(s, {**base, "emphasis": 0.0, "cutoff": 0.7})
     rows = []
     for amp in (0.005, 0.02, 0.05, 0.1, 0.2, 0.5):
         t = np.arange(int(0.5 * FS)) / FS

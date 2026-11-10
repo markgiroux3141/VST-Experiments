@@ -38,7 +38,7 @@ def test_vca_balance_nulls_the_loudness_feedthrough(s):
 
 
 def _gain_db(s, contour_v, amp_v=0.01, f_hz=220.0):
-    ir = st.build(s, {"cutoff_v": 4.0, "emphasis": 0.0})
+    ir = st.build(s, {"cutoff": 0.7, "emphasis": 0.0})
     t = np.arange(int(0.25 * st.FS)) / st.FS
     v = st.run(ir, amp_v * np.sin(2 * np.pi * f_hz * t), contour_v=contour_v)
     n = int(0.15 * st.FS)

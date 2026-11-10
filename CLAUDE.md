@@ -435,7 +435,17 @@ with two new kinds, a **reset** and an **edge** (`varimu/devices/reset_events.py
 `ResetEvents` / `EdgeEvents`; the engine's event runs one enum with thyratron's: HYBRID_PHYSICS_PLAN.md H5); tables by
 `scripts/minimoog_event_tables.py` -> `config/events/minimoog_osc_{reset,edge}.json`. Within 0.6 cents of the reference at
 96 and 192 kHz, saw and rectangle as clean as it; the triangle at the draft is the open item. The app's `minimoog_vco`
-(draft-2x, Newton 1e-3): 41 % load. Next: the user listens (MINIMOOG_BACKLOG.md).
+(draft-2x, Newton 1e-3): 41 % load. **The voice is a Model D (2026-11-09, unattended; MINIMOOG_PLAN.md "MM3 done and
+MM5 built"):** `minimoog_voice.yaml` has all three oscillators (2 and 3 GENERATED from 1 by
+`scripts/make_minimoog_oscillators.py` -> `minimoog_osc{2,3}.yaml`: SHIFT 82.5K, FREQUENCY, OSC 3 CONTROL, REV SAW), the
+-5 V reference, RANGE ladder and board 6's buffers, the mixer (waveform switches, LEVEL / ON, NOISE from board 3's
+avalanche junction, `minimoog_noise.yaml`, EXTERNAL INPUT through board 4's pre-amp), the modulation mix and wheel, and
+the panel's real CUTOFF summing (the filter board's `cutoff` rotation, its procedures re-run). Each oscillator trimmed
+by `minimoog_vco_trim.py [--circuit NAME] --write` through the keyboard circuit's output (within 0.07 c). New: a
+section's `substeps_in: events` (K's kernels inside a multi-rate island, both builders), named multi-rate partition
+groups (an island a thread), the part `noise_source` (an always-on white current, both builders). The app's
+`minimoog_voice` (draft-1x, each oscillator an island at 96 kHz, eight threads): ~100 % load with dropouts on this
+desktop (options in MINIMOOG_BACKLOG.md); levels -18 dBFS one oscillator, silent before a key. Next: the user listens.
 
 Modulation effects ([docs/MODULATION_PLAN.md](docs/MODULATION_PLAN.md), 2026-11-09, the
 user's ask: chorus, flanger, phaser, vibrato, tremolo as chain ends; the Leslie skipped for now):

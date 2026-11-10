@@ -9,8 +9,9 @@ service manual, p. 14; data/schematics/minimoog/README.md), in his order:
    CUTOFF for zero beats two octaves above 440 (1760 Hz); the low "A" key: the Scale trimpot
    (R49) for zero beats (440 Hz). Repeat until it tracks three octaves.
 
-CUTOFF -1 is the fixture's 0 V (config/circuits/minimoog_filter_board.yaml); the A keys' volts are
-the keyboard string's (the circuit file's key_* values: the low A MIDI 45, the third A MIDI 69).
+CUTOFF -1 is the CUTOFF pot at 0.4 (its dial's -5 .. +5 as 0 .. 1:
+config/circuits/minimoog_filter_board.yaml); the A keys' volts are the keyboard string's (the
+circuit file's key_* values: the low A MIDI 45, the third A MIDI 69).
 
     uv run --extra fast python scripts/minimoog_vcf_trim.py [--write] [--scale-only]
 
@@ -33,6 +34,7 @@ import minimoog_vcf_study as st  # noqa: E402
 DUR_S = 0.6
 A_HZ = 440.0
 LOW_A, THIRD_A = 45, 69
+CUTOFF_M1 = 0.4  # the CUTOFF dial at -1 (-5 .. +5 as 0 .. 1)
 
 
 def key_volts(s, note: int) -> float:
@@ -76,7 +78,7 @@ def main(argv=None) -> int:
     ap.add_argument("--scale-only", action="store_true")
     a = ap.parse_args(argv)
     s = st.load()
-    ov = {"cutoff_v": 0.0, "kb1": 1, "kb2": 1}
+    ov = {"cutoff": CUTOFF_M1, "kb1": 1, "kb2": 1}
 
     # 1. regeneration starts at EMPHASIS 7.5
     def regen(r):
@@ -125,19 +127,19 @@ def main(argv=None) -> int:
     ov["scale_trim"] = scale
 
     def cutf(c):
-        f = freq(s, {**ov, "cutoff_v": c}, key_v=ka)
-        print(f"  cutoff_v {c:+.4f} @ the low A: {f:.1f} Hz", flush=True)
+        f = freq(s, {**ov, "cutoff": c}, key_v=ka)
+        print(f"  cutoff {c:.4f} @ the low A: {f:.1f} Hz", flush=True)
         return np.log(max(f, 1e-3) / A_HZ)
 
-    cut = bisect(cutf, -1.0, 1.0, 9)
+    cut = bisect(cutf, CUTOFF_M1 - 0.1, CUTOFF_M1 + 0.1, 9)
 
     # the result: tracking over three octaves at the trimmed scale (the four A keys)
-    track = [freq(s, {**ov, "cutoff_v": cut}, key_v=key_volts(s, LOW_A + 12 * i)) for i in range(4)]
+    track = [freq(s, {**ov, "cutoff": cut}, key_v=key_volts(s, LOW_A + 12 * i)) for i in range(4)]
     out = {
         "regen_cal": regen_cal,
         "range_trim": range_trim,
         "scale_trim": scale,
-        "cutoff_v_at_scale": cut,
+        "cutoff_at_scale": cut,
         "tracking_hz": track,
         "octaves_per_keyboard_octave": np.diff(np.log2(track)).tolist(),
     }

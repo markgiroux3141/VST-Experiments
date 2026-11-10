@@ -31,7 +31,9 @@
 //! measure it against the one solve (the draft study does).
 //!
 //! **Multi-rate parts.** A section with `substeps` m > 1 (the IR's `Section::substeps`)
-//! runs as a part of its own (one per distinct m, after the named groups) at m steps per
+//! runs as a part of its own (one per distinct m, after the named groups; or a named group
+//! of multi-rate sections at one m, a part of its own: islands at the same rate on threads
+//! of their own, the Minimoog's three oscillators) at m steps per
 //! sample: what runs above the sample rate's Nyquist frequency (the Ampex 351's ~100 kc
 //! bias oscillator). Within a sample it sees the others' values interpolated linearly over
 //! its steps; it publishes the currents its sources take averaged over its steps (the
@@ -232,41 +234,56 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             part_of[i] = Some(g + 1);
         }
     }
-    // Multi-rate sections: a part per distinct count of steps and decimation, after the
-    // named groups.
+    // A named group of multi-rate sections is a multi-rate part of its own (its sections at
+    // one count of steps and decimation: the Minimoog's oscillators, an island each); the
+    // multi-rate sections no group names: a part per distinct count of steps and decimation,
+    // after the named groups.
+    let rate_of = |s: &crate::ir::Section| match s.substeps.filter(|&m| m > 1) {
+        Some(m) => (m, s.decimate),
+        None => (1, None),
+    };
     let named = groups.len();
-    let mut rates: Vec<(usize, Option<Decimate>)> = Vec::new();
-    for (i, s) in ir.sections.iter().enumerate() {
-        let Some(m) = s.substeps.filter(|&m| m > 1) else {
-            continue;
-        };
-        if part_of[i].is_some() {
-            return Err(Error::new(format!(
-                "partition: {:?} has substeps (a part of its own): don't name it",
-                s.title
-            )));
+    let mut rates: Vec<(usize, Option<Decimate>)> = Vec::with_capacity(named);
+    for titles in &groups {
+        let mut r: Option<(usize, Option<Decimate>)> = None;
+        for t in titles {
+            let s = ir
+                .sections
+                .iter()
+                .find(|s| &s.title == t)
+                .expect("named above");
+            let q = rate_of(s);
+            if r.is_some_and(|r| r != q) {
+                return Err(Error::new(format!(
+                    "partition: {t:?} runs at another rate than its group's other sections"
+                )));
+            }
+            r = Some(q);
         }
-        let rate = (m, s.decimate);
-        let g = rates.iter().position(|&r| r == rate).unwrap_or_else(|| {
-            rates.push(rate);
-            groups.push(Vec::new());
-            rates.len() - 1
-        });
+        rates.push(r.unwrap_or((1, None)));
+    }
+    for (i, s) in ir.sections.iter().enumerate() {
+        let rate = rate_of(s);
+        if rate.0 == 1 || part_of[i].is_some() {
+            continue;
+        }
+        let g = rates[named..]
+            .iter()
+            .position(|&r| r == rate)
+            .unwrap_or_else(|| {
+                rates.push(rate);
+                groups.push(Vec::new());
+                rates.len() - named - 1
+            });
         groups[named + g].push(s.title.clone());
         part_of[i] = Some(named + g + 1);
     }
     let n_parts = groups.len() + 1;
     let substeps: Vec<usize> = (0..n_parts)
-        .map(|p| if p > named { rates[p - named - 1].0 } else { 1 })
+        .map(|p| if p > 0 { rates[p - 1].0 } else { 1 })
         .collect();
     let decimate: Vec<Option<Decimate>> = (0..n_parts)
-        .map(|p| {
-            if p > named {
-                rates[p - named - 1].1
-            } else {
-                None
-            }
-        })
+        .map(|p| if p > 0 { rates[p - 1].1 } else { None })
         .collect();
     let part = |i: usize| part_of[i].unwrap_or(0);
     let mut lag = vec![0usize; n_parts];
@@ -450,12 +467,15 @@ pub(crate) fn split(ir: &CircuitIr, second: &[String]) -> Result<Split, Error> {
             }
         }
     }
+    // A claimed node no other part has stays the claimant's own (a switch can leave an
+    // island's output unused: the Minimoog's rectangle with its waveform switch elsewhere);
+    // one the claimant doesn't have is a mistake.
     if let Some((n, _)) = claims
         .iter()
-        .find(|(n, _)| !shared.iter().any(|s| &s.name == n))
+        .find(|(n, q)| !shared.iter().any(|s| &s.name == n) && !node_sets[*q].contains(n))
     {
         return Err(Error::new(format!(
-            "partition: node {n} is owned (`owns`) but no other part has it"
+            "partition: node {n} is owned (`owns`) but its part doesn't have it"
         )));
     }
     for p in 1..n_parts {

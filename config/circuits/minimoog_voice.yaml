@@ -2,17 +2,19 @@
 # and VCA, board No. 4), minimoog_contour.yaml (the two contour generators and the trigger, board
 # No. 2) and minimoog_keyboard.yaml (the keyboard circuit, board No. 2): never edit this file.
 # See that script's docstring for how they join, docs/MINIMOOG_PLAN.md MM4.
-title: 'Minimoog voice: filter board (VCF, VCA) with the contour generators and the keyboard'
+title: 'Minimoog voice: the oscillator board, the mixer, the filter board (VCF, VCA), the contour generators and the keyboard'
 input: in
 cv_inputs: {key: b_pbar, gate: b_kg}
-probes: [out, o7, vo, c16, c15, c14, c13, e1, c1, vt1, b15, vr, a4, b4, ctl, e26, tail, nb, b29, b30, p9, kbd, k_kg, k_env, k_envl, k_outn, k_tb, k_vtrig, b_s9, b_c6, b_n24]
+probes: [out, o7, vo, c16, c15, c14, c13, e1, c1, vt1, b15, vr, a4, b4, ctl, e26, tail, nb, b29, b30, p9, kbd, k_kg, k_env, k_envl, k_outn, k_tb, k_vtrig, b_s9, b_c6, b_n24, o1_out, o1_tri, o1_rect, o1_ramp,
+  o1_wf, o2_out, o2_tri, o2_rect, o2_ramp, o2_wf, o3_out, o3_tri, o3_rect, o3_ramp, o3_wf, mix, o_pri, o_m5, n_wn, n_pn, nsel, xo, mo, mw]
 full_scale:
-  input_volts_peak: {value: 0.25, source: 'provisional: model knowledge (the mixer''s output into the ladder''s input pair; the input pair limits near +-50 mV, the Minimoog''s mixer overdrives it; set again
-      when the mixer is drawn, MM5)'}
-  output_volts_peak: {value: 3.0, source: 'provisional: model knowledge (the MAIN OUTPUT''s swing; set from renders)'}
+  input_volts_peak: {value: 0.1, source: 'provisional: model knowledge (an instrument''s or a microphone''s level at the EXTERNAL INPUT jack, 0.1 V peak: the pre-amp''s +46 dB clips it with the level pot
+      past about half, as the Model D overdrives external signals)'}
+  output_volts_peak: {value: 12.0, source: 'numerical: chosen so one oscillator at the panel''s defaults (LEVEL 8, the filter and contours at their defaults) peaks near -18 dBFS at the MAIN OUTPUT (1.5
+      V there, measured by scripts/minimoog_gate_check.py --voice); all three at full level stay under -10 dBFS'}
 controls:
-  cutoff_v: {value: 0.0, min: -5.0, max: 5.0, unit: V, source: 'numerical: test fixture (the CUTOFF FREQUENCY knob''s contribution, a voltage through r_cutoff_ohm; the panel''s own circuit comes at MM5);
-      0 V stands for the procedure''s CUTOFF -1'}
+  cutoff: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R11 CUTOFF FREQUENCY, a 5K pot from -10 V (0) to +10 V (1), its wiper through R55 200K onto the control node (pin 5); the dial''s
+      -5 .. +5 as 0 .. 1, so Folkman''s CUTOFF -1 is 0.4, the default (the procedures'' setting)'}
   emphasis: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'the 204D manual''s Table 7-3: R14 Rotary Pot, Rev. Audio, 50K Ohm (EMPHASIS); 0 = the knob at 0, 1 = at 10'}
   kb1:
     value: 1
@@ -24,9 +26,9 @@ controls:
     choices: [0, 1]
     unit: switch
     source: the front panel's KEYBOARD CONTROL 2 rocker
-  range_trim: {value: 0.3065, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 ''Filter Range'' (CUTOFF -1, EMPHASIS 10, keyboard
+  range_trim: {value: 0.5632, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 ''Filter Range'' (CUTOFF -1, EMPHASIS 10, keyboard
       control off: zero beat with A-440)'}
-  scale_trim: {value: 0.4014, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 ''Filter Scale'' (tracks the
+  scale_trim: {value: 0.6494, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 ''Filter Scale'' (tracks the
       keyboard three octaves)'}
   ext_loudness:
     value: 0
@@ -36,7 +38,7 @@ controls:
   ext_loudness_v: {value: 5.0, min: 0.0, max: 10.0, unit: V, source: 'numerical: test fixture (a control voltage plugged into EXT. LOUDNESS; Folkman''s VCA Balance feeds audio there)'}
   vca1_bal: {value: 0.6181, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R14 25 ohm 1ST VCA BAL trim; default calibrated: Folkman p. 13 ''VCA Balance'' (scripts/minimoog_vca_trim.py)'}
   vca2_bal: {value: 0.7097, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R12 100 ohm 2ND VCA BAL trim (Table 7-8: Trim Pot, 100 Ohm); default calibrated: Folkman p. 13 ''VCA Balance'''}
-  regen_cal: {value: 0.8467, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R73 1K REGEN CAL trim (its wiper Q30''s base); default calibrated: Folkman p. 14 ''Regeneration Cal.'' (regeneration starts
+  regen_cal: {value: 0.8447, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-11: R73 1K REGEN CAL trim (its wiper Q30''s base); default calibrated: Folkman p. 14 ''Regeneration Cal.'' (regeneration starts
       between EMPHASIS 7 and 8 at CUTOFF -1)'}
   attack: {value: 0.1, min: 0.0, max: 1.0, unit: rotation, source: 'the 204D manual''s Table 7-3: R12 Rotary Pot, 1 Meg Audio (ATTACK; its wiring per Fig 9-17, user-read: R12 into pin 14); 0 = the knob
       at 0, 1 = at 10'}
@@ -60,10 +62,111 @@ controls:
     source: 'the left-hand controller''s GLIDE switch (Fig 9-17: its wires to 7A and 8A short the GLIDE pot when off): 0 off (shorted), 1 on; a contact always in the circuit, so a flip updates a stream
       in place'
   amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'the 204D manual''s Table 7-3: a 5K linear pot (AMOUNT OF CONTOUR TO FILTER, the filter contour into R74 / pin 16); 0 = the wiper at ground'}
+  tune: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-2: TUNE, a 5K linear pot from +10 V over 5.1K to ground (7.5 V +- 2.5 V, +- 2 semitones); 0.5 = centred'}
+  bend: {value: 0.5, min: 0.3, max: 0.7, unit: rotation, source: 'Fig 9-2: PITCH WHEEL, a 25K linear pot from +10 V to ground (5 V +- 2 V: its travel 0.3-0.7); 0.5 = centred'}
+  osc1_range:
+    value: 3
+    choices: [0, 1, 2, 3, 4, 5]
+    unit: position
+    source: 'Fig 9-2: the OSC 1 RANGE switch (LO, 32'', 16'', 8'', 4'', 2'' as 0-5); a change rewires (restarts a live stream)'
+    notes: 8' by default (the keyboard from ~87 Hz); Folkman's tuning is on 2' (position 5)
+  osc1_wave:
+    value: 2
+    choices: [0, 1, 2, 3, 4, 5]
+    unit: position
+    source: 'Fig 9-17: SW6 OSC 1 WAVEFORM (triangle, triangle-sawtooth, sawtooth, square, wide rectangle, narrow rectangle as 0-5; its second pole sets PULSE WIDTH IN: ground, then -1.5 V and -2.5 V from
+      the panel''s divider); a change rewires (restarts a live stream); the sawtooth by default (provisional)'
+  osc1_level: {value: 0.8, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R6 OSC 1 LEVEL, 25K (Table 7-3; its taper not read: linear, provisional); 0 = the wiper at ground, 1 = at the waveform;
+      8 by default (provisional)'}
+  osc1_on:
+    value: 1
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17: SW9, OSC 1''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); a contact always in the circuit, so a flip updates a stream in place'
+  osc2_range:
+    value: 3
+    choices: [0, 1, 2, 3, 4, 5]
+    unit: position
+    source: 'Fig 9-2: the OSC 1 RANGE switch (LO, 32'', 16'', 8'', 4'', 2'' as 0-5); a change rewires (restarts a live stream)'
+    notes: 8' by default (the keyboard from ~87 Hz); Folkman's tuning is on 2' (position 5)
+  osc2_freq: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-2: OSC 2 FREQUENCY, a 5K linear pot from +10 V over 5.1K to ground (7.5 V +- 2.5 V, +- a fifth); 0.5 = centred'}
+  osc2_wave:
+    value: 2
+    choices: [0, 1, 2, 3, 4, 5]
+    unit: position
+    source: 'Fig 9-17: SW7 OSC 2 WAVEFORM (triangle, triangle-sawtooth, sawtooth, square, wide rectangle, narrow rectangle as 0-5; its second pole sets PULSE WIDTH IN: ground, then -1.5 V and -2.5 V from
+      the panel''s divider); a change rewires (restarts a live stream); the sawtooth by default (provisional)'
+  osc2_level: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R7 OSC 2 LEVEL, 25K (Table 7-3; its taper not read: linear, provisional); 0 = the wiper at ground, 1 = at the waveform;
+      0 by default: one oscillator heard'}
+  osc2_on:
+    value: 1
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17: SW11, OSC 2''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); a contact always in the circuit, so a flip updates a stream in place'
+  osc3_range:
+    value: 3
+    choices: [0, 1, 2, 3, 4, 5]
+    unit: position
+    source: 'Fig 9-2: the OSC 1 RANGE switch (LO, 32'', 16'', 8'', 4'', 2'' as 0-5); a change rewires (restarts a live stream)'
+    notes: 8' by default (the keyboard from ~87 Hz); Folkman's tuning is on 2' (position 5)
+  osc3_freq: {value: 0.5, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-2: OSC 3 FREQUENCY, a 5K linear pot from +10 V over 5.1K to ground (7.5 V +- 2.5 V, +- a fifth); 0.5 = centred'}
+  osc3_control:
+    value: 1
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-2 / 9-17: OSC 3 CONTROL (SW2): 1 ON (16A on -10 V: the keys play oscillator 3), 0 OFF (16A on -5 V, the FREQUENCY pot also through R97); contacts always in the circuit, so a flip updates
+      a stream in place'
+  osc3_wave:
+    value: 2
+    choices: [0, 1, 2, 3, 4, 5]
+    unit: position
+    source: 'Fig 9-17: SW8 OSC 3 WAVEFORM (triangle, reverse sawtooth, sawtooth, square, wide rectangle, narrow rectangle as 0-5; its second pole sets PULSE WIDTH IN: ground, then -1.5 V and -2.5 V from
+      the panel''s divider); a change rewires (restarts a live stream); the sawtooth by default (provisional)'
+  osc3_level: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R8 OSC 3 LEVEL, 25K (Table 7-3; its taper not read: linear, provisional); 0 = the wiper at ground, 1 = at the waveform;
+      0 by default: one oscillator heard'}
+  osc3_on:
+    value: 1
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17: SW13, OSC 3''s mixer switch (ON: its summing resistor onto the bus, board 4''s pin 4); a contact always in the circuit, so a flip updates a stream in place'
+  noise_level_trim: {value: 0.4844, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-8: R26 2.5K NOISE LEVEL trim (Q12''s emitter; 0 = no resistance, the most gain); default trimmed: scripts/minimoog_noise_trim.py
+      (Folkman''s ''Noise Level'': -5 dB at most in the white position)'}
+  noise_color:
+    value: 0
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17: SW14, the NOISE switch (0 WHITE, board 3''s pin 5; 1 PINK, pin 6); contacts always in the circuit, so a flip updates a stream in place'
+  noise_level: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R10 NOISE level, 25K (Table 7-3; taper not legible: linear, provisional); 0 by default'}
+  noise_on:
+    value: 1
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); a contact always in the circuit'
+  ext_level: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R9 EXTERNAL INPUT level, 1 Megohm audio; 0 by default'}
+  ext_on:
+    value: 1
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17: SW10, the EXTERNAL INPUT mixer switch (ON: R46 onto the bus); a contact always in the circuit'
+  mod_mix: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'Fig 9-17: R3 MOD MIX, 25K (0 = all oscillator 3: its wiper shorts the noise''s pin 4; 1 = all noise); linear, provisional; 0 by default'}
+  mod_amount: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: 'the left-hand controller''s MODULATION wheel (50K audio, Fig 9-8): 0 none'}
+  osc_mod:
+    value: 0
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17 / 9-2: OSC MOD (1 ON: the wheel''s wiper into the primary summer''s R5 100K (7A); 0 OFF: grounded); contacts always in the circuit'
+  filter_mod:
+    value: 0
+    choices: [0, 1]
+    unit: switch
+    source: 'Fig 9-17 / 9-2: SW15 FILTER MOD (1 ON: the wheel''s wiper into R52 33K; 0 OFF: grounded); contacts always in the circuit'
 values:
   supply_v: {value: 10.0, source: 'Fig 9-11: +10 V (pins 1 / 13; Folkman: set to +10.00 V)'}
   supply_neg_v: {value: -10.0, source: 'Fig 9-11: -10 V (pins 3 / 8; Folkman: set to -10.00 V)'}
-  r_cutoff_ohm: {value: 100000.0, source: 'numerical: test fixture (the CUTOFF knob''s summing resistor; the front panel''s R51 100K by inference, unverified)'}
+  p_r11_ohm: {value: 5000.0, source: 'Fig 9-17: R11 5K (CUTOFF, +10 V to -10 V)'}
+  p_r55_ohm: {value: 200000.0, source: 'Fig 9-17: R55 200K (CUTOFF''s wiper into the control node)'}
+  p_r51_ohm: {value: 100000.0, source: 'Fig 9-17: R51 100K (J2 FILTER EXT CONTROL IN into the control node; the jack''s switch grounds it when empty)'}
+  p_r52_ohm: {value: 33000.0, source: 'Fig 9-17: R52 33K (FILTER MOD, SW15, into the control node; OFF grounds its far end)'}
   r_kb1_ohm: {value: 300000.0, source: 'provisional: model knowledge (KEYBOARD CONTROL 1, one third of the tracking: the front panel''s R53 300K by inference; Table 7-2 lists R53 300K, R54 150K, R55 200K,
       R51 100K without their places)'}
   r_kb2_ohm: {value: 150000.0, source: 'provisional: model knowledge (KEYBOARD CONTROL 2, two thirds: the front panel''s R54 150K by inference; with KB1, 100K together)'}
@@ -231,6 +334,204 @@ values:
   b_r_leak_ohm: {value: 1000000000.0, source: 'numerical: a leak on the unused audio input and the trigger bus (defined with the contact open)'}
   b_diode: {value: 1N4148@1, source: 'provisional: Fig 9-7''s CR5 1N4004 (a rectifier; no card): the 1N4148 stands in'}
   b_contact: {value: 1N4148@1, source: 'numerical: the key''s trigger contact as a diode (closes the bus onto the +10 V bar, open at key-up)'}
+  o_vpos_v: {value: 10.0, source: 'Fig 9-2: +10 V (pin 1A)'}
+  o_vneg_v: {value: -10.0, source: 'Fig 9-2: -10 V (pin 3A)'}
+  o_r_ladder_ohm: {value: 1000.0, source: 'Fig 9-2 / 9-17: the RANGE ladder''s R25-R28, 1K 1% (2'' to 32'', -571 mV an octave)'}
+  o_r_ladder_lo_ohm: {value: 4750.0, source: 'Fig 9-2 / 9-17: R29 4.75K 1% (32'' to LO, LO on ground through pins 20A-22A; R59 90.9 ohm deleted above serial 10175, Fig 9-1 note 5)'}
+  o_r_ref_sense_ohm: {value: 4700.0, source: 'Fig 9-2: R8 4.7K (the -5 V line''s sense, 18A, into IC2''s inverting input)'}
+  o_r_ref_div_ohm: {value: 4990.0, source: 'Fig 9-2: R9, R10 4.99K 1% (-10 V halved: IC2''s reference)'}
+  o_r_ref_base_ohm: {value: 4700.0, source: 'Fig 9-2: R11 4.7K (IC2''s output into Q1''s base)'}
+  o_c_ref_f: {value: 2.7e-05, source: 'Fig 9-2: C3 27 uF / 10 V tantalum (on IC2''s reference)'}
+  o_c_ref_esr_ohm: {value: 1.0, source: 'provisional: model knowledge (a 27 uF solid tantalum''s ESR, about an ohm)'}
+  o_q_ref: {value: 2N3906@1, source: 'Fig 9-2: Q1 2N3906 (sinks the ladder''s current into -10 V)'}
+  o_r_bend_ohm: {value: 25000.0, source: 'Fig 9-2: PITCH WHEEL 25K LIN'}
+  o_r_tune_ohm: {value: 5000.0, source: 'Fig 9-2: TUNE 5K LIN'}
+  o_r_tune_foot_ohm: {value: 5100.0, source: 'Fig 9-2: TUNE''s 5.1K to ground'}
+  o_r1_ohm: {value: 301000.0, source: 'Fig 9-2: R1 301K 1% (network N1, 949-042330-001)'}
+  o_r2_ohm: {value: 100000.0, source: 'Fig 9-2: R2 100K 1% (N1)'}
+  o_r3_ohm: {value: 1240000.0, source: 'Fig 9-2: R3 1.24M 1%'}
+  o_r4_ohm: {value: 102000.0, source: 'Fig 9-2: R4 102K 1% (N1)'}
+  o_r5_ohm: {value: 100000.0, source: 'Fig 9-2: R5 100K 1% (N1)'}
+  o_r6_ohm: {value: 100000.0, source: 'Fig 9-2: R6 100K 1% (N1)'}
+  o_r7_ohm: {value: 22000.0, source: 'Fig 9-2: R7 22K'}
+  o_r13_ohm: {value: 69800.0, source: 'Fig 9-2: R13 69.8K 1% (network N2, 949-042331-001)'}
+  o_r14_ohm: {value: 10000.0, source: 'Fig 9-2: R14 10K trim (OSC 1 SHIFT)'}
+  o_r16_ohm: {value: 10000.0, source: 'Fig 9-2: R16 10K trim (OSC 1 SCALE)'}
+  o_r17_ohm: {value: 90900.0, source: 'Fig 9-2: R17 90.9K 1% (N2)'}
+  o_r18_ohm: {value: 5000.0, source: 'Fig 9-2: R18 5K trim (OSC 1 OCT ADJ)'}
+  o_r19_ohm: {value: 53600.0, source: 'Fig 9-2: R19 53.6K 1% (N2)'}
+  o_r21_ohm: {value: 50000.0, source: 'Fig 9-2: R21 50K 1% (N2)'}
+  o_r22_ohm: {value: 15000.0, source: 'Fig 9-2: R22 15K'}
+  o_r23_ohm: {value: 2320.0, source: 'Fig 9-2: R23 2.32K 1%'}
+  o_r24_ohm: {value: 100.0, source: 'Fig 9-2: R24 100 ohm 1%'}
+  o_c4_f: {value: 1.0e-10, source: 'Fig 9-2: C4 100 pF'}
+  o_r27_temp_c: {value: 78.4, source: 'Fig 9-2: IC5 ''T = 78.4 C'' (the 726''s regulated die; R27 49.9K selects it)'}
+  o_r28_ohm: {value: 100000.0, source: 'Fig 9-2: R28 100K'}
+  o_r29_ohm: {value: 1000.0, source: 'Fig 9-2: R29 1K'}
+  o_c8_f: {value: 1.0e-09, source: 'Fig 9-2: C8 .001'}
+  o_r30_ohm: {value: 2000000.0, source: 'Fig 9-2: R30 2.0M 1% (I_R 5.0 uA)'}
+  o_r25_ohm: {value: 10000.0, source: 'Fig 9-2: R25 10K 1%'}
+  o_r26_ohm: {value: 10000.0, source: 'Fig 9-2: R26 10K 1%'}
+  o_c6_f: {value: 1.5e-06, source: 'Fig 9-2: C6 1.5 / 20 V tantalum'}
+  o_c6_esr_ohm: {value: 3.0, source: 'provisional: model knowledge (a 1.5 uF solid tantalum''s ESR, a few ohms)'}
+  o_c7_f: {value: 1.0e-09, source: 'Fig 9-2: C7 .001 (200 Hz / uA with the 5 V ramp)'}
+  o_r31_ohm: {value: 10000.0, source: 'Fig 9-2: R31 10K trim (the HI END compensation)'}
+  o_r32_ohm: {value: 100000.0, source: 'Fig 9-2: R32 100K'}
+  o_c9_f: {value: 1.0e-10, source: 'Fig 9-2: C9 100 pF'}
+  o_r33_ohm: {value: 2000.0, source: 'Fig 9-2: R33 2K'}
+  o_r34_ohm: {value: 1000000.0, source: 'Fig 9-2: R34 1M'}
+  o_r35_ohm: {value: 100.0, source: 'Fig 9-2: R35 100 ohm'}
+  o_c12_f: {value: 1.8e-11, source: 'Fig 9-2: C12 18 pF'}
+  o_r36_ohm: {value: 1000.0, source: 'Fig 9-2: R36 1K 1% (network N5, 949-042332-001)'}
+  o_r37_ohm: {value: 5600.0, source: 'Fig 9-2: R37 5.6K (N5)'}
+  o_r38_ohm: {value: 4020.0, source: 'Fig 9-2: R38 4.02K 1% (N5)'}
+  o_r39_ohm: {value: 1000.0, source: 'Fig 9-2: R39 1K (N5)'}
+  o_r40_ohm: {value: 10000.0, source: 'Fig 9-2: R40 10K 1% (N5)'}
+  o_r41_ohm: {value: 10000.0, source: 'Fig 9-2: R41 10K (N5)'}
+  o_r42_ohm: {value: 10000.0, source: 'Fig 9-2: R42 10K 1%'}
+  o_r43_ohm: {value: 8250.0, source: 'Fig 9-2: R43 8.25K 1% (N5)'}
+  o_r44_ohm: {value: 4990.0, source: 'Fig 9-2: R44 4.99K 1% (N5)'}
+  o_r45_ohm: {value: 100000.0, source: 'Fig 9-2: R45 100K 1%'}
+  o_r46_ohm: {value: 2200000.0, source: 'Fig 9-2: R46 2.2M'}
+  o_r47_ohm: {value: 100000.0, source: 'Fig 9-2: R47 100K 1%'}
+  o_r48_ohm: {value: 5100.0, source: 'Fig 9-2: R48 5.1K'}
+  o_r49_ohm: {value: 2700.0, source: 'Fig 9-2: R49 2.7K'}
+  o_c13_f: {value: 5.0e-10, source: 'Fig 9-2: C13 500 pF'}
+  o_c14_f: {value: 1.0e-08, source: 'Fig 9-2: C14 .01'}
+  o_rect_follow_gain: {value: 0.700292, source: 'derived: the ramp''s share at IC8A''s + input, (R37 || R38) / (R36 + R37 || R38) x R46 / (R39 + R46) (the events build''s rectangle follows the reset through
+      it)'}
+  o_r_leak_ohm: {value: 1000000000.0, source: 'numerical: a leak on the unused audio input'}
+  o_r_contact_ohm: {value: 0.05, source: 'provisional: model knowledge (a closed rotary-switch contact, tens of milliohm)'}
+  o_u1458_a0: {value: 200000.0, source: 'web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (AVD 200 V/mV typ; data/datasheets/opamps/README.md)'}
+  o_u1458_gbw_hz: {value: 1000000.0, source: 'web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (B1 1 MHz typ)'}
+  o_u1458_r_in_ohm: {value: 2000000.0, source: 'web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (ri 2 MOhm typ)'}
+  o_u1458_r_out_ohm: {value: 75.0, source: 'web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (ro 75 ohm typ)'}
+  o_tl081_a0: {value: 200000.0, source: 'web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, AOL 200 V/mV typ, TL08xC)'}
+  o_tl081_gbw_hz: {value: 3000000.0, source: 'web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, GBW 3 MHz: the TL08xM and NS / PS packages; the 1970s die''s)'}
+  o_tl081_r_in_ohm: {value: 1000000000000.0, source: 'web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, RID 1 TOhm typ)'}
+  o_tl081_r_out_ohm: {value: 100.0, source: 'provisional: model knowledge (a JFET-input op-amp''s open-loop output resistance, ~100 ohm; the sheet gives none)'}
+  o_tl081_slew_v_per_s: {value: 20000000.0, source: 'web: https://www.ti.com/lit/ds/symlink/tl081.pdf (SLOS081O, SR 20 V/us typ, 8 min)'}
+  o_tl081_swing_v: {value: 7.9, source: 'derived: the sheet''s VOM +-13.5 V at +-15 V (1.5 V from each rail) on this board''s +-10 V, less the clamp diode''s ~0.6 V'}
+  o_cmp_a0: {value: 200000.0, source: 'web: https://www.ti.com/lit/ds/symlink/lm393.pdf (SLCS005AH, AVD 200 V/mV typ)'}
+  o_cmp_gbw_hz: {value: 36962000.0, source: 'fitted: scripts/fit_lm393.py, the sheet''s response times (SLCS005AH: 1.3 us at 5 mV overdrive, 0.3 us for a TTL step)'}
+  o_cmp_slew_v_per_s: {value: 5398900.0, source: 'fitted: scripts/fit_lm393.py, the sheet''s response times (SLCS005AH: 1.3 us at 5 mV overdrive, 0.3 us for a TTL step)'}
+  o_cmp_swing_v: {value: 1.0, source: 'numerical: the macro''s internal swing (the response times are fitted with it: config/circuits/lm393_test.yaml)'}
+  o_cmp_r_in_ohm: {value: 1000000.0, source: 'provisional: model knowledge (a PNP-input comparator''s differential input resistance, ~1 MOhm)'}
+  o_cmp_r_out_ohm: {value: 1.0, source: 'numerical: unused with an open collector (the macro needs it)'}
+  o_clamp_diode: {value: 1N4148@1, source: 'numerical: the op-amp macros'' clamp and slew-limit diodes'}
+  o_cr1_diode: {value: 1N4148@1, source: 'provisional: model knowledge (Fig 9-2''s CR1, a small-signal silicon diode; the parts list''s type not read)'}
+  o_q_726: {value: UA726@1, source: 'Fig 9-2: IC5 726 (Fairchild uA726)'}
+  o_q_n: {value: 2N3904@1, source: 'Fig 9-2: Q5, Q6 2N3904'}
+  o_q_cmp_out: {value: 2N3904@1, source: 'provisional: model knowledge (the LM393''s open-collector output NPN; no die data: a small-signal NPN''s card stands in)'}
+  o_j_reset_cgd_f: {value: 7.5e-12, source: 'derived: the PN4092@1 card''s CGD (Q4''s gate-to-drain capacitance; in an events build its off state, from C7''s lower plate to the gate held at ~-9.4 V, an
+      AC ground)'}
+  o_j_reset: {value: PN4092@1, source: 'provisional: model knowledge (Fig 9-2''s Q4 E112, Siliconix''s J112-class chopper in its plastic E package, rDS(on) <= 50 ohm; no card found): Central''s PN4092 card
+      (the 2N4092, the same 50 ohm switch class) stands in'}
+  p_r_sum_noise_ohm: {value: 11000.0, source: 'Fig 9-17: R48 11K (NOISE into the mixer''s switch)'}
+  p_r_level_ohm: {value: 25000.0, source: 'Fig 9-17 / Table 7-3: the mixer''s LEVEL pots (R6, R7, R8 OSC 1-3, R10 NOISE), 25K; their taper isn''t legible (linear, provisional)'}
+  p_r_sum_osc_ohm: {value: 33000.0, source: 'Fig 9-17: R45, R47, R49 33K (OSC 1-3 into the mixer''s switches)'}
+  p_r_shark_saw_ohm: {value: 47000.0, source: 'Fig 9-17: R30 / R36 / R39 47K (the waveform switch''s triangle-sawtooth mix, the sawtooth''s share)'}
+  p_r_shark_tri_ohm: {value: 10000.0, source: 'Fig 9-17: R31 / R37 10K (the waveform switch''s triangle-sawtooth mix, the triangle''s share)'}
+  p_rpw_a_ohm: {value: 1500.0, source: 'Fig 9-17: R34 / R40 / R44 1.5K (the PW divider''s top, from ground)'}
+  p_rpw_b_ohm: {value: 1000.0, source: 'Fig 9-17: R33 / R39 / R43 1K (the PW divider''s middle)'}
+  p_rpw_c_ohm: {value: 7500.0, source: 'Fig 9-17: R32 / R38 / R42 7.5K (the PW divider to -10 V)'}
+  p_r_contact_ohm: {value: 0.05, source: 'provisional: model knowledge (a closed rotary-switch contact, tens of milliohm)'}
+  p_r_switch_open_ohm: {value: 10000000000.0, source: 'provisional: model knowledge (an open switch contact''s insulation, 1e10-1e12 ohm; closed it is a pot''s end, MIN_R_OHM)'}
+  p_r_bus_leak_ohm: {value: 1000000000.0, source: 'numerical: a leak on the mixer''s bus and the unused audio input (defined with every switch off)'}
+  o1_r14_at: {value: 0.84252, source: 'trimmed: scripts/minimoog_vco_trim.py (Folkman''s oscillator tuning: the ''Range trimpot'' for 3520 Hz at the high A on 2'')'}
+  o1_r16_at: {value: 0.70488, source: 'trimmed: scripts/minimoog_vco_trim.py (Folkman''s oscillator tuning: the Scale trimpot for 440 Hz at the low A on 2'')'}
+  o1_r18_at: {value: 0.51732, source: 'trimmed: scripts/minimoog_vco_trim.py (Folkman''s Octave Range trimmer: 8'' an octave below 2'')'}
+  o1_r31_at: {value: 0.32236, source: 'trimmed: scripts/minimoog_vco_trim.py (the top key''s pitch on 2'' after SHIFT and SCALE)'}
+  o2_r13_ohm: {value: 82500.0, source: 'Fig 9-2: R53 82.5K 1% (oscillator 2''s SHIFT; network N3; oscillator 1''s R13 is 69.8K)'}
+  o2_r14_at: {value: 0.9069, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc2 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o2_r16_at: {value: 0.70387, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc2 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o2_r18_at: {value: 0.51735, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc2 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o2_r31_at: {value: 0.31536, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc2 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o2_r_freq_ohm: {value: 5000.0, source: 'Fig 9-2 / 9-17: OSC 2 FREQ, a 5K LIN pot'}
+  o2_r_freq_foot_ohm: {value: 5100.0, source: 'Fig 9-2: OSC 2 FREQ''s 5.1K to ground'}
+  o2_r_freq_in_ohm: {value: 402000.0, source: 'Fig 9-2: R54 402K 1% (OSC 2 FREQ into the summer, ''7.5V +-2.5V, +-5TH'')'}
+  o3_r13_ohm: {value: 82500.0, source: 'Fig 9-2: R93 82.5K 1% (oscillator 3''s SHIFT; network N4; oscillator 1''s R13 is 69.8K)'}
+  o3_r14_at: {value: 0.90686, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc3 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o3_r16_at: {value: 0.67087, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc3 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o3_r18_at: {value: 0.51715, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc3 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o3_r31_at: {value: 0.31646, source: 'trimmed: scripts/minimoog_vco_trim.py --circuit minimoog_osc3 --write (Folkman''s tuning through the keyboard, as oscillator 1''s)'}
+  o3_r_freq_ohm: {value: 5000.0, source: 'Fig 9-2 / 9-17: OSC 3 FREQ, a 5K LIN pot'}
+  o3_r_freq_foot_ohm: {value: 5100.0, source: 'Fig 9-2: OSC 3 FREQ''s 5.1K to ground'}
+  o3_r_freq_in_ohm: {value: 402000.0, source: 'Fig 9-2: R96 402K 1% (OSC 3 FREQ into the summer, ''7.5V +-2.5V, +-5TH'')'}
+  o3_r97_ohm: {value: 121000.0, source: 'Fig 9-2: R97 121K 1% (network N4: OSC 3 CONTROL OFF, the FREQ pot into the summer, ''+-2.75 OCT'')'}
+  o3_r60_ohm: {value: 1000000.0, source: 'Fig 9-2: R60 1M (Q2''s gate to its source)'}
+  o3_r61_ohm: {value: 100000.0, source: 'Fig 9-2: R61 100K (16A into Q3''s base)'}
+  o3_r98_ohm: {value: 69800.0, source: 'Fig 9-2: R98 69.8K 1% (16A into Q19''s base)'}
+  o3_r123_ohm: {value: 330.0, source: 'Fig 9-2: R123 330 ohm (REV SAW''s +10 V decoupling)'}
+  o3_c37_f: {value: 5.6e-06, source: 'Fig 9-2: C37 5.6 uF / 35 V tantalum'}
+  o3_c37_esr_ohm: {value: 2.0, source: 'provisional: model knowledge (a 5.6 uF solid tantalum''s ESR, a few ohms)'}
+  o3_r124_ohm: {value: 2200.0, source: 'Fig 9-2: R124 2.2K'}
+  o3_r128_ohm: {value: 390000.0, source: 'Fig 9-2: R128 390K (Q20''s base to -10 V)'}
+  o3_r129_ohm: {value: 68000.0, source: 'Fig 9-2: R129 68K'}
+  o3_r130_ohm: {value: 33000.0, source: 'Fig 9-2: R130 33K (the sawtooth into Q20''s base)'}
+  o3_r133_ohm: {value: 7500.0, source: 'Fig 9-2: R133 7.5K (Q20''s collector, REV SAW 3 OUT, 7B)'}
+  o3_r134_ohm: {value: 18000.0, source: 'Fig 9-2: R134 18K (to -10 V)'}
+  o3_r_switch_open_ohm: {value: 10000000000.0, source: 'provisional: model knowledge (an open switch contact''s insulation, 1e10-1e12 ohm; closed it is a pot''s end, MIN_R_OHM)'}
+  o3_q_e101: {value: 2N5457@1, source: 'provisional: model knowledge (Fig 9-2''s Q2 E101, a Siliconix general-purpose N-channel JFET in the plastic E package; no card found): the 2N5457 card (Central''s
+      typical part) stands in; its on resistance in series with SCALE''s ~97K is trimmed out by SCALE'}
+  n_vpos_v: {value: 10.0, source: 'Fig 9-8: +10 V (pin 1)'}
+  n_r47_ohm: {value: 75000.0, source: 'Fig 9-8: R47 75K'}
+  n_c25_f: {value: 1.0e-05, source: 'Fig 9-8: C25 10 uF'}
+  n_r67_ohm: {value: 470000.0, source: 'Fig 9-8: R67 470K (Q15''s emitter feed)'}
+  n_v_avalanche_v: {value: 7.0, source: 'provisional: model knowledge (a small-signal NPN''s emitter-base avalanche, 6-9 V; the 2N3392''s BVEBO is 5 V minimum)'}
+  n_r_avalanche_ohm: {value: 20000.0, source: 'provisional: model knowledge (an emitter-base junction''s dynamic resistance in avalanche at a few uA, ~10-50K)'}
+  n_avalanche_psd_a2_hz: {value: 4.3e-17, source: 'provisional: chosen so the factory''s NOISE LEVEL trim (R26) sits near mid-travel at Folkman''s -5 dB (scripts/minimoog_noise_trim.py); an avalanche junction''s
+      noise current, 2 q I M^2 at ~5.5 uA, puts M near 600'}
+  n_c12_f: {value: 5.6e-06, source: 'Fig 9-8: C12 5.6 uF'}
+  n_r29_ohm: {value: 4700000.0, source: 'Fig 9-8: R29 4.7M (Q12''s collector to its base)'}
+  n_r17_ohm: {value: 100000.0, source: 'Fig 9-8: R17 100K'}
+  n_c11_f: {value: 1.0e-10, source: 'Fig 9-8: C11 100 pF (Q12''s collector)'}
+  n_r26_ohm: {value: 2500.0, source: 'Fig 9-8: R26 2.5K NOISE LEVEL trim'}
+  n_r9_ohm: {value: 470.0, source: 'Fig 9-8: R9 470'}
+  n_r19_ohm: {value: 3300.0, source: 'Fig 9-8: R19 3.3K'}
+  n_c5_f: {value: 1.0e-10, source: 'Fig 9-8: C5 100 pF'}
+  n_c18_f: {value: 1.5e-07, source: 'Fig 9-8: C18 .15 (WHITE NOISE out, pin 5)'}
+  n_r16_ohm: {value: 10000.0, source: 'Fig 9-8: R16 10K'}
+  n_c3_f: {value: 1.2e-07, source: 'Fig 9-8: C3 .12'}
+  n_r8_ohm: {value: 3300.0, source: 'Fig 9-8: R8 3.3K'}
+  n_c2_f: {value: 3.3e-08, source: 'Fig 9-8: C2 .033'}
+  n_r13_ohm: {value: 220.0, source: 'Fig 9-8: R13 220'}
+  n_c1_f: {value: 2.5e-06, source: 'Fig 9-8: C1 2.5 uF'}
+  n_r7_ohm: {value: 560000.0, source: 'Fig 9-8: R7 560K'}
+  n_r6_ohm: {value: 560000.0, source: 'Fig 9-8: R6 560K'}
+  n_c4_f: {value: 2.5e-06, source: 'Fig 9-8: C4 2.5 uF'}
+  n_r3_ohm: {value: 3300.0, source: 'Fig 9-8: R3 3.3K'}
+  n_r1_ohm: {value: 120.0, source: 'Fig 9-8: R1 120'}
+  n_c20_f: {value: 2.5e-06, source: 'Fig 9-8: C20 2.5 uF (PINK NOISE out, pin 6)'}
+  n_q_n: {value: 2N3904@1, source: 'provisional: model knowledge (Fig 9-8''s Q12, Q4, Q3 2N3392 (NPN): the sheet''s alternate for the TIS92 is the 2N3904, as on board 2)'}
+  x_r78_ohm: {value: 1000.0, source: 'Fig 9-11: R78 1K (the pre-amp''s input, pin 11)'}
+  x_c23_f: {value: 1.0e-07, source: 'Fig 9-11: C23 .1'}
+  x_r66_ohm: {value: 100000.0, source: 'Fig 9-11: R66 100K (Q27''s base to ground)'}
+  x_r58_ohm: {value: 150000.0, source: 'Fig 9-11: R58 150K (the pair''s tail to -10 V)'}
+  x_r65_ohm: {value: 27000.0, source: 'Fig 9-11: R65 27K (Q27''s collector)'}
+  x_r64_ohm: {value: 100.0, source: 'Fig 9-11: R64 100 (with C22, Q27''s collector to +10 V)'}
+  x_c22_f: {value: 1.0e-10, source: 'Fig 9-11: C22 100 pF'}
+  x_r57_ohm: {value: 10000.0, source: 'Fig 9-11: R57 10K (Q33''s collector to -10 V)'}
+  x_r61_ohm: {value: 200000.0, source: 'Fig 9-11: R61 200K (the feedback)'}
+  x_r63_ohm: {value: 1000.0, source: 'Fig 9-11: R63 1K (into Q32''s base)'}
+  x_r62_ohm: {value: 1000.0, source: 'Fig 9-11: R62 1K (the feedback''s foot)'}
+  x_c26_f: {value: 0.00022, source: 'Fig 9-11: C26 220 uF'}
+  x_c21_f: {value: 1.0e-11, source: 'Fig 9-11: C21 10 pF (Q32''s base to the output)'}
+  x_r_ext_ohm: {value: 1000000.0, source: 'Fig 9-17: R9 1 Megohm audio (EXTERNAL INPUT level, Table 7-3)'}
+  x_ext_taper_mid: {value: 0.15, source: 'provisional: model knowledge (an audio-taper pot''s track at half rotation, ~10-20 %)'}
+  x_r46_ohm: {value: 33000.0, source: 'Fig 9-17: R46 33K (PREAMP OUT into the mixer''s switch SW10)'}
+  m_r_in_ohm: {value: 24000.0, source: 'Fig 9-8 / 9-17: R24, R23 24K (noise and oscillator 3 into the modulation mix''s pins 4 and 3)'}
+  m_r_mix_ohm: {value: 25000.0, source: 'Fig 9-17: R3 MOD MIX 25K (its wiper on ground)'}
+  m_r62_ohm: {value: 43000.0, source: 'Fig 9-8: R62, R64 43K (into Q18''s base)'}
+  m_r60_ohm: {value: 91000.0, source: 'Fig 9-8: R60 91K (the feedback)'}
+  m_r54_ohm: {value: 43000.0, source: 'Fig 9-8: R54 43K (the pair''s tail to -10 V)'}
+  m_r42_ohm: {value: 6200.0, source: 'Fig 9-8: R42 6.2K (Q17''s collector)'}
+  m_r38_ohm: {value: 390.0, source: 'Fig 9-8: R38 390 (with C14, the compensation)'}
+  m_c14_f: {value: 2.2e-08, source: 'Fig 9-8: C14 .022'}
+  m_r30_ohm: {value: 10000.0, source: 'Fig 9-8: R30 10K (Q7''s collector to -10 V)'}
+  m_r57_ohm: {value: 1000.0, source: 'Fig 9-8: R57 1K (out on pin 1)'}
+  m_r_wheel_ohm: {value: 50000.0, source: 'Fig 9-8 / 9-2: the left-hand controller''s MODULATION wheel, 50K audio'}
+  m_wheel_taper_mid: {value: 0.15, source: 'provisional: model knowledge (an audio-taper pot''s track at half rotation)'}
 devices:
   QL: {device: 2N3904@1, source: 'provisional: the sheet''s TIS97 (no card found); the 2N3904, the sheet''s printed alternate for the TIS92, stands in'}
   QN: {device: 2N3904@1, source: 'Fig 9-11: TIS92, alternate 2N3904 (note 1)'}
@@ -246,6 +547,27 @@ devices:
       mA)'}
   b_DD: {device: b_diode}
   b_DK: {device: b_contact}
+  o_QREF: {device: o_q_ref}
+  o1_QX: {device: o_q_726, temp_c: o_r27_temp_c}
+  o1_QN: {device: o_q_n}
+  o1_QO: {device: o_q_cmp_out}
+  o1_JR: {device: o_j_reset}
+  o1_DCL: {device: o_clamp_diode}
+  o1_DCR: {device: o_cr1_diode}
+  o2_QX: {device: o_q_726, temp_c: o_r27_temp_c}
+  o2_QN: {device: o_q_n}
+  o2_QO: {device: o_q_cmp_out}
+  o2_JR: {device: o_j_reset}
+  o2_DCL: {device: o_clamp_diode}
+  o2_DCR: {device: o_cr1_diode}
+  o3_QX: {device: o_q_726, temp_c: o_r27_temp_c}
+  o3_QN: {device: o_q_n}
+  o3_QO: {device: o_q_cmp_out}
+  o3_JR: {device: o_j_reset}
+  o3_DCL: {device: o_clamp_diode}
+  o3_DCR: {device: o_cr1_diode}
+  o3_QE: {device: o3_q_e101}
+  n_QN: {device: n_q_n}
 sections:
 - title: rails and fixtures
   parts:
@@ -255,12 +577,19 @@ sections:
     VN:
       V: [vn, '0']
       v: supply_neg_v
-    VCUT:
-      V: [cutv, '0']
-      v: cutoff_v
-    RCUT:
-      R: [cutv, ctl]
-      r: r_cutoff_ohm
+    R11P:
+      pot: [vn, cutw, vp]
+      r: p_r11_ohm
+      at: cutoff
+    R55P:
+      R: [cutw, ctl]
+      r: p_r55_ohm
+    R51P:
+      R: [ctl, '0']
+      r: p_r51_ohm
+    R52P:
+      R: [ctl, fm]
+      r: p_r52_ohm
     SKB1:
       switch: kb1
       parts:
@@ -278,6 +607,177 @@ sections:
     RKBL:
       R: [kbd, '0']
       r: r_kbd_load_ohm
+- title: mixer
+  parts:
+    RSHS_p1:
+      R: [o1_out, o1_shk]
+      r: p_r_shark_saw_ohm
+    RSHT_p1:
+      R: [o1_tri, o1_shk]
+      r: p_r_shark_tri_ohm
+    SW6A_p1:
+      switch: osc1_wave
+      parts:
+        RWF0_p1:
+          R: [o1_tri, o1_wf]
+          r: p_r_contact_ohm
+          in: [0]
+        RWF1_p1:
+          R: [o1_shk, o1_wf]
+          r: p_r_contact_ohm
+          in: [1]
+        RWF2_p1:
+          R: [o1_out, o1_wf]
+          r: p_r_contact_ohm
+          in: [2]
+        RWF3_p1:
+          R: [o1_rect, o1_wf]
+          r: p_r_contact_ohm
+          in: [3]
+        RWF4_p1:
+          R: [o1_rect, o1_wf]
+          r: p_r_contact_ohm
+          in: [4]
+        RWF5_p1:
+          R: [o1_rect, o1_wf]
+          r: p_r_contact_ohm
+          in: [5]
+    R6_p1:
+      pot: ['0', o1_lw, o1_wf]
+      r: p_r_level_ohm
+      at: osc1_level
+    R45_p1:
+      R: [o1_lw, o1_ms]
+      r: p_r_sum_osc_ohm
+    RSW9_p1:
+      rheostat: [o1_ms, mix]
+      r: p_r_switch_open_ohm
+      at: osc1_on
+      reverse: 1
+    RSHS_p2:
+      R: [o2_out, o2_shk]
+      r: p_r_shark_saw_ohm
+    RSHT_p2:
+      R: [o2_tri, o2_shk]
+      r: p_r_shark_tri_ohm
+    SW7A_p2:
+      switch: osc2_wave
+      parts:
+        RWF0_p2:
+          R: [o2_tri, o2_wf]
+          r: p_r_contact_ohm
+          in: [0]
+        RWF1_p2:
+          R: [o2_shk, o2_wf]
+          r: p_r_contact_ohm
+          in: [1]
+        RWF2_p2:
+          R: [o2_out, o2_wf]
+          r: p_r_contact_ohm
+          in: [2]
+        RWF3_p2:
+          R: [o2_rect, o2_wf]
+          r: p_r_contact_ohm
+          in: [3]
+        RWF4_p2:
+          R: [o2_rect, o2_wf]
+          r: p_r_contact_ohm
+          in: [4]
+        RWF5_p2:
+          R: [o2_rect, o2_wf]
+          r: p_r_contact_ohm
+          in: [5]
+    R7_p2:
+      pot: ['0', o2_lw, o2_wf]
+      r: p_r_level_ohm
+      at: osc2_level
+    R47_p2:
+      R: [o2_lw, o2_ms]
+      r: p_r_sum_osc_ohm
+    RSW11_p2:
+      rheostat: [o2_ms, mix]
+      r: p_r_switch_open_ohm
+      at: osc2_on
+      reverse: 1
+    SW8A_p3:
+      switch: osc3_wave
+      parts:
+        RWF0_p3:
+          R: [o3_tri, o3_wf]
+          r: p_r_contact_ohm
+          in: [0]
+        RWF1_p3:
+          R: [o3_rsaw, o3_wf]
+          r: p_r_contact_ohm
+          in: [1]
+        RWF2_p3:
+          R: [o3_out, o3_wf]
+          r: p_r_contact_ohm
+          in: [2]
+        RWF3_p3:
+          R: [o3_rect, o3_wf]
+          r: p_r_contact_ohm
+          in: [3]
+        RWF4_p3:
+          R: [o3_rect, o3_wf]
+          r: p_r_contact_ohm
+          in: [4]
+        RWF5_p3:
+          R: [o3_rect, o3_wf]
+          r: p_r_contact_ohm
+          in: [5]
+    R8_p3:
+      pot: ['0', o3_lw, o3_wf]
+      r: p_r_level_ohm
+      at: osc3_level
+    R49_p3:
+      R: [o3_lw, o3_ms]
+      r: p_r_sum_osc_ohm
+    RSW13_p3:
+      rheostat: [o3_ms, mix]
+      r: p_r_switch_open_ohm
+      at: osc3_on
+      reverse: 1
+    RSW14W_p:
+      rheostat: [n_wn, nsel]
+      r: p_r_switch_open_ohm
+      at: noise_color
+    RSW14P_p:
+      rheostat: [n_pn, nsel]
+      r: p_r_switch_open_ohm
+      at: noise_color
+      reverse: 1
+    R10_p:
+      pot: ['0', nlw, nsel]
+      r: p_r_level_ohm
+      at: noise_level
+    R48_p:
+      R: [nlw, nms]
+      r: p_r_sum_noise_ohm
+    RSW12_p:
+      rheostat: [nms, mix]
+      r: p_r_switch_open_ohm
+      at: noise_on
+      reverse: 1
+    R46_p:
+      R: [xo, xms]
+      r: x_r46_ohm
+    RSW10_p:
+      rheostat: [xms, mix]
+      r: p_r_switch_open_ohm
+      at: ext_on
+      reverse: 1
+    RMIO_m:
+      R: [o3_wf, m3]
+      r: m_r_in_ohm
+- title: 'filter: rails'
+  parts:
+    VLP:
+      V: [lvp, '0']
+      v: supply_v
+    VLN:
+      V: [lvn, '0']
+      v: supply_neg_v
 - title: control current
   parts:
     R74:
@@ -319,7 +819,7 @@ sections:
 - title: ladder
   parts:
     R4:
-      R: [vp, n1]
+      R: [lvp, n1]
       r: r4_ohm
     R16:
       R: [n1, n2]
@@ -340,10 +840,10 @@ sections:
       C: [nb, '0']
       c: c24_f
     Q2:
-      bjt: [vp, n1, a4]
+      bjt: [lvp, n1, a4]
       model: QL
     Q3:
-      bjt: [vp, n1, b4]
+      bjt: [lvp, n1, b4]
       model: QL
     C3:
       C: [a4, b4]
@@ -382,7 +882,7 @@ sections:
       bjt: [b1, b30, tail]
       model: QL
     C27:
-      C: [in, b29]
+      C: [mix, b29]
       c: c27_f
     R54:
       R: [nb, b29]
@@ -400,6 +900,9 @@ sections:
       at: emphasis
       taper_mid: emphasis_taper_mid
       reverse: 1
+    RMIX:
+      R: [mix, '0']
+      r: p_r_bus_leak_ohm
 - title: output amplifier
   parts:
     C5:
@@ -418,25 +921,25 @@ sections:
       bjt: [o7, b8, e8]
       model: QL
     R24:
-      R: [e8, vn]
+      R: [e8, lvn]
       r: r24_ohm
     Q6:
-      bjt: [vp, b6, e6]
+      bjt: [lvp, b6, e6]
       model: QL
     R20:
-      R: [e6, vn]
+      R: [e6, lvn]
       r: r20_ohm
     Q7:
       bjt: [o7, e8, et]
       model: QL
     Q5:
-      bjt: [vp, e6, et]
+      bjt: [lvp, e6, et]
       model: QL
     R26:
-      R: [et, vn]
+      R: [et, lvn]
       r: r26_ohm
     R6:
-      R: [vp, vf]
+      R: [lvp, vf]
       r: r6_ohm
     C9:
       C: [vf, '0']
@@ -466,7 +969,7 @@ sections:
       R: [e18, '0']
       r: r37_ohm
     R43:
-      R: [e18, vn]
+      R: [e18, lvn]
       r: r43_ohm
 - title: vca
   parts:
@@ -1022,3 +1525,1389 @@ sections:
     R31_b:
       R: [b_g7, b_gb]
       r: b_r31_ohm
+- title: 'osc board: rails and panel'
+  parts:
+    VP_o:
+      V: [o_vp, '0']
+      v: o_vpos_v
+    VN_o:
+      V: [o_vn, '0']
+      v: o_vneg_v
+    RBEND_o:
+      pot: [o_vp, o_bendw, '0']
+      r: o_r_bend_ohm
+      at: bend
+    RTUNE_o:
+      pot: [o_vp, o_tunew, o_tunef]
+      r: o_r_tune_ohm
+      at: tune
+    RTUNEF_o:
+      R: [o_tunef, '0']
+      r: o_r_tune_foot_ohm
+- title: 'osc board: -5 V reference'
+  parts:
+    R9_o:
+      R: ['0', o_rp2]
+      r: o_r_ref_div_ohm
+    R10_o:
+      R: [o_rp2, o_vn]
+      r: o_r_ref_div_ohm
+    C3_o:
+      C: [o_c3t, '0']
+      c: o_c_ref_f
+    RC3_o:
+      R: [o_rp2, o_c3t]
+      r: o_c_ref_esr_ohm
+    R8_o:
+      R: [o_m5, o_rn2]
+      r: o_r_ref_sense_ohm
+    IC2_o:
+      opamp: [o_rp2, o_rn2, o_r11a]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    R11_o:
+      R: [o_r11a, o_bq1]
+      r: o_r_ref_base_ohm
+    Q1_o:
+      bjt: [o_vn, o_bq1, o_m5]
+      model: o_QREF
+- title: 'osc board: range ladder'
+  parts:
+    R25P_o:
+      R: [o_m5, o_t4]
+      r: o_r_ladder_ohm
+    R26P_o:
+      R: [o_t4, o_t8]
+      r: o_r_ladder_ohm
+    R27P_o:
+      R: [o_t8, o_t16]
+      r: o_r_ladder_ohm
+    R28P_o:
+      R: [o_t16, o_t32]
+      r: o_r_ladder_ohm
+    R29P_o:
+      R: [o_t32, '0']
+      r: o_r_ladder_lo_ohm
+- title: 'osc board: primary summer'
+  parts:
+    R1_o:
+      R: [o_bendw, o_p2]
+      r: o_r1_ohm
+    R3_o:
+      R: [o_tunew, o_p2]
+      r: o_r3_ohm
+    R4_o:
+      R: [kbd, o_p2]
+      r: o_r4_ohm
+    R5_o:
+      R: [om, o_p2]
+      r: o_r5_ohm
+    R6_o:
+      R: ['0', o_p2]
+      r: o_r6_ohm
+    R2_o:
+      R: [o_pri, o_p2]
+      r: o_r2_ohm
+    R7_o:
+      R: [o_p3, '0']
+      r: o_r7_ohm
+    IC1A_o:
+      opamp: [o_p3, o_p2, o_pri]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+- title: 'osc 1: range'
+  parts:
+    SRANGE_o1:
+      switch: osc1_range
+      parts:
+        RR0_o1:
+          R: ['0', o1_rw]
+          r: o_r_contact_ohm
+          in: [0]
+        RR1_o1:
+          R: [o_t32, o1_rw]
+          r: o_r_contact_ohm
+          in: [1]
+        RR2_o1:
+          R: [o_t16, o1_rw]
+          r: o_r_contact_ohm
+          in: [2]
+        RR3_o1:
+          R: [o_t8, o1_rw]
+          r: o_r_contact_ohm
+          in: [3]
+        RR4_o1:
+          R: [o_t4, o1_rw]
+          r: o_r_contact_ohm
+          in: [4]
+        RR5_o1:
+          R: [o_m5, o1_rw]
+          r: o_r_contact_ohm
+          in: [5]
+    IC1B6_o1:
+      opamp: [o1_rw, o1_rng, o1_rng]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 1: summer'
+  parts:
+    R13_o1:
+      R: [o_vp, o1_s9]
+      r: o_r13_ohm
+    R14_o1:
+      rheostat: [o1_s9, o1_s6]
+      r: o_r14_ohm
+      at: o1_r14_at
+    R16_o1:
+      rheostat: [o_pri, o1_s8]
+      r: o_r16_ohm
+      at: o1_r16_at
+    R17_o1:
+      R: [o1_s8, o1_s6]
+      r: o_r17_ohm
+    R18_o1:
+      rheostat: [o1_rng, o1_s7]
+      r: o_r18_ohm
+      at: o1_r18_at
+    R19_o1:
+      R: [o1_s7, o1_s6]
+      r: o_r19_ohm
+    R21_o1:
+      R: [o1_s5, o1_s6]
+      r: o_r21_ohm
+    R22_o1:
+      R: [o1_sp, '0']
+      r: o_r22_ohm
+    IC1B_o1:
+      opamp: [o1_sp, o1_s6, o1_s5]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    R23_o1:
+      R: [o1_s5, o1_v01]
+      r: o_r23_ohm
+    R24_o1:
+      R: [o1_v01, '0']
+      r: o_r24_ohm
+    C4_o1:
+      C: [o1_v01, '0']
+      c: o_c4_f
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 1: expo'
+  parts:
+    Q7_o1:
+      bjt: [o1_e, o1_v01, o1_ne]
+      model: o1_QX
+    Q8_o1:
+      bjt: [o1_n4, '0', o1_ne]
+      model: o1_QX
+    R30_o1:
+      R: [o_vp, o1_n4]
+      r: o_r30_ohm
+    IC6_o1:
+      opamp: ['0', o1_n4, o1_n6]
+      a0: o_tl081_a0
+      gbw_hz: o_tl081_gbw_hz
+      r_out_ohm: o_tl081_r_out_ohm
+      r_in_ohm: o_tl081_r_in_ohm
+    C8_o1:
+      C: [o1_n6, o1_n29]
+      c: o_c8_f
+    R29_o1:
+      R: [o1_n29, o1_n4]
+      r: o_r29_ohm
+    R28_o1:
+      R: [o1_n6, o1_ne]
+      r: o_r28_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 1: core'
+  parts:
+    R25_o1:
+      R: [o_vp, o1_r5p]
+      r: o_r25_ohm
+    R26_o1:
+      R: [o1_r5p, '0']
+      r: o_r26_ohm
+    IC4A_o1:
+      opamp: [o1_r5p, o1_ref5, o1_ref5]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    C6_o1:
+      C: [o1_c6t, '0']
+      c: o_c6_f
+    RC6_o1:
+      R: [o1_ref5, o1_c6t]
+      r: o_c6_esr_ohm
+    C7_o1:
+      C: [o1_ref5, o1_d]
+      c: o_c7_f
+    JQ4_o1:
+      jfet: [o1_d, o1_gate, o1_ref5]
+      model: o1_JR
+    R31_o1:
+      rheostat: [o1_d, o1_e]
+      r: o_r31_ohm
+      at: o1_r31_at
+    IC7_o1:
+      opamp: [o1_e, o1_ramp, o1_n7]
+      a0: o_tl081_a0
+      gbw_hz: o_tl081_gbw_hz
+      r_out_ohm: o_tl081_r_out_ohm
+      r_in_ohm: o_tl081_r_in_ohm
+      clamp: o1_DCL
+      swing_v: o_tl081_swing_v
+      slew_v_per_s: o_tl081_slew_v_per_s
+    Q5_o1:
+      bjt: [o_vp, o1_n7, o1_ramp]
+      model: o1_QN
+    R32_o1:
+      R: [o1_ref5, o1_gate]
+      r: o_r32_ohm
+    DCR1_o1:
+      device: [o1_gate, o1_cmp]
+      model: o1_DCR
+    C9_o1:
+      C: [o1_gate, o1_cmp]
+      c: o_c9_f
+    R33_o1:
+      R: [o_vp, o1_cmp]
+      r: o_r33_ohm
+    R34_o1:
+      R: [o1_cmp, o1_h8]
+      r: o_r34_ohm
+    C12_o1:
+      C: [o1_cmp, o1_h8]
+      c: o_c12_f
+    R35_o1:
+      R: [o1_h8, '0']
+      r: o_r35_ohm
+    IC8B_o1:
+      opamp: [o1_h8, o1_ramp, o1_cmp, o_vn]
+      a0: o_cmp_a0
+      gbw_hz: o_cmp_gbw_hz
+      r_out_ohm: o_cmp_r_out_ohm
+      r_in_ohm: o_cmp_r_in_ohm
+      clamp: o1_DCL
+      swing_v: o_cmp_swing_v
+      slew_v_per_s: o_cmp_slew_v_per_s
+      open_collector: o1_QO
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 1: shapers'
+  parts:
+    R36_o1:
+      R: [o1_ramp, o1_out]
+      r: o_r36_ohm
+    R37_o1:
+      R: [o1_out, '0']
+      r: o_r37_ohm
+    R38_o1:
+      R: [o1_out, o_vn]
+      r: o_r38_ohm
+    Q6_o1:
+      bjt: [o1_n1, o1_ramp, o1_e6]
+      model: o1_QN
+    R42_o1:
+      R: [o1_e6, '0']
+      r: o_r42_ohm
+    R40_o1:
+      R: [o1_ref5, o1_n1]
+      r: o_r40_ohm
+    R41_o1:
+      R: [o1_n1, o1_n3]
+      r: o_r41_ohm
+    C13_o1:
+      C: [o1_n3, '0']
+      c: o_c13_f
+    IC4B_o1:
+      opamp: [o1_n3, o1_n44, o1_tri]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    R44_o1:
+      R: [o1_tri, o1_n44]
+      r: o_r44_ohm
+    R43_o1:
+      R: [o1_n44, o_vp]
+      r: o_r43_ohm
+    R39_o1:
+      R: [o1_out, o1_n11]
+      r: o_r39_ohm
+    R46_o1:
+      R: [o1_n11, o1_rc]
+      r: o_r46_ohm
+    R47_o1:
+      R: [o1_pw, o1_n12]
+      r: o_r47_ohm
+    R45_o1:
+      R: [o1_n12, '0']
+      r: o_r45_ohm
+    C14_o1:
+      C: [o1_n12, '0']
+      c: o_c14_f
+    IC8A_o1:
+      opamp: [o1_n11, o1_n12, o1_rc, o_vn]
+      a0: o_cmp_a0
+      gbw_hz: o_cmp_gbw_hz
+      r_out_ohm: o_cmp_r_out_ohm
+      r_in_ohm: o_cmp_r_in_ohm
+      clamp: o1_DCL
+      swing_v: o_cmp_swing_v
+      slew_v_per_s: o_cmp_slew_v_per_s
+      open_collector: o1_QO
+    R48_o1:
+      R: [o1_rc, o1_rect]
+      r: o_r48_ohm
+    R49_o1:
+      R: [o1_rect, '0']
+      r: o_r49_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+  owns: [o1_out, o1_tri, o1_rect]
+- title: 'osc 1: pulse width'
+  parts:
+    R34_p1:
+      R: ['0', o1_pwa]
+      r: p_rpw_a_ohm
+    R33_p1:
+      R: [o1_pwa, o1_pwb]
+      r: p_rpw_b_ohm
+    R32_p1:
+      R: [o1_pwb, o_vn]
+      r: p_rpw_c_ohm
+    SW6B_p1:
+      switch: osc1_wave
+      parts:
+        RPW0_p1:
+          R: [o1_pw, '0']
+          r: p_r_contact_ohm
+          in: [0, 1, 2, 3]
+        RPW1_p1:
+          R: [o1_pw, o1_pwa]
+          r: p_r_contact_ohm
+          in: [4]
+        RPW2_p1:
+          R: [o1_pw, o1_pwb]
+          r: p_r_contact_ohm
+          in: [5]
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 2: panel'
+  parts:
+    RFREQ_o2:
+      pot: [o_vp, o2_freqw, o2_freqf]
+      r: o2_r_freq_ohm
+      at: osc2_freq
+    RFREQF_o2:
+      R: [o2_freqf, '0']
+      r: o2_r_freq_foot_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 2: range'
+  parts:
+    SRANGE_o2:
+      switch: osc2_range
+      parts:
+        RR0_o2:
+          R: ['0', o2_rw]
+          r: o_r_contact_ohm
+          in: [0]
+        RR1_o2:
+          R: [o_t32, o2_rw]
+          r: o_r_contact_ohm
+          in: [1]
+        RR2_o2:
+          R: [o_t16, o2_rw]
+          r: o_r_contact_ohm
+          in: [2]
+        RR3_o2:
+          R: [o_t8, o2_rw]
+          r: o_r_contact_ohm
+          in: [3]
+        RR4_o2:
+          R: [o_t4, o2_rw]
+          r: o_r_contact_ohm
+          in: [4]
+        RR5_o2:
+          R: [o_m5, o2_rw]
+          r: o_r_contact_ohm
+          in: [5]
+    IC1B6_o2:
+      opamp: [o2_rw, o2_rng, o2_rng]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 2: summer'
+  parts:
+    R13_o2:
+      R: [o_vp, o2_s9]
+      r: o2_r13_ohm
+    R14_o2:
+      rheostat: [o2_s9, o2_s6]
+      r: o_r14_ohm
+      at: o2_r14_at
+    R16_o2:
+      rheostat: [o_pri, o2_s8]
+      r: o_r16_ohm
+      at: o2_r16_at
+    R17_o2:
+      R: [o2_s8, o2_s6]
+      r: o_r17_ohm
+    R18_o2:
+      rheostat: [o2_rng, o2_s7]
+      r: o_r18_ohm
+      at: o2_r18_at
+    R19_o2:
+      R: [o2_s7, o2_s6]
+      r: o_r19_ohm
+    R21_o2:
+      R: [o2_s5, o2_s6]
+      r: o_r21_ohm
+    R22_o2:
+      R: [o2_sp, '0']
+      r: o_r22_ohm
+    IC1B_o2:
+      opamp: [o2_sp, o2_s6, o2_s5]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    R23_o2:
+      R: [o2_s5, o2_v01]
+      r: o_r23_ohm
+    R24_o2:
+      R: [o2_v01, '0']
+      r: o_r24_ohm
+    C4_o2:
+      C: [o2_v01, '0']
+      c: o_c4_f
+    RFREQIN_o2:
+      R: [o2_freqw, o2_s6]
+      r: o2_r_freq_in_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 2: expo'
+  parts:
+    Q7_o2:
+      bjt: [o2_e, o2_v01, o2_ne]
+      model: o2_QX
+    Q8_o2:
+      bjt: [o2_n4, '0', o2_ne]
+      model: o2_QX
+    R30_o2:
+      R: [o_vp, o2_n4]
+      r: o_r30_ohm
+    IC6_o2:
+      opamp: ['0', o2_n4, o2_n6]
+      a0: o_tl081_a0
+      gbw_hz: o_tl081_gbw_hz
+      r_out_ohm: o_tl081_r_out_ohm
+      r_in_ohm: o_tl081_r_in_ohm
+    C8_o2:
+      C: [o2_n6, o2_n29]
+      c: o_c8_f
+    R29_o2:
+      R: [o2_n29, o2_n4]
+      r: o_r29_ohm
+    R28_o2:
+      R: [o2_n6, o2_ne]
+      r: o_r28_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 2: core'
+  parts:
+    R25_o2:
+      R: [o_vp, o2_r5p]
+      r: o_r25_ohm
+    R26_o2:
+      R: [o2_r5p, '0']
+      r: o_r26_ohm
+    IC4A_o2:
+      opamp: [o2_r5p, o2_ref5, o2_ref5]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    C6_o2:
+      C: [o2_c6t, '0']
+      c: o_c6_f
+    RC6_o2:
+      R: [o2_ref5, o2_c6t]
+      r: o_c6_esr_ohm
+    C7_o2:
+      C: [o2_ref5, o2_d]
+      c: o_c7_f
+    JQ4_o2:
+      jfet: [o2_d, o2_gate, o2_ref5]
+      model: o2_JR
+    R31_o2:
+      rheostat: [o2_d, o2_e]
+      r: o_r31_ohm
+      at: o2_r31_at
+    IC7_o2:
+      opamp: [o2_e, o2_ramp, o2_n7]
+      a0: o_tl081_a0
+      gbw_hz: o_tl081_gbw_hz
+      r_out_ohm: o_tl081_r_out_ohm
+      r_in_ohm: o_tl081_r_in_ohm
+      clamp: o2_DCL
+      swing_v: o_tl081_swing_v
+      slew_v_per_s: o_tl081_slew_v_per_s
+    Q5_o2:
+      bjt: [o_vp, o2_n7, o2_ramp]
+      model: o2_QN
+    R32_o2:
+      R: [o2_ref5, o2_gate]
+      r: o_r32_ohm
+    DCR1_o2:
+      device: [o2_gate, o2_cmp]
+      model: o2_DCR
+    C9_o2:
+      C: [o2_gate, o2_cmp]
+      c: o_c9_f
+    R33_o2:
+      R: [o_vp, o2_cmp]
+      r: o_r33_ohm
+    R34_o2:
+      R: [o2_cmp, o2_h8]
+      r: o_r34_ohm
+    C12_o2:
+      C: [o2_cmp, o2_h8]
+      c: o_c12_f
+    R35_o2:
+      R: [o2_h8, '0']
+      r: o_r35_ohm
+    IC8B_o2:
+      opamp: [o2_h8, o2_ramp, o2_cmp, o_vn]
+      a0: o_cmp_a0
+      gbw_hz: o_cmp_gbw_hz
+      r_out_ohm: o_cmp_r_out_ohm
+      r_in_ohm: o_cmp_r_in_ohm
+      clamp: o2_DCL
+      swing_v: o_cmp_swing_v
+      slew_v_per_s: o_cmp_slew_v_per_s
+      open_collector: o2_QO
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 2: shapers'
+  parts:
+    R36_o2:
+      R: [o2_ramp, o2_out]
+      r: o_r36_ohm
+    R37_o2:
+      R: [o2_out, '0']
+      r: o_r37_ohm
+    R38_o2:
+      R: [o2_out, o_vn]
+      r: o_r38_ohm
+    Q6_o2:
+      bjt: [o2_n1, o2_ramp, o2_e6]
+      model: o2_QN
+    R42_o2:
+      R: [o2_e6, '0']
+      r: o_r42_ohm
+    R40_o2:
+      R: [o2_ref5, o2_n1]
+      r: o_r40_ohm
+    R41_o2:
+      R: [o2_n1, o2_n3]
+      r: o_r41_ohm
+    C13_o2:
+      C: [o2_n3, '0']
+      c: o_c13_f
+    IC4B_o2:
+      opamp: [o2_n3, o2_n44, o2_tri]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    R44_o2:
+      R: [o2_tri, o2_n44]
+      r: o_r44_ohm
+    R43_o2:
+      R: [o2_n44, o_vp]
+      r: o_r43_ohm
+    R39_o2:
+      R: [o2_out, o2_n11]
+      r: o_r39_ohm
+    R46_o2:
+      R: [o2_n11, o2_rc]
+      r: o_r46_ohm
+    R47_o2:
+      R: [o2_pw, o2_n12]
+      r: o_r47_ohm
+    R45_o2:
+      R: [o2_n12, '0']
+      r: o_r45_ohm
+    C14_o2:
+      C: [o2_n12, '0']
+      c: o_c14_f
+    IC8A_o2:
+      opamp: [o2_n11, o2_n12, o2_rc, o_vn]
+      a0: o_cmp_a0
+      gbw_hz: o_cmp_gbw_hz
+      r_out_ohm: o_cmp_r_out_ohm
+      r_in_ohm: o_cmp_r_in_ohm
+      clamp: o2_DCL
+      swing_v: o_cmp_swing_v
+      slew_v_per_s: o_cmp_slew_v_per_s
+      open_collector: o2_QO
+    R48_o2:
+      R: [o2_rc, o2_rect]
+      r: o_r48_ohm
+    R49_o2:
+      R: [o2_rect, '0']
+      r: o_r49_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+  owns: [o2_out, o2_tri, o2_rect]
+- title: 'osc 2: pulse width'
+  parts:
+    R40_p2:
+      R: ['0', o2_pwa]
+      r: p_rpw_a_ohm
+    R39_p2:
+      R: [o2_pwa, o2_pwb]
+      r: p_rpw_b_ohm
+    R38_p2:
+      R: [o2_pwb, o_vn]
+      r: p_rpw_c_ohm
+    SW7B_p2:
+      switch: osc2_wave
+      parts:
+        RPW0_p2:
+          R: [o2_pw, '0']
+          r: p_r_contact_ohm
+          in: [0, 1, 2, 3]
+        RPW1_p2:
+          R: [o2_pw, o2_pwa]
+          r: p_r_contact_ohm
+          in: [4]
+        RPW2_p2:
+          R: [o2_pw, o2_pwb]
+          r: p_r_contact_ohm
+          in: [5]
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 3: panel'
+  parts:
+    RFREQ_o3:
+      pot: [o_vp, o3_freqw, o3_freqf]
+      r: o3_r_freq_ohm
+      at: osc3_freq
+    RFREQF_o3:
+      R: [o3_freqf, '0']
+      r: o3_r_freq_foot_ohm
+    RCTLA_o3:
+      rheostat: [o3_freqw, o3_n10]
+      r: o3_r_switch_open_ohm
+      at: osc3_control
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 3: range'
+  parts:
+    SRANGE_o3:
+      switch: osc3_range
+      parts:
+        RR0_o3:
+          R: ['0', o3_rw]
+          r: o_r_contact_ohm
+          in: [0]
+        RR1_o3:
+          R: [o_t32, o3_rw]
+          r: o_r_contact_ohm
+          in: [1]
+        RR2_o3:
+          R: [o_t16, o3_rw]
+          r: o_r_contact_ohm
+          in: [2]
+        RR3_o3:
+          R: [o_t8, o3_rw]
+          r: o_r_contact_ohm
+          in: [3]
+        RR4_o3:
+          R: [o_t4, o3_rw]
+          r: o_r_contact_ohm
+          in: [4]
+        RR5_o3:
+          R: [o_m5, o3_rw]
+          r: o_r_contact_ohm
+          in: [5]
+    IC1B6_o3:
+      opamp: [o3_rw, o3_rng, o3_rng]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 3: control'
+  parts:
+    JQ2_o3:
+      jfet: [o3_sl3, o3_g2, o_pri]
+      model: o3_QE
+    R60_o3:
+      R: [o_pri, o3_g2]
+      r: o3_r60_ohm
+    Q3_o3:
+      bjt: [o3_g2, o3_b3, o_vn]
+      model: o3_QN
+    R61_o3:
+      R: [o3_n16, o3_b3]
+      r: o3_r61_ohm
+    Q19_o3:
+      bjt: [o3_sl3, o3_b19, o_vn]
+      model: o3_QN
+    R98_o3:
+      R: [o3_n16, o3_b19]
+      r: o3_r98_ohm
+    RCTLB_o3:
+      rheostat: [o_m5, o3_n16]
+      r: o3_r_switch_open_ohm
+      at: osc3_control
+    RCTLC_o3:
+      rheostat: [o_vn, o3_n16]
+      r: o3_r_switch_open_ohm
+      at: osc3_control
+      reverse: 1
+- title: 'osc 3: summer'
+  parts:
+    R13_o3:
+      R: [o_vp, o3_s9]
+      r: o3_r13_ohm
+    R14_o3:
+      rheostat: [o3_s9, o3_s6]
+      r: o_r14_ohm
+      at: o3_r14_at
+    R16_o3:
+      rheostat: [o3_sl3, o3_s8]
+      r: o_r16_ohm
+      at: o3_r16_at
+    R17_o3:
+      R: [o3_s8, o3_s6]
+      r: o_r17_ohm
+    R18_o3:
+      rheostat: [o3_rng, o3_s7]
+      r: o_r18_ohm
+      at: o3_r18_at
+    R19_o3:
+      R: [o3_s7, o3_s6]
+      r: o_r19_ohm
+    R21_o3:
+      R: [o3_s5, o3_s6]
+      r: o_r21_ohm
+    R22_o3:
+      R: [o3_sp, '0']
+      r: o_r22_ohm
+    IC1B_o3:
+      opamp: [o3_sp, o3_s6, o3_s5]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    R23_o3:
+      R: [o3_s5, o3_v01]
+      r: o_r23_ohm
+    R24_o3:
+      R: [o3_v01, '0']
+      r: o_r24_ohm
+    C4_o3:
+      C: [o3_v01, '0']
+      c: o_c4_f
+    RFREQIN_o3:
+      R: [o3_freqw, o3_s6]
+      r: o3_r_freq_in_ohm
+    R97_o3:
+      R: [o3_n10, o3_s6]
+      r: o3_r97_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 3: expo'
+  parts:
+    Q7_o3:
+      bjt: [o3_e, o3_v01, o3_ne]
+      model: o3_QX
+    Q8_o3:
+      bjt: [o3_n4, '0', o3_ne]
+      model: o3_QX
+    R30_o3:
+      R: [o_vp, o3_n4]
+      r: o_r30_ohm
+    IC6_o3:
+      opamp: ['0', o3_n4, o3_n6]
+      a0: o_tl081_a0
+      gbw_hz: o_tl081_gbw_hz
+      r_out_ohm: o_tl081_r_out_ohm
+      r_in_ohm: o_tl081_r_in_ohm
+    C8_o3:
+      C: [o3_n6, o3_n29]
+      c: o_c8_f
+    R29_o3:
+      R: [o3_n29, o3_n4]
+      r: o_r29_ohm
+    R28_o3:
+      R: [o3_n6, o3_ne]
+      r: o_r28_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 3: core'
+  parts:
+    R25_o3:
+      R: [o_vp, o3_r5p]
+      r: o_r25_ohm
+    R26_o3:
+      R: [o3_r5p, '0']
+      r: o_r26_ohm
+    IC4A_o3:
+      opamp: [o3_r5p, o3_ref5, o3_ref5]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    C6_o3:
+      C: [o3_c6t, '0']
+      c: o_c6_f
+    RC6_o3:
+      R: [o3_ref5, o3_c6t]
+      r: o_c6_esr_ohm
+    C7_o3:
+      C: [o3_ref5, o3_d]
+      c: o_c7_f
+    JQ4_o3:
+      jfet: [o3_d, o3_gate, o3_ref5]
+      model: o3_JR
+    R31_o3:
+      rheostat: [o3_d, o3_e]
+      r: o_r31_ohm
+      at: o3_r31_at
+    IC7_o3:
+      opamp: [o3_e, o3_ramp, o3_n7]
+      a0: o_tl081_a0
+      gbw_hz: o_tl081_gbw_hz
+      r_out_ohm: o_tl081_r_out_ohm
+      r_in_ohm: o_tl081_r_in_ohm
+      clamp: o3_DCL
+      swing_v: o_tl081_swing_v
+      slew_v_per_s: o_tl081_slew_v_per_s
+    Q5_o3:
+      bjt: [o_vp, o3_n7, o3_ramp]
+      model: o3_QN
+    R32_o3:
+      R: [o3_ref5, o3_gate]
+      r: o_r32_ohm
+    DCR1_o3:
+      device: [o3_gate, o3_cmp]
+      model: o3_DCR
+    C9_o3:
+      C: [o3_gate, o3_cmp]
+      c: o_c9_f
+    R33_o3:
+      R: [o_vp, o3_cmp]
+      r: o_r33_ohm
+    R34_o3:
+      R: [o3_cmp, o3_h8]
+      r: o_r34_ohm
+    C12_o3:
+      C: [o3_cmp, o3_h8]
+      c: o_c12_f
+    R35_o3:
+      R: [o3_h8, '0']
+      r: o_r35_ohm
+    IC8B_o3:
+      opamp: [o3_h8, o3_ramp, o3_cmp, o_vn]
+      a0: o_cmp_a0
+      gbw_hz: o_cmp_gbw_hz
+      r_out_ohm: o_cmp_r_out_ohm
+      r_in_ohm: o_cmp_r_in_ohm
+      clamp: o3_DCL
+      swing_v: o_cmp_swing_v
+      slew_v_per_s: o_cmp_slew_v_per_s
+      open_collector: o3_QO
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'osc 3: reverse sawtooth'
+  parts:
+    R123_o3:
+      R: [o_vp, o3_va]
+      r: o3_r123_ohm
+    C37_o3:
+      C: [o3_c37t, '0']
+      c: o3_c37_f
+    RC37_o3:
+      R: [o3_va, o3_c37t]
+      r: o3_c37_esr_ohm
+    R124_o3:
+      R: [o3_va, o3_vb]
+      r: o3_r124_ohm
+    R129_o3:
+      R: [o3_vb, o3_b20]
+      r: o3_r129_ohm
+    R128_o3:
+      R: [o_vn, o3_b20]
+      r: o3_r128_ohm
+    R130_o3:
+      R: [o3_out, o3_b20]
+      r: o3_r130_ohm
+    Q20_o3:
+      bjt: [o3_vb, o3_b20, '0']
+      model: o3_QN
+    R133_o3:
+      R: [o3_vb, o3_rsaw]
+      r: o3_r133_ohm
+    R134_o3:
+      R: [o3_rsaw, o_vn]
+      r: o3_r134_ohm
+- title: 'osc 3: shapers'
+  parts:
+    R36_o3:
+      R: [o3_ramp, o3_out]
+      r: o_r36_ohm
+    R37_o3:
+      R: [o3_out, '0']
+      r: o_r37_ohm
+    R38_o3:
+      R: [o3_out, o_vn]
+      r: o_r38_ohm
+    Q6_o3:
+      bjt: [o3_n1, o3_ramp, o3_e6]
+      model: o3_QN
+    R42_o3:
+      R: [o3_e6, '0']
+      r: o_r42_ohm
+    R40_o3:
+      R: [o3_ref5, o3_n1]
+      r: o_r40_ohm
+    R41_o3:
+      R: [o3_n1, o3_n3]
+      r: o_r41_ohm
+    C13_o3:
+      C: [o3_n3, '0']
+      c: o_c13_f
+    IC4B_o3:
+      opamp: [o3_n3, o3_n44, o3_tri]
+      a0: o_u1458_a0
+      gbw_hz: o_u1458_gbw_hz
+      r_out_ohm: o_u1458_r_out_ohm
+      r_in_ohm: o_u1458_r_in_ohm
+    R44_o3:
+      R: [o3_tri, o3_n44]
+      r: o_r44_ohm
+    R43_o3:
+      R: [o3_n44, o_vp]
+      r: o_r43_ohm
+    R39_o3:
+      R: [o3_out, o3_n11]
+      r: o_r39_ohm
+    R46_o3:
+      R: [o3_n11, o3_rc]
+      r: o_r46_ohm
+    R47_o3:
+      R: [o3_pw, o3_n12]
+      r: o_r47_ohm
+    R45_o3:
+      R: [o3_n12, '0']
+      r: o_r45_ohm
+    C14_o3:
+      C: [o3_n12, '0']
+      c: o_c14_f
+    IC8A_o3:
+      opamp: [o3_n11, o3_n12, o3_rc, o_vn]
+      a0: o_cmp_a0
+      gbw_hz: o_cmp_gbw_hz
+      r_out_ohm: o_cmp_r_out_ohm
+      r_in_ohm: o_cmp_r_in_ohm
+      clamp: o3_DCL
+      swing_v: o_cmp_swing_v
+      slew_v_per_s: o_cmp_slew_v_per_s
+      open_collector: o3_QO
+    R48_o3:
+      R: [o3_rc, o3_rect]
+      r: o_r48_ohm
+    R49_o3:
+      R: [o3_rect, '0']
+      r: o_r49_ohm
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+  owns: [o3_out, o3_tri, o3_rect]
+- title: 'osc 3: pulse width'
+  parts:
+    R44_p3:
+      R: ['0', o3_pwa]
+      r: p_rpw_a_ohm
+    R43_p3:
+      R: [o3_pwa, o3_pwb]
+      r: p_rpw_b_ohm
+    R42_p3:
+      R: [o3_pwb, o_vn]
+      r: p_rpw_c_ohm
+    SW8B_p3:
+      switch: osc3_wave
+      parts:
+        RPW0_p3:
+          R: [o3_pw, '0']
+          r: p_r_contact_ohm
+          in: [0, 1, 2, 3]
+        RPW1_p3:
+          R: [o3_pw, o3_pwa]
+          r: p_r_contact_ohm
+          in: [4]
+        RPW2_p3:
+          R: [o3_pw, o3_pwb]
+          r: p_r_contact_ohm
+          in: [5]
+  substeps: 2
+  decimate: fir
+  substeps_in: events
+- title: 'noise: rails'
+  parts:
+    VP_n:
+      V: [n_vp, '0']
+      v: n_vpos_v
+    RNWL_n:
+      R: [n_wn, '0']
+      r: p_r_bus_leak_ohm
+    RNPL_n:
+      R: [n_pn, '0']
+      r: p_r_bus_leak_ohm
+- title: 'noise: source'
+  parts:
+    R47_n:
+      R: [n_vp, n_n47]
+      r: n_r47_ohm
+    C25_n:
+      C: [n_n47, '0']
+      c: n_c25_f
+    R67_n:
+      R: [n_n47, n_e15]
+      r: n_r67_ohm
+    RZ15_n:
+      R: [n_e15, n_z15]
+      r: n_r_avalanche_ohm
+    VZ15_n:
+      V: [n_z15, '0']
+      v: n_v_avalanche_v
+    IN15_n:
+      noise_source: [n_e15, '0']
+      psd_a2_hz: n_avalanche_psd_a2_hz
+- title: 'noise: white'
+  parts:
+    C12_n:
+      C: [n_e15, n_b12]
+      c: n_c12_f
+    R29_n:
+      R: [n_c12, n_b12]
+      r: n_r29_ohm
+    R17_n:
+      R: [n_vp, n_c12]
+      r: n_r17_ohm
+    C11_n:
+      C: [n_c12, '0']
+      c: n_c11_f
+    Q12_n:
+      bjt: [n_c12, n_b12, n_e12]
+      model: n_QN
+    R26_n:
+      rheostat: [n_e12, '0']
+      r: n_r26_ohm
+      at: noise_level_trim
+    Q4_n:
+      bjt: [n_c4, n_c12, n_e4]
+      model: n_QN
+    R9_n:
+      R: [n_vp, n_c4]
+      r: n_r9_ohm
+    R19_n:
+      R: [n_e4, '0']
+      r: n_r19_ohm
+    C5_n:
+      C: [n_c12, n_e4]
+      c: n_c5_f
+    C18_n:
+      C: [n_e4, n_wn]
+      c: n_c18_f
+- title: 'noise: pink'
+  parts:
+    R16_n:
+      R: [n_e4, n_n1]
+      r: n_r16_ohm
+    C3_n:
+      C: [n_n1, n_n3c]
+      c: n_c3_f
+    R8_n:
+      R: [n_n3c, '0']
+      r: n_r8_ohm
+    C2_n:
+      C: [n_n1, n_n2c]
+      c: n_c2_f
+    R13_n:
+      R: [n_n2c, '0']
+      r: n_r13_ohm
+    C1_n:
+      C: [n_n1, n_b3]
+      c: n_c1_f
+    R7_n:
+      R: [n_b3, n_n7]
+      r: n_r7_ohm
+    R6_n:
+      R: [n_n7, n_c3]
+      r: n_r6_ohm
+    C4_n:
+      C: [n_n7, '0']
+      c: n_c4_f
+    Q3_n:
+      bjt: [n_c3, n_b3, n_e3]
+      model: n_QN
+    R3_n:
+      R: [n_vp, n_c3]
+      r: n_r3_ohm
+    R1_n:
+      R: [n_e3, '0']
+      r: n_r1_ohm
+    C20_n:
+      C: [n_c3, n_pn]
+      c: n_c20_f
+- title: external pre-amp
+  parts:
+    R9_p:
+      pot: ['0', xw, in]
+      r: x_r_ext_ohm
+      at: ext_level
+      taper_mid: x_ext_taper_mid
+    R78_x:
+      R: [xw, x78]
+      r: x_r78_ohm
+    C23_x:
+      C: [x78, xb27]
+      c: x_c23_f
+    R66_x:
+      R: [xb27, '0']
+      r: x_r66_ohm
+    Q27_x:
+      bjt: [xc27, xb27, xe]
+      model: QL
+    Q32_x:
+      bjt: [vp, xb32, xe]
+      model: QL
+    R58_x:
+      R: [xe, vn]
+      r: x_r58_ohm
+    R65_x:
+      R: [vp, xc27]
+      r: x_r65_ohm
+    R64_x:
+      R: [xc27, x64]
+      r: x_r64_ohm
+    C22_x:
+      C: [x64, vp]
+      c: x_c22_f
+    Q33_x:
+      bjt: [xo, xc27, vp]
+      model: QP
+    R57_x:
+      R: [xo, vn]
+      r: x_r57_ohm
+    R61_x:
+      R: [xo, x61]
+      r: x_r61_ohm
+    R63_x:
+      R: [x61, xb32]
+      r: x_r63_ohm
+    R62_x:
+      R: [x61, x62]
+      r: x_r62_ohm
+    C26_x:
+      C: [x62, '0']
+      c: x_c26_f
+    C21_x:
+      C: [xb32, xo]
+      c: x_c21_f
+- title: modulation mix
+  parts:
+    RMIN_m:
+      R: [n_pn, m4]
+      r: m_r_in_ohm
+    RMIX_m:
+      pot: [m3, '0', m4]
+      r: m_r_mix_ohm
+      at: mod_mix
+    R62_m:
+      R: [m4, mb]
+      r: m_r62_ohm
+    R64_m:
+      R: [m3, mb]
+      r: m_r62_ohm
+    R60_m:
+      R: [mo, mb]
+      r: m_r60_ohm
+    Q18_m:
+      bjt: [pvp, mb, me]
+      model: QL
+    Q17_m:
+      bjt: [mc, '0', me]
+      model: QL
+    R54_m:
+      R: [me, pvn]
+      r: m_r54_ohm
+    R42_m:
+      R: [pvp, mc]
+      r: m_r42_ohm
+    R38_m:
+      R: [mc, m38]
+      r: m_r38_ohm
+    C14_m:
+      C: [m38, '0']
+      c: m_c14_f
+    Q7_m:
+      bjt: [mo, mc, pvp]
+      model: QP
+    R30_m:
+      R: [mo, pvn]
+      r: m_r30_ohm
+    R57_m:
+      R: [mo, m1]
+      r: m_r57_ohm
+    RWHEEL_m:
+      pot: ['0', mw, m1]
+      r: m_r_wheel_ohm
+      at: mod_amount
+      taper_mid: m_wheel_taper_mid
+    RSWOM1_m:
+      rheostat: [mw, om]
+      r: p_r_switch_open_ohm
+      at: osc_mod
+      reverse: 1
+    RSWOM0_m:
+      rheostat: [om, '0']
+      r: p_r_switch_open_ohm
+      at: osc_mod
+    RSWFM1_m:
+      rheostat: [mw, fm]
+      r: p_r_switch_open_ohm
+      at: filter_mod
+      reverse: 1
+    RSWFM0_m:
+      rheostat: [fm, '0']
+      r: p_r_switch_open_ohm
+      at: filter_mod
+- title: 'panel: rails'
+  parts:
+    VPP_m:
+      V: [pvp, '0']
+      v: supply_v
+    VPN_m:
+      V: [pvn, '0']
+      v: supply_neg_v
+exceptions:
+  XRESET_o1:
+    kind: reset
+    tables: minimoog_osc_reset
+    sense: o1_ramp
+    src: o1_ref5
+    dst: o1_d
+    replaces: [JQ4_o1, IC8B_o1, DCR1_o1, C9_o1, R32_o1, R33_o1, R34_o1, R35_o1, C12_o1]
+    renders: true
+    parts:
+      CQ4OFF_o1:
+        C: [o1_d, '0']
+        c: o_j_reset_cgd_f
+    source: 'scripts/minimoog_event_tables.py: the reset unit (this circuit less its summers and expo, a constant current from Q7''s collector node) at 12.288 MHz with error control; the off Q4''s gate-to-drain
+      capacitance kept (its gate held at ~-9.4 V between resets)'
+  XRECT_o1:
+    kind: edge
+    tables: minimoog_osc_edge
+    plus: o1_n11
+    minus: o1_n12
+    src: o1_rc
+    dst: o_vn
+    replaces: [IC8A_o1]
+    renders: true
+    follows: XRESET_o1
+    follow_gain: o_rect_follow_gain
+    source: 'scripts/minimoog_event_tables.py: the edge unit (IC8A, R39, R46, PW''s divider at 0 V, R48 / R49) driven through zero at each slope, both ways, at 12.288 MHz with error control'
+  XRESET_o2:
+    kind: reset
+    tables: minimoog_osc_reset
+    sense: o2_ramp
+    src: o2_ref5
+    dst: o2_d
+    replaces: [JQ4_o2, IC8B_o2, DCR1_o2, C9_o2, R32_o2, R33_o2, R34_o2, R35_o2, C12_o2]
+    renders: true
+    parts:
+      CQ4OFF_o2:
+        C: [o2_d, '0']
+        c: o_j_reset_cgd_f
+    source: 'scripts/minimoog_event_tables.py: the reset unit (this circuit less its summers and expo, a constant current from Q7''s collector node) at 12.288 MHz with error control; the off Q4''s gate-to-drain
+      capacitance kept (its gate held at ~-9.4 V between resets)'
+  XRECT_o2:
+    kind: edge
+    tables: minimoog_osc_edge
+    plus: o2_n11
+    minus: o2_n12
+    src: o2_rc
+    dst: o_vn
+    replaces: [IC8A_o2]
+    renders: true
+    follows: XRESET_o2
+    follow_gain: o_rect_follow_gain
+    source: 'scripts/minimoog_event_tables.py: the edge unit (IC8A, R39, R46, PW''s divider at 0 V, R48 / R49) driven through zero at each slope, both ways, at 12.288 MHz with error control'
+  XRESET_o3:
+    kind: reset
+    tables: minimoog_osc_reset
+    sense: o3_ramp
+    src: o3_ref5
+    dst: o3_d
+    replaces: [JQ4_o3, IC8B_o3, DCR1_o3, C9_o3, R32_o3, R33_o3, R34_o3, R35_o3, C12_o3]
+    renders: true
+    parts:
+      CQ4OFF_o3:
+        C: [o3_d, '0']
+        c: o_j_reset_cgd_f
+    source: 'scripts/minimoog_event_tables.py: the reset unit (this circuit less its summers and expo, a constant current from Q7''s collector node) at 12.288 MHz with error control; the off Q4''s gate-to-drain
+      capacitance kept (its gate held at ~-9.4 V between resets)'
+  XRECT_o3:
+    kind: edge
+    tables: minimoog_osc_edge
+    plus: o3_n11
+    minus: o3_n12
+    src: o3_rc
+    dst: o_vn
+    replaces: [IC8A_o3]
+    renders: true
+    follows: XRESET_o3
+    follow_gain: o_rect_follow_gain
+    source: 'scripts/minimoog_event_tables.py: the edge unit (IC8A, R39, R46, PW''s divider at 0 V, R48 / R49) driven through zero at each slope, both ways, at 12.288 MHz with error control'

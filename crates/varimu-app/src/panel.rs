@@ -1386,11 +1386,11 @@ pub const DEVICES: [Device; 30] = [
             gate on the contour input (docs/MINIMOOG_PLAN.md)",
         group: Group::Instruments,
         circuit: "minimoog_filter_board",
-        panel: Some(&["cutoff_v", "emphasis", "kb1", "kb2"]),
+        panel: Some(&["cutoff", "emphasis", "kb1", "kb2"]),
         ahead_s: AHEAD_S,
         quality: Quality::Draft1x,
         cores: None,
-        mod_wheel: Some("cutoff_v"),
+        mod_wheel: Some("cutoff"),
         gate: Some("contour"),
         velocity: None,
         pitch: None,
@@ -1414,7 +1414,11 @@ pub const DEVICES: [Device; 30] = [
         id: "minimoog_vco",
         label: "Minimoog Oscillator 1 (board No. 1)",
         short: "Moog osc 1",
-        about: "The Model D's oscillator 1 from its schematic: the primary summer and its own             summer, the uA726 expo converter, the sawtooth core with its reset and the             rectangle's comparator as event kernels generated from a 12.288 MHz reference, the             triangle and rectangle shapers; the keys on the keyboard circuit's string; out the             sawtooth (docs/MINIMOOG_PLAN.md, MM3)",
+        about: "The Model D's oscillator 1 from its schematic: the primary summer and its own \
+            summer, the uA726 expo converter, the sawtooth core with its reset and the \
+            rectangle's comparator as event kernels generated from a 12.288 MHz reference, the \
+            triangle and rectangle shapers, the RANGE ladder; the keys on the keyboard \
+            circuit's output; out the sawtooth (docs/MINIMOOG_PLAN.md, MM3)",
         group: Group::Instruments,
         circuit: "minimoog_vco",
         panel: Some(&["osc_range", "tune", "bend", "pw_v"]),
@@ -1441,27 +1445,71 @@ pub const DEVICES: [Device; 30] = [
     },
     Device {
         id: "minimoog_voice",
-        label: "Minimoog Voice (keyboard, VCF, VCA, contours)",
+        label: "Minimoog Voice (three oscillators, mixer, VCF, VCA, contours)",
         short: "Moog voice",
-        about: "The Model D's filter board with board No. 2: the keyboard circuit (the keys on \
-            its string's pitch bar, the sample-and-hold, GLIDE) into KEYBOARD CONTROL, the two \
-            contour generators started by its trigger bus (ATTACK / DECAY / SUSTAIN each, DECAY \
-            switch), AMOUNT OF CONTOUR TO FILTER; the test oscillator into the ladder \
-            (docs/MINIMOOG_PLAN.md, MM4)",
+        about: "The Model D from its schematics: board No. 1's three oscillators (the uA726 \
+            expo converters, the sawtooth cores' resets and rectangles as event kernels, OSC 3 \
+            CONTROL, the -5 V RANGE ladder and board 6's buffers), the mixer (three \
+            oscillators, NOISE white / pink from board 3's avalanche junction, EXTERNAL INPUT \
+            through board 4's pre-amp), the ladder filter and VCA, the two contour generators \
+            and the keyboard circuit (docs/MINIMOOG_PLAN.md, MM5)",
         group: Group::Instruments,
         circuit: "minimoog_voice",
         panel: Some(&[
-            "cutoff_v", "emphasis", "kb1", "kb2", "amount", "lattack", "ldecay", "lsustain",
-            "attack", "decay", "sustain", "decay_on", "glide", "glide_on",
+            "tune",
+            "osc1_range",
+            "osc1_wave",
+            "osc2_range",
+            "osc2_freq",
+            "osc2_wave",
+            "osc3_range",
+            "osc3_freq",
+            "osc3_wave",
+            "osc3_control",
+            "osc1_level",
+            "osc1_on",
+            "osc2_level",
+            "osc2_on",
+            "osc3_level",
+            "osc3_on",
+            "noise_level",
+            "noise_color",
+            "noise_on",
+            "ext_level",
+            "ext_on",
+            "mod_mix",
+            "osc_mod",
+            "filter_mod",
+            "cutoff",
+            "emphasis",
+            "kb1",
+            "kb2",
+            "amount",
+            "lattack",
+            "ldecay",
+            "lsustain",
+            "attack",
+            "decay",
+            "sustain",
+            "decay_on",
+            "glide",
+            "glide_on",
         ]),
         ahead_s: AHEAD_S,
+        // Draft-1x (48 kHz), oscillator 1 an island at 96 kHz behind an anti-alias FIR (its
+        // sections' `substeps: 2`): the reset's and the rectangle's event kernels need 96 kHz
+        // (at 48 kHz the top C ran at 6.26 kHz), and the whole voice at draft-2x ran ~1.6x real
+        // time (the filter's part alone 1.55x).
         quality: Quality::Draft1x,
         cores: None,
-        mod_wheel: Some("cutoff_v"),
+        // the MODULATION wheel (the left-hand controller's: the modulation mix's amount)
+        mod_wheel: Some("mod_amount"),
         gate: Some("gate"),
         velocity: None,
         pitch: None,
-        own_oscillator: false,
+        // the Model D's own oscillator plays: the keys set its pitch through the keyboard
+        // circuit, the test oscillator stays off
+        own_oscillator: true,
         key: None,
         pitch2: None,
         // The gate reaches the VCA through the loudness contour now (rounded by the
@@ -1470,16 +1518,35 @@ pub const DEVICES: [Device; 30] = [
         // diverged at the loudness peak detector).
         coupling: Some("hold"),
         live_speaker_v: None,
-        // Three threads: the filter with the trigger's CR10 / R60 and the keyboard's contacts
-        // (the control inputs' nodes stay in the first part) | the VCA with the keyboard's S&H
-        // and glide (cut at the pitch bar's tap resistance into C9, at R65 into C13 and at its
-        // output into KEYBOARD CONTROL's 300K / 150K) | the contour board, cut at R60 into C7,
-        // at the contour outputs (p9 into R59, the filter contour into AMOUNT) and at Q18's
-        // collector. One solve ran ~1.8x real time live; the keyboard in the first part loaded
-        // 79-90 % with a key held (worst block 135 %). On a thread of its own (four parts) the
-        // loudness contour's attack ends early (~5.4 V for one solve's 6.8 V), not understood
-        // (docs/MINIMOOG_PLAN.md MM4); beside the VCA it matches one solve.
+        // Eight threads: the panel (the mixer, the filter's control current, the trigger's
+        // CR10 / R60, the keyboard's contacts, the external pre-amp, the oscillator board's
+        // primary summer, -5 V reference and RANGE ladder, OSC 3 CONTROL: the control inputs'
+        // and the audio input's nodes stay in the first part) | the ladder and its output amplifier on rails of their own (cut at Q28's
+        // collector, a current, and at the mixer's bus through its 33K resistors) | the noise
+        // generator and the modulation mix on rails of their own (met at the mixer's
+        // resistors, at MOD MIX's pin 3, at R52 and at the primary
+        // summer's R5 through OSC MOD's contacts) | the VCA
+        // with the keyboard's S&H and glide and the oscillator board's primary summer (cut at
+        // the pitch bar's tap resistance into C9, at R65 into C13 and at the keyboard's output
+        // into KEYBOARD CONTROL's 300K / 150K and KBD PITCH's 102K) | the contour board, cut at
+        // R60 into C7, at the contour outputs (p9 into R59, the filter contour into AMOUNT) and
+        // at Q18's collector | each oscillator an island at 96 kHz (its sections' substeps; it
+        // owns its waveforms), three threads. Eight in all on this 8-core desktop. Against the rest as one solve:
+        // scripts/minimoog_gate_check.py --voice (docs/MINIMOOG_PLAN.md MM5). With the keyboard
+        // on a thread of its own the loudness contour's attack ended early (MM4, not
+        // understood); beside the VCA it matches one solve.
         partition: Some(&[
+            "ladder",
+            "output amplifier",
+            "filter: rails",
+            "|",
+            "noise: rails",
+            "noise: source",
+            "noise: white",
+            "noise: pink",
+            "modulation mix",
+            "panel: rails",
+            "|",
             "vca",
             "keyboard: rails",
             "keyboard: sample and hold",
@@ -1493,6 +1560,29 @@ pub const DEVICES: [Device; 30] = [
             "contour: loudness flip-flop",
             "contour: loudness envelope",
             "contour: loudness output",
+            "|",
+            "osc 1: range",
+            "osc 1: summer",
+            "osc 1: expo",
+            "osc 1: core",
+            "osc 1: shapers",
+            "osc 1: pulse width",
+            "|",
+            "osc 2: panel",
+            "osc 2: range",
+            "osc 2: summer",
+            "osc 2: expo",
+            "osc 2: core",
+            "osc 2: shapers",
+            "osc 2: pulse width",
+            "|",
+            "osc 3: panel",
+            "osc 3: range",
+            "osc 3: summer",
+            "osc 3: expo",
+            "osc 3: core",
+            "osc 3: shapers",
+            "osc 3: pulse width",
         ]),
         newton: Some((1e-5, 1e-5)),
         method: None,

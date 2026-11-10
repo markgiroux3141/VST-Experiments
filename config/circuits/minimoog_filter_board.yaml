@@ -56,24 +56,27 @@ full_scale:
   output_volts_peak: {value: 3.0, source: "provisional: model knowledge (the MAIN OUTPUT's swing; set from renders)"}
 
 controls:
-  cutoff_v: {value: 0.0, min: -5.0, max: 5.0, unit: V, source: "numerical: test fixture (the CUTOFF FREQUENCY knob's contribution, a voltage through r_cutoff_ohm; the panel's own circuit comes at MM5); 0 V stands for the procedure's CUTOFF -1"}
+  cutoff: {value: 0.4, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-17: R11 CUTOFF FREQUENCY, a 5K pot from -10 V (0) to +10 V (1), its wiper through R55 200K onto the control node (pin 5); the dial's -5 .. +5 as 0 .. 1, so Folkman's CUTOFF -1 is 0.4, the default (the procedures' setting)"}
   emphasis: {value: 0.0, min: 0.0, max: 1.0, unit: rotation, source: "the 204D manual's Table 7-3: R14 Rotary Pot, Rev. Audio, 50K Ohm (EMPHASIS); 0 = the knob at 0, 1 = at 10"}
   kb1: {value: 1, choices: [0, 1], unit: switch, source: "the front panel's KEYBOARD CONTROL 1 rocker (Folkman's adjustment procedures)"}
   kb2: {value: 1, choices: [0, 1], unit: switch, source: "the front panel's KEYBOARD CONTROL 2 rocker"}
   # --- the board's trims (set by scripts/minimoog_vcf_trim.py from Folkman's procedures)
-  range_trim: {value: 0.3065, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 'Filter Range' (CUTOFF -1, EMPHASIS 10, keyboard control off: zero beat with A-440)"}
-  scale_trim: {value: 0.4014, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 'Filter Scale' (tracks the keyboard three octaves)"}
+  range_trim: {value: 0.5632, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R39 10K RANGE trim (+10 V to ground); default calibrated: Folkman p. 14 'Filter Range' (CUTOFF -1, EMPHASIS 10, keyboard control off: zero beat with A-440)"}
+  scale_trim: {value: 0.6494, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R49 500 ohm SCALE trim (a rheostat in series with R70); default calibrated: Folkman p. 14 'Filter Scale' (tracks the keyboard three octaves)"}
   ext_loudness: {value: 0, choices: [0, 1], unit: switch, source: "Fig 9-16: the EXT. LOUDNESS jack J3 (a shorting jack): 0 empty (pin 10 on +10 V through R56), 1 a plug carrying ext_loudness_v"}
   ext_loudness_v: {value: 5.0, min: 0.0, max: 10.0, unit: V, source: "numerical: test fixture (a control voltage plugged into EXT. LOUDNESS; Folkman's VCA Balance feeds audio there)"}
   vca1_bal: {value: 0.6181, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R14 25 ohm 1ST VCA BAL trim; default calibrated: Folkman p. 13 'VCA Balance' (scripts/minimoog_vca_trim.py)"}
   vca2_bal: {value: 0.7097, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R12 100 ohm 2ND VCA BAL trim (Table 7-8: Trim Pot, 100 Ohm); default calibrated: Folkman p. 13 'VCA Balance'"}
-  regen_cal: {value: 0.8467, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R73 1K REGEN CAL trim (its wiper Q30's base); default calibrated: Folkman p. 14 'Regeneration Cal.' (regeneration starts between EMPHASIS 7 and 8 at CUTOFF -1)"}
+  regen_cal: {value: 0.8447, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-11: R73 1K REGEN CAL trim (its wiper Q30's base); default calibrated: Folkman p. 14 'Regeneration Cal.' (regeneration starts between EMPHASIS 7 and 8 at CUTOFF -1)"}
 
 values:
   # --- rails and fixtures
   supply_v: {value: 10.0, source: "Fig 9-11: +10 V (pins 1 / 13; Folkman: set to +10.00 V)"}
   supply_neg_v: {value: -10.0, source: "Fig 9-11: -10 V (pins 3 / 8; Folkman: set to -10.00 V)"}
-  r_cutoff_ohm: {value: 100.0e+3, source: "numerical: test fixture (the CUTOFF knob's summing resistor; the front panel's R51 100K by inference, unverified)"}
+  p_r11_ohm: {value: 5.0e+3, source: "Fig 9-17: R11 5K (CUTOFF, +10 V to -10 V)"}
+  p_r55_ohm: {value: 200.0e+3, source: "Fig 9-17: R55 200K (CUTOFF's wiper into the control node)"}
+  p_r51_ohm: {value: 100.0e+3, source: "Fig 9-17: R51 100K (J2 FILTER EXT CONTROL IN into the control node; the jack's switch grounds it when empty)"}
+  p_r52_ohm: {value: 33.0e+3, source: "Fig 9-17: R52 33K (FILTER MOD, SW15, into the control node; OFF grounds its far end)"}
   r_kb1_ohm: {value: 300.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 1, one third of the tracking: the front panel's R53 300K by inference; Table 7-2 lists R53 300K, R54 150K, R55 200K, R51 100K without their places)"}
   r_kb2_ohm: {value: 150.0e+3, source: "provisional: model knowledge (KEYBOARD CONTROL 2, two thirds: the front panel's R54 150K by inference; with KB1, 100K together)"}
   r_kbd_load_ohm: {value: 1.0e+9, source: "numerical: a leak on the keyboard input (it stays defined with both rockers off)"}
@@ -163,8 +166,11 @@ sections:
     parts:
       VP: {V: [vp, "0"], v: supply_v}
       VN: {V: [vn, "0"], v: supply_neg_v}
-      VCUT: {V: [cutv, "0"], v: cutoff_v}
-      RCUT: {R: [cutv, ctl], r: r_cutoff_ohm}
+      # the panel's control summing (Fig 9-17): CUTOFF, J2 empty, FILTER MOD off
+      R11P: {pot: [vn, cutw, vp], r: p_r11_ohm, at: cutoff}
+      R55P: {R: [cutw, ctl], r: p_r55_ohm}
+      R51P: {R: [ctl, "0"], r: p_r51_ohm}
+      R52P: {R: [ctl, "0"], r: p_r52_ohm}
       SKB1:
         switch: kb1
         parts:

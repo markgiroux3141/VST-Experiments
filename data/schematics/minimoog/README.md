@@ -245,3 +245,77 @@ Built as `config/circuits/minimoog_keyboard.yaml` (docs/MINIMOOG_PLAN.md MM4).
 - Also on Fig 9-17: the filter's KEYBOARD CONTROL rockers SW16 (FILTER KBD 1/3) with R53 300K and SW17 (2/3) with R54
   150K, confirming MM1's inference; R55 200K and R51 100K (FILTER EXT CONTROL IN) beside them.
 
+
+## Oscillators 2 and 3, the RANGE path, the mixer (read 2026-11-09 from the 002 GIFs 902, 914, 917, 901)
+
+Scans: `curl` with a browser User-Agent from
+http://www.fantasyjackpalance.com/fjp/sound/synth/synthdata/16-minimoog/002/ (902-osc-print-schem-above.gif,
+901-osc-print-circ-1-above.gif, 914-oct-buff-schem-asm.gif, 917-interconnect-wiring.gif, 908-power-print-circ-schem.gif,
+911-filt-print-circ-schem.gif) into `cache/sources/minimoog/`.
+
+- **The three oscillators share the core, expo and shapers value for value** (Fig 9-2): C7 / C18 / C29 .001, HI END
+  R31 / R71 / R109 10K, the reset JFET Q4 / Q9 / Q14 E112 with C9 / C20 / C31 100 pF, R32 / R72 / R110 100K, R33 /
+  R73 / R111 2K, R34 / R74 / R112 1M, C12 / C23? / C34 18 pF, R35 / R75 / R113 100; I_R R30 / R70 / R108 2.0M; the
+  triangle's R40 / R80 / R118 10K 1%, R41 / R81 / R119 10K, C13 / C24 / C35 500 pF. So oscillator 1's event tables
+  serve all three.
+- **What differs:** SHIFT's series resistor is R53 / R93 82.5K 1% on oscillators 2 / 3 (oscillator 1's R13
+  69.8K); SCALE R55 / R91 10K + R56 / R94 90.9K, OCT ADJ R57 / R92 5K + R58 / R95 53.6K, feedback R59 / R99 50K,
+  R62 / R100 15K, R63 / R101 2.32K, R64 / R102 100 (as oscillator 1's). OSC 2 / OSC 3 FREQUENCY: a 5K LIN pot from
+  +10 V over 5.1K to ground ("7.5V +-2.5V, +-5TH") into R54 / R96 402K 1% (oscillator 1's R15 402K is that input,
+  left open). Oscillator 3's R97 121K 1% takes OSC 3 CONTROL's 10A ("+-2.75 OCT"); R51 121K and R50 69.8K on
+  oscillator 2 are spare network resistors with open ends.
+- **OSC 3 CONTROL** (SW2; Fig 9-2 lower left, Fig 9-17): its first pole puts the OSC 3 FREQ wiper on 10A when OFF
+  (open when ON); its second pole puts 16A on the board's -5 V when OFF, on -10 V (15A) when ON. 16A drives Q3
+  (2N3904, base through R61 100K, emitter -10 V), whose collector holds Q2's gate (E101, an N-channel JFET; R60 1M
+  gate to source), and Q19 (2N3904, base through R98 69.8K, emitter -10 V). Q2's source is on the primary summer's
+  output (the line oscillator 2's SCALE hangs on: no dots at its crossings with the OCT ADJ and R54 lines), its
+  drain oscillator 3's SCALE line, which Q19's collector also meets. ON: Q3 and Q19 off, Q2 on, the keys reach
+  oscillator 3. OFF: Q3 shuts Q2, Q19 holds the SCALE line near -10 V: oscillator 3 no longer follows the keys.
+- **REV SAW 3 OUT** (7B): Q20 2N3904 (emitter grounded), its collector on R124 2.2K's end of the +10 V decoupled by
+  R123 330 / C37 5.6 uF 35 V tantalum, fed back to its base through R129 68K; the sawtooth (node 9) into the base
+  through R130 33K, R128 390K to -10 V; the collector node divided by R133 7.5K / R134 18K (to -10 V) onto 7B. (The
+  first reading put the collector on 7B: Q20 saturated. The 2x zoom shows the collector on the top line.)
+- **Fig 9-1's notes:** note 3, R27 / R67 / R105 selected for 20.5 mV +-0.4 mV an octave across pins 1 and 10;
+  **note 4, R135 / R136 / R137 (220K from +10 V onto each sawtooth's pin 10B / 8B / 13B) "factory selected (if
+  necessary) to achieve 50 % +-1 % rect. duty cycle"**; note 5, R59 deleted above serial 10175.
+- **The -5 V reference** (Fig 9-2, upper left): IC2 (741) + input on R9 / R10 4.99K 1% (ground / -10 V) with C3 27
+  uF / 10 V tantalum, - input through R8 4.7K from 18A (the sense), output through R11 4.7K into Q1 (2N3906),
+  emitter on 17A (the -5 V line), collector on -10 V: Q1 sinks the ladder's current.
+- **The RANGE ladder** (on the front panel, Fig 9-17 / 9-2): from the -5 V line (2') R25 / R26 / R27 / R28 1K 1% to
+  4', 8', 16', 32', then R29 4.75K 1% to LO, which is ground (pins 20A-22A); R59 90.9 ohm (LO to the -5 V line) deleted
+  above serial 10175 (Fig 9-1 note 5, Fig 9-16's note). 571 mV an octave, 2' -5 V, LO 0 V. Each oscillator's RANGE
+  switch (SW3 / SW4 / SW5) picks a tap.
+- **The octave buffer** (board No. 6, Fig 9-14): three 741s as followers (pin 2 tied to 6): OSC 1's wiper (5) out on
+  14A, OSC 2's (8) on 13A, OSC 3's (2) on 11A.
+- **The waveform switches** (Fig 9-17): SW6 / SW7 / SW8, two poles, six positions. First pole: triangle, the second
+  shape, sawtooth, then the rectangle (21B / 19B / 14B) on the last three. The second shape is the triangle-sawtooth
+  mix on oscillators 1 and 2 (a node fed from the sawtooth through R30 / R36 47K and from the triangle through R31 /
+  R37 10K) and REV SAW on oscillator 3. Second pole (PULSE WIDTH IN): ground on the first four, then the panel's
+  divider from ground, R34 / R40 / R44 1.5K to -1.5 V (wide), R33 / R39 / R43 1K to -2.5 V (narrow), R32 / R38 / R42
+  7.5K to -10 V.
+- **The mixer** (Fig 9-17): each source onto a 25K LEVEL pot (R6 / R7 / R8 OSC 1-3, R10 NOISE; the wiper end to
+  ground), the wiper through R45 / R47 / R49 33K (R48 11K for NOISE) into its ON / OFF switch (SW9 / SW11 / SW13,
+  SW12 NOISE), ON onto the bus, board 4's pin 4 (C27 into the ladder). EXTERNAL INPUT: J6 onto R9 1 Meg audio, its
+  wiper into board 4's pre-amp (pin 11), PREAMP OUT (pin 17) through R46 33K and SW10 onto the bus. SW14 picks WHITE
+  (board 3's pin 5) or PINK (pin 6) for R10.
+- **The external pre-amp** (board 4, circuit No. 12, Fig 9-11): pin 11, R78 1K, C23 .1 into Q27 (TIS97; R66 100K
+  base to ground), Q27 / Q32 (TIS97) a pair on R58 150K to -10 V, Q27's collector R65 27K to +10 V (R64 100 + C22 100
+  pF across it) into Q33's base (2N4058, emitter +10 V), its collector the output on R57 10K to -10 V; R61 200K from
+  the output to R63 1K into Q32's base, R62 1K + C26 220 uF to ground at their junction, C21 10 pF base to output:
+  +46 dB at audio, unity at DC. Q32's collector on +10 V. The overload lamp driver (circuit No. 11) hangs on the output
+  through C20 1.0.
+- **The noise generator** (board 3, circuit No. 3, Fig 9-8): Q15 2N3392, base on ground, collector open, emitter on
+  R67 470K from +10 V through R47 75K (C25 10 uF): the reverse-biased emitter-base junction ("the noise generator
+  uses a reverse biased transistor junction", Folkman). C12 5.6 into Q12 (2N3392; R17 100K collector load, R29 4.7M
+  collector to base, C11 100 pF collector to ground, NOISE LEVEL R26 2.5K in its emitter), Q4 (2N3392) a follower (R9
+  470, R19 3.3K, C5 100 pF base to emitter), C18 .15 to WHITE NOISE (pin 5; C18 crosses the ground line without a
+  dot). R16 10K onto C3 .12 + R8 3.3K and C2 .033 + R13 220 to ground (the pinking legs), C1 2.5 into Q3 (2N3392; R3
+  3.3K, R1 120; bias R7 / R6 560K with C4 2.5 at their junction), C20 2.5 to PINK NOISE (pin 6). RED NOISE (pin 2)
+  through R12 10K, C7 .15, C8 2.5, Q6, R28 / R23 2.2M, C10 .1, C28 10, R59 100K: not traced in full.
+- **Folkman's Noise Level** (TECHNICAL SERVICE MANUAL p. 14): "factory-set to yield -5dB maximum in the white
+  position"; read here as 5 dB under an oscillator's sawtooth at the mixer's input (scripts/minimoog_noise_trim.py).
+- **The filter's control summing** (Fig 9-17): CUTOFF R11 5K from +10 to -10 V, its wiper through R55 200K; J2
+  FILTER EXT CONTROL IN through R51 100K (the jack's switch grounds it when empty); FILTER MOD SW15 through R52 33K
+  (OFF grounds R52's far end); KEYBOARD CONTROL SW16 R53 300K, SW17 R54 150K: all onto board 4's pin 5. The
+  modulation mix: MOD MIX R3 25K between board 3's pins 4 and 3, its wiper on ground; noise through R24 24K onto pin
+  4, oscillator 3 through R23 24K onto pin 3 (circuit No. 15's inputs).

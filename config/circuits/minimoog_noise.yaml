@@ -1,0 +1,108 @@
+# The Minimoog's noise generator (power supply board No. 3, circuit No. 3, Fig 9-8 of the 204D
+# service manual; docs/MINIMOOG_PLAN.md MM5, the reading in data/schematics/minimoog/README.md
+# "Noise generator"). Alone here; scripts/make_minimoog_voice.py joins it to the voice's mixer.
+#   source  Q15 (2N3392) with its collector open and its base on ground: the emitter-base junction
+#        reverse-biased into avalanche through R67 470K from +10 V (filtered by R47 75K / C25 10 uF),
+#        "a reverse biased transistor junction for a noise source" (Folkman). Our BJT model has no
+#        breakdown, so the junction stands in as its avalanche voltage in series with its dynamic
+#        resistance (provisional), and its noise as a white current across it (a `noise_source`:
+#        always on, a sound source of the instrument, not a part's imperfection)
+#   white  C12 5.6 uF into Q12 (2N3392; R17 100K collector load, R29 4.7M collector to base, C11 100
+#        pF on the collector, the NOISE LEVEL trim R26 2.5K in its emitter), the follower Q4 (R9 470,
+#        R19 3.3K, C5 100 pF base to emitter), out through C18 .15: WHITE NOISE (pin 5)
+#   pink  from Q4's emitter through R16 10K onto two series-RC legs to ground (C3 .12 + R8 3.3K, C2
+#        .033 + R13 220): the pinking filter; C1 2.5 uF into Q3 (2N3392; R3 3.3K, R1 120, its bias R7 /
+#        R6 560K decoupled by C4 2.5 uF), out through C20 2.5 uF: PINK NOISE (pin 6)
+#   red  (Q6, into the modulation mix) not drawn yet
+# Rails ideal (+10 V); the 2N3392s are 2N3904 cards (the sheet's alternate, as on board 2).
+
+title: "Minimoog noise generator (board No. 3, circuit No. 3)"
+input: nz_in
+full_scale:
+  input_volts_peak: {value: 1.0, source: "numerical: the audio input is unused (a leak to ground)"}
+  output_volts_peak: {value: 2.0, source: "numerical: about the white noise's peaks at pin 5"}
+probes: [wn, pn, e15, c12, e4, n1, c3]
+
+controls:
+  noise_level_trim: {value: 0.4844, min: 0.0, max: 1.0, unit: rotation, source: "Fig 9-8: R26 2.5K NOISE LEVEL trim (Q12's emitter; 0 = no resistance, the most gain); default trimmed: scripts/minimoog_noise_trim.py (Folkman's 'Noise Level': -5 dB at most in the white position)"}
+
+values:
+  vpos_v: {value: 10.0, source: "Fig 9-8: +10 V (pin 1)"}
+  r47_ohm: {value: 75.0e+3, source: "Fig 9-8: R47 75K"}
+  c25_f: {value: 10.0e-6, source: "Fig 9-8: C25 10 uF"}
+  r67_ohm: {value: 470.0e+3, source: "Fig 9-8: R67 470K (Q15's emitter feed)"}
+  v_avalanche_v: {value: 7.0, source: "provisional: model knowledge (a small-signal NPN's emitter-base avalanche, 6-9 V; the 2N3392's BVEBO is 5 V minimum)"}
+  r_avalanche_ohm: {value: 20.0e+3, source: "provisional: model knowledge (an emitter-base junction's dynamic resistance in avalanche at a few uA, ~10-50K)"}
+  avalanche_psd_a2_hz: {value: 4.3e-17, source: "provisional: chosen so the factory's NOISE LEVEL trim (R26) sits near mid-travel at Folkman's -5 dB (scripts/minimoog_noise_trim.py); an avalanche junction's noise current, 2 q I M^2 at ~5.5 uA, puts M near 600"}
+  c12_f: {value: 5.6e-6, source: "Fig 9-8: C12 5.6 uF"}
+  r29_ohm: {value: 4.7e+6, source: "Fig 9-8: R29 4.7M (Q12's collector to its base)"}
+  r17_ohm: {value: 100.0e+3, source: "Fig 9-8: R17 100K"}
+  c11_f: {value: 100.0e-12, source: "Fig 9-8: C11 100 pF (Q12's collector)"}
+  r26_ohm: {value: 2.5e+3, source: "Fig 9-8: R26 2.5K NOISE LEVEL trim"}
+  r9_ohm: {value: 470.0, source: "Fig 9-8: R9 470"}
+  r19_ohm: {value: 3.3e+3, source: "Fig 9-8: R19 3.3K"}
+  c5_f: {value: 100.0e-12, source: "Fig 9-8: C5 100 pF"}
+  c18_f: {value: 0.15e-6, source: "Fig 9-8: C18 .15 (WHITE NOISE out, pin 5)"}
+  r16_ohm: {value: 10.0e+3, source: "Fig 9-8: R16 10K"}
+  c3_f: {value: 0.12e-6, source: "Fig 9-8: C3 .12"}
+  r8_ohm: {value: 3.3e+3, source: "Fig 9-8: R8 3.3K"}
+  c2_f: {value: 0.033e-6, source: "Fig 9-8: C2 .033"}
+  r13_ohm: {value: 220.0, source: "Fig 9-8: R13 220"}
+  c1_f: {value: 2.5e-6, source: "Fig 9-8: C1 2.5 uF"}
+  r7_ohm: {value: 560.0e+3, source: "Fig 9-8: R7 560K"}
+  r6_ohm: {value: 560.0e+3, source: "Fig 9-8: R6 560K"}
+  c4_f: {value: 2.5e-6, source: "Fig 9-8: C4 2.5 uF"}
+  r3_ohm: {value: 3.3e+3, source: "Fig 9-8: R3 3.3K"}
+  r1_ohm: {value: 120.0, source: "Fig 9-8: R1 120"}
+  c20_f: {value: 2.5e-6, source: "Fig 9-8: C20 2.5 uF (PINK NOISE out, pin 6)"}
+  r_load_ohm: {value: 25.0e+3, source: "Fig 9-17: the mixer's NOISE level pot R10 25K, the outputs' load alone"}
+  r_leak_ohm: {value: 1.0e+9, source: "numerical: a leak on the unused audio input"}
+  q_n: {value: 2N3904@1, source: "provisional: model knowledge (Fig 9-8's Q12, Q4, Q3 2N3392 (NPN): the sheet's alternate for the TIS92 is the 2N3904, as on board 2)"}
+
+devices:
+  QN: {device: q_n}
+
+sections:
+  - title: rails
+    parts:
+      VP: {V: [vp, "0"], v: vpos_v}
+      RIN: {R: [nz_in, "0"], r: r_leak_ohm}
+  - title: source
+    parts:
+      R47: {R: [vp, n47], r: r47_ohm}
+      C25: {C: [n47, "0"], c: c25_f}
+      R67: {R: [n47, e15], r: r67_ohm}
+      # Q15's emitter-base junction in avalanche (its base on ground, its collector open)
+      RZ15: {R: [e15, z15], r: r_avalanche_ohm}
+      VZ15: {V: [z15, "0"], v: v_avalanche_v}
+      IN15: {noise_source: [e15, "0"], psd_a2_hz: avalanche_psd_a2_hz}
+  - title: white
+    parts:
+      C12: {C: [e15, b12], c: c12_f}
+      R29: {R: [c12, b12], r: r29_ohm}
+      R17: {R: [vp, c12], r: r17_ohm}
+      C11: {C: [c12, "0"], c: c11_f}
+      Q12: {bjt: [c12, b12, e12], model: QN}
+      R26: {rheostat: [e12, "0"], r: r26_ohm, at: noise_level_trim}
+      Q4: {bjt: [c4, c12, e4], model: QN}
+      R9: {R: [vp, c4], r: r9_ohm}
+      R19: {R: [e4, "0"], r: r19_ohm}
+      C5: {C: [c12, e4], c: c5_f}
+      C18: {C: [e4, wn], c: c18_f}
+      RLW: {R: [wn, "0"], r: r_load_ohm}
+  - title: pink
+    parts:
+      R16: {R: [e4, n1], r: r16_ohm}
+      C3: {C: [n1, n3c], c: c3_f}
+      R8: {R: [n3c, "0"], r: r8_ohm}
+      C2: {C: [n1, n2c], c: c2_f}
+      R13: {R: [n2c, "0"], r: r13_ohm}
+      C1: {C: [n1, b3], c: c1_f}
+      R7: {R: [b3, n7], r: r7_ohm}
+      R6: {R: [n7, c3], r: r6_ohm}
+      C4: {C: [n7, "0"], c: c4_f}
+      Q3: {bjt: [c3, b3, e3], model: QN}
+      R3: {R: [vp, c3], r: r3_ohm}
+      R1: {R: [e3, "0"], r: r1_ohm}
+      C20: {C: [c3, pn], c: c20_f}
+      RLP: {R: [pn, "0"], r: r_load_ohm}

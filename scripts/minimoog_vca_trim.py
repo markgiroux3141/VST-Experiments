@@ -62,7 +62,7 @@ def golden_min(fn, lo=0.0, hi=1.0, steps=14) -> float:
 def gain_law(s, ov: dict, amp_v: float = 0.05, f_hz: float = 220.0) -> list[dict]:
     """A sine through the filter (cutoff +4 V, EMPHASIS 0) and the VCA at contour levels: the
     MAIN OUTPUT's level re the filter's output, and its THD."""
-    o = {**ov, "cutoff_v": 4.0, "emphasis": 0.0}
+    o = {**ov, "cutoff": 0.7, "emphasis": 0.0}
     ir = st.build(s, o)
     t = np.arange(int(0.3 * st.FS)) / st.FS
     x = amp_v * np.sin(2 * np.pi * f_hz * t)

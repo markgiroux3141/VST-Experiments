@@ -56,6 +56,9 @@ pub struct SectionSpec {
     pub method: Option<String>,
     /// A multi-rate part's own tube tables (`tube_tables: true`), if given.
     pub tube_tables: Option<bool>,
+    /// `substeps_in: events`: the island only in a build with event kernels (K's at a finer
+    /// step than the sample); a literal build runs it at the sample rate.
+    pub substeps_in_events: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -344,6 +347,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
                     "lag_samples",
                     "method",
                     "tube_tables",
+                    "substeps_in",
                 ]
                 .contains(k)
             })
@@ -368,15 +372,27 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             || m.contains("owns")
             || m.contains("lag_samples")
             || m.contains("method")
-            || m.contains("tube_tables"))
+            || m.contains("tube_tables")
+            || m.contains("substeps_in"))
             && substeps.unwrap_or(1) < 2
         {
             errors.push(format!(
-                "sections[{i}]: decimate, owns, lag_samples, method and tube_tables are for a \
-                 multi-rate section"
+                "sections[{i}]: decimate, owns, lag_samples, method, tube_tables and \
+                 substeps_in are for a multi-rate section"
             ));
             continue;
         }
+        let substeps_in_events = match m.get("substeps_in") {
+            None => false,
+            Some(Value::Str(s)) if s == "events" => true,
+            Some(v) => {
+                errors.push(format!(
+                    "sections[{i}]: substeps_in '{}' (events)",
+                    v.py_str()
+                ));
+                continue;
+            }
+        };
         let method = match m.get("method") {
             None => None,
             Some(Value::Str(s)) if circuitsim::transient::Method::parse(s).is_ok() => {
@@ -451,6 +467,7 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
             lag_samples,
             method,
             tube_tables,
+            substeps_in_events,
         });
     }
     let devices = map_or_empty(data.get("devices"));

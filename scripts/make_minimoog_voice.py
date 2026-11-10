@@ -22,6 +22,7 @@ a `k_` prefix, its nodes a `k_` prefix) join the filter board (minimoog_filter_b
 """
 
 import argparse
+import re
 import sys
 
 import yaml
@@ -80,8 +81,25 @@ def build() -> str:
     vrename = {k: "k_" + k for k in list(cont["values"]) + list(cont["devices"])}
     out = dict(board)
     out["title"] = (
-        "Minimoog voice: filter board (VCF, VCA) with the contour generators and the keyboard"
+        "Minimoog voice: the oscillator board, the mixer, the filter board (VCF, VCA), the contour "
+        "generators and the keyboard"
     )
+    out["full_scale"] = {
+        "input_volts_peak": {
+            "value": 0.1,
+            "source": "provisional: model knowledge (an instrument's or a microphone's level at "
+            "the "
+            "EXTERNAL INPUT jack, 0.1 V peak: the pre-amp's +46 dB clips it with the level pot "
+            "past about half, as the Model D overdrives external signals)",
+        },
+        "output_volts_peak": {
+            "value": 12.0,
+            "source": "numerical: chosen so one oscillator at the panel's defaults (LEVEL 8, the "
+            "filter and contours at their defaults) peaks near -18 dBFS at the MAIN OUTPUT "
+            "(1.5 V there, measured by scripts/minimoog_gate_check.py --voice); all three at "
+            "full level stay under -10 dBFS",
+        },
+    }
     out["cv_inputs"] = {
         "key": node(kb["cv_inputs"]["key"], "b_", KB_SHARED),
         "gate": node(kb["cv_inputs"]["gate"], "b_", KB_SHARED),
@@ -148,6 +166,28 @@ def build() -> str:
         out["devices"][kbrename[k]] = d
 
     sections = [dict(s) for s in board["sections"]]
+    for s in sections:
+        # the ladder and its output amplifier on rails of their own, so they can run as a
+        # partition of their own (met at Q28's collector, a current, and at the mixer's bus
+        # through its summing resistors)
+        if s["title"] in LADDER_SECTIONS:
+            s["parts"] = {
+                n: {
+                    k: ([LADDER_RAILS.get(x, x) for x in v] if k in NODE_KEYS else v)
+                    for k, v in b.items()
+                }
+                for n, b in s["parts"].items()
+            }
+    sections.insert(
+        1,
+        {
+            "title": "filter: rails",
+            "parts": {
+                "VLP": {"V": ["lvp", "0"], "v": "supply_v"},
+                "VLN": {"V": ["lvn", "0"], "v": "supply_neg_v"},
+            },
+        },
+    )
     for s in sections:  # AMOUNT OF CONTOUR: R74's far end is the wiper
         parts = {}
         for n, b in s["parts"].items():
@@ -185,8 +225,691 @@ def build() -> str:
             if n not in KB_SKIP_PARTS
         }
         sections.append({"title": "keyboard: " + s["title"], "parts": parts})
+    join_oscillators(out, sections)
+    join_noise(out, sections)
+    join_external(out, sections)
+    join_modulation(out, sections)
     out["sections"] = sections
     return HEADER + yaml.safe_dump(out, sort_keys=False, default_flow_style=None, width=200)
+
+
+# --- the oscillator board (minimoog_vco.yaml, minimoog_osc2 / 3) and the panel's mixer ---------
+
+# Oscillator i's file: oscillator 1 hand-written, 2 and 3 generated from it
+# (scripts/make_minimoog_oscillators.py), each with its own trims.
+OSC_FILES = {1: "minimoog_vco", 2: "minimoog_osc2", 3: "minimoog_osc3"}
+VCO = CIRC / "minimoog_vco.yaml"
+LADDER_SECTIONS = ("ladder", "output amplifier")
+LADDER_RAILS = {"vp": "lvp", "vn": "lvn"}
+# Macro keys whose value is a node list (the rest of a part's string fields are parameter keys).
+NODE_KEYS = ("R", "C", "V", "pot", "rheostat", "bjt", "jfet", "device", "opamp", "noise_source")
+# The board's shared circuitry (the primary summer, the -5 V reference and the panel's RANGE ladder
+# with TUNE / PITCH WHEEL), from oscillator 1's file, whose nodes take `o_`; each oscillator's own
+# sections take `o<i>_` (nodes, devices, its own values) and `_o<i>` (parts).
+BOARD_SECTIONS = ("primary summer", "-5 V reference", "range ladder")
+BOARD_PANEL = ("VP", "VN", "RIN", "RBEND", "RTUNE", "RTUNEF", "VPW")
+BOARD_NODES = ("vp", "vn", "pri", "m5", "t4", "t8", "t16", "t32")
+OSC_SECTIONS = ("range", "summer", "expo", "core", "shapers")
+# Oscillator parts out of the island (the generated section's name: its parts).
+SLOW_PARTS = {
+    (3, "summer"): {"control": ("JQ2", "R60", "Q3", "R61", "Q19", "R98")},
+    (3, "shapers"): {
+        "reverse sawtooth": (
+            "R123", "C37", "RC37", "R124", "R129", "R128", "R130", "Q20", "R133", "R134",
+        )
+    },
+}  # fmt: skip
+OSC3_CONTACTS = ("RCTLB", "RCTLC")
+# The trims each oscillator has its own of.
+OSC_TRIMS = ("r14_at", "r16_at", "r18_at", "r31_at")
+# The front panel's parts per oscillator (Fig 9-17): the waveform switch, its PW divider, its LEVEL
+# pot and summing resistor and its mixer switch; oscillator 3's second position the reverse
+# sawtooth, 1 and 2's the triangle-sawtooth mix (R30 / R31, R36 / R37).
+OSC_PANEL = {
+    1: {"wave": "SW6", "level": "R6", "sum": "R45", "on": "SW9", "pw": ("R34", "R33", "R32")},
+    2: {"wave": "SW7", "level": "R7", "sum": "R47", "on": "SW11", "pw": ("R40", "R39", "R38")},
+    3: {"wave": "SW8", "level": "R8", "sum": "R49", "on": "SW13", "pw": ("R44", "R43", "R42")},
+}
+# Each oscillator an island at twice the sample rate behind the anti-alias FIR (the voice plays at
+# draft-1x, 48 kHz; the reset's and the rectangle's kernels need 96 kHz: at 48 kHz the top C ran at
+# 6.26 kHz), in a build with its kernels only (`substeps_in: events`; the literal reference runs
+# at its own rate). In production (192 kHz) the island runs at 384 kHz.
+ISLAND = {"substeps": 2, "decimate": "fir", "substeps_in": "events"}
+WAVES = (
+    "triangle",
+    "triangle-sawtooth",
+    "sawtooth",
+    "square",
+    "wide rectangle",
+    "narrow rectangle",
+)
+WAVES_3 = (
+    "triangle",
+    "reverse sawtooth",
+    "sawtooth",
+    "square",
+    "wide rectangle",
+    "narrow rectangle",
+)
+# An oscillator's controls in the voice (the file's name -> the voice's).
+OSC_CONTROLS = {"osc_range": "osc{i}_range", "freq": "osc{i}_freq", "control": "osc3_control"}
+
+
+def rename_any(body, nodes, vmap, suffix):
+    """A part's body with its nodes through `nodes`, its parameter keys through `vmap` and its
+    switch's sub-parts (recursively) suffixed."""
+    body = dict(body)
+    for k, v in list(body.items()):
+        if k in NODE_KEYS:
+            body[k] = [nodes(str(x)) for x in v]
+        elif k == "parts":
+            body[k] = {n + suffix: rename_any(b, nodes, vmap, suffix) for n, b in v.items()}
+        elif k == "switch" or isinstance(v, str):
+            body[k] = vmap.get(v, v)
+    return body
+
+
+def osc_title(t: str) -> str:
+    return "summer" if t.endswith("summer") and t != "primary summer" else t
+
+
+def join_oscillators(out: dict, sections: list, oscs: tuple[int, ...] = (1, 2, 3)) -> None:
+    """The oscillator board's shared circuitry and oscillators `oscs` (each its file's sections with
+    its own nodes, devices, values and exceptions) on rails of their own, the keyboard circuit's
+    output (`kbd`) into KBD PITCH (R4); the panel's waveform switches and mixer channels in the
+    filter's sections, the mixer's bus into the ladder's input (pin 4, C27)."""
+    files = {
+        i: yaml.safe_load((CIRC / f"{OSC_FILES[i]}.yaml").read_text(encoding="utf-8")) for i in oscs
+    }
+    vco = files[1] if 1 in files else yaml.safe_load(VCO.read_text(encoding="utf-8"))
+
+    def board_node(n: str) -> str:
+        if n == "0":
+            return "0"
+        if n == "kbd":  # KBD PITCH: the keyboard circuit's output (pins 4 / 5 of board 2)
+            return "kbd"
+        return "o_" + n
+
+    # values: the board's (oscillator 1's file's) with `o_`; the keys' copies dropped
+    board_vals = {k: v for k, v in vco["values"].items() if not kept_name(k) and k not in OSC_TRIMS}
+    vmap = {k: "o_" + k for k in board_vals}
+    for k, v in board_vals.items():
+        out["values"]["o_" + k] = v
+    for k, v in PANEL_VALUES.items():
+        out["values"][k] = v
+    # the board's own devices (the -5 V reference's Q1): `o_`
+    board_models = {
+        b.get("model")
+        for s in vco["sections"]
+        if s["title"] in BOARD_SECTIONS
+        for b in s["parts"].values()
+    }
+    for k, dv in vco["devices"].items():
+        if k in board_models:
+            vmap[k] = "o_" + k
+            out["devices"]["o_" + k] = {
+                f: (vmap.get(x, x) if isinstance(x, str) else x) for f, x in dv.items()
+            }
+    # the panel's TUNE and PITCH WHEEL keep their names; the rest are per oscillator
+    for k in ("tune", "bend"):
+        out["controls"][k] = vco["controls"][k]
+
+    rails = {
+        "VP_o": {"V": ["o_vp", "0"], "v": "o_vpos_v"},
+        "VN_o": {"V": ["o_vn", "0"], "v": "o_vneg_v"},
+    }
+    board_rails = next(s for s in vco["sections"] if s["title"] == "rails and panel")["parts"]
+    panel = {
+        n + "_o": rename_any(board_rails[n], board_node, vmap, "_o")
+        for n in ("RBEND", "RTUNE", "RTUNEF")
+    }
+    sections.append({"title": "osc board: rails and panel", "parts": {**rails, **panel}})
+    for s in vco["sections"]:
+        if s["title"] in BOARD_SECTIONS:
+            parts = {n + "_o": rename_any(b, board_node, vmap, "_o") for n, b in s["parts"].items()}
+            sections.append({"title": "osc board: " + s["title"], "parts": parts})
+
+    out["exceptions"] = dict(out.get("exceptions") or {})
+    mixer = {}
+    for i in oscs:
+        d = files[i]
+        sfx, pre = f"_o{i}", f"o{i}_"
+
+        def onode(n: str, pre=pre) -> str:
+            if n == "0":
+                return "0"
+            if n in BOARD_NODES:  # the rails, the primary summer's output, the ladder's taps
+                return "o_" + n
+            return pre + n
+
+        # its values: the board's where they're oscillator 1's, else its own (`o<i>_`)
+        ovmap = dict(vmap)
+        for k, v in d["values"].items():
+            if kept_name(k):
+                continue
+            if k in OSC_TRIMS or board_vals.get(k) != v:
+                ovmap[k] = pre + k
+                out["values"][pre + k] = v
+        own = yaml.safe_dump(
+            [
+                s["parts"]
+                for s in d["sections"]
+                if s["title"] not in BOARD_SECTIONS and s["title"] != "rails and panel"
+            ]
+            + [x.get("parts", {}) for x in d["exceptions"].values()]
+        )
+        for k, dv in d["devices"].items():
+            if not re.search(rf"\b{re.escape(k)}\b", own):
+                continue  # the board's (the -5 V reference's Q1)
+            ovmap[k] = pre + k
+            out["devices"][pre + k] = {
+                f: (ovmap.get(x, x) if isinstance(x, str) else x) for f, x in dv.items()
+            }
+        for k, name in OSC_CONTROLS.items():
+            if k in d["controls"]:
+                ovmap[k] = name.format(i=i)
+                out["controls"][ovmap[k]] = d["controls"][k]
+        # its panel parts (FREQUENCY, OSC 3 CONTROL's contacts) with the rest of it
+        own_panel = {
+            n + sfx: rename_any(b, onode, ovmap, sfx)
+            for n, b in next(s for s in d["sections"] if s["title"] == "rails and panel")[
+                "parts"
+            ].items()
+            if n not in BOARD_PANEL
+        }
+        own_panel_slow = own_panel  # OSC 3 CONTROL's 16A contacts leave with its switching
+        if own_panel:
+            sections.append({"title": f"osc {i}: panel", "parts": own_panel, **ISLAND})
+        for s in d["sections"]:
+            title = osc_title(s["title"])
+            if title in OSC_SECTIONS:
+                parts = {n + sfx: rename_any(b, onode, ovmap, sfx) for n, b in s["parts"].items()}
+                isl = dict(ISLAND)
+                if title == "shapers":  # the island's outputs into the panel's waveform switch
+                    isl["owns"] = [pre + "out", pre + "tri", pre + "rect"]
+                # what needn't run at the island's rate: OSC 3 CONTROL's switching (DC, beside
+                # the board's summer) and the reverse sawtooth's inverter (on the decimated
+                # sawtooth, in the first part beside the waveform switch)
+                for group, names in SLOW_PARTS.get((i, title), {}).items():
+                    slow = {n + sfx: parts.pop(n + sfx) for n in names}
+                    if group == "control":
+                        slow |= {n: own_panel_slow.pop(n) for n in (c + sfx for c in OSC3_CONTACTS)}
+                    sections.append({"title": f"osc {i}: {group}", "parts": slow})
+                sections.append({"title": f"osc {i}: {title}", "parts": parts, **isl})
+        for xn, x in d["exceptions"].items():
+            xx = dict(x)
+            for f in ("sense", "src", "dst", "plus", "minus"):
+                if f in xx:
+                    xx[f] = onode(xx[f])
+            xx["replaces"] = [n + sfx for n in x["replaces"]]
+            if "parts" in xx:
+                xx["parts"] = {
+                    n + sfx: rename_any(b, onode, ovmap, sfx) for n, b in x["parts"].items()
+                }
+            if "follows" in xx:
+                xx["follows"] = xx["follows"] + sfx
+            if "follow_gain" in xx:
+                xx["follow_gain"] = ovmap.get(xx["follow_gain"], xx["follow_gain"])
+            out["exceptions"][xn + sfx] = xx
+        # the waveform switch's second pole: PULSE WIDTH IN from the panel's divider (ground on the
+        # first four positions, -1.5 V wide, -2.5 V narrow), an oscillator part beside its PW input
+        p = OSC_PANEL[i]
+        ra, rb, rc = p["pw"]
+        sw = p["wave"]
+        pw_parts = {
+            f"{ra}_p{i}": {"R": ["0", pre + "pwa"], "r": "p_rpw_a_ohm"},
+            f"{rb}_p{i}": {"R": [pre + "pwa", pre + "pwb"], "r": "p_rpw_b_ohm"},
+            f"{rc}_p{i}": {"R": [pre + "pwb", "o_vn"], "r": "p_rpw_c_ohm"},
+            f"{sw}B_p{i}": {
+                "switch": f"osc{i}_wave",
+                "parts": {
+                    f"RPW0_p{i}": {
+                        "R": [pre + "pw", "0"],
+                        "r": "p_r_contact_ohm",
+                        "in": [0, 1, 2, 3],
+                    },
+                    f"RPW1_p{i}": {
+                        "R": [pre + "pw", pre + "pwa"],
+                        "r": "p_r_contact_ohm",
+                        "in": [4],
+                    },
+                    f"RPW2_p{i}": {
+                        "R": [pre + "pw", pre + "pwb"],
+                        "r": "p_r_contact_ohm",
+                        "in": [5],
+                    },
+                },
+            },
+        }
+        sections.append({"title": f"osc {i}: pulse width", "parts": pw_parts, **ISLAND})
+        # first pole: the waveform onto the LEVEL pot
+        second = pre + ("rsaw" if i == 3 else "shk")
+        src = {
+            0: pre + "tri",
+            1: second,
+            2: pre + "out",
+            3: pre + "rect",
+            4: pre + "rect",
+            5: pre + "rect",
+        }
+        if i != 3:  # the triangle-sawtooth mix, always on the panel
+            mixer[f"RSHS_p{i}"] = {"R": [pre + "out", pre + "shk"], "r": "p_r_shark_saw_ohm"}
+            mixer[f"RSHT_p{i}"] = {"R": [pre + "tri", pre + "shk"], "r": "p_r_shark_tri_ohm"}
+        mixer[f"{sw}A_p{i}"] = {
+            "switch": f"osc{i}_wave",
+            "parts": {
+                f"RWF{k}_p{i}": {"R": [n, pre + "wf"], "r": "p_r_contact_ohm", "in": [k]}
+                for k, n in src.items()
+            },
+        }
+        mixer[f"{p['level']}_p{i}"] = {
+            "pot": ["0", pre + "lw", pre + "wf"],
+            "r": "p_r_level_ohm",
+            "at": f"osc{i}_level",
+        }
+        mixer[f"{p['sum']}_p{i}"] = {"R": [pre + "lw", pre + "ms"], "r": "p_r_sum_osc_ohm"}
+        mixer[f"R{p['on']}_p{i}"] = {
+            "rheostat": [pre + "ms", "mix"],
+            "r": "p_r_switch_open_ohm",
+            "at": f"osc{i}_on",
+            "reverse": 1,
+        }
+        waves = WAVES_3 if i == 3 else WAVES
+        out["controls"][f"osc{i}_wave"] = {
+            "value": 2,
+            "choices": [0, 1, 2, 3, 4, 5],
+            "unit": "position",
+            "source": f"Fig 9-17: {sw} OSC {i} WAVEFORM ({', '.join(waves)} as 0-5; its second "
+            "pole sets PULSE WIDTH IN: ground, then -1.5 V and -2.5 V from the panel's divider); a "
+            "change rewires (restarts a live stream); the sawtooth by default (provisional)",
+        }
+        out["controls"][f"osc{i}_level"] = {
+            "value": 0.8 if i == 1 else 0.0,
+            "min": 0.0,
+            "max": 1.0,
+            "unit": "rotation",
+            "source": f"Fig 9-17: {p['level']} OSC {i} LEVEL, 25K (Table 7-3; its taper not read: "
+            "linear, provisional); 0 = the wiper at ground, 1 = at the waveform; "
+            + ("8 by default (provisional)" if i == 1 else "0 by default: one oscillator heard"),
+        }
+        out["controls"][f"osc{i}_on"] = {
+            "value": 1,
+            "choices": [0, 1],
+            "unit": "switch",
+            "source": f"Fig 9-17: {p['on']}, OSC {i}'s mixer switch (ON: its summing resistor "
+            "onto the bus, board 4's pin 4); a contact always in the circuit, so a flip updates "
+            "a stream in place",
+        }
+        out["probes"] += [pre + "out", pre + "tri", pre + "rect", pre + "ramp", pre + "wf"]
+    out["probes"] += ["mix", "o_pri", "o_m5"]
+    # the ladder's input (C27) now on the mixer's bus; the circuit's audio input a leak until
+    # EXTERNAL INPUT is drawn
+    for s in sections:
+        if "C27" in s["parts"]:
+            s["parts"]["C27"] = {**s["parts"]["C27"], "C": ["mix", "b29"]}
+            # the bus's leak beside C27: the ladder's part owns the bus (a DC path there)
+            s["parts"]["RMIX"] = {"R": ["mix", "0"], "r": "p_r_bus_leak_ohm"}
+    mixer["RIN_p"] = {"R": ["in", "0"], "r": "p_r_bus_leak_ohm"}
+    sections.insert(1, {"title": "mixer", "parts": mixer})
+
+
+NOISE = CIRC / "minimoog_noise.yaml"
+NOISE_SKIP = ("RIN", "RLW", "RLP")  # its unused input and its test loads
+
+
+def join_noise(out: dict, sections: list) -> None:
+    """Board 3's noise generator (minimoog_noise.yaml: nodes, values and devices `n_`, parts `_n`)
+    on its own +10 V, and the mixer's NOISE channel (Fig 9-17): SW14 picks WHITE (pin 5) or PINK
+    (pin 6) onto the NOISE level pot R10 25K, its wiper through R48 11K and SW12 onto the bus."""
+    nz = yaml.safe_load(NOISE.read_text(encoding="utf-8"))
+    vmap = {k: "n_" + k for k in list(nz["values"]) + list(nz["devices"])}
+    for k, v in nz["values"].items():
+        if k not in ("r_load_ohm", "r_leak_ohm"):
+            out["values"]["n_" + k] = v
+    for k, d in nz["devices"].items():
+        out["devices"]["n_" + k] = {
+            f: vmap.get(x, x) if isinstance(x, str) else x for f, x in d.items()
+        }
+    out["controls"]["noise_level_trim"] = nz["controls"]["noise_level_trim"]
+
+    def nnode(n: str) -> str:
+        return "0" if n == "0" else "n_" + n
+
+    for s in nz["sections"]:
+        parts = {
+            n + "_n": rename_any(b, nnode, vmap, "_n")
+            for n, b in s["parts"].items()
+            if n not in NOISE_SKIP
+        }
+        if s["title"] == "rails":  # the outputs' leaks: the noise's part owns them
+            parts["RNWL_n"] = {"R": ["n_wn", "0"], "r": "p_r_bus_leak_ohm"}
+            parts["RNPL_n"] = {"R": ["n_pn", "0"], "r": "p_r_bus_leak_ohm"}
+        sections.append({"title": "noise: " + s["title"], "parts": parts})
+    mixer = next(s for s in sections if s["title"] == "mixer")["parts"]
+    mixer.update(
+        {
+            "RSW14W_p": {
+                "rheostat": ["n_wn", "nsel"],
+                "r": "p_r_switch_open_ohm",
+                "at": "noise_color",
+            },
+            "RSW14P_p": {
+                "rheostat": ["n_pn", "nsel"],
+                "r": "p_r_switch_open_ohm",
+                "at": "noise_color",
+                "reverse": 1,
+            },
+            "R10_p": {"pot": ["0", "nlw", "nsel"], "r": "p_r_level_ohm", "at": "noise_level"},
+            "R48_p": {"R": ["nlw", "nms"], "r": "p_r_sum_noise_ohm"},
+            "RSW12_p": {
+                "rheostat": ["nms", "mix"],
+                "r": "p_r_switch_open_ohm",
+                "at": "noise_on",
+                "reverse": 1,
+            },
+        }
+    )
+    out["controls"]["noise_color"] = {
+        "value": 0,
+        "choices": [0, 1],
+        "unit": "switch",
+        "source": "Fig 9-17: SW14, the NOISE switch (0 WHITE, board 3's pin 5; 1 PINK, pin 6); "
+        "contacts always in the circuit, so a flip updates a stream in place",
+    }
+    out["controls"]["noise_level"] = {
+        "value": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "unit": "rotation",
+        "source": "Fig 9-17: R10 NOISE level, 25K (Table 7-3; taper not legible: linear, "
+        "provisional); 0 by default",
+    }
+    out["controls"]["noise_on"] = {
+        "value": 1,
+        "choices": [0, 1],
+        "unit": "switch",
+        "source": "Fig 9-17: SW12, the NOISE mixer switch (ON: R48 onto the bus); a contact always "
+        "in the circuit",
+    }
+    out["probes"] += ["n_wn", "n_pn", "nsel"]
+
+
+EXT_VALUES = {
+    "x_r78_ohm": {"value": 1.0e3, "source": "Fig 9-11: R78 1K (the pre-amp's input, pin 11)"},
+    "x_c23_f": {"value": 0.1e-6, "source": "Fig 9-11: C23 .1"},
+    "x_r66_ohm": {"value": 100.0e3, "source": "Fig 9-11: R66 100K (Q27's base to ground)"},
+    "x_r58_ohm": {"value": 150.0e3, "source": "Fig 9-11: R58 150K (the pair's tail to -10 V)"},
+    "x_r65_ohm": {"value": 27.0e3, "source": "Fig 9-11: R65 27K (Q27's collector)"},
+    "x_r64_ohm": {
+        "value": 100.0,
+        "source": "Fig 9-11: R64 100 (with C22, Q27's collector to +10 V)",
+    },
+    "x_c22_f": {"value": 100.0e-12, "source": "Fig 9-11: C22 100 pF"},
+    "x_r57_ohm": {"value": 10.0e3, "source": "Fig 9-11: R57 10K (Q33's collector to -10 V)"},
+    "x_r61_ohm": {"value": 200.0e3, "source": "Fig 9-11: R61 200K (the feedback)"},
+    "x_r63_ohm": {"value": 1.0e3, "source": "Fig 9-11: R63 1K (into Q32's base)"},
+    "x_r62_ohm": {"value": 1.0e3, "source": "Fig 9-11: R62 1K (the feedback's foot)"},
+    "x_c26_f": {"value": 220.0e-6, "source": "Fig 9-11: C26 220 uF"},
+    "x_c21_f": {"value": 10.0e-12, "source": "Fig 9-11: C21 10 pF (Q32's base to the output)"},
+    "x_r_ext_ohm": {
+        "value": 1.0e6,
+        "source": "Fig 9-17: R9 1 Megohm audio (EXTERNAL INPUT level, Table 7-3)",
+    },
+    "x_ext_taper_mid": {
+        "value": 0.15,
+        "source": "provisional: model knowledge (an audio-taper pot's track at half rotation, "
+        "~10-20 %)",
+    },
+    "x_r46_ohm": {
+        "value": 33.0e3,
+        "source": "Fig 9-17: R46 33K (PREAMP OUT into the mixer's switch SW10)",
+    },
+}
+
+
+def join_external(out: dict, sections: list) -> None:
+    """EXTERNAL INPUT (Fig 9-17 / 9-11): the circuit's audio input (`in`, the J6 jack) onto the
+    panel's R9 1 Meg audio pot, its wiper into board 4's external pre-amp (circuit No. 12: pin 11,
+    R78 1K / C23 .1 into Q27 / Q32, TIS97, a pair on R58 150K to -10 V; Q33, a 2N4058, out on
+    R57 10K; the feedback R61 200K over R63 1K, R62 1K and C26 220 uF to ground: +46 dB at audio,
+    unity at DC), its output (PREAMP OUT, pin 17) through R46 33K and SW10 onto the bus. The
+    overload lamp driver (circuit No. 11) isn't drawn."""
+    out["values"].update(EXT_VALUES)
+    out["controls"]["ext_level"] = {
+        "value": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "unit": "rotation",
+        "source": "Fig 9-17: R9 EXTERNAL INPUT level, 1 Megohm audio; 0 by default",
+    }
+    out["controls"]["ext_on"] = {
+        "value": 1,
+        "choices": [0, 1],
+        "unit": "switch",
+        "source": "Fig 9-17: SW10, the EXTERNAL INPUT mixer switch (ON: R46 onto the bus); a "
+        "contact always in the circuit",
+    }
+    pre = {
+        "R9_p": {
+            "pot": ["0", "xw", "in"],
+            "r": "x_r_ext_ohm",
+            "at": "ext_level",
+            "taper_mid": "x_ext_taper_mid",
+        },
+        "R78_x": {"R": ["xw", "x78"], "r": "x_r78_ohm"},
+        "C23_x": {"C": ["x78", "xb27"], "c": "x_c23_f"},
+        "R66_x": {"R": ["xb27", "0"], "r": "x_r66_ohm"},
+        "Q27_x": {"bjt": ["xc27", "xb27", "xe"], "model": "QL"},
+        "Q32_x": {"bjt": ["vp", "xb32", "xe"], "model": "QL"},
+        "R58_x": {"R": ["xe", "vn"], "r": "x_r58_ohm"},
+        "R65_x": {"R": ["vp", "xc27"], "r": "x_r65_ohm"},
+        "R64_x": {"R": ["xc27", "x64"], "r": "x_r64_ohm"},
+        "C22_x": {"C": ["x64", "vp"], "c": "x_c22_f"},
+        "Q33_x": {"bjt": ["xo", "xc27", "vp"], "model": "QP"},
+        "R57_x": {"R": ["xo", "vn"], "r": "x_r57_ohm"},
+        "R61_x": {"R": ["xo", "x61"], "r": "x_r61_ohm"},
+        "R63_x": {"R": ["x61", "xb32"], "r": "x_r63_ohm"},
+        "R62_x": {"R": ["x61", "x62"], "r": "x_r62_ohm"},
+        "C26_x": {"C": ["x62", "0"], "c": "x_c26_f"},
+        "C21_x": {"C": ["xb32", "xo"], "c": "x_c21_f"},
+    }
+    mixer = next(s for s in sections if s["title"] == "mixer")["parts"]
+    # in the first part with the audio input (a cut at Q27's base, R66's 100K against R78's 1K,
+    # diverged)
+    sections.append({"title": "external pre-amp", "parts": pre})
+    mixer.pop("RIN_p", None)  # the input is the jack now
+    mixer["R46_p"] = {"R": ["xo", "xms"], "r": "x_r46_ohm"}
+    mixer["RSW10_p"] = {
+        "rheostat": ["xms", "mix"],
+        "r": "p_r_switch_open_ohm",
+        "at": "ext_on",
+        "reverse": 1,
+    }
+    out["probes"] += ["xo"]
+
+
+MOD_VALUES = {
+    "m_r_in_ohm": {
+        "value": 24.0e3,
+        "source": "Fig 9-8 / 9-17: R24, R23 24K (noise and oscillator 3 into the modulation mix's "
+        "pins 4 and 3)",
+    },
+    "m_r_mix_ohm": {"value": 25.0e3, "source": "Fig 9-17: R3 MOD MIX 25K (its wiper on ground)"},
+    "m_r62_ohm": {"value": 43.0e3, "source": "Fig 9-8: R62, R64 43K (into Q18's base)"},
+    "m_r60_ohm": {"value": 91.0e3, "source": "Fig 9-8: R60 91K (the feedback)"},
+    "m_r54_ohm": {"value": 43.0e3, "source": "Fig 9-8: R54 43K (the pair's tail to -10 V)"},
+    "m_r42_ohm": {"value": 6.2e3, "source": "Fig 9-8: R42 6.2K (Q17's collector)"},
+    "m_r38_ohm": {"value": 390.0, "source": "Fig 9-8: R38 390 (with C14, the compensation)"},
+    "m_c14_f": {"value": 0.022e-6, "source": "Fig 9-8: C14 .022"},
+    "m_r30_ohm": {"value": 10.0e3, "source": "Fig 9-8: R30 10K (Q7's collector to -10 V)"},
+    "m_r57_ohm": {"value": 1.0e3, "source": "Fig 9-8: R57 1K (out on pin 1)"},
+    "m_r_wheel_ohm": {
+        "value": 50.0e3,
+        "source": "Fig 9-8 / 9-2: the left-hand controller's MODULATION wheel, 50K audio",
+    },
+    "m_wheel_taper_mid": {
+        "value": 0.15,
+        "source": "provisional: model knowledge (an audio-taper pot's track at half rotation)",
+    },
+}
+
+
+def join_modulation(out: dict, sections: list) -> None:
+    """The modulation mix (board 3, circuit No. 15, Fig 9-8) and its routing (Fig 9-17 / 9-2): noise
+    (pink: the red output isn't drawn) and oscillator 3's waveform (its waveform switch's
+    common) through 24K each onto pins 4 / 3, MOD MIX R3 25K between them with its wiper on
+    ground; R62 / R64 43K into Q18's base, Q18 / Q17 (2N3392) a pair on R54 43K, Q17's base on
+    ground, its collector R42 6.2K into Q7 (2N4058), R38 390 + C14 .022 compensating; Q7's
+    collector the output (R30 10K to -10 V, R60 91K back to Q18's base: an inverting summer, about
+    -2.1), out through R57 1K to the left-hand controller's MODULATION wheel (50K audio), its
+    wiper onto OSC MOD (into the primary summer's R5 100K, 7A, MOD 1 V/OCT) and FILTER MOD (SW15,
+    R52 33K onto the filter's control node); each switch off grounds its resistor."""
+    out["values"].update(MOD_VALUES)
+    out["controls"]["mod_mix"] = {
+        "value": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "unit": "rotation",
+        "source": "Fig 9-17: R3 MOD MIX, 25K (0 = all oscillator 3: its wiper shorts the noise's "
+        "pin 4; 1 = all noise); linear, provisional; 0 by default",
+    }
+    out["controls"]["mod_amount"] = {
+        "value": 0.0,
+        "min": 0.0,
+        "max": 1.0,
+        "unit": "rotation",
+        "source": "the left-hand controller's MODULATION wheel (50K audio, Fig 9-8): 0 none",
+    }
+    for k, sw, what in (
+        ("osc_mod", "OSC MOD", "the wheel's wiper into the primary summer's R5 100K (7A)"),
+        ("filter_mod", "SW15 FILTER MOD", "the wheel's wiper into R52 33K"),
+    ):
+        out["controls"][k] = {
+            "value": 0,
+            "choices": [0, 1],
+            "unit": "switch",
+            "source": f"Fig 9-17 / 9-2: {sw} (1 ON: {what}; 0 OFF: grounded); contacts always "
+            "in the circuit",
+        }
+    prim = next(s for s in sections if s["title"] == "osc board: primary summer")["parts"]
+    prim["R5_o"] = {**prim["R5_o"], "R": ["om", prim["R5_o"]["R"][1]]}
+    mod = {
+        "RMIN_m": {"R": ["n_pn", "m4"], "r": "m_r_in_ohm"},
+        "RMIO_m": {"R": ["o3_wf", "m3"], "r": "m_r_in_ohm"},
+        "RMIX_m": {"pot": ["m3", "0", "m4"], "r": "m_r_mix_ohm", "at": "mod_mix"},
+        "R62_m": {"R": ["m4", "mb"], "r": "m_r62_ohm"},
+        "R64_m": {"R": ["m3", "mb"], "r": "m_r62_ohm"},
+        "R60_m": {"R": ["mo", "mb"], "r": "m_r60_ohm"},
+        "Q18_m": {"bjt": ["pvp", "mb", "me"], "model": "QL"},
+        "Q17_m": {"bjt": ["mc", "0", "me"], "model": "QL"},
+        "R54_m": {"R": ["me", "pvn"], "r": "m_r54_ohm"},
+        "R42_m": {"R": ["pvp", "mc"], "r": "m_r42_ohm"},
+        "R38_m": {"R": ["mc", "m38"], "r": "m_r38_ohm"},
+        "C14_m": {"C": ["m38", "0"], "c": "m_c14_f"},
+        "Q7_m": {"bjt": ["mo", "mc", "pvp"], "model": "QP"},
+        "R30_m": {"R": ["mo", "pvn"], "r": "m_r30_ohm"},
+        "R57_m": {"R": ["mo", "m1"], "r": "m_r57_ohm"},
+        "RWHEEL_m": {
+            "pot": ["0", "mw", "m1"],
+            "r": "m_r_wheel_ohm",
+            "at": "mod_amount",
+            "taper_mid": "m_wheel_taper_mid",
+        },
+        # OSC MOD: the wheel's wiper or ground onto R5 (the primary summer's MOD input, 100K: the
+        # cut, the summer in the first part)
+        "RSWOM1_m": {
+            "rheostat": ["mw", "om"],
+            "r": "p_r_switch_open_ohm",
+            "at": "osc_mod",
+            "reverse": 1,
+        },
+        "RSWOM0_m": {"rheostat": ["om", "0"], "r": "p_r_switch_open_ohm", "at": "osc_mod"},
+        # FILTER MOD: the wheel's wiper or ground onto R52 33K
+        "RSWFM1_m": {
+            "rheostat": ["mw", "fm"],
+            "r": "p_r_switch_open_ohm",
+            "at": "filter_mod",
+            "reverse": 1,
+        },
+        "RSWFM0_m": {"rheostat": ["fm", "0"], "r": "p_r_switch_open_ohm", "at": "filter_mod"},
+    }
+    for s in sections:
+        if "R52P" in s["parts"]:
+            s["parts"]["R52P"] = {**s["parts"]["R52P"], "R": ["ctl", "fm"]}
+    # oscillator 3's 24K beside its waveform switch (the first part): met at pin 3 (MOD MIX
+    # holds it)
+    next(s for s in sections if s["title"] == "mixer")["parts"]["RMIO_m"] = mod.pop("RMIO_m")
+    sections.append({"title": "modulation mix", "parts": mod})
+    sections.append(
+        {
+            "title": "panel: rails",
+            "parts": {
+                "VPP_m": {"V": ["pvp", "0"], "v": "supply_v"},
+                "VPN_m": {"V": ["pvn", "0"], "v": "supply_neg_v"},
+            },
+        }
+    )
+    out["probes"] += ["mo", "mw"]
+
+
+PANEL_VALUES = {
+    "p_r_sum_noise_ohm": {
+        "value": 11.0e3,
+        "source": "Fig 9-17: R48 11K (NOISE into the mixer's switch)",
+    },
+    "p_r_level_ohm": {
+        "value": 25.0e3,
+        "source": "Fig 9-17 / Table 7-3: the mixer's LEVEL pots (R6, R7, R8 OSC 1-3, R10 NOISE), "
+        "25K; their taper isn't legible (linear, provisional)",
+    },
+    "p_r_sum_osc_ohm": {
+        "value": 33.0e3,
+        "source": "Fig 9-17: R45, R47, R49 33K (OSC 1-3 into the mixer's switches)",
+    },
+    "p_r_shark_saw_ohm": {
+        "value": 47.0e3,
+        "source": (
+            "Fig 9-17: R30 / R36 / R39 47K (the waveform switch's triangle-sawtooth mix, the "
+            "sawtooth's share)"
+        ),
+    },
+    "p_r_shark_tri_ohm": {
+        "value": 10.0e3,
+        "source": (
+            "Fig 9-17: R31 / R37 10K (the waveform switch's triangle-sawtooth mix, the triangle's"
+            " share)"
+        ),
+    },
+    "p_rpw_a_ohm": {
+        "value": 1.5e3,
+        "source": "Fig 9-17: R34 / R40 / R44 1.5K (the PW divider's top, from ground)",
+    },
+    "p_rpw_b_ohm": {
+        "value": 1.0e3,
+        "source": "Fig 9-17: R33 / R39 / R43 1K (the PW divider's middle)",
+    },
+    "p_rpw_c_ohm": {
+        "value": 7.5e3,
+        "source": "Fig 9-17: R32 / R38 / R42 7.5K (the PW divider to -10 V)",
+    },
+    "p_r_contact_ohm": {
+        "value": 0.05,
+        "source": "provisional: model knowledge (a closed rotary-switch contact, tens of milliohm)",
+    },
+    "p_r_switch_open_ohm": {
+        "value": 1.0e10,
+        "source": "provisional: model knowledge (an open switch contact's insulation, 1e10-1e12 "
+        "ohm; "
+        "closed it is a pot's end, MIN_R_OHM)",
+    },
+    "p_r_bus_leak_ohm": {
+        "value": 1.0e9,
+        "source": (
+            "numerical: a leak on the mixer's bus and the unused audio input (defined with every "
+            "switch off)"
+        ),
+    },
+}
 
 
 def main() -> int:

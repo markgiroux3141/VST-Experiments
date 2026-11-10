@@ -515,7 +515,7 @@ struct Macro {
     toleranced: bool,
 }
 
-const MACROS: [&str; 31] = [
+const MACROS: [&str; 32] = [
     "R",
     "C",
     "L",
@@ -535,6 +535,7 @@ const MACROS: [&str; 31] = [
     "vr_tube",
     "bjt",
     "jfet",
+    "noise_source",
     "capsule",
     "capsule_dual",
     "moving_coil",
@@ -589,6 +590,7 @@ fn macro_of(kind: &str) -> Macro {
         ),
         "device" => (None, vec![p("model", Device)], false),
         "bjt" => (Some(3), vec![p("model", Device)], false),
+        "noise_source" => (Some(2), vec![p("psd_a2_hz", Physical)], false),
         "jfet" => (Some(3), vec![p("model", Device)], false),
         "pot" => (
             Some(3),
@@ -1030,6 +1032,13 @@ fn expand(
             f("reverse")? != 0.0,
         )
         .map_err(|e| ctx.fail(name, e.0))?,
+        // A signal source, always on (Python's `noise_source` macro).
+        "noise_source" => vec![Element::NoiseCurrent(NoiseCurrent {
+            name: name.to_string(),
+            a: nodes[0].clone(),
+            b: nodes[1].clone(),
+            psd_a2_hz: f("psd_a2_hz")?,
+        })],
         "rheostat" => vec![
             parts::rheostat(
                 name,
@@ -2704,6 +2713,7 @@ pub fn build_ir_live(
     }
     let mut dropped_models: HashSet<String> = HashSet::new();
     let mut sections = Vec::new();
+    let mut k_island_of: Vec<bool> = Vec::new();
     for s in &spec.sections {
         ctx.section_tolerance = s.tolerance.clone();
         let mut elements = Vec::new();
@@ -2726,13 +2736,10 @@ pub fn build_ir_live(
         }
         // K replaces the island it plays in (technique M1 renders it, K plays it live); a
         // section its switches leave empty is no island (it owns nothing it doesn't have).
-        let k = elements.is_empty()
-            || elements.iter().any(|e| {
-                matches!(
-                    e,
-                    Element::ThyratronEvents(_) | Element::ResetEvents(_) | Element::EdgeEvents(_)
-                )
-            });
+        // A `substeps_in: events` section is K's own island: kept with its kernels in it.
+        let k =
+            elements.is_empty() || (!s.substeps_in_events && elements.iter().any(is_event_kernel));
+        k_island_of.push(s.substeps_in_events);
         sections.push(Section {
             title: s.title.clone(),
             substeps: if k { None } else { s.substeps },
@@ -2743,6 +2750,23 @@ pub fn build_ir_live(
             tube_tables: if k { None } else { s.tube_tables },
             elements,
         });
+    }
+    if !sections
+        .iter()
+        .any(|s| s.elements.iter().any(is_event_kernel))
+    {
+        // `substeps_in: events`: K's island; a build without kernels runs those sections at
+        // the sample rate.
+        for (s, &k) in sections.iter_mut().zip(&k_island_of) {
+            if k {
+                s.substeps = None;
+                s.decimate = None;
+                s.owns = None;
+                s.lag_samples = None;
+                s.method = None;
+                s.tube_tables = None;
+            }
+        }
     }
     if !ctx.tape_islands.is_empty() {
         // A reduced tape replaces the literal bias's island: those sections at the sample
@@ -2807,6 +2831,24 @@ pub fn build_ir_live(
     }
     // The mains wander on the mains parts the build kept (a switch may leave one out).
     let noise = match ctx.noise {
+        // With the circuit's noise off, its `noise_source` parts still need the block (Python's
+        // `_source_noise`): the file's seed (else 0), no mains wander.
+        None if sections
+            .iter()
+            .flat_map(|s| s.elements.iter())
+            .any(|e| matches!(e, Element::NoiseCurrent(_))) =>
+        {
+            let seed = match ctx.spec.noise.as_ref().and_then(|b| b.get("seed")) {
+                Some(Value::Int(i)) => *i as u64,
+                _ => 0,
+            };
+            Some(NoiseSpec {
+                seed,
+                rate_hz: sample_rate(lib)?,
+                mains_rms: 0.0,
+                mains_sources: Vec::new(),
+            })
+        }
         None => None,
         Some((seed, _, _, mains_rms)) => {
             let kept: HashSet<&str> = sections
@@ -2870,4 +2912,12 @@ pub fn build_ir_live(
     ir.validate()
         .map_err(|e| Error(format!("{}: {}", spec.path.display(), e.0)))?;
     Ok(ir)
+}
+
+/// An event kernel (technique K: HYBRID_PHYSICS_PLAN.md H3, H5).
+fn is_event_kernel(e: &Element) -> bool {
+    matches!(
+        e,
+        Element::ThyratronEvents(_) | Element::ResetEvents(_) | Element::EdgeEvents(_)
+    )
 }

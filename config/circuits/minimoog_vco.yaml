@@ -27,8 +27,11 @@
 #        8.25K to +10 V): +-1.75 V. Rectangle: IC8A (1/2 LM393) compares node 9 with PW / 2 (R47 /
 #        R45 100K, C14 .01; R39 1K, R46 2.2M hysteresis), its open collector onto R48 5.1K / R49
 #        2.7K: 0 / -3.5 V, 0 V PW = square, -2.5 V = 15 %
-# Rails ideal (+10, -10 V); the 726's heater regulation isn't modelled (its die at 78.4 C); the
-# RANGE switch's volts are its buffered ladder's (ideal sources).
+#   RANGE  the front panel's ladder (R25-R28 1K 1%, R29 4.75K 1% to ground) from the board's -5 V
+#        reference (IC2, a 741, holds the line at half of -10 V through R9 / R10 4.99K 1%, sensing it
+#        through R8 4.7K and sinking the ladder's current through Q1, a 2N3906): 2' -5 V, -571 mV an
+#        octave, LO 0 V; the switch's wiper into board 6's 741 follower (IC1, Fig 9-14), 14A
+# Rails ideal (+10, -10 V); the 726's heater regulation isn't modelled (its die at 78.4 C).
 
 title: "Minimoog oscillator 1 (board No. 1)"
 input: osc_in
@@ -48,18 +51,21 @@ controls:
 values:
   vpos_v: {value: 10.0, source: "Fig 9-2: +10 V (pin 1A)"}
   # --- the keys (read by the app: varimu-app panel::KeyString; the keyboard circuit's string)
-  key_v_per_semitone: {value: 0.084368, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_v_per_semitone: Fig 9-7's 10 ohm steps at its current source's measured 8.437 mA)"}
-  key_ref_note: {value: 41.0, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_ref_note: the lowest F as MIDI 41)"}
-  key_min_v: {value: 0.0, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_min_v)"}
-  key_max_v: {value: 3.6278, source: "the keyboard circuit's (config/circuits/minimoog_keyboard.yaml key_max_v: 43 steps)"}
+  key_v_per_semitone: {value: 0.084663, source: "fitted: the keyboard circuit's output (config/circuits/minimoog_keyboard.yaml at production, a key held) over its ends and A keys, a straight line: scripts/minimoog_vco_trim.py --write"}
+  key_ref_note: {value: 41.020604, source: "fitted: the keyboard circuit's output (config/circuits/minimoog_keyboard.yaml at production, a key held) over its ends and A keys, a straight line: scripts/minimoog_vco_trim.py --write"}
+  key_min_v: {value: -0.002027, source: "fitted: the keyboard circuit's output (config/circuits/minimoog_keyboard.yaml at production, a key held) over its ends and A keys, a straight line: scripts/minimoog_vco_trim.py --write"}
+  key_max_v: {value: 3.638533, source: "fitted: the keyboard circuit's output (config/circuits/minimoog_keyboard.yaml at production, a key held) over its ends and A keys, a straight line: scripts/minimoog_vco_trim.py --write"}
   vneg_v: {value: -10.0, source: "Fig 9-2: -10 V (pin 3A)"}
-  # --- the RANGE switch's volts (the ladder's taps, buffered by a 741)
-  range_2_v: {value: -5.0, source: "Fig 9-2: 14A, '-571 mV/OCT, 2' = -5V'"}
-  range_4_v: {value: -4.429, source: "derived: Fig 9-2's 2' = -5 V plus one octave of its -571 mV/OCT (the ladder's 1K 1% steps)"}
-  range_8_v: {value: -3.858, source: "derived: Fig 9-2's 2' = -5 V plus two octaves of -571 mV/OCT"}
-  range_16_v: {value: -3.287, source: "derived: Fig 9-2's 2' = -5 V plus three octaves of -571 mV/OCT"}
-  range_32_v: {value: -2.716, source: "derived: Fig 9-2's 2' = -5 V plus four octaves of -571 mV/OCT"}
-  range_lo_v: {value: -0.004, source: "derived: Fig 9-2's ladder, LO 4.75K 1% below 32' at -571 mV per 1K"}
+  # --- the RANGE switch's ladder (the front panel's R25-R29, Fig 9-17), fed by the board's -5 V
+  # reference (IC2, Q1: Fig 9-2), each oscillator's switch wiper buffered on board 6 (Fig 9-14)
+  r_ladder_ohm: {value: 1.0e+3, source: "Fig 9-2 / 9-17: the RANGE ladder's R25-R28, 1K 1% (2' to 32', -571 mV an octave)"}
+  r_ladder_lo_ohm: {value: 4.75e+3, source: "Fig 9-2 / 9-17: R29 4.75K 1% (32' to LO, LO on ground through pins 20A-22A; R59 90.9 ohm deleted above serial 10175, Fig 9-1 note 5)"}
+  r_ref_sense_ohm: {value: 4.7e+3, source: "Fig 9-2: R8 4.7K (the -5 V line's sense, 18A, into IC2's inverting input)"}
+  r_ref_div_ohm: {value: 4.99e+3, source: "Fig 9-2: R9, R10 4.99K 1% (-10 V halved: IC2's reference)"}
+  r_ref_base_ohm: {value: 4.7e+3, source: "Fig 9-2: R11 4.7K (IC2's output into Q1's base)"}
+  c_ref_f: {value: 27.0e-6, source: "Fig 9-2: C3 27 uF / 10 V tantalum (on IC2's reference)"}
+  c_ref_esr_ohm: {value: 1.0, source: "provisional: model knowledge (a 27 uF solid tantalum's ESR, about an ohm)"}
+  q_ref: {value: 2N3906@1, source: "Fig 9-2: Q1 2N3906 (sinks the ladder's current into -10 V)"}
   # --- the primary summer (IC1A)
   r_bend_ohm: {value: 25.0e+3, source: "Fig 9-2: PITCH WHEEL 25K LIN"}
   r_tune_ohm: {value: 5.0e+3, source: "Fig 9-2: TUNE 5K LIN"}
@@ -74,12 +80,12 @@ values:
   # --- oscillator 1's summer (IC1B)
   r13_ohm: {value: 69.8e+3, source: "Fig 9-2: R13 69.8K 1% (network N2, 949-042331-001)"}
   r14_ohm: {value: 10.0e+3, source: "Fig 9-2: R14 10K trim (OSC 1 SHIFT)"}
-  r14_at: {value: 0.83128, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's oscillator tuning: the 'Range trimpot' for 3520 Hz at the high A on 2')"}
+  r14_at: {value: 0.84252, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's oscillator tuning: the 'Range trimpot' for 3520 Hz at the high A on 2')"}
   r16_ohm: {value: 10.0e+3, source: "Fig 9-2: R16 10K trim (OSC 1 SCALE)"}
-  r16_at: {value: 0.66595, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's oscillator tuning: the Scale trimpot for 440 Hz at the low A on 2')"}
+  r16_at: {value: 0.70488, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's oscillator tuning: the Scale trimpot for 440 Hz at the low A on 2')"}
   r17_ohm: {value: 90.9e+3, source: "Fig 9-2: R17 90.9K 1% (N2)"}
   r18_ohm: {value: 5.0e+3, source: "Fig 9-2: R18 5K trim (OSC 1 OCT ADJ)"}
-  r18_at: {value: 0.50821, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's Octave Range trimmer: 8' an octave below 2')"}
+  r18_at: {value: 0.51732, source: "trimmed: scripts/minimoog_vco_trim.py (Folkman's Octave Range trimmer: 8' an octave below 2')"}
   r19_ohm: {value: 53.6e+3, source: "Fig 9-2: R19 53.6K 1% (N2)"}
   r21_ohm: {value: 50.0e+3, source: "Fig 9-2: R21 50K 1% (N2)"}
   r22_ohm: {value: 15.0e+3, source: "Fig 9-2: R22 15K"}
@@ -99,7 +105,7 @@ values:
   c6_esr_ohm: {value: 3.0, source: "provisional: model knowledge (a 1.5 uF solid tantalum's ESR, a few ohms)"}
   c7_f: {value: 1.0e-9, source: "Fig 9-2: C7 .001 (200 Hz / uA with the 5 V ramp)"}
   r31_ohm: {value: 10.0e+3, source: "Fig 9-2: R31 10K trim (the HI END compensation)"}
-  r31_at: {value: 0.28662, source: "trimmed: scripts/minimoog_vco_trim.py (the top key's pitch on 2' after SHIFT and SCALE)"}
+  r31_at: {value: 0.32236, source: "trimmed: scripts/minimoog_vco_trim.py (the top key's pitch on 2' after SHIFT and SCALE)"}
   r32_ohm: {value: 100.0e+3, source: "Fig 9-2: R32 100K"}
   c9_f: {value: 100.0e-12, source: "Fig 9-2: C9 100 pF"}
   r33_ohm: {value: 2.0e+3, source: "Fig 9-2: R33 2K"}
@@ -125,6 +131,7 @@ values:
   c14_f: {value: 10.0e-9, source: "Fig 9-2: C14 .01"}
   rect_follow_gain: {value: 0.700292, source: "derived: the ramp's share at IC8A's + input, (R37 || R38) / (R36 + R37 || R38) x R46 / (R39 + R46) (the events build's rectangle follows the reset through it)"}
   r_leak_ohm: {value: 1.0e+9, source: "numerical: a leak on the unused audio input"}
+  r_contact_ohm: {value: 0.05, source: "provisional: model knowledge (a closed rotary-switch contact, tens of milliohm)"}
   # --- the op-amps
   u1458_a0: {value: 2.0e+5, source: "web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (AVD 200 V/mV typ; data/datasheets/opamps/README.md)"}
   u1458_gbw_hz: {value: 1.0e+6, source: "web: https://www.ti.com/lit/ds/symlink/mc1458.pdf (B1 1 MHz typ)"}
@@ -184,6 +191,7 @@ exceptions:
 devices:
   QX: {device: q_726, temp_c: r27_temp_c}
   QN: {device: q_n}
+  QREF: {device: q_ref}
   QO: {device: q_cmp_out}
   JR: {device: j_reset}
   DCL: {device: clamp_diode}
@@ -199,15 +207,37 @@ sections:
       RTUNE: {pot: [vp, tunew, tunef], r: r_tune_ohm, at: tune}
       RTUNEF: {R: [tunef, "0"], r: r_tune_foot_ohm}
       VPW: {V: [pw, "0"], v: pw_v}
+  - title: -5 V reference
+    parts:
+      R9: {R: ["0", rp2], r: r_ref_div_ohm}
+      R10: {R: [rp2, vn], r: r_ref_div_ohm}
+      C3: {C: [c3t, "0"], c: c_ref_f}
+      RC3: {R: [rp2, c3t], r: c_ref_esr_ohm}
+      R8: {R: [m5, rn2], r: r_ref_sense_ohm}
+      IC2: {opamp: [rp2, rn2, r11a], a0: u1458_a0, gbw_hz: u1458_gbw_hz, r_out_ohm: u1458_r_out_ohm, r_in_ohm: u1458_r_in_ohm}
+      R11: {R: [r11a, bq1], r: r_ref_base_ohm}
+      Q1: {bjt: [vn, bq1, m5], model: QREF}
+  - title: range ladder
+    parts:
+      R25P: {R: [m5, t4], r: r_ladder_ohm}
+      R26P: {R: [t4, t8], r: r_ladder_ohm}
+      R27P: {R: [t8, t16], r: r_ladder_ohm}
+      R28P: {R: [t16, t32], r: r_ladder_ohm}
+      R29P: {R: [t32, "0"], r: r_ladder_lo_ohm}
+  - title: range
+    parts:
+      # the RANGE switch's wiper (contacts on the ladder's taps) into board 6's 741 follower, out
+      # on 14A; LO is the ladder's foot, ground
       SRANGE:
         switch: osc_range
         parts:
-          VR0: {V: [rng, "0"], v: range_lo_v, in: [0]}
-          VR1: {V: [rng, "0"], v: range_32_v, in: [1]}
-          VR2: {V: [rng, "0"], v: range_16_v, in: [2]}
-          VR3: {V: [rng, "0"], v: range_8_v, in: [3]}
-          VR4: {V: [rng, "0"], v: range_4_v, in: [4]}
-          VR5: {V: [rng, "0"], v: range_2_v, in: [5]}
+          RR0: {R: ["0", rw], r: r_contact_ohm, in: [0]}
+          RR1: {R: [t32, rw], r: r_contact_ohm, in: [1]}
+          RR2: {R: [t16, rw], r: r_contact_ohm, in: [2]}
+          RR3: {R: [t8, rw], r: r_contact_ohm, in: [3]}
+          RR4: {R: [t4, rw], r: r_contact_ohm, in: [4]}
+          RR5: {R: [m5, rw], r: r_contact_ohm, in: [5]}
+      IC1B6: {opamp: [rw, rng, rng], a0: u1458_a0, gbw_hz: u1458_gbw_hz, r_out_ohm: u1458_r_out_ohm, r_in_ohm: u1458_r_in_ohm}
   - title: primary summer
     parts:
       R1: {R: [bendw, p2], r: r1_ohm}

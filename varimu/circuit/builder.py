@@ -26,6 +26,7 @@ Macro parts (connection; params, * = required):
     device      [pins...] (the model's pin order); model* (a `devices` key)
     pot         [end_a, wiper, end_b]; r*, at* (0 = wiper at end_a), taper_mid (an
                 audio taper: the track's fraction at half rotation; default linear)
+    noise_source [a, b]; psd_a2_hz* (a white current, always on: see Noise below)
     rheostat    [a, b]; r*, at* (0 = no resistance), taper_mid, reverse (1: a reverse-taper
                 pot's wiper-to-end track, full resistance at 0, none at 1)
     tapped_pot  [end_a, tap, wiper, end_b]; r*, at*, tap* (fractions from end_a)
@@ -147,7 +148,11 @@ solver, not a part) and resistors on a core node (a gap or core loss: magnetic, 
 electrical); a capsule's acoustic resistances get theirs (its readout resistor none), a
 moving coil's coil, eddy-current and acoustic resistances theirs (its diaphragm's
 numerical leak, `_leak`, none); other
-macros' internals (mains, bridge, vr_tube, speaker) get none. Every
+macros' internals (mains, bridge, vr_tube, speaker) get none. A `noise_source` part
+([a, b], psd_a2_hz: a white current's one-sided density, from a through the source to b: an
+avalanche junction's noise, the Minimoog's noise generator) is a signal source: its NoiseCurrent
+is in every build, the circuit's noise on or off (its stream keyed by the file's `noise` seed,
+else 0). Every
 triode or pentode instance of a `device` part gets a TubeNoise `BN_<name>` (shot_k from
 varimu.devices.noise, a pentode's partition factor, flicker_v2 over its `parallel` count:
 independent cathodes average).
@@ -157,7 +162,10 @@ Event kernels (HYBRID_PHYSICS_PLAN.md H3; `build(..., events=True)`, off by defa
 tables, which must be for the same component version), and the thyratron's model leaves the
 IR. A thyratron without tables is an error in that build. A section with event kernels in
 it runs at the sample rate (its `substeps`, `decimate` and `owns` dropped): K replaces the
-multi-rate island (technique M1) the file renders the tube in.
+multi-rate island (technique M1) the file renders the tube in. A section with
+`substeps_in: events` is the other way round: K's kernels run in its island (finer than the
+sample), and a build without kernels (`literal=True`, their reference) runs it at the sample
+rate.
 
 Heated cathodes (device builder B6; the file's `heaters` block, or `build(..., heaters=)`):
 every triode, pentode and vacuum diode instance of a `device` part gets a HeatedCathode
@@ -1131,6 +1139,11 @@ for _name, _macro in {
     "mains": Macro(_mains, 2, {"v_rms": _P, "phase_deg": Param("number", 0.0)}),
     "device": Macro(_nodes_device, None, {"model": Param("device")}),
     "bjt": Macro(_bjt, 3, {"model": Param("device")}),
+    "noise_source": Macro(
+        lambda ctx, n, c, a: [NoiseCurrent(n, c[0], c[1], a["psd_a2_hz"])],
+        2,
+        {"psd_a2_hz": _P},
+    ),
     "jfet": Macro(_jfet, 3, {"model": Param("device")}),
     "pot": Macro(
         lambda ctx, n, c, a: parts.pot(n, *c, a["r"], a["at"], a["taper_mid"], bool(a["reverse"])),
@@ -1564,6 +1577,7 @@ def _build(
             dropped |= set(rep)
     dropped_models: set[str] = set()
     sections = []
+    k_island_of: list[bool] = []
     for s in spec.sections:
         ctx.section_tolerance = s.get("tolerance")
         els: list[Element] = []
@@ -1579,13 +1593,29 @@ def _build(
         substeps, decimate = s.get("substeps"), s.get("decimate")
         lag = s.get("lag_samples")
         method, tables = s.get("method"), s.get("tube_tables")
-        if not els or any(isinstance(e, ThyratronEvents | ResetEvents | EdgeEvents) for e in els):
+        k_island = s.get("substeps_in") == "events"
+        k_island_of.append(k_island)
+        if not els or (
+            not k_island
+            and any(isinstance(e, ThyratronEvents | ResetEvents | EdgeEvents) for e in els)
+        ):
             # K replaces the island it plays in (technique M1 renders it, K plays it live); a
             # section its switches leave empty is no island (it owns nothing it doesn't have)
             substeps = decimate = owns = lag = method = tables = None
         sections.append(
             Section(s["title"], tuple(els), substeps, decimate, owns, lag, method, tables)
         )
+    if not any(
+        isinstance(e, ThyratronEvents | ResetEvents | EdgeEvents)
+        for x in sections
+        for e in x.elements
+    ):
+        # `substeps_in: events`: K's island; a build without kernels (the literal reference)
+        # runs those sections at the sample rate
+        sections = [
+            Section(x.title, x.elements, None, None, None, None, None, None) if k else x
+            for x, k in zip(sections, k_island_of, strict=True)
+        ]
     if ctx.tape_islands:
         # A reduced tape replaces the literal bias's island: those sections at the sample rate.
         sections = [
@@ -1619,10 +1649,19 @@ def _build(
         ),
         sections=tuple(sections),
         controls=tuple(Control(n, node) for n, node in spec.cv_inputs),
-        noise=None if ctx.noise is None else _noise_spec(ctx, sections),
+        noise=_noise_spec(ctx, sections) if ctx.noise is not None else _source_noise(ctx, sections),
         heaters=None if ctx.heaters is None else _heater_spec(ctx),
     )
     return ir, types
+
+
+def _source_noise(ctx: Context, sections: list[Section]) -> NoiseSpec | None:
+    """With the circuit's noise off, the noise block its `noise_source` parts still need (they
+    are signal sources, always on): the file's `noise` seed (else 0), no mains wander."""
+    if not any(isinstance(e, NoiseCurrent) for sec in sections for e in sec.elements):
+        return None
+    seed = int((ctx.spec.noise or {}).get("seed", 0))
+    return NoiseSpec(seed, float(load_sim_settings().data["sample_rate"]), 0.0, ())
 
 
 def _noise_spec(ctx: Context, sections: list[Section]) -> NoiseSpec:

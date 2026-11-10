@@ -19,7 +19,7 @@ varimu.circuit.builder, which expands its parts with the parts library
     heaters: {start?: warm | cold, tap?: KEY}  # heated cathodes (device builder B6)
     devices: {key: {device, ...}}   # device model instances, in IR model order
     sections: [{title, tolerance?, substeps?, decimate?, owns?, lag_samples?, method?,
-                tube_tables?, parts: {NAME: {<macro>: <nodes>, ...}}}]
+                tube_tables?, substeps_in?, parts: {NAME: {<macro>: <nodes>, ...}}}]
                                     # substeps: steps per sample on a thread of its own (a
                                     # multi-rate part: circuitsim's partition.rs);
                                     # decimate: fir (what it hands on through an
@@ -29,7 +29,12 @@ varimu.circuit.builder, which expands its parts with the parts library
                                     # ahead: a cut only through stiff rails);
                                     # method: its own integration method (e.g.
                                     # trbdf2), tube_tables: true (its triodes from
-                                    # tables): TAPE_SPEED_PLAN.md P4
+                                    # tables): TAPE_SPEED_PLAN.md P4;
+                                    # substeps_in: events (the island only in a
+                                    # build with event kernels, K's at a finer step
+                                    # than the sample; a literal build, the kernels'
+                                    # reference, runs it at the sample rate: the
+                                    # Minimoog's oscillators, HYBRID_PHYSICS_PLAN.md H5)
 
 Parameters (controls, values, device_params, derived) are what parts refer to by
 key; every one has a `source` (CLAUDE.md, hard rules), and `--set` overrides
@@ -247,7 +252,7 @@ def load_circuit(path: Path) -> CircuitSpec:
             errors.append(f"sections[{i}]: needs `title` and `parts`")
         elif extra := set(s) - {
             "title", "parts", "tolerance", "substeps", "decimate", "owns", "lag_samples",
-            "method", "tube_tables",
+            "method", "tube_tables", "substeps_in",
         }:  # fmt: skip
             errors.append(f"sections[{i}]: unknown keys {sorted(extra)}")
         elif "substeps" in s and (
@@ -256,13 +261,15 @@ def load_circuit(path: Path) -> CircuitSpec:
             or s["substeps"] < 1
         ):
             errors.append(f"sections[{i}]: substeps {s['substeps']} (a count, 1 or more)")
-        elif {"decimate", "owns", "lag_samples", "method", "tube_tables"} & set(s) and s.get(
-            "substeps", 1
-        ) < 2:
+        elif {"decimate", "owns", "lag_samples", "method", "tube_tables", "substeps_in"} & set(
+            s
+        ) and s.get("substeps", 1) < 2:
             errors.append(
-                f"sections[{i}]: decimate, owns, lag_samples, method and tube_tables are for a"
-                " multi-rate section"
+                f"sections[{i}]: decimate, owns, lag_samples, method, tube_tables and"
+                " substeps_in are for a multi-rate section"
             )
+        elif "substeps_in" in s and s["substeps_in"] != "events":
+            errors.append(f"sections[{i}]: substeps_in {s['substeps_in']!r} (events)")
         elif "method" in s and s["method"] not in MULTIRATE_METHODS:
             errors.append(f"sections[{i}]: method {s['method']!r} (one of {MULTIRATE_METHODS})")
         elif "tube_tables" in s and not isinstance(s["tube_tables"], bool):
