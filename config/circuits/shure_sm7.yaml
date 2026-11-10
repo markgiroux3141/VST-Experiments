@@ -1,0 +1,35 @@
+# Shure SM7 (SM7B) dynamic microphone (docs/CHAINS_PLAN.md WP15). Built by
+# varimu/circuit/builder.py (the format: varimu/circuit/spec.py, builder.py).
+#
+# Sources (data/schematics/shure_sm7/README.md has their provenance):
+#   "shure: ..."       Shure's SM7B product specification (2009: 1.12 mV/Pa open circuit, 150 ohm,
+#                      cardioid, 50-20,000 Hz; the flat response digitized from its vector paths)
+#   "provisional: ..." model knowledge
+#
+# The cartridge R_SM7 (config/components/r_sm7/): the pressure at its front entry on `in`, at
+# its rear entries on the control input `p_rear` (pascals as volts; varimu/mics/). The coil's
+# two ends are the XLR's pins 2 and 3 (`out`, and the measuring ground); the output is open
+# circuit, as the sheet's 1.12 mV/Pa, and a chain replaces RLOAD with the preamp's input. The
+# bass roll-off and presence switches are not modelled yet (their curves are digitized:
+# data/datasheets/shure_sm7_response.csv); the circuit is the flat setting.
+
+title: "Shure SM7"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as neumann_u47.yaml)"}
+  output_volts_peak: {value: 0.05, source: "provisional: model knowledge (shure: 1.12 mV/Pa x 20 Pa = 22 mV peak, with headroom for proximity)"}
+
+values:
+  cartridge_model: {value: R_SM7@1, source: "config/components/r_sm7/1.yaml (no construction is published: the geometry bounded and fitted by scripts/fit_sm7.py to Shure's figures: data/schematics/shure_sm7/README.md)"}
+  load_ohm: {value: 1.0e+6, source: "shure: the sensitivity is open-circuit voltage (a chain replaces the load with its preamp)"}
+
+sections:
+  - title: cartridge
+    parts:
+      MC:
+        moving_coil: [in, p_rear, out, "0"]
+        component: cartridge_model
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

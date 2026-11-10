@@ -1109,6 +1109,27 @@ def build_r_md421() -> dict[str, Any]:
     }
 
 
+def build_r_sm7() -> dict[str, Any]:
+    """The Shure SM7's moving-coil cartridge (docs/CHAINS_PLAN.md WP15): its geometry
+    (published_points.yaml "R_SM7": no construction is published, so every dimension is bounded
+    and fitted by scripts/fit_sm7.py), the lumped network compiled from it as R57's
+    (varimu.devices.moving_coil.compile_network)."""
+    from varimu.devices import moving_coil
+
+    pub = _published()["R_SM7"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "R_SM7",
+        "kind": "moving_coil",
+        "source": "derived: varimu.devices.moving_coil.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": moving_coil.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/moving_coil.py's formulas (its docstring) on "
+        "the geometry; air at 20 C",
+    }
+
+
 def build_ribbon_44bx() -> dict[str, Any]:
     """The RCA 44-BX's ribbon motor (docs/CHAINS_PLAN.md WP5): its geometry
     (published_points.yaml "RIBBON_44BX": the ribbon from AEA's R44 sheet, the motor after
@@ -3109,6 +3130,7 @@ BUILDERS = {
     "R59": build_r59,
     "R_D112": build_r_d112,
     "R_MD421": build_r_md421,
+    "R_SM7": build_r_sm7,
     "RIBBON_44BX": build_ribbon_44bx,
     "RIBBON_4038": build_ribbon_4038,
     "RIBBON_77DX": build_ribbon_77dx,

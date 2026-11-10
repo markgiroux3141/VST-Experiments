@@ -1,0 +1,22 @@
+device: "SM7B"
+curve: free-field frequency response on axis (flat, bass roll-off, presence settings)
+publisher: Shure Incorporated
+documents:
+  specsheet:
+    title: "SM7B Cardioid Dynamic Microphone, Product Specifications"
+    date: "2009 (its footer)"
+    scan_source: "web: http://recordinghacks.com/pdf/shure/us_pro_SM7B_specsheet.pdf"
+    sha256: 56b606ca1d2e5465cc0c3e16e5bb0fc842cd064122eda45cec9e1b08fbf138ee
+    bytes: 301317
+    page: "PDF p. 1, the chart's vector paths (drawings 74 / 75 / 76)"
+local_copy: "data/schematics/shure_sm7/us_pro_SM7B_specsheet.pdf"
+digitized_with: >-
+  scripts/digitize_shure_sm7.py: the frame (x 358.8-532.5 pt, y 522.2-611.0 pt) is +20 / -20 dB with
+  5 dB rules every 11.12 pt; frequency interpolated in log f between the rules at 50 / 100 / 1000 /
+  10000 Hz (x 382.28 / 400.95 / 457.38 / 515.04) and the frame's 20 / 20000 Hz; cubic segments
+  sampled 16 per curve; resampled to sixth octaves.
+digitized_by: Claude Code
+digitized_on: 2026-11-10
+files:
+  shure_sm7_response.csv:
+    columns: setting (flat | rolloff | presence), freq_hz, db (as plotted)

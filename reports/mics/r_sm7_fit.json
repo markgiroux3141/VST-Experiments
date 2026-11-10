@@ -1,0 +1,81 @@
+{
+ "fitted": {
+  "coil/bl_tm": 19.99999999999999,
+  "coil/b_gap_t": 0.6000000000000001,
+  "diaphragm/resonance_hz": 35.00000000000001,
+  "diaphragm/thickness_m": 5.999999999999985e-05,
+  "ps/r1_pa_s_m3": 1833995.994861494,
+  "ps/q": 21.598802293846937,
+  "ps/d_m": 0.03175601779911959,
+  "washer/r_pa_s_m3": 100000.0000000002,
+  "handle/volume_m3": 5.000000000000007e-06,
+  "diaphragm/modes/0/f_hz": 3840.168994515374,
+  "diaphragm/modes/0/q": 0.7,
+  "diaphragm/modes/0/mass_fraction": 0.0976779870979369,
+  "diaphragm/modes/0/area_fraction": 0.4656832110038735
+ },
+ "body": {
+  "form": "dynamic",
+  "face_radius_m": 0.019,
+  "ports_m": [
+   0.012,
+   0.035
+  ],
+  "cartridge_length_m": 0.055,
+  "head_radius_m": 0.032,
+  "head_length_m": 0.1,
+  "taper_length_m": 0.07,
+  "end_radius_m": 0.012,
+  "end_length_m": 0.045
+ },
+ "sensitivity_mv_pa": 1.1503,
+ "sensitivity_target_mv_pa": 1.1199999999999999,
+ "rms_on_axis_db_fit_band": 0.769,
+ "max_on_axis_db_fit_band": 2.843,
+ "rms_on_axis_db_above": 7.006,
+ "polar": {
+  "250 Hz 90 deg": {
+   "model_db": -6.36,
+   "published_db": -4.5
+  },
+  "250 Hz 180 deg": {
+   "model_db": -21.58,
+   "published_db": -22.0
+  },
+  "2500 Hz 90 deg": {
+   "model_db": -5.71,
+   "published_db": -10.6
+  },
+  "2500 Hz 180 deg": {
+   "model_db": -21.08,
+   "published_db": -20.6
+  },
+  "8300 Hz 90 deg": {
+   "model_db": -12.95,
+   "published_db": -5.6
+  },
+  "8300 Hz 180 deg": {
+   "model_db": -11.87,
+   "published_db": -21.0
+  }
+ },
+ "moving_mass_mg": 805.77,
+ "mass_parts_mg": {
+  "dome_kg": 58.952,
+  "wire_kg": 604.286,
+  "adhesive_kg": 120.857,
+  "air_kg": 21.672,
+  "total_kg": 805.767
+ },
+ "wire_length_m": 33.3333,
+ "cost": 344.349437956869,
+ "at_bounds": [
+  "coil/bl_tm",
+  "coil/b_gap_t",
+  "diaphragm/resonance_hz",
+  "diaphragm/thickness_m",
+  "washer/r_pa_s_m3",
+  "handle/volume_m3",
+  "diaphragm/modes/0/q"
+ ]
+}

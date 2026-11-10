@@ -76,6 +76,21 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "SM7 into 1073",
+   "file": "SM7_into_1073.wav",
+   "chain": "sm7_n1073",
+   "set": {},
+   "pan": -0.25,
+   "entries": "body {'form': 'dynamic', 'face_radius_m': 0.019, 'ports_m': [0.012, 0.035], 'cartridge_length_m': 0.055, 'head_radius_m': 0.032, 'head_length_m': 0.1, 'taper_length_m': 0.07, 'end_radius_m': 0.012, 'end_length_m': 0.045}",
+   "rms_dbfs": -32.46,
+   "peak_dbfs": -22.89,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -90,6 +105,6 @@
   8000,
   16000
  ],
- "wall_s": 13.7,
+ "wall_s": 1089.9,
  "seconds": 8.999
 }

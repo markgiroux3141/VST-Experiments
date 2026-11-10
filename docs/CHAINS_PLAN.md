@@ -13,10 +13,10 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 29 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 30 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
-  SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073;
+  SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073;
   `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
@@ -49,9 +49,23 @@ runs**.
   (`config/circuits/neumann_u87.yaml` from Neumann's 1980 drawing; `K87@1` fitted to the U 87 i's
   curves through the circuit's feedback by `scripts/fit_k87.py`); WP22's Notes. WP24 (2026-11-10):
   the Neumann KM 84 (`config/circuits/neumann_km84.yaml` from Neumann's 930-12; `KK84@1`); WP24's
-  Notes.
-- **Next:** WP23 (AKG C414: the JFET exists; opens C414 -> SSL and -> clean); then WP19 (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+  Notes. WP15 (2026-11-10): the Shure SM7 (`config/circuits/shure_sm7.yaml`, `R_SM7@1` fitted to
+  the SM7B sheet; the switches not modelled); WP15's Notes.
+- **Next:** WP25 (U47 fet: Neumann's drawing is in `data/schematics/neumann_u47_fet/`, the
+  input network read: its README); WP17 (Beyer M160: its sheets on RecordingHacks,
+  `http://recordinghacks.com/pdf/beyerdynamic/m160_data_en.pdf`); WP16 (Royer R-121); WP19
+  (Helios); WP15's switches; WP23 (C414) and WP18 (ELA M 251) wait on files (below) (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
+- **Waiting on the user (files, 2026-11-10):** the AKG C414's schematic (no open copy found:
+  the C414 B-ULS's is an attachment in this GroupDIY thread, or radiomuseum.org by request):
+
+  ```
+  https://groupdiy.com/threads/akg-414b-uls-help.30533/
+  ```
+
+  and a legible ELA M 250 / 251 drawing (coutant.org's `elam250_2.jpg`, AKG Z.Nr. 1524 Sch 2f,
+  is 368 x 550 px: `data/schematics/telefunken_ela_m251/`; its amplifier is the C12's 6072 /
+  T14/1, the values unreadable).
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
@@ -141,7 +155,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 12 | API 312 (the 2520) | SM57 -> API | L | done 2026-11-10 |
 | 13 | Electro-Voice RE20 (Variable-D: rear entries along the body) | RE20 -> API, RE20 -> 1073 | L | |
 | 14 | Sennheiser MD421 (its bass switch) | MD421 -> API | L | |
-| 15 | Shure SM7 | SM7 -> 1073 | L | |
+| 15 | Shure SM7 | SM7 -> 1073 | L | done 2026-11-10 (the flat setting; switches to do) |
 | 16 | Royer R-121 (offset ribbon) | R-121 -> API | M | |
 | 17 | Beyer M160 (two ribbons, hypercardioid) | M160 -> 1073 | M | |
 | 18 | Telefunken ELA M 251 (the C12's capsule, its own electronics) | 251 -> 1073 | M | |
@@ -1221,6 +1235,24 @@ form's low end; -15.6 at 1 kHz), the pad -6.3 dB against -10 (C9's feedback dept
 provisional capsule and the FET's gain). `tests/test_neumann_km84.py` (5); the list's entry
 (pad); `km84_n1073` composed and rendered in `config/scenes/new_chains_check.yaml`: 29 of 51.
 
+### WP15. The Shure SM7
+
+Sources: `data/schematics/shure_sm7/README.md` (Shure's SM7B product specification, 2009, via
+RecordingHacks).
+
+Notes (2026-11-10, done but the switches): `data/datasheets/shure_sm7_response.csv` (the flat,
+bass roll-off and presence traces from the sheet's vector paths: `scripts/digitize_shure_sm7.py`);
+`R_SM7@1` (published_points.yaml "R_SM7", started from R_MD421's fitted block and network form)
+fitted by `scripts/fit_sm7.py` (fit_md421's method; ~7.5 min): 1.15 mV/Pa (Shure 1.12), on axis
+rms 0.77 dB / max 2.8 dB over 50 Hz-10 kHz, 250 Hz polar within 2 dB. **Known misses:** 2.5 kHz
+at 90 deg -5.7 dB against -10.6; 8.3 kHz -13 / -12 dB at 90 / 180 against -5.6 / -21 (no
+construction published; the MD 421's network form). Bounds hit: B l, the gap's flux, the
+resonance, the dome's thickness, the washer, the chamber, the mode's Q (a heavy 0.8 g moving
+system, as the D112's and MD 421's). `config/circuits/shure_sm7.yaml` (the flat setting, open
+circuit), the list's entry, `tests/test_shure_sm7.py` (5), `sm7_n1073` composed: 30 of 51.
+**Not done:** the bass roll-off and presence switches (their traces are digitized: a passive
+network each, fitted to them).
+
 ### WP12. The API 312 (the 2520)
 
 API's 500-series mic preamp: a bespoke input transformer (AP2516 now; the 512C used a
@@ -1474,3 +1506,7 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   side's, so K87@1 is twice the catalog's 50 pF a side (K87@2 next).
 - 2026-11-10: K87@2: the backplate derived from the catalog's 50 pF a side (c0 is per side),
   the U 87 refitted and repinned (7.7 mV/Pa, 200 ohm, on axis rms 0.7-0.8 dB).
+- 2026-11-10: WP15 done (the flat setting): the Shure SM7 from the SM7B sheet's vector paths,
+  `R_SM7@1` on fit_md421's method (on axis rms 0.77 dB; the polars above 2 kHz miss); SM7 -> 1073
+  composed: 30 of 51. WP23 (C414) and WP18 (ELA M 251) wait on files; WP25's sources fetched and
+  its input network read.
