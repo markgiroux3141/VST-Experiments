@@ -1,4 +1,4 @@
-# A check scene for the chains built 2026-11-10 (docs/CHAINS_PLAN.md WP11, WP12, WP15, WP22, WP24): one
+# A check scene for the chains built 2026-11-10 (docs/CHAINS_PLAN.md WP11, WP12, WP15, WP19, WP22, WP24, ...): one
 # source, the new chains as spots, rendered once at draft.
 #
 #   uv run --extra fast python scripts/room_print.py config/scenes/new_chains_check.yaml --quality draft
@@ -36,3 +36,8 @@ mics:
     position_m: [2.0, 2.25, 1.6]
     aim: {azimuth_deg: 90, elevation_deg: -30}
     pan: -0.25
+  - name: SM57 into Helios
+    chain: sm57_helios
+    position_m: [2.0, 2.25, 1.0]
+    aim: {azimuth_deg: 90, elevation_deg: 30}
+    pan: 0.1

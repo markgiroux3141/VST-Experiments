@@ -97,6 +97,14 @@ def _neve_law_db(sensitivity: float) -> float:
     return float(-sensitivity)
 
 
+def _helios_law_db(gain: float) -> float:
+    """Helios (IA-H9): the mic amp's 1 + 47k / R(GAIN) (SW2's R1-R8), T1's 1:10, the EQ CUT
+    divider R35 / R36 (into R25's 240 ohm) and the output amp's 1 + 47k / 8.2k (helios.yaml)."""
+    r = {20: 56e3, 30: 22e3, 40: 5.1e3, 50: 1.5e3, 60: 460.0, 70: 110.0}[int(gain)]
+    cut = 5.1e3 / (5.1e3 + 27e3 + 240.0)
+    return float(20 * np.log10((1 + 47e3 / r) * 10.0 * cut * (1 + 47e3 / 8.2e3)))
+
+
 PREAMPS = {
     "ssl_4000e": Preamp(
         circuit="ssl_4000e",
@@ -155,6 +163,19 @@ PREAMPS = {
         published_source="api: the 312 cut sheet (69 dB most gain, 20 dB pad) and the 1972 "
         "circuit sheet's Fig. 1 (input impedance > 1500 ohm, +-0.25 dB 20-20 kHz; "
         "data/schematics/api_312/README.md)",
+        pad_key="pad",
+    ),
+    "helios": Preamp(
+        circuit="helios",
+        nominal={"gain": 50, "pad": 0, "hpf": 0},
+        nominal_gain_db=50.0,
+        gain_key="gain",
+        gain_points=(20, 30, 40, 50, 60, 70),
+        law_db=_helios_law_db,
+        load_key="r_load_ohm",
+        published={"min_gain_db": 20.0, "max_gain_db": 70.0, "pad_db": -20.0},
+        published_source="web: the IA-H9 schematic's GAIN labels 20-70 and the pad's 1:1 tap "
+        "of the Sowter 7490 (1:10; data/schematics/helios_ia_h9/README.md)",
         pad_key="pad",
     ),
 }
