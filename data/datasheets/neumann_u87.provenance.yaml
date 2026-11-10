@@ -1,0 +1,23 @@
+device: "U 87 i"
+curve: free-field frequency responses on axis, omni, cardioid, figure-8 (with +-2 dB tolerance lines, not read)
+publisher: Georg Neumann GmbH, Berlin
+documents:
+  copi0042:
+    title: "Betriebsanleitung fuer das Kondensatormikrofon U 87 i / Operating Instructions for the U 87 i Condenser Microphone"
+    date: "September 1982 (its cover)"
+    scan_source: "web: http://recordinghacks.com/pdf/neumann/copi0042.pdf (linked from https://recordinghacks.com/microphones/Neumann/U-87)"
+    sha256: c796aaaeab98bffdfad569e129387b6de58ca4cd39cde79be805576aee1bf95d
+    bytes: 786062
+    page: "PDF p. 10 (one scanned page image), rendered at 300 dpi with PyMuPDF"
+local_copy: "data/schematics/neumann_u87/copi0042.pdf"
+digitized_with: >-
+  scripts/digitize_neumann_u87.py: frequency log-linear, the 100 / 1000 / 10000 Hz rules at x 445 / 905 /
+  1363 px (459 px per decade; 20 Hz the left frame at 124); 2 dB grid rules 8.514 px apart (19 rules
+  over the 36 dB frame); each chart's bold curve kept by a 5 x 5 erosion (the grid and tolerance lines
+  are 1-2 px wide), the run nearest the previous column's taken, then each curve re its own value at
+  1 kHz (the drawing's calibration mark). Above ~14-16 kHz the falling curve isn't followed.
+digitized_by: Claude Code
+digitized_on: 2026-11-10
+files:
+  neumann_u87_response.csv:
+    columns: pattern (omni | cardioid | figure8), freq_hz, db_re_1k (on axis)

@@ -161,7 +161,22 @@ circuits:
   telefunken_ela_m251: {kind: mic, tag: m251, label: ELA M 251, wp: 18}
   neumann_m49: {kind: mic, tag: m49, label: Neumann M49, wp: 29}
   neumann_u67: {kind: mic, tag: u67, label: Neumann U67, wp: 28}
-  neumann_u87: {kind: mic, tag: u87, label: Neumann U87, wp: 22}
+  neumann_u87:                      # the K87 at its three patterns; -10 dB pad
+    kind: mic
+    tag: u87
+    label: Neumann U87
+    output: out
+    drop: [RLOAD]
+    pattern: {setting: pattern}
+    settings:
+      - key: pattern
+        label: Pattern
+        choices: [[0, omni], [1, cardioid], [2, figure-8]]
+        default: 1
+      - key: pad
+        label: U87 pad
+        choices: [[0, "off"], [1, "-10 dB"]]
+        default: 0
   neumann_u47_fet: {kind: mic, tag: u47fet, label: U47 fet, wp: 25}
   neumann_km84: {kind: mic, tag: km84, label: Neumann KM84, wp: 24}
   akg_c414: {kind: mic, tag: c414, label: AKG C414, wp: 23}

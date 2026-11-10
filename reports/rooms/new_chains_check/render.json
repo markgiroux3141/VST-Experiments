@@ -1,0 +1,80 @@
+{
+ "scene": "new_chains_check",
+ "fs": 96000,
+ "quality": "draft",
+ "rt60_s": {
+  "125": 0.47,
+  "250": 0.754,
+  "500": 0.835,
+  "1000": 0.739,
+  "2000": 0.598,
+  "4000": 0.538,
+  "8000": 0.437
+ },
+ "room": "shoebox",
+ "free_field": false,
+ "room_backend": "gpu",
+ "gpu": "NVIDIA GeForce RTX 3080 (Vulkan)",
+ "wave_crossover_hz": null,
+ "mics": [
+  {
+   "name": "U87 into 1073",
+   "file": "U87_into_1073.wav",
+   "chain": "u87_n1073",
+   "set": {},
+   "pan": -0.5,
+   "entries": "body {'radius_m': 0.0155, 'rim_radius_m': 0.017, 'rim_thickness_m': 0.0015, 'spacing_m': 0.0041, 'ring_proud_m': 0.0}",
+   "rms_dbfs": -10.55,
+   "peak_dbfs": -2.24,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "SM57 into API",
+   "file": "SM57_into_API.wav",
+   "chain": "sm57_api312",
+   "set": {},
+   "pan": 0.0,
+   "entries": "body {'form': 'dynamic', 'face_radius_m': 0.013, 'ports_m': [0.003, 0.009], 'cartridge_length_m': 0.022, 'head_radius_m': 0.015875, 'head_length_m': 0.0635, 'taper_length_m': 0.07539, 'end_radius_m': 0.0119, 'end_length_m': 0.02024}",
+   "rms_dbfs": -24.99,
+   "peak_dbfs": -14.26,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "44-BX into 1073",
+   "file": "44-BX_into_1073.wav",
+   "chain": "r44_n1073",
+   "set": {},
+   "pan": 0.5,
+   "entries": "body {'form': 'baffle', 'radius_m': 0.02026, 'depth_m': 0.01339}",
+   "rms_dbfs": -24.24,
+   "peak_dbfs": -16.94,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  }
+ ],
+ "mix": "mix.wav",
+ "octaves_hz": [
+  63,
+  125,
+  250,
+  500,
+  1000,
+  2000,
+  4000,
+  8000,
+  16000
+ ],
+ "wall_s": 19.6,
+ "seconds": 8.999
+}

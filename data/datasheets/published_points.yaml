@@ -622,6 +622,41 @@
     membrane_resonance_hz: [800.0, 1500.0]   # web: Austrian Audio
     gap_m: [30.0e-6, 50.0e-6]           # web: Austrian Audio
 
+# --- Neumann U 87 (CHAINS_PLAN.md WP22) ---
+"K87":
+  source: "data/schematics/neumann_u87/README.md: RecordingHacks (the K87 center-terminated, dual-backplate, dual-diaphragm; a 34 mm capsule, 26 mm diaphragms, a 40 um plastic spacer; run at ~46 V in the U 87), Neumann's catalog cata0120 (2 x ~50 pF); no Neumann drawing of the capsule: the network starts from the CK12's (the same form) and is fitted to the U 87 i's curves (copi0042 p. 10-11) by scripts/fit_k87.py (value: ..., the bounds in its comment)"
+  polarization_v: 47.0     # sch: the U 87's 47 V polarization line
+  geometry:
+    diaphragm:
+      radius_m: {value: 13.0e-3}      # web (RecordingHacks: 26 mm diaphragms)
+      thickness_m: {value: 6.0e-6}    # provisional: model knowledge (the K87's PET film, ~6 um)
+      density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
+      tension_n_m: {value: 7.152}      # provisional: fitted (bounds 5-150 N/m)
+    gap_m: {value: 4.0e-05}           # web (RecordingHacks: a 40 um plastic spacer)
+    backplate:
+      radius_m: {value: 12.2e-3}      # provisional: model knowledge (the electrode a little inside the diaphragm's clamping, as the CK12's)
+      thickness_m: {value: 4.0e-3}    # provisional: model knowledge (a 34 mm dual-backplate capsule's ~4 mm backplates, as the CK12's)
+      through:
+        holes: {value: 24}            # provisional: model knowledge (as the CK12's)
+        radius_m: {value: 0.5e-3}     # provisional: model knowledge
+      blind:
+        holes: {value: 250.0}            # provisional: fitted (bounds 10-250 per side)
+        radius_m: {value: 0.5e-3}     # provisional: model knowledge (~1 mm drilled holes)
+        depth_m: {value: 0.0019}      # provisional: fitted (bounds 0.3-1.9 mm)
+    film_resistance_pa_s_m3: {value: 3.347e+06}       # provisional: fitted (bounds 1e4-3e7)
+    through_resistance_pa_s_m3: {value: 1.674e+07}    # provisional: fitted (bounds 1e6-3e9)
+    leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
+    stray_capacitance_f: {value: 2.0e-12}   # provisional: fitted (bounds 2-40 pF)
+    body:
+      radius_m: {value: 15.5e-3}          # provisional: model knowledge (as the CK12's: the same 34 mm form)
+      rim_radius_m: {value: 17.0e-3}      # web (RecordingHacks: a 34 mm capsule)
+      rim_thickness_m: {value: 1.5e-3}    # provisional: model knowledge (as the CK12's)
+      spacing_m: {value: 0.0041}          # provisional: model knowledge (the backplates' ~4 mm plus the gaps, as the CK12's)
+      ring_proud_m: {value: 0.0}          # provisional: model knowledge (as the CK12's)
+  published:
+    sensitivity_mv_pa: 8.0              # cat: ~0.8 mV/ubar, at the microphone's output into >= 1000 ohm
+    capacitance_pf: [50.0, 50.0]        # cat: 2 x ~50 pF
+
 # --- Neumann U47 (A3) ---
 # the VF 14 (VF 14 M), transcribed 2026-11-03; curves: telefunken_vf14.provenance.yaml
 

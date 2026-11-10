@@ -985,6 +985,26 @@ def build_ck12() -> dict[str, Any]:
     }
 
 
+def build_k87() -> dict[str, Any]:
+    """Neumann's K87 dual-diaphragm capsule (the U 87's; docs/CHAINS_PLAN.md WP22): its geometry
+    (published_points.yaml "K87": the spacer and sizes published, the network fitted to Neumann's
+    curves by scripts/fit_k87.py), the lumped network derived from it as the CK12's."""
+    from varimu.devices import capsule
+
+    pub = _published()["K87"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "K87",
+        "kind": "capsule",
+        "form": "dual",
+        "source": f"derived: varimu.devices.capsule.dual_lumped on the geometry ({pub['source']})",
+        "geometry": geom,
+        "lumped": capsule.dual_lumped(geom),
+        "lumped_source": "derived: varimu/devices/capsule.py's formulas (dual_lumped's "
+        "docstring) on the geometry; air at 20 C",
+    }
+
+
 def build_r57() -> dict[str, Any]:
     """The SM57's Unidyne III cartridge, Shure's replacement part R57 (docs/SM57_PLAN.md
     SM2): its geometry (published_points.yaml "R57": sourced where a source exists, the
@@ -3063,6 +3083,7 @@ BUILDERS = {
     "BK4134": build_bk4134,
     "K47": build_k47,
     "CK12": build_ck12,
+    "K87": build_k87,
     "R57": build_r57,
     "R59": build_r59,
     "R_D112": build_r_d112,

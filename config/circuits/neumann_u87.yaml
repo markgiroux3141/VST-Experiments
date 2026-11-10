@@ -1,0 +1,147 @@
+# The Neumann U 87 / U 87 i (docs/CHAINS_PLAN.md WP22), from Neumann's circuit diagram
+# 10241 901 21.7 (11.9.80) and the U 87 i's operating instructions (sources and the readings:
+# data/schematics/neumann_u87/README.md). Values cite "sch: <part>" (the drawing), "cat:" (the
+# catalog cata0120), "man:" (copi0042).
+#
+# The K87 is driven at its front by `in` and at its rear by the control input `p_rear`
+# (pascals as volts), as the C12. The backplates (contact 4) are the signal, at 0 V DC
+# through R6 1G; the front diaphragm (the contact-2 line) at the polarization line's ~47 V
+# through R8 1M || C6 220p, held at AC ground by C5 0.033u + R9 6k8 + R10 560; the drain's
+# signal bootstraps the polarization line through C9 0.47u (sch). PATTERN: the capsule at the
+# pattern's polarizations (front 47 V; rear +47 omni, 0 cardioid, -47 figure-8: the drawing's
+# switch derives them from the one 47 V line through R1 / R3 / R4 / R5 / C2, not modelled
+# contact by contact), its rear diaphragm on the front's line at AC (C2 10000p); the K87's two backplates
+# (contacts 4 and 1, joined by C1 470p) are the model's one backplate node, and C3 10p feeds the
+# polarization line's signal back into it. -10 dB: C15 560p across the capsule. T1 (a selected FET, the 2N3819 class)
+# common source, the source decoupled by C8 20u, the drain on R12 47k from the 29 V rail; C7
+# 1u into Ue1 90415's primary; the secondary (200 ohm) into RLOAD (the catalog's >= 1000 ohm
+# load, dropped in a chain). Supply: the phantom feed's ~47.5 V through R16 / R15 / R13
+# (C13 / C11) to the polarization line; Gr1's 33 V and R14 10k to the 29 V rail, ideal (the
+# TCR503 current regulator and the battery switch not modelled).
+
+title: "Neumann U 87"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, bp, g, d, s, fd, k]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "derived: 20 Pa peak (117 dB SPL) at the capsule, as neumann_u47.yaml"}
+  output_volts_peak: {value: 1.0960, source: "derived: 0 dBu peak, as neumann_u47.yaml"}
+
+controls:
+  pattern: {value: 1, choices: [0, 1, 2], unit: position, source: "sch / man: omni, cardioid, figure-8", notes: "0 omni, 1 cardioid, 2 figure-8"}
+  pad: {value: 0, choices: [0, 1], unit: switch, source: "sch: the -10 dB switch (C15 560p)", notes: "0 off, 1 -10 dB"}
+
+values:
+  capsule_model: {value: K87@1, source: "config/components/k87/1.yaml (its network fitted to the U 87 i's curves by scripts/fit_k87.py on the capsule's body: reports/mics/k87_fit.png)"}
+  pol_front_v: {value: 47.0, source: "sch: 47V (the polarization line; RecordingHacks: the K87 run at ~46 V in the U 87)"}
+  pol_rear_omni_v: {value: 47.0, source: "derived: omni, the rear at the front's polarization"}
+  pol_rear_card_v: {value: 0.0, source: "derived: cardioid, the rear unpolarized"}
+  pol_rear_eight_v: {value: -47.0, source: "derived: figure-8, the rear at the front's opposite (the equivalent of the drawing's switch)"}
+  r6_ohm: {value: 1.0e+9, source: "sch: R6 1G"}
+  r7_ohm: {value: 1.0e+9, source: "sch: R7 1G"}
+  c1_f: {value: 470.0e-12, source: "sch: C1 470p (joins the rear backplate to the front one at AC: inside the dual capsule's one backplate node, not a part here)"}
+  c3_f: {value: 10.0e-12, source: "sch: C3 10p (the polarization line to the backplates through C1: the drain's signal fed back)"}
+  c4_f: {value: 470.0e-12, source: "sch: C4 470p"}
+  c15_f: {value: 560.0e-12, source: "sch: C15 560p (-10 dB)"}
+  r2_ohm: {value: 150.0e+3, source: "sch: R2 150k (to the pattern switch: not modelled, the patterns being capsule instances)"}
+  r8_ohm: {value: 1.0e+6, source: "sch: R8 1M"}
+  c6_f: {value: 220.0e-12, source: "sch: C6 220p"}
+  c5_f: {value: 0.033e-6, source: "sch: C5 0,033u"}
+  r9_ohm: {value: 6.8e+3, source: "sch: R9 6,8k"}
+  r10_ohm: {value: 560.0, source: "sch: R10 560"}
+  rs_ohm: {value: 5.4e+3, source: "fit: the selected source resistor (sch: '*' selected) for the drain's printed 'ca. 11V'"}
+  c8_f: {value: 20.0e-6, source: "sch: C8 20u"}
+  r12_ohm: {value: 47.0e+3, source: "sch: R12 47k"}
+  c9_f: {value: 0.47e-6, source: "sch: C9 0,47u"}
+  r13_ohm: {value: 330.0e+3, source: "sch: R13 330k"}
+  c11_f: {value: 2.2e-6, source: "sch: C11 2,2u"}
+  r15_ohm: {value: 150.0e+3, source: "sch: R15 150k"}
+  c13_f: {value: 2.2e-6, source: "sch: C13 2,2u"}
+  r16_ohm: {value: 150.0e+3, source: "sch: R16 150k"}
+  r14_ohm: {value: 10.0e+3, source: "sch: R14 10k"}
+  c10_f: {value: 4.7e-6, source: "sch: C10 4,7u"}
+  c12_f: {value: 10.0e-6, source: "sch: C12 10u"}
+  c7_f: {value: 1.0e-6, source: "sch: C7 1u"}
+  phantom_v: {value: 47.5, source: "derived: sch: 48 V phantom at 0.45 mA through R18 || R19 (2 x 2k2): 47.5 V ('47V' on the drawing)"}
+  rail_v: {value: 33.0, source: "sch: Gr1 33V (the zener's rail)"}
+  t_ratio: {value: 0.177, source: "fit: Ue1 90415's secondary : primary, to cat's 200 ohm source impedance"}
+  t_r_p_ohm: {value: 800.0, source: "provisional: model knowledge (a FET microphone transformer's primary)"}
+  t_r_s_ohm: {value: 25.0, source: "provisional: model knowledge (its 200 ohm secondary)"}
+  t_core_material: {value: mumetall, source: "provisional: model knowledge (a microphone transformer's nickel core)"}
+  t_core_area_m2: {value: 2.0e-5, source: "provisional: model knowledge (a ~4.5 mm square tongue)"}
+  t_core_path_m: {value: 0.04, source: "provisional: model knowledge (~9 x the tongue)"}
+  t_turns: {value: 4000, source: "provisional: model knowledge (the primary, many turns for the drain's high impedance)"}
+  t_gap_m: {value: 2.0e-6, source: "provisional: model knowledge (an interleaved core's joint gap)"}
+  t_leakage_h: {value: 0.05, source: "provisional: model knowledge (referred to the primary)"}
+  t_c_p_f: {value: 1.0e-10, source: "provisional: model knowledge (a many-turn primary's capacitance)"}
+  r_load_ohm: {value: 1000.0, source: "cat: load impedance >= 1000 ohm"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (5% resistors)"}
+  tol_cap_pct: {value: 10.0, source: "provisional: model knowledge (film and electrolytic capacitors)"}
+
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r5: tol_resistor_pct
+    cap: tol_cap_pct
+  classes:
+    r5: [R6, R7, R8, R9, R10, R12, R13, R15, R16, R14]
+    cap: [C3, C4, C15, C6, C5, C8, C9, C11, C13, C10, C12, C7]
+
+devices:
+  QJ: {device: 2N3819@1, source: "provisional: T1 8280800006.4, a selected FET (ProSoundWeb's version list: '2N3819 or similar, selected')"}
+
+sections:
+  - title: supply
+    parts:
+      VPH: {V: [ph, "0"], v: phantom_v}
+      VR: {V: [r33, "0"], v: rail_v}
+      C12: {C: [r33, "0"], c: c12_f}
+      R14: {R: [r33, r29], r: r14_ohm}
+      C10: {C: [r29, "0"], c: c10_f}
+      R16: {R: [ph, mm], r: r16_ohm}
+      C13: {C: [mm, "0"], c: c13_f}
+      R15: {R: [mm, l], r: r15_ohm}
+      C11: {C: [l, "0"], c: c11_f}
+      R13: {R: [l, k], r: r13_ohm}
+  - title: capsule
+    parts:
+      SCAP:
+        switch: pattern
+        parts:
+          KC0: {capsule_dual: [in, p_rear, bp, fd, fd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_omni_v, in: [0]}
+          KC1: {capsule_dual: [in, p_rear, bp, fd, fd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_card_v, in: [1]}
+          KC2: {capsule_dual: [in, p_rear, bp, fd, fd], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_eight_v, in: [2]}
+      SPAD:
+        switch: pad
+        parts:
+          C15: {C: [bp, "0"], c: c15_f, in: [1]}
+      R6: {R: [bp, "0"], r: r6_ohm}
+      C3: {C: [k, bp], c: c3_f}
+      R8: {R: [k, fd], r: r8_ohm}
+      C6: {C: [k, fd], c: c6_f}
+      C5: {C: [fd, n5], c: c5_f}
+      R9: {R: [n5, n9], r: r9_ohm}
+      R10: {R: [n9, "0"], r: r10_ohm}
+  - title: amplifier
+    parts:
+      C4: {C: [bp, g], c: c4_f}
+      R7: {R: [g, "0"], r: r7_ohm}
+      J1: {jfet: [d, g, s], model: QJ}
+      RS: {R: [s, "0"], r: rs_ohm, tolerance: none}
+      C8: {C: [s, "0"], c: c8_f}
+      R12: {R: [r29, d], r: r12_ohm}
+      C9: {C: [d, k], c: c9_f}
+      C7: {C: [d, tp], c: c7_f}
+      TU:
+        transformer:
+          p: {nodes: [tp, "0"], r: t_r_p_ohm, c: t_c_p_f}
+          s: {nodes: [out, "0"], ratio: t_ratio, r: t_r_s_ohm}
+        core: {material: t_core_material, area_m2: t_core_area_m2, path_m: t_core_path_m, gap_m: t_gap_m}
+        turns: t_turns
+        leakage_h: t_leakage_h
+      RLOAD: {R: [out, "0"], r: r_load_ohm, tolerance: none}
