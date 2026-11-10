@@ -1452,7 +1452,9 @@ pub const DEVICES: [Device; 30] = [
             CONTROL, the -5 V RANGE ladder and board 6's buffers), the mixer (three \
             oscillators, NOISE white / pink from board 3's avalanche junction, EXTERNAL INPUT \
             through board 4's pre-amp), the ladder filter and VCA, the two contour generators \
-            and the keyboard circuit (docs/MINIMOOG_PLAN.md, MM5)",
+            and the keyboard circuit (docs/MINIMOOG_PLAN.md, MM5). A source with its ON or \
+            LEVEL down isn't simulated (nothing of it is heard): turning one up from 0, or a \
+            mixer switch, OSC MOD or FILTER MOD flipped, restarts the sound",
         group: Group::Instruments,
         circuit: "minimoog_voice",
         panel: Some(&[
@@ -1531,10 +1533,15 @@ pub const DEVICES: [Device; 30] = [
         // into KEYBOARD CONTROL's 300K / 150K and KBD PITCH's 102K) | the contour board, cut at
         // R60 into C7, at the contour outputs (p9 into R59, the filter contour into AMOUNT) and
         // at Q18's collector | each oscillator an island at 96 kHz (its sections' substeps; it
-        // owns its waveforms), three threads. Eight in all on this 8-core desktop. Against the rest as one solve:
-        // scripts/minimoog_gate_check.py --voice (docs/MINIMOOG_PLAN.md MM5). With the keyboard
-        // on a thread of its own the loudness contour's attack ended early (MM4, not
-        // understood); beside the VCA it matches one solve.
+        // owns its waveforms), three threads. Eight in all with everything heard; a source
+        // nobody hears isn't built (the circuit's `when`: an oscillator with its ON or LEVEL
+        // down, the noise, the modulation mix with OSC MOD and FILTER MOD off), so its group
+        // gets no thread: five at the default panel (one oscillator; docs/MINIMOOG_PLAN.md
+        // "Real time"). Against the rest as one solve: scripts/minimoog_gate_check.py --voice
+        // (docs/MINIMOOG_PLAN.md MM5). With the keyboard on a thread of its own the loudness
+        // contour's attack ended early (MM4, not understood); beside the VCA it matches one
+        // solve, mostly: a contour flip-flop's flip within one step can still land either way
+        // (MINIMOOG_BACKLOG.md).
         partition: Some(&[
             "ladder",
             "output amplifier",
