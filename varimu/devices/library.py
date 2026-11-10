@@ -1195,6 +1195,27 @@ def build_ribbon_77dx() -> dict[str, Any]:
     }
 
 
+def build_ribbon_m160() -> dict[str, Any]:
+    """The beyerdynamic M 160's ribbon motor (docs/CHAINS_PLAN.md WP17): its geometry
+    (published_points.yaml "RIBBON_M160": the double ribbon as one equivalent ribbon on
+    RIBBON_77DX's circuit with one fixed slot, fitted by scripts/fit_m160.py), the lumped
+    network compiled from it (varimu.devices.ribbon.compile_network)."""
+    from varimu.devices import ribbon
+
+    pub = _published()["RIBBON_M160"]
+    geom = _plain(pub["geometry"])
+    return {
+        "name": "RIBBON_M160",
+        "kind": "ribbon_motor",
+        "source": "derived: varimu.devices.ribbon.compile_network on the geometry "
+        f"({pub['source']})",
+        "geometry": geom,
+        "lumped": ribbon.compile_network(geom),
+        "lumped_source": "derived: varimu/devices/ribbon.py's and moving_coil.py's formulas "
+        "(their docstrings) on the geometry; air at 20 C",
+    }
+
+
 # The 5651's current at which its operating voltage (circuit value v5651_operating_v) is
 # taken: the middle of its 1.5-3.5 mA range.
 V5651_REF_A = 2.5e-3
@@ -3134,6 +3155,7 @@ BUILDERS = {
     "RIBBON_44BX": build_ribbon_44bx,
     "RIBBON_4038": build_ribbon_4038,
     "RIBBON_77DX": build_ribbon_77dx,
+    "RIBBON_M160": build_ribbon_m160,
     "VF14T": build_vf14t,
     "6X4": build_6x4,
     "6AL5": build_6al5,

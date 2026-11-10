@@ -127,7 +127,13 @@ circuits:
     pattern: figure-8
     settings: []
   royer_r121: {kind: mic, tag: r121, label: Royer R-121, wp: 16}
-  beyer_m160: {kind: mic, tag: m160, label: Beyer M160, wp: 17}
+  beyer_m160:                       # the double ribbon, hypercardioid (CHAINS_PLAN.md WP17)
+    kind: mic
+    tag: m160
+    label: Beyer M160
+    output: out
+    drop: [RLOAD]
+    pattern: hypercardioid
   ev_re20: {kind: mic, tag: re20, label: EV RE20, wp: 13}
   sennheiser_md421:
     kind: mic

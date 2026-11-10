@@ -58,8 +58,9 @@ def test_idle_output_at_zero(tg):
 
 def test_gain_fine_and_coarse(tg):
     pytest.importorskip("circuitsim")
-    for over, want in (({}, 34.8), ({"fine": -5}, 29.8), ({"fine": 5}, 39.8), ({"coarse": 15}, 19.6),
-                       ({"coarse": 55}, -20.4)):  # fmt: skip
+    cases = (({}, 34.8), ({"fine": -5}, 29.8), ({"fine": 5}, 39.8), ({"coarse": 15}, 19.6),
+             ({"coarse": 55}, -20.4))  # fmt: skip
+    for over, want in cases:
         h, _ = _run(tg, over)
         assert 20 * np.log10(h.amps[0] / 1e-3) == pytest.approx(want, abs=0.3), over
 

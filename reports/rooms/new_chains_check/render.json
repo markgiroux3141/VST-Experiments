@@ -55,7 +55,7 @@
    "pan": 0.5,
    "entries": "body {'form': 'baffle', 'radius_m': 0.02026, 'depth_m': 0.01339}",
    "rms_dbfs": -24.24,
-   "peak_dbfs": -16.94,
+   "peak_dbfs": -16.93,
    "hears": [
     "A"
    ],
@@ -70,7 +70,7 @@
    "pan": 0.25,
    "entries": "body {'radius_m': 0.0095, 'rim_radius_m': 0.0105, 'rim_thickness_m': 0.0015, 'spacing_m': 0.005, 'ring_proud_m': 0.0}",
    "rms_dbfs": -15.26,
-   "peak_dbfs": -5.92,
+   "peak_dbfs": -5.91,
    "hears": [
     "A"
    ],
@@ -85,7 +85,7 @@
    "pan": -0.25,
    "entries": "body {'form': 'dynamic', 'face_radius_m': 0.019, 'ports_m': [0.012, 0.035], 'cartridge_length_m': 0.055, 'head_radius_m': 0.032, 'head_length_m': 0.1, 'taper_length_m': 0.07, 'end_radius_m': 0.012, 'end_length_m': 0.045}",
    "rms_dbfs": -32.46,
-   "peak_dbfs": -22.89,
+   "peak_dbfs": -22.88,
    "hears": [
     "A"
    ],
@@ -106,6 +106,51 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "ELA M 251 into 1073",
+   "file": "ELA_M_251_into_1073.wav",
+   "chain": "m251_n1073",
+   "set": {},
+   "pan": -0.1,
+   "entries": "body {'radius_m': 0.0155, 'rim_radius_m': 0.017, 'rim_thickness_m': 0.0015, 'spacing_m': 0.0041, 'ring_proud_m': 0.0}",
+   "rms_dbfs": -13.78,
+   "peak_dbfs": -3.97,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "C414 into SSL",
+   "file": "C414_into_SSL.wav",
+   "chain": "c414_ssl",
+   "set": {},
+   "pan": 0.4,
+   "entries": "body {'radius_m': 0.0155, 'rim_radius_m': 0.017, 'rim_thickness_m': 0.0015, 'spacing_m': 0.0041, 'ring_proud_m': 0.0}",
+   "rms_dbfs": -25.19,
+   "peak_dbfs": -16.25,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "4038 into TG",
+   "file": "4038_into_TG.wav",
+   "chain": "c4038_tg",
+   "set": {},
+   "pan": -0.4,
+   "entries": "body {'form': 'baffle', 'radius_m': 0.01695, 'depth_m': 0.009810000000000001}",
+   "rms_dbfs": -55.37,
+   "peak_dbfs": -46.74,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -120,6 +165,6 @@
   8000,
   16000
  ],
- "wall_s": 24.9,
+ "wall_s": 29.0,
  "seconds": 8.999
 }

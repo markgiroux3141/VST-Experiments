@@ -62,7 +62,9 @@ def level(u47f):
     def f(over, pa_rms=1.0, angle_deg=0.0):
         p = pa_rms * np.sqrt(2) * np.sin(2 * np.pi * 1000.0 * t) * np.minimum(1, t / 0.05)
         front, rear, _ = capsule_entry_pressures(g, p, np.radians(angle_deg), fs)
-        v = fast.run_transient(builder.build(u47f, over).ir, front, settings=s, controls={"p_rear": rear})
+        v = fast.run_transient(
+            builder.build(u47f, over).ir, front, settings=s, controls={"p_rear": rear}
+        )
         h = metrics.harmonics(v.vectors["v(out)"][-fs // 5 :], 1000.0, fs)
         return h.amps[0] / np.sqrt(2), h.thd
 

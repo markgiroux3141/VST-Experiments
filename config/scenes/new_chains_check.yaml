@@ -61,3 +61,8 @@ mics:
     position_m: [2.0, 2.95, 1.0]
     aim: {azimuth_deg: -90}
     pan: 0.3
+  - name: M160 into 1073
+    chain: m160_n1073
+    position_m: [1.8, 2.7, 1.2]
+    aim: {azimuth_deg: -30}
+    pan: -0.3

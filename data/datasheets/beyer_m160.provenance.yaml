@@ -1,0 +1,19 @@
+device: "beyerdynamic M 160 (double ribbon, hypercardioid)"
+curve: frequency response at 1 m (on axis), relative to its 1 kHz reading (the sheet's 0 dB = 1.0 mV/Pa)
+publisher: beyerdynamic GmbH & Co. KG
+documents:
+  beyer:
+    title: "M 160 Dynamic Microphone, product data (EN), Order # 100.668"
+    scan_source: "the user's file data/schematics/beyer_m160/m160_data_en.pdf (not committed)"
+    sha256: b91cb6e864525e5252890b5c561a6873553fd1a4e2a115ab1c38800c50e2d69f
+    page: "PDF p.2, the response chart: an embedded 2673 x 673 grey image (xref 4), light lines on dark"
+local_copy: "none (the PDF isn't committed; hash above)"
+digitized_with: >-
+  the embedded image's pixels (pymupdf extract_image). Frequency axis: the vertical rules found as
+  columns of bright pixels, 768 px per decade (20 Hz at x 231, 100 Hz at 768, 1 kHz at 1536, 10 kHz
+  at 2305); level axis: the horizontal rules every 4 dB, 45.4 px each, 0 dB at y 310. The 1 m
+  trace read as the lowest bright cluster (>= 3 px) in 17 columns around each frequency, the rules'
+  pixels (+-3 px) masked; 500-700 Hz and 10 kHz are lost under rules (not listed). Re the 1 kHz
+  reading. The 10 cm and 2 cm traces (proximity) are not listed.
+digitized_by: Claude Code
+digitized_on: 2026-11-10

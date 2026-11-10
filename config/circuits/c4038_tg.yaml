@@ -170,9 +170,11 @@ values:
     value: 75000.0
     source: 'web: the README''s forum figures (a 75k collector; provisional)'
   c2_f_tg:
-    value: 8.2e-09
-    source: 'web: the README''s forum figures (8200 pF collector to ground; hb 12.3.3: C2 in the forward
-      path against r.f. oscillation; provisional)'
+    value: 4.7e-10
+    source: 'provisional: model knowledge (hb 12.3.3: C2 in the forward path only ''to prevent r.f. oscillation'',
+      so a few hundred pF, from the first stage''s collector to the +20 V rail it returns to; the README''s
+      forum 8200 pF here slewed VT1''s ~10 uA at 20 kHz: -2.5 dB and 4% THD at +4 dBu out; CHAINS_PLAN.md
+      WP20)'
   r4_ohm_tg:
     value: 43000.0
     source: 'web: the README''s forum figures (a 43k second-stage collector; provisional)'
@@ -560,8 +562,8 @@ sections:
       r: r3_ohm_tg
     C2_tg:
       C:
-      - c2_tg
-      - '0'
+      - c1_tg
+      - vp_tg
       c: c2_f_tg
     Q2_tg:
       bjt:

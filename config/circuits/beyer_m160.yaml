@@ -1,0 +1,41 @@
+# The beyerdynamic M 160 double-ribbon hypercardioid (docs/CHAINS_PLAN.md WP17), after beyer's
+# product data (data/schematics/beyer_m160/README.md): the ribbon motor RIBBON_M160 (the double
+# ribbon on RIBBON_77DX's polydirectional circuit with one fixed slot, fitted by
+# scripts/fit_m160.py to the sheet's 1 m curve, a hypercardioid's pattern and 1.0 mV/Pa) into
+# its transformer M160_OT (a design: config/designs/beyer_m160_ot.yaml, 1:26 for 200 ohm), as
+# the sheet's wiring diagram (the ribbon across the primary; the secondary to pins 2 / 3).
+#
+# The ribbon is driven at its front by `in` and at its rear by the control input `p_rear`
+# (pascals as volts), as coles_4038.yaml.
+
+title: "beyerdynamic M 160"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, rp, rm]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as coles_4038.yaml)"}
+  output_volts_peak: {value: 0.05, source: "derived: beyer's 1.0 mV/Pa open circuit x 20 Pa = 20 mV peak, with headroom for the proximity rise (as coles_4038.yaml)"}
+
+values:
+  ribbon_model: {value: RIBBON_M160@1, source: "config/components/ribbon_m160/1.yaml (the double ribbon on RIBBON_77DX's circuit, fitted to beyer's figures by scripts/fit_m160.py)"}
+  ribbon_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating ribbon and primary"}
+  transformer_model: {value: M160_OT@1, source: "config/components/m160_ot/1.yaml (config/designs/beyer_m160_ot.yaml: 1:26, inferred)"}
+  load_ohm: {value: 1.0e+6, source: "beyer: load impedance >= 1000 ohm (open circuit: the sheet's sensitivity; a chain replaces the load with its preamp)"}
+
+sections:
+  - title: ribbon
+    parts:
+      RB:
+        ribbon_motor: [in, p_rear, rp, rm]
+        component: ribbon_model
+      RRL: {R: [rm, "0"], r: ribbon_leak_ohm, tolerance: none}
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [rm, rp]}   # the sense that puts the output positive for front pressure (as coles_4038.yaml)
+          s: {nodes: ["0", out]}
+        component: transformer_model
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}
