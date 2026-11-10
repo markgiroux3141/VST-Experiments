@@ -151,6 +151,51 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "U47 fet into API",
+   "file": "U47_fet_into_API.wav",
+   "chain": "u47fet_api312",
+   "set": {},
+   "pan": 0.3,
+   "entries": "body {'radius_m': 0.0149, 'rim_radius_m': 0.0165, 'rim_thickness_m': 0.0015, 'spacing_m': 0.00575, 'ring_proud_m': 0.0005}",
+   "rms_dbfs": -15.41,
+   "peak_dbfs": -4.82,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "M160 into 1073",
+   "file": "M160_into_1073.wav",
+   "chain": "m160_n1073",
+   "set": {},
+   "pan": -0.3,
+   "entries": "body {'form': 'baffle', 'radius_m': 0.0137502, 'depth_m': 0.0047599}",
+   "rms_dbfs": -29.11,
+   "peak_dbfs": -21.36,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
+  },
+  {
+   "name": "R-121 into API",
+   "file": "R-121_into_API.wav",
+   "chain": "r121_api312",
+   "set": {},
+   "pan": 0.2,
+   "entries": "body {'form': 'baffle', 'radius_m': 0.01098, 'depth_m': 0.00579}",
+   "rms_dbfs": -18.24,
+   "peak_dbfs": -10.71,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -165,6 +210,6 @@
   8000,
   16000
  ],
- "wall_s": 29.0,
+ "wall_s": 327.7,
  "seconds": 8.999
 }

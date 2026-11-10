@@ -13,11 +13,12 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 30 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 40 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
-  SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073;
-  `uv run python scripts/chain_status.py`).
+  SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073, SM7 -> 1073,
+  SM57 -> Helios, 251 -> 1073, C414 -> SSL, C414 -> clean, 4038 / U87 / KM84 -> TG, U47 fet -> API 312,
+  M160 -> 1073, R-121 -> API 312; `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
   (`config/circuits/telefunken_v72.yaml`, 8 of 14 of the Braunbuch's specs, the misses
@@ -50,18 +51,22 @@ runs**.
   curves through the circuit's feedback by `scripts/fit_k87.py`); WP22's Notes. WP24 (2026-11-10):
   the Neumann KM 84 (`config/circuits/neumann_km84.yaml` from Neumann's 930-12; `KK84@1`); WP24's
   Notes. WP15 (2026-11-10): the Shure SM7 (`config/circuits/shure_sm7.yaml`, `R_SM7@1` fitted to
-  the SM7B sheet; the switches not modelled); WP15's Notes.
-- **Next:** WP19 (Helios: the user's IA-H9 files in `data/schematics/helios_ia_h9/`, cleared for
-  use 2026-11-10; the parts list was read last session, the topology not yet traced); WP25 (U47
-  fet: Neumann's drawing and manual in `data/schematics/neumann_u47_fet/`, the input network and
-  the output side read, the amplifier loop T2-T6 still to trace: its README; `K47@3` exists);
-  WP18 (ELA M 251), WP23 (C414) and WP20 (TG) built by inference (the user's decision below);
-  WP17 (Beyer M160: its sheets in `data/schematics/beyer_m160/`, raster charts; a double ribbon at
-  hypercardioid on the 77-DX's labyrinth machinery); WP16 (Royer R-121); WP28 (U67 / REDD.47:
-  an EF86 fit), WP29 (M49: an AC701 fit), WP27, WP26 (a surface-mounted mic in scenes), WP30 (a
-  crystal transducer kind), WP31 (a carbon kind); WP15's switches and WP14's bass switch (their
-  curves digitized); WP13 (RE20) waits on the N-entry room generalization (its Decision).
-  The user fetches login-walled files on request: each URL alone in a code block.
+  the SM7B sheet; the switches not modelled); WP15's Notes. The second session of 2026-11-10: WP19 (the Helios,
+  `config/circuits/helios.yaml`, traced from the IA-H9 rev 1; the EQ isn't built), WP18 (the ELA M
+  251 E by inference), WP23 (the C414 B-ULS by inference), WP20 (the TG12345's mic input by
+  inference), WP25 (the U 47 fet from Neumann's drawing), WP17 (the beyerdynamic M 160,
+  `RIBBON_M160@1` by `scripts/fit_m160.py`), WP16 (the Royer R-121, `RIBBON_R121@1` by
+  `scripts/fit_r121.py`); each WP's Notes.
+- **Next:** WP28 (U67 / REDD.47: an EF86 fit first, the device-model rule: Python, SPICE,
+  circuitsim, both builders; sources to find: Neumann's U 67 drawing, EMI's REDD.47 sheets), WP29
+  (M49: an AC701 fit), WP27 (the Cloudlifter and three-stage chains in `compose_chain.py`), WP26 (a
+  surface-mounted mic in scenes), WP30 (a crystal transducer kind), WP31 (a carbon kind); WP15's
+  switches and WP14's bass switch (their curves digitized; WP14's network unread); WP13 (RE20)
+  waits on the N-entry room generalization (its Decision). Open options inside done WPs: the
+  Helios EQ (the IA-H9's EQUALIZER, VTB9043 / VTB9042 as the inductors), a CK12-family refit to
+  the C414 ULS's curves (its sheet's p.2, vector paths), the TG's channel past Amplifier D, the
+  U 47 fet's bass cut and -6 dB switches. The user fetches login-walled files on request: each
+  URL alone in a code block.
 - **The user's decisions (2026-11-10):** the IA-H9 files (Iron Age Audioworks) are OK to use for
   WP19. The C414 GroupDIY thread and a legible ELA M 251 drawing can't be had (the links are
   dead): don't ask for them again. Build those by inference, every value sourced as provisional
@@ -76,7 +81,8 @@ runs**.
     nominal, >= 1.4 V rms into 3k), the forum figures there as provisional values, the rest
     fitted to the handbook.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
-  Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
+  Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL, and the 2026-11-10 chains
+  (`config/scenes/new_chains_check.yaml` renders one of each) in the Room view (optional). One call
   of theirs: the JT-115K-E's 20 Hz THD at -20 dBu is 0.44% against Jensen's 0.065% (the
   fitted mumetall's low-field hysteresis; WP4's Notes): leave it, or refit / add a nickel
   material (moves every render).
@@ -165,16 +171,16 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 13 | Electro-Voice RE20 (Variable-D: rear entries along the body) | RE20 -> API, RE20 -> 1073 | L | |
 | 14 | Sennheiser MD421 (its bass switch) | MD421 -> API | L | |
 | 15 | Shure SM7 | SM7 -> 1073 | L | done 2026-11-10 (the flat setting; switches to do) |
-| 16 | Royer R-121 (offset ribbon) | R-121 -> API | M | |
-| 17 | Beyer M160 (two ribbons, hypercardioid) | M160 -> 1073 | M | |
-| 18 | Telefunken ELA M 251 (the C12's capsule, its own electronics) | 251 -> 1073 | M | |
-| 19 | Helios | SM57 -> Helios | M | |
-| 20 | EMI TG12345 | 4038 -> TG | M | |
+| 16 | Royer R-121 (offset ribbon) | R-121 -> API | M | done 2026-11-10 |
+| 17 | Beyer M160 (two ribbons, hypercardioid) | M160 -> 1073 | M | done 2026-11-10 |
+| 18 | Telefunken ELA M 251 (the C12's capsule, its own electronics) | 251 -> 1073 | M | done 2026-11-10 (by inference) |
+| 19 | Helios | SM57 -> Helios | M | done 2026-11-10 (the mic path; the EQ isn't built) |
+| 20 | EMI TG12345 | 4038 -> TG | M | done 2026-11-10 (the mic input, by inference) |
 | 21 | **The JFET model** | 0 | L | done 2026-11-06 in DEVICE_BUILDER_PLAN.md's B12: `varimu/devices/jfet.py`, the `jfet` part, `2N3819@1` / `J175@1` |
-| 22 | Neumann U87 (dual capsule, pattern by polarization) | U87 -> 1073, SSL, TG | L | done 2026-11-10 (TG when WP20 builds it) |
-| 23 | AKG C414 | C414 -> SSL, C414 -> clean | L | |
-| 24 | Neumann KM84 | KM84 -> 1073, KM84 -> TG | L | done 2026-11-10 (TG when WP20 builds it) |
-| 25 | Neumann U47 fet (the K47 exists) | U47 fet -> API | M | |
+| 22 | Neumann U87 (dual capsule, pattern by polarization) | U87 -> 1073, SSL, TG | L | done 2026-11-10 |
+| 23 | AKG C414 | C414 -> SSL, C414 -> clean | L | done 2026-11-10 (by inference) |
+| 24 | Neumann KM84 | KM84 -> 1073, KM84 -> TG | L | done 2026-11-10 |
+| 25 | Neumann U47 fet (the K47 exists) | U47 fet -> API | M | done 2026-11-10 |
 | 26 | Crown PZM and a mic placed on a surface in scenes | PZM -> clean, PZM -> SSL | L | |
 | 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | |
 | 28 | The EF86 fit; Neumann U67; EMI REDD.47 | U67 -> REDD.47, U67 -> 1073 | L | |
@@ -1406,6 +1412,148 @@ Notes (2026-11-06, started): step 1 done. The curves: M flat -54 dBV (2.0 mV/Pa)
 kHz, +7 dB at 5-7 kHz; the four dips at 50 Hz: -3 / -6 / -15 / -15 dB re M (by rank).
 Step 3 done (2026-11-06): `R_MD421@1` (`config/components/r_md421/1.yaml`; geometry block `R_MD421` in `published_points.yaml`, builder `build_r_md421`), fitted by `scripts/fit_md421.py` (the D112's method; a 49 mm head body): 2.000 mV/Pa, on axis rms 0.83 dB / max 1.7 dB over 40 Hz-8 kHz, the 90 deg side within 1 dB at 125 Hz-2 kHz. **Known misses:** the 4 kHz side (-4.3 vs the sheet's -10.4 dB) and the 8 kHz rear (-10.1 vs -16.7), above 8 kHz not fitted; bounds hit: B l 20 T m, resonance 110 Hz, the washer, the chamber's volume 400 cm^3, the dome's mass 2% (a heavy moving system, as the D112). `config/circuits/sennheiser_md421.yaml` (the M position, open circuit), the list's entry (output out, drop RLOAD, cardioid), `tests/test_sennheiser_md421.py` (5) and `test_chain_matrix.py` pass. **Not done:** the patent lookup (step 2) and the five-position bass switch's network (step 4: fitted to the four dips: -3 / -6 / -15 / -15 dB at 50 Hz by rank); no new chain opens until WP12 builds the API 312 (md421_api312).
 
+### WP19. The Helios
+
+Sources: `data/schematics/helios_ia_h9/README.md` (Iron Age Audioworks' IA-H9 files, the user's;
+the trace wire by wire; Sowter's 7490 figures).
+
+Notes (2026-11-10, done): `config/circuits/helios.yaml`, hand-written from `Schematic_IA-H9.pdf`
+(rev 1, rendered at 250 dpi and traced): the Sowter 7490 (1:10, the 1:1 tap for PAD; the
+JT-115K-E's fitted construction stands in), the "Mic Amp 2128" (Q1 2N5087 with the feedback into
+its emitter, Q2 / Q3 BC550C; GAIN SW2's R1-R8 from C4 to ground: the gain is 1 + 47k / R, R12
+carries no signal current), the 80 Hz Sallen-Key behind the Q4 follower (H2 as the `hpf`
+switch: the follower's ~25k input across R18 makes it ~100 Hz, Q ~1), EQ CUT's bypass (R25 240R
+-> R35 27K -> R36 5.1K || C43 68p) and the "Output Amp 2128" (the same amplifier, R43 8.2K: x6.7)
+into C49 / R49 (HI out; LO out not modelled). Rails ideal: the 7808's +8 V and -16 V less D2
+(-15.3 V). **Not built:** the EQ (its loading of R25's node too), the line input, phantom.
+Profile (`opamp_pre_suite.py`'s entry, reports/units/helios_nominal/): GAIN 25.2 / 29.8 / 40.0 /
+50.0 / 60.1 / 72.3 dB at the labels 20-70 (R1 56K gives x1.8: the low end above its label),
+20 Hz -0.5 / 20 kHz -1.2 dB at 50, output 48 ohm, THD 0.034% at +4 dBu (mostly H2), 1% at +15.2
+dBu, input 3.3 kOhm at 1 kHz falling to 590 ohm at 10 kHz (C2 150p and the secondary's
+capacitance reflected through 1:10). `tests/test_helios.py` (6); the list's entry (GAIN by its
+measured gain, PAD, HPF); `sm57_helios` composed and rendered in `new_chains_check.yaml`.
+
+### WP18. The Telefunken ELA M 251 E (by inference)
+
+Sources: `data/schematics/telefunken_ela_m251/README.md` (AKG's 1961 drawing Z. Nr. 1524 Sch 2 f,
+368 x 550 px: its parts list and amplifier read upscaled; what is inferred).
+
+Decisions (2026-11-10, the user's decision to build by inference; Claude's calls): the capsule
+`CK12@1`; the polarization as drawn (B+ / 2 by R3 / R4, R2 8M, C1 4000p) onto the backplate
+through R9 30M (R9 is the head's only resistor: its place inferred), C5 1000p to the grid; the
+three patterns as the C12's equivalent polarizations (rear +60 / 0 / -60 V: the figure-8's rear
+at B+ is an inferred wire, the head's decks aren't legible); B+ 120 V ideal (the C12's); T14/1 as
+`akg_c12.yaml`'s.
+
+Notes (2026-11-10, done): `config/circuits/telefunken_ela_m251.yaml`: the 6072 cathode-biased
+(R11 1.8k, C4 20u: the drawing; the C12 grounds its cathode), R10 100k, C2 100p, C3 1u. Idle 0.62
+mA, 1.12 V at the cathode. The whole microphone: 10.0 / 10.7 / 11.1 mV/Pa omni / cardioid /
+figure-8 (an original 251's 10 mV/Pa, micpedia; the reissue's 17 is a different circuit), the
+cardioid -23.8 dB at 180 deg. `tests/test_telefunken_ela_m251.py` (4); `m251_n1073` composed and
+rendered.
+
+### WP23. The AKG C414 B-ULS (by inference)
+
+Sources: `data/schematics/akg_c414/README.md` (AKG's C414B/ULS sheet: 12.5 mV/Pa every pattern,
+180 ohm, 140 dB SPL at 0.5% THD (1 kHz), pads -10 / -20, the curves flat +-2 dB).
+
+Decisions (2026-11-10, Claude's): the capsule `CK12@1` as is (on axis within AKG's +-2 dB to 15
+kHz: +1.5 dB at 10 kHz, -3.8 at 20 kHz from the capsule itself; **a CK12-family refit to the
+ULS's curves is the open option**, they are vector paths on the sheet's p.2, not digitized); the
+four patterns as the C12's equivalent polarizations at 60 V (hypercardioid rear -30 V); a
+2N3819-class FET common source with a gate bias divider and a partly bypassed source, then **a
+BC550C emitter follower** (the ULS has transistors after its FET: a common source alone couldn't
+give 180 ohm and 12.5 mV/Pa at 0.5% at 140 dB from the gate's 3.4 mV/Pa) and an output
+transformer; a 20 V FET rail ideal.
+
+Notes (2026-11-10, done): `config/circuits/akg_c414.yaml`. Fitted jointly (scratch scripts:
+the source degeneration RS1, the transformer's ratio, the gate bias): 12.50 mV/Pa (cardioid), 180
+ohm, 0.495% THD at 140 dB SPL; the other patterns 11.8 / 12.9 / 13.3 mV/Pa (omni / hyper / 8);
+the pads' capacitors across the capsule fitted to -10.0 / -20.0 dB (580 / 2400 pF against the
+capsule's ~267 pF). The bass cut not modelled. `tests/test_akg_c414.py` (4); `c414_ssl`,
+`c414_clean` composed (`c414_ssl` rendered).
+
+### WP20. The EMI TG12345 Mk II's mic input (by inference)
+
+Sources: `data/schematics/emi_tg12345/README.md` (the handbook's text; the forum's values; what
+the circuit infers).
+
+Decisions (2026-11-10, Claude's): Amplifier D as A3's forward path (VT1 BC550C for the BC109,
+VT2 2N5087 for the BCY71, VT3 BC550C), the overall feedback R5 10k (provisional) with R6 || AOT1
+and R8 derived from hb 12.27's 20 dB at 1.2k and +5 dB at 0; FINE in 1 dB steps (the A191's 0.5);
+COARSE's first three steps as taps on the secondary, the 8.33k ladder across the -15 dB tap; VT1's
+emitter resistor fitted for 0 V at the direct-coupled output; **C2 470 pF, not the forum's 8200
+pF** (it slewed VT1's ~10 uA at 20 kHz: VT1's current is pinned by R3 75k across VT2's
+base-emitter); T1's construction provisional; rails +-20 V ideal (hb 12.21).
+
+Notes (2026-11-10, done): `config/circuits/emi_tg12345.yaml`. Profile
+(reports/units/tg12345_nominal/): 34.8 dB at COARSE 0 / FINE 0 (29.8-39.8 over FINE), COARSE 5 dB
+a step to -20.4, flat to -0.1 dB at 20 kHz, 1% THD at +13.8 dBu into 3k (hb: >= 1.4 V rms), out
+0.35 ohm, in 16 kOhm at 1 kHz (4.2k at 40 Hz). Only the mic input is built: a 4038 into it prints
+at -55 dBFS rms in the check scene (the TG's channel has more gain after Amplifier D).
+`tests/test_emi_tg12345.py` (5); `c4038_tg`, `u87_tg`, `km84_tg` composed (`c4038_tg` rendered).
+
+### WP25. The Neumann U 47 fet
+
+Sources: `data/schematics/neumann_u47_fet/README.md` (Neumann's drawing via RecordingHacks; the
+loop traced 2026-11-10; Neumann's data).
+
+Notes (2026-11-10, done): `config/circuits/neumann_u47_fet.yaml`, from the drawing: the K47@3 at
+cardioid (the rear diaphragm wired to the backplate), T1 (2N3819 class) into T2's emitter (a
+common base) and T3 (its cascode), T6 common emitter on T5's current source into Ü1's primary,
+the capacitive feedback R2 || C2 and R3 || C3 into the gate (a charge amplifier), T4 the DC servo
+onto T2's base, T7 the filtered +43 V follower, the phantom through 3.4k (DIN 45596) and R18 ||
+R19, R20 || R21 / R16 / R8 to line a. S1 (-10 dB) shorts R2 || C2. Idles within 3% of every
+printed voltage (line b 20.8 V against 21.5). Ü1's ratio fitted to 8 mV/Pa: 0.1274; then 153 ohm
+(Neumann 150), 0.05% THD at 137 dB SPL (< 0.5%), the pad -9.0 dB, the K47's +4.2 dB at 10 kHz.
+**Not modelled:** S2's bass cut, S3's -6 dB, C12 / C13. `tests/test_neumann_u47_fet.py` (4);
+`u47fet_api312` composed and rendered.
+
+### WP17. The beyerdynamic M 160
+
+Sources: `data/schematics/beyer_m160/README.md` (beyer's product data and information, the
+Resolution review).
+
+Decisions (2026-11-10, Claude's): the double ribbon as one equivalent ribbon (2.4 mm wide, 22 mm,
+1.8 um: provisional; the review's "spaced 0.5 mm apart" read as side by side, no gap between
+modelled); the hypercardioid as RIBBON_77DX's polydirectional circuit with one fixed slot (no
+shutter); the rear labyrinth RIBBON_77DX's (3 cm modelled, matched); the transformer a design
+(`config/designs/beyer_m160_ot.yaml`, EI-18, 1:26 for 200 ohm); the pattern targets the ideal
+hypercardioid's (90 deg -12, 180 deg -6 dB) with beyer's 110 deg > 25 dB as a bound.
+
+Notes (2026-11-10, done): `RIBBON_M160@1` (published_points.yaml "RIBBON_M160", builder
+`build_ribbon_m160`) fitted by `scripts/fit_m160.py` (fit_77dx's machinery; 2 rounds, ~10 min):
+1.000 mV/Pa; on axis rms 0.79 / 1.30 / 1.98 dB over 40 Hz-1 kHz / 1-10 kHz / 10-18 kHz (max 2.3);
+at 1 kHz 90 deg -11.9, 110 deg -36, 180 deg -6.1 dB (250 Hz alike; 8 kHz -8.5 / -17 / -3.1).
+**Bounds hit:** the foil's tuning at 5 Hz (the bass shape is the screen's and the rear path's),
+the slot's width at 5 mm. `M160_OT@1`. The 1 m curve digitized from the embedded image
+(`data/datasheets/beyer_m160_response.csv` + provenance; the 10 cm / 2 cm proximity traces not).
+`config/circuits/beyer_m160.yaml`, `tests/test_beyer_m160.py` (4); `m160_n1073` composed and
+rendered.
+
+### WP16. The Royer R-121
+
+Sources: `data/schematics/royer_r121/README.md` (Royer's manual and 2000 cut sheet, fetched
+2026-11-10).
+
+Decisions (2026-11-10, Claude's): Royer's ribbon (1.5 x 3/16 in x 2.5 um) on Olson's circuit
+like the 4038 (`scripts/fit_r121.py` from `fit_4038.py`), the offset as the front channel 30% of
+the pole pieces' depth (provisional), the transformer a design (`config/designs/
+royer_r121_ot.yaml`, EI-18, 1:40 for 300 ohm), the sensitivity the manual's -49 dB re 1 V/Pa.
+The chart's rules aren't a uniform log scale: its frequency axis log-interpolated between the
+printed labels (the provenance sidecar).
+
+Notes (2026-11-10): done. `RIBBON_R121@1` (published_points.yaml "RIBBON_R121", builder
+`build_ribbon_r121`) fitted by `scripts/fit_r121.py --grid --write` (~15 min): the body 10.98 x 5.79
+mm, the tuning 44.1 Hz q 2.77 (the 55 Hz bump), the screens 2.23 rayl, the gap 1.081 T
+(neodymium): -49.0 dB re 1 V/Pa; on axis rms 1.26 / 1.62 / 1.29 dB over 50 Hz-1 kHz / 1-10 kHz /
+10-15 kHz (max 2.7 dB at 2 kHz: inside the manual's +-3 dB). The ribbon 0.093 ohm, 1.35 mg.
+`R121_OT@1` (1:40, ~308 ohm). The chart digitized (`data/datasheets/royer_r121_response.csv` +
+provenance). Not checked: the offset's brighter rear at close range (the manual's p.14), the
+polars beyond the figure-8's null. `config/circuits/royer_r121.yaml`, `tests/test_royer_r121.py`
+(4); `r121_api312` composed and rendered.
+
+
 ### WP10-WP31
 
 Steps are written when a WP starts (step 4 of "Start"). Pointers for each:
@@ -1424,7 +1572,10 @@ touched only `varimu/mics`, `varimu/rooms`, data and configs, outside the key; W
 its step 4 the `line` kind and `stops` in `varimu/devices/{moving_coil,ribbon}.py` and a refusal in
 `varimu/circuit/parts.py`, every existing component compiling to its saved elements; its steps
 5-6 the ribbon motor's `stop` in `varimu/circuit/builder.py` and `RIBBON_77DX` in
-`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise; 2026-11-10: `build_k87`, `build_kk84`, `build_r_sm7` there, the API 312's and the 1073's entries in `varimu/measure/opamp_pre_suite.py` and `profiles.py`; the 2520's bias / C5 fits change only `api_2520_test.yaml`; the app fixtures re-exported, `varimu-circuit`'s agreement test passes): these
+`varimu/devices/library.py`, every existing IR unchanged; WP8 added `build_ribbon_4038` there, likewise; WP9 `build_r_d112`, WP14 `build_r_md421`, likewise; 2026-11-10: `build_k87`, `build_kk84`, `build_r_sm7` there, the API 312's and the 1073's entries in `varimu/measure/opamp_pre_suite.py` and `profiles.py`; the 2520's bias / C5 fits change only `api_2520_test.yaml`; the app fixtures re-exported, `varimu-circuit`'s agreement test passes; 2026-11-10 (second session): `build_ribbon_m160`, `build_ribbon_r121` in
+`varimu/devices/library.py` and the Helios's and TG's entries in `opamp_pre_suite.py` /
+`profiles.py`, every existing IR unchanged; the app fixtures re-exported, the agreement test
+passes): these
 move every render's cache key, so the full suite re-renders; no device model, engine or existing circuit changed, every
 fixture and golden unmoved, so `--verify` isn't due). Note: `ruff check .` reports one E501 in `varimu/phono/cylinder.py`, committed
 before this session (not the chains' work), and `ruff format --check` one file, `scripts/derive_rhodes_5e3.py` (also not the chains').
@@ -1519,3 +1670,9 @@ before this session (not the chains' work), and `ruff format --check` one file, 
   `R_SM7@1` on fit_md421's method (on axis rms 0.77 dB; the polars above 2 kHz miss); SM7 -> 1073
   composed: 30 of 51. WP23 (C414) and WP18 (ELA M 251) wait on files; WP25's sources fetched and
   its input network read.
+- 2026-11-10 (second session, the user away): WP19 the Helios traced from the IA-H9 (25-72 dB);
+  WP18 the ELA M 251 E, WP23 the C414 B-ULS and WP20 the TG12345's mic input by inference (the
+  user's decision); WP25 the U 47 fet from Neumann's drawing (idles within 3%, 8 mV/Pa); WP17 the
+  M 160 (RIBBON_M160 on the 77-DX's circuit, a hypercardioid slot); WP16 the R-121 (the offset
+  ribbon); SM57 -> Helios, 251 -> 1073, C414 -> SSL / clean, 4038 / U87 / KM84 -> TG, U47 fet ->
+  API, M160 -> 1073, R-121 -> API composed: 40 of 51 available.

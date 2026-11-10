@@ -1,0 +1,40 @@
+# The Royer R-121 offset-ribbon figure-8 (docs/CHAINS_PLAN.md WP16), after Royer's manual
+# (data/schematics/royer_r121/README.md): the ribbon motor RIBBON_R121 (1.5 x 3/16 in x 2.5 um
+# aluminium, offset toward the front, on Olson's circuit; fitted by scripts/fit_r121.py to the
+# manual's response chart and -49 dB re 1 V/Pa) into its transformer R121_OT (a design:
+# config/designs/royer_r121_ot.yaml, 1:40 for 300 ohm), as coles_4038.yaml.
+#
+# The ribbon is driven at its front (the logo side) by `in` and at its rear by the control
+# input `p_rear` (pascals as volts).
+
+title: "Royer R-121"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, rp, rm]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "provisional: MIC_ROOM_PLAN.md's proposed source convention (0 dBFS = 20 Pa peak; as coles_4038.yaml)"}
+  output_volts_peak: {value: 0.15, source: "derived: royer's 3.55 mV/Pa x 20 Pa = 71 mV peak, with headroom for the proximity rise"}
+
+values:
+  ribbon_model: {value: RIBBON_R121@1, source: "config/components/ribbon_r121/1.yaml (Royer's ribbon offset toward the front on Olson's circuit, fitted to the manual's figures by scripts/fit_r121.py)"}
+  ribbon_leak_ohm: {value: 1.0e+9, source: "numerical: a DC path for the floating ribbon and primary"}
+  transformer_model: {value: R121_OT@1, source: "config/components/r121_ot/1.yaml (config/designs/royer_r121_ot.yaml: 1:40, inferred)"}
+  load_ohm: {value: 1.0e+6, source: "royer: rated load impedance 1500 ohm (open circuit here: the sensitivity's condition; a chain replaces the load with its preamp)"}
+
+sections:
+  - title: ribbon
+    parts:
+      RB:
+        ribbon_motor: [in, p_rear, rp, rm]
+        component: ribbon_model
+      RRL: {R: [rm, "0"], r: ribbon_leak_ohm, tolerance: none}
+
+  - title: transformer
+    parts:
+      T1:
+        transformer:
+          p: {nodes: [rm, rp]}   # the sense that puts the output positive for front pressure (as coles_4038.yaml)
+          s: {nodes: ["0", out]}
+        component: transformer_model
+      RLOAD: {R: [out, "0"], r: load_ohm, tolerance: none}

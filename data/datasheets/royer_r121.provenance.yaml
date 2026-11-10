@@ -1,0 +1,21 @@
+device: "Royer Labs R-121 (offset ribbon, figure-8)"
+curve: frequency response (on axis), relative to its 1 kHz reading
+publisher: Royer Labs
+documents:
+  royer:
+    title: "R-121 Mono Ribbon Velocity Microphone, Operation Instructions Manual"
+    scan_source: "web: https://cf3.zzounds.com/media/R-121manual-2c43c453a7fd3f8c7fc0b9bf5d670e47.pdf (data/schematics/royer_r121/R-121manual.pdf, not committed)"
+    sha256: 1de6d2354b7530de3ad81e2d9c6a00fdb7c586914dfa020c0d80b61ba473ce8e
+    page: "PDF p.18 (index 17), the Frequency Response chart: an embedded 1303 x 240 grey image (xref 136)"
+local_copy: "none (the PDF isn't committed; hash above)"
+digitized_with: >-
+  the embedded image's pixels (pymupdf extract_image). The chart's vertical rules are not a uniform
+  log scale, so the frequency axis is log-interpolated between its printed labels, each at its
+  nearest rule (20 Hz x 61, 50 at 150.5, 100 at 289, 500 at 454.5, 1000 at 635.5, 5K at 828.5,
+  10K at 1046, 20K at 1273; the labels' centres found as dark blobs under the chart); level axis:
+  the rules every 5 dB, 31.5 px each, 0 dB at y 98.5. The thick trace read as the median centre of
+  dark runs >= 4 px (the rules are 1-2 px) in 7 columns at each frequency; 20 Hz not readable
+  (the trace's start), 25 Hz and 17-18 kHz coarse. Re the 1 kHz reading. Frequencies between
+  labels may be off by up to ~10% (the rules' irregular spacing).
+digitized_by: Claude Code
+digitized_on: 2026-11-10

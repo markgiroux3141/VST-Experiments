@@ -126,7 +126,13 @@ circuits:
     drop: [RLOAD]
     pattern: figure-8
     settings: []
-  royer_r121: {kind: mic, tag: r121, label: Royer R-121, wp: 16}
+  royer_r121:                       # the offset ribbon, figure-8 (CHAINS_PLAN.md WP16)
+    kind: mic
+    tag: r121
+    label: Royer R-121
+    output: out
+    drop: [RLOAD]
+    pattern: figure-8
   beyer_m160:                       # the double ribbon, hypercardioid (CHAINS_PLAN.md WP17)
     kind: mic
     tag: m160

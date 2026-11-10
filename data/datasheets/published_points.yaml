@@ -965,6 +965,47 @@
     sensitivity_v_per_pa: 0.6e-3   # stc: 0.06 mV per microbar open circuit (the fit's target)
     ribbon_ohm: 0.22               # bbc 2.3.3: 'The d.c. resistance of the ribbon in the PGS microphone is 0.22 ohm' (a check)
 
+# --- Royer R-121 ribbon motor (docs/CHAINS_PLAN.md WP16) ---
+"RIBBON_R121":
+  source: "data/schematics/royer_r121/README.md: the ribbon from Royer's R-121 manual (1.5 x 3/16 in x 2.5 um aluminium, neodymium Flux-Frame, the offset ribbon toward the front), the motor after Olson's circuit (SBE handbook Fig. 4.1.11), the pole pieces as a baffle (varimu.mics.bor.baffle_mesh), the front channel 30% of their depth (the offset, provisional); the body, the tuning, the foil's loss, the screens and the gap's flux fitted to the manual's response chart and -49 dB re 1 V/Pa by scripts/fit_r121.py (docs/CHAINS_PLAN.md WP16); screens and leads provisional"
+  geometry:
+    body:
+      form: baffle
+      radius_m: {value: 0.01098}   # fitted (scripts/fit_r121.py): royer's chart from 1 to 16 kHz re 1 kHz (an equivalent disc, not a drawing)
+      depth_m: {value: 0.00579}   # fitted with radius_m to the same curve; the channels below OFFSET (0.3) of it in front, the rest behind (the offset ribbon)
+    ribbon:
+      length_m: {value: 0.0381}   # royer: the manual's '1.5" x 3/16" x 2.5-micron ribbon assembly' (38.1 mm)
+      width_m: {value: 0.00476}   # royer: the same, 3/16 in (4.76 mm)
+      thickness_m: {value: 2.5e-06}   # royer: the same, 2.5 micron (aluminium: the cut sheet's '2.5-micron aluminum ribbon')
+      density_kg_m3: {value: 2700.0}   # provisional: model knowledge (pure aluminium, CRC handbook 2.70 g/cm^3)
+      resistivity_ohm_m: {value: 2.65e-08}   # provisional: model knowledge (pure aluminium at 20 C, CRC handbook 2.65 uOhm cm)
+      corrugation: {value: 1.1}   # provisional: as RIBBON_44BX (a corrugated foil)
+      resonance_hz: {value: 44.1}   # fitted (scripts/fit_r121.py): the foil's own tuning in vacuo, to royer's bass (bounds 8-60 Hz)
+      q: {value: 2.765}   # fitted with resonance_hz: the bass shape (the screens' and the foil's damping together)
+      modes: {value: 5}   # numerical: the odd length modes 1-9, the rest lumped on the 11th
+    magnet:
+      b_gap_t: {value: 1.081}   # fitted (scripts/fit_r121.py): royer's -49 dB re 1 V/Pa open circuit through R121_OT@1 (1:40)
+      gap_length_m: {value: 0.0381}   # provisional: model knowledge (the pole pieces span the ribbon)
+    leads:
+      r_ohm: {value: 0.01}   # provisional: model knowledge (the clamps and short leads)
+      l_h: {value: 4.0e-8}   # provisional: model knowledge (the ribbon and its return as a loop ~38 x 8 mm)
+    network:
+      - {name: rad_f, kind: radiation, a: front, b: fo, width_m: {value: 0.005}, length_m: {value: 0.0381}}
+      - {name: screen_f, kind: screen, a: fo, b: fs, rayl: {value: 2.23}, area_m2: {value: 0.00019050000000000002}}
+      - {name: chan_f_a, a: fs, b: cf, kind: slit, width_m: {value: 0.005}, breadth_m: {value: 0.0381}, length_m: {value: 0.0008685}, wide_at_hz: {value: 1000.0}}
+      - {name: cav_f, kind: cavity, a: cf, volume_m3: {value: 3.3089850000000004e-07}}
+      - {name: chan_f_b, a: cf, b: f, kind: slit, width_m: {value: 0.005}, breadth_m: {value: 0.0381}, length_m: {value: 0.0008685}, wide_at_hz: {value: 1000.0}}
+      - {name: rib, kind: ribbon, a: f, b: r}
+      - {name: edge, kind: slit, a: f, b: r, width_m: {value: 0.000125}, breadth_m: {value: 0.0762}, length_m: {value: 0.0005}}
+      - {name: chan_r_a, a: r, b: cr, kind: slit, width_m: {value: 0.005}, breadth_m: {value: 0.0381}, length_m: {value: 0.0020265}, wide_at_hz: {value: 1000.0}}
+      - {name: cav_r, kind: cavity, a: cr, volume_m3: {value: 7.720965000000001e-07}}
+      - {name: chan_r_b, a: cr, b: rs, kind: slit, width_m: {value: 0.005}, breadth_m: {value: 0.0381}, length_m: {value: 0.0020265}, wide_at_hz: {value: 1000.0}}
+      - {name: screen_r, kind: screen, a: rs, b: ro, rayl: {value: 2.23}, area_m2: {value: 0.00019050000000000002}}
+      - {name: rad_r, kind: radiation, a: rear, b: ro, width_m: {value: 0.005}, length_m: {value: 0.0381}}
+  published:
+    sensitivity_v_per_pa: 3.55e-3   # royer: -49 dB re 1 V/Pa (the manual; the fit's target)
+    output_ohm: 300.0              # royer: 300 ohm nominal balanced (a check, through R121_OT@1)
+
 # --- RCA 77-DX ribbon motor (docs/CHAINS_PLAN.md WP7) ---
 # The 77-DX's ribbon on Olson's polydirectional circuit (Proc. IRE 32, 1944: the ribbon's back on a labyrinth
 # connector, a damped pipe and an aperture under the shutter). Sources: data/schematics/rca_77dx/README.md (ib2:

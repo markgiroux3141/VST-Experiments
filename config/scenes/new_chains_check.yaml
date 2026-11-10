@@ -66,3 +66,8 @@ mics:
     position_m: [1.8, 2.7, 1.2]
     aim: {azimuth_deg: -30}
     pan: -0.3
+  - name: R-121 into API
+    chain: r121_api312
+    position_m: [2.2, 2.3, 1.2]
+    aim: {azimuth_deg: 120}
+    pan: 0.2

@@ -1,0 +1,90 @@
+# Compiled by varimu-components 0.2.0 on 2026-11-10.
+# Don't edit by hand: edit the design and save it as a new version.
+name: R121_OT
+kind: transformer
+source: 'Royer R-121 ribbon transformer (royer: the R-121 manual''s 300 ohm nominal balanced output, 158 x 25 mm body; data/schematics/royer_r121/README.md): the construction unpublished, the ratio derived from the ribbon''s resistance and 300 ohm, the rest provisional'
+compiler: varimu-components 0.2.0
+construction:
+  core:
+    lamination: {value: EI-18, source: 'provisional: model knowledge (a transformer inside a 25 mm body: the lamination table''s smallest, 3/16 in tongue)'}
+    material: {value: mumetall, source: 'provisional: model knowledge (a ribbon transformer at fractions of a millivolt: a high-nickel core)'}
+    stack_m: {value: 0.0095, source: 'provisional: model knowledge (a 3/8 in stack on the 3/16 in tongue)'}
+    stacking_factor: {value: 0.92, source: 'web: https://sekels.de/fileadmin/PDF/Deutsch/24_Info_Kernbleche.pdf (SEKELS / VAC Kernbleche, Tabelle 6: Mumetall-type laminations 0.35 mm, 92%)'}
+    stacking: {value: interleaved, source: 'provisional: model knowledge (an ungapped microphone transformer: E and I interleaved)'}
+    joint_gap_m: {value: 2.35e-07, source: 'provisional: as SM57_OT''s (config/designs/sm57_ot.yaml: an interleaved mumetall joint fitted to a measured primary inductance)'}
+  bobbin:
+    wall_m: {value: 0.0004, source: 'provisional: model knowledge (a small plastic bobbin)'}
+    cheek_m: {value: 0.0006, source: 'provisional: model knowledge'}
+    margin_m: {value: 0.0002, source: 'provisional: model knowledge (a small creepage margin each end)'}
+    pitch_factor: {value: 1.1765, source: 'web: https://lantern.mediahist.org/catalog/radiobroadcast16gardrich_0045 (Radio Broadcast Nov 1929 p.48: turns per layer = winding length / wire diameter x a space factor of 85% for small wires)'}
+  arrangement: {value: layer, source: 'provisional: model knowledge (layer-wound: the ribbon''s primary on the tongue, then the secondary)'}
+  windings: [p, s]
+  sections:
+  - winding: p
+    turns: {value: 20, source: 'provisional: model knowledge (a ribbon transformer''s primary: a few tens of turns of heavy wire, its resistance well under the ribbon''s)'}
+    layers: {value: 2, source: 'derived: turns / turns per layer (AWG 22 heavy at the pitch factor on the 9.5 mm traverse: two layers of 10)'}
+    wire: {value: AWG 22 heavy, source: 'provisional: model knowledge (the primary in series with a ~0.1 ohm ribbon)'}
+    enamel: {value: enamel, source: 'provisional: model knowledge (enamelled magnet wire)'}
+    interlayer:
+      thickness_m: {value: 2.5e-05, source: 'provisional: model knowledge (0.001 in paper)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge (kraft paper)'}
+  - insulation:
+      thickness_m: {value: 0.00015, source: 'provisional: model knowledge (a few wraps of tape between the windings)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge'}
+  - winding: s
+    turns: {value: 800, source: 'derived: n = 40: the ribbon''s ~0.10 ohm and the primary''s 0.04 ohm reflected (n^2 x 0.14 = 226 ohm) plus the secondary''s ~82 ohm make royer''s 300 ohm nominal'}
+    layers: {value: 13, source: 'derived: turns / turns per layer (62 of AWG 38 heavy, under the ~70 that fit the 9.5 mm traverse at the pitch factor)'}
+    wire: {value: AWG 38 heavy, source: 'provisional: model knowledge (fills the small window with the primary)'}
+    enamel: {value: enamel, source: 'provisional: model knowledge'}
+    interlayer:
+      thickness_m: {value: 1.2e-05, source: 'provisional: model knowledge (thin interlayer film)'}
+      dielectric: {value: kraft_dry, source: 'provisional: model knowledge'}
+  leakage_method: formula
+  rating:
+    windings: [p]
+    v_rms: {value: 0.01, source: 'provisional: model knowledge (the ribbon''s EMF at 135 dB SPL: 112 Pa x ~0.08 mV/Pa)'}
+    f_hz: {value: 30.0, source: 'royer: the manual''s maximum SPL 135 dB @ 30 Hz'}
+resolved:
+  lamination: {name: EI-18, shape: EI, leg_m: 0.004762499999999999, window_width_m: 0.004775199999999999, window_height_m: 0.0111252, path_m: 0.041275, path_derived: false, source: 'web: https://www.tempel.com/hubfs/TempelTransformerIndexCatalog_01.17.2022.pdf (Tempel Transformer Index & Catalog, EI Section 1, the two smallest sizes: EI-18 (0018) PDF p.5, ''Window Dimensions .438 in. x .188 in.'', ''Length of Magnetic Path 1.625 in.'', 0.750 x 0.625 in overall; EI-25 (00251) PDF p.6, ''Window Dimensions .500 in. x .250 in.'', ''Length of Magnetic Path 2.000 in.'', 1.000 x 0.750 in overall); EI-25 is also Edcor''s EI025 (drawing 15000-EI025-025-R01, 1.000 x 0.750 in, web: http://www.edcorusa.com/Content/DWG/15000-EI025-025-R01.pdf via the Wayback Machine)'}
+  material: {name: mumetall, source: 'fit (2026-10-24; mu4 +0.5%, mu_max -0.3%, Hc +2.3%, hysteresis loss at 0.5 T -2.2%, Rayleigh-region mu at 0.04 A/m -0.5%; origin permeability ~29,300): scripts/fit_core_material.py to the MUMETALL datasheet figures and its Rayleigh region (the datasheet block). Replaces the 2026-10-21 fit to the four scalars alone (c 0.00077: almost all irreversible, H ~ sqrt(B) at program levels, origin permeability 246; Phase 2''s ''Low-level core physics'', Option 1). Datasheet (web: https://www.matthey.ch/fileadmin/user_upload/downloads/fichetechnique/EN/MuMetall_v22E.pdf, Lamineries Matthey / Vacuumschmelze: ~76% Ni, 5% Mo, 5% Cu); Ms from its saturation polarization 0.8 T'}
+  copper: {resistivity_ohm_m: 1.7241e-08, temperature_c: 20.0, source: 'web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (NBS Handbook 100, Copper Wire Tables, 1966: the International Annealed Copper Standard, conductivity 58 m/(ohm mm^2) at 20 C, ''volume resistivity of annealed copper at 20 C = 100/58 = 1.7241 microhm-cm'', PDF p.16-17; temperature coefficient 0.00393 at 20 C, PDF p.10; IEC Publication 28, now IEC 60028)'}
+  wires:
+    AWG 22 heavy: {bare_m: 0.0006438032984904794, overall_m: 0.00070104, source: 'bare: web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (the American Wire Gage''s law, PDF p.12: No. 0000 0.4600 in, No. 36 0.0050 in, ratio 92^(1/39); published as ASTM B 258); overall (heavy, nominal): web: https://mwswire.com/wp-content/uploads/2024/01/MWS-copper-magnet-wire-data.pdf (MWS Wire, Copper Magnet Wire Data, p.2: overall diameters ''derived from NEMA MW1000-2020'', min / nom / max)'}
+    AWG 38 heavy: {bare_m: 0.0001007155787939871, overall_m: 0.00012445999999999998, source: 'bare: web: https://nvlpubs.nist.gov/nistpubs/Legacy/hb/nbshandbook100.pdf (the American Wire Gage''s law, PDF p.12: No. 0000 0.4600 in, No. 36 0.0050 in, ratio 92^(1/39); published as ASTM B 258); overall (heavy, nominal): web: https://mwswire.com/wp-content/uploads/2024/01/MWS-copper-magnet-wire-data.pdf (MWS Wire, Copper Magnet Wire Data, p.2: overall diameters ''derived from NEMA MW1000-2020'', min / nom / max)'}
+  dielectrics:
+    enamel: {eps_r: 3.8, source: 'provisional: model knowledge (magnet wire enamels: polyurethane, polyvinyl formal, polyester-imide, oleoresinous; no datasheet gives it; a patent snippet (US 10199138, unverified) puts conventional enamels at 3.8-4.2 at 25 C)'}
+    kraft_dry: {eps_r: 2.2, source: 'provisional: model knowledge (porous unimpregnated kraft, ~0.75-1.0 g/cm^3; Nomex 410 papers of like density read 1.6-2.7 at 60 Hz, same sheet as nomex410_*)'}
+compiled:
+  source: 'derived: varimu-components 0.2.0 from this version''s construction (the formulas: crates/varimu-components)'
+  core: {material: mumetall, area_m2: 4.162425e-05, path_m: 0.041275, gap_m: 4.7e-07}
+  turns: 20.0
+  windings:
+    p: {ratio: 1.0, r: 0.038353442816787174, c: 1.1329866172430447e-11, leak: 1.01796598445183e-06}
+    s: {ratio: 40.0, r: 81.66399280834173, c: 1.9592578267887513e-11, leak: 0.002360801741475781}
+  capacitors:
+  - between: [p.dot, s.dot]
+    c: 7.119550859161732e-12
+  - between: [p.dot, s.other]
+    c: 3.848405869817152e-13
+  - between: [p.other, s.dot]
+    c: 2.174349316446691e-11
+  - between: [p.other, s.other]
+    c: 7.696811739634304e-13
+report:
+  windings:
+    p: {turns: 20.0, copper_m: 0.7241660808816985, dcr_ohm: 0.038353442816787174, magnetizing_h: 0.011126844634936855, star_leak_h: 1.01796598445183e-06, self_c_f: 1.1329866172430447e-11}
+    s: {turns: 800.0, copper_m: 37.73560744641514, dcr_ohm: 81.66399280834173, magnetizing_h: 17.802951415898967, star_leak_h: 0.002360801741475781, self_c_f: 1.9592578267887513e-11}
+  leakage_method: formula
+  short_circuit_h: {p (s shorted): 2.493467072874194e-06, s (p shorted): 0.00398954731659871}
+  core: {area_m2: 4.162425e-05, path_m: 0.041275, gap_m: 4.7e-07, saturation_t: 0.7999751537455919}
+  window: {traverse_m: 0.009525200000000001, extent_m: 0.0037214584288698914, window_width_m: 0.004775199999999999, field_length_m: 0.010248350721856389, copper_fill: 0.24252413739756665}
+  flux:
+    windings: [p]
+    v_rms: 0.01
+    f_hz: 30.0
+    b_peak_t: 0.09012337721371419
+  facing_capacitance:
+  - between: [p, s]
+    sections: [0, 2]
+    c_f: 3.0017565784573786e-11
+  warnings: []

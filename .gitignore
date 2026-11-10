@@ -83,6 +83,8 @@ data/schematics/helios_ia_h9/*
 !data/schematics/helios_ia_h9/README.md
 data/schematics/emi_tg12345/*.txt
 data/schematics/api_312/*.pdf
+# Royer's R-121 manual and cut sheet (cited by data/schematics/royer_r121/README.md)
+data/schematics/royer_r121/*.pdf
 
 # Reference recordings of real instruments and songs (commercial / third-party audio), never committed
 real instrument samples/
