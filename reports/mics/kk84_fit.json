@@ -1,0 +1,18 @@
+{
+ "best": {
+  "diaphragm/tension_n_m": 16.669475964935078,
+  "through_resistance_pa_s_m3": 64158366.64134441,
+  "film_resistance_pa_s_m3": 27170997.323533062,
+  "backplate/blind/depth_m": 0.0014999999999999994,
+  "backplate/blind/holes": 149.99999999999983,
+  "stray_capacitance_f": 1.0000000000001325e-12,
+  "mv_pa_at_node": 2.054,
+  "target_mv_pa": 2.178,
+  "cardioid_0_rms_db": 0.67,
+  "cardioid_0_max_db": 1.44,
+  "cardioid_135_rms_db": 3.61,
+  "cardioid_135_max_db": 4.59,
+  "c0_pf": 34.1,
+  "rms_weighted_db": 1.01
+ }
+}

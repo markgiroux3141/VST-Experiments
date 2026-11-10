@@ -178,7 +178,18 @@ circuits:
         choices: [[0, "off"], [1, "-10 dB"]]
         default: 0
   neumann_u47_fet: {kind: mic, tag: u47fet, label: U47 fet, wp: 25}
-  neumann_km84: {kind: mic, tag: km84, label: Neumann KM84, wp: 24}
+  neumann_km84:                     # the KK 84 cardioid; -10 dB pad
+    kind: mic
+    tag: km84
+    label: Neumann KM84
+    output: out
+    drop: [RLOAD]
+    pattern: cardioid
+    settings:
+      - key: pad
+        label: KM84 pad
+        choices: [[0, "off"], [1, "-10 dB"]]
+        default: 0
   akg_c414: {kind: mic, tag: c414, label: AKG C414, wp: 23}
   crown_pzm: {kind: mic, tag: pzm, label: Crown PZM, wp: 26}
   shure_green_bullet: {kind: mic, tag: bullet, label: Shure Green Bullet, wp: 30}

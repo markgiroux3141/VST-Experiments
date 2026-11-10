@@ -27,7 +27,8 @@ the capsule (a capacitive divider). Contact 6 at 47 V through R2 150k; R8 1M || 
 there to the contact-2 line (the front diaphragm), which C5 0.033u + R9 6k8 + R10 560 hold at
 AC ground (R9 / R10 the calibration input). The pattern switch (contacts 1, 2, 3, 5, 7, 8, R1
 300k, R3 1G, R4 / R5 68M, C2 10000p) sets the rear diaphragm's voltage. T1 (8280800006.4, a
-selected FET: a 2N3819 or similar, ProSoundWeb's version list) a source follower: drain C7 1u
+selected FET: a 2N3819 or similar, ProSoundWeb's version list) common source, its source
+bypassed by C8 20u: drain C7 1u
 into the transformer 90415 (Ue1: 200 / 50 ohm), source resistor selected (*); R12 47k, R13
 330k, C9 0.47u (bootstrap), R14 10k, R15 / R16 150k, C10 4.7u, C11 / C13 2.2u, C8 20u, C12 10u;
 supply: phantom through R18 / R19 2k2 (paired), D1 TCR503 (a current regulator), Gr1 33 V

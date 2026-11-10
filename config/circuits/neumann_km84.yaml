@@ -1,0 +1,120 @@
+# The Neumann KM 84 (i) (docs/CHAINS_PLAN.md WP24), from Neumann's circuit diagram KM 84-930-12
+# (2.12.68, the KM 83...KM 85 / SRM 84; sources: data/schematics/neumann_km84/README.md). Values
+# cite "sch: <part>" (the drawing), "man:" (the KM 83 i / 84 i / 85 i operating instructions).
+#
+# The capsule (KK 84) at its front on `in`, its rear on the control input `p_rear` (pascals as
+# volts); its electrode A polarized through R1 1G from the filtered +46 V (R5 / R8 10M, C6 /
+# C10 0.1u), the other at ground. C1 470p onto T1's gate (R2 1G); C2 3p3 from A to the drain (a
+# feedback capacitor), and -10 dB (S1) adds C9 15p there: the pad at the gate (Neumann's
+# brochure). T1 (2N3819) common source, its source R3 (selected) || C3 1.5u, the drain on R4
+# 47k from the +21.5 V node (R7 10k from Gr1's +24 V, C5 5u), C4 1u into Bv. 107's primary,
+# the secondary at 200 ohm into RLOAD (man: load 1000 ohm; dropped in a chain). The rails ideal
+# (the phantom's +46 V, Gr1 ZF24's +24 V; R6 56k, R9 / R10 2k2, R11 / R12 47 not modelled).
+#
+# The KK 84 is a single-diaphragm cardioid (its crossed-slit backplate the rear acoustic
+# network); it is modelled in the dual-diaphragm form at the cardioid setting (the rear half
+# unpolarized: a passive membrane and its backplate network as the rear's), fitted to the
+# KM 84 i's curves (scripts/fit_kk84.py).
+
+title: "Neumann KM 84"
+input: in
+cv_inputs:
+  p_rear: p_rear
+probes: [out, a, g, d, s]
+full_scale:
+  input_volts_peak: {value: 20.0, source: "derived: 20 Pa peak (117 dB SPL) at the capsule, as neumann_u87.yaml"}
+  output_volts_peak: {value: 1.0960, source: "derived: 0 dBu peak, as neumann_u87.yaml"}
+
+controls:
+  pad: {value: 0, choices: [0, 1], unit: switch, source: "sch: S1 -10 dB (C9 15p)", notes: "0 off, 1 -10 dB"}
+
+values:
+  capsule_model: {value: KK84@1, source: "config/components/kk84/1.yaml (fitted to the KM 84 i's figures through this circuit's C2 feedback by scripts/fit_kk84.py: reports/mics/kk84_fit.png)"}
+  pol_front_v: {value: 46.0, source: "sch: +46 V through R1 1G (no DC in it)"}
+  pol_rear_v: {value: 0.0, source: "derived: the rear half unpolarized (the cardioid form; the header)"}
+  phantom_v: {value: 46.0, source: "sch: +46 V (the phantom feed inside the microphone)"}
+  rail24_v: {value: 24.0, source: "sch: Gr1 ZF24 (BZX 46 C 24), +24 V"}
+  r5_ohm: {value: 10.0e+6, source: "sch: R5 10M"}
+  c6_f: {value: 0.1e-6, source: "sch: C6 0.1u"}
+  r8_ohm: {value: 10.0e+6, source: "sch: R8 10M"}
+  c10_f: {value: 0.1e-6, source: "sch: C10 0,1u"}
+  r1_ohm: {value: 1.0e+9, source: "sch: R1 1G"}
+  r2_ohm: {value: 1.0e+9, source: "sch: R2 1G"}
+  c1_f: {value: 470.0e-12, source: "sch: C1 470p"}
+  c2_f: {value: 3.3e-12, source: "sch: C2 3.3p"}
+  c9_f: {value: 15.0e-12, source: "sch: C9 15p (-10 dB)"}
+  r3_ohm: {value: 8.9e+3, source: "fit: the selected source resistor (sch: '*' select) for the drain's printed +10 V"}
+  c3_f: {value: 1.5e-6, source: "sch: C3 1.5u 15V"}
+  r4_ohm: {value: 47.0e+3, source: "sch: R4 47K"}
+  r7_ohm: {value: 10.0e+3, source: "sch: R7 10K"}
+  c5_f: {value: 5.0e-6, source: "sch: C5 5u 25V"}
+  c8_f: {value: 5.0e-6, source: "sch: C8 5u 25V"}
+  c4_f: {value: 1.0e-6, source: "sch: C4 1u 25V"}
+  t_ratio: {value: 0.171, source: "fit: Bv. 107's secondary : primary, to man's 200 ohm source impedance"}
+  t_r_p_ohm: {value: 800.0, source: "provisional: model knowledge (a FET microphone transformer's primary)"}
+  t_r_s_ohm: {value: 25.0, source: "provisional: model knowledge (its 200 ohm secondary)"}
+  t_core_material: {value: mumetall, source: "provisional: model knowledge (a microphone transformer's nickel core)"}
+  t_core_area_m2: {value: 1.0e-5, source: "provisional: model knowledge (a ~3 mm square tongue: the KM 84's 21 mm body)"}
+  t_core_path_m: {value: 0.025, source: "provisional: model knowledge (~8 x the tongue)"}
+  t_turns: {value: 4000, source: "provisional: model knowledge (the primary, many turns for the drain's high impedance)"}
+  t_gap_m: {value: 2.0e-6, source: "provisional: model knowledge (an interleaved core's joint gap)"}
+  t_leakage_h: {value: 0.05, source: "provisional: model knowledge (referred to the primary)"}
+  t_c_p_f: {value: 1.0e-10, source: "provisional: model knowledge (a many-turn primary's capacitance)"}
+  r_load_ohm: {value: 1000.0, source: "man: load impedance 1000 ohm (the 200 ohm setting)"}
+  passive_seed: {value: 0, source: "numerical: which set of parts a unit is built from"}
+  passive_spread: {value: 0.0, source: "provisional: fraction of each part's tolerance band its deviation spans (0 = every part at its value)"}
+  tol_resistor_pct: {value: 5.0, source: "provisional: model knowledge (5% resistors)"}
+  tol_cap_pct: {value: 10.0, source: "provisional: model knowledge (film and electrolytic capacitors)"}
+
+tolerance:
+  source: "provisional: classes by part type (see the tol_* values)"
+  seed: passive_seed
+  spread: passive_spread
+  bands:
+    r5: tol_resistor_pct
+    cap: tol_cap_pct
+  classes:
+    r5: [R5, R8, R1, R2, R4, R7]
+    cap: [C6, C10, C1, C2, C9, C3, C5, C8, C4]
+
+devices:
+  QJ: {device: 2N3819@1, source: "sch: T1 2N3819"}
+
+sections:
+  - title: supply
+    parts:
+      VPH: {V: [p46, "0"], v: phantom_v}
+      V24: {V: [n24, "0"], v: rail24_v}
+      C8: {C: [n24, "0"], c: c8_f}
+      R7: {R: [n24, n21], r: r7_ohm}
+      C5: {C: [n21, "0"], c: c5_f}
+      R5: {R: [p46, pf1], r: r5_ohm}
+      C6: {C: [pf1, "0"], c: c6_f}
+      R8: {R: [pf1, pf2], r: r8_ohm}
+      C10: {C: [pf2, "0"], c: c10_f}
+  - title: capsule
+    parts:
+      KC: {capsule_dual: [in, p_rear, a, "0", "0"], component: capsule_model, polarization_front_v: pol_front_v, polarization_rear_v: pol_rear_v}
+      R1: {R: [pf2, a], r: r1_ohm}
+      C2: {C: [a, d], c: c2_f}
+      SPAD:
+        switch: pad
+        parts:
+          C9: {C: [a, d], c: c9_f, in: [1]}
+  - title: amplifier
+    parts:
+      C1: {C: [a, g], c: c1_f}
+      R2: {R: [g, "0"], r: r2_ohm}
+      J1: {jfet: [d, g, s], model: QJ}
+      R3: {R: [s, "0"], r: r3_ohm, tolerance: none}
+      C3: {C: [s, "0"], c: c3_f}
+      R4: {R: [n21, d], r: r4_ohm}
+      C4: {C: [d, tp], c: c4_f}
+      TU:
+        transformer:
+          p: {nodes: [tp, "0"], r: t_r_p_ohm, c: t_c_p_f}
+          s: {nodes: [out, "0"], ratio: t_ratio, r: t_r_s_ohm}
+        core: {material: t_core_material, area_m2: t_core_area_m2, path_m: t_core_path_m, gap_m: t_gap_m}
+        turns: t_turns
+        leakage_h: t_leakage_h
+      RLOAD: {R: [out, "0"], r: r_load_ohm, tolerance: none}

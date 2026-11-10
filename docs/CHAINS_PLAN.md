@@ -13,10 +13,10 @@ runs**.
 
 *Updated at the end of every session. The next session starts here.*
 
-- **Chains available:** 28 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
+- **Chains available:** 29 of 51 (the built matrix: U47, SM57, SM58, omni x V76, clean;
   U47 -> V72, U47 -> UA 610, C12 -> clean, C12 -> UA 610, SM58 -> SSL, SM57 / SM58 ->
   Portastudio, D112 -> SSL, 44-BX -> V76, 44-BX -> UA 610, 77-DX -> 351, 77-DX -> UA 610, 4038 -> V72,
-  SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL;
+  SM57 -> API 312, MD421 -> API 312, 44-BX / SM57 / U47 -> Neve 1073, U87 -> 1073, U87 -> SSL, KM84 -> 1073;
   `uv run python scripts/chain_status.py`).
 - **Done:** WP0 (2026-11-05): the list is `config/chains.yaml`, read by compose, the tests,
   `chain_status.py` and the app. WP1 (2026-11-05): the Telefunken V72
@@ -47,9 +47,11 @@ runs**.
   `scripts/make_neve_1073.py` from Neve's EH10023 / EK20033 / BA283 / BA284; the EQ isn't
   built: DEVICE_BUILDER_PLAN.md B13's rest); WP11's Notes. WP22 (2026-11-10): the Neumann U 87
   (`config/circuits/neumann_u87.yaml` from Neumann's 1980 drawing; `K87@1` fitted to the U 87 i's
-  curves through the circuit's feedback by `scripts/fit_k87.py`); WP22's Notes.
-- **Next:** WP24 (KM84: the U 87's electronics family, its figures in Neumann's catalog
-  `data/schematics/neumann_u87/cata0120.pdf`; opens KM84 -> 1073), WP23 (C414); then WP19 (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
+  curves through the circuit's feedback by `scripts/fit_k87.py`); WP22's Notes. WP24 (2026-11-10):
+  the Neumann KM 84 (`config/circuits/neumann_km84.yaml` from Neumann's 930-12; `KK84@1`); WP24's
+  Notes.
+- **Next:** `K87@2` (WP22's Notes: the K87's capacitance is per side, 103.5 pF against the
+  catalog's 50; refit and repin the U 87); then WP23 (C414); then WP19 (Helios: the user's IA-H9 schematics, `data/schematics/helios_ia_h9/`), WP14's bass switch; WP20 (TG) waits on drawings BE232 / AE.203 (the handbook's text has no values: `data/schematics/emi_tg12345/README.md`); WP20 (EMI TG12345) and WP19 (Helios) need the user's files (below); WP13 (RE20) waits on the N-entry room generalization (its Decision); then WP14 and onward by open sources. WP12 resumes when the user supplies the files in its README's "Missing".
   The user fetches login-walled files on request: each URL alone in a code block.
 - **Waiting on the user:** listening to U47 -> UA 610, the C12's chains, SM58 -> SSL, the
   Portastudio chains, the 44-BX's chains, the 77-DX's and D112 -> SSL in the Room view (optional). One call
@@ -149,7 +151,7 @@ before it. Sizes are rough: S one session, M one or two, L several.
 | 21 | **The JFET model** | 0 | L | done 2026-11-06 in DEVICE_BUILDER_PLAN.md's B12: `varimu/devices/jfet.py`, the `jfet` part, `2N3819@1` / `J175@1` |
 | 22 | Neumann U87 (dual capsule, pattern by polarization) | U87 -> 1073, SSL, TG | L | done 2026-11-10 (TG when WP20 builds it) |
 | 23 | AKG C414 | C414 -> SSL, C414 -> clean | L | |
-| 24 | Neumann KM84 | KM84 -> 1073, KM84 -> TG | L | |
+| 24 | Neumann KM84 | KM84 -> 1073, KM84 -> TG | L | done 2026-11-10 (TG when WP20 builds it) |
 | 25 | Neumann U47 fet (the K47 exists) | U47 fet -> API | M | |
 | 26 | Crown PZM and a mic placed on a surface in scenes | PZM -> clean, PZM -> SSL | L | |
 | 27 | The Cloudlifter, and three-stage chains in `compose_chain.py` | 44-BX / SM7 -> Cloudlifter -> clean | M | |
@@ -1194,6 +1196,26 @@ pattern switch contact by contact, the TCR503 / zener supply's dynamics, the bat
 composed; `config/scenes/new_chains_check.yaml` renders U87 -> 1073, SM57 -> API 312 and 44-BX
 -> 1073 once at draft (room_print.py): 28 of 51.
 
+### WP24. The Neumann KM 84
+
+Sources: `data/schematics/neumann_km84/README.md` (Neumann's 930-12 drawing, the KM 84 i's
+manual, the brochure, via RecordingHacks; the catalog's figures).
+
+Notes (2026-11-10, done): `config/circuits/neumann_km84.yaml` (hand-written from 930-12: the
+2N3819 common source, R3 fitted to the drain's printed +10 V, 8.9 k; C2 3p3 feedback, the pad
+C9 15p as more of it; Bv. 107's ratio 0.171 fitted to 200 ohm; ideal +46 / +24 V). **KK84@1**
+(published_points.yaml "KK84"): the single-diaphragm cardioid in the dual-diaphragm form at the
+cardioid setting (the rear half unpolarized), the gap derived for the catalog's 34 pF as c0
+(**c0 is one side's capacitance** in the dual form), fitted by `scripts/fit_kk84.py` (fit_ck12's
+machinery with a residual / summary for the cardioid-only data and 135 deg tabulated) through
+the circuit's C2 feedback (-2.3 dB) to the KM 84 i's on-axis curve read by eye (rms 0.67 dB, max
+1.4) and the catalog's 5 mV/Pa (the drawing's era; the KM 84 i is 10). Bounds hit: the drilled
+holes (150), their depth (1.5 mm), the stray (1 pF). The whole microphone: 4.7 mV/Pa, 186 ohm,
+the drain 10.1 V. **Known misses:** 135 deg -9.5 dB at 100 Hz against Neumann's -14 (the dual
+form's low end; -15.6 at 1 kHz), the pad -6.3 dB against -10 (C9's feedback depth on the
+provisional capsule and the FET's gain). `tests/test_neumann_km84.py` (5); the list's entry
+(pad); `km84_n1073` composed and rendered in `config/scenes/new_chains_check.yaml`: 29 of 51.
+
 ### WP12. The API 312 (the 2520)
 
 API's 500-series mic preamp: a bespoke input transformer (AP2516 now; the 512C used a
@@ -1441,3 +1463,7 @@ before this session (not the chains' work), and `ruff format --check` one file, 
 - 2026-11-10: WP22 done: the Neumann U 87 from Neumann's 1980 drawing (via RecordingHacks), the
   U 87 i's curves digitized, `K87@1` fitted through the circuit's feedback (C3 / C9 / R8, -4.9 dB);
   8.0 mV/Pa and 200 ohm as the catalog; U87 -> 1073 and -> SSL composed: 28 of 51 available.
+- 2026-11-10: WP24 done: the Neumann KM 84 from Neumann's 930-12 (via RecordingHacks), `KK84@1`
+  (the dual form at cardioid) fitted through its C2 feedback to the KM 84 i's curve and the
+  catalog's 5 mV/Pa; KM84 -> 1073 composed: 29 of 51 available. Found: the dual form's c0 is one
+  side's, so K87@1 is twice the catalog's 50 pF a side (K87@2 next).

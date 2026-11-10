@@ -657,6 +657,41 @@
     sensitivity_mv_pa: 8.0              # cat: ~0.8 mV/ubar, at the microphone's output into >= 1000 ohm
     capacitance_pf: [50.0, 50.0]        # cat: 2 x ~50 pF
 
+# --- Neumann KM 84 (CHAINS_PLAN.md WP24) ---
+"KK84":
+  source: "data/schematics/neumann_km84/README.md: RecordingHacks (the KK 64 / KK 84, a 20 mm capsule, a crossed-slit backplate), Neumann's catalog cata0120 (the KM 84: ~34 pF); no Neumann drawing of the capsule. A single-diaphragm cardioid modelled in the dual-diaphragm form at the cardioid setting (the rear half unpolarized standing in for the crossed-slit backplate's rear network), fitted to the KM 84 i's curves (KM84-manual.pdf p. 16, the text's 135 deg figure) by scripts/fit_kk84.py (value: ..., the bounds in its comment)"
+  polarization_v: 46.0     # sch: +46 V through R1 1G
+  geometry:
+    diaphragm:
+      radius_m: {value: 6.5e-3}       # provisional: model knowledge (a ~13 mm diaphragm in the 20 mm capsule)
+      thickness_m: {value: 6.0e-6}    # provisional: model knowledge (PET film, ~6 um)
+      density_kg_m3: {value: 1390.0}  # provisional: model knowledge (PET)
+      tension_n_m: {value: 16.67}      # provisional: fitted (bounds 5-200 N/m)
+    gap_m: {value: 2.94e-05}          # derived: cat's ~34 pF as the active side's capacitance (c0) at the provisional backplate radius
+    backplate:
+      radius_m: {value: 6.0e-3}       # provisional: model knowledge (inside the diaphragm's clamping)
+      thickness_m: {value: 2.0e-3}    # provisional: model knowledge (a small capsule's backplate)
+      through:
+        holes: {value: 12}            # provisional: model knowledge (the crossed slits as holes; sets only the path's air mass)
+        radius_m: {value: 0.3e-3}     # provisional: model knowledge
+      blind:
+        holes: {value: 150.0}            # provisional: fitted (bounds 5-150 per side)
+        radius_m: {value: 0.3e-3}     # provisional: model knowledge
+        depth_m: {value: 0.0015}      # provisional: fitted (bounds 0.2-1.5 mm)
+    film_resistance_pa_s_m3: {value: 2.717e+07}       # provisional: fitted (bounds 1e5-1e9)
+    through_resistance_pa_s_m3: {value: 6.416e+07}    # provisional: fitted (bounds 1e6-1e10)
+    leak_time_s: {value: 0.5}         # provisional: model knowledge (a slow static-pressure leak, below the audio band)
+    stray_capacitance_f: {value: 1.0e-12}   # provisional: fitted (bounds 1-20 pF)
+    body:
+      radius_m: {value: 9.5e-3}           # provisional: model knowledge (inside the 21 mm head)
+      rim_radius_m: {value: 10.5e-3}      # web (RecordingHacks: 21 mm diameter)
+      rim_thickness_m: {value: 1.5e-3}    # provisional: model knowledge
+      spacing_m: {value: 0.005}           # provisional: model knowledge (the rear slots ~5 mm behind the diaphragm)
+      ring_proud_m: {value: 0.0}          # provisional: model knowledge
+  published:
+    sensitivity_mv_pa: 10.0             # man: KM 84 i 10 mV/Pa (200 ohm, 1000 ohm load)
+    capacitance_pf: 34.0                # cat: ~34 pF
+
 # --- Neumann U47 (A3) ---
 # the VF 14 (VF 14 M), transcribed 2026-11-03; curves: telefunken_vf14.provenance.yaml
 

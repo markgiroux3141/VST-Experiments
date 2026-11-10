@@ -61,6 +61,21 @@
    ],
    "passes": "together",
    "free_field": false
+  },
+  {
+   "name": "KM84 into 1073",
+   "file": "KM84_into_1073.wav",
+   "chain": "km84_n1073",
+   "set": {},
+   "pan": 0.25,
+   "entries": "body {'radius_m': 0.0095, 'rim_radius_m': 0.0105, 'rim_thickness_m': 0.0015, 'spacing_m': 0.005, 'ring_proud_m': 0.0}",
+   "rms_dbfs": -15.26,
+   "peak_dbfs": -5.92,
+   "hears": [
+    "A"
+   ],
+   "passes": "together",
+   "free_field": false
   }
  ],
  "mix": "mix.wav",
@@ -75,6 +90,6 @@
   8000,
   16000
  ],
- "wall_s": 19.6,
+ "wall_s": 140.4,
  "seconds": 8.999
 }
