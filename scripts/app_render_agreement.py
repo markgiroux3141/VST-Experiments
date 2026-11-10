@@ -10,7 +10,8 @@ probe is compared value by value, and so is the output audio (`v(out)` over the
 circuit's output full scale: the 5E3 has its own, `full_scale` in its file; its `out` is
 the sound pressure in front of its speaker, component editor C3, in pascals, and its
 speaker's terminal voltage the probe `spk`). The keyed 670 (SIDECHAIN_PLAN.md K2) is keyed
-by kicks on its control input `key` in both. Same IR,
+by kicks on its control input `key` in both; the stereo 670 (STEREO_PLAN.md ST3b) gets the
+excerpt reversed on its right input `in_r` (an audio control) at LATERAL & VERTICAL. Same IR,
 engine and resampling, so every value must be equal: exit 1 otherwise. Run it after a
 change to the app's render or resampling, or to circuitsim, the builder or a circuit
 (renders take ~15x real time at production, plus 1 s of settling each).
@@ -40,11 +41,16 @@ CASES = {
     "fairchild_670": {"input_atten_db": 6.0, "time_constant": 1},
     "fender_5e3": {"input_jack": 2, "volume_bright": 0.3, "tone": 0.7},
     "fairchild_670_keyed": {"key_mode": 1, "time_constant": 1, "ac_threshold": 0.6},
+    "fairchild_670_stereo": {"mode": 2, "time_constant": 1, "time_constant_2": 3},
 }
 
 
-def controls(name: str, n: int, s: TransientSettings) -> dict[str, np.ndarray]:
-    """A circuit's control inputs in volts (the keyed 670: kicks on its key)."""
+def controls(name: str, x: np.ndarray, s: TransientSettings) -> dict[str, np.ndarray]:
+    """A circuit's control inputs in volts (the keyed 670: kicks on its key; the stereo 670:
+    the excerpt reversed on its right input, an audio control, STEREO_PLAN.md ST3b)."""
+    n = len(x)
+    if name == "fairchild_670_stereo":
+        return {"in_r": x[::-1].copy() * full_scale(s)[0]}
     if name != "fairchild_670_keyed":
         return {}
     from varimu.measure import keyed_suite
@@ -59,7 +65,7 @@ def python_render(name: str, x: np.ndarray, s: TransientSettings) -> dict[str, n
     circuit = None if name == "fairchild_670" else name
     c = runner.build_circuit(runner.RenderJob(x, CASES[name], circuit=circuit), s)
     v_in, v_out = full_scale(s, c)
-    ctl = controls(name, len(x), s) or None
+    ctl = controls(name, x, s) or None
     vectors = fast.run_transient(c.ir, x * v_in, settings=s, controls=ctl).vectors
     out = vectors["v(out)"].astype("<f4").astype(float) / v_out
     return {**vectors, "out": out.astype("<f4").astype(float)}
@@ -70,7 +76,7 @@ def rust_render(name: str, x: np.ndarray, quality: str, work: Path) -> dict[str,
     x.astype("<f8").tofile(inp)
     out = work / name
     sets = [a for k, v in CASES[name].items() for a in ("--set", f"{k}={v}")]
-    for k, v in controls(name, len(x), TransientSettings.from_sim_settings(
+    for k, v in controls(name, x, TransientSettings.from_sim_settings(
             engine="circuitsim", quality=quality)).items():  # fmt: skip
         path = work / f"{name}_{k}.f64"
         v.astype("<f8").tofile(path)

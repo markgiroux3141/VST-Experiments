@@ -1,0 +1,11 @@
+source: 'scripts/fairchild_670_stereo_trim.py, 2026-11-10, production: [MAN] p.8''s threshold procedure
+  to curve 3 on channel 1 (right input silent, LEFT & RIGHT), varimu.sim.setup.threshold; channel 2 takes
+  channel 1''s (alone, it lands +0.040 / -0.001 dB from the 3 / 10 dB points)'
+input_atten_db: 12.0
+dc_threshold: 0.3454
+ac_threshold: 0.9955
+log:
+- 'input gain: pad 12 dB, gain -0.31 dB at -10 dBm'
+- dc_threshold 0.3454
+- ac_threshold 0.9955
+- 'newton 1: dc 0.3454 ac 0.9955: +0.040 / -0.001 dB at the 3 / 10 dB points'

@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 use crate::Error;
 use crate::yaml::{self, Map, Value};
 
-const TOP_KEYS: [&str; 16] = [
+const TOP_KEYS: [&str; 17] = [
     "title",
     "input",
     "cv_inputs",
+    "audio_inputs",
     "probes",
     "full_scale",
     "controls",
@@ -75,6 +76,10 @@ pub struct CircuitSpec {
     /// Control inputs (`cv_inputs: {name: node}`, file order): nodes driven by
     /// their own samples beside the audio input (a gate, a pitch voltage).
     pub cv_inputs: Vec<(String, String)>,
+    /// Second audio inputs (`audio_inputs: {name: node}`, file order): control inputs
+    /// interpolated as the input is (a stereo unit's right channel); in the IR after
+    /// the `cv_inputs`, marked `audio`.
+    pub audio_inputs: Vec<(String, String)>,
     pub probes: Vec<String>,
     pub controls: Map,
     pub values: Map,
@@ -630,6 +635,11 @@ pub fn circuit_from_value(data: &Value, path: &Path) -> Result<CircuitSpec, Erro
         input_node: data.get("input").map_or_else(|| "in".into(), Value::py_str),
         cv_inputs: data
             .get("cv_inputs")
+            .and_then(Value::as_map)
+            .map(|m| m.iter().map(|(k, v)| (k.to_string(), v.py_str())).collect())
+            .unwrap_or_default(),
+        audio_inputs: data
+            .get("audio_inputs")
             .and_then(Value::as_map)
             .map(|m| m.iter().map(|(k, v)| (k.to_string(), v.py_str())).collect())
             .unwrap_or_default(),

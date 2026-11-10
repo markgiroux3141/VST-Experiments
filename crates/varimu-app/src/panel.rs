@@ -576,7 +576,7 @@ pub fn set_precise(id: &str, on: bool) {
     }
 }
 
-pub const DEVICES: [Device; 30] = [
+pub const DEVICES: [Device; 31] = [
     Device {
         id: "fairchild_670",
         label: "Fairchild 670 Compressor",
@@ -1747,6 +1747,41 @@ pub const DEVICES: [Device; 30] = [
             "power supply",
         ]),
     },
+    Device {
+        id: "fairchild_670_stereo",
+        label: "Fairchild 670 Stereo Compressor",
+        short: "670 st",
+        about: "The Fairchild 670 as built: both channels on one supply, LEFT-RIGHT or             LATERAL-VERTICAL (the sum and difference limited, as for cutting stereo discs)",
+        group: Group::Dynamics,
+        circuit: "fairchild_670_stereo",
+        panel: Some(&[
+            "mode",
+            "input_atten_db",
+            "ac_threshold",
+            "time_constant",
+            "dc_threshold",
+            "input_atten_db_2",
+            "ac_threshold_2",
+            "time_constant_2",
+            "dc_threshold_2",
+        ]),
+        // The 670's (above), for two channels' sidechains.
+        ahead_s: 0.25,
+        quality: Quality::Draft1x,
+        cores: None,
+        mod_wheel: None,
+        gate: None,
+        velocity: None,
+        pitch: None,
+        own_oscillator: false,
+        key: None,
+        pitch2: None,
+        coupling: None,
+        live_speaker_v: None,
+        newton: None,
+        method: None,
+        partition: None,
+    },
 ];
 
 /// The devices that can go at a chain's end (`player::EndDevice`: after the device played,
@@ -2525,7 +2560,10 @@ mod tests {
                     ]
                 ),
                 (Group::Drums, vec!["tube_kick", "sideman_bd"]),
-                (Group::Dynamics, vec!["fairchild_670", "urei_1176"]),
+                (
+                    Group::Dynamics,
+                    vec!["fairchild_670", "urei_1176", "fairchild_670_stereo"]
+                ),
                 (Group::Eq, vec!["pultec_eqp1a"]),
                 (Group::Amps, vec!["fender_5e3", "telefunken_v76"]),
                 (Group::Tape, vec!["ampex_351_insert", "ampex_351_2_insert"]),
@@ -2546,7 +2584,8 @@ mod tests {
                 "fairchild_670",
                 "fairchild_670_keyed",
                 "ssl_bus_comp",
-                "urei_1176"
+                "urei_1176",
+                "fairchild_670_stereo"
             ]
         );
         assert!(inserts.iter().all(|(g, _)| *g != Group::Instruments));

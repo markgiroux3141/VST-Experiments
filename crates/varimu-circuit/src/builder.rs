@@ -2915,9 +2915,16 @@ pub fn build_ir_live(
         controls: spec
             .cv_inputs
             .iter()
-            .map(|(name, node)| circuitsim::ir::Control {
+            .map(|(name, node)| (name, node, false))
+            .chain(
+                spec.audio_inputs
+                    .iter()
+                    .map(|(name, node)| (name, node, true)),
+            )
+            .map(|(name, node, audio)| circuitsim::ir::Control {
                 name: name.clone(),
                 node: node.clone(),
+                audio,
             })
             .collect(),
         heaters,

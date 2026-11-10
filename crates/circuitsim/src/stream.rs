@@ -38,7 +38,7 @@ use crate::Error;
 use crate::ir::{CircuitIr, Element, GROUND, Probe, Resistor, Section, VoltageSource};
 use crate::mna::Mna;
 use crate::partition::{Coupling, Decimator, Ring, SOURCE_PREFIX, Split, groups, split};
-use crate::transient::{Options, StepInput, Transient};
+use crate::transient::{Options, StepInput, Transient, step_window};
 
 /// Commands to a partition's thread, applied before it steps from a given sample.
 enum Command {
@@ -546,6 +546,8 @@ pub struct Stream {
     /// The control inputs' samples, indexed as `hist` (IR order; empty without
     /// control inputs).
     chist: Vec<Vec<f64>>,
+    /// The control inputs that are audio (IR `Control::audio`): interpolated as the input.
+    audio: Vec<usize>,
     /// Samples stepped: the state is at sample `n`.
     n: usize,
     /// The input has ended ([`Stream::finish`]): `len` samples in all.
@@ -629,6 +631,7 @@ impl Stream {
             hist: vec![u0],
             hist0: 0,
             chist: c0.iter().map(|&c| vec![c]).collect(),
+            audio: ir.audio_controls(),
             n: 0,
             len: None,
             initial: Vec::new(),
@@ -1183,6 +1186,17 @@ impl Stream {
             let c0: Vec<f64> = self.chist.iter().map(|h| h[i]).collect();
             let c1: Vec<f64> = self.chist.iter().map(|h| h[i + 1]).collect();
             self.a.set_controls(&c0, &c1);
+            if !self.audio.is_empty() {
+                let w: Vec<(usize, StepInput)> = self
+                    .audio
+                    .iter()
+                    .map(|&k| {
+                        let x = &self.chist[k];
+                        (k, step_window(x, self.hist0, n, self.order, self.len))
+                    })
+                    .collect();
+                self.a.set_audio_controls(&w);
+            }
         }
         // The input around the step, as simulate's loop takes it.
         if self.order == 1 {

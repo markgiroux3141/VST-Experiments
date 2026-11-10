@@ -109,6 +109,9 @@ class RenderJob:
     overrides: dict[str, Any] = field(default_factory=dict)
     label: str = ""  # free text for logs (e.g. clip name)
     circuit: str | Path | None = None  # a name in config/circuits/ or a .yaml path (None: 670)
+    # The circuit's control inputs ({name: samples}, as long as `samples`, scaled as they
+    # are: 1.0 = the input's full scale; a stereo unit's right channel `in_r`). None: none.
+    controls: dict[str, np.ndarray] | None = None
 
 
 def circuit_file(circuit: str | Path) -> Path:
@@ -125,7 +128,12 @@ def build_circuit(job: RenderJob, s: TransientSettings) -> nl.Circuit:
     return builder.build(c, job.overrides, triode_formulation=s.triode_formulation, cores=s.cores)
 
 
-def _key(circuit: nl.Circuit, samples: np.ndarray, s: TransientSettings) -> tuple[str, dict]:
+def _key(
+    circuit: nl.Circuit,
+    samples: np.ndarray,
+    s: TransientSettings,
+    controls: dict[str, np.ndarray] | None = None,
+) -> tuple[str, dict]:
     parts = {
         # The IR determines the circuit for both engines (the SPICE text, when there is
         # one, follows from it plus the formulation and tables, both keyed too).
@@ -140,6 +148,10 @@ def _key(circuit: nl.Circuit, samples: np.ndarray, s: TransientSettings) -> tupl
     }
     if s.engine == "circuitsim":
         parts["engine_build"] = fast.check_build()
+    if controls:
+        parts["controls"] = {
+            k: _sha(np.ascontiguousarray(v, "<f8").tobytes()) for k, v in sorted(controls.items())
+        }
     return _sha(json.dumps(parts, sort_keys=True).encode()), parts
 
 
@@ -216,8 +228,11 @@ def render(
         raise ValueError("ngspice has no Jiles-Atherton core: render with cores='linear'")
     circuit = build_circuit(job, s)
     samples = np.asarray(job.samples, float)
-    key, parts = _key(circuit, samples, s)
+    controls = {k: np.asarray(v, float) for k, v in (job.controls or {}).items()}
+    key, parts = _key(circuit, samples, s, controls)
     v_in, v_out = full_scale(s, circuit)
+    if controls and s.engine != "circuitsim":
+        raise ValueError("control inputs need circuitsim (ngspice runs none)")
     path = RENDER_DIR / key
     if use_cache and (path / "meta.json").exists():
         r = load_render(path)
@@ -237,7 +252,13 @@ def render(
     try:
         if s.engine == "circuitsim":
             with fast.thread_priority(s.priority):
-                res = fast.run_transient(circuit.ir, samples * v_in, settings=s, progress=progress)
+                res = fast.run_transient(
+                    circuit.ir,
+                    samples * v_in,
+                    settings=s,
+                    progress=progress,
+                    controls={k: v * v_in for k, v in controls.items()} or None,
+                )
         else:
             res = run_transient(
                 circuit.text,

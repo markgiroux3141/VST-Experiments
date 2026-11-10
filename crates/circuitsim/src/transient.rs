@@ -832,6 +832,9 @@ pub struct Transient {
     /// the next sample, linear in between.
     ext0: Vec<f64>,
     ext1: Vec<f64>,
+    /// The audio-rate control inputs' polynomials over the next sample (control index;
+    /// empty, or None: linear between `ext0` and `ext1`): [`Transient::set_audio_controls`].
+    ctl_poly: Vec<Option<StepInput>>,
     /// Whether `x` holds every unknown (else only the probes' and outputs' are
     /// current: a DK step without `Options::all_unknowns`).
     x_full: bool,
@@ -1024,6 +1027,7 @@ impl Transient {
             n: opts.origin_samples,
             ext0: ext.to_vec(),
             ext1: ext.to_vec(),
+            ctl_poly: Vec::new(),
             x_full: true,
             deepest: 0,
             level_hint: 0,
@@ -1817,6 +1821,11 @@ impl Transient {
             for ((v, &e0), &e1) in dk.wv[nw..].iter_mut().zip(&self.ext0).zip(&self.ext1) {
                 *v = e0 + th * (e1 - e0);
             }
+            for (v, p) in dk.wv[nw..].iter_mut().zip(&self.ctl_poly) {
+                if let Some(p) = p {
+                    *v = p.at(th);
+                }
+            }
             if let Some(noise) = &self.mna.noise {
                 noise.fill(th, &mut dk.wv[nw + self.ext0.len()..]);
             }
@@ -2507,6 +2516,21 @@ impl Transient {
         self.ext1[..k].copy_from_slice(end);
     }
 
+    /// Audio-rate control inputs (IR `Control::audio`: a second channel's audio) over the
+    /// next sample, after [`Transient::set_controls`]: (control index, its polynomial over
+    /// the sample, as the input's [`StepInput`]), evaluated at every stage time instead of
+    /// the line between the sample's ends (which the polynomial passes through exactly).
+    pub fn set_audio_controls(&mut self, polys: &[(usize, StepInput)]) {
+        if self.ctl_poly.len() != self.mna.n_controls {
+            self.ctl_poly = vec![None; self.mna.n_controls];
+        }
+        for &(k, p) in polys {
+            self.ext0[k] = p.at(0.0);
+            self.ext1[k] = p.at(1.0);
+            self.ctl_poly[k] = Some(p);
+        }
+    }
+
     pub fn x(&self) -> &[f64] {
         &self.x
     }
@@ -2569,6 +2593,44 @@ pub(crate) fn check_notes(notes: &[(usize, crate::media::NoteEvent)]) -> Result<
 /// The control inputs' samples at `n` (IR order).
 fn controls_at(controls: &[&[f64]], n: usize) -> Vec<f64> {
     controls.iter().map(|c| c[n]).collect()
+}
+
+/// Step `n` -> `n + 1` of a sample stream as a run takes its input: the polynomial through
+/// the `order + 1` samples centred on it (fewer at the stream's ends), a line at order 1.
+/// `x` holds the stream's samples from index `x0` on; `len` its length once it has ended
+/// (None: it goes on past `x`, which must reach the window's last sample).
+pub(crate) fn step_window(
+    x: &[f64],
+    x0: usize,
+    n: usize,
+    order: usize,
+    len: Option<usize>,
+) -> StepInput {
+    if order <= 1 {
+        return StepInput::linear(x[n - x0], x[n + 1 - x0]);
+    }
+    let half = (order - 1) / 2;
+    let lo = n.saturating_sub(half);
+    let hi = match len {
+        Some(len) => (n + 1 + half).min(len - 1),
+        None => n + 1 + half,
+    };
+    StepInput::lagrange(&x[lo - x0..=hi - x0], lo as i32 - n as i32)
+}
+
+/// The audio-rate control inputs' polynomials over step `n` -> `n + 1` (IR order of the
+/// controls marked `audio`; their streams `controls`, each `len` long).
+fn audio_windows(
+    audio: &[usize],
+    controls: &[&[f64]],
+    n: usize,
+    order: usize,
+    len: usize,
+) -> Vec<(usize, StepInput)> {
+    audio
+        .iter()
+        .map(|&k| (k, step_window(controls[k], 0, n, order, Some(len))))
+        .collect()
 }
 
 /// Check `controls` against `ir`'s control inputs: one sample stream each, as
@@ -2680,9 +2742,14 @@ pub fn simulate_notes(
     // on it (fewer at the ends of the input).
     let order = opts.input_order as i64;
     let len = input.len() as i64;
+    let audio = ir.audio_controls();
     for (i, &u) in rest.iter().enumerate() {
         if !controls.is_empty() {
             tr.set_controls(&controls_at(controls, i), &controls_at(controls, i + 1));
+            if !audio.is_empty() {
+                let w = audio_windows(&audio, controls, i, opts.input_order, input.len());
+                tr.set_audio_controls(&w);
+            }
         }
         if order == 1 {
             tr.step(u)?;

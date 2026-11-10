@@ -62,6 +62,7 @@ fn circuit(controls: bool) -> CircuitIr {
             vec![Control {
                 name: "gate".into(),
                 node: "g".into(),
+                audio: false,
             }]
         } else {
             vec![]

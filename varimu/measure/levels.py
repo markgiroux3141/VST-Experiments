@@ -23,7 +23,7 @@ Two ways to hold a tone:
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -87,17 +87,26 @@ def tone_levels(
     freq_hz: float = TONE_HZ,
     settings=None,
     label: str = "tone",
+    circuit: str | None = None,
+    controls: Callable[[np.ndarray], dict[str, np.ndarray]] | None = None,
 ) -> list[ToneLevel]:
-    """(overrides, input EMF in dBFS peak) -> the settled levels, rendered in parallel."""
+    """(overrides, input EMF in dBFS peak) -> the settled levels, rendered in parallel.
+    `circuit`: another circuit file than the 670 (with the 670's nodes in_s, out, cv: the
+    stereo unit's channel 1); `controls`: its control inputs for a tone (the stereo unit's
+    right channel, silent while channel 1 is adjusted)."""
     fs = load_sim_settings().sample_rate
-    rjobs = [
-        runner.RenderJob(
-            tone(10 ** (lv / 20), freq_hz=freq_hz, sample_rate=fs),
-            dict(ov),
-            f"{label}:{freq_hz:g}Hz@{lv:+.2f}dBFS",
+    rjobs = []
+    for ov, lv in jobs:
+        x = tone(10 ** (lv / 20), freq_hz=freq_hz, sample_rate=fs)
+        rjobs.append(
+            runner.RenderJob(
+                x,
+                dict(ov),
+                f"{label}:{freq_hz:g}Hz@{lv:+.2f}dBFS",
+                circuit=circuit,
+                controls=controls(x) if controls else None,
+            )
         )
-        for ov, lv in jobs
-    ]
     out = []
     for r in runner.render_many(rjobs, settings=settings):
         tail = slice(-int(MEASURE_S * fs), None)

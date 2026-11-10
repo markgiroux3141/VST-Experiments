@@ -52,6 +52,13 @@ pub fn derive(module: &str, name: &str, p: &Params) -> Result<Value, Error> {
             let r_fb = get(p, "r_fb_ohm")? / 2.0 + r34 * r35 / (r34 + r35);
             Value::Float(1.0 / (2.0 / get(p, "r124_r125_ohm")? + 1.0 / r_fb))
         }
+        // The stereo unit's split windings (fairchild_670.py: half the turns, resistance and
+        // the series winding's leakage share each).
+        "t101_pri_half_leak_h" => Value::Float(0.25 * get(p, "t101_leakage_h")?),
+        "t101_r_pri_half_ohm" => Value::Float(0.5 * get(p, "t101_r_pri_ohm")?),
+        "t102_sec_half_leak_h" => Value::Float(0.25 * get(p, "t102_leakage_h")?),
+        "t102_r_sec_half_ohm" => Value::Float(0.5 * get(p, "t102_r_sec_ohm")?),
+        "t103_pri_half_leak_h" => Value::Float(0.25 * get(p, "t103_leakage_h")?),
         other => return Err(Error(format!("derived: {module} has no {other}"))),
     })
 }

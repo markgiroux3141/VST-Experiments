@@ -785,10 +785,15 @@ class VoltageProbe:
 class Control:
     """A control input (a gate, a pitch voltage; the tube synth's S3): `node` to ground
     driven by its own samples beside the audio input, linear between samples (circuitsim;
-    ngspice runs no circuit with control inputs)."""
+    ngspice runs no circuit with control inputs).
+
+    `audio`: a second audio input (a stereo unit's right channel; STEREO_PLAN.md ST7): its
+    samples interpolated as the input's are (the run's input order), so two channels fed
+    the same samples see the same waveform. Written only when true."""
 
     name: str
     node: str
+    audio: bool = False
 
 
 # A multi-rate section's decimation of what it hands on (Section.decimate).
@@ -1110,7 +1115,10 @@ class CircuitIR:
             "input_node": self.input_node,
         }
         if self.controls:
-            d["controls"] = [{"name": c.name, "node": c.node} for c in self.controls]
+            d["controls"] = [
+                {"name": c.name, "node": c.node, **({"audio": True} if c.audio else {})}
+                for c in self.controls
+            ]
         if self.noise is not None:
             # The seed as an integer, not the codec's float.
             d["noise"] = {"seed": self.noise.seed, "rate_hz": float(self.noise.rate_hz)}
@@ -1153,7 +1161,7 @@ class CircuitIR:
                 for s in d["sections"]
             ),
             version=d["version"],
-            controls=tuple(_fields(Control, c, tagged=False) for c in d.get("controls", ())),
+            controls=tuple(_control(c) for c in d.get("controls", ())),
             noise=_decode_noise(d["noise"]) if "noise" in d else None,
             heaters=_fields(HeaterSpec, d["heaters"], tagged=False) if "heaters" in d else None,
         )
@@ -1445,6 +1453,12 @@ def _fields(cls, d: dict, tagged: bool, **nested) -> Any:
             v = tuple(v)
         kw[n] = v
     return cls(**kw)
+
+
+def _control(d: dict) -> Control:
+    """A control input from JSON (`audio` only when true)."""
+    _check_keys("Control", d, {"name", "node"} | ({"audio"} & set(d)))
+    return Control(d["name"], d["node"], bool(d.get("audio", False)))
 
 
 def _count(v: Any) -> int:

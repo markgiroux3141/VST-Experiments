@@ -190,12 +190,16 @@ def control_streams(
     rate: int,
     sim_rate: int,
     n_sim: int,
+    audio: Callable[[np.ndarray], np.ndarray] | None = None,
 ) -> list[np.ndarray]:
     """The IR's control inputs (IR order) on the simulation's grid: each of `controls`
     ({name: volts at `rate`}, `n` samples) behind `n0` samples of its first value,
-    interpolated linearly onto `n_sim` samples at `sim_rate` (held past its end)."""
+    interpolated linearly onto `n_sim` samples at `sim_rate` (held past its end). An
+    audio control (`Control.audio`, a second channel) goes the input's way instead:
+    `audio` (the input's resampling and upsampling) onto the grid, `n_sim` samples."""
     controls = dict(controls or {})
     names = [c.name for c in ir.controls]
+    audio_names = {c.name: c.audio for c in ir.controls}
     if set(controls) != set(names):
         raise ValueError(f"control inputs {sorted(controls)} for the circuit's {names}")
     t_in = np.arange(n0 + n) / rate
@@ -206,7 +210,15 @@ def control_streams(
         if len(c) != n:
             raise ValueError(f"control {name}: {len(c)} samples for {n} of input")
         c = np.concatenate([np.full(n0, c[0] if n else 0.0), c])
-        out.append(np.ascontiguousarray(np.interp(t_sim, t_in, c)))
+        if audio_names.get(name):
+            if audio is None:
+                raise ValueError(f"control {name} is audio: it needs the input's resampling")
+            y = np.asarray(audio(c), float)
+            if len(y) != n_sim:
+                raise ValueError(f"audio control {name}: {len(y)} samples for {n_sim}")
+            out.append(np.ascontiguousarray(y))
+        else:
+            out.append(np.ascontiguousarray(np.interp(t_sim, t_in, c)))
     return out
 
 
@@ -242,7 +254,8 @@ def run_transient(
     the run; Ctrl-C stops it (KeyboardInterrupt). `controls` drives the IR's control
     inputs ({name: volts}, each as long as `input_v`): held at their first sample while
     the circuit settles, and linear between samples at every rate (a gate's step stays a
-    step, where band-limited resampling would ring). `stats`: a dict to fill with the
+    step, where band-limited resampling would ring); an audio control (`Control.audio`, a
+    stereo unit's right channel) is resampled and interpolated as the input is. `stats`: a dict to fill with the
     engine's statistics of the run (circuitsim.simulate's). `notes` play the IR's media
     played by keys (a harp, docs/RHODES_PLAN.md RH3; a Clavinet's strings, CL3): (seconds
     from the input's start, "on" | "off" | "pedal" | "pressure", MIDI note, velocity, pedal
@@ -264,7 +277,16 @@ def run_transient(
     # come back to sample_rate.
     xh = resample(x, s.sample_rate, s.host)
     x_up = upsample(xh, k)
-    ctl = control_streams(ir, controls, len(input_v), n0, s.sample_rate, s.sim_rate, len(x_up))
+    ctl = control_streams(
+        ir,
+        controls,
+        len(input_v),
+        n0,
+        s.sample_rate,
+        s.sim_rate,
+        len(x_up),
+        audio=lambda c: upsample(resample(c, s.sample_rate, s.host), k),
+    )
     t0 = time.perf_counter()
     try:
         raw = circuitsim.simulate(

@@ -356,6 +356,45 @@ pub fn stereo_out(prep: &Prepared, slot: &Slot) -> Result<bool, String> {
         .is_some_and(|v| v >= 0.5))
 }
 
+/// A two-input device's right input (an audio control input, STEREO_PLAN.md ST7): the
+/// stereo 670's channel 2.
+pub const RIGHT_INPUT: &str = "in_r";
+
+/// Whether the slot's device takes both channels of a stereo input in one run (its circuit
+/// has the audio input [`RIGHT_INPUT`] and probes `out_r`, as the stereo 670): its print is
+/// stereo, the left into `in` and the right into `in_r` (a mono input into both).
+pub fn two_inputs(prep: &Prepared, slot: &Slot) -> bool {
+    let spec = prep.circuit.spec();
+    !slot.bypass
+        && spec.audio_inputs.iter().any(|(n, _)| n == RIGHT_INPUT)
+        && spec.probes.iter().any(|p| p == "out_r")
+}
+
+/// A two-input slot's print ([`two_inputs`]) of `left` and `right` (`left` when mono),
+/// uncached: one run, its `out` and `out_r` each mixed with its own side's dry input.
+#[allow(clippy::too_many_arguments)]
+pub fn print_uncached_two(
+    prep: &Prepared,
+    slot: &Slot,
+    left: &[f32],
+    right: Option<&[f32]>,
+    sidechain: Option<&[f32]>,
+    rate: u32,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+) -> Result<(Vec<f32>, Vec<f32>, f64), String> {
+    let r = right.unwrap_or(left);
+    let (y, yr, rtf) = device_out(prep, slot, left, Some(r), sidechain, rate, progress, cancel)?;
+    let yr = yr.ok_or_else(|| format!("{}: no right output (out_r)", slot.device))?;
+    Ok((mixed(slot, &y, left), mixed(slot, &yr, r), rtf))
+}
+
+/// A two-input slot's print key: the left's print key (the device, values and gains) with
+/// both inputs in it.
+fn two_key(base: &str, left: &[f32], right: Option<&[f32]>) -> String {
+    stereo_key(&format!("two inputs {base}"), left, right)
+}
+
 /// A stereo print's key: the key of its mid input's print (the device, values and gains)
 /// with both channels of the input in it (each side's dry is mixed in).
 fn stereo_key(base: &str, left: &[f32], right: Option<&[f32]>) -> String {
@@ -401,7 +440,7 @@ pub fn print_uncached(
     progress: impl FnMut(f64),
     cancel: &AtomicBool,
 ) -> Result<(Vec<f32>, f64), String> {
-    let (y, _, rtf) = device_out(prep, slot, input, sidechain, rate, progress, cancel)?;
+    let (y, _, rtf) = device_out(prep, slot, input, None, sidechain, rate, progress, cancel)?;
     Ok((mixed(slot, &y, input), rtf))
 }
 
@@ -420,7 +459,7 @@ pub fn print_uncached_stereo(
     cancel: &AtomicBool,
 ) -> Result<(Vec<f32>, Vec<f32>, f64), String> {
     let m = mid(left, right);
-    let (y, yr, rtf) = device_out(prep, slot, &m, sidechain, rate, progress, cancel)?;
+    let (y, yr, rtf) = device_out(prep, slot, &m, None, sidechain, rate, progress, cancel)?;
     let yr = yr.ok_or_else(|| format!("{}: no right output (out_r)", slot.device))?;
     Ok((
         mixed(slot, &y, left),
@@ -447,11 +486,14 @@ type DeviceOut = (Vec<f64>, Option<Vec<f64>>, f64);
 
 /// The slot's device's output for `input` at the session's rate (the input's length plus
 /// the tail, a tape machine's latency taken off), before the wet / dry mix; a stereo
-/// circuit's right output beside it; the render's realtime factor.
+/// circuit's right output beside it; the render's realtime factor. `right`: a two-input
+/// device's right input ([`two_inputs`]: its audio input `in_r`, through the same trim).
+#[allow(clippy::too_many_arguments)]
 fn device_out(
     prep: &Prepared,
     slot: &Slot,
     input: &[f32],
+    right: Option<&[f32]>,
     sidechain: Option<&[f32]>,
     rate: u32,
     progress: impl FnMut(f64),
@@ -474,7 +516,17 @@ fn device_out(
         }
         _ => None,
     };
-    let controls: Vec<(&str, &[f64])> = side_v.iter().map(|(c, k)| (*c, k.as_slice())).collect();
+    let right_v: Option<Vec<f64>> = right.map(|r| {
+        let v = trim * prep.circuit.full_scale(s).input_v;
+        let mut xr: Vec<f64> = r.iter().take(n + late).map(|&u| u as f64 * v).collect();
+        xr.resize(n + late, 0.0);
+        resample(&xr, rate, s.sample_rate)
+    });
+    let mut controls: Vec<(&str, &[f64])> =
+        side_v.iter().map(|(c, k)| (*c, k.as_slice())).collect();
+    if let Some(xr) = &right_v {
+        controls.push((RIGHT_INPUT, xr.as_slice()));
+    }
     let xs = resample(&x, rate, s.sample_rate);
     let r = if in_pieces(slot) && controls.is_empty() {
         render_pieces(
@@ -627,6 +679,51 @@ fn print_or_find_stereo(
     })
 }
 
+/// A two-input slot's print ([`two_inputs`]) of `left` and `right`, as
+/// [`print_or_find_stereo`].
+#[allow(clippy::too_many_arguments)]
+fn print_or_find_two(
+    prep: &Prepared,
+    slot: &Slot,
+    left: &Arc<Vec<f32>>,
+    right: Option<&Arc<Vec<f32>>>,
+    sidechain: Option<&[f32]>,
+    rate: u32,
+    cache: Option<&Path>,
+    progress: impl FnMut(f64),
+    cancel: &AtomicBool,
+    render: bool,
+) -> Result<Print, String> {
+    let r = right.map(|r| r.as_slice());
+    let key = two_key(&key(prep, slot, left, sidechain, rate)?, left, r);
+    if let Some(dir) = cache
+        && let Some((audio, Some(audio_r))) = read_print(&dir.join(&key), rate)?
+    {
+        return Ok(Print {
+            key,
+            audio: Arc::new(audio),
+            right: Some(Arc::new(audio_r)),
+            cached: true,
+            realtime_factor: 0.0,
+        });
+    }
+    if !render {
+        return Err(NOT_PRINTED.into());
+    }
+    let (audio, audio_r, rtf) =
+        print_uncached_two(prep, slot, left, r, sidechain, rate, progress, cancel)?;
+    if let Some(dir) = cache {
+        write_print(dir, &key, slot, &audio, Some(&audio_r), rate, rtf)?;
+    }
+    Ok(Print {
+        key,
+        audio: Arc::new(audio),
+        right: Some(Arc::new(audio_r)),
+        cached: false,
+        realtime_factor: rtf,
+    })
+}
+
 /// A cached print: its left (or mono) channel and a stereo print's right.
 type Kept = (Vec<f32>, Option<Vec<f32>>);
 
@@ -723,7 +820,8 @@ pub fn print_chain(
 /// The right channel's devices, loaded when a chain first needs them.
 type LoadRight<'a> = &'a dyn Fn() -> Result<Vec<Prepared>, String>;
 
-/// A chain's prints of `input` and a stereo input's `right`, insert by insert: a stereo
+/// A chain's prints of `input` and a stereo input's `right`, insert by insert: a two-input
+/// insert ([`two_inputs`], the stereo 670) prints both in one run; a stereo
 /// insert ([`stereo_out`]) prints their mid once into both channels; any other prints each
 /// channel apart once the chain is stereo (dual-mono, the right on a thread of its own with
 /// `load_right`'s devices: a tape machine's second track; None: the left's).
@@ -752,7 +850,20 @@ fn chain(
             .get(k)
             .and_then(|c| c.as_deref())
             .map(Vec::as_slice);
-        let print = if stereo_out(p, s)? {
+        let print = if two_inputs(p, s) {
+            print_or_find_two(
+                p,
+                s,
+                &x,
+                xr.as_ref(),
+                side,
+                rate,
+                cache,
+                |f| progress(k, f),
+                cancel,
+                render,
+            )?
+        } else if stereo_out(p, s)? {
             print_or_find_stereo(
                 p,
                 s,
@@ -1485,5 +1596,73 @@ mod tests {
             "a kick ducks the bass ({during} vs {before})"
         );
         assert!(unkeyed > 0.9 * before, "without the key it doesn't");
+    }
+
+    /// The stereo 670 (STEREO_PLAN.md ST3b) on a track: one run with the left on `in` and the
+    /// right on its audio input `in_r`, a mono track's into both.
+    #[test]
+    fn the_stereo_670_prints_both_channels_in_one_run() {
+        let rate = 48_000;
+        let mut slot = Slot::new("fairchild_670_stereo");
+        slot.tail_s = 0.05;
+        let prep = Prepared::load(&config(), &slot.device, slot.quality, slot.noise).unwrap();
+        assert!(two_inputs(&prep, &slot));
+        let bypassed = Slot {
+            bypass: true,
+            ..slot.clone()
+        };
+        assert!(!two_inputs(&prep, &bypassed));
+        let print = |slot: &Slot, l: &Arc<Vec<f32>>, r: Option<Arc<Vec<f32>>>| {
+            Job::spawn(
+                config(),
+                vec![slot.clone()],
+                vec![],
+                l.clone(),
+                r,
+                rate,
+                None,
+            )
+            .join()
+            .expect("a result")
+            .expect("printed")
+            .remove(0)
+        };
+        let rms = |x: &[f32]| {
+            (x.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt()
+        };
+        let (l, r) = (tone(rate, 0.15, 0.3), tone(rate, 0.15, 0.03));
+        // A mono track into both: the two channels alike.
+        let mono = print(&slot, &l, None);
+        let right = mono.right.as_ref().expect("a stereo print");
+        let d: Vec<f32> = mono
+            .audio
+            .iter()
+            .zip(right.iter())
+            .map(|(a, b)| a - b)
+            .collect();
+        assert!(
+            rms(&d) < 1e-3 * rms(&mono.audio),
+            "{} vs {}",
+            rms(&d),
+            rms(&mono.audio)
+        );
+        // A stereo track: each channel its own side, in one run.
+        let st = print(&slot, &l, Some(r.clone()));
+        let right = st.right.as_ref().expect("a stereo print");
+        assert!(rms(right) < 0.3 * rms(&st.audio));
+        assert_eq!(st.audio.len(), mono.audio.len());
+        // LATERAL & VERTICAL: the left alone comes back on the left only (the matrix's
+        // cancellation; the manual's separation).
+        let mut lv = slot.clone();
+        lv.values = vec![("mode".into(), Value::Int(2))];
+        let silent = Arc::new(vec![0.0f32; l.len()]);
+        let p = print(&lv, &l, Some(silent));
+        let right = p.right.as_ref().expect("a stereo print");
+        assert!(
+            rms(right) < 1e-4 * rms(&p.audio),
+            "{} vs {}",
+            rms(right),
+            rms(&p.audio)
+        );
     }
 }

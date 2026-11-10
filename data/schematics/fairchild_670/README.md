@@ -4,6 +4,8 @@ Crops of drawing A-96039, "670 Dual Limiter Schematic", from the Fairchild 670
 instruction manual (Fairchild Recording Equipment Corp., dated Dec 1959).
 
 - Source: http://thehistoryofrecording.com/Manuals/Fairchild/Fairchild_670_stereo_limiting_amplifier_instructions_Schematics.pdf
+  (dead by 2026-11-10; the same file, same sha256, from the Wayback Machine:
+  http://web.archive.org/web/20241114064935id_/https://thehistoryofrecording.com/Manuals/Fairchild/Fairchild_670_stereo_limiting_amplifier_instructions_Schematics.pdf)
 - sha256 of the downloaded PDF: `0ede9ed8d1294ada7b3e05a6f8ef89e7487a7530a2c7a36481c5c297bac7c535`
   (24 MB, scanned images, not committed; the drawing is page 16 of 16)
 - Rendered at 300 dpi and cropped on 2026-10-13. Values were read by eye.
@@ -19,6 +21,12 @@ instruction manual (Fairchild Recording Equipment Corp., dated Dec 1959).
 | `rails_psu.png` | The six supply lines leaving the PSU along its top edge, into the right-hand corridor |
 | `rails.png` | The right-hand corridor: the six lines rising to both channels, and their branches |
 | `rails_top.png` | Channel 1's top band: which line feeds R116/R118/R120, R126, T104's centre tap and the 6973 screens |
+| `s301_inputs.png`, `s301_outputs.png` | S301A-E (between AT101 / AT102 and the input transformers) and S301F-K (the output transformers to the terminals), added 2026-11-10 |
+| `t101_primaries.png`, `t201_primaries.png` | T101's primaries (pins 1-2, 3-4; R101 / R102) and T201's (pins 1-3, 2-4; R201 / R202), the lines down to S301 |
+| `t102_secondaries.png`, `t202_secondaries.png` | T102 / T202's secondaries (5-7, 8-10), each with its pad (R145-R148, R245-R248), the lines up to S301 |
+| `terminals.png` | J301's terminals 1-17, AT102, S301A-E, and the output lines into S301F-K |
+| `ch2_sidechain.png`, `c206.png` | Channel 2's threshold network, 12AX7, 12BH7 and 6973 values (compared with channel 1's, below) |
+| `manual_p5_controls.png` | The manual's p.5: the controls, incl. e) Mode Switch |
 
 `config/circuits/fairchild_670.yaml` cites these values as `sch:` (printed on the
 drawing) or `sch-interp:` (wiring read off the scan, where it isn't certain).
@@ -158,3 +166,65 @@ the 6386 heaters, T304), the pilot lamp, S302, F301.
 - What the meter's ZERO position measures (S101; ZERO is adjusted for a
   meter reading of zero, manual p.7). Decoding it would give ZERO a physical
   calibration criterion.
+
+## S301 MATRIXING and channel 2 (traced 2026-11-10, STEREO_PLAN.md ST3b)
+
+**What the manual says.** [MAN] p.2: "two independent limiters which can limit either two
+independent signals, such as the left and right channels of a stereo signal, or the vertical and
+lateral components of same ... by first bringing the two stereo channels through a matrixing
+network, dividing them into their vertical and lateral components, limiting them independently,
+and recombining them through a second matrixing network into left and right channels"; "one
+control common to both channels which will switch between independent limiting and
+vertical-lateral component limiting". p.5 e) Mode Switch: "Left-Right position: 2 independent
+limiters. Vertical-Lateral position: matrixing input and output, left and right in and out,
+limiting action vertical-lateral". p.4: separation "Left-Right position: 60 db, Vertical-Lateral
+position: 40 db". p.3 (stereo disc cutting): limiting the components "will retain the spatial
+distribution of instruments and soloists ... without producing any annoying image drift".
+**No sidechain link:** the manual has none; each channel's sidechain is its own (a link is a later
+modification, not the drawing's). The drawing's notes: "S301 MATRIXING POS. 1 LEFT & RIGHT, 2
+LATERAL & VERTICAL"; note 7: "ALL SWITCHES SHOWN IN CCW POSITION EXCEPT S301".
+
+**The input side (S301A-E, `s301_inputs.png`, `t101_primaries.png`, `t201_primaries.png`).**
+T101 has two primaries, pins 1-2 (R101 180 1% across) and 3-4 (R102); T201 two, pins 1-3 (R201)
+and 2-4 (R202), numbered so on the drawing. AT101's output goes straight to T101 pin 1; its common
+and AT102's are terminals 3 and 7 (strapped to chassis 4 for floating sources, p.6's note). Each
+wafer, pole: position 1 / position 2:
+
+| Wafer | Pole | 1 (LEFT & RIGHT) | 2 (LATERAL & VERTICAL) |
+|---|---|---|---|
+| S301A | T101 pin 2 | T101 pin 3 | T201 pin 1 |
+| S301B | AT101 common | T101 pin 4 | T201 pin 3 |
+| S301C | AT102 output | T201 pin 1 | T101 pin 3 |
+| S301D | T201 pin 2 | T201 pin 3 | AT102 common |
+| S301E | T201 pin 4 | AT102 common | T101 pin 4 |
+
+At 1 each attenuator drives its own transformer's two primaries in series. At 2 the left drives
+T101 1-2 then T201 1-3; the right T101 3-4 then T201 4-2, the second reversed: with each pair's
+dotted end at its top (both drawn alike), T101 carries L + R (lateral), T201 L - R (vertical).
+
+**The output side (S301F-K, `s301_outputs.png`, `t102_secondaries.png`, `t202_secondaries.png`,
+`terminals.png`).** T102 and T202 each have two secondaries, 5-7 and 8-10, and each secondary its
+own sidechain pad (R145 / R146 legs, R149 shunt into T103 pins 1-3; R147 / R148, R150 into T103
+2-4: `sidechain_1.png`); terminal 12 (left high) is T102 pin 5. There is no S301I.
+
+| Wafer | Pole | 1 | 2 |
+|---|---|---|---|
+| S301F | T102 pin 7 | T102 pin 8 | T202 pin 5 |
+| S301G | terminal 13 (left low) | T102 pin 10 | T202 pin 7 |
+| S301H | terminal 15 (right high) | T202 pin 5 | T102 pin 8 |
+| S301J | T202 pin 8 | T202 pin 7 | terminal 16 (right low) |
+| S301K | T202 pin 10 | terminal 16 | T102 pin 10 |
+
+At 1 each channel's two secondaries in series are its output. At 2 left = T102 5-7 + T202 5-7,
+right = T102 8-10 - T202 8-10 (T202's reversed): lateral + vertical, lateral - vertical.
+
+**Channel 2's values** (`ch2_sidechain.png`, `c206.png`): printed as channel 1's, with slips:
+R230 "150M" (150K), V206B "12BM7A" (12BH7A), C208 "1" (.1, as C107 / C108 / C207), and two
+readings that differ: R215A / R215B both print "180K LIN" (channel 1: R115A 100K, R115B 180K, the
+open question above), and C205 prints "10 MMF 1.6KV" where C105, C106 and C206 print 20. The
+stereo file takes channel 1's values for channel 2 (the same parts; C205 as 20 pF, a push-pull
+pair's neutralizing capacitors alike).
+
+**Modelled:** config/circuits/fairchild_670_stereo.yaml (scripts/make_fairchild_670_stereo.py),
+the contacts at 10 mOhm (provisional), the attenuators' and outputs' low sides at chassis ground.
+

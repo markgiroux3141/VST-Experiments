@@ -1660,7 +1660,10 @@ def _build(
             *ctx.core_models,
         ),
         sections=tuple(sections),
-        controls=tuple(Control(n, node) for n, node in spec.cv_inputs),
+        controls=(
+            *(Control(n, node) for n, node in spec.cv_inputs),
+            *(Control(n, node, audio=True) for n, node in spec.audio_inputs),
+        ),
         noise=_noise_spec(ctx, sections) if ctx.noise is not None else _source_noise(ctx, sections),
         heaters=None if ctx.heaters is None else _heater_spec(ctx),
     )

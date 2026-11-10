@@ -38,6 +38,7 @@ fn circuit() -> CircuitIr {
         controls: vec![Control {
             name: "gate".into(),
             node: "g".into(),
+            audio: false,
         }],
         noise: None,
         heaters: None,

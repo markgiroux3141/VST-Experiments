@@ -7,6 +7,8 @@ varimu.circuit.builder, which expands its parts with the parts library
     title: ...                      # the IR's title
     input: in                       # the node the audio input drives
     cv_inputs: {gate: g, ...}       # control inputs: nodes driven by their own samples
+    audio_inputs: {in_r: r, ...}    # second audio inputs: control inputs interpolated as
+                                    # the input is (a stereo unit's right channel)
     probes: [out, cv, ...]          # node voltages every render saves
     full_scale: {input_volts_peak: {value, source}, output_volts_peak | output_pascals_peak: {...}}
     controls: {key: {value, min, max | choices, source, unit?, notes?}}
@@ -109,6 +111,7 @@ _TOP_KEYS = {
     "title",
     "input",
     "cv_inputs",
+    "audio_inputs",
     "probes",
     "full_scale",
     "controls",
@@ -139,6 +142,9 @@ class CircuitSpec:
     input_node: str = "in"
     # Control inputs (cv_inputs: {name: node}, file order): a gate, a pitch voltage.
     cv_inputs: tuple[tuple[str, str], ...] = ()
+    # Second audio inputs (audio_inputs: {name: node}, file order): control inputs
+    # interpolated as the input is; in the IR after the cv_inputs, marked `audio`.
+    audio_inputs: tuple[tuple[str, str], ...] = ()
     probes: tuple[str, ...] = ()
     mains: dict[str, Any] | None = None
     derived: dict[str, Any] = dataclasses.field(default_factory=dict)
@@ -368,6 +374,7 @@ def load_circuit(path: Path) -> CircuitSpec:
         title=data.get("title", ""),
         input_node=data.get("input", "in"),
         cv_inputs=tuple((str(k), str(v)) for k, v in (data.get("cv_inputs") or {}).items()),
+        audio_inputs=tuple((str(k), str(v)) for k, v in (data.get("audio_inputs") or {}).items()),
         probes=tuple(data.get("probes") or ()),
         mains=data.get("mains"),
         derived=derived,

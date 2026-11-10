@@ -1,0 +1,64 @@
+{
+ "vs_mono": {
+  "mono_pickoff_left_alone_vs_mono_db": -84.3,
+  "mono_pickoff_left_alone_right_out_re_left_db": -243.0,
+  "mono_pickoff_both_vs_mono_db": -28.1,
+  "mono_pickoff_both_right_vs_left_db": -94.9,
+  "gain_db": {
+   "mono": -11.55,
+   "left_alone": -11.55,
+   "both": -11.14,
+   "own_both": -11.19,
+   "own_left": -11.5
+  },
+  "cv_v": {
+   "mono": -44.55,
+   "left_alone": -44.55,
+   "both": -53.28,
+   "own_both": -49.1,
+   "own_left": -40.95
+  },
+  "nb2_v": {
+   "mono": -12.39,
+   "left_alone": -12.39,
+   "both": -22.02,
+   "own_both": -20.88,
+   "own_left": -11.97
+  }
+ },
+ "separation": {
+  "left_right_db": 218.0,
+  "lateral_vertical_db": 214.0,
+  "lateral_vertical_unmatched_db": 38.2,
+  "unmatched_ch2_re_ch1_gain_db": -0.2,
+  "spec_db": {
+   "left_right": 60,
+   "lateral_vertical": 40
+  },
+  "gain_lv_vs_lr_db": -3.88,
+  "cv_lv_v": [
+   -5.66,
+   -5.66
+  ]
+ },
+ "panned": {
+  "lr": {
+   "left_ducks_db": -5.38,
+   "right_ducks_db": 1.12,
+   "image_shift_db": 6.5,
+   "cv_v": [
+    -43.48,
+    -5.72
+   ]
+  },
+  "lv": {
+   "left_ducks_db": -2.87,
+   "right_ducks_db": -2.87,
+   "image_shift_db": 0.0,
+   "cv_v": [
+    -32.31,
+    -25.99
+   ]
+  }
+ }
+}

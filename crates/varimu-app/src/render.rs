@@ -322,7 +322,23 @@ fn render_at(
             Ok(())
         }
     };
-    let ctl = control_streams(&given, n0, s.sample_rate, s.sim_rate(), x_up.len());
+    let mut ctl = control_streams(&given, n0, s.sample_rate, s.sim_rate(), x_up.len());
+    // An audio control (a stereo unit's right channel, circuit volts) goes the input's way:
+    // its settle, the host's rate, the oversampling (Python's `fast.control_streams`).
+    for (j, c) in ir.controls.iter().enumerate() {
+        if c.audio {
+            let src = given[j];
+            let mut y: Vec<f64> = Vec::with_capacity(n0 + src.len());
+            y.resize(n0, src.first().copied().unwrap_or(0.0));
+            y.extend_from_slice(src);
+            let yh = resample(&y, s.sample_rate, s.host());
+            ctl[j] = if k > 1 {
+                resample_poly(&yh, k, 1, Pad::Zero)
+            } else {
+                yh
+            };
+        }
+    }
     let ctl: Vec<&[f64]> = ctl.iter().map(Vec::as_slice).collect();
     let second = s.partition_sections(&ir);
     // Multi-rate sections (a literal tape's record side, its substeps) always run

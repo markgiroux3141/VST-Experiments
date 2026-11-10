@@ -547,6 +547,9 @@ pub struct Live {
     /// The input from the host's rate to the simulation's (1x: unchanged), shared by a
     /// stream and the one fading in.
     up: StreamResampler,
+    /// The audio control inputs (IR `Control::audio`: a stereo unit's right channel): their
+    /// index and their own upsampler, as the input's.
+    audio: Vec<(usize, StreamResampler)>,
     lag: usize,
     /// The control inputs' last values (IR order): where their next block starts.
     controls: Vec<f64>,
@@ -618,6 +621,17 @@ impl Live {
         let mut up = StreamResampler::new(k, 1);
         let n0 = (s.settle_s * rate as f64) as usize;
         up.process(&vec![u0; n0], &mut Vec::new());
+        let audio = ir
+            .controls
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.audio)
+            .map(|(j, _)| {
+                let mut r = StreamResampler::new(k, 1);
+                r.process(&vec![c0[j]; n0], &mut Vec::new());
+                (j, r)
+            })
+            .collect();
         let lag = chain_lag(k, (s.input_order.max(1) - 1) / 2 + 1, n0);
         let shared = Arc::new(Shared {
             wanted: Mutex::new(None),
@@ -653,6 +667,7 @@ impl Live {
             right: None,
             values,
             up,
+            audio,
             lag,
             controls: c0,
             notes: Vec::new(),
@@ -770,6 +785,12 @@ impl Live {
         self.process(&x)
     }
 
+    /// The circuit volts of a full-scale input sample after the input's gain: how a caller
+    /// scales an audio control input (a stereo unit's right channel) to match the input.
+    pub fn input_volts(&self) -> f64 {
+        self.gain * self.run.fs.input_v
+    }
+
     /// A stereo circuit's right channel from the last [`Live::process`] (its `out_r`
     /// probe, as long as the left); None for a mono circuit.
     pub fn right(&self) -> Option<&[f32]> {
@@ -813,24 +834,50 @@ impl Live {
         let k = self.s.oversample as usize;
         // The controls at the simulation's rate: linear from each block's previous
         // last value (k = 1: as given).
-        let ctl: Vec<Vec<f64>> = if controls.len() == self.controls.len() && !controls.is_empty() {
-            controls
-                .iter()
-                .zip(self.controls.iter_mut())
-                .map(|(c, last)| {
-                    let mut up = Vec::with_capacity(c.len() * k);
-                    for &v in c.iter() {
-                        for j in 1..=k {
-                            up.push(*last + (v - *last) * j as f64 / k as f64);
+        let mut ctl: Vec<Vec<f64>> =
+            if controls.len() == self.controls.len() && !controls.is_empty() {
+                controls
+                    .iter()
+                    .zip(self.controls.iter_mut())
+                    .map(|(c, last)| {
+                        let mut up = Vec::with_capacity(c.len() * k);
+                        for &v in c.iter() {
+                            for j in 1..=k {
+                                up.push(*last + (v - *last) * j as f64 / k as f64);
+                            }
+                            *last = v;
                         }
-                        *last = v;
-                    }
-                    up
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+                        up
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+        // An audio control (volts, as the caller scales it: [`Live::input_volts`]) through
+        // its own upsampler, as the input. Without samples it takes the input itself (a
+        // mono source patched into both of a stereo unit's inputs).
+        if !self.audio.is_empty() {
+            let scale = self.input_volts();
+            if ctl.is_empty() {
+                ctl = self
+                    .controls
+                    .iter()
+                    .map(|&v| vec![v; x.len() * k])
+                    .collect();
+            }
+            for (j, up) in &mut self.audio {
+                let c: Vec<f64> = match controls.get(*j) {
+                    Some(c) if controls.len() == self.controls.len() => c.to_vec(),
+                    _ => x.iter().map(|v| v * scale).collect(),
+                };
+                if let Some(&last) = c.last() {
+                    self.controls[*j] = last;
+                }
+                let mut y = Vec::with_capacity(c.len() * k);
+                up.process(&c, &mut y);
+                ctl[*j] = y;
+            }
+        }
         if !ctl.is_empty() {
             *self.shared.c0.lock().expect("c0") = self.controls.clone();
         }

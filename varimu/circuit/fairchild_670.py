@@ -52,3 +52,37 @@ def threshold_section_load_ohm(p: Mapping[str, Any], total: float) -> float:
     the rest of it in parallel with R113 / R114."""
     lo, r = p["ac_threshold_tap"] * total, p["r113_r114_ohm"]
     return (1 - p["ac_threshold_tap"]) * total + lo * r / (lo + r)
+
+
+# --- The stereo unit (config/circuits/fairchild_670_stereo.yaml, STEREO_PLAN.md ST3b) ------
+# The drawing's T101 / T201 have two primaries, T102 / T202 two secondaries and T103 / T203
+# two primaries (one per pad), where the one-channel file has each pair as one winding: the
+# S301 matrix wires them apart. Each half is half the turns and resistance and, so the two
+# in series are the one-channel file's winding, half its share of the leakage: a winding's
+# share is half the transformer's `leakage_h` times its ratio squared (parts.transformer),
+# which at a ratio of 0.5 would be a quarter.
+
+
+def t101_pri_half_leak_h(p: Mapping[str, Any]) -> float:
+    """Each T101 primary's leakage: half the series primary's share (0.5 x leakage_h)."""
+    return 0.25 * p["t101_leakage_h"]
+
+
+def t101_r_pri_half_ohm(p: Mapping[str, Any]) -> float:
+    """Each T101 primary's DC resistance: half the series primary's."""
+    return 0.5 * p["t101_r_pri_ohm"]
+
+
+def t102_sec_half_leak_h(p: Mapping[str, Any]) -> float:
+    """Each T102 secondary's leakage: half the series secondary's share."""
+    return 0.25 * p["t102_leakage_h"]
+
+
+def t102_r_sec_half_ohm(p: Mapping[str, Any]) -> float:
+    """Each T102 secondary's DC resistance: half the series secondary's."""
+    return 0.5 * p["t102_r_sec_ohm"]
+
+
+def t103_pri_half_leak_h(p: Mapping[str, Any]) -> float:
+    """Each T103 primary's leakage: half the series primary's share."""
+    return 0.25 * p["t103_leakage_h"]

@@ -28,6 +28,7 @@ import numpy as np
 from scipy.optimize import brentq
 
 from varimu.circuit import netlist as nl
+from varimu.circuit import spec as spec_mod
 from varimu.circuit.ir import VoltageProbe
 from varimu.config import DATA_DIR
 
@@ -162,6 +163,8 @@ def threshold(
     batches: int = 2,
     settings=None,
     log=print,
+    circuit: str | None = None,
+    controls=None,
 ) -> ThresholdSetup:
     """The manual's threshold adjustment (p.8) with steady 1 kHz tones
     (varimu.measure.levels), the factory curve (curve 3) by default:
@@ -181,7 +184,11 @@ def threshold(
     goes to the same end point by Newton on both controls together: both points'
     outputs at the controls and at each control nudged, 6 renders in parallel per
     iteration, until both are within `tol_db`. Controls the overrides already
-    give are left alone (with one free, 3 or 4 alone)."""
+    give are left alone (with one free, 3 or 4 alone).
+
+    `circuit` / `controls`: another circuit file with the 670's controls and nodes and its
+    control inputs per tone (levels.tone_levels): the stereo unit's channel 1, its right
+    channel silent (scripts/fairchild_670_stereo_trim.py)."""
     from varimu.measure import levels
 
     target = target or factory_target()
@@ -193,12 +200,17 @@ def threshold(
         log(m)
 
     def measure(points):
-        return levels.tone_levels(points, settings=settings, label="threshold")
+        return levels.tone_levels(
+            points, settings=settings, label="threshold", circuit=circuit, controls=controls
+        )
 
     # 1. Unity gain with no sidechain signal. k_db's first guess: a matched 600 ohm
     # input takes half the EMF (0 dBFS = 13.8 V peak EMF = +16 dBm on the terminals).
-    pad = float(nl.resolve(out)["input_atten_db"])
-    lo_db, hi_db = (nl.load_spec().controls["input_atten_db"][k] for k in ("min", "max"))
+    sp = (
+        nl.load_spec() if circuit is None else spec_mod.load_circuit(spec_mod.circuit_path(circuit))
+    )
+    pad = float(spec_mod.resolve(sp, out)["input_atten_db"])
+    lo_db, hi_db = (sp.controls["input_atten_db"][k] for k in ("min", "max"))
     k_db, gain = 16.0, float("nan")
     for _ in range(4):
         emf = UNITY_PROBE_DBM - k_db

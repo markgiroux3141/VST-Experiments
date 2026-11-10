@@ -79,11 +79,17 @@ pub struct CircuitIr {
 /// A control input (a gate, a pitch voltage; the tube synth's S3): `node` to
 /// ground driven by its own samples beside the audio input, linear between
 /// samples (a step stays a ramp over one sample instead of ringing).
+///
+/// `audio`: a second audio input (a stereo unit's right channel; STEREO_PLAN.md ST7):
+/// its samples interpolated as the input's are (`Options::input_order`'s polynomial), so
+/// two channels fed the same samples see the same waveform. Absent: false.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Control {
     pub name: String,
     pub node: String,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub audio: bool,
 }
 
 /// The circuit's heaters (B6): one cathode temperature for every [`HeatedCathode`], heated
@@ -1390,6 +1396,13 @@ impl CircuitIr {
         self.sections
             .iter()
             .any(|s| s.substeps.is_some_and(|m| m > 1))
+    }
+
+    /// The control inputs that are audio ([`Control::audio`]): their indices, IR order.
+    pub fn audio_controls(&self) -> Vec<usize> {
+        (0..self.controls.len())
+            .filter(|&k| self.controls[k].audio)
+            .collect()
     }
 
     pub fn validate(&self) -> Result<(), IrError> {
