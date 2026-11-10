@@ -439,6 +439,33 @@ def test_wave_solver_agrees_with_image_sources_in_a_rigid_shoebox():
     assert 20 * np.log10(err) < -30
 
 
+def test_wave_solver_response_never_comes_back_at_a_runs_end():
+    """An absorbing room's pressure response below the crossover only decays: the
+    zero-frequency mode's offset, cut off where a run ends, was a pulse there louder than the
+    direct sound (+60 dB over the decayed tail; wave.py's docstring). In 25 ms frames down to
+    -55 dB, none more than 10 dB above the quietest before it. (Below that a run's end still
+    shows: the reverb it cuts, ~-60 dB re the peak at 1.2 RT.)"""
+    from varimu.rooms import wave
+    from varimu.rooms.polyroom import ray_decay, rt60_from_decay
+
+    b = _wave_or_skip()
+    room = _rect_room()
+    src = np.array([2.0, 2.55, 1.3])
+    rt = rt60_from_decay(*ray_decay(room, src, 3.0, n_rays=20000, backend=b))
+    mics = [Mic(np.array([5.6, 4.1, 1.5]), aim_vector(200), _omni())]
+    n_fft = 1 << 18
+    low, _ = wave.responses(
+        room, [src], mics, FS, n_fft, crossover_hz=250, rt_s=rt, length_s=2.0, backend=b
+    )
+    w = np.fft.irfft(np.r_[low[0, 0, 0], np.zeros(n_fft // 2 + 1 - low.shape[-1])], n_fft)
+    fr = int(0.025 * FS)
+    e = 10 * np.log10(np.mean(w[: len(w) // fr * fr].reshape(-1, fr) ** 2, 1) + 1e-40)
+    e = e[np.argmax(e) :] - e.max()
+    e = e[: np.argmax(e < -55)]
+    rise = e[1:] - np.minimum.accumulate(e)[:-1]
+    assert len(e) > 20 and rise.max() < 10, (rise.max(), np.round(e))
+
+
 def test_wave_solver_decays_as_the_rays_say():
     """The admittance from the materials' random-incidence absorption: the wave solver's
     250 and 500 Hz octaves decay at the ray-traced RT within 10%."""

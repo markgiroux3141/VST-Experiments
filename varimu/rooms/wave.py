@@ -39,8 +39,16 @@ first order, 1-4 dB off.)
 
 **The zero-frequency mode.** A pressure impulse is a step of volume velocity: a sealed room
 keeps the volume it was given, a pressure offset the walls' admittance doesn't drain (the
-scheme's second-order form). Real rooms leak; the response is high-passed at `HP_HZ`
-(fourth order, zero phase), far below a room's first mode.
+scheme's second-order form). In an absorbing room it settles within a few hundred ms to a
+pressure the same at every point (6-12% of the direct sound's peak in-band; the gradients
+carry none). Real rooms leak; the response is high-passed at `HP_HZ` (fourth order, zero
+phase), far below a room's first mode. A run ends while the offset holds, so a pressure
+record is transformed as if held at its last value from there on (its differences' spectrum
+times 1 / (1 - z^-1)): cut off at the end, the offset was a step there, a pulse of the whole
+low band at every pressure entry at once, the run's length after the source (found
+2026-11-10: a "bloop" ~0.7 s after each drum hit on omni and cardioid mics, figure-8s
+cancelling it; `test_wave_solver_response_never_comes_back_at_a_runs_end`). Held, it is
+only its onset, high-passed.
 """
 
 from __future__ import annotations
@@ -333,6 +341,11 @@ def responses(
         else:
             groups.append([bi])
     k = 2 * np.pi * f / c
+    # a run's differences to the spectrum of its pressure held at its last value: 1 / (1 - z^-1)
+    # at the run's rate (0 at DC, where the high-pass is 0)
+    z1 = 1 - np.exp(-2j * np.pi * f * t_step)
+    hold = np.zeros(len(f), complex)
+    hold[1:] = 1 / z1[1:]
     with np.errstate(divide="ignore", invalid="ignore"):
         grad_fix = np.where(k * dx > 1e-9, (k * dx) / np.sin(k * dx), 1.0)
         inv_jk = np.where(k > 0, 1 / (1j * k), 0.0)
@@ -423,7 +436,10 @@ def responses(
             def spectra(rc, mi, mic):
                 p = rc[:, mi, 0]
                 gr = rc[:, mi, 1:] @ mic.aim / dx
-                pf = t_step * np.fft.rfft(p, n_fft)[: kmax * m : m][:kmax]
+                # the pressure held at its last value past the run's end (the module docstring:
+                # the zero-frequency mode's offset is not cut off there)
+                d = np.diff(p, prepend=0.0)
+                pf = t_step * np.fft.rfft(d, n_fft)[: kmax * m : m][:kmax] * hold
                 gf = t_step * np.fft.rfft(gr, n_fft)[: kmax * m : m][:kmax] * grad_fix
                 return pf, gf
 
